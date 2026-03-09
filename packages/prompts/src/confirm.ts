@@ -36,13 +36,13 @@ export const confirm = (opts: ConfirmOptions) => {
       switch (this.state) {
         case 'submit': {
           const submitPrefix = hasGuide ? `${color.gray(S_BAR)} ` : nestedPrefix;
-          return `${title}${submitPrefix}${color.dim(value)}\n\n`;
+          return `${title}${submitPrefix}${color.dim(value)}\n`;
         }
         case 'cancel': {
           const cancelPrefix = hasGuide ? `${color.gray(S_BAR)} ` : nestedPrefix;
           return `${title}${cancelPrefix}${color.strikethrough(
             color.dim(value),
-          )}${hasGuide ? `\n${color.gray(S_BAR)}` : ''}\n\n`;
+          )}${hasGuide ? `\n${color.gray(S_BAR)}` : ''}\n`;
         }
         default: {
           const defaultPrefix = hasGuide ? `${color.blue(S_BAR)} ` : nestedPrefix;

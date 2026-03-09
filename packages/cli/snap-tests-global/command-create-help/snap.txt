@@ -18,6 +18,7 @@ Options:
   --editor NAME     Write editor config files for the specified editor.
   --hooks           Set up pre-commit hooks (default in non-interactive mode)
   --no-hooks        Skip pre-commit hooks setup
+  --verbose         Show detailed scaffolding output
   --no-interactive  Run in non-interactive mode
   --list            List all available templates
   -h, --help        Show this help message
@@ -69,6 +70,7 @@ Options:
   --editor NAME     Write editor config files for the specified editor.
   --hooks           Set up pre-commit hooks (default in non-interactive mode)
   --no-hooks        Skip pre-commit hooks setup
+  --verbose         Show detailed scaffolding output
   --no-interactive  Run in non-interactive mode
   --list            List all available templates
   -h, --help        Show this help message
@@ -120,6 +122,7 @@ Options:
   --editor NAME     Write editor config files for the specified editor.
   --hooks           Set up pre-commit hooks (default in non-interactive mode)
   --no-hooks        Skip pre-commit hooks setup
+  --verbose         Show detailed scaffolding output
   --no-interactive  Run in non-interactive mode
   --list            List all available templates
   -h, --help        Show this help message

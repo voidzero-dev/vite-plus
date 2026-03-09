@@ -22,6 +22,7 @@ export async function executeMonorepoTemplate(
   workspaceInfo: WorkspaceInfo,
   templateInfo: BuiltinTemplateInfo,
   interactive: boolean,
+  options?: { silent?: boolean },
 ): Promise<ExecutionResult> {
   assert(templateInfo.packageName, 'packageName is required');
   assert(templateInfo.targetDir, 'targetDir is required');
@@ -43,11 +44,15 @@ export async function executeMonorepoTemplate(
       initGit = selected;
     }
   } else {
-    prompts.log.info(`Initializing git repository (default: yes)`);
+    if (!options?.silent) {
+      prompts.log.info(`Initializing git repository (default: yes)`);
+    }
   }
 
-  prompts.log.info(`Target directory: ${formatDisplayTargetDir(templateInfo.targetDir)}`);
-  prompts.log.step('Creating Vite+ monorepo...');
+  if (!options?.silent) {
+    prompts.log.info(`Target directory: ${formatDisplayTargetDir(templateInfo.targetDir)}`);
+    prompts.log.step('Creating Vite+ monorepo...');
+  }
 
   // Copy template files
   const templateDir = path.join(templatesDir, 'monorepo');
@@ -100,7 +105,9 @@ export async function executeMonorepoTemplate(
     }
   }
 
-  prompts.log.success('Monorepo template created');
+  if (!options?.silent) {
+    prompts.log.success('Monorepo template created');
+  }
 
   if (initGit) {
     const gitResult = spawn.sync('git', ['init'], {
@@ -109,7 +116,9 @@ export async function executeMonorepoTemplate(
     });
 
     if (gitResult.status === 0) {
-      prompts.log.success('Git repository initialized');
+      if (!options?.silent) {
+        prompts.log.success('Git repository initialized');
+      }
     } else {
       prompts.log.warn('Failed to initialize git repository');
       if (gitResult.stderr) {
@@ -119,14 +128,22 @@ export async function executeMonorepoTemplate(
   }
 
   // Automatically create a default application in apps/website
-  prompts.log.step('Creating default application in apps/website...');
+  if (!options?.silent) {
+    prompts.log.step('Creating default application in apps/website...');
+  }
 
   const appTemplateInfo = discoverTemplate(
     'create-vite@latest',
     [InitialMonorepoAppDir, '--template', 'vanilla-ts', '--no-interactive'],
     workspaceInfo,
   );
-  const appResult = await runRemoteTemplateCommand(workspaceInfo, fullPath, appTemplateInfo);
+  const appResult = await runRemoteTemplateCommand(
+    workspaceInfo,
+    fullPath,
+    appTemplateInfo,
+    false,
+    options?.silent ?? false,
+  );
 
   if (appResult.exitCode !== 0) {
     prompts.log.error(`Failed to create default application: ${appResult.exitCode}`);
@@ -139,10 +156,17 @@ export async function executeMonorepoTemplate(
   const appProjectPath = path.join(fullPath, InitialMonorepoAppDir);
   setPackageName(appProjectPath, appPackageName);
   // Perform auto-migration on the created app
-  rewriteMonorepoProject(appProjectPath, workspaceInfo.packageManager);
+  rewriteMonorepoProject(
+    appProjectPath,
+    workspaceInfo.packageManager,
+    undefined,
+    options?.silent ?? false,
+  );
 
   // Automatically create a default library in packages/utils
-  prompts.log.step('Creating default library in packages/utils...');
+  if (!options?.silent) {
+    prompts.log.step('Creating default library in packages/utils...');
+  }
   const libraryDir = 'packages/utils';
   const libraryTemplateInfo = discoverTemplate(
     'create-tsdown@latest',
@@ -153,6 +177,8 @@ export async function executeMonorepoTemplate(
     workspaceInfo,
     fullPath,
     libraryTemplateInfo,
+    false,
+    options?.silent ?? false,
   );
   if (libraryResult.exitCode !== 0) {
     prompts.log.error(`Failed to create default library, exit code: ${libraryResult.exitCode}`);
@@ -165,7 +191,12 @@ export async function executeMonorepoTemplate(
   const libraryProjectPath = path.join(fullPath, libraryDir);
   setPackageName(libraryProjectPath, libraryPackageName);
   // Perform auto-migration on the created library
-  rewriteMonorepoProject(libraryProjectPath, workspaceInfo.packageManager);
+  rewriteMonorepoProject(
+    libraryProjectPath,
+    workspaceInfo.packageManager,
+    undefined,
+    options?.silent ?? false,
+  );
 
   return { exitCode: 0, projectDir: templateInfo.targetDir };
 }

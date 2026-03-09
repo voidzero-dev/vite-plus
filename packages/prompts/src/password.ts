@@ -36,14 +36,14 @@ export const password = (opts: PasswordOptions) => {
         case 'submit': {
           const submitPrefix = hasGuide ? `${color.gray(S_BAR)} ` : nestedPrefix;
           const maskedText = masked ? color.dim(masked) : '';
-          return `${title}${submitPrefix}${maskedText}\n\n`;
+          return `${title}${submitPrefix}${maskedText}\n`;
         }
         case 'cancel': {
           const cancelPrefix = hasGuide ? `${color.gray(S_BAR)} ` : nestedPrefix;
           const maskedText = masked ? color.strikethrough(color.dim(masked)) : '';
           return `${title}${cancelPrefix}${maskedText}${
             masked && hasGuide ? `\n${color.gray(S_BAR)}` : ''
-          }\n\n`;
+          }\n`;
         }
         default: {
           const defaultPrefix = hasGuide ? `${color.blue(S_BAR)} ` : nestedPrefix;

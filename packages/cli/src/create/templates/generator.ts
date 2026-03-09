@@ -14,8 +14,11 @@ import type { BuiltinTemplateInfo } from './types.js';
 export async function executeGeneratorScaffold(
   workspaceInfo: WorkspaceInfo,
   templateInfo: BuiltinTemplateInfo,
+  options?: { silent?: boolean },
 ): Promise<ExecutionResult> {
-  prompts.log.step('Creating generator scaffold...');
+  if (!options?.silent) {
+    prompts.log.step('Creating generator scaffold...');
+  }
   let description: string | undefined;
   if (templateInfo.interactive) {
     const defaultDescription = 'Generate new components for our monorepo';
@@ -43,6 +46,8 @@ export async function executeGeneratorScaffold(
     return pkg;
   });
 
-  prompts.log.success('Generator scaffold created');
+  if (!options?.silent) {
+    prompts.log.success('Generator scaffold created');
+  }
   return { exitCode: 0, projectDir: templateInfo.targetDir };
 }

@@ -331,6 +331,7 @@ export function rewriteStandaloneProject(
   projectPath: string,
   workspaceInfo: WorkspaceInfo,
   skipStagedMigration?: boolean,
+  silent = false,
 ): void {
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
@@ -394,7 +395,7 @@ export function rewriteStandaloneProject(
 
   // Merge extracted staged config into vite.config.ts, then remove lint-staged from package.json
   if (extractedStagedConfig) {
-    if (mergeStagedConfigToViteConfig(projectPath, extractedStagedConfig)) {
+    if (mergeStagedConfigToViteConfig(projectPath, extractedStagedConfig, silent)) {
       removeLintStagedFromPackageJson(packageJsonPath);
     }
   }
@@ -402,10 +403,10 @@ export function rewriteStandaloneProject(
   if (!skipStagedMigration) {
     rewriteLintStagedConfigFile(projectPath);
   }
-  mergeViteConfigFiles(projectPath);
-  mergeTsdownConfigFile(projectPath);
+  mergeViteConfigFiles(projectPath, silent);
+  mergeTsdownConfigFile(projectPath, silent);
   // rewrite imports in all TypeScript/JavaScript files
-  rewriteAllImports(projectPath);
+  rewriteAllImports(projectPath, silent);
   // set package manager
   setPackageManager(projectPath, workspaceInfo.downloadPackageManager);
 }
@@ -414,7 +415,11 @@ export function rewriteStandaloneProject(
  * Rewrite monorepo to add vite-plus dependencies
  * @param workspaceInfo - The workspace info
  */
-export function rewriteMonorepo(workspaceInfo: WorkspaceInfo, skipStagedMigration?: boolean): void {
+export function rewriteMonorepo(
+  workspaceInfo: WorkspaceInfo,
+  skipStagedMigration?: boolean,
+  silent = false,
+): void {
   // rewrite root workspace
   if (workspaceInfo.packageManager === PackageManager.pnpm) {
     rewritePnpmWorkspaceYaml(workspaceInfo.rootDir);
@@ -433,16 +438,17 @@ export function rewriteMonorepo(workspaceInfo: WorkspaceInfo, skipStagedMigratio
       path.join(workspaceInfo.rootDir, pkg.path),
       workspaceInfo.packageManager,
       skipStagedMigration,
+      silent,
     );
   }
 
   if (!skipStagedMigration) {
     rewriteLintStagedConfigFile(workspaceInfo.rootDir);
   }
-  mergeViteConfigFiles(workspaceInfo.rootDir);
-  mergeTsdownConfigFile(workspaceInfo.rootDir);
+  mergeViteConfigFiles(workspaceInfo.rootDir, silent);
+  mergeTsdownConfigFile(workspaceInfo.rootDir, silent);
   // rewrite imports in all TypeScript/JavaScript files
-  rewriteAllImports(workspaceInfo.rootDir);
+  rewriteAllImports(workspaceInfo.rootDir, silent);
   // set package manager
   setPackageManager(workspaceInfo.rootDir, workspaceInfo.downloadPackageManager);
 }
@@ -455,9 +461,10 @@ export function rewriteMonorepoProject(
   projectPath: string,
   packageManager: PackageManager,
   skipStagedMigration?: boolean,
+  silent = false,
 ): void {
-  mergeViteConfigFiles(projectPath);
-  mergeTsdownConfigFile(projectPath);
+  mergeViteConfigFiles(projectPath, silent);
+  mergeTsdownConfigFile(projectPath, silent);
 
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
@@ -477,7 +484,7 @@ export function rewriteMonorepoProject(
 
   // Merge extracted staged config into vite.config.ts, then remove lint-staged from package.json
   if (extractedStagedConfig) {
-    if (mergeStagedConfigToViteConfig(projectPath, extractedStagedConfig)) {
+    if (mergeStagedConfigToViteConfig(projectPath, extractedStagedConfig, silent)) {
       removeLintStagedFromPackageJson(packageJsonPath);
     }
   }
@@ -853,7 +860,7 @@ function rewriteLintStagedConfigFile(projectPath: string): void {
  * Ensure vite.config.ts exists, create it if not
  * @returns The vite config filename
  */
-function ensureViteConfig(projectPath: string, configs: ConfigFiles): string {
+function ensureViteConfig(projectPath: string, configs: ConfigFiles, silent = false): string {
   if (!configs.viteConfig) {
     configs.viteConfig = 'vite.config.ts';
     const viteConfigPath = path.join(projectPath, 'vite.config.ts');
@@ -864,7 +871,9 @@ function ensureViteConfig(projectPath: string, configs: ConfigFiles): string {
 export default defineConfig({});
 `,
     );
-    prompts.log.success(`✔ Created vite.config.ts in ${displayRelative(viteConfigPath)}`);
+    if (!silent) {
+      prompts.log.success(`✔ Created vite.config.ts in ${displayRelative(viteConfigPath)}`);
+    }
   }
   return configs.viteConfig;
 }
@@ -874,12 +883,12 @@ export default defineConfig({});
  * - For JSON files: merge content directly into `pack` field and delete the JSON file
  * - For TS/JS files: import the config file
  */
-function mergeTsdownConfigFile(projectPath: string): void {
+function mergeTsdownConfigFile(projectPath: string, silent = false): void {
   const configs = detectConfigs(projectPath);
   if (!configs.tsdownConfig) {
     return;
   }
-  const viteConfig = ensureViteConfig(projectPath, configs);
+  const viteConfig = ensureViteConfig(projectPath, configs, silent);
 
   const fullViteConfigPath = path.join(projectPath, viteConfig);
   const fullTsdownConfigPath = path.join(projectPath, configs.tsdownConfig);
@@ -895,32 +904,36 @@ function mergeTsdownConfigFile(projectPath: string): void {
   const result = mergeTsdownConfig(fullViteConfigPath, tsdownRelativePath);
   if (result.updated) {
     fs.writeFileSync(fullViteConfigPath, result.content);
-    prompts.log.success(
-      `✔ Added import for ${displayRelative(fullTsdownConfigPath)} in ${displayRelative(fullViteConfigPath)}`,
-    );
+    if (!silent) {
+      prompts.log.success(
+        `✔ Added import for ${displayRelative(fullTsdownConfigPath)} in ${displayRelative(fullViteConfigPath)}`,
+      );
+    }
   }
   // Show documentation link for manual merging since we only added the import
-  prompts.log.info(
-    `Please manually merge ${displayRelative(fullTsdownConfigPath)} into ${displayRelative(fullViteConfigPath)}, see https://viteplus.dev/migration/#tsdown`,
-  );
+  if (!silent) {
+    prompts.log.info(
+      `Please manually merge ${displayRelative(fullTsdownConfigPath)} into ${displayRelative(fullViteConfigPath)}, see https://viteplus.dev/migration/#tsdown`,
+    );
+  }
 }
 
 /**
  * Merge oxlint and oxfmt config into vite.config.ts
  */
-export function mergeViteConfigFiles(projectPath: string): void {
+export function mergeViteConfigFiles(projectPath: string, silent = false): void {
   const configs = detectConfigs(projectPath);
   if (!configs.oxfmtConfig && !configs.oxlintConfig) {
     return;
   }
-  const viteConfig = ensureViteConfig(projectPath, configs);
+  const viteConfig = ensureViteConfig(projectPath, configs, silent);
   if (configs.oxlintConfig) {
     // merge oxlint config into vite.config.ts
-    mergeAndRemoveJsonConfig(projectPath, viteConfig, configs.oxlintConfig, 'lint');
+    mergeAndRemoveJsonConfig(projectPath, viteConfig, configs.oxlintConfig, 'lint', silent);
   }
   if (configs.oxfmtConfig) {
     // merge oxfmt config into vite.config.ts
-    mergeAndRemoveJsonConfig(projectPath, viteConfig, configs.oxfmtConfig, 'fmt');
+    mergeAndRemoveJsonConfig(projectPath, viteConfig, configs.oxfmtConfig, 'fmt', silent);
   }
 }
 
@@ -929,6 +942,7 @@ function mergeAndRemoveJsonConfig(
   viteConfigPath: string,
   jsonConfigPath: string,
   configKey: string,
+  silent = false,
 ): void {
   const fullViteConfigPath = path.join(projectPath, viteConfigPath);
   const fullJsonConfigPath = path.join(projectPath, jsonConfigPath);
@@ -936,9 +950,11 @@ function mergeAndRemoveJsonConfig(
   if (result.updated) {
     fs.writeFileSync(fullViteConfigPath, result.content);
     fs.unlinkSync(fullJsonConfigPath);
-    prompts.log.success(
-      `✔ Merged ${displayRelative(fullJsonConfigPath)} into ${displayRelative(fullViteConfigPath)}`,
-    );
+    if (!silent) {
+      prompts.log.success(
+        `✔ Merged ${displayRelative(fullJsonConfigPath)} into ${displayRelative(fullViteConfigPath)}`,
+      );
+    }
   } else {
     prompts.log.warn(
       `✘ Failed to merge ${displayRelative(fullJsonConfigPath)} into ${displayRelative(fullViteConfigPath)}`,
@@ -956,6 +972,7 @@ function mergeAndRemoveJsonConfig(
 function mergeStagedConfigToViteConfig(
   projectPath: string,
   stagedConfig: Record<string, string | string[]>,
+  silent = false,
 ): boolean {
   const configs = detectConfigs(projectPath);
   const viteConfig = ensureViteConfig(projectPath, configs);
@@ -974,7 +991,9 @@ function mergeStagedConfigToViteConfig(
 
   if (result.updated) {
     fs.writeFileSync(fullViteConfigPath, result.content);
-    prompts.log.success(`✔ Merged staged config into ${displayRelative(fullViteConfigPath)}`);
+    if (!silent) {
+      prompts.log.success(`✔ Merged staged config into ${displayRelative(fullViteConfigPath)}`);
+    }
     return true;
   } else {
     prompts.log.warn(`✘ Failed to merge staged config into ${displayRelative(fullViteConfigPath)}`);
@@ -1003,12 +1022,12 @@ function hasStagedConfigInViteConfig(projectPath: string): boolean {
  * This rewrites vite/vitest imports to @voidzero-dev/vite-plus
  * @param projectPath - The root directory to search for files
  */
-function rewriteAllImports(projectPath: string): void {
+function rewriteAllImports(projectPath: string, silent = false): void {
   const result = rewriteImportsInDirectory(projectPath);
   const modified = result.modifiedFiles.length;
   const errors = result.errors.length;
 
-  if (modified > 0) {
+  if (!silent && modified > 0) {
     prompts.log.success(`Rewrote imports in ${modified === 1 ? 'one file' : `${modified} files`}`);
     prompts.log.info(result.modifiedFiles.map((file) => `  ${displayRelative(file)}`).join('\n'));
   }
@@ -1090,9 +1109,9 @@ function collapseHuskyInstall(script: string): string {
  * High-level helper: detect old hooks dir, set up git hooks, and rewrite
  * the prepare script.  Returns true if hooks were successfully installed.
  */
-export function installGitHooks(projectPath: string): boolean {
+export function installGitHooks(projectPath: string, silent = false): boolean {
   const oldHooksDir = getOldHooksDir(projectPath);
-  if (setupGitHooks(projectPath, oldHooksDir)) {
+  if (setupGitHooks(projectPath, oldHooksDir, silent)) {
     rewritePrepareScript(projectPath);
     return true;
   }
@@ -1159,7 +1178,7 @@ export function preflightGitHooksSetup(projectPath: string): string | null {
  * Skips if another hook tool is detected (warns user).
  * Returns true if hooks were successfully set up, false if skipped.
  */
-export function setupGitHooks(projectPath: string, oldHooksDir?: string): boolean {
+export function setupGitHooks(projectPath: string, oldHooksDir?: string, silent = false): boolean {
   const reason = preflightGitHooksSetup(projectPath);
   if (reason) {
     prompts.log.warn(`⚠ ${reason}`);
@@ -1214,7 +1233,7 @@ export function setupGitHooks(projectPath: string, oldHooksDir?: string): boolea
     const finalConfig: Record<string, string | string[]> = updated
       ? JSON.parse(updated)
       : stagedConfig;
-    stagedMerged = mergeStagedConfigToViteConfig(projectPath, finalConfig);
+    stagedMerged = mergeStagedConfigToViteConfig(projectPath, finalConfig, silent);
   }
 
   // Only remove lint-staged key from package.json after staged config is
@@ -1294,7 +1313,9 @@ export function setupGitHooks(projectPath: string, oldHooksDir?: string): boolea
       return false;
     }
     removeReplacedHookPackages(packageJsonPath);
-    prompts.log.success('✔ Git hooks configured');
+    if (!silent) {
+      prompts.log.success('✔ Git hooks configured');
+    }
     return true;
   }
   prompts.log.warn('Failed to install git hooks');

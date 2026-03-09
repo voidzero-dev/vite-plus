@@ -79,7 +79,7 @@ export const selectKey = <Value extends string>(opts: SelectKeyOptions<Value>) =
             opt(selectedOption, 'selected'),
             submitPrefix,
           );
-          return `${title}${wrapped}\n\n`;
+          return `${title}${wrapped}\n`;
         }
         case 'cancel': {
           const cancelPrefix = hasGuide ? `${color.gray(S_BAR)} ` : nestedPrefix;
@@ -88,7 +88,7 @@ export const selectKey = <Value extends string>(opts: SelectKeyOptions<Value>) =
             opt(this.options[0], 'cancelled'),
             cancelPrefix,
           );
-          return `${title}${wrapped}${hasGuide ? `\n${color.gray(S_BAR)}` : ''}\n\n`;
+          return `${title}${wrapped}${hasGuide ? `\n${color.gray(S_BAR)}` : ''}\n`;
         }
         default: {
           const defaultPrefix = hasGuide ? `${color.blue(S_BAR)} ` : nestedPrefix;

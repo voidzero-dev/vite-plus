@@ -7,6 +7,7 @@ import {
   formatDlxCommand,
   runCommand,
   runCommandAndDetectProjectDir,
+  runCommandSilently,
 } from '../command.js';
 import type { TemplateInfo } from './types.js';
 
@@ -15,8 +16,12 @@ const { gray, yellow } = colors;
 export async function executeRemoteTemplate(
   workspaceInfo: WorkspaceInfo,
   templateInfo: TemplateInfo,
+  options?: { silent?: boolean },
 ): Promise<ExecutionResult> {
-  prompts.log.step('Generating project…');
+  const silent = options?.silent ?? false;
+  if (!silent) {
+    prompts.log.step('Generating project…');
+  }
 
   let isGitHubTemplate = templateInfo.command === 'degit';
   let result: ExecutionResult;
@@ -25,7 +30,9 @@ export async function executeRemoteTemplate(
     const command = templateInfo.command;
     const args = templateInfo.args;
     const envs = templateInfo.envs;
-    prompts.log.info(`Running: ${gray(`${command} ${args.join(' ')}`)}`);
+    if (!silent) {
+      prompts.log.info(`Running: ${gray(`${command} ${args.join(' ')}`)}`);
+    }
     result = await runCommandAndDetectProjectDir(
       { command, args, cwd: workspaceInfo.rootDir, envs },
       templateInfo.parentDir,
@@ -38,6 +45,7 @@ export async function executeRemoteTemplate(
       workspaceInfo.rootDir,
       templateInfo,
       true,
+      silent,
     );
   }
 
@@ -62,18 +70,24 @@ export async function runRemoteTemplateCommand(
   cwd: string,
   templateInfo: TemplateInfo,
   detectCreatedProjectDir?: boolean,
+  silent = false,
 ): Promise<ExecutionResult> {
   autoFixRemoteTemplateCommand(templateInfo, workspaceInfo);
   const remotePackageName = templateInfo.command;
   const execArgs = [...templateInfo.args];
   const envs = templateInfo.envs;
   const { command, args } = formatDlxCommand(remotePackageName, execArgs, workspaceInfo);
-  prompts.log.info(`Running: ${gray(`${command} ${args.join(' ')}`)}`);
+  if (!silent) {
+    prompts.log.info(`Running: ${gray(`${command} ${args.join(' ')}`)}`);
+  }
   if (detectCreatedProjectDir) {
     return await runCommandAndDetectProjectDir(
       { command, args, cwd, envs },
       templateInfo.parentDir,
     );
+  }
+  if (silent) {
+    return await runCommandSilently({ command, args, cwd, envs });
   }
   return await runCommand({ command, args, cwd, envs });
 }

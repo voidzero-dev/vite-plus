@@ -144,11 +144,13 @@ export async function writeEditorConfigs({
   editorId,
   interactive,
   conflictDecisions,
+  silent = false,
 }: {
   projectRoot: string;
   editorId: EditorId | undefined;
   interactive: boolean;
   conflictDecisions?: Map<string, 'merge' | 'skip'>;
+  silent?: boolean;
 }) {
   if (!editorId) {
     return;
@@ -197,15 +199,19 @@ export async function writeEditorConfigs({
       }
 
       if (conflictAction === 'merge') {
-        mergeAndWriteEditorConfig(filePath, incoming, fileName, displayPath);
+        mergeAndWriteEditorConfig(filePath, incoming, fileName, displayPath, silent);
       } else {
-        prompts.log.info(`Skipped writing ${displayPath}`);
+        if (!silent) {
+          prompts.log.info(`Skipped writing ${displayPath}`);
+        }
       }
       continue;
     }
 
     writeJsonFile(filePath, incoming);
-    prompts.log.success(`Wrote editor config to ${editorConfig.targetDir}/${fileName}`);
+    if (!silent) {
+      prompts.log.success(`Wrote editor config to ${editorConfig.targetDir}/${fileName}`);
+    }
   }
 }
 
@@ -214,11 +220,14 @@ function mergeAndWriteEditorConfig(
   incoming: Record<string, unknown>,
   fileName: string,
   displayPath: string,
+  silent = false,
 ) {
   const existing = readJsonFile(filePath);
   const merged = mergeEditorConfigs(existing, incoming, fileName);
   writeJsonFile(filePath, merged);
-  prompts.log.success(`Merged editor config into ${displayPath}`);
+  if (!silent) {
+    prompts.log.success(`Merged editor config into ${displayPath}`);
+  }
 }
 
 function mergeEditorConfigs(

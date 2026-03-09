@@ -395,12 +395,14 @@ export async function writeAgentInstructions({
   targetPaths,
   interactive,
   conflictDecisions,
+  silent = false,
 }: {
   projectRoot: string;
   targetPath?: string;
   targetPaths?: string[];
   interactive: boolean;
   conflictDecisions?: Map<string, 'append' | 'skip'>;
+  silent?: boolean;
 }) {
   const paths = [...(targetPaths ?? []), ...(targetPath ? [targetPath] : [])];
   if (paths.length === 0) {
@@ -409,7 +411,9 @@ export async function writeAgentInstructions({
 
   const sourcePath = path.join(pkgRoot, 'AGENTS.md');
   if (!fs.existsSync(sourcePath)) {
-    prompts.log.warn('Agent instructions template not found; skipping.');
+    if (!silent) {
+      prompts.log.warn('Agent instructions template not found; skipping.');
+    }
     return;
   }
 
@@ -432,7 +436,7 @@ export async function writeAgentInstructions({
     await fsPromises.mkdir(path.dirname(destinationPath), { recursive: true });
 
     if (shouldLinkToAgents && targetPathToWrite !== AGENT_STANDARD_PATH) {
-      const linked = await tryLinkTargetToAgents(projectRoot, targetPathToWrite);
+      const linked = await tryLinkTargetToAgents(projectRoot, targetPathToWrite, silent);
       if (linked) {
         continue;
       }
@@ -440,13 +444,17 @@ export async function writeAgentInstructions({
 
     if (fs.existsSync(destinationPath)) {
       if (fs.lstatSync(destinationPath).isSymbolicLink()) {
-        prompts.log.info(`Skipped writing ${targetPathToWrite} (symlink)`);
+        if (!silent) {
+          prompts.log.info(`Skipped writing ${targetPathToWrite} (symlink)`);
+        }
         continue;
       }
 
       const destinationRealPath = await fsPromises.realpath(destinationPath);
       if (seenRealPaths.has(destinationRealPath)) {
-        prompts.log.info(`Skipped writing ${targetPathToWrite} (duplicate target)`);
+        if (!silent) {
+          prompts.log.info(`Skipped writing ${targetPathToWrite} (duplicate target)`);
+        }
         continue;
       }
 
@@ -496,17 +504,22 @@ export async function writeAgentInstructions({
           targetPathToWrite,
           existingContent,
           incomingContent,
+          silent,
         );
       } else {
         const suffix = !preResolved && !interactive ? ' (already exists)' : '';
-        prompts.log.info(`Skipped writing ${targetPathToWrite}${suffix}`);
+        if (!silent) {
+          prompts.log.info(`Skipped writing ${targetPathToWrite}${suffix}`);
+        }
       }
       seenRealPaths.add(destinationRealPath);
       continue;
     }
 
     await fsPromises.writeFile(destinationPath, incomingContent);
-    prompts.log.success(`Wrote agent instructions to ${targetPathToWrite}`);
+    if (!silent) {
+      prompts.log.success(`Wrote agent instructions to ${targetPathToWrite}`);
+    }
     seenRealPaths.add(await fsPromises.realpath(destinationPath));
   }
 }
@@ -516,10 +529,13 @@ async function appendAgentContent(
   targetPath: string,
   existingContent: string,
   incomingContent: string,
+  silent = false,
 ) {
   const separator = existingContent.endsWith('\n') ? '' : '\n';
   await fsPromises.appendFile(destinationPath, `${separator}\n${incomingContent}`);
-  prompts.log.success(`Appended agent instructions to ${targetPath}`);
+  if (!silent) {
+    prompts.log.success(`Appended agent instructions to ${targetPath}`);
+  }
 }
 
 function normalizeAgentName(value: string) {
@@ -554,7 +570,7 @@ export function replaceMarkedAgentInstructionsSection(existing: string, incoming
   )}${existing.slice(existingRange.end)}`;
 }
 
-async function tryLinkTargetToAgents(projectRoot: string, targetPath: string) {
+async function tryLinkTargetToAgents(projectRoot: string, targetPath: string, silent = false) {
   const destinationPath = path.join(projectRoot, targetPath);
   const agentsPath = path.join(projectRoot, AGENT_STANDARD_PATH);
   const symlinkTarget = path.relative(path.dirname(destinationPath), agentsPath);
@@ -568,14 +584,20 @@ async function tryLinkTargetToAgents(projectRoot: string, targetPath: string) {
     const currentLink = await fsPromises.readlink(destinationPath);
     const resolvedCurrentLink = path.resolve(path.dirname(destinationPath), currentLink);
     if (resolvedCurrentLink === agentsPath) {
-      prompts.log.info(`Skipped linking ${targetPath} (already linked to ${AGENT_STANDARD_PATH})`);
+      if (!silent) {
+        prompts.log.info(
+          `Skipped linking ${targetPath} (already linked to ${AGENT_STANDARD_PATH})`,
+        );
+      }
       return true;
     }
     await fsPromises.unlink(destinationPath);
   }
 
   await fsPromises.symlink(symlinkTarget, destinationPath);
-  prompts.log.success(`Linked ${targetPath} to ${AGENT_STANDARD_PATH}`);
+  if (!silent) {
+    prompts.log.success(`Linked ${targetPath} to ${AGENT_STANDARD_PATH}`);
+  }
   return true;
 }
 

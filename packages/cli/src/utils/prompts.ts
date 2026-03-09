@@ -6,12 +6,18 @@ import { PackageManager } from '../types/index.js';
 import { runCommandSilently } from './command.js';
 import { accent } from './terminal.js';
 
+export interface CommandRunSummary {
+  durationMs: number;
+  exitCode?: number;
+  status: 'installed' | 'formatted' | 'failed' | 'skipped';
+}
+
 export function cancelAndExit(message = 'Operation cancelled', exitCode = 0): never {
   prompts.cancel(message);
   process.exit(exitCode);
 }
 
-export async function selectPackageManager(interactive?: boolean) {
+export async function selectPackageManager(interactive?: boolean, silent = false) {
   if (interactive) {
     const selected = await prompts.select({
       message: 'Which package manager would you like to use?',
@@ -30,7 +36,9 @@ export async function selectPackageManager(interactive?: boolean) {
     return selected;
   } else {
     // --no-interactive: use pnpm as default
-    prompts.log.info(`Using default package manager: ${accent(PackageManager.pnpm)}`);
+    if (!silent) {
+      prompts.log.info(`Using default package manager: ${accent(PackageManager.pnpm)}`);
+    }
     return PackageManager.pnpm;
   }
 }
@@ -51,12 +59,19 @@ export async function downloadPackageManager(
   return downloadResult;
 }
 
-export async function runViteInstall(cwd: string, interactive?: boolean, extraArgs?: string[]) {
-  if (process.env.VITE_PLUS_SKIP_INSTALL) {
-    return;
+export async function runViteInstall(
+  cwd: string,
+  interactive?: boolean,
+  extraArgs?: string[],
+  options?: { silent?: boolean },
+) {
+  // install dependencies on non-CI environment
+  if (process.env.VITE_PLUS_SKIP_INSTALL || process.env.CI) {
+    return { durationMs: 0, status: 'skipped' } satisfies CommandRunSummary;
   }
 
-  const spinner = getSpinner(interactive);
+  const spinner = options?.silent ? getSilentSpinner() : getSpinner(interactive);
+  const startTime = Date.now();
   spinner.start(`Installing dependencies...`);
   const { exitCode, stderr, stdout } = await runCommandSilently({
     command: process.env.VITE_PLUS_CLI_BIN ?? 'vp',
@@ -66,16 +81,32 @@ export async function runViteInstall(cwd: string, interactive?: boolean, extraAr
   });
   if (exitCode === 0) {
     spinner.stop(`Dependencies installed`);
+    return {
+      durationMs: Date.now() - startTime,
+      exitCode,
+      status: 'installed',
+    } satisfies CommandRunSummary;
   } else {
     spinner.stop(`Install failed`);
     prompts.log.info(stdout.toString());
     prompts.log.error(stderr.toString());
     prompts.log.info(`You may need to run "vp install" manually in ${cwd}`);
+    return {
+      durationMs: Date.now() - startTime,
+      exitCode,
+      status: 'failed',
+    } satisfies CommandRunSummary;
   }
 }
 
-export async function runViteFmt(cwd: string, interactive?: boolean, paths?: string[]) {
-  const spinner = getSpinner(interactive);
+export async function runViteFmt(
+  cwd: string,
+  interactive?: boolean,
+  paths?: string[],
+  options?: { silent?: boolean },
+) {
+  const spinner = options?.silent ? getSilentSpinner() : getSpinner(interactive);
+  const startTime = Date.now();
   spinner.start(`Formatting code...`);
 
   const { binPath, envs } = await resolveFmt();
@@ -91,12 +122,22 @@ export async function runViteFmt(cwd: string, interactive?: boolean, paths?: str
 
   if (exitCode === 0) {
     spinner.stop(`Code formatted`);
+    return {
+      durationMs: Date.now() - startTime,
+      exitCode,
+      status: 'formatted',
+    } satisfies CommandRunSummary;
   } else {
     spinner.stop(`Format failed`);
     prompts.log.info(stdout.toString());
     prompts.log.error(stderr.toString());
     const relativePaths = (paths ?? []).length > 0 ? ` ${(paths ?? []).join(' ')}` : '';
     prompts.log.info(`You may need to run "vp fmt --write${relativePaths}" manually in ${cwd}`);
+    return {
+      durationMs: Date.now() - startTime,
+      exitCode,
+      status: 'failed',
+    } satisfies CommandRunSummary;
   }
 }
 

@@ -183,7 +183,7 @@ export const multiselect = <Value>(opts: MultiSelectOptions<Value>) => {
               .join(color.dim(', ')) || color.dim('none');
           const submitPrefix = hasGuide ? `${color.gray(S_BAR)} ` : nestedPrefix;
           const wrappedSubmitText = wrapTextWithPrefix(opts.output, submitText, submitPrefix);
-          return `${title}${wrappedSubmitText}\n\n`;
+          return `${title}${wrappedSubmitText}\n`;
         }
         case 'cancel': {
           const label = this.options
@@ -191,13 +191,13 @@ export const multiselect = <Value>(opts: MultiSelectOptions<Value>) => {
             .map((option) => opt(option, 'cancelled'))
             .join(color.dim(', '));
           if (label.trim() === '') {
-            return hasGuide ? `${title}${color.gray(S_BAR)}\n\n` : `${title.trimEnd()}\n\n`;
+            return hasGuide ? `${title}${color.gray(S_BAR)}\n` : `${title.trimEnd()}\n`;
           }
           const cancelPrefix = hasGuide ? `${color.gray(S_BAR)} ` : nestedPrefix;
           const wrappedLabel = wrapTextWithPrefix(opts.output, label, cancelPrefix);
           return hasGuide
-            ? `${title}${wrappedLabel}\n${color.gray(S_BAR)}\n\n`
-            : `${title}${wrappedLabel}\n\n`;
+            ? `${title}${wrappedLabel}\n${color.gray(S_BAR)}\n`
+            : `${title}${wrappedLabel}\n`;
         }
         case 'error': {
           const prefix = hasGuide ? `${color.yellow(S_BAR)} ` : nestedPrefix;

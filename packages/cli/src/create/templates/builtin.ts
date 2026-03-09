@@ -11,12 +11,13 @@ import { BuiltinTemplate, type BuiltinTemplateInfo } from './types.js';
 export async function executeBuiltinTemplate(
   workspaceInfo: WorkspaceInfo,
   templateInfo: BuiltinTemplateInfo,
+  options?: { silent?: boolean },
 ): Promise<ExecutionResult> {
   assert(templateInfo.targetDir, 'targetDir is required');
   assert(templateInfo.packageName, 'packageName is required');
 
   if (templateInfo.command === BuiltinTemplate.generator) {
-    return await executeGeneratorScaffold(workspaceInfo, templateInfo);
+    return await executeGeneratorScaffold(workspaceInfo, templateInfo, options);
   }
 
   if (templateInfo.command === BuiltinTemplate.application) {
@@ -42,6 +43,7 @@ export async function executeBuiltinTemplate(
     workspaceInfo.rootDir,
     templateInfo,
     false,
+    options?.silent ?? false,
   );
   const fullPath = path.join(workspaceInfo.rootDir, templateInfo.targetDir);
   // set package name in the project directory

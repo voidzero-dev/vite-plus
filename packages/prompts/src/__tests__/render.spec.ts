@@ -11,6 +11,8 @@ const captured: {
   autocomplete?: PromptConfig;
   confirm?: PromptConfig;
   selectKey?: PromptConfig;
+  text?: PromptConfig;
+  password?: PromptConfig;
 } = {};
 
 class SelectPrompt<_Value> {
@@ -73,6 +75,26 @@ class SelectKeyPrompt<_Value> {
   }
 }
 
+class TextPrompt {
+  constructor(config: PromptConfig) {
+    captured.text = config;
+  }
+
+  prompt() {
+    return Promise.resolve(Symbol('cancel'));
+  }
+}
+
+class PasswordPrompt {
+  constructor(config: PromptConfig) {
+    captured.password = config;
+  }
+
+  prompt() {
+    return Promise.resolve(Symbol('cancel'));
+  }
+}
+
 vi.mock('@clack/core', () => {
   return {
     settings: { withGuide: true },
@@ -95,6 +117,8 @@ vi.mock('@clack/core', () => {
     AutocompletePrompt,
     ConfirmPrompt,
     SelectKeyPrompt,
+    TextPrompt,
+    PasswordPrompt,
   };
 });
 
@@ -116,6 +140,8 @@ beforeEach(() => {
   captured.autocomplete = undefined;
   captured.confirm = undefined;
   captured.selectKey = undefined;
+  captured.text = undefined;
+  captured.password = undefined;
 });
 
 describe('prompt renderers', () => {
@@ -269,5 +295,41 @@ describe('prompt renderers', () => {
     });
 
     expect(`${confirmOutput}\n---\n${selectKeyOutput}`).toMatchSnapshot();
+  });
+
+  it('renders submitted prompts without extra blank lines', async () => {
+    const [{ multiselect }, { confirm }, { text }] = await Promise.all([
+      import('../multi-select.js'),
+      import('../confirm.js'),
+      import('../text.js'),
+    ]);
+
+    const multiOptions = [
+      { value: 'alpha', label: 'Alpha' },
+      { value: 'beta', label: 'Beta' },
+    ];
+    void multiselect({
+      message: 'Choose multiple',
+      options: multiOptions,
+    });
+    const multiselectOutput = renderWith(captured.multiSelect, {
+      state: 'submit',
+      options: multiOptions,
+      value: ['beta'],
+    });
+
+    void confirm({ message: 'Proceed?' });
+    const confirmOutput = renderWith(captured.confirm, {
+      state: 'submit',
+      value: true,
+    });
+
+    void text({ message: 'Project name' });
+    const textOutput = renderWith(captured.text, {
+      state: 'submit',
+      value: 'acme-web',
+    });
+
+    expect(`${multiselectOutput}\n---\n${confirmOutput}\n---\n${textOutput}`).toMatchSnapshot();
   });
 });

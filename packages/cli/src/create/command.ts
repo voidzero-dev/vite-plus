@@ -94,6 +94,35 @@ export interface RunCommandResult extends ExecutionResult {
   stderr: Buffer;
 }
 
+export async function runCommandSilently(options: RunCommandOptions): Promise<RunCommandResult> {
+  const child = spawn(options.command, options.args, {
+    stdio: 'pipe',
+    cwd: options.cwd,
+    env: options.envs,
+  });
+  const promise = new Promise<RunCommandResult>((resolve, reject) => {
+    const stdout: Buffer[] = [];
+    const stderr: Buffer[] = [];
+    child.stdout?.on('data', (data) => {
+      stdout.push(data);
+    });
+    child.stderr?.on('data', (data) => {
+      stderr.push(data);
+    });
+    child.on('close', (code) => {
+      resolve({
+        exitCode: code ?? 0,
+        stdout: Buffer.concat(stdout),
+        stderr: Buffer.concat(stderr),
+      });
+    });
+    child.on('error', (err) => {
+      reject(err);
+    });
+  });
+  return await promise;
+}
+
 export async function runCommand(options: RunCommandOptions): Promise<ExecutionResult> {
   const child = spawn(options.command, options.args, {
     stdio: 'inherit',

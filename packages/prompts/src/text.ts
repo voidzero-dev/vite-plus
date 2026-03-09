@@ -40,12 +40,12 @@ export const text = (opts: TextOptions) => {
         case 'submit': {
           const valueText = value ? color.dim(value) : '';
           const submitPrefix = hasGuide ? `${color.gray(S_BAR)} ` : nestedPrefix;
-          return `${title}${submitPrefix}${valueText}\n\n`;
+          return `${title}${submitPrefix}${valueText}\n`;
         }
         case 'cancel': {
           const valueText = value ? color.strikethrough(color.dim(value)) : '';
           const cancelPrefix = hasGuide ? `${color.gray(S_BAR)} ` : nestedPrefix;
-          return `${title}${cancelPrefix}${valueText}${value.trim() ? `\n${cancelPrefix}` : ''}\n\n`;
+          return `${title}${cancelPrefix}${valueText}${value.trim() ? `\n${cancelPrefix}` : ''}\n`;
         }
         default: {
           const defaultPrefix = hasGuide ? `${color.blue(S_BAR)} ` : nestedPrefix;

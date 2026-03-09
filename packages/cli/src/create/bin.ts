@@ -21,6 +21,7 @@ import { detectExistingEditor, selectEditor, writeEditorConfigs } from '../utils
 import { renderCliDoc } from '../utils/help.js';
 import { displayRelative } from '../utils/path.js';
 import {
+  type CommandRunSummary,
   defaultInteractive,
   downloadPackageManager,
   promptGitHooks,
@@ -45,7 +46,7 @@ import {
 } from './templates/index.js';
 import { InitialMonorepoAppDir } from './templates/monorepo.js';
 import { BuiltinTemplate, TemplateType } from './templates/types.js';
-import { formatDisplayTargetDir, formatTargetDir } from './utils.js';
+import { formatTargetDir } from './utils.js';
 
 const helpMessage = renderCliDoc({
   usage: 'vp create [TEMPLATE] [OPTIONS] [-- TEMPLATE_OPTIONS]',
@@ -83,6 +84,7 @@ const helpMessage = renderCliDoc({
           description: 'Set up pre-commit hooks (default in non-interactive mode)',
         },
         { label: '--no-hooks', description: 'Skip pre-commit hooks setup' },
+        { label: '--verbose', description: 'Show detailed scaffolding output' },
         { label: '--no-interactive', description: 'Run in non-interactive mode' },
         { label: '--list', description: 'List all available templates' },
         { label: '-h, --help', description: 'Show this help message' },
@@ -169,6 +171,7 @@ export interface Options {
   interactive: boolean;
   list: boolean;
   help: boolean;
+  verbose: boolean;
   agent?: string | string[] | false;
   editor?: string;
   hooks?: boolean;
@@ -190,12 +193,13 @@ function parseArgs() {
     interactive?: boolean;
     list?: boolean;
     help?: boolean;
+    verbose?: boolean;
     agent?: string | string[] | false;
     editor?: string;
     hooks?: boolean;
   }>(viteArgs, {
     alias: { h: 'help' },
-    boolean: ['help', 'list', 'all', 'interactive', 'hooks'],
+    boolean: ['help', 'list', 'all', 'interactive', 'hooks', 'verbose'],
     string: ['directory', 'agent', 'editor'],
     default: { interactive: defaultInteractive() },
   });
@@ -209,6 +213,7 @@ function parseArgs() {
       interactive: parsed.interactive,
       list: parsed.list || false,
       help: parsed.help || false,
+      verbose: parsed.verbose || false,
       agent: parsed.agent,
       editor: parsed.editor,
       hooks: parsed.hooks,
@@ -217,8 +222,121 @@ function parseArgs() {
   };
 }
 
+function describeScaffold(templateName: string, templateArgs: string[]) {
+  if (templateName === BuiltinTemplate.monorepo) {
+    return 'Vite+ monorepo';
+  }
+  if (templateName === BuiltinTemplate.generator) {
+    return 'generator scaffold';
+  }
+  if (templateName === BuiltinTemplate.library) {
+    return 'TypeScript library';
+  }
+
+  const selectedTemplate = getTemplateOption(templateArgs);
+  if (selectedTemplate) {
+    return formatTemplateName(selectedTemplate);
+  }
+
+  if (templateName === BuiltinTemplate.application) {
+    return 'Vite application';
+  }
+
+  return undefined;
+}
+
+function getTemplateOption(args: string[]) {
+  for (let index = 0; index < args.length; index++) {
+    const arg = args[index];
+    if (arg === '--template' || arg === '-t') {
+      return args[index + 1];
+    }
+    if (arg.startsWith('--template=')) {
+      return arg.slice('--template='.length);
+    }
+  }
+  return undefined;
+}
+
+function formatTemplateName(templateName: string) {
+  const templateAliases: Record<string, string> = {
+    lit: 'Lit',
+    preact: 'Preact',
+    react: 'React',
+    'react-router': 'React Router',
+    solid: 'Solid',
+    svelte: 'Svelte',
+    vanilla: 'Vanilla',
+    vue: 'Vue',
+  };
+  const isTypeScript = templateName.endsWith('-ts');
+  const baseName = isTypeScript ? templateName.slice(0, -3) : templateName;
+  const frameworkName =
+    templateAliases[baseName] ??
+    baseName
+      .split(/[-_]/)
+      .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+      .join(' ');
+
+  return `${frameworkName} + ${isTypeScript ? 'TypeScript' : 'JavaScript'}`;
+}
+
+function formatDuration(durationMs: number) {
+  if (durationMs < 1000) {
+    return `${Math.max(1, durationMs)}ms`;
+  }
+  const durationSeconds = durationMs / 1000;
+  if (durationSeconds < 10) {
+    return `${durationSeconds.toFixed(1)}s`;
+  }
+  return `${Math.round(durationSeconds)}s`;
+}
+
+function getNextCommand(projectDir: string, command: string) {
+  if (!projectDir || projectDir === '.') {
+    return command;
+  }
+  return `cd ${projectDir} && ${command}`;
+}
+
+function showCreateSummary(options: {
+  description?: string;
+  installSummary?: CommandRunSummary;
+  nextCommand: string;
+  packageManager: string;
+  packageManagerVersion: string;
+  projectDir: string;
+}) {
+  const {
+    description,
+    installSummary,
+    nextCommand,
+    packageManager,
+    packageManagerVersion,
+    projectDir,
+  } = options;
+
+  log(
+    `${styleText('magenta', '◇')} Scaffolded ${accent(projectDir)}${
+      description ? ` with ${description}` : ''
+    }`,
+  );
+  log(
+    `${styleText('gray', '•')} Node ${process.versions.node}  ${packageManager} ${packageManagerVersion}`,
+  );
+  if (installSummary?.status === 'installed') {
+    log(
+      `${styleText('green', '✓')} Dependencies installed in ${formatDuration(
+        installSummary.durationMs,
+      )}`,
+    );
+  }
+  log(`${styleText('blue', '→')} Next: ${accent(nextCommand)}`);
+}
+
 async function main() {
   const { templateName, options, templateArgs } = parseArgs();
+  const compactOutput = !options.verbose;
 
   // #region Handle help flag
   if (options.help) {
@@ -253,7 +371,9 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   // #endregion
 
   // #region Prepare Stage
-  prompts.intro(vitePlusHeader());
+  if (options.interactive) {
+    prompts.intro(vitePlusHeader());
+  }
 
   // check --directory option is valid
   let targetDir = '';
@@ -296,6 +416,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   let selectedAgentTargetPaths: string[] | undefined;
   let selectedEditor: Awaited<ReturnType<typeof selectEditor>>;
   let selectedParentDir: string | undefined;
+  let shouldSetupHooks = false;
 
   if (!selectedTemplateName) {
     const templates: { label: string; value: string; hint: string }[] = [];
@@ -391,7 +512,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     cancelAndExit('Cannot create a monorepo inside an existing monorepo', 1);
   }
 
-  if (isInSubdirectory) {
+  if (isInSubdirectory && !compactOutput) {
     prompts.log.info(`Detected monorepo root at ${accent(workspaceInfoOptional.rootDir)}`);
   }
 
@@ -460,7 +581,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     selectedParentDir = parentDir;
   }
   if (isMonorepo && !options.interactive && !targetDir) {
-    if (isInSubdirectory) {
+    if (isInSubdirectory && !compactOutput) {
       prompts.log.info(`Use ${accent('--directory')} to specify a different target location.`);
     }
     const inferredParentDir =
@@ -492,9 +613,10 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
 
   // Prompt for package manager or use default
   const packageManager =
-    workspaceInfoOptional.packageManager ?? (await selectPackageManager(options.interactive));
+    workspaceInfoOptional.packageManager ??
+    (await selectPackageManager(options.interactive, compactOutput));
   const shouldSilencePackageManagerInstallLog =
-    isMonorepo && workspaceInfoOptional.packageManager !== undefined;
+    compactOutput || (isMonorepo && workspaceInfoOptional.packageManager !== undefined);
   // ensure the package manager is installed by vite-plus
   const downloadResult = await downloadPackageManager(
     packageManager,
@@ -533,6 +655,8 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       onCancel: () => cancelAndExit(),
     }));
 
+  shouldSetupHooks = await promptGitHooks(options);
+
   // Discover template
   const templateInfo = discoverTemplate(
     selectedTemplateName,
@@ -560,6 +684,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       workspaceInfo,
       { ...templateInfo, packageName, targetDir },
       options.interactive,
+      { silent: compactOutput },
     );
     const { projectDir } = result;
     if (result.exitCode !== 0 || !projectDir) {
@@ -572,24 +697,31 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       projectRoot: fullPath,
       targetPaths: selectedAgentTargetPaths,
       interactive: options.interactive,
+      silent: compactOutput,
     });
     await writeEditorConfigs({
       projectRoot: fullPath,
       editorId: selectedEditor,
       interactive: options.interactive,
+      silent: compactOutput,
     });
     workspaceInfo.rootDir = fullPath;
-    rewriteMonorepo(workspaceInfo);
-    const shouldSetupHooks = await promptGitHooks(options);
+    rewriteMonorepo(workspaceInfo, undefined, compactOutput);
     if (shouldSetupHooks) {
-      installGitHooks(fullPath);
+      installGitHooks(fullPath, compactOutput);
     }
-    await runViteInstall(fullPath, options.interactive);
-    await runViteFmt(fullPath, options.interactive);
-    prompts.outro(`✔ Created ${accent(projectDir)}!`);
-    log(styleText('bold', 'Next steps:'));
-    log(`  ${accent(`cd ${projectDir}`)}`);
-    log(`  ${accent(`vp dev ${InitialMonorepoAppDir}`)}`);
+    const installSummary = await runViteInstall(fullPath, options.interactive, undefined, {
+      silent: compactOutput,
+    });
+    await runViteFmt(fullPath, options.interactive, undefined, { silent: compactOutput });
+    showCreateSummary({
+      description: describeScaffold(selectedTemplateName, selectedTemplateArgs),
+      installSummary,
+      nextCommand: getNextCommand(projectDir, `vp dev ${InitialMonorepoAppDir}`),
+      packageManager: workspaceInfo.packageManager,
+      packageManagerVersion: workspaceInfo.downloadPackageManager.version,
+      projectDir,
+    });
     return;
   }
   // #endregion
@@ -611,14 +743,17 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
         : selected.targetDir;
     }
     await checkProjectDirExists(targetDir, options.interactive);
-    prompts.log.info(`Target directory: ${accent(formatDisplayTargetDir(targetDir))}`);
-    result = await executeBuiltinTemplate(workspaceInfo, {
-      ...templateInfo,
-      packageName,
-      targetDir,
-    });
+    result = await executeBuiltinTemplate(
+      workspaceInfo,
+      {
+        ...templateInfo,
+        packageName,
+        targetDir,
+      },
+      { silent: compactOutput },
+    );
   } else {
-    result = await executeRemoteTemplate(workspaceInfo, templateInfo);
+    result = await executeRemoteTemplate(workspaceInfo, templateInfo, { silent: compactOutput });
   }
 
   if (result.exitCode !== 0) {
@@ -629,23 +764,27 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     process.exit(0);
   }
 
-  prompts.log.success(`Project directory: ${accent(projectDir)}`);
   const fullPath = path.join(workspaceInfo.rootDir, projectDir);
   const agentInstructionsRoot = isMonorepo ? workspaceInfo.rootDir : fullPath;
   await writeAgentInstructions({
     projectRoot: agentInstructionsRoot,
     targetPaths: selectedAgentTargetPaths,
     interactive: options.interactive,
+    silent: compactOutput,
   });
   await writeEditorConfigs({
     projectRoot: fullPath,
     editorId: selectedEditor,
     interactive: options.interactive,
+    silent: compactOutput,
   });
 
+  let installSummary: CommandRunSummary | undefined;
   if (isMonorepo) {
-    prompts.log.step('Monorepo integration...');
-    rewriteMonorepoProject(fullPath, workspaceInfo.packageManager);
+    if (!compactOutput) {
+      prompts.log.step('Monorepo integration...');
+    }
+    rewriteMonorepoProject(fullPath, workspaceInfo.packageManager, undefined, compactOutput);
 
     if (workspaceInfo.packages.length > 0) {
       if (options.interactive) {
@@ -704,33 +843,32 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     }
 
     updateWorkspaceConfig(projectDir, workspaceInfo);
-    await runViteInstall(workspaceInfo.rootDir, options.interactive);
-    await runViteFmt(workspaceInfo.rootDir, options.interactive, [projectDir]);
+    installSummary = await runViteInstall(workspaceInfo.rootDir, options.interactive, undefined, {
+      silent: compactOutput,
+    });
+    await runViteFmt(workspaceInfo.rootDir, options.interactive, [projectDir], {
+      silent: compactOutput,
+    });
   } else {
-    rewriteStandaloneProject(fullPath, workspaceInfo);
-    const shouldSetupHooks = await promptGitHooks(options);
+    rewriteStandaloneProject(fullPath, workspaceInfo, undefined, compactOutput);
     if (shouldSetupHooks) {
-      installGitHooks(fullPath);
+      installGitHooks(fullPath, compactOutput);
     }
-    await runViteInstall(fullPath, options.interactive);
-    await runViteFmt(fullPath, options.interactive);
+    installSummary = await runViteInstall(fullPath, options.interactive, undefined, {
+      silent: compactOutput,
+    });
+    await runViteFmt(fullPath, options.interactive, undefined, { silent: compactOutput });
   }
 
-  prompts.outro(`✔ Created ${accent(projectDir)}!`);
-
-  showNextSteps(projectDir, isMonorepo);
+  showCreateSummary({
+    description: describeScaffold(selectedTemplateName, selectedTemplateArgs),
+    installSummary,
+    nextCommand: isMonorepo ? `vp dev ${projectDir}` : getNextCommand(projectDir, 'vp dev'),
+    packageManager: workspaceInfo.packageManager,
+    packageManagerVersion: workspaceInfo.downloadPackageManager.version,
+    projectDir,
+  });
   // #endregion
-}
-
-function showNextSteps(projectDir: string, isMonorepo: boolean) {
-  log(styleText('bold', 'Next steps:'));
-  if (isMonorepo) {
-    log(`  ${accent(`vp dev ${projectDir}`)}`);
-  } else {
-    log(`  ${accent(`cd ${projectDir}`)}`);
-    log(`  ${accent('vp dev')}`);
-  }
-  log('');
 }
 
 async function showAvailableTemplates() {

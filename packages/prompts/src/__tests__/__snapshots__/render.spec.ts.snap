@@ -64,3 +64,17 @@ exports[`prompt renderers > renders select with pointer markers and aligned mult
 
 "
 `;
+
+exports[`prompt renderers > renders submitted prompts without extra blank lines 1`] = `
+"◇ Choose multiple
+  Beta
+
+---
+◇ Proceed?
+  Yes
+
+---
+◇ Project name
+  acme-web
+"
+`;
