@@ -348,7 +348,7 @@ mod tests {
 
     /// Create a cross-platform absolute path for tests.
     /// On Unix `/workspace/...`, on Windows `C:\workspace\...`.
-    fn test_absolute_path(suffix: &str) -> Arc<AbsolutePathBuf> {
+    fn test_absolute_path(suffix: &str) -> Arc<vite_path::AbsolutePath> {
         #[cfg(windows)]
         let base = PathBuf::from(format!("C:\\workspace{}", suffix.replace('/', "\\")));
         #[cfg(not(windows))]
