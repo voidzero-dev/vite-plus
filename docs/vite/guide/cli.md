@@ -98,11 +98,11 @@ vp build [root] [OPTIONS]
 | `-h, --help`                   | Display available CLI options                                                                                          |
 | `--app`                        | Build all environments, same as `builder: {}` (`boolean`, experimental)                                                |
 
-## Build Library
+## Pack Libraries
 
 ### `vp pack`
 
-Build a library using tsdown.
+Pack libraries using tsdown.
 
 #### Usage
 

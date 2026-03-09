@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import rolldownIcon from '@assets/icons/rolldown-light.svg';
 import viteIcon from '@assets/icons/vite-light.svg';
-import devTerminal from '@local-assets/terminal-features/dev.svg';
 </script>
 
 <template>
@@ -51,9 +50,35 @@ import devTerminal from '@local-assets/terminal-features/dev.svg';
     <div class="flex flex-col min-h-[22rem] sm:min-h-[30rem]">
       <div class="bg-vite pl-10 h-full flex flex-col justify-center overflow-clip">
         <div
-          class="block px-5 py-6 relative bg-slate rounded-tl rounded-bl outline-1 outline-offset-[2px] outline-white/20"
+          class="mr-5 sm:mr-10 px-5 py-6 relative bg-slate rounded-tl rounded-bl outline-1 outline-offset-[2px] outline-white/20 font-mono text-sm leading-[1.5rem] text-white"
         >
-          <img loading="lazy" :src="devTerminal" alt="vp build terminal command" />
+          <div class="text-white">$ vp build</div>
+          <div class="h-4" />
+          <div class="text-grey">
+            VITE+ <span class="terminal-blue">building for production</span>
+          </div>
+          <div class="text-grey">
+            <span class="text-zest">✓</span> Transformed <span class="text-white">128 modules</span>
+          </div>
+          <div class="h-4" />
+          <div class="text-grey">
+            <span class="text-white">dist/index.html</span>
+            <span class="inline-block w-2" aria-hidden="true"></span>
+            <span class="terminal-blue">0.42 kB</span>
+          </div>
+          <div class="text-grey">
+            <span class="text-white">dist/assets/index.css</span>
+            <span class="inline-block w-2" aria-hidden="true"></span>
+            <span class="terminal-blue">5.1 kB</span>
+          </div>
+          <div class="text-grey">
+            <span class="text-white">dist/assets/index.js</span>
+            <span class="inline-block w-2" aria-hidden="true"></span>
+            <span class="terminal-blue">46.2 kB</span>
+          </div>
+          <div class="text-grey">
+            <span class="text-zest">✓</span> Built in <span class="text-white">421ms</span>
+          </div>
         </div>
       </div>
     </div>

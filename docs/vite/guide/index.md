@@ -2,16 +2,16 @@
 
 ## Overview
 
-Vite+ is a unified toolchain for modern web development. It combines [Vite](https://vite.dev/), [Vitest](https://vitest.dev/), [Oxlint](https://oxc.rs/docs/guide/usage/linter.html), [Oxfmt](https://oxc.rs/docs/guide/usage/formatter.html), [Rolldown](https://rolldown.rs/), [tsdown](https://tsdown.dev/), and [Vite Task](https://github.com/voidzero-dev/vite-task) into a single CLI:
+Vite+ is the unified toolchain and entry point for modern web application development. It manages your runtime, package manager, and frontend toolchain in one place by combining [Vite](https://vite.dev/), [Vitest](https://vitest.dev/), [Oxlint](https://oxc.rs/docs/guide/usage/linter.html), [Oxfmt](https://oxc.rs/docs/guide/usage/formatter.html), [Rolldown](https://rolldown.rs/), [tsdown](https://tsdown.dev/), and [Vite Task](https://github.com/voidzero-dev/vite-task):
 
 - **Runtime Management**: Manage Node.js globally and per project with `vp env`
 - **Package Management**: Install and manage dependencies with `vp install` and package-manager wrappers
 - **Dev Server**: Run Vite's native ESM dev server with instant HMR via `vp dev`
-- **Code Health**: Run type checks, linting, and formatting with `vp check`
+- **Code Health**: Run linting, formatting, and type checks with Oxlint, Oxfmt, and `tsgo` via `vp check`
 - **Testing**: Run tests through bundled Vitest with `vp test`
 - **Build & Pack**: Build apps with `vp build` and build libraries or standalone app binaries with `vp pack`
 - **Task Runner**: Run monorepo tasks with caching and dependency-aware scheduling via `vp run`
-- **Scaffolding & Migration**: Create new projects and migrate existing ones with `vp create` and `vp migrate`
+- **Scaffolding & Migration**: Create new projects or monorepos and migrate existing ones with `vp create` and `vp migrate`
 
 All in a single, cohesive tool designed for scale, speed, and developer sanity.
 Vite+ is fully open-source under the MIT license.
@@ -61,13 +61,13 @@ vp env help               # Show all commands
 
 ## Scaffolding Your First Vite+ Project
 
-Create a Vite+ project:
+Create a Vite+ project or monorepo:
 
 ```bash
 vp create
 ```
 
-Follow the prompts to select your preferred framework and configuration.
+Follow the prompts to select your preferred framework, workspace shape, and configuration.
 
 ## CLI Workflows
 
@@ -92,7 +92,7 @@ vp dlx              # Run remote/local package binaries
 
 # Build
 vp build            # Build applications
-vp pack             # Build libraries
+vp pack             # Pack libraries
 vp preview          # Preview production build
 ```
 

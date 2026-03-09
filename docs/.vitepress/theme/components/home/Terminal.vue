@@ -1,19 +1,15 @@
 <script setup lang="ts">
-import { TabsContent, TabsList, TabsRoot, TabsTrigger } from 'reka-ui';
-import { ref, onMounted, onUnmounted } from 'vue';
+import { TabsList, TabsRoot, TabsTrigger } from 'reka-ui';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 
-import TerminalAnimation1 from '../terminal-animations/TerminalAnimation1.vue';
-import TerminalAnimation2 from '../terminal-animations/TerminalAnimation2.vue';
-import TerminalAnimation3 from '../terminal-animations/TerminalAnimation3.vue';
-import TerminalAnimation4 from '../terminal-animations/TerminalAnimation4.vue';
-import TerminalAnimation5 from '../terminal-animations/TerminalAnimation5.vue';
-import TerminalAnimation6 from '../terminal-animations/TerminalAnimation6.vue';
+import { terminalTranscripts } from '../../data/terminal-transcripts';
+import TerminalTranscript from './TerminalTranscript.vue';
 
 // Auto-progression configuration
 const AUTO_ADVANCE_DELAY = 1500;
 
 // State management
-const activeTab = ref('tab1');
+const activeTab = ref(terminalTranscripts[0].id);
 const autoPlayEnabled = ref(true);
 let autoAdvanceTimeout: ReturnType<typeof setTimeout> | null = null;
 
@@ -23,7 +19,13 @@ const isVisible = ref(false);
 let observer: IntersectionObserver | null = null;
 
 // Tab progression logic
-const tabSequence = ['tab1', 'tab2', 'tab3', 'tab4', 'tab5', 'tab6'];
+const tabSequence = terminalTranscripts.map((transcript) => transcript.id);
+
+const activeTranscript = computed(
+  () =>
+    terminalTranscripts.find((transcript) => transcript.id === activeTab.value) ??
+    terminalTranscripts[0],
+);
 
 const goToNextTab = () => {
   const currentIndex = tabSequence.indexOf(activeTab.value);
@@ -110,6 +112,13 @@ onUnmounted(() => {
       style="transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1)"
     >
       <TabsRoot v-if="isVisible" v-model="activeTab" @update:modelValue="onTabChange">
+        <div class="w-full">
+          <TerminalTranscript
+            :key="activeTranscript.id"
+            :transcript="activeTranscript"
+            @complete="onAnimationComplete"
+          />
+        </div>
         <TabsList
           aria-label="features"
           :class="[
@@ -119,31 +128,14 @@ onUnmounted(() => {
           ]"
           style="transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1)"
         >
-          <TabsTrigger value="tab1"> create </TabsTrigger>
-          <TabsTrigger value="tab2"> dev </TabsTrigger>
-          <TabsTrigger value="tab3"> lint </TabsTrigger>
-          <TabsTrigger value="tab4"> fmt </TabsTrigger>
-          <TabsTrigger value="tab5"> test </TabsTrigger>
-          <TabsTrigger value="tab6"> build </TabsTrigger>
+          <TabsTrigger
+            v-for="transcript in terminalTranscripts"
+            :key="transcript.id"
+            :value="transcript.id"
+          >
+            {{ transcript.label }}
+          </TabsTrigger>
         </TabsList>
-        <TabsContent value="tab1">
-          <TerminalAnimation1 :on-animation-complete="onAnimationComplete" />
-        </TabsContent>
-        <TabsContent value="tab2">
-          <TerminalAnimation2 :on-animation-complete="onAnimationComplete" />
-        </TabsContent>
-        <TabsContent value="tab3">
-          <TerminalAnimation3 :on-animation-complete="onAnimationComplete" />
-        </TabsContent>
-        <TabsContent value="tab4">
-          <TerminalAnimation4 :on-animation-complete="onAnimationComplete" />
-        </TabsContent>
-        <TabsContent value="tab5">
-          <TerminalAnimation5 :on-animation-complete="onAnimationComplete" />
-        </TabsContent>
-        <TabsContent value="tab6">
-          <TerminalAnimation6 :on-animation-complete="onAnimationComplete" />
-        </TabsContent>
       </TabsRoot>
     </div>
   </section>

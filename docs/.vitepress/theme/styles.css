@@ -21,3 +21,102 @@
 .marketing-layout {
   --font-sans: 'APK Protocol', sans-serif;
 }
+
+:root[data-variant='viteplus'] {
+  --terminal-blue: color-mix(in srgb, var(--vp-c-indigo-2) 72%, white);
+}
+
+.terminal-copy {
+  max-width: 100%;
+  font-family: var(--font-mono);
+  min-height: 22rem;
+  padding: 0;
+  font-size: 0.875rem;
+  line-height: 1.5rem;
+  color: var(--color-white);
+}
+
+.terminal-prompt,
+.terminal-line {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.terminal-spacer {
+  height: 1rem;
+}
+
+.terminal-line + .terminal-line {
+  margin-top: 0.35rem;
+}
+
+.terminal-tone-base {
+  color: var(--color-white);
+}
+
+.terminal-tone-muted {
+  color: color-mix(in srgb, var(--vp-c-text-2) 88%, white 12%);
+}
+
+.terminal-tone-brand {
+  color: var(--terminal-blue);
+}
+
+.terminal-tone-accent {
+  color: var(--terminal-blue);
+}
+
+.terminal-tone-success {
+  color: var(--color-zest);
+}
+
+.terminal-tone-warning {
+  color: var(--color-fire);
+}
+
+.terminal-cursor {
+  display: inline-block;
+  width: 0.62rem;
+  height: 1.05rem;
+  margin-left: 0.1rem;
+  vertical-align: -0.12rem;
+  border-radius: 2px;
+  background: var(--color-white);
+  animation: terminal-blink 0.95s steps(1, end) infinite;
+}
+
+.terminal-line-enter-active,
+.terminal-line-leave-active {
+  transition:
+    opacity 220ms ease,
+    transform 220ms ease;
+}
+
+.terminal-line-enter-from,
+.terminal-line-leave-to {
+  opacity: 0;
+  transform: translateY(0.35rem);
+}
+
+@keyframes terminal-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .terminal-copy {
+    font-size: 0.82rem;
+    line-height: 1.5rem;
+  }
+}
+
+.terminal-blue {
+  color: var(--terminal-blue);
+}

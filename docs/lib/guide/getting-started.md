@@ -2,12 +2,12 @@
 
 ## Overview
 
-Vite+ combines [Vite](https://vite.dev/), [Vitest](https://vitest.dev/), [Oxlint](https://oxc.rs/docs/guide/usage/linter.html), [Oxfmt](https://oxc.rs/docs/guide/usage/formatter.html), [Rolldown](https://rolldown.rs/), [tsdown](https://tsdown.dev/), and [Vite Task](https://github.com/voidzero-dev/vite-task) as a unified zero-config toolchain:
+Vite+ is the unified toolchain and entry point for modern web application development. It manages your runtime, package manager, and frontend toolchain in one place by combining [Vite](https://vite.dev/), [Vitest](https://vitest.dev/), [Oxlint](https://oxc.rs/docs/guide/usage/linter.html), [Oxfmt](https://oxc.rs/docs/guide/usage/formatter.html), [Rolldown](https://rolldown.rs/), [tsdown](https://tsdown.dev/), and [Vite Task](https://github.com/voidzero-dev/vite-task):
 
 - **Runtime Management:** Manage Node.js globally and per-project with `vp env`
 - **Package Management:** Install and manage dependencies with `vp install` and related commands
 - **Dev Server:** Run Vite's native ESM dev server with `vp dev`
-- **Code Health:** Run type checks, linting, and formatting with `vp check`
+- **Code Health:** Run linting, formatting, and type checks with Oxlint, Oxfmt, and `tsgo` via `vp check`
 - **Testing:** Run tests with bundled Vitest via `vp test`
 - **Build & Pack:** Build apps with `vp build` and build libraries or standalone app binaries with `vp pack`
 - **Task Runner:** Execute monorepo tasks with `vp run` and automated caching/dependency resolution

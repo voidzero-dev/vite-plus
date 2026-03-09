@@ -34,7 +34,7 @@ import testTerminal from '@local-assets/terminal-features/test.svg';
         <div
           class="block px-5 py-6 relative bg-slate rounded-tl rounded-bl outline-1 outline-offset-[2px] outline-white/20"
         >
-          <img loading="lazy" :src="testTerminal" alt="vite test terminal command" />
+          <img loading="lazy" :src="testTerminal" alt="vp test terminal command" />
         </div>
       </div>
     </div>

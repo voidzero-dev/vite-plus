@@ -4,11 +4,9 @@ import { ref, onMounted, onUnmounted } from 'vue';
 const features = [
   { id: 'feature-dev-build', label: 'dev & build' },
   { id: 'feature-test', label: 'test' },
-  { id: 'feature-lint', label: 'lint' },
-  { id: 'feature-format', label: 'fmt' },
+  { id: 'feature-check', label: 'check' },
   { id: 'feature-run', label: 'run' },
-  { id: 'feature-ui', label: 'ui' },
-  { id: 'feature-lib', label: 'lib' },
+  { id: 'feature-pack', label: 'pack' },
 ];
 
 const activeSection = ref('feature-dev-build');
@@ -180,7 +178,7 @@ onUnmounted(() => {
   <div class="wrapper wrapper wrapper--ticks border-t w-full relative z-20"></div>
   <section class="wrapper sticky top-0 border-b bg-primary z-10 overflow-hidden">
     <ul
-      class="w-full sm:grid sm:grid-cols-7 flex items-center divide-x divide-nickel relative overflow-x-auto scrollbar-hide touch-none sm:touch-auto select-none sm:select-auto"
+      class="w-full sm:grid sm:grid-cols-5 flex items-center divide-x divide-nickel relative overflow-x-auto scrollbar-hide touch-none sm:touch-auto select-none sm:select-auto"
     >
       <div
         class="absolute bottom-0 h-0.5 bg-white transition-all duration-300 ease-out"

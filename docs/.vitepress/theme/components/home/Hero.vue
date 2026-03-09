@@ -8,21 +8,20 @@
           <span class="inline-block">Toolchain for the Web</span>
         </h1>
         <p class="self-stretch text-center text-balance text-nickel">
-          dev, build, test, lint, format, monorepo caching & more in a single dependency, built for
-          scale, speed, and sanity
+          Manage your runtime, package manager, and frontend stack with one tool.
         </p>
+        <p class="text-sm text-grey">Free and open source under the MIT license.</p>
       </div>
       <div class="flex items-center gap-5">
         <a href="/vite/guide" target="_self" class="button button--primary"> Get started </a>
-        <!--<a href="#intro" @click="smoothScrollTo($event, 'intro')" class="button">-->
-        <!-- <a
-          href="https://voidzero.dev/posts/announcing-vite-plus?utm_source=viteplusdev&utm_content=top_learn_more"
+        <a
+          href="https://voidzero.dev/posts/announcing-vite-plus-alpha"
           target="_blank"
           rel="noopener noreferrer"
           class="button"
         >
-          Learn more
-        </a> -->
+          Read the Announcement
+        </a>
       </div>
     </div>
   </div>
@@ -34,9 +33,9 @@
     110deg,
     var(--color-primary) 0%,
     var(--color-primary) 40%,
-    #6c3bff 48%,
-    #6c3bff 50%,
-    #6c3bff 52%,
+    #6254fe 48%,
+    #6254fe 50%,
+    #6254fe 52%,
     var(--color-primary) 60%,
     var(--color-primary) 100%
   );

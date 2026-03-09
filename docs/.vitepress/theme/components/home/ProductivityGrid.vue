@@ -31,13 +31,13 @@ import tileVitest from '@local-assets/tiles/vitest.png';
             <div
               class="relative flex flex-col flex-1 sm:pl-6 before:content-none sm:before:content-[''] before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-full before:w-px before:bg-stroke"
             >
-              <p class="text-primary font-medium text-base sm:text-xl">36m+</p>
+              <p class="text-primary font-medium text-base sm:text-xl">69m+</p>
               <p class="leading-tight text-base">Weekly npm downloads</p>
             </div>
             <div
               class="relative flex flex-col flex-shrink-0 pl-6 before:content-[''] before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-full before:w-px before:bg-stroke"
             >
-              <p class="text-primary font-medium text-base sm:text-xl">75k</p>
+              <p class="text-primary font-medium text-base sm:text-xl">78.7k</p>
               <p class="leading-tight text-base">GitHub stars</p>
             </div>
           </div>
@@ -54,13 +54,13 @@ import tileVitest from '@local-assets/tiles/vitest.png';
             <div
               class="relative flex flex-col flex-1 sm:pl-6 before:content-none sm:before:content-[''] before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-full before:w-px before:bg-stroke"
             >
-              <p class="text-primary font-medium text-base sm:text-xl">16.5m+</p>
+              <p class="text-primary font-medium text-base sm:text-xl">35m+</p>
               <p class="leading-tight text-base">Weekly npm downloads</p>
             </div>
             <div
               class="relative flex flex-col flex-shrink-0 pl-6 before:content-[''] before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-full before:w-px before:bg-stroke"
             >
-              <p class="text-primary font-medium text-base sm:text-xl">15k</p>
+              <p class="text-primary font-medium text-base sm:text-xl">16.1k</p>
               <p class="leading-tight text-base">GitHub stars</p>
             </div>
           </div>
@@ -77,13 +77,13 @@ import tileVitest from '@local-assets/tiles/vitest.png';
             <div
               class="relative flex flex-col flex-1 sm:pl-6 before:content-none sm:before:content-[''] before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-full before:w-px before:bg-stroke"
             >
-              <p class="text-primary font-medium text-base sm:text-xl">3.8m+</p>
+              <p class="text-primary font-medium text-base sm:text-xl">5m+</p>
               <p class="leading-tight text-base">Weekly npm downloads</p>
             </div>
             <div
               class="relative flex flex-col flex-shrink-0 pl-6 before:content-[''] before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-full before:w-px before:bg-stroke"
             >
-              <p class="text-primary font-medium text-base sm:text-xl">16.5k</p>
+              <p class="text-primary font-medium text-base sm:text-xl">19.8k</p>
               <p class="leading-tight text-base">GitHub stars</p>
             </div>
           </div>
@@ -93,9 +93,10 @@ import tileVitest from '@local-assets/tiles/vitest.png';
     <div class="p-5 sm:p-10 flex flex-col gap-3 border-r-0">
       <h5>Stay fast at scale</h5>
       <p class="max-w-[26rem] text-pretty">
-        With low-level components written in Rust, Vite+ offers unparalleled performance at
-        enterprise scale: up to <span class="text-primary">40x faster builds</span> than webpack and
-        <span class="text-primary">100x faster linting</span> than ESLint.
+        With low-level components written in Rust, Vite+ delivers enterprise-scale performance: up
+        to <span class="text-primary">40x faster builds</span> than webpack,
+        <span class="text-primary">~50x to ~100x faster linting</span> than ESLint, and
+        <span class="text-primary">up to 30x faster formatting</span> than Prettier.
       </p>
       <RiveAnimation
         :desktop-src="stayFastAtScaleAnimation"
@@ -110,7 +111,7 @@ import tileVitest from '@local-assets/tiles/vitest.png';
         <li class="leading-tight">Stop wasting time on tooling maintenance</li>
         <li class="leading-tight">Improve cross-team developer mobility</li>
         <li class="leading-tight">
-          Standardize and enforce best practices, especially for AI-assisted workflows
+          Standardize best practices for humans and AI-assisted workflows
         </li>
       </ul>
       <RiveAnimation
@@ -123,8 +124,8 @@ import tileVitest from '@local-assets/tiles/vitest.png';
     <div class="p-5 sm:p-10 flex flex-col gap-3">
       <h5>Supply chain security</h5>
       <p class="max-w-[20rem] text-pretty">
-        Vite+ development undergoes the most rigorous security practices and we vet all its
-        dependencies. SLAs available.
+        Vite+ development follows rigorous security practices, and we vet its dependencies across
+        the unified toolchain. SLAs available.
       </p>
       <img
         loading="lazy"
