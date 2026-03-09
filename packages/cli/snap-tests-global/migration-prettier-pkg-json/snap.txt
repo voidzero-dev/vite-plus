@@ -1,0 +1,58 @@
+> vp migrate --no-interactive # migration should detect prettier in package.json and auto-migrate
+VITE+ - The Unified Toolchain for the Web
+
+
+Using default package manager: pnpm
+
+Prettier configuration detected. Auto-migrating to Oxfmt...
+
+pnpm@latest installing...
+
+pnpm@<semver> installed
+
+Migrating Prettier config to Oxfmt...
+
+Prettier config migrated to .oxfmtrc.json
+
+✔ Merged staged config into vite.config.ts
+
+Wrote agent instructions to AGENTS.md
+✔ Migration completed!
+
+
+> cat package.json # check prettier key removed, scripts rewritten, dep removed
+{
+  "name": "migration-prettier-pkg-json",
+  "scripts": {
+    "format": "vp fmt .",
+    "format:check": "vp fmt --check .",
+    "prepare": "vp config"
+  },
+  "devDependencies": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vite-plus": "latest"
+  },
+  "pnpm": {
+    "overrides": {
+      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+      "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+    }
+  },
+  "packageManager": "pnpm@<semver>"
+}
+
+> cat vite.config.ts # check oxfmt config merged into vite.config.ts with semi/singleQuote settings
+import { defineConfig } from "vite-plus";
+
+export default defineConfig({
+  staged: {
+    "*": "vp check --fix"
+  },
+  fmt: {
+    semi: true,
+    singleQuote: true,
+    printWidth: 80,
+    sortPackageJson: false,
+    ignorePatterns: [],
+  },
+});

@@ -83,7 +83,6 @@ export default defineConfig({
     "categories": {
       "correctness": "warn"
     },
-    "$schema": "./node_modules/oxlint/configuration_schema.json",
     "env": {
       "builtin": true
     },

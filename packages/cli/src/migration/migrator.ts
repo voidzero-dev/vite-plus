@@ -429,20 +429,44 @@ export async function migratePrettierToOxfmt(
   const vpBin = process.env.VITE_PLUS_CLI_BIN ?? 'vp';
   const spinner = getSpinner(interactive);
 
-  // Step 1: Run vp fmt --migrate=prettier if there's a prettier config at root (not package.json#prettier)
-  if (prettierConfigFile && prettierConfigFile !== PRETTIER_PACKAGE_JSON_CONFIG) {
-    spinner.start('Migrating Prettier config to Oxfmt...');
-    const migrateOk = await runPrettierMigrateStep(
-      vpBin,
-      projectPath,
-      spinner,
-      'Prettier migration failed',
-      'You can run `vp fmt --migrate=prettier` manually later',
-    );
-    if (!migrateOk) {
-      return false;
+  // Step 1: Generate .oxfmtrc.json from Prettier config
+  if (prettierConfigFile) {
+    let tempPrettierConfig: string | undefined;
+
+    // If config is in package.json, extract it to a temporary .prettierrc.json
+    // so that `vp fmt --migrate=prettier` can read it
+    if (prettierConfigFile === PRETTIER_PACKAGE_JSON_CONFIG) {
+      const packageJsonPath = path.join(projectPath, 'package.json');
+      const pkg = readJsonFile<{ prettier?: unknown }>(packageJsonPath);
+      if (pkg.prettier) {
+        tempPrettierConfig = path.join(projectPath, '.prettierrc.json');
+        fs.writeFileSync(tempPrettierConfig, JSON.stringify(pkg.prettier, null, 2));
+      } else {
+        // Config disappeared between detection and migration — nothing to migrate
+        return true;
+      }
     }
-    spinner.stop('Prettier config migrated to .oxfmtrc.json');
+
+    try {
+      spinner.start('Migrating Prettier config to Oxfmt...');
+      const migrateOk = await runPrettierMigrateStep(
+        vpBin,
+        projectPath,
+        spinner,
+        'Prettier migration failed',
+        'You can run `vp fmt --migrate=prettier` manually later',
+      );
+      if (!migrateOk) {
+        return false;
+      }
+      spinner.stop('Prettier config migrated to .oxfmtrc.json');
+    } finally {
+      if (tempPrettierConfig) {
+        try {
+          fs.unlinkSync(tempPrettierConfig);
+        } catch {}
+      }
+    }
   }
 
   // Step 2: Delete all prettier config files at root

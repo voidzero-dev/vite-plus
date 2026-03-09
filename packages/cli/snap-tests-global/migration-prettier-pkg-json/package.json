@@ -1,0 +1,15 @@
+{
+  "name": "migration-prettier-pkg-json",
+  "scripts": {
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "prettier": "^3.0.0",
+    "vite": "^7.0.0"
+  },
+  "prettier": {
+    "semi": true,
+    "singleQuote": true
+  }
+}
