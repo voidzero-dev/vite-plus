@@ -209,7 +209,7 @@ async function buildVite() {
             typeof plugin === 'object' &&
             plugin !== null &&
             'name' in plugin &&
-            plugin.name === 'rollup-plugin-license'
+            (plugin.name === 'rollup-plugin-license' || plugin.name === 'bundle-limit')
           );
         }),
       ];
