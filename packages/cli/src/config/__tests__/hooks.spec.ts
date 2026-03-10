@@ -1,6 +1,9 @@
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
-import { hookScript } from '../hooks.js';
+import { hookScript, install } from '../hooks.js';
 
 function countDirnameCalls(script: string): number {
   // Count nested dirname calls in the `d=...` line
@@ -10,6 +13,34 @@ function countDirnameCalls(script: string): number {
   }
   return (match[1].match(/dirname/g) ?? []).length;
 }
+
+describe('install', () => {
+  it('should create _/pre-commit but not pre-commit in hooks dir root', () => {
+    const { execSync } = require('node:child_process');
+    const { mkdtempSync, rmSync } = require('node:fs');
+    const { tmpdir } = require('node:os');
+
+    const tmp = mkdtempSync(join(tmpdir(), 'hooks-test-'));
+    const originalCwd = process.cwd();
+    try {
+      // Set up a temporary git repo
+      execSync('git init', { cwd: tmp, stdio: 'ignore' });
+      process.chdir(tmp);
+
+      const hooksDir = '.vite-hooks';
+      const result = install(hooksDir);
+      expect(result.isError).toBe(false);
+
+      // install() creates the internal shim at _/pre-commit
+      expect(existsSync(join(tmp, hooksDir, '_', 'pre-commit'))).toBe(true);
+      // install() does NOT create pre-commit at the hooks dir root
+      expect(existsSync(join(tmp, hooksDir, 'pre-commit'))).toBe(false);
+    } finally {
+      process.chdir(originalCwd);
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+});
 
 describe('hookScript', () => {
   it('should compute correct depth for simple dir', () => {

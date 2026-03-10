@@ -62,7 +62,7 @@ async function main() {
 
   // --- Step 1: Hooks setup ---
   const hooksDir = dir ?? '.vite-hooks';
-  const isFirstHooksRun = !existsSync(join(root, hooksDir, 'pre-commit'));
+  const isFirstHooksRun = !existsSync(join(root, hooksDir, '_', 'pre-commit'));
 
   let shouldSetupHooks = true;
   if (interactive && isFirstHooksRun && !dir) {
