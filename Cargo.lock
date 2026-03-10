@@ -4922,7 +4922,6 @@ dependencies = [
  "petgraph 0.8.3",
  "rayon",
  "regex",
- "rolldown-notify",
  "rolldown_common",
  "rolldown_dev",
  "rolldown_dev_common",
@@ -4932,6 +4931,7 @@ dependencies = [
  "rolldown_error",
  "rolldown_fs",
  "rolldown_plugin",
+ "rolldown_plugin_asset_module",
  "rolldown_plugin_chunk_import_map",
  "rolldown_plugin_copy_module",
  "rolldown_plugin_data_url",
@@ -4944,7 +4944,6 @@ dependencies = [
  "rolldown_testing",
  "rolldown_tracing",
  "rolldown_utils",
- "rolldown_watcher",
  "rolldown_workspace",
  "rustc-hash",
  "serde",
@@ -5070,6 +5069,7 @@ dependencies = [
  "rolldown_sourcemap",
  "rolldown_tracing",
  "rolldown_utils",
+ "rolldown_watcher",
  "rustc-hash",
  "serde",
  "serde_json",
@@ -5248,6 +5248,21 @@ dependencies = [
  "tokio",
  "tracing",
  "typedmap",
+]
+
+[[package]]
+name = "rolldown_plugin_asset_module"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "memchr",
+ "rolldown_common",
+ "rolldown_plugin",
+ "rolldown_utils",
+ "rustc-hash",
+ "string_wizard",
+ "sugar_path",
+ "tokio",
 ]
 
 [[package]]
@@ -5726,6 +5741,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "arcstr",
+ "futures",
  "oxc_index",
  "rolldown",
  "rolldown-notify",
@@ -5733,6 +5749,8 @@ dependencies = [
  "rolldown_error",
  "rolldown_fs_watcher",
  "rolldown_utils",
+ "rolldown_workspace",
+ "sugar_path",
  "tokio",
  "tracing",
 ]
