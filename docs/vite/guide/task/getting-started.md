@@ -64,7 +64,7 @@ $ vp build ✗ cache miss: 'src/index.ts' modified, executing
 
 The task runner automatically tracks which files your command reads. No configuration needed.
 
-The `--cache` flag is a quick way to try caching, but the default behavior may not suit every task — you may need to control which files or environment variables affect the cache. To configure caching properly and enable it permanently, define the task in `vite.config.ts`.
+The `--cache` flag is a quick way to try caching, but the default behavior may not suit every task — you may need to control which files or environment variables affect the cache. To configure caching properly and enable it permanently, define the task in `vite.config.ts`. See [Caching](./caching) for how it works and [Config Reference](./config) for all task options.
 
 ## Task Definitions {#task-definitions}
 
