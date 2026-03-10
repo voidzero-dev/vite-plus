@@ -4,6 +4,7 @@ mod file_walker;
 mod import_rewriter;
 mod package;
 mod prettier;
+mod script_rewrite;
 mod vite_config;
 
 pub use file_walker::{WalkResult, find_ts_files};
