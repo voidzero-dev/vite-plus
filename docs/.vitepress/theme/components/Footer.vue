@@ -138,6 +138,6 @@
 
 <style scoped></style>
 <script setup lang="ts">
-import Sponsors from "@components/oss/Sponsors.vue";
-import { Icon } from "@iconify/vue";
+import Sponsors from '@components/oss/Sponsors.vue';
+import { Icon } from '@iconify/vue';
 </script>

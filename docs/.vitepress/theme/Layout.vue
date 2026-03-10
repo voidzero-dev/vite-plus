@@ -27,7 +27,7 @@ watch(
   () => frontmatter.value?.layout,
   () => {
     ensureHomeLight();
-  },
+  }
 );
 </script>
 
