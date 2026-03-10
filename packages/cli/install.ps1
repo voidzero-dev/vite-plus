@@ -322,11 +322,8 @@ function Main {
         Push-Location $VersionDir
         try {
             $env:CI = "true"
-            $ErrorActionPreference = "SilentlyContinue"
-            & "$BinDir\vp.exe" install --silent 2>&1 | Out-Null
-            $ErrorActionPreference = "Stop"
+            & "$BinDir\vp.exe" install --silent
         } finally {
-            $ErrorActionPreference = "Stop"
             Pop-Location
         }
     }

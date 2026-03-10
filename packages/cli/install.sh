@@ -577,7 +577,7 @@ WRAPPER_EOF
   # Install production dependencies (skip if VITE_PLUS_SKIP_DEPS_INSTALL is set,
   # e.g. during local dev where install-global-cli.ts handles deps separately)
   if [ -z "${VITE_PLUS_SKIP_DEPS_INSTALL:-}" ]; then
-    (cd "$VERSION_DIR" && CI=true "$BIN_DIR/vp" install --silent > /dev/null 2>&1)
+    (cd "$VERSION_DIR" && CI=true "$BIN_DIR/vp" install --silent)
   fi
 
   # Create/update current symlink (use relative path for portability)

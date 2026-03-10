@@ -1,22 +1,11 @@
 > vp install --no-frozen-lockfile --silent # install dependencies work
-VITE+ - The Unified Toolchain for the Web
-
-
 > mkdir -p packages/sub-project && echo '{"name": "sub-project", "dependencies": { "testnpm2": "1.0.0" }}' > packages/sub-project/package.json # create sub project and package.json
 > vp install --no-frozen-lockfile --silent # install again should work and without cache
-VITE+ - The Unified Toolchain for the Web
-
-
 > ls packages/sub-project/node_modules/testnpm2/package.json # check testnpm2 is installed
 packages/sub-project/node_modules/testnpm2/package.json
 
 > mkdir -p others/other && echo '{"name": "other", "dependencies": { "testnpm2": "1.0.0" }}' > others/other/package.json # create non workspace project
 > vp install --no-frozen-lockfile --silent # should install cache hit
-VITE+ - The Unified Toolchain for the Web
-
-
 > test -d others/other/node_modules/testnpm2 && echo 'Error: directory exists.' >&2 && exit 1 || true # check testnpm2 is not installed
 > rm -rf packages/sub-project # remove sub project
 > vp install --no-frozen-lockfile --silent | sed -E 's|packages.*|packages*|' # should install again without cache
-VITE+ - The Unified Toolchain for the Web
-

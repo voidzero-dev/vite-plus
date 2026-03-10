@@ -2,8 +2,6 @@
 no package.json
 
 > vp install --silent && cat package.json # should auto-create package.json and install
-VITE+ - The Unified Toolchain for the Web
-
 {
   "type": "module",
   "packageManager": "pnpm@<semver>"

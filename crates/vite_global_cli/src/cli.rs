@@ -1538,7 +1538,7 @@ pub async fn run_command_with_options(
             packages,
             pass_through_args,
         } => {
-            print_runtime_header(render_options.show_header);
+            print_runtime_header(render_options.show_header && !silent);
             // If packages are provided, redirect to Add command
             if let Some(pkgs) = packages
                 && !pkgs.is_empty()
