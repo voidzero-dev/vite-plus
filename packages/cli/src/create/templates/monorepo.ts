@@ -32,7 +32,7 @@ export async function executeMonorepoTemplate(
 
   // Ask user to init git repository before creation starts.
   let initGit = true; // Default to yes
-  if (interactive) {
+  if (interactive && !options?.silent) {
     const selected = await prompts.confirm({
       message: `Initialize git repository:`,
       initialValue: true,

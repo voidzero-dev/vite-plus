@@ -346,7 +346,7 @@ function showCreateSummary(options: {
 
 async function main() {
   const { templateName, options, templateArgs } = parseArgs();
-  const compactOutput = !options.verbose;
+  let compactOutput = !options.verbose;
 
   // #region Handle help flag
   if (options.help) {
@@ -513,6 +513,13 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   }
 
   const isBuiltinTemplate = selectedTemplateName.startsWith('vite:');
+
+  // Remote templates (e.g., @tanstack/create-start, custom templates) run their own
+  // interactive CLI, so verbose mode is needed to show their output.
+  if (!isBuiltinTemplate) {
+    compactOutput = false;
+  }
+
   if (targetDir && !isBuiltinTemplate) {
     cancelAndExit('The --directory option is only available for builtin templates', 1);
   }
@@ -687,7 +694,9 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       onCancel: () => cancelAndExit(),
     }));
 
-  shouldSetupHooks = await promptGitHooks(options);
+  if (!isMonorepo) {
+    shouldSetupHooks = await promptGitHooks(options);
+  }
 
   const createProgress =
     options.interactive && compactOutput ? prompts.spinner({ indicator: 'timer' }) : undefined;
