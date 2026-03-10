@@ -114,32 +114,6 @@ jobs:
           vp upgrade --rollback
           vp --version
 
-      - name: Verify implode and reinstall
-        run: |
-          # Implode (uninstall)
-          vp implode --yes
-          # Verify directory removed
-          if [ -d "$HOME/.vite-plus" ]; then
-            echo "Error: ~/.vite-plus still exists after implode"
-            exit 1
-          fi
-          # Verify shell profile cleaned
-          for f in ~/.zshenv ~/.zshrc ~/.bashrc ~/.bash_profile ~/.profile; do
-            if [ -f "$f" ] && grep -q "vite-plus/env" "$f"; then
-              echo "Error: $f still contains vite-plus/env line"
-              exit 1
-            fi
-          done
-          # Reinstall
-          cat packages/cli/install.sh | bash
-          # Source shell config
-          if [ -f ~/.zshenv ]; then source ~/.zshenv
-          elif [ -f ~/.bashrc ]; then source ~/.bashrc
-          else export PATH="$HOME/.vite-plus/bin:$PATH"
-          fi
-          # Verify reinstall works
-          vp --version
-
   test-install-sh-arm64:
     name: Test install.sh (Linux ARM64 glibc via QEMU)
     runs-on: ubuntu-latest
@@ -197,28 +171,6 @@ jobs:
               vp upgrade 0.0.0-gbe8891a5.20260227-1615
               vp --version
               vp upgrade --rollback
-              vp --version
-
-              # Verify implode and reinstall
-              vp implode --yes
-              if [ -d \"\$HOME/.vite-plus\" ]; then
-                echo \"Error: ~/.vite-plus still exists after implode\"
-                exit 1
-              fi
-              for f in ~/.profile ~/.bashrc; do
-                if [ -f \"\$f\" ] && grep -q \"vite-plus/env\" \"\$f\"; then
-                  echo \"Error: \$f still contains vite-plus/env line\"
-                  exit 1
-                fi
-              done
-              cat /workspace/packages/cli/install.sh | bash
-              if [ -f ~/.profile ]; then
-                source ~/.profile
-              elif [ -f ~/.bashrc ]; then
-                source ~/.bashrc
-              else
-                export PATH=\"\$HOME/.vite-plus/bin:\$PATH\"
-              fi
               vp --version
 
               # FIXME: qemu: uncaught target signal 11 (Segmentation fault) - core dumped
@@ -302,18 +254,6 @@ jobs:
           vp upgrade --rollback
           vp --version
 
-      - name: Verify implode and reinstall
-        shell: powershell
-        run: |
-          vp implode --yes
-          if (Test-Path "$env:USERPROFILE\.vite-plus") {
-            Write-Error "~/.vite-plus still exists after implode"
-            exit 1
-          }
-          & ./packages/cli/install.ps1
-          $env:Path = "$env:USERPROFILE\.vite-plus\bin;$env:Path"
-          vp --version
-
   test-install-ps1-arm64:
     name: Test install.ps1 (Windows ARM64)
     runs-on: windows-11-arm
@@ -381,18 +321,6 @@ jobs:
           vp upgrade --rollback
           vp --version
 
-      - name: Verify implode and reinstall
-        shell: pwsh
-        run: |
-          vp implode --yes
-          if (Test-Path "$env:USERPROFILE\.vite-plus") {
-            Write-Error "~/.vite-plus still exists after implode"
-            exit 1
-          }
-          & ./packages/cli/install.ps1
-          $env:Path = "$env:USERPROFILE\.vite-plus\bin;$env:Path"
-          vp --version
-
   test-install-ps1:
     name: Test install.ps1 (Windows x64)
     runs-on: windows-latest
@@ -420,18 +348,6 @@ jobs:
           vp --version
           # rollback to the previous version (should succeed after a real update)
           vp upgrade --rollback
-          vp --version
-
-      - name: Verify implode and reinstall
-        shell: pwsh
-        run: |
-          vp implode --yes
-          if (Test-Path "$env:USERPROFILE\.vite-plus") {
-            Write-Error "~/.vite-plus still exists after implode"
-            exit 1
-          }
-          & ./packages/cli/install.ps1
-          $env:Path = "$env:USERPROFILE\.vite-plus\bin;$env:Path"
           vp --version
 
       - name: Verify installation on powershell

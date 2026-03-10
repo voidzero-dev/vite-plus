@@ -205,16 +205,7 @@ fn remove_vite_plus_dir(home_dir: &AbsolutePathBuf) -> Result<(), Error> {
                     return Err(Error::CommandExecution(e));
                 }
 
-                let trash_str = trash_path.to_string_lossy();
-                let cmd_arg =
-                    vite_str::format!("ping -n 3 127.0.0.1 >NUL && rmdir /S /Q \"{trash_str}\"");
-                output::info(&vite_str::format!("Running: cmd.exe /C {cmd_arg}"));
-                let result = std::process::Command::new("cmd.exe")
-                    .args(["/C", &cmd_arg])
-                    .stdin(std::process::Stdio::null())
-                    .spawn();
-
-                match result {
+                match spawn_deferred_delete(&trash_path) {
                     Ok(_) => {
                         output::success(&vite_str::format!(
                             "Scheduled removal of {} (will complete shortly)",
@@ -233,6 +224,33 @@ fn remove_vite_plus_dir(home_dir: &AbsolutePathBuf) -> Result<(), Error> {
         }
         Ok(())
     }
+}
+
+/// Build a `cmd.exe` script that retries `rmdir /S /Q` up to 10 times with
+/// 1-second pauses, exiting as soon as the directory is gone.
+#[cfg(windows)]
+fn build_deferred_delete_script(trash_path: &std::path::Path) -> Str {
+    let p = trash_path.to_string_lossy();
+    vite_str::format!(
+        "for /L %i in (1,1,10) do @(\
+            if not exist \"{p}\" exit /B 0 & \
+            rmdir /S /Q \"{p}\" 2>NUL & \
+            if not exist \"{p}\" exit /B 0 & \
+            timeout /T 1 /NOBREAK >NUL\
+        )"
+    )
+}
+
+/// Spawn a detached `cmd.exe` process that retries deletion of `trash_path`.
+#[cfg(windows)]
+fn spawn_deferred_delete(trash_path: &std::path::Path) -> std::io::Result<std::process::Child> {
+    let script = build_deferred_delete_script(trash_path);
+    std::process::Command::new("cmd.exe")
+        .args(["/C", &script])
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
 }
 
 /// Check if file content contains Vite+ sourcing lines.
@@ -382,6 +400,17 @@ mod tests {
 
         let result = remove_vite_plus_dir(&target);
         assert!(result.is_err());
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn test_build_deferred_delete_script() {
+        let path = std::path::Path::new(r"C:\Users\test\.vite-plus.removing-1234");
+        let script = build_deferred_delete_script(path);
+        assert!(script.contains("rmdir /S /Q"));
+        assert!(script.contains(r"C:\Users\test\.vite-plus.removing-1234"));
+        assert!(script.contains("for /L %i in (1,1,10)"));
+        assert!(script.contains("timeout /T 1 /NOBREAK"));
     }
 
     #[test]

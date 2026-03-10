@@ -518,6 +518,45 @@ jobs:
             exit /b 1
           )
 
+      - name: Test implode (bash)
+        shell: bash
+        run: |
+          vp implode --yes
+          VP_HOME="${USERPROFILE:-$HOME}/.vite-plus"
+          if [ -d "$VP_HOME" ]; then
+            echo "Error: $VP_HOME still exists after implode"
+            exit 1
+          fi
+          # Reinstall
+          pnpm bootstrap-cli:ci
+          vp --version
+
+      - name: Test implode (powershell)
+        if: ${{ matrix.os == 'windows-latest' }}
+        shell: pwsh
+        run: |
+          vp implode --yes
+          Start-Sleep -Seconds 5
+          if (Test-Path "$env:USERPROFILE\.vite-plus") {
+            Write-Error "~/.vite-plus still exists after implode"
+            exit 1
+          }
+          pnpm bootstrap-cli:ci
+          vp --version
+
+      - name: Test implode (cmd)
+        if: ${{ matrix.os == 'windows-latest' }}
+        shell: cmd
+        run: |
+          vp implode --yes
+          timeout /T 5 /NOBREAK >NUL
+          if exist "%USERPROFILE%\.vite-plus" (
+            echo Error: .vite-plus still exists after implode
+            exit /b 1
+          )
+          call pnpm bootstrap-cli:ci
+          vp --version
+
   install-e2e-test:
     name: Local CLI `vp install` E2E test
     needs:
