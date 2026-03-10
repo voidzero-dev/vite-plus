@@ -4,7 +4,76 @@ import type { VoidZeroThemeConfig } from '@voidzero-dev/vitepress-theme';
 import { extendConfig } from '@voidzero-dev/vitepress-theme/config';
 import { defineConfig, type HeadConfig } from 'vitepress';
 
-// https://vitepress.dev/reference/site-config
+const taskRunnerGuideItems = [
+  {
+    text: 'Run',
+    link: '/guide/run',
+  },
+  {
+    text: 'Task Caching',
+    link: '/guide/cache',
+  },
+  {
+    text: 'Running Binaries',
+    link: '/guide/vpx',
+  },
+];
+
+const guideSidebar = [
+  {
+    text: 'Introduction',
+    items: [
+      { text: 'Getting Started', link: '/guide/' },
+      { text: 'Creating a Project', link: '/guide/create' },
+      { text: 'Migrate to Vite+', link: '/guide/migrate' },
+      { text: 'Installing Dependencies', link: '/guide/install' },
+      { text: 'Environment', link: '/guide/env' },
+    ],
+  },
+  {
+    text: 'Develop',
+    items: [
+      { text: 'Dev', link: '/guide/dev' },
+      {
+        text: 'Check',
+        link: '/guide/check',
+        items: [
+          { text: 'Lint', link: '/guide/lint' },
+          { text: 'Format', link: '/guide/fmt' },
+        ],
+      },
+      { text: 'Test', link: '/guide/test' },
+    ],
+  },
+  {
+    text: 'Execute',
+    items: taskRunnerGuideItems,
+  },
+  {
+    text: 'Build',
+    items: [
+      { text: 'Build', link: '/guide/build' },
+      { text: 'Pack', link: '/guide/pack' },
+    ],
+  },
+  {
+    text: 'Maintain',
+    items: [
+      { text: 'Upgrading Vite+', link: '/guide/upgrade' },
+      { text: 'Removing Vite+', link: '/guide/implode' },
+    ],
+  },
+  {
+    text: 'Workflow',
+    items: [
+      { text: 'IDE Integration', link: '/guide/ide-integration' },
+      { text: 'CI', link: '/guide/ci' },
+      { text: 'Commit Hooks', link: '/guide/commit-hooks' },
+      { text: 'Troubleshooting', link: '/guide/troubleshooting' },
+    ],
+  },
+];
+
 export default extendConfig(
   defineConfig({
     title: 'Vite+',
@@ -35,7 +104,6 @@ export default extendConfig(
           defer: '',
         },
       ],
-      // ["script", {}, "document.documentElement.setAttribute('data-theme', 'light')"],
     ],
     vite: {
       resolve: {
@@ -51,665 +119,62 @@ export default extendConfig(
       nav: [
         {
           text: 'Guide',
-          activeMatch: '/vite/guide/',
-          items: [
-            { text: 'Vite Core', link: '/vite/guide/' },
-            { text: 'Test', link: '/vite/guide/test/getting-started' },
-            { text: 'Lint', link: '/vite/guide/lint/getting-started' },
-            { text: 'Format', link: '/vite/guide/format/getting-started' },
-            { text: 'Task Runner', link: '/vite/guide/task/getting-started' },
-            { text: 'Library Bundler', link: '/lib/guide/getting-started' },
-            { text: 'DevTools', link: '/guide/devtools/getting-started' },
-            { text: 'Package Manager', link: '/guide/package-manager/getting-started' },
-          ],
+          link: '/guide/',
+          activeMatch: '^/guide/',
         },
         {
           text: 'Config',
-          activeMatch: '/config/',
-          items: [
-            { text: 'Vite Core', link: '/config/' },
-            { text: 'Test', link: '/config/test' },
-            { text: 'Lint', link: '/config/lint' },
-            { text: 'Format', link: '/config/format' },
-            { text: 'Task Runner', link: '/vite/guide/task/config' },
-            { text: 'Package Manager', link: '/config/package-manager' },
-          ],
+          link: '/config/',
+          activeMatch: '^/config/',
         },
-        {
-          text: 'APIs',
-          activeMatch: '/apis/',
-          items: [
-            { text: 'Vite API', link: '/apis/' },
-            { text: 'Environment API', link: '/apis/environment' },
-            { text: 'Test API', link: '/apis/test' },
-            { text: 'Lint API', link: '/apis/lint' },
-            { text: 'Format API', link: '/apis/format' },
-            { text: 'Task Runner API', link: '/apis/task-runner' },
-          ],
-        },
-        {
-          text: 'Plugins',
-          activeMatch: '/plugins/',
-          items: [
-            { text: 'Vite Plugins', link: '/plugins/' },
-            { text: 'Test Plugins', link: '/plugins/test' },
-            { text: 'Lint Plugins', link: '/plugins/lint' },
-            { text: 'Format Plugins', link: '/plugins/format' },
-            { text: 'Task Runner Plugins', link: '/plugins/task-runner' },
-          ],
-        },
-        // {
-        //   text: 'Test',
-        //   activeMatch: '/plugins/',
-        //   items: [
-        //     { text: 'Guide & API', link: '/test/guide/' },
-        //     { text: 'Config', link: '/test/config/' },
-        //     { text: 'Browser Mode', link: '/test/browser-mode/' },
-        //   ],
-        // },
-        // {
-        //   text: 'Format',
-        //   activeMatch: '/plugins/',
-        //   items: [
-        //     { text: 'Guide & API', link: '/test/guide/' },
-        //     { text: 'Config', link: '/test/config/' },
-        //     { text: 'Browser Mode', link: '/test/browser-mode/' },
-        //   ],
-        // },
         {
           text: 'Resources',
           items: [
-            { text: 'Team', link: 'https://voidzero.dev/team' },
-            { text: 'Blog', link: 'https://voidzero.dev/blog' },
+            { text: 'GitHub', link: 'https://github.com/voidzero-dev/vite-plus' },
             { text: 'Releases', link: 'https://github.com/voidzero-dev/vite-plus/releases' },
             {
-              items: [
-                {
-                  text: 'Awesome Vite+',
-                  link: 'https://github.com/voidzero-dev/awesome-vite-plus',
-                },
-                {
-                  text: 'ViteConf',
-                  link: 'https://viteconf.org',
-                },
-                {
-                  text: 'DEV Community',
-                  link: 'https://dev.to/t/vite',
-                },
-                {
-                  text: 'Changelog',
-                  link: 'https://github.com/voidzero-dev/vite-plus/releases',
-                },
-                {
-                  text: 'Contributing',
-                  link: 'https://github.com/voidzero-dev/vite-plus/blob/main/CONTRIBUTING.md',
-                },
-              ],
+              text: 'Announcement',
+              link: 'https://voidzero.dev/posts/announcing-vite-plus-alpha',
+            },
+            {
+              text: 'Contributing',
+              link: 'https://github.com/voidzero-dev/vite-plus/blob/main/CONTRIBUTING.md',
             },
           ],
         },
       ],
-
       sidebar: {
-        '/vite/guide/': {
-          base: '/vite/guide/',
-          items: [
-            {
-              text: 'Introduction',
-              items: [
-                {
-                  text: 'Getting Started',
-                  link: 'index',
-                },
-                {
-                  text: 'Monorepo',
-                  link: 'monorepo',
-                },
-                {
-                  text: 'Philosophy',
-                  link: 'philosophy',
-                },
-                {
-                  text: 'Why Vite+',
-                  link: 'why',
-                },
-                {
-                  text: 'Migration',
-                  link: 'migration',
-                },
-              ],
-            },
-            {
-              text: 'Vite Core',
-              items: [
-                {
-                  text: 'Features',
-                  link: 'features',
-                },
-                {
-                  text: 'CLI',
-                  link: 'cli',
-                },
-                {
-                  text: 'Using Plugins',
-                  link: 'using-plugins',
-                },
-                {
-                  text: 'Dependency Pre-Bundling',
-                  link: 'dependency-pre-bundling',
-                },
-                {
-                  text: 'Static Asset Handling',
-                  link: 'static-asset-handling',
-                },
-                {
-                  text: 'Building for Production',
-                  link: 'building-for-production',
-                },
-                {
-                  text: 'Deploying a Static Site',
-                  link: 'deploying-a-static-site',
-                },
-                {
-                  text: 'Env Variables and Modes',
-                  link: 'env-variables-and-modes',
-                },
-                {
-                  text: 'Server-Side Rendering',
-                  link: 'server-side-rendering',
-                },
-                {
-                  text: 'Backend Integration',
-                  link: 'backend-integration',
-                },
-                {
-                  text: 'Troubleshooting',
-                  link: 'troubleshooting',
-                },
-                {
-                  text: 'Performance',
-                  link: 'performance',
-                },
-                {
-                  text: 'Migration from vite@7+',
-                  link: 'migration',
-                },
-              ],
-            },
-            {
-              text: 'Test',
-              items: [
-                {
-                  text: 'Getting Started',
-                  link: '/guide/test/getting-started',
-                },
-                {
-                  text: 'Features',
-                  link: '/guide/test/features',
-                },
-                {
-                  text: 'CLI',
-                  link: '/guide/test/cli',
-                },
-                {
-                  text: 'Test Filtering',
-                  link: '/guide/test/test-filtering',
-                },
-                {
-                  text: '...',
-                  link: '/guide/test/dependency-pre-bundling',
-                },
-                {
-                  text: 'Migration from vitest',
-                  link: '/guide/test/migration-from-vitest',
-                },
-              ],
-            },
-            {
-              text: 'Lint',
-              items: [
-                {
-                  text: 'Getting Started',
-                  link: '/guide/lint/getting-started',
-                },
-                {
-                  text: 'Features',
-                  link: '/guide/lint/features',
-                },
-                {
-                  text: 'CLI',
-                  link: '/guide/lint/cli',
-                },
-                {
-                  text: '...',
-                  link: '/guide/test/dependency-pre-bundling',
-                },
-                {
-                  text: 'Migration from oxlint',
-                  link: '/guide/test/migration-from-oxlint',
-                },
-                {
-                  text: 'Migration from ESLint',
-                  link: '/guide/test/migration-from-eslint',
-                },
-              ],
-            },
-            {
-              text: 'Format',
-              items: [
-                {
-                  text: 'Getting Started',
-                  link: '/guide/format/getting-started',
-                },
-                {
-                  text: 'Features',
-                  link: '/guide/format/features',
-                },
-                {
-                  text: 'CLI',
-                  link: '/guide/format/cli',
-                },
-                {
-                  text: 'Migration from oxfmt',
-                  link: '/guide/format/migration-from-oxfmt',
-                },
-                {
-                  text: 'Migration from Prettier',
-                  link: '/guide/format/migration-from-prettier',
-                },
-              ],
-            },
-            {
-              text: 'Task Runner',
-              items: [
-                {
-                  text: 'Getting Started',
-                  link: 'task/getting-started',
-                },
-                {
-                  text: 'Running Tasks',
-                  link: 'task/running-tasks',
-                },
-                {
-                  text: 'Caching',
-                  link: 'task/caching',
-                },
-                {
-                  text: 'CLI',
-                  link: 'task/cli',
-                },
-                {
-                  text: 'Config',
-                  link: 'task/config',
-                },
-              ],
-            },
-            {
-              text: 'Library Bundler',
-              items: [
-                {
-                  text: 'Getting Started',
-                  link: '/guide/library/getting-started',
-                },
-                {
-                  text: 'Features',
-                  link: '/guide/library/features',
-                },
-                {
-                  text: 'CLI',
-                  link: '/guide/library/cli',
-                },
-                {
-                  text: 'Migration from tsdown',
-                  link: '/guide/library/migration-from-tsdown',
-                },
-                {
-                  text: 'Migration from tsup',
-                  link: '/guide/library/migration-from-tsup',
-                },
-                {
-                  text: 'Migration from esbuild',
-                  link: '/guide/library/migration-from-esbuild',
-                },
-              ],
-            },
-            {
-              text: 'DevTools',
-              items: [
-                {
-                  text: 'Getting Started',
-                  link: '/guide/devtools/getting-started',
-                },
-                {
-                  text: 'Features',
-                  link: '/guide/library/features',
-                },
-                {
-                  text: 'CLI',
-                  link: '/guide/devtools/cli',
-                },
-              ],
-            },
-            {
-              text: 'Package Manager',
-              items: [
-                {
-                  text: 'Getting Started',
-                  link: '/guide/package-manager/getting-started',
-                },
-                {
-                  text: 'Features',
-                  link: '/guide/package-manager/features',
-                },
-                {
-                  text: 'CLI',
-                  link: '/guide/package-manager/cli',
-                },
-              ],
-            },
-          ],
-        },
-        '/lib/guide/': {
-          base: '/lib/guide/',
-          items: [
-            {
-              text: 'Library Bundler',
-              items: [
-                {
-                  text: 'Introduction',
-                  link: 'introduction',
-                },
-                {
-                  text: 'Getting Started',
-                  link: 'getting-started',
-                },
-                {
-                  text: 'Migration from tsdown',
-                  link: '/guide/library/migration-from-tsdown',
-                },
-                {
-                  text: 'Migration from tsup',
-                  link: '/guide/library/migration-from-tsup',
-                },
-                {
-                  text: 'Migration from esbuild',
-                  link: '/guide/library/migration-from-esbuild',
-                },
-              ],
-            },
-            {
-              text: 'Options',
-              items: [
-                {
-                  text: 'Entry',
-                  link: 'entry',
-                },
-                {
-                  text: 'Config File',
-                  link: 'config-file',
-                },
-                {
-                  text: 'Declaration Files (dts)',
-                  link: 'dts',
-                },
-              ],
-            },
-            {
-              text: 'Recipes',
-              items: [
-                {
-                  text: 'Vue Support',
-                  link: 'vue-support',
-                },
-                {
-                  text: 'React Support',
-                  link: 'react-support',
-                },
-                {
-                  text: 'Svelte Support',
-                  link: 'svelte-support',
-                },
-              ],
-            },
-            {
-              text: 'Advanced',
-              items: [
-                {
-                  text: 'Plugins',
-                  link: 'plugins',
-                },
-                {
-                  text: 'Hooks',
-                  link: 'hooks',
-                },
-                {
-                  text: 'Rolldown Options',
-                  link: 'rolldown-options',
-                },
-                {
-                  text: 'Programmatic Usage',
-                  link: 'programmatic-usage',
-                },
-              ],
-            },
-            {
-              text: 'API Reference',
-              items: [
-                {
-                  text: 'Command Line Interface',
-                  link: 'command-line-interface',
-                },
-                {
-                  text: 'Config Options',
-                  link: 'config-options',
-                },
-                {
-                  text: 'Type Definitions',
-                  items: [
-                    {
-                      text: 'AttwOptions',
-                      link: 'attributes-options',
-                    },
-                    {
-                      text: 'BuildContext',
-                      link: 'build-context',
-                    },
-                  ],
-                },
-              ],
-            },
-          ],
-        },
+        '/guide/': guideSidebar,
         '/config/': [
           {
-            text: 'Vite Core',
+            text: 'Configuration',
             items: [
-              {
-                text: 'Configuring Vite+',
-                link: '/config/',
-              },
-              {
-                text: 'Shared Options',
-                link: '/config/shared-options',
-              },
-              {
-                text: 'Server Options',
-                link: '/config/server-options',
-              },
-              {
-                text: 'Build Options',
-                link: '/config/build-options',
-              },
-              {
-                text: 'Preview Options',
-                link: '/config/preview-options',
-              },
-              {
-                text: 'Dep Optimization Options',
-                link: '/config/dep-optimization-options',
-              },
-              {
-                text: 'SSR Options',
-                link: '/config/ssr-options',
-              },
-              {
-                text: 'Worker Options',
-                link: '/config/worker-options',
-              },
-            ],
-          },
-          {
-            text: 'Test',
-            items: [
-              {
-                text: 'Configuring Test',
-                link: '/config/test',
-              },
-              {
-                text: 'Test Options',
-                link: '/config/test-options',
-              },
-            ],
-          },
-          {
-            text: 'Lint',
-            items: [
-              {
-                text: 'Configuring Lint',
-                link: '/config/lint',
-              },
-              {
-                text: 'Lint Options',
-                link: '/config/lint-options',
-              },
-            ],
-          },
-          {
-            text: 'Task Runner',
-            items: [
-              {
-                text: 'Configuring Task Runner',
-                link: '/vite/guide/task/config',
-              },
+              { text: 'Configuring Vite+', link: '/config/' },
+              { text: 'Run', link: '/config/run' },
+              { text: 'Format', link: '/config/fmt' },
+              { text: 'Lint', link: '/config/lint' },
+              { text: 'Test', link: '/config/test' },
+              { text: 'Build', link: '/config/build' },
+              { text: 'Pack', link: '/config/pack' },
+              { text: 'Staged', link: '/config/staged' },
             ],
           },
         ],
-        '/apis/': [
-          {
-            text: 'Vite Core API',
-            items: [
-              {
-                text: 'Plugin API',
-                link: '/apis/vite/plugin',
-              },
-              {
-                text: 'HMR API',
-                link: '/apis/vite/hmr',
-              },
-              {
-                text: 'JavaScript API',
-                link: '/apis/vite/javascript',
-              },
-            ],
-          },
-          {
-            text: 'Environment API',
-            items: [
-              {
-                text: 'Introduction',
-                link: '/apis/environment/introduction',
-              },
-              {
-                text: 'Environment Instances',
-                link: '/apis/environment/instances',
-              },
-              {
-                text: 'Plugins',
-                link: '/apis/environment/plugins',
-              },
-              {
-                text: 'Frameworks',
-                link: '/apis/environment/frameworks',
-              },
-              {
-                text: 'Runtimes',
-                link: '/apis/environment/runtimes',
-              },
-            ],
-          },
-          {
-            text: 'Test API',
-            items: [
-              {
-                text: 'Introduction',
-                link: '/apis/test/introduction',
-              },
-              {
-                text: 'Plugin API',
-                link: '/apis/test/plugin',
-              },
-            ],
-          },
-          {
-            text: 'Lint API',
-            items: [
-              {
-                text: 'Introduction',
-                link: '/apis/lint/introduction',
-              },
-              {
-                text: 'Plugin API',
-                link: '/apis/lint/plugin',
-              },
-            ],
-          },
-          {
-            text: 'Format API',
-            items: [
-              {
-                text: 'Introduction',
-                link: '/apis/format/introduction',
-              },
-              {
-                text: 'Plugin API',
-                link: '/apis/format/plugin',
-              },
-            ],
-          },
-          {
-            text: 'Task Runner API',
-            items: [
-              {
-                text: 'Introduction',
-                link: '/apis/task-runner/introduction',
-              },
-              {
-                text: 'Plugin API',
-                link: '/apis/task-runner/plugin',
-              },
-            ],
-          },
-        ],
-        '/changes/': [],
       },
-
       socialLinks: [
         { icon: 'github', link: 'https://github.com/voidzero-dev/vite-plus' },
         { icon: 'x', link: 'https://x.com/voidzerodev' },
         { icon: 'discord', link: 'https://discord.gg/cC6TEVFKSx' },
         { icon: 'bluesky', link: 'https://bsky.app/profile/voidzero.dev' },
       ],
-
       outline: {
         level: [2, 3],
       },
-
       search: {
         provider: 'local',
       },
     },
     transformHead({ page, pageData }) {
-      // Remove .md suffix and replace index with empty string (to cover index.md)
       const url = 'https://viteplus.dev/' + page.replace(/\.md$/, '').replace(/index$/, '');
 
       const canonicalUrlEntry: HeadConfig = [

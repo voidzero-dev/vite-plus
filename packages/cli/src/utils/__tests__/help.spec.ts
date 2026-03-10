@@ -1,3 +1,5 @@
+import { stripVTControlCharacters } from 'node:util';
+
 import { describe, expect, it } from 'vitest';
 
 import { renderCliDoc } from '../help.js';
@@ -67,5 +69,17 @@ describe('renderCliDoc', () => {
         global vite-plus  v0.1.0
       "
     `);
+  });
+
+  it('renders documentation footer when present', () => {
+    const output = renderCliDoc({
+      usage: 'vp demo',
+      documentationUrl: 'https://viteplus.dev/guide/demo',
+      sections: [{ title: 'Arguments', rows: [{ label: '<name>', description: 'Project name' }] }],
+    });
+
+    expect(stripVTControlCharacters(output)).toContain(
+      'Documentation: https://viteplus.dev/guide/demo',
+    );
   });
 });

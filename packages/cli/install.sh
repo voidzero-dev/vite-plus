@@ -1,9 +1,9 @@
 #!/bin/bash
 # Vite+ CLI Installer
-# https://viteplus.dev/install.sh
+# https://vite.plus
 #
 # Usage:
-#   curl -fsSL https://viteplus.dev/install.sh | bash
+#   curl -fsSL https://vite.plus | bash
 #
 # Environment variables:
 #   VITE_PLUS_VERSION - Version to install (default: latest)

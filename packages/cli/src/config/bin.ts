@@ -33,6 +33,7 @@ async function main() {
     const helpMessage = renderCliDoc({
       usage: 'vp config [OPTIONS]',
       summary: 'Configure Vite+ for the current project (hooks + agent integration).',
+      documentationUrl: 'https://viteplus.dev/guide/commit-hooks',
       sections: [
         {
           title: 'Options',

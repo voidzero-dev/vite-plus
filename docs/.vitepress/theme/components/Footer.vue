@@ -13,15 +13,7 @@
           Take your team's productivity to the next level with Vite+
         </h2>
         <div class="flex items-center gap-5">
-          <a href="/vite/guide" target="_self" class="button button--white">Get started</a>
-          <!-- <a
-            href="https://voidzero.dev/posts/announcing-vite-plus?utm_source=viteplusdev&utm_content=bottom_learn_more"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="button button--white"
-          >
-            Learn more
-          </a> -->
+          <a href="/guide" target="_self" class="button button--white">Get started</a>
         </div>
       </div>
       <div
@@ -66,7 +58,6 @@
                 >Rolldown</a
               >
             </li>
-
             <li>
               <a
                 href="https://oxc.rs/"

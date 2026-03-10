@@ -18,7 +18,7 @@ const VSCODE_SETTINGS = {
 } as const;
 
 const VSCODE_EXTENSIONS = {
-  recommendations: ['oxc.oxc-vscode'],
+  recommendations: ['VoidZero.vite-plus-extension-pack'],
 } as const;
 
 export const EDITORS = [

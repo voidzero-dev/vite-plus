@@ -46,6 +46,8 @@ Maintain:
   upgrade  Update vp itself to the latest version
   implode  Remove vp and all related data
 
+Documentation: https://viteplus.dev/guide/
+
 Options:
   -V, --version  Print version
   -h, --help     Print help
@@ -104,6 +106,8 @@ Options:
   --node <NODE>         Node.js version to use for global installation (only with -g)
   -h, --help            Print help
 
+Documentation: https://viteplus.dev/guide/install
+
 
 > vp add -h # show add help message
 VITE+ - The Unified Toolchain for the Web
@@ -132,6 +136,8 @@ Options:
   --node <NODE>                       Node.js version to use for global installation (only with -g)
   -h, --help                          Print help
 
+Documentation: https://viteplus.dev/guide/install
+
 
 > vp remove -h # show remove help message
 VITE+ - The Unified Toolchain for the Web
@@ -154,6 +160,8 @@ Options:
   -g, --global          Remove global packages
   --dry-run             Preview what would be removed without actually removing (only with -g)
   -h, --help            Print help
+
+Documentation: https://viteplus.dev/guide/install
 
 
 > vp update -h # show update help message
@@ -181,6 +189,8 @@ Options:
   --workspace           Only update if package exists in workspace (pnpm-specific)
   -h, --help            Print help
 
+Documentation: https://viteplus.dev/guide/install
+
 
 > vp link -h # show link help message
 VITE+ - The Unified Toolchain for the Web
@@ -195,6 +205,8 @@ Arguments:
 
 Options:
   -h, --help  Print help
+
+Documentation: https://viteplus.dev/guide/install
 
 
 > vp unlink -h # show unlink help message
@@ -212,6 +224,8 @@ Options:
   -r, --recursive  Unlink in every workspace package
   -h, --help       Print help
 
+Documentation: https://viteplus.dev/guide/install
+
 
 > vp dedupe -h # show dedupe help message
 VITE+ - The Unified Toolchain for the Web
@@ -226,6 +240,8 @@ Arguments:
 Options:
   --check     Check if deduplication would make changes
   -h, --help  Print help
+
+Documentation: https://viteplus.dev/guide/install
 
 
 > vp outdated -h # show outdated help message
@@ -252,6 +268,8 @@ Options:
   --sort-by <FIELD>     Sort results by field
   -g, --global          Check globally installed packages
   -h, --help            Print help
+
+Documentation: https://viteplus.dev/guide/install
 
 
 > vp why -h # show why help message
@@ -281,6 +299,8 @@ Options:
   --find-by <FINDER_NAME>  Use a finder function defined in .pnpmfile.cjs
   -h, --help               Print help
 
+Documentation: https://viteplus.dev/guide/install
+
 
 > vp info -h # show info help message
 VITE+ - The Unified Toolchain for the Web
@@ -297,6 +317,8 @@ Arguments:
 Options:
   --json      Output in JSON format
   -h, --help  Print help
+
+Documentation: https://viteplus.dev/guide/install
 
 
 > vp pm -h # show pm help message
@@ -329,6 +351,8 @@ Commands:
 
 Options:
   -h, --help  Print help
+
+Documentation: https://viteplus.dev/guide/install
 
 
 > vp env # show env help message
@@ -389,6 +413,8 @@ Related Commands:
   vp update -g [package]        # Update global packages
   vp list -g [package]          # List global packages
 
+Documentation: https://viteplus.dev/guide/env
+
 
 > vp upgrade -h # show upgrade help message
 VITE+ - The Unified Toolchain for the Web
@@ -408,4 +434,6 @@ Options:
   --silent               Suppress output
   --registry <REGISTRY>  Custom npm registry URL
   -h, --help             Print help
+
+Documentation: https://viteplus.dev/guide/upgrade
 

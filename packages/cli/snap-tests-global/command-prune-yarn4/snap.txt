@@ -13,6 +13,8 @@ Options:
   --no-optional  Remove optional dependencies
   -h, --help     Print help
 
+Documentation: https://viteplus.dev/guide/install
+
 
 > vp pm prune # should show warning that yarn does not support prune command
 warn: yarn does not have 'prune' command. yarn install will prune extraneous packages automatically.

@@ -28,6 +28,45 @@ Examples:
   # Non-interactive mode
   vp migrate --no-interactive
 
+Migration Prompt:
+  Give this to a coding agent when you want it to drive the migration:
+
+  Migrate this project to Vite+.
+  Vite+ replaces the current split tooling around runtime management, package
+  management, dev/build/test commands, linting, formatting, and packaging.
+  Run `vp help` and `vp help migrate` before making changes.
+  Use vp migrate --no-interactive in the workspace root.
+  Make sure the project is using Vite 8+ and Vitest 4.1+ before migrating.
+
+  After the migration:
+  - Confirm `vite` imports were rewritten to `vite-plus` where needed
+  - Confirm `vitest` imports were rewritten to `vite-plus/test` where needed
+  - Remove old `vite` and `vitest` dependencies only after those rewrites
+    are confirmed
+  - Move remaining tool-specific config into the appropriate blocks in
+    `vite.config.ts`
+
+  Command mapping:
+  - `vp run <script>` is the equivalent of `pnpm run <script>`
+  - `vp test` runs the built-in test command, while `vp run test` runs the
+    `test` script from `package.json`
+  - `vp install`, `vp add`, and `vp remove` delegate through the package
+    manager declared by `packageManager`
+  - `vp dev`, `vp build`, `vp preview`, `vp lint`, `vp fmt`, `vp check`,
+    and `vp pack` replace the corresponding standalone tools
+  - Prefer `vp check` for validation loops
+
+  Finally, verify the migration by running:
+  - vp install
+  - vp check
+  - vp test
+  - vp build
+
+  Summarize the migration at the end and report any manual follow-up still
+  required.
+
+Documentation: https://viteplus.dev/guide/migrate
+
 
 > vp migrate --no-interactive # migration work with lintstagedrc.json
 VITE+ - The Unified Toolchain for the Web

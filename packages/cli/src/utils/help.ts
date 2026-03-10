@@ -4,6 +4,7 @@ export type CliDoc = {
   usage?: string;
   summary?: readonly string[] | string;
   sections: readonly CliSection[];
+  documentationUrl?: string;
 };
 
 export type CliSection = {
@@ -66,7 +67,13 @@ function renderRows(rows: readonly CliRow[]): string[] {
 }
 
 function heading(label: string, color: boolean): string {
-  return color ? styleText('bold', `${label}:`) : `${label}:`;
+  if (!color) {
+    return `${label}:`;
+  }
+
+  return label === 'Usage'
+    ? styleText('bold', `${label}:`)
+    : styleText(['blue', 'bold'], `${label}:`);
 }
 
 export function renderCliDoc(doc: CliDoc, options: RenderCliDocOptions = {}): string {
@@ -100,6 +107,13 @@ export function renderCliDoc(doc: CliDoc, options: RenderCliDocOptions = {}): st
     if (section.rows && section.rows.length > 0) {
       output.push(...renderRows(section.rows));
     }
+  }
+
+  if (doc.documentationUrl) {
+    if (output.length > 0) {
+      output.push('');
+    }
+    output.push(`${heading('Documentation', color)} ${doc.documentationUrl}`);
   }
 
   output.push('');

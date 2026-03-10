@@ -23,6 +23,8 @@ Options:
   --filter <PATTERN>         Filter packages in monorepo
   -h, --help                 Print help
 
+Documentation: https://viteplus.dev/guide/install
+
 
 > vp pm publish --dry-run -- --loglevel error # should preview publish without actually publishing (uses pnpm publish --dry-run)
 + command-publish-pnpm10@<semver>

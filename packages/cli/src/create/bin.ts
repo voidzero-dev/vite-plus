@@ -37,6 +37,7 @@ import {
 } from '../utils/workspace.js';
 import type { ExecutionResult } from './command.js';
 import { discoverTemplate, inferGitHubRepoName, inferParentDir, isGitHubUrl } from './discovery.js';
+import { getInitialTemplateOptions } from './initial-template-options.js';
 import {
   cancelAndExit,
   checkProjectDirExists,
@@ -57,6 +58,7 @@ import { formatTargetDir } from './utils.js';
 const helpMessage = renderCliDoc({
   usage: 'vp create [TEMPLATE] [OPTIONS] [-- TEMPLATE_OPTIONS]',
   summary: 'Use any builtin, local or remote template with Vite+.',
+  documentationUrl: 'https://viteplus.dev/guide/create',
   sections: [
     {
       title: 'Arguments',
@@ -132,6 +134,7 @@ const helpMessage = renderCliDoc({
 const listTemplatesMessage = renderCliDoc({
   usage: 'vp create --list',
   summary: 'List available builtin and popular project templates.',
+  documentationUrl: 'https://viteplus.dev/guide/create',
   sections: [
     {
       title: 'Vite+ Built-in Templates',
@@ -430,86 +433,16 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   let shouldSetupHooks = false;
 
   if (!selectedTemplateName) {
-    const templates: { label: string; value: string; hint: string }[] = [];
-    if (isMonorepo) {
-      // find local templates in the monorepo
-      for (const pkg of workspaceInfoOptional.packages) {
-        if (pkg.isTemplatePackage) {
-          templates.push({
-            label: pkg.name,
-            value: pkg.name,
-            hint: pkg.description ?? pkg.path,
-          });
-        }
-      }
-    } else {
-      templates.push({
-        label: 'Vite+ Monorepo',
-        value: BuiltinTemplate.monorepo,
-        hint: 'Create a new Vite+ monorepo project',
-      });
-    }
     const template = await prompts.select({
       message: '',
-      options: [
-        ...templates,
-        {
-          label: 'Vite+ Application',
-          value: BuiltinTemplate.application,
-          hint: 'Create vite applications',
-        },
-        {
-          label: 'Vite+ Library',
-          value: BuiltinTemplate.library,
-          hint: 'Create vite libraries',
-        },
-        // TODO: only support builtin generator template in monorepo for now
-        ...(isMonorepo
-          ? [
-              {
-                label: 'Vite+ Generator',
-                value: BuiltinTemplate.generator,
-                hint: 'Scaffold a new code generator',
-              },
-            ]
-          : []),
-        {
-          label: 'TanStack Start',
-          value: '@tanstack/create-start@latest',
-          hint: 'Create TanStack applications and libraries',
-        },
-        {
-          label: 'Others',
-          value: 'other',
-          hint: 'Enter a custom template package name',
-        },
-      ],
+      options: getInitialTemplateOptions(isMonorepo),
     });
 
     if (prompts.isCancel(template)) {
       cancelAndExit();
     }
 
-    // Handle custom template input
-    if (template === 'other') {
-      const customTemplate = await prompts.text({
-        message: 'Enter the template package name:',
-        placeholder: 'e.g., create-next-app, create-nuxt',
-        validate: (value) => {
-          if (!value || value.trim().length === 0) {
-            return 'Template name is required';
-          }
-        },
-      });
-
-      if (prompts.isCancel(customTemplate)) {
-        cancelAndExit();
-      }
-
-      selectedTemplateName = customTemplate;
-    } else {
-      selectedTemplateName = template;
-    }
+    selectedTemplateName = template;
   }
 
   const isBuiltinTemplate = selectedTemplateName.startsWith('vite:');

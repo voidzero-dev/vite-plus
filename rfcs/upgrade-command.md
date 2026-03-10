@@ -6,7 +6,7 @@ Draft
 
 ## Background
 
-Vite+ is distributed as a standalone Rust binary via bash installation (`curl -fsSL https://viteplus.dev/install.sh | bash`). Currently, users must re-run the full install script to update to a new version. This is friction-heavy and unfamiliar to users who expect a built-in update mechanism (like `rustup update`, `volta fetch`, or `brew upgrade`).
+Vite+ is distributed as a standalone Rust binary via bash installation (`curl -fsSL https://vite.plus | bash`). Currently, users must re-run the full install script to update to a new version. This is friction-heavy and unfamiliar to users who expect a built-in update mechanism (like `rustup update`, `volta fetch`, or `brew upgrade`).
 
 A native `vp upgrade` command would allow users to update the CLI in-place with a single command, improving the upgrade experience significantly.
 

@@ -89,7 +89,7 @@ This decouples the `vp` binary from vite-plus's internal file layout.
 
 **Install flows:**
 
-- **Production** (`curl -fsSL https://viteplus.dev/install.sh | bash`):
+- **Production** (`curl -fsSL https://vite.plus | bash`):
   Downloads CLI platform tarball from `@voidzero-dev/vite-plus-cli-{platform}` (extracts only `vp` binary),
   generates wrapper `package.json`, runs `vp install --silent` which installs `vite-plus` + all transitive deps via npm.
 

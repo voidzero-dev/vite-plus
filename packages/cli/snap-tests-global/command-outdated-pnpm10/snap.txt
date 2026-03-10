@@ -23,6 +23,8 @@ Options:
   -g, --global          Check globally installed packages
   -h, --help            Print help
 
+Documentation: https://viteplus.dev/guide/install
+
 
 > vp install # should install packages first
 VITE+ - The Unified Toolchain for the Web

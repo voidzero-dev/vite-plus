@@ -16,7 +16,7 @@ import mri from 'mri';
 import { vitePlusHeader } from '../../binding/index.js';
 import { resolveViteConfig } from '../resolve-vite-config.js';
 import { renderCliDoc } from '../utils/help.js';
-import { log } from '../utils/terminal.js';
+import { errorMsg, log } from '../utils/terminal.js';
 
 const args = mri(process.argv.slice(3), {
   alias: {
@@ -48,6 +48,7 @@ if (args.help) {
   const helpMessage = renderCliDoc({
     usage: 'vp staged [options]',
     summary: 'Run linters on staged files using staged config from vite.config.ts.',
+    documentationUrl: 'https://viteplus.dev/guide/commit-hooks',
     sections: [
       {
         title: 'Options',
@@ -151,7 +152,8 @@ if (args.help) {
   if (stagedConfig) {
     options.config = stagedConfig as Configuration;
   } else {
-    log('No "staged" config found in vite.config.ts. Please add a staged config:');
+    log(vitePlusHeader() + '\n');
+    errorMsg('No "staged" config found in vite.config.ts. Please add a staged config:');
     log('');
     log('  // vite.config.ts');
     log('  export default defineConfig({');

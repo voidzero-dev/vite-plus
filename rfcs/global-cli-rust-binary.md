@@ -68,7 +68,7 @@ npm install -g vite-plus-cli
 vp create my-app
 
 # After (no Node.js required)
-curl -fsSL https://viteplus.dev/install.sh | bash
+curl -fsSL https://vite.plus | bash
 # or
 brew install vite-plus
 # or download binary directly
@@ -723,7 +723,7 @@ For users who prefer standalone installation without npm:
 
 ```bash
 #!/bin/bash
-# https://viteplus.dev/install.sh
+# https://vite.plus
 #
 # Environment variables:
 #   VITE_PLUS_VERSION - Version to install (default: latest)
@@ -774,7 +774,7 @@ See [`packages/global/install.sh`](../packages/global/install.sh) for the full i
 For Windows users, provide a PowerShell script:
 
 ```powershell
-# https://viteplus.dev/install.ps1
+# https://vite.plus/ps1
 #
 # Environment variables:
 #   VITE_PLUS_VERSION - Version to install (default: latest)
@@ -825,7 +825,7 @@ See [`packages/global/install.ps1`](../packages/global/install.ps1) for the full
 1. **PowerShell one-liner:**
 
    ```powershell
-   irm https://viteplus.dev/install.ps1 | iex
+   irm https://vite.plus/ps1 | iex
    ```
 
 2. **npm (if Node.js is available):**
@@ -1168,7 +1168,7 @@ Rewriting these in Rust would be significant effort with limited benefit. Instea
 - run: npm install -g vite-plus-cli
 
 # After (recommended)
-- run: curl -fsSL https://viteplus.dev/install.sh | bash
+- run: curl -fsSL https://vite.plus | bash
 # or
 - uses: voidzero-dev/setup-vite-plus-action@v1
 ```

@@ -25,6 +25,8 @@ Options:
   --node <NODE>                       Node.js version to use for global installation (only with -g)
   -h, --help                          Print help
 
+Documentation: https://viteplus.dev/guide/install
+
 
 [2]> vp add # should error because no packages specified
 error: the following required arguments were not provided:

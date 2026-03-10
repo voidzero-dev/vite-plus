@@ -1,6 +1,6 @@
 > vp check
 pass: All 4 files are correctly formatted (<variable>ms, <variable> threads)
-warn: Lint or type warnings found
+warn: Lint warnings found
 ⚠ eslint(no-console): Unexpected console statement.
    ╭─[src/index.js:2:3]
  1 │ function hello() {

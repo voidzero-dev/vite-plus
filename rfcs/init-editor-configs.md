@@ -54,7 +54,7 @@ Based on [oxc-vscode's own `.vscode/settings.json`](https://github.com/oxc-proje
 
 ```json
 {
-  "recommendations": ["oxc.oxc-vscode"]
+  "recommendations": ["VoidZero.vite-plus-extension-pack"]
 }
 ```
 

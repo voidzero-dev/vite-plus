@@ -31,7 +31,7 @@ Install Vite+ globally as `vp`:
 For Linux or macOS:
 
 ```bash
-curl -fsSL https://viteplus.dev/install.sh | bash
+curl -fsSL https://vite.plus | bash
 ```
 
 For Windows:
@@ -140,6 +140,7 @@ Vite+ automatically wraps your package manager (pnpm, npm, or Yarn) based on `pa
 #### Maintain
 
 - **upgrade** - Update `vp` itself to the latest version
+- **implode** - Remove `vp` and all related data
 
 ### Scaffolding your first Vite+ project
 

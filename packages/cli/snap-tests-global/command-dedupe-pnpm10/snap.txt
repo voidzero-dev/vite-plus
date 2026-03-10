@@ -12,6 +12,8 @@ Options:
   --check     Check if deduplication would make changes
   -h, --help  Print help
 
+Documentation: https://viteplus.dev/guide/install
+
 
 > vp dedupe && cat package.json # should dedupe dependencies
 Already up to date

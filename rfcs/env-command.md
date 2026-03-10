@@ -866,7 +866,7 @@ The global CLI installation script (`packages/global/install.sh`) will be update
 5. If already configured, skip silently
 
 ```bash
-$ curl -fsSL https://viteplus.dev/install.sh | sh
+$ curl -fsSL https://vite.plus | sh
 
 Setting up VITE+...
 

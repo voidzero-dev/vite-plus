@@ -23,6 +23,8 @@ Options:
   -v, --verbose                      Show task output even when tasks succeed
   -h, --help                         Show this help message
 
+Documentation: https://viteplus.dev/guide/commit-hooks
+
 
 > vp staged --help
 VITE+ - The Unified Toolchain for the Web
@@ -49,6 +51,8 @@ Options:
   -v, --verbose                      Show task output even when tasks succeed
   -h, --help                         Show this help message
 
+Documentation: https://viteplus.dev/guide/commit-hooks
+
 
 > vp help staged
 VITE+ - The Unified Toolchain for the Web
@@ -74,4 +78,6 @@ Options:
   --revert                           Revert to original state in case of errors
   -v, --verbose                      Show task output even when tasks succeed
   -h, --help                         Show this help message
+
+Documentation: https://viteplus.dev/guide/commit-hooks
 

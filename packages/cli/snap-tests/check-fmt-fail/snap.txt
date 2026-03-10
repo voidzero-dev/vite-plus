@@ -7,8 +7,8 @@ Found formatting issues in 2 files (<variable>ms, <variable> threads). Run `vp c
 
 > vp check --fix
 pass: Formatting completed for checked files (<variable>ms)
-pass: Found no warnings, lint errors, or type errors in 1 file (<variable>ms, <variable> threads)
+pass: Found no warnings or lint errors in 1 file (<variable>ms, <variable> threads)
 
 > vp check # should pass after fix
 pass: All 3 files are correctly formatted (<variable>ms, <variable> threads)
-pass: Found no warnings, lint errors, or type errors in 1 file (<variable>ms, <variable> threads)
+pass: Found no warnings or lint errors in 1 file (<variable>ms, <variable> threads)

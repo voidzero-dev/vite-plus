@@ -12,6 +12,8 @@ Arguments:
 Options:
   -h, --help  Print help
 
+Documentation: https://viteplus.dev/guide/install
+
 
 > vp pm cache dir > /dev/null # should show cache directory (uses pnpm store path)
 > vp pm cache path > /dev/null # should show cache path (alias for dir, uses pnpm store path)

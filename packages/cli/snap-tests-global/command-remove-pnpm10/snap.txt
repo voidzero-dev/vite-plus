@@ -20,6 +20,8 @@ Options:
   --dry-run             Preview what would be removed without actually removing (only with -g)
   -h, --help            Print help
 
+Documentation: https://viteplus.dev/guide/install
+
 
 [2]> vp remove # should error because no packages specified
 error: the following required arguments were not provided:

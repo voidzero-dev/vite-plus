@@ -24,6 +24,8 @@ Examples:
   vp build --watch
   vp build --sourcemap
 
+Documentation: https://viteplus.dev/guide/build
+
 
 > vp dev -h # should fall back to global vite-plus and show dev help
 VITE+ - The Unified Toolchain for the Web
@@ -50,6 +52,8 @@ Examples:
   vp dev
   vp dev --open
   vp dev --host localhost --port 5173
+
+Documentation: https://viteplus.dev/guide/dev
 
 
 > vp test -h # should fall back to global vite-plus and show test help
@@ -82,4 +86,6 @@ Examples:
   vp test
   vp test run src/foo.test.ts
   vp test watch --coverage
+
+Documentation: https://viteplus.dev/guide/test
 

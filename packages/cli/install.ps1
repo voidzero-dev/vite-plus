@@ -1,8 +1,8 @@
 ﻿# Vite+ CLI Installer for Windows
-# https://viteplus.dev/install.ps1
+# https://vite.plus/ps1
 #
 # Usage:
-#   irm https://viteplus.dev/install.ps1 | iex
+#   irm https://vite.plus/ps1 | iex
 #
 # Environment variables:
 #   VITE_PLUS_VERSION - Version to install (default: latest)

@@ -10,6 +10,7 @@ pub struct HelpDoc {
     pub usage: &'static str,
     pub summary: Vec<&'static str>,
     pub sections: Vec<HelpSection>,
+    pub documentation_url: Option<&'static str>,
 }
 
 #[derive(Clone, Debug)]
@@ -29,6 +30,7 @@ struct OwnedHelpDoc {
     usage: String,
     summary: Vec<String>,
     sections: Vec<OwnedHelpSection>,
+    documentation_url: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -55,6 +57,33 @@ fn section_lines(title: &'static str, lines: Vec<&'static str>) -> HelpSection {
     HelpSection::Lines { title, lines }
 }
 
+fn documentation_url_for_command_path(command_path: &[&str]) -> Option<&'static str> {
+    match command_path {
+        [] => Some("https://viteplus.dev/guide/"),
+        ["create"] => Some("https://viteplus.dev/guide/create"),
+        ["migrate"] => Some("https://viteplus.dev/guide/migrate"),
+        ["config"] | ["staged"] => Some("https://viteplus.dev/guide/commit-hooks"),
+        [
+            "install" | "add" | "remove" | "update" | "dedupe" | "outdated" | "list" | "ls" | "why"
+            | "info" | "view" | "show" | "link" | "unlink" | "pm",
+            ..,
+        ] => Some("https://viteplus.dev/guide/install"),
+        ["dev"] => Some("https://viteplus.dev/guide/dev"),
+        ["check"] => Some("https://viteplus.dev/guide/check"),
+        ["lint"] => Some("https://viteplus.dev/guide/lint"),
+        ["fmt"] => Some("https://viteplus.dev/guide/fmt"),
+        ["test"] => Some("https://viteplus.dev/guide/test"),
+        ["run"] => Some("https://viteplus.dev/guide/run"),
+        ["exec" | "dlx"] => Some("https://viteplus.dev/guide/vpx"),
+        ["cache"] => Some("https://viteplus.dev/guide/cache"),
+        ["build" | "preview"] => Some("https://viteplus.dev/guide/build"),
+        ["pack"] => Some("https://viteplus.dev/guide/pack"),
+        ["env", ..] => Some("https://viteplus.dev/guide/env"),
+        ["upgrade"] => Some("https://viteplus.dev/guide/upgrade"),
+        _ => None,
+    }
+}
+
 pub fn render_heading(title: &str) -> String {
     let heading = format!("{title}:");
     if !should_style_help() {
@@ -73,21 +102,12 @@ fn render_usage_value(usage: &str) -> String {
 }
 
 fn should_accent_heading(title: &str) -> bool {
-    matches!(
-        title,
-        "Start"
-            | "Develop"
-            | "Execute"
-            | "Build"
-            | "Manage Dependencies"
-            | "Maintain"
-            | "Setup"
-            | "Manage"
-            | "Inspect"
-            | "Examples"
-            | "Options"
-            | "Related Commands"
-    )
+    title != "Usage"
+}
+
+fn write_documentation_footer(output: &mut String, documentation_url: &str) {
+    let _ = writeln!(output);
+    let _ = writeln!(output, "{} {documentation_url}", render_heading("Documentation"));
 }
 
 pub fn should_style_help() -> bool {
@@ -189,6 +209,10 @@ pub fn render_help_doc(doc: &HelpDoc) -> String {
         }
     }
 
+    if let Some(documentation_url) = doc.documentation_url {
+        write_documentation_footer(&mut output, documentation_url);
+    }
+
     output
 }
 
@@ -220,6 +244,10 @@ fn render_owned_help_doc(doc: &OwnedHelpDoc) -> String {
                 }
             }
         }
+    }
+
+    if let Some(documentation_url) = &doc.documentation_url {
+        write_documentation_footer(&mut output, documentation_url);
     }
 
     output
@@ -386,7 +414,7 @@ fn parse_clap_help_to_doc(raw_help: &str) -> Option<OwnedHelpDoc> {
         }
     }
 
-    Some(OwnedHelpDoc { usage, summary, sections })
+    Some(OwnedHelpDoc { usage, summary, sections, documentation_url: None })
 }
 
 pub fn top_level_help_doc() -> HelpDoc {
@@ -459,6 +487,7 @@ pub fn top_level_help_doc() -> HelpDoc {
                 ],
             ),
         ],
+        documentation_url: documentation_url_for_command_path(&[]),
     }
 }
 
@@ -546,6 +575,7 @@ fn env_help_doc() -> HelpDoc {
                 ],
             ),
         ],
+        documentation_url: documentation_url_for_command_path(&["env"]),
     }
 }
 
@@ -577,6 +607,7 @@ fn delegated_help_doc(command: &str) -> Option<HelpDoc> {
                     vec!["  vp dev", "  vp dev --open", "  vp dev --host localhost --port 5173"],
                 ),
             ],
+            documentation_url: documentation_url_for_command_path(&["dev"]),
         }),
         "build" => Some(HelpDoc {
             usage: "vp build [ROOT] [OPTIONS]",
@@ -604,6 +635,7 @@ fn delegated_help_doc(command: &str) -> Option<HelpDoc> {
                     vec!["  vp build", "  vp build --watch", "  vp build --sourcemap"],
                 ),
             ],
+            documentation_url: documentation_url_for_command_path(&["build"]),
         }),
         "preview" => Some(HelpDoc {
             usage: "vp preview [ROOT] [OPTIONS]",
@@ -628,6 +660,7 @@ fn delegated_help_doc(command: &str) -> Option<HelpDoc> {
                 ),
                 section_lines("Examples", vec!["  vp preview", "  vp preview --port 4173"]),
             ],
+            documentation_url: documentation_url_for_command_path(&["preview"]),
         }),
         "test" => Some(HelpDoc {
             usage: "vp test [COMMAND] [FILTERS] [OPTIONS]",
@@ -666,6 +699,7 @@ fn delegated_help_doc(command: &str) -> Option<HelpDoc> {
                     ],
                 ),
             ],
+            documentation_url: documentation_url_for_command_path(&["test"]),
         }),
         "lint" => Some(HelpDoc {
             usage: "vp lint [PATH]... [OPTIONS]",
@@ -692,6 +726,7 @@ fn delegated_help_doc(command: &str) -> Option<HelpDoc> {
                     ],
                 ),
             ],
+            documentation_url: documentation_url_for_command_path(&["lint"]),
         }),
         "fmt" => Some(HelpDoc {
             usage: "vp fmt [PATH]... [OPTIONS]",
@@ -714,6 +749,7 @@ fn delegated_help_doc(command: &str) -> Option<HelpDoc> {
                     vec!["  vp fmt", "  vp fmt src --check", "  vp fmt . --write"],
                 ),
             ],
+            documentation_url: documentation_url_for_command_path(&["fmt"]),
         }),
         "check" => Some(HelpDoc {
             usage: "vp check [OPTIONS] [PATHS]...",
@@ -737,6 +773,7 @@ fn delegated_help_doc(command: &str) -> Option<HelpDoc> {
                     ],
                 ),
             ],
+            documentation_url: documentation_url_for_command_path(&["check"]),
         }),
         "pack" => Some(HelpDoc {
             usage: "vp pack [...FILES] [OPTIONS]",
@@ -759,6 +796,7 @@ fn delegated_help_doc(command: &str) -> Option<HelpDoc> {
                     vec!["  vp pack", "  vp pack src/index.ts --dts", "  vp pack --watch"],
                 ),
             ],
+            documentation_url: documentation_url_for_command_path(&["pack"]),
         }),
         "run" => Some(HelpDoc {
             usage: "vp run [OPTIONS] [TASK_SPECIFIER] [ADDITIONAL_ARGS]...",
@@ -809,6 +847,7 @@ fn delegated_help_doc(command: &str) -> Option<HelpDoc> {
                     ],
                 ),
             ],
+            documentation_url: documentation_url_for_command_path(&["run"]),
         }),
         "exec" => Some(HelpDoc {
             usage: "vp exec [OPTIONS] [COMMAND]...",
@@ -862,6 +901,7 @@ fn delegated_help_doc(command: &str) -> Option<HelpDoc> {
                     ],
                 ),
             ],
+            documentation_url: documentation_url_for_command_path(&["exec"]),
         }),
         "cache" => Some(HelpDoc {
             usage: "vp cache <COMMAND>",
@@ -870,6 +910,7 @@ fn delegated_help_doc(command: &str) -> Option<HelpDoc> {
                 section_rows("Commands", vec![row("clean", "Clean up all the cache")]),
                 section_rows("Options", vec![row("-h, --help", "Print help")]),
             ],
+            documentation_url: documentation_url_for_command_path(&["cache"]),
         }),
         _ => None,
     }
@@ -1010,6 +1051,11 @@ pub fn print_unified_clap_help_for_path(command_path: &[&str]) -> bool {
     let Some(doc) = parse_clap_help_to_doc(&raw_help) else {
         return false;
     };
+    let doc = OwnedHelpDoc {
+        documentation_url: documentation_url_for_command_path(command_path)
+            .map(ToString::to_string),
+        ..doc
+    };
 
     println!("{}", vite_shared::header::vite_plus_header());
     println!();
@@ -1020,8 +1066,8 @@ pub fn print_unified_clap_help_for_path(command_path: &[&str]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        has_help_flag_before_terminator, parse_clap_help_to_doc, parse_rows, split_comment_suffix,
-        strip_ansi,
+        HelpDoc, documentation_url_for_command_path, has_help_flag_before_terminator,
+        parse_clap_help_to_doc, parse_rows, render_help_doc, split_comment_suffix, strip_ansi,
     };
 
     #[test]
@@ -1109,5 +1155,33 @@ Options:
     #[test]
     fn split_comment_suffix_returns_none_without_comment() {
         assert!(split_comment_suffix("  vp env list").is_none());
+    }
+
+    #[test]
+    fn docs_url_is_mapped_for_grouped_commands() {
+        assert_eq!(
+            documentation_url_for_command_path(&["add"]),
+            Some("https://viteplus.dev/guide/install")
+        );
+        assert_eq!(
+            documentation_url_for_command_path(&["env", "list"]),
+            Some("https://viteplus.dev/guide/env")
+        );
+        assert_eq!(
+            documentation_url_for_command_path(&["config"]),
+            Some("https://viteplus.dev/guide/commit-hooks")
+        );
+    }
+
+    #[test]
+    fn render_help_doc_appends_documentation_footer() {
+        let output = render_help_doc(&HelpDoc {
+            usage: "vp demo",
+            summary: vec![],
+            sections: vec![],
+            documentation_url: Some("https://viteplus.dev/guide/demo"),
+        });
+
+        assert!(output.contains("Documentation: https://viteplus.dev/guide/demo"));
     }
 }

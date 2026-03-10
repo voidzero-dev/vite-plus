@@ -12,6 +12,8 @@ Arguments:
 Options:
   -h, --help  Print help
 
+Documentation: https://viteplus.dev/guide/install
+
 
 > vp install # install initial dependencies
 VITE+ - The Unified Toolchain for the Web

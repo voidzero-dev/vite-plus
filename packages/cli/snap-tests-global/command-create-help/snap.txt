@@ -49,6 +49,8 @@ Examples:
   vp create github:user/repo
   vp create https://github.com/user/template-repo
 
+Documentation: https://viteplus.dev/guide/create
+
 
 > vp create --help
 VITE+ - The Unified Toolchain for the Web
@@ -101,6 +103,8 @@ Examples:
   vp create github:user/repo
   vp create https://github.com/user/template-repo
 
+Documentation: https://viteplus.dev/guide/create
+
 
 > vp help create
 VITE+ - The Unified Toolchain for the Web
@@ -152,4 +156,6 @@ Examples:
   # Use templates from GitHub (via degit)
   vp create github:user/repo
   vp create https://github.com/user/template-repo
+
+Documentation: https://viteplus.dev/guide/create
 

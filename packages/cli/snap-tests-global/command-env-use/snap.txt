@@ -14,6 +14,8 @@ Options:
   --silent-if-unchanged  Suppress output if version is already active
   -h, --help             Print help
 
+Documentation: https://viteplus.dev/guide/env
+
 
 > vp env use 20.18.0 --no-install # should output export command to stdout
 export VITE_PLUS_NODE_VERSION=20.18.0

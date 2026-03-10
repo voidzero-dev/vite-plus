@@ -13,7 +13,7 @@
         <p class="text-sm text-grey">Free and open source under the MIT license.</p>
       </div>
       <div class="flex items-center gap-5">
-        <a href="/vite/guide" target="_self" class="button button--primary"> Get started </a>
+        <a href="/guide" target="_self" class="button button--primary"> Get started </a>
         <a
           href="https://voidzero.dev/posts/announcing-vite-plus-alpha"
           target="_blank"

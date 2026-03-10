@@ -4,8 +4,8 @@
 //! It handles argument parsing, command dispatching, and orchestration of the task execution.
 
 use std::{
-    borrow::Cow, env, ffi::OsStr, future::Future, io::IsTerminal, iter, pin::Pin, process::Stdio,
-    sync::Arc, time::Instant,
+    borrow::Cow, env, ffi::OsStr, future::Future, io::IsTerminal, iter, path::PathBuf, pin::Pin,
+    process::Stdio, sync::Arc, time::Instant,
 };
 
 use clap::{
@@ -15,6 +15,7 @@ use clap::{
 use owo_colors::OwoColorize;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
+use tokio::fs::write;
 use vite_error::Error;
 use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_shared::{PrependOptions, output, prepend_to_path_env};
@@ -184,6 +185,8 @@ impl ResolvedSubcommand {
 pub struct SubcommandResolver {
     cli_options: Option<CliOptions>,
     workspace_path: Arc<AbsolutePath>,
+    /// Track temporary config files created during resolution for cleanup
+    temp_config_files: Vec<AbsolutePathBuf>,
 }
 
 impl std::fmt::Debug for SubcommandResolver {
@@ -191,13 +194,14 @@ impl std::fmt::Debug for SubcommandResolver {
         f.debug_struct("SubcommandResolver")
             .field("has_cli_options", &self.cli_options.is_some())
             .field("workspace_path", &self.workspace_path)
+            .field("temp_config_files_count", &self.temp_config_files.len())
             .finish()
     }
 }
 
 impl SubcommandResolver {
     pub fn new(workspace_path: Arc<AbsolutePath>) -> Self {
-        Self { cli_options: None, workspace_path }
+        Self { cli_options: None, workspace_path, temp_config_files: Vec::new() }
     }
 
     pub fn with_cli_options(mut self, cli_options: CliOptions) -> Self {
@@ -205,10 +209,143 @@ impl SubcommandResolver {
         self
     }
 
+    /// Clean up temporary config files created during resolution.
+    /// Should be called after command execution completes (success or failure).
+    pub async fn cleanup_temp_files(&mut self) {
+        for path in self.temp_config_files.drain(..) {
+            if let Err(e) = tokio::fs::remove_file(&path).await {
+                if e.kind() != std::io::ErrorKind::NotFound {
+                    tracing::warn!(
+                        "Failed to cleanup temp config file {}: {}",
+                        path.as_path().display(),
+                        e
+                    );
+                }
+            }
+        }
+    }
+
+    /// Write a temporary TS config file that re-exports a field from vite.config.
+    /// The temp file imports the vite config and re-exports the specified field,
+    /// so the tool (e.g. oxlint) picks it up via `-c <path>`.
+    /// The `config_file_path` must be an absolute path.
+    async fn write_temp_ts_config_import(
+        &mut self,
+        config_file_path: &str,
+        temp_filename: &str,
+        field_name: &str,
+        args: &mut Vec<String>,
+    ) -> anyhow::Result<()> {
+        let path = PathBuf::from(config_file_path);
+        if !path.is_absolute() {
+            anyhow::bail!("config_file_path must be an absolute path, got: {config_file_path}");
+        }
+
+        let config_basename = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .ok_or_else(|| {
+                anyhow::anyhow!("Failed to get file name of config file: {config_file_path}")
+            })?
+            .to_string();
+
+        let config_dir = AbsolutePathBuf::new(path)
+            .and_then(|p| p.parent().map(|p| p.to_absolute_path_buf()))
+            .ok_or_else(|| {
+                anyhow::anyhow!("Failed to get parent directory of config file: {config_file_path}")
+            })?;
+
+        let config_path = config_dir.join(temp_filename);
+        let content = format!(
+            "import {{ defineConfig }} from 'vite-plus/lint';\nimport viteConfig from './{config_basename}';\nexport default defineConfig(viteConfig.{field_name} as any);\n"
+        );
+        write(&config_path, content).await?;
+
+        self.temp_config_files.push(config_path.clone());
+
+        let config_path_str = config_path
+            .as_path()
+            .to_str()
+            .ok_or_else(|| anyhow::anyhow!("config path is not valid UTF-8"))?;
+        args.insert(0, config_path_str.to_string());
+        args.insert(0, "-c".to_string());
+        // Prevent oxlint from linting the temp config file itself
+        args.push("--ignore-pattern".to_string());
+        args.push(temp_filename.to_string());
+        Ok(())
+    }
+
+    /// Write a temporary JSON config file and prepend `-c <path>` to args.
+    /// The file will be tracked for cleanup after command execution.
+    /// The `config_file_path` must be an absolute path.
+    async fn write_temp_json_config_file(
+        &mut self,
+        config: &serde_json::Value,
+        config_file_path: &str,
+        temp_filename: &str,
+        args: &mut Vec<String>,
+    ) -> anyhow::Result<()> {
+        let mut config = config.clone();
+
+        // Add temp file to ignorePatterns to prevent self-checking
+        if let Some(obj) = config.as_object_mut() {
+            if let Some(patterns) = obj.get_mut("ignorePatterns") {
+                if let Some(array) = patterns.as_array_mut() {
+                    array.push(serde_json::json!(temp_filename));
+                }
+            } else {
+                obj.insert("ignorePatterns".to_string(), serde_json::json!([temp_filename]));
+            }
+        }
+
+        let path = PathBuf::from(config_file_path);
+        if !path.is_absolute() {
+            anyhow::bail!("config_file_path must be an absolute path, got: {config_file_path}");
+        }
+
+        let config_dir = AbsolutePathBuf::new(path)
+            .and_then(|p| p.parent().map(|p| p.to_absolute_path_buf()))
+            .ok_or_else(|| {
+                anyhow::anyhow!("Failed to get parent directory of config file: {config_file_path}")
+            })?;
+
+        let config_path = config_dir.join(temp_filename);
+        write(&config_path, serde_json::to_string(&config)?).await?;
+
+        self.temp_config_files.push(config_path.clone());
+
+        let config_path_str = config_path
+            .as_path()
+            .to_str()
+            .ok_or_else(|| anyhow::anyhow!("config path is not valid UTF-8"))?;
+        args.insert(0, config_path_str.to_string());
+        args.insert(0, "-c".to_string());
+        Ok(())
+    }
+
+    async fn resolve_universal_vite_config(&self) -> anyhow::Result<ResolvedUniversalViteConfig> {
+        let cli_options = self
+            .cli_options
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("CLI options required for vite config resolution"))?;
+        let workspace_path_str = self
+            .workspace_path
+            .as_path()
+            .to_str()
+            .ok_or_else(|| anyhow::anyhow!("workspace path is not valid UTF-8"))?;
+        let vite_config_json =
+            (cli_options.resolve_universal_vite_config)(workspace_path_str.to_string()).await?;
+
+        Ok(serde_json::from_str(&vite_config_json).inspect_err(|_| {
+            tracing::error!("Failed to parse vite config: {vite_config_json}");
+        })?)
+    }
+
     /// Resolve a synthesizable subcommand to a concrete program, args, cache config, and envs.
     async fn resolve(
         &mut self,
         subcommand: SynthesizableSubcommand,
+        resolved_vite_config: Option<&ResolvedUniversalViteConfig>,
         envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
         cwd: &Arc<AbsolutePath>,
     ) -> anyhow::Result<ResolvedSubcommand> {
@@ -223,25 +360,24 @@ impl SubcommandResolver {
                 let js_path_str = js_path
                     .to_str()
                     .ok_or_else(|| anyhow::anyhow!("lint JS path is not valid UTF-8"))?;
-
-                let workspace_path_str = self
-                    .workspace_path
-                    .as_path()
-                    .to_str()
-                    .ok_or_else(|| anyhow::anyhow!("workspace path is not valid UTF-8"))?;
-                let vite_config_json =
-                    (cli_options.resolve_universal_vite_config)(workspace_path_str.to_string())
-                        .await?;
-                let resolved_vite_config: ResolvedUniversalViteConfig =
-                    serde_json::from_str(&vite_config_json).inspect_err(|_| {
-                        tracing::error!("Failed to parse vite config: {vite_config_json}");
-                    })?;
+                let owned_resolved_vite_config;
+                let resolved_vite_config = if let Some(config) = resolved_vite_config {
+                    config
+                } else {
+                    owned_resolved_vite_config = self.resolve_universal_vite_config().await?;
+                    &owned_resolved_vite_config
+                };
 
                 if let (Some(_), Some(config_file)) =
                     (&resolved_vite_config.lint, &resolved_vite_config.config_file)
                 {
-                    args.insert(0, "-c".to_string());
-                    args.insert(1, config_file.clone());
+                    self.write_temp_ts_config_import(
+                        config_file,
+                        ".vite-plus-lint.tmp.mts",
+                        "lint",
+                        &mut args,
+                    )
+                    .await?;
                 }
 
                 Ok(ResolvedSubcommand {
@@ -268,25 +404,24 @@ impl SubcommandResolver {
                 let js_path_str = js_path
                     .to_str()
                     .ok_or_else(|| anyhow::anyhow!("fmt JS path is not valid UTF-8"))?;
+                let owned_resolved_vite_config;
+                let resolved_vite_config = if let Some(config) = resolved_vite_config {
+                    config
+                } else {
+                    owned_resolved_vite_config = self.resolve_universal_vite_config().await?;
+                    &owned_resolved_vite_config
+                };
 
-                let workspace_path_str = self
-                    .workspace_path
-                    .as_path()
-                    .to_str()
-                    .ok_or_else(|| anyhow::anyhow!("workspace path is not valid UTF-8"))?;
-                let vite_config_json =
-                    (cli_options.resolve_universal_vite_config)(workspace_path_str.to_string())
-                        .await?;
-                let resolved_vite_config: ResolvedUniversalViteConfig =
-                    serde_json::from_str(&vite_config_json).inspect_err(|_| {
-                        tracing::error!("Failed to parse vite config: {vite_config_json}");
-                    })?;
-
-                if let (Some(_), Some(config_file)) =
+                if let (Some(fmt_config), Some(config_file)) =
                     (&resolved_vite_config.fmt, &resolved_vite_config.config_file)
                 {
-                    args.insert(0, "-c".to_string());
-                    args.insert(1, config_file.clone());
+                    self.write_temp_json_config_file(
+                        fmt_config,
+                        config_file,
+                        ".vite-plus-fmt.tmp.json",
+                        &mut args,
+                    )
+                    .await?;
                 }
 
                 Ok(ResolvedSubcommand {
@@ -521,6 +656,10 @@ impl VitePlusCommandHandler {
     pub fn new(resolver: SubcommandResolver) -> Self {
         Self { resolver }
     }
+
+    pub async fn cleanup_temp_files(&mut self) {
+        self.resolver.cleanup_temp_files().await;
+    }
 }
 
 #[async_trait::async_trait(?Send)]
@@ -558,7 +697,8 @@ impl CommandHandler for VitePlusCommandHandler {
                 ))
             }
             CLIArgs::Synthesizable(subcmd) => {
-                let resolved = self.resolver.resolve(subcmd, &command.envs, &command.cwd).await?;
+                let resolved =
+                    self.resolver.resolve(subcmd, None, &command.envs, &command.cwd).await?;
                 Ok(HandledCommand::Synthesized(resolved.into_synthetic_plan_request()))
             }
             CLIArgs::ViteTask(cmd) => Ok(HandledCommand::ViteTaskCommand(cmd)),
@@ -618,12 +758,15 @@ impl UserConfigLoader for VitePlusConfigLoader {
 async fn resolve_and_build_command(
     resolver: &mut SubcommandResolver,
     subcommand: SynthesizableSubcommand,
+    resolved_vite_config: Option<&ResolvedUniversalViteConfig>,
     envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
     cwd: &AbsolutePathBuf,
     cwd_arc: &Arc<AbsolutePath>,
 ) -> Result<tokio::process::Command, Error> {
-    let resolved =
-        resolver.resolve(subcommand, envs, cwd_arc).await.map_err(|e| Error::Anyhow(e))?;
+    let resolved = resolver
+        .resolve(subcommand, resolved_vite_config, envs, cwd_arc)
+        .await
+        .map_err(|e| Error::Anyhow(e))?;
 
     // Resolve the program path using `which` to handle Windows .cmd/.bat files (PATHEXT)
     let program_path = {
@@ -653,11 +796,14 @@ async fn resolve_and_build_command(
 async fn resolve_and_execute(
     resolver: &mut SubcommandResolver,
     subcommand: SynthesizableSubcommand,
+    resolved_vite_config: Option<&ResolvedUniversalViteConfig>,
     envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
     cwd: &AbsolutePathBuf,
     cwd_arc: &Arc<AbsolutePath>,
 ) -> Result<ExitStatus, Error> {
-    let mut cmd = resolve_and_build_command(resolver, subcommand, envs, cwd, cwd_arc).await?;
+    let mut cmd =
+        resolve_and_build_command(resolver, subcommand, resolved_vite_config, envs, cwd, cwd_arc)
+            .await?;
     let mut child = cmd.spawn().map_err(|e| Error::Anyhow(e.into()))?;
     let status = child.wait().await.map_err(|e| Error::Anyhow(e.into()))?;
     Ok(ExitStatus(status.code().unwrap_or(1) as u8))
@@ -668,12 +814,15 @@ async fn resolve_and_execute(
 async fn resolve_and_execute_with_stdout_filter(
     resolver: &mut SubcommandResolver,
     subcommand: SynthesizableSubcommand,
+    resolved_vite_config: Option<&ResolvedUniversalViteConfig>,
     envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
     cwd: &AbsolutePathBuf,
     cwd_arc: &Arc<AbsolutePath>,
     filter: impl Fn(&str) -> Cow<'_, str>,
 ) -> Result<ExitStatus, Error> {
-    let mut cmd = resolve_and_build_command(resolver, subcommand, envs, cwd, cwd_arc).await?;
+    let mut cmd =
+        resolve_and_build_command(resolver, subcommand, resolved_vite_config, envs, cwd, cwd_arc)
+            .await?;
     cmd.stdout(Stdio::piped());
 
     let child = cmd.spawn().map_err(|e| Error::Anyhow(e.into()))?;
@@ -696,12 +845,15 @@ struct CapturedCommandOutput {
 async fn resolve_and_capture_output(
     resolver: &mut SubcommandResolver,
     subcommand: SynthesizableSubcommand,
+    resolved_vite_config: Option<&ResolvedUniversalViteConfig>,
     envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
     cwd: &AbsolutePathBuf,
     cwd_arc: &Arc<AbsolutePath>,
     force_color_if_terminal: bool,
 ) -> Result<CapturedCommandOutput, Error> {
-    let mut cmd = resolve_and_build_command(resolver, subcommand, envs, cwd, cwd_arc).await?;
+    let mut cmd =
+        resolve_and_build_command(resolver, subcommand, resolved_vite_config, envs, cwd, cwd_arc)
+            .await?;
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
     if force_color_if_terminal && std::io::stdout().is_terminal() {
@@ -748,6 +900,45 @@ struct LintFailure {
     warnings: usize,
     errors: usize,
     diagnostics: String,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum LintMessageKind {
+    LintOnly,
+    LintAndTypeCheck,
+}
+
+impl LintMessageKind {
+    fn from_lint_config(lint_config: Option<&serde_json::Value>) -> Self {
+        let type_check_enabled = lint_config
+            .and_then(|config| config.get("options"))
+            .and_then(|options| options.get("typeCheck"))
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false);
+
+        if type_check_enabled { Self::LintAndTypeCheck } else { Self::LintOnly }
+    }
+
+    fn success_label(self) -> &'static str {
+        match self {
+            Self::LintOnly => "Found no warnings or lint errors",
+            Self::LintAndTypeCheck => "Found no warnings, lint errors, or type errors",
+        }
+    }
+
+    fn warning_heading(self) -> &'static str {
+        match self {
+            Self::LintOnly => "Lint warnings found",
+            Self::LintAndTypeCheck => "Lint or type warnings found",
+        }
+    }
+
+    fn issue_heading(self) -> &'static str {
+        match self {
+            Self::LintOnly => "Lint issues found",
+            Self::LintAndTypeCheck => "Lint or type issues found",
+        }
+    }
 }
 
 fn parse_check_summary(line: &str) -> Option<CheckSummary> {
@@ -921,6 +1112,7 @@ async fn execute_direct_subcommand(
                 print_summary_line(
                     "`vp check` did not run because both `--no-fmt` and `--no-lint` were set",
                 );
+                resolver.cleanup_temp_files().await;
                 return Ok(ExitStatus(1));
             }
 
@@ -928,6 +1120,7 @@ async fn execute_direct_subcommand(
             let has_paths = !paths.is_empty();
             let mut fmt_fix_started: Option<Instant> = None;
             let mut deferred_lint_pass: Option<(String, String)> = None;
+            let resolved_vite_config = resolver.resolve_universal_vite_config().await?;
 
             if !no_fmt {
                 let mut args = if fix { vec![] } else { vec!["--check".to_string()] };
@@ -942,6 +1135,7 @@ async fn execute_direct_subcommand(
                 let captured = resolve_and_capture_output(
                     &mut resolver,
                     SynthesizableSubcommand::Fmt { args },
+                    Some(&resolved_vite_config),
                     &envs,
                     cwd,
                     &cwd_arc,
@@ -997,11 +1191,14 @@ async fn execute_direct_subcommand(
                     );
                 }
                 if status != ExitStatus::SUCCESS {
+                    resolver.cleanup_temp_files().await;
                     return Ok(status);
                 }
             }
 
             if !no_lint {
+                let lint_message_kind =
+                    LintMessageKind::from_lint_config(resolved_vite_config.lint.as_ref());
                 let mut args = Vec::new();
                 if fix {
                     args.push("--fix".to_string());
@@ -1012,6 +1209,7 @@ async fn execute_direct_subcommand(
                 let captured = resolve_and_capture_output(
                     &mut resolver,
                     SynthesizableSubcommand::Lint { args },
+                    Some(&resolved_vite_config),
                     &envs,
                     cwd,
                     &cwd_arc,
@@ -1030,10 +1228,9 @@ async fn execute_direct_subcommand(
 
                 match analyze_lint_output(&combined_output) {
                     Some(Ok(success)) => {
-                        let issue_label = "Found no warnings, lint errors, or type errors";
-
                         let message = format!(
-                            "{issue_label} in {}",
+                            "{} in {}",
+                            lint_message_kind.success_label(),
                             format_count(success.summary.files, "file", "files"),
                         );
                         let detail = format!(
@@ -1049,9 +1246,9 @@ async fn execute_direct_subcommand(
                     }
                     Some(Err(failure)) => {
                         if failure.errors == 0 && failure.warnings > 0 {
-                            output::warn("Lint or type warnings found");
+                            output::warn(lint_message_kind.warning_heading());
                         } else {
-                            output::error("Lint or type issues found");
+                            output::error(lint_message_kind.issue_heading());
                         }
                         print_stdout_block(&failure.diagnostics);
                         print_summary_line(&format!(
@@ -1072,6 +1269,7 @@ async fn execute_direct_subcommand(
                     }
                 }
                 if status != ExitStatus::SUCCESS {
+                    resolver.cleanup_temp_files().await;
                     return Ok(status);
                 }
             }
@@ -1087,6 +1285,7 @@ async fn execute_direct_subcommand(
                 let captured = resolve_and_capture_output(
                     &mut resolver,
                     SynthesizableSubcommand::Fmt { args },
+                    Some(&resolved_vite_config),
                     &envs,
                     cwd,
                     &cwd_arc,
@@ -1107,6 +1306,7 @@ async fn execute_direct_subcommand(
                         print_stdout_block(&combined_output);
                     }
                     print_summary_line("Formatting failed after lint fixes were applied");
+                    resolver.cleanup_temp_files().await;
                     return Ok(status);
                 }
                 if let Some(started) = fmt_fix_started {
@@ -1127,6 +1327,7 @@ async fn execute_direct_subcommand(
                 resolve_and_execute_with_stdout_filter(
                     &mut resolver,
                     other,
+                    None,
                     &envs,
                     cwd,
                     &cwd_arc,
@@ -1134,10 +1335,12 @@ async fn execute_direct_subcommand(
                 )
                 .await?
             } else {
-                resolve_and_execute(&mut resolver, other, &envs, cwd, &cwd_arc).await?
+                resolve_and_execute(&mut resolver, other, None, &envs, cwd, &cwd_arc).await?
             }
         }
     };
+
+    resolver.cleanup_temp_files().await;
 
     Ok(status)
 }
@@ -1182,6 +1385,8 @@ async fn execute_vite_task_command(
 
     // Main execution (consumes session)
     let result = session.main(command).await.map_err(|e| Error::Anyhow(e));
+
+    command_handler.cleanup_temp_files().await;
 
     result
 }
@@ -1421,11 +1626,12 @@ mod tests {
     use std::path::PathBuf;
 
     use clap::Parser;
+    use serde_json::json;
     use vite_task::config::UserRunConfig;
 
     use super::{
-        CLIArgs, SynthesizableSubcommand, extract_unknown_argument, has_pass_as_value_suggestion,
-        should_prepend_vitest_run, should_suppress_subcommand_stdout,
+        CLIArgs, LintMessageKind, SynthesizableSubcommand, extract_unknown_argument,
+        has_pass_as_value_suggestion, should_prepend_vitest_run, should_suppress_subcommand_stdout,
     };
 
     #[test]
@@ -1532,6 +1738,30 @@ mod tests {
     fn normal_lint_does_not_suppress_stdout() {
         let subcommand = SynthesizableSubcommand::Lint { args: vec!["src/index.ts".to_string()] };
         assert!(!should_suppress_subcommand_stdout(&subcommand));
+    }
+
+    #[test]
+    fn lint_message_kind_defaults_to_lint_only_without_typecheck() {
+        assert_eq!(LintMessageKind::from_lint_config(None), LintMessageKind::LintOnly);
+        assert_eq!(
+            LintMessageKind::from_lint_config(Some(&json!({ "options": {} }))),
+            LintMessageKind::LintOnly
+        );
+    }
+
+    #[test]
+    fn lint_message_kind_detects_typecheck_from_vite_config() {
+        let kind = LintMessageKind::from_lint_config(Some(&json!({
+            "options": {
+                "typeAware": true,
+                "typeCheck": true
+            }
+        })));
+
+        assert_eq!(kind, LintMessageKind::LintAndTypeCheck);
+        assert_eq!(kind.success_label(), "Found no warnings, lint errors, or type errors");
+        assert_eq!(kind.warning_heading(), "Lint or type warnings found");
+        assert_eq!(kind.issue_heading(), "Lint or type issues found");
     }
 
     #[test]

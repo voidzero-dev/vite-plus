@@ -25,6 +25,8 @@ Options:
   --node <NODE>                       Node.js version to use for global installation (only with -g)
   -h, --help                          Print help
 
+Documentation: https://viteplus.dev/guide/install
+
 
 > vp add testnpm2 -D && cat package.json # should add package as dev dependencies
 ➤ YN0000: · Yarn <semver>

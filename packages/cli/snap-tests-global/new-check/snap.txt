@@ -49,6 +49,8 @@ Examples:
   vp create github:user/repo
   vp create https://github.com/user/template-repo
 
+Documentation: https://viteplus.dev/guide/create
+
 
 > vp create --list # list templates
 VITE+ - The Unified Toolchain for the Web
@@ -79,6 +81,8 @@ Examples:
 
 Tip:
   You can use any npm template or git repo with vp create.
+
+Documentation: https://viteplus.dev/guide/create
 
 
 [1]> vp create --no-interactive # run in non-interactive mode without template name will show error

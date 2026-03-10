@@ -41,6 +41,8 @@ Options:
   -g, --global             List global packages
   -h, --help               Print help
 
+Documentation: https://viteplus.dev/guide/install
+
 
 > vp pm list # should list installed packages
 Legend: production dependency, optional only, dev only

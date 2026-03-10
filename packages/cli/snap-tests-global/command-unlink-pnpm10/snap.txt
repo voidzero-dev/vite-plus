@@ -13,6 +13,8 @@ Options:
   -r, --recursive  Unlink in every workspace package
   -h, --help       Print help
 
+Documentation: https://viteplus.dev/guide/install
+
 
 > mkdir -p ../unlink-test-lib && echo '{"name": "unlink-test-lib", "version": "1.0.0"}' > ../unlink-test-lib/package.json # create test library
 > vp link ../unlink-test-lib && cat package.json # link the library first

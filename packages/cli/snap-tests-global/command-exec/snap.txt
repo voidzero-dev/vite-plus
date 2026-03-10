@@ -62,6 +62,8 @@ Examples:
   vp exec -r -- tsc --noEmit                         # Run in all workspace packages
   vp exec --filter 'app...' -- tsc                   # Run in filtered packages
 
+Documentation: https://viteplus.dev/guide/vpx
+
 
 [1]> vp exec # missing command should error
 VITE+ - The Unified Toolchain for the Web

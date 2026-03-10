@@ -1,14 +1,12 @@
 <script setup lang="ts">
 import { Icon } from '@iconify/vue';
-import { ref, onMounted, onUnmounted } from 'vue';
+import { onMounted, onUnmounted, ref } from 'vue';
 
-const nav = [{ text: 'Docs', link: '/vite/guide' }];
+const nav = [{ text: 'Docs', link: '/guide' }];
 
-// Mobile menu state
 const mobileMenuOpen = ref(false);
 const expandedMobileItem = ref<string | null>(null);
 
-// Body scroll lock for mobile menu
 const lockBodyScroll = () => {
   const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
   document.body.style.overflow = 'hidden';
@@ -28,23 +26,18 @@ const unlockBodyScroll = () => {
   document.body.style.paddingRight = '';
 };
 
-// Close mobile menu
 const closeMobileMenu = () => {
   mobileMenuOpen.value = false;
   expandedMobileItem.value = null;
   unlockBodyScroll();
 };
 
-// Handle keyboard navigation
 const handleKeydown = (e: KeyboardEvent) => {
-  if (e.key === 'Escape') {
-    if (mobileMenuOpen.value) {
-      closeMobileMenu();
-    }
+  if (e.key === 'Escape' && mobileMenuOpen.value) {
+    closeMobileMenu();
   }
 };
 
-// Toggle mobile menu
 const toggleMobileMenu = () => {
   mobileMenuOpen.value = !mobileMenuOpen.value;
   if (mobileMenuOpen.value) {
@@ -67,20 +60,20 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <header class="wrapper px-6 py-7 flex items-center justify-between">
-    <div class="flex items-center gap-10">
-      <a href="/">
+  <header class="wrapper px-6 py-5 flex items-center justify-between relative">
+    <div class="flex gap-10 self-stretch">
+      <a href="/" class="flex flex-col items-start justify-center -mx-2 px-2">
         <img class="h-4" src="/logo.svg" alt="Vite+" />
       </a>
 
-      <!-- Desktop navigation - hidden on mobile -->
-      <nav class="nav-container hidden md:block">
-        <ul class="nav">
-          <li v-for="navItem in nav" :key="navItem.link" class="inline-block px-5">
+      <nav class="nav-container hidden lg:flex items-center gap-4">
+        <ul class="nav flex items-center gap-1">
+          <li v-for="navItem in nav" :key="navItem.link">
             <a
               :href="navItem.link"
               :target="navItem.link?.startsWith('http') ? '_blank' : '_self'"
               :rel="navItem.link?.startsWith('http') ? 'noopener noreferrer' : undefined"
+              class="flex items-center gap-1 px-3 py-2 text-base font-heading text-primary hover:opacity-85 transition-opacity whitespace-nowrap"
             >
               {{ navItem.text }}
               <svg
@@ -115,15 +108,14 @@ onUnmounted(() => {
           <img class="h-3" src="@assets/logos/voidzero-dark.svg" alt="VoidZero" />
         </a>
       </span>
-      <a href="/vite/guide" target="_self" class="button hidden md:block"> Get started </a>
+      <a href="/guide" target="_self" class="button hidden lg:block"> Get started </a>
 
-      <!-- Mobile hamburger/close button - Right aligned -->
       <button
         @click="toggleMobileMenu"
         :aria-expanded="mobileMenuOpen"
         aria-controls="mobile-menu"
         aria-label="Toggle navigation menu"
-        class="md:hidden p-2 -mr-2 text-primary dark:text-white hover:opacity-70 transition-opacity cursor-pointer"
+        class="lg:hidden p-2 -mr-2 text-primary dark:text-white hover:opacity-70 transition-opacity cursor-pointer"
         type="button"
       >
         <svg
@@ -148,7 +140,6 @@ onUnmounted(() => {
     </div>
   </header>
 
-  <!-- Mobile Menu Overlay - Full Screen -->
   <div
     v-if="mobileMenuOpen"
     id="mobile-menu"
@@ -156,10 +147,9 @@ onUnmounted(() => {
     aria-modal="true"
     aria-label="Mobile navigation menu"
     data-theme="dark"
-    class="md:hidden fixed inset-0 z-[1001] bg-primary"
+    class="lg:hidden fixed inset-0 z-[1001] bg-primary"
   >
     <section class="wrapper animate-fade-in">
-      <!-- Internal Header with Logo and Close Button -->
       <div class="w-full pl-5 pr-7 py-5 lg:py-7 flex items-center justify-between">
         <a href="/">
           <img class="h-4" src="@assets/logos/viteplus-light.svg" alt="Vite+" />
@@ -188,16 +178,13 @@ onUnmounted(() => {
         </button>
       </div>
 
-      <!-- Scrollable content container -->
       <div
         class="overflow-y-auto flex flex-col [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
         style="height: calc(100vh - 88px)"
       >
-        <!-- Navigation Items - Top Section -->
         <nav class="flex-1 w-full pt-6 pb-8">
           <ul class="space-y-1">
             <li v-for="navItem in nav" :key="navItem.link">
-              <!-- :class="{ 'bg-white/10': route.path === navItem.link }" -->
               <a
                 :href="navItem.link"
                 @click="closeMobileMenu"
@@ -230,13 +217,11 @@ onUnmounted(() => {
           </ul>
         </nav>
 
-        <!-- Bottom Section - CTA and Social -->
         <div class="w-full py-12 border-t border-nickel relative tick-left tick-right mt-auto">
           <div class="space-y-12">
-            <!-- CTA Button -->
             <div class="px-6">
               <a
-                href="/vite/guide"
+                href="/guide"
                 target="_self"
                 class="button button--primary button--white block text-center bg-white text-primary hover:bg-white/90"
                 @click="closeMobileMenu"
@@ -245,10 +230,8 @@ onUnmounted(() => {
               </a>
             </div>
 
-            <!-- Divider -->
             <div class="border-t border-nickel tick-left tick-right relative"></div>
 
-            <!-- Social Icons -->
             <div class="flex items-center justify-center gap-4 pb-12">
               <a
                 href="https://github.com/voidzero-dev"
@@ -317,10 +300,5 @@ onUnmounted(() => {
   to {
     opacity: 1;
   }
-}
-
-.animate-fade-in {
-  animation: fadeIn 300ms ease-out 100ms forwards;
-  opacity: 0;
 }
 </style>

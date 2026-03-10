@@ -31,6 +31,8 @@ Options:
   --no-optional  Remove optional dependencies
   -h, --help     Print help
 
+Documentation: https://viteplus.dev/guide/install
+
 
 > vp pm prune && cat package.json # should prune extraneous dependencies
 Lockfile is up to date, resolution step is skipped

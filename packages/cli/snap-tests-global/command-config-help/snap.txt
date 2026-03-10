@@ -12,6 +12,8 @@ Options:
 Environment:
   VITE_GIT_HOOKS=0  Skip hook installation
 
+Documentation: https://viteplus.dev/guide/commit-hooks
+
 
 > vp config --help
 VITE+ - The Unified Toolchain for the Web
@@ -27,6 +29,8 @@ Options:
 Environment:
   VITE_GIT_HOOKS=0  Skip hook installation
 
+Documentation: https://viteplus.dev/guide/commit-hooks
+
 
 > vp help config
 VITE+ - The Unified Toolchain for the Web
@@ -41,4 +45,6 @@ Options:
 
 Environment:
   VITE_GIT_HOOKS=0  Skip hook installation
+
+Documentation: https://viteplus.dev/guide/commit-hooks
 

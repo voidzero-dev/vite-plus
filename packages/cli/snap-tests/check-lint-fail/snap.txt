@@ -1,6 +1,6 @@
 [1]> vp check
 pass: All 4 files are correctly formatted (<variable>ms, <variable> threads)
-error: Lint or type issues found
+error: Lint issues found
 × eslint(no-eval): eval can be harmful.
    ╭─[src/index.js:2:3]
  1 │ function hello() {

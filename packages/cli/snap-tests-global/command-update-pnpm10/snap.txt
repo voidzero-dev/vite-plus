@@ -23,6 +23,8 @@ Options:
   --workspace           Only update if package exists in workspace (pnpm-specific)
   -h, --help            Print help
 
+Documentation: https://viteplus.dev/guide/install
+
 
 > vp update testnpm2 && cat package.json # should update package within semver range
 Packages: +<variable>

@@ -17,6 +17,8 @@ Options:
   --json                                 Output in JSON format
   -h, --help                             Print help
 
+Documentation: https://viteplus.dev/guide/install
+
 
 > vp pm pack && rm -rf *.tgz # should pack current package
 📦  command-pack-pnpm10@<semver>
