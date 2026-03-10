@@ -19,7 +19,7 @@ defaults:
     shell: bash
 
 env:
-  VITE_PLUS_VERSION: alpha
+  VITE_PLUS_VERSION: latest
 
 jobs:
   test-install-sh:
@@ -131,7 +131,7 @@ jobs:
         run: |
           docker run --rm --platform linux/arm64 \
             -v "${{ github.workspace }}:/workspace" \
-            -e VITE_PLUS_VERSION=alpha \
+            -e VITE_PLUS_VERSION=latest \
             ubuntu:20.04 bash -c "
               ls -al ~/
               apt-get update && apt-get install -y curl ca-certificates
