@@ -5,6 +5,7 @@ const PRETTIER_CONFIG: ScriptRewriteConfig = ScriptRewriteConfig {
     target_subcommand: "fmt",
     boolean_flags: &[
         "--write",
+        "-w",
         "--cache",
         "--no-config",
         "--no-editorconfig",
@@ -47,7 +48,7 @@ const PRETTIER_CONFIG: ScriptRewriteConfig = ScriptRewriteConfig {
         "--experimental-ternaries",
     ],
     flag_conversions: &[FlagConversion {
-        source_flags: &["--list-different", "-l"],
+        source_flags: &["--list-different", "-l", "-c"],
         target_flag: "--check",
         dedup_flag: "--check",
     }],
@@ -204,6 +205,17 @@ mod tests {
             rewrite_prettier_script("prettier --check --list-different ."),
             "vp fmt --check ."
         );
+    }
+
+    #[test]
+    fn test_rewrite_prettier_short_flags() {
+        // -w is short for --write (stripped)
+        assert_eq!(rewrite_prettier_script("prettier -w ."), "vp fmt .");
+        // -c is short for --check (converted)
+        assert_eq!(rewrite_prettier_script("prettier -c ."), "vp fmt --check .");
+        // Combined with other flags
+        assert_eq!(rewrite_prettier_script("prettier -w --single-quote ."), "vp fmt .");
+        assert_eq!(rewrite_prettier_script("prettier -c --single-quote ."), "vp fmt --check .");
     }
 
     #[test]
