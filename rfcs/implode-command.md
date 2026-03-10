@@ -186,10 +186,10 @@ On Windows, run PowerShell to remove `.vite-plus\bin` from the User PATH environ
 
 **Unix**: `std::fs::remove_dir_all` works even while the binary is running (Unix doesn't delete open files until all file descriptors are closed).
 
-**Windows**: The running `.exe` may be locked. Strategy:
+**Windows**: The running `vp.exe` is always locked by the OS. Strategy:
 
-1. Try direct `remove_dir_all` first
-2. If locked, spawn a detached `cmd.exe /C "ping -n 3 127.0.0.1 >NUL && rmdir /S /Q ..."` to delete after a short delay
+1. Rename `~/.vite-plus` to `~/.vite-plus.removing-<pid>` so the original path is immediately free for reinstall
+2. Spawn a detached `cmd.exe` process that retries `rmdir /S /Q` up to 10 times with 1-second pauses (via `timeout /T 1 /NOBREAK`), exiting as soon as the directory is gone
 
 ### File Structure
 
@@ -229,13 +229,12 @@ crates/vite_global_cli/
 
 ### CI Tests
 
-Added "Verify implode and reinstall" step to each job in `.github/workflows/test-standalone-install.yml`:
+Implode tests run in `.github/workflows/ci.yml` alongside the upgrade tests, across all platforms (bash on all, powershell and cmd on Windows):
 
 1. Run `vp implode --yes`
 2. Verify `~/.vite-plus/` is removed
-3. Verify shell profiles are cleaned
-4. Re-run install script
-5. Verify reinstallation works (`vp --version`)
+3. Reinstall via `pnpm bootstrap-cli:ci`
+4. Verify reinstallation works (`vp --version`)
 
 ### Manual Testing
 

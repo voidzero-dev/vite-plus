@@ -522,6 +522,7 @@ jobs:
         shell: bash
         run: |
           vp implode --yes
+          ls -la ~/
           VP_HOME="${USERPROFILE:-$HOME}/.vite-plus"
           if [ -d "$VP_HOME" ]; then
             echo "Error: $VP_HOME still exists after implode"
@@ -537,6 +538,7 @@ jobs:
         run: |
           vp implode --yes
           Start-Sleep -Seconds 5
+          dir "$env:USERPROFILE\"
           if (Test-Path "$env:USERPROFILE\.vite-plus") {
             Write-Error "~/.vite-plus still exists after implode"
             exit 1
@@ -550,11 +552,11 @@ jobs:
         run: |
           vp implode --yes
           timeout /T 5 /NOBREAK >NUL
+          dir "%USERPROFILE%\"
           if exist "%USERPROFILE%\.vite-plus" (
             echo Error: .vite-plus still exists after implode
             exit /b 1
           )
-          dir "%USERPROFILE%\"
           pnpm bootstrap-cli:ci
           vp --version
 
