@@ -322,7 +322,7 @@ function Main {
         Push-Location $VersionDir
         try {
             $env:CI = "true"
-            & "$BinDir\vp.exe" install --silent *>$null
+            & "$BinDir\vp.exe" install --silent 2>&1 | Out-Null
         } finally {
             Pop-Location
         }
