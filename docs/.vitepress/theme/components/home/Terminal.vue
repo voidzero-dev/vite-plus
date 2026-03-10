@@ -24,7 +24,7 @@ const tabSequence = terminalTranscripts.map((transcript) => transcript.id);
 const activeTranscript = computed(
   () =>
     terminalTranscripts.find((transcript) => transcript.id === activeTab.value) ??
-    terminalTranscripts[0]
+    terminalTranscripts[0],
 );
 
 const goToNextTab = () => {
@@ -81,7 +81,7 @@ onMounted(() => {
     {
       threshold: 0.2, // Trigger when 20% of the element is visible
       rootMargin: '0px',
-    }
+    },
   );
 
   observer.observe(sectionRef.value);

@@ -48,12 +48,12 @@ const restartAnimation = () => {
               if (lineIndex === props.transcript.lines.length - 1) {
                 const completionTimer = window.setTimeout(
                   () => emit('complete'),
-                  props.transcript.completionDelay ?? 900
+                  props.transcript.completionDelay ?? 900,
                 );
                 timers.push(completionTimer);
               }
             },
-            (props.transcript.lineDelay ?? 220) * (lineIndex + 1)
+            (props.transcript.lineDelay ?? 220) * (lineIndex + 1),
           );
           timers.push(revealTimer);
         });
@@ -86,7 +86,7 @@ const toneClass = (tone: TerminalTone) => {
 watch(
   () => props.transcript.id,
   () => restartAnimation(),
-  { immediate: true }
+  { immediate: true },
 );
 
 onBeforeUnmount(() => clearTimers());
