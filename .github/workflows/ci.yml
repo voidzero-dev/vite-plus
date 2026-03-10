@@ -382,7 +382,12 @@ jobs:
       - name: Run CLI snapshot tests
         run: |
           RUST_BACKTRACE=1 pnpm test
-          git diff --exit-code
+          if ! git diff --exit-code; then
+            echo "::error::Snapshot diff detected. Run 'pnpm -F vite-plus snap-test' locally and commit the updated snap.txt files."
+            git diff --stat
+            git diff
+            exit 1
+          fi
 
       # Upgrade tests (merged from separate job to avoid duplicate build)
       - name: Test upgrade (bash)
