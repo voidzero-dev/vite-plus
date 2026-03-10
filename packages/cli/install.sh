@@ -617,8 +617,8 @@ WRAPPER_EOF
 
   if [ "$NODE_MANAGER_ENABLED" = "true" ] || [ "$NODE_MANAGER_ENABLED" = "already" ]; then
     echo ""
-    echo -e "  Node.js is now managed by Vite+ (via ${BRIGHT_BLUE}vp env${NC})."
-    echo -e "  Run ${BRIGHT_BLUE}vp env doctor${NC} to verify your setup."
+    echo -e "  Vite+ is now managing Node.js via ${BRIGHT_BLUE}vp env${NC}."
+    echo -e "  Run ${BRIGHT_BLUE}vp env doctor${NC} to verify your setup, or ${BRIGHT_BLUE}vp env off${NC} to opt out."
   fi
 
   echo ""

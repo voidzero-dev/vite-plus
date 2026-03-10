@@ -395,8 +395,8 @@ exec "`$VITE_PLUS_HOME/current/bin/vp.exe" "`$@"
     # Show Node.js manager status
     if ($nodeManagerResult -eq "true" -or $nodeManagerResult -eq "already") {
         Write-Host ""
-        Write-Host "  Node.js is now managed by Vite+ (via ${BRIGHT_BLUE}vp env${NC})."
-        Write-Host "  Run ${BRIGHT_BLUE}vp env doctor${NC} to verify your setup."
+        Write-Host "  Vite+ is now managing Node.js via ${BRIGHT_BLUE}vp env${NC}."
+        Write-Host "  Run ${BRIGHT_BLUE}vp env doctor${NC} to verify your setup, or ${BRIGHT_BLUE}vp env off${NC} to opt out."
     }
 
     Write-Host ""
