@@ -156,13 +156,13 @@ export function brandRolldownVite(rootDir: string = process.cwd()) {
   const reporterResults = [
     replaceInFile(
       reporterFile,
-      'const COMPRESSIBLE_ASSETS_RE = /\\.(?:html|json|svg|txt|xml|xhtml|wasm)$/',
-      'const COMPRESSIBLE_ASSETS_RE = /\\.(?:html|json|svg|txt|xml|xhtml|wasm)$/\nconst VITE_VERSION_ONLY_LINE_RE = /^vite v\\S+$/',
+      "import path from 'node:path'",
+      "import path from 'node:path'\n\nconst VITE_VERSION_ONLY_LINE_RE = /^vite v\\S+$/",
     ),
     replaceInFile(
       reporterFile,
-      '        logInfo: shouldLogInfo ? (msg) => env.logger.info(msg) : undefined,',
-      '        logInfo: shouldLogInfo\n          ? (msg) => {\n              // Keep transformed/chunk/gzip logs but suppress redundant version-only line.\n              if (VITE_VERSION_ONLY_LINE_RE.test(msg.trim())) {\n                return\n              }\n              env.logger.info(msg)\n            }\n          : undefined,',
+      '      logInfo: shouldLogInfo ? (msg) => env.logger.info(msg) : undefined,',
+      '      logInfo: shouldLogInfo\n        ? (msg) => {\n            // Keep transformed/chunk/gzip logs but suppress redundant version-only line.\n            if (VITE_VERSION_ONLY_LINE_RE.test(msg.trim())) {\n              return\n            }\n            env.logger.info(msg)\n          }\n        : undefined,',
     ),
   ];
   logPatch(

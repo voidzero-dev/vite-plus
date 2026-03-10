@@ -239,6 +239,7 @@ rolldown_filter_analyzer = { path = "./rolldown/crates/rolldown_filter_analyzer"
 rolldown_fs = { path = "./rolldown/crates/rolldown_fs" }
 rolldown_fs_watcher = { path = "./rolldown/crates/rolldown_fs_watcher" }
 rolldown_plugin = { path = "./rolldown/crates/rolldown_plugin" }
+rolldown_plugin_asset_module = { path = "./rolldown/crates/rolldown_plugin_asset_module" }
 rolldown_plugin_bundle_analyzer = { path = "./rolldown/crates/rolldown_plugin_bundle_analyzer" }
 rolldown_plugin_chunk_import_map = { path = "./rolldown/crates/rolldown_plugin_chunk_import_map" }
 rolldown_plugin_copy_module = { path = "./rolldown/crates/rolldown_plugin_copy_module" }

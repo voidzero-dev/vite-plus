@@ -104,7 +104,7 @@ catalog:
   terser: ^5.44.1
   tinybench: ^6.0.0
   tinyexec: ^1.0.1
-  tsdown: ^0.21.0
+  tsdown: ^0.21.1
   tsx: ^4.20.6
   typescript: ^5.9.3
   unified: ^11.0.5
@@ -137,6 +137,7 @@ minimumReleaseAgeExclude:
   - '@oxlint-tsgolint/*'
   - '@oxlint/*'
   - '@rolldown/*'
+  - '@tsdown/*'
   - '@types/*'
   - '@vitejs/*'
   - '@vitest/*'
@@ -146,6 +147,8 @@ minimumReleaseAgeExclude:
   - oxfmt
   - oxlint
   - oxlint-tsgolint
+  - lightningcss
+  - lightningcss-*
   - rolldown
   - rolldown-plugin-dts
   - rolldown-vite
