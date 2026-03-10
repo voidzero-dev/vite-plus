@@ -1,4 +1,6 @@
-import { existsSync } from 'node:fs';
+import { execSync } from 'node:child_process';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
@@ -15,31 +17,30 @@ function countDirnameCalls(script: string): number {
 }
 
 describe('install', () => {
-  it('should create _/pre-commit but not pre-commit in hooks dir root', () => {
-    const { execSync } = require('node:child_process');
-    const { mkdtempSync, rmSync } = require('node:fs');
-    const { tmpdir } = require('node:os');
+  it.skipIf(process.platform === 'win32')(
+    'should create _/pre-commit but not pre-commit in hooks dir root',
+    () => {
+      const tmp = mkdtempSync(join(tmpdir(), 'hooks-test-'));
+      const originalCwd = process.cwd();
+      try {
+        // Set up a temporary git repo
+        execSync('git init', { cwd: tmp, stdio: 'ignore' });
+        process.chdir(tmp);
 
-    const tmp = mkdtempSync(join(tmpdir(), 'hooks-test-'));
-    const originalCwd = process.cwd();
-    try {
-      // Set up a temporary git repo
-      execSync('git init', { cwd: tmp, stdio: 'ignore' });
-      process.chdir(tmp);
+        const hooksDir = '.vite-hooks';
+        const result = install(hooksDir);
+        expect(result.isError).toBe(false);
 
-      const hooksDir = '.vite-hooks';
-      const result = install(hooksDir);
-      expect(result.isError).toBe(false);
-
-      // install() creates the internal shim at _/pre-commit
-      expect(existsSync(join(tmp, hooksDir, '_', 'pre-commit'))).toBe(true);
-      // install() does NOT create pre-commit at the hooks dir root
-      expect(existsSync(join(tmp, hooksDir, 'pre-commit'))).toBe(false);
-    } finally {
-      process.chdir(originalCwd);
-      rmSync(tmp, { recursive: true, force: true });
-    }
-  });
+        // install() creates the internal shim at _/pre-commit
+        expect(existsSync(join(tmp, hooksDir, '_', 'pre-commit'))).toBe(true);
+        // install() does NOT create pre-commit at the hooks dir root
+        expect(existsSync(join(tmp, hooksDir, 'pre-commit'))).toBe(false);
+      } finally {
+        process.chdir(originalCwd);
+        rmSync(tmp, { recursive: true, force: true });
+      }
+    },
+  );
 });
 
 describe('hookScript', () => {
