@@ -30,6 +30,16 @@ export function parseGitHubUrl(url: string): string | null {
   return null;
 }
 
+export function inferGitHubRepoName(templateName: string): string | null {
+  const degitPath = parseGitHubUrl(templateName);
+  if (!degitPath) {
+    return null;
+  }
+
+  const repoName = degitPath.split('/').pop();
+  return repoName || null;
+}
+
 // Discover and identify a template
 export function discoverTemplate(
   templateName: string,
@@ -59,7 +69,7 @@ export function discoverTemplate(
     if (degitPath) {
       return {
         command: 'degit',
-        args: [degitPath, templateName, ...templateArgs],
+        args: [degitPath, ...templateArgs],
         envs,
         type: TemplateType.remote,
         parentDir,

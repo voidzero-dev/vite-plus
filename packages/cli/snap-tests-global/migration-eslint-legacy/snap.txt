@@ -2,18 +2,7 @@
 VITE+ - The Unified Toolchain for the Web
 
 
-Using default package manager: pnpm
-
 Legacy ESLint configuration detected (.eslintrc). Automatic migration to Oxlint requires ESLint v9+ with flat config format (eslint.config.*). Please upgrade to ESLint v9 first: https://eslint.org/docs/latest/use/migrate-to-9.0.0
-
-pnpm@latest installing...
-
-pnpm@<semver> installed
-
-✔ Created vite.config.ts in vite.config.ts
-
-✔ Merged staged config into vite.config.ts
-
-Wrote agent instructions to AGENTS.md
-✔ Migration completed!
-
+◇ Migrated . to Vite+<repeat>
+• Node <semver>  pnpm <semver>
+• 2 config updates applied

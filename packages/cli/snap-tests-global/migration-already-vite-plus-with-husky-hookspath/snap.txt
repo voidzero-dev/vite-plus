@@ -3,14 +3,10 @@
 > vp migrate --no-interactive # should override husky's core.hooksPath and migrate hooks
 VITE+ - The Unified Toolchain for the Web
 
-
-✔ Created vite.config.ts in vite.config.ts
-
-✔ Merged staged config into vite.config.ts
-
-✔ Git hooks configured
-✔ Migration completed!
-
+◇ Updated .
+• Node <semver>  unknown latest
+• 2 config updates applied
+• Git hooks configured
 
 > cat package.json # husky/lint-staged should be removed, prepare should be vp config
 {

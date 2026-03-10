@@ -2,23 +2,11 @@
 VITE+ - The Unified Toolchain for the Web
 
 
-Using default package manager: pnpm
-
 Prettier configuration detected. Auto-migrating to Oxfmt...
-
-pnpm@latest installing...
-
-pnpm@<semver> installed
-
-Migrating Prettier config to Oxfmt...
-
-Prettier config migrated to .oxfmtrc.json
-
-✔ Merged staged config into vite.config.ts
-
-Wrote agent instructions to AGENTS.md
-✔ Migration completed!
-
+◇ Migrated . to Vite+<repeat>
+• Node <semver>  pnpm <semver>
+• 1 config update applied
+• Prettier migrated to Oxfmt
 
 > cat package.json # check prettier key removed, scripts rewritten, dep removed
 {

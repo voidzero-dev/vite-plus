@@ -9,8 +9,9 @@ Migrating Prettier config to Oxfmt...
 Prettier config migrated to .oxfmtrc.json
 
 ✔ Removed .prettierrc.json
-✔ Migration completed!
-
+◇ Updated .
+• Node <semver>  unknown latest
+• Prettier migrated to Oxfmt
 
 > cat package.json # check prettier removed from devDependencies and scripts rewritten
 {

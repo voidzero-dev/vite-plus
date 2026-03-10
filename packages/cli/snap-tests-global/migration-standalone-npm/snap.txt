@@ -1,22 +1,9 @@
 > vp migrate --no-interactive --no-hooks # migration should work with npm, add overrides, and update lockfile
 VITE+ - The Unified Toolchain for the Web
 
-
-npm@<semver> installing...
-
-npm@<semver> installed
-
-Installing dependencies...
-
-Dependencies installed
-
-Wrote agent instructions to AGENTS.md
-
-Installing dependencies...
-
-Dependencies installed
-✔ Migration completed!
-
+◇ Migrated . to Vite+<repeat>
+• Node <semver>  npm <semver>
+✓ Dependencies installed in <variable>ms
 
 > cat package.json # check package.json has overrides field (not pnpm.overrides)
 {

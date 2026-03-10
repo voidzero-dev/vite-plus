@@ -2,10 +2,6 @@
 VITE+ - The Unified Toolchain for the Web
 
 
-pnpm@<semver> installing...
-
-pnpm@<semver> installed
-
 ✘ pnpm@<semver> is not supported by auto migration, please upgrade pnpm to >=9.5.0 first
 Vite+ cannot automatically migrate this project yet.
 

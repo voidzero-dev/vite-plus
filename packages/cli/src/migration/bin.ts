@@ -3,7 +3,6 @@ import { styleText } from 'node:util';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import mri from 'mri';
-import colors from 'picocolors';
 import semver from 'semver';
 
 import { vitePlusHeader } from '../../binding/index.js';
@@ -20,13 +19,13 @@ import {
 } from '../utils/agent.js';
 import {
   detectEditorConflicts,
-  EDITORS,
   type EditorId,
   selectEditor,
   writeEditorConfigs,
 } from '../utils/editor.js';
 import { renderCliDoc } from '../utils/help.js';
 import { hasVitePlusDependency, readNearestPackageJson } from '../utils/package.js';
+import { displayRelative } from '../utils/path.js';
 import {
   cancelAndExit,
   defaultInteractive,
@@ -52,8 +51,7 @@ import {
   rewriteMonorepo,
   rewriteStandaloneProject,
 } from './migrator.js';
-
-const { green } = colors;
+import { createMigrationReport, type MigrationReport } from './report.js';
 
 function warnPackageLevelEslint() {
   prompts.log.warn(
@@ -80,7 +78,6 @@ async function confirmEslintMigration(interactive: boolean): Promise<boolean> {
     }
     return !!confirmed;
   }
-  prompts.log.info('ESLint configuration detected. Auto-migrating to Oxlint...');
   return true;
 }
 
@@ -287,22 +284,11 @@ async function collectMigrationPlan(
   options: MigrationOptions,
   packages?: WorkspacePackage[],
 ): Promise<MigrationPlan> {
-  // 1. Confirm migration
-  if (options.interactive) {
-    const approved = await prompts.confirm({
-      message: 'Migrate this project to Vite+?',
-      initialValue: true,
-    });
-    if (prompts.isCancel(approved) || !approved) {
-      cancelAndExit('Migration cancelled');
-    }
-  }
-
-  // 2. Package manager selection
+  // 1. Package manager selection
   const packageManager =
-    detectedPackageManager ?? (await selectPackageManager(options.interactive));
+    detectedPackageManager ?? (await selectPackageManager(options.interactive, true));
 
-  // 3. Git hooks (including preflight check)
+  // 2. Git hooks (including preflight check)
   let shouldSetupHooks = await promptGitHooks(options);
   if (shouldSetupHooks) {
     const reason = preflightGitHooksSetup(rootDir);
@@ -312,14 +298,14 @@ async function collectMigrationPlan(
     }
   }
 
-  // 4. Agent selection
+  // 3. Agent selection
   const selectedAgentTargetPaths = await selectAgentTargetPaths({
     interactive: options.interactive,
     agent: options.agent,
     onCancel: () => cancelAndExit(),
   });
 
-  // 5. Agent conflict detection + prompting
+  // 4. Agent conflict detection + prompting
   const agentConflicts = await detectAgentConflicts({
     projectRoot: rootDir,
     targetPaths: selectedAgentTargetPaths,
@@ -344,14 +330,14 @@ async function collectMigrationPlan(
     }
   }
 
-  // 6. Editor selection
+  // 5. Editor selection
   const selectedEditor = await selectEditor({
     interactive: options.interactive,
     editor: options.editor,
     onCancel: () => cancelAndExit(),
   });
 
-  // 7. Editor conflict detection + prompting
+  // 6. Editor conflict detection + prompting
   const editorConflicts = detectEditorConflicts({
     projectRoot: rootDir,
     editorId: selectedEditor,
@@ -380,7 +366,7 @@ async function collectMigrationPlan(
     }
   }
 
-  // 8. ESLint detection + prompt
+  // 7. ESLint detection + prompt
   const eslintProject = detectEslintProject(rootDir, packages);
   let migrateEslint = false;
   if (eslintProject.hasDependency && !eslintProject.configFile && eslintProject.legacyConfigFile) {
@@ -413,62 +399,140 @@ async function collectMigrationPlan(
     prettierConfigFile: prettierProject.configFile,
   };
 
-  // 10. Display migration plan summary
-  if (options.interactive) {
-    displayMigrationSummary(plan);
-  }
-
   return plan;
 }
 
-function displayMigrationSummary(plan: MigrationPlan) {
-  const lines: string[] = [
-    `- Install ${plan.packageManager} and dependencies`,
-    '- Rewrite configs and dependencies for Vite+',
-  ];
-
-  if (plan.migrateEslint) {
-    lines.push('- Migrate ESLint rules to Oxlint');
+function formatDuration(durationMs: number) {
+  if (durationMs < 1000) {
+    return `${Math.max(1, durationMs)}ms`;
   }
-
-  if (plan.migratePrettier) {
-    lines.push('- Migrate Prettier to Oxfmt');
+  const durationSeconds = durationMs / 1000;
+  if (durationSeconds < 10) {
+    return `${durationSeconds.toFixed(1)}s`;
   }
+  return `${Math.round(durationSeconds)}s`;
+}
 
-  if (plan.shouldSetupHooks) {
-    lines.push('- Set up pre-commit hooks');
+function showMigrationSummary(options: {
+  projectRoot: string;
+  packageManager: string;
+  packageManagerVersion: string;
+  installDurationMs: number;
+  report: MigrationReport;
+  updatedExistingVitePlus?: boolean;
+}) {
+  const {
+    projectRoot,
+    packageManager,
+    packageManagerVersion,
+    installDurationMs,
+    report,
+    updatedExistingVitePlus,
+  } = options;
+  const projectLabel = displayRelative(projectRoot) || '.';
+  const configUpdates =
+    report.createdViteConfigCount +
+    report.mergedConfigCount +
+    report.mergedStagedConfigCount +
+    report.inlinedLintStagedConfigCount +
+    report.removedConfigCount +
+    report.tsdownImportCount;
+
+  log(
+    `${styleText('magenta', '◇')} ${updatedExistingVitePlus ? 'Updated' : 'Migrated'} ${accent(projectLabel)}${
+      updatedExistingVitePlus ? '' : ' to Vite+'
+    }`,
+  );
+  log(
+    `${styleText('gray', '•')} Node ${process.versions.node}  ${packageManager} ${packageManagerVersion}`,
+  );
+  if (installDurationMs > 0) {
+    log(
+      `${styleText('green', '✓')} Dependencies installed in ${formatDuration(installDurationMs)}`,
+    );
   }
-
-  if (plan.selectedAgentTargetPaths && plan.selectedAgentTargetPaths.length > 0) {
-    const parts = plan.selectedAgentTargetPaths.map((tp) => {
-      const action = plan.agentConflictDecisions.get(tp);
-      return action ? `${tp}, ${action}` : tp;
-    });
-    lines.push(`- Write agent instructions (${parts.join('; ')})`);
+  if (configUpdates > 0 || report.rewrittenImportFileCount > 0) {
+    const parts: string[] = [];
+    if (configUpdates > 0) {
+      parts.push(
+        `${configUpdates} ${configUpdates === 1 ? 'config update' : 'config updates'} applied`,
+      );
+    }
+    if (report.rewrittenImportFileCount > 0) {
+      parts.push(
+        `${report.rewrittenImportFileCount} ${
+          report.rewrittenImportFileCount === 1 ? 'file had' : 'files had'
+        } imports rewritten`,
+      );
+    }
+    log(`${styleText('gray', '•')} ${parts.join(', ')}`);
   }
-
-  if (plan.selectedEditor) {
-    const editorConfig = EDITORS.find((e) => e.id === plan.selectedEditor);
-    const targetDir = editorConfig?.targetDir ?? plan.selectedEditor;
-    const decisions = [...plan.editorConflictDecisions.values()];
-    const uniqueActions = [...new Set(decisions)];
-    const actionStr = uniqueActions.length > 0 ? `, ${uniqueActions.join('/')}` : '';
-    lines.push(`- Write editor config (${targetDir}/${actionStr})`);
+  if (report.eslintMigrated) {
+    log(`${styleText('gray', '•')} ESLint rules migrated to Oxlint`);
   }
-
-  prompts.log.info([styleText('bold', 'Migration plan:'), ...lines].join('\n') + '\n');
+  if (report.prettierMigrated) {
+    log(`${styleText('gray', '•')} Prettier migrated to Oxfmt`);
+  }
+  if (report.gitHooksConfigured) {
+    log(`${styleText('gray', '•')} Git hooks configured`);
+  }
+  if (report.warnings.length > 0) {
+    log(`${styleText('yellow', '!')} Warnings:`);
+    for (const warning of report.warnings) {
+      log(`  - ${warning}`);
+    }
+  }
+  if (report.manualSteps.length > 0) {
+    log(`${styleText('blue', '→')} Manual follow-up:`);
+    for (const step of report.manualSteps) {
+      log(`  - ${step}`);
+    }
+  }
 }
 
 async function executeMigrationPlan(
   workspaceInfoOptional: WorkspaceInfoOptional,
   plan: MigrationPlan,
   interactive: boolean,
-) {
+): Promise<{
+  installDurationMs: number;
+  packageManagerVersion: string;
+  report: MigrationReport;
+}> {
+  const report = createMigrationReport();
+  const migrationProgress = interactive ? prompts.spinner({ indicator: 'timer' }) : undefined;
+  let migrationProgressStarted = false;
+  const updateMigrationProgress = (message: string) => {
+    if (!migrationProgress) {
+      return;
+    }
+    if (migrationProgressStarted) {
+      migrationProgress.message(message);
+      return;
+    }
+    migrationProgress.start(message);
+    migrationProgressStarted = true;
+  };
+  const clearMigrationProgress = () => {
+    if (migrationProgress && migrationProgressStarted) {
+      migrationProgress.clear();
+      migrationProgressStarted = false;
+    }
+  };
+  const failMigrationProgress = (message: string) => {
+    if (migrationProgress && migrationProgressStarted) {
+      migrationProgress.error(message);
+      migrationProgressStarted = false;
+    }
+  };
+
   // 1. Download package manager + version validation
+  updateMigrationProgress('Preparing migration');
   const downloadResult = await downloadPackageManager(
     plan.packageManager,
     workspaceInfoOptional.packageManagerVersion,
     interactive,
+    true,
   );
   const workspaceInfo: WorkspaceInfo = {
     ...workspaceInfoOptional,
@@ -481,11 +545,13 @@ async function executeMigrationPlan(
     plan.packageManager === PackageManager.yarn &&
     semver.satisfies(downloadResult.version, '>=4.0.0 <4.10.0')
   ) {
-    await upgradeYarn(workspaceInfo.rootDir, interactive);
+    updateMigrationProgress('Upgrading Yarn');
+    await upgradeYarn(workspaceInfo.rootDir, interactive, true);
   } else if (
     plan.packageManager === PackageManager.pnpm &&
     semver.satisfies(downloadResult.version, '< 9.5.0')
   ) {
+    failMigrationProgress('Migration failed');
     prompts.log.error(
       `✘ pnpm@${downloadResult.version} is not supported by auto migration, please upgrade pnpm to >=9.5.0 first`,
     );
@@ -494,6 +560,7 @@ async function executeMigrationPlan(
     plan.packageManager === PackageManager.npm &&
     semver.satisfies(downloadResult.version, '< 8.3.0')
   ) {
+    failMigrationProgress('Migration failed');
     prompts.log.error(
       `✘ npm@${downloadResult.version} is not supported by auto migration, please upgrade npm to >=8.3.0 first`,
     );
@@ -501,37 +568,53 @@ async function executeMigrationPlan(
   }
 
   // 3. Run vp install to ensure the project is ready
-  await runViteInstall(workspaceInfo.rootDir, interactive);
+  updateMigrationProgress('Installing dependencies');
+  const initialInstallSummary = await runViteInstall(
+    workspaceInfo.rootDir,
+    interactive,
+    undefined,
+    {
+      silent: true,
+    },
+  );
 
   // 4. Check vite and vitest version is supported by migration
+  updateMigrationProgress('Validating toolchain');
   const isViteSupported = checkViteVersion(workspaceInfo.rootDir);
   const isVitestSupported = checkVitestVersion(workspaceInfo.rootDir);
   if (!isViteSupported || !isVitestSupported) {
+    failMigrationProgress('Migration failed');
     cancelAndExit('Vite+ cannot automatically migrate this project yet.', 1);
   }
 
   // 5. ESLint → Oxlint migration (before main rewrite so .oxlintrc.json gets picked up)
   if (plan.migrateEslint) {
+    updateMigrationProgress('Migrating ESLint');
     const eslintOk = await migrateEslintToOxlint(
       workspaceInfo.rootDir,
       interactive,
       plan.eslintConfigFile,
       workspaceInfo.packages,
+      { silent: true, report },
     );
     if (!eslintOk) {
+      failMigrationProgress('Migration failed');
       cancelAndExit('ESLint migration failed. Fix the issue and re-run `vp migrate`.', 1);
     }
   }
 
   // 5b. Prettier → Oxfmt migration (before main rewrite so .oxfmtrc.json gets picked up)
   if (plan.migratePrettier) {
+    updateMigrationProgress('Migrating Prettier');
     const prettierOk = await migratePrettierToOxfmt(
       workspaceInfo.rootDir,
       interactive,
       plan.prettierConfigFile,
       workspaceInfo.packages,
+      { silent: true, report },
     );
     if (!prettierOk) {
+      failMigrationProgress('Migration failed');
       cancelAndExit('Prettier migration failed. Fix the issue and re-run `vp migrate`.', 1);
     }
   }
@@ -542,39 +625,62 @@ async function executeMigrationPlan(
   const skipStagedMigration = !plan.shouldSetupHooks;
 
   // 7. Rewrite configs
+  updateMigrationProgress('Rewriting configs');
   if (workspaceInfo.isMonorepo) {
-    rewriteMonorepo(workspaceInfo, skipStagedMigration);
+    rewriteMonorepo(workspaceInfo, skipStagedMigration, true, report);
   } else {
-    rewriteStandaloneProject(workspaceInfo.rootDir, workspaceInfo, skipStagedMigration);
+    rewriteStandaloneProject(
+      workspaceInfo.rootDir,
+      workspaceInfo,
+      skipStagedMigration,
+      true,
+      report,
+    );
   }
 
   // 8. Install git hooks
   if (plan.shouldSetupHooks) {
-    installGitHooks(workspaceInfo.rootDir);
+    updateMigrationProgress('Configuring git hooks');
+    installGitHooks(workspaceInfo.rootDir, true, report);
   }
 
   // 9. Write agent instructions (using pre-resolved decisions)
+  updateMigrationProgress('Writing agent instructions');
   await writeAgentInstructions({
     projectRoot: workspaceInfo.rootDir,
     targetPaths: plan.selectedAgentTargetPaths,
     interactive,
     conflictDecisions: plan.agentConflictDecisions,
+    silent: true,
   });
 
   // 10. Write editor configs (using pre-resolved decisions)
+  updateMigrationProgress('Writing editor configs');
   await writeEditorConfigs({
     projectRoot: workspaceInfo.rootDir,
     editorId: plan.selectedEditor,
     interactive,
     conflictDecisions: plan.editorConflictDecisions,
+    silent: true,
   });
 
   // 11. Reinstall after migration
   // npm needs --force to re-resolve packages with newly added overrides,
   // otherwise the stale lockfile prevents override resolution.
   const installArgs = plan.packageManager === PackageManager.npm ? ['--force'] : undefined;
-  await runViteInstall(workspaceInfo.rootDir, interactive, installArgs);
-  prompts.outro(green('✔ Migration completed!'));
+  updateMigrationProgress('Installing dependencies');
+  const finalInstallSummary = await runViteInstall(
+    workspaceInfo.rootDir,
+    interactive,
+    installArgs,
+    { silent: true },
+  );
+  clearMigrationProgress();
+  return {
+    installDurationMs: initialInstallSummary.durationMs + finalInstallSummary.durationMs,
+    packageManagerVersion: downloadResult.version,
+    report,
+  };
 }
 
 async function main() {
@@ -586,14 +692,38 @@ async function main() {
     return;
   }
 
-  prompts.intro(vitePlusHeader());
+  log(`${vitePlusHeader()}\n`);
 
   const workspaceInfoOptional = await detectWorkspace(projectPath);
+  const resolvedPackageManager = workspaceInfoOptional.packageManager ?? 'unknown';
 
   // Early return if already using Vite+ (only ESLint/hooks migration may be needed)
   const rootPkg = readNearestPackageJson<PackageDependencies>(workspaceInfoOptional.rootDir);
   if (hasVitePlusDependency(rootPkg)) {
     let didMigrate = false;
+    let installDurationMs = 0;
+    const report = createMigrationReport();
+    const migrationProgress = options.interactive
+      ? prompts.spinner({ indicator: 'timer' })
+      : undefined;
+    let migrationProgressStarted = false;
+    const updateMigrationProgress = (message: string) => {
+      if (!migrationProgress) {
+        return;
+      }
+      if (migrationProgressStarted) {
+        migrationProgress.message(message);
+        return;
+      }
+      migrationProgress.start(message);
+      migrationProgressStarted = true;
+    };
+    const clearMigrationProgress = () => {
+      if (migrationProgress && migrationProgressStarted) {
+        migrationProgress.clear();
+        migrationProgressStarted = false;
+      }
+    };
 
     // Check if ESLint migration is needed
     const eslintMigrated = await promptEslintMigration(
@@ -611,9 +741,21 @@ async function main() {
 
     // Merge configs and reinstall once if any tool migration happened
     if (eslintMigrated || prettierMigrated) {
-      mergeViteConfigFiles(workspaceInfoOptional.rootDir);
-      await runViteInstall(workspaceInfoOptional.rootDir, options.interactive);
+      updateMigrationProgress('Rewriting configs');
+      mergeViteConfigFiles(workspaceInfoOptional.rootDir, true, report);
+      updateMigrationProgress('Installing dependencies');
+      const installSummary = await runViteInstall(
+        workspaceInfoOptional.rootDir,
+        options.interactive,
+        undefined,
+        {
+          silent: true,
+        },
+      );
+      installDurationMs += installSummary.durationMs;
       didMigrate = true;
+      report.eslintMigrated = eslintMigrated;
+      report.prettierMigrated = prettierMigrated;
     }
 
     // Check if husky/lint-staged migration is needed
@@ -624,13 +766,24 @@ async function main() {
       rootPkg?.dependencies?.['lint-staged'];
     if (hasHooksToMigrate) {
       const shouldSetupHooks = await promptGitHooks(options);
-      if (shouldSetupHooks && installGitHooks(workspaceInfoOptional.rootDir)) {
+      if (shouldSetupHooks) {
+        updateMigrationProgress('Configuring git hooks');
+      }
+      if (shouldSetupHooks && installGitHooks(workspaceInfoOptional.rootDir, true, report)) {
         didMigrate = true;
       }
     }
 
     if (didMigrate) {
-      prompts.outro(green('✔ Migration completed!'));
+      clearMigrationProgress();
+      showMigrationSummary({
+        projectRoot: workspaceInfoOptional.rootDir,
+        packageManager: resolvedPackageManager,
+        packageManagerVersion: workspaceInfoOptional.packageManagerVersion,
+        installDurationMs,
+        report,
+        updatedExistingVitePlus: true,
+      });
     } else {
       prompts.outro(`This project is already using Vite+! ${accent(`Happy coding!`)}`);
     }
@@ -646,7 +799,14 @@ async function main() {
   );
 
   // Phase 2: Execute without prompts
-  await executeMigrationPlan(workspaceInfoOptional, plan, options.interactive);
+  const result = await executeMigrationPlan(workspaceInfoOptional, plan, options.interactive);
+  showMigrationSummary({
+    projectRoot: workspaceInfoOptional.rootDir,
+    packageManager: plan.packageManager,
+    packageManagerVersion: result.packageManagerVersion,
+    installDurationMs: result.installDurationMs,
+    report: result.report,
+  });
 }
 
 main().catch((err) => {

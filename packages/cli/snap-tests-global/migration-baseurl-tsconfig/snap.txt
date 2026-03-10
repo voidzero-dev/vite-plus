@@ -1,25 +1,12 @@
 > vp migrate --no-interactive # migration should skip typeAware/typeCheck when tsconfig has baseUrl
 VITE+ - The Unified Toolchain for the Web
 
-
-Using default package manager: pnpm
-
-pnpm@latest installing...
-
-pnpm@<semver> installed
-
-✔ Created vite.config.ts in vite.config.ts
-
-Skipped typeAware/typeCheck: tsconfig.json contains baseUrl which is not yet supported by the oxlint type checker.
+◇ Migrated . to Vite+<repeat>
+• Node <semver>  pnpm <semver>
+• 3 config updates applied
+! Warnings:
+  - Skipped typeAware/typeCheck: tsconfig.json contains baseUrl which is not yet supported by the oxlint type checker.
   Run `npx @andrewbranch/ts5to6 --fixBaseUrl .` to remove baseUrl from your tsconfig.
-
-✔ Merged .oxlintrc.json into vite.config.ts
-
-✔ Merged staged config into vite.config.ts
-
-Wrote agent instructions to AGENTS.md
-✔ Migration completed!
-
 
 > cat vite.config.ts # check vite.config.ts — should NOT have typeAware or typeCheck
 import { defineConfig } from 'vite-plus';

@@ -2,8 +2,6 @@
 VITE+ - The Unified Toolchain for the Web
 
 
-ESLint configuration detected. Auto-migrating to Oxlint...
-
 Migrating ESLint config to Oxlint...
 
 ESLint config migrated to .oxlintrc.json
@@ -13,10 +11,10 @@ Replacing ESLint comments with Oxlint equivalents...
 ESLint comments replaced
 
 ✔ Removed eslint.config.mjs
-
-✔ Merged .oxlintrc.json into vite.config.mjs
-✔ Migration completed!
-
+◇ Updated .
+• Node <semver>  unknown latest
+• 1 config update applied
+• ESLint rules migrated to Oxlint
 
 > cat package.json # check eslint removed from devDependencies and scripts rewritten
 {

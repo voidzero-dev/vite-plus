@@ -1,24 +1,9 @@
 > vp migrate --no-interactive # migration should skip rewriting vite imports when vite is in peerDependencies
 VITE+ - The Unified Toolchain for the Web
 
-
-Using default package manager: pnpm
-
-pnpm@latest installing...
-
-pnpm@<semver> installed
-
-Rewrote imports in one file
-
-  src/index.ts
-
-✔ Created vite.config.ts in vite.config.ts
-
-✔ Merged staged config into vite.config.ts
-
-Wrote agent instructions to AGENTS.md
-✔ Migration completed!
-
+◇ Migrated . to Vite+<repeat>
+• Node <semver>  pnpm <semver>
+• 2 config updates applied, 1 file had imports rewritten
 
 > cat src/index.ts # vite imports should NOT be rewritten, vitest imports SHOULD be rewritten
 import { defineConfig, type Plugin } from 'vite';

@@ -5,6 +5,7 @@ import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import validateNpmPackageName from 'validate-npm-package-name';
 
 import { accent } from '../utils/terminal.js';
+import { getRandomProjectName } from './random-name.js';
 import { getProjectDirFromPackageName } from './utils.js';
 
 export async function promptPackageNameAndTargetDir(
@@ -46,8 +47,46 @@ export async function promptPackageNameAndTargetDir(
   return { packageName, targetDir };
 }
 
+export async function promptTargetDir(
+  defaultTargetDir: string,
+  interactive?: boolean,
+  options?: { cwd?: string },
+) {
+  let targetDir: string;
+
+  if (interactive) {
+    const selected = await prompts.text({
+      message: 'Target directory:',
+      placeholder: defaultTargetDir,
+      defaultValue: defaultTargetDir,
+      validate: (value) => validateTargetDir(value ?? defaultTargetDir, options?.cwd).error,
+    });
+    if (prompts.isCancel(selected)) {
+      cancelAndExit();
+    }
+    targetDir = validateTargetDir(selected ?? defaultTargetDir, options?.cwd).directory;
+  } else {
+    targetDir = validateTargetDir(defaultTargetDir, options?.cwd).directory;
+    prompts.log.info(`Using default target directory: ${accent(targetDir)}`);
+  }
+
+  return targetDir;
+}
+
+export function suggestAvailableTargetDir(defaultTargetDir: string, cwd: string) {
+  let suggestedTargetDir = defaultTargetDir;
+  let attempt = 1;
+
+  while (!isTargetDirAvailable(path.join(cwd, suggestedTargetDir))) {
+    suggestedTargetDir = getRandomProjectName({ fallbackName: `${defaultTargetDir}-${attempt}` });
+    attempt++;
+  }
+
+  return suggestedTargetDir;
+}
+
 export async function checkProjectDirExists(projectDirFullPath: string, interactive?: boolean) {
-  if (!fs.existsSync(projectDirFullPath) || isEmpty(projectDirFullPath)) {
+  if (isTargetDirAvailable(projectDirFullPath)) {
     return;
   }
   if (!interactive) {
@@ -105,4 +144,30 @@ function emptyDir(dir: string) {
     }
     fs.rmSync(path.resolve(dir, file), { recursive: true, force: true });
   }
+}
+
+export function isTargetDirAvailable(projectDirFullPath: string) {
+  return !fs.existsSync(projectDirFullPath) || isEmpty(projectDirFullPath);
+}
+
+function validateTargetDir(input?: string, cwd?: string): { directory: string; error?: string } {
+  const value = input?.trim() ?? '';
+  if (!value) {
+    return { directory: '', error: 'Target directory is required' };
+  }
+
+  const targetDir = path.normalize(value);
+  if (!targetDir || targetDir === '.') {
+    return { directory: '', error: 'Target directory is required' };
+  }
+  if (path.isAbsolute(targetDir)) {
+    return { directory: '', error: 'Absolute path is not allowed' };
+  }
+  if (targetDir.includes('..')) {
+    return { directory: '', error: 'Relative path contains ".." which is not allowed' };
+  }
+  if (cwd && !isTargetDirAvailable(path.join(cwd, targetDir))) {
+    return { directory: '', error: `Target directory "${targetDir}" already exists` };
+  }
+  return { directory: targetDir };
 }

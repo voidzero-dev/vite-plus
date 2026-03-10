@@ -3,17 +3,9 @@
 VITE+ - The Unified Toolchain for the Web
 
 
-Using default package manager: pnpm
-
 ⚠ Unsupported lint-staged config format — skipping git hooks setup. Please configure git hooks manually.
-
-pnpm@latest installing...
-
-pnpm@<semver> installed
-
-Wrote agent instructions to AGENTS.md
-✔ Migration completed!
-
+◇ Migrated . to Vite+<repeat>
+• Node <semver>  pnpm <semver>
 
 > cat package.json # check lint-staged NOT added to package.json, husky/lint-staged removed from devDependencies
 {

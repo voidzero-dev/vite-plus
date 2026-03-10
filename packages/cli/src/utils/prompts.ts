@@ -141,8 +141,8 @@ export async function runViteFmt(
   }
 }
 
-export async function upgradeYarn(cwd: string, interactive?: boolean) {
-  const spinner = getSpinner(interactive);
+export async function upgradeYarn(cwd: string, interactive?: boolean, silent = false) {
+  const spinner = silent ? getSilentSpinner() : getSpinner(interactive);
   spinner.start(`Running yarn set version stable...`);
   const { exitCode, stderr, stdout } = await runCommandSilently({
     command: 'yarn',

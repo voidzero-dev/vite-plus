@@ -1,24 +1,9 @@
 > vp migrate --no-interactive # migration rewrites reference types
 VITE+ - The Unified Toolchain for the Web
 
-
-Using default package manager: pnpm
-
-pnpm@latest installing...
-
-pnpm@<semver> installed
-
-Rewrote imports in one file
-
-  src/env.d.ts
-
-✔ Created vite.config.ts in vite.config.ts
-
-✔ Merged staged config into vite.config.ts
-
-Wrote agent instructions to AGENTS.md
-✔ Migration completed!
-
+◇ Migrated . to Vite+<repeat>
+• Node <semver>  pnpm <semver>
+• 2 config updates applied, 1 file had imports rewritten
 
 > cat src/env.d.ts # check reference types rewritten
 /// <reference types="vite-plus" />

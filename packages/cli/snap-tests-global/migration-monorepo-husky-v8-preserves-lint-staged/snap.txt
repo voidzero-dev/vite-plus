@@ -3,14 +3,8 @@ VITE+ - The Unified Toolchain for the Web
 
 
 ⚠ Detected husky <9.0.0 — please upgrade to husky v9+ first, then re-run migration.
-
-pnpm@<semver> installing...
-
-pnpm@<semver> installed
-
-Wrote agent instructions to AGENTS.md
-✔ Migration completed!
-
+◇ Migrated . to Vite+<repeat>
+• Node <semver>  pnpm <semver>
 
 > cat package.json # root lint-staged config should still be in package.json
 {

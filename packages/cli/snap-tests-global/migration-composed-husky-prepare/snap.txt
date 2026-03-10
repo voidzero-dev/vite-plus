@@ -2,22 +2,10 @@
 > vp migrate --no-interactive # migration should replace husky in composed prepare script
 VITE+ - The Unified Toolchain for the Web
 
-
-Using default package manager: pnpm
-
-pnpm@latest installing...
-
-pnpm@<semver> installed
-
-✔ Created vite.config.ts in vite.config.ts
-
-✔ Merged staged config into vite.config.ts
-
-✔ Git hooks configured
-
-Wrote agent instructions to AGENTS.md
-✔ Migration completed!
-
+◇ Migrated . to Vite+<repeat>
+• Node <semver>  pnpm <semver>
+• 2 config updates applied
+• Git hooks configured
 
 > cat package.json # check prepare becomes 'vp config --hooks-dir .husky && npm run build' without leftover husky
 {

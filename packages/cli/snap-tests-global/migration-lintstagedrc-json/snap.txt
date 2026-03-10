@@ -32,22 +32,11 @@ Examples:
 > vp migrate --no-interactive # migration work with lintstagedrc.json
 VITE+ - The Unified Toolchain for the Web
 
-
-Using default package manager: pnpm
-
-pnpm@latest installing...
-
-pnpm@<semver> installed
-
-✔ Created vite.config.ts in vite.config.ts
-
-✔ Merged staged config into vite.config.ts
-
-⚠ .lintstagedrc.json found but "staged" already exists in vite.config.ts — please merge manually
-
-Wrote agent instructions to AGENTS.md
-✔ Migration completed!
-
+◇ Migrated . to Vite+<repeat>
+• Node <semver>  pnpm <semver>
+• 2 config updates applied
+! Warnings:
+  - .lintstagedrc.json found but "staged" already exists in vite.config.ts — please merge manually
 
 > cat .lintstagedrc.json # check lintstagedrc.json (should be deleted after inlining)
 {

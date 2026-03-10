@@ -36,8 +36,14 @@ import {
   updateWorkspaceConfig,
 } from '../utils/workspace.js';
 import type { ExecutionResult } from './command.js';
-import { discoverTemplate, inferParentDir } from './discovery.js';
-import { cancelAndExit, checkProjectDirExists, promptPackageNameAndTargetDir } from './prompts.js';
+import { discoverTemplate, inferGitHubRepoName, inferParentDir, isGitHubUrl } from './discovery.js';
+import {
+  cancelAndExit,
+  checkProjectDirExists,
+  promptPackageNameAndTargetDir,
+  promptTargetDir,
+  suggestAvailableTargetDir,
+} from './prompts.js';
 import { getRandomProjectName } from './random-name.js';
 import {
   executeBuiltinTemplate,
@@ -258,6 +264,10 @@ function getTemplateOption(args: string[]) {
   return undefined;
 }
 
+function hasExplicitTargetDir(args: string[]) {
+  return args[0] !== undefined && !args[0].startsWith('-');
+}
+
 function formatTemplateName(templateName: string) {
   const templateAliases: Record<string, string> = {
     lit: 'Lit',
@@ -416,6 +426,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   let selectedAgentTargetPaths: string[] | undefined;
   let selectedEditor: Awaited<ReturnType<typeof selectEditor>>;
   let selectedParentDir: string | undefined;
+  let remoteTargetDir: string | undefined;
   let shouldSetupHooks = false;
 
   if (!selectedTemplateName) {
@@ -590,6 +601,27 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     selectedParentDir = inferredParentDir;
   }
 
+  if (isGitHubUrl(selectedTemplateName)) {
+    if (hasExplicitTargetDir(selectedTemplateArgs)) {
+      remoteTargetDir = selectedTemplateArgs[0];
+    } else {
+      const inferredTargetDir = inferGitHubRepoName(selectedTemplateName) ?? 'template';
+      const remoteTargetBaseDir = selectedParentDir
+        ? path.join(workspaceInfoOptional.rootDir, selectedParentDir)
+        : workspaceInfoOptional.rootDir;
+      const defaultTargetDir = suggestAvailableTargetDir(inferredTargetDir, remoteTargetBaseDir);
+      if (defaultTargetDir !== inferredTargetDir && options.interactive) {
+        prompts.log.info(
+          `  Target directory "${inferredTargetDir}" already exists. Suggested: ${accent(defaultTargetDir)}`,
+        );
+      }
+      remoteTargetDir = await promptTargetDir(defaultTargetDir, options.interactive, {
+        cwd: remoteTargetBaseDir,
+      });
+      selectedTemplateArgs = [remoteTargetDir, ...selectedTemplateArgs];
+    }
+  }
+
   if (isBuiltinTemplate && !targetDir) {
     if (selectedTemplateName === BuiltinTemplate.monorepo) {
       const selected = await promptPackageNameAndTargetDir(
@@ -657,6 +689,48 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
 
   shouldSetupHooks = await promptGitHooks(options);
 
+  const createProgress =
+    options.interactive && compactOutput ? prompts.spinner({ indicator: 'timer' }) : undefined;
+  let createProgressStarted = false;
+  let createProgressMessage = 'Scaffolding project';
+  const updateCreateProgress = (message: string) => {
+    createProgressMessage = message;
+    if (!createProgress) {
+      return;
+    }
+    if (createProgressStarted) {
+      createProgress.message(message);
+      return;
+    }
+    createProgress.start(message);
+    createProgressStarted = true;
+  };
+  const clearCreateProgress = () => {
+    if (createProgress && createProgressStarted) {
+      createProgress.clear();
+      createProgressStarted = false;
+    }
+  };
+  const failCreateProgress = (message: string) => {
+    if (createProgress && createProgressStarted) {
+      createProgress.error(message);
+      createProgressStarted = false;
+    }
+  };
+  const pauseCreateProgress = () => {
+    if (createProgress && createProgressStarted) {
+      createProgress.pause();
+      createProgressStarted = false;
+    }
+  };
+  const resumeCreateProgress = () => {
+    if (createProgress && !createProgressStarted) {
+      createProgress.resume(createProgressMessage);
+      createProgressStarted = true;
+    }
+  };
+  updateCreateProgress('Scaffolding project');
+
   // Discover template
   const templateInfo = discoverTemplate(
     selectedTemplateName,
@@ -675,10 +749,20 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     templateInfo.parentDir = undefined;
   }
 
+  if (remoteTargetDir) {
+    const projectDir = templateInfo.parentDir
+      ? path.join(templateInfo.parentDir, remoteTargetDir)
+      : remoteTargetDir;
+    pauseCreateProgress();
+    await checkProjectDirExists(path.join(workspaceInfo.rootDir, projectDir), options.interactive);
+    resumeCreateProgress();
+  }
+
   // #endregion
 
   // #region Handle monorepo template
   if (templateInfo.command === BuiltinTemplate.monorepo) {
+    updateCreateProgress('Creating monorepo');
     await checkProjectDirExists(path.join(workspaceInfo.rootDir, targetDir), options.interactive);
     const result = await executeMonorepoTemplate(
       workspaceInfo,
@@ -688,32 +772,43 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     );
     const { projectDir } = result;
     if (result.exitCode !== 0 || !projectDir) {
+      failCreateProgress('Scaffolding failed');
       cancelAndExit(`Failed to create monorepo, exit code: ${result.exitCode}`, result.exitCode);
     }
 
     // rewrite monorepo to add vite-plus dependencies
     const fullPath = path.join(workspaceInfo.rootDir, projectDir);
+    updateCreateProgress('Writing agent instructions');
+    pauseCreateProgress();
     await writeAgentInstructions({
       projectRoot: fullPath,
       targetPaths: selectedAgentTargetPaths,
       interactive: options.interactive,
       silent: compactOutput,
     });
+    resumeCreateProgress();
+    updateCreateProgress('Writing editor configs');
+    pauseCreateProgress();
     await writeEditorConfigs({
       projectRoot: fullPath,
       editorId: selectedEditor,
       interactive: options.interactive,
       silent: compactOutput,
     });
+    resumeCreateProgress();
     workspaceInfo.rootDir = fullPath;
+    updateCreateProgress('Integrating monorepo');
     rewriteMonorepo(workspaceInfo, undefined, compactOutput);
     if (shouldSetupHooks) {
       installGitHooks(fullPath, compactOutput);
     }
+    updateCreateProgress('Installing dependencies');
     const installSummary = await runViteInstall(fullPath, options.interactive, undefined, {
       silent: compactOutput,
     });
+    updateCreateProgress('Formatting code');
     await runViteFmt(fullPath, options.interactive, undefined, { silent: compactOutput });
+    clearCreateProgress();
     showCreateSummary({
       description: describeScaffold(selectedTemplateName, selectedTemplateArgs),
       installSummary,
@@ -742,7 +837,10 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
         ? path.join(templateInfo.parentDir, selected.targetDir)
         : selected.targetDir;
     }
+    pauseCreateProgress();
     await checkProjectDirExists(targetDir, options.interactive);
+    resumeCreateProgress();
+    updateCreateProgress('Generating project');
     result = await executeBuiltinTemplate(
       workspaceInfo,
       {
@@ -753,41 +851,52 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       { silent: compactOutput },
     );
   } else {
+    updateCreateProgress('Generating project');
     result = await executeRemoteTemplate(workspaceInfo, templateInfo, { silent: compactOutput });
   }
 
   if (result.exitCode !== 0) {
+    failCreateProgress('Scaffolding failed');
     process.exit(result.exitCode);
   }
   const projectDir = result.projectDir;
   if (!projectDir) {
+    clearCreateProgress();
     process.exit(0);
   }
 
   const fullPath = path.join(workspaceInfo.rootDir, projectDir);
   const agentInstructionsRoot = isMonorepo ? workspaceInfo.rootDir : fullPath;
+  updateCreateProgress('Writing agent instructions');
+  pauseCreateProgress();
   await writeAgentInstructions({
     projectRoot: agentInstructionsRoot,
     targetPaths: selectedAgentTargetPaths,
     interactive: options.interactive,
     silent: compactOutput,
   });
+  resumeCreateProgress();
+  updateCreateProgress('Writing editor configs');
+  pauseCreateProgress();
   await writeEditorConfigs({
     projectRoot: fullPath,
     editorId: selectedEditor,
     interactive: options.interactive,
     silent: compactOutput,
   });
+  resumeCreateProgress();
 
   let installSummary: CommandRunSummary | undefined;
   if (isMonorepo) {
     if (!compactOutput) {
       prompts.log.step('Monorepo integration...');
     }
+    updateCreateProgress('Integrating into monorepo');
     rewriteMonorepoProject(fullPath, workspaceInfo.packageManager, undefined, compactOutput);
 
     if (workspaceInfo.packages.length > 0) {
       if (options.interactive) {
+        pauseCreateProgress();
         const selectedDepTypeOptions = await prompts.multiselect({
           message: `Add workspace dependencies to ${accent(projectDir)}?`,
           options: [
@@ -839,27 +948,34 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
             );
           }
         }
+        resumeCreateProgress();
       }
     }
 
     updateWorkspaceConfig(projectDir, workspaceInfo);
+    updateCreateProgress('Installing dependencies');
     installSummary = await runViteInstall(workspaceInfo.rootDir, options.interactive, undefined, {
       silent: compactOutput,
     });
+    updateCreateProgress('Formatting code');
     await runViteFmt(workspaceInfo.rootDir, options.interactive, [projectDir], {
       silent: compactOutput,
     });
   } else {
+    updateCreateProgress('Applying Vite+ project setup');
     rewriteStandaloneProject(fullPath, workspaceInfo, undefined, compactOutput);
     if (shouldSetupHooks) {
       installGitHooks(fullPath, compactOutput);
     }
+    updateCreateProgress('Installing dependencies');
     installSummary = await runViteInstall(fullPath, options.interactive, undefined, {
       silent: compactOutput,
     });
+    updateCreateProgress('Formatting code');
     await runViteFmt(fullPath, options.interactive, undefined, { silent: compactOutput });
   }
 
+  clearCreateProgress();
   showCreateSummary({
     description: describeScaffold(selectedTemplateName, selectedTemplateArgs),
     installSummary,

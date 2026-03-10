@@ -63,12 +63,20 @@ export function progress({
   };
   return {
     start,
+    pause: spin.pause.bind(spin),
+    resume: (msg?: string) => {
+      const nextMessage = msg ?? previousMessage;
+      previousMessage = nextMessage;
+      spin.resume(drawProgress('active', nextMessage));
+    },
     stop: spin.stop.bind(spin),
     cancel: spin.cancel.bind(spin),
     error: spin.error.bind(spin),
     clear: spin.clear.bind(spin),
     advance,
-    isCancelled: spin.isCancelled,
     message: (msg: string) => advance(0, msg),
+    get isCancelled() {
+      return spin.isCancelled;
+    },
   };
 }

@@ -2,16 +2,8 @@
 > vp migrate --no-hooks --no-interactive # --no-hooks should keep husky/lint-staged and preserve config
 VITE+ - The Unified Toolchain for the Web
 
-
-Using default package manager: pnpm
-
-pnpm@latest installing...
-
-pnpm@<semver> installed
-
-Wrote agent instructions to AGENTS.md
-✔ Migration completed!
-
+◇ Migrated . to Vite+<repeat>
+• Node <semver>  pnpm <semver>
 
 > cat package.json # prepare script, lint-staged config, check-staged script, and deps should all be preserved
 {

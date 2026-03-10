@@ -26,6 +26,8 @@ export interface SpinnerOptions extends CommonOptions {
 
 export interface SpinnerResult {
   start(msg?: string): void;
+  pause(): void;
+  resume(msg?: string): void;
   stop(msg?: string): void;
   cancel(msg?: string): void;
   error(msg?: string): void;
@@ -40,11 +42,11 @@ const removeTrailingDots = (msg: string): string => {
   return msg.replace(/\.+$/, '');
 };
 
-const formatTimer = (origin: number): string => {
-  const duration = (performance.now() - origin) / 1000;
+const formatTimer = (durationMs: number): string => {
+  const duration = durationMs / 1000;
   const min = Math.floor(duration / 60);
   const secs = Math.floor(duration % 60);
-  return min > 0 ? `[${min}m ${secs}s]` : `[${secs}s]`;
+  return color.gray(min > 0 ? `(${min}m ${secs}s)` : `(${secs}s)`);
 };
 
 export const spinner = ({
@@ -67,8 +69,16 @@ export const spinner = ({
   let _message = '';
   let _prevMessage: string | undefined;
   let _origin: number = performance.now();
+  let _elapsedMs = 0;
   const columns = getColumns(output);
   const styleFn = opts?.styleFrame ?? defaultStyleFn;
+
+  const getElapsedMs = () => {
+    if (!isSpinnerActive) {
+      return _elapsedMs;
+    }
+    return _elapsedMs + (performance.now() - _origin);
+  };
 
   const handleExit = (code: number) => {
     const msg =
@@ -135,11 +145,11 @@ export const spinner = ({
 
   const hasGuide = opts.withGuide ?? false;
 
-  const start = (msg = ''): void => {
+  const startLoop = (): void => {
     isSpinnerActive = true;
     unblock = block({ output });
-    _message = removeTrailingDots(msg);
     _origin = performance.now();
+    _prevMessage = undefined;
     if (hasGuide) {
       output.write(`${color.gray(S_BAR)}\n`);
     }
@@ -158,7 +168,7 @@ export const spinner = ({
       if (isCI) {
         outputMessage = `${frame}  ${_message}...`;
       } else if (indicator === 'timer') {
-        outputMessage = `${frame}  ${_message} ${formatTimer(_origin)}`;
+        outputMessage = `${frame}  ${_message} ${formatTimer(getElapsedMs())}`;
       } else {
         const loadingDots = '.'.repeat(Math.floor(indicatorTimer)).slice(0, 3);
         outputMessage = `${frame}  ${_message}${loadingDots}`;
@@ -176,13 +186,20 @@ export const spinner = ({
     }, delay);
   };
 
-  const _stop = (msg = '', code = 0, silent: boolean = false): void => {
+  const start = (msg = ''): void => {
+    _elapsedMs = 0;
+    _message = removeTrailingDots(msg);
+    startLoop();
+  };
+
+  const _stop = (msg = '', code = 0, silent: boolean = false, preserveElapsed = false): void => {
     if (!isSpinnerActive) {
       return;
     }
     isSpinnerActive = false;
     clearInterval(loop);
     clearPrevMessage();
+    const elapsedMs = getElapsedMs();
     const step =
       code === 0
         ? completeColor(S_STEP_SUBMIT)
@@ -192,15 +209,33 @@ export const spinner = ({
     _message = msg ?? _message;
     if (!silent) {
       if (indicator === 'timer') {
-        output.write(`${step} ${_message} ${formatTimer(_origin)}\n\n`);
+        output.write(`${step} ${_message} ${formatTimer(elapsedMs)}\n\n`);
       } else {
         output.write(`${step} ${_message}\n\n`);
       }
     }
+    if (!preserveElapsed) {
+      _elapsedMs = 0;
+    }
+    _prevMessage = undefined;
     clearHooks();
     unblock();
   };
 
+  const pause = (): void => {
+    if (!isSpinnerActive) {
+      return;
+    }
+    _elapsedMs = getElapsedMs();
+    _stop(_message, 0, true, true);
+  };
+  const resume = (msg = _message): void => {
+    if (isSpinnerActive) {
+      return;
+    }
+    _message = removeTrailingDots(msg);
+    startLoop();
+  };
   const stop = (msg = ''): void => _stop(msg, 0);
   const cancel = (msg = ''): void => _stop(msg, 1);
   const error = (msg = ''): void => _stop(msg, 2);
@@ -212,6 +247,8 @@ export const spinner = ({
 
   return {
     start,
+    pause,
+    resume,
     stop,
     message,
     cancel,

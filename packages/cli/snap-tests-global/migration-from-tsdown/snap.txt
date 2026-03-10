@@ -1,28 +1,11 @@
 > vp migrate --no-interactive # migration should rewrite imports to vite-plus
 VITE+ - The Unified Toolchain for the Web
 
-
-Using default package manager: pnpm
-
-pnpm@latest installing...
-
-pnpm@<semver> installed
-
-✔ Created vite.config.ts in vite.config.ts
-
-✔ Added import for tsdown.config.ts in vite.config.ts
-
-Please manually merge tsdown.config.ts into vite.config.ts, see https://viteplus.dev/migration/#tsdown
-
-Rewrote imports in one file
-
-  tsdown.config.ts
-
-✔ Merged staged config into vite.config.ts
-
-Wrote agent instructions to AGENTS.md
-✔ Migration completed!
-
+◇ Migrated . to Vite+<repeat>
+• Node <semver>  pnpm <semver>
+• 3 config updates applied, 1 file had imports rewritten
+→ Manual follow-up:
+  - Please manually merge tsdown.config.ts into vite.config.ts, see https://viteplus.dev/migration/#tsdown
 
 > cat tsdown.config.ts # check tsdown.config.ts
 import { defineConfig } from 'vite-plus/pack';

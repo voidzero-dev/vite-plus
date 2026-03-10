@@ -8,22 +8,10 @@ secret-scan
 > vp migrate --no-interactive # migration should preserve existing pre-commit contents
 VITE+ - The Unified Toolchain for the Web
 
-
-Using default package manager: pnpm
-
-pnpm@latest installing...
-
-pnpm@<semver> installed
-
-✔ Created vite.config.ts in vite.config.ts
-
-✔ Merged staged config into vite.config.ts
-
-✔ Git hooks configured
-
-Wrote agent instructions to AGENTS.md
-✔ Migration completed!
-
+◇ Migrated . to Vite+<repeat>
+• Node <semver>  pnpm <semver>
+• 2 config updates applied
+• Git hooks configured
 
 > cat .vite-hooks/pre-commit # check pre-commit hook preserves existing commands
 #!/usr/bin/env sh

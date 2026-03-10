@@ -2,20 +2,11 @@
 > vp migrate --no-interactive # should warn when staged already exists in vite.config.ts
 VITE+ - The Unified Toolchain for the Web
 
-
-Using default package manager: pnpm
-
-pnpm@latest installing...
-
-pnpm@<semver> installed
-
-⚠ .lintstagedrc.json found but "staged" already exists in vite.config.ts — please merge manually
-
-✔ Git hooks configured
-
-Wrote agent instructions to AGENTS.md
-✔ Migration completed!
-
+◇ Migrated . to Vite+<repeat>
+• Node <semver>  pnpm <semver>
+• Git hooks configured
+! Warnings:
+  - .lintstagedrc.json found but "staged" already exists in vite.config.ts — please merge manually
 
 > cat package.json # check package.json
 {

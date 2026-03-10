@@ -2,19 +2,8 @@
 > vp migrate --no-interactive # with HUSKY=0, vp config should skip and warn instead of reporting success
 VITE+ - The Unified Toolchain for the Web
 
-
-Using default package manager: pnpm
-
-pnpm@latest installing...
-
-pnpm@<semver> installed
-
-✔ Created vite.config.ts in vite.config.ts
-
-✔ Merged staged config into vite.config.ts
-
-⚠ Git hooks not configured — skip install (git hooks disabled)
-
-Wrote agent instructions to AGENTS.md
-✔ Migration completed!
-
+◇ Migrated . to Vite+<repeat>
+• Node <semver>  pnpm <semver>
+• 2 config updates applied
+! Warnings:
+  - Git hooks not configured — skip install (git hooks disabled)

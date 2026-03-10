@@ -3,17 +3,9 @@
 VITE+ - The Unified Toolchain for the Web
 
 
-Using default package manager: pnpm
-
 ⚠ Detected husky <9.0.0 — please upgrade to husky v9+ first, then re-run migration.
-
-pnpm@latest installing...
-
-pnpm@<semver> installed
-
-Wrote agent instructions to AGENTS.md
-✔ Migration completed!
-
+◇ Migrated . to Vite+<repeat>
+• Node <semver>  pnpm <semver>
 
 > cat package.json # husky/lint-staged should remain in devDeps, prepare should stay as husky
 {

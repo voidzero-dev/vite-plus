@@ -2,22 +2,13 @@
 > vp migrate --no-interactive # should handle merge failure gracefully
 VITE+ - The Unified Toolchain for the Web
 
-
-Using default package manager: pnpm
-
-pnpm@latest installing...
-
-pnpm@<semver> installed
-
-✘ Failed to merge staged config into vite.config.ts
-
-Please add staged config to vite.config.ts manually, see https://viteplus.dev/config/
-
-✔ Git hooks configured
-
-Wrote agent instructions to AGENTS.md
-✔ Migration completed!
-
+◇ Migrated . to Vite+<repeat>
+• Node <semver>  pnpm <semver>
+• Git hooks configured
+! Warnings:
+  - Failed to merge staged config into vite.config.ts
+→ Manual follow-up:
+  - Please add staged config to vite.config.ts manually, see https://viteplus.dev/config/
 
 > cat package.json # check package.json
 {

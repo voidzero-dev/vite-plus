@@ -3,18 +3,9 @@ VITE+ - The Unified Toolchain for the Web
 
 
 ESLint detected in workspace packages but no root config found. Package-level ESLint must be migrated manually.
-
-pnpm@<semver> installing...
-
-pnpm@<semver> installed
-
-✔ Created vite.config.ts in vite.config.ts
-
-✔ Merged staged config into vite.config.ts
-
-Wrote agent instructions to AGENTS.md
-✔ Migration completed!
-
+◇ Migrated . to Vite+<repeat>
+• Node <semver>  pnpm <semver>
+• 2 config updates applied
 
 > cat package.json # check root package.json
 {

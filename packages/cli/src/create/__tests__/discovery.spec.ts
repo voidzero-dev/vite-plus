@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { expandCreateShorthand } from '../discovery.js';
+import {
+  discoverTemplate,
+  expandCreateShorthand,
+  inferGitHubRepoName,
+  parseGitHubUrl,
+} from '../discovery.js';
 
 describe('expandCreateShorthand', () => {
   it('should expand unscoped names to create-* packages', () => {
@@ -57,5 +62,41 @@ describe('expandCreateShorthand', () => {
 
   it('should handle scope-only input gracefully', () => {
     expect(expandCreateShorthand('@scope')).toBe('@scope');
+  });
+});
+
+describe('GitHub template helpers', () => {
+  it('should parse GitHub shorthand URLs', () => {
+    expect(parseGitHubUrl('github:user/repo')).toBe('user/repo');
+  });
+
+  it('should parse GitHub https URLs', () => {
+    expect(parseGitHubUrl('https://github.com/user/repo')).toBe('user/repo');
+    expect(parseGitHubUrl('https://github.com/user/repo.git')).toBe('user/repo');
+  });
+
+  it('should infer the repository name from GitHub templates', () => {
+    expect(inferGitHubRepoName('github:nkzw-tech/fate-template')).toBe('fate-template');
+    expect(inferGitHubRepoName('https://github.com/nkzw-tech/fate-template')).toBe('fate-template');
+  });
+
+  it('should resolve GitHub templates to degit without reusing the original URL as destination', () => {
+    const template = discoverTemplate('https://github.com/nkzw-tech/fate-template', ['my-app'], {
+      rootDir: '/tmp/workspace',
+      isMonorepo: false,
+      monorepoScope: '',
+      workspacePatterns: [],
+      parentDirs: [],
+      packageManager: 'pnpm',
+      packageManagerVersion: 'latest',
+      downloadPackageManager: {
+        binPrefix: '/tmp/bin',
+        version: '10.0.0',
+      } as never,
+      packages: [],
+    });
+
+    expect(template.command).toBe('degit');
+    expect(template.args).toEqual(['nkzw-tech/fate-template', 'my-app']);
   });
 });

@@ -1,20 +1,9 @@
 > vp migrate --no-interactive # migration should merge pnpm overrides with dependency selector
 VITE+ - The Unified Toolchain for the Web
 
-
-pnpm@<semver> installing...
-
-pnpm@<semver> installed
-
-Rewrote imports in one file
-
-  vite.config.ts
-
-✔ Merged staged config into vite.config.ts
-
-Wrote agent instructions to AGENTS.md
-✔ Migration completed!
-
+◇ Migrated . to Vite+<repeat>
+• Node <semver>  pnpm <semver>
+• 1 config update applied, 1 file had imports rewritten
 
 > cat vite.config.ts # check vite.config.ts
 import react from '@vitejs/plugin-react';

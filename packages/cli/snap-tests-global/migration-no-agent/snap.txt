@@ -1,18 +1,9 @@
 > vp migrate --no-agent --no-interactive # migration with --no-agent should skip agent instructions
 VITE+ - The Unified Toolchain for the Web
 
-
-Using default package manager: pnpm
-
-pnpm@latest installing...
-
-pnpm@<semver> installed
-
-✔ Created vite.config.ts in vite.config.ts
-
-✔ Merged staged config into vite.config.ts
-✔ Migration completed!
-
+◇ Migrated . to Vite+<repeat>
+• Node <semver>  pnpm <semver>
+• 2 config updates applied
 
 > ls -la | grep -E '(AGENTS|CLAUDE)' || echo 'No agent file created' # verify no agent file was created
 No agent file created

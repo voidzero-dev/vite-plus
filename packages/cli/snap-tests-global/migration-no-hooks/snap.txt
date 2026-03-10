@@ -2,16 +2,8 @@
 > vp migrate --no-hooks --no-interactive # migration with --no-hooks should skip hooks setup
 VITE+ - The Unified Toolchain for the Web
 
-
-Using default package manager: pnpm
-
-pnpm@latest installing...
-
-pnpm@<semver> installed
-
-Wrote agent instructions to AGENTS.md
-✔ Migration completed!
-
+◇ Migrated . to Vite+<repeat>
+• Node <semver>  pnpm <semver>
 
 > cat package.json # check package.json has no prepare script and no lint-staged config
 {

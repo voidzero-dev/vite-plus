@@ -2,17 +2,9 @@
 VITE+ - The Unified Toolchain for the Web
 
 
-Using default package manager: pnpm
-
 ⚠ Detected simple-git-hooks — skipping git hooks setup. Please configure git hooks manually.
-
-pnpm@latest installing...
-
-pnpm@<semver> installed
-
-Wrote agent instructions to AGENTS.md
-✔ Migration completed!
-
+◇ Migrated . to Vite+<repeat>
+• Node <semver>  pnpm <semver>
 
 > cat package.json # lint-staged config, scripts, and simple-git-hooks config should all be preserved
 {
