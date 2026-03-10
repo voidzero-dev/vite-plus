@@ -3,6 +3,6 @@
 # (rolldown-vite patches don't exist on Netlify, causing pnpm install to fail).
 # The ignore command watches docs/ so builds still trigger on docs changes.
 base = "rfcs/"
-ignore = "git diff --quiet $CACHED_COMMIT_REF HEAD -- docs/ netlify.toml"
+ignore = "[ -z \"$CACHED_COMMIT_REF\" ] && exit 1; git diff --quiet $CACHED_COMMIT_REF HEAD -- docs/ netlify.toml"
 command = "cd ../docs && npm i --force && npm run build"
 publish = "../docs/.vitepress/dist"
