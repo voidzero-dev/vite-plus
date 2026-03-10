@@ -8,8 +8,8 @@ import { defineConfig, type HeadConfig } from 'vitepress';
 export default extendConfig(
   defineConfig({
     title: 'Vite+',
-    titleTemplate: ':title | The Unified Toolchain for the Web',
-    description: 'The Unified Toolchain for the Web',
+    titleTemplate: ':title | The Unified Toolchain for the Web (Alpha)',
+    description: 'The Unified Toolchain for the Web (Alpha)',
     cleanUrls: true,
     head: [
       ['link', { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' }],
