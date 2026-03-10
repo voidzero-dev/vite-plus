@@ -181,45 +181,33 @@ fn remove_vite_plus_dir(home_dir: &AbsolutePathBuf) -> Result<(), Error> {
 
     #[cfg(windows)]
     {
-        // On Windows, the running binary may be locked. Try direct removal first.
-        match std::fs::remove_dir_all(home_dir) {
-            Ok(()) => {
-                output::success(&vite_str::format!("Removed {}", home_dir.as_path().display()));
+        // On Windows, the running `vp` binary is always locked, so direct
+        // removal will fail.  Rename the directory first so the original path
+        // is immediately free for reinstall, then schedule deletion of the
+        // renamed directory via a detached process.
+        let trash_path =
+            home_dir.as_path().with_extension(vite_str::format!("removing-{}", std::process::id()));
+        if let Err(e) = std::fs::rename(home_dir, &trash_path) {
+            output::error(&vite_str::format!(
+                "Failed to rename {} for removal: {e}",
+                home_dir.as_path().display()
+            ));
+            return Err(Error::CommandExecution(e));
+        }
+
+        match spawn_deferred_delete(&trash_path) {
+            Ok(_) => {
+                output::success(&vite_str::format!(
+                    "Scheduled removal of {} (will complete shortly)",
+                    home_dir.as_path().display()
+                ));
             }
             Err(e) => {
-                output::warn(&vite_str::format!(
-                    "Direct removal failed ({}), renaming before scheduled delete",
-                    e
+                output::error(&vite_str::format!(
+                    "Failed to schedule removal of {}: {e}",
+                    home_dir.as_path().display()
                 ));
-                // Binary is locked — rename the directory first so the original
-                // path is immediately free for reinstall, then schedule deletion
-                // of the renamed directory via a detached process.
-                let trash_path = home_dir
-                    .as_path()
-                    .with_extension(vite_str::format!("removing-{}", std::process::id()));
-                if let Err(e) = std::fs::rename(home_dir, &trash_path) {
-                    output::error(&vite_str::format!(
-                        "Failed to rename {} for removal: {e}",
-                        home_dir.as_path().display()
-                    ));
-                    return Err(Error::CommandExecution(e));
-                }
-
-                match spawn_deferred_delete(&trash_path) {
-                    Ok(_) => {
-                        output::success(&vite_str::format!(
-                            "Scheduled removal of {} (will complete shortly)",
-                            home_dir.as_path().display()
-                        ));
-                    }
-                    Err(e) => {
-                        output::error(&vite_str::format!(
-                            "Failed to schedule removal of {}: {e}",
-                            home_dir.as_path().display()
-                        ));
-                        return Err(Error::CommandExecution(e));
-                    }
-                }
+                return Err(Error::CommandExecution(e));
             }
         }
         Ok(())

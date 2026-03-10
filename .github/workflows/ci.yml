@@ -554,7 +554,8 @@ jobs:
             echo Error: .vite-plus still exists after implode
             exit /b 1
           )
-          call pnpm bootstrap-cli:ci
+          dir "%USERPROFILE%\"
+          pnpm bootstrap-cli:ci
           vp --version
 
   install-e2e-test:
