@@ -3,14 +3,18 @@
 The task runner is configured under the `run` field in your `vite.config.ts`:
 
 ```ts [vite.config.ts]
-import { defineConfig } from 'vite-plus'
+import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   run: {
-    cache: { /* ... */ },
-    tasks: { /* ... */ },
+    cache: {
+      /* ... */
+    },
+    tasks: {
+      /* ... */
+    },
   },
-})
+});
 ```
 
 ## `run.cache` {#run-cache}
@@ -24,11 +28,11 @@ Global cache settings. Controls whether task results are cached and replayed on 
 export default defineConfig({
   run: {
     cache: {
-      scripts: true,  // Cache package.json scripts (default: false)
-      tasks: true,     // Cache task definitions (default: true)
+      scripts: true, // Cache package.json scripts (default: false)
+      tasks: true, // Cache task definitions (default: true)
     },
   },
-})
+});
 ```
 
 Shorthands: `cache: true` enables both, `cache: false` disables both.
@@ -54,7 +58,7 @@ export default defineConfig({
       },
     },
   },
-})
+});
 ```
 
 If a task name matches a script in `package.json`, the script is used automatically when `command` is omitted. See [Getting Started](./getting-started#task-definitions) for details.
@@ -97,7 +101,7 @@ tasks: {
 Dependencies can reference tasks in other packages using the `package#task` format:
 
 ```ts
-dependsOn: ['@my/core#build', '@my/utils#lint']
+dependsOn: ['@my/core#build', '@my/utils#lint'];
 ```
 
 See [Task Dependencies](./getting-started#task-dependencies) for details on how explicit and topological dependencies interact.

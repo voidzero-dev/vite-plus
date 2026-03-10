@@ -71,7 +71,7 @@ The `--cache` flag is a quick way to try caching, but the default behavior may n
 Task definitions in `vite.config.ts` enable caching by default and give you more control — dependencies, environment variables, and custom inputs:
 
 ```ts [vite.config.ts]
-import { defineConfig } from 'vite-plus'
+import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   run: {
@@ -88,7 +88,7 @@ export default defineConfig({
       },
     },
   },
-})
+});
 ```
 
 A task definition can either reference a `package.json` script (by omitting `command`) or specify its own command. You cannot define a command in both places.
@@ -118,7 +118,7 @@ Use [`dependsOn`](./config#depends-on) to ensure tasks run in the right order. R
 Dependencies can reference tasks in other packages using the `package#task` format:
 
 ```ts
-dependsOn: ['@my/core#build', '@my/utils#lint']
+dependsOn: ['@my/core#build', '@my/utils#lint'];
 ```
 
 ## Running Across Packages

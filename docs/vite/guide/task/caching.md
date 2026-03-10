@@ -38,10 +38,10 @@ A task can set [`cache: false`](./config#cache) to opt out. This cannot be overr
 
 The [`run.cache`](./config#run-cache) option in your root `vite.config.ts` controls the default for each category:
 
-| Setting | Default | Effect |
-| --- | --- | --- |
-| `cache.tasks` | `true` | Cache commands that have a task entry |
-| `cache.scripts` | `false` | Cache plain `package.json` scripts |
+| Setting         | Default | Effect                                |
+| --------------- | ------- | ------------------------------------- |
+| `cache.tasks`   | `true`  | Cache commands that have a task entry |
+| `cache.scripts` | `false` | Cache plain `package.json` scripts    |
 
 Use `--cache` to quickly enable script caching, or set `run.cache.scripts: true` in config to enable it permanently.
 
