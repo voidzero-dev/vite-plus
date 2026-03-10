@@ -3,6 +3,7 @@ export type TerminalTone = 'base' | 'muted' | 'brand' | 'accent' | 'success' | '
 export interface TerminalSegment {
   text: string;
   tone?: TerminalTone;
+  bold?: boolean;
 }
 
 export interface TerminalLine {

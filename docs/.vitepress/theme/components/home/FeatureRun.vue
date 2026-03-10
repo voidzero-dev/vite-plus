@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import runTerminal from '@local-assets/terminal-features/run.svg';
+import FeatureRunTerminal from './FeatureRunTerminal.vue';
 </script>
 
 <template>
@@ -23,16 +23,9 @@ import runTerminal from '@local-assets/terminal-features/run.svg';
         </ul>
       </div>
     </div>
-    <div class="flex flex-col">
-      <div
-        class="bg-viteplus h-full overflow-clip flex justify-end items-center py-36 px-5 md:pl-10 md:pr-0"
-      >
-        <img
-          loading="lazy"
-          :src="runTerminal"
-          alt="Monorepo caching that just works"
-          class="w-full md:w-auto"
-        />
+    <div class="flex flex-col min-h-[22rem] sm:min-h-[30rem]">
+      <div class="bg-viteplus pl-5 sm:pl-10 h-full overflow-clip flex flex-col justify-center py-6">
+        <FeatureRunTerminal />
       </div>
     </div>
   </section>

@@ -3,12 +3,14 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue';
 
 import type {
   TerminalLine,
+  TerminalSegment,
   TerminalTone,
   TerminalTranscript,
 } from '../../data/terminal-transcripts';
 
 const props = defineProps<{
   transcript: TerminalTranscript;
+  animate?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -31,6 +33,13 @@ const clearTimers = () => {
 
 const restartAnimation = () => {
   clearTimers();
+  if (props.animate === false) {
+    visibleLineCount.value = props.transcript.lines.length;
+    renderedPrompt.value = promptText.value;
+    promptFinished.value = true;
+    return;
+  }
+
   visibleLineCount.value = 0;
   renderedPrompt.value = '';
   promptFinished.value = false;
@@ -64,7 +73,10 @@ const restartAnimation = () => {
 };
 
 const lineClass = (line: TerminalLine) => toneClass(line.tone ?? 'base');
-const segmentClass = (tone?: TerminalTone) => toneClass(tone ?? 'base');
+const segmentClass = (segment: TerminalSegment) => [
+  toneClass(segment.tone ?? 'base'),
+  segment.bold ? 'font-bold' : '',
+];
 
 const toneClass = (tone: TerminalTone) => {
   switch (tone) {
@@ -84,7 +96,7 @@ const toneClass = (tone: TerminalTone) => {
 };
 
 watch(
-  () => props.transcript.id,
+  () => [props.transcript.id, props.animate],
   () => restartAnimation(),
   { immediate: true },
 );
@@ -110,7 +122,7 @@ onBeforeUnmount(() => clearTimers());
           v-for="(segment, segmentIndex) in line.segments"
           :key="`${transcript.id}-${index}-${segmentIndex}`"
         >
-          <span :class="segmentClass(segment.tone)">{{ segment.text }}</span>
+          <span :class="segmentClass(segment)">{{ segment.text }}</span>
         </template>
       </div>
     </TransitionGroup>
