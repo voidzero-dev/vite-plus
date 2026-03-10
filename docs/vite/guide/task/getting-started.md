@@ -2,9 +2,9 @@
 
 ## Overview
 
-The Vite+ Task Runner is a high-performance task execution system built into Vite+. It caches task results so repeated runs complete instantly, orders tasks by their dependencies, and scales across monorepo packages — all with minimal configuration.
+`vp run` works like `pnpm run` — it runs the scripts in your `package.json` — but adds caching, dependency ordering, and monorepo-aware execution on top. It works in both single-package projects and monorepos.
 
-It works with the scripts you already have in `package.json`. You can add task definitions in `vite.config.ts` when you need more control over dependencies and caching.
+You can add task definitions in `vite.config.ts` when you need more control over dependencies and caching.
 
 ## Running Scripts
 
