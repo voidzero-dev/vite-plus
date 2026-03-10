@@ -1,5 +1,4 @@
 import fs from 'node:fs';
-import { createRequire } from 'node:module';
 import path from 'node:path';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
@@ -146,14 +145,6 @@ export function detectEslintProject(
   return { hasDependency, configFile, legacyConfigFile };
 }
 
-function getInstalledOxlintVersion(): string {
-  const require = createRequire(import.meta.url);
-  const oxlintMainPath = require.resolve('oxlint');
-  const oxlintPackageRoot = path.dirname(path.dirname(oxlintMainPath));
-  const pkgJson = readJsonFile<{ version: string }>(path.join(oxlintPackageRoot, 'package.json'));
-  return pkgJson.version;
-}
-
 /**
  * Run a `vp dlx @oxlint/migrate` step with graceful error handling.
  * Returns true on success, false on failure (spawn error or non-zero exit).
@@ -202,7 +193,7 @@ export async function migrateEslintToOxlint(
 
   // Steps 1-2: Only run @oxlint/migrate if there's an eslint config at root
   if (eslintConfigFile) {
-    const migratePackage = `@oxlint/migrate@${getInstalledOxlintVersion()}`;
+    const migratePackage = '@oxlint/migrate';
 
     // Step 1: Generate .oxlintrc.json from ESLint config
     spinner.start('Migrating ESLint config to Oxlint...');
