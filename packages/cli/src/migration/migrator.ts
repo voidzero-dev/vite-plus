@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
@@ -22,7 +23,6 @@ import {
   VITE_PLUS_NAME,
   VITE_PLUS_OVERRIDE_PACKAGES,
   VITE_PLUS_VERSION,
-  resolve,
 } from '../utils/constants.js';
 import { editJsonFile, isJsonFile, readJsonFile } from '../utils/json.js';
 import { detectPackageMetadata } from '../utils/package.js';
@@ -147,7 +147,8 @@ export function detectEslintProject(
 }
 
 function getInstalledOxlintVersion(): string {
-  const oxlintMainPath = resolve('oxlint');
+  const require = createRequire(import.meta.url);
+  const oxlintMainPath = require.resolve('oxlint');
   const oxlintPackageRoot = path.dirname(path.dirname(oxlintMainPath));
   const pkgJson = readJsonFile<{ version: string }>(path.join(oxlintPackageRoot, 'package.json'));
   return pkgJson.version;
