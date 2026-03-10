@@ -43,9 +43,9 @@ jobs:
       contents: read
     env:
       VERSION: ${{ needs.prepare.outputs.version }}
-    defaults:
-      run:
-        shell: bash
+    # defaults:
+    #   run:
+    #     shell: bash
     strategy:
       fail-fast: false
       matrix:
