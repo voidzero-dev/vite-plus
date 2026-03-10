@@ -27,9 +27,10 @@ export async function executeBuiltinTemplate(
     }
   } else if (templateInfo.command === BuiltinTemplate.library) {
     templateInfo.command = 'create-tsdown@latest';
-    if (!templateInfo.interactive) {
-      // set default template for tsdown
-      if (!templateInfo.args.find((arg) => arg.startsWith('--template') || arg.startsWith('-t'))) {
+    // create-tsdown doesn't support non-interactive mode;
+    // add default template when running silently to prevent hang on piped stdin
+    if (!templateInfo.interactive || options?.silent) {
+      if (!templateInfo.args.some((arg) => arg.startsWith('--template') || arg.startsWith('-t'))) {
         templateInfo.args.push('--template', 'default');
       }
     }
