@@ -352,10 +352,11 @@ mod tests {
     fn test_execute_not_installed() {
         let temp_dir = tempfile::tempdir().unwrap();
         let non_existent = temp_dir.path().join("does-not-exist");
-        // Point VITE_PLUS_HOME at a non-existent path
-        unsafe { std::env::set_var("VITE_PLUS_HOME", non_existent.to_str().unwrap()) };
+        // Use thread-local test guard instead of mutating process-global env
+        let _guard = vite_shared::EnvConfig::test_guard(
+            vite_shared::EnvConfig::for_test_with_home(&non_existent),
+        );
         let result = execute(true);
-        unsafe { std::env::remove_var("VITE_PLUS_HOME") };
         assert!(result.is_ok());
         assert!(result.unwrap().success());
     }
