@@ -671,8 +671,15 @@ impl CommandHandler for VitePlusCommandHandler {
         }
         // Parse "vp <args>" using CLIArgs — always use "vp" as the program name
         // so clap shows "Usage: vp ..." even if the original command was "vite ..."
-        let cli_args =
-            CLIArgs::try_parse_from(iter::once("vp").chain(command.args.iter().map(Str::as_str)))?;
+        let cli_args = match CLIArgs::try_parse_from(
+            iter::once("vp").chain(command.args.iter().map(Str::as_str)),
+        ) {
+            Ok(args) => args,
+            Err(err) if err.kind() == ErrorKind::InvalidSubcommand => {
+                return Ok(HandledCommand::Verbatim);
+            }
+            Err(err) => return Err(err.into()),
+        };
         match cli_args {
             CLIArgs::Synthesizable(SynthesizableSubcommand::Check { .. }) => {
                 // Check is a composite command — run as a subprocess in task scripts
@@ -1659,5 +1666,21 @@ mod tests {
     fn normal_lint_does_not_suppress_stdout() {
         let subcommand = SynthesizableSubcommand::Lint { args: vec!["src/index.ts".to_string()] };
         assert!(!should_suppress_subcommand_stdout(&subcommand));
+    }
+
+    #[test]
+    fn global_subcommands_produce_invalid_subcommand_error() {
+        use clap::error::ErrorKind;
+
+        for subcommand in ["config", "create", "env", "migrate"] {
+            let error = CLIArgs::try_parse_from(["vp", subcommand])
+                .expect_err(&format!("expected error for global subcommand '{subcommand}'"));
+            assert_eq!(
+                error.kind(),
+                ErrorKind::InvalidSubcommand,
+                "expected InvalidSubcommand for '{subcommand}', got {:?}",
+                error.kind()
+            );
+        }
     }
 }

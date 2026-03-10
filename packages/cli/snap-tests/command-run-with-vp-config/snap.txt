@@ -1,0 +1,26 @@
+> vp run foo # should run vp config command
+$ vp config ⊘ cache disabled
+.git can't be found
+
+Created AGENTS.md with Vite+ instructions
+◇  Add this MCP server config to your agent ─╮
+                                              
+   {                                          
+     "vite-plus": {                           
+       "command": "npx",                      
+       "args": [                              
+         "vp",                                
+         "mcp"                                
+       ]                                      
+     }                                        
+   }                                          
+                                              
+╰────────────────────────────────────────────╯
+
+
+[2]> vp run bar # should throw error
+$ vp not-exist-command ⊘ cache disabled
+error: Command 'not-exist-command' not found
+
+Did you mean `vp test`?
+
