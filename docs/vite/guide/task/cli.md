@@ -17,7 +17,9 @@ Select a task (↑/↓, Enter to run, Esc to clear):
     lint: vp lint
 ```
 
-### Task Specifier {#task-specifier}
+### Task Argument {#task-argument}
+
+The `[task]` argument can be:
 
 - `build` — runs the `build` task in the current package
 - `@my/app#build` — runs the `build` task in a specific package

@@ -94,7 +94,7 @@ export default defineConfig({
 A task definition can either reference a `package.json` script (by omitting `command`) or specify its own command. You cannot define a command in both places.
 
 ::: info
-Tasks defined in `vite.config.ts` are cached by default. Plain `package.json` scripts (without a matching task entry) are **not** cached by default. See [Cache Configuration](./config#run-cache) for details.
+Tasks defined in `vite.config.ts` are cached by default. Plain `package.json` scripts (without a matching task entry) are **not** cached by default. See [When Is Caching Enabled?](./caching#when-is-caching-enabled) for details.
 :::
 
 See [Config Reference](./config) for all available task options.
@@ -121,65 +121,17 @@ Dependencies can reference tasks in other packages using the `package#task` form
 dependsOn: ['@my/core#build', '@my/utils#lint']
 ```
 
-## Monorepo Setup
+## Running Across Packages
 
-In a monorepo, each package can define its own tasks in its `vite.config.ts`:
-
-```
-my-project/
-├── pnpm-workspace.yaml
-├── packages/
-│   ├── core/
-│   │   ├── package.json          # @my/core
-│   │   └── vite.config.ts
-│   ├── utils/
-│   │   ├── package.json          # @my/utils → depends on @my/core
-│   │   └── vite.config.ts
-│   └── app/
-│       ├── package.json          # @my/app → depends on @my/utils
-│       └── vite.config.ts
-```
-
-Use `-r` (recursive) to run a task across all packages:
+In a monorepo, use `-r` (recursive) to run a task across all packages:
 
 ```bash
 vp run -r build
 ```
 
-```
-~/packages/core$ vp build
-✓ built in 28ms
+The task runner automatically orders packages by their `package.json` dependency graph — if `@my/app` depends on `@my/utils` which depends on `@my/core`, they build in that order. Each package's result is cached independently.
 
-~/packages/utils$ vp build
-✓ built in 21ms
-
-~/packages/app$ vp build
-✓ built in 26ms
-
----
-[vp run] 0/3 cache hit (0%).
-```
-
-The task runner uses your `package.json` dependency graph to determine the order — `@my/core` builds before `@my/utils`, which builds before `@my/app`. This is called **topological ordering** and is applied automatically.
-
-When combined with `dependsOn`, both types of ordering work together. For example, with `-r` and `dependsOn: ['lint']` on every package's `build` task:
-
-```
-core#lint → core#build → utils#lint → utils#build → app#lint → app#build
-```
-
-Each package's `lint` runs before its `build` (explicit dependency), and packages are ordered by their dependency graph (topological).
-
-Run it again — each package's task is cached independently:
-
-```
-~/packages/core$ vp build ✓ cache hit, replaying
-~/packages/utils$ vp build ✓ cache hit, replaying
-~/packages/app$ vp build ✓ cache hit, replaying
-
----
-[vp run] 3/3 cache hit (100%), 468ms saved.
-```
+See [Running Tasks](./running-tasks) for package selection with `--filter`, `--transitive`, and other options.
 
 ## What's Next?
 

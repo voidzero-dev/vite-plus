@@ -81,8 +81,8 @@ To make a variable affect caching, add it to [`envs`](./config#envs). Changing i
 ```ts
 tasks: {
   build: {
-    command: 'vp build',
-    envs: ['NODE_ENV', 'VITE_*'],
+    command: 'webpack --mode production',
+    envs: ['NODE_ENV'],
   },
 }
 ```
@@ -93,20 +93,18 @@ See the [config reference](./config#envs) for details on wildcard patterns and t
 
 ## Cache Sharing {#cache-sharing}
 
-Commands joined with `&&` are [split into independent sub-tasks](./running-tasks#compound-commands), each cached separately. The cache is content-based, so if two different tasks share a sub-command, they share its cache entry. For example:
+The cache is content-based — if two tasks run the same command with the same inputs, they share the cache entry. This happens naturally when multiple tasks include a common step, either as standalone tasks or as parts of [compound commands](./running-tasks#compound-commands):
 
-```ts
-tasks: {
-  check: {
-    command: 'vp lint && vp build',
-  },
-  release: {
-    command: 'vp lint && deploy-script',
-  },
+```json [package.json]
+{
+  "scripts": {
+    "check": "vp lint && vp build",
+    "release": "vp lint && deploy-script"
+  }
 }
 ```
 
-The `vp lint` sub-command is identical in both tasks, so running `check` first means the `lint` step in `release` is an instant cache hit.
+With caching enabled (e.g. `--cache` or [`run.cache.scripts: true`](./config#run-cache)), running `check` first means the `vp lint` step in `release` is an instant cache hit, since both run the same command against the same files.
 
 ## Clearing the Cache {#clearing-the-cache}
 

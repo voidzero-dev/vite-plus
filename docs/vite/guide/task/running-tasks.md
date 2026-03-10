@@ -69,18 +69,14 @@ vp run -w build
 
 ## Compound Commands {#compound-commands}
 
-Commands joined with `&&` are split into independently cached sub-tasks:
+Commands joined with `&&` are split into independent sub-tasks, each cached separately when [caching is enabled](./caching#when-is-caching-enabled). This applies to both `vite.config.ts` tasks and `package.json` scripts, where compound commands are common:
 
-```ts [vite.config.ts]
-export default defineConfig({
-  run: {
-    tasks: {
-      check: {
-        command: 'vp lint && vp build',
-      },
-    },
-  },
-})
+```json [package.json]
+{
+  "scripts": {
+    "check": "vp lint && vp build"
+  }
+}
 ```
 
 ```
