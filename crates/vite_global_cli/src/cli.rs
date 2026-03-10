@@ -680,7 +680,7 @@ pub enum Commands {
         registry: Option<String>,
     },
 
-    /// Completely remove vp and all its data from this system
+    /// Remove vp and all related data
     Implode {
         /// Skip confirmation prompt
         #[arg(long, short = 'y')]
