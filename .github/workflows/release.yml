@@ -43,9 +43,6 @@ jobs:
       contents: read
     env:
       VERSION: ${{ needs.prepare.outputs.version }}
-    defaults:
-      run:
-        shell: bash
     strategy:
       fail-fast: false
       matrix:
@@ -77,12 +74,14 @@ jobs:
       - uses: oxc-project/setup-node@fdbf0dfd334c4e6d56ceeb77d91c76339c2a0885 # v1.0.4
 
       - name: Set binding version
+        shell: bash
         run: |
           pnpm exec tool replace-file-content packages/cli/binding/Cargo.toml 'version = "0.0.0"' 'version = "${{ env.VERSION }}"'
           pnpm exec tool replace-file-content crates/vite_global_cli/Cargo.toml 'version = "0.0.0"' 'version = "${{ env.VERSION }}"'
           cat crates/vite_global_cli/Cargo.toml
 
       - name: Verify version replacement
+        shell: bash
         run: |
           if grep -q 'version = "0.0.0"' crates/vite_global_cli/Cargo.toml; then
             echo "ERROR: Version replacement failed for crates/vite_global_cli/Cargo.toml"
