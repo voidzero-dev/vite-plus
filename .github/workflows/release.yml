@@ -250,11 +250,11 @@ jobs:
       - name: Create release body
         run: |
           if [[ "${{ inputs.npm_tag }}" == "latest" ]]; then
-            INSTALL_BASH="curl -fsSL https://staging.viteplus.dev/install.sh | bash"
-            INSTALL_PS1="irm https://staging.viteplus.dev/install.ps1 | iex"
+            INSTALL_BASH="curl -fsSL https://viteplus.dev/install.sh | bash"
+            INSTALL_PS1="irm https://viteplus.dev/install.ps1 | iex"
           else
-            INSTALL_BASH="curl -fsSL https://staging.viteplus.dev/install.sh | VITE_PLUS_VERSION=${{ env.VERSION }} bash"
-            INSTALL_PS1="\\\$env:VITE_PLUS_VERSION=\\\"${{ env.VERSION }}\\\"; irm https://staging.viteplus.dev/install.ps1 | iex"
+            INSTALL_BASH="curl -fsSL https://viteplus.dev/install.sh | VITE_PLUS_VERSION=${{ env.VERSION }} bash"
+            INSTALL_PS1="\\\$env:VITE_PLUS_VERSION=\\\"${{ env.VERSION }}\\\"; irm https://viteplus.dev/install.ps1 | iex"
           fi
           cat > ./RELEASE_BODY.md <<EOF
           ## vite-plus v${{ env.VERSION }}
@@ -307,6 +307,6 @@ jobs:
             • vite-plus@${{ env.VERSION }}
 
             **Install:**
-            • macOS/Linux: `curl -fsSL https://staging.viteplus.dev/install.sh | bash`
-            • Windows: `irm https://staging.viteplus.dev/install.ps1 | iex`
+            • macOS/Linux: `curl -fsSL https://viteplus.dev/install.sh | bash`
+            • Windows: `irm https://viteplus.dev/install.ps1 | iex`
           embed-url: https://github.com/${{ github.repository }}/releases/tag/v${{ env.VERSION }}
