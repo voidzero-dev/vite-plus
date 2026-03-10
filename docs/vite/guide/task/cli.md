@@ -23,6 +23,8 @@ All options must come **before** the task name. If `task` is omitted, an interac
 | `--transitive` | `-t` | Run in the current package and its transitive dependencies |
 | `--workspace-root` | `-w` | Run in the workspace root package |
 | `--filter <pattern>` | `-F` | Select packages by name, directory, or glob (repeatable) |
+| `--cache` | — | Enable caching for all tasks and scripts |
+| `--no-cache` | — | Disable caching entirely |
 | `--ignore-depends-on` | — | Skip explicit `dependsOn` dependencies |
 | `--verbose` | `-v` | Show detailed execution summary |
 | `--last-details` | — | Display the summary from the last run |

@@ -33,7 +33,7 @@ export default defineConfig({
 
 Shorthands: `cache: true` enables both, `cache: false` disables both.
 
-Tasks defined in `vite.config.ts` are cached by default. Plain `package.json` scripts (without a matching task entry) are **not** cached by default.
+Tasks defined in `vite.config.ts` are cached by default. Plain `package.json` scripts (without a matching task entry) are **not** cached by default. See [When Is Caching Enabled?](./caching#when-is-caching-enabled) for the full resolution order including CLI overrides.
 
 ## `run.tasks` {#run-tasks}
 

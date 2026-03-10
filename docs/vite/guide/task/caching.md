@@ -18,6 +18,44 @@ $ vp build ✗ cache miss: envs changed, executing
 $ vp test ✗ cache miss: args changed, executing
 ```
 
+## When Is Caching Enabled? {#when-is-caching-enabled}
+
+A command run by `vp run` is either a **task** (has an entry in `vite.config.ts`) or a **script** (only exists in `package.json` with no corresponding task entry). By default, **tasks are cached and scripts are not.**
+
+The full resolution order:
+
+```
+--no-cache on the command line?
+├─ YES → NOT CACHED (overrides everything)
+└─ NO
+   │
+   --cache on the command line?
+   ├─ YES → acts as cache: true (enables both scripts and tasks)
+   └─ NO  → uses workspace config (run.cache)
+   │
+   Does the command have a task entry in vite.config.ts?
+   │
+   ├─ YES (task) ──────────────────────────────────
+   │   │
+   │   Global cache.tasks enabled? (default: true)
+   │   ├─ NO  → NOT CACHED
+   │   └─ YES
+   │       │
+   │       Per-task cache set to false?
+   │       ├─ YES → NOT CACHED (--cache does NOT override this)
+   │       └─ NO  → CACHED ← default for tasks
+   │
+   └─ NO (script) ─────────────────────────────────
+       │
+       Global cache.scripts enabled? (default: false)
+       ├─ YES → CACHED
+       └─ NO  → NOT CACHED ← default for scripts
+```
+
+`--no-cache` turns off caching for everything. `--cache` is equivalent to `cache: true` — it enables both `cache.tasks` and `cache.scripts`, but cannot override a task's per-task `cache: false`.
+
+See [`run.cache`](./config#run-cache) for workspace-level configuration.
+
 ## Automatic File Tracking {#automatic-file-tracking}
 
 By default, the task runner uses a file system spy to intercept file reads during execution. When `vp build` runs, it detects which files the command opens — your `.ts` source files, `vite.config.ts`, `package.json`, etc. — and records their content hashes. On the next run, it re-checks those hashes to determine if anything changed.
