@@ -102,6 +102,19 @@
             </li>
             <li>
               <a
+                href="https://discord.gg/cC6TEVFKSx"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="text-white text-base flex gap-3 items-center"
+                ><Icon
+                  icon="simple-icons:discord"
+                  aria-label="Discord"
+                  class="size-[18px]"
+                />Discord</a
+              >
+            </li>
+            <li>
+              <a
                 href="https://bsky.app/profile/voidzero.dev"
                 target="_blank"
                 rel="noopener noreferrer"
@@ -125,6 +138,6 @@
 
 <style scoped></style>
 <script setup lang="ts">
-import Sponsors from '@components/oss/Sponsors.vue';
-import { Icon } from '@iconify/vue';
+import Sponsors from "@components/oss/Sponsors.vue";
+import { Icon } from "@iconify/vue";
 </script>

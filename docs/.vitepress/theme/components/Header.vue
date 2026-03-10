@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { Icon } from '@iconify/vue';
-import { ref, onMounted, onUnmounted } from 'vue';
+import { Icon } from "@iconify/vue";
+import { ref, onMounted, onUnmounted } from "vue";
 
-const nav = [{ text: 'Docs', link: '/vite/guide' }];
+const nav = [{ text: "Docs", link: "/vite/guide" }];
 
 // Mobile menu state
 const mobileMenuOpen = ref(false);
@@ -11,21 +11,21 @@ const expandedMobileItem = ref<string | null>(null);
 // Body scroll lock for mobile menu
 const lockBodyScroll = () => {
   const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
-  document.body.style.overflow = 'hidden';
-  document.body.style.position = 'fixed';
-  document.body.style.width = '100%';
-  document.body.style.top = '0';
+  document.body.style.overflow = "hidden";
+  document.body.style.position = "fixed";
+  document.body.style.width = "100%";
+  document.body.style.top = "0";
   if (scrollbarWidth > 0) {
     document.body.style.paddingRight = `${scrollbarWidth}px`;
   }
 };
 
 const unlockBodyScroll = () => {
-  document.body.style.overflow = '';
-  document.body.style.position = '';
-  document.body.style.width = '';
-  document.body.style.top = '';
-  document.body.style.paddingRight = '';
+  document.body.style.overflow = "";
+  document.body.style.position = "";
+  document.body.style.width = "";
+  document.body.style.top = "";
+  document.body.style.paddingRight = "";
 };
 
 // Close mobile menu
@@ -37,7 +37,7 @@ const closeMobileMenu = () => {
 
 // Handle keyboard navigation
 const handleKeydown = (e: KeyboardEvent) => {
-  if (e.key === 'Escape') {
+  if (e.key === "Escape") {
     if (mobileMenuOpen.value) {
       closeMobileMenu();
     }
@@ -57,11 +57,11 @@ const toggleMobileMenu = () => {
 };
 
 onMounted(() => {
-  document.addEventListener('keydown', handleKeydown);
+  document.addEventListener("keydown", handleKeydown);
 });
 
 onUnmounted(() => {
-  document.removeEventListener('keydown', handleKeydown);
+  document.removeEventListener("keydown", handleKeydown);
   unlockBodyScroll();
 });
 </script>
@@ -260,15 +260,6 @@ onUnmounted(() => {
                 <Icon icon="simple-icons:github" aria-label="GitHub" class="size-5 text-white" />
               </a>
               <a
-                href="https://bsky.app/profile/voidzero.dev"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="hover:opacity-70 transition-opacity"
-                @click="closeMobileMenu"
-              >
-                <Icon icon="simple-icons:bluesky" aria-label="Bluesky" class="size-5 text-white" />
-              </a>
-              <a
                 href="https://x.com/voidzerodev"
                 target="_blank"
                 rel="noopener noreferrer"
@@ -276,6 +267,24 @@ onUnmounted(() => {
                 @click="closeMobileMenu"
               >
                 <Icon icon="simple-icons:x" aria-label="X" class="size-5 text-white" />
+              </a>
+              <a
+                href="https://discord.gg/cC6TEVFKSx"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="hover:opacity-70 transition-opacity"
+                @click="closeMobileMenu"
+              >
+                <Icon icon="simple-icons:discord" aria-label="Discord" class="size-5 text-white" />
+              </a>
+              <a
+                href="https://bsky.app/profile/voidzero.dev"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="hover:opacity-70 transition-opacity"
+                @click="closeMobileMenu"
+              >
+                <Icon icon="simple-icons:bluesky" aria-label="Bluesky" class="size-5 text-white" />
               </a>
             </div>
           </div>
