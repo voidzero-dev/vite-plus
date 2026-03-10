@@ -676,14 +676,18 @@ impl CommandHandler for VitePlusCommandHandler {
         ) {
             Ok(args) => args,
             Err(err) if err.kind() == ErrorKind::InvalidSubcommand => {
-                return Ok(HandledCommand::Verbatim);
+                return Ok(HandledCommand::Synthesized(
+                    command.to_synthetic_plan_request(UserCacheConfig::disabled()),
+                ));
             }
             Err(err) => return Err(err.into()),
         };
         match cli_args {
             CLIArgs::Synthesizable(SynthesizableSubcommand::Check { .. }) => {
                 // Check is a composite command — run as a subprocess in task scripts
-                Ok(HandledCommand::Verbatim)
+                Ok(HandledCommand::Synthesized(
+                    command.to_synthetic_plan_request(UserCacheConfig::disabled()),
+                ))
             }
             CLIArgs::Synthesizable(subcmd) => {
                 let resolved = self.resolver.resolve(subcmd, &command.envs, &command.cwd).await?;
@@ -692,7 +696,9 @@ impl CommandHandler for VitePlusCommandHandler {
             CLIArgs::ViteTask(cmd) => Ok(HandledCommand::ViteTaskCommand(cmd)),
             CLIArgs::Exec(_) => {
                 // exec in task scripts should run as a subprocess
-                Ok(HandledCommand::Verbatim)
+                Ok(HandledCommand::Synthesized(
+                    command.to_synthetic_plan_request(UserCacheConfig::disabled()),
+                ))
             }
         }
     }
