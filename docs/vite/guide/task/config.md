@@ -57,7 +57,7 @@ export default defineConfig({
 })
 ```
 
-If a task name matches a script in `package.json`, the script is used automatically when `command` is omitted. See [Scripts vs. Tasks](/vite/guide/task/features#scripts-vs-tasks) for details.
+If a task name matches a script in `package.json`, the script is used automatically when `command` is omitted. See [Getting Started](./getting-started#task-definitions) for details.
 
 ### `command` {#command}
 
@@ -76,7 +76,7 @@ tasks: {
 
 You cannot define a command in both `vite.config.ts` and `package.json` for the same task name — it's one or the other.
 
-Commands joined with `&&` are automatically split into independently cached sub-tasks. See [Compound Commands](/vite/guide/task/features#compound-commands).
+Commands joined with `&&` are automatically split into independently cached sub-tasks. See [Compound Commands](./running-tasks#compound-commands).
 
 ### `dependsOn` {#depends-on}
 
@@ -100,7 +100,7 @@ Dependencies can reference tasks in other packages using the `package#task` form
 dependsOn: ['@my/core#build', '@my/utils#lint']
 ```
 
-See [Task Dependencies](/vite/guide/task/features#task-dependencies) for details on how explicit and topological dependencies interact.
+See [Task Dependencies](./getting-started#task-dependencies) for details on how explicit and topological dependencies interact.
 
 ### `cache` {#cache}
 
@@ -136,7 +136,7 @@ tasks: {
 
 Wildcard patterns are supported: `VITE_*` matches all variables starting with `VITE_`.
 
-```ansi
+```
 $ NODE_ENV=development vp run build    # first run
 $ NODE_ENV=production vp run build     # cache miss: envs changed
 ```
@@ -173,7 +173,7 @@ A set of common environment variables are automatically passed through to all ta
 - **Type:** `Array<string | { auto: boolean }>`
 - **Default:** `[{ auto: true }]` (auto-inferred)
 
-Files to track for cache invalidation. By default, the task runner automatically detects which files a command reads. See [Automatic File Tracking](/vite/guide/task/features#automatic-file-tracking) for how this works.
+Files to track for cache invalidation. By default, the task runner automatically detects which files a command reads. See [Automatic File Tracking](./caching#automatic-file-tracking) for how this works.
 
 **Exclude files** from automatic tracking:
 

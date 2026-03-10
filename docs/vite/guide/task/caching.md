@@ -5,7 +5,7 @@
 When a task runs successfully (exit code 0), its output is saved. On the next run, the task runner checks if anything changed:
 
 1. **Command and arguments** — did the command itself change?
-2. **Environment variables** — did any [fingerprinted env vars](/config/task#envs) change?
+2. **Environment variables** — did any [fingerprinted env vars](./config#envs) change?
 3. **Input files** — did any file that the command reads change?
 
 If everything matches, the cached output is replayed instantly — the command never actually runs.
@@ -27,7 +27,7 @@ This means caching works out of the box for most commands without any configurat
 - **File non-existence** — if a command probes for a file that doesn't exist (e.g., `utils.ts` during module resolution), creating that file later correctly invalidates the cache.
 - **Directory listings** — if a command scans a directory (e.g., a test runner looking for `*.test.ts`), adding or removing files in that directory invalidates the cache.
 
-When you need more control over which files are tracked, use the [`inputs`](/config/task#inputs) option.
+When you need more control over which files are tracked, use the [`inputs`](./config#inputs) option.
 
 ## Cache Sharing {#cache-sharing}
 

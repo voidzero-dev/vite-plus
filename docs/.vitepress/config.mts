@@ -71,7 +71,7 @@ export default extendConfig(
             { text: 'Test', link: '/config/test' },
             { text: 'Lint', link: '/config/lint' },
             { text: 'Format', link: '/config/format' },
-            { text: 'Task Runner', link: '/config/task' },
+            { text: 'Task Runner', link: '/vite/guide/task/config' },
             { text: 'Package Manager', link: '/config/package-manager' },
           ],
         },
@@ -338,6 +338,10 @@ export default extendConfig(
                   text: 'CLI',
                   link: 'task/cli',
                 },
+                {
+                  text: 'Config',
+                  link: 'task/config',
+                },
               ],
             },
             {
@@ -585,7 +589,7 @@ export default extendConfig(
             items: [
               {
                 text: 'Configuring Task Runner',
-                link: '/config/task',
+                link: '/vite/guide/task/config',
               },
             ],
           },

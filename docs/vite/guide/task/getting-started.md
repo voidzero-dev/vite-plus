@@ -1,39 +1,23 @@
 # Getting Started
 
-The Task Runner lets you define, run, and cache tasks in any project — whether it's a single-package project or a large monorepo.
+## Overview
 
-## Why Use a Task Runner?
+The Vite+ Task Runner is a high-performance task execution system built into Vite+. It caches task results so repeated runs complete instantly, orders tasks by their dependencies, and scales across monorepo packages — all with minimal configuration.
 
-When you work on a project, you frequently run the same commands — build, lint, test. Each time, these commands do the same work if nothing changed. The task runner solves this by:
+It works with the scripts you already have in `package.json`. You can add task definitions in `vite.config.ts` when you need more control over dependencies and caching.
 
-- **Caching results** — when nothing changed, tasks complete instantly by replaying previous output
-- **Tracking dependencies** — tasks run in the correct order, so `build` always runs before `deploy`
-- **Running across packages** — in a monorepo, run tasks across all packages with a single command
+## Running Scripts
 
-## Defining Tasks
+If your project already has scripts in `package.json`, you can run them with `vp run` right away — no configuration needed:
 
-Tasks are defined in your `vite.config.ts` under the `run` section:
-
-```ts [vite.config.ts]
-import { defineConfig } from 'vite-plus'
-
-export default defineConfig({
-  run: {
-    tasks: {
-      build: {
-        command: 'vp build',
-      },
-      lint: {
-        command: 'vp lint',
-      },
-    },
-  },
-})
+```json [package.json]
+{
+  "scripts": {
+    "build": "vp build",
+    "test": "vp test"
+  }
+}
 ```
-
-## Running a Task
-
-Use `vp run` followed by the task name:
 
 ```bash
 vp run build
@@ -51,85 +35,40 @@ dist/assets/index-FvSqcG4U.js  0.69 kB │ gzip: 0.39 kB
 
 ## Caching
 
-Run the same task again — the output is replayed instantly from cache:
+Plain `package.json` scripts are not cached by default. Pass `--cache` to try it out:
 
 ```bash
-vp run build
+vp run --cache build
 ```
+
+```
+$ vp build
+✓ built in 28ms
+```
+
+Run it again — the output is replayed instantly from cache:
 
 ```
 $ vp build ✓ cache hit, replaying
-vite v8.0.0 building for production...
-✓ 4 modules transformed.
-dist/index.html                0.12 kB │ gzip: 0.12 kB
-dist/assets/index-FvSqcG4U.js  0.69 kB │ gzip: 0.39 kB
-
 ✓ built in 28ms
 
 ---
 [vp run] cache hit, 468ms saved.
 ```
 
-The task runner automatically tracks which files your command reads. If you edit a source file and run again, it detects the change and re-runs the task:
+Edit a source file and run again — the task runner detects the change and re-runs:
 
 ```
 $ vp build ✗ cache miss: 'src/index.ts' modified, executing
 ```
 
-No configuration needed — it just works.
+The task runner automatically tracks which files your command reads. No configuration needed.
 
-::: tip
-Tasks are cached by default. You can [disable caching](/config/task#cache) for tasks that shouldn't be cached, like dev servers.
-:::
+The `--cache` flag is a quick way to try caching, but the default behavior may not suit every task — you may need to control which files or environment variables affect the cache. To configure caching properly and enable it permanently, define the task in `vite.config.ts`.
 
-## Scripts vs. Tasks {#scripts-vs-tasks}
+## Task Definitions {#task-definitions}
 
-The task runner recognizes two sources of runnable commands:
-
-1. **Package.json scripts** — any entry in `"scripts"` can be run with `vp run`:
-
-   ```json [package.json]
-   {
-     "scripts": {
-       "build": "vp build",
-       "test": "vp test"
-     }
-   }
-   ```
-
-   ```bash
-   vp run test
-   ```
-
-2. **Task definitions** — entries in `vite.config.ts` that add configuration like dependencies or cache settings:
-
-   ```ts [vite.config.ts]
-   export default defineConfig({
-     run: {
-       tasks: {
-         build: {
-           // No command — uses the "build" script from package.json
-           dependsOn: ['lint'],
-           envs: ['NODE_ENV'],
-         },
-       },
-     },
-   })
-   ```
-
-A task definition can either reference a `package.json` script (by omitting `command`) or specify its own command. You cannot define a command in both places — it's one or the other.
-
-::: tip When to Use Which?
-Use **`package.json` scripts** for simple commands you want to run standalone (e.g., `"dev": "vp dev"`). Use **task definitions** in `vite.config.ts` when you need caching, dependencies, or other task runner features. You can combine both — define the command in `package.json` and add configuration in `vite.config.ts`.
-:::
-
-::: info
-Tasks defined in `vite.config.ts` are cached by default. Plain `package.json` scripts (without a matching task entry) are **not** cached by default. See [Cache Configuration](/config/task#run-cache) for details.
-:::
-
-## Task Dependencies
-
-Use [`dependsOn`](/config/task#depends-on) to ensure tasks run in the right order:
+Task definitions in `vite.config.ts` enable caching by default and give you more control — dependencies, environment variables, and custom inputs:
 
 ```ts [vite.config.ts]
 import { defineConfig } from 'vite-plus'
@@ -137,23 +76,32 @@ import { defineConfig } from 'vite-plus'
 export default defineConfig({
   run: {
     tasks: {
+      build: {
+        // Uses the "build" script from package.json
+        dependsOn: ['lint'],
+        envs: ['NODE_ENV'],
+      },
       deploy: {
         command: 'deploy-script --prod',
         cache: false,
         dependsOn: ['build', 'test'],
-      },
-      build: {
-        command: 'vp build',
-      },
-      test: {
-        command: 'vp test',
       },
     },
   },
 })
 ```
 
-Running `vp run deploy` runs `build` and `test` first:
+A task definition can either reference a `package.json` script (by omitting `command`) or specify its own command. You cannot define a command in both places.
+
+::: info
+Tasks defined in `vite.config.ts` are cached by default. Plain `package.json` scripts (without a matching task entry) are **not** cached by default. See [Cache Configuration](./config#run-cache) for details.
+:::
+
+See [Config Reference](./config) for all available task options.
+
+## Task Dependencies
+
+Use [`dependsOn`](./config#depends-on) to ensure tasks run in the right order. Running `vp run deploy` with the config above runs `build` and `test` first:
 
 ```
                 ┌─────────┐   ┌────────┐
@@ -235,7 +183,7 @@ Run it again — each package's task is cached independently:
 
 ## Interactive Task Selector
 
-Run `vp run` without a task name to browse all available tasks:
+Run `vp run` without a task name to browse available tasks:
 
 ```bash
 vp run
@@ -248,22 +196,9 @@ Select a task (↑/↓, Enter to run, Esc to clear):
     lint: vp lint
 ```
 
-Use the arrow keys to navigate, type to search, and press Enter to run. If you mistype a task name, the selector opens with suggestions:
-
-```bash
-vp run buid
-```
-
-```
-Task "buid" not found.
-Select a task (↑/↓, Enter to run, Esc to clear): buid
-
-  › build: vp build
-```
-
 ## What's Next?
 
 - [Running Tasks](./running-tasks) — package selection, compound commands, and concurrency
 - [Caching](./caching) — how caching works, file tracking, and cache sharing
 - [CLI Reference](./cli) — all flags and options
-- [Config Reference](/config/task) — all task configuration options
+- [Config Reference](./config) — all task configuration options
