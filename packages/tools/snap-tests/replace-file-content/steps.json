@@ -1,5 +1,4 @@
 {
-  "ignoredPlatforms": ["win32"],
   "env": {},
   "commands": [
     "cat foo/example.toml # should show original toml file",
