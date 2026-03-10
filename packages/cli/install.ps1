@@ -322,7 +322,7 @@ function Main {
         Push-Location $VersionDir
         try {
             $env:CI = "true"
-            & "$BinDir\vp.exe" install --silent
+            & "$BinDir\vp.exe" install --silent | Out-Null 2>&1
         } finally {
             Pop-Location
         }
@@ -390,7 +390,7 @@ exec "`$VITE_PLUS_HOME/current/bin/vp.exe" "`$@"
     Write-Host "    ${BRIGHT_BLUE}vp create${NC}       Create a new project"
     Write-Host "    ${BRIGHT_BLUE}vp env${NC}          Manage Node.js versions"
     Write-Host "    ${BRIGHT_BLUE}vp install${NC}      Install dependencies"
-    Write-Host "    ${BRIGHT_BLUE}vp dev${NC}          Start dev server"
+    Write-Host "    ${BRIGHT_BLUE}vp migrate${NC}      Migrate to Vite+"
 
     # Show Node.js manager status
     if ($nodeManagerResult -eq "true" -or $nodeManagerResult -eq "already") {
@@ -400,7 +400,7 @@ exec "`$VITE_PLUS_HOME/current/bin/vp.exe" "`$@"
     }
 
     Write-Host ""
-    Write-Host "  Run ${BRIGHT_BLUE}vp help${NC} for more information."
+    Write-Host "  Run ${BRIGHT_BLUE}vp help${NC} to see available commands."
 
     # Show note if PATH was updated
     if ($pathResult -eq "true") {
