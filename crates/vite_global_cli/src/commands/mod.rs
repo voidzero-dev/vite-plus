@@ -145,6 +145,7 @@ pub mod env;
 pub mod vpx;
 
 // Self-Management
+pub mod implode;
 pub mod upgrade;
 
 // Category C: Local CLI Delegation

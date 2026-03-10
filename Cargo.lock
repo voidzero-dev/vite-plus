@@ -7251,6 +7251,7 @@ dependencies = [
  "chrono",
  "clap",
  "crossterm",
+ "directories",
  "flate2",
  "junction",
  "node-semver",

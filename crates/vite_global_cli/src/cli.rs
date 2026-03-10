@@ -679,6 +679,13 @@ pub enum Commands {
         #[arg(long)]
         registry: Option<String>,
     },
+
+    /// Remove vp and all related data
+    Implode {
+        /// Skip confirmation prompt
+        #[arg(long, short = 'y')]
+        yes: bool,
+    },
 }
 
 /// Arguments for the `env` command
@@ -1965,6 +1972,7 @@ pub async fn run_command_with_options(
             })
             .await
         }
+        Commands::Implode { yes } => commands::implode::execute(yes),
     }
 }
 

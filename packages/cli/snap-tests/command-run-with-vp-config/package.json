@@ -1,0 +1,9 @@
+{
+  "name": "command-run-with-vp-config",
+  "version": "1.0.0",
+  "scripts": {
+    "foo": "vp config",
+    "bar": "vp not-exist-command"
+  },
+  "packageManager": "pnpm@10.19.0"
+}

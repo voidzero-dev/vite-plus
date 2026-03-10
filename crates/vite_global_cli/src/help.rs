@@ -453,7 +453,10 @@ pub fn top_level_help_doc() -> HelpDoc {
             ),
             section_rows(
                 "Maintain",
-                vec![row("upgrade", "Update vp itself to the latest version")],
+                vec![
+                    row("upgrade", "Update vp itself to the latest version"),
+                    row("implode", "Remove vp and all related data"),
+                ],
             ),
         ],
     }
