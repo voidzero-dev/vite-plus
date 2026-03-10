@@ -2,3 +2,7 @@
 base = "docs/"
 command = "npm i --force && npm run build"
 publish = ".vitepress/dist"
+
+[build.environment]
+# Skip Netlify's auto dependency install which fails on root pnpm workspace patches
+NETLIFY_SKIP_DEFAULT_DEPS_INSTALL = "true"
