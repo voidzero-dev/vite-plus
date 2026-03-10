@@ -61,7 +61,7 @@ jobs:
         env:
           RELEASE_BUILD: 'true'
 
-      - uses: anthropics/claude-code-action@a017b830c03e23789b11fb69ed571ea61c12e45c # v1.0.0
+      - uses: anthropics/claude-code-action@eb99fb38f09dedf69f423f1315d6c0272ace56a0 # Claude Code to 2.1.72
         env:
           RELEASE_BUILD: 'true'
         with:
