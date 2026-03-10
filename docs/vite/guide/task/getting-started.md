@@ -181,21 +181,6 @@ Run it again — each package's task is cached independently:
 [vp run] 3/3 cache hit (100%), 468ms saved.
 ```
 
-## Interactive Task Selector
-
-Run `vp run` without a task name to browse available tasks:
-
-```bash
-vp run
-```
-
-```
-Select a task (↑/↓, Enter to run, Esc to clear):
-
-  › build: vp build
-    lint: vp lint
-```
-
 ## What's Next?
 
 - [Running Tasks](./running-tasks) — package selection, compound commands, and concurrency

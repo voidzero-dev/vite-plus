@@ -35,7 +35,7 @@ If `@my/app` depends on `@my/utils` which depends on `@my/core`, this builds all
 
 ### Filter (`--filter`) {#filter}
 
-Select packages by name, directory, or glob pattern. The task name always comes **after** the flags:
+Select packages by name, directory, or glob pattern. The syntax is compatible with pnpm's `--filter`:
 
 ```bash
 # By name
@@ -58,10 +58,6 @@ vp run --filter "@my/*" --filter "!@my/utils" build
 ```
 
 Multiple `--filter` flags produce a union of the selected packages.
-
-::: tip
-The `--filter` syntax is compatible with pnpm. Most pnpm filter expressions work identically.
-:::
 
 ### Workspace Root (`-w`) {#workspace-root}
 
@@ -111,7 +107,7 @@ $ vp build ✗ cache miss: 'src/index.ts' modified, executing
 
 ### Nested `vp run` {#nested-vp-run}
 
-When a command contains `vp run`, it is **expanded at plan time** into the execution graph — no extra process is spawned. This means each sub-task is cached independently and output is shown flat:
+When a command contains `vp run`, the task runner **inlines it as separate tasks** rather than spawning a nested process. Each sub-task is cached independently and output is shown flat:
 
 ```json [package.json]
 {
@@ -152,12 +148,6 @@ A common monorepo pattern is a root script that runs a task recursively:
 
 This creates a potential recursion: root's `build` → `vp run -r build` → includes root's `build` → ... The task runner detects this and prunes the self-reference automatically, so other packages' builds run normally without infinite loops.
 :::
-
-## Concurrency {#concurrency}
-
-When running multiple tasks (e.g., with `-r`), the task runner executes independent tasks in parallel. Tasks that have no dependency relationship run concurrently, while dependent tasks wait for their dependencies to complete.
-
-For a single task, the process inherits the terminal directly — interactive programs, progress bars, and stdin all work normally. For multiple concurrent tasks, output is captured and displayed in order to avoid interleaving.
 
 ## Execution Summary {#execution-summary}
 

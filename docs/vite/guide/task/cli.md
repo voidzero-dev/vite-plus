@@ -5,10 +5,17 @@
 Run tasks defined in `vite.config.ts` or `package.json` scripts.
 
 ```bash
-vp run [options] [task] [-- additional-args]
+vp run [options] [task] [additional-args]
 ```
 
-All options must come **before** the task name. If `task` is omitted, an interactive task selector is shown.
+If `task` is omitted, an interactive selector is shown:
+
+```
+Select a task (↑/↓, Enter to run, Esc to clear):
+
+  › build: vp build
+    lint: vp lint
+```
 
 ### Task Specifier {#task-specifier}
 
@@ -31,10 +38,10 @@ All options must come **before** the task name. If `task` is omitted, an interac
 
 ### Additional Arguments {#additional-arguments}
 
-Arguments after `--` are passed through to the task command:
+Arguments after the task name are passed through to the task command:
 
 ```bash
-vp run test -- --reporter verbose
+vp run test --reporter verbose
 ```
 
 ### Filter Patterns {#filter-patterns}

@@ -141,10 +141,6 @@ $ NODE_ENV=development vp run build    # first run
 $ NODE_ENV=production vp run build     # cache miss: envs changed
 ```
 
-::: info
-Sensitive values (tokens, passwords, API keys) are hashed before being stored in the cache database — plaintext values are never persisted.
-:::
-
 ### `passThroughEnvs` {#pass-through-envs}
 
 - **Type:** `string[]`
