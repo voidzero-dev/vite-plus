@@ -62,12 +62,3 @@ vp cache clean
 ```
 
 Tasks will run fresh on the next invocation.
-
-## Exit Codes {#exit-codes}
-
-| Scenario | Exit code |
-| --- | --- |
-| All tasks succeed | `0` |
-| Single task fails | The task's own exit code |
-| Multiple tasks fail | `1` |
-| Task not found (non-interactive) | `1` |
