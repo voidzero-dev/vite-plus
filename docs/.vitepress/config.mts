@@ -327,40 +327,16 @@ export default extendConfig(
                   link: 'task/getting-started',
                 },
                 {
-                  text: 'Features',
-                  link: '/guide/task/features',
+                  text: 'Running Tasks',
+                  link: 'task/running-tasks',
+                },
+                {
+                  text: 'Caching',
+                  link: 'task/caching',
                 },
                 {
                   text: 'CLI',
-                  link: '/guide/task/cli',
-                },
-                {
-                  text: 'Migration from Turborepo',
-                  link: '/guide/format/migration-from-turborepo',
-                },
-                {
-                  text: 'Migration from Nx',
-                  link: '/guide/format/migration-from-nx',
-                },
-                {
-                  text: 'Migration from Lerna',
-                  link: '/guide/format/migration-from-lerna',
-                },
-                {
-                  text: 'Migration from pnpm',
-                  link: '/guide/format/migration-from-pnpm',
-                },
-                {
-                  text: 'Migration from yarn',
-                  link: '/guide/format/migration-from-yarn',
-                },
-                {
-                  text: 'Migration from npm',
-                  link: '/guide/format/migration-from-npm',
-                },
-                {
-                  text: 'Migration from bun',
-                  link: '/guide/format/migration-from-bun',
+                  link: 'task/cli',
                 },
               ],
             },
@@ -601,6 +577,15 @@ export default extendConfig(
               {
                 text: 'Lint Options',
                 link: '/config/lint-options',
+              },
+            ],
+          },
+          {
+            text: 'Task Runner',
+            items: [
+              {
+                text: 'Configuring Task Runner',
+                link: '/config/task',
               },
             ],
           },
