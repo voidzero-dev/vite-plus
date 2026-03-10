@@ -44,6 +44,7 @@ Manage Dependencies:
 
 Maintain:
   upgrade  Update vp itself to the latest version
+  implode  Completely remove vp and all its data from this system
 
 Options:
   -V, --version  Print version
