@@ -6,7 +6,10 @@
 //! - ANSI palette queries for blue/magenta with timeout
 //! - Gradient/fade generation and RGB ANSI coloring
 
-use std::{io::IsTerminal, sync::OnceLock};
+use std::{
+    io::IsTerminal,
+    sync::{LazyLock, OnceLock},
+};
 #[cfg(unix)]
 use std::{
     io::Write,
@@ -30,6 +33,15 @@ const ANSI_MAGENTA_INDEX: u8 = 5;
 const HEADER_SUFFIX_FADE_GAMMA: f64 = 1.35;
 
 static HEADER_COLORS: OnceLock<HeaderColors> = OnceLock::new();
+
+/// Whether the terminal is Warp, which does not respond to OSC color queries
+/// and renders alternate screen content flush against block edges.
+#[must_use]
+pub fn is_warp_terminal() -> bool {
+    static IS_WARP: LazyLock<bool> =
+        LazyLock::new(|| std::env::var("TERM_PROGRAM").as_deref() == Ok("WarpTerminal"));
+    *IS_WARP
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Rgb(u8, u8, u8);
@@ -181,6 +193,13 @@ fn query_terminal_colors(palette_indices: &[u8]) -> (Option<Rgb>, Vec<(u8, Rgb)>
     };
 
     if std::env::var_os("CI").is_some() {
+        return (None, vec![]);
+    }
+
+    // Warp terminal does not respond to OSC color queries in its block-mode
+    // renderer. Sending the queries causes the process to appear stuck until
+    // the user presses a key (which is consumed as a fake "response").
+    if is_warp_terminal() {
         return (None, vec![]);
     }
 

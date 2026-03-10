@@ -160,8 +160,11 @@ fn run_picker(command_order: &[usize]) -> io::Result<Option<PickedCommand>> {
     let mut viewport_start = 0usize;
     let mut query = String::new();
 
+    let is_warp = vite_shared::header::is_warp_terminal();
+    let header_overhead = if is_warp { 10 } else { 9 };
+
     terminal::enable_raw_mode()?;
-    execute!(stdout, cursor::Hide)?;
+    execute!(stdout, terminal::EnterAlternateScreen, cursor::Hide)?;
 
     let pick_result = loop {
         let filtered_indices = filtered_command_indices(&query, command_order);
@@ -177,37 +180,45 @@ fn run_picker(command_order: &[usize]) -> io::Result<Option<PickedCommand>> {
 
         let (_, rows) = terminal::size().unwrap_or((80, 24));
         let rows = if rows == 0 { 24 } else { rows };
-        let viewport_size = compute_viewport_size(rows.into(), filtered_indices.len());
+        let viewport_size =
+            compute_viewport_size(rows.into(), filtered_indices.len(), header_overhead);
         viewport_start = align_viewport(viewport_start, selected_position, viewport_size);
-        render_picker(
+        match render_picker(
             &mut stdout,
             &query,
             &filtered_indices,
             selected_position,
             viewport_start,
             viewport_size,
-        )?;
+        ) {
+            Ok(()) => {}
+            Err(err) => break Err(err),
+        }
 
-        if let Event::Key(KeyEvent { code, modifiers, .. }) = event::read()? {
-            match handle_key_event(
-                code,
-                modifiers,
-                &mut query,
-                &mut selected_position,
-                filtered_indices.len(),
-            ) {
-                ControlFlow::Continue(()) => continue,
-                ControlFlow::Break(Some(())) => {
-                    let Some(index) = filtered_indices.get(selected_position).copied() else {
-                        continue;
-                    };
-                    break Ok(Some(PickedCommand {
-                        command: COMMANDS[index].command,
-                        append_help: COMMANDS[index].append_help,
-                    }));
+        match event::read() {
+            Ok(Event::Key(KeyEvent { code, modifiers, .. })) => {
+                match handle_key_event(
+                    code,
+                    modifiers,
+                    &mut query,
+                    &mut selected_position,
+                    filtered_indices.len(),
+                ) {
+                    ControlFlow::Continue(()) => continue,
+                    ControlFlow::Break(Some(())) => {
+                        let Some(index) = filtered_indices.get(selected_position).copied() else {
+                            continue;
+                        };
+                        break Ok(Some(PickedCommand {
+                            command: COMMANDS[index].command,
+                            append_help: COMMANDS[index].append_help,
+                        }));
+                    }
+                    ControlFlow::Break(None) => break Ok(None),
                 }
-                ControlFlow::Break(None) => break Ok(None),
             }
+            Ok(_) => continue,
+            Err(err) => break Err(err),
         }
     };
 
@@ -221,13 +232,7 @@ fn run_picker(command_order: &[usize]) -> io::Result<Option<PickedCommand>> {
 
 fn cleanup_picker(stdout: &mut io::Stdout) -> io::Result<()> {
     terminal::disable_raw_mode()?;
-    execute!(
-        stdout,
-        cursor::Show,
-        terminal::Clear(ClearType::All),
-        cursor::MoveTo(0, 0),
-        ResetColor
-    )?;
+    execute!(stdout, cursor::Show, terminal::LeaveAlternateScreen, ResetColor)?;
     Ok(())
 }
 
@@ -294,21 +299,26 @@ fn render_picker(
 ) -> io::Result<()> {
     let (columns, _) = terminal::size().unwrap_or((80, 24));
     let columns = if columns == 0 { 80 } else { columns };
-    let max_width = usize::from(columns).saturating_sub(4);
+    // Warp terminal needs extra padding since it renders alternate screen
+    // content flush against the edges of its block-mode renderer.
+    let pad = if vite_shared::header::is_warp_terminal() { " " } else { "" };
+    let max_width = usize::from(columns).saturating_sub(4 + pad.len());
     let viewport_end = (viewport_start + viewport_size).min(filtered_indices.len());
     let instruction = truncate_line(
         &format!("Select a command (↑/↓, Enter to run, Esc to cancel): {query}"),
         max_width,
     );
 
+    execute!(stdout, cursor::MoveTo(0, 0), terminal::Clear(ClearType::All),)?;
+    if vite_shared::header::is_warp_terminal() {
+        execute!(stdout, Print(NEWLINE))?;
+    }
     execute!(
         stdout,
-        cursor::MoveTo(0, 0),
-        terminal::Clear(ClearType::All),
-        Print(vite_shared::header::vite_plus_header()),
+        Print(format!("{pad}{}", vite_shared::header::vite_plus_header())),
         Print(NEWLINE),
         Print(NEWLINE),
-        Print(instruction),
+        Print(format!("{pad}{instruction}")),
         Print(NEWLINE),
         Print(NEWLINE)
     )?;
@@ -317,7 +327,7 @@ fn render_picker(
         execute!(
             stdout,
             SetForegroundColor(crossterm::style::Color::DarkGrey),
-            Print("  ↑ more"),
+            Print(format!("{pad}  ↑ more")),
             Print(NEWLINE),
             ResetColor
         )?;
@@ -337,7 +347,7 @@ fn render_picker(
             execute!(
                 stdout,
                 SetForegroundColor(crossterm::style::Color::DarkGrey),
-                Print(format!("  {marker} ")),
+                Print(format!("{pad}  {marker} ")),
                 ResetColor
             )?;
             if is_selected {
@@ -371,7 +381,7 @@ fn render_picker(
             execute!(
                 stdout,
                 SetForegroundColor(crossterm::style::Color::DarkGrey),
-                Print(format!("  {marker} ")),
+                Print(format!("{pad}  {marker} ")),
                 ResetColor
             )?;
             execute!(stdout, SetForegroundColor(SELECTED_COLOR), SetAttribute(Attribute::Bold),)?;
@@ -391,7 +401,7 @@ fn render_picker(
             execute!(
                 stdout,
                 SetForegroundColor(crossterm::style::Color::DarkGrey),
-                Print(format!("  {marker} ")),
+                Print(format!("{pad}  {marker} ")),
                 ResetColor,
                 Print(label),
             )?;
@@ -403,7 +413,7 @@ fn render_picker(
         execute!(
             stdout,
             SetForegroundColor(crossterm::style::Color::DarkGrey),
-            Print("  ↓ more"),
+            Print(format!("{pad}  ↓ more")),
             Print(NEWLINE),
             ResetColor
         )?;
@@ -420,7 +430,7 @@ fn render_picker(
             stdout,
             Print(NEWLINE),
             SetForegroundColor(crossterm::style::Color::DarkGrey),
-            Print("  "),
+            Print(format!("{pad}  ")),
             Print(no_match),
             Print(NEWLINE),
             ResetColor
@@ -430,9 +440,12 @@ fn render_picker(
     stdout.flush()
 }
 
-fn compute_viewport_size(terminal_rows: usize, total_commands: usize) -> usize {
-    // Header + instructions + query + spacing takes ~9 rows.
-    terminal_rows.saturating_sub(9).clamp(6, total_commands.max(6))
+fn compute_viewport_size(
+    terminal_rows: usize,
+    total_commands: usize,
+    header_overhead: usize,
+) -> usize {
+    terminal_rows.saturating_sub(header_overhead).clamp(6, total_commands.max(6))
 }
 
 fn align_viewport(current_start: usize, selected_index: usize, viewport_size: usize) -> usize {
@@ -572,9 +585,12 @@ mod tests {
 
     #[test]
     fn viewport_size_is_clamped() {
-        assert_eq!(compute_viewport_size(12, 30), 6);
-        assert_eq!(compute_viewport_size(24, 30), 15);
-        assert_eq!(compute_viewport_size(100, 8), 8);
+        assert_eq!(compute_viewport_size(12, 30, 9), 6);
+        assert_eq!(compute_viewport_size(24, 30, 9), 15);
+        assert_eq!(compute_viewport_size(100, 8, 9), 8);
+        // Warp adds 1 extra row of overhead
+        assert_eq!(compute_viewport_size(12, 30, 10), 6);
+        assert_eq!(compute_viewport_size(24, 30, 10), 14);
     }
 
     #[test]
