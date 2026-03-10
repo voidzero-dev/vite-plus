@@ -186,19 +186,32 @@ fn remove_vite_plus_dir(home_dir: &AbsolutePathBuf) -> Result<(), Error> {
             Ok(()) => {
                 output::success(&vite_str::format!("Removed {}", home_dir.as_path().display()));
             }
-            Err(_) => {
-                // Binary is locked — schedule deletion via a detached process
-                let home_str = home_dir.as_path().to_string_lossy();
+            Err(e) => {
+                output::warn(&vite_str::format!(
+                    "Direct removal failed ({}), renaming before scheduled delete",
+                    e
+                ));
+                // Binary is locked — rename the directory first so the original
+                // path is immediately free for reinstall, then schedule deletion
+                // of the renamed directory via a detached process.
+                let trash_path = home_dir
+                    .as_path()
+                    .with_extension(vite_str::format!("removing-{}", std::process::id()));
+                if let Err(e) = std::fs::rename(home_dir, &trash_path) {
+                    output::error(&vite_str::format!(
+                        "Failed to rename {} for removal: {e}",
+                        home_dir.as_path().display()
+                    ));
+                    return Err(Error::CommandExecution(e));
+                }
+
+                let trash_str = trash_path.to_string_lossy();
+                let cmd_arg =
+                    vite_str::format!("ping -n 3 127.0.0.1 >NUL && rmdir /S /Q \"{trash_str}\"");
+                output::info(&vite_str::format!("Running: cmd.exe /C {cmd_arg}"));
                 let result = std::process::Command::new("cmd.exe")
-                    .args([
-                        "/C",
-                        &vite_str::format!(
-                            "ping -n 3 127.0.0.1 >NUL && rmdir /S /Q \"{home_str}\""
-                        ),
-                    ])
+                    .args(["/C", &cmd_arg])
                     .stdin(std::process::Stdio::null())
-                    .stdout(std::process::Stdio::null())
-                    .stderr(std::process::Stdio::null())
                     .spawn();
 
                 match result {
@@ -346,6 +359,29 @@ mod tests {
         let result = std::fs::read_to_string(&profile_path).unwrap();
         assert_eq!(result, "# my config\nexport FOO=bar\n");
         assert!(!result.contains(".vite-plus/env"));
+    }
+
+    #[test]
+    fn test_remove_vite_plus_dir_success() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let dir = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let target = dir.join("to-remove");
+        std::fs::create_dir_all(&target).unwrap();
+        std::fs::write(target.join("file.txt"), "data").unwrap();
+
+        let result = remove_vite_plus_dir(&target);
+        assert!(result.is_ok());
+        assert!(!target.as_path().exists());
+    }
+
+    #[test]
+    fn test_remove_vite_plus_dir_nonexistent() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let dir = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let target = dir.join("does-not-exist");
+
+        let result = remove_vite_plus_dir(&target);
+        assert!(result.is_err());
     }
 
     #[test]
