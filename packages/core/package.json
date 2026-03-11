@@ -32,56 +32,56 @@
     "./internal": "./dist/vite/node/internal.js",
     "./module-runner": "./dist/vite/node/module-runner.js",
     "./pack": {
-      "types": "./dist/tsdown/index-types.d.ts",
-      "default": "./dist/tsdown/index.js"
+      "default": "./dist/tsdown/index.js",
+      "types": "./dist/tsdown/index-types.d.ts"
     },
     "./package.json": "./package.json",
     "./rolldown": {
-      "types": "./dist/rolldown/index.d.mts",
-      "default": "./dist/rolldown/index.mjs"
+      "default": "./dist/rolldown/index.mjs",
+      "types": "./dist/rolldown/index.d.mts"
     },
     "./rolldown/config": {
-      "types": "./dist/rolldown/config.d.mts",
-      "default": "./dist/rolldown/config.mjs"
+      "default": "./dist/rolldown/config.mjs",
+      "types": "./dist/rolldown/config.d.mts"
     },
     "./rolldown/experimental": {
-      "types": "./dist/rolldown/experimental-index.d.mts",
-      "default": "./dist/rolldown/experimental-index.mjs"
+      "default": "./dist/rolldown/experimental-index.mjs",
+      "types": "./dist/rolldown/experimental-index.d.mts"
     },
     "./rolldown/experimental/runtime-types": {
       "types": "./dist/rolldown/experimental-runtime-types.d.ts"
     },
     "./rolldown/filter": {
-      "types": "./dist/rolldown/filter-index.d.mts",
-      "default": "./dist/rolldown/filter-index.mjs"
+      "default": "./dist/rolldown/filter-index.mjs",
+      "types": "./dist/rolldown/filter-index.d.mts"
     },
     "./rolldown/getLogFilter": {
-      "types": "./dist/rolldown/get-log-filter.d.mts",
-      "default": "./dist/rolldown/get-log-filter.mjs"
+      "default": "./dist/rolldown/get-log-filter.mjs",
+      "types": "./dist/rolldown/get-log-filter.d.mts"
     },
     "./rolldown/parallelPlugin": {
-      "types": "./dist/rolldown/parallel-plugin.d.mts",
-      "default": "./dist/rolldown/parallel-plugin.mjs"
+      "default": "./dist/rolldown/parallel-plugin.mjs",
+      "types": "./dist/rolldown/parallel-plugin.d.mts"
     },
     "./rolldown/parseAst": {
-      "types": "./dist/rolldown/parse-ast-index.d.mts",
-      "default": "./dist/rolldown/parse-ast-index.mjs"
+      "default": "./dist/rolldown/parse-ast-index.mjs",
+      "types": "./dist/rolldown/parse-ast-index.d.mts"
     },
     "./rolldown/plugins": {
-      "types": "./dist/rolldown/plugins-index.d.mts",
-      "default": "./dist/rolldown/plugins-index.mjs"
+      "default": "./dist/rolldown/plugins-index.mjs",
+      "types": "./dist/rolldown/plugins-index.d.mts"
     },
     "./rolldown/pluginutils": {
-      "types": "./dist/pluginutils/index.d.ts",
-      "default": "./dist/pluginutils/index.js"
+      "default": "./dist/pluginutils/index.js",
+      "types": "./dist/pluginutils/index.d.ts"
     },
     "./rolldown/pluginutils/filter": {
-      "types": "./dist/pluginutils/filter/index.d.ts",
-      "default": "./dist/pluginutils/filter/index.js"
+      "default": "./dist/pluginutils/filter/index.js",
+      "types": "./dist/pluginutils/filter/index.d.ts"
     },
     "./rolldown/utils": {
-      "types": "./dist/rolldown/utils-index.d.mts",
-      "default": "./dist/rolldown/utils-index.mjs"
+      "default": "./dist/rolldown/utils-index.mjs",
+      "types": "./dist/rolldown/utils-index.d.mts"
     },
     "./types/*": {
       "types": "./dist/vite/types/*"

@@ -120,8 +120,8 @@
     },
     "./test/config": {
       "types": "./dist/test/config.d.ts",
-      "require": "./dist/test/config.cjs",
-      "default": "./dist/test/config.js"
+      "default": "./dist/test/config.js",
+      "require": "./dist/test/config.cjs"
     },
     "./test/coverage": {
       "types": "./dist/test/coverage.d.ts",
