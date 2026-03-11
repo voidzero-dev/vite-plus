@@ -23,6 +23,10 @@ const PRETTIER_CONFIG: ScriptRewriteConfig = ScriptRewriteConfig {
         "--debug-benchmark",
         "--debug-repeat",
         "--experimental-cli",
+        "--ignore-unknown",
+        "-u",
+        "--no-color",
+        "--no-plugin-search",
     ],
     value_flags: &[
         "--config",
@@ -216,6 +220,28 @@ mod tests {
         // Combined with other flags
         assert_eq!(rewrite_prettier_script("prettier -w --single-quote ."), "vp fmt .");
         assert_eq!(rewrite_prettier_script("prettier -c --single-quote ."), "vp fmt --check .");
+    }
+
+    #[test]
+    fn test_rewrite_prettier_ignore_unknown_stripped() {
+        // --ignore-unknown is a prettier-only flag, should be stripped
+        assert_eq!(
+            rewrite_prettier_script(
+                "prettier . --cache --write --ignore-unknown --experimental-cli"
+            ),
+            "vp fmt ."
+        );
+        // -u is short for --ignore-unknown
+        assert_eq!(rewrite_prettier_script("prettier --write -u ."), "vp fmt .");
+        // --ignore-unknown with --check
+        assert_eq!(
+            rewrite_prettier_script("prettier --ignore-unknown --check ."),
+            "vp fmt --check ."
+        );
+        // --no-color stripped
+        assert_eq!(rewrite_prettier_script("prettier --no-color --write ."), "vp fmt .");
+        // --no-plugin-search stripped
+        assert_eq!(rewrite_prettier_script("prettier --no-plugin-search --write ."), "vp fmt .");
     }
 
     #[test]

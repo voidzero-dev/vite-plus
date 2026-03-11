@@ -1,0 +1,35 @@
+> vp migrate --no-interactive # migration should strip --ignore-unknown and -u flags
+VITE+ - The Unified Toolchain for the Web
+
+
+Prettier configuration detected. Auto-migrating to Oxfmt...
+◇ Migrated . to Vite+<repeat>
+• Node <semver>  pnpm <semver>
+• 2 config updates applied
+• Prettier migrated to Oxfmt
+
+> cat package.json # check prettier removed and --ignore-unknown stripped from scripts
+{
+  "name": "migration-prettier-ignore-unknown",
+  "scripts": {
+    "dev": "vp dev",
+    "build": "vp build",
+    "format": "vp fmt .",
+    "format:check": "vp fmt --check .",
+    "prepare": "vp config"
+  },
+  "devDependencies": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vite-plus": "latest"
+  },
+  "pnpm": {
+    "overrides": {
+      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+      "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+    }
+  },
+  "packageManager": "pnpm@<semver>"
+}
+
+> cat .prettierrc.json && exit 1 || true # check prettier config is removed
+cat: .prettierrc.json: No such file or directory
