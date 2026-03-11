@@ -1,0 +1,6 @@
+[1]> vp create vite:generator --no-interactive
+
+The vite:generator template requires a monorepo workspace.
+Run this command inside a Vite+ monorepo, or create one first with `vp create vite:monorepo`
+Cannot create a generator outside a monorepo
+

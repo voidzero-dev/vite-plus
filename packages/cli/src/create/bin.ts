@@ -139,7 +139,7 @@ const listTemplatesMessage = renderCliDoc({
         { label: 'vite:monorepo', description: 'Create a new monorepo' },
         { label: 'vite:application', description: 'Create a new application' },
         { label: 'vite:library', description: 'Create a new library' },
-        { label: 'vite:generator', description: 'Scaffold a new code generator' },
+        { label: 'vite:generator', description: 'Scaffold a new code generator (monorepo only)' },
       ],
     },
     {
@@ -528,6 +528,12 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       'You are already in a monorepo workspace.\nUse a different template or run this command outside the monorepo',
     );
     cancelAndExit('Cannot create a monorepo inside an existing monorepo', 1);
+  }
+  if (selectedTemplateName === BuiltinTemplate.generator && !isMonorepo) {
+    prompts.log.info(
+      'The vite:generator template requires a monorepo workspace.\nRun this command inside a Vite+ monorepo, or create one first with `vp create vite:monorepo`',
+    );
+    cancelAndExit('Cannot create a generator outside a monorepo', 1);
   }
 
   if (isInSubdirectory && !compactOutput) {

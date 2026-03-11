@@ -61,7 +61,7 @@ Vite+ Built-in Templates:
   vite:monorepo     Create a new monorepo
   vite:application  Create a new application
   vite:library      Create a new library
-  vite:generator    Scaffold a new code generator
+  vite:generator    Scaffold a new code generator (monorepo only)
 
 Popular Templates (shorthand):
   vite             Official Vite templates (create-vite)
