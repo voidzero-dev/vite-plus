@@ -15,6 +15,7 @@ import { build, type BuildOptions } from 'rolldown';
 import { dts } from 'rolldown-plugin-dts';
 import { glob } from 'tinyglobby';
 
+import { generateLicenseFile } from '../../scripts/generate-license.ts';
 import { buildCjsDeps } from './build-support/build-cjs-deps';
 import { replaceThirdPartyCjsRequires } from './build-support/find-create-require';
 import { RewriteImportsPlugin } from './build-support/rewrite-imports';
@@ -51,6 +52,41 @@ await buildVite();
 await bundleTsdown();
 await brandTsdown();
 await bundleVitepress();
+generateLicenseFile({
+  title: 'Vite-Plus core license',
+  packageName: 'Vite-Plus',
+  outputPath: join(projectDir, 'LICENSE.md'),
+  coreLicensePath: join(projectDir, '..', '..', 'LICENSE'),
+  bundledPaths: [join(projectDir, 'dist')],
+  resolveFrom: [
+    projectDir,
+    join(projectDir, '..', '..'),
+    join(projectDir, '..', '..', 'rolldown'),
+    join(projectDir, '..', '..', 'rolldown-vite'),
+  ],
+  extraPackages: [
+    {
+      packageDir: rolldownSourceDir,
+      licensePath: join(projectDir, '..', '..', 'rolldown', 'LICENSE'),
+    },
+    {
+      packageDir: rolldownPluginUtilsDir,
+      licensePath: join(projectDir, '..', '..', 'rolldown', 'LICENSE'),
+    },
+    {
+      packageDir: rolldownViteSourceDir,
+    },
+    {
+      packageDir: tsdownSourceDir,
+    },
+    {
+      packageDir: join(projectDir, '..', '..', 'node_modules', 'vitepress'),
+    },
+  ],
+});
+if (!existsSync(join(projectDir, 'LICENSE.md'))) {
+  throw new Error('LICENSE.md was not generated during build');
+}
 await mergePackageJson();
 await syncLicenseFromRoot();
 

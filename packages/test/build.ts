@@ -36,6 +36,7 @@
 //   - BUNDLE only leaf deps (chai, etc.) to reduce install size
 //   - Separate entries prevent __vite__injectQuery errors in browser
 
+import { existsSync } from 'node:fs';
 import {
   copyFile,
   glob as fsGlob,
@@ -55,6 +56,7 @@ import { format } from 'oxfmt';
 import { build } from 'rolldown';
 import { dts } from 'rolldown-plugin-dts';
 
+import { generateLicenseFile } from '../../scripts/generate-license.ts';
 import pkg from './package.json' with { type: 'json' };
 
 const projectDir = dirname(fileURLToPath(import.meta.url));
@@ -222,6 +224,23 @@ await patchChaiTypeReference();
 await patchMockerHoistedModule();
 const pluginExports = await createPluginExports();
 await mergePackageJson(pluginExports);
+generateLicenseFile({
+  title: 'Vite-Plus test license',
+  packageName: 'Vite-Plus',
+  outputPath: join(projectDir, 'LICENSE.md'),
+  coreLicensePath: join(projectDir, '..', '..', 'LICENSE'),
+  bundledPaths: [distDir],
+  resolveFrom: [projectDir, join(projectDir, '..', '..')],
+  extraPackages: [
+    { packageDir: vitestSourceDir },
+    ...VITEST_PACKAGES_TO_COPY.map((packageName) => ({
+      packageDir: resolve(projectDir, 'node_modules', packageName),
+    })),
+  ],
+});
+if (!existsSync(join(projectDir, 'LICENSE.md'))) {
+  throw new Error('LICENSE.md was not generated during build');
+}
 await syncLicenseFromRoot();
 await validateExternalDeps();
 

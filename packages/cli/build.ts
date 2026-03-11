@@ -37,6 +37,8 @@ import {
   ModuleKind,
 } from 'typescript';
 
+import { generateLicenseFile } from '../../scripts/generate-license.ts';
+
 const projectDir = dirname(fileURLToPath(import.meta.url));
 const TEST_PACKAGE_NAME = '@voidzero-dev/vite-plus-test';
 const CORE_PACKAGE_NAME = '@voidzero-dev/vite-plus-core';
@@ -59,6 +61,17 @@ const napiArgs = process.argv
 if (!skipTs) {
   await buildCli();
   buildGlobalModules();
+  generateLicenseFile({
+    title: 'Vite-Plus CLI license',
+    packageName: 'Vite-Plus',
+    outputPath: join(projectDir, 'LICENSE.md'),
+    coreLicensePath: join(projectDir, '..', '..', 'LICENSE'),
+    bundledPaths: [join(projectDir, 'dist', 'global')],
+    resolveFrom: [projectDir],
+  });
+  if (!existsSync(join(projectDir, 'LICENSE.md'))) {
+    throw new Error('LICENSE.md was not generated during build');
+  }
 }
 // Build native first - TypeScript may depend on the generated binding types
 if (!skipNative) {
