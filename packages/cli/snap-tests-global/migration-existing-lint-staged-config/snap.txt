@@ -33,6 +33,7 @@ cat: .lintstagedrc.json: No such file or directory
 import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
+  fmt: {},
   lint: {"options":{"typeAware":true,"typeCheck":true}},
   staged: {
     "*.ts": "vp lint --fix"

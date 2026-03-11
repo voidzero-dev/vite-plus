@@ -40,7 +40,7 @@ cat: eslint.config.mjs: No such file or directory
 cat: .prettierrc.json: No such file or directory
 
 > cat vite.config.ts # check oxlint and oxfmt config merged into vite.config.ts
-import { defineConfig } from "vite-plus";
+import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   staged: {

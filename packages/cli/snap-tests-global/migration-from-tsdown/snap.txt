@@ -27,6 +27,7 @@ export default defineConfig({
     "*": "vp check --fix"
   },
   pack: tsdownConfig,
+  fmt: {},
   lint: {"options":{"typeAware":true,"typeCheck":true}},
 });
 
@@ -78,6 +79,7 @@ export default defineConfig({
     "*": "vp check --fix"
   },
   pack: tsdownConfig,
+  fmt: {},
   lint: {"options":{"typeAware":true,"typeCheck":true}},
 });
 

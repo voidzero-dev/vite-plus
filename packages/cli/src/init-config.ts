@@ -138,6 +138,26 @@ function hasConfigKey(viteConfigPath: string, configKey: string): boolean {
   return new RegExp(`\\b${configKey}\\s*:`).test(viteConfig);
 }
 
+/**
+ * Ensure `fmt: {}` exists in vite.config.ts so oxfmt auto-discovery doesn't
+ * error when the config file lacks a `fmt` field.
+ */
+function injectFmtDefaultsIfMissing(viteConfigPath: string): void {
+  if (hasConfigKey(viteConfigPath, 'fmt')) {
+    return;
+  }
+  const tempConfigPath = `${viteConfigPath}.fmt-init.json`;
+  fs.writeFileSync(tempConfigPath, '{}');
+  try {
+    const result = mergeJsonConfig(viteConfigPath, tempConfigPath, 'fmt');
+    if (result.updated) {
+      fs.writeFileSync(viteConfigPath, result.content);
+    }
+  } finally {
+    fs.rmSync(tempConfigPath, { force: true });
+  }
+}
+
 async function vpFmt(cwd: string, filePath: string): Promise<void> {
   const { binPath, envs } = await resolveFmt();
   const result = await runCommandSilently({
@@ -249,6 +269,7 @@ export async function applyToolInitConfigToViteConfig(
     if (generatedConfigPath) {
       fs.rmSync(generatedConfigPath, { force: true });
     }
+    injectFmtDefaultsIfMissing(viteConfigPath);
     await vpFmt(projectPath, path.relative(projectPath, viteConfigPath));
     return {
       handled: true,
@@ -276,6 +297,7 @@ export async function applyToolInitConfigToViteConfig(
 
   fs.writeFileSync(viteConfigPath, mergeResult.content);
   fs.rmSync(generatedConfigPath, { force: true });
+  injectFmtDefaultsIfMissing(viteConfigPath);
   await vpFmt(projectPath, path.relative(projectPath, viteConfigPath));
   return {
     handled: true,

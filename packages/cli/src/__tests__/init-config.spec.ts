@@ -12,6 +12,12 @@ const tempDirs: string[] = [];
 function createTempDir() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-init-config-'));
   tempDirs.push(dir);
+  // oxfmt auto-discovers vite.config.ts and needs to resolve imports
+  fs.writeFileSync(path.join(dir, 'package.json'), '{"type":"module"}');
+  const stubDir = path.join(dir, 'node_modules', 'vite-plus');
+  fs.mkdirSync(stubDir, { recursive: true });
+  fs.writeFileSync(path.join(stubDir, 'package.json'), '{"type":"module","main":"index.js"}');
+  fs.writeFileSync(path.join(stubDir, 'index.js'), 'export const defineConfig = c => c;\n');
   return dir;
 }
 
