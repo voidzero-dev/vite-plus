@@ -188,10 +188,9 @@ async fn resolve_version_for_pin(
                 provider.resolve_version(version).await?;
                 Ok((version.to_string(), false))
             } else {
-                // For ranges/partial versions, keep as-is (resolved at runtime)
-                // But validate the range is parseable
-                provider.resolve_version(version).await?;
-                Ok((version.to_string(), false))
+                // For ranges/partial versions, resolve to exact version
+                let resolved = provider.resolve_version(version).await?;
+                Ok((resolved.to_string(), true))
             }
         }
     }
@@ -284,5 +283,35 @@ mod tests {
         // Should not error when no file exists
         let result = do_unpin(&temp_path).await;
         assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_resolve_version_for_pin_partial_version() {
+        let provider = NodeProvider::new();
+
+        // Partial version "20" should resolve to an exact version like "20.x.y"
+        let (resolved, was_alias) = resolve_version_for_pin("20", &provider).await.unwrap();
+        assert!(was_alias, "partial version should be treated as alias");
+
+        // The resolved version should be a full semver version starting with "20."
+        assert!(
+            resolved.starts_with("20."),
+            "expected resolved version to start with '20.', got: {resolved}"
+        );
+
+        // Should be a valid exact version (major.minor.patch)
+        let parts: Vec<&str> = resolved.split('.').collect();
+        assert_eq!(parts.len(), 3, "expected 3 version parts, got: {resolved}");
+        assert!(parts.iter().all(|p| p.parse::<u64>().is_ok()), "all parts should be numeric");
+    }
+
+    #[tokio::test]
+    async fn test_resolve_version_for_pin_exact_version() {
+        let provider = NodeProvider::new();
+
+        // Exact version should be returned as-is
+        let (resolved, was_alias) = resolve_version_for_pin("20.18.0", &provider).await.unwrap();
+        assert!(!was_alias, "exact version should not be treated as alias");
+        assert_eq!(resolved, "20.18.0");
     }
 }
