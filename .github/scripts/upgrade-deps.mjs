@@ -82,15 +82,15 @@ async function updatePnpmWorkspace(versions) {
   );
 
   // Update oxfmt in catalog
-  content = content.replace(/oxfmt: \^[\d.]+(-[\w.]+)?/, `oxfmt: ^${versions.oxfmt}`);
+  content = content.replace(/oxfmt: =[\d.]+(-[\w.]+)?/, `oxfmt: =${versions.oxfmt}`);
 
   // Update oxlint in catalog (but not oxlint-tsgolint)
-  content = content.replace(/oxlint: \^[\d.]+(-[\w.]+)?\n/, `oxlint: ^${versions.oxlint}\n`);
+  content = content.replace(/oxlint: =[\d.]+(-[\w.]+)?\n/, `oxlint: =${versions.oxlint}\n`);
 
   // Update oxlint-tsgolint in catalog
   content = content.replace(
-    /oxlint-tsgolint: \^[\d.]+(-[\w.]+)?/,
-    `oxlint-tsgolint: ^${versions.oxlintTsgolint}`,
+    /oxlint-tsgolint: =[\d.]+(-[\w.]+)?/,
+    `oxlint-tsgolint: =${versions.oxlintTsgolint}`,
   );
 
   fs.writeFileSync(filePath, content);

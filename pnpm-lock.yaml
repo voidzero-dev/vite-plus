@@ -160,13 +160,13 @@ catalogs:
       specifier: '=0.115.0'
       version: 0.115.0
     oxfmt:
-      specifier: ^0.38.0
+      specifier: '=0.38.0'
       version: 0.38.0
     oxlint:
-      specifier: ^1.53.0
+      specifier: '=1.53.0'
       version: 1.53.0
     oxlint-tsgolint:
-      specifier: ^0.16.0
+      specifier: '=0.16.0'
       version: 0.16.0
     pathe:
       specifier: ^2.0.3
