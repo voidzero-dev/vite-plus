@@ -1,3 +1,0 @@
-> vp lint # Test that vp lint ignores the temp config file
-Found 0 warnings and 0 errors.
-Finished in <variable>ms on 2 files with <variable> rules using <variable> threads.

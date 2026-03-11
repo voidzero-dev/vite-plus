@@ -118,7 +118,7 @@ export async function snapTest() {
   // Make dependencies available in the test cases.
   // Create a real node_modules directory so we can add the CLI package itself
   // alongside the symlinked dependencies (needed for `vite-plus/*` imports in
-  // generated config files like .vite-plus-lint.tmp.mts).
+  // vite.config.ts).
   const tempNodeModules = path.join(tempTmpDir, 'node_modules');
   fs.mkdirSync(tempNodeModules);
   const cliNodeModules = path.resolve('node_modules');

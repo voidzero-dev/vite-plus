@@ -1,0 +1,3 @@
+{
+  "commands": ["vp fmt --check # Test that vp fmt --check uses vite.config.ts"]
+}

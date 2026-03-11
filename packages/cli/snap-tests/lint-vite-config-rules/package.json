@@ -1,5 +1,5 @@
 {
-  "name": "@test/lint-ignore-temp-config",
+  "name": "@test/lint-vite-config-rules",
   "version": "1.0.0",
   "private": true
 }

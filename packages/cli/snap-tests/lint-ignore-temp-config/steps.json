@@ -1,3 +1,0 @@
-{
-  "commands": ["vp lint # Test that vp lint ignores the temp config file"]
-}
