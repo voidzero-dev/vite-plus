@@ -1,5 +1,5 @@
 {
-  "name": "workspace-root-vite-config-test",
+  "name": "workspace-lint-subpackage-test",
   "version": "0.0.0",
   "workspaces": [
     "packages/*"
