@@ -4,6 +4,7 @@ VITE+ - The Unified Toolchain for the Web
 ◇ Migrated . to Vite+<repeat>
 • Node <semver>  npm <semver>
 ✓ Dependencies installed in <variable>ms
+• 1 config update applied
 
 > cat package.json # check package.json has overrides field (not pnpm.overrides)
 {

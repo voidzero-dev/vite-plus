@@ -31,8 +31,8 @@ VITE+ - The Unified Toolchain for the Web
 import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
+  lint: {"options":{"typeAware":true,"typeCheck":true}},
   staged: {
     "*.js": "vp lint --fix"
   },
-  
 });

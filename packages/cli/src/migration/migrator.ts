@@ -724,6 +724,7 @@ export function rewriteStandaloneProject(
     rewriteLintStagedConfigFile(projectPath, report);
   }
   mergeViteConfigFiles(projectPath, silent, report);
+  injectLintTypeCheckDefaults(projectPath, silent, report);
   mergeTsdownConfigFile(projectPath, silent, report);
   // rewrite imports in all TypeScript/JavaScript files
   rewriteAllImports(projectPath, silent, report);
@@ -768,6 +769,7 @@ export function rewriteMonorepo(
     rewriteLintStagedConfigFile(workspaceInfo.rootDir, report);
   }
   mergeViteConfigFiles(workspaceInfo.rootDir, silent, report);
+  injectLintTypeCheckDefaults(workspaceInfo.rootDir, silent, report);
   mergeTsdownConfigFile(workspaceInfo.rootDir, silent, report);
   // rewrite imports in all TypeScript/JavaScript files
   rewriteAllImports(workspaceInfo.rootDir, silent, report);
@@ -1297,6 +1299,47 @@ export function mergeViteConfigFiles(
   if (configs.oxfmtConfig) {
     // merge oxfmt config into vite.config.ts
     mergeAndRemoveJsonConfig(projectPath, viteConfig, configs.oxfmtConfig, 'fmt', silent, report);
+  }
+}
+
+/**
+ * Inject typeAware and typeCheck defaults into vite.config.ts lint config.
+ * Called after mergeViteConfigFiles() to handle the case where no .oxlintrc.json exists
+ * (e.g., newly created projects from create-vite templates).
+ */
+export function injectLintTypeCheckDefaults(
+  projectPath: string,
+  silent = false,
+  report?: MigrationReport,
+): void {
+  if (hasBaseUrlInTsconfig(projectPath)) {
+    return;
+  }
+
+  const configs = detectConfigs(projectPath);
+  // Check if lint config already exists in vite.config.ts
+  if (configs.viteConfig) {
+    const content = fs.readFileSync(path.join(projectPath, configs.viteConfig), 'utf8');
+    if (/\blint\s*:/.test(content)) {
+      return;
+    }
+  }
+
+  const viteConfig = ensureViteConfig(projectPath, configs, silent, report);
+  const tempConfigPath = path.join(projectPath, '.vite-plus-lint-init.oxlintrc.json');
+  fs.writeFileSync(
+    tempConfigPath,
+    JSON.stringify({ options: { typeAware: true, typeCheck: true } }),
+  );
+  const fullViteConfigPath = path.join(projectPath, viteConfig);
+  let result;
+  try {
+    result = mergeJsonConfig(fullViteConfigPath, tempConfigPath, 'lint');
+  } finally {
+    fs.rmSync(tempConfigPath, { force: true });
+  }
+  if (result.updated) {
+    fs.writeFileSync(fullViteConfigPath, result.content);
   }
 }
 

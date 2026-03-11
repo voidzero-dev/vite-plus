@@ -1,0 +1,24 @@
+> vp create vite:application --no-interactive # create standalone app
+> cat vite-plus-application/vite.config.ts # check standalone vite.config.ts has typeAware and typeCheck
+import { defineConfig } from "vite-plus";
+
+export default defineConfig({
+  staged: {
+    "*": "vp check --fix",
+  },
+  lint: { options: { typeAware: true, typeCheck: true } },
+});
+
+> vp create vite:monorepo --no-interactive # create monorepo
+> cat vite-plus-monorepo/vite.config.ts # check monorepo root vite.config.ts has typeAware and typeCheck
+import { defineConfig } from "vite-plus";
+
+export default defineConfig({
+  staged: {
+    "*": "vp check --fix",
+  },
+  lint: { options: { typeAware: true, typeCheck: true } },
+});
+
+> cat vite-plus-monorepo/apps/website/vite.config.ts 2>&1 || true # sub-app should NOT have typeAware/typeCheck
+cat: vite-plus-monorepo/apps/website/vite.config.ts: No such file or directory

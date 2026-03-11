@@ -32,6 +32,7 @@ Prettier configuration detected. Auto-migrating to Oxfmt...
 import { defineConfig } from "vite-plus";
 
 export default defineConfig({
+  lint: {"options":{"typeAware":true,"typeCheck":true}},
   staged: {
     "*.ts": "vp fmt"
   },

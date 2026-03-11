@@ -4,6 +4,7 @@ VITE+ - The Unified Toolchain for the Web
 
 ◇ Migrated . to Vite+<repeat>
 • Node <semver>  pnpm <semver>
+• 1 config update applied
 
 > cat package.json # prepare script, lint-staged config, check-staged script, and deps should all be preserved
 {

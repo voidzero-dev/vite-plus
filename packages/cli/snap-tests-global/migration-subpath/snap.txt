@@ -6,6 +6,7 @@ VITE+ - The Unified Toolchain for the Web
 ⚠ Subdirectory project detected — skipping git hooks setup. Configure hooks at the repository root.
 ◇ Migrated foo to Vite+<repeat>
 • Node <semver>  pnpm <semver>
+• 1 config update applied
 
 > cat foo/package.json # check package.json
 {
@@ -31,8 +32,13 @@ VITE+ - The Unified Toolchain for the Web
   "packageManager": "pnpm@<semver>"
 }
 
-[1]> cat foo/vite.config.ts # check vite.config.ts
-cat: foo/vite.config.ts: No such file or directory
+> cat foo/vite.config.ts # check vite.config.ts
+import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  lint: {"options":{"typeAware":true,"typeCheck":true}},
+  
+});
 
 > git config --local core.hooksPath || echo 'core.hooksPath is not set' # should NOT be set
 core.hooksPath is not set

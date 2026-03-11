@@ -33,10 +33,10 @@ cat: .lintstagedrc.json: No such file or directory
 import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
+  lint: {"options":{"typeAware":true,"typeCheck":true}},
   staged: {
     "*.ts": "vp lint --fix"
   },
-  
 });
 
 > cat .vite-hooks/pre-commit # check pre-commit hook created

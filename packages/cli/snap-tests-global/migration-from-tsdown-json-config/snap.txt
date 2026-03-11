@@ -24,6 +24,7 @@ export default defineConfig({
       "cwd": "./src"
     }
   },
+  lint: {"options":{"typeAware":true,"typeCheck":true}},
   server: {
     port: 3000,
   },
@@ -73,6 +74,7 @@ export default defineConfig({
       "cwd": "./src"
     }
   },
+  lint: {"options":{"typeAware":true,"typeCheck":true}},
   server: {
     port: 3000,
   },

@@ -27,6 +27,7 @@ export default defineConfig({
     "*": "vp check --fix"
   },
   pack: tsdownConfig,
+  lint: {"options":{"typeAware":true,"typeCheck":true}},
 });
 
 > cat package.json # check package.json
@@ -77,6 +78,7 @@ export default defineConfig({
     "*": "vp check --fix"
   },
   pack: tsdownConfig,
+  lint: {"options":{"typeAware":true,"typeCheck":true}},
 });
 
 > cat package.json # check package.json
