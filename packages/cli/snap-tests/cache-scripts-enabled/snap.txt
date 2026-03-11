@@ -8,4 +8,4 @@ $ node hello.mjs ✓ cache hit, replaying
 hello from script
 
 ---
-[vp run] cache hit, <variable>ms saved.
+vp run: cache hit, <variable>ms saved.

@@ -8,4 +8,4 @@ $ node -p '40+2' ✓ cache hit, replaying
 42
 
 ---
-[vp run] cache hit, <variable>ms saved.
+vp run: cache hit, <variable>ms saved.

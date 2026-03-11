@@ -32,4 +32,4 @@ tslib
 $ vp install --production --silent ✓ cache hit, replaying
 
 ---
-[vp run] cache hit, <variable>ms saved.
+vp run: cache hit, <variable>ms saved.

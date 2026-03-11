@@ -22,4 +22,4 @@ dependencies:
 Done in <variable>ms using pnpm v<semver>
 
 ---
-[vp run] cache hit, <variable>ms saved.
+vp run: cache hit, <variable>ms saved.

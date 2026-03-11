@@ -91,4 +91,4 @@ success Saved lockfile.
 Done in <variable>ms.
 
 ---
-[vp run] cache hit, <variable>ms saved.
+vp run: cache hit, <variable>ms saved.

@@ -71,4 +71,4 @@ $ vp pack src/index.ts ✓ cache hit, replaying
 ✔ Build complete in <variable>ms
 
 ---
-[vp run] cache hit, <variable>ms saved.
+vp run: cache hit, <variable>ms saved.

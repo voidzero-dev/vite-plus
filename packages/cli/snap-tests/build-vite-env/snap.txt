@@ -20,7 +20,7 @@ dist/assets/index-BnIqjoTZ.js  <variable> kB │ gzip: <variable> kB
 ✓ built in <variable>ms
 
 ---
-[vp run] cache hit, <variable>ms saved.
+vp run: cache hit, <variable>ms saved.
 
 > VITE_MY_VAR=2 vp run build # env changed, should miss cache
 $ vp build ✗ cache miss: envs changed, executing

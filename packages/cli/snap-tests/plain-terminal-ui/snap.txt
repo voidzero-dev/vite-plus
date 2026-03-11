@@ -8,7 +8,7 @@ $ node hello.mjs ✓ cache hit, replaying
 input_content 1
 
 ---
-[vp run] cache hit, <variable>ms saved.
+vp run: cache hit, <variable>ms saved.
 
 > FOO=2 vp run hello # env changed
 $ node hello.mjs ✗ cache miss: envs changed, executing

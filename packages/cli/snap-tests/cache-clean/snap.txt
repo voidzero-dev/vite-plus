@@ -8,7 +8,7 @@ $ vp fmt ✓ cache hit, replaying
 Finished in <variable>ms on 4 files using <variable> threads.
 
 ---
-[vp run] cache hit, <variable>ms saved.
+vp run: cache hit, <variable>ms saved.
 
 > vp cache clean # clean the cache
 > vp run hello # cache miss after clean

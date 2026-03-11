@@ -8,7 +8,7 @@ Found 0 warnings and 0 errors.
 Finished in <variable>ms on 3 files with <variable> rules using <variable> threads.
 
 ---
-[vp run] 0/2 cache hit (0%). (Run `vp run --last-details` for full details)
+vp run: 0/2 cache hit (0%). (Run `vp run --last-details` for full details)
 
 > echo 'console.log(123)' > a.ts
 > vp run hello # report cache status from the inner runner
@@ -21,4 +21,4 @@ Found 0 warnings and 0 errors.
 Finished in <variable>ms on 3 files with <variable> rules using <variable> threads.
 
 ---
-[vp run] 1/2 cache hit (50%), <variable>ms saved. (Run `vp run --last-details` for full details)
+vp run: 1/2 cache hit (50%), <variable>ms saved. (Run `vp run --last-details` for full details)

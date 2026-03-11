@@ -4,7 +4,7 @@ index.cjs
 
 > vp run hello#build 2>&1 | grep 'cache hit' # should hit cache
 ~/packages/hello$ vp pack ✓ cache hit, replaying
-[vp run] cache hit, <variable>ms saved.
+vp run: cache hit, <variable>ms saved.
 
 > vp run array-config#build # should build the library supports array config
 > ls packages/array-config/dist # should have the library
@@ -13,7 +13,7 @@ index.mjs
 
 > vp run array-config#build 2>&1 | grep 'cache hit' # should hit cache
 ~/packages/array-config$ vp pack ✓ cache hit, replaying
-[vp run] cache hit, <variable>ms saved.
+vp run: cache hit, <variable>ms saved.
 
 > vp run default-config#build # should build the library supports default config
 > ls packages/default-config/dist # should have the library
@@ -21,4 +21,4 @@ index.mjs
 
 > vp run default-config#build 2>&1 | grep 'cache hit' # should hit cache
 ~/packages/default-config$ vp pack ✓ cache hit, replaying
-[vp run] cache hit, <variable>ms saved.
+vp run: cache hit, <variable>ms saved.
