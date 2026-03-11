@@ -158,6 +158,7 @@ minimumReleaseAgeExclude:
   - vite
   - vitepress
   - vitest
+  - vue-virtual-scroller
 overrides:
   '@rolldown/pluginutils': workspace:@rolldown/pluginutils@*
   rolldown: workspace:rolldown@*
