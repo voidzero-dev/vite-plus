@@ -170,7 +170,9 @@ async function vpFmt(cwd: string, filePath: string): Promise<void> {
     },
   });
   if (result.exitCode !== 0) {
-    warnMsg(`Failed to format ${filePath} with vp fmt`);
+    warnMsg(
+      `Failed to format ${filePath} with vp fmt:\n${result.stdout.toString()}${result.stderr.toString()}`,
+    );
   }
 }
 
