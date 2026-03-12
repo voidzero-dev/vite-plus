@@ -70,6 +70,7 @@ Options:
   --public-dir <dir>            Alias for --copy, deprecated 
   --tsconfig <tsconfig>         Set tsconfig path 
   --unbundle                    Unbundle mode 
+  --root <dir>                  Root directory of input files 
   --exe                         Bundle as executable 
   -W, --workspace [dir]         Enable workspace mode 
   -F, --filter <pattern>        Filter configs (cwd or name), e.g. /pkg-name$/ or pkg-name 
