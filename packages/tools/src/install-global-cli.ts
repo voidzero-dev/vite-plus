@@ -15,6 +15,15 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
 const isWindows = process.platform === 'win32';
+const LOCAL_DEV_PREFIX = 'local-dev';
+const pad2 = (n: number) => n.toString().padStart(2, '0');
+
+function localDevVersion(): string {
+  const now = new Date();
+  const date = `${now.getFullYear()}${pad2(now.getMonth() + 1)}${pad2(now.getDate())}`;
+  const time = `${pad2(now.getHours())}${pad2(now.getMinutes())}${pad2(now.getSeconds())}`;
+  return `${LOCAL_DEV_PREFIX}-${date}-${time}`;
+}
 
 // Get repo root from script location (packages/tools/src/install-global-cli.ts -> repo root)
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -80,12 +89,27 @@ export function installGlobalCli() {
       process.exit(1);
     }
 
+    const localDevVer = localDevVersion();
+
+    // Clean up old local-dev directories to avoid accumulation
+    if (existsSync(installDir)) {
+      for (const entry of readdirSync(installDir)) {
+        if (entry.startsWith(LOCAL_DEV_PREFIX)) {
+          try {
+            rmSync(path.join(installDir, entry), { recursive: true, force: true });
+          } catch (err) {
+            console.warn(`Warning: failed to remove old ${entry}: ${(err as Error).message}`);
+          }
+        }
+      }
+    }
+
     const env: Record<string, string> = {
       ...(process.env as Record<string, string>),
       VITE_PLUS_LOCAL_TGZ: tgzPath,
       VITE_PLUS_LOCAL_BINARY: binaryPath,
       VITE_PLUS_HOME: installDir,
-      VITE_PLUS_VERSION: 'local-dev',
+      VITE_PLUS_VERSION: localDevVer,
       CI: 'true',
       // Skip vp install in install.sh — we handle deps ourselves:
       // - Local dev: symlink monorepo node_modules
@@ -112,7 +136,7 @@ export function installGlobalCli() {
 
     // Set up node_modules for local dev by rewriting workspace deps to file: protocol
     // and running pnpm install. Production installs use `vp install` in install.sh directly.
-    const versionDir = path.join(installDir, 'local-dev');
+    const versionDir = path.join(installDir, localDevVer);
     if (values.tgz) {
       installCiDeps(versionDir, tgzPath);
     } else {
