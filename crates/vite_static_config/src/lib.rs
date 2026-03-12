@@ -58,12 +58,7 @@ impl FieldMap {
         }
     }
 
-    /// Returns `true` only when the map is closed (no spreads) and contains no fields.
-    /// Used to detect "no config file found" (caller can skip NAPI entirely).
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        matches!(&self.0, FieldMapInner::Closed(m) if m.is_empty())
-    }
+
 }
 
 /// The result of statically analyzing a vite config file.
@@ -77,8 +72,8 @@ impl FieldMap {
 ///   - Returns `Some(Json(v))` — field value was extracted as a JSON literal.
 ///   - Returns `Some(NonStatic)` — field exists (or may exist via a spread) but
 ///     its value cannot be represented as pure JSON; caller should use NAPI.
-///   - [`FieldMap::is_empty`] returns `true` — no config file was found; caller
-///     can skip NAPI entirely.
+///   - All fields return `None` — no config file was found or the file has no
+///     matching fields; caller can skip NAPI entirely.
 pub type StaticConfig = Option<FieldMap>;
 
 /// Config file names to try, in priority order.
@@ -514,7 +509,7 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let dir_path = vite_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
         let result = resolve_static_config(&dir_path).unwrap();
-        assert!(result.is_empty());
+        assert!(result.get("run").is_none());
     }
 
     // ── JSON config parsing ─────────────────────────────────────────────
@@ -548,7 +543,7 @@ mod tests {
     #[test]
     fn export_default_empty_object() {
         let result = parse("export default {}");
-        assert!(result.is_empty());
+        assert!(result.get("run").is_none());
     }
 
     // ── export default defineConfig({ ... }) ────────────────────────────
