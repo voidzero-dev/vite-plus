@@ -1,0 +1,6 @@
+{
+  "commands": [
+    "vp check --fix",
+    "vp check"
+  ]
+}
