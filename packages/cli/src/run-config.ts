@@ -92,4 +92,15 @@ export type RunConfig = {
    * Task definitions
    */
   tasks?: { [key in string]?: Task };
+  /**
+   * Whether to automatically run `preX`/`postX` package.json scripts as
+   * lifecycle hooks when script `X` is executed.
+   *
+   * When `true` (the default), running script `test` will automatically
+   * run `pretest` before and `posttest` after, if they exist.
+   *
+   * This option can only be set in the workspace root's config file.
+   * Setting it in a package's config will result in an error.
+   */
+  enablePrePostScripts?: boolean;
 };
