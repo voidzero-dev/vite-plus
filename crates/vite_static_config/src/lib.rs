@@ -37,7 +37,7 @@ enum FieldMapInner {
     Open(FxHashMap<Box<str>, serde_json::Value>),
 }
 
-/// Extracted fields from a vite config object. See [`StaticConfig`].
+/// Extracted fields from a vite config object.
 pub struct FieldMap(FieldMapInner);
 
 impl FieldMap {
@@ -73,16 +73,6 @@ impl FieldMap {
 
 }
 
-/// The result of statically analyzing a vite config file.
-///
-/// Use [`FieldMap::get`] to query individual fields:
-/// - Returns `None` — field is definitively absent (no spreads in the config object).
-///   If all keys return `None`, no config file was found; caller can skip NAPI.
-/// - Returns `Some(Json(v))` — field value was extracted as a JSON literal.
-/// - Returns `Some(NonStatic)` — field exists (or may exist via a spread/computed key,
-///   or the file was not analyzable); caller should fall back to NAPI.
-pub type StaticConfig = FieldMap;
-
 /// Config file names to try, in priority order.
 /// This matches Vite's `DEFAULT_CONFIG_FILES`:
 /// <https://github.com/vitejs/vite/blob/25227bbdc7de0ed07cf7bdc9a1a733e3a9a132bc/packages/vite/src/node/constants.ts#L98-L105>
@@ -114,9 +104,9 @@ fn resolve_config_path(dir: &AbsolutePath) -> Option<vite_path::AbsolutePathBuf>
 
 /// Resolve and parse a vite config file from the given directory.
 ///
-/// See [`StaticConfig`] for the return type semantics.
+/// Returns a [`FieldMap`]; use [`FieldMap::get`] to query individual fields.
 #[must_use]
-pub fn resolve_static_config(dir: &AbsolutePath) -> StaticConfig {
+pub fn resolve_static_config(dir: &AbsolutePath) -> FieldMap {
     let Some(config_path) = resolve_config_path(dir) else {
         // No config file found — closed empty map; get() returns None for any key.
         return FieldMap::no_config();
@@ -136,16 +126,19 @@ pub fn resolve_static_config(dir: &AbsolutePath) -> StaticConfig {
 
 /// Parse a JSON config file into a map of field names to values.
 /// All fields in a valid JSON object are fully static.
-fn parse_json_config(source: &str) -> StaticConfig {
+fn parse_json_config(source: &str) -> FieldMap {
     let Ok(serde_json::Value::Object(obj)) = serde_json::from_str(source) else {
         return FieldMap::unanalyzable();
     };
-    let map = obj.iter().map(|(k, v)| (Box::from(k.as_str()), FieldValue::Json(v.clone()))).collect();
+    let mut map = FxHashMap::with_capacity_and_hasher(obj.len(), Default::default());
+    for (k, v) in &obj {
+        map.insert(Box::from(k.as_str()), FieldValue::Json(v.clone()));
+    }
     FieldMap(FieldMapInner::Closed(map))
 }
 
 /// Parse a JS/TS config file, extracting the default export object's fields.
-fn parse_js_ts_config(source: &str, extension: &str) -> StaticConfig {
+fn parse_js_ts_config(source: &str, extension: &str) -> FieldMap {
     let allocator = Allocator::default();
     let source_type = match extension {
         "ts" | "mts" | "cts" => SourceType::ts(),
@@ -169,7 +162,7 @@ fn parse_js_ts_config(source: &str, extension: &str) -> StaticConfig {
 /// 2. `export default { ... }`
 /// 3. `module.exports = defineConfig({ ... })`
 /// 4. `module.exports = { ... }`
-fn extract_config_fields(program: &Program<'_>) -> StaticConfig {
+fn extract_config_fields(program: &Program<'_>) -> FieldMap {
     for stmt in &program.body {
         // ESM: export default ...
         if let Statement::ExportDefaultDeclaration(decl) = stmt {
@@ -201,7 +194,7 @@ fn extract_config_fields(program: &Program<'_>) -> StaticConfig {
 /// - `defineConfig(function() { return { ... }; })` → extract from return statement
 /// - `{ ... }` → extract directly
 /// - anything else → not analyzable
-fn extract_config_from_expr(expr: &Expression<'_>) -> StaticConfig {
+fn extract_config_from_expr(expr: &Expression<'_>) -> FieldMap {
     let expr = expr.without_parentheses();
     match expr {
         Expression::CallExpression(call) => {
@@ -241,7 +234,7 @@ fn extract_config_from_expr(expr: &Expression<'_>) -> StaticConfig {
 ///
 /// Returns `FieldMap::unanalyzable()` if the body contains multiple `return` statements
 /// (at any nesting depth), since the returned config would depend on runtime control flow.
-fn extract_config_from_function_body(body: &oxc_ast::ast::FunctionBody<'_>) -> StaticConfig {
+fn extract_config_from_function_body(body: &oxc_ast::ast::FunctionBody<'_>) -> FieldMap {
     // Reject functions with multiple returns — the config depends on control flow.
     if count_returns_in_stmts(&body.statements) > 1 {
         return FieldMap::unanalyzable();
