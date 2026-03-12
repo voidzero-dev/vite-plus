@@ -189,7 +189,7 @@ export const AGENTS = [
 
 type AgentSelection = string | string[] | false;
 const AGENT_STANDARD_PATH = 'AGENTS.md';
-const AGENT_INSTRUCTIONS_START_MARKER = '<!--VITE PLUS START-->';
+export const AGENT_INSTRUCTIONS_START_MARKER = '<!--VITE PLUS START-->';
 const AGENT_INSTRUCTIONS_END_MARKER = '<!--VITE PLUS END-->';
 
 export async function selectAgentTargetPaths({

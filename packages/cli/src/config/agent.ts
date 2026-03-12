@@ -4,8 +4,10 @@ import { dirname, join } from 'node:path';
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
 import {
+  AGENT_INSTRUCTIONS_START_MARKER,
   detectAgents,
   getAgentById,
+  replaceMarkedAgentInstructionsSection,
   type AgentConfig,
   type McpConfigTarget,
 } from '../utils/agent.js';
@@ -81,33 +83,20 @@ export async function resolveAgentSetup(
   return pickAgentWhenUndetected();
 }
 
-// --- Version and template reading ---
-
-function getOwnVersion(): string {
-  const pkg = JSON.parse(readFileSync(join(pkgRoot, 'package.json'), 'utf-8'));
-  if (typeof pkg.version !== 'string') {
-    throw new Error('vite-plus package.json is missing a "version" field');
-  }
-  return pkg.version;
-}
+// --- Template reading ---
 
 function readAgentPrompt(): string {
   return readFileSync(join(pkgRoot, 'AGENTS.md'), 'utf-8');
 }
 
-// --- Versioned injection ---
-
-const MARKER_OPEN_RE = /<!--injected-by-vite-plus-v([\w.+-]+)-->/;
-const MARKER_CLOSE = '<!--/injected-by-vite-plus-->';
-const MARKER_BLOCK_RE =
-  /<!--injected-by-vite-plus-v[\w.+-]+-->\n[\s\S]*?<!--\/injected-by-vite-plus-->/;
+// --- Agent instructions injection ---
 
 export function hasExistingAgentInstructions(root: string): boolean {
   for (const file of ['AGENTS.md', 'CLAUDE.md']) {
     const fullPath = join(root, file);
     if (existsSync(fullPath)) {
       const content = readFileSync(fullPath, 'utf-8');
-      if (MARKER_OPEN_RE.test(content)) {
+      if (content.includes(AGENT_INSTRUCTIONS_START_MARKER)) {
         return true;
       }
     }
@@ -117,40 +106,26 @@ export function hasExistingAgentInstructions(root: string): boolean {
 
 export function injectAgentBlock(root: string, filePath: string): void {
   const fullPath = join(root, filePath);
-  const version = getOwnVersion();
-  const promptContent = readAgentPrompt();
-  const openMarker = `<!--injected-by-vite-plus-v${version}-->`;
-  const block = `${openMarker}\n${promptContent}\n${MARKER_CLOSE}`;
+  const template = readAgentPrompt();
 
   if (existsSync(fullPath)) {
     const existing = readFileSync(fullPath, 'utf-8');
-    const match = existing.match(MARKER_OPEN_RE);
-    if (match) {
-      if (match[1] === version) {
-        prompts.log.info(`${filePath} already has Vite+ instructions (v${version})`);
-        return;
-      }
-      // Replace existing block with updated version
-      const updated = existing.replace(MARKER_BLOCK_RE, block);
-      if (updated === existing) {
-        // Closing marker is missing or malformed — append fresh block
-        const separator = existing.endsWith('\n') ? '\n' : '\n\n';
-        writeFileSync(fullPath, existing + separator + block + '\n');
-        prompts.log.warn(`Existing Vite+ block in ${filePath} was malformed; appended fresh block`);
-      } else {
+    const updated = replaceMarkedAgentInstructionsSection(existing, template);
+    if (updated !== undefined) {
+      if (updated !== existing) {
         writeFileSync(fullPath, updated);
-        prompts.log.success(
-          `Updated Vite+ instructions in ${filePath} (v${match[1]} → v${version})`,
-        );
+        prompts.log.success(`Updated Vite+ instructions in ${filePath}`);
+      } else {
+        prompts.log.info(`${filePath} already has up-to-date Vite+ instructions`);
       }
     } else {
-      // Append block to end of file
+      // No markers found — append template
       const separator = existing.endsWith('\n') ? '\n' : '\n\n';
-      writeFileSync(fullPath, existing + separator + block + '\n');
+      writeFileSync(fullPath, existing + separator + template);
       prompts.log.success(`Added Vite+ instructions to ${filePath}`);
     }
   } else {
-    writeFileSync(fullPath, block + '\n');
+    writeFileSync(fullPath, template);
     prompts.log.success(`Created ${filePath} with Vite+ instructions`);
   }
 }
