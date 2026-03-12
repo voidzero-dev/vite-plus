@@ -91,6 +91,8 @@ jobs:
               vp test -h
               vp build -h
               vp fmt -h
+              vp pack -h
+            - Compare tsdown CLI options with `vp pack` and sync any new or removed options. Follow the instructions in `.claude/skills/sync-tsdown-cli/SKILL.md`.
             - Your final step is to run `just build` to ensure all builds are successful.
 
             Help me fix the errors in `build-upstream` steps if exists.
