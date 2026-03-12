@@ -59,9 +59,13 @@ export default defineConfig({
 
 `cache: true` enables both task and script caching, `cache: false` disables both.
 
+::: warning
+This option can only be set in the workspace root's `vite.config.ts`. Setting it in a package's config will result in an error.
+:::
+
 ## `run.tasks`
 
-- **Type:** `Record<string, TaskConfig>`
+- **Type:** `Record<string, Task>`
 
 Defines tasks that can be run with `vp run <task>`.
 
@@ -164,17 +168,20 @@ tasks: {
 
 A set of common environment variables are automatically passed through to all tasks:
 
-- **System:** `HOME`, `USER`, `PATH`, `SHELL`, `LANG`, `TZ`
-- **Node.js:** `NODE_OPTIONS`, `COREPACK_HOME`, `PNPM_HOME`
-- **CI/CD:** `CI`, `VERCEL_*`, `NEXT_*`
-- **Terminal:** `TERM`, `COLORTERM`, `FORCE_COLOR`, `NO_COLOR`
+- **System:** `HOME`, `USER`, `PATH`, `SHELL`, `LANG`, `TZ`, `PWD`
+- **Node.js:** `NODE_OPTIONS`, `COREPACK_HOME`, `PNPM_HOME`, `NPM_CONFIG_STORE_DIR`
+- **CI/CD:** `CI`, `VERCEL`, `VERCEL_*`, `NEXT_*`
+- **Terminal:** `TERM`, `TERM_PROGRAM`, `COLORTERM`, `FORCE_COLOR`, `NO_COLOR`, `DISPLAY`
+- **Temp:** `TMP`, `TEMP`
+- **Library paths:** `LD_LIBRARY_PATH`, `DYLD_FALLBACK_LIBRARY_PATH`
+- **Token patterns:** `*_TOKEN`
+- **Tool-specific:** `OXLINT_*`, `RUST_*`, `VITE_*`, `DOCKER_*`, `VSCODE_*`
 
 ### `input`
 
 - **Type:** `Array<string | { auto: boolean }>`
-- **Default:** `[{ auto: true }]` (auto-inferred)
 
-Vite Task automatically detects which files are used by a command (see [Automatic File Tracking](/guide/cache#automatic-file-tracking)). The `input` option can be used to explicitly include or exclude certain files.
+When omitted, Vite Task automatically detects which files are used by a command (see [Automatic File Tracking](/guide/cache#automatic-file-tracking)). The `input` option can be used to explicitly include or exclude certain files.
 
 **Exclude files** from automatic tracking:
 
@@ -182,7 +189,7 @@ Vite Task automatically detects which files are used by a command (see [Automati
 tasks: {
   build: {
     command: 'vp build',
-    // Use `{ auto: true }` to use automatic fingerprinting (default).
+    // Use `{ auto: true }` to keep automatic file tracking alongside explicit patterns.
     input: [{ auto: true }, '!**/*.tsbuildinfo', '!dist/**'],
   },
 }
