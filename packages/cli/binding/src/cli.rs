@@ -1036,6 +1036,14 @@ fn print_summary_line(message: &str) {
     }
 }
 
+fn print_error_block(error_msg: &str, combined_output: &str, summary_msg: &str) {
+    output::error(error_msg);
+    if !combined_output.trim().is_empty() {
+        print_stdout_block(combined_output);
+    }
+    print_summary_line(summary_msg);
+}
+
 fn print_pass_line(message: &str, detail: Option<&str>) {
     if let Some(detail) = detail {
         output::raw(&format!("{} {message} {}", "pass:".bright_blue().bold(), detail.dimmed()));
@@ -1200,11 +1208,11 @@ async fn execute_direct_subcommand(
                             ));
                         }
                         None => {
-                            output::error("Formatting could not start");
-                            if !combined_output.trim().is_empty() {
-                                print_stdout_block(&combined_output);
-                            }
-                            print_summary_line("Formatting failed before analysis started");
+                            print_error_block(
+                                "Formatting could not start",
+                                &combined_output,
+                                "Formatting failed before analysis started",
+                            );
                         }
                     }
                 }
@@ -1216,6 +1224,13 @@ async fn execute_direct_subcommand(
                     );
                 }
                 if status != ExitStatus::SUCCESS {
+                    if fix {
+                        print_error_block(
+                            "Formatting could not complete",
+                            &combined_output,
+                            "Formatting failed during fix",
+                        );
+                    }
                     resolver.cleanup_temp_files().await;
                     return Ok(status);
                 }
@@ -1326,11 +1341,11 @@ async fn execute_direct_subcommand(
                     } else {
                         format!("{}{}", captured.stdout, captured.stderr)
                     };
-                    output::error("Formatting could not finish after lint fixes");
-                    if !combined_output.trim().is_empty() {
-                        print_stdout_block(&combined_output);
-                    }
-                    print_summary_line("Formatting failed after lint fixes were applied");
+                    print_error_block(
+                        "Formatting could not finish after lint fixes",
+                        &combined_output,
+                        "Formatting failed after lint fixes were applied",
+                    );
                     resolver.cleanup_temp_files().await;
                     return Ok(status);
                 }
