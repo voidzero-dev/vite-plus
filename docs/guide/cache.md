@@ -7,7 +7,7 @@ Vite Task can automatically track dependencies and cache tasks run through `vp r
 When a task runs successfully (exit code 0), its terminal output (stdout/stderr) is saved. On the next run, Vite Task checks if anything changed:
 
 1. **Arguments:** did the [additional arguments](/guide/run#additional-arguments) passed to the task change?
-2. **Environment variables:** did any [fingerprinted env vars](/config/run#envs) change?
+2. **Environment variables:** did any [fingerprinted env vars](/config/run#env) change?
 3. **Input files:** did any file that the command reads change?
 
 If everything matches, the cached output is replayed instantly, and the command does not run.
@@ -20,13 +20,13 @@ When a cache miss occurs, Vite Task tells you exactly why:
 
 ```
 $ vp lint ✗ cache miss: 'src/utils.ts' modified, executing
-$ vp build ✗ cache miss: envs changed, executing
+$ vp build ✗ cache miss: env changed, executing
 $ vp test ✗ cache miss: args changed, executing
 ```
 
 ## When Is Caching Enabled?
 
-A command run by `vp run` is either a **task** (has an entry in `vite.config.ts`) or a **script** (only exists in `package.json` with no corresponding task entry). By default, **tasks are cached and scripts are not.**
+A command run by `vp run` is either a **task** defined in `vite.config.ts` or a **script** defined in `package.json`. Task names and script names cannot overlap. By default, **tasks are cached and scripts are not.**
 
 There are three types of controls for task caching, in order:
 
@@ -42,10 +42,10 @@ A task can set [`cache: false`](/config/run#cache) to opt out. This cannot be ov
 
 The [`run.cache`](/config/run#run-cache) option in your root `vite.config.ts` controls the default for each category:
 
-| Setting         | Default | Effect                                |
-| --------------- | ------- | ------------------------------------- |
-| `cache.tasks`   | `true`  | Cache commands that have a task entry |
-| `cache.scripts` | `false` | Cache plain `package.json` scripts    |
+| Setting         | Default | Effect                                  |
+| --------------- | ------- | --------------------------------------- |
+| `cache.tasks`   | `true`  | Cache tasks defined in `vite.config.ts` |
+| `cache.scripts` | `false` | Cache `package.json` scripts            |
 
 ## Automatic File Tracking
 
@@ -63,13 +63,13 @@ Automatic tracking can sometimes include more files than necessary, causing unne
 - **Tool cache files:** some tools maintain their own cache, such as TypeScript's `.tsbuildinfo` or Cargo's `target/`. These files may change between runs even when your source code has not, causing unnecessary cache invalidation.
 - **Directory listings:** when a command scans a directory, such as when globbing for `**/*.js`, Vite Task sees the directory read but not the glob pattern. Any file added or removed in that directory, even unrelated ones, invalidates the cache.
 
-Use the [`inputs`](/config/run#inputs) option to exclude files or to replace automatic tracking with explicit file patterns:
+Use the [`input`](/config/run#input) option to exclude files or to replace automatic tracking with explicit file patterns:
 
 ```ts
 tasks: {
   build: {
     command: 'tsc',
-    inputs: [{ auto: true }, '!**/*.tsbuildinfo'],
+    input: [{ auto: true }, '!**/*.tsbuildinfo'],
   },
 }
 ```
@@ -78,20 +78,20 @@ tasks: {
 
 By default, tasks run in a clean environment. Only a small set of common variables, such as `PATH`, `HOME`, and `CI`, are passed through. Other environment variables are neither visible to the task nor included in the cache fingerprint.
 
-To add an environment variable to the cache key, add it to [`envs`](/config/run#envs). Changing its value then invalidates the cache:
+To add an environment variable to the cache key, add it to [`env`](/config/run#env). Changing its value then invalidates the cache:
 
 ```ts
 tasks: {
   build: {
     command: 'webpack --mode production',
-    envs: ['NODE_ENV'],
+    env: ['NODE_ENV'],
   },
 }
 ```
 
-To pass a variable to the task **without** affecting cache behavior, use [`passThroughEnvs`](/config/run#pass-through-envs). This is useful for variables like `CI` or `GITHUB_ACTIONS` that should be available in the task, but do not generally affect caching behavior.
+To pass a variable to the task **without** affecting cache behavior, use [`untrackedEnv`](/config/run#untracked-env). This is useful for variables like `CI` or `GITHUB_ACTIONS` that should be available in the task, but do not generally affect caching behavior.
 
-See [Run Config](/config/run#envs) for details on wildcard patterns and the full list of automatically passed-through variables.
+See [Run Config](/config/run#env) for details on wildcard patterns and the full list of automatically passed-through variables.
 
 ## Cache Sharing
 

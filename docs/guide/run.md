@@ -74,8 +74,9 @@ export default defineConfig({
   run: {
     tasks: {
       build: {
+        command: 'vp build',
         dependsOn: ['lint'],
-        envs: ['NODE_ENV'],
+        env: ['NODE_ENV'],
       },
       deploy: {
         command: 'deploy-script --prod',
@@ -87,10 +88,10 @@ export default defineConfig({
 });
 ```
 
-If `command` is omitted, the task uses the matching script from `package.json`. A task name can come from `vite.config.ts` or `package.json`, but not both.
+If you want to run an existing `package.json` script as-is, use `vp run <script>`. If you want task-level caching, dependencies, or environment/input controls, define a task with an explicit `command`. A task name can come from `vite.config.ts` or `package.json`, but not both.
 
 ::: info
-Tasks defined in `vite.config.ts` are cached by default. Plain `package.json` scripts without a matching task entry are not. See [When Is Caching Enabled?](/guide/cache#when-is-caching-enabled) for the full resolution order.
+Tasks defined in `vite.config.ts` are cached by default. `package.json` scripts are not. See [When Is Caching Enabled?](/guide/cache#when-is-caching-enabled) for the full resolution order.
 :::
 
 See [Run Config](/config/run) for the full `run` block reference.

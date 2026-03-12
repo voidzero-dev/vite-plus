@@ -46,9 +46,8 @@ Defines tasks that can be run with `vp run <task>`.
 ### `command`
 
 - **Type:** `string`
-- **Default:** matching `package.json` script
 
-The shell command to run.
+Defines the shell command to run for the task.
 
 ```ts
 tasks: {
@@ -58,7 +57,7 @@ tasks: {
 }
 ```
 
-You cannot define a command in both `vite.config.ts` and `package.json` with the same task name.
+Each task defined in `vite.config.ts` must include its own `command`. You cannot define a task in both `vite.config.ts` and `package.json` with the same task name.
 
 Commands joined with `&&` are automatically split into independently cached sub-tasks. See [Compound Commands](/guide/run#compound-commands).
 
@@ -102,7 +101,7 @@ tasks: {
 }
 ```
 
-### `envs`
+### `env`
 
 - **Type:** `string[]`
 - **Default:** `[]`
@@ -113,7 +112,7 @@ Environment variables included in the cache fingerprint. When any listed variabl
 tasks: {
   build: {
     command: 'vp build',
-    envs: ['NODE_ENV'],
+    env: ['NODE_ENV'],
   },
 }
 ```
@@ -125,7 +124,7 @@ $ NODE_ENV=development vp run build    # first run
 $ NODE_ENV=production vp run build     # cache miss: variable changed
 ```
 
-### `passThroughEnvs`
+### `untrackedEnv`
 
 - **Type:** `string[]`
 - **Default:** see below
@@ -136,7 +135,7 @@ Environment variables passed to the task process but **not** included in the cac
 tasks: {
   build: {
     command: 'vp build',
-    passThroughEnvs: ['CI', 'GITHUB_ACTIONS'],
+    untrackedEnv: ['CI', 'GITHUB_ACTIONS'],
   },
 }
 ```
@@ -148,12 +147,12 @@ A set of common environment variables are automatically passed through to all ta
 - **CI/CD:** `CI`, `VERCEL_*`, `NEXT_*`
 - **Terminal:** `TERM`, `COLORTERM`, `FORCE_COLOR`, `NO_COLOR`
 
-### `inputs`
+### `input`
 
 - **Type:** `Array<string | { auto: boolean }>`
 - **Default:** `[{ auto: true }]` (auto-inferred)
 
-Vite Task automatically detects which files are used by a command (see [Automatic File Tracking](/guide/cache#automatic-file-tracking)). The `inputs` option can be used to explicitly include or exclude certain files.
+Vite Task automatically detects which files are used by a command (see [Automatic File Tracking](/guide/cache#automatic-file-tracking)). The `input` option can be used to explicitly include or exclude certain files.
 
 **Exclude files** from automatic tracking:
 
@@ -162,7 +161,7 @@ tasks: {
   build: {
     command: 'vp build',
     // Use `{ auto: true }` to use automatic fingerprinting (default).
-    inputs: [{ auto: true }, '!**/*.tsbuildinfo', '!dist/**'],
+    input: [{ auto: true }, '!**/*.tsbuildinfo', '!dist/**'],
   },
 }
 ```
@@ -173,7 +172,7 @@ tasks: {
 tasks: {
   build: {
     command: 'vp build',
-    inputs: ['src/**/*.ts', 'vite.config.ts'],
+    input: ['src/**/*.ts', 'vite.config.ts'],
   },
 }
 ```
@@ -184,7 +183,7 @@ tasks: {
 tasks: {
   greet: {
     command: 'node greet.mjs',
-    inputs: [],
+    input: [],
   },
 }
 ```
