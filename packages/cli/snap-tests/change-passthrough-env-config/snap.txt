@@ -11,7 +11,7 @@ $ node -p process.env.MY_ENV ✓ cache hit, replaying
 vp run: cache hit, <variable>ms saved.
 
 > # add a new pass through env via VITE_TASK_PASS_THROUGH_ENVS
-> VITE_TASK_PASS_THROUGH_ENVS=MY_ENV,MY_ENV2 MY_ENV=2 vp run hello # cache should be invalidated because passThroughEnvs config changed
-$ node -p process.env.MY_ENV ✗ cache miss: pass-through env config changed, executing
+> VITE_TASK_PASS_THROUGH_ENVS=MY_ENV,MY_ENV2 MY_ENV=2 vp run hello # cache should be invalidated because untrackedEnv config changed
+$ node -p process.env.MY_ENV ✗ cache miss: untracked env config changed, executing
 2
 

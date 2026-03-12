@@ -3,10 +3,8 @@
 export type Task = {
   /**
    * The command to run for the task.
-   *
-   * If omitted, the script from `package.json` with the same name will be used
    */
-  command?: string;
+  command: string;
   /**
    * The working directory for the task, relative to the package root (not workspace root).
    */
@@ -24,11 +22,11 @@ export type Task = {
       /**
        * Environment variable names to be fingerprinted and passed to the task.
        */
-      envs?: Array<string>;
+      env?: Array<string>;
       /**
        * Environment variable names to be passed to the task without fingerprinting.
        */
-      passThroughEnvs?: Array<string>;
+      untrackedEnv?: Array<string>;
       /**
        * Files to include in the cache fingerprint.
        *
@@ -40,7 +38,7 @@ export type Task = {
        *
        * Patterns are relative to the package directory.
        */
-      inputs?: Array<
+      input?: Array<
         | string
         | {
             /**

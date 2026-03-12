@@ -21,7 +21,7 @@ use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_shared::{PrependOptions, output, prepend_to_path_env};
 use vite_str::Str;
 use vite_task::{
-    Command, CommandHandler, ExitStatus, HandledCommand, ScriptCommand, Session, SessionCallbacks,
+    Command, CommandHandler, ExitStatus, HandledCommand, ScriptCommand, Session, SessionConfig,
     config::{
         UserRunConfig,
         user::{EnabledCacheConfig, UserCacheConfig},
@@ -387,9 +387,9 @@ impl SubcommandResolver {
                         .chain(args.into_iter().map(Str::from))
                         .collect(),
                     cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
-                        envs: Some(Box::new([Str::from("OXLINT_TSGOLINT_PATH")])),
-                        pass_through_envs: None,
-                        inputs: None,
+                        env: Some(Box::new([Str::from("OXLINT_TSGOLINT_PATH")])),
+                        untracked_env: None,
+                        input: None,
                     }),
                     envs: merge_resolved_envs(envs, resolved.envs),
                 })
@@ -430,9 +430,9 @@ impl SubcommandResolver {
                         .chain(args.into_iter().map(Str::from))
                         .collect(),
                     cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
-                        envs: None,
-                        pass_through_envs: None,
-                        inputs: None,
+                        env: None,
+                        untracked_env: None,
+                        input: None,
                     }),
                     envs: merge_resolved_envs(envs, resolved.envs),
                 })
@@ -455,9 +455,9 @@ impl SubcommandResolver {
                         .chain(args.into_iter().map(Str::from))
                         .collect(),
                     cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
-                        envs: Some(Box::new([Str::from("VITE_*")])),
-                        pass_through_envs: None,
-                        inputs: None,
+                        env: Some(Box::new([Str::from("VITE_*")])),
+                        untracked_env: None,
+                        input: None,
                     }),
                     envs: merge_resolved_envs_with_version(envs, resolved.envs),
                 })
@@ -483,9 +483,9 @@ impl SubcommandResolver {
                     program: Arc::from(OsStr::new("node")),
                     args: iter::once(Str::from(js_path_str)).chain(vitest_args).collect(),
                     cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
-                        envs: None,
-                        pass_through_envs: None,
-                        inputs: None,
+                        env: None,
+                        untracked_env: None,
+                        input: None,
                     }),
                     envs: merge_resolved_envs_with_version(envs, resolved.envs),
                 })
@@ -507,9 +507,9 @@ impl SubcommandResolver {
                         .chain(args.into_iter().map(Str::from))
                         .collect(),
                     cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
-                        envs: None,
-                        pass_through_envs: None,
-                        inputs: None,
+                        env: None,
+                        untracked_env: None,
+                        input: None,
                     }),
                     envs: merge_resolved_envs(envs, resolved.envs),
                 })
@@ -573,9 +573,9 @@ impl SubcommandResolver {
                         .chain(args.into_iter().map(Str::from))
                         .collect(),
                     cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
-                        envs: None,
-                        pass_through_envs: None,
-                        inputs: None,
+                        env: None,
+                        untracked_env: None,
+                        input: None,
                     }),
                     envs: merge_resolved_envs(envs, resolved.envs),
                 })
@@ -604,9 +604,9 @@ impl SubcommandResolver {
                     ),
                     args: resolve_command.args.into_iter().map(Str::from).collect(),
                     cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
-                        envs: None,
-                        pass_through_envs: None,
-                        inputs: None,
+                        env: None,
+                        untracked_env: None,
+                        input: None,
                     }),
                     envs: merged_envs,
                 })
@@ -1403,9 +1403,10 @@ async fn execute_vite_task_command(
         prepend_to_path_env(&bin_prefix, PrependOptions::default());
     }
 
-    let session = Session::init(SessionCallbacks {
+    let session = Session::init(SessionConfig {
         command_handler: &mut command_handler,
         user_config_loader: &mut config_loader,
+        program_name: Str::from("vp"),
     })?;
 
     // Main execution (consumes session)

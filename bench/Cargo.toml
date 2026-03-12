@@ -10,6 +10,7 @@ criterion = { workspace = true }
 rustc-hash = { workspace = true }
 tokio = { workspace = true, features = ["rt"] }
 vite_path = { workspace = true }
+vite_str = { workspace = true }
 vite_task = { workspace = true }
 
 [[bench]]

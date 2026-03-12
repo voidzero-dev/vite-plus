@@ -10,9 +10,9 @@
     "vp run hello # env removed",
     "echo bar > input.txt",
     "vp run hello # input changed",
-    "# set passThroughEnvs via env var",
-    "VITE_TASK_PASS_THROUGH_ENVS=PTE vp run hello # passThroughEnvs changed",
-    "# set cwd via env var (keep passThroughEnvs from previous step)",
+    "# set untrackedEnv via env var",
+    "VITE_TASK_PASS_THROUGH_ENVS=PTE vp run hello # untrackedEnv changed",
+    "# set cwd via env var (keep untrackedEnv from previous step)",
     "VITE_TASK_PASS_THROUGH_ENVS=PTE VITE_TASK_CWD=subfolder vp run hello # cwd changed"
   ]
 }

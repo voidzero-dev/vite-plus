@@ -4,8 +4,9 @@ use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use rustc_hash::FxHashMap;
 use tokio::runtime::Runtime;
 use vite_path::{AbsolutePath, AbsolutePathBuf};
+use vite_str::Str;
 use vite_task::{
-    CommandHandler, HandledCommand, Session, SessionCallbacks, plan_request::ScriptCommand,
+    CommandHandler, HandledCommand, Session, SessionConfig, plan_request::ScriptCommand,
 };
 
 /// A no-op command handler for benchmarking purposes.
@@ -38,16 +39,17 @@ impl vite_task::loader::UserConfigLoader for NoOpUserConfigLoader {
 
 /// Owned session callbacks for benchmarking.
 #[derive(Default)]
-struct BenchSessionCallbacks {
+struct BenchSessionConfig {
     command_handler: NoOpCommandHandler,
     user_config_loader: NoOpUserConfigLoader,
 }
 
-impl BenchSessionCallbacks {
-    fn as_callbacks(&mut self) -> SessionCallbacks<'_> {
-        SessionCallbacks {
+impl BenchSessionConfig {
+    fn as_callbacks(&mut self) -> SessionConfig<'_> {
+        SessionConfig {
             command_handler: &mut self.command_handler,
             user_config_loader: &mut self.user_config_loader,
+            program_name: Str::from("vp"),
         }
     }
 }
@@ -67,7 +69,7 @@ fn bench_workspace_load(c: &mut Criterion) {
     session_group.bench_function("ensure_task_graph_loaded", |b| {
         b.iter(|| {
             runtime.block_on(async {
-                let mut owned_callbacks = BenchSessionCallbacks::default();
+                let mut owned_callbacks = BenchSessionConfig::default();
                 let envs: FxHashMap<Arc<OsStr>, Arc<OsStr>> = FxHashMap::default();
                 let mut session = Session::init_with(
                     envs,
@@ -85,7 +87,7 @@ fn bench_workspace_load(c: &mut Criterion) {
     session_group.bench_with_input(BenchmarkId::new("packages", 100), &fixture_path, |b, path| {
         b.iter(|| {
             runtime.block_on(async {
-                let mut owned_callbacks = BenchSessionCallbacks::default();
+                let mut owned_callbacks = BenchSessionConfig::default();
                 let envs: FxHashMap<Arc<OsStr>, Arc<OsStr>> = FxHashMap::default();
                 let mut session =
                     Session::init_with(envs, path.clone().into(), owned_callbacks.as_callbacks())
