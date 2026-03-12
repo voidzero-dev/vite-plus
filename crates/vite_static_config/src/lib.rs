@@ -41,6 +41,18 @@ enum FieldMapInner {
 pub struct FieldMap(FieldMapInner);
 
 impl FieldMap {
+    /// Returns an open empty map — used when the config is not analyzable.
+    /// `get()` returns `Some(NonStatic)` for any key, triggering NAPI fallback.
+    fn unanalyzable() -> Self {
+        Self(FieldMapInner::Open(FxHashMap::default()))
+    }
+
+    /// Returns a closed empty map — used when no config file exists.
+    /// `get()` returns `None` for any key (field definitively absent).
+    fn no_config() -> Self {
+        Self(FieldMapInner::Closed(FxHashMap::default()))
+    }
+
     /// Look up a field by name.
     ///
     /// - [`Closed`](FieldMapInner::Closed): returns the stored value, or `None`
@@ -63,18 +75,13 @@ impl FieldMap {
 
 /// The result of statically analyzing a vite config file.
 ///
-/// - `None` — the config file exists but is not analyzable (parse error,
-///   no `export default`, or the default export is not an object literal).
-///   The caller should fall back to a runtime evaluation (e.g. NAPI).
-/// - `Some(map)` — the config was successfully resolved. Use [`FieldMap::get`]
-///   to query individual fields:
-///   - Returns `None` — field is definitively absent (closed-world object with no spreads).
-///   - Returns `Some(Json(v))` — field value was extracted as a JSON literal.
-///   - Returns `Some(NonStatic)` — field exists (or may exist via a spread) but
-///     its value cannot be represented as pure JSON; caller should use NAPI.
-///   - All fields return `None` — no config file was found or the file has no
-///     matching fields; caller can skip NAPI entirely.
-pub type StaticConfig = Option<FieldMap>;
+/// Use [`FieldMap::get`] to query individual fields:
+/// - Returns `None` — field is definitively absent (no spreads in the config object).
+///   If all keys return `None`, no config file was found; caller can skip NAPI.
+/// - Returns `Some(Json(v))` — field value was extracted as a JSON literal.
+/// - Returns `Some(NonStatic)` — field exists (or may exist via a spread/computed key,
+///   or the file was not analyzable); caller should fall back to NAPI.
+pub type StaticConfig = FieldMap;
 
 /// Config file names to try, in priority order.
 /// This matches Vite's `DEFAULT_CONFIG_FILES`:
@@ -111,11 +118,12 @@ fn resolve_config_path(dir: &AbsolutePath) -> Option<vite_path::AbsolutePathBuf>
 #[must_use]
 pub fn resolve_static_config(dir: &AbsolutePath) -> StaticConfig {
     let Some(config_path) = resolve_config_path(dir) else {
-        // No config file found — return empty map so the caller can
-        // skip runtime evaluation (NAPI) entirely.
-        return Some(FieldMap(FieldMapInner::Closed(FxHashMap::default())));
+        // No config file found — closed empty map; get() returns None for any key.
+        return FieldMap::no_config();
     };
-    let source = std::fs::read_to_string(&config_path).ok()?;
+    let Ok(source) = std::fs::read_to_string(&config_path) else {
+        return FieldMap::unanalyzable();
+    };
 
     let extension = config_path.as_path().extension().and_then(|e| e.to_str()).unwrap_or("");
 
@@ -129,10 +137,11 @@ pub fn resolve_static_config(dir: &AbsolutePath) -> StaticConfig {
 /// Parse a JSON config file into a map of field names to values.
 /// All fields in a valid JSON object are fully static.
 fn parse_json_config(source: &str) -> StaticConfig {
-    let value: serde_json::Value = serde_json::from_str(source).ok()?;
-    let obj = value.as_object()?;
+    let Ok(serde_json::Value::Object(obj)) = serde_json::from_str(source) else {
+        return FieldMap::unanalyzable();
+    };
     let map = obj.iter().map(|(k, v)| (Box::from(k.as_str()), FieldValue::Json(v.clone()))).collect();
-    Some(FieldMap(FieldMapInner::Closed(map)))
+    FieldMap(FieldMapInner::Closed(map))
 }
 
 /// Parse a JS/TS config file, extracting the default export object's fields.
@@ -147,7 +156,7 @@ fn parse_js_ts_config(source: &str, extension: &str) -> StaticConfig {
     let result = parser.parse();
 
     if result.panicked || !result.errors.is_empty() {
-        return None;
+        return FieldMap::unanalyzable();
     }
 
     extract_config_fields(&result.program)
@@ -168,7 +177,7 @@ fn extract_config_fields(program: &Program<'_>) -> StaticConfig {
                 return extract_config_from_expr(expr);
             }
             // export default class/function — not analyzable
-            return None;
+            return FieldMap::unanalyzable();
         }
 
         // CJS: module.exports = ...
@@ -182,7 +191,7 @@ fn extract_config_fields(program: &Program<'_>) -> StaticConfig {
         }
     }
 
-    None
+    FieldMap::unanalyzable()
 }
 
 /// Extract the config object from an expression that is either:
@@ -197,23 +206,30 @@ fn extract_config_from_expr(expr: &Expression<'_>) -> StaticConfig {
     match expr {
         Expression::CallExpression(call) => {
             if !call.callee.is_specific_id("defineConfig") {
-                return None;
+                return FieldMap::unanalyzable();
             }
-            let first_arg = call.arguments.first()?;
-            let first_arg_expr = first_arg.as_expression()?;
+            let Some(first_arg) = call.arguments.first() else {
+                return FieldMap::unanalyzable();
+            };
+            let Some(first_arg_expr) = first_arg.as_expression() else {
+                return FieldMap::unanalyzable();
+            };
             match first_arg_expr {
-                Expression::ObjectExpression(obj) => Some(extract_object_fields(obj)),
+                Expression::ObjectExpression(obj) => extract_object_fields(obj),
                 Expression::ArrowFunctionExpression(arrow) => {
                     extract_config_from_function_body(&arrow.body)
                 }
                 Expression::FunctionExpression(func) => {
-                    extract_config_from_function_body(func.body.as_ref()?)
+                    let Some(body) = func.body.as_ref() else {
+                        return FieldMap::unanalyzable();
+                    };
+                    extract_config_from_function_body(body)
                 }
-                _ => None,
+                _ => FieldMap::unanalyzable(),
             }
         }
-        Expression::ObjectExpression(obj) => Some(extract_object_fields(obj)),
-        _ => None,
+        Expression::ObjectExpression(obj) => extract_object_fields(obj),
+        _ => FieldMap::unanalyzable(),
     }
 }
 
@@ -223,35 +239,37 @@ fn extract_config_from_expr(expr: &Expression<'_>) -> StaticConfig {
 /// - Concise arrow body: `() => ({ ... })` — body has a single `ExpressionStatement`
 /// - Block body with exactly one return: `() => { ... return { ... }; }`
 ///
-/// Returns `None` (not analyzable) if the body contains multiple `return` statements
+/// Returns `FieldMap::unanalyzable()` if the body contains multiple `return` statements
 /// (at any nesting depth), since the returned config would depend on runtime control flow.
 fn extract_config_from_function_body(body: &oxc_ast::ast::FunctionBody<'_>) -> StaticConfig {
     // Reject functions with multiple returns — the config depends on control flow.
     if count_returns_in_stmts(&body.statements) > 1 {
-        return None;
+        return FieldMap::unanalyzable();
     }
 
     for stmt in &body.statements {
         match stmt {
             Statement::ReturnStatement(ret) => {
-                let arg = ret.argument.as_ref()?;
+                let Some(arg) = ret.argument.as_ref() else {
+                    return FieldMap::unanalyzable();
+                };
                 if let Expression::ObjectExpression(obj) = arg.without_parentheses() {
-                    return Some(extract_object_fields(obj));
+                    return extract_object_fields(obj);
                 }
-                return None;
+                return FieldMap::unanalyzable();
             }
             Statement::ExpressionStatement(expr_stmt) => {
                 // Concise arrow: `() => ({ ... })` is represented as ExpressionStatement
                 if let Expression::ObjectExpression(obj) =
                     expr_stmt.expression.without_parentheses()
                 {
-                    return Some(extract_object_fields(obj));
+                    return extract_object_fields(obj);
                 }
             }
             _ => {}
         }
     }
-    None
+    FieldMap::unanalyzable()
 }
 
 /// Count `return` statements recursively in a slice of statements.
@@ -442,10 +460,9 @@ mod tests {
 
     use super::*;
 
-    /// Helper: parse JS/TS source, unwrap the `Some` (asserting it's analyzable),
-    /// and return the field map.
+    /// Helper: parse JS/TS source and return the field map.
     fn parse(source: &str) -> FieldMap {
-        parse_js_ts_config(source, "ts").expect("expected analyzable config")
+        parse_js_ts_config(source, "ts")
     }
 
     /// Shorthand for asserting a field extracted as JSON.
@@ -469,7 +486,7 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let dir_path = vite_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
         std::fs::write(dir.path().join("vite.config.ts"), "export default { run: {} }").unwrap();
-        let result = resolve_static_config(&dir_path).unwrap();
+        let result = resolve_static_config(&dir_path);
         assert!(result.get("run").is_some());
     }
 
@@ -478,7 +495,7 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let dir_path = vite_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
         std::fs::write(dir.path().join("vite.config.js"), "export default { run: {} }").unwrap();
-        let result = resolve_static_config(&dir_path).unwrap();
+        let result = resolve_static_config(&dir_path);
         assert!(result.get("run").is_some());
     }
 
@@ -487,7 +504,7 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let dir_path = vite_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
         std::fs::write(dir.path().join("vite.config.mts"), "export default { run: {} }").unwrap();
-        let result = resolve_static_config(&dir_path).unwrap();
+        let result = resolve_static_config(&dir_path);
         assert!(result.get("run").is_some());
     }
 
@@ -499,7 +516,7 @@ mod tests {
             .unwrap();
         std::fs::write(dir.path().join("vite.config.js"), "export default { fromJs: true }")
             .unwrap();
-        let result = resolve_static_config(&dir_path).unwrap();
+        let result = resolve_static_config(&dir_path);
         assert!(result.get("fromJs").is_some());
         assert!(result.get("fromTs").is_none());
     }
@@ -508,7 +525,7 @@ mod tests {
     fn returns_empty_map_for_no_config() {
         let dir = TempDir::new().unwrap();
         let dir_path = vite_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
-        let result = resolve_static_config(&dir_path).unwrap();
+        let result = resolve_static_config(&dir_path);
         assert!(result.get("run").is_none());
     }
 
@@ -523,7 +540,7 @@ mod tests {
             r#"export default { run: { tasks: { build: { command: "echo hello" } } } }"#,
         )
         .unwrap();
-        let result = resolve_static_config(&dir_path).unwrap();
+        let result = resolve_static_config(&dir_path);
         assert_json(
             &result,
             "run",
@@ -567,8 +584,7 @@ mod tests {
 
     #[test]
     fn module_exports_object() {
-        let result = parse_js_ts_config("module.exports = { run: { cache: true } }", "cjs")
-            .expect("expected analyzable config");
+        let result = parse_js_ts_config("module.exports = { run: { cache: true } }", "cjs");
         assert_json(&result, "run", serde_json::json!({ "cache": true }));
     }
 
@@ -582,19 +598,18 @@ mod tests {
             });
             ",
             "cjs",
-        )
-        .expect("expected analyzable config");
+        );
         assert_json(&result, "run", serde_json::json!({ "cacheScripts": true }));
     }
 
     #[test]
     fn module_exports_non_object() {
-        assert!(parse_js_ts_config("module.exports = 42;", "cjs").is_none());
+        assert_non_static(&parse_js_ts_config("module.exports = 42;", "cjs"), "run");
     }
 
     #[test]
     fn module_exports_unknown_call() {
-        assert!(parse_js_ts_config("module.exports = otherFn({ a: 1 });", "cjs").is_none());
+        assert_non_static(&parse_js_ts_config("module.exports = otherFn({ a: 1 });", "cjs"), "run");
     }
 
     // ── Primitive values ────────────────────────────────────────────────
@@ -1003,24 +1018,24 @@ mod tests {
     #[test]
     fn define_config_arrow_no_return_object() {
         // Arrow function that doesn't return an object literal
-        assert!(
-            parse_js_ts_config(
+        assert_non_static(
+            &parse_js_ts_config(
                 r"
             export default defineConfig(({ mode }) => {
                 return someFunction();
             });
             ",
                 "ts",
-            )
-            .is_none()
+            ),
+            "run",
         );
     }
 
     #[test]
     fn define_config_arrow_multiple_returns() {
         // Multiple top-level returns → not analyzable
-        assert!(
-            parse_js_ts_config(
+        assert_non_static(
+            &parse_js_ts_config(
                 r"
             export default defineConfig(({ mode }) => {
                 if (mode === 'production') {
@@ -1030,31 +1045,37 @@ mod tests {
             });
             ",
                 "ts",
-            )
-            .is_none()
+            ),
+            "run",
         );
     }
 
     #[test]
     fn define_config_arrow_empty_body() {
-        assert!(parse_js_ts_config("export default defineConfig(() => {});", "ts",).is_none());
+        assert_non_static(
+            &parse_js_ts_config("export default defineConfig(() => {});", "ts"),
+            "run",
+        );
     }
 
-    // ── Not analyzable cases (return None) ──────────────────────────────
+    // ── Not analyzable cases ─────────────────────────────────────────────
 
     #[test]
     fn returns_none_for_no_default_export() {
-        assert!(parse_js_ts_config("export const config = { a: 1 };", "ts").is_none());
+        assert_non_static(&parse_js_ts_config("export const config = { a: 1 };", "ts"), "run");
     }
 
     #[test]
     fn returns_none_for_non_object_default_export() {
-        assert!(parse_js_ts_config("export default 42;", "ts").is_none());
+        assert_non_static(&parse_js_ts_config("export default 42;", "ts"), "run");
     }
 
     #[test]
     fn returns_none_for_unknown_function_call() {
-        assert!(parse_js_ts_config("export default someOtherFn({ a: 1 });", "ts").is_none());
+        assert_non_static(
+            &parse_js_ts_config("export default someOtherFn({ a: 1 });", "ts"),
+            "run",
+        );
     }
 
     #[test]
