@@ -262,22 +262,34 @@ fn count_returns_in_stmt(stmt: &Statement<'_>) -> usize {
 
 /// Extract fields from an object expression, converting each value to JSON.
 /// Fields whose values cannot be represented as pure JSON are recorded as
-/// [`FieldValue::NonStatic`]. Computed properties are silently skipped (key unknown).
+/// [`FieldValue::NonStatic`].
 ///
-/// Spreads invalidate all fields declared before them: `{ a: 1, ...x, b: 2 }` yields
-/// `a: NonStatic` (spread may override it) and `b: Json(2)` (declared after, wins).
-/// Unknown keys introduced by the spread are not added to the map.
+/// Both spreads and computed-key properties invalidate all fields declared before
+/// them, because either may resolve to a key that overrides an earlier entry:
+///
+/// ```js
+/// { a: 1, ...x,    b: 2 }  // a → NonStatic, b → Json(2)
+/// { a: 1, [key]: 2, b: 3 } // a → NonStatic, b → Json(3)
+/// ```
+///
+/// Fields declared after such entries are safe (they explicitly override whatever
+/// the spread/computed-key produced). Unknown keys are never added to the map.
 fn extract_object_fields(
     obj: &oxc_ast::ast::ObjectExpression<'_>,
 ) -> FxHashMap<Box<str>, FieldValue> {
     let mut map = FxHashMap::default();
 
+    /// Mark every field accumulated so far as NonStatic.
+    fn invalidate_previous(map: &mut FxHashMap<Box<str>, FieldValue>) {
+        for value in map.values_mut() {
+            *value = FieldValue::NonStatic;
+        }
+    }
+
     for prop in &obj.properties {
         if prop.is_spread() {
             // A spread may override any field declared before it.
-            for value in map.values_mut() {
-                *value = FieldValue::NonStatic;
-            }
+            invalidate_previous(&mut map);
             continue;
         }
         let ObjectPropertyKind::ObjectProperty(prop) = prop else {
@@ -285,7 +297,8 @@ fn extract_object_fields(
         };
 
         let Some(key) = prop.key.static_name() else {
-            // Computed properties — keys are unknown at static analysis time
+            // A computed key may equal any previously-seen key name.
+            invalidate_previous(&mut map);
             continue;
         };
 
@@ -722,16 +735,32 @@ mod tests {
     }
 
     #[test]
-    fn computed_properties_skipped() {
+    fn computed_key_unknown_not_in_map() {
+        // The computed key's resolved name is unknown — not added to the map.
+        // Fields declared after it are safe (they explicitly win).
         let result = parse(
             r"
             const key = 'dynamic';
             export default { [key]: 'value', plain: 'ok' }
             ",
         );
-        // Computed key — not in map at all (key is unknown)
         assert!(!result.contains_key("dynamic"));
         assert_json(&result, "plain", serde_json::json!("ok"));
+    }
+
+    #[test]
+    fn computed_key_invalidates_previous_fields() {
+        // A computed key may resolve to any previously-seen name and override it.
+        let result = parse(
+            r"
+            const key = 'run';
+            export default { a: 1, run: { cacheScripts: true }, [key]: 'override', b: 2 }
+            ",
+        );
+        assert_non_static(&result, "a");
+        assert_non_static(&result, "run");
+        assert!(!result.contains_key("dynamic"));
+        assert_json(&result, "b", serde_json::json!(2));
     }
 
     #[test]
