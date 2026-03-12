@@ -328,9 +328,9 @@ fn count_returns_in_stmt(stmt: &Statement<'_>) -> usize {
 /// produce a [`FieldMapInner::Open`] map — absent keys may exist via the spread and
 /// [`FieldMap::get`] returns [`FieldValue::NonStatic`] for them.
 ///
-/// When a spread or computed key is encountered the accumulated pre-spread entries are
-/// discarded (`open.clear()`): they would all be [`FieldValue::NonStatic`] anyway, and
-/// [`FieldMapInner::Open`] already returns `NonStatic` for every absent key.
+/// When a spread or computed key is encountered the map transitions to
+/// [`FieldMapInner::Open`] (discarding pre-spread entries): they would all be
+/// [`FieldValue::NonStatic`] anyway, and `Open` already returns `NonStatic` for every absent key.
 ///
 /// Fields declared after the last spread/computed key are still extractable:
 ///
@@ -340,38 +340,35 @@ fn count_returns_in_stmt(stmt: &Statement<'_>) -> usize {
 /// { a: 1, b: 2 }         // Closed{ a: Json(1), b: Json(2) }; get("c") = None
 /// ```
 fn extract_object_fields(obj: &oxc_ast::ast::ObjectExpression<'_>) -> FieldMap {
-    let mut closed: FxHashMap<Box<str>, FieldValue> = FxHashMap::default();
-    let mut open: FxHashMap<Box<str>, serde_json::Value> = FxHashMap::default();
-    let mut has_unknown_keys = false;
+    let mut inner = FieldMapInner::Closed(FxHashMap::default());
 
     for prop in &obj.properties {
         if prop.is_spread() {
-            has_unknown_keys = true;
-            open.clear();
+            inner = FieldMapInner::Open(FxHashMap::default());
             continue;
         }
-        let ObjectPropertyKind::ObjectProperty(prop) = prop else {
-            continue;
-        };
+        let ObjectPropertyKind::ObjectProperty(prop) = prop else { continue };
         let Some(key) = prop.key.static_name() else {
-            has_unknown_keys = true;
-            open.clear();
+            inner = FieldMapInner::Open(FxHashMap::default());
             continue;
         };
 
-        if has_unknown_keys {
-            // Only Json values are meaningful in Open — NonStatic is already implied
-            // for any absent key, so there's no need to record it explicitly.
-            if let Some(json) = expr_to_json(&prop.value) {
-                open.insert(Box::from(key.as_ref()), json);
+        match &mut inner {
+            FieldMapInner::Closed(map) => {
+                let value = expr_to_json(&prop.value).map_or(FieldValue::NonStatic, FieldValue::Json);
+                map.insert(Box::from(key.as_ref()), value);
             }
-        } else {
-            let value = expr_to_json(&prop.value).map_or(FieldValue::NonStatic, FieldValue::Json);
-            closed.insert(Box::from(key.as_ref()), value);
+            FieldMapInner::Open(map) => {
+                // Only Json values are meaningful in Open — NonStatic is already implied
+                // for any absent key, so there's no need to record it explicitly.
+                if let Some(json) = expr_to_json(&prop.value) {
+                    map.insert(Box::from(key.as_ref()), json);
+                }
+            }
         }
     }
 
-    FieldMap(if has_unknown_keys { FieldMapInner::Open(open) } else { FieldMapInner::Closed(closed) })
+    FieldMap(inner)
 }
 
 /// Convert an f64 to a JSON value following `JSON.stringify` semantics.
