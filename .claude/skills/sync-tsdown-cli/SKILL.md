@@ -18,3 +18,4 @@ Compare the upstream `tsdown` CLI options with `vp pack` (defined in `packages/c
    - `-c, --config` is intentionally commented out (vp pack uses vite.config.ts)
    - `--env-prefix` has a different default (`['VITE_PACK_', 'TSDOWN_']`)
 6. Verify with `pnpm --filter vite-plus build-ts` and `vp pack -h`
+7. If new parameters were added, add a corresponding snap test under `packages/cli/snap-tests/` to verify the new option works correctly
