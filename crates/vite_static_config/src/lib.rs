@@ -64,13 +64,11 @@ impl FieldMap {
     pub fn get(&self, key: &str) -> Option<FieldValue> {
         match &self.0 {
             FieldMapInner::Closed(map) => map.get(key).cloned(),
-            FieldMapInner::Open(map) => Some(
-                map.get(key).map_or(FieldValue::NonStatic, |v| FieldValue::Json(v.clone())),
-            ),
+            FieldMapInner::Open(map) => {
+                Some(map.get(key).map_or(FieldValue::NonStatic, |v| FieldValue::Json(v.clone())))
+            }
         }
     }
-
-
 }
 
 /// Config file names to try, in priority order.
@@ -348,7 +346,8 @@ fn extract_object_fields(obj: &oxc_ast::ast::ObjectExpression<'_>) -> FieldMap {
 
         match &mut inner {
             FieldMapInner::Closed(map) => {
-                let value = expr_to_json(&prop.value).map_or(FieldValue::NonStatic, FieldValue::Json);
+                let value =
+                    expr_to_json(&prop.value).map_or(FieldValue::NonStatic, FieldValue::Json);
                 map.insert(Box::from(key.as_ref()), value);
             }
             FieldMapInner::Open(map) => {
