@@ -1,3 +1,4 @@
 {
+  "ignoredPlatforms": ["win32"],
   "commands": ["vpx -s cowsay hello # should work without package.json"]
 }

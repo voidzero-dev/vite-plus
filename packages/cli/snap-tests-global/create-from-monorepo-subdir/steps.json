@@ -1,4 +1,5 @@
 {
+  "ignoredPlatforms": ["win32"],
   "commands": [
     {
       "command": "cd apps/website && vp create --no-interactive vite:generator # from workspace subdir",

@@ -1,4 +1,5 @@
 {
+  "ignoredPlatforms": ["win32"],
   "commands": [
     "vp migrate --no-interactive # migration should fail because npm version is not supported",
     "cat package.json # check package.json is not updated"
