@@ -21,18 +21,65 @@ pub enum FieldValue {
     NonStatic,
 }
 
+/// Internal representation of extracted object fields.
+///
+/// Two variants model the closed-world vs open-world assumption:
+///
+/// - [`FieldMapInner::Closed`] — the object had no spreads or computed-key properties.
+///   The map is exhaustive: every field is accounted for, absent keys do not exist.
+///
+/// - [`FieldMapInner::Open`] — the object had at least one spread or computed-key
+///   property. The map contains only [`serde_json::Value`] entries for keys
+///   explicitly declared **after** the last such entry. Absent keys may exist via
+///   the spread and are treated as [`FieldValue::NonStatic`] by [`FieldMap::get`].
+enum FieldMapInner {
+    Closed(FxHashMap<Box<str>, FieldValue>),
+    Open(FxHashMap<Box<str>, serde_json::Value>),
+}
+
+/// Extracted fields from a vite config object. See [`StaticConfig`].
+pub struct FieldMap(FieldMapInner);
+
+impl FieldMap {
+    /// Look up a field by name.
+    ///
+    /// - [`Closed`](FieldMapInner::Closed): returns the stored value, or `None`
+    ///   if the field is definitively absent.
+    /// - [`Open`](FieldMapInner::Open): returns the stored `Json` value if
+    ///   explicitly declared after the last spread/computed key, or
+    ///   `Some(NonStatic)` for any other key (it may exist in the spread).
+    #[must_use]
+    pub fn get(&self, key: &str) -> Option<FieldValue> {
+        match &self.0 {
+            FieldMapInner::Closed(map) => map.get(key).cloned(),
+            FieldMapInner::Open(map) => Some(
+                map.get(key).map_or(FieldValue::NonStatic, |v| FieldValue::Json(v.clone())),
+            ),
+        }
+    }
+
+    /// Returns `true` only when the map is closed (no spreads) and contains no fields.
+    /// Used to detect "no config file found" (caller can skip NAPI entirely).
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        matches!(&self.0, FieldMapInner::Closed(m) if m.is_empty())
+    }
+}
+
 /// The result of statically analyzing a vite config file.
 ///
 /// - `None` — the config file exists but is not analyzable (parse error,
 ///   no `export default`, or the default export is not an object literal).
 ///   The caller should fall back to a runtime evaluation (e.g. NAPI).
-/// - `Some(map)` — the config was successfully resolved.
-///   - Empty map — no config file was found (caller can skip runtime evaluation).
-///   - Key maps to [`FieldValue::Json`] — field value was extracted.
-///   - Key maps to [`FieldValue::NonStatic`] — field exists but its value
-///     cannot be represented as pure JSON.
-///   - Key absent — the field does not exist in the config.
-pub type StaticConfig = Option<FxHashMap<Box<str>, FieldValue>>;
+/// - `Some(map)` — the config was successfully resolved. Use [`FieldMap::get`]
+///   to query individual fields:
+///   - Returns `None` — field is definitively absent (closed-world object with no spreads).
+///   - Returns `Some(Json(v))` — field value was extracted as a JSON literal.
+///   - Returns `Some(NonStatic)` — field exists (or may exist via a spread) but
+///     its value cannot be represented as pure JSON; caller should use NAPI.
+///   - [`FieldMap::is_empty`] returns `true` — no config file was found; caller
+///     can skip NAPI entirely.
+pub type StaticConfig = Option<FieldMap>;
 
 /// Config file names to try, in priority order.
 /// This matches Vite's `DEFAULT_CONFIG_FILES`:
@@ -71,7 +118,7 @@ pub fn resolve_static_config(dir: &AbsolutePath) -> StaticConfig {
     let Some(config_path) = resolve_config_path(dir) else {
         // No config file found — return empty map so the caller can
         // skip runtime evaluation (NAPI) entirely.
-        return Some(FxHashMap::default());
+        return Some(FieldMap(FieldMapInner::Closed(FxHashMap::default())));
     };
     let source = std::fs::read_to_string(&config_path).ok()?;
 
@@ -89,7 +136,8 @@ pub fn resolve_static_config(dir: &AbsolutePath) -> StaticConfig {
 fn parse_json_config(source: &str) -> StaticConfig {
     let value: serde_json::Value = serde_json::from_str(source).ok()?;
     let obj = value.as_object()?;
-    Some(obj.iter().map(|(k, v)| (Box::from(k.as_str()), FieldValue::Json(v.clone()))).collect())
+    let map = obj.iter().map(|(k, v)| (Box::from(k.as_str()), FieldValue::Json(v.clone()))).collect();
+    Some(FieldMap(FieldMapInner::Closed(map)))
 }
 
 /// Parse a JS/TS config file, extracting the default export object's fields.
@@ -260,53 +308,57 @@ fn count_returns_in_stmt(stmt: &Statement<'_>) -> usize {
     }
 }
 
-/// Extract fields from an object expression, converting each value to JSON.
-/// Fields whose values cannot be represented as pure JSON are recorded as
-/// [`FieldValue::NonStatic`].
+/// Extract fields from an object expression into a [`FieldMap`].
 ///
-/// Both spreads and computed-key properties invalidate all fields declared before
-/// them, because either may resolve to a key that overrides an earlier entry:
+/// Objects with no spreads or computed-key properties produce a [`FieldMapInner::Closed`]
+/// map — absent keys are definitively absent. Objects with at least one such property
+/// produce a [`FieldMapInner::Open`] map — absent keys may exist via the spread and
+/// [`FieldMap::get`] returns [`FieldValue::NonStatic`] for them.
+///
+/// When a spread or computed key is encountered the accumulated pre-spread entries are
+/// discarded (`open.clear()`): they would all be [`FieldValue::NonStatic`] anyway, and
+/// [`FieldMapInner::Open`] already returns `NonStatic` for every absent key.
+///
+/// Fields declared after the last spread/computed key are still extractable:
 ///
 /// ```js
-/// { a: 1, ...x,    b: 2 }  // a → NonStatic, b → Json(2)
-/// { a: 1, [key]: 2, b: 3 } // a → NonStatic, b → Json(3)
+/// { a: 1, ...x, b: 2 }  // Open{ b: Json(2) };  get("a") = NonStatic, get("b") = Json(2)
+/// { a: 1, [k]: 2, b: 3 } // Open{ b: Json(3) };  get("a") = NonStatic, get("b") = Json(3)
+/// { a: 1, b: 2 }         // Closed{ a: Json(1), b: Json(2) }; get("c") = None
 /// ```
-///
-/// Fields declared after such entries are safe (they explicitly override whatever
-/// the spread/computed-key produced). Unknown keys are never added to the map.
-fn extract_object_fields(
-    obj: &oxc_ast::ast::ObjectExpression<'_>,
-) -> FxHashMap<Box<str>, FieldValue> {
-    let mut map = FxHashMap::default();
-
-    /// Mark every field accumulated so far as NonStatic.
-    fn invalidate_previous(map: &mut FxHashMap<Box<str>, FieldValue>) {
-        for value in map.values_mut() {
-            *value = FieldValue::NonStatic;
-        }
-    }
+fn extract_object_fields(obj: &oxc_ast::ast::ObjectExpression<'_>) -> FieldMap {
+    let mut closed: FxHashMap<Box<str>, FieldValue> = FxHashMap::default();
+    let mut open: FxHashMap<Box<str>, serde_json::Value> = FxHashMap::default();
+    let mut has_unknown_keys = false;
 
     for prop in &obj.properties {
         if prop.is_spread() {
-            // A spread may override any field declared before it.
-            invalidate_previous(&mut map);
+            has_unknown_keys = true;
+            open.clear();
             continue;
         }
         let ObjectPropertyKind::ObjectProperty(prop) = prop else {
             continue;
         };
-
         let Some(key) = prop.key.static_name() else {
-            // A computed key may equal any previously-seen key name.
-            invalidate_previous(&mut map);
+            has_unknown_keys = true;
+            open.clear();
             continue;
         };
 
-        let value = expr_to_json(&prop.value).map_or(FieldValue::NonStatic, FieldValue::Json);
-        map.insert(Box::from(key.as_ref()), value);
+        if has_unknown_keys {
+            // Only Json values are meaningful in Open — NonStatic is already implied
+            // for any absent key, so there's no need to record it explicitly.
+            if let Some(json) = expr_to_json(&prop.value) {
+                open.insert(Box::from(key.as_ref()), json);
+            }
+        } else {
+            let value = expr_to_json(&prop.value).map_or(FieldValue::NonStatic, FieldValue::Json);
+            closed.insert(Box::from(key.as_ref()), value);
+        }
     }
 
-    map
+    FieldMap(if has_unknown_keys { FieldMapInner::Open(open) } else { FieldMapInner::Closed(closed) })
 }
 
 /// Convert an f64 to a JSON value following `JSON.stringify` semantics.
@@ -397,20 +449,20 @@ mod tests {
 
     /// Helper: parse JS/TS source, unwrap the `Some` (asserting it's analyzable),
     /// and return the field map.
-    fn parse(source: &str) -> FxHashMap<Box<str>, FieldValue> {
+    fn parse(source: &str) -> FieldMap {
         parse_js_ts_config(source, "ts").expect("expected analyzable config")
     }
 
     /// Shorthand for asserting a field extracted as JSON.
-    fn assert_json(map: &FxHashMap<Box<str>, FieldValue>, key: &str, expected: serde_json::Value) {
-        assert_eq!(map.get(key), Some(&FieldValue::Json(expected)));
+    fn assert_json(map: &FieldMap, key: &str, expected: serde_json::Value) {
+        assert_eq!(map.get(key), Some(FieldValue::Json(expected)));
     }
 
     /// Shorthand for asserting a field is `NonStatic`.
-    fn assert_non_static(map: &FxHashMap<Box<str>, FieldValue>, key: &str) {
+    fn assert_non_static(map: &FieldMap, key: &str) {
         assert_eq!(
             map.get(key),
-            Some(&FieldValue::NonStatic),
+            Some(FieldValue::NonStatic),
             "expected field {key:?} to be NonStatic"
         );
     }
@@ -423,7 +475,7 @@ mod tests {
         let dir_path = vite_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
         std::fs::write(dir.path().join("vite.config.ts"), "export default { run: {} }").unwrap();
         let result = resolve_static_config(&dir_path).unwrap();
-        assert!(result.contains_key("run"));
+        assert!(result.get("run").is_some());
     }
 
     #[test]
@@ -432,7 +484,7 @@ mod tests {
         let dir_path = vite_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
         std::fs::write(dir.path().join("vite.config.js"), "export default { run: {} }").unwrap();
         let result = resolve_static_config(&dir_path).unwrap();
-        assert!(result.contains_key("run"));
+        assert!(result.get("run").is_some());
     }
 
     #[test]
@@ -441,7 +493,7 @@ mod tests {
         let dir_path = vite_path::AbsolutePathBuf::new(dir.path().to_path_buf()).unwrap();
         std::fs::write(dir.path().join("vite.config.mts"), "export default { run: {} }").unwrap();
         let result = resolve_static_config(&dir_path).unwrap();
-        assert!(result.contains_key("run"));
+        assert!(result.get("run").is_some());
     }
 
     #[test]
@@ -453,8 +505,8 @@ mod tests {
         std::fs::write(dir.path().join("vite.config.js"), "export default { fromJs: true }")
             .unwrap();
         let result = resolve_static_config(&dir_path).unwrap();
-        assert!(result.contains_key("fromJs"));
-        assert!(!result.contains_key("fromTs"));
+        assert!(result.get("fromJs").is_some());
+        assert!(result.get("fromTs").is_none());
     }
 
     #[test]
@@ -706,22 +758,23 @@ mod tests {
 
     #[test]
     fn spread_unknown_keys_not_in_map() {
-        // Keys introduced by the spread are unknown — not added to the map.
-        // Fields declared after the spread are safe (they win over the spread).
+        // The spread produces an Open map. Keys from inside the spread (like "x") are
+        // not explicitly declared, so get("x") returns NonStatic (may exist via spread).
+        // Fields declared after the spread are still extracted as Json.
         let result = parse(
             r"
             const base = { x: 1 };
             export default { ...base, b: 'ok' }
             ",
         );
-        assert!(!result.contains_key("x"));
+        assert_non_static(&result, "x");
         assert_json(&result, "b", serde_json::json!("ok"));
     }
 
     #[test]
     fn spread_invalidates_previous_fields() {
-        // Fields declared before a spread become NonStatic — the spread may override them.
-        // Fields declared after the spread are unaffected.
+        // Pre-spread fields are discarded from the Open map (they're all NonStatic via
+        // the open-world fallback). Fields after the spread are still extracted.
         let result = parse(
             r"
             const base = { x: 1 };
@@ -730,27 +783,58 @@ mod tests {
         );
         assert_non_static(&result, "a");
         assert_non_static(&result, "run");
-        assert!(!result.contains_key("x"));
+        assert_non_static(&result, "x");
         assert_json(&result, "b", serde_json::json!("ok"));
     }
 
     #[test]
+    fn spread_only() {
+        // A bare spread with no explicit keys after it: every key is NonStatic.
+        let result = parse(
+            r"
+            const base = { run: { cacheScripts: true } };
+            export default { ...base }
+            ",
+        );
+        assert_non_static(&result, "run");
+    }
+
+    #[test]
+    fn spread_then_explicit_run() {
+        // run is explicitly declared after the spread and is still extractable as Json.
+        let result = parse(
+            r"
+            const base = { plugins: [] };
+            export default { ...base, run: { cacheScripts: true } }
+            ",
+        );
+        assert_json(&result, "run", serde_json::json!({ "cacheScripts": true }));
+    }
+
+    #[test]
+    fn no_spread_absent_is_none() {
+        // No spreads: Closed map — absent keys are definitively absent.
+        let result = parse(r"export default { plugins: [] }");
+        assert!(result.get("run").is_none());
+    }
+
+    #[test]
     fn computed_key_unknown_not_in_map() {
-        // The computed key's resolved name is unknown — not added to the map.
-        // Fields declared after it are safe (they explicitly win).
+        // The computed key produces an Open map. Keys not declared after it return NonStatic.
         let result = parse(
             r"
             const key = 'dynamic';
             export default { [key]: 'value', plain: 'ok' }
             ",
         );
-        assert!(!result.contains_key("dynamic"));
+        assert_non_static(&result, "dynamic");
         assert_json(&result, "plain", serde_json::json!("ok"));
     }
 
     #[test]
     fn computed_key_invalidates_previous_fields() {
-        // A computed key may resolve to any previously-seen name and override it.
+        // A computed key produces Open — pre-computed fields become NonStatic via the
+        // open-world fallback. Fields declared after are extracted normally.
         let result = parse(
             r"
             const key = 'run';
@@ -759,7 +843,6 @@ mod tests {
         );
         assert_non_static(&result, "a");
         assert_non_static(&result, "run");
-        assert!(!result.contains_key("dynamic"));
         assert_json(&result, "b", serde_json::json!(2));
     }
 
@@ -869,7 +952,7 @@ mod tests {
             export default { b: 2 };
             ",
         );
-        assert!(!result.contains_key("a"));
+        assert!(result.get("a").is_none());
         assert_json(&result, "b", serde_json::json!(2));
     }
 
