@@ -262,8 +262,11 @@ fn count_returns_in_stmt(stmt: &Statement<'_>) -> usize {
 
 /// Extract fields from an object expression, converting each value to JSON.
 /// Fields whose values cannot be represented as pure JSON are recorded as
-/// [`FieldValue::NonStatic`]. Spread elements and computed properties
-/// are not representable so they are silently skipped (their keys are unknown).
+/// [`FieldValue::NonStatic`]. Computed properties are silently skipped (key unknown).
+///
+/// Spreads invalidate all fields declared before them: `{ a: 1, ...x, b: 2 }` yields
+/// `a: NonStatic` (spread may override it) and `b: Json(2)` (declared after, wins).
+/// Unknown keys introduced by the spread are not added to the map.
 fn extract_object_fields(
     obj: &oxc_ast::ast::ObjectExpression<'_>,
 ) -> FxHashMap<Box<str>, FieldValue> {
@@ -271,7 +274,10 @@ fn extract_object_fields(
 
     for prop in &obj.properties {
         if prop.is_spread() {
-            // Spread elements — keys are unknown at static analysis time
+            // A spread may override any field declared before it.
+            for value in map.values_mut() {
+                *value = FieldValue::NonStatic;
+            }
             continue;
         }
         let ObjectPropertyKind::ObjectProperty(prop) = prop else {
@@ -686,14 +692,31 @@ mod tests {
     }
 
     #[test]
-    fn spread_in_top_level_skipped() {
+    fn spread_unknown_keys_not_in_map() {
+        // Keys introduced by the spread are unknown — not added to the map.
+        // Fields declared after the spread are safe (they win over the spread).
         let result = parse(
             r"
             const base = { x: 1 };
             export default { ...base, b: 'ok' }
             ",
         );
-        // Spread at top level — keys unknown, so not in map at all
+        assert!(!result.contains_key("x"));
+        assert_json(&result, "b", serde_json::json!("ok"));
+    }
+
+    #[test]
+    fn spread_invalidates_previous_fields() {
+        // Fields declared before a spread become NonStatic — the spread may override them.
+        // Fields declared after the spread are unaffected.
+        let result = parse(
+            r"
+            const base = { x: 1 };
+            export default { a: 1, run: { cacheScripts: true }, ...base, b: 'ok' }
+            ",
+        );
+        assert_non_static(&result, "a");
+        assert_non_static(&result, "run");
         assert!(!result.contains_key("x"));
         assert_json(&result, "b", serde_json::json!("ok"));
     }
