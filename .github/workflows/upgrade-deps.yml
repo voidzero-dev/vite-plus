@@ -64,6 +64,7 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          show_full_output: 'true'
           prompt: |
             Check if the build-upstream steps failed and fix them.
             ### Background
