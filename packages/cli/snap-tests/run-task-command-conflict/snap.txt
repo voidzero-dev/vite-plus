@@ -1,0 +1,5 @@
+> # Test that conflicting package.json and vite.config.ts task commands render cleanly
+[1]> vp run build
+error: Failed to load task graph
+* Failed to resolve task config for task run-task-command-conflict-test#build
+* Both package.json script and vite.config.* task define commands for the task

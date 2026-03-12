@@ -18,7 +18,7 @@ mod package_manager;
 #[allow(dead_code)]
 mod utils;
 
-use std::{collections::HashMap, ffi::OsStr, sync::Arc};
+use std::{collections::HashMap, error::Error as StdError, ffi::OsStr, fmt::Write as _, sync::Arc};
 
 use napi::{anyhow, bindgen_prelude::*, threadsafe_function::ThreadsafeFunction};
 use napi_derive::napi;
@@ -111,6 +111,18 @@ fn create_vite_config_resolver(
     })
 }
 
+fn format_error_message(error: &(dyn StdError + 'static)) -> String {
+    let mut message = error.to_string();
+    let mut source = error.source();
+
+    while let Some(current) = source {
+        let _ = write!(message, "\n* {current}");
+        source = current.source();
+    }
+
+    message
+}
+
 /// Main entry point for the CLI, called from JavaScript.
 ///
 /// This is an async function that spawns a new thread for the non-Send async code
@@ -180,7 +192,7 @@ pub async fn run(options: CliOptions) -> Result<i32> {
             vite_error::Error::UserCancelled => Ok(130),
             _ => {
                 tracing::error!("Rust error: {:?}", e);
-                Err(anyhow::Error::from(e).into())
+                Err(napi::Error::from_reason(format_error_message(&e)))
             }
         },
     }
