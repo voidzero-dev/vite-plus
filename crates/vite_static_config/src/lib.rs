@@ -5,7 +5,7 @@
 //! config like `run` without needing a Node.js runtime.
 
 use oxc_allocator::Allocator;
-use oxc_ast::ast::{BindingPattern, Expression, ObjectPropertyKind, Program, Statement};
+use oxc_ast::ast::{Expression, ObjectPropertyKind, Program, Statement};
 use oxc_parser::Parser;
 use oxc_span::SourceType;
 use rustc_hash::FxHashMap;
@@ -110,39 +110,19 @@ fn parse_js_ts_config(source: &str, extension: &str) -> StaticConfig {
     extract_config_fields(&result.program)
 }
 
-/// Scan top-level statements for a `const`/`let`/`var` declarator whose simple
-/// binding identifier matches `name`, and return a reference to its initializer.
-///
-/// Returns `None` if no match is found or the declarator has no initializer.
-/// Destructured bindings (object/array patterns) are intentionally skipped.
-fn find_top_level_init<'a>(name: &str, stmts: &'a [Statement<'a>]) -> Option<&'a Expression<'a>> {
-    for stmt in stmts {
-        let Statement::VariableDeclaration(decl) = stmt else { continue };
-        for declarator in &decl.declarations {
-            let BindingPattern::BindingIdentifier(ident) = &declarator.id else { continue };
-            if ident.name == name {
-                return declarator.init.as_ref();
-            }
-        }
-    }
-    None
-}
-
 /// Find the config object in a parsed program and extract its fields.
 ///
 /// Searches for the config value in the following patterns (in order):
 /// 1. `export default defineConfig({ ... })`
 /// 2. `export default { ... }`
-/// 3. `export default config` where `config` is a top-level variable
-/// 4. `module.exports = defineConfig({ ... })`
-/// 5. `module.exports = { ... }`
-/// 6. `module.exports = config` where `config` is a top-level variable
-fn extract_config_fields<'a>(program: &'a Program<'a>) -> StaticConfig {
+/// 3. `module.exports = defineConfig({ ... })`
+/// 4. `module.exports = { ... }`
+fn extract_config_fields(program: &Program<'_>) -> StaticConfig {
     for stmt in &program.body {
         // ESM: export default ...
         if let Statement::ExportDefaultDeclaration(decl) = stmt {
             if let Some(expr) = decl.declaration.as_expression() {
-                return extract_config_from_expr(expr, &program.body);
+                return extract_config_from_expr(expr);
             }
             // export default class/function — not analyzable
             return None;
@@ -155,7 +135,7 @@ fn extract_config_fields<'a>(program: &'a Program<'a>) -> StaticConfig {
                 m.object().is_specific_id("module") && m.static_property_name() == Some("exports")
             })
         {
-            return extract_config_from_expr(&assign.right, &program.body);
+            return extract_config_from_expr(&assign.right);
         }
     }
 
@@ -168,12 +148,8 @@ fn extract_config_fields<'a>(program: &'a Program<'a>) -> StaticConfig {
 /// - `defineConfig(() => { return { ... }; })` → extract from return statement
 /// - `defineConfig(function() { return { ... }; })` → extract from return statement
 /// - `{ ... }` → extract directly
-/// - `identifier` → look up in `stmts`, then extract (one level of indirection only)
 /// - anything else → not analyzable
-fn extract_config_from_expr<'a>(
-    expr: &'a Expression<'a>,
-    stmts: &'a [Statement<'a>],
-) -> StaticConfig {
+fn extract_config_from_expr(expr: &Expression<'_>) -> StaticConfig {
     let expr = expr.without_parentheses();
     match expr {
         Expression::CallExpression(call) => {
@@ -185,21 +161,15 @@ fn extract_config_from_expr<'a>(
             match first_arg_expr {
                 Expression::ObjectExpression(obj) => Some(extract_object_fields(obj)),
                 Expression::ArrowFunctionExpression(arrow) => {
-                    extract_config_from_function_body(&arrow.body, stmts)
+                    extract_config_from_function_body(&arrow.body)
                 }
                 Expression::FunctionExpression(func) => {
-                    extract_config_from_function_body(func.body.as_ref()?, stmts)
+                    extract_config_from_function_body(func.body.as_ref()?)
                 }
                 _ => None,
             }
         }
         Expression::ObjectExpression(obj) => Some(extract_object_fields(obj)),
-        // Resolve a top-level identifier to its initializer (one level of indirection).
-        // Pass empty stmts on the recursive call to prevent chaining (const a = b; export default a).
-        Expression::Identifier(ident) if !stmts.is_empty() => {
-            let init = find_top_level_init(&ident.name, stmts)?;
-            extract_config_from_expr(init, &[])
-        }
         _ => None,
     }
 }
@@ -212,13 +182,7 @@ fn extract_config_from_expr<'a>(
 ///
 /// Returns `None` (not analyzable) if the body contains multiple `return` statements
 /// (at any nesting depth), since the returned config would depend on runtime control flow.
-///
-/// `module_stmts` is the program's top-level statement list, used as a fallback when
-/// resolving an identifier in a `return <identifier>` statement.
-fn extract_config_from_function_body<'a>(
-    body: &'a oxc_ast::ast::FunctionBody<'a>,
-    module_stmts: &'a [Statement<'a>],
-) -> StaticConfig {
+fn extract_config_from_function_body(body: &oxc_ast::ast::FunctionBody<'_>) -> StaticConfig {
     // Reject functions with multiple returns — the config depends on control flow.
     if count_returns_in_stmts(&body.statements) > 1 {
         return None;
@@ -228,19 +192,10 @@ fn extract_config_from_function_body<'a>(
         match stmt {
             Statement::ReturnStatement(ret) => {
                 let arg = ret.argument.as_ref()?;
-                match arg.without_parentheses() {
-                    Expression::ObjectExpression(obj) => return Some(extract_object_fields(obj)),
-                    Expression::Identifier(ident) => {
-                        // Look for the binding in the function body first, then at module level.
-                        let init = find_top_level_init(&ident.name, &body.statements)
-                            .or_else(|| find_top_level_init(&ident.name, module_stmts))?;
-                        if let Expression::ObjectExpression(obj) = init.without_parentheses() {
-                            return Some(extract_object_fields(obj));
-                        }
-                        return None;
-                    }
-                    _ => return None,
+                if let Expression::ObjectExpression(obj) = arg.without_parentheses() {
+                    return Some(extract_object_fields(obj));
                 }
+                return None;
             }
             Statement::ExpressionStatement(expr_stmt) => {
                 // Concise arrow: `() => ({ ... })` is represented as ExpressionStatement
@@ -1043,126 +998,5 @@ mod tests {
             }",
         );
         assert_json(&result, "run", serde_json::json!({ "cacheScripts": true }));
-    }
-
-    // ── Indirect exports (identifier resolution) ─────────────────────────
-
-    #[test]
-    fn export_default_identifier_object() {
-        let result = parse(
-            r"
-            const config = { run: { cacheScripts: true } };
-            export default config;
-            ",
-        );
-        assert_json(&result, "run", serde_json::json!({ "cacheScripts": true }));
-    }
-
-    #[test]
-    fn export_default_identifier_define_config() {
-        // Real-world tanstack-start-helloworld pattern
-        let result = parse(
-            r"
-            import { defineConfig } from 'vite-plus';
-            const config = defineConfig({
-                run: { cacheScripts: true },
-                plugins: [devtools(), nitro()],
-            });
-            export default config;
-            ",
-        );
-        assert_json(&result, "run", serde_json::json!({ "cacheScripts": true }));
-        assert_non_static(&result, "plugins");
-    }
-
-    #[test]
-    fn module_exports_identifier_object() {
-        let result = parse_js_ts_config(
-            r"
-            const config = { run: { cache: true } };
-            module.exports = config;
-            ",
-            "cjs",
-        )
-        .expect("expected analyzable config");
-        assert_json(&result, "run", serde_json::json!({ "cache": true }));
-    }
-
-    #[test]
-    fn module_exports_identifier_define_config() {
-        let result = parse_js_ts_config(
-            r"
-            const { defineConfig } = require('vite-plus');
-            const config = defineConfig({ run: { cacheScripts: true } });
-            module.exports = config;
-            ",
-            "cjs",
-        )
-        .expect("expected analyzable config");
-        assert_json(&result, "run", serde_json::json!({ "cacheScripts": true }));
-    }
-
-    #[test]
-    fn define_config_callback_return_local_identifier() {
-        let result = parse(
-            r"
-            export default defineConfig(({ mode }) => {
-                const obj = { run: { cacheScripts: true }, plugins: [vue()] };
-                return obj;
-            });
-            ",
-        );
-        assert_json(&result, "run", serde_json::json!({ "cacheScripts": true }));
-        assert_non_static(&result, "plugins");
-    }
-
-    #[test]
-    fn define_config_callback_return_module_level_identifier() {
-        let result = parse(
-            r"
-            const shared = { run: { cacheScripts: true } };
-            export default defineConfig(() => {
-                return shared;
-            });
-            ",
-        );
-        assert_json(&result, "run", serde_json::json!({ "cacheScripts": true }));
-    }
-
-    #[test]
-    fn export_default_identifier_undeclared_is_none() {
-        // Identifier not declared in file — not analyzable
-        assert!(parse_js_ts_config("export default config;", "ts").is_none());
-    }
-
-    #[test]
-    fn export_default_identifier_no_init_is_none() {
-        // Variable declared without initializer — not analyzable
-        assert!(
-            parse_js_ts_config(
-                r"
-            let config;
-            export default config;
-            ",
-                "ts",
-            )
-            .is_none()
-        );
-    }
-
-    #[test]
-    fn export_default_chained_identifier_is_none() {
-        // Chained indirection (const a = b) — only one level is resolved
-        assert!(
-            parse_js_ts_config(
-                r"
-            const inner = { run: {} };
-            const config = inner;
-            export default config;
-            ",
-                "ts",
-            )
-            .is_none()
-        );
     }
 }
