@@ -191,7 +191,7 @@ catalogs:
       version: 2.32.0
     rolldown-plugin-dts:
       specifier: ^0.22.0
-      version: 0.22.4
+      version: 0.22.5
     rollup:
       specifier: ^4.18.0
       version: 4.59.0
@@ -223,8 +223,8 @@ catalogs:
       specifier: ^1.0.1
       version: 1.0.2
     tsdown:
-      specifier: ^0.21.1
-      version: 0.21.1
+      specifier: ^0.21.2
+      version: 0.21.2
     typescript:
       specifier: ^5.9.3
       version: 5.9.3
@@ -431,13 +431,13 @@ importers:
         version: link:../../rolldown/packages/rolldown
       rolldown-plugin-dts:
         specifier: 'catalog:'
-        version: 0.22.4(@typescript/native-preview@7.0.0-dev.20260122.2)(oxc-resolver@11.14.0)(rolldown@rolldown+packages+rolldown)(typescript@5.9.3)
+        version: 0.22.5(@typescript/native-preview@7.0.0-dev.20260122.2)(oxc-resolver@11.14.0)(rolldown@rolldown+packages+rolldown)(typescript@5.9.3)
       semver:
         specifier: 'catalog:'
         version: 7.7.4
       tsdown:
         specifier: 'catalog:'
-        version: 0.21.1(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.21.1)(@tsdown/exe@0.21.1)(@typescript/native-preview@7.0.0-dev.20260122.2)(@vitejs/devtools@0.0.0-alpha.34(@pnpm/logger@1001.0.1)(typescript@5.9.3)(vite@packages+core)(vue@3.5.27(typescript@5.9.3)))(oxc-resolver@11.14.0)(publint@0.3.18)(typescript@5.9.3)(unplugin-unused@0.5.6)
+        version: 0.21.2(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.21.2)(@tsdown/exe@0.21.2)(@typescript/native-preview@7.0.0-dev.20260122.2)(@vitejs/devtools@0.0.0-alpha.34(@pnpm/logger@1001.0.1)(typescript@5.9.3)(vite@packages+core)(vue@3.5.27(typescript@5.9.3)))(oxc-resolver@11.14.0)(publint@0.3.18)(typescript@5.9.3)(unplugin-unused@0.5.6)
       validate-npm-package-name:
         specifier: 'catalog:'
         version: 7.0.2
@@ -460,11 +460,11 @@ importers:
         specifier: 'catalog:'
         version: 0.115.0
       '@tsdown/css':
-        specifier: 0.21.1
-        version: 0.21.1(jiti@2.6.1)(postcss-import@16.1.1(postcss@8.5.6))(postcss@8.5.6)(sass-embedded@1.97.3(source-map-js@1.2.1))(sass@1.97.3)(tsdown@0.21.1)(tsx@4.21.0)(yaml@2.8.2)
+        specifier: 0.21.2
+        version: 0.21.2(jiti@2.6.1)(postcss-import@16.1.1(postcss@8.5.6))(postcss@8.5.6)(sass-embedded@1.97.3(source-map-js@1.2.1))(sass@1.97.3)(tsdown@0.21.2)(tsx@4.21.0)(yaml@2.8.2)
       '@tsdown/exe':
-        specifier: 0.21.1
-        version: 0.21.1(tsdown@0.21.1)
+        specifier: 0.21.2
+        version: 0.21.2(tsdown@0.21.2)
       '@types/node':
         specifier: ^20.19.0 || >=22.12.0
         version: 24.12.0
@@ -564,7 +564,7 @@ importers:
         version: link:../../rolldown/packages/rolldown
       rolldown-plugin-dts:
         specifier: 'catalog:'
-        version: 0.22.4(@typescript/native-preview@7.0.0-dev.20260122.2)(oxc-resolver@11.14.0)(rolldown@rolldown+packages+rolldown)(typescript@5.9.3)
+        version: 0.22.5(@typescript/native-preview@7.0.0-dev.20260122.2)(oxc-resolver@11.14.0)(rolldown@rolldown+packages+rolldown)(typescript@5.9.3)
       rollup:
         specifier: ^4.18.0
         version: 4.59.0
@@ -582,7 +582,7 @@ importers:
         version: 1.2.2
       tsdown:
         specifier: 'catalog:'
-        version: 0.21.1(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.21.1)(@tsdown/exe@0.21.1)(@typescript/native-preview@7.0.0-dev.20260122.2)(@vitejs/devtools@0.0.0-alpha.34(@pnpm/logger@1001.0.1)(typescript@5.9.3)(vite@packages+core)(vue@3.5.27(typescript@5.9.3)))(oxc-resolver@11.14.0)(publint@0.3.18)(typescript@5.9.3)(unplugin-unused@0.5.6)
+        version: 0.21.2(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.21.2)(@tsdown/exe@0.21.2)(@typescript/native-preview@7.0.0-dev.20260122.2)(@vitejs/devtools@0.0.0-alpha.34(@pnpm/logger@1001.0.1)(typescript@5.9.3)(vite@packages+core)(vue@3.5.27(typescript@5.9.3)))(oxc-resolver@11.14.0)(publint@0.3.18)(typescript@5.9.3)(unplugin-unused@0.5.6)
       vite:
         specifier: workspace:@voidzero-dev/vite-plus-core@*
         version: 'link:'
@@ -614,7 +614,7 @@ importers:
         version: 1.3.0
       tsdown:
         specifier: 'catalog:'
-        version: 0.21.1(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.21.1)(@tsdown/exe@0.21.1)(@typescript/native-preview@7.0.0-dev.20260122.2)(publint@0.3.18)(typescript@5.9.3)(unplugin-unused@0.5.6)
+        version: 0.21.2(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.21.2)(@tsdown/exe@0.21.2)(@typescript/native-preview@7.0.0-dev.20260122.2)(publint@0.3.18)(typescript@5.9.3)(unplugin-unused@0.5.6)
 
   packages/test:
     dependencies:
@@ -744,7 +744,7 @@ importers:
         version: link:../../rolldown/packages/rolldown
       rolldown-plugin-dts:
         specifier: 'catalog:'
-        version: 0.22.4(@typescript/native-preview@7.0.0-dev.20260122.2)(oxc-resolver@11.14.0)(rolldown@rolldown+packages+rolldown)(typescript@5.9.3)
+        version: 0.22.5(@typescript/native-preview@7.0.0-dev.20260122.2)(oxc-resolver@11.14.0)(rolldown@rolldown+packages+rolldown)(typescript@5.9.3)
       tinyrainbow:
         specifier: ^3.0.3
         version: 3.0.3
@@ -1182,7 +1182,7 @@ importers:
         version: 2.0.3
       rolldown-plugin-dts:
         specifier: ^0.22.2
-        version: 0.22.4(@typescript/native-preview@7.0.0-dev.20260122.2)(oxc-resolver@11.14.0)(rolldown@rolldown+packages+rolldown)(typescript@5.9.3)
+        version: 0.22.5(@typescript/native-preview@7.0.0-dev.20260122.2)(oxc-resolver@11.14.0)(rolldown@rolldown+packages+rolldown)(typescript@5.9.3)
       rollup:
         specifier: ^4.59.0
         version: 4.59.0
@@ -1350,7 +1350,7 @@ importers:
         version: 'link:'
       rolldown-plugin-dts:
         specifier: 'catalog:'
-        version: 0.22.4(@typescript/native-preview@7.0.0-dev.20260122.2)(oxc-resolver@11.14.0)(rolldown@rolldown+packages+rolldown)(typescript@5.9.3)
+        version: 0.22.5(@typescript/native-preview@7.0.0-dev.20260122.2)(oxc-resolver@11.14.0)(rolldown@rolldown+packages+rolldown)(typescript@5.9.3)
       rollup:
         specifier: 'catalog:'
         version: 4.59.0
@@ -4683,15 +4683,15 @@ packages:
   '@tootallnate/quickjs-emscripten@0.23.0':
     resolution: {integrity: sha512-C5Mc6rdnsaJDjO3UpGW/CQTHtCKaYlScZTly4JIu97Jxo/odCiH0ITnDXSJPTOrEKk/ycSZ0AOgTmkDtkOsvIA==}
 
-  '@tsdown/css@0.21.1':
-    resolution: {integrity: sha512-dGFqa/tTL6rJXrvAx18HJT+0Zpt+hVw9gNrJ7gkBUnqKSjKgmc/CQ4Uhu5UYrO7y1sB1ecamUg71A1Roar9/LA==}
+  '@tsdown/css@0.21.2':
+    resolution: {integrity: sha512-Q1hJZ7L3oZsK8pTZw1uD6+jkXOivXiqiME6gu3Q5P28ef+Gh5odeq3tUDJ6E44P7zlfW9QqzvQ4820z6uvI8ZA==}
     engines: {node: '>=20.19.0'}
     peerDependencies:
       postcss: ^8.4.0
       postcss-import: ^16.0.0
       sass: '*'
       sass-embedded: '*'
-      tsdown: 0.21.1
+      tsdown: 0.21.2
     peerDependenciesMeta:
       postcss:
         optional: true
@@ -4702,11 +4702,11 @@ packages:
       sass-embedded:
         optional: true
 
-  '@tsdown/exe@0.21.1':
-    resolution: {integrity: sha512-GSUNhN5dBH6i9oVsBUsNOONdAbokwp4YU6unF+CPb6DHHNtKKjwQ6io4gM/8+PQVAl/dlp0keuGI1KTvpi8dpA==}
+  '@tsdown/exe@0.21.2':
+    resolution: {integrity: sha512-73DZirFHxTzxA5y9XkWQpn+RrAOQOBpTcynJn2o3nO32fi6hSJmBw1XAwjLj/r8PDQ/BpYd7jFDZLlEIKOHlBg==}
     engines: {node: '>=20.19.0'}
     peerDependencies:
-      tsdown: 0.21.1
+      tsdown: 0.21.2
 
   '@tybys/wasm-util@0.10.1':
     resolution: {integrity: sha512-9tTaPJLSiejZKx+Bmog4uSubteqTvFrVrURwkmHixBo0G4seD0zUxp98E1DzUBJxLQ3NPwXrGKDiVjwx/DpPsg==}
@@ -8038,8 +8038,8 @@ packages:
   rgb2hex@0.2.5:
     resolution: {integrity: sha512-22MOP1Rh7sAo1BZpDG6R5RFYzR2lYEgwq7HEmyW2qcsOqR2lQKmn+O//xV3YG/0rrhMC6KVX2hU+ZXuaw9a5bw==}
 
-  rolldown-plugin-dts@0.22.4:
-    resolution: {integrity: sha512-pueqTPyN1N6lWYivyDGad+j+GO3DT67pzpct8s8e6KGVIezvnrDjejuw1AXFeyDRas3xTq4Ja6Lj5R5/04C5GQ==}
+  rolldown-plugin-dts@0.22.5:
+    resolution: {integrity: sha512-M/HXfM4cboo+jONx9Z0X+CUf3B5tCi7ni+kR5fUW50Fp9AlZk0oVLesibGWgCXDKFp5lpgQ9yhKoImUFjl3VZw==}
     engines: {node: '>=20.19.0'}
     peerDependencies:
       '@ts-macro/tsc': ^0.3.6
@@ -8664,14 +8664,14 @@ packages:
       unplugin-unused:
         optional: true
 
-  tsdown@0.21.1:
-    resolution: {integrity: sha512-2Qgm5Pztm1ZOBr6AfJ4pAlspuufa5SlnBgnUx7a0QSm0a73FrBETiRB422gHtMKbgWf1oUtjBL/eK+po7OXwKw==}
+  tsdown@0.21.2:
+    resolution: {integrity: sha512-pP8eAcd1XAWjl5gjosuJs0BAuVoheUe3V8VDHx31QK7YOgXjcCMsBSyFWO3CMh/CSUkjRUzR96JtGH3WJFTExQ==}
     engines: {node: '>=20.19.0'}
     hasBin: true
     peerDependencies:
       '@arethetypeswrong/core': ^0.18.1
-      '@tsdown/css': 0.21.1
-      '@tsdown/exe': 0.21.1
+      '@tsdown/css': 0.21.2
+      '@tsdown/exe': 0.21.2
       '@vitejs/devtools': '*'
       publint: ^0.3.0
       typescript: ^5.0.0
@@ -8861,8 +8861,8 @@ packages:
   unrs-resolver@1.11.1:
     resolution: {integrity: sha512-bSjt9pjaEBnNiGgc9rUiHGKv5l4/TGzDmYw3RhnkJGtLhbnnA/5qJj7x3dNDCRx/PJxu774LlH8lCOlB4hEfKg==}
 
-  unrun@0.2.31:
-    resolution: {integrity: sha512-qltXRUeKQSrIgVS4NbH6PXEFqq+dru2ivH9QINfB+TinSlslgQvursJEV56QzaX8VaDCV5KfbROwKTQf/APJFA==}
+  unrun@0.2.32:
+    resolution: {integrity: sha512-opd3z6791rf281JdByf0RdRQrpcc7WyzqittqIXodM/5meNWdTwrVxeyzbaCp4/Rgls/um14oUaif1gomO8YGg==}
     engines: {node: '>=20.19.0'}
     hasBin: true
     peerDependencies:
@@ -12118,12 +12118,12 @@ snapshots:
 
   '@tootallnate/quickjs-emscripten@0.23.0': {}
 
-  '@tsdown/css@0.21.1(jiti@2.6.1)(postcss-import@16.1.1(postcss@8.5.6))(postcss@8.5.6)(sass-embedded@1.97.3(source-map-js@1.2.1))(sass@1.97.3)(tsdown@0.21.1)(tsx@4.21.0)(yaml@2.8.2)':
+  '@tsdown/css@0.21.2(jiti@2.6.1)(postcss-import@16.1.1(postcss@8.5.6))(postcss@8.5.6)(sass-embedded@1.97.3(source-map-js@1.2.1))(sass@1.97.3)(tsdown@0.21.2)(tsx@4.21.0)(yaml@2.8.2)':
     dependencies:
       lightningcss: 1.32.0
       postcss-load-config: 6.0.1(jiti@2.6.1)(postcss@8.5.6)(tsx@4.21.0)(yaml@2.8.2)
       rolldown: link:rolldown/packages/rolldown
-      tsdown: 0.21.1(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.21.1)(@tsdown/exe@0.21.1)(@typescript/native-preview@7.0.0-dev.20260122.2)(@vitejs/devtools@0.0.0-alpha.34(@pnpm/logger@1001.0.1)(typescript@5.9.3)(vite@packages+core)(vue@3.5.27(typescript@5.9.3)))(oxc-resolver@11.14.0)(publint@0.3.18)(typescript@5.9.3)(unplugin-unused@0.5.6)
+      tsdown: 0.21.2(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.21.2)(@tsdown/exe@0.21.2)(@typescript/native-preview@7.0.0-dev.20260122.2)(@vitejs/devtools@0.0.0-alpha.34(@pnpm/logger@1001.0.1)(typescript@5.9.3)(vite@packages+core)(vue@3.5.27(typescript@5.9.3)))(oxc-resolver@11.14.0)(publint@0.3.18)(typescript@5.9.3)(unplugin-unused@0.5.6)
     optionalDependencies:
       postcss: 8.5.6
       postcss-import: 16.1.1(postcss@8.5.6)
@@ -12134,12 +12134,12 @@ snapshots:
       - tsx
       - yaml
 
-  '@tsdown/exe@0.21.1(tsdown@0.21.1)':
+  '@tsdown/exe@0.21.2(tsdown@0.21.2)':
     dependencies:
       obug: 2.1.1
       semver: 7.7.4
       tinyexec: 1.0.2
-      tsdown: 0.21.1(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.21.1)(@tsdown/exe@0.21.1)(@typescript/native-preview@7.0.0-dev.20260122.2)(@vitejs/devtools@0.0.0-alpha.34(@pnpm/logger@1001.0.1)(typescript@5.9.3)(vite@packages+core)(vue@3.5.27(typescript@5.9.3)))(oxc-resolver@11.14.0)(publint@0.3.18)(typescript@5.9.3)(unplugin-unused@0.5.6)
+      tsdown: 0.21.2(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.21.2)(@tsdown/exe@0.21.2)(@typescript/native-preview@7.0.0-dev.20260122.2)(@vitejs/devtools@0.0.0-alpha.34(@pnpm/logger@1001.0.1)(typescript@5.9.3)(vite@packages+core)(vue@3.5.27(typescript@5.9.3)))(oxc-resolver@11.14.0)(publint@0.3.18)(typescript@5.9.3)(unplugin-unused@0.5.6)
 
   '@tybys/wasm-util@0.10.1':
     dependencies:
@@ -15850,7 +15850,7 @@ snapshots:
 
   rgb2hex@0.2.5: {}
 
-  rolldown-plugin-dts@0.22.4(@typescript/native-preview@7.0.0-dev.20260122.2)(oxc-resolver@11.14.0)(rolldown@rolldown+packages+rolldown)(typescript@5.9.3):
+  rolldown-plugin-dts@0.22.5(@typescript/native-preview@7.0.0-dev.20260122.2)(oxc-resolver@11.14.0)(rolldown@rolldown+packages+rolldown)(typescript@5.9.3):
     dependencies:
       '@babel/generator': 8.0.0-rc.2
       '@babel/helper-validator-identifier': 8.0.0-rc.2
@@ -16447,13 +16447,13 @@ snapshots:
       obug: 2.1.1
       picomatch: 4.0.3
       rolldown: link:rolldown/packages/rolldown
-      rolldown-plugin-dts: 0.22.4(@typescript/native-preview@7.0.0-dev.20260122.2)(oxc-resolver@11.14.0)(rolldown@rolldown+packages+rolldown)(typescript@5.9.3)
+      rolldown-plugin-dts: 0.22.5(@typescript/native-preview@7.0.0-dev.20260122.2)(oxc-resolver@11.14.0)(rolldown@rolldown+packages+rolldown)(typescript@5.9.3)
       semver: 7.7.4
       tinyexec: 1.0.2
       tinyglobby: 0.2.15
       tree-kill: 1.2.2
       unconfig-core: 7.5.0
-      unrun: 0.2.31
+      unrun: 0.2.32
     optionalDependencies:
       '@arethetypeswrong/core': 0.18.2
       publint: 0.3.18
@@ -16467,7 +16467,7 @@ snapshots:
       - synckit
       - vue-tsc
 
-  tsdown@0.21.1(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.21.1)(@tsdown/exe@0.21.1)(@typescript/native-preview@7.0.0-dev.20260122.2)(@vitejs/devtools@0.0.0-alpha.34(@pnpm/logger@1001.0.1)(typescript@5.9.3)(vite@packages+core)(vue@3.5.27(typescript@5.9.3)))(oxc-resolver@11.14.0)(publint@0.3.18)(typescript@5.9.3)(unplugin-unused@0.5.6):
+  tsdown@0.21.2(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.21.2)(@tsdown/exe@0.21.2)(@typescript/native-preview@7.0.0-dev.20260122.2)(@vitejs/devtools@0.0.0-alpha.34(@pnpm/logger@1001.0.1)(typescript@5.9.3)(vite@packages+core)(vue@3.5.27(typescript@5.9.3)))(oxc-resolver@11.14.0)(publint@0.3.18)(typescript@5.9.3)(unplugin-unused@0.5.6):
     dependencies:
       ansis: 4.2.0
       cac: 7.0.0
@@ -16478,17 +16478,17 @@ snapshots:
       obug: 2.1.1
       picomatch: 4.0.3
       rolldown: link:rolldown/packages/rolldown
-      rolldown-plugin-dts: 0.22.4(@typescript/native-preview@7.0.0-dev.20260122.2)(oxc-resolver@11.14.0)(rolldown@rolldown+packages+rolldown)(typescript@5.9.3)
+      rolldown-plugin-dts: 0.22.5(@typescript/native-preview@7.0.0-dev.20260122.2)(oxc-resolver@11.14.0)(rolldown@rolldown+packages+rolldown)(typescript@5.9.3)
       semver: 7.7.4
       tinyexec: 1.0.2
       tinyglobby: 0.2.15
       tree-kill: 1.2.2
       unconfig-core: 7.5.0
-      unrun: 0.2.31
+      unrun: 0.2.32
     optionalDependencies:
       '@arethetypeswrong/core': 0.18.2
-      '@tsdown/css': 0.21.1(jiti@2.6.1)(postcss-import@16.1.1(postcss@8.5.6))(postcss@8.5.6)(sass-embedded@1.97.3(source-map-js@1.2.1))(sass@1.97.3)(tsdown@0.21.1)(tsx@4.21.0)(yaml@2.8.2)
-      '@tsdown/exe': 0.21.1(tsdown@0.21.1)
+      '@tsdown/css': 0.21.2(jiti@2.6.1)(postcss-import@16.1.1(postcss@8.5.6))(postcss@8.5.6)(sass-embedded@1.97.3(source-map-js@1.2.1))(sass@1.97.3)(tsdown@0.21.2)(tsx@4.21.0)(yaml@2.8.2)
+      '@tsdown/exe': 0.21.2(tsdown@0.21.2)
       '@vitejs/devtools': 0.0.0-alpha.34(@pnpm/logger@1001.0.1)(typescript@5.9.3)(vite@packages+core)(vue@3.5.27(typescript@5.9.3))
       publint: 0.3.18
       typescript: 5.9.3
@@ -16500,7 +16500,7 @@ snapshots:
       - synckit
       - vue-tsc
 
-  tsdown@0.21.1(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.21.1)(@tsdown/exe@0.21.1)(@typescript/native-preview@7.0.0-dev.20260122.2)(publint@0.3.18)(typescript@5.9.3)(unplugin-unused@0.5.6):
+  tsdown@0.21.2(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.21.2)(@tsdown/exe@0.21.2)(@typescript/native-preview@7.0.0-dev.20260122.2)(publint@0.3.18)(typescript@5.9.3)(unplugin-unused@0.5.6):
     dependencies:
       ansis: 4.2.0
       cac: 7.0.0
@@ -16511,17 +16511,17 @@ snapshots:
       obug: 2.1.1
       picomatch: 4.0.3
       rolldown: link:rolldown/packages/rolldown
-      rolldown-plugin-dts: 0.22.4(@typescript/native-preview@7.0.0-dev.20260122.2)(oxc-resolver@11.14.0)(rolldown@rolldown+packages+rolldown)(typescript@5.9.3)
+      rolldown-plugin-dts: 0.22.5(@typescript/native-preview@7.0.0-dev.20260122.2)(oxc-resolver@11.14.0)(rolldown@rolldown+packages+rolldown)(typescript@5.9.3)
       semver: 7.7.4
       tinyexec: 1.0.2
       tinyglobby: 0.2.15
       tree-kill: 1.2.2
       unconfig-core: 7.5.0
-      unrun: 0.2.31
+      unrun: 0.2.32
     optionalDependencies:
       '@arethetypeswrong/core': 0.18.2
-      '@tsdown/css': 0.21.1(jiti@2.6.1)(postcss-import@16.1.1(postcss@8.5.6))(postcss@8.5.6)(sass-embedded@1.97.3(source-map-js@1.2.1))(sass@1.97.3)(tsdown@0.21.1)(tsx@4.21.0)(yaml@2.8.2)
-      '@tsdown/exe': 0.21.1(tsdown@0.21.1)
+      '@tsdown/css': 0.21.2(jiti@2.6.1)(postcss-import@16.1.1(postcss@8.5.6))(postcss@8.5.6)(sass-embedded@1.97.3(source-map-js@1.2.1))(sass@1.97.3)(tsdown@0.21.2)(tsx@4.21.0)(yaml@2.8.2)
+      '@tsdown/exe': 0.21.2(tsdown@0.21.2)
       publint: 0.3.18
       typescript: 5.9.3
       unplugin-unused: 0.5.6
@@ -16716,7 +16716,7 @@ snapshots:
       '@unrs/resolver-binding-win32-ia32-msvc': 1.11.1
       '@unrs/resolver-binding-win32-x64-msvc': 1.11.1
 
-  unrun@0.2.31:
+  unrun@0.2.32:
     dependencies:
       rolldown: link:rolldown/packages/rolldown
 
