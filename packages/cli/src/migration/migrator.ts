@@ -725,7 +725,6 @@ export function rewriteStandaloneProject(
   }
   mergeViteConfigFiles(projectPath, silent, report);
   injectLintTypeCheckDefaults(projectPath, silent, report);
-  injectFmtDefaults(projectPath, silent, report);
   mergeTsdownConfigFile(projectPath, silent, report);
   // rewrite imports in all TypeScript/JavaScript files
   rewriteAllImports(projectPath, silent, report);
@@ -771,7 +770,6 @@ export function rewriteMonorepo(
   }
   mergeViteConfigFiles(workspaceInfo.rootDir, silent, report);
   injectLintTypeCheckDefaults(workspaceInfo.rootDir, silent, report);
-  injectFmtDefaults(workspaceInfo.rootDir, silent, report);
   mergeTsdownConfigFile(workspaceInfo.rootDir, silent, report);
   // rewrite imports in all TypeScript/JavaScript files
   rewriteAllImports(workspaceInfo.rootDir, silent, report);
@@ -1322,26 +1320,6 @@ export function injectLintTypeCheckDefaults(
     'lint',
     '.vite-plus-lint-init.oxlintrc.json',
     JSON.stringify({ options: { typeAware: true, typeCheck: true } }),
-    silent,
-    report,
-  );
-}
-
-/**
- * Inject an empty `fmt: {}` field into vite.config.ts if it doesn't already exist.
- * This is needed because oxfmt auto-discovers vite.config.ts and errors if
- * the `fmt` field is missing.
- */
-export function injectFmtDefaults(
-  projectPath: string,
-  silent = false,
-  report?: MigrationReport,
-): void {
-  injectConfigDefaults(
-    projectPath,
-    'fmt',
-    '.vite-plus-fmt-init.oxfmtrc.json',
-    '{}',
     silent,
     report,
   );

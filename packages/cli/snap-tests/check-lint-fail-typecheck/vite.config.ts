@@ -1,5 +1,4 @@
 export default {
-  fmt: {},
   lint: {
     options: {
       typeAware: true,

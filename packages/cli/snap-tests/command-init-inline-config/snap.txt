@@ -5,7 +5,6 @@ Added 'lint' to 'vite.config.ts'.
 import { defineConfig } from "vite-plus";
 
 export default defineConfig({
-  fmt: {},
   lint: { options: { typeAware: true, typeCheck: true } },
 });
 

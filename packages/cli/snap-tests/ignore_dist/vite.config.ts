@@ -1,5 +1,4 @@
 export default {
-  lint: {},
   run: {
     tasks: {
       lint: {
