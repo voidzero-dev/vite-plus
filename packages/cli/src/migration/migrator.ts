@@ -433,12 +433,7 @@ async function runPrettierMigrateStep(
       command: vpBin,
       args: ['fmt', '--migrate=prettier'],
       cwd,
-      envs: {
-        ...process.env,
-        // Skip applyToolInitConfigToViteConfig in bin.ts — the migrator handles
-        // vite.config.ts merging and fmt defaults injection itself.
-        __VITE_PLUS_SKIP_INIT_CONFIG: '1',
-      },
+      envs: process.env,
     });
     if (result.exitCode !== 0) {
       spinner.stop(failMessage);

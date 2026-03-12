@@ -159,20 +159,22 @@ function injectFmtDefaultsIfMissing(viteConfigPath: string): void {
 }
 
 async function vpFmt(cwd: string, filePath: string): Promise<void> {
-  const { binPath, envs } = await resolveFmt();
-  const result = await runCommandSilently({
-    command: binPath,
-    args: ['--write', filePath],
-    cwd,
-    envs: {
-      ...process.env,
-      ...envs,
-    },
-  });
-  if (result.exitCode !== 0) {
-    throw new Error(
-      `Failed to format ${filePath} with vp fmt:\n${result.stdout.toString()}${result.stderr.toString()}`,
-    );
+  try {
+    const { binPath, envs } = await resolveFmt();
+    const result = await runCommandSilently({
+      command: binPath,
+      args: ['--write', filePath],
+      cwd,
+      envs: {
+        ...process.env,
+        ...envs,
+      },
+    });
+    if (result.exitCode !== 0) {
+      warnMsg(`Failed to format ${filePath} with vp fmt`);
+    }
+  } catch {
+    // oxfmt not available (e.g., vite-plus not yet installed during migration) — skip formatting
   }
 }
 

@@ -94,7 +94,7 @@ if (command === 'create') {
     });
 
     let finalExitCode = exitCode;
-    if (exitCode === 0 && !process.env.__VITE_PLUS_SKIP_INIT_CONFIG) {
+    if (exitCode === 0) {
       try {
         const result = await applyToolInitConfigToViteConfig(command, args.slice(1));
         if (
