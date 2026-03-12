@@ -1,12 +1,10 @@
 > vp run hello # create the cache for 'echo hello'
 $ vp fmt
-No config found, using defaults. Please add a config file or try `oxfmt --init` if needed.
 Finished in <variable>ms on 4 files using <variable> threads.
 
 
 > vp run hello # hit the cache
 $ vp fmt ✓ cache hit, replaying
-No config found, using defaults. Please add a config file or try `oxfmt --init` if needed.
 Finished in <variable>ms on 4 files using <variable> threads.
 
 ---
@@ -16,12 +14,10 @@ vp run: cache hit, <variable>ms saved.
 > vp run hello # cache miss after clean
 $ vp fmt
 Finished in <variable>ms on 4 files using <variable> threads.
-No config found, using defaults. Please add a config file or try `oxfmt --init` if needed.
 
 
 > cd subfolder && vp cache clean # cache can be located and cleaned from subfolder
 > vp run hello # cache miss after clean
 $ vp fmt
 Finished in <variable>ms on 4 files using <variable> threads.
-No config found, using defaults. Please add a config file or try `oxfmt --init` if needed.
 
