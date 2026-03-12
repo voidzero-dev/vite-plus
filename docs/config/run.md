@@ -7,6 +7,7 @@ import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   run: {
+    enablePrePostScripts: true,
     cache: {
       /* ... */
     },
@@ -16,6 +17,27 @@ export default defineConfig({
   },
 });
 ```
+
+## `run.enablePrePostScripts`
+
+- **Type:** `boolean`
+- **Default:** `true`
+
+Whether to automatically run `preX`/`postX` package.json scripts as lifecycle hooks when script `X` is executed.
+
+When enabled (the default), running a script like `test` will automatically run `pretest` before it and `posttest` after it, if they exist in `package.json`.
+
+```ts
+export default defineConfig({
+  run: {
+    enablePrePostScripts: false, // Disable pre/post lifecycle hooks
+  },
+});
+```
+
+::: warning
+This option can only be set in the workspace root's `vite.config.ts`. Setting it in a package's config will result in an error.
+:::
 
 ## `run.cache`
 
