@@ -200,6 +200,12 @@ jobs:
         run: |
           & ./packages/cli/install.ps1
 
+      - name: Run install.ps1 via irm simulation (catches BOM issues)
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          Get-Content ./packages/cli/install.ps1 -Raw | Invoke-Expression
+
       - name: Set PATH
         shell: bash
         run: |
