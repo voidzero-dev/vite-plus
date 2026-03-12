@@ -304,10 +304,7 @@ fn render_picker(
     let pad = if vite_shared::header::is_warp_terminal() { " " } else { "" };
     let max_width = usize::from(columns).saturating_sub(4 + pad.len());
     let viewport_end = (viewport_start + viewport_size).min(filtered_indices.len());
-    let instruction = truncate_line(
-        &format!("Select a command (↑/↓, Enter to run, Esc to cancel): {query}"),
-        max_width,
-    );
+    let instruction = truncate_line(&picker_instruction(query), max_width);
 
     execute!(stdout, cursor::MoveTo(0, 0), terminal::Clear(ClearType::All),)?;
     if vite_shared::header::is_warp_terminal() {
@@ -440,6 +437,10 @@ fn render_picker(
     stdout.flush()
 }
 
+fn picker_instruction(query: &str) -> String {
+    format!("Select a command (↑/↓, Enter to run, type to search): {query}")
+}
+
 fn compute_viewport_size(
     terminal_rows: usize,
     total_commands: usize,
@@ -552,7 +553,7 @@ fn filtered_command_indices(query: &str, command_order: &[usize]) -> Vec<usize> 
 mod tests {
     use super::{
         COMMANDS, align_viewport, compute_viewport_size, default_command_order,
-        filtered_command_indices, selected_command_parts,
+        filtered_command_indices, picker_instruction, selected_command_parts,
     };
 
     #[test]
@@ -669,5 +670,13 @@ mod tests {
             .expect("help command should exist");
         assert_eq!(help.label, "help");
         assert_eq!(help.summary, "View all commands and details");
+    }
+
+    #[test]
+    fn picker_instruction_mentions_search() {
+        assert_eq!(
+            picker_instruction(""),
+            "Select a command (↑/↓, Enter to run, type to search): "
+        );
     }
 }

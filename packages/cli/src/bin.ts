@@ -21,7 +21,19 @@ import { pack } from './resolve-pack.js';
 import { test } from './resolve-test.js';
 import { resolveUniversalViteConfig } from './resolve-vite-config.js';
 import { vite } from './resolve-vite.js';
-import { accent, log } from './utils/terminal.js';
+import { accent, errorMsg, log } from './utils/terminal.js';
+
+function getErrorMessage(err: unknown): string {
+  if (err instanceof Error) {
+    return err.message;
+  }
+
+  if (typeof err === 'object' && err && 'message' in err && typeof err.message === 'string') {
+    return err.message;
+  }
+
+  return String(err);
+}
 
 // Parse command line arguments
 let args = process.argv.slice(2);
@@ -113,7 +125,7 @@ if (command === 'create') {
 
     process.exit(finalExitCode);
   } catch (err) {
-    console.error('[Vite+] run error:', err);
+    errorMsg(getErrorMessage(err));
     process.exit(1);
   }
 }

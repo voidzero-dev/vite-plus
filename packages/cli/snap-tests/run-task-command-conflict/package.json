@@ -1,0 +1,7 @@
+{
+  "name": "run-task-command-conflict-test",
+  "private": true,
+  "scripts": {
+    "build": "echo 'build from package.json'"
+  }
+}

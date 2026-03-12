@@ -1,0 +1,6 @@
+{
+  "commands": [
+    "# Test that conflicting package.json and vite.config.ts task commands render cleanly",
+    "vp run build"
+  ]
+}
