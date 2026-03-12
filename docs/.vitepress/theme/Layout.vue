@@ -1,10 +1,10 @@
 <script setup lang="ts">
+import OSSHeader from '@voidzero-dev/vitepress-theme/src/components/oss/Header.vue';
 import BaseTheme from '@voidzero-dev/vitepress-theme/src/viteplus';
 import { useData } from 'vitepress';
 import { onMounted, watch } from 'vue';
 
 import Footer from './components/Footer.vue';
-import Header from './components/Header.vue';
 import Home from './layouts/Home.vue';
 // import Error404 from "./layouts/Error404.vue";
 
@@ -33,7 +33,7 @@ watch(
 
 <template>
   <div v-if="frontmatter.layout === 'home'" class="marketing-layout">
-    <Header />
+    <OSSHeader />
     <Home />
     <Footer />
   </div>
