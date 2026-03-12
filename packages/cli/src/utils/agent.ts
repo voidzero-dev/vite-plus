@@ -189,7 +189,7 @@ export const AGENTS = [
 
 type AgentSelection = string | string[] | false;
 const AGENT_STANDARD_PATH = 'AGENTS.md';
-export const AGENT_INSTRUCTIONS_START_MARKER = '<!--VITE PLUS START-->';
+const AGENT_INSTRUCTIONS_START_MARKER = '<!--VITE PLUS START-->';
 const AGENT_INSTRUCTIONS_END_MARKER = '<!--VITE PLUS END-->';
 
 export async function selectAgentTargetPaths({
@@ -263,6 +263,20 @@ export function detectExistingAgentTargetPaths(projectRoot: string) {
 
 export function detectExistingAgentTargetPath(projectRoot: string) {
   return detectExistingAgentTargetPaths(projectRoot)?.[0];
+}
+
+export function hasExistingAgentInstructions(projectRoot: string): boolean {
+  const targetPaths = detectExistingAgentTargetPaths(projectRoot);
+  if (!targetPaths) {
+    return false;
+  }
+  for (const targetPath of targetPaths) {
+    const content = fs.readFileSync(path.join(projectRoot, targetPath), 'utf-8');
+    if (content.includes(AGENT_INSTRUCTIONS_START_MARKER)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export function resolveAgentTargetPaths(agent?: string | string[]) {

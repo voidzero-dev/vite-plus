@@ -4,9 +4,9 @@ import { dirname, join } from 'node:path';
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
 import {
-  AGENT_INSTRUCTIONS_START_MARKER,
   detectAgents,
   getAgentById,
+  hasExistingAgentInstructions,
   replaceMarkedAgentInstructionsSection,
   type AgentConfig,
   type McpConfigTarget,
@@ -91,18 +91,7 @@ function readAgentPrompt(): string {
 
 // --- Agent instructions injection ---
 
-export function hasExistingAgentInstructions(root: string): boolean {
-  for (const file of ['AGENTS.md', 'CLAUDE.md']) {
-    const fullPath = join(root, file);
-    if (existsSync(fullPath)) {
-      const content = readFileSync(fullPath, 'utf-8');
-      if (content.includes(AGENT_INSTRUCTIONS_START_MARKER)) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
+export { hasExistingAgentInstructions };
 
 export function injectAgentBlock(root: string, filePath: string): void {
   const fullPath = join(root, filePath);

@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   detectExistingAgentTargetPaths,
   detectExistingAgentTargetPath,
+  hasExistingAgentInstructions,
   replaceMarkedAgentInstructionsSection,
   resolveAgentTargetPaths,
   writeAgentInstructions,
@@ -101,6 +102,15 @@ class InMemoryFs {
       throw new Error(`ENOENT: no such file "${String(filePath)}"`);
     }
     this.nodes.delete(normalizedPath);
+  }
+
+  readFileSync(filePath: fs.PathLike): string {
+    const resolvedPath = this.resolvePath(filePath);
+    const node = this.nodes.get(resolvedPath);
+    if (!node || node.kind !== 'file') {
+      throw new Error(`ENOENT: no such file "${String(filePath)}"`);
+    }
+    return node.content;
   }
 
   isSymlink(filePath: string): boolean {
@@ -197,6 +207,9 @@ beforeEach(async () => {
 
   vi.spyOn(fs, 'existsSync').mockImplementation((filePath) => mockFs.existsSync(filePath));
   vi.spyOn(fs, 'lstatSync').mockImplementation((filePath) => mockFs.lstatSync(filePath));
+  vi.spyOn(fs, 'readFileSync').mockImplementation((filePath) =>
+    mockFs.readFileSync(filePath as fs.PathLike),
+  );
 
   vi.spyOn(fsPromises, 'appendFile').mockImplementation(async (filePath, data) =>
     mockFs.appendFile(filePath as fs.PathLike, String(data)),
@@ -373,5 +386,36 @@ describe('writeAgentInstructions symlink behavior', () => {
     expect(selectSpy).not.toHaveBeenCalled();
     expect(await mockFs.readText(targetPath)).toContain('template block');
     expect(successSpy).not.toHaveBeenCalledWith('Updated agent instructions in AGENTS.md');
+  });
+});
+
+describe('hasExistingAgentInstructions', () => {
+  it('returns true when an agent file has start marker', async () => {
+    const dir = await createProjectDir();
+    await mockFs.writeFile(
+      path.join(dir, 'AGENTS.md'),
+      '<!--VITE PLUS START-->\ncontent\n<!--VITE PLUS END-->',
+    );
+    expect(hasExistingAgentInstructions(dir)).toBe(true);
+  });
+
+  it('returns true when CLAUDE.md has start marker', async () => {
+    const dir = await createProjectDir();
+    await mockFs.writeFile(
+      path.join(dir, 'CLAUDE.md'),
+      '<!--VITE PLUS START-->\ncontent\n<!--VITE PLUS END-->',
+    );
+    expect(hasExistingAgentInstructions(dir)).toBe(true);
+  });
+
+  it('returns false when files exist without markers', async () => {
+    const dir = await createProjectDir();
+    await mockFs.writeFile(path.join(dir, 'AGENTS.md'), '# No markers here');
+    expect(hasExistingAgentInstructions(dir)).toBe(false);
+  });
+
+  it('returns false when no files exist', async () => {
+    const dir = await createProjectDir();
+    expect(hasExistingAgentInstructions(dir)).toBe(false);
   });
 });

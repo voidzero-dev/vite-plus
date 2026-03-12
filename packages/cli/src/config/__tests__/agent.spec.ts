@@ -32,7 +32,7 @@ vi.mock('node:fs', () => ({
   default: fsMock,
 }));
 
-import { hasExistingAgentInstructions, injectAgentBlock } from '../agent.js';
+import { injectAgentBlock } from '../agent.js';
 
 beforeEach(() => {
   files.clear();
@@ -43,33 +43,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
-});
-
-describe('hasExistingAgentInstructions', () => {
-  it('returns true when AGENTS.md has start marker', () => {
-    files.set(
-      join('/project', 'AGENTS.md'),
-      '<!--VITE PLUS START-->\ncontent\n<!--VITE PLUS END-->',
-    );
-    expect(hasExistingAgentInstructions('/project')).toBe(true);
-  });
-
-  it('returns true when CLAUDE.md has start marker', () => {
-    files.set(
-      join('/project', 'CLAUDE.md'),
-      '<!--VITE PLUS START-->\ncontent\n<!--VITE PLUS END-->',
-    );
-    expect(hasExistingAgentInstructions('/project')).toBe(true);
-  });
-
-  it('returns false when files exist without markers', () => {
-    files.set(join('/project', 'AGENTS.md'), '# No markers here');
-    expect(hasExistingAgentInstructions('/project')).toBe(false);
-  });
-
-  it('returns false when no files exist', () => {
-    expect(hasExistingAgentInstructions('/project')).toBe(false);
-  });
 });
 
 describe('injectAgentBlock', () => {
