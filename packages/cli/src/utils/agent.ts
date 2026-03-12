@@ -265,6 +265,20 @@ export function detectExistingAgentTargetPath(projectRoot: string) {
   return detectExistingAgentTargetPaths(projectRoot)?.[0];
 }
 
+export function hasExistingAgentInstructions(projectRoot: string): boolean {
+  const targetPaths = detectExistingAgentTargetPaths(projectRoot);
+  if (!targetPaths) {
+    return false;
+  }
+  for (const targetPath of targetPaths) {
+    const content = fs.readFileSync(path.join(projectRoot, targetPath), 'utf-8');
+    if (content.includes(AGENT_INSTRUCTIONS_START_MARKER)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function resolveAgentTargetPaths(agent?: string | string[]) {
   const agentNames = parseAgentNames(agent);
   const resolvedAgentNames = agentNames.length > 0 ? agentNames : ['other'];
