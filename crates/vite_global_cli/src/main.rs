@@ -92,7 +92,7 @@ fn print_invalid_subcommand_error(error: &clap::Error) -> bool {
 #[tokio::main]
 async fn main() -> ExitCode {
     // Initialize tracing
-    vite_shared::init_tracing();
+    let _tracing_guard = vite_shared::init_tracing();
 
     // Check for shim mode (invoked as node, npm, or npx)
     let args: Vec<String> = std::env::args().collect();

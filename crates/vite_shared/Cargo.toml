@@ -12,6 +12,7 @@ directories = { workspace = true }
 owo-colors = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+tracing-chrome = { workspace = true }
 tracing-subscriber = { workspace = true }
 vite_path = { workspace = true }
 vite_str = { workspace = true }

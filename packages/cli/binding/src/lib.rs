@@ -28,10 +28,28 @@ use crate::cli::{
     BoxedResolverFn, CliOptions as ViteTaskCliOptions, ResolveCommandResult, ViteConfigResolverFn,
 };
 
+/// Guard must be kept alive for the duration of the process when using chrome-json output.
+/// Stored in a OnceLock so it's never dropped until process exit.
+/// Wrapped in Mutex because `Box<dyn Any + Send>` is not Sync, but OnceLock requires Sync for statics.
+static TRACING_GUARD: std::sync::OnceLock<std::sync::Mutex<Option<Box<dyn std::any::Any + Send>>>> =
+    std::sync::OnceLock::new();
+
 /// Module initialization - sets up tracing for debugging
 #[napi_derive::module_init]
 pub fn init() {
-    crate::cli::init_tracing();
+    TRACING_GUARD.get_or_init(|| std::sync::Mutex::new(crate::cli::init_tracing()));
+}
+
+/// Flush and drop the tracing guard. Must be called before process.exit()
+/// because Rust statics in OnceLock are never dropped, and the ChromeLayer
+/// FlushGuard only writes trace data to disk when dropped.
+#[napi]
+pub fn shutdown_tracing() {
+    if let Some(mutex) = TRACING_GUARD.get() {
+        if let Ok(mut guard) = mutex.lock() {
+            drop(guard.take());
+        }
+    }
 }
 
 /// Configuration options passed from JavaScript to Rust.
@@ -75,6 +93,7 @@ fn create_resolver(
     Box::new(move || {
         let tsf = tsf.clone();
         Box::pin(async move {
+            let _span = tracing::debug_span!("js_resolver", resolver = error_message).entered();
             // Call JS function - map napi::Error to anyhow::Error
             let promise: Promise<JsCommandResolvedResult> = tsf
                 .call_async(Ok(()))
@@ -97,6 +116,7 @@ fn create_vite_config_resolver(
     Arc::new(move |package_path: String| {
         let tsf = tsf.clone();
         Box::pin(async move {
+            tracing::debug!("js_resolve_vite_config: start");
             let promise: Promise<String> = tsf
                 .call_async(Ok(package_path))
                 .await
@@ -118,6 +138,7 @@ fn create_vite_config_resolver(
 /// and process JavaScript callbacks (via ThreadsafeFunction).
 #[napi]
 pub async fn run(options: CliOptions) -> Result<i32> {
+    tracing::debug!("napi_run: start");
     // Use provided cwd or current directory
     let mut cwd = current_dir()?;
     if let Some(options_cwd) = options.cwd {

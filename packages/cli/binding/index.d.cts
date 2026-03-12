@@ -336,3 +336,10 @@ export interface RunCommandResult {
   /** Map of relative paths to their access modes */
   pathAccesses: Record<string, PathAccess>;
 }
+
+/**
+ * Flush and drop the tracing guard. Must be called before process.exit()
+ * because Rust statics in OnceLock are never dropped, and the ChromeLayer
+ * FlushGuard only writes trace data to disk when dropped.
+ */
+export declare function shutdownTracing(): void;

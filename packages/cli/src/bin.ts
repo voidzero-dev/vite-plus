@@ -10,7 +10,9 @@
  * If no local installation is found, this global dist/bin.js is used as fallback.
  */
 
-import { run } from '../binding/index.js';
+const jsStartTime = performance.now();
+
+import { run, shutdownTracing } from '../binding/index.js';
 import { doc } from './resolve-doc.js';
 import { fmt } from './resolve-fmt.js';
 import { lint } from './resolve-lint.js';
@@ -43,6 +45,13 @@ if (command === 'create') {
   await import('./global/version.js');
 } else {
   // All other commands — delegate to Rust core via NAPI binding
+  if (process.env.VITE_LOG) {
+    const processUptime = (process.uptime() * 1000).toFixed(2);
+    const jsModuleLoad = (performance.now() - jsStartTime).toFixed(2);
+    console.error(
+      `[vite-plus] process uptime: ${processUptime}ms, JS module load: ${jsModuleLoad}ms`,
+    );
+  }
   run({
     lint,
     pack,
@@ -54,10 +63,12 @@ if (command === 'create') {
     args: process.argv.slice(2),
   })
     .then((exitCode) => {
+      shutdownTracing();
       process.exit(exitCode);
     })
     .catch((err) => {
       console.error('[Vite+] run error:', err);
+      shutdownTracing();
       process.exit(1);
     });
 }

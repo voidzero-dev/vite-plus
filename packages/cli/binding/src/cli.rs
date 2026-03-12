@@ -277,6 +277,7 @@ impl SubcommandResolver {
     }
 
     /// Resolve a synthesizable subcommand to a concrete program, args, cache config, and envs.
+    #[tracing::instrument(level = "debug", skip_all)]
     async fn resolve(
         &mut self,
         subcommand: SynthesizableSubcommand,
@@ -602,6 +603,7 @@ impl CommandHandler for VitePlusCommandHandler {
         &mut self,
         command: &mut ScriptCommand,
     ) -> anyhow::Result<HandledCommand> {
+        let _span = tracing::debug_span!("handle_command").entered();
         // Intercept both "vp" and "vite" commands in task scripts.
         // "vp" is the conventional alias used in vite-plus task configs.
         // "vite" must also be intercepted so that `vite test`, `vite build`, etc.
@@ -655,6 +657,8 @@ impl UserConfigLoader for VitePlusConfigLoader {
         &self,
         package_path: &AbsolutePath,
     ) -> anyhow::Result<Option<UserRunConfig>> {
+        let _span = tracing::debug_span!("load_user_config_file").entered();
+
         // Try static config extraction first (no JS runtime needed)
         if let Some(static_fields) = vite_static_config::resolve_static_config(package_path) {
             match static_fields.get("run") {
@@ -701,6 +705,7 @@ impl UserConfigLoader for VitePlusConfigLoader {
 }
 
 /// Resolve a single subcommand and execute it, returning its exit status.
+#[tracing::instrument(level = "debug", skip_all)]
 async fn resolve_and_execute(
     resolver: &mut SubcommandResolver,
     subcommand: SynthesizableSubcommand,
@@ -742,6 +747,7 @@ async fn resolve_and_execute(
 
 /// Execute a synthesizable subcommand directly (not through vite-task Session).
 /// No caching, no task graph, no dependency resolution.
+#[tracing::instrument(level = "debug", skip_all)]
 async fn execute_direct_subcommand(
     subcommand: SynthesizableSubcommand,
     cwd: &AbsolutePathBuf,
@@ -865,6 +871,7 @@ async fn execute_direct_subcommand(
 }
 
 /// Execute a vite-task command (run, cache) through Session.
+#[tracing::instrument(level = "debug", skip_all)]
 async fn execute_vite_task_command(
     command: Command,
     cwd: AbsolutePathBuf,
