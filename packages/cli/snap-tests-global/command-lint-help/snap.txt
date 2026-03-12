@@ -1,0 +1,71 @@
+> vp lint -h
+VITE+ - The Unified Toolchain for the Web
+
+Usage: vp lint [PATH]... [OPTIONS]
+
+Lint code.
+Options are forwarded to Oxlint.
+
+Options:
+  --tsconfig <PATH>  TypeScript tsconfig path
+  --fix              Fix issues when possible
+  --type-aware       Enable rules requiring type information
+  --import-plugin    Enable import plugin
+  --rules            List registered rules
+  -h, --help         Print help
+
+Examples:
+  vp lint
+  vp lint src --fix
+  vp lint --type-aware --tsconfig ./tsconfig.json
+
+Documentation: https://viteplus.dev/guide/lint
+
+
+> vp lint --help
+VITE+ - The Unified Toolchain for the Web
+
+Usage: vp lint [PATH]... [OPTIONS]
+
+Lint code.
+Options are forwarded to Oxlint.
+
+Options:
+  --tsconfig <PATH>  TypeScript tsconfig path
+  --fix              Fix issues when possible
+  --type-aware       Enable rules requiring type information
+  --import-plugin    Enable import plugin
+  --rules            List registered rules
+  -h, --help         Print help
+
+Examples:
+  vp lint
+  vp lint src --fix
+  vp lint --type-aware --tsconfig ./tsconfig.json
+
+Documentation: https://viteplus.dev/guide/lint
+
+
+> vp help lint
+VITE+ - The Unified Toolchain for the Web
+
+Usage: vp lint [PATH]... [OPTIONS]
+
+Lint code.
+Options are forwarded to Oxlint.
+
+Options:
+  --tsconfig <PATH>  TypeScript tsconfig path
+  --fix              Fix issues when possible
+  --type-aware       Enable rules requiring type information
+  --import-plugin    Enable import plugin
+  --rules            List registered rules
+  -h, --help         Print help
+
+Examples:
+  vp lint
+  vp lint src --fix
+  vp lint --type-aware --tsconfig ./tsconfig.json
+
+Documentation: https://viteplus.dev/guide/lint
+

@@ -708,7 +708,6 @@ fn delegated_help_doc(command: &str) -> Option<HelpDoc> {
                 section_rows(
                     "Options",
                     vec![
-                        row("-c, --config <PATH>", "Oxlint configuration file"),
                         row("--tsconfig <PATH>", "TypeScript tsconfig path"),
                         row("--fix", "Fix issues when possible"),
                         row("--type-aware", "Enable rules requiring type information"),
@@ -735,7 +734,6 @@ fn delegated_help_doc(command: &str) -> Option<HelpDoc> {
                 section_rows(
                     "Options",
                     vec![
-                        row("-c, --config <PATH>", "Path to the configuration file"),
                         row("--write", "Format and write files in place"),
                         row("--check", "Check if files are formatted"),
                         row("--list-different", "List files that would be changed"),
