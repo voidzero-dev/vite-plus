@@ -316,9 +316,10 @@ function Main {
     } | ConvertTo-Json -Depth 10
     Set-Content -Path (Join-Path $VersionDir "package.json") -Value $wrapperJson
 
-    # Isolate from user's global pnpm config (e.g. minimumReleaseAge)
-    # by creating a local .npmrc in the version directory.
-    Set-Content -Path (Join-Path $VersionDir ".npmrc") -Value "minimum-release-age=0"
+    # Isolate from user's global package manager config that may block
+    # installing recently-published packages (e.g. pnpm's minimumReleaseAge,
+    # npm's min-release-age) by creating a local .npmrc in the version directory.
+    Set-Content -Path (Join-Path $VersionDir ".npmrc") -Value "minimum-release-age=0`nmin-release-age=0"
 
     # Install production dependencies (skip if VITE_PLUS_SKIP_DEPS_INSTALL is set,
     # e.g. during local dev where install-global-cli.ts handles deps separately)
