@@ -390,10 +390,6 @@ configure_shell_path() {
       ;;
     */fish)
       local fish_config="$HOME/.config/fish/conf.d/vite-plus.fish"
-      # Escape both absolute and $HOME-relative forms for grep (backward compat)
-      local fish_abs_pattern fish_ref_pattern
-      fish_abs_pattern=$(printf '%s' "$INSTALL_DIR" | sed 's/[.[\*^$()+?{|]/\\&/g')
-      fish_ref_pattern=$(printf '%s' "$INSTALL_DIR_REF" | sed 's/[.[\*^$()+?{|]/\\&/g')
       if [ -f "$fish_config" ]; then
         result=2
       else
