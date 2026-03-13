@@ -26,7 +26,7 @@ const ZED_SETTINGS = {
     oxlint: {
       initialization_options: {
         settings: {
-          configPath: './oxlintrc.json',
+          configPath: './.oxlintrc.json',
           run: 'onType',
           disableNestedConfig: false,
           fixKind: 'safe_fix',
@@ -38,7 +38,7 @@ const ZED_SETTINGS = {
     oxfmt: {
       initialization_options: {
         settings: {
-          configPath: './oxfmtrc.jsonc',
+          configPath: './.oxfmtrc.jsonc',
           run: 'onSave',
         },
       },
