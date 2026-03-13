@@ -153,11 +153,16 @@ detect_libc() {
 
   # Check ldd output for musl/glibc
   if command -v ldd &> /dev/null; then
-    if ldd --version 2>&1 | grep -qi musl; then
+    ldd_out="$(ldd --version 2>&1 || true)"
+    if echo "$ldd_out" | grep -qi musl; then
       echo "musl"
       return
     fi
-    if ldd --version 2>&1 | grep -qi 'gnu libc\|glibc'; then
+    if echo "$ldd_out" | grep -qi 'gnu libc'; then
+      echo "gnu"
+      return
+    fi
+    if echo "$ldd_out" | grep -qi 'glibc'; then
       echo "gnu"
       return
     fi
