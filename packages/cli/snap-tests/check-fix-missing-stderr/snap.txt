@@ -1,13 +1,15 @@
 [1]> vp check --fix
 error: Formatting could not complete
-Failed to parse configuration.
-invalid type: string "invalid", expected struct Oxfmtrc
+Failed to load configuration file.
+<cwd>/vite.config.ts
+Ensure the file has a valid default export of a JSON-serializable configuration object.
 
 Formatting failed during fix
 
 [1]> vp check
 error: Formatting could not start
-Failed to parse configuration.
-invalid type: string "invalid", expected struct Oxfmtrc
+Failed to load configuration file.
+<cwd>/vite.config.ts
+Ensure the file has a valid default export of a JSON-serializable configuration object.
 
 Formatting failed before analysis started
