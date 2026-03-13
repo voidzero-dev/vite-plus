@@ -39,6 +39,7 @@ const ZED_SETTINGS = {
       initialization_options: {
         settings: {
           configPath: './oxfmtrc.jsonc',
+          run: 'onSave',
         },
       },
     },
