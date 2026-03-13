@@ -6,7 +6,7 @@
 
 `vp lint` is built on [Oxlint](https://oxc.rs/docs/guide/usage/linter.html), the Oxc linter. Oxlint is designed as a fast replacement for ESLint for most frontend projects and ships with built-in support for core ESLint rules and many popular community rules.
 
-Use `vp lint` to lint your project, and `vp check` to format, lint and type-check all at once.docs/guide/fmt.md
+Use `vp lint` to lint your project, and `vp check` to format, lint and type-check all at once.
 
 ## Usage
 

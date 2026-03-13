@@ -448,7 +448,7 @@ async function copySkillDocs() {
 
   // Find all markdown files recursively and copy them with their relative paths.
   const mdFiles = globSync('**/*.md', { cwd: docsSourceDir }).filter(
-    (f) => !f.includes('node_modules'),
+    (f) => !f.includes('node_modules') && f !== 'index.md',
   );
   // eslint-disable-next-line unicorn/no-array-sort -- sorted traversal keeps output deterministic
   mdFiles.sort();

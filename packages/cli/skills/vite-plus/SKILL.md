@@ -28,25 +28,31 @@ Then ask what to do next.
 
 ## Task Routing
 
-| User intent                       | Docs file(s)                                                                     |
-| --------------------------------- | -------------------------------------------------------------------------------- |
-| CLI command syntax, flags         | `docs/vite/guide/cli.md`                                                         |
-| Initial setup, getting started    | `docs/index.md`, `docs/vite/guide/index.md`, `docs/lib/guide/getting-started.md` |
-| Dev server, development workflow  | `docs/vite/guide/index.md`, `docs/vite/guide/cli.md`                             |
-| Build configuration, optimization | `docs/config/index.md`, `docs/config/shared-options.md`                          |
-| Testing with Vitest               | `docs/vite/guide/tasks.md`, `docs/vite/guide/task/getting-started.md`            |
-| Linting with Oxlint               | `docs/vite/guide/cli.md`                                                         |
-| Formatting with Oxfmt             | `docs/vite/guide/cli.md`                                                         |
-| Monorepo setup and management     | `docs/vite/guide/monorepo.md`                                                    |
-| Migration from existing tools     | `docs/vite/guide/migration.md`                                                   |
-| Caching and performance           | `docs/vite/guide/caching.md`                                                     |
-| Library mode                      | `docs/lib/guide/getting-started.md`                                              |
-| Troubleshooting                   | `docs/vite/guide/troubleshooting.md`                                             |
-| Configuration and shared options  | `docs/config/shared-options.md`                                                  |
-| API reference                     | `docs/apis/index.md`                                                             |
+| User intent                       | Docs file(s)                                          |
+| --------------------------------- | ----------------------------------------------------- |
+| Initial setup, getting started    | `docs/guide/index.md`                                 |
+| Dev server, development workflow  | `docs/guide/dev.md`, `docs/guide/index.md`            |
+| Build configuration, optimization | `docs/guide/build.md`, `docs/config/build.md`         |
+| Testing with Vitest               | `docs/guide/test.md`, `docs/config/test.md`           |
+| Linting with Oxlint               | `docs/guide/lint.md`, `docs/config/lint.md`           |
+| Formatting with Oxfmt             | `docs/guide/fmt.md`, `docs/config/fmt.md`             |
+| Check (format, lint, types)       | `docs/guide/check.md`                                 |
+| Monorepo tasks                    | `docs/guide/run.md`, `docs/config/run.md`             |
+| Migration from existing tools     | `docs/guide/migrate.md`                               |
+| Caching and performance           | `docs/guide/cache.md`                                 |
+| Library mode (pack)               | `docs/guide/pack.md`, `docs/config/pack.md`           |
+| Troubleshooting                   | `docs/guide/troubleshooting.md`                       |
+| Configuration overview            | `docs/config/index.md`                                |
+| Staged files / pre-commit         | `docs/guide/commit-hooks.md`, `docs/config/staged.md` |
+| Install dependencies              | `docs/guide/install.md`                               |
+| Node.js version management        | `docs/guide/env.md`                                   |
+| Create a new project              | `docs/guide/create.md`                                |
+| CI setup                          | `docs/guide/ci.md`                                    |
+| IDE integration                   | `docs/guide/ide-integration.md`                       |
+| Upgrade Vite+                     | `docs/guide/upgrade.md`                               |
+| Execute one-off binaries          | `docs/guide/vpx.md`                                   |
 
 ## Working Rules
 
-- For CLI-heavy tasks, open `docs/vite/guide/cli.md` first.
 - For multi-topic tasks, combine only the needed doc files.
 - If docs and memory differ, follow docs.
