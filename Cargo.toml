@@ -84,7 +84,7 @@ dunce = "1.0.5"
 fast-glob = "1.0.0"
 flate2 = { version = "=1.1.9", features = ["zlib-rs"] }
 form_urlencoded = "1.2.1"
-fspy = { git = "ssh://git@github.com/voidzero-dev/vite-task.git", rev = "398a147fd1ed42a88585d3a9481f200c3e56a2f4" }
+fspy = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "398a147fd1ed42a88585d3a9481f200c3e56a2f4" }
 futures = "0.3.31"
 futures-util = "0.3.31"
 glob = "0.3.2"
@@ -183,15 +183,15 @@ vfs = "0.12.1"
 vite_command = { path = "crates/vite_command" }
 vite_error = { path = "crates/vite_error" }
 vite_js_runtime = { path = "crates/vite_js_runtime" }
-vite_glob = { git = "ssh://git@github.com/voidzero-dev/vite-task.git", rev = "398a147fd1ed42a88585d3a9481f200c3e56a2f4" }
+vite_glob = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "398a147fd1ed42a88585d3a9481f200c3e56a2f4" }
 vite_install = { path = "crates/vite_install" }
 vite_migration = { path = "crates/vite_migration" }
 vite_shared = { path = "crates/vite_shared" }
 vite_static_config = { path = "crates/vite_static_config" }
-vite_path = { git = "ssh://git@github.com/voidzero-dev/vite-task.git", rev = "398a147fd1ed42a88585d3a9481f200c3e56a2f4" }
-vite_str = { git = "ssh://git@github.com/voidzero-dev/vite-task.git", rev = "398a147fd1ed42a88585d3a9481f200c3e56a2f4" }
-vite_task = { git = "ssh://git@github.com/voidzero-dev/vite-task.git", rev = "398a147fd1ed42a88585d3a9481f200c3e56a2f4" }
-vite_workspace = { git = "ssh://git@github.com/voidzero-dev/vite-task.git", rev = "398a147fd1ed42a88585d3a9481f200c3e56a2f4" }
+vite_path = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "398a147fd1ed42a88585d3a9481f200c3e56a2f4" }
+vite_str = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "398a147fd1ed42a88585d3a9481f200c3e56a2f4" }
+vite_task = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "398a147fd1ed42a88585d3a9481f200c3e56a2f4" }
+vite_workspace = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "398a147fd1ed42a88585d3a9481f200c3e56a2f4" }
 walkdir = "2.5.0"
 wax = "0.6.0"
 which = "8.0.0"
@@ -296,7 +296,7 @@ string_wizard = { path = "./rolldown/crates/string_wizard", features = ["serde"]
 # To use: Ensure vite-task is cloned at ../vite-task relative to vite-plus.
 # Comment out this section before committing.
 # =============================================================================
-# [patch."ssh://git@github.com/voidzero-dev/vite-task.git"]
+# [patch."https://github.com/voidzero-dev/vite-task.git"]
 # fspy = { path = "../vite-task/crates/fspy" }
 # vite_glob = { path = "../vite-task/crates/vite_glob" }
 # vite_path = { path = "../vite-task/crates/vite_path" }

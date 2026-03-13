@@ -84,9 +84,6 @@ jobs:
       - run: rustup target add x86_64-unknown-linux-musl
         if: ${{ matrix.os == 'ubuntu-latest' }}
 
-      - name: Configure Git for access to vite-task
-        run: git config --global url."https://x-access-token:${{ secrets.VITE_TASK_TOKEN }}@github.com/".insteadOf "ssh://git@github.com/"
-
       - run: cargo check --all-targets --all-features
         env:
           RUSTFLAGS: '-D warnings --cfg tokio_unstable' # also update .cargo/config.toml
@@ -103,9 +100,6 @@ jobs:
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
       - uses: ./.github/actions/clone
-
-      - name: Configure Git for access to vite-task
-        run: git config --global url."https://x-access-token:${{ secrets.VITE_TASK_TOKEN }}@github.com/".insteadOf "ssh://git@github.com/"
 
       - uses: oxc-project/setup-rust@d286d43bc1f606abbd98096666ff8be68c8d5f57 # v1.0.0
         with:
@@ -137,9 +131,6 @@ jobs:
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
       - uses: ./.github/actions/clone
-
-      - name: Configure Git for access to vite-task
-        run: git config --global url."https://x-access-token:${{ secrets.VITE_TASK_TOKEN }}@github.com/".insteadOf "ssh://git@github.com/"
 
       - uses: oxc-project/setup-rust@d286d43bc1f606abbd98096666ff8be68c8d5f57 # v1.0.0
         with:
@@ -189,9 +180,6 @@ jobs:
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
       - uses: ./.github/actions/clone
-
-      - name: Configure Git for access to vite-task
-        run: git config --global url."https://x-access-token:${{ secrets.VITE_TASK_TOKEN }}@github.com/".insteadOf "ssh://git@github.com/"
 
       # Disable Windows Defender real-time scanning to speed up I/O-heavy builds (~30-50% faster)
       - name: Disable Windows Defender
@@ -574,9 +562,6 @@ jobs:
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
       - uses: ./.github/actions/clone
-
-      - name: Configure Git for access to vite-task
-        run: git config --global url."https://x-access-token:${{ secrets.VITE_TASK_TOKEN }}@github.com/".insteadOf "ssh://git@github.com/"
 
       - uses: oxc-project/setup-rust@d286d43bc1f606abbd98096666ff8be68c8d5f57 # v1.0.0
         with:
