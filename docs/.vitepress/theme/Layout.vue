@@ -44,19 +44,12 @@ const setupHomeHeaderObserver = (header: HTMLElement | null, isHome: boolean) =>
   });
 };
 
-const syncHomeThemeOverride = async () => {
+const syncHomeHeaderState = async () => {
   if (typeof document === 'undefined') {
     return;
   }
 
   const isHome = frontmatter.value?.layout === 'home';
-  const root = document.documentElement;
-
-  if (isHome) {
-    root.setAttribute('data-theme', 'light');
-  } else {
-    root.removeAttribute('data-theme');
-  }
 
   await nextTick();
 
@@ -68,19 +61,13 @@ const syncHomeThemeOverride = async () => {
     return;
   }
 
-  if (isHome) {
-    header.setAttribute('data-theme', 'light');
-  } else {
-    header.removeAttribute('data-theme');
-  }
-
   syncHeaderMobileMenuTheme(header, isHome);
 };
 
 watch(
-  [() => frontmatter.value?.layout, () => isDark.value],
+  [() => frontmatter.value?.layout, () => frontmatter.value?.theme, () => isDark.value],
   () => {
-    void syncHomeThemeOverride();
+    void syncHomeHeaderState();
   },
   { immediate: true },
 );
@@ -92,8 +79,12 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div v-if="frontmatter.layout === 'home'" class="marketing-layout">
-    <OSSHeader class="home-header" />
+  <div
+    v-if="frontmatter.layout === 'home'"
+    class="marketing-layout"
+    :data-theme="frontmatter.theme"
+  >
+    <OSSHeader class="home-header" :data-theme="frontmatter.theme" />
     <Home />
     <Footer />
   </div>
