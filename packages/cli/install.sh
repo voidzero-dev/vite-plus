@@ -389,10 +389,12 @@ configure_shell_path() {
       fi
       ;;
     */fish)
-      local fish_config="$HOME/.config/fish/conf.d/vite-plus.fish"
+      local fish_dir="$HOME/.config/fish/conf.d"
+      local fish_config="$fish_dir/vite-plus.fish"
       if [ -f "$fish_config" ]; then
         result=2
       else
+        mkdir -p "$fish_dir"
         echo "# Vite+ bin (https://viteplus.dev)" >> "$fish_config"
         echo "source \"$INSTALL_DIR_REF/env.fish\"" >> "$fish_config"
         result=0
