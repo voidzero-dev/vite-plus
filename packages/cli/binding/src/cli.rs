@@ -832,6 +832,13 @@ impl LintMessageKind {
             Self::LintAndTypeCheck => "Lint or type issues found",
         }
     }
+
+    fn failure_kind(self) -> &'static str {
+        match self {
+            Self::LintOnly => "lint",
+            Self::LintAndTypeCheck => "type-aware",
+        }
+    }
 }
 
 fn parse_check_summary(line: &str) -> Option<CheckSummary> {
@@ -1098,6 +1105,7 @@ async fn execute_direct_subcommand(
                             "Formatting failed during fix",
                         );
                     }
+                    crate::set_last_check_failure_kind(Some("formatting"));
                     return Ok(status);
                 }
             }
@@ -1175,6 +1183,7 @@ async fn execute_direct_subcommand(
                     }
                 }
                 if status != ExitStatus::SUCCESS {
+                    crate::set_last_check_failure_kind(Some(lint_message_kind.failure_kind()));
                     return Ok(status);
                 }
             }
@@ -1211,6 +1220,7 @@ async fn execute_direct_subcommand(
                         &combined_output,
                         "Formatting failed after lint fixes were applied",
                     );
+                    crate::set_last_check_failure_kind(Some("formatting"));
                     return Ok(status);
                 }
                 if let Some(started) = fmt_fix_started {
@@ -1663,6 +1673,12 @@ mod tests {
         assert_eq!(kind.success_label(), "Found no warnings, lint errors, or type errors");
         assert_eq!(kind.warning_heading(), "Lint or type warnings found");
         assert_eq!(kind.issue_heading(), "Lint or type issues found");
+        assert_eq!(kind.failure_kind(), "type-aware");
+    }
+
+    #[test]
+    fn lint_message_kind_reports_plain_lint_failures() {
+        assert_eq!(LintMessageKind::LintOnly.failure_kind(), "lint");
     }
 
     #[test]

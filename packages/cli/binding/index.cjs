@@ -771,4 +771,5 @@ module.exports.rewritePrettier = nativeBinding.rewritePrettier;
 module.exports.rewriteScripts = nativeBinding.rewriteScripts;
 module.exports.run = nativeBinding.run;
 module.exports.runCommand = nativeBinding.runCommand;
+module.exports.takeCheckFailureKind = nativeBinding.takeCheckFailureKind;
 module.exports.vitePlusHeader = nativeBinding.vitePlusHeader;

@@ -369,5 +369,7 @@ export interface RunCommandResult {
   pathAccesses: Record<string, PathAccess>;
 }
 
+export declare function takeCheckFailureKind(): string | null;
+
 /** Render the Vite+ header using the Rust implementation. */
 export declare function vitePlusHeader(): string;

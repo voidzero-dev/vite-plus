@@ -19,8 +19,7 @@
     "#module-evaluator": {
       "types": "./dist/module-evaluator.d.ts",
       "default": "./dist/module-evaluator.js"
-    },
-    "#nodejs-worker-loader": "./dist/nodejs-worker-loader.js"
+    }
   },
   "exports": {
     ".": {
@@ -63,6 +62,10 @@
       "types": "./dist/browser.d.ts",
       "default": "./dist/browser.js"
     },
+    "./internal/module-runner": {
+      "types": "./dist/module-runner.d.ts",
+      "default": "./dist/module-runner.js"
+    },
     "./runners": {
       "types": "./dist/runners.d.ts",
       "default": "./dist/runners.js"
@@ -92,9 +95,9 @@
       "types": "./dist/snapshot.d.ts",
       "default": "./dist/snapshot.js"
     },
-    "./runtime": {
-      "types": "./dist/runtime.d.ts",
-      "default": "./dist/runtime.js"
+    "./mocker": {
+      "types": "./dist/mocker.d.ts",
+      "default": "./dist/mocker.js"
     },
     "./worker": {
       "types": "./worker.d.ts",
@@ -308,10 +311,9 @@
     "@edge-runtime/vm": "*",
     "@opentelemetry/api": "^1.9.0",
     "@types/node": "^20.0.0 || ^22.0.0 || >=24.0.0",
-    "@vitest/ui": "4.1.0",
+    "@vitest/ui": "4.0.18",
     "happy-dom": "*",
-    "jsdom": "*",
-    "vite": "^6.0.0 || ^7.0.0 || ^8.0.0-0"
+    "jsdom": "*"
   },
   "peerDependenciesMeta": {
     "@edge-runtime/vm": {
@@ -331,15 +333,12 @@
     },
     "jsdom": {
       "optional": true
-    },
-    "vite": {
-      "optional": false
     }
   },
   "engines": {
     "node": "^20.0.0 || ^22.0.0 || >=24.0.0"
   },
   "bundledVersions": {
-    "vitest": "4.1.0"
+    "vitest": "4.0.18"
   }
 }

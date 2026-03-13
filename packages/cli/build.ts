@@ -20,7 +20,7 @@
 
 import { execSync } from 'node:child_process';
 import { existsSync, globSync, readFileSync, readdirSync, statSync } from 'node:fs';
-import { copyFile, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
@@ -60,6 +60,7 @@ const napiArgs = process.argv
 
 if (!skipTs) {
   await buildCli();
+  await copyCliAssets();
   buildGlobalModules();
   generateLicenseFile({
     title: 'Vite-Plus CLI license',
@@ -165,10 +166,11 @@ async function buildCli() {
     console.error(formatDiagnostics(cjsDiagnostics, cjsHost));
     process.exit(1);
   }
-  await rename(
-    join(projectDir, 'dist/define-config.js'),
-    join(projectDir, 'dist/define-config.cjs'),
-  );
+  const defineConfigJsPath = join(projectDir, 'dist/define-config.js');
+  const defineConfigCjsPath = join(projectDir, 'dist/define-config.cjs');
+  if (existsSync(defineConfigJsPath)) {
+    await copyFile(defineConfigJsPath, defineConfigCjsPath);
+  }
 
   const host = createCompilerHost(options);
 
@@ -195,6 +197,30 @@ async function buildCli() {
   if (diagnostics.length > 0) {
     console.error(formatDiagnostics(diagnostics, host));
     process.exit(1);
+  }
+
+  if (existsSync(defineConfigJsPath)) {
+    await copyFile(defineConfigJsPath, defineConfigCjsPath);
+  } else if (existsSync(defineConfigCjsPath)) {
+    await copyFile(defineConfigCjsPath, defineConfigJsPath);
+  }
+}
+
+async function copyCliAssets() {
+  const assetsDir = join(projectDir, 'assets');
+  if (!existsSync(assetsDir)) {
+    return;
+  }
+
+  const distAssetsDir = join(projectDir, 'dist', 'assets');
+  await mkdir(distAssetsDir, { recursive: true });
+
+  for (const entry of readdirSync(assetsDir)) {
+    const sourcePath = join(assetsDir, entry);
+    if (!statSync(sourcePath).isFile()) {
+      continue;
+    }
+    await copyFile(sourcePath, join(distAssetsDir, entry));
   }
 }
 

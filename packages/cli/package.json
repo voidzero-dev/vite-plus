@@ -102,6 +102,10 @@
       "types": "./dist/test/internal/browser.d.ts",
       "default": "./dist/test/internal/browser.js"
     },
+    "./test/internal/module-runner": {
+      "types": "./dist/test/internal/module-runner.d.ts",
+      "default": "./dist/test/internal/module-runner.js"
+    },
     "./test/runners": {
       "types": "./dist/test/runners.d.ts",
       "default": "./dist/test/runners.js"
@@ -131,9 +135,9 @@
       "types": "./dist/test/snapshot.d.ts",
       "default": "./dist/test/snapshot.js"
     },
-    "./test/runtime": {
-      "types": "./dist/test/runtime.d.ts",
-      "default": "./dist/test/runtime.js"
+    "./test/mocker": {
+      "types": "./dist/test/mocker.d.ts",
+      "default": "./dist/test/mocker.js"
     },
     "./test/worker": {
       "types": "./dist/test/worker.d.ts",

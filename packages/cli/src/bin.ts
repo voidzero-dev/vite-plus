@@ -12,7 +12,7 @@
 
 import path from 'node:path';
 
-import { run } from '../binding/index.js';
+import { detectWorkspace, run, takeCheckFailureKind } from '../binding/index.js';
 import { applyToolInitConfigToViteConfig, inspectInitCommand } from './init-config.js';
 import { doc } from './resolve-doc.js';
 import { fmt } from './resolve-fmt.js';
@@ -21,6 +21,12 @@ import { pack } from './resolve-pack.js';
 import { test } from './resolve-test.js';
 import { resolveUniversalViteConfig } from './resolve-vite-config.js';
 import { vite } from './resolve-vite.js';
+import { recordCheckFailureAchievement } from './utils/check-achievements.js';
+import {
+  normalizeCheckFailureKind,
+  printCheckFailureImage,
+  type CheckFailureKind,
+} from './utils/check-failure-image.js';
 import { accent, errorMsg, log } from './utils/terminal.js';
 
 function getErrorMessage(err: unknown): string {
@@ -33,6 +39,22 @@ function getErrorMessage(err: unknown): string {
   }
 
   return String(err);
+}
+
+async function celebrateCheckFailure(failureKind: CheckFailureKind) {
+  let projectRoot = process.cwd();
+
+  try {
+    projectRoot = (await detectWorkspace(projectRoot)).root ?? projectRoot;
+  } catch {
+    // Fall back to the current working directory if workspace detection fails.
+  }
+
+  const achievementUpdate = recordCheckFailureAchievement(projectRoot, failureKind);
+  await printCheckFailureImage(process.stderr, process.env, {
+    achievementUpdate,
+    failureKind,
+  });
 }
 
 // Parse command line arguments
@@ -94,6 +116,9 @@ if (command === 'create') {
     });
 
     let finalExitCode = exitCode;
+    if (command === 'check' && finalExitCode !== 0) {
+      await celebrateCheckFailure(normalizeCheckFailureKind(takeCheckFailureKind()));
+    }
     if (exitCode === 0) {
       try {
         const result = await applyToolInitConfigToViteConfig(command, args.slice(1));
@@ -126,6 +151,9 @@ if (command === 'create') {
     process.exit(finalExitCode);
   } catch (err) {
     errorMsg(getErrorMessage(err));
+    if (command === 'check') {
+      await celebrateCheckFailure(normalizeCheckFailureKind(takeCheckFailureKind()));
+    }
     process.exit(1);
   }
 }

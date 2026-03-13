@@ -18,7 +18,13 @@ mod package_manager;
 #[allow(dead_code)]
 mod utils;
 
-use std::{collections::HashMap, error::Error as StdError, ffi::OsStr, fmt::Write as _, sync::Arc};
+use std::{
+    collections::HashMap,
+    error::Error as StdError,
+    ffi::OsStr,
+    fmt::Write as _,
+    sync::{Arc, LazyLock, Mutex},
+};
 
 use napi::{anyhow, bindgen_prelude::*, threadsafe_function::ThreadsafeFunction};
 use napi_derive::napi;
@@ -27,6 +33,21 @@ use vite_path::current_dir;
 use crate::cli::{
     BoxedResolverFn, CliOptions as ViteTaskCliOptions, ResolveCommandResult, ViteConfigResolverFn,
 };
+
+static LAST_CHECK_FAILURE_KIND: LazyLock<Mutex<Option<String>>> =
+    LazyLock::new(|| Mutex::new(None));
+
+pub(crate) fn set_last_check_failure_kind(kind: Option<&str>) {
+    let mut last_failure_kind =
+        LAST_CHECK_FAILURE_KIND.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    *last_failure_kind = kind.map(str::to_owned);
+}
+
+fn take_last_check_failure_kind() -> Option<String> {
+    let mut last_failure_kind =
+        LAST_CHECK_FAILURE_KIND.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    last_failure_kind.take()
+}
 
 /// Module initialization - sets up tracing for debugging
 #[napi_derive::module_init]
@@ -130,6 +151,8 @@ fn format_error_message(error: &(dyn StdError + 'static)) -> String {
 /// and process JavaScript callbacks (via ThreadsafeFunction).
 #[napi]
 pub async fn run(options: CliOptions) -> Result<i32> {
+    set_last_check_failure_kind(None);
+
     // Use provided cwd or current directory
     let mut cwd = current_dir()?;
     if let Some(options_cwd) = options.cwd {
@@ -196,6 +219,11 @@ pub async fn run(options: CliOptions) -> Result<i32> {
             }
         },
     }
+}
+
+#[napi]
+pub fn take_check_failure_kind() -> Option<String> {
+    take_last_check_failure_kind()
 }
 
 /// Render the Vite+ header using the Rust implementation.
