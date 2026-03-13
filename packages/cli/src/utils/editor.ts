@@ -368,28 +368,33 @@ function mergeEditorConfigs(
     };
   }
 
-  // settings.json: 2-level deep merge, preserving existing keys
-  const result = { ...existing };
-  for (const [key, value] of Object.entries(incoming)) {
-    if (!(key in result)) {
-      result[key] = value;
-    } else if (
-      typeof result[key] === 'object' &&
-      result[key] !== null &&
-      !Array.isArray(result[key]) &&
-      typeof value === 'object' &&
-      value !== null &&
-      !Array.isArray(value)
-    ) {
-      // Nested object: merge preserving existing keys
-      result[key] = {
-        ...(value as Record<string, unknown>),
-        ...(result[key] as Record<string, unknown>),
-      };
+  // settings.json: recursive deep merge, preserving existing keys
+  function deepMerge(
+    target: Record<string, unknown>,
+    source: Record<string, unknown>,
+  ): Record<string, unknown> {
+    const result = { ...target };
+    for (const [key, value] of Object.entries(source)) {
+      if (!(key in result)) {
+        result[key] = value;
+      } else if (
+        typeof result[key] === 'object' &&
+        result[key] !== null &&
+        !Array.isArray(result[key]) &&
+        typeof value === 'object' &&
+        value !== null &&
+        !Array.isArray(value)
+      ) {
+        result[key] = deepMerge(
+          result[key] as Record<string, unknown>,
+          value as Record<string, unknown>,
+        );
+      }
     }
-    // else: existing key is preserved as-is
+    return result;
   }
-  return result;
+
+  return deepMerge(existing, incoming);
 }
 
 function resolveEditorId(editor: string): EditorId | undefined {
