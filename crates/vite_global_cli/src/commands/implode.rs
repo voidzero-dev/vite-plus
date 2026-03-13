@@ -76,7 +76,7 @@ pub fn execute(yes: bool) -> Result<ExitStatus, Error> {
 
 /// A shell profile that contains Vite+ sourcing lines.
 struct AffectedProfile {
-    /// Display name (e.g. ".zshrc", ".config/fish/config.fish").
+    /// Display name (e.g. ".zshrc", ".config/fish/conf.d/vite-plus.fish").
     name: Str,
     /// Absolute path to the file.
     path: AbsolutePathBuf,
@@ -343,13 +343,6 @@ mod tests {
         let content = "# existing config\nexport FOO=bar\n\n# Vite+ bin (https://viteplus.dev)\n. \"$HOME/.vite-plus/env\"\n";
         let result = remove_vite_plus_lines(content);
         assert_eq!(&*result, "# existing config\nexport FOO=bar\n");
-    }
-
-    #[test]
-    fn test_remove_vite_plus_lines_fish() {
-        let content = "# fish config\nset -x FOO bar\n\n# Vite+ bin (https://viteplus.dev)\nsource \"$HOME/.vite-plus/env.fish\"\n";
-        let result = remove_vite_plus_lines(content);
-        assert_eq!(&*result, "# fish config\nset -x FOO bar\n");
     }
 
     #[test]
