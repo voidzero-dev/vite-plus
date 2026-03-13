@@ -2,7 +2,7 @@
 import OSSHeader from '@components/oss/Header.vue';
 import BaseTheme from '@voidzero-dev/vitepress-theme/src/viteplus';
 import { useData } from 'vitepress';
-import { nextTick, watch } from 'vue';
+import { nextTick, onUnmounted, watch } from 'vue';
 
 import Footer from './components/Footer.vue';
 import Home from './layouts/Home.vue';
@@ -10,6 +10,39 @@ import Home from './layouts/Home.vue';
 
 const { frontmatter, isDark } = useData();
 const { Layout: BaseLayout } = BaseTheme;
+let homeHeaderObserver: MutationObserver | null = null;
+
+const syncHeaderMobileMenuTheme = (header: HTMLElement | null, isHome: boolean) => {
+  const mobileMenu = header?.querySelector<HTMLElement>('#mobile-menu');
+
+  if (!mobileMenu) {
+    return;
+  }
+
+  if (isHome) {
+    mobileMenu.setAttribute('data-theme', 'light');
+  } else {
+    mobileMenu.removeAttribute('data-theme');
+  }
+};
+
+const setupHomeHeaderObserver = (header: HTMLElement | null, isHome: boolean) => {
+  homeHeaderObserver?.disconnect();
+  homeHeaderObserver = null;
+
+  if (!header || !isHome || typeof MutationObserver === 'undefined') {
+    return;
+  }
+
+  homeHeaderObserver = new MutationObserver(() => {
+    syncHeaderMobileMenuTheme(header, isHome);
+  });
+
+  homeHeaderObserver.observe(header, {
+    childList: true,
+    subtree: true,
+  });
+};
 
 const syncHomeThemeOverride = async () => {
   if (typeof document === 'undefined') {
@@ -29,6 +62,8 @@ const syncHomeThemeOverride = async () => {
 
   const header = document.querySelector<HTMLElement>('.home-header');
 
+  setupHomeHeaderObserver(header, isHome);
+
   if (!header) {
     return;
   }
@@ -38,6 +73,8 @@ const syncHomeThemeOverride = async () => {
   } else {
     header.removeAttribute('data-theme');
   }
+
+  syncHeaderMobileMenuTheme(header, isHome);
 };
 
 watch(
@@ -47,6 +84,11 @@ watch(
   },
   { immediate: true },
 );
+
+onUnmounted(() => {
+  homeHeaderObserver?.disconnect();
+  homeHeaderObserver = null;
+});
 </script>
 
 <template>
