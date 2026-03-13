@@ -102,10 +102,6 @@
       "types": "./dist/test/internal/browser.d.ts",
       "default": "./dist/test/internal/browser.js"
     },
-    "./test/internal/module-runner": {
-      "types": "./dist/test/internal/module-runner.d.ts",
-      "default": "./dist/test/internal/module-runner.js"
-    },
     "./test/runners": {
       "types": "./dist/test/runners.d.ts",
       "default": "./dist/test/runners.js"
@@ -135,9 +131,9 @@
       "types": "./dist/test/snapshot.d.ts",
       "default": "./dist/test/snapshot.js"
     },
-    "./test/mocker": {
-      "types": "./dist/test/mocker.d.ts",
-      "default": "./dist/test/mocker.js"
+    "./test/runtime": {
+      "types": "./dist/test/runtime.d.ts",
+      "default": "./dist/test/runtime.js"
     },
     "./test/worker": {
       "types": "./dist/test/worker.d.ts",
@@ -205,6 +201,9 @@
     "./test/plugins/utils-source-map": {
       "default": "./dist/test/plugins/utils-source-map.js"
     },
+    "./test/plugins/utils-source-map-node": {
+      "default": "./dist/test/plugins/utils-source-map-node.js"
+    },
     "./test/plugins/utils-error": {
       "default": "./dist/test/plugins/utils-error.js"
     },
@@ -261,6 +260,9 @@
     },
     "./test/plugins/mocker-redirect": {
       "default": "./dist/test/plugins/mocker-redirect.js"
+    },
+    "./test/plugins/mocker-transforms": {
+      "default": "./dist/test/plugins/mocker-transforms.js"
     },
     "./test/plugins/mocker-automock": {
       "default": "./dist/test/plugins/mocker-automock.js"

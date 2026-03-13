@@ -61,8 +61,9 @@ async function updatePnpmWorkspace(versions) {
   let content = fs.readFileSync(filePath, 'utf8');
 
   // Update vitest-dev override (handle pre-release versions like -beta.1, -rc.0)
+  // Handle both quoted ('npm:vitest@^...') and unquoted (npm:vitest@^...) forms
   content = content.replace(
-    /vitest-dev: 'npm:vitest@\^[\d.]+(-[\w.]+)?'/,
+    /vitest-dev: '?npm:vitest@\^[\d.]+(-[\w.]+)?'?/,
     `vitest-dev: 'npm:vitest@^${versions.vitest}'`,
   );
 

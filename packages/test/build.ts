@@ -93,6 +93,7 @@ const VITEST_PACKAGE_TO_PATH: Record<string, string> = {
   // @vitest/utils
   '@vitest/utils': '@vitest/utils/index.js',
   '@vitest/utils/source-map': '@vitest/utils/source-map.js',
+  '@vitest/utils/source-map/node': '@vitest/utils/source-map/node.js',
   '@vitest/utils/error': '@vitest/utils/error.js',
   '@vitest/utils/helpers': '@vitest/utils/helpers.js',
   '@vitest/utils/display': '@vitest/utils/display.js',
@@ -116,6 +117,7 @@ const VITEST_PACKAGE_TO_PATH: Record<string, string> = {
   '@vitest/mocker/node': '@vitest/mocker/node.js',
   '@vitest/mocker/browser': '@vitest/mocker/browser.js',
   '@vitest/mocker/redirect': '@vitest/mocker/redirect.js',
+  '@vitest/mocker/transforms': '@vitest/mocker/transforms.js',
   '@vitest/mocker/automock': '@vitest/mocker/automock.js',
   '@vitest/mocker/register': '@vitest/mocker/register.js',
   // @vitest/pretty-format
@@ -2171,8 +2173,11 @@ async function patchChaiTypeReference() {
 async function patchMockerHoistedModule() {
   console.log('\nPatching vitest mocker to recognize @voidzero-dev packages...');
 
-  const mockerPath = join(distDir, '@vitest/mocker/node.js');
-  let content = await readFile(mockerPath, 'utf-8');
+  // The hoistedModule check may be in node.js or chunk-hoistMocks.js depending on the vitest version
+  const candidateFiles = [
+    join(distDir, '@vitest/mocker/node.js'),
+    join(distDir, '@vitest/mocker/chunk-hoistMocks.js'),
+  ];
 
   // Find and replace the hoistedModule check
   // Original: if (hoistedModule === source) {
@@ -2181,17 +2186,29 @@ async function patchMockerHoistedModule() {
   const newCheck =
     'if (hoistedModule === source || source === "vite-plus/test" || source === "@voidzero-dev/vite-plus-test") {';
 
-  if (!content.includes(originalCheck)) {
+  let patched = false;
+  for (const candidatePath of candidateFiles) {
+    let content: string;
+    try {
+      content = await readFile(candidatePath, 'utf-8');
+    } catch {
+      continue;
+    }
+    if (content.includes(originalCheck)) {
+      content = content.replace(originalCheck, newCheck);
+      await writeFile(candidatePath, content, 'utf-8');
+      console.log(`  Patched hoistMocks to recognize @voidzero-dev packages in ${candidatePath}`);
+      patched = true;
+      break;
+    }
+  }
+
+  if (!patched) {
     throw new Error(
       'Could not find hoistedModule check to patch in @vitest/mocker. ' +
         'This likely means vitest code has changed and the patch needs to be updated.',
     );
   }
-
-  content = content.replace(originalCheck, newCheck);
-
-  await writeFile(mockerPath, content, 'utf-8');
-  console.log('  Patched hoistMocks to recognize @voidzero-dev packages');
 }
 
 /**
@@ -2216,7 +2233,8 @@ async function createPluginExports() {
       continue;
     }
     // Convert @vitest/runner -> runner, @vitest/utils/error -> utils-error
-    const exportName = pkg.replace('@vitest/', '').replace('/', '-');
+    // @vitest/utils/source-map/node -> utils-source-map-node
+    const exportName = pkg.replace('@vitest/', '').replaceAll('/', '-');
     const shimFileName = `${exportName}.mjs`;
     const shimPath = join(pluginsDir, shimFileName);
 
