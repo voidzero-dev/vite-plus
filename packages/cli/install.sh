@@ -141,22 +141,40 @@ curl_with_error_handling() {
 
 # Detect libc type on Linux (gnu or musl)
 detect_libc() {
-  # Check for musl dynamic linker (most reliable method)
-  if [ -e /lib/ld-musl-x86_64.so.1 ] || [ -e /lib/ld-musl-aarch64.so.1 ]; then
-    echo "musl"
-    return
-  fi
-
-  # Check if ldd exists and is musl-based
-  if command -v ldd &> /dev/null; then
-    if ldd --version 2>&1 | grep -qi musl; then
-      echo "musl"
+  # Prefer positive glibc detection first.
+  # This avoids false musl detection on systems where musl is installed
+  # but the distro itself is glibc-based (common on WSL/Ubuntu).
+  if command -v getconf &> /dev/null; then
+    if getconf GNU_LIBC_VERSION > /dev/null 2>&1; then
+      echo "gnu"
       return
     fi
   fi
 
-  # Default to gnu (glibc)
-  echo "gnu"
+  # Check ldd output for musl/glibc
+  if command -v ldd &> /dev/null; then
+    ldd_out="$(ldd --version 2>&1 || true)"
+    if echo "$ldd_out" | grep -qi musl; then
+      echo "musl"
+      return
+    fi
+    if echo "$ldd_out" | grep -qi 'gnu libc'; then
+      echo "gnu"
+      return
+    fi
+    if echo "$ldd_out" | grep -qi 'glibc'; then
+      echo "gnu"
+      return
+    fi
+  fi
+
+  # Final fallback: musl loader present usually indicates musl-based distro,
+  # but only check this after glibc detection to avoid false positives.
+  if [ -e /lib/ld-musl-x86_64.so.1 ] || [ -e /lib/ld-musl-aarch64.so.1 ]; then
+    echo "musl"
+  else
+    echo "gnu"
+  fi
 }
 
 # Detect platform
