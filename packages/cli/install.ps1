@@ -324,12 +324,13 @@ function Main {
     # Install production dependencies (skip if VITE_PLUS_SKIP_DEPS_INSTALL is set,
     # e.g. during local dev where install-global-cli.ts handles deps separately)
     if (-not $env:VITE_PLUS_SKIP_DEPS_INSTALL) {
+        $installLog = Join-Path $VersionDir "install.log"
         Push-Location $VersionDir
         try {
             $env:CI = "true"
-            & "$BinDir\vp.exe" install
+            & "$BinDir\vp.exe" install --silent *> $installLog
             if ($LASTEXITCODE -ne 0) {
-                Write-Error "Failed to install dependencies. Please check the error output above."
+                Write-Host "error: Failed to install dependencies. See log for details: $installLog" -ForegroundColor Red
                 exit 1
             }
         } finally {

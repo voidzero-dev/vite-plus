@@ -603,9 +603,10 @@ NPMRC_EOF
   # Install production dependencies (skip if VITE_PLUS_SKIP_DEPS_INSTALL is set,
   # e.g. during local dev where install-global-cli.ts handles deps separately)
   if [ -z "${VITE_PLUS_SKIP_DEPS_INSTALL:-}" ]; then
-    if ! (cd "$VERSION_DIR" && CI=true "$BIN_DIR/vp" install 2>&1); then
-      error "Failed to install dependencies. Re-run without piping to see full output:
-    curl -fsSL https://vite.plus -o /tmp/vp-install.sh && bash /tmp/vp-install.sh"
+    local install_log="$VERSION_DIR/install.log"
+    if ! (cd "$VERSION_DIR" && CI=true "$BIN_DIR/vp" install --silent > "$install_log" 2>&1); then
+      error "Failed to install dependencies. See log for details: $install_log"
+      exit 1
     fi
   fi
 
