@@ -21,6 +21,118 @@ const VSCODE_EXTENSIONS = {
   recommendations: ['VoidZero.vite-plus-extension-pack'],
 } as const;
 
+const ZED_SETTINGS = {
+  lsp: {
+    oxlint: {
+      initialization_options: {
+        settings: {
+          configPath: './oxlintrc.json',
+          run: 'onType',
+          disableNestedConfig: false,
+          fixKind: 'safe_fix',
+          typeAware: true,
+          unusedDisableDirectives: 'deny',
+        },
+      },
+    },
+    oxfmt: {
+      initialization_options: {
+        settings: {
+          configPath: './oxfmtrc.jsonc',
+        },
+      },
+    },
+  },
+  languages: {
+    CSS: {
+      format_on_save: 'on',
+      prettier: { allowed: false },
+      formatter: [{ language_server: { name: 'oxfmt' } }],
+    },
+    GraphQL: {
+      format_on_save: 'on',
+      prettier: { allowed: false },
+      formatter: [{ language_server: { name: 'oxfmt' } }],
+    },
+    Handlebars: {
+      format_on_save: 'on',
+      prettier: { allowed: false },
+      formatter: [{ language_server: { name: 'oxfmt' } }],
+    },
+    HTML: {
+      format_on_save: 'on',
+      prettier: { allowed: false },
+      formatter: [{ language_server: { name: 'oxfmt' } }],
+    },
+    JavaScript: {
+      format_on_save: 'on',
+      prettier: { allowed: false },
+      formatter: [{ language_server: { name: 'oxfmt' } }],
+      code_action: 'source.fixAll.oxc',
+    },
+    JSX: {
+      format_on_save: 'on',
+      prettier: { allowed: false },
+      formatter: [{ language_server: { name: 'oxfmt' } }],
+    },
+    JSON: {
+      format_on_save: 'on',
+      prettier: { allowed: false },
+      formatter: [{ language_server: { name: 'oxfmt' } }],
+    },
+    JSON5: {
+      format_on_save: 'on',
+      prettier: { allowed: false },
+      formatter: [{ language_server: { name: 'oxfmt' } }],
+    },
+    JSONC: {
+      format_on_save: 'on',
+      prettier: { allowed: false },
+      formatter: [{ language_server: { name: 'oxfmt' } }],
+    },
+    Less: {
+      format_on_save: 'on',
+      prettier: { allowed: false },
+      formatter: [{ language_server: { name: 'oxfmt' } }],
+    },
+    Markdown: {
+      format_on_save: 'on',
+      prettier: { allowed: false },
+      formatter: [{ language_server: { name: 'oxfmt' } }],
+    },
+    MDX: {
+      format_on_save: 'on',
+      prettier: { allowed: false },
+      formatter: [{ language_server: { name: 'oxfmt' } }],
+    },
+    SCSS: {
+      format_on_save: 'on',
+      prettier: { allowed: false },
+      formatter: [{ language_server: { name: 'oxfmt' } }],
+    },
+    TypeScript: {
+      format_on_save: 'on',
+      prettier: { allowed: false },
+      formatter: [{ language_server: { name: 'oxfmt' } }],
+    },
+    TSX: {
+      format_on_save: 'on',
+      prettier: { allowed: false },
+      formatter: [{ language_server: { name: 'oxfmt' } }],
+    },
+    Vue: {
+      format_on_save: 'on',
+      prettier: { allowed: false },
+      formatter: [{ language_server: { name: 'oxfmt' } }],
+    },
+    YAML: {
+      format_on_save: 'on',
+      prettier: { allowed: false },
+      formatter: [{ language_server: { name: 'oxfmt' } }],
+    },
+  },
+} as const;
+
 export const EDITORS = [
   {
     id: 'vscode',
@@ -29,6 +141,14 @@ export const EDITORS = [
     files: {
       'settings.json': VSCODE_SETTINGS as Record<string, unknown>,
       'extensions.json': VSCODE_EXTENSIONS as Record<string, unknown>,
+    },
+  },
+  {
+    id: 'zed',
+    label: 'Zed',
+    targetDir: '.zed',
+    files: {
+      'settings.json': ZED_SETTINGS as Record<string, unknown>,
     },
   },
 ] as const;
