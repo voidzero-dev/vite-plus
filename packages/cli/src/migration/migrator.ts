@@ -1179,7 +1179,7 @@ function rewriteLintStagedConfigFile(projectPath: string, report?: MigrationRepo
   }
   if (hasUnsupported) {
     infoMigration(
-      'Only "staged" in vite.config.ts is supported. See https://viteplus.dev/migration/#lint-staged',
+      'Only "staged" in vite.config.ts is supported. See https://viteplus.dev/guide/migrate#lint-staged',
       report,
     );
   }
@@ -1256,7 +1256,7 @@ function mergeTsdownConfigFile(
   }
   // Show documentation link for manual merging since we only added the import
   infoMigration(
-    `Please manually merge ${displayRelative(fullTsdownConfigPath)} into ${displayRelative(fullViteConfigPath)}, see https://viteplus.dev/migration/#tsdown`,
+    `Please manually merge ${displayRelative(fullTsdownConfigPath)} into ${displayRelative(fullViteConfigPath)}, see https://viteplus.dev/guide/migrate#tsdown`,
     report,
   );
 }

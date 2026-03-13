@@ -92,6 +92,55 @@ Finally, verify the migration by running: `vp install`, `vp check`, `vp test`, a
 Summarize the migration at the end and report any manual follow-up still required.
 ```
 
+## tsdown
+
+If your project uses a `tsdown.config.ts`, move its options into the `pack` block in `vite.config.ts`:
+
+```ts
+// before — tsdown.config.ts
+import { defineConfig } from 'tsdown';
+
+export default defineConfig({
+  entry: ['src/index.ts'],
+  dts: true,
+  format: ['esm', 'cjs'],
+});
+```
+
+```ts
+// after — vite.config.ts
+import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  pack: {
+    entry: ['src/index.ts'],
+    dts: true,
+    format: ['esm', 'cjs'],
+  },
+});
+```
+
+After merging, delete `tsdown.config.ts`. See the [Pack guide](/guide/pack) for the full configuration reference.
+
+## lint-staged
+
+Vite+ replaces lint-staged with its own `staged` block in `vite.config.ts`. Only the `staged` config format is supported — standalone `.lintstagedrc`, `lint-staged.config.*`, or `package.json` `lint-staged` fields are not migrated automatically.
+
+Move your lint-staged rules into the `staged` block:
+
+```ts
+// vite.config.ts
+import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  staged: {
+    '*.{js,ts,tsx,vue,svelte}': 'vp check --fix',
+  },
+});
+```
+
+After migrating, remove lint-staged from your dependencies and delete any lint-staged config files. See the [Commit hooks guide](/guide/commit-hooks) and [Staged config reference](/config/staged) for details.
+
 ## Examples
 
 ```bash
