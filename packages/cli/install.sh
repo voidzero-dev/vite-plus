@@ -574,10 +574,19 @@ main() {
 }
 WRAPPER_EOF
 
+  # Isolate from user's global pnpm config (e.g. minimumReleaseAge)
+  # by creating a local .npmrc in the version directory.
+  cat > "$VERSION_DIR/.npmrc" <<NPMRC_EOF
+minimum-release-age=0
+NPMRC_EOF
+
   # Install production dependencies (skip if VITE_PLUS_SKIP_DEPS_INSTALL is set,
   # e.g. during local dev where install-global-cli.ts handles deps separately)
   if [ -z "${VITE_PLUS_SKIP_DEPS_INSTALL:-}" ]; then
-    (cd "$VERSION_DIR" && CI=true "$BIN_DIR/vp" install --silent)
+    if ! (cd "$VERSION_DIR" && CI=true "$BIN_DIR/vp" install 2>&1); then
+      error "Failed to install dependencies. Re-run without piping to see full output:
+    curl -fsSL https://vite.plus -o /tmp/vp-install.sh && bash /tmp/vp-install.sh"
+    fi
   fi
 
   # Create/update current symlink (use relative path for portability)
