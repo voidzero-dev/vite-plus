@@ -63,7 +63,7 @@ jobs:
             target: x86_64-unknown-linux-gnu
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-          - os: namespace-profile-mac-default
+          - os: macos-latest
             target: aarch64-apple-darwin
     runs-on: ${{ matrix.os }}
     steps:
@@ -174,7 +174,7 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-          - os: namespace-profile-mac-default
+          - os: macos-latest
           - os: windows-latest
     runs-on: ${{ matrix.os }}
     steps:
@@ -186,12 +186,6 @@ jobs:
         if: runner.os == 'Windows'
         shell: powershell
         run: Set-MpPreference -DisableRealtimeMonitoring $true
-
-      - run: |
-          brew install rustup
-          rustup install stable
-          echo "PATH=/opt/homebrew/opt/rustup/bin:$PATH" >> $GITHUB_ENV
-        if: ${{ matrix.os == 'namespace-profile-mac-default' }}
 
       - uses: oxc-project/setup-rust@d286d43bc1f606abbd98096666ff8be68c8d5f57 # v1.0.0
         with:
