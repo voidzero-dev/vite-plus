@@ -938,6 +938,16 @@ async function rewriteVitestImports(leafDepToVendorPath: Map<string, string>) {
       specifierMap.set(specifier, vendorPath);
     }
 
+    // For files inside @vitest/browser/, preserve 'vitest/browser' as a bare specifier.
+    // These files run in browser context where the vitest:vendor-aliases plugin
+    // resolves 'vitest/browser' to the virtual module '\0vitest/browser',
+    // which provides browser-safe context API (page, server, userEvent, utils).
+    // Without this, 'vitest/browser' gets rewritten to './index.js' which resolves
+    // to the Node.js server file (~9000 lines of node:fs, ws, etc.)
+    if (file.includes('@vitest/browser') || file.includes('@vitest\\browser')) {
+      specifierMap.delete('vitest/browser');
+    }
+
     // Rewrite using AST
     const rewritten = rewriteImportsWithAst(content, file, false, specifierMap);
 
@@ -946,38 +956,6 @@ async function rewriteVitestImports(leafDepToVendorPath: Map<string, string>) {
       .replaceAll(/from ['"]vite['"]/g, `from '${CORE_PACKAGE_NAME}'`)
       .replaceAll(/import\(['"]vite['"]\)/g, `import('${CORE_PACKAGE_NAME}')`)
       .replaceAll(`'vite/module-runner'`, `'${CORE_PACKAGE_NAME}/module-runner'`);
-
-    // Special handling for @vitest/browser files that import from ./index.js (Node.js-only)
-    // Replace: import{server,page,utils}from'./index.js' with browser-safe stubs
-    if (file.includes('@vitest/browser') || file.includes('@vitest\\browser')) {
-      // Replace server import with browser-safe stub
-      const serverStub = `const server = {
-  get browser() { return window.__vitest_browser_runner__?.config?.browser?.name; },
-  get config() { return window.__vitest_browser_runner__?.config || {}; },
-  get commands() { return window.__vitest_browser_runner__?.commands || {}; },
-  get provider() { return window.__vitest_browser_runner__?.provider; },
-}`;
-      // Handle combined import: import{server,page,utils}from'./index.js'
-      finalContent = finalContent.replace(
-        /import\s*\{\s*server\s*,\s*page\s*,\s*utils\s*\}\s*from\s*['"]\.\/index\.js['"];?/g,
-        `${serverStub};const page = window.__vitest_browser_runner__?.page || {};const utils = window.__vitest_browser_runner__?.utils || {};`,
-      );
-      // Handle individual server import: import{server}from'./index.js'
-      finalContent = finalContent.replace(
-        /import\s*\{\s*server\s*\}\s*from\s*['"]\.\/index\.js['"];?/g,
-        serverStub + ';',
-      );
-      // Remove side-effect imports from ./index.js (Node.js-only)
-      finalContent = finalContent.replace(/import\s*['"]\.\/index\.js['"];?/g, '');
-
-      // Handle tester chunk imports from ../../index.js (browser needs virtual module interception)
-      // The tester chunk is in client/__vitest_browser__/ and imports from ../../index.js
-      // Change to 'vitest/browser' so the virtual module plugin can intercept at runtime
-      finalContent = finalContent.replace(
-        /import\s*\{\s*userEvent\s*,\s*page\s*,\s*server\s*\}\s*from\s*['"]\.\.\/\.\.\/index\.js['"];?/g,
-        "import { userEvent, page, server } from 'vitest/browser';",
-      );
-    }
 
     // Special handling for @vitest/mocker entry files that have redundant side-effect imports
     // The original files have: import 'magic-string'; export {...} from './chunk-automock.js'; import 'estree-walker';
