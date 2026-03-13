@@ -28,6 +28,7 @@ const guideSidebar = [
       { text: 'Migrate to Vite+', link: '/guide/migrate' },
       { text: 'Installing Dependencies', link: '/guide/install' },
       { text: 'Environment', link: '/guide/env' },
+      { text: 'Why Vite+', link: '/guide/why' },
     ],
   },
   {
