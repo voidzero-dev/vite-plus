@@ -651,7 +651,12 @@ NPMRC_EOF
 
   # Show restart note if PATH was added to shell config
   if [ "$PATH_CONFIGURED" = "true" ] && [ -n "$SHELL_CONFIG_UPDATED" ]; then
-    local display_config="~${SHELL_CONFIG_UPDATED#"$HOME"}"
+    local display_config
+    if [ "${SHELL_CONFIG_UPDATED#"$HOME"}" != "$SHELL_CONFIG_UPDATED" ]; then
+      display_config="~${SHELL_CONFIG_UPDATED#"$HOME"}"
+    else
+      display_config="$SHELL_CONFIG_UPDATED"
+    fi
     echo ""
     echo "  Note: Run \`source $display_config\` or restart your terminal."
   fi
