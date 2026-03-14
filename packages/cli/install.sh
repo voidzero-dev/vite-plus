@@ -358,10 +358,10 @@ configure_shell_path() {
       # Prioritize .zshrc for user notification (easier to source)
       if [ $zshrc_result -eq 0 ]; then
         result=0
-        SHELL_CONFIG_UPDATED=".zshrc"
+        SHELL_CONFIG_UPDATED="$zsh_dir/.zshrc"
       elif [ $zshenv_result -eq 0 ]; then
         result=0
-        SHELL_CONFIG_UPDATED=".zshenv"
+        SHELL_CONFIG_UPDATED="$zsh_dir/.zshenv"
       elif [ $zshenv_result -eq 2 ] || [ $zshrc_result -eq 2 ]; then
         result=2  # already configured in at least one file
       fi
@@ -378,13 +378,13 @@ configure_shell_path() {
       # Prioritize .bashrc for user notification (most commonly edited)
       if [ $bashrc_result -eq 0 ]; then
         result=0
-        SHELL_CONFIG_UPDATED=".bashrc"
+        SHELL_CONFIG_UPDATED="$HOME/.bashrc"
       elif [ $bash_profile_result -eq 0 ]; then
         result=0
-        SHELL_CONFIG_UPDATED=".bash_profile"
+        SHELL_CONFIG_UPDATED="$HOME/.bash_profile"
       elif [ $profile_result -eq 0 ]; then
         result=0
-        SHELL_CONFIG_UPDATED=".profile"
+        SHELL_CONFIG_UPDATED="$HOME/.profile"
       elif [ $bash_profile_result -eq 2 ] || [ $bashrc_result -eq 2 ] || [ $profile_result -eq 2 ]; then
         result=2  # already configured in at least one file
       fi
@@ -399,7 +399,7 @@ configure_shell_path() {
         echo "# Vite+ bin (https://viteplus.dev)" >> "$fish_config"
         echo "source \"$INSTALL_DIR_REF/env.fish\"" >> "$fish_config"
         result=0
-        SHELL_CONFIG_UPDATED=".config/fish/conf.d/vite-plus.fish"
+        SHELL_CONFIG_UPDATED="$fish_config"
       fi
       ;;
   esac
@@ -651,8 +651,9 @@ NPMRC_EOF
 
   # Show restart note if PATH was added to shell config
   if [ "$PATH_CONFIGURED" = "true" ] && [ -n "$SHELL_CONFIG_UPDATED" ]; then
+    local display_config="~${SHELL_CONFIG_UPDATED#"$HOME"}"
     echo ""
-    echo "  Note: Run \`source ~/$SHELL_CONFIG_UPDATED\` or restart your terminal."
+    echo "  Note: Run \`source $display_config\` or restart your terminal."
   fi
 
   # Show warning if PATH could not be automatically configured
