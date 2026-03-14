@@ -767,7 +767,7 @@ fn delegated_help_doc(command: &str) -> Option<HelpDoc> {
                     vec![
                         "  vp check",
                         "  vp check --fix",
-                        "  vp check --no-type-check src/index.ts",
+                        "  vp check --no-lint src/index.ts",
                     ],
                 ),
             ],
