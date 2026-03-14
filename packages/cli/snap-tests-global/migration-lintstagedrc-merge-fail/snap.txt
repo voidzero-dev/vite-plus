@@ -8,7 +8,7 @@ VITE+ - The Unified Toolchain for the Web
 ! Warnings:
   - Failed to merge staged config into vite.config.ts
 → Manual follow-up:
-  - Please add staged config to vite.config.ts manually, see https://viteplus.dev/config/
+  - Please add staged config to vite.config.ts manually, see https://viteplus.dev/guide/migrate#lint-staged
 
 > cat package.json # check package.json
 {

@@ -1430,7 +1430,7 @@ function mergeStagedConfigToViteConfig(
       report,
     );
     infoMigration(
-      `Please add staged config to ${displayRelative(fullViteConfigPath)} manually, see https://viteplus.dev/config/`,
+      `Please add staged config to ${displayRelative(fullViteConfigPath)} manually, see https://viteplus.dev/guide/migrate#lint-staged`,
       report,
     );
     return false;
