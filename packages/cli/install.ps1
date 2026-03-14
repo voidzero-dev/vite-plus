@@ -316,13 +316,23 @@ function Main {
     } | ConvertTo-Json -Depth 10
     Set-Content -Path (Join-Path $VersionDir "package.json") -Value $wrapperJson
 
+    # Isolate from user's global package manager config that may block
+    # installing recently-published packages (e.g. pnpm's minimumReleaseAge,
+    # npm's min-release-age) by creating a local .npmrc in the version directory.
+    Set-Content -Path (Join-Path $VersionDir ".npmrc") -Value "minimum-release-age=0`nmin-release-age=0"
+
     # Install production dependencies (skip if VITE_PLUS_SKIP_DEPS_INSTALL is set,
     # e.g. during local dev where install-global-cli.ts handles deps separately)
     if (-not $env:VITE_PLUS_SKIP_DEPS_INSTALL) {
+        $installLog = Join-Path $VersionDir "install.log"
         Push-Location $VersionDir
         try {
             $env:CI = "true"
-            & "$BinDir\vp.exe" install --silent
+            & "$BinDir\vp.exe" install --silent *> $installLog
+            if ($LASTEXITCODE -ne 0) {
+                Write-Host "error: Failed to install dependencies. See log for details: $installLog" -ForegroundColor Red
+                exit 1
+            }
         } finally {
             Pop-Location
         }
