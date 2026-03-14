@@ -1,4 +1,5 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["github>Boshen/renovate", "helpers:pinGitHubActionDigestsToSemver"]
+  "extends": ["github>Boshen/renovate", "helpers:pinGitHubActionDigestsToSemver"],
+  "ignorePaths": ["packages/cli/snap-tests/**", "packages/cli/snap-tests-global/**"]
 }
