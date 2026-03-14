@@ -7,7 +7,7 @@ import type { LogMessageOptions } from './log.js';
 
 const prefix = '   ';
 
-// TODO (43081j): this currently doesn't support custom `output` writables
+// TODO (43081j): this currently doesn't support custom `output` writable
 // because we rely on `columns` existing (i.e. `process.stdout.columns).
 //
 // If we want to support `output` being passed in, we will need to use
