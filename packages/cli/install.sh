@@ -390,7 +390,7 @@ configure_shell_path() {
       fi
       ;;
     */fish)
-      local fish_dir="$HOME/.config/fish/conf.d"
+      local fish_dir="${XDG_CONFIG_HOME:-$HOME/.config}/fish/conf.d"
       local fish_config="$fish_dir/vite-plus.fish"
       if [ -f "$fish_config" ]; then
         result=2
