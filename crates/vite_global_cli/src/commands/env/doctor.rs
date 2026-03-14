@@ -457,15 +457,8 @@ fn check_profile_files(vite_plus_home: &str) -> Option<String> {
         search_strings.push(format!("{home_dir}{suffix}{env_suffix}"));
     }
 
-    #[cfg(target_os = "macos")]
-    let profile_files: &[&str] = &[".zshenv", ".profile"];
-
-    #[cfg(target_os = "linux")]
-    let profile_files: &[&str] = &[".profile"];
-
-    // Fallback for other Unix platforms
-    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
-    let profile_files: &[&str] = &[".profile"];
+    // Check all profiles the install script may have written to
+    let profile_files: &[&str] = &[".zshenv", ".zshrc", ".bash_profile", ".bashrc", ".profile"];
 
     for file in profile_files {
         let full_path = format!("{home_dir}/{file}");
