@@ -5,7 +5,7 @@ VITE+ - The Unified Toolchain for the Web
 • Node <semver>  pnpm <semver>
 • 3 config updates applied, 1 file had imports rewritten
 → Manual follow-up:
-  - Please manually merge tsdown.config.ts into vite.config.ts, see https://viteplus.dev/migration/#tsdown
+  - Please manually merge tsdown.config.ts into vite.config.ts, see https://viteplus.dev/guide/migrate#tsdown
 
 > cat tsdown.config.ts # check tsdown.config.ts
 import { defineConfig } from 'vite-plus/pack';
