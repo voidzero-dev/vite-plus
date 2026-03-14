@@ -24,6 +24,7 @@ When you create or migrate a project, Vite+ prompts whether you want editor conf
 ```json
 {
   "editor.defaultFormatter": "oxc.oxc-vscode",
+  "oxc.fmt.configPath": "./vite.config.ts",
   "editor.formatOnSave": true,
   "editor.formatOnSaveMode": "file",
   "editor.codeActionsOnSave": {
@@ -32,4 +33,4 @@ When you create or migrate a project, Vite+ prompts whether you want editor conf
 }
 ```
 
-This gives the project a shared default formatter and enables Oxc-powered fix actions on save. Vite+ uses `formatOnSaveMode: "file"` because Oxfmt does not support partial formatting.
+This gives the project a shared default formatter and enables Oxc-powered fix actions on save. Setting `oxc.fmt.configPath` to `./vite.config.ts` keeps editor format-on-save aligned with the `fmt` block in your Vite+ config. Vite+ uses `formatOnSaveMode: "file"` because Oxfmt does not support partial formatting.

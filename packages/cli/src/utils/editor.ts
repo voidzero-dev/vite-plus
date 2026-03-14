@@ -9,6 +9,7 @@ import { readJsonFile, writeJsonFile } from './json.js';
 const VSCODE_SETTINGS = {
   // Set as default over per-lang to avoid conflicts with other formatters
   'editor.defaultFormatter': 'oxc.oxc-vscode',
+  'oxc.fmt.configPath': './vite.config.ts',
   'editor.formatOnSave': true,
   // Oxfmt does not support partial formatting
   'editor.formatOnSaveMode': 'file',
@@ -38,7 +39,7 @@ const ZED_SETTINGS = {
     oxfmt: {
       initialization_options: {
         settings: {
-          configPath: './.oxfmtrc.jsonc',
+          configPath: './vite.config.ts',
           run: 'onSave',
         },
       },
