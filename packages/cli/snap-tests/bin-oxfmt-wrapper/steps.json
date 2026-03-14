@@ -1,4 +1,3 @@
 {
-  "ignoredPlatforms": ["win32"],
   "commands": ["oxfmt # should reject non-LSP usage", "oxfmt --help # should reject non-LSP usage"]
 }

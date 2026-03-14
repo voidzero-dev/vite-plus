@@ -12,9 +12,10 @@ if (!process.argv.includes('--lsp')) {
 
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const require = createRequire(import.meta.url);
 const oxlintMainPath = require.resolve('oxlint');
 const oxlintBin = join(dirname(dirname(oxlintMainPath)), 'bin', 'oxlint');
 
-await import(oxlintBin);
+await import(pathToFileURL(oxlintBin).href);
