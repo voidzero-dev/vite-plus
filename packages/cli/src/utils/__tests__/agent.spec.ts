@@ -334,13 +334,15 @@ describe('writeAgentInstructions symlink behavior', () => {
 
     await writeAgentInstructions({
       projectRoot: dir,
-      targetPaths: ['AGENTS.md', 'CLAUDE.md', '.github/copilot-instructions.md'],
+      targetPaths: ['AGENTS.md', 'CLAUDE.md', 'GEMINI.md', '.github/copilot-instructions.md'],
       interactive: false,
     });
 
     expect(mockFs.isSymlink(path.join(dir, 'AGENTS.md'))).toBe(false);
     expect(mockFs.isSymlink(path.join(dir, 'CLAUDE.md'))).toBe(true);
     expect(mockFs.readlinkSync(path.join(dir, 'CLAUDE.md'))).toBe('AGENTS.md');
+    expect(mockFs.isSymlink(path.join(dir, 'GEMINI.md'))).toBe(true);
+    expect(mockFs.readlinkSync(path.join(dir, 'GEMINI.md'))).toBe('AGENTS.md');
     expect(mockFs.isSymlink(path.join(dir, '.github/copilot-instructions.md'))).toBe(true);
     expect(mockFs.readlinkSync(path.join(dir, '.github/copilot-instructions.md'))).toBe(
       path.join('..', 'AGENTS.md'),

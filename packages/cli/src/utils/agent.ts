@@ -171,6 +171,7 @@ const AGENT_ALIASES: Record<string, string> = {
 export const AGENTS = [
   { id: 'chatgpt-codex', label: 'ChatGPT (Codex)', targetPath: 'AGENTS.md' },
   { id: 'claude', label: 'Claude Code', targetPath: 'CLAUDE.md' },
+  { id: 'gemini', label: 'Gemini CLI', targetPath: 'GEMINI.md' },
   {
     id: 'copilot',
     label: 'GitHub Copilot',
