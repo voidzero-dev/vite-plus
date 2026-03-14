@@ -350,10 +350,11 @@ configure_shell_path() {
       # Add to both .zshenv (for all shells including IDE) and .zshrc (to ensure PATH is at front)
       # Create .zshenv if missing — it's the canonical place for PATH in zsh
       # and is sourced by all session types (interactive, non-interactive, IDE)
-      [ -f "$HOME/.zshenv" ] || touch "$HOME/.zshenv"
+      local zsh_dir="${ZDOTDIR:-$HOME}"
+      [ -f "$zsh_dir/.zshenv" ] || touch "$zsh_dir/.zshenv"
       local zshenv_result=0 zshrc_result=0
-      add_bin_to_path "$HOME/.zshenv" || zshenv_result=$?
-      add_bin_to_path "$HOME/.zshrc" || zshrc_result=$?
+      add_bin_to_path "$zsh_dir/.zshenv" || zshenv_result=$?
+      add_bin_to_path "$zsh_dir/.zshrc" || zshrc_result=$?
       # Prioritize .zshrc for user notification (easier to source)
       if [ $zshrc_result -eq 0 ]; then
         result=0
