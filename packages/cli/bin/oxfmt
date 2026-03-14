@@ -11,8 +11,9 @@ if (!process.argv.includes('--lsp')) {
 }
 
 import { createRequire } from 'node:module';
+import { pathToFileURL } from 'node:url';
 
 const require = createRequire(import.meta.url);
 const oxfmtBin = require.resolve('oxfmt/bin/oxfmt');
 
-await import(oxfmtBin);
+await import(pathToFileURL(oxfmtBin).href);
