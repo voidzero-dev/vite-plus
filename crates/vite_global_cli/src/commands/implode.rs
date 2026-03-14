@@ -13,14 +13,14 @@ use vite_str::Str;
 
 use crate::{cli::exit_status, error::Error};
 
-/// All shell profile paths to check, with `is_fish` flag.
+/// All shell profile paths to check, with `is_snippet` flag.
 const SHELL_PROFILES: &[(&str, bool)] = &[
     (".zshenv", false),
     (".zshrc", false),
     (".bash_profile", false),
     (".bashrc", false),
     (".profile", false),
-    (".config/fish/config.fish", true),
+    (".config/fish/conf.d/vite-plus.fish", true),
 ];
 
 /// Comment marker written by the install script above the sourcing line.
@@ -76,32 +76,49 @@ pub fn execute(yes: bool) -> Result<ExitStatus, Error> {
 
 /// A shell profile that contains Vite+ sourcing lines.
 struct AffectedProfile {
-    /// Display name (e.g. ".zshrc", ".config/fish/config.fish").
+    /// Display name (e.g. ".zshrc", ".config/fish/conf.d/vite-plus.fish").
     name: Str,
     /// Absolute path to the file.
     path: AbsolutePathBuf,
-    /// Whether this is a fish shell profile.
-    is_fish: bool,
-    /// File content read during detection (reused for cleaning).
-    content: Str,
+    kind: AffectedProfileKind,
+}
+
+// Indicating whether it's a snippet (remove file) or a main profile (remove lines).
+enum AffectedProfileKind {
+    // A snippet, uninstall would be as easy as removing the file
+    Snippet,
+    Main {
+        /// File content read during detection (reused for cleaning).
+        content: Str,
+    },
 }
 
 /// Collect shell profiles that contain Vite+ sourcing lines.
 /// Content is cached so we don't need to re-read during cleaning.
 fn collect_affected_profiles(user_home: &AbsolutePathBuf) -> Vec<AffectedProfile> {
     let mut affected = Vec::new();
-    for &(name, is_fish) in SHELL_PROFILES {
+    for &(name, is_snippet) in SHELL_PROFILES {
         let path = user_home.join(name);
+        // For snippets, check if the file exists only
+        if is_snippet {
+            if let Some(true) = std::fs::exists(&path).ok() {
+                affected.push(AffectedProfile {
+                    name: Str::from(name),
+                    path,
+                    kind: AffectedProfileKind::Snippet,
+                })
+            }
+            continue;
+        }
         // Read directly — if the file doesn't exist, read_to_string returns Err
         // which is_ok_and handles gracefully (no redundant exists() check).
         if let Some(content) =
-            std::fs::read_to_string(&path).ok().filter(|c| has_vite_plus_lines(c, is_fish))
+            std::fs::read_to_string(&path).ok().filter(|c| has_vite_plus_lines(c))
         {
             affected.push(AffectedProfile {
                 name: Str::from(name),
                 path,
-                is_fish,
-                content: Str::from(content),
+                kind: AffectedProfileKind::Main { content: Str::from(content) },
             });
         }
     }
@@ -150,12 +167,22 @@ fn confirm_implode(
 /// Clean all affected shell profiles using cached content (no re-read).
 fn clean_affected_profiles(affected_profiles: &[AffectedProfile]) {
     for profile in affected_profiles {
-        let cleaned = remove_vite_plus_lines(&profile.content, profile.is_fish);
-        match std::fs::write(&profile.path, cleaned.as_bytes()) {
-            Ok(()) => output::success(&vite_str::format!("Cleaned ~/{}", profile.name)),
-            Err(e) => {
-                output::warn(&vite_str::format!("Failed to clean ~/{}: {e}", profile.name));
+        match &profile.kind {
+            AffectedProfileKind::Main { content } => {
+                let cleaned = remove_vite_plus_lines(content);
+                match std::fs::write(&profile.path, cleaned.as_bytes()) {
+                    Ok(()) => output::success(&vite_str::format!("Cleaned ~/{}", profile.name)),
+                    Err(e) => {
+                        output::warn(&vite_str::format!("Failed to clean ~/{}: {e}", profile.name));
+                    }
+                }
             }
+            AffectedProfileKind::Snippet => match std::fs::remove_file(&profile.path) {
+                Ok(()) => output::success(&vite_str::format!("Removed ~/{}", profile.name)),
+                Err(e) => {
+                    output::warn(&vite_str::format!("Failed to remove ~/{}: {e}", profile.name));
+                }
+            },
         }
     }
 }
@@ -242,14 +269,14 @@ fn spawn_deferred_delete(trash_path: &std::path::Path) -> std::io::Result<std::p
 }
 
 /// Check if file content contains Vite+ sourcing lines.
-fn has_vite_plus_lines(content: &str, is_fish: bool) -> bool {
-    let pattern = if is_fish { ".vite-plus/env.fish" } else { ".vite-plus/env\"" };
+fn has_vite_plus_lines(content: &str) -> bool {
+    let pattern = ".vite-plus/env\"";
     content.lines().any(|line| line.contains(pattern))
 }
 
 /// Remove Vite+ lines from content, returning the cleaned string.
-fn remove_vite_plus_lines(content: &str, is_fish: bool) -> Str {
-    let pattern = if is_fish { ".vite-plus/env.fish" } else { ".vite-plus/env\"" };
+fn remove_vite_plus_lines(content: &str) -> Str {
+    let pattern = ".vite-plus/env\"";
     let lines: Vec<&str> = content.lines().collect();
     let mut remove_indices = Vec::new();
 
@@ -314,35 +341,28 @@ mod tests {
     #[test]
     fn test_remove_vite_plus_lines_posix() {
         let content = "# existing config\nexport FOO=bar\n\n# Vite+ bin (https://viteplus.dev)\n. \"$HOME/.vite-plus/env\"\n";
-        let result = remove_vite_plus_lines(content, false);
+        let result = remove_vite_plus_lines(content);
         assert_eq!(&*result, "# existing config\nexport FOO=bar\n");
-    }
-
-    #[test]
-    fn test_remove_vite_plus_lines_fish() {
-        let content = "# fish config\nset -x FOO bar\n\n# Vite+ bin (https://viteplus.dev)\nsource \"$HOME/.vite-plus/env.fish\"\n";
-        let result = remove_vite_plus_lines(content, true);
-        assert_eq!(&*result, "# fish config\nset -x FOO bar\n");
     }
 
     #[test]
     fn test_remove_vite_plus_lines_no_match() {
         let content = "# just a normal config\nexport PATH=/usr/bin\n";
-        let result = remove_vite_plus_lines(content, false);
+        let result = remove_vite_plus_lines(content);
         assert_eq!(&*result, content);
     }
 
     #[test]
     fn test_remove_vite_plus_lines_absolute_path() {
         let content = "# existing\n. \"/home/user/.vite-plus/env\"\n";
-        let result = remove_vite_plus_lines(content, false);
+        let result = remove_vite_plus_lines(content);
         assert_eq!(&*result, "# existing\n");
     }
 
     #[test]
     fn test_remove_vite_plus_lines_preserves_surrounding() {
         let content = "# before\nexport A=1\n\n# Vite+ bin (https://viteplus.dev)\n. \"$HOME/.vite-plus/env\"\n# after\nexport B=2\n";
-        let result = remove_vite_plus_lines(content, false);
+        let result = remove_vite_plus_lines(content);
         assert_eq!(&*result, "# before\nexport A=1\n# after\nexport B=2\n");
     }
 
@@ -357,8 +377,7 @@ mod tests {
         let profiles = vec![AffectedProfile {
             name: Str::from(".zshrc"),
             path: profile_path.clone(),
-            is_fish: false,
-            content: Str::from(original),
+            kind: AffectedProfileKind::Main { content: Str::from(original) },
         }];
         clean_affected_profiles(&profiles);
 

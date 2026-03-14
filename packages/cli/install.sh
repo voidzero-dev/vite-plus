@@ -389,22 +389,16 @@ configure_shell_path() {
       fi
       ;;
     */fish)
-      local fish_config="$HOME/.config/fish/config.fish"
-      # Escape both absolute and $HOME-relative forms for grep (backward compat)
-      local fish_abs_pattern fish_ref_pattern
-      fish_abs_pattern=$(printf '%s' "$INSTALL_DIR" | sed 's/[.[\*^$()+?{|]/\\&/g')
-      fish_ref_pattern=$(printf '%s' "$INSTALL_DIR_REF" | sed 's/[.[\*^$()+?{|]/\\&/g')
+      local fish_dir="$HOME/.config/fish/conf.d"
+      local fish_config="$fish_dir/vite-plus.fish"
       if [ -f "$fish_config" ]; then
-        if grep -q "${fish_abs_pattern}/env" "$fish_config" 2>/dev/null || \
-           grep -q "${fish_ref_pattern}/env" "$fish_config" 2>/dev/null; then
-          result=2
-        else
-          echo "" >> "$fish_config"
-          echo "# Vite+ bin (https://viteplus.dev)" >> "$fish_config"
-          echo "source \"$INSTALL_DIR_REF/env.fish\"" >> "$fish_config"
-          result=0
-          SHELL_CONFIG_UPDATED="config.fish"
-        fi
+        result=2
+      else
+        mkdir -p "$fish_dir"
+        echo "# Vite+ bin (https://viteplus.dev)" >> "$fish_config"
+        echo "source \"$INSTALL_DIR_REF/env.fish\"" >> "$fish_config"
+        result=0
+        SHELL_CONFIG_UPDATED=".config/fish/conf.d/vite-plus.fish"
       fi
       ;;
   esac
