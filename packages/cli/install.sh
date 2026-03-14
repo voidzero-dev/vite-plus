@@ -592,10 +592,22 @@ main() {
 }
 WRAPPER_EOF
 
+  # Isolate from user's global package manager config that may block
+  # installing recently-published packages (e.g. pnpm's minimumReleaseAge,
+  # npm's min-release-age) by creating a local .npmrc in the version directory.
+  cat > "$VERSION_DIR/.npmrc" <<NPMRC_EOF
+minimum-release-age=0
+min-release-age=0
+NPMRC_EOF
+
   # Install production dependencies (skip if VITE_PLUS_SKIP_DEPS_INSTALL is set,
   # e.g. during local dev where install-global-cli.ts handles deps separately)
   if [ -z "${VITE_PLUS_SKIP_DEPS_INSTALL:-}" ]; then
-    (cd "$VERSION_DIR" && CI=true "$BIN_DIR/vp" install --silent)
+    local install_log="$VERSION_DIR/install.log"
+    if ! (cd "$VERSION_DIR" && CI=true "$BIN_DIR/vp" install --silent > "$install_log" 2>&1); then
+      error "Failed to install dependencies. See log for details: $install_log"
+      exit 1
+    fi
   fi
 
   # Create/update current symlink (use relative path for portability)
