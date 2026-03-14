@@ -476,6 +476,33 @@ fn check_profile_files(vite_plus_home: &str) -> Option<String> {
         }
     }
 
+    // If ZDOTDIR is set and differs from $HOME, also check $ZDOTDIR/.zshenv and .zshrc
+    if let Ok(zdotdir) = std::env::var("ZDOTDIR") {
+        if !zdotdir.is_empty() && zdotdir != home_dir {
+            for file in [".zshenv", ".zshrc"] {
+                let path = format!("{zdotdir}/{file}");
+                if let Ok(content) = std::fs::read_to_string(&path) {
+                    if search_strings.iter().any(|s| content.contains(s)) {
+                        return Some(abbreviate_home(&path));
+                    }
+                }
+            }
+        }
+    }
+
+    // If XDG_CONFIG_HOME is set and differs from default, also check fish conf.d
+    if let Ok(xdg_config) = std::env::var("XDG_CONFIG_HOME") {
+        let default_config = format!("{home_dir}/.config");
+        if !xdg_config.is_empty() && xdg_config != default_config {
+            let path = format!("{xdg_config}/fish/conf.d/vite-plus.fish");
+            if let Ok(content) = std::fs::read_to_string(&path) {
+                if search_strings.iter().any(|s| content.contains(s)) {
+                    return Some(abbreviate_home(&path));
+                }
+            }
+        }
+    }
+
     None
 }
 
@@ -765,5 +792,97 @@ mod tests {
             // Non-home path should be unchanged
             assert_eq!(abbreviate_home("/usr/local/bin"), "/usr/local/bin");
         }
+    }
+
+    /// Guard for env vars used by profile file tests.
+    struct ProfileEnvGuard {
+        original_home: Option<std::ffi::OsString>,
+        original_zdotdir: Option<std::ffi::OsString>,
+        original_xdg_config: Option<std::ffi::OsString>,
+    }
+
+    impl ProfileEnvGuard {
+        fn new(
+            home: &std::path::Path,
+            zdotdir: Option<&std::path::Path>,
+            xdg_config: Option<&std::path::Path>,
+        ) -> Self {
+            let guard = Self {
+                original_home: std::env::var_os("HOME"),
+                original_zdotdir: std::env::var_os("ZDOTDIR"),
+                original_xdg_config: std::env::var_os("XDG_CONFIG_HOME"),
+            };
+            unsafe {
+                std::env::set_var("HOME", home);
+                match zdotdir {
+                    Some(v) => std::env::set_var("ZDOTDIR", v),
+                    None => std::env::remove_var("ZDOTDIR"),
+                }
+                match xdg_config {
+                    Some(v) => std::env::set_var("XDG_CONFIG_HOME", v),
+                    None => std::env::remove_var("XDG_CONFIG_HOME"),
+                }
+            }
+            guard
+        }
+    }
+
+    impl Drop for ProfileEnvGuard {
+        fn drop(&mut self) {
+            unsafe {
+                match &self.original_home {
+                    Some(v) => std::env::set_var("HOME", v),
+                    None => std::env::remove_var("HOME"),
+                }
+                match &self.original_zdotdir {
+                    Some(v) => std::env::set_var("ZDOTDIR", v),
+                    None => std::env::remove_var("ZDOTDIR"),
+                }
+                match &self.original_xdg_config {
+                    Some(v) => std::env::set_var("XDG_CONFIG_HOME", v),
+                    None => std::env::remove_var("XDG_CONFIG_HOME"),
+                }
+            }
+        }
+    }
+
+    #[test]
+    #[serial]
+    #[cfg(not(windows))]
+    fn test_check_profile_files_finds_zdotdir() {
+        let temp = TempDir::new().unwrap();
+        let fake_home = temp.path().join("home");
+        let zdotdir = temp.path().join("zdotdir");
+        std::fs::create_dir_all(&fake_home).unwrap();
+        std::fs::create_dir_all(&zdotdir).unwrap();
+
+        std::fs::write(zdotdir.join(".zshenv"), ". \"$HOME/.vite-plus/env\"\n").unwrap();
+
+        let _guard = ProfileEnvGuard::new(&fake_home, Some(&zdotdir), None);
+
+        let result = check_profile_files("$HOME/.vite-plus");
+        assert!(result.is_some(), "Should find .zshenv in ZDOTDIR");
+        assert!(result.unwrap().ends_with(".zshenv"));
+    }
+
+    #[test]
+    #[serial]
+    #[cfg(not(windows))]
+    fn test_check_profile_files_finds_xdg_fish() {
+        let temp = TempDir::new().unwrap();
+        let fake_home = temp.path().join("home");
+        let xdg_config = temp.path().join("xdg_config");
+        let fish_dir = xdg_config.join("fish/conf.d");
+        std::fs::create_dir_all(&fake_home).unwrap();
+        std::fs::create_dir_all(&fish_dir).unwrap();
+
+        std::fs::write(fish_dir.join("vite-plus.fish"), "source \"$HOME/.vite-plus/env\"\n")
+            .unwrap();
+
+        let _guard = ProfileEnvGuard::new(&fake_home, None, Some(&xdg_config));
+
+        let result = check_profile_files("$HOME/.vite-plus");
+        assert!(result.is_some(), "Should find vite-plus.fish in XDG_CONFIG_HOME");
+        assert!(result.unwrap().contains("vite-plus.fish"));
     }
 }
