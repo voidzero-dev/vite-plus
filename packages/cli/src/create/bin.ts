@@ -927,7 +927,12 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   showCreateSummary({
     description: describeScaffold(selectedTemplateName, selectedTemplateArgs),
     installSummary,
-    nextCommand: isMonorepo ? `vp dev ${projectDir}` : getNextCommand(projectDir, 'vp dev'),
+    nextCommand: isMonorepo
+      ? `vp dev ${projectDir}`
+      : getNextCommand(
+          projectDir,
+          selectedTemplateName === BuiltinTemplate.library ? 'vp run dev' : 'vp dev',
+        ),
     packageManager: workspaceInfo.packageManager,
     packageManagerVersion: workspaceInfo.downloadPackageManager.version,
     projectDir,
