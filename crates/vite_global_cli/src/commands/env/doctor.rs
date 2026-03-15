@@ -896,4 +896,38 @@ mod tests {
         assert!(result.is_some(), "Should find vite-plus.fish in XDG_CONFIG_HOME");
         assert!(result.unwrap().contains("vite-plus.fish"));
     }
+
+    #[test]
+    #[serial]
+    #[cfg(not(windows))]
+    fn test_check_profile_files_default_fish_config() {
+        let temp = TempDir::new().unwrap();
+        let fake_home = temp.path().join("home");
+        std::fs::create_dir_all(&fake_home).unwrap();
+
+        let fish_dir = fake_home.join(".config/fish/conf.d");
+        std::fs::create_dir_all(&fish_dir).unwrap();
+        std::fs::write(fish_dir.join("vite-plus.fish"), "source \"$HOME/.vite-plus/env.fish\"\n")
+            .unwrap();
+
+        let _guard = ProfileEnvGuard::new(&fake_home, None, None);
+
+        let result = check_profile_files("$HOME/.vite-plus");
+        assert!(result.is_some(), "Should find vite-plus.fish in default fish conf.d");
+        assert!(result.unwrap().contains("vite-plus.fish"));
+    }
+
+    #[test]
+    #[serial]
+    #[cfg(not(windows))]
+    fn test_check_profile_files_no_fish_config() {
+        let temp = TempDir::new().unwrap();
+        let fake_home = temp.path().join("home");
+        std::fs::create_dir_all(&fake_home).unwrap();
+
+        let _guard = ProfileEnvGuard::new(&fake_home, None, None);
+
+        let result = check_profile_files("$HOME/.vite-plus");
+        assert_eq!(result, None);
+    }
 }
