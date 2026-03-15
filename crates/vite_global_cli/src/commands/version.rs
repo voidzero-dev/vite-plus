@@ -9,7 +9,10 @@ use std::{
 
 use owo_colors::OwoColorize;
 use serde::Deserialize;
+use vite_install::get_package_manager_type_and_version;
+use vite_js_runtime::{VersionSource, resolve_node_version};
 use vite_path::AbsolutePathBuf;
+use vite_workspace::find_workspace_root;
 
 use crate::{error::Error, help};
 
@@ -127,6 +130,17 @@ fn format_version(version: Option<String>) -> String {
     }
 }
 
+async fn get_node_version_info(cwd: &AbsolutePathBuf) -> Option<(String, String)> {
+    let resolution_opt = resolve_node_version(cwd, true).await.ok()?;
+    let resolution = resolution_opt?;
+    let source_label = match resolution.source {
+        VersionSource::NodeVersionFile => ".node-version",
+        VersionSource::EnginesNode => "engines.node",
+        VersionSource::DevEnginesRuntime => "devEngines.runtime",
+    };
+    Some((resolution.version.to_string(), source_label.to_string()))
+}
+
 /// Execute the `--version` command.
 pub async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
     println!("{}", vite_shared::header::vite_plus_header());
@@ -135,6 +149,7 @@ pub async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
     println!("vp v{}", env!("CARGO_PKG_VERSION"));
     println!();
 
+    // Local vite-plus and tools
     let local = find_local_vite_plus(cwd.as_path());
     print_rows(
         "Local vite-plus",
@@ -151,6 +166,24 @@ pub async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
         })
         .collect::<Vec<_>>();
     print_rows("Tools", &tool_rows);
+    println!();
+
+    // Environment info
+    let env_rows = [
+        find_workspace_root(&cwd).ok().and_then(|(root, _)| {
+            get_package_manager_type_and_version(&root, None)
+                .ok()
+                .map(|(pm, v, _)| ("Package manager", format!("{pm} v{v}")))
+        }),
+        get_node_version_info(&cwd).await.map(|(v, s)| ("Node.js", format!("v{v} ({s})"))),
+    ]
+    .into_iter()
+    .filter_map(|row| row)
+    .collect::<Vec<_>>();
+
+    if !env_rows.is_empty() {
+        print_rows("Environment", &env_rows);
+    }
 
     Ok(ExitStatus::default())
 }
