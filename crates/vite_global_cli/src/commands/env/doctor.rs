@@ -503,6 +503,14 @@ fn check_profile_files(vite_plus_home: &str) -> Option<String> {
         }
     }
 
+    // Also check the default fish conf.d location
+    let fish_path = format!("{home_dir}/.config/fish/conf.d/vite-plus.fish");
+    if let Ok(content) = std::fs::read_to_string(&fish_path) {
+        if search_strings.iter().any(|s| content.contains(s)) {
+            return Some(abbreviate_home(&fish_path));
+        }
+    }
+
     None
 }
 
