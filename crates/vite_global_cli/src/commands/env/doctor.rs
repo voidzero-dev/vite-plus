@@ -795,12 +795,14 @@ mod tests {
     }
 
     /// Guard for env vars used by profile file tests.
+    #[cfg(not(windows))]
     struct ProfileEnvGuard {
         original_home: Option<std::ffi::OsString>,
         original_zdotdir: Option<std::ffi::OsString>,
         original_xdg_config: Option<std::ffi::OsString>,
     }
 
+    #[cfg(not(windows))]
     impl ProfileEnvGuard {
         fn new(
             home: &std::path::Path,
@@ -827,6 +829,7 @@ mod tests {
         }
     }
 
+    #[cfg(not(windows))]
     impl Drop for ProfileEnvGuard {
         fn drop(&mut self) {
             unsafe {
