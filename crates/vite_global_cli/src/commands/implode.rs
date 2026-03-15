@@ -457,6 +457,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(windows))]
     fn test_abbreviate_home_path() {
         let home = AbsolutePathBuf::new("/home/user".into()).unwrap();
         // Under home → ~/...
@@ -469,6 +470,7 @@ mod tests {
 
     #[test]
     #[serial]
+    #[cfg(not(windows))]
     fn test_collect_affected_profiles() {
         let temp_dir = tempfile::tempdir().unwrap();
         let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
@@ -492,11 +494,13 @@ mod tests {
     }
 
     /// Guard that saves and restores ZDOTDIR and XDG_CONFIG_HOME env vars.
+    #[cfg(not(windows))]
     struct ProfileEnvGuard {
         original_zdotdir: Option<std::ffi::OsString>,
         original_xdg_config: Option<std::ffi::OsString>,
     }
 
+    #[cfg(not(windows))]
     impl ProfileEnvGuard {
         fn new(zdotdir: Option<&std::path::Path>, xdg_config: Option<&std::path::Path>) -> Self {
             let guard = Self {
@@ -517,6 +521,7 @@ mod tests {
         }
     }
 
+    #[cfg(not(windows))]
     impl Drop for ProfileEnvGuard {
         fn drop(&mut self) {
             unsafe {
@@ -534,6 +539,7 @@ mod tests {
 
     #[test]
     #[serial]
+    #[cfg(not(windows))]
     fn test_collect_affected_profiles_zdotdir() {
         let temp_dir = tempfile::tempdir().unwrap();
         let home = AbsolutePathBuf::new(temp_dir.path().join("home")).unwrap();
@@ -554,6 +560,7 @@ mod tests {
 
     #[test]
     #[serial]
+    #[cfg(not(windows))]
     fn test_collect_affected_profiles_xdg_config() {
         let temp_dir = tempfile::tempdir().unwrap();
         let home = AbsolutePathBuf::new(temp_dir.path().join("home")).unwrap();
