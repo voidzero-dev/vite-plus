@@ -879,7 +879,7 @@ mod tests {
         std::fs::create_dir_all(&fake_home).unwrap();
         std::fs::create_dir_all(&fish_dir).unwrap();
 
-        std::fs::write(fish_dir.join("vite-plus.fish"), "source \"$HOME/.vite-plus/env\"\n")
+        std::fs::write(fish_dir.join("vite-plus.fish"), "source \"$HOME/.vite-plus/env.fish\"\n")
             .unwrap();
 
         let _guard = ProfileEnvGuard::new(&fake_home, None, Some(&xdg_config));
