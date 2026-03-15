@@ -659,7 +659,11 @@ NPMRC_EOF
       display_config="$SHELL_CONFIG_UPDATED"
     fi
     echo ""
-    echo "  Note: Run \`source $display_config\` or restart your terminal."
+    if [ "${display_config#"~"}" != "$display_config" ]; then
+      echo "  Note: Run \`source $display_config\` or restart your terminal."
+    else
+      echo "  Note: Run \`source \"$display_config\"\` or restart your terminal."
+    fi
   fi
 
   # Show warning if PATH could not be automatically configured
