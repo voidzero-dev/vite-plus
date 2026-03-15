@@ -655,7 +655,7 @@ async function mergePackageJson() {
   };
 
   const { code, errors } = await format(destPkgPath, JSON.stringify(destPkg, null, 2) + '\n', {
-    experimentalSortPackageJson: true,
+    sortPackageJson: true,
   });
   if (errors.length > 0) {
     for (const error of errors) {

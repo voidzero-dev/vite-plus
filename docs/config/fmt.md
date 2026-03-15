@@ -12,7 +12,7 @@ export default defineConfig({
     ignorePatterns: ['dist/**'],
     singleQuote: true,
     semi: true,
-    experimentalSortPackageJson: true,
+    sortPackageJson: true,
   },
 });
 ```

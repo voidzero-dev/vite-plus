@@ -80,7 +80,7 @@ export default defineConfig({
     ],
     singleQuote: true,
     semi: true,
-    experimentalSortPackageJson: true,
+    sortPackageJson: true,
     sortImports: {
       groups: [
         ['type-import'],

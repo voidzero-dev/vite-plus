@@ -726,7 +726,7 @@ async function updateCliPackageJson(pkgPath: string, generatedExports: Record<st
   }
 
   const { code, errors } = await format(pkgPath, JSON.stringify(pkg, null, 2) + '\n', {
-    experimentalSortPackageJson: true,
+    sortPackageJson: true,
   });
   if (errors.length > 0) {
     for (const error of errors) {
