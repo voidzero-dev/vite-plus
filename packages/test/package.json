@@ -1,7 +1,18 @@
 {
   "name": "@voidzero-dev/vite-plus-test",
   "version": "0.0.0",
+  "description": "The Unified Toolchain for the Web",
+  "homepage": "https://viteplus.dev/guide",
+  "bugs": {
+    "url": "https://github.com/voidzero-dev/vite-plus/issues"
+  },
   "license": "MIT",
+  "author": "VoidZero Inc.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/voidzero-dev/vite-plus.git",
+    "directory": "packages/test"
+  },
   "files": [
     "*.cjs",
     "*.cts",
