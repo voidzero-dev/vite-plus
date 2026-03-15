@@ -351,6 +351,7 @@ configure_shell_path() {
       # Create .zshenv if missing — it's the canonical place for PATH in zsh
       # and is sourced by all session types (interactive, non-interactive, IDE)
       local zsh_dir="${ZDOTDIR:-$HOME}"
+      mkdir -p "$zsh_dir"
       [ -f "$zsh_dir/.zshenv" ] || touch "$zsh_dir/.zshenv"
       local zshenv_result=0 zshrc_result=0
       add_bin_to_path "$zsh_dir/.zshenv" || zshenv_result=$?
