@@ -22,7 +22,7 @@ const KNOWN_VERSION_MANAGERS: &[(&str, &str)] = &[
 ];
 
 /// Tools that should have shims
-const SHIM_TOOLS: &[&str] = &["node", "npm", "npx"];
+const SHIM_TOOLS: &[&str] = &["node", "npm", "npx", "vpx"];
 
 /// Column width for left-side keys in aligned output
 const KEY_WIDTH: usize = 18;
