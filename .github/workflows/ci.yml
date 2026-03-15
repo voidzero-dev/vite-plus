@@ -70,16 +70,21 @@ jobs:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
       - uses: ./.github/actions/clone
 
-      # Disable Windows Defender real-time scanning to speed up I/O-heavy builds (~30-50% faster)
-      - name: Disable Windows Defender
+      - name: Setup Dev Drive
         if: runner.os == 'Windows'
-        shell: powershell
-        run: Set-MpPreference -DisableRealtimeMonitoring $true
+        uses: samypr100/setup-dev-drive@30f0f98ae5636b2b6501e181dfb3631b9974818d # v4.0.0
+        with:
+          drive-size: 12GB
+          drive-format: ReFS
+          env-mapping: |
+            CARGO_HOME,{{ DEV_DRIVE }}/.cargo
+            RUSTUP_HOME,{{ DEV_DRIVE }}/.rustup
 
       - uses: oxc-project/setup-rust@d286d43bc1f606abbd98096666ff8be68c8d5f57 # v1.0.0
         with:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: test
+          target-dir: ${{ runner.os == 'Windows' && format('{0}/target', env.DEV_DRIVE) || '' }}
 
       - run: rustup target add x86_64-unknown-linux-musl
         if: ${{ matrix.os == 'ubuntu-latest' }}
@@ -181,16 +186,21 @@ jobs:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
       - uses: ./.github/actions/clone
 
-      # Disable Windows Defender real-time scanning to speed up I/O-heavy builds (~30-50% faster)
-      - name: Disable Windows Defender
+      - name: Setup Dev Drive
         if: runner.os == 'Windows'
-        shell: powershell
-        run: Set-MpPreference -DisableRealtimeMonitoring $true
+        uses: samypr100/setup-dev-drive@30f0f98ae5636b2b6501e181dfb3631b9974818d # v4.0.0
+        with:
+          drive-size: 12GB
+          drive-format: ReFS
+          env-mapping: |
+            CARGO_HOME,{{ DEV_DRIVE }}/.cargo
+            RUSTUP_HOME,{{ DEV_DRIVE }}/.rustup
 
       - uses: oxc-project/setup-rust@d286d43bc1f606abbd98096666ff8be68c8d5f57 # v1.0.0
         with:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: cli-e2e-test
+          target-dir: ${{ runner.os == 'Windows' && format('{0}/target', env.DEV_DRIVE) || '' }}
 
       - uses: oxc-project/setup-node@fdbf0dfd334c4e6d56ceeb77d91c76339c2a0885 # v1.0.4
 
