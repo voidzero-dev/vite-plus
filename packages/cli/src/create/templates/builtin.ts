@@ -1,6 +1,9 @@
 import assert from 'node:assert';
 import path from 'node:path';
 
+import * as prompts from '@voidzero-dev/vite-plus-prompts';
+import colors from 'picocolors';
+
 import type { WorkspaceInfo } from '../../types/index.js';
 import type { ExecutionResult } from '../command.js';
 import { setPackageName } from '../utils.js';
@@ -46,6 +49,22 @@ export async function executeBuiltinTemplate(
     false,
     options?.silent ?? false,
   );
+  if (result.exitCode !== 0) {
+    prompts.log.error('Failed to create project');
+
+    if (templateInfo.command === 'create-tsdown@latest') {
+      prompts.log.info(colors.yellow('\nTroubleshooting:'));
+      prompts.log.info(`  ${colors.gray('•')} Check your internet connection`);
+      prompts.log.info(`  ${colors.gray('•')} Verify that api.github.com is accessible`);
+      prompts.log.info(`  ${colors.gray('•')} Check your hosts file for incorrect DNS entries`);
+      prompts.log.info(
+        `  ${colors.gray('•')} Try running: ${colors.gray('pnpm dlx create-tsdown@latest --template default <project-name>')}`,
+      );
+    }
+
+    return result;
+  }
+
   const fullPath = path.join(workspaceInfo.rootDir, templateInfo.targetDir);
   // set package name in the project directory
   setPackageName(fullPath, templateInfo.packageName);
