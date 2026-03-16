@@ -196,15 +196,25 @@ const AGENT_INSTRUCTIONS_END_MARKER = '<!--VITE PLUS END-->';
 export async function selectAgentTargetPaths({
   interactive,
   agent,
+  projectRoot,
   onCancel,
 }: {
   interactive: boolean;
   agent?: AgentSelection;
+  projectRoot?: string;
   onCancel: () => void;
 }) {
   // Skip entirely if --no-agent is passed
   if (agent === false) {
     return undefined;
+  }
+
+  // If agent files already exist in the project, reuse them instead of prompting
+  if (interactive && !agent && projectRoot) {
+    const existingPaths = detectExistingAgentTargetPaths(projectRoot);
+    if (existingPaths) {
+      return existingPaths;
+    }
   }
 
   if (interactive && !agent) {

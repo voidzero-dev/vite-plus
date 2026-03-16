@@ -343,6 +343,7 @@ async function collectMigrationPlan(
   const selectedAgentTargetPaths = await selectAgentTargetPaths({
     interactive: options.interactive,
     agent: options.agent,
+    projectRoot: rootDir,
     onCancel: () => cancelAndExit(),
   });
 
