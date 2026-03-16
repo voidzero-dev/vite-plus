@@ -1,5 +1,4 @@
 packages:
-  - docs
   - packages/*
   - rolldown
   - rolldown/packages/*
@@ -182,7 +181,6 @@ patchedDependencies:
 peerDependencyRules:
   allowAny:
     - vite
-    - vitepress
     - vitest
     - rolldown
   allowedVersions:
