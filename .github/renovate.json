@@ -23,7 +23,7 @@
         "vite_task",
         "vite_workspace"
       ],
-      "enabled": false
+      "groupName": "vite-task dependencies"
     }
   ]
 }
