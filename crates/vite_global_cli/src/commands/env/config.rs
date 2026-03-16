@@ -230,6 +230,13 @@ pub async fn resolve_version(cwd: &AbsolutePath) -> Result<VersionResolution, Er
         });
     }
 
+    resolve_version_from_files(cwd).await
+}
+
+/// Resolve Node.js version from project files only (skipping session overrides).
+///
+/// This is used by `vp env use` without arguments to revert to file-based resolution.
+pub async fn resolve_version_from_files(cwd: &AbsolutePath) -> Result<VersionResolution, Error> {
     let provider = NodeProvider::new();
 
     // Use shared version resolution with directory walking

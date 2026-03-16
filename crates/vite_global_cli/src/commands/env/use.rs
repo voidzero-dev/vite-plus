@@ -94,11 +94,19 @@ pub async fn execute(
     let provider = vite_js_runtime::NodeProvider::new();
 
     // Resolve version: explicit argument or from project files
+    // When no argument provided, unset session override and resolve from project files
     let (resolved_version, source_desc) = if let Some(ref ver) = version {
         let resolved = config::resolve_version_alias(ver, &provider).await?;
         (resolved, format!("{ver}"))
     } else {
-        let resolution = config::resolve_version(&cwd).await?;
+        // No version argument - unset session override first
+        if has_eval_wrapper() {
+            println!("{}", format_unset(&shell));
+        } else {
+            config::delete_session_version().await?;
+        }
+        // Now resolve from project files (not from session override)
+        let resolution = config::resolve_version_from_files(&cwd).await?;
         let source = resolution.source.clone();
         (resolution.version, source)
     };
