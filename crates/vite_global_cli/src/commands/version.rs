@@ -67,6 +67,8 @@ const TOOL_SPECS: [ToolSpec; 7] = [
     },
 ];
 
+const NOT_FOUND: &str = "Not found";
+
 fn read_package_json(package_json_path: &Path) -> Option<PackageJson> {
     let content = fs::read_to_string(package_json_path).ok()?;
     serde_json::from_str(&content).ok()
@@ -126,7 +128,7 @@ fn print_rows(title: &str, rows: &[(&str, String)]) {
 fn format_version(version: Option<String>) -> String {
     match version {
         Some(v) => format!("v{v}"),
-        None => "Not found".to_string(),
+        None => NOT_FOUND.to_string(),
     }
 }
 
@@ -169,21 +171,23 @@ pub async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
     println!();
 
     // Environment info
-    let env_rows = [
-        find_workspace_root(&cwd).ok().and_then(|(root, _)| {
+    let package_manager_info = find_workspace_root(&cwd)
+        .ok()
+        .and_then(|(root, _)| {
             get_package_manager_type_and_version(&root, None)
                 .ok()
-                .map(|(pm, v, _)| ("Package manager", format!("{pm} v{v}")))
-        }),
-        get_node_version_info(&cwd).await.map(|(v, s)| ("Node.js", format!("v{v} ({s})"))),
-    ]
-    .into_iter()
-    .filter_map(|row| row)
-    .collect::<Vec<_>>();
+                .map(|(pm, v, _)| format!("{pm} v{v}"))
+        })
+        .unwrap_or(NOT_FOUND.to_string());
 
-    if !env_rows.is_empty() {
-        print_rows("Environment", &env_rows);
-    }
+    let node_info = get_node_version_info(&cwd)
+        .await
+        .map(|(v, s)| format!("v{v} ({s})"))
+        .unwrap_or(NOT_FOUND.to_string());
+
+    let env_rows = [("Package manager", package_manager_info), ("Node.js", node_info)];
+
+    print_rows("Environment", &env_rows);
 
     Ok(ExitStatus::default())
 }
