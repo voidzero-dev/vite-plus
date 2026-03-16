@@ -3,10 +3,11 @@ import path from 'node:path';
 
 import type { WorkspaceInfo } from '../../types/index.js';
 import type { ExecutionResult } from '../command.js';
+import { discoverTemplate } from '../discovery.js';
 import { setPackageName } from '../utils.js';
 import { executeGeneratorScaffold } from './generator.js';
 import { runRemoteTemplateCommand } from './remote.js';
-import { BuiltinTemplate, type BuiltinTemplateInfo } from './types.js';
+import { BuiltinTemplate, type BuiltinTemplateInfo, LibraryTemplateRepo } from './types.js';
 
 export async function executeBuiltinTemplate(
   workspaceInfo: WorkspaceInfo,
@@ -25,18 +26,25 @@ export async function executeBuiltinTemplate(
     if (!templateInfo.interactive) {
       templateInfo.args.push('--no-interactive');
     }
+    templateInfo.args.unshift(templateInfo.targetDir);
   } else if (templateInfo.command === BuiltinTemplate.library) {
-    templateInfo.command = 'create-tsdown@latest';
-    // create-tsdown doesn't support non-interactive mode;
-    // add default template when running silently to prevent hang on piped stdin
-    if (!templateInfo.interactive || options?.silent) {
-      if (!templateInfo.args.some((arg) => arg.startsWith('--template') || arg.startsWith('-t'))) {
-        templateInfo.args.push('--template', 'default');
-      }
-    }
+    // Use degit to download the template directly from GitHub
+    const libraryTemplateInfo = discoverTemplate(
+      LibraryTemplateRepo,
+      [templateInfo.targetDir],
+      workspaceInfo,
+    );
+    const result = await runRemoteTemplateCommand(
+      workspaceInfo,
+      workspaceInfo.rootDir,
+      libraryTemplateInfo,
+      false,
+      options?.silent ?? false,
+    );
+    const fullPath = path.join(workspaceInfo.rootDir, templateInfo.targetDir);
+    setPackageName(fullPath, templateInfo.packageName);
+    return { ...result, projectDir: templateInfo.targetDir };
   }
-
-  templateInfo.args.unshift(templateInfo.targetDir);
 
   // Handle remote/external templates with fspy monitoring
   const result = await runRemoteTemplateCommand(

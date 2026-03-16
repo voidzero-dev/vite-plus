@@ -13,7 +13,7 @@ import type { ExecutionResult } from '../command.js';
 import { discoverTemplate } from '../discovery.js';
 import { copyDir, formatDisplayTargetDir, setPackageName } from '../utils.js';
 import { runRemoteTemplateCommand } from './remote.js';
-import { type BuiltinTemplateInfo } from './types.js';
+import { type BuiltinTemplateInfo, LibraryTemplateRepo } from './types.js';
 
 export const InitialMonorepoAppDir = 'apps/website';
 
@@ -168,11 +168,7 @@ export async function executeMonorepoTemplate(
     prompts.log.step('Creating default library in packages/utils...');
   }
   const libraryDir = 'packages/utils';
-  const libraryTemplateInfo = discoverTemplate(
-    'create-tsdown@latest',
-    [libraryDir, '--template', 'default'],
-    workspaceInfo,
-  );
+  const libraryTemplateInfo = discoverTemplate(LibraryTemplateRepo, [libraryDir], workspaceInfo);
   const libraryResult = await runRemoteTemplateCommand(
     workspaceInfo,
     fullPath,

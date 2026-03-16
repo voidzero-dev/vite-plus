@@ -1,3 +1,5 @@
+export const LibraryTemplateRepo = 'github:sxzz/tsdown-templates/vite-plus';
+
 export const BuiltinTemplate = {
   generator: 'vite:generator',
   monorepo: 'vite:monorepo',
