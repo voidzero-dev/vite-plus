@@ -370,6 +370,7 @@ fn remove_windows_path_entry(bin_path: &vite_path::AbsolutePath) -> std::io::Res
 
 #[cfg(test)]
 mod tests {
+    #[cfg(not(windows))]
     use serial_test::serial;
 
     use super::*;
