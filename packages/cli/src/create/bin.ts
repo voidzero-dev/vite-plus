@@ -584,7 +584,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       const selected = await promptPackageNameAndTargetDir(defaultPackageName, options.interactive);
       packageName = selected.packageName;
       targetDir = selectedParentDir
-        ? path.join(selectedParentDir, selected.targetDir)
+        ? path.join(selectedParentDir, selected.targetDir).split(path.sep).join('/')
         : selected.targetDir;
     }
   }
@@ -782,7 +782,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       const selected = await promptPackageNameAndTargetDir(defaultPackageName, options.interactive);
       packageName = selected.packageName;
       targetDir = templateInfo.parentDir
-        ? path.join(templateInfo.parentDir, selected.targetDir)
+        ? path.join(templateInfo.parentDir, selected.targetDir).split(path.sep).join('/')
         : selected.targetDir;
     }
     pauseCreateProgress();
