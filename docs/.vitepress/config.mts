@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import type { VoidZeroThemeConfig } from '@voidzero-dev/vitepress-theme';
 import { extendConfig } from '@voidzero-dev/vitepress-theme/config';
 import { defineConfig, type HeadConfig } from 'vitepress';
+import { withMermaid } from 'vitepress-plugin-mermaid';
 
 const taskRunnerGuideItems = [
   {
@@ -76,136 +77,141 @@ const guideSidebar = [
 ];
 
 export default extendConfig(
-  defineConfig({
-    title: 'Vite+',
-    titleTemplate: ':title | The Unified Toolchain for the Web',
-    description: 'The Unified Toolchain for the Web',
-    cleanUrls: true,
-    head: [
-      ['link', { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' }],
-      [
-        'link',
-        {
-          rel: 'preconnect',
-          href: 'https://fonts.gstatic.com',
-          crossorigin: 'true',
-        },
+  withMermaid(
+    defineConfig({
+      title: 'Vite+',
+      titleTemplate: ':title | The Unified Toolchain for the Web',
+      description: 'The Unified Toolchain for the Web',
+      cleanUrls: true,
+      head: [
+        ['link', { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' }],
+        [
+          'link',
+          {
+            rel: 'preconnect',
+            href: 'https://fonts.gstatic.com',
+            crossorigin: 'true',
+          },
+        ],
+        ['meta', { name: 'theme-color', content: '#7474FB' }],
+        ['meta', { property: 'og:type', content: 'website' }],
+        ['meta', { property: 'og:site_name', content: 'Vite+' }],
+        ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
+        ['meta', { name: 'twitter:site', content: '@voidzerodev' }],
+        [
+          'script',
+          {
+            src: 'https://cdn.usefathom.com/script.js',
+            'data-site': 'JFDLUWBH',
+            'data-spa': 'auto',
+            defer: '',
+          },
+        ],
       ],
-      ['meta', { name: 'theme-color', content: '#7474FB' }],
-      ['meta', { property: 'og:type', content: 'website' }],
-      ['meta', { property: 'og:site_name', content: 'Vite+' }],
-      ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
-      ['meta', { name: 'twitter:site', content: '@voidzerodev' }],
-      [
-        'script',
-        {
-          src: 'https://cdn.usefathom.com/script.js',
-          'data-site': 'JFDLUWBH',
-          'data-spa': 'auto',
-          defer: '',
-        },
-      ],
-    ],
-    vite: {
-      resolve: {
-        tsconfigPaths: true,
-        alias: {
-          '@local-assets': resolve(__dirname, 'theme/assets'),
-          '@layouts': resolve(__dirname, 'theme/layouts'),
-        },
-      },
-    },
-    themeConfig: {
-      variant: 'viteplus' as VoidZeroThemeConfig['variant'],
-      nav: [
-        {
-          text: 'Guide',
-          link: '/guide/',
-          activeMatch: '^/guide/',
-        },
-        {
-          text: 'Config',
-          link: '/config/',
-          activeMatch: '^/config/',
-        },
-        {
-          text: 'Resources',
-          items: [
-            { text: 'GitHub', link: 'https://github.com/voidzero-dev/vite-plus' },
-            { text: 'Releases', link: 'https://github.com/voidzero-dev/vite-plus/releases' },
-            {
-              text: 'Announcement',
-              link: 'https://voidzero.dev/posts/announcing-vite-plus-alpha',
-            },
-            {
-              text: 'Contributing',
-              link: 'https://github.com/voidzero-dev/vite-plus/blob/main/CONTRIBUTING.md',
-            },
+      vite: {
+        resolve: {
+          tsconfigPaths: true,
+          alias: [
+            { find: '@local-assets', replacement: resolve(__dirname, 'theme/assets') },
+            { find: '@layouts', replacement: resolve(__dirname, 'theme/layouts') },
+            // dayjs ships CJS by default; redirect to its ESM build so
+            // mermaid (imported via vitepress-plugin-mermaid) works in dev
+            { find: /^dayjs$/, replacement: 'dayjs/esm' },
           ],
         },
-      ],
-      sidebar: {
-        '/guide/': guideSidebar,
-        '/config/': [
+      },
+      themeConfig: {
+        variant: 'viteplus' as VoidZeroThemeConfig['variant'],
+        nav: [
           {
-            text: 'Configuration',
+            text: 'Guide',
+            link: '/guide/',
+            activeMatch: '^/guide/',
+          },
+          {
+            text: 'Config',
+            link: '/config/',
+            activeMatch: '^/config/',
+          },
+          {
+            text: 'Resources',
             items: [
-              { text: 'Configuring Vite+', link: '/config/' },
-              { text: 'Run', link: '/config/run' },
-              { text: 'Format', link: '/config/fmt' },
-              { text: 'Lint', link: '/config/lint' },
-              { text: 'Test', link: '/config/test' },
-              { text: 'Build', link: '/config/build' },
-              { text: 'Pack', link: '/config/pack' },
-              { text: 'Staged', link: '/config/staged' },
+              { text: 'GitHub', link: 'https://github.com/voidzero-dev/vite-plus' },
+              { text: 'Releases', link: 'https://github.com/voidzero-dev/vite-plus/releases' },
+              {
+                text: 'Announcement',
+                link: 'https://voidzero.dev/posts/announcing-vite-plus-alpha',
+              },
+              {
+                text: 'Contributing',
+                link: 'https://github.com/voidzero-dev/vite-plus/blob/main/CONTRIBUTING.md',
+              },
             ],
           },
         ],
-      },
-      socialLinks: [
-        { icon: 'github', link: 'https://github.com/voidzero-dev/vite-plus' },
-        { icon: 'x', link: 'https://x.com/voidzerodev' },
-        { icon: 'discord', link: 'https://discord.gg/cC6TEVFKSx' },
-        { icon: 'bluesky', link: 'https://bsky.app/profile/voidzero.dev' },
-      ],
-      outline: {
-        level: [2, 3],
-      },
-      search: {
-        provider: 'local',
-      },
-    },
-    transformHead({ page, pageData }) {
-      const url = 'https://viteplus.dev/' + page.replace(/\.md$/, '').replace(/index$/, '');
-
-      const canonicalUrlEntry: HeadConfig = [
-        'link',
-        {
-          rel: 'canonical',
-          href: url,
+        sidebar: {
+          '/guide/': guideSidebar,
+          '/config/': [
+            {
+              text: 'Configuration',
+              items: [
+                { text: 'Configuring Vite+', link: '/config/' },
+                { text: 'Run', link: '/config/run' },
+                { text: 'Format', link: '/config/fmt' },
+                { text: 'Lint', link: '/config/lint' },
+                { text: 'Test', link: '/config/test' },
+                { text: 'Build', link: '/config/build' },
+                { text: 'Pack', link: '/config/pack' },
+                { text: 'Staged', link: '/config/staged' },
+              ],
+            },
+          ],
         },
-      ];
-
-      const ogInfo: HeadConfig[] = [
-        ['meta', { property: 'og:title', content: pageData.frontmatter.title ?? 'Vite+' }],
-        [
-          'meta',
-          {
-            property: 'og:image',
-            content: `https://viteplus.dev/${pageData.frontmatter.cover ?? 'og.jpg'}`,
-          },
+        socialLinks: [
+          { icon: 'github', link: 'https://github.com/voidzero-dev/vite-plus' },
+          { icon: 'x', link: 'https://x.com/voidzerodev' },
+          { icon: 'discord', link: 'https://discord.gg/cC6TEVFKSx' },
+          { icon: 'bluesky', link: 'https://bsky.app/profile/voidzero.dev' },
         ],
-        ['meta', { property: 'og:url', content: url }],
-        [
-          'meta',
-          {
-            property: 'og:description',
-            content: pageData.frontmatter.description ?? 'The Unified Toolchain for the Web',
-          },
-        ],
-      ];
+        outline: {
+          level: [2, 3],
+        },
+        search: {
+          provider: 'local',
+        },
+      },
+      transformHead({ page, pageData }) {
+        const url = 'https://viteplus.dev/' + page.replace(/\.md$/, '').replace(/index$/, '');
 
-      return [...ogInfo, canonicalUrlEntry];
-    },
-  }),
+        const canonicalUrlEntry: HeadConfig = [
+          'link',
+          {
+            rel: 'canonical',
+            href: url,
+          },
+        ];
+
+        const ogInfo: HeadConfig[] = [
+          ['meta', { property: 'og:title', content: pageData.frontmatter.title ?? 'Vite+' }],
+          [
+            'meta',
+            {
+              property: 'og:image',
+              content: `https://viteplus.dev/${pageData.frontmatter.cover ?? 'og.jpg'}`,
+            },
+          ],
+          ['meta', { property: 'og:url', content: url }],
+          [
+            'meta',
+            {
+              property: 'og:description',
+              content: pageData.frontmatter.description ?? 'The Unified Toolchain for the Web',
+            },
+          ],
+        ];
+
+        return [...ogInfo, canonicalUrlEntry];
+      },
+    }),
+  ),
 );

@@ -74,16 +74,20 @@ function linkSkills(
     mkdirSync(targetDir, { recursive: true });
   }
 
+  const isWindows = process.platform === 'win32';
+  const symlinkType = isWindows ? 'junction' : 'dir';
+
   let linked = 0;
   for (const skill of skills) {
     const linkPath = join(targetDir, skill.dirName);
     const sourcePath = join(skillsDir, skill.dirName);
     const relativeTarget = relative(targetDir, sourcePath);
+    const symlinkTarget = isWindows ? sourcePath : relativeTarget;
 
     if (pathExists(linkPath)) {
       try {
         const existing = readlinkSync(linkPath);
-        if (existing === relativeTarget) {
+        if (existing === symlinkTarget) {
           prompts.log.info(`  ${skill.name} — already linked`);
           continue;
         }
@@ -100,7 +104,7 @@ function linkSkills(
     }
 
     try {
-      symlinkSync(relativeTarget, linkPath, 'dir');
+      symlinkSync(symlinkTarget, linkPath, symlinkType);
     } catch (err: unknown) {
       prompts.log.warn(`  ${skill.name} — failed to create symlink: ${(err as Error).message}`);
       continue;
