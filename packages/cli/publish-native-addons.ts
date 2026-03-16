@@ -116,6 +116,7 @@ for (const [platform, rustTarget] of Object.entries(RUST_TARGETS)) {
     cpu: [meta.cpu],
     files: [binaryName],
     description: `Vite+ CLI binary for ${platform}`,
+    repository: cliPackageJson.repository,
   };
   writeFileSync(join(platformCliDir, 'package.json'), JSON.stringify(cliPackage, null, 2) + '\n');
 

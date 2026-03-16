@@ -11,6 +11,11 @@ on:
         options:
           - latest
           - alpha
+      version:
+        description: 'Override version (leave empty to auto-compute). Use when retrying a failed publish.'
+        required: false
+        default: ''
+        type: string
 
 permissions: {}
 
@@ -32,9 +37,14 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
       - uses: ./.github/actions/set-snapshot-version
-        id: version
+        if: ${{ inputs.version == '' }}
+        id: computed
         with:
           npm_tag: ${{ inputs.npm_tag }}
+
+      - name: Set final version
+        id: version
+        run: echo "version=${{ inputs.version || steps.computed.outputs.version }}" >> $GITHUB_OUTPUT
 
   build-rust:
     runs-on: ${{ matrix.settings.os }}
