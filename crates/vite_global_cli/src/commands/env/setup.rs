@@ -903,4 +903,72 @@ mod tests {
         assert!(fresh_home.join("env.fish").exists(), "env.fish file should be created");
         assert!(fresh_home.join("env.ps1").exists(), "env.ps1 file should be created");
     }
+
+    #[tokio::test]
+    async fn test_generate_completion_scripts_creates_all_files() {
+        let temp_dir = TempDir::new().unwrap();
+        let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        generate_completion_scripts(&home).await.unwrap();
+
+        let completion_dir = home.join("completion");
+
+        // Verify all completion scripts are created
+        let bash_completion = completion_dir.join("vp.bash");
+        let zsh_completion = completion_dir.join("_vp");
+        let fish_completion = completion_dir.join("vp.fish");
+        let ps1_completion = completion_dir.join("vp.ps1");
+
+        assert!(bash_completion.as_path().exists(), "bash completion (vp.bash) should be created");
+        assert!(zsh_completion.as_path().exists(), "zsh completion (_vp) should be created");
+        assert!(fish_completion.as_path().exists(), "fish completion (vp.fish) should be created");
+        assert!(
+            ps1_completion.as_path().exists(),
+            "PowerShell completion (vp.ps1) should be created"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_create_env_files_contains_completion() {
+        let temp_dir = TempDir::new().unwrap();
+        let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let _guard = home_guard(temp_dir.path());
+
+        create_env_files(&home).await.unwrap();
+
+        let env_content = tokio::fs::read_to_string(home.join("env")).await.unwrap();
+        let fish_content = tokio::fs::read_to_string(home.join("env.fish")).await.unwrap();
+        let ps1_content = tokio::fs::read_to_string(home.join("env.ps1")).await.unwrap();
+
+        assert!(
+            env_content.contains("Shell completion")
+                && env_content.contains("/completion/vp.bash\""),
+            "env file should contain bash completion"
+        );
+        assert!(
+            fish_content.contains("Shell completion")
+                && fish_content.contains("/completion/vp.fish\""),
+            "env.fish file should contain fish completion"
+        );
+        assert!(
+            ps1_content.contains("Shell completion")
+                && ps1_content.contains("/completion/vp.ps1\""),
+            "env.ps1 file should contain PowerShell completion"
+        );
+
+        // Verify placeholders are replaced
+        assert!(
+            !env_content.contains("__VP_COMPLETION_BASH__")
+                && !env_content.contains("__VP_COMPLETION_ZSH__"),
+            "env file should not contain __VP_COMPLETION_* placeholders"
+        );
+        assert!(
+            !fish_content.contains("__VP_COMPLETION_FISH__"),
+            "env.fish file should not contain __VP_COMPLETION_FISH__ placeholder"
+        );
+        assert!(
+            !ps1_content.contains("__VP_COMPLETION_PS1__"),
+            "env.ps1 file should not contain __VP_COMPLETION_PS1__ placeholder"
+        );
+    }
 }
