@@ -5,6 +5,9 @@ declare module '*.vue' {
   export default component;
 }
 
+// CSS module declarations
+declare module '*.css' {}
+
 // Asset module declarations
 declare module '*.riv' {
   const src: string;
