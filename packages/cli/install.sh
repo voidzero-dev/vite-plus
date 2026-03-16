@@ -350,17 +350,19 @@ configure_shell_path() {
       # Add to both .zshenv (for all shells including IDE) and .zshrc (to ensure PATH is at front)
       # Create .zshenv if missing — it's the canonical place for PATH in zsh
       # and is sourced by all session types (interactive, non-interactive, IDE)
-      [ -f "$HOME/.zshenv" ] || touch "$HOME/.zshenv"
+      local zsh_dir="${ZDOTDIR:-$HOME}"
+      mkdir -p "$zsh_dir"
+      [ -f "$zsh_dir/.zshenv" ] || touch "$zsh_dir/.zshenv"
       local zshenv_result=0 zshrc_result=0
-      add_bin_to_path "$HOME/.zshenv" || zshenv_result=$?
-      add_bin_to_path "$HOME/.zshrc" || zshrc_result=$?
+      add_bin_to_path "$zsh_dir/.zshenv" || zshenv_result=$?
+      add_bin_to_path "$zsh_dir/.zshrc" || zshrc_result=$?
       # Prioritize .zshrc for user notification (easier to source)
       if [ $zshrc_result -eq 0 ]; then
         result=0
-        SHELL_CONFIG_UPDATED=".zshrc"
+        SHELL_CONFIG_UPDATED="$zsh_dir/.zshrc"
       elif [ $zshenv_result -eq 0 ]; then
         result=0
-        SHELL_CONFIG_UPDATED=".zshenv"
+        SHELL_CONFIG_UPDATED="$zsh_dir/.zshenv"
       elif [ $zshenv_result -eq 2 ] || [ $zshrc_result -eq 2 ]; then
         result=2  # already configured in at least one file
       fi
@@ -377,19 +379,19 @@ configure_shell_path() {
       # Prioritize .bashrc for user notification (most commonly edited)
       if [ $bashrc_result -eq 0 ]; then
         result=0
-        SHELL_CONFIG_UPDATED=".bashrc"
+        SHELL_CONFIG_UPDATED="$HOME/.bashrc"
       elif [ $bash_profile_result -eq 0 ]; then
         result=0
-        SHELL_CONFIG_UPDATED=".bash_profile"
+        SHELL_CONFIG_UPDATED="$HOME/.bash_profile"
       elif [ $profile_result -eq 0 ]; then
         result=0
-        SHELL_CONFIG_UPDATED=".profile"
+        SHELL_CONFIG_UPDATED="$HOME/.profile"
       elif [ $bash_profile_result -eq 2 ] || [ $bashrc_result -eq 2 ] || [ $profile_result -eq 2 ]; then
         result=2  # already configured in at least one file
       fi
       ;;
     */fish)
-      local fish_dir="$HOME/.config/fish/conf.d"
+      local fish_dir="${XDG_CONFIG_HOME:-$HOME/.config}/fish/conf.d"
       local fish_config="$fish_dir/vite-plus.fish"
       if [ -f "$fish_config" ]; then
         result=2
@@ -398,7 +400,7 @@ configure_shell_path() {
         echo "# Vite+ bin (https://viteplus.dev)" >> "$fish_config"
         echo "source \"$INSTALL_DIR_REF/env.fish\"" >> "$fish_config"
         result=0
-        SHELL_CONFIG_UPDATED=".config/fish/conf.d/vite-plus.fish"
+        SHELL_CONFIG_UPDATED="$fish_config"
       fi
       ;;
   esac
@@ -650,8 +652,18 @@ NPMRC_EOF
 
   # Show restart note if PATH was added to shell config
   if [ "$PATH_CONFIGURED" = "true" ] && [ -n "$SHELL_CONFIG_UPDATED" ]; then
+    local display_config
+    if [ "${SHELL_CONFIG_UPDATED#"$HOME"}" != "$SHELL_CONFIG_UPDATED" ]; then
+      display_config="~${SHELL_CONFIG_UPDATED#"$HOME"}"
+    else
+      display_config="$SHELL_CONFIG_UPDATED"
+    fi
     echo ""
-    echo "  Note: Run \`source ~/$SHELL_CONFIG_UPDATED\` or restart your terminal."
+    if [ "${display_config#"~"}" != "$display_config" ]; then
+      echo "  Note: Run \`source $display_config\` or restart your terminal."
+    else
+      echo "  Note: Run \`source \"$display_config\"\` or restart your terminal."
+    fi
   fi
 
   # Show warning if PATH could not be automatically configured

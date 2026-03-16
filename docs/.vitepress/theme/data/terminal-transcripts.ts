@@ -27,25 +27,31 @@ export const terminalTranscripts: TerminalTranscript[] = [
     id: 'create',
     label: 'create',
     title: 'Scaffold a project',
-    command: 'vp create acme-web --template react-ts',
+    command: 'vp create',
     lineDelay: 220,
     completionDelay: 900,
     lines: [
       {
         segments: [
           { text: '◇ ', tone: 'accent' },
-          { text: 'Scaffolded ', tone: 'muted' },
-          { text: 'acme-web', tone: 'brand' },
-          { text: ' with React + TypeScript', tone: 'muted' },
+          { text: 'Select a template ', tone: 'muted' },
+          { text: 'vite:application', tone: 'brand' },
+        ],
+      },
+      {
+        segments: [
+          { text: '◇ ', tone: 'accent' },
+          { text: 'Project directory ', tone: 'muted' },
+          { text: 'vite-app', tone: 'brand' },
         ],
       },
       {
         segments: [
           { text: '• ', tone: 'muted' },
           { text: 'Node ', tone: 'muted' },
-          { text: '22.15.1', tone: 'brand' },
+          { text: '24.14.0', tone: 'brand' },
           { text: '  pnpm ', tone: 'muted' },
-          { text: '10.17.0', tone: 'accent' },
+          { text: '10.28.0', tone: 'accent' },
         ],
       },
       {
@@ -59,7 +65,7 @@ export const terminalTranscripts: TerminalTranscript[] = [
         segments: [
           { text: '→ ', tone: 'brand' },
           { text: 'Next: ', tone: 'muted' },
-          { text: 'cd acme-web && vp dev', tone: 'accent' },
+          { text: 'cd vite-app && vp dev', tone: 'accent' },
         ],
       },
     ],

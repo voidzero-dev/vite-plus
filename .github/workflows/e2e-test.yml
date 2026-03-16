@@ -246,6 +246,10 @@ jobs:
               vp run type-check:tsgo
               vp run build
               vp run test navigation-utils.test.ts real-browser-flicker.test.tsx workflow-parallel-limit.test.tsx
+          - name: viteplus-ws-repro
+            node-version: 24
+            command: |
+              vp test run
         exclude:
           # frm-stack uses Docker (testcontainers) which doesn't work the same way on Windows
           - os: windows-latest
