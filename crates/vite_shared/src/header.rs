@@ -209,6 +209,14 @@ fn query_terminal_colors(palette_indices: &[u8]) -> (Option<Rgb>, Vec<(u8, Rgb)>
         return (None, vec![]);
     }
 
+    // Docker containers and devcontainers may return unreliable OSC
+    // responses or introduce excessive pty round-trip latency, causing
+    // responses to arrive after cooked mode is restored and leak as
+    // visible text.
+    if std::path::Path::new("/.dockerenv").exists() {
+        return (None, vec![]);
+    }
+
     let mut tty = match OpenOptions::new().read(true).write(true).open("/dev/tty") {
         Ok(file) => file,
         Err(_) => return (None, vec![]),
