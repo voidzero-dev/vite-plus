@@ -118,6 +118,11 @@ pub struct EnvConfig {
     /// Env: `FISH_VERSION`
     pub fish_version: Option<String>,
 
+    /// Nushell version (indicates running under Nushell).
+    ///
+    /// Env: `NU_VERSION`
+    pub nu_version: Option<String>,
+
     /// PowerShell module path (indicates running under PowerShell on Windows).
     ///
     /// Env: `PSModulePath`
@@ -150,6 +155,7 @@ impl EnvConfig {
                 .ok()
                 .map(PathBuf::from),
             fish_version: std::env::var("FISH_VERSION").ok(),
+            nu_version: std::env::var("NU_VERSION").ok(),
             ps_module_path: std::env::var("PSModulePath").ok(),
         }
     }
@@ -232,6 +238,7 @@ impl EnvConfig {
             node_version: None,
             user_home: None,
             fish_version: None,
+            nu_version: None,
             ps_module_path: None,
         }
     }

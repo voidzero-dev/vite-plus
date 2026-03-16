@@ -388,6 +388,7 @@ async fn cleanup_legacy_completion_dir(vite_plus_home: &vite_path::AbsolutePath)
 /// Creates:
 /// - `~/.vite-plus/env` (POSIX shell — bash/zsh) with `vp()` wrapper function
 /// - `~/.vite-plus/env.fish` (fish shell) with `vp` wrapper function
+/// - `~/.vite-plus/env.nu` (Nushell) with PATH setup + `vp` wrapper function
 /// - `~/.vite-plus/env.ps1` (PowerShell) with PATH setup + `vp` function
 /// - `~/.vite-plus/bin/vp-use.cmd` (cmd.exe wrapper for `vp env use`)
 async fn create_env_files(vite_plus_home: &vite_path::AbsolutePath) -> Result<(), Error> {
@@ -395,18 +396,23 @@ async fn create_env_files(vite_plus_home: &vite_path::AbsolutePath) -> Result<()
 
     // Use $HOME-relative path if install dir is under HOME (like rustup's ~/.cargo/env)
     // This makes the env file portable across sessions where HOME may differ
-    let home_dir = vite_shared::EnvConfig::get().user_home;
-    let to_ref = |path: &vite_path::AbsolutePath| -> String {
-        home_dir
+    let (bin_path_ref, bin_path_nu) = {
+        let bin_path_ref = &bin_path;
+        vite_shared::EnvConfig::get()
+            .user_home
             .as_ref()
-            .and_then(|h| path.as_path().strip_prefix(h).ok())
-            .map(|s| {
-                // Normalize to forward slashes for $HOME/... paths (POSIX-style)
-                format!("$HOME/{}", s.display().to_string().replace('\\', "/"))
-            })
-            .unwrap_or_else(|| path.as_path().display().to_string())
+            .and_then(|h| bin_path_ref.as_path().strip_prefix(h).ok())
+            .map_or_else(
+                || (bin_path_ref.as_path().display().to_string(), None),
+                |s| {
+                    (
+                        // Normalize to forward slashes for $HOME/... paths (POSIX-style)
+                        format!("$HOME/{}", s.display().to_string().replace('\\', "/")),
+                        Some(format!("~/{}", s.display())),
+                    )
+                },
+            )
     };
-    let bin_path_ref = to_ref(&bin_path);
 
     // POSIX env file (bash/zsh)
     // When sourced multiple times, removes existing entry and re-prepends to front
@@ -499,6 +505,75 @@ complete -c vpr --keep-order --exclusive --arguments "(__vpr_complete)"
     let env_fish_file = vite_plus_home.join("env.fish");
     tokio::fs::write(&env_fish_file, env_fish_content).await?;
 
+    // Nushell env file with vp wrapper function
+    let env_nu_content = r#"# Vite+ environment setup (https://viteplus.dev)
+let __vp_bin = $"__VP_BIN_NU__"
+$env.PATH = (($env.PATH | where {|entry| $entry != $__vp_bin }) | prepend $__vp_bin)
+
+# Helper function to process `vp env use` stdout payload
+# to set/unset VP_NODE_VERSION in the current shell session.
+def --env __vp_apply_env_use_output [payload: string] {
+    let __vp_payload = ($payload | str trim)
+    if (($__vp_payload | str length) == 0) {
+        return
+    }
+
+    # `vp env use` emits JSONL for Nushell so we can apply it without string parsing.
+    for __line in ($__vp_payload | lines) {
+        let __vp_data = try {
+            $__line | from json
+        } catch {
+            error make { msg: $"Invalid Vite+ env payload: ($__vp_payload)" }
+        }
+
+        if 'set' in $__vp_data {
+            load-env $__vp_data.set
+        } else if 'unset' in $__vp_data {
+            for name in $__vp_data.unset {
+                hide-env -i $name
+            }
+        } else {
+            error make { msg: $"Unsupported Vite+ env payload: ($__vp_payload)" }
+        }
+    }
+}
+
+# Shell function wrapper: intercepts `vp env use` to consume its stdout,
+# Which then used to set/unset VP_NODE_VERSION in the current shell session.
+def --env vp [...args: string] {
+    if (($args | length) >= 2) and $args.0 == "env" and $args.1 == "use" {
+        if ($args | any {|arg| $arg == "-h" or $arg == "--help"}) {
+            ^vp ...$args
+            return
+        }
+
+        let __vp_result = (with-env { VP_ENV_USE_EVAL_ENABLE: "1" } {
+            do { ^vp ...$args } | complete
+        })
+
+        if (($__vp_result.stderr | str length) > 0) {
+            print --stderr --raw $__vp_result.stderr
+        }
+
+        if $__vp_result.exit_code != 0 {
+            let __vp_error = ($__vp_result.stderr | str trim)
+            if (($__vp_error | str length) > 0) {
+                error make { msg: $__vp_error }
+            } else {
+                error make { msg: $"vp env use exited with code ($__vp_result.exit_code)" }
+            }
+        }
+
+        __vp_apply_env_use_output $__vp_result.stdout
+    } else {
+        ^vp ...$args
+    }
+}
+"#
+    .replace("__VP_BIN_NU__", &bin_path_nu.unwrap_or(bin_path_ref));
+    let env_nu_file = vite_plus_home.join("env.nu");
+    tokio::fs::write(&env_nu_file, env_nu_content).await?;
+
     // PowerShell env file
     let env_ps1_content = r#"# Vite+ environment setup (https://viteplus.dev)
 $__vp_bin = "__VP_BIN_WIN__"
@@ -577,20 +652,21 @@ Register-ArgumentCompleter -Native -CommandName vpr -ScriptBlock $__vpr_comp
 
 /// Print instructions for adding bin directory to PATH.
 fn print_path_instructions(bin_dir: &vite_path::AbsolutePath) {
-    // Derive vite_plus_home from bin_dir (parent), using $HOME prefix for readability
+    // Derive vite_plus_home from bin_dir (parent), using a HOME-relative path for readability.
     let home_path = bin_dir
         .parent()
         .map(|p| p.as_path().display().to_string())
         .unwrap_or_else(|| bin_dir.as_path().display().to_string());
-    let home_path = if let Ok(home_dir) = std::env::var("HOME") {
+    let (home_path, nu_home_path) = if let Ok(home_dir) = std::env::var("HOME") {
         if let Some(suffix) = home_path.strip_prefix(&home_dir) {
-            format!("$HOME{suffix}")
+            (format!("$HOME{suffix}"), Some(format!("~{suffix}")))
         } else {
-            home_path
+            (home_path.clone(), None)
         }
     } else {
-        home_path
+        (home_path.clone(), None)
     };
+    let nu_home_path = nu_home_path.unwrap_or(home_path.clone());
 
     println!("{}", help::render_heading("Next Steps"));
     println!("  Add to your shell profile (~/.zshrc, ~/.bashrc, etc.):");
@@ -600,6 +676,10 @@ fn print_path_instructions(bin_dir: &vite_path::AbsolutePath) {
     println!("  For fish shell, add to ~/.config/fish/config.fish:");
     println!();
     println!("  source \"{home_path}/env.fish\"");
+    println!();
+    println!("  For Nushell, add to ~/.config/nushell/config.nu:");
+    println!();
+    println!("  source \"{nu_home_path}/env.nu\"");
     println!();
     println!("  For PowerShell, add to your $PROFILE:");
     println!();
@@ -654,9 +734,11 @@ mod tests {
 
         let env_path = home.join("env");
         let env_fish_path = home.join("env.fish");
+        let env_nu_path = home.join("env.nu");
         let env_ps1_path = home.join("env.ps1");
         assert!(env_path.as_path().exists(), "env file should be created");
         assert!(env_fish_path.as_path().exists(), "env.fish file should be created");
+        assert!(env_nu_path.as_path().exists(), "env.nu file should be created");
         assert!(env_ps1_path.as_path().exists(), "env.ps1 file should be created");
     }
 
@@ -670,6 +752,7 @@ mod tests {
 
         let env_content = tokio::fs::read_to_string(home.join("env")).await.unwrap();
         let fish_content = tokio::fs::read_to_string(home.join("env.fish")).await.unwrap();
+        let nu_content = tokio::fs::read_to_string(home.join("env.nu")).await.unwrap();
 
         // Placeholder should be fully replaced
         assert!(
@@ -680,6 +763,10 @@ mod tests {
             !fish_content.contains("__VP_BIN__"),
             "env.fish file should not contain __VP_BIN__ placeholder"
         );
+        assert!(
+            !nu_content.contains("__VP_BIN_NU__"),
+            "env.nu file should not contain __VP_BIN_NU__ placeholder"
+        );
 
         // Should use $HOME-relative path since install dir is under HOME
         assert!(
@@ -689,6 +776,10 @@ mod tests {
         assert!(
             fish_content.contains("$HOME/bin"),
             "env.fish file should reference $HOME/bin, got: {fish_content}"
+        );
+        assert!(
+            nu_content.contains("~/bin"),
+            "env.nu file should reference ~/bin, got: {nu_content}"
         );
     }
 
@@ -703,6 +794,7 @@ mod tests {
 
         let env_content = tokio::fs::read_to_string(home.join("env")).await.unwrap();
         let fish_content = tokio::fs::read_to_string(home.join("env.fish")).await.unwrap();
+        let nu_content = tokio::fs::read_to_string(home.join("env.nu")).await.unwrap();
 
         // Should use absolute path since install dir is not under HOME
         let expected_bin = home.join("bin");
@@ -715,9 +807,14 @@ mod tests {
             fish_content.contains(&expected_str),
             "env.fish file should use absolute path {expected_str}, got: {fish_content}"
         );
+        assert!(
+            nu_content.contains(&expected_str),
+            "env.nu file should use absolute path {expected_str}, got: {nu_content}"
+        );
 
         // Should NOT use $HOME-relative path
         assert!(!env_content.contains("$HOME/bin"), "env file should not reference $HOME/bin");
+        assert!(!nu_content.contains("~/bin"), "env.nu file should not reference ~/bin");
     }
 
     #[tokio::test]
@@ -774,6 +871,23 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_create_env_files_nushell_contains_path_guard() {
+        let temp_dir = TempDir::new().unwrap();
+        let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let _guard = home_guard(temp_dir.path());
+
+        create_env_files(&home).await.unwrap();
+
+        let nu_content = tokio::fs::read_to_string(home.join("env.nu")).await.unwrap();
+
+        // Verify Nushell PATH guard
+        assert!(
+            nu_content.contains("$env.PATH = (($env.PATH | where {|entry| $entry != $__vp_bin }) | prepend $__vp_bin)"),
+            "env.nu should dedupe and prepend the bin path"
+        );
+    }
+
+    #[tokio::test]
     async fn test_create_env_files_is_idempotent() {
         let temp_dir = TempDir::new().unwrap();
         let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
@@ -783,15 +897,18 @@ mod tests {
         create_env_files(&home).await.unwrap();
         let first_env = tokio::fs::read_to_string(home.join("env")).await.unwrap();
         let first_fish = tokio::fs::read_to_string(home.join("env.fish")).await.unwrap();
+        let first_nu = tokio::fs::read_to_string(home.join("env.nu")).await.unwrap();
         let first_ps1 = tokio::fs::read_to_string(home.join("env.ps1")).await.unwrap();
 
         create_env_files(&home).await.unwrap();
         let second_env = tokio::fs::read_to_string(home.join("env")).await.unwrap();
         let second_fish = tokio::fs::read_to_string(home.join("env.fish")).await.unwrap();
+        let second_nu = tokio::fs::read_to_string(home.join("env.nu")).await.unwrap();
         let second_ps1 = tokio::fs::read_to_string(home.join("env.ps1")).await.unwrap();
 
         assert_eq!(first_env, second_env, "env file should be identical after second write");
         assert_eq!(first_fish, second_fish, "env.fish file should be identical after second write");
+        assert_eq!(first_nu, second_nu, "env.nu file should be identical after second write");
         assert_eq!(first_ps1, second_ps1, "env.ps1 file should be identical after second write");
     }
 
@@ -869,6 +986,36 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_create_env_files_nushell_contains_vp_function() {
+        let temp_dir = TempDir::new().unwrap();
+        let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let _guard = home_guard(temp_dir.path());
+
+        create_env_files(&home).await.unwrap();
+
+        let nu_content = tokio::fs::read_to_string(home.join("env.nu")).await.unwrap();
+
+        // Verify Nushell vp function wrapper is present
+        assert!(nu_content.contains("def --env vp"), "env.nu should contain vp function");
+        assert!(
+            nu_content.contains("do { ^vp ...$args } | complete"),
+            "env.nu should capture stdout/stderr from vp env use"
+        );
+        assert!(
+            nu_content.contains("from json"),
+            "env.nu should parse the env use payload as JSON"
+        );
+        assert!(
+            nu_content.contains("load-env $__vp_data.set"),
+            "env.nu should load env changes from the payload record"
+        );
+        assert!(
+            nu_content.contains("hide-env -i $name"),
+            "env.nu should hide env vars based on the payload list"
+        );
+    }
+
+    #[tokio::test]
     async fn test_execute_env_only_creates_home_dir_and_env_files() {
         let temp_dir = TempDir::new().unwrap();
         let fresh_home = temp_dir.path().join("new-vite-plus");
@@ -888,6 +1035,7 @@ mod tests {
         // Env files should be written
         assert!(fresh_home.join("env").exists(), "env file should be created");
         assert!(fresh_home.join("env.fish").exists(), "env.fish file should be created");
+        assert!(fresh_home.join("env.nu").exists(), "env.nu file should be created");
         assert!(fresh_home.join("env.ps1").exists(), "env.ps1 file should be created");
     }
 
