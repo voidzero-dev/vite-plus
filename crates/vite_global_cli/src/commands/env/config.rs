@@ -1154,7 +1154,7 @@ mod tests {
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
         let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig {
             node_version: Some("22.0.0".into()),
-            ..vite_shared::EnvConfig::for_test_with_home(temp_dir.path()),
+            ..vite_shared::EnvConfig::for_test_with_home(temp_dir.path())
         });
 
         // Create .node-version file
