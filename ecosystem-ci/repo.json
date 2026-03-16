@@ -54,5 +54,11 @@
     "repository": "https://github.com/fengmk2/vite-vue-vercel.git",
     "branch": "main",
     "hash": "f2bf9fc40880c6a80f5d89bff70641c2eeaf77ef"
+  },
+  "viteplus-ws-repro": {
+    "repository": "https://github.com/Charles5277/viteplus-ws-repro.git",
+    "branch": "main",
+    "hash": "451925ad7c07750a23de1d6ed454825d0eb14092",
+    "forceFreshMigration": true
   }
 }

@@ -37,6 +37,7 @@
     ".": {
       "import": {
         "types": "./dist/index.d.ts",
+        "browser": "./dist/index.js",
         "node": "./dist/index-node.js",
         "default": "./dist/index.js"
       },

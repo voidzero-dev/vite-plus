@@ -45,7 +45,8 @@ pub async fn resolve_version(
     registry_override: Option<&str>,
 ) -> Result<ResolvedVersion, Error> {
     let default_registry = npm_registry();
-    let registry = registry_override.unwrap_or(&default_registry);
+    let registry_raw = registry_override.unwrap_or(&default_registry);
+    let registry = registry_raw.trim_end_matches('/');
     let client = HttpClient::new();
 
     // Step 1: Fetch main package metadata to resolve version

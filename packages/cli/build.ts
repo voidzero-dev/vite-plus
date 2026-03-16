@@ -8,7 +8,7 @@
  * 4. syncCorePackageExports() - Creates shim files to re-export from @voidzero-dev/vite-plus-core
  * 5. syncTestPackageExports() - Creates shim files to re-export from @voidzero-dev/vite-plus-test
  * 6. copySkillDocs() - Copies docs into skills/vite-plus/docs for runtime MCP access
- * 7. syncReadmeFromRoot()/syncLicenseFromRoot() - Keeps package docs/license in sync
+ * 7. syncReadmeFromRoot() - Keeps package README in sync
  *
  * The sync functions allow this package to be a drop-in replacement for 'vite' by
  * re-exporting all the same subpaths (./client, ./types/*, etc.) while delegating
@@ -64,13 +64,13 @@ if (!skipTs) {
   generateLicenseFile({
     title: 'Vite-Plus CLI license',
     packageName: 'Vite-Plus',
-    outputPath: join(projectDir, 'LICENSE.md'),
+    outputPath: join(projectDir, 'LICENSE'),
     coreLicensePath: join(projectDir, '..', '..', 'LICENSE'),
     bundledPaths: [join(projectDir, 'dist', 'global')],
     resolveFrom: [projectDir],
   });
-  if (!existsSync(join(projectDir, 'LICENSE.md'))) {
-    throw new Error('LICENSE.md was not generated during build');
+  if (!existsSync(join(projectDir, 'LICENSE'))) {
+    throw new Error('LICENSE was not generated during build');
   }
 }
 // Build native first - TypeScript may depend on the generated binding types
@@ -83,7 +83,6 @@ if (!skipTs) {
 }
 await copySkillDocs();
 await syncReadmeFromRoot();
-await syncLicenseFromRoot();
 
 async function buildNapiBinding() {
   const buildCommand = createBuildCommand(napiArgs);
@@ -480,12 +479,6 @@ async function syncReadmeFromRoot() {
   if (nextReadme !== packageReadme) {
     await writeFile(packageReadmePath, nextReadme);
   }
-}
-
-async function syncLicenseFromRoot() {
-  const rootLicensePath = join(projectDir, '..', '..', 'LICENSE');
-  const packageLicensePath = join(projectDir, 'LICENSE');
-  await copyFile(rootLicensePath, packageLicensePath);
 }
 
 function splitReadme(content: string, label: string) {

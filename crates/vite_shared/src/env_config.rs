@@ -133,7 +133,9 @@ impl EnvConfig {
             vite_plus_home: std::env::var(env_vars::VITE_PLUS_HOME).ok().map(PathBuf::from),
             npm_registry: std::env::var(env_vars::NPM_CONFIG_REGISTRY)
                 .or_else(|_| std::env::var(env_vars::NPM_CONFIG_REGISTRY_UPPER))
-                .unwrap_or_else(|_| "https://registry.npmjs.org".into()),
+                .unwrap_or_else(|_| "https://registry.npmjs.org".into())
+                .trim_end_matches('/')
+                .to_string(),
             node_dist_mirror: std::env::var(env_vars::VITE_NODE_DIST_MIRROR).ok(),
             is_ci: std::env::var("CI").is_ok(),
             bypass_shim: std::env::var(env_vars::VITE_PLUS_BYPASS).is_ok(),
