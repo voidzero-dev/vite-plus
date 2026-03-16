@@ -21,6 +21,18 @@ const cwd = directory ? join(repoRoot, directory) : repoRoot;
 // run vp migrate
 const cli = process.env.VITE_PLUS_CLI_BIN ?? 'vp';
 
+// Projects that already have vite-plus need it removed before migration so
+// vp migrate treats them as fresh and applies tgz overrides. Without this,
+// vp migrate detects "already using Vite+" and skips override injection.
+const forceFreshMigration = 'forceFreshMigration' in repoConfig && repoConfig.forceFreshMigration;
+if (forceFreshMigration) {
+  const pkgPath = join(cwd, 'package.json');
+  const pkg = JSON.parse(await readFile(pkgPath, 'utf-8'));
+  delete pkg.devDependencies?.['vite-plus'];
+  delete pkg.dependencies?.['vite-plus'];
+  await writeFile(pkgPath, JSON.stringify(pkg, null, 2) + '\n', 'utf-8');
+}
+
 if (project === 'rollipop') {
   const oxfmtrc = await readFile(join(repoRoot, '.oxfmtrc.json'), 'utf-8');
   await writeFile(

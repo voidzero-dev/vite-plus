@@ -302,9 +302,18 @@ async function mergePackageJson(pluginExports: Array<{ exportPath: string; shimF
     // browser-provider exports. Browser code uses index.js which is safe.
     // This separation prevents Node.js-only code (like __vite__injectQuery) from being
     // loaded in the browser, which would cause "Identifier already declared" errors.
+    //
+    // IMPORTANT: The 'browser' condition must come BEFORE 'node' because vitest passes
+    // custom --conditions (like 'browser') to worker processes when frameworks like Nuxt
+    // set edge/cloudflare presets. Without the 'browser' condition here, Node.js would
+    // match 'node' first, loading index-node.js which imports @vitest/browser/index.js,
+    // which imports 'ws'. With --conditions browser active, 'ws' resolves to its browser
+    // stub (ws/browser.js) that doesn't export WebSocketServer, causing a SyntaxError.
+    // See: https://github.com/voidzero-dev/vite-plus/issues/831
     if (destPkg.exports['.'] && destPkg.exports['.'].import) {
       destPkg.exports['.'].import = {
         types: destPkg.exports['.'].import.types,
+        browser: destPkg.exports['.'].import.default,
         node: './dist/index-node.js',
         default: destPkg.exports['.'].import.default,
       };
