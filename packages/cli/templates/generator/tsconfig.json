@@ -4,6 +4,7 @@
     "module": "nodenext",
     "moduleResolution": "nodenext",
     "noEmit": true,
+    "types": ["node"],
     "resolveJsonModule": true
   }
 }

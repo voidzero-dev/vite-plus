@@ -12,6 +12,7 @@
     "strict": true,
     "declaration": true,
     "skipLibCheck": true,
+    "types": ["node", "vite/client"],
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "forceConsistentCasingInFileNames": true,
