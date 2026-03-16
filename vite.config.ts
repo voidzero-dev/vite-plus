@@ -81,7 +81,7 @@ export default defineConfig({
     singleQuote: true,
     semi: true,
     experimentalSortPackageJson: true,
-    experimentalSortImports: {
+    sortImports: {
       groups: [
         ['type-import'],
         ['type-builtin', 'value-builtin'],

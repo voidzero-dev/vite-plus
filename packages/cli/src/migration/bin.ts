@@ -14,6 +14,7 @@ import {
 } from '../types/index.js';
 import {
   detectAgentConflicts,
+  detectExistingAgentTargetPaths,
   selectAgentTargetPaths,
   writeAgentInstructions,
 } from '../utils/agent.js';
@@ -339,12 +340,19 @@ async function collectMigrationPlan(
     }
   }
 
-  // 3. Agent selection
-  const selectedAgentTargetPaths = await selectAgentTargetPaths({
-    interactive: options.interactive,
-    agent: options.agent,
-    onCancel: () => cancelAndExit(),
-  });
+  // 3. Agent selection (auto-detect existing agent files to skip the selector prompt)
+  const existingAgentTargetPaths =
+    options.agent !== undefined || !options.interactive
+      ? undefined
+      : detectExistingAgentTargetPaths(rootDir);
+  const selectedAgentTargetPaths =
+    existingAgentTargetPaths !== undefined
+      ? existingAgentTargetPaths
+      : await selectAgentTargetPaths({
+          interactive: options.interactive,
+          agent: options.agent,
+          onCancel: () => cancelAndExit(),
+        });
 
   // 4. Agent conflict detection + prompting
   const agentConflicts = await detectAgentConflicts({

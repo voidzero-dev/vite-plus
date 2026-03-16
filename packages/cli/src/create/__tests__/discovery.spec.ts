@@ -63,6 +63,11 @@ describe('expandCreateShorthand', () => {
   it('should handle scope-only input gracefully', () => {
     expect(expandCreateShorthand('@scope')).toBe('@scope');
   });
+
+  it('should handle special cases where default convention does not apply', () => {
+    expect(expandCreateShorthand('nitro')).toBe('create-nitro-app');
+    expect(expandCreateShorthand('nitro@latest')).toBe('create-nitro-app@latest');
+  });
 });
 
 describe('GitHub template helpers', () => {

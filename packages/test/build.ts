@@ -302,9 +302,18 @@ async function mergePackageJson(pluginExports: Array<{ exportPath: string; shimF
     // browser-provider exports. Browser code uses index.js which is safe.
     // This separation prevents Node.js-only code (like __vite__injectQuery) from being
     // loaded in the browser, which would cause "Identifier already declared" errors.
+    //
+    // IMPORTANT: The 'browser' condition must come BEFORE 'node' because vitest passes
+    // custom --conditions (like 'browser') to worker processes when frameworks like Nuxt
+    // set edge/cloudflare presets. Without the 'browser' condition here, Node.js would
+    // match 'node' first, loading index-node.js which imports @vitest/browser/index.js,
+    // which imports 'ws'. With --conditions browser active, 'ws' resolves to its browser
+    // stub (ws/browser.js) that doesn't export WebSocketServer, causing a SyntaxError.
+    // See: https://github.com/voidzero-dev/vite-plus/issues/831
     if (destPkg.exports['.'] && destPkg.exports['.'].import) {
       destPkg.exports['.'].import = {
         types: destPkg.exports['.'].import.types,
+        browser: destPkg.exports['.'].import.default,
         node: './dist/index-node.js',
         default: destPkg.exports['.'].import.default,
       };
@@ -611,8 +620,11 @@ async function copyVitestPackages() {
     console.log(`    -> ${copied} files`);
 
     // Copy root type definition files if they exist
-    // These include context.d.ts (browser providers), matchers.d.ts (expect.element), jest-dom.d.ts (matchers)
-    const rootDtsFiles = ['context.d.ts', 'matchers.d.ts', 'jest-dom.d.ts'];
+    // These include context.d.ts (browser providers), matchers.d.ts (expect.element),
+    // jest-dom.d.ts (matchers), aria-role.d.ts (ARIARole type used by context.d.ts)
+    // TODO: consider dynamically scanning root .d.ts files instead of hardcoding,
+    // since upstream @vitest/browser may add new .d.ts files in future versions.
+    const rootDtsFiles = ['context.d.ts', 'matchers.d.ts', 'jest-dom.d.ts', 'aria-role.d.ts'];
     for (const dtsFile of rootDtsFiles) {
       const rootDts = resolve(projectDir, `node_modules/${pkg}/${dtsFile}`);
       try {
