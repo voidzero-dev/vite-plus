@@ -203,6 +203,12 @@ fn query_terminal_colors(palette_indices: &[u8]) -> (Option<Rgb>, Vec<(u8, Rgb)>
         return (None, vec![]);
     }
 
+    // tmux does not reliably forward OSC color query responses back to the
+    // child process, causing the same hang-until-keypress behavior as Warp.
+    if std::env::var_os("TMUX").is_some() {
+        return (None, vec![]);
+    }
+
     let mut tty = match OpenOptions::new().read(true).write(true).open("/dev/tty") {
         Ok(file) => file,
         Err(_) => return (None, vec![]),

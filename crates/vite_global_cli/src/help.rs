@@ -764,11 +764,7 @@ fn delegated_help_doc(command: &str) -> Option<HelpDoc> {
                 ),
                 section_lines(
                     "Examples",
-                    vec![
-                        "  vp check",
-                        "  vp check --fix",
-                        "  vp check --no-type-check src/index.ts",
-                    ],
+                    vec!["  vp check", "  vp check --fix", "  vp check --no-lint src/index.ts"],
                 ),
             ],
             documentation_url: documentation_url_for_command_path(&["check"]),
