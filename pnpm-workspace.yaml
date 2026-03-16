@@ -182,6 +182,7 @@ patchedDependencies:
 peerDependencyRules:
   allowAny:
     - vite
+    - vitepress
     - vitest
     - rolldown
   allowedVersions:

@@ -225,10 +225,9 @@ When a command contains `vp run`, Vite Task inlines it as separate tasks instead
 
 Running `vp run ci` expands into three tasks:
 
-```
-┌────────┐   ┌────────┐   ┌────────┐
-│  lint  │──▶│  test  │──▶│ build  │
-└────────┘   └────────┘   └────────┘
+```mermaid
+graph LR
+  lint --> test --> build
 ```
 
 Flags also work inside nested scripts. For example, `vp run -r build` inside a script expands into individual build tasks for every package.
