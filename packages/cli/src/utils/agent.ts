@@ -609,7 +609,20 @@ async function tryLinkTargetToAgents(projectRoot: string, targetPath: string, si
     await fsPromises.unlink(destinationPath);
   }
 
-  await fsPromises.symlink(symlinkTarget, destinationPath);
+  try {
+    await fsPromises.symlink(symlinkTarget, destinationPath);
+  } catch (err: unknown) {
+    if ((err as NodeJS.ErrnoException).code === 'EPERM') {
+      // On Windows, symlinks require admin privileges.
+      // Fall back to copying the file instead.
+      await fsPromises.copyFile(agentsPath, destinationPath);
+      if (!silent) {
+        prompts.log.success(`Copied ${AGENT_STANDARD_PATH} to ${targetPath}`);
+      }
+      return true;
+    }
+    throw err;
+  }
   if (!silent) {
     prompts.log.success(`Linked ${targetPath} to ${AGENT_STANDARD_PATH}`);
   }
