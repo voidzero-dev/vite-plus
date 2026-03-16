@@ -513,10 +513,7 @@ fn print_path_fix(bin_dir: &vite_path::AbsolutePath) {
 /// Returns `Some(display_path)` if any profile file contains a reference
 /// to the vite-plus env file, `None` otherwise.
 #[cfg(not(windows))]
-fn check_profile_files(
-    vite_plus_home: &str,
-    profile_files: &[(&str, bool)],
-) -> Option<String> {
+fn check_profile_files(vite_plus_home: &str, profile_files: &[(&str, bool)]) -> Option<String> {
     let home_dir = std::env::var("HOME").ok()?;
 
     for &(file, is_fish) in profile_files {
@@ -962,18 +959,13 @@ mod tests {
         let fake_home = temp.path().join("home");
         std::fs::create_dir_all(&fake_home).unwrap();
 
-        std::fs::write(
-            fake_home.join(".bashrc"),
-            "# some config\n. \"$HOME/.vite-plus/env\"\n",
-        )
-        .unwrap();
+        std::fs::write(fake_home.join(".bashrc"), "# some config\n. \"$HOME/.vite-plus/env\"\n")
+            .unwrap();
 
         let _guard = ProfileEnvGuard::new(&fake_home, None, None);
 
-        let result = check_profile_files(
-            "$HOME/.vite-plus",
-            &[(".bashrc", false), (".profile", false)],
-        );
+        let result =
+            check_profile_files("$HOME/.vite-plus", &[(".bashrc", false), (".profile", false)]);
         assert!(result.is_some(), "Should find env sourcing in .bashrc");
         assert_eq!(result.unwrap(), "~/.bashrc");
     }
@@ -987,18 +979,12 @@ mod tests {
         let fish_dir = fake_home.join(".config/fish");
         std::fs::create_dir_all(&fish_dir).unwrap();
 
-        std::fs::write(
-            fish_dir.join("config.fish"),
-            "source \"$HOME/.vite-plus/env.fish\"\n",
-        )
-        .unwrap();
+        std::fs::write(fish_dir.join("config.fish"), "source \"$HOME/.vite-plus/env.fish\"\n")
+            .unwrap();
 
         let _guard = ProfileEnvGuard::new(&fake_home, None, None);
 
-        let result = check_profile_files(
-            "$HOME/.vite-plus",
-            &[(".config/fish/config.fish", true)],
-        );
+        let result = check_profile_files("$HOME/.vite-plus", &[(".config/fish/config.fish", true)]);
         assert!(result.is_some(), "Should find env.fish sourcing in fish config");
         assert_eq!(result.unwrap(), "~/.config/fish/config.fish");
     }
@@ -1012,15 +998,12 @@ mod tests {
         std::fs::create_dir_all(&fake_home).unwrap();
 
         // Create a .bashrc without vite-plus sourcing
-        std::fs::write(fake_home.join(".bashrc"), "# no vite-plus here\nexport FOO=bar\n")
-            .unwrap();
+        std::fs::write(fake_home.join(".bashrc"), "# no vite-plus here\nexport FOO=bar\n").unwrap();
 
         let _guard = ProfileEnvGuard::new(&fake_home, None, None);
 
-        let result = check_profile_files(
-            "$HOME/.vite-plus",
-            &[(".bashrc", false), (".profile", false)],
-        );
+        let result =
+            check_profile_files("$HOME/.vite-plus", &[(".bashrc", false), (".profile", false)]);
         assert!(result.is_none(), "Should return None when env sourcing not found");
     }
 
@@ -1033,18 +1016,12 @@ mod tests {
         std::fs::create_dir_all(&fake_home).unwrap();
 
         // Use absolute path form instead of $HOME
-        let abs_path = format!(
-            ". \"{}/home/.vite-plus/env\"\n",
-            temp.path().display()
-        );
+        let abs_path = format!(". \"{}/home/.vite-plus/env\"\n", temp.path().display());
         std::fs::write(fake_home.join(".zshenv"), &abs_path).unwrap();
 
         let _guard = ProfileEnvGuard::new(&fake_home, None, None);
 
-        let result = check_profile_files(
-            "$HOME/.vite-plus",
-            &[(".zshenv", false)],
-        );
+        let result = check_profile_files("$HOME/.vite-plus", &[(".zshenv", false)]);
         assert!(result.is_some(), "Should find absolute path form of env sourcing");
         assert_eq!(result.unwrap(), "~/.zshenv");
     }
