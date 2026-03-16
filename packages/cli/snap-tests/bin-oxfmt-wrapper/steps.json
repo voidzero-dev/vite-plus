@@ -1,4 +1,7 @@
 {
-  "ignoredPlatforms": ["win32"],
-  "commands": ["oxfmt # should reject non-LSP usage", "oxfmt --help # should reject non-LSP usage"]
+  "commands": [
+    "node ../node_modules/vite-plus/bin/oxfmt # should reject non-LSP usage",
+    "node ../node_modules/vite-plus/bin/oxfmt --help # should reject non-LSP usage",
+    "node ../node_modules/vite-plus/bin/oxfmt --lsp --help # should exercise import path"
+  ]
 }

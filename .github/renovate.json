@@ -5,6 +5,25 @@
     "packages/cli/snap-tests/**",
     "packages/cli/snap-tests-global/**",
     "packages/cli/snap-tests-todo/**",
-    "bench/fixtures/**"
+    "bench/fixtures/**",
+    "rolldown/**",
+    "rolldown-vite/**"
+  ],
+  "packageRules": [
+    {
+      "matchPackageNames": ["vitest-dev"],
+      "enabled": false
+    },
+    {
+      "matchPackageNames": [
+        "fspy",
+        "vite_glob",
+        "vite_path",
+        "vite_str",
+        "vite_task",
+        "vite_workspace"
+      ],
+      "enabled": false
+    }
   ]
 }

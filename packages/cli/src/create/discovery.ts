@@ -136,6 +136,9 @@ export function discoverTemplate(
  * - `@tanstack/start` → `@tanstack/create-start`
  * - `@tanstack/start@latest` → `@tanstack/create-start@latest`
  *
+ * Special cases for packages where the convention doesn't work:
+ * - `nitro` → `create-nitro-app` (create-nitro is abandoned)
+ *
  * Skips expansion for:
  * - Builtin templates (`vite:*`)
  * - GitHub URLs
@@ -190,6 +193,12 @@ export function expandCreateShorthand(templateName: string): string {
   if (name.startsWith('create-')) {
     return templateName;
   }
+
+  // Special cases where the default convention doesn't apply
+  if (name === 'nitro') {
+    return `create-nitro-app${version}`;
+  }
+
   return `create-${name}${version}`;
 }
 

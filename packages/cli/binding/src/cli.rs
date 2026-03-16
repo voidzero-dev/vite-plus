@@ -1109,6 +1109,12 @@ async fn execute_direct_subcommand(
                 if fix {
                     args.push("--fix".to_string());
                 }
+                // `vp check` parses oxlint's human-readable summary output to print
+                // unified pass/fail lines. When `GITHUB_ACTIONS=true`, oxlint auto-switches
+                // to the GitHub reporter, which omits that summary on success and makes the
+                // parser think linting never started. Force the default reporter here so the
+                // captured output is stable across local and CI environments.
+                args.push("--format=default".to_string());
                 if has_paths {
                     args.extend(paths.iter().cloned());
                 }

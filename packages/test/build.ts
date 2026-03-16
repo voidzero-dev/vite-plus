@@ -611,8 +611,11 @@ async function copyVitestPackages() {
     console.log(`    -> ${copied} files`);
 
     // Copy root type definition files if they exist
-    // These include context.d.ts (browser providers), matchers.d.ts (expect.element), jest-dom.d.ts (matchers)
-    const rootDtsFiles = ['context.d.ts', 'matchers.d.ts', 'jest-dom.d.ts'];
+    // These include context.d.ts (browser providers), matchers.d.ts (expect.element),
+    // jest-dom.d.ts (matchers), aria-role.d.ts (ARIARole type used by context.d.ts)
+    // TODO: consider dynamically scanning root .d.ts files instead of hardcoding,
+    // since upstream @vitest/browser may add new .d.ts files in future versions.
+    const rootDtsFiles = ['context.d.ts', 'matchers.d.ts', 'jest-dom.d.ts', 'aria-role.d.ts'];
     for (const dtsFile of rootDtsFiles) {
       const rootDts = resolve(projectDir, `node_modules/${pkg}/${dtsFile}`);
       try {

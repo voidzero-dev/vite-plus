@@ -248,7 +248,8 @@ function setupLocalDevDeps(versionDir: string) {
 
   // Symlink node_modules/vite-plus → packages/cli (source)
   const cliDir = path.join(repoRoot, 'packages', 'cli');
-  symlinkSync(cliDir, path.join(nodeModulesDir, 'vite-plus'), 'dir');
+  const symlinkType = isWindows ? 'junction' : 'dir';
+  symlinkSync(cliDir, path.join(nodeModulesDir, 'vite-plus'), symlinkType);
 
   // Symlink transitive deps from packages/cli/node_modules
   const cliNodeModules = path.join(cliDir, 'node_modules');
@@ -267,10 +268,10 @@ function setupLocalDevDeps(versionDir: string) {
       if (entry.startsWith('@')) {
         mkdirSync(dest, { recursive: true });
         for (const sub of readdirSync(src)) {
-          symlinkSync(path.join(src, sub), path.join(dest, sub), 'dir');
+          symlinkSync(path.join(src, sub), path.join(dest, sub), symlinkType);
         }
       } else {
-        symlinkSync(src, dest, 'dir');
+        symlinkSync(src, dest, symlinkType);
       }
     }
   }
