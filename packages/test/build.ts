@@ -931,8 +931,9 @@ async function rewriteVitestImports(leafDepToVendorPath: Map<string, string>) {
       vitest: resolve(distDir, 'index.js'),
       'vitest/node': resolve(distDir, 'node.js'),
       'vitest/config': resolve(distDir, 'config.js'),
-      // vitest/browser exports page, server, etc from @vitest/browser
-      'vitest/browser': resolve(distDir, '@vitest/browser/index.js'),
+      // vitest/browser exports page, server, CDPSession, BrowserCommands, etc from @vitest/browser/context
+      // This matches vitest's own package.json exports: "./browser" -> "./browser/context.d.ts"
+      'vitest/browser': resolve(distDir, '@vitest/browser/context.js'),
       // vitest/internal/browser exports browser-safe __INTERNAL and stringify (NOT @vitest/browser/index.js which has Node.js code)
       'vitest/internal/browser': resolve(distDir, 'browser.js'),
       'vitest/runners': resolve(distDir, 'runners.js'),
