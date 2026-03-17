@@ -7530,6 +7530,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "vite_trampoline"
+version = "0.0.0"
+
+[[package]]
 name = "vite_workspace"
 version = "0.0.0"
 source = "git+https://github.com/voidzero-dev/vite-task.git?rev=398a147fd1ed42a88585d3a9481f200c3e56a2f4#398a147fd1ed42a88585d3a9481f200c3e56a2f4"

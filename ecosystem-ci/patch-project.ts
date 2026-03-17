@@ -1,4 +1,4 @@
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -42,7 +42,10 @@ if (project === 'rollipop') {
   );
 }
 
-execSync(`${cli} migrate --no-agent --no-interactive`, {
+// Use execFileSync instead of execSync to bypass cmd.exe on Windows.
+// execSync spawns cmd.exe which can't resolve Git Bash-style PATH entries
+// (e.g., /c/Users/...) used in GitHub Actions.
+execFileSync(cli, ['migrate', '--no-agent', '--no-interactive'], {
   cwd,
   stdio: 'inherit',
   env: {

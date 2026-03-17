@@ -239,8 +239,8 @@ async fn check_bin_dir() -> bool {
 fn shim_filename(tool: &str) -> String {
     #[cfg(windows)]
     {
-        // All tools use .cmd wrappers on Windows (including node)
-        format!("{tool}.cmd")
+        // All tools use trampoline .exe files on Windows
+        format!("{tool}.exe")
     }
 
     #[cfg(not(windows))]
@@ -739,10 +739,10 @@ mod tests {
 
         #[cfg(windows)]
         {
-            // All shims should use .cmd on Windows (matching setup.rs)
-            assert_eq!(node, "node.cmd");
-            assert_eq!(npm, "npm.cmd");
-            assert_eq!(npx, "npx.cmd");
+            // All shims should use .exe on Windows (trampoline executables)
+            assert_eq!(node, "node.exe");
+            assert_eq!(npm, "npm.exe");
+            assert_eq!(npx, "npx.exe");
         }
 
         #[cfg(not(windows))]

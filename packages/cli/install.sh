@@ -554,6 +554,14 @@ main() {
     # Copy binary from LOCAL_BINARY env var (set by install-global-cli.ts)
     if [ -n "$LOCAL_BINARY" ]; then
       cp "$LOCAL_BINARY" "$BIN_DIR/$binary_name"
+      # On Windows, also copy the trampoline shim binary if available
+      if [[ "$platform" == win32* ]]; then
+        local shim_src
+        shim_src="$(dirname "$LOCAL_BINARY")/vp-shim.exe"
+        if [ -f "$shim_src" ]; then
+          cp "$shim_src" "$BIN_DIR/vp-shim.exe"
+        fi
+      fi
     else
       error "VITE_PLUS_LOCAL_BINARY must be set when using VITE_PLUS_LOCAL_TGZ"
     fi
@@ -572,6 +580,10 @@ main() {
     # Copy binary to BIN_DIR
     cp "$platform_temp_dir/$binary_name" "$BIN_DIR/"
     chmod +x "$BIN_DIR/$binary_name"
+    # On Windows, also copy the trampoline shim binary if present in the package
+    if [[ "$platform" == win32* ]] && [ -f "$platform_temp_dir/vp-shim.exe" ]; then
+      cp "$platform_temp_dir/vp-shim.exe" "$BIN_DIR/"
+    fi
     rm -rf "$platform_temp_dir"
   fi
 
