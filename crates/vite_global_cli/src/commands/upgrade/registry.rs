@@ -99,7 +99,9 @@ mod tests {
             "darwin-arm64",
             "darwin-x64",
             "linux-arm64-gnu",
+            "linux-arm64-musl",
             "linux-x64-gnu",
+            "linux-x64-musl",
             "win32-arm64-msvc",
             "win32-x64-msvc",
         ];
@@ -124,10 +126,6 @@ mod tests {
         for suffix in &detection_suffixes {
             let package_name =
                 format!("{PLATFORM_PACKAGE_SCOPE}/{CLI_PACKAGE_NAME_PREFIX}-{suffix}");
-            // musl variants are not published, so skip them
-            if suffix.contains("musl") {
-                continue;
-            }
             assert!(
                 published_packages.contains(&package_name),
                 "Platform suffix '{suffix}' produces CLI package name '{package_name}' \

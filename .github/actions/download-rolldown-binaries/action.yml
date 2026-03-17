@@ -22,10 +22,15 @@ runs:
       run: |
         if ${{ runner.os == 'Windows' }}; then
           export TARGET="win32-x64-msvc"
-        elif ${{ runner.os == 'Linux' }}; then
-          export TARGET="linux-x64-gnu"
         elif ${{ runner.os == 'macOS' }}; then
           export TARGET="darwin-arm64"
+        elif [[ "${{ inputs.target }}" == *"musl"* ]]; then
+          case "${{ inputs.target }}" in
+            x86_64*)  export TARGET="linux-x64-musl" ;;
+            aarch64*) export TARGET="linux-arm64-musl" ;;
+          esac
+        else
+          export TARGET="linux-x64-gnu"
         fi
 
         # Pin to the version from checked-out rolldown source to avoid mismatch
