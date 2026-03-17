@@ -15,8 +15,8 @@ catalog:
   '@nkzw/safe-word-list': ^3.1.0
   '@oxc-node/cli': ^0.0.35
   '@oxc-node/core': ^0.0.35
-  '@oxc-project/runtime': =0.115.0
-  '@oxc-project/types': =0.115.0
+  '@oxc-project/runtime': =0.120.0
+  '@oxc-project/types': =0.120.0
   '@pnpm/find-workspace-packages': ^6.0.9
   '@rollup/plugin-commonjs': ^29.0.0
   '@rollup/plugin-json': ^6.1.0
@@ -77,9 +77,9 @@ catalog:
   mocha: ^11.7.5
   mri: ^1.2.0
   next: ^15.4.3
-  oxc-minify: =0.115.0
-  oxc-parser: =0.115.0
-  oxc-transform: =0.115.0
+  oxc-minify: =0.120.0
+  oxc-parser: =0.120.0
+  oxc-transform: =0.120.0
   oxfmt: =0.41.0
   oxlint: =1.56.0
   oxlint-tsgolint: =0.17.0
