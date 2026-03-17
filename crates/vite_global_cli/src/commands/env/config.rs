@@ -230,6 +230,13 @@ pub async fn resolve_version(cwd: &AbsolutePath) -> Result<VersionResolution, Er
         });
     }
 
+    resolve_version_from_files(cwd).await
+}
+
+/// Resolve Node.js version from project files only (skipping session overrides).
+///
+/// This is used by `vp env use` without arguments to revert to file-based resolution.
+pub async fn resolve_version_from_files(cwd: &AbsolutePath) -> Result<VersionResolution, Error> {
     let provider = NodeProvider::new();
 
     // Use shared version resolution with directory walking
@@ -1090,5 +1097,77 @@ mod tests {
         // Whitespace env var should be ignored, should fall through to .node-version
         assert_eq!(resolution.version, "20.18.0");
         assert_eq!(resolution.source, ".node-version");
+    }
+
+    // ── resolve_version_from_files tests ──
+
+    /// Verify that `resolve_version_from_files` ignores session env var override.
+    /// This is the key behavior for `vp env use` without arguments.
+    #[tokio::test]
+    async fn test_resolve_version_from_files_ignores_env_var() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig {
+            node_version: Some("22.0.0".into()),
+            ..vite_shared::EnvConfig::for_test()
+        });
+
+        // Create .node-version file with different version
+        tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
+
+        // resolve_version_from_files should skip env var and use .node-version
+        let resolution = resolve_version_from_files(&temp_path).await.unwrap();
+
+        assert_eq!(resolution.version, "20.18.0");
+        assert_eq!(resolution.source, ".node-version");
+    }
+
+    /// Verify that `resolve_version_from_files` ignores session file override.
+    #[tokio::test]
+    async fn test_resolve_version_from_files_ignores_session_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let _guard = vite_shared::EnvConfig::test_guard(
+            vite_shared::EnvConfig::for_test_with_home(temp_dir.path()),
+        );
+
+        // Write session version file
+        write_session_version("22.0.0").await.unwrap();
+
+        // Create .node-version file with different version
+        tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
+
+        // resolve_version_from_files should skip session file and use .node-version
+        let resolution = resolve_version_from_files(&temp_path).await.unwrap();
+
+        assert_eq!(resolution.version, "20.18.0");
+        assert_eq!(resolution.source, ".node-version");
+
+        // Clean up
+        delete_session_version().await.unwrap();
+    }
+
+    /// Verify that `resolve_version_from_files` still respects both env var and session file.
+    #[tokio::test]
+    async fn test_resolve_version_still_respects_overrides() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig {
+            node_version: Some("22.0.0".into()),
+            ..vite_shared::EnvConfig::for_test_with_home(temp_dir.path())
+        });
+
+        // Create .node-version file
+        tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
+
+        // resolve_version should still use env var (existing behavior)
+        let resolution = resolve_version(&temp_path).await.unwrap();
+        assert_eq!(resolution.version, "22.0.0");
+        assert_eq!(resolution.source, VERSION_ENV_VAR);
+
+        // But resolve_version_from_files should skip it
+        let resolution_from_files = resolve_version_from_files(&temp_path).await.unwrap();
+        assert_eq!(resolution_from_files.version, "20.18.0");
+        assert_eq!(resolution_from_files.source, ".node-version");
     }
 }
