@@ -8,8 +8,15 @@ _default:
 
 alias r := ready
 
-init:
+[unix]
+_clean_dist:
   rm -rf packages/*/dist
+
+[windows]
+_clean_dist:
+  Remove-Item -Path 'packages/*/dist' -Recurse -Force -ErrorAction SilentlyContinue
+
+init: _clean_dist
   cargo binstall watchexec-cli cargo-insta typos-cli cargo-shear dprint taplo-cli -y
   node packages/tools/src/index.ts sync-remote
   pnpm install
