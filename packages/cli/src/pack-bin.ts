@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { readFileSync } from 'node:fs';
 import module from 'node:module';
 
 import {
@@ -12,6 +13,32 @@ import {
 import { cac } from 'cac';
 
 import { resolveViteConfig } from './resolve-vite-config.js';
+
+/**
+ * Rolldown plugin that transforms value imports/exports to type-only in external
+ * packages' .d.ts files. Some packages (e.g. postcss, lightningcss) use
+ * `import { X }` and `export { X } from` instead of their type-only equivalents,
+ * which causes MISSING_EXPORT warnings from the DTS bundler.
+ *
+ * Since .d.ts files contain only type information, all imports/exports are
+ * inherently type-only, so this transformation is always safe.
+ */
+const EXTERNAL_DTS_FIX_RE =
+  /node_modules\/(postcss|lightningcss)\/.*\.d\.(ts|mts|cts)$|lightningcssOptions\.d\.ts$/;
+
+function externalDtsTypeOnlyPlugin() {
+  return {
+    name: 'vite-plus:external-dts-type-only',
+    transform: {
+      filter: { id: { include: [EXTERNAL_DTS_FIX_RE] } },
+      handler(code: string) {
+        return code
+          .replace(/^(import\s+)(?!type\s)/gm, 'import type ')
+          .replace(/^(export\s+)\{/gm, 'export type {');
+      },
+    },
+  };
+}
 
 const cli = cac('vp pack');
 cli.help();
@@ -98,7 +125,14 @@ cli
         ? viteConfig.pack
         : [viteConfig.pack ?? {}];
       for (const packConfig of packConfigs) {
-        const resolvedConfig = await resolveUserConfig({ ...packConfig, ...flags }, flags);
+        const merged = { ...packConfig, ...flags };
+        // Inject plugin to fix MISSING_EXPORT warnings from external .d.ts files
+        // (postcss, lightningcss use `import` instead of `import type` in their .d.ts)
+        // Inject plugin to fix MISSING_EXPORT warnings from external .d.ts files
+        // (postcss, lightningcss use `import`/`export` instead of `import type`/`export type`)
+        const existingPlugins = Array.isArray(merged.plugins) ? merged.plugins : [];
+        merged.plugins = [...existingPlugins, externalDtsTypeOnlyPlugin()];
+        const resolvedConfig = await resolveUserConfig(merged, flags);
         configs.push(...resolvedConfig);
       }
 
