@@ -86,7 +86,6 @@ catalog:
   fresh-import: ^0.2.1
   fs-extra: ^11.4.0
   glob: ^13.0.0
-  husky: ^9.1.7
   jsonc-parser: ^3.3.1
   # Kept in lockstep with the bundled @tsdown/css by .github/scripts/upgrade-deps.ts
   lightningcss: ^1.33.0
