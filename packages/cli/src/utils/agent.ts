@@ -184,6 +184,7 @@ export const AGENTS = [
     targetPath: '.aiassistant/rules/viteplus.md',
   },
   { id: 'amp', label: 'Amp', targetPath: 'AGENTS.md' },
+  { id: 'kiro', label: 'Kiro', targetPath: 'AGENTS.md' },
   { id: 'opencode', label: 'OpenCode', targetPath: 'AGENTS.md' },
   { id: 'other', label: 'Other', targetPath: 'AGENTS.md' },
 ] as const;
