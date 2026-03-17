@@ -45,7 +45,9 @@ const RUST_TARGETS: Record<string, string> = {
   'darwin-arm64': 'aarch64-apple-darwin',
   'darwin-x64': 'x86_64-apple-darwin',
   'linux-arm64-gnu': 'aarch64-unknown-linux-gnu',
+  'linux-arm64-musl': 'aarch64-unknown-linux-musl',
   'linux-x64-gnu': 'x86_64-unknown-linux-gnu',
+  'linux-x64-musl': 'x86_64-unknown-linux-musl',
   'win32-arm64-msvc': 'aarch64-pc-windows-msvc',
   'win32-x64-msvc': 'x86_64-pc-windows-msvc',
 };
@@ -63,11 +65,13 @@ for (const file of platformDirs) {
 }
 
 // Platform metadata for CLI packages
-const PLATFORM_META: Record<string, { os: string; cpu: string }> = {
+const PLATFORM_META: Record<string, { os: string; cpu: string; libc?: string }> = {
   'darwin-arm64': { os: 'darwin', cpu: 'arm64' },
   'darwin-x64': { os: 'darwin', cpu: 'x64' },
-  'linux-arm64-gnu': { os: 'linux', cpu: 'arm64' },
-  'linux-x64-gnu': { os: 'linux', cpu: 'x64' },
+  'linux-arm64-gnu': { os: 'linux', cpu: 'arm64', libc: 'glibc' },
+  'linux-arm64-musl': { os: 'linux', cpu: 'arm64', libc: 'musl' },
+  'linux-x64-gnu': { os: 'linux', cpu: 'x64', libc: 'glibc' },
+  'linux-x64-musl': { os: 'linux', cpu: 'x64', libc: 'musl' },
   'win32-arm64-msvc': { os: 'win32', cpu: 'arm64' },
   'win32-x64-msvc': { os: 'win32', cpu: 'x64' },
 };
@@ -131,6 +135,7 @@ for (const [platform, rustTarget] of Object.entries(RUST_TARGETS)) {
     version: cliVersion,
     os: [meta.os],
     cpu: [meta.cpu],
+    ...(meta.libc ? { libc: [meta.libc] } : {}),
     files,
     description: `Vite+ CLI binary for ${platform}`,
     repository: cliPackageJson.repository,

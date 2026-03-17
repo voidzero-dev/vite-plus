@@ -28,6 +28,27 @@ vp help
 Vite+ will manage your global Node.js runtime and package manager. If you'd like to opt out of this behavior, run `vp env off`. If you realize Vite+ is not for you, type `vp implode`, but please [share your feedback with us](https://discord.gg/cAnsqHh5PX).
 :::
 
+::: details Using a minor platform (CPU architecture, OS) ?
+
+Prebuilt binaries are distributed for the following platforms (grouped by [Node.js v24 platform support tier](https://github.com/nodejs/node/blob/v24.x/BUILDING.md#platform-list)):
+
+- Tier 1
+  - Linux x64 glibc (`x86_64-unknown-linux-gnu`)
+  - Linux arm64 glibc (`aarch64-unknown-linux-gnu`)
+  - Windows x64 (`x86_64-pc-windows-msvc`)
+  - macOS x64 (`x86_64-apple-darwin`)
+  - macOS arm64 (`aarch64-apple-darwin`)
+- Tier 2
+  - Windows arm64 (`aarch64-pc-windows-msvc`)
+- Experimental
+  - Linux x64 musl (`x86_64-unknown-linux-musl`)
+- Other
+  - Linux arm64 musl (`aarch64-unknown-linux-musl`)
+
+If a prebuilt binary is not available for your platform, installation will fail with an error.
+
+:::
+
 ## Quick Start
 
 Create a project, install dependencies, and use the default commands:
