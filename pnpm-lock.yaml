@@ -135,9 +135,6 @@ catalogs:
     glob:
       specifier: ^13.0.0
       version: 13.0.0
-    husky:
-      specifier: ^9.1.7
-      version: 9.1.7
     lint-staged:
       specifier: ^16.2.6
       version: 16.3.2
@@ -292,12 +289,6 @@ importers:
       bingo:
         specifier: 'catalog:'
         version: 0.9.2
-      husky:
-        specifier: 'catalog:'
-        version: 9.1.7
-      lint-staged:
-        specifier: 'catalog:'
-        version: 16.3.2
       oxfmt:
         specifier: 'catalog:'
         version: 0.41.0
