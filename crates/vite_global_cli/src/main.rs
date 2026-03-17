@@ -247,6 +247,11 @@ async fn main() -> ExitCode {
         }
     };
 
+    // Set terminal title to the project name from package.json
+    if let Some(project_name) = vite_shared::read_project_name(cwd.as_path().as_ref()) {
+        vite_shared::header::set_terminal_title(&project_name);
+    }
+
     if args.len() == 1 {
         match command_picker::pick_top_level_command_if_interactive(&cwd) {
             Ok(command_picker::TopLevelCommandPick::Selected(selection)) => {

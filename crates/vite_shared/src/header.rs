@@ -363,6 +363,21 @@ fn render_header_variant(
     format!("{}{}", bold(&vite_plus, prefix_bold), bold(&suffix, suffix_bold))
 }
 
+/// Set the terminal window title using OSC 0 escape sequence.
+///
+/// Writes `ESC ] 0 ; <title> BEL` to stdout when stdout is a terminal.
+/// This is a no-op when stdout is not a terminal or when running in CI.
+pub fn set_terminal_title(title: &str) {
+    use std::io::Write;
+
+    if !std::io::stdout().is_terminal() || std::env::var_os("CI").is_some() {
+        return;
+    }
+
+    let _ = write!(std::io::stdout(), "\x1b]0;{title}\x07");
+    let _ = std::io::stdout().flush();
+}
+
 /// Render the Vite+ CLI header string with JS-parity coloring behavior.
 #[must_use]
 pub fn vite_plus_header() -> String {
