@@ -23,18 +23,31 @@ import { resolveViteConfig } from './resolve-vite-config.js';
  * Since .d.ts files contain only type information, all imports/exports are
  * inherently type-only, so this transformation is always safe.
  */
-const EXTERNAL_DTS_FIX_RE =
-  /node_modules\/(postcss|lightningcss)\/.*\.d\.(ts|mts|cts)$|lightningcssOptions\.d\.ts$/;
+const EXTERNAL_DTS_INTERNAL_RE =
+  /node_modules\/(postcss|lightningcss)\/.*\.d\.(ts|mts|cts)$/;
+const EXTERNAL_DTS_CONSUMER_RE =
+  /lightningcssOptions\.d\.ts$|vite-plus-core\/dist\/.*\.d\.ts$/;
+const EXTERNAL_DTS_FIX_RE = new RegExp(
+  `${EXTERNAL_DTS_INTERNAL_RE.source}|${EXTERNAL_DTS_CONSUMER_RE.source}`,
+);
 
 function externalDtsTypeOnlyPlugin() {
   return {
     name: 'vite-plus:external-dts-type-only',
     transform: {
       filter: { id: { include: [EXTERNAL_DTS_FIX_RE] } },
-      handler(code: string) {
-        return code
-          .replace(/^(import\s+)(?!type\s)/gm, 'import type ')
-          .replace(/^(export\s+)\{/gm, 'export type {');
+      handler(code: string, id: string) {
+        if (EXTERNAL_DTS_INTERNAL_RE.test(id)) {
+          // postcss/lightningcss internal files: transform all imports and exports
+          return code
+            .replace(/^(import\s+)(?!type\s)/gm, 'import type ')
+            .replace(/^(export\s+)\{/gm, 'export type {');
+        }
+        // Consumer files: only transform imports from postcss/lightningcss
+        return code.replace(
+          /^(import\s+)(?!type\s)(.+from\s+['"](?:postcss|lightningcss)['"])/gm,
+          'import type $2',
+        );
       },
     },
   };
