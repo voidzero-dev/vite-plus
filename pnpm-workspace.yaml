@@ -80,8 +80,8 @@ catalog:
   oxc-minify: =0.115.0
   oxc-parser: =0.115.0
   oxc-transform: =0.115.0
-  oxfmt: =0.40.0
-  oxlint: =1.55.0
+  oxfmt: =0.41.0
+  oxlint: =1.56.0
   oxlint-tsgolint: =0.17.0
   pathe: ^2.0.3
   picocolors: ^1.1.1
@@ -103,7 +103,7 @@ catalog:
   terser: ^5.44.1
   tinybench: ^6.0.0
   tinyexec: ^1.0.1
-  tsdown: ^0.21.3
+  tsdown: ^0.21.4
   tsx: ^4.20.6
   typescript: ^5.9.3
   unified: ^11.0.5
@@ -163,7 +163,7 @@ overrides:
   rolldown: workspace:rolldown@*
   vite: workspace:@voidzero-dev/vite-plus-core@*
   vitest: workspace:@voidzero-dev/vite-plus-test@*
-  vitest-dev: 'npm:vitest@^4.1.0'
+  vitest-dev: npm:vitest@^4.1.0
 packageExtensions:
   sass-embedded:
     peerDependencies:
