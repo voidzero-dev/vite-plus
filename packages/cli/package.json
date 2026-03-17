@@ -322,6 +322,7 @@
     "@voidzero-dev/vite-plus-test": "workspace:*",
     "cac": "catalog:",
     "cross-spawn": "catalog:",
+    "jsonc-parser": "catalog:",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
     "oxlint-tsgolint": "catalog:",

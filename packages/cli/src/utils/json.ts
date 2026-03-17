@@ -2,10 +2,15 @@ import fs from 'node:fs';
 
 import detectIndent from 'detect-indent';
 import { detectNewline } from 'detect-newline';
+import { parse as parseJsonc } from 'jsonc-parser';
 
-export function readJsonFile<T = Record<string, unknown>>(file: string): T {
+export function readJsonFile<T = Record<string, unknown>>(
+  file: string,
+  allowComments?: boolean,
+): T {
   const content = fs.readFileSync(file, 'utf-8');
-  return JSON.parse(content) as T;
+  const parseFunction = allowComments ? parseJsonc : JSON.parse;
+  return parseFunction(content) as T;
 }
 
 export function writeJsonFile<T = Record<string, unknown>>(file: string, data: T) {
