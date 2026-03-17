@@ -1459,7 +1459,7 @@ async function patchVitestBrowserPackage() {
   // This allows imports like @vitest/runner to be resolved to our copied @vitest files
   const mappingEntries = Object.entries(VITEST_PACKAGE_TO_PATH)
     .filter(([pkg]) => pkg.startsWith('@vitest/'))
-    .map(([pkg, file]) => `'${pkg}': resolve(distRoot, '${file}')`)
+    .map(([pkg, file]) => `'${pkg}': resolve(packageRoot, '${file}')`)
     .join(',\n      ');
 
   // distRoot is @vitest/browser/ so we need to go up two levels to reach the actual dist root

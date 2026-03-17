@@ -1,7 +1,6 @@
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
 import { downloadPackageManager as downloadPackageManagerBinding } from '../../binding/index.js';
-import { fmt as resolveFmt } from '../resolve-fmt.js';
 import { PackageManager } from '../types/index.js';
 import { runCommandSilently } from './command.js';
 import { accent } from './terminal.js';
@@ -109,15 +108,11 @@ export async function runViteFmt(
   const startTime = Date.now();
   spinner.start(`Formatting code...`);
 
-  const { binPath, envs } = await resolveFmt();
   const { exitCode, stderr, stdout } = await runCommandSilently({
-    command: binPath,
-    args: ['--write', ...(paths ?? [])],
+    command: process.env.VITE_PLUS_CLI_BIN ?? 'vp',
+    args: ['fmt', '--write', ...(paths ?? [])],
     cwd,
-    envs: {
-      ...process.env,
-      ...envs,
-    },
+    envs: process.env,
   });
 
   if (exitCode === 0) {
