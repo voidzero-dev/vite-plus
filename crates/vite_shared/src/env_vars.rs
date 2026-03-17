@@ -72,3 +72,11 @@ pub const VITE_PLUS_CLI_BIN: &str = "VITE_PLUS_CLI_BIN";
 
 /// Global CLI version, passed from Rust binary to JS for --version display.
 pub const VITE_PLUS_GLOBAL_VERSION: &str = "VITE_PLUS_GLOBAL_VERSION";
+
+// ── Testing / Development ───────────────────────────────────────────────
+
+/// Override the trampoline binary path for tests.
+///
+/// When set, `get_trampoline_path()` uses this path instead of resolving
+/// relative to `current_exe()`. Only used in test environments.
+pub const VITE_PLUS_TRAMPOLINE_PATH: &str = "VITE_PLUS_TRAMPOLINE_PATH";
