@@ -30,6 +30,7 @@ fn is_safe_tar_path(path: &Path) -> bool {
 ///
 /// From the platform tarball, extracts:
 /// - The `vp` binary → `{version_dir}/bin/vp`
+/// - The `vp-shim.exe` trampoline → `{version_dir}/bin/vp-shim.exe` (Windows only)
 ///
 /// `.node` files are no longer extracted here — npm installs them
 /// via the platform package's optionalDependencies.
@@ -62,7 +63,7 @@ pub async fn extract_platform_package(
 
             let file_name = relative.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
-            if file_name == "vp" || file_name == "vp.exe" {
+            if file_name == "vp" || file_name == "vp.exe" || file_name == "vp-shim.exe" {
                 // Binary goes to bin/
                 let target = bin_dir_clone.join(file_name);
                 let mut buf = Vec::new();

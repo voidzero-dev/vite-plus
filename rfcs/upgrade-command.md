@@ -31,7 +31,7 @@ A native `vp upgrade` command would allow users to update the CLI in-place with 
 └── env.ps1                          # PowerShell env
 ```
 
-Key invariant: `~/.vite-plus/bin/vp` is a symlink to `../current/bin/vp` (Unix) or a `.cmd` wrapper calling `current\bin\vp.exe` (Windows), and `current` is a symlink (Unix) or junction (Windows) to the active version directory. Upgrading swaps the `current` link — atomic on Unix, near-instant on Windows.
+Key invariant: `~/.vite-plus/bin/vp` is a symlink to `../current/bin/vp` (Unix) or a trampoline `.exe` forwarding to `current\bin\vp.exe` (Windows), and `current` is a symlink (Unix) or junction (Windows) to the active version directory. Upgrading swaps the `current` link — atomic on Unix, near-instant on Windows.
 
 ## Goals
 
@@ -295,7 +295,7 @@ Key differences on Windows:
 - **Junctions** (`mklink /J`) are used instead of symlinks — junctions don't require admin privileges
 - Junctions only work for directories (which `current` is), and use absolute paths internally
 - The swap is **not atomic** — there's a brief window (~milliseconds) where `current` doesn't exist
-- `bin/vp` is a `.cmd` wrapper (not a symlink), so it doesn't need updating during upgrade
+- `bin/vp.exe` is a trampoline (not a symlink) that resolves through `current`, so it doesn't need updating during upgrade
 - This matches the existing `install.ps1` behavior exactly
 
 #### Step 6: Post-Update (Non-Fatal)
@@ -314,7 +314,7 @@ The running `vp` process is **not** the binary being replaced. The flow is:
 ~/.vite-plus/bin/vp  →  ../current/bin/vp  →  {old_version}/bin/vp
 
 # Windows
-~/.vite-plus/bin/vp.cmd  →  current\bin\vp.exe  →  {old_version}\bin\vp.exe
+~/.vite-plus/bin/vp.exe (trampoline)  →  current\bin\vp.exe  →  {old_version}\bin\vp.exe
 ```
 
 After the `current` link swap, any **new** invocation of `vp` will use the new binary. The currently running process continues to execute from the old version's binary file on disk:
