@@ -1,7 +1,6 @@
 {
   "commands": [
-    "node ../node_modules/vite-plus/bin/oxfmt # should reject non-LSP usage",
-    "node ../node_modules/vite-plus/bin/oxfmt --help # should reject non-LSP usage",
+    "node ../node_modules/vite-plus/bin/oxfmt --help # should show oxfmt help",
     "node ../node_modules/vite-plus/bin/oxfmt --lsp --help # should exercise import path"
   ]
 }

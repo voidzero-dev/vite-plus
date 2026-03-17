@@ -1,14 +1,10 @@
 #!/usr/bin/env node
 
-// LSP-only wrapper for oxfmt.
-// This enables IDE extensions (e.g., oxc-vscode) to discover and start the LSP server.
+// CLI wrapper for oxfmt.
+// This enables IDE extensions and editors to discover and use the oxfmt binary.
+// Supports all CLI modes: --lsp for LSP-aware editors, and flags like
+// --stdin-filepath, --check, etc. for non-LSP editors.
 // Binary resolution follows the same approach as `src/resolve-fmt.ts`.
-
-if (!process.argv.includes('--lsp')) {
-  console.error('This oxfmt wrapper is for IDE extension use only (--lsp mode).');
-  console.error('To format your code, run: vp fmt');
-  process.exit(1);
-}
 
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
