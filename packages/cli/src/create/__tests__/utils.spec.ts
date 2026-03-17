@@ -17,7 +17,8 @@ describe('formatTargetDir', () => {
     expect(formatTargetDir('../../foo/bar')).matchSnapshot();
   });
 
-  it.skipIf(process.platform === 'win32')('should format target dir with valid input', () => {
+  // Should work on all platforms (including Windows) - directory must always use forward slashes
+  it('should format target dir with valid input', () => {
     expect(formatTargetDir('./my-package')).matchSnapshot();
     expect(formatTargetDir('my-package')).matchSnapshot();
     expect(formatTargetDir('@my-scope/my-package')).matchSnapshot();
@@ -26,6 +27,17 @@ describe('formatTargetDir', () => {
     expect(formatTargetDir('./foo/bar/@scope/my-package')).matchSnapshot();
     expect(formatTargetDir('./foo/bar/@scope/my-package/')).matchSnapshot();
     expect(formatTargetDir('./foo/bar/@scope/my-package/sub-package')).matchSnapshot();
+  });
+
+  // Regression test for https://github.com/voidzero-dev/vite-plus/issues/938
+  // On Windows, path.join/normalize produce backslashes which break when passed as CLI args.
+  // Nested paths are the critical cases since they involve path separators.
+  it('should always use forward slashes in directory (issue #938)', () => {
+    expect(formatTargetDir('foo/@my-scope/my-package').directory).toBe('foo/my-package');
+    expect(formatTargetDir('./foo/bar/@scope/my-package').directory).toBe('foo/bar/my-package');
+    expect(formatTargetDir('./foo/bar/@scope/my-package/sub-package').directory).toBe(
+      'foo/bar/@scope/my-package/sub-package',
+    );
   });
 
   it('should format target dir with invalid package name', () => {
