@@ -4,7 +4,7 @@
     "branch": "main",
     "hash": "00f9fa1d47335aacbb9becc527fd920169bdf0cf"
   },
-  "rolldown-vite": {
+  "vite": {
     "repo": "https://github.com/vitejs/vite.git",
     "branch": "main",
     "hash": "b565af6f1123a62b3058253b2147574b8515e89f"

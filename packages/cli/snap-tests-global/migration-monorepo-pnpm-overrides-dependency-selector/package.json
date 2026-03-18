@@ -11,11 +11,11 @@
   "pnpm": {
     "overrides": {
       "react-click-away-listener>react": "0.0.0-experimental-7dc903cd-20251203",
-      "vite": "npm:rolldown-vite@7.0.12",
-      "vite-plugin-inspect>vite": "npm:rolldown-vite@7.0.12",
-      "vite-plugin-svgr>foo>vite": "npm:rolldown-vite@7.0.12",
-      "@vitejs/plugin-react>vite": "npm:rolldown-vite@7.0.12",
-      "@vitejs/plugin-react-swc>vite": "npm:rolldown-vite@7.0.12",
+      "vite": "npm:vite@7.0.12",
+      "vite-plugin-inspect>vite": "npm:vite@7.0.12",
+      "vite-plugin-svgr>foo>vite": "npm:vite@7.0.12",
+      "@vitejs/plugin-react>vite": "npm:vite@7.0.12",
+      "@vitejs/plugin-react-swc>vite": "npm:vite@7.0.12",
       "supertest>superagent": "9.0.2"
     }
   }

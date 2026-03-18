@@ -55,7 +55,7 @@ export default defineConfig({
   test: {
     exclude: [
       './ecosystem-ci/**',
-      './rolldown-vite/**',
+      './vite/**',
       './rolldown/**',
       '**/node_modules/**',
       '**/snap-tests/**',
@@ -77,7 +77,7 @@ export default defineConfig({
       'packages/test/**.d.ts',
       'packages/test/**.mjs',
       'packages/test/browser/',
-      'rolldown-vite',
+      'vite',
       'rolldown',
     ],
     singleQuote: true,

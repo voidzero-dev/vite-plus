@@ -15,12 +15,12 @@ outputs:
 runs:
   using: 'composite'
   steps:
-    - name: Output rolldown and rolldown-vite hash
+    - name: Output rolldown and vite hash
       shell: bash
       id: upstream-versions
       run: |
         node -e "console.log('ROLLDOWN_HASH=' + require('./packages/tools/.upstream-versions.json').rolldown.hash)" >> $GITHUB_OUTPUT
-        node -e "console.log('ROLLDOWN_VITE_HASH=' + require('./packages/tools/.upstream-versions.json')['rolldown-vite'].hash)" >> $GITHUB_OUTPUT
+        node -e "console.log('ROLLDOWN_VITE_HASH=' + require('./packages/tools/.upstream-versions.json')['vite'].hash)" >> $GITHUB_OUTPUT
 
     - name: Output ecosystem ci project hash
       shell: bash
@@ -40,7 +40,7 @@ runs:
     - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
       with:
         repository: vitejs/vite
-        path: rolldown-vite
+        path: vite
         ref: ${{ steps.upstream-versions.outputs.ROLLDOWN_VITE_HASH }}
 
     # Disable autocrlf to preserve LF line endings on Windows

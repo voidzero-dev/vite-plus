@@ -7,7 +7,7 @@
     "packages/cli/snap-tests-todo/**",
     "bench/fixtures/**",
     "rolldown/**",
-    "rolldown-vite/**"
+    "vite/**"
   ],
   "packageRules": [
     {

@@ -41,7 +41,7 @@ const rolldownPluginUtilsDir = resolve(
 
 const rolldownSourceDir = resolve(projectDir, '..', '..', 'rolldown', 'packages', 'rolldown');
 
-const rolldownViteSourceDir = resolve(projectDir, '..', '..', 'rolldown-vite', 'packages', 'vite');
+const rolldownViteSourceDir = resolve(projectDir, '..', '..', 'vite', 'packages', 'vite');
 
 const tsdownSourceDir = resolve(projectDir, 'node_modules/tsdown');
 
@@ -62,7 +62,7 @@ generateLicenseFile({
     projectDir,
     join(projectDir, '..', '..'),
     join(projectDir, '..', '..', 'rolldown'),
-    join(projectDir, '..', '..', 'rolldown-vite'),
+    join(projectDir, '..', '..', 'vite'),
   ],
   extraPackages: [
     {
@@ -640,13 +640,13 @@ async function mergePackageJson() {
   const vitePkg = JSON.parse(await readFile(vitePkgPath, 'utf-8'));
   const destPkg = JSON.parse(await readFile(destPkgPath, 'utf-8'));
 
-  // Merge peerDependencies from tsdown and rolldown-vite
+  // Merge peerDependencies from tsdown and vite
   destPkg.peerDependencies = {
     ...tsdownPkg.peerDependencies,
     ...vitePkg.peerDependencies,
   };
 
-  // Merge peerDependenciesMeta from tsdown and rolldown-vite
+  // Merge peerDependenciesMeta from tsdown and vite
   destPkg.peerDependenciesMeta = {
     ...tsdownPkg.peerDependenciesMeta,
     ...vitePkg.peerDependenciesMeta,

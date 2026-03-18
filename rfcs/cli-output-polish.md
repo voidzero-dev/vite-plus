@@ -60,7 +60,7 @@ Neither identifies the experience as "Vite+". Users who installed `vite-plus` se
 
 **5. The `[vite]` logger prefix in rolldown-vite**
 
-The logger in `rolldown-vite/packages/vite/src/node/logger.ts` defaults to `prefix = '[vite]'` for timestamped messages. This shows up during dev server operation as colored `[vite]` tags.
+The logger in `vite/packages/vite/src/node/logger.ts` defaults to `prefix = '[vite]'` for timestamped messages. This shows up during dev server operation as colored `[vite]` tags.
 
 ### What Users See Today
 
@@ -104,7 +104,7 @@ $ vpx
 
 ### Overview: Direct Source Modification
 
-Since vite-plus clones sub-tool source repositories (rolldown-vite at `rolldown-vite/`, rolldown at `rolldown/`), we modify the source directly. This is simple, transparent, and easy to audit via `git diff`. When syncing upstream, branding patches are rebased or re-applied — a small, well-defined set of changes.
+Since vite-plus clones sub-tool source repositories (vite at `vite/`, rolldown at `rolldown/`), we modify the source directly. This is simple, transparent, and easy to audit via `git diff`. When syncing upstream, branding patches are rebased or re-applied — a small, well-defined set of changes.
 
 Other sub-tools (vitest, oxlint, oxfmt) can follow the same pattern once their source is cloned or forked.
 
@@ -112,7 +112,7 @@ Other sub-tools (vitest, oxlint, oxfmt) can follow the same pattern once their s
 
 #### 1.1 Dev server banner
 
-**File:** `rolldown-vite/packages/vite/src/node/cli.ts` (line 256)
+**File:** `vite/packages/vite/src/node/cli.ts` (line 256)
 
 **Current:**
 
@@ -142,7 +142,7 @@ info(
 
 Where `VITE_PLUS_VERSION` is the vite-plus package version, injected via:
 
-- A new constant in `rolldown-vite/packages/vite/src/node/constants.ts`, or
+- A new constant in `vite/packages/vite/src/node/constants.ts`, or
 - Read from an environment variable set by the Rust CLI before spawning vite (e.g., `VITE_PLUS_VERSION`)
 
 **Recommended approach:** Environment variable injection. The Rust NAPI binding in `packages/cli/binding/src/cli.rs` already merges environment variables when spawning sub-tools via `merge_resolved_envs()`. We add `VITE_PLUS_VERSION` to the env map, and read it in rolldown-vite:
@@ -155,7 +155,7 @@ This is clean: the rolldown-vite source change is minimal (reads an env var with
 
 #### 1.2 Build banner
 
-**File:** `rolldown-vite/packages/vite/src/node/build.ts` (line 789)
+**File:** `vite/packages/vite/src/node/build.ts` (line 789)
 
 **Current:**
 
@@ -187,7 +187,7 @@ logger.info(
 
 #### 1.3 Logger prefix
 
-**File:** `rolldown-vite/packages/vite/src/node/logger.ts` (line 78)
+**File:** `vite/packages/vite/src/node/logger.ts` (line 78)
 
 **Current:**
 
@@ -367,7 +367,7 @@ Migrate JS-side code (`migration/bin.ts`, `create/bin.ts`) to use these shared f
 
 **Decision:** Modify rolldown-vite source files directly.
 
-**Rationale:** The user has the source cloned locally. Direct modification is transparent — anyone can `git diff rolldown-vite/` to see exactly what changed. The set of branding changes is small and well-defined (3-5 files), making rebasing during upstream sync manageable. Build-time transforms (Rolldown plugins in `packages/core/build.ts`) are an alternative that avoids merge conflicts, but they are less visible and can break silently when upstream changes the strings being matched.
+**Rationale:** The user has the source cloned locally. Direct modification is transparent — anyone can `git diff vite/` to see exactly what changed. The set of branding changes is small and well-defined (3-5 files), making rebasing during upstream sync manageable. Build-time transforms (Rolldown plugins in `packages/core/build.ts`) are an alternative that avoids merge conflicts, but they are less visible and can break silently when upstream changes the strings being matched.
 
 ### D2: Only show vite-plus version, not underlying vite version
 
@@ -428,10 +428,10 @@ These are internal identifiers, API references, or project name references:
 ### Phase 1: rolldown-vite Rebranding
 
 1. Add `VITE_PLUS_VERSION` env var injection in `packages/cli/binding/src/cli.rs` for vite commands (build, dev, preview)
-2. Modify `rolldown-vite/packages/vite/src/node/cli.ts` — read env var, change banner text
-3. Modify `rolldown-vite/packages/vite/src/node/build.ts` — change build banner text
-4. Modify `rolldown-vite/packages/vite/src/node/logger.ts` — change default prefix
-5. Modify `rolldown-vite/packages/vite/src/node/build.ts:1079` — change error prefix
+2. Modify `vite/packages/vite/src/node/cli.ts` — read env var, change banner text
+3. Modify `vite/packages/vite/src/node/build.ts` — change build banner text
+4. Modify `vite/packages/vite/src/node/logger.ts` — change default prefix
+5. Modify `vite/packages/vite/src/node/build.ts:1079` — change error prefix
 6. Rebuild with `pnpm bootstrap-cli` and verify output
 7. Update affected snap tests
 

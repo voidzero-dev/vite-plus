@@ -142,7 +142,7 @@ jobs:
           body: |
             Automated daily upgrade of upstream dependencies:
             - rolldown (latest tag)
-            - rolldown-vite (latest tag)
+            - vite (latest tag)
             - vitest (latest npm version)
             - tsdown (latest npm version)
 

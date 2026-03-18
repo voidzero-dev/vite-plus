@@ -48,7 +48,7 @@ catalog:
   vite-plus: latest
 
 overrides:
-  '@vitejs/plugin-react>vite': 'npm:rolldown-vite@<semver>'
+  '@vitejs/plugin-react>vite': 'npm:vite@<semver>'
   'supertest>superagent': '9.0.2'
   vite: 'catalog:'
   vitest: 'catalog:'
