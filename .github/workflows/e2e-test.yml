@@ -112,6 +112,7 @@ jobs:
           cd packages/cli && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
           # Copy vp binary for e2e-test job (findVpBinary expects it in target/)
           cp target/${{ matrix.target }}/release/vp tmp/tgz/vp 2>/dev/null || cp target/${{ matrix.target }}/release/vp.exe tmp/tgz/vp.exe 2>/dev/null || true
+          cp target/${{ matrix.target }}/release/vp-shim.exe tmp/tgz/vp-shim.exe 2>/dev/null || true
           ls -la tmp/tgz
 
       - name: Upload tgz artifacts
@@ -289,12 +290,16 @@ jobs:
           # Place vp binary where install-global-cli.ts expects it (target/release/)
           mkdir -p target/release
           cp tmp/tgz/vp target/release/vp 2>/dev/null || cp tmp/tgz/vp.exe target/release/vp.exe 2>/dev/null || true
+          cp tmp/tgz/vp-shim.exe target/release/vp-shim.exe 2>/dev/null || true
           chmod +x target/release/vp 2>/dev/null || true
           node $GITHUB_WORKSPACE/packages/tools/src/install-global-cli.ts --tgz $GITHUB_WORKSPACE/tmp/tgz/vite-plus-0.0.0.tgz
-          echo "$HOME/.vite-plus/bin" >> $GITHUB_PATH
+          # Use USERPROFILE (native Windows path) instead of HOME (Git Bash path /c/Users/...)
+          # so cmd.exe and Node.js execSync can resolve binaries in PATH
+          echo "${USERPROFILE:-$HOME}/.vite-plus/bin" >> $GITHUB_PATH
 
       - name: Migrate in ${{ matrix.project.name }}
         working-directory: ${{ runner.temp }}/vite-plus-ecosystem-ci/${{ matrix.project.name }}${{ matrix.project.directory && format('/{0}', matrix.project.directory) || '' }}
+        shell: bash
         run: |
           node $GITHUB_WORKSPACE/ecosystem-ci/patch-project.ts ${{ matrix.project.name }}
           vp install --no-frozen-lockfile

@@ -413,6 +413,17 @@ configure_shell_path() {
   # If result is still 1, PATH_CONFIGURED remains "false" (set at function start)
 }
 
+# Run vp env setup --refresh, showing output only on failure
+# Arguments: vp_bin - path to the vp binary
+refresh_shims() {
+  local vp_bin="$1"
+  local setup_output
+  if ! setup_output=$("$vp_bin" env setup --refresh 2>&1); then
+    warn "Failed to refresh shims:"
+    echo "$setup_output" >&2
+  fi
+}
+
 # Setup Node.js version manager (node/npm/npx shims)
 # Sets NODE_MANAGER_ENABLED global
 # Arguments: bin_dir - path to the version's bin directory containing vp
@@ -421,17 +432,22 @@ setup_node_manager() {
   local bin_path="$INSTALL_DIR/bin"
   NODE_MANAGER_ENABLED="false"
 
-  # Check if Vite+ is already managing Node.js (bin/node exists)
-  if [ -e "$bin_path/node" ]; then
-    # Already managing Node.js, just refresh shims
-    "$bin_dir/vp" env setup --refresh > /dev/null
+  # Resolve vp binary name (vp on Unix, vp.exe on Windows)
+  local vp_bin="$bin_dir/vp"
+  if [ -f "$bin_dir/vp.exe" ]; then
+    vp_bin="$bin_dir/vp.exe"
+  fi
+
+  # Check if Vite+ is already managing Node.js (bin/node or bin/node.exe exists)
+  if [ -e "$bin_path/node" ] || [ -e "$bin_path/node.exe" ]; then
+    refresh_shims "$vp_bin"
     NODE_MANAGER_ENABLED="already"
     return 0
   fi
 
   # Auto-enable on CI environment
   if [ -n "$CI" ]; then
-    "$bin_dir/vp" env setup --refresh > /dev/null
+    refresh_shims "$vp_bin"
     NODE_MANAGER_ENABLED="true"
     return 0
   fi
@@ -444,7 +460,7 @@ setup_node_manager() {
 
   # Auto-enable if no node available on system
   if [ "$node_available" = "false" ]; then
-    "$bin_dir/vp" env setup --refresh > /dev/null
+    refresh_shims "$vp_bin"
     NODE_MANAGER_ENABLED="true"
     return 0
   fi
@@ -457,7 +473,7 @@ setup_node_manager() {
     read -r response < /dev/tty
 
     if [ -z "$response" ] || [ "$response" = "y" ] || [ "$response" = "Y" ]; then
-      "$bin_dir/vp" env setup --refresh > /dev/null
+      refresh_shims "$vp_bin"
       NODE_MANAGER_ENABLED="true"
     fi
   fi
@@ -554,6 +570,14 @@ main() {
     # Copy binary from LOCAL_BINARY env var (set by install-global-cli.ts)
     if [ -n "$LOCAL_BINARY" ]; then
       cp "$LOCAL_BINARY" "$BIN_DIR/$binary_name"
+      # On Windows, also copy the trampoline shim binary if available
+      if [[ "$platform" == win32* ]]; then
+        local shim_src
+        shim_src="$(dirname "$LOCAL_BINARY")/vp-shim.exe"
+        if [ -f "$shim_src" ]; then
+          cp "$shim_src" "$BIN_DIR/vp-shim.exe"
+        fi
+      fi
     else
       error "VITE_PLUS_LOCAL_BINARY must be set when using VITE_PLUS_LOCAL_TGZ"
     fi
@@ -572,6 +596,10 @@ main() {
     # Copy binary to BIN_DIR
     cp "$platform_temp_dir/$binary_name" "$BIN_DIR/"
     chmod +x "$BIN_DIR/$binary_name"
+    # On Windows, also copy the trampoline shim binary if present in the package
+    if [[ "$platform" == win32* ]] && [ -f "$platform_temp_dir/vp-shim.exe" ]; then
+      cp "$platform_temp_dir/vp-shim.exe" "$BIN_DIR/"
+    fi
     rm -rf "$platform_temp_dir"
   fi
 
@@ -600,7 +628,11 @@ NPMRC_EOF
   # e.g. during local dev where install-global-cli.ts handles deps separately)
   if [ -z "${VITE_PLUS_SKIP_DEPS_INSTALL:-}" ]; then
     local install_log="$VERSION_DIR/install.log"
-    if ! (cd "$VERSION_DIR" && CI=true "$BIN_DIR/vp" install --silent > "$install_log" 2>&1); then
+    local vp_install_bin="$BIN_DIR/vp"
+    if [ -f "$BIN_DIR/vp.exe" ]; then
+      vp_install_bin="$BIN_DIR/vp.exe"
+    fi
+    if ! (cd "$VERSION_DIR" && CI=true "$vp_install_bin" install --silent > "$install_log" 2>&1); then
       error "Failed to install dependencies. See log for details: $install_log"
       exit 1
     fi
@@ -609,15 +641,29 @@ NPMRC_EOF
   # Create/update current symlink (use relative path for portability)
   ln -sfn "$VITE_PLUS_VERSION" "$CURRENT_LINK"
 
-  # Create bin directory and vp symlink (always done)
+  # Create bin directory and vp entrypoint (always done)
   mkdir -p "$INSTALL_DIR/bin"
-  ln -sf "../current/bin/vp" "$INSTALL_DIR/bin/vp"
+  if [[ "$platform" == win32* ]]; then
+    # Windows: copy trampoline as vp.exe (matching install.ps1)
+    if [ -f "$INSTALL_DIR/current/bin/vp-shim.exe" ]; then
+      cp "$INSTALL_DIR/current/bin/vp-shim.exe" "$INSTALL_DIR/bin/vp.exe"
+    fi
+  else
+    # Unix: symlink to current/bin/vp
+    ln -sf "../current/bin/vp" "$INSTALL_DIR/bin/vp"
+  fi
 
   # Cleanup old versions
   cleanup_old_versions
 
   # Create env files with PATH guard (prevents duplicate PATH entries)
-  "$INSTALL_DIR/bin/vp" env setup --env-only > /dev/null
+  # Use current/bin/vp directly (the real binary) instead of bin/vp (trampoline)
+  # to avoid the self-overwrite issue on Windows during --refresh
+  local vp_bin="$INSTALL_DIR/current/bin/vp"
+  if [[ "$platform" == win32* ]]; then
+    vp_bin="$INSTALL_DIR/current/bin/vp.exe"
+  fi
+  "$vp_bin" env setup --env-only > /dev/null
 
   # Configure shell PATH (always attempted)
   configure_shell_path
