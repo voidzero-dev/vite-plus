@@ -318,3 +318,8 @@ codegen-units = 1
 strip = "symbols" # set to `false` for debug information
 debug = false # set to `true` for debug information
 panic = "abort" # Let it crash and force ourselves to write safe Rust.
+
+# The trampoline binary is copied per shim tool (~5-10 copies), so optimize for
+# size instead of speed. This reduces it from ~200KB to ~100KB on Windows.
+[profile.release.package.vite_trampoline]
+opt-level = "z"

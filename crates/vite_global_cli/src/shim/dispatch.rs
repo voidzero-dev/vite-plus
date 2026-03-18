@@ -261,8 +261,19 @@ fn check_npm_global_install_result(
             }
 
             // Check if binary already exists in bin_dir (vite-plus bin)
+            // On Unix: symlinks (bin/tsc)
+            // On Windows: trampoline .exe (bin/tsc.exe) or legacy .cmd (bin/tsc.cmd)
             let shim_path = bin_dir.join(&bin_name);
-            if std::fs::symlink_metadata(shim_path.as_path()).is_ok() {
+            let shim_exists = std::fs::symlink_metadata(shim_path.as_path()).is_ok() || {
+                #[cfg(windows)]
+                {
+                    let exe_path = bin_dir.join(vite_str::format!("{bin_name}.exe"));
+                    std::fs::symlink_metadata(exe_path.as_path()).is_ok()
+                }
+                #[cfg(not(windows))]
+                false
+            };
+            if shim_exists {
                 if let Ok(Some(config)) = BinConfig::load_sync(&bin_name) {
                     if config.source == BinSource::Vp {
                         // Managed by vp install -g — warn about the conflict
@@ -430,7 +441,9 @@ fn create_bin_link(
 
     #[cfg(windows)]
     {
-        // Create .cmd wrapper
+        // npm-installed packages use .cmd wrappers pointing to npm's generated script.
+        // Unlike vp-installed packages, these don't have PackageMetadata, so the
+        // trampoline approach won't work (dispatch_package_binary would fail).
         let cmd_path = bin_dir.join(vite_str::format!("{bin_name}.cmd"));
         let wrapper_content = vite_str::format!(
             "@echo off\r\n\"{source}\" %*\r\nexit /b %ERRORLEVEL%\r\n",
@@ -523,13 +536,13 @@ fn remove_npm_global_uninstall_links(bin_entries: &[(String, String)], npm_prefi
             // Clean up the BinConfig
             let _ = BinConfig::delete_sync(bin_name);
 
-            // Also remove .cmd on Windows
+            // Also remove .cmd and .exe on Windows
             #[cfg(windows)]
             {
                 let cmd_path = bin_dir.join(vite_str::format!("{bin_name}.cmd"));
-                if cmd_path.as_path().exists() {
-                    let _ = std::fs::remove_file(cmd_path.as_path());
-                }
+                let _ = std::fs::remove_file(cmd_path.as_path());
+                let exe_path = bin_dir.join(vite_str::format!("{bin_name}.exe"));
+                let _ = std::fs::remove_file(exe_path.as_path());
             }
         } else {
             // Owned by a different npm package — check if our link target is now broken
