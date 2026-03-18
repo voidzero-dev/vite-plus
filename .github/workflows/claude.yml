@@ -2,22 +2,21 @@ name: Claude Code
 
 on:
   issues:
-    types: [opened]
+    types: [assigned]
 
 jobs:
   analyze:
-    if: github.repository == 'voidzero-dev/vite-plus'
+    if: github.repository == 'voidzero-dev/vite-plus' && github.event.action == 'assigned' && github.event.assignee.login == 'boshen' && github.event.sender.login == 'boshen'
     runs-on: ubuntu-slim
     permissions:
       contents: read
       issues: write
       id-token: write
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          fetch-depth: 10
+          fetch-depth: 100
           persist-credentials: true
 
       - name: Run Claude Code
