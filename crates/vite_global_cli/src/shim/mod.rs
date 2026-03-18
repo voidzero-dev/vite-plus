@@ -5,8 +5,8 @@
 //!
 //! Detection methods:
 //! - Unix: Symlinks to vp binary preserve argv[0], allowing tool detection
-//! - Windows: .cmd wrappers call `vp env exec <tool>` directly
-//! - Legacy: VITE_PLUS_SHIM_TOOL env var (kept for backward compatibility)
+//! - Windows: Trampoline `.exe` files set `VITE_PLUS_SHIM_TOOL` env var and spawn vp.exe
+//! - Legacy: `.cmd` wrappers call `vp env exec <tool>` directly (deprecated)
 
 mod cache;
 pub(crate) mod dispatch;
@@ -77,10 +77,24 @@ fn is_potential_package_binary(tool: &str) -> bool {
         return false;
     };
 
-    // Check if the shim exists in the configured bin directory
-    // Use symlink_metadata to detect symlinks (even broken ones)
+    // Check if the shim exists in the configured bin directory.
+    // Use symlink_metadata to detect symlinks (even broken ones).
+    // On Windows, check .exe first (trampoline shims, the common case),
+    // then fall back to extensionless (Unix symlinks or legacy).
+    #[cfg(windows)]
+    {
+        let exe_path = configured_bin.join(format!("{tool}.exe"));
+        if std::fs::symlink_metadata(&exe_path).is_ok() {
+            return true;
+        }
+    }
+
     let shim_path = configured_bin.join(tool);
-    std::fs::symlink_metadata(&shim_path).is_ok()
+    if std::fs::symlink_metadata(&shim_path).is_ok() {
+        return true;
+    }
+
+    false
 }
 
 /// Environment variable used for shim tool detection via shell wrapper scripts.
@@ -89,11 +103,9 @@ const SHIM_TOOL_ENV_VAR: &str = env_vars::VITE_PLUS_SHIM_TOOL;
 /// Detect the shim tool from environment and argv.
 ///
 /// Detection priority:
-/// 1. If argv[0] is "vp" or "vp.exe", this is a direct CLI invocation - NOT shim mode
-/// 2. Check `VITE_PLUS_SHIM_TOOL` env var (for shell wrapper scripts)
+/// 1. Check `VITE_PLUS_SHIM_TOOL` env var (set by trampoline exe on Windows)
+/// 2. If argv[0] is "vp" or "vp.exe", this is a direct CLI invocation - NOT shim mode
 /// 3. Fall back to argv[0] detection (primary method on Unix with symlinks)
-///
-/// Note: Modern Windows wrappers use `vp env exec <tool>` instead of env vars.
 ///
 /// IMPORTANT: This function clears `VITE_PLUS_SHIM_TOOL` after reading it to
 /// prevent the env var from leaking to child processes.
@@ -106,17 +118,9 @@ pub fn detect_shim_tool(argv0: &str) -> Option<String> {
         std::env::remove_var(SHIM_TOOL_ENV_VAR);
     }
 
-    // If argv[0] is explicitly "vp" or "vp.exe", this is a direct CLI invocation.
-    // Do NOT use the env var in this case - it may be stale from a parent process.
-    let argv0_tool = extract_tool_name(argv0);
-    if argv0_tool == "vp" {
-        return None; // Direct vp invocation, not shim mode
-    }
-    if argv0_tool == "vpx" {
-        return Some("vpx".to_string());
-    }
-
-    // Check VITE_PLUS_SHIM_TOOL env var (set by shell wrapper scripts)
+    // Check VITE_PLUS_SHIM_TOOL env var first (set by trampoline exe on Windows).
+    // This takes priority over argv[0] because the trampoline spawns vp.exe
+    // (so argv[0] would be "vp"), but the env var carries the real tool name.
     if let Some(tool) = env_tool {
         if !tool.is_empty() {
             let tool_lower = tool.to_lowercase();
@@ -127,7 +131,16 @@ pub fn detect_shim_tool(argv0: &str) -> Option<String> {
         }
     }
 
-    // Fall back to argv[0] detection
+    // If argv[0] is explicitly "vp" or "vp.exe", this is a direct CLI invocation.
+    let argv0_tool = extract_tool_name(argv0);
+    if argv0_tool == "vp" {
+        return None; // Direct vp invocation, not shim mode
+    }
+    if argv0_tool == "vpx" {
+        return Some("vpx".to_string());
+    }
+
+    // Fall back to argv[0] detection (Unix symlinks)
     if is_shim_tool(&argv0_tool) { Some(argv0_tool) } else { None }
 }
 

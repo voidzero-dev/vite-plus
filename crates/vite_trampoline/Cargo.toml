@@ -1,0 +1,27 @@
+[package]
+name = "vite_trampoline"
+version = "0.0.0"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "Minimal Windows trampoline exe for vite-plus shims"
+
+[[bin]]
+name = "vp-shim"
+path = "src/main.rs"
+
+# No dependencies — the single Win32 FFI call (SetConsoleCtrlHandler) is
+# declared inline to avoid pulling in the heavy `windows`/`windows-core` crates.
+
+# Override workspace lints: this is a standalone minimal binary that intentionally
+# avoids dependencies on vite_shared, vite_path, vite_str, etc. to keep binary
+# size small. It uses std types and macros directly.
+[lints.clippy]
+disallowed_macros = "allow"
+disallowed_types = "allow"
+disallowed_methods = "allow"
+
+# Note: Release profile is defined at workspace root (Cargo.toml).
+# The workspace already sets lto="fat", codegen-units=1, strip="symbols", panic="abort".
+# For even smaller binaries, consider building this crate separately with opt-level="z".

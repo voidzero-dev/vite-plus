@@ -155,13 +155,7 @@ if tool == "vpx" {
 
 ### Windows
 
-On Windows, `vpx.cmd` is a wrapper script (consistent with existing `node.cmd`, `npm.cmd`, `npx.cmd` wrappers):
-
-```cmd
-@echo off
-set "VITE_PLUS_SHIM_TOOL=vpx"
-"%~dp0..\current\bin\vp.exe" %*
-```
+On Windows, `vpx.exe` is a trampoline executable (consistent with existing `node.exe`, `npm.exe`, `npx.exe` shims). It detects its tool name from its own filename (`vpx`), sets `VITE_PLUS_SHIM_TOOL=vpx`, and spawns `vp.exe`. See [RFC: Trampoline EXE for Shims](./trampoline-exe-for-shims.md).
 
 ### Setup
 
