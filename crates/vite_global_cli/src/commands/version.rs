@@ -133,14 +133,31 @@ fn format_version(version: Option<String>) -> String {
 }
 
 async fn get_node_version_info(cwd: &AbsolutePathBuf) -> Option<(String, String)> {
-    let resolution_opt = resolve_node_version(cwd, true).await.ok()?;
-    let resolution = resolution_opt?;
-    let source_label = match resolution.source {
-        VersionSource::NodeVersionFile => ".node-version",
-        VersionSource::EnginesNode => "engines.node",
-        VersionSource::DevEnginesRuntime => "devEngines.runtime",
-    };
-    Some((resolution.version.to_string(), source_label.to_string()))
+    if let Ok(Some(resolution)) = resolve_node_version(cwd, true).await {
+        let source_label = match resolution.source {
+            VersionSource::NodeVersionFile => ".node-version",
+            VersionSource::EnginesNode => "engines.node",
+            VersionSource::DevEnginesRuntime => "devEngines.runtime",
+        };
+        return Some((resolution.version.to_string(), source_label.to_string()));
+    }
+
+    // Fallback: detect system Node version
+    let version = detect_system_node_version()?;
+    Some((version, "system".to_string()))
+}
+
+fn detect_system_node_version() -> Option<String> {
+    let output = std::process::Command::new("node").arg("--version").output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let version = String::from_utf8(output.stdout).ok()?;
+    let version = version.trim().strip_prefix('v').unwrap_or(version.trim());
+    if version.is_empty() {
+        return None;
+    }
+    Some(version.to_string())
 }
 
 /// Execute the `--version` command.
@@ -197,7 +214,7 @@ mod tests {
     #[cfg(unix)]
     use std::{fs, path::Path};
 
-    use super::format_version;
+    use super::{detect_system_node_version, format_version};
     #[cfg(unix)]
     use super::{ToolSpec, find_local_vite_plus, resolve_tool_version};
 
@@ -210,6 +227,15 @@ mod tests {
     fn format_version_values() {
         assert_eq!(format_version(Some("1.2.3".to_string())), "v1.2.3");
         assert_eq!(format_version(None), "Not found");
+    }
+
+    #[test]
+    fn detect_system_node_version_returns_version() {
+        let version = detect_system_node_version();
+        assert!(version.is_some(), "expected node to be installed");
+        let version = version.unwrap();
+        assert!(!version.starts_with('v'), "version should not have v prefix");
+        assert!(version.contains('.'), "expected semver-like version, got: {version}");
     }
 
     #[cfg(unix)]
