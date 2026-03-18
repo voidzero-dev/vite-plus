@@ -10,7 +10,7 @@ The core package uses a **multi-project bundling strategy** that combines 5 upst
 | ----------------------- | ------------------------------- | ------------------------- |
 | `@rolldown/pluginutils` | `rolldown/packages/pluginutils` | Rolldown plugin utilities |
 | `rolldown`              | `rolldown/packages/rolldown`    | Rolldown bundler          |
-| `vite`                  | `vite/packages/vite`   | Vite v8 beta              |
+| `vite`                  | `vite/packages/vite`            | Vite v8 beta              |
 | `tsdown`                | `node_modules/tsdown`           | TypeScript build tool     |
 | `vitepress`             | `node_modules/vitepress`        | Documentation tool        |
 
@@ -291,7 +291,7 @@ dist/
 | ----------------------- | ------------------------------------- | -------------- |
 | `@rolldown/pluginutils` | `../../rolldown/packages/pluginutils` | Git submodule  |
 | `rolldown`              | `../../rolldown/packages/rolldown`    | Git submodule  |
-| `vite`                  | `../../vite/packages/vite`   | Git submodule  |
+| `vite`                  | `../../vite/packages/vite`            | Git submodule  |
 | `tsdown`                | `node_modules/tsdown`                 | npm dependency |
 | `vitepress`             | `node_modules/vitepress`              | npm dependency |
 

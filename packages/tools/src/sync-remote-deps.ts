@@ -728,13 +728,7 @@ export async function syncRemote() {
 
   const corePackagePath = join(rootDir, CORE_PACKAGE_PATH, 'package.json');
   const rolldownPackagePath = join(rootDir, ROLLDOWN_DIR, 'packages', 'rolldown', 'package.json');
-  const rolldownVitePackagePath = join(
-    rootDir,
-    VITE_DIR,
-    'packages',
-    'vite',
-    'package.json',
-  );
+  const rolldownVitePackagePath = join(rootDir, VITE_DIR, 'packages', 'vite', 'package.json');
   const pluginutilsPackagePath = join(
     rootDir,
     ROLLDOWN_DIR,
