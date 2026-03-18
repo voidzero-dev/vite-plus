@@ -200,6 +200,52 @@ impl PackageManager {
                     output::warn("--find-by not supported by npm");
                 }
             }
+            PackageManagerType::Bun => {
+                bin_name = "bun".into();
+
+                // bun has a direct `why` subcommand (not `bun pm why`)
+                args.push("why".into());
+
+                // Add packages
+                args.extend_from_slice(options.packages);
+
+                // Warn about unsupported flags
+                if options.json {
+                    output::warn("--json not supported by bun why");
+                }
+                if options.long {
+                    output::warn("--long not supported by bun why");
+                }
+                if options.parseable {
+                    output::warn("--parseable not supported by bun why");
+                }
+                if options.recursive {
+                    output::warn("--recursive not supported by bun why");
+                }
+                if let Some(filters) = options.filters {
+                    if !filters.is_empty() {
+                        output::warn("--filter not supported by bun why");
+                    }
+                }
+                if options.workspace_root {
+                    output::warn("--workspace-root not supported by bun why");
+                }
+                if options.prod || options.dev {
+                    output::warn("--prod/--dev not supported by bun why");
+                }
+                if options.depth.is_some() {
+                    output::warn("--depth not supported by bun why");
+                }
+                if options.no_optional {
+                    output::warn("--no-optional not supported by bun why");
+                }
+                if options.exclude_peers {
+                    output::warn("--exclude-peers not supported by bun why");
+                }
+                if options.find_by.is_some() {
+                    output::warn("--find-by not supported by bun why");
+                }
+            }
         }
 
         // Add pass-through args

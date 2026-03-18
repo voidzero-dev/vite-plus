@@ -3,6 +3,7 @@ use std::{collections::HashMap, process::ExitStatus};
 use vite_command::run_command;
 use vite_error::Error;
 use vite_path::AbsolutePath;
+use vite_shared::output;
 
 use crate::package_manager::{
     PackageManager, PackageManagerType, ResolveCommandResult, format_path_env,
@@ -54,6 +55,13 @@ impl PackageManager {
                     args.push("npm".into());
                     args.push("login".into());
                 }
+            }
+            PackageManagerType::Bun => {
+                output::warn(
+                    "bun does not have a login command, falling back to npm login",
+                );
+                bin_name = "npm".into();
+                args.push("login".into());
             }
         }
 

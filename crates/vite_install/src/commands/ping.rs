@@ -4,7 +4,9 @@ use vite_command::run_command;
 use vite_error::Error;
 use vite_path::AbsolutePath;
 
-use crate::package_manager::{PackageManager, ResolveCommandResult, format_path_env};
+use vite_shared::output;
+
+use crate::package_manager::{PackageManager, PackageManagerType, ResolveCommandResult, format_path_env};
 
 /// Options for the ping command.
 #[derive(Debug, Default)]
@@ -28,11 +30,18 @@ impl PackageManager {
 
     /// Resolve the ping command.
     /// All package managers delegate to npm ping.
+    /// Bun does not support ping, falls back to npm.
     #[must_use]
     pub fn resolve_ping_command(&self, options: &PingCommandOptions) -> ResolveCommandResult {
         let bin_name: String = "npm".to_string();
         let envs = HashMap::from([("PATH".to_string(), format_path_env(self.get_bin_prefix()))]);
         let mut args: Vec<String> = Vec::new();
+
+        if self.client == PackageManagerType::Bun {
+            output::warn(
+                "bun does not support the ping command, falling back to npm ping",
+            );
+        }
 
         args.push("ping".into());
 

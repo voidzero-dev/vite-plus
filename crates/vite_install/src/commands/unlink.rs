@@ -63,6 +63,14 @@ impl PackageManager {
                     output::warn("npm doesn't support --recursive for unlink command");
                 }
             }
+            PackageManagerType::Bun => {
+                bin_name = "bun".into();
+                args.push("unlink".into());
+
+                if options.recursive {
+                    output::warn("bun doesn't support --recursive for unlink command");
+                }
+            }
         }
 
         // Add package if specified

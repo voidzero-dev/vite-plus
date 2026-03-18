@@ -75,6 +75,12 @@ impl PackageManager {
                 );
                 return None;
             }
+            PackageManagerType::Bun => {
+                output::warn(
+                    "bun does not have a 'prune' command. bun install will prune extraneous packages automatically.",
+                );
+                return None;
+            }
         }
 
         // Add pass-through args

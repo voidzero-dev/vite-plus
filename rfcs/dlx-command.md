@@ -2,7 +2,7 @@
 
 ## Summary
 
-Add `vp dlx` command that fetches a package from the registry without installing it as a dependency, hotloads it, and runs whatever default command binary it exposes. This provides a unified interface across pnpm, npm, and yarn for executing remote packages temporarily.
+Add `vp dlx` command that fetches a package from the registry without installing it as a dependency, hotloads it, and runs whatever default command binary it exposes. This provides a unified interface across pnpm, npm, yarn, and bun for executing remote packages temporarily.
 
 ## Motivation
 
@@ -104,13 +104,14 @@ vp dlx -p typescript -p @types/node -c 'tsc --init && node -e "console.log(123)"
 - pnpm: https://pnpm.io/cli/dlx
 - npm: https://docs.npmjs.com/cli/v10/commands/npm-exec
 - yarn: https://yarnpkg.com/cli/dlx
+- bun: https://bun.sh/docs/cli/bunx
 
-| Vite+ Flag                      | pnpm               | npm                 | yarn@1      | yarn@2+          | Description                |
-| ------------------------------- | ------------------ | ------------------- | ----------- | ---------------- | -------------------------- |
-| `vp dlx <pkg>`                  | `pnpm dlx <pkg>`   | `npm exec <pkg>`    | `npx <pkg>` | `yarn dlx <pkg>` | Execute package binary     |
-| `--package <name>`, `-p <name>` | `--package <name>` | `--package=<name>`  | N/A         | `-p <name>`      | Specify package to install |
-| `--shell-mode`, `-c`            | `-c`               | `-c`                | N/A         | N/A              | Execute in shell           |
-| `--silent`, `-s`                | `--silent`         | `--loglevel silent` | `--quiet`   | `--quiet`        | Suppress output            |
+| Vite+ Flag                      | pnpm               | npm                 | yarn@1      | yarn@2+          | bun          | Description                |
+| ------------------------------- | ------------------ | ------------------- | ----------- | ---------------- | ------------ | -------------------------- |
+| `vp dlx <pkg>`                  | `pnpm dlx <pkg>`   | `npm exec <pkg>`    | `npx <pkg>` | `yarn dlx <pkg>` | `bunx <pkg>` | Execute package binary     |
+| `--package <name>`, `-p <name>` | `--package <name>` | `--package=<name>`  | N/A         | `-p <name>`      | N/A          | Specify package to install |
+| `--shell-mode`, `-c`            | `-c`               | `-c`                | N/A         | N/A              | N/A          | Execute in shell           |
+| `--silent`, `-s`                | `--silent`         | `--loglevel silent` | `--quiet`   | `--quiet`        | N/A          | Suppress output            |
 
 **Notes:**
 
@@ -119,6 +120,7 @@ vp dlx -p typescript -p @types/node -c 'tsc --init && node -e "console.log(123)"
 - **Shell mode**: Yarn 2+ does not support shell mode (`-c`), command will print a warning and try to execute anyway.
 - **--package flag position**: For pnpm, `--package` comes before `dlx`. For npm, `--package` can be anywhere. For yarn, `-p` comes after `dlx`.
 - **Auto-confirm prompts**: For npm and npx (yarn@1 fallback), `--yes` is automatically added to align with pnpm's behavior which doesn't require confirmation.
+- **bun**: Uses `bunx` as a standalone binary (not a subcommand of `bun`). It does not support `--package`, `--shell-mode`, or `--silent` flags.
 
 ### Argument Handling
 
@@ -888,14 +890,14 @@ Examples:
 
 ## Package Manager Compatibility
 
-| Feature           | pnpm    | npm     | yarn@1  | yarn@2+ | Notes                    |
-| ----------------- | ------- | ------- | ------- | ------- | ------------------------ |
-| Basic execution   | ✅ Full | ✅ Full | ⚠️ npx  | ✅ Full | yarn@1 uses npx fallback |
-| Version specifier | ✅ Full | ✅ Full | ⚠️ npx  | ✅ Full |                          |
-| --package flag    | ✅ Full | ✅ Full | ⚠️ npx  | ✅ Full |                          |
-| Shell mode (-c)   | ✅ Full | ✅ Full | ⚠️ npx  | ❌ N/A  | yarn@2+ doesn't support  |
-| Silent mode       | ✅ Full | ✅ Full | ⚠️ npx  | ✅ Full |                          |
-| Auto-confirm      | ✅ N/A  | ✅ Auto | ⚠️ Auto | ✅ N/A  | --yes added for npm/npx  |
+| Feature           | pnpm    | npm     | yarn@1  | yarn@2+ | bun       | Notes                     |
+| ----------------- | ------- | ------- | ------- | ------- | --------- | ------------------------- |
+| Basic execution   | ✅ Full | ✅ Full | ⚠️ npx  | ✅ Full | ✅ `bunx` | yarn@1 uses npx fallback  |
+| Version specifier | ✅ Full | ✅ Full | ⚠️ npx  | ✅ Full | ✅ Full   |                           |
+| --package flag    | ✅ Full | ✅ Full | ⚠️ npx  | ✅ Full | ❌ N/A    | bunx doesn't support      |
+| Shell mode (-c)   | ✅ Full | ✅ Full | ⚠️ npx  | ❌ N/A  | ❌ N/A    | yarn@2+/bun don't support |
+| Silent mode       | ✅ Full | ✅ Full | ⚠️ npx  | ✅ Full | ❌ N/A    | bunx doesn't support      |
+| Auto-confirm      | ✅ N/A  | ✅ Auto | ⚠️ Auto | ✅ N/A  | ✅ N/A    | --yes added for npm/npx   |
 
 ## Security Considerations
 
@@ -1026,7 +1028,7 @@ vp dlx madge --image deps.svg src/
 
 ## Conclusion
 
-This RFC proposes adding `vp dlx` command to provide unified remote package execution across pnpm/npm/yarn. The design:
+This RFC proposes adding `vp dlx` command to provide unified remote package execution across pnpm/npm/yarn/bun. The design:
 
 - ✅ Unified interface for all package managers
 - ✅ Intelligent fallback for yarn@1
