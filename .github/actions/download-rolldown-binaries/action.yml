@@ -28,6 +28,7 @@ runs:
           case "${{ inputs.target }}" in
             x86_64*)  export TARGET="linux-x64-musl" ;;
             aarch64*) export TARGET="linux-arm64-musl" ;;
+            *) echo "Unknown musl target: ${{ inputs.target }}"; exit 1 ;;
           esac
         else
           export TARGET="linux-x64-gnu"
