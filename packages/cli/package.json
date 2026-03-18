@@ -339,7 +339,7 @@
     "detect-indent": "catalog:",
     "detect-newline": "catalog:",
     "glob": "catalog:",
-    "lint-staged": "catalog:",
+    "lint-staged": "^16.2.6",
     "minimatch": "catalog:",
     "mri": "catalog:",
     "rolldown": "workspace:*",

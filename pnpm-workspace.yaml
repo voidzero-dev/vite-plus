@@ -69,7 +69,6 @@ catalog:
   fs-extra: ^11.3.2
   glob: ^13.0.0
   jsonc-parser: ^3.3.1
-  lint-staged: ^16.2.6
   lodash-es: ^4.17.21
   micromatch: ^4.0.9
   minimatch: ^10.0.3
