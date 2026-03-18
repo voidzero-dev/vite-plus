@@ -74,6 +74,8 @@ jobs:
         include:
           - os: namespace-profile-linux-x64-default
             target: x86_64-unknown-linux-gnu
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
           - os: windows-latest
             target: x86_64-pc-windows-msvc
           - os: namespace-profile-mac-default
@@ -96,19 +98,20 @@ jobs:
       - uses: oxc-project/setup-rust@d286d43bc1f606abbd98096666ff8be68c8d5f57 # v1.0.0
         with:
           save-cache: ${{ github.ref_name == 'main' }}
-          cache-key: test
+          cache-key: test-${{ matrix.target }}
           target-dir: ${{ runner.os == 'Windows' && format('{0}/target', env.DEV_DRIVE) || '' }}
 
-      - run: rustup target add x86_64-unknown-linux-musl
-        if: ${{ matrix.target == 'x86_64-unknown-linux-gnu' }}
+      - name: Add musl target
+        if: ${{ matrix.target == 'x86_64-unknown-linux-musl' }}
+        run: rustup target add x86_64-unknown-linux-musl
 
-      - run: cargo check --all-targets --all-features
+      - run: cargo check --all-targets --all-features --target ${{ matrix.target }}
         env:
           RUSTFLAGS: '-D warnings --cfg tokio_unstable' # also update .cargo/config.toml
 
       # Test all crates/* packages. New crates are automatically included.
       # Also test vite-plus-cli (lives outside crates/) to catch type sync issues.
-      - run: cargo test $(for d in crates/*/; do echo -n "-p $(basename $d) "; done) -p vite-plus-cli
+      - run: cargo test $(for d in crates/*/; do echo -n "-p $(basename $d) "; done) -p vite-plus-cli --target ${{ matrix.target }}
         env:
           RUST_MIN_STACK: 8388608
 
@@ -197,8 +200,13 @@ jobs:
       matrix:
         include:
           - os: namespace-profile-linux-x64-default
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
           - os: namespace-profile-mac-default
+            target: aarch64-apple-darwin
           - os: windows-latest
+            target: x86_64-pc-windows-msvc
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
@@ -217,7 +225,7 @@ jobs:
       - uses: oxc-project/setup-rust@d286d43bc1f606abbd98096666ff8be68c8d5f57 # v1.0.0
         with:
           save-cache: ${{ github.ref_name == 'main' }}
-          cache-key: cli-e2e-test
+          cache-key: cli-e2e-test-${{ matrix.target }}
           target-dir: ${{ runner.os == 'Windows' && format('{0}/target', env.DEV_DRIVE) || '' }}
 
       - uses: oxc-project/setup-node@fdbf0dfd334c4e6d56ceeb77d91c76339c2a0885 # v1.0.4
@@ -234,10 +242,10 @@ jobs:
       - name: Build with upstream
         uses: ./.github/actions/build-upstream
         with:
-          target: ${{ matrix.os == 'namespace-profile-linux-x64-default' && 'x86_64-unknown-linux-gnu' ||  matrix.os == 'windows-latest' && 'x86_64-pc-windows-msvc' || 'aarch64-apple-darwin' }}
+          target: ${{ matrix.target }}
 
       - name: Check TypeScript types
-        if: ${{ matrix.os == 'namespace-profile-linux-x64-default' }}
+        if: ${{ matrix.target == 'x86_64-unknown-linux-gnu' }}
         run: pnpm tsgo
 
       - name: Install Global CLI vp
