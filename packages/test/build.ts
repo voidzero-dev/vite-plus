@@ -2117,13 +2117,9 @@ async function patchModuleAugmentations() {
     )) {
       const oldPattern = `declare module "${bareSpecifier}"`;
 
-      if (!content.includes(oldPattern)) {
-        continue;
-      }
-
       // Extract the augmentation block content using brace matching
       const startIdx = content.indexOf(oldPattern);
-      const braceStart = content.indexOf('{', startIdx);
+      const braceStart = startIdx !== -1 ? content.indexOf('{', startIdx) : -1;
       if (braceStart === -1) {
         continue;
       }

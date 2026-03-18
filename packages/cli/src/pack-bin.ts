@@ -27,7 +27,7 @@ const EXTERNAL_DTS_INTERNAL_RE = /node_modules\/(postcss|lightningcss)\/.*\.d\.(
 // In CI (installed from tgz): node_modules/vite-plus-core/dist/...
 // In local development (symlinked workspace): packages/core/dist/...
 const EXTERNAL_DTS_CONSUMER_RE =
-  /lightningcssOptions\.d\.ts$|(?:vite-plus-core|packages\/core)\/dist\/.*\.d\.ts$/;
+  /(?:vite-plus-core|packages\/core)\/.*lightningcssOptions\.d\.ts$|(?:vite-plus-core|packages\/core)\/dist\/.*\.d\.ts$/;
 const EXTERNAL_DTS_FIX_RE = new RegExp(
   `${EXTERNAL_DTS_INTERNAL_RE.source}|${EXTERNAL_DTS_CONSUMER_RE.source}`,
 );
@@ -141,11 +141,11 @@ cli
       for (const packConfig of packConfigs) {
         const merged = { ...packConfig, ...flags };
         // Inject plugin to fix MISSING_EXPORT warnings from external .d.ts files
-        // (postcss, lightningcss use `import` instead of `import type` in their .d.ts)
-        // Inject plugin to fix MISSING_EXPORT warnings from external .d.ts files
         // (postcss, lightningcss use `import`/`export` instead of `import type`/`export type`)
-        const existingPlugins = Array.isArray(merged.plugins) ? merged.plugins : [];
-        merged.plugins = [...existingPlugins, externalDtsTypeOnlyPlugin()];
+        if (merged.dts) {
+          const existingPlugins = Array.isArray(merged.plugins) ? merged.plugins : [];
+          merged.plugins = [...existingPlugins, externalDtsTypeOnlyPlugin()];
+        }
         const resolvedConfig = await resolveUserConfig(merged, flags);
         configs.push(...resolvedConfig);
       }
