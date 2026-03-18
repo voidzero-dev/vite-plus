@@ -2112,21 +2112,28 @@ async function patchModuleAugmentations() {
     let content = await readFile(file, 'utf-8');
     let modified = false;
 
-    for (const [bareSpecifier, { relativePath, targetFile }] of Object.entries(augmentationMappings)) {
+    for (const [bareSpecifier, { relativePath, targetFile }] of Object.entries(
+      augmentationMappings,
+    )) {
       const oldPattern = `declare module "${bareSpecifier}"`;
 
-      if (!content.includes(oldPattern)) continue;
+      if (!content.includes(oldPattern)) {
+        continue;
+      }
 
       // Extract the augmentation block content using brace matching
       const startIdx = content.indexOf(oldPattern);
       const braceStart = content.indexOf('{', startIdx);
-      if (braceStart === -1) continue;
+      if (braceStart === -1) {
+        continue;
+      }
 
       let depth = 0;
       let braceEnd = -1;
       for (let i = braceStart; i < content.length; i++) {
-        if (content[i] === '{') depth++;
-        else if (content[i] === '}') {
+        if (content[i] === '{') {
+          depth++;
+        } else if (content[i] === '}') {
           depth--;
           if (depth === 0) {
             braceEnd = i;
@@ -2134,7 +2141,9 @@ async function patchModuleAugmentations() {
           }
         }
       }
-      if (braceEnd === -1) continue;
+      if (braceEnd === -1) {
+        continue;
+      }
 
       const innerContent = content.slice(braceStart + 1, braceEnd).trim();
 
@@ -2155,9 +2164,12 @@ async function patchModuleAugmentations() {
           // Check both direct declarations (interface Name) and re-exports (export type { Name }).
           const hasDirectDecl = new RegExp(`\\binterface\\s+${name}\\b`).test(targetContent);
           const exportTypeMatch = targetContent.match(/export\s+type\s*\{([^}]*)\}/);
-          const isReExported = exportTypeMatch != null && new RegExp(`\\b${name}\\b`).test(exportTypeMatch[1]);
+          const isReExported =
+            exportTypeMatch != null && new RegExp(`\\b${name}\\b`).test(exportTypeMatch[1]);
           if (hasDirectDecl || isReExported) {
-            console.log(`  Skipped existing interface "${name}" (already in ${basename(targetFile)})`);
+            console.log(
+              `  Skipped existing interface "${name}" (already in ${basename(targetFile)})`,
+            );
             continue;
           }
 
@@ -2167,8 +2179,9 @@ async function patchModuleAugmentations() {
           let ifaceDepth = 0;
           let ifaceBraceEnd = -1;
           for (let i = ifaceBraceStart; i < innerContent.length; i++) {
-            if (innerContent[i] === '{') ifaceDepth++;
-            else if (innerContent[i] === '}') {
+            if (innerContent[i] === '{') {
+              ifaceDepth++;
+            } else if (innerContent[i] === '}') {
               ifaceDepth--;
               if (ifaceDepth === 0) {
                 ifaceBraceEnd = i;
@@ -2176,7 +2189,9 @@ async function patchModuleAugmentations() {
               }
             }
           }
-          if (ifaceBraceEnd === -1) continue;
+          if (ifaceBraceEnd === -1) {
+            continue;
+          }
 
           let block = innerContent.slice(ifaceStart, ifaceBraceEnd + 1).trim();
           if (!block.startsWith('export')) {
@@ -2208,7 +2223,10 @@ async function patchModuleAugmentations() {
   const contextDtsPath = join(distDir, '@vitest/browser/context.d.ts');
   if (existsSync(contextDtsPath)) {
     let content = await readFile(contextDtsPath, 'utf-8');
-    if (content.includes('BrowserCommands') && !content.match(/export\s+(type\s+)?\{[^}]*BrowserCommands/)) {
+    if (
+      content.includes('BrowserCommands') &&
+      !content.match(/export\s+(type\s+)?\{[^}]*BrowserCommands/)
+    ) {
       content += '\nexport type { BrowserCommands };\n';
       await writeFile(contextDtsPath, content, 'utf-8');
       console.log('  Added BrowserCommands re-export to context.d.ts');
@@ -2218,7 +2236,9 @@ async function patchModuleAugmentations() {
   // Validate: ensure no duplicate top-level interface declarations were introduced by merging.
   // Only count interfaces at the module scope (not nested inside declare global, namespace, etc.)
   for (const [bareSpecifier, { targetFile }] of Object.entries(augmentationMappings)) {
-    if (!existsSync(targetFile)) continue;
+    if (!existsSync(targetFile)) {
+      continue;
+    }
     const finalContent = await readFile(targetFile, 'utf-8');
 
     // Extract top-level interface names by tracking brace depth
@@ -2248,8 +2268,8 @@ async function patchModuleAugmentations() {
       if (count > 1) {
         throw new Error(
           `Interface "${name}" is declared ${count} times at top level in ${basename(targetFile)}. ` +
-          `Module augmentation merge for "${bareSpecifier}" likely created a duplicate ` +
-          `declaration that will shadow extends clauses and break type signatures.`,
+            `Module augmentation merge for "${bareSpecifier}" likely created a duplicate ` +
+            `declaration that will shadow extends clauses and break type signatures.`,
         );
       }
     }

@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import { readFileSync } from 'node:fs';
 import module from 'node:module';
 
 import {
@@ -23,8 +22,7 @@ import { resolveViteConfig } from './resolve-vite-config.js';
  * Since .d.ts files contain only type information, all imports/exports are
  * inherently type-only, so this transformation is always safe.
  */
-const EXTERNAL_DTS_INTERNAL_RE =
-  /node_modules\/(postcss|lightningcss)\/.*\.d\.(ts|mts|cts)$/;
+const EXTERNAL_DTS_INTERNAL_RE = /node_modules\/(postcss|lightningcss)\/.*\.d\.(ts|mts|cts)$/;
 // Match consumer .d.ts files that import from postcss/lightningcss.
 // In CI (installed from tgz): node_modules/vite-plus-core/dist/...
 // In local development (symlinked workspace): packages/core/dist/...
