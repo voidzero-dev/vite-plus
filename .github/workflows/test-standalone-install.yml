@@ -178,6 +178,105 @@ jobs:
               # cd hello && vp run build
             "
 
+  test-install-sh-musl-x64:
+    name: Test install.sh (Linux x64 musl)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Run install.sh in Alpine container
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}:/workspace" \
+            -e VITE_PLUS_VERSION=alpha \
+            alpine:3.21 sh -c "
+              apk add --no-cache bash curl ca-certificates
+              cat /workspace/packages/cli/install.sh | bash
+              source ~/.profile 2>/dev/null || export PATH=\"\$HOME/.vite-plus/bin:\$PATH\"
+
+              vp --version
+              vp --help
+              vp dlx print-current-version
+
+              # Verify bin setup
+              BIN_PATH=\"\$HOME/.vite-plus/bin\"
+              if [ ! -d \"\$BIN_PATH\" ]; then
+                echo \"Error: Bin directory not found: \$BIN_PATH\"
+                exit 1
+              fi
+              for shim in node npm npx; do
+                if [ ! -f \"\$BIN_PATH/\$shim\" ]; then
+                  echo \"Error: Shim not found: \$BIN_PATH/\$shim\"
+                  exit 1
+                fi
+                echo \"Found shim: \$BIN_PATH/\$shim\"
+              done
+              vp env doctor
+              vp env run --node 24 -- node -p \"process.versions\"
+
+              # Verify upgrade
+              vp upgrade --check
+              vp upgrade 0.0.0-gbe8891a5.20260227-1615
+              vp --version
+              vp upgrade --rollback
+              vp --version
+            "
+
+  test-install-sh-musl-arm64:
+    name: Test install.sh (Linux ARM64 musl via QEMU)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3.6.0
+        with:
+          platforms: arm64
+
+      - name: Run install.sh in ARM64 Alpine container
+        run: |
+          docker run --rm --platform linux/arm64 \
+            -v "${{ github.workspace }}:/workspace" \
+            -e VITE_PLUS_VERSION=alpha \
+            alpine:3.21 sh -c "
+              apk add --no-cache bash curl ca-certificates
+              cat /workspace/packages/cli/install.sh | bash
+              source ~/.profile 2>/dev/null || export PATH=\"\$HOME/.vite-plus/bin:\$PATH\"
+
+              vp --version
+              vp --help
+              vp dlx print-current-version
+
+              # Verify bin setup
+              BIN_PATH=\"\$HOME/.vite-plus/bin\"
+              if [ ! -d \"\$BIN_PATH\" ]; then
+                echo \"Error: Bin directory not found: \$BIN_PATH\"
+                exit 1
+              fi
+              for shim in node npm npx; do
+                if [ ! -f \"\$BIN_PATH/\$shim\" ]; then
+                  echo \"Error: Shim not found: \$BIN_PATH/\$shim\"
+                  exit 1
+                fi
+                echo \"Found shim: \$BIN_PATH/\$shim\"
+              done
+              vp env doctor
+
+              export VITE_LOG=trace
+              vp env run --node 24 -- node -p \"process.versions\"
+
+              # Verify upgrade
+              vp upgrade --check
+              vp upgrade 0.0.0-gbe8891a5.20260227-1615
+              vp --version
+              vp upgrade --rollback
+              vp --version
+            "
+
   test-install-ps1-v5:
     name: Test install.ps1 (Windows x64, PowerShell 5.1)
     runs-on: windows-latest
