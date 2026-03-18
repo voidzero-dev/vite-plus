@@ -31,13 +31,13 @@ runs:
         node -e "console.log('ECOSYSTEM_CI_PROJECT_REPOSITORY=' + require('./ecosystem-ci/repo.json')['${{ inputs.ecosystem-ci-project }}'].repository.replace('https://github.com/', '').replace('.git', ''))" >> $GITHUB_OUTPUT
         echo "ECOSYSTEM_CI_PROJECT_PATH=${{ runner.temp }}/vite-plus-ecosystem-ci/${{ inputs.ecosystem-ci-project }}" >> $GITHUB_OUTPUT
 
-    - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
         repository: rolldown/rolldown
         path: rolldown
         ref: ${{ steps.upstream-versions.outputs.ROLLDOWN_HASH }}
 
-    - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
         repository: vitejs/vite
         path: rolldown-vite

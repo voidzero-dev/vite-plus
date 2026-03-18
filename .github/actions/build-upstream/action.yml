@@ -30,7 +30,7 @@ runs:
     # Cache NAPI bindings and Rust CLI binary (the slow parts, especially on Windows)
     - name: Restore NAPI binding cache
       id: cache-restore
-      uses: actions/cache/restore@94b89442628ad1d101e352b7ee38f30e1bef108e # v5
+      uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
       with:
         path: |
           packages/cli/binding/*.node
@@ -113,7 +113,7 @@ runs:
 
     - name: Save NAPI binding cache
       if: steps.cache-restore.outputs.cache-hit != 'true'
-      uses: actions/cache/save@94b89442628ad1d101e352b7ee38f30e1bef108e # v5
+      uses: actions/cache/save@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
       with:
         path: |
           packages/cli/binding/*.node
