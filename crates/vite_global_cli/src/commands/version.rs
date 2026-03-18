@@ -214,9 +214,9 @@ mod tests {
     #[cfg(unix)]
     use std::{fs, path::Path};
 
-    use super::{detect_system_node_version, format_version};
     #[cfg(unix)]
     use super::{ToolSpec, find_local_vite_plus, resolve_tool_version};
+    use super::{detect_system_node_version, format_version};
 
     #[cfg(unix)]
     fn symlink_dir(src: &Path, dst: &Path) {
