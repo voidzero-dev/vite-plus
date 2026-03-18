@@ -23,33 +23,3 @@
 > printf 'eval("code");\n' > src/fail.js && git add src/fail.js
 [1]> vp staged # should fail when staged .js file has lint errors
 [STARTED] Backing up original state...
-[COMPLETED] Backed up original state in git stash (<hash>)
-[STARTED] Running tasks for staged files...
-[STARTED] Config object — 1 file
-[STARTED] *.ts — 0 files
-[STARTED] *.js — 1 file
-[SKIPPED] *.ts — no files
-[STARTED] vp lint
-[FAILED] vp lint [FAILED]
-[FAILED] vp lint [FAILED]
-[COMPLETED] Running tasks for staged files...
-[STARTED] Applying modifications from tasks...
-[SKIPPED] Skipped because of errors from tasks.
-[STARTED] Reverting to original state because of errors...
-[COMPLETED] Reverting to original state because of errors...
-[STARTED] Cleaning up temporary files...
-[COMPLETED] Cleaning up temporary files...
-
-✖ vp lint:
-VITE+ - The Unified Toolchain for the Web
-
-
-  × eslint(no-eval): eval can be harmful.
-   ╭─[src/fail.js:1:1]
- 1 │ eval("code");
-   · ────
-   ╰────
-  help: Avoid eval(). For JSON parsing use JSON.parse(); for dynamic property access use bracket notation (obj[key]); for other cases refactor to avoid evaluating strings as code.
-
-Found 0 warnings and 1 error.
-Finished in <variable>ms on 1 file with <variable> rules using <variable> threads.
