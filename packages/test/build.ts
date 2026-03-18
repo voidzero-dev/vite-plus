@@ -2138,13 +2138,58 @@ async function patchModuleAugmentations() {
 
       const innerContent = content.slice(braceStart + 1, braceEnd).trim();
 
-      // Merge augmented types into the target .d.ts file
+      // Merge only NEW type declarations into the target .d.ts file.
+      // Interfaces that already exist (e.g., ExpectStatic, Assertion, MatcherState) must NOT
+      // be re-declared, as that would shadow extends clauses and break call signatures.
       if (innerContent && existsSync(targetFile)) {
         let targetContent = await readFile(targetFile, 'utf-8');
-        const exportBlock = innerContent.replace(/^(\t*)interface /gm, '$1export interface ');
-        targetContent += `\n// Merged from module augmentation: declare module "${bareSpecifier}"\n${exportBlock}\n`;
-        await writeFile(targetFile, targetContent, 'utf-8');
-        console.log(`  Merged augmentation "${bareSpecifier}" into ${basename(targetFile)}`);
+
+        // Extract individual interface blocks from the augmentation content
+        const interfaceRegex = /(?:export\s+)?interface\s+(\w+)(?:<[^>]*>)?\s*\{/g;
+        let match;
+        const newDeclarations: string[] = [];
+
+        while ((match = interfaceRegex.exec(innerContent)) !== null) {
+          const name = match[1];
+          // Only merge if this interface does NOT already exist in the target file.
+          // Check both direct declarations (interface Name) and re-exports (export type { Name }).
+          const hasDirectDecl = new RegExp(`\\binterface\\s+${name}\\b`).test(targetContent);
+          const exportTypeMatch = targetContent.match(/export\s+type\s*\{([^}]*)\}/);
+          const isReExported = exportTypeMatch != null && new RegExp(`\\b${name}\\b`).test(exportTypeMatch[1]);
+          if (hasDirectDecl || isReExported) {
+            console.log(`  Skipped existing interface "${name}" (already in ${basename(targetFile)})`);
+            continue;
+          }
+
+          // Extract this interface block using brace matching
+          const ifaceStart = match.index;
+          const ifaceBraceStart = innerContent.indexOf('{', ifaceStart);
+          let ifaceDepth = 0;
+          let ifaceBraceEnd = -1;
+          for (let i = ifaceBraceStart; i < innerContent.length; i++) {
+            if (innerContent[i] === '{') ifaceDepth++;
+            else if (innerContent[i] === '}') {
+              ifaceDepth--;
+              if (ifaceDepth === 0) {
+                ifaceBraceEnd = i;
+                break;
+              }
+            }
+          }
+          if (ifaceBraceEnd === -1) continue;
+
+          let block = innerContent.slice(ifaceStart, ifaceBraceEnd + 1).trim();
+          if (!block.startsWith('export')) {
+            block = `export ${block}`;
+          }
+          newDeclarations.push(block);
+          console.log(`  Merged new interface "${name}" into ${basename(targetFile)}`);
+        }
+
+        if (newDeclarations.length > 0) {
+          targetContent += `\n// Merged from module augmentation: declare module "${bareSpecifier}"\n${newDeclarations.join('\n')}\n`;
+          await writeFile(targetFile, targetContent, 'utf-8');
+        }
       }
 
       // Rewrite declare module path to relative
@@ -2167,6 +2212,46 @@ async function patchModuleAugmentations() {
       content += '\nexport type { BrowserCommands };\n';
       await writeFile(contextDtsPath, content, 'utf-8');
       console.log('  Added BrowserCommands re-export to context.d.ts');
+    }
+  }
+
+  // Validate: ensure no duplicate top-level interface declarations were introduced by merging.
+  // Only count interfaces at the module scope (not nested inside declare global, namespace, etc.)
+  for (const [bareSpecifier, { targetFile }] of Object.entries(augmentationMappings)) {
+    if (!existsSync(targetFile)) continue;
+    const finalContent = await readFile(targetFile, 'utf-8');
+
+    // Extract top-level interface names by tracking brace depth
+    const topLevelInterfaces: string[] = [];
+    let depth = 0;
+    for (let i = 0; i < finalContent.length; i++) {
+      if (finalContent[i] === '{') {
+        depth++;
+      } else if (finalContent[i] === '}') {
+        depth--;
+      } else if (depth === 0) {
+        const remaining = finalContent.slice(i);
+        const m = remaining.match(/^interface\s+(\w+)/);
+        if (m) {
+          topLevelInterfaces.push(m[1]);
+          i += m[0].length - 1;
+        }
+      }
+    }
+
+    const counts = new Map<string, number>();
+    for (const name of topLevelInterfaces) {
+      counts.set(name, (counts.get(name) || 0) + 1);
+    }
+
+    for (const [name, count] of counts) {
+      if (count > 1) {
+        throw new Error(
+          `Interface "${name}" is declared ${count} times at top level in ${basename(targetFile)}. ` +
+          `Module augmentation merge for "${bareSpecifier}" likely created a duplicate ` +
+          `declaration that will shadow extends clauses and break type signatures.`,
+        );
+      }
     }
   }
 }
