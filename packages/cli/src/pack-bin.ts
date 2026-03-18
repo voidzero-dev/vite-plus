@@ -25,8 +25,11 @@ import { resolveViteConfig } from './resolve-vite-config.js';
  */
 const EXTERNAL_DTS_INTERNAL_RE =
   /node_modules\/(postcss|lightningcss)\/.*\.d\.(ts|mts|cts)$/;
+// Match consumer .d.ts files that import from postcss/lightningcss.
+// In CI (installed from tgz): node_modules/vite-plus-core/dist/...
+// In local development (symlinked workspace): packages/core/dist/...
 const EXTERNAL_DTS_CONSUMER_RE =
-  /lightningcssOptions\.d\.ts$|vite-plus-core\/dist\/.*\.d\.ts$/;
+  /lightningcssOptions\.d\.ts$|(?:vite-plus-core|packages\/core)\/dist\/.*\.d\.ts$/;
 const EXTERNAL_DTS_FIX_RE = new RegExp(
   `${EXTERNAL_DTS_INTERNAL_RE.source}|${EXTERNAL_DTS_CONSUMER_RE.source}`,
 );

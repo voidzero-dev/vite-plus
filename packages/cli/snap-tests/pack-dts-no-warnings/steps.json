@@ -1,0 +1,6 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "commands": [
+    "vp pack --dts src/index.ts # should bundle with DTS and no postcss/lightningcss/vitest warnings"
+  ]
+}

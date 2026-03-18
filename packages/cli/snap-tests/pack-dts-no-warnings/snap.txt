@@ -1,0 +1,350 @@
+> vp pack --dts src/index.ts # should bundle with DTS and no postcss/lightningcss/vitest warnings
+ℹ entry: src/index.ts
+ℹ Build start
+(rolldown-plugin-dts:fake-js plugin) `declare module "../@vitest/expect/index.js"` will be kept as-is in the output. Relative module declaration may cause unexpected issues. Found in <homedir>/Projects/oss/vite-plus/packages/test/dist/chunks/global.d.x-ILCfAE.d.ts.
+(rolldown-plugin-dts:fake-js plugin) `declare module "../@vitest/runner/index.js"` will be kept as-is in the output. Relative module declaration may cause unexpected issues. Found in <homedir>/Projects/oss/vite-plus/packages/test/dist/chunks/global.d.x-ILCfAE.d.ts.
+ℹ Hint: consider adding deps.onlyBundle option to avoid unintended bundling of dependencies, or set deps.onlyBundle: false to disable this hint.
+See more at https://tsdown.dev/options/dependencies#deps-onlybundle
+Detected dependencies in bundle:
+- @vitest/expect
+- @oxc-project/types
+- esbuild
+- @jridgewell/trace-mapping
+- terser
+- happy-dom
+- oxlint
+- oxfmt
+ℹ dist/index.mjs    <variable> kB │ gzip: <variable> kB
+ℹ dist/index.d.mts  <variable> MB
+ℹ 2 files, total: <variable> MB
+../../../../../../../..<homedir>/Projects/oss/vite-plus/packages/core/dist/vite/types/internal/esbuildOptions.d.ts (1:7) [MISSING_EXPORT] Warning: "default" is not exported by "../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/esbuild@<semver>/node_modules/esbuild/lib/main.d.ts".
+   ╭─[ ../../../../../../../..<homedir>/Projects/oss/vite-plus/packages/core/dist/vite/types/internal/esbuildOptions.d.ts:1:8 ]
+   │
+ 1 │ import esbuild from 'esbuild';
+   │        ───┬───  
+   │           ╰───── Missing export
+   │ 
+   │ Note: If you meant to import a type rather than a value, make sure to add the `type` modifier (e.g. `import { type Foo } from 'esbuild'`).
+───╯
+
+../../../../../../../..<homedir>/Projects/oss/vite-plus/packages/core/dist/vite/types/internal/cssPreprocessorOptions.d.ts (1:7) [MISSING_EXPORT] Warning: "default" is not exported by "../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass@<semver>/node_modules/sass/types/index.d.ts".
+   ╭─[ ../../../../../../../..<homedir>/Projects/oss/vite-plus/packages/core/dist/vite/types/internal/cssPreprocessorOptions.d.ts:1:8 ]
+   │
+ 1 │ import DartSass from 'sass';
+   │        ────┬───  
+   │            ╰───── Missing export
+   │ 
+   │ Note: If you meant to import a type rather than a value, make sure to add the `type` modifier (e.g. `import { type Foo } from 'sass'`).
+───╯
+
+../../../../../../../..<homedir>/Projects/oss/vite-plus/packages/core/dist/vite/types/internal/cssPreprocessorOptions.d.ts (2:7) [MISSING_EXPORT] Warning: "default" is not exported by "../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass-embedded@<semver>_source-map-js@<semver>/node_modules/sass-embedded/dist/types/index.m.d.ts".
+   ╭─[ ../../../../../../../..<homedir>/Projects/oss/vite-plus/packages/core/dist/vite/types/internal/cssPreprocessorOptions.d.ts:2:8 ]
+   │
+ 2 │ import SassEmbedded from 'sass-embedded';
+   │        ──────┬─────  
+   │              ╰─────── Missing export
+   │ 
+   │ Note: If you meant to import a type rather than a value, make sure to add the `type` modifier (e.g. `import { type Foo } from 'sass-embedded'`).
+───╯
+
+../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass@<semver>/node_modules/sass/types/index.d.ts (6:62) [MISSING_EXPORT] Warning: "StringOptionsWithImporter" is not exported by "../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass@<semver>/node_modules/sass/types/options.d.ts".
+   ╭─[ ../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass@<semver>/node_modules/sass/types/index.d.ts:6:63 ]
+   │
+ 6 │ export { CustomFunction, Options, OutputStyle, StringOptions, StringOptionsWithImporter, StringOptionsWithoutImporter, Syntax } from './options';
+   │                                                               ────────────┬────────────  
+   │                                                                           ╰────────────── Missing export
+   │ 
+   │ Note: If you meant to import a type rather than a value, make sure to add the `type` modifier (e.g. `import { type Foo } from './options'`).
+───╯
+
+../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass@<semver>/node_modules/sass/types/index.d.ts (6:89) [MISSING_EXPORT] Warning: "StringOptionsWithoutImporter" is not exported by "../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass@<semver>/node_modules/sass/types/options.d.ts".
+   ╭─[ ../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass@<semver>/node_modules/sass/types/index.d.ts:6:90 ]
+   │
+ 6 │ export { CustomFunction, Options, OutputStyle, StringOptions, StringOptionsWithImporter, StringOptionsWithoutImporter, Syntax } from './options';
+   │                                                                                          ──────────────┬─────────────  
+   │                                                                                                        ╰─────────────── Missing export
+   │ 
+   │ Note: If you meant to import a type rather than a value, make sure to add the `type` modifier (e.g. `import { type Foo } from './options'`).
+───╯
+
+../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass@<semver>/node_modules/sass/types/index.d.ts (11:9) [MISSING_EXPORT] Warning: "LegacyAsyncImporter" is not exported by "../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass@<semver>/node_modules/sass/types/legacy/importer.d.ts".
+    ╭─[ ../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass@<semver>/node_modules/sass/types/index.d.ts:11:10 ]
+    │
+ 11 │ export { LegacyAsyncImporter, LegacyImporter, LegacyImporterResult, LegacyImporterThis, LegacySyncImporter } from './legacy/importer';
+    │          ─────────┬─────────  
+    │                   ╰─────────── Missing export
+    │ 
+    │ Note: If you meant to import a type rather than a value, make sure to add the `type` modifier (e.g. `import { type Foo } from './legacy/importer'`).
+────╯
+
+../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass@<semver>/node_modules/sass/types/index.d.ts (11:68) [MISSING_EXPORT] Warning: "LegacyImporterThis" is not exported by "../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass@<semver>/node_modules/sass/types/legacy/importer.d.ts".
+    ╭─[ ../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass@<semver>/node_modules/sass/types/index.d.ts:11:69 ]
+    │
+ 11 │ export { LegacyAsyncImporter, LegacyImporter, LegacyImporterResult, LegacyImporterThis, LegacySyncImporter } from './legacy/importer';
+    │                                                                     ─────────┬────────  
+    │                                                                              ╰────────── Missing export
+    │ 
+    │ Note: If you meant to import a type rather than a value, make sure to add the `type` modifier (e.g. `import { type Foo } from './legacy/importer'`).
+────╯
+
+../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass@<semver>/node_modules/sass/types/index.d.ts (11:88) [MISSING_EXPORT] Warning: "LegacySyncImporter" is not exported by "../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass@<semver>/node_modules/sass/types/legacy/importer.d.ts".
+    ╭─[ ../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass@<semver>/node_modules/sass/types/index.d.ts:11:89 ]
+    │
+ 11 │ export { LegacyAsyncImporter, LegacyImporter, LegacyImporterResult, LegacyImporterThis, LegacySyncImporter } from './legacy/importer';
+    │                                                                                         ─────────┬────────  
+    │                                                                                                  ╰────────── Missing export
+    │ 
+    │ Note: If you meant to import a type rather than a value, make sure to add the `type` modifier (e.g. `import { type Foo } from './legacy/importer'`).
+────╯
+
+../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass-embedded@<semver>_source-map-js@<semver>/node_modules/sass-embedded/dist/types/index.m.d.ts (6:62) [MISSING_EXPORT] Warning: "StringOptionsWithImporter" is not exported by "../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass-embedded@<semver>_source-map-js@<semver>/node_modules/sass-embedded/dist/types/options.d.ts".
+   ╭─[ ../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass-embedded@<semver>_source-map-js@<semver>/node_modules/sass-embedded/dist/types/index.m.d.ts:6:63 ]
+   │
+ 6 │ export { CustomFunction, Options, OutputStyle, StringOptions, StringOptionsWithImporter, StringOptionsWithoutImporter, Syntax } from './options';
+   │                                                               ────────────┬────────────  
+   │                                                                           ╰────────────── Missing export
+   │ 
+   │ Note: If you meant to import a type rather than a value, make sure to add the `type` modifier (e.g. `import { type Foo } from './options'`).
+───╯
+
+../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass-embedded@<semver>_source-map-js@<semver>/node_modules/sass-embedded/dist/types/index.m.d.ts (6:89) [MISSING_EXPORT] Warning: "StringOptionsWithoutImporter" is not exported by "../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass-embedded@<semver>_source-map-js@<semver>/node_modules/sass-embedded/dist/types/options.d.ts".
+   ╭─[ ../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass-embedded@<semver>_source-map-js@<semver>/node_modules/sass-embedded/dist/types/index.m.d.ts:6:90 ]
+   │
+ 6 │ export { CustomFunction, Options, OutputStyle, StringOptions, StringOptionsWithImporter, StringOptionsWithoutImporter, Syntax } from './options';
+   │                                                                                          ──────────────┬─────────────  
+   │                                                                                                        ╰─────────────── Missing export
+   │ 
+   │ Note: If you meant to import a type rather than a value, make sure to add the `type` modifier (e.g. `import { type Foo } from './options'`).
+───╯
+
+../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass-embedded@<semver>_source-map-js@<semver>/node_modules/sass-embedded/dist/types/index.m.d.ts (11:9) [MISSING_EXPORT] Warning: "LegacyAsyncImporter" is not exported by "../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass-embedded@<semver>_source-map-js@<semver>/node_modules/sass-embedded/dist/types/legacy/importer.d.ts".
+    ╭─[ ../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass-embedded@<semver>_source-map-js@<semver>/node_modules/sass-embedded/dist/types/index.m.d.ts:11:10 ]
+    │
+ 11 │ export { LegacyAsyncImporter, LegacyImporter, LegacyImporterResult, LegacyImporterThis, LegacySyncImporter } from './legacy/importer';
+    │          ─────────┬─────────  
+    │                   ╰─────────── Missing export
+    │ 
+    │ Note: If you meant to import a type rather than a value, make sure to add the `type` modifier (e.g. `import { type Foo } from './legacy/importer'`).
+────╯
+
+../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass-embedded@<semver>_source-map-js@<semver>/node_modules/sass-embedded/dist/types/index.m.d.ts (11:68) [MISSING_EXPORT] Warning: "LegacyImporterThis" is not exported by "../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass-embedded@<semver>_source-map-js@<semver>/node_modules/sass-embedded/dist/types/legacy/importer.d.ts".
+    ╭─[ ../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass-embedded@<semver>_source-map-js@<semver>/node_modules/sass-embedded/dist/types/index.m.d.ts:11:69 ]
+    │
+ 11 │ export { LegacyAsyncImporter, LegacyImporter, LegacyImporterResult, LegacyImporterThis, LegacySyncImporter } from './legacy/importer';
+    │                                                                     ─────────┬────────  
+    │                                                                              ╰────────── Missing export
+    │ 
+    │ Note: If you meant to import a type rather than a value, make sure to add the `type` modifier (e.g. `import { type Foo } from './legacy/importer'`).
+────╯
+
+../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass-embedded@<semver>_source-map-js@<semver>/node_modules/sass-embedded/dist/types/index.m.d.ts (11:88) [MISSING_EXPORT] Warning: "LegacySyncImporter" is not exported by "../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass-embedded@<semver>_source-map-js@<semver>/node_modules/sass-embedded/dist/types/legacy/importer.d.ts".
+    ╭─[ ../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass-embedded@<semver>_source-map-js@<semver>/node_modules/sass-embedded/dist/types/index.m.d.ts:11:89 ]
+    │
+ 11 │ export { LegacyAsyncImporter, LegacyImporter, LegacyImporterResult, LegacyImporterThis, LegacySyncImporter } from './legacy/importer';
+    │                                                                                         ─────────┬────────  
+    │                                                                                                  ╰────────── Missing export
+    │ 
+    │ Note: If you meant to import a type rather than a value, make sure to add the `type` modifier (e.g. `import { type Foo } from './legacy/importer'`).
+────╯
+
+../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass-embedded@<semver>_source-map-js@<semver>/node_modules/sass-embedded/dist/types/value/index.d.ts (1:9) [MISSING_EXPORT] Warning: "List" is not exported by "../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/immutable@<semver>/node_modules/immutable/dist/immutable.d.ts".
+   ╭─[ ../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass-embedded@<semver>_source-map-js@<semver>/node_modules/sass-embedded/dist/types/value/index.d.ts:1:10 ]
+   │
+ 1 │ import { List, ValueObject } from 'immutable';
+   │          ──┬─  
+   │            ╰─── Missing export
+   │ 
+   │ Note: If you meant to import a type rather than a value, make sure to add the `type` modifier (e.g. `import { type Foo } from 'immutable'`).
+───╯
+
+../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass-embedded@<semver>_source-map-js@<semver>/node_modules/sass-embedded/dist/types/value/index.d.ts (1:15) [MISSING_EXPORT] Warning: "ValueObject" is not exported by "../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/immutable@<semver>/node_modules/immutable/dist/immutable.d.ts".
+   ╭─[ ../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass-embedded@<semver>_source-map-js@<semver>/node_modules/sass-embedded/dist/types/value/index.d.ts:1:16 ]
+   │
+ 1 │ import { List, ValueObject } from 'immutable';
+   │                ─────┬─────  
+   │                     ╰─────── Missing export
+   │ 
+   │ Note: If you meant to import a type rather than a value, make sure to add the `type` modifier (e.g. `import { type Foo } from 'immutable'`).
+───╯
+
+../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass@<semver>/node_modules/sass/types/value/index.d.ts (1:9) [MISSING_EXPORT] Warning: "List" is not exported by "../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/immutable@<semver>/node_modules/immutable/dist/immutable.d.ts".
+   ╭─[ ../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass@<semver>/node_modules/sass/types/value/index.d.ts:1:10 ]
+   │
+ 1 │ import { List, ValueObject } from 'immutable';
+   │          ──┬─  
+   │            ╰─── Missing export
+   │ 
+   │ Note: If you meant to import a type rather than a value, make sure to add the `type` modifier (e.g. `import { type Foo } from 'immutable'`).
+───╯
+
+../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass@<semver>/node_modules/sass/types/value/index.d.ts (1:15) [MISSING_EXPORT] Warning: "ValueObject" is not exported by "../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/immutable@<semver>/node_modules/immutable/dist/immutable.d.ts".
+   ╭─[ ../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass@<semver>/node_modules/sass/types/value/index.d.ts:1:16 ]
+   │
+ 1 │ import { List, ValueObject } from 'immutable';
+   │                ─────┬─────  
+   │                     ╰─────── Missing export
+   │ 
+   │ Note: If you meant to import a type rather than a value, make sure to add the `type` modifier (e.g. `import { type Foo } from 'immutable'`).
+───╯
+
+../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass-embedded@<semver>_source-map-js@<semver>/node_modules/sass-embedded/dist/types/value/calculation.d.ts (1:9) [MISSING_EXPORT] Warning: "List" is not exported by "../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/immutable@<semver>/node_modules/immutable/dist/immutable.d.ts".
+   ╭─[ ../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass-embedded@<semver>_source-map-js@<semver>/node_modules/sass-embedded/dist/types/value/calculation.d.ts:1:10 ]
+   │
+ 1 │ import { List, ValueObject } from 'immutable';
+   │          ──┬─  
+   │            ╰─── Missing export
+   │ 
+   │ Note: If you meant to import a type rather than a value, make sure to add the `type` modifier (e.g. `import { type Foo } from 'immutable'`).
+───╯
+
+../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass-embedded@<semver>_source-map-js@<semver>/node_modules/sass-embedded/dist/types/value/calculation.d.ts (1:15) [MISSING_EXPORT] Warning: "ValueObject" is not exported by "../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/immutable@<semver>/node_modules/immutable/dist/immutable.d.ts".
+   ╭─[ ../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass-embedded@<semver>_source-map-js@<semver>/node_modules/sass-embedded/dist/types/value/calculation.d.ts:1:16 ]
+   │
+ 1 │ import { List, ValueObject } from 'immutable';
+   │                ─────┬─────  
+   │                     ╰─────── Missing export
+   │ 
+   │ Note: If you meant to import a type rather than a value, make sure to add the `type` modifier (e.g. `import { type Foo } from 'immutable'`).
+───╯
+
+../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass-embedded@<semver>_source-map-js@<semver>/node_modules/sass-embedded/dist/types/value/color.d.ts (1:9) [MISSING_EXPORT] Warning: "List" is not exported by "../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/immutable@<semver>/node_modules/immutable/dist/immutable.d.ts".
+   ╭─[ ../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass-embedded@<semver>_source-map-js@<semver>/node_modules/sass-embedded/dist/types/value/color.d.ts:1:10 ]
+   │
+ 1 │ import { List } from 'immutable';
+   │          ──┬─  
+   │            ╰─── Missing export
+   │ 
+   │ Note: If you meant to import a type rather than a value, make sure to add the `type` modifier (e.g. `import { type Foo } from 'immutable'`).
+───╯
+
+../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass-embedded@<semver>_source-map-js@<semver>/node_modules/sass-embedded/dist/types/value/list.d.ts (1:9) [MISSING_EXPORT] Warning: "List" is not exported by "../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/immutable@<semver>/node_modules/immutable/dist/immutable.d.ts".
+   ╭─[ ../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass-embedded@<semver>_source-map-js@<semver>/node_modules/sass-embedded/dist/types/value/list.d.ts:1:10 ]
+   │
+ 1 │ import { List } from 'immutable';
+   │          ──┬─  
+   │            ╰─── Missing export
+   │ 
+   │ Note: If you meant to import a type rather than a value, make sure to add the `type` modifier (e.g. `import { type Foo } from 'immutable'`).
+───╯
+
+../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass-embedded@<semver>_source-map-js@<semver>/node_modules/sass-embedded/dist/types/value/map.d.ts (1:9) [MISSING_EXPORT] Warning: "OrderedMap" is not exported by "../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/immutable@<semver>/node_modules/immutable/dist/immutable.d.ts".
+   ╭─[ ../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass-embedded@<semver>_source-map-js@<semver>/node_modules/sass-embedded/dist/types/value/map.d.ts:1:10 ]
+   │
+ 1 │ import { OrderedMap } from 'immutable';
+   │          ─────┬────  
+   │               ╰────── Missing export
+   │ 
+   │ Note: If you meant to import a type rather than a value, make sure to add the `type` modifier (e.g. `import { type Foo } from 'immutable'`).
+───╯
+
+../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass-embedded@<semver>_source-map-js@<semver>/node_modules/sass-embedded/dist/types/value/number.d.ts (1:9) [MISSING_EXPORT] Warning: "List" is not exported by "../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/immutable@<semver>/node_modules/immutable/dist/immutable.d.ts".
+   ╭─[ ../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass-embedded@<semver>_source-map-js@<semver>/node_modules/sass-embedded/dist/types/value/number.d.ts:1:10 ]
+   │
+ 1 │ import { List } from 'immutable';
+   │          ──┬─  
+   │            ╰─── Missing export
+   │ 
+   │ Note: If you meant to import a type rather than a value, make sure to add the `type` modifier (e.g. `import { type Foo } from 'immutable'`).
+───╯
+
+../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass-embedded@<semver>_source-map-js@<semver>/node_modules/sass-embedded/dist/types/value/argument_list.d.ts (1:9) [MISSING_EXPORT] Warning: "List" is not exported by "../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/immutable@<semver>/node_modules/immutable/dist/immutable.d.ts".
+   ╭─[ ../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass-embedded@<semver>_source-map-js@<semver>/node_modules/sass-embedded/dist/types/value/argument_list.d.ts:1:10 ]
+   │
+ 1 │ import { List, OrderedMap } from 'immutable';
+   │          ──┬─  
+   │            ╰─── Missing export
+   │ 
+   │ Note: If you meant to import a type rather than a value, make sure to add the `type` modifier (e.g. `import { type Foo } from 'immutable'`).
+───╯
+
+../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass-embedded@<semver>_source-map-js@<semver>/node_modules/sass-embedded/dist/types/value/argument_list.d.ts (1:15) [MISSING_EXPORT] Warning: "OrderedMap" is not exported by "../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/immutable@<semver>/node_modules/immutable/dist/immutable.d.ts".
+   ╭─[ ../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass-embedded@<semver>_source-map-js@<semver>/node_modules/sass-embedded/dist/types/value/argument_list.d.ts:1:16 ]
+   │
+ 1 │ import { List, OrderedMap } from 'immutable';
+   │                ─────┬────  
+   │                     ╰────── Missing export
+   │ 
+   │ Note: If you meant to import a type rather than a value, make sure to add the `type` modifier (e.g. `import { type Foo } from 'immutable'`).
+───╯
+
+../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass@<semver>/node_modules/sass/types/value/calculation.d.ts (1:9) [MISSING_EXPORT] Warning: "List" is not exported by "../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/immutable@<semver>/node_modules/immutable/dist/immutable.d.ts".
+   ╭─[ ../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass@<semver>/node_modules/sass/types/value/calculation.d.ts:1:10 ]
+   │
+ 1 │ import { List, ValueObject } from 'immutable';
+   │          ──┬─  
+   │            ╰─── Missing export
+   │ 
+   │ Note: If you meant to import a type rather than a value, make sure to add the `type` modifier (e.g. `import { type Foo } from 'immutable'`).
+───╯
+
+../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass@<semver>/node_modules/sass/types/value/calculation.d.ts (1:15) [MISSING_EXPORT] Warning: "ValueObject" is not exported by "../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/immutable@<semver>/node_modules/immutable/dist/immutable.d.ts".
+   ╭─[ ../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass@<semver>/node_modules/sass/types/value/calculation.d.ts:1:16 ]
+   │
+ 1 │ import { List, ValueObject } from 'immutable';
+   │                ─────┬─────  
+   │                     ╰─────── Missing export
+   │ 
+   │ Note: If you meant to import a type rather than a value, make sure to add the `type` modifier (e.g. `import { type Foo } from 'immutable'`).
+───╯
+
+../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass@<semver>/node_modules/sass/types/value/color.d.ts (1:9) [MISSING_EXPORT] Warning: "List" is not exported by "../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/immutable@<semver>/node_modules/immutable/dist/immutable.d.ts".
+   ╭─[ ../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass@<semver>/node_modules/sass/types/value/color.d.ts:1:10 ]
+   │
+ 1 │ import { List } from 'immutable';
+   │          ──┬─  
+   │            ╰─── Missing export
+   │ 
+   │ Note: If you meant to import a type rather than a value, make sure to add the `type` modifier (e.g. `import { type Foo } from 'immutable'`).
+───╯
+
+../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass@<semver>/node_modules/sass/types/value/list.d.ts (1:9) [MISSING_EXPORT] Warning: "List" is not exported by "../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/immutable@<semver>/node_modules/immutable/dist/immutable.d.ts".
+   ╭─[ ../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass@<semver>/node_modules/sass/types/value/list.d.ts:1:10 ]
+   │
+ 1 │ import { List } from 'immutable';
+   │          ──┬─  
+   │            ╰─── Missing export
+   │ 
+   │ Note: If you meant to import a type rather than a value, make sure to add the `type` modifier (e.g. `import { type Foo } from 'immutable'`).
+───╯
+
+../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass@<semver>/node_modules/sass/types/value/map.d.ts (1:9) [MISSING_EXPORT] Warning: "OrderedMap" is not exported by "../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/immutable@<semver>/node_modules/immutable/dist/immutable.d.ts".
+   ╭─[ ../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass@<semver>/node_modules/sass/types/value/map.d.ts:1:10 ]
+   │
+ 1 │ import { OrderedMap } from 'immutable';
+   │          ─────┬────  
+   │               ╰────── Missing export
+   │ 
+   │ Note: If you meant to import a type rather than a value, make sure to add the `type` modifier (e.g. `import { type Foo } from 'immutable'`).
+───╯
+
+../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass@<semver>/node_modules/sass/types/value/number.d.ts (1:9) [MISSING_EXPORT] Warning: "List" is not exported by "../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/immutable@<semver>/node_modules/immutable/dist/immutable.d.ts".
+   ╭─[ ../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass@<semver>/node_modules/sass/types/value/number.d.ts:1:10 ]
+   │
+ 1 │ import { List } from 'immutable';
+   │          ──┬─  
+   │            ╰─── Missing export
+   │ 
+   │ Note: If you meant to import a type rather than a value, make sure to add the `type` modifier (e.g. `import { type Foo } from 'immutable'`).
+───╯
+
+../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass@<semver>/node_modules/sass/types/value/argument_list.d.ts (1:9) [MISSING_EXPORT] Warning: "List" is not exported by "../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/immutable@<semver>/node_modules/immutable/dist/immutable.d.ts".
+   ╭─[ ../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass@<semver>/node_modules/sass/types/value/argument_list.d.ts:1:10 ]
+   │
+ 1 │ import { List, OrderedMap } from 'immutable';
+   │          ──┬─  
+   │            ╰─── Missing export
+   │ 
+   │ Note: If you meant to import a type rather than a value, make sure to add the `type` modifier (e.g. `import { type Foo } from 'immutable'`).
+───╯
+
+../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass@<semver>/node_modules/sass/types/value/argument_list.d.ts (1:15) [MISSING_EXPORT] Warning: "OrderedMap" is not exported by "../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/immutable@<semver>/node_modules/immutable/dist/immutable.d.ts".
+   ╭─[ ../../../../../../../..<homedir>/Projects/oss/vite-plus/node_modules/.pnpm/sass@<semver>/node_modules/sass/types/value/argument_list.d.ts:1:16 ]
+   │
+ 1 │ import { List, OrderedMap } from 'immutable';
+   │                ─────┬────  
+   │                     ╰────── Missing export
+   │ 
+   │ Note: If you meant to import a type rather than a value, make sure to add the `type` modifier (e.g. `import { type Foo } from 'immutable'`).
+───╯
+
+✔ Build complete in <variable>ms
