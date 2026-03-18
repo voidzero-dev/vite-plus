@@ -23,7 +23,7 @@ This RFC proposes adding a `vp env` command that provides system-wide, IDE-safe 
 A shim-based approach where:
 
 - `VITE_PLUS_HOME/bin/` directory is added to PATH (system-level for IDE reliability)
-- Shims (`node`, `npm`, `npx`) are symlinks to the `vp` binary (Unix) or `.cmd` wrappers (Windows)
+- Shims (`node`, `npm`, `npx`) are symlinks to the `vp` binary (Unix) or trampoline `.exe` files (Windows)
 - The `vp` CLI itself is also in `VITE_PLUS_HOME/bin/`, so users only need one PATH entry
 - The binary detects invocation via `argv[0]` and dispatches accordingly
 - Version resolution and installation leverage existing `vite_js_runtime` infrastructure
@@ -344,16 +344,11 @@ VITE_PLUS_HOME/                              # Default: ~/.vite-plus
 │   ├── npm -> ../current/bin/vp      # Symlink to vp binary (Unix)
 │   ├── npx -> ../current/bin/vp      # Symlink to vp binary (Unix)
 │   ├── tsc -> ../current/bin/vp      # Symlink for global package (Unix)
-│   ├── vp                            # Shell script for Git Bash (Windows)
-│   ├── vp.cmd                        # Wrapper calling ..\current\bin\vp.exe (Windows)
-│   ├── node                          # Shell script for Git Bash (Windows)
-│   ├── node.cmd                      # Wrapper calling vp env exec node (Windows)
-│   ├── npm                           # Shell script for Git Bash (Windows)
-│   ├── npm.cmd                       # Wrapper calling vp env exec npm (Windows)
-│   ├── npx                           # Shell script for Git Bash (Windows)
-│   ├── npx.cmd                       # Wrapper calling vp env exec npx (Windows)
-│   ├── tsc                           # Shell script for global package Git Bash (Windows)
-│   └── tsc.cmd                       # Wrapper for global package (Windows)
+│   ├── vp.exe                        # Trampoline forwarding to current\bin\vp.exe (Windows)
+│   ├── node.exe                      # Trampoline shim for node (Windows)
+│   ├── npm.exe                       # Trampoline shim for npm (Windows)
+│   ├── npx.exe                       # Trampoline shim for npx (Windows)
+│   └── tsc.exe                       # Trampoline shim for global package (Windows)
 ├── current/
 │   └── bin/
 │       ├── vp                        # The actual vp CLI binary (Unix)
@@ -734,17 +729,16 @@ fn execute_run_command() {
 - No binary accumulation issues (symlinks are just filesystem pointers)
 - Relative symlinks (e.g., `../current/bin/vp`) work within the same directory tree
 
-### 3. Wrapper Scripts for Windows
+### 3. Trampoline Executables for Windows
 
-**Decision**: Use `.cmd` wrapper scripts on Windows that call `vp env exec <tool>`.
+**Decision**: Use lightweight trampoline `.exe` files on Windows instead of `.cmd` wrappers. Each trampoline detects its tool name from its own filename, sets `VITE_PLUS_SHIM_TOOL`, and spawns `vp.exe`. See [RFC: Trampoline EXE for Shims](./trampoline-exe-for-shims.md).
 
 **Rationale**:
 
-- Windows PATH resolution prefers `.cmd` over `.exe` for extensionless commands
-- Simple wrapper format: `vp env exec npm %*` - no binary copies needed
-- Same pattern as Volta (`volta run <tool>`)
-- Single `vp.exe` binary to maintain in `current/bin/`
-- No `VITE_PLUS_SHIM_TOOL` env var complexity - dispatch via `vp env exec` command
+- `.cmd` wrappers cause "Terminate batch job (Y/N)?" prompt on Ctrl+C
+- `.exe` files work in all shells (cmd.exe, PowerShell, Git Bash) without needing separate wrappers
+- Single trampoline binary (~100-150KB) copied per tool — no `.cmd` + shell script pair needed
+- Ctrl+C handled cleanly via `SetConsoleCtrlHandler`
 
 ### 4. execve on Unix, spawn on Windows
 
@@ -1853,7 +1847,7 @@ This is useful for:
 - Testing code against different Node versions
 - Running one-off commands without changing project configuration
 - CI/CD scripts that need explicit version control
-- Windows shims (`.cmd` wrappers and Git Bash shell scripts call `vp env exec <tool>`)
+- Legacy Windows `.cmd` wrappers (deprecated in favor of trampoline `.exe` shims)
 
 ### Usage
 
@@ -1897,7 +1891,7 @@ When `--node` is **not provided** and the first command is a shim tool:
 - **Core tools (node, npm, npx)**: Version resolved from `.node-version`, `package.json#engines.node`, or default
 - **Global packages (tsc, eslint, etc.)**: Uses the Node.js version that was used during `vp install -g`
 
-Both use the **exact same code path** as Unix symlinks (`shim::dispatch()`), ensuring identical behavior across platforms. This is how Windows `.cmd` wrappers and Git Bash shell scripts work.
+Both use the **exact same code path** as Unix symlinks (`shim::dispatch()`), ensuring identical behavior across platforms. On Windows, trampoline `.exe` shims set `VITE_PLUS_SHIM_TOOL` to enter shim dispatch mode.
 
 **Important**: The `VITE_PLUS_TOOL_RECURSION` environment variable is cleared before dispatch to ensure fresh version resolution, even when invoked from within a context where the variable is already set (e.g., when pnpm runs through the vite-plus shim).
 
@@ -2123,24 +2117,20 @@ ln -sf ../current/bin/vp ~/.vite-plus/bin/tsc
 ```
 VITE_PLUS_HOME\
 ├── bin\
-│   ├── vp           # Shell script for Git Bash (calls vp.exe directly)
-│   ├── vp.cmd       # Wrapper for cmd.exe/PowerShell
-│   ├── node         # Shell script for Git Bash (calls vp env exec node)
-│   ├── node.cmd     # Wrapper calling vp env exec node
-│   ├── npm          # Shell script for Git Bash (calls vp env exec npm)
-│   ├── npm.cmd      # Wrapper calling vp env exec npm
-│   ├── npx          # Shell script for Git Bash (calls vp env exec npx)
-│   ├── npx.cmd      # Wrapper calling vp env exec npx
-│   ├── tsc          # Shell script for global package (Git Bash)
-│   └── tsc.cmd      # Wrapper for global package (cmd.exe/PowerShell)
+│   ├── vp.exe       # Trampoline forwarding to current\bin\vp.exe
+│   ├── node.exe     # Trampoline shim (sets VITE_PLUS_SHIM_TOOL=node)
+│   ├── npm.exe      # Trampoline shim (sets VITE_PLUS_SHIM_TOOL=npm)
+│   ├── npx.exe      # Trampoline shim (sets VITE_PLUS_SHIM_TOOL=npx)
+│   └── tsc.exe      # Trampoline shim for global package
 └── current\
     └── bin\
-        └── vp.exe   # The actual vp CLI binary
+        ├── vp.exe       # The actual vp CLI binary
+        └── vp-shim.exe  # Trampoline template (copied as shims)
 ```
 
-### Shell Scripts for Git Bash
+### Trampoline Executables
 
-Git Bash (MSYS2/MinGW) doesn't use Windows' PATHEXT mechanism, so it won't find `.cmd` files when you type a command without extension. Shell script wrappers (without extension) are created alongside all `.cmd` files.
+Windows shims use lightweight trampoline `.exe` files (see [RFC: Trampoline EXE for Shims](./trampoline-exe-for-shims.md)). Each trampoline detects its tool name from its own filename, sets `VITE_PLUS_SHIM_TOOL`, and spawns `vp.exe`. This avoids the "Terminate batch job (Y/N)?" prompt from `.cmd` wrappers and works in all shells (cmd.exe, PowerShell, Git Bash) without needing separate wrapper formats.
 
 #### Why Not Symlinks?
 
@@ -2148,68 +2138,14 @@ On Unix, shims are symlinks to the vp binary, which preserves argv[0] for tool d
 
 1. **Admin privileges required**: Windows symlinks need admin rights or Developer Mode
 2. **Unreliable Git Bash support**: Symlink emulation varies by Git for Windows version
-3. **Consistent with .cmd approach**: Both .cmd and shell scripts use the same dispatch pattern
 
-#### Wrapper Scripts
-
-**vp wrapper** (calls vp.exe directly):
-
-```sh
-#!/bin/sh
-VITE_PLUS_HOME="$(dirname "$(dirname "$(readlink -f "$0" 2>/dev/null || echo "$0")")")"
-export VITE_PLUS_HOME
-exec "$VITE_PLUS_HOME/current/bin/vp.exe" "$@"
-```
-
-**Tool wrappers** (node, npm, npx - uses explicit dispatch):
-
-```sh
-#!/bin/sh
-VITE_PLUS_HOME="$(dirname "$(dirname "$(readlink -f "$0" 2>/dev/null || echo "$0")")")"
-export VITE_PLUS_HOME
-exec "$VITE_PLUS_HOME/current/bin/vp.exe" env exec node "$@"
-```
-
-This ensures all commands work in:
-
-- Git Bash
-- WSL (if accessing Windows paths)
-- Any POSIX-compatible shell on Windows
-
-### Wrapper Script Template (vp.cmd)
-
-```batch
-@echo off
-set VITE_PLUS_HOME=%~dp0..
-"%VITE_PLUS_HOME%\current\bin\vp.exe" %*
-exit /b %ERRORLEVEL%
-```
-
-The `vp.cmd` wrapper forwards all arguments to the actual `vp.exe` binary.
-
-### Wrapper Script Template (node.cmd, npm.cmd, npx.cmd)
-
-```batch
-@echo off
-set VITE_PLUS_HOME=%~dp0..
-"%VITE_PLUS_HOME%\current\bin\vp.exe" env exec node %*
-exit /b %ERRORLEVEL%
-```
-
-For npm:
-
-```batch
-@echo off
-set VITE_PLUS_HOME=%~dp0..
-"%VITE_PLUS_HOME%\current\bin\vp.exe" env exec npm %*
-exit /b %ERRORLEVEL%
-```
+Instead, trampoline `.exe` files are used. See [RFC: Trampoline EXE for Shims](./trampoline-exe-for-shims.md) for the full design.
 
 **How it works**:
 
 1. User runs `npm install`
-2. Windows finds `~/.vite-plus/bin/npm.cmd` in PATH (cmd.exe/PowerShell) or `npm` (Git Bash)
-3. Wrapper calls `vp.exe env exec npm install`
+2. Windows finds `~/.vite-plus/bin/npm.exe` in PATH
+3. Trampoline sets `VITE_PLUS_SHIM_TOOL=npm` and spawns `vp.exe`
 4. `vp env exec` command handles version resolution and execution
 
 **Benefits of this approach**:
@@ -2224,11 +2160,10 @@ exit /b %ERRORLEVEL%
 
 The Windows installer (`install.ps1`) follows this flow:
 
-1. Download and install `vp.exe` to `~/.vite-plus/current/bin/`
-2. Create `~/.vite-plus/bin/vp.cmd` wrapper script
-3. Create `~/.vite-plus/bin/vp` shell script (for Git Bash)
-4. Create shim wrappers: `node.cmd`, `npm.cmd`, `npx.cmd` (and corresponding shell scripts)
-5. Configure User PATH to include `~/.vite-plus/bin`
+1. Download and install `vp.exe` and `vp-shim.exe` to `~/.vite-plus/current/bin/`
+2. Create `~/.vite-plus/bin/vp.exe` trampoline (copy of `vp-shim.exe`)
+3. Create shim trampolines: `node.exe`, `npm.exe`, `npx.exe` (via `vp env setup`)
+4. Configure User PATH to include `~/.vite-plus/bin`
 
 ## Testing Strategy
 
@@ -2266,7 +2201,7 @@ env-doctor/
 
 - ubuntu-latest: Full integration tests
 - macos-latest: Full integration tests
-- windows-latest: Full integration tests with .cmd wrapper validation
+- windows-latest: Full integration tests with trampoline `.exe` shim validation
 
 ## Security Considerations
 
@@ -2282,7 +2217,7 @@ env-doctor/
 1. Add `vp env` command structure to CLI
 2. Implement argv[0] detection in main.rs
 3. Implement shim dispatch logic for `node`
-4. Implement `vp env setup` (Unix symlinks, Windows .cmd wrappers)
+4. Implement `vp env setup` (Unix symlinks, Windows trampoline `.exe` shims)
 5. Implement `vp env doctor` basic diagnostics
 6. Add resolution cache (persists across upgrades with version field)
 7. Implement `vp env default [version]` to set/show global default Node.js version
@@ -2338,7 +2273,7 @@ The following decisions have been made:
 
 1. **VITE_PLUS_HOME Default Location**: `~/.vite-plus` - Simple, memorable path that's easy for users to find and configure.
 
-2. **Windows Wrapper Strategy**: `.cmd` wrappers that call `vp env exec <tool>` - Consistent with Volta, no binary copies needed.
+2. **Windows Shim Strategy**: Trampoline `.exe` files that set `VITE_PLUS_SHIM_TOOL` and spawn `vp.exe` - Avoids "Terminate batch job?" prompt, works in all shells. See [RFC: Trampoline EXE for Shims](./trampoline-exe-for-shims.md).
 
 3. **Corepack Handling**: Not included - vite-plus has integrated package manager functionality, making corepack shims unnecessary.
 
