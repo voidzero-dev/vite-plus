@@ -138,6 +138,9 @@ catalogs:
     husky:
       specifier: ^9.1.7
       version: 9.1.7
+    jsonc-parser:
+      specifier: ^3.3.1
+      version: 3.3.1
     lint-staged:
       specifier: ^16.2.6
       version: 16.3.2
@@ -259,13 +262,13 @@ packageExtensionsChecksum: sha256-Tldxs3DhJEw/FFBonUidqhCBqApA0zxQnop3Y+BTO3U=
 patchedDependencies:
   chokidar@3.6.0:
     hash: 8a4f9e2b397e6034b91a0508faae3cecb97f222313faa129d7cb0eb71e9d0e84
-    path: rolldown-vite/patches/chokidar@3.6.0.patch
+    path: vite/patches/chokidar@3.6.0.patch
   dotenv-expand@12.0.3:
     hash: 49330a663821151418e003e822a82a6a61d2f0f8a6e3cab00c1c94815a112889
-    path: rolldown-vite/patches/dotenv-expand@12.0.3.patch
+    path: vite/patches/dotenv-expand@12.0.3.patch
   sirv@3.0.2:
     hash: c07c56eb72faea34341d465cde2314e89db472106ed378181e3447893af6bf95
-    path: rolldown-vite/patches/sirv@3.0.2.patch
+    path: vite/patches/sirv@3.0.2.patch
 
 importers:
 
@@ -386,6 +389,9 @@ importers:
       glob:
         specifier: 'catalog:'
         version: 13.0.0
+      jsonc-parser:
+        specifier: 'catalog:'
+        version: 3.3.1
       lint-staged:
         specifier: 'catalog:'
         version: 16.3.2
@@ -812,7 +818,7 @@ importers:
         specifier: 'catalog:'
         version: 5.9.3
 
-  rolldown-vite:
+  vite:
     devDependencies:
       '@eslint/js':
         specifier: ^9.39.4
@@ -908,7 +914,7 @@ importers:
         specifier: workspace:@voidzero-dev/vite-plus-test@*
         version: link:../packages/test
 
-  rolldown-vite/packages/create-vite:
+  vite/packages/create-vite:
     devDependencies:
       '@clack/prompts':
         specifier: ^1.1.0
@@ -929,7 +935,7 @@ importers:
         specifier: ^0.20.3
         version: 0.20.3(@arethetypeswrong/core@0.18.2)(@typescript/native-preview@7.0.0-dev.20260122.2)(@vitejs/devtools@0.1.2(@pnpm/logger@1001.0.1)(typescript@5.9.3)(vite@packages+core)(vue@3.5.27(typescript@5.9.3)))(publint@0.3.18)(typescript@5.9.3)(unplugin-lightningcss@0.4.3)(unplugin-unused@0.5.6)
 
-  rolldown-vite/packages/plugin-legacy:
+  vite/packages/plugin-legacy:
     dependencies:
       '@babel/core':
         specifier: ^7.29.0
@@ -984,7 +990,7 @@ importers:
         specifier: workspace:@voidzero-dev/vite-plus-core@*
         version: link:../../../packages/core
 
-  rolldown-vite/packages/vite:
+  vite/packages/vite:
     dependencies:
       '@oxc-project/runtime':
         specifier: 0.115.0
@@ -6519,6 +6525,9 @@ packages:
     resolution: {integrity: sha512-XmOWe7eyHYH14cLdVPoyg+GOH3rYX++KpzrylJwSW98t3Nk+U8XOl8FWKOgwtzdb8lXGf6zYwDUzeHMWfxasyg==}
     engines: {node: '>=6'}
     hasBin: true
+
+  jsonc-parser@3.3.1:
+    resolution: {integrity: sha512-HUgH65KyejrUFPvHFPbqOY0rsFip3Bo5wb4ngvdi1EpCYWUQDC5V+Y7mZws+DLkr4M//zQJoanu1SP+87Dv1oQ==}
 
   jsonfile@6.2.0:
     resolution: {integrity: sha512-FGuPw30AdOIUTRMC2OMRtQV+jkVj2cfPqSeWXv1NEAJ1qZ5zb1X6z1mFhbfOB/iy3ssJCD+3KuZ8r8C3uVFlAg==}
@@ -13706,6 +13715,8 @@ snapshots:
   json-stable-stringify-without-jsonify@1.0.1: {}
 
   json5@2.2.3: {}
+
+  jsonc-parser@3.3.1: {}
 
   jsonfile@6.2.0:
     dependencies:

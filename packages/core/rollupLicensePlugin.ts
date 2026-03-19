@@ -1,1 +1,1 @@
-../../rolldown-vite/packages/vite/rollupLicensePlugin.ts
+../../vite/packages/vite/rollupLicensePlugin.ts

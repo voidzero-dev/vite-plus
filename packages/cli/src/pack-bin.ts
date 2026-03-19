@@ -13,6 +13,48 @@ import { cac } from 'cac';
 
 import { resolveViteConfig } from './resolve-vite-config.js';
 
+/**
+ * Rolldown plugin that transforms value imports/exports to type-only in external
+ * packages' .d.ts files. Some packages (e.g. postcss, lightningcss) use
+ * `import { X }` and `export { X } from` instead of their type-only equivalents,
+ * which causes MISSING_EXPORT warnings from the DTS bundler.
+ *
+ * Since .d.ts files contain only type information, all imports/exports are
+ * inherently type-only, so this transformation is always safe.
+ */
+const EXTERNAL_DTS_INTERNAL_RE = /node_modules\/(postcss|lightningcss)\/.*\.d\.(ts|mts|cts)$/;
+// Match consumer .d.ts files that import from postcss/lightningcss.
+// In CI (installed from tgz): node_modules/vite-plus-core/dist/...
+// In local development (symlinked workspace): packages/core/dist/...
+const EXTERNAL_DTS_CONSUMER_RE =
+  /(?:vite-plus-core|packages\/core)\/.*lightningcssOptions\.d\.ts$|(?:vite-plus-core|packages\/core)\/dist\/.*\.d\.ts$/;
+const EXTERNAL_DTS_FIX_RE = new RegExp(
+  `${EXTERNAL_DTS_INTERNAL_RE.source}|${EXTERNAL_DTS_CONSUMER_RE.source}`,
+);
+
+function externalDtsTypeOnlyPlugin() {
+  return {
+    name: 'vite-plus:external-dts-type-only',
+    transform: {
+      filter: { id: { include: [EXTERNAL_DTS_FIX_RE] } },
+      handler(code: string, rawId: string) {
+        // Normalize Windows backslash paths to forward slashes for regex matching
+        const id = rawId.replaceAll('\\', '/');
+        if (EXTERNAL_DTS_INTERNAL_RE.test(id)) {
+          // postcss/lightningcss internal files: transform imports only
+          // (exports may include value re-exports like `export const Features`)
+          return code.replace(/^(import\s+)(?!type\s)/gm, 'import type ');
+        }
+        // Consumer files: only transform imports from postcss/lightningcss
+        return code.replace(
+          /^(import\s+)(?!type\s)(.+from\s+['"](?:postcss|lightningcss)['"])/gm,
+          'import type $2',
+        );
+      },
+    },
+  };
+}
+
 const cli = cac('vp pack');
 cli.help();
 
@@ -98,7 +140,14 @@ cli
         ? viteConfig.pack
         : [viteConfig.pack ?? {}];
       for (const packConfig of packConfigs) {
-        const resolvedConfig = await resolveUserConfig({ ...packConfig, ...flags }, flags);
+        const merged = { ...packConfig, ...flags };
+        // Inject plugin to fix MISSING_EXPORT warnings from external .d.ts files
+        // (postcss, lightningcss use `import`/`export` instead of `import type`/`export type`)
+        if (merged.dts) {
+          const existingPlugins = Array.isArray(merged.plugins) ? merged.plugins : [];
+          merged.plugins = [...existingPlugins, externalDtsTypeOnlyPlugin()];
+        }
+        const resolvedConfig = await resolveUserConfig(merged, flags);
         configs.push(...resolvedConfig);
       }
 

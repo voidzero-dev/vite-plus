@@ -24,15 +24,18 @@ jobs:
         uses: anthropics/claude-code-action@26ec041249acb0a944c0a47b6c0c13f05dbc5b44 # v1.0.70
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          claude_args: --allowedTools "Read,Glob,Grep,Bash(gh:*),Bash(cargo:*),Bash(git:*),WebFetch"
-          issue_number: ${{ github.event.issue.number }}
+          assignee_trigger: 'boshen'
+          claude_args: --allowedTools "Edit,Write,Read,Glob,Grep,Bash(gh:*),Bash(cargo:*),Bash(git:*),Bash(just:*),WebFetch,TodoWrite"
           prompt: |
-            Analyze the linked issue and determine if it can be fixed.
+            Analyze issue #${{ github.event.issue.number }} in ${{ github.repository }} and determine if it can be fixed.
 
+            First, use `gh issue view ${{ github.event.issue.number }}` to read the issue details.
+
+            Then:
             1. Search the codebase to gather relevant context (related files, existing implementations, tests)
             2. Determine if the issue is fixable and estimate the complexity
 
-            Post a comment on the issue with:
+            Finally, post a comment on the issue with:
             - A brief summary of your understanding of the issue
             - Relevant files/code you found
             - Whether this issue is fixable (yes/no/needs clarification)

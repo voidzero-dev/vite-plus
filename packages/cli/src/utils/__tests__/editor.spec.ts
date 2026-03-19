@@ -40,6 +40,48 @@ describe('writeEditorConfigs', () => {
     expect(settings['editor.formatOnSave']).toBe(true);
   });
 
+  it('merges existing vscode JSONC settings (comments, trailing commas)', async () => {
+    const projectRoot = createTempDir();
+
+    const vscodeDir = path.join(projectRoot, '.vscode');
+    fs.mkdirSync(vscodeDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(vscodeDir, 'settings.json'),
+      `{
+  // JSONC comment
+  "editor.formatOnSave": false,
+  "editor.codeActionsOnSave": {
+    // preserve existing key
+    "source.organizeImports": "explicit",
+  },
+}
+`,
+      'utf8',
+    );
+
+    await writeEditorConfigs({
+      projectRoot,
+      editorId: 'vscode',
+      interactive: false,
+      silent: true,
+    });
+
+    const settings = JSON.parse(
+      fs.readFileSync(path.join(projectRoot, '.vscode', 'settings.json'), 'utf8'),
+    ) as Record<string, unknown>;
+
+    // Existing key is preserved (merge never overwrites)
+    expect(settings['editor.formatOnSave']).toBe(false);
+
+    // New keys are added
+    expect(settings['editor.defaultFormatter']).toBe('oxc.oxc-vscode');
+    expect(settings['oxc.fmt.configPath']).toBe('./vite.config.ts');
+
+    const codeActions = settings['editor.codeActionsOnSave'] as Record<string, unknown>;
+    expect(codeActions['source.organizeImports']).toBe('explicit');
+    expect(codeActions['source.fixAll.oxc']).toBe('explicit');
+  });
+
   it('writes zed settings that align formatter config with vite.config.ts', async () => {
     const projectRoot = createTempDir();
 

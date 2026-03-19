@@ -1,1 +1,1 @@
-../../rolldown-vite/packages/vite/rolldown.config.ts
+../../vite/packages/vite/rolldown.config.ts

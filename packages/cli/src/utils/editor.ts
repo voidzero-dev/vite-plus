@@ -340,7 +340,7 @@ function mergeAndWriteEditorConfig(
   displayPath: string,
   silent = false,
 ) {
-  const existing = readJsonFile(filePath);
+  const existing = readJsonFile(filePath, true);
   const merged = mergeEditorConfigs(existing, incoming, fileName);
   writeJsonFile(filePath, merged);
   if (!silent) {

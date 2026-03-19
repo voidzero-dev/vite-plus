@@ -60,5 +60,10 @@
     "branch": "main",
     "hash": "451925ad7c07750a23de1d6ed454825d0eb14092",
     "forceFreshMigration": true
+  },
+  "vp-config": {
+    "repository": "https://github.com/kazupon/vp-config.git",
+    "branch": "main",
+    "hash": "b58c48d71a17c25dec71a003535e6312791ce2aa"
   }
 }

@@ -6,7 +6,7 @@ Draft
 
 ## Executive Summary
 
-Vite+ wraps several sub-tools (rolldown-vite, vitest, oxlint, oxfmt) and has native Rust commands (upgrade, env, vpx, package manager commands). Each sub-tool currently shows its own branding and uses inconsistent formatting for messages, prefixes, and status indicators. This RFC proposes unifying all CLI output under the "Vite+" brand identity with consistent message formatting, starting with rolldown-vite (whose source is cloned locally and directly modifiable) and extending to Rust commands and other sub-tools.
+Vite+ wraps several sub-tools (vite, vitest, oxlint, oxfmt) and has native Rust commands (upgrade, env, vpx, package manager commands). Each sub-tool currently shows its own branding and uses inconsistent formatting for messages, prefixes, and status indicators. This RFC proposes unifying all CLI output under the "Vite+" brand identity with consistent message formatting, starting with vite (whose source is cloned locally and directly modifiable) and extending to Rust commands and other sub-tools.
 
 ## Motivation
 
@@ -56,11 +56,11 @@ Neither identifies the experience as "Vite+". Users who installed `vite-plus` se
 | ------------------ | ----------------------- |
 | Rust (global CLI)  | `owo_colors`            |
 | JS (vite-plus CLI) | `node:util styleText()` |
-| rolldown-vite      | `picocolors`            |
+| vite               | `picocolors`            |
 
-**5. The `[vite]` logger prefix in rolldown-vite**
+**5. The `[vite]` logger prefix in vite**
 
-The logger in `rolldown-vite/packages/vite/src/node/logger.ts` defaults to `prefix = '[vite]'` for timestamped messages. This shows up during dev server operation as colored `[vite]` tags.
+The logger in `vite/packages/vite/src/node/logger.ts` defaults to `prefix = '[vite]'` for timestamped messages. This shows up during dev server operation as colored `[vite]` tags.
 
 ### What Users See Today
 
@@ -89,7 +89,7 @@ $ vpx
 1. Establish a unified branding format where "VITE+" is the primary identity shown to users
 2. Standardize message prefix formatting across all commands to a single convention
 3. Standardize status indicator symbols to a single set
-4. Apply branding changes to rolldown-vite output (dev banner, build banner, logger prefix)
+4. Apply branding changes to vite output (dev banner, build banner, logger prefix)
 5. Define a repeatable approach: modify sub-tool source directly to achieve consistent output
 
 ## Non-Goals
@@ -104,15 +104,15 @@ $ vpx
 
 ### Overview: Direct Source Modification
 
-Since vite-plus clones sub-tool source repositories (rolldown-vite at `rolldown-vite/`, rolldown at `rolldown/`), we modify the source directly. This is simple, transparent, and easy to audit via `git diff`. When syncing upstream, branding patches are rebased or re-applied — a small, well-defined set of changes.
+Since vite-plus clones sub-tool source repositories (vite at `vite/`, rolldown at `rolldown/`), we modify the source directly. This is simple, transparent, and easy to audit via `git diff`. When syncing upstream, branding patches are rebased or re-applied — a small, well-defined set of changes.
 
 Other sub-tools (vitest, oxlint, oxfmt) can follow the same pattern once their source is cloned or forked.
 
-### Phase 1: Rebrand rolldown-vite Output
+### Phase 1: Rebrand vite Output
 
 #### 1.1 Dev server banner
 
-**File:** `rolldown-vite/packages/vite/src/node/cli.ts` (line 256)
+**File:** `vite/packages/vite/src/node/cli.ts` (line 256)
 
 **Current:**
 
@@ -142,20 +142,20 @@ info(
 
 Where `VITE_PLUS_VERSION` is the vite-plus package version, injected via:
 
-- A new constant in `rolldown-vite/packages/vite/src/node/constants.ts`, or
+- A new constant in `vite/packages/vite/src/node/constants.ts`, or
 - Read from an environment variable set by the Rust CLI before spawning vite (e.g., `VITE_PLUS_VERSION`)
 
-**Recommended approach:** Environment variable injection. The Rust NAPI binding in `packages/cli/binding/src/cli.rs` already merges environment variables when spawning sub-tools via `merge_resolved_envs()`. We add `VITE_PLUS_VERSION` to the env map, and read it in rolldown-vite:
+**Recommended approach:** Environment variable injection. The Rust NAPI binding in `packages/cli/binding/src/cli.rs` already merges environment variables when spawning sub-tools via `merge_resolved_envs()`. We add `VITE_PLUS_VERSION` to the env map, and read it in vite:
 
 ```javascript
 const VITE_PLUS_VERSION = process.env.VITE_PLUS_VERSION || VERSION;
 ```
 
-This is clean: the rolldown-vite source change is minimal (reads an env var with fallback), and the version injection happens in the Rust layer that already owns this responsibility.
+This is clean: the vite source change is minimal (reads an env var with fallback), and the version injection happens in the Rust layer that already owns this responsibility.
 
 #### 1.2 Build banner
 
-**File:** `rolldown-vite/packages/vite/src/node/build.ts` (line 789)
+**File:** `vite/packages/vite/src/node/build.ts` (line 789)
 
 **Current:**
 
@@ -187,7 +187,7 @@ logger.info(
 
 #### 1.3 Logger prefix
 
-**File:** `rolldown-vite/packages/vite/src/node/logger.ts` (line 78)
+**File:** `vite/packages/vite/src/node/logger.ts` (line 78)
 
 **Current:**
 
@@ -203,7 +203,7 @@ prefix = '[vite+]',
 
 #### 1.4 Other user-visible strings to audit
 
-A full audit of rolldown-vite source for user-visible "vite" strings:
+A full audit of vite source for user-visible "vite" strings:
 
 | Location                      | String                                                                       | Action                                                |
 | ----------------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------- |
@@ -309,7 +309,7 @@ After `bundleVitest()` copies vitest files to `dist/`, a `brandVitest()` step pa
 3. `/^vitest\/\d+\.\d+\.\d+$/` regex → `/^vp test\/[\d.]+$/` — so the help callback can still find the banner line
 4. `$ vitest --help --expand-help` → `$ vp test --help --expand-help` — hardcoded help text
 
-The Rust NAPI binding injects `VITE_PLUS_VERSION` env var (same mechanism used for rolldown-vite build/dev/preview commands), so `vp test -h` shows `vp test/<vite-plus-version>`.
+The Rust NAPI binding injects `VITE_PLUS_VERSION` env var (same mechanism used for vite build/dev/preview commands), so `vp test -h` shows `vp test/<vite-plus-version>`.
 
 #### 3.3 Remaining `vite` → `vp` branding in CLI output
 
@@ -365,9 +365,9 @@ Migrate JS-side code (`migration/bin.ts`, `create/bin.ts`) to use these shared f
 
 ### D1: Direct source modification over build-time transforms
 
-**Decision:** Modify rolldown-vite source files directly.
+**Decision:** Modify vite source files directly.
 
-**Rationale:** The user has the source cloned locally. Direct modification is transparent — anyone can `git diff rolldown-vite/` to see exactly what changed. The set of branding changes is small and well-defined (3-5 files), making rebasing during upstream sync manageable. Build-time transforms (Rolldown plugins in `packages/core/build.ts`) are an alternative that avoids merge conflicts, but they are less visible and can break silently when upstream changes the strings being matched.
+**Rationale:** The user has the source cloned locally. Direct modification is transparent — anyone can `git diff vite/` to see exactly what changed. The set of branding changes is small and well-defined (3-5 files), making rebasing during upstream sync manageable. Build-time transforms (Rolldown plugins in `packages/core/build.ts`) are an alternative that avoids merge conflicts, but they are less visible and can break silently when upstream changes the strings being matched.
 
 ### D2: Only show vite-plus version, not underlying vite version
 
@@ -377,9 +377,9 @@ Migrate JS-side code (`migration/bin.ts`, `create/bin.ts`) to use these shared f
 
 ### D3: Inject version via environment variable
 
-**Decision:** The Rust CLI sets `VITE_PLUS_VERSION` env var before spawning rolldown-vite. The modified rolldown-vite source reads it with a fallback.
+**Decision:** The Rust CLI sets `VITE_PLUS_VERSION` env var before spawning vite. The modified vite source reads it with a fallback.
 
-**Rationale:** This avoids hardcoding the version in rolldown-vite source (which would require updating on every release). The Rust CLI already manages environment variables for sub-tool spawning via `merge_resolved_envs()`. The env var approach is the minimal-touch change to rolldown-vite.
+**Rationale:** This avoids hardcoding the version in vite source (which would require updating on every release). The Rust CLI already manages environment variables for sub-tool spawning via `merge_resolved_envs()`. The env var approach is the minimal-touch change to vite.
 
 ### D4: Lowercase prefixes (`info:` not `Info:`)
 
@@ -395,11 +395,11 @@ Migrate JS-side code (`migration/bin.ts`, `create/bin.ts`) to use these shared f
 
 ### D6: Keep each layer's color library
 
-**Decision:** Rust keeps `owo_colors`, JS keeps `node:util styleText()`, rolldown-vite keeps `picocolors`.
+**Decision:** Rust keeps `owo_colors`, JS keeps `node:util styleText()`, vite keeps `picocolors`.
 
 **Rationale:** Changing color libraries is high-risk, low-reward. The shared formatting module abstracts the library choice so the output convention is consistent regardless of the underlying library.
 
-## Scope of rolldown-vite Changes
+## Scope of vite Changes
 
 ### Strings to Change
 
@@ -425,13 +425,13 @@ These are internal identifiers, API references, or project name references:
 
 ## Implementation Plan
 
-### Phase 1: rolldown-vite Rebranding
+### Phase 1: vite Rebranding
 
 1. Add `VITE_PLUS_VERSION` env var injection in `packages/cli/binding/src/cli.rs` for vite commands (build, dev, preview)
-2. Modify `rolldown-vite/packages/vite/src/node/cli.ts` — read env var, change banner text
-3. Modify `rolldown-vite/packages/vite/src/node/build.ts` — change build banner text
-4. Modify `rolldown-vite/packages/vite/src/node/logger.ts` — change default prefix
-5. Modify `rolldown-vite/packages/vite/src/node/build.ts:1079` — change error prefix
+2. Modify `vite/packages/vite/src/node/cli.ts` — read env var, change banner text
+3. Modify `vite/packages/vite/src/node/build.ts` — change build banner text
+4. Modify `vite/packages/vite/src/node/logger.ts` — change default prefix
+5. Modify `vite/packages/vite/src/node/build.ts:1079` — change error prefix
 6. Rebuild with `pnpm bootstrap-cli` and verify output
 7. Update affected snap tests
 
@@ -493,7 +493,7 @@ Many existing snap tests will need updates due to prefix and branding changes:
 ### CI
 
 - All existing `cargo test` and snap tests pass with updated expectations
-- No regressions in rolldown-vite's own test suite
+- No regressions in vite's own test suite
 
 ## Future Enhancements
 
