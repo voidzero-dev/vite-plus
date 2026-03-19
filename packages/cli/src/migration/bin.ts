@@ -648,7 +648,11 @@ async function executeMigrationPlan(
     cancelAndExit('Vite+ cannot automatically migrate this project yet.', 1);
   }
 
-  // 5. ESLint → Oxlint migration (before main rewrite so .oxlintrc.json gets picked up)
+  // 5. Check for Rolldown-incompatible config patterns
+  updateMigrationProgress('Checking config compatibility');
+  await checkRolldownCompatibility(workspaceInfo.rootDir, report);
+
+  // 6. ESLint → Oxlint migration (before main rewrite so .oxlintrc.json gets picked up)
   if (plan.migrateEslint) {
     updateMigrationProgress('Migrating ESLint');
     const eslintOk = await migrateEslintToOxlint(
@@ -736,10 +740,6 @@ async function executeMigrationPlan(
     installArgs,
     { silent: true },
   );
-
-  // 12. Check for Rolldown-incompatible config patterns
-  updateMigrationProgress('Checking config compatibility');
-  await checkRolldownCompatibility(workspaceInfo.rootDir, report);
 
   clearMigrationProgress();
   return {
