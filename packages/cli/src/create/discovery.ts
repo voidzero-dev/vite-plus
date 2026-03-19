@@ -169,7 +169,7 @@ export function expandCreateShorthand(templateName: string): string {
   if (templateName.startsWith('@')) {
     const slashIndex = templateName.indexOf('/');
     if (slashIndex === -1) {
-      return templateName;
+      return `${templateName}/create`;
     }
     const scope = templateName.slice(0, slashIndex);
     const rest = templateName.slice(slashIndex + 1);

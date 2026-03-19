@@ -60,8 +60,8 @@ describe('expandCreateShorthand', () => {
     expect(expandCreateShorthand('/absolute/path')).toBe('/absolute/path');
   });
 
-  it('should handle scope-only input gracefully', () => {
-    expect(expandCreateShorthand('@scope')).toBe('@scope');
+  it('should expand scope-only input to @scope/create', () => {
+    expect(expandCreateShorthand('@scope')).toBe('@scope/create');
   });
 
   it('should handle special cases where default convention does not apply', () => {
