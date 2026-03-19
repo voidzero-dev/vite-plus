@@ -463,8 +463,6 @@ exec "`$VITE_PLUS_HOME/current/bin/vp.exe" "`$@"
         Write-Host "  Note: Restart your terminal and IDE for changes to take effect."
     }
 
-
-
     Write-Host ""
 }
 
