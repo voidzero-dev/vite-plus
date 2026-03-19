@@ -5061,6 +5061,7 @@ dependencies = [
  "rolldown_plugin_bundle_analyzer",
  "rolldown_plugin_esm_external_require",
  "rolldown_plugin_isolated_declaration",
+ "rolldown_plugin_oxc_runtime",
  "rolldown_plugin_replace",
  "rolldown_plugin_utils",
  "rolldown_plugin_vite_alias",
@@ -5248,6 +5249,7 @@ dependencies = [
  "rolldown_devtools",
  "rolldown_ecmascript",
  "rolldown_error",
+ "rolldown_fs",
  "rolldown_resolver",
  "rolldown_sourcemap",
  "rolldown_utils",
@@ -5650,8 +5652,6 @@ dependencies = [
  "memchr",
  "oxc",
  "oxc_sourcemap",
- "rolldown_utils",
- "rustc-hash",
 ]
 
 [[package]]
@@ -6958,9 +6958,6 @@ name = "typedmap"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "63278e72ed4f207eb3216c944cbafb35bdb656d2eab97ef73c0c165a1cd3e319"
-dependencies = [
- "dashmap",
-]
 
 [[package]]
 name = "typenum"
