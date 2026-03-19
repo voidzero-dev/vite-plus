@@ -636,6 +636,13 @@ export async function syncRemote() {
   // Get the root directory (assuming script is run from root)
   const rootDir = process.cwd();
 
+  // Clean up legacy 'rolldown-vite' directory (renamed to 'vite')
+  const legacyViteDir = join(rootDir, 'rolldown-vite');
+  if (existsSync(legacyViteDir)) {
+    rmSync(legacyViteDir, { recursive: true, force: true });
+    log('Removed legacy rolldown-vite directory');
+  }
+
   if (values.clean) {
     log('Cleaning existing repositories...');
     if (existsSync(join(rootDir, ROLLDOWN_DIR))) {
