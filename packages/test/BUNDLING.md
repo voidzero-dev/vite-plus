@@ -114,7 +114,7 @@ For maintainers developing the vitest/vite migration feature, here are the trans
 | `from "vite"`                        | `from "@voidzero-dev/vite-plus-core"`                     |
 | `from "vite/module-runner"`          | `from "@voidzero-dev/vite-plus-core/module-runner"`       |
 
-**Note**: `@voidzero-dev/vite-plus-core` is the bundled version of upstream rolldown-vite (Vite v8 beta). See [Core Package Bundling](../core/BUNDLING.md) for details on what it contains.
+**Note**: `@voidzero-dev/vite-plus-core` is the bundled version of upstream vite (Vite v8 beta). See [Core Package Bundling](../core/BUNDLING.md) for details on what it contains.
 
 **Note:** When using pnpm overrides, you have three options for browser provider imports:
 

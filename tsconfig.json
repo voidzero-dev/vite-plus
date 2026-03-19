@@ -19,7 +19,7 @@
     "ecosystem-ci",
     "packages/cli/snap-tests",
     "packages/cli/snap-tests-global",
-    "rolldown-vite",
+    "vite",
     "rolldown",
     "target"
   ]

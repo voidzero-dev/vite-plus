@@ -339,6 +339,7 @@
     "detect-indent": "catalog:",
     "detect-newline": "catalog:",
     "glob": "catalog:",
+    "jsonc-parser": "catalog:",
     "lint-staged": "catalog:",
     "minimatch": "catalog:",
     "mri": "catalog:",

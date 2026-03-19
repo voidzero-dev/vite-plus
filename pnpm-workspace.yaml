@@ -2,8 +2,8 @@ packages:
   - packages/*
   - rolldown
   - rolldown/packages/*
-  - rolldown-vite
-  - rolldown-vite/packages/*
+  - vite
+  - vite/packages/*
 catalog:
   '@babel/core': ^7.24.7
   '@babel/preset-env': ^7.24.7
@@ -92,7 +92,6 @@ catalog:
   remark-parse: ^11.0.0
   remeda: ^2.10.0
   rolldown-plugin-dts: ^0.22.0
-  rolldown-vite: ^7.1.19
   rollup: ^4.18.0
   semver: ^7.7.3
   serve-static: ^2.0.0
@@ -151,7 +150,6 @@ minimumReleaseAgeExclude:
   - lightningcss-*
   - rolldown
   - rolldown-plugin-dts
-  - rolldown-vite
   - tsdown
   - unrun
   - vite
@@ -175,9 +173,9 @@ packageExtensions:
     dependencies:
       '@types/estree': ^1.0.0
 patchedDependencies:
-  sirv@3.0.2: rolldown-vite/patches/sirv@3.0.2.patch
-  chokidar@3.6.0: rolldown-vite/patches/chokidar@3.6.0.patch
-  dotenv-expand@12.0.3: rolldown-vite/patches/dotenv-expand@12.0.3.patch
+  sirv@3.0.2: vite/patches/sirv@3.0.2.patch
+  chokidar@3.6.0: vite/patches/chokidar@3.6.0.patch
+  dotenv-expand@12.0.3: vite/patches/dotenv-expand@12.0.3.patch
 peerDependencyRules:
   allowAny:
     - vite

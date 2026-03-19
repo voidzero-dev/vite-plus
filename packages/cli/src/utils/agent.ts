@@ -184,6 +184,7 @@ export const AGENTS = [
     targetPath: '.aiassistant/rules/viteplus.md',
   },
   { id: 'amp', label: 'Amp', targetPath: 'AGENTS.md' },
+  { id: 'kiro', label: 'Kiro', targetPath: 'AGENTS.md' },
   { id: 'opencode', label: 'OpenCode', targetPath: 'AGENTS.md' },
   { id: 'other', label: 'Other', targetPath: 'AGENTS.md' },
 ] as const;
@@ -278,6 +279,40 @@ export function hasExistingAgentInstructions(projectRoot: string): boolean {
     }
   }
   return false;
+}
+
+/**
+ * Silently update agent instruction files that contain Vite+ markers.
+ * - No agent files → no writes
+ * - No Vite+ markers → no writes
+ * - Markers present, content up to date → no writes
+ * - Markers present, content outdated → update marked section
+ */
+export function updateExistingAgentInstructions(projectRoot: string): void {
+  const targetPaths = detectExistingAgentTargetPaths(projectRoot);
+  if (!targetPaths) {
+    return;
+  }
+
+  const templatePath = path.join(pkgRoot, 'AGENTS.md');
+  if (!fs.existsSync(templatePath)) {
+    return;
+  }
+
+  const templateContent = fs.readFileSync(templatePath, 'utf-8');
+
+  for (const targetPath of targetPaths) {
+    try {
+      const fullPath = path.join(projectRoot, targetPath);
+      const existing = fs.readFileSync(fullPath, 'utf-8');
+      const updated = replaceMarkedAgentInstructionsSection(existing, templateContent);
+      if (updated !== undefined && updated !== existing) {
+        fs.writeFileSync(fullPath, updated);
+      }
+    } catch {
+      // Best-effort: skip files that can't be read or written
+    }
+  }
 }
 
 export function resolveAgentTargetPaths(agent?: string | string[]) {

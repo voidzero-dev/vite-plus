@@ -931,8 +931,9 @@ async function rewriteVitestImports(leafDepToVendorPath: Map<string, string>) {
       vitest: resolve(distDir, 'index.js'),
       'vitest/node': resolve(distDir, 'node.js'),
       'vitest/config': resolve(distDir, 'config.js'),
-      // vitest/browser exports page, server, etc from @vitest/browser
-      'vitest/browser': resolve(distDir, '@vitest/browser/index.js'),
+      // vitest/browser exports page, server, CDPSession, BrowserCommands, etc from @vitest/browser/context
+      // This matches vitest's own package.json exports: "./browser" -> "./browser/context.d.ts"
+      'vitest/browser': resolve(distDir, '@vitest/browser/context.js'),
       // vitest/internal/browser exports browser-safe __INTERNAL and stringify (NOT @vitest/browser/index.js which has Node.js code)
       'vitest/internal/browser': resolve(distDir, 'browser.js'),
       'vitest/runners': resolve(distDir, 'runners.js'),
@@ -2064,7 +2065,7 @@ export * from '../dist/@vitest/browser/context.d.ts'
 }
 
 /**
- * Patch module augmentations in global.d.*.d.ts files to use relative paths.
+ * Patch module augmentations in global.d.*.d.ts files.
  *
  * The original vitest types use module augmentation like:
  *   declare module "@vitest/expect" { interface Assertion<T> { toMatchSnapshot: ... } }
@@ -2073,12 +2074,11 @@ export * from '../dist/@vitest/browser/context.d.ts'
  * "@vitest/expect" doesn't exist as a package for consumers. This breaks the
  * module augmentation - TypeScript can't find @vitest/expect to augment.
  *
- * The fix: Change module augmentation to use relative paths that TypeScript CAN resolve:
- *   declare module "../@vitest/expect/index.js" { ... }
- *
- * This makes TypeScript augment the same module that our index.d.ts imports from,
- * so the augmented properties (toMatchSnapshot, toMatchInlineSnapshot, etc.)
- * appear on the Assertion type that consumers import.
+ * The fix has two parts:
+ * 1. Change module augmentation to use relative paths that TypeScript CAN resolve:
+ *      declare module "../@vitest/expect/index.js" { ... }
+ * 2. Merge augmented interface/type definitions into the target .d.ts files so that
+ *    downstream DTS bundlers (rolldown) can resolve them without cross-file augmentation.
  */
 async function patchModuleAugmentations() {
   console.log('\nPatching module augmentations in global.d.*.d.ts files...');
@@ -2096,29 +2096,178 @@ async function patchModuleAugmentations() {
     return;
   }
 
-  // Module augmentation mappings: bare specifier -> relative path from chunks/
-  const augmentationMappings: Record<string, string> = {
-    '@vitest/expect': '../@vitest/expect/index.js',
-    '@vitest/runner': '../@vitest/runner/index.js',
+  // Module augmentation mappings: bare specifier -> [relative path, target .d.ts file]
+  const augmentationMappings: Record<string, { relativePath: string; targetFile: string }> = {
+    '@vitest/expect': {
+      relativePath: '../@vitest/expect/index.js',
+      targetFile: join(distDir, '@vitest/expect/index.d.ts'),
+    },
+    '@vitest/runner': {
+      relativePath: '../@vitest/runner/index.js',
+      targetFile: join(distDir, '@vitest/runner/utils.d.ts'),
+    },
   };
 
   for (const file of globalDtsFiles) {
     let content = await readFile(file, 'utf-8');
     let modified = false;
 
-    for (const [bareSpecifier, relativePath] of Object.entries(augmentationMappings)) {
+    for (const [bareSpecifier, { relativePath, targetFile }] of Object.entries(
+      augmentationMappings,
+    )) {
       const oldPattern = `declare module "${bareSpecifier}"`;
-      const newPattern = `declare module "${relativePath}"`;
 
-      if (content.includes(oldPattern)) {
-        content = content.replaceAll(oldPattern, newPattern);
-        modified = true;
-        console.log(`  Patched: ${bareSpecifier} -> ${relativePath} in ${basename(file)}`);
+      // Extract the augmentation block content using brace matching
+      const startIdx = content.indexOf(oldPattern);
+      const braceStart = startIdx !== -1 ? content.indexOf('{', startIdx) : -1;
+      if (braceStart === -1) {
+        continue;
       }
+
+      let depth = 0;
+      let braceEnd = -1;
+      for (let i = braceStart; i < content.length; i++) {
+        if (content[i] === '{') {
+          depth++;
+        } else if (content[i] === '}') {
+          depth--;
+          if (depth === 0) {
+            braceEnd = i;
+            break;
+          }
+        }
+      }
+      if (braceEnd === -1) {
+        continue;
+      }
+
+      const innerContent = content.slice(braceStart + 1, braceEnd).trim();
+
+      // Merge only NEW type declarations into the target .d.ts file.
+      // Interfaces that already exist (e.g., ExpectStatic, Assertion, MatcherState) must NOT
+      // be re-declared, as that would shadow extends clauses and break call signatures.
+      if (innerContent && existsSync(targetFile)) {
+        let targetContent = await readFile(targetFile, 'utf-8');
+
+        // Extract individual interface blocks from the augmentation content
+        const interfaceRegex = /(?:export\s+)?interface\s+(\w+)(?:<[^>]*>)?\s*\{/g;
+        let match;
+        const newDeclarations: string[] = [];
+
+        while ((match = interfaceRegex.exec(innerContent)) !== null) {
+          const name = match[1];
+          // Only merge if this interface does NOT already exist in the target file.
+          // Check both direct declarations (interface Name) and re-exports (export type { Name }).
+          const hasDirectDecl = new RegExp(`\\binterface\\s+${name}\\b`).test(targetContent);
+          const exportTypeMatch = targetContent.match(/export\s+type\s*\{([^}]*)\}/);
+          const isReExported =
+            exportTypeMatch != null && new RegExp(`\\b${name}\\b`).test(exportTypeMatch[1]);
+          if (hasDirectDecl || isReExported) {
+            console.log(
+              `  Skipped existing interface "${name}" (already in ${basename(targetFile)})`,
+            );
+            continue;
+          }
+
+          // Extract this interface block using brace matching
+          const ifaceStart = match.index;
+          const ifaceBraceStart = innerContent.indexOf('{', ifaceStart);
+          let ifaceDepth = 0;
+          let ifaceBraceEnd = -1;
+          for (let i = ifaceBraceStart; i < innerContent.length; i++) {
+            if (innerContent[i] === '{') {
+              ifaceDepth++;
+            } else if (innerContent[i] === '}') {
+              ifaceDepth--;
+              if (ifaceDepth === 0) {
+                ifaceBraceEnd = i;
+                break;
+              }
+            }
+          }
+          if (ifaceBraceEnd === -1) {
+            continue;
+          }
+
+          let block = innerContent.slice(ifaceStart, ifaceBraceEnd + 1).trim();
+          if (!block.startsWith('export')) {
+            block = `export ${block}`;
+          }
+          newDeclarations.push(block);
+          console.log(`  Merged new interface "${name}" into ${basename(targetFile)}`);
+        }
+
+        if (newDeclarations.length > 0) {
+          targetContent += `\n// Merged from module augmentation: declare module "${bareSpecifier}"\n${newDeclarations.join('\n')}\n`;
+          await writeFile(targetFile, targetContent, 'utf-8');
+        }
+      }
+
+      // Rewrite declare module path to relative
+      const newPattern = `declare module "${relativePath}"`;
+      content = content.replaceAll(oldPattern, newPattern);
+      modified = true;
+      console.log(`  Patched: ${bareSpecifier} -> ${relativePath} in ${basename(file)}`);
     }
 
     if (modified) {
       await writeFile(file, content, 'utf-8');
+    }
+  }
+
+  // Re-export BrowserCommands from context.d.ts (imported but not exported)
+  const contextDtsPath = join(distDir, '@vitest/browser/context.d.ts');
+  if (existsSync(contextDtsPath)) {
+    let content = await readFile(contextDtsPath, 'utf-8');
+    if (
+      content.includes('BrowserCommands') &&
+      !content.match(/export\s+(type\s+)?\{[^}]*BrowserCommands/)
+    ) {
+      content += '\nexport type { BrowserCommands };\n';
+      await writeFile(contextDtsPath, content, 'utf-8');
+      console.log('  Added BrowserCommands re-export to context.d.ts');
+    }
+  }
+
+  // Validate: ensure no duplicate top-level interface declarations were introduced by merging.
+  // Only count interfaces at the module scope (not nested inside declare global, namespace, etc.)
+  for (const [bareSpecifier, { targetFile }] of Object.entries(augmentationMappings)) {
+    if (!existsSync(targetFile)) {
+      continue;
+    }
+    const finalContent = await readFile(targetFile, 'utf-8');
+
+    // Extract top-level interface names by tracking brace depth
+    const topLevelInterfaces: string[] = [];
+    let depth = 0;
+    for (let i = 0; i < finalContent.length; i++) {
+      if (finalContent[i] === '{') {
+        depth++;
+      } else if (finalContent[i] === '}') {
+        depth--;
+      } else if (depth === 0) {
+        const remaining = finalContent.slice(i);
+        const m = remaining.match(/^interface\s+(\w+)/);
+        if (m) {
+          topLevelInterfaces.push(m[1]);
+          i += m[0].length - 1;
+        }
+      }
+    }
+
+    const counts = new Map<string, number>();
+    for (const name of topLevelInterfaces) {
+      counts.set(name, (counts.get(name) || 0) + 1);
+    }
+
+    for (const [name, count] of counts) {
+      if (count > 1) {
+        throw new Error(
+          `Interface "${name}" is declared ${count} times at top level in ${basename(targetFile)}. ` +
+            `Module augmentation merge for "${bareSpecifier}" likely created a duplicate ` +
+            `declaration that will shadow extends clauses and break type signatures.`,
+        );
+      }
     }
   }
 }

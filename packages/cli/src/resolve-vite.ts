@@ -21,7 +21,7 @@ import { DEFAULT_ENVS, resolve } from './utils/constants.js';
  *   - envs: Environment variables to set when executing Vite
  *
  * The function first tries to resolve vite package, then falls back
- * to rolldown-vite package (for direct rolldown-vite installations).
+ * to vite package (for direct vite installations).
  * It constructs the path to the CLI binary within the resolved package.
  */
 export async function vite(): Promise<{

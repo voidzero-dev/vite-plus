@@ -1,7 +1,7 @@
 /**
- * Apply Vite+ branding patches to rolldown-vite source after sync.
+ * Apply Vite+ branding patches to vite source after sync.
  *
- * This script modifies user-visible branding strings in the rolldown-vite
+ * This script modifies user-visible branding strings in the vite
  * source to show "VITE+" instead of "VITE". It is called automatically
  * at the end of `sync-remote-deps.ts` and can also be run independently.
  *
@@ -16,11 +16,11 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const ROLLDOWN_VITE_DIR = 'rolldown-vite';
-const VITE_NODE_DIR = join(ROLLDOWN_VITE_DIR, 'packages', 'vite', 'src', 'node');
+const VITE_DIR = 'vite';
+const VITE_NODE_DIR = join(VITE_DIR, 'packages', 'vite', 'src', 'node');
 
 function log(message: string) {
-  console.log(`[brand-rolldown-vite] ${message}`);
+  console.log(`[brand-vite] ${message}`);
 }
 
 /**
@@ -46,9 +46,9 @@ function replaceInFile(
     return 'patched';
   }
   throw new Error(
-    `[brand-rolldown-vite] Patch failed in ${filePath}:\n` +
+    `[brand-vite] Patch failed in ${filePath}:\n` +
       `  Could not find search string: ${JSON.stringify(search)}\n` +
-      `  The upstream code may have changed. Please update the search string in brand-rolldown-vite.ts.`,
+      `  The upstream code may have changed. Please update the search string in brand-vite.ts.`,
   );
 }
 
@@ -84,7 +84,7 @@ function logPatch(file: string, desc: string, result: 'patched' | 'already') {
   }
 }
 
-export function brandRolldownVite(rootDir: string = process.cwd()) {
+export function brandVite(rootDir: string = process.cwd()) {
   log('Applying Vite+ branding patches...');
 
   const nodeDir = join(rootDir, VITE_NODE_DIR);
