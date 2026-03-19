@@ -39,10 +39,9 @@ function externalDtsTypeOnlyPlugin() {
       filter: { id: { include: [EXTERNAL_DTS_FIX_RE] } },
       handler(code: string, id: string) {
         if (EXTERNAL_DTS_INTERNAL_RE.test(id)) {
-          // postcss/lightningcss internal files: transform all imports and exports
-          return code
-            .replace(/^(import\s+)(?!type\s)/gm, 'import type ')
-            .replace(/^(export\s+)\{/gm, 'export type {');
+          // postcss/lightningcss internal files: transform imports only
+          // (exports may include value re-exports like `export const Features`)
+          return code.replace(/^(import\s+)(?!type\s)/gm, 'import type ');
         }
         // Consumer files: only transform imports from postcss/lightningcss
         return code.replace(
