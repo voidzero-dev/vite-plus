@@ -428,6 +428,11 @@ async function bundleTsdown() {
       }),
     ],
   });
+
+  // Copy esm-shims.js to dist/ so tsdown's shims option can resolve it.
+  // tsdown resolves this file via path.resolve(import.meta.dirname, '..', 'esm-shims.js'),
+  // which means it expects the file at dist/esm-shims.js (one level up from dist/tsdown/).
+  await copyFile(join(tsdownSourceDir, 'esm-shims.js'), join(projectDir, 'dist/esm-shims.js'));
 }
 
 async function brandTsdown() {

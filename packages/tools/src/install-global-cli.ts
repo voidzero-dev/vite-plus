@@ -89,6 +89,17 @@ export function installGlobalCli() {
       process.exit(1);
     }
 
+    // On Windows, the trampoline shim binary is required for creating shims.
+    // Validate it exists beside the chosen vp.exe to avoid mismatched artifacts.
+    if (isWindows) {
+      const shimPath = path.join(path.dirname(binaryPath), 'vp-shim.exe');
+      if (!existsSync(shimPath)) {
+        console.error(`Error: vp-shim.exe not found at ${shimPath}`);
+        console.error('Build it with: cargo build -p vite_trampoline --release');
+        process.exit(1);
+      }
+    }
+
     const localDevVer = localDevVersion();
 
     // Clean up old local-dev directories to avoid accumulation

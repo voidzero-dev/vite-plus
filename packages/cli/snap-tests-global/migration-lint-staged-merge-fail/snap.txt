@@ -4,9 +4,11 @@ VITE+ - The Unified Toolchain for the Web
 
 ◇ Migrated . to Vite+<repeat>
 • Node <semver>  pnpm <semver>
-• Git hooks configured
 ! Warnings:
   - Failed to merge staged config into vite.config.ts
+  - Git hooks not configured — Failed to merge staged config into vite.config.ts
+
+Please add staged config to vite.config.ts manually, see https://viteplus.dev/guide/migrate#lint-staged
 → Manual follow-up:
   - Please add staged config to vite.config.ts manually, see https://viteplus.dev/guide/migrate#lint-staged
 
@@ -14,6 +16,7 @@ VITE+ - The Unified Toolchain for the Web
 {
   "name": "migration-lint-staged-merge-fail",
   "devDependencies": {
+    "lint-staged": "^16.2.6",
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
     "vite-plus": "latest"
   },
@@ -37,4 +40,4 @@ const config = { plugins: [] };
 module.exports = config;
 
 > test -f .vite-hooks/pre-commit && echo 'pre-commit hook exists' || echo 'no pre-commit hook' # should NOT exist when merge fails
-no pre-commit hook
+pre-commit hook exists

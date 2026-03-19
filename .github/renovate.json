@@ -21,7 +21,8 @@
         "vite_path",
         "vite_str",
         "vite_task",
-        "vite_workspace"
+        "vite_workspace",
+        "https://github.com/voidzero-dev/vite-task"
       ],
       "enabled": false
     }
