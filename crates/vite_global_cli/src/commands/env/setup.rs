@@ -17,10 +17,11 @@
 
 use std::process::ExitStatus;
 
+use clap::CommandFactory;
 use owo_colors::OwoColorize;
 
 use super::config::{get_bin_dir, get_vite_plus_home};
-use crate::{error::Error, help};
+use crate::{cli::Args, error::Error, help};
 
 /// Tools to create shims for (node, npm, npx, vpx)
 const SHIM_TOOLS: &[&str] = &["node", "npm", "npx", "vpx"];
@@ -39,6 +40,9 @@ pub async fn execute(refresh: bool, env_only: bool) -> Result<ExitStatus, Error>
 
     // Ensure home directory exists (env files are written here)
     tokio::fs::create_dir_all(&vite_plus_home).await?;
+
+    // Generate completion scripts
+    generate_completion_scripts(&vite_plus_home).await?;
 
     // Create env files with PATH guard (prevents duplicate PATH entries)
     create_env_files(&vite_plus_home).await?;
@@ -270,6 +274,45 @@ async fn create_windows_shim(
     Ok(())
 }
 
+/// Creates completion scripts in `~/.vite-plus/completion/`:
+/// - `vp.bash` (bash)
+/// - `_vp` (zsh, following zsh convention)
+/// - `vp.fish` (fish shell)
+/// - `vp.ps1` (PowerShell)
+async fn generate_completion_scripts(
+    vite_plus_home: &vite_path::AbsolutePath,
+) -> Result<(), Error> {
+    let mut cmd = Args::command();
+
+    // Create completion directory
+    let completion_dir = vite_plus_home.join("completion");
+    tokio::fs::create_dir_all(&completion_dir).await?;
+
+    // Bash completion
+    let bash_completion = completion_dir.join("vp.bash");
+    let mut bash_file = std::fs::File::create(&bash_completion)?;
+    clap_complete::generate(clap_complete::Shell::Bash, &mut cmd, "vp", &mut bash_file);
+
+    // Zsh completion (following zsh convention: _vp)
+    let zsh_completion = completion_dir.join("_vp");
+    let mut zsh_file = std::fs::File::create(&zsh_completion)?;
+    clap_complete::generate(clap_complete::Shell::Zsh, &mut cmd, "vp", &mut zsh_file);
+
+    // Fish completion
+    let fish_completion = completion_dir.join("vp.fish");
+    let mut fish_file = std::fs::File::create(&fish_completion)?;
+    clap_complete::generate(clap_complete::Shell::Fish, &mut cmd, "vp", &mut fish_file);
+
+    // PowerShell completion
+    let ps1_completion = completion_dir.join("vp.ps1");
+    let mut ps1_file = std::fs::File::create(&ps1_completion)?;
+    clap_complete::generate(clap_complete::Shell::PowerShell, &mut cmd, "vp", &mut ps1_file);
+
+    tracing::debug!("Generated completion scripts in {:?}", completion_dir);
+
+    Ok(())
+}
+
 /// Get the path to the trampoline template binary (vp-shim.exe).
 ///
 /// The trampoline binary is distributed alongside vp.exe in the same directory.
@@ -378,23 +421,26 @@ pub(crate) async fn cleanup_legacy_windows_shim(bin_dir: &vite_path::AbsolutePat
 /// - `~/.vite-plus/bin/vp-use.cmd` (cmd.exe wrapper for `vp env use`)
 async fn create_env_files(vite_plus_home: &vite_path::AbsolutePath) -> Result<(), Error> {
     let bin_path = vite_plus_home.join("bin");
+    let completion_path = vite_plus_home.join("completion");
 
     // Use $HOME-relative path if install dir is under HOME (like rustup's ~/.cargo/env)
     // This makes the env file portable across sessions where HOME may differ
-    let bin_path_ref = if let Some(home_dir) = vite_shared::EnvConfig::get().user_home {
-        if let Ok(suffix) = bin_path.as_path().strip_prefix(&home_dir) {
-            format!("$HOME/{}", suffix.display())
-        } else {
-            bin_path.as_path().display().to_string()
-        }
-    } else {
-        bin_path.as_path().display().to_string()
+    let home_dir = vite_shared::EnvConfig::get().user_home;
+    let to_ref = |path: &vite_path::AbsolutePath| -> String {
+        home_dir
+            .as_ref()
+            .and_then(|h| path.as_path().strip_prefix(h).ok())
+            .map(|s| format!("$HOME/{}", s.display()))
+            .unwrap_or_else(|| path.as_path().display().to_string())
     };
+    let bin_path_ref = to_ref(&bin_path);
+    let completion_path_ref = to_ref(&completion_path);
 
     // POSIX env file (bash/zsh)
     // When sourced multiple times, removes existing entry and re-prepends to front
     // Uses parameter expansion to split PATH around the bin entry in O(1) operations
     // Includes vp() shell function wrapper for `vp env use` (evals stdout)
+    // Includes shell completion support
     let env_content = r#"#!/bin/sh
 # Vite+ environment setup (https://viteplus.dev)
 __vp_bin="__VP_BIN__"
@@ -425,8 +471,29 @@ vp() {
         command vp "$@"
     fi
 }
+
+# Shell completion for bash/zsh
+# Source appropriate completion script based on current shell
+# Only load completion in interactive shells with required builtins
+if [ -n "$BASH_VERSION" ] && type complete >/dev/null 2>&1; then
+    # Bash shell with completion support
+    __vp_completion="__VP_COMPLETION_BASH__"
+    if [ -f "$__vp_completion" ]; then
+        . "$__vp_completion"
+    fi
+    unset __vp_completion
+elif [ -n "$ZSH_VERSION" ] && type compdef >/dev/null 2>&1; then
+    # Zsh shell with completion support
+    __vp_completion="__VP_COMPLETION_ZSH__"
+    if [ -f "$__vp_completion" ]; then
+        . "$__vp_completion"
+    fi
+    unset __vp_completion
+fi
 "#
-    .replace("__VP_BIN__", &bin_path_ref);
+    .replace("__VP_BIN__", &bin_path_ref)
+    .replace("__VP_COMPLETION_BASH__", &format!("{}/vp.bash", completion_path_ref))
+    .replace("__VP_COMPLETION_ZSH__", &format!("{}/_vp", completion_path_ref));
     let env_file = vite_plus_home.join("env");
     tokio::fs::write(&env_file, env_content).await?;
 
@@ -450,8 +517,15 @@ function vp
         command vp $argv
     end
 end
+
+# Shell completion for fish
+set -l __vp_completion "__VP_COMPLETION_FISH__"
+if test -f "$__vp_completion"
+    source "$__vp_completion"
+end
 "#
-    .replace("__VP_BIN__", &bin_path_ref);
+    .replace("__VP_BIN__", &bin_path_ref)
+    .replace("__VP_COMPLETION_FISH__", &format!("{}/vp.fish", completion_path_ref));
     let env_fish_file = vite_plus_home.join("env.fish");
     tokio::fs::write(&env_fish_file, env_fish_content).await?;
 
@@ -485,11 +559,20 @@ function vp {
         & (Join-Path $__vp_bin "vp.exe") @args
     }
 }
+
+# Shell completion for PowerShell
+$__vp_completion = "__VP_COMPLETION_PS1__"
+if (Test-Path $__vp_completion) {
+    . $__vp_completion
+}
 "#;
 
     // For PowerShell, use the actual absolute path (not $HOME-relative)
     let bin_path_win = bin_path.as_path().display().to_string();
-    let env_ps1_content = env_ps1_content.replace("__VP_BIN_WIN__", &bin_path_win);
+    let completion_path_win = completion_path.as_path().display().to_string();
+    let env_ps1_content = env_ps1_content
+        .replace("__VP_BIN_WIN__", &bin_path_win)
+        .replace("__VP_COMPLETION_PS1__", &format!("{}/vp.ps1", completion_path_win));
     let env_ps1_file = vite_plus_home.join("env.ps1");
     tokio::fs::write(&env_ps1_file, env_ps1_content).await?;
 
