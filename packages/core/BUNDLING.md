@@ -10,7 +10,7 @@ The core package uses a **multi-project bundling strategy** that combines 5 upst
 | ----------------------- | ------------------------------- | ------------------------- |
 | `@rolldown/pluginutils` | `rolldown/packages/pluginutils` | Rolldown plugin utilities |
 | `rolldown`              | `rolldown/packages/rolldown`    | Rolldown bundler          |
-| `vite` (rolldown-vite)  | `rolldown-vite/packages/vite`   | Vite v8 beta              |
+| `vite`                  | `vite/packages/vite`            | Vite v8 beta              |
 | `tsdown`                | `node_modules/tsdown`           | TypeScript build tool     |
 | `vitepress`             | `node_modules/vitepress`        | Documentation tool        |
 
@@ -59,7 +59,7 @@ This is the most complex step, using the upstream `vite-rolldown.config` with mo
 3. **Rewrite static paths** - Fixes `VITE_PACKAGE_DIR`, `CLIENT_ENTRY`, `ENV_ENTRY` constants
 4. **Copy additional files** - `misc/`, `.d.ts` files, `types/`, `client.d.ts`
 
-**Input**: `rolldown-vite/packages/vite/`
+**Input**: `vite/packages/vite/`
 **Output**: `dist/vite/`
 
 ### Step 4: Bundle Tsdown (`bundleTsdown`)
@@ -93,8 +93,8 @@ This is the most complex step, using the upstream `vite-rolldown.config` with mo
 
 **Updates**:
 
-- `peerDependencies` - Merged from tsdown and rolldown-vite
-- `peerDependenciesMeta` - Merged from tsdown and rolldown-vite
+- `peerDependencies` - Merged from tsdown and vite
+- `peerDependenciesMeta` - Merged from tsdown and vite
 - `bundledVersions` - Records vite, rolldown, and tsdown versions
 
 ---
@@ -234,7 +234,7 @@ dist/
 │   ├── parse-ast-index.mjs
 │   ├── plugins-index.mjs
 │   └── ...
-├── vite/                  # Vite (from rolldown-vite)
+├── vite/                  # Vite
 │   ├── node/
 │   │   ├── index.js
 │   │   ├── index.d.ts
@@ -291,7 +291,7 @@ dist/
 | ----------------------- | ------------------------------------- | -------------- |
 | `@rolldown/pluginutils` | `../../rolldown/packages/pluginutils` | Git submodule  |
 | `rolldown`              | `../../rolldown/packages/rolldown`    | Git submodule  |
-| `vite` (rolldown-vite)  | `../../rolldown-vite/packages/vite`   | Git submodule  |
+| `vite`                  | `../../vite/packages/vite`            | Git submodule  |
 | `tsdown`                | `node_modules/tsdown`                 | npm dependency |
 | `vitepress`             | `node_modules/vitepress`              | npm dependency |
 
@@ -312,9 +312,9 @@ dist/
 
 ## Maintenance: Updating Bundled Versions
 
-### Updating Vite (rolldown-vite)
+### Updating Vite
 
-1. Update the `rolldown-vite` git submodule to the new version
+1. Update the `vite` git submodule to the new version
 2. Run `pnpm -C packages/core build`
 3. Verify `bundledVersions.vite` in `package.json` is updated
 4. Test with `pnpm test`
@@ -389,7 +389,7 @@ const rolldownPluginUtilsDir = resolve(
   'pluginutils',
 );
 const rolldownSourceDir = resolve(projectDir, '..', '..', 'rolldown', 'packages', 'rolldown');
-const rolldownViteSourceDir = resolve(projectDir, '..', '..', 'rolldown-vite', 'packages', 'vite');
+const rolldownViteSourceDir = resolve(projectDir, '..', '..', 'vite', 'packages', 'vite');
 const tsdownSourceDir = resolve(projectDir, 'node_modules/tsdown');
 
 // Package name used for rewrites

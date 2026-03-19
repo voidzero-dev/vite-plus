@@ -31,7 +31,7 @@ interface PackageJson {
 type ExportValue = string | { [condition: string]: string | ExportValue } | null;
 
 const ROLLDOWN_DIR = 'rolldown';
-const ROLLDOWN_VITE_DIR = 'rolldown-vite';
+const VITE_DIR = 'vite';
 const CORE_PACKAGE_PATH = 'packages/core';
 
 function log(message: string) {
@@ -529,9 +529,9 @@ function mergePnpmWorkspaces(
   // Add rolldown packages
   packagesSet.add(ROLLDOWN_DIR);
   packagesSet.add(`${ROLLDOWN_DIR}/packages/*`);
-  // Add rolldown-vite packages
-  packagesSet.add(ROLLDOWN_VITE_DIR);
-  packagesSet.add(`${ROLLDOWN_VITE_DIR}/packages/*`);
+  // Add vite packages
+  packagesSet.add(VITE_DIR);
+  packagesSet.add(`${VITE_DIR}/packages/*`);
   result.packages = Array.from(packagesSet);
 
   // Merge catalog
@@ -547,7 +547,7 @@ function mergePnpmWorkspaces(
     }
   }
 
-  // Add all entries from rolldown-vite catalog (if it has one)
+  // Add all entries from vite catalog (if it has one)
   for (const [pkg, version] of Object.entries(rolldownVite.catalog || {})) {
     if (catalog[pkg]) {
       // Merge versions
@@ -578,14 +578,14 @@ function mergePnpmWorkspaces(
   (rolldownVite.minimumReleaseAgeExclude || []).forEach((item) => excludeSet.add(item));
   result.minimumReleaseAgeExclude = Array.from(excludeSet);
 
-  // Copy patchedDependencies from rolldown-vite (with path prefix)
+  // Copy patchedDependencies from vite (with path prefix)
   if (rolldownVite.patchedDependencies) {
     result.patchedDependencies = {};
     for (const [dep, patchPath] of Object.entries(rolldownVite.patchedDependencies)) {
-      // Prepend rolldown-vite directory to patch paths
+      // Prepend vite directory to patch paths
       result.patchedDependencies[dep] = patchPath.startsWith('./')
-        ? `./${ROLLDOWN_VITE_DIR}/${patchPath.slice(2)}`
-        : `${ROLLDOWN_VITE_DIR}/${patchPath}`;
+        ? `./${VITE_DIR}/${patchPath.slice(2)}`
+        : `${VITE_DIR}/${patchPath}`;
     }
   }
 
@@ -604,7 +604,7 @@ function mergePnpmWorkspaces(
     }
   }
 
-  // Copy packageExtensions from rolldown-vite
+  // Copy packageExtensions from vite
   if (rolldownVite.packageExtensions) {
     result.packageExtensions = {
       ...main.packageExtensions,
@@ -631,7 +631,7 @@ export async function syncRemote() {
     args: process.argv.slice(3),
   });
 
-  log('Starting rolldown/rolldown-vite sync...');
+  log('Starting rolldown/vite sync...');
 
   // Get the root directory (assuming script is run from root)
   const rootDir = process.cwd();
@@ -642,12 +642,18 @@ export async function syncRemote() {
       rmSync(join(rootDir, ROLLDOWN_DIR), { recursive: true, force: true });
       log(`Removed ${ROLLDOWN_DIR}`);
     }
-    if (existsSync(join(rootDir, ROLLDOWN_VITE_DIR))) {
-      rmSync(join(rootDir, ROLLDOWN_VITE_DIR), {
+    if (existsSync(join(rootDir, VITE_DIR))) {
+      rmSync(join(rootDir, VITE_DIR), {
         recursive: true,
         force: true,
       });
-      log(`Removed ${ROLLDOWN_VITE_DIR}`);
+      log(`Removed ${VITE_DIR}`);
+    }
+    // Clean up legacy 'rolldown-vite' directory (renamed to 'vite')
+    const legacyViteDir = join(rootDir, 'rolldown-vite');
+    if (existsSync(legacyViteDir)) {
+      rmSync(legacyViteDir, { recursive: true, force: true });
+      log('Removed legacy rolldown-vite directory');
     }
   }
 
@@ -659,10 +665,10 @@ export async function syncRemote() {
     upstreamVersions.rolldown.hash,
   );
   cloneOrResetRepo(
-    upstreamVersions['rolldown-vite'].repo,
-    join(rootDir, ROLLDOWN_VITE_DIR),
-    upstreamVersions['rolldown-vite'].branch,
-    upstreamVersions['rolldown-vite'].hash,
+    upstreamVersions['vite'].repo,
+    join(rootDir, VITE_DIR),
+    upstreamVersions['vite'].branch,
+    upstreamVersions['vite'].hash,
   );
 
   // Dynamically import dependencies after git clone
@@ -697,8 +703,8 @@ export async function syncRemote() {
     readFileSync(rolldownWorkspacePath, 'utf-8'),
   ) as PnpmWorkspace;
 
-  // Read rolldown-vite pnpm-workspace.yaml
-  const rolldownViteWorkspacePath = join(rootDir, ROLLDOWN_VITE_DIR, 'pnpm-workspace.yaml');
+  // Read vite pnpm-workspace.yaml
+  const rolldownViteWorkspacePath = join(rootDir, VITE_DIR, 'pnpm-workspace.yaml');
   const rolldownViteWorkspace = parseYaml(
     readFileSync(rolldownViteWorkspacePath, 'utf-8'),
   ) as PnpmWorkspace;
@@ -728,13 +734,7 @@ export async function syncRemote() {
 
   const corePackagePath = join(rootDir, CORE_PACKAGE_PATH, 'package.json');
   const rolldownPackagePath = join(rootDir, ROLLDOWN_DIR, 'packages', 'rolldown', 'package.json');
-  const rolldownVitePackagePath = join(
-    rootDir,
-    ROLLDOWN_VITE_DIR,
-    'packages',
-    'vite',
-    'package.json',
-  );
+  const rolldownVitePackagePath = join(rootDir, VITE_DIR, 'packages', 'vite', 'package.json');
   const pluginutilsPackagePath = join(
     rootDir,
     ROLLDOWN_DIR,
@@ -772,9 +772,9 @@ export async function syncRemote() {
 
   log('✓ package.json exports updated successfully!');
 
-  // Apply Vite+ branding patches to rolldown-vite source
-  const { brandRolldownVite } = await import('./brand-rolldown-vite.ts');
-  brandRolldownVite(rootDir);
+  // Apply Vite+ branding patches to vite source
+  const { brandVite } = await import('./brand-vite.ts');
+  brandVite(rootDir);
 
   log('✓ Done!');
 }

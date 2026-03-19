@@ -837,7 +837,7 @@ function rewritePnpmWorkspaceYaml(projectPath: string): void {
       }
       doc.setIn(['overrides', scalarString(key)], scalarString(version));
     }
-    // remove dependency selector from vite, e.g. "vite-plugin-svgr>vite": "npm:rolldown-vite@7.0.12"
+    // remove dependency selector from vite, e.g. "vite-plugin-svgr>vite": "npm:vite@7.0.12"
     const overrides = doc.getIn(['overrides']) as YAMLMap<Scalar<string>, Scalar<string>>;
     for (const item of overrides.items) {
       if (item.key.value.includes('>')) {
@@ -994,7 +994,7 @@ function rewriteRootWorkspacePackageJson(
           delete pkg.resolutions[key];
         }
       }
-      // remove dependency selector from vite, e.g. "vite-plugin-svgr>vite": "npm:rolldown-vite@7.0.12"
+      // remove dependency selector from vite, e.g. "vite-plugin-svgr>vite": "npm:vite@7.0.12"
       for (const key in pkg.pnpm?.overrides) {
         if (key.includes('>')) {
           const splits = key.split('>');

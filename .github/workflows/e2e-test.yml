@@ -251,6 +251,12 @@ jobs:
             node-version: 24
             command: |
               vp test run
+          - name: vp-config
+            node-version: 22
+            command: |
+              vp check
+              vp pack
+              vp test
         exclude:
           # frm-stack uses Docker (testcontainers) which doesn't work the same way on Windows
           - os: windows-latest

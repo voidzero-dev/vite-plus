@@ -286,7 +286,7 @@ The CLI package creates thin shim files that re-export from `@voidzero-dev/vite-
 3. **Reduces duplication** - No file copying, just re-exports
 4. **Preserves module resolution** - Node.js resolves to the actual core package
 
-**Note**: The `@voidzero-dev/vite-plus-core` package itself bundles multiple upstream projects (rolldown-vite, rolldown, tsdown, vitepress). See [Core Package Bundling](../core/BUNDLING.md) for details.
+**Note**: The `@voidzero-dev/vite-plus-core` package itself bundles multiple upstream projects (vite, rolldown, tsdown, vitepress). See [Core Package Bundling](../core/BUNDLING.md) for details.
 
 ### Export Mapping (Core)
 
