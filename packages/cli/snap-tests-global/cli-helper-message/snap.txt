@@ -71,7 +71,7 @@ Tools:
 
 Environment:
   Package manager  Not found
-  Node.js          v<semver> (default)
+  Node.js          v<semver>
 
 > vp install -h # show install help message
 VITE+ - The Unified Toolchain for the Web
@@ -440,4 +440,3 @@ Options:
   -h, --help             Print help
 
 Documentation: https://viteplus.dev/guide/upgrade
-

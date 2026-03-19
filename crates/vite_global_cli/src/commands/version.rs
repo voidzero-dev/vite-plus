@@ -198,7 +198,10 @@ pub async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
 
     let node_info = get_node_version_info(&cwd)
         .await
-        .map(|(v, s)| format!("v{v} ({s})"))
+        .map(|(v, s)| match s.as_str() {
+            "lts" | "default" | "system" => format!("v{v}"),
+            _ => format!("v{v} ({s})"),
+        })
         .unwrap_or(NOT_FOUND.to_string());
 
     let env_rows = [("Package manager", package_manager_info), ("Node.js", node_info)];
