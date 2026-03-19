@@ -33,7 +33,7 @@ Vite+ ships with these built-in templates:
 
 `vp create` is not limited to the built-in templates.
 
-- Use shorthand templates like `vite`, `@tanstack/start`, `next-app`, `nuxt`, `react-router`, and `vue`
+- Use shorthand templates like `vite`, `@tanstack/start`, `svelte`, `next-app`, `nuxt`, `react-router`, and `vue`
 - Use full package names like `create-vite` or `create-next-app`
 - Use local templates such as `./tools/create-ui-component` or `@acme/generator-*`
 - Use remote templates such as `github:user/repo` or `https://github.com/user/template-repo`
@@ -76,6 +76,7 @@ vp create vite:generator
 # Use shorthand community templates
 vp create vite
 vp create @tanstack/start
+vp create svelte
 
 # Use full package names
 vp create create-vite

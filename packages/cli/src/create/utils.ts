@@ -85,7 +85,7 @@ export function formatTargetDir(input: string): {
       error: `Parsed package name "${packageName}" is invalid: ${message}`,
     };
   }
-  return { directory: targetDir, packageName };
+  return { directory: targetDir.split(path.sep).join('/'), packageName };
 }
 
 // Get the project directory from the project name

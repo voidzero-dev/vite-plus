@@ -368,7 +368,7 @@ pub(crate) const CORE_SHIMS: &[&str] = &["node", "npm", "npx", "vp"];
 /// Create a shim for a package binary.
 ///
 /// On Unix: Creates a symlink to ../current/bin/vp
-/// On Windows: Creates a .cmd wrapper that calls `vp env exec <bin_name>`
+/// On Windows: Creates a trampoline .exe that forwards to vp.exe
 async fn create_package_shim(
     bin_dir: &vite_path::AbsolutePath,
     bin_name: &str,
@@ -406,40 +406,25 @@ async fn create_package_shim(
 
     #[cfg(windows)]
     {
-        let cmd_path = bin_dir.join(format!("{}.cmd", bin_name));
+        let shim_path = bin_dir.join(format!("{}.exe", bin_name));
 
         // Skip if already exists (e.g., re-installing the same package)
-        if tokio::fs::try_exists(&cmd_path).await.unwrap_or(false) {
+        if tokio::fs::try_exists(&shim_path).await.unwrap_or(false) {
             return Ok(());
         }
 
-        // Create .cmd wrapper that calls vp env exec <bin_name>.
-        // Use `--` so args like `--help` are forwarded to the package binary,
-        // not consumed by clap while parsing `vp env exec`.
-        // Set VITE_PLUS_HOME using %~dp0.. which resolves to the parent of bin/
-        // This ensures the vp binary knows its home directory
-        let wrapper_content = format!(
-            "@echo off\r\nset VITE_PLUS_HOME=%~dp0..\r\nset VITE_PLUS_SHIM_WRAPPER=1\r\n\"%VITE_PLUS_HOME%\\current\\bin\\vp.exe\" env exec {} -- %*\r\nexit /b %ERRORLEVEL%\r\n",
-            bin_name
-        );
-        tokio::fs::write(&cmd_path, wrapper_content).await?;
+        // Copy the trampoline binary as <bin_name>.exe.
+        // The trampoline detects the tool name from its own filename and sets
+        // VITE_PLUS_SHIM_TOOL env var before spawning vp.exe.
+        let trampoline_src = super::setup::get_trampoline_path()?;
+        tokio::fs::copy(trampoline_src.as_path(), &shim_path).await?;
 
-        // Also create shell script for Git Bash (bin_name without extension)
-        // Uses explicit "vp env exec <bin_name>" instead of symlink+argv[0] because
-        // Windows symlinks require admin privileges
-        let sh_path = bin_dir.join(bin_name);
-        let sh_content = format!(
-            r#"#!/bin/sh
-VITE_PLUS_HOME="$(dirname "$(dirname "$(readlink -f "$0" 2>/dev/null || echo "$0")")")"
-export VITE_PLUS_HOME
-export VITE_PLUS_SHIM_WRAPPER=1
-exec "$VITE_PLUS_HOME/current/bin/vp.exe" env exec {} -- "$@"
-"#,
-            bin_name
-        );
-        tokio::fs::write(&sh_path, sh_content).await?;
+        // Remove legacy .cmd and shell script wrappers from previous versions.
+        // In Git Bash/MSYS, the extensionless script takes precedence over .exe,
+        // so leftover wrappers would bypass the trampoline.
+        super::setup::cleanup_legacy_windows_shim(bin_dir, bin_name).await;
 
-        tracing::debug!("Created package shim wrappers for {} (.cmd and shell script)", bin_name);
+        tracing::debug!("Created package trampoline shim {:?}", shim_path);
     }
 
     Ok(())
@@ -466,16 +451,15 @@ async fn remove_package_shim(
 
     #[cfg(windows)]
     {
-        // Remove .cmd wrapper
-        let cmd_path = bin_dir.join(format!("{}.cmd", bin_name));
-        if tokio::fs::try_exists(&cmd_path).await.unwrap_or(false) {
-            tokio::fs::remove_file(&cmd_path).await?;
-        }
-
-        // Also remove shell script (for Git Bash)
-        let sh_path = bin_dir.join(bin_name);
-        if tokio::fs::try_exists(&sh_path).await.unwrap_or(false) {
-            tokio::fs::remove_file(&sh_path).await?;
+        // Remove trampoline .exe shim and legacy .cmd / shell script wrappers.
+        // Best-effort: ignore NotFound errors for files that don't exist.
+        for suffix in &[".exe", ".cmd", ""] {
+            let path = if suffix.is_empty() {
+                bin_dir.join(bin_name)
+            } else {
+                bin_dir.join(format!("{bin_name}{suffix}"))
+            };
+            let _ = tokio::fs::remove_file(&path).await;
         }
     }
 
@@ -486,13 +470,42 @@ async fn remove_package_shim(
 mod tests {
     use super::*;
 
+    /// RAII guard that sets `VITE_PLUS_TRAMPOLINE_PATH` to a fake binary on creation
+    /// and clears it on drop. Ensures cleanup even on test panics.
+    #[cfg(windows)]
+    struct FakeTrampolineGuard;
+
+    #[cfg(windows)]
+    impl FakeTrampolineGuard {
+        fn new(dir: &std::path::Path) -> Self {
+            let trampoline = dir.join("vp-shim.exe");
+            std::fs::write(&trampoline, b"fake-trampoline").unwrap();
+            unsafe {
+                std::env::set_var(vite_shared::env_vars::VITE_PLUS_TRAMPOLINE_PATH, &trampoline);
+            }
+            Self
+        }
+    }
+
+    #[cfg(windows)]
+    impl Drop for FakeTrampolineGuard {
+        fn drop(&mut self) {
+            unsafe {
+                std::env::remove_var(vite_shared::env_vars::VITE_PLUS_TRAMPOLINE_PATH);
+            }
+        }
+    }
+
     #[tokio::test]
+    #[cfg_attr(windows, serial_test::serial)]
     async fn test_create_package_shim_creates_bin_dir() {
         use tempfile::TempDir;
         use vite_path::AbsolutePathBuf;
 
         // Create a temp directory but don't create the bin subdirectory
         let temp_dir = TempDir::new().unwrap();
+        #[cfg(windows)]
+        let _guard = FakeTrampolineGuard::new(temp_dir.path());
         let bin_dir = temp_dir.path().join("bin");
         let bin_dir = AbsolutePathBuf::new(bin_dir).unwrap();
 
@@ -505,7 +518,7 @@ mod tests {
         // Verify bin directory was created
         assert!(bin_dir.as_path().exists());
 
-        // Verify shim file was created (on Windows, shims have .cmd extension)
+        // Verify shim file was created (on Windows, shims have .exe extension)
         // On Unix, symlinks may be broken (target doesn't exist), so use symlink_metadata
         #[cfg(unix)]
         {
@@ -517,7 +530,7 @@ mod tests {
         }
         #[cfg(windows)]
         {
-            let shim_path = bin_dir.join("test-shim.cmd");
+            let shim_path = bin_dir.join("test-shim.exe");
             assert!(shim_path.as_path().exists());
         }
     }
@@ -537,16 +550,19 @@ mod tests {
         #[cfg(unix)]
         let shim_path = bin_dir.join("node");
         #[cfg(windows)]
-        let shim_path = bin_dir.join("node.cmd");
+        let shim_path = bin_dir.join("node.exe");
         assert!(!shim_path.as_path().exists());
     }
 
     #[tokio::test]
+    #[cfg_attr(windows, serial_test::serial)]
     async fn test_remove_package_shim_removes_shim() {
         use tempfile::TempDir;
         use vite_path::AbsolutePathBuf;
 
         let temp_dir = TempDir::new().unwrap();
+        #[cfg(windows)]
+        let _guard = FakeTrampolineGuard::new(temp_dir.path());
         let bin_dir = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
 
         // Create a shim
@@ -573,7 +589,7 @@ mod tests {
         }
         #[cfg(windows)]
         {
-            let shim_path = bin_dir.join("tsc.cmd");
+            let shim_path = bin_dir.join("tsc.exe");
             assert!(shim_path.as_path().exists(), "Shim should exist after creation");
 
             // Remove the shim
@@ -597,13 +613,16 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg_attr(windows, serial_test::serial)]
     async fn test_uninstall_removes_shims_from_metadata() {
         use tempfile::TempDir;
         use vite_path::AbsolutePathBuf;
 
         let temp_dir = TempDir::new().unwrap();
         let temp_path = temp_dir.path().to_path_buf();
-        let _guard = vite_shared::EnvConfig::test_guard(
+        #[cfg(windows)]
+        let _trampoline_guard = FakeTrampolineGuard::new(&temp_path);
+        let _env_guard = vite_shared::EnvConfig::test_guard(
             vite_shared::EnvConfig::for_test_with_home(&temp_path),
         );
 
@@ -630,10 +649,10 @@ mod tests {
         }
         #[cfg(windows)]
         {
-            assert!(bin_dir.join("tsc.cmd").as_path().exists(), "tsc.cmd shim should exist");
+            assert!(bin_dir.join("tsc.exe").as_path().exists(), "tsc.exe shim should exist");
             assert!(
-                bin_dir.join("tsserver.cmd").as_path().exists(),
-                "tsserver.cmd shim should exist"
+                bin_dir.join("tsserver.exe").as_path().exists(),
+                "tsserver.exe shim should exist"
             );
         }
 
@@ -674,10 +693,10 @@ mod tests {
         }
         #[cfg(windows)]
         {
-            assert!(!bin_dir.join("tsc.cmd").as_path().exists(), "tsc.cmd shim should be removed");
+            assert!(!bin_dir.join("tsc.exe").as_path().exists(), "tsc.exe shim should be removed");
             assert!(
-                !bin_dir.join("tsserver.cmd").as_path().exists(),
-                "tsserver.cmd shim should be removed"
+                !bin_dir.join("tsserver.exe").as_path().exists(),
+                "tsserver.exe shim should be removed"
             );
         }
     }

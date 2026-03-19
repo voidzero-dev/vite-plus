@@ -33,6 +33,7 @@ Examples:
   # Use existing templates (shorthand expands to create-* packages)
   vp create vite
   vp create @tanstack/start
+  vp create svelte
   vp create vite -- --template react-ts
 
   # Full package names also work
@@ -71,6 +72,7 @@ Popular Templates (shorthand):
   next-app         Next.js application (create-next-app)
   nuxt             Nuxt application (create-nuxt)
   react-router     React Router application (create-react-router)
+  svelte           Svelte application (sv create)
   vue              Vue application (create-vue)
 
 Examples:

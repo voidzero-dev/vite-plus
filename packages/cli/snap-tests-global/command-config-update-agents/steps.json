@@ -1,0 +1,9 @@
+{
+  "commands": [
+    { "command": "git init", "ignoreOutput": true },
+    "vp config # should auto-update agent instructions",
+    "head -5 AGENTS.md # verify user content preserved",
+    "tail -3 AGENTS.md # verify user content preserved",
+    "grep -q 'OUTDATED CONTENT' AGENTS.md && echo 'ERROR: outdated content still present' || echo 'outdated content replaced' # verify old content gone"
+  ]
+}

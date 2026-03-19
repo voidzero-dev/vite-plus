@@ -110,6 +110,13 @@ function autoFixRemoteTemplateCommand(templateInfo: TemplateInfo, workspaceInfo:
     templateInfo.args.push('--no-install');
     // don't setup toolchain automatically
     templateInfo.args.push('--no-toolchain');
+  } else if (packageName === 'sv') {
+    // ensure create command is used
+    if (templateInfo.args[0] !== 'create') {
+      templateInfo.args.unshift('create');
+    }
+    // don't run npm install after project creation
+    templateInfo.args.push('--no-install');
   }
 
   if (workspaceInfo.isMonorepo) {

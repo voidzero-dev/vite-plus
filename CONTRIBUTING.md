@@ -2,6 +2,8 @@
 
 ## Initial Setup
 
+### macOS / Linux
+
 You'll need the following tools installed on your system:
 
 ```
@@ -20,6 +22,28 @@ Initial setup to install dependencies for Vite+:
 ```
 just init
 ```
+
+### Windows
+
+You'll need the following tools installed on your system. You can use [winget](https://learn.microsoft.com/en-us/windows/package-manager/).
+
+```powershell
+winget install pnpm.pnpm OpenJS.NodeJS.LTS Casey.Just Kitware.CMake
+```
+
+Install Rust & Cargo from [rustup.rs](https://rustup.rs/), then install `cargo-binstall`:
+
+```powershell
+cargo install cargo-binstall
+```
+
+Initial setup to install dependencies for Vite+:
+
+```powershell
+just init
+```
+
+**Note:** Run commands in PowerShell or Windows Terminal. Some commands may require elevated permissions.
 
 ## Build Vite+ and upstream dependencies
 

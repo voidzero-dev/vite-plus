@@ -60,13 +60,17 @@ describe('expandCreateShorthand', () => {
     expect(expandCreateShorthand('/absolute/path')).toBe('/absolute/path');
   });
 
-  it('should handle scope-only input gracefully', () => {
-    expect(expandCreateShorthand('@scope')).toBe('@scope');
+  it('should expand scope-only input to @scope/create', () => {
+    expect(expandCreateShorthand('@scope')).toBe('@scope/create');
+    expect(expandCreateShorthand('@scope@latest')).toBe('@scope/create@latest');
+    expect(expandCreateShorthand('@scope@1.2.3')).toBe('@scope/create@1.2.3');
   });
 
   it('should handle special cases where default convention does not apply', () => {
     expect(expandCreateShorthand('nitro')).toBe('create-nitro-app');
     expect(expandCreateShorthand('nitro@latest')).toBe('create-nitro-app@latest');
+    expect(expandCreateShorthand('svelte')).toBe('sv');
+    expect(expandCreateShorthand('svelte@latest')).toBe('sv@latest');
   });
 });
 

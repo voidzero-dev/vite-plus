@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "pnpm -F @voidzero-dev/* -F vite-plus build",
-    "bootstrap-cli": "pnpm build && cargo build -p vite_global_cli --release && pnpm install-global-cli",
+    "bootstrap-cli": "pnpm build && cargo build -p vite_global_cli -p vite_trampoline --release && pnpm install-global-cli",
     "bootstrap-cli:ci": "pnpm install-global-cli",
     "install-global-cli": "tool install-global-cli",
     "tsgo": "tsgo -b tsconfig.json",
@@ -13,8 +13,8 @@
     "test": "vp test run && pnpm -r snap-test",
     "fmt": "vp fmt",
     "test:unit": "vp test run",
-    "docs:dev": "pnpm --filter=./docs dev",
-    "docs:build": "pnpm --filter=./docs build",
+    "docs:dev": "pnpm -C docs dev",
+    "docs:build": "pnpm -C docs build",
     "prepare": "husky"
   },
   "devDependencies": {

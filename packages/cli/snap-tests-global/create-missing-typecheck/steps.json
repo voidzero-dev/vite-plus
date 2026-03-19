@@ -1,4 +1,5 @@
 {
+  "ignoredPlatforms": ["darwin", "win32"],
   "commands": [
     {
       "command": "vp create vite:application --no-interactive # create standalone app",

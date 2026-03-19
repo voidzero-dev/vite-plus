@@ -124,6 +124,7 @@ jobs:
           path: |
             ./target/${{ matrix.settings.target }}/release/vp
             ./target/${{ matrix.settings.target }}/release/vp.exe
+            ./target/${{ matrix.settings.target }}/release/vp-shim.exe
           if-no-files-found: error
 
       - name: Remove .node files before upload dist

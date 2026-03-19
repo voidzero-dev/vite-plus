@@ -115,7 +115,7 @@
     "@babel/types": "^7.28.5",
     "@oxc-node/cli": "catalog:",
     "@oxc-node/core": "catalog:",
-    "@vitejs/devtools": "^0.1.0",
+    "@vitejs/devtools": "^0.1.2",
     "es-module-lexer": "^1.7.0",
     "hookable": "^6.0.1",
     "magic-string": "^0.30.21",
@@ -136,8 +136,8 @@
   },
   "peerDependencies": {
     "@arethetypeswrong/core": "^0.18.1",
-    "@tsdown/css": "0.21.3",
-    "@tsdown/exe": "0.21.3",
+    "@tsdown/css": "0.21.4",
+    "@tsdown/exe": "0.21.4",
     "@types/node": "^20.19.0 || >=22.12.0",
     "@vitejs/devtools": "^0.0.0-alpha.31",
     "esbuild": "^0.27.0",
@@ -219,6 +219,6 @@
   "bundledVersions": {
     "vite": "8.0.0",
     "rolldown": "1.0.0-rc.9",
-    "tsdown": "0.21.3"
+    "tsdown": "0.21.4"
   }
 }

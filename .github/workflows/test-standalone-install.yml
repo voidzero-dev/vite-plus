@@ -19,7 +19,7 @@ defaults:
     shell: bash
 
 env:
-  VITE_PLUS_VERSION: latest
+  VITE_PLUS_VERSION: alpha
 
 jobs:
   test-install-sh:
@@ -131,7 +131,7 @@ jobs:
         run: |
           docker run --rm --platform linux/arm64 \
             -v "${{ github.workspace }}:/workspace" \
-            -e VITE_PLUS_VERSION=latest \
+            -e VITE_PLUS_VERSION=alpha \
             ubuntu:20.04 bash -c "
               ls -al ~/
               apt-get update && apt-get install -y curl ca-certificates
@@ -233,7 +233,7 @@ jobs:
             exit 1
           }
 
-          $expectedShims = @("node.cmd", "npm.cmd", "npx.cmd")
+          $expectedShims = @("node.exe", "npm.exe", "npx.exe")
           foreach ($shim in $expectedShims) {
             $shimFile = Join-Path $binPath $shim
             if (-not (Test-Path $shimFile)) {
@@ -300,7 +300,7 @@ jobs:
             exit 1
           }
 
-          $expectedShims = @("node.cmd", "npm.cmd", "npx.cmd")
+          $expectedShims = @("node.exe", "npm.exe", "npx.exe")
           foreach ($shim in $expectedShims) {
             $shimFile = Join-Path $binPath $shim
             if (-not (Test-Path $shimFile)) {
@@ -380,8 +380,8 @@ jobs:
             exit 1
           }
 
-          # Verify shim executables exist (all use .cmd wrappers on Windows)
-          $expectedShims = @("node.cmd", "npm.cmd", "npx.cmd")
+          # Verify shim executables exist (trampoline .exe files on Windows)
+          $expectedShims = @("node.exe", "npm.exe", "npx.exe")
           foreach ($shim in $expectedShims) {
             $shimFile = Join-Path $binPath $shim
             if (-not (Test-Path $shimFile)) {
@@ -419,8 +419,8 @@ jobs:
           set "BIN_PATH=%USERPROFILE%\.vite-plus\bin"
           dir "%BIN_PATH%"
 
-          REM Verify shim executables exist (Windows uses .cmd wrappers)
-          for %%s in (node.cmd npm.cmd npx.cmd vp.cmd) do (
+          REM Verify shim executables exist (Windows uses trampoline .exe files)
+          for %%s in (node.exe npm.exe npx.exe vp.exe) do (
             if not exist "%BIN_PATH%\%%s" (
               echo Error: Shim not found: %BIN_PATH%\%%s
               exit /b 1
@@ -462,22 +462,13 @@ jobs:
             exit 1
           fi
 
-          # Verify .cmd wrappers exist (for cmd.exe/PowerShell)
-          for shim in node.cmd npm.cmd npx.cmd vp.cmd; do
+          # Verify trampoline .exe files exist
+          for shim in node.exe npm.exe npx.exe vp.exe; do
             if [ ! -f "$BIN_PATH/$shim" ]; then
-              echo "Error: .cmd wrapper not found: $BIN_PATH/$shim"
+              echo "Error: Trampoline shim not found: $BIN_PATH/$shim"
               exit 1
             fi
-            echo "Found .cmd wrapper: $BIN_PATH/$shim"
-          done
-
-          # Verify shell scripts exist (for Git Bash)
-          for shim in node npm npx vp; do
-            if [ ! -f "$BIN_PATH/$shim" ]; then
-              echo "Error: Shell script not found: $BIN_PATH/$shim"
-              exit 1
-            fi
-            echo "Found shell script: $BIN_PATH/$shim"
+            echo "Found trampoline shim: $BIN_PATH/$shim"
           done
 
           # Verify vp env doctor works

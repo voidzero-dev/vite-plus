@@ -18,7 +18,7 @@
   },
   "devDependencies": {
     "@voidzero-dev/vitepress-theme": "4.8.3",
-    "oxc-minify": "^0.110.0",
+    "oxc-minify": "^0.120.0",
     "tailwindcss": "^4.1.18",
     "vitepress": "2.0.0-alpha.15"
   }

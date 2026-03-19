@@ -111,6 +111,7 @@ const helpMessage = renderCliDoc({
         `  ${muted('# Use existing templates (shorthand expands to create-* packages)')}`,
         `  ${accent('vp create vite')}`,
         `  ${accent('vp create @tanstack/start')}`,
+        `  ${accent('vp create svelte')}`,
         `  ${accent('vp create vite -- --template react-ts')}`,
         '',
         `  ${muted('# Full package names also work')}`,
@@ -156,6 +157,7 @@ const listTemplatesMessage = renderCliDoc({
         { label: 'next-app', description: 'Next.js application (create-next-app)' },
         { label: 'nuxt', description: 'Nuxt application (create-nuxt)' },
         { label: 'react-router', description: 'React Router application (create-react-router)' },
+        { label: 'svelte', description: 'Svelte application (sv create)' },
         { label: 'vue', description: 'Vue application (create-vue)' },
       ],
     },
@@ -584,7 +586,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       const selected = await promptPackageNameAndTargetDir(defaultPackageName, options.interactive);
       packageName = selected.packageName;
       targetDir = selectedParentDir
-        ? path.join(selectedParentDir, selected.targetDir)
+        ? path.join(selectedParentDir, selected.targetDir).split(path.sep).join('/')
         : selected.targetDir;
     }
   }
@@ -782,7 +784,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       const selected = await promptPackageNameAndTargetDir(defaultPackageName, options.interactive);
       packageName = selected.packageName;
       targetDir = templateInfo.parentDir
-        ? path.join(templateInfo.parentDir, selected.targetDir)
+        ? path.join(templateInfo.parentDir, selected.targetDir).split(path.sep).join('/')
         : selected.targetDir;
     }
     pauseCreateProgress();
