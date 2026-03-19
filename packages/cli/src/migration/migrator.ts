@@ -1394,7 +1394,7 @@ function mergeAndRemoveJsonConfig(
  * Merge a staged config object into vite.config.ts as `staged: { ... }`.
  * Writes the config to a temp JSON file, calls mergeJsonConfig NAPI, then cleans up.
  */
-function mergeStagedConfigToViteConfig(
+export function mergeStagedConfigToViteConfig(
   projectPath: string,
   stagedConfig: Record<string, string | string[]>,
   silent = false,
@@ -1440,7 +1440,7 @@ function mergeStagedConfigToViteConfig(
 /**
  * Check if vite.config.ts already has a `staged` config key.
  */
-function hasStagedConfigInViteConfig(projectPath: string): boolean {
+export function hasStagedConfigInViteConfig(projectPath: string): boolean {
   const configs = detectConfigs(projectPath);
   if (!configs.viteConfig) {
     return false;
@@ -1689,7 +1689,7 @@ export function setupGitHooks(
     const pkgData = readJsonFile<{ 'lint-staged'?: Record<string, string | string[]> }>(
       packageJsonPath,
     );
-    const stagedConfig = pkgData?.['lint-staged'] ?? { '*': 'vp check --fix' };
+    const stagedConfig = pkgData?.['lint-staged'] ?? DEFAULT_STAGED_CONFIG;
     const updated = rewriteScripts(JSON.stringify(stagedConfig), readRulesYaml());
     const finalConfig: Record<string, string | string[]> = updated
       ? JSON.parse(updated)
@@ -1821,6 +1821,20 @@ const STALE_LINT_STAGED_PATTERNS = [
   /^((?:[A-Z_][A-Z0-9_]*(?:=\S*)?\s+)*)(pnpm|pnpm exec|npx|yarn|yarn run|npm exec|npm run|bunx|bun run|bun x)\s+lint-staged\b/,
   /^((?:[A-Z_][A-Z0-9_]*(?:=\S*)?\s+)*)lint-staged\b/,
 ];
+
+const DEFAULT_STAGED_CONFIG: Record<string, string> = { '*': 'vp check --fix' };
+
+/**
+ * Ensure the pre-commit hook exists with `vp staged`, and that
+ * vite.config.ts contains a `staged` block (using the default config
+ * if none is present). Called by `vp config` after hook installation.
+ */
+export function ensurePreCommitHook(projectPath: string, dir = '.vite-hooks'): void {
+  if (!hasStagedConfigInViteConfig(projectPath)) {
+    mergeStagedConfigToViteConfig(projectPath, DEFAULT_STAGED_CONFIG, true);
+  }
+  createPreCommitHook(projectPath, dir);
+}
 
 export function createPreCommitHook(projectPath: string, dir = '.vite-hooks'): void {
   const huskyDir = path.join(projectPath, dir);
