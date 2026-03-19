@@ -108,13 +108,30 @@ for (const [platform, rustTarget] of Object.entries(RUST_TARGETS)) {
     chmodSync(join(platformCliDir, binaryName), 0o755);
   }
 
+  // Copy trampoline shim binary for Windows (required)
+  // The trampoline is a small exe that replaces .cmd wrappers to avoid
+  // "Terminate batch job (Y/N)?" on Ctrl+C (see issue #835)
+  const shimName = 'vp-shim.exe';
+  const files = [binaryName];
+  if (isWindows) {
+    const shimSource = join(repoRoot, 'target', rustTarget, 'release', shimName);
+    if (!existsSync(shimSource)) {
+      console.error(
+        `Error: ${shimName} not found at ${shimSource}. Run "cargo build -p vite_trampoline --release --target ${rustTarget}" first.`,
+      );
+      process.exit(1);
+    }
+    copyFileSync(shimSource, join(platformCliDir, shimName));
+    files.push(shimName);
+  }
+
   // Generate package.json
   const cliPackage = {
     name: `@voidzero-dev/vite-plus-cli-${platform}`,
     version: cliVersion,
     os: [meta.os],
     cpu: [meta.cpu],
-    files: [binaryName],
+    files,
     description: `Vite+ CLI binary for ${platform}`,
     repository: cliPackageJson.repository,
   };

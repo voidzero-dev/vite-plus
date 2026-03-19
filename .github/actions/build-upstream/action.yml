@@ -40,6 +40,7 @@ runs:
           packages/cli/binding/index.d.cts
           target/${{ inputs.target }}/release/vp
           target/${{ inputs.target }}/release/vp.exe
+          target/${{ inputs.target }}/release/vp-shim.exe
         key: ${{ steps.cache-key.outputs.key }}
 
     # Apply Vite+ branding patches to rolldown-vite source (CI checks out
@@ -111,6 +112,11 @@ runs:
       shell: bash
       run: cargo build --release --target ${{ inputs.target }} -p vite_global_cli
 
+    - name: Build trampoline shim binary (Windows only)
+      if: steps.cache-restore.outputs.cache-hit != 'true' && contains(inputs.target, 'windows')
+      shell: bash
+      run: cargo build --release --target ${{ inputs.target }} -p vite_trampoline
+
     - name: Save NAPI binding cache
       if: steps.cache-restore.outputs.cache-hit != 'true'
       uses: actions/cache/save@94b89442628ad1d101e352b7ee38f30e1bef108e # v5
@@ -123,6 +129,7 @@ runs:
           packages/cli/binding/index.d.cts
           target/${{ inputs.target }}/release/vp
           target/${{ inputs.target }}/release/vp.exe
+          target/${{ inputs.target }}/release/vp-shim.exe
         key: ${{ steps.cache-key.outputs.key }}
 
     # Build vite-plus TypeScript after native bindings are ready
