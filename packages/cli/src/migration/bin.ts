@@ -540,6 +540,17 @@ function showMigrationSummary(options: {
   }
 }
 
+async function checkRolldownCompatibility(rootDir: string, report: MigrationReport): Promise<void> {
+  try {
+    const { resolveViteConfig } = await import('../resolve-vite-config.js');
+    const { checkManualChunksCompat } = await import('./compat.js');
+    const config = await resolveViteConfig(rootDir);
+    checkManualChunksCompat(config.build?.rollupOptions?.output, report);
+  } catch {
+    // Config resolution may fail — skip compatibility check silently
+  }
+}
+
 async function executeMigrationPlan(
   workspaceInfoOptional: WorkspaceInfoOptional,
   plan: MigrationPlan,
@@ -725,6 +736,11 @@ async function executeMigrationPlan(
     installArgs,
     { silent: true },
   );
+
+  // 12. Check for Rolldown-incompatible config patterns
+  updateMigrationProgress('Checking config compatibility');
+  await checkRolldownCompatibility(workspaceInfo.rootDir, report);
+
   clearMigrationProgress();
   return {
     installDurationMs: initialInstallSummary.durationMs + finalInstallSummary.durationMs,
@@ -825,7 +841,10 @@ async function main() {
       }
     }
 
-    if (didMigrate) {
+    // Check for Rolldown-incompatible config patterns
+    await checkRolldownCompatibility(workspaceInfoOptional.rootDir, report);
+
+    if (didMigrate || report.warnings.length > 0) {
       clearMigrationProgress();
       showMigrationSummary({
         projectRoot: workspaceInfoOptional.rootDir,
