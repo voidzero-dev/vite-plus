@@ -56,7 +56,7 @@ Neither identifies the experience as "Vite+". Users who installed `vite-plus` se
 | ------------------ | ----------------------- |
 | Rust (global CLI)  | `owo_colors`            |
 | JS (vite-plus CLI) | `node:util styleText()` |
-| vite      | `picocolors`            |
+| vite               | `picocolors`            |
 
 **5. The `[vite]` logger prefix in vite**
 
