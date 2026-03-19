@@ -10,11 +10,10 @@ use std::{
 use owo_colors::OwoColorize;
 use serde::Deserialize;
 use vite_install::get_package_manager_type_and_version;
-use vite_js_runtime::{VersionSource, resolve_node_version};
 use vite_path::AbsolutePathBuf;
 use vite_workspace::find_workspace_root;
 
-use crate::{error::Error, help};
+use crate::{commands::env::config::resolve_version, error::Error, help};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -133,22 +132,22 @@ fn format_version(version: Option<String>) -> String {
 }
 
 async fn get_node_version_info(cwd: &AbsolutePathBuf) -> Option<(String, String)> {
-    if let Ok(Some(resolution)) = resolve_node_version(cwd, true).await {
-        let source_label = match resolution.source {
-            VersionSource::NodeVersionFile => ".node-version",
-            VersionSource::EnginesNode => "engines.node",
-            VersionSource::DevEnginesRuntime => "devEngines.runtime",
-        };
-        return Some((resolution.version.to_string(), source_label.to_string()));
+    // Try the full managed resolution chain
+    if let Ok(resolution) = resolve_version(cwd).await {
+        return Some((resolution.version, resolution.source));
     }
 
-    // Fallback: detect system Node version
+    // Fallback: detect system Node version (with VITE_PLUS_BYPASS to avoid hitting the shim)
     let version = detect_system_node_version()?;
     Some((version, "system".to_string()))
 }
 
 fn detect_system_node_version() -> Option<String> {
-    let output = std::process::Command::new("node").arg("--version").output().ok()?;
+    let output = std::process::Command::new("node")
+        .arg("--version")
+        .env(vite_shared::env_vars::VITE_PLUS_BYPASS, "1")
+        .output()
+        .ok()?;
     if !output.status.success() {
         return None;
     }
