@@ -22,19 +22,3 @@
 > git add -A && git commit -m 'second'
 > printf 'eval("code");\n' > src/fail.js && git add src/fail.js
 [1]> vp staged > /dev/null 2>&1 # should fail when staged .js file has lint errors
-[FAILED] vp lint [FAILED]
-[FAILED] vp lint [FAILED]
-
-✖ vp lint:
-VITE+ - The Unified Toolchain for the Web
-
-
-  × eslint(no-eval): eval can be harmful.
-   ╭─[src/fail.js:1:1]
- 1 │ eval("code");
-   · ────
-   ╰────
-  help: Avoid eval(). For JSON parsing use JSON.parse(); for dynamic property access use bracket notation (obj[key]); for other cases refactor to avoid evaluating strings as code.
-
-Found 0 warnings and 1 error.
-Finished in <variable>ms on 1 file with <variable> rules using <variable> threads.
