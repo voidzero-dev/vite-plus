@@ -542,9 +542,9 @@ function showMigrationSummary(options: {
 
 async function checkRolldownCompatibility(rootDir: string, report: MigrationReport): Promise<void> {
   try {
-    const { resolveViteConfig } = await import('../resolve-vite-config.js');
+    const { resolveConfig } = await import('../index.js');
     const { checkManualChunksCompat } = await import('./compat.js');
-    const config = await resolveViteConfig(rootDir);
+    const config = await resolveConfig({ root: rootDir, logLevel: 'silent' }, 'build');
     checkManualChunksCompat(config.build?.rollupOptions?.output, report);
   } catch {
     // Config resolution may fail — skip compatibility check silently
