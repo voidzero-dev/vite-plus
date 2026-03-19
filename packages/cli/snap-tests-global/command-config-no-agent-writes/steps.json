@@ -1,0 +1,8 @@
+{
+  "commands": [
+    { "command": "git init", "ignoreOutput": true },
+    "vp config",
+    "cat CLAUDE.md # should be unchanged",
+    "test -f AGENTS.md && echo 'AGENTS.md exists' || echo 'AGENTS.md not created' # should not exist"
+  ]
+}

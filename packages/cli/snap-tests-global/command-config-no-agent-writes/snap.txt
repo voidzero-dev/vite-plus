@@ -1,0 +1,9 @@
+> git init
+> vp config
+> cat CLAUDE.md # should be unchanged
+# My Custom Claude Instructions
+
+Do not modify this file.
+
+> test -f AGENTS.md && echo 'AGENTS.md exists' || echo 'AGENTS.md not created' # should not exist
+AGENTS.md not created
