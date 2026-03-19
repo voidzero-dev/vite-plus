@@ -1,0 +1,16 @@
+> git init
+> vp config # should auto-update agent instructions
+> head -5 AGENTS.md # verify user content preserved
+# My Project
+
+Custom instructions here.
+
+<!--VITE PLUS START-->
+
+> tail -3 AGENTS.md # verify user content preserved
+<!--VITE PLUS END-->
+
+More custom content below.
+
+> grep -q 'OUTDATED CONTENT' AGENTS.md && echo 'ERROR: outdated content still present' || echo 'outdated content replaced' # verify old content gone
+outdated content replaced

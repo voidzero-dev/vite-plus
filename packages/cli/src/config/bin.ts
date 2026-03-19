@@ -1,8 +1,8 @@
-// Unified `vp config` command — merges the old `vp prepare` (hooks setup) and
-// `vp init` (agent integration) into a single entry point.
+// Unified `vp config` command — hooks setup + agent instruction updates.
 //
-// Interactive mode (TTY, no CI): prompts on first run, updates silently after.
-// Non-interactive mode (scripts.prepare, CI, piped): runs everything by default.
+// Hooks: interactive mode prompts on first run; non-interactive installs by default.
+// Agent instructions: silently updates existing files with Vite+ markers.
+// Never creates new agent files. Same behavior for prepare and manual runs.
 
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -10,16 +10,11 @@ import { join } from 'node:path';
 import mri from 'mri';
 
 import { vitePlusHeader } from '../../binding/index.js';
+import { ensurePreCommitHook } from '../migration/migrator.js';
+import { updateExistingAgentInstructions } from '../utils/agent.js';
 import { renderCliDoc } from '../utils/help.js';
 import { defaultInteractive, promptGitHooks } from '../utils/prompts.js';
-import { linkSkillsForSpecificAgents } from '../utils/skills.js';
 import { log } from '../utils/terminal.js';
-import {
-  resolveAgentSetup,
-  hasExistingAgentInstructions,
-  injectAgentBlock,
-  setupMcpConfig,
-} from './agent.js';
 import { install } from './hooks.js';
 
 async function main() {
@@ -59,6 +54,7 @@ async function main() {
   const dir = args['hooks-dir'] as string | undefined;
   const hooksOnly = args['hooks-only'] as boolean;
   const interactive = defaultInteractive();
+  const isPrepareScript = process.env.npm_lifecycle_event === 'prepare';
   const root = process.cwd();
 
   // --- Step 1: Hooks setup ---
@@ -66,8 +62,9 @@ async function main() {
   const isFirstHooksRun = !existsSync(join(root, hooksDir, '_', 'pre-commit'));
 
   let shouldSetupHooks = true;
-  if (interactive && isFirstHooksRun && !dir) {
+  if (interactive && isFirstHooksRun && !dir && !isPrepareScript) {
     // --hooks-dir implies agreement; only prompt when using default dir on first run
+    // prepare script implies the project opted into hooks — install automatically
     shouldSetupHooks = await promptGitHooks({ interactive });
   }
 
@@ -79,18 +76,17 @@ async function main() {
         process.exit(1);
       }
     }
+
+    // Only create pre-commit hook when install() succeeded (empty message).
+    // Skip when hooks were disabled or git is unavailable.
+    if (!message) {
+      ensurePreCommitHook(root, hooksDir);
+    }
   }
 
-  // --- Step 2: Agent setup (skipped with --hooks-only or during prepare lifecycle) ---
-  if (!hooksOnly && process.env.npm_lifecycle_event !== 'prepare') {
-    const isFirstAgentRun = !hasExistingAgentInstructions(root);
-    const agentSetup = await resolveAgentSetup(root, interactive && isFirstAgentRun);
-
-    injectAgentBlock(root, agentSetup.instructionFilePath);
-    setupMcpConfig(root, agentSetup.agents);
-    if (agentSetup.agents.length > 0) {
-      linkSkillsForSpecificAgents(root, agentSetup.agents);
-    }
+  // --- Step 2: Update agent instructions if Vite+ header exists and is outdated ---
+  if (!hooksOnly) {
+    updateExistingAgentInstructions(root);
   }
 }
 
