@@ -325,6 +325,9 @@ add_bin_to_path() {
   ref_pattern=$(printf '%s' "$INSTALL_DIR_REF" | sed 's/[.[\*^$()+?{|]/\\&/g')
 
   if [ -f "$shell_config" ]; then
+    if [ ! -w "$shell_config" ]; then
+      error "Cannot write to $shell_config. Please check the file permissions and re-run the installer."
+    fi
     if grep -q "${abs_pattern}/env" "$shell_config" 2>/dev/null || \
        grep -q "${ref_pattern}/env" "$shell_config" 2>/dev/null; then
       return 2

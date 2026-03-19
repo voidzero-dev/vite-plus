@@ -178,9 +178,13 @@ function Configure-UserPath {
     }
 
     $newPath = "$binPath;$userPath"
-    [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
-    $env:Path = "$binPath;$env:Path"
-    return "true"
+    try {
+        [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
+        $env:Path = "$binPath;$env:Path"
+        return "true"
+    } catch {
+        Write-Error-Exit "Cannot update user PATH. Please check your system permissions and re-run the installer."
+    }
 }
 
 # Run vp env setup --refresh, showing output only on failure
@@ -458,6 +462,8 @@ exec "`$VITE_PLUS_HOME/current/bin/vp.exe" "`$@"
         Write-Host ""
         Write-Host "  Note: Restart your terminal and IDE for changes to take effect."
     }
+
+
 
     Write-Host ""
 }
