@@ -62,6 +62,8 @@ describe('expandCreateShorthand', () => {
 
   it('should expand scope-only input to @scope/create', () => {
     expect(expandCreateShorthand('@scope')).toBe('@scope/create');
+    expect(expandCreateShorthand('@scope@latest')).toBe('@scope/create@latest');
+    expect(expandCreateShorthand('@scope@1.2.3')).toBe('@scope/create@1.2.3');
   });
 
   it('should handle special cases where default convention does not apply', () => {
