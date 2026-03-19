@@ -326,7 +326,8 @@ add_bin_to_path() {
 
   if [ -f "$shell_config" ]; then
     if [ ! -w "$shell_config" ]; then
-      error "Cannot write to $shell_config. Please check the file permissions and re-run the installer."
+      warn "Cannot write to $shell_config (permission denied), skipping."
+      return 1
     fi
     if grep -q "${abs_pattern}/env" "$shell_config" 2>/dev/null || \
        grep -q "${ref_pattern}/env" "$shell_config" 2>/dev/null; then
