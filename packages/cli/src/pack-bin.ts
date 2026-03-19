@@ -37,7 +37,9 @@ function externalDtsTypeOnlyPlugin() {
     name: 'vite-plus:external-dts-type-only',
     transform: {
       filter: { id: { include: [EXTERNAL_DTS_FIX_RE] } },
-      handler(code: string, id: string) {
+      handler(code: string, rawId: string) {
+        // Normalize Windows backslash paths to forward slashes for regex matching
+        const id = rawId.replaceAll('\\', '/');
         if (EXTERNAL_DTS_INTERNAL_RE.test(id)) {
           // postcss/lightningcss internal files: transform imports only
           // (exports may include value re-exports like `export const Features`)
