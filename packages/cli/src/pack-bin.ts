@@ -128,7 +128,7 @@ cli
     }
 
     async function runBuild() {
-      const viteConfig = await resolveViteConfig(process.cwd());
+      const viteConfig = await resolveViteConfig(process.cwd(), { traverseUp: true });
 
       const configFiles: string[] = [];
       if (viteConfig.configFile) {
