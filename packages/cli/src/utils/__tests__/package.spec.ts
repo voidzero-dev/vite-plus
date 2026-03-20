@@ -27,7 +27,10 @@ describe('checkNpmPackageExists', () => {
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue({ status: 200, ok: true } as Response);
     await checkNpmPackageExists('create-vite@latest');
-    expect(mockFetch).toHaveBeenCalledWith('https://registry.npmjs.org/create-vite/latest');
+    expect(mockFetch).toHaveBeenCalledWith(
+      'https://registry.npmjs.org/create-vite',
+      expect.objectContaining({ method: 'HEAD' }),
+    );
   });
 
   it('strips version from scoped package name', async () => {
@@ -36,7 +39,8 @@ describe('checkNpmPackageExists', () => {
       .mockResolvedValue({ status: 200, ok: true } as Response);
     await checkNpmPackageExists('@tanstack/create-start@latest');
     expect(mockFetch).toHaveBeenCalledWith(
-      'https://registry.npmjs.org/@tanstack/create-start/latest',
+      'https://registry.npmjs.org/@tanstack/create-start',
+      expect.objectContaining({ method: 'HEAD' }),
     );
   });
 
@@ -46,7 +50,8 @@ describe('checkNpmPackageExists', () => {
       .mockResolvedValue({ status: 200, ok: true } as Response);
     await checkNpmPackageExists('@tanstack/create-start');
     expect(mockFetch).toHaveBeenCalledWith(
-      'https://registry.npmjs.org/@tanstack/create-start/latest',
+      'https://registry.npmjs.org/@tanstack/create-start',
+      expect.objectContaining({ method: 'HEAD' }),
     );
   });
 });

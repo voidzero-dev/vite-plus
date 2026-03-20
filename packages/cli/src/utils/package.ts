@@ -14,10 +14,13 @@ export async function checkNpmPackageExists(packageName: string): Promise<boolea
   const atIndex = packageName.indexOf('@', 2);
   const name = atIndex === -1 ? packageName : packageName.slice(0, atIndex);
   try {
-    const response = await fetch(`https://registry.npmjs.org/${name}/latest`);
+    const response = await fetch(`https://registry.npmjs.org/${name}`, {
+      method: 'HEAD',
+      signal: AbortSignal.timeout(3000),
+    });
     return response.status !== 404;
   } catch {
-    return true; // Network error - let the package manager handle it
+    return true; // Network error or timeout - let the package manager handle it
   }
 }
 

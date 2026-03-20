@@ -42,6 +42,7 @@ export async function executeRemoteTemplate(
     // TODO: prompt for project name if not provided for degit
     // Template not found - use package manager runner (npx/pnpm dlx/etc.)
     if (!isGitHubTemplate) {
+      // templateInfo.command is the npm package name (e.g. "create-vite", "@tanstack/create-start")
       const packageExists = await checkNpmPackageExists(templateInfo.command);
       if (!packageExists) {
         if (!silent) {
