@@ -114,6 +114,41 @@ jobs:
           vp upgrade --rollback
           vp --version
 
+  test-install-sh-readonly-config:
+    name: Test install.sh (readonly shell config)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Make shell config files read-only
+        run: |
+          # Simulate Nix-managed or read-only shell configs
+          touch ~/.bashrc ~/.bash_profile ~/.profile
+          chmod 444 ~/.bashrc ~/.bash_profile ~/.profile
+
+      - name: Run install.sh
+        run: |
+          output=$(cat packages/cli/install.sh | bash 2>&1) || {
+            echo "$output"
+            echo "Install script exited with non-zero status"
+            exit 1
+          }
+          echo "$output"
+          # Verify installation succeeds (not a fatal error)
+          echo "$output" | grep -q "successfully installed"
+          # Verify fallback message shows binary location
+          echo "$output" | grep -q "vp was installed to:"
+          # Verify fallback message shows manual instructions
+          echo "$output" | grep -q "Or run vp directly:"
+          # Verify the permission warning was shown
+          echo "$output" | grep -qi "permission denied"
+
+      - name: Verify vp works via direct path
+        run: |
+          ~/.vite-plus/bin/vp --version
+
   test-install-sh-arm64:
     name: Test install.sh (Linux ARM64 glibc via QEMU)
     runs-on: ubuntu-latest
