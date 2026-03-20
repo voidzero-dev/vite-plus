@@ -1,0 +1,39 @@
+> vp create vite:monorepo --no-interactive --verbose --directory synth-tools > create.log 2>&1 # create yarn pnp monorepo from yarn project context
+> ! rg -n "Format failed|ERR_MODULE_NOT_FOUND|Could not resolve 'vite-plus'" create.log && echo 'create output clean' # create should not hit the old vite-plus resolution failure
+create output clean
+
+> test -f synth-tools/.pnp.cjs && echo '.pnp.cjs created' # yarn pnp install should create loader
+.pnp.cjs created
+
+> cd synth-tools && vp fmt --check # fmt should succeed in yarn pnp monorepo
+> node -e "const fs = require('node:fs'); const pkg = JSON.parse(fs.readFileSync('synth-tools/package.json', 'utf8')); console.log(JSON.stringify({ name: pkg.name, packageManager: pkg.packageManager, workspaces: pkg.workspaces, scripts: pkg.scripts, devDependencies: pkg.devDependencies, resolutions: pkg.resolutions }, null, 2))" # check yarn workspace package metadata
+{
+  "name": "synth-tools",
+  "packageManager": "yarn@<semver>",
+  "workspaces": [
+    "packages/*",
+    "apps/*",
+    "tools/*"
+  ],
+  "scripts": {
+    "ready": "vp fmt && vp lint && vp run test -r && vp run build -r",
+    "dev": "vp run website#dev",
+    "prepare": "vp config"
+  },
+  "devDependencies": {
+    "vite-plus": "catalog:"
+  },
+  "resolutions": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+  }
+}
+
+> cat synth-tools/.yarnrc.yml # check yarn config preserved
+# used for install vite-plus
+catalog:
+  '@types/node': ^24
+  typescript: ^5
+  vite: npm:@voidzero-dev/vite-plus-core@latest
+  vitest: npm:@voidzero-dev/vite-plus-test@latest
+  vite-plus: latest
