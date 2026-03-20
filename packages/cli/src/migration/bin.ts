@@ -540,6 +540,22 @@ function showMigrationSummary(options: {
   }
 }
 
+async function checkRolldownCompatibility(rootDir: string, report: MigrationReport): Promise<void> {
+  try {
+    const { resolveConfig } = await import('../index.js');
+    const { checkManualChunksCompat } = await import('./compat.js');
+    // Use 'runner' configLoader to avoid Rolldown bundling the config file,
+    // which prints UNRESOLVED_IMPORT warnings that cannot be suppressed via logLevel.
+    const config = await resolveConfig(
+      { root: rootDir, logLevel: 'silent', configLoader: 'runner' },
+      'build',
+    );
+    checkManualChunksCompat(config.build?.rollupOptions?.output, report);
+  } catch {
+    // Config resolution may fail — skip compatibility check silently
+  }
+}
+
 async function executeMigrationPlan(
   workspaceInfoOptional: WorkspaceInfoOptional,
   plan: MigrationPlan,
@@ -637,7 +653,16 @@ async function executeMigrationPlan(
     cancelAndExit('Vite+ cannot automatically migrate this project yet.', 1);
   }
 
-  // 5. ESLint → Oxlint migration (before main rewrite so .oxlintrc.json gets picked up)
+  // 5. Check for Rolldown-incompatible config patterns (root + workspace packages)
+  updateMigrationProgress('Checking config compatibility');
+  await checkRolldownCompatibility(workspaceInfo.rootDir, report);
+  if (workspaceInfo.packages) {
+    for (const pkg of workspaceInfo.packages) {
+      await checkRolldownCompatibility(path.join(workspaceInfo.rootDir, pkg.path), report);
+    }
+  }
+
+  // 6. ESLint → Oxlint migration (before main rewrite so .oxlintrc.json gets picked up)
   if (plan.migrateEslint) {
     updateMigrationProgress('Migrating ESLint');
     const eslintOk = await migrateEslintToOxlint(
@@ -725,6 +750,7 @@ async function executeMigrationPlan(
     installArgs,
     { silent: true },
   );
+
   clearMigrationProgress();
   return {
     installDurationMs: initialInstallSummary.durationMs + finalInstallSummary.durationMs,
@@ -825,7 +851,18 @@ async function main() {
       }
     }
 
-    if (didMigrate) {
+    // Check for Rolldown-incompatible config patterns (root + workspace packages)
+    await checkRolldownCompatibility(workspaceInfoOptional.rootDir, report);
+    if (workspaceInfoOptional.packages) {
+      for (const pkg of workspaceInfoOptional.packages) {
+        await checkRolldownCompatibility(
+          path.join(workspaceInfoOptional.rootDir, pkg.path),
+          report,
+        );
+      }
+    }
+
+    if (didMigrate || report.warnings.length > 0) {
       clearMigrationProgress();
       showMigrationSummary({
         projectRoot: workspaceInfoOptional.rootDir,
