@@ -45,14 +45,9 @@ export async function executeRemoteTemplate(
       const packageExists = await checkNpmPackageExists(templateInfo.command);
       if (!packageExists) {
         if (!silent) {
-          prompts.log.info(yellow('\nTroubleshooting:'));
-          prompts.log.info(
-            `  ${gray('•')} Template not found on npm. Run ${yellow('vp create --list')} to see available templates.`,
+          prompts.log.error(
+            `Template "${templateInfo.command}" not found on npm. Run ${yellow('vp create --list')} to see available templates.`,
           );
-          prompts.log.info(
-            `  ${gray('•')} Built-in templates: ${yellow('vite:monorepo')}, ${yellow('vite:application')}, ${yellow('vite:library')}, ${yellow('vite:generator')}`,
-          );
-          prompts.log.info(`  ${gray('•')} Run ${yellow('vp create')} for interactive mode`);
         }
         return { exitCode: 1 };
       }
