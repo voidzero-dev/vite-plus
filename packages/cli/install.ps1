@@ -183,7 +183,8 @@ function Configure-UserPath {
         $env:Path = "$binPath;$env:Path"
         return "true"
     } catch {
-        Write-Error-Exit "Cannot update user PATH. Please check your system permissions and re-run the installer."
+        Write-Warn "Could not update user PATH automatically."
+        return "failed"
     }
 }
 
@@ -428,6 +429,7 @@ exec "`$VITE_PLUS_HOME/current/bin/vp.exe" "`$@"
     # ANSI color codes for consistent output
     $e = [char]27
     $GREEN = "$e[32m"
+    $YELLOW = "$e[33m"
     $BRIGHT_BLUE = "$e[94m"
     $BOLD = "$e[1m"
     $DIM = "$e[2m"
@@ -461,6 +463,22 @@ exec "`$VITE_PLUS_HOME/current/bin/vp.exe" "`$@"
     if ($pathResult -eq "true") {
         Write-Host ""
         Write-Host "  Note: Restart your terminal and IDE for changes to take effect."
+    }
+
+    # Show manual PATH instructions if PATH could not be configured
+    if ($pathResult -eq "failed") {
+        Write-Host ""
+        Write-Host "  ${YELLOW}note${NC}: Could not automatically add vp to your PATH."
+        Write-Host ""
+        Write-Host "  vp was installed to: ${BOLD}${displayDir}\bin${NC}"
+        Write-Host ""
+        Write-Host "  To use vp, manually add it to your PATH:"
+        Write-Host ""
+        Write-Host "    [Environment]::SetEnvironmentVariable('Path', '$InstallDir\bin;' + [Environment]::GetEnvironmentVariable('Path', 'User'), 'User')"
+        Write-Host ""
+        Write-Host "  Or run vp directly:"
+        Write-Host ""
+        Write-Host "    & `"$InstallDir\bin\vp.exe`""
     }
 
     Write-Host ""

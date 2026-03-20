@@ -721,6 +721,8 @@ NPMRC_EOF
     echo ""
     echo -e "  ${YELLOW}note${NC}: Could not automatically add vp to your PATH."
     echo ""
+    echo -e "  vp was installed to: ${BOLD}${display_location}${NC}"
+    echo ""
     echo "  To use vp, add this line to your shell config file:"
     echo ""
     echo "    . \"$INSTALL_DIR_REF/env\""
@@ -729,6 +731,10 @@ NPMRC_EOF
     echo "    - Bash: ~/.bashrc or ~/.bash_profile"
     echo "    - Zsh:  ~/.zshrc"
     echo "    - Fish: source \"$INSTALL_DIR_REF/env.fish\" in ~/.config/fish/config.fish"
+    echo ""
+    echo "  Or run vp directly:"
+    echo ""
+    echo -e "    ${display_location}/vp"
   fi
 
   echo ""

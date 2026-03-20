@@ -11,6 +11,15 @@ export const VITE_PLUS_OVERRIDE_PACKAGES: Record<string, string> = process.env
       vitest: 'npm:@voidzero-dev/vite-plus-test@latest',
     };
 
+/**
+ * When VITE_PLUS_FORCE_MIGRATE is set, force full dependency rewriting
+ * even for projects already using vite-plus. Used by ecosystem CI to
+ * override dependencies with locally built tgz packages.
+ */
+export function isForceOverrideMode(): boolean {
+  return process.env.VITE_PLUS_FORCE_MIGRATE === '1';
+}
+
 const require = createRequire(import.meta.url);
 
 export function resolve(path: string) {

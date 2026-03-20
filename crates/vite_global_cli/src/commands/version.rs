@@ -10,11 +10,10 @@ use std::{
 use owo_colors::OwoColorize;
 use serde::Deserialize;
 use vite_install::get_package_manager_type_and_version;
-use vite_js_runtime::{VersionSource, resolve_node_version};
 use vite_path::AbsolutePathBuf;
 use vite_workspace::find_workspace_root;
 
-use crate::{error::Error, help};
+use crate::{commands::env::config::resolve_version, error::Error, help};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -133,14 +132,31 @@ fn format_version(version: Option<String>) -> String {
 }
 
 async fn get_node_version_info(cwd: &AbsolutePathBuf) -> Option<(String, String)> {
-    let resolution_opt = resolve_node_version(cwd, true).await.ok()?;
-    let resolution = resolution_opt?;
-    let source_label = match resolution.source {
-        VersionSource::NodeVersionFile => ".node-version",
-        VersionSource::EnginesNode => "engines.node",
-        VersionSource::DevEnginesRuntime => "devEngines.runtime",
-    };
-    Some((resolution.version.to_string(), source_label.to_string()))
+    // Try the full managed resolution chain
+    if let Ok(resolution) = resolve_version(cwd).await {
+        return Some((resolution.version, resolution.source));
+    }
+
+    // Fallback: detect system Node version (with VITE_PLUS_BYPASS to avoid hitting the shim)
+    let version = detect_system_node_version()?;
+    Some((version, "system".to_string()))
+}
+
+fn detect_system_node_version() -> Option<String> {
+    let output = std::process::Command::new("node")
+        .arg("--version")
+        .env(vite_shared::env_vars::VITE_PLUS_BYPASS, "1")
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let version = String::from_utf8(output.stdout).ok()?;
+    let version = version.trim().strip_prefix('v').unwrap_or(version.trim());
+    if version.is_empty() {
+        return None;
+    }
+    Some(version.to_string())
 }
 
 /// Execute the `--version` command.
@@ -182,7 +198,10 @@ pub async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
 
     let node_info = get_node_version_info(&cwd)
         .await
-        .map(|(v, s)| format!("v{v} ({s})"))
+        .map(|(v, s)| match s.as_str() {
+            "lts" | "default" | "system" => format!("v{v}"),
+            _ => format!("v{v} ({s})"),
+        })
         .unwrap_or(NOT_FOUND.to_string());
 
     let env_rows = [("Package manager", package_manager_info), ("Node.js", node_info)];
@@ -197,9 +216,9 @@ mod tests {
     #[cfg(unix)]
     use std::{fs, path::Path};
 
-    use super::format_version;
     #[cfg(unix)]
     use super::{ToolSpec, find_local_vite_plus, resolve_tool_version};
+    use super::{detect_system_node_version, format_version};
 
     #[cfg(unix)]
     fn symlink_dir(src: &Path, dst: &Path) {
@@ -210,6 +229,15 @@ mod tests {
     fn format_version_values() {
         assert_eq!(format_version(Some("1.2.3".to_string())), "v1.2.3");
         assert_eq!(format_version(None), "Not found");
+    }
+
+    #[test]
+    fn detect_system_node_version_returns_version() {
+        let version = detect_system_node_version();
+        assert!(version.is_some(), "expected node to be installed");
+        let version = version.unwrap();
+        assert!(!version.starts_with('v'), "version should not have v prefix");
+        assert!(version.contains('.'), "expected semver-like version, got: {version}");
     }
 
     #[cfg(unix)]

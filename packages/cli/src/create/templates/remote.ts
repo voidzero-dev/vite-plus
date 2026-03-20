@@ -2,6 +2,7 @@ import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import colors from 'picocolors';
 
 import type { WorkspaceInfo } from '../../types/index.js';
+import { checkNpmPackageExists } from '../../utils/package.js';
 import {
   type ExecutionResult,
   formatDlxCommand,
@@ -40,6 +41,18 @@ export async function executeRemoteTemplate(
   } else {
     // TODO: prompt for project name if not provided for degit
     // Template not found - use package manager runner (npx/pnpm dlx/etc.)
+    if (!isGitHubTemplate) {
+      // templateInfo.command is the npm package name (e.g. "create-vite", "@tanstack/create-start")
+      const packageExists = await checkNpmPackageExists(templateInfo.command);
+      if (!packageExists) {
+        if (!silent) {
+          prompts.log.error(
+            `Template "${templateInfo.command}" not found on npm. Run ${yellow('vp create --list')} to see available templates.`,
+          );
+        }
+        return { exitCode: 1 };
+      }
+    }
     result = await runRemoteTemplateCommand(
       workspaceInfo,
       workspaceInfo.rootDir,

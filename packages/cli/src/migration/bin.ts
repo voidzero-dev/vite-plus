@@ -18,6 +18,7 @@ import {
   selectAgentTargetPaths,
   writeAgentInstructions,
 } from '../utils/agent.js';
+import { isForceOverrideMode } from '../utils/constants.js';
 import {
   detectEditorConflicts,
   type EditorId,
@@ -747,8 +748,9 @@ async function main() {
   const resolvedPackageManager = workspaceInfoOptional.packageManager ?? 'unknown';
 
   // Early return if already using Vite+ (only ESLint/hooks migration may be needed)
+  // In force-override mode (file: tgz overrides), skip this check and run full migration
   const rootPkg = readNearestPackageJson<PackageDependencies>(workspaceInfoOptional.rootDir);
-  if (hasVitePlusDependency(rootPkg)) {
+  if (hasVitePlusDependency(rootPkg) && !isForceOverrideMode()) {
     let didMigrate = false;
     let installDurationMs = 0;
     const report = createMigrationReport();

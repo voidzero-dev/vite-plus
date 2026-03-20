@@ -257,6 +257,13 @@ jobs:
               vp check
               vp pack
               vp test
+          - name: vinext
+            node-version: 24
+            command: |
+              vp run build
+              vp check --fix
+              vp run check
+              vp run test
         exclude:
           # frm-stack uses Docker (testcontainers) which doesn't work the same way on Windows
           - os: windows-latest
@@ -266,6 +273,10 @@ jobs:
           - os: windows-latest
             project:
               name: dify
+          # vinext uses workerd native deps that don't build on Windows
+          - os: windows-latest
+            project:
+              name: vinext
 
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
@@ -309,6 +320,11 @@ jobs:
         run: |
           node $GITHUB_WORKSPACE/ecosystem-ci/patch-project.ts ${{ matrix.project.name }}
           vp install --no-frozen-lockfile
+
+      - name: Verify local tgz packages installed
+        working-directory: ${{ runner.temp }}/vite-plus-ecosystem-ci/${{ matrix.project.name }}${{ matrix.project.directory && format('/{0}', matrix.project.directory) || '' }}
+        shell: bash
+        run: node $GITHUB_WORKSPACE/ecosystem-ci/verify-install.ts
 
       - name: Run vite-plus commands in ${{ matrix.project.name }}
         working-directory: ${{ runner.temp }}/vite-plus-ecosystem-ci/${{ matrix.project.name }}${{ matrix.project.directory && format('/{0}', matrix.project.directory) || '' }}

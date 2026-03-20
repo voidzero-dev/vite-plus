@@ -22,6 +22,7 @@ import {
   VITE_PLUS_NAME,
   VITE_PLUS_OVERRIDE_PACKAGES,
   VITE_PLUS_VERSION,
+  isForceOverrideMode,
 } from '../utils/constants.js';
 import { editJsonFile, isJsonFile, readJsonFile } from '../utils/json.js';
 import { detectPackageMetadata } from '../utils/package.js';
@@ -982,16 +983,30 @@ function rewriteRootWorkspacePackageJson(
         ...VITE_PLUS_OVERRIDE_PACKAGES,
       };
     } else if (packageManager === PackageManager.pnpm) {
-      // pnpm use overrides field at pnpm-workspace.yaml
-      // so we don't need to set overrides field at package.json
-      // remove packages from `resolutions` field and `pnpm.overrides` field if they exist
-      // https://pnpm.io/9.x/package_json#resolutions
-      for (const key of [...Object.keys(VITE_PLUS_OVERRIDE_PACKAGES), ...REMOVE_PACKAGES]) {
-        if (pkg.pnpm?.overrides?.[key]) {
-          delete pkg.pnpm.overrides[key];
-        }
-        if (pkg.resolutions?.[key]) {
-          delete pkg.resolutions[key];
+      if (isForceOverrideMode()) {
+        // In force-override mode, keep overrides in package.json pnpm.overrides
+        // because pnpm ignores pnpm-workspace.yaml overrides when pnpm.overrides
+        // exists in package.json (even with unrelated entries like rollup).
+        pkg.pnpm = {
+          ...pkg.pnpm,
+          overrides: {
+            ...pkg.pnpm?.overrides,
+            ...VITE_PLUS_OVERRIDE_PACKAGES,
+            [VITE_PLUS_NAME]: VITE_PLUS_VERSION,
+          },
+        };
+      } else {
+        // pnpm use overrides field at pnpm-workspace.yaml
+        // so we don't need to set overrides field at package.json
+        // remove packages from `resolutions` field and `pnpm.overrides` field if they exist
+        // https://pnpm.io/9.x/package_json#resolutions
+        for (const key of [...Object.keys(VITE_PLUS_OVERRIDE_PACKAGES), ...REMOVE_PACKAGES]) {
+          if (pkg.pnpm?.overrides?.[key]) {
+            delete pkg.pnpm.overrides[key];
+          }
+          if (pkg.resolutions?.[key]) {
+            delete pkg.resolutions[key];
+          }
         }
       }
       // remove dependency selector from vite, e.g. "vite-plugin-svgr>vite": "npm:vite@7.0.12"
