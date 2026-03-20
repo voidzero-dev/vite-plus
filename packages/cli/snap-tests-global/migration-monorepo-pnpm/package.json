@@ -16,6 +16,7 @@
     "testnpm2": "1.0.0"
   },
   "devDependencies": {
+    "@vitejs/plugin-react": "catalog:",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
     "vite": "catalog:",

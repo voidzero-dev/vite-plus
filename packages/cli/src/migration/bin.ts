@@ -544,7 +544,12 @@ async function checkRolldownCompatibility(rootDir: string, report: MigrationRepo
   try {
     const { resolveConfig } = await import('../index.js');
     const { checkManualChunksCompat } = await import('./compat.js');
-    const config = await resolveConfig({ root: rootDir, logLevel: 'silent' }, 'build');
+    // Use 'runner' configLoader to avoid Rolldown bundling the config file,
+    // which prints UNRESOLVED_IMPORT warnings that cannot be suppressed via logLevel.
+    const config = await resolveConfig(
+      { root: rootDir, logLevel: 'silent', configLoader: 'runner' },
+      'build',
+    );
     checkManualChunksCompat(config.build?.rollupOptions?.output, report);
   } catch {
     // Config resolution may fail — skip compatibility check silently
