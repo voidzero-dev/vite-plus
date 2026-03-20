@@ -34,27 +34,9 @@ jobs:
         with:
           graphite_token: ${{ secrets.GRAPHITE_CI_OPTIMIZER_TOKEN }}
 
-  detect-changes:
-    runs-on: ubuntu-latest
+  download-previous-rolldown-binaries:
     needs: optimize-ci
     if: needs.optimize-ci.outputs.skip == 'false'
-    permissions:
-      contents: read
-      pull-requests: read
-    outputs:
-      code-changed: ${{ steps.filter.outputs.code }}
-    steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
-      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
-        id: filter
-        with:
-          filters: |
-            code:
-              - '!**/*.md'
-
-  download-previous-rolldown-binaries:
-    needs: detect-changes
-    if: needs.detect-changes.outputs.code-changed == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -65,8 +47,13 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
   test:
-    needs: detect-changes
-    if: needs.detect-changes.outputs.code-changed == 'true'
+    needs: optimize-ci
+    if: |
+      needs.optimize-ci.outputs.skip == 'false' && (
+        matrix.os == 'ubuntu-latest' ||
+        github.event_name != 'pull_request' ||
+        contains(github.event.pull_request.labels.*.name, 'ci: full')
+      )
     name: Test
     strategy:
       fail-fast: false
@@ -111,8 +98,8 @@ jobs:
       - run: cargo test $(for d in crates/*/; do echo -n "-p $(basename $d) "; done) -p vite-plus-cli
 
   lint:
-    needs: detect-changes
-    if: needs.detect-changes.outputs.code-changed == 'true'
+    needs: optimize-ci
+    if: needs.optimize-ci.outputs.skip == 'false'
     name: Lint
     runs-on: ubuntu-latest
     steps:
@@ -188,6 +175,10 @@ jobs:
 
   cli-e2e-test:
     name: CLI E2E test
+    if: |
+      matrix.os == 'ubuntu-latest' ||
+      github.event_name != 'pull_request' ||
+      contains(github.event.pull_request.labels.*.name, 'ci: full')
     needs:
       - download-previous-rolldown-binaries
     strategy:
