@@ -6,7 +6,7 @@ on:
 
 jobs:
   analyze:
-    if: github.repository == 'voidzero-dev/vite-plus' && github.event.action == 'assigned' && github.event.assignee.login == 'boshen' && github.event.sender.login == 'boshen'
+    if: github.repository == 'voidzero-dev/vite-plus' && github.event.action == 'assigned' && github.event.assignee.login == 'boshen'
     runs-on: ubuntu-slim
     permissions:
       contents: read
