@@ -73,5 +73,11 @@
     "branch": "main",
     "hash": "f78dd2b39f5b02242417e0a684b1f2f55d3dbdff",
     "forceFreshMigration": true
+  },
+  "reactive-resume": {
+    "repository": "https://github.com/amruthpillai/reactive-resume.git",
+    "branch": "main",
+    "hash": "f4e2d05f25539ba64a97368f6e35b33b2a7bed05",
+    "forceFreshMigration": true
   }
 }

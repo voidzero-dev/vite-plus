@@ -264,6 +264,13 @@ jobs:
               vp check --fix
               vp run check
               vp run test
+          - name: reactive-resume
+            node-version: 24
+            command: |
+              vp fmt
+              vp lint --type-aware
+              vp build
+              vp test
         exclude:
           # frm-stack uses Docker (testcontainers) which doesn't work the same way on Windows
           - os: windows-latest
