@@ -224,6 +224,7 @@ await createBrowserEntryFiles();
 await patchModuleAugmentations();
 await patchChaiTypeReference();
 await patchMockerHoistedModule();
+await patchGlobalExpectReuse();
 const pluginExports = await createPluginExports();
 await mergePackageJson(pluginExports);
 generateLicenseFile({
@@ -2350,6 +2351,62 @@ async function patchMockerHoistedModule() {
         'This likely means vitest code has changed and the patch needs to be updated.',
     );
   }
+}
+
+/**
+ * Patch globalExpect initialization to reuse an existing instance.
+ *
+ * When vitest is aliased via npm overrides (e.g., vitest → @voidzero-dev/vite-plus-test),
+ * the override module may be loaded as a separate instance from the test runner's vitest core.
+ * Both instances execute `const globalExpect = createExpect()` and set
+ * `globalThis[GLOBAL_EXPECT]`, causing the later one to overwrite the first.
+ *
+ * This patch makes the override module reuse an existing globalExpect if one is already set,
+ * so that `expect.extend()` calls from third-party libraries (e.g., @testing-library/jest-dom)
+ * register matchers on the same instance used by the test runner.
+ *
+ * See: https://github.com/voidzero-dev/vite-plus/issues/897
+ */
+async function patchGlobalExpectReuse() {
+  console.log('\nPatching globalExpect to reuse existing instance...');
+
+  const chunksDir = join(distDir, 'chunks');
+  const files = await readdir(chunksDir);
+  const testChunk = files.find((f) => f.startsWith('test.') && f.endsWith('.js'));
+
+  if (!testChunk) {
+    throw new Error('Could not find test chunk file in dist/chunks/');
+  }
+
+  const testChunkPath = join(chunksDir, testChunk);
+  let content = await readFile(testChunkPath, 'utf-8');
+
+  const original = `const globalExpect = createExpect();
+Object.defineProperty(globalThis, GLOBAL_EXPECT, {
+  value: globalExpect,
+  writable: true,
+  configurable: true
+});`;
+
+  const patched = `const globalExpect = globalThis[GLOBAL_EXPECT] ?? createExpect();
+if (!globalThis[GLOBAL_EXPECT]) {
+  Object.defineProperty(globalThis, GLOBAL_EXPECT, {
+    value: globalExpect,
+    writable: true,
+    configurable: true
+  });
+}`;
+
+  if (!content.includes(original)) {
+    throw new Error(
+      'Could not find globalExpect initialization pattern in test chunk. ' +
+        'This likely means vitest code has changed and the patch needs to be updated.',
+    );
+  }
+
+  content = content.replace(original, patched);
+  await writeFile(testChunkPath, content, 'utf-8');
+  console.log(`  Patched globalExpect in ${testChunk}`);
 }
 
 /**
