@@ -390,9 +390,6 @@ mod tests {
 
         // Loading from removed file should return empty default cache
         let loaded_cache = ResolveCache::load(&cache_file);
-        assert!(
-            loaded_cache.get(&temp_path).is_none(),
-            "Cache should be empty after invalidation"
-        );
+        assert!(loaded_cache.get(&temp_path).is_none(), "Cache should be empty after invalidation");
     }
 }
