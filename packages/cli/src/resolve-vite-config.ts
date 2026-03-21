@@ -2,11 +2,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const VITE_CONFIG_FILES = [
+  'vite.config.ts',
   'vite.config.js',
   'vite.config.mjs',
-  'vite.config.ts',
-  'vite.config.cjs',
   'vite.config.mts',
+  'vite.config.cjs',
   'vite.config.cts',
 ];
 
