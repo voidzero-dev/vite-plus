@@ -72,11 +72,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          - os: namespace-profile-linux-x64-default
             target: x86_64-unknown-linux-gnu
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-          - os: macos-latest
+          - os: namespace-profile-mac-default
             target: aarch64-apple-darwin
     runs-on: ${{ matrix.os }}
     steps:
@@ -100,7 +100,7 @@ jobs:
           target-dir: ${{ runner.os == 'Windows' && format('{0}/target', env.DEV_DRIVE) || '' }}
 
       - run: rustup target add x86_64-unknown-linux-musl
-        if: ${{ matrix.os == 'ubuntu-latest' }}
+        if: ${{ matrix.target == 'x86_64-unknown-linux-gnu' }}
 
       - run: cargo check --all-targets --all-features
         env:
@@ -116,7 +116,7 @@ jobs:
     needs: detect-changes
     if: needs.detect-changes.outputs.code-changed == 'true'
     name: Lint
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-linux-x64-default
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
       - uses: ./.github/actions/clone
@@ -148,7 +148,7 @@ jobs:
 
   run:
     name: Run task
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-linux-x64-default
     needs:
       - download-previous-rolldown-binaries
     steps:
@@ -196,8 +196,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
-          - os: macos-latest
+          - os: namespace-profile-linux-x64-default
+          - os: namespace-profile-mac-default
           - os: windows-latest
     runs-on: ${{ matrix.os }}
     steps:
@@ -234,10 +234,10 @@ jobs:
       - name: Build with upstream
         uses: ./.github/actions/build-upstream
         with:
-          target: ${{ matrix.os == 'ubuntu-latest' && 'x86_64-unknown-linux-gnu' ||  matrix.os == 'windows-latest' && 'x86_64-pc-windows-msvc' || 'aarch64-apple-darwin' }}
+          target: ${{ matrix.os == 'namespace-profile-linux-x64-default' && 'x86_64-unknown-linux-gnu' ||  matrix.os == 'windows-latest' && 'x86_64-pc-windows-msvc' || 'aarch64-apple-darwin' }}
 
       - name: Check TypeScript types
-        if: ${{ matrix.os == 'ubuntu-latest' }}
+        if: ${{ matrix.os == 'namespace-profile-linux-x64-default' }}
         run: pnpm tsgo
 
       - name: Install Global CLI vp
@@ -581,7 +581,7 @@ jobs:
     name: Local CLI `vp install` E2E test
     needs:
       - download-previous-rolldown-binaries
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-linux-x64-default
     # Run if: not a PR, OR PR has 'test: install-e2e' label
     if: >-
       github.event_name != 'pull_request' ||

@@ -73,5 +73,23 @@
     "branch": "main",
     "hash": "f78dd2b39f5b02242417e0a684b1f2f55d3dbdff",
     "forceFreshMigration": true
+  },
+  "reactive-resume": {
+    "repository": "https://github.com/amruthpillai/reactive-resume.git",
+    "branch": "main",
+    "hash": "f4e2d05f25539ba64a97368f6e35b33b2a7bed05",
+    "forceFreshMigration": true
+  },
+  "yaak": {
+    "repository": "https://github.com/mountain-loop/yaak.git",
+    "branch": "main",
+    "hash": "b4a1c418bb3f923858dd55729f585e189327a038",
+    "forceFreshMigration": true
+  },
+  "npmx.dev": {
+    "repository": "https://github.com/npmx-dev/npmx.dev.git",
+    "branch": "main",
+    "hash": "230b7c7ddb6bb8551ce797144f0ce0f047ff8d7d",
+    "forceFreshMigration": true
   }
 }

@@ -1,5 +1,5 @@
 {
-  "ignoredPlatforms": ["win32"],
+  "ignoredPlatforms": ["win32", "darwin"],
   "commands": [
     { "command": "git init", "ignoreOutput": true },
     { "command": "git add -A && git commit -m 'init'", "ignoreOutput": true },
