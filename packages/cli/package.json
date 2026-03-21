@@ -340,7 +340,7 @@
     "detect-newline": "catalog:",
     "glob": "catalog:",
     "jsonc-parser": "catalog:",
-    "lint-staged": "catalog:",
+    "lint-staged": "^16.2.6",
     "minimatch": "catalog:",
     "mri": "catalog:",
     "rolldown": "workspace:*",
