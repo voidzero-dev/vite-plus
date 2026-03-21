@@ -26,7 +26,7 @@ export function findViteConfigUp(startDir: string, stopDir: string): string | un
       }
     }
     const parent = path.dirname(dir);
-    if (parent === dir || !dir.startsWith(stop)) {
+    if (parent === dir || !parent.startsWith(stop)) {
       break;
     }
     dir = parent;
@@ -56,7 +56,7 @@ function findWorkspaceRoot(startDir: string): string | undefined {
           return dir;
         }
       } catch {
-        // ignore
+        // Skip malformed package.json and continue searching parent directories
       }
     }
     if (fs.existsSync(path.join(dir, 'lerna.json'))) {

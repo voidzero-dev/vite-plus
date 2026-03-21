@@ -1,9 +1,9 @@
 import fs from 'node:fs';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 
 import { findViteConfigUp } from '../resolve-vite-config';
 
@@ -11,7 +11,8 @@ describe('findViteConfigUp', () => {
   let tempDir: string;
 
   beforeEach(() => {
-    tempDir = mkdtempSync(path.join(tmpdir(), 'vite-config-test-'));
+    // Resolve symlinks (macOS /var -> /private/var) to match path.resolve behavior
+    tempDir = fs.realpathSync(mkdtempSync(path.join(tmpdir(), 'vite-config-test-')));
   });
 
   afterEach(() => {
@@ -88,5 +89,32 @@ describe('findViteConfigUp', () => {
 
     const result = findViteConfigUp(subDir, tempDir);
     expect(result).toBe(path.join(tempDir, 'vite.config.mts'));
+  });
+
+  it('should find .cjs config files', () => {
+    const subDir = path.join(tempDir, 'packages', 'my-lib');
+    fs.mkdirSync(subDir, { recursive: true });
+    fs.writeFileSync(path.join(tempDir, 'vite.config.cjs'), '');
+
+    const result = findViteConfigUp(subDir, tempDir);
+    expect(result).toBe(path.join(tempDir, 'vite.config.cjs'));
+  });
+
+  it('should find .cts config files', () => {
+    const subDir = path.join(tempDir, 'packages', 'my-lib');
+    fs.mkdirSync(subDir, { recursive: true });
+    fs.writeFileSync(path.join(tempDir, 'vite.config.cts'), '');
+
+    const result = findViteConfigUp(subDir, tempDir);
+    expect(result).toBe(path.join(tempDir, 'vite.config.cts'));
+  });
+
+  it('should find .mjs config files', () => {
+    const subDir = path.join(tempDir, 'packages', 'my-lib');
+    fs.mkdirSync(subDir, { recursive: true });
+    fs.writeFileSync(path.join(tempDir, 'vite.config.mjs'), '');
+
+    const result = findViteConfigUp(subDir, tempDir);
+    expect(result).toBe(path.join(tempDir, 'vite.config.mjs'));
   });
 });
