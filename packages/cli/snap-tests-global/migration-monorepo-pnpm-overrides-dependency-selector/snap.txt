@@ -26,6 +26,7 @@ export default defineConfig({
     "prepare": "vp config"
   },
   "devDependencies": {
+    "@vitejs/plugin-react": "catalog:",
     "vite": "catalog:",
     "vite-plus": "catalog:"
   },

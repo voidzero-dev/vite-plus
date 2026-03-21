@@ -17,6 +17,7 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.0",
+    "@vitest/browser-playwright": "^4.0.0",
     "oxfmt": "1",
     "oxlint": "1",
     "vite": "^7.0.0",

@@ -62,6 +62,7 @@ cat: .oxfmtrc.json: No such file or directory
     "testnpm2": "1.0.0"
   },
   "devDependencies": {
+    "@vitejs/plugin-react": "catalog:",
     "vite": "catalog:",
     "vitest": "catalog:",
     "vite-plus": "catalog:"

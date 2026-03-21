@@ -245,6 +245,9 @@ async function runTestCase(name: string, tempTmpDir: string, casesDir: string, b
     // Indicate CLI is running in test mode, so that it prints more detailed outputs.
     // Also disables tips for stable snapshots.
     VITE_PLUS_CLI_TEST: '1',
+    // Suppress Node.js runtime warnings (e.g. MODULE_TYPELESS_PACKAGE_JSON)
+    // to keep snap outputs stable across Node.js versions.
+    NODE_NO_WARNINGS: '1',
     NO_COLOR: 'true',
     // set CI=true make sure snap-tests are stable on GitHub Actions
     CI: 'true',
