@@ -645,24 +645,27 @@ jobs:
         with:
           target: x86_64-unknown-linux-musl
 
-      # Install the CLI using the cross-compiled musl vp binary + NAPI binding,
-      # then run E2E tests inside an Alpine container where musl is native.
+      # Run E2E tests inside an Alpine container where musl is native.
+      # Can't use bootstrap-cli:ci because it loads NAPI bindings on the glibc host.
+      # Instead, copy the cross-compiled vp binary directly into the container.
       - name: Run E2E in Alpine container
         run: |
-          # Install CLI on the host (bootstrap-cli:ci finds the musl vp binary)
-          # Set NAPI_RS_NATIVE_LIBRARY_PATH so the musl .node loads on glibc host during pnpm pack
-          export NAPI_RS_NATIVE_LIBRARY_PATH="${{ github.workspace }}/packages/cli/binding/vite-plus.linux-x64-musl.node"
-          pnpm bootstrap-cli:ci
-
           docker run --rm \
-            -v "$HOME/.vite-plus:/root/.vite-plus" \
             -v "${{ github.workspace }}:/workspace" \
             node:22-alpine3.21 sh -c "
               apk add --no-cache bash curl ca-certificates git
+
+              # Install the cross-compiled musl vp binary
+              mkdir -p /root/.vite-plus/bin
+              cp /workspace/target/x86_64-unknown-linux-musl/release/vp /root/.vite-plus/bin/vp
+              chmod +x /root/.vite-plus/bin/vp
               export PATH=\"/root/.vite-plus/bin:\$PATH\"
 
               vp --version
               vp -h
+
+              # Set up env (creates shims for node/npm/npx)
+              vp env setup
               vp env doctor
 
               # Verify shims work
