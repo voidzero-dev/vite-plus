@@ -4,6 +4,7 @@ import path from 'node:path';
 import validateNpmPackageName from 'validate-npm-package-name';
 
 import { editJsonFile } from '../utils/json.js';
+import { getRandomProjectName } from './random-name.js';
 
 // Helper functions for file operations
 export function copy(src: string, dest: string) {
@@ -30,12 +31,12 @@ export function copyDir(srcDir: string, destDir: string) {
  * Examples:
  * ```
  * # invalid target directories
- * ./ -> { directory: '', packageName: '', error: 'Invalid target directory' }
  * /foo/bar -> { directory: '', packageName: '', error: 'Absolute path is not allowed' }
  * @scope/ -> { directory: '', packageName: '', error: 'Invalid target directory' }
  * ../../foo/bar -> { directory: '', packageName: '', error: 'Invalid target directory' }
  *
  * # valid target directories
+ * . -> { directory: '.', packageName: '' }
  * ./my-package -> { directory: './my-package', packageName: 'my-package' }
  * ./foo/bar-package -> { directory: './foo/bar-package', packageName: 'bar-package' }
  * ./foo/bar-package/ -> { directory: './foo/bar-package', packageName: 'bar-package' }
@@ -52,6 +53,12 @@ export function formatTargetDir(input: string): {
   error?: string;
 } {
   let targetDir = path.normalize(input.trim());
+
+  // "." or "./" means current directory — valid directory, but no package name derivable
+  if (targetDir === '.' || targetDir === `.${path.sep}`) {
+    return { directory: '.', packageName: '' };
+  }
+
   const parsed = path.parse(targetDir);
   if (parsed.root || path.isAbsolute(targetDir)) {
     return {
@@ -119,4 +126,16 @@ export function formatDisplayTargetDir(targetDir: string) {
     return normalized;
   }
   return `./${normalized}`;
+}
+
+export function deriveDefaultPackageName(
+  cwd: string,
+  scope: string | undefined,
+  fallbackName: string,
+): string {
+  const dirName = path.basename(cwd);
+  const candidate = scope ? `${scope}/${dirName}` : dirName;
+  return validateNpmPackageName(candidate).validForNewPackages
+    ? candidate
+    : getRandomProjectName({ scope, fallbackName });
 }

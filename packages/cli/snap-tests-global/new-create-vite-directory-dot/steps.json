@@ -1,0 +1,9 @@
+{
+  "commands": [
+    {
+      "command": "vp create vite:application --no-interactive --directory . # create vite app in current directory",
+      "ignoreOutput": true
+    },
+    "ls package.json # check package.json exists in current directory"
+  ]
+}

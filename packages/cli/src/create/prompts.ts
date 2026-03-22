@@ -24,7 +24,6 @@ export async function promptPackageNameAndTargetDir(
         if (value == null || value.length === 0) {
           return;
         }
-
         const result = value ? validateNpmPackageName(value) : null;
         if (result?.validForNewPackages) {
           return;
