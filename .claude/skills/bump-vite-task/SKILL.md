@@ -50,6 +50,7 @@ vite-task changes often affect CLI output, which means snap tests need updating.
 - **Task output formatting**: e.g., step numbering, separator lines
 
 To update snap tests:
+
 1. Push your changes and let CI run the snap tests.
 2. CI will show the diff in the E2E test logs if snap tests fail.
 3. Extract the diff from CI logs and apply it locally.
