@@ -12,11 +12,11 @@ vp run: 0/2 cache hit (0%). (Run `vp run --last-details` for full details)
 
 > echo 'console.log(123)' > a.ts
 > vp run hello # report cache status from the inner runner
-$ vp lint ./src ✓ cache hit, replaying
+$ vp lint ./src ◉ cache hit, replaying
 Found 0 warnings and 0 errors.
 Finished in <variable>ms on 1 file with <variable> rules using <variable> threads.
 
-$ vp lint ✗ cache miss: 'a.ts' modified, executing
+$ vp lint ○ cache miss: 'a.ts' modified, executing
 Found 0 warnings and 0 errors.
 Finished in <variable>ms on 3 files with <variable> rules using <variable> threads.
 

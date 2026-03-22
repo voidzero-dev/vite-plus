@@ -47,4 +47,4 @@ jobs:
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh issue edit ${{ github.event.issue.number }} --remove-assignee boshen
+        run: gh issue edit ${{ github.event.issue.number }} --remove-assignee Boshen
