@@ -30,7 +30,16 @@ jobs:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
           persist-credentials: false
-          submodules: true
+
+      - name: Output rolldown hash
+        id: upstream-versions
+        run: node -e "console.log('ROLLDOWN_HASH=' + require('./packages/tools/.upstream-versions.json').rolldown.hash)" >> $GITHUB_OUTPUT
+
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          repository: rolldown/rolldown
+          path: rolldown
+          ref: ${{ steps.upstream-versions.outputs.ROLLDOWN_HASH }}
 
       - uses: oxc-project/setup-rust@d286d43bc1f606abbd98096666ff8be68c8d5f57 # v1.0.0
         with:
