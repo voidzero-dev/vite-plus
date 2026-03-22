@@ -23,6 +23,8 @@ Initial setup to install dependencies for Vite+:
 just init
 ```
 
+`just init` bootstraps the pinned `rolldown` and `vite` source trees needed for local development, then installs workspace dependencies.
+
 ### Windows
 
 You'll need the following tools installed on your system. You can use [winget](https://learn.microsoft.com/en-us/windows/package-manager/).
@@ -42,6 +44,8 @@ Initial setup to install dependencies for Vite+:
 ```powershell
 just init
 ```
+
+`just init` bootstraps the pinned `rolldown` and `vite` source trees needed for local development, then installs workspace dependencies.
 
 **Note:** Run commands in PowerShell or Windows Terminal. Some commands may require elevated permissions.
 
