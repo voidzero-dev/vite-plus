@@ -60,7 +60,12 @@ runs:
         pnpm --filter vite-plus build-ts
 
     # Install zig + cargo-zigbuild for musl cross-compilation (napi-cross only supports gnu)
-    - name: Setup zig and cargo-zigbuild (musl)
+    - name: Add musl Rust target
+      if: steps.cache-restore.outputs.cache-hit != 'true' && contains(inputs.target, 'musl')
+      shell: bash
+      run: rustup target add ${{ inputs.target }}
+
+    - name: Setup zig (musl)
       if: steps.cache-restore.outputs.cache-hit != 'true' && contains(inputs.target, 'musl')
       uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
       with:
