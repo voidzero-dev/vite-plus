@@ -109,6 +109,8 @@ jobs:
       # Test all crates/* packages. New crates are automatically included.
       # Also test vite-plus-cli (lives outside crates/) to catch type sync issues.
       - run: cargo test $(for d in crates/*/; do echo -n "-p $(basename $d) "; done) -p vite-plus-cli
+        env:
+          RUST_MIN_STACK: 8388608
 
   lint:
     needs: detect-changes
@@ -399,6 +401,8 @@ jobs:
             git diff
             exit 1
           fi
+        env:
+          RUST_MIN_STACK: 8388608
 
       # Upgrade tests (merged from separate job to avoid duplicate build)
       - name: Test upgrade (bash)
