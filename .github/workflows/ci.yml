@@ -235,8 +235,6 @@ jobs:
         include:
           - os: namespace-profile-linux-x64-default
             target: x86_64-unknown-linux-gnu
-          - os: namespace-profile-linux-x64-default
-            target: x86_64-unknown-linux-musl
           - os: namespace-profile-mac-default
             target: aarch64-apple-darwin
           - os: windows-latest
