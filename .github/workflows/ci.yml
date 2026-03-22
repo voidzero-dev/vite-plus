@@ -655,8 +655,9 @@ jobs:
             node:22-alpine3.21 sh -c "
               apk add --no-cache bash curl ca-certificates git
 
-              # Install pnpm and bootstrap the CLI
+              # Install pnpm and resolve musl-specific optional dependencies
               corepack enable
+              pnpm install --frozen-lockfile
               pnpm bootstrap-cli:ci
               export PATH=\"/root/.vite-plus/bin:\$PATH\"
 
