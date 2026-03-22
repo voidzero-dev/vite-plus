@@ -235,6 +235,8 @@ jobs:
         include:
           - os: namespace-profile-linux-x64-default
             target: x86_64-unknown-linux-gnu
+          - os: namespace-profile-linux-x64-default
+            target: x86_64-unknown-linux-musl
           - os: namespace-profile-mac-default
             target: aarch64-apple-darwin
           - os: windows-latest
@@ -275,6 +277,12 @@ jobs:
         uses: ./.github/actions/build-upstream
         with:
           target: ${{ matrix.target }}
+
+      # On musl builds, the NAPI binding is built for musl but the host Node.js is glibc.
+      # Set NAPI_RS_NATIVE_LIBRARY_PATH to bypass platform detection and load the musl .node directly.
+      - name: Set NAPI native library path (musl)
+        if: ${{ contains(matrix.target, 'musl') }}
+        run: echo "NAPI_RS_NATIVE_LIBRARY_PATH=${{ github.workspace }}/packages/cli/binding/vite-plus.linux-x64-musl.node" >> "$GITHUB_ENV"
 
       - name: Check TypeScript types
         if: ${{ matrix.target == 'x86_64-unknown-linux-gnu' }}
