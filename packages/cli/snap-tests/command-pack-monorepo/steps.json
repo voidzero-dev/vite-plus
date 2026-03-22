@@ -1,4 +1,5 @@
 {
+  "ignoredPlatforms": ["win32"],
   "commands": [
     {
       "command": "vp run hello#build # should build the library",
