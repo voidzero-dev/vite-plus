@@ -4,7 +4,7 @@ $ node -p '40+2'
 
 
 > vp run hello # should hit cache
-$ node -p '40+2' ✓ cache hit, replaying
+$ node -p '40+2' ◉ cache hit, replaying
 42
 
 ---
