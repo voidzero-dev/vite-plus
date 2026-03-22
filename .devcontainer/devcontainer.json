@@ -26,7 +26,8 @@
         }
       }
     }
-  }
+  },
+  "postCreateCommand": "curl -fsSL https://vite.plus | bash"
   // Use 'mounts' to make the cargo cache persistent in a Docker Volume.
   // "mounts": [
   // 	{
