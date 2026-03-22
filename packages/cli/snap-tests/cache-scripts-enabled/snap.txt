@@ -4,7 +4,7 @@ hello from script
 
 
 > vp run hello # second run should be cache hit
-$ node hello.mjs ✓ cache hit, replaying
+$ node hello.mjs ◉ cache hit, replaying
 hello from script
 
 ---

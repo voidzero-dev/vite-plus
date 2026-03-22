@@ -11,7 +11,7 @@ dist/assets/index-BnIqjoTZ.js  <variable> kB │ gzip: <variable> kB
 
 
 > VITE_MY_VAR=1 vp run build # should hit cache
-$ vp build ✓ cache hit, replaying
+$ vp build ◉ cache hit, replaying
 vite v<semver> building client environment for production...
 transforming...✓ <variable> modules transformed.
 rendering chunks...
@@ -25,7 +25,7 @@ dist/assets/index-BnIqjoTZ.js  <variable> kB │ gzip: <variable> kB
 vp run: cache hit, <variable>ms saved.
 
 > VITE_MY_VAR=2 vp run build # env changed, should miss cache
-$ vp build ✗ cache miss: envs changed, executing
+$ vp build ○ cache miss: envs changed, executing
 vite v<semver> building client environment for production...
 transforming...✓ <variable> modules transformed.
 rendering chunks...
@@ -35,3 +35,5 @@ dist/assets/index-BnIqjoTZ.js  <variable> kB │ gzip: <variable> kB
 
 ✓ built in <variable>ms
 
+---
+vp run: build-vite-env-test#build not cached because it modified its input. (Run `vp run --last-details` for full details)
