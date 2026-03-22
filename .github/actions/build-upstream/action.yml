@@ -59,16 +59,38 @@ runs:
         pnpm --filter "@voidzero-dev/*" build
         pnpm --filter vite-plus build-ts
 
+    # Install zig + cargo-zigbuild for musl cross-compilation (napi-cross only supports gnu)
+    - name: Setup zig and cargo-zigbuild (musl)
+      if: steps.cache-restore.outputs.cache-hit != 'true' && contains(inputs.target, 'musl')
+      uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
+      with:
+        version: 0.15.2
+
+    - name: Install cargo-zigbuild (musl)
+      if: steps.cache-restore.outputs.cache-hit != 'true' && contains(inputs.target, 'musl')
+      uses: taiki-e/install-action@f916cfac5d8efd040e250d0cd6b967616504b3a4 # v2.68.32
+      with:
+        tool: cargo-zigbuild
+
     # NAPI builds - only run on cache miss (slow, especially on Windows)
     # Must run before vite-plus TypeScript builds which depend on the bindings
-    - name: Build NAPI bindings (Linux)
+    - name: Build NAPI bindings (Linux gnu)
       shell: bash
-      if: steps.cache-restore.outputs.cache-hit != 'true' && contains(inputs.target, 'linux')
+      if: steps.cache-restore.outputs.cache-hit != 'true' && contains(inputs.target, 'linux') && !contains(inputs.target, 'musl')
       run: |
         pnpm --filter=vite-plus build-native --target ${{ inputs.target }} --use-napi-cross
       env:
         TARGET_CC: clang
         TARGET_CFLAGS: ${{ contains(inputs.target, 'aarch64') && '-D_BSD_SOURCE' || '' }}
+        DEBUG: napi:*
+
+    - name: Build NAPI bindings (Linux musl)
+      shell: bash
+      if: steps.cache-restore.outputs.cache-hit != 'true' && contains(inputs.target, 'musl')
+      run: |
+        pnpm --filter=vite-plus build-native --target ${{ inputs.target }} -x
+      env:
+        TARGET_CC: clang
         DEBUG: napi:*
 
     - name: Build NAPI bindings (non-Linux targets)
@@ -79,14 +101,23 @@ runs:
       env:
         DEBUG: napi:*
 
-    - name: Build Rust CLI binary (Linux)
-      if: steps.cache-restore.outputs.cache-hit != 'true' && contains(inputs.target, 'linux')
+    - name: Build Rust CLI binary (Linux gnu)
+      if: steps.cache-restore.outputs.cache-hit != 'true' && contains(inputs.target, 'linux') && !contains(inputs.target, 'musl')
       shell: bash
       run: |
         pnpm exec napi build --use-napi-cross --target ${{ inputs.target }} --release -p vite_global_cli
       env:
         TARGET_CC: clang
         TARGET_CFLAGS: ${{ contains(inputs.target, 'aarch64') && '-D_BSD_SOURCE' || '' }}
+        DEBUG: napi:*
+
+    - name: Build Rust CLI binary (Linux musl)
+      if: steps.cache-restore.outputs.cache-hit != 'true' && contains(inputs.target, 'musl')
+      shell: bash
+      run: |
+        pnpm exec napi build -x --target ${{ inputs.target }} --release -p vite_global_cli
+      env:
+        TARGET_CC: clang
         DEBUG: napi:*
 
     - name: Build Rust CLI binary (non-Linux targets)
