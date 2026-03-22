@@ -12,6 +12,7 @@ mod cache;
 pub(crate) mod dispatch;
 pub(crate) mod exec;
 
+pub(crate) use cache::invalidate_cache;
 pub use dispatch::dispatch;
 use vite_shared::env_vars;
 
