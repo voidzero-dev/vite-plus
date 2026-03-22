@@ -235,8 +235,6 @@ jobs:
         include:
           - os: namespace-profile-linux-x64-default
             target: x86_64-unknown-linux-gnu
-          - os: namespace-profile-linux-x64-default
-            target: x86_64-unknown-linux-musl
           - os: namespace-profile-mac-default
             target: aarch64-apple-darwin
           - os: windows-latest
@@ -277,12 +275,6 @@ jobs:
         uses: ./.github/actions/build-upstream
         with:
           target: ${{ matrix.target }}
-
-      # On musl builds, the NAPI binding is built for musl but the host Node.js is glibc.
-      # Set NAPI_RS_NATIVE_LIBRARY_PATH to bypass platform detection and load the musl .node directly.
-      - name: Set NAPI native library path (musl)
-        if: ${{ contains(matrix.target, 'musl') }}
-        run: echo "NAPI_RS_NATIVE_LIBRARY_PATH=${{ github.workspace }}/packages/cli/binding/vite-plus.linux-x64-musl.node" >> "$GITHUB_ENV"
 
       - name: Check TypeScript types
         if: ${{ matrix.target == 'x86_64-unknown-linux-gnu' }}
@@ -625,6 +617,65 @@ jobs:
           pnpm bootstrap-cli:ci
           vp --version
 
+  cli-e2e-test-musl:
+    name: CLI E2E test (Linux x64 musl)
+    needs:
+      - download-previous-rolldown-binaries
+    runs-on: namespace-profile-linux-x64-default
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+      - uses: ./.github/actions/clone
+
+      - uses: oxc-project/setup-rust@d286d43bc1f606abbd98096666ff8be68c8d5f57 # v1.0.0
+        with:
+          save-cache: ${{ github.ref_name == 'main' }}
+          cache-key: cli-e2e-test-musl
+
+      - uses: oxc-project/setup-node@fdbf0dfd334c4e6d56ceeb77d91c76339c2a0885 # v1.0.4
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: rolldown-binaries
+          path: ./rolldown/packages/rolldown/src
+          merge-multiple: true
+
+      # Cross-compile for musl on the glibc host
+      - name: Build with upstream (musl)
+        uses: ./.github/actions/build-upstream
+        with:
+          target: x86_64-unknown-linux-musl
+
+      # Install the CLI using the cross-compiled musl vp binary + NAPI binding,
+      # then run E2E tests inside an Alpine container where musl is native.
+      - name: Run E2E in Alpine container
+        run: |
+          # Install CLI on the host (bootstrap-cli:ci finds the musl vp binary)
+          # Set NAPI_RS_NATIVE_LIBRARY_PATH so the musl .node loads on glibc host during pnpm pack
+          export NAPI_RS_NATIVE_LIBRARY_PATH="${{ github.workspace }}/packages/cli/binding/vite-plus.linux-x64-musl.node"
+          pnpm bootstrap-cli:ci
+
+          docker run --rm \
+            -v "$HOME/.vite-plus:/root/.vite-plus" \
+            -v "${{ github.workspace }}:/workspace" \
+            node:22-alpine3.21 sh -c "
+              apk add --no-cache bash curl ca-certificates git
+              export PATH=\"/root/.vite-plus/bin:\$PATH\"
+
+              vp --version
+              vp -h
+              vp env doctor
+
+              # Verify shims work
+              which node
+              which npm
+              node --version
+
+              # Test global package install
+              vp install -g typescript
+              tsc --version
+              vp uninstall -g typescript
+            "
+
   install-e2e-test:
     name: Local CLI `vp install` E2E test
     needs:
@@ -703,6 +754,7 @@ jobs:
       - lint
       - run
       - cli-e2e-test
+      - cli-e2e-test-musl
     steps:
       - run: exit 1
         # Thank you, next https://github.com/vercel/next.js/blob/canary/.github/workflows/build_and_test.yml#L379
