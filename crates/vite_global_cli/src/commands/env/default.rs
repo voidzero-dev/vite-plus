@@ -87,6 +87,9 @@ async fn set_default(version: &str) -> Result<ExitStatus, Error> {
     config.default_node_version = Some(store_version);
     save_config(&config).await?;
 
+    // Invalidate resolve cache so the new default takes effect immediately
+    crate::shim::invalidate_cache();
+
     println!("\u{2713} Default Node.js version set to {display_version}");
 
     Ok(ExitStatus::default())
