@@ -164,7 +164,7 @@ pub async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
     println!("{}", vite_shared::header::vite_plus_header());
     println!();
 
-    println!("vp v{}", env!("CARGO_PKG_VERSION"));
+    println!("vp v{}", env!("VITE_PLUS_VERSION"));
     println!();
 
     // Local vite-plus and tools
