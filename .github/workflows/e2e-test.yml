@@ -246,6 +246,7 @@ jobs:
             command: |
               vp run type-check:tsgo
               vp run build
+              vp run build:vinext
               vp run test navigation-utils.test.ts real-browser-flicker.test.tsx workflow-parallel-limit.test.tsx
           - name: viteplus-ws-repro
             node-version: 24
