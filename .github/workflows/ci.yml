@@ -645,27 +645,23 @@ jobs:
         with:
           target: x86_64-unknown-linux-musl
 
-      # Run E2E tests inside an Alpine container where musl is native.
-      # Can't use bootstrap-cli:ci because it loads NAPI bindings on the glibc host.
-      # Instead, copy the cross-compiled vp binary directly into the container.
+      # Run bootstrap-cli:ci and E2E tests inside an Alpine container where musl is native.
+      # Can't run on the glibc host because NAPI .node files are musl-linked.
       - name: Run E2E in Alpine container
         run: |
           docker run --rm \
             -v "${{ github.workspace }}:/workspace" \
+            -w /workspace \
             node:22-alpine3.21 sh -c "
               apk add --no-cache bash curl ca-certificates git
 
-              # Install the cross-compiled musl vp binary
-              mkdir -p /root/.vite-plus/bin
-              cp /workspace/target/x86_64-unknown-linux-musl/release/vp /root/.vite-plus/bin/vp
-              chmod +x /root/.vite-plus/bin/vp
+              # Install pnpm and bootstrap the CLI
+              corepack enable
+              pnpm bootstrap-cli:ci
               export PATH=\"/root/.vite-plus/bin:\$PATH\"
 
               vp --version
               vp -h
-
-              # Set up env (creates shims for node/npm/npx)
-              vp env setup
               vp env doctor
 
               # Verify shims work
