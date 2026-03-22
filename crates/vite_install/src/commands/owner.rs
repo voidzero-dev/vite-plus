@@ -4,7 +4,9 @@ use vite_command::run_command;
 use vite_error::Error;
 use vite_path::AbsolutePath;
 
-use crate::package_manager::{PackageManager, ResolveCommandResult, format_path_env};
+use vite_shared::output;
+
+use crate::package_manager::{PackageManager, PackageManagerType, ResolveCommandResult, format_path_env};
 
 /// Owner subcommand type.
 #[derive(Debug, Clone)]
@@ -29,11 +31,18 @@ impl PackageManager {
 
     /// Resolve the owner command.
     /// All package managers delegate to npm owner.
+    /// Bun does not support owner, falls back to npm.
     #[must_use]
     pub fn resolve_owner_command(&self, subcommand: &OwnerSubcommand) -> ResolveCommandResult {
         let bin_name: String = "npm".to_string();
         let envs = HashMap::from([("PATH".to_string(), format_path_env(self.get_bin_prefix()))]);
         let mut args: Vec<String> = Vec::new();
+
+        if self.client == PackageManagerType::Bun {
+            output::warn(
+                "bun does not support the owner command, falling back to npm owner",
+            );
+        }
 
         args.push("owner".into());
 

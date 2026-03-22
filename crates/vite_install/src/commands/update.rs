@@ -179,6 +179,22 @@ impl PackageManager {
                     output::warn("npm doesn't support interactive mode. Running standard update.");
                 }
             }
+            PackageManagerType::Bun => {
+                bin_name = "bun".into();
+                args.push("update".into());
+
+                if options.latest {
+                    args.push("--latest".into());
+                }
+                if options.interactive {
+                    args.push("--interactive".into());
+                }
+                if options.recursive {
+                    output::warn(
+                        "bun updates all workspaces by default, --recursive is not needed",
+                    );
+                }
+            }
         }
 
         if let Some(pass_through_args) = options.pass_through_args {

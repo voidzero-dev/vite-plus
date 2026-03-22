@@ -173,6 +173,37 @@ impl PackageManager {
                     args.push("--json".into());
                 }
             }
+            PackageManagerType::Bun => {
+                args.push("pm".into());
+                args.push("pack".into());
+
+                if options.recursive {
+                    output::warn("--recursive not supported by bun pm pack, ignoring flag");
+                }
+
+                if let Some(filters) = options.filters {
+                    if !filters.is_empty() {
+                        output::warn("--filter not supported by bun pm pack, ignoring flag");
+                    }
+                }
+
+                if options.out.is_some() {
+                    output::warn("--out not supported by bun pm pack, ignoring flag");
+                }
+
+                if let Some(dest) = options.pack_destination {
+                    args.push("--destination".into());
+                    args.push(dest.to_string());
+                }
+
+                if options.pack_gzip_level.is_some() {
+                    output::warn("--pack-gzip-level not supported by bun pm pack, ignoring flag");
+                }
+
+                if options.json {
+                    output::warn("--json not supported by bun pm pack, ignoring flag");
+                }
+            }
         }
 
         // Add pass-through args

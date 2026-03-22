@@ -198,6 +198,64 @@ impl PackageManager {
                     }
                 }
             }
+            PackageManagerType::Bun => {
+                args.push("pm".into());
+                args.push("ls".into());
+
+                if let Some(pattern) = options.pattern {
+                    args.push(pattern.to_string());
+                }
+
+                if options.depth.is_some() {
+                    output::warn("--depth not supported by bun pm ls, ignoring flag");
+                }
+
+                if options.json {
+                    output::warn("--json not supported by bun pm ls, ignoring flag");
+                }
+
+                if options.long {
+                    output::warn("--long not supported by bun pm ls, ignoring flag");
+                }
+
+                if options.parseable {
+                    output::warn("--parseable not supported by bun pm ls, ignoring flag");
+                }
+
+                if options.prod {
+                    output::warn("--prod not supported by bun pm ls, ignoring flag");
+                }
+
+                if options.dev {
+                    output::warn("--dev not supported by bun pm ls, ignoring flag");
+                }
+
+                if options.no_optional {
+                    output::warn("--no-optional not supported by bun pm ls, ignoring flag");
+                }
+
+                if options.exclude_peers {
+                    output::warn("--exclude-peers not supported by bun pm ls, ignoring flag");
+                }
+
+                if options.only_projects {
+                    output::warn("--only-projects not supported by bun pm ls, ignoring flag");
+                }
+
+                if options.find_by.is_some() {
+                    output::warn("--find-by not supported by bun pm ls, ignoring flag");
+                }
+
+                if options.recursive {
+                    output::warn("--recursive not supported by bun pm ls, ignoring flag");
+                }
+
+                if let Some(filters) = options.filters {
+                    if !filters.is_empty() {
+                        output::warn("--filter not supported by bun pm ls, ignoring flag");
+                    }
+                }
+            }
         }
 
         // Add pass-through args

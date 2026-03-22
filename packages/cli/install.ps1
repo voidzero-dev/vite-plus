@@ -198,6 +198,16 @@ function Refresh-Shims {
     }
 }
 
+# Run vp env setup --refresh, showing output only on failure
+function Refresh-Shims {
+    param([string]$BinDir)
+    $setupOutput = & "$BinDir\vp.exe" env setup --refresh 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warn "Failed to refresh shims:"
+        Write-Host "$setupOutput"
+    }
+}
+
 # Setup Node.js version manager (node/npm/npx shims)
 # Returns: "true" = enabled, "false" = not enabled, "already" = already configured
 function Setup-NodeManager {

@@ -24,6 +24,7 @@ export async function selectPackageManager(interactive?: boolean, silent = false
         { value: PackageManager.pnpm, hint: 'recommended' },
         { value: PackageManager.yarn },
         { value: PackageManager.npm },
+        { value: PackageManager.bun },
       ],
       initialValue: PackageManager.pnpm,
     });

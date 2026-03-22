@@ -63,6 +63,10 @@ impl PackageManager {
 
                 return None;
             }
+            PackageManagerType::Bun => {
+                output::warn("bun does not support the rebuild command");
+                return None;
+            }
         }
 
         // Add pass-through args

@@ -3,6 +3,7 @@ use std::{collections::HashMap, process::ExitStatus};
 use vite_command::run_command;
 use vite_error::Error;
 use vite_path::AbsolutePath;
+use vite_shared::output;
 
 use crate::package_manager::{
     PackageManager, PackageManagerType, ResolveCommandResult, format_path_env,
@@ -193,6 +194,47 @@ impl PackageManager {
 
                 if options.save_exact {
                     args.push("--save-exact".into());
+                }
+            }
+            PackageManagerType::Bun => {
+                bin_name = "bun".into();
+                args.push("add".into());
+
+                if let Some(save_dependency_type) = options.save_dependency_type {
+                    match save_dependency_type {
+                        SaveDependencyType::Production => {
+                            // default, no flag needed
+                        }
+                        SaveDependencyType::Dev => {
+                            args.push("--dev".into());
+                        }
+                        SaveDependencyType::Peer => {
+                            args.push("--peer".into());
+                        }
+                        SaveDependencyType::Optional => {
+                            args.push("--optional".into());
+                        }
+                    }
+                }
+                if options.save_exact {
+                    args.push("--exact".into());
+                }
+                if let Some(filters) = options.filters {
+                    if !filters.is_empty() {
+                        output::warn("bun add does not support --filter");
+                    }
+                }
+                if options.workspace_root {
+                    output::warn("bun add does not support --workspace-root");
+                }
+                if options.workspace_only {
+                    output::warn("bun add does not support --workspace-only");
+                }
+                if options.save_catalog_name.is_some() {
+                    output::warn("bun add does not support --save-catalog-name");
+                }
+                if options.allow_build.is_some() {
+                    output::warn("bun add does not support --allow-build");
                 }
             }
         }

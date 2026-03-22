@@ -142,6 +142,29 @@ impl PackageManager {
                     }
                 }
             }
+            PackageManagerType::Bun => {
+                bin_name = "bun".into();
+                args.push("pm".into());
+                args.push("audit".into());
+
+                if options.fix {
+                    output::warn("bun pm audit does not support --fix");
+                    return None;
+                }
+
+                if let Some(level) = options.level {
+                    args.push("--level".into());
+                    args.push(level.to_string());
+                }
+
+                if options.production {
+                    output::warn("--production not supported by bun pm audit, ignoring flag");
+                }
+
+                if options.json {
+                    args.push("--json".into());
+                }
+            }
         }
 
         // Add pass-through args
