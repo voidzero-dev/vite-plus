@@ -1458,8 +1458,19 @@ async function patchVitestBrowserPackage() {
 
   // 1. Inject vitest:vendor-aliases plugin into BrowserPlugin return array
   // This allows imports like @vitest/runner to be resolved to our copied @vitest files
+  // Exclude @vitest/browser/context from vendor-aliases so that BrowserContext
+  // plugin's resolveId can intercept the bare specifier and return the virtual
+  // module (which includes the dynamically generated `server` export).
+  // Without this, vendor-aliases resolves the bare specifier to the static
+  // context.js file (which has no `server`), bypassing BrowserContext entirely.
+  // See: https://github.com/voidzero-dev/vite-plus/issues/1086
+  const VENDOR_ALIASES_EXCLUDE = new Set(['@vitest/browser/context']);
+
   const mappingEntries = Object.entries(VITEST_PACKAGE_TO_PATH)
-    .filter(([pkg]) => pkg.startsWith('@vitest/'))
+    .filter(
+      ([pkg]) =>
+        pkg.startsWith('@vitest/') && !VENDOR_ALIASES_EXCLUDE.has(pkg),
+    )
     .map(([pkg, file]) => `'${pkg}': resolve(packageRoot, '${file}')`)
     .join(',\n      ');
 
