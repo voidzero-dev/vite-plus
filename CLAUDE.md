@@ -108,10 +108,13 @@ All user-facing output must go through shared output modules instead of raw prin
 
 ## Build
 
-- Run `pnpm bootstrap-cli` from the project root to build all packages and install the global CLI
+- Run `pnpm build:cli` from the project root for normal local development
   - This builds all `@voidzero-dev/*` and `vite-plus` packages
-  - Compiles the Rust NAPI bindings and the `vp` Rust binary
-  - Installs the CLI globally to `~/.vite-plus/`
+  - Compiles the Rust `vp` and `vite_trampoline` binaries in `debug`
+  - Uses only repo-local artifacts (`packages/cli/dist`, `packages/test/dist`, `target/debug/vp`)
+  - Assumes the local `rolldown/` and `vite/` checkouts already exist; use `just init` or `node packages/tools/src/index.ts sync-remote` to prepare them
+- Run `pnpm bootstrap-cli` only when you need to validate the global install flow
+  - This performs the release build and installs the CLI globally to `~/.vite-plus/`
 
 ## Snap Tests
 
@@ -134,5 +137,7 @@ pnpm -F vite-plus snap-test-local <name-filter>
 pnpm -F vite-plus snap-test-global
 pnpm -F vite-plus snap-test-global <name-filter>
 ```
+
+Global CLI snap tests use the repo-local debug binary and do not require `~/.vite-plus/bin`.
 
 The snap test will automatically generate/update the `snap.txt` file with the command outputs. It exits with zero status even if there are output differences; you need to manually check the diffs(`git diff`) to verify correctness.

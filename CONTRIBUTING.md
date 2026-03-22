@@ -53,6 +53,17 @@ To create a release build of Vite+ and all upstream dependencies, run:
 just build
 ```
 
+## Local CLI workflow
+
+```
+pnpm install
+pnpm build:cli
+pnpm test
+```
+
+This installs dependencies, builds the repo-local CLI artifacts, and runs tests without reading `~/.vite-plus`.
+If you have not prepared the local `rolldown/` and `vite/` checkouts yet, run `just init` or `node packages/tools/src/index.ts sync-remote` first.
+
 ## Install the Vite+ Global CLI from source code
 
 ```
@@ -60,14 +71,14 @@ pnpm bootstrap-cli
 vp --version
 ```
 
-This builds all packages, compiles the Rust `vp` binary, and installs the CLI to `~/.vite-plus`.
+Use this only when you specifically want to validate the install flow or the globally installed CLI.
 
 ## Workflow for build and test
 
 You can run this command to build, test and check if there are any snapshot changes:
 
 ```
-pnpm bootstrap-cli && pnpm test && git status
+pnpm build:cli && pnpm test && git status
 ```
 
 ## Running Snap Tests
@@ -86,6 +97,8 @@ pnpm -F vite-plus snap-test-local <name-filter>
 pnpm -F vite-plus snap-test-global
 pnpm -F vite-plus snap-test-global <name-filter>
 ```
+
+Global CLI snap tests use the repo-local debug binary and `packages/cli/dist`; they do not require `~/.vite-plus/bin`.
 
 Snap tests auto-generate `snap.txt` files. Check `git diff` to verify output changes are correct.
 
