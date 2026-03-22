@@ -116,18 +116,25 @@ jobs:
     runs-on: namespace-profile-linux-x64-default
     container:
       image: node:22-alpine3.21
+    env:
+      # GitHub Actions sets HOME=/github/home in containers, but the euid home is /root.
+      # Pin Rust tooling paths to avoid $HOME mismatch issues.
+      CARGO_HOME: /root/.cargo
+      RUSTUP_HOME: /root/.rustup
     steps:
       - name: Install Alpine dependencies
         shell: sh {0}
-        run: apk add --no-cache bash curl git musl-dev gcc g++ python3
+        run: apk add --no-cache bash curl git musl-dev gcc g++ python3 cmake make
 
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
       - uses: ./.github/actions/clone
 
       - name: Install rustup
         run: |
+          # GitHub Actions sets HOME=/github/home in containers, but rustup expects euid home (/root)
+          export HOME=/root
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain none
-          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          echo "/root/.cargo/bin" >> "$GITHUB_PATH"
 
       - name: Install Rust toolchain
         run: rustup show
