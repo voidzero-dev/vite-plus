@@ -115,7 +115,7 @@ jobs:
     name: Test (musl)
     runs-on: namespace-profile-linux-x64-default
     container:
-      image: alpine:3.21
+      image: node:22-alpine3.21
     steps:
       - name: Install Alpine dependencies
         shell: sh {0}
