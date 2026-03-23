@@ -107,8 +107,12 @@ export function mergeLintConfig(
   rootLint: Record<string, unknown> | undefined,
   cwdLint: Record<string, unknown> | undefined,
 ): Record<string, unknown> | undefined {
-  if (!cwdLint) return rootLint;
-  if (!rootLint) return cwdLint;
+  if (!cwdLint) {
+    return rootLint;
+  }
+  if (!rootLint) {
+    return cwdLint;
+  }
 
   const merged: Record<string, unknown> = { ...rootLint, ...cwdLint };
 
