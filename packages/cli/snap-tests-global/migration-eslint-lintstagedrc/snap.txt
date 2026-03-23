@@ -27,7 +27,6 @@ VITE+ - The Unified Toolchain for the Web
 }
 
 > test ! -f .lintstagedrc.json # check lintstagedrc.json is removed
-
 > cat vite.config.ts # check oxlint config merged into vite.config.ts
 import { defineConfig } from 'vite-plus';
 

@@ -435,7 +435,7 @@ jobs:
       - name: Run CLI snapshot tests
         run: |
           RUST_BACKTRACE=1 pnpm test
-          if ! git diff --exit-code; then
+          if ! git diff --quiet; then
             echo "::error::Snapshot diff detected. Run 'pnpm -F vite-plus snap-test' locally and commit the updated snap.txt files."
             git diff --stat
             git diff
@@ -690,7 +690,7 @@ jobs:
               # Run snap tests
               git config --global --add safe.directory /workspace
               RUST_BACKTRACE=1 pnpm test
-              if ! git diff --exit-code; then
+              if ! git diff --quiet; then
                 echo '::error::Snapshot diff detected. Run pnpm -F vite-plus snap-test locally and commit the updated snap.txt files.'
                 git diff --stat
                 git diff
