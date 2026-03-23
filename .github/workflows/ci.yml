@@ -704,17 +704,21 @@ jobs:
               cd /workspace
 
               echo '=== Debug: migration-auto-create-vite-config ==='
-              cd packages/cli/snap-tests-global/migration-auto-create-vite-config
+              TMPDIR=\$(mktemp -d)
+              cp -r packages/cli/snap-tests-global/migration-auto-create-vite-config/* \$TMPDIR/
+              cd \$TMPDIR
+              echo '--- vp migrate --no-interactive ---'
               vp migrate --no-interactive 2>&1 || true
+              echo '--- cat vite.config.ts ---'
               cat vite.config.ts 2>&1 || true
+              echo '--- cat .oxlintrc.json ---'
+              cat .oxlintrc.json 2>&1 || true
+              echo '--- cat .oxfmtrc.json ---'
+              cat .oxfmtrc.json 2>&1 || true
+              echo '--- cat package.json ---'
               cat package.json 2>&1 || true
               cd /workspace
-
-              # Debug: run only migration-auto-create-vite-config snap test to isolate error
-              git config --global --add safe.directory /workspace
-              RUST_BACKTRACE=1 pnpm -F vite-plus snap-test-global migration-auto-create-vite-config 2>&1 || true
-              echo '=== snap.txt diff ==='
-              git diff packages/cli/snap-tests-global/migration-auto-create-vite-config/snap.txt || true
+              rm -rf \$TMPDIR
             "
 
   install-e2e-test:
