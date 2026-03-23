@@ -20,5 +20,4 @@ export default defineConfig({
   lint: { options: { typeAware: true, typeCheck: true } },
 });
 
-> cat vite-plus-monorepo/apps/website/vite.config.ts 2>&1 || true # sub-app should NOT have typeAware/typeCheck
-cat: vite-plus-monorepo/apps/website/vite.config.ts: No such file or directory
+> test ! -f vite-plus-monorepo/apps/website/vite.config.ts # sub-app should NOT have typeAware/typeCheck

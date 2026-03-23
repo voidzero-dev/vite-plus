@@ -26,8 +26,7 @@ VITE+ - The Unified Toolchain for the Web
   }
 }
 
-[1]> cat .lintstagedrc.json # check eslint rewritten to vp lint in lintstagedrc
-cat: .lintstagedrc.json: No such file or directory
+> test ! -f .lintstagedrc.json # check lintstagedrc.json is removed
 
 > cat vite.config.ts # check oxlint config merged into vite.config.ts
 import { defineConfig } from 'vite-plus';

@@ -26,8 +26,7 @@ VITE+ - The Unified Toolchain for the Web
   }
 }
 
-[1]> cat .lintstagedrc.json # check lintstagedrc.json (should be deleted after inlining to vite.config.ts)
-cat: .lintstagedrc.json: No such file or directory
+> test ! -f .lintstagedrc.json # check lintstagedrc.json (should be deleted after inlining to vite.config.ts)
 
 > cat vite.config.ts # check staged config migrated to vite.config.ts
 import { defineConfig } from 'vite-plus';

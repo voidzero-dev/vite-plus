@@ -2,7 +2,7 @@
   "commands": [
     "vp migrate --no-interactive # migration should detect eslint and auto-migrate including lintstagedrc",
     "cat package.json # check eslint removed and scripts rewritten",
-    "cat .lintstagedrc.json # check eslint rewritten to vp lint in lintstagedrc",
+    "test ! -f .lintstagedrc.json # check lintstagedrc.json is removed",
     "cat vite.config.ts # check oxlint config merged into vite.config.ts"
   ]
 }

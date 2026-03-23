@@ -3,7 +3,7 @@
     { "command": "git init", "ignoreOutput": true },
     "vp migrate --no-interactive # migration should add prepare script, remove lint-staged from devDeps",
     "cat package.json # check prepare script added, lint-staged removed from devDeps",
-    "cat .lintstagedrc.json # check lintstagedrc.json (should be deleted after inlining to vite.config.ts)",
+    "test ! -f .lintstagedrc.json # check lintstagedrc.json (should be deleted after inlining to vite.config.ts)",
     "cat vite.config.ts # check staged config migrated to vite.config.ts",
     "cat .vite-hooks/pre-commit # check pre-commit hook created"
   ]

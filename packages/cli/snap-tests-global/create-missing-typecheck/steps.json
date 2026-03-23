@@ -11,6 +11,6 @@
       "ignoreOutput": true
     },
     "cat vite-plus-monorepo/vite.config.ts # check monorepo root vite.config.ts has typeAware and typeCheck",
-    "cat vite-plus-monorepo/apps/website/vite.config.ts 2>&1 || true # sub-app should NOT have typeAware/typeCheck"
+    "test ! -f vite-plus-monorepo/apps/website/vite.config.ts # sub-app should NOT have typeAware/typeCheck"
   ]
 }

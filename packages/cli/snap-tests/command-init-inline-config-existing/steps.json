@@ -4,8 +4,8 @@
   },
   "commands": [
     "vp lint --init",
-    "cat .oxlintrc.json && exit 1 || true # check .oxlintrc.json is not created",
+    "test ! -f .oxlintrc.json # check .oxlintrc.json is not created",
     "vp fmt --init",
-    "cat .oxfmtrc.json && exit 1 || true # check .oxfmtrc.json is not created"
+    "test ! -f .oxfmtrc.json # check .oxfmtrc.json is not created"
   ]
 }
