@@ -665,7 +665,7 @@ jobs:
               ROLLDOWN_VERSION=\$(node -p \"require('./rolldown/packages/rolldown/package.json').version\")
               npm pack \"@rolldown/binding-linux-x64-musl@\${ROLLDOWN_VERSION}\"
               tar -xzf \"rolldown-binding-linux-x64-musl-\${ROLLDOWN_VERSION}.tgz\"
-              cp ./package/rolldown-binding.linux-x64-musl.node ./packages/core/dist/rolldown/
+              cp ./package/rolldown-binding.linux-x64-musl.node ./packages/core/dist/rolldown/shared/
               rm -rf package *.tgz
 
               pnpm bootstrap-cli:ci
