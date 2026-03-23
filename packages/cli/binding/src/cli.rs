@@ -34,6 +34,9 @@ use vite_task::{
 pub struct ResolvedUniversalViteConfig {
     #[serde(rename = "configFile")]
     pub config_file: Option<String>,
+    /// Separate config file path for lint (merged JSON when sub-package overrides exist)
+    #[serde(rename = "lintConfigFile")]
+    pub lint_config_file: Option<String>,
     pub lint: Option<serde_json::Value>,
     pub fmt: Option<serde_json::Value>,
     pub run: Option<serde_json::Value>,
@@ -258,9 +261,14 @@ impl SubcommandResolver {
                     &owned_resolved_vite_config
                 };
 
-                if let (Some(_), Some(config_file)) =
-                    (&resolved_vite_config.lint, &resolved_vite_config.config_file)
-                {
+                // Use lint-specific config file (merged JSON) if available,
+                // otherwise fall back to vite.config.ts
+                if let Some(config_file) = resolved_vite_config.lint.as_ref().and(
+                    resolved_vite_config
+                        .lint_config_file
+                        .as_ref()
+                        .or(resolved_vite_config.config_file.as_ref()),
+                ) {
                     args.insert(0, "-c".to_string());
                     args.insert(1, config_file.clone());
                 }

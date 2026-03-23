@@ -206,10 +206,13 @@ export async function resolveUniversalViteConfig(err: null | Error, arg: string)
       );
       const mergedFmt = cwdConfig.fmt ?? rootConfig.fmt;
 
+      const configFile = cwdConfig.configFile ?? rootConfig.configFile;
+
       if (mergedLint) {
         const mergedConfigPath = writeMergedLintConfig(cwd, mergedLint);
         return JSON.stringify({
-          configFile: mergedConfigPath,
+          configFile,
+          lintConfigFile: mergedConfigPath,
           lint: mergedLint,
           fmt: mergedFmt,
           run: cwdConfig.run ?? rootConfig.run,
@@ -218,7 +221,7 @@ export async function resolveUniversalViteConfig(err: null | Error, arg: string)
       }
 
       return JSON.stringify({
-        configFile: cwdConfig.configFile ?? rootConfig.configFile,
+        configFile,
         lint: cwdConfig.lint ?? rootConfig.lint,
         fmt: mergedFmt,
         run: cwdConfig.run ?? rootConfig.run,
