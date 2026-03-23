@@ -660,6 +660,14 @@ jobs:
               # but we need to re-link the musl variants.
               corepack enable
               pnpm install --frozen-lockfile --force
+
+              # Download musl rolldown binding (host downloaded glibc variant)
+              ROLLDOWN_VERSION=\$(node -p \"require('./rolldown/packages/rolldown/package.json').version\")
+              npm pack \"@rolldown/binding-linux-x64-musl@\${ROLLDOWN_VERSION}\"
+              tar -xzf \"rolldown-binding-linux-x64-musl-\${ROLLDOWN_VERSION}.tgz\"
+              cp ./package/rolldown-binding.linux-x64-musl.node ./rolldown/packages/rolldown/src/
+              rm -rf package *.tgz
+
               pnpm bootstrap-cli:ci
               export PATH=\"/root/.vite-plus/bin:\$PATH\"
 
