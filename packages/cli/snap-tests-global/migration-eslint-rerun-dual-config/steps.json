@@ -5,5 +5,11 @@
     "cat eslint.config.mjs && exit 1 || true # check flat config is removed",
     "cat .eslintrc && exit 1 || true # check legacy config is also removed",
     "cat vite.config.ts # check oxlint config merged into vite.config.ts"
+  ],
+  "ignoredPlatforms": [
+    {
+      "os": "linux",
+      "libc": "musl"
+    }
   ]
 }

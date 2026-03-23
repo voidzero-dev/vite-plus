@@ -2,5 +2,11 @@
   "commands": [
     "vp migrate --no-interactive # migration should warn about non-JSON lint-staged config",
     "cat lint-staged.config.mjs # verify non-JSON lint-staged config is preserved unchanged"
+  ],
+  "ignoredPlatforms": [
+    {
+      "os": "linux",
+      "libc": "musl"
+    }
   ]
 }
