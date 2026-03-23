@@ -685,8 +685,7 @@ jobs:
               tsc --version
               vp uninstall -g typescript
 
-              # Install Playwright browsers and run snap tests
-              pnpx playwright install --with-deps chromium
+              # Run snap tests
               git config --global --add safe.directory /workspace
               RUST_BACKTRACE=1 pnpm test
               if ! git diff --exit-code; then
