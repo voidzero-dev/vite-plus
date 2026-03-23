@@ -663,15 +663,11 @@ jobs:
               pnpm bootstrap-cli:ci
               export PATH=\"/root/.vite-plus/bin:\$PATH\"
 
-              # Use system Node.js (from container image) instead of vp-managed one.
-              # vp downloads glibc Node.js binaries which don't run on musl Alpine.
-              vp env off
-
               vp --version
               vp -h
               vp env doctor
 
-              # Verify system node works through vp
+              # Verify shims work
               which node
               which npm
               node --version
