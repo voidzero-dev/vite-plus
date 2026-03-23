@@ -592,9 +592,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
         }
         // Check if cwd is inside an existing workspace package
         const enclosingPackage = workspaceInfoOptional.packages.find(
-          (pkg) =>
-            cwdRelativeToRoot === pkg.path ||
-            cwdRelativeToRoot.startsWith(`${pkg.path}/`),
+          (pkg) => cwdRelativeToRoot === pkg.path || cwdRelativeToRoot.startsWith(`${pkg.path}/`),
         );
         if (enclosingPackage) {
           cancelAndExit(
