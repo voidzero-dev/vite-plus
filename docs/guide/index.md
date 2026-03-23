@@ -41,9 +41,8 @@ If your shell cannot find `vp`, make sure your package manager's global bin dire
 This installation path is more manual than the install script:
 
 - It does not modify your shell profile for you.
-- It does not automatically create the `node`, `npm`, and `npx` shims in `VITE_PLUS_HOME/bin`.
-- If you want Vite+ to manage those shims after installing, run `vp env setup`.
-- If you want to keep your system Node.js first, run `vp env off`.
+- It does not create the Vite+-managed installation layout under `VITE_PLUS_HOME` that the install script uses.
+- `vp implode` does not uninstall npm/pnpm global installs. Use `npm uninstall -g vite-plus` or `pnpm remove -g vite-plus` if you installed it this way.
 
 ::: info
 Vite+ will manage your global Node.js runtime and package manager. If you'd like to opt out of this behavior, run `vp env off`. If you realize Vite+ is not for you, type `vp implode`, but please [share your feedback with us](https://discord.gg/cAnsqHh5PX).
