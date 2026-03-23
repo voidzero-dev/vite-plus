@@ -112,7 +112,7 @@ jobs:
   test-musl:
     needs: detect-changes
     if: needs.detect-changes.outputs.code-changed == 'true'
-    name: Test (musl)
+    name: Test (Linux x64 musl)
     runs-on: namespace-profile-linux-x64-default
     container:
       image: node:22-alpine3.21

@@ -31,9 +31,7 @@ export default defineConfig({
 });
 
 > test ! -f .oxlintrc.json # check .oxlintrc.json is removed
-
 > test ! -f .oxfmtrc.json # check .oxfmtrc.json is removed
-
 > cat package.json # check package.json
 {
   "devDependencies": {

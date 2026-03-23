@@ -31,9 +31,7 @@ ESLint comments replaced
 }
 
 > test ! -f eslint.config.mjs # check flat config is removed
-
 > test ! -f .eslintrc # check legacy config is also removed
-
 > cat vite.config.ts # check oxlint config merged into vite.config.ts
 import { defineConfig } from 'vite-plus';
 

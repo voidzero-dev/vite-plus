@@ -6,7 +6,6 @@ VITE+ - The Unified Toolchain for the Web
 • 2 config updates applied
 
 > test ! -f tsdown.config.json # check tsdown.config.json should be removed
-
 > cat vite.config.ts # check vite.config.ts
 import { defineConfig } from 'vite-plus';
 
