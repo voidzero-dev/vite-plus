@@ -1,0 +1,6 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "commands": [
+    "cd packages/some-package && vp lint # sub-package ignorePatterns should exclude fixtures"
+  ]
+}

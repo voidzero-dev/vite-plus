@@ -5,7 +5,7 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { findViteConfigUp } from '../resolve-vite-config';
+import { findViteConfigUp, mergeLintConfig } from '../resolve-vite-config';
 
 describe('findViteConfigUp', () => {
   let tempDir: string;
@@ -116,5 +116,85 @@ describe('findViteConfigUp', () => {
 
     const result = findViteConfigUp(subDir, tempDir);
     expect(result).toBe(path.join(tempDir, 'vite.config.mjs'));
+  });
+});
+
+describe('mergeLintConfig', () => {
+  it('should return rootLint when cwdLint is undefined', () => {
+    const root = { plugins: ['import'], rules: { 'no-console': 'warn' } };
+    expect(mergeLintConfig(root, undefined)).toEqual(root);
+  });
+
+  it('should return cwdLint when rootLint is undefined', () => {
+    const cwd = { ignorePatterns: ['tests/**'] };
+    expect(mergeLintConfig(undefined, cwd)).toEqual(cwd);
+  });
+
+  it('should return undefined when both are undefined', () => {
+    expect(mergeLintConfig(undefined, undefined)).toBeUndefined();
+  });
+
+  it('should merge plugins as union with dedup', () => {
+    const root = { plugins: ['import', 'react'] };
+    const cwd = { plugins: ['import', 'unicorn'] };
+    const merged = mergeLintConfig(root, cwd)!;
+    expect(merged.plugins).toEqual(['import', 'react', 'unicorn']);
+  });
+
+  it('should shallow merge rules with cwd taking priority', () => {
+    const root = { rules: { 'no-console': 'warn', 'import/no-commonjs': 'error' } };
+    const cwd = { rules: { 'no-console': 'off' } };
+    const merged = mergeLintConfig(root, cwd)!;
+    expect(merged.rules).toEqual({
+      'no-console': 'off',
+      'import/no-commonjs': 'error',
+    });
+  });
+
+  it('should use cwd ignorePatterns when present', () => {
+    const root = { ignorePatterns: ['dist/**'] };
+    const cwd = { ignorePatterns: ['tests/fixtures/**/*'] };
+    const merged = mergeLintConfig(root, cwd)!;
+    expect(merged.ignorePatterns).toEqual(['tests/fixtures/**/*']);
+  });
+
+  it('should keep root ignorePatterns when cwd has none', () => {
+    const root = { ignorePatterns: ['dist/**'], rules: { 'no-console': 'warn' } };
+    const cwd = { rules: { 'no-console': 'off' } };
+    const merged = mergeLintConfig(root, cwd)!;
+    expect(merged.ignorePatterns).toEqual(['dist/**']);
+  });
+
+  it('should shallow merge options with cwd taking priority', () => {
+    const root = { options: { typeAware: false, denyWarnings: true } };
+    const cwd = { options: { typeAware: true } };
+    const merged = mergeLintConfig(root, cwd)!;
+    expect(merged.options).toEqual({ typeAware: true, denyWarnings: true });
+  });
+
+  it('should concatenate overrides from root and cwd', () => {
+    const root = { overrides: [{ files: ['*.ts'], rules: { a: 'off' } }] };
+    const cwd = { overrides: [{ files: ['*.tsx'], rules: { b: 'off' } }] };
+    const merged = mergeLintConfig(root, cwd)!;
+    expect(merged.overrides).toEqual([
+      { files: ['*.ts'], rules: { a: 'off' } },
+      { files: ['*.tsx'], rules: { b: 'off' } },
+    ]);
+  });
+
+  it('should merge all fields together (issue #997 scenario)', () => {
+    const root = {
+      plugins: ['import'],
+      rules: { 'import/no-commonjs': 'error' },
+    };
+    const cwd = {
+      options: { typeAware: true, typeCheck: true },
+      ignorePatterns: ['tests/fixtures/**/*'],
+    };
+    const merged = mergeLintConfig(root, cwd)!;
+    expect(merged.plugins).toEqual(['import']);
+    expect(merged.rules).toEqual({ 'import/no-commonjs': 'error' });
+    expect(merged.ignorePatterns).toEqual(['tests/fixtures/**/*']);
+    expect(merged.options).toEqual({ typeAware: true, typeCheck: true });
   });
 });

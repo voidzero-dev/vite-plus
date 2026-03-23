@@ -205,7 +205,10 @@ impl SubcommandResolver {
         self
     }
 
-    async fn resolve_universal_vite_config(&self) -> anyhow::Result<ResolvedUniversalViteConfig> {
+    async fn resolve_universal_vite_config(
+        &self,
+        cwd: Option<&AbsolutePath>,
+    ) -> anyhow::Result<ResolvedUniversalViteConfig> {
         let cli_options = self
             .cli_options
             .as_ref()
@@ -215,8 +218,13 @@ impl SubcommandResolver {
             .as_path()
             .to_str()
             .ok_or_else(|| anyhow::anyhow!("workspace path is not valid UTF-8"))?;
+        let cwd_str = cwd
+            .and_then(|p| p.as_path().to_str())
+            .ok_or_else(|| anyhow::anyhow!("cwd is not valid UTF-8"))
+            .ok();
+        let arg = build_vite_config_resolver_arg(workspace_path_str, cwd_str);
         let vite_config_json =
-            (cli_options.resolve_universal_vite_config)(workspace_path_str.to_string()).await?;
+            (cli_options.resolve_universal_vite_config)(arg).await?;
 
         Ok(serde_json::from_str(&vite_config_json).inspect_err(|_| {
             tracing::error!("Failed to parse vite config: {vite_config_json}");
@@ -246,7 +254,8 @@ impl SubcommandResolver {
                 let resolved_vite_config = if let Some(config) = resolved_vite_config {
                     config
                 } else {
-                    owned_resolved_vite_config = self.resolve_universal_vite_config().await?;
+                    owned_resolved_vite_config =
+                        self.resolve_universal_vite_config(Some(cwd)).await?;
                     &owned_resolved_vite_config
                 };
 
@@ -285,7 +294,8 @@ impl SubcommandResolver {
                 let resolved_vite_config = if let Some(config) = resolved_vite_config {
                     config
                 } else {
-                    owned_resolved_vite_config = self.resolve_universal_vite_config().await?;
+                    owned_resolved_vite_config =
+                        self.resolve_universal_vite_config(Some(cwd)).await?;
                     &owned_resolved_vite_config
                 };
 
@@ -644,6 +654,22 @@ impl UserConfigLoader for VitePlusConfigLoader {
             None => UserRunConfig::default(),
         };
         Ok(Some(run_config))
+    }
+}
+
+/// Build the argument string for `resolve_universal_vite_config` JS function.
+///
+/// When `cwd` differs from `workspace_path`, returns a JSON string with both
+/// paths so the JS side can merge root and sub-package configs.
+/// Otherwise returns the workspace path as a plain string.
+fn build_vite_config_resolver_arg(workspace_path: &str, cwd: Option<&str>) -> String {
+    match cwd {
+        Some(cwd) if cwd != workspace_path => serde_json::json!({
+            "workspacePath": workspace_path,
+            "cwd": cwd
+        })
+        .to_string(),
+        _ => workspace_path.to_string(),
     }
 }
 
@@ -1020,7 +1046,8 @@ async fn execute_direct_subcommand(
             let has_paths = !paths.is_empty();
             let mut fmt_fix_started: Option<Instant> = None;
             let mut deferred_lint_pass: Option<(String, String)> = None;
-            let resolved_vite_config = resolver.resolve_universal_vite_config().await?;
+            let resolved_vite_config =
+                resolver.resolve_universal_vite_config(Some(&cwd_arc)).await?;
 
             if !no_fmt {
                 let mut args = if fix { vec![] } else { vec!["--check".to_string()] };
@@ -1537,8 +1564,9 @@ mod tests {
     use vite_task::config::UserRunConfig;
 
     use super::{
-        CLIArgs, LintMessageKind, SynthesizableSubcommand, extract_unknown_argument,
-        has_pass_as_value_suggestion, should_prepend_vitest_run, should_suppress_subcommand_stdout,
+        CLIArgs, LintMessageKind, SynthesizableSubcommand, build_vite_config_resolver_arg,
+        extract_unknown_argument, has_pass_as_value_suggestion, should_prepend_vitest_run,
+        should_suppress_subcommand_stdout,
     };
 
     #[test]
@@ -1685,5 +1713,26 @@ mod tests {
                 error.kind()
             );
         }
+    }
+
+    #[test]
+    fn vite_config_resolver_arg_returns_plain_string_when_no_cwd() {
+        let arg = build_vite_config_resolver_arg("/workspace", None);
+        assert_eq!(arg, "/workspace");
+    }
+
+    #[test]
+    fn vite_config_resolver_arg_returns_plain_string_when_cwd_same_as_workspace() {
+        let arg = build_vite_config_resolver_arg("/workspace", Some("/workspace"));
+        assert_eq!(arg, "/workspace");
+    }
+
+    #[test]
+    fn vite_config_resolver_arg_returns_json_when_cwd_differs() {
+        let arg =
+            build_vite_config_resolver_arg("/workspace", Some("/workspace/packages/some-package"));
+        let parsed: serde_json::Value = serde_json::from_str(&arg).expect("should be valid JSON");
+        assert_eq!(parsed["workspacePath"], "/workspace");
+        assert_eq!(parsed["cwd"], "/workspace/packages/some-package");
     }
 }
