@@ -16,11 +16,12 @@ use crate::{
 };
 
 /// Default Node.js distribution base URL
+#[cfg(not(target_env = "musl"))]
 const DEFAULT_NODE_DIST_URL: &str = "https://nodejs.org/dist";
 
 /// Unofficial builds URL for musl (official nodejs.org only provides glibc binaries)
 #[cfg(target_env = "musl")]
-const DEFAULT_NODE_DIST_URL_MUSL: &str = "https://unofficial-builds.nodejs.org/download/release";
+const DEFAULT_NODE_DIST_URL: &str = "https://unofficial-builds.nodejs.org/download/release";
 
 /// Environment variable to override the Node.js distribution URL
 
@@ -536,18 +537,7 @@ fn calculate_expires_at(max_age: Option<u64>) -> u64 {
 /// otherwise returns the default `https://nodejs.org/dist`.
 fn get_dist_url() -> Str {
     vite_shared::EnvConfig::get().node_dist_mirror.map_or_else(
-        || {
-            // On musl targets, use unofficial-builds.nodejs.org which provides musl binaries.
-            // Official nodejs.org only distributes glibc-linked Linux binaries.
-            #[cfg(target_env = "musl")]
-            {
-                DEFAULT_NODE_DIST_URL_MUSL.into()
-            }
-            #[cfg(not(target_env = "musl"))]
-            {
-                DEFAULT_NODE_DIST_URL.into()
-            }
-        },
+        || DEFAULT_NODE_DIST_URL.into(),
         |url| Str::from(url.trim_end_matches('/').to_string()),
     )
 }
