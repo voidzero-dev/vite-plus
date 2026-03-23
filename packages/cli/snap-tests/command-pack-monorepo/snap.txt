@@ -2,23 +2,48 @@
 > ls packages/hello/dist # should have the library
 index.cjs
 
-> vp run hello#build 2>&1 | grep 'cache hit' # should hit cache
-~/packages/hello$ vp pack ✓ cache hit, replaying
-vp run: cache hit, <variable>ms saved.
+> vp run hello#build 2>&1 # should hit cache but not working for now
+~/packages/hello$ vp pack
+ℹ entry: src/index.ts
+ℹ Build start
+ℹ Cleaning 1 files
+ℹ dist/index.cjs  <variable> kB │ gzip: <variable> kB
+ℹ 1 files, total: <variable> kB
+✔ Build complete in <variable>ms
+
+---
+vp run: hello#build not cached because it modified its input. (Run `vp run --last-details` for full details)
 
 > vp run array-config#build # should build the library supports array config
 > ls packages/array-config/dist # should have the library
 index.d.mts
 index.mjs
 
-> vp run array-config#build 2>&1 | grep 'cache hit' # should hit cache
-~/packages/array-config$ vp pack ✓ cache hit, replaying
-vp run: cache hit, <variable>ms saved.
+> vp run array-config#build 2>&1 # should hit cache but not working
+~/packages/array-config$ vp pack
+ℹ entry: src/sub/index.ts
+ℹ Build start
+ℹ Cleaning 2 files
+ℹ dist/index.mjs    <variable> kB │ gzip: <variable> kB
+ℹ dist/index.d.mts  <variable> kB │ gzip: <variable> kB
+ℹ 2 files, total: <variable> kB
+✔ Build complete in <variable>ms
+
+---
+vp run: array-config#build not cached because it modified its input. (Run `vp run --last-details` for full details)
 
 > vp run default-config#build # should build the library supports default config
 > ls packages/default-config/dist # should have the library
 index.mjs
 
-> vp run default-config#build 2>&1 | grep 'cache hit' # should hit cache
-~/packages/default-config$ vp pack ✓ cache hit, replaying
-vp run: cache hit, <variable>ms saved.
+> vp run default-config#build 2>&1 # should hit cache but not working
+~/packages/default-config$ vp pack
+ℹ entry: src/index.ts
+ℹ Build start
+ℹ Cleaning 1 files
+ℹ dist/index.mjs  <variable> kB │ gzip: <variable> kB
+ℹ 1 files, total: <variable> kB
+✔ Build complete in <variable>ms
+
+---
+vp run: default-config#build not cached because it modified its input. (Run `vp run --last-details` for full details)

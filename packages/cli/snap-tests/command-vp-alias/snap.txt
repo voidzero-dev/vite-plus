@@ -42,5 +42,6 @@ Options:
   -v, --verbose            Show full detailed summary after execution
       --cache              Force caching on for all tasks and scripts
       --no-cache           Force caching off for all tasks and scripts
+      --log <LOG>          How task output is displayed [default: interleaved] [possible values: interleaved, labeled, grouped]
       --last-details       Display the detailed summary of the last run
   -h, --help               Print help (see more with '--help')

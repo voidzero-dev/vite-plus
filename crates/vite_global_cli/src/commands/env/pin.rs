@@ -130,6 +130,9 @@ async fn do_pin(
     // Write the version to .node-version
     tokio::fs::write(&node_version_path, format!("{resolved_version}\n")).await?;
 
+    // Invalidate resolve cache so the pinned version takes effect immediately
+    crate::shim::invalidate_cache();
+
     // Print success message
     if was_alias {
         output::success(&format!(
@@ -206,6 +209,10 @@ pub async fn do_unpin(cwd: &AbsolutePathBuf) -> Result<ExitStatus, Error> {
     }
 
     tokio::fs::remove_file(&node_version_path).await?;
+
+    // Invalidate resolve cache so the unpinned version falls back correctly
+    crate::shim::invalidate_cache();
+
     output::success(&format!("Removed {} from {}", NODE_VERSION_FILE, cwd.as_path().display()));
 
     Ok(ExitStatus::default())
@@ -213,6 +220,7 @@ pub async fn do_unpin(cwd: &AbsolutePathBuf) -> Result<ExitStatus, Error> {
 
 #[cfg(test)]
 mod tests {
+    use serial_test::serial;
     use tempfile::TempDir;
     use vite_path::AbsolutePathBuf;
 
@@ -273,6 +281,90 @@ mod tests {
 
         // File should be gone
         assert!(!tokio::fs::try_exists(&node_version_path).await.unwrap());
+    }
+
+    #[tokio::test]
+    // Run serially: mutates VITE_PLUS_HOME env var which affects invalidate_cache()
+    #[serial]
+    async fn test_do_unpin_invalidates_cache() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Point VITE_PLUS_HOME to temp dir
+        unsafe {
+            std::env::set_var(vite_shared::env_vars::VITE_PLUS_HOME, temp_path.as_path());
+        }
+
+        // Create cache file manually
+        let cache_dir = temp_path.join("cache");
+        std::fs::create_dir_all(&cache_dir).unwrap();
+        let cache_file = cache_dir.join("resolve_cache.json");
+        std::fs::write(&cache_file, r#"{"version":2,"entries":{}}"#).unwrap();
+        assert!(
+            std::fs::metadata(cache_file.as_path()).is_ok(),
+            "Cache file should exist before unpin"
+        );
+
+        // Create .node-version and unpin
+        let node_version_path = temp_path.join(".node-version");
+        tokio::fs::write(&node_version_path, "20.18.0\n").await.unwrap();
+        let result = do_unpin(&temp_path).await;
+        assert!(result.is_ok());
+
+        // Cache file should be removed by invalidate_cache()
+        assert!(
+            std::fs::metadata(cache_file.as_path()).is_err(),
+            "Cache file should be removed after unpin"
+        );
+
+        // Cleanup
+        unsafe {
+            std::env::remove_var(vite_shared::env_vars::VITE_PLUS_HOME);
+        }
+    }
+
+    // Run serially: mutates VITE_PLUS_HOME env var which affects invalidate_cache()
+    #[tokio::test]
+    #[serial]
+    async fn test_do_pin_invalidates_cache() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Point VITE_PLUS_HOME to temp dir
+        unsafe {
+            std::env::set_var(vite_shared::env_vars::VITE_PLUS_HOME, temp_path.as_path());
+        }
+
+        // Create cache file manually
+        let cache_dir = temp_path.join("cache");
+        std::fs::create_dir_all(&cache_dir).unwrap();
+        let cache_file = cache_dir.join("resolve_cache.json");
+        std::fs::write(&cache_file, r#"{"version":2,"entries":{}}"#).unwrap();
+        assert!(
+            std::fs::metadata(cache_file.as_path()).is_ok(),
+            "Cache file should exist before pin"
+        );
+
+        // Pin an exact version (no_install=true to skip download, force=true to skip prompt)
+        let result = do_pin(&temp_path, "20.18.0", true, true).await;
+        assert!(result.is_ok());
+
+        // .node-version should be created
+        let node_version_path = temp_path.join(".node-version");
+        assert!(tokio::fs::try_exists(&node_version_path).await.unwrap());
+        let content = tokio::fs::read_to_string(&node_version_path).await.unwrap();
+        assert_eq!(content.trim(), "20.18.0");
+
+        // Cache file should be removed by invalidate_cache()
+        assert!(
+            std::fs::metadata(cache_file.as_path()).is_err(),
+            "Cache file should be removed after pin"
+        );
+
+        // Cleanup
+        unsafe {
+            std::env::remove_var(vite_shared::env_vars::VITE_PLUS_HOME);
+        }
     }
 
     #[tokio::test]

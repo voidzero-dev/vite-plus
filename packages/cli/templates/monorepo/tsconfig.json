@@ -1,8 +1,8 @@
 {
   "compilerOptions": {
     "noEmit": true,
-    "module": "preserve",
-    "moduleResolution": "bundler",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
     "allowImportingTsExtensions": true,
     "esModuleInterop": true
   }

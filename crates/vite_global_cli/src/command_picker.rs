@@ -7,7 +7,7 @@ use std::{
 
 use crossterm::{
     cursor,
-    event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
+    event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers},
     execute,
     style::{Attribute, Print, ResetColor, SetAttribute, SetForegroundColor},
     terminal::{self, ClearType},
@@ -196,25 +196,28 @@ fn run_picker(command_order: &[usize]) -> io::Result<Option<PickedCommand>> {
         }
 
         match event::read() {
-            Ok(Event::Key(KeyEvent { code, modifiers, .. })) => {
-                match handle_key_event(
-                    code,
-                    modifiers,
-                    &mut query,
-                    &mut selected_position,
-                    filtered_indices.len(),
-                ) {
-                    ControlFlow::Continue(()) => continue,
-                    ControlFlow::Break(Some(())) => {
-                        let Some(index) = filtered_indices.get(selected_position).copied() else {
-                            continue;
-                        };
-                        break Ok(Some(PickedCommand {
-                            command: COMMANDS[index].command,
-                            append_help: COMMANDS[index].append_help,
-                        }));
+            Ok(Event::Key(KeyEvent { code, modifiers, kind, .. })) => {
+                if kind == KeyEventKind::Press {
+                    match handle_key_event(
+                        code,
+                        modifiers,
+                        &mut query,
+                        &mut selected_position,
+                        filtered_indices.len(),
+                    ) {
+                        ControlFlow::Continue(()) => continue,
+                        ControlFlow::Break(Some(())) => {
+                            let Some(index) = filtered_indices.get(selected_position).copied()
+                            else {
+                                continue;
+                            };
+                            break Ok(Some(PickedCommand {
+                                command: COMMANDS[index].command,
+                                append_help: COMMANDS[index].append_help,
+                            }));
+                        }
+                        ControlFlow::Break(None) => break Ok(None),
                     }
-                    ControlFlow::Break(None) => break Ok(None),
                 }
             }
             Ok(_) => continue,

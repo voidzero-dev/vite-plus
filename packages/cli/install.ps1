@@ -205,6 +205,14 @@ function Setup-NodeManager {
 
     $binPath = "$InstallDir\bin"
 
+    # Explicit override via environment variable
+    if ($env:VITE_PLUS_NODE_MANAGER -eq "yes") {
+        Refresh-Shims -BinDir $BinDir
+        return "true"
+    } elseif ($env:VITE_PLUS_NODE_MANAGER -eq "no") {
+        return "false"
+    }
+
     # Check if Vite+ is already managing Node.js (bin\node.exe exists)
     if (Test-Path "$binPath\node.exe") {
         # Already managing Node.js, just refresh shims
@@ -212,8 +220,12 @@ function Setup-NodeManager {
         return "already"
     }
 
-    # Auto-enable on CI environment
-    if ($env:CI) {
+    # Auto-enable on CI or devcontainer environments
+    # CI: standard CI environment variable (GitHub Actions, Travis, CircleCI, etc.)
+    # CODESPACES: set by GitHub Codespaces (https://docs.github.com/en/codespaces)
+    # REMOTE_CONTAINERS: set by VS Code Dev Containers extension
+    # DEVPOD: set by DevPod (https://devpod.sh)
+    if ($env:CI -or $env:CODESPACES -or $env:REMOTE_CONTAINERS -or $env:DEVPOD) {
         Refresh-Shims -BinDir $BinDir
         return "true"
     }
