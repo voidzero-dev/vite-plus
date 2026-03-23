@@ -669,13 +669,6 @@ jobs:
               cp ./package/rolldown-binding.linux-x64-musl.node ./rolldown/packages/rolldown/dist/shared/
               rm -rf package *.tgz
 
-              # Debug: verify rolldown musl binding exists
-              echo '=== Verify rolldown musl binding ==='
-              ls -la ./packages/core/dist/rolldown/shared/rolldown-binding.linux-x64-musl.node
-              ls -la ./rolldown/packages/rolldown/dist/shared/rolldown-binding.linux-x64-musl.node
-              # Also check the rolldown src dir (used by rolldown source builds)
-              ls -la ./rolldown/packages/rolldown/src/rolldown-binding.*.node
-
               pnpm bootstrap-cli:ci
               export PATH=\"/root/.vite-plus/bin:\$PATH\"
 
@@ -693,32 +686,15 @@ jobs:
               tsc --version
               vp uninstall -g typescript
 
-              # Debug: run failing snap tests manually to see full output
-              echo '=== Debug: command-pack-exe ==='
-              cd packages/cli/snap-tests-global/command-pack-exe
-              VITE_DISABLE_AUTO_INSTALL=1 vp pack src/index.ts --exe 2>&1 || true
-              ls dist 2>&1 || true
-              ls build 2>&1 || true
-              ./build/index 2>&1 || true
-              rm -rf dist build
-              cd /workspace
-
-              echo '=== Debug: migration-auto-create-vite-config ==='
-              TMPDIR=\$(mktemp -d)
-              cp -r packages/cli/snap-tests-global/migration-auto-create-vite-config/* \$TMPDIR/
-              cd \$TMPDIR
-              echo '--- vp migrate --no-interactive ---'
-              vp migrate --no-interactive 2>&1 || true
-              echo '--- cat vite.config.ts ---'
-              cat vite.config.ts 2>&1 || true
-              echo '--- cat .oxlintrc.json ---'
-              cat .oxlintrc.json 2>&1 || true
-              echo '--- cat .oxfmtrc.json ---'
-              cat .oxfmtrc.json 2>&1 || true
-              echo '--- cat package.json ---'
-              cat package.json 2>&1 || true
-              cd /workspace
-              rm -rf \$TMPDIR
+              # Run snap tests
+              git config --global --add safe.directory /workspace
+              RUST_BACKTRACE=1 pnpm test
+              if ! git diff --exit-code; then
+                echo '::error::Snapshot diff detected. Run pnpm -F vite-plus snap-test locally and commit the updated snap.txt files.'
+                git diff --stat
+                git diff
+                exit 1
+              fi
             "
 
   install-e2e-test:
