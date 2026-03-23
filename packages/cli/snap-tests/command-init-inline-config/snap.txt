@@ -8,9 +8,7 @@ export default defineConfig({
   lint: { options: { typeAware: true, typeCheck: true } },
 });
 
-> cat .oxlintrc.json && exit 1 || true # check .oxlintrc.json is removed
-cat: .oxlintrc.json: No such file or directory
-
+> test ! -f .oxlintrc.json # check .oxlintrc.json is removed
 > rm vite.config.ts
 > vp fmt --init
 Added 'fmt' to 'vite.config.ts'.
@@ -24,5 +22,4 @@ export default defineConfig({
   },
 });
 
-> cat .oxfmtrc.json && exit 1 || true # check .oxfmtrc.json is removed
-cat: .oxfmtrc.json: No such file or directory
+> test ! -f .oxfmtrc.json # check .oxfmtrc.json is removed
