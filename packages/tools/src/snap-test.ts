@@ -230,10 +230,23 @@ let _isMusl: boolean | null = null;
 
 function isMusl(): boolean {
   if (_isMusl === null) {
-    try {
-      // Check if ldd is musl-based (most reliable on Alpine/musl systems)
-      _isMusl = readFileSync('/usr/bin/ldd', 'utf-8').includes('musl');
-    } catch {
+    if (process.platform !== 'linux') {
+      _isMusl = false;
+    } else if (typeof process.report?.getReport === 'function') {
+      // Use Node.js process.report API to detect libc type:
+      // - glibcVersionRuntime present → glibc
+      // - shared objects contain "musl" → musl
+      const report = process.report.getReport() as Record<string, any>;
+      if (report.header?.glibcVersionRuntime) {
+        _isMusl = false;
+      } else if (Array.isArray(report.sharedObjects)) {
+        _isMusl = report.sharedObjects.some(
+          (f: string) => f.includes('libc.musl-') || f.includes('ld-musl-'),
+        );
+      } else {
+        _isMusl = false;
+      }
+    } else {
       _isMusl = false;
     }
   }
