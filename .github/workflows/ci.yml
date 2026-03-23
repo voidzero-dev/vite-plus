@@ -655,9 +655,11 @@ jobs:
             node:22-alpine3.21 sh -c "
               apk add --no-cache bash curl ca-certificates git
 
-              # Install pnpm and resolve musl-specific optional dependencies
+              # Install pnpm and re-resolve optional dependencies for musl.
+              # The host node_modules has glibc bindings; pnpm store holds both
+              # but we need to re-link the musl variants.
               corepack enable
-              pnpm install --frozen-lockfile
+              pnpm install --frozen-lockfile --force
               pnpm bootstrap-cli:ci
               export PATH=\"/root/.vite-plus/bin:\$PATH\"
 
