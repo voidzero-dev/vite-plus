@@ -15,6 +15,14 @@ use vite_str::Str;
 
 use crate::{Error, provider::ArchiveFormat};
 
+#[cfg(not(target_os = "windows"))]
+fn ensure_tls_provider() {
+    static INIT: std::sync::OnceLock<()> = std::sync::OnceLock::new();
+    INIT.get_or_init(|| {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    });
+}
+
 /// Response from a cached fetch operation
 pub struct CachedFetchResponse {
     /// Response body (None if 304 Not Modified)
@@ -37,6 +45,8 @@ pub async fn download_file(
     target_path: &AbsolutePath,
     message: &str,
 ) -> Result<(), Error> {
+    ensure_tls_provider();
+
     tracing::debug!("Downloading {url} to {target_path:?}");
 
     let response = (|| async { reqwest::get(url).await?.error_for_status() })
@@ -114,6 +124,8 @@ pub async fn download_file(
 /// Download text content from a URL with retry logic
 #[expect(clippy::disallowed_types, reason = "HTTP response body is a String")]
 pub async fn download_text(url: &str) -> Result<String, Error> {
+    ensure_tls_provider();
+
     tracing::debug!("Downloading text from {url}");
 
     let content = (|| async { reqwest::get(url).await?.text().await })
@@ -137,6 +149,8 @@ pub async fn fetch_with_cache_headers(
     url: &str,
     if_none_match: Option<&str>,
 ) -> Result<CachedFetchResponse, Error> {
+    ensure_tls_provider();
+
     tracing::debug!("Fetching with cache headers from {url}");
 
     let response = (|| async {

@@ -11,6 +11,14 @@ use tar::Archive;
 use tokio::{fs, io::AsyncWriteExt};
 use vite_error::Error;
 
+#[cfg(not(target_os = "windows"))]
+fn ensure_tls_provider() {
+    static INIT: std::sync::OnceLock<()> = std::sync::OnceLock::new();
+    INIT.get_or_init(|| {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    });
+}
+
 /// HTTP client with built-in retry support
 #[derive(Clone)]
 pub struct HttpClient {
@@ -57,6 +65,8 @@ impl HttpClient {
     }
 
     async fn get(&self, url: &str) -> Result<Response, Error> {
+        ensure_tls_provider();
+
         let response = (|| async { reqwest::get(url).await?.error_for_status() })
             .retry(
                 ExponentialBuilder::default()
