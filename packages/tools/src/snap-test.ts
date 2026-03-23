@@ -204,8 +204,13 @@ interface Command {
   timeout?: number;
 }
 
+interface PlatformFilter {
+  os: string;
+  libc?: string;
+}
+
 interface Steps {
-  ignoredPlatforms?: string[];
+  ignoredPlatforms?: (string | PlatformFilter)[];
   env: Record<string, string>;
   commands: (string | Command)[];
   /**
@@ -221,11 +226,49 @@ interface Steps {
   serial?: boolean;
 }
 
+let _isMusl: boolean | null = null;
+
+function isMusl(): boolean {
+  if (_isMusl === null) {
+    try {
+      // Check if ldd is musl-based (most reliable on Alpine/musl systems)
+      _isMusl = readFileSync('/usr/bin/ldd', 'utf-8').includes('musl');
+    } catch {
+      _isMusl = false;
+    }
+  }
+  return _isMusl;
+}
+
+function shouldSkipPlatform(ignoredPlatforms: (string | PlatformFilter)[]): boolean {
+  for (const filter of ignoredPlatforms) {
+    if (typeof filter === 'string') {
+      if (filter === process.platform) {
+        return true;
+      }
+    } else {
+      if (filter.os !== process.platform) {
+        continue;
+      }
+      if (filter.libc === undefined) {
+        return true;
+      }
+      if (filter.libc === 'musl' && isMusl()) {
+        return true;
+      }
+      if (filter.libc === 'glibc' && !isMusl()) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 async function runTestCase(name: string, tempTmpDir: string, casesDir: string, binDir?: string) {
   const steps: Steps = JSON.parse(
     await fsPromises.readFile(`${casesDir}/${name}/steps.json`, 'utf-8'),
   );
-  if (steps.ignoredPlatforms !== undefined && steps.ignoredPlatforms.includes(process.platform)) {
+  if (steps.ignoredPlatforms !== undefined && shouldSkipPlatform(steps.ignoredPlatforms)) {
     console.log('%s skipped on platform %s', name, process.platform);
     return;
   }
