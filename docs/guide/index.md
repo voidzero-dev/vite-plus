@@ -24,6 +24,27 @@ After installation, open a new shell and run:
 vp help
 ```
 
+### Install with npm or pnpm
+
+If you prefer not to pipe a remote script into your shell, you can install the published `vite-plus` package globally with a package manager instead:
+
+```bash
+npm install -g vite-plus
+# or
+pnpm add -g vite-plus
+```
+
+After installing, open a new shell and run `vp help`.
+
+If your shell cannot find `vp`, make sure your package manager's global bin directory is on your `PATH`. For `pnpm`, you may need to run `pnpm setup` first.
+
+This installation path is more manual than the install script:
+
+- It does not modify your shell profile for you.
+- It does not automatically create the `node`, `npm`, and `npx` shims in `VITE_PLUS_HOME/bin`.
+- If you want Vite+ to manage those shims after installing, run `vp env setup`.
+- If you want to keep your system Node.js first, run `vp env off`.
+
 ::: info
 Vite+ will manage your global Node.js runtime and package manager. If you'd like to opt out of this behavior, run `vp env off`. If you realize Vite+ is not for you, type `vp implode`, but please [share your feedback with us](https://discord.gg/cAnsqHh5PX).
 :::
