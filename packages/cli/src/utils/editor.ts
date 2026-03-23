@@ -122,7 +122,7 @@ const ZED_SETTINGS = {
       prettier: { allowed: false },
       formatter: [{ language_server: { name: 'oxfmt' } }],
     },
-    Vue: {
+    'Vue.js': {
       format_on_save: 'on',
       prettier: { allowed: false },
       formatter: [{ language_server: { name: 'oxfmt' } }],

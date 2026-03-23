@@ -9,6 +9,7 @@
 #   VITE_PLUS_VERSION - Version to install (default: latest)
 #   VITE_PLUS_HOME - Installation directory (default: ~/.vite-plus)
 #   NPM_CONFIG_REGISTRY - Custom npm registry URL (default: https://registry.npmjs.org)
+#   VITE_PLUS_NODE_MANAGER - Set to "yes" or "no" to skip interactive prompt (for CI/devcontainers)
 #   VITE_PLUS_LOCAL_TGZ - Path to local vite-plus.tgz (for development/testing)
 
 set -e
@@ -442,6 +443,16 @@ setup_node_manager() {
     vp_bin="$bin_dir/vp.exe"
   fi
 
+  # Explicit override via environment variable
+  if [ "$VITE_PLUS_NODE_MANAGER" = "yes" ]; then
+    refresh_shims "$vp_bin"
+    NODE_MANAGER_ENABLED="true"
+    return 0
+  elif [ "$VITE_PLUS_NODE_MANAGER" = "no" ]; then
+    NODE_MANAGER_ENABLED="false"
+    return 0
+  fi
+
   # Check if Vite+ is already managing Node.js (bin/node or bin/node.exe exists)
   if [ -e "$bin_path/node" ] || [ -e "$bin_path/node.exe" ]; then
     refresh_shims "$vp_bin"
@@ -449,8 +460,12 @@ setup_node_manager() {
     return 0
   fi
 
-  # Auto-enable on CI environment
-  if [ -n "$CI" ]; then
+  # Auto-enable on CI or devcontainer environments
+  # CI: standard CI environment variable (GitHub Actions, Travis, CircleCI, etc.)
+  # CODESPACES: set by GitHub Codespaces (https://docs.github.com/en/codespaces)
+  # REMOTE_CONTAINERS: set by VS Code Dev Containers extension
+  # DEVPOD: set by DevPod (https://devpod.sh)
+  if [ -n "$CI" ] || [ -n "$CODESPACES" ] || [ -n "$REMOTE_CONTAINERS" ] || [ -n "$DEVPOD" ]; then
     refresh_shims "$vp_bin"
     NODE_MANAGER_ENABLED="true"
     return 0
