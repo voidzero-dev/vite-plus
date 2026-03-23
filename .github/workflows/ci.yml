@@ -669,6 +669,13 @@ jobs:
               cp ./package/rolldown-binding.linux-x64-musl.node ./rolldown/packages/rolldown/dist/shared/
               rm -rf package *.tgz
 
+              # Debug: verify rolldown musl binding exists
+              echo '=== Verify rolldown musl binding ==='
+              ls -la ./packages/core/dist/rolldown/shared/rolldown-binding.linux-x64-musl.node
+              ls -la ./rolldown/packages/rolldown/dist/shared/rolldown-binding.linux-x64-musl.node
+              # Also check the rolldown src dir (used by rolldown source builds)
+              ls -la ./rolldown/packages/rolldown/src/rolldown-binding.*.node
+
               pnpm bootstrap-cli:ci
               export PATH=\"/root/.vite-plus/bin:\$PATH\"
 
