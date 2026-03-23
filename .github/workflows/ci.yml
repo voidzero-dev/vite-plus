@@ -679,7 +679,13 @@ jobs:
 
               # Install Playwright browsers and run snap tests
               pnpx playwright install --with-deps chromium
-              RUST_BACKTRACE=1 pnpm -F vite-plus snap-test
+              RUST_BACKTRACE=1 pnpm test
+              if ! git diff --exit-code; then
+                echo '::error::Snapshot diff detected. Run pnpm -F vite-plus snap-test locally and commit the updated snap.txt files.'
+                git diff --stat
+                git diff
+                exit 1
+              fi
             "
 
   install-e2e-test:
