@@ -676,6 +676,10 @@ jobs:
               vp install -g typescript
               tsc --version
               vp uninstall -g typescript
+
+              # Install Playwright browsers and run snap tests
+              pnpx playwright install --with-deps chromium
+              RUST_BACKTRACE=1 pnpm -F vite-plus snap-test
             "
 
   install-e2e-test:
