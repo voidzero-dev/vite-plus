@@ -19,3 +19,7 @@ Not in scripts/helper/
 > cd scripts/helper && vp create --no-interactive vite:application --directory apps/custom-app # --directory from non-workspace dir
 > test -f apps/custom-app/package.json && echo 'Created at apps/custom-app with --directory' || echo 'NOT at apps/custom-app'
 Created at apps/custom-app with --directory
+
+> mkdir -p apps/dot-test && cd apps/dot-test && vp create --no-interactive vite:application --directory . # --directory . from monorepo subdir
+> test -f apps/dot-test/package.json && echo 'Created at apps/dot-test with --directory .' || echo 'NOT at apps/dot-test'
+Created at apps/dot-test with --directory .

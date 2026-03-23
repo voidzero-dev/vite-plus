@@ -583,6 +583,11 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
         fallbackName,
       );
       prompts.log.info(`Using package name: ${accent(packageName)}`);
+      // In a monorepo subdirectory, resolve '.' to the path relative to rootDir
+      // so that scaffolding happens in cwd, not at the workspace root
+      if (isMonorepo && cwdRelativeToRoot) {
+        targetDir = cwdRelativeToRoot;
+      }
     } else if (selectedTemplateName === BuiltinTemplate.monorepo) {
       const selected = await promptPackageNameAndTargetDir(
         getRandomProjectName({ fallbackName: 'vite-plus-monorepo' }),
