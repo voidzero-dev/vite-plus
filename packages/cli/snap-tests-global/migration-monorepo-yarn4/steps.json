@@ -2,7 +2,7 @@
   "commands": [
     "vp migrate --no-interactive # migration should merge vite.config.ts and remove oxlintrc",
     "cat vite.config.ts # check vite.config.ts",
-    "cat .oxlintrc.json && exit 1 || true # check .oxlintrc.json is removed",
+    "test ! -f .oxlintrc.json # check .oxlintrc.json is removed",
     "cat package.json # check package.json",
     "cat .yarnrc.yml # check .yarnrc.yml",
     "cat packages/app/package.json # check app package.json",

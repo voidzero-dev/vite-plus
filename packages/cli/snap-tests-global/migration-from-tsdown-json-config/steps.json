@@ -1,7 +1,7 @@
 {
   "commands": [
     "vp migrate --no-interactive # migration should rewrite imports to vite-plus",
-    "cat tsdown.config.json && exit 1 || true # check tsdown.config.json should be removed",
+    "test ! -f tsdown.config.json # check tsdown.config.json should be removed",
     "cat vite.config.ts # check vite.config.ts",
     "cat package.json # check package.json",
     "vp migrate --no-interactive # run migration again to check if it is idempotent",

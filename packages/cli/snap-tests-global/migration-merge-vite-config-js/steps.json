@@ -2,7 +2,7 @@
   "commands": [
     "vp migrate --no-interactive # migration should merge vite.config.js and remove oxlintrc",
     "cat vite.config.js # check vite.config.js",
-    "cat .oxlintrc.json && exit 1 || true # check .oxlintrc.json is removed",
+    "test ! -f .oxlintrc.json # check .oxlintrc.json is removed",
     "cat package.json # check package.json"
   ]
 }

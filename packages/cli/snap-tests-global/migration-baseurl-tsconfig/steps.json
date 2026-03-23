@@ -2,7 +2,7 @@
   "commands": [
     "vp migrate --no-interactive # migration should skip typeAware/typeCheck when tsconfig has baseUrl",
     "cat vite.config.ts # check vite.config.ts — should NOT have typeAware or typeCheck",
-    "cat .oxlintrc.json && exit 1 || true # check .oxlintrc.json is removed",
+    "test ! -f .oxlintrc.json # check .oxlintrc.json is removed",
     "cat package.json # check package.json"
   ]
 }

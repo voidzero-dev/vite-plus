@@ -5,8 +5,7 @@ VITE+ - The Unified Toolchain for the Web
 • Node <semver>  pnpm <semver>
 • 2 config updates applied
 
-> cat tsdown.config.json && exit 1 || true # check tsdown.config.json should be removed
-cat: tsdown.config.json: No such file or directory
+> test ! -f tsdown.config.json # check tsdown.config.json should be removed
 
 > cat vite.config.ts # check vite.config.ts
 import { defineConfig } from 'vite-plus';

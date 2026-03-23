@@ -31,5 +31,4 @@ Prettier configuration detected. Auto-migrating to Oxfmt...
   "packageManager": "pnpm@<semver>"
 }
 
-> cat .prettierrc.json && exit 1 || true # check prettier config is removed
-cat: .prettierrc.json: No such file or directory
+> test ! -f .prettierrc.json # check prettier config is removed

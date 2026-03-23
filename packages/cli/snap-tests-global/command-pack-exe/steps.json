@@ -9,14 +9,6 @@
   "env": {
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
-  "commands": [
-    "vp pack src/index.ts --exe 2>&1",
-    "ls dist",
-    "ls build",
-    "./build/index"
-  ],
-  "after": [
-    "rm -rf dist",
-    "rm -rf build"
-  ]
+  "commands": ["vp pack src/index.ts --exe 2>&1", "ls dist", "ls build", "./build/index"],
+  "after": ["rm -rf dist", "rm -rf build"]
 }
