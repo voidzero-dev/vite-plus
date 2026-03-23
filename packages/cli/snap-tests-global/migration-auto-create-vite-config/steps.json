@@ -1,6 +1,6 @@
 {
   "commands": [
-    "vp migrate --no-interactive # migration should auto create vite.config.ts and remove oxlintrc and oxfmtrc",
+    "vp migrate --no-interactive 2>&1 # migration should auto create vite.config.ts and remove oxlintrc and oxfmtrc",
     "cat vite.config.ts # check vite.config.ts",
     "cat .oxlintrc.json && exit 1 || true # check .oxlintrc.json is removed",
     "cat .oxfmtrc.json && exit 1 || true # check .oxfmtrc.json is removed",
