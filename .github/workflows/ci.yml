@@ -183,48 +183,6 @@ jobs:
       - name: Deduplicate dependencies
         run: pnpm dedupe --check
 
-  run:
-    name: Run task
-    runs-on: namespace-profile-linux-x64-default
-    needs:
-      - download-previous-rolldown-binaries
-    steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
-      - uses: ./.github/actions/clone
-
-      - uses: oxc-project/setup-rust@d286d43bc1f606abbd98096666ff8be68c8d5f57 # v1.0.0
-        with:
-          save-cache: ${{ github.ref_name == 'main' }}
-          cache-key: run
-
-      - uses: oxc-project/setup-node@fdbf0dfd334c4e6d56ceeb77d91c76339c2a0885 # v1.0.4
-
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: rolldown-binaries
-          path: ./rolldown/packages/rolldown/src
-          merge-multiple: true
-
-      - name: Build with upstream
-        uses: ./.github/actions/build-upstream
-        with:
-          target: x86_64-unknown-linux-gnu
-
-      - name: Install Global CLI vp
-        run: |
-          pnpm bootstrap-cli:ci
-          echo "$HOME/.vite-plus/bin" >> $GITHUB_PATH
-
-      - name: Print help for built-in commands
-        run: |
-          which vp
-          vp -h
-          vp run -h
-          vp lint -h
-          vp test -h
-          vp build -h
-          vp fmt -h
-
   cli-e2e-test:
     name: CLI E2E test
     needs:
