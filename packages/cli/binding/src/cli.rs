@@ -223,8 +223,7 @@ impl SubcommandResolver {
             .ok_or_else(|| anyhow::anyhow!("cwd is not valid UTF-8"))
             .ok();
         let arg = build_vite_config_resolver_arg(workspace_path_str, cwd_str);
-        let vite_config_json =
-            (cli_options.resolve_universal_vite_config)(arg).await?;
+        let vite_config_json = (cli_options.resolve_universal_vite_config)(arg).await?;
 
         Ok(serde_json::from_str(&vite_config_json).inspect_err(|_| {
             tracing::error!("Failed to parse vite config: {vite_config_json}");
