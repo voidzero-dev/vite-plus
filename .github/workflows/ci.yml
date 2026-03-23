@@ -685,7 +685,7 @@ jobs:
               tsc --version
               vp uninstall -g typescript
 
-              # Debug: run command-pack-exe snap test manually to see full output
+              # Debug: run failing snap tests manually to see full output
               echo '=== Debug: command-pack-exe ==='
               cd packages/cli/snap-tests-global/command-pack-exe
               VITE_DISABLE_AUTO_INSTALL=1 vp pack src/index.ts --exe 2>&1 || true
@@ -693,6 +693,13 @@ jobs:
               ls build 2>&1 || true
               ./build/index 2>&1 || true
               rm -rf dist build
+              cd /workspace
+
+              echo '=== Debug: migration-auto-create-vite-config ==='
+              cd packages/cli/snap-tests-global/migration-auto-create-vite-config
+              vp migrate --no-interactive 2>&1 || true
+              cat vite.config.ts 2>&1 || true
+              cat package.json 2>&1 || true
               cd /workspace
 
               # Run snap tests
