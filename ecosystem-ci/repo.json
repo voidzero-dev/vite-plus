@@ -91,5 +91,11 @@
     "branch": "main",
     "hash": "230b7c7ddb6bb8551ce797144f0ce0f047ff8d7d",
     "forceFreshMigration": true
+  },
+  "vite-plus-jest-dom-repro": {
+    "repository": "https://github.com/why-reproductions-are-required/vite-plus-jest-dom-repro.git",
+    "branch": "master",
+    "hash": "01bd9ce1ac66ee3c21ed8a7f14311317d87fb999",
+    "forceFreshMigration": true
   }
 }

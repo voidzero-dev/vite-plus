@@ -285,6 +285,10 @@ jobs:
               vp run lint
               vp run test:types
               vp test --project unit
+          - name: vite-plus-jest-dom-repro
+            node-version: 24
+            command: |
+              vp test run
         exclude:
           # frm-stack uses Docker (testcontainers) which doesn't work the same way on Windows
           - os: windows-latest
