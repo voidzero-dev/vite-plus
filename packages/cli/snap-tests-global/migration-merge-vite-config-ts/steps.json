@@ -2,8 +2,8 @@
   "commands": [
     "vp migrate --no-interactive # migration should merge vite.config.ts and remove oxlintrc and oxfmtrc",
     "cat vite.config.ts # check vite.config.ts",
-    "cat .oxlintrc.json && exit 1 || true # check .oxlintrc.json is removed",
-    "cat .oxfmtrc.json && exit 1 || true # check .oxfmtrc.json is removed",
+    "test ! -f .oxlintrc.json # check .oxlintrc.json is removed",
+    "test ! -f .oxfmtrc.json # check .oxfmtrc.json is removed",
     "cat package.json # check package.json"
   ]
 }

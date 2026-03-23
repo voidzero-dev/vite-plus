@@ -23,8 +23,7 @@ export default defineConfig({
   },
 });
 
-> cat .oxlintrc.json && exit 1 || true # check .oxlintrc.json is removed
-cat: .oxlintrc.json: No such file or directory
+> test ! -f .oxlintrc.json # check .oxlintrc.json is removed
 
 > cat package.json # check package.json
 {

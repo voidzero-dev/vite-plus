@@ -2,6 +2,6 @@
   "commands": [
     "vp migrate --no-interactive # migration should strip --ignore-unknown and -u flags",
     "cat package.json # check prettier removed and --ignore-unknown stripped from scripts",
-    "cat .prettierrc.json && exit 1 || true # check prettier config is removed"
+    "test ! -f .prettierrc.json # check prettier config is removed"
   ]
 }

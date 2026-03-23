@@ -2,7 +2,7 @@
   "commands": [
     "vp migrate --no-interactive # migration should detect prettier and auto-migrate",
     "cat package.json # check prettier removed and scripts rewritten",
-    "cat .prettierrc.json && exit 1 || true # check prettier config is removed",
+    "test ! -f .prettierrc.json # check prettier config is removed",
     "cat vite.config.ts # check oxfmt config merged into vite.config.ts"
   ]
 }

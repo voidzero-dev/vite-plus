@@ -50,5 +50,4 @@ VITE+ - The Unified Toolchain for the Web
   "devDependencies": {}
 }
 
-> cat eslint.config.mjs && exit 1 || true # check root eslint config is removed
-cat: eslint.config.mjs: No such file or directory
+> test ! -f eslint.config.mjs # check root eslint config is removed
