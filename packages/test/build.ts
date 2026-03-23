@@ -1467,10 +1467,7 @@ async function patchVitestBrowserPackage() {
   const VENDOR_ALIASES_EXCLUDE = new Set(['@vitest/browser/context']);
 
   const mappingEntries = Object.entries(VITEST_PACKAGE_TO_PATH)
-    .filter(
-      ([pkg]) =>
-        pkg.startsWith('@vitest/') && !VENDOR_ALIASES_EXCLUDE.has(pkg),
-    )
+    .filter(([pkg]) => pkg.startsWith('@vitest/') && !VENDOR_ALIASES_EXCLUDE.has(pkg))
     .map(([pkg, file]) => `'${pkg}': resolve(packageRoot, '${file}')`)
     .join(',\n      ');
 
