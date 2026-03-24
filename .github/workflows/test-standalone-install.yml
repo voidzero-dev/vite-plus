@@ -108,7 +108,7 @@ jobs:
         run: |
           # --check queries npm registry and prints update status
           vp upgrade --check
-          vp upgrade 0.0.0-gbe8891a5.20260227-1615
+          vp upgrade 0.1.14-alpha.1
           vp --version
           # rollback to the previous version (should succeed after a real update)
           vp upgrade --rollback
@@ -203,7 +203,7 @@ jobs:
 
               # Verify upgrade
               vp upgrade --check
-              vp upgrade 0.0.0-gbe8891a5.20260227-1615
+              vp upgrade 0.1.14-alpha.1
               vp --version
               vp upgrade --rollback
               vp --version
@@ -260,7 +260,7 @@ jobs:
 
               # Verify upgrade
               vp upgrade --check
-              vp upgrade 0.0.0-gbe8891a5.20260227-1615
+              vp upgrade 0.1.14-alpha.1
               vp --version
               vp upgrade --rollback
               vp --version
@@ -313,9 +313,14 @@ jobs:
               export VITE_LOG=trace
               vp env run --node 24 -- node -p \"process.versions\"
 
+              # Test create command
+              vp create vite --no-interactive --no-agent -- hello --no-interactive -t vanilla
+              cd hello && vp run build && vp --version
+              cd ..
+
               # Verify upgrade
               vp upgrade --check
-              vp upgrade 0.0.0-gbe8891a5.20260227-1615
+              vp upgrade 0.1.14-alpha.1
               vp --version
               vp upgrade --rollback
               vp --version
@@ -398,7 +403,7 @@ jobs:
         shell: powershell
         run: |
           vp upgrade --check
-          vp upgrade 0.0.0-gbe8891a5.20260227-1615
+          vp upgrade 0.1.14-alpha.1
           vp --version
           vp upgrade --rollback
           vp --version
@@ -465,7 +470,7 @@ jobs:
         shell: pwsh
         run: |
           vp upgrade --check
-          vp upgrade 0.0.0-gbe8891a5.20260227-1615
+          vp upgrade 0.1.14-alpha.1
           vp --version
           vp upgrade --rollback
           vp --version
@@ -493,7 +498,7 @@ jobs:
         run: |
           # --check queries npm registry and prints update status
           vp upgrade --check
-          vp upgrade 0.0.0-gbe8891a5.20260227-1615
+          vp upgrade 0.1.14-alpha.1
           vp --version
           # rollback to the previous version (should succeed after a real update)
           vp upgrade --rollback
