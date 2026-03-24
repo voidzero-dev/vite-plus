@@ -253,6 +253,11 @@ jobs:
               vp env doctor
               vp env run --node 24 -- node -p \"process.versions\"
 
+              # Test create command
+              vp create vite --no-interactive --no-agent -- hello --no-interactive -t vanilla
+              cd hello && vp run build && vp --version
+              cd ..
+
               # Verify upgrade
               vp upgrade --check
               vp upgrade 0.0.0-gbe8891a5.20260227-1615
