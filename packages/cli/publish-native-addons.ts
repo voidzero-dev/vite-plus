@@ -57,11 +57,24 @@ const platformDirs = await readdir(npmDir);
 // Publish each NAPI platform package (without vp binary)
 const npmTag = process.env.NPM_TAG || 'latest';
 for (const file of platformDirs) {
-  execSync(`npm publish --tag ${npmTag} --access public`, {
-    cwd: join(currentDir, 'npm', file),
-    env: process.env,
-    stdio: 'inherit',
-  });
+  try {
+    const output = execSync(`npm publish --tag ${npmTag} --access public`, {
+      cwd: join(currentDir, 'npm', file),
+      env: process.env,
+      stdio: 'pipe',
+    });
+    process.stdout.write(output);
+  } catch (e) {
+    if (
+      e instanceof Error &&
+      e.message.includes('You cannot publish over the previously published versions')
+    ) {
+      console.info(e.message);
+      console.warn(`${file} has been published, skipping`);
+    } else {
+      throw e;
+    }
+  }
 }
 
 // Platform metadata for CLI packages
