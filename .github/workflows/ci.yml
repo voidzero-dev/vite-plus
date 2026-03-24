@@ -732,7 +732,6 @@ jobs:
       - test
       - test-musl
       - lint
-      - run
       - cli-e2e-test
       - cli-e2e-test-musl
     steps:
