@@ -44,6 +44,6 @@ jobs:
       - uses: oxc-project/setup-rust@d286d43bc1f606abbd98096666ff8be68c8d5f57 # v1.0.0
         with:
           restore-cache: false
-          tools: cargo-deny
+          tools: cargo-deny@0.18.9
 
       - run: cargo deny check
