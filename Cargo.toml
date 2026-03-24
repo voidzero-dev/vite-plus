@@ -180,7 +180,7 @@ typedmap = "0.6.0"
 url = "2.5.4"
 urlencoding = "2.1.3"
 uuid = "1.17.0"
-vfs = "0.12.1"
+vfs = "0.13.0"
 vite_command = { path = "crates/vite_command" }
 vite_error = { path = "crates/vite_error" }
 vite_js_runtime = { path = "crates/vite_js_runtime" }
@@ -200,7 +200,7 @@ xxhash-rust = "0.8.15"
 zip = "7.2"
 
 # oxc crates with the same version
-oxc = { version = "0.120.0", features = [
+oxc = { version = "0.121.0", features = [
   "ast_visit",
   "transformer",
   "minifier",
@@ -212,16 +212,16 @@ oxc = { version = "0.120.0", features = [
   "regular_expression",
   "cfg",
 ] }
-oxc_allocator = { version = "0.120.0", features = ["pool"] }
-oxc_ast = "0.120.0"
-oxc_ecmascript = "0.120.0"
-oxc_parser = "0.120.0"
-oxc_span = "0.120.0"
-oxc_napi = "0.120.0"
-oxc_minify_napi = "0.120.0"
-oxc_parser_napi = "0.120.0"
-oxc_transform_napi = "0.120.0"
-oxc_traverse = "0.120.0"
+oxc_allocator = { version = "0.121.0", features = ["pool"] }
+oxc_ast = "0.121.0"
+oxc_ecmascript = "0.121.0"
+oxc_parser = "0.121.0"
+oxc_span = "0.121.0"
+oxc_napi = "0.121.0"
+oxc_minify_napi = "0.121.0"
+oxc_parser_napi = "0.121.0"
+oxc_transform_napi = "0.121.0"
+oxc_traverse = "0.121.0"
 
 # oxc crates in their own repos
 oxc_index = { version = "4", features = ["rayon", "serde"] }

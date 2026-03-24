@@ -93,6 +93,9 @@
     "./test/optional-types.js": {
       "types": "./dist/test/optional-types.js.d.ts"
     },
+    "./test/optional-runtime-types.js": {
+      "types": "./dist/test/optional-runtime-types.js.d.ts"
+    },
     "./test/globals": {
       "types": "./dist/test/globals.d.ts"
     },

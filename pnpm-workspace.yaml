@@ -15,8 +15,8 @@ catalog:
   '@nkzw/safe-word-list': ^3.1.0
   '@oxc-node/cli': ^0.0.35
   '@oxc-node/core': ^0.0.35
-  '@oxc-project/runtime': =0.120.0
-  '@oxc-project/types': =0.120.0
+  '@oxc-project/runtime': =0.121.0
+  '@oxc-project/types': =0.122.0
   '@pnpm/find-workspace-packages': ^6.0.9
   '@rollup/plugin-commonjs': ^29.0.0
   '@rollup/plugin-json': ^6.1.0
@@ -77,12 +77,12 @@ catalog:
   mocha: ^11.7.5
   mri: ^1.2.0
   next: ^15.4.3
-  oxc-minify: =0.120.0
-  oxc-parser: =0.120.0
-  oxc-transform: =0.120.0
+  oxc-minify: =0.121.0
+  oxc-parser: =0.121.0
+  oxc-transform: =0.121.0
   oxfmt: =0.41.0
   oxlint: =1.56.0
-  oxlint-tsgolint: =0.17.1
+  oxlint-tsgolint: =0.17.2
   pathe: ^2.0.3
   picocolors: ^1.1.1
   picomatch: ^4.0.2
@@ -106,7 +106,7 @@ catalog:
   tsx: ^4.20.6
   typescript: ^5.9.3
   unified: ^11.0.5
-  valibot: 1.2.0
+  valibot: 1.3.1
   validate-npm-package-name: ^7.0.2
   vitepress: ^2.0.0-alpha.15
   vitepress-plugin-graphviz: ^0.0.1
@@ -161,7 +161,7 @@ overrides:
   rolldown: workspace:rolldown@*
   vite: workspace:@voidzero-dev/vite-plus-core@*
   vitest: workspace:@voidzero-dev/vite-plus-test@*
-  vitest-dev: npm:vitest@^4.1.0
+  vitest-dev: npm:vitest@^4.1.1
 packageExtensions:
   sass-embedded:
     peerDependencies:
