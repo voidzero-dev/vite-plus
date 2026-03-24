@@ -213,11 +213,7 @@ jobs:
               # cd hello && vp run build
             "
 
-  # TODO: Enable after musl support is released.
-  # The published vp binary doesn't have musl Node.js download support yet
-  # (it downloads glibc Node.js from nodejs.org instead of unofficial-builds).
   test-install-sh-musl-x64:
-    if: false
     name: Test install.sh (Linux x64 musl)
     runs-on: ubuntu-latest
     permissions:
@@ -232,7 +228,8 @@ jobs:
             -e VITE_PLUS_VERSION=alpha \
             -e CI=true \
             alpine:3.21 sh -c "
-              apk add --no-cache bash curl ca-certificates
+              # libstdc++ is needed by unofficial-builds Node.js musl binary
+              apk add --no-cache bash curl ca-certificates libstdc++
               cat /workspace/packages/cli/install.sh | bash
               source ~/.profile 2>/dev/null || export PATH=\"\$HOME/.vite-plus/bin:\$PATH\"
 
@@ -264,9 +261,7 @@ jobs:
               vp --version
             "
 
-  # TODO: Enable after musl support is released.
   test-install-sh-musl-arm64:
-    if: false
     name: Test install.sh (Linux ARM64 musl via QEMU)
     runs-on: ubuntu-latest
     permissions:
@@ -286,7 +281,8 @@ jobs:
             -e VITE_PLUS_VERSION=alpha \
             -e CI=true \
             alpine:3.21 sh -c "
-              apk add --no-cache bash curl ca-certificates
+              # libstdc++ is needed by unofficial-builds Node.js musl binary
+              apk add --no-cache bash curl ca-certificates libstdc++
               cat /workspace/packages/cli/install.sh | bash
               source ~/.profile 2>/dev/null || export PATH=\"\$HOME/.vite-plus/bin:\$PATH\"
 
