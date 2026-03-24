@@ -50,10 +50,10 @@ If a prebuilt binary is not available for your platform, installation will fail 
 On Alpine Linux (musl), you need to install `libstdc++` before using Vite+:
 
 ```sh
-apk add --no-cache libstdc++
+apk add libstdc++
 ```
 
-This is required because the managed Node.js runtime depends on the GNU C++ standard library.
+This is required because the managed [unofficial-builds](https://unofficial-builds.nodejs.org/) Node.js runtime depends on the GNU C++ standard library.
 
 :::
 
