@@ -313,10 +313,9 @@ jobs:
               export VITE_LOG=trace
               vp env run --node 24 -- node -p \"process.versions\"
 
-              # Test create command
-              vp create vite --no-interactive --no-agent -- hello --no-interactive -t vanilla
-              cd hello && vp run build && vp --version
-              cd ..
+              # FIXME: QEMU doesn't support all syscalls needed by rolldown/tsdown
+              # vp create vite --no-interactive --no-agent -- hello --no-interactive -t vanilla
+              # cd hello && vp run build && vp --version
 
               # Verify upgrade
               vp upgrade --check
