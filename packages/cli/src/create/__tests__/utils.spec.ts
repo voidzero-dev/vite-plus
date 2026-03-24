@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   deriveDefaultPackageName,
   formatTargetDir,
+  getCreateNextCommand,
+  getNextCommand,
   getProjectDirFromPackageName,
 } from '../utils.js';
 

@@ -53,7 +53,12 @@ import {
 } from './templates/index.js';
 import { InitialMonorepoAppDir } from './templates/monorepo.js';
 import { BuiltinTemplate, TemplateType } from './templates/types.js';
-import { deriveDefaultPackageName, formatTargetDir } from './utils.js';
+import {
+  deriveDefaultPackageName,
+  formatTargetDir,
+  getCreateNextCommand,
+  getNextCommand,
+} from './utils.js';
 
 const helpMessage = renderCliDoc({
   usage: 'vp create [TEMPLATE] [OPTIONS] [-- TEMPLATE_OPTIONS]',
@@ -305,13 +310,6 @@ function formatDuration(durationMs: number) {
     return `${durationSeconds.toFixed(1)}s`;
   }
   return `${Math.round(durationSeconds)}s`;
-}
-
-function getNextCommand(projectDir: string, command: string) {
-  if (!projectDir || projectDir === '.') {
-    return command;
-  }
-  return `cd ${projectDir} && ${command}`;
 }
 
 function showCreateSummary(options: {
@@ -963,12 +961,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   showCreateSummary({
     description: describeScaffold(selectedTemplateName, selectedTemplateArgs),
     installSummary,
-    nextCommand: isMonorepo
-      ? `vp dev ${projectDir}`
-      : getNextCommand(
-          projectDir,
-          selectedTemplateName === BuiltinTemplate.library ? 'vp run dev' : 'vp dev',
-        ),
+    nextCommand: getCreateNextCommand(projectDir, selectedTemplateName, isMonorepo),
     packageManager: workspaceInfo.packageManager,
     packageManagerVersion: workspaceInfo.downloadPackageManager.version,
     projectDir,

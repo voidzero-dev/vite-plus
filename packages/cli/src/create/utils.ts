@@ -5,6 +5,7 @@ import validateNpmPackageName from 'validate-npm-package-name';
 
 import { editJsonFile } from '../utils/json.js';
 import { getRandomProjectName } from './random-name.js';
+import { BuiltinTemplate } from './templates/types.js';
 
 // Helper functions for file operations
 export function copy(src: string, dest: string) {
@@ -138,4 +139,32 @@ export function deriveDefaultPackageName(
   return validateNpmPackageName(candidate).validForNewPackages
     ? candidate
     : getRandomProjectName({ scope, fallbackName });
+}
+
+export function getNextCommand(projectDir: string, command: string) {
+  if (!projectDir || projectDir === '.') {
+    return command;
+  }
+  return `cd ${projectDir} && ${command}`;
+}
+
+/**
+ * Determine the "Next:" command to show after `vp create`.
+ *
+ * - Builtin templates (except `vite:library`) use Vite's dev server directly → `vp dev`
+ * - Non-builtin templates (Astro, Nuxt, etc.) and `vite:library` run the
+ *   package.json `dev` script → `vp run dev`
+ */
+export function getCreateNextCommand(
+  projectDir: string,
+  selectedTemplateName: string,
+  isMonorepo: boolean,
+): string {
+  const isBuiltinTemplate = selectedTemplateName.startsWith('vite:');
+  const hasBuiltinDevServer = isBuiltinTemplate && selectedTemplateName !== BuiltinTemplate.library;
+
+  if (isMonorepo) {
+    return hasBuiltinDevServer ? `vp dev ${projectDir}` : getNextCommand(projectDir, 'vp run dev');
+  }
+  return getNextCommand(projectDir, hasBuiltinDevServer ? 'vp dev' : 'vp run dev');
 }
