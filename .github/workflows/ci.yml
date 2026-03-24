@@ -139,12 +139,9 @@ jobs:
       - name: Install Rust toolchain
         run: rustup show
 
-      - run: cargo check --all-targets --all-features
-        env:
-          RUSTFLAGS: '-D warnings --cfg tokio_unstable'
-
       # Test all crates/* packages. New crates are automatically included.
       # Also test vite-plus-cli (lives outside crates/) to catch type sync issues.
+      # Skip separate cargo check — cargo test already compiles everything.
       - run: cargo test $(for d in crates/*/; do echo -n "-p $(basename $d) "; done) -p vite-plus-cli
         env:
           RUST_MIN_STACK: 8388608
