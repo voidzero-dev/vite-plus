@@ -231,7 +231,7 @@ jobs:
               # libstdc++ is needed by unofficial-builds Node.js musl binary
               apk add --no-cache bash curl ca-certificates libstdc++
               cat /workspace/packages/cli/install.sh | bash
-              source ~/.profile 2>/dev/null || export PATH=\"\$HOME/.vite-plus/bin:\$PATH\"
+              export PATH=\"\$HOME/.vite-plus/bin:\$PATH\"
 
               vp --version
               vp --help
@@ -284,7 +284,7 @@ jobs:
               # libstdc++ is needed by unofficial-builds Node.js musl binary
               apk add --no-cache bash curl ca-certificates libstdc++
               cat /workspace/packages/cli/install.sh | bash
-              source ~/.profile 2>/dev/null || export PATH=\"\$HOME/.vite-plus/bin:\$PATH\"
+              export PATH=\"\$HOME/.vite-plus/bin:\$PATH\"
 
               vp --version
               vp --help
