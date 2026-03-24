@@ -226,9 +226,10 @@ jobs:
           docker run --rm \
             -v "${{ github.workspace }}:/workspace" \
             -e VITE_PLUS_VERSION=alpha \
+            -e CI=true \
             alpine:3.21 sh -c "
               apk add --no-cache bash curl ca-certificates
-              cat /workspace/packages/cli/install.sh | bash
+              cat /workspace/packages/cli/install.sh | bash -x
               source ~/.profile 2>/dev/null || export PATH=\"\$HOME/.vite-plus/bin:\$PATH\"
 
               vp --version
@@ -277,9 +278,10 @@ jobs:
           docker run --rm --platform linux/arm64 \
             -v "${{ github.workspace }}:/workspace" \
             -e VITE_PLUS_VERSION=alpha \
+            -e CI=true \
             alpine:3.21 sh -c "
               apk add --no-cache bash curl ca-certificates
-              cat /workspace/packages/cli/install.sh | bash
+              cat /workspace/packages/cli/install.sh | bash -x
               source ~/.profile 2>/dev/null || export PATH=\"\$HOME/.vite-plus/bin:\$PATH\"
 
               vp --version
