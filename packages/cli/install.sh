@@ -652,7 +652,12 @@ NPMRC_EOF
       vp_install_bin="$BIN_DIR/vp.exe"
     fi
     if ! (cd "$VERSION_DIR" && CI=true "$vp_install_bin" install --silent > "$install_log" 2>&1); then
-      error "Failed to install dependencies. See log for details: $install_log"
+      error "Failed to install dependencies."
+      if [ "${CI:-}" = "true" ]; then
+        cat "$install_log"
+      else
+        error "See log for details: $install_log"
+      fi
       exit 1
     fi
   fi
