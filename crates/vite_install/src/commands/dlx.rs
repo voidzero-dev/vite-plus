@@ -200,16 +200,18 @@ impl PackageManager {
         // Some installation methods (e.g. mise) don't add bunx to PATH on Windows.
         args.push("x".into());
 
+        // --packages flags must come before the package spec
+        for pkg in options.packages {
+            args.push("--package".into());
+            args.push(pkg.clone());
+        }
+
         // Add package spec
         args.push(options.package_spec.into());
 
         // Add command arguments
         args.extend(options.args.iter().cloned());
 
-        // Warn about unsupported flags
-        if !options.packages.is_empty() {
-            output::warn("bun x does not support --package");
-        }
         if options.shell_mode {
             output::warn("bun x does not support shell mode (-c)");
         }

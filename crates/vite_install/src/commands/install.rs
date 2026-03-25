@@ -317,7 +317,7 @@ impl PackageManager {
                     args.push("--ignore-scripts".into());
                 }
                 if options.lockfile_only {
-                    output::warn("bun does not support --lockfile-only");
+                    args.push("--lockfile-only".into());
                 }
                 if options.prefer_offline {
                     output::warn("bun does not support --prefer-offline");

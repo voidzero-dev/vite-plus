@@ -249,11 +249,15 @@ impl PackageManager {
                     if options.workspace_root {
                         output::warn("bun outdated does not support --workspace-root");
                     }
-                    if options.prod || options.dev {
-                        output::warn("bun outdated does not support --prod/--dev");
+                    if options.prod {
+                        args.push("--production".into());
+                    }
+                    if options.dev {
+                        output::warn("bun outdated does not support --dev");
                     }
                     if options.no_optional {
-                        output::warn("bun outdated does not support --no-optional");
+                        args.push("--omit".into());
+                        args.push("optional".into());
                     }
                     if options.compatible {
                         output::warn("bun outdated does not support --compatible");

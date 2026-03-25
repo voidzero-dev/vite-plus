@@ -3,7 +3,6 @@ use std::{collections::HashMap, process::ExitStatus};
 use vite_command::run_command;
 use vite_error::Error;
 use vite_path::AbsolutePath;
-use vite_shared::output;
 
 use crate::package_manager::{
     PackageManager, PackageManagerType, ResolveCommandResult, format_path_env,
@@ -33,28 +32,39 @@ impl PackageManager {
 
     /// Resolve the view command.
     /// All package managers delegate to npm view (pnpm and yarn use npm internally).
-    /// Bun does not have a direct equivalent, so we fall back to npm view.
+    /// Bun uses `bun info` as a native alternative.
     #[must_use]
     pub fn resolve_view_command(&self, options: &ViewCommandOptions) -> ResolveCommandResult {
-        let bin_name: String = "npm".to_string();
         let envs = HashMap::from([("PATH".to_string(), format_path_env(self.get_bin_prefix()))]);
         let mut args: Vec<String> = Vec::new();
 
-        if self.client == PackageManagerType::Bun {
-            output::warn("bun does not have a view command, falling back to npm view");
-        }
+        let bin_name: String = if self.client == PackageManagerType::Bun {
+            args.push("info".into());
+            args.push(options.package.to_string());
 
-        args.push("view".into());
+            if let Some(field) = options.field {
+                args.push(field.to_string());
+            }
 
-        args.push(options.package.to_string());
+            if options.json {
+                args.push("--json".into());
+            }
 
-        if let Some(field) = options.field {
-            args.push(field.to_string());
-        }
+            "bun".into()
+        } else {
+            args.push("view".into());
+            args.push(options.package.to_string());
 
-        if options.json {
-            args.push("--json".into());
-        }
+            if let Some(field) = options.field {
+                args.push(field.to_string());
+            }
+
+            if options.json {
+                args.push("--json".into());
+            }
+
+            "npm".into()
+        };
 
         // Add pass-through args
         if let Some(pass_through_args) = options.pass_through_args {

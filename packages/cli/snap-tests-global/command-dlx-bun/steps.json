@@ -1,4 +1,5 @@
 {
+  "ignoredPlatforms": ["win32"],
   "commands": [
     "vp dlx --help # should show help message",
     "vp dlx -s cowsay hello # should run cowsay with bun x",

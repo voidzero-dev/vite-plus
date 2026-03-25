@@ -18,24 +18,22 @@ Documentation: https://viteplus.dev/guide/install
 
 
 > vp pm view testnpm2 # should view package information
-warn: bun does not have a view command, falling back to npm view
+testnpm2@<semver> | ISC | deps: 0 | versions: 2
 
-testnpm2@<semver> | ISC | deps: none | versions: 2
 
 dist
-.tarball: https://registry.<domain>/testnpm2/-/testnpm2-1.0.1.tgz
-.shasum: <hash>
-.integrity: sha512-<hash>
-
-maintainers:
-- fengmk2 <fengmk2@gmail.com>
+ .tarball: https://registry.<domain>/testnpm2/-/testnpm2-1.0.1.tgz
+ .shasum: <hash>
+ .integrity: sha512-<hash>
 
 dist-tags:
 latest: <semver>
 release-1: <semver>
 
-published over a year ago by fengmk2 <fengmk2@gmail.com>
+maintainers:
+- fengmk2 <fengmk2@gmail.com>
+
+Published: <date>T<date>.560Z
 
 > vp pm view testnpm2 version # should view version field
-warn: bun does not have a view command, falling back to npm view
-<semver>
+1.0.1

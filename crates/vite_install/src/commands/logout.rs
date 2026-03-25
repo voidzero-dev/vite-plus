@@ -3,7 +3,6 @@ use std::{collections::HashMap, process::ExitStatus};
 use vite_command::run_command;
 use vite_error::Error;
 use vite_path::AbsolutePath;
-use vite_shared::output;
 
 use crate::package_manager::{
     PackageManager, PackageManagerType, ResolveCommandResult, format_path_env,
@@ -57,7 +56,6 @@ impl PackageManager {
                 }
             }
             PackageManagerType::Bun => {
-                output::warn("bun does not have a logout command, falling back to npm logout");
                 bin_name = "npm".into();
                 args.push("logout".into());
             }
