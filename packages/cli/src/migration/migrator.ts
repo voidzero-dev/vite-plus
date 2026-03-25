@@ -987,11 +987,12 @@ function rewriteBunCatalog(projectPath: string): void {
 
     pkg.catalog = catalog;
 
-    // bun uses overrides in package.json (catalog: references are NOT supported in overrides)
-    pkg.overrides = {
-      ...pkg.overrides,
-      ...VITE_PLUS_OVERRIDE_PACKAGES,
-    };
+    // bun overrides support catalog: references
+    const overrides: Record<string, string> = { ...pkg.overrides };
+    for (const key of Object.keys(VITE_PLUS_OVERRIDE_PACKAGES)) {
+      overrides[key] = 'catalog:';
+    }
+    pkg.overrides = overrides;
 
     return pkg;
   });
@@ -1026,11 +1027,13 @@ function rewriteRootWorkspacePackageJson(
         // https://github.com/yarnpkg/berry/issues/6979
         ...VITE_PLUS_OVERRIDE_PACKAGES,
       };
-    } else if (packageManager === PackageManager.npm || packageManager === PackageManager.bun) {
+    } else if (packageManager === PackageManager.npm) {
       pkg.overrides = {
         ...pkg.overrides,
         ...VITE_PLUS_OVERRIDE_PACKAGES,
       };
+    } else if (packageManager === PackageManager.bun) {
+      // bun overrides are handled in rewriteBunCatalog() with catalog: references
     } else if (packageManager === PackageManager.pnpm) {
       if (isForceOverrideMode()) {
         // In force-override mode, keep overrides in package.json pnpm.overrides
