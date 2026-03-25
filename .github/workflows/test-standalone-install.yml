@@ -228,7 +228,6 @@ jobs:
             -e VITE_PLUS_VERSION=alpha \
             -e CI=true \
             alpine:3.21 sh -c "
-              # ca-certificates: required for TLS cert verification (Alpine has no root CAs by default)
               # libstdc++: required by unofficial-builds Node.js musl binary
               apk add --no-cache bash curl ca-certificates libstdc++
               cat /workspace/packages/cli/install.sh | bash

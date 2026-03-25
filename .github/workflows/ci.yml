@@ -609,7 +609,6 @@ jobs:
             -v "${{ github.workspace }}:/workspace" \
             -w /workspace \
             node:22-alpine3.21 sh -c "
-              # ca-certificates: required for TLS cert verification (Alpine has no root CAs by default)
               apk add --no-cache bash curl ca-certificates git
 
               # Install pnpm and re-resolve optional dependencies for musl.
