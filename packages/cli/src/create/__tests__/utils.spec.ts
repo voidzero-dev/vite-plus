@@ -3,8 +3,6 @@ import { describe, expect, it } from 'vitest';
 import {
   deriveDefaultPackageName,
   formatTargetDir,
-  getCreateNextCommand,
-  getNextCommand,
   getProjectDirFromPackageName,
 } from '../utils.js';
 
@@ -62,67 +60,6 @@ describe('formatTargetDir', () => {
   it('should format target dir with invalid package name', () => {
     expect(formatTargetDir('my-package@').error).matchSnapshot();
     expect(formatTargetDir('my-package@1.0.0').error).matchSnapshot();
-  });
-});
-
-describe('getNextCommand', () => {
-  it('should prepend cd when projectDir is a named directory', () => {
-    expect(getNextCommand('my-app', 'vp dev')).toBe('cd my-app && vp dev');
-    expect(getNextCommand('my-app', 'vp run dev')).toBe('cd my-app && vp run dev');
-  });
-
-  it('should return command only when projectDir is "."', () => {
-    expect(getNextCommand('.', 'vp dev')).toBe('vp dev');
-  });
-
-  it('should return command only when projectDir is empty', () => {
-    expect(getNextCommand('', 'vp dev')).toBe('vp dev');
-  });
-});
-
-describe('getCreateNextCommand', () => {
-  // standalone
-  it('should suggest vp dev for builtin application (standalone)', () => {
-    expect(getCreateNextCommand('my-app', 'vite:application', false)).toBe('cd my-app && vp dev');
-  });
-
-  it('should suggest vp run dev for builtin library (standalone)', () => {
-    expect(getCreateNextCommand('my-app', 'vite:library', false)).toBe('cd my-app && vp run dev');
-  });
-
-  it('should suggest vp run dev for remote template (standalone)', () => {
-    expect(getCreateNextCommand('my-astro', 'astro', false)).toBe('cd my-astro && vp run dev');
-  });
-
-  it('should suggest vp run dev for bingo template (standalone)', () => {
-    expect(getCreateNextCommand('my-app', 'my-bingo-template', false)).toBe(
-      'cd my-app && vp run dev',
-    );
-  });
-
-  // monorepo
-  it('should suggest vp dev <dir> for builtin application (monorepo)', () => {
-    expect(getCreateNextCommand('packages/my-app', 'vite:application', true)).toBe(
-      'vp dev packages/my-app',
-    );
-  });
-
-  it('should suggest cd + vp run dev for builtin library (monorepo)', () => {
-    expect(getCreateNextCommand('packages/my-lib', 'vite:library', true)).toBe(
-      'cd packages/my-lib && vp run dev',
-    );
-  });
-
-  it('should suggest cd + vp run dev for remote template (monorepo)', () => {
-    expect(getCreateNextCommand('packages/my-nuxt', 'nuxt', true)).toBe(
-      'cd packages/my-nuxt && vp run dev',
-    );
-  });
-
-  // projectDir edge cases
-  it('should omit cd when projectDir is "." (standalone)', () => {
-    expect(getCreateNextCommand('.', 'vite:application', false)).toBe('vp dev');
-    expect(getCreateNextCommand('.', 'astro', false)).toBe('vp run dev');
   });
 });
 

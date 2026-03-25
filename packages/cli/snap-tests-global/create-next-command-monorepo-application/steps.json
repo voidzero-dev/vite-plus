@@ -1,7 +1,7 @@
 {
   "commands": [
     {
-      "command": "vp create vite:application --no-interactive # monorepo: next command should suggest vp dev <dir>",
+      "command": "vp create vite:application --no-interactive # monorepo: next command should suggest vp run",
       "ignoreOutput": false
     }
   ]

@@ -1,7 +1,7 @@
 {
   "commands": [
     {
-      "command": "vp create vite:library --no-interactive # verify next command suggests vp run dev",
+      "command": "vp create vite:library --no-interactive # verify next command suggests vp run",
       "ignoreOutput": false
     }
   ]
