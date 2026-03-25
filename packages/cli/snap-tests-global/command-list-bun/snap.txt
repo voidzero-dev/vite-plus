@@ -2,7 +2,6 @@
 VITE+ - The Unified Toolchain for the Web
 
 bun install v<semver> (af24e281)
-Saved lockfile
 
 + test-vite-plus-package@<semver>
 + test-vite-plus-package-optional@<semver>

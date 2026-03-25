@@ -28,7 +28,6 @@ Documentation: https://viteplus.dev/guide/install
 
 > vp update testnpm2 && cat package.json # should update package within semver range
 bun update v<semver> (af24e281)
-Saved lockfile
 
 + test-vite-plus-package@<semver>
 + test-vite-plus-package-optional@<semver>
@@ -53,7 +52,6 @@ installed testnpm2@<semver>
 
 > vp up testnpm2 --latest && cat package.json # should update to absolute latest version
 bun update v<semver> (af24e281)
-Saved lockfile
 
 installed testnpm2@<semver>
 

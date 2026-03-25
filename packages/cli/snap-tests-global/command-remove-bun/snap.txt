@@ -42,19 +42,16 @@ package.json doesn't have dependencies, there's nothing to remove!
 
 > vp add testnpm2 && vp add -D test-vite-plus-install && vp add -O test-vite-plus-package-optional && cat package.json # should add packages to dependencies
 bun add v<semver> (af24e281)
-Saved lockfile
 
 installed testnpm2@<semver>
 
 1 package installed [<variable>ms]
 bun add v<semver> (af24e281)
-Saved lockfile
 
 installed test-vite-plus-install@<semver>
 
 1 package installed [<variable>ms]
 bun add v<semver> (af24e281)
-Saved lockfile
 
 installed test-vite-plus-package-optional@<semver>
 
@@ -76,7 +73,6 @@ installed test-vite-plus-package-optional@<semver>
 
 > vp remove testnpm2 test-vite-plus-install && cat package.json # should remove packages from dependencies
 bun remove v<semver> (af24e281)
-Saved lockfile
 
 - testnpm2
 - test-vite-plus-install

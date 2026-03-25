@@ -38,7 +38,6 @@ For more information, try '--help'.
 
 > vp add testnpm2 -D && cat package.json # should add package as dev dependencies
 bun add v<semver> (af24e281)
-Saved lockfile
 
 installed testnpm2@<semver>
 
@@ -54,7 +53,6 @@ installed testnpm2@<semver>
 
 > vp add testnpm2 test-vite-plus-install && cat package.json # should add packages to dependencies
 bun add v<semver> (af24e281)
-Saved lockfile
 
 installed testnpm2@<semver>
 installed test-vite-plus-install@<semver>
@@ -76,7 +74,6 @@ installed test-vite-plus-install@<semver>
 VITE+ - The Unified Toolchain for the Web
 
 bun add v<semver> (af24e281)
-Saved lockfile
 
 installed test-vite-plus-package@<semver>
 
@@ -98,7 +95,6 @@ installed test-vite-plus-package@<semver>
 
 > vp add test-vite-plus-package-optional -O && cat package.json # should add package as optional dependencies
 bun add v<semver> (af24e281)
-Saved lockfile
 
 installed test-vite-plus-package-optional@<semver>
 
