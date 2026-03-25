@@ -8,11 +8,11 @@ The command completes the execution story alongside existing commands:
 
 | Command       | Behavior                                                       | Analogy                     |
 | ------------- | -------------------------------------------------------------- | --------------------------- |
-| `vp dlx`      | Always downloads from remote                                   | `pnpm dlx` / `bunx`         |
+| `vp dlx`      | Always downloads from remote                                   | `pnpm dlx` / `bun x`        |
 | `vpx`         | Local → global → PATH → remote fallback                        | `npx`                       |
 | **`vp exec`** | **Prepend `node_modules/.bin` to PATH, then execute normally** | **`pnpm exec`** / **`bun`** |
 
-**Note:** bun natively resolves binaries from local `node_modules/.bin`, so `bun <cmd>` or `bunx <cmd>` can serve a similar purpose to `vp exec`.
+**Note:** bun natively resolves binaries from local `node_modules/.bin`, so `bun <cmd>` or `bun x <cmd>` can serve a similar purpose to `vp exec`.
 
 ## Motivation
 

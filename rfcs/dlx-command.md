@@ -104,14 +104,14 @@ vp dlx -p typescript -p @types/node -c 'tsc --init && node -e "console.log(123)"
 - pnpm: https://pnpm.io/cli/dlx
 - npm: https://docs.npmjs.com/cli/v10/commands/npm-exec
 - yarn: https://yarnpkg.com/cli/dlx
-- bun: https://bun.sh/docs/cli/bunx
+- bun: https://bun.sh/docs/pm/bunx
 
-| Vite+ Flag                      | pnpm               | npm                 | yarn@1      | yarn@2+          | bun          | Description                |
-| ------------------------------- | ------------------ | ------------------- | ----------- | ---------------- | ------------ | -------------------------- |
-| `vp dlx <pkg>`                  | `pnpm dlx <pkg>`   | `npm exec <pkg>`    | `npx <pkg>` | `yarn dlx <pkg>` | `bunx <pkg>` | Execute package binary     |
-| `--package <name>`, `-p <name>` | `--package <name>` | `--package=<name>`  | N/A         | `-p <name>`      | N/A          | Specify package to install |
-| `--shell-mode`, `-c`            | `-c`               | `-c`                | N/A         | N/A              | N/A          | Execute in shell           |
-| `--silent`, `-s`                | `--silent`         | `--loglevel silent` | `--quiet`   | `--quiet`        | N/A          | Suppress output            |
+| Vite+ Flag                      | pnpm               | npm                 | yarn@1      | yarn@2+          | bun           | Description                |
+| ------------------------------- | ------------------ | ------------------- | ----------- | ---------------- | ------------- | -------------------------- |
+| `vp dlx <pkg>`                  | `pnpm dlx <pkg>`   | `npm exec <pkg>`    | `npx <pkg>` | `yarn dlx <pkg>` | `bun x <pkg>` | Execute package binary     |
+| `--package <name>`, `-p <name>` | `--package <name>` | `--package=<name>`  | N/A         | `-p <name>`      | N/A           | Specify package to install |
+| `--shell-mode`, `-c`            | `-c`               | `-c`                | N/A         | N/A              | N/A           | Execute in shell           |
+| `--silent`, `-s`                | `--silent`         | `--loglevel silent` | `--quiet`   | `--quiet`        | N/A           | Suppress output            |
 
 **Notes:**
 
@@ -120,7 +120,7 @@ vp dlx -p typescript -p @types/node -c 'tsc --init && node -e "console.log(123)"
 - **Shell mode**: Yarn 2+ does not support shell mode (`-c`), command will print a warning and try to execute anyway.
 - **--package flag position**: For pnpm, `--package` comes before `dlx`. For npm, `--package` can be anywhere. For yarn, `-p` comes after `dlx`.
 - **Auto-confirm prompts**: For npm and npx (yarn@1 fallback), `--yes` is automatically added to align with pnpm's behavior which doesn't require confirmation.
-- **bun**: Uses `bunx` as a standalone binary (not a subcommand of `bun`). It does not support `--package`, `--shell-mode`, or `--silent` flags.
+- **bun**: Uses `bun x` subcommand (preferred over the `bunx` standalone binary for better cross-platform compatibility). It does not support `--package`, `--shell-mode`, or `--silent` flags.
 
 ### Argument Handling
 
@@ -721,7 +721,7 @@ Error: yarn@1.22.19 does not support dlx command
 
 - Frustrating user experience
 - npx fallback works well and is available
-- Other tools (like bunx) also provide fallbacks
+- Other tools (like `bun x`) also provide fallbacks
 - Users shouldn't need to switch package managers for dlx
 
 ## Implementation Plan
@@ -890,14 +890,14 @@ Examples:
 
 ## Package Manager Compatibility
 
-| Feature           | pnpm    | npm     | yarn@1  | yarn@2+ | bun       | Notes                     |
-| ----------------- | ------- | ------- | ------- | ------- | --------- | ------------------------- |
-| Basic execution   | ✅ Full | ✅ Full | ⚠️ npx  | ✅ Full | ✅ `bunx` | yarn@1 uses npx fallback  |
-| Version specifier | ✅ Full | ✅ Full | ⚠️ npx  | ✅ Full | ✅ Full   |                           |
-| --package flag    | ✅ Full | ✅ Full | ⚠️ npx  | ✅ Full | ❌ N/A    | bunx doesn't support      |
-| Shell mode (-c)   | ✅ Full | ✅ Full | ⚠️ npx  | ❌ N/A  | ❌ N/A    | yarn@2+/bun don't support |
-| Silent mode       | ✅ Full | ✅ Full | ⚠️ npx  | ✅ Full | ❌ N/A    | bunx doesn't support      |
-| Auto-confirm      | ✅ N/A  | ✅ Auto | ⚠️ Auto | ✅ N/A  | ✅ N/A    | --yes added for npm/npx   |
+| Feature           | pnpm    | npm     | yarn@1  | yarn@2+ | bun        | Notes                     |
+| ----------------- | ------- | ------- | ------- | ------- | ---------- | ------------------------- |
+| Basic execution   | ✅ Full | ✅ Full | ⚠️ npx  | ✅ Full | ✅ `bun x` | yarn@1 uses npx fallback  |
+| Version specifier | ✅ Full | ✅ Full | ⚠️ npx  | ✅ Full | ✅ Full    |                           |
+| --package flag    | ✅ Full | ✅ Full | ⚠️ npx  | ✅ Full | ❌ N/A     | `bun x` doesn't support   |
+| Shell mode (-c)   | ✅ Full | ✅ Full | ⚠️ npx  | ❌ N/A  | ❌ N/A     | yarn@2+/bun don't support |
+| Silent mode       | ✅ Full | ✅ Full | ⚠️ npx  | ✅ Full | ❌ N/A     | `bun x` doesn't support   |
+| Auto-confirm      | ✅ N/A  | ✅ Auto | ⚠️ Auto | ✅ N/A  | ✅ N/A     | --yes added for npm/npx   |
 
 ## Security Considerations
 
