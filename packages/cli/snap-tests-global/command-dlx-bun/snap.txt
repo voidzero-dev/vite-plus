@@ -18,9 +18,6 @@ Documentation: https://viteplus.dev/guide/vpx
 
 
 > vp dlx -s cowsay hello # should run cowsay with bun x
-Resolving dependencies
-Resolved, downloaded and extracted [104]
-Saved lockfile
  _______
 < hello >
  -------
@@ -31,9 +28,6 @@ Saved lockfile
                 ||     ||
 
 > vp dlx -s cowsay@1.6.0 hello # should run specific version
-Resolving dependencies
-Resolved, downloaded and extracted [54]
-Saved lockfile
  _______
 < hello >
  -------

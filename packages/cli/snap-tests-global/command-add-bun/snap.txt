@@ -76,8 +76,6 @@ installed test-vite-plus-install@<semver>
 VITE+ - The Unified Toolchain for the Web
 
 bun add v<semver> (af24e281)
-Resolving dependencies
-Resolved, downloaded and extracted [0]
 Saved lockfile
 
 installed test-vite-plus-package@<semver>

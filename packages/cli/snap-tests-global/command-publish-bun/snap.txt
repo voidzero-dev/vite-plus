@@ -35,7 +35,7 @@ packed <variable>KB snap.txt
 packed <variable>B steps.json
 
 Total files: 4
-Unpacked size: 1.42KB
+Unpacked size: 1.66KB
 Tag: latest
 Access: default
 Registry: https://registry.<domain>

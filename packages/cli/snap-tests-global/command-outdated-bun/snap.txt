@@ -30,8 +30,6 @@ Documentation: https://viteplus.dev/guide/install
 VITE+ - The Unified Toolchain for the Web
 
 bun install v<semver> (af24e281)
-Resolving dependencies
-Resolved, downloaded and extracted [10]
 Saved lockfile
 
 + test-vite-plus-top-package@<semver> (v1.1.0 available)

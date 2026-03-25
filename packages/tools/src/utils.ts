@@ -83,6 +83,11 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
       .replaceAll(/\++\n/g, '+<repeat>\n')
       // ignore pnpm registry request error warning log
       .replaceAll(/ ?WARN\s+GET\s+https:\/\/registry\..+?\n/g, '')
+      // ignore bun resolution progress (appears intermittently depending on cache state)
+      // "Resolving dependencies"
+      // "Resolved, downloaded and extracted [104]"
+      .replaceAll(/Resolving dependencies\n/g, '')
+      .replaceAll(/Resolved, downloaded and extracted \[\d+\]\n/g, '')
       // ignore yarn YN0013, because it's unstable output, only exists on CI environment
       // ➤ YN0013: │ A package was added to the project (+ 0.7 KiB).
       .replaceAll(/➤ YN0013:[^\n]+\n/g, '')
