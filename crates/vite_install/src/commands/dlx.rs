@@ -196,7 +196,10 @@ impl PackageManager {
     ) -> ResolveCommandResult {
         let mut args = Vec::new();
 
-        // bunx is the dlx equivalent, no subcommand needed
+        // Use `bun x` instead of `bunx` for better cross-platform compatibility.
+        // Some installation methods (e.g. mise) don't add bunx to PATH on Windows.
+        args.push("x".into());
+
         // Add package spec
         args.push(options.package_spec.into());
 
@@ -205,13 +208,13 @@ impl PackageManager {
 
         // Warn about unsupported flags
         if !options.packages.is_empty() {
-            output::warn("bunx does not support --package");
+            output::warn("bun x does not support --package");
         }
         if options.shell_mode {
-            output::warn("bunx does not support shell mode (-c)");
+            output::warn("bun x does not support shell mode (-c)");
         }
 
-        ResolveCommandResult { bin_path: "bunx".into(), args, envs }
+        ResolveCommandResult { bin_path: "bun".into(), args, envs }
     }
 }
 

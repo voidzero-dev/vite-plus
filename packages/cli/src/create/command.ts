@@ -154,7 +154,7 @@ export function getPackageRunner(workspaceInfo: WorkspaceInfo) {
         args: ['dlx'],
       };
     case 'bun':
-      return { command: 'bunx', args: [] };
+      return { command: 'bun', args: ['x'] };
     case 'npm':
     default:
       return { command: 'npx', args: [] };
