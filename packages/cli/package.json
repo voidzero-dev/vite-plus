@@ -70,6 +70,10 @@
       "types": "./dist/lint.d.ts",
       "import": "./dist/lint.js"
     },
+    "./fmt": {
+      "types": "./dist/fmt.d.ts",
+      "import": "./dist/fmt.js"
+    },
     "./package.json": "./package.json",
     "./pack": {
       "types": "./dist/pack.d.ts",
