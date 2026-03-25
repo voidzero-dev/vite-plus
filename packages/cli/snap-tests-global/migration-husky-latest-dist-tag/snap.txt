@@ -1,0 +1,29 @@
+> git init
+> vp migrate --no-interactive # should warn about uncoercible husky version
+VITE+ - The Unified Toolchain for the Web
+
+
+⚠ Could not determine husky version from "latest" — please specify a semver-compatible version (e.g., "^9.0.0") and re-run migration.
+◇ Migrated . to Vite+<repeat>
+• Node <semver>  pnpm <semver>
+• 1 config update applied
+
+> cat package.json # husky should still be in devDeps
+{
+  "name": "migration-husky-latest-dist-tag",
+  "scripts": {
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "husky": "latest",
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vite-plus": "latest"
+  },
+  "pnpm": {
+    "overrides": {
+      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+      "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+    }
+  },
+  "packageManager": "pnpm@<semver>"
+}

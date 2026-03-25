@@ -1,0 +1,14 @@
+{
+  "name": "migration-husky-latest-dist-tag-v9-installed",
+  "scripts": {
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "husky": "latest",
+    "lint-staged": "^16.2.6",
+    "vite": "^7.0.0"
+  },
+  "lint-staged": {
+    "*.js": "oxlint --fix"
+  }
+}

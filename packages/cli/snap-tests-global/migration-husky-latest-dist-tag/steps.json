@@ -1,0 +1,7 @@
+{
+  "commands": [
+    { "command": "git init", "ignoreOutput": true },
+    "vp migrate --no-interactive # should warn about uncoercible husky version",
+    "cat package.json # husky should still be in devDeps"
+  ]
+}

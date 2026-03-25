@@ -1,6 +1,9 @@
 import assert from 'node:assert';
 import path from 'node:path';
 
+import * as prompts from '@voidzero-dev/vite-plus-prompts';
+import colors from 'picocolors';
+
 import type { WorkspaceInfo } from '../../types/index.js';
 import type { ExecutionResult } from '../command.js';
 import { discoverTemplate } from '../discovery.js';
@@ -41,9 +44,22 @@ export async function executeBuiltinTemplate(
       false,
       options?.silent ?? false,
     );
+    if (result.exitCode !== 0) {
+      return { exitCode: result.exitCode };
+    }
     const fullPath = path.join(workspaceInfo.rootDir, templateInfo.targetDir);
     setPackageName(fullPath, templateInfo.packageName);
     return { ...result, projectDir: templateInfo.targetDir };
+  }
+
+  // Unknown vite: template (e.g. vite:test) — application was already rewritten to create-vite@latest
+  if (templateInfo.command.startsWith('vite:')) {
+    if (!options?.silent) {
+      prompts.log.error(
+        `Unknown builtin template "${templateInfo.command}". Run ${colors.yellow('vp create --list')} to see available templates.`,
+      );
+    }
+    return { exitCode: 1 };
   }
 
   // Handle remote/external templates with fspy monitoring
@@ -54,6 +70,9 @@ export async function executeBuiltinTemplate(
     false,
     options?.silent ?? false,
   );
+  if (result.exitCode !== 0) {
+    return { exitCode: result.exitCode };
+  }
   const fullPath = path.join(workspaceInfo.rootDir, templateInfo.targetDir);
   // set package name in the project directory
   setPackageName(fullPath, templateInfo.packageName);

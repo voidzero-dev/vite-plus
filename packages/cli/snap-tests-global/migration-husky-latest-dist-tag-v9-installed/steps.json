@@ -1,0 +1,7 @@
+{
+  "commands": [
+    { "command": "git init", "ignoreOutput": true },
+    "vp migrate --no-interactive # should resolve husky v9 from node_modules, no warning",
+    "cat package.json # husky and lint-staged should be removed"
+  ]
+}

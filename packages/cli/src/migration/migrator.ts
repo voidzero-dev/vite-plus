@@ -1510,18 +1510,34 @@ function rewriteAllImports(projectPath: string, silent = false, report?: Migrati
 /**
  * Check if the project has an unsupported husky version (<9.0.0).
  * Uses `semver.coerce` to handle ranges like `^8.0.0` → `8.0.0`.
- * Accepts pre-loaded deps to avoid re-reading package.json when called
- * from contexts that already parsed it.
+ * When the specifier is not coercible (e.g. `"latest"`), falls back to
+ * the installed version in node_modules via `detectPackageMetadata`.
+ * Returns a reason string if hooks migration should be skipped, or null
+ * if husky is absent or compatible.
  */
 function checkUnsupportedHuskyVersion(
+  projectPath: string,
   deps: Record<string, string> | undefined,
   prodDeps: Record<string, string> | undefined,
-): boolean {
+): string | null {
   const huskyVersion = deps?.husky ?? prodDeps?.husky;
   if (!huskyVersion) {
-    return false;
+    return null;
   }
-  return semver.satisfies(semver.coerce(huskyVersion) ?? '0.0.0', '<9.0.0');
+  let coerced = semver.coerce(huskyVersion);
+  if (coerced == null) {
+    const installed = detectPackageMetadata(projectPath, 'husky');
+    if (installed) {
+      coerced = semver.coerce(installed.version);
+    }
+    if (coerced == null) {
+      return `Could not determine husky version from "${huskyVersion}" — please specify a semver-compatible version (e.g., "^9.0.0") and re-run migration.`;
+    }
+  }
+  if (semver.satisfies(coerced, '<9.0.0')) {
+    return 'Detected husky <9.0.0 — please upgrade to husky v9+ first, then re-run migration.';
+  }
+  return null;
 }
 
 const OTHER_HOOK_TOOLS = ['simple-git-hooks', 'lefthook', 'yorkie'] as const;
@@ -1635,8 +1651,9 @@ export function preflightGitHooksSetup(projectPath: string): string | null {
       return `Detected ${tool} — skipping git hooks setup. Please configure git hooks manually.`;
     }
   }
-  if (checkUnsupportedHuskyVersion(deps, prodDeps)) {
-    return 'Detected husky <9.0.0 — please upgrade to husky v9+ first, then re-run migration.';
+  const huskyReason = checkUnsupportedHuskyVersion(projectPath, deps, prodDeps);
+  if (huskyReason) {
+    return huskyReason;
   }
   if (hasUnsupportedLintStagedConfig(projectPath)) {
     return 'Unsupported lint-staged config format — skipping git hooks setup. Please configure git hooks manually.';
