@@ -149,7 +149,7 @@ vp why typescript -g            # Check globally installed packages
 | `-w, --workspace-root`    | `-w`                      | N/A                     | N/A                 | N/A                      | N/A             | Check in workspace root (pnpm-specific)                         |
 | `-P, --prod`              | `-P, --prod`              | N/A                     | N/A                 | N/A                      | N/A             | Only production dependencies (pnpm only)                        |
 | `-D, --dev`               | `-D, --dev`               | N/A                     | N/A                 | N/A                      | N/A             | Only dev dependencies (pnpm only)                               |
-| `--depth <number>`        | `--depth <number>`        | N/A                     | N/A                 | N/A                      | N/A             | Limit tree depth (pnpm only)                                    |
+| `--depth <number>`        | `--depth <number>`        | N/A                     | N/A                 | N/A                      | `--depth`       | Limit tree depth (pnpm/bun)                                     |
 | `--no-optional`           | `--no-optional`           | N/A                     | `--ignore-optional` | N/A                      | N/A             | Exclude optional dependencies (pnpm only)                       |
 | `-g, --global`            | `-g, --global`            | N/A                     | N/A                 | N/A                      | N/A             | Check globally installed packages                               |
 | `--exclude-peers`         | `--exclude-peers`         | N/A                     | N/A                 | Removes `--peers` flag   | N/A             | Exclude peer dependencies (yarn@2+ defaults to including peers) |
@@ -1266,7 +1266,7 @@ vp why package --prod --json
 | Recursive        | ✅ `-r`           | ❌ Not supported | ❌ Not supported | ✅ `--recursive` | ❌ Not supported | pnpm and yarn@2+        |
 | Workspace filter | ✅ `--filter`     | ✅ `--workspace` | ❌ Not supported | ❌ Not supported | ❌ Not supported | pnpm and npm            |
 | Dep type filter  | ✅ `--prod/--dev` | ❌ Not supported | ❌ Not supported | ❌ Not supported | ❌ Not supported | pnpm only               |
-| Depth limit      | ✅ `--depth`      | ❌ Not supported | ❌ Not supported | ❌ Not supported | ❌ Not supported | pnpm only               |
+| Depth limit      | ✅ `--depth`      | ❌ Not supported | ❌ Not supported | ❌ Not supported | ✅ `--depth`     | pnpm and bun            |
 | Global check     | ✅ `-g`           | ❌ Not supported | ❌ Not supported | ❌ Not supported | ❌ Not supported | pnpm only               |
 | Tree view        | ❌ Not supported  | ❌ Not supported | ❌ Not supported | ❌ Not supported | ✅ Built-in      | bun shows tree view     |
 
