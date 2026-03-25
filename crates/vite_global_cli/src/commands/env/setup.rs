@@ -507,8 +507,8 @@ function vp
             command vp $argv; return
         end
         set -lx VITE_PLUS_ENV_USE_EVAL_ENABLE 1
-        set -l __vp_out (command vp $argv); or return $status
-        eval $__vp_out
+        set -l __vp_out (env FISH_VERSION=$FISH_VERSION command vp $argv); or return $status
+        eval (string join ';' $__vp_out)
     else
         command vp $argv
     end
