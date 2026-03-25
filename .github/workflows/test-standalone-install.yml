@@ -228,7 +228,7 @@ jobs:
             -e VITE_PLUS_VERSION=alpha \
             -e CI=true \
             alpine:3.21 sh -c "
-              # libstdc++ is needed by unofficial-builds Node.js musl binary
+              # libstdc++: required by unofficial-builds Node.js musl binary
               apk add --no-cache bash curl ca-certificates libstdc++
               cat /workspace/packages/cli/install.sh | bash
               export PATH=\"\$HOME/.vite-plus/bin:\$PATH\"
