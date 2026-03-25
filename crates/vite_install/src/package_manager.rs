@@ -532,9 +532,11 @@ async fn download_bun_package_manager(
     let platform_tgz_url = get_npm_package_tgz_url(platform_package_name, version);
     let target_dir_tmp = tempfile::tempdir_in(parent_dir)?.path().to_path_buf();
 
-    download_and_extract_tgz_with_hash(&platform_tgz_url, &target_dir_tmp, expected_hash)
-        .await
-        .map_err(|err| {
+    // The hash from the `packageManager` field (e.g., "bun@1.2.0+sha512.abc") belongs to the
+    // main `bun` npm package, not the platform-specific `@oven/bun-<platform>` package.
+    // We must skip hash validation here since the downloaded tarball is a different package.
+    download_and_extract_tgz_with_hash(&platform_tgz_url, &target_dir_tmp, None).await.map_err(
+        |err| {
             if let Error::Reqwest(e) = &err
                 && let Some(status) = e.status()
                 && status == reqwest::StatusCode::NOT_FOUND
@@ -547,7 +549,8 @@ async fn download_bun_package_manager(
             } else {
                 err
             }
-        })?;
+        },
+    )?;
 
     // Create the expected directory structure: bun/bin/
     let tmp_bun_dir = target_dir_tmp.join("bun");
@@ -683,17 +686,17 @@ async fn create_shim_files(
 /// `bin_prefix/bun.native.exe` (windows), and we create shim wrappers
 /// that exec it directly (without Node.js).
 async fn create_bun_shim_files(bin_prefix: &AbsolutePath) -> Result<(), Error> {
-    // The native binary should already be at bin_prefix/bun.native
-    // (placed there by download_bun_platform_binary)
-    let native_bin = bin_prefix.join("bun.native");
+    // The native binary should already be at bin_prefix/bun.native (unix) or
+    // bin_prefix/bun.native.exe (windows), placed there by download_bun_platform_binary.
+    let native_bin = if cfg!(windows) {
+        bin_prefix.join("bun.native.exe")
+    } else {
+        bin_prefix.join("bun.native")
+    };
     if !is_exists_file(&native_bin)? {
-        // On Windows, check for bun.native.exe
-        let native_bin_exe = bin_prefix.join("bun.native.exe");
-        if !is_exists_file(&native_bin_exe)? {
-            return Err(Error::CannotFindBinaryPath(
-                "bun native binary not found. Expected bin/bun.native".into(),
-            ));
-        }
+        return Err(Error::CannotFindBinaryPath(
+            "bun native binary not found. Expected bin/bun.native".into(),
+        ));
     }
 
     // Create bun shim -> bun.native

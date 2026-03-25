@@ -233,8 +233,9 @@ impl PackageManager {
                 if options.prod || options.dev {
                     output::warn("--prod/--dev not supported by bun why");
                 }
-                if options.depth.is_some() {
-                    output::warn("--depth not supported by bun why");
+                if let Some(depth) = options.depth {
+                    args.push("--depth".into());
+                    args.push(depth.to_string());
                 }
                 if options.no_optional {
                     output::warn("--no-optional not supported by bun why");
@@ -425,5 +426,18 @@ mod tests {
         });
         assert_eq!(result.bin_path, "pnpm");
         assert_eq!(result.args, vec!["why", "--find-by", "customFinder", "react"]);
+    }
+
+    #[test]
+    fn test_bun_why_with_depth() {
+        let pm = create_mock_package_manager(PackageManagerType::Bun, "1.3.11");
+        let packages = vec!["testnpm2".to_string()];
+        let result = pm.resolve_why_command(&WhyCommandOptions {
+            packages: &packages,
+            depth: Some(2),
+            ..Default::default()
+        });
+        assert!(result.args.contains(&"--depth".to_string()));
+        assert!(result.args.contains(&"2".to_string()));
     }
 }

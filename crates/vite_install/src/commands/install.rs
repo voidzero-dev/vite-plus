@@ -310,7 +310,11 @@ impl PackageManager {
                     args.push("--silent".into());
                 }
                 if options.no_optional {
-                    output::warn("bun does not directly support --no-optional");
+                    args.push("--omit".into());
+                    args.push("optional".into());
+                }
+                if options.ignore_scripts {
+                    args.push("--ignore-scripts".into());
                 }
                 if options.lockfile_only {
                     output::warn("bun does not support --lockfile-only");
@@ -320,9 +324,6 @@ impl PackageManager {
                 }
                 if options.offline {
                     output::warn("bun does not support --offline");
-                }
-                if options.ignore_scripts {
-                    output::warn("bun uses trustedDependencies instead of --ignore-scripts");
                 }
                 if options.no_lockfile {
                     output::warn("bun does not support --no-lockfile");
@@ -732,6 +733,55 @@ mod tests {
             ..Default::default()
         });
         assert_eq!(result.args, vec!["install"]);
+    }
+
+    #[test]
+    fn test_bun_basic_install() {
+        let pm = create_mock_package_manager(PackageManagerType::Bun, "1.3.11");
+        let result = pm.resolve_install_command_with_options(&InstallCommandOptions::default());
+        assert_eq!(result.bin_path, "bun");
+        assert_eq!(result.args, vec!["install"]);
+    }
+
+    #[test]
+    fn test_bun_frozen_lockfile() {
+        let pm = create_mock_package_manager(PackageManagerType::Bun, "1.3.11");
+        let result = pm.resolve_install_command_with_options(&InstallCommandOptions {
+            frozen_lockfile: true,
+            ..Default::default()
+        });
+        assert!(result.args.contains(&"--frozen-lockfile".to_string()));
+    }
+
+    #[test]
+    fn test_bun_ignore_scripts() {
+        let pm = create_mock_package_manager(PackageManagerType::Bun, "1.3.11");
+        let result = pm.resolve_install_command_with_options(&InstallCommandOptions {
+            ignore_scripts: true,
+            ..Default::default()
+        });
+        assert!(result.args.contains(&"--ignore-scripts".to_string()));
+    }
+
+    #[test]
+    fn test_bun_no_optional() {
+        let pm = create_mock_package_manager(PackageManagerType::Bun, "1.3.11");
+        let result = pm.resolve_install_command_with_options(&InstallCommandOptions {
+            no_optional: true,
+            ..Default::default()
+        });
+        assert!(result.args.contains(&"--omit".to_string()));
+        assert!(result.args.contains(&"optional".to_string()));
+    }
+
+    #[test]
+    fn test_bun_prod_install() {
+        let pm = create_mock_package_manager(PackageManagerType::Bun, "1.3.11");
+        let result = pm.resolve_install_command_with_options(&InstallCommandOptions {
+            prod: true,
+            ..Default::default()
+        });
+        assert!(result.args.contains(&"--production".to_string()));
     }
 
     #[test]

@@ -796,9 +796,9 @@ Bun provides several `bun pm` subcommands that may not have direct equivalents i
 | `vp pm pack`                | `pnpm pack`          | `npm pack`           | `yarn pack`  | `yarn pack`                                   | `bun pm pack`   | Create package tarball            |
 | `-r, --recursive`           | `--recursive`        | `--workspaces`       | N/A          | `workspaces foreach --all pack`               | N/A             | Pack all workspace packages       |
 | `--filter <pattern>`        | `--filter`           | `--workspace`        | N/A          | `workspaces foreach --include <pattern> pack` | N/A             | Filter packages to pack           |
-| `--out <path>`              | `--out`              | N/A                  | `--filename` | `--out`                                       | N/A             | Output file path (supports %s/%v) |
+| `--out <path>`              | `--out`              | N/A                  | `--filename` | `--out`                                       | `--filename`    | Output file path (supports %s/%v) |
 | `--pack-destination <dir>`  | `--pack-destination` | `--pack-destination` | N/A          | N/A                                           | `--destination` | Output directory                  |
-| `--pack-gzip-level <level>` | `--pack-gzip-level`  | N/A                  | N/A          | N/A                                           | N/A             | Gzip compression level (0-9)      |
+| `--pack-gzip-level <level>` | `--pack-gzip-level`  | N/A                  | N/A          | N/A                                           | `--gzip-level`  | Gzip compression level (0-9)      |
 | `--json`                    | `--json`             | `--json`             | `--json`     | `--json`                                      | N/A             | JSON output                       |
 | `--dry-run`                 | N/A                  | `--dry-run`          | N/A          | N/A                                           | `--dry-run`     | Preview without creating tarball  |
 
@@ -822,8 +822,8 @@ Bun provides several `bun pm` subcommands that may not have direct equivalents i
   - Supported by pnpm and npm
   - yarn does not support this option (prints warning and ignores)
 - `--pack-gzip-level <level>`: Gzip compression level (0-9)
-  - Only supported by pnpm
-  - npm, yarn, and bun do not support this option (prints warning and ignores)
+  - Supported by pnpm and bun (bun uses `--gzip-level`)
+  - npm and yarn do not support this option (prints warning and ignores)
 - bun uses `bun pm pack` (not `bun pack`), supports `--destination` and `--dry-run` flags
 
 #### List Command
@@ -1204,13 +1204,13 @@ Bun provides several `bun pm` subcommands that may not have direct equivalents i
 - https://classic.yarnpkg.com/en/docs/cli/audit
 - https://yarnpkg.com/cli/npm/audit
 
-| Vite+ Flag              | pnpm            | npm             | yarn@1          | yarn@2+                    | bun        | Description        |
-| ----------------------- | --------------- | --------------- | --------------- | -------------------------- | ---------- | ------------------ |
-| `vp pm audit`           | `pnpm audit`    | `npm audit`     | `yarn audit`    | `yarn npm audit`           | N/A (warn) | Run security audit |
-| `--json`                | `--json`        | `--json`        | `--json`        | `--json`                   | N/A        | JSON output        |
-| `--prod`                | `--prod`        | `--omit=dev`    | `--groups prod` | `--environment production` | N/A        | Production only    |
-| `--audit-level <level>` | `--audit-level` | `--audit-level` | `--level`       | `--severity`               | N/A        | Minimum severity   |
-| `fix`                   | `--fix`         | `npm audit fix` | N/A             | N/A                        | N/A        | Auto-fix           |
+| Vite+ Flag              | pnpm            | npm             | yarn@1          | yarn@2+                    | bun             | Description        |
+| ----------------------- | --------------- | --------------- | --------------- | -------------------------- | --------------- | ------------------ |
+| `vp pm audit`           | `pnpm audit`    | `npm audit`     | `yarn audit`    | `yarn npm audit`           | `bun audit`     | Run security audit |
+| `--json`                | `--json`        | `--json`        | `--json`        | `--json`                   | `--json`        | JSON output        |
+| `--prod`                | `--prod`        | `--omit=dev`    | `--groups prod` | `--environment production` | N/A             | Production only    |
+| `--audit-level <level>` | `--audit-level` | `--audit-level` | `--level`       | `--severity`               | `--audit-level` | Minimum severity   |
+| `fix`                   | `--fix`         | `npm audit fix` | N/A             | N/A                        | N/A             | Auto-fix           |
 
 **Note:**
 
@@ -2209,7 +2209,7 @@ Examples:
 | logout     | ✅ `npm`   | ✅ Full | ✅ Full    | ⚠️ `npm logout`  | ✅ `npm logout`    | delegates to npm                        |
 | whoami     | ✅ `npm`   | ✅ Full | ❌ N/A     | ⚠️ `npm whoami`  | ✅ `bun pm whoami` | bun has native whoami                   |
 | token      | ✅ `npm`   | ✅ Full | ❌ N/A     | ❌ N/A           | ❌ N/A             | Always delegates to npm                 |
-| audit      | ✅ Full    | ✅ Full | ✅ Full    | ⚠️ `npm audit`   | ❌ N/A             | bun has no audit command                |
+| audit      | ✅ Full    | ✅ Full | ✅ Full    | ⚠️ `npm audit`   | ✅ `bun audit`     | bun has native audit support            |
 | dist-tag   | ✅ `npm`   | ✅ Full | ⚠️ `tag`   | ⚠️ `npm tag`     | ✅ `npm dist-tag`  | delegates to npm                        |
 | deprecate  | ✅ `npm`   | ✅ Full | ✅ `npm`   | ✅ `npm`         | ✅ `npm deprecate` | Always delegates to npm                 |
 | search     | ✅ `npm`   | ✅ Full | ✅ `npm`   | ✅ `npm`         | ✅ `npm search`    | Always delegates to npm                 |
