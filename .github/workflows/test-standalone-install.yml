@@ -221,6 +221,21 @@ jobs:
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
+      - name: Verify install.sh fails without ca-certificates
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}:/workspace" \
+            -e VITE_PLUS_VERSION=alpha \
+            -e CI=true \
+            alpine:3.21 sh -c "
+              apk add --no-cache bash curl libstdc++
+              if cat /workspace/packages/cli/install.sh | bash 2>&1; then
+                echo 'Error: install.sh should fail without ca-certificates'
+                exit 1
+              fi
+              echo 'Confirmed: install.sh fails without ca-certificates (expected)'
+            "
+
       - name: Run install.sh in Alpine container
         run: |
           docker run --rm \
@@ -228,7 +243,8 @@ jobs:
             -e VITE_PLUS_VERSION=alpha \
             -e CI=true \
             alpine:3.21 sh -c "
-              # libstdc++ is needed by unofficial-builds Node.js musl binary
+              # ca-certificates: required for TLS cert verification (Alpine has no root CAs by default)
+              # libstdc++: required by unofficial-builds Node.js musl binary
               apk add --no-cache bash curl ca-certificates libstdc++
               cat /workspace/packages/cli/install.sh | bash
               export PATH=\"\$HOME/.vite-plus/bin:\$PATH\"

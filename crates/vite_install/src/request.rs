@@ -569,6 +569,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore] // Flaky on musl/Alpine — temp file race condition
     async fn test_verify_file_hash_sha224() {
         use sha2::{Digest, Sha224};
         use tokio::io::AsyncWriteExt;

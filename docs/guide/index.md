@@ -47,13 +47,14 @@ Prebuilt binaries are distributed for the following platforms (grouped by [Node.
 
 If a prebuilt binary is not available for your platform, installation will fail with an error.
 
-On Alpine Linux (musl), you need to install `libstdc++` before using Vite+:
+On Alpine Linux (musl), you need to install `ca-certificates` and `libstdc++` before using Vite+:
 
 ```sh
-apk add libstdc++
+apk add ca-certificates libstdc++
 ```
 
-This is required because the managed [unofficial-builds](https://unofficial-builds.nodejs.org/) Node.js runtime depends on the GNU C++ standard library.
+- **`ca-certificates`** is required for TLS certificate verification when downloading packages and runtimes (Alpine's minimal base image does not include root CA certificates).
+- **`libstdc++`** is required because the managed [unofficial-builds](https://unofficial-builds.nodejs.org/) Node.js runtime depends on the GNU C++ standard library.
 
 :::
 
