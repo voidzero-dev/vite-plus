@@ -447,6 +447,19 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     selectedTemplateName = template;
   }
 
+  // Validate builtin template names
+  if (selectedTemplateName.startsWith('vite:')) {
+    const validBuiltins = Object.values(BuiltinTemplate);
+    if (!validBuiltins.includes(selectedTemplateName as BuiltinTemplate)) {
+      const validNames = validBuiltins.join(', ');
+      prompts.log.error(
+        `Unknown builtin template "${selectedTemplateName}". Valid builtin templates are: ${validNames}`,
+      );
+      prompts.log.info(`Run \`${accent('vp create --list')}\` to see all available templates.`);
+      cancelAndExit('', 1);
+    }
+  }
+
   const isBuiltinTemplate = selectedTemplateName.startsWith('vite:');
 
   // Remote templates (e.g., @tanstack/create-start, custom templates) run their own
