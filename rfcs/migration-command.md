@@ -243,7 +243,7 @@ Wrote agent instructions to AGENTS.md
 **After (merged into vite.config.ts):**
 
 ```typescript
-import { defineConfig } from "vite-plus";
+import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   plugins: [],
@@ -255,10 +255,10 @@ export default defineConfig({
       typeCheck: true,
     },
     rules: {
-      "no-unused-vars": "error",
-      "no-console": "warn",
+      'no-unused-vars': 'error',
+      'no-console': 'warn',
     },
-    ignorePatterns: ["dist", "node_modules"],
+    ignorePatterns: ['dist', 'node_modules'],
   },
 });
 ```
@@ -282,7 +282,7 @@ export default defineConfig({
 **After (merged into vite.config.ts):**
 
 ```typescript
-import { defineConfig } from "vite-plus";
+import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   plugins: [],
@@ -293,7 +293,7 @@ export default defineConfig({
     tabWidth: 2,
     semi: true,
     singleQuote: true,
-    trailingComma: "es5",
+    trailingComma: 'es5',
   },
 });
 ```
@@ -308,7 +308,7 @@ effect files:
 **Before (import from 'vitest/config'):**
 
 ```typescript
-import { defineConfig } from "vitest/config";
+import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
@@ -320,7 +320,7 @@ export default defineConfig({
 **After (import from 'vite-plus'):**
 
 ```typescript
-import { defineConfig } from "vite-plus";
+import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   test: {
@@ -332,7 +332,7 @@ export default defineConfig({
 **Before (import from 'vite'):**
 
 ```typescript
-import { defineConfig } from "vite";
+import { defineConfig } from 'vite';
 
 export default defineConfig({
   test: {
@@ -344,7 +344,7 @@ export default defineConfig({
 **After (import from 'vite-plus'):**
 
 ```typescript
-import { defineConfig } from "vite-plus";
+import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   test: {
@@ -381,8 +381,8 @@ my-package/
 
 ```typescript
 // Import from 'vite' still works - overrides maps it to vite-plus
-import react from "@vitejs/plugin-react";
-import { defineConfig } from "vite-plus";
+import react from '@vitejs/plugin-react';
+import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   // Vite configuration
@@ -391,16 +391,16 @@ export default defineConfig({
     port: 3000,
   },
   build: {
-    target: "esnext",
+    target: 'esnext',
   },
 
   // lint configuration (merged from .oxlintrc)
   lint: {
     rules: {
-      "no-unused-vars": "error",
-      "no-console": "warn",
+      'no-unused-vars': 'error',
+      'no-console': 'warn',
     },
-    ignorePatterns: ["dist", "node_modules"],
+    ignorePatterns: ['dist', 'node_modules'],
   },
 
   // format configuration (merged from .oxfmtrc)
@@ -409,7 +409,7 @@ export default defineConfig({
     tabWidth: 2,
     semi: true,
     singleQuote: true,
-    trailingComma: "es5",
+    trailingComma: 'es5',
   },
 });
 ```
@@ -417,7 +417,7 @@ export default defineConfig({
 **vitest.config.ts (after migration):**
 
 ```typescript
-import { defineConfig } from "vite-plus";
+import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   test: {
@@ -438,16 +438,16 @@ catalog:
   vitest: npm:@voidzero-dev/vite-plus-test@latest
 
 overrides:
-  vite: "catalog:"
-  vitest: "catalog:"
+  vite: 'catalog:'
+  vitest: 'catalog:'
 
 peerDependencyRules:
   allowAny:
     - vite
     - vitest
   allowedVersions:
-    vite: "*"
-    vitest: "*"
+    vite: '*'
+    vitest: '*'
 ```
 
 ### for npm
