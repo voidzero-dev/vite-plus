@@ -2022,8 +2022,12 @@ export function parseNvmrcVersion(content: string): string | null {
     return version;
   }
 
-  // Strip optional 'v' prefix
-  return version.startsWith('v') ? version.slice(1) : version;
+  // Strip optional 'v' prefix, then validate as a semver version or range
+  const normalized = version.startsWith('v') ? version.slice(1) : version;
+  if (!normalized || !semver.validRange(normalized)) {
+    return null;
+  }
+  return normalized;
 }
 
 /**

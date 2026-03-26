@@ -154,6 +154,12 @@ describe('parseNvmrcVersion', () => {
     expect(parseNvmrcVersion('system\n')).toBeNull();
     expect(parseNvmrcVersion('')).toBeNull();
   });
+
+  it('returns null for invalid version strings', () => {
+    expect(parseNvmrcVersion('v\n')).toBeNull();
+    expect(parseNvmrcVersion('laetst\n')).toBeNull();
+    expect(parseNvmrcVersion('20.5.0.1\n')).toBeNull();
+  });
 });
 
 describe('detectNodeVersionManagerFile', () => {
