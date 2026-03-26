@@ -539,7 +539,7 @@ export async function migratePrettierToOxfmt(
   const prettierIgnorePath = path.join(projectPath, '.prettierignore');
   if (fs.existsSync(prettierIgnorePath)) {
     warnMigration(
-      `${displayRelative(prettierIgnorePath)} found — Oxfmt uses .oxfmtignore. Please migrate manually.`,
+      `${displayRelative(prettierIgnorePath)} found — Oxfmt supports .prettierignore, but using the \`ignorePatterns\` option is recommended.`,
       options?.report,
     );
   }
