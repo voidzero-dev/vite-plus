@@ -16,7 +16,7 @@ const upstreamVersions = JSON.parse(
 );
 
 function log(message) {
-  console.log(`[setup-dev] ${message}`);
+  process.stdout.write(`[setup-dev] ${message}\n`);
 }
 
 function fail(message) {
@@ -103,8 +103,12 @@ function cloneCheckout(name, repoUrl, branch, hash) {
 function rolldownBindingCandidates() {
   switch (process.platform) {
     case 'android':
-      if (process.arch === 'arm64') return ['@rolldown/binding-android-arm64'];
-      if (process.arch === 'arm') return ['@rolldown/binding-android-arm-eabi'];
+      if (process.arch === 'arm64') {
+        return ['@rolldown/binding-android-arm64'];
+      }
+      if (process.arch === 'arm') {
+        return ['@rolldown/binding-android-arm-eabi'];
+      }
       return [];
     case 'darwin':
       if (process.arch === 'arm64') {
@@ -115,8 +119,12 @@ function rolldownBindingCandidates() {
       }
       return [];
     case 'freebsd':
-      if (process.arch === 'arm64') return ['@rolldown/binding-freebsd-arm64'];
-      if (process.arch === 'x64') return ['@rolldown/binding-freebsd-x64'];
+      if (process.arch === 'arm64') {
+        return ['@rolldown/binding-freebsd-arm64'];
+      }
+      if (process.arch === 'x64') {
+        return ['@rolldown/binding-freebsd-x64'];
+      }
       return [];
     case 'linux':
       if (process.arch === 'arm') {
@@ -128,18 +136,26 @@ function rolldownBindingCandidates() {
       if (process.arch === 'loong64') {
         return ['@rolldown/binding-linux-loong64-gnu', '@rolldown/binding-linux-loong64-musl'];
       }
-      if (process.arch === 'ppc64') return ['@rolldown/binding-linux-ppc64-gnu'];
+      if (process.arch === 'ppc64') {
+        return ['@rolldown/binding-linux-ppc64-gnu'];
+      }
       if (process.arch === 'riscv64') {
         return ['@rolldown/binding-linux-riscv64-gnu', '@rolldown/binding-linux-riscv64-musl'];
       }
-      if (process.arch === 's390x') return ['@rolldown/binding-linux-s390x-gnu'];
+      if (process.arch === 's390x') {
+        return ['@rolldown/binding-linux-s390x-gnu'];
+      }
       if (process.arch === 'x64') {
         return ['@rolldown/binding-linux-x64-gnu', '@rolldown/binding-linux-x64-musl'];
       }
       return [];
     case 'win32':
-      if (process.arch === 'arm64') return ['@rolldown/binding-win32-arm64-msvc'];
-      if (process.arch === 'ia32') return ['@rolldown/binding-win32-ia32-msvc'];
+      if (process.arch === 'arm64') {
+        return ['@rolldown/binding-win32-arm64-msvc'];
+      }
+      if (process.arch === 'ia32') {
+        return ['@rolldown/binding-win32-ia32-msvc'];
+      }
       if (process.arch === 'x64') {
         return ['@rolldown/binding-win32-x64-msvc', '@rolldown/binding-win32-x64-gnu'];
       }
@@ -156,7 +172,7 @@ function withRolldownHostBindings(pkg) {
   }
 
   const optionalDependencies = {
-    ...(pkg.optionalDependencies ?? {}),
+    ...pkg.optionalDependencies,
   };
 
   let changed = false;
@@ -194,9 +210,7 @@ function ensureRolldownHostBindings() {
 }
 
 function hasOnlyManagedRolldownBindingsChange(dir) {
-  const statusEntries = capture(gitBin, ['status', '--porcelain'], dir)
-    .split('\n')
-    .filter(Boolean);
+  const statusEntries = capture(gitBin, ['status', '--porcelain'], dir).split('\n').filter(Boolean);
   if (statusEntries.length !== 1 || statusEntries[0].slice(3) !== rolldownPackageJsonRelativePath) {
     return false;
   }

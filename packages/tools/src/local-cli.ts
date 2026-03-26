@@ -60,8 +60,12 @@ function localCliEnv(): NodeJS.ProcessEnv {
 function rolldownBindingCandidates() {
   switch (process.platform) {
     case 'android':
-      if (process.arch === 'arm64') return ['@rolldown/binding-android-arm64/package.json'];
-      if (process.arch === 'arm') return ['@rolldown/binding-android-arm-eabi/package.json'];
+      if (process.arch === 'arm64') {
+        return ['@rolldown/binding-android-arm64/package.json'];
+      }
+      if (process.arch === 'arm') {
+        return ['@rolldown/binding-android-arm-eabi/package.json'];
+      }
       return [];
     case 'darwin':
       if (process.arch === 'arm64') {
@@ -78,8 +82,12 @@ function rolldownBindingCandidates() {
       }
       return [];
     case 'freebsd':
-      if (process.arch === 'arm64') return ['@rolldown/binding-freebsd-arm64/package.json'];
-      if (process.arch === 'x64') return ['@rolldown/binding-freebsd-x64/package.json'];
+      if (process.arch === 'arm64') {
+        return ['@rolldown/binding-freebsd-arm64/package.json'];
+      }
+      if (process.arch === 'x64') {
+        return ['@rolldown/binding-freebsd-x64/package.json'];
+      }
       return [];
     case 'linux':
       if (process.arch === 'arm') {
@@ -100,14 +108,18 @@ function rolldownBindingCandidates() {
           '@rolldown/binding-linux-loong64-musl/package.json',
         ];
       }
-      if (process.arch === 'ppc64') return ['@rolldown/binding-linux-ppc64-gnu/package.json'];
+      if (process.arch === 'ppc64') {
+        return ['@rolldown/binding-linux-ppc64-gnu/package.json'];
+      }
       if (process.arch === 'riscv64') {
         return [
           '@rolldown/binding-linux-riscv64-gnu/package.json',
           '@rolldown/binding-linux-riscv64-musl/package.json',
         ];
       }
-      if (process.arch === 's390x') return ['@rolldown/binding-linux-s390x-gnu/package.json'];
+      if (process.arch === 's390x') {
+        return ['@rolldown/binding-linux-s390x-gnu/package.json'];
+      }
       if (process.arch === 'x64') {
         return [
           '@rolldown/binding-linux-x64-gnu/package.json',
@@ -116,8 +128,12 @@ function rolldownBindingCandidates() {
       }
       return [];
     case 'win32':
-      if (process.arch === 'arm64') return ['@rolldown/binding-win32-arm64-msvc/package.json'];
-      if (process.arch === 'ia32') return ['@rolldown/binding-win32-ia32-msvc/package.json'];
+      if (process.arch === 'arm64') {
+        return ['@rolldown/binding-win32-arm64-msvc/package.json'];
+      }
+      if (process.arch === 'ia32') {
+        return ['@rolldown/binding-win32-ia32-msvc/package.json'];
+      }
       if (process.arch === 'x64') {
         return [
           '@rolldown/binding-win32-x64-msvc/package.json',
@@ -162,7 +178,8 @@ function materializeRolldownPackagedBindings() {
       files?: string[];
       main?: string;
     };
-    const bindingFile = packageJson.main ?? packageJson.files?.find((file) => file.endsWith('.node'));
+    const bindingFile =
+      packageJson.main ?? packageJson.files?.find((file) => file.endsWith('.node'));
     if (!bindingFile) {
       continue;
     }
@@ -182,9 +199,7 @@ function ensureBuildWorkspaceReady() {
       console.error(
         `Found legacy checkout at ${legacyViteRepoDir}. This repo now expects the upstream Vite checkout at ./vite.`,
       );
-      console.error(
-        `Run "${installHint}" to recreate the canonical layout.`,
-      );
+      console.error(`Run "${installHint}" to recreate the canonical layout.`);
     } else {
       console.error(
         `Run "${installHint}" to fetch the local upstream checkouts, or "${bootstrapHint}" to prepare and build the local CLI.`,
@@ -298,21 +313,36 @@ export function runBuildLocalCli(args: string[]) {
   runPnpmCommand('Build rolldown JS glue', ['--filter', 'rolldown', 'build-node'], {
     hint: 'If this fails with a missing rolldown native binding, rerun "pnpm install:dev". If the error mentions "cmake", install cmake to build rolldown from source.',
   });
-  runPnpmCommand('Build vite rolled-up types', ['-C', 'vite', '--filter', 'vite', 'build-types-roll'], {
-    hint: 'If this fails because vite dependencies are missing, rerun "pnpm install" from the repo root.',
-  });
-  runPnpmCommand('Type-check vite declarations', ['-C', 'vite', '--filter', 'vite', 'build-types-check'], {
-    hint: 'If this fails because vite dependencies are missing, rerun "pnpm install" from the repo root.',
-  });
+  runPnpmCommand(
+    'Build vite rolled-up types',
+    ['-C', 'vite', '--filter', 'vite', 'build-types-roll'],
+    {
+      hint: 'If this fails because vite dependencies are missing, rerun "pnpm install" from the repo root.',
+    },
+  );
+  runPnpmCommand(
+    'Type-check vite declarations',
+    ['-C', 'vite', '--filter', 'vite', 'build-types-check'],
+    {
+      hint: 'If this fails because vite dependencies are missing, rerun "pnpm install" from the repo root.',
+    },
+  );
   runPnpmCommand('Build vite-plus core', ['--filter', '@voidzero-dev/vite-plus-core', 'build']);
   runPnpmCommand('Build vite-plus test', ['--filter', '@voidzero-dev/vite-plus-test', 'build']);
-  runPnpmCommand('Build vite-plus prompts', ['--filter', '@voidzero-dev/vite-plus-prompts', 'build']);
+  runPnpmCommand('Build vite-plus prompts', [
+    '--filter',
+    '@voidzero-dev/vite-plus-prompts',
+    'build',
+  ]);
   runPnpmCommand('Build vite-plus CLI', ['--filter', 'vite-plus', 'build'], {
     env: releaseRust ? process.env : localBuildEnv,
   });
-  runCommand(
-    'Build Rust CLI binaries',
-    cargoBin,
-    ['build', '-p', 'vite_global_cli', '-p', 'vite_trampoline', ...(releaseRust ? ['--release'] : [])],
-  );
+  runCommand('Build Rust CLI binaries', cargoBin, [
+    'build',
+    '-p',
+    'vite_global_cli',
+    '-p',
+    'vite_trampoline',
+    ...(releaseRust ? ['--release'] : []),
+  ]);
 }
