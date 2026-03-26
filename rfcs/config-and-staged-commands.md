@@ -282,6 +282,48 @@ Husky <9.0.0 is not supported by auto migration — `vp migrate` detects unsuppo
 | **`vp config`**  | **Reinstall hook shims + agent setup** | **npm `prepare` lifecycle** |
 | **`vp staged`**  | **Run staged linters on staged files** | **Pre-commit hook**         |
 
+## `vp config` Hooks Setup Flow
+
+```
+vp config
+│
+├─ VITE_GIT_HOOKS=0 or HUSKY=0? ──→ Skip hooks (exit 0)
+│
+├─ Not inside a git repo? ──→ Skip hooks (exit 0)
+│
+├─ Should prompt user?
+│   Prompt ONLY when ALL of these are true:
+│   • Interactive terminal (not CI, not piped)
+│   • First run (hook shims don't exist yet)
+│   • No --hooks-dir flag
+│   • Not running from prepare lifecycle
+│   • No staged config in vite.config.ts          ← NEW (#1154)
+│
+│   YES → Prompt "Set up pre-commit hooks?"
+│          User declines → skip hooks
+│   NO  → Auto-install hooks
+│
+├─ core.hooksPath already set to a custom path?
+│   (not .vite-hooks/_, not .husky)
+│   └─ YES → Skip hooks, preserve custom config
+│
+├─ Set core.hooksPath → .vite-hooks/_
+├─ Create hook shims in .vite-hooks/_/
+├─ Ensure staged config in vite.config.ts
+└─ Ensure .vite-hooks/pre-commit contains "vp staged"
+```
+
+### When does the prompt appear?
+
+| Caller                                | Prompts? | Why                                              |
+| ------------------------------------- | -------- | ------------------------------------------------ |
+| `npm install` → prepare               | No       | prepare lifecycle = auto-install                 |
+| Manual, project has `staged` config   | No       | staged config = already opted in **(#1154 fix)** |
+| Manual, no `staged` config, first run | **Yes**  | No signal that project wants hooks               |
+| Manual, already ran before            | No       | Hook shims exist = not first run                 |
+| CI / non-interactive                  | No       | Non-interactive = auto-install                   |
+| `--hooks-dir` flag                    | No       | Explicit flag = intent to install                |
+
 ## Comparison with Other Tools
 
 | Tool                      | Approach                                   |
