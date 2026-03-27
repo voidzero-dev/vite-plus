@@ -3,12 +3,12 @@ VITE+ - The Unified Toolchain for the Web
 
 
 .nvmrc detected. Auto-migrating to .node-version...
+
+"node" in .nvmrc is not a specific version; automatically mapping to "lts/*"
 ◇ Migrated . to Vite+<repeat>
 • Node <semver>  pnpm <semver>
 • 2 config updates applied
 • Node version manager file migrated to .node-version
-→ Manual follow-up:
-  - "node" in .nvmrc is not a specific version; automatically mapping to "lts/*"
 
 > cat .node-version # check node alias is mapped to lts/*
 lts/*
