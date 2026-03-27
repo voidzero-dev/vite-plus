@@ -6,6 +6,7 @@
 use std::process::ExitStatus;
 
 use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
+use clap_complete::ArgValueCandidates;
 use vite_install::commands::{
     add::SaveDependencyType, install::InstallCommandOptions, outdated::Format,
 };
@@ -19,6 +20,14 @@ use crate::{
     error::Error,
     help,
 };
+
+fn run_tasks_completions() -> Vec<clap_complete::CompletionCandidate> {
+    vec![
+        clap_complete::CompletionCandidate::new("build"),
+        clap_complete::CompletionCandidate::new("dev"),
+        clap_complete::CompletionCandidate::new("test"),
+    ]
+}
 
 #[derive(Clone, Copy, Debug)]
 pub struct RenderOptions {
@@ -615,7 +624,7 @@ pub enum Commands {
     #[command(disable_help_flag = true)]
     Run {
         /// Additional arguments
-        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true, add = ArgValueCandidates::new(run_tasks_completions))]
         args: Vec<String>,
     },
 

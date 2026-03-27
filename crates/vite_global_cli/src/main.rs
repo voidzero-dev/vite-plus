@@ -22,12 +22,14 @@ use std::{
 };
 
 use clap::error::{ContextKind, ContextValue};
+use clap_complete::env::CompleteEnv;
 use owo_colors::OwoColorize;
 use vite_shared::output;
 
 pub use crate::cli::try_parse_args_from;
 use crate::cli::{
-    RenderOptions, run_command, run_command_with_options, try_parse_args_from_with_options,
+    RenderOptions, command_with_help, run_command, run_command_with_options,
+    try_parse_args_from_with_options,
 };
 
 /// Normalize CLI arguments:
@@ -226,6 +228,9 @@ fn print_unknown_argument_error(error: &clap::Error) -> bool {
 async fn main() -> ExitCode {
     // Initialize tracing
     vite_shared::init_tracing();
+
+    // Handle shell completion
+    CompleteEnv::with_factory(command_with_help).complete();
 
     // Check for shim mode (invoked as node, npm, or npx)
     let mut args: Vec<String> = std::env::args().collect();
