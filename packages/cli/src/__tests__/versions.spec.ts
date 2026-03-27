@@ -37,43 +37,46 @@ describe('versions export', () => {
   });
 
   describe('bundledVersions consistency', () => {
-    it('should contain all core bundledVersions', () => {
+    it('should contain all core bundledVersions', async () => {
       const corePkg = JSON.parse(fs.readFileSync(corePkgPath, 'utf-8'));
-      const content = fs.readFileSync(path.join(distDir, 'versions.js'), 'utf-8');
+      const mod = await import('../../dist/versions.js');
+      const versions = mod.versions as Record<string, string>;
       for (const [key, value] of Object.entries(
         corePkg.bundledVersions as Record<string, string>,
       )) {
-        expect(content).toContain(`${key}:`);
-        expect(content).toContain(`'${value}'`);
+        expect(versions[key], `versions.${key} should match core bundledVersions`).toBe(value);
       }
     });
 
-    it('should contain all test bundledVersions', () => {
+    it('should contain all test bundledVersions', async () => {
       const testPkg = JSON.parse(fs.readFileSync(testPkgPath, 'utf-8'));
-      const content = fs.readFileSync(path.join(distDir, 'versions.js'), 'utf-8');
+      const mod = await import('../../dist/versions.js');
+      const versions = mod.versions as Record<string, string>;
       for (const [key, value] of Object.entries(
         testPkg.bundledVersions as Record<string, string>,
       )) {
-        expect(content).toContain(`${key}:`);
-        expect(content).toContain(`'${value}'`);
+        expect(versions[key], `versions.${key} should match test bundledVersions`).toBe(value);
       }
     });
   });
 
   describe('dependency tool versions', () => {
-    it('should contain oxlint version', () => {
-      const content = fs.readFileSync(path.join(distDir, 'versions.js'), 'utf-8');
-      expect(content).toContain('oxlint:');
+    it('should contain oxlint version', async () => {
+      const mod = await import('../../dist/versions.js');
+      const versions = mod.versions as Record<string, string>;
+      expect(versions.oxlint).toBeTypeOf('string');
     });
 
-    it('should contain oxfmt version', () => {
-      const content = fs.readFileSync(path.join(distDir, 'versions.js'), 'utf-8');
-      expect(content).toContain('oxfmt:');
+    it('should contain oxfmt version', async () => {
+      const mod = await import('../../dist/versions.js');
+      const versions = mod.versions as Record<string, string>;
+      expect(versions.oxfmt).toBeTypeOf('string');
     });
 
-    it('should contain oxlint-tsgolint version', () => {
-      const content = fs.readFileSync(path.join(distDir, 'versions.js'), 'utf-8');
-      expect(content).toContain('oxlint-tsgolint');
+    it('should contain oxlint-tsgolint version', async () => {
+      const mod = await import('../../dist/versions.js');
+      const versions = mod.versions as Record<string, string>;
+      expect(versions['oxlint-tsgolint']).toBeTypeOf('string');
     });
   });
 
