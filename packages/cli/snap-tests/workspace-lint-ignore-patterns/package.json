@@ -1,0 +1,6 @@
+{
+  "name": "workspace-lint-ignore-patterns",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "pnpm@10.19.0"
+}
