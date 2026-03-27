@@ -18,7 +18,7 @@ _clean_dist:
 
 init: _clean_dist
   cargo binstall watchexec-cli cargo-insta typos-cli cargo-shear dprint taplo-cli -y
-  node packages/tools/src/index.ts sync-remote
+  node packages/tools/src/index.ts sync-remote --clone-only
   pnpm install
   pnpm -C docs install
 
@@ -31,7 +31,7 @@ build:
   pnpm --filter=@voidzero-dev/vite-plus-core build
   pnpm --filter=@voidzero-dev/vite-plus-test build
   pnpm --filter=@voidzero-dev/vite-plus-prompts build
-  pnpm --filter=vite-plus build
+  node packages/tools/src/with-curl-http1.ts pnpm --filter=vite-plus build
 
 ready:
   git diff --exit-code --quiet

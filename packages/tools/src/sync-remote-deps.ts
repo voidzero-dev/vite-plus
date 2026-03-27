@@ -63,6 +63,46 @@ function execCommand(command: string, cwd?: string): string {
   }
 }
 
+function normalizeGithubRepoUrl(repoUrl: string): string {
+  const httpsMatch = repoUrl.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?\/?$/);
+  if (httpsMatch) {
+    return `github:${httpsMatch[1]}/${httpsMatch[2]}`;
+  }
+
+  const sshMatch = repoUrl.match(/^git@github\.com:([^/]+)\/([^/]+?)(?:\.git)?$/);
+  if (sshMatch) {
+    return `github:${sshMatch[1]}/${sshMatch[2]}`;
+  }
+
+  return repoUrl;
+}
+
+function toGithubSshUrl(repoUrl: string): string {
+  const match = repoUrl.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?\/?$/);
+  if (!match) {
+    return repoUrl;
+  }
+
+  return `git@github.com:${match[1]}/${match[2]}.git`;
+}
+
+function resolveRepoUrl(repoUrl: string, cwd?: string): string {
+  if (!repoUrl.startsWith('https://github.com/')) {
+    return repoUrl;
+  }
+
+  try {
+    const originUrl = execCommand('git remote get-url origin', cwd);
+    if (originUrl.startsWith('git@github.com:')) {
+      return toGithubSshUrl(repoUrl);
+    }
+  } catch {
+    // Fall back to the configured upstream URL when git metadata is unavailable.
+  }
+
+  return repoUrl;
+}
+
 function cloneOrResetRepo(repoUrl: string, dir: string, branch: string = 'main', hash?: string) {
   log(`Processing ${dir}...`);
 
@@ -84,10 +124,12 @@ function cloneOrResetRepo(repoUrl: string, dir: string, branch: string = 'main',
 
       // Check remote URL
       const remoteUrl = execCommand('git remote get-url origin', dir);
-      if (remoteUrl !== repoUrl) {
-        log(`${dir} has wrong remote (${remoteUrl} vs ${repoUrl}), removing and re-cloning...`);
+      if (normalizeGithubRepoUrl(remoteUrl) !== normalizeGithubRepoUrl(resolveRepoUrl(repoUrl, dir))) {
+        log(
+          `${dir} has wrong remote (${remoteUrl} vs ${resolveRepoUrl(repoUrl, dir)}), removing and re-cloning...`,
+        );
         rmSync(dir, { recursive: true, force: true });
-        cloneRepo(repoUrl, dir, branch, hash);
+        cloneRepo(resolveRepoUrl(repoUrl, dir), dir, branch, hash);
         return;
       }
 
@@ -125,10 +167,10 @@ function cloneOrResetRepo(repoUrl: string, dir: string, branch: string = 'main',
         `Failed to reset ${dir} (${error instanceof Error ? error.message : String(error)}), removing and re-cloning...`,
       );
       rmSync(dir, { recursive: true, force: true });
-      cloneRepo(repoUrl, dir, branch, hash);
+      cloneRepo(resolveRepoUrl(repoUrl, dir), dir, branch, hash);
     }
   } else {
-    cloneRepo(repoUrl, dir, branch, hash);
+    cloneRepo(resolveRepoUrl(repoUrl, dir), dir, branch, hash);
   }
 }
 
@@ -624,6 +666,9 @@ export async function syncRemote() {
       clean: {
         type: 'boolean',
       },
+      'clone-only': {
+        type: 'boolean',
+      },
       'update-hashes': {
         type: 'boolean',
       },
@@ -670,6 +715,11 @@ export async function syncRemote() {
     upstreamVersions['vite'].branch,
     upstreamVersions['vite'].hash,
   );
+
+  if (values['clone-only']) {
+    log('Clone-only mode enabled, skipping workspace merge and dependency sync.');
+    return;
+  }
 
   // Dynamically import dependencies after git clone
   let parseYaml: typeof import('yaml').parse;
