@@ -293,17 +293,17 @@
     "@blazediff/core": "1.9.1",
     "@oxc-node/cli": "catalog:",
     "@oxc-node/core": "catalog:",
-    "@vitest/browser": "4.1.1",
-    "@vitest/browser-playwright": "4.1.1",
-    "@vitest/browser-preview": "4.1.1",
-    "@vitest/browser-webdriverio": "4.1.1",
-    "@vitest/expect": "4.1.1",
-    "@vitest/mocker": "4.1.1",
-    "@vitest/pretty-format": "4.1.1",
-    "@vitest/runner": "4.1.1",
-    "@vitest/snapshot": "4.1.1",
-    "@vitest/spy": "4.1.1",
-    "@vitest/utils": "4.1.1",
+    "@vitest/browser": "4.1.2",
+    "@vitest/browser-playwright": "4.1.2",
+    "@vitest/browser-preview": "4.1.2",
+    "@vitest/browser-webdriverio": "4.1.2",
+    "@vitest/expect": "4.1.2",
+    "@vitest/mocker": "4.1.2",
+    "@vitest/pretty-format": "4.1.2",
+    "@vitest/runner": "4.1.2",
+    "@vitest/snapshot": "4.1.2",
+    "@vitest/spy": "4.1.2",
+    "@vitest/utils": "4.1.2",
     "chai": "^6.2.1",
     "convert-source-map": "^2.0.0",
     "estree-walker": "^3.0.3",
@@ -315,15 +315,15 @@
     "picomatch": "^4.0.3",
     "rolldown": "workspace:*",
     "rolldown-plugin-dts": "catalog:",
-    "tinyrainbow": "^3.0.3",
-    "vitest-dev": "^4.1.1",
+    "tinyrainbow": "^3.1.0",
+    "vitest-dev": "^4.1.2",
     "why-is-node-running": "^2.3.0"
   },
   "peerDependencies": {
     "@edge-runtime/vm": "*",
     "@opentelemetry/api": "^1.9.0",
     "@types/node": "^20.0.0 || ^22.0.0 || >=24.0.0",
-    "@vitest/ui": "4.1.1",
+    "@vitest/ui": "4.1.2",
     "happy-dom": "*",
     "jsdom": "*",
     "vite": "^6.0.0 || ^7.0.0 || ^8.0.0"
@@ -355,6 +355,6 @@
     "node": "^20.0.0 || ^22.0.0 || >=24.0.0"
   },
   "bundledVersions": {
-    "vitest": "4.1.1"
+    "vitest": "4.1.2"
   }
 }
