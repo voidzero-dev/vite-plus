@@ -103,15 +103,36 @@ pub fn display_upgrade_notice(new_version: &str) {
 }
 
 /// Whether the upgrade check should run for the given command args.
-pub fn should_run_for_command(args: &crate::cli::Args) -> bool {
+/// Returns `false` for commands excluded by design (upgrade, implode, --version)
+/// and for any command invoked with `--silent` or `--json`.
+pub fn should_run_for_command(args: &crate::cli::Args, raw_args: &[String]) -> bool {
     if args.version {
         return false;
     }
 
-    !matches!(
+    if matches!(
         &args.command,
-        Some(crate::cli::Commands::Upgrade { .. } | crate::cli::Commands::Implode { .. })
-    )
+        Some(
+            crate::cli::Commands::Upgrade { .. }
+                | crate::cli::Commands::Implode { .. }
+                | crate::cli::Commands::Lint { .. }
+                | crate::cli::Commands::Fmt { .. }
+        )
+    ) {
+        return false;
+    }
+
+    // Suppress for --silent and --json flags (before -- terminator)
+    for arg in raw_args {
+        if arg == "--" {
+            break;
+        }
+        if arg == "--silent" || arg == "--json" {
+            return false;
+        }
+    }
+
+    true
 }
 
 #[cfg(test)]
@@ -211,5 +232,45 @@ mod tests {
             }
             assert!(!should_check(None, now_secs()));
         });
+    }
+
+    fn parse_args(args: &[&str]) -> crate::cli::Args {
+        let full: Vec<String> =
+            std::iter::once("vp").chain(args.iter().copied()).map(String::from).collect();
+        crate::try_parse_args_from(full).unwrap()
+    }
+
+    fn raw_args(args: &[&str]) -> Vec<String> {
+        args.iter().map(|s| String::from(*s)).collect()
+    }
+
+    #[test]
+    fn should_run_for_normal_command() {
+        let args = parse_args(&["build"]);
+        assert!(should_run_for_command(&args, &raw_args(&["build"])));
+    }
+
+    #[test]
+    fn should_not_run_for_upgrade() {
+        let args = parse_args(&["upgrade"]);
+        assert!(!should_run_for_command(&args, &raw_args(&["upgrade"])));
+    }
+
+    #[test]
+    fn should_not_run_for_silent_flag() {
+        let args = parse_args(&["install", "--silent"]);
+        assert!(!should_run_for_command(&args, &raw_args(&["install", "--silent"])));
+    }
+
+    #[test]
+    fn should_not_run_for_json_flag() {
+        let args = parse_args(&["why", "lodash", "--json"]);
+        assert!(!should_run_for_command(&args, &raw_args(&["why", "lodash", "--json"])));
+    }
+
+    #[test]
+    fn should_run_when_json_after_terminator() {
+        let args = parse_args(&["build"]);
+        assert!(should_run_for_command(&args, &raw_args(&["build", "--", "--json"])));
     }
 }

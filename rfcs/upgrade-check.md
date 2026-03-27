@@ -194,7 +194,9 @@ The background check runs on **all** commands except:
 
 - `vp upgrade` (already handles version checking)
 - `vp implode` (removing the tool)
+- `vp lint` / `vp fmt` (too fast to benefit from a background check)
 - `vp --version` / `vp -V` (version display, keep it fast)
+- Any command with `--silent` or `--json` (quiet/machine-readable output)
 - Shim invocations (`node`, `npm`, `npx` via vp)
 
 This keeps the check broadly useful without interfering with special commands.
