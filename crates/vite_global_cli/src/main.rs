@@ -284,7 +284,7 @@ async fn main() -> ExitCode {
     let parse_result = try_parse_args_from(normalized_args);
 
     // Spawn background upgrade check for eligible commands
-    let update_handle = match &parse_result {
+    let upgrade_handle = match &parse_result {
         Ok(args) if upgrade_check::should_run_for_command(args, &tip_context.raw_args) => {
             Some(tokio::spawn(upgrade_check::check_for_update()))
         }
@@ -367,7 +367,7 @@ async fn main() -> ExitCode {
     };
 
     // Display upgrade notice if a newer version is available
-    if let Some(handle) = update_handle
+    if let Some(handle) = upgrade_handle
         && let Ok(Ok(Some(result))) =
             tokio::time::timeout(std::time::Duration::from_millis(500), handle).await
     {

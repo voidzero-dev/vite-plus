@@ -18,7 +18,7 @@ const PROMPT_INTERVAL_SECS: u64 = 24 * 60 * 60;
 const CACHE_FILE_NAME: &str = ".upgrade-check.json";
 
 #[expect(clippy::disallowed_types)] // String required for serde JSON round-trip
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct UpgradeCheckCache {
     latest: String,
     checked_at: u64,
@@ -73,11 +73,9 @@ async fn resolve_latest_version() -> Option<String> {
     Some(meta.version)
 }
 
-/// Result of the upgrade check: the new version to display, plus the install
-/// dir needed to update `prompted_at` after display.
 pub struct UpgradeCheckResult {
-    pub new_version: String,
     install_dir: vite_path::AbsolutePathBuf,
+    cache: UpgradeCheckCache,
 }
 
 /// Returns an upgrade check result if a newer version is available and the user
@@ -90,10 +88,9 @@ pub async fn check_for_update() -> Option<UpgradeCheckResult> {
     let mut cache = read_cache(&install_dir);
 
     if should_check(cache.as_ref(), now) {
-        // Query registry and update cache
         let latest = resolve_latest_version().await?;
         let prompted_at = cache.as_ref().map_or(0, |c| c.prompted_at);
-        let new_cache = UpgradeCheckCache { latest: latest.clone(), checked_at: now, prompted_at };
+        let new_cache = UpgradeCheckCache { latest, checked_at: now, prompted_at };
         write_cache(&install_dir, &new_cache);
         cache = Some(new_cache);
     }
@@ -108,7 +105,7 @@ pub async fn check_for_update() -> Option<UpgradeCheckResult> {
         return None;
     }
 
-    Some(UpgradeCheckResult { new_version: cache.latest, install_dir })
+    Some(UpgradeCheckResult { install_dir, cache })
 }
 
 /// Print a one-line upgrade notice to stderr and record the prompt time.
@@ -120,15 +117,13 @@ pub fn display_upgrade_notice(result: &UpgradeCheckResult) {
         "vp update available:".bright_black(),
         current_version.bright_black(),
         "\u{2192}".bright_black(),
-        result.new_version.green().bold(),
+        result.cache.latest.bright_green().bold(),
         "`vp upgrade`".bright_black().bold(),
     );
 
-    // Record that we prompted, so we don't nag again for 24h
-    if let Some(mut cache) = read_cache(&result.install_dir) {
-        cache.prompted_at = now_secs();
-        write_cache(&result.install_dir, &cache);
-    }
+    let mut cache = result.cache.clone();
+    cache.prompted_at = now_secs();
+    write_cache(&result.install_dir, &cache);
 }
 
 /// Whether the upgrade check should run for the given command args.
@@ -155,7 +150,6 @@ pub fn should_run_for_command(args: &crate::cli::Args, raw_args: &[String]) -> b
         return false;
     }
 
-    // Suppress for --silent and --json flags (before -- terminator)
     for arg in raw_args {
         if arg == "--" {
             break;
