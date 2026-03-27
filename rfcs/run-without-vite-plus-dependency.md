@@ -46,7 +46,7 @@ $ vp run dev
 # Executes: pnpm run dev (or npm/yarn depending on project)
 
 # With vite-plus as a dependency, uses full task runner
-$ vp run build -r
+$ vp run -r build
 # Executes via vite-plus task runner with recursive + topological ordering
 ```
 
@@ -80,7 +80,7 @@ When falling back to PM run, all arguments are passed through as-is:
 | ------------------------ | -------------------------- | ------------------------ |
 | `vp run dev`             | `pnpm run dev`             | Basic script execution   |
 | `vp run dev --port 3000` | `pnpm run dev --port 3000` | Args passed through      |
-| `vp run build -r`        | `pnpm run build -r`        | PM ignores unknown flags |
+| `vp run -r build`        | `pnpm run -r build`        | PM ignores unknown flags |
 | `vp run app#build`       | `pnpm run app#build`       | PM treats as script name |
 
 vite-plus specific flags (`-r`, `--recursive`, `--topological`, `package#task` syntax) are only meaningful when vite-plus is installed. When falling back, these are passed verbatim to the PM which will naturally error with "Missing script" -- this is correct behavior since these features require vite-plus.
@@ -346,7 +346,7 @@ $ vp run dev
 
 ```bash
 # package.json has vite-plus in devDependencies
-$ vp run build -r
+$ vp run -r build
 # Delegates to local vite-plus CLI
 # Uses task runner with recursive + topological ordering
   my-lib  build  done in 1.2s

@@ -13,9 +13,9 @@ vp test                            # Run Vitest (dedicated command)
 vp lint                            # Run oxlint (dedicated command)
 
 # Run tasks across packages (explicit mode)
-vp run build -r                    # recursive with topological ordering
+vp run -r build                    # recursive with topological ordering
 vp run app#build web#build         # specific packages
-vp run build -r --no-topological   # recursive without implicit deps
+vp run -r --no-topological build   # recursive without implicit deps
 
 # Run task in current package (implicit mode - for non-built-in tasks)
 vp run dev                         # runs dev script from package.json

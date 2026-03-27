@@ -13,13 +13,13 @@ vp run ready
 - Run the tests:
 
 ```bash
-vp run test -r
+vp run -r test
 ```
 
 - Build the monorepo:
 
 ```bash
-vp run build -r
+vp run -r build
 ```
 
 - Run the development server:
