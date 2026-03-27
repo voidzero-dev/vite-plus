@@ -1,7 +1,7 @@
 {
   "commands": [
-    "vp migrate --no-interactive # 'node' alias cannot be auto-migrated, should warn",
-    "test ! -f .node-version # check .node-version is NOT created",
-    "test -f .nvmrc # check .nvmrc is preserved"
+    "vp migrate --no-interactive # 'node' alias should be mapped to lts/* with an info message",
+    "cat .node-version # check node alias is mapped to lts/*",
+    "test ! -f .nvmrc # check .nvmrc is removed"
   ]
 }
