@@ -75,6 +75,10 @@
       "types": "./dist/pack.d.ts",
       "import": "./dist/pack.js"
     },
+    "./versions": {
+      "types": "./dist/versions.d.ts",
+      "default": "./dist/versions.js"
+    },
     "./test": {
       "import": {
         "types": "./dist/test/index.d.ts",
