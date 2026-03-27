@@ -570,7 +570,7 @@ When a Prettier configuration file (`.prettierrc*`, `prettier.config.*`, or `"pr
 4. Remove `prettier` and `prettier-plugin-*` from `devDependencies`/`dependencies`
 5. Rewrite `prettier` scripts in `package.json` to `vp fmt`, stripping Prettier-only flags
 6. Rewrite `prettier` references in lint-staged configs
-7. Warn about `.prettierignore` if present (Oxfmt uses `.oxfmtignore`)
+7. Warn about `.prettierignore` if present (Oxfmt supports it, but `ignorePatterns` is recommended)
 8. The existing migration flow picks up `.oxfmtrc.json` and merges it into `vite.config.ts`
 
 **Script Rewriting** (powered by [brush-parser](https://github.com/reubeno/brush) for shell AST parsing):

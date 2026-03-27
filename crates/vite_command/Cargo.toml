@@ -9,6 +9,7 @@ rust-version.workspace = true
 [dependencies]
 fspy = { workspace = true }
 tokio = { workspace = true }
+tokio-util = { workspace = true }
 tracing = { workspace = true }
 vite_error = { workspace = true }
 vite_path = { workspace = true }
