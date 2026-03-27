@@ -432,6 +432,14 @@ async function syncTestPackageExports() {
 /**
  * Read version from a dependency's package.json in node_modules.
  * Uses readFile because these packages don't export ./package.json.
+ *
+ * TODO: Once https://github.com/oxc-project/oxc/pull/20784 lands and oxlint/oxfmt/oxlint-tsgolint
+ * export ./package.json, this function can be removed and replaced with static imports:
+ * ```js
+ * import oxlintPkg from 'oxlint/package.json' with { type: 'json' };
+ * import oxfmtPkg from 'oxfmt/package.json' with { type: 'json' };
+ * import oxlintTsgolintPkg from 'oxlint-tsgolint/package.json' with { type: 'json' };
+ * ```
  */
 async function readDepVersion(packageName: string): Promise<string | null> {
   try {
