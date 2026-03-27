@@ -17,6 +17,13 @@ You can upgrade both of them independently.
 vp upgrade
 ```
 
+If you installed `vite-plus` globally with npm or pnpm instead of the install script, update it with the same package manager:
+
+```bash
+npm install -g vite-plus@latest
+pnpm add -g vite-plus@latest
+```
+
 ## Local `vite-plus`
 
 Update the project dependency with the package manager commands in Vite+:
