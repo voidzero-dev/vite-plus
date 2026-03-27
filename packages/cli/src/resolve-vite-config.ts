@@ -86,12 +86,12 @@ export async function resolveViteConfig(cwd: string, options?: ResolveViteConfig
     if (workspaceRoot) {
       const configFile = findViteConfigUp(path.dirname(cwd), workspaceRoot);
       if (configFile) {
-        return resolveConfig({ root: cwd, configFile }, 'build');
+        return resolveConfig({ root: cwd, configFile, configLoader: 'runner' }, 'build');
       }
     }
   }
 
-  return resolveConfig({ root: cwd }, 'build');
+  return resolveConfig({ root: cwd, configLoader: 'runner' }, 'build');
 }
 
 export async function resolveUniversalViteConfig(err: null | Error, viteConfigCwd: string) {

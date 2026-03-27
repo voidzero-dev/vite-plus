@@ -6,14 +6,26 @@
 use std::process::ExitStatus;
 
 use tokio::process::Command;
+use vite_install::package_manager::{
+    PackageManagerType, download_package_manager, get_package_manager_type_and_version,
+};
 use vite_js_runtime::{
     JsRuntime, JsRuntimeType, download_runtime, download_runtime_for_project, is_valid_version,
     read_package_json, resolve_node_version,
 };
 use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_shared::{PrependOptions, PrependResult, env_vars, format_path_with_prepend};
+use vite_workspace::find_workspace_root;
 
 use crate::{commands::env::config, error::Error};
+
+const DELEGATE_BOOTSTRAP_FILE: &str = "delegate-bootstrap.js";
+
+#[derive(Clone, Debug)]
+struct YarnPnpProject {
+    version: String,
+    hash: Option<String>,
+}
 
 /// JavaScript executor using managed Node.js runtime.
 ///
@@ -108,6 +120,29 @@ impl JsExecutor {
         cmd
     }
 
+    /// Create a `yarn node` command so Yarn can inject its PnP hooks.
+    fn create_yarn_node_command(
+        yarn_binary: &AbsolutePath,
+        runtime_bin_prefix: &AbsolutePath,
+    ) -> Command {
+        let mut cmd = Command::new(yarn_binary.as_path());
+        if let Ok(bin_path) = Self::get_bin_path() {
+            tracing::debug!("Set VITE_PLUS_CLI_BIN to {:?}", bin_path);
+            cmd.env(env_vars::VITE_PLUS_CLI_BIN, bin_path.as_path());
+        }
+
+        let options = PrependOptions { dedupe_anywhere: true };
+        if let PrependResult::Prepended(new_path) =
+            format_path_with_prepend(runtime_bin_prefix.as_path(), options)
+        {
+            tracing::debug!("Set PATH to {:?}", new_path);
+            cmd.env("PATH", new_path);
+        }
+
+        cmd.arg("node");
+        cmd
+    }
+
     /// Get the CLI's package.json directory (parent of `scripts_dir`).
     ///
     /// This is used for resolving the CLI's default Node.js version
@@ -199,9 +234,9 @@ impl JsExecutor {
 
     /// Delegate to local or global vite-plus CLI.
     ///
-    /// Uses `oxc_resolver` to find the project's local vite-plus installation.
-    /// If found, runs the local `dist/bin.js` directly. Otherwise, falls back
-    /// to the global installation's `dist/bin.js`.
+    /// Executes a small bootstrap entrypoint from the global installation.
+    /// The bootstrap resolves the project's local `vite-plus` from the project
+    /// context and falls back to the global `dist/bin.js` when needed.
     ///
     /// Uses the project's runtime resolved via `config::resolve_version()`.
     /// For side-effect-free commands like `--version`, use [`delegate_with_cli_runtime`] instead.
@@ -218,7 +253,7 @@ impl JsExecutor {
         let runtime = self.ensure_project_runtime(project_path).await?;
         let node_binary = runtime.get_binary_path();
         let bin_prefix = runtime.get_bin_prefix();
-        self.run_js_entry(project_path, &node_binary, &bin_prefix, args).await
+        self.run_local_js_entry(project_path, &node_binary, &bin_prefix, args).await
     }
 
     /// Delegate to the global vite-plus CLI entrypoint directly.
@@ -233,14 +268,7 @@ impl JsExecutor {
         let runtime = self.ensure_cli_runtime().await?;
         let node_binary = runtime.get_binary_path();
         let bin_prefix = runtime.get_bin_prefix();
-        let scripts_dir = self.get_scripts_dir()?;
-        let entry_point = scripts_dir.join("bin.js");
-
-        let mut cmd = Self::create_js_command(&node_binary, &bin_prefix);
-        cmd.arg(entry_point.as_path()).args(args).current_dir(project_path.as_path());
-
-        let status = cmd.status().await?;
-        Ok(status)
+        self.run_global_js_entry(project_path, &node_binary, &bin_prefix, args).await
     }
 
     /// Delegate to local or global vite-plus CLI using the CLI's own runtime.
@@ -260,58 +288,109 @@ impl JsExecutor {
         let runtime = self.ensure_cli_runtime().await?;
         let node_binary = runtime.get_binary_path();
         let bin_prefix = runtime.get_bin_prefix();
-        self.run_js_entry(project_path, &node_binary, &bin_prefix, args).await
+        self.run_local_js_entry(project_path, &node_binary, &bin_prefix, args).await
     }
 
-    /// Run a JS entry point with the given runtime, resolving local vite-plus first.
-    async fn run_js_entry(
+    async fn run_local_js_entry(
         &self,
         project_path: &AbsolutePath,
         node_binary: &AbsolutePath,
         bin_prefix: &AbsolutePath,
         args: &[String],
     ) -> Result<ExitStatus, Error> {
-        // Try to resolve vite-plus from the project directory using oxc_resolver
-        let entry_point = match Self::resolve_local_vite_plus(project_path) {
-            Some(path) => path,
-            None => {
-                // Fall back to the global installation's bin.js
-                let scripts_dir = self.get_scripts_dir()?;
-                scripts_dir.join("bin.js")
+        let scripts_dir = self.get_scripts_dir()?;
+        let bootstrap_entry = scripts_dir.join(DELEGATE_BOOTSTRAP_FILE);
+        let global_entry = scripts_dir.join("bin.js");
+
+        tracing::debug!("Delegating to CLI via bootstrap {:?} {:?}", bootstrap_entry, args);
+
+        let mut cmd = match self.resolve_yarn_pnp_bin(project_path).await? {
+            Some(yarn_binary) => {
+                tracing::debug!("Using yarn node launcher for PnP project");
+                Self::create_yarn_node_command(&yarn_binary, bin_prefix)
             }
+            None => Self::create_js_command(node_binary, bin_prefix),
         };
+        cmd.arg(bootstrap_entry.as_path())
+            .arg(global_entry.as_path())
+            .args(args)
+            .current_dir(project_path.as_path());
 
-        tracing::debug!("Delegating to CLI via JS entry point: {:?} {:?}", entry_point, args);
+        Ok(cmd.status().await?)
+    }
 
-        let mut cmd = Self::create_js_command(node_binary, bin_prefix);
+    async fn run_global_js_entry(
+        &self,
+        project_path: &AbsolutePath,
+        node_binary: &AbsolutePath,
+        bin_prefix: &AbsolutePath,
+        args: &[String],
+    ) -> Result<ExitStatus, Error> {
+        let scripts_dir = self.get_scripts_dir()?;
+        let entry_point = scripts_dir.join("bin.js");
+
+        tracing::debug!(
+            "Delegating to global CLI via JS entry point: {:?} {:?}",
+            entry_point,
+            args
+        );
+
+        let mut cmd = match self.resolve_yarn_pnp_bin(project_path).await? {
+            Some(yarn_binary) => {
+                tracing::debug!("Using yarn node launcher for PnP project");
+                Self::create_yarn_node_command(&yarn_binary, bin_prefix)
+            }
+            None => Self::create_js_command(node_binary, bin_prefix),
+        };
         cmd.arg(entry_point.as_path()).args(args).current_dir(project_path.as_path());
 
-        let status = cmd.status().await?;
-        Ok(status)
+        Ok(cmd.status().await?)
     }
 
-    /// Resolve the local vite-plus package's `dist/bin.js` from the project directory.
-    fn resolve_local_vite_plus(project_path: &AbsolutePath) -> Option<AbsolutePathBuf> {
-        use oxc_resolver::{ResolveOptions, Resolver};
+    async fn resolve_yarn_pnp_bin(
+        &self,
+        project_path: &AbsolutePath,
+    ) -> Result<Option<AbsolutePathBuf>, Error> {
+        let Some(project) = detect_yarn_pnp_project(project_path)? else {
+            return Ok(None);
+        };
 
-        let resolver = Resolver::new(ResolveOptions {
-            condition_names: vec!["import".into(), "node".into()],
-            ..ResolveOptions::default()
-        });
-
-        // Resolve vite-plus/package.json from the project directory to find the package root
-        let resolved = resolver.resolve(project_path, "vite-plus/package.json").ok()?;
-        let pkg_dir = resolved.path().parent()?;
-        let bin_js = pkg_dir.join("dist").join("bin.js");
-
-        if bin_js.exists() {
-            tracing::debug!("Found local vite-plus at {:?}", bin_js);
-            AbsolutePathBuf::new(bin_js)
+        let (install_dir, _, _) = download_package_manager(
+            PackageManagerType::Yarn,
+            &project.version,
+            project.hash.as_deref(),
+        )
+        .await?;
+        let yarn_bin = if cfg!(windows) {
+            install_dir.join("bin").join("yarn.cmd")
         } else {
-            tracing::debug!("Local vite-plus found but dist/bin.js missing at {:?}", bin_js);
-            None
-        }
+            install_dir.join("bin").join("yarn")
+        };
+        Ok(Some(yarn_bin))
     }
+}
+
+fn detect_yarn_pnp_project(project_path: &AbsolutePath) -> Result<Option<YarnPnpProject>, Error> {
+    let (workspace_root, _) = match find_workspace_root(project_path) {
+        Ok(result) => result,
+        Err(vite_workspace::Error::PackageJsonNotFound(_)) => return Ok(None),
+        Err(err) => return Err(err.into()),
+    };
+
+    let (package_manager_type, version, hash) =
+        get_package_manager_type_and_version(&workspace_root, None)?;
+    if package_manager_type != PackageManagerType::Yarn {
+        return Ok(None);
+    }
+
+    if !workspace_root.path.join(".pnp.cjs").as_path().exists() {
+        return Ok(None);
+    }
+
+    Ok(Some(YarnPnpProject {
+        version: version.to_string(),
+        hash: hash.map(|value| value.to_string()),
+    }))
 }
 
 /// Check whether a project directory has at least one valid version source.
@@ -358,7 +437,10 @@ async fn has_valid_version_source(
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+
     use serial_test::serial;
+    use tempfile::TempDir;
 
     use super::*;
 
@@ -411,8 +493,6 @@ mod tests {
     async fn test_delegate_to_local_cli_prints_node_version() {
         use std::io::Write;
 
-        use tempfile::TempDir;
-
         // Create a temporary directory for the scripts (used as fallback global dir)
         let temp_dir = TempDir::new().unwrap();
         let scripts_dir = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
@@ -421,6 +501,13 @@ mod tests {
         let script_path = temp_dir.path().join("bin.js");
         let mut file = std::fs::File::create(&script_path).unwrap();
         writeln!(file, "console.log(process.version);").unwrap();
+        let bootstrap_path = temp_dir.path().join(DELEGATE_BOOTSTRAP_FILE);
+        let mut bootstrap_file = std::fs::File::create(&bootstrap_path).unwrap();
+        writeln!(
+            bootstrap_file,
+            "import {{ pathToFileURL }} from 'node:url'; await import(pathToFileURL(process.argv[2]).href);"
+        )
+        .unwrap();
 
         // Create executor with the temp scripts directory as global fallback
         let mut executor = JsExecutor::new(Some(scripts_dir.clone()));
@@ -429,5 +516,49 @@ mod tests {
         let status = executor.delegate_to_local_cli(&scripts_dir, &[]).await.unwrap();
 
         assert!(status.success(), "Script should execute successfully");
+    }
+
+    #[test]
+    fn test_detect_yarn_pnp_project_when_pnp_file_exists() {
+        let temp_dir = TempDir::new().unwrap();
+        let project_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        fs::write(
+            project_path.join("package.json"),
+            r#"{"name":"test-project","packageManager":"yarn@4.13.0"}"#,
+        )
+        .unwrap();
+        fs::write(project_path.join(".pnp.cjs"), "").unwrap();
+
+        let project = detect_yarn_pnp_project(&project_path).unwrap();
+        assert!(project.is_some(), "Expected Yarn PnP project to be detected");
+    }
+
+    #[test]
+    fn test_detect_yarn_pnp_project_ignores_yarn_without_pnp_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let project_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        fs::write(
+            project_path.join("package.json"),
+            r#"{"name":"test-project","packageManager":"yarn@4.13.0"}"#,
+        )
+        .unwrap();
+
+        let project = detect_yarn_pnp_project(&project_path).unwrap();
+        assert!(project.is_none(), "Expected Yarn project without .pnp.cjs to be ignored");
+    }
+
+    #[test]
+    fn test_detect_yarn_pnp_project_ignores_non_yarn_projects() {
+        let temp_dir = TempDir::new().unwrap();
+        let project_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        fs::write(
+            project_path.join("package.json"),
+            r#"{"name":"test-project","packageManager":"pnpm@10.19.0"}"#,
+        )
+        .unwrap();
+        fs::write(project_path.join(".pnp.cjs"), "").unwrap();
+
+        let project = detect_yarn_pnp_project(&project_path).unwrap();
+        assert!(project.is_none(), "Expected non-Yarn project to be ignored");
     }
 }

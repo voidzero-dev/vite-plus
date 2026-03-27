@@ -1,0 +1,17 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "commands": [
+    {
+      "command": "vp create vite:monorepo --no-interactive --verbose --directory synth-tools > create.log 2>&1 # create yarn pnp monorepo from yarn project context",
+      "ignoreOutput": true
+    },
+    "! rg -n \"Format failed|ERR_MODULE_NOT_FOUND|Could not resolve 'vite-plus'\" create.log && echo 'create output clean' # create should not hit the old vite-plus resolution failure",
+    "test -f synth-tools/.pnp.cjs && echo '.pnp.cjs created' # yarn pnp install should create loader",
+    {
+      "command": "cd synth-tools && vp fmt --check # fmt should succeed in yarn pnp monorepo",
+      "ignoreOutput": true
+    },
+    "node -e \"const fs = require('node:fs'); const pkg = JSON.parse(fs.readFileSync('synth-tools/package.json', 'utf8')); console.log(JSON.stringify({ name: pkg.name, packageManager: pkg.packageManager, workspaces: pkg.workspaces, scripts: pkg.scripts, devDependencies: pkg.devDependencies, resolutions: pkg.resolutions }, null, 2))\" # check yarn workspace package metadata",
+    "cat synth-tools/.yarnrc.yml # check yarn config preserved"
+  ]
+}
