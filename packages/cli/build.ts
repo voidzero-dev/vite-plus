@@ -21,7 +21,7 @@
 import { execSync } from 'node:child_process';
 import { existsSync, globSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { copyFile, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
@@ -391,6 +391,11 @@ async function syncTestPackageExports() {
   const testPkgPath = join(projectDir, '../test/package.json');
   const cliPkgPath = join(projectDir, 'package.json');
   const testDistDir = join(projectDir, 'dist/test');
+  // Proxy files for TypeScript compilerOptions.types resolution.
+  // TypeScript resolves "vite-plus/test/globals" via the filesystem directly
+  // (without consulting package.json exports), so we need actual files at
+  // test/globals.d.ts that TypeScript can find for type-only exports.
+  const testTypesDir = join(projectDir, 'test');
 
   // Read test package.json
   const testPkg = JSON.parse(await readFile(testPkgPath, 'utf-8'));
@@ -399,6 +404,8 @@ async function syncTestPackageExports() {
   // Clean up previous build
   await rm(testDistDir, { recursive: true, force: true });
   await mkdir(testDistDir, { recursive: true });
+  await rm(testTypesDir, { recursive: true, force: true });
+  await mkdir(testTypesDir, { recursive: true });
 
   const generatedExports: Record<string, unknown> = {};
 
@@ -416,6 +423,24 @@ async function syncTestPackageExports() {
     if (shimExport) {
       generatedExports[cliExportPath] = shimExport;
       console.log(`  Created ${cliExportPath}`);
+
+      // For type-only exports, also create a proxy file at test/{name}.d.ts so
+      // TypeScript can resolve "vite-plus/test/globals" via compilerOptions.types.
+      // compilerOptions.types uses filesystem resolution (not exports field), so
+      // it looks for node_modules/vite-plus/test/globals.d.ts directly.
+      if (isTypeOnlyExport(shimExport)) {
+        const testImportSpecifier =
+          exportPath === '.' ? TEST_PACKAGE_NAME : `${TEST_PACKAGE_NAME}${exportPath.slice(1)}`;
+        const shimBaseName = exportPath === '.' ? 'index' : exportPath.slice(2);
+        const proxyRelDir = dirname(shimBaseName);
+        const proxyDir = proxyRelDir === '.' ? testTypesDir : join(testTypesDir, proxyRelDir);
+        await mkdir(proxyDir, { recursive: true });
+        const baseFileName = basename(shimBaseName);
+        await writeFile(
+          join(proxyDir, `${baseFileName}.d.ts`),
+          `/// <reference types="${testImportSpecifier}" />\n`,
+        );
+      }
     }
   }
 
@@ -423,6 +448,14 @@ async function syncTestPackageExports() {
   await updateCliPackageJson(cliPkgPath, generatedExports);
 
   console.log(`\nSynced ${Object.keys(generatedExports).length} exports from test package`);
+}
+
+function isTypeOnlyExport(exportValue: ExportValue): boolean {
+  if (typeof exportValue === 'string') {
+    return false;
+  }
+  const keys = Object.keys(exportValue);
+  return keys.length === 1 && keys[0] === 'types';
 }
 
 /**
@@ -713,9 +746,12 @@ async function updateCliPackageJson(pkgPath: string, generatedExports: Record<st
     ...generatedExports,
   };
 
-  // Ensure dist/test is included in files
+  // Ensure dist/test and test are included in files
   if (!pkg.files.includes('dist/test')) {
     pkg.files.push('dist/test');
+  }
+  if (!pkg.files.includes('test')) {
+    pkg.files.push('test');
   }
 
   const { code, errors } = await format(pkgPath, JSON.stringify(pkg, null, 2) + '\n', {
