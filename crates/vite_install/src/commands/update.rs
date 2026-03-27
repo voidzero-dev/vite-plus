@@ -179,6 +179,30 @@ impl PackageManager {
                     output::warn("npm doesn't support interactive mode. Running standard update.");
                 }
             }
+            PackageManagerType::Bun => {
+                bin_name = "bun".into();
+                args.push("update".into());
+
+                if options.latest {
+                    args.push("--latest".into());
+                }
+                if options.interactive {
+                    args.push("--interactive".into());
+                }
+                if options.prod {
+                    args.push("--production".into());
+                }
+                if options.no_optional {
+                    args.push("--omit".into());
+                    args.push("optional".into());
+                }
+                if options.no_save {
+                    args.push("--no-save".into());
+                }
+                if options.recursive {
+                    args.push("--recursive".into());
+                }
+            }
         }
 
         if let Some(pass_through_args) = options.pass_through_args {
@@ -592,5 +616,58 @@ mod tests {
             ]
         );
         assert_eq!(result.bin_path, "yarn");
+    }
+
+    #[test]
+    fn test_bun_basic_update() {
+        let pm = create_mock_package_manager(PackageManagerType::Bun, "1.3.11");
+        let result = pm.resolve_update_command(&UpdateCommandOptions::default());
+        assert_eq!(result.bin_path, "bun");
+        assert_eq!(result.args, vec!["update"]);
+    }
+
+    #[test]
+    fn test_bun_update_latest() {
+        let pm = create_mock_package_manager(PackageManagerType::Bun, "1.3.11");
+        let result =
+            pm.resolve_update_command(&UpdateCommandOptions { latest: true, ..Default::default() });
+        assert!(result.args.contains(&"--latest".to_string()));
+    }
+
+    #[test]
+    fn test_bun_update_prod() {
+        let pm = create_mock_package_manager(PackageManagerType::Bun, "1.3.11");
+        let result =
+            pm.resolve_update_command(&UpdateCommandOptions { prod: true, ..Default::default() });
+        assert!(result.args.contains(&"--production".to_string()));
+    }
+
+    #[test]
+    fn test_bun_update_no_optional() {
+        let pm = create_mock_package_manager(PackageManagerType::Bun, "1.3.11");
+        let result = pm.resolve_update_command(&UpdateCommandOptions {
+            no_optional: true,
+            ..Default::default()
+        });
+        assert!(result.args.contains(&"--omit".to_string()));
+        assert!(result.args.contains(&"optional".to_string()));
+    }
+
+    #[test]
+    fn test_bun_update_no_save() {
+        let pm = create_mock_package_manager(PackageManagerType::Bun, "1.3.11");
+        let result = pm
+            .resolve_update_command(&UpdateCommandOptions { no_save: true, ..Default::default() });
+        assert!(result.args.contains(&"--no-save".to_string()));
+    }
+
+    #[test]
+    fn test_bun_update_recursive() {
+        let pm = create_mock_package_manager(PackageManagerType::Bun, "1.3.11");
+        let result = pm.resolve_update_command(&UpdateCommandOptions {
+            recursive: true,
+            ..Default::default()
+        });
+        assert!(result.args.contains(&"--recursive".to_string()));
     }
 }

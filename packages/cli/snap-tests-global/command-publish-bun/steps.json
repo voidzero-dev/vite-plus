@@ -1,0 +1,6 @@
+{
+  "commands": [
+    "vp pm publish --help # should show help",
+    "#vp pm publish --dry-run # should preview publish without actually publishing (not working on CI, skip for now)"
+  ]
+}

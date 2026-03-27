@@ -1,0 +1,5 @@
+{
+  "name": "command-remove-bun",
+  "version": "1.0.0",
+  "packageManager": "bun@1.3.11"
+}

@@ -89,7 +89,7 @@ export async function executeMonorepoTemplate(
       fs.unlinkSync(pnpmWorkspacePath);
     }
   } else {
-    // npm
+    // npm or bun: both use package.json workspaces field
     // remove pnpm field
     editJsonFile(path.join(fullPath, 'package.json'), (pkg) => {
       pkg.pnpm = undefined;

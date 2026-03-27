@@ -28,7 +28,11 @@ import { editJsonFile, isJsonFile, readJsonFile } from '../utils/json.js';
 import { detectPackageMetadata } from '../utils/package.js';
 import { displayRelative, rulesDir } from '../utils/path.js';
 import { getSpinner } from '../utils/prompts.js';
-import { hasBaseUrlInTsconfig } from '../utils/tsconfig.js';
+import {
+  findTsconfigFiles,
+  hasBaseUrlInTsconfig,
+  removeEsModuleInteropFalseFromFile,
+} from '../utils/tsconfig.js';
 import { editYamlFile, scalarString, type YamlDocument } from '../utils/yaml.js';
 import {
   PRETTIER_CONFIG_FILES,
@@ -643,6 +647,28 @@ function rewritePrettierLintStagedConfigFiles(projectPath: string, report?: Migr
   rewriteToolLintStagedConfigFiles(projectPath, rewritePrettier, 'prettier', report);
 }
 
+function cleanupDeprecatedTsconfigOptions(
+  projectPath: string,
+  silent = false,
+  report?: MigrationReport,
+): void {
+  const files = findTsconfigFiles(projectPath);
+  for (const filePath of files) {
+    if (removeEsModuleInteropFalseFromFile(filePath)) {
+      if (report) {
+        report.removedConfigCount++;
+      }
+      if (!silent) {
+        prompts.log.success(`✔ Removed esModuleInterop: false from ${displayRelative(filePath)}`);
+      }
+      warnMigration(
+        `Removed \`"esModuleInterop": false\` from ${displayRelative(filePath)} — this option has been deprecated. See https://github.com/oxc-project/tsgolint/issues/351, https://github.com/microsoft/TypeScript/issues/62529`,
+        report,
+      );
+    }
+  }
+}
+
 /**
  * Rewrite standalone project to add vite-plus dependencies
  * @param projectPath - The path to the project
@@ -680,7 +706,7 @@ export function rewriteStandaloneProject(
         ...pkg.resolutions,
         ...VITE_PLUS_OVERRIDE_PACKAGES,
       };
-    } else if (packageManager === PackageManager.npm) {
+    } else if (packageManager === PackageManager.npm || packageManager === PackageManager.bun) {
       pkg.overrides = {
         ...pkg.overrides,
         ...VITE_PLUS_OVERRIDE_PACKAGES,
@@ -724,6 +750,7 @@ export function rewriteStandaloneProject(
   if (!skipStagedMigration) {
     rewriteLintStagedConfigFile(projectPath, report);
   }
+  cleanupDeprecatedTsconfigOptions(projectPath, silent, report);
   mergeViteConfigFiles(projectPath, silent, report);
   injectLintTypeCheckDefaults(projectPath, silent, report);
   injectFmtDefaults(projectPath, silent, report);
@@ -749,6 +776,8 @@ export function rewriteMonorepo(
     rewritePnpmWorkspaceYaml(workspaceInfo.rootDir);
   } else if (workspaceInfo.packageManager === PackageManager.yarn) {
     rewriteYarnrcYml(workspaceInfo.rootDir);
+  } else if (workspaceInfo.packageManager === PackageManager.bun) {
+    rewriteBunCatalog(workspaceInfo.rootDir);
   }
   rewriteRootWorkspacePackageJson(
     workspaceInfo.rootDir,
@@ -770,6 +799,7 @@ export function rewriteMonorepo(
   if (!skipStagedMigration) {
     rewriteLintStagedConfigFile(workspaceInfo.rootDir, report);
   }
+  cleanupDeprecatedTsconfigOptions(workspaceInfo.rootDir, silent, report);
   mergeViteConfigFiles(workspaceInfo.rootDir, silent, report);
   injectLintTypeCheckDefaults(workspaceInfo.rootDir, silent, report);
   injectFmtDefaults(workspaceInfo.rootDir, silent, report);
@@ -791,6 +821,7 @@ export function rewriteMonorepoProject(
   silent = false,
   report?: MigrationReport,
 ): void {
+  cleanupDeprecatedTsconfigOptions(projectPath, silent, report);
   mergeViteConfigFiles(projectPath, silent, report);
   mergeTsdownConfigFile(projectPath, silent, report);
 
@@ -951,6 +982,52 @@ function rewriteCatalog(doc: YamlDocument): void {
 }
 
 /**
+ * Write catalog entries to root package.json for bun.
+ * Bun stores catalogs in package.json under the `catalog` key,
+ * unlike pnpm which uses pnpm-workspace.yaml.
+ * @see https://bun.sh/docs/pm/catalogs
+ */
+function rewriteBunCatalog(projectPath: string): void {
+  const packageJsonPath = path.join(projectPath, 'package.json');
+  if (!fs.existsSync(packageJsonPath)) {
+    return;
+  }
+
+  editJsonFile<{
+    catalog?: Record<string, string>;
+    overrides?: Record<string, string>;
+  }>(packageJsonPath, (pkg) => {
+    const catalog: Record<string, string> = { ...pkg.catalog };
+
+    // Add vite-plus managed packages to catalog
+    for (const [key, value] of Object.entries(VITE_PLUS_OVERRIDE_PACKAGES)) {
+      if (!value.startsWith('file:')) {
+        catalog[key] = value;
+      }
+    }
+    if (!VITE_PLUS_VERSION.startsWith('file:')) {
+      catalog[VITE_PLUS_NAME] = VITE_PLUS_VERSION;
+    }
+
+    // Remove replaced packages from catalog
+    for (const name of REMOVE_PACKAGES) {
+      delete catalog[name];
+    }
+
+    pkg.catalog = catalog;
+
+    // bun overrides support catalog: references
+    const overrides: Record<string, string> = { ...pkg.overrides };
+    for (const key of Object.keys(VITE_PLUS_OVERRIDE_PACKAGES)) {
+      overrides[key] = 'catalog:';
+    }
+    pkg.overrides = overrides;
+
+    return pkg;
+  });
+}
+
+/**
  * Rewrite root workspace package.json to add vite-plus dependencies
  * @param projectPath - The path to the project
  */
@@ -984,6 +1061,8 @@ function rewriteRootWorkspacePackageJson(
         ...pkg.overrides,
         ...VITE_PLUS_OVERRIDE_PACKAGES,
       };
+    } else if (packageManager === PackageManager.bun) {
+      // bun overrides are handled in rewriteBunCatalog() with catalog: references
     } else if (packageManager === PackageManager.pnpm) {
       if (isForceOverrideMode()) {
         // In force-override mode, keep overrides in package.json pnpm.overrides

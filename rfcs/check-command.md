@@ -10,7 +10,7 @@ Currently, running a full code quality check requires chaining multiple commands
 
 ```bash
 # From the monorepo template's "ready" script:
-vp fmt && vp lint --type-aware && vp run test -r && vp run build -r
+vp fmt && vp lint --type-aware && vp run -r test && vp run -r build
 ```
 
 Pain points:
@@ -221,7 +221,7 @@ Options:
 With `vp check`, the monorepo template's "ready" script simplifies to:
 
 ```json
-"ready": "vp check && vp run test -r && vp run build -r"
+"ready": "vp check && vp run -r test && vp run -r build"
 ```
 
 ## Comparison with Other Tools

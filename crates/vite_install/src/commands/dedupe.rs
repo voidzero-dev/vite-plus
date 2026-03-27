@@ -3,6 +3,7 @@ use std::{collections::HashMap, process::ExitStatus};
 use vite_command::run_command;
 use vite_error::Error;
 use vite_path::AbsolutePath;
+use vite_shared::output;
 
 use crate::package_manager::{
     PackageManager, PackageManagerType, ResolveCommandResult, format_path_env,
@@ -62,6 +63,11 @@ impl PackageManager {
                 if options.check {
                     args.push("--dry-run".into());
                 }
+            }
+            PackageManagerType::Bun => {
+                bin_name = "bun".into();
+                output::warn("bun does not support dedupe, falling back to bun install");
+                args.push("install".into());
             }
         }
 

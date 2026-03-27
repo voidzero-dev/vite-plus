@@ -29,6 +29,7 @@ impl PackageManager {
 
     /// Resolve the owner command.
     /// All package managers delegate to npm owner.
+    /// Bun does not support owner, falls back to npm.
     #[must_use]
     pub fn resolve_owner_command(&self, subcommand: &OwnerSubcommand) -> ResolveCommandResult {
         let bin_name: String = "npm".to_string();

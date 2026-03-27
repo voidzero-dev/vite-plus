@@ -153,6 +153,8 @@ export function getPackageRunner(workspaceInfo: WorkspaceInfo) {
         command: 'yarn',
         args: ['dlx'],
       };
+    case 'bun':
+      return { command: 'bun', args: ['x'] };
     case 'npm':
     default:
       return { command: 'npx', args: [] };
@@ -166,7 +168,7 @@ export function formatDlxCommand(
   workspaceInfo: WorkspaceInfo,
 ) {
   const runner = getPackageRunner(workspaceInfo);
-  const dlxArgs = runner.command === 'npm' ? ['--', ...args] : args;
+  const dlxArgs = runner.command === 'npx' ? ['--', ...args] : args;
   return {
     command: runner.command,
     args: [...runner.args, packageName, ...dlxArgs],

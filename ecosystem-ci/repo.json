@@ -97,5 +97,10 @@
     "branch": "master",
     "hash": "01bd9ce1ac66ee3c21ed8a7f14311317d87fb999",
     "forceFreshMigration": true
+  },
+  "bun-vite-template": {
+    "repository": "https://github.com/why-reproductions-are-required/bun-vite-template.git",
+    "branch": "master",
+    "hash": "d84099b4a153c7e0f35e510725b2ceb24c6e09ad"
   }
 }

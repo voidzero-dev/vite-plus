@@ -1,0 +1,29 @@
+> vp pm publish --help # should show help
+VITE+ - The Unified Toolchain for the Web
+
+Usage: vp pm publish [OPTIONS] [TARBALL|FOLDER] [-- <PASS_THROUGH_ARGS>...]
+
+Publish package to registry
+
+Arguments:
+  [TARBALL|FOLDER]        Tarball or folder to publish
+  [PASS_THROUGH_ARGS]...  Additional arguments
+
+Options:
+  --dry-run                  Preview without publishing
+  --tag <TAG>                Publish tag
+  --access <ACCESS>          Access level (public/restricted)
+  --otp <OTP>                One-time password for authentication
+  --no-git-checks            Skip git checks
+  --publish-branch <BRANCH>  Set the branch name to publish from
+  --report-summary           Save publish summary
+  --force                    Force publish
+  --json                     Output in JSON format
+  -r, --recursive            Publish all workspace packages
+  --filter <PATTERN>         Filter packages in monorepo
+  -h, --help                 Print help
+
+Documentation: https://viteplus.dev/guide/install
+
+
+> #vp pm publish --dry-run # should preview publish without actually publishing (not working on CI, skip for now)

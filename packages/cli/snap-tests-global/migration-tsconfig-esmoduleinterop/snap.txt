@@ -1,0 +1,46 @@
+> vp migrate --no-interactive # should remove esModuleInterop: false from tsconfig.json
+VITE+ - The Unified Toolchain for the Web
+
+◇ Migrated . to Vite+<repeat>
+• Node <semver>  pnpm <semver>
+• 3 config updates applied
+! Warnings:
+  - Removed `"esModuleInterop": false` from tsconfig.json — this option has been deprecated. See https://github.com/oxc-project/tsgolint/issues/351, https://github.com/microsoft/TypeScript/issues/62529
+
+> cat tsconfig.json # verify esModuleInterop: false is removed
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "ESNext",
+    "allowSyntheticDefaultImports": true,
+    "strict": true
+  }
+}
+
+> cat vite.config.ts # check vite.config.ts
+import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  staged: {
+    "*": "vp check --fix"
+  },
+  lint: {"options":{"typeAware":true,"typeCheck":true}},
+});
+
+> cat package.json # check package.json
+{
+  "devDependencies": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vite-plus": "latest"
+  },
+  "pnpm": {
+    "overrides": {
+      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+      "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+    }
+  },
+  "packageManager": "pnpm@<semver>",
+  "scripts": {
+    "prepare": "vp config"
+  }
+}

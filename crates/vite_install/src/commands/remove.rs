@@ -3,6 +3,7 @@ use std::{collections::HashMap, process::ExitStatus};
 use vite_command::run_command;
 use vite_error::Error;
 use vite_path::AbsolutePath;
+use vite_shared::output;
 
 use crate::package_manager::{
     PackageManager, PackageManagerType, ResolveCommandResult, format_path_env,
@@ -126,6 +127,20 @@ impl PackageManager {
                     args.push("--workspaces".into());
                 }
                 // not support: save_dev, save_optional, save_prod, just ignore them
+            }
+            PackageManagerType::Bun => {
+                bin_name = "bun".into();
+                args.push("remove".into());
+
+                if let Some(filters) = options.filters {
+                    if !filters.is_empty() {
+                        output::warn("bun remove does not support --filter");
+                    }
+                }
+                if options.workspace_root {
+                    output::warn("bun remove does not support --workspace-root");
+                }
+                // bun remove doesn't support save_dev, save_optional, save_prod flags
             }
         }
 

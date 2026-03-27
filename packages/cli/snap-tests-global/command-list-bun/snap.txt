@@ -1,0 +1,46 @@
+> vp install # should install packages first
+VITE+ - The Unified Toolchain for the Web
+
+bun install v<semver> (af24e281)
+
++ test-vite-plus-package@<semver>
++ test-vite-plus-package-optional@<semver>
++ testnpm2@<semver>
+
+3 packages installed [<variable>ms]
+
+> vp pm list --help # should show help
+VITE+ - The Unified Toolchain for the Web
+
+Usage: vp pm list [OPTIONS] [PATTERN] [-- <PASS_THROUGH_ARGS>...]
+
+List installed packages
+
+Arguments:
+  [PATTERN]               Package pattern to filter
+  [PASS_THROUGH_ARGS]...  Additional arguments
+
+Options:
+  --depth <DEPTH>          Maximum depth of dependency tree
+  --json                   Output in JSON format
+  --long                   Show extended information
+  --parseable              Parseable output format
+  -P, --prod               Only production dependencies
+  -D, --dev                Only dev dependencies
+  --no-optional            Exclude optional dependencies
+  --exclude-peers          Exclude peer dependencies
+  --only-projects          Show only project packages
+  --find-by <FINDER_NAME>  Use a finder function
+  -r, --recursive          List across all workspaces
+  --filter <PATTERN>       Filter packages in monorepo
+  -g, --global             List global packages
+  -h, --help               Print help
+
+Documentation: https://viteplus.dev/guide/install
+
+
+> vp pm list # should list installed packages
+<cwd> node_modules (3)
+├── test-vite-plus-package@<semver>
+├── test-vite-plus-package-optional@<semver>
+└── testnpm2@<semver>

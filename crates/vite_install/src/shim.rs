@@ -5,6 +5,91 @@ use pathdiff::diff_paths;
 use tokio::fs::write;
 use vite_error::Error;
 
+/// Write cmd/sh/pwsh shim files for native (non-Node.js) binaries.
+/// Unlike `write_shims` which wraps JS files with Node.js, this creates
+/// wrappers that exec the native binary directly.
+pub async fn write_native_shims(
+    source_file: impl AsRef<Path>,
+    to_bin: impl AsRef<Path>,
+) -> Result<(), Error> {
+    let to_bin = to_bin.as_ref();
+    let parent = to_bin
+        .parent()
+        .ok_or_else(|| Error::CannotFindBinaryPath("shim path has no parent directory".into()))?;
+    let relative_path = diff_paths(&source_file, parent).ok_or_else(|| {
+        Error::CannotFindBinaryPath("cannot compute relative path for shim".into())
+    })?;
+    let relative_file = relative_path
+        .to_str()
+        .ok_or_else(|| Error::CannotFindBinaryPath("shim path is not valid UTF-8".into()))?;
+
+    write(to_bin, native_sh_shim(relative_file)).await?;
+    write(to_bin.with_extension("cmd"), native_cmd_shim(relative_file)).await?;
+    write(to_bin.with_extension("ps1"), native_pwsh_shim(relative_file)).await?;
+
+    // set executable permission for unix
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        tokio::fs::set_permissions(to_bin, std::fs::Permissions::from_mode(0o755)).await?;
+    }
+
+    tracing::debug!("write_native_shims: {:?} -> {:?}", to_bin, relative_file);
+    Ok(())
+}
+
+/// Unix shell shim for native binaries.
+pub fn native_sh_shim(relative_file: &str) -> String {
+    formatdoc! {
+        r#"
+        #!/bin/sh
+        basedir=$(dirname "$(echo "$0" | sed -e 's,\\,/,g')")
+
+        case `uname` in
+            *CYGWIN*|*MINGW*|*MSYS*)
+                if command -v cygpath > /dev/null 2>&1; then
+                    basedir=`cygpath -w "$basedir"`
+                fi
+            ;;
+        esac
+
+        exec "$basedir/{relative_file}" "$@"
+        "#
+    }
+}
+
+/// Windows Command Prompt shim for native binaries.
+pub fn native_cmd_shim(relative_file: &str) -> String {
+    formatdoc! {
+        r#"
+        @SETLOCAL
+        @"%~dp0\{relative_file}" %*
+        "#,
+        relative_file = relative_file.replace('/', "\\")
+    }
+    .replace('\n', "\r\n")
+}
+
+/// `PowerShell` shim for native binaries.
+pub fn native_pwsh_shim(relative_file: &str) -> String {
+    formatdoc! {
+        r#"
+        #!/usr/bin/env pwsh
+        $basedir=Split-Path $MyInvocation.MyCommand.Definition -Parent
+
+        $ret=0
+        # Support pipeline input
+        if ($MyInvocation.ExpectingInput) {{
+            $input | & "$basedir/{relative_file}" $args
+        }} else {{
+            & "$basedir/{relative_file}" $args
+        }}
+        $ret=$LASTEXITCODE
+        exit $ret
+        "#
+    }
+}
+
 /// Write cmd/sh/pwsh shim files.
 pub async fn write_shims(
     source_file: impl AsRef<Path>,

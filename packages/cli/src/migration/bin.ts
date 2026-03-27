@@ -779,7 +779,10 @@ async function executeMigrationPlan(
   // 11. Reinstall after migration
   // npm needs --force to re-resolve packages with newly added overrides,
   // otherwise the stale lockfile prevents override resolution.
-  const installArgs = plan.packageManager === PackageManager.npm ? ['--force'] : undefined;
+  const installArgs =
+    plan.packageManager === PackageManager.npm || plan.packageManager === PackageManager.bun
+      ? ['--force']
+      : undefined;
   updateMigrationProgress('Installing dependencies');
   const finalInstallSummary = await runViteInstall(
     workspaceInfo.rootDir,

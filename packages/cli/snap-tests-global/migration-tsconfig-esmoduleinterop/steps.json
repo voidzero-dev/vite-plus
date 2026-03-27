@@ -1,0 +1,8 @@
+{
+  "commands": [
+    "vp migrate --no-interactive # should remove esModuleInterop: false from tsconfig.json",
+    "cat tsconfig.json # verify esModuleInterop: false is removed",
+    "cat vite.config.ts # check vite.config.ts",
+    "cat package.json # check package.json"
+  ]
+}
