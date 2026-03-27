@@ -3,16 +3,16 @@ VITE+ - The Unified Toolchain for the Web
 
 ◇ Migrated . to Vite+<repeat>
 • Node <semver>  pnpm <semver>
-• 3 config updates applied
+• 4 config updates applied
 ! Warnings:
   - Removed `"esModuleInterop": false` from tsconfig.json — this option has been deprecated. See https://github.com/oxc-project/tsgolint/issues/351, https://github.com/microsoft/TypeScript/issues/62529
+  - Removed `"allowSyntheticDefaultImports": false` from tsconfig.json — this option has been deprecated. See https://github.com/oxc-project/tsgolint/issues/351, https://github.com/microsoft/TypeScript/issues/62529
 
 > cat tsconfig.json # verify esModuleInterop: false is removed
 {
   "compilerOptions": {
     "target": "ES2023",
     "module": "ESNext",
-    "allowSyntheticDefaultImports": true,
     "strict": true
   }
 }
@@ -24,6 +24,7 @@ export default defineConfig({
   staged: {
     "*": "vp check --fix"
   },
+  fmt: {},
   lint: {"options":{"typeAware":true,"typeCheck":true}},
 });
 

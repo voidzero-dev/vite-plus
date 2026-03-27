@@ -36,7 +36,7 @@ export function findTsconfigFiles(projectPath: string): string[] {
 // runtime for tsc-compiled code (init-config.ts imports this file).
 // TODO: move back to devDependencies once the bundle refactoring lands
 // https://github.com/voidzero-dev/vite-plus/issues/744
-export function removeEsModuleInteropFalseFromFile(filePath: string): boolean {
+export function removeDeprecatedTsconfigFalseOption(filePath: string, optionName: string): boolean {
   let text: string;
   try {
     text = fs.readFileSync(filePath, 'utf-8');
@@ -45,13 +45,13 @@ export function removeEsModuleInteropFalseFromFile(filePath: string): boolean {
   }
 
   const parsed = parseJsonc(text) as {
-    compilerOptions?: { esModuleInterop?: boolean };
+    compilerOptions?: Record<string, unknown>;
   } | null;
-  if (parsed?.compilerOptions?.esModuleInterop !== false) {
+  if (parsed?.compilerOptions?.[optionName] !== false) {
     return false;
   }
 
-  const edits = modify(text, ['compilerOptions', 'esModuleInterop'], undefined, {});
+  const edits = modify(text, ['compilerOptions', optionName], undefined, {});
   if (edits.length === 0) {
     return false;
   }

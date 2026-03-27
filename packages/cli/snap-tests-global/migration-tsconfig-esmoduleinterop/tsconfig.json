@@ -3,7 +3,7 @@
     "target": "ES2023",
     "module": "ESNext",
     "esModuleInterop": false,
-    "allowSyntheticDefaultImports": true,
+    "allowSyntheticDefaultImports": false,
     "strict": true
   }
 }

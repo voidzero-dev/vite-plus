@@ -31,7 +31,7 @@ import { getSpinner } from '../utils/prompts.js';
 import {
   findTsconfigFiles,
   hasBaseUrlInTsconfig,
-  removeEsModuleInteropFalseFromFile,
+  removeDeprecatedTsconfigFalseOption,
 } from '../utils/tsconfig.js';
 import { editYamlFile, scalarString, type YamlDocument } from '../utils/yaml.js';
 import {
@@ -652,19 +652,22 @@ function cleanupDeprecatedTsconfigOptions(
   silent = false,
   report?: MigrationReport,
 ): void {
+  const deprecatedOptions = ['esModuleInterop', 'allowSyntheticDefaultImports'];
   const files = findTsconfigFiles(projectPath);
   for (const filePath of files) {
-    if (removeEsModuleInteropFalseFromFile(filePath)) {
-      if (report) {
-        report.removedConfigCount++;
+    for (const name of deprecatedOptions) {
+      if (removeDeprecatedTsconfigFalseOption(filePath, name)) {
+        if (report) {
+          report.removedConfigCount++;
+        }
+        if (!silent) {
+          prompts.log.success(`✔ Removed ${name}: false from ${displayRelative(filePath)}`);
+        }
+        warnMigration(
+          `Removed \`"${name}": false\` from ${displayRelative(filePath)} — this option has been deprecated. See https://github.com/oxc-project/tsgolint/issues/351, https://github.com/microsoft/TypeScript/issues/62529`,
+          report,
+        );
       }
-      if (!silent) {
-        prompts.log.success(`✔ Removed esModuleInterop: false from ${displayRelative(filePath)}`);
-      }
-      warnMigration(
-        `Removed \`"esModuleInterop": false\` from ${displayRelative(filePath)} — this option has been deprecated. See https://github.com/oxc-project/tsgolint/issues/351, https://github.com/microsoft/TypeScript/issues/62529`,
-        report,
-      );
     }
   }
 }
