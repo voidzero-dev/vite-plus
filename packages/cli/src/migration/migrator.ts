@@ -2012,7 +2012,11 @@ export function parseNvmrcVersion(content: string): string | null {
     return null;
   }
 
-  // Unsupported nvm aliases that have no direct version equivalent
+  // These aliases are intentionally not mapped to lts/* even though it might seem natural.
+  // "node" and "stable" resolve to the latest Node.js release, which is not always an LTS
+  // (e.g. Node 25 is the latest but not LTS). Silently converting to lts/* could downgrade
+  // users to Node 22 without them noticing. We emit a warning instead and let users decide.
+  // "iojs", "system", and "default" have no meaningful equivalent at all.
   if (['node', 'stable', 'iojs', 'system', 'default'].includes(version)) {
     return null;
   }

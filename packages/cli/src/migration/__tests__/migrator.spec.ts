@@ -151,7 +151,9 @@ describe('parseNvmrcVersion', () => {
   it('returns null for unsupported aliases', () => {
     expect(parseNvmrcVersion('node\n')).toBeNull();
     expect(parseNvmrcVersion('stable\n')).toBeNull();
+    expect(parseNvmrcVersion('iojs\n')).toBeNull();
     expect(parseNvmrcVersion('system\n')).toBeNull();
+    expect(parseNvmrcVersion('default\n')).toBeNull();
     expect(parseNvmrcVersion('')).toBeNull();
   });
 
@@ -209,7 +211,7 @@ describe('migrateNodeVersionManagerFile', () => {
   });
 
   it('returns false and warns for unsupported alias', () => {
-    fs.writeFileSync(path.join(tmpDir, '.nvmrc'), 'node\n');
+    fs.writeFileSync(path.join(tmpDir, '.nvmrc'), 'system\n');
     const report = {
       createdViteConfigCount: 0,
       mergedConfigCount: 0,
