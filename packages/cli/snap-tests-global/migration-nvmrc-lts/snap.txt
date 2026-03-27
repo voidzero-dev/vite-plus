@@ -1,0 +1,14 @@
+> vp migrate --no-interactive # migration should detect .nvmrc with lts alias and auto-migrate
+VITE+ - The Unified Toolchain for the Web
+
+
+.nvmrc detected. Auto-migrating to .node-version...
+◇ Migrated . to Vite+<repeat>
+• Node <semver>  pnpm <semver>
+• 2 config updates applied
+• Node version manager file migrated to .node-version
+
+> cat .node-version # check lts alias is preserved as-is
+lts/iron
+
+> test ! -f .nvmrc # check .nvmrc is removed

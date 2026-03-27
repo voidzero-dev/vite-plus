@@ -1,0 +1,7 @@
+{
+  "commands": [
+    "vp migrate --no-interactive # 'node' alias cannot be auto-migrated, should warn",
+    "test ! -f .node-version # check .node-version is NOT created",
+    "test -f .nvmrc # check .nvmrc is preserved"
+  ]
+}

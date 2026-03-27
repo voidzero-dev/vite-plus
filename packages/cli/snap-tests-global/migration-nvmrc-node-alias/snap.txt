@@ -1,0 +1,15 @@
+> vp migrate --no-interactive # 'node' alias should be migrated to lts/*
+VITE+ - The Unified Toolchain for the Web
+
+
+.nvmrc detected. Auto-migrating to .node-version...
+◇ Migrated . to Vite+<repeat>
+• Node <semver>  pnpm <semver>
+• 2 config updates applied
+! Warnings:
+  - .nvmrc contains an unsupported version alias. Create .node-version manually with your desired Node.js version.
+
+[1]> cat .node-version # check node alias is converted to lts/*
+cat: .node-version: No such file or directory
+
+[1]> test ! -f .nvmrc # check .nvmrc is removed
