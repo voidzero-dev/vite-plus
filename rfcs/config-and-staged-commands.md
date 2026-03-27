@@ -2,7 +2,7 @@
 
 ## Summary
 
-Add `vp config` and `vp staged` as built-in commands. `vp config` is a `prepare`-lifecycle command that installs git hook shims (husky-compatible reimplementation, not a bundled dependency). `vp staged` bundles lint-staged and reads config from the `staged` key in `vite.config.ts`. Projects get a zero-config pre-commit hook that runs `vp check --fix` on staged files — no extra devDependencies needed.
+Add `vp config` and `vp staged` as built-in commands. `vp config` is a lifecycle command (`prepare` or `postinstall`) that installs git hook shims (husky-compatible reimplementation, not a bundled dependency). `vp staged` bundles lint-staged and reads config from the `staged` key in `vite.config.ts`. Projects get a zero-config pre-commit hook that runs `vp check --fix` on staged files — no extra devDependencies needed.
 
 ## Motivation
 
@@ -55,24 +55,27 @@ Flags: `--hooks` (force), `--no-hooks` (skip)
 
 Flags: `--hooks` (force), `--no-hooks` (skip)
 
-### Ongoing use: `vp config` (prepare lifecycle)
+### Ongoing use: `vp config` (lifecycle script)
 
-`vp config` is the command that runs on every `npm install` via the `prepare` script. It reinstalls hook shims — it does **not** create the `staged` config or the pre-commit hook file. Those are created by `vp create`/`vp migrate`.
+`vp config` is the command that runs on every `npm install` via the `prepare` or `postinstall` script. It reinstalls hook shims — it does **not** create the `staged` config or the pre-commit hook file. Those are created by `vp create`/`vp migrate`.
 
 ```json
 { "scripts": { "prepare": "vp config" } }
+// or
+{ "scripts": { "postinstall": "vp config" } }
 ```
 
-When `npm_lifecycle_event=prepare` (set by npm/pnpm/yarn during `npm install`), agent setup is skipped automatically — only hooks are reinstalled.
+When running from a lifecycle script (`npm_lifecycle_event` is `prepare` or `postinstall`), hooks are installed automatically without prompting.
 
 ### Manual setup (without `vp create`/`vp migrate`)
 
 For users who want to set up hooks manually, four steps are required:
 
-1. **Add prepare script** to `package.json`:
+1. **Add lifecycle script** to `package.json`:
    ```json
    { "scripts": { "prepare": "vp config" } }
    ```
+   Or use `postinstall` if `prepare` is not suitable for your project.
 2. **Add staged config** to `vite.config.ts`:
    ```typescript
    export default defineConfig({
@@ -105,9 +108,10 @@ Behavior:
 6. Exits 0 and skips hooks if `VITE_GIT_HOOKS=0` or `HUSKY=0` environment variable is set (backwards compatible)
 7. Exits 0 and skips hooks if `.git` directory doesn't exist (safe during `npm install` in consumer projects)
 8. Exits 1 on real errors (git command not found, `git config` failed)
-9. Agent update runs uniformly in all modes (`prepare`, interactive, non-interactive). New agent file creation is handled by `vp create`/`vp migrate`.
-10. Interactive mode: prompts on first run for hooks setup
-11. Non-interactive mode: sets up hooks by default
+9. Agent update runs uniformly in all modes (lifecycle script, interactive, non-interactive). New agent file creation is handled by `vp create`/`vp migrate`.
+10. Lifecycle script mode (`prepare`/`postinstall`): sets up hooks automatically without prompting
+11. Interactive mode: prompts on first run — unless the project already has `staged` config in `vite.config.ts` (which implies prior opt-in)
+12. Non-interactive mode: sets up hooks by default
 
 ### `vp staged`
 
@@ -275,12 +279,54 @@ Husky <9.0.0 is not supported by auto migration — `vp migrate` detects unsuppo
 
 ## Relationship to Existing Commands
 
-| Command          | Purpose                                | When                        |
-| ---------------- | -------------------------------------- | --------------------------- |
-| `vp check`       | Format + lint + type check             | Manual or CI                |
-| `vp check --fix` | Auto-fix format + lint issues          | Manual or pre-commit        |
-| **`vp config`**  | **Reinstall hook shims + agent setup** | **npm `prepare` lifecycle** |
-| **`vp staged`**  | **Run staged linters on staged files** | **Pre-commit hook**         |
+| Command          | Purpose                                | When                                        |
+| ---------------- | -------------------------------------- | ------------------------------------------- |
+| `vp check`       | Format + lint + type check             | Manual or CI                                |
+| `vp check --fix` | Auto-fix format + lint issues          | Manual or pre-commit                        |
+| **`vp config`**  | **Reinstall hook shims + agent setup** | **npm lifecycle (`prepare`/`postinstall`)** |
+| **`vp staged`**  | **Run staged linters on staged files** | **Pre-commit hook**                         |
+
+## `vp config` Hooks Setup Flow
+
+```
+vp config
+│
+├─ VITE_GIT_HOOKS=0 or HUSKY=0? ──→ Skip hooks (exit 0)
+│
+├─ Not inside a git repo? ──→ Skip hooks (exit 0)
+│
+├─ Should prompt user?
+│   Prompt ONLY when ALL of these are true:
+│   • Interactive terminal (not CI, not piped)
+│   • First run (hook shims don't exist yet)
+│   • No --hooks-dir flag
+│   • Not running from lifecycle script (prepare/postinstall)
+│   • No staged config in vite.config.ts
+│
+│   YES → Prompt "Set up pre-commit hooks?"
+│          User declines → skip hooks
+│   NO  → Auto-install hooks
+│
+├─ core.hooksPath already set to a custom path?
+│   (not .vite-hooks/_, not .husky)
+│   └─ YES → Skip hooks, preserve custom config
+│
+├─ Set core.hooksPath → .vite-hooks/_
+├─ Create hook shims in .vite-hooks/_/
+├─ Ensure staged config in vite.config.ts
+└─ Ensure .vite-hooks/pre-commit contains "vp staged"
+```
+
+### When does the prompt appear?
+
+| Caller                                | Prompts? | Why                                |
+| ------------------------------------- | -------- | ---------------------------------- |
+| `npm install` → prepare/postinstall   | No       | lifecycle script = auto-install    |
+| Manual, project has `staged` config   | No       | staged config = already opted in   |
+| Manual, no `staged` config, first run | **Yes**  | No signal that project wants hooks |
+| Manual, already ran before            | No       | Hook shims exist = not first run   |
+| CI / non-interactive                  | No       | Non-interactive = auto-install     |
+| `--hooks-dir` flag                    | No       | Explicit flag = intent to install  |
 
 ## Comparison with Other Tools
 

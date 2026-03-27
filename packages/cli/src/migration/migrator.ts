@@ -726,6 +726,7 @@ export function rewriteStandaloneProject(
   }
   mergeViteConfigFiles(projectPath, silent, report);
   injectLintTypeCheckDefaults(projectPath, silent, report);
+  injectFmtDefaults(projectPath, silent, report);
   mergeTsdownConfigFile(projectPath, silent, report);
   // rewrite imports in all TypeScript/JavaScript files
   rewriteAllImports(projectPath, silent, report);
@@ -771,6 +772,7 @@ export function rewriteMonorepo(
   }
   mergeViteConfigFiles(workspaceInfo.rootDir, silent, report);
   injectLintTypeCheckDefaults(workspaceInfo.rootDir, silent, report);
+  injectFmtDefaults(workspaceInfo.rootDir, silent, report);
   mergeTsdownConfigFile(workspaceInfo.rootDir, silent, report);
   // rewrite imports in all TypeScript/JavaScript files
   rewriteAllImports(workspaceInfo.rootDir, silent, report);
@@ -1335,6 +1337,21 @@ export function injectLintTypeCheckDefaults(
     'lint',
     '.vite-plus-lint-init.oxlintrc.json',
     JSON.stringify({ options: { typeAware: true, typeCheck: true } }),
+    silent,
+    report,
+  );
+}
+
+export function injectFmtDefaults(
+  projectPath: string,
+  silent = false,
+  report?: MigrationReport,
+): void {
+  injectConfigDefaults(
+    projectPath,
+    'fmt',
+    '.vite-plus-fmt-init.oxfmtrc.json',
+    JSON.stringify({}),
     silent,
     report,
   );
@@ -1976,4 +1993,104 @@ function setPackageManager(
     }
     return pkg;
   });
+}
+
+export interface NodeVersionManagerDetection {
+  file: string;
+}
+
+/**
+ * Detect a .nvmrc file in the project directory.
+ * Returns undefined if not found or .node-version already exists.
+ */
+export function detectNodeVersionManagerFile(
+  projectPath: string,
+): NodeVersionManagerDetection | undefined {
+  // already has .node-version — skip detection to avoid false positives and preserve existing file
+  if (fs.existsSync(path.join(projectPath, '.node-version'))) {
+    return undefined;
+  }
+
+  const configs = detectConfigs(projectPath);
+  if (configs.nvmrcFile) {
+    return { file: '.nvmrc' };
+  }
+  return undefined;
+}
+
+/**
+ * Parse a version alias from a .nvmrc file into a .node-version compatible string.
+ * Accepts the first line of .nvmrc (pre-trimmed).
+ * Returns null for unsupported aliases like "system", "default", "iojs".
+ */
+export function parseNvmrcVersion(alias: string): string | null {
+  const version = alias.trim();
+
+  if (!version) {
+    return null;
+  }
+
+  // "node" and "stable" mean "latest stable release" which maps closely to lts/*.
+  // Starting from Node 27, all releases will be LTS, so the gap is shrinking.
+  // We map these to lts/* and log the conversion so users are aware.
+  if (version === 'node' || version === 'stable') {
+    return 'lts/*';
+  }
+
+  // "iojs", "system", and "default" have no meaningful equivalent and cannot be auto-migrated.
+  if (version === 'iojs' || version === 'system' || version === 'default') {
+    return null;
+  }
+
+  // LTS aliases (lts/*, lts/iron, etc.) pass through as-is
+  if (version.startsWith('lts/')) {
+    return version;
+  }
+
+  // Strip optional 'v' prefix, then validate as a semver version or range
+  const normalized = version.startsWith('v') ? version.slice(1) : version;
+  if (!normalized || !semver.validRange(normalized)) {
+    return null;
+  }
+  return normalized;
+}
+
+/**
+ * Migrate .nvmrc to .node-version and remove .nvmrc.
+ * Returns true on success, false if migration was skipped or failed.
+ */
+export function migrateNodeVersionManagerFile(
+  projectPath: string,
+  _detection: NodeVersionManagerDetection,
+  report?: MigrationReport,
+): boolean {
+  const sourcePath = path.join(projectPath, '.nvmrc');
+  const nodeVersionPath = path.join(projectPath, '.node-version');
+  const content = fs.readFileSync(sourcePath, 'utf8');
+  const originalAlias = content.split('\n')[0]?.trim() ?? '';
+  const version = parseNvmrcVersion(originalAlias);
+
+  if (!version) {
+    warnMigration(
+      '.nvmrc contains an unsupported version alias. Create .node-version manually with your desired Node.js version.',
+      report,
+    );
+    return false;
+  }
+
+  // TODO: remove this log once Node 27+ makes all releases LTS, at which point
+  // "node"/"stable" and "lts/*" will be effectively equivalent.
+  if (version === 'lts/*' && (originalAlias === 'node' || originalAlias === 'stable')) {
+    prompts.log.info(
+      `"${originalAlias}" in .nvmrc is not a specific version; automatically mapping to "lts/*"`,
+    );
+  }
+
+  fs.writeFileSync(nodeVersionPath, `${version}\n`);
+  fs.unlinkSync(sourcePath);
+
+  if (report) {
+    report.nodeVersionFileMigrated = true;
+  }
+  return true;
 }

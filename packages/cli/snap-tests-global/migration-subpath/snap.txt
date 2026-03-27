@@ -36,8 +36,8 @@ VITE+ - The Unified Toolchain for the Web
 import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
+  fmt: {},
   lint: {"options":{"typeAware":true,"typeCheck":true}},
-  
 });
 
 > git config --local core.hooksPath || echo 'core.hooksPath is not set' # should NOT be set

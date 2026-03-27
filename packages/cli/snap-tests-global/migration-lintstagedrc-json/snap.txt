@@ -104,6 +104,7 @@ VITE+ - The Unified Toolchain for the Web
 import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
+  fmt: {},
   lint: {"options":{"typeAware":true,"typeCheck":true}},
   staged: {
     "*.@(js|ts|tsx|yml|yaml|md|json|html|toml)": [

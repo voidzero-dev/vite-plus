@@ -12,6 +12,7 @@ export default {
   staged: {
     "*": "vp check --fix"
   },
+  fmt: {},
   lint: {
     "rules": {
       "no-unused-vars": "error"
