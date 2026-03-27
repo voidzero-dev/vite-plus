@@ -1364,6 +1364,11 @@ pub async fn main(
     options: Option<CliOptions>,
     args: Option<Vec<String>>,
 ) -> Result<ExitStatus, Error> {
+    // Set terminal title to the project name from package.json
+    if let Some(project_name) = vite_shared::read_project_name(cwd.as_path().as_ref()) {
+        vite_shared::header::set_terminal_title(&project_name);
+    }
+
     let args_vec: Vec<String> = args.unwrap_or_else(|| env::args().skip(1).collect());
     let args_vec = normalize_help_args(args_vec);
     if should_print_help(&args_vec) {
