@@ -32,6 +32,16 @@ struct ReleaseTagFormat {
 }
 
 impl ReleaseTagFormat {
+    fn parse_components(self, tag_name: &str) -> Option<(&str, &str)> {
+        let trimmed = tag_name.strip_prefix(self.namespace)?;
+        let (package_path, version) = trimmed.rsplit_once(self.version_prefix)?;
+        if package_path.is_empty() || version.is_empty() {
+            return None;
+        }
+
+        Some((package_path, version))
+    }
+
     fn git_tag_list_args(self, package_names: &[String]) -> Vec<String> {
         let mut args = Vec::with_capacity(package_names.len() + 3);
         args.push(String::from("tag"));
@@ -78,20 +88,30 @@ impl ReleaseTagFormat {
     }
 
     fn parse_version(self, tag_name: &str) -> Option<Version> {
-        let (_, version) = tag_name.rsplit_once(self.version_prefix)?;
+        let (_, version) = self.parse_components(tag_name)?;
         Version::parse(version).ok()
     }
 
     fn parse_package_name(self, tag_name: &str) -> Option<String> {
-        let package_path =
-            tag_name.strip_prefix(self.namespace)?.rsplit_once(self.version_prefix)?.0;
-        if package_path.contains('/') {
-            let mut package_name = String::with_capacity(package_path.len() + 1);
-            package_name.push('@');
-            package_name.push_str(package_path);
-            Some(package_name)
-        } else {
-            Some(package_path.to_owned())
+        let (package_path, version) = self.parse_components(tag_name)?;
+        Version::parse(version).ok()?;
+
+        let mut segments = package_path.split('/');
+        let first = segments.next()?;
+        let second = segments.next();
+        if first.is_empty() {
+            return None;
+        }
+
+        match second {
+            None => Some(first.to_owned()),
+            Some(second) if !second.is_empty() && segments.next().is_none() => {
+                let mut package_name = String::with_capacity(package_path.len() + 1);
+                package_name.push('@');
+                package_name.push_str(package_path);
+                Some(package_name)
+            }
+            _ => None,
         }
     }
 
