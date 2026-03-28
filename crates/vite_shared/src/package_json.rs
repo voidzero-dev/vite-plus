@@ -2,6 +2,7 @@
 //!
 //! References:
 //! - npm `package.json`: https://docs.npmjs.com/cli/v11/configuring-npm/package-json/
+//! - npm package spec: https://docs.npmjs.com/cli/v11/using-npm/package-spec/
 //! - npm workspaces: https://docs.npmjs.com/cli/v11/using-npm/workspaces/
 //! - npm RFC for `workspace:`: https://github.com/npm/rfcs/issues/765
 //! - pnpm workspaces: https://pnpm.io/workspaces
@@ -256,18 +257,24 @@ pub fn replace_top_level_string_property(
 
                 cursor = skip_json_whitespace(bytes, cursor + 1);
                 if cursor >= bytes.len() || bytes[cursor] != b'"' {
-                    return Err(PackageJsonError::Message(format!(
-                        "Expected top-level '{key}' to be a JSON string"
-                    )));
+                    let mut message = String::from("Expected top-level '");
+                    message.push_str(key);
+                    message.push_str("' to be a JSON string");
+                    return Err(PackageJsonError::Message(message));
                 }
 
                 let Some((value_end, parsed_value)) = parse_json_string(contents, cursor) else {
                     break;
                 };
                 if parsed_value != expected_value {
-                    return Err(PackageJsonError::Message(format!(
-                        "Expected '{key}' to be '{expected_value}' but found '{parsed_value}'"
-                    )));
+                    let mut message = String::from("Expected '");
+                    message.push_str(key);
+                    message.push_str("' to be '");
+                    message.push_str(expected_value);
+                    message.push_str("' but found '");
+                    message.push_str(&parsed_value);
+                    message.push('\'');
+                    return Err(PackageJsonError::Message(message));
                 }
 
                 let mut updated = String::with_capacity(contents.len() + new_value.len());
@@ -287,9 +294,10 @@ pub fn replace_top_level_string_property(
         }
     }
 
-    Err(PackageJsonError::Message(format!(
-        "Could not find top-level '{key}' field in package.json"
-    )))
+    let mut message = String::from("Could not find top-level '");
+    message.push_str(key);
+    message.push_str("' field in package.json");
+    Err(PackageJsonError::Message(message))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -312,9 +320,12 @@ pub fn parse_workspace_reference(input: &str) -> Result<WorkspaceReference<'_>, 
     // pnpm: https://pnpm.io/workspaces
     // Yarn: https://yarnpkg.com/protocol/workspace
     // Bun: https://bun.sh/docs/pm/workspaces
-    let spec = input
-        .strip_prefix("workspace:")
-        .ok_or_else(|| VersionError::Message(format!("not a workspace reference: '{input}'")))?;
+    let spec = input.strip_prefix("workspace:").ok_or_else(|| {
+        let mut message = String::from("not a workspace reference: '");
+        message.push_str(input);
+        message.push('\'');
+        VersionError::Message(message)
+    })?;
 
     if spec.is_empty() {
         return Ok(WorkspaceReference::Version(WorkspaceVersionSpec::Current));

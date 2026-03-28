@@ -4,7 +4,7 @@
 //! - SemVer 2.0.0: https://semver.org/spec/v2.0.0.html
 //! - SemVer FAQ for `0.y.z`: https://semver.org/#faq
 
-use std::{fmt, str::FromStr};
+use std::{fmt, fmt::Write as _, str::FromStr};
 
 use thiserror::Error;
 
@@ -87,9 +87,7 @@ impl FromStr for Version {
         let minor = parse_core_number(segments.next(), "minor")?;
         let patch = parse_core_number(segments.next(), "patch")?;
         if segments.next().is_some() {
-            return Err(VersionError::Message(format!(
-                "invalid version '{input}': expected exactly 3 numeric core segments"
-            )));
+            return Err(VersionError::Message(invalid_core_segment_count_message(input)));
         }
 
         let prerelease = match prerelease {
@@ -246,7 +244,11 @@ pub fn prerelease_number(version: &Version) -> Option<u64> {
 
 pub fn build_prerelease(channel: &str, number: u64) -> Result<String, VersionError> {
     let channel = validate_identifiers(channel, false, "prerelease channel")?;
-    Ok(format!("{channel}.{number}"))
+    let mut prerelease = String::with_capacity(channel.len() + 24);
+    prerelease.push_str(&channel);
+    prerelease.push('.');
+    let _ = write!(prerelease, "{number}");
+    Ok(prerelease)
 }
 
 fn split_once_checked<'a>(
@@ -261,7 +263,7 @@ fn split_once_checked<'a>(
                 || tail.is_empty()
                 || (reject_repeated_delimiter && tail.contains(delimiter))
             {
-                Err(VersionError::Message(format!("invalid {label} in version '{input}'")))
+                Err(VersionError::Message(invalid_delimited_version_message(label, input)))
             } else {
                 Ok((head, Some(tail)))
             }
@@ -271,20 +273,16 @@ fn split_once_checked<'a>(
 }
 
 fn parse_core_number(value: Option<&str>, label: &str) -> Result<u64, VersionError> {
-    let value = value.ok_or_else(|| {
-        VersionError::Message(format!("invalid version: missing {label} segment"))
-    })?;
+    let value = value.ok_or_else(|| VersionError::Message(missing_core_segment_message(label)))?;
     if value.is_empty() {
-        return Err(VersionError::Message(format!("invalid version: empty {label} segment")));
+        return Err(VersionError::Message(empty_core_segment_message(label)));
     }
     if value.len() > 1 && value.starts_with('0') {
-        return Err(VersionError::Message(format!(
-            "invalid version: {label} segment '{value}' has a leading zero"
-        )));
+        return Err(VersionError::Message(leading_zero_core_segment_message(label, value)));
     }
-    value.parse::<u64>().map_err(|_| {
-        VersionError::Message(format!("invalid version: {label} segment '{value}' is not numeric"))
-    })
+    value
+        .parse::<u64>()
+        .map_err(|_| VersionError::Message(non_numeric_core_segment_message(label, value)))
 }
 
 fn validate_identifiers(
@@ -293,32 +291,108 @@ fn validate_identifiers(
     label: &str,
 ) -> Result<String, VersionError> {
     if input.is_empty() {
-        return Err(VersionError::Message(format!("{label} cannot be empty")));
+        return Err(VersionError::Message(empty_identifier_message(label)));
     }
 
     for identifier in input.split('.') {
         if identifier.is_empty() {
-            return Err(VersionError::Message(format!(
-                "{label} identifier cannot be empty in '{input}'"
-            )));
+            return Err(VersionError::Message(empty_identifier_in_value_message(label, input)));
         }
         if !identifier.bytes().all(is_valid_identifier_char) {
-            return Err(VersionError::Message(format!(
-                "{label} identifier '{identifier}' contains invalid characters"
-            )));
+            return Err(VersionError::Message(invalid_identifier_chars_message(label, identifier)));
         }
         if disallow_numeric_leading_zero
             && identifier.len() > 1
             && identifier.starts_with('0')
             && identifier.bytes().all(|byte| byte.is_ascii_digit())
         {
-            return Err(VersionError::Message(format!(
-                "{label} numeric identifier '{identifier}' has a leading zero"
-            )));
+            return Err(VersionError::Message(leading_zero_identifier_message(label, identifier)));
         }
     }
 
     Ok(input.to_owned())
+}
+
+fn invalid_core_segment_count_message(input: &str) -> String {
+    let mut message = String::from("invalid version '");
+    message.push_str(input);
+    message.push_str("': expected exactly 3 numeric core segments");
+    message
+}
+
+fn invalid_delimited_version_message(label: &str, input: &str) -> String {
+    let mut message = String::from("invalid ");
+    message.push_str(label);
+    message.push_str(" in version '");
+    message.push_str(input);
+    message.push('\'');
+    message
+}
+
+fn missing_core_segment_message(label: &str) -> String {
+    let mut message = String::from("invalid version: missing ");
+    message.push_str(label);
+    message.push_str(" segment");
+    message
+}
+
+fn empty_core_segment_message(label: &str) -> String {
+    let mut message = String::from("invalid version: empty ");
+    message.push_str(label);
+    message.push_str(" segment");
+    message
+}
+
+fn leading_zero_core_segment_message(label: &str, value: &str) -> String {
+    let mut message = String::from("invalid version: ");
+    message.push_str(label);
+    message.push_str(" segment '");
+    message.push_str(value);
+    message.push_str("' has a leading zero");
+    message
+}
+
+fn non_numeric_core_segment_message(label: &str, value: &str) -> String {
+    let mut message = String::from("invalid version: ");
+    message.push_str(label);
+    message.push_str(" segment '");
+    message.push_str(value);
+    message.push_str("' is not numeric");
+    message
+}
+
+fn empty_identifier_message(label: &str) -> String {
+    let mut message = String::new();
+    message.push_str(label);
+    message.push_str(" cannot be empty");
+    message
+}
+
+fn empty_identifier_in_value_message(label: &str, input: &str) -> String {
+    let mut message = String::new();
+    message.push_str(label);
+    message.push_str(" identifier cannot be empty in '");
+    message.push_str(input);
+    message.push('\'');
+    message
+}
+
+fn invalid_identifier_chars_message(label: &str, identifier: &str) -> String {
+    let mut message = String::new();
+    message.push_str(label);
+    message.push_str(" identifier '");
+    message.push_str(identifier);
+    message.push_str("' contains invalid characters");
+    message
+}
+
+fn leading_zero_identifier_message(label: &str, identifier: &str) -> String {
+    let mut message = String::new();
+    message.push_str(label);
+    message.push_str(" numeric identifier '");
+    message.push_str(identifier);
+    message.push_str("' has a leading zero");
+    message
 }
 
 fn is_valid_identifier_char(byte: u8) -> bool {
@@ -328,6 +402,22 @@ fn is_valid_identifier_char(byte: u8) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn assert_version_error_contains(input: &str, expected: &str) {
+        let error = Version::parse(input).unwrap_err();
+        assert!(
+            error.to_string().contains(expected),
+            "expected error for '{input}' to contain '{expected}', got '{error}'"
+        );
+    }
+
+    fn assert_pattern_error_contains(input: &str, expected: &str) {
+        let error = parse_version_pattern(input).unwrap_err();
+        assert!(
+            error.to_string().contains(expected),
+            "expected pattern error for '{input}' to contain '{expected}', got '{error}'"
+        );
+    }
 
     #[test]
     fn parses_plain_versions() {
@@ -354,56 +444,146 @@ mod tests {
     }
 
     #[test]
+    fn trims_surrounding_whitespace_before_parsing() {
+        let version = Version::parse(" \n\t1.2.3-rc.1+build.9 \t").unwrap();
+        assert_eq!(version.to_string(), "1.2.3-rc.1+build.9");
+    }
+
+    #[test]
+    fn parses_zero_major_versions_and_numeric_zero_prereleases() {
+        let version = Version::parse("0.0.0-0+001").unwrap();
+        assert_eq!(version.major, 0);
+        assert_eq!(version.minor, 0);
+        assert_eq!(version.patch, 0);
+        assert_eq!(version.prerelease(), Some("0"));
+        assert_eq!(version.build(), Some("001"));
+    }
+
+    #[test]
+    fn parses_maximum_u64_core_segments() {
+        let version =
+            Version::parse("18446744073709551615.18446744073709551615.18446744073709551615")
+                .unwrap();
+        assert_eq!(version.major, u64::MAX);
+        assert_eq!(version.minor, u64::MAX);
+        assert_eq!(version.patch, u64::MAX);
+    }
+
+    #[test]
+    fn allows_leading_zero_build_identifiers() {
+        let version = Version::parse("1.2.3+001.0002").unwrap();
+        assert_eq!(version.build(), Some("001.0002"));
+    }
+
+    #[test]
+    fn allows_alphanumeric_prerelease_identifiers_with_leading_zero() {
+        let version = Version::parse("1.2.3-alpha.01a").unwrap();
+        assert_eq!(version.prerelease(), Some("alpha.01a"));
+    }
+
+    #[test]
     fn rejects_empty_versions() {
-        assert!(Version::parse("").is_err());
-        assert!(Version::parse("   ").is_err());
+        assert_version_error_contains("", "version cannot be empty");
+        assert_version_error_contains("   ", "version cannot be empty");
     }
 
     #[test]
     fn rejects_incomplete_core_segments() {
-        assert!(Version::parse("1.2").is_err());
-        assert!(Version::parse("1").is_err());
+        assert_version_error_contains("1.2", "missing patch segment");
+        assert_version_error_contains("1", "missing minor segment");
     }
 
     #[test]
     fn rejects_extra_core_segments() {
-        assert!(Version::parse("1.2.3.4").is_err());
+        assert_version_error_contains("1.2.3.4", "expected exactly 3 numeric core segments");
     }
 
     #[test]
     fn rejects_leading_zero_core_segments() {
-        assert!(Version::parse("01.2.3").is_err());
-        assert!(Version::parse("1.02.3").is_err());
-        assert!(Version::parse("1.2.03").is_err());
+        assert_version_error_contains("01.2.3", "major segment '01' has a leading zero");
+        assert_version_error_contains("1.02.3", "minor segment '02' has a leading zero");
+        assert_version_error_contains("1.2.03", "patch segment '03' has a leading zero");
     }
 
     #[test]
     fn rejects_invalid_core_characters() {
-        assert!(Version::parse("1.x.3").is_err());
-        assert!(Version::parse("1.2.-3").is_err());
+        assert_version_error_contains("1.x.3", "minor segment 'x' is not numeric");
+        assert_version_error_contains("1.2.-3", "patch segment '-3' is not numeric");
+    }
+
+    #[test]
+    fn rejects_empty_core_segments() {
+        assert_version_error_contains(".1.2", "empty major segment");
+        assert_version_error_contains("1..2", "empty minor segment");
+        assert_version_error_contains("1.2.", "empty patch segment");
+    }
+
+    #[test]
+    fn rejects_overflowing_core_segments() {
+        assert_version_error_contains("18446744073709551616.0.0", "major segment");
+        assert_version_error_contains("0.18446744073709551616.0", "minor segment");
+        assert_version_error_contains("0.0.18446744073709551616", "patch segment");
     }
 
     #[test]
     fn rejects_empty_prerelease_identifiers() {
-        assert!(Version::parse("1.2.3-").is_err());
-        assert!(Version::parse("1.2.3-alpha..1").is_err());
+        assert_version_error_contains("1.2.3-", "invalid prerelease in version");
+        assert_version_error_contains(
+            "1.2.3-alpha..1",
+            "prerelease identifier cannot be empty in 'alpha..1'",
+        );
     }
 
     #[test]
     fn rejects_leading_zero_numeric_prerelease_identifiers() {
-        assert!(Version::parse("1.2.3-alpha.01").is_err());
-        assert!(Version::parse("1.2.3-01").is_err());
+        assert_version_error_contains(
+            "1.2.3-alpha.01",
+            "numeric identifier '01' has a leading zero",
+        );
+        assert_version_error_contains("1.2.3-01", "numeric identifier '01' has a leading zero");
     }
 
     #[test]
     fn rejects_invalid_prerelease_and_build_characters() {
-        assert!(Version::parse("1.2.3-alpha_1").is_err());
-        assert!(Version::parse("1.2.3+build_1").is_err());
+        assert_version_error_contains(
+            "1.2.3-alpha_1",
+            "prerelease identifier 'alpha_1' contains invalid characters",
+        );
+        assert_version_error_contains(
+            "1.2.3+build_1",
+            "build metadata identifier 'build_1' contains invalid characters",
+        );
+    }
+
+    #[test]
+    fn rejects_empty_build_metadata_and_identifiers() {
+        assert_version_error_contains("1.2.3+", "invalid build metadata in version");
+        assert_version_error_contains("1.2.3-alpha+", "invalid build metadata in version");
+        assert_version_error_contains(
+            "1.2.3+build..meta",
+            "build metadata identifier cannot be empty in 'build..meta'",
+        );
+    }
+
+    #[test]
+    fn rejects_non_ascii_identifier_characters() {
+        assert_version_error_contains(
+            "1.2.3-βeta",
+            "prerelease identifier 'βeta' contains invalid characters",
+        );
+        assert_version_error_contains(
+            "1.2.3+ビルド",
+            "build metadata identifier 'ビルド' contains invalid characters",
+        );
     }
 
     #[test]
     fn rejects_repeated_build_delimiters() {
-        assert!(Version::parse("1.2.3+build+meta").is_err());
+        assert_version_error_contains("1.2.3+build+meta", "invalid build metadata in version");
+        assert_version_error_contains(
+            "1.2.3-alpha+build+meta",
+            "invalid build metadata in version",
+        );
     }
 
     #[test]
@@ -428,15 +608,38 @@ mod tests {
     }
 
     #[test]
+    fn prerelease_helpers_return_none_when_suffix_is_missing_or_not_numeric() {
+        let stable = Version::parse("1.2.3").unwrap();
+        assert_eq!(prerelease_channel(&stable), None);
+        assert_eq!(prerelease_number(&stable), None);
+
+        let prerelease = Version::parse("1.2.3-beta").unwrap();
+        assert_eq!(prerelease_channel(&prerelease), Some("beta"));
+        assert_eq!(prerelease_number(&prerelease), None);
+
+        let named_suffix = Version::parse("1.2.3-beta.next").unwrap();
+        assert_eq!(prerelease_channel(&named_suffix), Some("beta"));
+        assert_eq!(prerelease_number(&named_suffix), None);
+    }
+
+    #[test]
     fn builds_prerelease_strings() {
         assert_eq!(build_prerelease("alpha", 0).unwrap(), "alpha.0");
         assert_eq!(build_prerelease("beta-candidate", 12).unwrap(), "beta-candidate.12");
     }
 
     #[test]
+    fn builds_prerelease_strings_for_multi_segment_channels() {
+        assert_eq!(build_prerelease("alpha.beta", 42).unwrap(), "alpha.beta.42");
+    }
+
+    #[test]
     fn rejects_invalid_prerelease_channels() {
         assert!(build_prerelease("alpha beta", 0).is_err());
         assert!(build_prerelease("", 0).is_err());
+        assert!(build_prerelease("alpha..beta", 0).is_err());
+        assert!(build_prerelease(".alpha", 0).is_err());
+        assert!(build_prerelease("alpha.", 0).is_err());
     }
 
     #[test]
@@ -469,6 +672,18 @@ mod tests {
     }
 
     #[test]
+    fn trims_whitespace_in_version_patterns() {
+        assert_eq!(
+            parse_version_pattern("  ~1.2.3+build.5 \n").unwrap().to_string(),
+            "~1.2.3+build.5",
+        );
+        assert_eq!(
+            parse_version_pattern("  ^ \t").unwrap(),
+            VersionPattern::Token(VersionPrefix::Caret)
+        );
+    }
+
+    #[test]
     fn parses_bare_monorepo_tokens() {
         assert_eq!(
             parse_version_pattern("^").unwrap(),
@@ -483,8 +698,10 @@ mod tests {
 
     #[test]
     fn rejects_invalid_version_patterns() {
-        assert!(parse_version_pattern("").is_err());
-        assert!(parse_version_pattern("workspace:^").is_err());
+        assert_pattern_error_contains("", "version pattern cannot be empty");
+        assert_pattern_error_contains("workspace:^", "major segment 'workspace:^' is not numeric");
+        assert_pattern_error_contains("^1.2", "missing patch segment");
+        assert_pattern_error_contains("1.2.3.4", "expected exactly 3 numeric core segments");
     }
 
     #[test]
@@ -494,5 +711,31 @@ mod tests {
             let parsed = parse_version_pattern(pattern).unwrap();
             assert_eq!(parsed.to_string(), pattern);
         }
+    }
+
+    #[test]
+    fn version_bump_order_matches_release_priority() {
+        assert!(VersionBump::Alpha < VersionBump::Beta);
+        assert!(VersionBump::Beta < VersionBump::Rc);
+        assert!(VersionBump::Rc < VersionBump::Patch);
+        assert!(VersionBump::Patch < VersionBump::Minor);
+        assert!(VersionBump::Minor < VersionBump::Major);
+    }
+
+    #[test]
+    fn version_bump_helpers_match_release_semantics() {
+        assert_eq!(VersionBump::Alpha.as_str(), "alpha");
+        assert_eq!(VersionBump::Beta.as_str(), "beta");
+        assert_eq!(VersionBump::Rc.as_str(), "rc");
+        assert_eq!(VersionBump::Patch.as_str(), "patch");
+        assert_eq!(VersionBump::Minor.as_str(), "minor");
+        assert_eq!(VersionBump::Major.as_str(), "major");
+
+        assert!(!VersionBump::Alpha.is_version_bump());
+        assert!(!VersionBump::Beta.is_version_bump());
+        assert!(!VersionBump::Rc.is_version_bump());
+        assert!(VersionBump::Patch.is_version_bump());
+        assert!(VersionBump::Minor.is_version_bump());
+        assert!(VersionBump::Major.is_version_bump());
     }
 }
