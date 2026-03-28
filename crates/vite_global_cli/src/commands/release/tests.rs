@@ -1056,8 +1056,8 @@ fn project_order_breaks_ties_between_independent_packages() {
 
     let selected = vec![
         make_workspace_package(&graph, pkg_a, 2),
-        make_workspace_package(&graph, pkg_b, 1),
-        make_workspace_package(&graph, pkg_c, 0),
+        make_workspace_package(&graph, pkg_b, 0),
+        make_workspace_package(&graph, pkg_c, 1),
     ];
 
     let ordered = topological_sort_selected_packages(&graph, &selected);
