@@ -195,7 +195,7 @@ pub(super) async fn run_publish_preflight(
 ) -> Result<ExitStatus, Error> {
     if options.skip_publish {
         output::note("Skipping publish preflight because --skip-publish was provided.");
-        return Ok(ExitStatus::SUCCESS);
+        return Ok(ExitStatus::default());
     }
 
     output::raw("");
@@ -236,7 +236,7 @@ pub(super) async fn run_release_checks(
 ) -> Result<ExitStatus, Error> {
     if !options.run_checks {
         output::note("Release checks are disabled for this run.");
-        return Ok(ExitStatus::SUCCESS);
+        return Ok(ExitStatus::default());
     }
 
     if readiness_report.workspace_scripts.is_empty() && readiness_report.package_scripts.is_empty()
@@ -288,7 +288,7 @@ pub(super) async fn run_release_checks(
     }
 
     output::success("Release checks succeeded.");
-    Ok(ExitStatus::SUCCESS)
+    Ok(ExitStatus::default())
 }
 
 /// Executes the real publish flow while guaranteeing manifest restoration afterward.
@@ -519,7 +519,7 @@ async fn run_publish_preflight_inner(
     }
 
     output::success("Publish preflight succeeded.");
-    Ok(ExitStatus::SUCCESS)
+    Ok(ExitStatus::default())
 }
 
 async fn publish_packages_inner(
@@ -554,7 +554,7 @@ async fn publish_packages_inner(
         published_count += 1;
     }
 
-    Ok((published_count, ExitStatus::SUCCESS))
+    Ok((published_count, ExitStatus::default()))
 }
 
 fn apply_manifest_edits(
