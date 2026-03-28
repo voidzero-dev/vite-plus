@@ -35,7 +35,7 @@ jobs:
           node-version: '22'
           cache: true
 
-__PACKAGE_MANAGER_SETUP__
+      - __PACKAGE_MANAGER_SETUP__
       - name: Install dependencies
         run: __INSTALL_COMMAND__
 
