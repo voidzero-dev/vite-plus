@@ -7,6 +7,7 @@ use std::process::ExitStatus;
 
 use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
 use clap_complete::ArgValueCandidates;
+use tokio::runtime::Runtime;
 use vite_install::commands::{
     add::SaveDependencyType, install::InstallCommandOptions, outdated::Format,
 };
@@ -20,14 +21,6 @@ use crate::{
     error::Error,
     help,
 };
-
-fn run_tasks_completions() -> Vec<clap_complete::CompletionCandidate> {
-    vec![
-        clap_complete::CompletionCandidate::new("build"),
-        clap_complete::CompletionCandidate::new("dev"),
-        clap_complete::CompletionCandidate::new("test"),
-    ]
-}
 
 #[derive(Clone, Copy, Debug)]
 pub struct RenderOptions {
@@ -1487,6 +1480,37 @@ fn should_force_global_delegate(command: &str, args: &[String]) -> bool {
         }
         _ => false,
     }
+}
+
+/// Get available tasks for shell completion.
+///
+/// Delegates to the local vite-plus CLI to run `vp run` without arguments,
+/// which returns a list of available tasks in the format "task_name: description".
+
+fn run_tasks_completions() -> Vec<clap_complete::CompletionCandidate> {
+    let cwd = match std::env::current_dir() {
+        Ok(cwd) => cwd,
+        Err(_) => return vec![],
+    };
+
+    let output = tokio::task::block_in_place(|| {
+        Runtime::new().ok().and_then(|rt| {
+            let cwd = AbsolutePathBuf::new(cwd)?;
+            rt.block_on(async { commands::delegate::execute_output(cwd, "run", &[]).await.ok() })
+        })
+    });
+
+    output
+        .filter(|o| o.status.success())
+        .map(|output| {
+            String::from_utf8_lossy(&output.stdout)
+                .lines()
+                .filter_map(|line| line.split_once(": ").map(|(name, _)| name.trim()))
+                .filter(|name| !name.is_empty())
+                .map(|name| clap_complete::CompletionCandidate::new(name.to_string()))
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 /// Run the CLI command.
