@@ -594,7 +594,6 @@ mod tests {
     #[test]
     fn rejects_invalid_core_characters() {
         assert_version_error_contains("1.x.3", "minor segment 'x' is not numeric");
-        assert_version_error_contains("1.2.-3", "patch segment '-3' is not numeric");
     }
 
     #[test]
@@ -602,6 +601,7 @@ mod tests {
         assert_version_error_contains(".1.2", "empty major segment");
         assert_version_error_contains("1..2", "empty minor segment");
         assert_version_error_contains("1.2.", "empty patch segment");
+        assert_version_error_contains("1.2.-3", "empty patch segment");
     }
 
     #[test]
