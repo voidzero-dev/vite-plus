@@ -25,26 +25,6 @@ Vite+ is the unified entry point for local web development. It combines [Vite](h
 All of this is configured from your project root and works across Vite's framework ecosystem.
 Vite+ is fully open-source under the MIT license.
 
-### Release References
-
-`vp release` follows these upstream specifications and package-manager docs when deciding version bumps and publish safety:
-
-- [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html)
-- [SemVer FAQ: 0.y.z initial development](https://semver.org/#faq)
-- [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/#specification)
-- [Conventional Commits FAQ](https://www.conventionalcommits.org/en/v1.0.0/#faq)
-- [npm `package.json` docs](https://docs.npmjs.com/cli/v11/configuring-npm/package-json/)
-- [npm package spec docs](https://docs.npmjs.com/cli/v11/using-npm/package-spec/)
-- [npm RFC: `workspace:` protocol support](https://github.com/npm/rfcs/issues/765)
-- [pnpm workspaces and `workspace:` publish transformations](https://pnpm.io/workspaces)
-- [pnpm catalogs](https://pnpm.io/catalogs)
-- [Yarn workspaces and `workspace:` cross-references](https://yarnpkg.com/features/workspaces)
-- [Yarn `workspace:` protocol](https://yarnpkg.com/protocol/workspace)
-- [Yarn `yarn npm publish`](https://yarnpkg.com/cli/npm/publish)
-- [Bun workspaces and `workspace:` publish transformations](https://bun.sh/docs/pm/workspaces)
-- [Bun catalogs](https://bun.sh/docs/pm/catalogs)
-- [Bun `bun publish`](https://bun.sh/docs/pm/cli/publish)
-
 `vp release` does not run build, pack, or custom pre-release scripts implicitly. Instead it summarizes likely checks from `build`, `pack`, `prepack`, `prepublishOnly`, `prepare`, and `vitePlus.release.checkScripts`, then asks for confirmation before mutating files or publishing. Use `--yes` for CI or other non-interactive runs.
 
 ## Getting Started
