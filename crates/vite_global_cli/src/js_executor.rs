@@ -3,7 +3,7 @@
 //! This module handles downloading and caching Node.js via `vite_js_runtime`,
 //! and executing JavaScript scripts using the managed runtime.
 
-use std::process::ExitStatus;
+use std::process::{ExitStatus, Output};
 
 use tokio::process::Command;
 use vite_js_runtime::{
@@ -214,11 +214,23 @@ impl JsExecutor {
         project_path: &AbsolutePath,
         args: &[String],
     ) -> Result<ExitStatus, Error> {
-        // Use project's runtime based on its devEngines.runtime configuration
+        let scripts_dir = self.get_scripts_dir()?;
         let runtime = self.ensure_project_runtime(project_path).await?;
-        let node_binary = runtime.get_binary_path();
-        let bin_prefix = runtime.get_bin_prefix();
-        self.run_js_entry(project_path, &node_binary, &bin_prefix, args).await
+        let mut cmd = Self::prepare_js_command(project_path, &runtime, scripts_dir, args);
+        let status = cmd.status().await?;
+        Ok(status)
+    }
+
+    pub async fn delegate_to_local_cli_output(
+        &mut self,
+        project_path: &AbsolutePath,
+        args: &[String],
+    ) -> Result<Output, Error> {
+        let scripts_dir = self.get_scripts_dir()?;
+        let runtime = self.ensure_project_runtime(project_path).await?;
+        let mut cmd = Self::prepare_js_command(project_path, &runtime, scripts_dir, args);
+        let output = cmd.output().await?;
+        Ok(output)
     }
 
     /// Delegate to the global vite-plus CLI entrypoint directly.
@@ -251,43 +263,37 @@ impl JsExecutor {
     /// when no version source exists in the project directory.
     ///
     /// Use this for read-only / side-effect-free commands like `--version`.
-    #[allow(dead_code)] // kept for future read-only delegations
+    #[allow(dead_code)]
     pub async fn delegate_with_cli_runtime(
         &mut self,
         project_path: &AbsolutePath,
         args: &[String],
     ) -> Result<ExitStatus, Error> {
+        let scripts_dir = self.get_scripts_dir()?;
         let runtime = self.ensure_cli_runtime().await?;
-        let node_binary = runtime.get_binary_path();
-        let bin_prefix = runtime.get_bin_prefix();
-        self.run_js_entry(project_path, &node_binary, &bin_prefix, args).await
+        let mut cmd = Self::prepare_js_command(project_path, &runtime, scripts_dir, args);
+        let status = cmd.status().await?;
+        Ok(status)
     }
 
-    /// Run a JS entry point with the given runtime, resolving local vite-plus first.
-    async fn run_js_entry(
-        &self,
+    fn prepare_js_command(
         project_path: &AbsolutePath,
-        node_binary: &AbsolutePath,
-        bin_prefix: &AbsolutePath,
+        runtime: &JsRuntime,
+        scripts_dir: AbsolutePathBuf,
         args: &[String],
-    ) -> Result<ExitStatus, Error> {
-        // Try to resolve vite-plus from the project directory using oxc_resolver
+    ) -> Command {
         let entry_point = match Self::resolve_local_vite_plus(project_path) {
             Some(path) => path,
-            None => {
-                // Fall back to the global installation's bin.js
-                let scripts_dir = self.get_scripts_dir()?;
-                scripts_dir.join("bin.js")
-            }
+            None => scripts_dir.join("bin.js"),
         };
 
         tracing::debug!("Delegating to CLI via JS entry point: {:?} {:?}", entry_point, args);
 
-        let mut cmd = Self::create_js_command(node_binary, bin_prefix);
+        let node_binary = runtime.get_binary_path();
+        let bin_prefix = runtime.get_bin_prefix();
+        let mut cmd = Self::create_js_command(&node_binary, &bin_prefix);
         cmd.arg(entry_point.as_path()).args(args).current_dir(project_path.as_path());
-
-        let status = cmd.status().await?;
-        Ok(status)
+        cmd
     }
 
     /// Resolve the local vite-plus package's `dist/bin.js` from the project directory.
