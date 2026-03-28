@@ -551,8 +551,8 @@ impl CommandHandler for VitePlusCommandHandler {
         &mut self,
         command: &mut ScriptCommand,
     ) -> anyhow::Result<HandledCommand> {
-        // Only intercept "vp" commands in task scripts.
-        // "vite" is a separate tool and should always run verbatim.
+        // Intercept "vp" commands in task scripts so that `vp test`, `vp build`, etc.
+        // are synthesized in-session rather than spawning a new CLI process.
         let program = command.program.as_str();
         if program != "vp" {
             return Ok(HandledCommand::Verbatim);
