@@ -248,7 +248,8 @@ impl ChecklistText<'_> {
     /// writes directly into that buffer instead of allocating a brand new line string.
     fn write_into(&self, buffer: &mut String) {
         match self {
-            Self::Static(value) | Self::Borrowed(value) => buffer.push_str(value),
+            Self::Static(value) => buffer.push_str(value),
+            Self::Borrowed(value) => buffer.push_str(value),
             Self::Owned(value) => buffer.push_str(value),
         }
     }

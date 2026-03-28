@@ -199,7 +199,7 @@ pub(super) fn select_workspace_packages(
     let mut selected = Vec::new();
 
     for package in packages {
-        let mut match_order = None;
+        let mut match_order: Option<usize> = None;
         for (index, pattern) in patterns.iter().enumerate() {
             if package.known_names.iter().any(|name| pattern.matches(name)) {
                 matched_patterns[index] = true;
