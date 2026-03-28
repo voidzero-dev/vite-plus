@@ -38,6 +38,7 @@ When transitioning to Vite+, projects typically use standalone tools like vite, 
 - ✅ **Configuration files**:
   - .oxlintrc → vite.config.ts (lint section)
   - .oxfmtrc → vite.config.ts (format section)
+- ✅ **tsconfig.json cleanup**: Removes deprecated `esModuleInterop: false` (causes oxlint tsgolint errors)
 
 **What this command optionally migrates** (prompted):
 
@@ -52,7 +53,6 @@ When transitioning to Vite+, projects typically use standalone tools like vite, 
 **What this command does NOT migrate**:
 
 - ❌ Package.json scripts → vite-task.json (different feature)
-- ❌ TypeScript configuration changes
 - ❌ Build tool changes (webpack/rollup → vite)
 
 These are **consolidation migrations**, not **feature migrations**.
@@ -604,6 +604,21 @@ When a Prettier configuration file (`.prettierrc*`, `prettier.config.*`, or `"pr
 - Non-interactive mode: auto-runs without prompting
 - Failure is non-blocking — warns and continues with the rest of migration
 - Re-runnable: if user declines initially, running `vp migrate` again offers prettier migration
+
+## tsconfig.json Cleanup
+
+During migration, `vp migrate` scans all `tsconfig*.json` files in the project directory (non-recursive) and removes deprecated options that would cause lint errors.
+
+**Currently removed options**:
+
+- `"esModuleInterop": false` — This option has been removed by typescript. When present, `vp lint --type-aware` fails with: `Option 'esModuleInterop=false' has been removed.`
+
+**Behavior**:
+
+- Only `esModuleInterop: false` is removed — `true` is left alone
+- Uses `jsonc-parser` for JSONC-aware editing that preserves comments and formatting
+- Scans all `tsconfig*.json` variants (e.g., `tsconfig.json`, `tsconfig.app.json`, `tsconfig.node.json`)
+- Runs automatically as part of the config rewrite phase — no user prompt needed
 
 ## References
 

@@ -44,14 +44,17 @@ import {
   checkVitestVersion,
   checkViteVersion,
   detectEslintProject,
+  detectNodeVersionManagerFile,
   detectPrettierProject,
   installGitHooks,
   mergeViteConfigFiles,
   migrateEslintToOxlint,
+  migrateNodeVersionManagerFile,
   migratePrettierToOxfmt,
   preflightGitHooksSetup,
   rewriteMonorepo,
   rewriteStandaloneProject,
+  type NodeVersionManagerDetection,
 } from './migrator.js';
 import { createMigrationReport, type MigrationReport } from './report.js';
 
@@ -164,6 +167,20 @@ async function promptPrettierMigration(
   );
   if (!ok) {
     cancelAndExit('Prettier migration failed. Fix the issue and re-run `vp migrate`.', 1);
+  }
+  return true;
+}
+
+async function confirmNodeVersionFileMigration(interactive: boolean): Promise<boolean> {
+  if (interactive) {
+    const confirmed = await prompts.confirm({
+      message: 'Migrate .nvmrc to .node-version?',
+      initialValue: true,
+    });
+    if (prompts.isCancel(confirmed)) {
+      cancelAndExit();
+    }
+    return !!confirmed;
   }
   return true;
 }
@@ -319,6 +336,8 @@ interface MigrationPlan {
   eslintConfigFile?: string;
   migratePrettier: boolean;
   prettierConfigFile?: string;
+  migrateNodeVersionFile: boolean;
+  nodeVersionDetection?: NodeVersionManagerDetection;
 }
 
 async function collectMigrationPlan(
@@ -436,6 +455,13 @@ async function collectMigrationPlan(
     warnPackageLevelPrettier();
   }
 
+  // 10. Node version manager file detection + prompt
+  const nodeVersionDetection = detectNodeVersionManagerFile(rootDir);
+  let migrateNodeVersionFile = false;
+  if (nodeVersionDetection) {
+    migrateNodeVersionFile = await confirmNodeVersionFileMigration(options.interactive);
+  }
+
   const plan: MigrationPlan = {
     packageManager,
     shouldSetupHooks,
@@ -447,6 +473,8 @@ async function collectMigrationPlan(
     eslintConfigFile: eslintProject.configFile,
     migratePrettier,
     prettierConfigFile: prettierProject.configFile,
+    migrateNodeVersionFile,
+    nodeVersionDetection,
   };
 
   return plan;
@@ -522,6 +550,9 @@ function showMigrationSummary(options: {
   }
   if (report.prettierMigrated) {
     log(`${styleText('gray', '•')} Prettier migrated to Oxfmt`);
+  }
+  if (report.nodeVersionFileMigrated) {
+    log(`${styleText('gray', '•')} Node version manager file migrated to .node-version`);
   }
   if (report.gitHooksConfigured) {
     log(`${styleText('gray', '•')} Git hooks configured`);
@@ -633,7 +664,13 @@ async function executeMigrationPlan(
     cancelAndExit('Vite+ cannot automatically migrate this project yet.', 1);
   }
 
-  // 3. Run vp install to ensure the project is ready
+  // 3. Migrate node version manager file → .node-version (independent of vite version)
+  if (plan.migrateNodeVersionFile && plan.nodeVersionDetection) {
+    updateMigrationProgress('Migrating node version file');
+    migrateNodeVersionManagerFile(workspaceInfo.rootDir, plan.nodeVersionDetection, report);
+  }
+
+  // 4. Run vp install to ensure the project is ready
   updateMigrationProgress('Installing dependencies');
   const initialInstallSummary = await runViteInstall(
     workspaceInfo.rootDir,
@@ -742,7 +779,10 @@ async function executeMigrationPlan(
   // 11. Reinstall after migration
   // npm needs --force to re-resolve packages with newly added overrides,
   // otherwise the stale lockfile prevents override resolution.
-  const installArgs = plan.packageManager === PackageManager.npm ? ['--force'] : undefined;
+  const installArgs =
+    plan.packageManager === PackageManager.npm || plan.packageManager === PackageManager.bun
+      ? ['--force']
+      : undefined;
   updateMigrationProgress('Installing dependencies');
   const finalInstallSummary = await runViteInstall(
     workspaceInfo.rootDir,
@@ -815,6 +855,18 @@ async function main() {
       options.interactive,
       workspaceInfoOptional.packages,
     );
+
+    // Check if node version manager file migration is needed
+    const nodeVersionDetection = detectNodeVersionManagerFile(workspaceInfoOptional.rootDir);
+    if (nodeVersionDetection) {
+      const confirmed = await confirmNodeVersionFileMigration(options.interactive);
+      if (
+        confirmed &&
+        migrateNodeVersionManagerFile(workspaceInfoOptional.rootDir, nodeVersionDetection, report)
+      ) {
+        didMigrate = true;
+      }
+    }
 
     // Merge configs and reinstall once if any tool migration happened
     if (eslintMigrated || prettierMigrated) {

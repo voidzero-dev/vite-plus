@@ -1,0 +1,7 @@
+{
+  "commands": [
+    "vp migrate --no-interactive # migration should detect .nvmrc and auto-migrate to .node-version",
+    "cat .node-version # check .node-version is created with v prefix stripped",
+    "test ! -f .nvmrc # check .nvmrc is removed"
+  ]
+}

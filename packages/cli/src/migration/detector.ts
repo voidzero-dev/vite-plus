@@ -11,6 +11,7 @@ export interface ConfigFiles {
   eslintLegacyConfig?: string;
   prettierConfig?: string; // e.g. '.prettierrc.json', 'prettier.config.js', PRETTIER_PACKAGE_JSON_CONFIG
   prettierIgnore?: boolean;
+  nvmrcFile?: boolean;
 }
 
 // Sentinel value indicating Prettier config lives inside package.json "prettier" key.
@@ -176,6 +177,11 @@ export function detectConfigs(projectPath: string): ConfigFiles {
   // Check for .prettierignore
   if (fs.existsSync(path.join(projectPath, '.prettierignore'))) {
     configs.prettierIgnore = true;
+  }
+
+  // Check for .nvmrc (nvm)
+  if (fs.existsSync(path.join(projectPath, '.nvmrc'))) {
+    configs.nvmrcFile = true;
   }
 
   return configs;

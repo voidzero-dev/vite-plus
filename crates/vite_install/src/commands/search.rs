@@ -31,6 +31,7 @@ impl PackageManager {
 
     /// Resolve the search command.
     /// All package managers delegate to npm search.
+    /// Bun does not support search, falls back to npm.
     #[must_use]
     pub fn resolve_search_command(&self, options: &SearchCommandOptions) -> ResolveCommandResult {
         let bin_name: String = "npm".to_string();

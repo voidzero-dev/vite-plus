@@ -11,7 +11,7 @@ import {
   rewriteMonorepoProject,
   rewriteStandaloneProject,
 } from '../migration/migrator.js';
-import { DependencyType, type WorkspaceInfo } from '../types/index.js';
+import { DependencyType, PackageManager, type WorkspaceInfo } from '../types/index.js';
 import {
   detectExistingAgentTargetPaths,
   selectAgentTargetPaths,
@@ -91,6 +91,10 @@ const helpMessage = renderCliDoc({
           description: 'Set up pre-commit hooks (default in non-interactive mode)',
         },
         { label: '--no-hooks', description: 'Skip pre-commit hooks setup' },
+        {
+          label: '--package-manager NAME',
+          description: 'Use specified package manager (pnpm, npm, yarn, bun)',
+        },
         { label: '--verbose', description: 'Show detailed scaffolding output' },
         { label: '--no-interactive', description: 'Run in non-interactive mode' },
         { label: '--list', description: 'List all available templates' },
@@ -185,6 +189,7 @@ export interface Options {
   agent?: string | string[] | false;
   editor?: string;
   hooks?: boolean;
+  packageManager?: string;
 }
 
 // Parse CLI arguments: split on '--' separator
@@ -207,10 +212,11 @@ function parseArgs() {
     agent?: string | string[] | false;
     editor?: string;
     hooks?: boolean;
+    'package-manager'?: string;
   }>(viteArgs, {
     alias: { h: 'help' },
     boolean: ['help', 'list', 'all', 'interactive', 'hooks', 'verbose'],
-    string: ['directory', 'agent', 'editor'],
+    string: ['directory', 'agent', 'editor', 'package-manager'],
     default: { interactive: defaultInteractive() },
   });
 
@@ -227,6 +233,7 @@ function parseArgs() {
       agent: parsed.agent,
       editor: parsed.editor,
       hooks: parsed.hooks,
+      packageManager: parsed['package-manager'],
     } as Options,
     templateArgs,
   };
@@ -624,9 +631,20 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     }
   }
 
-  // Prompt for package manager or use default
+  // Resolve package manager: workspace detection > CLI flag > interactive prompt/default
+  if (
+    options.packageManager &&
+    !Object.values(PackageManager).includes(options.packageManager as PackageManager)
+  ) {
+    const valid = Object.values(PackageManager).join(', ');
+    prompts.log.error(
+      `Invalid package manager: ${options.packageManager}. Must be one of: ${valid}`,
+    );
+    cancelAndExit('Invalid --package-manager value', 1);
+  }
   const packageManager =
     workspaceInfoOptional.packageManager ??
+    (options.packageManager as PackageManager | undefined) ??
     (await selectPackageManager(options.interactive, compactOutput));
   const shouldSilencePackageManagerInstallLog =
     compactOutput || (isMonorepo && workspaceInfoOptional.packageManager !== undefined);

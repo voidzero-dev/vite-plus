@@ -1,0 +1,7 @@
+{
+  "commands": [
+    "vp pm cache --help # should show help",
+    "vp pm cache dir > /dev/null # should show cache directory",
+    "vp pm cache path > /dev/null # should show cache path (alias for dir)"
+  ]
+}

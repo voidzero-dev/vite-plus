@@ -343,6 +343,9 @@ importers:
       cross-spawn:
         specifier: 'catalog:'
         version: 7.0.6
+      jsonc-parser:
+        specifier: 'catalog:'
+        version: 3.3.1
       oxfmt:
         specifier: 'catalog:'
         version: 0.42.0
@@ -389,9 +392,6 @@ importers:
       glob:
         specifier: 'catalog:'
         version: 13.0.0
-      jsonc-parser:
-        specifier: 'catalog:'
-        version: 3.3.1
       lint-staged:
         specifier: 'catalog:'
         version: 16.4.0

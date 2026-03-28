@@ -28,7 +28,11 @@ import { editJsonFile, isJsonFile, readJsonFile } from '../utils/json.js';
 import { detectPackageMetadata } from '../utils/package.js';
 import { displayRelative, rulesDir } from '../utils/path.js';
 import { getSpinner } from '../utils/prompts.js';
-import { hasBaseUrlInTsconfig } from '../utils/tsconfig.js';
+import {
+  findTsconfigFiles,
+  hasBaseUrlInTsconfig,
+  removeDeprecatedTsconfigFalseOption,
+} from '../utils/tsconfig.js';
 import { editYamlFile, scalarString, type YamlDocument } from '../utils/yaml.js';
 import {
   PRETTIER_CONFIG_FILES,
@@ -643,6 +647,31 @@ function rewritePrettierLintStagedConfigFiles(projectPath: string, report?: Migr
   rewriteToolLintStagedConfigFiles(projectPath, rewritePrettier, 'prettier', report);
 }
 
+function cleanupDeprecatedTsconfigOptions(
+  projectPath: string,
+  silent = false,
+  report?: MigrationReport,
+): void {
+  const deprecatedOptions = ['esModuleInterop', 'allowSyntheticDefaultImports'];
+  const files = findTsconfigFiles(projectPath);
+  for (const filePath of files) {
+    for (const name of deprecatedOptions) {
+      if (removeDeprecatedTsconfigFalseOption(filePath, name)) {
+        if (report) {
+          report.removedConfigCount++;
+        }
+        if (!silent) {
+          prompts.log.success(`✔ Removed ${name}: false from ${displayRelative(filePath)}`);
+        }
+        warnMigration(
+          `Removed \`"${name}": false\` from ${displayRelative(filePath)} — this option has been deprecated. See https://github.com/oxc-project/tsgolint/issues/351, https://github.com/microsoft/TypeScript/issues/62529`,
+          report,
+        );
+      }
+    }
+  }
+}
+
 /**
  * Rewrite standalone project to add vite-plus dependencies
  * @param projectPath - The path to the project
@@ -680,7 +709,7 @@ export function rewriteStandaloneProject(
         ...pkg.resolutions,
         ...VITE_PLUS_OVERRIDE_PACKAGES,
       };
-    } else if (packageManager === PackageManager.npm) {
+    } else if (packageManager === PackageManager.npm || packageManager === PackageManager.bun) {
       pkg.overrides = {
         ...pkg.overrides,
         ...VITE_PLUS_OVERRIDE_PACKAGES,
@@ -724,6 +753,7 @@ export function rewriteStandaloneProject(
   if (!skipStagedMigration) {
     rewriteLintStagedConfigFile(projectPath, report);
   }
+  cleanupDeprecatedTsconfigOptions(projectPath, silent, report);
   mergeViteConfigFiles(projectPath, silent, report);
   injectLintTypeCheckDefaults(projectPath, silent, report);
   injectFmtDefaults(projectPath, silent, report);
@@ -749,6 +779,8 @@ export function rewriteMonorepo(
     rewritePnpmWorkspaceYaml(workspaceInfo.rootDir);
   } else if (workspaceInfo.packageManager === PackageManager.yarn) {
     rewriteYarnrcYml(workspaceInfo.rootDir);
+  } else if (workspaceInfo.packageManager === PackageManager.bun) {
+    rewriteBunCatalog(workspaceInfo.rootDir);
   }
   rewriteRootWorkspacePackageJson(
     workspaceInfo.rootDir,
@@ -770,6 +802,7 @@ export function rewriteMonorepo(
   if (!skipStagedMigration) {
     rewriteLintStagedConfigFile(workspaceInfo.rootDir, report);
   }
+  cleanupDeprecatedTsconfigOptions(workspaceInfo.rootDir, silent, report);
   mergeViteConfigFiles(workspaceInfo.rootDir, silent, report);
   injectLintTypeCheckDefaults(workspaceInfo.rootDir, silent, report);
   injectFmtDefaults(workspaceInfo.rootDir, silent, report);
@@ -791,6 +824,7 @@ export function rewriteMonorepoProject(
   silent = false,
   report?: MigrationReport,
 ): void {
+  cleanupDeprecatedTsconfigOptions(projectPath, silent, report);
   mergeViteConfigFiles(projectPath, silent, report);
   mergeTsdownConfigFile(projectPath, silent, report);
 
@@ -951,6 +985,52 @@ function rewriteCatalog(doc: YamlDocument): void {
 }
 
 /**
+ * Write catalog entries to root package.json for bun.
+ * Bun stores catalogs in package.json under the `catalog` key,
+ * unlike pnpm which uses pnpm-workspace.yaml.
+ * @see https://bun.sh/docs/pm/catalogs
+ */
+function rewriteBunCatalog(projectPath: string): void {
+  const packageJsonPath = path.join(projectPath, 'package.json');
+  if (!fs.existsSync(packageJsonPath)) {
+    return;
+  }
+
+  editJsonFile<{
+    catalog?: Record<string, string>;
+    overrides?: Record<string, string>;
+  }>(packageJsonPath, (pkg) => {
+    const catalog: Record<string, string> = { ...pkg.catalog };
+
+    // Add vite-plus managed packages to catalog
+    for (const [key, value] of Object.entries(VITE_PLUS_OVERRIDE_PACKAGES)) {
+      if (!value.startsWith('file:')) {
+        catalog[key] = value;
+      }
+    }
+    if (!VITE_PLUS_VERSION.startsWith('file:')) {
+      catalog[VITE_PLUS_NAME] = VITE_PLUS_VERSION;
+    }
+
+    // Remove replaced packages from catalog
+    for (const name of REMOVE_PACKAGES) {
+      delete catalog[name];
+    }
+
+    pkg.catalog = catalog;
+
+    // bun overrides support catalog: references
+    const overrides: Record<string, string> = { ...pkg.overrides };
+    for (const key of Object.keys(VITE_PLUS_OVERRIDE_PACKAGES)) {
+      overrides[key] = 'catalog:';
+    }
+    pkg.overrides = overrides;
+
+    return pkg;
+  });
+}
+
+/**
  * Rewrite root workspace package.json to add vite-plus dependencies
  * @param projectPath - The path to the project
  */
@@ -984,6 +1064,8 @@ function rewriteRootWorkspacePackageJson(
         ...pkg.overrides,
         ...VITE_PLUS_OVERRIDE_PACKAGES,
       };
+    } else if (packageManager === PackageManager.bun) {
+      // bun overrides are handled in rewriteBunCatalog() with catalog: references
     } else if (packageManager === PackageManager.pnpm) {
       if (isForceOverrideMode()) {
         // In force-override mode, keep overrides in package.json pnpm.overrides
@@ -1993,4 +2075,104 @@ function setPackageManager(
     }
     return pkg;
   });
+}
+
+export interface NodeVersionManagerDetection {
+  file: string;
+}
+
+/**
+ * Detect a .nvmrc file in the project directory.
+ * Returns undefined if not found or .node-version already exists.
+ */
+export function detectNodeVersionManagerFile(
+  projectPath: string,
+): NodeVersionManagerDetection | undefined {
+  // already has .node-version — skip detection to avoid false positives and preserve existing file
+  if (fs.existsSync(path.join(projectPath, '.node-version'))) {
+    return undefined;
+  }
+
+  const configs = detectConfigs(projectPath);
+  if (configs.nvmrcFile) {
+    return { file: '.nvmrc' };
+  }
+  return undefined;
+}
+
+/**
+ * Parse a version alias from a .nvmrc file into a .node-version compatible string.
+ * Accepts the first line of .nvmrc (pre-trimmed).
+ * Returns null for unsupported aliases like "system", "default", "iojs".
+ */
+export function parseNvmrcVersion(alias: string): string | null {
+  const version = alias.trim();
+
+  if (!version) {
+    return null;
+  }
+
+  // "node" and "stable" mean "latest stable release" which maps closely to lts/*.
+  // Starting from Node 27, all releases will be LTS, so the gap is shrinking.
+  // We map these to lts/* and log the conversion so users are aware.
+  if (version === 'node' || version === 'stable') {
+    return 'lts/*';
+  }
+
+  // "iojs", "system", and "default" have no meaningful equivalent and cannot be auto-migrated.
+  if (version === 'iojs' || version === 'system' || version === 'default') {
+    return null;
+  }
+
+  // LTS aliases (lts/*, lts/iron, etc.) pass through as-is
+  if (version.startsWith('lts/')) {
+    return version;
+  }
+
+  // Strip optional 'v' prefix, then validate as a semver version or range
+  const normalized = version.startsWith('v') ? version.slice(1) : version;
+  if (!normalized || !semver.validRange(normalized)) {
+    return null;
+  }
+  return normalized;
+}
+
+/**
+ * Migrate .nvmrc to .node-version and remove .nvmrc.
+ * Returns true on success, false if migration was skipped or failed.
+ */
+export function migrateNodeVersionManagerFile(
+  projectPath: string,
+  _detection: NodeVersionManagerDetection,
+  report?: MigrationReport,
+): boolean {
+  const sourcePath = path.join(projectPath, '.nvmrc');
+  const nodeVersionPath = path.join(projectPath, '.node-version');
+  const content = fs.readFileSync(sourcePath, 'utf8');
+  const originalAlias = content.split('\n')[0]?.trim() ?? '';
+  const version = parseNvmrcVersion(originalAlias);
+
+  if (!version) {
+    warnMigration(
+      '.nvmrc contains an unsupported version alias. Create .node-version manually with your desired Node.js version.',
+      report,
+    );
+    return false;
+  }
+
+  // TODO: remove this log once Node 27+ makes all releases LTS, at which point
+  // "node"/"stable" and "lts/*" will be effectively equivalent.
+  if (version === 'lts/*' && (originalAlias === 'node' || originalAlias === 'stable')) {
+    prompts.log.info(
+      `"${originalAlias}" in .nvmrc is not a specific version; automatically mapping to "lts/*"`,
+    );
+  }
+
+  fs.writeFileSync(nodeVersionPath, `${version}\n`);
+  fs.unlinkSync(sourcePath);
+
+  if (report) {
+    report.nodeVersionFileMigrated = true;
+  }
+  return true;
 }

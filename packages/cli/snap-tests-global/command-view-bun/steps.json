@@ -1,0 +1,7 @@
+{
+  "commands": [
+    "vp pm view --help # should show help",
+    "vp pm view testnpm2 | grep 'registry' # should view package information",
+    "vp pm view testnpm2 version # should view version field"
+  ]
+}

@@ -49,6 +49,10 @@ impl PackageManager {
                 bin_name = "npm".into();
                 args.push("link".into());
             }
+            PackageManagerType::Bun => {
+                bin_name = "bun".into();
+                args.push("link".into());
+            }
         }
 
         // Add package/directory if specified

@@ -117,6 +117,28 @@ impl PackageManager {
                     }
                 }
             }
+            PackageManagerType::Bun => {
+                bin_name = "bun".into();
+
+                match options.subcommand {
+                    "dir" | "path" => {
+                        args.push("pm".into());
+                        args.push("cache".into());
+                    }
+                    "clean" => {
+                        args.push("pm".into());
+                        args.push("cache".into());
+                        args.push("rm".into());
+                    }
+                    _ => {
+                        output::warn(&format!(
+                            "bun pm cache subcommand '{}' not supported",
+                            options.subcommand
+                        ));
+                        return None;
+                    }
+                }
+            }
         }
 
         // Add pass-through args

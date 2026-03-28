@@ -1,0 +1,24 @@
+> vp pm view --help # should show help
+VITE+ - The Unified Toolchain for the Web
+
+Usage: vp pm view [OPTIONS] <PACKAGE> [FIELD] [-- <PASS_THROUGH_ARGS>...]
+
+View package information from the registry
+
+Arguments:
+  <PACKAGE>               Package name with optional version
+  [FIELD]                 Specific field to view
+  [PASS_THROUGH_ARGS]...  Additional arguments
+
+Options:
+  --json      Output in JSON format
+  -h, --help  Print help
+
+Documentation: https://viteplus.dev/guide/install
+
+
+> vp pm view testnpm2 | grep 'registry' # should view package information
+ .tarball: https://registry.<domain>/testnpm2/-/testnpm2-1.0.1.tgz
+
+> vp pm view testnpm2 version # should view version field
+1.0.1
