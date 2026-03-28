@@ -11,7 +11,7 @@ impl Tip for UseVpxOrRun {
     }
 
     fn message(&self) -> &'static str {
-        "Execute a package binary with `vpx <pkg[@version]>`, or a script with `vp run <script>`"
+        "Execute a package binary with `vpx <pkg[@version]>`, or a script with `vpr <script>` (or `vp run <script>`)"
     }
 }
 
