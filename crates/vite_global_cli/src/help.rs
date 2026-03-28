@@ -78,6 +78,7 @@ fn documentation_url_for_command_path(command_path: &[&str]) -> Option<&'static 
         ["cache"] => Some("https://viteplus.dev/guide/cache"),
         ["build" | "preview"] => Some("https://viteplus.dev/guide/build"),
         ["pack"] => Some("https://viteplus.dev/guide/pack"),
+        ["release"] => None,
         ["env", ..] => Some("https://viteplus.dev/guide/env"),
         ["upgrade"] => Some("https://viteplus.dev/guide/upgrade"),
         _ => None,
@@ -461,6 +462,10 @@ pub fn top_level_help_doc() -> HelpDoc {
                     row("build", "Build for production"),
                     row("pack", "Build library"),
                     row("preview", "Preview production build"),
+                    row(
+                        "release",
+                        "Version and publish workspace packages with readiness checks, confirmation, and optional changelog generation",
+                    ),
                 ],
             ),
             section_rows(

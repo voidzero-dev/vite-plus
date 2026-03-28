@@ -2,6 +2,7 @@
 
 use std::io;
 
+use vite_shared::{GitError, PackageJsonError};
 use vite_str::Str;
 
 /// Error type for the global CLI.
@@ -57,4 +58,23 @@ pub enum Error {
 
     #[error("Unsupported integrity format: {0} (only sha512 is supported)")]
     UnsupportedIntegrity(Str),
+}
+
+impl From<GitError> for Error {
+    fn from(value: GitError) -> Self {
+        match value {
+            GitError::Io(err) => Self::CommandExecution(err),
+            GitError::Command(message) => Self::UserMessage(message.into()),
+        }
+    }
+}
+
+impl From<PackageJsonError> for Error {
+    fn from(value: PackageJsonError) -> Self {
+        match value {
+            PackageJsonError::Io(err) => Self::CommandExecution(err),
+            PackageJsonError::Json(err) => Self::JsonError(err),
+            PackageJsonError::Message(message) => Self::UserMessage(message.into()),
+        }
+    }
 }
