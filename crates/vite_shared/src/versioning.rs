@@ -8,50 +8,79 @@ use std::{fmt, fmt::Write as _, str::FromStr};
 
 use thiserror::Error;
 
+/// Error produced while parsing or synthesizing versions and version patterns.
+///
+/// The parser in this module is intentionally scratch-built for the release flow, so callers only
+/// need a human-readable message explaining which SemVer rule was violated.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum VersionError {
     #[error("{0}")]
     Message(String),
 }
 
+/// A parsed semantic version with optional prerelease and build metadata.
+///
+/// The release command uses this type instead of depending on an external SemVer crate so that the
+/// accepted syntax, error messages, and bump behavior remain fully under vite-plus control.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Version {
+    /// Major version number.
     pub major: u64,
+    /// Minor version number.
     pub minor: u64,
+    /// Patch version number.
     pub patch: u64,
     prerelease: Option<String>,
     build: Option<String>,
 }
 
 impl Version {
+    /// Creates a core version without prerelease or build metadata.
     #[must_use]
     pub const fn new(major: u64, minor: u64, patch: u64) -> Self {
         Self { major, minor, patch, prerelease: None, build: None }
     }
 
+    /// Parses a SemVer string into a [`Version`].
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use vite_shared::Version;
+    ///
+    /// let version = Version::parse("1.2.3-beta.1+build.5").unwrap();
+    /// assert_eq!(version.major, 1);
+    /// assert_eq!(version.prerelease(), Some("beta.1"));
+    /// assert_eq!(version.build(), Some("build.5"));
+    /// ```
     pub fn parse(input: &str) -> Result<Self, VersionError> {
         input.parse()
     }
 
+    /// Returns the prerelease portion, if present.
     #[must_use]
     pub fn prerelease(&self) -> Option<&str> {
         self.prerelease.as_deref()
     }
 
+    /// Returns the build metadata portion, if present.
     #[must_use]
     pub fn build(&self) -> Option<&str> {
         self.build.as_deref()
     }
 
+    /// Returns `true` when this version is a prerelease.
     #[must_use]
     pub fn has_prerelease(&self) -> bool {
         self.prerelease.is_some()
     }
 
+    /// Replaces the prerelease component.
     pub fn set_prerelease(&mut self, prerelease: Option<String>) {
         self.prerelease = prerelease;
     }
 
+    /// Removes build metadata in place.
     pub fn clear_build(&mut self) {
         self.build = None;
     }
@@ -103,6 +132,10 @@ impl FromStr for Version {
     }
 }
 
+/// Release-level bump classification used by vite-plus release planning.
+///
+/// `Alpha`, `Beta`, and `Rc` are prerelease channels rather than base SemVer increments, which is
+/// why [`VersionBump::is_version_bump`] returns `false` for them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum VersionBump {
     Alpha,
@@ -114,6 +147,7 @@ pub enum VersionBump {
 }
 
 impl VersionBump {
+    /// Returns the CLI/config spelling of the bump level.
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -126,12 +160,14 @@ impl VersionBump {
         }
     }
 
+    /// Returns whether this value changes the SemVer core version line.
     #[must_use]
     pub const fn is_version_bump(self) -> bool {
         matches!(self, Self::Patch | Self::Minor | Self::Major)
     }
 }
 
+/// Prefix used when serializing dependency ranges such as `^1.2.3` or `~1.2.3`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VersionPrefix {
     Exact,
@@ -140,6 +176,7 @@ pub enum VersionPrefix {
 }
 
 impl VersionPrefix {
+    /// Returns the string prefix used in package manifest ranges.
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -150,6 +187,10 @@ impl VersionPrefix {
     }
 }
 
+/// A workspace-friendly version selector.
+///
+/// This is broader than raw SemVer because monorepo protocols often need to represent `*`, bare
+/// `^` / `~`, or a concrete version with one of those prefixes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VersionPattern {
     Any,
@@ -167,6 +208,20 @@ impl fmt::Display for VersionPattern {
     }
 }
 
+/// Parses a dependency version token such as `1.2.3`, `^1.2.3`, `~`, or `*`.
+///
+/// # Examples
+///
+/// ```rust
+/// use vite_shared::{VersionPattern, VersionPrefix, parse_version_pattern};
+///
+/// assert_eq!(parse_version_pattern("*").unwrap(), VersionPattern::Any);
+/// assert_eq!(
+///     parse_version_pattern("^").unwrap(),
+///     VersionPattern::Token(VersionPrefix::Caret),
+/// );
+/// assert_eq!(parse_version_pattern("~1.2.3").unwrap().to_string(), "~1.2.3");
+/// ```
 pub fn parse_version_pattern(input: &str) -> Result<VersionPattern, VersionError> {
     let input = input.trim();
     if input.is_empty() {
@@ -197,6 +252,21 @@ pub fn parse_version_pattern(input: &str) -> Result<VersionPattern, VersionError
     Ok(VersionPattern::Version { prefix, version: Version::parse(rest)? })
 }
 
+/// Applies a SemVer core bump and drops prerelease/build metadata from the source version.
+///
+/// Prerelease channel bumps are intentionally rejected here because they are handled by the
+/// release-layer logic that decides how prerelease channels advance on top of a base version.
+///
+/// # Examples
+///
+/// ```rust
+/// use vite_shared::{Version, VersionBump, bump_version};
+///
+/// let current = Version::parse("1.2.3-alpha.2+build.7").unwrap();
+/// let next = bump_version(&current, VersionBump::Minor);
+///
+/// assert_eq!(next.to_string(), "1.3.0");
+/// ```
 #[must_use]
 pub fn bump_version(version: &Version, bump: VersionBump) -> Version {
     // Base version increments follow the SemVer core rules for MAJOR/MINOR/PATCH.
@@ -222,6 +292,7 @@ pub fn bump_version(version: &Version, bump: VersionBump) -> Version {
     next
 }
 
+/// Returns a copy of the version without prerelease or build metadata.
 #[must_use]
 pub fn strip_prerelease(version: &Version) -> Version {
     let mut stripped = version.clone();
@@ -230,11 +301,13 @@ pub fn strip_prerelease(version: &Version) -> Version {
     stripped
 }
 
+/// Returns the first prerelease identifier, which vite-plus treats as the prerelease channel.
 #[must_use]
 pub fn prerelease_channel(version: &Version) -> Option<&str> {
     version.prerelease()?.split('.').next().filter(|segment| !segment.is_empty())
 }
 
+/// Returns the trailing numeric prerelease suffix when the prerelease is shaped like `alpha.3`.
 #[must_use]
 pub fn prerelease_number(version: &Version) -> Option<u64> {
     let prerelease = version.prerelease()?;
@@ -242,6 +315,19 @@ pub fn prerelease_number(version: &Version) -> Option<u64> {
     number.parse().ok()
 }
 
+/// Builds a prerelease identifier such as `alpha.0` or `rc.12`.
+///
+/// The channel is validated with the same identifier rules as parsed prerelease strings so that
+/// generated versions round-trip through the parser.
+///
+/// # Examples
+///
+/// ```rust
+/// use vite_shared::build_prerelease;
+///
+/// assert_eq!(build_prerelease("alpha", 0).unwrap(), "alpha.0");
+/// assert_eq!(build_prerelease("rc", 12).unwrap(), "rc.12");
+/// ```
 pub fn build_prerelease(channel: &str, number: u64) -> Result<String, VersionError> {
     let channel = validate_identifiers(channel, false, "prerelease channel")?;
     let mut prerelease = String::with_capacity(channel.len() + 24);

@@ -4,14 +4,40 @@
 //! - Conventional Commits 1.0.0: https://www.conventionalcommits.org/en/v1.0.0/#specification
 //! - Conventional Commits FAQ: https://www.conventionalcommits.org/en/v1.0.0/#faq
 
+/// Parsed Conventional Commit header/body information used by release classification.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ConventionalCommit<'a> {
+    /// Commit type, for example `feat`, `fix`, or `chore`.
     pub kind: &'a str,
+    /// Optional scope extracted from `type(scope): description`.
     pub scope: Option<&'a str>,
+    /// Header description after the first `:`.
     pub description: &'a str,
+    /// Whether the commit advertises a breaking change via `!` or footer syntax.
     pub breaking: bool,
 }
 
+/// Parses a Conventional Commit subject/body pair.
+///
+/// The parser intentionally extracts only the pieces that release classification needs: the type,
+/// optional scope, human description, and whether the commit is breaking.
+///
+/// # Examples
+///
+/// ```rust
+/// use vite_shared::parse_conventional_commit;
+///
+/// let commit = parse_conventional_commit(
+///     "feat(cli)!: add release command",
+///     "BREAKING CHANGE: old release flow was removed",
+/// )
+/// .unwrap();
+///
+/// assert_eq!(commit.kind, "feat");
+/// assert_eq!(commit.scope, Some("cli"));
+/// assert_eq!(commit.description, "add release command");
+/// assert!(commit.breaking);
+/// ```
 #[must_use]
 pub fn parse_conventional_commit<'a>(
     subject: &'a str,

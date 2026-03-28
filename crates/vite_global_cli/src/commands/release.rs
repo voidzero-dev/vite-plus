@@ -5,16 +5,6 @@
 //! - SemVer FAQ for `0.y.z`: https://semver.org/#faq
 //! - Conventional Commits 1.0.0: https://www.conventionalcommits.org/en/v1.0.0/#specification
 //! - Conventional Commits FAQ: https://www.conventionalcommits.org/en/v1.0.0/#faq
-//! - npm `package.json`: https://docs.npmjs.com/cli/v11/configuring-npm/package-json/
-//! - npm package spec: https://docs.npmjs.com/cli/v11/using-npm/package-spec/
-//! - npm RFC for `workspace:`: https://github.com/npm/rfcs/issues/765
-//! - pnpm workspaces: https://pnpm.io/workspaces
-//! - pnpm catalogs: https://pnpm.io/catalogs
-//! - Yarn `workspace:` protocol: https://yarnpkg.com/protocol/workspace
-//! - Yarn `yarn npm publish`: https://yarnpkg.com/cli/npm/publish
-//! - Bun workspaces: https://bun.sh/docs/pm/workspaces
-//! - Bun catalogs: https://bun.sh/docs/pm/catalogs
-//! - Bun publish: https://bun.sh/docs/pm/cli/publish
 
 use std::{
     collections::{HashMap, HashSet},
@@ -1184,59 +1174,131 @@ mod presentation {
 }
 
 mod first_publish {
+    //! First-release guidance is intentionally modeled as a tiny inline DSL.
+    //!
+    //! The goal here is twofold:
+    //!
+    //! 1. Keep the full checklist visible in one place so maintainers can scan the entire
+    //!    first-publish experience without jumping through a long chain of helper functions.
+    //! 2. Stay extremely conservative on runtime cost even though this code is primarily
+    //!    user-facing text generation.
+    //!
+    //! The macros below expand directly into a fixed checklist structure rather than building an
+    //! intermediate template language at runtime. That keeps the declaration readable while also
+    //! avoiding:
+    //!
+    //! - `format!`-heavy string construction
+    //! - repeated temporary `Vec<String>` / `String` creation for static content
+    //! - fragmented step builder functions that make the overall checklist harder to audit
+    //!
+    //! The resulting flow is:
+    //!
+    //! - `first_publish_checklist!` declares the entire checklist as a fixed array of steps
+    //! - `ChecklistStep` / `ChecklistLine` store only the minimal renderable structure
+    //! - `print_checklist` reuses a single `String` buffer while streaming output line by line
+    //!
+    //! This is intentionally not a generic templating system. It is a small, purpose-built,
+    //! allocation-aware representation tailored to the handful of first-publish messages we need
+    //! to render.
+
     use super::*;
 
     const CHECKLIST_STEP_PREFIX: &str = "  ";
     const CHECKLIST_ITEM_PREFIX: &str = "     - ";
 
+    /// Declares a checklist step in a compact, template-like form.
+    ///
+    /// This macro exists so that the first-publish checklist can be read top-to-bottom as a
+    /// single declarative block. It expands straight into `ChecklistStep::new`, so there is no
+    /// runtime template parsing or second-pass interpretation cost.
     macro_rules! step {
         ($title:expr, [$( $line:expr ),* $(,)?] $(,)?) => {
             ChecklistStep::new($title, [$( $line ),*])
         };
     }
 
+    /// Emits a static text line.
+    ///
+    /// Static strings stay borrowed all the way through rendering, which lets the checklist carry
+    /// explanatory text without allocating per line.
     macro_rules! text {
         ($text:expr $(,)?) => {
             Some(ChecklistLine::static_text($text))
         };
     }
 
+    /// Emits a key/value line where both sides are static.
+    ///
+    /// This is the cheapest path through the checklist DSL because both key and value can remain
+    /// borrowed until the final buffered write.
     macro_rules! kv_static {
         ($key:expr, $value:expr $(,)?) => {
             Some(ChecklistLine::key_value_static($key, $value))
         };
     }
 
+    /// Emits a key/value line whose value is borrowed from existing guidance state.
+    ///
+    /// Borrowing here matters because several values, such as the workflow path, already live in
+    /// `FirstPublishGuidance`; cloning them just to print one checklist would be unnecessary work.
     macro_rules! kv_borrowed {
         ($key:expr, $value:expr $(,)?) => {
             Some(ChecklistLine::key_value_borrowed($key, $value))
         };
     }
 
+    /// Emits a key/value line that owns its rendered value.
+    ///
+    /// This is reserved for lines that genuinely need a synthesized `String`, such as inline-code
+    /// wrappers or comma-joined package lists. Keeping this explicit makes it easier to audit
+    /// where allocations still happen.
     macro_rules! kv_owned {
         ($key:expr, $value:expr $(,)?) => {
             Some(ChecklistLine::key_value_owned($key, $value))
         };
     }
 
+    /// Emits an owned key/value line only when an optional source value exists.
+    ///
+    /// The render closure runs only on the populated path, which keeps optional checklist lines
+    /// concise without forcing the surrounding step to split into multiple helper functions.
     macro_rules! maybe_kv_owned {
         ($key:expr, $value:expr, |$binding:ident| $render:expr $(,)?) => {
             $value.map(|$binding| ChecklistLine::key_value_owned($key, $render))
         };
     }
 
+    /// Emits a static text line behind a boolean gate.
+    ///
+    /// This keeps conditional checklist entries inline with their neighboring lines, which is
+    /// useful for preserving the “entire template in one screen” property of this module.
     macro_rules! when_text {
         ($condition:expr, $text:expr $(,)?) => {
             ($condition).then_some(ChecklistLine::static_text($text))
         };
     }
 
+    /// Emits an owned key/value line behind a boolean gate.
+    ///
+    /// The checklist uses this for diagnostics such as missing repository metadata, where we only
+    /// want to pay the join/allocation cost when there is something actionable to show.
     macro_rules! when_kv_owned {
         ($condition:expr, $key:expr, $value:expr $(,)?) => {
             ($condition).then(|| ChecklistLine::key_value_owned($key, $value))
         };
     }
 
+    /// Declares the full first-publish checklist as a single fixed array.
+    ///
+    /// This macro is the main readability/performance tradeoff point for the module:
+    ///
+    /// - Readability: every step is visible in one contiguous block, so reviewers can understand
+    ///   the entire checklist without chasing helper functions.
+    /// - Performance: the macro expands to a fixed `[ChecklistStep; 5]`, avoiding a top-level
+    ///   dynamic `Vec` allocation for the checklist itself.
+    ///
+    /// The helpers used inside the block (`kv_*`, `when_*`, `text!`) are intentionally tiny so the
+    /// callsite still reads like a declarative template rather than imperative push-based code.
     macro_rules! first_publish_checklist {
         ($guidance:expr, $options:expr $(,)?) => {{
             let guidance = $guidance;
@@ -1342,6 +1404,10 @@ mod first_publish {
     }
 
     impl ChecklistText<'_> {
+        /// Writes a previously classified text fragment into the shared render buffer.
+        ///
+        /// The checklist renderer deliberately reuses a single `String`, so each line component
+        /// writes directly into that buffer instead of allocating a brand new line string.
         fn write_into(&self, buffer: &mut String) {
             match self {
                 Self::Static(value) | Self::Borrowed(value) => buffer.push_str(value),
@@ -1357,6 +1423,10 @@ mod first_publish {
     }
 
     impl ChecklistLine<'_> {
+        /// Serializes a single line into the shared render buffer.
+        ///
+        /// This stays intentionally tiny because the hot path is simple: append the line prefix,
+        /// then stream the already-prepared content into the same buffer.
         fn write_into(&self, buffer: &mut String) {
             match self {
                 Self::Text(text) => text.write_into(buffer),
@@ -1376,6 +1446,11 @@ mod first_publish {
     }
 
     impl<'a> ChecklistStep<'a> {
+        /// Builds a step from an iterator of optional lines.
+        ///
+        /// Accepting `Option<ChecklistLine>` lets the declarative macros keep conditional lines
+        /// inline without falling back to imperative `push` code. The constructor uses the
+        /// iterator's lower-bound size hint to preallocate just once for the common case.
         fn new<I>(title: &'static str, lines: I) -> Self
         where
             I: IntoIterator<Item = Option<ChecklistLine<'a>>>,
@@ -1410,6 +1485,10 @@ mod first_publish {
         }
     }
 
+    /// Collects repository/workflow/package metadata needed by the first-publish checklist.
+    ///
+    /// The checklist rendering path is intentionally pure and declarative, so any filesystem or
+    /// git-derived facts are gathered ahead of time into `FirstPublishGuidance`.
     pub(super) async fn collect_first_publish_guidance(
         cwd: &AbsolutePath,
         release_plans: &[PackageReleasePlan],
@@ -1446,10 +1525,16 @@ mod first_publish {
         guidance
     }
 
+    /// Renders the first-publish checklist using the declarative checklist DSL above.
+    ///
+    /// Keeping the checklist materialization next to this callsite makes the overall flow easy to
+    /// inspect, while `print_checklist` keeps the indentation and numbering details centralized.
     pub(super) fn print_first_publish_guidance(
         guidance: &FirstPublishGuidance,
         options: &ReleaseOptions,
     ) {
+        // Keep the checklist declaration itself adjacent to the callsite so the full first-publish
+        // story remains easy to audit in one place.
         let checklist = first_publish_checklist!(guidance, options);
         print_checklist(
             "First publish checklist:",
@@ -1458,6 +1543,10 @@ mod first_publish {
         );
     }
 
+    /// Renders a concrete `vp release` example command for checklist output.
+    ///
+    /// This path deliberately avoids `format!` so the user-facing examples follow the same
+    /// allocation discipline as the rest of the release command.
     pub(super) fn render_release_command(
         options: &ReleaseOptions,
         dry_run: bool,
@@ -1498,7 +1587,14 @@ mod first_publish {
         command
     }
 
+    /// Streams checklist lines to the output layer with a single reusable buffer.
+    ///
+    /// Building the full output eagerly would be simpler, but reusing one `String` keeps this path
+    /// cheap and makes allocation behavior very obvious during review.
     fn print_checklist(heading: &str, intro: &str, checklist: &[ChecklistStep<'_>]) {
+        // A single reusable buffer keeps line rendering simple and cheap. This is intentionally
+        // more verbose than collecting all output first because we want predictable, low-overhead
+        // streaming writes without building one large intermediate string.
         output::raw("");
         output::info(heading);
 
@@ -1524,7 +1620,10 @@ mod first_publish {
         }
     }
 
+    /// Wraps a value in backticks using one tightly-sized owned buffer.
     fn render_inline_code(value: &str) -> String {
+        // These helpers precompute a tight-enough capacity because they are hit from the checklist
+        // macros and are among the few places where we intentionally materialize owned strings.
         let mut rendered = String::with_capacity(value.len() + 2);
         rendered.push('`');
         rendered.push_str(value);
@@ -1532,7 +1631,10 @@ mod first_publish {
         rendered
     }
 
+    /// Formats the branch trigger hint shown in the workflow step.
     fn render_branch_or_dispatch(branch: &str) -> String {
+        // Keep the branch rendering centralized so the declarative checklist stays focused on
+        // content, while string sizing remains easy to audit in one helper.
         let mut rendered = String::with_capacity(branch.len() + 26);
         rendered.push('`');
         rendered.push_str(branch);
@@ -1540,7 +1642,10 @@ mod first_publish {
         rendered
     }
 
+    /// Joins a borrowed slice of owned strings with a precomputed output capacity.
     fn join_string_slice(values: &[String], separator: &str) -> String {
+        // Joining package names is one of the few dynamic list operations in the checklist. The
+        // capacity calculation avoids repeated growth when surfacing multiple package issues.
         if values.is_empty() {
             return String::new();
         }

@@ -1,9 +1,12 @@
+//! Shared git helpers used by release planning and repository introspection.
+
 use std::{process::Output, string::String};
 
 use thiserror::Error;
 use tokio::process::Command;
 use vite_path::AbsolutePath;
 
+/// Error raised while invoking git commands or interpreting their result.
 #[derive(Debug, Error)]
 pub enum GitError {
     #[error(transparent)]
@@ -12,6 +15,10 @@ pub enum GitError {
     Command(String),
 }
 
+/// Runs `git` and returns trimmed stdout on success.
+///
+/// The helper collects command arguments once up front so the same owned argument list can be used
+/// for both process execution and rich error reporting.
 pub async fn capture_git<I, S>(cwd: &AbsolutePath, args: I) -> Result<String, GitError>
 where
     I: IntoIterator<Item = S>,
@@ -27,6 +34,7 @@ where
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
+/// Runs `git` and returns only success or a structured command error.
 pub async fn run_git<I, S>(cwd: &AbsolutePath, args: I) -> Result<(), GitError>
 where
     I: IntoIterator<Item = S>,
@@ -42,10 +50,27 @@ where
     Err(command_error(&args, &output))
 }
 
+/// Returns whether the current worktree has no staged or unstaged changes.
 pub async fn is_clean_git_worktree(cwd: &AbsolutePath) -> Result<bool, GitError> {
     Ok(capture_git(cwd, ["status", "--porcelain"]).await?.trim().is_empty())
 }
 
+/// Extracts an `owner/repo` slug from common GitHub remote URL formats.
+///
+/// # Examples
+///
+/// ```rust
+/// use vite_shared::parse_github_repo_slug;
+///
+/// assert_eq!(
+///     parse_github_repo_slug("git@github.com:voidzero-dev/vite-plus.git"),
+///     Some("voidzero-dev/vite-plus".into()),
+/// );
+/// assert_eq!(
+///     parse_github_repo_slug("https://github.com/voidzero-dev/vite-plus"),
+///     Some("voidzero-dev/vite-plus".into()),
+/// );
+/// ```
 #[must_use]
 pub fn parse_github_repo_slug(url: &str) -> Option<String> {
     let url = url.trim().trim_end_matches('/');
@@ -75,6 +100,7 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<str>,
 {
+    // Preserve one owned argument buffer for both process spawning and later error reporting.
     let iter = args.into_iter();
     let (lower, _) = iter.size_hint();
     let mut collected = Vec::with_capacity(lower);
@@ -85,6 +111,8 @@ where
 }
 
 fn command_error(args: &[String], output: &Output) -> GitError {
+    // Construct the git invocation string directly rather than joining/formatting multiple
+    // temporaries, since this path is also used by release dry-runs and failure reporting.
     let stderr = String::from_utf8_lossy(&output.stderr);
     let stderr = stderr.trim();
     let args_len: usize = args.iter().map(String::len).sum();
