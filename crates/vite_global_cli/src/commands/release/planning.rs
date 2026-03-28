@@ -5,6 +5,12 @@ use std::{
 
 use super::*;
 
+const GIT_LOG_FIELD_SEPARATOR: char = '\u{001f}';
+const GIT_LOG_RECORD_SEPARATOR: char = '\u{001e}';
+const GIT_LOG_FORMAT: &str = "--format=%H%x1f%s%x1f%b%x1e";
+const GIT_LOG_PART_COUNT: usize = 3;
+const SHORT_COMMIT_HASH_LEN: usize = 7;
+
 #[derive(Debug, Clone, Copy)]
 struct ReleaseTagFormat {
     namespace: &'static str,
@@ -301,7 +307,7 @@ pub(super) fn collect_package_commits(
     let mut args = Vec::with_capacity(package_paths.len() + 5);
     args.push(String::from("log"));
     args.push(String::from("--reverse"));
-    args.push(String::from("--format=%H%x1f%s%x1f%b%x1e"));
+    args.push(String::from(GIT_LOG_FORMAT));
     if let Some(tag) = since_tag {
         let mut range = String::with_capacity(tag.len() + 6);
         range.push_str(tag);
@@ -316,13 +322,13 @@ pub(super) fn collect_package_commits(
     let stdout = capture_git(cwd, args)?;
     let mut commits = Vec::new();
 
-    for record in stdout.split('\u{001e}') {
+    for record in stdout.split(GIT_LOG_RECORD_SEPARATOR) {
         let trimmed = record.trim();
         if trimmed.is_empty() {
             continue;
         }
 
-        let mut parts = trimmed.splitn(3, '\u{001f}');
+        let mut parts = trimmed.splitn(GIT_LOG_PART_COUNT, GIT_LOG_FIELD_SEPARATOR);
         let hash = parts.next().unwrap_or_default().trim();
         let subject = parts.next().unwrap_or_default().trim();
         let body = parts.next().unwrap_or_default().trim();
@@ -333,7 +339,7 @@ pub(super) fn collect_package_commits(
         if let Some(level) = classify_commit(subject, body) {
             commits.push(CommitInfo {
                 hash: hash.to_owned(),
-                short_hash: hash.get(..7).unwrap_or(hash).to_owned(),
+                short_hash: hash.get(..SHORT_COMMIT_HASH_LEN).unwrap_or(hash).to_owned(),
                 subject: subject.to_owned(),
                 level,
             });

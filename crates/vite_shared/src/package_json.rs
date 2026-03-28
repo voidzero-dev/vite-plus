@@ -9,6 +9,13 @@ use vite_str::Str;
 
 use crate::versioning::{VersionError, VersionPattern, parse_version_pattern};
 
+const JSON_OBJECT_START_BYTE: u8 = b'{';
+const JSON_OBJECT_END_BYTE: u8 = b'}';
+const JSON_STRING_DELIMITER_BYTE: u8 = b'"';
+const JSON_KEY_VALUE_SEPARATOR_BYTE: u8 = b':';
+const JSON_ESCAPE_PREFIX_BYTE: u8 = b'\\';
+const TOP_LEVEL_JSON_OBJECT_DEPTH: usize = 1;
+
 /// A single runtime engine configuration.
 #[derive(Deserialize, Default, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -290,26 +297,29 @@ pub fn replace_top_level_string_property(
 
     while index < bytes.len() {
         match bytes[index] {
-            b'{' => {
+            JSON_OBJECT_START_BYTE => {
                 depth += 1;
                 index += 1;
             }
-            b'}' => {
+            JSON_OBJECT_END_BYTE => {
                 depth = depth.saturating_sub(1);
                 index += 1;
             }
-            b'"' if depth == 1 => {
+            JSON_STRING_DELIMITER_BYTE if depth == TOP_LEVEL_JSON_OBJECT_DEPTH => {
                 let Some((string_end, parsed_key)) = parse_json_string(contents, index) else {
                     break;
                 };
                 let mut cursor = skip_json_whitespace(bytes, string_end + 1);
-                if parsed_key != key || cursor >= bytes.len() || bytes[cursor] != b':' {
+                if parsed_key != key
+                    || cursor >= bytes.len()
+                    || bytes[cursor] != JSON_KEY_VALUE_SEPARATOR_BYTE
+                {
                     index = string_end + 1;
                     continue;
                 }
 
                 cursor = skip_json_whitespace(bytes, cursor + 1);
-                if cursor >= bytes.len() || bytes[cursor] != b'"' {
+                if cursor >= bytes.len() || bytes[cursor] != JSON_STRING_DELIMITER_BYTE {
                     let mut message = String::from("Expected top-level '");
                     message.push_str(key);
                     message.push_str("' to be a JSON string");
@@ -336,7 +346,7 @@ pub fn replace_top_level_string_property(
                 updated.push_str(&contents[value_end..]);
                 return Ok(updated);
             }
-            b'"' => {
+            JSON_STRING_DELIMITER_BYTE => {
                 if let Some((string_end, _)) = parse_json_string(contents, index) {
                     index = string_end + 1;
                 } else {
@@ -378,15 +388,15 @@ pub fn replace_dependency_version_ranges(
 
     while index < bytes.len() {
         match bytes[index] {
-            b'{' => {
+            JSON_OBJECT_START_BYTE => {
                 depth += 1;
                 index += 1;
             }
-            b'}' => {
+            JSON_OBJECT_END_BYTE => {
                 depth = depth.saturating_sub(1);
                 index += 1;
             }
-            b'"' if depth == 1 => {
+            JSON_STRING_DELIMITER_BYTE if depth == TOP_LEVEL_JSON_OBJECT_DEPTH => {
                 let Some((key_end, parsed_key)) = parse_json_string(contents, index) else {
                     break;
                 };
@@ -397,14 +407,14 @@ pub fn replace_dependency_version_ranges(
                 let mut cursor = skip_json_whitespace(bytes, key_end + 1);
                 if !DEPENDENCY_SECTION_KEYS.contains(&parsed_key.as_str())
                     || cursor >= bytes.len()
-                    || bytes[cursor] != b':'
+                    || bytes[cursor] != JSON_KEY_VALUE_SEPARATOR_BYTE
                 {
                     index = key_end + 1;
                     continue;
                 }
 
                 cursor = skip_json_whitespace(bytes, cursor + 1);
-                if cursor >= bytes.len() || bytes[cursor] != b'{' {
+                if cursor >= bytes.len() || bytes[cursor] != JSON_OBJECT_START_BYTE {
                     let mut message = String::from("Expected top-level '");
                     message.push_str(&parsed_key);
                     message.push_str("' to be a JSON object");
@@ -430,7 +440,7 @@ pub fn replace_dependency_version_ranges(
 
                 index = object_end + 1;
             }
-            b'"' => {
+            JSON_STRING_DELIMITER_BYTE => {
                 if let Some((string_end, _)) = parse_json_string(contents, index) {
                     index = string_end + 1;
                 } else {
@@ -588,15 +598,15 @@ fn replace_flat_object_string_properties(
 
     while index < bytes.len() {
         match bytes[index] {
-            b'{' => {
+            JSON_OBJECT_START_BYTE => {
                 depth += 1;
                 index += 1;
             }
-            b'}' => {
+            JSON_OBJECT_END_BYTE => {
                 depth = depth.saturating_sub(1);
                 index += 1;
             }
-            b'"' if depth == 1 => {
+            JSON_STRING_DELIMITER_BYTE if depth == TOP_LEVEL_JSON_OBJECT_DEPTH => {
                 let Some((key_end, parsed_key)) = parse_json_string(contents, index) else {
                     break;
                 };
@@ -606,13 +616,13 @@ fn replace_flat_object_string_properties(
                 };
 
                 let mut cursor = skip_json_whitespace(bytes, key_end + 1);
-                if cursor >= bytes.len() || bytes[cursor] != b':' {
+                if cursor >= bytes.len() || bytes[cursor] != JSON_KEY_VALUE_SEPARATOR_BYTE {
                     index = key_end + 1;
                     continue;
                 }
 
                 cursor = skip_json_whitespace(bytes, cursor + 1);
-                if cursor >= bytes.len() || bytes[cursor] != b'"' {
+                if cursor >= bytes.len() || bytes[cursor] != JSON_STRING_DELIMITER_BYTE {
                     let mut message = String::from("Expected dependency '");
                     message.push_str(&parsed_key);
                     message.push_str("' to have a JSON string version");
@@ -628,7 +638,7 @@ fn replace_flat_object_string_properties(
                 index = value_end + 1;
                 changed = true;
             }
-            b'"' => {
+            JSON_STRING_DELIMITER_BYTE => {
                 if let Some((string_end, _)) = parse_json_string(contents, index) {
                     index = string_end + 1;
                 } else {
@@ -649,7 +659,7 @@ fn replace_flat_object_string_properties(
 
 fn find_matching_object_end(contents: &str, start: usize) -> Option<usize> {
     let bytes = contents.as_bytes();
-    if bytes.get(start) != Some(&b'{') {
+    if bytes.get(start) != Some(&JSON_OBJECT_START_BYTE) {
         return None;
     }
 
@@ -657,18 +667,18 @@ fn find_matching_object_end(contents: &str, start: usize) -> Option<usize> {
     let mut index = start;
     while index < bytes.len() {
         match bytes[index] {
-            b'{' => {
+            JSON_OBJECT_START_BYTE => {
                 depth += 1;
                 index += 1;
             }
-            b'}' => {
+            JSON_OBJECT_END_BYTE => {
                 depth = depth.saturating_sub(1);
                 if depth == 0 {
                     return Some(index);
                 }
                 index += 1;
             }
-            b'"' => {
+            JSON_STRING_DELIMITER_BYTE => {
                 if let Some((string_end, _)) = parse_json_string(contents, index) {
                     index = string_end + 1;
                 } else {
@@ -684,7 +694,7 @@ fn find_matching_object_end(contents: &str, start: usize) -> Option<usize> {
 
 fn parse_json_string(contents: &str, start: usize) -> Option<(usize, String)> {
     let bytes = contents.as_bytes();
-    if bytes.get(start) != Some(&b'"') {
+    if bytes.get(start) != Some(&JSON_STRING_DELIMITER_BYTE) {
         return None;
     }
 
@@ -694,9 +704,9 @@ fn parse_json_string(contents: &str, start: usize) -> Option<(usize, String)> {
         let byte = bytes[index];
         if escaped {
             escaped = false;
-        } else if byte == b'\\' {
+        } else if byte == JSON_ESCAPE_PREFIX_BYTE {
             escaped = true;
-        } else if byte == b'"' {
+        } else if byte == JSON_STRING_DELIMITER_BYTE {
             let raw = &contents[start..=index];
             let value: String = serde_json::from_str(raw).ok()?;
             return Some((index, value));
