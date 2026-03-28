@@ -1,5 +1,6 @@
 use directories::BaseDirs;
 use vite_path::{AbsolutePathBuf, current_dir};
+use which::which;
 
 use crate::EnvConfig;
 
@@ -16,6 +17,14 @@ pub fn get_vite_plus_home() -> std::io::Result<AbsolutePathBuf> {
         if let Some(path) = AbsolutePathBuf::new(home.clone()) {
             return Ok(path);
         }
+    }
+
+    // Get from `node`'s path (~/.vite-plus/bin/node)
+    if let Ok(path) = which("node")
+        && let Some(parent) = path.parent()
+        && let Some(grandparent) = parent.parent()
+    {
+        return Ok(AbsolutePathBuf::new(grandparent.to_path_buf()).unwrap());
     }
 
     // Default to ~/.vite-plus
