@@ -102,5 +102,11 @@
     "repository": "https://github.com/why-reproductions-are-required/bun-vite-template.git",
     "branch": "master",
     "hash": "d84099b4a153c7e0f35e510725b2ceb24c6e09ad"
+  },
+  "vite-plus-vitest-global-type-minimal-repro": {
+    "repository": "https://github.com/why-reproductions-are-required/vite-plus-vitest-global-type-minimal-repro.git",
+    "branch": "main",
+    "hash": "419653665e4f0688ad3cac68a34673fdd0632b55",
+    "forceFreshMigration": true
   }
 }
