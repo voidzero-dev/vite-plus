@@ -242,7 +242,7 @@ pub(super) fn git_tag(cwd: &AbsolutePath, tag_name: &str) -> Result<(), Error> {
     })
 }
 
-fn prepend_changelog_section(existing: &str, section: &str) -> String {
+pub(super) fn prepend_changelog_section(existing: &str, section: &str) -> String {
     if let Some(rest) = existing.strip_prefix("# Changelog") {
         let rest = rest.trim_start_matches('\n');
         if rest.is_empty() {
