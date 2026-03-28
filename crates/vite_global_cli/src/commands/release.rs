@@ -186,7 +186,7 @@ pub async fn execute(cwd: AbsolutePathBuf, options: ReleaseOptions) -> Result<Ex
 
     let workspace_packages = load_workspace_packages(&package_graph)?;
     let orphaned_released_packages =
-        collect_orphaned_released_packages(&workspace_root_path, &workspace_packages).await?;
+        collect_orphaned_released_packages(&workspace_root_path, &workspace_packages)?;
     if !orphaned_released_packages.is_empty() {
         let mut message = String::from(
             "Previously released packages no longer map to an active workspace package: ",
@@ -211,20 +211,19 @@ pub async fn execute(cwd: AbsolutePathBuf, options: ReleaseOptions) -> Result<Ex
         let previous_tag = if options.first_release {
             None
         } else {
-            find_latest_package_tag(&workspace_root_path, &package.known_names).await?
+            find_latest_package_tag(&workspace_root_path, &package.known_names)?
         };
         let latest_stable_version = if options.first_release {
             None
         } else {
-            find_latest_stable_package_version(&workspace_root_path, &package.known_names).await?
+            find_latest_stable_package_version(&workspace_root_path, &package.known_names)?
         };
 
         let commits = collect_package_commits(
             &workspace_root_path,
             &package.release_paths,
             previous_tag.as_deref(),
-        )
-        .await?;
+        )?;
 
         let Some(level) = highest_release_level(&commits) else {
             let mut message = String::from("Skipping ");
@@ -285,7 +284,7 @@ pub async fn execute(cwd: AbsolutePathBuf, options: ReleaseOptions) -> Result<Ex
 
     print_release_plan(&release_plans, &options);
     if options.first_release {
-        let guidance = collect_first_publish_guidance(&workspace_root_path, &release_plans).await;
+        let guidance = collect_first_publish_guidance(&workspace_root_path, &release_plans);
         print_first_publish_guidance(&guidance, &options);
     }
     let readiness_report =
@@ -327,7 +326,7 @@ pub async fn execute(cwd: AbsolutePathBuf, options: ReleaseOptions) -> Result<Ex
         return Ok(ExitStatus::SUCCESS);
     }
 
-    ensure_clean_worktree(&workspace_root_path).await?;
+    ensure_clean_worktree(&workspace_root_path)?;
     if !options.yes && !confirm_release(&release_plans, &readiness_report, &options)? {
         return Ok(ExitStatus::SUCCESS);
     }
@@ -362,9 +361,9 @@ pub async fn execute(cwd: AbsolutePathBuf, options: ReleaseOptions) -> Result<Ex
     }
 
     if options.git_commit {
-        git_add_paths(&workspace_root_path, &changed_files).await?;
+        git_add_paths(&workspace_root_path, &changed_files)?;
         let commit_message = release_commit_message(&release_plans);
-        git_commit(&workspace_root_path, &commit_message).await?;
+        git_commit(&workspace_root_path, &commit_message)?;
         let mut message = String::from("Created release commit: ");
         message.push_str(&commit_message);
         output::success(&message);
@@ -395,7 +394,7 @@ pub async fn execute(cwd: AbsolutePathBuf, options: ReleaseOptions) -> Result<Ex
 
     if options.git_tag {
         for plan in &release_plans {
-            git_tag(&workspace_root_path, &plan.tag_name).await?;
+            git_tag(&workspace_root_path, &plan.tag_name)?;
             let mut message = String::from("Created git tag ");
             message.push_str(&plan.tag_name);
             output::success(&message);
@@ -608,19 +607,19 @@ mod planning {
         nodes.dedup();
     }
 
-    pub(super) async fn find_latest_package_tag(
+    pub(super) fn find_latest_package_tag(
         cwd: &AbsolutePath,
         package_names: &[String],
     ) -> Result<Option<String>, Error> {
-        let stdout = capture_git(cwd, release_tag_list_args(package_names)).await?;
+        let stdout = capture_git(cwd, release_tag_list_args(package_names))?;
         Ok(stdout.lines().map(str::trim).find(|line| !line.is_empty()).map(ToOwned::to_owned))
     }
 
-    pub(super) async fn find_latest_stable_package_version(
+    pub(super) fn find_latest_stable_package_version(
         cwd: &AbsolutePath,
         package_names: &[String],
     ) -> Result<Option<Version>, Error> {
-        let stdout = capture_git(cwd, release_tag_list_args(package_names)).await?;
+        let stdout = capture_git(cwd, release_tag_list_args(package_names))?;
         Ok(stdout
             .lines()
             .map(str::trim)
@@ -628,7 +627,7 @@ mod planning {
             .find(|version| !version.has_prerelease()))
     }
 
-    pub(super) async fn collect_package_commits(
+    pub(super) fn collect_package_commits(
         cwd: &AbsolutePath,
         package_paths: &[String],
         since_tag: Option<&str>,
@@ -648,7 +647,7 @@ mod planning {
             args.push(package_path.clone());
         }
 
-        let stdout = capture_git(cwd, args).await?;
+        let stdout = capture_git(cwd, args)?;
         let mut commits = Vec::new();
 
         for record in stdout.split('\u{001e}') {
@@ -820,11 +819,11 @@ mod planning {
         }
     }
 
-    pub(super) async fn collect_orphaned_released_packages(
+    pub(super) fn collect_orphaned_released_packages(
         cwd: &AbsolutePath,
         packages: &[WorkspacePackage],
     ) -> Result<Vec<String>, Error> {
-        let stdout = capture_git(cwd, ["tag", "--list", "release/*/v*"]).await?;
+        let stdout = capture_git(cwd, ["tag", "--list", "release/*/v*"])?;
         let known_names: HashSet<&str> = packages
             .iter()
             .flat_map(|package| {
@@ -1489,12 +1488,12 @@ mod first_publish {
     ///
     /// The checklist rendering path is intentionally pure and declarative, so any filesystem or
     /// git-derived facts are gathered ahead of time into `FirstPublishGuidance`.
-    pub(super) async fn collect_first_publish_guidance(
+    pub(super) fn collect_first_publish_guidance(
         cwd: &AbsolutePath,
         release_plans: &[PackageReleasePlan],
     ) -> FirstPublishGuidance {
-        let github_repo = detect_github_repo(cwd).await;
-        let release_branch = detect_release_branch(cwd).await;
+        let github_repo = detect_github_repo(cwd);
+        let release_branch = detect_release_branch(cwd);
         let workflow_path = find_release_workflow_path(cwd);
 
         let mut guidance = FirstPublishGuidance {
@@ -1809,14 +1808,14 @@ mod first_publish {
         path.rsplit('/').next().unwrap_or(path)
     }
 
-    async fn detect_github_repo(cwd: &AbsolutePath) -> Option<String> {
-        let remote = capture_git(cwd, ["config", "--get", "remote.origin.url"]).await.ok()?;
+    fn detect_github_repo(cwd: &AbsolutePath) -> Option<String> {
+        let remote = capture_git(cwd, ["config", "--get", "remote.origin.url"]).ok()?;
         parse_github_repo_slug(&remote)
     }
 
-    async fn detect_release_branch(cwd: &AbsolutePath) -> Option<String> {
+    fn detect_release_branch(cwd: &AbsolutePath) -> Option<String> {
         if let Ok(default_head) =
-            capture_git(cwd, ["symbolic-ref", "--short", "refs/remotes/origin/HEAD"]).await
+            capture_git(cwd, ["symbolic-ref", "--short", "refs/remotes/origin/HEAD"])
         {
             let branch = default_head.strip_prefix("origin/").unwrap_or(&default_head).trim();
             if !branch.is_empty() {
@@ -1824,7 +1823,7 @@ mod first_publish {
             }
         }
 
-        let branch = capture_git(cwd, ["branch", "--show-current"]).await.ok()?;
+        let branch = capture_git(cwd, ["branch", "--show-current"]).ok()?;
         let branch = branch.trim();
         (!branch.is_empty()).then(|| branch.to_owned())
     }
@@ -1846,8 +1845,8 @@ mod storage {
         }
     }
 
-    pub(super) async fn ensure_clean_worktree(cwd: &AbsolutePath) -> Result<(), Error> {
-        if is_clean_git_worktree(cwd).await? {
+    pub(super) fn ensure_clean_worktree(cwd: &AbsolutePath) -> Result<(), Error> {
+        if is_clean_git_worktree(cwd)? {
             return Ok(());
         }
 
@@ -1976,7 +1975,7 @@ mod storage {
         }
     }
 
-    pub(super) async fn git_add_paths(
+    pub(super) fn git_add_paths(
         cwd: &AbsolutePath,
         paths: &[AbsolutePathBuf],
     ) -> Result<(), Error> {
@@ -1985,23 +1984,23 @@ mod storage {
         for path in paths {
             args.push(path.as_path().to_string_lossy().to_string());
         }
-        run_git(cwd, args).await.map_err(|err| {
+        run_git(cwd, args).map_err(|err| {
             let mut message = String::from("stage release changes: ");
             push_display(&mut message, err);
             Error::UserMessage(message.into())
         })
     }
 
-    pub(super) async fn git_commit(cwd: &AbsolutePath, message: &str) -> Result<(), Error> {
-        run_git(cwd, ["commit", "-m", message]).await.map_err(|err| {
+    pub(super) fn git_commit(cwd: &AbsolutePath, message: &str) -> Result<(), Error> {
+        run_git(cwd, ["commit", "-m", message]).map_err(|err| {
             let mut error_message = String::from("create release commit: ");
             push_display(&mut error_message, err);
             Error::UserMessage(error_message.into())
         })
     }
 
-    pub(super) async fn git_tag(cwd: &AbsolutePath, tag_name: &str) -> Result<(), Error> {
-        run_git(cwd, ["tag", tag_name]).await.map_err(|err| {
+    pub(super) fn git_tag(cwd: &AbsolutePath, tag_name: &str) -> Result<(), Error> {
+        run_git(cwd, ["tag", tag_name]).map_err(|err| {
             let mut message = String::from("create release tag: ");
             push_display(&mut message, err);
             Error::UserMessage(message.into())

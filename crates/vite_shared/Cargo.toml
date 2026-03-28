@@ -15,7 +15,6 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 supports-color = "3"
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["process"] }
 tracing-subscriber = { workspace = true }
 vite_path = { workspace = true }
 vite_str = { workspace = true }

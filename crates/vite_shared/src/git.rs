@@ -1,9 +1,16 @@
 //! Shared git helpers used by release planning and repository introspection.
+//!
+//! These helpers intentionally use `std::process::Command` rather than an async runtime. The
+//! commands here are short-lived process invocations in already-async callsites, so keeping the
+//! shared utility crate synchronous avoids forcing a heavier dependency such as `tokio` onto every
+//! consumer of `vite_shared`.
 
-use std::{process::Output, string::String};
+use std::{
+    process::{Command, Output},
+    string::String,
+};
 
 use thiserror::Error;
-use tokio::process::Command;
 use vite_path::AbsolutePath;
 
 /// Error raised while invoking git commands or interpreting their result.
@@ -19,13 +26,13 @@ pub enum GitError {
 ///
 /// The helper collects command arguments once up front so the same owned argument list can be used
 /// for both process execution and rich error reporting.
-pub async fn capture_git<I, S>(cwd: &AbsolutePath, args: I) -> Result<String, GitError>
+pub fn capture_git<I, S>(cwd: &AbsolutePath, args: I) -> Result<String, GitError>
 where
     I: IntoIterator<Item = S>,
     S: AsRef<str>,
 {
     let args = collect_args(args);
-    let output = Command::new("git").args(&args).current_dir(cwd.as_path()).output().await?;
+    let output = Command::new("git").args(&args).current_dir(cwd.as_path()).output()?;
 
     if !output.status.success() {
         return Err(command_error(&args, &output));
@@ -35,13 +42,13 @@ where
 }
 
 /// Runs `git` and returns only success or a structured command error.
-pub async fn run_git<I, S>(cwd: &AbsolutePath, args: I) -> Result<(), GitError>
+pub fn run_git<I, S>(cwd: &AbsolutePath, args: I) -> Result<(), GitError>
 where
     I: IntoIterator<Item = S>,
     S: AsRef<str>,
 {
     let args = collect_args(args);
-    let output = Command::new("git").args(&args).current_dir(cwd.as_path()).output().await?;
+    let output = Command::new("git").args(&args).current_dir(cwd.as_path()).output()?;
 
     if output.status.success() {
         return Ok(());
@@ -51,8 +58,8 @@ where
 }
 
 /// Returns whether the current worktree has no staged or unstaged changes.
-pub async fn is_clean_git_worktree(cwd: &AbsolutePath) -> Result<bool, GitError> {
-    Ok(capture_git(cwd, ["status", "--porcelain"]).await?.trim().is_empty())
+pub fn is_clean_git_worktree(cwd: &AbsolutePath) -> Result<bool, GitError> {
+    Ok(capture_git(cwd, ["status", "--porcelain"])?.trim().is_empty())
 }
 
 /// Extracts an `owner/repo` slug from common GitHub remote URL formats.
