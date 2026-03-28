@@ -41,7 +41,7 @@ pub struct ConventionalCommit<'a> {
 #[must_use]
 pub fn parse_conventional_commit<'a>(
     subject: &'a str,
-    body: &str,
+    body: &'a str,
 ) -> Option<ConventionalCommit<'a>> {
     // Header and BREAKING CHANGE footer parsing intentionally follows the Conventional Commits
     // 1.0.0 grammar rather than git-conventional-commits dialects.

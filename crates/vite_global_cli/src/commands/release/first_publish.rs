@@ -641,8 +641,9 @@ fn detect_dispatch_ref_hint(cwd: &AbsolutePath) -> Option<String> {
 mod tests {
     use std::fs;
 
-    use super::*;
     use vite_path::AbsolutePathBuf;
+
+    use super::*;
 
     fn render_checklist_lines(checklist: &[ChecklistStep<'_>]) -> Vec<String> {
         let mut rendered = Vec::new();
