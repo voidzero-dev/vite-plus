@@ -1,3 +1,11 @@
+//! Publish command resolution for npm-compatible package managers.
+//!
+//! References:
+//! - npm publish: https://docs.npmjs.com/cli/v11/commands/npm-publish
+//! - pnpm publish: https://pnpm.io/cli/publish
+//! - Yarn `yarn npm publish`: https://yarnpkg.com/cli/npm/publish
+//! - Bun publish: https://bun.sh/docs/pm/cli/publish
+
 use std::{collections::HashMap, process::ExitStatus};
 
 use vite_command::run_command;
@@ -41,7 +49,7 @@ impl PackageManager {
     }
 
     /// Resolve the publish command.
-    /// All yarn versions delegate to npm publish.
+    /// Prefer native publish commands when they provide better protocol handling.
     #[must_use]
     pub fn resolve_publish_command(&self, options: &PublishCommandOptions) -> ResolveCommandResult {
         let envs = HashMap::from([("PATH".to_string(), format_path_env(self.get_bin_prefix()))]);
@@ -111,8 +119,7 @@ impl PackageManager {
                     args.push("--recursive".into());
                 }
             }
-            PackageManagerType::Npm | PackageManagerType::Yarn => {
-                // Yarn always delegates to npm
+            PackageManagerType::Npm => {
                 bin_name = "npm".into();
 
                 args.push("publish".into());
@@ -166,6 +173,111 @@ impl PackageManager {
 
                 if options.json {
                     output::warn("--json not supported by npm, ignoring flag");
+                }
+            }
+            PackageManagerType::Yarn => {
+                // Modern Yarn has its own publish surface (`yarn npm publish`), while Yarn 1 falls
+                // back to npm semantics. Keep the native path when it preserves documented behavior.
+                // https://yarnpkg.com/cli/npm/publish
+                let can_use_native_yarn = !self.version.starts_with("1.")
+                    && options.target.is_none()
+                    && !options.recursive
+                    && options.filters.map_or(true, |filters| filters.is_empty())
+                    && options.publish_branch.is_none()
+                    && !options.report_summary
+                    && !options.force;
+
+                if can_use_native_yarn {
+                    bin_name = "yarn".into();
+                    args.push("npm".into());
+                    args.push("publish".into());
+
+                    if options.dry_run {
+                        args.push("--dry-run".into());
+                    }
+
+                    if let Some(tag) = options.tag {
+                        args.push("--tag".into());
+                        args.push(tag.to_string());
+                    }
+
+                    if let Some(access) = options.access {
+                        args.push("--access".into());
+                        args.push(access.to_string());
+                    }
+
+                    if let Some(otp) = options.otp {
+                        args.push("--otp".into());
+                        args.push(otp.to_string());
+                    }
+
+                    if options.no_git_checks {
+                        output::warn(
+                            "--no-git-checks not supported by yarn npm publish, ignoring flag",
+                        );
+                    }
+
+                    if options.json {
+                        args.push("--json".into());
+                    }
+                } else {
+                    bin_name = "npm".into();
+
+                    args.push("publish".into());
+
+                    if options.recursive {
+                        args.push("--workspaces".into());
+                    }
+
+                    if let Some(filters) = options.filters {
+                        for filter in filters {
+                            args.push("--workspace".into());
+                            args.push(filter.clone());
+                        }
+                    }
+
+                    if let Some(target) = options.target {
+                        args.push(target.to_string());
+                    }
+
+                    if options.dry_run {
+                        args.push("--dry-run".into());
+                    }
+
+                    if let Some(tag) = options.tag {
+                        args.push("--tag".into());
+                        args.push(tag.to_string());
+                    }
+
+                    if let Some(access) = options.access {
+                        args.push("--access".into());
+                        args.push(access.to_string());
+                    }
+
+                    if let Some(otp) = options.otp {
+                        args.push("--otp".into());
+                        args.push(otp.to_string());
+                    }
+
+                    if options.force {
+                        args.push("--force".into());
+                    }
+
+                    if options.publish_branch.is_some() {
+                        output::warn(
+                            "--publish-branch not supported by yarn native publish flow, falling back to npm publish",
+                        );
+                    }
+
+                    if options.report_summary {
+                        output::warn(
+                            "--report-summary not supported by yarn native publish flow, falling back to npm publish",
+                        );
+                    }
+
+                    if options.json {
+                        output::warn("--json not supported by npm, ignoring flag");
+                    }
                 }
             }
             PackageManagerType::Bun => {
@@ -291,11 +403,11 @@ mod tests {
     }
 
     #[test]
-    fn test_yarn2_publish_uses_npm() {
+    fn test_yarn2_publish_uses_yarn_npm_publish() {
         let pm = create_mock_package_manager(PackageManagerType::Yarn, "4.0.0");
         let result = pm.resolve_publish_command(&PublishCommandOptions::default());
-        assert_eq!(result.bin_path, "npm");
-        assert_eq!(result.args, vec!["publish"]);
+        assert_eq!(result.bin_path, "yarn");
+        assert_eq!(result.args, vec!["npm", "publish"]);
     }
 
     #[test]
@@ -305,8 +417,8 @@ mod tests {
             tag: Some("beta"),
             ..Default::default()
         });
-        assert_eq!(result.bin_path, "npm");
-        assert_eq!(result.args, vec!["publish", "--tag", "beta"]);
+        assert_eq!(result.bin_path, "yarn");
+        assert_eq!(result.args, vec!["npm", "publish", "--tag", "beta"]);
     }
 
     #[test]
@@ -358,6 +470,18 @@ mod tests {
     #[test]
     fn test_yarn_publish_with_filter() {
         let pm = create_mock_package_manager(PackageManagerType::Yarn, "1.22.0");
+        let filters = vec!["app".to_string()];
+        let result = pm.resolve_publish_command(&PublishCommandOptions {
+            filters: Some(&filters),
+            ..Default::default()
+        });
+        assert_eq!(result.bin_path, "npm");
+        assert_eq!(result.args, vec!["publish", "--workspace", "app"]);
+    }
+
+    #[test]
+    fn test_yarn_modern_publish_with_filter_falls_back_to_npm() {
+        let pm = create_mock_package_manager(PackageManagerType::Yarn, "4.0.0");
         let filters = vec!["app".to_string()];
         let result = pm.resolve_publish_command(&PublishCommandOptions {
             filters: Some(&filters),
@@ -460,5 +584,14 @@ mod tests {
         });
         assert_eq!(result.bin_path, "npm");
         assert_eq!(result.args, vec!["publish", "--otp", "999999"]);
+    }
+
+    #[test]
+    fn test_yarn_modern_publish_json_uses_native_command() {
+        let pm = create_mock_package_manager(PackageManagerType::Yarn, "4.0.0");
+        let result =
+            pm.resolve_publish_command(&PublishCommandOptions { json: true, ..Default::default() });
+        assert_eq!(result.bin_path, "yarn");
+        assert_eq!(result.args, vec!["npm", "publish", "--json"]);
     }
 }
