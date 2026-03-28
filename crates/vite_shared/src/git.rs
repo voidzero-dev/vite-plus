@@ -1,4 +1,4 @@
-use std::process::Output;
+use std::{process::Output, string::String};
 
 use thiserror::Error;
 use tokio::process::Command;
@@ -63,7 +63,11 @@ pub fn parse_github_repo_slug(url: &str) -> Option<String> {
     let mut segments = path.split('/').filter(|segment| !segment.is_empty());
     let owner = segments.next()?;
     let repo = segments.next()?;
-    Some(format!("{owner}/{repo}"))
+    let mut slug = String::with_capacity(owner.len() + repo.len() + 1);
+    slug.push_str(owner);
+    slug.push('/');
+    slug.push_str(repo);
+    Some(slug)
 }
 
 fn collect_args<I, S>(args: I) -> Vec<String>
@@ -71,16 +75,30 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<str>,
 {
-    args.into_iter().map(|arg| arg.as_ref().to_owned()).collect()
+    let iter = args.into_iter();
+    let (lower, _) = iter.size_hint();
+    let mut collected = Vec::with_capacity(lower);
+    for arg in iter {
+        collected.push(arg.as_ref().to_owned());
+    }
+    collected
 }
 
 fn command_error(args: &[String], output: &Output) -> GitError {
-    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-    let message = if stderr.is_empty() {
-        format!("`git {}` failed", args.join(" "))
-    } else {
-        format!("`git {}` failed: {}", args.join(" "), stderr)
-    };
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stderr = stderr.trim();
+    let args_len: usize = args.iter().map(String::len).sum();
+    let mut message = String::with_capacity(args_len + stderr.len() + 16 + args.len());
+    message.push_str("`git");
+    for arg in args {
+        message.push(' ');
+        message.push_str(arg);
+    }
+    message.push_str("` failed");
+    if !stderr.is_empty() {
+        message.push_str(": ");
+        message.push_str(stderr);
+    }
     GitError::Command(message)
 }
 

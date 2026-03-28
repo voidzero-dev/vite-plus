@@ -52,8 +52,9 @@ impl PackageManager {
     /// Prefer native publish commands when they provide better protocol handling.
     #[must_use]
     pub fn resolve_publish_command(&self, options: &PublishCommandOptions) -> ResolveCommandResult {
-        let envs = HashMap::from([("PATH".to_string(), format_path_env(self.get_bin_prefix()))]);
-        let mut args: Vec<String> = Vec::new();
+        let mut envs = HashMap::with_capacity(1);
+        envs.insert(String::from("PATH"), format_path_env(self.get_bin_prefix()));
+        let mut args: Vec<String> = Vec::with_capacity(16);
 
         let bin_name: String;
 
