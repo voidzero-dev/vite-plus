@@ -9,7 +9,9 @@ const VITE_PLUS_HOME_DIR: &str = ".vite-plus";
 
 /// Get the vite-plus home directory.
 ///
-/// Uses `EnvConfig::get().vite_plus_home` if set, otherwise defaults to `~/.vite-plus`.
+/// Uses `EnvConfig::get().vite_plus_home` if set,
+/// or the `node` executable's grandparent directory if it ends with `.vite-plus`,
+/// otherwise defaults to `~/.vite-plus`.
 /// Falls back to `$CWD/.vite-plus` if the home directory cannot be determined.
 pub fn get_vite_plus_home() -> std::io::Result<AbsolutePathBuf> {
     let config = EnvConfig::get();
@@ -19,7 +21,7 @@ pub fn get_vite_plus_home() -> std::io::Result<AbsolutePathBuf> {
         }
     }
 
-    // Get from `node`'s path (~/.vite-plus/bin/node)
+    // Get from `node` executable file's grandparent directory (~/.vite-plus/bin/node)
     if let Ok(path) = which("node")
         && let Some(parent) = path.parent()
         && let Some(grandparent) = parent.parent()
