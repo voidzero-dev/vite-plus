@@ -18,6 +18,13 @@
     "docs:update-trusted-stack-stats": "pnpm -C docs update-trusted-stack-stats",
     "prepare": "husky"
   },
+  "vitePlus": {
+    "release": {
+      "checkScripts": [
+        "test:unit"
+      ]
+    }
+  },
   "devDependencies": {
     "@napi-rs/cli": "catalog:",
     "@oxc-node/cli": "catalog:",

@@ -159,6 +159,9 @@ pub struct ReleaseLifecycle {
     /// Historical package names that should still match tag selection.
     #[serde(default)]
     pub previous_names: Vec<String>,
+    /// Additional active paths whose commits should contribute commit history.
+    #[serde(default)]
+    pub tracked_paths: Vec<String>,
     /// Historical package paths that should still contribute commit history.
     #[serde(default)]
     pub previous_paths: Vec<String>,
@@ -965,6 +968,7 @@ mod tests {
                 "vitePlus": {
                     "release": {
                         "previousNames": ["@scope/old-name"],
+                        "trackedPaths": ["crates"],
                         "previousPaths": ["packages/old-name"],
                         "retiredNames": ["@scope/older-name"],
                         "checkScripts": ["release:verify", "release:pack"]
@@ -975,6 +979,7 @@ mod tests {
         .unwrap();
 
         assert_eq!(manifest.vite_plus.release.previous_names, vec!["@scope/old-name"]);
+        assert_eq!(manifest.vite_plus.release.tracked_paths, vec!["crates"]);
         assert_eq!(manifest.vite_plus.release.previous_paths, vec!["packages/old-name"]);
         assert_eq!(manifest.vite_plus.release.retired_names, vec!["@scope/older-name"]);
         assert_eq!(

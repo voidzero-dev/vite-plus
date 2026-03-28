@@ -22,6 +22,7 @@ const GIT_LOG_RECORD_SEPARATOR: char = '\u{001e}';
 const GIT_LOG_FORMAT: &str = "--format=%H%x1f%s%x1f%b%x1e";
 const GIT_LOG_PART_COUNT: usize = 3;
 const SHORT_COMMIT_HASH_LEN: usize = 7;
+const REPOSITORY_RELEASE_TAG_PREFIX: &str = "v";
 
 /// Encodes the git tag layout used as the durable release watermark in this repository.
 #[derive(Debug, Clone, Copy)]
@@ -152,6 +153,7 @@ pub(super) fn load_workspace_packages(
             unique_strings(manifest.vite_plus.release.retired_names.iter().cloned());
         let release_paths = unique_strings(
             std::iter::once(package.path.as_str().to_owned())
+                .chain(manifest.vite_plus.release.tracked_paths.iter().cloned())
                 .chain(manifest.vite_plus.release.previous_paths.iter().cloned()),
         );
 
@@ -310,6 +312,47 @@ pub(super) fn find_latest_stable_package_version(
         .lines()
         .map(str::trim)
         .filter_map(|tag_name| RELEASE_TAG_FORMAT.parse_version(tag_name))
+        .find(|version| !version.has_prerelease()))
+}
+
+pub(super) fn find_latest_package_version(
+    cwd: &AbsolutePath,
+    package_names: &[String],
+) -> Result<Option<Version>, Error> {
+    let stdout = capture_git(cwd, RELEASE_TAG_FORMAT.git_tag_list_args(package_names))?;
+    Ok(stdout
+        .lines()
+        .map(str::trim)
+        .filter_map(|tag_name| RELEASE_TAG_FORMAT.parse_version(tag_name))
+        .next())
+}
+
+pub(super) fn find_latest_repository_release_tag(
+    cwd: &AbsolutePath,
+) -> Result<Option<String>, Error> {
+    let stdout = capture_git(cwd, ["tag", "--list", "--sort=-creatordate", "v*"])?;
+    Ok(stdout
+        .lines()
+        .map(str::trim)
+        .find(|tag_name| parse_repository_release_version(tag_name).is_some())
+        .map(ToOwned::to_owned))
+}
+
+pub(super) fn find_latest_repository_release_version(
+    cwd: &AbsolutePath,
+) -> Result<Option<Version>, Error> {
+    let stdout = capture_git(cwd, ["tag", "--list", "--sort=-creatordate", "v*"])?;
+    Ok(stdout.lines().map(str::trim).filter_map(parse_repository_release_version).next())
+}
+
+pub(super) fn find_latest_repository_stable_release_version(
+    cwd: &AbsolutePath,
+) -> Result<Option<Version>, Error> {
+    let stdout = capture_git(cwd, ["tag", "--list", "--sort=-creatordate", "v*"])?;
+    Ok(stdout
+        .lines()
+        .map(str::trim)
+        .filter_map(parse_repository_release_version)
         .find(|version| !version.has_prerelease()))
 }
 
@@ -501,6 +544,11 @@ pub(super) fn parse_package_name_from_release_tag(tag_name: &str) -> Option<Stri
     RELEASE_TAG_FORMAT.parse_package_name(tag_name)
 }
 
+#[cfg(test)]
+pub(super) fn parse_repository_release_tag_version_for_tests(tag_name: &str) -> Option<Version> {
+    parse_repository_release_version(tag_name)
+}
+
 fn release_line_level(stable_baseline: &Version, target_base: &Version) -> Option<VersionBump> {
     if target_base.major > stable_baseline.major {
         Some(VersionBump::Major)
@@ -521,6 +569,14 @@ fn prerelease_with_number(prerelease_tag: &PrereleaseTag, number: u64) -> Result
         push_display(&mut message, e);
         Error::UserMessage(message.into())
     })
+}
+
+fn parse_repository_release_version(tag_name: &str) -> Option<Version> {
+    let version = Version::parse(tag_name.strip_prefix(REPOSITORY_RELEASE_TAG_PREFIX)?).ok()?;
+    match prerelease_channel(&version) {
+        None | Some("alpha" | "beta" | "rc") => Some(version),
+        Some(_) => None,
+    }
 }
 
 fn release_queue_entry(package: &WorkspacePackage) -> ReleaseQueueEntry {

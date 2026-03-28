@@ -160,6 +160,9 @@ macro_rules! first_publish_checklist {
                         "Required workflow permissions",
                         "`contents: write` and `id-token: write`",
                     ),
+                    text!(
+                        "Push the generated release tags back to origin so the release watermark survives CI.",
+                    ),
                 ],
             ),
             step!(
@@ -434,6 +437,10 @@ pub(super) fn render_release_command(
     if options.changelog {
         command.push_str(" --changelog");
     }
+    if let Some(version) = options.version.as_deref() {
+        command.push_str(" --version ");
+        command.push_str(version);
+    }
     if let Some(preid) = options.preid.as_deref() {
         command.push_str(" --preid ");
         command.push_str(preid);
@@ -456,6 +463,9 @@ pub(super) fn render_release_command(
     if dry_run {
         command.push_str(" --dry-run");
     } else {
+        if !options.run_checks {
+            command.push_str(" --no-run-checks");
+        }
         command.push_str(" --yes");
     }
 
@@ -673,11 +683,13 @@ mod tests {
                 skip_publish: false,
                 first_release: true,
                 changelog: false,
+                version: None,
                 preid: None,
                 otp: None,
                 projects: None,
                 git_tag: true,
                 git_commit: true,
+                run_checks: true,
                 yes: false,
             },
         );
@@ -713,11 +725,13 @@ mod tests {
                 skip_publish: false,
                 first_release: true,
                 changelog: true,
+                version: None,
                 preid: Some("beta".into()),
                 otp: None,
                 projects: Some(vec!["@scope/pkg-a".into()]),
                 git_tag: false,
                 git_commit: false,
+                run_checks: true,
                 yes: false,
             },
         );
@@ -767,11 +781,13 @@ mod tests {
                 skip_publish: true,
                 first_release: false,
                 changelog: false,
+                version: None,
                 preid: None,
                 otp: Some("123456".into()),
                 projects: Some(Vec::new()),
                 git_tag: true,
                 git_commit: true,
+                run_checks: true,
                 yes: false,
             },
             false,
@@ -789,11 +805,13 @@ mod tests {
                 skip_publish: false,
                 first_release: true,
                 changelog: false,
+                version: None,
                 preid: None,
                 otp: None,
                 projects: None,
                 git_tag: true,
                 git_commit: false,
+                run_checks: true,
                 yes: false,
             },
             true,
@@ -801,6 +819,30 @@ mod tests {
         );
 
         assert_eq!(command, "vp release --first-release --no-git-commit --dry-run");
+    }
+
+    #[test]
+    fn render_release_command_includes_version_override() {
+        let command = render_release_command(
+            &ReleaseOptions {
+                dry_run: false,
+                skip_publish: false,
+                first_release: false,
+                changelog: false,
+                version: Some("1.2.3".into()),
+                preid: None,
+                otp: None,
+                projects: None,
+                git_tag: true,
+                git_commit: true,
+                run_checks: true,
+                yes: false,
+            },
+            false,
+            false,
+        );
+
+        assert_eq!(command, "vp release --version 1.2.3 --yes");
     }
 
     #[test]
@@ -854,8 +896,10 @@ mod tests {
         assert!(created.contains("<release-tag-pattern>"));
         assert!(created.contains("run: corepack enable"));
         assert!(created.contains("run: pnpm install --frozen-lockfile"));
+        assert!(created.contains("git config user.name \"github-actions[bot]\""));
         assert!(created.contains("vp release --first-release --yes"));
         assert!(created.contains("vp release --yes"));
+        assert!(created.contains("run: git push origin --tags"));
         assert!(!created.contains(PACKAGE_MANAGER_SETUP_TOKEN));
         assert!(!created.contains(INSTALL_COMMAND_TOKEN));
     }
@@ -898,11 +942,13 @@ mod tests {
             skip_publish: false,
             first_release: true,
             changelog: false,
+            version: None,
             preid: None,
             otp: None,
             projects: None,
             git_tag: true,
             git_commit: true,
+            run_checks: true,
             yes: false,
         }
     }

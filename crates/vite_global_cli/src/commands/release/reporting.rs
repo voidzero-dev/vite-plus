@@ -130,8 +130,19 @@ pub(super) fn print_release_plan(release_plans: &[PackageReleasePlan], options: 
     if !options.changelog {
         output::note("Changelog generation is disabled for this run.");
     }
+    if let Some(version) = options.version.as_deref() {
+        let mut line = String::from("Target version overridden with --version ");
+        line.push_str(version);
+        line.push('.');
+        output::note(&line);
+    }
     if !options.dry_run && options.skip_publish {
         output::note("Publishing disabled for this run.");
+    }
+    if options.run_checks {
+        output::note("Release checks will run before publish.");
+    } else {
+        output::note("Release checks are disabled for this run.");
     }
 }
 
@@ -277,12 +288,12 @@ pub(super) fn print_release_readiness_report(report: &ReleaseReadinessReport) {
         "prefer npm passkey/security-key auth; use `--otp` only for legacy TOTP fallback",
     );
 
-    output::note(
-        "`vp release` does not run build, pack, or custom pre-release scripts implicitly.",
-    );
-    output::note(
-        "Review this summary, run any checks you need manually, then confirm to continue.",
-    );
+    output::note(if report.workspace_scripts.is_empty() && report.package_scripts.is_empty() {
+        "No release checks were detected automatically for this run."
+    } else {
+        "Release checks can run from these detected scripts; real releases do so by default and dry-runs can opt in with `--run-checks`."
+    });
+    output::note("Review this summary, then confirm to continue.");
     if !report.trusted_publish.context.supports_trusted_publishing() {
         output::note(
             "Local dry-runs validate packaging and publish command shape, but OIDC auth and trusted-publishing provenance are only exercised from CI.",
@@ -352,6 +363,11 @@ pub(super) fn print_dry_run_actions(
         output::note(
             "Would print the release summary and ask for confirmation before changing files.",
         );
+    }
+    if options.run_checks {
+        output::note("Would run detected release checks before publish.");
+    } else {
+        output::note("Would skip release checks for this run.");
     }
     if options.skip_publish {
         output::note("Would skip publishing because --skip-publish was provided.");
@@ -484,6 +500,9 @@ pub(super) fn print_release_completion_summary(
         raw_bullet_line!(
             "local release tags can be rolled back if a later tag creation step fails"
         );
+        output::note(
+            "Push the new release tags to origin so future `vp release` runs can reuse the published watermark.",
+        );
     }
 }
 
@@ -509,11 +528,15 @@ pub(super) fn confirm_release(
     raw_item_kv!("changelog", if options.changelog { "yes" } else { "no" });
     raw_item_kv!("git commit", if options.git_commit { "yes" } else { "no" });
     raw_item_kv!("git tags", if options.git_tag { "yes" } else { "no" });
+    raw_item_kv!("release checks", if options.run_checks { "yes" } else { "no" });
     raw_item_kv!(
         "trusted publishing",
         readiness_report.trusted_publish.context.environment_summary(),
     );
     raw_item_kv!("prerelease tag", options.preid.as_deref().unwrap_or("stable"));
+    if let Some(version) = options.version.as_deref() {
+        raw_item_kv!("version override", version);
+    }
     if !readiness_report.warnings.is_empty() {
         let mut warning = String::new();
         push_display(&mut warning, readiness_report.warnings.len());

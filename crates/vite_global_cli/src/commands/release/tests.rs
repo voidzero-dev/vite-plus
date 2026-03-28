@@ -124,11 +124,13 @@ fn make_release_options() -> ReleaseOptions {
         skip_publish: false,
         first_release: false,
         changelog: false,
+        version: None,
         preid: None,
         otp: None,
         projects: None,
         git_tag: true,
         git_commit: true,
+        run_checks: true,
         yes: false,
     }
 }
@@ -211,11 +213,13 @@ fn render_release_command_keeps_relevant_flags() {
             skip_publish: true,
             first_release: true,
             changelog: true,
+            version: None,
             preid: Some("alpha".into()),
             otp: None,
             projects: Some(vec!["@scope/pkg-a".into(), "@scope/pkg-b".into()]),
             git_tag: false,
             git_commit: true,
+            run_checks: true,
             yes: false,
         },
         true,
@@ -236,11 +240,13 @@ fn render_release_command_uses_yes_for_non_interactive_runs() {
             skip_publish: false,
             first_release: false,
             changelog: false,
+            version: None,
             preid: None,
             otp: None,
             projects: None,
             git_tag: true,
             git_commit: true,
+            run_checks: true,
             yes: false,
         },
         false,
@@ -257,11 +263,13 @@ fn validate_release_options_rejects_real_skip_publish() {
         skip_publish: true,
         first_release: false,
         changelog: false,
+        version: None,
         preid: None,
         otp: None,
         projects: None,
         git_tag: true,
         git_commit: true,
+        run_checks: true,
         yes: false,
     })
     .unwrap_err();
@@ -276,11 +284,13 @@ fn validate_release_options_rejects_real_no_git_tag() {
         skip_publish: false,
         first_release: false,
         changelog: false,
+        version: None,
         preid: None,
         otp: None,
         projects: None,
         git_tag: false,
         git_commit: true,
+        run_checks: true,
         yes: false,
     })
     .unwrap_err();
@@ -295,11 +305,13 @@ fn validate_release_options_rejects_real_git_tag_without_commit() {
         skip_publish: false,
         first_release: false,
         changelog: false,
+        version: None,
         preid: None,
         otp: None,
         projects: None,
         git_tag: true,
         git_commit: false,
+        run_checks: true,
         yes: false,
     })
     .unwrap_err();
@@ -316,15 +328,39 @@ fn validate_release_options_allows_preview_only_flags_in_dry_run() {
             skip_publish: true,
             first_release: true,
             changelog: true,
+            version: None,
             preid: Some("beta".into()),
             otp: None,
             projects: Some(vec!["pkg-a".into()]),
             git_tag: false,
             git_commit: false,
+            run_checks: false,
             yes: false,
         })
         .is_ok()
     );
+}
+
+#[test]
+fn validate_release_options_rejects_version_with_preid() {
+    let error = validate_release_options(&ReleaseOptions {
+        dry_run: false,
+        skip_publish: false,
+        first_release: false,
+        changelog: false,
+        version: Some("1.2.3-alpha.0".into()),
+        preid: Some("alpha".into()),
+        otp: None,
+        projects: None,
+        git_tag: true,
+        git_commit: true,
+        run_checks: true,
+        yes: false,
+    })
+    .unwrap_err();
+
+    assert!(error.to_string().contains("--version"));
+    assert!(error.to_string().contains("--preid"));
 }
 
 #[test]
@@ -337,11 +373,13 @@ fn resolved_publish_tag_prefers_cli_preid_over_manifest_tag() {
         skip_publish: false,
         first_release: false,
         changelog: false,
+        version: None,
         preid: Some("beta".into()),
         otp: None,
         projects: None,
         git_tag: true,
         git_commit: true,
+        run_checks: true,
         yes: false,
     };
 
@@ -882,6 +920,20 @@ fn invalid_release_tags_are_ignored() {
     assert_eq!(parse_package_name_from_release_tag("release//v1.0.0"), None);
     assert_eq!(parse_package_name_from_release_tag("release/pkg-a/not-a-version"), None);
     assert_eq!(parse_package_name_from_release_tag("pkg-a@1.0.0"), None);
+}
+
+#[test]
+fn repository_release_tags_accept_stable_and_standard_prereleases_only() {
+    assert_eq!(
+        parse_repository_release_tag_version_for_tests("v1.2.3").unwrap().to_string(),
+        "1.2.3"
+    );
+    assert_eq!(
+        parse_repository_release_tag_version_for_tests("v1.2.4-alpha.1").unwrap().to_string(),
+        "1.2.4-alpha.1"
+    );
+    assert!(parse_repository_release_tag_version_for_tests("v0.0.0-16aec32").is_none());
+    assert!(parse_repository_release_tag_version_for_tests("release/pkg-a/v1.0.0").is_none());
 }
 
 #[test]

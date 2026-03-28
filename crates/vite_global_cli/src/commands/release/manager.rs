@@ -141,20 +141,51 @@ impl ReleaseManager {
         workspace_root_path: &AbsolutePath,
         ordered: Vec<WorkspacePackage>,
     ) -> Result<(Vec<PackageReleasePlan>, Vec<CommitInfo>), Error> {
+        let version_override =
+            self.options.version.as_deref().map(Version::parse).transpose().map_err(|error| {
+                let mut message = String::from("Invalid `--version` value: ");
+                push_display(&mut message, error);
+                Error::UserMessage(message.into())
+            })?;
         let mut release_plans = Vec::with_capacity(ordered.len());
         let mut root_commits = Vec::new();
         let mut seen_commit_hashes = HashSet::new();
 
         for package in ordered {
-            let previous_tag = if self.options.first_release {
+            let uses_tag_version_source = package.manifest.version.trim() == "0.0.0";
+            let latest_package_tag = if self.options.first_release {
                 None
             } else {
                 find_latest_package_tag(workspace_root_path, &package.known_names)?
             };
+            let previous_tag = if latest_package_tag.is_some() || !uses_tag_version_source {
+                latest_package_tag
+            } else if self.options.first_release {
+                None
+            } else {
+                find_latest_repository_release_tag(workspace_root_path)?
+            };
+            let latest_package_version = if self.options.first_release {
+                None
+            } else {
+                find_latest_package_version(workspace_root_path, &package.known_names)?
+            };
+            let latest_repository_version =
+                if self.options.first_release || !uses_tag_version_source {
+                    None
+                } else {
+                    find_latest_repository_release_version(workspace_root_path)?
+                };
             let latest_stable_version = if self.options.first_release {
                 None
             } else {
-                find_latest_stable_package_version(workspace_root_path, &package.known_names)?
+                let latest_package_stable_version =
+                    find_latest_stable_package_version(workspace_root_path, &package.known_names)?;
+                if latest_package_stable_version.is_some() || !uses_tag_version_source {
+                    latest_package_stable_version
+                } else {
+                    find_latest_repository_stable_release_version(workspace_root_path)?
+                }
             };
 
             let commits = collect_package_commits(
@@ -171,22 +202,31 @@ impl ReleaseManager {
                 continue;
             };
 
-            let current_version = Version::parse(&package.manifest.version).map_err(|e| {
-                let mut message = String::from("Package '");
-                message.push_str(&package.name);
-                message.push_str("' has an invalid version '");
-                message.push_str(&package.manifest.version);
-                message.push_str("': ");
-                push_display(&mut message, e);
-                Error::UserMessage(message.into())
-            })?;
+            let current_version = if uses_tag_version_source {
+                latest_package_version
+                    .or(latest_repository_version)
+                    .unwrap_or_else(|| Version::new(0, 0, 0))
+            } else {
+                Version::parse(&package.manifest.version).map_err(|e| {
+                    let mut message = String::from("Package '");
+                    message.push_str(&package.name);
+                    message.push_str("' has an invalid version '");
+                    message.push_str(&package.manifest.version);
+                    message.push_str("': ");
+                    push_display(&mut message, e);
+                    Error::UserMessage(message.into())
+                })?
+            };
             let level = effective_release_level(&current_version, level);
-            let next_version = next_release_version(
-                &current_version,
-                level,
-                latest_stable_version.as_ref(),
-                self.options.preid.as_deref(),
-            )?;
+            let next_version = match version_override.as_ref() {
+                Some(version) => version.clone(),
+                None => next_release_version(
+                    &current_version,
+                    level,
+                    latest_stable_version.as_ref(),
+                    self.options.preid.as_deref(),
+                )?,
+            };
 
             for commit in &commits {
                 if seen_commit_hashes.insert(commit.hash.clone()) {
@@ -216,6 +256,17 @@ impl ReleaseManager {
                 scripts: package.manifest.scripts.keys().cloned().collect(),
                 check_scripts: package.manifest.vite_plus.release.check_scripts.clone(),
             });
+        }
+
+        if self.options.version.is_some()
+            && let Some(first_version) =
+                release_plans.first().map(|plan| plan.current_version.clone())
+            && release_plans.iter().any(|plan| plan.current_version != first_version)
+        {
+            return Err(Error::UserMessage(
+                "`vp release --version` currently requires all selected packages to share the same current version. Narrow the selection with `--projects` if you need to retry only part of the release."
+                    .into(),
+            ));
         }
 
         Ok((release_plans, root_commits))
@@ -369,6 +420,24 @@ impl ReleaseManager {
             &self.trusted_publish_context,
         );
 
+        let readiness_report = collect_release_readiness_report(
+            release.workspace_manifest.as_ref(),
+            &release.release_plans,
+            &self.options,
+            &self.trusted_publish_context,
+        );
+        let check_status = run_release_checks(
+            &release.package_manager,
+            &release.workspace_root_path,
+            &release.release_plans,
+            &readiness_report,
+            &self.options,
+        )
+        .await?;
+        if !check_status.success() {
+            return Ok(check_status);
+        }
+
         let publish_status = if self.options.skip_publish {
             DryRunPublishStatus::SkippedByOption
         } else if is_clean_git_worktree(&release.workspace_root_path)? {
@@ -420,6 +489,18 @@ impl ReleaseManager {
             && !confirm_release(&release.release_plans, readiness_report, &self.options)?
         {
             return Ok(ExitStatus::SUCCESS);
+        }
+
+        let check_status = run_release_checks(
+            &release.package_manager,
+            &release.workspace_root_path,
+            &release.release_plans,
+            readiness_report,
+            &self.options,
+        )
+        .await?;
+        if !check_status.success() {
+            return Ok(check_status);
         }
 
         let preflight_status = run_publish_preflight(
