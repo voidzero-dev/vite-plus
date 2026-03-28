@@ -1186,6 +1186,230 @@ mod presentation {
 mod first_publish {
     use super::*;
 
+    const CHECKLIST_STEP_PREFIX: &str = "  ";
+    const CHECKLIST_ITEM_PREFIX: &str = "     - ";
+
+    macro_rules! step {
+        ($title:expr, [$( $line:expr ),* $(,)?] $(,)?) => {
+            ChecklistStep::new($title, [$( $line ),*])
+        };
+    }
+
+    macro_rules! text {
+        ($text:expr $(,)?) => {
+            Some(ChecklistLine::static_text($text))
+        };
+    }
+
+    macro_rules! kv_static {
+        ($key:expr, $value:expr $(,)?) => {
+            Some(ChecklistLine::key_value_static($key, $value))
+        };
+    }
+
+    macro_rules! kv_borrowed {
+        ($key:expr, $value:expr $(,)?) => {
+            Some(ChecklistLine::key_value_borrowed($key, $value))
+        };
+    }
+
+    macro_rules! kv_owned {
+        ($key:expr, $value:expr $(,)?) => {
+            Some(ChecklistLine::key_value_owned($key, $value))
+        };
+    }
+
+    macro_rules! maybe_kv_owned {
+        ($key:expr, $value:expr, |$binding:ident| $render:expr $(,)?) => {
+            $value.map(|$binding| ChecklistLine::key_value_owned($key, $render))
+        };
+    }
+
+    macro_rules! when_text {
+        ($condition:expr, $text:expr $(,)?) => {
+            ($condition).then_some(ChecklistLine::static_text($text))
+        };
+    }
+
+    macro_rules! when_kv_owned {
+        ($condition:expr, $key:expr, $value:expr $(,)?) => {
+            ($condition).then(|| ChecklistLine::key_value_owned($key, $value))
+        };
+    }
+
+    macro_rules! first_publish_checklist {
+        ($guidance:expr, $options:expr $(,)?) => {{
+            let guidance = $guidance;
+            let options = $options;
+            let has_repository_issues = !guidance.packages_missing_repository.is_empty()
+                || !guidance.packages_mismatched_repository.is_empty();
+
+            [
+                step!(
+                    "Commit a GitHub Actions release workflow that runs on a GitHub-hosted runner.",
+                    [
+                        kv_borrowed!("Workflow file", &guidance.workflow_path),
+                        maybe_kv_owned!(
+                            "Trigger",
+                            guidance.release_branch.as_deref(),
+                            |branch| render_branch_or_dispatch(branch)
+                        ),
+                        kv_static!(
+                            "Required workflow permissions",
+                            "`contents: write` and `id-token: write`",
+                        ),
+                    ],
+                ),
+                step!(
+                    "Configure npm Trusted Publishing for each package you are releasing.",
+                    [
+                        Some(match guidance.github_repo.as_deref() {
+                            Some(repo) => {
+                                ChecklistLine::key_value_owned("Repository", render_inline_code(repo))
+                            }
+                            None => ChecklistLine::key_value_static("Repository", "`<owner>/<repo>`"),
+                        }),
+                        kv_owned!(
+                            "Workflow filename in npm",
+                            render_inline_code(workflow_filename(&guidance.workflow_path)),
+                        ),
+                        maybe_kv_owned!(
+                            "Branch / environment",
+                            guidance.release_branch.as_deref(),
+                            |branch| render_inline_code(branch)
+                        ),
+                        text!("npm requires the repository and workflow values to match exactly."),
+                        text!(
+                            "Trusted publishing currently works for public npm packages and scopes.",
+                        ),
+                    ],
+                ),
+                step!(
+                    "Make sure each package.json has a matching `repository` entry.",
+                    [
+                        when_text!(
+                            !has_repository_issues,
+                            "Looks good for the packages in this release.",
+                        ),
+                        when_kv_owned!(
+                            !guidance.packages_missing_repository.is_empty(),
+                            "Missing `repository`",
+                            join_string_slice(&guidance.packages_missing_repository, ", "),
+                        ),
+                        when_kv_owned!(
+                            !guidance.packages_mismatched_repository.is_empty(),
+                            "Repository does not match git remote",
+                            join_string_slice(&guidance.packages_mismatched_repository, ", "),
+                        ),
+                    ],
+                ),
+                step!(
+                    "For the first public publish of scoped packages, set `publishConfig.access` to `public`.",
+                    [
+                        when_text!(
+                            guidance.scoped_packages_missing_public_access.is_empty(),
+                            "No obvious access issues detected."
+                        ),
+                        when_kv_owned!(
+                            !guidance.scoped_packages_missing_public_access.is_empty(),
+                            "Missing `publishConfig.access = \"public\"`",
+                            join_string_slice(&guidance.scoped_packages_missing_public_access, ", "),
+                        ),
+                    ],
+                ),
+                step!(
+                    "Validate the release flow from CI before the first real publish.",
+                    [
+                        kv_owned!("Dry run", render_release_command(options, true, true)),
+                        kv_owned!(
+                            "Real publish from GitHub Actions",
+                            render_release_command(options, false, false),
+                        ),
+                        text!(
+                            "Trusted publishing covers publish itself. If CI also installs private packages, use a separate read-only npm token for install steps.",
+                        ),
+                    ],
+                ),
+            ]
+        }};
+    }
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    enum ChecklistText<'a> {
+        Static(&'static str),
+        Borrowed(&'a str),
+        Owned(String),
+    }
+
+    impl ChecklistText<'_> {
+        fn write_into(&self, buffer: &mut String) {
+            match self {
+                Self::Static(value) | Self::Borrowed(value) => buffer.push_str(value),
+                Self::Owned(value) => buffer.push_str(value),
+            }
+        }
+    }
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    enum ChecklistLine<'a> {
+        Text(ChecklistText<'a>),
+        KeyValue { key: &'static str, value: ChecklistText<'a> },
+    }
+
+    impl ChecklistLine<'_> {
+        fn write_into(&self, buffer: &mut String) {
+            match self {
+                Self::Text(text) => text.write_into(buffer),
+                Self::KeyValue { key, value } => {
+                    buffer.push_str(key);
+                    buffer.push_str(": ");
+                    value.write_into(buffer);
+                }
+            }
+        }
+    }
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    struct ChecklistStep<'a> {
+        title: &'static str,
+        lines: Vec<ChecklistLine<'a>>,
+    }
+
+    impl<'a> ChecklistStep<'a> {
+        fn new<I>(title: &'static str, lines: I) -> Self
+        where
+            I: IntoIterator<Item = Option<ChecklistLine<'a>>>,
+        {
+            let iter = lines.into_iter();
+            let (lower, _) = iter.size_hint();
+            let mut collected = Vec::with_capacity(lower);
+            for line in iter {
+                if let Some(line) = line {
+                    collected.push(line);
+                }
+            }
+            Self { title, lines: collected }
+        }
+    }
+
+    impl<'a> ChecklistLine<'a> {
+        fn static_text(text: &'static str) -> Self {
+            Self::Text(ChecklistText::Static(text))
+        }
+
+        fn key_value_static(key: &'static str, value: &'static str) -> Self {
+            Self::KeyValue { key, value: ChecklistText::Static(value) }
+        }
+
+        fn key_value_borrowed(key: &'static str, value: &'a str) -> Self {
+            Self::KeyValue { key, value: ChecklistText::Borrowed(value) }
+        }
+
+        fn key_value_owned(key: &'static str, value: String) -> Self {
+            Self::KeyValue { key, value: ChecklistText::Owned(value) }
+        }
+    }
+
     pub(super) async fn collect_first_publish_guidance(
         cwd: &AbsolutePath,
         release_plans: &[PackageReleasePlan],
@@ -1226,102 +1450,11 @@ mod first_publish {
         guidance: &FirstPublishGuidance,
         options: &ReleaseOptions,
     ) {
-        output::raw("");
-        output::info("First publish checklist:");
-        output::raw("  This run uses --first-release, so there are a few one-time setup steps:");
-        output::raw(
-            "  1. Commit a GitHub Actions release workflow that runs on a GitHub-hosted runner.",
-        );
-        let mut line = String::from("     - Workflow file: ");
-        line.push_str(&guidance.workflow_path);
-        output::raw(&line);
-        if let Some(branch) = guidance.release_branch.as_deref() {
-            let mut line = String::from("     - Trigger from `");
-            line.push_str(branch);
-            line.push_str("` or `workflow_dispatch`");
-            output::raw(&line);
-        }
-        output::raw(
-            "     - Required workflow permissions: `contents: write` and `id-token: write`",
-        );
-
-        output::raw("  2. Configure npm Trusted Publishing for each package you are releasing.");
-        if let Some(repo) = guidance.github_repo.as_deref() {
-            let mut line = String::from("     - Repository: `");
-            line.push_str(repo);
-            line.push('`');
-            output::raw(&line);
-        } else {
-            output::raw("     - Repository: `<owner>/<repo>`");
-        }
-        let mut line = String::from("     - Workflow filename in npm: `");
-        line.push_str(workflow_filename(&guidance.workflow_path));
-        line.push('`');
-        output::raw(&line);
-        if let Some(branch) = guidance.release_branch.as_deref() {
-            let mut line = String::from("     - Branch / environment: `");
-            line.push_str(branch);
-            line.push('`');
-            output::raw(&line);
-        }
-        output::raw("     - npm requires the repository and workflow values to match exactly.");
-        output::raw(
-            "     - Trusted publishing currently works for public npm packages and scopes.",
-        );
-
-        output::raw("  3. Make sure each package.json has a matching `repository` entry.");
-        if guidance.packages_missing_repository.is_empty()
-            && guidance.packages_mismatched_repository.is_empty()
-        {
-            output::raw("     - Looks good for the packages in this release.");
-        } else {
-            if !guidance.packages_missing_repository.is_empty() {
-                let mut line = String::from("     - Missing `repository`: ");
-                push_joined(
-                    &mut line,
-                    guidance.packages_missing_repository.iter().map(String::as_str),
-                    ", ",
-                );
-                output::raw(&line);
-            }
-            if !guidance.packages_mismatched_repository.is_empty() {
-                let mut line = String::from("     - Repository does not match git remote: ");
-                push_joined(
-                    &mut line,
-                    guidance.packages_mismatched_repository.iter().map(String::as_str),
-                    ", ",
-                );
-                output::raw(&line);
-            }
-        }
-
-        output::raw(
-            "  4. For the first public publish of scoped packages, set `publishConfig.access` to `public`.",
-        );
-        if guidance.scoped_packages_missing_public_access.is_empty() {
-            output::raw("     - No obvious access issues detected.");
-        } else {
-            let mut line = String::from("     - Missing `publishConfig.access = \"public\"`: ");
-            push_joined(
-                &mut line,
-                guidance.scoped_packages_missing_public_access.iter().map(String::as_str),
-                ", ",
-            );
-            output::raw(&line);
-        }
-
-        output::raw("  5. Validate the release flow from CI before the first real publish.");
-        let dry_run = render_release_command(options, true, true);
-        let mut line = String::from("     - Dry run: ");
-        line.push_str(&dry_run);
-        output::raw(&line);
-
-        let real_publish = render_release_command(options, false, false);
-        let mut line = String::from("     - Real publish from GitHub Actions: ");
-        line.push_str(&real_publish);
-        output::raw(&line);
-        output::raw(
-            "     - Trusted publishing covers publish itself. If CI also installs private packages, use a separate read-only npm token for install steps.",
+        let checklist = first_publish_checklist!(guidance, options);
+        print_checklist(
+            "First publish checklist:",
+            "This run uses --first-release, so there are a few one-time setup steps:",
+            &checklist,
         );
     }
 
@@ -1363,6 +1496,173 @@ mod first_publish {
         }
 
         command
+    }
+
+    fn print_checklist(heading: &str, intro: &str, checklist: &[ChecklistStep<'_>]) {
+        output::raw("");
+        output::info(heading);
+
+        let mut line = String::with_capacity(256);
+        line.push_str(CHECKLIST_STEP_PREFIX);
+        line.push_str(intro);
+        output::raw(&line);
+
+        for (index, step) in checklist.iter().enumerate() {
+            line.clear();
+            line.push_str(CHECKLIST_STEP_PREFIX);
+            push_display(&mut line, index + 1);
+            line.push_str(". ");
+            line.push_str(step.title);
+            output::raw(&line);
+
+            for item in &step.lines {
+                line.clear();
+                line.push_str(CHECKLIST_ITEM_PREFIX);
+                item.write_into(&mut line);
+                output::raw(&line);
+            }
+        }
+    }
+
+    fn render_inline_code(value: &str) -> String {
+        let mut rendered = String::with_capacity(value.len() + 2);
+        rendered.push('`');
+        rendered.push_str(value);
+        rendered.push('`');
+        rendered
+    }
+
+    fn render_branch_or_dispatch(branch: &str) -> String {
+        let mut rendered = String::with_capacity(branch.len() + 26);
+        rendered.push('`');
+        rendered.push_str(branch);
+        rendered.push_str("` or `workflow_dispatch`");
+        rendered
+    }
+
+    fn join_string_slice(values: &[String], separator: &str) -> String {
+        if values.is_empty() {
+            return String::new();
+        }
+
+        let separator_bytes = separator.len();
+        let total_len = values.iter().map(String::len).sum::<usize>()
+            + separator_bytes * values.len().saturating_sub(1);
+        let mut joined = String::with_capacity(total_len);
+        push_joined(&mut joined, values.iter().map(String::as_str), separator);
+        joined
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        fn render_checklist_lines(checklist: &[ChecklistStep<'_>]) -> Vec<String> {
+            let mut rendered = Vec::new();
+            let mut line = String::with_capacity(256);
+
+            for (index, step) in checklist.iter().enumerate() {
+                line.clear();
+                line.push_str(CHECKLIST_STEP_PREFIX);
+                push_display(&mut line, index + 1);
+                line.push_str(". ");
+                line.push_str(step.title);
+                rendered.push(line.clone());
+
+                for item in &step.lines {
+                    line.clear();
+                    line.push_str(CHECKLIST_ITEM_PREFIX);
+                    item.write_into(&mut line);
+                    rendered.push(line.clone());
+                }
+            }
+
+            rendered
+        }
+
+        #[test]
+        fn first_publish_checklist_is_declared_in_stable_step_order() {
+            let guidance = FirstPublishGuidance {
+                github_repo: Some("voidzero-dev/vite-plus".into()),
+                release_branch: Some("main".into()),
+                workflow_path: ".github/workflows/release.yml".into(),
+                ..Default::default()
+            };
+
+            let checklist = first_publish_checklist!(
+                &guidance,
+                &ReleaseOptions {
+                    dry_run: false,
+                    skip_publish: false,
+                    first_release: true,
+                    changelog: false,
+                    preid: None,
+                    projects: None,
+                    git_tag: true,
+                    git_commit: true,
+                    yes: false,
+                },
+            );
+
+            let lines = render_checklist_lines(&checklist);
+            assert_eq!(
+                lines[0],
+                "  1. Commit a GitHub Actions release workflow that runs on a GitHub-hosted runner."
+            );
+            assert!(lines.iter().any(|line| line.contains("Repository: `voidzero-dev/vite-plus`")));
+            assert!(
+                lines
+                    .iter()
+                    .any(|line| line.contains("Dry run: vp release --first-release --dry-run"))
+            );
+            assert!(lines.iter().any(|line| {
+                line.contains("Real publish from GitHub Actions: vp release --first-release --yes")
+            }));
+        }
+
+        #[test]
+        fn first_publish_checklist_surfaces_package_issues_compactly() {
+            let guidance = FirstPublishGuidance {
+                workflow_path: ".github/workflows/release.yml".into(),
+                packages_missing_repository: vec!["@scope/pkg-a".into(), "@scope/pkg-b".into()],
+                packages_mismatched_repository: vec!["@scope/pkg-c".into()],
+                scoped_packages_missing_public_access: vec!["@scope/pkg-a".into()],
+                ..Default::default()
+            };
+
+            let checklist = first_publish_checklist!(
+                &guidance,
+                &ReleaseOptions {
+                    dry_run: false,
+                    skip_publish: false,
+                    first_release: true,
+                    changelog: true,
+                    preid: Some("beta".into()),
+                    projects: Some(vec!["@scope/pkg-a".into()]),
+                    git_tag: false,
+                    git_commit: false,
+                    yes: false,
+                },
+            );
+
+            let lines = render_checklist_lines(&checklist);
+            assert!(
+                lines.iter().any(|line| {
+                    line.contains("Missing `repository`: @scope/pkg-a, @scope/pkg-b")
+                })
+            );
+            assert!(lines.iter().any(|line| {
+                line.contains("Repository does not match git remote: @scope/pkg-c")
+            }));
+            assert!(lines.iter().any(|line| {
+                line.contains("Missing `publishConfig.access = \"public\"`: @scope/pkg-a")
+            }));
+            assert!(lines.iter().any(|line| {
+                line.contains(
+                    "Dry run: vp release --first-release --changelog --preid beta --projects @scope/pkg-a --no-git-tag --no-git-commit --dry-run",
+                )
+            }));
+        }
     }
 
     fn find_release_workflow_path(cwd: &AbsolutePath) -> String {
