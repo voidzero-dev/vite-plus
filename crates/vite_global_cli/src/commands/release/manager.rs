@@ -233,6 +233,7 @@ impl ReleaseManager {
                     root_commits.push(commit.clone());
                 }
             }
+            let tag_name = package_tag_name(&package.name, &next_version);
 
             release_plans.push(PackageReleasePlan {
                 name: package.name.clone(),
@@ -252,7 +253,7 @@ impl ReleaseManager {
                 publish_provenance: package.manifest.publish_config.provenance,
                 repository_url: package.manifest.repository_url().map(ToOwned::to_owned),
                 protocol_summary: package.manifest.dependency_protocol_summary(),
-                tag_name: package_tag_name(&package.name, &next_version),
+                tag_name,
                 scripts: package.manifest.scripts.keys().cloned().collect(),
                 check_scripts: package.manifest.vite_plus.release.check_scripts.clone(),
             });
