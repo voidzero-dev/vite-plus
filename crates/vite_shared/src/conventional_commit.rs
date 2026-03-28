@@ -37,7 +37,10 @@ pub fn parse_conventional_commit(subject: &str, body: &str) -> Option<Convention
     let (kind, scope) = match kind_with_scope.split_once('(') {
         Some((kind, rest)) => {
             let scope = rest.strip_suffix(')')?.trim();
-            (kind.trim(), (!scope.is_empty()).then_some(scope))
+            if scope.is_empty() {
+                return None;
+            }
+            (kind.trim(), Some(scope))
         }
         None => (kind_with_scope.trim(), None),
     };
@@ -59,22 +62,155 @@ pub fn parse_conventional_commit(subject: &str, body: &str) -> Option<Convention
 mod tests {
     use super::*;
 
+    fn assert_commit<'a>(
+        subject: &'a str,
+        body: &'a str,
+        kind: &'a str,
+        scope: Option<&'a str>,
+        description: &'a str,
+        breaking: bool,
+    ) {
+        let commit = parse_conventional_commit(subject, body).expect("commit should parse");
+        assert_eq!(commit.kind, kind);
+        assert_eq!(commit.scope, scope);
+        assert_eq!(commit.description, description);
+        assert_eq!(commit.breaking, breaking);
+    }
+
     #[test]
     fn parses_scope_and_breaking_marker() {
-        let commit =
-            parse_conventional_commit("feat(cli)!: add release", "").expect("commit should parse");
-        assert_eq!(commit.kind, "feat");
-        assert_eq!(commit.scope, Some("cli"));
-        assert_eq!(commit.description, "add release");
-        assert!(commit.breaking);
+        assert_commit("feat(cli)!: add release", "", "feat", Some("cli"), "add release", true);
+    }
+
+    #[test]
+    fn parses_commits_without_scope() {
+        assert_commit("fix: handle cache miss", "", "fix", None, "handle cache miss", false);
+    }
+
+    #[test]
+    fn trims_subject_parts() {
+        assert_commit(
+            "  feat(parser):   add support for colons: here   ",
+            "",
+            "feat",
+            Some("parser"),
+            "add support for colons: here",
+            false,
+        );
+    }
+
+    #[test]
+    fn parses_breaking_header_without_scope() {
+        assert_commit("refactor!: split module", "", "refactor", None, "split module", true);
+    }
+
+    #[test]
+    fn parses_scopes_with_symbols_used_in_package_names() {
+        assert_commit(
+            "build(pkg-utils/core): ship binary",
+            "",
+            "build",
+            Some("pkg-utils/core"),
+            "ship binary",
+            false,
+        );
     }
 
     #[test]
     fn parses_breaking_change_footer() {
-        let commit = parse_conventional_commit("chore: cleanup", "BREAKING CHANGE: changed API")
-            .expect("commit should parse");
-        assert_eq!(commit.kind, "chore");
-        assert!(commit.breaking);
+        assert_commit(
+            "chore: cleanup",
+            "BREAKING CHANGE: changed API",
+            "chore",
+            None,
+            "cleanup",
+            true,
+        );
+    }
+
+    #[test]
+    fn parses_breaking_change_hyphenated_footer() {
+        assert_commit(
+            "feat: ship release",
+            "BREAKING-CHANGE: config file layout changed",
+            "feat",
+            None,
+            "ship release",
+            true,
+        );
+    }
+
+    #[test]
+    fn detects_breaking_footer_after_blank_line_and_indentation() {
+        assert_commit(
+            "feat(ui): refresh",
+            "\n  BREAKING CHANGE: theme tokens moved",
+            "feat",
+            Some("ui"),
+            "refresh",
+            true,
+        );
+    }
+
+    #[test]
+    fn does_not_mark_non_breaking_body_text_as_breaking() {
+        assert_commit(
+            "docs: explain migration",
+            "This mentions BREAKING CHANGE but not as a footer.\nAlso BREAKING CHANGE without colon",
+            "docs",
+            None,
+            "explain migration",
+            false,
+        );
+    }
+
+    #[test]
+    fn breaking_header_wins_even_without_footer() {
+        assert_commit("feat!: ship api v2", "some body", "feat", None, "ship api v2", true);
+    }
+
+    #[test]
+    fn returns_none_for_empty_scope() {
+        assert!(parse_conventional_commit("feat(): release", "").is_none());
+        assert!(parse_conventional_commit("feat( ): release", "").is_none());
+    }
+
+    #[test]
+    fn returns_none_for_missing_separator_or_description() {
+        assert!(parse_conventional_commit("release prep", "").is_none());
+        assert!(parse_conventional_commit("feat", "").is_none());
+        assert!(parse_conventional_commit("feat:", "").is_none());
+        assert!(parse_conventional_commit("feat:   ", "").is_none());
+    }
+
+    #[test]
+    fn returns_none_for_missing_type() {
+        assert!(parse_conventional_commit(": description", "").is_none());
+        assert!(parse_conventional_commit("   : description", "").is_none());
+    }
+
+    #[test]
+    fn returns_none_for_malformed_scope_syntax() {
+        assert!(parse_conventional_commit("feat(parser: release", "").is_none());
+        assert!(parse_conventional_commit("feat)parser(: release", "").is_none());
+        assert!(parse_conventional_commit("feat(parser) extra: release", "").is_none());
+    }
+
+    #[test]
+    fn only_uses_first_colon_as_header_separator() {
+        assert_commit(
+            "feat: add support: parser mode",
+            "",
+            "feat",
+            None,
+            "add support: parser mode",
+            false,
+        );
+    }
+
+    #[test]
+    fn preserves_case_of_kind_and_scope() {
+        assert_commit("Feat(API): allow preview", "", "Feat", Some("API"), "allow preview", false);
     }
 
     #[test]
