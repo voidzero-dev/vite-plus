@@ -1,16 +1,4 @@
 //! Package.json parsing and editing utilities shared across vite-plus crates.
-//!
-//! References:
-//! - npm `package.json`: https://docs.npmjs.com/cli/v11/configuring-npm/package-json/
-//! - npm package spec: https://docs.npmjs.com/cli/v11/using-npm/package-spec/
-//! - npm workspaces: https://docs.npmjs.com/cli/v11/using-npm/workspaces/
-//! - npm RFC for `workspace:`: https://github.com/npm/rfcs/issues/765
-//! - pnpm workspaces: https://pnpm.io/workspaces
-//! - pnpm catalogs: https://pnpm.io/catalogs
-//! - Yarn workspaces: https://yarnpkg.com/features/workspaces
-//! - Yarn `workspace:` protocol: https://yarnpkg.com/protocol/workspace
-//! - Bun workspaces: https://bun.sh/docs/pm/workspaces
-//! - Bun catalogs: https://bun.sh/docs/pm/catalogs
 
 use std::{collections::BTreeMap, fs};
 
@@ -97,13 +85,23 @@ pub enum PackageJsonError {
     Message(String),
 }
 
+/// Subset of `publishConfig` used by release/publish flows.
+///
+/// npm documents `publishConfig` as the package-level place to pin publish-time behavior such as
+/// `access`, which is why release planning reads it directly from `package.json`.
+/// https://docs.npmjs.com/cli/v11/configuring-npm/package-json/
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PublishConfig {
+    /// npm access mode, typically `"public"` for first publish of scoped public packages.
     #[serde(default)]
     pub access: Option<String>,
 }
 
+/// Summary of dependency protocols found in a package manifest.
+///
+/// The release flow uses this compact bitset-like structure to decide whether the selected
+/// publisher can safely rewrite manifest references before publish.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct DependencyProtocolSummary {
     pub workspace: bool,
@@ -116,6 +114,7 @@ pub struct DependencyProtocolSummary {
 }
 
 impl DependencyProtocolSummary {
+    /// Returns `true` when no special protocols were detected.
     #[must_use]
     pub const fn is_empty(self) -> bool {
         !self.workspace
@@ -128,19 +127,28 @@ impl DependencyProtocolSummary {
     }
 }
 
+/// Release lifecycle metadata stored under `vitePlus.release`.
+///
+/// These fields let release planning survive package renames, moves, and retirement without
+/// losing the ability to match previous tags or find the right commit history.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReleaseLifecycle {
+    /// Historical package names that should still match tag selection.
     #[serde(default)]
     pub previous_names: Vec<String>,
+    /// Historical package paths that should still contribute commit history.
     #[serde(default)]
     pub previous_paths: Vec<String>,
+    /// Released names that should no longer resolve to an active workspace package.
     #[serde(default)]
     pub retired_names: Vec<String>,
+    /// Extra scripts to surface in the pre-release readiness summary.
     #[serde(default)]
     pub check_scripts: Vec<String>,
 }
 
+/// Top-level vite-plus metadata read from `package.json`.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VitePlusMetadata {
@@ -148,6 +156,10 @@ pub struct VitePlusMetadata {
     pub release: ReleaseLifecycle,
 }
 
+/// Manifest subset used by vite-plus release/publish logic.
+///
+/// The type stays intentionally partial so release planning can read just the fields it needs
+/// without depending on a fully modeled `package.json`.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PackageManifest {
@@ -176,11 +188,17 @@ pub struct PackageManifest {
 }
 
 impl PackageManifest {
+    /// Returns whether a named npm script exists in the manifest.
     #[must_use]
     pub fn has_script(&self, name: &str) -> bool {
         self.scripts.contains_key(name)
     }
 
+    /// Returns the repository URL regardless of whether `repository` is a string or object form.
+    ///
+    /// npm accepts both the string shorthand and object form for `repository`, so the release
+    /// flow normalizes both into one accessor when validating publish metadata.
+    /// https://docs.npmjs.com/cli/v11/configuring-npm/package-json/
     #[must_use]
     pub fn repository_url(&self) -> Option<&str> {
         match self.repository.as_ref()? {
@@ -190,6 +208,11 @@ impl PackageManifest {
         }
     }
 
+    /// Scans dependency sections and reports which non-trivial protocols are in use.
+    ///
+    /// Release safety only needs to know whether protocols such as `workspace:` or `catalog:` are
+    /// present anywhere in the manifest, so a compact summary is cheaper and easier to reason
+    /// about than carrying full per-dependency protocol metadata through the planner.
     #[must_use]
     pub fn dependency_protocol_summary(&self) -> DependencyProtocolSummary {
         let mut summary = DependencyProtocolSummary::default();
@@ -201,6 +224,10 @@ impl PackageManifest {
     }
 }
 
+/// A parsed manifest together with its original source text.
+///
+/// Keeping the original text around allows top-level field rewrites without round-tripping the
+/// entire JSON document through a serializer.
 #[derive(Debug, Clone)]
 pub struct PackageManifestDocument {
     pub contents: String,
@@ -208,6 +235,7 @@ pub struct PackageManifestDocument {
 }
 
 impl PackageManifestDocument {
+    /// Returns manifest contents with only the top-level `version` field updated.
     pub fn updated_version_contents(
         &self,
         current_version: &str,
@@ -217,6 +245,7 @@ impl PackageManifestDocument {
     }
 }
 
+/// Reads and parses a package manifest while preserving the original file contents.
 pub fn read_package_manifest(
     path: &AbsolutePath,
 ) -> Result<PackageManifestDocument, PackageJsonError> {
@@ -225,6 +254,27 @@ pub fn read_package_manifest(
     Ok(PackageManifestDocument { contents, manifest })
 }
 
+/// Rewrites a single top-level string property without reserializing the whole JSON document.
+///
+/// This is designed for version updates where preserving existing formatting and field order is
+/// more important than supporting arbitrary JSON mutations.
+///
+/// # Examples
+///
+/// ```rust
+/// use vite_shared::replace_top_level_string_property;
+///
+/// let input = r#"{
+///   "version": "1.0.0",
+///   "nested": { "version": "keep-me" }
+/// }"#;
+///
+/// let updated =
+///     replace_top_level_string_property(input, "version", "1.0.0", "1.1.0").unwrap();
+///
+/// assert!(updated.contains(r#""version": "1.1.0""#));
+/// assert!(updated.contains(r#""version": "keep-me""#));
+/// ```
 pub fn replace_top_level_string_property(
     contents: &str,
     key: &str,
@@ -300,12 +350,17 @@ pub fn replace_top_level_string_property(
     Err(PackageJsonError::Message(message))
 }
 
+/// Workspace version selector after peeling off the `workspace:` protocol.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WorkspaceVersionSpec {
     Current,
     Pattern(VersionPattern),
 }
 
+/// Parsed form of a `workspace:` dependency reference.
+///
+/// The parser distinguishes between relative path references, direct version/current references,
+/// and aliased package references such as `workspace:@scope/pkg@^`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WorkspaceReference<'a> {
     RelativePath(&'a str),
@@ -313,13 +368,39 @@ pub enum WorkspaceReference<'a> {
     Alias { package: &'a str, spec: WorkspaceVersionSpec },
 }
 
+/// Parses a `workspace:` dependency spec into a structured representation.
+///
+/// The exact publish-time rewrite differs by package manager, which is why this parser only
+/// recognizes the syntax shape and leaves policy decisions to the release/publish layer:
+///
+/// - npm RFC for `workspace:`: https://github.com/npm/rfcs/issues/765
+/// - pnpm workspaces: https://pnpm.io/workspaces
+/// - Yarn `workspace:` protocol: https://yarnpkg.com/protocol/workspace
+/// - Bun workspaces: https://bun.sh/docs/pm/workspaces
+///
+/// # Examples
+///
+/// ```rust
+/// use vite_shared::{WorkspaceReference, WorkspaceVersionSpec, parse_workspace_reference};
+///
+/// assert!(matches!(
+///     parse_workspace_reference("workspace:^").unwrap(),
+///     WorkspaceReference::Version(WorkspaceVersionSpec::Pattern(_)),
+/// ));
+///
+/// assert!(matches!(
+///     parse_workspace_reference("workspace:./packages/shared").unwrap(),
+///     WorkspaceReference::RelativePath("./packages/shared"),
+/// ));
+///
+/// assert!(matches!(
+///     parse_workspace_reference("workspace:@scope/pkg@~").unwrap(),
+///     WorkspaceReference::Alias { package: "@scope/pkg", .. },
+/// ));
+/// ```
 pub fn parse_workspace_reference(input: &str) -> Result<WorkspaceReference<'_>, VersionError> {
     // `workspace:` references are intentionally parsed without assuming one package manager's
     // exact publish-time rewrite semantics. That logic lives higher up in release/publish flows.
-    // npm RFC: https://github.com/npm/rfcs/issues/765
-    // pnpm: https://pnpm.io/workspaces
-    // Yarn: https://yarnpkg.com/protocol/workspace
-    // Bun: https://bun.sh/docs/pm/workspaces
     let spec = input.strip_prefix("workspace:").ok_or_else(|| {
         let mut message = String::from("not a workspace reference: '");
         message.push_str(input);
