@@ -17,6 +17,13 @@
     "docs:build": "pnpm -C docs build",
     "prepare": "husky"
   },
+  "vitePlus": {
+    "release": {
+      "checkScripts": [
+        "test:unit"
+      ]
+    }
+  },
   "devDependencies": {
     "@napi-rs/cli": "catalog:",
     "@oxc-node/cli": "catalog:",

@@ -39,6 +39,11 @@ __PACKAGE_MANAGER_SETUP__
       - name: Install dependencies
         run: __INSTALL_COMMAND__
 
+      - name: Configure git author
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
       - name: Publish release
         shell: bash
         env:
@@ -49,3 +54,6 @@ __PACKAGE_MANAGER_SETUP__
           else
             __RELEASE_COMMAND__
           fi
+
+      - name: Push release tags
+        run: git push origin --tags

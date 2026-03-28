@@ -226,6 +226,71 @@ pub(super) async fn run_publish_preflight(
     }
 }
 
+/// Runs configured release checks before publish when the release policy requires them.
+pub(super) async fn run_release_checks(
+    package_manager: &PackageManager,
+    workspace_root_path: &AbsolutePath,
+    release_plans: &[PackageReleasePlan],
+    readiness_report: &ReleaseReadinessReport,
+    options: &ReleaseOptions,
+) -> Result<ExitStatus, Error> {
+    if !options.run_checks {
+        output::note("Release checks are disabled for this run.");
+        return Ok(ExitStatus::SUCCESS);
+    }
+
+    if readiness_report.workspace_scripts.is_empty() && readiness_report.package_scripts.is_empty()
+    {
+        return Err(Error::UserMessage(
+            "No release checks were detected for this release. Add `build` / `pack` / `prepack` / `prepublishOnly` / `prepare` scripts or configure `vitePlus.release.checkScripts`, then rerun `vp release`. Use `--no-run-checks` only if you intentionally want to skip this safeguard."
+                .into(),
+        ));
+    }
+
+    output::raw("");
+    output::info("Running release checks:");
+
+    let workspace_script_names: HashSet<&str> =
+        readiness_report.workspace_scripts.iter().map(String::as_str).collect();
+    for script in &readiness_report.workspace_scripts {
+        raw_progress_line!("workspace script `", script, '`');
+        let status = package_manager
+            .run_script_command(std::slice::from_ref(script), workspace_root_path)
+            .await?;
+        if !status.success() {
+            return Ok(status);
+        }
+    }
+
+    let package_scripts: HashMap<&str, &PackageReadiness> = readiness_report
+        .package_scripts
+        .iter()
+        .map(|readiness| (readiness.package.as_str(), readiness))
+        .collect();
+    for plan in release_plans {
+        let Some(readiness) = package_scripts.get(plan.name.as_str()) else {
+            continue;
+        };
+
+        for script in readiness
+            .scripts
+            .iter()
+            .filter(|script| !workspace_script_names.contains(script.as_str()))
+        {
+            raw_progress_line!(&plan.name, " script `", script, '`');
+            let status = package_manager
+                .run_script_command(std::slice::from_ref(script), &plan.package_path)
+                .await?;
+            if !status.success() {
+                return Ok(status);
+            }
+        }
+    }
+
+    output::success("Release checks succeeded.");
+    Ok(ExitStatus::SUCCESS)
+}
+
 /// Executes the real publish flow while guaranteeing manifest restoration afterward.
 pub(super) async fn publish_packages(
     package_manager: &PackageManager,
@@ -253,6 +318,28 @@ pub(super) async fn publish_packages(
                 let mut message = String::from("Publish stopped after ");
                 push_display(&mut message, published_count);
                 message.push_str(" package(s) were already published. Local package.json files were restored, so inspect the registry state before retrying.");
+                let remaining_packages: Vec<&str> = release_plans[published_count..]
+                    .iter()
+                    .map(|plan| plan.name.as_str())
+                    .collect();
+                if !remaining_packages.is_empty() {
+                    message.push_str(" Remaining selection: ");
+                    push_joined(&mut message, remaining_packages.iter().copied(), ", ");
+                    message.push('.');
+                    message.push_str(" Rerun with `--projects` narrowed to the remaining packages");
+                    let mut unique_versions = release_plans[published_count..]
+                        .iter()
+                        .map(|plan| plan.next_version.to_string())
+                        .collect::<Vec<_>>();
+                    unique_versions.sort();
+                    unique_versions.dedup();
+                    if unique_versions.len() == 1 {
+                        message.push_str(" and `--version ");
+                        message.push_str(&unique_versions[0]);
+                        message.push('`');
+                    }
+                    message.push('.');
+                }
                 output::warn(&message);
             }
             Ok(status)
