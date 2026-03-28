@@ -82,7 +82,7 @@ catalog:
   oxc-transform: =0.121.0
   oxfmt: =0.42.0
   oxlint: =1.57.0
-  oxlint-tsgolint: =0.17.4
+  oxlint-tsgolint: =0.18.1
   pathe: ^2.0.3
   picocolors: ^1.1.1
   picomatch: ^4.0.2
@@ -91,7 +91,7 @@ catalog:
   react-dom: ^19.1.0
   remark-parse: ^11.0.0
   remeda: ^2.10.0
-  rolldown-plugin-dts: ^0.22.0
+  rolldown-plugin-dts: ^0.23.0
   rollup: ^4.18.0
   semver: ^7.7.3
   serve-static: ^2.0.0
@@ -102,7 +102,7 @@ catalog:
   terser: ^5.44.1
   tinybench: ^6.0.0
   tinyexec: ^1.0.1
-  tsdown: ^0.21.5
+  tsdown: ^0.21.6
   tsx: ^4.20.6
   typescript: ^5.9.3
   unified: ^11.0.5
