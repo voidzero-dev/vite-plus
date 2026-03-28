@@ -58,6 +58,18 @@ fn should_prompt(cache: Option<&UpgradeCheckCache>, now: u64) -> bool {
     cache.is_none_or(|c| now.saturating_sub(c.prompted_at) > PROMPT_INTERVAL_SECS)
 }
 
+/// Returns `true` if `latest` is strictly newer than `current` per semver.
+/// Returns `false` for equal versions, downgrades, or unparseable strings.
+fn is_newer_version(current: &str, latest: &str) -> bool {
+    if latest.is_empty() || current == "0.0.0" {
+        return false;
+    }
+    match (node_semver::Version::parse(current), node_semver::Version::parse(latest)) {
+        (Ok(current), Ok(latest)) => latest > current,
+        _ => false,
+    }
+}
+
 #[expect(clippy::disallowed_types)] // String returned from serde deserialization
 async fn resolve_version_string() -> Option<String> {
     registry::resolve_version_string("latest", None).await.ok()
@@ -98,7 +110,7 @@ pub async fn check_for_update() -> Option<UpgradeCheckResult> {
 
     let cache = cache?;
 
-    if cache.latest.is_empty() || cache.latest == current_version {
+    if !is_newer_version(current_version, &cache.latest) {
         return None;
     }
 
@@ -300,6 +312,56 @@ mod tests {
         let cache =
             UpgradeCheckCache { latest: "2.0.0".to_owned(), checked_at: now, prompted_at: stale };
         assert!(should_prompt(Some(&cache), now));
+    }
+
+    #[test]
+    fn is_newer_version_detects_upgrade() {
+        assert!(is_newer_version("0.1.0", "0.2.0"));
+        assert!(is_newer_version("0.1.0", "1.0.0"));
+        assert!(is_newer_version("1.0.0", "1.0.1"));
+    }
+
+    #[test]
+    fn is_newer_version_rejects_same() {
+        assert!(!is_newer_version("0.2.0", "0.2.0"));
+    }
+
+    #[test]
+    fn is_newer_version_rejects_downgrade() {
+        assert!(!is_newer_version("0.2.0", "0.1.0"));
+    }
+
+    #[test]
+    fn is_newer_version_rejects_prerelease_downgrade_to_stable() {
+        // User on alpha, latest stable is older — don't prompt
+        assert!(!is_newer_version("0.3.0-alpha.1", "0.2.0"));
+    }
+
+    #[test]
+    fn is_newer_version_prompts_prerelease_to_newer_stable() {
+        assert!(is_newer_version("0.1.0-alpha.1", "0.2.0"));
+    }
+
+    #[test]
+    fn is_newer_version_prompts_prerelease_to_same_base_release() {
+        // 1.0.0 is newer than 1.0.0-alpha.1 per semver
+        assert!(is_newer_version("1.0.0-alpha.1", "1.0.0"));
+    }
+
+    #[test]
+    fn is_newer_version_rejects_empty_latest() {
+        assert!(!is_newer_version("0.1.0", ""));
+    }
+
+    #[test]
+    fn is_newer_version_skips_dev_build() {
+        assert!(!is_newer_version("0.0.0", "0.2.0"));
+    }
+
+    #[test]
+    fn is_newer_version_rejects_invalid_versions() {
+        assert!(!is_newer_version("not-a-version", "0.2.0"));
+        assert!(!is_newer_version("0.1.0", "not-a-version"));
     }
 
     fn parse_args(args: &[&str]) -> crate::cli::Args {
