@@ -635,6 +635,10 @@ pub enum Commands {
         #[arg(long, overrides_with = "changelog")]
         no_changelog: bool,
 
+        /// Override the computed release version. Useful when retrying a partial publish.
+        #[arg(long, value_name = "VERSION")]
+        version: Option<String>,
+
         /// Publish a prerelease using the provided identifier (for example: alpha, beta, rc)
         #[arg(long, value_name = "TAG")]
         preid: Option<String>,
@@ -663,6 +667,14 @@ pub enum Commands {
         /// Skip the release commit
         #[arg(long, overrides_with = "git_commit")]
         no_git_commit: bool,
+
+        /// Run detected release checks before publishing. Real releases do this by default.
+        #[arg(long, overrides_with = "no_run_checks")]
+        run_checks: bool,
+
+        /// Skip release checks before publishing
+        #[arg(long, overrides_with = "run_checks")]
+        no_run_checks: bool,
 
         /// Skip the final confirmation prompt
         #[arg(long, short = 'y', alias = "force")]
@@ -2094,6 +2106,7 @@ pub async fn run_command_with_options(
             first_release,
             changelog,
             no_changelog,
+            version,
             preid,
             otp,
             projects,
@@ -2101,8 +2114,11 @@ pub async fn run_command_with_options(
             no_git_tag,
             git_commit: _,
             no_git_commit,
+            run_checks,
+            no_run_checks,
             yes,
         } => {
+            let run_checks = if dry_run { run_checks } else { !no_run_checks || run_checks };
             commands::release::execute(
                 cwd,
                 commands::release::ReleaseOptions {
@@ -2110,11 +2126,13 @@ pub async fn run_command_with_options(
                     skip_publish,
                     first_release,
                     changelog: changelog && !no_changelog,
+                    version,
                     preid,
                     otp,
                     projects,
                     git_tag: !no_git_tag,
                     git_commit: !no_git_commit,
+                    run_checks,
                     yes,
                 },
             )

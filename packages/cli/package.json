@@ -327,6 +327,17 @@
     "publish-native": "node ./publish-native-addons.ts",
     "test": "vitest run"
   },
+  "vitePlus": {
+    "release": {
+      "trackedPaths": [
+        "crates",
+        "packages/cli/binding"
+      ],
+      "checkScripts": [
+        "test"
+      ]
+    }
+  },
   "dependencies": {
     "@oxc-project/types": "catalog:",
     "@voidzero-dev/vite-plus-core": "workspace:*",

@@ -65,6 +65,8 @@ pub struct ReleaseOptions {
     pub first_release: bool,
     /// Enables root and per-package changelog generation.
     pub changelog: bool,
+    /// Exact version to publish instead of auto-computing the next release.
+    pub version: Option<String>,
     /// Optional prerelease dist-tag/channel override such as `alpha`, `beta`, or `rc`.
     pub preid: Option<String>,
     /// Legacy TOTP override for package-manager publish commands.
@@ -75,6 +77,8 @@ pub struct ReleaseOptions {
     pub git_tag: bool,
     /// Whether local release artifacts should be committed.
     pub git_commit: bool,
+    /// Whether release checks should run before publish.
+    pub run_checks: bool,
     /// Skips the interactive confirmation prompt.
     pub yes: bool,
 }
@@ -470,6 +474,22 @@ where
 
 /// Rejects option combinations that would produce ambiguous or unsafe release boundaries.
 fn validate_release_options(options: &ReleaseOptions) -> Result<(), Error> {
+    if let Some(version) = options.version.as_deref() {
+        Version::parse(version).map_err(|error| {
+            let mut message = String::from("Invalid `--version` value '");
+            message.push_str(version);
+            message.push_str("': ");
+            push_display(&mut message, error);
+            Error::UserMessage(message.into())
+        })?;
+    }
+    if options.version.is_some() && options.preid.is_some() {
+        return Err(Error::UserMessage(
+            "`vp release --version` cannot be combined with `--preid` because the exact target version already determines the prerelease channel."
+                .into(),
+        ));
+    }
+
     if options.git_tag && !options.git_commit && !options.dry_run {
         return Err(Error::UserMessage(
             "`vp release --no-git-commit --git-tag` is not supported because tags would not point to the release changes."
