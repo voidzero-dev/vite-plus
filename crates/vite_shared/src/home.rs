@@ -59,4 +59,52 @@ mod tests {
             assert_eq!(home.as_path(), temp_dir.as_path());
         });
     }
+
+    #[test]
+    fn test_get_vite_plus_without_home() {
+        use std::path::PathBuf;
+
+        // Create a temp directory structure: /tmp/xxx/.vite-plus/bin/node
+        let temp_dir = PathBuf::from(
+            std::env::temp_dir().join(format!("vp-test-node-path-{}", std::process::id())),
+        );
+        let vite_plus_home = temp_dir.join(".vite-plus");
+        let bin_dir = vite_plus_home.join("bin");
+        std::fs::create_dir_all(&bin_dir).unwrap();
+
+        // Create a fake node executable
+        let node_path = bin_dir.join("node");
+        std::fs::write(&node_path, "#!/bin/sh\necho 'fake node'").unwrap();
+        #[cfg(unix)]
+        {
+            // Make it executable on Unix
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = std::fs::metadata(&node_path).unwrap().permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(&node_path, perms).unwrap();
+        }
+
+        // Set PATH to include the fake node directory
+        let original_path = std::env::var("PATH").unwrap_or_default();
+        let new_path = format!("{}", bin_dir.display());
+        // SAFETY: restore PATH after test
+        unsafe {
+            std::env::set_var("PATH", &new_path);
+        }
+
+        // Clear any existing VITE_PLUS_HOME env var by using a test config without it
+        EnvConfig::test_scope(EnvConfig::for_test(), || {
+            // Test: get_vite_plus_home should return /tmp/xxx/.vite-plus
+            let home = get_vite_plus_home().unwrap();
+            assert_eq!(home.as_path(), vite_plus_home.as_path());
+        });
+
+        // SAFETY: restore PATH after test
+        unsafe {
+            std::env::set_var("PATH", original_path);
+        }
+
+        // Cleanup
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
 }
