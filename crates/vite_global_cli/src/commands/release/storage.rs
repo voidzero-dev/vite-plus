@@ -1,8 +1,30 @@
+//! Release persistence, rollback, and side-effect helpers.
+//!
+//! This module contains the mutating half of the release workflow:
+//!
+//! - reading manifests
+//! - computing final artifact edits
+//! - applying and rolling back file mutations
+//! - invoking git and native publish commands
+//!
+//! The orchestration layer calls into these functions only after planning and validation have
+//! completed, so the code here can stay focused on careful state transitions and rollback paths.
+
 use super::*;
 
 const DIRECT_PUBLISH_PROTOCOL_PREFIXES: [&str; 6] =
     ["catalog:", "file:", "link:", "portal:", "patch:", "jsr:"];
+const PROGRESS_INDENT: &str = "  ";
 
+macro_rules! raw_progress_line {
+    ($($part:expr),+ $(,)?) => {{
+        let mut line = String::from(PROGRESS_INDENT);
+        $(push_display(&mut line, $part);)+
+        output::raw(&line);
+    }};
+}
+
+/// Reads the root workspace manifest when one exists.
 pub(super) fn read_workspace_manifest(
     cwd: &AbsolutePath,
 ) -> Result<Option<PackageManifest>, Error> {
@@ -16,6 +38,7 @@ pub(super) fn read_workspace_manifest(
     }
 }
 
+/// Fails closed when the current worktree is dirty.
 pub(super) fn ensure_clean_worktree(cwd: &AbsolutePath) -> Result<(), Error> {
     if is_clean_git_worktree(cwd)? {
         return Ok(());
@@ -27,6 +50,7 @@ pub(super) fn ensure_clean_worktree(cwd: &AbsolutePath) -> Result<(), Error> {
     ))
 }
 
+/// Builds one package changelog section for the current release.
 pub(super) fn build_package_changelog_section(
     release_date: &str,
     version: &Version,
@@ -49,6 +73,7 @@ pub(super) fn build_package_changelog_section(
     section
 }
 
+/// Builds the root changelog section summarizing all packages in the release.
 pub(super) fn build_root_changelog_section(
     release_date: &str,
     release_plans: &[PackageReleasePlan],
@@ -78,19 +103,7 @@ pub(super) fn build_root_changelog_section(
     section
 }
 
-pub(super) fn write_changelog_section(path: &AbsolutePath, section: &str) -> Result<(), Error> {
-    let new_contents = match fs::read_to_string(path) {
-        Ok(existing) => prepend_changelog_section(&existing, section),
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
-            prepend_changelog_heading(section)
-        }
-        Err(err) => return Err(err.into()),
-    };
-
-    fs::write(path, new_contents)?;
-    Ok(())
-}
-
+/// Computes temporary manifest rewrites used during publish preflight and publish execution.
 pub(super) fn build_manifest_edits(
     release_plans: &[PackageReleasePlan],
 ) -> Result<Vec<ManifestEdit>, Error> {
@@ -111,11 +124,74 @@ pub(super) fn build_manifest_edits(
     Ok(edits)
 }
 
+/// Counts how many durable local artifacts a release will update.
+pub(super) fn summarize_release_artifacts(
+    release_plans: &[PackageReleasePlan],
+    manifest_edits: &[ManifestEdit],
+    include_changelog: bool,
+) -> ReleaseArtifactSummary {
+    ReleaseArtifactSummary {
+        manifest_file_count: manifest_edits.len(),
+        changelog_file_count: if include_changelog { release_plans.len() + 1 } else { 0 },
+    }
+}
+
+/// Builds the final artifact edits that should remain in git after a successful release.
+pub(super) fn build_release_artifact_edits(
+    workspace_root_path: &AbsolutePath,
+    release_plans: &[PackageReleasePlan],
+    manifest_edits: &[ManifestEdit],
+    root_commits: &[CommitInfo],
+    release_date: &str,
+    include_changelog: bool,
+) -> Result<Vec<ReleaseArtifactEdit>, Error> {
+    let mut edits = Vec::with_capacity(
+        manifest_edits.len() + if include_changelog { release_plans.len() + 1 } else { 0 },
+    );
+
+    if include_changelog {
+        let root_changelog_path = workspace_root_path.join("CHANGELOG.md");
+        let root_section = build_root_changelog_section(release_date, release_plans, root_commits);
+        edits.push(build_changelog_artifact_edit(
+            root_changelog_path,
+            root_section,
+            String::from("workspace changelog"),
+        )?);
+    }
+
+    for edit in manifest_edits {
+        edits.push(ReleaseArtifactEdit {
+            label: {
+                let mut label = String::from("package manifest for ");
+                label.push_str(&edit.package);
+                label
+            },
+            path: edit.path.clone(),
+            original_contents: Some(edit.original_contents.clone()),
+            updated_contents: edit.updated_contents.clone(),
+        });
+    }
+
+    if include_changelog {
+        for plan in release_plans {
+            let section =
+                build_package_changelog_section(release_date, &plan.next_version, &plan.commits);
+            let mut label = String::from("package changelog for ");
+            label.push_str(&plan.name);
+            edits.push(build_changelog_artifact_edit(plan.changelog_path.clone(), section, label)?);
+        }
+    }
+
+    Ok(edits)
+}
+
+/// Runs native publisher dry-runs while temporarily rewriting manifests.
 pub(super) async fn run_publish_preflight(
     package_manager: &PackageManager,
     release_plans: &[PackageReleasePlan],
     manifest_edits: &[ManifestEdit],
     options: &ReleaseOptions,
+    trusted_publish_context: &TrustedPublishContext,
 ) -> Result<ExitStatus, Error> {
     if options.skip_publish {
         output::note("Skipping publish preflight because --skip-publish was provided.");
@@ -125,8 +201,13 @@ pub(super) async fn run_publish_preflight(
     output::raw("");
     output::info("Publish preflight:");
     apply_manifest_edits(manifest_edits, false)?;
-    let preflight_result =
-        run_publish_preflight_inner(package_manager, release_plans, options).await;
+    let preflight_result = run_publish_preflight_inner(
+        package_manager,
+        release_plans,
+        options,
+        trusted_publish_context,
+    )
+    .await;
     let restore_result = apply_manifest_edits(manifest_edits, true);
 
     match (preflight_result, restore_result) {
@@ -145,11 +226,13 @@ pub(super) async fn run_publish_preflight(
     }
 }
 
+/// Executes the real publish flow while guaranteeing manifest restoration afterward.
 pub(super) async fn publish_packages(
     package_manager: &PackageManager,
     release_plans: &[PackageReleasePlan],
     manifest_edits: &[ManifestEdit],
     options: &ReleaseOptions,
+    trusted_publish_context: &TrustedPublishContext,
 ) -> Result<ExitStatus, Error> {
     debug_assert!(
         !options.skip_publish,
@@ -159,7 +242,9 @@ pub(super) async fn publish_packages(
     output::raw("");
     output::info("Publishing packages:");
     apply_manifest_edits(manifest_edits, false)?;
-    let publish_result = publish_packages_inner(package_manager, release_plans, options).await;
+    let publish_result =
+        publish_packages_inner(package_manager, release_plans, options, trusted_publish_context)
+            .await;
     let restore_result = apply_manifest_edits(manifest_edits, true);
 
     match (publish_result, restore_result) {
@@ -186,11 +271,26 @@ pub(super) async fn publish_packages(
     }
 }
 
-pub(super) fn write_manifest_contents(path: &AbsolutePath, contents: &str) -> Result<(), Error> {
-    fs::write(path, contents)?;
+/// Applies final release artifacts transactionally, rolling back already-written files on error.
+pub(super) fn apply_release_artifact_edits(edits: &[ReleaseArtifactEdit]) -> Result<(), Error> {
+    let mut applied_count = 0usize;
+    for edit in edits {
+        if let Err(error) = write_release_artifact_edit(edit) {
+            let rollback_result = rollback_applied_release_artifact_edits(&edits[..applied_count]);
+            return Err(release_artifact_error("write release artifacts", error, rollback_result));
+        }
+        applied_count += 1;
+    }
+
     Ok(())
 }
 
+/// Rolls back final release artifacts in reverse application order.
+pub(super) fn rollback_release_artifact_edits(edits: &[ReleaseArtifactEdit]) -> Result<(), Error> {
+    rollback_applied_release_artifact_edits(edits)
+}
+
+/// Formats the local release commit message from the package set.
 pub(super) fn release_commit_message(release_plans: &[PackageReleasePlan]) -> String {
     if release_plans.len() <= 3 {
         let mut message = String::from("chore(release): publish ");
@@ -213,6 +313,7 @@ pub(super) fn release_commit_message(release_plans: &[PackageReleasePlan]) -> St
     }
 }
 
+/// Stages the final release artifacts.
 pub(super) fn git_add_paths(cwd: &AbsolutePath, paths: &[AbsolutePathBuf]) -> Result<(), Error> {
     let mut args = Vec::with_capacity(paths.len() + 1);
     args.push(String::from("add"));
@@ -226,6 +327,7 @@ pub(super) fn git_add_paths(cwd: &AbsolutePath, paths: &[AbsolutePathBuf]) -> Re
     })
 }
 
+/// Creates the local release commit.
 pub(super) fn git_commit(cwd: &AbsolutePath, message: &str) -> Result<(), Error> {
     run_git(cwd, ["commit", "-m", message]).map_err(|err| {
         let mut error_message = String::from("create release commit: ");
@@ -234,6 +336,7 @@ pub(super) fn git_commit(cwd: &AbsolutePath, message: &str) -> Result<(), Error>
     })
 }
 
+/// Creates one local release watermark tag.
 pub(super) fn git_tag(cwd: &AbsolutePath, tag_name: &str) -> Result<(), Error> {
     run_git(cwd, ["tag", tag_name]).map_err(|err| {
         let mut message = String::from("create release tag: ");
@@ -242,6 +345,27 @@ pub(super) fn git_tag(cwd: &AbsolutePath, tag_name: &str) -> Result<(), Error> {
     })
 }
 
+/// Deletes one local release watermark tag.
+pub(super) fn git_delete_tag(cwd: &AbsolutePath, tag_name: &str) -> Result<(), Error> {
+    run_git(cwd, ["tag", "-d", tag_name]).map_err(|err| {
+        let mut message = String::from("delete release tag: ");
+        push_display(&mut message, err);
+        Error::UserMessage(message.into())
+    })
+}
+
+/// Removes tags created by the current release attempt in reverse order.
+pub(super) fn rollback_created_git_tags(
+    cwd: &AbsolutePath,
+    tag_names: &[String],
+) -> Result<(), Error> {
+    for tag_name in tag_names.iter().rev() {
+        git_delete_tag(cwd, tag_name)?;
+    }
+    Ok(())
+}
+
+/// Prepends a generated changelog section while preserving the conventional heading structure.
 pub(super) fn prepend_changelog_section(existing: &str, section: &str) -> String {
     if let Some(rest) = existing.strip_prefix("# Changelog") {
         let rest = rest.trim_start_matches('\n');
@@ -264,23 +388,40 @@ fn prepend_changelog_heading(section: &str) -> String {
     updated
 }
 
+fn build_changelog_artifact_edit(
+    path: AbsolutePathBuf,
+    section: String,
+    label: String,
+) -> Result<ReleaseArtifactEdit, Error> {
+    let (original_contents, updated_contents) = match fs::read_to_string(&path) {
+        Ok(existing) => {
+            let updated = prepend_changelog_section(&existing, &section);
+            (Some(existing), updated)
+        }
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+            (None, prepend_changelog_heading(&section))
+        }
+        Err(err) => return Err(err.into()),
+    };
+
+    Ok(ReleaseArtifactEdit { label, path, original_contents, updated_contents })
+}
+
 async fn run_publish_preflight_inner(
     package_manager: &PackageManager,
     release_plans: &[PackageReleasePlan],
     options: &ReleaseOptions,
+    trusted_publish_context: &TrustedPublishContext,
 ) -> Result<ExitStatus, Error> {
     for plan in release_plans {
-        let mut message = String::from("  checking ");
-        message.push_str(&plan.name);
-        message.push('@');
-        push_display(&mut message, &plan.next_version);
-        output::raw(&message);
+        raw_progress_line!("checking ", &plan.name, '@', &plan.next_version);
 
         let publish_options = PublishCommandOptions {
             dry_run: true,
             tag: resolved_publish_tag(plan, options),
             access: plan.access.as_deref(),
             otp: options.otp.as_deref(),
+            provenance: resolved_publish_provenance(plan, trusted_publish_context),
             ..Default::default()
         };
         let status =
@@ -298,6 +439,7 @@ async fn publish_packages_inner(
     package_manager: &PackageManager,
     release_plans: &[PackageReleasePlan],
     options: &ReleaseOptions,
+    trusted_publish_context: &TrustedPublishContext,
 ) -> Result<(usize, ExitStatus), Error> {
     let mut published_count = 0usize;
 
@@ -313,6 +455,7 @@ async fn publish_packages_inner(
             tag: resolved_publish_tag(plan, options),
             access: plan.access.as_deref(),
             otp: options.otp.as_deref(),
+            provenance: resolved_publish_provenance(plan, trusted_publish_context),
             ..Default::default()
         };
         let status =
@@ -344,6 +487,67 @@ fn apply_manifest_edits(
     }
 
     Ok(())
+}
+
+fn write_release_artifact_edit(edit: &ReleaseArtifactEdit) -> Result<(), Error> {
+    fs::write(&edit.path, &edit.updated_contents).map_err(|error| {
+        let mut message = String::from("write ");
+        message.push_str(&edit.label);
+        message.push_str(": ");
+        push_display(&mut message, error);
+        Error::UserMessage(message.into())
+    })
+}
+
+fn rollback_applied_release_artifact_edits(edits: &[ReleaseArtifactEdit]) -> Result<(), Error> {
+    for edit in edits.iter().rev() {
+        restore_release_artifact_edit(edit)?;
+    }
+
+    Ok(())
+}
+
+fn restore_release_artifact_edit(edit: &ReleaseArtifactEdit) -> Result<(), Error> {
+    match &edit.original_contents {
+        Some(contents) => fs::write(&edit.path, contents).map_err(|error| {
+            let mut message = String::from("restore ");
+            message.push_str(&edit.label);
+            message.push_str(": ");
+            push_display(&mut message, error);
+            Error::UserMessage(message.into())
+        }),
+        None => match fs::remove_file(&edit.path) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(error) => {
+                let mut message = String::from("remove generated ");
+                message.push_str(&edit.label);
+                message.push_str(": ");
+                push_display(&mut message, error);
+                Err(Error::UserMessage(message.into()))
+            }
+        },
+    }
+}
+
+fn release_artifact_error(
+    context: &str,
+    error: Error,
+    rollback_result: Result<(), Error>,
+) -> Error {
+    let mut message = String::from(context);
+    message.push_str(": ");
+    push_display(&mut message, error);
+    match rollback_result {
+        Ok(()) => {
+            message.push_str(". Local release files were rolled back.");
+        }
+        Err(rollback_error) => {
+            message.push_str(" | rollback error: ");
+            push_display(&mut message, rollback_error);
+        }
+    }
+    Error::UserMessage(message.into())
 }
 
 fn build_updated_manifest_contents(
