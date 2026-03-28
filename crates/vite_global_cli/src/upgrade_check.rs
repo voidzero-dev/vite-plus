@@ -141,9 +141,9 @@ pub fn display_upgrade_notice(result: &UpgradeCheckResult) {
 }
 
 /// Whether the upgrade check should run for the given command args.
-/// Returns `false` for commands excluded by design (upgrade, implode, --version)
-/// and for any command invoked with `--silent` or `--json`.
-pub fn should_run_for_command(args: &crate::cli::Args, raw_args: &[String]) -> bool {
+/// Returns `false` for commands excluded by design, quiet modes, and
+/// machine-readable output flags (--silent, -s, --json, --parseable, --format json).
+pub fn should_run_for_command(args: &crate::cli::Args) -> bool {
     if !cfg!(test) && !std::io::stderr().is_terminal() {
         return false;
     }
@@ -152,28 +152,16 @@ pub fn should_run_for_command(args: &crate::cli::Args, raw_args: &[String]) -> b
         return false;
     }
 
-    if matches!(
-        &args.command,
+    match &args.command {
         Some(
             crate::cli::Commands::Upgrade { .. }
-                | crate::cli::Commands::Implode { .. }
-                | crate::cli::Commands::Lint { .. }
-                | crate::cli::Commands::Fmt { .. }
-        )
-    ) {
-        return false;
+            | crate::cli::Commands::Implode { .. }
+            | crate::cli::Commands::Lint { .. }
+            | crate::cli::Commands::Fmt { .. },
+        ) => false,
+        Some(cmd) => !cmd.is_quiet_or_machine_readable(),
+        None => true,
     }
-
-    for arg in raw_args {
-        if arg == "--" {
-            break;
-        }
-        if arg == "--silent" || arg == "--json" {
-            return false;
-        }
-    }
-
-    true
 }
 
 #[cfg(test)]
@@ -370,37 +358,58 @@ mod tests {
         crate::try_parse_args_from(full).unwrap()
     }
 
-    fn raw_args(args: &[&str]) -> Vec<String> {
-        args.iter().map(|s| String::from(*s)).collect()
-    }
-
     #[test]
     fn should_run_for_normal_command() {
-        let args = parse_args(&["build"]);
-        assert!(should_run_for_command(&args, &raw_args(&["build"])));
+        assert!(should_run_for_command(&parse_args(&["build"])));
     }
 
     #[test]
     fn should_not_run_for_upgrade() {
-        let args = parse_args(&["upgrade"]);
-        assert!(!should_run_for_command(&args, &raw_args(&["upgrade"])));
+        assert!(!should_run_for_command(&parse_args(&["upgrade"])));
     }
 
     #[test]
-    fn should_not_run_for_silent_flag() {
-        let args = parse_args(&["install", "--silent"]);
-        assert!(!should_run_for_command(&args, &raw_args(&["install", "--silent"])));
+    fn should_not_run_for_install_silent() {
+        assert!(!should_run_for_command(&parse_args(&["install", "--silent"])));
     }
 
     #[test]
-    fn should_not_run_for_json_flag() {
-        let args = parse_args(&["why", "lodash", "--json"]);
-        assert!(!should_run_for_command(&args, &raw_args(&["why", "lodash", "--json"])));
+    fn should_not_run_for_dlx_short_silent() {
+        assert!(!should_run_for_command(&parse_args(&["dlx", "-s", "pkg"])));
     }
 
     #[test]
-    fn should_run_when_json_after_terminator() {
-        let args = parse_args(&["build"]);
-        assert!(should_run_for_command(&args, &raw_args(&["build", "--", "--json"])));
+    fn should_not_run_for_why_json() {
+        assert!(!should_run_for_command(&parse_args(&["why", "lodash", "--json"])));
+    }
+
+    #[test]
+    fn should_not_run_for_why_parseable() {
+        assert!(!should_run_for_command(&parse_args(&["why", "lodash", "--parseable"])));
+    }
+
+    #[test]
+    fn should_not_run_for_outdated_format_json() {
+        assert!(!should_run_for_command(&parse_args(&["outdated", "--format", "json"])));
+    }
+
+    #[test]
+    fn should_not_run_for_pm_list_parseable() {
+        assert!(!should_run_for_command(&parse_args(&["pm", "list", "--parseable"])));
+    }
+
+    #[test]
+    fn should_not_run_for_pm_list_json() {
+        assert!(!should_run_for_command(&parse_args(&["pm", "list", "--json"])));
+    }
+
+    #[test]
+    fn should_not_run_for_env_current_json() {
+        assert!(!should_run_for_command(&parse_args(&["env", "current", "--json"])));
+    }
+
+    #[test]
+    fn should_run_for_outdated_without_format() {
+        assert!(should_run_for_command(&parse_args(&["outdated"])));
     }
 }

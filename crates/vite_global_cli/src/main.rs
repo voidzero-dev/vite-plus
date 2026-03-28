@@ -285,7 +285,7 @@ async fn main() -> ExitCode {
 
     // Spawn background upgrade check for eligible commands
     let upgrade_handle = match &parse_result {
-        Ok(args) if upgrade_check::should_run_for_command(args, &tip_context.raw_args) => {
+        Ok(args) if upgrade_check::should_run_for_command(args) => {
             Some(tokio::spawn(upgrade_check::check_for_update()))
         }
         _ => None,
