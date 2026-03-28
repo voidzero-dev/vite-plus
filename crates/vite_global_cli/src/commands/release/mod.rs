@@ -11,6 +11,7 @@ use std::{
     fmt::{self, Write as _},
     fs,
     io::{IsTerminal, Write},
+    process::ExitStatus,
 };
 
 use chrono::Local;
@@ -27,7 +28,6 @@ use vite_shared::{
     prerelease_number, read_package_manifest, replace_dependency_version_ranges,
     replace_top_level_string_property, run_git, strip_prerelease,
 };
-use vite_task::ExitStatus;
 use vite_workspace::{DependencyType, PackageInfo, PackageNodeIndex};
 
 use crate::error::Error;
