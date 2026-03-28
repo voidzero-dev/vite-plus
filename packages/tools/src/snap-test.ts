@@ -111,6 +111,9 @@ export async function snapTest() {
   const systemTmpDir = fs.realpathSync(tmpdir());
   const tempTmpDir = `${systemTmpDir}/vite-plus-test-${randomUUID().replaceAll('-', '')}`;
   fs.mkdirSync(tempTmpDir, { recursive: true });
+  // Pre-create the npm global prefix directory so tests using npm global
+  // operations (link, outdated -g, etc.) don't fail with ENOENT.
+  fs.mkdirSync(path.join(tempTmpDir, 'npm-global-lib-for-snap-tests'));
 
   // Clean up stale .node-version and package.json in the system temp directory.
   // vite-plus walks up the directory tree to resolve Node.js versions, so leftover
