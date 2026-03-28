@@ -253,6 +253,11 @@ jobs:
       - name: Run vp check
         run: vp check
 
+      - name: Run unit tests
+        run: RUST_BACKTRACE=1 pnpm test:unit
+        env:
+          RUST_MIN_STACK: 8388608
+
       - name: Test global package install (powershell)
         if: ${{ matrix.os == 'windows-latest' }}
         shell: pwsh
@@ -383,21 +388,6 @@ jobs:
           vp env doctor
           vp env use --unset
           node --version
-
-      - name: Install Playwright browsers
-        run: pnpx playwright install chromium
-
-      - name: Run CLI snapshot tests
-        run: |
-          RUST_BACKTRACE=1 pnpm test
-          if ! git diff --quiet; then
-            echo "::error::Snapshot diff detected. Run 'pnpm -F vite-plus snap-test' locally and commit the updated snap.txt files."
-            git diff --stat
-            git diff
-            exit 1
-          fi
-        env:
-          RUST_MIN_STACK: 8388608
 
       # Upgrade tests (merged from separate job to avoid duplicate build)
       - name: Test upgrade (bash)
@@ -572,6 +562,110 @@ jobs:
           pnpm bootstrap-cli:ci
           vp --version
 
+  cli-snap-test:
+    name: CLI snap test (${{ matrix.target }}, ${{ matrix.shard }}/${{ matrix.shardTotal }})
+    needs:
+      - download-previous-rolldown-binaries
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: namespace-profile-linux-x64-default
+            target: x86_64-unknown-linux-gnu
+            shard: 1
+            shardTotal: 3
+          - os: namespace-profile-linux-x64-default
+            target: x86_64-unknown-linux-gnu
+            shard: 2
+            shardTotal: 3
+          - os: namespace-profile-linux-x64-default
+            target: x86_64-unknown-linux-gnu
+            shard: 3
+            shardTotal: 3
+          - os: namespace-profile-mac-default
+            target: aarch64-apple-darwin
+            shard: 1
+            shardTotal: 3
+          - os: namespace-profile-mac-default
+            target: aarch64-apple-darwin
+            shard: 2
+            shardTotal: 3
+          - os: namespace-profile-mac-default
+            target: aarch64-apple-darwin
+            shard: 3
+            shardTotal: 3
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            shard: 1
+            shardTotal: 3
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            shard: 2
+            shardTotal: 3
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            shard: 3
+            shardTotal: 3
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+      - uses: ./.github/actions/clone
+
+      - name: Setup Dev Drive
+        if: runner.os == 'Windows'
+        uses: samypr100/setup-dev-drive@30f0f98ae5636b2b6501e181dfb3631b9974818d # v4.0.0
+        with:
+          drive-size: 12GB
+          drive-format: ReFS
+          env-mapping: |
+            CARGO_HOME,{{ DEV_DRIVE }}/.cargo
+            RUSTUP_HOME,{{ DEV_DRIVE }}/.rustup
+
+      - uses: oxc-project/setup-rust@d286d43bc1f606abbd98096666ff8be68c8d5f57 # v1.0.0
+        with:
+          save-cache: ${{ github.ref_name == 'main' }}
+          cache-key: cli-snap-test-${{ matrix.target }}
+          target-dir: ${{ runner.os == 'Windows' && format('{0}/target', env.DEV_DRIVE) || '' }}
+
+      - uses: oxc-project/setup-node@fdbf0dfd334c4e6d56ceeb77d91c76339c2a0885 # v1.0.4
+
+      - name: Install docs dependencies
+        run: pnpm -C docs install --frozen-lockfile
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: rolldown-binaries
+          path: ./rolldown/packages/rolldown/src
+          merge-multiple: true
+
+      - name: Build with upstream
+        uses: ./.github/actions/build-upstream
+        with:
+          target: ${{ matrix.target }}
+
+      - name: Install Global CLI vp
+        run: |
+          pnpm bootstrap-cli:ci
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            echo "$USERPROFILE\.vite-plus\bin" >> $GITHUB_PATH
+          else
+            echo "$HOME/.vite-plus/bin" >> $GITHUB_PATH
+          fi
+
+      - name: Run CLI snapshot tests (shard ${{ matrix.shard }}/${{ matrix.shardTotal }})
+        run: |
+          cd packages/cli
+          RUST_BACKTRACE=1 pnpm snap-test-local -- --shard=${{ matrix.shard }}/${{ matrix.shardTotal }}
+          RUST_BACKTRACE=1 pnpm snap-test-global -- --shard=${{ matrix.shard }}/${{ matrix.shardTotal }}
+          if ! git diff --quiet; then
+            echo "::error::Snapshot diff detected. Run 'pnpm -F vite-plus snap-test' locally and commit the updated snap.txt files."
+            git diff --stat
+            git diff
+            exit 1
+          fi
+        env:
+          RUST_MIN_STACK: 8388608
+
   cli-e2e-test-musl:
     name: CLI E2E test (Linux x64 musl)
     needs:
@@ -731,6 +825,7 @@ jobs:
       - lint
       - cli-e2e-test
       - cli-e2e-test-musl
+      - cli-snap-test
     steps:
       - run: exit 1
         # Thank you, next https://github.com/vercel/next.js/blob/canary/.github/workflows/build_and_test.yml#L379

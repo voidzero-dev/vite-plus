@@ -66,6 +66,30 @@ function expandHome(p: string): string {
   return p.startsWith('~') ? path.join(homedir(), p.slice(1)) : p;
 }
 
+function parseShard(value: string): { index: number; total: number } {
+  const match = value.match(/^(\d+)\/(\d+)$/);
+  if (!match) {
+    throw new Error(
+      `Invalid --shard format: "${value}". Expected format: --shard=<index>/<total> (e.g., --shard=1/3)`,
+    );
+  }
+  const index = Number(match[1]);
+  const total = Number(match[2]);
+  if (total < 1) {
+    throw new Error(`Invalid --shard total: ${total}. Must be >= 1`);
+  }
+  if (index < 1 || index > total) {
+    throw new Error(`Invalid --shard index: ${index}. Must be between 1 and ${total}`);
+  }
+  return { index, total };
+}
+
+function selectShard<T>(items: T[], index: number, total: number): T[] {
+  const chunkSize = Math.ceil(items.length / total);
+  const start = (index - 1) * chunkSize;
+  return items.slice(start, start + chunkSize);
+}
+
 export async function snapTest() {
   const { positionals, values } = parseArgs({
     allowPositionals: true,
@@ -73,10 +97,12 @@ export async function snapTest() {
     options: {
       dir: { type: 'string' },
       'bin-dir': { type: 'string' },
+      shard: { type: 'string' },
     },
   });
 
   const filter = positionals[0] ?? ''; // Optional filter to run specific test cases
+  const shard = values.shard ? parseShard(values.shard) : undefined;
 
   // Create a unique temporary directory for testing
   // On macOS, `tmpdir()` is a symlink. Resolve it so that we can replace the resolved cwd in outputs.
@@ -141,10 +167,10 @@ export async function snapTest() {
 
   const casesDir = path.resolve(values.dir || 'snap-tests');
 
-  const serialTasks: (() => Promise<void>)[] = [];
-  const parallelTasks: (() => Promise<void>)[] = [];
+  // Collect valid test case names (sorted for deterministic sharding)
+  const validCaseNames: string[] = [];
   const missingStepsJson: string[] = [];
-  for (const caseName of fs.readdirSync(casesDir)) {
+  for (const caseName of fs.readdirSync(casesDir).toSorted()) {
     if (caseName.startsWith('.')) {
       continue;
     }
@@ -158,13 +184,7 @@ export async function snapTest() {
       continue;
     }
     if (caseName.includes(filter)) {
-      const steps: Steps = JSON.parse(readFileSync(stepsPath, 'utf-8'));
-      const task = () => runTestCase(caseName, tempTmpDir, casesDir, values['bin-dir']);
-      if (steps.serial) {
-        serialTasks.push(task);
-      } else {
-        parallelTasks.push(task);
-      }
+      validCaseNames.push(caseName);
     }
   }
 
@@ -174,15 +194,35 @@ export async function snapTest() {
     );
   }
 
+  // Apply sharding to select a subset of test cases
+  const selectedCases = shard
+    ? selectShard(validCaseNames, shard.index, shard.total)
+    : validCaseNames;
+
+  const serialTasks: (() => Promise<void>)[] = [];
+  const parallelTasks: (() => Promise<void>)[] = [];
+  for (const caseName of selectedCases) {
+    const stepsPath = path.join(casesDir, caseName, 'steps.json');
+    const steps: Steps = JSON.parse(readFileSync(stepsPath, 'utf-8'));
+    const task = () => runTestCase(caseName, tempTmpDir, casesDir, values['bin-dir']);
+    if (steps.serial) {
+      serialTasks.push(task);
+    } else {
+      parallelTasks.push(task);
+    }
+  }
+
   const totalCount = serialTasks.length + parallelTasks.length;
   if (totalCount > 0) {
     const cpuCount = cpus().length;
+    const shardInfo = shard ? `, shard ${shard.index}/${shard.total}` : '';
     console.log(
-      'Running %d test cases (%d serial + %d parallel, concurrency limit %d)',
+      'Running %d test cases (%d serial + %d parallel, concurrency limit %d%s)',
       totalCount,
       serialTasks.length,
       parallelTasks.length,
       cpuCount,
+      shardInfo,
     );
     await runWithConcurrencyLimit(serialTasks, 1);
     await runWithConcurrencyLimit(parallelTasks, cpuCount);
