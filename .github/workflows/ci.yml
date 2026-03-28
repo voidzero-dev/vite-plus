@@ -654,9 +654,8 @@ jobs:
 
       - name: Run CLI snapshot tests (shard ${{ matrix.shard }}/${{ matrix.shardTotal }})
         run: |
-          cd packages/cli
-          RUST_BACKTRACE=1 pnpm snap-test-local -- --shard=${{ matrix.shard }}/${{ matrix.shardTotal }}
-          RUST_BACKTRACE=1 pnpm snap-test-global -- --shard=${{ matrix.shard }}/${{ matrix.shardTotal }}
+          RUST_BACKTRACE=1 pnpm -F ./packages/cli snap-test-local --shard=${{ matrix.shard }}/${{ matrix.shardTotal }}
+          RUST_BACKTRACE=1 pnpm -F ./packages/cli snap-test-global --shard=${{ matrix.shard }}/${{ matrix.shardTotal }}
           if ! git diff --quiet; then
             echo "::error::Snapshot diff detected. Run 'pnpm -F vite-plus snap-test' locally and commit the updated snap.txt files."
             git diff --stat
