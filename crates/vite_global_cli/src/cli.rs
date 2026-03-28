@@ -688,6 +688,32 @@ pub enum Commands {
     },
 }
 
+impl Commands {
+    /// Whether the command was invoked with flags that request quiet or
+    /// machine-readable output (--silent, -s, --json, --parseable, --format json/list).
+    pub fn is_quiet_or_machine_readable(&self) -> bool {
+        match self {
+            Self::Install { silent, .. }
+            | Self::Dlx { silent, .. }
+            | Self::Upgrade { silent, .. } => *silent,
+
+            Self::Outdated { format, .. } => {
+                matches!(format, Some(Format::Json | Format::List))
+            }
+
+            Self::Why { json, parseable, .. } => *json || *parseable,
+            Self::Info { json, .. } => *json,
+
+            Self::Pm(sub) => sub.is_quiet_or_machine_readable(),
+            Self::Env(args) => {
+                args.command.as_ref().is_some_and(|sub| sub.is_quiet_or_machine_readable())
+            }
+
+            _ => false,
+        }
+    }
+}
+
 /// Arguments for the `env` command
 #[derive(clap::Args, Debug)]
 #[command(after_help = "\
@@ -875,6 +901,15 @@ pub enum EnvSubcommands {
         #[arg(long)]
         silent_if_unchanged: bool,
     },
+}
+
+impl EnvSubcommands {
+    fn is_quiet_or_machine_readable(&self) -> bool {
+        match self {
+            Self::Current { json } | Self::List { json } | Self::ListRemote { json, .. } => *json,
+            _ => false,
+        }
+    }
 }
 
 /// Version sorting order for list-remote command
@@ -1240,6 +1275,23 @@ pub enum PmCommands {
     },
 }
 
+impl PmCommands {
+    fn is_quiet_or_machine_readable(&self) -> bool {
+        match self {
+            Self::List { json, parseable, .. } => *json || *parseable,
+            Self::Pack { json, .. }
+            | Self::View { json, .. }
+            | Self::Publish { json, .. }
+            | Self::Audit { json, .. }
+            | Self::Search { json, .. }
+            | Self::Fund { json, .. } => *json,
+            Self::Config(sub) => sub.is_quiet_or_machine_readable(),
+            Self::Token(sub) => sub.is_quiet_or_machine_readable(),
+            _ => false,
+        }
+    }
+}
+
 /// Configuration subcommands
 #[derive(Subcommand, Debug, Clone)]
 pub enum ConfigCommands {
@@ -1310,6 +1362,15 @@ pub enum ConfigCommands {
         #[arg(long, value_name = "LOCATION")]
         location: Option<String>,
     },
+}
+
+impl ConfigCommands {
+    fn is_quiet_or_machine_readable(&self) -> bool {
+        match self {
+            Self::List { json, .. } | Self::Get { json, .. } | Self::Set { json, .. } => *json,
+            _ => false,
+        }
+    }
 }
 
 /// Owner subcommands
@@ -1406,6 +1467,15 @@ pub enum TokenCommands {
         #[arg(last = true, allow_hyphen_values = true)]
         pass_through_args: Option<Vec<String>>,
     },
+}
+
+impl TokenCommands {
+    fn is_quiet_or_machine_readable(&self) -> bool {
+        match self {
+            Self::List { json, .. } | Self::Create { json, .. } => *json,
+            _ => false,
+        }
+    }
 }
 
 /// Distribution tag subcommands
