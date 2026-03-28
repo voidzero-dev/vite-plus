@@ -3,10 +3,10 @@
 //! This module defines the CLI structure using clap and routes commands
 //! to their appropriate handlers.
 
-use std::process::ExitStatus;
+use std::{ffi::OsStr, process::ExitStatus};
 
 use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
-use clap_complete::ArgValueCandidates;
+use clap_complete::ArgValueCompleter;
 use tokio::runtime::Runtime;
 use vite_install::commands::{
     add::SaveDependencyType, install::InstallCommandOptions, outdated::Format,
@@ -617,7 +617,7 @@ pub enum Commands {
     #[command(disable_help_flag = true)]
     Run {
         /// Additional arguments
-        #[arg(trailing_var_arg = true, allow_hyphen_values = true, add = ArgValueCandidates::new(run_tasks_completions))]
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true, add = ArgValueCompleter::new(run_tasks_completions))]
         args: Vec<String>,
     },
 
@@ -1487,11 +1487,17 @@ fn should_force_global_delegate(command: &str, args: &[String]) -> bool {
 /// Delegates to the local vite-plus CLI to run `vp run` without arguments,
 /// which returns a list of available tasks in the format "task_name: description".
 
-fn run_tasks_completions() -> Vec<clap_complete::CompletionCandidate> {
+fn run_tasks_completions(current: &OsStr) -> Vec<clap_complete::CompletionCandidate> {
     let cwd = match std::env::current_dir() {
         Ok(cwd) => cwd,
         Err(_) => return vec![],
     };
+
+    let current = current
+        .to_string_lossy()
+        .replace("\\#", "#")
+        .trim_matches(|c| c == '"' || c == '\'')
+        .to_string();
 
     let output = tokio::task::block_in_place(|| {
         Runtime::new().ok().and_then(|rt| {
@@ -1507,6 +1513,7 @@ fn run_tasks_completions() -> Vec<clap_complete::CompletionCandidate> {
                 .lines()
                 .filter_map(|line| line.split_once(": ").map(|(name, _)| name.trim()))
                 .filter(|name| !name.is_empty())
+                .filter(|name| name.starts_with(&current) || current.is_empty())
                 .map(|name| clap_complete::CompletionCandidate::new(name.to_string()))
                 .collect()
         })
