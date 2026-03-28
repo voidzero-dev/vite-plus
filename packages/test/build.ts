@@ -65,6 +65,7 @@ const distDir = resolve(projectDir, 'dist');
 const vendorDir = resolve(distDir, 'vendor');
 
 const CORE_PACKAGE_NAME = '@voidzero-dev/vite-plus-core';
+const TEST_PACKAGE_NAME = '@voidzero-dev/vite-plus-test';
 
 // @vitest/* packages to copy (not bundle) to preserve browser/Node.js separation
 // These are copied from node_modules to dist/@vitest/ to avoid shared chunks
@@ -480,7 +481,10 @@ async function bundleVitest() {
         .replaceAll(/require\("vite"\)/g, `require("${CORE_PACKAGE_NAME}")`)
         .replaceAll(`import 'vite';`, `import '${CORE_PACKAGE_NAME}';`)
         .replaceAll(`'vite/module-runner'`, `'${CORE_PACKAGE_NAME}/module-runner'`)
-        .replaceAll(`declare module "vite"`, `declare module "${CORE_PACKAGE_NAME}"`);
+        .replaceAll(`declare module "vite"`, `declare module "${CORE_PACKAGE_NAME}"`)
+        // Rewrite vitest self-references in .d.ts files (e.g., globals.d.ts uses
+        // `typeof import('vitest')['test']` which must resolve via self-reference)
+        .replaceAll(/import\(['"]vitest['"]\)/g, `import('${TEST_PACKAGE_NAME}')`);
       console.log(`Replaced vite imports in ${destPath}`);
       await writeFile(destPath, content, 'utf-8');
     } else {
