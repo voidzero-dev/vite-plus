@@ -1929,7 +1929,7 @@ pub async fn run_command_with_options(
                 return Ok(ExitStatus::default());
             }
             print_runtime_header(render_options.show_header);
-            commands::run_or_delegate::execute(cwd, &args).await
+            commands::delegate::execute(cwd, "run", &args).await
         }
 
         Commands::Exec { args } => {

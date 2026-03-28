@@ -182,7 +182,6 @@ pub mod upgrade;
 
 // Category C: Local CLI Delegation
 pub mod delegate;
-pub mod run_or_delegate;
 
 // Re-export command structs for convenient access
 pub use add::AddCommand;
