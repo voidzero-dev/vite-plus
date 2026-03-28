@@ -275,17 +275,6 @@ enum TrustedPublishRunnerEnvironment {
     Unknown,
 }
 
-impl TrustedPublishRunnerEnvironment {
-    #[must_use]
-    const fn as_str(self) -> &'static str {
-        match self {
-            Self::GitHubHosted => "github-hosted",
-            Self::SelfHosted => "self-hosted",
-            Self::Unknown => "unknown",
-        }
-    }
-}
-
 /// Detected CI/trusted-publishing context for the current process.
 ///
 /// This structure is intentionally small and serializable-by-thought: it contains only the bits of
