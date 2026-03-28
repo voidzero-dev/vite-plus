@@ -60,7 +60,7 @@ impl ReleaseManager {
 
         let workspace = self.load_workspace().await?;
         let Some(release) = self.prepare_release(workspace)? else {
-            return Ok(ExitStatus::SUCCESS);
+            return Ok(ExitStatus::default());
         };
 
         let readiness_report = self.present_release(&release)?;
@@ -476,7 +476,7 @@ impl ReleaseManager {
             &self.trusted_publish_context,
         );
 
-        Ok(ExitStatus::SUCCESS)
+        Ok(ExitStatus::default())
     }
 
     /// Executes the real publish flow and finalizes local release artifacts on success.
@@ -489,7 +489,7 @@ impl ReleaseManager {
         if !self.options.yes
             && !confirm_release(&release.release_plans, readiness_report, &self.options)?
         {
-            return Ok(ExitStatus::SUCCESS);
+            return Ok(ExitStatus::default());
         }
 
         let check_status = run_release_checks(
@@ -595,7 +595,7 @@ impl ReleaseManager {
             created_tag_names.len(),
             &self.trusted_publish_context,
         );
-        Ok(ExitStatus::SUCCESS)
+        Ok(ExitStatus::default())
     }
 }
 
