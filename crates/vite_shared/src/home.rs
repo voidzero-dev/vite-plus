@@ -23,6 +23,7 @@ pub fn get_vite_plus_home() -> std::io::Result<AbsolutePathBuf> {
     if let Ok(path) = which("node")
         && let Some(parent) = path.parent()
         && let Some(grandparent) = parent.parent()
+        && grandparent.ends_with(VITE_PLUS_HOME_DIR)
     {
         return Ok(AbsolutePathBuf::new(grandparent.to_path_buf()).unwrap());
     }
