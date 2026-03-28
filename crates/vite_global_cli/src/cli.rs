@@ -20,6 +20,7 @@ use crate::{
     },
     error::Error,
     help,
+    js_executor::JsExecutor,
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -1488,9 +1489,12 @@ fn should_force_global_delegate(command: &str, args: &[String]) -> bool {
 /// which returns a list of available tasks in the format "task_name: description".
 
 fn run_tasks_completions(current: &OsStr) -> Vec<clap_complete::CompletionCandidate> {
-    let cwd = match std::env::current_dir() {
-        Ok(cwd) => cwd,
-        Err(_) => return vec![],
+    let Some(cwd) = std::env::current_dir()
+        .ok()
+        .and_then(AbsolutePathBuf::new)
+        .filter(|p| JsExecutor::resolve_local_vite_plus(p).is_some())
+    else {
+        return vec![];
     };
 
     let current = current
@@ -1501,7 +1505,6 @@ fn run_tasks_completions(current: &OsStr) -> Vec<clap_complete::CompletionCandid
 
     let output = tokio::task::block_in_place(|| {
         Runtime::new().ok().and_then(|rt| {
-            let cwd = AbsolutePathBuf::new(cwd)?;
             rt.block_on(async { commands::delegate::execute_output(cwd, "run", &[]).await.ok() })
         })
     });

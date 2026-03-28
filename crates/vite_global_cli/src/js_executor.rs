@@ -297,7 +297,7 @@ impl JsExecutor {
     }
 
     /// Resolve the local vite-plus package's `dist/bin.js` from the project directory.
-    fn resolve_local_vite_plus(project_path: &AbsolutePath) -> Option<AbsolutePathBuf> {
+    pub fn resolve_local_vite_plus(project_path: &AbsolutePath) -> Option<AbsolutePathBuf> {
         use oxc_resolver::{ResolveOptions, Resolver};
 
         let resolver = Resolver::new(ResolveOptions {
