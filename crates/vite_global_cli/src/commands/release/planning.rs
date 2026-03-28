@@ -476,6 +476,11 @@ where
     orphaned
 }
 
+#[cfg(test)]
+pub(super) fn parse_package_name_from_release_tag(tag_name: &str) -> Option<String> {
+    RELEASE_TAG_FORMAT.parse_package_name(tag_name)
+}
+
 fn release_line_level(stable_baseline: &Version, target_base: &Version) -> Option<VersionBump> {
     if target_base.major > stable_baseline.major {
         Some(VersionBump::Major)
