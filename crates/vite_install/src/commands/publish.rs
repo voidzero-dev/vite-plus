@@ -1,10 +1,4 @@
 //! Publish command resolution for npm-compatible package managers.
-//!
-//! References:
-//! - npm publish: https://docs.npmjs.com/cli/v11/commands/npm-publish
-//! - pnpm publish: https://pnpm.io/cli/publish
-//! - Yarn `yarn npm publish`: https://yarnpkg.com/cli/npm/publish
-//! - Bun publish: https://bun.sh/docs/pm/cli/publish
 
 use std::{collections::HashMap, process::ExitStatus};
 
@@ -20,18 +14,31 @@ use crate::package_manager::{
 /// Options for the publish command.
 #[derive(Debug, Default)]
 pub struct PublishCommandOptions<'a> {
+    /// Optional tarball/directory target passed to the underlying publisher.
     pub target: Option<&'a str>,
+    /// Whether the resolved command should only simulate publishing.
     pub dry_run: bool,
+    /// Dist-tag to publish under.
     pub tag: Option<&'a str>,
+    /// Access level, typically `public` for first publish of scoped public packages.
     pub access: Option<&'a str>,
+    /// One-time password for npm 2FA flows.
     pub otp: Option<&'a str>,
+    /// Disables git checks when the package manager supports it.
     pub no_git_checks: bool,
+    /// Branch restriction for publishers that support release branches.
     pub publish_branch: Option<&'a str>,
+    /// Requests a publish summary file/output when supported.
     pub report_summary: bool,
+    /// Forces publish when the package manager exposes such a flag.
     pub force: bool,
+    /// Requests machine-readable JSON output when supported.
     pub json: bool,
+    /// Enables recursive/workspace publish mode when supported.
     pub recursive: bool,
+    /// Package-manager-native workspace filters.
     pub filters: Option<&'a [String]>,
+    /// Reserved passthrough arguments for future publish extensions.
     pub pass_through_args: Option<&'a [String]>,
 }
 
@@ -49,7 +56,9 @@ impl PackageManager {
     }
 
     /// Resolve the publish command.
-    /// Prefer native publish commands when they provide better protocol handling.
+    ///
+    /// Prefer native publish commands when they provide better protocol handling, especially for
+    /// workspace/catalog-style references that may need publisher-specific rewriting.
     #[must_use]
     pub fn resolve_publish_command(&self, options: &PublishCommandOptions) -> ResolveCommandResult {
         let mut envs = HashMap::with_capacity(1);
@@ -62,7 +71,8 @@ impl PackageManager {
             PackageManagerType::Pnpm => {
                 bin_name = "pnpm".into();
 
-                // pnpm: --filter must come before command
+                // pnpm treats filtering as a global option, so it must appear before `publish`.
+                // https://pnpm.io/cli/publish
                 if let Some(filters) = options.filters {
                     for filter in filters {
                         args.push("--filter".into());
@@ -125,11 +135,13 @@ impl PackageManager {
 
                 args.push("publish".into());
 
+                // npm workspace selection is expressed with per-workspace flags after the command.
+                // https://docs.npmjs.com/cli/v11/commands/npm-publish
+                // https://docs.npmjs.com/cli/v11/using-npm/workspaces/
                 if options.recursive {
                     args.push("--workspaces".into());
                 }
 
-                // npm: --workspace comes after command (maps from --filter)
                 if let Some(filters) = options.filters {
                     for filter in filters {
                         args.push("--workspace".into());
@@ -282,6 +294,9 @@ impl PackageManager {
                 }
             }
             PackageManagerType::Bun => {
+                // Bun exposes its own `publish` command, but does not currently mirror npm/pnpm's
+                // workspace/filter feature set, so unsupported flags are surfaced explicitly.
+                // https://bun.sh/docs/pm/cli/publish
                 bin_name = "bun".into();
 
                 args.push("publish".into());
