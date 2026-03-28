@@ -148,17 +148,16 @@ The notice is printed **after** the command output and **before** any tip, so it
 
 The notice is **not shown** when:
 
-| Condition                       | Reason                                             |
-| ------------------------------- | -------------------------------------------------- |
-| `VP_NO_UPDATE_CHECK=1`          | Explicit opt-out                                   |
-| `CI` is set                     | CI environments should not see upgrade prompts     |
-| `VITE_PLUS_CLI_TEST` is set     | Test environments                                  |
-| `--silent` flag is used         | User requested no extra output                     |
-| `--json` output mode            | Machine-readable output should not contain notices |
-| `vp upgrade` is running         | Already upgrading, don't nag                       |
-| `vp upgrade --check` is running | Already checking, don't duplicate                  |
-| Stderr is not a TTY             | Non-interactive / piped / redirected output        |
-| Already prompted within 24h     | Show at most once per day, not on every run        |
+| Condition                       | Reason                                                          |
+| ------------------------------- | --------------------------------------------------------------- |
+| `VP_NO_UPDATE_CHECK=1`          | Explicit opt-out                                                |
+| `CI` is set                     | CI environments should not see upgrade prompts                  |
+| `VITE_PLUS_CLI_TEST` is set     | Test environments                                               |
+| Quiet/machine-readable flags    | `--silent`, `-s`, `--json`, `--parseable`, `--format json/list` |
+| `vp upgrade` is running         | Already upgrading, don't nag                                    |
+| `vp upgrade --check` is running | Already checking, don't duplicate                               |
+| Stderr is not a TTY             | Non-interactive / piped / redirected output                     |
+| Already prompted within 24h     | Show at most once per day, not on every run                     |
 
 ### Commands That Trigger the Check
 
@@ -168,7 +167,7 @@ The background check runs on **all** commands except:
 - `vp implode` (removing the tool)
 - `vp lint` / `vp fmt` (too fast to benefit from a background check)
 - `vp --version` / `vp -V` (version display, keep it fast)
-- Any command with `--silent` or `--json` (quiet/machine-readable output)
+- Any command with quiet/machine-readable flags (`--silent`, `-s`, `--json`, `--parseable`, `--format json/list`)
 - Shim invocations (`node`, `npm`, `npx` via vp)
 
 This keeps the check broadly useful without interfering with special commands.
@@ -264,11 +263,11 @@ The 500ms timeout ensures that even if the registry is slow, the user's command 
 
 **Rationale**: Most CLI tools (npm, pip, gh) enable update checks by default. The check is non-blocking and the notice is rare (at most once per 24 hours, only when an update exists). Users who don't want it can set a single env var.
 
-### 5. Flat Version Comparison (Not Semver)
+### 5. Semver Comparison (Not String Equality)
 
-**Decision**: Compare version strings for equality, not semver ordering.
+**Decision**: Only show the notice when `latest` is strictly greater than `current` per semver.
 
-**Rationale**: If the registry says `latest` is `0.2.0` and the user is on `0.2.0`, there's no update. If they're on anything else (older or newer), show the notice. This handles edge cases like downgrading from a pre-release to stable. Matches the existing `vp upgrade` comparison logic.
+**Rationale**: String inequality would prompt prerelease/alpha users to "downgrade" to an older stable release. Semver comparison ensures the notice only appears for genuine upgrades. Dev builds (`0.0.0`) are skipped entirely.
 
 ## Testing Strategy
 
