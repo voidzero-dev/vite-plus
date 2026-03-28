@@ -617,7 +617,7 @@ pub enum Commands {
         #[arg(long)]
         dry_run: bool,
 
-        /// Update versions and, if enabled, changelogs, but skip publishing
+        /// During dry-runs, omit publish simulation and show only versioning/changelog actions
         #[arg(long)]
         skip_publish: bool,
 
@@ -637,6 +637,10 @@ pub enum Commands {
         #[arg(long, value_name = "TAG")]
         preid: Option<String>,
 
+        /// One-time password for npm 2FA publish flows
+        #[arg(long, value_name = "OTP")]
+        otp: Option<String>,
+
         /// Release only matching workspace packages. When multiple values are provided,
         /// their order is used as a tie-breaker between independent packages.
         #[arg(long, value_name = "PATTERN", value_delimiter = ',')]
@@ -646,7 +650,7 @@ pub enum Commands {
         #[arg(long, overrides_with = "no_git_tag")]
         git_tag: bool,
 
-        /// Skip git tag creation
+        /// Skip git tag creation in preview mode
         #[arg(long, overrides_with = "git_tag")]
         no_git_tag: bool,
 
@@ -1983,6 +1987,7 @@ pub async fn run_command_with_options(
             changelog,
             no_changelog,
             preid,
+            otp,
             projects,
             git_tag: _,
             no_git_tag,
@@ -1998,6 +2003,7 @@ pub async fn run_command_with_options(
                     first_release,
                     changelog: changelog && !no_changelog,
                     preid,
+                    otp,
                     projects,
                     git_tag: !no_git_tag,
                     git_commit: !no_git_commit,

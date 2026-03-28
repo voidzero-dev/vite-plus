@@ -22,7 +22,7 @@ pub use package_json::{
     DependencyProtocolSummary, DevEngines, Engines, PackageJson, PackageJsonError, PackageManifest,
     PackageManifestDocument, PublishConfig, ReleaseLifecycle, RuntimeEngine, RuntimeEngineConfig,
     VitePlusMetadata, WorkspaceReference, WorkspaceVersionSpec, parse_workspace_reference,
-    read_package_manifest, replace_top_level_string_property,
+    read_package_manifest, replace_dependency_version_ranges, replace_top_level_string_property,
 };
 pub use path_env::{
     PrependOptions, PrependResult, format_path_prepended, format_path_with_prepend,

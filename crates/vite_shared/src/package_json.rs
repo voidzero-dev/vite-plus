@@ -88,7 +88,7 @@ pub enum PackageJsonError {
 /// Subset of `publishConfig` used by release/publish flows.
 ///
 /// npm documents `publishConfig` as the package-level place to pin publish-time behavior such as
-/// `access`, which is why release planning reads it directly from `package.json`.
+/// `access` and `tag`, which is why release planning reads it directly from `package.json`.
 /// https://docs.npmjs.com/cli/v11/configuring-npm/package-json/
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -96,6 +96,9 @@ pub struct PublishConfig {
     /// npm access mode, typically `"public"` for first publish of scoped public packages.
     #[serde(default)]
     pub access: Option<String>,
+    /// Default dist-tag to publish under when the release flow does not override it explicitly.
+    #[serde(default)]
+    pub tag: Option<String>,
 }
 
 /// Summary of dependency protocols found in a package manifest.
@@ -350,6 +353,102 @@ pub fn replace_top_level_string_property(
     Err(PackageJsonError::Message(message))
 }
 
+/// Rewrites dependency version strings across the standard package dependency sections.
+///
+/// The rewrite preserves the existing JSON formatting and key order by editing only the targeted
+/// string literal values inside `dependencies`, `devDependencies`, `peerDependencies`, and
+/// `optionalDependencies`.
+pub fn replace_dependency_version_ranges(
+    contents: &str,
+    updates: &BTreeMap<String, BTreeMap<String, String>>,
+) -> Result<String, PackageJsonError> {
+    if updates.is_empty() {
+        return Ok(contents.to_owned());
+    }
+
+    const DEPENDENCY_SECTION_KEYS: [&str; 4] =
+        ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"];
+
+    let bytes = contents.as_bytes();
+    let mut depth = 0usize;
+    let mut index = 0usize;
+    let mut last_copied = 0usize;
+    let mut rewritten = String::with_capacity(contents.len());
+    let mut changed = false;
+
+    while index < bytes.len() {
+        match bytes[index] {
+            b'{' => {
+                depth += 1;
+                index += 1;
+            }
+            b'}' => {
+                depth = depth.saturating_sub(1);
+                index += 1;
+            }
+            b'"' if depth == 1 => {
+                let Some((key_end, parsed_key)) = parse_json_string(contents, index) else {
+                    break;
+                };
+                let Some(section_updates) = updates.get(parsed_key.as_str()) else {
+                    index = key_end + 1;
+                    continue;
+                };
+                let mut cursor = skip_json_whitespace(bytes, key_end + 1);
+                if !DEPENDENCY_SECTION_KEYS.contains(&parsed_key.as_str())
+                    || cursor >= bytes.len()
+                    || bytes[cursor] != b':'
+                {
+                    index = key_end + 1;
+                    continue;
+                }
+
+                cursor = skip_json_whitespace(bytes, cursor + 1);
+                if cursor >= bytes.len() || bytes[cursor] != b'{' {
+                    let mut message = String::from("Expected top-level '");
+                    message.push_str(&parsed_key);
+                    message.push_str("' to be a JSON object");
+                    return Err(PackageJsonError::Message(message));
+                }
+
+                let Some(object_end) = find_matching_object_end(contents, cursor) else {
+                    let mut message = String::from("Could not parse top-level '");
+                    message.push_str(&parsed_key);
+                    message.push_str("' object in package.json");
+                    return Err(PackageJsonError::Message(message));
+                };
+
+                let section_contents = &contents[cursor..=object_end];
+                let updated_section =
+                    replace_flat_object_string_properties(section_contents, section_updates)?;
+                if updated_section != section_contents {
+                    rewritten.push_str(&contents[last_copied..cursor]);
+                    rewritten.push_str(&updated_section);
+                    last_copied = object_end + 1;
+                    changed = true;
+                }
+
+                index = object_end + 1;
+            }
+            b'"' => {
+                if let Some((string_end, _)) = parse_json_string(contents, index) {
+                    index = string_end + 1;
+                } else {
+                    break;
+                }
+            }
+            _ => index += 1,
+        }
+    }
+
+    if !changed {
+        return Ok(contents.to_owned());
+    }
+
+    rewritten.push_str(&contents[last_copied..]);
+    Ok(rewritten)
+}
+
 /// Workspace version selector after peeling off the `workspace:` protocol.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WorkspaceVersionSpec {
@@ -474,6 +573,113 @@ where
             summary.jsr = true;
         }
     }
+}
+
+fn replace_flat_object_string_properties(
+    contents: &str,
+    updates: &BTreeMap<String, String>,
+) -> Result<String, PackageJsonError> {
+    let bytes = contents.as_bytes();
+    let mut depth = 0usize;
+    let mut index = 0usize;
+    let mut last_copied = 0usize;
+    let mut rewritten = String::with_capacity(contents.len());
+    let mut changed = false;
+
+    while index < bytes.len() {
+        match bytes[index] {
+            b'{' => {
+                depth += 1;
+                index += 1;
+            }
+            b'}' => {
+                depth = depth.saturating_sub(1);
+                index += 1;
+            }
+            b'"' if depth == 1 => {
+                let Some((key_end, parsed_key)) = parse_json_string(contents, index) else {
+                    break;
+                };
+                let Some(new_value) = updates.get(parsed_key.as_str()) else {
+                    index = key_end + 1;
+                    continue;
+                };
+
+                let mut cursor = skip_json_whitespace(bytes, key_end + 1);
+                if cursor >= bytes.len() || bytes[cursor] != b':' {
+                    index = key_end + 1;
+                    continue;
+                }
+
+                cursor = skip_json_whitespace(bytes, cursor + 1);
+                if cursor >= bytes.len() || bytes[cursor] != b'"' {
+                    let mut message = String::from("Expected dependency '");
+                    message.push_str(&parsed_key);
+                    message.push_str("' to have a JSON string version");
+                    return Err(PackageJsonError::Message(message));
+                }
+
+                let Some((value_end, _)) = parse_json_string(contents, cursor) else {
+                    break;
+                };
+                rewritten.push_str(&contents[last_copied..cursor + 1]);
+                rewritten.push_str(new_value);
+                last_copied = value_end;
+                index = value_end + 1;
+                changed = true;
+            }
+            b'"' => {
+                if let Some((string_end, _)) = parse_json_string(contents, index) {
+                    index = string_end + 1;
+                } else {
+                    break;
+                }
+            }
+            _ => index += 1,
+        }
+    }
+
+    if !changed {
+        return Ok(contents.to_owned());
+    }
+
+    rewritten.push_str(&contents[last_copied..]);
+    Ok(rewritten)
+}
+
+fn find_matching_object_end(contents: &str, start: usize) -> Option<usize> {
+    let bytes = contents.as_bytes();
+    if bytes.get(start) != Some(&b'{') {
+        return None;
+    }
+
+    let mut depth = 0usize;
+    let mut index = start;
+    while index < bytes.len() {
+        match bytes[index] {
+            b'{' => {
+                depth += 1;
+                index += 1;
+            }
+            b'}' => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    return Some(index);
+                }
+                index += 1;
+            }
+            b'"' => {
+                if let Some((string_end, _)) = parse_json_string(contents, index) {
+                    index = string_end + 1;
+                } else {
+                    return None;
+                }
+            }
+            _ => index += 1,
+        }
+    }
+
+    None
 }
 
 fn parse_json_string(contents: &str, start: usize) -> Option<(usize, String)> {
@@ -690,6 +896,22 @@ mod tests {
     }
 
     #[test]
+    fn parses_publish_config_access_and_tag() {
+        let manifest: PackageManifest = serde_json::from_str(
+            r#"{
+                "publishConfig": {
+                    "access": "public",
+                    "tag": "next"
+                }
+            }"#,
+        )
+        .unwrap();
+
+        assert_eq!(manifest.publish_config.access.as_deref(), Some("public"));
+        assert_eq!(manifest.publish_config.tag.as_deref(), Some("next"));
+    }
+
+    #[test]
     fn parses_vite_plus_release_lifecycle_metadata() {
         let manifest: PackageManifest = serde_json::from_str(
             r#"{
@@ -745,6 +967,59 @@ mod tests {
             replace_top_level_string_property(contents, "version", "1.0.0", "2.0.0").unwrap();
         assert!(updated.contains(r#""version": "2.0.0""#));
         assert!(updated.contains(r#""version": "should-stay""#));
+    }
+
+    #[test]
+    fn replace_dependency_version_ranges_updates_known_sections_only() {
+        let contents = r#"{
+  "name": "pkg-a",
+  "dependencies": {
+    "pkg-b": "^1.0.0",
+    "pkg-c": "workspace:*"
+  },
+  "peerDependencies": {
+    "pkg-b": "~1.0.0"
+  }
+}
+"#;
+
+        let updates = BTreeMap::from([
+            (
+                "dependencies".to_string(),
+                BTreeMap::from([("pkg-b".to_string(), "^1.1.0".to_string())]),
+            ),
+            (
+                "peerDependencies".to_string(),
+                BTreeMap::from([("pkg-b".to_string(), "~1.1.0".to_string())]),
+            ),
+        ]);
+        let updated = replace_dependency_version_ranges(contents, &updates).unwrap();
+
+        assert!(updated.contains(r#""pkg-b": "^1.1.0""#));
+        assert!(updated.contains(r#""pkg-b": "~1.1.0""#));
+        assert!(updated.contains(r#""pkg-c": "workspace:*""#));
+    }
+
+    #[test]
+    fn replace_dependency_version_ranges_preserves_unmatched_sections() {
+        let contents = r#"{
+  "name": "pkg-a",
+  "scripts": {
+    "build": "vite build"
+  },
+  "dependencies": {
+    "pkg-b": "1.0.0"
+  }
+}
+"#;
+
+        let updates = BTreeMap::from([(
+            "dependencies".to_string(),
+            BTreeMap::from([("pkg-c".to_string(), "1.1.0".to_string())]),
+        )]);
+        let updated = replace_dependency_version_ranges(contents, &updates).unwrap();
+
+        assert_eq!(updated, contents);
     }
 
     #[test]
