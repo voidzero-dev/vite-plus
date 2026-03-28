@@ -1,5 +1,13 @@
+//! Publish-protocol compatibility checks.
+//!
+//! Some dependency protocols are safe to keep in a monorepo but unsafe to ship to the registry
+//! unless the selected package manager rewrites them during publish. This module centralizes that
+//! compatibility matrix so the release flow can reject unsafe combinations before any publish
+//! attempt begins.
+
 use super::*;
 
+/// Returns dependency protocols that are unsafe for the selected publisher to ship as-is.
 pub(super) fn unsupported_publish_protocols(
     package_manager: &PackageManager,
     summary: DependencyProtocolSummary,
@@ -37,6 +45,8 @@ pub(super) fn unsupported_publish_protocols(
     protocols
 }
 
+/// Returns whether the package manager is known to rewrite workspace/catalog-style references at
+/// publish time.
 fn supports_publish_rewrite(package_manager: &PackageManager) -> bool {
     match package_manager.client {
         PackageManagerType::Pnpm | PackageManagerType::Bun => true,

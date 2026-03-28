@@ -1,4 +1,12 @@
-//! Package.json parsing and editing utilities shared across vite-plus crates.
+//! `package.json` parsing and editing utilities shared across vite-plus crates.
+//!
+//! The release flow relies on this module for two distinct jobs:
+//!
+//! - reading just enough manifest structure to plan and validate releases
+//! - performing targeted string-preserving edits without reserializing the full JSON document
+//!
+//! Preserving the original source formatting matters for reviewability: release commits should be
+//! narrow and predictable rather than full-document rewrites caused by JSON serialization.
 
 use std::{collections::BTreeMap, fs};
 
@@ -95,7 +103,8 @@ pub enum PackageJsonError {
 /// Subset of `publishConfig` used by release/publish flows.
 ///
 /// npm documents `publishConfig` as the package-level place to pin publish-time behavior such as
-/// `access` and `tag`, which is why release planning reads it directly from `package.json`.
+/// `access`, `tag`, and provenance preferences, which is why release planning reads it directly
+/// from `package.json`.
 /// https://docs.npmjs.com/cli/v11/configuring-npm/package-json/
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -106,6 +115,9 @@ pub struct PublishConfig {
     /// Default dist-tag to publish under when the release flow does not override it explicitly.
     #[serde(default)]
     pub tag: Option<String>,
+    /// Explicit provenance preference for publish tools that honor npm-style publish config.
+    #[serde(default)]
+    pub provenance: Option<bool>,
 }
 
 /// Summary of dependency protocols found in a package manifest.
@@ -240,7 +252,9 @@ impl PackageManifest {
 /// entire JSON document through a serializer.
 #[derive(Debug, Clone)]
 pub struct PackageManifestDocument {
+    /// Original `package.json` source text.
     pub contents: String,
+    /// Parsed manifest subset derived from `contents`.
     pub manifest: PackageManifest,
 }
 
@@ -906,12 +920,34 @@ mod tests {
     }
 
     #[test]
+    fn repository_url_ignores_unsupported_repository_shapes() {
+        let manifest: PackageManifest = serde_json::from_str(
+            r#"{
+                "repository": {
+                    "type": "git"
+                }
+            }"#,
+        )
+        .unwrap();
+        assert_eq!(manifest.repository_url(), None);
+
+        let manifest: PackageManifest = serde_json::from_str(
+            r#"{
+                "repository": 42
+            }"#,
+        )
+        .unwrap();
+        assert_eq!(manifest.repository_url(), None);
+    }
+
+    #[test]
     fn parses_publish_config_access_and_tag() {
         let manifest: PackageManifest = serde_json::from_str(
             r#"{
                 "publishConfig": {
                     "access": "public",
-                    "tag": "next"
+                    "tag": "next",
+                    "provenance": true
                 }
             }"#,
         )
@@ -919,6 +955,7 @@ mod tests {
 
         assert_eq!(manifest.publish_config.access.as_deref(), Some("public"));
         assert_eq!(manifest.publish_config.tag.as_deref(), Some("next"));
+        assert_eq!(manifest.publish_config.provenance, Some(true));
     }
 
     #[test]
@@ -964,6 +1001,44 @@ mod tests {
     }
 
     #[test]
+    fn dependency_protocol_summary_is_empty_for_plain_semver_ranges() {
+        let manifest: PackageManifest = serde_json::from_str(
+            r#"{
+                "dependencies": {
+                    "pkg-a": "^1.0.0"
+                },
+                "devDependencies": {
+                    "pkg-b": "~2.0.0"
+                }
+            }"#,
+        )
+        .unwrap();
+
+        assert!(manifest.dependency_protocol_summary().is_empty());
+    }
+
+    #[test]
+    fn detects_link_portal_file_and_jsr_protocols() {
+        let manifest: PackageManifest = serde_json::from_str(
+            r#"{
+                "dependencies": {
+                    "pkg-a": "file:../pkg-a",
+                    "pkg-b": "link:../pkg-b",
+                    "pkg-c": "portal:../pkg-c",
+                    "pkg-d": "jsr:@std/assert"
+                }
+            }"#,
+        )
+        .unwrap();
+
+        let summary = manifest.dependency_protocol_summary();
+        assert!(summary.file);
+        assert!(summary.link);
+        assert!(summary.portal);
+        assert!(summary.jsr);
+    }
+
+    #[test]
     fn replace_top_level_string_property_only_updates_top_level_field() {
         let contents = r#"{
   "version": "1.0.0",
@@ -977,6 +1052,45 @@ mod tests {
             replace_top_level_string_property(contents, "version", "1.0.0", "2.0.0").unwrap();
         assert!(updated.contains(r#""version": "2.0.0""#));
         assert!(updated.contains(r#""version": "should-stay""#));
+    }
+
+    #[test]
+    fn replace_top_level_string_property_handles_escaped_strings() {
+        let contents = r#"{
+  "name": "pkg-a",
+  "description": "says \"version\" here",
+  "version": "1.0.0"
+}
+"#;
+
+        let updated =
+            replace_top_level_string_property(contents, "version", "1.0.0", "1.0.1").unwrap();
+        assert!(updated.contains(r#""description": "says \"version\" here""#));
+        assert!(updated.contains(r#""version": "1.0.1""#));
+    }
+
+    #[test]
+    fn replace_top_level_string_property_rejects_non_string_field() {
+        let contents = r#"{
+  "version": 1
+}
+"#;
+
+        let error =
+            replace_top_level_string_property(contents, "version", "1.0.0", "1.0.1").unwrap_err();
+        assert!(error.to_string().contains("Expected top-level 'version' to be a JSON string"));
+    }
+
+    #[test]
+    fn replace_top_level_string_property_errors_when_field_is_missing() {
+        let contents = r#"{
+  "name": "pkg-a"
+}
+"#;
+
+        let error =
+            replace_top_level_string_property(contents, "version", "1.0.0", "1.0.1").unwrap_err();
+        assert!(error.to_string().contains("Could not find top-level 'version' field"));
     }
 
     #[test]
@@ -1033,6 +1147,44 @@ mod tests {
     }
 
     #[test]
+    fn replace_dependency_version_ranges_rejects_non_object_sections() {
+        let contents = r#"{
+  "dependencies": []
+}
+"#;
+
+        let updates = BTreeMap::from([(
+            "dependencies".to_string(),
+            BTreeMap::from([("pkg-a".to_string(), "1.1.0".to_string())]),
+        )]);
+        let error = replace_dependency_version_ranges(contents, &updates).unwrap_err();
+
+        assert!(
+            error.to_string().contains("Expected top-level 'dependencies' to be a JSON object")
+        );
+    }
+
+    #[test]
+    fn replace_dependency_version_ranges_rejects_non_string_dependency_versions() {
+        let contents = r#"{
+  "dependencies": {
+    "pkg-a": 1
+  }
+}
+"#;
+
+        let updates = BTreeMap::from([(
+            "dependencies".to_string(),
+            BTreeMap::from([("pkg-a".to_string(), "1.1.0".to_string())]),
+        )]);
+        let error = replace_dependency_version_ranges(contents, &updates).unwrap_err();
+
+        assert!(
+            error.to_string().contains("Expected dependency 'pkg-a' to have a JSON string version")
+        );
+    }
+
+    #[test]
     fn parses_workspace_references_with_current_and_range_tokens() {
         assert_eq!(
             parse_workspace_reference("workspace:").unwrap(),
@@ -1064,6 +1216,23 @@ mod tests {
         assert_eq!(
             parse_workspace_reference("workspace:../pkg-a").unwrap(),
             WorkspaceReference::RelativePath("../pkg-a")
+        );
+    }
+
+    #[test]
+    fn parse_workspace_reference_rejects_non_workspace_inputs() {
+        let error = parse_workspace_reference("^1.0.0").unwrap_err();
+        assert!(error.to_string().contains("not a workspace reference"));
+    }
+
+    #[test]
+    fn parses_workspace_alias_with_current_version_selector() {
+        assert_eq!(
+            parse_workspace_reference("workspace:@scope/pkg@").unwrap(),
+            WorkspaceReference::Alias {
+                package: "@scope/pkg",
+                spec: WorkspaceVersionSpec::Current,
+            }
         );
     }
 }

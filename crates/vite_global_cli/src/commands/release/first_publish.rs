@@ -29,6 +29,14 @@ use super::*;
 
 const CHECKLIST_STEP_PREFIX: &str = "  ";
 const CHECKLIST_ITEM_PREFIX: &str = "     - ";
+const DEFAULT_PUBLISH_WORKFLOW_PATH: &str = ".github/workflows/publish.yml";
+const PUBLISH_WORKFLOW_TEMPLATE: &str = include_str!("templates/publish.yml");
+const PACKAGE_MANAGER_SETUP_TOKEN: &str = "__PACKAGE_MANAGER_SETUP__";
+const INSTALL_COMMAND_TOKEN: &str = "__INSTALL_COMMAND__";
+const RELEASE_COMMAND_TOKEN: &str = "__RELEASE_COMMAND__";
+const FIRST_RELEASE_COMMAND_TOKEN: &str = "__FIRST_RELEASE_COMMAND__";
+const COREPACK_SETUP_STEP: &str = "      - name: Enable Corepack\n        run: corepack enable\n";
+const BUN_SETUP_STEP: &str = "      - name: Setup Bun\n        uses: oven-sh/setup-bun@v2\n";
 
 /// Declares a checklist step in a compact, template-like form.
 ///
@@ -132,13 +140,21 @@ macro_rules! first_publish_checklist {
 
         [
             step!(
-                "Commit a GitHub Actions release workflow that runs on a GitHub-hosted runner.",
+                "Commit a GitHub Actions publish workflow that runs on a GitHub-hosted runner.",
                 [
                     kv_borrowed!("Workflow file", &guidance.workflow_path),
+                    when_text!(
+                        guidance.workflow_template_created,
+                        "A starter workflow was scaffolded locally from the built-in template. Review it before committing.",
+                    ),
+                    kv_static!("Trigger", "`workflow_dispatch`"),
                     maybe_kv_owned!(
-                        "Trigger",
-                        guidance.release_branch.as_deref(),
-                        |branch| render_branch_or_dispatch(branch)
+                        "Suggested dispatch ref",
+                        guidance.dispatch_ref_hint.as_deref(),
+                        |dispatch_ref| render_inline_code(dispatch_ref)
+                    ),
+                    text!(
+                        "After review, add any automatic push trigger using the branch or tag rule that matches your release boundary.",
                     ),
                     kv_static!(
                         "Required workflow permissions",
@@ -157,13 +173,9 @@ macro_rules! first_publish_checklist {
                         "Workflow filename in npm",
                         render_inline_code(workflow_filename(&guidance.workflow_path)),
                     ),
-                    maybe_kv_owned!(
-                        "Branch / environment",
-                        guidance.release_branch.as_deref(),
-                        |branch| render_inline_code(branch)
-                    ),
                     text!("npm requires the repository and workflow values to match exactly."),
                     text!("Trusted publishing currently works for public npm packages and scopes."),
+                    text!("For any manual maintainer fallback, prefer npm passkeys/security-key 2FA instead of TOTP codes or long-lived publish tokens."),
                 ],
             ),
             step!(
@@ -204,11 +216,14 @@ macro_rules! first_publish_checklist {
                 [
                     kv_owned!("Dry run", render_release_command(options, true, true)),
                     kv_owned!(
-                        "Real publish from GitHub Actions",
+                        "Trusted publish from GitHub Actions",
                         render_release_command(options, false, false),
                     ),
                     text!(
                         "Trusted publishing covers publish itself. If CI also installs private packages, use a separate read-only npm token for install steps.",
+                    ),
+                    text!(
+                        "If you ever need an interactive fallback outside CI, prefer a passkey/security-key prompt over `--otp`.",
                     ),
                 ],
             ),
@@ -314,12 +329,12 @@ pub(super) fn collect_first_publish_guidance(
     release_plans: &[PackageReleasePlan],
 ) -> FirstPublishGuidance {
     let github_repo = detect_github_repo(cwd);
-    let release_branch = detect_release_branch(cwd);
+    let dispatch_ref_hint = detect_dispatch_ref_hint(cwd);
     let workflow_path = find_release_workflow_path(cwd);
 
     let mut guidance = FirstPublishGuidance {
         github_repo: github_repo.clone(),
-        release_branch,
+        dispatch_ref_hint,
         workflow_path,
         ..Default::default()
     };
@@ -342,6 +357,49 @@ pub(super) fn collect_first_publish_guidance(
     }
 
     guidance
+}
+
+/// Scaffolds a trusted-publishing workflow template when the repository has no release workflow.
+///
+/// Existing `publish.*` / `release.*` workflows always win. The scaffold is only written when the
+/// repository has no obvious workflow at all, which avoids surprising users with duplicate jobs.
+pub(super) fn ensure_first_publish_workflow_template(
+    cwd: &AbsolutePath,
+    package_manager: PackageManagerType,
+    guidance: &mut FirstPublishGuidance,
+) -> Result<(), Error> {
+    if find_existing_release_workflow_path(cwd).is_some() {
+        return Ok(());
+    }
+
+    let workflow_path = default_publish_workflow_path();
+    let workflows_dir = cwd.join(".github/workflows");
+    fs::create_dir_all(workflows_dir.as_path()).map_err(|error| {
+        let mut message = String::from("create .github/workflows directory: ");
+        push_display(&mut message, error);
+        Error::UserMessage(message.into())
+    })?;
+
+    let rendered = render_publish_workflow_template(package_manager);
+    let workflow_file_path = cwd.join(workflow_path);
+    fs::write(&workflow_file_path, rendered).map_err(|error| {
+        let mut message = String::from("write ");
+        message.push_str(workflow_path);
+        message.push_str(": ");
+        push_display(&mut message, error);
+        Error::UserMessage(message.into())
+    })?;
+
+    guidance.workflow_path = workflow_path.to_owned();
+    guidance.workflow_template_created = true;
+
+    let mut message = String::from("Scaffolded ");
+    message.push_str(workflow_path);
+    message
+        .push_str(" from the built-in trusted-publishing template. Review it before committing.");
+    output::success(&message);
+
+    Ok(())
 }
 
 /// Renders the first-publish checklist using the declarative checklist DSL above.
@@ -443,15 +501,6 @@ fn render_inline_code(value: &str) -> String {
     rendered
 }
 
-/// Formats the branch trigger hint shown in the workflow step.
-fn render_branch_or_dispatch(branch: &str) -> String {
-    let mut rendered = String::with_capacity(branch.len() + 26);
-    rendered.push('`');
-    rendered.push_str(branch);
-    rendered.push_str("` or `workflow_dispatch`");
-    rendered
-}
-
 /// Joins a borrowed slice of owned strings with a precomputed output capacity.
 fn join_string_slice(values: &[String], separator: &str) -> String {
     if values.is_empty() {
@@ -466,10 +515,47 @@ fn join_string_slice(values: &[String], separator: &str) -> String {
     joined
 }
 
+fn render_publish_workflow_template(package_manager: PackageManagerType) -> String {
+    let package_manager_setup = package_manager_setup_step(package_manager);
+    let install_command = package_manager_install_command(package_manager);
+    let mut rendered = String::from(PUBLISH_WORKFLOW_TEMPLATE);
+    rendered = rendered.replace(PACKAGE_MANAGER_SETUP_TOKEN, package_manager_setup);
+    rendered = rendered.replace(INSTALL_COMMAND_TOKEN, install_command);
+    rendered = rendered.replace(RELEASE_COMMAND_TOKEN, "vp release --yes");
+    rendered.replace(FIRST_RELEASE_COMMAND_TOKEN, "vp release --first-release --yes")
+}
+
+fn package_manager_setup_step(package_manager: PackageManagerType) -> &'static str {
+    match package_manager {
+        PackageManagerType::Pnpm | PackageManagerType::Yarn => COREPACK_SETUP_STEP,
+        PackageManagerType::Bun => BUN_SETUP_STEP,
+        PackageManagerType::Npm => "",
+    }
+}
+
+fn package_manager_install_command(package_manager: PackageManagerType) -> &'static str {
+    match package_manager {
+        PackageManagerType::Pnpm => "pnpm install --frozen-lockfile",
+        PackageManagerType::Yarn => "yarn install --immutable",
+        PackageManagerType::Npm => "npm ci",
+        PackageManagerType::Bun => "bun install --frozen-lockfile",
+    }
+}
+
 fn find_release_workflow_path(cwd: &AbsolutePath) -> String {
-    for candidate in [".github/workflows/release.yml", ".github/workflows/release.yaml"] {
+    find_existing_release_workflow_path(cwd)
+        .unwrap_or_else(|| default_publish_workflow_path().to_owned())
+}
+
+fn find_existing_release_workflow_path(cwd: &AbsolutePath) -> Option<String> {
+    for candidate in [
+        ".github/workflows/publish.yml",
+        ".github/workflows/publish.yaml",
+        ".github/workflows/release.yml",
+        ".github/workflows/release.yaml",
+    ] {
         if cwd.join(candidate).as_path().exists() {
-            return candidate.to_owned();
+            return Some(candidate.to_owned());
         }
     }
 
@@ -480,25 +566,34 @@ fn find_release_workflow_path(cwd: &AbsolutePath) -> String {
             let file_name = entry.file_name();
             let file_name = file_name.to_string_lossy();
             let lowercase = file_name.to_ascii_lowercase();
-            if !(lowercase.contains("release")
-                && (lowercase.ends_with(".yml") || lowercase.ends_with(".yaml")))
-            {
+            let is_workflow_manifest = lowercase.ends_with(".yml") || lowercase.ends_with(".yaml");
+            let mentions_publish = lowercase.contains("publish");
+            let mentions_release = lowercase.contains("release");
+            if !is_workflow_manifest || (!mentions_publish && !mentions_release) {
                 continue;
             }
 
             let mut path = String::with_capacity(file_name.len() + 18);
             path.push_str(".github/workflows/");
             path.push_str(&file_name);
-            if best_path.as_ref().map_or(true, |best| path < *best) {
+            let should_replace = best_path.as_ref().map_or(true, |best| {
+                let best_lowercase = best.to_ascii_lowercase();
+                let best_mentions_publish = best_lowercase.contains("publish");
+                (mentions_publish && !best_mentions_publish)
+                    || (mentions_publish == best_mentions_publish && path < *best)
+            });
+            if should_replace {
                 best_path = Some(path);
             }
         }
-        if let Some(path) = best_path {
-            return path;
-        }
+        return best_path;
     }
 
-    String::from(".github/workflows/release.yml")
+    None
+}
+
+const fn default_publish_workflow_path() -> &'static str {
+    DEFAULT_PUBLISH_WORKFLOW_PATH
 }
 
 fn workflow_filename(path: &str) -> &str {
@@ -510,7 +605,14 @@ fn detect_github_repo(cwd: &AbsolutePath) -> Option<String> {
     parse_github_repo_slug(&remote)
 }
 
-fn detect_release_branch(cwd: &AbsolutePath) -> Option<String> {
+fn detect_dispatch_ref_hint(cwd: &AbsolutePath) -> Option<String> {
+    if let Ok(tag) = capture_git(cwd, ["describe", "--tags", "--exact-match"]) {
+        let tag = tag.trim();
+        if !tag.is_empty() {
+            return Some(tag.to_owned());
+        }
+    }
+
     if let Ok(default_head) =
         capture_git(cwd, ["symbolic-ref", "--short", "refs/remotes/origin/HEAD"])
     {
@@ -527,7 +629,10 @@ fn detect_release_branch(cwd: &AbsolutePath) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+
     use super::*;
+    use vite_path::AbsolutePathBuf;
 
     fn render_checklist_lines(checklist: &[ChecklistStep<'_>]) -> Vec<String> {
         let mut rendered = Vec::new();
@@ -556,8 +661,8 @@ mod tests {
     fn first_publish_checklist_is_declared_in_stable_step_order() {
         let guidance = FirstPublishGuidance {
             github_repo: Some("voidzero-dev/vite-plus".into()),
-            release_branch: Some("main".into()),
-            workflow_path: ".github/workflows/release.yml".into(),
+            dispatch_ref_hint: Some("main".into()),
+            workflow_path: ".github/workflows/publish.yml".into(),
             ..Default::default()
         };
 
@@ -580,21 +685,21 @@ mod tests {
         let lines = render_checklist_lines(&checklist);
         assert_eq!(
             lines[0],
-            "  1. Commit a GitHub Actions release workflow that runs on a GitHub-hosted runner."
+            "  1. Commit a GitHub Actions publish workflow that runs on a GitHub-hosted runner."
         );
         assert!(lines.iter().any(|line| line.contains("Repository: `voidzero-dev/vite-plus`")));
         assert!(
             lines.iter().any(|line| line.contains("Dry run: vp release --first-release --dry-run"))
         );
         assert!(lines.iter().any(|line| {
-            line.contains("Real publish from GitHub Actions: vp release --first-release --yes")
+            line.contains("Trusted publish from GitHub Actions: vp release --first-release --yes")
         }));
     }
 
     #[test]
     fn first_publish_checklist_surfaces_package_issues_compactly() {
         let guidance = FirstPublishGuidance {
-            workflow_path: ".github/workflows/release.yml".into(),
+            workflow_path: ".github/workflows/publish.yml".into(),
             packages_missing_repository: vec!["@scope/pkg-a".into(), "@scope/pkg-b".into()],
             packages_mismatched_repository: vec!["@scope/pkg-c".into()],
             scoped_packages_missing_public_access: vec!["@scope/pkg-a".into()],
@@ -636,5 +741,169 @@ mod tests {
                 "Dry run: vp release --first-release --changelog --preid beta --projects @scope/pkg-a --no-git-tag --no-git-commit --dry-run",
             )
         }));
+    }
+
+    #[test]
+    fn first_publish_checklist_surfaces_scaffolded_workflow_note() {
+        let guidance = FirstPublishGuidance {
+            workflow_path: ".github/workflows/publish.yml".into(),
+            workflow_template_created: true,
+            ..Default::default()
+        };
+
+        let checklist = first_publish_checklist!(&guidance, &make_release_options_for_tests());
+        let lines = render_checklist_lines(&checklist);
+
+        assert!(lines.iter().any(|line| {
+            line.contains("A starter workflow was scaffolded locally from the built-in template")
+        }));
+    }
+
+    #[test]
+    fn render_release_command_omits_skip_publish_for_real_publish_examples() {
+        let command = render_release_command(
+            &ReleaseOptions {
+                dry_run: false,
+                skip_publish: true,
+                first_release: false,
+                changelog: false,
+                preid: None,
+                otp: Some("123456".into()),
+                projects: Some(Vec::new()),
+                git_tag: true,
+                git_commit: true,
+                yes: false,
+            },
+            false,
+            false,
+        );
+
+        assert_eq!(command, "vp release --yes");
+    }
+
+    #[test]
+    fn render_release_command_preserves_no_git_commit_for_checklist_examples() {
+        let command = render_release_command(
+            &ReleaseOptions {
+                dry_run: false,
+                skip_publish: false,
+                first_release: true,
+                changelog: false,
+                preid: None,
+                otp: None,
+                projects: None,
+                git_tag: true,
+                git_commit: false,
+                yes: false,
+            },
+            true,
+            true,
+        );
+
+        assert_eq!(command, "vp release --first-release --no-git-commit --dry-run");
+    }
+
+    #[test]
+    fn workflow_detection_prefers_publish_filename_when_both_exist() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let cwd = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let workflows_dir = cwd.join(".github/workflows");
+        fs::create_dir_all(workflows_dir.as_path()).unwrap();
+        fs::write(workflows_dir.join("release.yml").as_path(), "name: Release\n").unwrap();
+        fs::write(workflows_dir.join("publish.yml").as_path(), "name: Publish\n").unwrap();
+
+        assert_eq!(find_release_workflow_path(&cwd), ".github/workflows/publish.yml");
+    }
+
+    #[test]
+    fn workflow_detection_uses_release_filename_when_publish_is_missing() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let cwd = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let workflows_dir = cwd.join(".github/workflows");
+        fs::create_dir_all(workflows_dir.as_path()).unwrap();
+        fs::write(workflows_dir.join("release.yaml").as_path(), "name: Release\n").unwrap();
+
+        assert_eq!(find_release_workflow_path(&cwd), ".github/workflows/release.yaml");
+    }
+
+    #[test]
+    fn workflow_detection_defaults_to_publish_filename_when_missing() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let cwd = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        assert_eq!(find_release_workflow_path(&cwd), ".github/workflows/publish.yml");
+    }
+
+    #[test]
+    fn workflow_template_creation_writes_publish_workflow_when_missing() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let cwd = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let mut guidance = FirstPublishGuidance {
+            dispatch_ref_hint: Some("release-main".into()),
+            workflow_path: ".github/workflows/publish.yml".into(),
+            ..Default::default()
+        };
+
+        ensure_first_publish_workflow_template(&cwd, PackageManagerType::Pnpm, &mut guidance)
+            .unwrap();
+
+        let created = std::fs::read_to_string(cwd.join(".github/workflows/publish.yml")).unwrap();
+        assert!(guidance.workflow_template_created);
+        assert!(created.contains("workflow_dispatch:"));
+        assert!(created.contains("<default-branch>"));
+        assert!(created.contains("<release-tag-pattern>"));
+        assert!(created.contains("run: corepack enable"));
+        assert!(created.contains("run: pnpm install --frozen-lockfile"));
+        assert!(created.contains("vp release --first-release --yes"));
+        assert!(created.contains("vp release --yes"));
+        assert!(!created.contains(PACKAGE_MANAGER_SETUP_TOKEN));
+        assert!(!created.contains(INSTALL_COMMAND_TOKEN));
+    }
+
+    #[test]
+    fn workflow_template_creation_skips_existing_release_workflow() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let cwd = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let workflows_dir = cwd.join(".github/workflows");
+        fs::create_dir_all(workflows_dir.as_path()).unwrap();
+        fs::write(workflows_dir.join("release.yml").as_path(), "name: Release\n").unwrap();
+        let mut guidance = FirstPublishGuidance {
+            workflow_path: ".github/workflows/release.yml".into(),
+            ..Default::default()
+        };
+
+        ensure_first_publish_workflow_template(&cwd, PackageManagerType::Pnpm, &mut guidance)
+            .unwrap();
+
+        assert!(!guidance.workflow_template_created);
+        assert!(!cwd.join(".github/workflows/publish.yml").as_path().exists());
+        assert_eq!(
+            std::fs::read_to_string(cwd.join(".github/workflows/release.yml")).unwrap(),
+            "name: Release\n"
+        );
+    }
+
+    #[test]
+    fn workflow_template_creation_uses_bun_specific_setup() {
+        let rendered = render_publish_workflow_template(PackageManagerType::Bun);
+
+        assert!(rendered.contains("uses: oven-sh/setup-bun@v2"));
+        assert!(rendered.contains("run: bun install --frozen-lockfile"));
+        assert!(!rendered.contains("run: corepack enable"));
+    }
+
+    fn make_release_options_for_tests() -> ReleaseOptions {
+        ReleaseOptions {
+            dry_run: false,
+            skip_publish: false,
+            first_release: true,
+            changelog: false,
+            preid: None,
+            otp: None,
+            projects: None,
+            git_tag: true,
+            git_commit: true,
+            yes: false,
+        }
     }
 }

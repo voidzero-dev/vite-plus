@@ -1,0 +1,51 @@
+name: Publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      first_release:
+        description: Set to true only for the very first publish
+        required: false
+        default: false
+        type: boolean
+  # Optional automation examples after you confirm your release boundary:
+  # push:
+  #   branches:
+  #     - <default-branch>
+  #   tags:
+  #     - <release-tag-pattern>
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Install Vite+
+        uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version: '22'
+          cache: true
+
+__PACKAGE_MANAGER_SETUP__
+      - name: Install dependencies
+        run: __INSTALL_COMMAND__
+
+      - name: Publish release
+        shell: bash
+        env:
+          FIRST_RELEASE: ${{ github.event_name == 'workflow_dispatch' && inputs.first_release || 'false' }}
+        run: |
+          if [[ "${FIRST_RELEASE}" == "true" ]]; then
+            __FIRST_RELEASE_COMMAND__
+          else
+            __RELEASE_COMMAND__
+          fi
