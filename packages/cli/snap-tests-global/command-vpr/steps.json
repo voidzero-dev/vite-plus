@@ -1,0 +1,8 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "commands": [
+    "vpr hello # should fall back to pnpm run when no vite-plus dependency",
+    "vpr greet --arg1 value1 # should pass through args to pnpm run",
+    "vpr nonexistent # should show pnpm missing script error"
+  ]
+}
