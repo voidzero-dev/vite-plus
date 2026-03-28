@@ -1,3 +1,10 @@
+//! Unit tests for the split release modules.
+//!
+//! The release flow spans planning, security validation, git tag handling, manifest rewriting,
+//! and user-facing summaries. These tests intentionally stay close to the module boundary rather
+//! than trying to boot a full end-to-end workspace, so they can validate the core rules quickly
+//! even when external workspace fixtures are unavailable.
+
 use std::path::PathBuf;
 
 use vite_path::{AbsolutePathBuf, RelativePathBuf};
@@ -102,12 +109,55 @@ fn make_release_plan(name: &str, scripts: &[&str], check_scripts: &[&str]) -> Pa
         changelog_path: test_absolute_path(&format!("/packages/{name}/CHANGELOG.md")),
         access: None,
         publish_tag: None,
-        repository_url: None,
+        publish_provenance: None,
+        repository_url: Some(String::from("https://github.com/voidzero-dev/vite-plus.git")),
         protocol_summary: DependencyProtocolSummary::default(),
         tag_name: format!("release/{name}/v1.0.1"),
         scripts: scripts.iter().map(|script| (*script).to_string()).collect(),
         check_scripts: check_scripts.iter().map(|script| (*script).to_string()).collect(),
     }
+}
+
+fn make_release_options() -> ReleaseOptions {
+    ReleaseOptions {
+        dry_run: false,
+        skip_publish: false,
+        first_release: false,
+        changelog: false,
+        preid: None,
+        otp: None,
+        projects: None,
+        git_tag: true,
+        git_commit: true,
+        yes: false,
+    }
+}
+
+fn github_hosted_trusted_publish_context() -> TrustedPublishContext {
+    TrustedPublishContext::from_env(|key| match key {
+        "GITHUB_ACTIONS" => Some(String::from("true")),
+        "RUNNER_ENVIRONMENT" => Some(String::from("github-hosted")),
+        "GITHUB_REPOSITORY" => Some(String::from("voidzero-dev/vite-plus")),
+        "GITHUB_WORKFLOW" => Some(String::from("Release")),
+        "GITHUB_WORKFLOW_REF" => Some(String::from(
+            "voidzero-dev/vite-plus/.github/workflows/release.yml@refs/heads/main",
+        )),
+        _ => None,
+    })
+}
+
+fn gitlab_trusted_publish_context() -> TrustedPublishContext {
+    TrustedPublishContext::from_env(|key| match key {
+        "GITLAB_CI" => Some(String::from("true")),
+        _ => None,
+    })
+}
+
+fn circleci_trusted_publish_context() -> TrustedPublishContext {
+    TrustedPublishContext::from_env(|key| match key {
+        "CIRCLECI" => Some(String::from("true")),
+        _ => None,
+    })
 }
 
 #[test]
@@ -239,6 +289,45 @@ fn validate_release_options_rejects_real_no_git_tag() {
 }
 
 #[test]
+fn validate_release_options_rejects_real_git_tag_without_commit() {
+    let error = validate_release_options(&ReleaseOptions {
+        dry_run: false,
+        skip_publish: false,
+        first_release: false,
+        changelog: false,
+        preid: None,
+        otp: None,
+        projects: None,
+        git_tag: true,
+        git_commit: false,
+        yes: false,
+    })
+    .unwrap_err();
+
+    assert!(error.to_string().contains("--no-git-commit"));
+    assert!(error.to_string().contains("--git-tag"));
+}
+
+#[test]
+fn validate_release_options_allows_preview_only_flags_in_dry_run() {
+    assert!(
+        validate_release_options(&ReleaseOptions {
+            dry_run: true,
+            skip_publish: true,
+            first_release: true,
+            changelog: true,
+            preid: Some("beta".into()),
+            otp: None,
+            projects: Some(vec!["pkg-a".into()]),
+            git_tag: false,
+            git_commit: false,
+            yes: false,
+        })
+        .is_ok()
+    );
+}
+
+#[test]
 fn resolved_publish_tag_prefers_cli_preid_over_manifest_tag() {
     let mut plan = make_release_plan("pkg-a", &[], &[]);
     plan.publish_tag = Some("next".into());
@@ -257,6 +346,14 @@ fn resolved_publish_tag_prefers_cli_preid_over_manifest_tag() {
     };
 
     assert_eq!(resolved_publish_tag(&plan, &options), Some("beta"));
+}
+
+#[test]
+fn resolved_publish_tag_falls_back_to_manifest_tag() {
+    let mut plan = make_release_plan("pkg-a", &[], &[]);
+    plan.publish_tag = Some("next".into());
+
+    assert_eq!(resolved_publish_tag(&plan, &make_release_options()), Some("next"));
 }
 
 #[test]
@@ -328,8 +425,12 @@ fn readiness_report_collects_workspace_and_package_scripts() {
     .unwrap();
     let plans = vec![make_release_plan("pkg-a", &["build", "prepack"], &[])];
 
-    let report = collect_release_readiness_report(Some(&workspace_manifest), &plans);
-
+    let report = collect_release_readiness_report(
+        Some(&workspace_manifest),
+        &plans,
+        &make_release_options(),
+        &github_hosted_trusted_publish_context(),
+    );
     assert_eq!(report.workspace_scripts, vec!["build", "release:verify"]);
     assert_eq!(report.package_scripts.len(), 1);
     assert_eq!(report.package_scripts[0].package, "pkg-a");
@@ -341,7 +442,12 @@ fn readiness_report_collects_workspace_and_package_scripts() {
 fn readiness_report_warns_for_missing_custom_scripts() {
     let plans = vec![make_release_plan("pkg-a", &["build"], &["release:verify"])];
 
-    let report = collect_release_readiness_report(None, &plans);
+    let report = collect_release_readiness_report(
+        None,
+        &plans,
+        &make_release_options(),
+        &github_hosted_trusted_publish_context(),
+    );
 
     assert_eq!(report.package_scripts[0].scripts, vec!["build"]);
     assert_eq!(report.warnings.len(), 1);
@@ -352,7 +458,12 @@ fn readiness_report_warns_for_missing_custom_scripts() {
 fn readiness_report_warns_when_no_obvious_checks_exist() {
     let plans = vec![make_release_plan("pkg-a", &[], &[])];
 
-    let report = collect_release_readiness_report(None, &plans);
+    let report = collect_release_readiness_report(
+        None,
+        &plans,
+        &make_release_options(),
+        &github_hosted_trusted_publish_context(),
+    );
 
     assert!(report.package_scripts.is_empty());
     assert_eq!(report.warnings.len(), 2);
@@ -518,6 +629,240 @@ fn prepend_changelog_section_reuses_existing_heading() {
 }
 
 #[test]
+fn prepend_changelog_section_adds_heading_when_missing() {
+    let existing = "## 0.1.0 - 2026-01-01\n\n- existing\n";
+    let prepended = prepend_changelog_section(existing, "## 0.2.0 - 2026-02-01\n\n- new\n\n");
+    assert!(prepended.starts_with("# Changelog\n\n## 0.2.0 - 2026-02-01"));
+    assert!(prepended.contains("## 0.1.0 - 2026-01-01"));
+}
+
+#[test]
+fn prepend_changelog_section_handles_heading_without_existing_entries() {
+    let prepended =
+        prepend_changelog_section("# Changelog\n", "## 0.2.0 - 2026-02-01\n\n- new\n\n");
+    assert_eq!(prepended, "# Changelog\n\n## 0.2.0 - 2026-02-01\n\n- new\n\n");
+}
+
+#[test]
+fn summarize_release_artifacts_counts_manifests_and_changelogs() {
+    let plans = vec![make_release_plan("pkg-a", &[], &[]), make_release_plan("pkg-b", &[], &[])];
+    let manifest_edits = vec![
+        ManifestEdit {
+            package: "pkg-a".into(),
+            path: test_absolute_path("/packages/pkg-a/package.json"),
+            original_contents: "{}".into(),
+            updated_contents: r#"{"version":"1.0.1"}"#.into(),
+        },
+        ManifestEdit {
+            package: "pkg-b".into(),
+            path: test_absolute_path("/packages/pkg-b/package.json"),
+            original_contents: "{}".into(),
+            updated_contents: r#"{"version":"1.0.1"}"#.into(),
+        },
+    ];
+
+    let summary = summarize_release_artifacts(&plans, &manifest_edits, true);
+    assert_eq!(summary.manifest_file_count, 2);
+    assert_eq!(summary.changelog_file_count, 3);
+    assert_eq!(summary.total_file_count(), 5);
+}
+
+#[test]
+fn rollback_release_artifact_edits_restores_and_removes_files() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let workspace_root = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+    let existing_path = workspace_root.join("existing.txt");
+    std::fs::write(&existing_path, "before").unwrap();
+    let generated_path = workspace_root.join("generated.txt");
+    std::fs::write(&generated_path, "after").unwrap();
+
+    let edits = vec![
+        ReleaseArtifactEdit {
+            label: "existing file".into(),
+            path: existing_path.clone(),
+            original_contents: Some(String::from("before")),
+            updated_contents: String::from("after"),
+        },
+        ReleaseArtifactEdit {
+            label: "generated file".into(),
+            path: generated_path.clone(),
+            original_contents: None,
+            updated_contents: String::from("after"),
+        },
+    ];
+
+    rollback_release_artifact_edits(&edits).unwrap();
+
+    assert_eq!(std::fs::read_to_string(&existing_path).unwrap(), "before");
+    assert!(!generated_path.as_path().exists());
+}
+
+#[test]
+fn trusted_publish_context_detects_github_actions_hosted_runner() {
+    let context = github_hosted_trusted_publish_context();
+
+    assert!(context.supports_trusted_publishing());
+    assert!(context.supports_publish_provenance());
+    assert_eq!(context.workflow_path().as_deref(), Some(".github/workflows/release.yml"));
+    assert_eq!(context.repository.as_deref(), Some("voidzero-dev/vite-plus"));
+}
+
+#[test]
+fn trusted_publish_context_detects_gitlab_ci() {
+    let context = gitlab_trusted_publish_context();
+
+    assert!(context.supports_trusted_publishing());
+    assert!(context.supports_publish_provenance());
+    assert!(context.workflow_path().is_none());
+    assert!(context.environment_summary().contains("GitLab CI"));
+}
+
+#[test]
+fn trusted_publish_context_detects_circleci_without_provenance() {
+    let context = circleci_trusted_publish_context();
+
+    assert!(context.supports_trusted_publishing());
+    assert!(!context.supports_publish_provenance());
+    assert!(context.environment_summary().contains("CircleCI"));
+}
+
+#[test]
+fn trusted_publish_context_parses_publish_workflow_ref() {
+    let context = TrustedPublishContext::from_env(|key| match key {
+        "GITHUB_ACTIONS" => Some(String::from("true")),
+        "RUNNER_ENVIRONMENT" => Some(String::from("github-hosted")),
+        "GITHUB_WORKFLOW_REF" => Some(String::from(
+            "voidzero-dev/vite-plus/.github/workflows/publish.yml@refs/heads/main",
+        )),
+        _ => None,
+    });
+
+    assert_eq!(context.workflow_path().as_deref(), Some(".github/workflows/publish.yml"));
+}
+
+#[test]
+fn trusted_publish_context_returns_no_workflow_path_for_unexpected_ref_shape() {
+    let context = TrustedPublishContext::from_env(|key| match key {
+        "GITHUB_ACTIONS" => Some(String::from("true")),
+        "RUNNER_ENVIRONMENT" => Some(String::from("github-hosted")),
+        "GITHUB_WORKFLOW_REF" => Some(String::from("voidzero-dev/vite-plus@refs/heads/main")),
+        _ => None,
+    });
+
+    assert!(context.workflow_path().is_none());
+}
+
+#[test]
+fn trusted_publish_context_rejects_github_actions_self_hosted_runner() {
+    let context = TrustedPublishContext::from_env(|key| match key {
+        "GITHUB_ACTIONS" => Some(String::from("true")),
+        "RUNNER_ENVIRONMENT" => Some(String::from("self-hosted")),
+        _ => None,
+    });
+
+    assert!(!context.supports_trusted_publishing());
+    assert!(!context.supports_publish_provenance());
+}
+
+#[test]
+fn validate_trusted_publish_context_rejects_local_real_release() {
+    let error = validate_trusted_publish_context(
+        &make_release_options(),
+        &TrustedPublishContext::default(),
+    )
+    .unwrap_err();
+    assert!(error.to_string().contains("trusted-publishing CI"));
+}
+
+#[test]
+fn validate_trusted_publish_context_allows_local_dry_run() {
+    let mut options = make_release_options();
+    options.dry_run = true;
+
+    assert!(validate_trusted_publish_context(&options, &TrustedPublishContext::default()).is_ok());
+}
+
+#[test]
+fn validate_trusted_publish_context_rejects_circleci_without_provenance() {
+    let context = circleci_trusted_publish_context();
+
+    let error = validate_trusted_publish_context(&make_release_options(), &context).unwrap_err();
+    assert!(error.to_string().contains("provenance attestations"));
+}
+
+#[test]
+fn validate_trusted_publish_context_allows_gitlab_real_release() {
+    assert!(
+        validate_trusted_publish_context(
+            &make_release_options(),
+            &gitlab_trusted_publish_context()
+        )
+        .is_ok()
+    );
+}
+
+#[test]
+fn resolved_publish_provenance_defaults_to_true_in_trusted_publish_ci() {
+    let plan = make_release_plan("pkg-a", &[], &[]);
+    let context = github_hosted_trusted_publish_context();
+
+    assert_eq!(resolved_publish_provenance(&plan, &context), Some(true));
+}
+
+#[test]
+fn resolved_publish_provenance_respects_explicit_opt_out() {
+    let mut plan = make_release_plan("pkg-a", &[], &[]);
+    plan.publish_provenance = Some(false);
+
+    assert_eq!(
+        resolved_publish_provenance(&plan, &github_hosted_trusted_publish_context()),
+        Some(false)
+    );
+}
+
+#[test]
+fn resolved_publish_provenance_stays_none_without_capable_environment() {
+    let plan = make_release_plan("pkg-a", &[], &[]);
+    assert_eq!(resolved_publish_provenance(&plan, &TrustedPublishContext::default()), None);
+}
+
+#[test]
+fn readiness_report_tracks_provenance_opt_out_and_legacy_otp() {
+    let mut options = make_release_options();
+    options.otp = Some(String::from("123456"));
+    let mut plan = make_release_plan("pkg-a", &["build"], &[]);
+    plan.publish_provenance = Some(false);
+
+    let report = collect_release_readiness_report(
+        None,
+        &[plan],
+        &options,
+        &github_hosted_trusted_publish_context(),
+    );
+
+    assert_eq!(report.trusted_publish.packages_with_provenance_disabled, vec!["pkg-a"]);
+    assert!(report.trusted_publish.uses_legacy_otp);
+}
+
+#[test]
+fn readiness_report_warns_when_environment_cannot_emit_provenance() {
+    let report = collect_release_readiness_report(
+        None,
+        &[make_release_plan("pkg-a", &["build"], &[])],
+        &make_release_options(),
+        &TrustedPublishContext::default(),
+    );
+
+    assert!(
+        report
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("cannot produce the npm provenance attestations"))
+    );
+}
+
+#[test]
 fn package_tags_are_scoped_and_safe() {
     let version = Version::parse("1.0.0").unwrap();
     assert_eq!(package_tag_name("@scope/pkg-a", &version), "release/scope/pkg-a/v1.0.0");
@@ -533,6 +878,13 @@ fn release_tags_roundtrip_scoped_and_unscoped_package_names() {
 }
 
 #[test]
+fn invalid_release_tags_are_ignored() {
+    assert_eq!(parse_package_name_from_release_tag("release//v1.0.0"), None);
+    assert_eq!(parse_package_name_from_release_tag("release/pkg-a/not-a-version"), None);
+    assert_eq!(parse_package_name_from_release_tag("pkg-a@1.0.0"), None);
+}
+
+#[test]
 fn publish_protocol_matrix_prefers_native_workspace_and_catalog_rewrites() {
     let pnpm = test_package_manager(PackageManagerType::Pnpm, "10.0.0");
     let summary =
@@ -542,6 +894,24 @@ fn publish_protocol_matrix_prefers_native_workspace_and_catalog_rewrites() {
 
     let npm = test_package_manager(PackageManagerType::Npm, "11.0.0");
     assert_eq!(unsupported_publish_protocols(&npm, summary), vec!["workspace:", "catalog:"]);
+}
+
+#[test]
+fn publish_protocol_matrix_allows_workspace_and_catalog_for_bun() {
+    let bun = test_package_manager(PackageManagerType::Bun, "1.2.0");
+    let summary =
+        DependencyProtocolSummary { workspace: true, catalog: true, ..Default::default() };
+
+    assert!(unsupported_publish_protocols(&bun, summary).is_empty());
+}
+
+#[test]
+fn publish_protocol_matrix_rejects_workspace_and_catalog_for_yarn1() {
+    let yarn = test_package_manager(PackageManagerType::Yarn, "1.22.0");
+    let summary =
+        DependencyProtocolSummary { workspace: true, catalog: true, ..Default::default() };
+
+    assert_eq!(unsupported_publish_protocols(&yarn, summary), vec!["workspace:", "catalog:"]);
 }
 
 #[test]
@@ -567,6 +937,32 @@ fn project_selection_matches_previous_package_names() {
 }
 
 #[test]
+fn release_commit_message_lists_up_to_three_packages() {
+    let plans = vec![
+        make_release_plan("pkg-a", &[], &[]),
+        make_release_plan("pkg-b", &[], &[]),
+        make_release_plan("pkg-c", &[], &[]),
+    ];
+
+    assert_eq!(
+        release_commit_message(&plans),
+        "chore(release): publish pkg-a@1.0.1, pkg-b@1.0.1, pkg-c@1.0.1"
+    );
+}
+
+#[test]
+fn release_commit_message_summarizes_larger_release_sets() {
+    let plans = vec![
+        make_release_plan("pkg-a", &[], &[]),
+        make_release_plan("pkg-b", &[], &[]),
+        make_release_plan("pkg-c", &[], &[]),
+        make_release_plan("pkg-d", &[], &[]),
+    ];
+
+    assert_eq!(release_commit_message(&plans), "chore(release): publish 4 packages");
+}
+
+#[test]
 fn unique_strings_preserves_order() {
     let values =
         unique_strings(vec!["a".to_string(), "b".to_string(), "a".to_string(), "c".to_string()]);
@@ -586,6 +982,16 @@ fn orphaned_released_packages_ignore_known_and_retired_names() {
         &known,
     );
     assert_eq!(orphaned, vec!["@scope/pkg-d"]);
+}
+
+#[test]
+fn orphaned_released_packages_ignore_invalid_tag_shapes() {
+    let known = HashSet::from(["pkg-a"]);
+    let orphaned = collect_orphaned_released_package_names(
+        ["not-a-tag", "release//v1.0.0", "release/pkg-a/not-a-version"],
+        &known,
+    );
+    assert!(orphaned.is_empty());
 }
 
 #[test]
@@ -622,4 +1028,40 @@ fn dependency_order_wins_over_requested_project_order() {
     let names: Vec<&str> = ordered.iter().map(|package| package.name.as_str()).collect();
 
     assert_eq!(names, vec!["pkg-b", "pkg-a"]);
+}
+
+#[test]
+fn cycle_breaker_prefers_selection_order_for_cycles() {
+    let mut graph = build_test_package_graph();
+    let mut nodes = graph.node_indices().filter(|&node| !graph[node].path.as_str().is_empty());
+    let pkg_a = nodes.next().unwrap();
+    let pkg_b = nodes.next().unwrap();
+
+    graph.add_edge(pkg_b, pkg_a, DependencyType::Normal);
+
+    let selected =
+        vec![make_workspace_package(&graph, pkg_a, 1), make_workspace_package(&graph, pkg_b, 0)];
+
+    let ordered = topological_sort_selected_packages(&graph, &selected);
+    let names: Vec<&str> = ordered.iter().map(|package| package.name.as_str()).collect();
+
+    assert_eq!(names, vec!["pkg-b", "pkg-a"]);
+}
+
+#[test]
+fn cycle_breaker_uses_package_name_when_selection_order_matches() {
+    let mut graph = build_test_package_graph();
+    let mut nodes = graph.node_indices().filter(|&node| !graph[node].path.as_str().is_empty());
+    let pkg_a = nodes.next().unwrap();
+    let pkg_b = nodes.next().unwrap();
+
+    graph.add_edge(pkg_b, pkg_a, DependencyType::Normal);
+
+    let selected =
+        vec![make_workspace_package(&graph, pkg_a, 0), make_workspace_package(&graph, pkg_b, 0)];
+
+    let ordered = topological_sort_selected_packages(&graph, &selected);
+    let names: Vec<&str> = ordered.iter().map(|package| package.name.as_str()).collect();
+
+    assert_eq!(names, vec!["pkg-a", "pkg-b"]);
 }

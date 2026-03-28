@@ -613,7 +613,7 @@ pub enum Commands {
         args: Vec<String>,
     },
 
-    /// Version and publish workspace packages, with readiness checks and optional changelog generation
+    /// Version workspace packages locally, then publish them from trusted-publishing CI with readiness checks and optional changelog generation
     Release {
         /// Preview the release plan without changing files or publishing
         #[arg(long)]
@@ -639,7 +639,7 @@ pub enum Commands {
         #[arg(long, value_name = "TAG")]
         preid: Option<String>,
 
-        /// One-time password for npm 2FA publish flows
+        /// Legacy TOTP code for npm 2FA publish flows. Prefer trusted publishing or passkey/security-key auth when possible.
         #[arg(long, value_name = "OTP")]
         otp: Option<String>,
 

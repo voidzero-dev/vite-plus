@@ -1,3 +1,15 @@
+//! Release planning, git-history inspection, and tag naming.
+//!
+//! This module turns discovered workspace packages into deterministic release plans. Its main
+//! jobs are to:
+//!
+//! - normalize historical package identity across renames and moves
+//! - collect conventional commits since the previous release watermark
+//! - infer semantic version bumps and prerelease progression
+//! - preserve a stable package order that respects both dependencies and user selection order
+//!
+//! It may read git state, but it intentionally does not mutate the worktree or print summaries.
+
 use std::{
     cmp::{Ordering, Reverse},
     collections::BinaryHeap,
@@ -11,6 +23,7 @@ const GIT_LOG_FORMAT: &str = "--format=%H%x1f%s%x1f%b%x1e";
 const GIT_LOG_PART_COUNT: usize = 3;
 const SHORT_COMMIT_HASH_LEN: usize = 7;
 
+/// Encodes the git tag layout used as the durable release watermark in this repository.
 #[derive(Debug, Clone, Copy)]
 struct ReleaseTagFormat {
     namespace: &'static str,
@@ -89,6 +102,7 @@ impl ReleaseTagFormat {
 const RELEASE_TAG_FORMAT: ReleaseTagFormat =
     ReleaseTagFormat { namespace: "release/", version_prefix: "/v" };
 
+/// Priority-queue entry used to produce a stable topological ordering for selected packages.
 #[derive(Debug, Clone, Eq, PartialEq)]
 struct ReleaseQueueEntry {
     selection_order: usize,

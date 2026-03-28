@@ -1,5 +1,21 @@
+//! Release workflow orchestration.
+//!
+//! This module is the top-level state machine for `vp release`. It intentionally owns the
+//! sequence of high-level phases:
+//!
+//! 1. detect workspace/package-manager context
+//! 2. build a release plan
+//! 3. present readiness/security information
+//! 4. run dry-run preflight or the real publish flow
+//! 5. finalize local git state
+//!
+//! Lower-level details such as git history inspection, file rewrites, and rendering live in
+//! neighboring modules. Keeping the phase transitions here makes it easier to audit the control
+//! flow and the fail-closed security checks in one place.
+
 use super::*;
 
+/// Workspace-scoped data loaded once before package selection and release planning.
 struct ReleaseWorkspace {
     package_manager: PackageManager,
     workspace_root_path: AbsolutePathBuf,
@@ -8,6 +24,10 @@ struct ReleaseWorkspace {
     workspace_packages: Vec<WorkspacePackage>,
 }
 
+/// Immutable release plan plus the data needed to execute it.
+///
+/// This type sits at the boundary between planning and execution. After it is constructed, the
+/// remaining workflow should not need to rediscover workspace state.
 struct PreparedRelease {
     package_manager: PackageManager,
     workspace_root_path: AbsolutePathBuf,
@@ -17,25 +37,34 @@ struct PreparedRelease {
     root_commits: Vec<CommitInfo>,
 }
 
+/// Coordinator for one `vp release` invocation.
+///
+/// The manager owns runtime-only context such as the current working directory and detected
+/// trusted-publishing environment, then delegates specialized work to sibling modules.
 struct ReleaseManager {
     cwd: AbsolutePathBuf,
     options: ReleaseOptions,
+    trusted_publish_context: TrustedPublishContext,
 }
 
 impl ReleaseManager {
+    /// Constructs a manager and snapshots the current trusted-publishing environment.
     fn new(cwd: AbsolutePathBuf, options: ReleaseOptions) -> Self {
-        Self { cwd, options }
+        Self { cwd, options, trusted_publish_context: TrustedPublishContext::detect() }
     }
 
+    /// Executes the full release workflow, returning early when no packages need a release.
     async fn run(self) -> Result<ExitStatus, Error> {
         validate_release_options(&self.options)?;
+        validate_trusted_publish_context(&self.options, &self.trusted_publish_context)?;
 
         let workspace = self.load_workspace().await?;
         let Some(release) = self.prepare_release(workspace)? else {
             return Ok(ExitStatus::SUCCESS);
         };
 
-        let readiness_report = self.present_release(&release);
+        let readiness_report = self.present_release(&release)?;
+        self.validate_release_security_posture(&release)?;
         self.validate_publish_protocol_safety(&release)?;
 
         if self.options.dry_run {
@@ -106,6 +135,7 @@ impl ReleaseManager {
         }))
     }
 
+    /// Builds per-package release plans and the root changelog commit set.
     fn build_release_plans(
         &self,
         workspace_root_path: &AbsolutePath,
@@ -179,6 +209,7 @@ impl ReleaseManager {
                 changelog_path: package.package_path.join("CHANGELOG.md"),
                 access: package.manifest.publish_config.access.clone(),
                 publish_tag: package.manifest.publish_config.tag.clone(),
+                publish_provenance: package.manifest.publish_config.provenance,
                 repository_url: package.manifest.repository_url().map(ToOwned::to_owned),
                 protocol_summary: package.manifest.dependency_protocol_summary(),
                 tag_name: package_tag_name(&package.name, &next_version),
@@ -190,23 +221,32 @@ impl ReleaseManager {
         Ok((release_plans, root_commits))
     }
 
-    fn present_release(&self, release: &PreparedRelease) -> ReleaseReadinessReport {
+    /// Renders the user-facing release/readiness summaries and returns the computed report.
+    fn present_release(&self, release: &PreparedRelease) -> Result<ReleaseReadinessReport, Error> {
         print_release_plan(&release.release_plans, &self.options);
         if self.options.first_release {
-            let guidance = collect_first_publish_guidance(
+            let mut guidance = collect_first_publish_guidance(
                 &release.workspace_root_path,
                 &release.release_plans,
             );
+            ensure_first_publish_workflow_template(
+                &release.workspace_root_path,
+                release.package_manager.client,
+                &mut guidance,
+            )?;
             print_first_publish_guidance(&guidance, &self.options);
         }
         let readiness_report = collect_release_readiness_report(
             release.workspace_manifest.as_ref(),
             &release.release_plans,
+            &self.options,
+            &self.trusted_publish_context,
         );
         print_release_readiness_report(&readiness_report);
-        readiness_report
+        Ok(readiness_report)
     }
 
+    /// Rejects package-manager/protocol combinations that are known to publish unsafe manifests.
     fn validate_publish_protocol_safety(&self, release: &PreparedRelease) -> Result<(), Error> {
         if self.options.skip_publish {
             return Ok(());
@@ -245,29 +285,131 @@ impl ReleaseManager {
         }
     }
 
-    async fn run_dry_run(&self, release: &PreparedRelease) -> Result<ExitStatus, Error> {
-        print_dry_run_actions(&release.release_plans, &release.package_manager, &self.options);
-        if !self.options.skip_publish {
-            if is_clean_git_worktree(&release.workspace_root_path)? {
-                let status = run_publish_preflight(
-                    &release.package_manager,
-                    &release.release_plans,
-                    &release.manifest_edits,
-                    &self.options,
-                )
-                .await?;
-                if !status.success() {
-                    return Ok(status);
-                }
-            } else {
-                output::warn(
-                    "Skipping native publish dry-run because the git worktree is dirty. Rerun from a clean tree for full publish preflight.",
+    /// Enforces hardened release policy before any real publish happens.
+    ///
+    /// This gate is intentionally fail-closed. If a real release cannot satisfy provenance and
+    /// repository metadata expectations, the workflow should stop before touching the registry.
+    fn validate_release_security_posture(&self, release: &PreparedRelease) -> Result<(), Error> {
+        if self.options.dry_run {
+            return Ok(());
+        }
+
+        let mut issues = Vec::new();
+        let provenance_disabled: Vec<&str> = release
+            .release_plans
+            .iter()
+            .filter(|plan| matches!(plan.publish_provenance, Some(false)))
+            .map(|plan| plan.name.as_str())
+            .collect();
+        if !provenance_disabled.is_empty() {
+            let mut message = String::from(
+                "`publishConfig.provenance = false` is not allowed for hardened releases: ",
+            );
+            push_joined(&mut message, provenance_disabled.into_iter(), ", ");
+            issues.push(message);
+        }
+
+        let missing_repository: Vec<&str> = release
+            .release_plans
+            .iter()
+            .filter(|plan| plan.repository_url.is_none())
+            .map(|plan| plan.name.as_str())
+            .collect();
+        if !missing_repository.is_empty() {
+            let mut message =
+                String::from("Repository metadata is required for trusted publishing provenance: ");
+            push_joined(&mut message, missing_repository.into_iter(), ", ");
+            issues.push(message);
+        }
+
+        if let Some(expected_repository) = self.trusted_publish_context.repository.as_deref() {
+            let mismatched_repository: Vec<&str> = release
+                .release_plans
+                .iter()
+                .filter(|plan| {
+                    plan.repository_url
+                        .as_deref()
+                        .and_then(parse_github_repo_slug)
+                        .map_or(true, |slug| slug != expected_repository)
+                })
+                .map(|plan| plan.name.as_str())
+                .collect();
+            if !mismatched_repository.is_empty() {
+                let mut message = String::from(
+                    "Package `repository` metadata must match the trusted publishing repository `",
                 );
+                message.push_str(expected_repository);
+                message.push_str("`: ");
+                push_joined(&mut message, mismatched_repository.into_iter(), ", ");
+                issues.push(message);
             }
         }
+
+        if issues.is_empty() {
+            return Ok(());
+        }
+
+        let mut message = String::from("Security policy rejected this release: ");
+        push_joined(&mut message, issues.iter().map(String::as_str), " | ");
+        Err(Error::UserMessage(message.into()))
+    }
+
+    /// Executes a no-write preview of the release, including publish preflight when possible.
+    async fn run_dry_run(&self, release: &PreparedRelease) -> Result<ExitStatus, Error> {
+        let artifact_summary = summarize_release_artifacts(
+            &release.release_plans,
+            &release.manifest_edits,
+            self.options.changelog,
+        );
+        print_dry_run_actions(
+            &release.release_plans,
+            &release.package_manager,
+            &self.options,
+            artifact_summary,
+            &self.trusted_publish_context,
+        );
+
+        let publish_status = if self.options.skip_publish {
+            DryRunPublishStatus::SkippedByOption
+        } else if is_clean_git_worktree(&release.workspace_root_path)? {
+            let status = run_publish_preflight(
+                &release.package_manager,
+                &release.release_plans,
+                &release.manifest_edits,
+                &self.options,
+                &self.trusted_publish_context,
+            )
+            .await?;
+            if !status.success() {
+                print_dry_run_summary(
+                    artifact_summary,
+                    DryRunPublishStatus::Failed,
+                    &self.options,
+                    release.release_plans.len(),
+                    &self.trusted_publish_context,
+                );
+                return Ok(status);
+            }
+            DryRunPublishStatus::Succeeded
+        } else {
+            output::warn(
+                "Skipping native publish dry-run because the git worktree is dirty. Rerun from a clean tree for full publish preflight.",
+            );
+            DryRunPublishStatus::SkippedDirtyWorktree
+        };
+
+        print_dry_run_summary(
+            artifact_summary,
+            publish_status,
+            &self.options,
+            release.release_plans.len(),
+            &self.trusted_publish_context,
+        );
+
         Ok(ExitStatus::SUCCESS)
     }
 
+    /// Executes the real publish flow and finalizes local release artifacts on success.
     async fn run_release(
         &self,
         release: &PreparedRelease,
@@ -285,6 +427,7 @@ impl ReleaseManager {
             &release.release_plans,
             &release.manifest_edits,
             &self.options,
+            &self.trusted_publish_context,
         )
         .await?;
         if !preflight_status.success() {
@@ -296,71 +439,138 @@ impl ReleaseManager {
             &release.release_plans,
             &release.manifest_edits,
             &self.options,
+            &self.trusted_publish_context,
         )
         .await?;
         if !publish_status.success() {
             return Ok(publish_status);
         }
 
-        let mut changed_files = Vec::with_capacity(
-            release.release_plans.len() * (1 + usize::from(self.options.changelog)) + 1,
+        let artifact_summary = summarize_release_artifacts(
+            &release.release_plans,
+            &release.manifest_edits,
+            self.options.changelog,
         );
         let release_date = Local::now().format("%Y-%m-%d").to_string();
+        let artifact_edits = build_release_artifact_edits(
+            &release.workspace_root_path,
+            &release.release_plans,
+            &release.manifest_edits,
+            &release.root_commits,
+            &release_date,
+            self.options.changelog,
+        )?;
+        let changed_files: Vec<AbsolutePathBuf> =
+            artifact_edits.iter().map(|edit| edit.path.clone()).collect();
+        apply_release_artifact_edits(&artifact_edits)?;
 
-        if self.options.changelog {
-            let root_changelog_path = release.workspace_root_path.join("CHANGELOG.md");
-            let root_section = build_root_changelog_section(
-                &release_date,
-                &release.release_plans,
-                &release.root_commits,
-            );
-            write_changelog_section(&root_changelog_path, &root_section)?;
-            changed_files.push(root_changelog_path);
-        }
-
-        for edit in &release.manifest_edits {
-            write_manifest_contents(&edit.path, &edit.updated_contents)?;
-            changed_files.push(edit.path.clone());
-        }
-
-        for plan in &release.release_plans {
-            if self.options.changelog {
-                let package_section = build_package_changelog_section(
-                    &release_date,
-                    &plan.next_version,
-                    &plan.commits,
-                );
-                write_changelog_section(&plan.changelog_path, &package_section)?;
-                changed_files.push(plan.changelog_path.clone());
-            }
-        }
-
+        let commit_message =
+            self.options.git_commit.then(|| release_commit_message(&release.release_plans));
         if self.options.git_commit {
-            git_add_paths(&release.workspace_root_path, &changed_files)?;
-            let commit_message = release_commit_message(&release.release_plans);
-            git_commit(&release.workspace_root_path, &commit_message)?;
+            if let Err(error) = git_add_paths(&release.workspace_root_path, &changed_files) {
+                return Err(artifact_rollback_error(
+                    "stage release changes",
+                    error,
+                    &artifact_edits,
+                    true,
+                ));
+            }
+            let commit_message = commit_message.as_deref().expect("commit message should exist");
+            if let Err(error) = git_commit(&release.workspace_root_path, commit_message) {
+                return Err(artifact_rollback_error(
+                    "create release commit",
+                    error,
+                    &artifact_edits,
+                    true,
+                ));
+            }
             let mut message = String::from("Created release commit: ");
-            message.push_str(&commit_message);
+            message.push_str(commit_message);
             output::success(&message);
         }
 
+        let mut created_tag_names = Vec::new();
         if self.options.git_tag {
             for plan in &release.release_plans {
-                git_tag(&release.workspace_root_path, &plan.tag_name)?;
+                if let Err(error) = git_tag(&release.workspace_root_path, &plan.tag_name) {
+                    return Err(tag_rollback_error(
+                        &release.workspace_root_path,
+                        error,
+                        &created_tag_names,
+                    ));
+                }
+                created_tag_names.push(plan.tag_name.clone());
                 let mut message = String::from("Created git tag ");
                 message.push_str(&plan.tag_name);
                 output::success(&message);
             }
         }
 
-        let mut message = String::from("Release completed for ");
-        push_display(&mut message, release.release_plans.len());
-        message.push_str(" package(s).");
-        output::success(&message);
+        print_release_completion_summary(
+            artifact_summary,
+            release.release_plans.len(),
+            commit_message.as_deref(),
+            created_tag_names.len(),
+            &self.trusted_publish_context,
+        );
         Ok(ExitStatus::SUCCESS)
     }
 }
 
+/// Formats an execution error while rolling back final local release artifacts when possible.
+fn artifact_rollback_error(
+    context: &str,
+    error: Error,
+    artifact_edits: &[ReleaseArtifactEdit],
+    mention_git_index: bool,
+) -> Error {
+    let rollback_result = rollback_release_artifact_edits(artifact_edits);
+    let mut message = String::from(context);
+    message.push_str(": ");
+    push_display(&mut message, error);
+    match rollback_result {
+        Ok(()) => {
+            message.push_str(". Local release files were rolled back.");
+            if mention_git_index {
+                message
+                    .push_str(" If git staged any paths before the failure, inspect `git status`.");
+            }
+        }
+        Err(rollback_error) => {
+            message.push_str(" | rollback error: ");
+            push_display(&mut message, rollback_error);
+        }
+    }
+    Error::UserMessage(message.into())
+}
+
+/// Formats a tag-creation error and removes any tags created by the current run.
+fn tag_rollback_error(
+    workspace_root_path: &AbsolutePath,
+    error: Error,
+    created_tag_names: &[String],
+) -> Error {
+    let rollback_result = rollback_created_git_tags(workspace_root_path, created_tag_names);
+    let mut message = String::from("create release tag: ");
+    push_display(&mut message, error);
+    match rollback_result {
+        Ok(()) => {
+            if !created_tag_names.is_empty() {
+                message.push_str(". Previously created release tags from this run were removed.");
+            }
+            message.push_str(
+                " The release commit remains in git; inspect it before retrying tag creation.",
+            );
+        }
+        Err(rollback_error) => {
+            message.push_str(" | tag rollback error: ");
+            push_display(&mut message, rollback_error);
+        }
+    }
+    Error::UserMessage(message.into())
+}
+
+/// Public entrypoint used by the parent `release` command module.
 pub(super) async fn execute_release(
     cwd: AbsolutePathBuf,
     options: ReleaseOptions,
