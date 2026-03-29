@@ -1,0 +1,9 @@
+{
+  "name": "app-a",
+  "scripts": {
+    "hello": "echo hello from app-a"
+  },
+  "dependencies": {
+    "lib-b": "workspace:*"
+  }
+}

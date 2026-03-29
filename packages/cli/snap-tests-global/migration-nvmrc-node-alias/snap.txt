@@ -1,0 +1,14 @@
+> vp migrate --no-interactive # 'node' alias should be mapped to lts/* with an info message
+VITE+ - The Unified Toolchain for the Web
+
+
+"node" in .nvmrc is not a specific version; automatically mapping to "lts/*"
+◇ Migrated . to Vite+<repeat>
+• Node <semver>  pnpm <semver>
+• 2 config updates applied
+• Node version manager file migrated to .node-version
+
+> cat .node-version # check node alias is mapped to lts/*
+lts/*
+
+> test ! -f .nvmrc # check .nvmrc is removed

@@ -44,6 +44,7 @@ pub enum PackageManagerType {
     Pnpm,
     Yarn,
     Npm,
+    Bun,
 }
 
 impl fmt::Display for PackageManagerType {
@@ -52,6 +53,7 @@ impl fmt::Display for PackageManagerType {
             Self::Pnpm => write!(f, "pnpm"),
             Self::Yarn => write!(f, "yarn"),
             Self::Npm => write!(f, "npm"),
+            Self::Bun => write!(f, "bun"),
         }
     }
 }
@@ -194,6 +196,11 @@ impl PackageManager {
                 ignores.push("!**/package-lock.json".into());
                 ignores.push("!**/npm-shrinkwrap.json".into());
             }
+            PackageManagerType::Bun => {
+                ignores.push("!**/bun.lock".into());
+                ignores.push("!**/bun.lockb".into());
+                ignores.push("!**/bunfig.toml".into());
+            }
         }
 
         // if the workspace is a monorepo, keep workspace packages' parent directories to watch for new packages being added
@@ -259,6 +266,7 @@ pub fn get_package_manager_type_and_version(
                 "pnpm" => return Ok((PackageManagerType::Pnpm, version.into(), hash)),
                 "yarn" => return Ok((PackageManagerType::Yarn, version.into(), hash)),
                 "npm" => return Ok((PackageManagerType::Npm, version.into(), hash)),
+                "bun" => return Ok((PackageManagerType::Bun, version.into(), hash)),
                 _ => return Err(Error::UnsupportedPackageManager(name.into())),
             }
         }
@@ -291,6 +299,16 @@ pub fn get_package_manager_type_and_version(
         return Ok((PackageManagerType::Npm, version, None));
     }
 
+    // if bun.lock (text format) or bun.lockb (binary format) exists, use bun@latest
+    let bun_lock_path = workspace_root.path.join("bun.lock");
+    if is_exists_file(&bun_lock_path)? {
+        return Ok((PackageManagerType::Bun, version, None));
+    }
+    let bun_lockb_path = workspace_root.path.join("bun.lockb");
+    if is_exists_file(&bun_lockb_path)? {
+        return Ok((PackageManagerType::Bun, version, None));
+    }
+
     // if .pnpmfile.cjs exists, use pnpm@latest
     let pnpmfile_cjs_path = workspace_root.path.join(".pnpmfile.cjs");
     if is_exists_file(&pnpmfile_cjs_path)? {
@@ -301,6 +319,12 @@ pub fn get_package_manager_type_and_version(
     let legacy_pnpmfile_cjs_path = workspace_root.path.join("pnpmfile.cjs");
     if is_exists_file(&legacy_pnpmfile_cjs_path)? {
         return Ok((PackageManagerType::Pnpm, version, None));
+    }
+
+    // if bunfig.toml exists, use bun@latest
+    let bunfig_toml_path = workspace_root.path.join("bunfig.toml");
+    if is_exists_file(&bunfig_toml_path)? {
+        return Ok((PackageManagerType::Bun, version, None));
     }
 
     // if yarn.config.cjs exists, use yarn@latest (yarn 2.0+)
@@ -372,9 +396,17 @@ pub async fn download_package_manager(
         }
     }
 
-    let tgz_url = get_npm_package_tgz_url(&package_name, &version);
     let home_dir = vite_shared::get_vite_plus_home()?;
     let bin_name = package_manager_type.to_string();
+
+    // For bun, use platform-specific download flow.
+    // The hash from `packageManager` field belongs to the main `bun` npm package,
+    // not the platform-specific binary, so we don't pass it through.
+    if matches!(package_manager_type, PackageManagerType::Bun) {
+        return download_bun_package_manager(&version, &home_dir).await;
+    }
+
+    let tgz_url = get_npm_package_tgz_url(&package_name, &version);
     // $VITE_PLUS_HOME/package_manager/pnpm/10.0.0
     let target_dir = home_dir.join("package_manager").join(&bin_name).join(&version);
     let install_dir = target_dir.join(&bin_name);
@@ -448,6 +480,136 @@ pub async fn download_package_manager(
     Ok((install_dir, package_name, version))
 }
 
+/// Get the platform-specific npm package name for bun.
+/// Returns the `@oven/bun-{os}-{arch}` package name for the current platform.
+fn get_bun_platform_package_name() -> Result<&'static str, Error> {
+    let name = match (env::consts::OS, env::consts::ARCH) {
+        ("macos", "aarch64") => "@oven/bun-darwin-aarch64",
+        ("macos", "x86_64") => "@oven/bun-darwin-x64",
+        #[cfg(target_env = "musl")]
+        ("linux", "aarch64") => "@oven/bun-linux-aarch64-musl",
+        #[cfg(not(target_env = "musl"))]
+        ("linux", "aarch64") => "@oven/bun-linux-aarch64",
+        #[cfg(target_env = "musl")]
+        ("linux", "x86_64") => "@oven/bun-linux-x64-musl",
+        #[cfg(not(target_env = "musl"))]
+        ("linux", "x86_64") => "@oven/bun-linux-x64",
+        ("windows", "x86_64") => "@oven/bun-windows-x64",
+        ("windows", "aarch64") => "@oven/bun-windows-aarch64",
+        (os, arch) => {
+            return Err(Error::UnsupportedPackageManager(
+                format!("bun (unsupported platform: {os}-{arch})").into(),
+            ));
+        }
+    };
+    Ok(name)
+}
+
+/// Download bun package manager (native binary) from npm.
+///
+/// Unlike JS-based package managers (pnpm/npm/yarn), bun is a native binary
+/// distributed via platform-specific npm packages (`@oven/bun-{os}-{arch}`).
+///
+/// Layout: `$VITE_PLUS_HOME/package_manager/bun/{version}/bun/bin/bun.native`
+async fn download_bun_package_manager(
+    version: &Str,
+    home_dir: &AbsolutePath,
+) -> Result<(AbsolutePathBuf, Str, Str), Error> {
+    let package_name: Str = "bun".into();
+    let platform_package_name = get_bun_platform_package_name()?;
+
+    // $VITE_PLUS_HOME/package_manager/bun/{version}
+    let target_dir = home_dir.join("package_manager").join("bun").join(version.as_str());
+    let install_dir = target_dir.join("bun");
+    let bin_prefix = install_dir.join("bin");
+    let bin_file = bin_prefix.join("bun");
+
+    // If shims already exist, return early
+    if is_exists_file(&bin_file)?
+        && is_exists_file(bin_file.with_extension("cmd"))?
+        && is_exists_file(bin_file.with_extension("ps1"))?
+    {
+        return Ok((install_dir, package_name, version.clone()));
+    }
+
+    let parent_dir = target_dir.parent().unwrap();
+    tokio::fs::create_dir_all(parent_dir).await?;
+
+    // Download the platform-specific package directly
+    let platform_tgz_url = get_npm_package_tgz_url(platform_package_name, version);
+    let target_dir_tmp = tempfile::tempdir_in(parent_dir)?.path().to_path_buf();
+
+    download_and_extract_tgz_with_hash(&platform_tgz_url, &target_dir_tmp, None).await.map_err(
+        |err| {
+            if let Error::Reqwest(e) = &err
+                && let Some(status) = e.status()
+                && status == reqwest::StatusCode::NOT_FOUND
+            {
+                Error::PackageManagerVersionNotFound {
+                    name: "bun".into(),
+                    version: version.clone(),
+                    url: platform_tgz_url.into(),
+                }
+            } else {
+                err
+            }
+        },
+    )?;
+
+    // Create the expected directory structure: bun/bin/
+    let tmp_bun_dir = target_dir_tmp.join("bun");
+    let tmp_bin_dir = tmp_bun_dir.join("bin");
+    tokio::fs::create_dir_all(&tmp_bin_dir).await?;
+
+    // The platform package extracts to `package/bin/` with the bun binary inside
+    // Find the native binary in the extracted package
+    let package_dir = target_dir_tmp.join("package");
+    let package_bin_dir = package_dir.join("bin");
+    let native_bin_src =
+        if cfg!(windows) { package_bin_dir.join("bun.exe") } else { package_bin_dir.join("bun") };
+
+    // Move native binary to bin/bun.native
+    let native_bin_dest = if cfg!(windows) {
+        tmp_bin_dir.join("bun.native.exe")
+    } else {
+        tmp_bin_dir.join("bun.native")
+    };
+    tokio::fs::rename(&native_bin_src, &native_bin_dest).await?;
+
+    // Set executable permission on the native binary
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        tokio::fs::set_permissions(&native_bin_dest, fs::Permissions::from_mode(0o755)).await?;
+    }
+
+    // Clean up the extracted package directory
+    remove_dir_all_force(&package_dir).await?;
+
+    // Acquire lock for atomic rename
+    let lock_path = parent_dir.join(format!("{version}.lock"));
+    tracing::debug!("Acquire lock file: {:?}", lock_path);
+    let lock_file = File::create(lock_path.as_path())?;
+    lock_file.lock()?;
+    tracing::debug!("Lock acquired: {:?}", lock_path);
+
+    if is_exists_file(&bin_file)? {
+        tracing::debug!("bun bin_file already exists after lock acquisition, skip rename");
+        return Ok((install_dir, package_name, version.clone()));
+    }
+
+    // Rename temp dir to final location
+    tracing::debug!("Rename {:?} to {:?}", target_dir_tmp, target_dir);
+    remove_dir_all_force(&target_dir).await?;
+    tokio::fs::rename(&target_dir_tmp, &target_dir).await?;
+
+    // Create native binary shims
+    tracing::debug!("Create shim files for bun");
+    create_shim_files(PackageManagerType::Bun, &bin_prefix).await?;
+
+    Ok((install_dir, package_name, version.clone()))
+}
+
 /// Remove the directory and all its contents.
 /// Ignore the error if the directory is not found.
 async fn remove_dir_all_force(path: impl AsRef<Path>) -> Result<(), std::io::Error> {
@@ -494,6 +656,12 @@ async fn create_shim_files(
             bin_names.push(("npm", "npm-cli"));
             bin_names.push(("npx", "npx-cli"));
         }
+        PackageManagerType::Bun => {
+            // bun is a native binary, not a JS package.
+            // Create native binary shims instead of Node.js-based shims.
+            let bin_prefix = bin_prefix.as_ref();
+            return create_bun_shim_files(bin_prefix).await;
+        }
     }
 
     let bin_prefix = bin_prefix.as_ref();
@@ -512,6 +680,37 @@ async fn create_shim_files(
         let to_bin = bin_prefix.join(bin_name);
         shim::write_shims(&source_file, &to_bin).await?;
     }
+    Ok(())
+}
+
+/// Create shim files for bun's native binary.
+///
+/// Bun is a native binary distributed via platform-specific npm packages.
+/// The native binary is placed at `bin_prefix/bun.native` (unix) or
+/// `bin_prefix/bun.native.exe` (windows), and we create shim wrappers
+/// that exec it directly (without Node.js).
+async fn create_bun_shim_files(bin_prefix: &AbsolutePath) -> Result<(), Error> {
+    // The native binary should already be at bin_prefix/bun.native (unix) or
+    // bin_prefix/bun.native.exe (windows), placed there by download_bun_platform_binary.
+    let native_bin = if cfg!(windows) {
+        bin_prefix.join("bun.native.exe")
+    } else {
+        bin_prefix.join("bun.native")
+    };
+    if !is_exists_file(&native_bin)? {
+        return Err(Error::CannotFindBinaryPath(
+            "bun native binary not found. Expected bin/bun.native".into(),
+        ));
+    }
+
+    // Create bun shim -> bun.native
+    let bun_shim = bin_prefix.join("bun");
+    shim::write_native_shims(&native_bin, &bun_shim).await?;
+
+    // Create bunx shim -> bun.native (bunx is just bun with different argv[0])
+    let bunx_shim = bin_prefix.join("bunx");
+    shim::write_native_shims(&native_bin, &bunx_shim).await?;
+
     Ok(())
 }
 
@@ -570,6 +769,7 @@ fn interactive_package_manager_menu() -> Result<PackageManagerType, Error> {
         ("pnpm (recommended)", PackageManagerType::Pnpm),
         ("npm", PackageManagerType::Npm),
         ("yarn", PackageManagerType::Yarn),
+        ("bun", PackageManagerType::Bun),
     ];
 
     let mut selected_index = 0;
@@ -664,6 +864,9 @@ fn interactive_package_manager_menu() -> Result<PackageManagerType, Error> {
                 KeyCode::Char('3') if options.len() > 2 => {
                     break Ok(options[2].1);
                 }
+                KeyCode::Char('4') if options.len() > 3 => {
+                    break Ok(options[3].1);
+                }
                 KeyCode::Esc | KeyCode::Char('q') => {
                     // Exit on escape/quit
                     terminal::disable_raw_mode()?;
@@ -693,6 +896,7 @@ fn interactive_package_manager_menu() -> Result<PackageManagerType, Error> {
             PackageManagerType::Pnpm => "pnpm",
             PackageManagerType::Npm => "npm",
             PackageManagerType::Yarn => "yarn",
+            PackageManagerType::Bun => "bun",
         };
         println!("\n✓ Selected package manager: {name}\n");
     }
@@ -733,6 +937,7 @@ fn simple_text_prompt() -> Result<PackageManagerType, Error> {
         ("pnpm", PackageManagerType::Pnpm),
         ("npm", PackageManagerType::Npm),
         ("yarn", PackageManagerType::Yarn),
+        ("bun", PackageManagerType::Bun),
     ];
 
     println!("\nNo package manager detected. Please select one:");
@@ -2107,5 +2312,164 @@ mod tests {
             assert!(matcher.is_match("README.md"), "Should ignore docs");
             assert!(matcher.is_match("src/app.ts"), "Should ignore source files");
         }
+
+        #[test]
+        fn test_bun_fingerprint_ignores() {
+            let temp_dir: TempDir = create_temp_dir();
+            let pm = create_mock_package_manager(temp_dir, PackageManagerType::Bun, false);
+            let ignores = pm.get_fingerprint_ignores().expect("Should get fingerprint ignores");
+            let matcher = GlobPatternSet::new(&ignores).expect("Should compile patterns");
+
+            // Should NOT ignore bun-specific files
+            assert!(!matcher.is_match("bun.lock"), "Should NOT ignore bun.lock");
+            assert!(!matcher.is_match("bun.lockb"), "Should NOT ignore bun.lockb");
+            assert!(!matcher.is_match("bunfig.toml"), "Should NOT ignore bunfig.toml");
+            assert!(!matcher.is_match(".npmrc"), "Should NOT ignore .npmrc");
+            assert!(!matcher.is_match("package.json"), "Should NOT ignore package.json");
+
+            // Should ignore other package manager files
+            assert!(matcher.is_match("pnpm-lock.yaml"), "Should ignore pnpm-lock.yaml");
+            assert!(matcher.is_match("yarn.lock"), "Should ignore yarn.lock");
+            assert!(matcher.is_match("package-lock.json"), "Should ignore package-lock.json");
+
+            // Regular files should be ignored
+            assert!(matcher.is_match("README.md"), "Should ignore docs");
+            assert!(matcher.is_match("src/app.ts"), "Should ignore source files");
+        }
+    }
+
+    // Tests for bun package manager detection
+    #[tokio::test]
+    async fn test_detect_package_manager_with_bun_lock() {
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let package_content = r#"{"name": "test-package"}"#;
+        create_package_json(&temp_dir_path, package_content);
+
+        // Create bun.lock (text format)
+        fs::write(temp_dir_path.join("bun.lock"), r#"# bun lockfile"#)
+            .expect("Failed to write bun.lock");
+
+        let (workspace_root, _) =
+            find_workspace_root(&temp_dir_path).expect("Should find workspace root");
+        let (pm_type, version, hash) =
+            get_package_manager_type_and_version(&workspace_root, None).expect("Should detect bun");
+        assert_eq!(pm_type, PackageManagerType::Bun);
+        assert_eq!(version.as_str(), "latest");
+        assert!(hash.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_detect_package_manager_with_bun_lockb() {
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let package_content = r#"{"name": "test-package"}"#;
+        create_package_json(&temp_dir_path, package_content);
+
+        // Create bun.lockb (binary format)
+        fs::write(temp_dir_path.join("bun.lockb"), b"\x00\x01\x02")
+            .expect("Failed to write bun.lockb");
+
+        let (workspace_root, _) =
+            find_workspace_root(&temp_dir_path).expect("Should find workspace root");
+        let (pm_type, version, hash) =
+            get_package_manager_type_and_version(&workspace_root, None).expect("Should detect bun");
+        assert_eq!(pm_type, PackageManagerType::Bun);
+        assert_eq!(version.as_str(), "latest");
+        assert!(hash.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_detect_package_manager_with_bunfig_toml() {
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let package_content = r#"{"name": "test-package"}"#;
+        create_package_json(&temp_dir_path, package_content);
+
+        // Create bunfig.toml
+        fs::write(temp_dir_path.join("bunfig.toml"), "[install]\noptional = true")
+            .expect("Failed to write bunfig.toml");
+
+        let (workspace_root, _) =
+            find_workspace_root(&temp_dir_path).expect("Should find workspace root");
+        let (pm_type, version, hash) =
+            get_package_manager_type_and_version(&workspace_root, None).expect("Should detect bun");
+        assert_eq!(pm_type, PackageManagerType::Bun);
+        assert_eq!(version.as_str(), "latest");
+        assert!(hash.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_detect_package_manager_with_package_manager_field_bun() {
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let package_content = r#"{"name": "test-package", "packageManager": "bun@1.2.0"}"#;
+        create_package_json(&temp_dir_path, package_content);
+
+        let (workspace_root, _) =
+            find_workspace_root(&temp_dir_path).expect("Should find workspace root");
+        let (pm_type, version, hash) = get_package_manager_type_and_version(&workspace_root, None)
+            .expect("Should detect bun from packageManager field");
+        assert_eq!(pm_type, PackageManagerType::Bun);
+        assert_eq!(version.as_str(), "1.2.0");
+        assert!(hash.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_detect_package_manager_with_package_manager_field_bun_with_hash() {
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let package_content =
+            r#"{"name": "test-package", "packageManager": "bun@1.2.0+sha512.abc123"}"#;
+        create_package_json(&temp_dir_path, package_content);
+
+        let (workspace_root, _) =
+            find_workspace_root(&temp_dir_path).expect("Should find workspace root");
+        let (pm_type, version, hash) = get_package_manager_type_and_version(&workspace_root, None)
+            .expect("Should detect bun with hash");
+        assert_eq!(pm_type, PackageManagerType::Bun);
+        assert_eq!(version.as_str(), "1.2.0");
+        assert_eq!(hash.unwrap().as_str(), "sha512.abc123");
+    }
+
+    #[tokio::test]
+    async fn test_detect_package_manager_bun_lock_priority_over_pnpmfile() {
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let package_content = r#"{"name": "test-package"}"#;
+        create_package_json(&temp_dir_path, package_content);
+
+        // Create both bun.lock and .pnpmfile.cjs
+        fs::write(temp_dir_path.join("bun.lock"), "# bun lockfile")
+            .expect("Failed to write bun.lock");
+        fs::write(temp_dir_path.join(".pnpmfile.cjs"), "module.exports = {}")
+            .expect("Failed to write .pnpmfile.cjs");
+
+        let (workspace_root, _) =
+            find_workspace_root(&temp_dir_path).expect("Should find workspace root");
+        let (pm_type, _, _) =
+            get_package_manager_type_and_version(&workspace_root, None).expect("Should detect bun");
+        assert_eq!(
+            pm_type,
+            PackageManagerType::Bun,
+            "bun.lock should be detected before .pnpmfile.cjs"
+        );
+    }
+
+    #[test]
+    fn test_get_bun_platform_package_name() {
+        let result = get_bun_platform_package_name();
+        assert!(result.is_ok(), "Should return a platform package name");
+        let name = result.unwrap();
+        assert!(
+            name.starts_with("@oven/bun-"),
+            "Package name should start with @oven/bun-, got: {name}"
+        );
+        // On musl targets, the package name should contain "-musl"
+        #[cfg(target_env = "musl")]
+        assert!(
+            name.ends_with("-musl"),
+            "On musl targets, package name should end with -musl, got: {name}"
+        );
     }
 }

@@ -1,0 +1,7 @@
+{
+  "commands": [
+    "vp migrate --no-interactive # migration should detect .nvmrc with lts alias and auto-migrate",
+    "cat .node-version # check lts alias is preserved as-is",
+    "test ! -f .nvmrc # check .nvmrc is removed"
+  ]
+}

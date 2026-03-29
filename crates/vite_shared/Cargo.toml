@@ -17,6 +17,7 @@ supports-color = "3"
 tracing-subscriber = { workspace = true }
 vite_path = { workspace = true }
 vite_str = { workspace = true }
+which = { workspace = true }
 
 [target.'cfg(not(target_os = "windows"))'.dependencies]
 rustls = { workspace = true }

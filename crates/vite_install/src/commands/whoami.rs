@@ -62,6 +62,11 @@ impl PackageManager {
                 args.push("npm".into());
                 args.push("whoami".into());
             }
+            PackageManagerType::Bun => {
+                bin_name = "bun".into();
+                args.push("pm".into());
+                args.push("whoami".into());
+            }
         }
 
         if let Some(registry) = options.registry {

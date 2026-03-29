@@ -62,6 +62,7 @@ pub async fn download_package_manager(
         "pnpm" => PackageManagerType::Pnpm,
         "yarn" => PackageManagerType::Yarn,
         "npm" => PackageManagerType::Npm,
+        "bun" => PackageManagerType::Bun,
         _ => {
             return Err(Error::from_reason(format!(
                 "Invalid package manager name: {}",

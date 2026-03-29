@@ -2,7 +2,7 @@
 
 ## Summary
 
-Add `vp install` command (alias: `vp i`) that automatically adapts to the detected package manager (pnpm/yarn/npm) for installing all dependencies in a project, with support for common flags and workspace-aware operations based on pnpm's API design.
+Add `vp install` command (alias: `vp i`) that automatically adapts to the detected package manager (pnpm/yarn/npm/bun) for installing all dependencies in a project, with support for common flags and workspace-aware operations based on pnpm's API design.
 
 ## Motivation
 
@@ -28,6 +28,7 @@ This creates friction in monorepo workflows and requires remembering different s
 pnpm install --frozen-lockfile  # pnpm project
 yarn install --frozen-lockfile  # yarn project (v1) or --immutable (v2+)
 npm ci                          # npm project (clean install)
+bun install --frozen-lockfile   # bun project
 
 # Different flags for production install
 pnpm install --prod
@@ -120,27 +121,28 @@ vp install --filter app              # Install for specific package
 - https://yarnpkg.com/cli/install
 - https://classic.yarnpkg.com/en/docs/cli/install
 - https://docs.npmjs.com/cli/v11/commands/npm-install
+- https://bun.sh/docs/cli/install
 
-| Vite+ Flag             | pnpm                   | yarn@1                 | yarn@2+                                     | npm                         | Description                          |
-| ---------------------- | ---------------------- | ---------------------- | ------------------------------------------- | --------------------------- | ------------------------------------ |
-| `vp install`           | `pnpm install`         | `yarn install`         | `yarn install`                              | `npm install`               | Install all dependencies             |
-| `--prod, -P`           | `--prod`               | `--production`         | N/A (use `.yarnrc.yml`)                     | `--omit=dev`                | Skip devDependencies                 |
-| `--dev, -D`            | `--dev`                | N/A                    | N/A                                         | `--include=dev --omit=prod` | Only devDependencies                 |
-| `--no-optional`        | `--no-optional`        | `--ignore-optional`    | N/A                                         | `--omit=optional`           | Skip optionalDependencies            |
-| `--frozen-lockfile`    | `--frozen-lockfile`    | `--frozen-lockfile`    | `--immutable`                               | `ci` (use `npm ci`)         | Fail if lockfile outdated            |
-| `--no-frozen-lockfile` | `--no-frozen-lockfile` | `--no-frozen-lockfile` | `--no-immutable`                            | `install` (not `ci`)        | Allow lockfile updates               |
-| `--lockfile-only`      | `--lockfile-only`      | N/A                    | `--mode update-lockfile`                    | `--package-lock-only`       | Only update lockfile                 |
-| `--prefer-offline`     | `--prefer-offline`     | `--prefer-offline`     | N/A                                         | `--prefer-offline`          | Prefer cached packages               |
-| `--offline`            | `--offline`            | `--offline`            | N/A                                         | `--offline`                 | Only use cache                       |
-| `--force, -f`          | `--force`              | `--force`              | N/A                                         | `--force`                   | Force reinstall                      |
-| `--ignore-scripts`     | `--ignore-scripts`     | `--ignore-scripts`     | `--mode skip-build`                         | `--ignore-scripts`          | Skip lifecycle scripts               |
-| `--no-lockfile`        | `--no-lockfile`        | `--no-lockfile`        | N/A                                         | `--no-package-lock`         | Skip lockfile                        |
-| `--fix-lockfile`       | `--fix-lockfile`       | N/A                    | `--refresh-lockfile`                        | N/A                         | Fix broken lockfile entries          |
-| `--shamefully-hoist`   | `--shamefully-hoist`   | N/A                    | N/A                                         | N/A                         | Flat node_modules (pnpm)             |
-| `--resolution-only`    | `--resolution-only`    | N/A                    | N/A                                         | N/A                         | Re-run resolution only (pnpm)        |
-| `--silent`             | `--silent`             | `--silent`             | N/A (use env var)                           | `--loglevel silent`         | Suppress output                      |
-| `--filter <pattern>`   | `--filter <pattern>`   | N/A                    | `workspaces foreach -A --include <pattern>` | `--workspace <pattern>`     | Target specific workspace package(s) |
-| `-w, --workspace-root` | `-w`                   | `-W`                   | N/A                                         | `--include-workspace-root`  | Install in root only                 |
+| Vite+ Flag             | pnpm                   | yarn@1                 | yarn@2+                                     | npm                         | bun                      | Description                          |
+| ---------------------- | ---------------------- | ---------------------- | ------------------------------------------- | --------------------------- | ------------------------ | ------------------------------------ |
+| `vp install`           | `pnpm install`         | `yarn install`         | `yarn install`                              | `npm install`               | `bun install`            | Install all dependencies             |
+| `--prod, -P`           | `--prod`               | `--production`         | N/A (use `.yarnrc.yml`)                     | `--omit=dev`                | `--production`           | Skip devDependencies                 |
+| `--dev, -D`            | `--dev`                | N/A                    | N/A                                         | `--include=dev --omit=prod` | N/A                      | Only devDependencies                 |
+| `--no-optional`        | `--no-optional`        | `--ignore-optional`    | N/A                                         | `--omit=optional`           | `--omit optional`        | Skip optionalDependencies            |
+| `--frozen-lockfile`    | `--frozen-lockfile`    | `--frozen-lockfile`    | `--immutable`                               | `ci` (use `npm ci`)         | `--frozen-lockfile`      | Fail if lockfile outdated            |
+| `--no-frozen-lockfile` | `--no-frozen-lockfile` | `--no-frozen-lockfile` | `--no-immutable`                            | `install` (not `ci`)        | `--no-frozen-lockfile`   | Allow lockfile updates               |
+| `--lockfile-only`      | `--lockfile-only`      | N/A                    | `--mode update-lockfile`                    | `--package-lock-only`       | `--lockfile-only`        | Only update lockfile                 |
+| `--prefer-offline`     | `--prefer-offline`     | `--prefer-offline`     | N/A                                         | `--prefer-offline`          | N/A                      | Prefer cached packages               |
+| `--offline`            | `--offline`            | `--offline`            | N/A                                         | `--offline`                 | N/A                      | Only use cache                       |
+| `--force, -f`          | `--force`              | `--force`              | N/A                                         | `--force`                   | `--force`                | Force reinstall                      |
+| `--ignore-scripts`     | `--ignore-scripts`     | `--ignore-scripts`     | `--mode skip-build`                         | `--ignore-scripts`          | `--ignore-scripts`       | Skip lifecycle scripts               |
+| `--no-lockfile`        | `--no-lockfile`        | `--no-lockfile`        | N/A                                         | `--no-package-lock`         | N/A                      | Skip lockfile                        |
+| `--fix-lockfile`       | `--fix-lockfile`       | N/A                    | `--refresh-lockfile`                        | N/A                         | N/A                      | Fix broken lockfile entries          |
+| `--shamefully-hoist`   | `--shamefully-hoist`   | N/A                    | N/A                                         | N/A                         | N/A (hoisted by default) | Flat node_modules (pnpm)             |
+| `--resolution-only`    | `--resolution-only`    | N/A                    | N/A                                         | N/A                         | N/A                      | Re-run resolution only (pnpm)        |
+| `--silent`             | `--silent`             | `--silent`             | N/A (use env var)                           | `--loglevel silent`         | `--silent`               | Suppress output                      |
+| `--filter <pattern>`   | `--filter <pattern>`   | N/A                    | `workspaces foreach -A --include <pattern>` | `--workspace <pattern>`     | `--filter <pattern>`     | Target specific workspace package(s) |
+| `-w, --workspace-root` | `-w`                   | `-W`                   | N/A                                         | `--include-workspace-root`  | N/A                      | Install in root only                 |
 
 **Notes:**
 
@@ -151,6 +153,7 @@ vp install --filter app              # Install for specific package
 - `--fix-lockfile`: Automatically fixes broken lockfile entries (pnpm and yarn@2+ only, npm does not support)
 - `--resolution-only`: Re-runs dependency resolution without installing packages. Useful for peer dependency analysis (pnpm only)
 - `--shamefully-hoist`: pnpm-specific, creates flat node_modules like npm/yarn
+- `--ignore-scripts`: For bun, use `--ignore-scripts` to skip lifecycle scripts.
 - `--silent`: Suppresses output. For yarn@2+, use `YARN_ENABLE_PROGRESS=false` environment variable instead. For npm, maps to `--loglevel silent`
 
 **Add Package Mode:**
@@ -801,6 +804,7 @@ VITE_PM=pnpm vp install
 - yarn@4.x
 - npm@10.x
 - npm@11.x
+- bun@1.x
 
 ### Unit Tests
 
@@ -1002,25 +1006,25 @@ This is a new feature with no breaking changes:
 
 ## Package Manager Compatibility Matrix
 
-| Feature                | pnpm | yarn@1 | yarn@2+                 | npm             | Notes                     |
-| ---------------------- | ---- | ------ | ----------------------- | --------------- | ------------------------- |
-| Basic install          | ✅   | ✅     | ✅                      | ✅              | All supported             |
-| `--prod`               | ✅   | ✅     | ⚠️                      | ✅              | yarn@2+ needs .yarnrc.yml |
-| `--dev`                | ✅   | ❌     | ❌                      | ✅              | Limited support           |
-| `--no-optional`        | ✅   | ✅     | ⚠️                      | ✅              | yarn@2+ needs .yarnrc.yml |
-| `--frozen-lockfile`    | ✅   | ✅     | ✅ `--immutable`        | ✅ `ci`         | npm uses `npm ci`         |
-| `--no-frozen-lockfile` | ✅   | ✅     | ✅ `--no-immutable`     | ✅ `install`    | Pass through to PM        |
-| `--lockfile-only`      | ✅   | ❌     | ✅                      | ✅              | yarn@1 not supported      |
-| `--prefer-offline`     | ✅   | ✅     | ❌                      | ✅              | yarn@2+ not supported     |
-| `--offline`            | ✅   | ✅     | ❌                      | ✅              | yarn@2+ not supported     |
-| `--force`              | ✅   | ✅     | ❌                      | ✅              | yarn@2+ not supported     |
-| `--ignore-scripts`     | ✅   | ✅     | ✅ `--mode skip-build`  | ✅              | All supported             |
-| `--no-lockfile`        | ✅   | ✅     | ❌                      | ✅              | yarn@2+ not supported     |
-| `--fix-lockfile`       | ✅   | ❌     | ✅ `--refresh-lockfile` | ❌              | pnpm and yarn@2+ only     |
-| `--shamefully-hoist`   | ✅   | ❌     | ❌                      | ❌              | pnpm only                 |
-| `--resolution-only`    | ✅   | ❌     | ❌                      | ❌              | pnpm only                 |
-| `--silent`             | ✅   | ✅     | ⚠️ (use env var)        | ✅ `--loglevel` | yarn@2+ use env var       |
-| `--filter`             | ✅   | ❌     | ✅ `workspaces foreach` | ✅              | yarn@1 not supported      |
+| Feature                | pnpm | yarn@1 | yarn@2+                 | npm             | bun                     | Notes                      |
+| ---------------------- | ---- | ------ | ----------------------- | --------------- | ----------------------- | -------------------------- |
+| Basic install          | ✅   | ✅     | ✅                      | ✅              | ✅                      | All supported              |
+| `--prod`               | ✅   | ✅     | ⚠️                      | ✅              | ✅                      | yarn@2+ needs .yarnrc.yml  |
+| `--dev`                | ✅   | ❌     | ❌                      | ✅              | ❌                      | Limited support            |
+| `--no-optional`        | ✅   | ✅     | ⚠️                      | ✅              | ✅                      | yarn@2+ needs .yarnrc.yml  |
+| `--frozen-lockfile`    | ✅   | ✅     | ✅ `--immutable`        | ✅ `ci`         | ✅                      | npm uses `npm ci`          |
+| `--no-frozen-lockfile` | ✅   | ✅     | ✅ `--no-immutable`     | ✅ `install`    | ✅                      | Pass through to PM         |
+| `--lockfile-only`      | ✅   | ❌     | ✅                      | ✅              | ✅                      | yarn@1 not supported       |
+| `--prefer-offline`     | ✅   | ✅     | ❌                      | ✅              | ❌                      | yarn@2+, bun not supported |
+| `--offline`            | ✅   | ✅     | ❌                      | ✅              | ❌                      | yarn@2+, bun not supported |
+| `--force`              | ✅   | ✅     | ❌                      | ✅              | ✅                      | yarn@2+ not supported      |
+| `--ignore-scripts`     | ✅   | ✅     | ✅ `--mode skip-build`  | ✅              | ✅                      |                            |
+| `--no-lockfile`        | ✅   | ✅     | ❌                      | ✅              | ❌                      | yarn@2+, bun not supported |
+| `--fix-lockfile`       | ✅   | ❌     | ✅ `--refresh-lockfile` | ❌              | ❌                      | pnpm and yarn@2+ only      |
+| `--shamefully-hoist`   | ✅   | ❌     | ❌                      | ❌              | ❌ (hoisted by default) | pnpm only                  |
+| `--resolution-only`    | ✅   | ❌     | ❌                      | ❌              | ❌                      | pnpm only                  |
+| `--silent`             | ✅   | ✅     | ⚠️ (use env var)        | ✅ `--loglevel` | ✅                      | yarn@2+ use env var        |
+| `--filter`             | ✅   | ❌     | ✅ `workspaces foreach` | ✅              | ✅                      | yarn@1 not supported       |
 
 ## Future Enhancements
 
@@ -1139,7 +1143,7 @@ vp install --offline
 
 ## Conclusion
 
-This RFC proposes adding `vp install` command to provide a unified interface for installing dependencies across pnpm/yarn/npm. The design:
+This RFC proposes adding `vp install` command to provide a unified interface for installing dependencies across pnpm/yarn/npm/bun. The design:
 
 - ✅ Automatically adapts to detected package manager
 - ✅ Supports common installation flags

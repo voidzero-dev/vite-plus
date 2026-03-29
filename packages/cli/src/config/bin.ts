@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import mri from 'mri';
 
 import { vitePlusHeader } from '../../binding/index.js';
-import { ensurePreCommitHook } from '../migration/migrator.js';
+import { ensurePreCommitHook, hasStagedConfigInViteConfig } from '../migration/migrator.js';
 import { updateExistingAgentInstructions } from '../utils/agent.js';
 import { renderCliDoc } from '../utils/help.js';
 import { defaultInteractive, promptGitHooks } from '../utils/prompts.js';
@@ -54,7 +54,8 @@ async function main() {
   const dir = args['hooks-dir'] as string | undefined;
   const hooksOnly = args['hooks-only'] as boolean;
   const interactive = defaultInteractive();
-  const isPrepareScript = process.env.npm_lifecycle_event === 'prepare';
+  const lifecycleEvent = process.env.npm_lifecycle_event;
+  const isLifecycleScript = lifecycleEvent === 'prepare' || lifecycleEvent === 'postinstall';
   const root = process.cwd();
 
   // --- Step 1: Hooks setup ---
@@ -62,9 +63,16 @@ async function main() {
   const isFirstHooksRun = !existsSync(join(root, hooksDir, '_', 'pre-commit'));
 
   let shouldSetupHooks = true;
-  if (interactive && isFirstHooksRun && !dir && !isPrepareScript) {
+  if (
+    interactive &&
+    isFirstHooksRun &&
+    !dir &&
+    !isLifecycleScript &&
+    !hasStagedConfigInViteConfig(root)
+  ) {
     // --hooks-dir implies agreement; only prompt when using default dir on first run
-    // prepare script implies the project opted into hooks — install automatically
+    // lifecycle script (prepare/postinstall) implies the project opted into hooks — install automatically
+    // existing staged config in vite.config.ts implies the project already opted in
     shouldSetupHooks = await promptGitHooks({ interactive });
   }
 

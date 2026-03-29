@@ -3,6 +3,7 @@ use std::{collections::HashMap, process::ExitStatus};
 use vite_command::run_command;
 use vite_error::Error;
 use vite_path::AbsolutePath;
+use vite_shared::output;
 
 use crate::package_manager::{
     PackageManager, PackageManagerType, ResolveCommandResult, format_path_env,
@@ -63,6 +64,11 @@ impl PackageManager {
                     args.push("npm".into());
                     args.push("tag".into());
                 }
+            }
+            PackageManagerType::Bun => {
+                output::warn("bun does not support dist-tag, falling back to npm dist-tag");
+                bin_name = "npm".into();
+                args.push("dist-tag".into());
             }
         }
 

@@ -1,0 +1,6 @@
+{
+  "name": "migration-nvmrc-lts",
+  "devDependencies": {
+    "vite": "^7.0.0"
+  }
+}

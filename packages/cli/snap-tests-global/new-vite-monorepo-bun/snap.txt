@@ -1,0 +1,73 @@
+> vp create vite:monorepo --no-interactive --package-manager bun # create monorepo with bun
+> ls vite-plus-monorepo | LC_ALL=C sort # check files created
+AGENTS.md
+README.md
+apps
+package.json
+packages
+tsconfig.json
+vite.config.ts
+
+> cat vite-plus-monorepo/package.json # check package.json with catalog
+{
+  "name": "vite-plus-monorepo",
+  "version": "0.0.0",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*",
+    "tools/*"
+  ],
+  "type": "module",
+  "scripts": {
+    "ready": "vp fmt && vp lint && vp run -r test && vp run -r build",
+    "dev": "vp run website#dev",
+    "prepare": "vp config"
+  },
+  "devDependencies": {
+    "vite-plus": "catalog:"
+  },
+  "overrides": {
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "packageManager": "bun@<semver>",
+  "catalog": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vitest": "npm:@voidzero-dev/vite-plus-test@latest",
+    "vite-plus": "latest"
+  }
+}
+
+> test ! -f vite-plus-monorepo/pnpm-workspace.yaml && echo 'No pnpm-workspace.yaml' || echo 'ERROR: pnpm-workspace.yaml exists' # verify no pnpm config
+No pnpm-workspace.yaml
+
+> test ! -f vite-plus-monorepo/.yarnrc.yml && echo 'No .yarnrc.yml' || echo 'ERROR: .yarnrc.yml exists' # verify no yarn config
+No .yarnrc.yml
+
+> test -d vite-plus-monorepo/.git && echo 'Git initialized' || echo 'No git' # check git init
+Git initialized
+
+> ls vite-plus-monorepo/apps # check apps directory
+website
+
+> cat vite-plus-monorepo/apps/website/package.json # check website uses catalog:
+{
+  "name": "website",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vp dev",
+    "build": "tsc && vp build",
+    "preview": "vp preview"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.3",
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}

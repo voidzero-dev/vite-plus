@@ -31,6 +31,7 @@ impl PackageManager {
             PackageManagerType::Pnpm => "pnpm",
             PackageManagerType::Npm => "npm",
             PackageManagerType::Yarn => "yarn",
+            PackageManagerType::Bun => "bun",
         };
 
         ResolveCommandResult { bin_path: bin_path.to_string(), args: cmd_args, envs }

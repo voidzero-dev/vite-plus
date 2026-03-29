@@ -1,0 +1,5 @@
+> vp info vite@2.0.0 version # should work without package.json
+2.0.0
+
+> vp pm view vite@2.0.0 version # should work without package.json
+2.0.0

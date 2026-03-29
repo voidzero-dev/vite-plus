@@ -1,0 +1,8 @@
+{
+  "commands": [
+    "vp fmt 2>&1 # should show 'vp fmt --init' instead of 'oxfmt --init'",
+    "vp fmt --init",
+    "cat vite.config.ts # should have fmt config",
+    "vp fmt 2>&1 # should no longer show 'No config found' message"
+  ]
+}

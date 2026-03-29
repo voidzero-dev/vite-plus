@@ -1,0 +1,8 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "commands": [
+    "vp update --help # should show help",
+    "vp update testnpm2 && cat package.json # should update package within semver range",
+    "vp up testnpm2 --latest && cat package.json # should update to absolute latest version"
+  ]
+}

@@ -27,7 +27,7 @@ const RECURSION_ENV_VAR: &str = env_vars::VITE_PLUS_TOOL_RECURSION;
 
 /// Package manager tools that should resolve Node.js version from the project context
 /// rather than using the install-time version.
-const PACKAGE_MANAGER_TOOLS: &[&str] = &["pnpm", "yarn"];
+const PACKAGE_MANAGER_TOOLS: &[&str] = &["pnpm", "yarn", "bun"];
 
 fn is_package_manager_tool(tool: &str) -> bool {
     PACKAGE_MANAGER_TOOLS.contains(&tool)

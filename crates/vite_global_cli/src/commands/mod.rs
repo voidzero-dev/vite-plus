@@ -25,7 +25,7 @@
 
 use std::{collections::HashMap, io::BufReader};
 
-use vite_install::package_manager::PackageManager;
+use vite_install::package_manager::{PackageManager, PackageManagerType};
 use vite_path::AbsolutePath;
 use vite_shared::{PrependOptions, prepend_to_path_env};
 
@@ -115,6 +115,37 @@ pub async fn build_package_manager(cwd: &AbsolutePath) -> Result<PackageManager,
             Err(Error::UserMessage("No package.json found.".into()))
         }
         Err(e) => Err(e.into()),
+    }
+}
+
+/// Build a PackageManager, falling back to a default npm instance when no
+/// package.json is found. Uses `build()` instead of `build_with_default()`
+/// to skip the interactive package manager selection prompt on the fallback path.
+///
+/// Requires `prepend_js_runtime_to_path_env` to be called first so npm is on PATH.
+pub async fn build_package_manager_or_npm_default(
+    cwd: &AbsolutePath,
+) -> Result<PackageManager, Error> {
+    match PackageManager::builder(cwd).build().await {
+        Ok(pm) => Ok(pm),
+        Err(vite_error::Error::WorkspaceError(vite_workspace::Error::PackageJsonNotFound(_)))
+        | Err(vite_error::Error::UnrecognizedPackageManager) => {
+            Ok(default_npm_package_manager(cwd))
+        }
+        Err(e) => Err(e.into()),
+    }
+}
+
+fn default_npm_package_manager(cwd: &AbsolutePath) -> PackageManager {
+    PackageManager {
+        client: PackageManagerType::Npm,
+        package_name: "npm".into(),
+        version: "latest".into(),
+        hash: None,
+        bin_name: "npm".into(),
+        workspace_root: cwd.to_absolute_path_buf(),
+        is_monorepo: false,
+        install_dir: cwd.to_absolute_path_buf(),
     }
 }
 

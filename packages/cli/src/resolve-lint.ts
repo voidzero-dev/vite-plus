@@ -42,18 +42,16 @@ export async function lint(): Promise<{
   const binPath = join(oxlintPackageRoot, 'bin', 'oxlint');
   let oxlintTsgolintPath = resolve('oxlint-tsgolint/bin/tsgolint');
   if (process.platform === 'win32') {
-    // If on Windows, resolve the tsgolint binary from the local node_modules
-    oxlintTsgolintPath = join(
-      dirname(fileURLToPath(import.meta.url)),
-      '..',
-      'node_modules',
-      '.bin',
-      'tsgolint.cmd',
-    );
-    if (!existsSync(oxlintTsgolintPath)) {
-      // Fallback to the cwd node_modules
-      oxlintTsgolintPath = join(process.cwd(), 'node_modules', '.bin', 'tsgolint.cmd');
-    }
+    // On Windows, try .exe first (bun creates .exe), then .cmd (npm/pnpm/yarn create .cmd)
+    const localBinDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'node_modules', '.bin');
+    const cwdBinDir = join(process.cwd(), 'node_modules', '.bin');
+    oxlintTsgolintPath =
+      [
+        join(localBinDir, 'tsgolint.exe'),
+        join(localBinDir, 'tsgolint.cmd'),
+        join(cwdBinDir, 'tsgolint.exe'),
+        join(cwdBinDir, 'tsgolint.cmd'),
+      ].find((p) => existsSync(p)) ?? join(cwdBinDir, 'tsgolint.cmd');
     const relativePath = relative(process.cwd(), oxlintTsgolintPath);
     // Only prepend .\ if it's actually a relative path (not an absolute path returned by relative())
     oxlintTsgolintPath = /^[a-zA-Z]:/.test(relativePath) ? relativePath : `.\\${relativePath}`;

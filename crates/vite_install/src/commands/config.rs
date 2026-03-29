@@ -127,6 +127,32 @@ impl PackageManager {
                     }
                 }
             }
+            PackageManagerType::Bun => {
+                output::warn(
+                    "bun uses bunfig.toml for configuration, not a config command. Falling back to npm config.",
+                );
+
+                // Fall back to npm config
+                args.push("config".into());
+                args.push(options.subcommand.to_string());
+
+                if let Some(key) = options.key {
+                    args.push(key.to_string());
+                }
+
+                if let Some(value) = options.value {
+                    args.push(value.to_string());
+                }
+
+                if options.json {
+                    args.push("--json".into());
+                }
+
+                if let Some(location) = options.location {
+                    args.push("--location".into());
+                    args.push(location.to_string());
+                }
+            }
         }
 
         // Add pass-through args

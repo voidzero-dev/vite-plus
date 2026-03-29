@@ -219,6 +219,53 @@ impl PackageManager {
                     bin_name = "npm".into();
                     Self::format_npm_outdated_args(&mut args, options);
                 }
+                PackageManagerType::Bun => {
+                    bin_name = "bun".into();
+                    args.push("outdated".into());
+
+                    if let Some(filters) = options.filters {
+                        for filter in filters {
+                            args.push("--filter".into());
+                            args.push(filter.clone());
+                        }
+                    }
+
+                    if options.recursive {
+                        args.push("--recursive".into());
+                    }
+
+                    // Add packages
+                    args.extend_from_slice(options.packages);
+
+                    if let Some(format) = options.format {
+                        if format == Format::Json {
+                            output::warn("bun outdated does not support --format json");
+                        }
+                    }
+
+                    if options.long {
+                        output::warn("bun outdated does not support --long");
+                    }
+                    if options.workspace_root {
+                        output::warn("bun outdated does not support --workspace-root");
+                    }
+                    if options.prod {
+                        args.push("--production".into());
+                    }
+                    if options.dev {
+                        output::warn("bun outdated does not support --dev");
+                    }
+                    if options.no_optional {
+                        args.push("--omit".into());
+                        args.push("optional".into());
+                    }
+                    if options.compatible {
+                        output::warn("bun outdated does not support --compatible");
+                    }
+                    if options.sort_by.is_some() {
+                        output::warn("bun outdated does not support --sort-by");
+                    }
+                }
             }
         }
 
