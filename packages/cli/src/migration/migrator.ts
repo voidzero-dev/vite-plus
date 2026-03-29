@@ -720,6 +720,7 @@ export function rewriteStandaloneProject(
         overrides: {
           ...pkg.pnpm?.overrides,
           ...VITE_PLUS_OVERRIDE_PACKAGES,
+          ...(isForceOverrideMode() ? { [VITE_PLUS_NAME]: VITE_PLUS_VERSION } : {}),
         },
       };
       // remove packages from `resolutions` field if they exist
@@ -734,7 +735,7 @@ export function rewriteStandaloneProject(
     extractedStagedConfig = rewritePackageJson(pkg, packageManager, false, skipStagedMigration);
 
     // ensure vite-plus is in devDependencies
-    if (!pkg.devDependencies?.[VITE_PLUS_NAME]) {
+    if (!pkg.devDependencies?.[VITE_PLUS_NAME] || isForceOverrideMode()) {
       pkg.devDependencies = {
         ...pkg.devDependencies,
         [VITE_PLUS_NAME]: VITE_PLUS_VERSION,
