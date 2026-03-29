@@ -23,7 +23,7 @@ use crate::commands::env::{
 ///
 /// When set, the shim will skip version resolution and execute the tool
 /// directly using the current PATH (passthrough mode).
-const RECURSION_ENV_VAR: &str = env_vars::VITE_PLUS_TOOL_RECURSION;
+const RECURSION_ENV_VAR: &str = env_vars::VP_TOOL_RECURSION;
 
 /// Package manager tools that should resolve Node.js version from the project context
 /// rather than using the install-time version.
@@ -682,7 +682,7 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
     }
 
     // Check bypass mode (explicit environment variable)
-    if std::env::var(env_vars::VITE_PLUS_BYPASS).is_ok() {
+    if std::env::var(env_vars::VP_BYPASS).is_ok() {
         tracing::debug!("bypass mode enabled");
         return bypass_to_system(tool, args);
     }
@@ -693,11 +693,11 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
         tracing::debug!("system-first mode enabled");
         // In system-first mode, try to find system tool first
         if let Some(system_path) = find_system_tool(tool) {
-            // Append current bin_dir to VITE_PLUS_BYPASS to prevent infinite loops
+            // Append current bin_dir to VP_BYPASS to prevent infinite loops
             // when multiple vite-plus installations exist in PATH.
             // The next installation will filter all accumulated paths.
             if let Ok(bin_dir) = config::get_bin_dir() {
-                let bypass_val = match std::env::var_os(env_vars::VITE_PLUS_BYPASS) {
+                let bypass_val = match std::env::var_os(env_vars::VP_BYPASS) {
                     Some(existing) => {
                         let mut paths: Vec<_> = std::env::split_paths(&existing).collect();
                         paths.push(bin_dir.as_path().to_path_buf());
@@ -707,7 +707,7 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
                 };
                 // SAFETY: Setting env vars before exec (which replaces the process) is safe
                 unsafe {
-                    std::env::set_var(env_vars::VITE_PLUS_BYPASS, bypass_val);
+                    std::env::set_var(env_vars::VP_BYPASS, bypass_val);
                 }
             }
             return exec::exec_tool(&system_path, args);
@@ -765,11 +765,11 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
     prepend_to_path_env(node_bin_dir, PrependOptions::default());
 
     // Optional debug env vars
-    if std::env::var(env_vars::VITE_PLUS_DEBUG_SHIM).is_ok() {
+    if std::env::var(env_vars::VP_DEBUG_SHIM).is_ok() {
         // SAFETY: Setting env vars at this point before exec is safe
         unsafe {
-            std::env::set_var(env_vars::VITE_PLUS_ACTIVE_NODE, &resolution.version);
-            std::env::set_var(env_vars::VITE_PLUS_RESOLVE_SOURCE, &resolution.source);
+            std::env::set_var(env_vars::VP_ACTIVE_NODE, &resolution.version);
+            std::env::set_var(env_vars::VP_RESOLVE_SOURCE, &resolution.source);
         }
     }
 
@@ -785,7 +785,7 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
         if let Some(parsed) = parse_npm_global_install(args) {
             let exit_code = exec::spawn_tool(&tool_path, args);
             if exit_code == 0 {
-                if let Ok(home_dir) = vite_shared::get_vite_plus_home() {
+                if let Ok(home_dir) = vite_shared::get_vp_home() {
                     let node_dir =
                         home_dir.join("js_runtime").join("node").join(&*resolution.version);
                     let npm_prefix = resolve_npm_prefix(&parsed, &tool_path, &node_dir);
@@ -803,7 +803,7 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
 
         if let Some(parsed) = parse_npm_global_uninstall(args) {
             // Collect bin names before uninstall (package.json will be gone after)
-            let context = if let Ok(home_dir) = vite_shared::get_vite_plus_home() {
+            let context = if let Ok(home_dir) = vite_shared::get_vp_home() {
                 let node_dir = home_dir.join("js_runtime").join("node").join(&*resolution.version);
                 let npm_prefix = resolve_npm_prefix(&parsed, &tool_path, &node_dir);
                 let bins = collect_bin_names_from_npm(&parsed.packages, &npm_prefix, &node_dir);
@@ -986,7 +986,7 @@ fn bypass_to_system(tool: &str, args: &[String]) -> i32 {
     match find_system_tool(tool) {
         Some(system_path) => exec::exec_tool(&system_path, args),
         None => {
-            eprintln!("vp: VITE_PLUS_BYPASS is set but no system '{tool}' found in PATH");
+            eprintln!("vp: VP_BYPASS is set but no system '{tool}' found in PATH");
             1
         }
     }
@@ -994,7 +994,7 @@ fn bypass_to_system(tool: &str, args: &[String]) -> i32 {
 
 /// Passthrough mode for recursion prevention.
 ///
-/// When VITE_PLUS_TOOL_RECURSION is set, we skip version resolution
+/// When VP_TOOL_RECURSION is set, we skip version resolution
 /// and execute the tool directly using the current PATH.
 /// This prevents infinite loops when a managed tool invokes another shim.
 fn passthrough_to_system(tool: &str, args: &[String]) -> i32 {
@@ -1009,7 +1009,7 @@ fn passthrough_to_system(tool: &str, args: &[String]) -> i32 {
 
 /// Resolve version with caching.
 async fn resolve_with_cache(cwd: &AbsolutePathBuf) -> Result<ResolveCacheEntry, String> {
-    // Fast-path: VITE_PLUS_NODE_VERSION env var set by `vp env use`
+    // Fast-path: VP_NODE_VERSION env var set by `vp env use`
     // Skip all disk I/O for cache when session override is active
     if let Ok(env_version) = std::env::var(config::VERSION_ENV_VAR) {
         let env_version = env_version.trim().to_string();
@@ -1087,7 +1087,7 @@ async fn resolve_with_cache(cwd: &AbsolutePathBuf) -> Result<ResolveCacheEntry, 
 
 /// Ensure Node.js is installed.
 pub(crate) async fn ensure_installed(version: &str) -> Result<(), String> {
-    let home_dir = vite_shared::get_vite_plus_home()
+    let home_dir = vite_shared::get_vp_home()
         .map_err(|e| format!("Failed to get vite-plus home dir: {e}"))?
         .join("js_runtime")
         .join("node")
@@ -1112,7 +1112,7 @@ pub(crate) async fn ensure_installed(version: &str) -> Result<(), String> {
 
 /// Locate a tool binary within the Node.js installation.
 pub(crate) fn locate_tool(version: &str, tool: &str) -> Result<AbsolutePathBuf, String> {
-    let home_dir = vite_shared::get_vite_plus_home()
+    let home_dir = vite_shared::get_vp_home()
         .map_err(|e| format!("Failed to get vite-plus home dir: {e}"))?
         .join("js_runtime")
         .join("node")
@@ -1144,7 +1144,7 @@ async fn load_shim_mode() -> ShimMode {
 }
 
 /// Find a system tool in PATH, skipping the vite-plus bin directory and any
-/// directories listed in `VITE_PLUS_BYPASS`.
+/// directories listed in `VP_BYPASS`.
 ///
 /// Returns the absolute path to the tool if found, None otherwise.
 fn find_system_tool(tool: &str) -> Option<AbsolutePathBuf> {
@@ -1152,9 +1152,9 @@ fn find_system_tool(tool: &str) -> Option<AbsolutePathBuf> {
     let path_var = std::env::var_os("PATH")?;
     tracing::debug!("path_var: {:?}", path_var);
 
-    // Parse VITE_PLUS_BYPASS as a PATH-style list of additional directories to skip.
+    // Parse VP_BYPASS as a PATH-style list of additional directories to skip.
     // This prevents infinite loops when multiple vite-plus installations exist in PATH.
-    let bypass_paths: Vec<std::path::PathBuf> = std::env::var_os(env_vars::VITE_PLUS_BYPASS)
+    let bypass_paths: Vec<std::path::PathBuf> = std::env::var_os(env_vars::VP_BYPASS)
         .map(|v| std::env::split_paths(&v).collect())
         .unwrap_or_default();
     tracing::debug!("bypass_paths: {:?}", bypass_paths);
@@ -1202,7 +1202,7 @@ mod tests {
         path
     }
 
-    /// Helper to save and restore PATH and VITE_PLUS_BYPASS around a test.
+    /// Helper to save and restore PATH and VP_BYPASS around a test.
     struct EnvGuard {
         original_path: Option<std::ffi::OsString>,
         original_bypass: Option<std::ffi::OsString>,
@@ -1212,7 +1212,7 @@ mod tests {
         fn new() -> Self {
             Self {
                 original_path: std::env::var_os("PATH"),
-                original_bypass: std::env::var_os(env_vars::VITE_PLUS_BYPASS),
+                original_bypass: std::env::var_os(env_vars::VP_BYPASS),
             }
         }
     }
@@ -1225,8 +1225,8 @@ mod tests {
                     None => std::env::remove_var("PATH"),
                 }
                 match &self.original_bypass {
-                    Some(v) => std::env::set_var(env_vars::VITE_PLUS_BYPASS, v),
-                    None => std::env::remove_var(env_vars::VITE_PLUS_BYPASS),
+                    Some(v) => std::env::set_var(env_vars::VP_BYPASS, v),
+                    None => std::env::remove_var(env_vars::VP_BYPASS),
                 }
             }
         }
@@ -1244,7 +1244,7 @@ mod tests {
         // SAFETY: This test runs in isolation with serial_test
         unsafe {
             std::env::set_var("PATH", &dir);
-            std::env::remove_var(env_vars::VITE_PLUS_BYPASS);
+            std::env::remove_var(env_vars::VP_BYPASS);
         }
 
         let result = find_system_tool("mytesttool");
@@ -1269,7 +1269,7 @@ mod tests {
         unsafe {
             std::env::set_var("PATH", &path);
             // Bypass dir_a — should skip it and find dir_b's tool
-            std::env::set_var(env_vars::VITE_PLUS_BYPASS, dir_a.as_os_str());
+            std::env::set_var(env_vars::VP_BYPASS, dir_a.as_os_str());
         }
 
         let result = find_system_tool("mytesttool");
@@ -1302,7 +1302,7 @@ mod tests {
         // SAFETY: This test runs in isolation with serial_test
         unsafe {
             std::env::set_var("PATH", &path);
-            std::env::set_var(env_vars::VITE_PLUS_BYPASS, &bypass);
+            std::env::set_var(env_vars::VP_BYPASS, &bypass);
         }
 
         let result = find_system_tool("mytesttool");
@@ -1325,15 +1325,15 @@ mod tests {
         // SAFETY: This test runs in isolation with serial_test
         unsafe {
             std::env::set_var("PATH", dir_a.as_os_str());
-            std::env::set_var(env_vars::VITE_PLUS_BYPASS, dir_a.as_os_str());
+            std::env::set_var(env_vars::VP_BYPASS, dir_a.as_os_str());
         }
 
         let result = find_system_tool("mytesttool");
         assert!(result.is_none(), "Should return None when all paths are bypassed");
     }
 
-    /// Simulates the SystemFirst loop prevention: Installation A sets VITE_PLUS_BYPASS
-    /// with its own bin dir, then Installation B (seeing VITE_PLUS_BYPASS) should filter
+    /// Simulates the SystemFirst loop prevention: Installation A sets VP_BYPASS
+    /// with its own bin dir, then Installation B (seeing VP_BYPASS) should filter
     /// both A's dir (from bypass) and its own dir (from get_bin_dir), finding the real tool
     /// in a third directory or returning None.
     #[test]
@@ -1359,7 +1359,7 @@ mod tests {
         ])
         .unwrap();
 
-        // Simulate: Installation A already set VITE_PLUS_BYPASS=<install_a_bin>
+        // Simulate: Installation A already set VP_BYPASS=<install_a_bin>
         // Installation B also needs to filter install_b_bin (via get_bin_dir),
         // but get_bin_dir returns the real vite-plus home. So we test by putting
         // install_b_bin in the bypass as well (simulating cumulative append).
@@ -1369,7 +1369,7 @@ mod tests {
         // SAFETY: This test runs in isolation with serial_test
         unsafe {
             std::env::set_var("PATH", &path);
-            std::env::set_var(env_vars::VITE_PLUS_BYPASS, &bypass);
+            std::env::set_var(env_vars::VP_BYPASS, &bypass);
         }
 
         let result = find_system_tool("mytesttool");
@@ -1401,7 +1401,7 @@ mod tests {
         // SAFETY: This test runs in isolation with serial_test
         unsafe {
             std::env::set_var("PATH", &path);
-            std::env::set_var(env_vars::VITE_PLUS_BYPASS, &bypass);
+            std::env::set_var(env_vars::VP_BYPASS, &bypass);
         }
 
         let result = find_system_tool("mytesttool");

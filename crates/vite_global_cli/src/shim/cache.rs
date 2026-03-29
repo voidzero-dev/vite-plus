@@ -39,7 +39,7 @@ pub struct ResolveCacheEntry {
     pub is_range: bool,
 }
 
-/// Resolution cache stored in VITE_PLUS_HOME/cache/resolve_cache.json.
+/// Resolution cache stored in VP_HOME/cache/resolve_cache.json.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ResolveCache {
     /// Cache format version for upgrade compatibility
@@ -184,7 +184,7 @@ impl ResolveCache {
 
 /// Get the cache file path.
 pub fn get_cache_path() -> Option<AbsolutePathBuf> {
-    let home = crate::commands::env::config::get_vite_plus_home().ok()?;
+    let home = crate::commands::env::config::get_vp_home().ok()?;
     Some(home.join("cache").join("resolve_cache.json"))
 }
 
@@ -344,14 +344,14 @@ mod tests {
         assert_eq!(cached_entry.unwrap().version, "20.20.0");
     }
 
-    // Run serially: mutates VITE_PLUS_HOME env var which affects get_cache_path()
+    // Run serially: mutates VP_HOME env var which affects get_cache_path()
     #[test]
     #[serial_test::serial]
     fn test_invalidate_cache_removes_file() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
 
-        // Set VITE_PLUS_HOME to temp dir so invalidate_cache() targets our test file
+        // Set VP_HOME to temp dir so invalidate_cache() targets our test file
         let cache_dir = temp_path.join("cache");
         std::fs::create_dir_all(&cache_dir).unwrap();
         let cache_file = cache_dir.join("resolve_cache.json");
@@ -373,13 +373,13 @@ mod tests {
         cache.save(&cache_file);
         assert!(std::fs::metadata(cache_file.as_path()).is_ok(), "Cache file should exist");
 
-        // Point VITE_PLUS_HOME to our temp dir and call invalidate_cache
+        // Point VP_HOME to our temp dir and call invalidate_cache
         unsafe {
-            std::env::set_var(vite_shared::env_vars::VITE_PLUS_HOME, temp_path.as_path());
+            std::env::set_var(vite_shared::env_vars::VP_HOME, temp_path.as_path());
         }
         invalidate_cache();
         unsafe {
-            std::env::remove_var(vite_shared::env_vars::VITE_PLUS_HOME);
+            std::env::remove_var(vite_shared::env_vars::VP_HOME);
         }
 
         // Cache file should be removed

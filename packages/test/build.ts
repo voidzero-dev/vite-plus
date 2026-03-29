@@ -521,11 +521,11 @@ async function brandVitest() {
     // 1. CLI name: cac("vitest") → cac("vp test")
     patchString('cac name', 'cac("vitest")', 'cac("vp test")');
 
-    // 2. Version: var version = "<semver>" → use VITE_PLUS_VERSION env var with fallback
+    // 2. Version: var version = "<semver>" → use VP_VERSION env var with fallback
     patchString(
       'version',
       /var version = "(\d+\.\d+\.\d+[^"]*)"/,
-      'var version = process.env.VITE_PLUS_VERSION || "$1"',
+      'var version = process.env.VP_VERSION || "$1"',
     );
 
     // 3. Banner regex: /^vitest\/\d+\.\d+\.\d+$/ → /^vp test\/[\d.]+$/

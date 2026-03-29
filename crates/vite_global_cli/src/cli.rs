@@ -751,7 +751,7 @@ pub enum EnvSubcommands {
     /// Enable system-first mode - shims prefer system Node.js, fallback to managed
     Off,
 
-    /// Create or update shims in VITE_PLUS_HOME/bin
+    /// Create or update shims in VP_HOME/bin
     Setup {
         /// Force refresh shims even if they exist
         #[arg(long)]

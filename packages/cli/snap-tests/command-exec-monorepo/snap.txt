@@ -1,143 +1,143 @@
-> vp exec -r -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # recursive exec with env var
-lib-c$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+> vp exec -r -- node -e "console.log(process.env.VP_PACKAGE_NAME)" # recursive exec with env var
+lib-c$ node -e console.log(process.env.VP_PACKAGE_NAME)
 lib-c
-app-a$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+app-a$ node -e console.log(process.env.VP_PACKAGE_NAME)
 app-a
-app-b$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+app-b$ node -e console.log(process.env.VP_PACKAGE_NAME)
 app-b
-exec-monorepo$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+exec-monorepo$ node -e console.log(process.env.VP_PACKAGE_NAME)
 exec-monorepo
 
-> vp exec --filter app-* -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # glob filter
-app-a$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+> vp exec --filter app-* -- node -e "console.log(process.env.VP_PACKAGE_NAME)" # glob filter
+app-a$ node -e console.log(process.env.VP_PACKAGE_NAME)
 app-a
-app-b$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+app-b$ node -e console.log(process.env.VP_PACKAGE_NAME)
 app-b
 
 > vp exec --filter lib-c -- echo lib-only # exact name filter
 lib-only
 
-> vp exec --filter app-a... -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # filter with dependencies
-lib-c$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+> vp exec --filter app-a... -- node -e "console.log(process.env.VP_PACKAGE_NAME)" # filter with dependencies
+lib-c$ node -e console.log(process.env.VP_PACKAGE_NAME)
 lib-c
-app-a$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+app-a$ node -e console.log(process.env.VP_PACKAGE_NAME)
 app-a
 
-> vp exec --filter app-a^... -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # dependencies only, exclude self
+> vp exec --filter app-a^... -- node -e "console.log(process.env.VP_PACKAGE_NAME)" # dependencies only, exclude self
 lib-c
 
-> vp exec -r --parallel -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # parallel mode
-lib-c$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+> vp exec -r --parallel -- node -e "console.log(process.env.VP_PACKAGE_NAME)" # parallel mode
+lib-c$ node -e console.log(process.env.VP_PACKAGE_NAME)
 lib-c
-app-a$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+app-a$ node -e console.log(process.env.VP_PACKAGE_NAME)
 app-a
-app-b$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+app-b$ node -e console.log(process.env.VP_PACKAGE_NAME)
 app-b
-exec-monorepo$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+exec-monorepo$ node -e console.log(process.env.VP_PACKAGE_NAME)
 exec-monorepo
 
-> vp exec -r -c 'echo shell-$VITE_PLUS_PACKAGE_NAME' # recursive + shell mode
-lib-c$ echo shell-$VITE_PLUS_PACKAGE_NAME
+> vp exec -r -c 'echo shell-$VP_PACKAGE_NAME' # recursive + shell mode
+lib-c$ echo shell-$VP_PACKAGE_NAME
 shell-lib-c
-app-a$ echo shell-$VITE_PLUS_PACKAGE_NAME
+app-a$ echo shell-$VP_PACKAGE_NAME
 shell-app-a
-app-b$ echo shell-$VITE_PLUS_PACKAGE_NAME
+app-b$ echo shell-$VP_PACKAGE_NAME
 shell-app-b
-exec-monorepo$ echo shell-$VITE_PLUS_PACKAGE_NAME
+exec-monorepo$ echo shell-$VP_PACKAGE_NAME
 shell-exec-monorepo
 
-> vp exec --filter ./packages/app-a -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # path filter
+> vp exec --filter ./packages/app-a -- node -e "console.log(process.env.VP_PACKAGE_NAME)" # path filter
 app-a
 
-> vp exec --filter '{./packages/app-a}' -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # braced path filter
+> vp exec --filter '{./packages/app-a}' -- node -e "console.log(process.env.VP_PACKAGE_NAME)" # braced path filter
 app-a
 
-> vp exec --filter '{./packages/app-a}...' -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # braced path filter with deps
-lib-c$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+> vp exec --filter '{./packages/app-a}...' -- node -e "console.log(process.env.VP_PACKAGE_NAME)" # braced path filter with deps
+lib-c$ node -e console.log(process.env.VP_PACKAGE_NAME)
 lib-c
-app-a$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+app-a$ node -e console.log(process.env.VP_PACKAGE_NAME)
 app-a
 
-> vp exec -r --reverse -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # reverse order
-exec-monorepo$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+> vp exec -r --reverse -- node -e "console.log(process.env.VP_PACKAGE_NAME)" # reverse order
+exec-monorepo$ node -e console.log(process.env.VP_PACKAGE_NAME)
 exec-monorepo
-app-b$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+app-b$ node -e console.log(process.env.VP_PACKAGE_NAME)
 app-b
-app-a$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+app-a$ node -e console.log(process.env.VP_PACKAGE_NAME)
 app-a
-lib-c$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+lib-c$ node -e console.log(process.env.VP_PACKAGE_NAME)
 lib-c
 
-> vp exec -r --resume-from lib-c -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # resume from
-lib-c$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+> vp exec -r --resume-from lib-c -- node -e "console.log(process.env.VP_PACKAGE_NAME)" # resume from
+lib-c$ node -e console.log(process.env.VP_PACKAGE_NAME)
 lib-c
-app-a$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+app-a$ node -e console.log(process.env.VP_PACKAGE_NAME)
 app-a
-app-b$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+app-b$ node -e console.log(process.env.VP_PACKAGE_NAME)
 app-b
-exec-monorepo$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+exec-monorepo$ node -e console.log(process.env.VP_PACKAGE_NAME)
 exec-monorepo
 
-> vp exec --filter '!app-b' -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # exclusion-only filter
-lib-c$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+> vp exec --filter '!app-b' -- node -e "console.log(process.env.VP_PACKAGE_NAME)" # exclusion-only filter
+lib-c$ node -e console.log(process.env.VP_PACKAGE_NAME)
 lib-c
-app-a$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+app-a$ node -e console.log(process.env.VP_PACKAGE_NAME)
 app-a
-exec-monorepo$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+exec-monorepo$ node -e console.log(process.env.VP_PACKAGE_NAME)
 exec-monorepo
 
-> vp exec --filter '!app-a' --filter '!app-b' -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # multiple exclusion-only filters
-exec-monorepo$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+> vp exec --filter '!app-a' --filter '!app-b' -- node -e "console.log(process.env.VP_PACKAGE_NAME)" # multiple exclusion-only filters
+exec-monorepo$ node -e console.log(process.env.VP_PACKAGE_NAME)
 exec-monorepo
-lib-c$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+lib-c$ node -e console.log(process.env.VP_PACKAGE_NAME)
 lib-c
 
-> vp exec --filter app-a --filter lib-c -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # multiple inclusion filters (union)
-lib-c$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+> vp exec --filter app-a --filter lib-c -- node -e "console.log(process.env.VP_PACKAGE_NAME)" # multiple inclusion filters (union)
+lib-c$ node -e console.log(process.env.VP_PACKAGE_NAME)
 lib-c
-app-a$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+app-a$ node -e console.log(process.env.VP_PACKAGE_NAME)
 app-a
 
-> vp exec --filter 'app-*' --filter '!app-b' -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # mixed inclusion + exclusion filters
+> vp exec --filter 'app-*' --filter '!app-b' -- node -e "console.log(process.env.VP_PACKAGE_NAME)" # mixed inclusion + exclusion filters
 app-a
 
-> vp exec --filter '!no-such-pkg' -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # exclusion of nonexistent pkg returns all
-lib-c$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+> vp exec --filter '!no-such-pkg' -- node -e "console.log(process.env.VP_PACKAGE_NAME)" # exclusion of nonexistent pkg returns all
+lib-c$ node -e console.log(process.env.VP_PACKAGE_NAME)
 lib-c
-app-a$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+app-a$ node -e console.log(process.env.VP_PACKAGE_NAME)
 app-a
-exec-monorepo$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+exec-monorepo$ node -e console.log(process.env.VP_PACKAGE_NAME)
 exec-monorepo
-app-b$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
-app-b
-
-> vp exec --filter='app-*' -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # equals-form filter
-app-a$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
-app-a
-app-b$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+app-b$ node -e console.log(process.env.VP_PACKAGE_NAME)
 app-b
 
-> vp exec --filter '*' -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # glob star includes root
-lib-c$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
-lib-c
-app-a$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+> vp exec --filter='app-*' -- node -e "console.log(process.env.VP_PACKAGE_NAME)" # equals-form filter
+app-a$ node -e console.log(process.env.VP_PACKAGE_NAME)
 app-a
-exec-monorepo$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
-exec-monorepo
-app-b$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+app-b$ node -e console.log(process.env.VP_PACKAGE_NAME)
 app-b
 
-> vp exec -w -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # workspace root only
+> vp exec --filter '*' -- node -e "console.log(process.env.VP_PACKAGE_NAME)" # glob star includes root
+lib-c$ node -e console.log(process.env.VP_PACKAGE_NAME)
+lib-c
+app-a$ node -e console.log(process.env.VP_PACKAGE_NAME)
+app-a
+exec-monorepo$ node -e console.log(process.env.VP_PACKAGE_NAME)
+exec-monorepo
+app-b$ node -e console.log(process.env.VP_PACKAGE_NAME)
+app-b
+
+> vp exec -w -- node -e "console.log(process.env.VP_PACKAGE_NAME)" # workspace root only
 exec-monorepo
 
-> vp exec -r --report-summary -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # report summary
-lib-c$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+> vp exec -r --report-summary -- node -e "console.log(process.env.VP_PACKAGE_NAME)" # report summary
+lib-c$ node -e console.log(process.env.VP_PACKAGE_NAME)
 lib-c
-app-a$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+app-a$ node -e console.log(process.env.VP_PACKAGE_NAME)
 app-a
-app-b$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+app-b$ node -e console.log(process.env.VP_PACKAGE_NAME)
 app-b
-exec-monorepo$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+exec-monorepo$ node -e console.log(process.env.VP_PACKAGE_NAME)
 exec-monorepo
 
 > node -e "const r=JSON.parse(require('fs').readFileSync('vp-exec-summary.json','utf8'));const s=r.executionStatus;for(const[k,v]of Object.entries(s)){console.log(k+': '+v.status+' '+(typeof v.duration==='number'?'has_duration':'no_duration'))}" # verify summary file

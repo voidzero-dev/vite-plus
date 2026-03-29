@@ -300,38 +300,38 @@ async function runTestCase(name: string, tempTmpDir: string, casesDir: string, b
     ...passThroughEnvs,
     // Indicate CLI is running in test mode, so that it prints more detailed outputs.
     // Also disables tips for stable snapshots.
-    VITE_PLUS_CLI_TEST: '1',
+    VP_CLI_TEST: '1',
     // Suppress Node.js runtime warnings (e.g. MODULE_TYPELESS_PACKAGE_JSON)
     // to keep snap outputs stable across Node.js versions.
     NODE_NO_WARNINGS: '1',
     NO_COLOR: 'true',
     // set CI=true make sure snap-tests are stable on GitHub Actions
     CI: 'true',
-    VITE_PLUS_HOME: path.join(homedir(), '.vite-plus'),
+    VP_HOME: path.join(homedir(), '.vite-plus'),
     // Set git identity so `git commit` works on CI runners without global git config
     GIT_AUTHOR_NAME: 'Test',
     GIT_COMMITTER_NAME: 'Test',
     GIT_AUTHOR_EMAIL: 'vite-plus-test@test.com',
     GIT_COMMITTER_EMAIL: 'vite-plus-test@test.com',
     // Skip `vp install` inside `vp migrate` — snap tests don't need real installs
-    VITE_PLUS_SKIP_INSTALL: '1',
+    VP_SKIP_INSTALL: '1',
     // make sure npm install global packages to the temporary directory
     NPM_CONFIG_PREFIX: path.join(tempTmpDir, 'npm-global-lib-for-snap-tests'),
 
     // A test case can override/unset environment variables above.
-    // For example, VITE_PLUS_CLI_TEST/CI can be unset to test the real-world outputs.
+    // For example, VP_CLI_TEST/CI can be unset to test the real-world outputs.
     ...steps.env,
   };
 
-  // Unset VITE_PLUS_NODE_VERSION to prevent `vp env use` session overrides
-  // from leaking into snap tests (it passes through via the VITE_* pattern).
-  delete env['VITE_PLUS_NODE_VERSION'];
+  // Unset VP_NODE_VERSION to prevent `vp env use` session overrides
+  // from leaking into snap tests.
+  delete env['VP_NODE_VERSION'];
 
-  // Unset VITE_PLUS_TOOL_RECURSION to prevent the shim recursion guard from
+  // Unset VP_TOOL_RECURSION to prevent the shim recursion guard from
   // leaking into snap tests. When `pnpm` runs the test via the `vp` shim, vp
   // sets this marker before exec. Without clearing it, every npm/node command
   // in the test would bypass the managed shim and fall through to the system binary.
-  delete env['VITE_PLUS_TOOL_RECURSION'];
+  delete env['VP_TOOL_RECURSION'];
 
   // Sometimes on Windows, the PATH variable is named 'Path'
   if ('Path' in env && !('PATH' in env)) {
@@ -341,7 +341,7 @@ async function runTestCase(name: string, tempTmpDir: string, casesDir: string, b
   // The node shim prepends ~/.vite-plus/js_runtime/node/VERSION/bin/ to PATH,
   // which leaks into this process. Strip internal vite-plus paths so the test
   // environment simulates a clean user PATH (only the shim bin dir + system paths).
-  const vitePlusJsRuntime = path.join(env['VITE_PLUS_HOME'], 'js_runtime');
+  const vitePlusJsRuntime = path.join(env['VP_HOME'], 'js_runtime');
   env['PATH'] = [
     // Extend PATH to include the package's bin directory
     // --bin-dir overrides the default for cases like global CLI tests

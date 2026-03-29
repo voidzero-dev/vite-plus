@@ -6,7 +6,7 @@
     "vp install -g ./npm-global-vp-managed-pkg # Install via vp (creates managed shim)",
     "npm install -g ./npm-global-vp-managed-pkg # npm install (should warn about conflict)",
     "npm uninstall -g npm-global-vp-managed-pkg # npm uninstall should NOT remove the vp-managed shim",
-    "test -L $VITE_PLUS_HOME/bin/npm-global-vp-managed-cli && echo 'link exists' || echo 'link removed' # Shim should still exist",
+    "test -L $VP_HOME/bin/npm-global-vp-managed-cli && echo 'link exists' || echo 'link removed' # Shim should still exist",
     "npm-global-vp-managed-cli # Verify the shim still works",
     "vp remove -g npm-global-vp-managed-pkg # Cleanup"
   ]

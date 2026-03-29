@@ -19,7 +19,7 @@ defaults:
     shell: bash
 
 env:
-  VITE_PLUS_VERSION: alpha
+  VP_VERSION: alpha
 
 jobs:
   test-install-sh:
@@ -166,7 +166,7 @@ jobs:
         run: |
           docker run --rm --platform linux/arm64 \
             -v "${{ github.workspace }}:/workspace" \
-            -e VITE_PLUS_VERSION=alpha \
+            -e VP_VERSION=alpha \
             ubuntu:20.04 bash -c "
               ls -al ~/
               apt-get update && apt-get install -y curl ca-certificates
@@ -225,7 +225,7 @@ jobs:
         run: |
           docker run --rm \
             -v "${{ github.workspace }}:/workspace" \
-            -e VITE_PLUS_VERSION=alpha \
+            -e VP_VERSION=alpha \
             -e CI=true \
             alpine:3.21 sh -c "
               # libstdc++: required by unofficial-builds Node.js musl binary
@@ -283,7 +283,7 @@ jobs:
         run: |
           docker run --rm --platform linux/arm64 \
             -v "${{ github.workspace }}:/workspace" \
-            -e VITE_PLUS_VERSION=alpha \
+            -e VP_VERSION=alpha \
             -e CI=true \
             alpine:3.21 sh -c "
               # libstdc++ is needed by unofficial-builds Node.js musl binary

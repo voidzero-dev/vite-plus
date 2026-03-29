@@ -12,7 +12,7 @@
 //! On Windows:
 //! - bin/vp.exe, bin/node.exe, bin/npm.exe, bin/npx.exe are trampoline executables
 //! - Each trampoline detects its tool name from its own filename and spawns
-//!   current\bin\vp.exe with VITE_PLUS_SHIM_TOOL env var set
+//!   current\bin\vp.exe with VP_SHIM_TOOL env var set
 //! - This avoids the "Terminate batch job (Y/N)?" prompt from .cmd wrappers
 
 use std::process::ExitStatus;
@@ -20,7 +20,7 @@ use std::process::ExitStatus;
 use clap::CommandFactory;
 use owo_colors::OwoColorize;
 
-use super::config::{get_bin_dir, get_vite_plus_home};
+use super::config::{get_bin_dir, get_vp_home};
 use crate::{cli::Args, error::Error, help};
 
 /// Tools to create shims for (node, npm, npx, vpx)
@@ -36,7 +36,7 @@ fn accent_command(command: &str) -> String {
 
 /// Execute the setup command.
 pub async fn execute(refresh: bool, env_only: bool) -> Result<ExitStatus, Error> {
-    let vite_plus_home = get_vite_plus_home()?;
+    let vite_plus_home = get_vp_home()?;
 
     // Ensure home directory exists (env files are written here)
     tokio::fs::create_dir_all(&vite_plus_home).await?;
@@ -252,7 +252,7 @@ async fn create_unix_shim(
 ///
 /// Each tool gets a copy of the trampoline binary renamed to `<tool>.exe`.
 /// The trampoline detects its tool name from its own filename and spawns
-/// vp.exe with `VITE_PLUS_SHIM_TOOL` set, avoiding the "Terminate batch job?"
+/// vp.exe with `VP_SHIM_TOOL` set, avoiding the "Terminate batch job?"
 /// prompt that `.cmd` wrappers cause on Ctrl+C.
 ///
 /// See: <https://github.com/voidzero-dev/vite-plus/issues/835>
@@ -310,11 +310,11 @@ async fn generate_completion_scripts(
 /// Get the path to the trampoline template binary (vp-shim.exe).
 ///
 /// The trampoline binary is distributed alongside vp.exe in the same directory.
-/// In tests, `VITE_PLUS_TRAMPOLINE_PATH` can override the resolved path.
+/// In tests, `VP_TRAMPOLINE_PATH` can override the resolved path.
 #[cfg(windows)]
 pub(crate) fn get_trampoline_path() -> Result<vite_path::AbsolutePathBuf, Error> {
     // Allow tests to override the trampoline path
-    if let Ok(override_path) = std::env::var(vite_shared::env_vars::VITE_PLUS_TRAMPOLINE_PATH) {
+    if let Ok(override_path) = std::env::var(vite_shared::env_vars::VP_TRAMPOLINE_PATH) {
         let path = std::path::PathBuf::from(override_path);
         if path.exists() {
             return vite_path::AbsolutePathBuf::new(path)
@@ -457,11 +457,11 @@ esac
 unset __vp_bin
 
 # Shell function wrapper: intercepts `vp env use` to eval its stdout,
-# which sets/unsets VITE_PLUS_NODE_VERSION in the current shell session.
+# which sets/unsets VP_NODE_VERSION in the current shell session.
 vp() {
     if [ "$1" = "env" ] && [ "$2" = "use" ]; then
         case " $* " in *" -h "*|*" --help "*) command vp "$@"; return; esac
-        __vp_out="$(VITE_PLUS_ENV_USE_EVAL_ENABLE=1 command vp "$@")" || return $?
+        __vp_out="$(VP_ENV_USE_EVAL_ENABLE=1 command vp "$@")" || return $?
         eval "$__vp_out"
     else
         command vp "$@"
@@ -500,13 +500,13 @@ and set -e PATH[$__vp_idx]
 set -gx PATH __VP_BIN__ $PATH
 
 # Shell function wrapper: intercepts `vp env use` to eval its stdout,
-# which sets/unsets VITE_PLUS_NODE_VERSION in the current shell session.
+# which sets/unsets VP_NODE_VERSION in the current shell session.
 function vp
     if test (count $argv) -ge 2; and test "$argv[1]" = "env"; and test "$argv[2]" = "use"
         if contains -- -h $argv; or contains -- --help $argv
             command vp $argv; return
         end
-        set -lx VITE_PLUS_ENV_USE_EVAL_ENABLE 1
+        set -lx VP_ENV_USE_EVAL_ENABLE 1
         set -l __vp_out (env FISH_VERSION=$FISH_VERSION command vp $argv); or return $status
         eval (string join ';' $__vp_out)
     else
@@ -536,13 +536,13 @@ if ($env:Path -split ';' -notcontains $__vp_bin) {
 }
 
 # Shell function wrapper: intercepts `vp env use` to eval its stdout,
-# which sets/unsets VITE_PLUS_NODE_VERSION in the current shell session.
+# which sets/unsets VP_NODE_VERSION in the current shell session.
 function vp {
     if ($args.Count -ge 2 -and $args[0] -eq "env" -and $args[1] -eq "use") {
         if ($args -contains "-h" -or $args -contains "--help") {
             & (Join-Path $__vp_bin "vp.exe") @args; return
         }
-        $env:VITE_PLUS_ENV_USE_EVAL_ENABLE = "1"
+        $env:VP_ENV_USE_EVAL_ENABLE = "1"
         $output = & (Join-Path $__vp_bin "vp.exe") @args 2>&1 | ForEach-Object {
             if ($_ -is [System.Management.Automation.ErrorRecord]) {
                 Write-Host $_.Exception.Message
@@ -550,7 +550,7 @@ function vp {
                 $_
             }
         }
-        Remove-Item Env:VITE_PLUS_ENV_USE_EVAL_ENABLE -ErrorAction SilentlyContinue
+        Remove-Item Env:VP_ENV_USE_EVAL_ENABLE -ErrorAction SilentlyContinue
         if ($LASTEXITCODE -eq 0 -and $output) {
             Invoke-Expression ($output -join "`n")
         }
@@ -577,7 +577,7 @@ if (Test-Path $__vp_completion) {
 
     // cmd.exe wrapper for `vp env use` (cmd.exe cannot define shell functions)
     // Users run `vp-use 24` in cmd.exe instead of `vp env use 24`
-    let vp_use_cmd_content = "@echo off\r\nset VITE_PLUS_ENV_USE_EVAL_ENABLE=1\r\nfor /f \"delims=\" %%i in ('%~dp0..\\current\\bin\\vp.exe env use %*') do %%i\r\nset VITE_PLUS_ENV_USE_EVAL_ENABLE=\r\n";
+    let vp_use_cmd_content = "@echo off\r\nset VP_ENV_USE_EVAL_ENABLE=1\r\nfor /f \"delims=\" %%i in ('%~dp0..\\current\\bin\\vp.exe env use %*') do %%i\r\nset VP_ENV_USE_EVAL_ENABLE=\r\n";
     // Only write if bin directory exists (it may not during --env-only)
     if tokio::fs::try_exists(&bin_path).await.unwrap_or(false) {
         let vp_use_cmd_file = bin_path.join("vp-use.cmd");
@@ -895,7 +895,7 @@ mod tests {
         assert!(status.success(), "execute --env-only should succeed");
 
         // Directory should now exist
-        assert!(fresh_home.exists(), "VITE_PLUS_HOME directory should be created");
+        assert!(fresh_home.exists(), "VP_HOME directory should be created");
 
         // Env files should be written
         assert!(fresh_home.join("env").exists(), "env file should be created");
