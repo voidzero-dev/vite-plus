@@ -4,9 +4,9 @@
   "ignoredPlatforms": ["win32"],
   "commands": [
     "npm install -g ./npm-global-hint-pkg # Should install and show hint + create link",
-    "test -L $VITE_PLUS_HOME/bin/npm-global-hint-cli && echo 'link created' # Link should exist",
+    "test -L $VP_HOME/bin/npm-global-hint-cli && echo 'link created' # Link should exist",
     "npm-global-hint-cli # Should be callable via the link",
-    "rm -f $VITE_PLUS_HOME/bin/npm-global-hint-cli # Cleanup link",
+    "rm -f $VP_HOME/bin/npm-global-hint-cli # Cleanup link",
     "npm uninstall -g npm-global-hint-pkg # Cleanup npm install"
   ]
 }

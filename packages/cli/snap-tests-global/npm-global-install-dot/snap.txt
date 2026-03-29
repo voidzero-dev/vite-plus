@@ -5,13 +5,13 @@ Linked 'npm-global-dot-cli' to <vite-plus-home>/bin/npm-global-dot-cli
 
 tip: Use `vp install -g .` for managed shims that persist across Node.js version changes.
 
-> test -L $VITE_PLUS_HOME/bin/npm-global-dot-cli && echo 'link created' # Link should exist
+> test -L $VP_HOME/bin/npm-global-dot-cli && echo 'link created' # Link should exist
 link created
 
 > npm-global-dot-cli # Should be callable via the link
 npm-global-dot-cli works
 
-> rm -f $VITE_PLUS_HOME/bin/npm-global-dot-cli # Cleanup link
+> rm -f $VP_HOME/bin/npm-global-dot-cli # Cleanup link
 > npm uninstall -g npm-global-dot-pkg # Cleanup npm install
 
 removed 1 package in <variable>ms

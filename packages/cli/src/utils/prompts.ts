@@ -66,7 +66,7 @@ export async function runViteInstall(
   options?: { silent?: boolean },
 ) {
   // install dependencies on non-CI environment
-  if (process.env.VITE_PLUS_SKIP_INSTALL) {
+  if (process.env.VP_SKIP_INSTALL) {
     return { durationMs: 0, status: 'skipped' } satisfies CommandRunSummary;
   }
 
@@ -74,7 +74,7 @@ export async function runViteInstall(
   const startTime = Date.now();
   spinner.start(`Installing dependencies...`);
   const { exitCode, stderr, stdout } = await runCommandSilently({
-    command: process.env.VITE_PLUS_CLI_BIN ?? 'vp',
+    command: process.env.VP_CLI_BIN ?? 'vp',
     args: ['install', ...(extraArgs ?? [])],
     cwd,
     envs: process.env,
@@ -110,7 +110,7 @@ export async function runViteFmt(
   spinner.start(`Formatting code...`);
 
   const { exitCode, stderr, stdout } = await runCommandSilently({
-    command: process.env.VITE_PLUS_CLI_BIN ?? 'vp',
+    command: process.env.VP_CLI_BIN ?? 'vp',
     args: ['fmt', '--write', ...(paths ?? [])],
     cwd,
     envs: process.env,

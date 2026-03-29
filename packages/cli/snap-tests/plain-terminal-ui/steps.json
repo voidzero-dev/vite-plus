@@ -1,6 +1,6 @@
 {
   "env": {
-    "VITE_PLUS_CLI_TEST": "0"
+    "VP_CLI_TEST": "0"
   },
   "commands": [
     "FOO=1 vp run hello",

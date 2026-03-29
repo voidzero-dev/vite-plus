@@ -5,13 +5,13 @@ Linked 'npm-global-hint-cli' to <vite-plus-home>/bin/npm-global-hint-cli
 
 tip: Use `vp install -g ./npm-global-hint-pkg` for managed shims that persist across Node.js version changes.
 
-> test -L $VITE_PLUS_HOME/bin/npm-global-hint-cli && echo 'link created' # Link should exist
+> test -L $VP_HOME/bin/npm-global-hint-cli && echo 'link created' # Link should exist
 link created
 
 > npm-global-hint-cli # Should be callable via the link
 npm-global-hint-cli works
 
-> rm -f $VITE_PLUS_HOME/bin/npm-global-hint-cli # Cleanup link
+> rm -f $VP_HOME/bin/npm-global-hint-cli # Cleanup link
 > npm uninstall -g npm-global-hint-pkg # Cleanup npm install
 
 removed 1 package in <variable>ms

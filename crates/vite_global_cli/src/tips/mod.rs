@@ -76,10 +76,10 @@ fn all() -> &'static [&'static dyn Tip] {
 /// Pick a random tip from those matching the current context.
 ///
 /// Returns `None` if:
-/// - The `VITE_PLUS_CLI_TEST` env var is set (test mode)
+/// - The `VP_CLI_TEST` env var is set (test mode)
 /// - No tips match the given context
 pub fn get_tip(context: &TipContext) -> Option<&'static str> {
-    if std::env::var_os("VITE_PLUS_CLI_TEST").is_some() || std::env::var_os("CI").is_some() {
+    if std::env::var_os("VP_CLI_TEST").is_some() || std::env::var_os("CI").is_some() {
         return None;
     }
 

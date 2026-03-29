@@ -6,9 +6,9 @@
     "mkdir -p custom-prefix",
     "NPM_CONFIG_PREFIX=$(pwd)/custom-prefix npm install -g ./npm-global-custom-prefix-pkg # Should install to custom prefix and show hint",
     "test -f custom-prefix/bin/npm-global-custom-prefix-cli && echo 'binary in custom prefix' # Verify installed to custom prefix",
-    "test -L $VITE_PLUS_HOME/bin/npm-global-custom-prefix-cli && echo 'link created' # Link should exist",
+    "test -L $VP_HOME/bin/npm-global-custom-prefix-cli && echo 'link created' # Link should exist",
     "npm-global-custom-prefix-cli # Should be callable via the link",
-    "rm -f $VITE_PLUS_HOME/bin/npm-global-custom-prefix-cli # Cleanup link",
+    "rm -f $VP_HOME/bin/npm-global-custom-prefix-cli # Cleanup link",
     "NPM_CONFIG_PREFIX=$(pwd)/custom-prefix npm uninstall -g npm-global-custom-prefix-pkg; rm -rf custom-prefix # Cleanup"
   ]
 }

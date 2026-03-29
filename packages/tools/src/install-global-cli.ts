@@ -117,15 +117,15 @@ export function installGlobalCli() {
 
     const env: Record<string, string> = {
       ...(process.env as Record<string, string>),
-      VITE_PLUS_LOCAL_TGZ: tgzPath,
-      VITE_PLUS_LOCAL_BINARY: binaryPath,
-      VITE_PLUS_HOME: installDir,
-      VITE_PLUS_VERSION: localDevVer,
+      VP_LOCAL_TGZ: tgzPath,
+      VP_LOCAL_BINARY: binaryPath,
+      VP_HOME: installDir,
+      VP_VERSION: localDevVer,
       CI: 'true',
       // Skip vp install in install.sh — we handle deps ourselves:
       // - Local dev: symlink monorepo node_modules
       // - CI (--tgz): rewrite @voidzero-dev/* deps to file: protocol and npm install
-      VITE_PLUS_SKIP_DEPS_INSTALL: '1',
+      VP_SKIP_DEPS_INSTALL: '1',
     };
 
     // Run platform-specific install script (use absolute paths)

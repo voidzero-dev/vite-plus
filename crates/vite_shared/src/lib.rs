@@ -17,7 +17,8 @@ pub mod versioning;
 pub use conventional_commit::{ConventionalCommit, parse_conventional_commit};
 pub use env_config::{EnvConfig, TestEnvGuard};
 pub use git::{GitError, capture_git, is_clean_git_worktree, parse_github_repo_slug, run_git};
-pub use home::get_vite_plus_home;
+pub use home::get_vp_home;
+pub use home::get_vp_home as get_vite_plus_home;
 pub use package_json::{
     DependencyProtocolSummary, DevEngines, Engines, PackageJson, PackageJsonError, PackageManifest,
     PackageManifestDocument, PublishConfig, ReleaseLifecycle, RuntimeEngine, RuntimeEngineConfig,
