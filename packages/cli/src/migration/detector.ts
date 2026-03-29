@@ -99,7 +99,7 @@ export function detectConfigs(projectPath: string): ConfigFiles {
 
   // Check for oxlint configs
   // https://oxc.rs/docs/guide/usage/linter/config.html#configuration-file-format
-  const oxlintConfigs = ['.oxlintrc.json'];
+  const oxlintConfigs = ['.oxlintrc.json', '.oxlintrc.jsonc'];
   for (const config of oxlintConfigs) {
     if (fs.existsSync(path.join(projectPath, config))) {
       configs.oxlintConfig = config;

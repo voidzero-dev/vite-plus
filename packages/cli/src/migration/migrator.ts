@@ -1376,7 +1376,7 @@ export function mergeViteConfigFiles(
   if (configs.oxlintConfig) {
     // Inject options.typeAware and options.typeCheck defaults before merging
     const fullOxlintPath = path.join(projectPath, configs.oxlintConfig);
-    const oxlintJson = JSON.parse(fs.readFileSync(fullOxlintPath, 'utf8'));
+    const oxlintJson = readJsonFile<{ options?: Record<string, unknown> }>(fullOxlintPath, true);
     if (!oxlintJson.options) {
       oxlintJson.options = {};
     }

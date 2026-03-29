@@ -1,0 +1,50 @@
+> vp migrate --no-interactive 2>&1 # migration should detect .oxlintrc.jsonc and .oxfmtrc.jsonc
+VITE+ - The Unified Toolchain for the Web
+
+◇ Migrated . to Vite+<repeat>
+• Node <semver>  pnpm <semver>
+• 4 config updates applied
+
+> cat vite.config.ts # check vite.config.ts
+import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  staged: {
+    "*": "vp check --fix"
+  },
+  fmt: {
+    "printWidth": 100,
+    "tabWidth": 2,
+    "semi": true,
+    "singleQuote": true,
+    "trailingComma": "es5",
+  },
+  lint: {
+    "rules": {
+      "no-unused-vars": "error"
+    },
+    "options": {
+      "typeAware": true,
+      "typeCheck": true
+    }
+  },
+});
+
+> test ! -f .oxlintrc.jsonc # check .oxlintrc.jsonc is removed
+> test ! -f .oxfmtrc.jsonc # check .oxfmtrc.jsonc is removed
+> cat package.json # check package.json
+{
+  "devDependencies": {
+    "vite-plus": "latest"
+  },
+  "pnpm": {
+    "overrides": {
+      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+      "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+    }
+  },
+  "packageManager": "pnpm@<semver>",
+  "scripts": {
+    "prepare": "vp config"
+  }
+}
