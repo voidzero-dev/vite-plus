@@ -108,8 +108,8 @@ mod tests {
 
         // Clear any existing VITE_PLUS_HOME env var by using a test config without it
         EnvConfig::test_scope(EnvConfig::for_test(), || {
-            // Test: get_vite_plus_home should return /tmp/xxx/.vite-plus
-            let home = get_vite_plus_home().unwrap();
+            // Test: get_vp_home should return /tmp/xxx/.vite-plus
+            let home = get_vp_home().unwrap();
             assert_eq!(home.as_path(), vite_plus_home.as_path());
         });
 
