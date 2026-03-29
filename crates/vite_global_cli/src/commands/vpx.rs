@@ -656,7 +656,7 @@ mod tests {
     #[serial]
     fn test_find_on_path_excludes_vp_bin_dir() {
         let original_path = std::env::var_os("PATH");
-        let original_home = std::env::var_os("VITE_PLUS_HOME");
+        let original_home = std::env::var_os("VP_HOME");
         let temp = tempfile::tempdir().unwrap();
 
         // Set up a fake vite-plus home with bin dir
@@ -675,7 +675,7 @@ mod tests {
         // SAFETY: serial test
         unsafe {
             std::env::set_var("PATH", &path);
-            std::env::set_var("VITE_PLUS_HOME", fake_home.as_os_str());
+            std::env::set_var("VP_HOME", fake_home.as_os_str());
         }
 
         let result = find_on_path("vpx-excluded-tool");
@@ -692,8 +692,8 @@ mod tests {
                 None => std::env::remove_var("PATH"),
             }
             match &original_home {
-                Some(v) => std::env::set_var("VITE_PLUS_HOME", v),
-                None => std::env::remove_var("VITE_PLUS_HOME"),
+                Some(v) => std::env::set_var("VP_HOME", v),
+                None => std::env::remove_var("VP_HOME"),
             }
         }
     }

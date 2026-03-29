@@ -7,7 +7,7 @@
     "npm-global-linked-cli # Should be callable via the link",
     "npm install -g ./npm-global-linked-pkg # Should NOT show hint (binary already exists)",
     "vp remove -g npm-global-linked-pkg # Cleanup",
-    "test -L $VITE_PLUS_HOME/bin/npm-global-linked-cli && echo 'link created' || echo 'link removed'"
+    "test -L $VP_HOME/bin/npm-global-linked-cli && echo 'link created' || echo 'link removed'"
   ],
   "after": ["npm uninstall -g npm-global-linked-pkg"]
 }

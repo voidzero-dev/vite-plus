@@ -7,12 +7,12 @@
     "vp exec -F app-a -- echo hello # -F short flag for --filter",
     "vp exec -F app-a -F lib-c -- echo hello # -F short flag multiple",
     "vp exec -F 'app-*' -- echo hello # -F short flag with glob",
-    "vp exec --filter 'app-a lib-c' -- node -e \"console.log(process.env.VITE_PLUS_PACKAGE_NAME)\" # whitespace splitting: 'a b' => two filters",
-    "vp exec --filter 'app-a  app-b' -- node -e \"console.log(process.env.VITE_PLUS_PACKAGE_NAME)\" # whitespace splitting with extra spaces",
+    "vp exec --filter 'app-a lib-c' -- node -e \"console.log(process.env.VP_PACKAGE_NAME)\" # whitespace splitting: 'a b' => two filters",
+    "vp exec --filter 'app-a  app-b' -- node -e \"console.log(process.env.VP_PACKAGE_NAME)\" # whitespace splitting with extra spaces",
     "vp exec --filter nonexistent-pkg -- echo hello # unmatched filter warning",
-    "vp exec --filter nonexistent-pkg --filter app-a -- node -e \"console.log(process.env.VITE_PLUS_PACKAGE_NAME)\" # unmatched + matched filter",
-    "vp exec -w --filter app-a -- node -e \"console.log(process.env.VITE_PLUS_PACKAGE_NAME)\" # -w + --filter is additive (root + filtered)",
-    "vp exec -w --filter 'app-*' -- node -e \"console.log(process.env.VITE_PLUS_PACKAGE_NAME)\" # -w + glob filter additive",
+    "vp exec --filter nonexistent-pkg --filter app-a -- node -e \"console.log(process.env.VP_PACKAGE_NAME)\" # unmatched + matched filter",
+    "vp exec -w --filter app-a -- node -e \"console.log(process.env.VP_PACKAGE_NAME)\" # -w + --filter is additive (root + filtered)",
+    "vp exec -w --filter 'app-*' -- node -e \"console.log(process.env.VP_PACKAGE_NAME)\" # -w + glob filter additive",
     "vp exec -r --filter app-a -- echo hello # -r + --filter conflict error"
   ]
 }

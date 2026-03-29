@@ -5,7 +5,7 @@ Linked 'npm-global-uninstall-cli' to <vite-plus-home>/bin/npm-global-uninstall-c
 
 tip: Use `vp install -g ./npm-global-uninstall-pkg` for managed shims that persist across Node.js version changes.
 
-> test -L $VITE_PLUS_HOME/bin/npm-global-uninstall-cli && echo 'link exists' # Link should exist after install
+> test -L $VP_HOME/bin/npm-global-uninstall-cli && echo 'link exists' # Link should exist after install
 link exists
 
 > npm uninstall -g npm-global-uninstall-pkg # Uninstall should remove the link
@@ -13,5 +13,5 @@ link exists
 removed 1 package in <variable>ms
 Removed link 'npm-global-uninstall-cli' from <vite-plus-home>/bin/npm-global-uninstall-cli
 
-> test -L $VITE_PLUS_HOME/bin/npm-global-uninstall-cli && echo 'link exists' || echo 'link removed' # Link should be gone
+> test -L $VP_HOME/bin/npm-global-uninstall-cli && echo 'link exists' || echo 'link removed' # Link should be gone
 link removed

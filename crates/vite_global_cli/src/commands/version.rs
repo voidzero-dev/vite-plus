@@ -137,7 +137,7 @@ async fn get_node_version_info(cwd: &AbsolutePathBuf) -> Option<(String, String)
         return Some((resolution.version, resolution.source));
     }
 
-    // Fallback: detect system Node version (with VITE_PLUS_BYPASS to avoid hitting the shim)
+    // Fallback: detect system Node version (with VP_BYPASS to avoid hitting the shim)
     let version = detect_system_node_version()?;
     Some((version, "system".to_string()))
 }
@@ -145,7 +145,7 @@ async fn get_node_version_info(cwd: &AbsolutePathBuf) -> Option<(String, String)
 fn detect_system_node_version() -> Option<String> {
     let output = std::process::Command::new("node")
         .arg("--version")
-        .env(vite_shared::env_vars::VITE_PLUS_BYPASS, "1")
+        .env(vite_shared::env_vars::VP_BYPASS, "1")
         .output()
         .ok()?;
     if !output.status.success() {

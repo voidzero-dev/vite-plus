@@ -1,0 +1,6 @@
+{
+  "rules": {
+    // this is a comment
+    "no-unused-vars": "error",
+  },
+}

@@ -3,16 +3,16 @@
   "ignoredPlatforms": ["win32"],
   "commands": [
     "npm install -g ./pkg-a # Install pkg-a (creates link for npm-global-shared-cli)",
-    "test -L $VITE_PLUS_HOME/bin/npm-global-shared-cli && echo 'link exists'",
-    "cat $VITE_PLUS_HOME/bins/npm-global-shared-cli.json # BinConfig should point to pkg-a",
+    "test -L $VP_HOME/bin/npm-global-shared-cli && echo 'link exists'",
+    "cat $VP_HOME/bins/npm-global-shared-cli.json # BinConfig should point to pkg-a",
     "npm install -g --force ./pkg-b # Install pkg-b with force (overwrites npm-global-shared-cli)",
-    "test -L $VITE_PLUS_HOME/bin/npm-global-shared-cli && echo 'link exists'",
-    "cat $VITE_PLUS_HOME/bins/npm-global-shared-cli.json # BinConfig should now point to pkg-b",
+    "test -L $VP_HOME/bin/npm-global-shared-cli && echo 'link exists'",
+    "cat $VP_HOME/bins/npm-global-shared-cli.json # BinConfig should now point to pkg-b",
     "npm-global-shared-cli # Should print pkg-b message (latest installed)",
     "npm uninstall -g npm-global-shared-pkg-a # Uninstall pkg-a, should NOT remove the link (owned by pkg-b now)",
-    "test -L $VITE_PLUS_HOME/bin/npm-global-shared-cli && echo 'link exists' || echo 'link removed'",
+    "test -L $VP_HOME/bin/npm-global-shared-cli && echo 'link exists' || echo 'link removed'",
     "npm-global-shared-cli # Should still work (owned by pkg-b)",
     "npm uninstall -g npm-global-shared-pkg-b # Uninstall pkg-b, NOW should remove the link",
-    "test -L $VITE_PLUS_HOME/bin/npm-global-shared-cli && echo 'link exists' || echo 'link removed'"
+    "test -L $VP_HOME/bin/npm-global-shared-cli && echo 'link exists' || echo 'link removed'"
   ]
 }

@@ -10,7 +10,7 @@
 use serde::{Deserialize, Serialize};
 use vite_path::AbsolutePathBuf;
 
-use super::config::get_vite_plus_home;
+use super::config::get_vp_home;
 use crate::error::Error;
 
 /// Source that installed a binary.
@@ -54,7 +54,7 @@ impl BinConfig {
 
     /// Get the bins directory path (~/.vite-plus/bins/).
     pub fn bins_dir() -> Result<AbsolutePathBuf, Error> {
-        Ok(get_vite_plus_home()?.join("bins"))
+        Ok(get_vp_home()?.join("bins"))
     }
 
     /// Get the path to a binary's config file.

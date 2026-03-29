@@ -1,0 +1,12 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "categories": {
+    "correctness": "error"
+  },
+  "rules": {
+    // this is a comment
+    "no-console": "error"
+  },
+  "globals": {},
+  "ignorePatterns": []
+}

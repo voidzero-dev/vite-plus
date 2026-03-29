@@ -53,7 +53,7 @@ thread_local! {
 pub struct EnvConfig {
     /// Override for the vite-plus home directory (`~/.vite-plus`).
     ///
-    /// Env: `VITE_PLUS_HOME`
+    /// Env: `VP_HOME`
     pub vite_plus_home: Option<PathBuf>,
 
     /// NPM registry URL.
@@ -75,22 +75,22 @@ pub struct EnvConfig {
 
     /// Bypass the vite-plus shim and use the system tool directly.
     ///
-    /// Env: `VITE_PLUS_BYPASS`
+    /// Env: `VP_BYPASS`
     pub bypass_shim: bool,
 
     /// Enable debug output for shim dispatch.
     ///
-    /// Env: `VITE_PLUS_DEBUG_SHIM`
+    /// Env: `VP_DEBUG_SHIM`
     pub debug_shim: bool,
 
     /// Enable eval mode for `vp env use`.
     ///
-    /// Env: `VITE_PLUS_ENV_USE_EVAL_ENABLE`
+    /// Env: `VP_ENV_USE_EVAL_ENABLE`
     pub env_use_eval_enable: bool,
 
     /// Recursion guard for `vp env exec`.
     ///
-    /// Env: `VITE_PLUS_TOOL_RECURSION`
+    /// Env: `VP_TOOL_RECURSION`
     pub tool_recursion: Option<String>,
 
     /// Override directory for global CLI JS scripts.
@@ -105,7 +105,7 @@ pub struct EnvConfig {
 
     /// Override Node.js version (takes highest priority in version resolution).
     ///
-    /// Env: `VITE_PLUS_NODE_VERSION`
+    /// Env: `VP_NODE_VERSION`
     pub node_version: Option<String>,
 
     /// User home directory.
@@ -130,7 +130,7 @@ impl EnvConfig {
     /// Called once in `main()` via `EnvConfig::init()`.
     pub fn from_env() -> Self {
         Self {
-            vite_plus_home: std::env::var(env_vars::VITE_PLUS_HOME).ok().map(PathBuf::from),
+            vite_plus_home: std::env::var(env_vars::VP_HOME).ok().map(PathBuf::from),
             npm_registry: std::env::var(env_vars::NPM_CONFIG_REGISTRY)
                 .or_else(|_| std::env::var(env_vars::NPM_CONFIG_REGISTRY_UPPER))
                 .unwrap_or_else(|_| "https://registry.npmjs.org".into())
@@ -138,13 +138,13 @@ impl EnvConfig {
                 .to_string(),
             node_dist_mirror: std::env::var(env_vars::VITE_NODE_DIST_MIRROR).ok(),
             is_ci: std::env::var("CI").is_ok(),
-            bypass_shim: std::env::var(env_vars::VITE_PLUS_BYPASS).is_ok(),
-            debug_shim: std::env::var(env_vars::VITE_PLUS_DEBUG_SHIM).is_ok(),
-            env_use_eval_enable: std::env::var(env_vars::VITE_PLUS_ENV_USE_EVAL_ENABLE).is_ok(),
-            tool_recursion: std::env::var(env_vars::VITE_PLUS_TOOL_RECURSION).ok(),
+            bypass_shim: std::env::var(env_vars::VP_BYPASS).is_ok(),
+            debug_shim: std::env::var(env_vars::VP_DEBUG_SHIM).is_ok(),
+            env_use_eval_enable: std::env::var(env_vars::VP_ENV_USE_EVAL_ENABLE).is_ok(),
+            tool_recursion: std::env::var(env_vars::VP_TOOL_RECURSION).ok(),
             js_scripts_dir: std::env::var(env_vars::VITE_GLOBAL_CLI_JS_SCRIPTS_DIR).ok(),
             update_task_types: std::env::var(env_vars::VITE_UPDATE_TASK_TYPES).ok(),
-            node_version: std::env::var(env_vars::VITE_PLUS_NODE_VERSION).ok(),
+            node_version: std::env::var(env_vars::VP_NODE_VERSION).ok(),
             user_home: std::env::var("HOME")
                 .or_else(|_| std::env::var("USERPROFILE"))
                 .ok()

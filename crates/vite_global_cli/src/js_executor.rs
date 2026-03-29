@@ -74,7 +74,7 @@ impl JsExecutor {
 
     /// Get the path to the current Rust binary (vp).
     ///
-    /// This is passed to JS scripts via `VITE_PLUS_CLI_BIN` environment variable
+    /// This is passed to JS scripts via `VP_CLI_BIN` environment variable
     /// so they can invoke vp commands when needed.
     fn get_bin_path() -> Result<AbsolutePathBuf, Error> {
         let exe_path = std::env::current_exe().map_err(|_| Error::CliBinaryNotFound)?;
@@ -84,7 +84,7 @@ impl JsExecutor {
     /// Create a JS runtime command with common environment variables set.
     ///
     /// Sets up:
-    /// - `VITE_PLUS_CLI_BIN`: So JS scripts can invoke vp commands
+    /// - `VP_CLI_BIN`: So JS scripts can invoke vp commands
     /// - `PATH`: Prepends the runtime bin directory so child processes can find the JS runtime
     fn create_js_command(
         runtime_binary: &AbsolutePath,
@@ -92,8 +92,8 @@ impl JsExecutor {
     ) -> Command {
         let mut cmd = Command::new(runtime_binary.as_path());
         if let Ok(bin_path) = Self::get_bin_path() {
-            tracing::debug!("Set VITE_PLUS_CLI_BIN to {:?}", bin_path);
-            cmd.env(env_vars::VITE_PLUS_CLI_BIN, bin_path.as_path());
+            tracing::debug!("Set VP_CLI_BIN to {:?}", bin_path);
+            cmd.env(env_vars::VP_CLI_BIN, bin_path.as_path());
         }
 
         // Prepend runtime bin to PATH so child processes can find the JS runtime

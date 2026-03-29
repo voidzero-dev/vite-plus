@@ -19,5 +19,5 @@ Skipped 'npm-global-linked-cli': managed by `vp install -g ./npm-global-linked-p
 > vp remove -g npm-global-linked-pkg # Cleanup
 Uninstalled npm-global-linked-pkg
 
-> test -L $VITE_PLUS_HOME/bin/npm-global-linked-cli && echo 'link created' || echo 'link removed'
+> test -L $VP_HOME/bin/npm-global-linked-cli && echo 'link created' || echo 'link removed'
 link removed

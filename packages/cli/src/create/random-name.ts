@@ -1,6 +1,6 @@
 import { getRandomWord } from '@nkzw/safe-word-list';
 
-const isTest = process.env.VITE_PLUS_CLI_TEST === '1';
+const isTest = process.env.VP_CLI_TEST === '1';
 
 export default function getRandomWords(): ReadonlyArray<string> {
   const first = getRandomWord();

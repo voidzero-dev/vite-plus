@@ -4,11 +4,11 @@
     "VITE_DISABLE_AUTO_INSTALL": "1"
   },
   "commands": [
-    "vp exec -r -- node -e \"console.log(process.env.VITE_PLUS_PACKAGE_NAME)\" # recursive: topological order",
-    "vp exec --filter 'app-web...' -- node -e \"console.log(process.env.VITE_PLUS_PACKAGE_NAME)\" # filter with transitive deps",
-    "vp exec --filter 'lib-ui...' -- node -e \"console.log(process.env.VITE_PLUS_PACKAGE_NAME)\" # filter mid-graph with deps",
-    "vp exec --filter '...lib-core' -- node -e \"console.log(process.env.VITE_PLUS_PACKAGE_NAME)\" # filter dependents of foundation",
-    "vp exec -r --reverse -- node -e \"console.log(process.env.VITE_PLUS_PACKAGE_NAME)\" # reverse topological order",
-    "vp exec --filter 'cycle-a...' -- node -e \"console.log(process.env.VITE_PLUS_PACKAGE_NAME)\" # cycle member with non-cyclic dep: lib-core before cycle-a"
+    "vp exec -r -- node -e \"console.log(process.env.VP_PACKAGE_NAME)\" # recursive: topological order",
+    "vp exec --filter 'app-web...' -- node -e \"console.log(process.env.VP_PACKAGE_NAME)\" # filter with transitive deps",
+    "vp exec --filter 'lib-ui...' -- node -e \"console.log(process.env.VP_PACKAGE_NAME)\" # filter mid-graph with deps",
+    "vp exec --filter '...lib-core' -- node -e \"console.log(process.env.VP_PACKAGE_NAME)\" # filter dependents of foundation",
+    "vp exec -r --reverse -- node -e \"console.log(process.env.VP_PACKAGE_NAME)\" # reverse topological order",
+    "vp exec --filter 'cycle-a...' -- node -e \"console.log(process.env.VP_PACKAGE_NAME)\" # cycle member with non-cyclic dep: lib-core before cycle-a"
   ]
 }

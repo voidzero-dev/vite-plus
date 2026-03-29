@@ -19,7 +19,7 @@ const repoConfig = repos[project as keyof typeof repos];
 const directory = 'directory' in repoConfig ? repoConfig.directory : undefined;
 const cwd = directory ? join(repoRoot, directory) : repoRoot;
 // run vp migrate
-const cli = process.env.VITE_PLUS_CLI_BIN ?? 'vp';
+const cli = process.env.VP_CLI_BIN ?? 'vp';
 
 if (project === 'rollipop') {
   const oxfmtrc = await readFile(join(repoRoot, '.oxfmtrc.json'), 'utf-8');
@@ -30,7 +30,7 @@ if (project === 'rollipop') {
   );
 }
 
-// Projects that already use vite-plus need VITE_PLUS_FORCE_MIGRATE=1 so
+// Projects that already use vite-plus need VP_FORCE_MIGRATE=1 so
 // vp migrate runs full dependency rewriting instead of skipping.
 const forceFreshMigration = 'forceFreshMigration' in repoConfig && repoConfig.forceFreshMigration;
 
@@ -39,13 +39,13 @@ execSync(`${cli} migrate --no-agent --no-interactive`, {
   stdio: 'inherit',
   env: {
     ...process.env,
-    ...(forceFreshMigration ? { VITE_PLUS_FORCE_MIGRATE: '1' } : {}),
-    VITE_PLUS_OVERRIDE_PACKAGES: JSON.stringify({
+    ...(forceFreshMigration ? { VP_FORCE_MIGRATE: '1' } : {}),
+    VP_OVERRIDE_PACKAGES: JSON.stringify({
       vite: `file:${tgzDir}/voidzero-dev-vite-plus-core-0.0.0.tgz`,
       vitest: `file:${tgzDir}/voidzero-dev-vite-plus-test-0.0.0.tgz`,
       '@voidzero-dev/vite-plus-core': `file:${tgzDir}/voidzero-dev-vite-plus-core-0.0.0.tgz`,
       '@voidzero-dev/vite-plus-test': `file:${tgzDir}/voidzero-dev-vite-plus-test-0.0.0.tgz`,
     }),
-    VITE_PLUS_VERSION: `file:${tgzDir}/vite-plus-0.0.0.tgz`,
+    VP_VERSION: `file:${tgzDir}/vite-plus-0.0.0.tgz`,
   },
 });
