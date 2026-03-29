@@ -214,6 +214,9 @@ impl PackageManager {
                     && options.filters.map_or(true, |filters| filters.is_empty())
                     && options.publish_branch.is_none()
                     && !options.report_summary
+                    && options
+                        .pass_through_args
+                        .map_or(true, |pass_through_args| pass_through_args.is_empty())
                     && !options.force;
 
                 if can_use_native_yarn {
@@ -675,6 +678,19 @@ mod tests {
             .resolve_publish_command(&PublishCommandOptions { force: true, ..Default::default() });
         assert_eq!(result.bin_path, "npm");
         assert_eq!(result.args, vec!["publish", "--force"]);
+    }
+
+    #[test]
+    fn test_yarn_modern_publish_with_pass_through_args_falls_back_to_npm() {
+        let pm = create_mock_package_manager(PackageManagerType::Yarn, "4.0.0");
+        let pass_through_args = vec!["--loglevel".to_string(), "error".to_string()];
+        let result = pm.resolve_publish_command(&PublishCommandOptions {
+            dry_run: true,
+            pass_through_args: Some(&pass_through_args),
+            ..Default::default()
+        });
+        assert_eq!(result.bin_path, "npm");
+        assert_eq!(result.args, vec!["publish", "--dry-run", "--loglevel", "error"]);
     }
 
     #[test]
