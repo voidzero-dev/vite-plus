@@ -1,4 +1,4 @@
-> printf '#!/bin/sh\necho preexisting-binary-works' > $VITE_PLUS_HOME/bin/npm-global-preexist-cli && chmod +x $VITE_PLUS_HOME/bin/npm-global-preexist-cli # Create user-owned binary
+> printf '#!/bin/sh\necho preexisting-binary-works' > $VP_HOME/bin/npm-global-preexist-cli && chmod +x $VP_HOME/bin/npm-global-preexist-cli # Create user-owned binary
 > npm-global-preexist-cli # Verify it works before
 preexisting-binary-works
 
@@ -13,4 +13,4 @@ removed 1 package in <variable>ms
 > npm-global-preexist-cli # Should still work
 preexisting-binary-works
 
-> rm $VITE_PLUS_HOME/bin/npm-global-preexist-cli # Cleanup
+> rm $VP_HOME/bin/npm-global-preexist-cli # Cleanup

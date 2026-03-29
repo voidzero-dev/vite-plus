@@ -1,6 +1,6 @@
 //! List command for displaying locally installed Node.js versions.
 //!
-//! Handles `vp env list` to show Node.js versions installed in VITE_PLUS_HOME/js_runtime/node/.
+//! Handles `vp env list` to show Node.js versions installed in VP_HOME/js_runtime/node/.
 
 use std::{cmp::Ordering, process::ExitStatus};
 
@@ -53,7 +53,7 @@ fn compare_versions(a: &str, b: &str) -> Ordering {
 /// Execute the list command (local installed versions).
 pub async fn execute(cwd: AbsolutePathBuf, json_output: bool) -> Result<ExitStatus, Error> {
     let home_dir =
-        vite_shared::get_vite_plus_home().map_err(|e| Error::ConfigError(format!("{e}").into()))?;
+        vite_shared::get_vp_home().map_err(|e| Error::ConfigError(format!("{e}").into()))?;
     let node_dir = home_dir.join("js_runtime").join("node");
 
     let versions = list_installed_versions(node_dir.as_path());

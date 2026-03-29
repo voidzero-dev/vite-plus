@@ -6,7 +6,7 @@
 
 Managed mode is on by default, so `node`, `npm`, and related shims resolve through Vite+ and pick the right Node.js version for the current project.
 
-By default, Vite+ stores its managed runtime and related files in `~/.vite-plus`. If needed, you can override that location with `VITE_PLUS_HOME`.
+By default, Vite+ stores its managed runtime and related files in `~/.vite-plus`. If needed, you can override that location with `VP_HOME`.
 
 If you want to keep that behavior, run:
 
@@ -28,7 +28,7 @@ This switches to system-first mode, where the shims prefer your system Node.js a
 
 ### Setup
 
-- `vp env setup` creates or updates shims in `VITE_PLUS_HOME/bin`
+- `vp env setup` creates or updates shims in `VP_HOME/bin`
 - `vp env on` enables managed mode so shims always use Vite+-managed Node.js
 - `vp env off` enables system-first mode so shims prefer system Node.js first
 - `vp env print` prints the shell snippet for the current session

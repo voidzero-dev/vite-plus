@@ -5,10 +5,10 @@
   "commands": [
     "mkdir -p custom-prefix",
     "npm install -g --prefix $(pwd)/custom-prefix ./npm-global-prefix-pkg # Install to custom prefix, should create link",
-    "test -L $VITE_PLUS_HOME/bin/npm-global-prefix-cli && echo 'link exists' # Link should exist",
+    "test -L $VP_HOME/bin/npm-global-prefix-cli && echo 'link exists' # Link should exist",
     "npm-global-prefix-cli # Verify callable via link",
     "npm uninstall -g --prefix $(pwd)/custom-prefix npm-global-prefix-pkg # Uninstall should also remove link",
-    "test -L $VITE_PLUS_HOME/bin/npm-global-prefix-cli && echo 'link exists' || echo 'link removed' # Should be gone",
+    "test -L $VP_HOME/bin/npm-global-prefix-cli && echo 'link exists' || echo 'link removed' # Should be gone",
     "rm -rf custom-prefix # Cleanup"
   ]
 }

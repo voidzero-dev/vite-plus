@@ -48,20 +48,20 @@ pub async fn execute(
     if is_shim_tool(tool) {
         // Clear recursion env var to force fresh version resolution.
         // This is needed because `vp env exec` may be invoked from within a context
-        // where VITE_PLUS_TOOL_RECURSION is already set (e.g., when pnpm runs through
+        // where VP_TOOL_RECURSION is already set (e.g., when pnpm runs through
         // the vite-plus shim). Without clearing it, shim_dispatch would passthrough
         // to the system node instead of resolving the version.
         // SAFETY: This is safe because we're about to spawn a child process and we want
         // fresh version resolution, not passthrough behavior.
         unsafe {
-            std::env::remove_var(env_vars::VITE_PLUS_TOOL_RECURSION);
+            std::env::remove_var(env_vars::VP_TOOL_RECURSION);
         }
 
         // Use the SAME shim dispatch as Unix symlinks - this ensures:
         // - Core tools: Version resolved from .node-version/package.json/default
         // - Package binaries: Uses Node.js version from package metadata
         // - Automatic Node.js download if needed
-        // - Recursion prevention via VITE_PLUS_TOOL_RECURSION
+        // - Recursion prevention via VP_TOOL_RECURSION
         // - Shim mode checking (managed vs system-first)
         let args: Vec<String> = command[1..].to_vec();
         let exit_code = shim_dispatch(tool, &args).await;
@@ -85,14 +85,14 @@ pub async fn execute(
 /// consumed by clap while parsing `vp env exec`. Remove only that inserted
 /// separator before forwarding args to the target tool.
 fn normalize_wrapper_command(command: &[String]) -> Vec<String> {
-    let from_wrapper = std::env::var_os(env_vars::VITE_PLUS_SHIM_WRAPPER).is_some();
+    let from_wrapper = std::env::var_os(env_vars::VP_SHIM_WRAPPER).is_some();
     let normalized = normalize_wrapper_command_inner(command, from_wrapper);
 
     if from_wrapper {
         // SAFETY: We're in a short-lived CLI process and clearing a wrapper-only
         // marker before tool execution avoids leaking it to child processes.
         unsafe {
-            std::env::remove_var(env_vars::VITE_PLUS_SHIM_WRAPPER);
+            std::env::remove_var(env_vars::VP_SHIM_WRAPPER);
         }
     }
 
@@ -132,7 +132,7 @@ async fn execute_with_version(
     // to ensure the env var is not inherited. We're not reading this env var in other
     // threads at this point.
     unsafe {
-        std::env::remove_var(env_vars::VITE_PLUS_TOOL_RECURSION);
+        std::env::remove_var(env_vars::VP_TOOL_RECURSION);
     }
 
     // 4. Build PATH with node bin dir first (uses platform-specific separator)

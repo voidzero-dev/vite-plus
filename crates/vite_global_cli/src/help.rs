@@ -499,7 +499,7 @@ fn env_help_doc() -> HelpDoc {
             section_rows(
                 "Setup",
                 vec![
-                    row("setup", "Create or update shims in VITE_PLUS_HOME/bin"),
+                    row("setup", "Create or update shims in VP_HOME/bin"),
                     row("on", "Enable managed mode - shims always use vite-plus managed Node.js"),
                     row(
                         "off",

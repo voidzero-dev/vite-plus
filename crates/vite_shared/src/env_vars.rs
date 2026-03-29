@@ -13,7 +13,7 @@
 // ── Config: read once at startup via EnvConfig ──────────────────────────
 
 /// Override for the vite-plus home directory (default: `~/.vite-plus`).
-pub const VITE_PLUS_HOME: &str = "VITE_PLUS_HOME";
+pub const VP_HOME: &str = "VP_HOME";
 
 /// Log filter string for `tracing_subscriber` (e.g. `"debug"`, `"vite_task=trace"`).
 pub const VITE_LOG: &str = "VITE_LOG";
@@ -28,13 +28,13 @@ pub const NPM_CONFIG_REGISTRY_UPPER: &str = "NPM_CONFIG_REGISTRY";
 pub const VITE_NODE_DIST_MIRROR: &str = "VITE_NODE_DIST_MIRROR";
 
 /// Override Node.js version (takes highest priority in version resolution).
-pub const VITE_PLUS_NODE_VERSION: &str = "VITE_PLUS_NODE_VERSION";
+pub const VP_NODE_VERSION: &str = "VP_NODE_VERSION";
 
 /// Enable debug output for shim dispatch.
-pub const VITE_PLUS_DEBUG_SHIM: &str = "VITE_PLUS_DEBUG_SHIM";
+pub const VP_DEBUG_SHIM: &str = "VP_DEBUG_SHIM";
 
 /// Enable eval mode for `vp env use`.
-pub const VITE_PLUS_ENV_USE_EVAL_ENABLE: &str = "VITE_PLUS_ENV_USE_EVAL_ENABLE";
+pub const VP_ENV_USE_EVAL_ENABLE: &str = "VP_ENV_USE_EVAL_ENABLE";
 
 /// Filter for update task types.
 pub const VITE_UPDATE_TASK_TYPES: &str = "VITE_UPDATE_TASK_TYPES";
@@ -47,31 +47,31 @@ pub const VITE_GLOBAL_CLI_JS_SCRIPTS_DIR: &str = "VITE_GLOBAL_CLI_JS_SCRIPTS_DIR
 /// Bypass the vite-plus shim and use the system tool directly.
 ///
 /// Value is a `PATH`-style list of directories to bypass.
-pub const VITE_PLUS_BYPASS: &str = "VITE_PLUS_BYPASS";
+pub const VP_BYPASS: &str = "VP_BYPASS";
 
 /// Recursion guard for `vp env exec` — prevents infinite shim loops.
-pub const VITE_PLUS_TOOL_RECURSION: &str = "VITE_PLUS_TOOL_RECURSION";
+pub const VP_TOOL_RECURSION: &str = "VP_TOOL_RECURSION";
 
 /// Set by shim dispatch to record the active Node.js version.
-pub const VITE_PLUS_ACTIVE_NODE: &str = "VITE_PLUS_ACTIVE_NODE";
+pub const VP_ACTIVE_NODE: &str = "VP_ACTIVE_NODE";
 
 /// Set by shim dispatch to record how the Node.js version was resolved.
-pub const VITE_PLUS_RESOLVE_SOURCE: &str = "VITE_PLUS_RESOLVE_SOURCE";
+pub const VP_RESOLVE_SOURCE: &str = "VP_RESOLVE_SOURCE";
 
 /// Set by shell wrapper scripts to indicate which tool is being shimmed.
-pub const VITE_PLUS_SHIM_TOOL: &str = "VITE_PLUS_SHIM_TOOL";
+pub const VP_SHIM_TOOL: &str = "VP_SHIM_TOOL";
 
 /// Set by Windows shim wrappers that route through `vp env exec`.
 ///
 /// When present, `env exec` can normalize wrapper-inserted argument separators
 /// before forwarding to the actual tool.
-pub const VITE_PLUS_SHIM_WRAPPER: &str = "VITE_PLUS_SHIM_WRAPPER";
+pub const VP_SHIM_WRAPPER: &str = "VP_SHIM_WRAPPER";
 
 /// Path to the vp binary, passed to JS scripts so they can invoke CLI commands.
-pub const VITE_PLUS_CLI_BIN: &str = "VITE_PLUS_CLI_BIN";
+pub const VP_CLI_BIN: &str = "VP_CLI_BIN";
 
 /// Global CLI version, passed from Rust binary to JS for --version display.
-pub const VITE_PLUS_GLOBAL_VERSION: &str = "VITE_PLUS_GLOBAL_VERSION";
+pub const VP_GLOBAL_VERSION: &str = "VP_GLOBAL_VERSION";
 
 // ── Testing / Development ───────────────────────────────────────────────
 
@@ -79,4 +79,4 @@ pub const VITE_PLUS_GLOBAL_VERSION: &str = "VITE_PLUS_GLOBAL_VERSION";
 ///
 /// When set, `get_trampoline_path()` uses this path instead of resolving
 /// relative to `current_exe()`. Only used in test environments.
-pub const VITE_PLUS_TRAMPOLINE_PATH: &str = "VITE_PLUS_TRAMPOLINE_PATH";
+pub const VP_TRAMPOLINE_PATH: &str = "VP_TRAMPOLINE_PATH";

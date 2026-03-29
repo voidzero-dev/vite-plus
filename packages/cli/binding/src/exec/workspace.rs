@@ -140,7 +140,7 @@ pub(super) async fn execute_exec_workspace(
                 exec_dir,
             )?;
             cmd.env("PATH", &path_env)
-                .env("VITE_PLUS_PACKAGE_NAME", &pkg_name)
+                .env("VP_PACKAGE_NAME", &pkg_name)
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped());
 
@@ -231,7 +231,7 @@ pub(super) async fn execute_exec_workspace(
                 }
                 Err(e) => return Err(e),
             };
-            cmd.env("PATH", &path_env).env("VITE_PLUS_PACKAGE_NAME", pkg_name);
+            cmd.env("PATH", &path_env).env("VP_PACKAGE_NAME", pkg_name);
 
             let mut child = cmd.spawn().map_err(|e| Error::Anyhow(e.into()))?;
             let status = child.wait().await.map_err(|e| Error::Anyhow(e.into()))?;

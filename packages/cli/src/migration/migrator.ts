@@ -209,7 +209,7 @@ export async function migrateEslintToOxlint(
   packages?: WorkspacePackage[],
   options?: { silent?: boolean; report?: MigrationReport },
 ): Promise<boolean> {
-  const vpBin = process.env.VITE_PLUS_CLI_BIN ?? 'vp';
+  const vpBin = process.env.VP_CLI_BIN ?? 'vp';
   const spinner = options?.silent
     ? {
         start: () => {},
@@ -464,7 +464,7 @@ export async function migratePrettierToOxfmt(
   packages?: WorkspacePackage[],
   options?: { silent?: boolean; report?: MigrationReport },
 ): Promise<boolean> {
-  const vpBin = process.env.VITE_PLUS_CLI_BIN ?? 'vp';
+  const vpBin = process.env.VP_CLI_BIN ?? 'vp';
   const spinner = options?.silent
     ? {
         start: () => {},
@@ -1884,7 +1884,7 @@ export function setupGitHooks(
     }
   }
 
-  const vpBin = process.env.VITE_PLUS_CLI_BIN ?? 'vp';
+  const vpBin = process.env.VP_CLI_BIN ?? 'vp';
 
   // Install git hooks via vp config (--hooks-only to skip agent setup, handled by migration)
   const configArgs = isCustomDir
