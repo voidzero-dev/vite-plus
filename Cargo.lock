@@ -7377,6 +7377,7 @@ dependencies = [
  "ast-grep-language",
  "brush-parser 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "ignore",
+ "rayon",
  "regex",
  "serde_json",
  "tempfile",
