@@ -27,6 +27,7 @@ Execute:
 Build:
   build    Build for production
   pack     Build library
+  release  Version and publish workspace packages with readiness checks, confirmation, and optional changelog generation
   preview  Preview production build
 
 Manage Dependencies:
