@@ -17,10 +17,15 @@ Vite+ is the unified entry point for local web development. It combines [Vite](h
 - **`vp build`:** Build applications for production with Vite + Rolldown
 - **`vp run`:** Execute monorepo tasks with caching and dependency-aware scheduling
 - **`vp pack`:** Build libraries for npm publishing or standalone app binaries
+- **`vp release`:** Version and publish workspace packages with native publish preflight during `--dry-run`, release checks before real publishes by default, retry-friendly exact version overrides via `--version`, optional changelog generation via `--changelog`, prerelease channels like `--preid alpha` / `beta` / `rc`, and `--projects` order respected between independent packages
 - **`vp create` / `vp migrate`:** Scaffold new projects and migrate existing ones
 
 All of this is configured from your project root and works across Vite's framework ecosystem.
 Vite+ is fully open-source under the MIT license.
+
+`vp release` detects likely checks from `build`, `pack`, `prepack`, `prepublishOnly`, `prepare`, and `vitePlus.release.checkScripts`. Real releases run those checks before publishing unless you pass `--no-run-checks`; dry-runs stay lightweight by default and can opt in with `--run-checks`. `--dry-run` also runs the native publisher in dry-run mode from a temporary release manifest state when the git worktree is clean. Use `--yes` for CI or other non-interactive runs, and `--version <x.y.z>` when retrying a partial publish at an exact version.
+
+Real releases always create git tags after a successful publish. Preview-only flags such as `--skip-publish` and `--no-git-tag` are therefore limited to `--dry-run`.
 
 ## Getting Started
 
@@ -118,6 +123,7 @@ Use `vp migrate` to migrate to Vite+. It merges tool-specific config files such 
 
 - **build** - Build for production
 - **pack** - Build libraries
+- **release** - Version and publish workspace packages, with optional changelog generation
 - **preview** - Preview production build
 
 #### Manage Dependencies
