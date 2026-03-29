@@ -74,21 +74,32 @@ mod tests {
         let bin_dir = vite_plus_home.join("bin");
         std::fs::create_dir_all(&bin_dir).unwrap();
 
-        // Create a fake node executable
+        // Create a fake node executable with platform-specific extension
+        #[cfg(windows)]
+        let node_path = bin_dir.join("node.exe");
+        #[cfg(not(windows))]
         let node_path = bin_dir.join("node");
-        std::fs::write(&node_path, "#!/bin/sh\necho 'fake node'").unwrap();
-        #[cfg(unix)]
+
+        // Write minimal content - on Windows, the file just needs to exist with .exe extension
+        // On Unix, we need a shebang and executable permissions
+        #[cfg(windows)]
+        std::fs::write(&node_path, b"MZ").unwrap(); // Minimal PE header for Windows
+        #[cfg(not(windows))]
         {
-            // Make it executable on Unix
+            std::fs::write(&node_path, "#!/bin/sh\necho 'fake node'").unwrap();
             use std::os::unix::fs::PermissionsExt;
             let mut perms = std::fs::metadata(&node_path).unwrap().permissions();
             perms.set_mode(0o755);
             std::fs::set_permissions(&node_path, perms).unwrap();
         }
 
-        // Set PATH to include the fake node directory
+        // Set PATH to include the fake node directory FIRST (prepended)
         let original_path = std::env::var("PATH").unwrap_or_default();
-        let new_path = format!("{}", bin_dir.display());
+        #[cfg(windows)]
+        let path_separator = ';';
+        #[cfg(not(windows))]
+        let path_separator = ':';
+        let new_path = format!("{}{}{}", bin_dir.display(), path_separator, original_path);
         // SAFETY: restore PATH after test
         unsafe {
             std::env::set_var("PATH", &new_path);
