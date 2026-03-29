@@ -1,0 +1,21 @@
+> node setup-bin.js
+> vp run dev # should run vite binary, not parse as vp subcommand
+VITE+ - The Unified Toolchain for the Web
+
+$ vite ⊘ cache disabled
+vite
+
+
+> vp run dev-help # should run vite -h, not parse as vp subcommand
+VITE+ - The Unified Toolchain for the Web
+
+$ vite -h ⊘ cache disabled
+vite -h
+
+
+> vp run dev-version # should run vite --version, not parse as vp subcommand
+VITE+ - The Unified Toolchain for the Web
+
+$ vite --version ⊘ cache disabled
+vite --version
+

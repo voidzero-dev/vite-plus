@@ -1,0 +1,8 @@
+{
+  "commands": [
+    { "command": "node setup-bin.js", "ignoreOutput": true },
+    "vp run dev # should run vite binary, not parse as vp subcommand",
+    "vp run dev-help # should run vite -h, not parse as vp subcommand",
+    "vp run dev-version # should run vite --version, not parse as vp subcommand"
+  ]
+}
