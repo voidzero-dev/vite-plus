@@ -1,0 +1,11 @@
+{
+  "name": "cache-monorepo-missing",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "ready": "vp run -r build"
+  },
+  "packageManager": "pnpm@10.32.1"
+}
