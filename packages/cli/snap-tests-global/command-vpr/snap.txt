@@ -31,21 +31,15 @@ Filter Patterns:
 Documentation: https://viteplus.dev/guide/run
 
 
-> vpr hello # should fall back to pnpm run when no vite-plus dependency
-
-> command-vpr@<semver> hello <cwd>
-> echo hello from script
-
+> vpr hello # should execute via global vite-plus task runner
+$ echo hello from script ⊘ cache disabled
 hello from script
 
-> vpr greet --arg1 value1 # should pass through args to pnpm run
 
-> command-vpr@<semver> greet <cwd>
-> echo greet --arg1 value1
-
+> vpr greet --arg1 value1 # should pass through args
+$ echo greet --arg1 value1 ⊘ cache disabled
 greet --arg1 value1
 
-[1]> vpr nonexistent # should show pnpm missing script error
- ERR_PNPM_NO_SCRIPT  Missing script: nonexistent
 
-Command "nonexistent" not found.
+[1]> vpr nonexistent # should show task not found error
+Task "nonexistent" not found.

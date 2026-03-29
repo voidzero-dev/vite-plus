@@ -1,8 +1,7 @@
 //! `vpr` command implementation.
 //!
-//! Standalone shorthand for `vp run`. Executes tasks via the same
-//! run-or-delegate logic: delegates to local vite-plus CLI when
-//! vite-plus is a dependency, otherwise falls back to `<pm> run`.
+//! Standalone shorthand for `vp run`. Delegates to the local or global
+//! vite-plus CLI to execute tasks.
 
 use vite_path::AbsolutePath;
 use vite_shared::output;
@@ -16,7 +15,7 @@ pub async fn execute_vpr(args: &[String], cwd: &AbsolutePath) -> i32 {
     }
 
     let cwd_buf = cwd.to_absolute_path_buf();
-    match super::run_or_delegate::execute(cwd_buf, args).await {
+    match super::delegate::execute(cwd_buf, "run", args).await {
         Ok(status) => status.code().unwrap_or(1),
         Err(e) => {
             output::error(&e.to_string());
