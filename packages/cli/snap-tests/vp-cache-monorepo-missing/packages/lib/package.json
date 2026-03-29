@@ -1,0 +1,7 @@
+{
+  "name": "lib",
+  "private": true,
+  "scripts": {
+    "build": "vp pack"
+  }
+}
