@@ -22,6 +22,7 @@ pub fn get_vite_plus_home() -> std::io::Result<AbsolutePathBuf> {
     }
 
     // Get from `node` executable file's grandparent directory (~/.vite-plus/bin/node)
+    // For the case where `$HOME` is overridden
     if let Ok(path) = which("node")
         && let Some(parent) = path.parent()
         && let Some(grandparent) = parent.parent()
