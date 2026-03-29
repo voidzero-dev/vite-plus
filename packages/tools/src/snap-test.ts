@@ -90,6 +90,8 @@ function selectShard<T>(items: T[], index: number, total: number): T[] {
   return items.slice(start, start + chunkSize);
 }
 
+const NPM_GLOBAL_PREFIX_DIR = 'npm-global-lib-for-snap-tests';
+
 export async function snapTest() {
   const { positionals, values } = parseArgs({
     allowPositionals: true,
@@ -113,7 +115,7 @@ export async function snapTest() {
   fs.mkdirSync(tempTmpDir, { recursive: true });
   // Pre-create the npm global prefix directory so tests using npm global
   // operations (link, outdated -g, etc.) don't fail with ENOENT.
-  fs.mkdirSync(path.join(tempTmpDir, 'npm-global-lib-for-snap-tests', 'lib'), { recursive: true });
+  fs.mkdirSync(path.join(tempTmpDir, NPM_GLOBAL_PREFIX_DIR, 'lib'), { recursive: true });
 
   // Clean up stale .node-version and package.json in the system temp directory.
   // vite-plus walks up the directory tree to resolve Node.js versions, so leftover
@@ -359,7 +361,7 @@ async function runTestCase(name: string, tempTmpDir: string, casesDir: string, b
     // Skip `vp install` inside `vp migrate` — snap tests don't need real installs
     VITE_PLUS_SKIP_INSTALL: '1',
     // make sure npm install global packages to the temporary directory
-    NPM_CONFIG_PREFIX: path.join(tempTmpDir, 'npm-global-lib-for-snap-tests'),
+    NPM_CONFIG_PREFIX: path.join(tempTmpDir, NPM_GLOBAL_PREFIX_DIR),
 
     // A test case can override/unset environment variables above.
     // For example, VITE_PLUS_CLI_TEST/CI can be unset to test the real-world outputs.
