@@ -294,6 +294,11 @@ jobs:
             command: |
               vp fmt
               vp run validate
+          - name: vite-plus-vitest-global-type-minimal-repro
+            node-version: 24
+            command: |
+              vp test
+              vp check --fix
         exclude:
           # frm-stack uses Docker (testcontainers) which doesn't work the same way on Windows
           - os: windows-latest
