@@ -6,7 +6,7 @@ Implemented
 
 ## Summary
 
-Replace Windows `.cmd` wrapper scripts with lightweight trampoline `.exe` binaries for all shim tools (`vp`, `node`, `npm`, `npx`, `vpx`, and globally installed package binaries). This eliminates the `Terminate batch job (Y/N)?` prompt that appears when users press Ctrl+C, providing the same clean signal behavior as direct `.exe` invocation.
+Replace Windows `.cmd` wrapper scripts with lightweight trampoline `.exe` binaries for all shim tools (`vp`, `node`, `npm`, `npx`, `vpx`, `vpr`, and globally installed package binaries). This eliminates the `Terminate batch job (Y/N)?` prompt that appears when users press Ctrl+C, providing the same clean signal behavior as direct `.exe` invocation.
 
 ## Motivation
 
@@ -64,7 +64,9 @@ On Unix, shims are symlinks to the `vp` binary. The binary detects the tool name
 ├── vp   → ../current/bin/vp     (symlink)
 ├── node → ../current/bin/vp     (symlink)
 ├── npm  → ../current/bin/vp     (symlink)
-└── npx  → ../current/bin/vp     (symlink)
+├── npx  → ../current/bin/vp     (symlink)
+├── vpx  → ../current/bin/vp     (symlink)
+└── vpr  → ../current/bin/vp     (symlink)
 ```
 
 ### Windows (Trampoline `.exe` Files)
@@ -76,6 +78,7 @@ On Unix, shims are symlinks to the `vp` binary. The binary detects the tool name
 ├── npm.exe      # Trampoline → sets VITE_PLUS_SHIM_TOOL=npm, spawns vp.exe
 ├── npx.exe      # Trampoline → sets VITE_PLUS_SHIM_TOOL=npx, spawns vp.exe
 ├── vpx.exe      # Trampoline → sets VITE_PLUS_SHIM_TOOL=vpx, spawns vp.exe
+├── vpr.exe      # Trampoline → sets VITE_PLUS_SHIM_TOOL=vpr, spawns vp.exe
 └── tsc.exe      # Trampoline → sets VITE_PLUS_SHIM_TOOL=tsc, spawns vp.exe (package shim)
 ```
 

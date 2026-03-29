@@ -23,8 +23,8 @@ use owo_colors::OwoColorize;
 use super::config::{get_bin_dir, get_vite_plus_home};
 use crate::{cli::Args, error::Error, help};
 
-/// Tools to create shims for (node, npm, npx, vpx)
-const SHIM_TOOLS: &[&str] = &["node", "npm", "npx", "vpx"];
+/// Tools to create shims for (node, npm, npx, vpx, vpr)
+const SHIM_TOOLS: &[&str] = &["node", "npm", "npx", "vpx", "vpr"];
 
 fn accent_command(command: &str) -> String {
     if help::should_style_help() {

@@ -140,6 +140,9 @@ pub fn detect_shim_tool(argv0: &str) -> Option<String> {
     if argv0_tool == "vpx" {
         return Some("vpx".to_string());
     }
+    if argv0_tool == "vpr" {
+        return Some("vpr".to_string());
+    }
 
     // Fall back to argv[0] detection (Unix symlinks)
     if is_shim_tool(&argv0_tool) { Some(argv0_tool) } else { None }
@@ -222,5 +225,24 @@ mod tests {
         // Also works with .exe extension (Windows)
         let result = detect_shim_tool("vpx.exe");
         assert_eq!(result, Some("vpx".to_string()));
+    }
+
+    #[test]
+    fn test_detect_shim_tool_vpr() {
+        // vpr should be detected via the argv0 check, same pattern as vpx
+        // SAFETY: We're in a test
+        unsafe {
+            std::env::remove_var(SHIM_TOOL_ENV_VAR);
+        }
+        let result = detect_shim_tool("vpr");
+        assert_eq!(result, Some("vpr".to_string()));
+
+        // Also works with full path
+        let result = detect_shim_tool("/home/user/.vite-plus/bin/vpr");
+        assert_eq!(result, Some("vpr".to_string()));
+
+        // Also works with .exe extension (Windows)
+        let result = detect_shim_tool("vpr.exe");
+        assert_eq!(result, Some("vpr".to_string()));
     }
 }

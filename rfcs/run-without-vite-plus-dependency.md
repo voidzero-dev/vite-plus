@@ -427,6 +427,20 @@ fn test_yarn_run_script() {
 }
 ```
 
+## Standalone Shorthand: `vpr`
+
+`vpr` is available as a standalone binary shorthand for `vp run`, following the same pattern as `vpx` (shorthand for `vp exec`). It is implemented as a shim symlink to the `vp` binary, detected via `argv[0]`, and dispatches to the same `run_or_delegate` logic:
+
+```bash
+# These are equivalent:
+vpr dev
+vp run dev
+
+# Fallback behavior is identical:
+vpr build          # → <pm> run build (when no vite-plus dependency)
+vpr -r build       # → delegates to vite-plus task runner (when vite-plus is a dependency)
+```
+
 ## Backward Compatibility
 
 - **Projects with vite-plus**: No change in behavior. The `has_vite_plus_dependency` check passes, and delegation proceeds as before.
