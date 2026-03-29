@@ -80,7 +80,7 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
             crate::cli::EnvSubcommands::Uninstall { version } => {
                 let provider = vite_js_runtime::NodeProvider::new();
                 let resolved = config::resolve_version_alias(&version, &provider).await?;
-                let home_dir = vite_shared::get_vite_plus_home()
+                let home_dir = vite_shared::get_vp_home()
                     .map_err(|e| crate::error::Error::ConfigError(format!("{e}").into()))?;
                 let version_dir = home_dir.join("js_runtime").join("node").join(&resolved);
                 if !version_dir.as_path().exists() {

@@ -5,7 +5,7 @@ Installing ./command-env-install-version-alias-pkg globally...
 Installed ./command-env-install-version-alias-pkg v<semver>
 Binaries: command-env-install-version-alias-pkg-cli
 
-> cat $VITE_PLUS_HOME/bins/command-env-install-version-alias-pkg-cli.json | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); const v=parseInt(d.nodeVersion.split('.')[0]); console.log('LTS major >= 20:', v >= 20)" # Verify LTS version
+> cat $VP_HOME/bins/command-env-install-version-alias-pkg-cli.json | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); const v=parseInt(d.nodeVersion.split('.')[0]); console.log('LTS major >= 20:', v >= 20)" # Verify LTS version
 LTS major >= 20: true
 
 > vp remove -g command-env-install-version-alias-pkg # Cleanup
@@ -18,7 +18,7 @@ Installing ./command-env-install-version-alias-pkg globally...
 Installed ./command-env-install-version-alias-pkg v<semver>
 Binaries: command-env-install-version-alias-pkg-cli
 
-> cat $VITE_PLUS_HOME/bins/command-env-install-version-alias-pkg-cli.json | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); const v=parseInt(d.nodeVersion.split('.')[0]); console.log('Latest major >= 20:', v >= 20)" # Verify latest version
+> cat $VP_HOME/bins/command-env-install-version-alias-pkg-cli.json | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); const v=parseInt(d.nodeVersion.split('.')[0]); console.log('Latest major >= 20:', v >= 20)" # Verify latest version
 Latest major >= 20: true
 
 > vp remove -g command-env-install-version-alias-pkg # Cleanup

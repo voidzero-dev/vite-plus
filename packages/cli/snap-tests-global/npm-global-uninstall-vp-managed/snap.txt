@@ -14,7 +14,7 @@ Skipped 'npm-global-vp-managed-cli': managed by `vp install -g ./npm-global-vp-m
 
 removed 1 package in <variable>ms
 
-> test -L $VITE_PLUS_HOME/bin/npm-global-vp-managed-cli && echo 'link exists' || echo 'link removed' # Shim should still exist
+> test -L $VP_HOME/bin/npm-global-vp-managed-cli && echo 'link exists' || echo 'link removed' # Shim should still exist
 link exists
 
 > npm-global-vp-managed-cli # Verify the shim still works

@@ -12,7 +12,7 @@ mod tls;
 mod tracing;
 
 pub use env_config::{EnvConfig, TestEnvGuard};
-pub use home::get_vite_plus_home;
+pub use home::get_vp_home;
 pub use package_json::{DevEngines, Engines, PackageJson, RuntimeEngine, RuntimeEngineConfig};
 pub use path_env::{
     PrependOptions, PrependResult, format_path_prepended, format_path_with_prepend,

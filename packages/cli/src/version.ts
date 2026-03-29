@@ -31,7 +31,7 @@ interface ToolVersionSpec {
 }
 
 function getGlobalVersion(): string | null {
-  return process.env.VITE_PLUS_GLOBAL_VERSION ?? null;
+  return process.env.VP_GLOBAL_VERSION ?? null;
 }
 
 function getCliVersion(): string | null {

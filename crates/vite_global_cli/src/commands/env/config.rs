@@ -1,7 +1,7 @@
 //! Configuration and version resolution for the env command.
 //!
 //! This module provides:
-//! - VITE_PLUS_HOME path resolution
+//! - VP_HOME path resolution
 //! - Version resolution with priority order
 //! - Config file management
 
@@ -27,7 +27,7 @@ pub enum ShimMode {
     SystemFirst,
 }
 
-/// User configuration stored in VITE_PLUS_HOME/config.json
+/// User configuration stored in VP_HOME/config.json
 #[derive(Serialize, Deserialize, Default, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Config {
@@ -60,26 +60,26 @@ pub struct VersionResolution {
     pub is_range: bool,
 }
 
-/// Get the VITE_PLUS_HOME directory path.
+/// Get the VP_HOME directory path.
 ///
-/// Uses `VITE_PLUS_HOME` environment variable if set, otherwise defaults to `~/.vite-plus`.
-pub fn get_vite_plus_home() -> Result<AbsolutePathBuf, Error> {
-    Ok(vite_shared::get_vite_plus_home()?)
+/// Uses `VP_HOME` environment variable if set, otherwise defaults to `~/.vite-plus`.
+pub fn get_vp_home() -> Result<AbsolutePathBuf, Error> {
+    Ok(vite_shared::get_vp_home()?)
 }
 
 /// Get the bin directory path (~/.vite-plus/bin/).
 pub fn get_bin_dir() -> Result<AbsolutePathBuf, Error> {
-    Ok(get_vite_plus_home()?.join("bin"))
+    Ok(get_vp_home()?.join("bin"))
 }
 
 /// Get the packages directory path (~/.vite-plus/packages/).
 pub fn get_packages_dir() -> Result<AbsolutePathBuf, Error> {
-    Ok(get_vite_plus_home()?.join("packages"))
+    Ok(get_vp_home()?.join("packages"))
 }
 
 /// Get the tmp directory path for staging (~/.vite-plus/tmp/).
 pub fn get_tmp_dir() -> Result<AbsolutePathBuf, Error> {
-    Ok(get_vite_plus_home()?.join("tmp"))
+    Ok(get_vp_home()?.join("tmp"))
 }
 
 /// Get the node_modules directory path for a package.
@@ -116,7 +116,7 @@ pub fn get_node_modules_dir(prefix: &AbsolutePath, package_name: &str) -> Absolu
 
 /// Get the config file path.
 pub fn get_config_path() -> Result<AbsolutePathBuf, Error> {
-    Ok(get_vite_plus_home()?.join(CONFIG_FILE))
+    Ok(get_vp_home()?.join(CONFIG_FILE))
 }
 
 /// Load configuration from disk.
@@ -135,7 +135,7 @@ pub async fn load_config() -> Result<Config, Error> {
 /// Save configuration to disk.
 pub async fn save_config(config: &Config) -> Result<(), Error> {
     let config_path = get_config_path()?;
-    let vite_plus_home = get_vite_plus_home()?;
+    let vite_plus_home = get_vp_home()?;
 
     // Ensure directory exists
     tokio::fs::create_dir_all(&vite_plus_home).await?;
@@ -147,14 +147,14 @@ pub async fn save_config(config: &Config) -> Result<(), Error> {
 
 /// Environment variable for per-shell session Node.js version override.
 /// Set by `vp env use` command.
-pub const VERSION_ENV_VAR: &str = vite_shared::env_vars::VITE_PLUS_NODE_VERSION;
+pub const VERSION_ENV_VAR: &str = vite_shared::env_vars::VP_NODE_VERSION;
 
 /// Session version file name, written by `vp env use` so shims work without the shell eval wrapper.
 pub const SESSION_VERSION_FILE: &str = ".session-node-version";
 
 /// Get the path to the session version file (~/.vite-plus/.session-node-version).
 pub fn get_session_version_path() -> Result<AbsolutePathBuf, Error> {
-    Ok(get_vite_plus_home()?.join(SESSION_VERSION_FILE))
+    Ok(get_vp_home()?.join(SESSION_VERSION_FILE))
 }
 
 /// Read the session version file. Returns `None` if the file is missing or empty.
@@ -197,7 +197,7 @@ pub async fn delete_session_version() -> Result<(), Error> {
 /// Resolve Node.js version for a directory.
 ///
 /// Resolution order:
-/// 0. `VITE_PLUS_NODE_VERSION` env var (session override from `vp env use`)
+/// 0. `VP_NODE_VERSION` env var (session override from `vp env use`)
 /// 1. `.session-node-version` file (session override written by `vp env use` for shell-wrapper-less environments)
 /// 2. `.node-version` file in current or parent directories
 /// 3. `package.json#engines.node` in current or parent directories
@@ -824,7 +824,7 @@ mod tests {
 
         let resolution = resolve_version(&temp_path).await.unwrap();
 
-        // VITE_PLUS_NODE_VERSION should take priority over .node-version
+        // VP_NODE_VERSION should take priority over .node-version
         assert_eq!(resolution.version, "22.0.0");
         assert_eq!(resolution.source, VERSION_ENV_VAR);
         assert!(resolution.source_path.is_none());

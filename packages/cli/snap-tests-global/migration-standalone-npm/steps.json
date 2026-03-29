@@ -3,7 +3,7 @@
   "env": {
     "VITE_DISABLE_AUTO_INSTALL": "1",
     "CI": "",
-    "VITE_PLUS_SKIP_INSTALL": ""
+    "VP_SKIP_INSTALL": ""
   },
   "commands": [
     "vp migrate --no-interactive --no-hooks # migration should work with npm, add overrides, and update lockfile",

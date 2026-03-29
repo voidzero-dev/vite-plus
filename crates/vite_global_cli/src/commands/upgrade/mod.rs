@@ -15,7 +15,7 @@ use vite_install::request::HttpClient;
 use vite_path::AbsolutePathBuf;
 use vite_shared::output;
 
-use crate::{commands::env::config::get_vite_plus_home, error::Error};
+use crate::{commands::env::config::get_vp_home, error::Error};
 
 /// Options for the upgrade command.
 pub struct UpgradeOptions {
@@ -41,7 +41,7 @@ const MAX_VERSIONS_KEEP: usize = 5;
 /// Execute the upgrade command.
 #[allow(clippy::print_stdout, clippy::print_stderr)]
 pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
-    let install_dir = get_vite_plus_home()?;
+    let install_dir = get_vp_home()?;
 
     // Handle --rollback
     if options.rollback {

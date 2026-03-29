@@ -5,21 +5,21 @@
 #   irm https://vite.plus/ps1 | iex
 #
 # Environment variables:
-#   VITE_PLUS_VERSION - Version to install (default: latest)
-#   VITE_PLUS_HOME - Installation directory (default: $env:USERPROFILE\.vite-plus)
+#   VP_VERSION - Version to install (default: latest)
+#   VP_HOME - Installation directory (default: $env:USERPROFILE\.vite-plus)
 #   NPM_CONFIG_REGISTRY - Custom npm registry URL (default: https://registry.npmjs.org)
-#   VITE_PLUS_LOCAL_TGZ - Path to local vite-plus.tgz (for development/testing)
+#   VP_LOCAL_TGZ - Path to local vite-plus.tgz (for development/testing)
 
 $ErrorActionPreference = "Stop"
 
-$ViteVersion = if ($env:VITE_PLUS_VERSION) { $env:VITE_PLUS_VERSION } else { "latest" }
-$InstallDir = if ($env:VITE_PLUS_HOME) { $env:VITE_PLUS_HOME } else { "$env:USERPROFILE\.vite-plus" }
+$ViteVersion = if ($env:VP_VERSION) { $env:VP_VERSION } else { "latest" }
+$InstallDir = if ($env:VP_HOME) { $env:VP_HOME } else { "$env:USERPROFILE\.vite-plus" }
 # npm registry URL (strip trailing slash if present)
 $NpmRegistry = if ($env:NPM_CONFIG_REGISTRY) { $env:NPM_CONFIG_REGISTRY.TrimEnd('/') } else { "https://registry.npmjs.org" }
 # Local tarball for development/testing
-$LocalTgz = $env:VITE_PLUS_LOCAL_TGZ
+$LocalTgz = $env:VP_LOCAL_TGZ
 # Local binary path (set by install-global-cli.ts for local dev)
-$LocalBinary = $env:VITE_PLUS_LOCAL_BINARY
+$LocalBinary = $env:VP_LOCAL_BINARY
 
 function Write-Info {
     param([string]$Message)
@@ -206,10 +206,10 @@ function Setup-NodeManager {
     $binPath = "$InstallDir\bin"
 
     # Explicit override via environment variable
-    if ($env:VITE_PLUS_NODE_MANAGER -eq "yes") {
+    if ($env:VP_NODE_MANAGER -eq "yes") {
         Refresh-Shims -BinDir $BinDir
         return "true"
-    } elseif ($env:VITE_PLUS_NODE_MANAGER -eq "no") {
+    } elseif ($env:VP_NODE_MANAGER -eq "no") {
         return "false"
     }
 
@@ -305,7 +305,7 @@ function Main {
                 Copy-Item -Path $shimSource -Destination (Join-Path $BinDir "vp-shim.exe") -Force
             }
         } else {
-            Write-Error-Exit "VITE_PLUS_LOCAL_BINARY must be set when using VITE_PLUS_LOCAL_TGZ"
+            Write-Error-Exit "VP_LOCAL_BINARY must be set when using VP_LOCAL_TGZ"
         }
     } else {
         # Download from npm registry — extract only the vp binary from CLI platform package
@@ -359,9 +359,9 @@ function Main {
     # npm's min-release-age) by creating a local .npmrc in the version directory.
     Set-Content -Path (Join-Path $VersionDir ".npmrc") -Value "minimum-release-age=0`nmin-release-age=0"
 
-    # Install production dependencies (skip if VITE_PLUS_SKIP_DEPS_INSTALL is set,
+    # Install production dependencies (skip if VP_SKIP_DEPS_INSTALL is set,
     # e.g. during local dev where install-global-cli.ts handles deps separately)
-    if (-not $env:VITE_PLUS_SKIP_DEPS_INSTALL) {
+    if (-not $env:VP_SKIP_DEPS_INSTALL) {
         $installLog = Join-Path $VersionDir "install.log"
         Push-Location $VersionDir
         try {
@@ -410,8 +410,8 @@ function Main {
         # Keep consistent with the original install.ps1 wrapper format
         $wrapperContent = @"
 @echo off
-set VITE_PLUS_HOME=%~dp0..
-"%VITE_PLUS_HOME%\current\bin\vp.exe" %*
+set VP_HOME=%~dp0..
+"%VP_HOME%\current\bin\vp.exe" %*
 exit /b %ERRORLEVEL%
 "@
         Set-Content -Path "$InstallDir\bin\vp.cmd" -Value $wrapperContent -NoNewline
@@ -419,9 +419,9 @@ exit /b %ERRORLEVEL%
         # Also create shell script wrapper for Git Bash/MSYS
         $shContent = @"
 #!/bin/sh
-VITE_PLUS_HOME="`$(dirname "`$(dirname "`$(readlink -f "`$0" 2>/dev/null || echo "`$0")")")"
-export VITE_PLUS_HOME
-exec "`$VITE_PLUS_HOME/current/bin/vp.exe" "`$@"
+VP_HOME="`$(dirname "`$(dirname "`$(readlink -f "`$0" 2>/dev/null || echo "`$0")")")"
+export VP_HOME
+exec "`$VP_HOME/current/bin/vp.exe" "`$@"
 "@
         Set-Content -Path "$InstallDir\bin\vp" -Value $shContent -NoNewline
     }

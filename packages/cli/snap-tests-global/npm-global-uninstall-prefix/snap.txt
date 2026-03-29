@@ -6,7 +6,7 @@ Linked 'npm-global-prefix-cli' to <vite-plus-home>/bin/npm-global-prefix-cli
 
 tip: Use `vp install -g ./npm-global-prefix-pkg` for managed shims that persist across Node.js version changes.
 
-> test -L $VITE_PLUS_HOME/bin/npm-global-prefix-cli && echo 'link exists' # Link should exist
+> test -L $VP_HOME/bin/npm-global-prefix-cli && echo 'link exists' # Link should exist
 link exists
 
 > npm-global-prefix-cli # Verify callable via link
@@ -17,7 +17,7 @@ npm-global-prefix-cli works
 removed 1 package in <variable>ms
 Removed link 'npm-global-prefix-cli' from <vite-plus-home>/bin/npm-global-prefix-cli
 
-> test -L $VITE_PLUS_HOME/bin/npm-global-prefix-cli && echo 'link exists' || echo 'link removed' # Should be gone
+> test -L $VP_HOME/bin/npm-global-prefix-cli && echo 'link exists' || echo 'link removed' # Should be gone
 link removed
 
 > rm -rf custom-prefix # Cleanup

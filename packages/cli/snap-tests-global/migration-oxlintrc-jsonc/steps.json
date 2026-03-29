@@ -1,0 +1,9 @@
+{
+  "commands": [
+    "vp migrate --no-interactive 2>&1 # migration should detect .oxlintrc.jsonc and .oxfmtrc.jsonc",
+    "cat vite.config.ts # check vite.config.ts",
+    "test ! -f .oxlintrc.jsonc # check .oxlintrc.jsonc is removed",
+    "test ! -f .oxfmtrc.jsonc # check .oxfmtrc.jsonc is removed",
+    "cat package.json # check package.json"
+  ]
+}

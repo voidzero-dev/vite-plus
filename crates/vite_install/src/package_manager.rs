@@ -374,7 +374,7 @@ async fn get_latest_version(package_manager_type: PackageManagerType) -> Result<
 }
 
 /// Download the package manager and extract it to the vite-plus home directory.
-/// Return the install directory, e.g. `$VITE_PLUS_HOME/package_manager/pnpm/10.0.0/pnpm`
+/// Return the install directory, e.g. `$VP_HOME/package_manager/pnpm/10.0.0/pnpm`
 pub async fn download_package_manager(
     package_manager_type: PackageManagerType,
     version_or_latest: &str,
@@ -396,7 +396,7 @@ pub async fn download_package_manager(
         }
     }
 
-    let home_dir = vite_shared::get_vite_plus_home()?;
+    let home_dir = vite_shared::get_vp_home()?;
     let bin_name = package_manager_type.to_string();
 
     // For bun, use platform-specific download flow.
@@ -407,12 +407,12 @@ pub async fn download_package_manager(
     }
 
     let tgz_url = get_npm_package_tgz_url(&package_name, &version);
-    // $VITE_PLUS_HOME/package_manager/pnpm/10.0.0
+    // $VP_HOME/package_manager/pnpm/10.0.0
     let target_dir = home_dir.join("package_manager").join(&bin_name).join(&version);
     let install_dir = target_dir.join(&bin_name);
 
     // If all shims already exist, return the target directory
-    // $VITE_PLUS_HOME/package_manager/pnpm/10.0.0/pnpm/bin/(pnpm|pnpm.cmd|pnpm.ps1)
+    // $VP_HOME/package_manager/pnpm/10.0.0/pnpm/bin/(pnpm|pnpm.cmd|pnpm.ps1)
     let bin_prefix = install_dir.join("bin");
     let bin_file = bin_prefix.join(&bin_name);
     if is_exists_file(&bin_file)?
@@ -422,7 +422,7 @@ pub async fn download_package_manager(
         return Ok((install_dir, package_name, version));
     }
 
-    // $VITE_PLUS_HOME/package_manager/pnpm/{tmp_name}
+    // $VP_HOME/package_manager/pnpm/{tmp_name}
     // Use tempfile::TempDir for robust temporary directory creation
     let parent_dir = target_dir.parent().unwrap();
     tokio::fs::create_dir_all(parent_dir).await?;
@@ -510,7 +510,7 @@ fn get_bun_platform_package_name() -> Result<&'static str, Error> {
 /// Unlike JS-based package managers (pnpm/npm/yarn), bun is a native binary
 /// distributed via platform-specific npm packages (`@oven/bun-{os}-{arch}`).
 ///
-/// Layout: `$VITE_PLUS_HOME/package_manager/bun/{version}/bun/bin/bun.native`
+/// Layout: `$VP_HOME/package_manager/bun/{version}/bun/bin/bun.native`
 async fn download_bun_package_manager(
     version: &Str,
     home_dir: &AbsolutePath,
@@ -518,7 +518,7 @@ async fn download_bun_package_manager(
     let package_name: Str = "bun".into();
     let platform_package_name = get_bun_platform_package_name()?;
 
-    // $VITE_PLUS_HOME/package_manager/bun/{version}
+    // $VP_HOME/package_manager/bun/{version}
     let target_dir = home_dir.join("package_manager").join("bun").join(version.as_str());
     let install_dir = target_dir.join("bun");
     let bin_prefix = install_dir.join("bin");
