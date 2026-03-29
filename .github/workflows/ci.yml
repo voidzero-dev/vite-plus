@@ -715,7 +715,7 @@ jobs:
             fi
             git clone --depth 1 "https://github.com/$repo.git" "$RUNNER_TEMP/$dir_name"
             cd "$RUNNER_TEMP/$dir_name"
-            vp install
+            vp install --no-frozen-lockfile
             # run again to show install cache increase by time
             time vp install
             echo "✓ Successfully installed dependencies for $repo"
