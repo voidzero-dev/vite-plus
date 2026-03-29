@@ -40,6 +40,9 @@ pub async fn execute(refresh: bool, env_only: bool) -> Result<ExitStatus, Error>
     // Ensure home directory exists (env files are written here)
     tokio::fs::create_dir_all(&vite_plus_home).await?;
 
+    // TODO: remove this cleanup logic before the beta release
+    cleanup_legacy_completion_dir(&vite_plus_home).await;
+
     // Create env files with PATH guard (prevents duplicate PATH entries)
     create_env_files(&vite_plus_home).await?;
 
@@ -366,6 +369,17 @@ pub(crate) async fn cleanup_legacy_windows_shim(bin_dir: &vite_path::AbsolutePat
     .await;
     if is_shell_script == Some(true) {
         let _ = tokio::fs::remove_file(&sh_path).await;
+    }
+}
+
+/// Remove `~/.vite-plus/completion` directory
+///
+/// In older versions, static completion scripts were generated in `~/.vite-plus/completion/`.
+/// This is no longer needed with dynamic completion support.
+async fn cleanup_legacy_completion_dir(vite_plus_home: &vite_path::AbsolutePath) {
+    let completion_dir = vite_plus_home.join("completion");
+    if tokio::fs::remove_dir_all(&completion_dir).await.is_ok() {
+        tracing::debug!("Removed legacy completion directory: {:?}", completion_dir);
     }
 }
 
