@@ -2078,7 +2078,7 @@ function setPackageManager(
 }
 
 export interface NodeVersionManagerDetection {
-  file: string;
+  file: '.nvmrc' | 'package.json';
 }
 
 /**
