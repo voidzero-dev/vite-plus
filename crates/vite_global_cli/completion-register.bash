@@ -57,8 +57,18 @@ _clap_complete_vp() {
     fi
     _clap_trim_completions
 }
+
+_clap_complete_vpr() {
+    local COMP_WORDS=("vp" "run" "${COMP_WORDS[@]:1}")
+    local COMP_CWORD=$((COMP_CWORD + 1))
+    local COMP_LINE="vp run ${COMP_LINE#vpr}"
+    _clap_complete_vp
+}
+
 if [[ "${BASH_VERSINFO[0]}" -eq 4 && "${BASH_VERSINFO[1]}" -ge 4 || "${BASH_VERSINFO[0]}" -gt 4 ]]; then
     complete -o nospace -o bashdefault -o nosort -F _clap_complete_vp vp
+    complete -o nospace -o bashdefault -o nosort -F _clap_complete_vpr vpr
 else
     complete -o nospace -o bashdefault -F _clap_complete_vp vp
+    complete -o nospace -o bashdefault -F _clap_complete_vpr vpr
 fi

@@ -1557,11 +1557,7 @@ fn should_force_global_delegate(command: &str, args: &[String]) -> bool {
 /// Delegates to the local vite-plus CLI to run `vp run` without arguments,
 /// which returns a list of available tasks in the format "task_name: description".
 fn run_tasks_completions(current: &OsStr) -> Vec<clap_complete::CompletionCandidate> {
-    let Some(cwd) = std::env::current_dir()
-        .ok()
-        .and_then(AbsolutePathBuf::new)
-        .filter(|p| commands::has_vite_plus_dependency(p))
-    else {
+    let Ok(cwd) = vite_path::current_dir() else {
         return vec![];
     };
 
