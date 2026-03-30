@@ -128,18 +128,14 @@ tasks: {
 - **Type:** `string[]`
 - **Default:** `[]`
 
-Environment variables to pass into the task process and include in the cache fingerprint. When any listed variable's value changes, the cache is invalidated.
+Environment variables that the task can read. Listed variables are forwarded to the task process and included in the cache fingerprint — when a value changes, the cache is invalidated.
 
-::: warning
-Tasks run in a **clean environment** — only a small set of system variables (like `PATH` and `HOME`) are passed through automatically. If your task needs a specific environment variable, you **must** list it in `env` (or [`untrackedEnv`](#untrackedenv)) for the variable to be visible to the task process. Simply setting a variable in the shell or Dockerfile is not enough.
-:::
+Because tasks run in a [clean environment](/guide/cache#environment-variables), variables that aren't listed here (or in [`untrackedEnv`](#untrackedenv)) are not visible to the task, even if they are set in your shell or Dockerfile.
 
 ```ts
 tasks: {
   build: {
     command: 'vp build',
-    // NODE_ENV and all VITE_* variables are passed to the task
-    // AND included in the cache fingerprint
     env: ['NODE_ENV', 'VITE_*'],
   },
 }
@@ -152,14 +148,14 @@ $ NODE_ENV=development vp run build    # first run
 $ NODE_ENV=production vp run build     # cache miss: variable changed
 ```
 
-If you need a variable available to the task but don't want it to affect caching, use [`untrackedEnv`](#untrackedenv) instead.
+To forward a variable without it affecting the cache, use [`untrackedEnv`](#untrackedenv) instead.
 
 ### `untrackedEnv`
 
 - **Type:** `string[]`
 - **Default:** see below
 
-Environment variables passed to the task process but **not** included in the cache fingerprint. Use this for variables that the task needs at runtime but that don't affect its output, so changing them won't invalidate the cache.
+Environment variables passed to the task process but **not** included in the cache fingerprint. Changing these values won't invalidate the cache.
 
 ```ts
 tasks: {
