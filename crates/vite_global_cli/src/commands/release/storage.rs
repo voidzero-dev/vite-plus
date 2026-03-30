@@ -250,8 +250,6 @@ pub(super) async fn run_release_checks(
     output::raw("");
     output::info("Running release checks:");
 
-    let workspace_script_names: HashSet<&str> =
-        readiness_report.workspace_scripts.iter().map(String::as_str).collect();
     for script in &readiness_report.workspace_scripts {
         raw_progress_line!("workspace script `", script, '`');
         let status = package_manager
@@ -278,11 +276,7 @@ pub(super) async fn run_release_checks(
             continue;
         };
 
-        for script in readiness
-            .scripts
-            .iter()
-            .filter(|script| !workspace_script_names.contains(script.as_str()))
-        {
+        for script in &readiness.scripts {
             raw_progress_line!(&plan.name, " script `", script, '`');
             let status = package_manager
                 .run_script_command(
@@ -569,20 +563,33 @@ async fn publish_packages_inner(
     Ok((published_count, ExitStatus::default()))
 }
 
-fn apply_manifest_edits(
+pub(super) fn apply_manifest_edits(
     manifest_edits: &[ManifestEdit],
     restore_original: bool,
 ) -> Result<(), Error> {
+    let mut applied_edits = 0usize;
     for edit in manifest_edits {
         let contents =
             if restore_original { &edit.original_contents } else { &edit.updated_contents };
-        fs::write(&edit.path, contents).map_err(|error| {
+        if let Err(error) = fs::write(&edit.path, contents) {
+            let rollback_result =
+                rollback_manifest_edits(&manifest_edits[..applied_edits], !restore_original);
             let mut message = String::from("write release manifest for ");
             message.push_str(&edit.package);
             message.push_str(": ");
             push_display(&mut message, error);
-            Error::UserMessage(message.into())
-        })?;
+            match rollback_result {
+                Ok(()) => {
+                    message.push_str(". Previously written release manifests were rolled back.");
+                }
+                Err(rollback_error) => {
+                    message.push_str(" | rollback error: ");
+                    push_display(&mut message, rollback_error);
+                }
+            }
+            return Err(Error::UserMessage(message.into()));
+        }
+        applied_edits += 1;
     }
 
     Ok(())
@@ -596,6 +603,25 @@ fn write_release_artifact_edit(edit: &ReleaseArtifactEdit) -> Result<(), Error> 
         push_display(&mut message, error);
         Error::UserMessage(message.into())
     })
+}
+
+fn rollback_manifest_edits(
+    manifest_edits: &[ManifestEdit],
+    restore_original: bool,
+) -> Result<(), Error> {
+    for edit in manifest_edits.iter().rev() {
+        let contents =
+            if restore_original { &edit.original_contents } else { &edit.updated_contents };
+        fs::write(&edit.path, contents).map_err(|error| {
+            let mut message = String::from("restore release manifest for ");
+            message.push_str(&edit.package);
+            message.push_str(": ");
+            push_display(&mut message, error);
+            Error::UserMessage(message.into())
+        })?;
+    }
+
+    Ok(())
 }
 
 fn rollback_applied_release_artifact_edits(edits: &[ReleaseArtifactEdit]) -> Result<(), Error> {
@@ -653,12 +679,11 @@ fn build_updated_manifest_contents(
     plan: &PackageReleasePlan,
     release_versions: &HashMap<&str, &Version>,
 ) -> Result<String, Error> {
-    let current_version = plan.current_version.to_string();
     let next_version = plan.next_version.to_string();
     let mut updated = replace_top_level_string_property(
         &plan.manifest_contents,
         "version",
-        &current_version,
+        &plan.manifest.version,
         &next_version,
     )?;
 

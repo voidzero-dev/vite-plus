@@ -395,6 +395,23 @@ fn resolved_publish_tag_falls_back_to_manifest_tag() {
 }
 
 #[test]
+fn resolved_publish_tag_uses_prerelease_channel_from_target_version() {
+    let mut plan = make_release_plan("pkg-a", &[], &[]);
+    plan.next_version = Version::parse("1.0.1-beta.2").unwrap();
+    plan.publish_tag = Some("next".into());
+
+    assert_eq!(resolved_publish_tag(&plan, &make_release_options()), Some("beta"));
+}
+
+#[test]
+fn resolved_publish_tag_supports_custom_prerelease_channels() {
+    let mut plan = make_release_plan("pkg-a", &[], &[]);
+    plan.next_version = Version::parse("1.0.1-canary.0").unwrap();
+
+    assert_eq!(resolved_publish_tag(&plan, &make_release_options()), Some("canary"));
+}
+
+#[test]
 fn build_manifest_edits_updates_simple_internal_dependency_ranges() {
     let mut pkg_a = make_release_plan("pkg-a", &[], &[]);
     pkg_a.current_version = Version::parse("1.0.0").unwrap();
@@ -443,6 +460,24 @@ fn build_manifest_edits_rejects_complex_internal_dependency_ranges() {
 
     let error = build_manifest_edits(&[pkg_a, pkg_b]).unwrap_err();
     assert!(error.to_string().contains("Use `workspace:` or a simple exact/^/~ version"));
+}
+
+#[test]
+fn build_manifest_edits_supports_tag_sourced_zero_versions() {
+    let mut plan = make_release_plan("pkg-a", &[], &[]);
+    plan.current_version = Version::parse("0.0.0-16aec32").unwrap();
+    plan.next_version = Version::parse("1.2.3").unwrap();
+    plan.manifest.version = "0.0.0".into();
+    plan.manifest_contents = r#"{
+  "name": "pkg-a",
+  "version": "0.0.0"
+}
+"#
+    .into();
+
+    let edits = build_manifest_edits(&[plan]).unwrap();
+    assert_eq!(edits.len(), 1);
+    assert!(edits[0].updated_contents.contains(r#""version": "1.2.3""#));
 }
 
 #[test]
@@ -706,6 +741,64 @@ fn summarize_release_artifacts_counts_manifests_and_changelogs() {
 }
 
 #[test]
+fn apply_manifest_edits_rolls_back_partial_updates() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let workspace_root = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+    let good_path = workspace_root.join("packages/pkg-a/package.json");
+    std::fs::create_dir_all(good_path.as_path().parent().unwrap()).unwrap();
+    std::fs::write(&good_path, "{\"version\":\"1.0.0\"}").unwrap();
+
+    let bad_path = workspace_root.join("missing/pkg-b/package.json");
+    let edits = vec![
+        ManifestEdit {
+            package: "pkg-a".into(),
+            path: good_path.clone(),
+            original_contents: "{\"version\":\"1.0.0\"}".into(),
+            updated_contents: "{\"version\":\"1.0.1\"}".into(),
+        },
+        ManifestEdit {
+            package: "pkg-b".into(),
+            path: bad_path,
+            original_contents: "{\"version\":\"1.0.0\"}".into(),
+            updated_contents: "{\"version\":\"1.0.1\"}".into(),
+        },
+    ];
+
+    let error = apply_manifest_edits(&edits, false).unwrap_err();
+    assert!(error.to_string().contains("rolled back"));
+    assert_eq!(std::fs::read_to_string(&good_path).unwrap(), "{\"version\":\"1.0.0\"}");
+}
+
+#[test]
+fn apply_manifest_edits_rolls_back_partial_restore_to_updated_state() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let workspace_root = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+    let good_path = workspace_root.join("packages/pkg-a/package.json");
+    std::fs::create_dir_all(good_path.as_path().parent().unwrap()).unwrap();
+    std::fs::write(&good_path, "{\"version\":\"1.0.1\"}").unwrap();
+
+    let bad_path = workspace_root.join("missing/pkg-b/package.json");
+    let edits = vec![
+        ManifestEdit {
+            package: "pkg-a".into(),
+            path: good_path.clone(),
+            original_contents: "{\"version\":\"1.0.0\"}".into(),
+            updated_contents: "{\"version\":\"1.0.1\"}".into(),
+        },
+        ManifestEdit {
+            package: "pkg-b".into(),
+            path: bad_path,
+            original_contents: "{\"version\":\"1.0.0\"}".into(),
+            updated_contents: "{\"version\":\"1.0.1\"}".into(),
+        },
+    ];
+
+    let error = apply_manifest_edits(&edits, true).unwrap_err();
+    assert!(error.to_string().contains("rolled back"));
+    assert_eq!(std::fs::read_to_string(&good_path).unwrap(), "{\"version\":\"1.0.1\"}");
+}
+
+#[test]
 fn rollback_release_artifact_edits_restores_and_removes_files() {
     let temp_dir = tempfile::tempdir().unwrap();
     let workspace_root = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
@@ -923,7 +1016,7 @@ fn invalid_release_tags_are_ignored() {
 }
 
 #[test]
-fn repository_release_tags_accept_stable_and_standard_prereleases_only() {
+fn repository_release_tags_accept_stable_and_numbered_prereleases() {
     assert_eq!(
         parse_repository_release_tag_version_for_tests("v1.2.3").unwrap().to_string(),
         "1.2.3"
@@ -932,7 +1025,14 @@ fn repository_release_tags_accept_stable_and_standard_prereleases_only() {
         parse_repository_release_tag_version_for_tests("v1.2.4-alpha.1").unwrap().to_string(),
         "1.2.4-alpha.1"
     );
+    assert_eq!(
+        parse_repository_release_tag_version_for_tests("v1.2.5-canary.0").unwrap().to_string(),
+        "1.2.5-canary.0"
+    );
     assert!(parse_repository_release_tag_version_for_tests("v0.0.0-16aec32").is_none());
+    assert!(
+        parse_repository_release_tag_version_for_tests("v0.0.0-0bfcc90f.20260209-0731").is_none()
+    );
     assert!(parse_repository_release_tag_version_for_tests("release/pkg-a/v1.0.0").is_none());
 }
 
