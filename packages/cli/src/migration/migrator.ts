@@ -2097,6 +2097,11 @@ export function detectNodeVersionManagerFile(
   if (configs.nvmrcFile) {
     return { file: '.nvmrc' };
   }
+
+  if (configs.voltaNode) {
+    return { file: 'package.json' };
+  }
+
   return undefined;
 }
 
@@ -2138,16 +2143,53 @@ export function parseNvmrcVersion(alias: string): string | null {
 }
 
 /**
- * Migrate .nvmrc to .node-version and remove .nvmrc.
+ * Migrate .nvmrc or Volta node version from package.json to .node-version.
+ * - For .nvmrc: the source file is removed after migration.
+ * - For package.json (Volta): the volta field is left as-is; removal is left to the user's discretion.
  * Returns true on success, false if migration was skipped or failed.
  */
 export function migrateNodeVersionManagerFile(
   projectPath: string,
-  _detection: NodeVersionManagerDetection,
+  detection: NodeVersionManagerDetection,
   report?: MigrationReport,
 ): boolean {
-  const sourcePath = path.join(projectPath, '.nvmrc');
   const nodeVersionPath = path.join(projectPath, '.node-version');
+
+  // Volta: read node version from package.json volta.node field
+  if (detection.file === 'package.json') {
+    const packageJsonPath = path.join(projectPath, 'package.json');
+    const pkg: Record<string, unknown> | null = (() => {
+      try {
+        return JSON.parse(fs.readFileSync(packageJsonPath, 'utf8')) as Record<string, unknown>;
+      } catch {
+        return null;
+      }
+    })();
+
+    if (!pkg) {
+      warnMigration('Failed to parse package.json. Create .node-version manually.', report);
+      return false;
+    }
+
+    const voltaNode = (pkg.volta as Record<string, unknown> | undefined)?.node;
+    if (typeof voltaNode !== 'string' || !semver.valid(voltaNode)) {
+      warnMigration(
+        'package.json volta.node is not a valid version. Create .node-version manually with your desired Node.js version.',
+        report,
+      );
+      return false;
+    }
+
+    fs.writeFileSync(nodeVersionPath, `${voltaNode}\n`);
+    prompts.log.info('You can now remove the "volta" field from package.json manually.');
+    if (report) {
+      report.nodeVersionFileMigrated = true;
+    }
+    return true;
+  }
+
+  // .nvmrc: parse version alias and write to .node-version
+  const sourcePath = path.join(projectPath, '.nvmrc');
   const content = fs.readFileSync(sourcePath, 'utf8');
   const originalAlias = content.split('\n')[0]?.trim() ?? '';
   const version = parseNvmrcVersion(originalAlias);
