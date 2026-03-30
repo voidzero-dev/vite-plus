@@ -192,7 +192,7 @@ vite_migration = { path = "crates/vite_migration" }
 vite_shared = { path = "crates/vite_shared" }
 vite_static_config = { path = "crates/vite_static_config" }
 vite_path = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "26c18922e8f3de1cf8a18597e5640f1c85662e45" }
-vite_str = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "26c18922e8f3de1cf8a18597e5640f1c85662e45" }
+vite_str = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "cf2a7486875a7dd19554b3e60e9b97a6c4f28eb1" }
 vite_task = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "26c18922e8f3de1cf8a18597e5640f1c85662e45" }
 vite_workspace = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "26c18922e8f3de1cf8a18597e5640f1c85662e45" }
 walkdir = "2.5.0"
