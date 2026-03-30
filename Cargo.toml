@@ -258,7 +258,7 @@ rolldown_plugin_asset_module = { path = "./rolldown/crates/rolldown_plugin_asset
 rolldown_plugin_bundle_analyzer = { path = "./rolldown/crates/rolldown_plugin_bundle_analyzer" }
 rolldown_plugin_chunk_import_map = { path = "./rolldown/crates/rolldown_plugin_chunk_import_map" }
 rolldown_plugin_copy_module = { path = "./rolldown/crates/rolldown_plugin_copy_module" }
-rolldown_plugin_data_url = { path = "./rolldown/crates/rolldown_plugin_data_url" }
+rolldown_plugin_data_uri = { path = "./rolldown/crates/rolldown_plugin_data_uri" }
 rolldown_plugin_esm_external_require = { path = "./rolldown/crates/rolldown_plugin_esm_external_require" }
 rolldown_plugin_hmr = { path = "./rolldown/crates/rolldown_plugin_hmr" }
 rolldown_plugin_isolated_declaration = { path = "./rolldown/crates/rolldown_plugin_isolated_declaration" }
@@ -285,6 +285,7 @@ rolldown_plugin_vite_reporter = { path = "./rolldown/crates/rolldown_plugin_vite
 rolldown_plugin_vite_resolve = { path = "./rolldown/crates/rolldown_plugin_vite_resolve" }
 rolldown_plugin_vite_transform = { path = "./rolldown/crates/rolldown_plugin_vite_transform" }
 rolldown_plugin_vite_wasm_fallback = { path = "./rolldown/crates/rolldown_plugin_vite_wasm_fallback" }
+rolldown_plugin_vite_wasm_helper = { path = "./rolldown/crates/rolldown_plugin_vite_wasm_helper" }
 rolldown_plugin_vite_web_worker_post = { path = "./rolldown/crates/rolldown_plugin_vite_web_worker_post" }
 rolldown_resolver = { path = "./rolldown/crates/rolldown_resolver" }
 rolldown_sourcemap = { path = "./rolldown/crates/rolldown_sourcemap" }

@@ -255,7 +255,13 @@ pub(super) async fn run_release_checks(
     for script in &readiness_report.workspace_scripts {
         raw_progress_line!("workspace script `", script, '`');
         let status = package_manager
-            .run_script_command(std::slice::from_ref(script), workspace_root_path)
+            .run_script_command(
+                &ScriptCommandOptions {
+                    scripts: std::slice::from_ref(script),
+                    pass_through_args: None,
+                },
+                workspace_root_path,
+            )
             .await?;
         if !status.success() {
             return Ok(status);
@@ -279,7 +285,13 @@ pub(super) async fn run_release_checks(
         {
             raw_progress_line!(&plan.name, " script `", script, '`');
             let status = package_manager
-                .run_script_command(std::slice::from_ref(script), &plan.package_path)
+                .run_script_command(
+                    &ScriptCommandOptions {
+                        scripts: std::slice::from_ref(script),
+                        pass_through_args: None,
+                    },
+                    &plan.package_path,
+                )
                 .await?;
             if !status.success() {
                 return Ok(status);

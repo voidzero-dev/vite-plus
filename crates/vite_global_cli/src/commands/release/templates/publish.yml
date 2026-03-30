@@ -55,5 +55,22 @@ jobs:
             __RELEASE_COMMAND__
           fi
 
-      - name: Push release tags
-        run: git push origin --tags
+      - name: Push release commit and tags
+        run: |
+          git push origin HEAD
+          git push origin --tags
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          repo_tag="$(git tag --points-at HEAD 'v*' | head -n1)"
+          if [[ -z "$repo_tag" ]]; then
+            echo "No repository tag was created by vp release; skipping GitHub Release."
+            exit 0
+          fi
+          if gh release view "$repo_tag" >/dev/null 2>&1; then
+            echo "GitHub Release already exists for $repo_tag; skipping."
+            exit 0
+          fi
+          gh release create "$repo_tag" --generate-notes --title "$repo_tag"
