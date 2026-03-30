@@ -141,3 +141,63 @@ test('should handle async function config without lazy', async () => {
   expect(config.plugins?.length).toBe(1);
   expect((config.plugins?.[0] as { name: string })?.name).toBe('no-lazy');
 });
+
+test('should support async/await lazy loading of plugins', async () => {
+  const config = await defineConfig({
+    lazy: async () => {
+      const plugins = [{ name: 'async-lazy' }];
+      return { plugins };
+    },
+  });
+  expect(config.plugins?.length).toBe(1);
+  expect((config.plugins?.[0] as { name: string })?.name).toBe('async-lazy');
+});
+
+test('should merge async/await lazy plugins with existing plugins', async () => {
+  const config = await defineConfig({
+    plugins: [{ name: 'existing' }],
+    lazy: async () => {
+      const plugins = [{ name: 'async-lazy' }];
+      return { plugins };
+    },
+  });
+  expect(config.plugins?.length).toBe(2);
+  expect((config.plugins?.[0] as { name: string })?.name).toBe('existing');
+  expect((config.plugins?.[1] as { name: string })?.name).toBe('async-lazy');
+});
+
+test('should support async/await lazy with dynamic import pattern', async () => {
+  const config = await defineConfig({
+    lazy: async () => {
+      // simulates: const { default: plugin } = await import('heavy-plugin')
+      const plugin = await Promise.resolve({ name: 'dynamic-import-plugin' });
+      return { plugins: [plugin] };
+    },
+  });
+  expect(config.plugins?.length).toBe(1);
+  expect((config.plugins?.[0] as { name: string })?.name).toBe('dynamic-import-plugin');
+});
+
+test('should support async/await lazy in async function config', async () => {
+  const configFn = defineConfig(async () => ({
+    lazy: async () => {
+      const plugins = [{ name: 'async-fn-async-lazy' }];
+      return { plugins };
+    },
+  }));
+  const config = await configFn({ command: 'build', mode: 'production' });
+  expect(config.plugins?.length).toBe(1);
+  expect((config.plugins?.[0] as { name: string })?.name).toBe('async-fn-async-lazy');
+});
+
+test('should support async/await lazy in sync function config', async () => {
+  const configFn = defineConfig(() => ({
+    lazy: async () => {
+      const plugins = [{ name: 'sync-fn-async-lazy' }];
+      return { plugins };
+    },
+  }));
+  const config = await configFn({ command: 'build', mode: 'production' });
+  expect(config.plugins?.length).toBe(1);
+  expect((config.plugins?.[0] as { name: string })?.name).toBe('sync-fn-async-lazy');
+});

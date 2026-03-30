@@ -1,0 +1,4 @@
+> # Test that plugins loaded via lazy field are applied during build
+> vp build
+> cat dist/index.html | grep 'lazy-plugin-injected'
+  <!-- lazy-plugin-injected --></body>
