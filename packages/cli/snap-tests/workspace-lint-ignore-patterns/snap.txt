@@ -1,3 +1,3 @@
-> cd packages/app-a && vp lint # sub-workspace has no-console:off but root has no-console:warn
+> cd packages/some-package && vp lint # sub-package ignorePatterns should exclude fixtures
 Found 0 warnings and 0 errors.
 Finished in <variable>ms on 2 files with <variable> rules using <variable> threads.

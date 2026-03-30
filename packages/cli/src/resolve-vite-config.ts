@@ -94,19 +94,147 @@ export async function resolveViteConfig(cwd: string, options?: ResolveViteConfig
   return resolveConfig({ root: cwd }, 'build');
 }
 
-export async function resolveUniversalViteConfig(err: null | Error, viteConfigCwd: string) {
+/**
+ * Merge two lint configs. The cwd config overrides the root config.
+ * - plugins: union (deduplicated)
+ * - rules: shallow merge (cwd wins)
+ * - ignorePatterns: cwd overrides entirely
+ * - options: shallow merge (cwd wins)
+ * - overrides: concatenated
+ * - other fields: cwd wins if present
+ */
+export function mergeLintConfig(
+  rootLint: Record<string, unknown> | undefined,
+  cwdLint: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  if (!cwdLint) {
+    return rootLint;
+  }
+  if (!rootLint) {
+    return cwdLint;
+  }
+
+  const merged: Record<string, unknown> = { ...rootLint, ...cwdLint };
+
+  // plugins: union with dedup
+  const rootPlugins = (rootLint.plugins as string[]) ?? [];
+  const cwdPlugins = (cwdLint.plugins as string[]) ?? [];
+  if (rootPlugins.length > 0 || cwdPlugins.length > 0) {
+    merged.plugins = [...new Set([...rootPlugins, ...cwdPlugins])];
+  }
+
+  // rules: shallow merge
+  if (rootLint.rules || cwdLint.rules) {
+    merged.rules = {
+      ...(rootLint.rules as Record<string, unknown>),
+      ...(cwdLint.rules as Record<string, unknown>),
+    };
+  }
+
+  // options: shallow merge
+  if (rootLint.options || cwdLint.options) {
+    merged.options = {
+      ...(rootLint.options as Record<string, unknown>),
+      ...(cwdLint.options as Record<string, unknown>),
+    };
+  }
+
+  // overrides: concatenate
+  const rootOverrides = (rootLint.overrides as unknown[]) ?? [];
+  const cwdOverrides = (cwdLint.overrides as unknown[]) ?? [];
+  if (rootOverrides.length > 0 || cwdOverrides.length > 0) {
+    merged.overrides = [...rootOverrides, ...cwdOverrides];
+  }
+
+  return merged;
+}
+
+/**
+ * Write merged lint config to a fixed path in node_modules/.cache/vite-plus/.
+ * Using a fixed path ensures vite-task's cache key (which includes CLI args)
+ * stays stable across runs.
+ */
+function writeMergedLintConfig(cwd: string, mergedLint: Record<string, unknown>): string {
+  const cacheDir = path.join(cwd, 'node_modules', '.cache', 'vite-plus');
+  fs.mkdirSync(cacheDir, { recursive: true });
+  const configPath = path.join(cacheDir, 'merged-lint-config.json');
+  fs.writeFileSync(configPath, JSON.stringify(mergedLint, null, 2));
+  return configPath;
+}
+
+/**
+ * Resolve vite config for lint/fmt/staged commands.
+ *
+ * The argument can be either:
+ * - A plain string (workspace path) for backward compatibility
+ * - A JSON string `{"workspacePath": "...", "cwd": "..."}` when cwd differs
+ *   from workspace root (e.g., running `vp lint` in a sub-package)
+ *
+ * When cwd differs from workspacePath:
+ * 1. Resolve root config (from workspacePath)
+ * 2. Resolve cwd config (from cwd)
+ * 3. Merge lint configs (root as base, cwd overrides)
+ * 4. Write merged lint to a fixed cache file
+ * 5. Return the cache file as configFile
+ */
+export async function resolveUniversalViteConfig(err: null | Error, arg: string) {
   if (err) {
     throw err;
   }
   try {
-    const config = await resolveViteConfig(viteConfigCwd);
+    let workspacePath: string;
+    let cwd: string | undefined;
+
+    // Parse argument: plain string or JSON with workspacePath + cwd
+    if (arg.startsWith('{')) {
+      const parsed = JSON.parse(arg) as { workspacePath: string; cwd: string };
+      workspacePath = parsed.workspacePath;
+      cwd = parsed.cwd;
+    } else {
+      workspacePath = arg;
+    }
+
+    const rootConfig = await resolveViteConfig(workspacePath);
+
+    // If cwd is different from workspace root and has its own vite config,
+    // merge lint configs
+    if (cwd && cwd !== workspacePath && hasViteConfig(cwd)) {
+      const cwdConfig = await resolveViteConfig(cwd);
+      const mergedLint = mergeLintConfig(
+        rootConfig.lint as Record<string, unknown> | undefined,
+        cwdConfig.lint as Record<string, unknown> | undefined,
+      );
+      const mergedFmt = cwdConfig.fmt ?? rootConfig.fmt;
+
+      const configFile = cwdConfig.configFile ?? rootConfig.configFile;
+
+      if (mergedLint) {
+        const mergedConfigPath = writeMergedLintConfig(cwd, mergedLint);
+        return JSON.stringify({
+          configFile,
+          lintConfigFile: mergedConfigPath,
+          lint: mergedLint,
+          fmt: mergedFmt,
+          run: cwdConfig.run ?? rootConfig.run,
+          staged: cwdConfig.staged ?? rootConfig.staged,
+        });
+      }
+
+      return JSON.stringify({
+        configFile,
+        lint: cwdConfig.lint ?? rootConfig.lint,
+        fmt: mergedFmt,
+        run: cwdConfig.run ?? rootConfig.run,
+        staged: cwdConfig.staged ?? rootConfig.staged,
+      });
+    }
 
     return JSON.stringify({
-      configFile: config.configFile,
-      lint: config.lint,
-      fmt: config.fmt,
-      run: config.run,
-      staged: config.staged,
+      configFile: rootConfig.configFile,
+      lint: rootConfig.lint,
+      fmt: rootConfig.fmt,
+      run: rootConfig.run,
+      staged: rootConfig.staged,
     });
   } catch (resolveErr) {
     console.error('[Vite+] resolve universal vite config error:', resolveErr);
