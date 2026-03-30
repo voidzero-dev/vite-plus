@@ -76,20 +76,24 @@ tasks: {
 
 ## Environment Variables
 
-By default, tasks run in a clean environment. Only a small set of common variables, such as `PATH`, `HOME`, and `CI`, are passed through. Other environment variables are neither visible to the task nor included in the cache fingerprint.
+By default, tasks run in a **clean environment**. Only a small set of common variables, such as `PATH`, `HOME`, and `CI`, are passed through automatically. All other environment variables are **not visible** to the task unless you explicitly list them.
 
-To add an environment variable to the cache key, add it to [`env`](/config/run#env). Changing its value then invalidates the cache:
+::: tip
+If your task depends on environment variables (e.g., `VITE_*` variables set in a Dockerfile or CI pipeline), you must add them to [`env`](/config/run#env) or [`untrackedEnv`](/config/run#untracked-env). Without this, the variables won't be available to the task process, even if they are set in the parent shell.
+:::
+
+Use [`env`](/config/run#env) to pass a variable to the task **and** include it in the cache key. Changing its value then invalidates the cache:
 
 ```ts
 tasks: {
   build: {
     command: 'webpack --mode production',
-    env: ['NODE_ENV'],
+    env: ['NODE_ENV', 'VITE_*'],
   },
 }
 ```
 
-To pass a variable to the task **without** affecting cache behavior, use [`untrackedEnv`](/config/run#untracked-env). This is useful for variables like `CI` or `GITHUB_ACTIONS` that should be available in the task, but do not generally affect caching behavior.
+To pass a variable to the task **without** affecting cache behavior, use [`untrackedEnv`](/config/run#untracked-env). This is useful for variables like `CI` or `GITHUB_ACTIONS` that should be available in the task but whose changes shouldn't invalidate the cache.
 
 See [Run Config](/config/run#env) for details on wildcard patterns and the full list of automatically passed-through variables.
 
