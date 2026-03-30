@@ -191,6 +191,23 @@ describe('detectNodeVersionManagerFile', () => {
     fs.writeFileSync(path.join(tmpDir, '.nvmrc'), 'v20.5.0\n');
     expect(detectNodeVersionManagerFile(tmpDir)).toEqual({ file: '.nvmrc' });
   });
+
+  it('detects volta node in package.json', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ volta: { node: '20.5.0' } }),
+    );
+    expect(detectNodeVersionManagerFile(tmpDir)).toEqual({ file: 'package.json' });
+  });
+
+  it('returns undefined when .node-version already exists even with volta', () => {
+    fs.writeFileSync(path.join(tmpDir, '.node-version'), '20.5.0\n');
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ volta: { node: '20.5.0' } }),
+    );
+    expect(detectNodeVersionManagerFile(tmpDir)).toBeUndefined();
+  });
 });
 
 describe('migrateNodeVersionManagerFile', () => {
@@ -231,6 +248,65 @@ describe('migrateNodeVersionManagerFile', () => {
       manualSteps: [],
     };
     const ok = migrateNodeVersionManagerFile(tmpDir, { file: '.nvmrc' }, report);
+    expect(ok).toBe(false);
+    expect(report.warnings.length).toBe(1);
+    expect(fs.existsSync(path.join(tmpDir, '.node-version'))).toBe(false);
+  });
+
+  it('migrates volta node version to .node-version and leaves package.json intact', () => {
+    const pkg = { name: 'my-app', volta: { node: '20.5.0' } };
+    fs.writeFileSync(path.join(tmpDir, 'package.json'), JSON.stringify(pkg));
+    const ok = migrateNodeVersionManagerFile(tmpDir, { file: 'package.json' });
+    expect(ok).toBe(true);
+    expect(fs.readFileSync(path.join(tmpDir, '.node-version'), 'utf8')).toBe('20.5.0\n');
+    // package.json must not be modified
+    expect(JSON.parse(fs.readFileSync(path.join(tmpDir, 'package.json'), 'utf8'))).toEqual(pkg);
+  });
+
+  it('sets nodeVersionFileMigrated in report for volta migration', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ volta: { node: '20.5.0' } }),
+    );
+    const report = {
+      createdViteConfigCount: 0,
+      mergedConfigCount: 0,
+      mergedStagedConfigCount: 0,
+      inlinedLintStagedConfigCount: 0,
+      removedConfigCount: 0,
+      tsdownImportCount: 0,
+      rewrittenImportFileCount: 0,
+      rewrittenImportErrors: [],
+      eslintMigrated: false,
+      prettierMigrated: false,
+      nodeVersionFileMigrated: false,
+      gitHooksConfigured: false,
+      warnings: [],
+      manualSteps: [],
+    };
+    migrateNodeVersionManagerFile(tmpDir, { file: 'package.json' }, report);
+    expect(report.nodeVersionFileMigrated).toBe(true);
+  });
+
+  it('returns false and warns when volta.node is not a valid semver', () => {
+    fs.writeFileSync(path.join(tmpDir, 'package.json'), JSON.stringify({ volta: { node: 'lts' } }));
+    const report = {
+      createdViteConfigCount: 0,
+      mergedConfigCount: 0,
+      mergedStagedConfigCount: 0,
+      inlinedLintStagedConfigCount: 0,
+      removedConfigCount: 0,
+      tsdownImportCount: 0,
+      rewrittenImportFileCount: 0,
+      rewrittenImportErrors: [],
+      eslintMigrated: false,
+      prettierMigrated: false,
+      nodeVersionFileMigrated: false,
+      gitHooksConfigured: false,
+      warnings: [],
+      manualSteps: [],
+    };
+    const ok = migrateNodeVersionManagerFile(tmpDir, { file: 'package.json' }, report);
     expect(ok).toBe(false);
     expect(report.warnings.length).toBe(1);
     expect(fs.existsSync(path.join(tmpDir, '.node-version'))).toBe(false);
