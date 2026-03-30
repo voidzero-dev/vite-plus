@@ -6,7 +6,7 @@
 mod install;
 mod integrity;
 mod platform;
-mod registry;
+pub(crate) mod registry;
 
 use std::process::ExitStatus;
 

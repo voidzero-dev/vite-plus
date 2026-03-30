@@ -15,6 +15,7 @@ mod help;
 mod js_executor;
 mod shim;
 mod tips;
+mod upgrade_check;
 
 use std::{
     env,
@@ -293,7 +294,17 @@ async fn main() -> ExitCode {
     }
 
     // Parse CLI arguments (using custom help formatting)
-    let exit_code = match try_parse_args_from(normalized_args) {
+    let parse_result = try_parse_args_from(normalized_args);
+
+    // Spawn background upgrade check for eligible commands
+    let upgrade_handle = match &parse_result {
+        Ok(args) if upgrade_check::should_run_for_command(args) => {
+            Some(tokio::spawn(upgrade_check::check_for_update()))
+        }
+        _ => None,
+    };
+
+    let exit_code = match parse_result {
         Err(e) => {
             use clap::error::ErrorKind;
 
@@ -367,6 +378,14 @@ async fn main() -> ExitCode {
             }
         },
     };
+
+    // Display upgrade notice if a newer version is available
+    if let Some(handle) = upgrade_handle
+        && let Ok(Ok(Some(result))) =
+            tokio::time::timeout(std::time::Duration::from_millis(500), handle).await
+    {
+        upgrade_check::display_upgrade_notice(&result);
+    }
 
     tip_context.exit_code = if exit_code == ExitCode::SUCCESS { 0 } else { 1 };
 
