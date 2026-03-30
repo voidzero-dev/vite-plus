@@ -292,11 +292,23 @@ impl SubcommandResolver {
                     &owned_resolved_vite_config
                 };
 
-                if let (Some(_), Some(config_file)) =
+                if let (Some(fmt_config), Some(config_file)) =
                     (&resolved_vite_config.fmt, &resolved_vite_config.config_file)
                 {
                     args.insert(0, "-c".to_string());
                     args.insert(1, config_file.clone());
+
+                    // Avoid "Expected at least one target file" error when
+                    // ignorePatterns filters out all input files (e.g., `vp staged`
+                    // passes only package-lock.json which is then excluded).
+                    if fmt_config
+                        .get("ignorePatterns")
+                        .and_then(|v| v.as_array())
+                        .is_some_and(|arr| !arr.is_empty())
+                        && !has_flag_before_terminator(&args, "--no-error-on-unmatched-pattern")
+                    {
+                        args.push("--no-error-on-unmatched-pattern".to_string());
+                    }
                 }
 
                 Ok(ResolvedSubcommand {
