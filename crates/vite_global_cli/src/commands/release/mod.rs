@@ -550,7 +550,11 @@ fn resolved_publish_tag<'a>(
     plan: &'a PackageReleasePlan,
     options: &'a ReleaseOptions,
 ) -> Option<&'a str> {
-    options.preid.as_deref().or(plan.publish_tag.as_deref())
+    options
+        .preid
+        .as_deref()
+        .or_else(|| prerelease_channel(&plan.next_version))
+        .or(plan.publish_tag.as_deref())
 }
 
 /// Resolves the effective provenance preference for a package release.
