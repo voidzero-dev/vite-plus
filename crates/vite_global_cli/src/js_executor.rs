@@ -3,7 +3,7 @@
 //! This module handles downloading and caching Node.js via `vite_js_runtime`,
 //! and executing JavaScript scripts using the managed runtime.
 
-use std::process::ExitStatus;
+use std::process::{ExitStatus, Output};
 
 use tokio::process::Command;
 use vite_js_runtime::{
@@ -221,6 +221,17 @@ impl JsExecutor {
         self.run_js_entry(project_path, &node_binary, &bin_prefix, args).await
     }
 
+    pub async fn delegate_to_local_cli_output(
+        &mut self,
+        project_path: &AbsolutePath,
+        args: &[String],
+    ) -> Result<Output, Error> {
+        let runtime = self.ensure_project_runtime(project_path).await?;
+        let node_binary = runtime.get_binary_path();
+        let bin_prefix = runtime.get_bin_prefix();
+        self.run_js_entry_output(project_path, &node_binary, &bin_prefix, args).await
+    }
+
     /// Delegate to the global vite-plus CLI entrypoint directly.
     ///
     /// Unlike [`delegate_to_local_cli`], this bypasses project-local resolution and always runs
@@ -263,14 +274,14 @@ impl JsExecutor {
         self.run_js_entry(project_path, &node_binary, &bin_prefix, args).await
     }
 
-    /// Run a JS entry point with the given runtime, resolving local vite-plus first.
-    async fn run_js_entry(
+    /// Prepare a JS command with the entry point resolved.
+    fn prepare_js_entry(
         &self,
         project_path: &AbsolutePath,
         node_binary: &AbsolutePath,
         bin_prefix: &AbsolutePath,
         args: &[String],
-    ) -> Result<ExitStatus, Error> {
+    ) -> Result<Command, Error> {
         // Try to resolve vite-plus from the project directory using oxc_resolver
         let entry_point = match Self::resolve_local_vite_plus(project_path) {
             Some(path) => path,
@@ -285,9 +296,33 @@ impl JsExecutor {
 
         let mut cmd = Self::create_js_command(node_binary, bin_prefix);
         cmd.arg(entry_point.as_path()).args(args).current_dir(project_path.as_path());
+        Ok(cmd)
+    }
 
+    /// Run a JS entry point with the given runtime, resolving local vite-plus first.
+    async fn run_js_entry(
+        &self,
+        project_path: &AbsolutePath,
+        node_binary: &AbsolutePath,
+        bin_prefix: &AbsolutePath,
+        args: &[String],
+    ) -> Result<ExitStatus, Error> {
+        let mut cmd = self.prepare_js_entry(project_path, node_binary, bin_prefix, args)?;
         let status = cmd.status().await?;
         Ok(status)
+    }
+
+    /// Like [`run_js_entry`], but returns `Output`.
+    async fn run_js_entry_output(
+        &self,
+        project_path: &AbsolutePath,
+        node_binary: &AbsolutePath,
+        bin_prefix: &AbsolutePath,
+        args: &[String],
+    ) -> Result<Output, Error> {
+        let mut cmd = self.prepare_js_entry(project_path, node_binary, bin_prefix, args)?;
+        let output = cmd.output().await?;
+        Ok(output)
     }
 
     /// Resolve the local vite-plus package's `dist/bin.js` from the project directory.

@@ -3,9 +3,11 @@
 //! This module defines the CLI structure using clap and routes commands
 //! to their appropriate handlers.
 
-use std::process::ExitStatus;
+use std::{ffi::OsStr, process::ExitStatus};
 
 use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
+use clap_complete::ArgValueCompleter;
+use tokio::runtime::Runtime;
 use vite_install::commands::{
     add::SaveDependencyType, install::InstallCommandOptions, outdated::Format,
 };
@@ -683,7 +685,7 @@ pub enum Commands {
     #[command(disable_help_flag = true)]
     Run {
         /// Additional arguments
-        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true, add = ArgValueCompleter::new(run_tasks_completions))]
         args: Vec<String>,
     },
 
@@ -754,6 +756,32 @@ pub enum Commands {
         #[arg(long, short = 'y')]
         yes: bool,
     },
+}
+
+impl Commands {
+    /// Whether the command was invoked with flags that request quiet or
+    /// machine-readable output (--silent, -s, --json, --parseable, --format json/list).
+    pub fn is_quiet_or_machine_readable(&self) -> bool {
+        match self {
+            Self::Install { silent, .. }
+            | Self::Dlx { silent, .. }
+            | Self::Upgrade { silent, .. } => *silent,
+
+            Self::Outdated { format, .. } => {
+                matches!(format, Some(Format::Json | Format::List))
+            }
+
+            Self::Why { json, parseable, .. } => *json || *parseable,
+            Self::Info { json, .. } => *json,
+
+            Self::Pm(sub) => sub.is_quiet_or_machine_readable(),
+            Self::Env(args) => {
+                args.command.as_ref().is_some_and(|sub| sub.is_quiet_or_machine_readable())
+            }
+
+            _ => false,
+        }
+    }
 }
 
 /// Arguments for the `env` command
@@ -943,6 +971,15 @@ pub enum EnvSubcommands {
         #[arg(long)]
         silent_if_unchanged: bool,
     },
+}
+
+impl EnvSubcommands {
+    fn is_quiet_or_machine_readable(&self) -> bool {
+        match self {
+            Self::Current { json } | Self::List { json } | Self::ListRemote { json, .. } => *json,
+            _ => false,
+        }
+    }
 }
 
 /// Version sorting order for list-remote command
@@ -1308,6 +1345,23 @@ pub enum PmCommands {
     },
 }
 
+impl PmCommands {
+    fn is_quiet_or_machine_readable(&self) -> bool {
+        match self {
+            Self::List { json, parseable, .. } => *json || *parseable,
+            Self::Pack { json, .. }
+            | Self::View { json, .. }
+            | Self::Publish { json, .. }
+            | Self::Audit { json, .. }
+            | Self::Search { json, .. }
+            | Self::Fund { json, .. } => *json,
+            Self::Config(sub) => sub.is_quiet_or_machine_readable(),
+            Self::Token(sub) => sub.is_quiet_or_machine_readable(),
+            _ => false,
+        }
+    }
+}
+
 /// Configuration subcommands
 #[derive(Subcommand, Debug, Clone)]
 pub enum ConfigCommands {
@@ -1378,6 +1432,15 @@ pub enum ConfigCommands {
         #[arg(long, value_name = "LOCATION")]
         location: Option<String>,
     },
+}
+
+impl ConfigCommands {
+    fn is_quiet_or_machine_readable(&self) -> bool {
+        match self {
+            Self::List { json, .. } | Self::Get { json, .. } | Self::Set { json, .. } => *json,
+            _ => false,
+        }
+    }
 }
 
 /// Owner subcommands
@@ -1476,6 +1539,15 @@ pub enum TokenCommands {
     },
 }
 
+impl TokenCommands {
+    fn is_quiet_or_machine_readable(&self) -> bool {
+        match self {
+            Self::List { json, .. } | Self::Create { json, .. } => *json,
+            _ => false,
+        }
+    }
+}
+
 /// Distribution tag subcommands
 #[derive(Subcommand, Debug, Clone)]
 pub enum DistTagCommands {
@@ -1546,6 +1618,46 @@ fn should_force_global_delegate(command: &str, args: &[String]) -> bool {
         }
         _ => false,
     }
+}
+
+/// Get available tasks for shell completion.
+///
+/// Delegates to the local vite-plus CLI to run `vp run` without arguments,
+/// which returns a list of available tasks in the format "task_name: description".
+fn run_tasks_completions(current: &OsStr) -> Vec<clap_complete::CompletionCandidate> {
+    let Some(cwd) = std::env::current_dir()
+        .ok()
+        .and_then(AbsolutePathBuf::new)
+        .filter(|p| commands::has_vite_plus_dependency(p))
+    else {
+        return vec![];
+    };
+
+    // Unescape hashtag and trim quotes for better matching
+    let current = current
+        .to_string_lossy()
+        .replace("\\#", "#")
+        .trim_matches(|c| c == '"' || c == '\'')
+        .to_string();
+
+    let output = tokio::task::block_in_place(|| {
+        Runtime::new().ok().and_then(|rt| {
+            rt.block_on(async { commands::delegate::execute_output(cwd, "run", &[]).await.ok() })
+        })
+    });
+
+    output
+        .filter(|o| o.status.success())
+        .map(|output| {
+            String::from_utf8_lossy(&output.stdout)
+                .lines()
+                .filter_map(|line| line.split_once(": ").map(|(name, _)| name.trim()))
+                .filter(|name| !name.is_empty())
+                .filter(|name| name.starts_with(&current) || current.is_empty())
+                .map(|name| clap_complete::CompletionCandidate::new(name.to_string()))
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 /// Run the CLI command.
@@ -2036,7 +2148,7 @@ pub async fn run_command_with_options(
                 return Ok(ExitStatus::default());
             }
             print_runtime_header(render_options.show_header);
-            commands::run_or_delegate::execute(cwd, &args).await
+            commands::delegate::execute(cwd, "run", &args).await
         }
 
         Commands::Exec { args } => {

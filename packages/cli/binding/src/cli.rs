@@ -332,13 +332,7 @@ impl SubcommandResolver {
                     cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
                         env: Some(Box::new([Str::from("VITE_*")])),
                         untracked_env: None,
-                        input: Some(vec![
-                            UserInputEntry::Auto(AutoInput { auto: true }),
-                            UserInputEntry::GlobWithBase(GlobWithBase {
-                                pattern: Str::from("!node_modules/.vite-temp/**"),
-                                base: InputBase::Workspace,
-                            }),
-                        ]),
+                        input: Some(build_pack_cache_inputs()),
                     }),
                     envs: merge_resolved_envs_with_version(envs, resolved.envs),
                 })
@@ -366,7 +360,14 @@ impl SubcommandResolver {
                     cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
                         env: None,
                         untracked_env: None,
-                        input: None,
+                        input: Some(vec![
+                            UserInputEntry::Auto(AutoInput { auto: true }),
+                            exclude_glob("!node_modules/.vite-temp/**", InputBase::Package),
+                            exclude_glob(
+                                "!node_modules/.vite/vitest/**/results.json",
+                                InputBase::Package,
+                            ),
+                        ]),
                     }),
                     envs: merge_resolved_envs_with_version(envs, resolved.envs),
                 })
@@ -390,13 +391,7 @@ impl SubcommandResolver {
                     cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
                         env: None,
                         untracked_env: None,
-                        input: Some(vec![
-                            UserInputEntry::Auto(AutoInput { auto: true }),
-                            UserInputEntry::GlobWithBase(GlobWithBase {
-                                pattern: Str::from("!node_modules/.vite-temp/**"),
-                                base: InputBase::Workspace,
-                            }),
-                        ]),
+                        input: Some(build_pack_cache_inputs()),
                     }),
                     envs: merge_resolved_envs(envs, resolved.envs),
                 })
@@ -504,6 +499,24 @@ impl SubcommandResolver {
 
 /// Merge resolved environment variables from JS resolver into existing envs.
 /// Does not override existing entries.
+/// Create a negative glob entry to exclude a pattern from cache fingerprinting.
+fn exclude_glob(pattern: &str, base: InputBase) -> UserInputEntry {
+    UserInputEntry::GlobWithBase(GlobWithBase { pattern: Str::from(pattern), base })
+}
+
+/// Common cache input entries for build/pack commands.
+/// Excludes .vite-temp config files and dist output files that are both read and written.
+/// TODO: The hardcoded `!dist/**` exclusion is a temporary workaround. It will be replaced
+/// by a runner-aware approach that automatically excludes task output directories.
+fn build_pack_cache_inputs() -> Vec<UserInputEntry> {
+    vec![
+        UserInputEntry::Auto(AutoInput { auto: true }),
+        exclude_glob("!node_modules/.vite-temp/**", InputBase::Workspace),
+        exclude_glob("!node_modules/.vite-temp/**", InputBase::Package),
+        exclude_glob("!dist/**", InputBase::Package),
+    ]
+}
+
 fn merge_resolved_envs(
     envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
     resolved_envs: Vec<(String, String)>,
@@ -551,18 +564,18 @@ impl CommandHandler for VitePlusCommandHandler {
         &mut self,
         command: &mut ScriptCommand,
     ) -> anyhow::Result<HandledCommand> {
-        // Intercept both "vp" and "vite" commands in task scripts.
-        // "vp" is the conventional alias used in vite-plus task configs.
-        // "vite" must also be intercepted so that `vite test`, `vite build`, etc.
-        // in task scripts are synthesized in-session rather than spawning a new CLI process.
+        // Intercept "vp" and "vpr" commands in task scripts so that `vp test`, `vp build`,
+        // `vpr build`, etc. are synthesized in-session rather than spawning a new CLI process.
         let program = command.program.as_str();
-        if program != "vp" && program != "vite" {
+        if program != "vp" && program != "vpr" {
             return Ok(HandledCommand::Verbatim);
         }
-        // Parse "vp <args>" using CLIArgs — always use "vp" as the program name
-        // so clap shows "Usage: vp ..." even if the original command was "vite ..."
+        // "vpr <args>" is shorthand for "vp run <args>", so prepend "run" for parsing.
+        let is_vpr = program == "vpr";
         let cli_args = match CLIArgs::try_parse_from(
-            iter::once("vp").chain(command.args.iter().map(Str::as_str)),
+            iter::once("vp")
+                .chain(is_vpr.then_some("run"))
+                .chain(command.args.iter().map(Str::as_str)),
         ) {
             Ok(args) => args,
             Err(err) if err.kind() == ErrorKind::InvalidSubcommand => {

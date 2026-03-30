@@ -19,7 +19,7 @@ Develop:
   test   Run tests
 
 Execute:
-  run    Run tasks
+  run    Run tasks (also available as standalone `vpr`)
   exec   Execute a command from local node_modules/.bin
   dlx    Execute a package binary without installing it as a dependency
   cache  Manage the task cache

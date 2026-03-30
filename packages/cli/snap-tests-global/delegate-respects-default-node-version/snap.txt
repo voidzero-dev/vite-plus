@@ -6,11 +6,9 @@ VITE+ - The Unified Toolchain for the Web
 > vp run check-node # Should also use 22.12.0
 VITE+ - The Unified Toolchain for the Web
 
-
-> delegate-respects-default-node-version@<semver> check-node <cwd>
-> node -e "console.log(process.version)"
-
+$ node -e "console.log(process.version)" ⊘ cache disabled
 v<semver>
+
 
 > vp exec node -e "console.log(process.version)" # Should also use 22.12.0
 VITE+ - The Unified Toolchain for the Web

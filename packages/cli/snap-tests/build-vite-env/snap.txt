@@ -35,5 +35,3 @@ dist/assets/index-BnIqjoTZ.js  <variable> kB │ gzip: <variable> kB
 
 ✓ built in <variable>ms
 
----
-vp run: build-vite-env-test#build not cached because it modified its input. (Run `vp run --last-details` for full details)

@@ -1,0 +1,9 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "commands": [
+    "vpr -h # should show vp run help",
+    "vpr hello # should run script via vpr shorthand",
+    "vpr greet --arg1 value1 # should pass through additional args",
+    "vpr nonexistent # should show pnpm missing script error"
+  ]
+}

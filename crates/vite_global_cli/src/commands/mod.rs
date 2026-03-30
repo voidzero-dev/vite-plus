@@ -173,7 +173,8 @@ pub mod version;
 // Category D: Environment Management
 pub mod env;
 
-// Standalone binary command
+// Standalone binary commands
+pub mod vpr;
 pub mod vpx;
 
 // Self-Management
@@ -182,7 +183,6 @@ pub mod upgrade;
 
 // Category C: Local CLI Delegation
 pub mod delegate;
-pub mod run_or_delegate;
 
 // Re-export command structs for convenient access
 pub use add::AddCommand;
