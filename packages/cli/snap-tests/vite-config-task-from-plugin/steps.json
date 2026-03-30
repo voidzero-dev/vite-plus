@@ -1,0 +1,6 @@
+{
+  "commands": [
+    "# Test that tasks added by a plugin config hook are recognized by vp run",
+    "vp run build:prod"
+  ]
+}
