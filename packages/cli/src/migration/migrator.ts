@@ -2094,6 +2094,8 @@ export function detectNodeVersionManagerFile(
   }
 
   const configs = detectConfigs(projectPath);
+
+  // .nvmrc takes priority over volta.node when both are present
   if (configs.nvmrcFile) {
     return { file: '.nvmrc' };
   }
