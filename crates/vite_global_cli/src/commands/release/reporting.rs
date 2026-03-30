@@ -324,6 +324,7 @@ pub(super) fn print_release_readiness_report(report: &ReleaseReadinessReport) {
 /// Prints the concrete actions a dry-run would perform.
 pub(super) fn print_dry_run_actions(
     release_plans: &[PackageReleasePlan],
+    repository_tag_name: Option<&str>,
     package_manager: &PackageManager,
     options: &ReleaseOptions,
     artifact_summary: ReleaseArtifactSummary,
@@ -354,6 +355,11 @@ pub(super) fn print_dry_run_actions(
         for plan in release_plans {
             let mut line = String::from("Would create git tag ");
             line.push_str(&plan.tag_name);
+            output::note(&line);
+        }
+        if let Some(repository_tag_name) = repository_tag_name {
+            let mut line = String::from("Would create repository git tag ");
+            line.push_str(repository_tag_name);
             output::note(&line);
         }
     }
@@ -403,6 +409,7 @@ pub(super) fn print_dry_run_summary(
     publish_status: DryRunPublishStatus,
     options: &ReleaseOptions,
     package_count: usize,
+    repository_tag_name: Option<&str>,
     trusted_publish_context: &TrustedPublishContext,
 ) {
     info_section!("Dry-run summary:");
@@ -436,6 +443,7 @@ pub(super) fn print_dry_run_summary(
     output::raw(&line);
 
     raw_item_kv!("trusted publish target", trusted_publish_context.environment_summary(),);
+    raw_item_kv!("repository tag", repository_tag_name.unwrap_or("not planned"));
     raw_item_kv!(
         "interactive fallback auth",
         "passkey/security-key preferred; `--otp` remains legacy-only",
@@ -461,6 +469,7 @@ pub(super) fn print_release_completion_summary(
     artifact_summary: ReleaseArtifactSummary,
     package_count: usize,
     commit_message: Option<&str>,
+    repository_tag_name: Option<&str>,
     created_tag_count: usize,
     trusted_publish_context: &TrustedPublishContext,
 ) {
@@ -484,6 +493,7 @@ pub(super) fn print_release_completion_summary(
     output::raw(&line);
 
     raw_item_kv!("release commit", commit_message.unwrap_or("skipped"));
+    raw_item_kv!("repository tag", repository_tag_name.unwrap_or("not created"));
     raw_item_kv!("git tags created", created_tag_count);
     raw_item_kv!("trusted publishing", trusted_publish_context.environment_summary());
     raw_item_kv!(
@@ -501,7 +511,7 @@ pub(super) fn print_release_completion_summary(
             "local release tags can be rolled back if a later tag creation step fails"
         );
         output::note(
-            "Push the new release tags to origin so future `vp release` runs can reuse the published watermark.",
+            "Push the new release commit and tags to origin so future `vp release` runs can reuse the published watermark.",
         );
     }
 }

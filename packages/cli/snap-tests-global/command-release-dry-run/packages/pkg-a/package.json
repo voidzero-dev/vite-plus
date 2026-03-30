@@ -1,0 +1,9 @@
+{
+  "name": "pkg-a",
+  "version": "1.0.0",
+  "type": "module",
+  "repository": "https://github.com/example/release-fixture.git",
+  "scripts": {
+    "build": "node -e \"console.log('build')\""
+  }
+}

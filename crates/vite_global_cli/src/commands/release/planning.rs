@@ -500,6 +500,23 @@ pub(super) fn package_tag_name(package_name: &str, version: &Version) -> String 
     RELEASE_TAG_FORMAT.format_tag(package_name, version)
 }
 
+pub(super) fn repository_tag_name(version: &Version) -> String {
+    let mut tag = String::with_capacity(REPOSITORY_RELEASE_TAG_PREFIX.len() + 12);
+    tag.push_str(REPOSITORY_RELEASE_TAG_PREFIX);
+    push_display(&mut tag, version);
+    tag
+}
+
+pub(super) fn shared_repository_release_tag(
+    release_plans: &[PackageReleasePlan],
+) -> Option<String> {
+    let version = &release_plans.first()?.next_version;
+    release_plans
+        .iter()
+        .all(|plan| plan.next_version == *version)
+        .then(|| repository_tag_name(version))
+}
+
 pub(super) fn collect_orphaned_released_packages(
     cwd: &AbsolutePath,
     packages: &[WorkspacePackage],

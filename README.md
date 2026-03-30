@@ -27,7 +27,7 @@ Vite+ is fully open-source under the MIT license.
 
 `vp release` detects likely checks from `build`, `pack`, `prepack`, `prepublishOnly`, `prepare`, and `vitePlus.release.checkScripts`. Real releases run those checks before publishing unless you pass `--no-run-checks`; dry-runs stay lightweight by default and can opt in with `--run-checks`. `--dry-run` also runs the native publisher in dry-run mode from a temporary release manifest state when the git worktree is clean. Use `--yes` for CI or other non-interactive runs, and `--version <x.y.z>` when retrying a partial publish at an exact version.
 
-Real releases always create git tags after a successful publish. Preview-only flags such as `--skip-publish` and `--no-git-tag` are therefore limited to `--dry-run`.
+Real releases always create git tags after a successful publish. When every released package shares the same target version, `vp release` also creates a repository-level `v<version>` tag so GitHub Releases and repo-wide release notes can follow the same watermark. Preview-only flags such as `--skip-publish` and `--no-git-tag` are therefore limited to `--dry-run`.
 
 ## Getting Started
 
