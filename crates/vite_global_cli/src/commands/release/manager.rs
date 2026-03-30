@@ -33,6 +33,7 @@ struct PreparedRelease {
     workspace_root_path: AbsolutePathBuf,
     workspace_manifest: Option<PackageManifest>,
     release_plans: Vec<PackageReleasePlan>,
+    repository_tag_name: Option<String>,
     manifest_edits: Vec<ManifestEdit>,
     root_commits: Vec<CommitInfo>,
 }
@@ -107,6 +108,7 @@ impl ReleaseManager {
         &self,
         workspace: ReleaseWorkspace,
     ) -> Result<Option<PreparedRelease>, Error> {
+        let publishable_package_count = workspace.workspace_packages.len();
         let selected = select_workspace_packages(
             &workspace.workspace_packages,
             self.options.projects.as_deref(),
@@ -124,12 +126,16 @@ impl ReleaseManager {
             return Ok(None);
         }
 
+        let repository_tag_name = (selected.len() == publishable_package_count)
+            .then(|| shared_repository_release_tag(&release_plans))
+            .flatten();
         let manifest_edits = build_manifest_edits(&release_plans)?;
         Ok(Some(PreparedRelease {
             package_manager: workspace.package_manager,
             workspace_root_path: workspace.workspace_root_path,
             workspace_manifest: workspace.workspace_manifest,
             release_plans,
+            repository_tag_name,
             manifest_edits,
             root_commits,
         }))
@@ -415,6 +421,7 @@ impl ReleaseManager {
         );
         print_dry_run_actions(
             &release.release_plans,
+            release.repository_tag_name.as_deref(),
             &release.package_manager,
             &self.options,
             artifact_summary,
@@ -456,6 +463,7 @@ impl ReleaseManager {
                     DryRunPublishStatus::Failed,
                     &self.options,
                     release.release_plans.len(),
+                    release.repository_tag_name.as_deref(),
                     &self.trusted_publish_context,
                 );
                 return Ok(status);
@@ -473,6 +481,7 @@ impl ReleaseManager {
             publish_status,
             &self.options,
             release.release_plans.len(),
+            release.repository_tag_name.as_deref(),
             &self.trusted_publish_context,
         );
 
@@ -586,12 +595,26 @@ impl ReleaseManager {
                 message.push_str(&plan.tag_name);
                 output::success(&message);
             }
+            if let Some(repository_tag_name) = release.repository_tag_name.as_deref() {
+                if let Err(error) = git_tag(&release.workspace_root_path, repository_tag_name) {
+                    return Err(tag_rollback_error(
+                        &release.workspace_root_path,
+                        error,
+                        &created_tag_names,
+                    ));
+                }
+                created_tag_names.push(repository_tag_name.to_owned());
+                let mut message = String::from("Created repository git tag ");
+                message.push_str(repository_tag_name);
+                output::success(&message);
+            }
         }
 
         print_release_completion_summary(
             artifact_summary,
             release.release_plans.len(),
             commit_message.as_deref(),
+            release.repository_tag_name.as_deref(),
             created_tag_names.len(),
             &self.trusted_publish_context,
         );

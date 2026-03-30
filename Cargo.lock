@@ -1215,6 +1215,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "css-module-lexer"
+version = "0.0.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b51940c54c6ca015d3add383571ec5610114466eb67aa0a27096e1dcf3c9e29"
+dependencies = [
+ "smallvec 1.15.1",
+]
+
+[[package]]
 name = "ctor"
 version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4920,8 +4929,11 @@ dependencies = [
  "bitflags 2.11.0",
  "commondir",
  "cow-utils",
+ "css-module-lexer",
  "dashmap",
+ "dunce",
  "futures",
+ "glob",
  "indexmap",
  "insta",
  "itertools 0.14.0",
@@ -4936,6 +4948,7 @@ dependencies = [
  "petgraph 0.8.3",
  "rayon",
  "regex",
+ "rolldown-notify",
  "rolldown_common",
  "rolldown_dev",
  "rolldown_dev_common",
@@ -4945,10 +4958,8 @@ dependencies = [
  "rolldown_error",
  "rolldown_fs",
  "rolldown_plugin",
- "rolldown_plugin_asset_module",
  "rolldown_plugin_chunk_import_map",
- "rolldown_plugin_copy_module",
- "rolldown_plugin_data_url",
+ "rolldown_plugin_data_uri",
  "rolldown_plugin_hmr",
  "rolldown_plugin_lazy_compilation",
  "rolldown_plugin_oxc_runtime",
@@ -5040,7 +5051,6 @@ dependencies = [
  "dashmap",
  "derive_more",
  "futures",
- "indexmap",
  "itertools 0.14.0",
  "mimalloc-safe",
  "napi",
@@ -5049,24 +5059,17 @@ dependencies = [
  "num_cpus",
  "oxc",
  "oxc_minify_napi",
- "oxc_napi",
  "oxc_parser_napi",
- "oxc_resolver",
  "oxc_resolver_napi",
- "oxc_sourcemap",
  "oxc_transform_napi",
- "regex",
- "regress",
  "rolldown",
  "rolldown_common",
  "rolldown_dev",
  "rolldown_devtools",
  "rolldown_error",
  "rolldown_plugin",
- "rolldown_plugin_bundle_analyzer",
  "rolldown_plugin_esm_external_require",
  "rolldown_plugin_isolated_declaration",
- "rolldown_plugin_oxc_runtime",
  "rolldown_plugin_replace",
  "rolldown_plugin_utils",
  "rolldown_plugin_vite_alias",
@@ -5082,11 +5085,11 @@ dependencies = [
  "rolldown_plugin_vite_resolve",
  "rolldown_plugin_vite_transform",
  "rolldown_plugin_vite_wasm_fallback",
+ "rolldown_plugin_vite_wasm_helper",
  "rolldown_plugin_vite_web_worker_post",
  "rolldown_sourcemap",
  "rolldown_tracing",
  "rolldown_utils",
- "rolldown_watcher",
  "rustc-hash",
  "serde",
  "serde_json",
@@ -5254,7 +5257,6 @@ dependencies = [
  "rolldown_devtools",
  "rolldown_ecmascript",
  "rolldown_error",
- "rolldown_fs",
  "rolldown_resolver",
  "rolldown_sourcemap",
  "rolldown_utils",
@@ -5266,35 +5268,6 @@ dependencies = [
  "tokio",
  "tracing",
  "typedmap",
-]
-
-[[package]]
-name = "rolldown_plugin_asset_module"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "memchr",
- "rolldown_common",
- "rolldown_plugin",
- "rolldown_utils",
- "rustc-hash",
- "string_wizard",
- "sugar_path",
- "tokio",
-]
-
-[[package]]
-name = "rolldown_plugin_bundle_analyzer"
-version = "0.1.0"
-dependencies = [
- "arcstr",
- "rolldown_common",
- "rolldown_plugin",
- "rolldown_utils",
- "rustc-hash",
- "serde",
- "serde_json",
- "sugar_path",
 ]
 
 [[package]]
@@ -5311,23 +5284,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rolldown_plugin_copy_module"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "arcstr",
- "memchr",
- "rolldown_common",
- "rolldown_plugin",
- "rolldown_utils",
- "rustc-hash",
- "string_wizard",
- "sugar_path",
- "tokio",
-]
-
-[[package]]
-name = "rolldown_plugin_data_url"
+name = "rolldown_plugin_data_uri"
 version = "0.1.0"
 dependencies = [
  "arcstr",
@@ -5354,6 +5311,8 @@ dependencies = [
 name = "rolldown_plugin_hmr"
 version = "0.1.0"
 dependencies = [
+ "arcstr",
+ "oxc",
  "rolldown_common",
  "rolldown_plugin",
 ]
@@ -5559,9 +5518,7 @@ dependencies = [
 name = "rolldown_plugin_vite_reporter"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "cow-utils",
- "derive_more",
  "flate2",
  "itoa",
  "num-format",
@@ -5569,6 +5526,7 @@ dependencies = [
  "rayon",
  "rolldown_common",
  "rolldown_plugin",
+ "rolldown_plugin_utils",
  "sugar_path",
  "terminal_size",
 ]
@@ -5591,7 +5549,6 @@ dependencies = [
  "rolldown_common",
  "rolldown_plugin",
  "rolldown_plugin_utils",
- "rolldown_std_utils",
  "rolldown_utils",
  "rustc-hash",
  "serde",
@@ -5626,6 +5583,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "rolldown_plugin_vite_wasm_helper"
+version = "0.1.0"
+dependencies = [
+ "arcstr",
+ "derive_more",
+ "rolldown_common",
+ "rolldown_plugin",
+ "rolldown_plugin_utils",
+]
+
+[[package]]
 name = "rolldown_plugin_vite_web_worker_post"
 version = "0.1.0"
 dependencies = [
@@ -5657,6 +5625,8 @@ dependencies = [
  "memchr",
  "oxc",
  "oxc_sourcemap",
+ "rolldown_utils",
+ "rustc-hash",
 ]
 
 [[package]]
@@ -5736,6 +5706,7 @@ dependencies = [
  "nom 8.0.0",
  "oxc",
  "oxc_index",
+ "phf 0.13.1",
  "rayon",
  "regex",
  "regress",
@@ -5748,26 +5719,6 @@ dependencies = [
  "tokio",
  "uuid",
  "xxhash-rust",
-]
-
-[[package]]
-name = "rolldown_watcher"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "arcstr",
- "futures",
- "oxc_index",
- "rolldown",
- "rolldown-notify",
- "rolldown_common",
- "rolldown_error",
- "rolldown_fs_watcher",
- "rolldown_utils",
- "rolldown_workspace",
- "sugar_path",
- "tokio",
- "tracing",
 ]
 
 [[package]]
@@ -6973,6 +6924,9 @@ name = "typedmap"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "63278e72ed4f207eb3216c944cbafb35bdb656d2eab97ef73c0c165a1cd3e319"
+dependencies = [
+ "dashmap",
+]
 
 [[package]]
 name = "typenum"

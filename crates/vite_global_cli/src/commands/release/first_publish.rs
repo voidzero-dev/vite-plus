@@ -161,7 +161,7 @@ macro_rules! first_publish_checklist {
                         "`contents: write` and `id-token: write`",
                     ),
                     text!(
-                        "Push the generated release tags back to origin so the release watermark survives CI.",
+                        "Push the generated release commit and tags back to origin so the release watermark survives CI.",
                     ),
                 ],
             ),
@@ -901,7 +901,12 @@ mod tests {
         assert!(created.contains("git config user.name \"github-actions[bot]\""));
         assert!(created.contains("vp release --first-release --yes"));
         assert!(created.contains("vp release --yes"));
-        assert!(created.contains("run: git push origin --tags"));
+        assert!(created.contains("git push origin HEAD"));
+        assert!(created.contains("git push origin --tags"));
+        assert!(
+            created
+                .contains("gh release create \"$repo_tag\" --generate-notes --title \"$repo_tag\"")
+        );
         assert!(!created.contains(PACKAGE_MANAGER_SETUP_TOKEN));
         assert!(!created.contains(INSTALL_COMMAND_TOKEN));
     }

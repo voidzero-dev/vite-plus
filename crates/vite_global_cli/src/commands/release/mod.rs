@@ -18,7 +18,9 @@ use chrono::Local;
 use glob::Pattern;
 use petgraph::visit::EdgeRef;
 use vite_install::{
-    PackageManager, commands::publish::PublishCommandOptions, package_manager::PackageManagerType,
+    PackageManager,
+    commands::{publish::PublishCommandOptions, script::ScriptCommandOptions},
+    package_manager::PackageManagerType,
 };
 use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_shared::{
