@@ -937,6 +937,28 @@ fn repository_release_tags_accept_stable_and_standard_prereleases_only() {
 }
 
 #[test]
+fn shared_repository_release_tag_uses_lockstep_version() {
+    let mut pkg_a = make_release_plan("pkg-a", &[], &[]);
+    pkg_a.next_version = Version::parse("1.2.3").unwrap();
+
+    let mut pkg_b = make_release_plan("pkg-b", &[], &[]);
+    pkg_b.next_version = Version::parse("1.2.3").unwrap();
+
+    assert_eq!(shared_repository_release_tag(&[pkg_a, pkg_b]), Some(String::from("v1.2.3")));
+}
+
+#[test]
+fn shared_repository_release_tag_is_skipped_for_mixed_versions() {
+    let mut pkg_a = make_release_plan("pkg-a", &[], &[]);
+    pkg_a.next_version = Version::parse("1.2.3").unwrap();
+
+    let mut pkg_b = make_release_plan("pkg-b", &[], &[]);
+    pkg_b.next_version = Version::parse("1.2.4").unwrap();
+
+    assert_eq!(shared_repository_release_tag(&[pkg_a, pkg_b]), None);
+}
+
+#[test]
 fn publish_protocol_matrix_prefers_native_workspace_and_catalog_rewrites() {
     let pnpm = test_package_manager(PackageManagerType::Pnpm, "10.0.0");
     let summary =
