@@ -3,9 +3,11 @@
 //! This module defines the CLI structure using clap and routes commands
 //! to their appropriate handlers.
 
-use std::process::ExitStatus;
+use std::{ffi::OsStr, process::ExitStatus};
 
 use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
+use clap_complete::ArgValueCompleter;
+use tokio::runtime::Runtime;
 use vite_install::commands::{
     add::SaveDependencyType, install::InstallCommandOptions, outdated::Format,
 };
@@ -615,7 +617,7 @@ pub enum Commands {
     #[command(disable_help_flag = true)]
     Run {
         /// Additional arguments
-        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true, add = ArgValueCompleter::new(run_tasks_completions))]
         args: Vec<String>,
     },
 
@@ -1478,6 +1480,46 @@ fn should_force_global_delegate(command: &str, args: &[String]) -> bool {
         }
         _ => false,
     }
+}
+
+/// Get available tasks for shell completion.
+///
+/// Delegates to the local vite-plus CLI to run `vp run` without arguments,
+/// which returns a list of available tasks in the format "task_name: description".
+fn run_tasks_completions(current: &OsStr) -> Vec<clap_complete::CompletionCandidate> {
+    let Some(cwd) = std::env::current_dir()
+        .ok()
+        .and_then(AbsolutePathBuf::new)
+        .filter(|p| commands::has_vite_plus_dependency(p))
+    else {
+        return vec![];
+    };
+
+    // Unescape hashtag and trim quotes for better matching
+    let current = current
+        .to_string_lossy()
+        .replace("\\#", "#")
+        .trim_matches(|c| c == '"' || c == '\'')
+        .to_string();
+
+    let output = tokio::task::block_in_place(|| {
+        Runtime::new().ok().and_then(|rt| {
+            rt.block_on(async { commands::delegate::execute_output(cwd, "run", &[]).await.ok() })
+        })
+    });
+
+    output
+        .filter(|o| o.status.success())
+        .map(|output| {
+            String::from_utf8_lossy(&output.stdout)
+                .lines()
+                .filter_map(|line| line.split_once(": ").map(|(name, _)| name.trim()))
+                .filter(|name| !name.is_empty())
+                .filter(|name| name.starts_with(&current) || current.is_empty())
+                .map(|name| clap_complete::CompletionCandidate::new(name.to_string()))
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 /// Run the CLI command.

@@ -113,8 +113,11 @@ For maintainers developing the vitest/vite migration feature, here are the trans
 | `from "@vitest/browser-preview"`     | `from "@voidzero-dev/vite-plus-test/browser-preview"`     |
 | `from "vite"`                        | `from "@voidzero-dev/vite-plus-core"`                     |
 | `from "vite/module-runner"`          | `from "@voidzero-dev/vite-plus-core/module-runner"`       |
+| `import('vitest')`                   | `import('@voidzero-dev/vite-plus-test')`                  |
 
 **Note**: `@voidzero-dev/vite-plus-core` is the bundled version of upstream vite (Vite v8 beta). See [Core Package Bundling](../core/BUNDLING.md) for details on what it contains.
+
+**Note**: The `import('vitest')` → `import('@voidzero-dev/vite-plus-test')` rewrite is critical for `globals.d.ts`, which declares global types like `typeof import('vitest')['test']`. Without this rewrite, `vitest` is not resolvable from the `@voidzero-dev/vite-plus-test` package context in pnpm's strict `node_modules` layout. TypeScript silently treats unresolved dynamic type imports as `any`, but oxlint's type-aware linting treats them as `error` types, causing `no-unsafe-call` errors. The rewrite turns this into a self-reference that resolves correctly via Node.js package self-referencing.
 
 **Note:** When using pnpm overrides, you have three options for browser provider imports:
 
