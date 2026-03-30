@@ -1,24 +1,18 @@
-> vp run hello # should fall back to pnpm run when no vite-plus dependency
+> vp run hello # should execute via global vite-plus task runner
 VITE+ - The Unified Toolchain for the Web
 
-
-> command-run-without-vite-plus@<semver> hello <cwd>
-> echo hello from script
-
+$ echo hello from script ⊘ cache disabled
 hello from script
 
-> vp run greet --arg1 value1 # should pass through args to pnpm run
+
+> vp run greet --arg1 value1 # should pass through args
 VITE+ - The Unified Toolchain for the Web
 
-
-> command-run-without-vite-plus@<semver> greet <cwd>
-> echo greet --arg1 value1
-
+$ echo greet --arg1 value1 ⊘ cache disabled
 greet --arg1 value1
 
-[1]> vp run nonexistent # should show pnpm missing script error
+
+[1]> vp run nonexistent # should show task not found error
 VITE+ - The Unified Toolchain for the Web
 
- ERR_PNPM_NO_SCRIPT  Missing script: nonexistent
-
-Command "nonexistent" not found.
+Task "nonexistent" not found.

@@ -2,6 +2,10 @@
 
 `vp run` runs `package.json` scripts and tasks defined in `vite.config.ts`. It works like `pnpm run`, with caching, dependency ordering, and workspace-aware execution built in.
 
+::: tip
+`vpr` is available as a standalone shorthand for `vp run`. All examples below work with both `vp run` and `vpr`.
+:::
+
 ## Overview
 
 Use `vp run` with existing `package.json` scripts:
