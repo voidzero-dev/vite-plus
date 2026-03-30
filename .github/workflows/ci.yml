@@ -521,7 +521,16 @@ jobs:
       - name: Test implode (bash)
         shell: bash
         run: |
-          vp implode --yes
+          # Retry on Windows — file locks can cause transient "Access is denied" errors
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            for i in 1 2 3; do
+              vp implode --yes && break
+              echo "Retry $i: vp implode failed, waiting 5s..."
+              sleep 5
+            done
+          else
+            vp implode --yes
+          fi
           ls -la ~/
           VP_HOME="${USERPROFILE:-$HOME}/.vite-plus"
           if [ -d "$VP_HOME" ]; then
@@ -536,7 +545,13 @@ jobs:
         if: ${{ matrix.os == 'windows-latest' }}
         shell: pwsh
         run: |
-          vp implode --yes
+          # Retry — Windows file locks can cause transient "Access is denied" errors
+          foreach ($i in 1..3) {
+            vp implode --yes
+            if ($LASTEXITCODE -eq 0) { break }
+            Write-Host "Retry $i`: vp implode failed, waiting 5s..."
+            Start-Sleep -Seconds 5
+          }
           Start-Sleep -Seconds 5
           dir "$env:USERPROFILE\"
           if (Test-Path "$env:USERPROFILE\.vite-plus") {
@@ -550,9 +565,16 @@ jobs:
         if: ${{ matrix.os == 'windows-latest' }}
         shell: cmd
         run: |
+          REM Retry — Windows file locks can cause transient "Access is denied" errors
           REM vp.exe renames its own parent directory; cmd.exe may report
           REM "The system cannot find the path specified" on exit — ignore it.
-          vp implode --yes || ver >NUL
+          for /L %%i in (1,1,3) do (
+            vp implode --yes || ver >NUL
+            if not exist "%USERPROFILE%\.vite-plus" goto implode_done
+            echo Retry %%i: vp implode failed, waiting 5s...
+            timeout /T 5 /NOBREAK >NUL
+          )
+          :implode_done
           timeout /T 5 /NOBREAK >NUL
           dir "%USERPROFILE%\"
           if exist "%USERPROFILE%\.vite-plus" (
