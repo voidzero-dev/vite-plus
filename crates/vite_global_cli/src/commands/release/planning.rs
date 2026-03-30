@@ -610,10 +610,11 @@ fn prerelease_with_number(prerelease_tag: &PrereleaseTag, number: u64) -> Result
 
 fn parse_repository_release_version(tag_name: &str) -> Option<Version> {
     let version = Version::parse(tag_name.strip_prefix(REPOSITORY_RELEASE_TAG_PREFIX)?).ok()?;
-    match prerelease_channel(&version) {
-        None | Some("alpha" | "beta" | "rc") => Some(version),
-        Some(_) => None,
+    if version.has_prerelease() && prerelease_number(&version).is_none() {
+        return None;
     }
+
+    Some(version)
 }
 
 fn release_queue_entry(package: &WorkspacePackage) -> ReleaseQueueEntry {
