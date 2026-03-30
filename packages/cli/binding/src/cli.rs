@@ -515,14 +515,14 @@ fn merge_resolved_envs(
     Arc::new(envs)
 }
 
-/// Merge resolved envs and inject VITE_PLUS_VERSION for rolldown-vite branding.
+/// Merge resolved envs and inject VP_VERSION for rolldown-vite branding.
 fn merge_resolved_envs_with_version(
     envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
     resolved_envs: Vec<(String, String)>,
 ) -> Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>> {
     let mut merged = merge_resolved_envs(envs, resolved_envs);
     let map = Arc::make_mut(&mut merged);
-    map.entry(Arc::from(OsStr::new("VITE_PLUS_VERSION")))
+    map.entry(Arc::from(OsStr::new("VP_VERSION")))
         .or_insert_with(|| Arc::from(OsStr::new(env!("CARGO_PKG_VERSION"))));
     merged
 }

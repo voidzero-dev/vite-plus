@@ -6,9 +6,7 @@ use owo_colors::OwoColorize;
 use vite_path::{AbsolutePathBuf, current_dir};
 use vite_shared::{env_vars, output};
 
-use super::config::{
-    self, ShimMode, get_bin_dir, get_vite_plus_home, load_config, resolve_version,
-};
+use super::config::{self, ShimMode, get_bin_dir, get_vp_home, load_config, resolve_version};
 use crate::error::Error;
 
 /// IDE-relevant profile files that GUI-launched applications can see.
@@ -163,14 +161,14 @@ pub async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
     }
 }
 
-/// Check VITE_PLUS_HOME directory.
+/// Check VP_HOME directory.
 async fn check_vite_plus_home() -> bool {
-    let home = match get_vite_plus_home() {
+    let home = match get_vp_home() {
         Ok(h) => h,
         Err(e) => {
             print_check(
                 &output::CROSS.red().to_string(),
-                env_vars::VITE_PLUS_HOME,
+                env_vars::VP_HOME,
                 &format!("{e}").red().to_string(),
             );
             return false;
@@ -180,12 +178,12 @@ async fn check_vite_plus_home() -> bool {
     let display = abbreviate_home(&home.as_path().display().to_string());
 
     if tokio::fs::try_exists(&home).await.unwrap_or(false) {
-        print_check(&output::CHECK.green().to_string(), env_vars::VITE_PLUS_HOME, &display);
+        print_check(&output::CHECK.green().to_string(), env_vars::VP_HOME, &display);
         true
     } else {
         print_check(
             &output::CROSS.red().to_string(),
-            env_vars::VITE_PLUS_HOME,
+            env_vars::VP_HOME,
             &"does not exist".red().to_string(),
         );
         print_hint("Run 'vp env setup' to create it.");
@@ -341,13 +339,13 @@ fn check_env_sourcing() -> EnvSourcingStatus {
 }
 
 /// Find system Node.js, skipping vite-plus bin directory and any
-/// directories listed in `VITE_PLUS_BYPASS`.
+/// directories listed in `VP_BYPASS`.
 fn find_system_node() -> Option<std::path::PathBuf> {
     let bin_dir = get_bin_dir().ok();
     let path_var = std::env::var_os("PATH")?;
 
-    // Parse VITE_PLUS_BYPASS as a PATH-style list of additional directories to skip
-    let bypass_paths: Vec<std::path::PathBuf> = std::env::var_os(env_vars::VITE_PLUS_BYPASS)
+    // Parse VP_BYPASS as a PATH-style list of additional directories to skip
+    let bypass_paths: Vec<std::path::PathBuf> = std::env::var_os(env_vars::VP_BYPASS)
         .map(|v| std::env::split_paths(&v).collect())
         .unwrap_or_default();
 
@@ -370,7 +368,7 @@ fn find_system_node() -> Option<std::path::PathBuf> {
     vite_command::resolve_bin("node", Some(&filtered_path), &cwd).ok().map(|p| p.into_path_buf())
 }
 
-/// Check for active session override via VITE_PLUS_NODE_VERSION or session file.
+/// Check for active session override via VP_NODE_VERSION or session file.
 fn check_session_override() {
     if let Ok(version) = std::env::var(config::VERSION_ENV_VAR) {
         let version = version.trim();
@@ -378,7 +376,7 @@ fn check_session_override() {
             print_check(
                 &output::WARN_SIGN.yellow().to_string(),
                 "Session override",
-                &format!("{}={version}", env_vars::VITE_PLUS_NODE_VERSION).yellow().to_string(),
+                &format!("{}={version}", env_vars::VP_NODE_VERSION).yellow().to_string(),
             );
             print_hint("Overrides all file-based resolution.");
             print_hint("Run 'vp env use --unset' to remove.");
@@ -629,7 +627,7 @@ async fn check_current_resolution(cwd: &AbsolutePathBuf) {
             print_check(" ", "Version", &resolution.version.bright_green().to_string());
 
             // Check if Node.js is installed
-            let home_dir = match vite_shared::get_vite_plus_home() {
+            let home_dir = match vite_shared::get_vp_home() {
                 Ok(d) => d.join("js_runtime").join("node").join(&resolution.version),
                 Err(_) => return,
             };
@@ -759,7 +757,7 @@ mod tests {
         path
     }
 
-    /// Helper to save and restore PATH and VITE_PLUS_BYPASS around a test.
+    /// Helper to save and restore PATH and VP_BYPASS around a test.
     struct EnvGuard {
         original_path: Option<std::ffi::OsString>,
         original_bypass: Option<std::ffi::OsString>,
@@ -769,7 +767,7 @@ mod tests {
         fn new() -> Self {
             Self {
                 original_path: std::env::var_os("PATH"),
-                original_bypass: std::env::var_os(env_vars::VITE_PLUS_BYPASS),
+                original_bypass: std::env::var_os(env_vars::VP_BYPASS),
             }
         }
     }
@@ -782,8 +780,8 @@ mod tests {
                     None => std::env::remove_var("PATH"),
                 }
                 match &self.original_bypass {
-                    Some(v) => std::env::set_var(env_vars::VITE_PLUS_BYPASS, v),
-                    None => std::env::remove_var(env_vars::VITE_PLUS_BYPASS),
+                    Some(v) => std::env::set_var(env_vars::VP_BYPASS, v),
+                    None => std::env::remove_var(env_vars::VP_BYPASS),
                 }
             }
         }
@@ -805,7 +803,7 @@ mod tests {
         // SAFETY: This test runs in isolation with serial_test
         unsafe {
             std::env::set_var("PATH", &path);
-            std::env::set_var(env_vars::VITE_PLUS_BYPASS, dir_a.as_os_str());
+            std::env::set_var(env_vars::VP_BYPASS, dir_a.as_os_str());
         }
 
         let result = find_system_node();
@@ -825,7 +823,7 @@ mod tests {
         // SAFETY: This test runs in isolation with serial_test
         unsafe {
             std::env::set_var("PATH", dir_a.as_os_str());
-            std::env::set_var(env_vars::VITE_PLUS_BYPASS, dir_a.as_os_str());
+            std::env::set_var(env_vars::VP_BYPASS, dir_a.as_os_str());
         }
 
         let result = find_system_node();

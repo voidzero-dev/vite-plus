@@ -6,7 +6,7 @@
     "mkdir -p custom-prefix-on-path/bin",
     "PATH=$(pwd)/custom-prefix-on-path/bin:$PATH NPM_CONFIG_PREFIX=$(pwd)/custom-prefix-on-path npm install -g ./npm-global-on-path-pkg # Should install without hint (bin dir on PATH)",
     "test -f custom-prefix-on-path/bin/npm-global-on-path-cli && echo 'binary in custom prefix' # Verify installed to custom prefix",
-    "test ! -L $VITE_PLUS_HOME/bin/npm-global-on-path-cli && echo 'no link created' # No link should be created",
+    "test ! -L $VP_HOME/bin/npm-global-on-path-cli && echo 'no link created' # No link should be created",
     "NPM_CONFIG_PREFIX=$(pwd)/custom-prefix-on-path npm uninstall -g npm-global-on-path-pkg; rm -rf custom-prefix-on-path # Cleanup"
   ]
 }

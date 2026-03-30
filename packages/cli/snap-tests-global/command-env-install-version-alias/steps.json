@@ -3,10 +3,10 @@
   "env": {},
   "commands": [
     "vp install -g --node lts ./command-env-install-version-alias-pkg # Install with LTS alias",
-    "cat $VITE_PLUS_HOME/bins/command-env-install-version-alias-pkg-cli.json | node -e \"const d=JSON.parse(require('fs').readFileSync(0,'utf8')); const v=parseInt(d.nodeVersion.split('.')[0]); console.log('LTS major >= 20:', v >= 20)\" # Verify LTS version",
+    "cat $VP_HOME/bins/command-env-install-version-alias-pkg-cli.json | node -e \"const d=JSON.parse(require('fs').readFileSync(0,'utf8')); const v=parseInt(d.nodeVersion.split('.')[0]); console.log('LTS major >= 20:', v >= 20)\" # Verify LTS version",
     "vp remove -g command-env-install-version-alias-pkg # Cleanup",
     "vp install -g --node latest ./command-env-install-version-alias-pkg # Install with latest alias",
-    "cat $VITE_PLUS_HOME/bins/command-env-install-version-alias-pkg-cli.json | node -e \"const d=JSON.parse(require('fs').readFileSync(0,'utf8')); const v=parseInt(d.nodeVersion.split('.')[0]); console.log('Latest major >= 20:', v >= 20)\" # Verify latest version",
+    "cat $VP_HOME/bins/command-env-install-version-alias-pkg-cli.json | node -e \"const d=JSON.parse(require('fs').readFileSync(0,'utf8')); const v=parseInt(d.nodeVersion.split('.')[0]); console.log('Latest major >= 20:', v >= 20)\" # Verify latest version",
     "vp remove -g command-env-install-version-alias-pkg # Cleanup"
   ]
 }

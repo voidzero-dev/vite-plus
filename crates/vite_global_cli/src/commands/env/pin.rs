@@ -284,15 +284,15 @@ mod tests {
     }
 
     #[tokio::test]
-    // Run serially: mutates VITE_PLUS_HOME env var which affects invalidate_cache()
+    // Run serially: mutates VP_HOME env var which affects invalidate_cache()
     #[serial]
     async fn test_do_unpin_invalidates_cache() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
 
-        // Point VITE_PLUS_HOME to temp dir
+        // Point VP_HOME to temp dir
         unsafe {
-            std::env::set_var(vite_shared::env_vars::VITE_PLUS_HOME, temp_path.as_path());
+            std::env::set_var(vite_shared::env_vars::VP_HOME, temp_path.as_path());
         }
 
         // Create cache file manually
@@ -319,20 +319,20 @@ mod tests {
 
         // Cleanup
         unsafe {
-            std::env::remove_var(vite_shared::env_vars::VITE_PLUS_HOME);
+            std::env::remove_var(vite_shared::env_vars::VP_HOME);
         }
     }
 
-    // Run serially: mutates VITE_PLUS_HOME env var which affects invalidate_cache()
+    // Run serially: mutates VP_HOME env var which affects invalidate_cache()
     #[tokio::test]
     #[serial]
     async fn test_do_pin_invalidates_cache() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
 
-        // Point VITE_PLUS_HOME to temp dir
+        // Point VP_HOME to temp dir
         unsafe {
-            std::env::set_var(vite_shared::env_vars::VITE_PLUS_HOME, temp_path.as_path());
+            std::env::set_var(vite_shared::env_vars::VP_HOME, temp_path.as_path());
         }
 
         // Create cache file manually
@@ -363,7 +363,7 @@ mod tests {
 
         // Cleanup
         unsafe {
-            std::env::remove_var(vite_shared::env_vars::VITE_PLUS_HOME);
+            std::env::remove_var(vite_shared::env_vars::VP_HOME);
         }
     }
 

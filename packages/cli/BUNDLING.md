@@ -41,7 +41,7 @@ await cli.build({
   packageJsonPath: '../package.json',
   cwd: 'binding',
   platform: true,
-  release: process.env.VITE_PLUS_CLI_DEBUG !== '1',
+  release: process.env.VP_CLI_DEBUG !== '1',
   esm: true,
 });
 ```
@@ -194,7 +194,7 @@ The rolldown feature is only enabled during release builds:
 // In build.ts
 await cli.build({
   features: process.env.RELEASE_BUILD ? ['rolldown'] : void 0,
-  release: process.env.VITE_PLUS_CLI_DEBUG !== '1',
+  release: process.env.VP_CLI_DEBUG !== '1',
 });
 ```
 
@@ -429,7 +429,7 @@ Note: Type shims include a side-effect import to preserve module augmentations (
 To build with debug (unoptimized) Rust bindings:
 
 ```bash
-VITE_PLUS_CLI_DEBUG=1 pnpm build
+VP_CLI_DEBUG=1 pnpm build
 ```
 
 This sets `release: false` in the NAPI build options, producing larger but faster-to-compile debug binaries.
@@ -446,7 +446,7 @@ pnpm -C packages/cli build
 pnpm build --filter vite-plus
 
 # Debug build
-VITE_PLUS_CLI_DEBUG=1 pnpm -C packages/cli build
+VP_CLI_DEBUG=1 pnpm -C packages/cli build
 ```
 
 ---

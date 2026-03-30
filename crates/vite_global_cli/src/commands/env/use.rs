@@ -1,7 +1,7 @@
 //! Implementation of `vp env use` command.
 //!
 //! Outputs shell-appropriate commands to stdout that set (or unset)
-//! the `VITE_PLUS_NODE_VERSION` environment variable. The shell function
+//! the `VP_NODE_VERSION` environment variable. The shell function
 //! wrapper in `~/.vite-plus/env` evals this output to modify the current
 //! shell session.
 //!
@@ -132,7 +132,7 @@ pub async fn execute(
 
     // Ensure version is installed (unless --no-install)
     if !no_install {
-        let home_dir = vite_shared::get_vite_plus_home()
+        let home_dir = vite_shared::get_vp_home()
             .map_err(|e| Error::ConfigError(format!("{e}").into()))?
             .join("js_runtime")
             .join("node")
@@ -208,48 +208,48 @@ mod tests {
     #[test]
     fn test_format_export_posix() {
         let result = format_export(&Shell::Posix, "20.18.0");
-        assert_eq!(result, "export VITE_PLUS_NODE_VERSION=20.18.0");
+        assert_eq!(result, "export VP_NODE_VERSION=20.18.0");
     }
 
     #[test]
     fn test_format_export_fish() {
         let result = format_export(&Shell::Fish, "20.18.0");
-        assert_eq!(result, "set -gx VITE_PLUS_NODE_VERSION 20.18.0");
+        assert_eq!(result, "set -gx VP_NODE_VERSION 20.18.0");
     }
 
     #[test]
     fn test_format_export_powershell() {
         let result = format_export(&Shell::PowerShell, "20.18.0");
-        assert_eq!(result, "$env:VITE_PLUS_NODE_VERSION = \"20.18.0\"");
+        assert_eq!(result, "$env:VP_NODE_VERSION = \"20.18.0\"");
     }
 
     #[test]
     fn test_format_export_cmd() {
         let result = format_export(&Shell::Cmd, "20.18.0");
-        assert_eq!(result, "set VITE_PLUS_NODE_VERSION=20.18.0");
+        assert_eq!(result, "set VP_NODE_VERSION=20.18.0");
     }
 
     #[test]
     fn test_format_unset_posix() {
         let result = format_unset(&Shell::Posix);
-        assert_eq!(result, "unset VITE_PLUS_NODE_VERSION");
+        assert_eq!(result, "unset VP_NODE_VERSION");
     }
 
     #[test]
     fn test_format_unset_fish() {
         let result = format_unset(&Shell::Fish);
-        assert_eq!(result, "set -e VITE_PLUS_NODE_VERSION");
+        assert_eq!(result, "set -e VP_NODE_VERSION");
     }
 
     #[test]
     fn test_format_unset_powershell() {
         let result = format_unset(&Shell::PowerShell);
-        assert_eq!(result, "Remove-Item Env:VITE_PLUS_NODE_VERSION -ErrorAction SilentlyContinue");
+        assert_eq!(result, "Remove-Item Env:VP_NODE_VERSION -ErrorAction SilentlyContinue");
     }
 
     #[test]
     fn test_format_unset_cmd() {
         let result = format_unset(&Shell::Cmd);
-        assert_eq!(result, "set VITE_PLUS_NODE_VERSION=");
+        assert_eq!(result, "set VP_NODE_VERSION=");
     }
 }
