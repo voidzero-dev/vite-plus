@@ -66,6 +66,10 @@
       "import": "./binding/index.cjs",
       "require": "./binding/index.cjs"
     },
+    "./fmt": {
+      "types": "./dist/fmt.d.ts",
+      "import": "./dist/fmt.js"
+    },
     "./lint": {
       "types": "./dist/lint.d.ts",
       "import": "./dist/lint.js"
