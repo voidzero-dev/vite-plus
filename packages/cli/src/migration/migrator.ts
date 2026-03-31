@@ -2077,9 +2077,9 @@ function setPackageManager(
   });
 }
 
-export interface NodeVersionManagerDetection {
-  file: '.nvmrc' | 'package.json';
-}
+export type NodeVersionManagerDetection =
+  | { file: '.nvmrc' }
+  | { file: 'package.json'; voltaNodeVersion: string };
 
 /**
  * Detect a .nvmrc file in the project directory.
@@ -2101,7 +2101,7 @@ export function detectNodeVersionManagerFile(
   }
 
   if (configs.voltaNode) {
-    return { file: 'package.json' };
+    return { file: 'package.json', voltaNodeVersion: configs.voltaNode };
   }
 
   return undefined;
@@ -2157,24 +2157,10 @@ export function migrateNodeVersionManagerFile(
 ): boolean {
   const nodeVersionPath = path.join(projectPath, '.node-version');
 
-  // Volta: read node version from package.json volta.node field
+  // Volta: node version was already extracted during detection — no package.json re-read needed
   if (detection.file === 'package.json') {
-    const packageJsonPath = path.join(projectPath, 'package.json');
-    const pkg: Record<string, unknown> | null = (() => {
-      try {
-        return JSON.parse(fs.readFileSync(packageJsonPath, 'utf8')) as Record<string, unknown>;
-      } catch {
-        return null;
-      }
-    })();
-
-    if (!pkg) {
-      warnMigration('Failed to parse package.json. Create .node-version manually.', report);
-      return false;
-    }
-
-    const voltaNode = (pkg.volta as Record<string, unknown> | undefined)?.node;
-    if (typeof voltaNode !== 'string' || !semver.valid(voltaNode)) {
+    const { voltaNodeVersion } = detection;
+    if (!semver.valid(voltaNodeVersion)) {
       warnMigration(
         'package.json volta.node is not a valid version. Create .node-version manually with your desired Node.js version.',
         report,
@@ -2182,10 +2168,12 @@ export function migrateNodeVersionManagerFile(
       return false;
     }
 
-    fs.writeFileSync(nodeVersionPath, `${voltaNode}\n`);
-    prompts.log.info('You can now remove the "volta" field from package.json manually.');
+    fs.writeFileSync(nodeVersionPath, `${voltaNodeVersion}\n`);
     if (report) {
+      report.manualSteps.push('Remove the "volta" field from package.json');
       report.nodeVersionFileMigrated = true;
+    } else {
+      prompts.log.info('You can now remove the "volta" field from package.json manually.');
     }
     return true;
   }

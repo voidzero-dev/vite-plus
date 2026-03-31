@@ -12,7 +12,7 @@ export interface ConfigFiles {
   prettierConfig?: string; // e.g. '.prettierrc.json', 'prettier.config.js', PRETTIER_PACKAGE_JSON_CONFIG
   prettierIgnore?: boolean;
   nvmrcFile?: boolean;
-  voltaNode?: boolean;
+  voltaNode?: string;
 }
 
 // Sentinel value indicating Prettier config lives inside package.json "prettier" key.
@@ -181,8 +181,9 @@ export function detectConfigs(projectPath: string): ConfigFiles {
         configs.prettierConfig = PRETTIER_PACKAGE_JSON_CONFIG;
       }
 
-      if (typeof pkg.volta?.node === 'string') {
-        configs.voltaNode = true;
+      const voltaNode = pkg.volta?.node;
+      if (typeof voltaNode === 'string') {
+        configs.voltaNode = voltaNode;
       }
     } catch {
       // ignore parse errors
