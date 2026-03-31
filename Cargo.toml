@@ -85,7 +85,7 @@ dunce = "1.0.5"
 fast-glob = "1.0.0"
 flate2 = { version = "=1.1.9", features = ["zlib-rs"] }
 form_urlencoded = "1.2.1"
-fspy = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "26c18922e8f3de1cf8a18597e5640f1c85662e45" }
+fspy = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "1ef4e2f6bd783472ffdaa1cae874d142e2f56322" }
 futures = "0.3.31"
 futures-util = "0.3.31"
 glob = "0.3.2"
@@ -186,15 +186,15 @@ vfs = "0.13.0"
 vite_command = { path = "crates/vite_command" }
 vite_error = { path = "crates/vite_error" }
 vite_js_runtime = { path = "crates/vite_js_runtime" }
-vite_glob = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "26c18922e8f3de1cf8a18597e5640f1c85662e45" }
+vite_glob = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "1ef4e2f6bd783472ffdaa1cae874d142e2f56322" }
 vite_install = { path = "crates/vite_install" }
 vite_migration = { path = "crates/vite_migration" }
 vite_shared = { path = "crates/vite_shared" }
 vite_static_config = { path = "crates/vite_static_config" }
-vite_path = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "26c18922e8f3de1cf8a18597e5640f1c85662e45" }
-vite_str = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "26c18922e8f3de1cf8a18597e5640f1c85662e45" }
-vite_task = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "26c18922e8f3de1cf8a18597e5640f1c85662e45" }
-vite_workspace = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "26c18922e8f3de1cf8a18597e5640f1c85662e45" }
+vite_path = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "1ef4e2f6bd783472ffdaa1cae874d142e2f56322" }
+vite_str = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "1ef4e2f6bd783472ffdaa1cae874d142e2f56322" }
+vite_task = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "1ef4e2f6bd783472ffdaa1cae874d142e2f56322" }
+vite_workspace = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "1ef4e2f6bd783472ffdaa1cae874d142e2f56322" }
 walkdir = "2.5.0"
 wax = "0.6.0"
 which = "8.0.0"
