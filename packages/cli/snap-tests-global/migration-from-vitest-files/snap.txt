@@ -19,6 +19,7 @@ VITE+ - The Unified Toolchain for the Web
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
     "vitest": "npm:@voidzero-dev/vite-plus-test@latest",
+    "playwright": "*",
     "vite-plus": "latest"
   },
   "pnpm": {

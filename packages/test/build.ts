@@ -1637,6 +1637,18 @@ async function patchVitestBrowserPackage() {
     );
   }
 
+  // 5. Patch version to use VP_VERSION, preventing the "Running mixed versions" warning
+  const versionPattern = /var version = "(\d+\.\d+\.\d+[^"]*)"/;
+  const beforeVersion = content;
+  content = content.replace(versionPattern, 'var version = process.env.VP_VERSION || "$1"');
+  if (content === beforeVersion) {
+    throw new Error(
+      'Failed to patch version in @vitest/browser/index.js: pattern not found. ' +
+        'This likely means vitest code has changed and the patch needs to be updated.',
+    );
+  }
+  console.log('  Patched version to use VP_VERSION env var');
+
   await writeFile(browserIndexPath, content, 'utf-8');
   console.log('  Successfully patched @vitest/browser/index.js');
 }

@@ -70,6 +70,7 @@ export default defineConfig({
     "@vitejs/plugin-react": "^4.2.0",
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
     "vitest": "npm:@voidzero-dev/vite-plus-test@latest",
+    "playwright": "*",
     "vite-plus": "latest"
   },
   "pnpm": {

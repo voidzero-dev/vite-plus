@@ -108,5 +108,10 @@
     "branch": "main",
     "hash": "419653665e4f0688ad3cac68a34673fdd0632b55",
     "forceFreshMigration": true
+  },
+  "vitest-playwright-repro": {
+    "repository": "https://github.com/why-reproductions-are-required/vitest-playwright-repro.git",
+    "branch": "main",
+    "hash": "f7252170025c01ec482fa9ad43e09b965f46928f"
   }
 }

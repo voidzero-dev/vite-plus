@@ -78,6 +78,13 @@ const REMOVE_PACKAGES = [
   '@vitest/browser-webdriverio',
 ] as const;
 
+// When a browser provider package is removed, its runtime peer dependency
+// must be preserved in devDependencies so browser tests continue to work.
+const BROWSER_PROVIDER_PEER_DEPS: Record<string, string> = {
+  '@vitest/browser-playwright': 'playwright',
+  '@vitest/browser-webdriverio': 'webdriverio',
+};
+
 function warnMigration(message: string, report?: MigrationReport) {
   addMigrationWarning(report, message);
   if (!report) {
@@ -1203,13 +1210,26 @@ export function rewritePackageJson(
   }
   // remove packages that are replaced with vite-plus
   for (const name of REMOVE_PACKAGES) {
-    if (pkg.devDependencies?.[name]) {
-      delete pkg.devDependencies[name];
+    const wasInDevDeps = !!pkg.devDependencies?.[name];
+    const wasInDeps = !!pkg.dependencies?.[name];
+    if (wasInDevDeps) {
+      delete pkg.devDependencies![name];
       needVitePlus = true;
     }
-    if (pkg.dependencies?.[name]) {
-      delete pkg.dependencies[name];
+    if (wasInDeps) {
+      delete pkg.dependencies![name];
       needVitePlus = true;
+    }
+    // e.g., removing @vitest/browser-playwright should keep `playwright` in devDeps
+    const peerDep = BROWSER_PROVIDER_PEER_DEPS[name];
+    if (
+      (wasInDevDeps || wasInDeps) &&
+      peerDep &&
+      !pkg.devDependencies?.[peerDep] &&
+      !pkg.dependencies?.[peerDep]
+    ) {
+      pkg.devDependencies ??= {};
+      pkg.devDependencies[peerDep] = '*';
     }
   }
   if (needVitePlus) {

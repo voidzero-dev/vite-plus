@@ -129,6 +129,60 @@ describe('rewritePackageJson', () => {
     rewritePackageJson(pkg, PackageManager.yarn, true);
     expect(pkg).toMatchSnapshot();
   });
+
+  it('should preserve playwright when removing @vitest/browser-playwright', async () => {
+    const pkg = {
+      devDependencies: {
+        '@vitest/browser': '^4.0.0',
+        '@vitest/browser-playwright': '^4.0.0',
+        vitest: '^4.0.0',
+      },
+    };
+    rewritePackageJson(pkg, PackageManager.pnpm);
+    expect(pkg.devDependencies).toHaveProperty('playwright', '*');
+    expect(pkg.devDependencies).not.toHaveProperty('@vitest/browser');
+    expect(pkg.devDependencies).not.toHaveProperty('@vitest/browser-playwright');
+  });
+
+  it('should preserve webdriverio when removing @vitest/browser-webdriverio', async () => {
+    const pkg = {
+      devDependencies: {
+        '@vitest/browser': '^4.0.0',
+        '@vitest/browser-webdriverio': '^4.0.0',
+        vitest: '^4.0.0',
+      },
+    };
+    rewritePackageJson(pkg, PackageManager.pnpm);
+    expect(pkg.devDependencies).toHaveProperty('webdriverio', '*');
+    expect(pkg.devDependencies).not.toHaveProperty('@vitest/browser-webdriverio');
+  });
+
+  it('should not overwrite playwright if already in devDependencies', async () => {
+    const pkg = {
+      devDependencies: {
+        '@vitest/browser-playwright': '^4.0.0',
+        playwright: '^1.40.0',
+        vitest: '^4.0.0',
+      },
+    };
+    rewritePackageJson(pkg, PackageManager.pnpm);
+    expect(pkg.devDependencies).toHaveProperty('playwright', '^1.40.0');
+  });
+
+  it('should not add playwright if already in dependencies', async () => {
+    const pkg = {
+      dependencies: {
+        playwright: '^1.40.0',
+      },
+      devDependencies: {
+        '@vitest/browser-playwright': '^4.0.0',
+        vitest: '^4.0.0',
+      },
+    };
+    rewritePackageJson(pkg, PackageManager.pnpm);
+    expect(pkg.dependencies).toHaveProperty('playwright', '^1.40.0');
+    expect(pkg.devDependencies).not.toHaveProperty('playwright');
+  });
 });
 
 describe('parseNvmrcVersion', () => {
