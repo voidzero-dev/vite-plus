@@ -2,11 +2,12 @@
 VITE+ - The Unified Toolchain for the Web
 
 
-You can now remove the "volta" field from package.json manually.
 ◇ Migrated . to Vite+<repeat>
 • Node <semver>  pnpm <semver>
 • 2 config updates applied
 • Node version manager file migrated to .node-version
+→ Manual follow-up:
+  - Remove the "volta" field from package.json
 
 > cat .node-version # check .node-version is created from volta.node
 20.5.0
