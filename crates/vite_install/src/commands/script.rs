@@ -45,10 +45,16 @@ impl PackageManager {
 
 #[cfg(test)]
 mod tests {
+    use std::env;
+
     use vite_path::AbsolutePathBuf;
 
     use super::*;
     use crate::package_manager::PackageManagerType;
+
+    fn temp_absolute_path() -> AbsolutePathBuf {
+        AbsolutePathBuf::new(env::temp_dir()).unwrap()
+    }
 
     fn make_pm(client: PackageManagerType) -> PackageManager {
         PackageManager {
@@ -57,9 +63,9 @@ mod tests {
             version: "1.0.0".into(),
             hash: None,
             bin_name: client.to_string().into(),
-            workspace_root: AbsolutePathBuf::new("/tmp".into()).unwrap(),
+            workspace_root: temp_absolute_path(),
             is_monorepo: false,
-            install_dir: AbsolutePathBuf::new("/tmp".into()).unwrap(),
+            install_dir: temp_absolute_path(),
         }
     }
 
