@@ -66,6 +66,7 @@ Snap test files are at `packages/cli/snap-tests/*/snap.txt` and `packages/cli/sn
   https://raw.githubusercontent.com/voidzero-dev/vite-task/<new-hash>/CHANGELOG.md
   ```
 - Review each changelog entry and determine if it affects user-facing behavior: new CLI options, changed defaults, new config fields, removed features, etc.
+- The changelog contains links to the corresponding vite-task PRs. For complex changes, check the PR description and code diff (especially any docs changes in the PR) to understand the full scope of the change.
 - If user-facing changes are found, update the relevant docs in `docs/` (e.g., `docs/guide/`, `docs/config/`).
 - Common doc updates include:
   - **New CLI flags/options**: Update the relevant config doc (e.g., `docs/config/run.md`, `docs/config/build.md`)
