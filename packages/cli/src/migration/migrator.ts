@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
@@ -233,7 +234,12 @@ export async function migrateEslintToOxlint(
 
   // Steps 1-2: Only run @oxlint/migrate if there's an eslint config at root
   if (eslintConfigFile) {
-    const migratePackage = '@oxlint/migrate';
+    // Pin @oxlint/migrate to the bundled oxlint version.
+    // Uses createRequire to bypass the exports field (oxlint doesn't export ./package.json yet).
+    const { version: oxlintVersion }: { version: string } = createRequire(import.meta.url)(
+      'oxlint/package.json',
+    );
+    const migratePackage = `@oxlint/migrate@${oxlintVersion}`;
 
     // Step 1: Generate .oxlintrc.json from ESLint config
     spinner.start('Migrating ESLint config to Oxlint...');
