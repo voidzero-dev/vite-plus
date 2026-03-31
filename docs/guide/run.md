@@ -306,13 +306,13 @@ The limit can also be set via the `VP_RUN_CONCURRENCY_LIMIT` environment variabl
 Use `--parallel` to ignore task dependencies and run all tasks at once with unlimited concurrency:
 
 ```bash
-vp run -r --parallel lint
+vp run -r --parallel dev
 ```
 
 This is useful when tasks are independent and you want maximum throughput. You can combine `--parallel` with `--concurrency-limit` to run tasks without dependency ordering but still cap the number of concurrent tasks:
 
 ```bash
-vp run -r --parallel --concurrency-limit 4 lint
+vp run -r --parallel --concurrency-limit 4 dev
 ```
 
 ## Additional Arguments

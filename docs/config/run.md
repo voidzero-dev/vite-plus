@@ -213,8 +213,8 @@ tasks: {
 }
 ```
 
-The `base` field controls how the glob pattern is resolved:
-- `"package"` (default): relative to the package directory
+The `base` field is required and controls how the glob pattern is resolved:
+- `"package"`: relative to the package directory
 - `"workspace"`: relative to the workspace root
 
 **Disable file tracking** entirely and cache only on command/env changes:
