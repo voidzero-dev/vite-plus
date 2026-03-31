@@ -449,6 +449,13 @@ if [ -n "$BASH_VERSION" ] && type complete >/dev/null 2>&1; then
     eval "$(VP_COMPLETE=bash command vp)"
 elif [ -n "$ZSH_VERSION" ] && type compdef >/dev/null 2>&1; then
     eval "$(VP_COMPLETE=zsh command vp)"
+    _vpr_complete() {
+        local -a orig=("${words[@]}")
+        words=("vp" "run" "${orig[@]:1}")
+        CURRENT=$((CURRENT + 1))
+        ${=_comps[vp]}
+    }
+    compdef _vpr_complete vpr
 fi
 "#
     .replace("__VP_BIN__", &bin_path_ref);
@@ -478,6 +485,13 @@ end
 
 # Dynamic shell completion for fish
 VP_COMPLETE=fish command vp | source
+
+function __vpr_complete
+    set -l tokens (commandline --current-process --tokenize --cut-at-cursor)
+    set -l current (commandline --current-token)
+    VP_COMPLETE=fish command vp -- vp run $tokens[2..] $current
+end
+complete -c vpr --keep-order --exclusive --arguments "(__vpr_complete)"
 "#
     .replace("__VP_BIN__", &bin_path_ref);
     let env_fish_file = vite_plus_home.join("env.fish");
@@ -518,6 +532,27 @@ function vp {
 $env:VP_COMPLETE = "powershell"
 & (Join-Path $__vp_bin "vp.exe") | Out-String | Invoke-Expression
 Remove-Item Env:\VP_COMPLETE -ErrorAction SilentlyContinue
+
+$__vpr_comp = {
+    param($wordToComplete, $commandAst, $cursorPosition)
+    $prev = $env:VP_COMPLETE
+    $env:VP_COMPLETE = "powershell"
+    $commandLine = $commandAst.Extent.Text
+    $args = $commandLine.Substring(0, [math]::Min($cursorPosition, $commandLine.Length))
+    $args = $args -replace '^(vpr\.exe|vpr)\b', 'vp run'
+    if ($wordToComplete -eq "") { $args += " ''" }
+    $results = Invoke-Expression @"
+& (Join-Path $__vp_bin 'vp.exe') -- $args
+"@;
+    if ($prev) { $env:VP_COMPLETE = $prev } else { Remove-Item Env:\VP_COMPLETE }
+    $results | ForEach-Object {
+        $split = $_.Split("`t")
+        $cmd = $split[0];
+        if ($split.Length -eq 2) { $help = $split[1] } else { $help = $split[0] }
+        [System.Management.Automation.CompletionResult]::new($cmd, $cmd, 'ParameterValue', $help)
+    }
+}
+Register-ArgumentCompleter -Native -CommandName vpr -ScriptBlock $__vpr_comp
 "#;
 
     // For PowerShell, use the actual absolute path (not $HOME-relative)
@@ -866,7 +901,6 @@ mod tests {
         let fish_content = tokio::fs::read_to_string(home.join("env.fish")).await.unwrap();
         let ps1_content = tokio::fs::read_to_string(home.join("env.ps1")).await.unwrap();
 
-        // Verify completion env is set
         assert!(
             env_content.contains("VP_COMPLETE=bash") && env_content.contains("VP_COMPLETE=zsh"),
             "env file should contain completion for bash and zsh"
@@ -878,6 +912,16 @@ mod tests {
         assert!(
             ps1_content.contains("VP_COMPLETE = \"powershell\""),
             "env.ps1 file should contain completion for PowerShell"
+        );
+
+        assert!(
+            env_content.contains("compdef _vpr_complete vpr"),
+            "env should have vpr completion for zsh"
+        );
+        assert!(fish_content.contains("complete -c vpr"), "env.fish should have vpr completion");
+        assert!(
+            ps1_content.contains("Register-ArgumentCompleter -Native -CommandName vpr"),
+            "env.ps1 should have vpr completion"
         );
     }
 }

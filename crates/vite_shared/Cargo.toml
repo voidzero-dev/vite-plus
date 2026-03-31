@@ -23,5 +23,8 @@ which = { workspace = true }
 [target.'cfg(not(target_os = "windows"))'.dependencies]
 rustls = { workspace = true }
 
+[dev-dependencies]
+serial_test = { workspace = true }
+
 [lints]
 workspace = true

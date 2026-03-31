@@ -1,22 +1,20 @@
-> git init
-> vp migrate --no-interactive # migration should rewrite husky to vp config
+> vp migrate --no-interactive --no-hooks --package-manager pnpm # migration should work with pnpm, add overrides and peerDependencyRules
 VITE+ - The Unified Toolchain for the Web
 
 ◇ Migrated . to Vite+<repeat>
 • Node <semver>  pnpm <semver>
-• 2 config updates applied
-• Git hooks configured
+✓ Dependencies installed in <variable>ms
+• 1 config update applied
 
-> cat package.json # check prepare script rewritten and husky removed from devDeps
+> cat package.json # check package.json has pnpm.overrides and pnpm.peerDependencyRules
 {
-  "name": "migration-existing-husky",
-  "scripts": {
-    "prepare": "vp config"
-  },
+  "name": "migration-standalone-pnpm",
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vitest": "npm:@voidzero-dev/vite-plus-test@latest",
     "vite-plus": "latest"
   },
+  "packageManager": "pnpm@<semver>",
   "pnpm": {
     "overrides": {
       "vite": "npm:@voidzero-dev/vite-plus-core@latest",
@@ -32,9 +30,5 @@ VITE+ - The Unified Toolchain for the Web
         "vitest": "*"
       }
     }
-  },
-  "packageManager": "pnpm@<semver>"
+  }
 }
-
-> cat .vite-hooks/pre-commit # check pre-commit hook rewritten to vp staged
-vp staged

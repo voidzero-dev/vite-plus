@@ -10,7 +10,7 @@ import { debuglog, parseArgs } from 'node:util';
 import { npath } from '@yarnpkg/fslib';
 import { execute } from '@yarnpkg/shell';
 
-import { isPassThroughEnv, replaceUnstableOutput } from './utils';
+import { isPassThroughEnv, replaceUnstableOutput } from './utils.js';
 
 const debug = debuglog('vite-plus/snap-test');
 

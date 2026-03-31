@@ -27,6 +27,16 @@ Please add staged config to vite.config.ts manually, see https://viteplus.dev/gu
     "overrides": {
       "vite": "npm:@voidzero-dev/vite-plus-core@latest",
       "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+    },
+    "peerDependencyRules": {
+      "allowAny": [
+        "vite",
+        "vitest"
+      ],
+      "allowedVersions": {
+        "vite": "*",
+        "vitest": "*"
+      }
     }
   },
   "packageManager": "pnpm@<semver>",

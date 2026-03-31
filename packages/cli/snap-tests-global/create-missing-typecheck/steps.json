@@ -1,5 +1,5 @@
 {
-  "ignoredPlatforms": ["darwin", "win32", { "os": "linux", "libc": "musl" }],
+  "ignoredPlatforms": ["win32", { "os": "linux", "libc": "musl" }],
   "commands": [
     {
       "command": "vp create vite:application --no-interactive # create standalone app",

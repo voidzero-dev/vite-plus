@@ -106,6 +106,12 @@ All user-facing output must go through shared output modules instead of raw prin
 - Run `cargo test` to execute all tests
 - You never need to run `pnpm install` in the test fixtures dir, vite-plus should able to load and parse the workspace without `pnpm install`.
 
+### Environment Variables in Tests
+
+- **Prefer `EnvConfig::test_scope()`**: For tests needing custom config values (VP_HOME, npm registry, etc.), use thread-local `EnvConfig::test_scope()` or `EnvConfig::test_guard()` from `vite_shared` — no `unsafe`, no `#[serial]`, full parallelism
+- **`#[serial]` required for `std::env::set_var`/`remove_var`**: Any test that directly modifies process env vars (PATH, VP_SHIM_TOOL, etc.) MUST have `#[serial_test::serial]` to prevent concurrent access races
+- **Clean up ALL related env vars**: When clearing env vars before a test, clear ALL vars that the function under test reads — not just the one being tested
+
 ## Build
 
 - Run `pnpm bootstrap-cli` from the project root to build all packages and install the global CLI

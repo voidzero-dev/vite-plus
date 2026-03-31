@@ -698,10 +698,10 @@ export function rewriteStandaloneProject(
     scripts?: Record<string, string>;
     pnpm?: {
       overrides?: Record<string, string>;
-      // peerDependencyRules?: {
-      //   allowAny?: string[];
-      //   allowedVersions?: Record<string, string>;
-      // };
+      peerDependencyRules?: {
+        allowAny?: string[];
+        allowedVersions?: Record<string, string>;
+      };
     };
   }>(packageJsonPath, (pkg) => {
     if (packageManager === PackageManager.yarn) {
@@ -715,6 +715,7 @@ export function rewriteStandaloneProject(
         ...VITE_PLUS_OVERRIDE_PACKAGES,
       };
     } else if (packageManager === PackageManager.pnpm) {
+      const overrideKeys = Object.keys(VITE_PLUS_OVERRIDE_PACKAGES);
       pkg.pnpm = {
         ...pkg.pnpm,
         overrides: {
@@ -722,10 +723,19 @@ export function rewriteStandaloneProject(
           ...VITE_PLUS_OVERRIDE_PACKAGES,
           ...(isForceOverrideMode() ? { [VITE_PLUS_NAME]: VITE_PLUS_VERSION } : {}),
         },
+        peerDependencyRules: {
+          allowAny: [
+            ...new Set([...(pkg.pnpm?.peerDependencyRules?.allowAny ?? []), ...overrideKeys]),
+          ],
+          allowedVersions: {
+            ...pkg.pnpm?.peerDependencyRules?.allowedVersions,
+            ...Object.fromEntries(overrideKeys.map((key) => [key, '*'])),
+          },
+        },
       };
       // remove packages from `resolutions` field if they exist
       // https://pnpm.io/9.x/package_json#resolutions
-      for (const key of [...Object.keys(VITE_PLUS_OVERRIDE_PACKAGES), ...REMOVE_PACKAGES]) {
+      for (const key of [...overrideKeys, ...REMOVE_PACKAGES]) {
         if (pkg.resolutions?.[key]) {
           delete pkg.resolutions[key];
         }

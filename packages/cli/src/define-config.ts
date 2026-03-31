@@ -3,7 +3,7 @@ import {
   type ConfigEnv,
 } from '@voidzero-dev/vite-plus-test/config';
 
-import type { UserConfig } from './index';
+import type { UserConfig } from './index.js';
 
 type ViteUserConfigFnObject = (env: ConfigEnv) => UserConfig;
 type ViteUserConfigFnPromise = (env: ConfigEnv) => Promise<UserConfig>;

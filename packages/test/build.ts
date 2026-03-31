@@ -56,7 +56,7 @@ import { format } from 'oxfmt';
 import { build } from 'rolldown';
 import { dts } from 'rolldown-plugin-dts';
 
-import { generateLicenseFile } from '../../scripts/generate-license.ts';
+import { generateLicenseFile } from '../../scripts/generate-license.js';
 import pkg from './package.json' with { type: 'json' };
 
 const projectDir = dirname(fileURLToPath(import.meta.url));

@@ -38,7 +38,7 @@ import {
   ModuleKind,
 } from 'typescript';
 
-import { generateLicenseFile } from '../../scripts/generate-license.ts';
+import { generateLicenseFile } from '../../scripts/generate-license.js';
 import corePkg from '../core/package.json' with { type: 'json' };
 import testPkg from '../test/package.json' with { type: 'json' };
 
@@ -115,7 +115,7 @@ async function buildNapiBinding() {
   });
 
   const outputs = await task;
-  const viteConfig = await import('../../vite.config');
+  const viteConfig = await import('../../vite.config.js');
   for (const output of outputs) {
     if (output.kind !== 'node') {
       const { code, errors } = await format(output.path, await readFile(output.path, 'utf8'), {

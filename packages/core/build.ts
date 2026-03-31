@@ -15,18 +15,18 @@ import { build, type BuildOptions } from 'rolldown';
 import { dts } from 'rolldown-plugin-dts';
 import { glob } from 'tinyglobby';
 
-import { generateLicenseFile } from '../../scripts/generate-license.ts';
-import { buildCjsDeps } from './build-support/build-cjs-deps';
-import { replaceThirdPartyCjsRequires } from './build-support/find-create-require';
-import { RewriteImportsPlugin } from './build-support/rewrite-imports';
+import { generateLicenseFile } from '../../scripts/generate-license.js';
+import { buildCjsDeps } from './build-support/build-cjs-deps.js';
+import { replaceThirdPartyCjsRequires } from './build-support/find-create-require.js';
+import { RewriteImportsPlugin } from './build-support/rewrite-imports.js';
 import {
   createRolldownRewriteRules,
   createViteRewriteRules,
   rewriteModuleSpecifiers,
   type ReplacementRule,
-} from './build-support/rewrite-module-specifiers';
+} from './build-support/rewrite-module-specifiers.js';
 import pkgJson from './package.json' with { type: 'json' };
-import viteRolldownConfig from './vite-rolldown.config';
+import viteRolldownConfig from './vite-rolldown.config.js';
 
 const projectDir = join(fileURLToPath(import.meta.url), '..');
 

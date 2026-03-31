@@ -217,10 +217,18 @@ mod tests {
         assert!(!is_potential_package_binary("another-fake-tool"));
     }
 
+    /// Clear both shim env vars to isolate tests.
+    /// SAFETY: caller must be `#[serial]` since this mutates process-global state.
+    unsafe fn clear_shim_env_vars() {
+        unsafe {
+            std::env::remove_var(SHIM_TOOL_ENV_VAR);
+            std::env::remove_var(LEGACY_SHIM_TOOL_ENV_VAR);
+        }
+    }
+
     #[test]
     #[serial]
     fn test_detect_shim_tool_from_env_var() {
-        // SAFETY: We're in a test at startup, no other threads
         unsafe {
             std::env::set_var(SHIM_TOOL_ENV_VAR, "node");
             std::env::remove_var(LEGACY_SHIM_TOOL_ENV_VAR);
@@ -236,7 +244,6 @@ mod tests {
     fn test_detect_shim_tool_from_legacy_env_var() {
         // When only VITE_PLUS_SHIM_TOOL is set (older trampoline), it should
         // fall back to reading the legacy env var.
-        // SAFETY: We're in a test at startup, no other threads
         unsafe {
             std::env::remove_var(SHIM_TOOL_ENV_VAR);
             std::env::set_var(LEGACY_SHIM_TOOL_ENV_VAR, "npm");
@@ -247,43 +254,28 @@ mod tests {
         assert!(std::env::var(LEGACY_SHIM_TOOL_ENV_VAR).is_err());
     }
 
-    #[test]
-    #[serial]
-    fn test_detect_shim_tool_vpx() {
-        // vpx should be detected via the argv0 check, before the env var check
-        // and before is_shim_tool (which would incorrectly match it as a package binary)
-        // SAFETY: We're in a test
-        unsafe {
-            std::env::remove_var(SHIM_TOOL_ENV_VAR);
-        }
-        let result = detect_shim_tool("vpx");
-        assert_eq!(result, Some("vpx".to_string()));
+    /// Tests that argv0-based tool detection works for a given tool name,
+    /// including full path and .exe extension variants.
+    fn assert_detect_shim_tool_from_argv0(tool: &str) {
+        unsafe { clear_shim_env_vars() };
 
-        // Also works with full path
-        let result = detect_shim_tool("/home/user/.vite-plus/bin/vpx");
-        assert_eq!(result, Some("vpx".to_string()));
-
-        // Also works with .exe extension (Windows)
-        let result = detect_shim_tool("vpx.exe");
-        assert_eq!(result, Some("vpx".to_string()));
+        assert_eq!(detect_shim_tool(tool), Some(tool.to_string()));
+        assert_eq!(
+            detect_shim_tool(&vite_str::format!("/home/user/.vite-plus/bin/{tool}")),
+            Some(tool.to_string()),
+        );
+        assert_eq!(detect_shim_tool(&vite_str::format!("{tool}.exe")), Some(tool.to_string()),);
     }
 
     #[test]
+    #[serial]
+    fn test_detect_shim_tool_vpx() {
+        assert_detect_shim_tool_from_argv0("vpx");
+    }
+
+    #[test]
+    #[serial]
     fn test_detect_shim_tool_vpr() {
-        // vpr should be detected via the argv0 check, same pattern as vpx
-        // SAFETY: We're in a test
-        unsafe {
-            std::env::remove_var(SHIM_TOOL_ENV_VAR);
-        }
-        let result = detect_shim_tool("vpr");
-        assert_eq!(result, Some("vpr".to_string()));
-
-        // Also works with full path
-        let result = detect_shim_tool("/home/user/.vite-plus/bin/vpr");
-        assert_eq!(result, Some("vpr".to_string()));
-
-        // Also works with .exe extension (Windows)
-        let result = detect_shim_tool("vpr.exe");
-        assert_eq!(result, Some("vpr".to_string()));
+        assert_detect_shim_tool_from_argv0("vpr");
     }
 }

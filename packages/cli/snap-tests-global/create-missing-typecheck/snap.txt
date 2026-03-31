@@ -20,6 +20,9 @@ export default defineConfig({
   },
   fmt: {},
   lint: { options: { typeAware: true, typeCheck: true } },
+  run: {
+    cache: true,
+  },
 });
 
 > test ! -f vite-plus-monorepo/apps/website/vite.config.ts # sub-app should NOT have typeAware/typeCheck
