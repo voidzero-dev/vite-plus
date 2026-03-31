@@ -233,7 +233,10 @@ export async function migrateEslintToOxlint(
 
   // Steps 1-2: Only run @oxlint/migrate if there's an eslint config at root
   if (eslintConfigFile) {
-    const migratePackage = '@oxlint/migrate';
+    // Pin @oxlint/migrate to the bundled oxlint version.
+    // @ts-expect-error — resolved at runtime from dist/global/ → dist/versions.js
+    const { versions } = await import('../versions.js');
+    const migratePackage = `@oxlint/migrate@${versions.oxlint}`;
 
     // Step 1: Generate .oxlintrc.json from ESLint config
     spinner.start('Migrating ESLint config to Oxlint...');
