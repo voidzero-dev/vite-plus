@@ -1,8 +1,12 @@
 {
   "commands": [
-    { "command": "git init", "ignoreOutput": true },
+    {
+      "command": "git init",
+      "ignoreOutput": true
+    },
     "vp migrate --no-interactive # migration should preserve chained commands after lint-staged",
     "cat package.json # check prepare rewritten and husky/lint-staged removed",
+    "cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog",
     "cat vite.config.ts # check staged config migrated to vite.config.ts",
     "cat .vite-hooks/pre-commit # check npx lint-staged replaced but --diff HEAD~1 && npm test preserved"
   ]

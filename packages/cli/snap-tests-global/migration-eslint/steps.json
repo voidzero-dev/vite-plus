@@ -2,6 +2,7 @@
   "commands": [
     "vp migrate --no-interactive # migration should detect eslint and auto-migrate",
     "cat package.json # check eslint removed and scripts rewritten",
+    "cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog",
     "test ! -f eslint.config.mjs # check eslint config is removed",
     "cat vite.config.ts # check oxlint config merged into vite.config.ts"
   ]

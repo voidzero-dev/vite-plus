@@ -6,7 +6,8 @@
     "VP_SKIP_INSTALL": ""
   },
   "commands": [
-    "vp migrate --no-interactive --no-hooks --package-manager pnpm # migration should work with pnpm, add overrides and peerDependencyRules",
-    "cat package.json # check package.json has pnpm.overrides and pnpm.peerDependencyRules"
+    "vp migrate --no-interactive --no-hooks --package-manager pnpm # migration should work with pnpm, write overrides and peerDependencyRules to pnpm-workspace.yaml",
+    "cat package.json # check package.json has no pnpm section",
+    "cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides, peerDependencyRules, and catalog"
   ]
 }

@@ -1,7 +1,11 @@
 {
   "commands": [
-    { "command": "git init", "ignoreOutput": true },
+    {
+      "command": "git init",
+      "ignoreOutput": true
+    },
     "vp migrate --no-interactive # migration should preserve || fallback semantics",
-    "cat package.json # check prepare script preserves || true fallback"
+    "cat package.json # check prepare script preserves || true fallback",
+    "cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog"
   ]
 }

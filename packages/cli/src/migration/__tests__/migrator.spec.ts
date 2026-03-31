@@ -16,6 +16,7 @@ vi.mock('../../utils/constants.js', async (importOriginal) => {
 
 const {
   rewritePackageJson,
+  rewriteStandaloneProject,
   parseNvmrcVersion,
   detectNodeVersionManagerFile,
   migrateNodeVersionManagerFile,
@@ -288,5 +289,144 @@ describe('migrateNodeVersionManagerFile', () => {
     expect(ok).toBe(false);
     expect(report.warnings.length).toBe(1);
     expect(fs.existsSync(path.join(tmpDir, '.node-version'))).toBe(false);
+  });
+});
+
+function makeWorkspaceInfo(
+  rootDir: string,
+  packageManager: PackageManager,
+): import('../../types/index.js').WorkspaceInfo {
+  return {
+    rootDir,
+    isMonorepo: false,
+    monorepoScope: '',
+    workspacePatterns: [],
+    parentDirs: [],
+    packageManager,
+    packageManagerVersion: '10.33.0',
+    downloadPackageManager: {
+      name: 'pnpm',
+      installDir: '/tmp',
+      binPrefix: '/tmp/bin',
+      packageName: 'pnpm',
+      version: '10.33.0',
+    },
+    packages: [],
+  };
+}
+
+function readJson(filePath: string): Record<string, unknown> {
+  return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+}
+
+function readYaml(filePath: string): string {
+  return fs.readFileSync(filePath, 'utf8');
+}
+
+describe('rewriteStandaloneProject pnpm workspace yaml', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-pnpm-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('creates pnpm-workspace.yaml when no existing pnpm config in package.json', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'test', devDependencies: { vite: '^7.0.0' } }),
+    );
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+    // pnpm-workspace.yaml should be created
+    expect(fs.existsSync(path.join(tmpDir, 'pnpm-workspace.yaml'))).toBe(true);
+    const yaml = readYaml(path.join(tmpDir, 'pnpm-workspace.yaml'));
+    expect(yaml).toContain('overrides:');
+    expect(yaml).toContain('peerDependencyRules:');
+    expect(yaml).toContain('catalog:');
+
+    // package.json should not have pnpm section
+    const pkg = readJson(path.join(tmpDir, 'package.json'));
+    expect(pkg.pnpm).toBeUndefined();
+
+    // devDependencies should use catalog:
+    const devDeps = pkg.devDependencies as Record<string, string>;
+    expect(devDeps.vite).toBe('catalog:');
+    expect(devDeps['vite-plus']).toBe('catalog:');
+  });
+
+  it('keeps pnpm config in package.json when existing pnpm field present', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { vite: '^7.0.0' },
+        pnpm: {
+          overrides: { 'some-pkg': '1.0.0' },
+          onlyBuiltDependencies: ['esbuild'],
+        },
+      }),
+    );
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+    // pnpm-workspace.yaml should NOT be created
+    expect(fs.existsSync(path.join(tmpDir, 'pnpm-workspace.yaml'))).toBe(false);
+
+    // package.json should have pnpm.overrides with both existing and vite overrides
+    const pkg = readJson(path.join(tmpDir, 'package.json'));
+    const pnpm = pkg.pnpm as Record<string, unknown>;
+    expect(pnpm).toBeDefined();
+    const overrides = pnpm.overrides as Record<string, string>;
+    expect(overrides['some-pkg']).toBe('1.0.0');
+    expect(overrides.vite).toBeDefined();
+    expect(overrides.vitest).toBeDefined();
+
+    // peerDependencyRules should be present
+    expect(pnpm.peerDependencyRules).toBeDefined();
+    // onlyBuiltDependencies should be preserved
+    expect(pnpm.onlyBuiltDependencies).toEqual(['esbuild']);
+  });
+
+  it('preserves custom peerDependencyRules when migrating to pnpm-workspace.yaml', () => {
+    // Project has peerDependencyRules but no pnpm.overrides -- pnpm field is present
+    // so it should keep using package.json
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { vite: '^7.0.0' },
+        pnpm: {
+          peerDependencyRules: {
+            allowAny: ['react', 'vite'],
+            allowedVersions: { react: '*', vite: '*' },
+            ignoreMissing: ['@types/node'],
+          },
+        },
+      }),
+    );
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json'));
+    const pnpm = pkg.pnpm as Record<string, unknown>;
+    const rules = pnpm.peerDependencyRules as Record<string, unknown>;
+    // Custom entries preserved, Vite entries merged
+    expect(rules.allowAny).toEqual(expect.arrayContaining(['react', 'vite', 'vitest']));
+    // ignoreMissing preserved
+    expect(rules.ignoreMissing).toEqual(['@types/node']);
+  });
+
+  it('writes vite overrides with catalog references to pnpm-workspace.yaml', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'test', devDependencies: { vite: '^7.0.0' } }),
+    );
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+    const yaml = readYaml(path.join(tmpDir, 'pnpm-workspace.yaml'));
+    expect(yaml).toContain("vite: 'catalog:'");
+    expect(yaml).toContain("vitest: 'catalog:'");
   });
 });

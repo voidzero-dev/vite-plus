@@ -697,6 +697,9 @@ export function rewriteStandaloneProject(
 
   const packageManager = workspaceInfo.packageManager;
   let extractedStagedConfig: Record<string, string | string[]> | null = null;
+  let remainingPnpmOverrides: Record<string, string> | undefined;
+  // Determined inside editJsonFile callback to avoid a redundant file read
+  let usePnpmWorkspaceYaml = false;
   editJsonFile<{
     overrides?: Record<string, string>;
     resolutions?: Record<string, string>;
@@ -722,24 +725,52 @@ export function rewriteStandaloneProject(
         ...VITE_PLUS_OVERRIDE_PACKAGES,
       };
     } else if (packageManager === PackageManager.pnpm) {
+      // If package.json already has a "pnpm" field, keep using it;
+      // otherwise use pnpm-workspace.yaml.
+      usePnpmWorkspaceYaml = !pkg.pnpm;
+      if (usePnpmWorkspaceYaml) {
+        rewritePnpmWorkspaceYaml(projectPath);
+        // In force-override mode, also override vite-plus itself so transitive
+        // deps resolve to the local tgz instead of the published version.
+        if (isForceOverrideMode()) {
+          migratePnpmOverridesToWorkspaceYaml(projectPath, {
+            [VITE_PLUS_NAME]: VITE_PLUS_VERSION,
+          });
+        }
+      }
       const overrideKeys = Object.keys(VITE_PLUS_OVERRIDE_PACKAGES);
-      pkg.pnpm = {
-        ...pkg.pnpm,
-        overrides: {
-          ...pkg.pnpm?.overrides,
-          ...VITE_PLUS_OVERRIDE_PACKAGES,
-          ...(isForceOverrideMode() ? { [VITE_PLUS_NAME]: VITE_PLUS_VERSION } : {}),
-        },
-        peerDependencyRules: {
-          allowAny: [
-            ...new Set([...(pkg.pnpm?.peerDependencyRules?.allowAny ?? []), ...overrideKeys]),
-          ],
-          allowedVersions: {
-            ...pkg.pnpm?.peerDependencyRules?.allowedVersions,
-            ...Object.fromEntries(overrideKeys.map((key) => [key, '*'])),
+      if (!usePnpmWorkspaceYaml) {
+        // Project already has pnpm config in package.json -- keep using it.
+        pkg.pnpm = {
+          ...pkg.pnpm,
+          overrides: {
+            ...pkg.pnpm?.overrides,
+            ...VITE_PLUS_OVERRIDE_PACKAGES,
+            ...(isForceOverrideMode() ? { [VITE_PLUS_NAME]: VITE_PLUS_VERSION } : {}),
           },
-        },
-      };
+          peerDependencyRules: {
+            ...pkg.pnpm?.peerDependencyRules,
+            allowAny: [
+              ...new Set([...(pkg.pnpm?.peerDependencyRules?.allowAny ?? []), ...overrideKeys]),
+            ],
+            allowedVersions: {
+              ...pkg.pnpm?.peerDependencyRules?.allowedVersions,
+              ...Object.fromEntries(overrideKeys.map((key) => [key, '*'])),
+            },
+          },
+        };
+      } else {
+        remainingPnpmOverrides = cleanupPnpmOverridesForWorkspaceYaml(pkg, overrideKeys);
+      }
+      // remove dependency selectors targeting vite (e.g. "vite-plugin-svgr>vite")
+      for (const key in pkg.pnpm?.overrides) {
+        if (key.includes('>')) {
+          const splits = key.split('>');
+          if (splits[splits.length - 1].trim() === 'vite') {
+            delete pkg.pnpm.overrides[key];
+          }
+        }
+      }
       // remove packages from `resolutions` field if they exist
       // https://pnpm.io/9.x/package_json#resolutions
       for (const key of [...overrideKeys, ...REMOVE_PACKAGES]) {
@@ -749,17 +780,31 @@ export function rewriteStandaloneProject(
       }
     }
 
-    extractedStagedConfig = rewritePackageJson(pkg, packageManager, false, skipStagedMigration);
+    extractedStagedConfig = rewritePackageJson(
+      pkg,
+      packageManager,
+      usePnpmWorkspaceYaml,
+      skipStagedMigration,
+    );
 
     // ensure vite-plus is in devDependencies
     if (!pkg.devDependencies?.[VITE_PLUS_NAME] || isForceOverrideMode()) {
+      const version =
+        usePnpmWorkspaceYaml && !VITE_PLUS_VERSION.startsWith('file:')
+          ? 'catalog:'
+          : VITE_PLUS_VERSION;
       pkg.devDependencies = {
         ...pkg.devDependencies,
-        [VITE_PLUS_NAME]: VITE_PLUS_VERSION,
+        [VITE_PLUS_NAME]: version,
       };
     }
     return pkg;
   });
+
+  // Move remaining non-Vite pnpm.overrides to pnpm-workspace.yaml
+  if (remainingPnpmOverrides) {
+    migratePnpmOverridesToWorkspaceYaml(projectPath, remainingPnpmOverrides);
+  }
 
   // Merge extracted staged config into vite.config.ts, then remove lint-staged from package.json
   if (extractedStagedConfig) {
@@ -961,6 +1006,102 @@ function rewritePnpmWorkspaceYaml(projectPath: string): void {
 }
 
 /**
+ * Clean up pnpm.overrides and peerDependencyRules from package.json when migrating
+ * to pnpm-workspace.yaml. Returns any remaining non-Vite overrides that need to be
+ * moved to pnpm-workspace.yaml.
+ */
+function cleanupPnpmOverridesForWorkspaceYaml(
+  pkg: {
+    pnpm?: {
+      overrides?: Record<string, string>;
+      peerDependencyRules?: { allowAny?: string[]; allowedVersions?: Record<string, string> };
+    };
+  },
+  overrideKeys: string[],
+): Record<string, string> | undefined {
+  // Remove Vite-managed keys from pnpm.overrides
+  for (const key of [...overrideKeys, ...REMOVE_PACKAGES]) {
+    if (pkg.pnpm?.overrides?.[key]) {
+      delete pkg.pnpm.overrides[key];
+    }
+  }
+  // Remove dependency selectors targeting vite
+  for (const key in pkg.pnpm?.overrides) {
+    if (key.includes('>')) {
+      const splits = key.split('>');
+      if (splits[splits.length - 1].trim() === 'vite') {
+        delete pkg.pnpm.overrides[key];
+      }
+    }
+  }
+  // Collect remaining overrides to move to pnpm-workspace.yaml then delete all
+  // (pnpm ignores workspace-level overrides when pnpm.overrides exists in package.json)
+  let remaining: Record<string, string> | undefined;
+  if (pkg.pnpm?.overrides && Object.keys(pkg.pnpm.overrides).length > 0) {
+    remaining = { ...pkg.pnpm.overrides };
+  }
+  delete pkg.pnpm?.overrides;
+  // Only remove Vite-managed peerDependencyRules entries, preserve custom ones
+  cleanupPeerDependencyRules(pkg.pnpm?.peerDependencyRules, overrideKeys);
+  if (pkg.pnpm?.peerDependencyRules && Object.keys(pkg.pnpm.peerDependencyRules).length === 0) {
+    delete pkg.pnpm.peerDependencyRules;
+  }
+  if (pkg.pnpm && Object.keys(pkg.pnpm).length === 0) {
+    delete pkg.pnpm;
+  }
+  return remaining;
+}
+
+/**
+ * Move remaining non-Vite pnpm.overrides from package.json to pnpm-workspace.yaml.
+ * pnpm ignores workspace-level overrides when pnpm.overrides exists in package.json,
+ * so all overrides must live in pnpm-workspace.yaml.
+ */
+function migratePnpmOverridesToWorkspaceYaml(
+  projectPath: string,
+  overrides: Record<string, string>,
+): void {
+  const pnpmWorkspaceYamlPath = path.join(projectPath, 'pnpm-workspace.yaml');
+  editYamlFile(pnpmWorkspaceYamlPath, (doc) => {
+    for (const [key, value] of Object.entries(overrides)) {
+      // Always overwrite: package.json value was the effective one before migration
+      // (pnpm ignores workspace overrides when pnpm.overrides exists in package.json)
+      doc.setIn(['overrides', scalarString(key)], scalarString(value));
+    }
+  });
+}
+
+/**
+ * Remove only Vite-managed entries from peerDependencyRules, preserving custom ones.
+ */
+function cleanupPeerDependencyRules(
+  peerDependencyRules:
+    | { allowAny?: string[]; allowedVersions?: Record<string, string> }
+    | undefined,
+  overrideKeys: string[],
+): void {
+  if (!peerDependencyRules) {
+    return;
+  }
+  if (Array.isArray(peerDependencyRules.allowAny)) {
+    peerDependencyRules.allowAny = peerDependencyRules.allowAny.filter(
+      (key) => !overrideKeys.includes(key),
+    );
+    if (peerDependencyRules.allowAny.length === 0) {
+      delete peerDependencyRules.allowAny;
+    }
+  }
+  if (peerDependencyRules.allowedVersions) {
+    for (const key of overrideKeys) {
+      delete peerDependencyRules.allowedVersions[key];
+    }
+    if (Object.keys(peerDependencyRules.allowedVersions).length === 0) {
+      delete peerDependencyRules.allowedVersions;
+    }
+  }
+}
+
+/**
  * Rewrite .yarnrc.yml to add vite-plus dependencies
  * @param projectPath - The path to the project
  */
@@ -1062,12 +1203,17 @@ function rewriteRootWorkspacePackageJson(
     return;
   }
 
+  let remainingPnpmOverrides: Record<string, string> | undefined;
   editJsonFile<{
     resolutions?: Record<string, string>;
     overrides?: Record<string, string>;
     devDependencies?: Record<string, string>;
     pnpm?: {
       overrides?: Record<string, string>;
+      peerDependencyRules?: {
+        allowAny?: string[];
+        allowedVersions?: Record<string, string>;
+      };
     };
   }>(packageJsonPath, (pkg) => {
     if (packageManager === PackageManager.yarn) {
@@ -1085,6 +1231,7 @@ function rewriteRootWorkspacePackageJson(
     } else if (packageManager === PackageManager.bun) {
       // bun overrides are handled in rewriteBunCatalog() with catalog: references
     } else if (packageManager === PackageManager.pnpm) {
+      const overrideKeys = Object.keys(VITE_PLUS_OVERRIDE_PACKAGES);
       if (isForceOverrideMode()) {
         // In force-override mode, keep overrides in package.json pnpm.overrides
         // because pnpm ignores pnpm-workspace.yaml overrides when pnpm.overrides
@@ -1098,20 +1245,14 @@ function rewriteRootWorkspacePackageJson(
           },
         };
       } else {
-        // pnpm use overrides field at pnpm-workspace.yaml
-        // so we don't need to set overrides field at package.json
-        // remove packages from `resolutions` field and `pnpm.overrides` field if they exist
-        // https://pnpm.io/9.x/package_json#resolutions
-        for (const key of [...Object.keys(VITE_PLUS_OVERRIDE_PACKAGES), ...REMOVE_PACKAGES]) {
-          if (pkg.pnpm?.overrides?.[key]) {
-            delete pkg.pnpm.overrides[key];
-          }
+        for (const key of [...overrideKeys, ...REMOVE_PACKAGES]) {
           if (pkg.resolutions?.[key]) {
             delete pkg.resolutions[key];
           }
         }
+        remainingPnpmOverrides = cleanupPnpmOverridesForWorkspaceYaml(pkg, overrideKeys);
       }
-      // remove dependency selector from vite, e.g. "vite-plugin-svgr>vite": "npm:vite@7.0.12"
+      // remove dependency selectors targeting vite (e.g. "vite-plugin-svgr>vite")
       for (const key in pkg.pnpm?.overrides) {
         if (key.includes('>')) {
           const splits = key.split('>');
@@ -1134,6 +1275,11 @@ function rewriteRootWorkspacePackageJson(
     }
     return pkg;
   });
+
+  // Move remaining non-Vite pnpm.overrides to pnpm-workspace.yaml
+  if (remainingPnpmOverrides) {
+    migratePnpmOverridesToWorkspaceYaml(projectPath, remainingPnpmOverrides);
+  }
 
   // rewrite package.json
   rewriteMonorepoProject(projectPath, packageManager, skipStagedMigration);

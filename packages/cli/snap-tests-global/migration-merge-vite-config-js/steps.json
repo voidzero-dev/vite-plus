@@ -3,6 +3,7 @@
     "vp migrate --no-interactive # migration should merge vite.config.js and remove oxlintrc",
     "cat vite.config.js # check vite.config.js",
     "test ! -f .oxlintrc.json # check .oxlintrc.json is removed",
-    "cat package.json # check package.json"
+    "cat package.json # check package.json",
+    "cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog"
   ]
 }
