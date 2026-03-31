@@ -59,7 +59,23 @@ To update snap tests:
 
 Snap test files are at `packages/cli/snap-tests/*/snap.txt` and `packages/cli/snap-tests-global/*/snap.txt`.
 
-### 7. Create the PR
+### 7. Review changelog and update docs
+
+- Fetch the vite-task `CHANGELOG.md` diff between old and new commits to see what changed:
+  ```
+  https://raw.githubusercontent.com/voidzero-dev/vite-task/<new-hash>/CHANGELOG.md
+  ```
+- Review each changelog entry and determine if it affects user-facing behavior: new CLI options, changed defaults, new config fields, removed features, etc.
+- The changelog contains links to the corresponding vite-task PRs. For complex changes, check the PR description and code diff (especially any docs changes in the PR) to understand the full scope of the change.
+- If user-facing changes are found, update the relevant docs in `docs/` (e.g., `docs/guide/`, `docs/config/`).
+- Common doc updates include:
+  - **New CLI flags/options**: Update the relevant config doc (e.g., `docs/config/run.md`, `docs/config/build.md`)
+  - **New features or commands**: Add or update the relevant guide page (e.g., `docs/guide/cache.md`)
+  - **Changed defaults or behavior**: Update any docs that describe the old behavior
+  - **Removed/deprecated options**: Remove or mark as deprecated in the relevant docs
+- If no user-facing changes are found, skip this step.
+
+### 8. Create the PR
 
 - Commit message: `chore: bump vite-task to <short-hash>`
 - PR title: `chore: bump vite-task to <short-hash>`
@@ -68,7 +84,7 @@ Snap test files are at `packages/cli/snap-tests/*/snap.txt` and `packages/cli/sn
   https://github.com/voidzero-dev/vite-task/compare/<old-hash>...<new-hash>#diff-06572a96a58dc510037d5efa622f9bec8519bc1beab13c9f251e97e657a9d4ed
   ```
 
-### 8. Verify CI
+### 9. Verify CI
 
 Wait for CI and ensure the `done` check passes. Key checks to monitor:
 

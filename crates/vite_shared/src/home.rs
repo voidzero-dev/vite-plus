@@ -64,6 +64,7 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_get_vite_plus_without_home() {
         use std::path::PathBuf;
 

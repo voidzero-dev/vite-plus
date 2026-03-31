@@ -77,6 +77,7 @@ export default defineConfig({
       'packages/test/**.d.ts',
       'packages/test/**.mjs',
       'packages/test/browser/',
+      'packages/cli/src/run-config.ts',
       'vite',
       'rolldown',
     ],

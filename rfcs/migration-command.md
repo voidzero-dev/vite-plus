@@ -32,8 +32,10 @@ When transitioning to Vite+, projects typically use standalone tools like vite, 
 
 - ✅ **Dependencies**: vite, vitest, oxlint, oxfmt → vite-plus
 - ✅ **Overrides**: Force vite → vite-plus (for all dependencies)
-  - npm/pnpm/bun: Adds `overrides.vite` mapping
-  - yarn: Adds `resolutions.vite` mapping
+  - pnpm (no existing `pnpm` config): Writes `overrides`, `peerDependencyRules`, and `catalog` to `pnpm-workspace.yaml`
+  - pnpm (existing `pnpm` config): Adds `pnpm.overrides` and `pnpm.peerDependencyRules` in `package.json`
+  - npm/bun: Adds `overrides.vite` mapping in `package.json`
+  - yarn: Adds `resolutions.vite` mapping in `package.json`
   - **Benefit**: Code keeps `import from 'vite'` - automatically resolves to vite-plus
 - ✅ **Configuration files**:
   - .oxlintrc → vite.config.ts (lint section)
@@ -191,7 +193,7 @@ Wrote agent instructions to AGENTS.md
 }
 ```
 
-**After:**
+**After (npm/bun) -- `package.json`:**
 
 ```json
 {
@@ -211,9 +213,73 @@ Wrote agent instructions to AGENTS.md
 }
 ```
 
+**After (pnpm, no existing `pnpm` config) -- `package.json`:**
+
+```json
+{
+  "name": "my-package",
+  "dependencies": {
+    "react": "^18.2.0"
+  },
+  "devDependencies": {
+    "vite": "catalog:",
+    "vitest": "catalog:",
+    "@vitejs/plugin-react": "^4.2.0",
+    "vite-plus": "catalog:"
+  },
+  "packageManager": "pnpm@<semver>"
+}
+```
+
+**After (pnpm, no existing `pnpm` config) -- `pnpm-workspace.yaml`:**
+
+```yaml
+catalog:
+  vite: npm:@voidzero-dev/vite-plus-core@latest
+  vitest: npm:@voidzero-dev/vite-plus-test@latest
+  vite-plus: latest
+overrides:
+  vite: 'catalog:'
+  vitest: 'catalog:'
+peerDependencyRules:
+  allowAny:
+    - vite
+    - vitest
+  allowedVersions:
+    vite: '*'
+    vitest: '*'
+```
+
+**After (pnpm, existing `pnpm` config) -- `package.json`:**
+
+Projects that already have a `pnpm` field in `package.json` (e.g., with `overrides` or `onlyBuiltDependencies`) keep using `package.json` for pnpm config:
+
+```json
+{
+  "name": "my-package",
+  "devDependencies": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vitest": "npm:@voidzero-dev/vite-plus-test@latest",
+    "vite-plus": "latest"
+  },
+  "pnpm": {
+    "overrides": {
+      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+      "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+    },
+    "peerDependencyRules": {
+      "allowAny": ["vite", "vitest"],
+      "allowedVersions": { "vite": "*", "vitest": "*" }
+    }
+  }
+}
+```
+
 **Important**:
 
 - `overrides.vite` ensures any dependency requiring `vite` gets `vite-plus` instead
+- For pnpm without existing config, overrides and peerDependencyRules are written to `pnpm-workspace.yaml`
+- For pnpm with existing `pnpm` config in `package.json`, the existing location is respected
 - rewrite `import from 'vite'` to `import from 'vite-plus'`
 - rewrite `import from 'vite/{name}'` to `import from 'vite-plus/{name}'`, e.g.: `import from 'vite/module-runner'` to `import from 'vite-plus/module-runner'`
 - rewrite `import from 'vitest'` to `import from 'vite-plus/test'`
@@ -430,17 +496,18 @@ export default defineConfig({
 
 ### for pnpm
 
+For monorepo projects and standalone projects without existing `pnpm` config in `package.json`, overrides, peerDependencyRules, and catalog are written to `pnpm-workspace.yaml`. Projects with existing `pnpm` config in `package.json` keep using `package.json`.
+
 `pnpm-workspace.yaml`
 
 ```yaml
 catalog:
   vite: npm:@voidzero-dev/vite-plus-core@latest
   vitest: npm:@voidzero-dev/vite-plus-test@latest
-
+  vite-plus: latest
 overrides:
   vite: 'catalog:'
   vitest: 'catalog:'
-
 peerDependencyRules:
   allowAny:
     - vite

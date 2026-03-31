@@ -1,0 +1,9 @@
+{
+  "name": "command-vpr",
+  "version": "1.0.0",
+  "scripts": {
+    "hello": "node args.mjs hello from script",
+    "greet": "node args.mjs greet"
+  },
+  "packageManager": "pnpm@10.19.0"
+}

@@ -1,0 +1,13 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1",
+    "CI": "",
+    "VP_SKIP_INSTALL": ""
+  },
+  "commands": [
+    "vp migrate --no-interactive --no-hooks --package-manager pnpm # migration should work with pnpm, write overrides and peerDependencyRules to pnpm-workspace.yaml",
+    "cat package.json # check package.json has no pnpm section",
+    "cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides, peerDependencyRules, and catalog"
+  ]
+}

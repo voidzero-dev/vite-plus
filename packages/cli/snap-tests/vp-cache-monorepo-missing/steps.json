@@ -1,0 +1,9 @@
+{
+  "commands": [
+    {
+      "command": "vp run --cache ready # first run",
+      "ignoreOutput": true
+    },
+    "vp run --cache ready 2>&1 | grep -E 'cache hit|modified' # second run should all hit cache"
+  ]
+}

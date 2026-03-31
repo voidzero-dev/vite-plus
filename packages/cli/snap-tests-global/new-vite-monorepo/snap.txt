@@ -29,6 +29,20 @@ vite.config.ts
   "packageManager": "pnpm@<semver>"
 }
 
+> cat vite-plus-monorepo/vite.config.ts # check vite config has cache enabled
+import { defineConfig } from "vite-plus";
+
+export default defineConfig({
+  staged: {
+    "*": "vp check --fix",
+  },
+  fmt: {},
+  lint: { options: { typeAware: true, typeCheck: true } },
+  run: {
+    cache: true,
+  },
+});
+
 > cat vite-plus-monorepo/pnpm-workspace.yaml # check workspace config
 packages:
   - apps/*

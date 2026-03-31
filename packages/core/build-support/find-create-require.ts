@@ -10,7 +10,7 @@ import {
   type VariableDeclarator,
 } from 'oxc-parser';
 
-import { createModuleEntryFileName } from './build-cjs-deps';
+import { createModuleEntryFileName } from './build-cjs-deps.js';
 
 // Node.js built-in modules (without node: prefix)
 const nodeBuiltins = new Set(builtinModules);

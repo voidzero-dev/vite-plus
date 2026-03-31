@@ -2,6 +2,7 @@
   "commands": [
     "vp migrate --no-interactive # migration should detect both eslint and prettier and auto-migrate",
     "cat package.json # check eslint and prettier removed, scripts rewritten",
+    "cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog",
     "test ! -f eslint.config.mjs # check eslint config is removed",
     "test ! -f .prettierrc.json # check prettier config is removed",
     "cat vite.config.ts # check oxlint and oxfmt config merged into vite.config.ts"

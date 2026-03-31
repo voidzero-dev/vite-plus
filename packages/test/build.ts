@@ -56,7 +56,7 @@ import { format } from 'oxfmt';
 import { build } from 'rolldown';
 import { dts } from 'rolldown-plugin-dts';
 
-import { generateLicenseFile } from '../../scripts/generate-license.ts';
+import { generateLicenseFile } from '../../scripts/generate-license.js';
 import pkg from './package.json' with { type: 'json' };
 
 const projectDir = dirname(fileURLToPath(import.meta.url));
@@ -65,6 +65,7 @@ const distDir = resolve(projectDir, 'dist');
 const vendorDir = resolve(distDir, 'vendor');
 
 const CORE_PACKAGE_NAME = '@voidzero-dev/vite-plus-core';
+const TEST_PACKAGE_NAME = '@voidzero-dev/vite-plus-test';
 
 // @vitest/* packages to copy (not bundle) to preserve browser/Node.js separation
 // These are copied from node_modules to dist/@vitest/ to avoid shared chunks
@@ -480,7 +481,8 @@ async function bundleVitest() {
         .replaceAll(/require\("vite"\)/g, `require("${CORE_PACKAGE_NAME}")`)
         .replaceAll(`import 'vite';`, `import '${CORE_PACKAGE_NAME}';`)
         .replaceAll(`'vite/module-runner'`, `'${CORE_PACKAGE_NAME}/module-runner'`)
-        .replaceAll(`declare module "vite"`, `declare module "${CORE_PACKAGE_NAME}"`);
+        .replaceAll(`declare module "vite"`, `declare module "${CORE_PACKAGE_NAME}"`)
+        .replaceAll(/import\(['"]vitest['"]\)/g, `import('${TEST_PACKAGE_NAME}')`);
       console.log(`Replaced vite imports in ${destPath}`);
       await writeFile(destPath, content, 'utf-8');
     } else {
@@ -1634,6 +1636,18 @@ async function patchVitestBrowserPackage() {
         'This likely means vitest code has changed and the patch needs to be updated.',
     );
   }
+
+  // 5. Patch version to use VP_VERSION, preventing the "Running mixed versions" warning
+  const versionPattern = /var version = "(\d+\.\d+\.\d+[^"]*)"/;
+  const beforeVersion = content;
+  content = content.replace(versionPattern, 'var version = process.env.VP_VERSION || "$1"');
+  if (content === beforeVersion) {
+    throw new Error(
+      'Failed to patch version in @vitest/browser/index.js: pattern not found. ' +
+        'This likely means vitest code has changed and the patch needs to be updated.',
+    );
+  }
+  console.log('  Patched version to use VP_VERSION env var');
 
   await writeFile(browserIndexPath, content, 'utf-8');
   console.log('  Successfully patched @vitest/browser/index.js');

@@ -3,9 +3,9 @@ import type { OxfmtConfig } from 'oxfmt';
 import type { OxlintConfig } from 'oxlint';
 
 import { defineConfig } from './define-config.js';
-import type { PackUserConfig } from './pack';
-import type { RunConfig } from './run-config';
-import type { StagedConfig } from './staged-config';
+import type { PackUserConfig } from './pack.js';
+import type { RunConfig } from './run-config.js';
+import type { StagedConfig } from './staged-config.js';
 
 declare module '@voidzero-dev/vite-plus-core' {
   interface UserConfig {

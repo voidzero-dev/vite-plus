@@ -1,8 +1,7 @@
 {
-  "ignoredPlatforms": ["win32"],
   "commands": [
-    "vp run hello # should fall back to pnpm run when no vite-plus dependency",
-    "vp run greet --arg1 value1 # should pass through args to pnpm run",
-    "vp run nonexistent # should show pnpm missing script error"
+    "vp run hello # should execute via global vite-plus task runner",
+    "vp run greet --arg1 value1 # should pass through args",
+    "vp run nonexistent # should show task not found error"
   ]
 }

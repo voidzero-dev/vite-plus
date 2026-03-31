@@ -2,6 +2,7 @@
   "commands": [
     "vp migrate --no-interactive # migration should skip rewriting vite imports when vite is in peerDependencies",
     "cat src/index.ts # vite imports should NOT be rewritten, vitest imports SHOULD be rewritten",
-    "cat package.json # check package.json"
+    "cat package.json # check package.json",
+    "cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog"
   ]
 }

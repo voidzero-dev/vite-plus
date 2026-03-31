@@ -7,8 +7,9 @@
  * 3. buildNapiBinding() - Builds the native Rust binding via NAPI
  * 4. syncCorePackageExports() - Creates shim files to re-export from @voidzero-dev/vite-plus-core
  * 5. syncTestPackageExports() - Creates shim files to re-export from @voidzero-dev/vite-plus-test
- * 6. copySkillDocs() - Copies docs into skills/vite-plus/docs for runtime MCP access
- * 7. syncReadmeFromRoot() - Keeps package README in sync
+ * 6. syncVersionsExport() - Generates ./versions module with bundled tool versions
+ * 7. copySkillDocs() - Copies docs into skills/vite-plus/docs for runtime MCP access
+ * 8. syncReadmeFromRoot() - Keeps package README in sync
  *
  * The sync functions allow this package to be a drop-in replacement for 'vite' by
  * re-exporting all the same subpaths (./client, ./types/*, etc.) while delegating
@@ -37,7 +38,9 @@ import {
   ModuleKind,
 } from 'typescript';
 
-import { generateLicenseFile } from '../../scripts/generate-license.ts';
+import { generateLicenseFile } from '../../scripts/generate-license.js';
+import corePkg from '../core/package.json' with { type: 'json' };
+import testPkg from '../test/package.json' with { type: 'json' };
 
 const projectDir = dirname(fileURLToPath(import.meta.url));
 const TEST_PACKAGE_NAME = '@voidzero-dev/vite-plus-test';
@@ -80,6 +83,7 @@ if (!skipNative) {
 if (!skipTs) {
   await syncCorePackageExports();
   await syncTestPackageExports();
+  await syncVersionsExport();
 }
 await copySkillDocs();
 await syncReadmeFromRoot();
@@ -111,7 +115,7 @@ async function buildNapiBinding() {
   });
 
   const outputs = await task;
-  const viteConfig = await import('../../vite.config');
+  const viteConfig = await import('../../vite.config.js');
   for (const output of outputs) {
     if (output.kind !== 'node') {
       const { code, errors } = await format(output.path, await readFile(output.path, 'utf8'), {
@@ -423,6 +427,75 @@ async function syncTestPackageExports() {
   await updateCliPackageJson(cliPkgPath, generatedExports);
 
   console.log(`\nSynced ${Object.keys(generatedExports).length} exports from test package`);
+}
+
+/**
+ * Read version from a dependency's package.json in node_modules.
+ * Uses readFile because these packages don't export ./package.json.
+ *
+ * TODO: Once https://github.com/oxc-project/oxc/pull/20784 lands and oxlint/oxfmt/oxlint-tsgolint
+ * export ./package.json, this function can be removed and replaced with static imports:
+ * ```js
+ * import oxlintPkg from 'oxlint/package.json' with { type: 'json' };
+ * import oxfmtPkg from 'oxfmt/package.json' with { type: 'json' };
+ * import oxlintTsgolintPkg from 'oxlint-tsgolint/package.json' with { type: 'json' };
+ * ```
+ */
+async function readDepVersion(packageName: string): Promise<string | null> {
+  try {
+    const pkgPath = join(projectDir, 'node_modules', packageName, 'package.json');
+    const pkg = JSON.parse(await readFile(pkgPath, 'utf-8'));
+    return pkg.version ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Generate ./versions export module with bundled tool versions.
+ *
+ * Collects versions from:
+ * - core/test package.json bundledVersions (vite, rolldown, tsdown, vitest)
+ * - CLI dependency package.json (oxlint, oxfmt, oxlint-tsgolint)
+ *
+ * Generates dist/versions.js and dist/versions.d.ts with inlined constants.
+ */
+async function syncVersionsExport() {
+  console.log('\nSyncing versions export...');
+  const distDir = join(projectDir, 'dist');
+
+  // Collect versions from bundledVersions (core + test)
+  const versions: Record<string, string> = {
+    ...(corePkg as Record<string, any>).bundledVersions,
+    ...(testPkg as Record<string, any>).bundledVersions,
+  };
+
+  // Collect versions from CLI dependencies (oxlint, oxfmt, oxlint-tsgolint)
+  // These don't export ./package.json, so we read from node_modules directly
+  const depTools = ['oxlint', 'oxfmt', 'oxlint-tsgolint'] as const;
+  for (const name of depTools) {
+    const version = await readDepVersion(name);
+    if (version) {
+      versions[name] = version;
+    }
+  }
+
+  // dist/versions.js — inlined constants (no runtime I/O)
+  await writeFile(
+    join(distDir, 'versions.js'),
+    `export const versions = ${JSON.stringify(versions, null, 2)};\n`,
+  );
+
+  // dist/versions.d.ts — type declarations
+  const typeFields = Object.keys(versions)
+    .map((k) => `  readonly '${k}': string;`)
+    .join('\n');
+  await writeFile(
+    join(distDir, 'versions.d.ts'),
+    `export declare const versions: {\n${typeFields}\n};\n`,
+  );
+
+  console.log(`  Created ./versions (${Object.keys(versions).length} tools)`);
 }
 
 /**

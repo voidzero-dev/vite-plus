@@ -142,7 +142,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
+    #[serial_test::serial]
     fn test_format_path_prepended_always_prepends() {
         // Even if the directory exists somewhere in PATH, it should be prepended
         let test_dir = "/test/node/bin";

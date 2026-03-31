@@ -5,7 +5,7 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { findViteConfigUp } from '../resolve-vite-config';
+import { findViteConfigUp } from '../resolve-vite-config.js';
 
 describe('findViteConfigUp', () => {
   let tempDir: string;

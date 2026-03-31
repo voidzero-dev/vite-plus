@@ -1,11 +1,10 @@
 {
   "compilerOptions": {
-    "allowImportingTsExtensions": true,
     "declaration": true,
     "esModuleInterop": true,
-    "module": "preserve",
+    "module": "nodenext",
     "moduleDetection": "force",
-    "moduleResolution": "bundler",
+    "moduleResolution": "nodenext",
     "noEmit": true,
     "noUnusedLocals": true,
     "resolveJsonModule": true,
@@ -19,6 +18,11 @@
     "ecosystem-ci",
     "packages/cli/snap-tests",
     "packages/cli/snap-tests-global",
+    // Symlinks to vite submodule files that don't use .js extensions;
+    // excluding build.ts too because it imports vite-rolldown.config.ts
+    "packages/core/build.ts",
+    "packages/core/rollupLicensePlugin.ts",
+    "packages/core/vite-rolldown.config.ts",
     "vite",
     "rolldown",
     "target"

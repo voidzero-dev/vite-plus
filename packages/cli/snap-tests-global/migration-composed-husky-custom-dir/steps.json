@@ -1,8 +1,12 @@
 {
   "commands": [
-    { "command": "git init", "ignoreOutput": true },
+    {
+      "command": "git init",
+      "ignoreOutput": true
+    },
     "vp migrate --no-interactive # migration should preserve custom husky dir in composed prepare",
     "cat package.json # prepare should be 'vp config --hooks-dir .config/husky && npm run build'",
+    "cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog",
     "cat .config/husky/pre-commit # pre-commit hook should be in custom dir",
     "cat .config/husky/_/h # hook dispatcher should resolve repo root correctly for nested dirs"
   ]

@@ -5,7 +5,7 @@ import path from 'node:path';
 
 import { describe, expect, test } from '@voidzero-dev/vite-plus-test';
 
-import { isPassThroughEnv, replaceUnstableOutput } from '../utils';
+import { isPassThroughEnv, replaceUnstableOutput } from '../utils.js';
 
 describe('replaceUnstableOutput()', () => {
   test('strip ANSI escape sequences', () => {

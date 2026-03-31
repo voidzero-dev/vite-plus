@@ -34,13 +34,35 @@ const MAIN_PACKAGE_NAME: &str = "vite-plus";
 const PLATFORM_PACKAGE_SCOPE: &str = "@voidzero-dev";
 const CLI_PACKAGE_NAME_PREFIX: &str = "vite-plus-cli";
 
-/// Resolve a version from the npm registry.
+/// Resolve a version string from the npm registry.
 ///
-/// Makes two HTTP calls:
-/// 1. Main package metadata to resolve version tags (e.g., "latest" → "1.2.3")
-/// 2. CLI platform package metadata to get tarball URL and integrity
-pub async fn resolve_version(
+/// Single HTTP call to resolve a version or tag (e.g., "latest" → "1.2.3").
+/// Does NOT verify the platform-specific package exists.
+pub async fn resolve_version_string(
     version_or_tag: &str,
+    registry_override: Option<&str>,
+) -> Result<String, Error> {
+    let default_registry = npm_registry();
+    let registry_raw = registry_override.unwrap_or(&default_registry);
+    let registry = registry_raw.trim_end_matches('/');
+    let client = HttpClient::new();
+
+    let main_url = format!("{registry}/{MAIN_PACKAGE_NAME}/{version_or_tag}");
+    tracing::debug!("Fetching main package metadata: {}", main_url);
+
+    let main_meta: PackageVersionMetadata = client.get_json(&main_url).await.map_err(|e| {
+        Error::Upgrade(format!("Failed to fetch package metadata from {main_url}: {e}").into())
+    })?;
+
+    Ok(main_meta.version)
+}
+
+/// Resolve the platform-specific package metadata for a given version.
+///
+/// Single HTTP call to fetch the tarball URL and integrity hash for the
+/// platform-specific CLI binary package.
+pub async fn resolve_platform_package(
+    version: &str,
     platform_suffix: &str,
     registry_override: Option<&str>,
 ) -> Result<ResolvedVersion, Error> {
@@ -49,18 +71,9 @@ pub async fn resolve_version(
     let registry = registry_raw.trim_end_matches('/');
     let client = HttpClient::new();
 
-    // Step 1: Fetch main package metadata to resolve version
-    let main_url = format!("{registry}/{MAIN_PACKAGE_NAME}/{version_or_tag}");
-    tracing::debug!("Fetching main package metadata: {}", main_url);
-
-    let main_meta: PackageVersionMetadata = client.get_json(&main_url).await.map_err(|e| {
-        Error::Upgrade(format!("Failed to fetch package metadata from {main_url}: {e}").into())
-    })?;
-
-    // Step 2: Query CLI platform package directly
     let cli_package_name =
         format!("{PLATFORM_PACKAGE_SCOPE}/{CLI_PACKAGE_NAME_PREFIX}-{platform_suffix}");
-    let cli_url = format!("{registry}/{cli_package_name}/{}", main_meta.version);
+    let cli_url = format!("{registry}/{cli_package_name}/{version}");
     tracing::debug!("Fetching CLI package metadata: {}", cli_url);
 
     let cli_meta: PackageVersionMetadata = client.get_json(&cli_url).await.map_err(|e| {
@@ -74,10 +87,24 @@ pub async fn resolve_version(
     })?;
 
     Ok(ResolvedVersion {
-        version: main_meta.version,
+        version: version.to_owned(),
         platform_tarball_url: cli_meta.dist.tarball,
         platform_integrity: cli_meta.dist.integrity,
     })
+}
+
+/// Resolve a version from the npm registry with platform package verification.
+///
+/// Makes two HTTP calls:
+/// 1. Main package metadata to resolve version tags (e.g., "latest" → "1.2.3")
+/// 2. CLI platform package metadata to get tarball URL and integrity
+pub async fn resolve_version(
+    version_or_tag: &str,
+    platform_suffix: &str,
+    registry_override: Option<&str>,
+) -> Result<ResolvedVersion, Error> {
+    let version = resolve_version_string(version_or_tag, registry_override).await?;
+    resolve_platform_package(&version, platform_suffix, registry_override).await
 }
 
 #[cfg(test)]
