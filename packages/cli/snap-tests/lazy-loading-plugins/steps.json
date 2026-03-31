@@ -1,6 +1,6 @@
 {
   "commands": [
-    "# Test that lazy-loaded plugins via dynamic import are applied during build",
+    "# Test that plugins loaded via lazy field are applied during build",
     {
       "command": "vp build",
       "ignoreOutput": true
