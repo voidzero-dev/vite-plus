@@ -9,6 +9,7 @@ permissions: {}
 
 jobs:
   upgrade:
+    if: github.event.repository.fork == false
     runs-on: ubuntu-latest
     permissions:
       contents: write
