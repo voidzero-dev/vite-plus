@@ -313,6 +313,16 @@ impl NodeProvider {
         find_latest_lts_version(&versions)
     }
 
+    /// Get the absolute latest version, including non-LTS.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if no version is found or the version index cannot be fetched.
+    pub async fn resolve_absolute_latest_version(&self) -> Result<Str, Error> {
+        let versions = self.fetch_version_index().await?;
+        find_absolute_latest_version(&versions)
+    }
+
     /// Check if a version string is an LTS alias (e.g., `lts/*`, `lts/iron`, `lts/-1`).
     ///
     /// Returns `true` for LTS alias formats:
@@ -459,6 +469,21 @@ fn find_latest_lts_version(versions: &[NodeVersionEntry]) -> Result<Str, Error> 
     latest_lts.map(|(_, version_str)| version_str.into()).ok_or_else(|| {
         Error::VersionIndexParseFailed { reason: "No LTS version found in version index".into() }
     })
+}
+
+/// Find the absolute latest version, regardless of LTS status.
+///
+/// The version index is sorted newest-first, so we take the first entry.
+fn find_absolute_latest_version(versions: &[NodeVersionEntry]) -> Result<Str, Error> {
+    versions
+        .first()
+        .map(|entry| {
+            let version_str = entry.version.strip_prefix('v').unwrap_or(&entry.version);
+            version_str.into()
+        })
+        .ok_or_else(|| Error::VersionIndexParseFailed {
+            reason: "No version found in version index".into(),
+        })
 }
 
 /// Resolve a version requirement to a matching version from a list.
@@ -1181,6 +1206,49 @@ fedcba987654  node-v22.13.1-win-x64.zip";
         // ^20.18.0 should return 20.19.0 (the only LTS in range)
         let result = resolve_version_from_list("^20.18.0", &versions).unwrap();
         assert_eq!(result, "20.19.0");
+    }
+
+    // ========================================================================
+    // Absolute Latest Version Tests
+    // ========================================================================
+
+    #[test]
+    fn test_find_absolute_latest_version() {
+        use super::find_absolute_latest_version;
+
+        let versions = vec![
+            NodeVersionEntry { version: "v25.5.0".into(), lts: LtsInfo::NotLts },
+            NodeVersionEntry { version: "v24.5.0".into(), lts: LtsInfo::Codename("Jod".into()) },
+            NodeVersionEntry { version: "v22.15.0".into(), lts: LtsInfo::Codename("Jod".into()) },
+            NodeVersionEntry { version: "v20.19.0".into(), lts: LtsInfo::Codename("Iron".into()) },
+        ];
+
+        // Should return the absolute highest version, not LTS
+        let result = find_absolute_latest_version(&versions).unwrap();
+        assert_eq!(result, "25.5.0");
+    }
+
+    #[test]
+    fn test_find_absolute_latest_version_all_lts() {
+        use super::find_absolute_latest_version;
+
+        let versions = vec![
+            NodeVersionEntry { version: "v24.5.0".into(), lts: LtsInfo::Codename("Jod".into()) },
+            NodeVersionEntry { version: "v22.15.0".into(), lts: LtsInfo::Codename("Jod".into()) },
+        ];
+
+        // When all versions are LTS, return the highest
+        let result = find_absolute_latest_version(&versions).unwrap();
+        assert_eq!(result, "24.5.0");
+    }
+
+    #[test]
+    fn test_find_absolute_latest_version_empty() {
+        use super::find_absolute_latest_version;
+
+        let versions: Vec<NodeVersionEntry> = vec![];
+        let result = find_absolute_latest_version(&versions);
+        assert!(result.is_err());
     }
 
     // ========================================================================

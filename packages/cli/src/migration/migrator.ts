@@ -33,6 +33,7 @@ import {
   hasBaseUrlInTsconfig,
   removeDeprecatedTsconfigFalseOption,
 } from '../utils/tsconfig.js';
+import type { NpmWorkspaces } from '../utils/workspace.js';
 import { editYamlFile, scalarString, type YamlDocument } from '../utils/yaml.js';
 import {
   PRETTIER_CONFIG_FILES,
@@ -1159,12 +1160,18 @@ function rewriteBunCatalog(projectPath: string): void {
   }
 
   editJsonFile<{
+    workspaces?: NpmWorkspaces;
     catalog?: Record<string, string>;
     overrides?: Record<string, string>;
   }>(packageJsonPath, (pkg) => {
-    const catalog: Record<string, string> = { ...pkg.catalog };
+    // Bun supports catalogs in both workspaces.catalog and top-level catalog;
+    // prefer the location the user already chose to avoid moving their config.
+    const workspacesObj =
+      pkg.workspaces && !Array.isArray(pkg.workspaces) ? pkg.workspaces : undefined;
+    const catalog: Record<string, string> = {
+      ...(workspacesObj?.catalog ?? pkg.catalog),
+    };
 
-    // Add vite-plus managed packages to catalog
     for (const [key, value] of Object.entries(VITE_PLUS_OVERRIDE_PACKAGES)) {
       if (!value.startsWith('file:')) {
         catalog[key] = value;
@@ -1174,12 +1181,15 @@ function rewriteBunCatalog(projectPath: string): void {
       catalog[VITE_PLUS_NAME] = VITE_PLUS_VERSION;
     }
 
-    // Remove replaced packages from catalog
     for (const name of REMOVE_PACKAGES) {
       delete catalog[name];
     }
 
-    pkg.catalog = catalog;
+    if (workspacesObj?.catalog != null) {
+      workspacesObj.catalog = catalog;
+    } else {
+      pkg.catalog = catalog;
+    }
 
     // bun overrides support catalog: references
     const overrides: Record<string, string> = { ...pkg.overrides };
