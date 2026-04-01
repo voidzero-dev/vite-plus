@@ -17,6 +17,7 @@ vi.mock('../../utils/constants.js', async (importOriginal) => {
 const {
   rewritePackageJson,
   rewriteStandaloneProject,
+  rewriteMonorepo,
   parseNvmrcVersion,
   detectNodeVersionManagerFile,
   migrateNodeVersionManagerFile,
@@ -428,5 +429,90 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     const yaml = readYaml(path.join(tmpDir, 'pnpm-workspace.yaml'));
     expect(yaml).toContain("vite: 'catalog:'");
     expect(yaml).toContain("vitest: 'catalog:'");
+  });
+});
+
+describe('rewriteMonorepo bun catalog', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-bun-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('writes catalog to top-level when workspaces is an array', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'bun-monorepo',
+        workspaces: ['packages/*'],
+        devDependencies: { vite: '^7.0.0' },
+        packageManager: 'bun@1.3.11',
+      }),
+    );
+    rewriteMonorepo(makeWorkspaceInfo(tmpDir, PackageManager.bun), true);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json'));
+    // catalog should be at top level
+    const catalog = pkg.catalog as Record<string, string>;
+    expect(catalog.vite).toBeDefined();
+    expect(catalog['vite-plus']).toBe('latest');
+    // overrides should reference catalog:
+    const overrides = pkg.overrides as Record<string, string>;
+    expect(overrides.vite).toBe('catalog:');
+  });
+
+  it('writes catalog to workspaces.catalog when workspaces is an object with existing catalog', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'bun-monorepo',
+        workspaces: {
+          packages: ['packages/*'],
+          catalog: { react: '^19.0.0' },
+        },
+        devDependencies: { vite: '^7.0.0' },
+        packageManager: 'bun@1.3.11',
+      }),
+    );
+    rewriteMonorepo(makeWorkspaceInfo(tmpDir, PackageManager.bun), true);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json'));
+    // No top-level catalog
+    expect(pkg.catalog).toBeUndefined();
+    // workspaces.catalog should have merged entries
+    const workspaces = pkg.workspaces as { packages: string[]; catalog: Record<string, string> };
+    expect(workspaces.catalog.react).toBe('^19.0.0');
+    expect(workspaces.catalog.vite).toBeDefined();
+    expect(workspaces.catalog['vite-plus']).toBe('latest');
+    // workspaces.packages should be preserved
+    expect(workspaces.packages).toEqual(['packages/*']);
+  });
+
+  it('writes catalog to top-level when workspaces is an object without catalog', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'bun-monorepo',
+        workspaces: {
+          packages: ['packages/*'],
+        },
+        devDependencies: { vite: '^7.0.0' },
+        packageManager: 'bun@1.3.11',
+      }),
+    );
+    rewriteMonorepo(makeWorkspaceInfo(tmpDir, PackageManager.bun), true);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json'));
+    // catalog should be at top level since workspaces.catalog didn't exist
+    const catalog = pkg.catalog as Record<string, string>;
+    expect(catalog.vite).toBeDefined();
+    expect(catalog['vite-plus']).toBe('latest');
+    // workspaces object should be preserved
+    const workspaces = pkg.workspaces as { packages: string[] };
+    expect(workspaces.packages).toEqual(['packages/*']);
   });
 });
