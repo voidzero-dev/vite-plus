@@ -181,7 +181,7 @@ async fn resolve_version_for_pin(
             Ok((resolved.to_string(), true))
         }
         "latest" => {
-            let resolved = provider.resolve_version("*").await?;
+            let resolved = provider.resolve_absolute_latest_version().await?;
             Ok((resolved.to_string(), true))
         }
         _ => {

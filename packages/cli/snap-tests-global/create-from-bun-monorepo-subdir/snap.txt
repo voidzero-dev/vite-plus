@@ -1,0 +1,34 @@
+> cd apps/website && vp create --no-interactive vite:generator # from workspace subdir with object-form workspaces
+> test -f tools/vite-plus-generator/package.json && echo 'Created at tools/vite-plus-generator' || echo 'NOT at tools/'
+Created at tools/vite-plus-generator
+
+> test ! -f apps/website/tools/vite-plus-generator/package.json && echo 'Not in apps/website/' || echo 'BUG: in apps/website/'
+Not in apps/website/
+
+> cd apps && vp create --no-interactive vite:application # from workspace parent dir
+> test -f apps/vite-plus-application/package.json && echo 'Created at apps/vite-plus-application' || echo 'NOT at apps/'
+Created at apps/vite-plus-application
+
+> cd scripts/helper && vp create --no-interactive vite:library # from non-workspace dir
+> test -f packages/vite-plus-library/package.json && echo 'Created at packages/vite-plus-library' || echo 'NOT at packages/'
+Created at packages/vite-plus-library
+
+> cat package.json # verify workspaces object form preserved after workspace update
+{
+  "name": "test-bun-monorepo",
+  "version": "0.0.0",
+  "private": true,
+  "workspaces": {
+    "packages": [
+      "apps/*",
+      "packages/*",
+      "tools/*"
+    ],
+    "catalog": {
+      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+      "vitest": "npm:@voidzero-dev/vite-plus-test@latest",
+      "vite-plus": "latest"
+    }
+  },
+  "packageManager": "bun@<semver>"
+}

@@ -1,0 +1,10 @@
+{
+  "commands": [
+    "vp migrate --no-interactive # migration should work with bun object-form workspaces",
+    "cat vite.config.ts # check vite.config.ts",
+    "test ! -f .oxlintrc.json # check .oxlintrc.json is removed",
+    "cat package.json # check package.json preserves workspaces object form",
+    "cat packages/app/package.json # check app package.json",
+    "cat packages/utils/package.json # check utils package.json"
+  ]
+}

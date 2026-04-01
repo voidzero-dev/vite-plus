@@ -436,7 +436,8 @@ vite-plus supports the following version specification formats, compatible with 
 | **LTS latest**      | `lts/*`                           | Highest LTS version            | time-based (1 hour) |
 | **LTS codename**    | `lts/iron`, `lts/jod`             | Highest version in LTS line    | time-based (1 hour) |
 | **LTS offset**      | `lts/-1`, `lts/-2`                | nth-highest LTS line           | time-based (1 hour) |
-| **Wildcard**        | `*`                               | Latest version                 | time-based (1 hour) |
+| **Wildcard**        | `*`                               | Highest matching (prefers LTS) | time-based (1 hour) |
+| **Latest**          | `latest`                          | Absolute latest version        | time-based (1 hour) |
 
 ### Exact Versions
 

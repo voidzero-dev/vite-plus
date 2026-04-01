@@ -171,10 +171,19 @@ async function promptPrettierMigration(
   return true;
 }
 
-async function confirmNodeVersionFileMigration(interactive: boolean): Promise<boolean> {
+async function confirmNodeVersionFileMigration(
+  interactive: boolean,
+  detection: NodeVersionManagerDetection,
+): Promise<boolean> {
+  const confirmMessageByFile = {
+    'package.json': 'Migrate Volta node version (package.json) to .node-version?',
+    '.nvmrc': 'Migrate .nvmrc to .node-version?',
+  } as const satisfies Record<NodeVersionManagerDetection['file'], string>;
+
+  const message = confirmMessageByFile[detection.file];
   if (interactive) {
     const confirmed = await prompts.confirm({
-      message: 'Migrate .nvmrc to .node-version?',
+      message,
       initialValue: true,
     });
     if (prompts.isCancel(confirmed)) {
@@ -459,7 +468,10 @@ async function collectMigrationPlan(
   const nodeVersionDetection = detectNodeVersionManagerFile(rootDir);
   let migrateNodeVersionFile = false;
   if (nodeVersionDetection) {
-    migrateNodeVersionFile = await confirmNodeVersionFileMigration(options.interactive);
+    migrateNodeVersionFile = await confirmNodeVersionFileMigration(
+      options.interactive,
+      nodeVersionDetection,
+    );
   }
 
   const plan: MigrationPlan = {
@@ -859,7 +871,10 @@ async function main() {
     // Check if node version manager file migration is needed
     const nodeVersionDetection = detectNodeVersionManagerFile(workspaceInfoOptional.rootDir);
     if (nodeVersionDetection) {
-      const confirmed = await confirmNodeVersionFileMigration(options.interactive);
+      const confirmed = await confirmNodeVersionFileMigration(
+        options.interactive,
+        nodeVersionDetection,
+      );
       if (
         confirmed &&
         migrateNodeVersionManagerFile(workspaceInfoOptional.rootDir, nodeVersionDetection, report)

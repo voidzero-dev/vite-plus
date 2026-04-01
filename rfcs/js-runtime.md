@@ -182,8 +182,11 @@ impl NodeProvider {
     /// Resolve version requirement (e.g., "^24.4.0") to exact version
     pub async fn resolve_version(&self, version_req: &str) -> Result<Str, Error>;
 
-    /// Get latest version (first entry in index)
+    /// Get latest LTS version
     pub async fn resolve_latest_version(&self) -> Result<Str, Error>;
+
+    /// Get absolute latest version (including non-LTS)
+    pub async fn resolve_absolute_latest_version(&self) -> Result<Str, Error>;
 }
 ```
 

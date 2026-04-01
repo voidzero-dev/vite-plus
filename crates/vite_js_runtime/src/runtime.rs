@@ -418,7 +418,7 @@ async fn resolve_version_for_project(
     // Handle "latest" alias - resolves to absolute latest version (including non-LTS)
     if NodeProvider::is_latest_alias(version_req) {
         tracing::debug!("Resolving 'latest' alias");
-        return provider.resolve_version("*").await;
+        return provider.resolve_absolute_latest_version().await;
     }
 
     // Check if it's an exact version

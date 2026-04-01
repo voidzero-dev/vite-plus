@@ -1,0 +1,25 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "commands": [
+    {
+      "command": "cd apps/website && vp create --no-interactive vite:generator # from workspace subdir with object-form workspaces",
+      "ignoreOutput": true
+    },
+    "test -f tools/vite-plus-generator/package.json && echo 'Created at tools/vite-plus-generator' || echo 'NOT at tools/'",
+    "test ! -f apps/website/tools/vite-plus-generator/package.json && echo 'Not in apps/website/' || echo 'BUG: in apps/website/'",
+
+    {
+      "command": "cd apps && vp create --no-interactive vite:application # from workspace parent dir",
+      "ignoreOutput": true
+    },
+    "test -f apps/vite-plus-application/package.json && echo 'Created at apps/vite-plus-application' || echo 'NOT at apps/'",
+
+    {
+      "command": "cd scripts/helper && vp create --no-interactive vite:library # from non-workspace dir",
+      "ignoreOutput": true
+    },
+    "test -f packages/vite-plus-library/package.json && echo 'Created at packages/vite-plus-library' || echo 'NOT at packages/'",
+
+    "cat package.json # verify workspaces object form preserved after workspace update"
+  ]
+}

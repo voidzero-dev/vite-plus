@@ -1,0 +1,7 @@
+{
+  "commands": [
+    "vp migrate --no-interactive # migration should detect volta.node in package.json and migrate to .node-version",
+    "cat .node-version # check .node-version is created from volta.node",
+    "grep '\"volta\"' package.json # check volta field is preserved in package.json (not removed)"
+  ]
+}
