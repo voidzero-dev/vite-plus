@@ -30,20 +30,28 @@ export default defineConfig({
     if (source === '../../binding/index.js' || source === '../binding/index.js') {
       return true;
     }
+    if (source === '../versions.js') {
+      return true;
+    }
     return false;
   },
   plugins: [
     {
-      name: 'fix-binding-path',
-      // Rewrite the binding import path for the output directory.
-      // Source files import from ../../binding/index.js (relative to src/*/).
-      // Output is in dist/global/, so the correct path is ../../binding/index.js (two dirs up).
-      // Rolldown normalizes it to ../binding/index.js which is wrong.
+      name: 'fix-external-paths',
+      // Rewrite external import paths for the output directory (dist/global/).
+      // Rolldown normalizes relative paths from source locations, but the output
+      // is two directories deep (dist/global/), so the paths need adjustment.
       renderChunk(code) {
-        if (code.includes('../binding/index.js')) {
-          return { code: code.replaceAll('../binding/index.js', '../../binding/index.js') };
+        let result = code;
+        // ../../binding/index.js → Rolldown normalizes to ../binding/index.js, needs ../../
+        if (result.includes('../binding/index.js')) {
+          result = result.replaceAll('../binding/index.js', '../../binding/index.js');
         }
-        return null;
+        // ../versions.js → Rolldown normalizes to ./versions.js, needs ../
+        if (result.includes('./versions.js')) {
+          result = result.replaceAll('./versions.js', '../versions.js');
+        }
+        return result !== code ? { code: result } : null;
       },
     },
     {

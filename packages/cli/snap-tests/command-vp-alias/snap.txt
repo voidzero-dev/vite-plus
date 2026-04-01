@@ -36,14 +36,29 @@ Arguments:
           Running `vp run` without a task name shows an interactive task selector.
 
 Options:
-  -r, --recursive          Select all packages in the workspace
-  -t, --transitive         Select the current package and its transitive dependencies
-  -w, --workspace-root     Select the workspace root package
-  -F, --filter <FILTERS>   Match packages by name, directory, or glob pattern
-      --ignore-depends-on  Do not run dependencies specified in `dependsOn` fields
-  -v, --verbose            Show full detailed summary after execution
-      --cache              Force caching on for all tasks and scripts
-      --no-cache           Force caching off for all tasks and scripts
-      --log <LOG>          How task output is displayed [default: interleaved] [possible values: interleaved, labeled, grouped]
-      --last-details       Display the detailed summary of the last run
-  -h, --help               Print help (see more with '--help')
+  -r, --recursive
+          Select all packages in the workspace
+  -t, --transitive
+          Select the current package and its transitive dependencies
+  -w, --workspace-root
+          Select the workspace root package
+  -F, --filter <FILTERS>
+          Match packages by name, directory, or glob pattern
+      --ignore-depends-on
+          Do not run dependencies specified in `dependsOn` fields
+  -v, --verbose
+          Show full detailed summary after execution
+      --cache
+          Force caching on for all tasks and scripts
+      --no-cache
+          Force caching off for all tasks and scripts
+      --log <LOG>
+          How task output is displayed [default: interleaved] [possible values: interleaved, labeled, grouped]
+      --concurrency-limit <CONCURRENCY_LIMIT>
+          Maximum number of tasks to run concurrently. Defaults to 4
+      --parallel
+          Run tasks without dependency ordering. Sets concurrency to unlimited unless `--concurrency-limit` is also specified
+      --last-details
+          Display the detailed summary of the last run
+  -h, --help
+          Print help (see more with '--help')

@@ -1,9 +1,13 @@
 {
   "commands": [
-    { "command": "git init", "ignoreOutput": true },
+    {
+      "command": "git init",
+      "ignoreOutput": true
+    },
     "vp migrate foo --no-interactive # migration work with subpath",
     "cat foo/package.json # check package.json",
     "cat foo/vite.config.ts # check vite.config.ts",
-    "git config --local core.hooksPath || echo 'core.hooksPath is not set' # should NOT be set"
+    "git config --local core.hooksPath || echo 'core.hooksPath is not set' # should NOT be set",
+    "cat foo/pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog"
   ]
 }

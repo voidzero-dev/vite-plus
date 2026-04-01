@@ -1,6 +1,7 @@
 {
   "commands": [
     "vp migrate --no-interactive # hooks should be skipped due to simple-git-hooks",
-    "cat package.json # lint-staged config, scripts, and simple-git-hooks config should all be preserved"
+    "cat package.json # lint-staged config, scripts, and simple-git-hooks config should all be preserved",
+    "cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog"
   ]
 }

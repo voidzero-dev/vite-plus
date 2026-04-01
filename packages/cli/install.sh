@@ -245,16 +245,16 @@ fetch_package_metadata() {
     # npm can return either {"error":"..."} or a plain JSON string like "version not found: test"
     if echo "$PACKAGE_METADATA" | grep -q '"error"'; then
       local error_msg
-      error_msg=$(echo "$PACKAGE_METADATA" | grep -o '"error":"[^"]*"' | cut -d'"' -f4)
-      error "Failed to fetch version '${version_path}': ${error_msg:-unknown error}"
+      error_msg=$(echo "$PACKAGE_METADATA" | grep -o '"error" *: *"[^"]*"' | cut -d'"' -f4)
+      error "Failed to fetch version '${version_path}': ${error_msg:-unknown error}\n  URL: $metadata_url"
     fi
     # Check if response is a plain error string (not a valid package object)
     # Use '"version":' to match JSON property, not just the word "version"
-    if ! echo "$PACKAGE_METADATA" | grep -q '"version":'; then
+    if ! echo "$PACKAGE_METADATA" | grep -q '"version" *:'; then
       # Remove surrounding quotes from the error message if present
       local error_msg
       error_msg=$(echo "$PACKAGE_METADATA" | sed 's/^"//;s/"$//')
-      error "Failed to fetch version '${version_path}': ${error_msg:-unknown error}"
+      error "Failed to fetch version '${version_path}': ${error_msg:-unknown error}\n  URL: $metadata_url"
     fi
   fi
   # PACKAGE_METADATA is set as a global variable, no need to echo
@@ -266,7 +266,7 @@ get_version_from_metadata() {
   # Call fetch_package_metadata to populate PACKAGE_METADATA global
   # Don't use command substitution as it would swallow the exit from error()
   fetch_package_metadata
-  RESOLVED_VERSION=$(echo "$PACKAGE_METADATA" | grep -o '"version":"[^"]*"' | head -1 | cut -d'"' -f4)
+  RESOLVED_VERSION=$(echo "$PACKAGE_METADATA" | grep -o '"version" *: *"[^"]*"' | head -1 | cut -d'"' -f4)
   if [ -z "$RESOLVED_VERSION" ]; then
     error "Failed to extract version from package metadata"
   fi

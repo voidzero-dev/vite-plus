@@ -74,7 +74,7 @@ function Get-PackageMetadata {
                 try {
                     $errorJson = $errorMsg | ConvertFrom-Json
                     if ($errorJson.error) {
-                        Write-Error-Exit "Failed to fetch version '${versionPath}': $($errorJson.error)"
+                        Write-Error-Exit "Failed to fetch version '${versionPath}': $($errorJson.error)`n  URL: $metadataUrl"
                     }
                 } catch {
                     # JSON parsing failed, fall through to generic error
@@ -85,11 +85,17 @@ function Get-PackageMetadata {
         # Check for error in successful response
         # npm can return {"error":"..."} object or a plain string like "version not found: test"
         if ($script:PackageMetadata -is [string]) {
-            # Plain string response means error
-            Write-Error-Exit "Failed to fetch version '${versionPath}': $script:PackageMetadata"
+            # Some registries (e.g. JFrog) may return JSON with a non-JSON content type,
+            # causing Invoke-RestMethod to return a raw string. Try parsing it as JSON first.
+            try {
+                $script:PackageMetadata = $script:PackageMetadata | ConvertFrom-Json
+            } catch {
+                # Not valid JSON - treat as plain string error
+                Write-Error-Exit "Failed to fetch version '${versionPath}': $script:PackageMetadata`n  URL: $metadataUrl"
+            }
         }
         if ($script:PackageMetadata.error) {
-            Write-Error-Exit "Failed to fetch version '${versionPath}': $($script:PackageMetadata.error)"
+            Write-Error-Exit "Failed to fetch version '${versionPath}': $($script:PackageMetadata.error)`n  URL: $metadataUrl"
         }
     }
     return $script:PackageMetadata

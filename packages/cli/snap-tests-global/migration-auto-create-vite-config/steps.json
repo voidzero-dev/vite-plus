@@ -4,6 +4,7 @@
     "cat vite.config.ts # check vite.config.ts",
     "test ! -f .oxlintrc.json # check .oxlintrc.json is removed",
     "test ! -f .oxfmtrc.json # check .oxfmtrc.json is removed",
-    "cat package.json # check package.json"
+    "cat package.json # check package.json",
+    "cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog"
   ]
 }

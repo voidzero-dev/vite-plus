@@ -20,24 +20,8 @@ VITE+ - The Unified Toolchain for the Web
       "oxlint --fix"
     ]
   },
-  "pnpm": {
-    "overrides": {
-      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-      "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
-    },
-    "peerDependencyRules": {
-      "allowAny": [
-        "vite",
-        "vitest"
-      ],
-      "allowedVersions": {
-        "vite": "*",
-        "vitest": "*"
-      }
-    }
-  },
   "devDependencies": {
-    "vite-plus": "latest"
+    "vite-plus": "catalog:"
   },
   "packageManager": "pnpm@<semver>"
 }
@@ -52,3 +36,19 @@ export default defineConfig({
 
 > git config --local core.hooksPath || echo 'core.hooksPath is not set' # should NOT be set
 core.hooksPath is not set
+
+> cat foo/pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog
+catalog:
+  vite: npm:@voidzero-dev/vite-plus-core@latest
+  vitest: npm:@voidzero-dev/vite-plus-test@latest
+  vite-plus: latest
+overrides:
+  vite: 'catalog:'
+  vitest: 'catalog:'
+peerDependencyRules:
+  allowAny:
+    - vite
+    - vitest
+  allowedVersions:
+    vite: '*'
+    vitest: '*'

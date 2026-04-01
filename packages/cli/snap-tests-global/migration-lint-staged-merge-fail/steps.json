@@ -1,8 +1,12 @@
 {
   "commands": [
-    { "command": "git init", "ignoreOutput": true },
+    {
+      "command": "git init",
+      "ignoreOutput": true
+    },
     "vp migrate --no-interactive # should handle merge failure gracefully",
     "cat package.json # lint-staged config should be preserved when merge fails",
+    "cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog",
     "cat vite.config.ts # vite config should be unchanged (merge failed)",
     "test -f .vite-hooks/pre-commit && echo 'pre-commit hook exists' || echo 'no pre-commit hook' # should NOT exist when merge fails"
   ]

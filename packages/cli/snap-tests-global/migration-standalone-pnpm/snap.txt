@@ -1,4 +1,4 @@
-> vp migrate --no-interactive --no-hooks --package-manager pnpm # migration should work with pnpm, add overrides and peerDependencyRules
+> vp migrate --no-interactive --no-hooks --package-manager pnpm # migration should work with pnpm, write overrides and peerDependencyRules to pnpm-workspace.yaml
 VITE+ - The Unified Toolchain for the Web
 
 ◇ Migrated . to Vite+<repeat>
@@ -6,29 +6,29 @@ VITE+ - The Unified Toolchain for the Web
 ✓ Dependencies installed in <variable>ms
 • 1 config update applied
 
-> cat package.json # check package.json has pnpm.overrides and pnpm.peerDependencyRules
+> cat package.json # check package.json has no pnpm section
 {
   "name": "migration-standalone-pnpm",
   "devDependencies": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vitest": "npm:@voidzero-dev/vite-plus-test@latest",
-    "vite-plus": "latest"
+    "vite": "catalog:",
+    "vitest": "catalog:",
+    "vite-plus": "catalog:"
   },
-  "packageManager": "pnpm@<semver>",
-  "pnpm": {
-    "overrides": {
-      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-      "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
-    },
-    "peerDependencyRules": {
-      "allowAny": [
-        "vite",
-        "vitest"
-      ],
-      "allowedVersions": {
-        "vite": "*",
-        "vitest": "*"
-      }
-    }
-  }
+  "packageManager": "pnpm@<semver>"
 }
+
+> cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides, peerDependencyRules, and catalog
+catalog:
+  vite: npm:@voidzero-dev/vite-plus-core@latest
+  vitest: npm:@voidzero-dev/vite-plus-test@latest
+  vite-plus: latest
+overrides:
+  vite: 'catalog:'
+  vitest: 'catalog:'
+peerDependencyRules:
+  allowAny:
+    - vite
+    - vitest
+  allowedVersions:
+    vite: '*'
+    vitest: '*'
