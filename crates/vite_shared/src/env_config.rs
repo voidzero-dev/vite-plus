@@ -65,7 +65,7 @@ pub struct EnvConfig {
 
     /// Node.js distribution mirror URL.
     ///
-    /// Env: `VITE_NODE_DIST_MIRROR`
+    /// Env: `VP_NODE_DIST_MIRROR`
     pub node_dist_mirror: Option<String>,
 
     /// Whether running in a CI environment.
@@ -136,7 +136,7 @@ impl EnvConfig {
                 .unwrap_or_else(|_| "https://registry.npmjs.org".into())
                 .trim_end_matches('/')
                 .to_string(),
-            node_dist_mirror: std::env::var(env_vars::VITE_NODE_DIST_MIRROR).ok(),
+            node_dist_mirror: std::env::var(env_vars::VP_NODE_DIST_MIRROR).ok(),
             is_ci: std::env::var("CI").is_ok(),
             bypass_shim: std::env::var(env_vars::VP_BYPASS).is_ok(),
             debug_shim: std::env::var(env_vars::VP_DEBUG_SHIM).is_ok(),

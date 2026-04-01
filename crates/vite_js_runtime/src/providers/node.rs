@@ -558,7 +558,7 @@ fn calculate_expires_at(max_age: Option<u64>) -> u64 {
 
 /// Get the Node.js distribution base URL
 ///
-/// Returns the value of `VITE_NODE_DIST_MIRROR` environment variable if set,
+/// Returns the value of `VP_NODE_DIST_MIRROR` environment variable if set,
 /// otherwise returns the default `https://nodejs.org/dist`.
 fn get_dist_url() -> Str {
     vite_shared::EnvConfig::get().node_dist_mirror.map_or_else(

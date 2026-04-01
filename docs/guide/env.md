@@ -85,15 +85,15 @@ vp env exec node -v           # Use shim mode with automatic version resolution
 
 ## Custom Node.js Mirror
 
-By default, Vite+ downloads Node.js from `https://nodejs.org/dist`. If you're behind a corporate proxy or need to use an internal mirror (e.g., Artifactory), set the `VITE_NODE_DIST_MIRROR` environment variable:
+By default, Vite+ downloads Node.js from `https://nodejs.org/dist`. If you're behind a corporate proxy or need to use an internal mirror (e.g., Artifactory), set the `VP_NODE_DIST_MIRROR` environment variable:
 
 ```bash
 # Install a specific version from your custom mirror
-VITE_NODE_DIST_MIRROR=https://my-mirror.example.com/nodejs/dist vp env install 22
+VP_NODE_DIST_MIRROR=https://my-mirror.example.com/nodejs/dist vp env install 22
 
 # Set the global default version using a custom mirror
-VITE_NODE_DIST_MIRROR=https://my-mirror.example.com/nodejs/dist vp env default lts
+VP_NODE_DIST_MIRROR=https://my-mirror.example.com/nodejs/dist vp env default lts
 
 # Set it permanently in your shell profile (.bashrc, .zshrc, etc.)
-echo 'export VITE_NODE_DIST_MIRROR=https://my-mirror.example.com/nodejs/dist' >> ~/.zshrc
+echo 'export VP_NODE_DIST_MIRROR=https://my-mirror.example.com/nodejs/dist' >> ~/.zshrc
 ```
