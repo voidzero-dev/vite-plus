@@ -361,9 +361,11 @@ function Main {
     Set-Content -Path (Join-Path $VersionDir "package.json") -Value $wrapperJson
 
     # Isolate from user's global package manager config that may block
-    # installing recently-published packages (e.g. pnpm's minimumReleaseAge,
-    # npm's min-release-age) by creating a local .npmrc in the version directory.
+    # installing recently-published packages (pnpm's minimumReleaseAge,
+    # npm's min-release-age, yarn's npmMinimalAgeGate, bun's minimumReleaseAge).
     Set-Content -Path (Join-Path $VersionDir ".npmrc") -Value "minimum-release-age=0`nmin-release-age=0"
+    Set-Content -Path (Join-Path $VersionDir ".yarnrc.yml") -Value 'npmMinimalAgeGate: "0m"'
+    Set-Content -Path (Join-Path $VersionDir "bunfig.toml") -Value "[install]`nminimumReleaseAge = 0"
 
     # Install production dependencies (skip if VP_SKIP_DEPS_INSTALL is set,
     # e.g. during local dev where install-global-cli.ts handles deps separately)

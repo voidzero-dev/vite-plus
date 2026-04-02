@@ -636,12 +636,19 @@ main() {
 WRAPPER_EOF
 
   # Isolate from user's global package manager config that may block
-  # installing recently-published packages (e.g. pnpm's minimumReleaseAge,
-  # npm's min-release-age) by creating a local .npmrc in the version directory.
+  # installing recently-published packages (pnpm's minimumReleaseAge,
+  # npm's min-release-age, yarn's npmMinimalAgeGate, bun's minimumReleaseAge).
   cat > "$VERSION_DIR/.npmrc" <<NPMRC_EOF
 minimum-release-age=0
 min-release-age=0
 NPMRC_EOF
+  cat > "$VERSION_DIR/.yarnrc.yml" <<YARNRC_EOF
+npmMinimalAgeGate: "0m"
+YARNRC_EOF
+  cat > "$VERSION_DIR/bunfig.toml" <<BUNFIG_EOF
+[install]
+minimumReleaseAge = 0
+BUNFIG_EOF
 
   # Install production dependencies (skip if VP_SKIP_DEPS_INSTALL is set,
   # e.g. during local dev where install-global-cli.ts handles deps separately)

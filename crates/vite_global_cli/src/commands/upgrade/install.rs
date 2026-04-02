@@ -108,9 +108,56 @@ pub async fn generate_wrapper_package_json(
     Ok(())
 }
 
+/// Create local config overrides in the version directory to isolate from
+/// user's global package manager config that may block installing
+/// recently-published packages.
+///
+/// Overrides for each package manager:
+/// - pnpm: `minimum-release-age=0` in `.npmrc`
+/// - npm: `min-release-age=0` in `.npmrc`
+/// - yarn: `npmMinimalAgeGate: "0s"` in `.yarnrc.yml`
+/// - bun: `minimumReleaseAge = 0` in `bunfig.toml`
+pub async fn write_release_age_overrides(version_dir: &AbsolutePath) -> Result<(), Error> {
+    // pnpm + npm
+    let npmrc_path = version_dir.join(".npmrc");
+    tokio::fs::write(&npmrc_path, "minimum-release-age=0\nmin-release-age=0\n").await?;
+
+    // yarn (SettingsType.DURATION with DurationUnit.MINUTES, "0m" disables)
+    let yarnrc_path = version_dir.join(".yarnrc.yml");
+    tokio::fs::write(&yarnrc_path, "npmMinimalAgeGate: \"0m\"\n").await?;
+
+    // bun
+    let bunfig_path = version_dir.join("bunfig.toml");
+    tokio::fs::write(&bunfig_path, "[install]\nminimumReleaseAge = 0\n").await?;
+
+    Ok(())
+}
+
+/// Write stdout and stderr from a failed install to `{version_dir}/upgrade.log`.
+///
+/// Returns the log file path on success, or `None` if writing failed.
+pub async fn write_upgrade_log(
+    version_dir: &AbsolutePath,
+    stdout: &[u8],
+    stderr: &[u8],
+) -> Option<AbsolutePathBuf> {
+    let log_path = version_dir.join("upgrade.log");
+    let stdout_str = String::from_utf8_lossy(stdout);
+    let stderr_str = String::from_utf8_lossy(stderr);
+    let content = format!("=== stdout ===\n{stdout_str}\n=== stderr ===\n{stderr_str}");
+    match tokio::fs::write(&log_path, &content).await {
+        Ok(()) => Some(log_path),
+        Err(e) => {
+            tracing::warn!("Failed to write upgrade log: {}", e);
+            None
+        }
+    }
+}
+
 /// Install production dependencies using the new version's binary.
 ///
 /// Spawns: `{version_dir}/bin/vp install --silent [--registry <url>]` with `CI=true`.
+/// On failure, writes stdout+stderr to `{version_dir}/upgrade.log` for debugging.
 pub async fn install_production_deps(
     version_dir: &AbsolutePath,
     registry: Option<&str>,
@@ -140,12 +187,16 @@ pub async fn install_production_deps(
         .await?;
 
     if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
+        let log_path = write_upgrade_log(version_dir, &output.stdout, &output.stderr).await;
+        let log_msg = log_path.map_or_else(
+            || String::new(),
+            |p| format!(". See log for details: {}", p.as_path().display()),
+        );
         return Err(Error::Upgrade(
             format!(
-                "Failed to install production dependencies (exit code: {})\n{}",
+                "Failed to install production dependencies (exit code: {}){}",
                 output.status.code().unwrap_or(-1),
-                stderr.trim()
+                log_msg
             )
             .into(),
         ));
@@ -430,5 +481,63 @@ mod tests {
                 .unwrap();
         let result = cleanup_old_versions(&non_existent, 5, &[]).await;
         assert!(result.is_err(), "cleanup_old_versions should error on non-existent dir");
+    }
+
+    #[tokio::test]
+    async fn test_write_upgrade_log_creates_log_file() {
+        let temp = tempfile::tempdir().unwrap();
+        let version_dir = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+
+        let stdout = b"some stdout output";
+        let stderr = b"error: something went wrong";
+
+        let result = write_upgrade_log(&version_dir, stdout, stderr).await;
+        assert!(result.is_some(), "write_upgrade_log should return log path");
+
+        let log_path = result.unwrap();
+        assert!(log_path.as_path().exists(), "upgrade.log should exist");
+
+        let content = tokio::fs::read_to_string(&log_path).await.unwrap();
+        assert!(content.contains("=== stdout ==="), "log should have stdout section");
+        assert!(content.contains("some stdout output"), "log should contain stdout");
+        assert!(content.contains("=== stderr ==="), "log should have stderr section");
+        assert!(content.contains("error: something went wrong"), "log should contain stderr");
+    }
+
+    #[tokio::test]
+    async fn test_write_upgrade_log_handles_empty_output() {
+        let temp = tempfile::tempdir().unwrap();
+        let version_dir = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+
+        let result = write_upgrade_log(&version_dir, b"", b"").await;
+        assert!(result.is_some());
+
+        let content = tokio::fs::read_to_string(result.unwrap()).await.unwrap();
+        assert!(content.contains("=== stdout ==="));
+        assert!(content.contains("=== stderr ==="));
+    }
+
+    #[tokio::test]
+    async fn test_write_release_age_overrides_creates_all_config_files() {
+        let temp = tempfile::tempdir().unwrap();
+        let version_dir = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+
+        write_release_age_overrides(&version_dir).await.unwrap();
+
+        // .npmrc (pnpm + npm)
+        let npmrc = tokio::fs::read_to_string(version_dir.join(".npmrc")).await.unwrap();
+        assert!(npmrc.contains("minimum-release-age=0"), ".npmrc should contain pnpm override");
+        assert!(npmrc.contains("min-release-age=0"), ".npmrc should contain npm override");
+
+        // .yarnrc.yml (yarn)
+        let yarnrc = tokio::fs::read_to_string(version_dir.join(".yarnrc.yml")).await.unwrap();
+        assert!(yarnrc.contains("npmMinimalAgeGate"), ".yarnrc.yml should contain yarn override");
+
+        // bunfig.toml (bun)
+        let bunfig = tokio::fs::read_to_string(version_dir.join("bunfig.toml")).await.unwrap();
+        assert!(
+            bunfig.contains("minimumReleaseAge = 0"),
+            "bunfig.toml should contain bun override"
+        );
     }
 }
