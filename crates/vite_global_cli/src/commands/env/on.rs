@@ -22,17 +22,17 @@ pub async fn execute() -> Result<ExitStatus, Error> {
     let mut config = load_config().await?;
 
     if config.shim_mode == ShimMode::Managed {
-        println!("Shim mode is already set to managed.");
-        println!("Shims will always use the Vite+ managed Node.js.");
+        println!("Node.js management is already set to managed.");
+        println!("All vp commands and shims will always use Vite+ managed Node.js.");
         return Ok(ExitStatus::default());
     }
 
     config.shim_mode = ShimMode::Managed;
     save_config(&config).await?;
 
-    println!("\u{2713} Shim mode set to managed.");
+    println!("\u{2713} Node.js management set to managed.");
     println!();
-    println!("Shims will now always use the Vite+ managed Node.js.");
+    println!("All vp commands and shims will now always use Vite+ managed Node.js.");
     println!();
     println!("Run {} to prefer system Node.js instead.", accent_command("vp env off"));
 

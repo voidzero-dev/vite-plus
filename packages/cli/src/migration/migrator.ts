@@ -1399,6 +1399,15 @@ export function rewritePackageJson(
       ...pkg.devDependencies,
       [VITE_PLUS_NAME]: version,
     };
+    // Add vitest to devDependencies when a remaining dependency likely peer-depends
+    // on vitest (e.g., vitest-browser-svelte). Without this, pnpm resolves the real
+    // vitest for peer deps instead of @voidzero-dev/vite-plus-test, causing
+    // third-party type augmentations to target the wrong module.
+    const allDeps = { ...pkg.dependencies, ...pkg.devDependencies };
+    if (!allDeps.vitest && Object.keys(allDeps).some((name) => name.includes('vitest'))) {
+      const ver = VITE_PLUS_OVERRIDE_PACKAGES.vitest;
+      pkg.devDependencies.vitest = supportCatalog && !ver.startsWith('file:') ? 'catalog:' : ver;
+    }
   }
   return extractedStagedConfig;
 }

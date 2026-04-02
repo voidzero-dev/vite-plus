@@ -309,6 +309,8 @@ When upgrading the vitest version:
     - createNodeEntry()          index-node.js with browser-provider
     - copyBrowserClientFiles()
     - createBrowserEntryFiles()  browser/ entry files at package root
+    - patchModuleAugmentations() Rewrite @vitest/expect, @vitest/runner augmentations
+    - patchChaiTypeReference()   Add @types/chai triple-slash reference
     - createPluginExports()      dist/plugins/* for pnpm overrides
     - mergePackageJson()
     - validateExternalDeps()

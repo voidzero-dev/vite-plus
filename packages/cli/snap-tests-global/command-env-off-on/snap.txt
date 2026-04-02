@@ -1,0 +1,38 @@
+> vp run assert-managed # Managed mode: should use project's engines.node 20.18.0
+VITE+ - The Unified Toolchain for the Web
+
+$ node src/assert-managed.mjs ⊘ cache disabled
+OK: v<semver>
+
+
+> vp env off # Switch to system-first mode
+VITE+ - The Unified Toolchain for the Web
+
+✓ Node.js management set to system-first.
+
+All vp commands and shims will now prefer system Node.js, falling back to managed if not found.
+
+Run `vp env on` to always use Vite+ managed Node.js.
+
+> vp run assert-not-managed # System-first mode: must NOT use 20.18.0
+VITE+ - The Unified Toolchain for the Web
+
+$ node src/assert-not-managed.mjs ⊘ cache disabled
+OK: v<semver>
+
+
+> vp env on # Switch back to managed mode
+VITE+ - The Unified Toolchain for the Web
+
+✓ Node.js management set to managed.
+
+All vp commands and shims will now always use Vite+ managed Node.js.
+
+Run `vp env off` to prefer system Node.js instead.
+
+> vp run assert-managed # Managed mode restored: should use 20.18.0 again
+VITE+ - The Unified Toolchain for the Web
+
+$ node src/assert-managed.mjs ⊘ cache disabled
+OK: v<semver>
+
