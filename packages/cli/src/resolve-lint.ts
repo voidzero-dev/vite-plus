@@ -11,7 +11,7 @@
  * provides ESLint-compatible linting with significantly better performance.
  */
 
-import { existsSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { relative } from 'node:path/win32';
 import { fileURLToPath } from 'node:url';
@@ -43,7 +43,8 @@ export async function lint(): Promise<{
   let oxlintTsgolintPath = resolve('oxlint-tsgolint/bin/tsgolint');
   if (process.platform === 'win32') {
     // On Windows, try .exe first (bun creates .exe), then .cmd (npm/pnpm/yarn create .cmd)
-    const localBinDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'node_modules', '.bin');
+    const scriptDir = dirname(fileURLToPath(import.meta.url));
+    const localBinDir = join(scriptDir, '..', 'node_modules', '.bin');
     const cwdBinDir = join(process.cwd(), 'node_modules', '.bin');
     oxlintTsgolintPath =
       [
@@ -51,7 +52,23 @@ export async function lint(): Promise<{
         join(localBinDir, 'tsgolint.cmd'),
         join(cwdBinDir, 'tsgolint.exe'),
         join(cwdBinDir, 'tsgolint.cmd'),
-      ].find((p) => existsSync(p)) ?? join(cwdBinDir, 'tsgolint.cmd');
+      ].find((p) => existsSync(p)) ?? '';
+    // Bun stores packages in .bun/ cache dirs where the symlinked paths above won't match.
+    if (!oxlintTsgolintPath) {
+      try {
+        const realPkgDir = realpathSync(join(scriptDir, '..'));
+        const realBinDir = join(dirname(realPkgDir), '.bin');
+        oxlintTsgolintPath =
+          [join(realBinDir, 'tsgolint.exe'), join(realBinDir, 'tsgolint.cmd')].find((p) =>
+            existsSync(p),
+          ) ?? '';
+      } catch {
+        // realpath failed, fall through to default
+      }
+    }
+    if (!oxlintTsgolintPath) {
+      oxlintTsgolintPath = join(cwdBinDir, 'tsgolint.cmd');
+    }
     const relativePath = relative(process.cwd(), oxlintTsgolintPath);
     // Only prepend .\ if it's actually a relative path (not an absolute path returned by relative())
     oxlintTsgolintPath = /^[a-zA-Z]:/.test(relativePath) ? relativePath : `.\\${relativePath}`;
