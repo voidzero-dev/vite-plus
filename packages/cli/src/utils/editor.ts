@@ -179,7 +179,7 @@ export async function selectEditor({
       hint: option.targetDir,
     }));
     const noneOption = {
-      label: 'None',
+      label: 'Other',
       value: null,
       hint: 'Skip writing editor configs',
     };
