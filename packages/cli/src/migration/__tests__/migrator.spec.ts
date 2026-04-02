@@ -247,6 +247,35 @@ describe('detectNodeVersionManagerFile', () => {
     fs.writeFileSync(path.join(tmpDir, '.nvmrc'), 'v20.5.0\n');
     expect(detectNodeVersionManagerFile(tmpDir)).toEqual({ file: '.nvmrc' });
   });
+
+  it('detects volta node in package.json', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ volta: { node: '20.5.0' } }),
+    );
+    expect(detectNodeVersionManagerFile(tmpDir)).toEqual({
+      file: 'package.json',
+      voltaNodeVersion: '20.5.0',
+    });
+  });
+
+  it('prefers .nvmrc over volta when both are present and sets voltaPresent', () => {
+    fs.writeFileSync(path.join(tmpDir, '.nvmrc'), 'v20.5.0\n');
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ volta: { node: '18.0.0' } }),
+    );
+    expect(detectNodeVersionManagerFile(tmpDir)).toEqual({ file: '.nvmrc', voltaPresent: true });
+  });
+
+  it('returns undefined when .node-version already exists even with volta', () => {
+    fs.writeFileSync(path.join(tmpDir, '.node-version'), '20.5.0\n');
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ volta: { node: '20.5.0' } }),
+    );
+    expect(detectNodeVersionManagerFile(tmpDir)).toBeUndefined();
+  });
 });
 
 describe('migrateNodeVersionManagerFile', () => {
@@ -258,6 +287,28 @@ describe('migrateNodeVersionManagerFile', () => {
 
   afterEach(() => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('adds volta manual step when voltaPresent is set', () => {
+    fs.writeFileSync(path.join(tmpDir, '.nvmrc'), 'v20.5.0\n');
+    const report = {
+      createdViteConfigCount: 0,
+      mergedConfigCount: 0,
+      mergedStagedConfigCount: 0,
+      inlinedLintStagedConfigCount: 0,
+      removedConfigCount: 0,
+      tsdownImportCount: 0,
+      rewrittenImportFileCount: 0,
+      rewrittenImportErrors: [],
+      eslintMigrated: false,
+      prettierMigrated: false,
+      nodeVersionFileMigrated: false,
+      gitHooksConfigured: false,
+      warnings: [],
+      manualSteps: [],
+    };
+    migrateNodeVersionManagerFile(tmpDir, { file: '.nvmrc', voltaPresent: true }, report);
+    expect(report.manualSteps).toContain('Remove the "volta" field from package.json');
   });
 
   it('migrates .nvmrc to .node-version and removes .nvmrc', () => {
@@ -287,6 +338,77 @@ describe('migrateNodeVersionManagerFile', () => {
       manualSteps: [],
     };
     const ok = migrateNodeVersionManagerFile(tmpDir, { file: '.nvmrc' }, report);
+    expect(ok).toBe(false);
+    expect(report.warnings.length).toBe(1);
+    expect(fs.existsSync(path.join(tmpDir, '.node-version'))).toBe(false);
+  });
+
+  it('migrates volta node version to .node-version', () => {
+    const ok = migrateNodeVersionManagerFile(tmpDir, {
+      file: 'package.json',
+      voltaNodeVersion: '20.5.0',
+    });
+    expect(ok).toBe(true);
+    expect(fs.readFileSync(path.join(tmpDir, '.node-version'), 'utf8')).toBe('20.5.0\n');
+  });
+
+  it('sets nodeVersionFileMigrated and manualSteps in report for volta migration', () => {
+    const report = {
+      createdViteConfigCount: 0,
+      mergedConfigCount: 0,
+      mergedStagedConfigCount: 0,
+      inlinedLintStagedConfigCount: 0,
+      removedConfigCount: 0,
+      tsdownImportCount: 0,
+      rewrittenImportFileCount: 0,
+      rewrittenImportErrors: [],
+      eslintMigrated: false,
+      prettierMigrated: false,
+      nodeVersionFileMigrated: false,
+      gitHooksConfigured: false,
+      warnings: [],
+      manualSteps: [],
+    };
+    migrateNodeVersionManagerFile(
+      tmpDir,
+      { file: 'package.json', voltaNodeVersion: '20.5.0' },
+      report,
+    );
+    expect(report.nodeVersionFileMigrated).toBe(true);
+    expect(report.manualSteps).toContain('Remove the "volta" field from package.json');
+  });
+
+  it('normalizes volta.node "lts" to "lts/*"', () => {
+    const ok = migrateNodeVersionManagerFile(tmpDir, {
+      file: 'package.json',
+      voltaNodeVersion: 'lts',
+    });
+    expect(ok).toBe(true);
+    expect(fs.readFileSync(path.join(tmpDir, '.node-version'), 'utf8')).toBe('lts/*\n');
+  });
+
+  it('returns false and warns when volta.node is a partial version', () => {
+    const report = {
+      createdViteConfigCount: 0,
+      mergedConfigCount: 0,
+      mergedStagedConfigCount: 0,
+      inlinedLintStagedConfigCount: 0,
+      removedConfigCount: 0,
+      tsdownImportCount: 0,
+      rewrittenImportFileCount: 0,
+      rewrittenImportErrors: [],
+      eslintMigrated: false,
+      prettierMigrated: false,
+      nodeVersionFileMigrated: false,
+      gitHooksConfigured: false,
+      warnings: [],
+      manualSteps: [],
+    };
+    const ok = migrateNodeVersionManagerFile(
+      tmpDir,
+      { file: 'package.json', voltaNodeVersion: '20' },
+      report,
+    );
     expect(ok).toBe(false);
     expect(report.warnings.length).toBe(1);
     expect(fs.existsSync(path.join(tmpDir, '.node-version'))).toBe(false);

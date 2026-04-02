@@ -42,7 +42,7 @@ export async function executeRemoteTemplate(
     // TODO: prompt for project name if not provided for degit
     // Template not found - use package manager runner (npx/pnpm dlx/etc.)
     if (!isGitHubTemplate) {
-      // templateInfo.command is the npm package name (e.g. "create-vite", "@tanstack/create-start")
+      // templateInfo.command is the npm package name (e.g. "create-vite", "@tanstack/cli")
       const packageExists = await checkNpmPackageExists(templateInfo.command);
       if (!packageExists) {
         if (!silent) {
@@ -106,7 +106,7 @@ export async function runRemoteTemplateCommand(
 }
 
 function autoFixRemoteTemplateCommand(templateInfo: TemplateInfo, workspaceInfo: WorkspaceInfo) {
-  // @tanstack/create-start@latest, create-vite@latest
+  // @tanstack/cli@latest, create-vite@latest
   let packageName = templateInfo.command;
   const indexOfAt = packageName.indexOf('@', 2);
   if (indexOfAt !== -1) {
@@ -118,7 +118,11 @@ function autoFixRemoteTemplateCommand(templateInfo: TemplateInfo, workspaceInfo:
     templateInfo.args.push('--no-immediate');
     // don't present rolldown option to users
     templateInfo.args.push('--no-rolldown');
-  } else if (packageName === '@tanstack/create-start') {
+  } else if (packageName === '@tanstack/cli') {
+    // ensure create command is used
+    if (templateInfo.args[0] !== 'create') {
+      templateInfo.args.unshift('create');
+    }
     // don't run npm install after project creation
     templateInfo.args.push('--no-install');
     // don't setup toolchain automatically
@@ -136,7 +140,7 @@ function autoFixRemoteTemplateCommand(templateInfo: TemplateInfo, workspaceInfo:
     // don't run git init on monorepo
     if (packageName === 'create-nuxt') {
       templateInfo.args.push('--no-gitInit');
-    } else if (packageName === '@tanstack/create-start') {
+    } else if (packageName === '@tanstack/cli') {
       templateInfo.args.push('--no-git');
     }
   }

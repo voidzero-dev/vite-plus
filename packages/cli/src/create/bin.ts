@@ -155,7 +155,7 @@ const listTemplatesMessage = renderCliDoc({
         { label: 'vite', description: 'Official Vite templates (create-vite)' },
         {
           label: '@tanstack/start',
-          description: 'TanStack applications (@tanstack/create-start)',
+          description: 'TanStack applications (@tanstack/cli create)',
         },
         { label: 'next-app', description: 'Next.js application (create-next-app)' },
         { label: 'nuxt', description: 'Nuxt application (create-nuxt)' },
@@ -169,7 +169,7 @@ const listTemplatesMessage = renderCliDoc({
       lines: [
         `  ${accent('vp create')} ${muted('# interactive mode')}`,
         `  ${accent('vp create vite')} ${muted('# shorthand for create-vite')}`,
-        `  ${accent('vp create @tanstack/start')} ${muted('# shorthand for @tanstack/create-start')}`,
+        `  ${accent('vp create @tanstack/start')} ${muted('# shorthand for @tanstack/cli create')}`,
         `  ${accent('vp create <template> -- <options>')} ${muted('# pass options to the template')}`,
       ],
     },
@@ -455,7 +455,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
 
   const isBuiltinTemplate = selectedTemplateName.startsWith('vite:');
 
-  // Remote templates (e.g., @tanstack/create-start, custom templates) run their own
+  // Remote templates (e.g., @tanstack/cli, custom templates) run their own
   // interactive CLI, so verbose mode is needed to show their output.
   if (!isBuiltinTemplate) {
     compactOutput = false;

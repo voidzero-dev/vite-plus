@@ -69,7 +69,7 @@ Vite+ Built-in Templates:
 
 Popular Templates (shorthand):
   vite             Official Vite templates (create-vite)
-  @tanstack/start  TanStack applications (@tanstack/create-start)
+  @tanstack/start  TanStack applications (@tanstack/cli create)
   next-app         Next.js application (create-next-app)
   nuxt             Nuxt application (create-nuxt)
   react-router     React Router application (create-react-router)
@@ -79,7 +79,7 @@ Popular Templates (shorthand):
 Examples:
   vp create # interactive mode
   vp create vite # shorthand for create-vite
-  vp create @tanstack/start # shorthand for @tanstack/create-start
+  vp create @tanstack/start # shorthand for @tanstack/cli create
   vp create <template> -- <options> # pass options to the template
 
 Tip:

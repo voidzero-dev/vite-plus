@@ -1,0 +1,8 @@
+{
+  "commands": [
+    "vp migrate --no-interactive # .nvmrc should take priority over volta.node",
+    "cat .node-version # check .node-version comes from .nvmrc (v20.5.0), not volta.node (18.0.0)",
+    "test ! -f .nvmrc # check .nvmrc is removed",
+    "grep '\"volta\"' package.json # volta field must remain intact"
+  ]
+}

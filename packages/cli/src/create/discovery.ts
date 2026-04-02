@@ -133,11 +133,11 @@ export function discoverTemplate(
  * This follows the same convention as `npm create` / `pnpm create`:
  * - `vite` → `create-vite`
  * - `vite@latest` → `create-vite@latest`
- * - `@tanstack/start` → `@tanstack/create-start`
- * - `@tanstack/start@latest` → `@tanstack/create-start@latest`
  *
  * Special cases for packages where the convention doesn't work:
  * - `nitro` → `create-nitro-app` (create-nitro is abandoned)
+ * - `svelte` → `sv`
+ * - `@tanstack/start` → `@tanstack/cli` (@tanstack/create-start is deprecated)
  *
  * Skips expansion for:
  * - Builtin templates (`vite:*`)
@@ -186,6 +186,12 @@ export function expandCreateShorthand(templateName: string): string {
     if (name.startsWith('create-')) {
       return templateName;
     }
+
+    // Special cases where the default convention doesn't apply
+    if (scope === '@tanstack' && name === 'start') {
+      return `@tanstack/cli${version}`;
+    }
+
     return `${scope}/create-${name}${version}`;
   }
 

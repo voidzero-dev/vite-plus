@@ -304,6 +304,10 @@ jobs:
             command: |
               npx playwright install chromium
               vp test
+          - name: vite-plus-vitest-type-aug
+            node-version: 24
+            command: |
+              vp check --fix
         exclude:
           # frm-stack uses Docker (testcontainers) which doesn't work the same way on Windows
           - os: windows-latest

@@ -1399,6 +1399,15 @@ export function rewritePackageJson(
       ...pkg.devDependencies,
       [VITE_PLUS_NAME]: version,
     };
+    // Add vitest to devDependencies when a remaining dependency likely peer-depends
+    // on vitest (e.g., vitest-browser-svelte). Without this, pnpm resolves the real
+    // vitest for peer deps instead of @voidzero-dev/vite-plus-test, causing
+    // third-party type augmentations to target the wrong module.
+    const allDeps = { ...pkg.dependencies, ...pkg.devDependencies };
+    if (!allDeps.vitest && Object.keys(allDeps).some((name) => name.includes('vitest'))) {
+      const ver = VITE_PLUS_OVERRIDE_PACKAGES.vitest;
+      pkg.devDependencies.vitest = supportCatalog && !ver.startsWith('file:') ? 'catalog:' : ver;
+    }
   }
   return extractedStagedConfig;
 }
@@ -2267,12 +2276,14 @@ function setPackageManager(
   });
 }
 
-export interface NodeVersionManagerDetection {
-  file: string;
-}
+export type NodeVersionManagerDetection =
+  | { file: '.nvmrc'; voltaPresent?: true }
+  | { file: 'package.json'; voltaNodeVersion: string };
 
 /**
  * Detect a .nvmrc file in the project directory.
+ * If not found, check for a Volta node version in package.json.
+ * If either is found, return the relevant info for migration.
  * Returns undefined if not found or .node-version already exists.
  */
 export function detectNodeVersionManagerFile(
@@ -2284,9 +2295,18 @@ export function detectNodeVersionManagerFile(
   }
 
   const configs = detectConfigs(projectPath);
+
+  // .nvmrc takes priority over volta.node when both are present.
+  // voltaPresent is carried through so the migration step can remind the user
+  // to remove the now-redundant volta field from package.json.
   if (configs.nvmrcFile) {
-    return { file: '.nvmrc' };
+    return configs.voltaNode ? { file: '.nvmrc', voltaPresent: true } : { file: '.nvmrc' };
   }
+
+  if (configs.voltaNode) {
+    return { file: 'package.json', voltaNodeVersion: configs.voltaNode };
+  }
+
   return undefined;
 }
 
@@ -2328,16 +2348,45 @@ export function parseNvmrcVersion(alias: string): string | null {
 }
 
 /**
- * Migrate .nvmrc to .node-version and remove .nvmrc.
+ * Migrate .nvmrc or Volta node version from package.json to .node-version.
+ * - For .nvmrc: the source file is removed after migration.
+ * - For package.json (Volta): the volta field is left as-is; removal is left to the user's discretion.
  * Returns true on success, false if migration was skipped or failed.
  */
 export function migrateNodeVersionManagerFile(
   projectPath: string,
-  _detection: NodeVersionManagerDetection,
+  detection: NodeVersionManagerDetection,
   report?: MigrationReport,
 ): boolean {
-  const sourcePath = path.join(projectPath, '.nvmrc');
   const nodeVersionPath = path.join(projectPath, '.node-version');
+
+  // Volta: node version was already extracted during detection — no package.json re-read needed
+  if (detection.file === 'package.json') {
+    const { voltaNodeVersion } = detection;
+
+    // Normalize Volta's "lts" alias to the .node-version compatible form
+    const resolvedVersion = voltaNodeVersion === 'lts' ? 'lts/*' : voltaNodeVersion;
+
+    if (!semver.valid(resolvedVersion) && resolvedVersion !== 'lts/*') {
+      warnMigration(
+        `package.json volta.node "${voltaNodeVersion}" is not an exact version. Pin an exact version (e.g. ${voltaNodeVersion}.0 or run \`volta pin node@${voltaNodeVersion}\`) then re-run migration.`,
+        report,
+      );
+      return false;
+    }
+
+    fs.writeFileSync(nodeVersionPath, `${resolvedVersion}\n`);
+    if (report) {
+      report.manualSteps.push('Remove the "volta" field from package.json');
+      report.nodeVersionFileMigrated = true;
+    } else {
+      prompts.log.info('You can now remove the "volta" field from package.json manually.');
+    }
+    return true;
+  }
+
+  // .nvmrc: parse version alias and write to .node-version
+  const sourcePath = path.join(projectPath, '.nvmrc');
   const content = fs.readFileSync(sourcePath, 'utf8');
   const originalAlias = content.split('\n')[0]?.trim() ?? '';
   const version = parseNvmrcVersion(originalAlias);
@@ -2363,6 +2412,12 @@ export function migrateNodeVersionManagerFile(
 
   if (report) {
     report.nodeVersionFileMigrated = true;
+    // Both .nvmrc and volta were present; .nvmrc was migrated but volta still lingers.
+    if (detection.voltaPresent) {
+      report.manualSteps.push('Remove the "volta" field from package.json');
+    }
+  } else if (detection.voltaPresent) {
+    prompts.log.info('You can now remove the "volta" field from package.json manually.');
   }
   return true;
 }

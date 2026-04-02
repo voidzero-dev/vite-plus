@@ -13,7 +13,11 @@ use vite_js_runtime::{
 use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_shared::{PrependOptions, PrependResult, env_vars, format_path_with_prepend};
 
-use crate::{commands::env::config, error::Error};
+use crate::{
+    commands::env::config::{self, ShimMode},
+    error::Error,
+    shim,
+};
 
 /// JavaScript executor using managed Node.js runtime.
 ///
@@ -125,8 +129,15 @@ impl JsExecutor {
     ///
     /// Uses the CLI's package.json `devEngines.runtime` configuration
     /// to determine which Node.js version to use.
+    ///
+    /// When system-first mode is active (`vp env off`), prefers the
+    /// system-installed Node.js found in PATH.
     pub async fn ensure_cli_runtime(&mut self) -> Result<&JsRuntime, Error> {
         if self.cli_runtime.is_none() {
+            if let Some(system_runtime) = find_system_node_runtime().await {
+                return Ok(self.cli_runtime.insert(system_runtime));
+            }
+
             let cli_dir = self.get_cli_package_dir()?;
             tracing::debug!("Resolving CLI runtime from {:?}", cli_dir);
             let runtime = download_runtime_for_project(&cli_dir).await?;
@@ -150,6 +161,10 @@ impl JsExecutor {
     ) -> Result<&JsRuntime, Error> {
         if self.project_runtime.is_none() {
             tracing::debug!("Resolving project runtime from {:?}", project_path);
+
+            if let Some(system_runtime) = find_system_node_runtime().await {
+                return Ok(self.project_runtime.insert(system_runtime));
+            }
 
             // 1–2. Session overrides: env var (from `vp env use`), then file
             let session_version = vite_shared::EnvConfig::get()
@@ -389,6 +404,24 @@ async fn has_valid_version_source(
             .is_some_and(|r| is_valid_version(&r.version));
 
     Ok(engines_valid || dev_engines_valid)
+}
+
+/// Try to find system Node.js when in system-first mode (`vp env off`).
+///
+/// Returns `Some(JsRuntime)` when both conditions are met:
+/// 1. Config has `shim_mode == SystemFirst`
+/// 2. A system `node` binary is found in PATH (excluding the vite-plus bin directory)
+///
+/// Returns `None` if mode is `Managed` or no system Node.js is found,
+/// allowing the caller to fall through to managed runtime resolution.
+async fn find_system_node_runtime() -> Option<JsRuntime> {
+    let config = config::load_config().await.ok()?;
+    if config.shim_mode != ShimMode::SystemFirst {
+        return None;
+    }
+    let system_node = shim::find_system_tool("node")?;
+    tracing::info!("System-first mode: using system Node.js at {:?}", system_node);
+    Some(JsRuntime::from_system(JsRuntimeType::Node, system_node))
 }
 
 #[cfg(test)]

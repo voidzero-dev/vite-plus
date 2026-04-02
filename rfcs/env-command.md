@@ -412,10 +412,10 @@ VITE_PLUS_HOME/                              # Default: ~/.vite-plus
   // "defaultNodeVersion": "lts"     // Always use latest LTS
   // "defaultNodeVersion": "latest"  // Always use latest (not recommended)
 
-  // Shim mode: controls how shims resolve tools
+  // Node.js mode: controls how all vp commands and shims resolve Node.js
   // Set via: vp env on (managed) or vp env off (system_first)
-  // - "managed" (default): Shims always use vite-plus managed Node.js
-  // - "system_first": Shims prefer system Node.js, fallback to managed if not found
+  // - "managed" (default): All vp commands and shims use vite-plus managed Node.js
+  // - "system_first": All vp commands and shims prefer system Node.js, fallback to managed if not found
   "shimMode": "managed"
 }
 ```
@@ -824,7 +824,7 @@ Installation
   ✓ Shims             node, npm, npx
 
 Configuration
-  ✓ Shim mode         managed
+  ✓ Node.js mode      managed
 
 PATH
   ✗ vp                not in PATH
@@ -922,7 +922,7 @@ Installation
   ✓ Shims             node, npm, npx
 
 Configuration
-  ✓ Shim mode         managed
+  ✓ Node.js mode      managed
   ✓ IDE integration   env sourced in ~/.zshenv
 
 PATH
@@ -947,7 +947,7 @@ $ vp env doctor
 ...
 
 Configuration
-  ✓ Shim mode         managed
+  ✓ Node.js mode      managed
   ✓ IDE integration   env sourced in ~/.zshenv
   ⚠ Session override  VITE_PLUS_NODE_VERSION=20.18.0
                       Overrides all file-based resolution.
@@ -965,9 +965,17 @@ $ vp env doctor
 ...
 
 Configuration
-  ✓ Shim mode         system-first
+  ✓ Node.js mode      system-first
     System Node.js    /usr/local/bin/node
   ✓ IDE integration   env sourced in ~/.zshenv
+
+...
+
+Version Resolution
+    Directory         /Users/user/projects/my-app
+    Source            system PATH
+    Version           v22.22.0
+  ✓ Node binary       /usr/local/bin/node
 
 ...
 ```
@@ -979,8 +987,8 @@ $ vp env doctor
 ...
 
 Configuration
-  ✓ Shim mode         system-first
-  ⚠ System Node.js    not found (will use managed)
+  ✓ Node.js mode      system-first
+  ⚠ System Node.js    not found (will fall back to managed)
 
 ...
 ```
@@ -996,7 +1004,7 @@ Installation
                       Run 'vp env setup' to create bin directory and shims.
 
 Configuration
-  ✓ Shim mode         managed
+  ✓ Node.js mode      managed
 
 PATH
   ✗ vp                not in PATH
@@ -1256,40 +1264,42 @@ No default version configured. Using latest LTS (22.13.0).
   Run 'vp env default <version>' to set a default.
 ```
 
-### Shim Mode Commands
+### Node.js Mode Commands
 
-The shim mode controls how shims resolve tools:
+The Node.js mode controls how all vp commands and shims resolve Node.js:
 
-| Mode                | Description                                                   |
-| ------------------- | ------------------------------------------------------------- |
-| `managed` (default) | Shims always use vite-plus managed Node.js                    |
-| `system_first`      | Shims prefer system Node.js, fallback to managed if not found |
+| Mode                | Description                                                                       |
+| ------------------- | --------------------------------------------------------------------------------- |
+| `managed` (default) | All vp commands and shims use vite-plus managed Node.js                           |
+| `system_first`      | All vp commands and shims prefer system Node.js, fallback to managed if not found |
 
 ```bash
 # Enable managed mode (always use vite-plus Node.js)
 $ vp env on
-✓ Shim mode set to managed.
+✓ Node.js management set to managed.
 
-Shims will now always use the Vite+ managed Node.js.
+All vp commands and shims will now always use Vite+ managed Node.js.
 Run 'vp env off' to prefer system Node.js instead.
 
 # Enable system-first mode (prefer system Node.js)
 $ vp env off
-✓ Shim mode set to system-first.
+✓ Node.js management set to system-first.
 
-Shims will now prefer system Node.js, falling back to managed if not found.
-Run 'vp env on' to always use vite-plus managed Node.js.
+All vp commands and shims will now prefer system Node.js, falling back to managed if not found.
+Run 'vp env on' to always use Vite+ managed Node.js.
 
 # If already in the requested mode
 $ vp env on
-Shim mode is already set to managed.
-Shims will always use vite-plus managed Node.js.
+Node.js management is already set to managed.
+All vp commands and shims will always use Vite+ managed Node.js.
 ```
 
 **Use cases for system-first mode (`vp env off`)**:
 
-- When you have a system Node.js that you want to use by default
-- When working on projects that don't need vite-plus version management
+- NixOS / GNU Guix where downloaded binaries are dynamically linked and fail to run
+- Air-gapped environments with no network access to download Node.js
+- Container images where Node.js is already installed
+- Users managing Node.js via other tools (mise, nvm, fnm, etc.)
 - When debugging version-related issues by comparing system vs managed Node.js
 
 ### Which Command
