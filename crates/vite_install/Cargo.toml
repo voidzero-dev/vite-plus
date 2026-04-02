@@ -33,11 +33,9 @@ vite_shared = { workspace = true }
 vite_str = { workspace = true }
 vite_workspace = { workspace = true }
 
-[target.'cfg(target_os = "windows")'.dependencies]
-reqwest = { workspace = true, features = ["stream", "native-tls-vendored", "json"] }
-
-[target.'cfg(not(target_os = "windows"))'.dependencies]
-reqwest = { workspace = true, features = ["stream", "rustls-no-provider", "json"] }
+[dependencies.reqwest]
+workspace = true
+features = ["stream", "rustls-no-provider", "json"]
 
 [dev-dependencies]
 httpmock = { workspace = true }

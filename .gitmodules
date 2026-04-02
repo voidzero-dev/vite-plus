@@ -1,0 +1,3 @@
+[submodule "tools/qwin"]
+	path = tools/qwin
+	url = https://github.com/pi0/qwin.git
