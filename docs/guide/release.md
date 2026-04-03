@@ -66,10 +66,11 @@ vp release --preid beta --yes
 vp release --preid rc --yes
 ```
 
-Custom prerelease channels are also supported:
+Custom prerelease channels are also supported, but interactive runs ask for one extra `y/N`
+confirmation so a typo does not silently create a new channel:
 
 ```bash
-vp release --preid canary --yes
+vp release --preid canary
 ```
 
 ### Retry a partial publish with an exact version
