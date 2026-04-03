@@ -123,21 +123,19 @@ fn format_error_message(error: &(dyn StdError + 'static)) -> String {
     message
 }
 
-/// Override rolldown's panic hook with a vite-plus specific one.
+/// Install a Vite+ panic hook so panics are correctly attributed to Vite+.
 ///
-/// rolldown_binding sets a global panic hook in its `#[module_init]` that prints
-/// "Rolldown panicked" for ALL panics. Since vite-plus bundles rolldown into the
-/// same binary, we need to replace it so panics are correctly attributed to Vite+.
+/// Discards any previously set hook (e.g. rolldown's) via double `take_hook`:
+/// first call removes the current hook, second captures the restored default.
+/// Safe to call regardless of whether a custom hook was installed.
 #[allow(clippy::disallowed_macros)]
 fn setup_panic_hook() {
     static ONCE: std::sync::Once = std::sync::Once::new();
     ONCE.call_once(|| {
-        // First take_hook discards rolldown's custom hook (which wraps the default
-        // in a closure that prints "Rolldown panicked"). Second gets the real default.
         let _ = std::panic::take_hook();
         let default_hook = std::panic::take_hook();
         std::panic::set_hook(Box::new(move |info| {
-            eprintln!("Vite+ panicked. This is a bug in Vite+, not your code.\n");
+            eprintln!("Vite+ panicked. This is a bug in Vite+, not your code.");
             default_hook(info);
             eprintln!(
                 "\nPlease report this issue at: https://github.com/voidzero-dev/vite-plus/issues/new?template=bug_report.yml"
