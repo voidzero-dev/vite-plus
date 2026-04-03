@@ -16,20 +16,15 @@ use vite_js_runtime::NodeProvider;
 use vite_path::{AbsolutePath, AbsolutePathBuf, current_dir};
 use vite_shared::{format_path_prepended, output};
 
-use crate::{
-    commands::{
-        env::{
-            bin_config::BinConfig,
-            config::{
-                get_bin_dir, get_node_modules_dir, get_packages_dir, get_tmp_dir, resolve_version,
-                resolve_version_alias,
-            },
-            package_metadata::PackageMetadata,
-        },
-        global::{CORE_SHIMS, parse_package_spec},
+use super::{
+    bin_config::BinConfig,
+    config::{
+        get_bin_dir, get_node_modules_dir, get_packages_dir, get_tmp_dir, resolve_version,
+        resolve_version_alias,
     },
-    error::Error,
+    package_metadata::PackageMetadata,
 };
+use crate::error::Error;
 
 struct Package<'a> {
     spec: &'a str,
@@ -448,6 +443,136 @@ pub async fn uninstall(package_name: &str, dry_run: bool) -> Result<(), Error> {
     Ok(())
 }
 
+/// Resolve the version currently published for a package spec.
+///
+/// `package_spec` may be a bare package name (`typescript`) or include a
+/// version/tag (`typescript@beta`, `@scope/pkg@1.0.0`). The command returns the
+/// version that npm resolves for that spec.
+pub(crate) async fn latest_package_version(package_spec: &str) -> Result<String, Error> {
+    // Resolve from current directory
+    let node_version = {
+        let cwd = match current_dir() {
+            Ok(cwd) => cwd,
+            Err(error) => {
+                let error =
+                    Error::ConfigError(format!("Cannot get current directory: {}", error).into());
+                return Err(error);
+            }
+        };
+        let resolution = match resolve_version(&cwd).await {
+            Ok(resolution) => resolution,
+            Err(error) => return Err(error),
+        };
+        resolution.version
+    };
+
+    // Ensure Node.js is installed
+    let runtime = match vite_js_runtime::download_runtime(
+        vite_js_runtime::JsRuntimeType::Node,
+        &node_version,
+    )
+    .await
+    {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            let error = Error::RuntimeDownload(error);
+            return Err(error);
+        }
+    };
+
+    let node_bin_dir = runtime.get_bin_prefix();
+    let npm_path =
+        if cfg!(windows) { node_bin_dir.join("npm.cmd") } else { node_bin_dir.join("npm") };
+
+    let output = Command::new(npm_path.as_path())
+        .args(["view", package_spec, "version", "--json"])
+        .env("PATH", format_path_prepended(node_bin_dir.as_path()))
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .await?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(Error::ConfigError(
+            format!("npm view failed for {package_spec}: {stderr}").into(),
+        ));
+    }
+
+    parse_npm_view_version(&output.stdout)
+}
+
+fn parse_npm_view_version(stdout: &[u8]) -> Result<String, Error> {
+    let raw = String::from_utf8_lossy(stdout);
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Err(Error::ConfigError("npm view returned an empty version".into()));
+    }
+
+    match serde_json::from_str::<serde_json::Value>(trimmed) {
+        Ok(serde_json::Value::String(version)) => Ok(version),
+        Ok(serde_json::Value::Array(versions)) => versions
+            .iter()
+            .rev()
+            .find_map(|version| version.as_str())
+            .map(str::to_string)
+            .ok_or_else(|| Error::ConfigError("npm view returned an empty version list".into())),
+        _ => Ok(trimmed.to_string()),
+    }
+}
+
+/// Return true for package specs that refer to local filesystem content.
+pub(crate) fn is_local_package_spec(spec: &str) -> bool {
+    spec == "."
+        || spec == ".."
+        || spec.starts_with("./")
+        || spec.starts_with("../")
+        || spec.starts_with(".\\")
+        || spec.starts_with("..\\")
+        || spec.starts_with('/')
+        || spec.starts_with("file:")
+        || (cfg!(windows)
+            && spec.len() >= 3
+            && spec.as_bytes()[1] == b':'
+            && (spec.as_bytes()[2] == b'\\' || spec.as_bytes()[2] == b'/'))
+}
+
+/// Parse package spec into name and optional version.
+pub(crate) fn parse_package_spec(spec: &str) -> (String, Option<String>) {
+    if is_local_package_spec(spec) {
+        return (resolve_local_package_name(spec).unwrap_or_else(|| spec.to_string()), None);
+    }
+
+    // Handle scoped packages: @scope/name@version
+    if spec.starts_with('@') {
+        // Find the second @ for version
+        if let Some(idx) = spec[1..].find('@') {
+            let idx = idx + 1; // Adjust for the skipped first char
+            return (spec[..idx].to_string(), Some(spec[idx + 1..].to_string()));
+        }
+        return (spec.to_string(), None);
+    }
+
+    // Handle regular packages: name@version
+    if let Some(idx) = spec.find('@') {
+        return (spec[..idx].to_string(), Some(spec[idx + 1..].to_string()));
+    }
+
+    (spec.to_string(), None)
+}
+
+fn resolve_local_package_name(spec: &str) -> Option<String> {
+    let spec = spec.strip_prefix("file:").unwrap_or(spec);
+    let package_dir = if let Some(package_dir) = AbsolutePathBuf::new(spec.into()) {
+        package_dir
+    } else {
+        current_dir().ok()?.join(spec)
+    };
+    let package_json = std::fs::read_to_string(package_dir.join("package.json").as_path()).ok()?;
+    let json: serde_json::Value = serde_json::from_str(&package_json).ok()?;
+    json.get("name").and_then(|value| value.as_str()).map(str::to_string)
+}
+
 /// Binary info extracted from package.json.
 struct BinaryInfo {
     /// Binary name (the command users will run)
@@ -523,6 +648,9 @@ fn is_javascript_binary(path: &AbsolutePath) -> bool {
     false
 }
 
+/// Core shims that should not be overwritten by package binaries.
+pub(crate) const CORE_SHIMS: &[&str] = &["node", "npm", "npx", "vp"];
+
 /// Create a shim for a package binary.
 ///
 /// On Unix: Creates a symlink to ../current/bin/vp
@@ -564,25 +692,21 @@ async fn create_package_shim(
 
     #[cfg(windows)]
     {
-        use crate::commands::env::{
-            cleanup_legacy_windows_shim, get_trampoline_path, remove_or_rename_to_old,
-        };
-
         let shim_path = bin_dir.join(format!("{}.exe", bin_name));
 
         // Delete before overwrite; falls back to rename if the exe is locked.
-        remove_or_rename_to_old(&shim_path).await;
+        super::setup::remove_or_rename_to_old(&shim_path).await;
 
         // Copy the trampoline binary as <bin_name>.exe.
         // The trampoline detects the tool name from its own filename and sets
         // VP_SHIM_TOOL env var before spawning vp.exe.
-        let trampoline_src = get_trampoline_path()?;
+        let trampoline_src = super::setup::get_trampoline_path()?;
         tokio::fs::copy(trampoline_src.as_path(), &shim_path).await?;
 
         // Remove legacy .cmd and shell script wrappers from previous versions.
         // In Git Bash/MSYS, the extensionless script takes precedence over .exe,
         // so leftover wrappers would bypass the trampoline.
-        cleanup_legacy_windows_shim(bin_dir, bin_name).await;
+        super::setup::cleanup_legacy_windows_shim(bin_dir, bin_name).await;
 
         tracing::debug!("Created package trampoline shim {:?}", shim_path);
     }
@@ -629,7 +753,22 @@ async fn remove_package_shim(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::commands::global::is_local_package_spec;
+
+    struct CurrentDirGuard(std::path::PathBuf);
+
+    impl CurrentDirGuard {
+        fn change_to(path: &std::path::Path) -> Self {
+            let previous = std::env::current_dir().unwrap();
+            std::env::set_current_dir(path).unwrap();
+            Self(previous)
+        }
+    }
+
+    impl Drop for CurrentDirGuard {
+        fn drop(&mut self) {
+            std::env::set_current_dir(&self.0).unwrap();
+        }
+    }
 
     /// RAII guard that sets `VP_TRAMPOLINE_PATH` to a fake binary on creation
     /// and clears it on drop. Ensures cleanup even on test panics.
@@ -863,6 +1002,30 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_npm_view_version_json_string() {
+        let version = parse_npm_view_version(b"\"5.9.3\"\n").unwrap();
+        assert_eq!(version, "5.9.3");
+    }
+
+    #[test]
+    fn test_parse_npm_view_version_plain_string() {
+        let version = parse_npm_view_version(b"5.9.3\n").unwrap();
+        assert_eq!(version, "5.9.3");
+    }
+
+    #[test]
+    fn test_parse_npm_view_version_json_array_uses_latest_entry() {
+        let version = parse_npm_view_version(b"[\"5.9.2\", \"5.9.3\"]\n").unwrap();
+        assert_eq!(version, "5.9.3");
+    }
+
+    #[test]
+    fn test_parse_npm_view_version_rejects_empty_output() {
+        let err = parse_npm_view_version(b"\n").unwrap_err();
+        assert!(err.to_string().contains("empty version"));
+    }
+
+    #[test]
     fn test_is_local_package_spec_relative_paths() {
         assert!(is_local_package_spec("."));
         assert!(is_local_package_spec(".."));
@@ -905,6 +1068,27 @@ mod tests {
         let (name, version) = parse_package_spec("@types/node@20.0.0");
         assert_eq!(name, "@types/node");
         assert_eq!(version, Some("20.0.0".to_string()));
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_parse_package_spec_local_path_uses_package_name() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let _cwd_guard = CurrentDirGuard::change_to(temp_dir.path());
+        let package_dir = temp_dir.path().join("fixture-pkg");
+
+        std::fs::create_dir_all(&package_dir).unwrap();
+        std::fs::write(
+            package_dir.join("package.json"),
+            r#"{ "name": "resolved-local-package", "version": "1.0.0" }"#,
+        )
+        .unwrap();
+
+        let (name, version) = parse_package_spec("./fixture-pkg");
+        assert_eq!(name, "resolved-local-package");
+        assert_eq!(version, None);
     }
 
     #[test]
