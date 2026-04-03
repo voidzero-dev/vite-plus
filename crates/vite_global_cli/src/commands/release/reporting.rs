@@ -533,6 +533,7 @@ pub(super) fn confirm_release(
     }
 
     info_section!("Release summary:");
+    let prerelease_channels = release_prerelease_channels(release_plans, options);
     raw_item_kv!("packages", release_plans.len());
     raw_item_kv!("publish", if options.skip_publish { "no" } else { "yes" });
     raw_item_kv!("changelog", if options.changelog { "yes" } else { "no" });
@@ -543,7 +544,7 @@ pub(super) fn confirm_release(
         "trusted publishing",
         readiness_report.trusted_publish.context.environment_summary(),
     );
-    raw_item_kv!("prerelease tag", options.preid.as_deref().unwrap_or("stable"));
+    raw_item_kv!("prerelease tag", format_release_prerelease_summary(&prerelease_channels),);
     if let Some(version) = options.version.as_deref() {
         raw_item_kv!("version override", version);
     }
@@ -554,19 +555,88 @@ pub(super) fn confirm_release(
         output::warn(&warning);
     }
 
-    output::raw_inline("Continue with this release? [Y/n] ");
+    let custom_prerelease_channels = collect_nonstandard_prerelease_channels(&prerelease_channels);
+    if !custom_prerelease_channels.is_empty() {
+        let mut warning = String::from(
+            "Non-standard prerelease channels can create a new release line if mistyped.",
+        );
+        warning.push_str(" Standard channels are `alpha`, `beta`, and `rc`.");
+        output::warn(&warning);
+
+        let channel_count = custom_prerelease_channels.len();
+        let suffix = if channel_count == 1 { "" } else { "s" };
+        let joined_channels = custom_prerelease_channels.join(", ");
+        let mut prompt = String::from("Continue with non-standard prerelease channel");
+        prompt.push_str(suffix);
+        prompt.push_str(" ");
+        prompt.push_str(&joined_channels);
+        prompt.push_str("? [y/N] ");
+        if !prompt_for_confirmation(&prompt, false)? {
+            output::info("Aborted.");
+            return Ok(false);
+        }
+    }
+
+    if prompt_for_confirmation("Continue with this release? [Y/n] ", true)? {
+        Ok(true)
+    } else {
+        output::info("Aborted.");
+        Ok(false)
+    }
+}
+
+fn release_prerelease_channels(
+    release_plans: &[PackageReleasePlan],
+    options: &ReleaseOptions,
+) -> Vec<String> {
+    let mut channels =
+        Vec::with_capacity(release_plans.len() + usize::from(options.preid.is_some()));
+    if let Some(preid) = options.preid.as_deref() {
+        channels.push(preid.to_owned());
+    }
+    channels.extend(
+        release_plans
+            .iter()
+            .filter_map(|plan| prerelease_channel(&plan.next_version).map(str::to_owned)),
+    );
+    unique_strings(channels)
+}
+
+fn format_release_prerelease_summary(prerelease_channels: &[String]) -> String {
+    match prerelease_channels {
+        [] => String::from("stable"),
+        [channel] => channel.clone(),
+        _ => {
+            let mut summary = String::from("mixed (");
+            summary.push_str(&prerelease_channels.join(", "));
+            summary.push(')');
+            summary
+        }
+    }
+}
+
+fn collect_nonstandard_prerelease_channels(prerelease_channels: &[String]) -> Vec<String> {
+    prerelease_channels
+        .iter()
+        .filter(|channel| matches!(PrereleaseTag::parse(channel), PrereleaseTag::Custom(_)))
+        .cloned()
+        .collect()
+}
+
+fn prompt_for_confirmation(prompt: &str, default_yes: bool) -> Result<bool, Error> {
+    output::raw_inline(prompt);
     #[expect(clippy::disallowed_types)]
     let mut input = String::new();
     std::io::stdout().flush()?;
     std::io::stdin().read_line(&mut input)?;
 
-    match input.trim().to_ascii_lowercase().as_str() {
-        "" | "y" | "yes" => Ok(true),
-        _ => {
-            output::info("Aborted.");
-            Ok(false)
-        }
-    }
+    let normalized = input.trim().to_ascii_lowercase();
+    Ok(match normalized.as_str() {
+        "" => default_yes,
+        "y" | "yes" => true,
+        "n" | "no" => false,
+        _ => false,
+    })
 }
 
 /// Collects scripts worth surfacing in the readiness summary for one scope.
