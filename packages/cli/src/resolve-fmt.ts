@@ -11,7 +11,7 @@
  * provides high-performance code formatting capabilities.
  */
 
-import { DEFAULT_ENVS, resolve } from './utils/constants.js';
+import { DEFAULT_ENVS, resolve } from './utils/constants.ts';
 
 /**
  * Resolves the oxfmt binary path and environment variables.

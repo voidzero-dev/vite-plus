@@ -343,15 +343,6 @@ importers:
       '@voidzero-dev/vite-plus-test':
         specifier: workspace:*
         version: link:../test
-      cac:
-        specifier: 'catalog:'
-        version: 7.0.0
-      cross-spawn:
-        specifier: 'catalog:'
-        version: 7.0.6
-      jsonc-parser:
-        specifier: 'catalog:'
-        version: 3.3.1
       oxfmt:
         specifier: 'catalog:'
         version: 0.43.0
@@ -361,9 +352,6 @@ importers:
       oxlint-tsgolint:
         specifier: 'catalog:'
         version: 0.19.0
-      picocolors:
-        specifier: 'catalog:'
-        version: 1.1.1
     devDependencies:
       '@napi-rs/cli':
         specifier: 'catalog:'
@@ -389,6 +377,12 @@ importers:
       '@voidzero-dev/vite-plus-tools':
         specifier: 'workspace:'
         version: link:../tools
+      cac:
+        specifier: 'catalog:'
+        version: 7.0.0
+      cross-spawn:
+        specifier: 'catalog:'
+        version: 7.0.6
       detect-indent:
         specifier: 'catalog:'
         version: 7.0.2
@@ -398,6 +392,9 @@ importers:
       glob:
         specifier: 'catalog:'
         version: 13.0.0
+      jsonc-parser:
+        specifier: 'catalog:'
+        version: 3.3.1
       lint-staged:
         specifier: 'catalog:'
         version: 16.4.0
@@ -407,9 +404,9 @@ importers:
       mri:
         specifier: 'catalog:'
         version: 1.2.0
-      rolldown:
-        specifier: workspace:rolldown@*
-        version: link:../../rolldown/packages/rolldown
+      picocolors:
+        specifier: 'catalog:'
+        version: 1.1.1
       rolldown-plugin-dts:
         specifier: 'catalog:'
         version: 0.23.2(@typescript/native-preview@7.0.0-dev.20260122.2)(oxc-resolver@11.19.1(@emnapi/core@1.9.1)(@emnapi/runtime@1.9.1))(rolldown@rolldown+packages+rolldown)(typescript@6.0.2)

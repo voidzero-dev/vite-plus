@@ -6,7 +6,7 @@ This document explains how `vite-plus` is built and how it re-exports from both 
 
 The CLI package uses a **4-step build process**:
 
-1. **TypeScript Compilation** - Compile TypeScript source to JavaScript
+1. **tsdown Build** - Bundle all CLI entry points via tsdown
 2. **NAPI Binding Build** - Compile Rust code to native Node.js bindings
 3. **Core Package Export Sync** - Re-export `@voidzero-dev/vite-plus-core` under `./client`, `./types/*`, etc.
 4. **Test Package Export Sync** - Re-export `@voidzero-dev/vite-plus-test` under `./test/*`
@@ -15,21 +15,26 @@ This architecture allows users to import everything from a single package (`vite
 
 ## Build Steps
 
-### Step 1: TypeScript Compilation (`buildCli`)
+### Step 1: tsdown Build (`buildWithTsdown`)
 
-Compiles TypeScript source files using the TypeScript compiler API:
+Bundles all CLI entry points using tsdown (configured in `tsdown.config.ts`). The config defines two builds:
 
-```typescript
-const program = createProgram({
-  rootNames: fileNames,
-  options,
-  host,
-});
-program.emit();
-```
+**ESM build** — bundles all entry points to `dist/`:
 
-**Input**: `src/*.ts` files
-**Output**: `dist/*.js`, `dist/*.d.ts`
+- Public API entries: `bin`, `index`, `define-config`, `fmt`, `lint`, `pack`, `pack-bin`
+- Global command entries: `create`, `migrate`, `version`, `config`, `mcp`, `staged`
+- All third-party dependencies are inlined at build time
+- Only packages that must be resolved at runtime stay external (NAPI binding, `@voidzero-dev/vite-plus-core`, `@voidzero-dev/vite-plus-test`, `oxfmt`, `oxlint`)
+- Code splitting creates shared chunks for code used by multiple entries
+- DTS (`.d.ts`) files are generated for all entries
+
+**CJS build** — produces dual-format output for:
+
+- `define-config.ts` → `dist/define-config.cjs`
+- `index.cts` → `dist/index.cjs`
+
+**Input**: `src/**/*.ts`, `src/**/*.cts`
+**Output**: `dist/*.js`, `dist/*.cjs`, `dist/*.d.ts`, `dist/*-<hash>.js` (shared chunks)
 
 ### Step 2: NAPI Binding Build (`buildNapiBinding`)
 
@@ -103,43 +108,37 @@ export * from '@voidzero-dev/vite-plus-test/browser-playwright';
 ```
 packages/cli/
 ├── dist/
-│   ├── index.js              # Main entry (ESM)
+│   ├── bin.js                # CLI entry point (bundled)
+│   ├── index.js              # Main entry (ESM, bundled)
 │   ├── index.cjs             # Main entry (CJS)
 │   ├── index.d.ts            # Type declarations
-│   ├── bin.js                # CLI entry point
+│   ├── define-config.js      # Config helper (ESM)
+│   ├── define-config.cjs     # Config helper (CJS)
+│   ├── define-config.d.ts
+│   ├── fmt.js                # Re-exports oxfmt
+│   ├── lint.js               # Re-exports oxlint types
+│   ├── pack.js               # Re-exports vite-plus-core/pack
+│   ├── pack-bin.js           # tsdown CLI for `vp pack`
+│   ├── create.js             # Global command: vp create
+│   ├── migrate.js            # Global command: vp migrate
+│   ├── version.js            # Global command: vp --version
+│   ├── config.js             # Global command: vp config
+│   ├── mcp.js                # Global command: vp mcp
+│   ├── staged.js             # Global command: vp staged
+│   ├── *-<hash>.js           # Shared chunks (code splitting)
+│   ├── versions.js           # Generated tool versions
 │   ├── client.d.ts           # ./client types (triple-slash ref)
 │   ├── module-runner.js      # ./module-runner shim
-│   ├── module-runner.d.ts
 │   ├── internal.js           # ./internal shim
-│   ├── internal.d.ts
 │   ├── client/               # Synced client runtime files
-│   │   ├── client.mjs        # ESM client shim
-│   │   ├── client.d.ts
-│   │   ├── env.mjs
-│   │   └── ...
 │   ├── types/                # Synced type definitions
-│   │   ├── importMeta.d.ts   # Type shims (export type *)
-│   │   ├── importGlob.d.ts
-│   │   ├── customEvent.d.ts
-│   │   └── ...
 │   └── test/                 # Synced test exports
-│       ├── index.js          # Re-exports @voidzero-dev/vite-plus-test
-│       ├── index.cjs
-│       ├── index.d.ts
-│       ├── browser-playwright.js
-│       ├── browser-playwright.d.ts
-│       ├── plugins/
-│       │   ├── runner.js
-│       │   ├── utils.js
-│       │   ├── spy.js
-│       │   └── ... (33+ plugin shims)
-│       └── ...
 ├── binding/
 │   ├── index.js              # NAPI binding JS wrapper
 │   ├── index.d.ts            # NAPI type declarations
 │   └── *.node                # Platform-specific binaries
 └── bin/
-    └── vite                  # Shell entry point
+    └── vp                    # Shell entry point
 ```
 
 ---
@@ -420,7 +419,7 @@ Note: Type shims include a side-effect import to preserve module augmentations (
 | -------------- | -------------------------------- |
 | `@napi-rs/cli` | NAPI build toolchain for Rust    |
 | `oxfmt`        | Code formatting for generated JS |
-| `typescript`   | TypeScript compilation           |
+| `tsdown`       | TypeScript bundling              |
 
 ---
 
@@ -480,7 +479,7 @@ See `package.json` for the complete list of exports.
 ### Build Flow
 
 ```
-1. buildCli()                TypeScript compilation -> dist/*.js
+1. buildWithTsdown()         tsdown bundle -> dist/*.js, dist/*.d.ts
 2. buildNapiBinding()        Rust -> binding/*.node (per platform)
 3. syncCorePackageExports()  Read core pkg dist -> dist/client/, dist/types/
    ├── createClientShim()        Triple-slash reference for ./client
@@ -512,7 +511,7 @@ The `exports` field in `package.json` has two categories: **manual** and **autom
 
 All non-`./test*` exports are manually maintained in `package.json`. These fall into two groups:
 
-**CLI-native exports** — point to CLI's own compiled TypeScript (built by `buildCli()` via tsc):
+**CLI-native exports** — point to CLI's own bundled TypeScript (built by `buildWithTsdown()` via tsdown):
 
 | Export           | Description                |
 | ---------------- | -------------------------- |

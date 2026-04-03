@@ -10,16 +10,16 @@ import {
   rewriteMonorepo,
   rewriteMonorepoProject,
   rewriteStandaloneProject,
-} from '../migration/migrator.js';
-import { DependencyType, PackageManager, type WorkspaceInfo } from '../types/index.js';
+} from '../migration/migrator.ts';
+import { DependencyType, PackageManager, type WorkspaceInfo } from '../types/index.ts';
 import {
   detectExistingAgentTargetPaths,
   selectAgentTargetPaths,
   writeAgentInstructions,
-} from '../utils/agent.js';
-import { detectExistingEditor, selectEditor, writeEditorConfigs } from '../utils/editor.js';
-import { renderCliDoc } from '../utils/help.js';
-import { displayRelative } from '../utils/path.js';
+} from '../utils/agent.ts';
+import { detectExistingEditor, selectEditor, writeEditorConfigs } from '../utils/editor.ts';
+import { renderCliDoc } from '../utils/help.ts';
+import { displayRelative } from '../utils/path.ts';
 import {
   type CommandRunSummary,
   defaultInteractive,
@@ -28,31 +28,31 @@ import {
   runViteFmt,
   runViteInstall,
   selectPackageManager,
-} from '../utils/prompts.js';
-import { accent, muted, log, success } from '../utils/terminal.js';
+} from '../utils/prompts.ts';
+import { accent, muted, log, success } from '../utils/terminal.ts';
 import {
   detectWorkspace,
   updatePackageJsonWithDeps,
   updateWorkspaceConfig,
-} from '../utils/workspace.js';
-import type { ExecutionResult } from './command.js';
-import { discoverTemplate, inferGitHubRepoName, inferParentDir, isGitHubUrl } from './discovery.js';
-import { getInitialTemplateOptions } from './initial-template-options.js';
+} from '../utils/workspace.ts';
+import type { ExecutionResult } from './command.ts';
+import { discoverTemplate, inferGitHubRepoName, inferParentDir, isGitHubUrl } from './discovery.ts';
+import { getInitialTemplateOptions } from './initial-template-options.ts';
 import {
   cancelAndExit,
   checkProjectDirExists,
   promptPackageNameAndTargetDir,
   promptTargetDir,
   suggestAvailableTargetDir,
-} from './prompts.js';
-import { getRandomProjectName } from './random-name.js';
+} from './prompts.ts';
+import { getRandomProjectName } from './random-name.ts';
 import {
   executeBuiltinTemplate,
   executeMonorepoTemplate,
   executeRemoteTemplate,
-} from './templates/index.js';
-import { BuiltinTemplate, TemplateType } from './templates/types.js';
-import { deriveDefaultPackageName, formatTargetDir } from './utils.js';
+} from './templates/index.ts';
+import { BuiltinTemplate, TemplateType } from './templates/types.ts';
+import { deriveDefaultPackageName, formatTargetDir } from './utils.ts';
 
 const helpMessage = renderCliDoc({
   usage: 'vp create [TEMPLATE] [OPTIONS] [-- TEMPLATE_OPTIONS]',

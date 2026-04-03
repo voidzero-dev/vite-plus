@@ -4,13 +4,13 @@ import path from 'node:path';
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import colors from 'picocolors';
 
-import type { WorkspaceInfo } from '../../types/index.js';
-import type { ExecutionResult } from '../command.js';
-import { discoverTemplate } from '../discovery.js';
-import { setPackageName } from '../utils.js';
-import { executeGeneratorScaffold } from './generator.js';
-import { runRemoteTemplateCommand } from './remote.js';
-import { BuiltinTemplate, type BuiltinTemplateInfo, LibraryTemplateRepo } from './types.js';
+import type { WorkspaceInfo } from '../../types/index.ts';
+import type { ExecutionResult } from '../command.ts';
+import { discoverTemplate } from '../discovery.ts';
+import { setPackageName } from '../utils.ts';
+import { executeGeneratorScaffold } from './generator.ts';
+import { runRemoteTemplateCommand } from './remote.ts';
+import { BuiltinTemplate, type BuiltinTemplateInfo, LibraryTemplateRepo } from './types.ts';
 
 export async function executeBuiltinTemplate(
   workspaceInfo: WorkspaceInfo,

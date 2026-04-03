@@ -15,33 +15,33 @@ import {
   rewriteImportsInDirectory,
   type DownloadPackageManagerResult,
 } from '../../binding/index.js';
-import { PackageManager, type WorkspaceInfo, type WorkspacePackage } from '../types/index.js';
-import { runCommandSilently } from '../utils/command.js';
+import { PackageManager, type WorkspaceInfo, type WorkspacePackage } from '../types/index.ts';
+import { runCommandSilently } from '../utils/command.ts';
 import {
   BASEURL_TSCONFIG_WARNING,
   VITE_PLUS_NAME,
   VITE_PLUS_OVERRIDE_PACKAGES,
   VITE_PLUS_VERSION,
   isForceOverrideMode,
-} from '../utils/constants.js';
-import { editJsonFile, isJsonFile, readJsonFile } from '../utils/json.js';
-import { detectPackageMetadata } from '../utils/package.js';
-import { displayRelative, rulesDir } from '../utils/path.js';
-import { getSpinner } from '../utils/prompts.js';
+} from '../utils/constants.ts';
+import { editJsonFile, isJsonFile, readJsonFile } from '../utils/json.ts';
+import { detectPackageMetadata } from '../utils/package.ts';
+import { displayRelative, rulesDir } from '../utils/path.ts';
+import { getSpinner } from '../utils/prompts.ts';
 import {
   findTsconfigFiles,
   hasBaseUrlInTsconfig,
   removeDeprecatedTsconfigFalseOption,
-} from '../utils/tsconfig.js';
-import type { NpmWorkspaces } from '../utils/workspace.js';
-import { editYamlFile, scalarString, type YamlDocument } from '../utils/yaml.js';
+} from '../utils/tsconfig.ts';
+import type { NpmWorkspaces } from '../utils/workspace.ts';
+import { editYamlFile, scalarString, type YamlDocument } from '../utils/yaml.ts';
 import {
   PRETTIER_CONFIG_FILES,
   PRETTIER_PACKAGE_JSON_CONFIG,
   detectConfigs,
   type ConfigFiles,
-} from './detector.js';
-import { addManualStep, addMigrationWarning, type MigrationReport } from './report.js';
+} from './detector.ts';
+import { addManualStep, addMigrationWarning, type MigrationReport } from './report.ts';
 
 // All known lint-staged config file names.
 // JSON-parseable ones come first so rewriteLintStagedConfigFile can rewrite them.
@@ -235,7 +235,7 @@ export async function migrateEslintToOxlint(
   // Steps 1-2: Only run @oxlint/migrate if there's an eslint config at root
   if (eslintConfigFile) {
     // Pin @oxlint/migrate to the bundled oxlint version.
-    // @ts-expect-error — resolved at runtime from dist/global/ → dist/versions.js
+    // @ts-expect-error — resolved at runtime from dist/ → dist/versions.js
     const { versions } = await import('../versions.js');
     const migratePackage = `@oxlint/migrate@${versions.oxlint}`;
 

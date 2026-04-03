@@ -11,23 +11,23 @@ import {
   type WorkspaceInfo,
   type WorkspaceInfoOptional,
   type WorkspacePackage,
-} from '../types/index.js';
+} from '../types/index.ts';
 import {
   detectAgentConflicts,
   detectExistingAgentTargetPaths,
   selectAgentTargetPaths,
   writeAgentInstructions,
-} from '../utils/agent.js';
-import { isForceOverrideMode } from '../utils/constants.js';
+} from '../utils/agent.ts';
+import { isForceOverrideMode } from '../utils/constants.ts';
 import {
   detectEditorConflicts,
   type EditorId,
   selectEditor,
   writeEditorConfigs,
-} from '../utils/editor.js';
-import { renderCliDoc } from '../utils/help.js';
-import { hasVitePlusDependency, readNearestPackageJson } from '../utils/package.js';
-import { displayRelative } from '../utils/path.js';
+} from '../utils/editor.ts';
+import { renderCliDoc } from '../utils/help.ts';
+import { hasVitePlusDependency, readNearestPackageJson } from '../utils/package.ts';
+import { displayRelative } from '../utils/path.ts';
 import {
   cancelAndExit,
   defaultInteractive,
@@ -36,10 +36,10 @@ import {
   runViteInstall,
   selectPackageManager,
   upgradeYarn,
-} from '../utils/prompts.js';
-import { accent, log, muted } from '../utils/terminal.js';
-import type { PackageDependencies } from '../utils/types.js';
-import { detectWorkspace } from '../utils/workspace.js';
+} from '../utils/prompts.ts';
+import { accent, log, muted } from '../utils/terminal.ts';
+import type { PackageDependencies } from '../utils/types.ts';
+import { detectWorkspace } from '../utils/workspace.ts';
 import {
   checkVitestVersion,
   checkViteVersion,
@@ -55,8 +55,8 @@ import {
   rewriteMonorepo,
   rewriteStandaloneProject,
   type NodeVersionManagerDetection,
-} from './migrator.js';
-import { createMigrationReport, type MigrationReport } from './report.js';
+} from './migrator.ts';
+import { createMigrationReport, type MigrationReport } from './report.ts';
 
 function warnPackageLevelEslint() {
   prompts.log.warn(

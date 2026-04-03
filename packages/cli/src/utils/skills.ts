@@ -12,9 +12,9 @@ import { join, relative } from 'node:path';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
-import { type AgentConfig } from './agent.js';
-import { VITE_PLUS_NAME } from './constants.js';
-import { pkgRoot } from './path.js';
+import { type AgentConfig } from './agent.ts';
+import { VITE_PLUS_NAME } from './constants.ts';
+import { pkgRoot } from './path.ts';
 
 interface SkillInfo {
   dirName: string;

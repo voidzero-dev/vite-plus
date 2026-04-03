@@ -10,12 +10,12 @@ import { join } from 'node:path';
 import mri from 'mri';
 
 import { vitePlusHeader } from '../../binding/index.js';
-import { ensurePreCommitHook, hasStagedConfigInViteConfig } from '../migration/migrator.js';
-import { updateExistingAgentInstructions } from '../utils/agent.js';
-import { renderCliDoc } from '../utils/help.js';
-import { defaultInteractive, promptGitHooks } from '../utils/prompts.js';
-import { log } from '../utils/terminal.js';
-import { install } from './hooks.js';
+import { ensurePreCommitHook, hasStagedConfigInViteConfig } from '../migration/migrator.ts';
+import { updateExistingAgentInstructions } from '../utils/agent.ts';
+import { renderCliDoc } from '../utils/help.ts';
+import { defaultInteractive, promptGitHooks } from '../utils/prompts.ts';
+import { log } from '../utils/terminal.ts';
+import { install } from './hooks.ts';
 
 async function main() {
   const args = mri(process.argv.slice(3), {

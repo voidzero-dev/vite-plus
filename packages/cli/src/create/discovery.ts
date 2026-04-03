@@ -1,9 +1,9 @@
 import path from 'node:path';
 
-import type { WorkspaceInfo, WorkspaceInfoOptional } from '../types/index.js';
-import { readJsonFile } from '../utils/json.js';
-import { prependToPathToEnvs } from './command.js';
-import { BuiltinTemplate, type TemplateInfo, TemplateType } from './templates/types.js';
+import type { WorkspaceInfo, WorkspaceInfoOptional } from '../types/index.ts';
+import { readJsonFile } from '../utils/json.ts';
+import { prependToPathToEnvs } from './command.ts';
+import { BuiltinTemplate, type TemplateInfo, TemplateType } from './templates/types.ts';
 
 // Check if template name is a GitHub URL
 export function isGitHubUrl(templateName: string): boolean {

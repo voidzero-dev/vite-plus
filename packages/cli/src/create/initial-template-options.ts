@@ -1,4 +1,4 @@
-import { BuiltinTemplate } from './templates/types.js';
+import { BuiltinTemplate } from './templates/types.ts';
 
 export interface InitialTemplateOption {
   label: string;

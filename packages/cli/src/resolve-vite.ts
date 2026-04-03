@@ -11,7 +11,7 @@
 
 import { dirname, join } from 'node:path';
 
-import { DEFAULT_ENVS, resolve } from './utils/constants.js';
+import { DEFAULT_ENVS, resolve } from './utils/constants.ts';
 
 /**
  * Resolves the Vite binary path and environment variables.

@@ -5,7 +5,7 @@ import { styleText } from 'node:util';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
-import { pkgRoot } from './path.js';
+import { pkgRoot } from './path.ts';
 
 // --- Interfaces ---
 

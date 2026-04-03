@@ -5,7 +5,7 @@ import { styleText } from 'node:util';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
-import { readJsonFile, writeJsonFile } from './json.js';
+import { readJsonFile, writeJsonFile } from './json.ts';
 
 const VSCODE_SETTINGS = {
   // Set as default over per-lang to avoid conflicts with other formatters

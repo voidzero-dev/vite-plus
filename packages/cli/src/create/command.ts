@@ -4,7 +4,7 @@ import path from 'node:path';
 import spawn from 'cross-spawn';
 
 import { runCommand as runCommandWithFspy } from '../../binding/index.js';
-import type { WorkspaceInfo } from '../types/index.js';
+import type { WorkspaceInfo } from '../types/index.ts';
 
 export interface ExecutionResult {
   exitCode: number;
