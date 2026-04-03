@@ -25,6 +25,18 @@ switch (subcommand) {
     const { installGlobalCli } = await import('./install-global-cli.ts');
     installGlobalCli();
     break;
+  case 'build-local-cli':
+    const { runBuildLocalCli } = await import('./local-cli.ts');
+    runBuildLocalCli(process.argv.slice(3));
+    break;
+  case 'local-cli':
+    const { runLocalCli } = await import('./local-cli.ts');
+    runLocalCli(process.argv.slice(3));
+    break;
+  case 'snap-test-global-local':
+    const { runLocalGlobalSnapTest } = await import('./local-cli.ts');
+    runLocalGlobalSnapTest(process.argv.slice(3));
+    break;
   case 'brand-vite':
     const { brandVite } = await import('./brand-vite.ts');
     brandVite();
@@ -32,7 +44,7 @@ switch (subcommand) {
   default:
     console.error(`Unknown subcommand: ${subcommand}`);
     console.error(
-      'Available subcommands: snap-test, replace-file-content, sync-remote, json-sort, merge-peer-deps, install-global-cli, brand-vite',
+      'Available subcommands: snap-test, replace-file-content, sync-remote, json-sort, merge-peer-deps, install-global-cli, build-local-cli, local-cli, snap-test-global-local, brand-vite',
     );
     process.exit(1);
 }
