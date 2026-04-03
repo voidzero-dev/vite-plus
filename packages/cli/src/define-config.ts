@@ -47,10 +47,10 @@ export function defineConfig(config: ViteUserConfigExport): ViteUserConfigExport
   return viteDefineConfig(config);
 }
 
-export function vitePlugins<T>(cb: () => T): T | undefined {
+export function vitePlugins<T>(cb: () => T): T | [] {
   const cmd = process.env.VP_COMMAND;
   if (cmd === 'dev' || cmd === 'build' || cmd === 'test' || cmd === 'preview') {
     return cb();
   }
-  return undefined;
+  return [];
 }

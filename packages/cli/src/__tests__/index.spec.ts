@@ -36,16 +36,16 @@ test('should keep vitest exports stable', () => {
   expect(defaultBrowserPort).toBeDefined();
 });
 
-test('vitePlugins returns undefined when VP_COMMAND is unset', () => {
+test('vitePlugins returns empty array when VP_COMMAND is unset', () => {
   delete process.env.VP_COMMAND;
   const result = vitePlugins(() => [{ name: 'test' }]);
-  expect(result).toBeUndefined();
+  expect(result).toEqual([]);
 });
 
-test('vitePlugins returns undefined when VP_COMMAND is empty string', () => {
+test('vitePlugins returns empty array when VP_COMMAND is empty string', () => {
   process.env.VP_COMMAND = '';
   const result = vitePlugins(() => [{ name: 'test' }]);
-  expect(result).toBeUndefined();
+  expect(result).toEqual([]);
 });
 
 test.each(['dev', 'build', 'test', 'preview'])(
@@ -58,11 +58,11 @@ test.each(['dev', 'build', 'test', 'preview'])(
 );
 
 test.each(['lint', 'fmt', 'check', 'pack', 'install', 'run'])(
-  'vitePlugins returns undefined when VP_COMMAND is %s',
+  'vitePlugins returns empty array when VP_COMMAND is %s',
   (cmd) => {
     process.env.VP_COMMAND = cmd;
     const result = vitePlugins(() => [{ name: 'my-plugin' }]);
-    expect(result).toBeUndefined();
+    expect(result).toEqual([]);
   },
 );
 
@@ -76,10 +76,10 @@ test('vitePlugins supports async callback', async () => {
   expect(await result).toEqual([{ name: 'async-plugin' }]);
 });
 
-test('vitePlugins returns undefined for async callback when skipped', () => {
+test('vitePlugins returns empty array for async callback when skipped', () => {
   process.env.VP_COMMAND = 'lint';
   const result = vitePlugins(async () => {
     return [{ name: 'async-plugin' }];
   });
-  expect(result).toBeUndefined();
+  expect(result).toEqual([]);
 });

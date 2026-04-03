@@ -22,10 +22,12 @@ For heavy plugins that should be lazily imported, combine with dynamic `import()
 import { defineConfig, vitePlugins } from 'vite-plus';
 
 export default defineConfig({
-  plugins: vitePlugins(async () => {
-    const { default: heavyPlugin } = await import('vite-plugin-heavy');
-    return [heavyPlugin()];
-  }),
+  plugins: [
+    vitePlugins(async () => {
+      const { default: heavyPlugin } = await import('vite-plugin-heavy');
+      return [heavyPlugin()];
+    }),
+  ],
 });
 ```
 
