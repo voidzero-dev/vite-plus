@@ -444,6 +444,7 @@ async function bundleVitest() {
       join(vitestSourceDir, 'node_modules/**'),
       join(vitestSourceDir, 'package.json'),
       join(vitestSourceDir, 'README.md'),
+      join(vitestSourceDir, 'LICENSE.md'),
     ],
   });
 
