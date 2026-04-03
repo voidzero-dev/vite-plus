@@ -249,7 +249,9 @@ function Setup-NodeManager {
     $isInteractive = [Environment]::UserInteractive
     if ($isInteractive) {
         Write-Host ""
-        Write-Host "Would you want Vite+ to manage Node.js versions?"
+        Write-Host "Would you like Vite+ to manage your Node.js versions?"
+        Write-Host "It adds ``node``, ``npm``, and ``npx`` shims to ~/.vite-plus/bin/ and automatically uses the right version."
+        Write-Host "Opt out anytime with ``vp env off``."
         $response = Read-Host "Press Enter to accept (Y/n)"
 
         if ($response -eq '' -or $response -eq 'y' -or $response -eq 'Y') {

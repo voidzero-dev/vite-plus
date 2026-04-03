@@ -1,4 +1,4 @@
-import { addMigrationWarning, type MigrationReport } from './report.js';
+import { addMigrationWarning, type MigrationReport } from './report.ts';
 
 /**
  * Check for Rolldown-incompatible manualChunks config patterns.

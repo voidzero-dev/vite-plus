@@ -2,11 +2,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { mergeJsonConfig } from '../binding/index.js';
-import { fmt as resolveFmt } from './resolve-fmt.js';
-import { runCommandSilently } from './utils/command.js';
-import { BASEURL_TSCONFIG_WARNING, VITE_PLUS_NAME } from './utils/constants.js';
-import { warnMsg } from './utils/terminal.js';
-import { hasBaseUrlInTsconfig } from './utils/tsconfig.js';
+import { fmt as resolveFmt } from './resolve-fmt.ts';
+import { runCommandSilently } from './utils/command.ts';
+import { BASEURL_TSCONFIG_WARNING, VITE_PLUS_NAME } from './utils/constants.ts';
+import { warnMsg } from './utils/terminal.ts';
+import { hasBaseUrlInTsconfig } from './utils/tsconfig.ts';
 
 interface InitCommandSpec {
   configKey: 'lint' | 'fmt';

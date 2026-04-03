@@ -773,7 +773,7 @@ export async function syncRemote() {
   log('✓ package.json exports updated successfully!');
 
   // Apply Vite+ branding patches to vite source
-  const { brandVite } = await import('./brand-vite.js');
+  const { brandVite } = await import('./brand-vite.ts');
   brandVite(rootDir);
 
   log('✓ Done!');

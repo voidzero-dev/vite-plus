@@ -3,10 +3,10 @@ import path from 'node:path';
 
 import { vitePlusHeader } from '../binding/index.js';
 import cliPkg from '../package.json' with { type: 'json' };
-import { VITE_PLUS_NAME } from './utils/constants.js';
-import { renderCliDoc } from './utils/help.js';
-import { detectPackageMetadata, hasVitePlusDependency } from './utils/package.js';
-import { accent, log } from './utils/terminal.js';
+import { VITE_PLUS_NAME } from './utils/constants.ts';
+import { renderCliDoc } from './utils/help.ts';
+import { detectPackageMetadata, hasVitePlusDependency } from './utils/package.ts';
+import { accent, log } from './utils/terminal.ts';
 
 /** Tool display names in the order shown by `vp --version`. */
 const TOOL_DISPLAY_ORDER = [

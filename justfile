@@ -18,7 +18,7 @@ _clean_dist:
 
 init: _clean_dist
   cargo binstall watchexec-cli cargo-insta typos-cli cargo-shear dprint taplo-cli -y
-  node packages/tools/src/bin.js sync-remote
+  node packages/tools/src/index.ts sync-remote
   pnpm install
   pnpm -C docs install
 

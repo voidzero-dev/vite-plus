@@ -25,7 +25,7 @@ runs:
       id: cache-key
       shell: bash
       run: |
-        echo "key=napi-binding-v3-${{ inputs.target }}-${{ env.RELEASE_BUILD }}-${{ env.DEBUG }}-${{ env.VERSION }}-${{ env.NPM_TAG }}-${{ hashFiles('packages/tools/.upstream-versions.json', 'Cargo.lock', 'crates/**/*.rs', 'crates/*/Cargo.toml', 'packages/cli/binding/**/*.rs', 'packages/cli/binding/Cargo.toml', 'Cargo.toml', '.cargo/config.toml', 'packages/cli/package.json', 'packages/cli/build.ts') }}" >> $GITHUB_OUTPUT
+        echo "key=napi-binding-v3-${{ inputs.target }}-${{ env.RELEASE_BUILD }}-${{ env.DEBUG }}-${{ env.VERSION }}-${{ env.NPM_TAG }}-${{ hashFiles('packages/tools/.upstream-versions.json', 'Cargo.lock', 'crates/**/*.rs', 'crates/*/Cargo.toml', 'packages/cli/binding/**/*.rs', 'packages/cli/binding/Cargo.toml', 'Cargo.toml', '.cargo/config.toml', 'packages/cli/package.json', 'packages/cli/build.ts', 'packages/cli/tsdown.config.ts') }}" >> $GITHUB_OUTPUT
 
     # Resolve the Rust target directory (CARGO_TARGET_DIR from setup-rust, or default "target")
     - name: Resolve Rust target directory

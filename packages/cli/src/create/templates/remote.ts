@@ -1,16 +1,16 @@
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import colors from 'picocolors';
 
-import type { WorkspaceInfo } from '../../types/index.js';
-import { checkNpmPackageExists } from '../../utils/package.js';
+import type { WorkspaceInfo } from '../../types/index.ts';
+import { checkNpmPackageExists } from '../../utils/package.ts';
 import {
   type ExecutionResult,
   formatDlxCommand,
   runCommand,
   runCommandAndDetectProjectDir,
   runCommandSilently,
-} from '../command.js';
-import type { TemplateInfo } from './types.js';
+} from '../command.ts';
+import type { TemplateInfo } from './types.ts';
 
 const { gray, yellow } = colors;
 

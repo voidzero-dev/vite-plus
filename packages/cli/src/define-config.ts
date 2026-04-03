@@ -1,9 +1,38 @@
+import type { UserConfig } from '@voidzero-dev/vite-plus-core';
 import {
   defineConfig as viteDefineConfig,
   type ConfigEnv,
+  type Plugin as VitestPlugin,
 } from '@voidzero-dev/vite-plus-test/config';
+import type { OxfmtConfig } from 'oxfmt';
+import type { OxlintConfig } from 'oxlint';
 
-import type { UserConfig } from './index.js';
+import type { PackUserConfig } from './pack.ts';
+import type { RunConfig } from './run-config.ts';
+import type { StagedConfig } from './staged-config.ts';
+
+declare module '@voidzero-dev/vite-plus-core' {
+  interface UserConfig {
+    /**
+     * Options for oxlint
+     */
+    lint?: OxlintConfig;
+
+    fmt?: OxfmtConfig;
+
+    pack?: PackUserConfig | PackUserConfig[];
+
+    run?: RunConfig;
+
+    staged?: StagedConfig;
+
+    // temporary solution to load plugins lazily
+    // We need to support this in the upstream vite
+    lazy?: () => Promise<{
+      plugins?: VitestPlugin[];
+    }>;
+  }
+}
 
 type ViteUserConfigFnObject = (env: ConfigEnv) => UserConfig;
 type ViteUserConfigFnPromise = (env: ConfigEnv) => Promise<UserConfig>;

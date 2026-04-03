@@ -487,7 +487,9 @@ setup_node_manager() {
   # Prompt user in interactive mode
   if [ -e /dev/tty ] && [ -t 1 ]; then
     echo ""
-    echo "Would you want Vite+ to manage Node.js versions?"
+    echo "Would you like Vite+ to manage your Node.js versions?"
+    echo "It adds \`node\`, \`npm\`, and \`npx\` shims to ~/.vite-plus/bin/ and automatically uses the right version."
+    echo "Opt out anytime with \`vp env off\`."
     echo -n "Press Enter to accept (Y/n): "
     read -r response < /dev/tty
 

@@ -12,10 +12,10 @@ import {
   type WorkspaceInfo,
   type WorkspaceInfoOptional,
   type WorkspacePackage,
-} from '../types/index.js';
-import { editJsonFile, readJsonFile } from './json.js';
-import { getScopeFromPackageName } from './package.js';
-import { editYamlFile, readYamlFile } from './yaml.js';
+} from '../types/index.ts';
+import { editJsonFile, readJsonFile } from './json.ts';
+import { getScopeFromPackageName } from './package.ts';
+import { editYamlFile, readYamlFile } from './yaml.ts';
 
 // npm/yarn use an array; Bun catalogs and Yarn classic nohoist use an object with `packages`.
 export type NpmWorkspaces = string[] | { packages?: string[]; catalog?: Record<string, string> };
