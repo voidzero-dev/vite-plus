@@ -375,8 +375,10 @@ function Main {
         Push-Location $VersionDir
         try {
             $env:CI = "true"
-            & "$BinDir\vp.exe" install --silent *> $installLog
-            if ($LASTEXITCODE -ne 0) {
+            $output = & "$BinDir\vp.exe" install --silent 2>&1
+            $installExitCode = $LASTEXITCODE
+            $output | Out-File $installLog
+            if ($installExitCode -ne 0) {
                 Write-Host "error: Failed to install dependencies. See log for details: $installLog" -ForegroundColor Red
                 exit 1
             }
