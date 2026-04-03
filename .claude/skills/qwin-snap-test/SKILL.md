@@ -109,33 +109,50 @@ Windows crates must use `rustls-no-provider` instead of `native-tls-vendored` fo
 
 And `crates/vite_shared/Cargo.toml` must have `rustls` as an unconditional dependency (not gated behind `cfg(not(windows))`).
 
-## Artifact Transfer
+## Artifact Transfer (Git Clone Approach)
 
-### What to transfer (~4 MB without node_modules)
+**Do NOT tar/scp node_modules.** pnpm's symlink-based layout doesn't transfer across macOS/Windows.
 
-The wrapper script creates a slim tarball excluding node_modules, then installs dependencies on the VM via `npm install`.
+### Step 1: Clone the repo + upstreams in the VM
 
-**Key tar exclude rules:**
+```bash
+# Push your branch first, then in the VM:
+git clone --depth 1 --branch <branch> https://github.com/voidzero-dev/vite-plus.git
+cd vite-plus
+git submodule update --init --depth 1
 
-- `--exclude='tools/qwin'` (NOT `--exclude='tools'` which would also exclude `packages/tools`)
-- `--exclude='node_modules'` and `--exclude='*/node_modules'`
-- No `-h` flag (avoid dereferencing pnpm symlinks which bloats to 1.4 GB)
+# Clone upstream repos at pinned hashes (required for patches and workspace deps)
+# Get hashes from packages/tools/.upstream-versions.json
+git clone --depth 1 https://github.com/rolldown/rolldown.git rolldown
+cd rolldown && git fetch --depth 1 origin <ROLLDOWN_HASH> && git checkout <ROLLDOWN_HASH> && cd ..
+git clone --depth 1 https://github.com/vitejs/vite.git vite
+cd vite && git fetch --depth 1 origin <VITE_HASH> && git checkout <VITE_HASH> && cd ..
 
-### VM-side dependency installation
+# Install deps (works with full workspace intact)
+pnpm install --frozen-lockfile
+```
 
-Since pnpm's symlink-based node_modules don't transfer across platforms:
+### Step 2: SCP only the cross-compiled binaries (~23 MB)
 
-1. Transfer project files without node_modules
-2. Create a resolved `package.json` for `packages/tools` (replace `catalog:` with real versions, remove `workspace:*` deps)
-3. Run `npm install --ignore-scripts` in `packages/tools/` on the VM
-4. Place `@oxc-node/core` Windows native binary (`oxc-node.win32-x64-msvc.node`) manually
+```bash
+scp -P 2222 target/x86_64-pc-windows-msvc/release/vp.exe administrator@localhost:
+scp -P 2222 target/x86_64-pc-windows-msvc/release/vp-shim.exe administrator@localhost:
+scp -P 2222 packages/cli/binding/vite-plus.win32-x64-msvc.node administrator@localhost:
+```
+
+Then place them in the correct locations on the VM.
+
+### Why not tar node_modules?
+
+- pnpm symlinks don't work across macOS/Windows
+- `-h` flag dereferences but inflates to 1.4 GB
+- `--exclude='tools'` accidentally excludes `packages/tools` (must use `tools/qwin`)
+- `pnpm install --frozen-lockfile` with the cloned workspace just works
 
 ### Windows-specific requirements
 
 - **VC++ Redistributable**: Required for MSVC-compiled Rust binaries (`VCRUNTIME140.dll`)
 - **Long paths**: `reg add HKLM\SYSTEM\CurrentControlSet\Control\FileSystem /v LongPathsEnabled /t REG_DWORD /d 1 /f`
-- **tsx**: Use instead of `@oxc-node/core` register hook (which has a target config issue on Windows)
-- **@oxc-node Windows binary**: Download via `npm pack @oxc-node/core-win32-x64-msvc@<version>`
 
 ## SSH Access
 
