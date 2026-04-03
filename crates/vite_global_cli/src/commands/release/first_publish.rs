@@ -894,6 +894,7 @@ mod tests {
         let created = std::fs::read_to_string(cwd.join(".github/workflows/publish.yml")).unwrap();
         assert!(guidance.workflow_template_created);
         assert!(created.contains("workflow_dispatch:"));
+        assert!(created.contains("uses: actions/checkout@v6"));
         assert!(created.contains("<default-branch>"));
         assert!(created.contains("<release-tag-pattern>"));
         assert!(created.contains("run: corepack enable"));
