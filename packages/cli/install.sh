@@ -623,32 +623,26 @@ main() {
   fi
 
   # Generate wrapper package.json that declares vite-plus as a dependency.
-  # npm will install vite-plus and all transitive deps via `vp install`.
+  # pnpm will install vite-plus and all transitive deps via `vp install`.
+  # The packageManager field pins pnpm to a known-good version, ensuring
+  # consistent behavior regardless of the user's global pnpm version.
   cat > "$VERSION_DIR/package.json" <<WRAPPER_EOF
 {
   "name": "vp-global",
   "version": "$VP_VERSION",
   "private": true,
+  "packageManager": "pnpm@10.33.0",
   "dependencies": {
     "vite-plus": "$VP_VERSION"
   }
 }
 WRAPPER_EOF
 
-  # Isolate from user's global package manager config that may block
-  # installing recently-published packages (pnpm's minimumReleaseAge,
-  # npm's min-release-age, yarn's npmMinimalAgeGate, bun's minimumReleaseAge).
+  # Isolate from pnpm's global config that may block installing
+  # recently-published packages (e.g. minimumReleaseAge).
   cat > "$VERSION_DIR/.npmrc" <<NPMRC_EOF
 minimum-release-age=0
-min-release-age=0
 NPMRC_EOF
-  cat > "$VERSION_DIR/.yarnrc.yml" <<YARNRC_EOF
-npmMinimalAgeGate: "0m"
-YARNRC_EOF
-  cat > "$VERSION_DIR/bunfig.toml" <<BUNFIG_EOF
-[install]
-minimumReleaseAge = 0
-BUNFIG_EOF
 
   # Install production dependencies (skip if VP_SKIP_DEPS_INSTALL is set,
   # e.g. during local dev where install-global-cli.ts handles deps separately)

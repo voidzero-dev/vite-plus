@@ -87,10 +87,15 @@ pub async fn extract_platform_package(
     Ok(())
 }
 
+/// The pnpm version pinned in the wrapper package.json for global installs.
+/// This ensures consistent install behavior regardless of the user's global pnpm version.
+const PINNED_PNPM_VERSION: &str = "pnpm@10.33.0";
+
 /// Generate a wrapper `package.json` that declares `vite-plus` as a dependency.
 ///
-/// This replaces the old approach of extracting the main package tarball.
-/// npm will install `vite-plus` and all its transitive deps via `vp install`.
+/// The `packageManager` field pins pnpm to a known-good version, ensuring
+/// consistent behavior regardless of the user's global pnpm version.
+/// pnpm will install `vite-plus` and all its transitive deps via `vp install`.
 pub async fn generate_wrapper_package_json(
     version_dir: &AbsolutePath,
     version: &str,
@@ -99,6 +104,7 @@ pub async fn generate_wrapper_package_json(
         "name": "vp-global",
         "version": version,
         "private": true,
+        "packageManager": PINNED_PNPM_VERSION,
         "dependencies": {
             "vite-plus": version
         }
@@ -108,32 +114,18 @@ pub async fn generate_wrapper_package_json(
     Ok(())
 }
 
-/// Create local config overrides in the version directory to isolate from
-/// user's global package manager config that may block installing
-/// recently-published packages.
-///
-/// Overrides for each package manager:
-/// - pnpm: `minimum-release-age=0` in `.npmrc`
-/// - npm: `min-release-age=0` in `.npmrc`
-/// - yarn: `npmMinimalAgeGate: "0s"` in `.yarnrc.yml`
-/// - bun: `minimumReleaseAge = 0` in `bunfig.toml`
+/// Create a local `.npmrc` in the version directory to bypass pnpm's
+/// `minimumReleaseAge` setting that may block installing recently-published packages.
 pub async fn write_release_age_overrides(version_dir: &AbsolutePath) -> Result<(), Error> {
-    // pnpm + npm
     let npmrc_path = version_dir.join(".npmrc");
-    tokio::fs::write(&npmrc_path, "minimum-release-age=0\nmin-release-age=0\n").await?;
-
-    // yarn (SettingsType.DURATION with DurationUnit.MINUTES, "0m" disables)
-    let yarnrc_path = version_dir.join(".yarnrc.yml");
-    tokio::fs::write(&yarnrc_path, "npmMinimalAgeGate: \"0m\"\n").await?;
-
-    // bun
-    let bunfig_path = version_dir.join("bunfig.toml");
-    tokio::fs::write(&bunfig_path, "[install]\nminimumReleaseAge = 0\n").await?;
-
+    tokio::fs::write(&npmrc_path, "minimum-release-age=0\n").await?;
     Ok(())
 }
 
-/// Write stdout and stderr from a failed install to `{version_dir}/upgrade.log`.
+/// Write stdout and stderr from a failed install to `upgrade.log`.
+///
+/// The log is written to the **parent** of `version_dir` (i.e. `~/.vite-plus/upgrade.log`)
+/// so it survives the cleanup that removes `version_dir` on failure.
 ///
 /// Returns the log file path on success, or `None` if writing failed.
 pub async fn write_upgrade_log(
@@ -141,7 +133,9 @@ pub async fn write_upgrade_log(
     stdout: &[u8],
     stderr: &[u8],
 ) -> Option<AbsolutePathBuf> {
-    let log_path = version_dir.join("upgrade.log");
+    // Write to parent dir so the log survives version_dir cleanup on failure
+    let parent = version_dir.as_path().parent()?;
+    let log_path = AbsolutePathBuf::new(parent.join("upgrade.log"))?;
     let stdout_str = String::from_utf8_lossy(stdout);
     let stderr_str = String::from_utf8_lossy(stderr);
     let content = format!("=== stdout ===\n{stdout_str}\n=== stderr ===\n{stderr_str}");
@@ -484,9 +478,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_write_upgrade_log_creates_log_file() {
+    async fn test_write_upgrade_log_creates_log_in_parent_dir() {
         let temp = tempfile::tempdir().unwrap();
-        let version_dir = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        // Simulate ~/.vite-plus/0.1.15/ structure
+        let version_dir =
+            AbsolutePathBuf::new(temp.path().join("0.1.15").to_path_buf()).unwrap();
+        tokio::fs::create_dir(&version_dir).await.unwrap();
 
         let stdout = b"some stdout output";
         let stderr = b"error: something went wrong";
@@ -495,6 +492,12 @@ mod tests {
         assert!(result.is_some(), "write_upgrade_log should return log path");
 
         let log_path = result.unwrap();
+        // Log should be in parent dir, not version_dir
+        assert_eq!(
+            log_path.as_path().parent().unwrap(),
+            temp.path(),
+            "upgrade.log should be in parent dir"
+        );
         assert!(log_path.as_path().exists(), "upgrade.log should exist");
 
         let content = tokio::fs::read_to_string(&log_path).await.unwrap();
@@ -502,12 +505,18 @@ mod tests {
         assert!(content.contains("some stdout output"), "log should contain stdout");
         assert!(content.contains("=== stderr ==="), "log should have stderr section");
         assert!(content.contains("error: something went wrong"), "log should contain stderr");
+
+        // Log should survive version_dir removal
+        tokio::fs::remove_dir_all(&version_dir).await.unwrap();
+        assert!(log_path.as_path().exists(), "upgrade.log should survive version_dir cleanup");
     }
 
     #[tokio::test]
     async fn test_write_upgrade_log_handles_empty_output() {
         let temp = tempfile::tempdir().unwrap();
-        let version_dir = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        let version_dir =
+            AbsolutePathBuf::new(temp.path().join("0.1.15").to_path_buf()).unwrap();
+        tokio::fs::create_dir(&version_dir).await.unwrap();
 
         let result = write_upgrade_log(&version_dir, b"", b"").await;
         assert!(result.is_some());
@@ -518,26 +527,24 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_write_release_age_overrides_creates_all_config_files() {
+    async fn test_write_release_age_overrides_creates_npmrc() {
         let temp = tempfile::tempdir().unwrap();
         let version_dir = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
 
         write_release_age_overrides(&version_dir).await.unwrap();
 
-        // .npmrc (pnpm + npm)
+        // .npmrc (pnpm only — packageManager pins pnpm)
         let npmrc = tokio::fs::read_to_string(version_dir.join(".npmrc")).await.unwrap();
         assert!(npmrc.contains("minimum-release-age=0"), ".npmrc should contain pnpm override");
-        assert!(npmrc.contains("min-release-age=0"), ".npmrc should contain npm override");
 
-        // .yarnrc.yml (yarn)
-        let yarnrc = tokio::fs::read_to_string(version_dir.join(".yarnrc.yml")).await.unwrap();
-        assert!(yarnrc.contains("npmMinimalAgeGate"), ".yarnrc.yml should contain yarn override");
-
-        // bunfig.toml (bun)
-        let bunfig = tokio::fs::read_to_string(version_dir.join("bunfig.toml")).await.unwrap();
+        // No .yarnrc.yml or bunfig.toml (pnpm only)
         assert!(
-            bunfig.contains("minimumReleaseAge = 0"),
-            "bunfig.toml should contain bun override"
+            !version_dir.join(".yarnrc.yml").as_path().exists(),
+            ".yarnrc.yml should not be created"
+        );
+        assert!(
+            !version_dir.join("bunfig.toml").as_path().exists(),
+            "bunfig.toml should not be created"
         );
     }
 }
