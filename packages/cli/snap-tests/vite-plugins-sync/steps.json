@@ -1,10 +1,9 @@
 {
   "commands": [
-    "# Test that plugins loaded via sync vitePlugins() are applied during build",
     {
       "command": "vp build",
       "ignoreOutput": true
     },
-    "cat dist/index.html | grep 'sync-plugin-injected'"
+    "cat dist/index.html | grep 'sync-plugin-injected' # sync vitePlugins() should apply plugins during build"
   ]
 }

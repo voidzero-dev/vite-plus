@@ -1,10 +1,9 @@
 {
   "commands": [
-    "# Test that plugins loaded via async vitePlugins() are applied during build",
     {
       "command": "vp build",
       "ignoreOutput": true
     },
-    "cat dist/index.html | grep 'lazy-plugin-injected'"
+    "cat dist/index.html | grep 'lazy-plugin-injected' # async vitePlugins() should apply plugins during build"
   ]
 }
