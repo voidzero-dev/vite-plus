@@ -1,8 +1,8 @@
-import { defineConfig } from 'vite-plus';
+import { defineConfig, vitePlugins } from 'vite-plus';
 
 export default defineConfig({
-  lazy: async () => {
+  plugins: vitePlugins(async () => {
     const { default: myLazyPlugin } = await import('./my-plugin');
-    return { plugins: [myLazyPlugin()] };
-  },
+    return [myLazyPlugin()];
+  }),
 });

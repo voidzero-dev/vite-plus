@@ -6,36 +6,31 @@ Use this page when your Vite+ configuration is not behaving the way you expect.
 
 When `vite.config.ts` imports heavy plugins at the top level, every `import` is evaluated eagerly, even for commands like `vp lint` or `vp fmt` that don't need those plugins. This can make config loading noticeably slow.
 
-Use the `lazy` field in `defineConfig` to defer heavy plugin loading. Plugins provided through `lazy` are only resolved when Vite actually needs them:
+Use the `vitePlugins()` helper to conditionally load plugins. It checks which `vp` command is running and skips plugin loading for commands that don't need them (like `lint`, `fmt`, `check`):
 
 ```ts
-import { defineConfig } from 'vite-plus';
+import { defineConfig, vitePlugins } from 'vite-plus';
 
 export default defineConfig({
-  lazy: async () => {
-    const { default: heavyPlugin } = await import('vite-plugin-heavy');
-    return { plugins: [heavyPlugin()] };
-  },
+  plugins: vitePlugins(() => [myPlugin()]),
 });
 ```
 
-You can keep lightweight plugins inline and defer only the expensive ones. Plugins from `lazy` are appended after existing plugins:
+For heavy plugins that should be lazily imported, combine with dynamic `import()`:
 
 ```ts
-import { defineConfig } from 'vite-plus';
-import lightPlugin from 'vite-plugin-light';
+import { defineConfig, vitePlugins } from 'vite-plus';
 
 export default defineConfig({
-  plugins: [lightPlugin()],
-  lazy: async () => {
+  plugins: vitePlugins(async () => {
     const { default: heavyPlugin } = await import('vite-plugin-heavy');
-    return { plugins: [heavyPlugin()] };
-  },
+    return [heavyPlugin()];
+  }),
 });
 ```
 
-The resulting plugin order is: `[lightPlugin(), heavyPlugin()]`.
+Plugins load for `dev`, `build`, `test`, and `preview`. They are skipped for `lint`, `fmt`, `check`, and other commands that don't need them.
 
 ::: info
-The `lazy` field is a Vite+ extension. We plan to support this in upstream Vite in the future.
+`vitePlugins()` works by checking the `VP_COMMAND` environment variable, which is automatically set by `vp` for every command.
 :::
