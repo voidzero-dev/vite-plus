@@ -1,0 +1,8 @@
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "testnpm2": "*"
+  }
+}

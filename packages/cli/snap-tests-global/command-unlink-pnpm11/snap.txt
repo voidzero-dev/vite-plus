@@ -1,0 +1,49 @@
+> vp unlink -h # should show help message
+VITE+ - The Unified Toolchain for the Web
+
+Usage: vp unlink [OPTIONS] [PACKAGE|DIR] [ARGS]...
+
+Unlink packages
+
+Arguments:
+  [PACKAGE|DIR]  Package name to unlink
+  [ARGS]...      Arguments to pass to package manager
+
+Options:
+  -r, --recursive  Unlink in every workspace package
+  -h, --help       Print help
+
+Documentation: https://viteplus.dev/guide/install
+
+
+> mkdir -p ../unlink-test-lib && echo '{"name": "unlink-test-lib", "version": "1.0.0"}' > ../unlink-test-lib/package.json # create test library
+> vp link ../unlink-test-lib && cat package.json # link the library first
+
+dependencies:
++ @pnpm/exe <semver>
++ pnpm <semver>
+- unlink-test-lib link:../unlink-test-lib
++ unlink-test-lib <semver> <- ../unlink-test-lib
+
+{
+  "name": "command-unlink-pnpm11",
+  "version": "1.0.0",
+  "packageManager": "pnpm@<semver>
+  "dependencies": {
+    "unlink-test-lib": "link:../unlink-test-lib"
+  }
+}
+
+[1]> vp unlink unlink-test-lib && cat package.json # should unlink the package
+ ERR_PNPM_LOCKFILE_CONFIG_MISMATCH  Cannot proceed with the frozen installation. The current "overrides" configuration doesn't match the value found in the lockfile
+
+Update your lockfile using "pnpm install --no-frozen-lockfile"
+
+> vp link ../unlink-test-lib # link again
+Lockfile is up to date, resolution step is skipped
+
+
+[1]> vp unlink && cat package.json # should unlink all packages
+ ERR_PNPM_LOCKFILE_CONFIG_MISMATCH  Cannot proceed with the frozen installation. The current "overrides" configuration doesn't match the value found in the lockfile
+
+Update your lockfile using "pnpm install --no-frozen-lockfile"
