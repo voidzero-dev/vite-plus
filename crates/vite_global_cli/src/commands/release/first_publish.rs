@@ -899,6 +899,7 @@ mod tests {
         assert!(created.contains("<release-tag-pattern>"));
         assert!(created.contains("run: corepack enable"));
         assert!(created.contains("run: pnpm install --frozen-lockfile"));
+        assert!(!created.contains("node-version:"));
         assert!(created.contains("git config user.name \"github-actions[bot]\""));
         assert!(created.contains("vp release --first-release --yes"));
         assert!(created.contains("vp release --yes"));
