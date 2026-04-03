@@ -17,10 +17,10 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 cargo install cargo-binstall
 ```
 
-Initial setup to install dependencies for Vite+:
+Initial setup to prepare the repo for local development:
 
 ```
-just init
+pnpm install:dev
 ```
 
 ### Windows
@@ -37,10 +37,10 @@ Install Rust & Cargo from [rustup.rs](https://rustup.rs/), then install `cargo-b
 cargo install cargo-binstall
 ```
 
-Initial setup to install dependencies for Vite+:
+Initial setup to prepare the repo for local development:
 
 ```powershell
-just init
+pnpm install:dev
 ```
 
 **Note:** Run commands in PowerShell or Windows Terminal. Some commands may require elevated permissions.
@@ -53,6 +53,23 @@ To create a release build of Vite+ and all upstream dependencies, run:
 just build
 ```
 
+## Local CLI workflow
+
+```
+pnpm bootstrap:dev
+pnpm test
+```
+
+This prepares the local `rolldown/` and `vite/` checkouts, installs dependencies, builds the repo-local CLI artifacts, and runs tests without reading `~/.vite-plus`.
+
+If you only want to prepare the repo after cloning it, run:
+
+```
+pnpm install:dev
+```
+
+If you prefer the existing Just-based setup, `just init` now delegates to the same repo-local install flow.
+
 ## Install the Vite+ Global CLI from source code
 
 ```
@@ -60,14 +77,14 @@ pnpm bootstrap-cli
 vp --version
 ```
 
-This builds all packages, compiles the Rust `vp` binary, and installs the CLI to `~/.vite-plus`.
+Use this only when you specifically want to validate the install flow or the globally installed CLI.
 
 ## Workflow for build and test
 
 You can run this command to build, test and check if there are any snapshot changes:
 
 ```
-pnpm bootstrap-cli && pnpm test && git status
+pnpm build:cli && pnpm test && git status
 ```
 
 ## Running Snap Tests
@@ -86,6 +103,8 @@ pnpm -F vite-plus snap-test-local <name-filter>
 pnpm -F vite-plus snap-test-global
 pnpm -F vite-plus snap-test-global <name-filter>
 ```
+
+Global CLI snap tests use the repo-local debug binary and `packages/cli/dist`; they do not require `~/.vite-plus/bin`.
 
 Snap tests auto-generate `snap.txt` files. Check `git diff` to verify output changes are correct.
 
