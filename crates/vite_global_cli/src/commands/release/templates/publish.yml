@@ -32,7 +32,6 @@ jobs:
       - name: Install Vite+
         uses: voidzero-dev/setup-vp@v1
         with:
-          node-version: '22'
           cache: true
 
       - __PACKAGE_MANAGER_SETUP__
