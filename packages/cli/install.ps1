@@ -350,6 +350,10 @@ function Main {
         }
     }
 
+    # Remove Zone.Identifier (Mark of the Web) from downloaded binaries so
+    # Windows SmartScreen / Defender won't block execution.
+    Get-ChildItem -Path $BinDir -Filter "*.exe" | Unblock-File
+
     # Generate wrapper package.json that declares vite-plus as a dependency.
     # pnpm will install vite-plus and all transitive deps via `vp install`.
     # The packageManager field pins pnpm to a known-good version.
