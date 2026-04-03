@@ -449,6 +449,7 @@ if [ -n "$BASH_VERSION" ] && type complete >/dev/null 2>&1; then
     eval "$(VP_COMPLETE=bash command vp)"
 elif [ -n "$ZSH_VERSION" ] && type compdef >/dev/null 2>&1; then
     eval "$(VP_COMPLETE=zsh command vp)"
+    eval '
     _vpr_complete() {
         local -a orig=("${words[@]}")
         words=("vp" "run" "${orig[@]:1}")
@@ -456,6 +457,7 @@ elif [ -n "$ZSH_VERSION" ] && type compdef >/dev/null 2>&1; then
         ${=_comps[vp]}
     }
     compdef _vpr_complete vpr
+    '
 fi
 "#
     .replace("__VP_BIN__", &bin_path_ref);
@@ -917,6 +919,10 @@ mod tests {
         assert!(
             env_content.contains("compdef _vpr_complete vpr"),
             "env should have vpr completion for zsh"
+        );
+        assert!(
+            env_content.contains("eval '") && env_content.contains("_vpr_complete() {"),
+            "env should wrap zsh-specific code in eval"
         );
         assert!(fish_content.contains("complete -c vpr"), "env.fish should have vpr completion");
         assert!(
