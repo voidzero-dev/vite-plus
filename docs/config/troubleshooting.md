@@ -11,8 +11,12 @@ Use the `vitePlugins()` helper to conditionally load plugins. It checks which `v
 ```ts
 import { defineConfig, vitePlugins } from 'vite-plus';
 
+import myPlugin from 'vite-plugin-foo';
+
 export default defineConfig({
-  plugins: vitePlugins(() => [myPlugin()]),
+  plugins: [
+    vitePlugins(() => [myPlugin()]),
+  ],
 });
 ```
 
