@@ -55,7 +55,7 @@ await bundleVitepress();
 generateLicenseFile({
   title: 'Vite-Plus core license',
   packageName: 'Vite-Plus',
-  outputPath: join(projectDir, 'LICENSE.md'),
+  outputPath: join(projectDir, 'LICENSE'),
   coreLicensePath: join(projectDir, '..', '..', 'LICENSE'),
   bundledPaths: [join(projectDir, 'dist')],
   resolveFrom: [
@@ -84,11 +84,10 @@ generateLicenseFile({
     },
   ],
 });
-if (!existsSync(join(projectDir, 'LICENSE.md'))) {
-  throw new Error('LICENSE.md was not generated during build');
+if (!existsSync(join(projectDir, 'LICENSE'))) {
+  throw new Error('LICENSE was not generated during build');
 }
 await mergePackageJson();
-await syncLicenseFromRoot();
 
 async function buildVite() {
   const newViteRolldownConfig = viteRolldownConfig.map((config) => {
@@ -669,10 +668,4 @@ async function mergePackageJson() {
     process.exit(1);
   }
   await writeFile(destPkgPath, code);
-}
-
-async function syncLicenseFromRoot() {
-  const rootLicensePath = join(projectDir, '..', '..', 'LICENSE');
-  const packageLicensePath = join(projectDir, 'LICENSE');
-  await copyFile(rootLicensePath, packageLicensePath);
 }

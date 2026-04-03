@@ -231,7 +231,7 @@ await mergePackageJson(pluginExports);
 generateLicenseFile({
   title: 'Vite-Plus test license',
   packageName: 'Vite-Plus',
-  outputPath: join(projectDir, 'LICENSE.md'),
+  outputPath: join(projectDir, 'LICENSE'),
   coreLicensePath: join(projectDir, '..', '..', 'LICENSE'),
   bundledPaths: [distDir],
   resolveFrom: [projectDir, join(projectDir, '..', '..')],
@@ -242,10 +242,9 @@ generateLicenseFile({
     })),
   ],
 });
-if (!existsSync(join(projectDir, 'LICENSE.md'))) {
-  throw new Error('LICENSE.md was not generated during build');
+if (!existsSync(join(projectDir, 'LICENSE'))) {
+  throw new Error('LICENSE was not generated during build');
 }
-await syncLicenseFromRoot();
 await validateExternalDeps();
 
 async function mergePackageJson(pluginExports: Array<{ exportPath: string; shimFile: string }>) {
@@ -432,12 +431,6 @@ async function mergePackageJson(pluginExports: Array<{ exportPath: string; shimF
     process.exit(1);
   }
   await writeFile(destPackageJsonPath, code);
-}
-
-async function syncLicenseFromRoot() {
-  const rootLicensePath = join(projectDir, '..', '..', 'LICENSE');
-  const packageLicensePath = join(projectDir, 'LICENSE');
-  await copyFile(rootLicensePath, packageLicensePath);
 }
 
 async function bundleVitest() {
