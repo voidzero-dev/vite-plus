@@ -412,6 +412,34 @@ fn resolved_publish_tag_supports_custom_prerelease_channels() {
 }
 
 #[test]
+fn release_prerelease_channels_use_planned_custom_version_when_preid_is_absent() {
+    let mut plan = make_release_plan("pkg-a", &[], &[]);
+    plan.next_version = Version::parse("1.0.1-canary.0").unwrap();
+
+    assert_eq!(release_prerelease_channels(&[plan], &make_release_options()), vec!["canary"]);
+}
+
+#[test]
+fn collect_nonstandard_prerelease_channels_flags_custom_channels_only() {
+    assert_eq!(
+        collect_nonstandard_prerelease_channels(&[
+            String::from("alpha"),
+            String::from("canary"),
+            String::from("beta"),
+        ]),
+        vec![String::from("canary")]
+    );
+}
+
+#[test]
+fn format_release_prerelease_summary_marks_mixed_channels() {
+    assert_eq!(
+        format_release_prerelease_summary(&[String::from("alpha"), String::from("canary"),]),
+        "mixed (alpha, canary)"
+    );
+}
+
+#[test]
 fn build_manifest_edits_updates_simple_internal_dependency_ranges() {
     let mut pkg_a = make_release_plan("pkg-a", &[], &[]);
     pkg_a.current_version = Version::parse("1.0.0").unwrap();
