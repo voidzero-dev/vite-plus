@@ -121,7 +121,7 @@ Use `vp migrate` to migrate to Vite+. It merges tool-specific config files such 
 
 - **build** - Build for production
 - **pack** - Build libraries
-- **release** - Version and publish workspace packages, with optional changelog generation
+- **release** - Publish workspace releases
 - **preview** - Preview production build
 
 #### Manage Dependencies
