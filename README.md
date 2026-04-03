@@ -11,16 +11,16 @@ _runtime and package management, create, dev, check, test, build, pack, and mono
 
 Vite+ is the unified entry point for local web development. It combines [Vite](https://vite.dev/), [Vitest](https://vitest.dev/), [Oxlint](https://oxc.rs/docs/guide/usage/linter.html), [Oxfmt](https://oxc.rs/docs/guide/usage/formatter.html), [Rolldown](https://rolldown.rs/), [tsdown](https://tsdown.dev/), and [Vite Task](https://github.com/voidzero-dev/vite-task) into one zero-config toolchain that also manages runtime and package manager workflows:
 
-- **`vp env`:** Manage Node.js globally and per project
-- **`vp install`:** Install dependencies with automatic package manager detection
-- **`vp dev`:** Run Vite's fast native ESM dev server with instant HMR
-- **`vp check`:** Run formatting, linting, and type checks in one command
-- **`vp test`:** Run tests through bundled Vitest
-- **`vp build`:** Build applications for production with Vite + Rolldown
-- **`vp run`:** Execute monorepo tasks with caching and dependency-aware scheduling
-- **`vp pack`:** Build libraries for npm publishing or standalone app binaries
-- **`vp release`:** Version and publish workspace packages
-- **`vp create` / `vp migrate`:** Scaffold new projects and migrate existing ones
+- **`vp env`:** Manage Node and package managers
+- **`vp install`:** Install project dependencies
+- **`vp dev`:** Start the dev server
+- **`vp check`:** Run format, lint, type checks
+- **`vp test`:** Run test suites
+- **`vp build`:** Build apps for production
+- **`vp run`:** Run cached workspace tasks
+- **`vp pack`:** Build libraries and binaries
+- **`vp release`:** Publish workspace releases
+- **`vp create` / `vp migrate`:** Create or migrate projects
 
 All of this is configured from your project root and works across Vite's framework ecosystem.
 Vite+ is fully open-source under the MIT license.
