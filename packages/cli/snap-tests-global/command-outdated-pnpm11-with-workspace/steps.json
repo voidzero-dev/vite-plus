@@ -1,0 +1,11 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "commands": [
+    "vp install",
+    "vp outdated testnpm2 -w # should outdated in workspace root",
+    "vp outdated testnpm2 --filter app # should outdated in specific package",
+    "vp outdated -D --filter app # should outdated dev dependencies in app",
+    "vp outdated --filter \"*\" --format json # should outdated in all packages",
+    "vp outdated -r # should outdated recursively"
+  ]
+}
