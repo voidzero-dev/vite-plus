@@ -1,0 +1,6 @@
+{
+  "commands": [
+    "# Test that vp lint does not load plugins (the plugin throws if loaded)",
+    "vp lint src/"
+  ]
+}
