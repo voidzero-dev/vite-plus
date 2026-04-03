@@ -3,6 +3,7 @@
 use std::{
     collections::HashSet,
     io::{Read, Write},
+    path::Path,
     process::Stdio,
 };
 
@@ -269,6 +270,10 @@ pub async fn uninstall(package_name: &str, dry_run: bool) -> Result<(), Error> {
 
 /// Parse package spec into name and optional version.
 fn parse_package_spec(spec: &str) -> (String, Option<String>) {
+    if is_local_path_spec(spec) {
+        return (resolve_local_package_name(spec).unwrap_or_else(|| spec.to_string()), None);
+    }
+
     // Handle scoped packages: @scope/name@version
     if spec.starts_with('@') {
         // Find the second @ for version
@@ -285,6 +290,27 @@ fn parse_package_spec(spec: &str) -> (String, Option<String>) {
     }
 
     (spec.to_string(), None)
+}
+
+fn is_local_path_spec(spec: &str) -> bool {
+    spec == "."
+        || spec == ".."
+        || spec.starts_with("./")
+        || spec.starts_with("../")
+        || spec.starts_with(".\\")
+        || spec.starts_with("..\\")
+        || Path::new(spec).is_absolute()
+}
+
+fn resolve_local_package_name(spec: &str) -> Option<String> {
+    let package_dir = if Path::new(spec).is_absolute() {
+        Path::new(spec).to_path_buf()
+    } else {
+        std::env::current_dir().ok()?.join(spec)
+    };
+    let package_json = std::fs::read_to_string(package_dir.join("package.json")).ok()?;
+    let json: serde_json::Value = serde_json::from_str(&package_json).ok()?;
+    json.get("name").and_then(|value| value.as_str()).map(str::to_string)
 }
 
 /// Binary info extracted from package.json.
@@ -469,6 +495,22 @@ async fn remove_package_shim(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct CurrentDirGuard(std::path::PathBuf);
+
+    impl CurrentDirGuard {
+        fn change_to(path: &std::path::Path) -> Self {
+            let previous = std::env::current_dir().unwrap();
+            std::env::set_current_dir(path).unwrap();
+            Self(previous)
+        }
+    }
+
+    impl Drop for CurrentDirGuard {
+        fn drop(&mut self) {
+            std::env::set_current_dir(&self.0).unwrap();
+        }
+    }
 
     /// RAII guard that sets `VP_TRAMPOLINE_PATH` to a fake binary on creation
     /// and clears it on drop. Ensures cleanup even on test panics.
@@ -727,6 +769,27 @@ mod tests {
         let (name, version) = parse_package_spec("@types/node@20.0.0");
         assert_eq!(name, "@types/node");
         assert_eq!(version, Some("20.0.0".to_string()));
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_parse_package_spec_local_path_uses_package_name() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let _cwd_guard = CurrentDirGuard::change_to(temp_dir.path());
+        let package_dir = temp_dir.path().join("fixture-pkg");
+
+        std::fs::create_dir_all(&package_dir).unwrap();
+        std::fs::write(
+            package_dir.join("package.json"),
+            r#"{ "name": "resolved-local-package", "version": "1.0.0" }"#,
+        )
+        .unwrap();
+
+        let (name, version) = parse_package_spec("./fixture-pkg");
+        assert_eq!(name, "resolved-local-package");
+        assert_eq!(version, None);
     }
 
     #[test]

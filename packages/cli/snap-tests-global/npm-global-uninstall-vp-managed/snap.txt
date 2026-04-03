@@ -8,7 +8,7 @@ Binaries: npm-global-vp-managed-cli
 > npm install -g ./npm-global-vp-managed-pkg # npm install (should warn about conflict)
 
 added 1 package in <variable>ms
-Skipped 'npm-global-vp-managed-cli': managed by `vp install -g ./npm-global-vp-managed-pkg`. Run `vp uninstall -g ./npm-global-vp-managed-pkg` to remove it first.
+Skipped 'npm-global-vp-managed-cli': managed by `vp install -g npm-global-vp-managed-pkg`. Run `vp uninstall -g npm-global-vp-managed-pkg` to remove it first.
 
 > npm uninstall -g npm-global-vp-managed-pkg # npm uninstall should NOT remove the vp-managed shim
 
