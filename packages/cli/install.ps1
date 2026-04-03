@@ -351,21 +351,22 @@ function Main {
     }
 
     # Generate wrapper package.json that declares vite-plus as a dependency.
-    # npm will install vite-plus and all transitive deps via `vp install`.
+    # pnpm will install vite-plus and all transitive deps via `vp install`.
+    # The packageManager field pins pnpm to a known-good version.
     $wrapperJson = @{
         name = "vp-global"
         version = $ViteVersion
         private = $true
+        packageManager = "pnpm@10.33.0"
         dependencies = @{
             "vite-plus" = $ViteVersion
         }
     } | ConvertTo-Json -Depth 10
     Set-Content -Path (Join-Path $VersionDir "package.json") -Value $wrapperJson
 
-    # Isolate from user's global package manager config that may block
-    # installing recently-published packages (e.g. pnpm's minimumReleaseAge,
-    # npm's min-release-age) by creating a local .npmrc in the version directory.
-    Set-Content -Path (Join-Path $VersionDir ".npmrc") -Value "minimum-release-age=0`nmin-release-age=0"
+    # Isolate from pnpm's global config that may block installing
+    # recently-published packages (e.g. minimumReleaseAge).
+    Set-Content -Path (Join-Path $VersionDir ".npmrc") -Value "minimum-release-age=0"
 
     # Install production dependencies (skip if VP_SKIP_DEPS_INSTALL is set,
     # e.g. during local dev where install-global-cli.ts handles deps separately)
