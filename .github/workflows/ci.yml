@@ -250,6 +250,15 @@ jobs:
           vp --version
           vp -h
 
+      - name: Verify env file is POSIX-compatible (dash)
+        if: runner.os == 'Linux'
+        shell: sh
+        run: |
+          # On Ubuntu, /bin/sh is dash. `sh -n` does syntax-only check.
+          # This catches Zsh-specific syntax that would break desktop login.
+          sh -n "$HOME/.vite-plus/env"
+          echo "env file parses successfully under $(readlink -f /bin/sh)"
+
       - name: Run vp check
         run: vp check
 
