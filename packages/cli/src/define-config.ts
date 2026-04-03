@@ -49,6 +49,8 @@ export function defineConfig(config: ViteUserConfigExport): ViteUserConfigExport
 
 export function vitePlugins<T>(cb: () => T): T | undefined {
   const cmd = process.env.VP_COMMAND;
-  if (cmd === 'dev' || cmd === 'build' || cmd === 'test' || cmd === 'preview') return cb();
+  if (cmd === 'dev' || cmd === 'build' || cmd === 'test' || cmd === 'preview') {
+    return cb();
+  }
   return undefined;
 }
