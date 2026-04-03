@@ -481,8 +481,7 @@ mod tests {
     async fn test_write_upgrade_log_creates_log_in_parent_dir() {
         let temp = tempfile::tempdir().unwrap();
         // Simulate ~/.vite-plus/0.1.15/ structure
-        let version_dir =
-            AbsolutePathBuf::new(temp.path().join("0.1.15").to_path_buf()).unwrap();
+        let version_dir = AbsolutePathBuf::new(temp.path().join("0.1.15").to_path_buf()).unwrap();
         tokio::fs::create_dir(&version_dir).await.unwrap();
 
         let stdout = b"some stdout output";
@@ -514,8 +513,7 @@ mod tests {
     #[tokio::test]
     async fn test_write_upgrade_log_handles_empty_output() {
         let temp = tempfile::tempdir().unwrap();
-        let version_dir =
-            AbsolutePathBuf::new(temp.path().join("0.1.15").to_path_buf()).unwrap();
+        let version_dir = AbsolutePathBuf::new(temp.path().join("0.1.15").to_path_buf()).unwrap();
         tokio::fs::create_dir(&version_dir).await.unwrap();
 
         let result = write_upgrade_log(&version_dir, b"", b"").await;
