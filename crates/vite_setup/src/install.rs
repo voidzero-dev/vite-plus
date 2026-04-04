@@ -199,18 +199,20 @@ pub async fn install_production_deps(
     Ok(())
 }
 
+/// Read the current installed version by following the `current` symlink/junction.
+///
+/// Returns `None` if no installation exists or the link target cannot be read.
+pub async fn read_current_version(install_dir: &AbsolutePath) -> Option<String> {
+    let current_link = install_dir.join("current");
+    let target = tokio::fs::read_link(&current_link).await.ok()?;
+    target.file_name().and_then(|n| n.to_str()).map(String::from)
+}
+
 /// Save the current version before swapping, for rollback support.
 ///
 /// Reads the `current` symlink target and writes the version to `.previous-version`.
 pub async fn save_previous_version(install_dir: &AbsolutePath) -> Result<Option<String>, Error> {
-    let current_link = install_dir.join("current");
-
-    if !tokio::fs::try_exists(&current_link).await.unwrap_or(false) {
-        return Ok(None);
-    }
-
-    let target = tokio::fs::read_link(&current_link).await?;
-    let version = target.file_name().and_then(|n| n.to_str()).map(String::from);
+    let version = read_current_version(install_dir).await;
 
     if let Some(ref v) = version {
         let prev_file = install_dir.join(".previous-version");

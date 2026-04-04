@@ -19,10 +19,11 @@ use std::io::{self, Write};
 use indicatif::{ProgressBar, ProgressStyle};
 use owo_colors::OwoColorize;
 use vite_install::request::HttpClient;
+use vite_path::AbsolutePathBuf;
 use vite_setup::{install, integrity, platform, registry};
 
-/// DLL security: restrict DLL search to system32 only.
-/// Prevents DLL hijacking when the installer is run from a Downloads folder.
+/// Restrict DLL search to system32 only to prevent DLL hijacking
+/// when the installer is run from a Downloads folder.
 #[cfg(windows)]
 fn init_dll_security() {
     unsafe extern "system" {
@@ -52,18 +53,26 @@ fn main() {
 
 #[allow(clippy::print_stdout, clippy::print_stderr)]
 async fn run(opts: cli::Options) -> i32 {
-    // Interactive mode: show welcome and prompt
+    let install_dir = match resolve_install_dir(&opts) {
+        Ok(dir) => dir,
+        Err(e) => {
+            print_error(&format!("Failed to resolve install directory: {e}"));
+            return 1;
+        }
+    };
+    let install_dir_display = install_dir.as_path().to_string_lossy().to_string();
+
     if !opts.yes {
-        let proceed = show_interactive_menu(&opts);
+        let proceed = show_interactive_menu(&opts, &install_dir_display);
         if !proceed {
             println!("Installation cancelled.");
             return 0;
         }
     }
 
-    match do_install(&opts).await {
+    match do_install(&opts, &install_dir).await {
         Ok(()) => {
-            print_success(&opts);
+            print_success(&opts, &install_dir_display);
             0
         }
         Err(e) => {
@@ -73,16 +82,16 @@ async fn run(opts: cli::Options) -> i32 {
     }
 }
 
-/// The core installation flow, matching what `install.ps1` does.
 #[allow(clippy::print_stdout)]
-async fn do_install(opts: &cli::Options) -> Result<(), Box<dyn std::error::Error>> {
-    // Step 1: Detect platform
+async fn do_install(
+    opts: &cli::Options,
+    install_dir: &AbsolutePathBuf,
+) -> Result<(), Box<dyn std::error::Error>> {
     let platform_suffix = platform::detect_platform_suffix()?;
     if !opts.quiet {
         print_info(&format!("detected platform: {platform_suffix}"));
     }
 
-    // Step 2: Resolve version from npm registry
     let version_or_tag = opts.version.as_deref().unwrap_or(&opts.tag);
     if !opts.quiet {
         print_info(&format!("resolving version '{version_or_tag}'..."));
@@ -94,11 +103,9 @@ async fn do_install(opts: &cli::Options) -> Result<(), Box<dyn std::error::Error
         print_info(&format!("found vite-plus@{}", resolved.version));
     }
 
-    // Step 3: Check for existing installation
-    let install_dir = resolve_install_dir(opts)?;
-    tokio::fs::create_dir_all(&install_dir).await?;
+    tokio::fs::create_dir_all(install_dir).await?;
 
-    let current_version = read_current_version(&install_dir).await;
+    let current_version = install::read_current_version(install_dir).await;
     if let Some(ref current) = current_version {
         if current == &resolved.version {
             if !opts.quiet {
@@ -115,7 +122,6 @@ async fn do_install(opts: &cli::Options) -> Result<(), Box<dyn std::error::Error
         }
     }
 
-    // Step 4: Download platform tarball
     if !opts.quiet {
         print_info(&format!(
             "downloading vite-plus@{} for {}...",
@@ -123,71 +129,55 @@ async fn do_install(opts: &cli::Options) -> Result<(), Box<dyn std::error::Error
         ));
     }
     let client = HttpClient::new();
-    let platform_data = download_with_progress(
-        &client,
-        &resolved.platform_tarball_url,
-        opts.quiet,
-    )
-    .await?;
+    let platform_data =
+        download_with_progress(&client, &resolved.platform_tarball_url, opts.quiet).await?;
 
-    // Step 5: Verify integrity
     if !opts.quiet {
         print_info("verifying integrity...");
     }
     integrity::verify_integrity(&platform_data, &resolved.platform_integrity)?;
 
-    // Step 6: Create version directory
     let version_dir = install_dir.join(&resolved.version);
     tokio::fs::create_dir_all(&version_dir).await?;
 
-    // Step 7: Extract binary
     if !opts.quiet {
         print_info("extracting binary...");
     }
     install::extract_platform_package(&platform_data, &version_dir).await?;
 
-    // Verify binary was extracted
     let binary_name = if cfg!(windows) { "vp.exe" } else { "vp" };
     let binary_path = version_dir.join("bin").join(binary_name);
     if !tokio::fs::try_exists(&binary_path).await.unwrap_or(false) {
         return Err("Binary not found after extraction. The download may be corrupted.".into());
     }
 
-    // Step 8: Generate wrapper package.json
     install::generate_wrapper_package_json(&version_dir, &resolved.version).await?;
-
-    // Step 9: Write .npmrc overrides
     install::write_release_age_overrides(&version_dir).await?;
 
-    // Step 10: Install production dependencies
     if !opts.quiet {
         print_info("installing dependencies (this may take a moment)...");
     }
     install::install_production_deps(&version_dir, opts.registry.as_deref()).await?;
 
-    // Step 11: Swap current symlink/junction
     if current_version.is_some() {
-        install::save_previous_version(&install_dir).await?;
+        install::save_previous_version(install_dir).await?;
     }
-    install::swap_current_link(&install_dir, &resolved.version).await?;
+    install::swap_current_link(install_dir, &resolved.version).await?;
 
-    // Step 12: Create bin shims
     if !opts.quiet {
         print_info("setting up shims...");
     }
-    setup_bin_shims(&install_dir).await?;
+    setup_bin_shims(install_dir).await?;
 
-    // Step 13: Refresh shims (Node.js manager)
     if !opts.no_node_manager {
         if !opts.quiet {
             print_info("setting up Node.js version manager...");
         }
-        install::refresh_shims(&install_dir).await?;
+        install::refresh_shims(install_dir).await?;
     }
 
-    // Step 14: Cleanup old versions
     if let Err(e) = install::cleanup_old_versions(
-        &install_dir,
+        install_dir,
         vite_setup::MAX_VERSIONS_KEEP,
         &[&resolved.version],
     )
@@ -196,12 +186,32 @@ async fn do_install(opts: &cli::Options) -> Result<(), Box<dyn std::error::Error
         tracing::warn!("Old version cleanup failed (non-fatal): {e}");
     }
 
-    // Step 15: Modify PATH
     if !opts.no_modify_path {
         let bin_dir_str = install_dir.join("bin").as_path().to_string_lossy().to_string();
         modify_path(&bin_dir_str, opts.quiet)?;
     }
 
+    Ok(())
+}
+
+/// On Windows, rename a running exe to `.old` then copy the new one in place.
+#[cfg(windows)]
+async fn replace_windows_exe(
+    src: &vite_path::AbsolutePathBuf,
+    dst: &vite_path::AbsolutePathBuf,
+    bin_dir: &vite_path::AbsolutePathBuf,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if dst.as_path().exists() {
+        let old_name = format!(
+            "vp.exe.{}.old",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs()
+        );
+        let _ = tokio::fs::rename(dst, &bin_dir.join(&old_name)).await;
+    }
+    tokio::fs::copy(src, dst).await?;
     Ok(())
 }
 
@@ -217,47 +227,24 @@ async fn setup_bin_shims(
 
     #[cfg(windows)]
     {
-        let shim_src = install_dir.join("current").join("bin").join("vp-shim.exe");
         let shim_dst = bin_dir.join("vp.exe");
+        let shim_src = install_dir.join("current").join("bin").join("vp-shim.exe");
 
-        if tokio::fs::try_exists(&shim_src).await.unwrap_or(false) {
-            // Handle running exe: rename old, copy new
-            if shim_dst.as_path().exists() {
-                let old_name = format!(
-                    "vp.exe.{}.old",
-                    std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_secs()
-                );
-                let old_path = bin_dir.join(&old_name);
-                let _ = tokio::fs::rename(&shim_dst, &old_path).await;
-            }
-            tokio::fs::copy(&shim_src, &shim_dst).await?;
+        // Prefer vp-shim.exe (lightweight trampoline), fall back to vp.exe
+        let src = if tokio::fs::try_exists(&shim_src).await.unwrap_or(false) {
+            shim_src
         } else {
-            // Fallback: copy vp.exe directly
-            let vp_src = install_dir.join("current").join("bin").join("vp.exe");
-            if tokio::fs::try_exists(&vp_src).await.unwrap_or(false) {
-                if shim_dst.as_path().exists() {
-                    let old_name = format!(
-                        "vp.exe.{}.old",
-                        std::time::SystemTime::now()
-                            .duration_since(std::time::UNIX_EPOCH)
-                            .unwrap_or_default()
-                            .as_secs()
-                    );
-                    let old_path = bin_dir.join(&old_name);
-                    let _ = tokio::fs::rename(&shim_dst, &old_path).await;
-                }
-                tokio::fs::copy(&vp_src, &shim_dst).await?;
-            }
+            install_dir.join("current").join("bin").join("vp.exe")
+        };
+
+        if tokio::fs::try_exists(&src).await.unwrap_or(false) {
+            replace_windows_exe(&src, &shim_dst, &bin_dir).await?;
         }
 
         // Best-effort cleanup of old shim files
         if let Ok(mut entries) = tokio::fs::read_dir(&bin_dir).await {
             while let Ok(Some(entry)) = entries.next_entry().await {
-                let name = entry.file_name();
-                if name.to_string_lossy().ends_with(".old") {
+                if entry.file_name().to_string_lossy().ends_with(".old") {
                     let _ = tokio::fs::remove_file(entry.path()).await;
                 }
             }
@@ -268,8 +255,6 @@ async fn setup_bin_shims(
     {
         let link_target = std::path::PathBuf::from("../current/bin/vp");
         let link_path = bin_dir.join("vp");
-
-        // Remove existing symlink
         let _ = tokio::fs::remove_file(&link_path).await;
         tokio::fs::symlink(&link_target, &link_path).await?;
     }
@@ -277,7 +262,6 @@ async fn setup_bin_shims(
     Ok(())
 }
 
-/// Download bytes with a progress bar.
 async fn download_with_progress(
     client: &HttpClient,
     url: &str,
@@ -301,19 +285,9 @@ async fn download_with_progress(
     Ok(data)
 }
 
-/// Read the current installed version by following the `current` symlink/junction.
-async fn read_current_version(
-    install_dir: &vite_path::AbsolutePath,
-) -> Option<String> {
-    let current_link = install_dir.join("current");
-    let target = tokio::fs::read_link(&current_link).await.ok()?;
-    target.file_name()?.to_str().map(String::from)
-}
-
-/// Resolve the installation directory.
 fn resolve_install_dir(
     opts: &cli::Options,
-) -> Result<vite_path::AbsolutePathBuf, Box<dyn std::error::Error>> {
+) -> Result<AbsolutePathBuf, Box<dyn std::error::Error>> {
     if let Some(ref dir) = opts.install_dir {
         let path = std::path::PathBuf::from(dir);
         let abs = if path.is_absolute() {
@@ -321,30 +295,12 @@ fn resolve_install_dir(
         } else {
             std::env::current_dir()?.join(path)
         };
-        vite_path::AbsolutePathBuf::new(abs)
-            .ok_or_else(|| "Invalid installation directory".into())
-    } else if let Ok(dir) = vite_shared::get_vp_home() {
-        Ok(dir)
+        AbsolutePathBuf::new(abs).ok_or_else(|| "Invalid installation directory".into())
     } else {
-        // Fallback: ~/.vite-plus
-        let home = dirs_home().ok_or("Could not determine home directory")?;
-        vite_path::AbsolutePathBuf::new(home.join(".vite-plus"))
-            .ok_or_else(|| "Invalid home directory".into())
+        Ok(vite_shared::get_vp_home()?)
     }
 }
 
-fn dirs_home() -> Option<std::path::PathBuf> {
-    #[cfg(windows)]
-    {
-        std::env::var_os("USERPROFILE").map(std::path::PathBuf::from)
-    }
-    #[cfg(not(windows))]
-    {
-        std::env::var_os("HOME").map(std::path::PathBuf::from)
-    }
-}
-
-/// Modify the user's PATH to include the bin directory.
 #[allow(clippy::print_stdout)]
 fn modify_path(bin_dir: &str, quiet: bool) -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(windows)]
@@ -357,7 +313,6 @@ fn modify_path(bin_dir: &str, quiet: bool) -> Result<(), Box<dyn std::error::Err
 
     #[cfg(not(windows))]
     {
-        // On non-Windows, env file setup is handled by `vp env setup`
         if !quiet {
             print_info(&format!("add {bin_dir} to your shell's PATH"));
         }
@@ -366,14 +321,10 @@ fn modify_path(bin_dir: &str, quiet: bool) -> Result<(), Box<dyn std::error::Err
     Ok(())
 }
 
-/// Show the interactive installation menu. Returns `true` if user wants to proceed.
 #[allow(clippy::print_stdout)]
-fn show_interactive_menu(opts: &cli::Options) -> bool {
-    let install_dir = resolve_install_dir(opts)
-        .map(|p| p.as_path().to_string_lossy().to_string())
-        .unwrap_or_else(|_| "~/.vite-plus".to_string());
+fn show_interactive_menu(opts: &cli::Options, install_dir: &str) -> bool {
     let version = opts.version.as_deref().unwrap_or("latest");
-    let bin_dir = format!("{install_dir}/bin");
+    let bin_dir = format!("{install_dir}{sep}bin", sep = std::path::MAIN_SEPARATOR);
 
     println!();
     println!("  {}", "Welcome to Vite+ Installer!".bold());
@@ -381,7 +332,7 @@ fn show_interactive_menu(opts: &cli::Options) -> bool {
     println!("  This will install the {} CLI and monorepo task runner.", "vp".cyan());
     println!();
     println!("    Install directory: {}", install_dir.cyan());
-    println!("    PATH modification: {}", if opts.no_modify_path { "no".to_string() } else { format!("{bin_dir} → User PATH") }.cyan());
+    println!("    PATH modification: {}", if opts.no_modify_path { "no".to_string() } else { format!("{bin_dir} \u{2192} User PATH") }.cyan());
     println!("    Version:           {}", version.cyan());
     println!("    Node.js manager:   {}", if opts.no_node_manager { "disabled" } else { "auto-detect" }.cyan());
     println!();
@@ -401,14 +352,10 @@ fn show_interactive_menu(opts: &cli::Options) -> bool {
 }
 
 #[allow(clippy::print_stdout)]
-fn print_success(opts: &cli::Options) {
+fn print_success(opts: &cli::Options, install_dir: &str) {
     if opts.quiet {
         return;
     }
-
-    let install_dir = resolve_install_dir(opts)
-        .map(|p| p.as_path().to_string_lossy().to_string())
-        .unwrap_or_else(|_| "~/.vite-plus".to_string());
 
     println!();
     println!(
