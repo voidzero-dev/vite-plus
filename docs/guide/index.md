@@ -18,6 +18,8 @@ curl -fsSL https://vite.plus | bash
 irm https://vite.plus/ps1 | iex
 ```
 
+Or download and run `vp-setup.exe` from the [latest release](https://github.com/voidzero-dev/vite-plus/releases/latest) — works from cmd.exe, PowerShell, Git Bash, or double-click. No PowerShell required.
+
 After installation, open a new shell and run:
 
 ```bash
