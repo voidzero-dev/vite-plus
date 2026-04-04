@@ -6,5 +6,6 @@ dist
 .DS_Store
 rolldown
 rolldown-vite
-vite
+vite/*
+!vite/patches
 /crates/vite_global_cli/vp
