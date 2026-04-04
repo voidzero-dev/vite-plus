@@ -54,8 +54,8 @@ pub fn parse() -> Options {
     if opts.registry.is_none() {
         opts.registry = std::env::var("NPM_CONFIG_REGISTRY").ok();
     }
-    // quiet implies yes
-    if opts.quiet {
+    // CI and quiet both imply non-interactive (no prompts)
+    if opts.quiet || std::env::var_os("CI").is_some() {
         opts.yes = true;
     }
 
