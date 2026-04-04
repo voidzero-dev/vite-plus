@@ -18,7 +18,7 @@ curl -fsSL https://vite.plus | bash
 irm https://vite.plus/ps1 | iex
 ```
 
-Alternatively, download and run [`vp-setup.exe`](https://github.com/voidzero-dev/vite-plus/releases/latest) from the latest release.
+Alternatively, download and run `vp-setup.exe` from the [latest release](https://github.com/voidzero-dev/vite-plus/releases/latest).
 
 After installation, open a new shell and run:
 
