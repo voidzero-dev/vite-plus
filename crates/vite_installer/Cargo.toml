@@ -16,7 +16,6 @@ clap = { workspace = true, features = ["derive"] }
 indicatif = { workspace = true }
 owo-colors = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
-tracing = { workspace = true }
 vite_install = { workspace = true }
 vite_path = { workspace = true }
 vite_setup = { workspace = true }

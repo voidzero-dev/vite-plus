@@ -7469,7 +7469,6 @@ dependencies = [
  "indicatif",
  "owo-colors",
  "tokio",
- "tracing",
  "vite_install",
  "vite_path",
  "vite_setup",
