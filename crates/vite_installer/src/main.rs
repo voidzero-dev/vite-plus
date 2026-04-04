@@ -108,90 +108,168 @@ async fn do_install(
     tokio::fs::create_dir_all(install_dir).await?;
 
     let current_version = install::read_current_version(install_dir).await;
-    if let Some(ref current) = current_version {
-        if current == &resolved.version {
-            if !opts.quiet {
-                println!("\n{} Already installed ({})", "\u{2714}".green(), resolved.version);
-            }
-            return Ok(());
-        }
+    let same_version = current_version.as_deref() == Some(resolved.version.as_str());
+
+    if same_version {
         if !opts.quiet {
-            print_info(&format!("upgrading from {current} to {}", resolved.version));
+            print_info(&format!(
+                "version {} already installed, verifying setup...",
+                resolved.version
+            ));
+        }
+    } else {
+        if let Some(ref current) = current_version {
+            if !opts.quiet {
+                print_info(&format!("upgrading from {current} to {}", resolved.version));
+            }
+        }
+
+        if !opts.quiet {
+            print_info(&format!(
+                "downloading vite-plus@{} for {}...",
+                resolved.version, platform_suffix
+            ));
+        }
+        let client = HttpClient::new();
+        let platform_data =
+            download_with_progress(&client, &resolved.platform_tarball_url, opts.quiet).await?;
+
+        if !opts.quiet {
+            print_info("verifying integrity...");
+        }
+        integrity::verify_integrity(&platform_data, &resolved.platform_integrity)?;
+
+        let version_dir = install_dir.join(&resolved.version);
+        tokio::fs::create_dir_all(&version_dir).await?;
+
+        if !opts.quiet {
+            print_info("extracting binary...");
+        }
+        install::extract_platform_package(&platform_data, &version_dir).await?;
+
+        let binary_path = version_dir.join("bin").join(VP_BINARY_NAME);
+        if !tokio::fs::try_exists(&binary_path).await.unwrap_or(false) {
+            return Err("Binary not found after extraction. The download may be corrupted.".into());
+        }
+
+        install::generate_wrapper_package_json(&version_dir, &resolved.version).await?;
+        install::write_release_age_overrides(&version_dir).await?;
+
+        if !opts.quiet {
+            print_info("installing dependencies (this may take a moment)...");
+        }
+        install::install_production_deps(&version_dir, opts.registry.as_deref()).await?;
+
+        let previous_version = if current_version.is_some() {
+            install::save_previous_version(install_dir).await?
+        } else {
+            None
+        };
+        install::swap_current_link(install_dir, &resolved.version).await?;
+
+        // Cleanup with both new and previous versions protected (matches vp upgrade)
+        let mut protected = vec![resolved.version.as_str()];
+        if let Some(ref prev) = previous_version {
+            protected.push(prev.as_str());
+        }
+        if let Err(e) =
+            install::cleanup_old_versions(install_dir, vite_setup::MAX_VERSIONS_KEEP, &protected)
+                .await
+        {
+            tracing::warn!("Old version cleanup failed (non-fatal): {e}");
         }
     }
 
-    if !opts.quiet {
-        print_info(&format!(
-            "downloading vite-plus@{} for {}...",
-            resolved.version, platform_suffix
-        ));
-    }
-    let client = HttpClient::new();
-    let platform_data =
-        download_with_progress(&client, &resolved.platform_tarball_url, opts.quiet).await?;
-
-    if !opts.quiet {
-        print_info("verifying integrity...");
-    }
-    integrity::verify_integrity(&platform_data, &resolved.platform_integrity)?;
-
-    let version_dir = install_dir.join(&resolved.version);
-    tokio::fs::create_dir_all(&version_dir).await?;
-
-    if !opts.quiet {
-        print_info("extracting binary...");
-    }
-    install::extract_platform_package(&platform_data, &version_dir).await?;
-
-    let binary_path = version_dir.join("bin").join(VP_BINARY_NAME);
-    if !tokio::fs::try_exists(&binary_path).await.unwrap_or(false) {
-        return Err("Binary not found after extraction. The download may be corrupted.".into());
-    }
-
-    install::generate_wrapper_package_json(&version_dir, &resolved.version).await?;
-    install::write_release_age_overrides(&version_dir).await?;
-
-    if !opts.quiet {
-        print_info("installing dependencies (this may take a moment)...");
-    }
-    install::install_production_deps(&version_dir, opts.registry.as_deref()).await?;
-
-    if current_version.is_some() {
-        install::save_previous_version(install_dir).await?;
-    }
-    install::swap_current_link(install_dir, &resolved.version).await?;
+    // --- Post-activation setup (always runs, even for same-version repair) ---
+    // All steps below are best-effort after activation: the core install succeeded
+    // once `current` points at the right version.
 
     if !opts.quiet {
         print_info("setting up shims...");
     }
-    setup_bin_shims(install_dir).await?;
+    if let Err(e) = setup_bin_shims(install_dir).await {
+        print_warn(&format!("Shim setup failed (non-fatal): {e}"));
+    }
 
-    if !opts.no_node_manager {
+    // Node.js manager: match install.ps1/install.sh auto-detect logic
+    let enable_node_manager = should_enable_node_manager(opts, install_dir);
+    if enable_node_manager {
         if !opts.quiet {
             print_info("setting up Node.js version manager...");
         }
-        install::refresh_shims(install_dir).await?;
+        if let Err(e) = install::refresh_shims(install_dir).await {
+            print_warn(&format!("Node.js manager setup failed (non-fatal): {e}"));
+        }
     } else {
-        // When skipping Node.js manager, still create shell env files
+        // Still create shell env files even without Node.js manager
         create_env_files(install_dir).await;
-    }
-
-    if let Err(e) = install::cleanup_old_versions(
-        install_dir,
-        vite_setup::MAX_VERSIONS_KEEP,
-        &[&resolved.version],
-    )
-    .await
-    {
-        tracing::warn!("Old version cleanup failed (non-fatal): {e}");
     }
 
     if !opts.no_modify_path {
         let bin_dir_str = install_dir.join("bin").as_path().to_string_lossy().to_string();
-        modify_path(&bin_dir_str, opts.quiet)?;
+        if let Err(e) = modify_path(&bin_dir_str, opts.quiet) {
+            print_warn(&format!("PATH modification failed (non-fatal): {e}"));
+        }
     }
 
     Ok(())
+}
+
+/// Determine whether to enable the Node.js version manager (node/npm/npx shims).
+///
+/// Matches the auto-detect logic from install.ps1/install.sh:
+/// 1. VP_NODE_MANAGER=yes → enable; VP_NODE_MANAGER=no or --no-node-manager → disable
+/// 2. Already managing Node (bin/node.exe exists) → enable (refresh)
+/// 3. CI / Codespaces / DevContainer / DevPod → enable
+/// 4. No system `node` found → enable
+/// 5. Interactive mode with system node → prompt the user
+/// 6. Silent mode with system node → disable (don't silently take over)
+#[allow(clippy::print_stdout)]
+fn should_enable_node_manager(opts: &cli::Options, install_dir: &vite_path::AbsolutePath) -> bool {
+    if opts.no_node_manager {
+        return false;
+    }
+
+    if std::env::var("VP_NODE_MANAGER").ok().is_some_and(|v| v.eq_ignore_ascii_case("yes")) {
+        return true;
+    }
+
+    // Already managing Node (shims exist from a previous install)
+    let node_shim = install_dir.join("bin").join(if cfg!(windows) { "node.exe" } else { "node" });
+    if node_shim.as_path().exists() {
+        return true;
+    }
+
+    // Auto-enable on CI / devcontainer environments
+    if std::env::var_os("CI").is_some()
+        || std::env::var_os("CODESPACES").is_some()
+        || std::env::var_os("REMOTE_CONTAINERS").is_some()
+        || std::env::var_os("DEVPOD").is_some()
+    {
+        return true;
+    }
+
+    // Auto-enable if no system node available
+    if which::which("node").is_err() {
+        return true;
+    }
+
+    // System node exists — prompt in interactive mode, skip in silent mode
+    if opts.yes {
+        return false;
+    }
+
+    println!();
+    println!("  Would you like Vite+ to manage your Node.js versions?");
+    println!(
+        "  It adds {}, {}, and {} shims to ~/.vite-plus/bin/ and automatically uses the right version.",
+        "node".cyan(),
+        "npm".cyan(),
+        "npx".cyan()
+    );
+    println!("  Opt out anytime with {}.", "vp env off".cyan());
+    let answer = read_input("  Press Enter to accept (Y/n): ");
+    answer.is_empty() || answer.eq_ignore_ascii_case("y")
 }
 
 /// Windows locks running `.exe` files — rename the old one out of the way before copying.
@@ -443,6 +521,12 @@ fn print_success(opts: &cli::Options, install_dir: &str) {
 #[allow(clippy::print_stderr)]
 fn print_info(msg: &str) {
     eprint!("{}", "info: ".blue());
+    eprintln!("{msg}");
+}
+
+#[allow(clippy::print_stderr)]
+fn print_warn(msg: &str) {
+    eprint!("{}", "warn: ".yellow());
     eprintln!("{msg}");
 }
 
