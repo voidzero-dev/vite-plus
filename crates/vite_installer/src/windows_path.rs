@@ -16,7 +16,6 @@ mod ffi {
     pub type DWORD = u32;
     pub type LONG = i32;
     pub type LPCWSTR = *const u16;
-    pub type LPWSTR = *mut u16;
     pub type HWND = isize;
     pub type WPARAM = usize;
     pub type LPARAM = isize;
