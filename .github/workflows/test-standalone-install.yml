@@ -737,7 +737,7 @@ jobs:
 
       - name: Install via vp-setup.exe (silent)
         shell: pwsh
-        run: ${{ format('{0}/target/release/vp-setup.exe', env.DEV_DRIVE) }} -y
+        run: ${{ format('{0}/target/release/vp-setup.exe', env.DEV_DRIVE) }}
         env:
           VP_VERSION: alpha
 
