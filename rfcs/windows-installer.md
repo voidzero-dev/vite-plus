@@ -202,56 +202,105 @@ CLI flags take precedence over environment variables.
 
 ## Installation Flow
 
-The installer performs the exact same steps as `install.ps1`, in Rust:
+The installer replicates the same result as `install.ps1`, implemented in Rust via `vite_setup`.
 
 ```
-1. Detect platform          → vite_setup::platform::detect_platform_suffix()
-                              (win32-x64-msvc or win32-arm64-msvc)
-
-2. Resolve version          → vite_setup::registry::resolve_version()
-                              Query npm registry for latest/specified version
-
-3. Check existing install   → Read %VP_HOME%\current target, compare versions
-                              Skip if already at target version
-
-4. Download tarball          → vite_install::HttpClient::get_bytes()
-                              With progress bar via indicatif
-
-5. Verify integrity         → vite_setup::integrity::verify_integrity()
-                              SHA-512 SRI hash from npm metadata
-
-6. Create version dir       → %VP_HOME%\{version}\bin\
-
-7. Extract binary           → vite_setup::extract::extract_platform_package()
-                              Extracts vp.exe and vp-shim.exe
-
-8. Generate package.json    → vite_setup::package_json::generate()
-                              Wrapper package.json in version dir
-
-9. Write .npmrc             → vite_setup::npmrc::write_release_age_overrides()
-                              minimum-release-age=0
-
-10. Install deps            → Spawn: {version_dir}\bin\vp.exe install --silent
-
-11. Swap current junction   → vite_setup::link::swap_current_link()
-                              mklink /J current → {version}
-
-12. Create bin shims        → Copy vp-shim.exe → %VP_HOME%\bin\vp.exe
-
-13. Setup Node.js manager   → Prompt or auto-detect, then:
-                              Spawn: vp.exe env setup --refresh
-
-14. Cleanup old versions    → vite_setup::cleanup::cleanup_old_versions()
-                              Keep last 5
-
-15. Modify User PATH        → Registry: HKCU\Environment\Path
-                              Add %VP_HOME%\bin if not present
-                              Broadcast WM_SETTINGCHANGE
-
-16. Create env files        → Spawn: vp.exe env setup --env-only
-
-17. Print success           → Show getting-started commands
+┌─────────────────────────────────────────────────────────────┐
+│                      RESOLVE                                │
+│                                                             │
+│  ┌─ detect platform ──────── win32-x64-msvc                 │
+│  │                           win32-arm64-msvc                │
+│  │                                                          │
+│  ├─ resolve version ──────── query npm registry              │
+│  │                           "latest" → "0.3.0"              │
+│  │                                                          │
+│  └─ check existing ──────── read %VP_HOME%\current           │
+│                              same version? → exit early      │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                      DOWNLOAD & VERIFY                      │
+│                                                             │
+│  ┌─ download tarball ─────── GET tarball URL from registry   │
+│  │                           progress spinner via indicatif  │
+│  │                                                          │
+│  └─ verify integrity ─────── SHA-512 SRI hash comparison     │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                      INSTALL                                │
+│                                                             │
+│  ┌─ extract binary ──────── %VP_HOME%\{version}\bin\         │
+│  │                          vp.exe + vp-shim.exe             │
+│  │                                                          │
+│  ├─ generate package.json ─ wrapper with vite-plus dep       │
+│  │                          pins pnpm@10.33.0                │
+│  │                                                          │
+│  ├─ write .npmrc ────────── minimum-release-age=0            │
+│  │                                                          │
+│  └─ install deps ────────── spawn: vp install --silent       │
+│                              installs vite-plus + transitive │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     ACTIVATE              ◄── point of no    │
+│                                               return         │
+│  ┌─ save previous version ── .previous-version (rollback)    │
+│  │                          (only if upgrading existing)     │
+│  │                                                          │
+│  └─ swap current ───────���── mklink /J current → {version}    │
+│                              (junction on Windows,           │
+│                               atomic symlink on Unix)        │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     CONFIGURE                               │
+│                                                             │
+│  ┌─ create bin shims ────── copy vp-shim.exe → bin\vp.exe   │
+│  │                          (rename-to-.old if running)      │
+│  │                                                          │
+│  ├─ Node.js manager ────── if enabled:                       │
+│  │                            spawn: vp env setup --refresh  │
+│  │                          if disabled:                     │
+│  │                            spawn: vp env setup --env-only │
+│  │                                                          │
+│  ├─ cleanup old versions ── keep last 5 by creation time     │
+│  │                          (non-fatal on error)             │
+│  │                                                          │
+│  └─ modify User PATH ────── if --no-modify-path not set:     │
+│                              HKCU\Environment\Path           │
+│                              prepend %VP_HOME%\bin           ���
+│                              broadcast WM_SETTINGCHANGE      │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+                        ✔ Print success
 ```
+
+Each phase maps to `vite_setup` library functions shared with `vp upgrade`:
+
+| Phase             | Key function                               | Crate            |
+| ----------------- | ------------------------------------------ | ---------------- |
+| Resolve           | `platform::detect_platform_suffix()`       | `vite_setup`     |
+| Resolve           | `registry::resolve_version()`              | `vite_setup`     |
+| Resolve           | `install::read_current_version()`          | `vite_setup`     |
+| Download & Verify | `HttpClient::get_bytes()`                  | `vite_install`   |
+| Download & Verify | `integrity::verify_integrity()`            | `vite_setup`     |
+| Install           | `install::extract_platform_package()`      | `vite_setup`     |
+| Install           | `install::generate_wrapper_package_json()` | `vite_setup`     |
+| Install           | `install::write_release_age_overrides()`   | `vite_setup`     |
+| Install           | `install::install_production_deps()`       | `vite_setup`     |
+| Activate          | `install::save_previous_version()`         | `vite_setup`     |
+| Activate          | `install::swap_current_link()`             | `vite_setup`     |
+| Configure         | `install::refresh_shims()`                 | `vite_setup`     |
+| Configure         | `install::cleanup_old_versions()`          | `vite_setup`     |
+| Configure         | `windows_path::add_to_user_path()`         | `vite_installer` |
+
+On failure before the **Activate** phase, the version directory is cleaned up and the existing installation remains untouched. After the **Activate** phase (junction swap), the update has already succeeded — subsequent configure steps are best-effort (non-fatal on error).
 
 ## Windows-Specific Details
 
