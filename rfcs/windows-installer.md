@@ -167,12 +167,17 @@ Customization submenu:
 
 ### Silent Mode (CI)
 
+The installer auto-detects CI environments (`CI=true`) and skips interactive prompts, so `-y` is not required in CI:
+
 ```bash
-# Accept all defaults
+# CI environments are automatically non-interactive
+vp-setup.exe
+
+# Explicit silent mode (outside CI)
 vp-setup.exe -y
 
 # Customize
-vp-setup.exe -y --version 0.3.0 --no-node-manager --registry https://registry.npmmirror.com
+vp-setup.exe --version 0.3.0 --no-node-manager --registry https://registry.npmmirror.com
 ```
 
 ### CLI Flags
@@ -460,7 +465,7 @@ test-vp-setup-exe:
       run: cargo build --release -p vite_installer
     - name: Install via vp-setup.exe (silent)
       shell: pwsh
-      run: ./target/release/vp-setup.exe -y
+      run: ./target/release/vp-setup.exe
       env:
         VP_VERSION: alpha
     - name: Verify installation (pwsh/cmd/bash)
