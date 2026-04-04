@@ -303,12 +303,16 @@ On failure before the **Activate** phase, the version directory is cleaned up an
 
 ### PATH Modification via Registry
 
-Same approach as rustup and `install.ps1`, using raw Win32 FFI (no external crate) following the same zero-dependency pattern as `vite_trampoline`:
+Same approach as rustup and `install.ps1`, using the `winreg` crate for registry access:
 
-1. Read current `HKCU\Environment\Path` via `RegQueryValueExW`
-2. Check if bin dir is already present (case-insensitive, handles trailing backslash)
-3. Prepend `%VP_HOME%\bin` if not present, write back via `RegSetValueExW` as `REG_EXPAND_SZ`
-4. Broadcast `WM_SETTINGCHANGE` via `SendMessageTimeoutW` so other processes pick up the change
+```rust
+let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+let env = hkcu.open_subkey_with_flags("Environment", KEY_READ | KEY_WRITE)?;
+let current: String = env.get_value("Path").unwrap_or_default();
+// ... check if already present (case-insensitive, handles trailing backslash)
+// ... prepend bin_dir, write back as REG_EXPAND_SZ
+// ... broadcast WM_SETTINGCHANGE via SendMessageTimeoutW (raw FFI, single call)
+```
 
 See `crates/vite_installer/src/windows_path.rs` for the full implementation.
 
@@ -461,9 +465,8 @@ Key dependencies and their approximate contribution:
 | `indicatif`                       | Progress bars          | ~100 KB     |
 | `sha2`                            | Integrity verification | ~50 KB      |
 | `serde_json`                      | Registry JSON parsing  | ~200 KB     |
+| `winreg` + `windows-sys`          | Windows registry       | ~50-100 KB  |
 | Rust std + overhead               |                        | ~500 KB     |
-
-Note: Windows registry access uses raw FFI (~0 KB overhead) instead of the `winreg` crate, following the same zero-dependency pattern as `vite_trampoline`.
 
 Use `opt-level = "z"` (optimize for size) in package profile override, matching the trampoline approach.
 
@@ -490,12 +493,12 @@ Like rustup, make `vp.exe` detect when called as `vp-setup.exe` and switch to in
 
 Embed the PowerShell script in a self-extracting exe. Fragile, still requires PowerShell runtime.
 
-### 4. Use `winreg` Crate vs Raw FFI for PATH (Decision: Raw FFI)
+### 4. Use `winreg` Crate vs Raw FFI for PATH (Decision: `winreg`)
 
-- `winreg` crate: Higher-level API, adds ~50 KB dependency
-- Raw Win32 FFI: Zero external dependencies, matches `vite_trampoline` pattern, slightly more code
+- `winreg` crate: Higher-level safe API, ~50-100 KB after LTO, significantly less code (~80 lines vs ~225 lines)
+- Raw Win32 FFI: Zero dependencies but 225 lines of unsafe code with manual UTF-16 encoding and registry choreography
 - PowerShell subprocess: Proven in `install.ps1` but adds process spawn overhead and PowerShell dependency
-- Decision: Use raw FFI for direct registry access — keeps the installer dependency-free for Win32 operations, consistent with the trampoline's approach
+- Decision: Use `winreg` for registry access — the zero-dependency pattern makes sense for `vite_trampoline` (copied 5-10 times as shims) but not for a single downloadable installer where readability matters more. `WM_SETTINGCHANGE` broadcast still uses a single raw FFI call since `winreg` doesn't wrap it.
 
 ## Implementation Phases
 
