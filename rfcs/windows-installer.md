@@ -2,7 +2,7 @@
 
 ## Status
 
-Draft
+Implemented
 
 ## Summary
 
@@ -85,17 +85,12 @@ crates/vite_installer/      — standalone installer binary
 
 ### What Gets Extracted
 
-| Current location in `upgrade/`                                    | Extracted to `vite_setup::` | Purpose                   |
-| ----------------------------------------------------------------- | --------------------------- | ------------------------- |
-| `platform.rs` → `detect_platform_suffix()`                        | `platform`                  | OS/arch detection         |
-| `registry.rs` → `resolve_version()`, `resolve_platform_package()` | `registry`                  | npm registry queries      |
-| `integrity.rs` → `verify_integrity()`                             | `integrity`                 | SHA-512 verification      |
-| `install.rs` → `extract_platform_package()`                       | `extract`                   | Tarball extraction        |
-| `install.rs` → `generate_wrapper_package_json()`                  | `package_json`              | Wrapper package.json      |
-| `install.rs` → `write_release_age_overrides()`                    | `npmrc`                     | .npmrc overrides          |
-| `install.rs` → `install_production_deps()`                        | `deps`                      | Run `vp install --silent` |
-| `install.rs` → `swap_current_link()`                              | `link`                      | Symlink/junction swap     |
-| `install.rs` → `cleanup_old_versions()`                           | `cleanup`                   | Old version cleanup       |
+| Original location in `upgrade/` | Extracted to `vite_setup::` | Purpose                                                                                                                              |
+| ------------------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `platform.rs`                   | `platform`                  | OS/arch detection                                                                                                                    |
+| `registry.rs`                   | `registry`                  | npm registry queries                                                                                                                 |
+| `integrity.rs`                  | `integrity`                 | SHA-512 verification                                                                                                                 |
+| `install.rs` (all functions)    | `install`                   | Tarball extraction, package.json generation, .npmrc overrides, dep install, symlink/junction swap, version cleanup, rollback support |
 
 ### What Stays in `vite_global_cli`
 
@@ -117,15 +112,16 @@ crates/vite_installer/      — standalone installer binary
 
 ```
 vite_installer (binary, ~3-5 MB)
-  ├── vite_setup (new library)
+  ├── vite_setup (shared installation logic)
   ├── vite_install (HTTP client)
-  ├── vite_shared (home dir, output)
+  ├── vite_shared (home dir resolution)
+  ├── vite_path (typed path wrappers)
   ├── clap (CLI parsing)
   ├── tokio (async runtime)
   ├── indicatif (progress bars)
-  └── junction (Windows junctions)
+  └── owo-colors (terminal colors)
 
-vite_global_cli (existing, unchanged)
+vite_global_cli (existing)
   ├── vite_setup (replaces inline upgrade code)
   └── ... (all existing deps)
 ```
@@ -156,13 +152,14 @@ This will install the vp CLI and monorepo task runner.
 Customization submenu:
 
 ```
-  Install directory  [C:\Users\alice\.vite-plus]
-  Version            [latest]
-  npm registry       [https://registry.npmjs.org]
-  Node.js manager    [auto]
-  Modify PATH        [yes]
+  Customize installation:
 
-Enter option number to change, or press Enter to go back:
+    1) Version:         [latest]
+    2) npm registry:    [(default)]
+    3) Node.js manager: [auto-detect]
+    4) Modify PATH:     [yes]
+
+  Enter option number to change, or press Enter to go back:
 >
 ```
 
@@ -306,42 +303,32 @@ On failure before the **Activate** phase, the version directory is cleaned up an
 
 ### PATH Modification via Registry
 
-Same approach as rustup and `install.ps1`:
+Same approach as rustup and `install.ps1`, using raw Win32 FFI (no external crate) following the same zero-dependency pattern as `vite_trampoline`:
 
-```rust
-use winreg::RegKey;
-use winreg::enums::*;
+1. Read current `HKCU\Environment\Path` via `RegQueryValueExW`
+2. Check if bin dir is already present (case-insensitive, handles trailing backslash)
+3. Prepend `%VP_HOME%\bin` if not present, write back via `RegSetValueExW` as `REG_EXPAND_SZ`
+4. Broadcast `WM_SETTINGCHANGE` via `SendMessageTimeoutW` so other processes pick up the change
 
-fn add_to_path(bin_dir: &str) -> Result<()> {
-    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-    let env = hkcu.open_subkey_with_flags("Environment", KEY_READ | KEY_WRITE)?;
-
-    let current_path: String = env.get_value("Path")?;
-    if !current_path.split(';').any(|p| p.eq_ignore_ascii_case(bin_dir)) {
-        let new_path = format!("{bin_dir};{current_path}");
-        env.set_value("Path", &new_path)?;
-        // Broadcast WM_SETTINGCHANGE so other processes pick up the change
-        broadcast_settings_change();
-    }
-    Ok(())
-}
-```
+See `crates/vite_installer/src/windows_path.rs` for the full implementation.
 
 ### DLL Security (for download-folder execution)
 
-Following rustup's approach — when the `.exe` is downloaded to `Downloads/` and double-clicked, malicious DLLs in the same folder could be loaded. Mitigations:
+Following rustup's approach — when the `.exe` is downloaded to `Downloads/` and double-clicked, malicious DLLs in the same folder could be loaded. Two mitigations, both using raw FFI (no `windows-sys` crate):
 
 ```rust
-// In build.rs — linker flags
+// build.rs — linker-time: restrict DLL search at load time
 #[cfg(windows)]
 println!("cargo:rustc-link-arg=/DEPENDENTLOADFLAG:0x800");
 
-// In main() — runtime mitigation
+// main.rs — runtime: restrict DLL search via Win32 API
 #[cfg(windows)]
-unsafe {
-    windows_sys::Win32::System::LibraryLoader::SetDefaultDllDirectories(
-        LOAD_LIBRARY_SEARCH_SYSTEM32,
-    );
+fn init_dll_security() {
+    unsafe extern "system" {
+        fn SetDefaultDllDirectories(directory_flags: u32) -> i32;
+    }
+    const LOAD_LIBRARY_SEARCH_SYSTEM32: u32 = 0x0000_0800;
+    unsafe { SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_SYSTEM32); }
 }
 ```
 
@@ -404,40 +391,52 @@ Submit to winget, chocolatey, scoop. Each has its own manifest format and review
 
 ### Release Workflow Additions
 
-```yaml
-# In build-rust job matrix (already has windows targets)
-- name: Build installer (Windows only)
-  if: contains(matrix.settings.target, 'windows')
-  run: cargo build --release --target ${{ matrix.settings.target }} -p vite_installer
+In `build-upstream/action.yml`, the installer binary is built and cached alongside the CLI:
 
-- name: Upload installer artifact
+```yaml
+- name: Build installer binary (Windows only)
+  if: contains(inputs.target, 'windows')
+  run: cargo build --release --target ${{ inputs.target }} -p vite_installer
+```
+
+In `release.yml`, installer artifacts are uploaded per-target, renamed with the target triple, and attached to the GitHub Release:
+
+```yaml
+- name: Upload installer binary artifact (Windows only)
   if: contains(matrix.settings.target, 'windows')
   uses: actions/upload-artifact@v4
   with:
-    name: vite-init-${{ matrix.settings.target }}
+    name: vp-setup-${{ matrix.settings.target }}
     path: ./target/${{ matrix.settings.target }}/release/vp-setup.exe
 ```
 
 ### Test Workflow
 
-Extend `test-standalone-install.yml` with new jobs:
+`test-standalone-install.yml` includes a `test-vp-setup-exe` job that builds the installer from source and tests silent installation across three shells:
 
 ```yaml
-test-init-exe:
+test-vp-setup-exe:
+  name: Test vp-setup.exe (${{ matrix.shell }})
+  runs-on: windows-latest
   strategy:
     matrix:
-      shell: [cmd, pwsh, powershell, bash]
-  runs-on: windows-latest
+      shell: [cmd, pwsh, bash]
   steps:
-    - name: Download vp-setup.exe
-      run: # download from artifacts or latest release
-    - name: Install (silent)
-      run: vp-setup.exe -y
+    - uses: actions/checkout@v4
+    - uses: oxc-project/setup-rust@v1
+    - name: Build vp-setup.exe
+      run: cargo build --release -p vite_installer
+    - name: Install via vp-setup.exe (silent)
+      run: ./target/release/vp-setup.exe -y
+      env:
+        VP_VERSION: alpha
     - name: Verify installation
       run: |
         vp --version
         vp --help
 ```
+
+The workflow triggers on changes to `crates/vite_installer/**` and `crates/vite_setup/**`.
 
 ## Code Signing
 
@@ -462,8 +461,9 @@ Key dependencies and their approximate contribution:
 | `indicatif`                       | Progress bars          | ~100 KB     |
 | `sha2`                            | Integrity verification | ~50 KB      |
 | `serde_json`                      | Registry JSON parsing  | ~200 KB     |
-| `winreg`                          | Windows registry       | ~50 KB      |
 | Rust std + overhead               |                        | ~500 KB     |
+
+Note: Windows registry access uses raw FFI (~0 KB overhead) instead of the `winreg` crate, following the same zero-dependency pattern as `vite_trampoline`.
 
 Use `opt-level = "z"` (optimize for size) in package profile override, matching the trampoline approach.
 
@@ -490,42 +490,44 @@ Like rustup, make `vp.exe` detect when called as `vp-setup.exe` and switch to in
 
 Embed the PowerShell script in a self-extracting exe. Fragile, still requires PowerShell runtime.
 
-### 4. Use `winreg` vs PowerShell for PATH (Decision: `winreg`)
+### 4. Use `winreg` Crate vs Raw FFI for PATH (Decision: Raw FFI)
 
-- `winreg` crate: Direct registry API, no subprocess, reliable
+- `winreg` crate: Higher-level API, adds ~50 KB dependency
+- Raw Win32 FFI: Zero external dependencies, matches `vite_trampoline` pattern, slightly more code
 - PowerShell subprocess: Proven in `install.ps1` but adds process spawn overhead and PowerShell dependency
-- Decision: Use `winreg` for direct registry access — the whole point of the exe installer is to not depend on PowerShell
+- Decision: Use raw FFI for direct registry access — keeps the installer dependency-free for Win32 operations, consistent with the trampoline's approach
 
 ## Implementation Phases
 
-### Phase 1: Extract `vite_setup` Library
+### Phase 1: Extract `vite_setup` Library (done)
 
-- Create `crates/vite_setup/Cargo.toml`
-- Move shared code from `vite_global_cli/src/commands/upgrade/` into `vite_setup`
-- Update `vite_global_cli` to import from `vite_setup`
-- Run existing tests to verify no regressions
+- Created `crates/vite_setup/` with `platform`, `registry`, `integrity`, `install` modules
+- Moved shared code from `vite_global_cli/src/commands/upgrade/` into `vite_setup`
+- Updated `vite_global_cli` to import from `vite_setup`
+- All 353 existing tests pass
 
-### Phase 2: Create `vite_installer` Binary
+### Phase 2: Create `vite_installer` Binary (done)
 
-- Create `crates/vite_installer/` with `[[bin]] name = "vp-setup"`
-- Implement CLI argument parsing (clap)
-- Implement installation flow calling `vite_setup`
-- Implement Windows PATH modification via `winreg`
-- Implement interactive prompts
-- Implement progress bar for downloads
-- Add DLL security mitigations
+- Created `crates/vite_installer/` with `[[bin]] name = "vp-setup"`
+- Implemented CLI argument parsing (clap) with env var merging
+- Implemented installation flow calling `vite_setup`
+- Implemented Windows PATH modification via raw Win32 FFI
+- Implemented interactive prompts with customization submenu
+- Implemented progress spinner for downloads
+- Added DLL security mitigations (build.rs linker flag + runtime `SetDefaultDllDirectories`)
 
-### Phase 3: CI Integration
+### Phase 3: CI Integration (done)
 
-- Add init binary build to release workflow
-- Add artifact upload and GitHub Release attachment
-- Add test jobs for `vp-setup.exe` across shell types
+- Added installer binary build to `build-upstream/action.yml` (Windows targets only)
+- Added artifact upload and GitHub Release attachment in `release.yml`
+- Added `test-vp-setup-exe` job to `test-standalone-install.yml` (cmd, pwsh, bash)
+- Updated release body with `vp-setup.exe` download mention
 
-### Phase 4: Documentation & Distribution
+### Phase 4: Documentation & Distribution (future)
 
-- Update installation docs
-- Host on `vite.plus/vp-setup.exe`
-- Update release body template with download link
+- Update installation docs on website
+- Host on `vite.plus/vp-setup.exe` with architecture auto-detection
+- Submit to winget, chocolatey, scoop
 
 ## Testing Strategy
 
