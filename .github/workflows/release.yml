@@ -131,6 +131,14 @@ jobs:
             ./target/${{ matrix.settings.target }}/release/vp-shim.exe
           if-no-files-found: error
 
+      - name: Upload installer binary artifact (Windows only)
+        if: contains(matrix.settings.target, 'windows')
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: vp-setup-${{ matrix.settings.target }}
+          path: ./target/${{ matrix.settings.target }}/release/vp-setup.exe
+          if-no-files-found: error
+
       - name: Remove .node files before upload dist
         if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
         run: |
@@ -241,6 +249,12 @@ jobs:
           path: rust-cli-artifacts
           pattern: vite-global-cli-*
 
+      - name: Download installer binaries (Windows)
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: installer-artifacts
+          pattern: vp-setup-*
+
       - name: Move Rust CLI binaries to target directories
         run: |
           # Move each artifact's binary to the correct target directory
@@ -264,6 +278,19 @@ jobs:
           fi
           echo "Found binaries:"
           echo "$vp_files"
+
+      - name: Prepare installer binaries for release
+        run: |
+          mkdir -p installer-release
+          for artifact_dir in installer-artifacts/vp-setup-*/; do
+            if [ -d "$artifact_dir" ]; then
+              dir_name=$(basename "$artifact_dir")
+              target_name=${dir_name#vp-setup-}
+              cp "$artifact_dir/vp-setup.exe" "installer-release/vp-setup-${target_name}.exe"
+            fi
+          done
+          echo "Installer binaries:"
+          ls -la installer-release/ || echo "No installer binaries found"
 
       - name: Set npm packages version
         run: |
@@ -318,6 +345,8 @@ jobs:
           ${INSTALL_PS1}
           \`\`\`
 
+          Or download and run \`vp-setup.exe\` from the assets below.
+
           View the full commit: https://github.com/${{ github.repository }}/commit/${{ github.sha }}
           EOF
 
@@ -332,6 +361,8 @@ jobs:
           name: vite-plus v${{ env.VERSION }}
           tag_name: v${{ env.VERSION }}
           target_commitish: ${{ github.sha }}
+          files: |
+            installer-release/vp-setup-*.exe
 
       - name: Send Discord notification
         if: ${{ inputs.npm_tag == 'latest' }}
