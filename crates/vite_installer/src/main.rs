@@ -64,6 +64,12 @@ async fn run(mut opts: cli::Options) -> i32 {
     };
     let install_dir_display = install_dir.as_path().to_string_lossy().to_string();
 
+    // Pre-compute Node.js manager default before showing the menu,
+    // so the user sees the resolved value and can override it.
+    if !opts.no_node_manager {
+        opts.no_node_manager = !auto_detect_node_manager(&install_dir);
+    }
+
     if !opts.yes {
         let proceed = show_interactive_menu(&mut opts, &install_dir_display);
         if !proceed {
@@ -193,8 +199,7 @@ async fn do_install(
         print_warn(&format!("Shim setup failed (non-fatal): {e}"));
     }
 
-    let enable_node_manager = should_enable_node_manager(opts, install_dir);
-    if enable_node_manager {
+    if !opts.no_node_manager {
         if !opts.quiet {
             print_info("setting up Node.js version manager...");
         }
@@ -217,23 +222,19 @@ async fn do_install(
     Ok(())
 }
 
-/// Determine whether to enable the Node.js version manager (node/npm/npx shims).
+/// Auto-detect whether the Node.js version manager should be enabled.
 ///
-/// Matches the auto-detect logic from install.ps1/install.sh:
-/// 1. VP_NODE_MANAGER=yes → enable; VP_NODE_MANAGER=no or --no-node-manager → disable
+/// Pure logic — no user prompts. Called once before the interactive menu
+/// so the user sees the resolved default and can override it.
+///
+/// Matches install.ps1/install.sh auto-detect logic:
+/// 1. VP_NODE_MANAGER=yes → enable; VP_NODE_MANAGER=no → disable
 /// 2. Already managing Node (bin/node.exe exists) → enable (refresh)
 /// 3. CI / Codespaces / DevContainer / DevPod → enable
 /// 4. No system `node` found → enable
-/// 5. Interactive mode with system node → prompt the user
-/// 6. Silent mode with system node → disable (don't silently take over)
-#[allow(clippy::print_stdout)]
-fn should_enable_node_manager(opts: &cli::Options, install_dir: &vite_path::AbsolutePath) -> bool {
-    // --no-node-manager CLI flag
-    if opts.no_node_manager {
-        return false;
-    }
-
-    // VP_NODE_MANAGER env var: "yes" or "no" (both handled here)
+/// 5. System node present → disable (user can enable via customize menu)
+fn auto_detect_node_manager(install_dir: &vite_path::AbsolutePath) -> bool {
+    // VP_NODE_MANAGER env var: "yes" or "no"
     if let Ok(val) = std::env::var("VP_NODE_MANAGER") {
         return val.eq_ignore_ascii_case("yes");
     }
@@ -253,27 +254,9 @@ fn should_enable_node_manager(opts: &cli::Options, install_dir: &vite_path::Abso
         return true;
     }
 
-    // Auto-enable if no system node available
-    if which::which("node").is_err() {
-        return true;
-    }
-
-    // System node exists — prompt in interactive mode, skip in silent mode
-    if opts.yes {
-        return false;
-    }
-
-    println!();
-    println!("  Would you like Vite+ to manage your Node.js versions?");
-    println!(
-        "  It adds {}, {}, and {} shims to ~/.vite-plus/bin/ and automatically uses the right version.",
-        "node".cyan(),
-        "npm".cyan(),
-        "npx".cyan()
-    );
-    println!("  Opt out anytime with {}.", "vp env off".cyan());
-    let answer = read_input("  Press Enter to accept (Y/n): ");
-    answer.is_empty() || answer.eq_ignore_ascii_case("y")
+    // Auto-enable if no system node available; otherwise default to disabled
+    // (the interactive menu lets users enable it before proceeding)
+    which::which("node").is_err()
 }
 
 /// Windows locks running `.exe` files — rename the old one out of the way before copying.
@@ -433,7 +416,7 @@ fn show_interactive_menu(opts: &mut cli::Options, install_dir: &str) -> bool {
         println!("    Version:           {}", version.cyan());
         println!(
             "    Node.js manager:   {}",
-            if opts.no_node_manager { "disabled" } else { "auto-detect" }.cyan()
+            if opts.no_node_manager { "disabled" } else { "enabled" }.cyan()
         );
         println!();
         println!("  1) {} (default)", "Proceed with installation".bold());
@@ -466,7 +449,7 @@ fn show_customize_menu(opts: &mut cli::Options) {
         println!("    2) npm registry:   [{}]", registry_display.cyan());
         println!(
             "    3) Node.js manager: [{}]",
-            if opts.no_node_manager { "disabled" } else { "auto-detect" }.cyan()
+            if opts.no_node_manager { "disabled" } else { "enabled" }.cyan()
         );
         println!(
             "    4) Modify PATH:    [{}]",
