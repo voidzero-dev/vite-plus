@@ -207,6 +207,7 @@ vite_workspace = { git = "https://github.com/voidzero-dev/vite-task.git", rev = 
 walkdir = "2.5.0"
 wax = "0.6.0"
 which = "8.0.0"
+winreg = "0.56.0"
 xxhash-rust = "0.8.15"
 zip = "7.2"
 
