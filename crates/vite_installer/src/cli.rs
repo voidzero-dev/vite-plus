@@ -55,9 +55,8 @@ pub fn parse() -> Options {
         opts.registry = std::env::var("NPM_CONFIG_REGISTRY").ok();
     }
     if !opts.no_node_manager {
-        opts.no_node_manager = std::env::var("VP_NODE_MANAGER")
-            .ok()
-            .is_some_and(|v| v.eq_ignore_ascii_case("no"));
+        opts.no_node_manager =
+            std::env::var("VP_NODE_MANAGER").ok().is_some_and(|v| v.eq_ignore_ascii_case("no"));
     }
 
     // quiet implies yes
