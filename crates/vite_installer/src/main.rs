@@ -207,7 +207,7 @@ async fn do_install(
             print_warn(&format!("Node.js manager setup failed (non-fatal): {e}"));
         }
     } else {
-        if let Err(e) = create_env_files(install_dir).await {
+        if let Err(e) = install::create_env_files(install_dir).await {
             print_warn(&format!("Env file creation failed (non-fatal): {e}"));
         }
     }
@@ -351,23 +351,6 @@ async fn download_with_progress(
 
     pb.finish_and_clear();
     Ok(data)
-}
-
-async fn create_env_files(
-    install_dir: &vite_path::AbsolutePath,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let vp_binary = install_dir.join("current").join("bin").join(VP_BINARY_NAME);
-
-    if !tokio::fs::try_exists(&vp_binary).await.unwrap_or(false) {
-        return Ok(());
-    }
-
-    tokio::process::Command::new(vp_binary.as_path())
-        .args(["env", "setup", "--env-only"])
-        .output()
-        .await?;
-
-    Ok(())
 }
 
 fn resolve_install_dir(opts: &cli::Options) -> Result<AbsolutePathBuf, Box<dyn std::error::Error>> {

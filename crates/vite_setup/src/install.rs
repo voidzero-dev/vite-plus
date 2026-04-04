@@ -319,6 +319,26 @@ pub async fn refresh_shims(install_dir: &AbsolutePath) -> Result<(), Error> {
     Ok(())
 }
 
+/// Create shell env files by running `vp env setup --env-only`.
+///
+/// Used when the Node.js manager is disabled — ensures env files exist
+/// even without a full shim refresh.
+pub async fn create_env_files(install_dir: &AbsolutePath) -> Result<(), Error> {
+    let vp_binary =
+        install_dir.join("current").join("bin").join(if cfg!(windows) { "vp.exe" } else { "vp" });
+
+    if !tokio::fs::try_exists(&vp_binary).await.unwrap_or(false) {
+        return Ok(());
+    }
+
+    tokio::process::Command::new(vp_binary.as_path())
+        .args(["env", "setup", "--env-only"])
+        .output()
+        .await?;
+
+    Ok(())
+}
+
 /// Clean up old version directories, keeping at most `max_keep` versions.
 ///
 /// Sorts by creation time (newest first, matching install.sh behavior) and removes
