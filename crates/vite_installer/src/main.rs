@@ -20,9 +20,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use owo_colors::OwoColorize;
 use vite_install::request::HttpClient;
 use vite_path::AbsolutePathBuf;
-use vite_setup::{install, integrity, platform, registry};
-
-const VP_BINARY_NAME: &str = if cfg!(windows) { "vp.exe" } else { "vp" };
+use vite_setup::{VP_BINARY_NAME, install, integrity, platform, registry};
 
 /// Restrict DLL search to system32 only to prevent DLL hijacking
 /// when the installer is run from a Downloads folder.
@@ -206,10 +204,8 @@ async fn do_install(
         if let Err(e) = install::refresh_shims(install_dir).await {
             print_warn(&format!("Node.js manager setup failed (non-fatal): {e}"));
         }
-    } else {
-        if let Err(e) = install::create_env_files(install_dir).await {
-            print_warn(&format!("Env file creation failed (non-fatal): {e}"));
-        }
+    } else if let Err(e) = install::create_env_files(install_dir).await {
+        print_warn(&format!("Env file creation failed (non-fatal): {e}"));
     }
 
     if !opts.no_modify_path {
