@@ -137,17 +137,19 @@ Welcome to Vite+ Installer!
 
 This will install the vp CLI and monorepo task runner.
 
-  Install directory: C:\Users\alice\.vite-plus
-  PATH modification: C:\Users\alice\.vite-plus\bin → User PATH
-  Version:           latest
-  Node.js manager:   auto-detect
+    Install directory: C:\Users\alice\.vite-plus
+    PATH modification: C:\Users\alice\.vite-plus\bin → User PATH
+    Version:           latest
+    Node.js manager:   enabled
 
-1) Proceed with installation (default)
-2) Customize installation
-3) Cancel
+  1) Proceed with installation (default)
+  2) Customize installation
+  3) Cancel
 
->
+  >
 ```
+
+The Node.js manager value is pre-computed via auto-detection before the menu is shown (see [Node.js Manager Auto-Detection](#nodejs-manager-auto-detection)). The user can override it in the customize submenu before proceeding.
 
 Customization submenu:
 
@@ -156,11 +158,11 @@ Customization submenu:
 
     1) Version:         [latest]
     2) npm registry:    [(default)]
-    3) Node.js manager: [auto-detect]
+    3) Node.js manager: [enabled]
     4) Modify PATH:     [yes]
 
   Enter option number to change, or press Enter to go back:
->
+  >
 ```
 
 ### Silent Mode (CI)
@@ -208,18 +210,24 @@ The installer replicates the same result as `install.ps1`, implemented in Rust v
 │  ┌─ detect platform ──────── win32-x64-msvc                 │
 │  │                           win32-arm64-msvc                │
 │  │                                                          │
-│  ├─ resolve version ──────── query npm registry              │
-│  │                           "latest" → "0.3.0"              │
+│  ├─ check existing ──────── read %VP_HOME%\current           │
 │  │                                                          │
-│  └─ check existing ──────── read %VP_HOME%\current           │
-│                              same version? → exit early      │
+│  └─ resolve version ──────── resolve_version_string()        │
+│                              1 HTTP call: "latest" → "0.3.0" │
+│                              same version? → skip to         │
+│                              CONFIGURE (repair path)         │
 └─────────────────────────────────────────────────────────────┘
+                              │
+                   (only if version differs)
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                      DOWNLOAD & VERIFY                      │
 │                                                             │
-│  ┌─ download tarball ─────── GET tarball URL from registry   │
+│  ┌─ resolve platform pkg ── resolve_platform_package()       │
+│  │                          2nd HTTP call: tarball URL + SRI │
+│  │                                                          │
+│  ├─ download tarball ─────── GET tarball URL from registry   │
 │  │                           progress spinner via indicatif  │
 │  │                                                          │
 │  └─ verify integrity ─────── SHA-512 SRI hash comparison     │
@@ -248,25 +256,26 @@ The installer replicates the same result as `install.ps1`, implemented in Rust v
 │  ┌─ save previous version ── .previous-version (rollback)    │
 │  │                          (only if upgrading existing)     │
 │  │                                                          │
-│  └─ swap current ────────── mklink /J current → {version}    │
-│                              (junction on Windows,           │
-│                               atomic symlink on Unix)        │
+│  ├─ swap current ────────── mklink /J current → {version}    │
+│  │                          (junction on Windows,            │
+│  │                           atomic symlink on Unix)         │
+│  │                                                          │
+│  └─ cleanup old versions ── keep last 5 by creation time     │
+│                              protects new + previous version │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                     CONFIGURE                               │
+│       CONFIGURE         (best-effort, always runs,           │
+│                          even for same-version repair)        │
 │                                                             │
 │  ┌─ create bin shims ────── copy vp-shim.exe → bin\vp.exe   │
 │  │                          (rename-to-.old if running)      │
 │  │                                                          │
-│  ├─ Node.js manager ────── if enabled:                       │
+│  ├─ Node.js manager ────── if enabled (pre-computed):        │
 │  │                            spawn: vp env setup --refresh  │
 │  │                          if disabled:                     │
 │  │                            spawn: vp env setup --env-only │
-│  │                                                          │
-│  ├─ cleanup old versions ── keep last 5 by creation time     │
-│  │                          (non-fatal on error)             │
 │  │                                                          │
 │  └─ modify User PATH ────── if --no-modify-path not set:     │
 │                              HKCU\Environment\Path           │
@@ -283,8 +292,9 @@ Each phase maps to `vite_setup` library functions shared with `vp upgrade`:
 | Phase             | Key function                               | Crate            |
 | ----------------- | ------------------------------------------ | ---------------- |
 | Resolve           | `platform::detect_platform_suffix()`       | `vite_setup`     |
-| Resolve           | `registry::resolve_version()`              | `vite_setup`     |
 | Resolve           | `install::read_current_version()`          | `vite_setup`     |
+| Resolve           | `registry::resolve_version_string()`       | `vite_setup`     |
+| Download & Verify | `registry::resolve_platform_package()`     | `vite_setup`     |
 | Download & Verify | `HttpClient::get_bytes()`                  | `vite_install`   |
 | Download & Verify | `integrity::verify_integrity()`            | `vite_setup`     |
 | Install           | `install::extract_platform_package()`      | `vite_setup`     |
@@ -293,11 +303,32 @@ Each phase maps to `vite_setup` library functions shared with `vp upgrade`:
 | Install           | `install::install_production_deps()`       | `vite_setup`     |
 | Activate          | `install::save_previous_version()`         | `vite_setup`     |
 | Activate          | `install::swap_current_link()`             | `vite_setup`     |
+| Activate          | `install::cleanup_old_versions()`          | `vite_setup`     |
 | Configure         | `install::refresh_shims()`                 | `vite_setup`     |
-| Configure         | `install::cleanup_old_versions()`          | `vite_setup`     |
 | Configure         | `windows_path::add_to_user_path()`         | `vite_installer` |
 
-On failure before the **Activate** phase, the version directory is cleaned up and the existing installation remains untouched. After the **Activate** phase (junction swap), the update has already succeeded — subsequent configure steps are best-effort (non-fatal on error).
+**Same-version repair**: When the resolved version matches the installed version, the DOWNLOAD/INSTALL/ACTIVATE phases are skipped entirely (saving 1 HTTP request + all I/O). The CONFIGURE phase always runs to repair shims, env files, and PATH if needed.
+
+**Failure recovery**: Before the **Activate** phase, failures clean up the version directory and leave the existing installation untouched. After **Activate**, all CONFIGURE steps are best-effort — failures log a warning but do not cause exit code 1. Rerunning the installer always retries CONFIGURE.
+
+## Node.js Manager Auto-Detection
+
+The Node.js manager decision (`enabled`/`disabled`) is pre-computed before the interactive menu is shown, so the user sees the resolved value and can override it via the customize submenu. No prompts occur during the installation phase.
+
+The auto-detection logic matches `install.ps1`/`install.sh`:
+
+| Priority | Condition                                 | Result   |
+| -------- | ----------------------------------------- | -------- |
+| 1        | `--no-node-manager` CLI flag              | disabled |
+| 2        | `VP_NODE_MANAGER=yes`                     | enabled  |
+| 3        | `VP_NODE_MANAGER=no`                      | disabled |
+| 4        | `bin/node.exe` shim already exists        | enabled  |
+| 5        | CI / Codespaces / DevContainer / DevPod   | enabled  |
+| 6        | No system `node` found                    | enabled  |
+| 7        | System `node` present, interactive mode   | enabled  |
+| 8        | System `node` present, silent mode (`-y`) | disabled |
+
+In interactive mode (rules 7), the default matches `install.ps1`'s Y/n prompt where pressing Enter enables it. The user can disable it in the customize menu before installation begins. In silent mode (rule 8), shims are not created unless explicitly requested, avoiding silently taking over an existing Node toolchain.
 
 ## Windows-Specific Details
 
@@ -342,13 +373,13 @@ The binary uses the console subsystem (default for Rust binaries on Windows). Wh
 
 ### Existing Installation Handling
 
-| Scenario                                  | Behavior                                                |
-| ----------------------------------------- | ------------------------------------------------------- |
-| No existing install                       | Fresh install                                           |
-| Same version installed                    | Print "already up to date", exit 0                      |
-| Different version installed               | Upgrade to target version                               |
-| Corrupt/partial install (broken junction) | Recreate directory structure                            |
-| Running `vp.exe` in bin/                  | Rename to `.old`, copy new (same as trampoline pattern) |
+| Scenario                                  | Behavior                                                     |
+| ----------------------------------------- | ------------------------------------------------------------ |
+| No existing install                       | Fresh install                                                |
+| Same version installed                    | Skip download, rerun CONFIGURE phase (repair shims/PATH/env) |
+| Different version installed               | Upgrade to target version                                    |
+| Corrupt/partial install (broken junction) | Recreate directory structure                                 |
+| Running `vp.exe` in bin/                  | Rename to `.old`, copy new (same as trampoline pattern)      |
 
 ## Add/Remove Programs Registration
 
@@ -416,28 +447,24 @@ In `release.yml`, installer artifacts are uploaded per-target, renamed with the 
 
 ### Test Workflow
 
-`test-standalone-install.yml` includes a `test-vp-setup-exe` job that builds the installer from source and tests silent installation across three shells:
+`test-standalone-install.yml` includes a `test-vp-setup-exe` job that builds the installer from source, installs via pwsh, and verifies from all three shells (pwsh, cmd, bash):
 
 ```yaml
 test-vp-setup-exe:
-  name: Test vp-setup.exe (${{ matrix.shell }})
+  name: Test vp-setup.exe (pwsh)
   runs-on: windows-latest
-  strategy:
-    matrix:
-      shell: [cmd, pwsh, bash]
   steps:
     - uses: actions/checkout@v4
     - uses: oxc-project/setup-rust@v1
     - name: Build vp-setup.exe
       run: cargo build --release -p vite_installer
     - name: Install via vp-setup.exe (silent)
+      shell: pwsh
       run: ./target/release/vp-setup.exe -y
       env:
         VP_VERSION: alpha
-    - name: Verify installation
-      run: |
-        vp --version
-        vp --help
+    - name: Verify installation (pwsh/cmd/bash)
+      # verifies from all three shells after a single install
 ```
 
 The workflow triggers on changes to `crates/vite_installer/**` and `crates/vite_setup/**`.
@@ -513,11 +540,13 @@ Embed the PowerShell script in a self-extracting exe. Fragile, still requires Po
 
 - Created `crates/vite_installer/` with `[[bin]] name = "vp-setup"`
 - Implemented CLI argument parsing (clap) with env var merging
-- Implemented installation flow calling `vite_setup`
-- Implemented Windows PATH modification via raw Win32 FFI
+- Implemented installation flow calling `vite_setup` with same-version repair path
+- Implemented Windows PATH modification via `winreg` crate
 - Implemented interactive prompts with customization submenu
+- Implemented Node.js manager auto-detection (pre-computed, no mid-install prompts)
 - Implemented progress spinner for downloads
 - Added DLL security mitigations (build.rs linker flag + runtime `SetDefaultDllDirectories`)
+- Post-activation steps are best-effort (non-fatal on error)
 
 ### Phase 3: CI Integration (done)
 
