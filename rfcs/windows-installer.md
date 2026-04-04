@@ -59,6 +59,7 @@ rustup provides `rustup-init.exe` — a single console binary that users downloa
 rustup uses one binary for everything — `rustup-init.exe` copies itself to `~/.cargo/bin/rustup.exe` and changes behavior based on `argv[0]`. This works because rustup IS the toolchain manager.
 
 **Not suitable for vp** because:
+
 - `vp.exe` is downloaded from the npm registry as a platform-specific package
 - The installer cannot copy itself as `vp.exe` — they are fundamentally different binaries
 - `vp.exe` links `vite_js_runtime`, `vite_workspace`, `oxc_resolver` (~15-20 MB) — the installer needs none of these
@@ -75,6 +76,7 @@ crates/vite_installer/      — standalone installer binary
 `vite_setup` extracts the reusable installation logic currently in `vite_global_cli/src/commands/upgrade/`. Both `vp upgrade` and `vp-setup.exe` call into `vite_setup`.
 
 **Benefits:**
+
 - Installer binary stays small (3-5 MB)
 - `vp upgrade` and `vp-setup.exe` share identical installation logic — no drift
 - Clear separation of concerns
@@ -83,17 +85,17 @@ crates/vite_installer/      — standalone installer binary
 
 ### What Gets Extracted
 
-| Current location in `upgrade/` | Extracted to `vite_setup::` | Purpose |
-|---|---|---|
-| `platform.rs` → `detect_platform_suffix()` | `platform` | OS/arch detection |
-| `registry.rs` → `resolve_version()`, `resolve_platform_package()` | `registry` | npm registry queries |
-| `integrity.rs` → `verify_integrity()` | `integrity` | SHA-512 verification |
-| `install.rs` → `extract_platform_package()` | `extract` | Tarball extraction |
-| `install.rs` → `generate_wrapper_package_json()` | `package_json` | Wrapper package.json |
-| `install.rs` → `write_release_age_overrides()` | `npmrc` | .npmrc overrides |
-| `install.rs` → `install_production_deps()` | `deps` | Run `vp install --silent` |
-| `install.rs` → `swap_current_link()` | `link` | Symlink/junction swap |
-| `install.rs` → `cleanup_old_versions()` | `cleanup` | Old version cleanup |
+| Current location in `upgrade/`                                    | Extracted to `vite_setup::` | Purpose                   |
+| ----------------------------------------------------------------- | --------------------------- | ------------------------- |
+| `platform.rs` → `detect_platform_suffix()`                        | `platform`                  | OS/arch detection         |
+| `registry.rs` → `resolve_version()`, `resolve_platform_package()` | `registry`                  | npm registry queries      |
+| `integrity.rs` → `verify_integrity()`                             | `integrity`                 | SHA-512 verification      |
+| `install.rs` → `extract_platform_package()`                       | `extract`                   | Tarball extraction        |
+| `install.rs` → `generate_wrapper_package_json()`                  | `package_json`              | Wrapper package.json      |
+| `install.rs` → `write_release_age_overrides()`                    | `npmrc`                     | .npmrc overrides          |
+| `install.rs` → `install_production_deps()`                        | `deps`                      | Run `vp install --silent` |
+| `install.rs` → `swap_current_link()`                              | `link`                      | Symlink/junction swap     |
+| `install.rs` → `cleanup_old_versions()`                           | `cleanup`                   | Old version cleanup       |
 
 ### What Stays in `vite_global_cli`
 
@@ -176,24 +178,24 @@ vp-setup.exe -y --version 0.3.0 --no-node-manager --registry https://registry.np
 
 ### CLI Flags
 
-| Flag | Description | Default |
-|---|---|---|
-| `-y` / `--yes` | Accept defaults, no prompts | interactive |
-| `-q` / `--quiet` | Suppress output except errors | false |
-| `--version <VER>` | Install specific version | latest |
-| `--tag <TAG>` | npm dist-tag | latest |
-| `--install-dir <PATH>` | Installation directory | `%USERPROFILE%\.vite-plus` |
-| `--registry <URL>` | npm registry URL | `https://registry.npmjs.org` |
-| `--no-node-manager` | Skip Node.js manager setup | auto-detect |
-| `--no-modify-path` | Don't modify User PATH | modify |
+| Flag                   | Description                   | Default                      |
+| ---------------------- | ----------------------------- | ---------------------------- |
+| `-y` / `--yes`         | Accept defaults, no prompts   | interactive                  |
+| `-q` / `--quiet`       | Suppress output except errors | false                        |
+| `--version <VER>`      | Install specific version      | latest                       |
+| `--tag <TAG>`          | npm dist-tag                  | latest                       |
+| `--install-dir <PATH>` | Installation directory        | `%USERPROFILE%\.vite-plus`   |
+| `--registry <URL>`     | npm registry URL              | `https://registry.npmjs.org` |
+| `--no-node-manager`    | Skip Node.js manager setup    | auto-detect                  |
+| `--no-modify-path`     | Don't modify User PATH        | modify                       |
 
 ### Environment Variables (compatible with `install.ps1`)
 
-| Variable | Maps to |
-|---|---|
-| `VP_VERSION` | `--version` |
-| `VP_HOME` | `--install-dir` |
-| `NPM_CONFIG_REGISTRY` | `--registry` |
+| Variable                  | Maps to             |
+| ------------------------- | ------------------- |
+| `VP_VERSION`              | `--version`         |
+| `VP_HOME`                 | `--install-dir`     |
+| `NPM_CONFIG_REGISTRY`     | `--registry`        |
 | `VP_NODE_MANAGER=yes\|no` | `--no-node-manager` |
 
 CLI flags take precedence over environment variables.
@@ -300,13 +302,13 @@ The binary uses the console subsystem (default for Rust binaries on Windows). Wh
 
 ### Existing Installation Handling
 
-| Scenario | Behavior |
-|---|---|
-| No existing install | Fresh install |
-| Same version installed | Print "already up to date", exit 0 |
-| Different version installed | Upgrade to target version |
-| Corrupt/partial install (broken junction) | Recreate directory structure |
-| Running `vp.exe` in bin/ | Rename to `.old`, copy new (same as trampoline pattern) |
+| Scenario                                  | Behavior                                                |
+| ----------------------------------------- | ------------------------------------------------------- |
+| No existing install                       | Fresh install                                           |
+| Same version installed                    | Print "already up to date", exit 0                      |
+| Different version installed               | Upgrade to target version                               |
+| Corrupt/partial install (broken junction) | Recreate directory structure                            |
+| Running `vp.exe` in bin/                  | Rename to `.old`, copy new (same as trampoline pattern) |
 
 ## Add/Remove Programs Registration
 
@@ -402,17 +404,17 @@ Target: 3-5 MB (release, stripped, LTO).
 
 Key dependencies and their approximate contribution:
 
-| Dependency | Purpose | Size impact |
-|---|---|---|
-| `reqwest` + `native-tls-vendored` | HTTP + TLS | ~1.5 MB |
-| `flate2` + `tar` | Tarball extraction | ~200 KB |
-| `clap` | CLI parsing | ~300 KB |
-| `tokio` (minimal features) | Async runtime | ~400 KB |
-| `indicatif` | Progress bars | ~100 KB |
-| `sha2` | Integrity verification | ~50 KB |
-| `serde_json` | Registry JSON parsing | ~200 KB |
-| `winreg` | Windows registry | ~50 KB |
-| Rust std + overhead | | ~500 KB |
+| Dependency                        | Purpose                | Size impact |
+| --------------------------------- | ---------------------- | ----------- |
+| `reqwest` + `native-tls-vendored` | HTTP + TLS             | ~1.5 MB     |
+| `flate2` + `tar`                  | Tarball extraction     | ~200 KB     |
+| `clap`                            | CLI parsing            | ~300 KB     |
+| `tokio` (minimal features)        | Async runtime          | ~400 KB     |
+| `indicatif`                       | Progress bars          | ~100 KB     |
+| `sha2`                            | Integrity verification | ~50 KB      |
+| `serde_json`                      | Registry JSON parsing  | ~200 KB     |
+| `winreg`                          | Windows registry       | ~50 KB      |
+| Rust std + overhead               |                        | ~500 KB     |
 
 Use `opt-level = "z"` (optimize for size) in package profile override, matching the trampoline approach.
 
@@ -421,6 +423,7 @@ Use `opt-level = "z"` (optimize for size) in package profile override, matching 
 ### 1. MSI/NSIS/Inno Setup Installer (Rejected)
 
 Traditional Windows installers provide GUI, Add/Remove Programs, and Start Menu integration. However:
+
 - Adds build-time dependency on external tooling (WiX, NSIS)
 - GUI is unnecessary for a developer CLI tool
 - MSI has complex authoring requirements
@@ -478,11 +481,13 @@ Embed the PowerShell script in a self-extracting exe. Fragile, still requires Po
 ## Testing Strategy
 
 ### Unit Tests
+
 - Platform detection (mock different architectures)
 - PATH modification logic (registry read/write)
 - Version comparison and existing install detection
 
 ### Integration Tests (CI)
+
 - Fresh install from cmd.exe, PowerShell, Git Bash
 - Silent mode (`-y`) installation
 - Custom registry, custom install dir
@@ -491,6 +496,7 @@ Embed the PowerShell script in a self-extracting exe. Fragile, still requires Po
 - Verify PATH is modified correctly
 
 ### Manual Tests
+
 - Double-click from Downloads folder
 - SmartScreen behavior (signed vs unsigned)
 - Windows Defender scan behavior

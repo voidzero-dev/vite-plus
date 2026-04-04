@@ -109,11 +109,7 @@ async fn do_install(
     if let Some(ref current) = current_version {
         if current == &resolved.version {
             if !opts.quiet {
-                println!(
-                    "\n{} Already installed ({})",
-                    "\u{2714}".green(),
-                    resolved.version
-                );
+                println!("\n{} Already installed ({})", "\u{2714}".green(), resolved.version);
             }
             return Ok(());
         }
@@ -285,16 +281,10 @@ async fn download_with_progress(
     Ok(data)
 }
 
-fn resolve_install_dir(
-    opts: &cli::Options,
-) -> Result<AbsolutePathBuf, Box<dyn std::error::Error>> {
+fn resolve_install_dir(opts: &cli::Options) -> Result<AbsolutePathBuf, Box<dyn std::error::Error>> {
     if let Some(ref dir) = opts.install_dir {
         let path = std::path::PathBuf::from(dir);
-        let abs = if path.is_absolute() {
-            path
-        } else {
-            std::env::current_dir()?.join(path)
-        };
+        let abs = if path.is_absolute() { path } else { std::env::current_dir()?.join(path) };
         AbsolutePathBuf::new(abs).ok_or_else(|| "Invalid installation directory".into())
     } else {
         Ok(vite_shared::get_vp_home()?)
@@ -332,9 +322,20 @@ fn show_interactive_menu(opts: &cli::Options, install_dir: &str) -> bool {
     println!("  This will install the {} CLI and monorepo task runner.", "vp".cyan());
     println!();
     println!("    Install directory: {}", install_dir.cyan());
-    println!("    PATH modification: {}", if opts.no_modify_path { "no".to_string() } else { format!("{bin_dir} \u{2192} User PATH") }.cyan());
+    println!(
+        "    PATH modification: {}",
+        if opts.no_modify_path {
+            "no".to_string()
+        } else {
+            format!("{bin_dir} \u{2192} User PATH")
+        }
+        .cyan()
+    );
     println!("    Version:           {}", version.cyan());
-    println!("    Node.js manager:   {}", if opts.no_node_manager { "disabled" } else { "auto-detect" }.cyan());
+    println!(
+        "    Node.js manager:   {}",
+        if opts.no_node_manager { "disabled" } else { "auto-detect" }.cyan()
+    );
     println!();
     println!("  1) {} (default)", "Proceed with installation".bold());
     println!("  2) Cancel");
@@ -358,10 +359,7 @@ fn print_success(opts: &cli::Options, install_dir: &str) {
     }
 
     println!();
-    println!(
-        "  {} Vite+ has been installed successfully!",
-        "\u{2714}".green().bold()
-    );
+    println!("  {} Vite+ has been installed successfully!", "\u{2714}".green().bold());
     println!();
     println!("  To get started, restart your terminal, then run:");
     println!();

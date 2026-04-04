@@ -84,13 +84,7 @@ fn read_user_path() -> io::Result<String> {
 
     let mut hkey: ffi::HKEY = 0;
     let result = unsafe {
-        ffi::RegOpenKeyExW(
-            ffi::HKEY_CURRENT_USER,
-            sub_key.as_ptr(),
-            0,
-            ffi::KEY_READ,
-            &mut hkey,
-        )
+        ffi::RegOpenKeyExW(ffi::HKEY_CURRENT_USER, sub_key.as_ptr(), 0, ffi::KEY_READ, &mut hkey)
     };
 
     if result == ffi::ERROR_FILE_NOT_FOUND {
@@ -143,10 +137,7 @@ fn read_user_path() -> io::Result<String> {
     }
 
     // Convert UTF-16 to String (strip trailing null)
-    let wide: Vec<u16> = buf
-        .chunks_exact(2)
-        .map(|c| u16::from_le_bytes([c[0], c[1]]))
-        .collect();
+    let wide: Vec<u16> = buf.chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
     let s = String::from_utf16_lossy(&wide);
     Ok(s.trim_end_matches('\0').to_string())
 }
@@ -159,13 +150,7 @@ fn write_user_path(path: &str) -> io::Result<()> {
 
     let mut hkey: ffi::HKEY = 0;
     let result = unsafe {
-        ffi::RegOpenKeyExW(
-            ffi::HKEY_CURRENT_USER,
-            sub_key.as_ptr(),
-            0,
-            ffi::KEY_WRITE,
-            &mut hkey,
-        )
+        ffi::RegOpenKeyExW(ffi::HKEY_CURRENT_USER, sub_key.as_ptr(), 0, ffi::KEY_WRITE, &mut hkey)
     };
 
     if result != ffi::ERROR_SUCCESS {
@@ -230,11 +215,8 @@ pub fn add_to_user_path(bin_dir: &str) -> io::Result<()> {
     }
 
     // Prepend to PATH
-    let new_path = if current.is_empty() {
-        bin_dir.to_string()
-    } else {
-        format!("{bin_dir};{current}")
-    };
+    let new_path =
+        if current.is_empty() { bin_dir.to_string() } else { format!("{bin_dir};{current}") };
 
     write_user_path(&new_path)?;
     broadcast_settings_change();
