@@ -94,41 +94,43 @@ async fn do_install(
         print_info(&format!("detected platform: {platform_suffix}"));
     }
 
+    // Check local version first to potentially skip HTTP requests
+    tokio::fs::create_dir_all(install_dir).await?;
+    let current_version = install::read_current_version(install_dir).await;
+
     let version_or_tag = opts.version.as_deref().unwrap_or(&opts.tag);
+
+    // Resolve the target version — use resolve_version_string first so we can
+    // skip the platform package fetch if the version is already installed
     if !opts.quiet {
         print_info(&format!("resolving version '{version_or_tag}'..."));
     }
-    let resolved =
-        registry::resolve_version(version_or_tag, &platform_suffix, opts.registry.as_deref())
-            .await?;
-    if !opts.quiet {
-        print_info(&format!("found vite-plus@{}", resolved.version));
-    }
+    let target_version =
+        registry::resolve_version_string(version_or_tag, opts.registry.as_deref()).await?;
 
-    tokio::fs::create_dir_all(install_dir).await?;
-
-    let current_version = install::read_current_version(install_dir).await;
-    let same_version = current_version.as_deref() == Some(resolved.version.as_str());
+    let same_version = current_version.as_deref() == Some(target_version.as_str());
 
     if same_version {
         if !opts.quiet {
-            print_info(&format!(
-                "version {} already installed, verifying setup...",
-                resolved.version
-            ));
+            print_info(&format!("version {target_version} already installed, verifying setup..."));
         }
-    } else {
-        if let Some(ref current) = current_version {
-            if !opts.quiet {
-                print_info(&format!("upgrading from {current} to {}", resolved.version));
-            }
+    } else if let Some(ref current) = current_version {
+        if !opts.quiet {
+            print_info(&format!("upgrading from {current} to {target_version}"));
         }
+    }
+
+    if !same_version {
+        // Only fetch platform metadata + download when we actually need to install
+        let resolved = registry::resolve_platform_package(
+            &target_version,
+            &platform_suffix,
+            opts.registry.as_deref(),
+        )
+        .await?;
 
         if !opts.quiet {
-            print_info(&format!(
-                "downloading vite-plus@{} for {}...",
-                resolved.version, platform_suffix
-            ));
+            print_info(&format!("downloading vite-plus@{target_version} for {platform_suffix}..."));
         }
         let client = HttpClient::new();
         let platform_data =
@@ -139,7 +141,7 @@ async fn do_install(
         }
         integrity::verify_integrity(&platform_data, &resolved.platform_integrity)?;
 
-        let version_dir = install_dir.join(&resolved.version);
+        let version_dir = install_dir.join(&target_version);
         tokio::fs::create_dir_all(&version_dir).await?;
 
         if !opts.quiet {
@@ -152,7 +154,7 @@ async fn do_install(
             return Err("Binary not found after extraction. The download may be corrupted.".into());
         }
 
-        install::generate_wrapper_package_json(&version_dir, &resolved.version).await?;
+        install::generate_wrapper_package_json(&version_dir, &target_version).await?;
         install::write_release_age_overrides(&version_dir).await?;
 
         if !opts.quiet {
@@ -165,10 +167,10 @@ async fn do_install(
         } else {
             None
         };
-        install::swap_current_link(install_dir, &resolved.version).await?;
+        install::swap_current_link(install_dir, &target_version).await?;
 
         // Cleanup with both new and previous versions protected (matches vp upgrade)
-        let mut protected = vec![resolved.version.as_str()];
+        let mut protected = vec![target_version.as_str()];
         if let Some(ref prev) = previous_version {
             protected.push(prev.as_str());
         }
@@ -176,13 +178,13 @@ async fn do_install(
             install::cleanup_old_versions(install_dir, vite_setup::MAX_VERSIONS_KEEP, &protected)
                 .await
         {
-            tracing::warn!("Old version cleanup failed (non-fatal): {e}");
+            print_warn(&format!("Old version cleanup failed (non-fatal): {e}"));
         }
     }
 
     // --- Post-activation setup (always runs, even for same-version repair) ---
-    // All steps below are best-effort after activation: the core install succeeded
-    // once `current` points at the right version.
+    // All steps below are best-effort: the core install succeeded once `current`
+    // points at the right version.
 
     if !opts.quiet {
         print_info("setting up shims...");
@@ -191,7 +193,6 @@ async fn do_install(
         print_warn(&format!("Shim setup failed (non-fatal): {e}"));
     }
 
-    // Node.js manager: match install.ps1/install.sh auto-detect logic
     let enable_node_manager = should_enable_node_manager(opts, install_dir);
     if enable_node_manager {
         if !opts.quiet {
@@ -201,8 +202,9 @@ async fn do_install(
             print_warn(&format!("Node.js manager setup failed (non-fatal): {e}"));
         }
     } else {
-        // Still create shell env files even without Node.js manager
-        create_env_files(install_dir).await;
+        if let Err(e) = create_env_files(install_dir).await {
+            print_warn(&format!("Env file creation failed (non-fatal): {e}"));
+        }
     }
 
     if !opts.no_modify_path {
@@ -226,12 +228,14 @@ async fn do_install(
 /// 6. Silent mode with system node → disable (don't silently take over)
 #[allow(clippy::print_stdout)]
 fn should_enable_node_manager(opts: &cli::Options, install_dir: &vite_path::AbsolutePath) -> bool {
+    // --no-node-manager CLI flag
     if opts.no_node_manager {
         return false;
     }
 
-    if std::env::var("VP_NODE_MANAGER").ok().is_some_and(|v| v.eq_ignore_ascii_case("yes")) {
-        return true;
+    // VP_NODE_MANAGER env var: "yes" or "no" (both handled here)
+    if let Ok(val) = std::env::var("VP_NODE_MANAGER") {
+        return val.eq_ignore_ascii_case("yes");
     }
 
     // Already managing Node (shims exist from a previous install)
@@ -358,21 +362,21 @@ async fn download_with_progress(
     Ok(data)
 }
 
-async fn create_env_files(install_dir: &vite_path::AbsolutePath) {
+async fn create_env_files(
+    install_dir: &vite_path::AbsolutePath,
+) -> Result<(), Box<dyn std::error::Error>> {
     let vp_binary = install_dir.join("current").join("bin").join(VP_BINARY_NAME);
 
     if !tokio::fs::try_exists(&vp_binary).await.unwrap_or(false) {
-        return;
+        return Ok(());
     }
 
-    let output = tokio::process::Command::new(vp_binary.as_path())
+    tokio::process::Command::new(vp_binary.as_path())
         .args(["env", "setup", "--env-only"])
         .output()
-        .await;
+        .await?;
 
-    if let Err(e) = output {
-        tracing::warn!("Failed to create env files (non-fatal): {e}");
-    }
+    Ok(())
 }
 
 fn resolve_install_dir(opts: &cli::Options) -> Result<AbsolutePathBuf, Box<dyn std::error::Error>> {
