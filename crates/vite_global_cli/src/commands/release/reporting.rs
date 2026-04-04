@@ -585,7 +585,7 @@ pub(super) fn confirm_release(
     }
 }
 
-fn release_prerelease_channels(
+pub(super) fn release_prerelease_channels(
     release_plans: &[PackageReleasePlan],
     options: &ReleaseOptions,
 ) -> Vec<String> {
@@ -602,7 +602,7 @@ fn release_prerelease_channels(
     unique_strings(channels)
 }
 
-fn format_release_prerelease_summary(prerelease_channels: &[String]) -> String {
+pub(super) fn format_release_prerelease_summary(prerelease_channels: &[String]) -> String {
     match prerelease_channels {
         [] => String::from("stable"),
         [channel] => channel.clone(),
@@ -615,7 +615,9 @@ fn format_release_prerelease_summary(prerelease_channels: &[String]) -> String {
     }
 }
 
-fn collect_nonstandard_prerelease_channels(prerelease_channels: &[String]) -> Vec<String> {
+pub(super) fn collect_nonstandard_prerelease_channels(
+    prerelease_channels: &[String],
+) -> Vec<String> {
     prerelease_channels
         .iter()
         .filter(|channel| matches!(PrereleaseTag::parse(channel), PrereleaseTag::Custom(_)))
