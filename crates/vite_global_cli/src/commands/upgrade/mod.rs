@@ -3,16 +3,12 @@
 //! Downloads and installs a new version of the CLI from the npm registry
 //! with SHA-512 integrity verification.
 
-mod install;
-mod integrity;
-mod platform;
-pub(crate) mod registry;
-
 use std::process::ExitStatus;
 
 use owo_colors::OwoColorize;
 use vite_install::request::HttpClient;
 use vite_path::AbsolutePathBuf;
+use vite_setup::{install, integrity, platform, registry};
 use vite_shared::output;
 
 use crate::{commands::env::config::get_vp_home, error::Error};
@@ -34,9 +30,6 @@ pub struct UpgradeOptions {
     /// Custom npm registry URL
     pub registry: Option<String>,
 }
-
-/// Maximum number of old versions to keep.
-const MAX_VERSIONS_KEEP: usize = 5;
 
 /// Execute the upgrade command.
 #[allow(clippy::print_stdout, clippy::print_stderr)]
@@ -189,7 +182,8 @@ async fn install_platform_and_main(
     if let Some(ref prev) = previous_version {
         protected.push(prev.as_str());
     }
-    if let Err(e) = install::cleanup_old_versions(install_dir, MAX_VERSIONS_KEEP, &protected).await
+    if let Err(e) =
+        install::cleanup_old_versions(install_dir, vite_setup::MAX_VERSIONS_KEEP, &protected).await
     {
         output::warn(&format!("Old version cleanup failed (non-fatal): {e}"));
     }
