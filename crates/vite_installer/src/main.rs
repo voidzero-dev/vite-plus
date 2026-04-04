@@ -22,6 +22,8 @@ use vite_install::request::HttpClient;
 use vite_path::AbsolutePathBuf;
 use vite_setup::{install, integrity, platform, registry};
 
+const VP_BINARY_NAME: &str = if cfg!(windows) { "vp.exe" } else { "vp" };
+
 /// Restrict DLL search to system32 only to prevent DLL hijacking
 /// when the installer is run from a Downloads folder.
 #[cfg(windows)]
@@ -141,8 +143,7 @@ async fn do_install(
     }
     install::extract_platform_package(&platform_data, &version_dir).await?;
 
-    let binary_name = if cfg!(windows) { "vp.exe" } else { "vp" };
-    let binary_path = version_dir.join("bin").join(binary_name);
+    let binary_path = version_dir.join("bin").join(VP_BINARY_NAME);
     if !tokio::fs::try_exists(&binary_path).await.unwrap_or(false) {
         return Err("Binary not found after extraction. The download may be corrupted.".into());
     }
@@ -193,31 +194,26 @@ async fn do_install(
     Ok(())
 }
 
-/// On Windows, rename a running exe to `.old` then copy the new one in place.
+/// Windows locks running `.exe` files — rename the old one out of the way before copying.
 #[cfg(windows)]
 async fn replace_windows_exe(
     src: &vite_path::AbsolutePathBuf,
     dst: &vite_path::AbsolutePathBuf,
     bin_dir: &vite_path::AbsolutePathBuf,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    if dst.as_path().exists() {
-        let old_name = format!(
-            "vp.exe.{}.old",
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs()
-        );
-        let _ = tokio::fs::rename(dst, &bin_dir.join(&old_name)).await;
-    }
+    let old_name = format!(
+        "vp.exe.{}.old",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs()
+    );
+    let _ = tokio::fs::rename(dst, &bin_dir.join(&old_name)).await;
     tokio::fs::copy(src, dst).await?;
     Ok(())
 }
 
-/// Set up the bin/ directory with the initial `vp` shim.
-///
-/// On Windows, copies `vp-shim.exe` from `current/bin/` to `bin/vp.exe`.
-/// On Unix, creates a symlink from `bin/vp` to `../current/bin/vp`.
+/// Set up the `bin/vp` entry point (trampoline copy on Windows, symlink on Unix).
 async fn setup_bin_shims(
     install_dir: &vite_path::AbsolutePath,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -284,10 +280,8 @@ async fn download_with_progress(
     Ok(data)
 }
 
-/// Create shell env files by spawning `vp env setup --env-only`.
 async fn create_env_files(install_dir: &vite_path::AbsolutePath) {
-    let vp_binary =
-        install_dir.join("current").join("bin").join(if cfg!(windows) { "vp.exe" } else { "vp" });
+    let vp_binary = install_dir.join("current").join("bin").join(VP_BINARY_NAME);
 
     if !tokio::fs::try_exists(&vp_binary).await.unwrap_or(false) {
         return;
