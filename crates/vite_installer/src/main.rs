@@ -492,7 +492,7 @@ fn print_success(opts: &cli::Options, install_dir: &str) {
     println!("    {}", "vp --help".cyan());
     println!();
     println!("  Install directory: {install_dir}");
-    println!("  Documentation:     {}", "https://github.com/voidzero-dev/vite-plus");
+    println!("  Documentation:     {}", "https://viteplus.dev/guide/");
     println!();
 }
 
