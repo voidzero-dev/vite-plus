@@ -52,7 +52,7 @@ fn main() {
 }
 
 #[allow(clippy::print_stdout, clippy::print_stderr)]
-async fn run(opts: cli::Options) -> i32 {
+async fn run(mut opts: cli::Options) -> i32 {
     let install_dir = match resolve_install_dir(&opts) {
         Ok(dir) => dir,
         Err(e) => {
@@ -63,7 +63,7 @@ async fn run(opts: cli::Options) -> i32 {
     let install_dir_display = install_dir.as_path().to_string_lossy().to_string();
 
     if !opts.yes {
-        let proceed = show_interactive_menu(&opts, &install_dir_display);
+        let proceed = show_interactive_menu(&mut opts, &install_dir_display);
         if !proceed {
             println!("Installation cancelled.");
             return 0;
@@ -170,6 +170,9 @@ async fn do_install(
             print_info("setting up Node.js version manager...");
         }
         install::refresh_shims(install_dir).await?;
+    } else {
+        // When skipping Node.js manager, still create shell env files
+        create_env_files(install_dir).await;
     }
 
     if let Err(e) = install::cleanup_old_versions(
@@ -281,6 +284,25 @@ async fn download_with_progress(
     Ok(data)
 }
 
+/// Create shell env files by spawning `vp env setup --env-only`.
+async fn create_env_files(install_dir: &vite_path::AbsolutePath) {
+    let vp_binary =
+        install_dir.join("current").join("bin").join(if cfg!(windows) { "vp.exe" } else { "vp" });
+
+    if !tokio::fs::try_exists(&vp_binary).await.unwrap_or(false) {
+        return;
+    }
+
+    let output = tokio::process::Command::new(vp_binary.as_path())
+        .args(["env", "setup", "--env-only"])
+        .output()
+        .await;
+
+    if let Err(e) = output {
+        tracing::warn!("Failed to create env files (non-fatal): {e}");
+    }
+}
+
 fn resolve_install_dir(opts: &cli::Options) -> Result<AbsolutePathBuf, Box<dyn std::error::Error>> {
     if let Some(ref dir) = opts.install_dir {
         let path = std::path::PathBuf::from(dir);
@@ -312,44 +334,98 @@ fn modify_path(bin_dir: &str, quiet: bool) -> Result<(), Box<dyn std::error::Err
 }
 
 #[allow(clippy::print_stdout)]
-fn show_interactive_menu(opts: &cli::Options, install_dir: &str) -> bool {
-    let version = opts.version.as_deref().unwrap_or("latest");
-    let bin_dir = format!("{install_dir}{sep}bin", sep = std::path::MAIN_SEPARATOR);
+fn show_interactive_menu(opts: &mut cli::Options, install_dir: &str) -> bool {
+    loop {
+        let version = opts.version.as_deref().unwrap_or("latest");
+        let bin_dir = format!("{install_dir}{sep}bin", sep = std::path::MAIN_SEPARATOR);
 
-    println!();
-    println!("  {}", "Welcome to Vite+ Installer!".bold());
-    println!();
-    println!("  This will install the {} CLI and monorepo task runner.", "vp".cyan());
-    println!();
-    println!("    Install directory: {}", install_dir.cyan());
-    println!(
-        "    PATH modification: {}",
-        if opts.no_modify_path {
-            "no".to_string()
-        } else {
-            format!("{bin_dir} \u{2192} User PATH")
+        println!();
+        println!("  {}", "Welcome to Vite+ Installer!".bold());
+        println!();
+        println!("  This will install the {} CLI and monorepo task runner.", "vp".cyan());
+        println!();
+        println!("    Install directory: {}", install_dir.cyan());
+        println!(
+            "    PATH modification: {}",
+            if opts.no_modify_path {
+                "no".to_string()
+            } else {
+                format!("{bin_dir} \u{2192} User PATH")
+            }
+            .cyan()
+        );
+        println!("    Version:           {}", version.cyan());
+        println!(
+            "    Node.js manager:   {}",
+            if opts.no_node_manager { "disabled" } else { "auto-detect" }.cyan()
+        );
+        println!();
+        println!("  1) {} (default)", "Proceed with installation".bold());
+        println!("  2) Customize installation");
+        println!("  3) Cancel");
+        println!();
+
+        let choice = read_input("  > ");
+        match choice.as_str() {
+            "" | "1" => return true,
+            "2" => show_customize_menu(opts),
+            "3" => return false,
+            _ => {
+                println!("  Invalid choice. Please enter 1, 2, or 3.");
+            }
         }
-        .cyan()
-    );
-    println!("    Version:           {}", version.cyan());
-    println!(
-        "    Node.js manager:   {}",
-        if opts.no_node_manager { "disabled" } else { "auto-detect" }.cyan()
-    );
-    println!();
-    println!("  1) {} (default)", "Proceed with installation".bold());
-    println!("  2) Cancel");
-    println!();
-    print!("  > ");
-    let _ = io::stdout().flush();
-
-    let mut input = String::new();
-    if io::stdin().read_line(&mut input).is_err() {
-        return false;
     }
+}
 
-    let choice = input.trim();
-    choice.is_empty() || choice == "1"
+#[allow(clippy::print_stdout)]
+fn show_customize_menu(opts: &mut cli::Options) {
+    loop {
+        let version_display = opts.version.as_deref().unwrap_or("latest");
+        let registry_display = opts.registry.as_deref().unwrap_or("(default)");
+
+        println!();
+        println!("  {}", "Customize installation:".bold());
+        println!();
+        println!("    1) Version:        [{}]", version_display.cyan());
+        println!("    2) npm registry:   [{}]", registry_display.cyan());
+        println!(
+            "    3) Node.js manager: [{}]",
+            if opts.no_node_manager { "disabled" } else { "auto-detect" }.cyan()
+        );
+        println!(
+            "    4) Modify PATH:    [{}]",
+            if opts.no_modify_path { "no" } else { "yes" }.cyan()
+        );
+        println!();
+
+        let choice = read_input("  Enter option number to change, or press Enter to go back: ");
+        match choice.as_str() {
+            "" => return,
+            "1" => {
+                let v = read_input("    Version (e.g. 0.3.0, or 'latest'): ");
+                if v == "latest" || v.is_empty() {
+                    opts.version = None;
+                } else {
+                    opts.version = Some(v);
+                }
+            }
+            "2" => {
+                let r = read_input("    npm registry URL (or empty for default): ");
+                opts.registry = if r.is_empty() { None } else { Some(r) };
+            }
+            "3" => opts.no_node_manager = !opts.no_node_manager,
+            "4" => opts.no_modify_path = !opts.no_modify_path,
+            _ => println!("  Invalid option."),
+        }
+    }
+}
+
+fn read_input(prompt: &str) -> String {
+    print!("{prompt}");
+    let _ = io::stdout().flush();
+    let mut input = String::new();
+    let _ = io::stdin().read_line(&mut input);
+    input.trim().to_string()
 }
 
 #[allow(clippy::print_stdout)]
