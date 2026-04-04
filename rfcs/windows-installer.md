@@ -594,7 +594,7 @@ Embed the PowerShell script in a self-extracting exe. Fragile, still requires Po
 
 - **Binary name**: `vp-setup.exe`
 - **Uninstall**: Rely on `vp implode` — no `--uninstall` flag in the installer
-- **Minimum Windows version**: Windows 10 1809+ (same as Rust's MSVC target)
+- **Minimum Windows version**: Windows 10 version 1809 (October 2018 Update) or later, same as Rust's `x86_64-pc-windows-msvc` target requirement
 
 ## References
 
