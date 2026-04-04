@@ -67,7 +67,7 @@ async fn run(mut opts: cli::Options) -> i32 {
     // Pre-compute Node.js manager default before showing the menu,
     // so the user sees the resolved value and can override it.
     if !opts.no_node_manager {
-        opts.no_node_manager = !auto_detect_node_manager(&install_dir);
+        opts.no_node_manager = !auto_detect_node_manager(&install_dir, !opts.yes);
     }
 
     if !opts.yes {
@@ -232,8 +232,10 @@ async fn do_install(
 /// 2. Already managing Node (bin/node.exe exists) → enable (refresh)
 /// 3. CI / Codespaces / DevContainer / DevPod → enable
 /// 4. No system `node` found → enable
-/// 5. System node present → disable (user can enable via customize menu)
-fn auto_detect_node_manager(install_dir: &vite_path::AbsolutePath) -> bool {
+/// 5. System node present, interactive → enable (matching install.ps1's default-Y prompt;
+///    user can disable via customize menu before proceeding)
+/// 6. System node present, silent → disable (don't silently take over)
+fn auto_detect_node_manager(install_dir: &vite_path::AbsolutePath, interactive: bool) -> bool {
     // VP_NODE_MANAGER env var: "yes" or "no"
     if let Ok(val) = std::env::var("VP_NODE_MANAGER") {
         return val.eq_ignore_ascii_case("yes");
@@ -254,9 +256,15 @@ fn auto_detect_node_manager(install_dir: &vite_path::AbsolutePath) -> bool {
         return true;
     }
 
-    // Auto-enable if no system node available; otherwise default to disabled
-    // (the interactive menu lets users enable it before proceeding)
-    which::which("node").is_err()
+    // Auto-enable if no system node available
+    if which::which("node").is_err() {
+        return true;
+    }
+
+    // System node exists: in interactive mode, default to enabled (matching
+    // install.ps1's Y/n prompt where Enter = yes). The user can disable it
+    // in the customize menu. In silent mode, don't take over.
+    interactive
 }
 
 /// Windows locks running `.exe` files — rename the old one out of the way before copying.
