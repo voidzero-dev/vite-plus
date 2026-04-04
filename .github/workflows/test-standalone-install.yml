@@ -8,6 +8,8 @@ on:
     paths:
       - 'packages/cli/install.sh'
       - 'packages/cli/install.ps1'
+      - 'crates/vite_installer/**'
+      - 'crates/vite_setup/**'
       - '.github/workflows/test-standalone-install.yml'
 
 concurrency:
@@ -706,3 +708,36 @@ jobs:
           which npm
           which npx
           which vp
+
+  test-vp-setup-exe:
+    name: Test vp-setup.exe (${{ matrix.shell }})
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        shell: [cmd, pwsh, bash]
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: oxc-project/setup-rust@23f38cfb0c04af97a055f76acee94d5be71c7c82 # v1.0.16
+
+      - name: Build vp-setup.exe
+        shell: bash
+        run: cargo build --release -p vite_installer
+
+      - name: Install via vp-setup.exe (silent)
+        shell: ${{ matrix.shell }}
+        run: ./target/release/vp-setup.exe -y
+        env:
+          VP_VERSION: alpha
+
+      - name: Set PATH
+        shell: bash
+        run: echo "$USERPROFILE/.vite-plus/bin" >> $GITHUB_PATH
+
+      - name: Verify installation
+        shell: ${{ matrix.shell }}
+        run: |
+          vp --version
+          vp --help
