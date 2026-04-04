@@ -7474,6 +7474,7 @@ dependencies = [
  "vite_path",
  "vite_setup",
  "vite_shared",
+ "which",
  "winreg",
 ]
 
