@@ -43,11 +43,7 @@ fn broadcast_settings_change() {
     }
 }
 
-/// Add a directory to the User PATH if not already present.
-///
-/// Reads `HKCU\Environment\Path`, checks if `bin_dir` is already there
-/// (case-insensitive, with/without trailing backslash), and prepends if not.
-/// Broadcasts `WM_SETTINGCHANGE` so new terminal sessions see the change.
+/// Add a directory to the User PATH (`HKCU\Environment\Path`) if not already present.
 pub fn add_to_user_path(bin_dir: &str) -> io::Result<()> {
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     let env = hkcu.open_subkey_with_flags("Environment", KEY_READ | KEY_WRITE)?;
