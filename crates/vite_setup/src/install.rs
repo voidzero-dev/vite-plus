@@ -156,7 +156,7 @@ pub async fn install_production_deps(
     version_dir: &AbsolutePath,
     registry: Option<&str>,
 ) -> Result<(), Error> {
-    let vp_binary = version_dir.join("bin").join(if cfg!(windows) { "vp.exe" } else { "vp" });
+    let vp_binary = version_dir.join("bin").join(crate::VP_BINARY_NAME);
 
     if !tokio::fs::try_exists(&vp_binary).await.unwrap_or(false) {
         return Err(Error::Setup(
@@ -289,8 +289,7 @@ pub async fn swap_current_link(install_dir: &AbsolutePath, version: &str) -> Res
 
 /// Refresh shims by running `vp env setup --refresh` with the new binary.
 pub async fn refresh_shims(install_dir: &AbsolutePath) -> Result<(), Error> {
-    let vp_binary =
-        install_dir.join("current").join("bin").join(if cfg!(windows) { "vp.exe" } else { "vp" });
+    let vp_binary = install_dir.join("current").join("bin").join(crate::VP_BINARY_NAME);
 
     if !tokio::fs::try_exists(&vp_binary).await.unwrap_or(false) {
         tracing::warn!(
@@ -324,17 +323,25 @@ pub async fn refresh_shims(install_dir: &AbsolutePath) -> Result<(), Error> {
 /// Used when the Node.js manager is disabled — ensures env files exist
 /// even without a full shim refresh.
 pub async fn create_env_files(install_dir: &AbsolutePath) -> Result<(), Error> {
-    let vp_binary =
-        install_dir.join("current").join("bin").join(if cfg!(windows) { "vp.exe" } else { "vp" });
+    let vp_binary = install_dir.join("current").join("bin").join(crate::VP_BINARY_NAME);
 
     if !tokio::fs::try_exists(&vp_binary).await.unwrap_or(false) {
         return Ok(());
     }
 
-    tokio::process::Command::new(vp_binary.as_path())
+    let output = tokio::process::Command::new(vp_binary.as_path())
         .args(["env", "setup", "--env-only"])
         .output()
         .await?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        tracing::warn!(
+            "env setup --env-only exited with code {}, continuing anyway\n{}",
+            output.status.code().unwrap_or(-1),
+            stderr.trim()
+        );
+    }
 
     Ok(())
 }

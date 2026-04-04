@@ -147,7 +147,7 @@ async fn install_platform_and_main(
     install::extract_platform_package(platform_data, version_dir).await?;
 
     // Verify binary was extracted
-    let binary_name = if cfg!(windows) { "vp.exe" } else { "vp" };
+    let binary_name = vite_setup::VP_BINARY_NAME;
     let binary_path = version_dir.join("bin").join(binary_name);
     if !tokio::fs::try_exists(&binary_path).await.unwrap_or(false) {
         return Err(Error::Upgrade(
