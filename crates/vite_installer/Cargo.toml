@@ -21,6 +21,7 @@ vite_install = { workspace = true }
 vite_path = { workspace = true }
 vite_setup = { workspace = true }
 vite_shared = { workspace = true }
+which = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
 winreg = { workspace = true }
