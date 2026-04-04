@@ -7399,7 +7399,6 @@ dependencies = [
  "clap_complete",
  "crossterm",
  "directories",
- "junction",
  "node-semver",
  "owo-colors",
  "oxc_resolver",

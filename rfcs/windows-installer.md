@@ -251,7 +251,7 @@ The installer replicates the same result as `install.ps1`, implemented in Rust v
 │  ┌─ save previous version ── .previous-version (rollback)    │
 │  │                          (only if upgrading existing)     │
 │  │                                                          │
-│  └─ swap current ───────���── mklink /J current → {version}    │
+│  └─ swap current ────────── mklink /J current → {version}    │
 │                              (junction on Windows,           │
 │                               atomic symlink on Unix)        │
 └─────────────────────────────────────────────────────────────┘
@@ -273,7 +273,7 @@ The installer replicates the same result as `install.ps1`, implemented in Rust v
 │  │                                                          │
 │  └─ modify User PATH ────── if --no-modify-path not set:     │
 │                              HKCU\Environment\Path           │
-│                              prepend %VP_HOME%\bin           ���
+│                              prepend %VP_HOME%\bin           │
 │                              broadcast WM_SETTINGCHANGE      │
 └─────────────────────────────────────────────────────────────┘
                               │
