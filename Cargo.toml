@@ -197,6 +197,7 @@ vite_js_runtime = { path = "crates/vite_js_runtime" }
 vite_glob = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "eb746ad3f35bd994ddb39be001eaf58986f48388" }
 vite_install = { path = "crates/vite_install" }
 vite_migration = { path = "crates/vite_migration" }
+vite_setup = { path = "crates/vite_setup" }
 vite_shared = { path = "crates/vite_shared" }
 vite_static_config = { path = "crates/vite_static_config" }
 vite_path = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "eb746ad3f35bd994ddb39be001eaf58986f48388" }
@@ -206,6 +207,7 @@ vite_workspace = { git = "https://github.com/voidzero-dev/vite-task.git", rev = 
 walkdir = "2.5.0"
 wax = "0.6.0"
 which = "8.0.0"
+winreg = "0.56.0"
 xxhash-rust = "0.8.15"
 zip = "7.2"
 
@@ -333,4 +335,8 @@ panic = "abort" # Let it crash and force ourselves to write safe Rust.
 # The trampoline binary is copied per shim tool (~5-10 copies), so optimize for
 # size instead of speed. This reduces it from ~200KB to ~100KB on Windows.
 [profile.release.package.vite_trampoline]
+opt-level = "z"
+
+# The installer binary is downloaded by users, so optimize for size.
+[profile.release.package.vite_installer]
 opt-level = "z"

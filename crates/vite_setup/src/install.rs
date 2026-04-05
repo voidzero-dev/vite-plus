@@ -1,4 +1,4 @@
-//! Installation logic for upgrade.
+//! Installation logic shared between `vp upgrade` and `vp-setup.exe`.
 //!
 //! Handles tarball extraction, dependency installation, symlink swapping,
 //! and version cleanup.
@@ -82,7 +82,7 @@ pub async fn extract_platform_package(
         Ok::<(), Error>(())
     })
     .await
-    .map_err(|e| Error::Upgrade(format!("Task join error: {e}").into()))??;
+    .map_err(|e| Error::Setup(format!("Task join error: {e}").into()))??;
 
     Ok(())
 }
@@ -128,7 +128,7 @@ pub async fn write_release_age_overrides(version_dir: &AbsolutePath) -> Result<(
 /// so it survives the cleanup that removes `version_dir` on failure.
 ///
 /// Returns the log file path on success, or `None` if writing failed.
-pub async fn write_upgrade_log(
+pub async fn write_install_log(
     version_dir: &AbsolutePath,
     stdout: &[u8],
     stderr: &[u8],
@@ -142,7 +142,7 @@ pub async fn write_upgrade_log(
     match tokio::fs::write(&log_path, &content).await {
         Ok(()) => Some(log_path),
         Err(e) => {
-            tracing::warn!("Failed to write upgrade log: {}", e);
+            tracing::warn!("Failed to write install log: {}", e);
             None
         }
     }
@@ -151,15 +151,15 @@ pub async fn write_upgrade_log(
 /// Install production dependencies using the new version's binary.
 ///
 /// Spawns: `{version_dir}/bin/vp install --silent [--registry <url>]` with `CI=true`.
-/// On failure, writes stdout+stderr to `{version_dir}/upgrade.log` for debugging.
+/// On failure, writes stdout+stderr to `{install_dir}/upgrade.log` for debugging.
 pub async fn install_production_deps(
     version_dir: &AbsolutePath,
     registry: Option<&str>,
 ) -> Result<(), Error> {
-    let vp_binary = version_dir.join("bin").join(if cfg!(windows) { "vp.exe" } else { "vp" });
+    let vp_binary = version_dir.join("bin").join(crate::VP_BINARY_NAME);
 
     if !tokio::fs::try_exists(&vp_binary).await.unwrap_or(false) {
-        return Err(Error::Upgrade(
+        return Err(Error::Setup(
             format!("New binary not found at {}", vp_binary.as_path().display()).into(),
         ));
     }
@@ -181,12 +181,12 @@ pub async fn install_production_deps(
         .await?;
 
     if !output.status.success() {
-        let log_path = write_upgrade_log(version_dir, &output.stdout, &output.stderr).await;
+        let log_path = write_install_log(version_dir, &output.stdout, &output.stderr).await;
         let log_msg = log_path.map_or_else(
             || String::new(),
             |p| format!(". See log for details: {}", p.as_path().display()),
         );
-        return Err(Error::Upgrade(
+        return Err(Error::Setup(
             format!(
                 "Failed to install production dependencies (exit code: {}){}",
                 output.status.code().unwrap_or(-1),
@@ -199,18 +199,20 @@ pub async fn install_production_deps(
     Ok(())
 }
 
+/// Read the current installed version by following the `current` symlink/junction.
+///
+/// Returns `None` if no installation exists or the link target cannot be read.
+pub async fn read_current_version(install_dir: &AbsolutePath) -> Option<String> {
+    let current_link = install_dir.join("current");
+    let target = tokio::fs::read_link(&current_link).await.ok()?;
+    target.file_name().and_then(|n| n.to_str()).map(String::from)
+}
+
 /// Save the current version before swapping, for rollback support.
 ///
 /// Reads the `current` symlink target and writes the version to `.previous-version`.
 pub async fn save_previous_version(install_dir: &AbsolutePath) -> Result<Option<String>, Error> {
-    let current_link = install_dir.join("current");
-
-    if !tokio::fs::try_exists(&current_link).await.unwrap_or(false) {
-        return Ok(None);
-    }
-
-    let target = tokio::fs::read_link(&current_link).await?;
-    let version = target.file_name().and_then(|n| n.to_str()).map(String::from);
+    let version = read_current_version(install_dir).await;
 
     if let Some(ref v) = version {
         let prev_file = install_dir.join(".previous-version");
@@ -231,7 +233,7 @@ pub async fn swap_current_link(install_dir: &AbsolutePath, version: &str) -> Res
 
     // Verify the version directory exists
     if !tokio::fs::try_exists(&version_dir).await.unwrap_or(false) {
-        return Err(Error::Upgrade(
+        return Err(Error::Setup(
             format!("Version directory does not exist: {}", version_dir.as_path().display()).into(),
         ));
     }
@@ -259,7 +261,7 @@ pub async fn swap_current_link(install_dir: &AbsolutePath, version: &str) -> Res
             if let Err(e) = std::fs::remove_dir(&current_link) {
                 tracing::debug!("remove_dir failed ({}), trying junction::delete", e);
                 junction::delete(&current_link).map_err(|e| {
-                    Error::Upgrade(
+                    Error::Setup(
                         format!(
                             "Failed to remove existing junction at {}: {e}",
                             current_link.as_path().display()
@@ -271,7 +273,7 @@ pub async fn swap_current_link(install_dir: &AbsolutePath, version: &str) -> Res
         }
 
         junction::create(&version_dir, &current_link).map_err(|e| {
-            Error::Upgrade(
+            Error::Setup(
                 format!(
                     "Failed to create junction at {}: {e}\nTry removing it manually and run again.",
                     current_link.as_path().display()
@@ -287,8 +289,7 @@ pub async fn swap_current_link(install_dir: &AbsolutePath, version: &str) -> Res
 
 /// Refresh shims by running `vp env setup --refresh` with the new binary.
 pub async fn refresh_shims(install_dir: &AbsolutePath) -> Result<(), Error> {
-    let vp_binary =
-        install_dir.join("current").join("bin").join(if cfg!(windows) { "vp.exe" } else { "vp" });
+    let vp_binary = install_dir.join("current").join("bin").join(crate::VP_BINARY_NAME);
 
     if !tokio::fs::try_exists(&vp_binary).await.unwrap_or(false) {
         tracing::warn!(
@@ -309,6 +310,34 @@ pub async fn refresh_shims(install_dir: &AbsolutePath) -> Result<(), Error> {
         let stderr = String::from_utf8_lossy(&output.stderr);
         tracing::warn!(
             "Shim refresh exited with code {}, continuing anyway\n{}",
+            output.status.code().unwrap_or(-1),
+            stderr.trim()
+        );
+    }
+
+    Ok(())
+}
+
+/// Create shell env files by running `vp env setup --env-only`.
+///
+/// Used when the Node.js manager is disabled — ensures env files exist
+/// even without a full shim refresh.
+pub async fn create_env_files(install_dir: &AbsolutePath) -> Result<(), Error> {
+    let vp_binary = install_dir.join("current").join("bin").join(crate::VP_BINARY_NAME);
+
+    if !tokio::fs::try_exists(&vp_binary).await.unwrap_or(false) {
+        return Ok(());
+    }
+
+    let output = tokio::process::Command::new(vp_binary.as_path())
+        .args(["env", "setup", "--env-only"])
+        .output()
+        .await?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        tracing::warn!(
+            "env setup --env-only exited with code {}, continuing anyway\n{}",
             output.status.code().unwrap_or(-1),
             stderr.trim()
         );
@@ -342,7 +371,7 @@ pub async fn cleanup_old_versions(
                 metadata.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH)
             });
             let path = AbsolutePathBuf::new(entry.path()).ok_or_else(|| {
-                Error::Upgrade(format!("Invalid absolute path: {}", entry.path().display()).into())
+                Error::Setup(format!("Invalid absolute path: {}", entry.path().display()).into())
             })?;
             versions.push((time, path));
         }
@@ -478,7 +507,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_write_upgrade_log_creates_log_in_parent_dir() {
+    async fn test_write_install_log_creates_log_in_parent_dir() {
         let temp = tempfile::tempdir().unwrap();
         // Simulate ~/.vite-plus/0.1.15/ structure
         let version_dir = AbsolutePathBuf::new(temp.path().join("0.1.15").to_path_buf()).unwrap();
@@ -487,8 +516,8 @@ mod tests {
         let stdout = b"some stdout output";
         let stderr = b"error: something went wrong";
 
-        let result = write_upgrade_log(&version_dir, stdout, stderr).await;
-        assert!(result.is_some(), "write_upgrade_log should return log path");
+        let result = write_install_log(&version_dir, stdout, stderr).await;
+        assert!(result.is_some(), "write_install_log should return log path");
 
         let log_path = result.unwrap();
         // Log should be in parent dir, not version_dir
@@ -511,12 +540,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_write_upgrade_log_handles_empty_output() {
+    async fn test_write_install_log_handles_empty_output() {
         let temp = tempfile::tempdir().unwrap();
         let version_dir = AbsolutePathBuf::new(temp.path().join("0.1.15").to_path_buf()).unwrap();
         tokio::fs::create_dir(&version_dir).await.unwrap();
 
-        let result = write_upgrade_log(&version_dir, b"", b"").await;
+        let result = write_install_log(&version_dir, b"", b"").await;
         assert!(result.is_some());
 
         let content = tokio::fs::read_to_string(result.unwrap()).await.unwrap();
