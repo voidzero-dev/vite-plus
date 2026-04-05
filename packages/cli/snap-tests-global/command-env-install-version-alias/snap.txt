@@ -2,7 +2,7 @@
 VITE+ - The Unified Toolchain for the Web
 
 Installing ./command-env-install-version-alias-pkg globally...
-Installed ./command-env-install-version-alias-pkg v<semver>
+Installed command-env-install-version-alias-pkg v<semver>
 Binaries: command-env-install-version-alias-pkg-cli
 
 > cat $VP_HOME/bins/command-env-install-version-alias-pkg-cli.json | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); const v=parseInt(d.nodeVersion.split('.')[0]); console.log('LTS major >= 20:', v >= 20)" # Verify LTS version
@@ -15,7 +15,7 @@ Uninstalled command-env-install-version-alias-pkg
 VITE+ - The Unified Toolchain for the Web
 
 Installing ./command-env-install-version-alias-pkg globally...
-Installed ./command-env-install-version-alias-pkg v<semver>
+Installed command-env-install-version-alias-pkg v<semver>
 Binaries: command-env-install-version-alias-pkg-cli
 
 > cat $VP_HOME/bins/command-env-install-version-alias-pkg-cli.json | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8')); const v=parseInt(d.nodeVersion.split('.')[0]); console.log('Latest major >= 20:', v >= 20)" # Verify latest version
