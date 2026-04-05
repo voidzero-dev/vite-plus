@@ -28,6 +28,7 @@ use vite_path::AbsolutePathBuf;
 
 use crate::{
     cli::{EnvArgs, EnvSubcommands},
+    commands::shell::{Shell, detect_shell},
     error::Error,
 };
 
@@ -166,12 +167,22 @@ async fn print_env(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
     .await?;
 
     let bin_dir = runtime.get_bin_prefix();
+    let snippet = format_print_snippet(detect_shell(), &bin_dir);
 
     // Print shell snippet
     println!("# Add to your shell to use this Node.js version for this session:");
-    println!("export PATH=\"{}:$PATH\"", bin_dir.as_path().display());
+    println!("{snippet}");
 
     Ok(ExitStatus::default())
+}
+
+fn format_print_snippet(shell: Shell, bin_dir: &vite_path::AbsolutePath) -> String {
+    match shell {
+        Shell::Nushell => {
+            format!("$env.PATH = ($env.PATH | prepend \"{}\")", bin_dir.as_path().display())
+        }
+        _ => format!("export PATH=\"{}:$PATH\"", bin_dir.as_path().display()),
+    }
 }
 
 /// Create an exit status with the given code.
@@ -185,5 +196,26 @@ fn exit_status(code: i32) -> ExitStatus {
     {
         use std::os::windows::process::ExitStatusExt;
         ExitStatus::from_raw(code as u32)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use vite_path::AbsolutePathBuf;
+
+    use super::{Shell, format_print_snippet};
+
+    #[test]
+    fn test_format_print_snippet_posix() {
+        let bin_dir = AbsolutePathBuf::new("/tmp/vp/bin".into()).unwrap();
+        let snippet = format_print_snippet(Shell::Posix, &bin_dir);
+        assert_eq!(snippet, "export PATH=\"/tmp/vp/bin:$PATH\"");
+    }
+
+    #[test]
+    fn test_format_print_snippet_nushell() {
+        let bin_dir = AbsolutePathBuf::new("/tmp/vp/bin".into()).unwrap();
+        let snippet = format_print_snippet(Shell::Nushell, &bin_dir);
+        assert_eq!(snippet, "$env.PATH = ($env.PATH | prepend \"/tmp/vp/bin\")");
     }
 }

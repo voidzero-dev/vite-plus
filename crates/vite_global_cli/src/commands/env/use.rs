@@ -1,51 +1,29 @@
 //! Implementation of `vp env use` command.
 //!
 //! Outputs shell-appropriate commands to stdout that set (or unset)
-//! the `VP_NODE_VERSION` environment variable. The shell function
-//! wrapper in `~/.vite-plus/env` evals this output to modify the current
-//! shell session.
+//! the `VP_NODE_VERSION` environment variable. The shell wrapper
+//! scripts consume this output to modify the current shell session.
 //!
 //! All user-facing status messages go to stderr so they don't interfere
-//! with the eval'd output.
+//! with the wrapper-consumed output.
 
 use std::process::ExitStatus;
 
+use serde_json::json;
 use vite_path::AbsolutePathBuf;
 
 use super::config::{self, VERSION_ENV_VAR};
-use crate::error::Error;
-
-/// Detected shell type for output formatting.
-enum Shell {
-    /// POSIX shell (bash, zsh, sh)
-    Posix,
-    /// Fish shell
-    Fish,
-    /// PowerShell
-    PowerShell,
-    /// Windows cmd.exe
-    Cmd,
-}
-
-/// Detect the current shell from environment variables.
-fn detect_shell() -> Shell {
-    let config = vite_shared::EnvConfig::get();
-    if config.fish_version.is_some() {
-        Shell::Fish
-    } else if cfg!(windows) && config.ps_module_path.is_some() {
-        Shell::PowerShell
-    } else if cfg!(windows) {
-        Shell::Cmd
-    } else {
-        Shell::Posix
-    }
-}
+use crate::{
+    commands::shell::{Shell, detect_shell},
+    error::Error,
+};
 
 /// Format a shell export command for the detected shell.
 fn format_export(shell: &Shell, value: &str) -> String {
     match shell {
         Shell::Posix => format!("export {VERSION_ENV_VAR}={value}"),
         Shell::Fish => format!("set -gx {VERSION_ENV_VAR} {value}"),
+        Shell::Nushell => json!({ "set": { VERSION_ENV_VAR: value } }).to_string(),
         Shell::PowerShell => format!("$env:{VERSION_ENV_VAR} = \"{value}\""),
         Shell::Cmd => format!("set {VERSION_ENV_VAR}={value}"),
     }
@@ -56,6 +34,7 @@ fn format_unset(shell: &Shell) -> String {
     match shell {
         Shell::Posix => format!("unset {VERSION_ENV_VAR}"),
         Shell::Fish => format!("set -e {VERSION_ENV_VAR}"),
+        Shell::Nushell => json!({ "unset": [VERSION_ENV_VAR] }).to_string(),
         Shell::PowerShell => {
             format!("Remove-Item Env:{VERSION_ENV_VAR} -ErrorAction SilentlyContinue")
         }
@@ -63,8 +42,8 @@ fn format_unset(shell: &Shell) -> String {
     }
 }
 
-/// Whether the shell eval wrapper is active.
-/// When true, the wrapper will eval our stdout to set env vars — no session file needed.
+/// Whether the shell wrapper is active.
+/// When true, the wrapper will consume our stdout to set env vars — no session file needed.
 /// When false (CI, direct invocation), we write a session file so shims can read it.
 fn has_eval_wrapper() -> bool {
     vite_shared::EnvConfig::get().env_use_eval_enable
@@ -172,40 +151,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_detect_shell_posix_even_with_psmodulepath() {
-        let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig {
-            ps_module_path: Some("/some/path".into()),
-            ..vite_shared::EnvConfig::for_test()
-        });
-        let shell = detect_shell();
-        #[cfg(not(windows))]
-        assert!(matches!(shell, Shell::Posix));
-        #[cfg(windows)]
-        assert!(matches!(shell, Shell::PowerShell));
-    }
-
-    #[test]
-    fn test_detect_shell_fish() {
-        let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig {
-            fish_version: Some("3.7.0".into()),
-            ..vite_shared::EnvConfig::for_test()
-        });
-        let shell = detect_shell();
-        assert!(matches!(shell, Shell::Fish));
-    }
-
-    #[test]
-    fn test_detect_shell_posix_default() {
-        // All shell detection fields None → defaults
-        let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig::for_test());
-        let shell = detect_shell();
-        #[cfg(not(windows))]
-        assert!(matches!(shell, Shell::Posix));
-        #[cfg(windows)]
-        assert!(matches!(shell, Shell::Cmd));
-    }
-
-    #[test]
     fn test_format_export_posix() {
         let result = format_export(&Shell::Posix, "20.18.0");
         assert_eq!(result, "export VP_NODE_VERSION=20.18.0");
@@ -215,6 +160,12 @@ mod tests {
     fn test_format_export_fish() {
         let result = format_export(&Shell::Fish, "20.18.0");
         assert_eq!(result, "set -gx VP_NODE_VERSION 20.18.0");
+    }
+
+    #[test]
+    fn test_format_export_nushell() {
+        let result = format_export(&Shell::Nushell, "20.18.0");
+        assert_eq!(result, r#"{"set":{"VP_NODE_VERSION":"20.18.0"}}"#);
     }
 
     #[test]
@@ -239,6 +190,12 @@ mod tests {
     fn test_format_unset_fish() {
         let result = format_unset(&Shell::Fish);
         assert_eq!(result, "set -e VP_NODE_VERSION");
+    }
+
+    #[test]
+    fn test_format_unset_nushell() {
+        let result = format_unset(&Shell::Nushell);
+        assert_eq!(result, r#"{"unset":["VP_NODE_VERSION"]}"#);
     }
 
     #[test]
