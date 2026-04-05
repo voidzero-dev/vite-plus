@@ -163,6 +163,7 @@ export default extendConfig(
                 { text: 'Build', link: '/config/build' },
                 { text: 'Pack', link: '/config/pack' },
                 { text: 'Staged', link: '/config/staged' },
+                { text: 'Troubleshooting', link: '/config/troubleshooting' },
               ],
             },
           ],

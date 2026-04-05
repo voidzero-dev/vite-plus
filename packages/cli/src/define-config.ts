@@ -2,7 +2,6 @@ import type { UserConfig } from '@voidzero-dev/vite-plus-core';
 import {
   defineConfig as viteDefineConfig,
   type ConfigEnv,
-  type Plugin as VitestPlugin,
 } from '@voidzero-dev/vite-plus-test/config';
 import type { OxfmtConfig } from 'oxfmt';
 import type { OxlintConfig } from 'oxlint';
@@ -25,12 +24,6 @@ declare module '@voidzero-dev/vite-plus-core' {
     run?: RunConfig;
 
     staged?: StagedConfig;
-
-    // temporary solution to load plugins lazily
-    // We need to support this in the upstream vite
-    lazy?: () => Promise<{
-      plugins?: VitestPlugin[];
-    }>;
   }
 }
 
@@ -51,49 +44,13 @@ export function defineConfig(config: ViteUserConfigFnPromise): ViteUserConfigFnP
 export function defineConfig(config: ViteUserConfigExport): ViteUserConfigExport;
 
 export function defineConfig(config: ViteUserConfigExport): ViteUserConfigExport {
-  if (typeof config === 'object') {
-    if (config instanceof Promise) {
-      return config.then((config) => {
-        if (config.lazy) {
-          return config.lazy().then(({ plugins }) =>
-            viteDefineConfig({
-              ...config,
-              plugins: [...(config.plugins || []), ...(plugins || [])],
-            }),
-          );
-        }
-        return viteDefineConfig(config);
-      });
-    } else if (config.lazy) {
-      return config.lazy().then(({ plugins }) =>
-        viteDefineConfig({
-          ...config,
-          plugins: [...(config.plugins || []), ...(plugins || [])],
-        }),
-      );
-    }
-  } else if (typeof config === 'function') {
-    return viteDefineConfig((env) => {
-      const c = config(env);
-      if (c instanceof Promise) {
-        return c.then((v) => {
-          if (v.lazy) {
-            return v
-              .lazy()
-              .then(({ plugins }) =>
-                viteDefineConfig({ ...v, plugins: [...(v.plugins || []), ...(plugins || [])] }),
-              );
-          }
-          return v;
-        });
-      }
-      if (c.lazy) {
-        return c
-          .lazy()
-          .then(({ plugins }) => ({ ...c, plugins: [...(c.plugins || []), ...(plugins || [])] }));
-      }
-      return c;
-    });
-  }
   return viteDefineConfig(config);
+}
+
+export function vitePlugins<T>(cb: () => T): T | undefined {
+  const cmd = process.env.VP_COMMAND;
+  if (cmd === 'dev' || cmd === 'build' || cmd === 'test' || cmd === 'preview') {
+    return cb();
+  }
+  return undefined;
 }
