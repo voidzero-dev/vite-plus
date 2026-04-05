@@ -12,8 +12,12 @@ if (!process.argv.includes('--lsp')) {
 
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
+import pkg from '../package.json' with { type: 'json' };
 
 const require = createRequire(import.meta.url);
 const oxfmtBin = require.resolve('oxfmt/bin/oxfmt');
 
+// This allows oxfmt to load vite.config.ts
+// For `vp check` and `vp fmt`, see `src/utils/constants.ts`
+process.env.VITE_PLUS_VERSION = pkg.version;
 await import(pathToFileURL(oxfmtBin).href);

@@ -37,4 +37,7 @@ export const DEFAULT_ENVS = {
   JS_RUNTIME_NAME: process.release.name,
   // Indicate that vite-plus is the package manager
   NODE_PACKAGE_MANAGER: 'vite-plus',
+  // This allows oxlint/oxfmt to load vite.config.ts
+  // For `--lsp` path, see `bin/oxlint` and `bin/oxfmt`
+  VITE_PLUS_VERSION,
 } as const;
