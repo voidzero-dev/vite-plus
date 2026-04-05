@@ -534,12 +534,21 @@ def --env --wrapped vp [...args: string@"nu-complete vp"] {
         let out = (with-env { VP_ENV_USE_EVAL_ENABLE: "1", NU_VERSION: "1" } {
             ^vp ...$args
         })
-        let exports = ($out | lines | where { $in =~ '^\$env\.' } | parse '$env.{key} = "{value}"')
-        if ($exports | is-not-empty) {
-            load-env ($exports | reduce -f {} {|it, acc| $acc | insert $it.key $it.value})
+        # Apply mutations in emission order so that hide-env followed by $env.KEY = "..."
+        # correctly results in the variable being set (not unset).
+        for line in ($out | lines) {
+            if ($line =~ '^\$env\.') {
+                let parsed = ($line | parse '$env.{key} = "{value}"')
+                if ($parsed | is-not-empty) {
+                    load-env { ($parsed.0.key): ($parsed.0.value) }
+                }
+            } else if ($line =~ '^hide-env ') {
+                let parsed = ($line | parse 'hide-env {key}')
+                if ($parsed | is-not-empty) {
+                    hide-env ($parsed.0.key)
+                }
+            }
         }
-        let unsets = ($out | lines | where { $in =~ '^hide-env ' } | parse 'hide-env {key}' | get key)
-        for key in $unsets { hide-env $key }
     } else {
         ^vp ...$args
     }
@@ -753,6 +762,10 @@ mod tests {
         assert!(
             nu_content.contains("vp.fish"),
             "env.nu should reference the Fish completion file for Nushell delegation"
+        );
+        assert!(
+            nu_content.contains("for line in ($out | lines)"),
+            "env.nu should apply mutations in emission order"
         );
     }
 
