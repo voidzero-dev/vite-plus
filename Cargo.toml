@@ -72,7 +72,6 @@ blake3 = "1.8.2"
 chrono = { version = "0.4", features = ["serde"] }
 clap = "4.5.40"
 clap_complete = "4.6.0"
-clap_complete_nushell = "4.6.0"
 commondir = "1.0.0"
 cow-utils = "0.1.3"
 criterion = { version = "0.7", features = ["html_reports"] }

@@ -16,7 +16,6 @@ base64-simd = { workspace = true }
 chrono = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 clap_complete = { workspace = true, features = ["unstable-dynamic"] }
-clap_complete_nushell = { workspace = true }
 directories = { workspace = true }
 flate2 = { workspace = true }
 serde = { workspace = true }
