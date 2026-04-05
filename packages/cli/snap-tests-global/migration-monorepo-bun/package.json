@@ -1,0 +1,32 @@
+{
+  "name": "migration-monorepo-bun",
+  "version": "1.0.0",
+  "workspaces": {
+    "packages": [
+      "packages/*"
+    ],
+    "catalog": {
+      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+      "vitest": "npm:@voidzero-dev/vite-plus-test@latest",
+      "vite-plus": "latest"
+    }
+  },
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "test": "vitest",
+    "lint": "oxlint",
+    "fmt": "oxfmt"
+  },
+  "dependencies": {
+    "testnpm2": "1.0.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "catalog:",
+    "oxfmt": "catalog:",
+    "oxlint": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  },
+  "packageManager": "bun@1.3.11"
+}

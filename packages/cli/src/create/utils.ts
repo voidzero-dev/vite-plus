@@ -3,8 +3,8 @@ import path from 'node:path';
 
 import validateNpmPackageName from 'validate-npm-package-name';
 
-import { editJsonFile } from '../utils/json.js';
-import { getRandomProjectName } from './random-name.js';
+import { editJsonFile } from '../utils/json.ts';
+import { getRandomProjectName } from './random-name.ts';
 
 // Helper functions for file operations
 export function copy(src: string, dest: string) {

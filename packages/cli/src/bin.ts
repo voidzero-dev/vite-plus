@@ -1,7 +1,7 @@
 /**
  * Unified entry point for both the local CLI (via bin/vp) and the global CLI (via Rust vp binary).
  *
- * Global commands (create, migrate, config, mcp, staged, --version) are handled by rolldown-bundled modules.
+ * Global commands (create, migrate, config, mcp, staged, --version) are handled by tsdown-bundled modules.
  * All other commands are delegated to the Rust core through NAPI bindings, which
  * uses JavaScript tool resolver functions to locate tool binaries.
  *
@@ -13,15 +13,15 @@
 import path from 'node:path';
 
 import { run } from '../binding/index.js';
-import { applyToolInitConfigToViteConfig, inspectInitCommand } from './init-config.js';
-import { doc } from './resolve-doc.js';
-import { fmt } from './resolve-fmt.js';
-import { lint } from './resolve-lint.js';
-import { pack } from './resolve-pack.js';
-import { test } from './resolve-test.js';
-import { resolveUniversalViteConfig } from './resolve-vite-config.js';
-import { vite } from './resolve-vite.js';
-import { accent, errorMsg, log } from './utils/terminal.js';
+import { applyToolInitConfigToViteConfig, inspectInitCommand } from './init-config.ts';
+import { doc } from './resolve-doc.ts';
+import { fmt } from './resolve-fmt.ts';
+import { lint } from './resolve-lint.ts';
+import { pack } from './resolve-pack.ts';
+import { test } from './resolve-test.ts';
+import { resolveUniversalViteConfig } from './resolve-vite-config.ts';
+import { vite } from './resolve-vite.ts';
+import { accent, errorMsg, log } from './utils/terminal.ts';
 
 function getErrorMessage(err: unknown): string {
   if (err instanceof Error) {
@@ -46,26 +46,19 @@ if (args[0] === 'help' && args[1]) {
 
 const command = args[0];
 
-// Global commands — handled by rolldown-bundled modules in dist/global/
-// These modules only exist after rolldown bundles them, so TS cannot resolve them.
+// Global commands — handled by tsdown-bundled modules in dist/
 if (command === 'create') {
-  // @ts-ignore — rolldown output
-  await import('./global/create.js');
+  await import('./create/bin.js');
 } else if (command === 'migrate') {
-  // @ts-ignore — rolldown output
-  await import('./global/migrate.js');
+  await import('./migration/bin.js');
 } else if (command === 'config') {
-  // @ts-ignore — rolldown output
-  await import('./global/config.js');
+  await import('./config/bin.js');
 } else if (command === 'mcp') {
-  // @ts-ignore — rolldown output
-  await import('./global/mcp.js');
+  await import('./mcp/bin.js');
 } else if (command === '--version' || command === '-V') {
-  // @ts-ignore — rolldown output
-  await import('./global/version.js');
+  await import('./version.js');
 } else if (command === 'staged') {
-  // @ts-ignore — rolldown output
-  await import('./global/staged.js');
+  await import('./staged/bin.js');
 } else {
   // All other commands — delegate to Rust core via NAPI binding
   try {

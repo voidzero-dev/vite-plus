@@ -1,0 +1,12 @@
+{
+  "name": "migration-vitest-peer-dep",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "test": "vitest"
+  },
+  "devDependencies": {
+    "vite": "^7.0.0",
+    "vitest-browser-svelte": "^2.1.0"
+  }
+}

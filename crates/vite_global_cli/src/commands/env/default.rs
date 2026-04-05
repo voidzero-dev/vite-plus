@@ -68,7 +68,7 @@ async fn set_default(version: &str) -> Result<ExitStatus, Error> {
         }
         "latest" => {
             // Resolve to show current value, but store "latest" as alias
-            let current_latest = provider.resolve_version("*").await?;
+            let current_latest = provider.resolve_absolute_latest_version().await?;
             (format!("latest (currently {})", current_latest), "latest".to_string())
         }
         _ => {
@@ -102,7 +102,7 @@ async fn resolve_alias(
 ) -> Result<String, Error> {
     match alias {
         "lts" => Ok(provider.resolve_latest_version().await?.to_string()),
-        "latest" => Ok(provider.resolve_version("*").await?.to_string()),
+        "latest" => Ok(provider.resolve_absolute_latest_version().await?.to_string()),
         _ => Ok(alias.to_string()),
     }
 }

@@ -11,7 +11,7 @@ import {
 } from '@voidzero-dev/vite-plus-core/pack';
 import { cac } from 'cac';
 
-import { resolveViteConfig } from './resolve-vite-config.js';
+import { resolveViteConfig } from './resolve-vite-config.ts';
 
 /**
  * Rolldown plugin that transforms value imports/exports to type-only in external

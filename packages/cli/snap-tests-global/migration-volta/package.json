@@ -1,0 +1,10 @@
+{
+  "name": "migration-volta",
+  "devDependencies": {
+    "vite": "^7.0.0"
+  },
+  "volta": {
+    "node": "20.5.0",
+    "npm": "10.2.5"
+  }
+}

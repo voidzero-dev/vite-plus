@@ -14,6 +14,7 @@ pub(crate) mod exec;
 
 pub(crate) use cache::invalidate_cache;
 pub use dispatch::dispatch;
+pub(crate) use dispatch::find_system_tool;
 use vite_shared::env_vars;
 
 /// Core shim tools (node, npm, npx)

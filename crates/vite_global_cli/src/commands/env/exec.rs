@@ -159,7 +159,7 @@ async fn resolve_version(version: &str, provider: &NodeProvider) -> Result<Strin
             Ok(resolved.to_string())
         }
         "latest" => {
-            let resolved = provider.resolve_version("*").await?;
+            let resolved = provider.resolve_absolute_latest_version().await?;
             Ok(resolved.to_string())
         }
         _ => {

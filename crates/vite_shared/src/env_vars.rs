@@ -25,7 +25,7 @@ pub const NPM_CONFIG_REGISTRY: &str = "npm_config_registry";
 pub const NPM_CONFIG_REGISTRY_UPPER: &str = "NPM_CONFIG_REGISTRY";
 
 /// Node.js distribution mirror URL for downloads.
-pub const VITE_NODE_DIST_MIRROR: &str = "VITE_NODE_DIST_MIRROR";
+pub const VP_NODE_DIST_MIRROR: &str = "VP_NODE_DIST_MIRROR";
 
 /// Override Node.js version (takes highest priority in version resolution).
 pub const VP_NODE_VERSION: &str = "VP_NODE_VERSION";

@@ -7,7 +7,7 @@ use vite_path::{AbsolutePathBuf, current_dir};
 use vite_shared::{env_vars, output};
 
 use super::config::{self, ShimMode, get_bin_dir, get_vp_home, load_config, resolve_version};
-use crate::error::Error;
+use crate::{error::Error, shim};
 
 /// IDE-relevant profile files that GUI-launched applications can see.
 /// GUI apps don't run through an interactive shell, so only login/environment
@@ -114,7 +114,7 @@ pub async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
 
     // Section: Configuration
     print_section("Configuration");
-    check_shim_mode().await;
+    let (shim_mode, system_node_path) = check_shim_mode().await;
 
     // Check env sourcing: IDE-relevant profiles first, then all shell profiles
     #[cfg(not(windows))]
@@ -128,7 +128,7 @@ pub async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
 
     // Section: Version Resolution
     print_section("Version Resolution");
-    check_current_resolution(&cwd).await;
+    check_current_resolution(&cwd, shim_mode, system_node_path).await;
 
     // Section: Conflicts (conditional)
     check_conflicts();
@@ -247,43 +247,48 @@ fn shim_filename(tool: &str) -> String {
     }
 }
 
-/// Check and display shim mode.
-async fn check_shim_mode() {
+/// Check and display shim mode. Returns the mode and any found system node path.
+async fn check_shim_mode() -> (ShimMode, Option<AbsolutePathBuf>) {
     let config = match load_config().await {
         Ok(c) => c,
         Err(e) => {
             print_check(
                 &output::WARN_SIGN.yellow().to_string(),
-                "Shim mode",
+                "Node.js mode",
                 &format!("config error: {e}").yellow().to_string(),
             );
-            return;
+            return (ShimMode::default(), None);
         }
     };
 
+    let mut system_node_path = None;
+
     match config.shim_mode {
         ShimMode::Managed => {
-            print_check(&output::CHECK.green().to_string(), "Shim mode", "managed");
+            print_check(&output::CHECK.green().to_string(), "Node.js mode", "managed");
         }
         ShimMode::SystemFirst => {
             print_check(
                 &output::CHECK.green().to_string(),
-                "Shim mode",
+                "Node.js mode",
                 &"system-first".bright_blue().to_string(),
             );
 
             // Check if system Node.js is available
-            if let Some(system_node) = find_system_node() {
-                print_check(" ", "System Node.js", &system_node.display().to_string());
+            if let Some(system_node) = shim::find_system_tool("node") {
+                print_check(" ", "System Node.js", &system_node.as_path().display().to_string());
+                system_node_path = Some(system_node);
             } else {
                 print_check(
                     &output::WARN_SIGN.yellow().to_string(),
                     "System Node.js",
-                    &"not found (will use managed)".yellow().to_string(),
+                    &"not found (will fall back to managed)".yellow().to_string(),
                 );
             }
         }
     }
+
+    (config.shim_mode, system_node_path)
 }
 
 /// Check profile files for env sourcing and classify where it was found.
@@ -336,36 +341,6 @@ fn check_env_sourcing() -> EnvSourcingStatus {
     }
 
     EnvSourcingStatus::NotFound
-}
-
-/// Find system Node.js, skipping vite-plus bin directory and any
-/// directories listed in `VP_BYPASS`.
-fn find_system_node() -> Option<std::path::PathBuf> {
-    let bin_dir = get_bin_dir().ok();
-    let path_var = std::env::var_os("PATH")?;
-
-    // Parse VP_BYPASS as a PATH-style list of additional directories to skip
-    let bypass_paths: Vec<std::path::PathBuf> = std::env::var_os(env_vars::VP_BYPASS)
-        .map(|v| std::env::split_paths(&v).collect())
-        .unwrap_or_default();
-
-    // Filter PATH to exclude our bin directory and any bypass directories
-    let filtered_paths: Vec<_> = std::env::split_paths(&path_var)
-        .filter(|p| {
-            if let Some(ref bin) = bin_dir {
-                if p == bin.as_path() {
-                    return false;
-                }
-            }
-            !bypass_paths.iter().any(|bp| p == bp)
-        })
-        .collect();
-
-    let filtered_path = std::env::join_paths(filtered_paths).ok()?;
-
-    // Use vite_command::resolve_bin with filtered PATH - stops at first match
-    let cwd = current_dir().ok()?;
-    vite_command::resolve_bin("node", Some(&filtered_path), &cwd).ok().map(|p| p.into_path_buf())
 }
 
 /// Check for active session override via VP_NODE_VERSION or session file.
@@ -613,8 +588,34 @@ fn print_ide_setup_guidance(bin_dir: &vite_path::AbsolutePath) {
 }
 
 /// Check current directory version resolution.
-async fn check_current_resolution(cwd: &AbsolutePathBuf) {
+async fn check_current_resolution(
+    cwd: &AbsolutePathBuf,
+    shim_mode: ShimMode,
+    system_node_path: Option<AbsolutePathBuf>,
+) {
     print_check(" ", "Directory", &cwd.as_path().display().to_string());
+
+    // In system-first mode, show system Node.js info instead of managed resolution
+    if shim_mode == ShimMode::SystemFirst {
+        if let Some(system_node) = system_node_path {
+            let version = get_node_version(&system_node).await;
+            print_check(" ", "Source", "system PATH");
+            print_check(" ", "Version", &version.bright_green().to_string());
+            print_check(
+                &output::CHECK.green().to_string(),
+                "Node binary",
+                &system_node.as_path().display().to_string(),
+            );
+        } else {
+            print_check(
+                &output::WARN_SIGN.yellow().to_string(),
+                "System Node.js",
+                &"not found in PATH".yellow().to_string(),
+            );
+            print_hint("Install Node.js or run 'vp env on' to use managed Node.js.");
+        }
+        return;
+    }
 
     match resolve_version(cwd).await {
         Ok(resolution) => {
@@ -655,6 +656,16 @@ async fn check_current_resolution(cwd: &AbsolutePathBuf) {
                 &format!("failed: {e}").red().to_string(),
             );
         }
+    }
+}
+
+/// Get the version string from a Node.js binary.
+async fn get_node_version(node_path: &vite_path::AbsolutePath) -> String {
+    match tokio::process::Command::new(node_path.as_path()).arg("--version").output().await {
+        Ok(output) if output.status.success() => {
+            String::from_utf8_lossy(&output.stdout).trim().to_string()
+        }
+        _ => "unknown".to_string(),
     }
 }
 
@@ -806,9 +817,12 @@ mod tests {
             std::env::set_var(env_vars::VP_BYPASS, dir_a.as_os_str());
         }
 
-        let result = find_system_node();
+        let result = shim::find_system_tool("node");
         assert!(result.is_some(), "Should find node in non-bypassed directory");
-        assert!(result.unwrap().starts_with(&dir_b), "Should find node in dir_b, not dir_a");
+        assert!(
+            result.unwrap().as_path().starts_with(&dir_b),
+            "Should find node in dir_b, not dir_a"
+        );
     }
 
     #[test]
@@ -826,7 +840,7 @@ mod tests {
             std::env::set_var(env_vars::VP_BYPASS, dir_a.as_os_str());
         }
 
-        let result = find_system_node();
+        let result = shim::find_system_tool("node");
         assert!(result.is_none(), "Should return None when all paths are bypassed");
     }
 

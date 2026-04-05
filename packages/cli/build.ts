@@ -2,14 +2,13 @@
  * Build script for vite-plus CLI package
  *
  * This script performs the following main tasks:
- * 1. buildCli() - Compiles TypeScript sources (local CLI) via tsc
- * 2. buildGlobalModules() - Bundles global CLI modules (create, migrate, init, mcp, version) via rolldown
- * 3. buildNapiBinding() - Builds the native Rust binding via NAPI
- * 4. syncCorePackageExports() - Creates shim files to re-export from @voidzero-dev/vite-plus-core
- * 5. syncTestPackageExports() - Creates shim files to re-export from @voidzero-dev/vite-plus-test
- * 6. syncVersionsExport() - Generates ./versions module with bundled tool versions
- * 7. copySkillDocs() - Copies docs into skills/vite-plus/docs for runtime MCP access
- * 8. syncReadmeFromRoot() - Keeps package README in sync
+ * 1. buildWithTsdown() - Bundles all CLI entry points via tsdown
+ * 2. buildNapiBinding() - Builds the native Rust binding via NAPI
+ * 3. syncCorePackageExports() - Creates shim files to re-export from @voidzero-dev/vite-plus-core
+ * 4. syncTestPackageExports() - Creates shim files to re-export from @voidzero-dev/vite-plus-test
+ * 5. syncVersionsExport() - Generates ./versions module with bundled tool versions
+ * 6. copySkillDocs() - Copies docs into skills/vite-plus/docs for runtime MCP access
+ * 7. syncReadmeFromRoot() - Keeps package README in sync
  *
  * The sync functions allow this package to be a drop-in replacement for 'vite' by
  * re-exporting all the same subpaths (./client, ./types/*, etc.) while delegating
@@ -20,23 +19,14 @@
  */
 
 import { execSync } from 'node:child_process';
-import { existsSync, globSync, readFileSync, readdirSync, statSync } from 'node:fs';
-import { copyFile, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { existsSync, globSync, readdirSync, statSync } from 'node:fs';
+import { copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
 import { createBuildCommand, NapiCli } from '@napi-rs/cli';
 import { format } from 'oxfmt';
-import {
-  createCompilerHost,
-  createProgram,
-  formatDiagnostics,
-  parseJsonSourceFileConfigFileContent,
-  readJsonConfigFile,
-  sys,
-  ModuleKind,
-} from 'typescript';
 
 import { generateLicenseFile } from '../../scripts/generate-license.js';
 import corePkg from '../core/package.json' with { type: 'json' };
@@ -62,14 +52,13 @@ const napiArgs = process.argv
   .filter((arg) => arg !== '--skip-native' && arg !== '--skip-ts');
 
 if (!skipTs) {
-  await buildCli();
-  buildGlobalModules();
+  buildWithTsdown();
   generateLicenseFile({
     title: 'Vite-Plus CLI license',
     packageName: 'Vite-Plus',
     outputPath: join(projectDir, 'LICENSE'),
     coreLicensePath: join(projectDir, '..', '..', 'LICENSE'),
-    bundledPaths: [join(projectDir, 'dist', 'global')],
+    bundledPaths: [join(projectDir, 'dist')],
     resolveFrom: [projectDir],
   });
   if (!existsSync(join(projectDir, 'LICENSE'))) {
@@ -133,112 +122,11 @@ async function buildNapiBinding() {
   }
 }
 
-async function buildCli() {
-  const tsconfig = readJsonConfigFile(join(projectDir, 'tsconfig.json'), sys.readFile.bind(sys));
-
-  const { options: initialOptions } = parseJsonSourceFileConfigFileContent(
-    tsconfig,
-    sys,
-    projectDir,
-  );
-
-  const options = {
-    ...initialOptions,
-    noEmit: false,
-    outDir: join(projectDir, 'dist'),
-  };
-
-  const cjsHost = createCompilerHost({
-    ...options,
-    module: ModuleKind.CommonJS,
-  });
-
-  const cjsProgram = createProgram({
-    rootNames: ['src/define-config.ts'],
-    options: {
-      ...options,
-      module: ModuleKind.CommonJS,
-    },
-    host: cjsHost,
-  });
-
-  const { diagnostics: cjsDiagnostics } = cjsProgram.emit();
-
-  if (cjsDiagnostics.length > 0) {
-    console.error(formatDiagnostics(cjsDiagnostics, cjsHost));
-    process.exit(1);
-  }
-  await rename(
-    join(projectDir, 'dist/define-config.js'),
-    join(projectDir, 'dist/define-config.cjs'),
-  );
-
-  const host = createCompilerHost(options);
-
-  const program = createProgram({
-    rootNames: globSync('src/**/*.{ts,cts}', {
-      cwd: projectDir,
-      exclude: [
-        '**/*/__tests__',
-        // Global CLI modules — bundled by rolldown instead of tsc
-        'src/create/**',
-        'src/init/**',
-        'src/mcp/**',
-        'src/migration/**',
-        'src/version.ts',
-        'src/types/**',
-      ],
-    }),
-    options,
-    host,
-  });
-
-  const { diagnostics } = program.emit();
-
-  if (diagnostics.length > 0) {
-    console.error(formatDiagnostics(diagnostics, host));
-    process.exit(1);
-  }
-}
-
-function buildGlobalModules() {
-  execSync('npx rolldown -c rolldown.config.ts', {
+function buildWithTsdown() {
+  execSync('npx tsdown', {
     cwd: projectDir,
     stdio: 'inherit',
   });
-  validateGlobalBundleExternals();
-}
-
-/**
- * Scan rolldown output for unbundled workspace package imports.
- *
- * Rolldown silently externalizes imports it can't resolve (no error, no warning).
- * If a workspace package's dist doesn't exist at bundle time (build order race,
- * clean checkout, etc.), the bare specifier stays in the output. Since these
- * packages are devDependencies — not installed in the global CLI's node_modules —
- * this causes a runtime ERR_MODULE_NOT_FOUND crash.
- *
- * Fail the build loudly instead of producing a broken install.
- */
-function validateGlobalBundleExternals() {
-  const globalDir = join(projectDir, 'dist/global');
-  const files = globSync('*.js', { cwd: globalDir });
-  const errors: string[] = [];
-
-  for (const file of files) {
-    const content = readFileSync(join(globalDir, file), 'utf8');
-    const matches = content.matchAll(/\bimport\s.*?from\s+["'](@voidzero-dev\/[^"']+)["']/g);
-    for (const match of matches) {
-      errors.push(`  ${file}: unbundled import of "${match[1]}"`);
-    }
-  }
-
-  if (errors.length > 0) {
-    throw new Error(
-      `Rolldown failed to bundle workspace packages in dist/global/:\n${errors.join('\n')}\n` +
-        `Ensure these packages are built before running the CLI build.`,
-    );
-  }
 }
 
 /**

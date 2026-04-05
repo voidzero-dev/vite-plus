@@ -66,6 +66,28 @@ impl JsRuntime {
     pub fn version(&self) -> &str {
         &self.version
     }
+
+    /// Create a `JsRuntime` from a system-installed binary path.
+    ///
+    /// `get_bin_prefix()` returns the parent directory of `binary_path`.
+    #[must_use]
+    pub fn from_system(runtime_type: JsRuntimeType, binary_path: AbsolutePathBuf) -> Self {
+        let install_dir = binary_path
+            .parent()
+            .map(vite_path::AbsolutePath::to_absolute_path_buf)
+            .unwrap_or_else(|| binary_path.clone());
+        let binary_filename: Str = Str::from(
+            binary_path.as_path().file_name().unwrap_or_default().to_string_lossy().as_ref(),
+        );
+        debug_assert!(!binary_filename.is_empty(), "binary_path has no filename: {binary_path:?}");
+        Self {
+            runtime_type,
+            version: "system".into(),
+            install_dir,
+            binary_relative_path: binary_filename,
+            bin_dir_relative_path: Str::default(),
+        }
+    }
 }
 
 /// Download and cache a JavaScript runtime
@@ -418,7 +440,7 @@ async fn resolve_version_for_project(
     // Handle "latest" alias - resolves to absolute latest version (including non-LTS)
     if NodeProvider::is_latest_alias(version_req) {
         tracing::debug!("Resolving 'latest' alias");
-        return provider.resolve_version("*").await;
+        return provider.resolve_absolute_latest_version().await;
     }
 
     // Check if it's an exact version
@@ -555,6 +577,26 @@ mod tests {
     #[test]
     fn test_js_runtime_type_display() {
         assert_eq!(JsRuntimeType::Node.to_string(), "node");
+    }
+
+    #[test]
+    fn test_js_runtime_from_system() {
+        let binary_path = AbsolutePathBuf::new(std::path::PathBuf::from(if cfg!(windows) {
+            "C:\\Program Files\\nodejs\\node.exe"
+        } else {
+            "/usr/local/bin/node"
+        }))
+        .unwrap();
+
+        let runtime = JsRuntime::from_system(JsRuntimeType::Node, binary_path.clone());
+
+        assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
+        assert_eq!(runtime.version(), "system");
+        assert_eq!(runtime.get_binary_path(), binary_path);
+
+        // bin prefix should be the directory containing the binary
+        let expected_bin_prefix = binary_path.parent().unwrap().to_absolute_path_buf();
+        assert_eq!(runtime.get_bin_prefix(), expected_bin_prefix);
     }
 
     /// Test that install_dir path is constructed correctly without embedded forward slashes.

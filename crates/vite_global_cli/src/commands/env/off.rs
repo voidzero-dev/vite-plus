@@ -23,9 +23,9 @@ pub async fn execute() -> Result<ExitStatus, Error> {
     let mut config = load_config().await?;
 
     if config.shim_mode == ShimMode::SystemFirst {
-        println!("Shim mode is already set to system-first.");
+        println!("Node.js management is already set to system-first.");
         println!(
-            "Shims will prefer system Node.js, falling back to Vite+ managed Node.js if not found."
+            "All vp commands and shims will prefer system Node.js, falling back to managed if not found."
         );
         return Ok(ExitStatus::default());
     }
@@ -33,13 +33,13 @@ pub async fn execute() -> Result<ExitStatus, Error> {
     config.shim_mode = ShimMode::SystemFirst;
     save_config(&config).await?;
 
-    println!("\u{2713} Shim mode set to system-first.");
+    println!("\u{2713} Node.js management set to system-first.");
     println!();
     println!(
-        "Shims will now prefer system Node.js, falling back to Vite+ managed Node.js if not found."
+        "All vp commands and shims will now prefer system Node.js, falling back to managed if not found."
     );
     println!();
-    println!("Run {} to always use the Vite+ managed Node.js.", accent_command("vp env on"));
+    println!("Run {} to always use Vite+ managed Node.js.", accent_command("vp env on"));
 
     Ok(ExitStatus::default())
 }

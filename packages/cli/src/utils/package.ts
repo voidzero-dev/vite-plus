@@ -2,8 +2,8 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 
-import { VITE_PLUS_NAME } from './constants.js';
-import { readJsonFile } from './json.js';
+import { VITE_PLUS_NAME } from './constants.ts';
+import { readJsonFile } from './json.ts';
 
 export function getScopeFromPackageName(packageName: string): string {
   if (packageName.startsWith('@')) {
