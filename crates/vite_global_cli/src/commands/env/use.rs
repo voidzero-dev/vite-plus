@@ -34,7 +34,7 @@ fn detect_shell() -> Shell {
     let config = vite_shared::EnvConfig::get();
     if config.fish_version.is_some() {
         Shell::Fish
-    } else if config.nu_version.is_some() {
+    } else if config.vp_shell_nu {
         Shell::NuShell
     } else if cfg!(windows) && config.ps_module_path.is_some() {
         Shell::PowerShell
@@ -202,9 +202,10 @@ mod tests {
 
     #[test]
     fn test_detect_shell_fish_and_nushell() {
+        // Fish takes priority over Nu shell signal
         let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig {
             fish_version: Some("3.7.0".into()),
-            nu_version: Some("0.91.0".into()),
+            vp_shell_nu: true,
             ..vite_shared::EnvConfig::for_test()
         });
         let shell = detect_shell();
@@ -225,11 +226,25 @@ mod tests {
     #[test]
     fn test_detect_shell_nushell() {
         let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig {
-            nu_version: Some("0.91.0".into()),
+            vp_shell_nu: true,
             ..vite_shared::EnvConfig::for_test()
         });
         let shell = detect_shell();
         assert!(matches!(shell, Shell::NuShell));
+    }
+
+    #[test]
+    fn test_detect_shell_inherited_nu_version_is_posix() {
+        // NU_VERSION alone (inherited from parent Nushell) must NOT trigger Nu detection.
+        // Only the explicit VP_SHELL_NU marker set by env.nu wrapper counts.
+        let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig {
+            nu_version: Some("0.111.0".into()),
+            vp_shell_nu: false,
+            ..vite_shared::EnvConfig::for_test()
+        });
+        let shell = detect_shell();
+        #[cfg(not(windows))]
+        assert!(matches!(shell, Shell::Posix));
     }
 
     #[test]

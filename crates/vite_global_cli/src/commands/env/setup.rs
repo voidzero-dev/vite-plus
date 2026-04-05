@@ -531,23 +531,21 @@ def --env --wrapped vp [...args: string@"nu-complete vp"] {
             ^vp ...$args
             return
         }
-        let out = (with-env { VP_ENV_USE_EVAL_ENABLE: "1", NU_VERSION: "1" } {
+        let out = (with-env { VP_ENV_USE_EVAL_ENABLE: "1", VP_SHELL_NU: "1" } {
             ^vp ...$args
         })
-        # Apply mutations in emission order so that hide-env followed by $env.KEY = "..."
-        # correctly results in the variable being set (not unset).
-        for line in ($out | lines) {
-            if ($line =~ '^\$env\.') {
-                let parsed = ($line | parse '$env.{key} = "{value}"')
-                if ($parsed | is-not-empty) {
-                    $env.($parsed.0.key) = $parsed.0.value
-                }
-            } else if ($line =~ '^hide-env ') {
-                let parsed = ($line | parse 'hide-env {key}')
-                if ($parsed | is-not-empty) and ($parsed.0.key in $env) {
-                    hide-env ($parsed.0.key)
-                }
-            }
+        let lines = ($out | lines)
+        let exports = ($lines | where { $in =~ '^\$env\.' } | parse '$env.{key} = "{value}"')
+        let export_keys = ($exports | get key? | default [])
+        # Exclude keys that also appear in exports: when vp emits `hide-env X` then
+        # `$env.X = "v"` (e.g. `vp env use` with no args resolving from .node-version),
+        # the set should win.
+        let unsets = ($lines | where { $in =~ '^hide-env ' } | parse 'hide-env {key}' | get key? | default [] | where { $in not-in $export_keys })
+        if ($exports | is-not-empty) {
+            load-env ($exports | reduce -f {} {|it, acc| $acc | insert $it.key $it.value})
+        }
+        for key in $unsets {
+            if ($key in $env) { hide-env $key }
         }
     } else {
         ^vp ...$args
@@ -764,8 +762,12 @@ mod tests {
             "env.nu should reference the Fish completion file for Nushell delegation"
         );
         assert!(
-            nu_content.contains("for line in ($out | lines)"),
-            "env.nu should apply mutations in emission order"
+            nu_content.contains("VP_SHELL_NU"),
+            "env.nu should use VP_SHELL_NU explicit marker instead of inherited NU_VERSION"
+        );
+        assert!(
+            nu_content.contains("load-env"),
+            "env.nu should use load-env to apply exports"
         );
     }
 
