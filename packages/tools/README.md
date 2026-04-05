@@ -1,4 +1,4 @@
-# tools for internal development use
+# Tools for Internal Development Use
 
 - json-edit: A CLI tool to edit JSON files such as package.json in e2e tests
 - json-sort: A CLI tool to sort JSON keys in a file
