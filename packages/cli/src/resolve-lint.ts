@@ -45,14 +45,11 @@ export async function lint(): Promise<{
     // On Windows, try .exe first (bun creates .exe), then .cmd (npm/pnpm/yarn create .cmd)
     const scriptDir = dirname(fileURLToPath(import.meta.url));
     const localBinDir = join(scriptDir, '..', 'node_modules', '.bin');
-    const cwdBinDir = join(process.cwd(), 'node_modules', '.bin');
     const oxlintTsgolintPackagePath = dirname(dirname(oxlintTsgolintPath));
     const projectBinDir = join(oxlintTsgolintPackagePath, '..', '.bin');
     const pathCandidates = [
       join(localBinDir, 'tsgolint.exe'),
       join(localBinDir, 'tsgolint.cmd'),
-      join(cwdBinDir, 'tsgolint.exe'),
-      join(cwdBinDir, 'tsgolint.cmd'),
       join(projectBinDir, 'tsgolint.exe'),
       join(projectBinDir, 'tsgolint.cmd'),
     ];
