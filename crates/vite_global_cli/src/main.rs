@@ -25,7 +25,6 @@ use std::{
 
 use clap::error::{ContextKind, ContextValue};
 use clap_complete::env::CompleteEnv;
-
 use owo_colors::OwoColorize;
 use vite_shared::output;
 
