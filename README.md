@@ -19,6 +19,7 @@ Vite+ is the unified entry point for local web development. It combines [Vite](h
 - **`vp build`:** Build applications for production with Vite + Rolldown
 - **`vp run`:** Execute monorepo tasks with caching and dependency-aware scheduling
 - **`vp pack`:** Build libraries for npm publishing or standalone app binaries
+- **`vp release`:** Publish workspace releases
 - **`vp create` / `vp migrate`:** Scaffold new projects and migrate existing ones
 
 All of this is configured from your project root and works across Vite's framework ecosystem.
@@ -120,6 +121,7 @@ Use `vp migrate` to migrate to Vite+. It merges tool-specific config files such 
 
 - **build** - Build for production
 - **pack** - Build libraries
+- **release** - Publish workspace releases
 - **preview** - Preview production build
 
 #### Manage Dependencies
