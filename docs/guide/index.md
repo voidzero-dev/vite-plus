@@ -21,7 +21,7 @@ irm https://vite.plus/ps1 | iex
 Alternatively, download and run `vp-setup.exe` from the [latest release](https://github.com/voidzero-dev/vite-plus/releases/latest).
 
 ::: tip SmartScreen warning
-The `.exe` is not yet code-signed. Your browser may show a warning when downloading. Click **"..."** → **"Keep"** → **"Keep anyway"** to proceed. If Windows Defender SmartScreen blocks the file when you run it, click **"More info"** → **"Run anyway"**.
+The `vp-setup.exe` is not yet code-signed. Your browser may show a warning when downloading. Click **"..."** → **"Keep"** → **"Keep anyway"** to proceed. If Windows Defender SmartScreen blocks the file when you run it, click **"More info"** → **"Run anyway"**.
 :::
 
 After installation, open a new shell and run:
