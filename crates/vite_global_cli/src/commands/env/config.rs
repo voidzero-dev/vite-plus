@@ -362,7 +362,7 @@ async fn resolve_version_string(version: &str, provider: &NodeProvider) -> Resul
 
     // Check for "latest" alias - resolves to absolute latest version (including non-LTS)
     if NodeProvider::is_latest_alias(version) {
-        let resolved = provider.resolve_version("*").await?;
+        let resolved = provider.resolve_absolute_latest_version().await?;
         return Ok(resolved.to_string());
     }
 
@@ -391,8 +391,7 @@ pub async fn resolve_version_alias(
             Ok(resolved.to_string())
         }
         "latest" => {
-            // Resolve * to get the absolute latest version
-            let resolved = provider.resolve_version("*").await?;
+            let resolved = provider.resolve_absolute_latest_version().await?;
             Ok(resolved.to_string())
         }
         _ => resolve_version_string(version, provider).await,

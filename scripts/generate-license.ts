@@ -203,7 +203,10 @@ export function generateLicenseFile(options: GenerateLicenseFileOptions) {
 
   if (existingContent !== licenseFileContent) {
     fs.writeFileSync(options.outputPath, licenseFileContent);
-    console.error('\x1b[33m\nLICENSE.md updated. You should commit the updated file.\n\x1b[0m');
+    const outputFileName = path.basename(options.outputPath);
+    console.error(
+      `\x1b[33m\n${outputFileName} updated. You should commit the updated file.\n\x1b[0m`,
+    );
   }
 }
 

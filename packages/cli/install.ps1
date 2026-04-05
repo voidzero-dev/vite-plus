@@ -74,7 +74,7 @@ function Get-PackageMetadata {
                 try {
                     $errorJson = $errorMsg | ConvertFrom-Json
                     if ($errorJson.error) {
-                        Write-Error-Exit "Failed to fetch version '${versionPath}': $($errorJson.error)"
+                        Write-Error-Exit "Failed to fetch version '${versionPath}': $($errorJson.error)`n  URL: $metadataUrl"
                     }
                 } catch {
                     # JSON parsing failed, fall through to generic error
@@ -85,11 +85,17 @@ function Get-PackageMetadata {
         # Check for error in successful response
         # npm can return {"error":"..."} object or a plain string like "version not found: test"
         if ($script:PackageMetadata -is [string]) {
-            # Plain string response means error
-            Write-Error-Exit "Failed to fetch version '${versionPath}': $script:PackageMetadata"
+            # Some registries (e.g. JFrog) may return JSON with a non-JSON content type,
+            # causing Invoke-RestMethod to return a raw string. Try parsing it as JSON first.
+            try {
+                $script:PackageMetadata = $script:PackageMetadata | ConvertFrom-Json
+            } catch {
+                # Not valid JSON - treat as plain string error
+                Write-Error-Exit "Failed to fetch version '${versionPath}': $script:PackageMetadata`n  URL: $metadataUrl"
+            }
         }
         if ($script:PackageMetadata.error) {
-            Write-Error-Exit "Failed to fetch version '${versionPath}': $($script:PackageMetadata.error)"
+            Write-Error-Exit "Failed to fetch version '${versionPath}': $($script:PackageMetadata.error)`n  URL: $metadataUrl"
         }
     }
     return $script:PackageMetadata
@@ -243,7 +249,9 @@ function Setup-NodeManager {
     $isInteractive = [Environment]::UserInteractive
     if ($isInteractive) {
         Write-Host ""
-        Write-Host "Would you want Vite+ to manage Node.js versions?"
+        Write-Host "Would you like Vite+ to manage your Node.js versions?"
+        Write-Host "It adds ``node``, ``npm``, and ``npx`` shims to ~/.vite-plus/bin/ and automatically uses the right version."
+        Write-Host "Opt out anytime with ``vp env off``."
         $response = Read-Host "Press Enter to accept (Y/n)"
 
         if ($response -eq '' -or $response -eq 'y' -or $response -eq 'Y') {
@@ -343,21 +351,22 @@ function Main {
     }
 
     # Generate wrapper package.json that declares vite-plus as a dependency.
-    # npm will install vite-plus and all transitive deps via `vp install`.
+    # pnpm will install vite-plus and all transitive deps via `vp install`.
+    # The packageManager field pins pnpm to a known-good version.
     $wrapperJson = @{
         name = "vp-global"
         version = $ViteVersion
         private = $true
+        packageManager = "pnpm@10.33.0"
         dependencies = @{
             "vite-plus" = $ViteVersion
         }
     } | ConvertTo-Json -Depth 10
     Set-Content -Path (Join-Path $VersionDir "package.json") -Value $wrapperJson
 
-    # Isolate from user's global package manager config that may block
-    # installing recently-published packages (e.g. pnpm's minimumReleaseAge,
-    # npm's min-release-age) by creating a local .npmrc in the version directory.
-    Set-Content -Path (Join-Path $VersionDir ".npmrc") -Value "minimum-release-age=0`nmin-release-age=0"
+    # Isolate from pnpm's global config that may block installing
+    # recently-published packages (e.g. minimumReleaseAge).
+    Set-Content -Path (Join-Path $VersionDir ".npmrc") -Value "minimum-release-age=0"
 
     # Install production dependencies (skip if VP_SKIP_DEPS_INSTALL is set,
     # e.g. during local dev where install-global-cli.ts handles deps separately)

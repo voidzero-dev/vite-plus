@@ -26,6 +26,7 @@ import StackedBlock from './StackedBlock.vue';
           <code>pnpm</code>
           <code>npm</code>
           <code>yarn</code>
+          <code>bun</code>
         </div>
       </div>
     </div>

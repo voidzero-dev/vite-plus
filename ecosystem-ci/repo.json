@@ -113,5 +113,11 @@
     "repository": "https://github.com/why-reproductions-are-required/vitest-playwright-repro.git",
     "branch": "main",
     "hash": "f7252170025c01ec482fa9ad43e09b965f46928f"
+  },
+  "vite-plus-vitest-type-aug": {
+    "repository": "https://github.com/why-reproductions-are-required/vite-plus-vitest-type-aug.git",
+    "branch": "main",
+    "hash": "6192f60653c124ae068efaf5d7d0a4134c95edbd",
+    "forceFreshMigration": true
   }
 }

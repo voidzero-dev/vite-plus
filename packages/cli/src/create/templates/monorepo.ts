@@ -5,15 +5,15 @@ import path from 'node:path';
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import spawn from 'cross-spawn';
 
-import { rewriteMonorepoProject } from '../../migration/migrator.js';
-import { PackageManager, type WorkspaceInfo } from '../../types/index.js';
-import { editJsonFile } from '../../utils/json.js';
-import { templatesDir } from '../../utils/path.js';
-import type { ExecutionResult } from '../command.js';
-import { discoverTemplate } from '../discovery.js';
-import { copyDir, formatDisplayTargetDir, setPackageName } from '../utils.js';
-import { runRemoteTemplateCommand } from './remote.js';
-import { type BuiltinTemplateInfo, LibraryTemplateRepo } from './types.js';
+import { rewriteMonorepoProject } from '../../migration/migrator.ts';
+import { PackageManager, type WorkspaceInfo } from '../../types/index.ts';
+import { editJsonFile } from '../../utils/json.ts';
+import { templatesDir } from '../../utils/path.ts';
+import type { ExecutionResult } from '../command.ts';
+import { discoverTemplate } from '../discovery.ts';
+import { copyDir, formatDisplayTargetDir, setPackageName } from '../utils.ts';
+import { runRemoteTemplateCommand } from './remote.ts';
+import { type BuiltinTemplateInfo, LibraryTemplateRepo } from './types.ts';
 
 export const InitialMonorepoAppDir = 'apps/website';
 

@@ -11,23 +11,23 @@ import {
   type WorkspaceInfo,
   type WorkspaceInfoOptional,
   type WorkspacePackage,
-} from '../types/index.js';
+} from '../types/index.ts';
 import {
   detectAgentConflicts,
   detectExistingAgentTargetPaths,
   selectAgentTargetPaths,
   writeAgentInstructions,
-} from '../utils/agent.js';
-import { isForceOverrideMode } from '../utils/constants.js';
+} from '../utils/agent.ts';
+import { isForceOverrideMode } from '../utils/constants.ts';
 import {
   detectEditorConflicts,
   type EditorId,
   selectEditor,
   writeEditorConfigs,
-} from '../utils/editor.js';
-import { renderCliDoc } from '../utils/help.js';
-import { hasVitePlusDependency, readNearestPackageJson } from '../utils/package.js';
-import { displayRelative } from '../utils/path.js';
+} from '../utils/editor.ts';
+import { renderCliDoc } from '../utils/help.ts';
+import { hasVitePlusDependency, readNearestPackageJson } from '../utils/package.ts';
+import { displayRelative } from '../utils/path.ts';
 import {
   cancelAndExit,
   defaultInteractive,
@@ -36,10 +36,10 @@ import {
   runViteInstall,
   selectPackageManager,
   upgradeYarn,
-} from '../utils/prompts.js';
-import { accent, log, muted } from '../utils/terminal.js';
-import type { PackageDependencies } from '../utils/types.js';
-import { detectWorkspace } from '../utils/workspace.js';
+} from '../utils/prompts.ts';
+import { accent, log, muted } from '../utils/terminal.ts';
+import type { PackageDependencies } from '../utils/types.ts';
+import { detectWorkspace } from '../utils/workspace.ts';
 import {
   checkVitestVersion,
   checkViteVersion,
@@ -55,8 +55,8 @@ import {
   rewriteMonorepo,
   rewriteStandaloneProject,
   type NodeVersionManagerDetection,
-} from './migrator.js';
-import { createMigrationReport, type MigrationReport } from './report.js';
+} from './migrator.ts';
+import { createMigrationReport, type MigrationReport } from './report.ts';
 
 function warnPackageLevelEslint() {
   prompts.log.warn(
@@ -75,7 +75,12 @@ function warnLegacyEslintConfig(legacyConfigFile: string) {
 async function confirmEslintMigration(interactive: boolean): Promise<boolean> {
   if (interactive) {
     const confirmed = await prompts.confirm({
-      message: 'Migrate ESLint rules to Oxlint using @oxlint/migrate?',
+      message:
+        'Migrate ESLint rules to Oxlint using @oxlint/migrate?\n  ' +
+        styleText(
+          'gray',
+          "Oxlint is Vite+'s built-in linter — significantly faster than ESLint with compatible rule support. @oxlint/migrate converts your existing rules automatically.",
+        ),
       initialValue: true,
     });
     if (prompts.isCancel(confirmed)) {
@@ -129,7 +134,12 @@ function warnPackageLevelPrettier() {
 async function confirmPrettierMigration(interactive: boolean): Promise<boolean> {
   if (interactive) {
     const confirmed = await prompts.confirm({
-      message: 'Migrate Prettier to Oxfmt?',
+      message:
+        'Migrate Prettier to Oxfmt?\n  ' +
+        styleText(
+          'gray',
+          "Oxfmt is Vite+'s built-in formatter that replaces Prettier with faster performance. Your configuration will be converted automatically.",
+        ),
       initialValue: true,
     });
     if (prompts.isCancel(confirmed)) {
@@ -171,10 +181,19 @@ async function promptPrettierMigration(
   return true;
 }
 
-async function confirmNodeVersionFileMigration(interactive: boolean): Promise<boolean> {
+async function confirmNodeVersionFileMigration(
+  interactive: boolean,
+  detection: NodeVersionManagerDetection,
+): Promise<boolean> {
+  const confirmMessageByFile = {
+    'package.json': 'Migrate Volta node version (package.json) to .node-version?',
+    '.nvmrc': 'Migrate .nvmrc to .node-version?',
+  } as const satisfies Record<NodeVersionManagerDetection['file'], string>;
+
+  const message = confirmMessageByFile[detection.file];
   if (interactive) {
     const confirmed = await prompts.confirm({
-      message: 'Migrate .nvmrc to .node-version?',
+      message,
       initialValue: true,
     });
     if (prompts.isCancel(confirmed)) {
@@ -383,7 +402,12 @@ async function collectMigrationPlan(
   for (const conflict of agentConflicts) {
     if (options.interactive) {
       const action = await prompts.select({
-        message: `Agent instructions already exist at ${conflict.targetPath}.`,
+        message:
+          `Agent instructions already exist at ${conflict.targetPath}.\n  ` +
+          styleText(
+            'gray',
+            'The Vite+ template includes guidance on `vp` commands, the build pipeline, and project conventions.',
+          ),
         options: [
           { label: 'Append', value: 'append' as const, hint: 'Add template content to the end' },
           { label: 'Skip', value: 'skip' as const, hint: 'Leave existing file unchanged' },
@@ -415,7 +439,12 @@ async function collectMigrationPlan(
   for (const conflict of editorConflicts) {
     if (options.interactive) {
       const action = await prompts.select({
-        message: `${conflict.displayPath} already exists.`,
+        message:
+          `${conflict.displayPath} already exists.\n  ` +
+          styleText(
+            'gray',
+            'Vite+ adds editor settings for the built-in linter and formatter. Merge adds new keys without overwriting existing ones.',
+          ),
         options: [
           {
             label: 'Merge',
@@ -459,7 +488,10 @@ async function collectMigrationPlan(
   const nodeVersionDetection = detectNodeVersionManagerFile(rootDir);
   let migrateNodeVersionFile = false;
   if (nodeVersionDetection) {
-    migrateNodeVersionFile = await confirmNodeVersionFileMigration(options.interactive);
+    migrateNodeVersionFile = await confirmNodeVersionFileMigration(
+      options.interactive,
+      nodeVersionDetection,
+    );
   }
 
   const plan: MigrationPlan = {
@@ -859,7 +891,10 @@ async function main() {
     // Check if node version manager file migration is needed
     const nodeVersionDetection = detectNodeVersionManagerFile(workspaceInfoOptional.rootDir);
     if (nodeVersionDetection) {
-      const confirmed = await confirmNodeVersionFileMigration(options.interactive);
+      const confirmed = await confirmNodeVersionFileMigration(
+        options.interactive,
+        nodeVersionDetection,
+      );
       if (
         confirmed &&
         migrateNodeVersionManagerFile(workspaceInfoOptional.rootDir, nodeVersionDetection, report)

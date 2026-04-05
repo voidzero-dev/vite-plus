@@ -1,1 +1,3 @@
-export type StagedConfig = Record<string, string | string[]>;
+import type { Configuration } from 'lint-staged';
+
+export type StagedConfig = Configuration;

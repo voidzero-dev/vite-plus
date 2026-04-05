@@ -1159,7 +1159,7 @@ async fn load_shim_mode() -> ShimMode {
 /// directories listed in `VP_BYPASS`.
 ///
 /// Returns the absolute path to the tool if found, None otherwise.
-fn find_system_tool(tool: &str) -> Option<AbsolutePathBuf> {
+pub(crate) fn find_system_tool(tool: &str) -> Option<AbsolutePathBuf> {
     let bin_dir = config::get_bin_dir().ok();
     let path_var = std::env::var_os("PATH")?;
     tracing::debug!("path_var: {:?}", path_var);

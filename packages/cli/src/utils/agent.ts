@@ -1,10 +1,11 @@
 import fs from 'node:fs';
 import fsPromises from 'node:fs/promises';
 import path from 'node:path';
+import { styleText } from 'node:util';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
-import { pkgRoot } from './path.js';
+import { pkgRoot } from './path.ts';
 
 // --- Interfaces ---
 
@@ -210,7 +211,12 @@ export async function selectAgentTargetPaths({
 
   if (interactive && !agent) {
     const selectedAgents = await prompts.multiselect({
-      message: 'Which agents are you using?',
+      message:
+        'Which agents are you using?\n  ' +
+        styleText(
+          'gray',
+          'Writes an instruction file for each selected agent to help it understand `vp` commands and the project workflow.',
+        ),
       options: AGENTS.map((option) => ({
         label: option.label,
         value: option.id,
@@ -528,7 +534,12 @@ export async function writeAgentInstructions({
         conflictAction = preResolved;
       } else if (interactive) {
         const action = await prompts.select({
-          message: `Agent instructions already exist at ${targetPathToWrite}.`,
+          message:
+            `Agent instructions already exist at ${targetPathToWrite}.\n  ` +
+            styleText(
+              'gray',
+              'The Vite+ template includes guidance on `vp` commands, the build pipeline, and project conventions.',
+            ),
           options: [
             {
               label: 'Append',

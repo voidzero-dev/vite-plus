@@ -15,32 +15,33 @@ import {
   rewriteImportsInDirectory,
   type DownloadPackageManagerResult,
 } from '../../binding/index.js';
-import { PackageManager, type WorkspaceInfo, type WorkspacePackage } from '../types/index.js';
-import { runCommandSilently } from '../utils/command.js';
+import { PackageManager, type WorkspaceInfo, type WorkspacePackage } from '../types/index.ts';
+import { runCommandSilently } from '../utils/command.ts';
 import {
   BASEURL_TSCONFIG_WARNING,
   VITE_PLUS_NAME,
   VITE_PLUS_OVERRIDE_PACKAGES,
   VITE_PLUS_VERSION,
   isForceOverrideMode,
-} from '../utils/constants.js';
-import { editJsonFile, isJsonFile, readJsonFile } from '../utils/json.js';
-import { detectPackageMetadata } from '../utils/package.js';
-import { displayRelative, rulesDir } from '../utils/path.js';
-import { getSpinner } from '../utils/prompts.js';
+} from '../utils/constants.ts';
+import { editJsonFile, isJsonFile, readJsonFile } from '../utils/json.ts';
+import { detectPackageMetadata } from '../utils/package.ts';
+import { displayRelative, rulesDir } from '../utils/path.ts';
+import { getSpinner } from '../utils/prompts.ts';
 import {
   findTsconfigFiles,
   hasBaseUrlInTsconfig,
   removeDeprecatedTsconfigFalseOption,
-} from '../utils/tsconfig.js';
-import { editYamlFile, scalarString, type YamlDocument } from '../utils/yaml.js';
+} from '../utils/tsconfig.ts';
+import type { NpmWorkspaces } from '../utils/workspace.ts';
+import { editYamlFile, scalarString, type YamlDocument } from '../utils/yaml.ts';
 import {
   PRETTIER_CONFIG_FILES,
   PRETTIER_PACKAGE_JSON_CONFIG,
   detectConfigs,
   type ConfigFiles,
-} from './detector.js';
-import { addManualStep, addMigrationWarning, type MigrationReport } from './report.js';
+} from './detector.ts';
+import { addManualStep, addMigrationWarning, type MigrationReport } from './report.ts';
 
 // All known lint-staged config file names.
 // JSON-parseable ones come first so rewriteLintStagedConfigFile can rewrite them.
@@ -234,7 +235,7 @@ export async function migrateEslintToOxlint(
   // Steps 1-2: Only run @oxlint/migrate if there's an eslint config at root
   if (eslintConfigFile) {
     // Pin @oxlint/migrate to the bundled oxlint version.
-    // @ts-expect-error — resolved at runtime from dist/global/ → dist/versions.js
+    // @ts-expect-error — resolved at runtime from dist/ → dist/versions.js
     const { versions } = await import('../versions.js');
     const migratePackage = `@oxlint/migrate@${versions.oxlint}`;
 
@@ -1159,12 +1160,18 @@ function rewriteBunCatalog(projectPath: string): void {
   }
 
   editJsonFile<{
+    workspaces?: NpmWorkspaces;
     catalog?: Record<string, string>;
     overrides?: Record<string, string>;
   }>(packageJsonPath, (pkg) => {
-    const catalog: Record<string, string> = { ...pkg.catalog };
+    // Bun supports catalogs in both workspaces.catalog and top-level catalog;
+    // prefer the location the user already chose to avoid moving their config.
+    const workspacesObj =
+      pkg.workspaces && !Array.isArray(pkg.workspaces) ? pkg.workspaces : undefined;
+    const catalog: Record<string, string> = {
+      ...(workspacesObj?.catalog ?? pkg.catalog),
+    };
 
-    // Add vite-plus managed packages to catalog
     for (const [key, value] of Object.entries(VITE_PLUS_OVERRIDE_PACKAGES)) {
       if (!value.startsWith('file:')) {
         catalog[key] = value;
@@ -1174,12 +1181,15 @@ function rewriteBunCatalog(projectPath: string): void {
       catalog[VITE_PLUS_NAME] = VITE_PLUS_VERSION;
     }
 
-    // Remove replaced packages from catalog
     for (const name of REMOVE_PACKAGES) {
       delete catalog[name];
     }
 
-    pkg.catalog = catalog;
+    if (workspacesObj?.catalog != null) {
+      workspacesObj.catalog = catalog;
+    } else {
+      pkg.catalog = catalog;
+    }
 
     // bun overrides support catalog: references
     const overrides: Record<string, string> = { ...pkg.overrides };
@@ -1389,6 +1399,15 @@ export function rewritePackageJson(
       ...pkg.devDependencies,
       [VITE_PLUS_NAME]: version,
     };
+    // Add vitest to devDependencies when a remaining dependency likely peer-depends
+    // on vitest (e.g., vitest-browser-svelte). Without this, pnpm resolves the real
+    // vitest for peer deps instead of @voidzero-dev/vite-plus-test, causing
+    // third-party type augmentations to target the wrong module.
+    const allDeps = { ...pkg.dependencies, ...pkg.devDependencies };
+    if (!allDeps.vitest && Object.keys(allDeps).some((name) => name.includes('vitest'))) {
+      const ver = VITE_PLUS_OVERRIDE_PACKAGES.vitest;
+      pkg.devDependencies.vitest = supportCatalog && !ver.startsWith('file:') ? 'catalog:' : ver;
+    }
   }
   return extractedStagedConfig;
 }
@@ -2257,12 +2276,14 @@ function setPackageManager(
   });
 }
 
-export interface NodeVersionManagerDetection {
-  file: string;
-}
+export type NodeVersionManagerDetection =
+  | { file: '.nvmrc'; voltaPresent?: true }
+  | { file: 'package.json'; voltaNodeVersion: string };
 
 /**
  * Detect a .nvmrc file in the project directory.
+ * If not found, check for a Volta node version in package.json.
+ * If either is found, return the relevant info for migration.
  * Returns undefined if not found or .node-version already exists.
  */
 export function detectNodeVersionManagerFile(
@@ -2274,9 +2295,18 @@ export function detectNodeVersionManagerFile(
   }
 
   const configs = detectConfigs(projectPath);
+
+  // .nvmrc takes priority over volta.node when both are present.
+  // voltaPresent is carried through so the migration step can remind the user
+  // to remove the now-redundant volta field from package.json.
   if (configs.nvmrcFile) {
-    return { file: '.nvmrc' };
+    return configs.voltaNode ? { file: '.nvmrc', voltaPresent: true } : { file: '.nvmrc' };
   }
+
+  if (configs.voltaNode) {
+    return { file: 'package.json', voltaNodeVersion: configs.voltaNode };
+  }
+
   return undefined;
 }
 
@@ -2318,16 +2348,45 @@ export function parseNvmrcVersion(alias: string): string | null {
 }
 
 /**
- * Migrate .nvmrc to .node-version and remove .nvmrc.
+ * Migrate .nvmrc or Volta node version from package.json to .node-version.
+ * - For .nvmrc: the source file is removed after migration.
+ * - For package.json (Volta): the volta field is left as-is; removal is left to the user's discretion.
  * Returns true on success, false if migration was skipped or failed.
  */
 export function migrateNodeVersionManagerFile(
   projectPath: string,
-  _detection: NodeVersionManagerDetection,
+  detection: NodeVersionManagerDetection,
   report?: MigrationReport,
 ): boolean {
-  const sourcePath = path.join(projectPath, '.nvmrc');
   const nodeVersionPath = path.join(projectPath, '.node-version');
+
+  // Volta: node version was already extracted during detection — no package.json re-read needed
+  if (detection.file === 'package.json') {
+    const { voltaNodeVersion } = detection;
+
+    // Normalize Volta's "lts" alias to the .node-version compatible form
+    const resolvedVersion = voltaNodeVersion === 'lts' ? 'lts/*' : voltaNodeVersion;
+
+    if (!semver.valid(resolvedVersion) && resolvedVersion !== 'lts/*') {
+      warnMigration(
+        `package.json volta.node "${voltaNodeVersion}" is not an exact version. Pin an exact version (e.g. ${voltaNodeVersion}.0 or run \`volta pin node@${voltaNodeVersion}\`) then re-run migration.`,
+        report,
+      );
+      return false;
+    }
+
+    fs.writeFileSync(nodeVersionPath, `${resolvedVersion}\n`);
+    if (report) {
+      report.manualSteps.push('Remove the "volta" field from package.json');
+      report.nodeVersionFileMigrated = true;
+    } else {
+      prompts.log.info('You can now remove the "volta" field from package.json manually.');
+    }
+    return true;
+  }
+
+  // .nvmrc: parse version alias and write to .node-version
+  const sourcePath = path.join(projectPath, '.nvmrc');
   const content = fs.readFileSync(sourcePath, 'utf8');
   const originalAlias = content.split('\n')[0]?.trim() ?? '';
   const version = parseNvmrcVersion(originalAlias);
@@ -2353,6 +2412,12 @@ export function migrateNodeVersionManagerFile(
 
   if (report) {
     report.nodeVersionFileMigrated = true;
+    // Both .nvmrc and volta were present; .nvmrc was migrated but volta still lingers.
+    if (detection.voltaPresent) {
+      report.manualSteps.push('Remove the "volta" field from package.json');
+    }
+  } else if (detection.voltaPresent) {
+    prompts.log.info('You can now remove the "volta" field from package.json manually.');
   }
   return true;
 }

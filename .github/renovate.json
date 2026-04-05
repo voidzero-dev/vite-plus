@@ -15,14 +15,13 @@
       "enabled": false
     },
     {
-      "matchPackageNames": [
+      "matchDepNames": [
         "fspy",
         "vite_glob",
         "vite_path",
         "vite_str",
         "vite_task",
-        "vite_workspace",
-        "https://github.com/voidzero-dev/vite-task"
+        "vite_workspace"
       ],
       "enabled": false
     }

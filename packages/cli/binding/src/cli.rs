@@ -1214,6 +1214,7 @@ async fn execute_direct_subcommand(
                     Some(Err(failure)) => {
                         if failure.errors == 0 && failure.warnings > 0 {
                             output::warn(lint_message_kind.warning_heading());
+                            status = ExitStatus::SUCCESS;
                         } else {
                             output::error(lint_message_kind.issue_heading());
                         }
