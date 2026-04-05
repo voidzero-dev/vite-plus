@@ -25,7 +25,7 @@ use std::{
 
 use clap::error::{ContextKind, ContextValue};
 use clap_complete::env::CompleteEnv;
-use clap_complete_nushell::Nushell;
+
 use owo_colors::OwoColorize;
 use vite_shared::output;
 
@@ -237,13 +237,6 @@ async fn main() -> ExitCode {
     // Replace bash completion script to fix completion for items containing ':'
     if env::var_os("VP_COMPLETE").is_some_and(|shell| shell == "bash") && args.len() == 1 {
         print!("{}", include_str!("../completion-register.bash"));
-        return ExitCode::SUCCESS;
-    }
-
-    // Handle Nushell completion (clap_complete_nushell uses generate() directly)
-    if env::var_os("VP_COMPLETE").is_some_and(|shell| shell == "nushell") {
-        let mut cmd = command_with_help();
-        clap_complete::generate(Nushell, &mut cmd, "vp", &mut std::io::stdout());
         return ExitCode::SUCCESS;
     }
 
