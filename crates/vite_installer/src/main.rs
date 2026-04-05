@@ -456,7 +456,7 @@ fn show_customize_menu(opts: &mut cli::Options) {
         match choice.as_str() {
             "" => return,
             "1" => {
-                let v = read_input("    Version (e.g. 0.3.0, or 'latest'): ");
+                let v = read_input("    Version (e.g. 0.3.0 or latest): ");
                 if v == "latest" || v.is_empty() {
                     opts.version = None;
                 } else {
