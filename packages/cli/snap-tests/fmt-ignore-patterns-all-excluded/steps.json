@@ -1,0 +1,5 @@
+{
+  "commands": [
+    "vp fmt src/ # Test that fmt exits 0 when all input files are excluded by ignorePatterns"
+  ]
+}

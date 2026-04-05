@@ -1,0 +1,3 @@
+> vp fmt src/ # Test that fmt exits 0 when all input files are excluded by ignorePatterns
+Finished in <variable>ms on 0 files using <variable> threads.
+No files found matching the given patterns.
