@@ -64,7 +64,7 @@ pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
         registry::resolve_version(version_or_tag, &platform_suffix, options.registry.as_deref())
             .await?;
 
-    let current_version = env!("CARGO_PKG_VERSION");
+    let current_version = env!("VITE_PLUS_VERSION");
 
     if !options.silent {
         output::info(&format!(
@@ -231,7 +231,7 @@ async fn execute_rollback(
     }
 
     if !silent {
-        let current_version = env!("CARGO_PKG_VERSION");
+        let current_version = env!("VITE_PLUS_VERSION");
         output::info("rolling back to previous version...");
         output::info(&format!("switching from {} {} {}", current_version, output::ARROW, previous));
     }
