@@ -544,7 +544,7 @@ def --env --wrapped vp [...args: string@"nu-complete vp"] {
                 }
             } else if ($line =~ '^hide-env ') {
                 let parsed = ($line | parse 'hide-env {key}')
-                if ($parsed | is-not-empty) {
+                if ($parsed | is-not-empty) and ($parsed.0.key in $env) {
                     hide-env ($parsed.0.key)
                 }
             }
