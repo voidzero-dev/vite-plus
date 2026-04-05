@@ -46,7 +46,7 @@ In scenarios reported in issue #930, Oxc-side integrations that read `vite.confi
 
 - Prefer a static `defineConfig({ ... })` export when you need `lint` / `fmt` in `vite.config.ts`.
 - Avoid Node-specific globals (`__dirname` in ESM), unresolved TS-only imports, or JSON imports without import attributes in config code used by lint/fmt.
-- If needed, keep `.oxlintrc.*` / `.oxfmtrc.*` as temporary fallback while this integration behavior is being improved.
+- If needed, keep `.oxlintrc.*` / `.oxfmtrc.*` as temporary fallback, [although we do not recommend doing this normally](/guide/lint##configuration), while this integration behavior is being improved.
 
 ### VS Code multi-root workspace note
 
