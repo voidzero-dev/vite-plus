@@ -64,6 +64,9 @@ pub struct Engines {
 #[derive(Deserialize, Default, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PackageJson {
+    /// The package name
+    #[serde(default)]
+    pub name: Option<Str>,
     /// The devEngines configuration
     #[serde(default)]
     pub dev_engines: Option<DevEngines>,
