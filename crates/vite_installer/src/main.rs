@@ -76,7 +76,7 @@ async fn run(mut opts: cli::Options) -> i32 {
         }
     }
 
-    match do_install(&opts, &install_dir).await {
+    let code = match do_install(&opts, &install_dir).await {
         Ok(()) => {
             print_success(&opts, &install_dir_display);
             0
@@ -85,7 +85,15 @@ async fn run(mut opts: cli::Options) -> i32 {
             print_error(&format!("{e}"));
             1
         }
+    };
+
+    // When running interactively (double-click), pause so the user can
+    // read the output before the console window closes.
+    if !opts.yes {
+        read_input("  Press Enter to close...");
     }
+
+    code
 }
 
 #[allow(clippy::print_stdout)]
