@@ -245,6 +245,8 @@ mod tests {
         let shell = detect_shell();
         #[cfg(not(windows))]
         assert!(matches!(shell, Shell::Posix));
+        #[cfg(windows)]
+        let _ = shell;
     }
 
     #[test]
