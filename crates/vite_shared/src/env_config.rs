@@ -122,6 +122,11 @@ pub struct EnvConfig {
     ///
     /// Env: `PSModulePath`
     pub ps_module_path: Option<String>,
+
+    /// Nu shell version (indicates running under Nu shell).
+    ///
+    /// Env: `NU_VERSION`
+    pub nu_version: Option<String>,
 }
 
 impl EnvConfig {
@@ -151,6 +156,7 @@ impl EnvConfig {
                 .map(PathBuf::from),
             fish_version: std::env::var("FISH_VERSION").ok(),
             ps_module_path: std::env::var("PSModulePath").ok(),
+            nu_version: std::env::var("NU_VERSION").ok(),
         }
     }
 
@@ -233,6 +239,7 @@ impl EnvConfig {
             user_home: None,
             fish_version: None,
             ps_module_path: None,
+            nu_version: None,
         }
     }
 
