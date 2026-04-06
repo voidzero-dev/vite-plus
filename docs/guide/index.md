@@ -94,10 +94,10 @@ Vite+ can handle the entire local frontend development cycle from starting a pro
 ### Execute
 
 - [`vp run`](/guide/run) runs tasks across workspaces with caching.
-- [`vp cache`](/guide/cache) clears task cache entries.
-- [`vpx`](/guide/vpx) runs binaries globally.
+- [`vp cache clean`](/guide/cache) clears task cache entries.
+- [`vpx`](/guide/vpx) downloads and runs binaries globally.
 - [`vp exec`](/guide/vpx) runs local project binaries.
-- [`vp dlx`](/guide/vpx) runs package binaries without adding them as dependencies.
+- [`vp dlx`](/guide/vpx) downloads and runs package binaries without adding them as dependencies.
 
 ### Build
 
@@ -116,7 +116,7 @@ Vite+ can handle the entire local frontend development cycle from starting a pro
 - [`vp implode`](/guide/implode) removes `vp` and related Vite+ data from your machine.
 
 ::: info
-Vite+ ships with many predefined commands such as `vp build`, `vp test`, and `vp dev`. These commands are built in and cannot be changed. If you want to run a command from your `package.json` scripts, use `vp run <command>`.
+Vite+ ships with many predefined commands such as `vp build`, `vp test`, and `vp dev`. These commands are built-in and cannot be changed. If you want to run a command from your `package.json` scripts, use `vp run <command>` or `vpr <command>`.
 
 [Learn more about `vp run`.](/guide/run)
 :::
