@@ -62,7 +62,7 @@ catalog:
   detect-indent: ^7.0.2
   detect-newline: ^4.0.1
   diff: ^8.0.0
-  esbuild: ^0.27.0
+  esbuild: ^0.28.0
   estree-toolkit: ^1.7.8
   execa: ^9.2.0
   fast-glob: ^3.3.3
