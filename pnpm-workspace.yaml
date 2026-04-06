@@ -84,7 +84,7 @@ catalog:
   oxc-transform: =0.123.0
   oxfmt: =0.43.0
   oxlint: =1.58.0
-  oxlint-tsgolint: =0.19.0
+  oxlint-tsgolint: =0.20.0
   pathe: ^2.0.3
   picocolors: ^1.1.1
   picomatch: ^4.0.2
@@ -151,6 +151,7 @@ minimumReleaseAgeExclude:
   - oxlint-tsgolint
   - lightningcss
   - lightningcss-*
+  - baseline-browser-mapping
   - rolldown
   - rolldown-plugin-dts
   - tsdown
