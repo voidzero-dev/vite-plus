@@ -374,8 +374,9 @@ function Main {
         $installLog = Join-Path $VersionDir "install.log"
         Push-Location $VersionDir
         try {
-            $env:CI = "true"
-            & "$BinDir\vp.exe" install --silent *> $installLog
+            # Use cmd /c so CI=true is scoped to the child process only,
+            # avoiding leaking it into the user's shell session.
+            cmd /c "set CI=true && `"$BinDir\vp.exe`" install --silent" *> $installLog
             if ($LASTEXITCODE -ne 0) {
                 Write-Host "error: Failed to install dependencies. See log for details: $installLog" -ForegroundColor Red
                 exit 1
