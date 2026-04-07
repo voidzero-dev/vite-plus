@@ -19,6 +19,7 @@ export const RewriteImportsPlugin: Plugin = {
           external: true,
         };
       }
+      return undefined;
     },
   },
 };

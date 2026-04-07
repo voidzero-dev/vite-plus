@@ -44,7 +44,7 @@ export const S_ERROR = unicodeOr('■', 'x');
 
 export const completeColor = (value: string) => color.gray(value);
 
-export const symbol = (state: State) => {
+export const symbol = (state: State): string => {
   switch (state) {
     case 'initial':
     case 'active':
@@ -53,12 +53,12 @@ export const symbol = (state: State) => {
       return color.red(S_STEP_CANCEL);
     case 'error':
       return color.yellow(S_STEP_ERROR);
-    case 'submit':
+    default:
       return completeColor(S_STEP_SUBMIT);
   }
 };
 
-export const symbolBar = (state: State) => {
+export const symbolBar = (state: State): string => {
   switch (state) {
     case 'initial':
     case 'active':
@@ -67,7 +67,7 @@ export const symbolBar = (state: State) => {
       return color.red(S_BAR);
     case 'error':
       return color.yellow(S_BAR);
-    case 'submit':
+    default:
       return completeColor(S_BAR);
   }
 };

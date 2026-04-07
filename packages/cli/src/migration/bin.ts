@@ -86,7 +86,7 @@ async function confirmEslintMigration(interactive: boolean): Promise<boolean> {
     if (prompts.isCancel(confirmed)) {
       cancelAndExit();
     }
-    return !!confirmed;
+    return confirmed;
   }
   return true;
 }
@@ -145,7 +145,7 @@ async function confirmPrettierMigration(interactive: boolean): Promise<boolean> 
     if (prompts.isCancel(confirmed)) {
       cancelAndExit();
     }
-    return !!confirmed;
+    return confirmed;
   }
   prompts.log.info('Prettier configuration detected. Auto-migrating to Oxfmt...');
   return true;
@@ -199,7 +199,7 @@ async function confirmNodeVersionFileMigration(
     if (prompts.isCancel(confirmed)) {
       cancelAndExit();
     }
-    return !!confirmed;
+    return confirmed;
   }
   return true;
 }
