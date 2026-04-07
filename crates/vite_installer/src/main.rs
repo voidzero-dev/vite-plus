@@ -42,6 +42,7 @@ fn main() {
     init_dll_security();
 
     let opts = cli::parse();
+
     let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().unwrap_or_else(|e| {
         print_error(&format!("Failed to create async runtime: {e}"));
         std::process::exit(1);
@@ -61,6 +62,12 @@ async fn run(mut opts: cli::Options) -> i32 {
         }
     };
     let install_dir_display = install_dir.as_path().to_string_lossy().to_string();
+
+    // Propagate the resolved install directory to child `vp` processes
+    // (refresh_shims, create_env_files, install_production_deps) so they
+    // find the correct home, especially for --install-dir overrides.
+    // Safety: no other threads are reading env vars at this point.
+    unsafe { std::env::set_var("VP_HOME", install_dir.as_path()) };
 
     // Pre-compute Node.js manager default before showing the menu,
     // so the user sees the resolved value and can override it.
