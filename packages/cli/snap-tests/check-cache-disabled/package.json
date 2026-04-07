@@ -1,0 +1,7 @@
+{
+  "name": "check-cache-disabled-test",
+  "type": "module",
+  "scripts": {
+    "check": "vp check"
+  }
+}

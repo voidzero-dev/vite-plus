@@ -504,6 +504,21 @@ fn exclude_glob(pattern: &str, base: InputBase) -> UserInputEntry {
     UserInputEntry::GlobWithBase(GlobWithBase { pattern: Str::from(pattern), base })
 }
 
+/// Cache input entries for the check command.
+/// The vp check subprocess is a full vp CLI process (not resolved to a binary like
+/// build/lint/fmt), so it accesses additional directories that must be excluded:
+/// - `.vite-temp`: config compilation cache, read+written during vp CLI startup
+/// - `.vite/task-cache`: task runner state files that change after each run
+fn check_cache_inputs() -> Vec<UserInputEntry> {
+    vec![
+        UserInputEntry::Auto(AutoInput { auto: true }),
+        exclude_glob("!node_modules/.vite-temp/**", InputBase::Workspace),
+        exclude_glob("!node_modules/.vite-temp/**", InputBase::Package),
+        exclude_glob("!node_modules/.vite/task-cache/**", InputBase::Workspace),
+        exclude_glob("!node_modules/.vite/task-cache/**", InputBase::Package),
+    ]
+}
+
 /// Common cache input entries for build/pack commands.
 /// Excludes .vite-temp config files and dist output files that are both read and written.
 /// TODO: The hardcoded `!dist/**` exclusion is a temporary workaround. It will be replaced
@@ -587,10 +602,14 @@ impl CommandHandler for VitePlusCommandHandler {
         };
         match cli_args {
             CLIArgs::Synthesizable(SynthesizableSubcommand::Check { .. }) => {
-                // Check is a composite command — run as a subprocess in task scripts
-                Ok(HandledCommand::Synthesized(
-                    command.to_synthetic_plan_request(UserCacheConfig::disabled()),
-                ))
+                // Check is a composite command (fmt + lint) — run as a subprocess in task scripts
+                Ok(HandledCommand::Synthesized(command.to_synthetic_plan_request(
+                    UserCacheConfig::with_config(EnabledCacheConfig {
+                        env: Some(Box::new([Str::from("OXLINT_TSGOLINT_PATH")])),
+                        untracked_env: None,
+                        input: Some(check_cache_inputs()),
+                    }),
+                )))
             }
             CLIArgs::Synthesizable(subcmd) => {
                 let resolved =
