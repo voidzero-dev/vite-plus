@@ -14,6 +14,7 @@ const fixVersionsPathPlugin = {
     if (source === '../versions.js') {
       return { id: './versions.js', external: true };
     }
+    return undefined;
   },
 };
 

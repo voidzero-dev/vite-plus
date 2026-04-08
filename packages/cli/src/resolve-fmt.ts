@@ -11,6 +11,8 @@
  * provides high-performance code formatting capabilities.
  */
 
+import { dirname, join } from 'node:path';
+
 import { DEFAULT_ENVS, resolve } from './utils/constants.ts';
 
 /**
@@ -27,8 +29,13 @@ export async function fmt(): Promise<{
   binPath: string;
   envs: Record<string, string>;
 }> {
-  // Resolve the oxfmt binary directly (it's a native executable)
-  const binPath = resolve('oxfmt/bin/oxfmt');
+  // Resolve the oxfmt package path first, then navigate to the bin file.
+  // The bin/oxfmt subpath is not exported in package.json exports, so we
+  // resolve the main entry point and derive the bin path from it.
+  // resolve('oxfmt') returns .../oxfmt/dist/index.js, so we need to go up
+  // two directories (past 'dist') to reach the package root.
+  const oxfmtMainPath = resolve('oxfmt');
+  const binPath = join(dirname(dirname(oxfmtMainPath)), 'bin', 'oxfmt');
 
   return {
     binPath,

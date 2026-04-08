@@ -235,7 +235,7 @@ beforeEach(async () => {
     await mockFs.unlink(filePath);
   });
   vi.spyOn(fsPromises, 'writeFile').mockImplementation(async (filePath, data) => {
-    await mockFs.writeFile(filePath as fs.PathLike, String(data as string));
+    await mockFs.writeFile(filePath as fs.PathLike, data as string);
   });
 
   await mockFs.writeFile(path.join(pkgRoot, 'AGENTS.md'), AGENT_TEMPLATE);

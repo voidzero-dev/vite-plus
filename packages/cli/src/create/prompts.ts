@@ -22,11 +22,11 @@ export async function promptPackageNameAndTargetDir(
       defaultValue: defaultPackageName,
       validate: (value) => {
         if (value == null || value.length === 0) {
-          return;
+          return undefined;
         }
         const result = value ? validateNpmPackageName(value) : null;
         if (result?.validForNewPackages) {
-          return;
+          return undefined;
         }
         return result?.errors?.[0] ?? result?.warnings?.[0] ?? 'Invalid package name';
       },

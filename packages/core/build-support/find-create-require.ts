@@ -142,7 +142,7 @@ function findCreateRequireInStaticImports(
     return value === 'node:module' || value === 'module';
   });
   if (!importFromModule) {
-    return;
+    return undefined;
   }
 
   // Find the createRequire import entry
@@ -150,7 +150,7 @@ function findCreateRequireInStaticImports(
     return entry.importName.name === 'createRequire';
   });
   if (!createRequireEntry) {
-    return;
+    return undefined;
   }
 
   const createRequireLocalName = createRequireEntry.localName.value;
@@ -175,7 +175,7 @@ function findCreateRequireInStaticImports(
   varVisitor.visit(ast.program);
 
   if (!requireVarName) {
-    return;
+    return undefined;
   }
 
   // Find all calls to the require variable
@@ -277,7 +277,7 @@ function findCreateRequireInGlobalModule(
   visitor.visit(ast.program);
 
   if (!requireVarName) {
-    return;
+    return undefined;
   }
 
   // Find all calls to the require variable

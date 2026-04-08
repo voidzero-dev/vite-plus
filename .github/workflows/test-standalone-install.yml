@@ -474,6 +474,86 @@ jobs:
           vp upgrade --rollback
           vp --version
 
+  test-install-ps1-v76:
+    name: Test install.ps1 (Windows x64, PowerShell 7.6)
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install PowerShell 7.6
+        shell: pwsh
+        run: |
+          dotnet tool install --global PowerShell --version 7.6.0
+          $pwsh76 = "$env:USERPROFILE\.dotnet\tools\pwsh.exe"
+          echo "PWSH76=$pwsh76" >> $env:GITHUB_ENV
+          $ver = & $pwsh76 -NoProfile -Command '$PSVersionTable.PSVersion.ToString()'
+          Write-Host "PowerShell version: $ver"
+          if (-not $ver.StartsWith("7.6")) {
+            Write-Error "Expected PowerShell 7.6.x but got $ver"
+            exit 1
+          }
+
+      - name: Run install.ps1 via iex under PowerShell 7.6
+        shell: pwsh
+        run: |
+          & $env:PWSH76 -NoProfile -Command "Get-Content ./packages/cli/install.ps1 -Raw | Invoke-Expression"
+
+      - name: Set PATH
+        shell: bash
+        run: |
+          echo "$USERPROFILE\.vite-plus\bin" >> $GITHUB_PATH
+
+      - name: Verify installation
+        shell: pwsh
+        working-directory: ${{ runner.temp }}
+        run: |
+          Write-Host "PATH: $env:Path"
+          vp --version
+          vp --help
+          vp create vite --no-interactive --no-agent -- hello --no-interactive -t vanilla
+          cd hello
+          vp run build
+          vp --version
+
+      - name: Verify bin setup
+        shell: pwsh
+        run: |
+          $binPath = "$env:USERPROFILE\.vite-plus\bin"
+          Get-ChildItem -Force $binPath
+          if (-not (Test-Path $binPath)) {
+            Write-Error "Bin directory not found: $binPath"
+            exit 1
+          }
+
+          $expectedShims = @("node.exe", "npm.exe", "npx.exe")
+          foreach ($shim in $expectedShims) {
+            $shimFile = Join-Path $binPath $shim
+            if (-not (Test-Path $shimFile)) {
+              Write-Error "Shim not found: $shimFile"
+              exit 1
+            }
+            Write-Host "Found shim: $shimFile"
+          }
+          where.exe node
+          where.exe npm
+          where.exe npx
+          where.exe vp
+
+          $env:Path = "$env:USERPROFILE\.vite-plus\bin;$env:Path"
+          vp env doctor
+          vp env run --node 24 -- node -p "process.versions"
+
+      - name: Verify upgrade
+        shell: pwsh
+        run: |
+          vp upgrade --check
+          vp upgrade 0.1.14-alpha.1
+          vp --version
+          vp upgrade --rollback
+          vp --version
+
   test-install-ps1:
     name: Test install.ps1 (Windows x64)
     runs-on: windows-latest

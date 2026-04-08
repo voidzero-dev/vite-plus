@@ -139,6 +139,7 @@ export const multiselect = <Value>(opts: MultiSelectOptions<Value>) => {
           ),
         )}`;
       }
+      return undefined;
     },
     render() {
       const hasGuide = opts.withGuide ?? false;
