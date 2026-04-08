@@ -86,7 +86,7 @@ async function confirmEslintMigration(interactive: boolean): Promise<boolean> {
     if (prompts.isCancel(confirmed)) {
       cancelAndExit();
     }
-    return !!confirmed;
+    return confirmed;
   }
   return true;
 }
@@ -145,7 +145,7 @@ async function confirmPrettierMigration(interactive: boolean): Promise<boolean> 
     if (prompts.isCancel(confirmed)) {
       cancelAndExit();
     }
-    return !!confirmed;
+    return confirmed;
   }
   prompts.log.info('Prettier configuration detected. Auto-migrating to Oxfmt...');
   return true;
@@ -199,7 +199,7 @@ async function confirmNodeVersionFileMigration(
     if (prompts.isCancel(confirmed)) {
       cancelAndExit();
     }
-    return !!confirmed;
+    return confirmed;
   }
   return true;
 }
@@ -224,10 +224,9 @@ const helpMessage = renderCliDoc({
       rows: [
         {
           label: '--agent NAME',
-          description:
-            'Write agent instructions file into the project (e.g. chatgpt, claude, opencode).',
+          description: 'Write coding agent instructions to AGENTS.md, CLAUDE.md, etc.',
         },
-        { label: '--no-agent', description: 'Skip writing agent instructions file' },
+        { label: '--no-agent', description: 'Skip writing coding agent instructions' },
         {
           label: '--editor NAME',
           description: 'Write editor config files into the project.',

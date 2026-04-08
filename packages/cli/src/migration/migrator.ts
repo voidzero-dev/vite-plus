@@ -1917,16 +1917,16 @@ export function installGitHooks(
 export function getOldHooksDir(rootDir: string): string | undefined {
   const packageJsonPath = path.join(rootDir, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
-    return;
+    return undefined;
   }
   const pkg = readJsonFile<{ scripts?: { prepare?: string } }>(packageJsonPath);
   if (!pkg.scripts?.prepare) {
-    return;
+    return undefined;
   }
   const prepare = collapseHuskyInstall(pkg.scripts.prepare);
   const match = prepare.match(/\bhusky(?:\s+([\w./-]+))?/);
   if (!match) {
-    return;
+    return undefined;
   }
   return match[1] ?? '.husky';
 }
@@ -2231,7 +2231,7 @@ export function createPreCommitHook(projectPath: string, dir = '.vite-hooks'): v
 export function rewritePrepareScript(rootDir: string): string | undefined {
   const packageJsonPath = path.join(rootDir, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
-    return;
+    return undefined;
   }
 
   let oldDir: string | undefined;

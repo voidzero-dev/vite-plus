@@ -9,8 +9,8 @@ Arguments:
   PATH  Target directory to migrate (default: current directory)
 
 Options:
-  --agent NAME      Write agent instructions file into the project (e.g. chatgpt, claude, opencode).
-  --no-agent        Skip writing agent instructions file
+  --agent NAME      Write coding agent instructions to AGENTS.md, CLAUDE.md, etc.
+  --no-agent        Skip writing coding agent instructions
   --editor NAME     Write editor config files into the project.
   --no-editor       Skip writing editor config files
   --hooks           Set up pre-commit hooks (default in non-interactive mode)
