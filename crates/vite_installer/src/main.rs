@@ -310,19 +310,14 @@ async fn setup_bin_shims(
 
     #[cfg(windows)]
     {
-        let shim_dst = bin_dir.join("vp.exe");
         let shim_src = install_dir.join("current").join("bin").join("vp-shim.exe");
+        let shim_dst = bin_dir.join("vp.exe");
 
-        // Prefer vp-shim.exe (lightweight trampoline), fall back to vp.exe
-        let src = if tokio::fs::try_exists(&shim_src).await.unwrap_or(false) {
-            shim_src
-        } else {
-            install_dir.join("current").join("bin").join("vp.exe")
-        };
-
-        if tokio::fs::try_exists(&src).await.unwrap_or(false) {
-            replace_windows_exe(&src, &shim_dst, &bin_dir).await?;
+        if !tokio::fs::try_exists(&shim_src).await.unwrap_or(false) {
+            return Err(format!("vp-shim.exe not found at {}", shim_src.as_path().display()).into());
         }
+
+        replace_windows_exe(&shim_src, &shim_dst, &bin_dir).await?;
 
         // Best-effort cleanup of old shim files
         if let Ok(mut entries) = tokio::fs::read_dir(&bin_dir).await {
