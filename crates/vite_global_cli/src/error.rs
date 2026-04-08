@@ -52,9 +52,6 @@ pub enum Error {
     #[error("Upgrade error: {0}")]
     Upgrade(Str),
 
-    #[error("Integrity mismatch: expected {expected}, got {actual}")]
-    IntegrityMismatch { expected: Str, actual: Str },
-
-    #[error("Unsupported integrity format: {0} (only sha512 is supported)")]
-    UnsupportedIntegrity(Str),
+    #[error("{0}")]
+    Setup(#[from] vite_setup::error::Error),
 }

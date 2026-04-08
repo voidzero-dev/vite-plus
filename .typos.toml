@@ -2,6 +2,7 @@
 ratatui = "ratatui"
 PUNICODE = "PUNICODE"
 Jod = "Jod" # Node.js v22 LTS codename
+flate = "flate" # flate2 crate name (gzip/deflate compression)
 
 [files]
 extend-exclude = [

@@ -47,6 +47,7 @@ runs:
           ${{ steps.rust-target.outputs.dir }}/${{ inputs.target }}/release/vp
           ${{ steps.rust-target.outputs.dir }}/${{ inputs.target }}/release/vp.exe
           ${{ steps.rust-target.outputs.dir }}/${{ inputs.target }}/release/vp-shim.exe
+          ${{ steps.rust-target.outputs.dir }}/${{ inputs.target }}/release/vp-setup.exe
         key: ${{ steps.cache-key.outputs.key }}
 
     # Apply Vite+ branding patches to vite source (CI checks out
@@ -143,6 +144,11 @@ runs:
       shell: bash
       run: cargo build --release --target ${{ inputs.target }} -p vite_trampoline
 
+    - name: Build installer binary (Windows only)
+      if: steps.cache-restore.outputs.cache-hit != 'true' && contains(inputs.target, 'windows')
+      shell: bash
+      run: cargo build --release --target ${{ inputs.target }} -p vite_installer
+
     - name: Save NAPI binding cache
       if: steps.cache-restore.outputs.cache-hit != 'true'
       uses: actions/cache/save@94b89442628ad1d101e352b7ee38f30e1bef108e # v5
@@ -156,6 +162,7 @@ runs:
           ${{ steps.rust-target.outputs.dir }}/${{ inputs.target }}/release/vp
           ${{ steps.rust-target.outputs.dir }}/${{ inputs.target }}/release/vp.exe
           ${{ steps.rust-target.outputs.dir }}/${{ inputs.target }}/release/vp-shim.exe
+          ${{ steps.rust-target.outputs.dir }}/${{ inputs.target }}/release/vp-setup.exe
         key: ${{ steps.cache-key.outputs.key }}
 
     # Build vite-plus TypeScript after native bindings are ready
