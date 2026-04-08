@@ -396,7 +396,7 @@ fn modify_path(bin_dir: &str, quiet: bool) -> Result<(), Box<dyn std::error::Err
 #[allow(clippy::print_stdout)]
 fn show_interactive_menu(opts: &mut cli::Options, install_dir: &str) -> bool {
     loop {
-        let version = opts.version.as_deref().unwrap_or("latest");
+        let version = opts.version.as_deref().unwrap_or(&opts.tag);
         let bin_dir = format!("{install_dir}{sep}bin", sep = std::path::MAIN_SEPARATOR);
 
         println!();
@@ -440,7 +440,7 @@ fn show_interactive_menu(opts: &mut cli::Options, install_dir: &str) -> bool {
 #[allow(clippy::print_stdout)]
 fn show_customize_menu(opts: &mut cli::Options) {
     loop {
-        let version_display = opts.version.as_deref().unwrap_or("latest");
+        let version_display = opts.version.as_deref().unwrap_or(&opts.tag);
         let registry_display = opts.registry.as_deref().unwrap_or("(default)");
 
         println!();
@@ -463,7 +463,7 @@ fn show_customize_menu(opts: &mut cli::Options) {
             "" => return,
             "1" => {
                 let v = read_input("    Version (e.g. 0.3.0 or latest): ");
-                if v == "latest" || v.is_empty() {
+                if v.is_empty() || v == opts.tag {
                     opts.version = None;
                 } else {
                     opts.version = Some(v);
