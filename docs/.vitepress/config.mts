@@ -109,6 +109,9 @@ export default extendConfig(
         ],
       ],
       vite: {
+        optimizeDeps: {
+          include: ['mermaid > @braintree/sanitize-url'],
+        },
         resolve: {
           tsconfigPaths: true,
           alias: [
