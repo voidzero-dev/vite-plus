@@ -87,6 +87,9 @@ function Test-ReleaseAgeError {
 }
 
 function Confirm-ReleaseAgeOverride {
+    if ($env:CI -eq "true") {
+        return $false
+    }
     if (-not [Environment]::UserInteractive) {
         return $false
     }
