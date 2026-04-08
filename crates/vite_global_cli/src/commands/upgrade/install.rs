@@ -4,8 +4,9 @@
 //! and version cleanup.
 
 use std::{
-    io::{Cursor, Read as _},
+    io::{Cursor, IsTerminal, Read as _, Write as _},
     path::Path,
+    process::Output,
 };
 
 use flate2::read::GzDecoder;
@@ -122,6 +123,94 @@ pub async fn write_release_age_overrides(version_dir: &AbsolutePath) -> Result<(
     Ok(())
 }
 
+fn is_affirmative_response(input: &str) -> bool {
+    matches!(input.trim().to_ascii_lowercase().as_str(), "y" | "yes")
+}
+
+fn should_prompt_release_age_override(silent: bool) -> bool {
+    !silent && std::io::stdin().is_terminal() && std::io::stderr().is_terminal()
+}
+
+fn prompt_release_age_override(version: &str) -> bool {
+    eprintln!();
+    eprintln!("warn: Your minimumReleaseAge setting prevented installing vite-plus@{version}.");
+    eprintln!("This setting helps protect against newly published compromised packages.");
+    eprintln!("Proceeding will disable this protection for this Vite+ install only.");
+    eprint!("Do you want to proceed? (y/N): ");
+    if std::io::stderr().flush().is_err() {
+        return false;
+    }
+
+    let mut input = String::new();
+    if std::io::stdin().read_line(&mut input).is_err() {
+        return false;
+    }
+
+    is_affirmative_response(&input)
+}
+
+fn is_release_age_error(stdout: &[u8], stderr: &[u8]) -> bool {
+    let output =
+        format!("{}\n{}", String::from_utf8_lossy(stdout), String::from_utf8_lossy(stderr));
+    let lower = output.to_ascii_lowercase();
+
+    // This wrapper install path is pinned to pnpm via packageManager, so this
+    // detection follows pnpm's resolver/reporter output rather than npm/yarn.
+    //
+    // pnpm's PnpmError prefixes internal codes with ERR_PNPM_, so
+    // `NO_MATURE_MATCHING_VERSION` becomes `ERR_PNPM_NO_MATURE_MATCHING_VERSION`
+    // in CLI output. We still match the unprefixed code as a fallback in case
+    // future reporter/log output includes the raw internal code.
+    // https://github.com/pnpm/pnpm/blob/16cfde66ec71125d692ea828eba2a5f9b3cc54fc/core/error/src/index.ts#L18-L20
+    //
+    // npm-resolver chooses NO_MATURE_MATCHING_VERSION when
+    // publishedBy/minimumReleaseAge rejects a matching version, and uses the
+    // "does not meet the minimumReleaseAge constraint" message.
+    // https://github.com/pnpm/pnpm/blob/16cfde66ec71125d692ea828eba2a5f9b3cc54fc/resolving/npm-resolver/src/index.ts#L76-L84
+    //
+    // default-reporter handles both ERR_PNPM_NO_MATURE_MATCHING_VERSION and
+    // ERR_PNPM_NO_MATCHING_VERSION, and may append guidance mentioning
+    // minimumReleaseAgeExclude when the error has an immatureVersion.
+    // https://github.com/pnpm/pnpm/blob/16cfde66ec71125d692ea828eba2a5f9b3cc54fc/cli/default-reporter/src/reportError.ts#L163-L164
+    //
+    // pnpm itself notes that NO_MATCHING_VERSION can also happen under
+    // minimumReleaseAge when all candidate versions are newer than the threshold.
+    // Because it is also used for real missing versions, we only treat it as
+    // release-age related when accompanied by the age-gate text below.
+    // https://github.com/pnpm/pnpm/blob/16cfde66ec71125d692ea828eba2a5f9b3cc54fc/deps/inspection/outdated/src/createManifestGetter.ts#L66-L76
+    //
+    // minimum-release-age is the pnpm .npmrc key; npm's min-release-age is
+    // intentionally not treated as a pnpm signal here.
+    // https://github.com/pnpm/pnpm/blob/16cfde66ec71125d692ea828eba2a5f9b3cc54fc/config/reader/src/types.ts#L73-L74
+    let has_release_age_text = output.contains("does not meet the minimumReleaseAge constraint")
+        || output.contains("minimumReleaseAge")
+        || output.contains("minimumReleaseAgeExclude")
+        || lower.contains("minimum release age")
+        || lower.contains("minimum-release-age");
+
+    output.contains("ERR_PNPM_NO_MATURE_MATCHING_VERSION")
+        || output.contains("NO_MATURE_MATCHING_VERSION")
+        || (output.contains("ERR_PNPM_NO_MATCHING_VERSION") && has_release_age_text)
+        || has_release_age_text
+}
+
+fn format_install_failure_message(
+    exit_code: i32,
+    log_path: Option<&AbsolutePathBuf>,
+    release_age_blocked: bool,
+) -> String {
+    let log_msg = log_path
+        .map_or_else(String::new, |p| format!(". See log for details: {}", p.as_path().display()));
+
+    if release_age_blocked {
+        format!(
+            "Upgrade blocked by your minimumReleaseAge setting. Wait until the package is old enough or adjust your package manager configuration explicitly{log_msg}"
+        )
+    } else {
+        format!("Failed to install production dependencies (exit code: {exit_code}){log_msg}")
+    }
+}
+
 /// Write stdout and stderr from a failed install to `upgrade.log`.
 ///
 /// The log is written to the **parent** of `version_dir` (i.e. `~/.vite-plus/upgrade.log`)
@@ -150,11 +239,13 @@ pub async fn write_upgrade_log(
 
 /// Install production dependencies using the new version's binary.
 ///
-/// Spawns: `{version_dir}/bin/vp install --silent [--registry <url>]` with `CI=true`.
+/// Spawns: `{version_dir}/bin/vp install [--registry <url>]` with `CI=true`.
 /// On failure, writes stdout+stderr to `{version_dir}/upgrade.log` for debugging.
 pub async fn install_production_deps(
     version_dir: &AbsolutePath,
     registry: Option<&str>,
+    silent: bool,
+    new_version: &str,
 ) -> Result<(), Error> {
     let vp_binary = version_dir.join("bin").join(if cfg!(windows) { "vp.exe" } else { "vp" });
 
@@ -166,37 +257,80 @@ pub async fn install_production_deps(
 
     tracing::debug!("Running vp install in {}", version_dir.as_path().display());
 
-    let mut args = vec!["install", "--silent"];
+    // Do not pass `--silent` to the inner install: pnpm suppresses the
+    // release-age error body in silent mode, which would leave upgrade.log
+    // empty and make the release-age gate impossible to detect. This outer
+    // process captures the output and only surfaces it through the log.
+    let mut args = vec!["install"];
     if let Some(registry_url) = registry {
         args.push("--");
         args.push("--registry");
         args.push(registry_url);
     }
 
+    let output = run_vp_install(version_dir, &vp_binary, &args).await?;
+
+    if !output.status.success() {
+        let log_path = write_upgrade_log(version_dir, &output.stdout, &output.stderr).await;
+        let release_age_blocked = is_release_age_error(&output.stdout, &output.stderr);
+
+        if !release_age_blocked {
+            return Err(Error::Upgrade(
+                format_install_failure_message(
+                    output.status.code().unwrap_or(-1),
+                    log_path.as_ref(),
+                    false,
+                )
+                .into(),
+            ));
+        }
+
+        if !should_prompt_release_age_override(silent) || !prompt_release_age_override(new_version)
+        {
+            return Err(Error::Upgrade(
+                format_install_failure_message(
+                    output.status.code().unwrap_or(-1),
+                    log_path.as_ref(),
+                    true,
+                )
+                .into(),
+            ));
+        }
+
+        // Only create the local override after explicit consent. This preserves
+        // minimumReleaseAge protection for the default and non-interactive paths.
+        write_release_age_overrides(version_dir).await?;
+        let retry_output = run_vp_install(version_dir, &vp_binary, &args).await?;
+        if !retry_output.status.success() {
+            let retry_log_path =
+                write_upgrade_log(version_dir, &retry_output.stdout, &retry_output.stderr).await;
+            return Err(Error::Upgrade(
+                format_install_failure_message(
+                    retry_output.status.code().unwrap_or(-1),
+                    retry_log_path.as_ref(),
+                    false,
+                )
+                .into(),
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+async fn run_vp_install(
+    version_dir: &AbsolutePath,
+    vp_binary: &AbsolutePath,
+    args: &[&str],
+) -> Result<Output, Error> {
     let output = tokio::process::Command::new(vp_binary.as_path())
-        .args(&args)
+        .args(args)
         .current_dir(version_dir)
         .env("CI", "true")
         .output()
         .await?;
 
-    if !output.status.success() {
-        let log_path = write_upgrade_log(version_dir, &output.stdout, &output.stderr).await;
-        let log_msg = log_path.map_or_else(
-            || String::new(),
-            |p| format!(". See log for details: {}", p.as_path().display()),
-        );
-        return Err(Error::Upgrade(
-            format!(
-                "Failed to install production dependencies (exit code: {}){}",
-                output.status.code().unwrap_or(-1),
-                log_msg
-            )
-            .into(),
-        ));
-    }
-
-    Ok(())
+    Ok(output)
 }
 
 /// Save the current version before swapping, for rollback support.
@@ -544,5 +678,42 @@ mod tests {
             !version_dir.join("bunfig.toml").as_path().exists(),
             "bunfig.toml should not be created"
         );
+    }
+
+    #[test]
+    fn test_is_release_age_error_detects_pnpm_no_mature_code() {
+        assert!(is_release_age_error(
+            b"",
+            b"ERR_PNPM_NO_MATURE_MATCHING_VERSION Version 0.1.16 of vite-plus does not meet the minimumReleaseAge constraint",
+        ));
+    }
+
+    #[test]
+    fn test_is_release_age_error_detects_minimum_release_age_message() {
+        assert!(is_release_age_error(
+            b"",
+            b"Version 0.1.16 (released just now) of vite-plus does not meet the minimumReleaseAge constraint",
+        ));
+    }
+
+    #[test]
+    fn test_is_release_age_error_detects_no_matching_with_release_age_context() {
+        assert!(is_release_age_error(
+            b"",
+            b"ERR_PNPM_NO_MATCHING_VERSION No matching version found. Add the package name to minimumReleaseAgeExclude if you want to ignore the time it was published.",
+        ));
+    }
+
+    #[test]
+    fn test_is_release_age_error_ignores_plain_no_matching_version() {
+        assert!(!is_release_age_error(
+            b"",
+            b"ERR_PNPM_NO_MATCHING_VERSION No matching version found for vite-plus@999.999.999",
+        ));
+    }
+
+    #[test]
+    fn test_is_release_age_error_ignores_npm_min_release_age() {
+        assert!(!is_release_age_error(b"", b"min-release-age prevented installing vite-plus",));
     }
 }

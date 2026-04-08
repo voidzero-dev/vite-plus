@@ -58,6 +58,84 @@ error() {
   exit 1
 }
 
+is_release_age_error() {
+  local log_file="$1"
+  [ -f "$log_file" ] || return 1
+
+  # This wrapper install path is pinned to pnpm via packageManager, so this
+  # detection follows pnpm's resolver/reporter output rather than npm/yarn.
+  #
+  # pnpm's PnpmError prefixes internal codes with ERR_PNPM_, so
+  # NO_MATURE_MATCHING_VERSION is normally printed as
+  # ERR_PNPM_NO_MATURE_MATCHING_VERSION. npm-resolver emits that code with the
+  # "does not meet the minimumReleaseAge constraint" message when
+  # publishedBy/minimumReleaseAge rejects a matching version.
+  # https://github.com/pnpm/pnpm/blob/16cfde66ec71125d692ea828eba2a5f9b3cc54fc/core/error/src/index.ts#L18-L20
+  # https://github.com/pnpm/pnpm/blob/16cfde66ec71125d692ea828eba2a5f9b3cc54fc/resolving/npm-resolver/src/index.ts#L76-L84
+  #
+  # default-reporter may append guidance mentioning minimumReleaseAgeExclude
+  # when the error has an immatureVersion, so that token is also a useful
+  # release-age signal. minimum-release-age is pnpm's .npmrc key; npm's
+  # min-release-age is intentionally not treated as a pnpm signal here.
+  # https://github.com/pnpm/pnpm/blob/16cfde66ec71125d692ea828eba2a5f9b3cc54fc/cli/default-reporter/src/reportError.ts#L163-L164
+  # https://github.com/pnpm/pnpm/blob/16cfde66ec71125d692ea828eba2a5f9b3cc54fc/config/reader/src/types.ts#L73-L74
+  grep -Eqi 'ERR_PNPM_NO_MATURE_MATCHING_VERSION|NO_MATURE_MATCHING_VERSION|does not meet the minimumReleaseAge constraint|minimumReleaseAge|minimumReleaseAgeExclude|minimum release age|minimum-release-age' "$log_file" && return 0
+
+  # pnpm can also surface ERR_PNPM_NO_MATCHING_VERSION when minimumReleaseAge
+  # filters out all candidates. That code is also used for real missing
+  # versions, so require age-gate context before prompting for a bypass.
+  # https://github.com/pnpm/pnpm/blob/16cfde66ec71125d692ea828eba2a5f9b3cc54fc/deps/inspection/outdated/src/createManifestGetter.ts#L66-L76
+  if grep -Eq 'ERR_PNPM_NO_MATCHING_VERSION' "$log_file"; then
+    grep -Eqi 'minimumReleaseAge|minimumReleaseAgeExclude|minimum release age|minimum-release-age' "$log_file"
+    return $?
+  fi
+
+  return 1
+}
+
+confirm_release_age_override() {
+  [ -e /dev/tty ] && [ -t 1 ] || return 1
+
+  echo "" > /dev/tty
+  echo -e "${YELLOW}warn${NC}: Your minimumReleaseAge setting prevented installing vite-plus@${VP_VERSION}." > /dev/tty
+  echo "This setting helps protect against newly published compromised packages." > /dev/tty
+  echo "Proceeding will disable this protection for this Vite+ install only." > /dev/tty
+  printf "Do you want to proceed? (y/N): " > /dev/tty
+
+  local response
+  read -r response < /dev/tty || return 1
+  case "$response" in
+    y|Y|yes|YES) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+write_release_age_override() {
+  cat > "$VERSION_DIR/.npmrc" <<NPMRC_EOF
+minimum-release-age=0
+NPMRC_EOF
+}
+
+print_install_failure() {
+  local install_log="$1"
+  if [ "${CI:-}" = "true" ]; then
+    echo -e "${RED}error${NC}: Failed to install dependencies. Log output:"
+    cat "$install_log"
+  else
+    echo -e "${RED}error${NC}: Failed to install dependencies. See log for details: $install_log"
+  fi
+}
+
+print_release_age_failure() {
+  local install_log="$1"
+  if [ "${CI:-}" = "true" ]; then
+    echo -e "${RED}error${NC}: Install blocked by your minimumReleaseAge setting. Log output:"
+    cat "$install_log"
+  else
+    echo -e "${RED}error${NC}: Install blocked by your minimumReleaseAge setting. Wait until the package is old enough or adjust your package manager configuration explicitly. See log for details: $install_log"
+  fi
+}
+
 # Print user-friendly error message for curl failures
 # Arguments: exit_code url
 print_curl_error() {
@@ -640,12 +718,6 @@ main() {
 }
 WRAPPER_EOF
 
-  # Isolate from pnpm's global config that may block installing
-  # recently-published packages (e.g. minimumReleaseAge).
-  cat > "$VERSION_DIR/.npmrc" <<NPMRC_EOF
-minimum-release-age=0
-NPMRC_EOF
-
   # Install production dependencies (skip if VP_SKIP_DEPS_INSTALL is set,
   # e.g. during local dev where install-global-cli.ts handles deps separately)
   if [ -z "${VP_SKIP_DEPS_INSTALL:-}" ]; then
@@ -654,14 +726,27 @@ NPMRC_EOF
     if [ -f "$BIN_DIR/vp.exe" ]; then
       vp_install_bin="$BIN_DIR/vp.exe"
     fi
-    if ! (cd "$VERSION_DIR" && CI=true "$vp_install_bin" install --silent > "$install_log" 2>&1); then
-      if [ "${CI:-}" = "true" ]; then
-        echo -e "${RED}error${NC}: Failed to install dependencies. Log output:"
-        cat "$install_log"
+    # Do not pass --silent to the inner install: pnpm suppresses the
+    # release-age error body in silent mode, which would leave install.log
+    # empty and make the release-age gate impossible to detect. Output is
+    # already redirected to install.log here.
+    if ! (cd "$VERSION_DIR" && CI=true "$vp_install_bin" install > "$install_log" 2>&1); then
+      if is_release_age_error "$install_log"; then
+        if confirm_release_age_override; then
+          # Write the override only after explicit consent, then retry once.
+          write_release_age_override
+          if ! (cd "$VERSION_DIR" && CI=true "$vp_install_bin" install > "$install_log" 2>&1); then
+            print_install_failure "$install_log"
+            exit 1
+          fi
+        else
+          print_release_age_failure "$install_log"
+          exit 1
+        fi
       else
-        echo -e "${RED}error${NC}: Failed to install dependencies. See log for details: $install_log"
+        print_install_failure "$install_log"
+        exit 1
       fi
-      exit 1
     fi
   fi
 
