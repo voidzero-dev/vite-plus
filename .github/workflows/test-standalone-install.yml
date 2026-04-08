@@ -622,6 +622,11 @@ jobs:
               Write-Error "Non-interactive install must not write minimum-release-age overrides"
               exit 1
             }
+
+            # The child install.ps1 is expected to fail in this test. Reset the
+            # native command exit code so the GitHub Actions PowerShell wrapper
+            # does not fail the step after our assertions pass.
+            $global:LASTEXITCODE = 0
           } finally {
             Remove-Item -Path $npmrc -Force -ErrorAction SilentlyContinue
             if (Test-Path $backup) {
