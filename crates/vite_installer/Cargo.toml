@@ -1,0 +1,29 @@
+[package]
+name = "vite_installer"
+version = "0.0.0"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+rust-version.workspace = true
+
+[[bin]]
+name = "vp-setup"
+path = "src/main.rs"
+
+[dependencies]
+clap = { workspace = true, features = ["derive"] }
+indicatif = { workspace = true }
+owo-colors = { workspace = true, features = ["supports-colors"] }
+tokio = { workspace = true, features = ["full"] }
+vite_install = { workspace = true }
+vite_path = { workspace = true }
+vite_setup = { workspace = true }
+vite_shared = { workspace = true }
+which = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+winreg = { workspace = true }
+
+[lints]
+workspace = true

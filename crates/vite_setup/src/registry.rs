@@ -51,7 +51,7 @@ pub async fn resolve_version_string(
     tracing::debug!("Fetching main package metadata: {}", main_url);
 
     let main_meta: PackageVersionMetadata = client.get_json(&main_url).await.map_err(|e| {
-        Error::Upgrade(format!("Failed to fetch package metadata from {main_url}: {e}").into())
+        Error::Setup(format!("Failed to fetch package metadata from {main_url}: {e}").into())
     })?;
 
     Ok(main_meta.version)
@@ -77,7 +77,7 @@ pub async fn resolve_platform_package(
     tracing::debug!("Fetching CLI package metadata: {}", cli_url);
 
     let cli_meta: PackageVersionMetadata = client.get_json(&cli_url).await.map_err(|e| {
-        Error::Upgrade(
+        Error::Setup(
             format!(
                 "Failed to fetch CLI package metadata from {cli_url}: {e}. \
                      Your platform ({platform_suffix}) may not be supported."

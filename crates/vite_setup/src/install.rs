@@ -1,4 +1,4 @@
-//! Installation logic for upgrade.
+//! Installation logic shared between `vp upgrade` and `vp-setup.exe`.
 //!
 //! Handles tarball extraction, dependency installation, symlink swapping,
 //! and version cleanup.
@@ -83,7 +83,7 @@ pub async fn extract_platform_package(
         Ok::<(), Error>(())
     })
     .await
-    .map_err(|e| Error::Upgrade(format!("Task join error: {e}").into()))??;
+    .map_err(|e| Error::Setup(format!("Task join error: {e}").into()))??;
 
     Ok(())
 }
@@ -247,10 +247,10 @@ pub async fn install_production_deps(
     silent: bool,
     new_version: &str,
 ) -> Result<(), Error> {
-    let vp_binary = version_dir.join("bin").join(if cfg!(windows) { "vp.exe" } else { "vp" });
+    let vp_binary = version_dir.join("bin").join(crate::VP_BINARY_NAME);
 
     if !tokio::fs::try_exists(&vp_binary).await.unwrap_or(false) {
-        return Err(Error::Upgrade(
+        return Err(Error::Setup(
             format!("New binary not found at {}", vp_binary.as_path().display()).into(),
         ));
     }
@@ -275,7 +275,7 @@ pub async fn install_production_deps(
         let release_age_blocked = is_release_age_error(&output.stdout, &output.stderr);
 
         if !release_age_blocked {
-            return Err(Error::Upgrade(
+            return Err(Error::Setup(
                 format_install_failure_message(
                     output.status.code().unwrap_or(-1),
                     log_path.as_ref(),
@@ -287,7 +287,7 @@ pub async fn install_production_deps(
 
         if !should_prompt_release_age_override(silent) || !prompt_release_age_override(new_version)
         {
-            return Err(Error::Upgrade(
+            return Err(Error::Setup(
                 format_install_failure_message(
                     output.status.code().unwrap_or(-1),
                     log_path.as_ref(),
@@ -304,7 +304,7 @@ pub async fn install_production_deps(
         if !retry_output.status.success() {
             let retry_log_path =
                 write_upgrade_log(version_dir, &retry_output.stdout, &retry_output.stderr).await;
-            return Err(Error::Upgrade(
+            return Err(Error::Setup(
                 format_install_failure_message(
                     retry_output.status.code().unwrap_or(-1),
                     retry_log_path.as_ref(),
@@ -337,14 +337,7 @@ async fn run_vp_install(
 ///
 /// Reads the `current` symlink target and writes the version to `.previous-version`.
 pub async fn save_previous_version(install_dir: &AbsolutePath) -> Result<Option<String>, Error> {
-    let current_link = install_dir.join("current");
-
-    if !tokio::fs::try_exists(&current_link).await.unwrap_or(false) {
-        return Ok(None);
-    }
-
-    let target = tokio::fs::read_link(&current_link).await?;
-    let version = target.file_name().and_then(|n| n.to_str()).map(String::from);
+    let version = read_current_version(install_dir).await;
 
     if let Some(ref v) = version {
         let prev_file = install_dir.join(".previous-version");
@@ -365,7 +358,7 @@ pub async fn swap_current_link(install_dir: &AbsolutePath, version: &str) -> Res
 
     // Verify the version directory exists
     if !tokio::fs::try_exists(&version_dir).await.unwrap_or(false) {
-        return Err(Error::Upgrade(
+        return Err(Error::Setup(
             format!("Version directory does not exist: {}", version_dir.as_path().display()).into(),
         ));
     }
@@ -393,7 +386,7 @@ pub async fn swap_current_link(install_dir: &AbsolutePath, version: &str) -> Res
             if let Err(e) = std::fs::remove_dir(&current_link) {
                 tracing::debug!("remove_dir failed ({}), trying junction::delete", e);
                 junction::delete(&current_link).map_err(|e| {
-                    Error::Upgrade(
+                    Error::Setup(
                         format!(
                             "Failed to remove existing junction at {}: {e}",
                             current_link.as_path().display()
@@ -405,7 +398,7 @@ pub async fn swap_current_link(install_dir: &AbsolutePath, version: &str) -> Res
         }
 
         junction::create(&version_dir, &current_link).map_err(|e| {
-            Error::Upgrade(
+            Error::Setup(
                 format!(
                     "Failed to create junction at {}: {e}\nTry removing it manually and run again.",
                     current_link.as_path().display()
@@ -421,8 +414,7 @@ pub async fn swap_current_link(install_dir: &AbsolutePath, version: &str) -> Res
 
 /// Refresh shims by running `vp env setup --refresh` with the new binary.
 pub async fn refresh_shims(install_dir: &AbsolutePath) -> Result<(), Error> {
-    let vp_binary =
-        install_dir.join("current").join("bin").join(if cfg!(windows) { "vp.exe" } else { "vp" });
+    let vp_binary = install_dir.join("current").join("bin").join(crate::VP_BINARY_NAME);
 
     if !tokio::fs::try_exists(&vp_binary).await.unwrap_or(false) {
         tracing::warn!(
@@ -476,7 +468,7 @@ pub async fn cleanup_old_versions(
                 metadata.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH)
             });
             let path = AbsolutePathBuf::new(entry.path()).ok_or_else(|| {
-                Error::Upgrade(format!("Invalid absolute path: {}", entry.path().display()).into())
+                Error::Setup(format!("Invalid absolute path: {}", entry.path().display()).into())
             })?;
             versions.push((time, path));
         }
@@ -513,6 +505,43 @@ pub async fn read_previous_version(install_dir: &AbsolutePath) -> Result<Option<
     let version = content.trim().to_string();
 
     if version.is_empty() { Ok(None) } else { Ok(Some(version)) }
+}
+
+/// Read the current installed version by following the `current` symlink/junction.
+///
+/// Returns `None` if no installation exists or the link target cannot be read.
+pub async fn read_current_version(install_dir: &AbsolutePath) -> Option<String> {
+    let current_link = install_dir.join("current");
+    let target = tokio::fs::read_link(&current_link).await.ok()?;
+    target.file_name().and_then(|n| n.to_str()).map(String::from)
+}
+
+/// Create shell env files by running `vp env setup --env-only`.
+///
+/// Used when the Node.js manager is disabled — ensures env files exist
+/// even without a full shim refresh.
+pub async fn create_env_files(install_dir: &AbsolutePath) -> Result<(), Error> {
+    let vp_binary = install_dir.join("current").join("bin").join(crate::VP_BINARY_NAME);
+
+    if !tokio::fs::try_exists(&vp_binary).await.unwrap_or(false) {
+        return Ok(());
+    }
+
+    let output = tokio::process::Command::new(vp_binary.as_path())
+        .args(["env", "setup", "--env-only"])
+        .output()
+        .await?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        tracing::warn!(
+            "env setup --env-only exited with code {}, continuing anyway\n{}",
+            output.status.code().unwrap_or(-1),
+            stderr.trim()
+        );
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]

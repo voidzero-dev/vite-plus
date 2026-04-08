@@ -2,3 +2,9 @@
 base = "docs/"
 command = "pnpm build"
 publish = ".vitepress/dist"
+
+# Windows installer redirect
+[[redirects]]
+from = "/vp-setup"
+to = "https://vp-setup.void.app"
+status = 302
