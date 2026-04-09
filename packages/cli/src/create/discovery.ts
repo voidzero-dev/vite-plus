@@ -221,7 +221,7 @@ export function inferParentDir(
   workspaceInfo: WorkspaceInfoOptional,
 ): string | undefined {
   if (workspaceInfo.parentDirs.length === 0) {
-    return;
+    return undefined;
   }
   // apps/applications by default
   let rule = /app/i;
@@ -237,5 +237,5 @@ export function inferParentDir(
       return parentDir;
     }
   }
-  return;
+  return undefined;
 }

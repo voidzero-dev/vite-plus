@@ -11,6 +11,7 @@ import {
   hasExistingAgentInstructions,
   replaceMarkedAgentInstructionsSection,
   resolveAgentTargetPaths,
+  selectAgentTargetPaths,
   writeAgentInstructions,
 } from '../agent.js';
 import { pkgRoot } from '../path.js';
@@ -235,7 +236,7 @@ beforeEach(async () => {
     await mockFs.unlink(filePath);
   });
   vi.spyOn(fsPromises, 'writeFile').mockImplementation(async (filePath, data) => {
-    await mockFs.writeFile(filePath as fs.PathLike, String(data as string));
+    await mockFs.writeFile(filePath as fs.PathLike, data as string);
   });
 
   await mockFs.writeFile(path.join(pkgRoot, 'AGENTS.md'), AGENT_TEMPLATE);
@@ -252,11 +253,17 @@ async function createProjectDir() {
 }
 
 describe('resolveAgentTargetPaths', () => {
-  it('resolves comma-separated agent names and deduplicates target paths', () => {
+  it('resolves legacy agent names and deduplicates target paths', () => {
     expect(resolveAgentTargetPaths('claude,amp,opencode,chatgpt')).toEqual([
       'CLAUDE.md',
       'AGENTS.md',
     ]);
+  });
+
+  it('resolves file names directly', () => {
+    expect(
+      resolveAgentTargetPaths(['AGENTS.md', 'CLAUDE.md', '.github/copilot-instructions.md']),
+    ).toEqual(['AGENTS.md', 'CLAUDE.md', '.github/copilot-instructions.md']);
   });
 
   it('resolves repeated --agent values and trims whitespace', () => {
@@ -269,6 +276,40 @@ describe('resolveAgentTargetPaths', () => {
   it('falls back to AGENTS.md when no valid agents are provided', () => {
     expect(resolveAgentTargetPaths()).toEqual(['AGENTS.md']);
     expect(resolveAgentTargetPaths(' , , ')).toEqual(['AGENTS.md']);
+  });
+});
+
+describe('selectAgentTargetPaths', () => {
+  it('prompts with file-based targets and agent hints', async () => {
+    const multiselectSpy = vi.spyOn(prompts, 'multiselect').mockResolvedValue(['agents', 'claude']);
+
+    await expect(
+      selectAgentTargetPaths({
+        interactive: true,
+        onCancel: vi.fn(),
+      }),
+    ).resolves.toEqual(['AGENTS.md', 'CLAUDE.md']);
+
+    expect(multiselectSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.stringContaining(
+          'Which coding agent instruction files should Vite+ create?',
+        ),
+        initialValues: ['agents'],
+        options: expect.arrayContaining([
+          expect.objectContaining({
+            label: 'AGENTS.md',
+            value: 'agents',
+            hint: expect.stringContaining('Codex'),
+          }),
+          expect.objectContaining({
+            label: 'CLAUDE.md',
+            value: 'claude',
+            hint: 'Claude Code',
+          }),
+        ]),
+      }),
+    );
   });
 });
 

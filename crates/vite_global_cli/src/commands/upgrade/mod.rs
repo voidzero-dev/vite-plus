@@ -165,13 +165,8 @@ async fn install_platform_and_main(
     // Generate wrapper package.json that declares vite-plus as a dependency
     install::generate_wrapper_package_json(version_dir, new_version).await?;
 
-    // Isolate from user's global package manager config that may block
-    // installing recently-published packages (e.g. pnpm's minimumReleaseAge,
-    // yarn's npmMinimalAgeGate, bun's minimumReleaseAge)
-    install::write_release_age_overrides(version_dir).await?;
-
-    // Install production dependencies (npm installs vite-plus + all transitive deps)
-    install::install_production_deps(version_dir, registry).await?;
+    // Install production dependencies (pnpm installs vite-plus + all transitive deps)
+    install::install_production_deps(version_dir, registry, silent, new_version).await?;
 
     // Save previous version for rollback
     let previous_version = install::save_previous_version(install_dir).await?;

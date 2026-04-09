@@ -46,6 +46,88 @@ function Write-Error-Exit {
     exit 1
 }
 
+function Test-ReleaseAgeError {
+    param([string]$LogPath)
+    if (-not (Test-Path $LogPath)) {
+        return $false
+    }
+
+    $content = Get-Content -Path $LogPath -Raw
+    # This wrapper install path is pinned to pnpm via packageManager, so this
+    # detection follows pnpm's resolver/reporter output rather than npm/yarn.
+    #
+    # pnpm's PnpmError prefixes internal codes with ERR_PNPM_, so
+    # NO_MATURE_MATCHING_VERSION is normally printed as
+    # ERR_PNPM_NO_MATURE_MATCHING_VERSION. npm-resolver emits that code with the
+    # "does not meet the minimumReleaseAge constraint" message when
+    # publishedBy/minimumReleaseAge rejects a matching version.
+    # https://github.com/pnpm/pnpm/blob/16cfde66ec71125d692ea828eba2a5f9b3cc54fc/core/error/src/index.ts#L18-L20
+    # https://github.com/pnpm/pnpm/blob/16cfde66ec71125d692ea828eba2a5f9b3cc54fc/resolving/npm-resolver/src/index.ts#L76-L84
+    #
+    # default-reporter may append guidance mentioning minimumReleaseAgeExclude
+    # when the error has an immatureVersion, so that token is also a useful
+    # release-age signal. minimum-release-age is pnpm's .npmrc key; npm's
+    # min-release-age is intentionally not treated as a pnpm signal here.
+    # https://github.com/pnpm/pnpm/blob/16cfde66ec71125d692ea828eba2a5f9b3cc54fc/cli/default-reporter/src/reportError.ts#L163-L164
+    # https://github.com/pnpm/pnpm/blob/16cfde66ec71125d692ea828eba2a5f9b3cc54fc/config/reader/src/types.ts#L73-L74
+    $hasReleaseAgeText = $content -match "does not meet the minimumReleaseAge constraint" `
+        -or $content -match "minimumReleaseAge" `
+        -or $content -match "minimumReleaseAgeExclude" `
+        -or $content -match "minimum release age" `
+        -or $content -match "minimum-release-age"
+
+    # pnpm can also surface ERR_PNPM_NO_MATCHING_VERSION when minimumReleaseAge
+    # filters out all candidates. That code is also used for real missing
+    # versions, so require age-gate context before prompting for a bypass.
+    # https://github.com/pnpm/pnpm/blob/16cfde66ec71125d692ea828eba2a5f9b3cc54fc/deps/inspection/outdated/src/createManifestGetter.ts#L66-L76
+    return $content -match "ERR_PNPM_NO_MATURE_MATCHING_VERSION" `
+        -or $content -match "NO_MATURE_MATCHING_VERSION" `
+        -or (($content -match "ERR_PNPM_NO_MATCHING_VERSION") -and $hasReleaseAgeText) `
+        -or $hasReleaseAgeText
+}
+
+function Confirm-ReleaseAgeOverride {
+    if ($env:CI -eq "true") {
+        return $false
+    }
+    if (-not [Environment]::UserInteractive) {
+        return $false
+    }
+
+    Write-Host ""
+    Write-Warn "Your minimumReleaseAge setting prevented installing vite-plus@$ViteVersion."
+    Write-Host "This setting helps protect against newly published compromised packages."
+    Write-Host "Proceeding will disable this protection for this Vite+ install only."
+    $response = Read-Host "Do you want to proceed? (y/N)"
+    return $response -match "^(?i:y|yes)$"
+}
+
+function Write-ReleaseAgeOverride {
+    Set-Content -Path (Join-Path $VersionDir ".npmrc") -Value "minimum-release-age=0"
+}
+
+function Write-InstallFailure {
+    param([string]$LogPath)
+    if ($env:CI -eq "true") {
+        Write-Host "error: " -ForegroundColor Red -NoNewline
+        Write-Host "Failed to install dependencies. Log output:"
+        Get-Content -Path $LogPath | ForEach-Object { Write-Host $_ }
+    } else {
+        Write-Error-Exit "Failed to install dependencies. See log for details: $LogPath"
+    }
+}
+
+function Write-ReleaseAgeFailure {
+    param([string]$LogPath)
+    if ($env:CI -eq "true") {
+        Write-Host "error: " -ForegroundColor Red -NoNewline
+        Write-Host "Install blocked by your minimumReleaseAge setting. Log output:"
+        Get-Content -Path $LogPath | ForEach-Object { Write-Host $_ }
+    } else {
+        Write-Error-Exit "Install blocked by your minimumReleaseAge setting. Wait until the package is old enough or adjust your package manager configuration explicitly. See log for details: $LogPath"
+    }
+}
+
 function Get-Architecture {
     if ([Environment]::Is64BitOperatingSystem) {
         if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") {
@@ -368,10 +450,6 @@ function Main {
     } | ConvertTo-Json -Depth 10
     Set-Content -Path (Join-Path $VersionDir "package.json") -Value $wrapperJson
 
-    # Isolate from pnpm's global config that may block installing
-    # recently-published packages (e.g. minimumReleaseAge).
-    Set-Content -Path (Join-Path $VersionDir ".npmrc") -Value "minimum-release-age=0"
-
     # Install production dependencies (skip if VP_SKIP_DEPS_INSTALL is set,
     # e.g. during local dev where install-global-cli.ts handles deps separately)
     if (-not $env:VP_SKIP_DEPS_INSTALL) {
@@ -380,12 +458,33 @@ function Main {
         try {
             # Use cmd /c so CI=true is scoped to the child process only,
             # avoiding leaking it into the user's shell session.
-            $output = cmd /c "set CI=true && `"$BinDir\vp.exe`" install --silent" 2>&1
+            # Do not pass --silent to the inner install: pnpm suppresses the
+            # release-age error body in silent mode, which would leave
+            # install.log empty and make the release-age gate impossible to
+            # detect. Output is already captured to install.log here.
+            $output = cmd /c "set CI=true && `"$BinDir\vp.exe`" install" 2>&1
             $installExitCode = $LASTEXITCODE
             $output | Out-File $installLog
             if ($installExitCode -ne 0) {
-                Write-Host "error: Failed to install dependencies. See log for details: $installLog" -ForegroundColor Red
-                exit 1
+                if (Test-ReleaseAgeError $installLog) {
+                    if (Confirm-ReleaseAgeOverride) {
+                        # Write the override only after explicit consent, then retry once.
+                        Write-ReleaseAgeOverride
+                        $retryOutput = cmd /c "set CI=true && `"$BinDir\vp.exe`" install" 2>&1
+                        $retryExitCode = $LASTEXITCODE
+                        $retryOutput | Out-File $installLog
+                        if ($retryExitCode -ne 0) {
+                            Write-InstallFailure $installLog
+                            exit 1
+                        }
+                    } else {
+                        Write-ReleaseAgeFailure $installLog
+                        exit 1
+                    }
+                } else {
+                    Write-InstallFailure $installLog
+                    exit 1
+                }
             }
         } finally {
             Pop-Location

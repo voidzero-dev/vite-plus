@@ -164,36 +164,74 @@ export function detectAgents(root: string): AgentConfig[] {
 
 // --- Backward-compatible exports ---
 
-const AGENT_ALIASES: Record<string, string> = {
-  chatgpt: 'chatgpt-codex',
-  codex: 'chatgpt-codex',
-};
-
 export const AGENTS = [
-  { id: 'chatgpt-codex', label: 'ChatGPT (Codex)', targetPath: 'AGENTS.md' },
-  { id: 'claude', label: 'Claude Code', targetPath: 'CLAUDE.md' },
-  { id: 'gemini', label: 'Gemini CLI', targetPath: 'GEMINI.md' },
+  {
+    id: 'agents',
+    label: 'AGENTS.md',
+    targetPath: 'AGENTS.md',
+    hint: 'Codex, Amp, OpenCode, and similar agents',
+    aliases: [
+      'agents.md',
+      'chatgpt',
+      'chatgpt-codex',
+      'codex',
+      'amp',
+      'kilo',
+      'kilo-code',
+      'kiro',
+      'kiro-cli',
+      'opencode',
+      'other',
+    ],
+  },
+  {
+    id: 'claude',
+    label: 'CLAUDE.md',
+    targetPath: 'CLAUDE.md',
+    hint: 'Claude Code',
+    aliases: ['claude.md', 'claude-code'],
+  },
+  {
+    id: 'gemini',
+    label: 'GEMINI.md',
+    targetPath: 'GEMINI.md',
+    hint: 'Gemini CLI',
+    aliases: ['gemini.md', 'gemini-cli'],
+  },
   {
     id: 'copilot',
-    label: 'GitHub Copilot',
+    label: '.github/copilot-instructions.md',
     targetPath: '.github/copilot-instructions.md',
+    hint: 'GitHub Copilot',
+    aliases: ['github-copilot', 'copilot-instructions.md'],
   },
-  { id: 'cursor', label: 'Cursor', targetPath: '.cursor/rules/viteplus.mdc' },
+  {
+    id: 'cursor',
+    label: '.cursor/rules/viteplus.mdc',
+    targetPath: '.cursor/rules/viteplus.mdc',
+    hint: 'Cursor',
+    aliases: ['viteplus.mdc'],
+  },
   {
     id: 'jetbrains',
-    label: 'JetBrains AI Assistant',
+    label: '.aiassistant/rules/viteplus.md',
     targetPath: '.aiassistant/rules/viteplus.md',
+    hint: 'JetBrains AI Assistant',
+    aliases: ['jetbrains', 'jetbrains-ai-assistant', 'aiassistant', 'viteplus.md'],
   },
-  { id: 'amp', label: 'Amp', targetPath: 'AGENTS.md' },
-  { id: 'kiro', label: 'Kiro', targetPath: 'AGENTS.md' },
-  { id: 'opencode', label: 'OpenCode', targetPath: 'AGENTS.md' },
-  { id: 'other', label: 'Other', targetPath: 'AGENTS.md' },
 ] as const;
 
 type AgentSelection = string | string[] | false;
+const AGENT_DEFAULT_ID = 'agents';
 const AGENT_STANDARD_PATH = 'AGENTS.md';
 const AGENT_INSTRUCTIONS_START_MARKER = '<!--VITE PLUS START-->';
 const AGENT_INSTRUCTIONS_END_MARKER = '<!--VITE PLUS END-->';
+
+const AGENT_ALIASES = Object.fromEntries(
+  AGENTS.flatMap((option) =>
+    (option.aliases ?? []).map((alias) => [normalizeAgentName(alias), option.id]),
+  ),
+) as Record<string, string>;
 
 export async function selectAgentTargetPaths({
   interactive,
@@ -211,18 +249,13 @@ export async function selectAgentTargetPaths({
 
   if (interactive && !agent) {
     const selectedAgents = await prompts.multiselect({
-      message:
-        'Which agents are you using?\n  ' +
-        styleText(
-          'gray',
-          'Writes an instruction file for each selected agent to help it understand `vp` commands and the project workflow.',
-        ),
+      message: 'Which coding agent instruction files should Vite+ create?',
       options: AGENTS.map((option) => ({
         label: option.label,
         value: option.id,
-        hint: option.targetPath,
+        hint: option.hint,
       })),
-      initialValues: ['chatgpt-codex'],
+      initialValues: [AGENT_DEFAULT_ID],
       required: false,
     });
 
@@ -237,7 +270,7 @@ export async function selectAgentTargetPaths({
     return resolveAgentTargetPaths(selectedAgents);
   }
 
-  return resolveAgentTargetPaths(agent ?? 'other');
+  return resolveAgentTargetPaths(agent ?? AGENT_DEFAULT_ID);
 }
 
 export async function selectAgentTargetPath({
@@ -359,9 +392,12 @@ function resolveSingleAgentTargetPath(agent: string) {
   const resolved = alias ? normalizeAgentName(alias) : normalized;
   const match = AGENTS.find(
     (option) =>
-      normalizeAgentName(option.id) === resolved || normalizeAgentName(option.label) === resolved,
+      normalizeAgentName(option.id) === resolved ||
+      normalizeAgentName(option.label) === resolved ||
+      normalizeAgentName(option.targetPath) === resolved ||
+      option.aliases?.some((candidate) => normalizeAgentName(candidate) === resolved),
   );
-  return match?.targetPath ?? AGENTS[AGENTS.length - 1].targetPath;
+  return match?.targetPath ?? AGENT_STANDARD_PATH;
 }
 
 export interface AgentConflictInfo {

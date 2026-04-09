@@ -80,7 +80,7 @@ const helpMessage = renderCliDoc({
         { label: '--directory DIR', description: 'Target directory for the generated project.' },
         {
           label: '--agent NAME',
-          description: 'Create an agent instructions file for the specified agent.',
+          description: 'Write coding agent instructions to AGENTS.md, CLAUDE.md, etc.',
         },
         {
           label: '--editor NAME',
