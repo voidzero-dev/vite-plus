@@ -5,7 +5,7 @@
 
 use std::{
     borrow::Cow, env, ffi::OsStr, future::Future, io::IsTerminal, iter, pin::Pin, process::Stdio,
-    sync::Arc, time::Instant,
+    sync::Arc,
 };
 
 use clap::{
@@ -208,7 +208,9 @@ impl SubcommandResolver {
         self
     }
 
-    async fn resolve_universal_vite_config(&self) -> anyhow::Result<ResolvedUniversalViteConfig> {
+    pub(crate) async fn resolve_universal_vite_config(
+        &self,
+    ) -> anyhow::Result<ResolvedUniversalViteConfig> {
         let cli_options = self
             .cli_options
             .as_ref()
@@ -803,13 +805,13 @@ async fn resolve_and_execute_with_stderr_filter(
     Ok(ExitStatus(output.status.code().unwrap_or(1) as u8))
 }
 
-struct CapturedCommandOutput {
-    status: ExitStatus,
-    stdout: String,
-    stderr: String,
+pub(crate) struct CapturedCommandOutput {
+    pub(crate) status: ExitStatus,
+    pub(crate) stdout: String,
+    pub(crate) stderr: String,
 }
 
-async fn resolve_and_capture_output(
+pub(crate) async fn resolve_and_capture_output(
     resolver: &SubcommandResolver,
     subcommand: SynthesizableSubcommand,
     resolved_vite_config: Option<&ResolvedUniversalViteConfig>,
@@ -837,226 +839,6 @@ async fn resolve_and_capture_output(
     })
 }
 
-#[derive(Debug, Clone)]
-struct CheckSummary {
-    duration: String,
-    files: usize,
-    threads: usize,
-}
-
-#[derive(Debug)]
-struct FmtSuccess {
-    summary: CheckSummary,
-}
-
-#[derive(Debug)]
-struct FmtFailure {
-    summary: CheckSummary,
-    issue_files: Vec<String>,
-    issue_count: usize,
-}
-
-#[derive(Debug)]
-struct LintSuccess {
-    summary: CheckSummary,
-}
-
-#[derive(Debug)]
-struct LintFailure {
-    summary: CheckSummary,
-    warnings: usize,
-    errors: usize,
-    diagnostics: String,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum LintMessageKind {
-    LintOnly,
-    LintAndTypeCheck,
-}
-
-impl LintMessageKind {
-    fn from_lint_config(lint_config: Option<&serde_json::Value>) -> Self {
-        let type_check_enabled = lint_config
-            .and_then(|config| config.get("options"))
-            .and_then(|options| options.get("typeCheck"))
-            .and_then(serde_json::Value::as_bool)
-            .unwrap_or(false);
-
-        if type_check_enabled { Self::LintAndTypeCheck } else { Self::LintOnly }
-    }
-
-    fn success_label(self) -> &'static str {
-        match self {
-            Self::LintOnly => "Found no warnings or lint errors",
-            Self::LintAndTypeCheck => "Found no warnings, lint errors, or type errors",
-        }
-    }
-
-    fn warning_heading(self) -> &'static str {
-        match self {
-            Self::LintOnly => "Lint warnings found",
-            Self::LintAndTypeCheck => "Lint or type warnings found",
-        }
-    }
-
-    fn issue_heading(self) -> &'static str {
-        match self {
-            Self::LintOnly => "Lint issues found",
-            Self::LintAndTypeCheck => "Lint or type issues found",
-        }
-    }
-}
-
-fn parse_check_summary(line: &str) -> Option<CheckSummary> {
-    let rest = line.strip_prefix("Finished in ")?;
-    let (duration, rest) = rest.split_once(" on ")?;
-    let files = rest.split_once(" file")?.0.parse().ok()?;
-    let (_, threads_part) = rest.rsplit_once(" using ")?;
-    let threads = threads_part.split_once(" thread")?.0.parse().ok()?;
-
-    Some(CheckSummary { duration: duration.to_string(), files, threads })
-}
-
-fn parse_issue_count(line: &str, prefix: &str) -> Option<usize> {
-    let rest = line.strip_prefix(prefix)?;
-    rest.split_once(" file")?.0.parse().ok()
-}
-
-fn parse_warning_error_counts(line: &str) -> Option<(usize, usize)> {
-    let rest = line.strip_prefix("Found ")?;
-    let (warnings, rest) = rest.split_once(" warning")?;
-    let (_, rest) = rest.split_once(" and ")?;
-    let errors = rest.split_once(" error")?.0;
-    Some((warnings.parse().ok()?, errors.parse().ok()?))
-}
-
-fn format_elapsed(elapsed: std::time::Duration) -> String {
-    if elapsed.as_millis() < 1000 {
-        format!("{}ms", elapsed.as_millis())
-    } else {
-        format!("{:.1}s", elapsed.as_secs_f64())
-    }
-}
-
-fn format_count(count: usize, singular: &str, plural: &str) -> String {
-    if count == 1 { format!("1 {singular}") } else { format!("{count} {plural}") }
-}
-
-fn print_stdout_block(block: &str) {
-    let trimmed = block.trim_matches('\n');
-    if trimmed.is_empty() {
-        return;
-    }
-
-    use std::io::Write;
-    let mut stdout = std::io::stdout().lock();
-    let _ = stdout.write_all(trimmed.as_bytes());
-    let _ = stdout.write_all(b"\n");
-}
-
-fn print_summary_line(message: &str) {
-    output::raw("");
-    if std::io::stdout().is_terminal() && message.contains('`') {
-        let mut formatted = String::with_capacity(message.len());
-        let mut segments = message.split('`');
-        if let Some(first) = segments.next() {
-            formatted.push_str(first);
-        }
-        let mut is_accent = true;
-        for segment in segments {
-            if is_accent {
-                formatted.push_str(&format!("{}", format!("`{segment}`").bright_blue()));
-            } else {
-                formatted.push_str(segment);
-            }
-            is_accent = !is_accent;
-        }
-        output::raw(&formatted);
-    } else {
-        output::raw(message);
-    }
-}
-
-fn print_error_block(error_msg: &str, combined_output: &str, summary_msg: &str) {
-    output::error(error_msg);
-    if !combined_output.trim().is_empty() {
-        print_stdout_block(combined_output);
-    }
-    print_summary_line(summary_msg);
-}
-
-fn print_pass_line(message: &str, detail: Option<&str>) {
-    if let Some(detail) = detail {
-        output::raw(&format!("{} {message} {}", "pass:".bright_blue().bold(), detail.dimmed()));
-    } else {
-        output::pass(message);
-    }
-}
-
-fn analyze_fmt_check_output(output: &str) -> Option<Result<FmtSuccess, FmtFailure>> {
-    let trimmed = output.trim();
-    if trimmed.is_empty() {
-        return None;
-    }
-
-    let lines: Vec<&str> = trimmed.lines().collect();
-    let finish_line = lines.iter().rev().find(|line| line.starts_with("Finished in "))?;
-    let summary = parse_check_summary(finish_line)?;
-
-    if lines.iter().any(|line| *line == "All matched files use the correct format.") {
-        return Some(Ok(FmtSuccess { summary }));
-    }
-
-    let issue_line = lines.iter().find(|line| line.starts_with("Format issues found in above "))?;
-    let issue_count = parse_issue_count(issue_line, "Format issues found in above ")?;
-
-    let mut issue_files = Vec::new();
-    let mut collecting = false;
-    for line in lines {
-        if line == "Checking formatting..." {
-            collecting = true;
-            continue;
-        }
-        if !collecting {
-            continue;
-        }
-        if line.is_empty() {
-            continue;
-        }
-        if line.starts_with("Format issues found in above ") || line.starts_with("Finished in ") {
-            break;
-        }
-        issue_files.push(line.to_string());
-    }
-
-    Some(Err(FmtFailure { summary, issue_files, issue_count }))
-}
-
-fn analyze_lint_output(output: &str) -> Option<Result<LintSuccess, LintFailure>> {
-    let trimmed = output.trim();
-    if trimmed.is_empty() {
-        return None;
-    }
-
-    let lines: Vec<&str> = trimmed.lines().collect();
-    let counts_idx = lines.iter().position(|line| {
-        line.starts_with("Found ") && line.contains(" warning") && line.contains(" error")
-    })?;
-    let finish_line =
-        lines.iter().skip(counts_idx + 1).find(|line| line.starts_with("Finished in "))?;
-
-    let summary = parse_check_summary(finish_line)?;
-    let (warnings, errors) = parse_warning_error_counts(lines[counts_idx])?;
-    let diagnostics = lines[..counts_idx].join("\n").trim_matches('\n').to_string();
-
-    if warnings == 0 && errors == 0 {
-        return Some(Ok(LintSuccess { summary }));
-    }
-
-    Some(Err(LintFailure { summary, warnings, errors, diagnostics }))
-}
-
 /// Execute a synthesizable subcommand directly (not through vite-task Session).
 /// No caching, no task graph, no dependency resolution.
 async fn execute_direct_subcommand(
@@ -1082,230 +864,10 @@ async fn execute_direct_subcommand(
 
     let status = match subcommand {
         SynthesizableSubcommand::Check { fix, no_fmt, no_lint, paths } => {
-            if no_fmt && no_lint {
-                output::error("No checks enabled");
-                print_summary_line(
-                    "`vp check` did not run because both `--no-fmt` and `--no-lint` were set",
-                );
-                return Ok(ExitStatus(1));
-            }
-
-            let mut status = ExitStatus::SUCCESS;
-            let has_paths = !paths.is_empty();
-            let mut fmt_fix_started: Option<Instant> = None;
-            let mut deferred_lint_pass: Option<(String, String)> = None;
-            let resolved_vite_config = resolver.resolve_universal_vite_config().await?;
-
-            if !no_fmt {
-                let mut args = if fix { vec![] } else { vec!["--check".to_string()] };
-                if has_paths {
-                    args.push("--no-error-on-unmatched-pattern".to_string());
-                    args.extend(paths.iter().cloned());
-                }
-                let fmt_start = Instant::now();
-                if fix {
-                    fmt_fix_started = Some(fmt_start);
-                }
-                let captured = resolve_and_capture_output(
-                    &resolver,
-                    SynthesizableSubcommand::Fmt { args },
-                    Some(&resolved_vite_config),
-                    &envs,
-                    cwd,
-                    &cwd_arc,
-                    false,
-                )
-                .await?;
-                status = captured.status;
-
-                let combined_output = if captured.stderr.is_empty() {
-                    captured.stdout
-                } else if captured.stdout.is_empty() {
-                    captured.stderr
-                } else {
-                    format!("{}{}", captured.stdout, captured.stderr)
-                };
-
-                if !fix {
-                    match analyze_fmt_check_output(&combined_output) {
-                        Some(Ok(success)) => print_pass_line(
-                            &format!(
-                                "All {} are correctly formatted",
-                                format_count(success.summary.files, "file", "files")
-                            ),
-                            Some(&format!(
-                                "({}, {} threads)",
-                                success.summary.duration, success.summary.threads
-                            )),
-                        ),
-                        Some(Err(failure)) => {
-                            output::error("Formatting issues found");
-                            print_stdout_block(&failure.issue_files.join("\n"));
-                            print_summary_line(&format!(
-                                "Found formatting issues in {} ({}, {} threads). Run `vp check --fix` to fix them.",
-                                format_count(failure.issue_count, "file", "files"),
-                                failure.summary.duration,
-                                failure.summary.threads
-                            ));
-                        }
-                        None => {
-                            print_error_block(
-                                "Formatting could not start",
-                                &combined_output,
-                                "Formatting failed before analysis started",
-                            );
-                        }
-                    }
-                }
-
-                if fix && no_lint && status == ExitStatus::SUCCESS {
-                    print_pass_line(
-                        "Formatting completed for checked files",
-                        Some(&format!("({})", format_elapsed(fmt_start.elapsed()))),
-                    );
-                }
-                if status != ExitStatus::SUCCESS {
-                    if fix {
-                        print_error_block(
-                            "Formatting could not complete",
-                            &combined_output,
-                            "Formatting failed during fix",
-                        );
-                    }
-                    return Ok(status);
-                }
-            }
-
-            if !no_lint {
-                let lint_message_kind =
-                    LintMessageKind::from_lint_config(resolved_vite_config.lint.as_ref());
-                let mut args = Vec::new();
-                if fix {
-                    args.push("--fix".to_string());
-                }
-                // `vp check` parses oxlint's human-readable summary output to print
-                // unified pass/fail lines. When `GITHUB_ACTIONS=true`, oxlint auto-switches
-                // to the GitHub reporter, which omits that summary on success and makes the
-                // parser think linting never started. Force the default reporter here so the
-                // captured output is stable across local and CI environments.
-                args.push("--format=default".to_string());
-                if has_paths {
-                    args.extend(paths.iter().cloned());
-                }
-                let captured = resolve_and_capture_output(
-                    &resolver,
-                    SynthesizableSubcommand::Lint { args },
-                    Some(&resolved_vite_config),
-                    &envs,
-                    cwd,
-                    &cwd_arc,
-                    true,
-                )
-                .await?;
-                status = captured.status;
-
-                let combined_output = if captured.stderr.is_empty() {
-                    captured.stdout
-                } else if captured.stdout.is_empty() {
-                    captured.stderr
-                } else {
-                    format!("{}{}", captured.stdout, captured.stderr)
-                };
-
-                match analyze_lint_output(&combined_output) {
-                    Some(Ok(success)) => {
-                        let message = format!(
-                            "{} in {}",
-                            lint_message_kind.success_label(),
-                            format_count(success.summary.files, "file", "files"),
-                        );
-                        let detail = format!(
-                            "({}, {} threads)",
-                            success.summary.duration, success.summary.threads
-                        );
-
-                        if fix && !no_fmt {
-                            deferred_lint_pass = Some((message, detail));
-                        } else {
-                            print_pass_line(&message, Some(&detail));
-                        }
-                    }
-                    Some(Err(failure)) => {
-                        if failure.errors == 0 && failure.warnings > 0 {
-                            output::warn(lint_message_kind.warning_heading());
-                            status = ExitStatus::SUCCESS;
-                        } else {
-                            output::error(lint_message_kind.issue_heading());
-                        }
-                        print_stdout_block(&failure.diagnostics);
-                        print_summary_line(&format!(
-                            "Found {} and {} in {} ({}, {} threads)",
-                            format_count(failure.errors, "error", "errors"),
-                            format_count(failure.warnings, "warning", "warnings"),
-                            format_count(failure.summary.files, "file", "files"),
-                            failure.summary.duration,
-                            failure.summary.threads
-                        ));
-                    }
-                    None => {
-                        output::error("Linting could not start");
-                        if !combined_output.trim().is_empty() {
-                            print_stdout_block(&combined_output);
-                        }
-                        print_summary_line("Linting failed before analysis started");
-                    }
-                }
-                if status != ExitStatus::SUCCESS {
-                    return Ok(status);
-                }
-            }
-
-            // Re-run fmt after lint --fix, since lint fixes can break formatting
-            // (e.g. the curly rule adding braces to if-statements)
-            if fix && !no_fmt && !no_lint {
-                let mut args = Vec::new();
-                if has_paths {
-                    args.push("--no-error-on-unmatched-pattern".to_string());
-                    args.extend(paths.into_iter());
-                }
-                let captured = resolve_and_capture_output(
-                    &resolver,
-                    SynthesizableSubcommand::Fmt { args },
-                    Some(&resolved_vite_config),
-                    &envs,
-                    cwd,
-                    &cwd_arc,
-                    false,
-                )
-                .await?;
-                status = captured.status;
-                if status != ExitStatus::SUCCESS {
-                    let combined_output = if captured.stderr.is_empty() {
-                        captured.stdout
-                    } else if captured.stdout.is_empty() {
-                        captured.stderr
-                    } else {
-                        format!("{}{}", captured.stdout, captured.stderr)
-                    };
-                    print_error_block(
-                        "Formatting could not finish after lint fixes",
-                        &combined_output,
-                        "Formatting failed after lint fixes were applied",
-                    );
-                    return Ok(status);
-                }
-                if let Some(started) = fmt_fix_started {
-                    print_pass_line(
-                        "Formatting completed for checked files",
-                        Some(&format!("({})", format_elapsed(started.elapsed()))),
-                    );
-                }
-                if let Some((message, detail)) = deferred_lint_pass.take() {
-                    print_pass_line(&message, Some(&detail));
-                }
-            }
-
-            status
+            return crate::check::execute_check(
+                &resolver, fix, no_fmt, no_lint, paths, &envs, cwd, &cwd_arc,
+            )
+            .await;
         }
         other => {
             if should_suppress_subcommand_stdout(&other) {
@@ -1619,12 +1181,11 @@ mod tests {
     use std::path::PathBuf;
 
     use clap::Parser;
-    use serde_json::json;
     use vite_task::{Command, config::UserRunConfig};
 
     use super::{
-        CLIArgs, LintMessageKind, SynthesizableSubcommand, extract_unknown_argument,
-        has_pass_as_value_suggestion, should_prepend_vitest_run, should_suppress_subcommand_stdout,
+        CLIArgs, SynthesizableSubcommand, extract_unknown_argument, has_pass_as_value_suggestion,
+        should_prepend_vitest_run, should_suppress_subcommand_stdout,
     };
 
     #[test]
@@ -1733,30 +1294,6 @@ mod tests {
     fn normal_lint_does_not_suppress_stdout() {
         let subcommand = SynthesizableSubcommand::Lint { args: vec!["src/index.ts".to_string()] };
         assert!(!should_suppress_subcommand_stdout(&subcommand));
-    }
-
-    #[test]
-    fn lint_message_kind_defaults_to_lint_only_without_typecheck() {
-        assert_eq!(LintMessageKind::from_lint_config(None), LintMessageKind::LintOnly);
-        assert_eq!(
-            LintMessageKind::from_lint_config(Some(&json!({ "options": {} }))),
-            LintMessageKind::LintOnly
-        );
-    }
-
-    #[test]
-    fn lint_message_kind_detects_typecheck_from_vite_config() {
-        let kind = LintMessageKind::from_lint_config(Some(&json!({
-            "options": {
-                "typeAware": true,
-                "typeCheck": true
-            }
-        })));
-
-        assert_eq!(kind, LintMessageKind::LintAndTypeCheck);
-        assert_eq!(kind.success_label(), "Found no warnings, lint errors, or type errors");
-        assert_eq!(kind.warning_heading(), "Lint or type warnings found");
-        assert_eq!(kind.issue_heading(), "Lint or type issues found");
     }
 
     #[test]
