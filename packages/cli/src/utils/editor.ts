@@ -290,7 +290,7 @@ export async function writeEditorConfigs({
 
   for (const [fileName, baseIncoming] of Object.entries(editorConfig.files)) {
     const incoming =
-      fileName === 'settings.json' && additionalSettings
+      editorId === 'vscode' && fileName === 'settings.json' && additionalSettings
         ? { ...baseIncoming, ...additionalSettings }
         : baseIncoming;
     const filePath = path.join(targetDir, fileName);
