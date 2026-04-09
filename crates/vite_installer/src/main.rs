@@ -239,7 +239,7 @@ async fn do_install(
         install::install_production_deps(
             &version_dir,
             opts.registry.as_deref(),
-            opts.quiet,
+            opts.yes,
             &resolved.version,
         )
         .await?;
