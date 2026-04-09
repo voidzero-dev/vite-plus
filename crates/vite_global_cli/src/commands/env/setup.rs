@@ -46,8 +46,8 @@ pub async fn execute(refresh: bool, env_only: bool) -> Result<ExitStatus, Error>
     // Create env files with PATH guard (prevents duplicate PATH entries)
     create_env_files(&vite_plus_home).await?;
 
-    // Generate Fish completion file at ~/.vite-plus/vp.fish for use by the Nushell completer.
-    // Fish completions are generated statically so that Nushell can delegate to Fish at runtime.
+    // Generate Fish completion file at ~/.vite-plus/vp.fish for Fish shell users.
+    // Nushell completions delegate to Fish dynamically via VP_COMPLETE=fish at runtime.
     // command_with_help() uses a deep call stack, so we spawn a thread with a larger stack.
     let fish_completions_path = vite_plus_home.join("vp.fish").as_path().to_path_buf();
     std::thread::Builder::new()
@@ -518,8 +518,8 @@ complete -c vpr --keep-order --exclusive --arguments "(__vpr_complete)"
     tokio::fs::write(&env_fish_file, env_fish_content).await?;
 
     // Nushell env file with vp wrapper function.
-    // Completions delegate to Fish via vp.fish because clap_complete_nushell generates
-    // multiple rest params (e.g. for `vp install`), which Nushell does not support.
+    // Completions delegate to Fish dynamically (VP_COMPLETE=fish) because clap_complete_nushell
+    // generates multiple rest params (e.g. for `vp install`), which Nushell does not support.
     let env_nu_content = r#"# Vite+ environment setup (https://viteplus.dev)
 $env.PATH = ($env.PATH | where { $in != "__VP_BIN__" } | prepend "__VP_BIN__")
 
@@ -771,8 +771,8 @@ mod tests {
             "env.nu should set VP_ENV_USE_EVAL_ENABLE"
         );
         assert!(
-            nu_content.contains("vp.fish"),
-            "env.nu should reference the Fish completion file for Nushell delegation"
+            nu_content.contains("VP_COMPLETE=fish"),
+            "env.nu should use dynamic Fish completion delegation"
         );
         assert!(
             nu_content.contains("VP_SHELL_NU"),
