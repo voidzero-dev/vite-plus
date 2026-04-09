@@ -17,7 +17,6 @@ const VSCODE_SETTINGS = {
   'editor.codeActionsOnSave': {
     'source.fixAll.oxc': 'explicit',
   },
-  'npm.scriptRunner': 'vp',
 } as const;
 
 const VSCODE_EXTENSIONS = {
@@ -268,12 +267,14 @@ export async function writeEditorConfigs({
   interactive,
   conflictDecisions,
   silent = false,
+  additionalSettings,
 }: {
   projectRoot: string;
   editorId: EditorId | undefined;
   interactive: boolean;
   conflictDecisions?: Map<string, 'merge' | 'skip'>;
   silent?: boolean;
+  additionalSettings?: Record<string, unknown>;
 }) {
   if (!editorId) {
     return;
@@ -287,7 +288,11 @@ export async function writeEditorConfigs({
   const targetDir = path.join(projectRoot, editorConfig.targetDir);
   await fsPromises.mkdir(targetDir, { recursive: true });
 
-  for (const [fileName, incoming] of Object.entries(editorConfig.files)) {
+  for (const [fileName, baseIncoming] of Object.entries(editorConfig.files)) {
+    const incoming =
+      fileName === 'settings.json' && additionalSettings
+        ? { ...baseIncoming, ...additionalSettings }
+        : baseIncoming;
     const filePath = path.join(targetDir, fileName);
 
     if (fs.existsSync(filePath)) {

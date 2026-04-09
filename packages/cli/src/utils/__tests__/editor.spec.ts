@@ -38,7 +38,26 @@ describe('writeEditorConfigs', () => {
     expect(settings['editor.defaultFormatter']).toBe('oxc.oxc-vscode');
     expect(settings['oxc.fmt.configPath']).toBe('./vite.config.ts');
     expect(settings['editor.formatOnSave']).toBe(true);
+    expect(settings['npm.scriptRunner']).toBeUndefined();
+  });
+
+  it('includes additionalSettings in vscode settings.json when provided', async () => {
+    const projectRoot = createTempDir();
+
+    await writeEditorConfigs({
+      projectRoot,
+      editorId: 'vscode',
+      interactive: false,
+      silent: true,
+      additionalSettings: { 'npm.scriptRunner': 'vp' },
+    });
+
+    const settings = JSON.parse(
+      fs.readFileSync(path.join(projectRoot, '.vscode', 'settings.json'), 'utf8'),
+    ) as Record<string, unknown>;
+
     expect(settings['npm.scriptRunner']).toBe('vp');
+    expect(settings['editor.defaultFormatter']).toBe('oxc.oxc-vscode');
   });
 
   it('merges existing vscode JSONC settings (comments, trailing commas)', async () => {
@@ -65,6 +84,7 @@ describe('writeEditorConfigs', () => {
       editorId: 'vscode',
       interactive: false,
       silent: true,
+      additionalSettings: { 'npm.scriptRunner': 'vp' },
     });
 
     const settings = JSON.parse(
