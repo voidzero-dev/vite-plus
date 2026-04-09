@@ -552,10 +552,9 @@ def --env --wrapped vp [...args: string@"nu-complete vp"] {
     }
 }
 
-# Shell completion for nushell (delegates to fish completions)
+# Shell completion for nushell (delegates to fish completions dynamically)
 def "nu-complete vp" [context: string] {
-    let fish_comp_path = "__VP_HOME__/vp.fish"
-    let fish_cmd = $"source '($fish_comp_path)'; complete '--do-complete=($context)'"
+    let fish_cmd = $"VP_COMPLETE=fish command vp | source; complete '--do-complete=($context)'"
     fish --command $fish_cmd | from tsv --flexible --noheaders --no-infer | rename value description | update value {|row|
         let value = $row.value
         let need_quote = ['\' ',' '[' ']' '(' ')' ' ' '\t' "'" '"' "`"] | any {$in in $value}
@@ -565,10 +564,22 @@ def "nu-complete vp" [context: string] {
         } else {$value}
     }
 }
-export def --env --wrapped vpr [...args: string@"nu-complete vp"] { ^vp run ...$args }
+# Completion logic for vpr (translates context to 'vp run ...')
+def "nu-complete vpr" [context: string] {
+    let modified_context = ($context | str replace -r '^vpr' 'vp run')
+    let fish_cmd = $"VP_COMPLETE=fish command vp | source; complete '--do-complete=($modified_context)'"
+    fish --command $fish_cmd | from tsv --flexible --noheaders --no-infer | rename value description | update value {|row|
+        let value = $row.value
+        let need_quote = ['\' ',' '[' ']' '(' ')' ' ' '\t' "'" '"' "`"] | any {$in in $value}
+        if ($need_quote and ($value | path exists)) {
+            let expanded_path = if ($value starts-with ~) {$value | path expand --no-symlink} else {$value}
+            $'"($expanded_path | str replace --all "\"" "\\\"")"'
+        } else {$value}
+    }
+}
+export extern "vpr" [...args: string@"nu-complete vpr"]
 "#
-    .replace("__VP_BIN__", &bin_path_ref)
-    .replace("__VP_HOME__", &vite_plus_home.as_path().display().to_string());
+    .replace("__VP_BIN__", &bin_path_ref);
     let env_nu_file = vite_plus_home.join("env.nu");
     tokio::fs::write(&env_nu_file, env_nu_content).await?;
 
