@@ -166,7 +166,7 @@ The default release checks should come from familiar script names:
 - `prepack`
 - `prepublishOnly`
 - `prepare`
-- `vitePlus.release.checkScripts`
+- `release.checkScripts` in `vite.config`
 
 Real releases run these checks by default. Dry-runs should remain lightweight unless `--run-checks` is requested.
 
