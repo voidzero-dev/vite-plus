@@ -30,10 +30,7 @@ use vite_str::Str;
 use vite_task::{ExitStatus, Session, SessionConfig};
 
 use self::{
-    execution::{
-        resolve_and_execute, resolve_and_execute_with_stderr_filter,
-        resolve_and_execute_with_stdout_filter,
-    },
+    execution::{FilterStream, resolve_and_execute, resolve_and_execute_with_filter},
     handler::{VitePlusCommandHandler, VitePlusConfigLoader},
     help::{
         handle_cli_parse_error, normalize_help_args, print_help, should_print_help,
@@ -74,24 +71,26 @@ async fn execute_direct_subcommand(
         }
         other => {
             if should_suppress_subcommand_stdout(&other) {
-                resolve_and_execute_with_stdout_filter(
+                resolve_and_execute_with_filter(
                     &resolver,
                     other,
                     None,
                     &envs,
                     cwd,
                     &cwd_arc,
+                    FilterStream::Stdout,
                     |_| Cow::Borrowed(""),
                 )
                 .await?
             } else if matches!(&other, SynthesizableSubcommand::Fmt { .. }) {
-                resolve_and_execute_with_stderr_filter(
+                resolve_and_execute_with_filter(
                     &resolver,
                     other,
                     None,
                     &envs,
                     cwd,
                     &cwd_arc,
+                    FilterStream::Stderr,
                     |s| s.cow_replace("oxfmt --init", "vp fmt --init"),
                 )
                 .await?

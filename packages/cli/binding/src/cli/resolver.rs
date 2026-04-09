@@ -38,13 +38,16 @@ impl SubcommandResolver {
         self
     }
 
+    fn cli_options(&self) -> anyhow::Result<&CliOptions> {
+        self.cli_options
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("CLI options not available (running without NAPI?)"))
+    }
+
     pub(crate) async fn resolve_universal_vite_config(
         &self,
     ) -> anyhow::Result<ResolvedUniversalViteConfig> {
-        let cli_options = self
-            .cli_options
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("CLI options required for vite config resolution"))?;
+        let cli_options = self.cli_options()?;
         let workspace_path_str = self
             .workspace_path
             .as_path()
@@ -68,10 +71,7 @@ impl SubcommandResolver {
     ) -> anyhow::Result<ResolvedSubcommand> {
         match subcommand {
             SynthesizableSubcommand::Lint { mut args } => {
-                let cli_options = self
-                    .cli_options
-                    .as_ref()
-                    .ok_or_else(|| anyhow::anyhow!("CLI options required for lint command"))?;
+                let cli_options = self.cli_options()?;
                 let resolved = (cli_options.lint)().await?;
                 let js_path = resolved.bin_path;
                 let js_path_str = js_path
@@ -107,10 +107,7 @@ impl SubcommandResolver {
                 })
             }
             SynthesizableSubcommand::Fmt { mut args } => {
-                let cli_options = self
-                    .cli_options
-                    .as_ref()
-                    .ok_or_else(|| anyhow::anyhow!("CLI options required for fmt command"))?;
+                let cli_options = self.cli_options()?;
                 let resolved = (cli_options.fmt)().await?;
                 let js_path = resolved.bin_path;
                 let js_path_str = js_path
@@ -145,10 +142,7 @@ impl SubcommandResolver {
                 })
             }
             SynthesizableSubcommand::Build { args } => {
-                let cli_options = self
-                    .cli_options
-                    .as_ref()
-                    .ok_or_else(|| anyhow::anyhow!("CLI options required for build command"))?;
+                let cli_options = self.cli_options()?;
                 let resolved = (cli_options.vite)().await?;
                 let js_path = resolved.bin_path;
                 let js_path_str = js_path
@@ -170,10 +164,7 @@ impl SubcommandResolver {
                 })
             }
             SynthesizableSubcommand::Test { args } => {
-                let cli_options = self
-                    .cli_options
-                    .as_ref()
-                    .ok_or_else(|| anyhow::anyhow!("CLI options required for test command"))?;
+                let cli_options = self.cli_options()?;
                 let resolved = (cli_options.test)().await?;
                 let js_path = resolved.bin_path;
                 let js_path_str = js_path
@@ -205,10 +196,7 @@ impl SubcommandResolver {
                 })
             }
             SynthesizableSubcommand::Pack { args } => {
-                let cli_options = self
-                    .cli_options
-                    .as_ref()
-                    .ok_or_else(|| anyhow::anyhow!("CLI options required for pack command"))?;
+                let cli_options = self.cli_options()?;
                 let resolved = (cli_options.pack)().await?;
                 let js_path = resolved.bin_path;
                 let js_path_str = js_path
@@ -229,10 +217,7 @@ impl SubcommandResolver {
                 })
             }
             SynthesizableSubcommand::Dev { args } => {
-                let cli_options = self
-                    .cli_options
-                    .as_ref()
-                    .ok_or_else(|| anyhow::anyhow!("CLI options required for dev command"))?;
+                let cli_options = self.cli_options()?;
                 let resolved = (cli_options.vite)().await?;
                 let js_path = resolved.bin_path;
                 let js_path_str = js_path
@@ -250,10 +235,7 @@ impl SubcommandResolver {
                 })
             }
             SynthesizableSubcommand::Preview { args } => {
-                let cli_options = self
-                    .cli_options
-                    .as_ref()
-                    .ok_or_else(|| anyhow::anyhow!("CLI options required for preview command"))?;
+                let cli_options = self.cli_options()?;
                 let resolved = (cli_options.vite)().await?;
                 let js_path = resolved.bin_path;
                 let js_path_str = js_path
@@ -271,10 +253,7 @@ impl SubcommandResolver {
                 })
             }
             SynthesizableSubcommand::Doc { args } => {
-                let cli_options = self
-                    .cli_options
-                    .as_ref()
-                    .ok_or_else(|| anyhow::anyhow!("CLI options required for doc command"))?;
+                let cli_options = self.cli_options()?;
                 let resolved = (cli_options.doc)().await?;
                 let js_path = resolved.bin_path;
                 let js_path_str = js_path
