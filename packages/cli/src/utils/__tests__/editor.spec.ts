@@ -38,6 +38,7 @@ describe('writeEditorConfigs', () => {
     expect(settings['editor.defaultFormatter']).toBe('oxc.oxc-vscode');
     expect(settings['oxc.fmt.configPath']).toBe('./vite.config.ts');
     expect(settings['editor.formatOnSave']).toBe(true);
+    expect(settings['npm.scriptRunner']).toBe('vp');
   });
 
   it('merges existing vscode JSONC settings (comments, trailing commas)', async () => {
@@ -76,6 +77,7 @@ describe('writeEditorConfigs', () => {
     // New keys are added
     expect(settings['editor.defaultFormatter']).toBe('oxc.oxc-vscode');
     expect(settings['oxc.fmt.configPath']).toBe('./vite.config.ts');
+    expect(settings['npm.scriptRunner']).toBe('vp');
 
     const codeActions = settings['editor.codeActionsOnSave'] as Record<string, unknown>;
     expect(codeActions['source.organizeImports']).toBe('explicit');

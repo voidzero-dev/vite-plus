@@ -17,6 +17,7 @@ const VSCODE_SETTINGS = {
   'editor.codeActionsOnSave': {
     'source.fixAll.oxc': 'explicit',
   },
+  'npm.scriptRunner': 'vp',
 } as const;
 
 const VSCODE_EXTENSIONS = {

@@ -29,7 +29,8 @@ When you create or migrate a project, Vite+ prompts whether you want editor conf
   "editor.formatOnSaveMode": "file",
   "editor.codeActionsOnSave": {
     "source.fixAll.oxc": "explicit"
-  }
+  },
+  "npm.scriptRunner": "vp"
 }
 ```
 
