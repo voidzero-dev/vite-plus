@@ -94,11 +94,11 @@ pub(crate) async fn execute_check(
                     ));
                 }
                 None => {
-                    if suppress_unmatched && status == ExitStatus::SUCCESS {
-                        // No files matched fmt patterns — treat as pass when
-                        // --no-error-on-unmatched-pattern is active (explicit or
-                        // implicit via --fix with paths).
-                    } else {
+                    // oxfmt handles --no-error-on-unmatched-pattern natively and
+                    // exits 0 when no files match, so we only need to guard
+                    // against the edge case where output is unparseable but the
+                    // process still succeeded.
+                    if !(suppress_unmatched && status == ExitStatus::SUCCESS) {
                         print_error_block(
                             "Formatting could not start",
                             &combined_output,
@@ -191,9 +191,9 @@ pub(crate) async fn execute_check(
             }
             None => {
                 if suppress_unmatched {
-                    // oxlint does not support --no-error-on-unmatched-pattern natively,
-                    // so we handle it here: when all files are excluded by ignorePatterns
-                    // and the flag is active, treat it as a pass instead of an error.
+                    // oxlint does not support --no-error-on-unmatched-pattern natively
+                    // and exits non-zero when no files match, so we must override the
+                    // status here (unlike fmt, where oxfmt handles the flag and exits 0).
                     status = ExitStatus::SUCCESS;
                 } else {
                     output::error("Linting could not start");
