@@ -80,7 +80,7 @@ const helpMessage = renderCliDoc({
         { label: '--directory DIR', description: 'Target directory for the generated project.' },
         {
           label: '--agent NAME',
-          description: 'Create an agent instructions file for the specified agent.',
+          description: 'Write coding agent instructions to AGENTS.md, CLAUDE.md, etc.',
         },
         {
           label: '--editor NAME',
@@ -439,6 +439,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   let selectedParentDir: string | undefined;
   let remoteTargetDir: string | undefined;
   let shouldSetupHooks = false;
+  const installArgs = process.env.CI ? ['--no-frozen-lockfile'] : undefined;
 
   if (!selectedTemplateName) {
     const template = await prompts.select({
@@ -804,7 +805,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       installGitHooks(fullPath, compactOutput);
     }
     updateCreateProgress('Installing dependencies');
-    const installSummary = await runViteInstall(fullPath, options.interactive, undefined, {
+    const installSummary = await runViteInstall(fullPath, options.interactive, installArgs, {
       silent: compactOutput,
     });
     updateCreateProgress('Formatting code');
@@ -955,7 +956,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
 
     updateWorkspaceConfig(projectDir, workspaceInfo);
     updateCreateProgress('Installing dependencies');
-    installSummary = await runViteInstall(workspaceInfo.rootDir, options.interactive, undefined, {
+    installSummary = await runViteInstall(workspaceInfo.rootDir, options.interactive, installArgs, {
       silent: compactOutput,
     });
     updateCreateProgress('Formatting code');
@@ -969,7 +970,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       installGitHooks(fullPath, compactOutput);
     }
     updateCreateProgress('Installing dependencies');
-    installSummary = await runViteInstall(fullPath, options.interactive, undefined, {
+    installSummary = await runViteInstall(fullPath, options.interactive, installArgs, {
       silent: compactOutput,
     });
     updateCreateProgress('Formatting code');

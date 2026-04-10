@@ -14,7 +14,7 @@ Arguments:
 
 Options:
   --directory DIR         Target directory for the generated project.
-  --agent NAME            Create an agent instructions file for the specified agent.
+  --agent NAME            Write coding agent instructions to AGENTS.md, CLAUDE.md, etc.
   --editor NAME           Write editor config files for the specified editor.
   --hooks                 Set up pre-commit hooks (default in non-interactive mode)
   --no-hooks              Skip pre-commit hooks setup

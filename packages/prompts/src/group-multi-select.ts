@@ -143,6 +143,7 @@ export const groupMultiselect = <Value>(opts: GroupMultiSelectOptions<Value>) =>
           ),
         )}`;
       }
+      return undefined;
     },
     render() {
       const title = `${hasGuide ? `${color.gray(S_BAR)}\n` : ''}${symbol(this.state)} ${opts.message}\n`;

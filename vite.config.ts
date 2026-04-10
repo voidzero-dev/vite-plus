@@ -17,6 +17,7 @@ export default defineConfig({
       'no-console': ['error', { allow: ['error'] }],
       'no-shadow': 'off',
       'typescript/no-unnecessary-boolean-literal-compare': 'off',
+      'typescript/no-unnecessary-type-arguments': 'off',
       'typescript/no-unsafe-type-assertion': 'off',
       curly: 'error',
     },

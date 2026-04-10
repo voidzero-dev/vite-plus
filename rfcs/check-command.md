@@ -224,6 +224,45 @@ With `vp check`, the monorepo template's "ready" script simplifies to:
 "ready": "vp check && vp run -r test && vp run -r build"
 ```
 
+## Caching
+
+When `vp check` is used as a package.json script (e.g., `"check": "vp check"`) and executed via `vp run check`, it supports task runner caching like other synthesized commands (`vp build`, `vp lint`, `vp fmt`).
+
+### Configuration
+
+Enable caching in `vite.config.ts`:
+
+```ts
+export default {
+  run: {
+    cache: true,
+  },
+};
+```
+
+With caching enabled, the second `vp run check` replays cached output when inputs haven't changed:
+
+```
+$ vp check ◉ cache hit, replaying
+pass: All 4 files are correctly formatted (105ms, 16 threads)
+pass: Found no warnings or lint errors in 2 files (452ms, 16 threads)
+```
+
+### Cache key
+
+The check command's cache fingerprint includes:
+
+- **Environment variable:** `OXLINT_TSGOLINT_PATH` (affects lint behavior)
+- **Input files:** Auto-tracked via fspy, excluding:
+  - `node_modules/.vite-temp/**` — config compilation cache (read+written by the vp CLI subprocess)
+  - `node_modules/.vite/task-cache/**` — task runner state files that change after each run
+
+These exclusions are shared with other synthesized commands via `base_cache_inputs()` in `cli.rs`.
+
+### How it differs from `vp fmt` / `vp lint`
+
+When `vp fmt` or `vp lint` appear in task scripts, the command handler resolves them to their underlying binaries (e.g., `node path/to/oxfmt.mjs`). The `vp check` command is different — it runs as a full `vp check` subprocess because it's a composite command that orchestrates both fmt and lint internally. This means the `vp` CLI process itself is tracked by fspy, which is why the `.vite-temp` and `.vite/task-cache` exclusions are necessary.
+
 ## Comparison with Other Tools
 
 | Tool              | Scope                              |
@@ -252,4 +291,11 @@ packages/cli/snap-tests/check-no-fmt/
   package.json
   steps.json     # { "steps": [{ "command": "vp check --no-fmt" }] }
   snap.txt       # Only lint runs
+
+packages/cli/snap-tests/check-cache-enabled/
+  package.json   # { "scripts": { "check": "vp check" } }
+  vite.config.ts # { run: { cache: true } }
+  steps.json     # Runs vp run check twice, expects cache hit on second run
+  src/index.js
+  snap.txt
 ```

@@ -153,6 +153,7 @@ async function buildVite() {
                 };
               }
             }
+            return undefined;
           },
         },
         {
@@ -194,19 +195,20 @@ async function buildVite() {
                 };
               }
             }
+            return undefined;
           },
         },
         {
           name: 'suppress-vite-version-only-reporter-line',
           transform(code, id) {
             if (!id.endsWith(join('vite', 'src', 'node', 'plugins', 'reporter.ts'))) {
-              return;
+              return undefined;
             }
 
             // Upstream native reporter can emit a redundant standalone "vite vX.Y.Z" line.
             // Filter it at source so snapshots and CLI output remain stable.
             if (code.includes('VITE_VERSION_ONLY_LINE_RE')) {
-              return;
+              return undefined;
             }
 
             const constLine =
@@ -215,7 +217,7 @@ async function buildVite() {
               '        logInfo: shouldLogInfo ? (msg) => env.logger.info(msg) : undefined,';
 
             if (!code.includes(constLine) || !code.includes(logInfoLine)) {
-              return;
+              return undefined;
             }
 
             return {
@@ -404,6 +406,7 @@ async function bundleTsdown() {
             }
             return { code: updatedCode };
           }
+          return undefined;
         },
       },
     ],

@@ -29,7 +29,7 @@
   "vue-mini": {
     "repository": "https://github.com/vue-mini/vue-mini.git",
     "branch": "master",
-    "hash": "23df6ba49e29d3ea909ef55874f59b973916d177"
+    "hash": "333c5957bf99a68991c9f91019670c56b65bd896"
   },
   "vite-plugin-react": {
     "repository": "https://github.com/vitejs/vite-plugin-react.git",

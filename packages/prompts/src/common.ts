@@ -55,6 +55,8 @@ export const symbol = (state: State) => {
       return color.yellow(S_STEP_ERROR);
     case 'submit':
       return completeColor(S_STEP_SUBMIT);
+    default:
+      return color.blue(S_STEP_ACTIVE);
   }
 };
 
@@ -69,6 +71,8 @@ export const symbolBar = (state: State) => {
       return color.yellow(S_BAR);
     case 'submit':
       return completeColor(S_BAR);
+    default:
+      return color.blue(S_BAR);
   }
 };
 
