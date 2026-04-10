@@ -408,6 +408,9 @@ async fn create_env_files(vite_plus_home: &vite_path::AbsolutePath) -> Result<()
             .unwrap_or_else(|| path.as_path().display().to_string())
     };
     let bin_path_ref = to_ref(&bin_path);
+    // Nushell requires `~` instead of `$HOME` in string literals — `$HOME` is not expanded
+    // at parse time, so PATH entries would contain a literal "$HOME/..." segment.
+    let bin_path_ref_nu = bin_path_ref.replace("$HOME/", "~/");
 
     // POSIX env file (bash/zsh)
     // When sourced multiple times, removes existing entry and re-prepends to front
@@ -562,7 +565,7 @@ def "nu-complete vpr" [context: string] {
 }
 export extern "vpr" [...args: string@"nu-complete vpr"]
 "#
-    .replace("__VP_BIN__", &bin_path_ref);
+    .replace("__VP_BIN__", &bin_path_ref_nu);
     let env_nu_file = vite_plus_home.join("env.nu");
     tokio::fs::write(&env_nu_file, env_nu_content).await?;
 
@@ -748,7 +751,7 @@ mod tests {
             !nu_content.contains("__VP_BIN__"),
             "env.nu should not contain __VP_BIN__ placeholder"
         );
-        assert!(nu_content.contains("$HOME/bin"), "env.nu should reference $HOME/bin");
+        assert!(nu_content.contains("~/bin"), "env.nu should reference ~/bin (not $HOME/bin — Nushell does not expand $HOME in string literals)");
         assert!(
             nu_content.contains("VP_ENV_USE_EVAL_ENABLE"),
             "env.nu should set VP_ENV_USE_EVAL_ENABLE"
