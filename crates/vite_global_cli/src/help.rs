@@ -760,6 +760,10 @@ fn delegated_help_doc(command: &str) -> Option<HelpDoc> {
                         row("--fix", "Auto-fix format and lint issues"),
                         row("--no-fmt", "Skip format check"),
                         row("--no-lint", "Skip lint check"),
+                        row(
+                            "--no-error-on-unmatched-pattern",
+                            "Do not exit with error when pattern is unmatched",
+                        ),
                         row("-h, --help", "Print help"),
                     ],
                 ),

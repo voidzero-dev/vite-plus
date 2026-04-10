@@ -6,10 +6,11 @@ Usage: vp check [OPTIONS] [PATHS]...
 Run format, lint, and type checks.
 
 Options:
-  --fix       Auto-fix format and lint issues
-  --no-fmt    Skip format check
-  --no-lint   Skip lint check
-  -h, --help  Print help
+  --fix                            Auto-fix format and lint issues
+  --no-fmt                         Skip format check
+  --no-lint                        Skip lint check
+  --no-error-on-unmatched-pattern  Do not exit with error when pattern is unmatched
+  -h, --help                       Print help
 
 Examples:
   vp check
@@ -27,10 +28,11 @@ Usage: vp check [OPTIONS] [PATHS]...
 Run format, lint, and type checks.
 
 Options:
-  --fix       Auto-fix format and lint issues
-  --no-fmt    Skip format check
-  --no-lint   Skip lint check
-  -h, --help  Print help
+  --fix                            Auto-fix format and lint issues
+  --no-fmt                         Skip format check
+  --no-lint                        Skip lint check
+  --no-error-on-unmatched-pattern  Do not exit with error when pattern is unmatched
+  -h, --help                       Print help
 
 Examples:
   vp check
@@ -48,10 +50,11 @@ Usage: vp check [OPTIONS] [PATHS]...
 Run format, lint, and type checks.
 
 Options:
-  --fix       Auto-fix format and lint issues
-  --no-fmt    Skip format check
-  --no-lint   Skip lint check
-  -h, --help  Print help
+  --fix                            Auto-fix format and lint issues
+  --no-fmt                         Skip format check
+  --no-lint                        Skip lint check
+  --no-error-on-unmatched-pattern  Do not exit with error when pattern is unmatched
+  -h, --help                       Print help
 
 Examples:
   vp check

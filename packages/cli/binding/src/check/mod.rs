@@ -22,6 +22,7 @@ pub(crate) async fn execute_check(
     fix: bool,
     no_fmt: bool,
     no_lint: bool,
+    no_error_on_unmatched_pattern: bool,
     paths: Vec<String>,
     envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
     cwd: &AbsolutePathBuf,
@@ -37,14 +38,20 @@ pub(crate) async fn execute_check(
 
     let mut status = ExitStatus::SUCCESS;
     let has_paths = !paths.is_empty();
+    // In --fix mode with file paths (the lint-staged use case), implicitly suppress
+    // "no matching files" errors. This is also available as an explicit flag for
+    // non-fix use cases.
+    let suppress_unmatched = no_error_on_unmatched_pattern || (fix && has_paths);
     let mut fmt_fix_started: Option<Instant> = None;
     let mut deferred_lint_pass: Option<(String, String)> = None;
     let resolved_vite_config = resolver.resolve_universal_vite_config().await?;
 
     if !no_fmt {
         let mut args = if fix { vec![] } else { vec!["--check".to_string()] };
-        if has_paths {
+        if suppress_unmatched {
             args.push("--no-error-on-unmatched-pattern".to_string());
+        }
+        if has_paths {
             args.extend(paths.iter().cloned());
         }
         let fmt_start = Instant::now();
@@ -87,11 +94,17 @@ pub(crate) async fn execute_check(
                     ));
                 }
                 None => {
-                    print_error_block(
-                        "Formatting could not start",
-                        &combined_output,
-                        "Formatting failed before analysis started",
-                    );
+                    if suppress_unmatched && status == ExitStatus::SUCCESS {
+                        // No files matched fmt patterns — treat as pass when
+                        // --no-error-on-unmatched-pattern is active (explicit or
+                        // implicit via --fix with paths).
+                    } else {
+                        print_error_block(
+                            "Formatting could not start",
+                            &combined_output,
+                            "Formatting failed before analysis started",
+                        );
+                    }
                 }
             }
         }
@@ -177,11 +190,18 @@ pub(crate) async fn execute_check(
                 ));
             }
             None => {
-                output::error("Linting could not start");
-                if !combined_output.trim().is_empty() {
-                    print_stdout_block(&combined_output);
+                if suppress_unmatched {
+                    // oxlint does not support --no-error-on-unmatched-pattern natively,
+                    // so we handle it here: when all files are excluded by ignorePatterns
+                    // and the flag is active, treat it as a pass instead of an error.
+                    status = ExitStatus::SUCCESS;
+                } else {
+                    output::error("Linting could not start");
+                    if !combined_output.trim().is_empty() {
+                        print_stdout_block(&combined_output);
+                    }
+                    print_summary_line("Linting failed before analysis started");
                 }
-                print_summary_line("Linting failed before analysis started");
             }
         }
         if status != ExitStatus::SUCCESS {
@@ -193,8 +213,10 @@ pub(crate) async fn execute_check(
     // (e.g. the curly rule adding braces to if-statements)
     if fix && !no_fmt && !no_lint {
         let mut args = Vec::new();
-        if has_paths {
+        if suppress_unmatched {
             args.push("--no-error-on-unmatched-pattern".to_string());
+        }
+        if has_paths {
             args.extend(paths.into_iter());
         }
         let captured = resolve_and_capture_output(

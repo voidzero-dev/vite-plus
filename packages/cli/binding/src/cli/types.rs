@@ -93,6 +93,9 @@ pub enum SynthesizableSubcommand {
         /// Skip lint check
         #[arg(long = "no-lint")]
         no_lint: bool,
+        /// Do not exit with error when pattern is unmatched
+        #[arg(long = "no-error-on-unmatched-pattern")]
+        no_error_on_unmatched_pattern: bool,
         /// File paths to check (passed through to fmt and lint)
         #[arg(trailing_var_arg = true)]
         paths: Vec<String>,
