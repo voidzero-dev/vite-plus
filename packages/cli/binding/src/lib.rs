@@ -28,10 +28,21 @@ use crate::cli::{
     BoxedResolverFn, CliOptions as ViteTaskCliOptions, ResolveCommandResult, ViteConfigResolverFn,
 };
 
-/// Module initialization - sets up tracing for debugging
+/// Module initialization - sets up tracing and panic hook
 #[napi_derive::module_init]
+#[allow(clippy::disallowed_macros)]
 pub fn init() {
     crate::cli::init_tracing();
+
+    // Install a Vite+ panic hook so panics are correctly attributed to Vite+.
+    let default_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        eprintln!("Vite+ panicked. This is a bug in Vite+, not your code.");
+        default_hook(info);
+        eprintln!(
+            "\nPlease report this issue at: https://github.com/voidzero-dev/vite-plus/issues/new?template=bug_report.yml"
+        );
+    }));
 }
 
 /// Configuration options passed from JavaScript to Rust.
@@ -123,27 +134,6 @@ fn format_error_message(error: &(dyn StdError + 'static)) -> String {
     message
 }
 
-/// Install a Vite+ panic hook so panics are correctly attributed to Vite+.
-///
-/// Discards any previously set hook (e.g. rolldown's) via double `take_hook`:
-/// first call removes the current hook, second captures the restored default.
-/// Safe to call regardless of whether a custom hook was installed.
-#[allow(clippy::disallowed_macros)]
-fn setup_panic_hook() {
-    static ONCE: std::sync::Once = std::sync::Once::new();
-    ONCE.call_once(|| {
-        let _ = std::panic::take_hook();
-        let default_hook = std::panic::take_hook();
-        std::panic::set_hook(Box::new(move |info| {
-            eprintln!("Vite+ panicked. This is a bug in Vite+, not your code.");
-            default_hook(info);
-            eprintln!(
-                "\nPlease report this issue at: https://github.com/voidzero-dev/vite-plus/issues/new?template=bug_report.yml"
-            );
-        }));
-    });
-}
-
 /// Main entry point for the CLI, called from JavaScript.
 ///
 /// This is an async function that spawns a new thread for the non-Send async code
@@ -151,7 +141,6 @@ fn setup_panic_hook() {
 /// and process JavaScript callbacks (via ThreadsafeFunction).
 #[napi]
 pub async fn run(options: CliOptions) -> Result<i32> {
-    setup_panic_hook();
     // Use provided cwd or current directory
     let mut cwd = current_dir()?;
     if let Some(options_cwd) = options.cwd {

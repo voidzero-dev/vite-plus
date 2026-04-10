@@ -31,7 +31,7 @@ vite_static_config = { workspace = true }
 vite_str = { workspace = true }
 vite_task = { workspace = true }
 vite_workspace = { workspace = true }
-rolldown_binding = { workspace = true, optional = true }
+rolldown_binding = { workspace = true, optional = true, features = ["disable_panic_hook"] }
 
 [build-dependencies]
 napi-build = { workspace = true }
