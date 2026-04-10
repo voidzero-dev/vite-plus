@@ -190,10 +190,10 @@ pub(crate) async fn execute_check(
                 ));
             }
             None => {
-                if suppress_unmatched {
-                    // oxlint does not support --no-error-on-unmatched-pattern natively
-                    // and exits non-zero when no files match, so we must override the
-                    // status here (unlike fmt, where oxfmt handles the flag and exits 0).
+                // Only suppress when the output is empty (no files to lint).
+                // If oxlint produced error output (config error, crash, etc.),
+                // surface it even when suppress_unmatched is active.
+                if suppress_unmatched && combined_output.trim().is_empty() {
                     status = ExitStatus::SUCCESS;
                 } else {
                     output::error("Linting could not start");
