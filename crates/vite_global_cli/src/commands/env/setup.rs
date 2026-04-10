@@ -388,6 +388,7 @@ async fn cleanup_legacy_completion_dir(vite_plus_home: &vite_path::AbsolutePath)
 /// Creates:
 /// - `~/.vite-plus/env` (POSIX shell — bash/zsh) with `vp()` wrapper function
 /// - `~/.vite-plus/env.fish` (fish shell) with `vp` wrapper function
+/// - `~/.vite-plus/env.nu` (Nushell) with `vp env use` wrapper function
 /// - `~/.vite-plus/env.ps1` (PowerShell) with PATH setup + `vp` function
 /// - `~/.vite-plus/bin/vp-use.cmd` (cmd.exe wrapper for `vp env use`)
 async fn create_env_files(vite_plus_home: &vite_path::AbsolutePath) -> Result<(), Error> {
@@ -407,6 +408,9 @@ async fn create_env_files(vite_plus_home: &vite_path::AbsolutePath) -> Result<()
             .unwrap_or_else(|| path.as_path().display().to_string())
     };
     let bin_path_ref = to_ref(&bin_path);
+    // Nushell requires `~` instead of `$HOME` in string literals — `$HOME` is not expanded
+    // at parse time, so PATH entries would contain a literal "$HOME/..." segment.
+    let bin_path_ref_nu = bin_path_ref.replace("$HOME/", "~/");
 
     // POSIX env file (bash/zsh)
     // When sourced multiple times, removes existing entry and re-prepends to front
@@ -499,6 +503,72 @@ complete -c vpr --keep-order --exclusive --arguments "(__vpr_complete)"
     let env_fish_file = vite_plus_home.join("env.fish");
     tokio::fs::write(&env_fish_file, env_fish_content).await?;
 
+    // Nushell env file with vp wrapper function.
+    // Completions delegate to Fish dynamically (VP_COMPLETE=fish) because clap_complete_nushell
+    // generates multiple rest params (e.g. for `vp install`), which Nushell does not support.
+    let env_nu_content = r#"# Vite+ environment setup (https://viteplus.dev)
+$env.PATH = ($env.PATH | where { $in != "__VP_BIN__" } | prepend "__VP_BIN__")
+
+# Shell function wrapper: intercepts `vp env use` to parse its stdout,
+# which sets/unsets VP_NODE_VERSION in the current shell session.
+def --env --wrapped vp [...args: string@"nu-complete vp"] {
+    if ($args | length) >= 2 and $args.0 == "env" and $args.1 == "use" {
+        if ("-h" in $args) or ("--help" in $args) {
+            ^vp ...$args
+            return
+        }
+        let out = (with-env { VP_ENV_USE_EVAL_ENABLE: "1", VP_SHELL_NU: "1" } {
+            ^vp ...$args
+        })
+        let lines = ($out | lines)
+        let exports = ($lines | where { $in =~ '^\$env\.' } | parse '$env.{key} = "{value}"')
+        let export_keys = ($exports | get key? | default [])
+        # Exclude keys that also appear in exports: when vp emits `hide-env X` then
+        # `$env.X = "v"` (e.g. `vp env use` with no args resolving from .node-version),
+        # the set should win.
+        let unsets = ($lines | where { $in =~ '^hide-env ' } | parse 'hide-env {key}' | get key? | default [] | where { $in not-in $export_keys })
+        if ($exports | is-not-empty) {
+            load-env ($exports | reduce -f {} {|it, acc| $acc | insert $it.key $it.value})
+        }
+        for key in $unsets {
+            if ($key in $env) { hide-env $key }
+        }
+    } else {
+        ^vp ...$args
+    }
+}
+
+# Shell completion for nushell (delegates to fish completions dynamically)
+def "nu-complete vp" [context: string] {
+    let fish_cmd = $"VP_COMPLETE=fish command vp | source; complete '--do-complete=($context)'"
+    fish --command $fish_cmd | from tsv --flexible --noheaders --no-infer | rename value description | update value {|row|
+        let value = $row.value
+        let need_quote = ['\' ',' '[' ']' '(' ')' ' ' '\t' "'" '"' "`"] | any {$in in $value}
+        if ($need_quote and ($value | path exists)) {
+            let expanded_path = if ($value starts-with ~) {$value | path expand --no-symlink} else {$value}
+            $'"($expanded_path | str replace --all "\"" "\\\"")"'
+        } else {$value}
+    }
+}
+# Completion logic for vpr (translates context to 'vp run ...')
+def "nu-complete vpr" [context: string] {
+    let modified_context = ($context | str replace -r '^vpr' 'vp run')
+    let fish_cmd = $"VP_COMPLETE=fish command vp | source; complete '--do-complete=($modified_context)'"
+    fish --command $fish_cmd | from tsv --flexible --noheaders --no-infer | rename value description | update value {|row|
+        let value = $row.value
+        let need_quote = ['\' ',' '[' ']' '(' ')' ' ' '\t' "'" '"' "`"] | any {$in in $value}
+        if ($need_quote and ($value | path exists)) {
+            let expanded_path = if ($value starts-with ~) {$value | path expand --no-symlink} else {$value}
+            $'"($expanded_path | str replace --all "\"" "\\\"")"'
+        } else {$value}
+    }
+}
+export extern "vpr" [...args: string@"nu-complete vpr"]
+"#
+    .replace("__VP_BIN__", &bin_path_ref_nu);
+    let env_nu_file = vite_plus_home.join("env.nu");
+    tokio::fs::write(&env_nu_file, env_nu_content).await?;
+
     // PowerShell env file
     let env_ps1_content = r#"# Vite+ environment setup (https://viteplus.dev)
 $__vp_bin = "__VP_BIN_WIN__"
@@ -582,14 +652,16 @@ fn print_path_instructions(bin_dir: &vite_path::AbsolutePath) {
         .parent()
         .map(|p| p.as_path().display().to_string())
         .unwrap_or_else(|| bin_dir.as_path().display().to_string());
-    let home_path = if let Ok(home_dir) = std::env::var("HOME") {
+    let (home_path, nu_home_path) = if let Ok(home_dir) = std::env::var("HOME") {
         if let Some(suffix) = home_path.strip_prefix(&home_dir) {
-            format!("$HOME{suffix}")
+            // POSIX/Fish use $HOME; Nushell's `source` is a parse-time keyword
+            // that cannot expand $HOME (a runtime env var), so use ~ instead.
+            (format!("$HOME{suffix}"), format!("~{suffix}"))
         } else {
-            home_path
+            (home_path.clone(), home_path)
         }
     } else {
-        home_path
+        (home_path.clone(), home_path)
     };
 
     println!("{}", help::render_heading("Next Steps"));
@@ -600,6 +672,10 @@ fn print_path_instructions(bin_dir: &vite_path::AbsolutePath) {
     println!("  For fish shell, add to ~/.config/fish/config.fish:");
     println!();
     println!("  source \"{home_path}/env.fish\"");
+    println!();
+    println!("  For Nushell, add to ~/.config/nushell/config.nu:");
+    println!();
+    println!("  source \"{nu_home_path}/env.nu\"");
     println!();
     println!("  For PowerShell, add to your $PROFILE:");
     println!();
@@ -654,10 +730,44 @@ mod tests {
 
         let env_path = home.join("env");
         let env_fish_path = home.join("env.fish");
+        let env_nu_path = home.join("env.nu");
         let env_ps1_path = home.join("env.ps1");
         assert!(env_path.as_path().exists(), "env file should be created");
         assert!(env_fish_path.as_path().exists(), "env.fish file should be created");
+        assert!(env_nu_path.as_path().exists(), "env.nu file should be created");
         assert!(env_ps1_path.as_path().exists(), "env.ps1 file should be created");
+    }
+
+    #[tokio::test]
+    async fn test_create_env_files_nu_contains_path_guard() {
+        let temp_dir = TempDir::new().unwrap();
+        let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let _guard = home_guard(temp_dir.path());
+
+        create_env_files(&home).await.unwrap();
+
+        let nu_content = tokio::fs::read_to_string(home.join("env.nu")).await.unwrap();
+        assert!(
+            !nu_content.contains("__VP_BIN__"),
+            "env.nu should not contain __VP_BIN__ placeholder"
+        );
+        assert!(
+            nu_content.contains("~/bin"),
+            "env.nu should reference ~/bin (not $HOME/bin — Nushell does not expand $HOME in string literals)"
+        );
+        assert!(
+            nu_content.contains("VP_ENV_USE_EVAL_ENABLE"),
+            "env.nu should set VP_ENV_USE_EVAL_ENABLE"
+        );
+        assert!(
+            nu_content.contains("VP_COMPLETE=fish"),
+            "env.nu should use dynamic Fish completion delegation"
+        );
+        assert!(
+            nu_content.contains("VP_SHELL_NU"),
+            "env.nu should use VP_SHELL_NU explicit marker instead of inherited NU_VERSION"
+        );
+        assert!(nu_content.contains("load-env"), "env.nu should use load-env to apply exports");
     }
 
     #[tokio::test]
