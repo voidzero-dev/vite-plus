@@ -76,7 +76,7 @@ When file paths are provided:
 
 - Paths are appended to both `fmt` and `lint` sub-commands
 - In `--fix` mode, `--no-error-on-unmatched-pattern` is implicitly enabled for both `fmt` and `lint`, preventing errors when all provided paths are excluded by ignorePatterns. This is the common lint-staged use case where staged files may not match tool-specific patterns.
-- Without `--fix`, unmatched patterns are reported as errors unless `--no-error-on-unmatched-pattern` is explicitly passed. Note that oxfmt supports this flag natively, while oxlint does not — `vp check` handles the lint side by treating unparseable lint output as a pass when the flag is active.
+- Without `--fix`, unmatched patterns are reported as errors unless `--no-error-on-unmatched-pattern` is explicitly passed. Note that oxfmt supports this flag natively, while oxlint does not — `vp check` handles the lint side by treating unparsable lint output as a pass when the flag is active.
 
 This enables lint-staged integration:
 
