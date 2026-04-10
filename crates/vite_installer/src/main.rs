@@ -220,47 +220,22 @@ async fn do_install(
         let version_dir = install_dir.join(&target_version);
         tokio::fs::create_dir_all(&version_dir).await?;
 
-        if !opts.quiet {
-            print_info("extracting binary...");
-        }
-        install::extract_platform_package(&platform_data, &version_dir).await?;
-
-        let binary_path = version_dir.join("bin").join(VP_BINARY_NAME);
-        if !tokio::fs::try_exists(&binary_path).await.unwrap_or(false) {
-            return Err("Binary not found after extraction. The download may be corrupted.".into());
-        }
-
-        install::generate_wrapper_package_json(&version_dir, &target_version).await?;
-
-        if !opts.quiet {
-            print_info("installing dependencies (this may take a moment)...");
-        }
-        install::install_production_deps(
+        let result = install_new_version(
+            opts,
+            &platform_data,
             &version_dir,
-            opts.registry.as_deref(),
-            opts.yes,
+            install_dir,
+            &target_version,
             &resolved.version,
+            current_version.is_some(),
         )
-        .await?;
+        .await;
 
-        let previous_version = if current_version.is_some() {
-            install::save_previous_version(install_dir).await?
-        } else {
-            None
-        };
-        install::swap_current_link(install_dir, &target_version).await?;
-
-        // Cleanup with both new and previous versions protected (matches vp upgrade)
-        let mut protected = vec![target_version.as_str()];
-        if let Some(ref prev) = previous_version {
-            protected.push(prev.as_str());
+        // On failure, clean up the partial version directory (matches vp upgrade behavior)
+        if result.is_err() {
+            let _ = tokio::fs::remove_dir_all(&version_dir).await;
         }
-        if let Err(e) =
-            install::cleanup_old_versions(install_dir, vite_setup::MAX_VERSIONS_KEEP, &protected)
-                .await
-        {
-            print_warn(&format!("Old version cleanup failed (non-fatal): {e}"));
-        }
+        result?;
     }
 
     // --- Post-activation setup (always runs, even for same-version repair) ---
@@ -345,6 +320,58 @@ fn auto_detect_node_manager(install_dir: &vite_path::AbsolutePath, interactive: 
     // install.ps1's Y/n prompt where Enter = yes). The user can disable it
     // in the customize menu. In silent mode, don't take over.
     interactive
+}
+
+/// Extract, install deps, and activate a new version. Separated so the caller
+/// can clean up the version directory on failure.
+async fn install_new_version(
+    opts: &cli::Options,
+    platform_data: &[u8],
+    version_dir: &AbsolutePathBuf,
+    install_dir: &AbsolutePathBuf,
+    target_version: &str,
+    resolved_version: &str,
+    has_previous: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if !opts.quiet {
+        print_info("extracting binary...");
+    }
+    install::extract_platform_package(platform_data, version_dir).await?;
+
+    let binary_path = version_dir.join("bin").join(VP_BINARY_NAME);
+    if !tokio::fs::try_exists(&binary_path).await.unwrap_or(false) {
+        return Err("Binary not found after extraction. The download may be corrupted.".into());
+    }
+
+    install::generate_wrapper_package_json(version_dir, target_version).await?;
+
+    if !opts.quiet {
+        print_info("installing dependencies (this may take a moment)...");
+    }
+    install::install_production_deps(
+        version_dir,
+        opts.registry.as_deref(),
+        opts.yes,
+        resolved_version,
+    )
+    .await?;
+
+    let previous_version =
+        if has_previous { install::save_previous_version(install_dir).await? } else { None };
+    install::swap_current_link(install_dir, target_version).await?;
+
+    // Cleanup with both new and previous versions protected (matches vp upgrade)
+    let mut protected = vec![target_version];
+    if let Some(ref prev) = previous_version {
+        protected.push(prev.as_str());
+    }
+    if let Err(e) =
+        install::cleanup_old_versions(install_dir, vite_setup::MAX_VERSIONS_KEEP, &protected).await
+    {
+        print_warn(&format!("Old version cleanup failed (non-fatal): {e}"));
+    }
+
+    Ok(())
 }
 
 /// Windows locks running `.exe` files — rename the old one out of the way before copying.
