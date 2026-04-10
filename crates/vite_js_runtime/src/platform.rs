@@ -47,9 +47,9 @@ impl Os {
     /// Compilation will fail on unsupported operating systems.
     #[must_use]
     pub const fn current() -> Self {
-        #[cfg(target_os = "linux")]
+        #[cfg(any(target_os = "android", target_os = "linux"))]
         {
-            Self::Linux
+            return Self::Linux;
         }
         #[cfg(target_os = "macos")]
         {
@@ -59,7 +59,12 @@ impl Os {
         {
             Self::Windows
         }
-        #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+        #[cfg(not(any(
+            target_os = "android",
+            target_os = "linux",
+            target_os = "macos",
+            target_os = "windows"
+        )))]
         {
             compile_error!(
                 "Unsupported operating system. vite_js_runtime only supports Linux, macOS, and Windows."
