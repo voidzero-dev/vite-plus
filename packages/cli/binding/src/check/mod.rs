@@ -96,7 +96,7 @@ pub(crate) async fn execute_check(
                 None => {
                     // oxfmt handles --no-error-on-unmatched-pattern natively and
                     // exits 0 when no files match, so we only need to guard
-                    // against the edge case where output is unparseable but the
+                    // against the edge case where output is unparsable but the
                     // process still succeeded.
                     if !(suppress_unmatched && status == ExitStatus::SUCCESS) {
                         print_error_block(
