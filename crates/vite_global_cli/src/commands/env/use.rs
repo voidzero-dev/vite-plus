@@ -25,6 +25,8 @@ enum Shell {
     PowerShell,
     /// Windows cmd.exe
     Cmd,
+    /// Nushell
+    NuShell,
 }
 
 /// Detect the current shell from environment variables.
@@ -32,6 +34,8 @@ fn detect_shell() -> Shell {
     let config = vite_shared::EnvConfig::get();
     if config.fish_version.is_some() {
         Shell::Fish
+    } else if config.vp_shell_nu {
+        Shell::NuShell
     } else if cfg!(windows) && config.ps_module_path.is_some() {
         Shell::PowerShell
     } else if cfg!(windows) {
@@ -48,6 +52,7 @@ fn format_export(shell: &Shell, value: &str) -> String {
         Shell::Fish => format!("set -gx {VERSION_ENV_VAR} {value}"),
         Shell::PowerShell => format!("$env:{VERSION_ENV_VAR} = \"{value}\""),
         Shell::Cmd => format!("set {VERSION_ENV_VAR}={value}"),
+        Shell::NuShell => format!("$env.{VERSION_ENV_VAR} = \"{value}\""),
     }
 }
 
@@ -60,6 +65,7 @@ fn format_unset(shell: &Shell) -> String {
             format!("Remove-Item Env:{VERSION_ENV_VAR} -ErrorAction SilentlyContinue")
         }
         Shell::Cmd => format!("set {VERSION_ENV_VAR}="),
+        Shell::NuShell => format!("hide-env {VERSION_ENV_VAR}"),
     }
 }
 
@@ -195,6 +201,18 @@ mod tests {
     }
 
     #[test]
+    fn test_detect_shell_fish_and_nushell() {
+        // Fish takes priority over Nu shell signal
+        let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig {
+            fish_version: Some("3.7.0".into()),
+            vp_shell_nu: true,
+            ..vite_shared::EnvConfig::for_test()
+        });
+        let shell = detect_shell();
+        assert!(matches!(shell, Shell::Fish));
+    }
+
+    #[test]
     fn test_detect_shell_posix_default() {
         // All shell detection fields None → defaults
         let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig::for_test());
@@ -203,6 +221,32 @@ mod tests {
         assert!(matches!(shell, Shell::Posix));
         #[cfg(windows)]
         assert!(matches!(shell, Shell::Cmd));
+    }
+
+    #[test]
+    fn test_detect_shell_nushell() {
+        let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig {
+            vp_shell_nu: true,
+            ..vite_shared::EnvConfig::for_test()
+        });
+        let shell = detect_shell();
+        assert!(matches!(shell, Shell::NuShell));
+    }
+
+    #[test]
+    fn test_detect_shell_inherited_nu_version_is_posix() {
+        // NU_VERSION alone (inherited from parent Nushell) must NOT trigger Nu detection.
+        // Only the explicit VP_SHELL_NU marker set by env.nu wrapper counts.
+        let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig {
+            nu_version: Some("0.111.0".into()),
+            vp_shell_nu: false,
+            ..vite_shared::EnvConfig::for_test()
+        });
+        let shell = detect_shell();
+        #[cfg(not(windows))]
+        assert!(matches!(shell, Shell::Posix));
+        #[cfg(windows)]
+        let _ = shell;
     }
 
     #[test]
@@ -251,5 +295,16 @@ mod tests {
     fn test_format_unset_cmd() {
         let result = format_unset(&Shell::Cmd);
         assert_eq!(result, "set VP_NODE_VERSION=");
+    }
+    #[test]
+    fn test_format_export_nushell() {
+        let result = format_export(&Shell::NuShell, "20.18.0");
+        assert_eq!(result, "$env.VP_NODE_VERSION = \"20.18.0\"");
+    }
+
+    #[test]
+    fn test_format_unset_nushell() {
+        let result = format_unset(&Shell::NuShell);
+        assert_eq!(result, "hide-env VP_NODE_VERSION");
     }
 }

@@ -122,6 +122,19 @@ pub struct EnvConfig {
     ///
     /// Env: `PSModulePath`
     pub ps_module_path: Option<String>,
+
+    /// Nu shell version (indicates running under Nu shell).
+    ///
+    /// Env: `NU_VERSION`
+    pub nu_version: Option<String>,
+
+    /// Explicit Nu shell eval signal set by the `env.nu` wrapper.
+    ///
+    /// Unlike `NU_VERSION`, this is not inherited by child processes — it is only
+    /// present when the Nushell wrapper explicitly passes it via `with-env`.
+    ///
+    /// Env: `VP_SHELL_NU`
+    pub vp_shell_nu: bool,
 }
 
 impl EnvConfig {
@@ -151,6 +164,8 @@ impl EnvConfig {
                 .map(PathBuf::from),
             fish_version: std::env::var("FISH_VERSION").ok(),
             ps_module_path: std::env::var("PSModulePath").ok(),
+            nu_version: std::env::var("NU_VERSION").ok(),
+            vp_shell_nu: std::env::var(env_vars::VP_SHELL_NU).is_ok(),
         }
     }
 
@@ -233,6 +248,8 @@ impl EnvConfig {
             user_home: None,
             fish_version: None,
             ps_module_path: None,
+            nu_version: None,
+            vp_shell_nu: false,
         }
     }
 
