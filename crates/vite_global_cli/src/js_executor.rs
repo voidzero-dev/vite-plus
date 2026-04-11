@@ -5,6 +5,7 @@
 
 use std::process::{ExitStatus, Output};
 
+use node_semver::{Range, Version};
 use tokio::process::Command;
 use vite_js_runtime::{
     JsRuntime, JsRuntimeType, download_runtime, download_runtime_for_project, is_valid_version,
@@ -187,10 +188,8 @@ impl JsExecutor {
                 config::read_session_version().await
             };
             if let Some(version) = session_version {
+                self.check_runtime_compatibility(&version).await?;
                 let runtime = download_runtime(JsRuntimeType::Node, &version).await?;
-                if let Some(req) = self.get_cli_engines_requirement().await {
-                    check_runtime_compatibility(&runtime, &req)?;
-                }
                 return Ok(self.project_runtime.insert(runtime));
             }
 
@@ -205,18 +204,52 @@ impl JsExecutor {
                 // At least one valid project source exists — delegate to
                 // download_runtime_for_project for cache-aware range resolution
                 // and intra-project fallback chain
-                download_runtime_for_project(project_path).await?
+                let runtime = download_runtime_for_project(project_path).await?;
+                self.check_runtime_compatibility(&runtime.version).await?;
+                runtime
             } else {
                 // No valid project source — check user default from config, then LTS
                 let resolution = config::resolve_version(project_path).await?;
+                self.check_runtime_compatibility(&resolution.version).await?;
                 download_runtime(JsRuntimeType::Node, &resolution.version).await?
             };
-            if let Some(req) = self.get_cli_engines_requirement().await {
-                check_runtime_compatibility(&runtime, &req)?;
-            }
             self.project_runtime = Some(runtime);
         }
         Ok(self.project_runtime.as_ref().unwrap())
+    }
+
+    /// Check that a resolved runtime's version satisfies vp's engine requirements.
+    ///
+    /// Skips silently when:
+    /// - The runtime is a system install (version == `"system"`)
+    /// - The version or requirement strings cannot be parsed as semver
+    ///
+    /// Returns [`Error::NodeVersionIncompatible`] when the version is parseable but
+    /// outside the required range.
+    async fn check_runtime_compatibility(&self, version: &str) -> Result<(), Error> {
+        let Some(requirement) = self.get_cli_engines_requirement().await else { return Ok(()) };
+
+        // System runtimes report "system" — we cannot inspect the actual version cheaply,
+        // and the user has explicitly opted in via `vp env off`.
+        if version == "system" {
+            return Ok(());
+        }
+
+        let normalized = version.strip_prefix('v').unwrap_or(version);
+        let Ok(version) = Version::parse(normalized) else {
+            return Ok(()); // unparsable version — skip silently
+        };
+        let Ok(range) = Range::parse(&requirement) else {
+            return Ok(()); // invalid range in package.json — skip silently
+        };
+
+        if !range.satisfies(&version) {
+            return Err(Error::NodeVersionIncompatible {
+                version: version.to_string(),
+                requirement: requirement.to_string(),
+            });
+        }
+        Ok(())
     }
 
     /// Download a specific Node.js version.
@@ -420,42 +453,6 @@ async fn has_valid_version_source(
             .is_some_and(|r| is_valid_version(&r.version));
 
     Ok(engines_valid || dev_engines_valid)
-}
-
-/// Check that a resolved runtime's version satisfies vp's engine requirements.
-///
-/// Skips silently when:
-/// - The runtime is a system install (version == `"system"`)
-/// - The version or requirement strings cannot be parsed as semver
-///
-/// Returns [`Error::NodeVersionIncompatible`] when the version is parseable but
-/// outside the required range.
-fn check_runtime_compatibility(runtime: &JsRuntime, requirement: &str) -> Result<(), Error> {
-    use node_semver::{Range, Version};
-
-    let version_str = runtime.version();
-
-    // System runtimes report "system" — we cannot inspect the actual version cheaply,
-    // and the user has explicitly opted in via `vp env off`.
-    if version_str == "system" {
-        return Ok(());
-    }
-
-    let normalized = version_str.strip_prefix('v').unwrap_or(version_str);
-    let Ok(version) = Version::parse(normalized) else {
-        return Ok(()); // unparsable version — skip silently
-    };
-    let Ok(range) = Range::parse(requirement) else {
-        return Ok(()); // invalid range in package.json — skip silently
-    };
-
-    if !range.satisfies(&version) {
-        return Err(Error::NodeVersionIncompatible {
-            version: version_str.to_string(),
-            requirement: requirement.to_string(),
-        });
-    }
-    Ok(())
 }
 
 /// Try to find system Node.js when in system-first mode (`vp env off`).
