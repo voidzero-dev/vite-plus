@@ -526,6 +526,122 @@ mod tests {
         assert_eq!(cmd.as_std().get_program(), OsStr::new(expected_program));
     }
 
+    // ---- check_runtime_compatibility ----
+
+    fn make_runtime_with_version(version: &str) -> JsRuntime {
+        let binary_path = if cfg!(windows) {
+            AbsolutePathBuf::new("C:\\node\\node.exe".into()).unwrap()
+        } else {
+            AbsolutePathBuf::new("/usr/local/bin/node".into()).unwrap()
+        };
+        let mut runtime = JsRuntime::from_system(JsRuntimeType::Node, binary_path);
+        runtime.version = version.into();
+        runtime
+    }
+
+    #[test]
+    fn compatible_version_passes() {
+        let runtime = make_runtime_with_version("22.12.0");
+        assert!(
+            check_runtime_compatibility(&runtime, "^20.19.0 || >=22.12.0").is_ok(),
+            "22.12.0 should satisfy ^20.19.0 || >=22.12.0"
+        );
+    }
+
+    #[test]
+    fn compatible_version_with_v_prefix_passes() {
+        let runtime = make_runtime_with_version("v20.19.0");
+        assert!(
+            check_runtime_compatibility(&runtime, "^20.19.0 || >=22.12.0").is_ok(),
+            "v20.19.0 should satisfy ^20.19.0 || >=22.12.0"
+        );
+    }
+
+    #[test]
+    fn incompatible_version_returns_error() {
+        let runtime = make_runtime_with_version("18.0.0");
+        let err = check_runtime_compatibility(&runtime, "^20.19.0 || >=22.12.0")
+            .expect_err("18.0.0 should not satisfy ^20.19.0 || >=22.12.0");
+        assert!(
+            matches!(err, Error::NodeVersionIncompatible { .. }),
+            "expected NodeVersionIncompatible, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn system_runtime_skips_check() {
+        // from_system() sets version == "system"
+        let binary_path = if cfg!(windows) {
+            AbsolutePathBuf::new("C:\\node\\node.exe".into()).unwrap()
+        } else {
+            AbsolutePathBuf::new("/usr/local/bin/node".into()).unwrap()
+        };
+        let runtime = JsRuntime::from_system(JsRuntimeType::Node, binary_path);
+        assert_eq!(runtime.version(), "system");
+        assert!(
+            check_runtime_compatibility(&runtime, "^20.19.0 || >=22.12.0").is_ok(),
+            "system runtime should pass the check unconditionally"
+        );
+    }
+
+    #[test]
+    fn unparseable_version_skips_check() {
+        let runtime = make_runtime_with_version("not-a-version");
+        assert!(
+            check_runtime_compatibility(&runtime, "^20.19.0 || >=22.12.0").is_ok(),
+            "unparseable version should not cause an error"
+        );
+    }
+
+    #[test]
+    fn invalid_requirement_skips_check() {
+        let runtime = make_runtime_with_version("18.0.0");
+        assert!(
+            check_runtime_compatibility(&runtime, "not-a-range").is_ok(),
+            "invalid requirement range should not cause an error"
+        );
+    }
+
+    // ---- get_cli_engines_requirement ----
+
+    #[tokio::test]
+    async fn get_cli_engines_requirement_reads_from_package_json() {
+        use std::io::Write;
+
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        // The scripts dir is `<pkg_dir>/dist`, and get_cli_package_dir returns its parent.
+        let dist_dir = temp_dir.path().join("dist");
+        std::fs::create_dir(&dist_dir).unwrap();
+
+        let pkg_json_content = r#"{ "engines": { "node": "^20.19.0 || >=22.12.0" } }"#;
+        let mut f = std::fs::File::create(temp_dir.path().join("package.json")).unwrap();
+        f.write_all(pkg_json_content.as_bytes()).unwrap();
+
+        let scripts_dir = AbsolutePathBuf::new(dist_dir).unwrap();
+        let executor = JsExecutor::new(Some(scripts_dir));
+
+        let req = executor.get_cli_engines_requirement().await;
+        assert_eq!(req.as_deref(), Some("^20.19.0 || >=22.12.0"));
+    }
+
+    #[tokio::test]
+    async fn get_cli_engines_requirement_returns_none_when_missing() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let dist_dir = temp_dir.path().join("dist");
+        std::fs::create_dir(&dist_dir).unwrap();
+
+        // No package.json → should return None
+        let scripts_dir = AbsolutePathBuf::new(dist_dir).unwrap();
+        let executor = JsExecutor::new(Some(scripts_dir));
+
+        let req = executor.get_cli_engines_requirement().await;
+        assert!(req.is_none());
+    }
+
     #[tokio::test]
     #[serial]
     async fn test_delegate_to_local_cli_prints_node_version() {
