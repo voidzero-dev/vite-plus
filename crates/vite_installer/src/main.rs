@@ -226,7 +226,6 @@ async fn do_install(
             &version_dir,
             install_dir,
             &target_version,
-            &resolved.version,
             current_version.is_some(),
         )
         .await;
@@ -329,8 +328,7 @@ async fn install_new_version(
     platform_data: &[u8],
     version_dir: &AbsolutePathBuf,
     install_dir: &AbsolutePathBuf,
-    target_version: &str,
-    resolved_version: &str,
+    version: &str,
     has_previous: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     if !opts.quiet {
@@ -343,25 +341,20 @@ async fn install_new_version(
         return Err("Binary not found after extraction. The download may be corrupted.".into());
     }
 
-    install::generate_wrapper_package_json(version_dir, target_version).await?;
+    install::generate_wrapper_package_json(version_dir, version).await?;
 
     if !opts.quiet {
         print_info("installing dependencies (this may take a moment)...");
     }
-    install::install_production_deps(
-        version_dir,
-        opts.registry.as_deref(),
-        opts.yes,
-        resolved_version,
-    )
-    .await?;
+    install::install_production_deps(version_dir, opts.registry.as_deref(), opts.yes, version)
+        .await?;
 
     let previous_version =
         if has_previous { install::save_previous_version(install_dir).await? } else { None };
-    install::swap_current_link(install_dir, target_version).await?;
+    install::swap_current_link(install_dir, version).await?;
 
     // Cleanup with both new and previous versions protected (matches vp upgrade)
-    let mut protected = vec![target_version];
+    let mut protected = vec![version];
     if let Some(ref prev) = previous_version {
         protected.push(prev.as_str());
     }
@@ -559,8 +552,10 @@ fn show_customize_menu(opts: &mut cli::Options) {
         match choice.as_str() {
             "" => return,
             "1" => {
-                let v = read_input("    Version (e.g. 0.3.0 or latest): ");
-                if v.is_empty() || v == opts.tag {
+                let v = read_input("    Version (e.g. 0.3.0 or latest, Enter to keep): ");
+                if v.is_empty() {
+                    // Keep current value
+                } else if v == opts.tag {
                     opts.version = None;
                 } else {
                     opts.version = Some(v);
