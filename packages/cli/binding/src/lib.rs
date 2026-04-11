@@ -7,6 +7,7 @@
 #[cfg(feature = "rolldown")]
 pub extern crate rolldown_binding;
 
+mod check;
 mod cli;
 mod exec;
 // These modules export NAPI functions only called from JavaScript at runtime.

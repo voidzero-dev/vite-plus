@@ -178,17 +178,23 @@ Commands::Check { args } => commands::delegate::execute(cwd, "check", &args).awa
 
 ### NAPI Binding
 
-Add `Check` to `SynthesizableSubcommand` in `packages/cli/binding/src/cli.rs`. The check command internally resolves and runs fmt + lint sequentially, reusing existing resolvers.
+The `Check` variant is defined in `SynthesizableSubcommand` in `packages/cli/binding/src/cli.rs`. The check command's orchestration logic lives in its own module at `packages/cli/binding/src/check/`, following the same directory-per-command pattern as `exec/`:
+
+- `check/mod.rs` — `execute_check()` orchestration (runs fmt + lint sequentially, handles `--fix` re-formatting)
+- `check/analysis.rs` — Output analysis types (`CheckSummary`, `LintMessageKind`, etc.), parsers, and formatting helpers
+
+The check module reuses `SubcommandResolver` and `resolve_and_capture_output` from `cli.rs` to resolve and run the underlying fmt/lint commands.
 
 ### TypeScript Side
 
 No new resolver needed — `vp check` reuses existing `resolve-lint.ts` and `resolve-fmt.ts`.
 
-### Key Files to Modify
+### Key Files
 
-1. `crates/vite_global_cli/src/cli.rs` — Add `Check` command variant and routing
-2. `packages/cli/binding/src/cli.rs` — Add check subcommand handling (sequential fmt + lint)
-3. `packages/cli/src/bin.ts` — (if needed for routing)
+1. `crates/vite_global_cli/src/cli.rs` — `Check` command variant and routing
+2. `packages/cli/binding/src/cli.rs` — `SynthesizableSubcommand::Check` definition, delegates to `check` module
+3. `packages/cli/binding/src/check/mod.rs` — Check command orchestration (`execute_check`)
+4. `packages/cli/binding/src/check/analysis.rs` — Output parsing and analysis types
 
 ## CLI Help Output
 
@@ -257,7 +263,7 @@ The check command's cache fingerprint includes:
   - `node_modules/.vite-temp/**` — config compilation cache (read+written by the vp CLI subprocess)
   - `node_modules/.vite/task-cache/**` — task runner state files that change after each run
 
-These exclusions are shared with other synthesized commands via `base_cache_inputs()` in `cli.rs`.
+These exclusions are defined by `check_cache_inputs()` in `cli.rs`.
 
 ### How it differs from `vp fmt` / `vp lint`
 
