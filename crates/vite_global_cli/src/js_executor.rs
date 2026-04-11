@@ -443,7 +443,7 @@ fn check_runtime_compatibility(runtime: &JsRuntime, requirement: &str) -> Result
 
     let normalized = version_str.strip_prefix('v').unwrap_or(version_str);
     let Ok(version) = Version::parse(normalized) else {
-        return Ok(()); // unparseable version — skip silently
+        return Ok(()); // unparsable version — skip silently
     };
     let Ok(range) = Range::parse(requirement) else {
         return Ok(()); // invalid range in package.json — skip silently
@@ -585,11 +585,11 @@ mod tests {
     }
 
     #[test]
-    fn unparseable_version_skips_check() {
+    fn unparsable_version_skips_check() {
         let runtime = make_runtime_with_version("not-a-version");
         assert!(
             check_runtime_compatibility(&runtime, "^20.19.0 || >=22.12.0").is_ok(),
-            "unparseable version should not cause an error"
+            "unparsable version should not cause an error"
         );
     }
 
