@@ -48,7 +48,13 @@ pub fn add_to_user_path(bin_dir: &str) -> io::Result<()> {
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     let env = hkcu.open_subkey_with_flags("Environment", KEY_READ | KEY_WRITE)?;
 
-    let current: String = env.get_value("Path").unwrap_or_default();
+    // Only treat "value not found" as empty PATH. Any other error (corrupt
+    // data, wrong type) must be propagated to avoid overwriting the user's PATH.
+    let current: String = match env.get_value("Path") {
+        Ok(val) => val,
+        Err(e) if e.raw_os_error() == Some(2) => String::new(), // ERROR_FILE_NOT_FOUND
+        Err(e) => return Err(e),
+    };
     let bin_dir_normalized = bin_dir.trim_end_matches('\\');
 
     let already_present = current
