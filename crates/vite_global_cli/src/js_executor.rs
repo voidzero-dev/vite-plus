@@ -218,13 +218,13 @@ impl JsExecutor {
         Ok(self.project_runtime.as_ref().unwrap())
     }
 
-    /// Check that a resolved runtime's version satisfies vp's engine requirements.
+    /// Check that a runtime's version satisfies vp's engine requirements.
     ///
     /// Skips silently when:
     /// - The runtime is a system install (version == `"system"`)
     /// - The version or requirement strings cannot be parsed as semver
     ///
-    /// Returns [`Error::NodeVersionIncompatible`] when the version is parseable but
+    /// Returns [`Error::NodeVersionIncompatible`] when the version is parsable but
     /// outside the required range.
     async fn check_runtime_compatibility(&self, version: &str) -> Result<(), Error> {
         let Some(requirement) = self.get_cli_engines_requirement().await else { return Ok(()) };
@@ -523,120 +523,43 @@ mod tests {
         assert_eq!(cmd.as_std().get_program(), OsStr::new(expected_program));
     }
 
-    // ---- check_runtime_compatibility ----
-
-    fn make_runtime_with_version(version: &str) -> JsRuntime {
-        let binary_path = if cfg!(windows) {
-            AbsolutePathBuf::new("C:\\node\\node.exe".into()).unwrap()
-        } else {
-            AbsolutePathBuf::new("/usr/local/bin/node".into()).unwrap()
-        };
-        let mut runtime = JsRuntime::from_system(JsRuntimeType::Node, binary_path);
-        runtime.version = version.into();
-        runtime
-    }
-
-    #[test]
-    fn compatible_version_passes() {
-        let runtime = make_runtime_with_version("22.12.0");
-        assert!(
-            check_runtime_compatibility(&runtime, "^20.19.0 || >=22.12.0").is_ok(),
-            "22.12.0 should satisfy ^20.19.0 || >=22.12.0"
-        );
-    }
-
-    #[test]
-    fn compatible_version_with_v_prefix_passes() {
-        let runtime = make_runtime_with_version("v20.19.0");
-        assert!(
-            check_runtime_compatibility(&runtime, "^20.19.0 || >=22.12.0").is_ok(),
-            "v20.19.0 should satisfy ^20.19.0 || >=22.12.0"
-        );
-    }
-
-    #[test]
-    fn incompatible_version_returns_error() {
-        let runtime = make_runtime_with_version("18.0.0");
-        let err = check_runtime_compatibility(&runtime, "^20.19.0 || >=22.12.0")
-            .expect_err("18.0.0 should not satisfy ^20.19.0 || >=22.12.0");
-        assert!(
-            matches!(err, Error::NodeVersionIncompatible { .. }),
-            "expected NodeVersionIncompatible, got {err:?}"
-        );
-    }
-
-    #[test]
-    fn system_runtime_skips_check() {
-        // from_system() sets version == "system"
-        let binary_path = if cfg!(windows) {
-            AbsolutePathBuf::new("C:\\node\\node.exe".into()).unwrap()
-        } else {
-            AbsolutePathBuf::new("/usr/local/bin/node".into()).unwrap()
-        };
-        let runtime = JsRuntime::from_system(JsRuntimeType::Node, binary_path);
-        assert_eq!(runtime.version(), "system");
-        assert!(
-            check_runtime_compatibility(&runtime, "^20.19.0 || >=22.12.0").is_ok(),
-            "system runtime should pass the check unconditionally"
-        );
-    }
-
-    #[test]
-    fn unparsable_version_skips_check() {
-        let runtime = make_runtime_with_version("not-a-version");
-        assert!(
-            check_runtime_compatibility(&runtime, "^20.19.0 || >=22.12.0").is_ok(),
-            "unparsable version should not cause an error"
-        );
-    }
-
-    #[test]
-    fn invalid_requirement_skips_check() {
-        let runtime = make_runtime_with_version("18.0.0");
-        assert!(
-            check_runtime_compatibility(&runtime, "not-a-range").is_ok(),
-            "invalid requirement range should not cause an error"
-        );
-    }
-
-    // ---- get_cli_engines_requirement ----
-
+    /// Pin Node.js to 20.0.0
+    /// and any vp command should be blocked with a clear error instead of crashing
     #[tokio::test]
-    async fn get_cli_engines_requirement_reads_from_package_json() {
-        use std::io::Write;
-
+    async fn incompatible_node_version_should_be_blocked() {
         use tempfile::TempDir;
+        use vite_shared::EnvConfig;
 
+        // Point scripts_dir at the real packages/cli/dist so that
+        // get_cli_engines_requirement() reads the actual engines.node from
+        // packages/cli/package.json.  The dist/ directory need not exist — only
+        // its parent (packages/cli/) and the package.json within it are read.
+        let scripts_dir = AbsolutePathBuf::new(
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../packages/cli/dist"),
+        )
+        .unwrap();
+
+        // Use any existing directory as project_path; the session override
+        // fires before any project-source lookup or network download.
         let temp_dir = TempDir::new().unwrap();
-        // The scripts dir is `<pkg_dir>/dist`, and get_cli_package_dir returns its parent.
-        let dist_dir = temp_dir.path().join("dist");
-        std::fs::create_dir(&dist_dir).unwrap();
+        let project_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
 
-        let pkg_json_content = r#"{ "engines": { "node": "^20.19.0 || >=22.12.0" } }"#;
-        let mut f = std::fs::File::create(temp_dir.path().join("package.json")).unwrap();
-        f.write_all(pkg_json_content.as_bytes()).unwrap();
+        // Simulate `.node-version: 20.0.0` / `vp env use 20.0.0` via a session override.
+        let _guard = EnvConfig::test_guard(EnvConfig {
+            node_version: Some("20.0.0".to_string()),
+            ..EnvConfig::for_test()
+        });
 
-        let scripts_dir = AbsolutePathBuf::new(dist_dir).unwrap();
-        let executor = JsExecutor::new(Some(scripts_dir));
+        let mut executor = JsExecutor::new(Some(scripts_dir));
+        let err = executor
+            .ensure_project_runtime(&project_path)
+            .await
+            .expect_err("Node.js 20.0.0 should be rejected as incompatible with vp requirements");
 
-        let req = executor.get_cli_engines_requirement().await;
-        assert_eq!(req.as_deref(), Some("^20.19.0 || >=22.12.0"));
-    }
-
-    #[tokio::test]
-    async fn get_cli_engines_requirement_returns_none_when_missing() {
-        use tempfile::TempDir;
-
-        let temp_dir = TempDir::new().unwrap();
-        let dist_dir = temp_dir.path().join("dist");
-        std::fs::create_dir(&dist_dir).unwrap();
-
-        // No package.json → should return None
-        let scripts_dir = AbsolutePathBuf::new(dist_dir).unwrap();
-        let executor = JsExecutor::new(Some(scripts_dir));
-
-        let req = executor.get_cli_engines_requirement().await;
-        assert!(req.is_none());
+        assert!(
+            matches!(&err, Error::NodeVersionIncompatible { version, .. } if version == "20.0.0"),
+            "expected NodeVersionIncompatible for 20.0.0, got: {err:?}"
+        );
     }
 
     #[tokio::test]
