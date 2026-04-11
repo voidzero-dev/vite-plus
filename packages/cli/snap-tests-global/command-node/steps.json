@@ -1,0 +1,11 @@
+{
+  "env": {},
+  "ignoredPlatforms": [],
+  "commands": [
+    "vp node -v # Shorthand: version resolved from package.json engines.node",
+    "vp node script.js # Execute a local JS file (primary use case)",
+    "vp node script.js foo bar --flag # Forward script args to the local file",
+    "vp node -e \"console.log('Hello from vp node')\" # Inline script via -e",
+    "vp env exec node -v # Equivalence check: same output as shorthand"
+  ]
+}

@@ -37,6 +37,7 @@ use crate::cli::{
 /// Normalize CLI arguments:
 /// - `vp list ...` / `vp ls ...` → `vp pm list ...`
 /// - `vp help [command]` → `vp [command] --help`
+/// - `vp node [args...]` → `vp env exec node [args...]`
 fn normalize_args(args: Vec<String>) -> Vec<String> {
     match args.get(1).map(String::as_str) {
         // `vp list ...` → `vp pm list ...`
@@ -58,6 +59,16 @@ fn normalize_args(args: Vec<String>) -> Vec<String> {
             normalized.push(args[2].clone());
             normalized.push("--help".to_string());
             normalized.extend(args[3..].iter().cloned());
+            normalized
+        }
+        // `vp node [args...]` → `vp env exec node [args...]`
+        Some("node") => {
+            let mut normalized = Vec::with_capacity(args.len() + 2);
+            normalized.push(args[0].clone());
+            normalized.push("env".to_string());
+            normalized.push("exec".to_string());
+            normalized.push("node".to_string());
+            normalized.extend(args[2..].iter().cloned());
             normalized
         }
         // No transformation needed
@@ -402,8 +413,26 @@ mod tests {
 
     use super::{
         extract_unknown_argument, has_pass_as_value_suggestion, is_affirmative_response,
-        replace_top_level_typoed_subcommand, try_parse_args_from,
+        normalize_args, replace_top_level_typoed_subcommand, try_parse_args_from,
     };
+
+    fn s(v: &[&str]) -> Vec<String> {
+        v.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn normalize_args_rewrites_vp_node_to_env_exec_node() {
+        let input = s(&["vp", "node", "script.js", "foo", "--flag"]);
+        let normalized = normalize_args(input);
+        assert_eq!(normalized, s(&["vp", "env", "exec", "node", "script.js", "foo", "--flag"]));
+    }
+
+    #[test]
+    fn normalize_args_rewrites_bare_vp_node() {
+        let input = s(&["vp", "node"]);
+        let normalized = normalize_args(input);
+        assert_eq!(normalized, s(&["vp", "env", "exec", "node"]));
+    }
 
     #[test]
     fn unknown_argument_detected_without_pass_as_value_hint() {
