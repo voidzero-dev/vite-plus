@@ -54,4 +54,9 @@ pub enum Error {
 
     #[error("{0}")]
     Setup(#[from] vite_setup::error::Error),
+
+    #[error(
+        "Node.js {version} does not meet vite-plus requirements ({requirement}).\nRun `vp env use 22` to switch to a compatible version."
+    )]
+    NodeVersionIncompatible { version: String, requirement: String },
 }

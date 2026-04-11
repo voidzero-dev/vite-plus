@@ -112,6 +112,16 @@ impl JsExecutor {
         cmd
     }
 
+    /// Read the `engines.node` requirement from the CLI's own `package.json`.
+    ///
+    /// Returns `None` when the file is missing, unreadable, or has no `engines.node`.
+    async fn get_cli_engines_requirement(&self) -> Option<String> {
+        let cli_dir = self.get_cli_package_dir().ok()?;
+        let pkg_path = cli_dir.join("package.json");
+        let pkg = read_package_json(&pkg_path).await.ok()??;
+        pkg.engines?.node.map(|s| s.to_string())
+    }
+
     /// Get the CLI's package.json directory (parent of `scripts_dir`).
     ///
     /// This is used for resolving the CLI's default Node.js version
@@ -178,6 +188,9 @@ impl JsExecutor {
             };
             if let Some(version) = session_version {
                 let runtime = download_runtime(JsRuntimeType::Node, &version).await?;
+                if let Some(req) = self.get_cli_engines_requirement().await {
+                    check_runtime_compatibility(&runtime, &req)?;
+                }
                 return Ok(self.project_runtime.insert(runtime));
             }
 
@@ -198,6 +211,9 @@ impl JsExecutor {
                 let resolution = config::resolve_version(project_path).await?;
                 download_runtime(JsRuntimeType::Node, &resolution.version).await?
             };
+            if let Some(req) = self.get_cli_engines_requirement().await {
+                check_runtime_compatibility(&runtime, &req)?;
+            }
             self.project_runtime = Some(runtime);
         }
         Ok(self.project_runtime.as_ref().unwrap())
@@ -404,6 +420,42 @@ async fn has_valid_version_source(
             .is_some_and(|r| is_valid_version(&r.version));
 
     Ok(engines_valid || dev_engines_valid)
+}
+
+/// Check that a resolved runtime's version satisfies vp's engine requirements.
+///
+/// Skips silently when:
+/// - The runtime is a system install (version == `"system"`)
+/// - The version or requirement strings cannot be parsed as semver
+///
+/// Returns [`Error::NodeVersionIncompatible`] when the version is parseable but
+/// outside the required range.
+fn check_runtime_compatibility(runtime: &JsRuntime, requirement: &str) -> Result<(), Error> {
+    use node_semver::{Range, Version};
+
+    let version_str = runtime.version();
+
+    // System runtimes report "system" — we cannot inspect the actual version cheaply,
+    // and the user has explicitly opted in via `vp env off`.
+    if version_str == "system" {
+        return Ok(());
+    }
+
+    let normalized = version_str.strip_prefix('v').unwrap_or(version_str);
+    let Ok(version) = Version::parse(normalized) else {
+        return Ok(()); // unparseable version — skip silently
+    };
+    let Ok(range) = Range::parse(requirement) else {
+        return Ok(()); // invalid range in package.json — skip silently
+    };
+
+    if !range.satisfies(&version) {
+        return Err(Error::NodeVersionIncompatible {
+            version: version_str.to_string(),
+            requirement: requirement.to_string(),
+        });
+    }
+    Ok(())
 }
 
 /// Try to find system Node.js when in system-first mode (`vp env off`).
