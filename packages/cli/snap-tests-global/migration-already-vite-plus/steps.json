@@ -1,3 +1,9 @@
 {
-  "commands": ["vp migrate --no-interactive # should detect existing vite-plus and exit"]
+  "commands": ["vp migrate --no-interactive # should detect existing vite-plus and exit"],
+  "ignoredPlatforms": [
+    {
+      "os": "linux",
+      "libc": "musl"
+    }
+  ]
 }

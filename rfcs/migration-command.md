@@ -32,12 +32,15 @@ When transitioning to Vite+, projects typically use standalone tools like vite, 
 
 - ✅ **Dependencies**: vite, vitest, oxlint, oxfmt → vite-plus
 - ✅ **Overrides**: Force vite → vite-plus (for all dependencies)
-  - npm/pnpm/bun: Adds `overrides.vite` mapping
-  - yarn: Adds `resolutions.vite` mapping
+  - pnpm (no existing `pnpm` config): Writes `overrides`, `peerDependencyRules`, and `catalog` to `pnpm-workspace.yaml`
+  - pnpm (existing `pnpm` config): Adds `pnpm.overrides` and `pnpm.peerDependencyRules` in `package.json`
+  - npm/bun: Adds `overrides.vite` mapping in `package.json`
+  - yarn: Adds `resolutions.vite` mapping in `package.json`
   - **Benefit**: Code keeps `import from 'vite'` - automatically resolves to vite-plus
 - ✅ **Configuration files**:
   - .oxlintrc → vite.config.ts (lint section)
   - .oxfmtrc → vite.config.ts (format section)
+- ✅ **tsconfig.json cleanup**: Removes deprecated `esModuleInterop: false` (causes oxlint tsgolint errors)
 
 **What this command optionally migrates** (prompted):
 
@@ -52,7 +55,6 @@ When transitioning to Vite+, projects typically use standalone tools like vite, 
 **What this command does NOT migrate**:
 
 - ❌ Package.json scripts → vite-task.json (different feature)
-- ❌ TypeScript configuration changes
 - ❌ Build tool changes (webpack/rollup → vite)
 
 These are **consolidation migrations**, not **feature migrations**.
@@ -191,7 +193,7 @@ Wrote agent instructions to AGENTS.md
 }
 ```
 
-**After:**
+**After (npm/bun) -- `package.json`:**
 
 ```json
 {
@@ -211,9 +213,73 @@ Wrote agent instructions to AGENTS.md
 }
 ```
 
+**After (pnpm, no existing `pnpm` config) -- `package.json`:**
+
+```json
+{
+  "name": "my-package",
+  "dependencies": {
+    "react": "^18.2.0"
+  },
+  "devDependencies": {
+    "vite": "catalog:",
+    "vitest": "catalog:",
+    "@vitejs/plugin-react": "^4.2.0",
+    "vite-plus": "catalog:"
+  },
+  "packageManager": "pnpm@<semver>"
+}
+```
+
+**After (pnpm, no existing `pnpm` config) -- `pnpm-workspace.yaml`:**
+
+```yaml
+catalog:
+  vite: npm:@voidzero-dev/vite-plus-core@latest
+  vitest: npm:@voidzero-dev/vite-plus-test@latest
+  vite-plus: latest
+overrides:
+  vite: 'catalog:'
+  vitest: 'catalog:'
+peerDependencyRules:
+  allowAny:
+    - vite
+    - vitest
+  allowedVersions:
+    vite: '*'
+    vitest: '*'
+```
+
+**After (pnpm, existing `pnpm` config) -- `package.json`:**
+
+Projects that already have a `pnpm` field in `package.json` (e.g., with `overrides` or `onlyBuiltDependencies`) keep using `package.json` for pnpm config:
+
+```json
+{
+  "name": "my-package",
+  "devDependencies": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vitest": "npm:@voidzero-dev/vite-plus-test@latest",
+    "vite-plus": "latest"
+  },
+  "pnpm": {
+    "overrides": {
+      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+      "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+    },
+    "peerDependencyRules": {
+      "allowAny": ["vite", "vitest"],
+      "allowedVersions": { "vite": "*", "vitest": "*" }
+    }
+  }
+}
+```
+
 **Important**:
 
 - `overrides.vite` ensures any dependency requiring `vite` gets `vite-plus` instead
+- For pnpm without existing config, overrides and peerDependencyRules are written to `pnpm-workspace.yaml`
+- For pnpm with existing `pnpm` config in `package.json`, the existing location is respected
 - rewrite `import from 'vite'` to `import from 'vite-plus'`
 - rewrite `import from 'vite/{name}'` to `import from 'vite-plus/{name}'`, e.g.: `import from 'vite/module-runner'` to `import from 'vite-plus/module-runner'`
 - rewrite `import from 'vitest'` to `import from 'vite-plus/test'`
@@ -430,17 +496,18 @@ export default defineConfig({
 
 ### for pnpm
 
+For monorepo projects and standalone projects without existing `pnpm` config in `package.json`, overrides, peerDependencyRules, and catalog are written to `pnpm-workspace.yaml`. Projects with existing `pnpm` config in `package.json` keep using `package.json`.
+
 `pnpm-workspace.yaml`
 
 ```yaml
 catalog:
   vite: npm:@voidzero-dev/vite-plus-core@latest
   vitest: npm:@voidzero-dev/vite-plus-test@latest
-
+  vite-plus: latest
 overrides:
   vite: 'catalog:'
   vitest: 'catalog:'
-
 peerDependencyRules:
   allowAny:
     - vite
@@ -570,7 +637,7 @@ When a Prettier configuration file (`.prettierrc*`, `prettier.config.*`, or `"pr
 4. Remove `prettier` and `prettier-plugin-*` from `devDependencies`/`dependencies`
 5. Rewrite `prettier` scripts in `package.json` to `vp fmt`, stripping Prettier-only flags
 6. Rewrite `prettier` references in lint-staged configs
-7. Warn about `.prettierignore` if present (Oxfmt uses `.oxfmtignore`)
+7. Warn about `.prettierignore` if present (Oxfmt supports it, but `ignorePatterns` is recommended)
 8. The existing migration flow picks up `.oxfmtrc.json` and merges it into `vite.config.ts`
 
 **Script Rewriting** (powered by [brush-parser](https://github.com/reubeno/brush) for shell AST parsing):
@@ -604,6 +671,21 @@ When a Prettier configuration file (`.prettierrc*`, `prettier.config.*`, or `"pr
 - Non-interactive mode: auto-runs without prompting
 - Failure is non-blocking — warns and continues with the rest of migration
 - Re-runnable: if user declines initially, running `vp migrate` again offers prettier migration
+
+## tsconfig.json Cleanup
+
+During migration, `vp migrate` scans all `tsconfig*.json` files in the project directory (non-recursive) and removes deprecated options that would cause lint errors.
+
+**Currently removed options**:
+
+- `"esModuleInterop": false` — This option has been removed by typescript. When present, `vp lint --type-aware` fails with: `Option 'esModuleInterop=false' has been removed.`
+
+**Behavior**:
+
+- Only `esModuleInterop: false` is removed — `true` is left alone
+- Uses `jsonc-parser` for JSONC-aware editing that preserves comments and formatting
+- Scans all `tsconfig*.json` variants (e.g., `tsconfig.json`, `tsconfig.app.json`, `tsconfig.node.json`)
+- Runs automatically as part of the config rewrite phase — no user prompt needed
 
 ## References
 

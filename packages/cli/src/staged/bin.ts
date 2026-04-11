@@ -10,13 +10,13 @@
 // etc., which breaks when bundled to ESM format by rolldown.
 
 import lintStaged from 'lint-staged';
-import type { Configuration, Options } from 'lint-staged';
+import type { Options } from 'lint-staged';
 import mri from 'mri';
 
 import { vitePlusHeader } from '../../binding/index.js';
-import { resolveViteConfig } from '../resolve-vite-config.js';
-import { renderCliDoc } from '../utils/help.js';
-import { errorMsg, log } from '../utils/terminal.js';
+import { resolveViteConfig } from '../resolve-vite-config.ts';
+import { renderCliDoc } from '../utils/help.ts';
+import { errorMsg, log } from '../utils/terminal.ts';
 
 const args = mri(process.argv.slice(3), {
   alias: {
@@ -150,7 +150,7 @@ if (args.help) {
     process.exit(1);
   }
   if (stagedConfig) {
-    options.config = stagedConfig as Configuration;
+    options.config = stagedConfig;
   } else {
     log(vitePlusHeader() + '\n');
     errorMsg('No "staged" config found in vite.config.ts. Please add a staged config:');

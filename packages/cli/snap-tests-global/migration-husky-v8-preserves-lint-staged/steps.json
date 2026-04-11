@@ -1,7 +1,11 @@
 {
   "commands": [
-    { "command": "git init", "ignoreOutput": true },
+    {
+      "command": "git init",
+      "ignoreOutput": true
+    },
     "vp migrate --no-interactive # should warn about husky v8, preserve lint-staged config",
-    "cat package.json # lint-staged config should still be in package.json"
+    "cat package.json # lint-staged config should still be in package.json",
+    "cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog"
   ]
 }

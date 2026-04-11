@@ -1,0 +1,7 @@
+{
+  "name": "build-cache-test",
+  "private": true,
+  "scripts": {
+    "build": "vp build"
+  }
+}

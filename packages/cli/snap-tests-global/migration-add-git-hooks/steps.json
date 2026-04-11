@@ -1,8 +1,12 @@
 {
   "commands": [
-    { "command": "git init", "ignoreOutput": true },
+    {
+      "command": "git init",
+      "ignoreOutput": true
+    },
     "vp migrate --no-interactive # migration should add git hooks setup",
     "cat package.json # check package.json has prepare script and lint-staged config",
+    "cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog",
     "cat .vite-hooks/pre-commit # check pre-commit hook",
     "test -d .vite-hooks/_ && echo 'hook shims exist' || echo 'no hook shims' # check vp config ran",
     "git config --local core.hooksPath # should be set to .vite-hooks/_",

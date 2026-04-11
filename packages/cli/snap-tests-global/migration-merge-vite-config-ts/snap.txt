@@ -45,12 +45,8 @@ export default defineConfig({
   },
 });
 
-> cat .oxlintrc.json && exit 1 || true # check .oxlintrc.json is removed
-cat: .oxlintrc.json: No such file or directory
-
-> cat .oxfmtrc.json && exit 1 || true # check .oxfmtrc.json is removed
-cat: .oxfmtrc.json: No such file or directory
-
+> test ! -f .oxlintrc.json # check .oxlintrc.json is removed
+> test ! -f .oxfmtrc.json # check .oxfmtrc.json is removed
 > cat package.json # check package.json
 {
   "scripts": {
@@ -72,15 +68,26 @@ cat: .oxfmtrc.json: No such file or directory
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.0",
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vitest": "npm:@voidzero-dev/vite-plus-test@latest",
-    "vite-plus": "latest"
-  },
-  "pnpm": {
-    "overrides": {
-      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-      "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
-    }
+    "vite": "catalog:",
+    "vitest": "catalog:",
+    "playwright": "*",
+    "vite-plus": "catalog:"
   },
   "packageManager": "pnpm@<semver>"
 }
+
+> cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog
+catalog:
+  vite: npm:@voidzero-dev/vite-plus-core@latest
+  vitest: npm:@voidzero-dev/vite-plus-test@latest
+  vite-plus: latest
+overrides:
+  vite: 'catalog:'
+  vitest: 'catalog:'
+peerDependencyRules:
+  allowAny:
+    - vite
+    - vitest
+  allowedVersions:
+    vite: '*'
+    vitest: '*'

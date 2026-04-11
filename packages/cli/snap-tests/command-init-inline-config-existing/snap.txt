@@ -1,11 +1,8 @@
 > vp lint --init
 Skipped initialization: 'lint' already exists in 'vite.config.ts'.
 
-> cat .oxlintrc.json && exit 1 || true # check .oxlintrc.json is not created
-cat: .oxlintrc.json: No such file or directory
-
+> test ! -f .oxlintrc.json # check .oxlintrc.json is not created
 > vp fmt --init
 Skipped initialization: 'fmt' already exists in 'vite.config.ts'.
 
-> cat .oxfmtrc.json && exit 1 || true # check .oxfmtrc.json is not created
-cat: .oxfmtrc.json: No such file or directory
+> test ! -f .oxfmtrc.json # check .oxfmtrc.json is not created

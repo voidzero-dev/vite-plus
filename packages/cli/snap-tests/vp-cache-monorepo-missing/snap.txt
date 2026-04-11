@@ -1,0 +1,4 @@
+> vp run --cache ready # first run
+> vp run --cache ready 2>&1 | grep -E 'cache hit|modified' # second run should all hit cache
+~/packages/lib$ vp pack ◉ cache hit, replaying
+vp run: cache hit, <variable>ms saved.

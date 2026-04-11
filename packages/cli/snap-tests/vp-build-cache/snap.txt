@@ -1,0 +1,9 @@
+> vp run build # first build
+> vp run build 2>&1 | grep 'cache hit' # should hit cache
+$ vp build ◉ cache hit, replaying
+vp run: cache hit, <variable>ms saved.
+
+> vp build 2>&1 # direct vp build should not be cached
+> vp build 2>&1 | grep -c 'cache' || echo 'no cache' # direct vp build has no cache
+0
+no cache

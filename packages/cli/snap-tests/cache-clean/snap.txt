@@ -2,13 +2,13 @@
 $ vp fmt
 Finished in <variable>ms on 4 files using <variable> threads.
 
+---
+vp run: hello not cached because it modified its input. (Run `vp run --last-details` for full details)
 
 > vp run hello # hit the cache
-$ vp fmt ✓ cache hit, replaying
+$ vp fmt
 Finished in <variable>ms on 4 files using <variable> threads.
 
----
-vp run: cache hit, <variable>ms saved.
 
 > vp cache clean # clean the cache
 > vp run hello # cache miss after clean

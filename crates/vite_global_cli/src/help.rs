@@ -449,7 +449,7 @@ pub fn top_level_help_doc() -> HelpDoc {
             section_rows(
                 "Execute",
                 vec![
-                    row("run", "Run tasks"),
+                    row("run", "Run tasks (also available as standalone `vpr`)"),
                     row("exec", "Execute a command from local node_modules/.bin"),
                     row("dlx", "Execute a package binary without installing it as a dependency"),
                     row("cache", "Manage the task cache"),
@@ -499,7 +499,7 @@ fn env_help_doc() -> HelpDoc {
             section_rows(
                 "Setup",
                 vec![
-                    row("setup", "Create or update shims in VITE_PLUS_HOME/bin"),
+                    row("setup", "Create or update shims in VP_HOME/bin"),
                     row("on", "Enable managed mode - shims always use vite-plus managed Node.js"),
                     row(
                         "off",

@@ -50,10 +50,8 @@ async fn execute_core_tool(cwd: AbsolutePathBuf, tool: &str) -> Result<ExitStatu
     let resolution = resolve_version(&cwd).await?;
 
     // Get the tool path
-    let home_dir = vite_shared::get_vite_plus_home()?
-        .join("js_runtime")
-        .join("node")
-        .join(&resolution.version);
+    let home_dir =
+        vite_shared::get_vp_home()?.join("js_runtime").join("node").join(&resolution.version);
 
     #[cfg(windows)]
     let tool_path = if tool == "node" {

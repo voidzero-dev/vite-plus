@@ -1013,6 +1013,27 @@ export default defineConfig({
     }
 
     #[test]
+    fn test_merge_json_config_content_empty_object() {
+        let vite_config = r#"import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  lint: { options: { typeAware: true, typeCheck: true } },
+});"#;
+
+        let result = merge_json_config_content(vite_config, "{}", "fmt").unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  fmt: {},
+  lint: { options: { typeAware: true, typeCheck: true } },
+});"#
+        );
+    }
+
+    #[test]
     fn test_merge_tsdown_config_content_simple() {
         let vite_config = r#"import { defineConfig } from 'vite-plus';
 

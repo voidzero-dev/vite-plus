@@ -6,6 +6,7 @@ use std::{
 
 use fspy::AccessMode;
 use tokio::process::Command;
+use tokio_util::sync::CancellationToken;
 use vite_error::Error;
 use vite_path::{AbsolutePath, AbsolutePathBuf, RelativePathBuf};
 
@@ -162,7 +163,7 @@ where
         });
     }
 
-    let child = cmd.spawn().await.map_err(|e| Error::Anyhow(e.into()))?;
+    let child = cmd.spawn(CancellationToken::new()).await.map_err(|e| Error::Anyhow(e.into()))?;
     let termination = child.wait_handle.await?;
 
     let mut path_accesses = HashMap::<RelativePathBuf, AccessMode>::new();

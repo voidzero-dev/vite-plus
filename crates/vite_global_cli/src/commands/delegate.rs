@@ -1,6 +1,6 @@
 //! JavaScript command delegation — resolves local vite-plus first, falls back to global.
 
-use std::process::ExitStatus;
+use std::process::{ExitStatus, Output};
 
 use vite_path::AbsolutePathBuf;
 
@@ -16,6 +16,18 @@ pub async fn execute(
     let mut full_args = vec![command.to_string()];
     full_args.extend(args.iter().cloned());
     executor.delegate_to_local_cli(&cwd, &full_args).await
+}
+
+/// Execute a command by delegating to the local `vite-plus` CLI, capturing output.
+pub async fn execute_output(
+    cwd: AbsolutePathBuf,
+    command: &str,
+    args: &[String],
+) -> Result<Output, Error> {
+    let mut executor = JsExecutor::new(None);
+    let mut full_args = vec![command.to_string()];
+    full_args.extend(args.iter().cloned());
+    executor.delegate_to_local_cli_output(&cwd, &full_args).await
 }
 
 /// Execute a command by delegating to the global `vite-plus` CLI.

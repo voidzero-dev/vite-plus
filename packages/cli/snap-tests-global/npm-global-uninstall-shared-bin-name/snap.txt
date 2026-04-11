@@ -5,15 +5,15 @@ Linked 'npm-global-shared-cli' to <vite-plus-home>/bin/npm-global-shared-cli
 
 tip: Use `vp install -g ./pkg-a` for managed shims that persist across Node.js version changes.
 
-> test -L $VITE_PLUS_HOME/bin/npm-global-shared-cli && echo 'link exists'
+> test -L $VP_HOME/bin/npm-global-shared-cli && echo 'link exists'
 link exists
 
-> cat $VITE_PLUS_HOME/bins/npm-global-shared-cli.json # BinConfig should point to pkg-a
+> cat $VP_HOME/bins/npm-global-shared-cli.json # BinConfig should point to pkg-a
 {
   "name": "npm-global-shared-cli",
   "package": "npm-global-shared-pkg-a",
   "version": "",
-  "nodeVersion": "24.14.0",
+  "nodeVersion": "24.14.1",
   "source": "npm"
 }
 > npm install -g --force ./pkg-b # Install pkg-b with force (overwrites npm-global-shared-cli)
@@ -22,15 +22,15 @@ npm warn using --force Recommended protections disabled.
 added 1 package in <variable>ms
 Linked 'npm-global-shared-cli' to <vite-plus-home>/bin/npm-global-shared-cli
 
-> test -L $VITE_PLUS_HOME/bin/npm-global-shared-cli && echo 'link exists'
+> test -L $VP_HOME/bin/npm-global-shared-cli && echo 'link exists'
 link exists
 
-> cat $VITE_PLUS_HOME/bins/npm-global-shared-cli.json # BinConfig should now point to pkg-b
+> cat $VP_HOME/bins/npm-global-shared-cli.json # BinConfig should now point to pkg-b
 {
   "name": "npm-global-shared-cli",
   "package": "npm-global-shared-pkg-b",
   "version": "",
-  "nodeVersion": "24.14.0",
+  "nodeVersion": "24.14.1",
   "source": "npm"
 }
 > npm-global-shared-cli # Should print pkg-b message (latest installed)
@@ -41,7 +41,7 @@ shared-cli from pkg-b
 removed 1 package in <variable>ms
 Linked 'npm-global-shared-cli' to <vite-plus-home>/bin/npm-global-shared-cli
 
-> test -L $VITE_PLUS_HOME/bin/npm-global-shared-cli && echo 'link exists' || echo 'link removed'
+> test -L $VP_HOME/bin/npm-global-shared-cli && echo 'link exists' || echo 'link removed'
 link exists
 
 > npm-global-shared-cli # Should still work (owned by pkg-b)
@@ -52,5 +52,5 @@ shared-cli from pkg-b
 removed 1 package in <variable>ms
 Removed link 'npm-global-shared-cli' from <vite-plus-home>/bin/npm-global-shared-cli
 
-> test -L $VITE_PLUS_HOME/bin/npm-global-shared-cli && echo 'link exists' || echo 'link removed'
+> test -L $VP_HOME/bin/npm-global-shared-cli && echo 'link exists' || echo 'link removed'
 link removed

@@ -6,15 +6,16 @@
 #   curl -fsSL https://vite.plus | bash
 #
 # Environment variables:
-#   VITE_PLUS_VERSION - Version to install (default: latest)
-#   VITE_PLUS_HOME - Installation directory (default: ~/.vite-plus)
+#   VP_VERSION - Version to install (default: latest)
+#   VP_HOME - Installation directory (default: ~/.vite-plus)
 #   NPM_CONFIG_REGISTRY - Custom npm registry URL (default: https://registry.npmjs.org)
-#   VITE_PLUS_LOCAL_TGZ - Path to local vite-plus.tgz (for development/testing)
+#   VP_NODE_MANAGER - Set to "yes" or "no" to skip interactive prompt (for CI/devcontainers)
+#   VP_LOCAL_TGZ - Path to local vite-plus.tgz (for development/testing)
 
 set -e
 
-VITE_PLUS_VERSION="${VITE_PLUS_VERSION:-latest}"
-INSTALL_DIR="${VITE_PLUS_HOME:-$HOME/.vite-plus}"
+VP_VERSION="${VP_VERSION:-latest}"
+INSTALL_DIR="${VP_HOME:-$HOME/.vite-plus}"
 # Use $HOME-relative path for shell config references (portable across sessions)
 if case "$INSTALL_DIR" in "$HOME"/*) true;; *) false;; esac; then
   INSTALL_DIR_REF="\$HOME${INSTALL_DIR#"$HOME"}"
@@ -25,9 +26,9 @@ fi
 NPM_REGISTRY="${NPM_CONFIG_REGISTRY:-https://registry.npmjs.org}"
 NPM_REGISTRY="${NPM_REGISTRY%/}"
 # Local tarball for development/testing
-LOCAL_TGZ="${VITE_PLUS_LOCAL_TGZ:-}"
+LOCAL_TGZ="${VP_LOCAL_TGZ:-}"
 # Local binary path (set by install-global-cli.ts for local dev)
-LOCAL_BINARY="${VITE_PLUS_LOCAL_BINARY:-}"
+LOCAL_BINARY="${VP_LOCAL_BINARY:-}"
 
 # Colors for output
 RED='\033[0;31m'
@@ -55,6 +56,84 @@ warn() {
 error() {
   echo -e "${RED}error${NC}: $1"
   exit 1
+}
+
+is_release_age_error() {
+  local log_file="$1"
+  [ -f "$log_file" ] || return 1
+
+  # This wrapper install path is pinned to pnpm via packageManager, so this
+  # detection follows pnpm's resolver/reporter output rather than npm/yarn.
+  #
+  # pnpm's PnpmError prefixes internal codes with ERR_PNPM_, so
+  # NO_MATURE_MATCHING_VERSION is normally printed as
+  # ERR_PNPM_NO_MATURE_MATCHING_VERSION. npm-resolver emits that code with the
+  # "does not meet the minimumReleaseAge constraint" message when
+  # publishedBy/minimumReleaseAge rejects a matching version.
+  # https://github.com/pnpm/pnpm/blob/16cfde66ec71125d692ea828eba2a5f9b3cc54fc/core/error/src/index.ts#L18-L20
+  # https://github.com/pnpm/pnpm/blob/16cfde66ec71125d692ea828eba2a5f9b3cc54fc/resolving/npm-resolver/src/index.ts#L76-L84
+  #
+  # default-reporter may append guidance mentioning minimumReleaseAgeExclude
+  # when the error has an immatureVersion, so that token is also a useful
+  # release-age signal. minimum-release-age is pnpm's .npmrc key; npm's
+  # min-release-age is intentionally not treated as a pnpm signal here.
+  # https://github.com/pnpm/pnpm/blob/16cfde66ec71125d692ea828eba2a5f9b3cc54fc/cli/default-reporter/src/reportError.ts#L163-L164
+  # https://github.com/pnpm/pnpm/blob/16cfde66ec71125d692ea828eba2a5f9b3cc54fc/config/reader/src/types.ts#L73-L74
+  grep -Eqi 'ERR_PNPM_NO_MATURE_MATCHING_VERSION|NO_MATURE_MATCHING_VERSION|does not meet the minimumReleaseAge constraint|minimumReleaseAge|minimumReleaseAgeExclude|minimum release age|minimum-release-age' "$log_file" && return 0
+
+  # pnpm can also surface ERR_PNPM_NO_MATCHING_VERSION when minimumReleaseAge
+  # filters out all candidates. That code is also used for real missing
+  # versions, so require age-gate context before prompting for a bypass.
+  # https://github.com/pnpm/pnpm/blob/16cfde66ec71125d692ea828eba2a5f9b3cc54fc/deps/inspection/outdated/src/createManifestGetter.ts#L66-L76
+  if grep -Eq 'ERR_PNPM_NO_MATCHING_VERSION' "$log_file"; then
+    grep -Eqi 'minimumReleaseAge|minimumReleaseAgeExclude|minimum release age|minimum-release-age' "$log_file"
+    return $?
+  fi
+
+  return 1
+}
+
+confirm_release_age_override() {
+  [ -e /dev/tty ] && [ -t 1 ] || return 1
+
+  echo "" > /dev/tty
+  echo -e "${YELLOW}warn${NC}: Your minimumReleaseAge setting prevented installing vite-plus@${VP_VERSION}." > /dev/tty
+  echo "This setting helps protect against newly published compromised packages." > /dev/tty
+  echo "Proceeding will disable this protection for this Vite+ install only." > /dev/tty
+  printf "Do you want to proceed? (y/N): " > /dev/tty
+
+  local response
+  read -r response < /dev/tty || return 1
+  case "$response" in
+    y|Y|yes|YES) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+write_release_age_override() {
+  cat > "$VERSION_DIR/.npmrc" <<NPMRC_EOF
+minimum-release-age=0
+NPMRC_EOF
+}
+
+print_install_failure() {
+  local install_log="$1"
+  if [ "${CI:-}" = "true" ]; then
+    echo -e "${RED}error${NC}: Failed to install dependencies. Log output:"
+    cat "$install_log"
+  else
+    echo -e "${RED}error${NC}: Failed to install dependencies. See log for details: $install_log"
+  fi
+}
+
+print_release_age_failure() {
+  local install_log="$1"
+  if [ "${CI:-}" = "true" ]; then
+    echo -e "${RED}error${NC}: Install blocked by your minimumReleaseAge setting. Log output:"
+    cat "$install_log"
+  else
+    echo -e "${RED}error${NC}: Install blocked by your minimumReleaseAge setting. Wait until the package is old enough or adjust your package manager configuration explicitly. See log for details: $install_log"
+  fi
 }
 
 # Print user-friendly error message for curl failures
@@ -225,15 +304,15 @@ check_requirements() {
 }
 
 # Fetch package metadata from npm registry (cached for reuse)
-# Uses VITE_PLUS_VERSION to fetch the correct version's metadata
+# Uses VP_VERSION to fetch the correct version's metadata
 PACKAGE_METADATA=""
 fetch_package_metadata() {
   if [ -z "$PACKAGE_METADATA" ]; then
     local version_path metadata_url
-    if [ "$VITE_PLUS_VERSION" = "latest" ]; then
+    if [ "$VP_VERSION" = "latest" ]; then
       version_path="latest"
     else
-      version_path="$VITE_PLUS_VERSION"
+      version_path="$VP_VERSION"
     fi
     metadata_url="${NPM_REGISTRY}/vite-plus/${version_path}"
     PACKAGE_METADATA=$(curl_with_error_handling -s "$metadata_url")
@@ -244,16 +323,16 @@ fetch_package_metadata() {
     # npm can return either {"error":"..."} or a plain JSON string like "version not found: test"
     if echo "$PACKAGE_METADATA" | grep -q '"error"'; then
       local error_msg
-      error_msg=$(echo "$PACKAGE_METADATA" | grep -o '"error":"[^"]*"' | cut -d'"' -f4)
-      error "Failed to fetch version '${version_path}': ${error_msg:-unknown error}"
+      error_msg=$(echo "$PACKAGE_METADATA" | grep -o '"error" *: *"[^"]*"' | cut -d'"' -f4)
+      error "Failed to fetch version '${version_path}': ${error_msg:-unknown error}\n  URL: $metadata_url"
     fi
     # Check if response is a plain error string (not a valid package object)
     # Use '"version":' to match JSON property, not just the word "version"
-    if ! echo "$PACKAGE_METADATA" | grep -q '"version":'; then
+    if ! echo "$PACKAGE_METADATA" | grep -q '"version" *:'; then
       # Remove surrounding quotes from the error message if present
       local error_msg
       error_msg=$(echo "$PACKAGE_METADATA" | sed 's/^"//;s/"$//')
-      error "Failed to fetch version '${version_path}': ${error_msg:-unknown error}"
+      error "Failed to fetch version '${version_path}': ${error_msg:-unknown error}\n  URL: $metadata_url"
     fi
   fi
   # PACKAGE_METADATA is set as a global variable, no need to echo
@@ -265,7 +344,7 @@ get_version_from_metadata() {
   # Call fetch_package_metadata to populate PACKAGE_METADATA global
   # Don't use command substitution as it would swallow the exit from error()
   fetch_package_metadata
-  RESOLVED_VERSION=$(echo "$PACKAGE_METADATA" | grep -o '"version":"[^"]*"' | head -1 | cut -d'"' -f4)
+  RESOLVED_VERSION=$(echo "$PACKAGE_METADATA" | grep -o '"version" *: *"[^"]*"' | head -1 | cut -d'"' -f4)
   if [ -z "$RESOLVED_VERSION" ]; then
     error "Failed to extract version from package metadata"
   fi
@@ -325,6 +404,10 @@ add_bin_to_path() {
   ref_pattern=$(printf '%s' "$INSTALL_DIR_REF" | sed 's/[.[\*^$()+?{|]/\\&/g')
 
   if [ -f "$shell_config" ]; then
+    if [ ! -w "$shell_config" ]; then
+      warn "Cannot write to $shell_config (permission denied), skipping."
+      return 1
+    fi
     if grep -q "${abs_pattern}/env" "$shell_config" 2>/dev/null || \
        grep -q "${ref_pattern}/env" "$shell_config" 2>/dev/null; then
       return 2
@@ -438,6 +521,16 @@ setup_node_manager() {
     vp_bin="$bin_dir/vp.exe"
   fi
 
+  # Explicit override via environment variable
+  if [ "$VP_NODE_MANAGER" = "yes" ]; then
+    refresh_shims "$vp_bin"
+    NODE_MANAGER_ENABLED="true"
+    return 0
+  elif [ "$VP_NODE_MANAGER" = "no" ]; then
+    NODE_MANAGER_ENABLED="false"
+    return 0
+  fi
+
   # Check if Vite+ is already managing Node.js (bin/node or bin/node.exe exists)
   if [ -e "$bin_path/node" ] || [ -e "$bin_path/node.exe" ]; then
     refresh_shims "$vp_bin"
@@ -445,8 +538,12 @@ setup_node_manager() {
     return 0
   fi
 
-  # Auto-enable on CI environment
-  if [ -n "$CI" ]; then
+  # Auto-enable on CI or devcontainer environments
+  # CI: standard CI environment variable (GitHub Actions, Travis, CircleCI, etc.)
+  # CODESPACES: set by GitHub Codespaces (https://docs.github.com/en/codespaces)
+  # REMOTE_CONTAINERS: set by VS Code Dev Containers extension
+  # DEVPOD: set by DevPod (https://devpod.sh)
+  if [ -n "$CI" ] || [ -n "$CODESPACES" ] || [ -n "$REMOTE_CONTAINERS" ] || [ -n "$DEVPOD" ]; then
     refresh_shims "$vp_bin"
     NODE_MANAGER_ENABLED="true"
     return 0
@@ -468,7 +565,9 @@ setup_node_manager() {
   # Prompt user in interactive mode
   if [ -e /dev/tty ] && [ -t 1 ]; then
     echo ""
-    echo "Would you want Vite+ to manage Node.js versions?"
+    echo "Would you like Vite+ to manage your Node.js versions?"
+    echo "It adds \`node\`, \`npm\`, and \`npx\` shims to ~/.vite-plus/bin/ and automatically uses the right version."
+    echo "Opt out anytime with \`vp env off\`."
     echo -n "Press Enter to accept (Y/n): "
     read -r response < /dev/tty
 
@@ -541,17 +640,17 @@ main() {
       error "Local tarball not found: $LOCAL_TGZ"
     fi
     # Use version as-is (default to "local-dev")
-    if [ "$VITE_PLUS_VERSION" = "latest" ] || [ "$VITE_PLUS_VERSION" = "test" ]; then
-      VITE_PLUS_VERSION="local-dev"
+    if [ "$VP_VERSION" = "latest" ] || [ "$VP_VERSION" = "test" ]; then
+      VP_VERSION="local-dev"
     fi
   else
     # Fetch package metadata and resolve version from npm
     get_version_from_metadata
-    VITE_PLUS_VERSION="$RESOLVED_VERSION"
+    VP_VERSION="$RESOLVED_VERSION"
   fi
 
   # Set up version-specific directories
-  VERSION_DIR="$INSTALL_DIR/$VITE_PLUS_VERSION"
+  VERSION_DIR="$INSTALL_DIR/$VP_VERSION"
   BIN_DIR="$VERSION_DIR/bin"
   CURRENT_LINK="$INSTALL_DIR/current"
 
@@ -579,14 +678,14 @@ main() {
         fi
       fi
     else
-      error "VITE_PLUS_LOCAL_BINARY must be set when using VITE_PLUS_LOCAL_TGZ"
+      error "VP_LOCAL_BINARY must be set when using VP_LOCAL_TGZ"
     fi
     chmod +x "$BIN_DIR/$binary_name"
   else
     # Download from npm registry — extract only the vp binary from CLI platform package
     get_platform_suffix "$platform"
     local package_name="@voidzero-dev/vite-plus-cli-${PLATFORM_SUFFIX}"
-    local platform_url="${NPM_REGISTRY}/${package_name}/-/vite-plus-cli-${PLATFORM_SUFFIX}-${VITE_PLUS_VERSION}.tgz"
+    local platform_url="${NPM_REGISTRY}/${package_name}/-/vite-plus-cli-${PLATFORM_SUFFIX}-${VP_VERSION}.tgz"
 
     # Create temp directory for extraction
     local platform_temp_dir
@@ -604,42 +703,55 @@ main() {
   fi
 
   # Generate wrapper package.json that declares vite-plus as a dependency.
-  # npm will install vite-plus and all transitive deps via `vp install`.
+  # pnpm will install vite-plus and all transitive deps via `vp install`.
+  # The packageManager field pins pnpm to a known-good version, ensuring
+  # consistent behavior regardless of the user's global pnpm version.
   cat > "$VERSION_DIR/package.json" <<WRAPPER_EOF
 {
   "name": "vp-global",
-  "version": "$VITE_PLUS_VERSION",
+  "version": "$VP_VERSION",
   "private": true,
+  "packageManager": "pnpm@10.33.0",
   "dependencies": {
-    "vite-plus": "$VITE_PLUS_VERSION"
+    "vite-plus": "$VP_VERSION"
   }
 }
 WRAPPER_EOF
 
-  # Isolate from user's global package manager config that may block
-  # installing recently-published packages (e.g. pnpm's minimumReleaseAge,
-  # npm's min-release-age) by creating a local .npmrc in the version directory.
-  cat > "$VERSION_DIR/.npmrc" <<NPMRC_EOF
-minimum-release-age=0
-min-release-age=0
-NPMRC_EOF
-
-  # Install production dependencies (skip if VITE_PLUS_SKIP_DEPS_INSTALL is set,
+  # Install production dependencies (skip if VP_SKIP_DEPS_INSTALL is set,
   # e.g. during local dev where install-global-cli.ts handles deps separately)
-  if [ -z "${VITE_PLUS_SKIP_DEPS_INSTALL:-}" ]; then
+  if [ -z "${VP_SKIP_DEPS_INSTALL:-}" ]; then
     local install_log="$VERSION_DIR/install.log"
     local vp_install_bin="$BIN_DIR/vp"
     if [ -f "$BIN_DIR/vp.exe" ]; then
       vp_install_bin="$BIN_DIR/vp.exe"
     fi
-    if ! (cd "$VERSION_DIR" && CI=true "$vp_install_bin" install --silent > "$install_log" 2>&1); then
-      error "Failed to install dependencies. See log for details: $install_log"
-      exit 1
+    # Do not pass --silent to the inner install: pnpm suppresses the
+    # release-age error body in silent mode, which would leave install.log
+    # empty and make the release-age gate impossible to detect. Output is
+    # already redirected to install.log here.
+    if ! (cd "$VERSION_DIR" && CI=true "$vp_install_bin" install > "$install_log" 2>&1); then
+      if is_release_age_error "$install_log"; then
+        if confirm_release_age_override; then
+          # Write the override only after explicit consent, then retry once.
+          write_release_age_override
+          if ! (cd "$VERSION_DIR" && CI=true "$vp_install_bin" install > "$install_log" 2>&1); then
+            print_install_failure "$install_log"
+            exit 1
+          fi
+        else
+          print_release_age_failure "$install_log"
+          exit 1
+        fi
+      else
+        print_install_failure "$install_log"
+        exit 1
+      fi
     fi
   fi
 
   # Create/update current symlink (use relative path for portability)
-  ln -sfn "$VITE_PLUS_VERSION" "$CURRENT_LINK"
+  ln -sfn "$VP_VERSION" "$CURRENT_LINK"
 
   # Create bin directory and vp entrypoint (always done)
   mkdir -p "$INSTALL_DIR/bin"
@@ -717,6 +829,8 @@ NPMRC_EOF
     echo ""
     echo -e "  ${YELLOW}note${NC}: Could not automatically add vp to your PATH."
     echo ""
+    echo -e "  vp was installed to: ${BOLD}${display_location}${NC}"
+    echo ""
     echo "  To use vp, add this line to your shell config file:"
     echo ""
     echo "    . \"$INSTALL_DIR_REF/env\""
@@ -725,6 +839,10 @@ NPMRC_EOF
     echo "    - Bash: ~/.bashrc or ~/.bash_profile"
     echo "    - Zsh:  ~/.zshrc"
     echo "    - Fish: source \"$INSTALL_DIR_REF/env.fish\" in ~/.config/fish/config.fish"
+    echo ""
+    echo "  Or run vp directly:"
+    echo ""
+    echo -e "    ${display_location}/vp"
   fi
 
   echo ""

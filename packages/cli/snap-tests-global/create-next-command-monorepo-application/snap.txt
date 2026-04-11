@@ -1,0 +1,6 @@
+> vp create vite:application --no-interactive # monorepo: next command should suggest vp run
+
+Using default package name: vite-plus-application
+◇ Scaffolded apps/vite-plus-application with Vite application
+• Node <semver>  pnpm <semver>
+→ Next: cd apps/vite-plus-application && vp run

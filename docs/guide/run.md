@@ -2,6 +2,10 @@
 
 `vp run` runs `package.json` scripts and tasks defined in `vite.config.ts`. It works like `pnpm run`, with caching, dependency ordering, and workspace-aware execution built in.
 
+::: tip
+`vpr` is available as a standalone shorthand for `vp run`. All examples below work with both `vp run` and `vpr`.
+:::
+
 ## Overview
 
 Use `vp run` with existing `package.json` scripts:
@@ -281,6 +285,34 @@ Use `--last-details` to show the summary from the last run without running tasks
 
 ```bash
 vp run --last-details
+```
+
+## Concurrency
+
+By default, up to 4 tasks run at the same time. Use `--concurrency-limit` to change this:
+
+```bash
+# Run up to 8 tasks at once
+vp run -r --concurrency-limit 8 build
+
+# Run tasks one at a time
+vp run -r --concurrency-limit 1 build
+```
+
+The limit can also be set via the `VP_RUN_CONCURRENCY_LIMIT` environment variable. The `--concurrency-limit` flag takes priority over the environment variable.
+
+### Parallel Mode
+
+Use `--parallel` to ignore task dependencies and run all tasks at once with unlimited concurrency:
+
+```bash
+vp run -r --parallel dev
+```
+
+This is useful when tasks are independent and you want maximum throughput. You can combine `--parallel` with `--concurrency-limit` to run tasks without dependency ordering but still cap the number of concurrent tasks:
+
+```bash
+vp run -r --parallel --concurrency-limit 4 dev
 ```
 
 ## Additional Arguments

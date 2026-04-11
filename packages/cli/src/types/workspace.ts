@@ -1,5 +1,5 @@
 import type { DownloadPackageManagerResult } from '../../binding/index.js';
-import type { PackageManager } from './package.js';
+import type { PackageManager } from './package.ts';
 
 export interface WorkspacePackage {
   name: string;

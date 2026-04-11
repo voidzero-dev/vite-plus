@@ -19,7 +19,7 @@ defaults:
     shell: bash
 
 env:
-  VITE_PLUS_VERSION: alpha
+  VP_VERSION: alpha
 
 jobs:
   test-install-sh:
@@ -38,7 +38,7 @@ jobs:
           - os: macos-latest
             name: macOS ARM64
     steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Run install.sh
         run: cat packages/cli/install.sh | bash
@@ -108,11 +108,46 @@ jobs:
         run: |
           # --check queries npm registry and prints update status
           vp upgrade --check
-          vp upgrade 0.0.0-gbe8891a5.20260227-1615
+          vp upgrade 0.1.14-alpha.1
           vp --version
           # rollback to the previous version (should succeed after a real update)
           vp upgrade --rollback
           vp --version
+
+  test-install-sh-readonly-config:
+    name: Test install.sh (readonly shell config)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Make shell config files read-only
+        run: |
+          # Simulate Nix-managed or read-only shell configs
+          touch ~/.bashrc ~/.bash_profile ~/.profile
+          chmod 444 ~/.bashrc ~/.bash_profile ~/.profile
+
+      - name: Run install.sh
+        run: |
+          output=$(cat packages/cli/install.sh | bash 2>&1) || {
+            echo "$output"
+            echo "Install script exited with non-zero status"
+            exit 1
+          }
+          echo "$output"
+          # Verify installation succeeds (not a fatal error)
+          echo "$output" | grep -q "successfully installed"
+          # Verify fallback message shows binary location
+          echo "$output" | grep -q "vp was installed to:"
+          # Verify fallback message shows manual instructions
+          echo "$output" | grep -q "Or run vp directly:"
+          # Verify the permission warning was shown
+          echo "$output" | grep -qi "permission denied"
+
+      - name: Verify vp works via direct path
+        run: |
+          ~/.vite-plus/bin/vp --version
 
   test-install-sh-arm64:
     name: Test install.sh (Linux ARM64 glibc via QEMU)
@@ -120,7 +155,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3.6.0
@@ -131,7 +166,7 @@ jobs:
         run: |
           docker run --rm --platform linux/arm64 \
             -v "${{ github.workspace }}:/workspace" \
-            -e VITE_PLUS_VERSION=alpha \
+            -e VP_VERSION=alpha \
             ubuntu:20.04 bash -c "
               ls -al ~/
               apt-get update && apt-get install -y curl ca-certificates
@@ -168,7 +203,7 @@ jobs:
 
               # Verify upgrade
               vp upgrade --check
-              vp upgrade 0.0.0-gbe8891a5.20260227-1615
+              vp upgrade 0.1.14-alpha.1
               vp --version
               vp upgrade --rollback
               vp --version
@@ -178,13 +213,125 @@ jobs:
               # cd hello && vp run build
             "
 
+  test-install-sh-musl-x64:
+    name: Test install.sh (Linux x64 musl)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Run install.sh in Alpine container
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}:/workspace" \
+            -e VP_VERSION=alpha \
+            -e CI=true \
+            alpine:3.21 sh -c "
+              # libstdc++: required by unofficial-builds Node.js musl binary
+              apk add --no-cache bash curl ca-certificates libstdc++
+              cat /workspace/packages/cli/install.sh | bash
+              export PATH=\"\$HOME/.vite-plus/bin:\$PATH\"
+
+              vp --version
+              vp --help
+              vp dlx print-current-version
+
+              # Verify bin setup
+              BIN_PATH=\"\$HOME/.vite-plus/bin\"
+              if [ ! -d \"\$BIN_PATH\" ]; then
+                echo \"Error: Bin directory not found: \$BIN_PATH\"
+                exit 1
+              fi
+              for shim in node npm npx; do
+                if [ ! -f \"\$BIN_PATH/\$shim\" ]; then
+                  echo \"Error: Shim not found: \$BIN_PATH/\$shim\"
+                  exit 1
+                fi
+                echo \"Found shim: \$BIN_PATH/\$shim\"
+              done
+              vp env doctor
+              vp env run --node 24 -- node -p \"process.versions\"
+
+              # Test create command
+              vp create vite --no-interactive --no-agent -- hello --no-interactive -t vanilla
+              cd hello && vp run build && vp --version
+              cd ..
+
+              # Verify upgrade
+              vp upgrade --check
+              vp upgrade 0.1.14-alpha.1
+              vp --version
+              vp upgrade --rollback
+              vp --version
+            "
+
+  test-install-sh-musl-arm64:
+    name: Test install.sh (Linux ARM64 musl via QEMU)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3.6.0
+        with:
+          platforms: arm64
+
+      - name: Run install.sh in ARM64 Alpine container
+        run: |
+          docker run --rm --platform linux/arm64 \
+            -v "${{ github.workspace }}:/workspace" \
+            -e VP_VERSION=alpha \
+            -e CI=true \
+            alpine:3.21 sh -c "
+              # libstdc++ is needed by unofficial-builds Node.js musl binary
+              apk add --no-cache bash curl ca-certificates libstdc++
+              cat /workspace/packages/cli/install.sh | bash
+              export PATH=\"\$HOME/.vite-plus/bin:\$PATH\"
+
+              vp --version
+              vp --help
+              vp dlx print-current-version
+
+              # Verify bin setup
+              BIN_PATH=\"\$HOME/.vite-plus/bin\"
+              if [ ! -d \"\$BIN_PATH\" ]; then
+                echo \"Error: Bin directory not found: \$BIN_PATH\"
+                exit 1
+              fi
+              for shim in node npm npx; do
+                if [ ! -f \"\$BIN_PATH/\$shim\" ]; then
+                  echo \"Error: Shim not found: \$BIN_PATH/\$shim\"
+                  exit 1
+                fi
+                echo \"Found shim: \$BIN_PATH/\$shim\"
+              done
+              vp env doctor
+
+              export VITE_LOG=trace
+              vp env run --node 24 -- node -p \"process.versions\"
+
+              # FIXME: QEMU doesn't support all syscalls needed by rolldown/tsdown
+              # vp create vite --no-interactive --no-agent -- hello --no-interactive -t vanilla
+              # cd hello && vp run build && vp --version
+
+              # Verify upgrade
+              vp upgrade --check
+              vp upgrade 0.1.14-alpha.1
+              vp --version
+              vp upgrade --rollback
+              vp --version
+            "
+
   test-install-ps1-v5:
     name: Test install.ps1 (Windows x64, PowerShell 5.1)
     runs-on: windows-latest
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Assert PowerShell 5.x
         shell: powershell
@@ -255,7 +402,7 @@ jobs:
         shell: powershell
         run: |
           vp upgrade --check
-          vp upgrade 0.0.0-gbe8891a5.20260227-1615
+          vp upgrade 0.1.14-alpha.1
           vp --version
           vp upgrade --rollback
           vp --version
@@ -266,7 +413,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Run install.ps1
         shell: pwsh
@@ -322,10 +469,170 @@ jobs:
         shell: pwsh
         run: |
           vp upgrade --check
-          vp upgrade 0.0.0-gbe8891a5.20260227-1615
+          vp upgrade 0.1.14-alpha.1
           vp --version
           vp upgrade --rollback
           vp --version
+
+  test-install-ps1-v76:
+    name: Test install.ps1 (Windows x64, PowerShell 7.6)
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install PowerShell 7.6
+        shell: pwsh
+        run: |
+          dotnet tool install --global PowerShell --version 7.6.0
+          $pwsh76 = "$env:USERPROFILE\.dotnet\tools\pwsh.exe"
+          echo "PWSH76=$pwsh76" >> $env:GITHUB_ENV
+          $ver = & $pwsh76 -NoProfile -Command '$PSVersionTable.PSVersion.ToString()'
+          Write-Host "PowerShell version: $ver"
+          if (-not $ver.StartsWith("7.6")) {
+            Write-Error "Expected PowerShell 7.6.x but got $ver"
+            exit 1
+          }
+
+      - name: Run install.ps1 via iex under PowerShell 7.6
+        shell: pwsh
+        run: |
+          & $env:PWSH76 -NoProfile -Command "Get-Content ./packages/cli/install.ps1 -Raw | Invoke-Expression"
+
+      - name: Set PATH
+        shell: bash
+        run: |
+          echo "$USERPROFILE\.vite-plus\bin" >> $GITHUB_PATH
+
+      - name: Verify installation
+        shell: pwsh
+        working-directory: ${{ runner.temp }}
+        run: |
+          Write-Host "PATH: $env:Path"
+          vp --version
+          vp --help
+          vp create vite --no-interactive --no-agent -- hello --no-interactive -t vanilla
+          cd hello
+          vp run build
+          vp --version
+
+      - name: Verify bin setup
+        shell: pwsh
+        run: |
+          $binPath = "$env:USERPROFILE\.vite-plus\bin"
+          Get-ChildItem -Force $binPath
+          if (-not (Test-Path $binPath)) {
+            Write-Error "Bin directory not found: $binPath"
+            exit 1
+          }
+
+          $expectedShims = @("node.exe", "npm.exe", "npx.exe")
+          foreach ($shim in $expectedShims) {
+            $shimFile = Join-Path $binPath $shim
+            if (-not (Test-Path $shimFile)) {
+              Write-Error "Shim not found: $shimFile"
+              exit 1
+            }
+            Write-Host "Found shim: $shimFile"
+          }
+          where.exe node
+          where.exe npm
+          where.exe npx
+          where.exe vp
+
+          $env:Path = "$env:USERPROFILE\.vite-plus\bin;$env:Path"
+          vp env doctor
+          vp env run --node 24 -- node -p "process.versions"
+
+      - name: Verify upgrade
+        shell: pwsh
+        run: |
+          vp upgrade --check
+          vp upgrade 0.1.14-alpha.1
+          vp --version
+          vp upgrade --rollback
+          vp --version
+
+  test-install-ps1-release-age:
+    name: Test install.ps1 (minimum-release-age)
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Verify minimumReleaseAge blocks non-interactive install
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $env:CI = "true"
+          $env:VP_NODE_MANAGER = "no"
+          $env:VP_HOME = Join-Path $env:RUNNER_TEMP "vite-plus-release-age"
+
+          $npmrc = Join-Path $env:USERPROFILE ".npmrc"
+          $backup = Join-Path $env:RUNNER_TEMP ".npmrc.backup"
+
+          if (Test-Path $npmrc) {
+            Move-Item -Path $npmrc -Destination $backup -Force
+          }
+
+          try {
+            Set-Content -Path $npmrc -Value "minimum-release-age=10000000"
+
+            $output = & powershell -NoProfile -ExecutionPolicy Bypass -File .\packages\cli\install.ps1 2>&1
+            $exitCode = $LASTEXITCODE
+            $text = $output -join "`n"
+            Write-Host $text
+
+            if ($exitCode -eq 0) {
+              Write-Error "Expected install.ps1 to fail when pnpm minimum-release-age blocks vite-plus"
+              exit 1
+            }
+
+            if ($text -notmatch "Install blocked by your minimumReleaseAge setting") {
+              Write-Error "Expected release-age block message in installer output"
+              exit 1
+            }
+
+            if ($text -notmatch "ERR_PNPM_NO_MATURE_MATCHING_VERSION|minimumReleaseAge") {
+              Write-Error "Expected pnpm release-age details in installer output"
+              exit 1
+            }
+
+            $installLog = Get-ChildItem -Path $env:VP_HOME -Recurse -Filter install.log | Select-Object -First 1
+            if (-not $installLog) {
+              Write-Error "Expected install.log to be written under VP_HOME"
+              exit 1
+            }
+
+            $logText = Get-Content -Path $installLog.FullName -Raw
+            if ($logText -notmatch "ERR_PNPM_NO_MATURE_MATCHING_VERSION|minimumReleaseAge") {
+              Write-Error "Expected pnpm release-age details in install.log"
+              exit 1
+            }
+
+            $overrideFiles = Get-ChildItem -Path $env:VP_HOME -Recurse -Force -Filter .npmrc |
+              Where-Object { $_.FullName -notmatch "\\js_runtime\\" }
+            if ($overrideFiles) {
+              Write-Host "Unexpected override files:"
+              $overrideFiles | ForEach-Object { Write-Host $_.FullName }
+              Write-Error "Non-interactive install must not write minimum-release-age overrides"
+              exit 1
+            }
+
+            # The child install.ps1 is expected to fail in this test. Reset the
+            # native command exit code so the GitHub Actions PowerShell wrapper
+            # does not fail the step after our assertions pass.
+            $global:LASTEXITCODE = 0
+          } finally {
+            Remove-Item -Path $npmrc -Force -ErrorAction SilentlyContinue
+            if (Test-Path $backup) {
+              Move-Item -Path $backup -Destination $npmrc -Force
+            }
+          }
 
   test-install-ps1:
     name: Test install.ps1 (Windows x64)
@@ -333,7 +640,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Run install.ps1
         shell: pwsh
@@ -350,7 +657,7 @@ jobs:
         run: |
           # --check queries npm registry and prints update status
           vp upgrade --check
-          vp upgrade 0.0.0-gbe8891a5.20260227-1615
+          vp upgrade 0.1.14-alpha.1
           vp --version
           # rollback to the previous version (should succeed after a real update)
           vp upgrade --rollback

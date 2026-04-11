@@ -186,14 +186,14 @@ export function mergePeerDeps() {
   const vitepressPackagePath = join(rootDir, 'packages/cli/node_modules/vitepress/package.json');
   const tsdownPackagePath = join(rootDir, 'packages/cli/node_modules/tsdown/package.json');
   const vitestPackagePath = join(rootDir, 'packages/cli/node_modules/vitest-dev/package.json');
-  const rolldownVitePackagePath = join(rootDir, 'rolldown-vite/packages/vite/package.json');
+  const rolldownVitePackagePath = join(rootDir, 'vite/packages/vite/package.json');
 
   // Check if all files exist
   const packagePaths = [
     { path: vitepressPackagePath, name: 'vitepress' },
     { path: tsdownPackagePath, name: 'tsdown' },
     { path: vitestPackagePath, name: 'vitest' },
-    { path: rolldownVitePackagePath, name: 'rolldown-vite' },
+    { path: rolldownVitePackagePath, name: 'vite' },
   ];
 
   const packages: PackageJson[] = [];

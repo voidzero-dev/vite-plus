@@ -29,7 +29,9 @@ use vite_install::commands::{
 };
 use vite_path::AbsolutePathBuf;
 
-use super::{build_package_manager, prepend_js_runtime_to_path_env};
+use super::{
+    build_package_manager, build_package_manager_or_npm_default, prepend_js_runtime_to_path_env,
+};
 use crate::{
     cli::{ConfigCommands, DistTagCommands, OwnerCommands, PmCommands, TokenCommands},
     error::Error,
@@ -45,7 +47,7 @@ pub async fn execute_info(
 ) -> Result<ExitStatus, Error> {
     prepend_js_runtime_to_path_env(&cwd).await?;
 
-    let package_manager = build_package_manager(&cwd).await?;
+    let package_manager = build_package_manager_or_npm_default(&cwd).await?;
 
     let options = ViewCommandOptions { package, field, json, pass_through_args };
 
@@ -64,7 +66,23 @@ pub async fn execute_pm_subcommand(
 
     prepend_js_runtime_to_path_env(&cwd).await?;
 
-    let package_manager = build_package_manager(&cwd).await?;
+    // Project-dependent commands require package.json; standalone ones fall back to npm.
+    let needs_project = matches!(
+        command,
+        PmCommands::Prune { .. }
+            | PmCommands::Pack { .. }
+            | PmCommands::List { .. }
+            | PmCommands::Publish { .. }
+            | PmCommands::Rebuild { .. }
+            | PmCommands::Fund { .. }
+            | PmCommands::Audit { .. }
+    );
+
+    let package_manager = if needs_project {
+        build_package_manager(&cwd).await?
+    } else {
+        build_package_manager_or_npm_default(&cwd).await?
+    };
 
     match command {
         PmCommands::Prune { prod, no_optional, pass_through_args } => {

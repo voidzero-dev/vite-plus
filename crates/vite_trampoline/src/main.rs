@@ -2,7 +2,7 @@
 //!
 //! This binary is copied and renamed for each shim tool (node.exe, npm.exe, etc.).
 //! It detects the tool name from its own filename, then spawns `vp.exe` with the
-//! `VITE_PLUS_SHIM_TOOL` environment variable set, allowing `vp.exe` to enter
+//! `VP_SHIM_TOOL` environment variable set, allowing `vp.exe` to enter
 //! shim dispatch mode.
 //!
 //! On Ctrl+C, the trampoline ignores the signal (the child process handles it),
@@ -36,23 +36,23 @@ fn main() {
     install_ctrl_handler();
 
     // 4. Spawn vp.exe
-    //    - Always set VITE_PLUS_HOME so vp.exe uses the correct home directory
+    //    - Always set VP_HOME so vp.exe uses the correct home directory
     //      (matches what the old .cmd wrappers did with %~dp0..)
-    //    - If tool is "vp", run in normal CLI mode (no VITE_PLUS_SHIM_TOOL)
-    //    - Otherwise, set VITE_PLUS_SHIM_TOOL so vp.exe enters shim dispatch
+    //    - If tool is "vp", run in normal CLI mode (no VP_SHIM_TOOL)
+    //    - Otherwise, set VP_SHIM_TOOL so vp.exe enters shim dispatch
     let mut cmd = Command::new(&vp_exe);
     cmd.args(env::args_os().skip(1));
-    cmd.env("VITE_PLUS_HOME", vp_home);
+    cmd.env("VP_HOME", vp_home);
 
     if tool_name != "vp" {
-        cmd.env("VITE_PLUS_SHIM_TOOL", tool_name);
+        cmd.env("VP_SHIM_TOOL", tool_name);
         // Clear the recursion marker so nested shim invocations (e.g., npm
         // spawning node) get fresh version resolution instead of falling
         // through to passthrough mode. The old .cmd wrappers went through
         // `vp env exec` which cleared this in exec.rs; the trampoline
         // bypasses that path.
-        // Must match vite_shared::env_vars::VITE_PLUS_TOOL_RECURSION
-        cmd.env_remove("VITE_PLUS_TOOL_RECURSION");
+        // Must match vite_shared::env_vars::VP_TOOL_RECURSION
+        cmd.env_remove("VP_TOOL_RECURSION");
     }
 
     // 5. Execute and propagate exit code.

@@ -1,0 +1,100 @@
+> vp remove --help # should show help
+VITE+ - The Unified Toolchain for the Web
+
+Usage: vp remove [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
+
+Remove packages from dependencies
+
+Arguments:
+  <PACKAGES>...           Packages to remove
+  [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
+
+Options:
+  -D, --save-dev        Only remove from `devDependencies` (pnpm-specific)
+  -O, --save-optional   Only remove from `optionalDependencies` (pnpm-specific)
+  -P, --save-prod       Only remove from `dependencies` (pnpm-specific)
+  --filter <PATTERN>    Filter packages in monorepo (can be used multiple times)
+  -w, --workspace-root  Remove from workspace root
+  -r, --recursive       Remove recursively from all workspace packages
+  -g, --global          Remove global packages
+  --dry-run             Preview what would be removed without actually removing (only with -g)
+  -h, --help            Print help
+
+Documentation: https://viteplus.dev/guide/install
+
+
+[2]> vp remove # should error because no packages specified
+error: the following required arguments were not provided:
+  <PACKAGES>...
+
+Usage: vp remove <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
+
+For more information, try '--help'.
+
+> vp remove testnpm2 -D && cat package.json # should error when remove not exists package from dev dependencies
+bun remove v<semver> (af24e281)
+package.json doesn't have dependencies, there's nothing to remove!
+{
+  "name": "command-remove-bun",
+  "version": "1.0.0",
+  "packageManager": "bun@<semver>"
+}
+
+> vp add testnpm2 && vp add -D test-vite-plus-install && vp add -O test-vite-plus-package-optional && cat package.json # should add packages to dependencies
+bun add v<semver> (af24e281)
+
+installed testnpm2@<semver>
+
+1 package installed [<variable>ms]
+bun add v<semver> (af24e281)
+
+installed test-vite-plus-install@<semver>
+
+1 package installed [<variable>ms]
+bun add v<semver> (af24e281)
+
+installed test-vite-plus-package-optional@<semver>
+
+1 package installed [<variable>ms]
+{
+  "name": "command-remove-bun",
+  "version": "1.0.0",
+  "packageManager": "bun@<semver>",
+  "dependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "devDependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  }
+}
+
+> vp remove testnpm2 test-vite-plus-install && cat package.json # should remove packages from dependencies
+bun remove v<semver> (af24e281)
+
+- testnpm2
+- test-vite-plus-install
+2 packages removed [<variable>ms]
+{
+  "name": "command-remove-bun",
+  "version": "1.0.0",
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  },
+  "packageManager": "bun@<semver>"
+}
+
+> vp remove -O test-vite-plus-package-optional && cat package.json # should remove package from optional dependencies
+bun remove v<semver> (af24e281)
+
+package.json has no dependencies! Deleted empty lockfile
+
+- test-vite-plus-package-optional
+1 package removed [<variable>ms]
+{
+  "name": "command-remove-bun",
+  "version": "1.0.0",
+  "packageManager": "bun@<semver>"
+}

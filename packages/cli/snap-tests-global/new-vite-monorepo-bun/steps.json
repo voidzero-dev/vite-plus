@@ -1,0 +1,16 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "commands": [
+    {
+      "command": "vp create vite:monorepo --no-interactive --package-manager bun # create monorepo with bun",
+      "ignoreOutput": true
+    },
+    "ls vite-plus-monorepo | LC_ALL=C sort # check files created",
+    "cat vite-plus-monorepo/package.json # check package.json with catalog",
+    "test ! -f vite-plus-monorepo/pnpm-workspace.yaml && echo 'No pnpm-workspace.yaml' || echo 'ERROR: pnpm-workspace.yaml exists' # verify no pnpm config",
+    "test ! -f vite-plus-monorepo/.yarnrc.yml && echo 'No .yarnrc.yml' || echo 'ERROR: .yarnrc.yml exists' # verify no yarn config",
+    "test -d vite-plus-monorepo/.git && echo 'Git initialized' || echo 'No git' # check git init",
+    "ls vite-plus-monorepo/apps # check apps directory",
+    "cat vite-plus-monorepo/apps/website/package.json # check website uses catalog:"
+  ]
+}

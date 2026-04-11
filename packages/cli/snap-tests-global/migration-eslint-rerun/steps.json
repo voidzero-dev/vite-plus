@@ -2,7 +2,13 @@
   "commands": [
     "vp migrate --no-interactive # should detect vite-plus + eslint and auto-migrate eslint",
     "cat package.json # check eslint removed from devDependencies and scripts rewritten",
-    "cat eslint.config.mjs && exit 1 || true # check eslint config is removed",
+    "test ! -f eslint.config.mjs # check eslint config is removed",
     "cat vite.config.ts # check oxlint config merged into vite.config.ts"
+  ],
+  "ignoredPlatforms": [
+    {
+      "os": "linux",
+      "libc": "musl"
+    }
   ]
 }

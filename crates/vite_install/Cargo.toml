@@ -37,7 +37,7 @@ vite_workspace = { workspace = true }
 reqwest = { workspace = true, features = ["stream", "native-tls-vendored", "json"] }
 
 [target.'cfg(not(target_os = "windows"))'.dependencies]
-reqwest = { workspace = true, features = ["stream", "rustls-tls", "json"] }
+reqwest = { workspace = true, features = ["stream", "rustls-no-provider", "json"] }
 
 [dev-dependencies]
 httpmock = { workspace = true }

@@ -115,7 +115,7 @@
     "@babel/types": "^7.28.5",
     "@oxc-node/cli": "catalog:",
     "@oxc-node/core": "catalog:",
-    "@vitejs/devtools": "^0.1.2",
+    "@vitejs/devtools": "^0.1.13",
     "es-module-lexer": "^1.7.0",
     "hookable": "^6.0.1",
     "magic-string": "^0.30.21",
@@ -136,11 +136,11 @@
   },
   "peerDependencies": {
     "@arethetypeswrong/core": "^0.18.1",
-    "@tsdown/css": "0.21.4",
-    "@tsdown/exe": "0.21.4",
+    "@tsdown/css": "0.21.7",
+    "@tsdown/exe": "0.21.7",
     "@types/node": "^20.19.0 || >=22.12.0",
-    "@vitejs/devtools": "^0.0.0-alpha.31",
-    "esbuild": "^0.27.0",
+    "@vitejs/devtools": "^0.1.0",
+    "esbuild": "^0.27.0 || ^0.28.0",
     "jiti": ">=1.21.0",
     "less": "^4.0.0",
     "publint": "^0.3.0",
@@ -150,7 +150,7 @@
     "sugarss": "^5.0.0",
     "terser": "^5.16.0",
     "tsx": "^4.8.1",
-    "typescript": "^5.0.0",
+    "typescript": "^5.0.0 || ^6.0.0",
     "unplugin-unused": "^0.5.0",
     "yaml": "^2.4.2"
   },
@@ -217,8 +217,8 @@
     "node": "^20.19.0 || >=22.12.0"
   },
   "bundledVersions": {
-    "vite": "8.0.0",
-    "rolldown": "1.0.0-rc.9",
-    "tsdown": "0.21.4"
+    "vite": "8.0.8",
+    "rolldown": "1.0.0-rc.15",
+    "tsdown": "0.21.7"
   }
 }

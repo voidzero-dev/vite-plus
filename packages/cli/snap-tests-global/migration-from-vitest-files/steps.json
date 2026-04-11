@@ -2,6 +2,7 @@
   "commands": [
     "vp migrate --no-interactive # migration should rewrite imports to vite-plus",
     "cat package.json # check package.json",
+    "cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog",
     "cat test/hello.ts # check test/hello.ts"
   ]
 }

@@ -8,7 +8,7 @@ import {
   defaultBrowserPort,
   defineConfig,
   defineProject,
-} from '../index';
+} from '../index.js';
 
 test('should keep vitest exports stable', () => {
   expect(defineConfig).toBeTypeOf('function');

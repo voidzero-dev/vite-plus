@@ -7,6 +7,9 @@ ignored = [
   # These workspace dependencies are used by rolldown crates, not our local crates
   "css-module-lexer",
   "html5gum",
+  "prettyplease",
+  "proc-macro2",
+  "quote",
   "rolldown_filter_analyzer",
   "rolldown_plugin_vite_asset",
   "rolldown_plugin_vite_asset_import_meta_url",
@@ -15,6 +18,7 @@ ignored = [
   "rolldown_plugin_vite_html",
   "rolldown_plugin_vite_html_inline_proxy",
   "string_cache",
+  "syn",
 ]
 
 [workspace.package]
@@ -71,6 +75,7 @@ brush-parser = "0.3.0"
 blake3 = "1.8.2"
 chrono = { version = "0.4", features = ["serde"] }
 clap = "4.5.40"
+clap_complete = "4.6.0"
 commondir = "1.0.0"
 cow-utils = "0.1.3"
 criterion = { version = "0.7", features = ["html_reports"] }
@@ -84,7 +89,7 @@ dunce = "1.0.5"
 fast-glob = "1.0.0"
 flate2 = { version = "=1.1.9", features = ["zlib-rs"] }
 form_urlencoded = "1.2.1"
-fspy = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "398a147fd1ed42a88585d3a9481f200c3e56a2f4" }
+fspy = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "076cef486127e6cd1fefc58945f00dac316888ca" }
 futures = "0.3.31"
 futures-util = "0.3.31"
 glob = "0.3.2"
@@ -102,7 +107,7 @@ itertools = "0.14.0"
 itoa = "1.0.15"
 json-escape-simd = "3"
 json-strip-comments = "3"
-jsonschema = { version = "0.42.0", default-features = false }
+jsonschema = { version = "0.45.0", default-features = false }
 junction = "1.4.1"
 memchr = "2.7.4"
 mimalloc-safe = "0.1.52"
@@ -134,15 +139,19 @@ percent-encoding = "2.3.1"
 petgraph = "0.8.2"
 pretty_assertions = "1.4.1"
 phf = "0.13.0"
+prettyplease = "0.2.32"
+proc-macro2 = "1"
+quote = "1"
 rayon = "1.10.0"
 regex = "1.11.1"
-regress = "0.10.3"
-reqwest = { version = "0.12", default-features = false }
-rolldown-notify = "10.1.0"
-rolldown-notify-debouncer-full = "0.7.4"
+regress = "0.11.0"
+reqwest = { version = "0.13", default-features = false }
+rolldown-notify = "10.2.0"
+rolldown-notify-debouncer-full = "0.7.5"
 ropey = "1.6.1"
 rusqlite = { version = "0.37.0", features = ["bundled"] }
 rustc-hash = "2.1.1"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 schemars = "1.0.0"
 self_cell = "1.2.0"
 node-semver = "2.2.0"
@@ -158,6 +167,7 @@ simdutf8 = "0.1.5"
 smallvec = "1.15.0"
 string_cache = "0.9.0"
 sugar_path = { version = "2.0.1", features = ["cached_current_dir"] }
+syn = { version = "2", default-features = false }
 tar = "0.4.43"
 tempfile = "3.14.0"
 terminal_size = "0.4.2"
@@ -165,6 +175,7 @@ test-log = { version = "0.2.18", features = ["trace"] }
 testing_macros = "1.0.0"
 thiserror = "2"
 tokio = { version = "1.48.0", default-features = false }
+tokio-util = "0.7"
 tracing = "0.1.41"
 tracing-chrome = "0.7.2"
 tracing-subscriber = { version = "0.3.19", default-features = false, features = [
@@ -179,19 +190,19 @@ typedmap = "0.6.0"
 url = "2.5.4"
 urlencoding = "2.1.3"
 uuid = "1.17.0"
-vfs = "0.12.1"
+vfs = "0.13.0"
 vite_command = { path = "crates/vite_command" }
 vite_error = { path = "crates/vite_error" }
 vite_js_runtime = { path = "crates/vite_js_runtime" }
-vite_glob = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "398a147fd1ed42a88585d3a9481f200c3e56a2f4" }
+vite_glob = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "076cef486127e6cd1fefc58945f00dac316888ca" }
 vite_install = { path = "crates/vite_install" }
 vite_migration = { path = "crates/vite_migration" }
 vite_shared = { path = "crates/vite_shared" }
 vite_static_config = { path = "crates/vite_static_config" }
-vite_path = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "398a147fd1ed42a88585d3a9481f200c3e56a2f4" }
-vite_str = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "398a147fd1ed42a88585d3a9481f200c3e56a2f4" }
-vite_task = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "398a147fd1ed42a88585d3a9481f200c3e56a2f4" }
-vite_workspace = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "398a147fd1ed42a88585d3a9481f200c3e56a2f4" }
+vite_path = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "076cef486127e6cd1fefc58945f00dac316888ca" }
+vite_str = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "076cef486127e6cd1fefc58945f00dac316888ca" }
+vite_task = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "076cef486127e6cd1fefc58945f00dac316888ca" }
+vite_workspace = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "076cef486127e6cd1fefc58945f00dac316888ca" }
 walkdir = "2.5.0"
 wax = "0.6.0"
 which = "8.0.0"
@@ -199,7 +210,7 @@ xxhash-rust = "0.8.15"
 zip = "7.2"
 
 # oxc crates with the same version
-oxc = { version = "0.120.0", features = [
+oxc = { version = "0.123.0", features = [
   "ast_visit",
   "transformer",
   "minifier",
@@ -211,21 +222,21 @@ oxc = { version = "0.120.0", features = [
   "regular_expression",
   "cfg",
 ] }
-oxc_allocator = { version = "0.120.0", features = ["pool"] }
-oxc_ast = "0.120.0"
-oxc_ecmascript = "0.120.0"
-oxc_parser = "0.120.0"
-oxc_span = "0.120.0"
-oxc_napi = "0.120.0"
-oxc_minify_napi = "0.120.0"
-oxc_parser_napi = "0.120.0"
-oxc_transform_napi = "0.120.0"
-oxc_traverse = "0.120.0"
+oxc_allocator = { version = "0.123.0", features = ["pool"] }
+oxc_ast = "0.123.0"
+oxc_ecmascript = "0.123.0"
+oxc_parser = "0.123.0"
+oxc_span = "0.123.0"
+oxc_napi = "0.123.0"
+oxc_minify_napi = "0.123.0"
+oxc_parser_napi = "0.123.0"
+oxc_transform_napi = "0.123.0"
+oxc_traverse = "0.123.0"
 
 # oxc crates in their own repos
 oxc_index = { version = "4", features = ["rayon", "serde"] }
-oxc_resolver = { version = "11.19.0", features = ["yarn_pnp"] }
-oxc_resolver_napi = { version = "11.19.0", default-features = false, features = ["yarn_pnp"] }
+oxc_resolver = { version = "11.19.1", features = ["yarn_pnp"] }
+oxc_resolver_napi = { version = "11.19.1", default-features = false, features = ["yarn_pnp"] }
 oxc_sourcemap = "6"
 
 # rolldown crates

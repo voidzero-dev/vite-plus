@@ -9,7 +9,9 @@ For the best VS Code experience with Vite+, install the [Vite Plus Extension Pac
 - `Oxc` for formatting and linting via `vp check`
 - `Vitest` for test runs via `vp test`
 
-When you create or migrate a project, Vite+ prompts whether you want editor config written for VS Code. You can also manually set up the VS Code config:
+When you create or migrate a project, Vite+ prompts whether you want editor config written for VS Code. `vp create` additionally sets `npm.scriptRunner` to `vp` so the VS Code NPM Scripts panel runs scripts through the Vite+ task runner. For migrated or existing projects, you can add this setting manually (see below).
+
+You can also manually set up the VS Code config:
 
 `.vscode/extensions.json`
 
@@ -34,3 +36,13 @@ When you create or migrate a project, Vite+ prompts whether you want editor conf
 ```
 
 This gives the project a shared default formatter and enables Oxc-powered fix actions on save. Setting `oxc.fmt.configPath` to `./vite.config.ts` keeps editor format-on-save aligned with the `fmt` block in your Vite+ config. Vite+ uses `formatOnSaveMode: "file"` because Oxfmt does not support partial formatting.
+
+To let the VS Code NPM Scripts panel run scripts through `vp`, add the following to your `.vscode/settings.json`:
+
+```json
+{
+  "npm.scriptRunner": "vp"
+}
+```
+
+This is included automatically by `vp create` but not by `vp migrate`, since existing projects may have team members who do not have `vp` installed locally.

@@ -12,6 +12,7 @@ use clap::{
     Parser, Subcommand,
     error::{ContextKind, ContextValue, ErrorKind},
 };
+use cow_utils::CowUtils;
 use owo_colors::OwoColorize;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
@@ -23,7 +24,9 @@ use vite_task::{
     Command, CommandHandler, ExitStatus, HandledCommand, ScriptCommand, Session, SessionConfig,
     config::{
         UserRunConfig,
-        user::{EnabledCacheConfig, UserCacheConfig},
+        user::{
+            AutoInput, EnabledCacheConfig, GlobWithBase, InputBase, UserCacheConfig, UserInputEntry,
+        },
     },
     loader::UserConfigLoader,
     plan_request::SyntheticPlanRequest,
@@ -329,7 +332,7 @@ impl SubcommandResolver {
                     cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
                         env: Some(Box::new([Str::from("VITE_*")])),
                         untracked_env: None,
-                        input: None,
+                        input: Some(build_pack_cache_inputs()),
                     }),
                     envs: merge_resolved_envs_with_version(envs, resolved.envs),
                 })
@@ -357,7 +360,14 @@ impl SubcommandResolver {
                     cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
                         env: None,
                         untracked_env: None,
-                        input: None,
+                        input: Some(vec![
+                            UserInputEntry::Auto(AutoInput { auto: true }),
+                            exclude_glob("!node_modules/.vite-temp/**", InputBase::Package),
+                            exclude_glob(
+                                "!node_modules/.vite/vitest/**/results.json",
+                                InputBase::Package,
+                            ),
+                        ]),
                     }),
                     envs: merge_resolved_envs_with_version(envs, resolved.envs),
                 })
@@ -381,7 +391,7 @@ impl SubcommandResolver {
                     cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
                         env: None,
                         untracked_env: None,
-                        input: None,
+                        input: Some(build_pack_cache_inputs()),
                     }),
                     envs: merge_resolved_envs(envs, resolved.envs),
                 })
@@ -489,6 +499,39 @@ impl SubcommandResolver {
 
 /// Merge resolved environment variables from JS resolver into existing envs.
 /// Does not override existing entries.
+/// Create a negative glob entry to exclude a pattern from cache fingerprinting.
+fn exclude_glob(pattern: &str, base: InputBase) -> UserInputEntry {
+    UserInputEntry::GlobWithBase(GlobWithBase { pattern: Str::from(pattern), base })
+}
+
+/// Common cache input entries for build/pack commands.
+/// Excludes .vite-temp config files and dist output files that are both read and written.
+/// TODO: The hardcoded `!dist/**` exclusion is a temporary workaround. It will be replaced
+/// by a runner-aware approach that automatically excludes task output directories.
+fn build_pack_cache_inputs() -> Vec<UserInputEntry> {
+    vec![
+        UserInputEntry::Auto(AutoInput { auto: true }),
+        exclude_glob("!node_modules/.vite-temp/**", InputBase::Workspace),
+        exclude_glob("!node_modules/.vite-temp/**", InputBase::Package),
+        exclude_glob("!dist/**", InputBase::Package),
+    ]
+}
+
+/// Cache input entries for the check command.
+/// The vp check subprocess is a full vp CLI process (not resolved to a binary like
+/// build/lint/fmt), so it accesses additional directories that must be excluded:
+/// - `.vite-temp`: config compilation cache, read+written during vp CLI startup
+/// - `.vite/task-cache`: task runner state files that change after each run
+fn check_cache_inputs() -> Vec<UserInputEntry> {
+    vec![
+        UserInputEntry::Auto(AutoInput { auto: true }),
+        exclude_glob("!node_modules/.vite-temp/**", InputBase::Workspace),
+        exclude_glob("!node_modules/.vite-temp/**", InputBase::Package),
+        exclude_glob("!node_modules/.vite/task-cache/**", InputBase::Workspace),
+        exclude_glob("!node_modules/.vite/task-cache/**", InputBase::Package),
+    ]
+}
+
 fn merge_resolved_envs(
     envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
     resolved_envs: Vec<(String, String)>,
@@ -500,14 +543,14 @@ fn merge_resolved_envs(
     Arc::new(envs)
 }
 
-/// Merge resolved envs and inject VITE_PLUS_VERSION for rolldown-vite branding.
+/// Merge resolved envs and inject VP_VERSION for rolldown-vite branding.
 fn merge_resolved_envs_with_version(
     envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
     resolved_envs: Vec<(String, String)>,
 ) -> Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>> {
     let mut merged = merge_resolved_envs(envs, resolved_envs);
     let map = Arc::make_mut(&mut merged);
-    map.entry(Arc::from(OsStr::new("VITE_PLUS_VERSION")))
+    map.entry(Arc::from(OsStr::new("VP_VERSION")))
         .or_insert_with(|| Arc::from(OsStr::new(env!("CARGO_PKG_VERSION"))));
     merged
 }
@@ -536,18 +579,18 @@ impl CommandHandler for VitePlusCommandHandler {
         &mut self,
         command: &mut ScriptCommand,
     ) -> anyhow::Result<HandledCommand> {
-        // Intercept both "vp" and "vite" commands in task scripts.
-        // "vp" is the conventional alias used in vite-plus task configs.
-        // "vite" must also be intercepted so that `vite test`, `vite build`, etc.
-        // in task scripts are synthesized in-session rather than spawning a new CLI process.
+        // Intercept "vp" and "vpr" commands in task scripts so that `vp test`, `vp build`,
+        // `vpr build`, etc. are synthesized in-session rather than spawning a new CLI process.
         let program = command.program.as_str();
-        if program != "vp" && program != "vite" {
+        if program != "vp" && program != "vpr" {
             return Ok(HandledCommand::Verbatim);
         }
-        // Parse "vp <args>" using CLIArgs — always use "vp" as the program name
-        // so clap shows "Usage: vp ..." even if the original command was "vite ..."
+        // "vpr <args>" is shorthand for "vp run <args>", so prepend "run" for parsing.
+        let is_vpr = program == "vpr";
         let cli_args = match CLIArgs::try_parse_from(
-            iter::once("vp").chain(command.args.iter().map(Str::as_str)),
+            iter::once("vp")
+                .chain(is_vpr.then_some("run"))
+                .chain(command.args.iter().map(Str::as_str)),
         ) {
             Ok(args) => args,
             Err(err) if err.kind() == ErrorKind::InvalidSubcommand => {
@@ -559,10 +602,14 @@ impl CommandHandler for VitePlusCommandHandler {
         };
         match cli_args {
             CLIArgs::Synthesizable(SynthesizableSubcommand::Check { .. }) => {
-                // Check is a composite command — run as a subprocess in task scripts
-                Ok(HandledCommand::Synthesized(
-                    command.to_synthetic_plan_request(UserCacheConfig::disabled()),
-                ))
+                // Check is a composite command (fmt + lint) — run as a subprocess in task scripts
+                Ok(HandledCommand::Synthesized(command.to_synthetic_plan_request(
+                    UserCacheConfig::with_config(EnabledCacheConfig {
+                        env: Some(Box::new([Str::from("OXLINT_TSGOLINT_PATH")])),
+                        untracked_env: None,
+                        input: Some(check_cache_inputs()),
+                    }),
+                )))
             }
             CLIArgs::Synthesizable(subcmd) => {
                 let resolved =
@@ -725,6 +772,33 @@ async fn resolve_and_execute_with_stdout_filter(
     let stdout = String::from_utf8_lossy(&output.stdout);
     let filtered = filter(&stdout);
     let _ = std::io::stdout().lock().write_all(filtered.as_bytes());
+
+    Ok(ExitStatus(output.status.code().unwrap_or(1) as u8))
+}
+
+/// Like `resolve_and_execute`, but captures stderr, applies a text filter,
+/// and writes the result to real stderr. Stdout remains inherited (streaming).
+async fn resolve_and_execute_with_stderr_filter(
+    resolver: &SubcommandResolver,
+    subcommand: SynthesizableSubcommand,
+    resolved_vite_config: Option<&ResolvedUniversalViteConfig>,
+    envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
+    cwd: &AbsolutePathBuf,
+    cwd_arc: &Arc<AbsolutePath>,
+    filter: impl Fn(&str) -> Cow<'_, str>,
+) -> Result<ExitStatus, Error> {
+    let mut cmd =
+        resolve_and_build_command(resolver, subcommand, resolved_vite_config, envs, cwd, cwd_arc)
+            .await?;
+    cmd.stderr(Stdio::piped());
+
+    let child = cmd.spawn().map_err(|e| Error::Anyhow(e.into()))?;
+    let output = child.wait_with_output().await.map_err(|e| Error::Anyhow(e.into()))?;
+
+    use std::io::Write;
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let filtered = filter(&stderr);
+    let _ = std::io::stderr().lock().write_all(filtered.as_bytes());
 
     Ok(ExitStatus(output.status.code().unwrap_or(1) as u8))
 }
@@ -1159,6 +1233,7 @@ async fn execute_direct_subcommand(
                     Some(Err(failure)) => {
                         if failure.errors == 0 && failure.warnings > 0 {
                             output::warn(lint_message_kind.warning_heading());
+                            status = ExitStatus::SUCCESS;
                         } else {
                             output::error(lint_message_kind.issue_heading());
                         }
@@ -1242,6 +1317,17 @@ async fn execute_direct_subcommand(
                     cwd,
                     &cwd_arc,
                     |_| Cow::Borrowed(""),
+                )
+                .await?
+            } else if matches!(&other, SynthesizableSubcommand::Fmt { .. }) {
+                resolve_and_execute_with_stderr_filter(
+                    &resolver,
+                    other,
+                    None,
+                    &envs,
+                    cwd,
+                    &cwd_arc,
+                    |s| s.cow_replace("oxfmt --init", "vp fmt --init"),
                 )
                 .await?
             } else {
@@ -1534,7 +1620,7 @@ mod tests {
 
     use clap::Parser;
     use serde_json::json;
-    use vite_task::config::UserRunConfig;
+    use vite_task::{Command, config::UserRunConfig};
 
     use super::{
         CLIArgs, LintMessageKind, SynthesizableSubcommand, extract_unknown_argument,
@@ -1570,11 +1656,13 @@ mod tests {
     }
 
     #[test]
-    fn unknown_argument_detected_with_pass_as_value_hint() {
-        let error =
-            CLIArgs::try_parse_from(["vp", "run", "--yolo"]).expect_err("Expected parse error");
-        assert_eq!(extract_unknown_argument(&error).as_deref(), Some("--yolo"));
-        assert!(has_pass_as_value_suggestion(&error));
+    fn run_accepts_unknown_flags_as_task_args() {
+        // After trailing_var_arg change, unknown flags like --yolo are
+        // accepted as task arguments instead of producing a parse error.
+        let args = CLIArgs::try_parse_from(["vp", "run", "--yolo"]).unwrap();
+        let debug = vite_str::format!("{args:?}");
+        assert!(debug.contains("\"--yolo\""), "Expected --yolo in task args, got: {debug}",);
+        assert!(matches!(args, CLIArgs::ViteTask(Command::Run(_))));
     }
 
     #[test]

@@ -5,7 +5,7 @@ Installing ./env-binary-conflict-pkg-a globally...
 Installed ./env-binary-conflict-pkg-a v<semver>
 Binaries: env-binary-conflict-cli
 
-> cat $VITE_PLUS_HOME/bins/env-binary-conflict-cli.json # Bin config should point to pkg-a
+> cat $VP_HOME/bins/env-binary-conflict-cli.json # Bin config should point to pkg-a
 {
   "name": "env-binary-conflict-cli",
   "package": "./env-binary-conflict-pkg-a",
@@ -21,7 +21,7 @@ Failed to install ./env-binary-conflict-pkg-b: Executable 'env-binary-conflict-c
 
 Please remove ./env-binary-conflict-pkg-a before installing ./env-binary-conflict-pkg-b, or use --force to auto-replace
 
-> cat $VITE_PLUS_HOME/bins/env-binary-conflict-cli.json # Bin config should still point to pkg-a
+> cat $VP_HOME/bins/env-binary-conflict-cli.json # Bin config should still point to pkg-a
 {
   "name": "env-binary-conflict-cli",
   "package": "./env-binary-conflict-pkg-a",
@@ -38,7 +38,7 @@ Uninstalled ./env-binary-conflict-pkg-a
 Installed ./env-binary-conflict-pkg-b v<semver>
 Binaries: env-binary-conflict-cli
 
-> cat $VITE_PLUS_HOME/bins/env-binary-conflict-cli.json # Bin config should now point to pkg-b
+> cat $VP_HOME/bins/env-binary-conflict-cli.json # Bin config should now point to pkg-b
 {
   "name": "env-binary-conflict-cli",
   "package": "./env-binary-conflict-pkg-b",
@@ -49,5 +49,5 @@ Binaries: env-binary-conflict-cli
 > vp remove -g env-binary-conflict-pkg-b # Cleanup
 Uninstalled env-binary-conflict-pkg-b
 
-> test ! -f $VITE_PLUS_HOME/bins/env-binary-conflict-cli.json && echo 'bin config removed' # Bin config should be deleted
+> test ! -f $VP_HOME/bins/env-binary-conflict-cli.json && echo 'bin config removed' # Bin config should be deleted
 bin config removed

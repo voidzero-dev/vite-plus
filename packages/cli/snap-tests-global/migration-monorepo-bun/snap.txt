@@ -1,0 +1,107 @@
+> vp migrate --no-interactive # migration should work with bun object-form workspaces
+VITE+ - The Unified Toolchain for the Web
+
+
+✔ Merged .oxlintrc.json into vite.config.ts
+◇ Migrated . to Vite+<repeat>
+• Node <semver>  bun <semver>
+• 1 config update applied, 1 file had imports rewritten
+
+> cat vite.config.ts # check vite.config.ts
+import react from '@vitejs/plugin-react';
+import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  staged: {
+    "*": "vp check --fix"
+  },
+  fmt: {},
+  lint: {
+    "rules": {
+      "no-unused-vars": "error"
+    },
+    "options": {
+      "typeAware": true,
+      "typeCheck": true
+    }
+  },
+  plugins: [react()],
+});
+
+> test ! -f .oxlintrc.json # check .oxlintrc.json is removed
+> cat package.json # check package.json preserves workspaces object form
+{
+  "name": "migration-monorepo-bun",
+  "version": "1.0.0",
+  "workspaces": {
+    "packages": [
+      "packages/*"
+    ],
+    "catalog": {
+      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+      "vitest": "npm:@voidzero-dev/vite-plus-test@latest",
+      "vite-plus": "latest"
+    }
+  },
+  "scripts": {
+    "dev": "vp dev",
+    "build": "vp build",
+    "test": "vp test",
+    "lint": "vp lint",
+    "fmt": "vp fmt",
+    "prepare": "vp config"
+  },
+  "dependencies": {
+    "testnpm2": "1.0.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:",
+    "vite-plus": "catalog:"
+  },
+  "packageManager": "bun@<semver>",
+  "overrides": {
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  }
+}
+
+> cat packages/app/package.json # check app package.json
+{
+  "name": "app",
+  "scripts": {
+    "dev": "vp dev",
+    "build": "vp build",
+    "test": "vp test"
+  },
+  "dependencies": {
+    "@migration-bun-test/utils": "workspace:*",
+    "test-vite-plus-install": "1.0.0",
+    "testnpm2": "catalog:"
+  },
+  "devDependencies": {
+    "test-vite-plus-package": "1.0.0",
+    "vite": "catalog:",
+    "vitest": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}
+
+> cat packages/utils/package.json # check utils package.json
+{
+  "name": "@migration-bun-test/utils",
+  "scripts": {
+    "dev": "vp dev",
+    "build": "vp build",
+    "test": "vp test"
+  },
+  "dependencies": {
+    "testnpm2": "1.0.0"
+  },
+  "devDependencies": {
+    "vite": "catalog:",
+    "vitest": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}

@@ -4,9 +4,11 @@ VITE+ - The Unified Toolchain for the Web
 
 ◇ Migrated . to Vite+<repeat>
 • Node <semver>  pnpm <semver>
-• Git hooks configured
 ! Warnings:
   - Failed to merge staged config into vite.config.ts
+  - Git hooks not configured — Failed to merge staged config into vite.config.ts
+
+Please add staged config to vite.config.ts manually, see https://viteplus.dev/guide/migrate#lint-staged
 → Manual follow-up:
   - Please add staged config to vite.config.ts manually, see https://viteplus.dev/guide/migrate#lint-staged
 
@@ -14,17 +16,12 @@ VITE+ - The Unified Toolchain for the Web
 {
   "name": "migration-lint-staged-merge-fail",
   "devDependencies": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vite-plus": "latest"
+    "lint-staged": "^16.2.6",
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
   },
   "lint-staged": {
     "*.css": "stylelint --fix"
-  },
-  "pnpm": {
-    "overrides": {
-      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-      "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
-    }
   },
   "packageManager": "pnpm@<semver>",
   "scripts": {
@@ -32,9 +29,25 @@ VITE+ - The Unified Toolchain for the Web
   }
 }
 
+> cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog
+catalog:
+  vite: npm:@voidzero-dev/vite-plus-core@latest
+  vitest: npm:@voidzero-dev/vite-plus-test@latest
+  vite-plus: latest
+overrides:
+  vite: 'catalog:'
+  vitest: 'catalog:'
+peerDependencyRules:
+  allowAny:
+    - vite
+    - vitest
+  allowedVersions:
+    vite: '*'
+    vitest: '*'
+
 > cat vite.config.ts # vite config should be unchanged (merge failed)
 const config = { plugins: [] };
 module.exports = config;
 
 > test -f .vite-hooks/pre-commit && echo 'pre-commit hook exists' || echo 'no pre-commit hook' # should NOT exist when merge fails
-no pre-commit hook
+pre-commit hook exists

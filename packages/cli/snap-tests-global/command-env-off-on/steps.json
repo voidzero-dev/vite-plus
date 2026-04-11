@@ -1,0 +1,12 @@
+{
+  "serial": true,
+  "ignoredPlatforms": ["win32"],
+  "commands": [
+    "vp run assert-managed # Managed mode: should use project's engines.node 20.18.0",
+    "vp env off # Switch to system-first mode",
+    "vp run assert-not-managed # System-first mode: must NOT use 20.18.0",
+    "vp env on # Switch back to managed mode",
+    "vp run assert-managed # Managed mode restored: should use 20.18.0 again"
+  ],
+  "after": ["vp env on"]
+}

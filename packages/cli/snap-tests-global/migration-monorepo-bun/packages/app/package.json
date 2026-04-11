@@ -1,0 +1,18 @@
+{
+  "name": "app",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "@migration-bun-test/utils": "workspace:*",
+    "test-vite-plus-install": "1.0.0",
+    "testnpm2": "catalog:"
+  },
+  "devDependencies": {
+    "test-vite-plus-package": "1.0.0",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  }
+}

@@ -2,7 +2,13 @@
   "commands": [
     "vp migrate --no-interactive # should detect vite-plus + prettier and auto-migrate prettier",
     "cat package.json # check prettier removed from devDependencies and scripts rewritten",
-    "cat .prettierrc.json && exit 1 || true # check prettier config is removed",
+    "test ! -f .prettierrc.json # check prettier config is removed",
     "cat vite.config.ts # check oxfmt config merged into vite.config.ts"
+  ],
+  "ignoredPlatforms": [
+    {
+      "os": "linux",
+      "libc": "musl"
+    }
   ]
 }

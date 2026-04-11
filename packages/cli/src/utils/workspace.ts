@@ -12,10 +12,13 @@ import {
   type WorkspaceInfo,
   type WorkspaceInfoOptional,
   type WorkspacePackage,
-} from '../types/index.js';
-import { editJsonFile, readJsonFile } from './json.js';
-import { getScopeFromPackageName } from './package.js';
-import { editYamlFile, readYamlFile } from './yaml.js';
+} from '../types/index.ts';
+import { editJsonFile, readJsonFile } from './json.ts';
+import { getScopeFromPackageName } from './package.ts';
+import { editYamlFile, readYamlFile } from './yaml.ts';
+
+// npm/yarn use an array; Bun catalogs and Yarn classic nohoist use an object with `packages`.
+export type NpmWorkspaces = string[] | { packages?: string[]; catalog?: Record<string, string> };
 
 export function findPackageJsonFilesFromPatterns(patterns: string[], cwd: string): string[] {
   if (patterns.length === 0) {
@@ -64,10 +67,12 @@ export async function detectWorkspace(rootDir: string): Promise<WorkspaceInfoOpt
         result.workspacePatterns = workspaceConfig.packages;
       }
     } else if (fs.existsSync(packageJsonFile)) {
-      // Check for npm/yarn workspace
-      const pkg = readJsonFile<{ workspaces?: string[] }>(packageJsonFile);
+      // Check for npm/yarn/bun workspace (array or object form)
+      const pkg = readJsonFile<{ workspaces?: NpmWorkspaces }>(packageJsonFile);
       if (Array.isArray(pkg.workspaces)) {
         result.workspacePatterns = pkg.workspaces;
+      } else if (pkg.workspaces && Array.isArray(pkg.workspaces.packages)) {
+        result.workspacePatterns = pkg.workspaces.packages;
       }
     }
 
@@ -193,11 +198,16 @@ export function updateWorkspaceConfig(projectPath: string, workspaceInfo: Worksp
       doc.setIn(['packages'], packages);
     });
   } else {
-    // Update package.json workspaces
-    editJsonFile<{ workspaces?: string[] }>(
+    // Update package.json workspaces (array or object form)
+    editJsonFile<{ workspaces?: NpmWorkspaces }>(
       path.join(workspaceInfo.rootDir, 'package.json'),
       (pkg) => {
-        pkg.workspaces = [...(pkg.workspaces || []), pattern];
+        if (pkg.workspaces && !Array.isArray(pkg.workspaces)) {
+          // Preserve object form (e.g., Bun catalogs, Yarn classic nohoist)
+          pkg.workspaces.packages = [...(pkg.workspaces.packages || []), pattern];
+        } else {
+          pkg.workspaces = [...(pkg.workspaces || []), pattern];
+        }
         return pkg;
       },
     );

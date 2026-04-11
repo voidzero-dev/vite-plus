@@ -1,9 +1,9 @@
 use std::{collections::HashMap, iter, process::ExitStatus};
 
-use tracing::warn;
 use vite_command::run_command;
 use vite_error::Error;
 use vite_path::AbsolutePath;
+use vite_shared::output;
 
 use crate::package_manager::{
     PackageManager, PackageManagerType, ResolveCommandResult, format_path_env,
@@ -165,8 +165,8 @@ impl PackageManager {
                         args.push("--mode".into());
                         args.push("update-lockfile".into());
                         if options.ignore_scripts {
-                            warn!(
-                                "yarn@2+ --mode can only be specified once; --lockfile-only takes priority over --ignore-scripts"
+                            output::warn(
+                                "yarn@2+ --mode can only be specified once; --lockfile-only takes priority over --ignore-scripts",
                             );
                         }
                     } else if options.ignore_scripts {
@@ -177,15 +177,17 @@ impl PackageManager {
                         args.push("--refresh-lockfile".into());
                     }
                     if options.silent {
-                        warn!(
-                            "yarn@2+ does not support --silent, use YARN_ENABLE_PROGRESS=false instead"
+                        output::warn(
+                            "yarn@2+ does not support --silent, use YARN_ENABLE_PROGRESS=false instead",
                         );
                     }
                     if options.prod {
-                        warn!("yarn@2+ requires configuration in .yarnrc.yml for --prod behavior");
+                        output::warn(
+                            "yarn@2+ requires configuration in .yarnrc.yml for --prod behavior",
+                        );
                     }
                     if options.resolution_only {
-                        warn!("yarn@2+ does not support --resolution-only");
+                        output::warn("yarn@2+ does not support --resolution-only");
                     }
                 } else {
                     // yarn@1 (Classic)
@@ -220,10 +222,10 @@ impl PackageManager {
                         args.push("--no-lockfile".into());
                     }
                     if options.fix_lockfile {
-                        warn!("yarn@1 does not support --fix-lockfile");
+                        output::warn("yarn@1 does not support --fix-lockfile");
                     }
                     if options.resolution_only {
-                        warn!("yarn@1 does not support --resolution-only");
+                        output::warn("yarn@1 does not support --resolution-only");
                     }
                     if options.workspace_root {
                         args.push("-W".into());
@@ -269,10 +271,10 @@ impl PackageManager {
                     args.push("--no-package-lock".into());
                 }
                 if options.fix_lockfile {
-                    warn!("npm does not support --fix-lockfile");
+                    output::warn("npm does not support --fix-lockfile");
                 }
                 if options.resolution_only {
-                    warn!("npm does not support --resolution-only");
+                    output::warn("npm does not support --resolution-only");
                 }
                 if options.silent {
                     args.push("--loglevel".into());
@@ -286,6 +288,60 @@ impl PackageManager {
                         args.push("--workspace".into());
                         args.push(filter.clone());
                     }
+                }
+            }
+            PackageManagerType::Bun => {
+                bin_name = "bun".into();
+                args.push("install".into());
+
+                if options.prod {
+                    args.push("--production".into());
+                }
+                // --no-frozen-lockfile takes higher priority over --frozen-lockfile
+                if options.no_frozen_lockfile {
+                    args.push("--no-frozen-lockfile".into());
+                } else if options.frozen_lockfile {
+                    args.push("--frozen-lockfile".into());
+                }
+                if options.force {
+                    args.push("--force".into());
+                }
+                if options.silent {
+                    args.push("--silent".into());
+                }
+                if options.no_optional {
+                    args.push("--omit".into());
+                    args.push("optional".into());
+                }
+                if options.ignore_scripts {
+                    args.push("--ignore-scripts".into());
+                }
+                if options.lockfile_only {
+                    args.push("--lockfile-only".into());
+                }
+                if options.prefer_offline {
+                    output::warn("bun does not support --prefer-offline");
+                }
+                if options.offline {
+                    output::warn("bun does not support --offline");
+                }
+                if options.no_lockfile {
+                    output::warn("bun does not support --no-lockfile");
+                }
+                if options.fix_lockfile {
+                    output::warn("bun does not support --fix-lockfile");
+                }
+                if options.resolution_only {
+                    output::warn("bun does not support --resolution-only");
+                }
+                if let Some(filters) = options.filters {
+                    for filter in filters {
+                        args.push("--filter".into());
+                        args.push(filter.clone());
+                    }
+                }
+                if options.workspace_root {
+                    output::warn("bun does not support --workspace-root");
                 }
             }
         }
@@ -676,6 +732,55 @@ mod tests {
             ..Default::default()
         });
         assert_eq!(result.args, vec!["install"]);
+    }
+
+    #[test]
+    fn test_bun_basic_install() {
+        let pm = create_mock_package_manager(PackageManagerType::Bun, "1.3.11");
+        let result = pm.resolve_install_command_with_options(&InstallCommandOptions::default());
+        assert_eq!(result.bin_path, "bun");
+        assert_eq!(result.args, vec!["install"]);
+    }
+
+    #[test]
+    fn test_bun_frozen_lockfile() {
+        let pm = create_mock_package_manager(PackageManagerType::Bun, "1.3.11");
+        let result = pm.resolve_install_command_with_options(&InstallCommandOptions {
+            frozen_lockfile: true,
+            ..Default::default()
+        });
+        assert!(result.args.contains(&"--frozen-lockfile".to_string()));
+    }
+
+    #[test]
+    fn test_bun_ignore_scripts() {
+        let pm = create_mock_package_manager(PackageManagerType::Bun, "1.3.11");
+        let result = pm.resolve_install_command_with_options(&InstallCommandOptions {
+            ignore_scripts: true,
+            ..Default::default()
+        });
+        assert!(result.args.contains(&"--ignore-scripts".to_string()));
+    }
+
+    #[test]
+    fn test_bun_no_optional() {
+        let pm = create_mock_package_manager(PackageManagerType::Bun, "1.3.11");
+        let result = pm.resolve_install_command_with_options(&InstallCommandOptions {
+            no_optional: true,
+            ..Default::default()
+        });
+        assert!(result.args.contains(&"--omit".to_string()));
+        assert!(result.args.contains(&"optional".to_string()));
+    }
+
+    #[test]
+    fn test_bun_prod_install() {
+        let pm = create_mock_package_manager(PackageManagerType::Bun, "1.3.11");
+        let result = pm.resolve_install_command_with_options(&InstallCommandOptions {
+            prod: true,
+            ..Default::default()
+        });
+        assert!(result.args.contains(&"--production".to_string()));
     }
 
     #[test]

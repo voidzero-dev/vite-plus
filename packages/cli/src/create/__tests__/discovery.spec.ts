@@ -21,13 +21,13 @@ describe('expandCreateShorthand', () => {
   });
 
   it('should expand scoped names to @scope/create-* packages', () => {
-    expect(expandCreateShorthand('@tanstack/start')).toBe('@tanstack/create-start');
+    expect(expandCreateShorthand('@tanstack/start')).toBe('@tanstack/cli');
     expect(expandCreateShorthand('@my-org/app')).toBe('@my-org/create-app');
   });
 
   it('should expand scoped names with version', () => {
-    expect(expandCreateShorthand('@tanstack/start@latest')).toBe('@tanstack/create-start@latest');
-    expect(expandCreateShorthand('@tanstack/start@1.0.0')).toBe('@tanstack/create-start@1.0.0');
+    expect(expandCreateShorthand('@tanstack/start@latest')).toBe('@tanstack/cli@latest');
+    expect(expandCreateShorthand('@tanstack/start@1.0.0')).toBe('@tanstack/cli@1.0.0');
   });
 
   it('should not expand names already starting with create-', () => {
@@ -60,8 +60,10 @@ describe('expandCreateShorthand', () => {
     expect(expandCreateShorthand('/absolute/path')).toBe('/absolute/path');
   });
 
-  it('should handle scope-only input gracefully', () => {
-    expect(expandCreateShorthand('@scope')).toBe('@scope');
+  it('should expand scope-only input to @scope/create', () => {
+    expect(expandCreateShorthand('@scope')).toBe('@scope/create');
+    expect(expandCreateShorthand('@scope@latest')).toBe('@scope/create@latest');
+    expect(expandCreateShorthand('@scope@1.2.3')).toBe('@scope/create@1.2.3');
   });
 
   it('should handle special cases where default convention does not apply', () => {

@@ -1,0 +1,9 @@
+{
+  "commands": [
+    {
+      "command": "mkdir -p my-app && cd my-app && vp create vite:application --no-interactive --directory . # create vite app in current directory",
+      "ignoreOutput": true
+    },
+    "test -f my-app/package.json && echo 'Created at my-app with --directory .' || echo 'NOT at my-app'"
+  ]
+}

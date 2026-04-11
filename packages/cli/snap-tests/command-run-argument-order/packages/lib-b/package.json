@@ -1,0 +1,6 @@
+{
+  "name": "lib-b",
+  "scripts": {
+    "hello": "echo hello from lib-b"
+  }
+}

@@ -24,9 +24,7 @@ Prettier config migrated to .oxfmtrc.json
   }
 }
 
-> cat .prettierrc.json && exit 1 || true # check prettier config is removed
-cat: .prettierrc.json: No such file or directory
-
+> test ! -f .prettierrc.json # check prettier config is removed
 > cat vite.config.ts # check oxfmt config merged into vite.config.ts
 import { defineConfig } from 'vite-plus';
 

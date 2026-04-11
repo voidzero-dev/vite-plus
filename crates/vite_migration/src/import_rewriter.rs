@@ -4,6 +4,9 @@ use std::{
     sync::LazyLock,
 };
 
+use ast_grep_config::RuleConfig;
+use ast_grep_language::SupportLang;
+use rayon::prelude::*;
 use regex::Regex;
 use vite_error::Error;
 
@@ -276,6 +279,18 @@ transform:
 fix: $NEW_IMPORT
 "#;
 
+static PARSED_VITE_RULES: LazyLock<Vec<RuleConfig<SupportLang>>> = LazyLock::new(|| {
+    ast_grep::load_rules(REWRITE_VITE_RULES).expect("failed to parse vite rewrite rules")
+});
+
+static PARSED_VITEST_RULES: LazyLock<Vec<RuleConfig<SupportLang>>> = LazyLock::new(|| {
+    ast_grep::load_rules(REWRITE_VITEST_RULES).expect("failed to parse vitest rewrite rules")
+});
+
+static PARSED_TSDOWN_RULES: LazyLock<Vec<RuleConfig<SupportLang>>> = LazyLock::new(|| {
+    ast_grep::load_rules(REWRITE_TSDOWN_RULES).expect("failed to parse tsdown rewrite rules")
+});
+
 // Regex patterns for rewriting `/// <reference types="..." />` directives.
 // These cannot be handled by ast-grep because triple-slash references are parsed as comments.
 
@@ -502,7 +517,7 @@ fn rewrite_reference_types(content: &mut String, skip_packages: &SkipPackages) -
 }
 
 /// Packages to skip rewriting based on peerDependencies or dependencies
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Copy, Default)]
 struct SkipPackages {
     /// Skip rewriting vite imports (vite is in peerDependencies or dependencies)
     skip_vite: bool,
@@ -593,6 +608,12 @@ pub struct BatchRewriteResult {
     pub errors: Vec<(PathBuf, String)>,
 }
 
+enum FileResult {
+    Modified,
+    Unchanged,
+    Error(String),
+}
+
 /// Rewrite imports in all TypeScript/JavaScript files under a directory
 ///
 /// This function finds all TypeScript and JavaScript files in the specified directory
@@ -625,53 +646,65 @@ pub struct BatchRewriteResult {
 pub fn rewrite_imports_in_directory(root: &Path) -> Result<BatchRewriteResult, Error> {
     let walk_result = file_walker::find_ts_files(root)?;
 
-    let mut result = BatchRewriteResult {
+    // Pre-compute skip_packages for each file (requires mutable cache, done sequentially)
+    let mut skip_packages_cache: HashMap<PathBuf, SkipPackages> = HashMap::new();
+    let files_with_skip: Vec<(PathBuf, SkipPackages)> = walk_result
+        .files
+        .into_iter()
+        .map(|file_path| {
+            let skip_packages =
+                if let Some(package_json_path) = find_nearest_package_json(&file_path, root) {
+                    *skip_packages_cache
+                        .entry(package_json_path.clone())
+                        .or_insert_with(|| get_skip_packages_from_package_json(&package_json_path))
+                } else {
+                    SkipPackages::default()
+                };
+            (file_path, skip_packages)
+        })
+        .collect();
+
+    // Process files in parallel using rayon
+    let results: Vec<(PathBuf, FileResult)> = files_with_skip
+        .into_par_iter()
+        .map(|(file_path, skip_packages)| {
+            if skip_packages.all_skipped() {
+                return (file_path, FileResult::Unchanged);
+            }
+
+            match rewrite_import(&file_path, &skip_packages) {
+                Ok(rewrite_result) => {
+                    if rewrite_result.updated {
+                        if let Err(e) = std::fs::write(&file_path, &rewrite_result.content) {
+                            (file_path, FileResult::Error(e.to_string()))
+                        } else {
+                            (file_path, FileResult::Modified)
+                        }
+                    } else {
+                        (file_path, FileResult::Unchanged)
+                    }
+                }
+                Err(e) => (file_path, FileResult::Error(e.to_string())),
+            }
+        })
+        .collect();
+
+    // Collect results
+    let mut batch_result = BatchRewriteResult {
         modified_files: Vec::new(),
         unchanged_files: Vec::new(),
         errors: Vec::new(),
     };
 
-    // Cache package.json lookups to avoid re-reading the same file
-    let mut skip_packages_cache: HashMap<PathBuf, SkipPackages> = HashMap::new();
-
-    for file_path in walk_result.files {
-        // Find the nearest package.json for this file
-        let skip_packages =
-            if let Some(package_json_path) = find_nearest_package_json(&file_path, root) {
-                skip_packages_cache
-                    .entry(package_json_path.clone())
-                    .or_insert_with(|| get_skip_packages_from_package_json(&package_json_path))
-                    .clone()
-            } else {
-                SkipPackages::default()
-            };
-
-        // If all packages are in peerDeps for this file's package, skip it
-        if skip_packages.all_skipped() {
-            result.unchanged_files.push(file_path);
-            continue;
-        }
-
-        match rewrite_import(&file_path, &skip_packages) {
-            Ok(rewrite_result) => {
-                if rewrite_result.updated {
-                    // Write the modified content back
-                    if let Err(e) = std::fs::write(&file_path, &rewrite_result.content) {
-                        result.errors.push((file_path, e.to_string()));
-                    } else {
-                        result.modified_files.push(file_path);
-                    }
-                } else {
-                    result.unchanged_files.push(file_path);
-                }
-            }
-            Err(e) => {
-                result.errors.push((file_path, e.to_string()));
-            }
+    for (file_path, file_result) in results {
+        match file_result {
+            FileResult::Modified => batch_result.modified_files.push(file_path),
+            FileResult::Unchanged => batch_result.unchanged_files.push(file_path),
+            FileResult::Error(msg) => batch_result.errors.push((file_path, msg)),
         }
     }
 
-    Ok(result)
+    Ok(batch_result)
 }
 
 /// Rewrite imports in a TypeScript/JavaScript file from vite/vitest to vite-plus
@@ -698,6 +731,24 @@ fn rewrite_import(file_path: &Path, skip_packages: &SkipPackages) -> Result<Rewr
     rewrite_import_content(&content, skip_packages)
 }
 
+/// Fast pre-filter to skip expensive AST parsing for files with no relevant imports.
+fn content_may_need_rewriting(content: &str, skip_packages: &SkipPackages) -> bool {
+    // "vite" also matches "vitest" as a substring, covering both packages
+    if !skip_packages.skip_vite || !skip_packages.skip_vitest {
+        if content.contains("vite") {
+            return true;
+        }
+    }
+    // When only skip_vite is set, we still need to catch @vitest/ scoped packages
+    if !skip_packages.skip_vitest && content.contains("@vitest/") {
+        return true;
+    }
+    if !skip_packages.skip_tsdown && content.contains("tsdown") {
+        return true;
+    }
+    false
+}
+
 /// Rewrite imports in content from vite/vitest to vite-plus
 ///
 /// This is the internal function that performs the actual rewrite using ast-grep.
@@ -706,33 +757,36 @@ fn rewrite_import_content(
     content: &str,
     skip_packages: &SkipPackages,
 ) -> Result<RewriteResult, Error> {
+    // Fast path: skip AST parsing if the file doesn't contain any target strings
+    if !content_may_need_rewriting(content, skip_packages) {
+        return Ok(RewriteResult { content: content.to_string(), updated: false });
+    }
+
     let mut new_content = content.to_string();
     let mut updated = false;
 
-    // Apply vite rules if not skipped
+    // Apply vite rules if not skipped (using pre-parsed rules)
     if !skip_packages.skip_vite {
-        let (vite_content, vite_updated) = ast_grep::apply_rules(&new_content, REWRITE_VITE_RULES)?;
-        if vite_updated {
+        let vite_content = ast_grep::apply_loaded_rules(&new_content, &PARSED_VITE_RULES);
+        if vite_content != new_content {
             new_content = vite_content;
             updated = true;
         }
     }
 
-    // Apply vitest rules if not skipped
+    // Apply vitest rules if not skipped (using pre-parsed rules)
     if !skip_packages.skip_vitest {
-        let (vitest_content, vitest_updated) =
-            ast_grep::apply_rules(&new_content, REWRITE_VITEST_RULES)?;
-        if vitest_updated {
+        let vitest_content = ast_grep::apply_loaded_rules(&new_content, &PARSED_VITEST_RULES);
+        if vitest_content != new_content {
             new_content = vitest_content;
             updated = true;
         }
     }
 
-    // Apply tsdown rules if not skipped
+    // Apply tsdown rules if not skipped (using pre-parsed rules)
     if !skip_packages.skip_tsdown {
-        let (tsdown_content, tsdown_updated) =
-            ast_grep::apply_rules(&new_content, REWRITE_TSDOWN_RULES)?;
-        if tsdown_updated {
+        let tsdown_content = ast_grep::apply_loaded_rules(&new_content, &PARSED_TSDOWN_RULES);
+        if tsdown_content != new_content {
             new_content = tsdown_content;
             updated = true;
         }

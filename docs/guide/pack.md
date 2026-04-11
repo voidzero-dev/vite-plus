@@ -25,8 +25,8 @@ See the [tsdown guide](https://tsdown.dev/guide/) and the [tsdown config file do
 Use it for:
 
 - [declaration files (`dts`)](https://tsdown.dev/options/dts)
-- [output formats](https://tsdown.dev/options/format)
-- [watch mode](https://tsdown.dev/options/watch)
+- [output formats](https://tsdown.dev/options/output-format)
+- [watch mode](https://tsdown.dev/options/watch-mode)
 - [standalone executables](https://tsdown.dev/options/exe#executable)
 
 ```ts

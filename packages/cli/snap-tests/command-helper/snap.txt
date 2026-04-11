@@ -337,7 +337,7 @@ Options:
   --no-color                                                 Removes colors from the console output (default: true)
   --clearScreen                                              Clear terminal screen when re-running tests during watch mode (default: true) 
   --configLoader <loader>                                    Use bundle to bundle the config with esbuild or runner (experimental) to process it on the fly. This is only available in vite version <semver> and above. (default: bundle) 
-  --standalone                                               Start Vitest without running tests. Tests will be running only on change. This option is ignored when CLI file filters are passed. (default: false) 
+  --standalone                                               Start Vitest without running tests. Tests will be running only on change. If browser mode is enabled, the UI will be opened automatically. This option is ignored when CLI file filters are passed. (default: false) 
   --mergeReports [path]                                      Path to a blob reports directory. If this options is used, Vitest won't run any tests, it will only report previously recorded tests 
   --listTags [type]                                          List all available tags instead of running tests. --list-tags=json will output tags in JSON format, unless there are no tags. 
   --clearCache                                               Delete all Vitest caches, including experimental.fsModuleCache, without running any tests. This will reduce the performance in the subsequent test run. 

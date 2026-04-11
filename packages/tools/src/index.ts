@@ -25,14 +25,14 @@ switch (subcommand) {
     const { installGlobalCli } = await import('./install-global-cli.ts');
     installGlobalCli();
     break;
-  case 'brand-rolldown-vite':
-    const { brandRolldownVite } = await import('./brand-rolldown-vite.ts');
-    brandRolldownVite();
+  case 'brand-vite':
+    const { brandVite } = await import('./brand-vite.ts');
+    brandVite();
     break;
   default:
     console.error(`Unknown subcommand: ${subcommand}`);
     console.error(
-      'Available subcommands: snap-test, replace-file-content, sync-remote, json-sort, merge-peer-deps, install-global-cli, brand-rolldown-vite',
+      'Available subcommands: snap-test, replace-file-content, sync-remote, json-sort, merge-peer-deps, install-global-cli, brand-vite',
     );
     process.exit(1);
 }

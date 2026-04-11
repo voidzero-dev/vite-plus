@@ -48,8 +48,8 @@ async function updateUpstreamVersions() {
   // rolldown -> rolldown/rolldown
   data.rolldown.hash = await getLatestTagCommit('rolldown', 'rolldown');
 
-  // rolldown-vite -> vitejs/vite
-  data['rolldown-vite'].hash = await getLatestTagCommit('vitejs', 'vite');
+  // vite -> vitejs/vite
+  data['vite'].hash = await getLatestTagCommit('vitejs', 'vite');
 
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2) + '\n');
   console.log('Updated .upstream-versions.json');

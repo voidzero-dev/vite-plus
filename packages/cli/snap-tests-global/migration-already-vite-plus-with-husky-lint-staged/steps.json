@@ -1,9 +1,18 @@
 {
   "commands": [
-    { "command": "git init", "ignoreOutput": true },
+    {
+      "command": "git init",
+      "ignoreOutput": true
+    },
     "vp migrate --no-interactive # should still migrate husky/lint-staged even though vite-plus exists",
     "cat package.json # husky/lint-staged should be removed, prepare should be vp config",
     "cat .vite-hooks/pre-commit # pre-commit hook should be rewritten",
     "test -d .husky && echo '.husky directory exists' || echo 'No .husky directory' # .husky should be removed"
+  ],
+  "ignoredPlatforms": [
+    {
+      "os": "linux",
+      "libc": "musl"
+    }
   ]
 }

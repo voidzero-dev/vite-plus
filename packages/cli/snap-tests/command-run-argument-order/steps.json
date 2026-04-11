@@ -1,0 +1,10 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1"
+  },
+  "commands": [
+    "vp run -r hello # new syntax: -r before task, runs recursively",
+    "vp run hello -r # old syntax: -r after task, passed through as arg"
+  ]
+}

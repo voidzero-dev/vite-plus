@@ -23,7 +23,14 @@ yanked = "warn"
 # output a note when they are encountered.
 ignore = [
   "RUSTSEC-2024-0399",
-  # "RUSTSEC-0000-0000",
+  # Advisories from upstream (rolldown) dependencies
+  "RUSTSEC-2025-0052",
+  "RUSTSEC-2025-0067",
+  "RUSTSEC-2025-0068",
+  "RUSTSEC-2025-0141",
+  "RUSTSEC-2026-0049",
+  "RUSTSEC-2026-0067",
+  "RUSTSEC-2026-0068",
 ]
 # Threshold for security vulnerabilities, any vulnerability with a CVSS score
 # lower than the range specified will be ignored. Note that ignored advisories
@@ -50,13 +57,20 @@ ignore = [
 # [possible values: any SPDX 3.11 short identifier (+ optional exception)].
 allow = [
   "Apache-2.0",
+  "BSD-2-Clause",
   "BSD-3-Clause",
+  "BSL-1.0",
+  "bzip2-1.0.6",
+  "CC0-1.0",
+  "CDLA-Permissive-2.0",
   "ISC",
   "MIT",
+  "MIT-0",
   "MPL-2.0",
   "OpenSSL",
   "Unicode-DFS-2016",
   "Unicode-3.0",
+  "Zlib",
 ]
 # The confidence threshold for detecting a license from license text.
 # The higher the value, the more closely the license text must be to the
@@ -200,7 +214,7 @@ allow-git = []
 
 [sources.allow-org]
 # 1 or more github.com organizations to allow git sources for
-# github = [""]
+github = ["voidzero-dev", "reubeno", "polachok", "branchseer"]
 # 1 or more gitlab.com organizations to allow git sources for
 # gitlab = [""]
 # 1 or more bitbucket.org organizations to allow git sources for
@@ -232,7 +246,18 @@ targets = [
 # they are connected to another crate in the graph that hasn't been pruned,
 # so it should be used with care. The identifiers are [Package ID Specifications]
 # (https://doc.rust-lang.org/cargo/reference/pkgid-spec.html)
-# exclude = []
+# First-party crates without license fields — exclude from all checks
+exclude = [
+  "vite-plus-benches",
+  "vite-plus-cli",
+  "fspy",
+  "fspy_detours_sys",
+  "fspy_preload_unix",
+  "fspy_preload_windows",
+  "fspy_seccomp_unotify",
+  "fspy_shared",
+  "fspy_shared_unix",
+]
 # If true, metadata will be collected with `--all-features`. Note that this can't
 # be toggled off if true, if you want to conditionally enable `--all-features` it
 # is recommended to pass `--all-features` on the cmd line instead

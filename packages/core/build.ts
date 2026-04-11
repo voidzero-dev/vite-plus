@@ -15,18 +15,18 @@ import { build, type BuildOptions } from 'rolldown';
 import { dts } from 'rolldown-plugin-dts';
 import { glob } from 'tinyglobby';
 
-import { generateLicenseFile } from '../../scripts/generate-license.ts';
-import { buildCjsDeps } from './build-support/build-cjs-deps';
-import { replaceThirdPartyCjsRequires } from './build-support/find-create-require';
-import { RewriteImportsPlugin } from './build-support/rewrite-imports';
+import { generateLicenseFile } from '../../scripts/generate-license.js';
+import { buildCjsDeps } from './build-support/build-cjs-deps.js';
+import { replaceThirdPartyCjsRequires } from './build-support/find-create-require.js';
+import { RewriteImportsPlugin } from './build-support/rewrite-imports.js';
 import {
   createRolldownRewriteRules,
   createViteRewriteRules,
   rewriteModuleSpecifiers,
   type ReplacementRule,
-} from './build-support/rewrite-module-specifiers';
+} from './build-support/rewrite-module-specifiers.js';
 import pkgJson from './package.json' with { type: 'json' };
-import viteRolldownConfig from './vite-rolldown.config';
+import viteRolldownConfig from './vite-rolldown.config.js';
 
 const projectDir = join(fileURLToPath(import.meta.url), '..');
 
@@ -41,7 +41,7 @@ const rolldownPluginUtilsDir = resolve(
 
 const rolldownSourceDir = resolve(projectDir, '..', '..', 'rolldown', 'packages', 'rolldown');
 
-const rolldownViteSourceDir = resolve(projectDir, '..', '..', 'rolldown-vite', 'packages', 'vite');
+const rolldownViteSourceDir = resolve(projectDir, '..', '..', 'vite', 'packages', 'vite');
 
 const tsdownSourceDir = resolve(projectDir, 'node_modules/tsdown');
 
@@ -55,14 +55,14 @@ await bundleVitepress();
 generateLicenseFile({
   title: 'Vite-Plus core license',
   packageName: 'Vite-Plus',
-  outputPath: join(projectDir, 'LICENSE.md'),
+  outputPath: join(projectDir, 'LICENSE'),
   coreLicensePath: join(projectDir, '..', '..', 'LICENSE'),
   bundledPaths: [join(projectDir, 'dist')],
   resolveFrom: [
     projectDir,
     join(projectDir, '..', '..'),
     join(projectDir, '..', '..', 'rolldown'),
-    join(projectDir, '..', '..', 'rolldown-vite'),
+    join(projectDir, '..', '..', 'vite'),
   ],
   extraPackages: [
     {
@@ -84,11 +84,10 @@ generateLicenseFile({
     },
   ],
 });
-if (!existsSync(join(projectDir, 'LICENSE.md'))) {
-  throw new Error('LICENSE.md was not generated during build');
+if (!existsSync(join(projectDir, 'LICENSE'))) {
+  throw new Error('LICENSE was not generated during build');
 }
 await mergePackageJson();
-await syncLicenseFromRoot();
 
 async function buildVite() {
   const newViteRolldownConfig = viteRolldownConfig.map((config) => {
@@ -154,6 +153,7 @@ async function buildVite() {
                 };
               }
             }
+            return undefined;
           },
         },
         {
@@ -195,19 +195,20 @@ async function buildVite() {
                 };
               }
             }
+            return undefined;
           },
         },
         {
           name: 'suppress-vite-version-only-reporter-line',
           transform(code, id) {
             if (!id.endsWith(join('vite', 'src', 'node', 'plugins', 'reporter.ts'))) {
-              return;
+              return undefined;
             }
 
             // Upstream native reporter can emit a redundant standalone "vite vX.Y.Z" line.
             // Filter it at source so snapshots and CLI output remain stable.
             if (code.includes('VITE_VERSION_ONLY_LINE_RE')) {
-              return;
+              return undefined;
             }
 
             const constLine =
@@ -216,7 +217,7 @@ async function buildVite() {
               '        logInfo: shouldLogInfo ? (msg) => env.logger.info(msg) : undefined,';
 
             if (!code.includes(constLine) || !code.includes(logInfoLine)) {
-              return;
+              return undefined;
             }
 
             return {
@@ -405,6 +406,7 @@ async function bundleTsdown() {
             }
             return { code: updatedCode };
           }
+          return undefined;
         },
       },
     ],
@@ -640,13 +642,13 @@ async function mergePackageJson() {
   const vitePkg = JSON.parse(await readFile(vitePkgPath, 'utf-8'));
   const destPkg = JSON.parse(await readFile(destPkgPath, 'utf-8'));
 
-  // Merge peerDependencies from tsdown and rolldown-vite
+  // Merge peerDependencies from tsdown and vite
   destPkg.peerDependencies = {
     ...tsdownPkg.peerDependencies,
     ...vitePkg.peerDependencies,
   };
 
-  // Merge peerDependenciesMeta from tsdown and rolldown-vite
+  // Merge peerDependenciesMeta from tsdown and vite
   destPkg.peerDependenciesMeta = {
     ...tsdownPkg.peerDependenciesMeta,
     ...vitePkg.peerDependenciesMeta,
@@ -669,10 +671,4 @@ async function mergePackageJson() {
     process.exit(1);
   }
   await writeFile(destPkgPath, code);
-}
-
-async function syncLicenseFromRoot() {
-  const rootLicensePath = join(projectDir, '..', '..', 'LICENSE');
-  const packageLicensePath = join(projectDir, 'LICENSE');
-  await copyFile(rootLicensePath, packageLicensePath);
 }

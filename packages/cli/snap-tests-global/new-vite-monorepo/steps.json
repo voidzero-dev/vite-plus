@@ -7,6 +7,7 @@
     },
     "ls vite-plus-monorepo | LC_ALL=C sort # check files created",
     "cat vite-plus-monorepo/package.json # check package.json",
+    "cat vite-plus-monorepo/vite.config.ts # check vite config has cache enabled",
     "cat vite-plus-monorepo/pnpm-workspace.yaml # check workspace config",
     "test -d vite-plus-monorepo/.git && echo 'Git initialized' || echo 'No git' # check git init",
     "ls vite-plus-monorepo/apps # check apps directory created",

@@ -1,0 +1,14 @@
+{
+  "commands": [
+    {
+      "command": "vp run build # first build",
+      "ignoreOutput": true
+    },
+    "vp run build 2>&1 | grep 'cache hit' # should hit cache",
+    {
+      "command": "vp build 2>&1 # direct vp build should not be cached",
+      "ignoreOutput": true
+    },
+    "vp build 2>&1 | grep -c 'cache' || echo 'no cache' # direct vp build has no cache"
+  ]
+}

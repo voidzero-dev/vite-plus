@@ -1,10 +1,14 @@
 {
   "commands": [
-    { "command": "git init", "ignoreOutput": true },
+    {
+      "command": "git init",
+      "ignoreOutput": true
+    },
     "vp migrate --no-interactive # migration should not support non-json format lintstagedrc",
     "cat .lintstagedrc # check .lintstagedrc is not updated",
     "cat .lintstagedrc.yaml # check .lintstagedrc.yaml is not updated",
     "cat lint-staged.config.mjs # check lint-staged.config.mjs is not updated",
-    "cat package.json # check hooks setup skipped but husky/lint-staged removed from devDependencies"
+    "cat package.json # check hooks setup skipped but husky/lint-staged removed from devDependencies",
+    "cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog"
   ]
 }

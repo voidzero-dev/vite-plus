@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 // Get the package root directory (packages/cli)
-// Works from both source (src/utils/) and bundled (dist/global/) locations
+// Works from both source (src/utils/) and bundled (dist/) locations
 function findPkgRoot(): string {
   let dir = import.meta.dirname;
   while (dir !== path.dirname(dir)) {

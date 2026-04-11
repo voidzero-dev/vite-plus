@@ -2,7 +2,7 @@
 
 ## Summary
 
-Add `vp dedupe` command that automatically adapts to the detected package manager (pnpm/npm/yarn) for optimizing dependency trees by removing duplicate packages and upgrading older dependencies to newer compatible versions in the lockfile. This helps reduce redundancy and improve project efficiency.
+Add `vp dedupe` command that automatically adapts to the detected package manager (pnpm/npm/yarn/bun) for optimizing dependency trees by removing duplicate packages and upgrading older dependencies to newer compatible versions in the lockfile. This helps reduce redundancy and improve project efficiency.
 
 ## Motivation
 
@@ -84,15 +84,16 @@ vp dedupe --check
 - https://yarnpkg.com/cli/dedupe (yarn@2+)
 - Note: yarn@2+ has a dedicated `yarn dedupe` command with `--check` mode support
 
-| Vite+ Flag  | pnpm          | npm          | yarn@2+       | Description                  |
-| ----------- | ------------- | ------------ | ------------- | ---------------------------- |
-| `vp dedupe` | `pnpm dedupe` | `npm dedupe` | `yarn dedupe` | Deduplicate dependencies     |
-| `--check`   | `--check`     | `--dry-run`  | `--check`     | Check if changes would occur |
+| Vite+ Flag  | pnpm          | npm          | yarn@2+       | bun | Description                  |
+| ----------- | ------------- | ------------ | ------------- | --- | ---------------------------- |
+| `vp dedupe` | `pnpm dedupe` | `npm dedupe` | `yarn dedupe` | N/A | Deduplicate dependencies     |
+| `--check`   | `--check`     | `--dry-run`  | `--check`     | N/A | Check if changes would occur |
 
 **Note**:
 
 - pnpm uses `--check` for dry-run, npm uses `--dry-run`, yarn@2+ uses `--check`
 - yarn@1 does not have dedupe command and is not supported
+- bun does not currently support a dedupe command
 
 ### Dedupe Behavior Differences Across Package Managers
 
@@ -561,6 +562,7 @@ vp dedupe:run
 - yarn@4.x (yarn@2+)
 - npm@10.x
 - npm@11.x (WIP)
+- bun@1.x (N/A - bun does not support dedupe)
 
 ### Unit Tests
 
@@ -764,13 +766,13 @@ vp test
 
 ## Package Manager Compatibility
 
-| Feature       | pnpm         | npm            | yarn@2+      | Notes                                     |
-| ------------- | ------------ | -------------- | ------------ | ----------------------------------------- |
-| Basic dedupe  | ✅ `dedupe`  | ✅ `dedupe`    | ✅ `dedupe`  | All use native dedupe command             |
-| Check/Dry-run | ✅ `--check` | ✅ `--dry-run` | ✅ `--check` | npm uses different flag name              |
-| Exit codes    | ✅ Supported | ✅ Supported   | ✅ Supported | All return non-zero on check with changes |
+| Feature       | pnpm         | npm            | yarn@2+      | bun              | Notes                                     |
+| ------------- | ------------ | -------------- | ------------ | ---------------- | ----------------------------------------- |
+| Basic dedupe  | ✅ `dedupe`  | ✅ `dedupe`    | ✅ `dedupe`  | ❌ Not supported | bun has no dedupe command                 |
+| Check/Dry-run | ✅ `--check` | ✅ `--dry-run` | ✅ `--check` | ❌ Not supported | npm uses different flag name              |
+| Exit codes    | ✅ Supported | ✅ Supported   | ✅ Supported | ❌ Not supported | All return non-zero on check with changes |
 
-**Note**: yarn@1 does not have a dedupe command and is not supported
+**Note**: yarn@1 does not have a dedupe command and is not supported. bun does not currently support a dedupe command.
 
 ## Future Enhancements
 
@@ -870,7 +872,7 @@ Recommendation: All can use lodash@4.17.21
 
 ## Conclusion
 
-This RFC proposes adding `vp dedupe` command to provide a unified interface for dependency deduplication across pnpm/npm/yarn@2+. The design:
+This RFC proposes adding `vp dedupe` command to provide a unified interface for dependency deduplication across pnpm/npm/yarn@2+/bun. The design:
 
 - ✅ Automatically adapts to detected package manager
 - ✅ Supports check mode for validation (maps to --check for pnpm/yarn@2+, --dry-run for npm)

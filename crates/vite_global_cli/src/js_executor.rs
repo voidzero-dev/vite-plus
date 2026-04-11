@@ -3,7 +3,7 @@
 //! This module handles downloading and caching Node.js via `vite_js_runtime`,
 //! and executing JavaScript scripts using the managed runtime.
 
-use std::process::ExitStatus;
+use std::process::{ExitStatus, Output};
 
 use tokio::process::Command;
 use vite_js_runtime::{
@@ -13,7 +13,11 @@ use vite_js_runtime::{
 use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_shared::{PrependOptions, PrependResult, env_vars, format_path_with_prepend};
 
-use crate::{commands::env::config, error::Error};
+use crate::{
+    commands::env::config::{self, ShimMode},
+    error::Error,
+    shim,
+};
 
 /// JavaScript executor using managed Node.js runtime.
 ///
@@ -74,7 +78,7 @@ impl JsExecutor {
 
     /// Get the path to the current Rust binary (vp).
     ///
-    /// This is passed to JS scripts via `VITE_PLUS_CLI_BIN` environment variable
+    /// This is passed to JS scripts via `VP_CLI_BIN` environment variable
     /// so they can invoke vp commands when needed.
     fn get_bin_path() -> Result<AbsolutePathBuf, Error> {
         let exe_path = std::env::current_exe().map_err(|_| Error::CliBinaryNotFound)?;
@@ -84,7 +88,7 @@ impl JsExecutor {
     /// Create a JS runtime command with common environment variables set.
     ///
     /// Sets up:
-    /// - `VITE_PLUS_CLI_BIN`: So JS scripts can invoke vp commands
+    /// - `VP_CLI_BIN`: So JS scripts can invoke vp commands
     /// - `PATH`: Prepends the runtime bin directory so child processes can find the JS runtime
     fn create_js_command(
         runtime_binary: &AbsolutePath,
@@ -92,8 +96,8 @@ impl JsExecutor {
     ) -> Command {
         let mut cmd = Command::new(runtime_binary.as_path());
         if let Ok(bin_path) = Self::get_bin_path() {
-            tracing::debug!("Set VITE_PLUS_CLI_BIN to {:?}", bin_path);
-            cmd.env(env_vars::VITE_PLUS_CLI_BIN, bin_path.as_path());
+            tracing::debug!("Set VP_CLI_BIN to {:?}", bin_path);
+            cmd.env(env_vars::VP_CLI_BIN, bin_path.as_path());
         }
 
         // Prepend runtime bin to PATH so child processes can find the JS runtime
@@ -125,8 +129,15 @@ impl JsExecutor {
     ///
     /// Uses the CLI's package.json `devEngines.runtime` configuration
     /// to determine which Node.js version to use.
+    ///
+    /// When system-first mode is active (`vp env off`), prefers the
+    /// system-installed Node.js found in PATH.
     pub async fn ensure_cli_runtime(&mut self) -> Result<&JsRuntime, Error> {
         if self.cli_runtime.is_none() {
+            if let Some(system_runtime) = find_system_node_runtime().await {
+                return Ok(self.cli_runtime.insert(system_runtime));
+            }
+
             let cli_dir = self.get_cli_package_dir()?;
             tracing::debug!("Resolving CLI runtime from {:?}", cli_dir);
             let runtime = download_runtime_for_project(&cli_dir).await?;
@@ -150,6 +161,10 @@ impl JsExecutor {
     ) -> Result<&JsRuntime, Error> {
         if self.project_runtime.is_none() {
             tracing::debug!("Resolving project runtime from {:?}", project_path);
+
+            if let Some(system_runtime) = find_system_node_runtime().await {
+                return Ok(self.project_runtime.insert(system_runtime));
+            }
 
             // 1–2. Session overrides: env var (from `vp env use`), then file
             let session_version = vite_shared::EnvConfig::get()
@@ -221,6 +236,17 @@ impl JsExecutor {
         self.run_js_entry(project_path, &node_binary, &bin_prefix, args).await
     }
 
+    pub async fn delegate_to_local_cli_output(
+        &mut self,
+        project_path: &AbsolutePath,
+        args: &[String],
+    ) -> Result<Output, Error> {
+        let runtime = self.ensure_project_runtime(project_path).await?;
+        let node_binary = runtime.get_binary_path();
+        let bin_prefix = runtime.get_bin_prefix();
+        self.run_js_entry_output(project_path, &node_binary, &bin_prefix, args).await
+    }
+
     /// Delegate to the global vite-plus CLI entrypoint directly.
     ///
     /// Unlike [`delegate_to_local_cli`], this bypasses project-local resolution and always runs
@@ -263,14 +289,14 @@ impl JsExecutor {
         self.run_js_entry(project_path, &node_binary, &bin_prefix, args).await
     }
 
-    /// Run a JS entry point with the given runtime, resolving local vite-plus first.
-    async fn run_js_entry(
+    /// Prepare a JS command with the entry point resolved.
+    fn prepare_js_entry(
         &self,
         project_path: &AbsolutePath,
         node_binary: &AbsolutePath,
         bin_prefix: &AbsolutePath,
         args: &[String],
-    ) -> Result<ExitStatus, Error> {
+    ) -> Result<Command, Error> {
         // Try to resolve vite-plus from the project directory using oxc_resolver
         let entry_point = match Self::resolve_local_vite_plus(project_path) {
             Some(path) => path,
@@ -285,9 +311,33 @@ impl JsExecutor {
 
         let mut cmd = Self::create_js_command(node_binary, bin_prefix);
         cmd.arg(entry_point.as_path()).args(args).current_dir(project_path.as_path());
+        Ok(cmd)
+    }
 
+    /// Run a JS entry point with the given runtime, resolving local vite-plus first.
+    async fn run_js_entry(
+        &self,
+        project_path: &AbsolutePath,
+        node_binary: &AbsolutePath,
+        bin_prefix: &AbsolutePath,
+        args: &[String],
+    ) -> Result<ExitStatus, Error> {
+        let mut cmd = self.prepare_js_entry(project_path, node_binary, bin_prefix, args)?;
         let status = cmd.status().await?;
         Ok(status)
+    }
+
+    /// Like [`run_js_entry`], but returns `Output`.
+    async fn run_js_entry_output(
+        &self,
+        project_path: &AbsolutePath,
+        node_binary: &AbsolutePath,
+        bin_prefix: &AbsolutePath,
+        args: &[String],
+    ) -> Result<Output, Error> {
+        let mut cmd = self.prepare_js_entry(project_path, node_binary, bin_prefix, args)?;
+        let output = cmd.output().await?;
+        Ok(output)
     }
 
     /// Resolve the local vite-plus package's `dist/bin.js` from the project directory.
@@ -354,6 +404,24 @@ async fn has_valid_version_source(
             .is_some_and(|r| is_valid_version(&r.version));
 
     Ok(engines_valid || dev_engines_valid)
+}
+
+/// Try to find system Node.js when in system-first mode (`vp env off`).
+///
+/// Returns `Some(JsRuntime)` when both conditions are met:
+/// 1. Config has `shim_mode == SystemFirst`
+/// 2. A system `node` binary is found in PATH (excluding the vite-plus bin directory)
+///
+/// Returns `None` if mode is `Managed` or no system Node.js is found,
+/// allowing the caller to fall through to managed runtime resolution.
+async fn find_system_node_runtime() -> Option<JsRuntime> {
+    let config = config::load_config().await.ok()?;
+    if config.shim_mode != ShimMode::SystemFirst {
+        return None;
+    }
+    let system_node = shim::find_system_tool("node")?;
+    tracing::info!("System-first mode: using system Node.js at {:?}", system_node);
+    Some(JsRuntime::from_system(JsRuntimeType::Node, system_node))
 }
 
 #[cfg(test)]

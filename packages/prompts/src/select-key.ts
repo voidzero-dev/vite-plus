@@ -34,7 +34,7 @@ export const selectKey = <Value extends string>(opts: SelectKeyOptions<Value>) =
     option: Option<Value>,
     state: 'inactive' | 'active' | 'selected' | 'cancelled' = 'inactive',
   ) => {
-    const label = option.label ?? String(option.value);
+    const label = option.label ?? option.value;
     if (state === 'selected') {
       return color.dim(label);
     }

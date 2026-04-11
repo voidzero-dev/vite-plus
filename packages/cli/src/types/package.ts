@@ -2,6 +2,7 @@ export const PackageManager = {
   pnpm: 'pnpm',
   npm: 'npm',
   yarn: 'yarn',
+  bun: 'bun',
 } as const;
 export type PackageManager = (typeof PackageManager)[keyof typeof PackageManager];
 

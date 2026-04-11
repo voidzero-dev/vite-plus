@@ -1,8 +1,12 @@
 {
   "commands": [
-    { "command": "git init", "ignoreOutput": true },
+    {
+      "command": "git init",
+      "ignoreOutput": true
+    },
     "vp migrate --no-interactive # migration should warn about unsupported TS lint-staged config",
     "cat package.json # check lint-staged NOT added to package.json, husky/lint-staged removed from devDependencies",
+    "cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog",
     "cat lint-staged.config.ts # check TS config is not modified"
   ]
 }

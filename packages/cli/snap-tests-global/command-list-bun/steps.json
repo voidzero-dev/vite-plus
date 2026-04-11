@@ -1,0 +1,8 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "commands": [
+    "vp install # should install packages first",
+    "vp pm list --help # should show help",
+    "vp pm list # should list installed packages"
+  ]
+}

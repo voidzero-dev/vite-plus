@@ -1,0 +1,7 @@
+{
+  "commands": [
+    "vp migrate --no-interactive # 'node' alias should be mapped to lts/* with an info message",
+    "cat .node-version # check node alias is mapped to lts/*",
+    "test ! -f .nvmrc # check .nvmrc is removed"
+  ]
+}

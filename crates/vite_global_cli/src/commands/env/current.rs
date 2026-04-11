@@ -47,10 +47,8 @@ pub async fn execute(cwd: AbsolutePathBuf, json: bool) -> Result<ExitStatus, Err
     let resolution = resolve_version(&cwd).await?;
 
     // Get the home directory for this version
-    let home_dir = vite_shared::get_vite_plus_home()?
-        .join("js_runtime")
-        .join("node")
-        .join(&resolution.version);
+    let home_dir =
+        vite_shared::get_vp_home()?.join("js_runtime").join("node").join(&resolution.version);
 
     #[cfg(windows)]
     let (node_path, npm_path, npx_path) =

@@ -1,0 +1,11 @@
+{
+  "commands": [
+    {
+      "command": "vp run app#build # first build",
+      "ignoreOutput": true
+    },
+    "ls packages/app/dist # should have the build output",
+    "vp run app#build 2>&1 | grep -c 'cache hit' || echo 'no cache hit' # cache disabled, no cache hit",
+    "vp run app#build 2>&1 | grep 'cache disabled' # should show cache disabled"
+  ]
+}

@@ -43,6 +43,7 @@ impl PackageManager {
 
     /// Resolve the token command.
     /// All package managers delegate to npm token.
+    /// Bun does not support token, falls back to npm.
     #[must_use]
     pub fn resolve_token_command(&self, subcommand: &TokenSubcommand) -> ResolveCommandResult {
         let bin_name: String = "npm".to_string();

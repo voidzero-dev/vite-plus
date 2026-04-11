@@ -1,5 +1,11 @@
 {
   "commands": [
     "vp migrate --no-interactive # should show legacy config warning and already using Vite+"
+  ],
+  "ignoredPlatforms": [
+    {
+      "os": "linux",
+      "libc": "musl"
+    }
   ]
 }
