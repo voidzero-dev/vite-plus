@@ -1,4 +1,5 @@
 {
   "env": {},
-  "commands": ["vp install"]
+  "before": ["rm ~/.vite-plus/.session-node-version"],
+  "commands": ["vp check"]
 }

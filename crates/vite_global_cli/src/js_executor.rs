@@ -12,7 +12,11 @@ use vite_js_runtime::{
     is_valid_version, read_package_json, resolve_node_version,
 };
 use vite_path::{AbsolutePath, AbsolutePathBuf};
-use vite_shared::{PrependOptions, PrependResult, env_vars, format_path_with_prepend};
+use vite_shared::{
+    PrependOptions, PrependResult,
+    env_vars::{self, VP_NODE_VERSION},
+    format_path_with_prepend,
+};
 
 use crate::{
     commands::env::config::{self, ShimMode},
@@ -183,11 +187,17 @@ impl JsExecutor {
                 .map(|v| v.trim().to_string())
                 .filter(|v| !v.is_empty())
             {
-                self.check_runtime_compatibility(&session_version, None).await?;
+                self.check_runtime_compatibility(&session_version, Some(VP_NODE_VERSION), false)
+                    .await?;
                 Some(session_version)
             } else if let Some(session_version) = config::read_session_version().await {
                 // Read from file
-                self.check_runtime_compatibility(&session_version, None).await?;
+                self.check_runtime_compatibility(
+                    &session_version,
+                    Some(".session-node-version"),
+                    false,
+                )
+                .await?;
                 Some(session_version)
             } else {
                 None
@@ -209,12 +219,22 @@ impl JsExecutor {
                 // download_runtime_for_project for cache-aware range resolution
                 // and intra-project fallback chain
                 let (runtime, source) = download_runtime_for_project(project_path).await?;
-                self.check_runtime_compatibility(&runtime.version, source).await?;
+                self.check_runtime_compatibility(
+                    &runtime.version,
+                    source.map(|s| format!("{s}")).as_deref(),
+                    true,
+                )
+                .await?;
                 runtime
             } else {
                 // No valid project source — check user default from config, then LTS
                 let resolution = config::resolve_version(project_path).await?;
-                self.check_runtime_compatibility(&resolution.version, None).await?;
+                self.check_runtime_compatibility(
+                    &resolution.version,
+                    Some(&resolution.source),
+                    false,
+                )
+                .await?;
                 download_runtime(JsRuntimeType::Node, &resolution.version).await?
             };
             self.project_runtime = Some(runtime);
@@ -233,7 +253,8 @@ impl JsExecutor {
     async fn check_runtime_compatibility(
         &self,
         version: &str,
-        source: Option<VersionSource>,
+        source: Option<&str>,
+        is_project_runtime: bool,
     ) -> Result<(), Error> {
         let Some(requirement) = self.get_cli_engines_requirement().await else { return Ok(()) };
 
@@ -255,7 +276,7 @@ impl JsExecutor {
             let version_source =
                 source.map(|s| format!("\nResolved from: {s}\n")).unwrap_or_default();
 
-            let help = (if source.is_some() {
+            let help = (if is_project_runtime {
                 "Fix this project: vp env pin lts"
             } else {
                 "Set a compatible version globally: vp env default lts"
