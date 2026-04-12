@@ -8,8 +8,8 @@ use std::process::{ExitStatus, Output};
 use node_semver::{Range, Version};
 use tokio::process::Command;
 use vite_js_runtime::{
-    JsRuntime, JsRuntimeType, VersionSource, download_runtime, download_runtime_for_project,
-    is_valid_version, read_package_json, resolve_node_version,
+    JsRuntime, JsRuntimeType, download_runtime, download_runtime_for_project, is_valid_version,
+    read_package_json, resolve_node_version,
 };
 use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_shared::{
