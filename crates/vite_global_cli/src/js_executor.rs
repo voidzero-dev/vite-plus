@@ -15,7 +15,7 @@ use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_shared::{PrependOptions, PrependResult, env_vars, format_path_with_prepend};
 
 use crate::{
-    commands::env::config::{self, ShimMode},
+    commands::env::config::{self, ShimMode, get_session_version_path},
     error::Error,
     shim,
 };
@@ -178,17 +178,27 @@ impl JsExecutor {
             }
 
             // 1–2. Session overrides: env var (from `vp env use`), then file
-            let session_version = vite_shared::EnvConfig::get()
+            let session_version = if let Some(session_version) = vite_shared::EnvConfig::get()
                 .node_version
                 .map(|v| v.trim().to_string())
-                .filter(|v| !v.is_empty());
-            let session_version = if session_version.is_some() {
-                session_version
+                .filter(|v| !v.is_empty())
+            {
+                self.check_runtime_compatibility(&session_version, "VP_NODE_VERSION", true).await?;
+                Some(session_version)
+            } else if let Some(session_version) = config::read_session_version().await {
+                // Read from file
+                self.check_runtime_compatibility(
+                    &session_version,
+                    // SAFETY: read_session_version() fn makes sure get_session_version_path won't return Err
+                    &get_session_version_path().unwrap().to_string(),
+                    true,
+                )
+                .await?;
+                Some(session_version)
             } else {
-                config::read_session_version().await
+                None
             };
             if let Some(version) = session_version {
-                self.check_runtime_compatibility(&version).await?;
                 let runtime = download_runtime(JsRuntimeType::Node, &version).await?;
                 return Ok(self.project_runtime.insert(runtime));
             }
@@ -205,12 +215,22 @@ impl JsExecutor {
                 // download_runtime_for_project for cache-aware range resolution
                 // and intra-project fallback chain
                 let runtime = download_runtime_for_project(project_path).await?;
-                self.check_runtime_compatibility(&runtime.version).await?;
+                self.check_runtime_compatibility(
+                    &runtime.version,
+                    "project runtime settings", // We can't know the exact source in `resolve_node_version`
+                    true,
+                )
+                .await?;
                 runtime
             } else {
                 // No valid project source — check user default from config, then LTS
                 let resolution = config::resolve_version(project_path).await?;
-                self.check_runtime_compatibility(&resolution.version).await?;
+                self.check_runtime_compatibility(
+                    &resolution.version,
+                    "vp env default", // lts won't fail this check
+                    false,
+                )
+                .await?;
                 download_runtime(JsRuntimeType::Node, &resolution.version).await?
             };
             self.project_runtime = Some(runtime);
@@ -226,7 +246,12 @@ impl JsExecutor {
     ///
     /// Returns [`Error::NodeVersionIncompatible`] when the version is parsable but
     /// outside the required range.
-    async fn check_runtime_compatibility(&self, version: &str) -> Result<(), Error> {
+    async fn check_runtime_compatibility(
+        &self,
+        version: &str,
+        source: &str,
+        is_project_node: bool,
+    ) -> Result<(), Error> {
         let Some(requirement) = self.get_cli_engines_requirement().await else { return Ok(()) };
 
         // System runtimes report "system" — we cannot inspect the actual version cheaply,
@@ -244,9 +269,20 @@ impl JsExecutor {
         };
 
         if !range.satisfies(&version) {
+            let version_source = format!("\nResolved from: {source}");
+
+            let help = (if is_project_node {
+                "Fix this project: vp env pin lts\nTemporary override: vp env use lts"
+            } else {
+                "Use a compatible version for this shell: vp env default lts"
+            })
+            .to_owned();
+
             return Err(Error::NodeVersionIncompatible {
                 version: version.to_string(),
                 requirement: requirement.to_string(),
+                version_source,
+                help,
             });
         }
         Ok(())
