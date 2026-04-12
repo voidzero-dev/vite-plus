@@ -19,7 +19,7 @@ use vite_shared::{
 };
 
 use crate::{
-    commands::env::config::{self, ShimMode},
+    commands::env::config::{self, SESSION_VERSION_FILE, ShimMode},
     error::Error,
     shim,
 };
@@ -194,7 +194,7 @@ impl JsExecutor {
                 // Read from file
                 self.check_runtime_compatibility(
                     &session_version,
-                    Some(".session-node-version"),
+                    Some(SESSION_VERSION_FILE),
                     false,
                 )
                 .await?;
