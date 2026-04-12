@@ -1,6 +1,4 @@
 {
   "env": {},
-  "commands": [
-    "vp install"
-  ]
+  "commands": ["vp install"]
 }
