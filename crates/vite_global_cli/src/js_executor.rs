@@ -191,7 +191,7 @@ impl JsExecutor {
                     &session_version,
                     // SAFETY: read_session_version() fn makes sure get_session_version_path won't return Err
                     &get_session_version_path().unwrap().to_string(),
-                    true,
+                    false,
                 )
                 .await?;
                 Some(session_version)
@@ -272,11 +272,12 @@ impl JsExecutor {
             let version_source = format!("\nResolved from: {source}");
 
             let help = (if is_project_node {
-                "Fix this project: vp env pin lts\nTemporary override: vp env use lts"
+                "Fix this project: vp env pin lts"
             } else {
-                "Use a compatible version for this shell: vp env default lts"
+                "Set a compatible version globally: vp env default lts"
             })
             .to_owned();
+            let help = format!("{help}\nTemporary override: vp env use lts");
 
             return Err(Error::NodeVersionIncompatible {
                 version: version.to_string(),
