@@ -1,0 +1,5 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "commands": ["vp env use 20.0.0", "vp exec node --version"],
+  "after": ["set VP_NODE_VERSION=", "rm ~/.vite-plus/.session-node-version"]
+}

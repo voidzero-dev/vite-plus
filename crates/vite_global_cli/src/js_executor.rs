@@ -253,7 +253,7 @@ impl JsExecutor {
 
         if !range.satisfies(&version) {
             let version_source =
-                source.map(|s| format!("Resolved from: {s}\n")).unwrap_or_default();
+                source.map(|s| format!("\nResolved from: {s}\n")).unwrap_or_default();
 
             let help = (if source.is_some() {
                 "Fix this project: vp env pin lts"
