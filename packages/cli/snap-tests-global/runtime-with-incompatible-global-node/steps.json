@@ -1,0 +1,5 @@
+{
+  "env": {},
+  "commands": ["vp env default 20.0.0", "vp migrate --yes"],
+  "after": ["vp env default lts"]
+}

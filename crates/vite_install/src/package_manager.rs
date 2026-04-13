@@ -8,7 +8,7 @@ use std::{
 
 use crossterm::{
     cursor,
-    event::{self, Event, KeyCode, KeyEvent},
+    event::{self, Event, KeyCode, KeyEvent, KeyEventKind},
     execute,
     style::{Color, Print, ResetColor, SetForegroundColor},
     terminal,
@@ -826,63 +826,69 @@ fn interactive_package_manager_menu() -> Result<PackageManagerType, Error> {
             execute!(io::stdout(), cursor::MoveUp((options.len() - 1) as u16))?;
         }
 
-        // Read keyboard input
-        if let Event::Key(KeyEvent { code, modifiers, .. }) = event::read()? {
-            match code {
-                // Handle Ctrl+C for exit
-                KeyCode::Char('c') if modifiers.contains(event::KeyModifiers::CONTROL) => {
-                    // Clean up terminal before exiting
-                    terminal::disable_raw_mode()?;
-                    execute!(
-                        io::stdout(),
-                        cursor::Show,
-                        cursor::MoveDown(options.len() as u16),
-                        Print("\n\n"),
-                        SetForegroundColor(Color::Yellow),
-                        Print("⚠ Installation cancelled by user\n"),
-                        ResetColor
-                    )?;
-                    return Err(Error::UserCancelled);
+        // Read keyboard input, skipping non-Press events (e.g. Release on Windows)
+        let (code, modifiers) = loop {
+            if let Event::Key(KeyEvent { code, modifiers, kind, .. }) = event::read()? {
+                if kind == KeyEventKind::Press {
+                    break (code, modifiers);
                 }
-                KeyCode::Up => {
-                    selected_index = selected_index.saturating_sub(1);
-                }
-                KeyCode::Down => {
-                    if selected_index < options.len() - 1 {
-                        selected_index += 1;
-                    }
-                }
-                KeyCode::Enter | KeyCode::Char(' ') => {
-                    break Ok(options[selected_index].1);
-                }
-                KeyCode::Char('1') => {
-                    break Ok(options[0].1);
-                }
-                KeyCode::Char('2') if options.len() > 1 => {
-                    break Ok(options[1].1);
-                }
-                KeyCode::Char('3') if options.len() > 2 => {
-                    break Ok(options[2].1);
-                }
-                KeyCode::Char('4') if options.len() > 3 => {
-                    break Ok(options[3].1);
-                }
-                KeyCode::Esc | KeyCode::Char('q') => {
-                    // Exit on escape/quit
-                    terminal::disable_raw_mode()?;
-                    execute!(
-                        io::stdout(),
-                        cursor::Show,
-                        cursor::MoveDown(options.len() as u16),
-                        Print("\n\n"),
-                        SetForegroundColor(Color::Yellow),
-                        Print("⚠ Installation cancelled by user\n"),
-                        ResetColor
-                    )?;
-                    return Err(Error::UserCancelled);
-                }
-                _ => {}
             }
+        };
+
+        match code {
+            // Handle Ctrl+C for exit
+            KeyCode::Char('c') if modifiers.contains(event::KeyModifiers::CONTROL) => {
+                // Clean up terminal before exiting
+                terminal::disable_raw_mode()?;
+                execute!(
+                    io::stdout(),
+                    cursor::Show,
+                    cursor::MoveDown(options.len() as u16),
+                    Print("\n\n"),
+                    SetForegroundColor(Color::Yellow),
+                    Print("⚠ Installation cancelled by user\n"),
+                    ResetColor
+                )?;
+                return Err(Error::UserCancelled);
+            }
+            KeyCode::Up => {
+                selected_index = selected_index.saturating_sub(1);
+            }
+            KeyCode::Down => {
+                if selected_index < options.len() - 1 {
+                    selected_index += 1;
+                }
+            }
+            KeyCode::Enter | KeyCode::Char(' ') => {
+                break Ok(options[selected_index].1);
+            }
+            KeyCode::Char('1') => {
+                break Ok(options[0].1);
+            }
+            KeyCode::Char('2') if options.len() > 1 => {
+                break Ok(options[1].1);
+            }
+            KeyCode::Char('3') if options.len() > 2 => {
+                break Ok(options[2].1);
+            }
+            KeyCode::Char('4') if options.len() > 3 => {
+                break Ok(options[3].1);
+            }
+            KeyCode::Esc | KeyCode::Char('q') => {
+                // Exit on escape/quit
+                terminal::disable_raw_mode()?;
+                execute!(
+                    io::stdout(),
+                    cursor::Show,
+                    cursor::MoveDown(options.len() as u16),
+                    Print("\n\n"),
+                    SetForegroundColor(Color::Yellow),
+                    Print("⚠ Installation cancelled by user\n"),
+                    ResetColor
+                )?;
+                return Err(Error::UserCancelled);
+            }
+            _ => {}
         }
     };
 
