@@ -103,7 +103,7 @@ impl SubcommandResolver {
                         untracked_env: None,
                         input: None,
                     }),
-                    envs: merge_resolved_envs(envs, resolved.envs),
+                    envs: merge_resolved_envs_with_version(envs, resolved.envs),
                 })
             }
             SynthesizableSubcommand::Fmt { mut args } => {
@@ -138,7 +138,7 @@ impl SubcommandResolver {
                         untracked_env: None,
                         input: None,
                     }),
-                    envs: merge_resolved_envs(envs, resolved.envs),
+                    envs: merge_resolved_envs_with_version(envs, resolved.envs),
                 })
             }
             SynthesizableSubcommand::Build { args } => {
