@@ -36,7 +36,7 @@ runs:
     # Cache NAPI bindings and Rust CLI binary (the slow parts, especially on Windows)
     - name: Restore NAPI binding cache
       id: cache-restore
-      uses: actions/cache/restore@94b89442628ad1d101e352b7ee38f30e1bef108e # v5
+      uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
       with:
         path: |
           packages/cli/binding/*.node
@@ -80,7 +80,7 @@ runs:
 
     - name: Install cargo-zigbuild (musl)
       if: steps.cache-restore.outputs.cache-hit != 'true' && contains(inputs.target, 'musl')
-      uses: taiki-e/install-action@f916cfac5d8efd040e250d0cd6b967616504b3a4 # v2.68.32
+      uses: taiki-e/install-action@0abfcd587b70a713fdaa7fb502c885e2112acb15 # v2.75.7
       with:
         tool: cargo-zigbuild
 
@@ -151,7 +151,7 @@ runs:
 
     - name: Save NAPI binding cache
       if: steps.cache-restore.outputs.cache-hit != 'true'
-      uses: actions/cache/save@94b89442628ad1d101e352b7ee38f30e1bef108e # v5
+      uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
       with:
         path: |
           packages/cli/binding/*.node
