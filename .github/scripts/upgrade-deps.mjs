@@ -64,7 +64,7 @@ async function updatePnpmWorkspace(versions) {
   // Handle both quoted ('npm:vitest@^...') and unquoted (npm:vitest@^...) forms
   content = content.replace(
     /vitest-dev: '?npm:vitest@\^[\d.]+(-[\w.]+)?'?/,
-    `vitest-dev: 'npm:vitest@^${versions.vitest}'`,
+    `vitest-dev: npm:vitest@^${versions.vitest}`,
   );
 
   // Update tsdown in catalog (handle pre-release versions)
