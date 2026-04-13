@@ -359,9 +359,12 @@ pub(crate) fn get_trampoline_path() -> Result<vite_path::AbsolutePathBuf, Error>
 /// This avoids accumulating `.old` files when the exe is not in use.
 #[cfg(windows)]
 pub(crate) async fn remove_or_rename_to_old(path: &vite_path::AbsolutePath) {
-    if tokio::fs::remove_file(path).await.is_ok() {
-        return;
+    match tokio::fs::remove_file(path).await {
+        Ok(()) => return,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return,
+        Err(_) => {}
     }
+    // File exists but is locked (e.g., running process) — rename instead.
     rename_to_old(path).await;
 }
 
