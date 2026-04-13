@@ -1,4 +1,5 @@
 > vp env use 20.0.0
+Installing Node.js v<semver>...
 Using Node.js v<semver> (resolved from <semver>)
 
 [1]> vp exec node --version
