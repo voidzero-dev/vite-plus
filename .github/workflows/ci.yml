@@ -177,8 +177,11 @@ jobs:
       - name: Install docs dependencies
         run: pnpm -C docs install --frozen-lockfile
 
+      # Retry once because `pnpm dedupe --check` re-resolves all dependencies and
+      # can non-deterministically flag optional transitive peers (e.g. oxc-resolver
+      # via dts-resolver) as dedup-able depending on async resolution order.
       - name: Deduplicate dependencies
-        run: pnpm dedupe --check
+        run: pnpm dedupe --check || pnpm dedupe --check
 
   cli-e2e-test:
     name: CLI E2E test

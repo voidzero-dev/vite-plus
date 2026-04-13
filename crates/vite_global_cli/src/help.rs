@@ -451,6 +451,7 @@ pub fn top_level_help_doc() -> HelpDoc {
                 vec![
                     row("run", "Run tasks (also available as standalone `vpr`)"),
                     row("exec", "Execute a command from local node_modules/.bin"),
+                    row("node", "Run a Node.js script (shorthand for `env exec node`)"),
                     row("dlx", "Execute a package binary without installing it as a dependency"),
                     row("cache", "Manage the task cache"),
                 ],
