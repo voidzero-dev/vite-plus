@@ -408,9 +408,9 @@ async fn create_package_shim(
     {
         let shim_path = bin_dir.join(format!("{}.exe", bin_name));
 
-        // Skip if already exists (e.g., re-installing the same package)
+        // Delete before overwrite; falls back to rename if the exe is locked.
         if tokio::fs::try_exists(&shim_path).await.unwrap_or(false) {
-            return Ok(());
+            super::setup::remove_or_rename_to_old(&shim_path).await;
         }
 
         // Copy the trampoline binary as <bin_name>.exe.
