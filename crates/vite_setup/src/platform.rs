@@ -1,4 +1,4 @@
-//! Platform detection for upgrade.
+//! Platform detection for installation.
 //!
 //! Detects the current platform and returns the npm package suffix
 //! used to find the correct platform-specific binary package.
@@ -16,7 +16,7 @@ pub fn detect_platform_suffix() -> Result<String, Error> {
     } else if cfg!(target_os = "windows") {
         "win32"
     } else {
-        return Err(Error::Upgrade(
+        return Err(Error::Setup(
             format!("Unsupported operating system: {}", std::env::consts::OS).into(),
         ));
     };
@@ -26,7 +26,7 @@ pub fn detect_platform_suffix() -> Result<String, Error> {
     } else if cfg!(target_arch = "aarch64") {
         "arm64"
     } else {
-        return Err(Error::Upgrade(
+        return Err(Error::Setup(
             format!("Unsupported architecture: {}", std::env::consts::ARCH).into(),
         ));
     };

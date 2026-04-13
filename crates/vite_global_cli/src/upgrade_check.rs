@@ -11,8 +11,7 @@ use std::{
 
 use owo_colors::OwoColorize;
 use serde::{Deserialize, Serialize};
-
-use crate::commands::upgrade::registry;
+use vite_setup::registry;
 
 const CHECK_INTERVAL_SECS: u64 = 24 * 60 * 60;
 const PROMPT_INTERVAL_SECS: u64 = 24 * 60 * 60;

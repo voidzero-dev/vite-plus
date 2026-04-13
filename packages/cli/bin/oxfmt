@@ -13,9 +13,13 @@ if (!process.argv.includes('--lsp')) {
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import pkg from '../package.json' with { type: 'json' };
 
 const require = createRequire(import.meta.url);
 const oxfmtMainPath = require.resolve('oxfmt');
 const oxfmtBin = join(dirname(dirname(oxfmtMainPath)), 'bin', 'oxfmt');
 
+// This allows oxfmt to load vite.config.ts
+// For `vp check` and `vp fmt`, it is injected by `merge_resolved_envs_with_version()` in `cli.rs`
+process.env.VP_VERSION = pkg.version;
 await import(pathToFileURL(oxfmtBin).href);

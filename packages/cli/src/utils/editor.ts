@@ -267,12 +267,14 @@ export async function writeEditorConfigs({
   interactive,
   conflictDecisions,
   silent = false,
+  extraVsCodeSettings,
 }: {
   projectRoot: string;
   editorId: EditorId | undefined;
   interactive: boolean;
   conflictDecisions?: Map<string, 'merge' | 'skip'>;
   silent?: boolean;
+  extraVsCodeSettings?: Record<string, string>;
 }) {
   if (!editorId) {
     return;
@@ -286,7 +288,11 @@ export async function writeEditorConfigs({
   const targetDir = path.join(projectRoot, editorConfig.targetDir);
   await fsPromises.mkdir(targetDir, { recursive: true });
 
-  for (const [fileName, incoming] of Object.entries(editorConfig.files)) {
+  for (const [fileName, baseIncoming] of Object.entries(editorConfig.files)) {
+    const incoming =
+      editorId === 'vscode' && fileName === 'settings.json' && extraVsCodeSettings
+        ? { ...extraVsCodeSettings, ...baseIncoming }
+        : baseIncoming;
     const filePath = path.join(targetDir, fileName);
 
     if (fs.existsSync(filePath)) {

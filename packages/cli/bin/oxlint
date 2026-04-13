@@ -13,9 +13,13 @@ if (!process.argv.includes('--lsp')) {
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import pkg from '../package.json' with { type: 'json' };
 
 const require = createRequire(import.meta.url);
 const oxlintMainPath = require.resolve('oxlint');
 const oxlintBin = join(dirname(dirname(oxlintMainPath)), 'bin', 'oxlint');
 
+// This allows oxlint to load vite.config.ts
+// For `vp check` and `vp lint`, it is injected by `merge_resolved_envs_with_version()` in `cli.rs`
+process.env.VP_VERSION = pkg.version;
 await import(pathToFileURL(oxlintBin).href);
