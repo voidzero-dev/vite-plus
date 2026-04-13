@@ -165,7 +165,7 @@ overrides:
   rolldown: workspace:rolldown@*
   vite: workspace:@voidzero-dev/vite-plus-core@*
   vitest: workspace:@voidzero-dev/vite-plus-test@*
-  vitest-dev: npm:vitest@^4.1.4
+  vitest-dev: 'npm:vitest@^4.1.4'
 packageExtensions:
   sass-embedded:
     peerDependencies:
