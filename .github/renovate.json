@@ -15,6 +15,18 @@
       "enabled": false
     },
     {
+      "description": "Ignore oxc crate updates",
+      "matchManagers": ["cargo"],
+      "matchPackageNames": ["/^oxc([_-].*)?$/"],
+      "enabled": false
+    },
+    {
+      "description": "Ignore oxlint and oxfmt package updates",
+      "matchManagers": ["npm"],
+      "matchPackageNames": ["oxfmt", "oxlint", "oxlint-tsgolint"],
+      "enabled": false
+    },
+    {
       "matchDepNames": [
         "fspy",
         "vite_glob",
