@@ -207,6 +207,17 @@ When `vp env setup --refresh` is invoked through the trampoline (`~/.vite-plus/b
 2. Copy new trampoline to `vp.exe`
 3. Best-effort cleanup of all `*.old` files in the bin directory
 
+### Upgrade Refresh
+
+During `vp upgrade`, after the `current` link is swapped to the new version, `vp env setup --refresh` is invoked to regenerate all trampoline `.exe` files. This ensures that when the trampoline binary (`vp-shim.exe`) changes between versions, all shims pick up the new version:
+
+1. **Core shims** (`vp.exe`, `node.exe`, `npm.exe`, `npx.exe`, `vpx.exe`, `vpr.exe`) are refreshed by the standard `--refresh` logic.
+2. **Package shims** (e.g., `corepack.exe`, `tsc.exe`, installed via `vp install -g`) are discovered by scanning `~/.vite-plus/bins/` for `BinConfig` entries with `source: Vp`, and each `.exe` is replaced with the new trampoline.
+
+Package shims installed via npm interception (`source: Npm`) use `.cmd` wrappers, not trampoline `.exe` files, and are not affected by this refresh.
+
+Additionally, re-installing a global package (`vp install -g <pkg>`) always re-copies the current trampoline, ensuring the shim stays up to date even without a full upgrade.
+
 ### Distribution
 
 The trampoline binary (`vp-shim.exe`) is distributed alongside `vp.exe`:

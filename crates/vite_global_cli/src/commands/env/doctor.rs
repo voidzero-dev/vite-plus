@@ -62,8 +62,7 @@ const KNOWN_VERSION_MANAGERS: &[(&str, &str)] = &[
     ("n", "N_PREFIX"),
 ];
 
-/// Tools that should have shims
-const SHIM_TOOLS: &[&str] = &["node", "npm", "npx", "vpx", "vpr"];
+use super::setup::SHIM_TOOLS;
 
 /// Column width for left-side keys in aligned output
 const KEY_WIDTH: usize = 18;
