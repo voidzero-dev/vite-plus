@@ -1,4 +1,5 @@
 {
+  "serial": true,
   "ignoredPlatforms": ["win32"],
   "commands": ["vp env use 20.0.0", "vp exec node --version"],
   "after": ["vp env use --unset"]
