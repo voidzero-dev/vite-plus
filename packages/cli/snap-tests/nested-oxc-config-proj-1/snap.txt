@@ -12,3 +12,27 @@ Finished in <variable>ms on 2 files with <variable> rules using <variable> threa
 Checking formatting...
 All matched files use the correct format.
 Finished in <variable>ms on 1 files using <variable> threads.
+
+> # Running from the workspace root must use the root config, so both
+> # commands should fail: lint flags the `debugger;` and fmt flags the
+> # double-quoted string in packages/proj-1/src/index.js.
+[1]> vp lint
+
+  × eslint(no-debugger): `debugger` statement is not allowed
+   ╭─[packages/proj-1/src/index.js:2:3]
+ 1 │ function hello() {
+ 2 │   debugger;
+   ·   ─────────
+ 3 │   return "hello from proj-1";
+   ╰────
+  help: Remove the debugger statement
+
+Found 0 warnings and 1 error.
+Finished in <variable>ms on 3 files with <variable> rules using <variable> threads.
+
+[1]> vp fmt --check packages/proj-1/src
+Checking formatting...
+packages/proj-1/src/index.js (<variable>ms)
+
+Format issues found in above 1 files. Run without `--check` to fix.
+Finished in <variable>ms on 1 files using <variable> threads.
