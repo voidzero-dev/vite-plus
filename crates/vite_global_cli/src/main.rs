@@ -36,6 +36,7 @@ use crate::cli::{
 
 /// Normalize CLI arguments:
 /// - `vp list ...` / `vp ls ...` → `vp pm list ...`
+/// - `vp rebuild ...` → `vp pm rebuild ...`
 /// - `vp help [command]` → `vp [command] --help`
 /// - `vp node [args...]` → `vp env exec node [args...]`
 fn normalize_args(args: Vec<String>) -> Vec<String> {
@@ -47,6 +48,15 @@ fn normalize_args(args: Vec<String>) -> Vec<String> {
             normalized.push(args[0].clone());
             normalized.push("pm".to_string());
             normalized.push("list".to_string());
+            normalized.extend(args[2..].iter().cloned());
+            normalized
+        }
+        // `vp rebuild ...` → `vp pm rebuild ...`
+        Some("rebuild") => {
+            let mut normalized = Vec::with_capacity(args.len() + 1);
+            normalized.push(args[0].clone());
+            normalized.push("pm".to_string());
+            normalized.push("rebuild".to_string());
             normalized.extend(args[2..].iter().cloned());
             normalized
         }
@@ -432,6 +442,20 @@ mod tests {
         let input = s(&["vp", "node"]);
         let normalized = normalize_args(input);
         assert_eq!(normalized, s(&["vp", "env", "exec", "node"]));
+    }
+
+    #[test]
+    fn normalize_args_rewrites_bare_vp_rebuild() {
+        let input = s(&["vp", "rebuild"]);
+        let normalized = normalize_args(input);
+        assert_eq!(normalized, s(&["vp", "pm", "rebuild"]));
+    }
+
+    #[test]
+    fn normalize_args_rewrites_vp_rebuild_with_args() {
+        let input = s(&["vp", "rebuild", "--", "--update-binary"]);
+        let normalized = normalize_args(input);
+        assert_eq!(normalized, s(&["vp", "pm", "rebuild", "--", "--update-binary"]));
     }
 
     #[test]
