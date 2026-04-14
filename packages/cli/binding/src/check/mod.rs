@@ -62,7 +62,6 @@ pub(crate) async fn execute_check(
         let captured = resolve_and_capture_output(
             resolver,
             SynthesizableSubcommand::Fmt { args },
-            Some(&resolved_vite_config),
             envs,
             cwd,
             cwd_arc,
@@ -153,7 +152,6 @@ pub(crate) async fn execute_check(
         let captured = resolve_and_capture_output(
             resolver,
             SynthesizableSubcommand::Lint { args },
-            Some(&resolved_vite_config),
             envs,
             cwd,
             cwd_arc,
@@ -228,7 +226,6 @@ pub(crate) async fn execute_check(
         let captured = resolve_and_capture_output(
             resolver,
             SynthesizableSubcommand::Fmt { args },
-            Some(&resolved_vite_config),
             envs,
             cwd,
             cwd_arc,

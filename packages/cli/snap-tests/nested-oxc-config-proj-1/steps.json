@@ -1,12 +1,13 @@
 {
   "ignoredPlatforms": ["win32"],
   "commands": [
-    "# Reproduces oxc-project/oxc#20416: nested vite.config.ts in packages/proj-1",
-    "# should override root config when `vp lint` / `vp fmt` run from that cwd.",
-    "# proj-1 disables no-debugger and turns off singleQuote, so both commands",
-    "# should pass. If the root config leaks through, lint reports a debugger",
-    "# violation and fmt reports a quote-style diff.",
-    "cd packages/proj-1 && vp lint # expected: pass (proj-1 disables no-debugger); actual: fails with root rule",
-    "cd packages/proj-1 && vp fmt --check # expected: pass (proj-1 sets singleQuote:false); actual: fails with root singleQuote:true"
+    "# Regression test for oxc-project/oxc#20416: nested vite.config.ts in",
+    "# packages/proj-1 must override the workspace root config when `vp lint`",
+    "# and `vp fmt` run from that cwd. Root has `no-debugger: error` and",
+    "# `singleQuote: true`, proj-1 overrides both to `off` / `false`. If the",
+    "# root config leaks through, lint reports a debugger violation and fmt",
+    "# reports a quote-style diff.",
+    "cd packages/proj-1 && vp lint",
+    "cd packages/proj-1 && vp fmt --check src"
   ]
 }

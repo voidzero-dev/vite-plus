@@ -65,32 +65,17 @@ impl SubcommandResolver {
     pub(super) async fn resolve(
         &self,
         subcommand: SynthesizableSubcommand,
-        resolved_vite_config: Option<&ResolvedUniversalViteConfig>,
         envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
         cwd: &Arc<AbsolutePath>,
     ) -> anyhow::Result<ResolvedSubcommand> {
         match subcommand {
-            SynthesizableSubcommand::Lint { mut args } => {
+            SynthesizableSubcommand::Lint { args } => {
                 let cli_options = self.cli_options()?;
                 let resolved = (cli_options.lint)().await?;
                 let js_path = resolved.bin_path;
                 let js_path_str = js_path
                     .to_str()
                     .ok_or_else(|| anyhow::anyhow!("lint JS path is not valid UTF-8"))?;
-                let owned_resolved_vite_config;
-                let resolved_vite_config = if let Some(config) = resolved_vite_config {
-                    config
-                } else {
-                    owned_resolved_vite_config = self.resolve_universal_vite_config().await?;
-                    &owned_resolved_vite_config
-                };
-
-                if let (Some(_), Some(config_file)) =
-                    (&resolved_vite_config.lint, &resolved_vite_config.config_file)
-                {
-                    args.insert(0, "-c".to_string());
-                    args.insert(1, config_file.clone());
-                }
 
                 Ok(ResolvedSubcommand {
                     program: Arc::from(OsStr::new("node")),
@@ -106,27 +91,13 @@ impl SubcommandResolver {
                     envs: merge_resolved_envs_with_version(envs, resolved.envs),
                 })
             }
-            SynthesizableSubcommand::Fmt { mut args } => {
+            SynthesizableSubcommand::Fmt { args } => {
                 let cli_options = self.cli_options()?;
                 let resolved = (cli_options.fmt)().await?;
                 let js_path = resolved.bin_path;
                 let js_path_str = js_path
                     .to_str()
                     .ok_or_else(|| anyhow::anyhow!("fmt JS path is not valid UTF-8"))?;
-                let owned_resolved_vite_config;
-                let resolved_vite_config = if let Some(config) = resolved_vite_config {
-                    config
-                } else {
-                    owned_resolved_vite_config = self.resolve_universal_vite_config().await?;
-                    &owned_resolved_vite_config
-                };
-
-                if let (Some(_), Some(config_file)) =
-                    (&resolved_vite_config.fmt, &resolved_vite_config.config_file)
-                {
-                    args.insert(0, "-c".to_string());
-                    args.insert(1, config_file.clone());
-                }
 
                 Ok(ResolvedSubcommand {
                     program: Arc::from(OsStr::new("node")),

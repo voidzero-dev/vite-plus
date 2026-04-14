@@ -90,7 +90,6 @@ async fn execute_direct_subcommand(
                 resolve_and_execute_with_filter(
                     &resolver,
                     other,
-                    None,
                     &envs,
                     cwd,
                     &cwd_arc,
@@ -102,7 +101,6 @@ async fn execute_direct_subcommand(
                 resolve_and_execute_with_filter(
                     &resolver,
                     other,
-                    None,
                     &envs,
                     cwd,
                     &cwd_arc,
@@ -111,7 +109,7 @@ async fn execute_direct_subcommand(
                 )
                 .await?
             } else {
-                resolve_and_execute(&resolver, other, None, &envs, cwd, &cwd_arc).await?
+                resolve_and_execute(&resolver, other, &envs, cwd, &cwd_arc).await?
             }
         }
     };
