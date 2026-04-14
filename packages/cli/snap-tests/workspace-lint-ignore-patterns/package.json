@@ -1,0 +1,9 @@
+{
+  "name": "workspace-lint-ignore-patterns-test",
+  "version": "0.0.0",
+  "workspaces": [
+    "packages/*"
+  ],
+  "type": "module",
+  "packageManager": "pnpm@10.16.1"
+}
