@@ -1,3 +1,17 @@
 > cd packages/app-a && vp lint # sub-workspace has no-console:off but root has no-console:warn
 Found 0 warnings and 0 errors.
 Finished in <variable>ms on 2 files with <variable> rules using <variable> threads.
+
+> vp lint # at root, no-console:warn should flag app-a's console.log
+
+  ⚠ eslint(no-console): Unexpected console statement.
+   ╭─[packages/app-a/src/index.js:2:3]
+ 1 │ function hello() {
+ 2 │   console.log('hello from app-a');
+   ·   ───────────
+ 3 │   return 'hello';
+   ╰────
+  help: Delete this console statement.
+
+Found 1 warning and 0 errors.
+Finished in <variable>ms on 3 files with <variable> rules using <variable> threads.
