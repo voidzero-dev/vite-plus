@@ -62,13 +62,13 @@ export async function detectWorkspace(rootDir: string): Promise<WorkspaceInfoOpt
     const pnpmWorkspaceFile = path.join(result.rootDir, 'pnpm-workspace.yaml');
     const packageJsonFile = path.join(result.rootDir, 'package.json');
     if (fs.existsSync(pnpmWorkspaceFile)) {
-      const workspaceConfig = readYamlFile<{ packages?: string[] }>(pnpmWorkspaceFile);
+      const workspaceConfig = readYamlFile(pnpmWorkspaceFile) as { packages?: string[] };
       if (Array.isArray(workspaceConfig.packages)) {
         result.workspacePatterns = workspaceConfig.packages;
       }
     } else if (fs.existsSync(packageJsonFile)) {
       // Check for npm/yarn/bun workspace (array or object form)
-      const pkg = readJsonFile<{ workspaces?: NpmWorkspaces }>(packageJsonFile);
+      const pkg = readJsonFile(packageJsonFile) as { workspaces?: NpmWorkspaces };
       if (Array.isArray(pkg.workspaces)) {
         result.workspacePatterns = pkg.workspaces;
       } else if (pkg.workspaces && Array.isArray(pkg.workspaces.packages)) {
@@ -92,7 +92,7 @@ export async function detectWorkspace(rootDir: string): Promise<WorkspaceInfoOpt
     result.parentDirs = Array.from(dirs).sort();
 
     // Extract the scope from the package.json
-    const pkg = readJsonFile<{ name?: string }>(packageJsonFile);
+    const pkg = readJsonFile(packageJsonFile) as { name?: string };
     if (pkg.name) {
       result.monorepoScope = getScopeFromPackageName(pkg.name);
     }
@@ -124,13 +124,13 @@ export function discoverWorkspacePackages(
   );
   for (const packageJsonRelativePath of packageJsonRelativePaths) {
     const packageJsonPath = path.join(rootDir, packageJsonRelativePath);
-    const pkg = readJsonFile<{
+    const pkg = readJsonFile(packageJsonPath) as {
       name?: string;
       description?: string;
       version?: string;
       dependencies?: Record<string, string>;
       keywords?: string[];
-    }>(packageJsonPath);
+    };
     if (!pkg.name) {
       continue;
     }

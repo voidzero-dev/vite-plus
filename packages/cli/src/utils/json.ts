@@ -4,18 +4,13 @@ import detectIndent from 'detect-indent';
 import { detectNewline } from 'detect-newline';
 import { parse as parseJsonc } from 'jsonc-parser';
 
-// eslint-disable-next-line typescript-eslint/no-unnecessary-type-parameters -- convenience generic for callers
-export function readJsonFile<T = Record<string, unknown>>(
-  file: string,
-  allowComments?: boolean,
-): T {
+export function readJsonFile(file: string, allowComments?: boolean): Record<string, unknown> {
   const content = fs.readFileSync(file, 'utf-8');
   const parseFunction = allowComments ? parseJsonc : JSON.parse;
-  return parseFunction(content) as T;
+  return parseFunction(content);
 }
 
-// eslint-disable-next-line typescript-eslint/no-unnecessary-type-parameters -- convenience generic for callers
-export function writeJsonFile<T = Record<string, unknown>>(file: string, data: T) {
+export function writeJsonFile(file: string, data: Record<string, unknown>) {
   let newline = '\n';
   let indent = '  ';
   if (fs.existsSync(file)) {
@@ -27,11 +22,11 @@ export function writeJsonFile<T = Record<string, unknown>>(file: string, data: T
   fs.writeFileSync(file, JSON.stringify(data, null, indent) + newline, 'utf-8');
 }
 
-export function editJsonFile<T = Record<string, unknown>>(
+export function editJsonFile<T extends Record<string, unknown> = Record<string, unknown>>(
   file: string,
   callback: (content: T) => T | undefined,
 ) {
-  const json = readJsonFile<T>(file);
+  const json = readJsonFile(file) as T;
   const newJson = callback(json);
   if (newJson) {
     writeJsonFile(file, newJson);

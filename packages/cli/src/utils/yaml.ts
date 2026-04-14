@@ -2,10 +2,9 @@ import fs from 'node:fs';
 
 import { type Document, parseDocument, parse as parseYaml, Scalar } from 'yaml';
 
-// eslint-disable-next-line typescript-eslint/no-unnecessary-type-parameters -- convenience generic for callers
-export function readYamlFile<T = Record<string, unknown>>(file: string): T {
+export function readYamlFile(file: string): Record<string, unknown> {
   const content = fs.readFileSync(file, 'utf-8');
-  return parseYaml(content) as T;
+  return parseYaml(content);
 }
 
 export type YamlDocument = Document.Parsed;

@@ -44,12 +44,11 @@ export function detectPackageMetadata(
  * @param currentDir - The current directory to start searching from.
  * @returns The package.json content as a JSON object, or null if no package.json is found.
  */
-// eslint-disable-next-line typescript-eslint/no-unnecessary-type-parameters -- convenience generic for callers
-export function readNearestPackageJson<T = Record<string, unknown>>(currentDir: string): T | null {
+export function readNearestPackageJson(currentDir: string): Record<string, unknown> | null {
   do {
     const packageJsonPath = path.join(currentDir, 'package.json');
     if (fs.existsSync(packageJsonPath)) {
-      return readJsonFile<T>(packageJsonPath);
+      return readJsonFile(packageJsonPath);
     }
     currentDir = path.dirname(currentDir);
   } while (currentDir !== path.dirname(currentDir));
