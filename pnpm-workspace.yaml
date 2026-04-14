@@ -82,8 +82,8 @@ catalog:
   oxc-minify: =0.124.0
   oxc-parser: =0.124.0
   oxc-transform: =0.124.0
-  oxfmt: =0.44.0
-  oxlint: =1.59.0
+  oxfmt: =0.45.0
+  oxlint: =1.60.0
   oxlint-tsgolint: =0.20.0
   pathe: ^2.0.3
   picocolors: ^1.1.1
@@ -104,7 +104,7 @@ catalog:
   terser: ^5.44.1
   tinybench: ^6.0.0
   tinyexec: ^1.0.1
-  tsdown: ^0.21.7
+  tsdown: ^0.21.8
   tsx: ^4.20.6
   typescript: ^6.0.0
   unified: ^11.0.5

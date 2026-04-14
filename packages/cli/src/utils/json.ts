@@ -4,6 +4,7 @@ import detectIndent from 'detect-indent';
 import { detectNewline } from 'detect-newline';
 import { parse as parseJsonc } from 'jsonc-parser';
 
+// eslint-disable-next-line typescript-eslint/no-unnecessary-type-parameters -- convenience generic for callers
 export function readJsonFile<T = Record<string, unknown>>(
   file: string,
   allowComments?: boolean,
@@ -13,6 +14,7 @@ export function readJsonFile<T = Record<string, unknown>>(
   return parseFunction(content) as T;
 }
 
+// eslint-disable-next-line typescript-eslint/no-unnecessary-type-parameters -- convenience generic for callers
 export function writeJsonFile<T = Record<string, unknown>>(file: string, data: T) {
   let newline = '\n';
   let indent = '  ';

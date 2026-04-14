@@ -136,8 +136,8 @@
   },
   "peerDependencies": {
     "@arethetypeswrong/core": "^0.18.1",
-    "@tsdown/css": "0.21.7",
-    "@tsdown/exe": "0.21.7",
+    "@tsdown/css": "0.21.8",
+    "@tsdown/exe": "0.21.8",
     "@types/node": "^20.19.0 || >=22.12.0",
     "@vitejs/devtools": "^0.1.0",
     "esbuild": "^0.27.0 || ^0.28.0",
@@ -219,6 +219,6 @@
   "bundledVersions": {
     "vite": "8.0.8",
     "rolldown": "1.0.0-rc.15",
-    "tsdown": "0.21.7"
+    "tsdown": "0.21.8"
   }
 }
