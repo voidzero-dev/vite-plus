@@ -1,0 +1,33 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "commands": [
+    "# Pins each claim in docs/guide/nested-config.md. Fixture layout:",
+    "#   root vite.config.ts            -> no-debugger:error, singleQuote:true",
+    "#   root vite.config.permissive.ts -> no-debugger:off,   singleQuote:false",
+    "#   packages/pkg-a/vite.config.ts  -> no-debugger:off,   singleQuote:false",
+    "#   packages/pkg-b/                -> no local vite.config.ts",
+    "# Both pkg-a/src/index.js and pkg-b/src/index.js contain `debugger;` and double-quoted strings.",
+    "# Claim 1: from a cwd that contains a vite.config.ts, both lint and fmt use it.",
+    "# pkg-a's own config wins: no-debugger:off and singleQuote:false -> lint and fmt pass.",
+    "cd packages/pkg-a && vp lint",
+    "cd packages/pkg-a && vp fmt --check src",
+    "# Claim 2a: `vp lint` does NOT walk up. pkg-b has no local vite.config.ts,",
+    "# so Oxlint's built-in defaults apply -> no-debugger fires as a warning (exit 0),",
+    "# not as the root's `error`. Root's vite.config.ts is NOT consulted.",
+    "cd packages/pkg-b && vp lint",
+    "# Claim 2b: `vp fmt` DOES walk up. From pkg-b (no local config) it reaches the root,",
+    "# which sets singleQuote:true -> double-quoted strings fail (exit 1).",
+    "cd packages/pkg-b && vp fmt --check src",
+    "# Claim 3: from the workspace root the root config applies to every file,",
+    "# including files in pkg-a that have their own vite.config.ts (not merged,",
+    "# and not resolved per-file). Running against each package separately keeps",
+    "# the snap output stable regardless of oxlint's parallel scheduling.",
+    "vp lint packages/pkg-a/src",
+    "vp lint packages/pkg-b/src",
+    "vp fmt --check packages",
+    "# Claim 4: `-c <path>` bypasses cwd-based resolution. The permissive config applies",
+    "# to every targeted file, so both debugger statements and double-quoted strings pass.",
+    "vp lint -c vite.config.permissive.ts",
+    "vp fmt -c vite.config.permissive.ts --check packages/pkg-a/src packages/pkg-b/src"
+  ]
+}

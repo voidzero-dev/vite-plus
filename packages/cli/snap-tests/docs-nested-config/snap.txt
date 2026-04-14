@@ -1,0 +1,93 @@
+> # Pins each claim in docs/guide/nested-config.md. Fixture layout:
+> #   root vite.config.ts            -> no-debugger:error, singleQuote:true
+> #   root vite.config.permissive.ts -> no-debugger:off,   singleQuote:false
+> #   packages/pkg-a/vite.config.ts  -> no-debugger:off,   singleQuote:false
+> #   packages/pkg-b/                -> no local vite.config.ts
+> # Both pkg-a/src/index.js and pkg-b/src/index.js contain `debugger;` and double-quoted strings.
+> # Claim 1: from a cwd that contains a vite.config.ts, both lint and fmt use it.
+> # pkg-a's own config wins: no-debugger:off and singleQuote:false -> lint and fmt pass.
+> cd packages/pkg-a && vp lint
+Found 0 warnings and 0 errors.
+Finished in <variable>ms on 2 files with <variable> rules using <variable> threads.
+
+> cd packages/pkg-a && vp fmt --check src
+Checking formatting...
+All matched files use the correct format.
+Finished in <variable>ms on 1 files using <variable> threads.
+
+> # Claim 2a: `vp lint` does NOT walk up. pkg-b has no local vite.config.ts,
+> # so Oxlint's built-in defaults apply -> no-debugger fires as a warning (exit 0),
+> # not as the root's `error`. Root's vite.config.ts is NOT consulted.
+> cd packages/pkg-b && vp lint
+
+  ⚠ eslint(no-debugger): `debugger` statement is not allowed
+   ╭─[src/index.js:2:3]
+ 1 │ function pkgB() {
+ 2 │   debugger;
+   ·   ─────────
+ 3 │   return "hello from pkg-b";
+   ╰────
+  help: Remove the debugger statement
+
+Found 1 warning and 0 errors.
+Finished in <variable>ms on 1 file with <variable> rules using <variable> threads.
+
+> # Claim 2b: `vp fmt` DOES walk up. From pkg-b (no local config) it reaches the root,
+> # which sets singleQuote:true -> double-quoted strings fail (exit 1).
+[1]> cd packages/pkg-b && vp fmt --check src
+Checking formatting...
+src/index.js (<variable>ms)
+
+Format issues found in above 1 files. Run without `--check` to fix.
+Finished in <variable>ms on 1 files using <variable> threads.
+
+> # Claim 3: from the workspace root the root config applies to every file,
+> # including files in pkg-a that have their own vite.config.ts (not merged,
+> # and not resolved per-file). Running against each package separately keeps
+> # the snap output stable regardless of oxlint's parallel scheduling.
+[1]> vp lint packages/pkg-a/src
+
+  × eslint(no-debugger): `debugger` statement is not allowed
+   ╭─[packages/pkg-a/src/index.js:2:3]
+ 1 │ function pkgA() {
+ 2 │   debugger;
+   ·   ─────────
+ 3 │   return "hello from pkg-a";
+   ╰────
+  help: Remove the debugger statement
+
+Found 0 warnings and 1 error.
+Finished in <variable>ms on 1 file with <variable> rules using <variable> threads.
+
+[1]> vp lint packages/pkg-b/src
+
+  × eslint(no-debugger): `debugger` statement is not allowed
+   ╭─[packages/pkg-b/src/index.js:2:3]
+ 1 │ function pkgB() {
+ 2 │   debugger;
+   ·   ─────────
+ 3 │   return "hello from pkg-b";
+   ╰────
+  help: Remove the debugger statement
+
+Found 0 warnings and 1 error.
+Finished in <variable>ms on 1 file with <variable> rules using <variable> threads.
+
+[1]> vp fmt --check packages
+Checking formatting...
+packages/pkg-a/src/index.js (<variable>ms)
+packages/pkg-b/src/index.js (<variable>ms)
+
+Format issues found in above 2 files. Run without `--check` to fix.
+Finished in <variable>ms on 5 files using <variable> threads.
+
+> # Claim 4: `-c <path>` bypasses cwd-based resolution. The permissive config applies
+> # to every targeted file, so both debugger statements and double-quoted strings pass.
+> vp lint -c vite.config.permissive.ts
+Found 0 warnings and 0 errors.
+Finished in <variable>ms on 5 files with <variable> rules using <variable> threads.
+
+> vp fmt -c vite.config.permissive.ts --check packages/pkg-a/src packages/pkg-b/src
+Checking formatting...
+All matched files use the correct format.
+Finished in <variable>ms on 2 files using <variable> threads.

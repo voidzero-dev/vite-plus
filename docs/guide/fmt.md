@@ -30,6 +30,8 @@ For editors, point the formatter config path at `./vite.config.ts` so format-on-
 
 For the upstream formatter behavior and configuration reference, see the [Oxfmt docs](https://oxc.rs/docs/guide/usage/formatter.html).
 
+In monorepos, `vp fmt` walks up from the current working directory and uses the first `vite.config.ts` it finds — unlike `vp lint`, which is cwd-only. See [Nested Configuration](/guide/nested-config) for the full resolution rules.
+
 ```ts
 import { defineConfig } from 'vite-plus';
 

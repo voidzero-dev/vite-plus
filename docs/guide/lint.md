@@ -22,6 +22,8 @@ Put lint configuration directly in the `lint` block in `vite.config.ts` so all y
 
 For the upstream rule set, options, and compatibility details, see the [Oxlint docs](https://oxc.rs/docs/guide/usage/linter.html).
 
+In monorepos, `vp lint` uses `<cwd>/vite.config.ts` if it exists, and falls back to Oxlint's built-in defaults otherwise — it does not walk up. See [Nested Configuration](/guide/nested-config) for details.
+
 ```ts
 import { defineConfig } from 'vite-plus';
 
