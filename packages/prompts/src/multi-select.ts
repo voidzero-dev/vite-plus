@@ -120,13 +120,15 @@ export const multiselect = <Value>(opts: MultiSelectOptions<Value>) => {
     );
   };
   const required = opts.required ?? true;
-  const hint = '  ' + color.reset(
+  const hint =
+    '  ' +
+    color.reset(
       color.dim(
-          `Press ${color.gray(color.bgWhite(color.inverse(' space ')))} to select, ${color.gray(
-              color.bgWhite(color.inverse(' enter ')),
-          )} to submit`,
+        `Press ${color.gray(color.bgWhite(color.inverse(' space ')))} to select, ${color.gray(
+          color.bgWhite(color.inverse(' enter ')),
+        )} to submit`,
       ),
-  )
+    );
 
   return new MultiSelectPrompt({
     options: opts.options,
