@@ -71,6 +71,7 @@ export default defineConfig({
       'packages/cli/snap-tests/fmt-ignore-patterns/src/ignored',
       'packages/cli/snap-tests/nested-oxc-config-proj-1/**',
       'packages/cli/snap-tests-global/migration-lint-staged-ts-config',
+      'packages/cli/snap-tests/docs-nested-config',
       'docs/**',
       'ecosystem-ci/*/**',
       'packages/test/**.cjs',
