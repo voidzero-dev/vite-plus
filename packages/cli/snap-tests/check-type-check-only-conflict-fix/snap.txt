@@ -1,0 +1,4 @@
+[1]> vp check --type-check-only --fix
+error: Conflicting flags
+
+`vp check --type-check-only` cannot be used with `--fix`

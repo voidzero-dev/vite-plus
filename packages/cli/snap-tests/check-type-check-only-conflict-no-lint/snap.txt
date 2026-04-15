@@ -1,0 +1,4 @@
+[1]> vp check --type-check-only --no-lint
+error: Conflicting flags
+
+`vp check --type-check-only` cannot be used with `--no-lint`
