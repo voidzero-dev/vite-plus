@@ -1,0 +1,16 @@
+> vp check --fix src/ignored/index.js # all files excluded by ignorePatterns, should pass in --fix mode
+pass: Formatting completed for checked files (<variable>ms)
+
+> vp check --fix package.json # non-lintable file, should pass in --fix mode
+pass: Formatting completed for checked files (<variable>ms)
+
+> vp check --no-error-on-unmatched-pattern src/ignored/index.js # explicit flag without --fix, should also pass
+> vp check --fix --no-error-on-unmatched-pattern src/ignored/index.js # both flags set, should pass
+pass: Formatting completed for checked files (<variable>ms)
+
+[2]> vp check src/ignored/index.js # without --fix or explicit flag, should exit non-zero
+error: Formatting could not start
+Checking formatting...
+Expected at least one target file. All matched files may have been excluded by ignore rules.
+
+Formatting failed before analysis started

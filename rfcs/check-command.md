@@ -53,6 +53,7 @@ vp check --no-type-check
 | `--lint` / `--no-lint`             | ON      | Run lint check (`vp lint`)                              |
 | `--type-aware` / `--no-type-aware` | ON      | Enable type-aware lint rules (oxlint `--type-aware`)    |
 | `--type-check` / `--no-type-check` | ON      | Enable TypeScript type checking (oxlint `--type-check`) |
+| `--no-error-on-unmatched-pattern`  | OFF     | Do not exit with error when pattern is unmatched        |
 
 **Flag dependency:** `--type-check` requires `--type-aware` as a prerequisite.
 
@@ -73,8 +74,9 @@ vp check --fix src/index.ts src/utils.ts
 
 When file paths are provided:
 
-- `--no-error-on-unmatched-pattern` is automatically added to `fmt` args (prevents errors when paths don't match fmt patterns)
 - Paths are appended to both `fmt` and `lint` sub-commands
+- In `--fix` mode, `--no-error-on-unmatched-pattern` is implicitly enabled for both `fmt` and `lint`, preventing errors when all provided paths are excluded by ignorePatterns. This is the common lint-staged use case where staged files may not match tool-specific patterns.
+- Without `--fix`, unmatched patterns are reported as errors unless `--no-error-on-unmatched-pattern` is explicitly passed. Both oxfmt and oxlint support this flag natively.
 
 This enables lint-staged integration:
 
@@ -208,6 +210,7 @@ Options:
       --lint             Run lint check [default: true]
       --type-aware       Enable type-aware linting [default: true]
       --type-check       Enable TypeScript type checking [default: true]
+      --no-error-on-unmatched-pattern  Do not exit with error when no files match
   -h, --help             Print help
 ```
 

@@ -386,14 +386,27 @@ pub async fn download_package_manager(
         version_or_latest.into()
     };
 
+    // Reject anything that is not strict semver `major.minor.patch[-prerelease][+build]`.
+    // This prevents path traversal via the version being interpolated into
+    // `$VP_HOME/package_manager/{name}/{version}` below, since `AbsolutePath::join`
+    // does not normalize `..` components. Also guards against registry-controlled
+    // "latest" lookups returning a malicious value.
+    let parsed_version = Version::parse(&version).map_err(|_| {
+        Error::InvalidArgument(
+            format!(
+                "invalid {package_manager_type} version {version:?}: expected semver 'major.minor.patch'"
+            )
+            .into(),
+        )
+    })?;
+
     let mut package_name: Str = package_manager_type.to_string().into();
     // handle yarn >= 2.0.0 to use `@yarnpkg/cli-dist` as package name
     // @see https://github.com/nodejs/corepack/blob/main/config.json#L135
-    if matches!(package_manager_type, PackageManagerType::Yarn) {
-        let version_req = VersionReq::parse(">=2.0.0")?;
-        if version_req.matches(&Version::parse(&version)?) {
-            package_name = "@yarnpkg/cli-dist".into();
-        }
+    if matches!(package_manager_type, PackageManagerType::Yarn)
+        && VersionReq::parse(">=2.0.0")?.matches(&parsed_version)
+    {
+        package_name = "@yarnpkg/cli-dist".into();
     }
 
     let home_dir = vite_shared::get_vp_home()?;
@@ -1838,6 +1851,24 @@ mod tests {
             .expect("Should detect pnpm from parent workspace");
         assert_eq!(result.bin_name, "pnpm");
         assert!(result.get_bin_prefix().ends_with("pnpm/bin"));
+    }
+
+    #[tokio::test]
+    async fn test_download_package_manager_rejects_path_traversal_version() {
+        // Versions containing path separators or traversal components must be
+        // rejected before any filesystem operations: `AbsolutePath::join` does
+        // not normalize `..`, so a bad version would escape the home dir.
+        for bad in ["../../../escape", "..", "1.0.0/../../escape", "/foo/bar", "1.0.0\0", ""] {
+            let result = download_package_manager(PackageManagerType::Pnpm, bad, None).await;
+            match result {
+                Err(Error::InvalidArgument(_)) => {}
+                other => panic!("expected InvalidArgument for {bad:?}, got {other:?}"),
+            }
+        }
+
+        // Bun takes a separate code path but shares the same pre-validation.
+        let result = download_package_manager(PackageManagerType::Bun, "../../escape", None).await;
+        assert!(matches!(result, Err(Error::InvalidArgument(_))));
     }
 
     #[tokio::test]
