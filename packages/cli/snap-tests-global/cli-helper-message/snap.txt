@@ -41,6 +41,7 @@ Manage Dependencies:
   info, view, show           View package information from the registry
   link, ln                   Link packages for local development
   unlink                     Unlink packages
+  rebuild                    Rebuild native modules
   pm                         Forward a command to the package manager
 
 Maintain:
@@ -441,4 +442,3 @@ Options:
   -h, --help             Print help
 
 Documentation: https://viteplus.dev/guide/upgrade
-
