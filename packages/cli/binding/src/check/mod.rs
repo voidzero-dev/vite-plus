@@ -140,6 +140,9 @@ pub(crate) async fn execute_check(
         // parser think linting never started. Force the default reporter here so the
         // captured output is stable across local and CI environments.
         args.push("--format=default".to_string());
+        if suppress_unmatched {
+            args.push("--no-error-on-unmatched-pattern".to_string());
+        }
         if has_paths {
             args.extend(paths.iter().cloned());
         }
@@ -190,12 +193,11 @@ pub(crate) async fn execute_check(
                 ));
             }
             None => {
-                // Only suppress when the output is empty (no files to lint).
-                // If oxlint produced error output (config error, crash, etc.),
-                // surface it even when suppress_unmatched is active.
-                if suppress_unmatched && combined_output.trim().is_empty() {
-                    status = ExitStatus::SUCCESS;
-                } else {
+                // oxlint handles --no-error-on-unmatched-pattern natively and
+                // exits 0 when no files match, so we only need to guard
+                // against the edge case where output is unparsable but the
+                // process still succeeded.
+                if !(suppress_unmatched && status == ExitStatus::SUCCESS) {
                     output::error("Linting could not start");
                     if !combined_output.trim().is_empty() {
                         print_stdout_block(&combined_output);
