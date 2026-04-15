@@ -413,7 +413,7 @@ The release workflow already creates GitHub Releases. Add build + upload steps f
 
 ### Phase 2: Direct Download URL (done)
 
-`https://viteplus.dev/vp-setup` redirects (302) to `https://vp-setup.void.app` via Netlify redirect in `netlify.toml`. Installation docs link to the user-facing `viteplus.dev` URL.
+`https://viteplus.dev/vp-setup` redirects (302) to `https://setup.viteplus.dev` via Netlify redirect in `netlify.toml`. Installation docs link to the user-facing `viteplus.dev` URL.
 
 ### Phase 3: Package Managers
 
