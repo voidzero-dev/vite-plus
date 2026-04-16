@@ -1,7 +1,8 @@
 # RFC: Organization Default Templates for `vp create`
 
-> Status: Draft (Round 2) — all initial open questions resolved. See the
-> "Resolved Decisions" section at the bottom for the settled list.
+> Status: Draft (Round 3) — addresses PR #1398 review feedback on keeping
+> Vite+ built-in templates reachable when `create.defaultTemplate` is set.
+> See the "Resolved Decisions" section at the bottom for the settled list.
 
 ## Summary
 
@@ -293,6 +294,57 @@ export default defineConfig({
 prompt for template name (today's behavior when bare `vp create` is typed with
 no argument and no default).
 
+### Keeping access to the Vite+ built-in templates
+
+Setting `create.defaultTemplate` should never _hide_ the Vite+ built-in
+defaults (`vite:monorepo`, `vite:application`, `vite:library`,
+`vite:generator`) from an engineer who needs them. Without an escape hatch,
+a repo that ships this config would force every contributor to remember the
+exact `vite:*` specifier name, which defeats the purpose of interactive
+discovery.
+
+The org picker therefore always appends a trailing "Vite+ built-in
+templates" entry. Selecting it drops the user into the existing
+`getInitialTemplateOptions` picker
+(`packages/cli/src/create/initial-template-options.ts:9-31`) unchanged:
+
+```
+? Pick a template from @nkzw
+❯ monorepo   Full Nakazawa Tech monorepo scaffold
+  web        Web app template (Vite + React)
+  mobile     Mobile app (React Native) template
+  server     Server template (Node + Fastify)
+  library    TypeScript library template
+  ──────────────────
+  › Vite+ built-in templates   Use defaults (monorepo / application / library / generator)
+```
+
+Rules:
+
+- The escape-hatch entry is appended by Vite+, not by the org manifest. It
+  cannot be suppressed by the org — this is an intentional
+  "user-agency-trumps-config" decision, similar to how most modern package
+  managers always expose `--help` regardless of project config.
+- Selecting it re-enters the standard flow: the picker shown is identical
+  to what `vp create` renders in a repo without `defaultTemplate` set, and
+  is itself already context-aware (omits `vite:monorepo` inside a monorepo,
+  requires a monorepo for `vite:generator`, etc.).
+- The entry is placed last, below a separator, so the org's own templates
+  remain the visually dominant choice.
+
+For scripted / non-interactive use, engineers can bypass the configured
+default by passing any template argument directly — `vp create vite:library`,
+`vp create vite:application`, etc. No new CLI flag is added; the existing
+"pass an explicit specifier" escape hatch is sufficient for CI and scripts.
+
+The `--no-interactive` error output for `vp create @org` mentions this in
+the hint line, so an agent reading the table can pivot:
+
+```
+hint: rerun with an explicit selection, e.g. `vp create @nkzw/web`,
+      or use a Vite+ built-in template like `vp create vite:application`.
+```
+
 ### Intentionally out of scope
 
 - **User-level default** at `~/.vite-plus/config.json`. Deferred to a future
@@ -308,7 +360,8 @@ no argument and no default).
 
 When `@org/create`'s manifest is found, `vp create @org` displays a list
 prompt over the **context-filtered** entries (see "Context-aware filtering"
-below). Sketch:
+below), followed by a trailing **Vite+ built-in templates** entry (see
+"Keeping access to the Vite+ built-in templates" above). Sketch:
 
 ```
 ? Pick a template from @nkzw
@@ -316,6 +369,8 @@ below). Sketch:
   mobile    Mobile app (React Native) template
   server    Server template (Node + Fastify)
   library   TypeScript library template
+  ──────────────────
+  › Vite+ built-in templates   Use defaults (monorepo / application / library / generator)
 ```
 
 ### Context-aware filtering
@@ -374,7 +429,8 @@ available templates from @nkzw/create:
   server   Server template (Node + Fastify)     github:nkzw-tech/template-server
   library  TypeScript library template          @nkzw/template-library
 
-hint: rerun with an explicit selection, e.g. `vp create @nkzw/web`.
+hint: rerun with an explicit selection, e.g. `vp create @nkzw/web`,
+      or use a Vite+ built-in template like `vp create vite:application`.
 ```
 
 Notes:
@@ -584,6 +640,7 @@ Fixture additions under `packages/cli/snap-tests-global/create-org-*`:
 | `create-org-invalid-manifest`            | Invalid `vp.templates` produces a schema error                                                                    |
 | `create-org-monorepo-filter`             | `monorepo: true` entries hidden from picker and `--no-interactive` output when run inside a monorepo              |
 | `create-org-monorepo-direct-in-monorepo` | `vp create @org/<monorepo-entry>` errors with "cannot create a monorepo inside an existing monorepo"              |
+| `create-org-builtin-escape-hatch`        | Org picker always ends with a "Vite+ built-in templates" entry that routes to `getInitialTemplateOptions`         |
 
 Unit tests:
 
@@ -658,7 +715,11 @@ export default defineConfig({
 ```bash
 # Inside that repo: engineers just type `vp create`
 vp create
-# → picker from @acme/create
+# → picker from @acme/create, plus a trailing
+#   "Vite+ built-in templates" entry for users who need vite:library etc.
+
+# Explicit builtin (bypasses the configured default)
+vp create vite:library
 ```
 
 ### Mixed-specifier manifest
@@ -700,6 +761,12 @@ vp create
   user explicitly typed `@org`. Users on flaky networks get a clear,
   actionable error instead of mysteriously running a single-template
   fallback.
+- **Built-in templates always reachable from the org picker**: when
+  `create.defaultTemplate` is set, the org picker appends a trailing "Vite+
+  built-in templates" entry that routes to the existing
+  `getInitialTemplateOptions` flow. No new CLI flag; explicit specifiers
+  like `vp create vite:application` remain the scripted escape hatch.
+  (Resolves review feedback on #1398.)
 - **Local test fixtures only**: snap-tests and unit tests use a local mock
   registry / stubbed `fetch`. No dedicated published fixture package —
   registry-surface regressions are low-frequency and caught downstream.
