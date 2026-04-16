@@ -65,7 +65,7 @@ fn documentation_url_for_command_path(command_path: &[&str]) -> Option<&'static 
         ["config"] | ["staged"] => Some("https://viteplus.dev/guide/commit-hooks"),
         [
             "install" | "add" | "remove" | "update" | "dedupe" | "outdated" | "list" | "ls" | "why"
-            | "info" | "view" | "show" | "link" | "unlink" | "pm",
+            | "info" | "view" | "show" | "link" | "unlink" | "rebuild" | "pm",
             ..,
         ] => Some("https://viteplus.dev/guide/install"),
         ["dev"] => Some("https://viteplus.dev/guide/dev"),
@@ -477,6 +477,7 @@ pub fn top_level_help_doc() -> HelpDoc {
                     row("info, view, show", "View package information from the registry"),
                     row("link, ln", "Link packages for local development"),
                     row("unlink", "Unlink packages"),
+                    row("rebuild", "Rebuild native modules"),
                     row("pm", "Forward a command to the package manager"),
                 ],
             ),
