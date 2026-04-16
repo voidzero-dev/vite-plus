@@ -1,0 +1,7 @@
+{
+  "ignoredPlatforms": ["darwin", "linux"],
+  "commands": [
+    { "command": "node setup.js", "ignoreOutput": true },
+    "cd via/app && vp build 2>&1 | grep -E 'built in|vite:build-html'"
+  ]
+}
