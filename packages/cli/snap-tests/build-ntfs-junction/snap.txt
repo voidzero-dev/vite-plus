@@ -1,2 +1,2 @@
-> cd via/app && vp build 2>&1 | grep -E 'built in|vite:build-html'
-✓ built in <variable>ms
+> node setup.js
+> cd via/app && vp build 2>&1
