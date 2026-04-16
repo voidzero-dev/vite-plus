@@ -6,5 +6,5 @@ publish = ".vitepress/dist"
 # Windows installer redirect
 [[redirects]]
 from = "/vp-setup"
-to = "https://vp-setup.void.app"
+to = "https://setup.viteplus.dev"
 status = 302
