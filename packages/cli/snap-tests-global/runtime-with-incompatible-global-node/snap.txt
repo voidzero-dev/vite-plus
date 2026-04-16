@@ -1,8 +1,4 @@
 > vp env default 20.0.0
-VITE+ - The Unified Toolchain for the Web
-
-✓ Default Node.js version set to <semver>
-
 [1]> vp migrate --yes
 error: Node.js <semver> is incompatible with Vite+ CLI.
 Required by Vite+: ^20.19.0 || >=22.12.0

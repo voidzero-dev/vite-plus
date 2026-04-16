@@ -1,6 +1,4 @@
 > vp env use 20.0.0
-Using Node.js v<semver> (resolved from <semver>)
-
 [1]> vp exec node --version
 VITE+ - The Unified Toolchain for the Web
 
