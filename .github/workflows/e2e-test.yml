@@ -83,6 +83,7 @@ jobs:
       # Disable Windows Defender real-time scanning to speed up I/O-heavy builds (~30-50% faster)
       - name: Disable Windows Defender
         if: runner.os == 'Windows'
+        continue-on-error: true
         shell: powershell
         run: Set-MpPreference -DisableRealtimeMonitoring $true
 
@@ -344,6 +345,7 @@ jobs:
       # Disable Windows Defender real-time scanning to speed up I/O-heavy operations
       - name: Disable Windows Defender
         if: runner.os == 'Windows'
+        continue-on-error: true
         shell: powershell
         run: Set-MpPreference -DisableRealtimeMonitoring $true
 
