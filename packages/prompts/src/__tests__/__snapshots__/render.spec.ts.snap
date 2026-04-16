@@ -52,6 +52,7 @@ exports[`prompt renderers > renders multiselect with cursor marker plus checkbox
       Second line
   › ◼ Beta
     ◻ Gamma
+  Press  space  to select,  enter  to submit
 
 "
 `;
