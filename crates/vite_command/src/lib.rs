@@ -1,3 +1,5 @@
+#[cfg(unix)]
+use std::os::fd::{BorrowedFd, RawFd};
 use std::{
     collections::HashMap,
     ffi::OsStr,
@@ -9,9 +11,6 @@ use tokio::process::Command;
 use tokio_util::sync::CancellationToken;
 use vite_error::Error;
 use vite_path::{AbsolutePath, AbsolutePathBuf, RelativePathBuf};
-
-#[cfg(unix)]
-use std::os::fd::{BorrowedFd, RawFd};
 
 /// Result of running a command with fspy tracking.
 #[derive(Debug)]

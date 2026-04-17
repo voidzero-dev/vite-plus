@@ -62,7 +62,7 @@ pub(super) async fn resolve_and_execute(
         SynthesizableSubcommand::Dev { .. } | SynthesizableSubcommand::Preview { .. }
     );
 
-    let cmd =
+    let mut cmd =
         resolve_and_build_command(resolver, subcommand, resolved_vite_config, envs, cwd, cwd_arc)
             .await?;
 
