@@ -13,7 +13,7 @@ use vite_js_runtime::{
 };
 use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_shared::{
-    PrependOptions, PrependResult,
+    PackageJson, PrependOptions, PrependResult,
     env_vars::{self, VP_NODE_VERSION},
     format_path_with_prepend,
 };
@@ -117,13 +117,11 @@ impl JsExecutor {
         cmd
     }
 
-    /// Read the `engines.node` requirement from the CLI's own `package.json`.
-    ///
-    /// Returns `None` when the file is missing, unreadable, or has no `engines.node`.
-    async fn get_cli_engines_requirement(&self) -> Option<String> {
-        let cli_dir = self.get_cli_package_dir().ok()?;
-        let pkg_path = cli_dir.join("package.json");
-        let pkg = read_package_json(&pkg_path).await.ok()??;
+    /// Return the `engines.node` requirement from the CLI's `package.json`.
+    /// It must be embedded at compile time. As cli package may not exist while upgrading.
+    fn get_cli_engines_requirement() -> Option<String> {
+        let pkg: PackageJson =
+            serde_json::from_str(include_str!("../../../packages/cli/package.json")).ok()?;
         pkg.engines?.node.map(|s| s.to_string())
     }
 
@@ -256,7 +254,7 @@ impl JsExecutor {
         source: Option<&str>,
         is_project_runtime: bool,
     ) -> Result<(), Error> {
-        let Some(requirement) = self.get_cli_engines_requirement().await else { return Ok(()) };
+        let Some(requirement) = Self::get_cli_engines_requirement() else { return Ok(()) };
 
         // System runtimes report "system" — we cannot inspect the actual version cheaply,
         // and the user has explicitly opted in via `vp env off`.
@@ -572,14 +570,10 @@ mod tests {
         use tempfile::TempDir;
         use vite_shared::EnvConfig;
 
-        // Point scripts_dir at the real packages/cli/dist so that
-        // get_cli_engines_requirement() reads the actual engines.node from
-        // packages/cli/package.json.  The dist/ directory need not exist — only
-        // its parent (packages/cli/) and the package.json within it are read.
-        let scripts_dir = AbsolutePathBuf::new(
-            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../packages/cli/dist"),
-        )
-        .unwrap();
+        // `engines.node`` is now embedded at compile time
+        // So we just need to direct to a random directory
+        let scripts_dir =
+            AbsolutePathBuf::new(TempDir::new().unwrap().path().to_path_buf()).unwrap();
 
         // Use any existing directory as project_path; the session override
         // fires before any project-source lookup or network download.
