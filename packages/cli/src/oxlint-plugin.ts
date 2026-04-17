@@ -126,7 +126,7 @@ export const preferVitePlusImportsRule: OxlintRule = {
       preferVitePlusImports: "Use '{{to}}' instead of '{{from}}' in Vite+ projects.",
     },
   },
-  create(context: ReportContext) {
+  createOnce(context: ReportContext) {
     return {
       ImportDeclaration(node: VisitorNode<'ImportDeclaration'>) {
         maybeReportLiteral(context, node.source);
