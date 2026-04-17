@@ -533,7 +533,9 @@ async function collectMigrationPlan(
       (detectFramework(rootDir).includes(framework) && !hasFrameworkShim(rootDir, framework)) ||
       (packages ?? []).some((pkg) => {
         const pkgPath = path.join(rootDir, pkg.path);
-        return detectFramework(pkgPath).includes(framework) && !hasFrameworkShim(pkgPath, framework);
+        return (
+          detectFramework(pkgPath).includes(framework) && !hasFrameworkShim(pkgPath, framework)
+        );
       });
     if (anyMissingShim) {
       const addShim = await confirmFrameworkShim(framework, options.interactive);
