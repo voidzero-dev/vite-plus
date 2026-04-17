@@ -1,0 +1,7 @@
+> vp create vite:application --no-interactive -- --template vue-ts # create Vue+TS app
+> cat vite-plus-application/src/env.d.ts # check Vue shim was added
+declare module '*.vue' {
+  import type { DefineComponent } from 'vue';
+  const component: DefineComponent<{}, {}, unknown>;
+  export default component;
+}
