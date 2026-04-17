@@ -74,6 +74,10 @@
       "types": "./dist/lint.d.ts",
       "import": "./dist/lint.js"
     },
+    "./oxlint-plugin": {
+      "types": "./dist/oxlint-plugin.d.ts",
+      "import": "./dist/oxlint-plugin.js"
+    },
     "./package.json": "./package.json",
     "./pack": {
       "types": "./dist/pack.d.ts",

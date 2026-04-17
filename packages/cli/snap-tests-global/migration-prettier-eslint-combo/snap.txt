@@ -64,12 +64,19 @@ export default defineConfig({
       "builtin": true
     },
     "rules": {
-      "no-unused-vars": "error"
+      "no-unused-vars": "error",
+      "vite-plus/prefer-vite-plus-imports": "error"
     },
     "options": {
       "typeAware": true,
       "typeCheck": true
-    }
+    },
+    "jsPlugins": [
+      {
+        "name": "vite-plus",
+        "specifier": "vite-plus/oxlint-plugin"
+      }
+    ]
   },
   fmt: {
     semi: true,

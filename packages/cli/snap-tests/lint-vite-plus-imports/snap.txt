@@ -1,0 +1,28 @@
+> vp lint --fix src/index.ts src/types.ts # rewrite vite and vitest imports via the vite-plus oxlint plugin
+Found 0 warnings and 0 errors.
+Finished in <variable>ms on 2 files with <variable> rules using <variable> threads.
+
+> cat src/index.ts
+import { defineConfig } from 'vite-plus';
+
+const configPromise = import('vite-plus');
+
+export { expect } from 'vite-plus/test';
+
+void defineConfig;
+void configPromise;
+
+> cat src/types.ts
+type TestFn = typeof import('vite-plus/test')['test'];
+
+declare module 'vite-plus/test/browser-playwright' {}
+
+import client = require('vite-plus/client');
+
+export type { TestFn };
+
+void client;
+
+> vp lint src/index.ts src/types.ts # confirm the rewritten files are clean
+Found 0 warnings and 0 errors.
+Finished in <variable>ms on 2 files with <variable> rules using <variable> threads.

@@ -1,0 +1,159 @@
+import {
+  PREFER_VITE_PLUS_IMPORTS_RULE_NAME,
+  VITE_PLUS_OXLINT_PLUGIN_NAME,
+} from './oxlint-plugin-config.ts';
+
+interface StringLiteralLike {
+  raw: string | null;
+  type: 'Literal';
+  value: string;
+}
+
+interface ReportContext {
+  report(diagnostic: {
+    data: Record<string, string>;
+    fix: (fixer: Fixer) => unknown;
+    messageId: 'preferVitePlusImports';
+    node: StringLiteralLike;
+  }): void;
+}
+
+interface Fixer {
+  replaceText(node: unknown, text: string): unknown;
+}
+
+function isStringLiteralLike(value: unknown): value is StringLiteralLike {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'type' in value &&
+    value.type === 'Literal' &&
+    'value' in value &&
+    typeof value.value === 'string'
+  );
+}
+
+function rewriteVitePlusImportSpecifier(specifier: string): string | null {
+  if (specifier === 'vite') {
+    return 'vite-plus';
+  }
+
+  if (specifier.startsWith('vite/')) {
+    return `vite-plus/${specifier.slice('vite/'.length)}`;
+  }
+
+  if (specifier === 'vitest/config') {
+    return 'vite-plus';
+  }
+
+  if (specifier === 'vitest') {
+    return 'vite-plus/test';
+  }
+
+  if (specifier.startsWith('vitest/')) {
+    return `vite-plus/test/${specifier.slice('vitest/'.length)}`;
+  }
+
+  for (const prefix of [
+    '@vitest/browser-playwright',
+    '@vitest/browser-preview',
+    '@vitest/browser-webdriverio',
+    '@vitest/browser',
+  ]) {
+    if (specifier === prefix) {
+      return `vite-plus/test/${prefix.slice('@vitest/'.length)}`;
+    }
+
+    if (specifier.startsWith(`${prefix}/`)) {
+      return `vite-plus/test/${specifier.slice('@vitest/'.length)}`;
+    }
+  }
+
+  return null;
+}
+
+function quoteSpecifier(literal: StringLiteralLike, replacement: string): string {
+  const quote = literal.raw?.startsWith("'") ? "'" : '"';
+  return `${quote}${replacement}${quote}`;
+}
+
+function maybeReportLiteral(context: ReportContext, literal: StringLiteralLike | null | undefined) {
+  if (!literal || typeof literal.value !== 'string') {
+    return;
+  }
+
+  const replacement = rewriteVitePlusImportSpecifier(literal.value);
+  if (!replacement) {
+    return;
+  }
+
+  context.report({
+    node: literal,
+    messageId: 'preferVitePlusImports',
+    data: {
+      from: literal.value,
+      to: replacement,
+    },
+    fix(fixer) {
+      return fixer.replaceText(literal, quoteSpecifier(literal, replacement));
+    },
+  });
+}
+
+export const preferVitePlusImportsRule = {
+  meta: {
+    type: 'problem',
+    docs: {
+      description: 'Prefer vite-plus module specifiers over vite and vitest packages.',
+      recommended: true,
+      url: 'https://github.com/voidzero-dev/vite-plus/issues/1301',
+    },
+    fixable: 'code',
+    messages: {
+      preferVitePlusImports: "Use '{{to}}' instead of '{{from}}' in Vite+ projects.",
+    },
+  },
+  create(context: any) {
+    return {
+      ImportDeclaration(node: { source: StringLiteralLike }) {
+        maybeReportLiteral(context, node.source);
+      },
+      ExportAllDeclaration(node: { source: StringLiteralLike }) {
+        maybeReportLiteral(context, node.source);
+      },
+      ExportNamedDeclaration(node: { source: StringLiteralLike | null }) {
+        maybeReportLiteral(context, node.source);
+      },
+      ImportExpression(node: { source: unknown }) {
+        if (!isStringLiteralLike(node.source)) {
+          return;
+        }
+        maybeReportLiteral(context, node.source);
+      },
+      TSImportType(node: { source: StringLiteralLike }) {
+        maybeReportLiteral(context, node.source);
+      },
+      TSExternalModuleReference(node: { expression: StringLiteralLike }) {
+        maybeReportLiteral(context, node.expression);
+      },
+      TSModuleDeclaration(node: { global?: boolean; id: StringLiteralLike | { type: string } }) {
+        if (node.global || !isStringLiteralLike(node.id)) {
+          return;
+        }
+        maybeReportLiteral(context, node.id);
+      },
+    };
+  },
+};
+
+const plugin = {
+  meta: {
+    name: VITE_PLUS_OXLINT_PLUGIN_NAME,
+  },
+  rules: {
+    [PREFER_VITE_PLUS_IMPORTS_RULE_NAME]: preferVitePlusImportsRule,
+  },
+};
+
+export default plugin;
+export { rewriteVitePlusImportSpecifier };

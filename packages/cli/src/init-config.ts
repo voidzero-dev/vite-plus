@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { mergeJsonConfig } from '../binding/index.js';
+import { createDefaultVitePlusLintConfig } from './oxlint-plugin-config.ts';
 import { fmt as resolveFmt } from './resolve-fmt.ts';
 import { runCommandSilently } from './utils/command.ts';
 import { BASEURL_TSCONFIG_WARNING, VITE_PLUS_NAME } from './utils/constants.ts';
@@ -233,11 +234,13 @@ export async function applyToolInitConfigToViteConfig(
     const lintInitConfigPath = path.join(projectPath, '.vite-plus-lint-init.oxlintrc.json');
     // Skip typeAware/typeCheck when tsconfig.json has baseUrl (unsupported by tsgolint)
     const hasBaseUrl = hasBaseUrlInTsconfig(projectPath);
-    const initOptions = hasBaseUrl ? {} : { typeAware: true, typeCheck: true };
+    const initConfig = createDefaultVitePlusLintConfig({
+      includeTypeAwareDefaults: !hasBaseUrl,
+    });
     if (hasBaseUrl) {
       warnMsg(BASEURL_TSCONFIG_WARNING);
     }
-    fs.writeFileSync(lintInitConfigPath, JSON.stringify({ options: initOptions }));
+    fs.writeFileSync(lintInitConfigPath, JSON.stringify(initConfig));
     const mergeResult = mergeJsonConfig(viteConfigPath, lintInitConfigPath, spec.configKey);
 
     if (!mergeResult.updated) {
