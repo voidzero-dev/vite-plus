@@ -84,47 +84,67 @@ async function updatePnpmWorkspace(versions) {
   const filePath = path.join(ROOT, 'pnpm-workspace.yaml');
   let content = fs.readFileSync(filePath, 'utf8');
 
-  // The capture regex puts the current version in $1 and matches exactly what
-  // the new string will replace. oxlint's trailing \n disambiguates from oxlint-tsgolint.
+  // Each pattern has exactly one capture group (the current version) so the replace
+  // callback signature is `(match, captured, offset, string)` — no positional ambiguity.
+  // oxlint's trailing \n disambiguates from oxlint-tsgolint.
   const entries = [
     {
       name: 'vitest',
-      pattern: /(vitest-dev: npm:vitest@\^)([\d.]+(?:-[\w.]+)?)/,
+      pattern: /vitest-dev: npm:vitest@\^([\d.]+(?:-[\w.]+)?)/,
+      replacement: `vitest-dev: npm:vitest@^${versions.vitest}`,
       newVersion: versions.vitest,
     },
-    { name: 'tsdown', pattern: /(tsdown: \^)([\d.]+(?:-[\w.]+)?)/, newVersion: versions.tsdown },
+    {
+      name: 'tsdown',
+      pattern: /tsdown: \^([\d.]+(?:-[\w.]+)?)/,
+      replacement: `tsdown: ^${versions.tsdown}`,
+      newVersion: versions.tsdown,
+    },
     {
       name: '@oxc-node/cli',
-      pattern: /('@oxc-node\/cli': \^)([\d.]+(?:-[\w.]+)?)/,
+      pattern: /'@oxc-node\/cli': \^([\d.]+(?:-[\w.]+)?)/,
+      replacement: `'@oxc-node/cli': ^${versions.oxcNodeCli}`,
       newVersion: versions.oxcNodeCli,
     },
     {
       name: '@oxc-node/core',
-      pattern: /('@oxc-node\/core': \^)([\d.]+(?:-[\w.]+)?)/,
+      pattern: /'@oxc-node\/core': \^([\d.]+(?:-[\w.]+)?)/,
+      replacement: `'@oxc-node/core': ^${versions.oxcNodeCore}`,
       newVersion: versions.oxcNodeCore,
     },
-    { name: 'oxfmt', pattern: /(oxfmt: =)([\d.]+(?:-[\w.]+)?)/, newVersion: versions.oxfmt },
-    { name: 'oxlint', pattern: /(oxlint: =)([\d.]+(?:-[\w.]+)?)(\n)/, newVersion: versions.oxlint },
+    {
+      name: 'oxfmt',
+      pattern: /oxfmt: =([\d.]+(?:-[\w.]+)?)/,
+      replacement: `oxfmt: =${versions.oxfmt}`,
+      newVersion: versions.oxfmt,
+    },
+    {
+      name: 'oxlint',
+      pattern: /oxlint: =([\d.]+(?:-[\w.]+)?)\n/,
+      replacement: `oxlint: =${versions.oxlint}\n`,
+      newVersion: versions.oxlint,
+    },
     {
       name: 'oxlint-tsgolint',
-      pattern: /(oxlint-tsgolint: =)([\d.]+(?:-[\w.]+)?)/,
+      pattern: /oxlint-tsgolint: =([\d.]+(?:-[\w.]+)?)/,
+      replacement: `oxlint-tsgolint: =${versions.oxlintTsgolint}`,
       newVersion: versions.oxlintTsgolint,
     },
   ];
 
-  for (const { name, pattern, newVersion } of entries) {
-    let matched = false;
-    content = content.replace(pattern, (_match, prefix, oldVersion, suffix = '') => {
-      matched = true;
-      recordChange(name, oldVersion, newVersion);
-      return `${prefix}${newVersion}${suffix}`;
+  for (const { name, pattern, replacement, newVersion } of entries) {
+    let oldVersion;
+    content = content.replace(pattern, (_match, captured) => {
+      oldVersion = captured;
+      return replacement;
     });
-    if (!matched) {
+    if (oldVersion === undefined) {
       throw new Error(
         `Failed to match ${name} in pnpm-workspace.yaml — the pattern ${pattern} is stale, ` +
           `please update it in .github/scripts/upgrade-deps.mjs`,
       );
     }
+    recordChange(name, oldVersion, newVersion);
   }
 
   fs.writeFileSync(filePath, content);
