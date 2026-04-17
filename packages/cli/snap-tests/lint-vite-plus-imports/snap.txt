@@ -1,5 +1,60 @@
 [1]> vp lint src/index.ts src/types.ts # should fail before fix
 
+  × vite-plus(prefer-vite-plus-imports): Use 'vite-plus/test' instead of 'vitest' in Vite+ projects.
+   ╭─[src/types.ts:1:30]
+ 1 │ type TestFn = (typeof import('vitest'))['test'];
+   ·                              ────────
+ 2 │ type BrowserContext = typeof import('@vitest/browser/context');
+   ╰────
+
+  × vite-plus(prefer-vite-plus-imports): Use 'vite-plus/test/browser/context' instead of '@vitest/browser/context' in Vite+ projects.
+   ╭─[src/types.ts:2:37]
+ 1 │ type TestFn = (typeof import('vitest'))['test'];
+ 2 │ type BrowserContext = typeof import('@vitest/browser/context');
+   ·                                     ─────────────────────────
+ 3 │ type BrowserClient = typeof import('@vitest/browser/client');
+   ╰────
+
+  × vite-plus(prefer-vite-plus-imports): Use 'vite-plus/test/client' instead of '@vitest/browser/client' in Vite+ projects.
+   ╭─[src/types.ts:3:36]
+ 2 │ type BrowserContext = typeof import('@vitest/browser/context');
+ 3 │ type BrowserClient = typeof import('@vitest/browser/client');
+   ·                                    ────────────────────────
+ 4 │ type PlaywrightProvider = typeof import('@vitest/browser-playwright/provider');
+   ╰────
+
+  × vite-plus(prefer-vite-plus-imports): Use 'vite-plus/test/browser/providers/playwright' instead of '@vitest/browser-playwright/provider' in Vite+ projects.
+   ╭─[src/types.ts:4:41]
+ 3 │ type BrowserClient = typeof import('@vitest/browser/client');
+ 4 │ type PlaywrightProvider = typeof import('@vitest/browser-playwright/provider');
+   ·                                         ─────────────────────────────────────
+ 5 │ 
+   ╰────
+
+  × vite-plus(prefer-vite-plus-imports): Use 'vite-plus/test/browser-playwright' instead of '@vitest/browser-playwright' in Vite+ projects.
+   ╭─[src/types.ts:6:16]
+ 5 │ 
+ 6 │ declare module '@vitest/browser-playwright' {}
+   ·                ────────────────────────────
+ 7 │ declare module '@vitest/browser-playwright/context' {}
+   ╰────
+
+  × vite-plus(prefer-vite-plus-imports): Use 'vite-plus/test/browser/context' instead of '@vitest/browser-playwright/context' in Vite+ projects.
+   ╭─[src/types.ts:7:16]
+ 6 │ declare module '@vitest/browser-playwright' {}
+ 7 │ declare module '@vitest/browser-playwright/context' {}
+   ·                ────────────────────────────────────
+ 8 │ 
+   ╰────
+
+  × vite-plus(prefer-vite-plus-imports): Use 'vite-plus/client' instead of 'vite/client' in Vite+ projects.
+    ╭─[src/types.ts:9:25]
+  8 │ 
+  9 │ import client = require('vite/client');
+    ·                         ─────────────
+ 10 │ 
+    ╰────
+
   × vite-plus(prefer-vite-plus-imports): Use 'vite-plus' instead of 'vite' in Vite+ projects.
    ╭─[src/index.ts:1:30]
  1 │ import { defineConfig } from 'vite';
@@ -23,30 +78,7 @@
  6 │ 
    ╰────
 
-  × vite-plus(prefer-vite-plus-imports): Use 'vite-plus/test' instead of 'vitest' in Vite+ projects.
-   ╭─[src/types.ts:1:30]
- 1 │ type TestFn = (typeof import('vitest'))['test'];
-   ·                              ────────
- 2 │ 
-   ╰────
-
-  × vite-plus(prefer-vite-plus-imports): Use 'vite-plus/test/browser-playwright' instead of '@vitest/browser-playwright' in Vite+ projects.
-   ╭─[src/types.ts:3:16]
- 2 │ 
- 3 │ declare module '@vitest/browser-playwright' {}
-   ·                ────────────────────────────
- 4 │ 
-   ╰────
-
-  × vite-plus(prefer-vite-plus-imports): Use 'vite-plus/client' instead of 'vite/client' in Vite+ projects.
-   ╭─[src/types.ts:5:25]
- 4 │ 
- 5 │ import client = require('vite/client');
-   ·                         ─────────────
- 6 │ 
-   ╰────
-
-Found 0 warnings and 6 errors.
+Found 0 warnings and 10 errors.
 Finished in <variable>ms on 2 files with <variable> rules using <variable> threads.
 
 > vp lint --fix src/index.ts src/types.ts # rewrite vite and vitest imports via the vite-plus oxlint plugin
@@ -65,12 +97,16 @@ void configPromise;
 
 > cat src/types.ts
 type TestFn = (typeof import('vite-plus/test'))['test'];
+type BrowserContext = typeof import('vite-plus/test/browser/context');
+type BrowserClient = typeof import('vite-plus/test/client');
+type PlaywrightProvider = typeof import('vite-plus/test/browser/providers/playwright');
 
 declare module 'vite-plus/test/browser-playwright' {}
+declare module 'vite-plus/test/browser/context' {}
 
 import client = require('vite-plus/client');
 
-export type { TestFn };
+export type { BrowserClient, BrowserContext, PlaywrightProvider, TestFn };
 
 void client;
 
