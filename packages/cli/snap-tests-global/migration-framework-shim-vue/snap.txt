@@ -5,6 +5,11 @@ VITE+ - The Unified Toolchain for the Web
 • Node <semver>  pnpm <semver>
 ✓ Dependencies installed in <variable>ms
 • 1 config update applied
+• TypeScript shim added for framework component files
 
-[1]> cat src/env.d.ts # check Vue shim was written
-cat: src/env.d.ts: No such file or directory
+> cat src/env.d.ts # check Vue shim was written
+declare module '*.vue' {
+  import type { DefineComponent } from 'vue';
+  const component: DefineComponent<{}, {}, unknown>;
+  export default component;
+}
