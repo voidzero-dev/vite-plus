@@ -752,4 +752,63 @@ describe('framework shim', () => {
       expect(report.frameworkShimAdded).toBe(true);
     });
   });
+
+  describe('create flow integration', () => {
+    it('does not add duplicate shim when template already wrote env.d.ts', () => {
+      // Simulate create-vue having already written a shim into src/env.d.ts
+      const srcDir = path.join(tmpDir, 'src');
+      fs.mkdirSync(srcDir);
+      const existingShim = "declare module '*.vue' {\n  import type { DefineComponent } from 'vue';\n  const component: DefineComponent;\n  export default component;\n}\n";
+      fs.writeFileSync(path.join(srcDir, 'env.d.ts'), existingShim);
+
+      const framework = detectFramework(
+        (() => {
+          fs.writeFileSync(
+            path.join(tmpDir, 'package.json'),
+            JSON.stringify({ devDependencies: { vue: '^3.0.0' } }),
+          );
+          return tmpDir;
+        })(),
+      );
+      expect(framework).toBe('vue');
+      // Gate check: shim already present, so addFrameworkShim should NOT be called
+      expect(hasFrameworkShim(tmpDir, 'vue')).toBe(true);
+      // Verify content is unchanged if caller respects the gate
+      const contentBefore = fs.readFileSync(path.join(srcDir, 'env.d.ts'), 'utf-8');
+      if (!hasFrameworkShim(tmpDir, 'vue')) {
+        addFrameworkShim(tmpDir, 'vue');
+      }
+      const contentAfter = fs.readFileSync(path.join(srcDir, 'env.d.ts'), 'utf-8');
+      expect(contentAfter).toBe(contentBefore);
+    });
+
+    it('adds shim for vue project created without env.d.ts', () => {
+      fs.mkdirSync(path.join(tmpDir, 'src'));
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify({ devDependencies: { vue: '^3.0.0' } }),
+      );
+      const framework = detectFramework(tmpDir);
+      expect(framework).toBe('vue');
+      if (framework && !hasFrameworkShim(tmpDir, framework)) {
+        addFrameworkShim(tmpDir, framework);
+      }
+      const content = fs.readFileSync(path.join(tmpDir, 'src', 'env.d.ts'), 'utf-8');
+      expect(content).toContain("declare module '*.vue'");
+    });
+
+    it('adds astro shim for astro project without env.d.ts', () => {
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify({ devDependencies: { astro: '^4.0.0' } }),
+      );
+      const framework = detectFramework(tmpDir);
+      expect(framework).toBe('astro');
+      if (framework && !hasFrameworkShim(tmpDir, framework)) {
+        addFrameworkShim(tmpDir, framework);
+      }
+      const content = fs.readFileSync(path.join(tmpDir, 'env.d.ts'), 'utf-8');
+      expect(content).toContain('/// <reference types="astro/client" />');
+    });
+  });
 });
