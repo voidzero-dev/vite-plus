@@ -1,0 +1,3 @@
+> vp run build-task
+> cat dist/index.html | grep 'run-build-plugin-injected' # vp run build should load plugins from factory
+  <!-- run-build-plugin-injected --></body>

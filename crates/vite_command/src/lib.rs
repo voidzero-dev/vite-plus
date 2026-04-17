@@ -1,3 +1,5 @@
+#[cfg(unix)]
+use std::os::fd::{BorrowedFd, RawFd};
 use std::{
     collections::HashMap,
     ffi::OsStr,
@@ -57,6 +59,32 @@ pub fn build_command(bin_path: &AbsolutePath, cwd: &AbsolutePath) -> Command {
     }
 
     cmd
+}
+
+/// Execute a command while preserving terminal state.
+/// This prevents escape sequences from appearing in the prompt when the child process
+/// is interrupted (e.g., via Ctrl+C) while the terminal is in a non-standard state.
+///
+/// On Unix, saves the terminal state before spawning the child process and restores
+/// it after the child exits. On Windows, this is a simple pass-through.
+pub async fn execute_with_terminal_guard(mut cmd: Command) -> Result<ExitStatus, Error> {
+    #[cfg(unix)]
+    {
+        use nix::libc::STDIN_FILENO;
+
+        // Save terminal state before spawning child
+        let _guard = TerminalStateGuard::save(STDIN_FILENO);
+
+        // Spawn and wait for child - guard will restore terminal state on drop
+        let mut child = cmd.spawn().map_err(|e| Error::Anyhow(e.into()))?;
+        child.wait().await.map_err(|e| Error::Anyhow(e.into()))
+    }
+
+    #[cfg(not(unix))]
+    {
+        let mut child = cmd.spawn().map_err(|e| Error::Anyhow(e.into()))?;
+        child.wait().await.map_err(|e| Error::Anyhow(e.into()))
+    }
 }
 
 /// Build a `tokio::process::Command` for shell execution.
@@ -228,6 +256,50 @@ pub fn fix_stdio_streams() {
     clear_cloexec(unsafe { BorrowedFd::borrow_raw(STDIN_FILENO) });
     clear_cloexec(unsafe { BorrowedFd::borrow_raw(STDOUT_FILENO) });
     clear_cloexec(unsafe { BorrowedFd::borrow_raw(STDERR_FILENO) });
+}
+
+/// Guard that saves terminal state and restores it on drop.
+/// This prevents escape sequences from appearing in the prompt when a child process
+/// is interrupted (e.g., via Ctrl+C) while the terminal is in a non-standard state.
+#[cfg(unix)]
+struct TerminalStateGuard {
+    fd: RawFd,
+    original: nix::sys::termios::Termios,
+}
+
+#[cfg(unix)]
+impl TerminalStateGuard {
+    /// Save the current terminal state for the given file descriptor.
+    /// Returns None if the fd is not a terminal or if saving fails.
+    fn save(fd: RawFd) -> Option<Self> {
+        use nix::sys::termios::tcgetattr;
+
+        // SAFETY: fd comes from a valid stdin/stdout/stderr file descriptor
+        let borrowed_fd = unsafe { BorrowedFd::borrow_raw(fd) };
+
+        // Only save state if this is actually a terminal
+        if !nix::unistd::isatty(borrowed_fd).unwrap_or(false) {
+            return None;
+        }
+
+        match tcgetattr(borrowed_fd) {
+            Ok(original) => Some(Self { fd, original }),
+            Err(_) => None,
+        }
+    }
+}
+
+#[cfg(unix)]
+impl Drop for TerminalStateGuard {
+    fn drop(&mut self) {
+        use nix::sys::termios::{SetArg, tcsetattr};
+
+        // SAFETY: fd comes from stdin/stdout/stderr and the guard does not outlive the process
+        let borrowed_fd = unsafe { BorrowedFd::borrow_raw(self.fd) };
+
+        // Best effort: ignore errors during cleanup
+        let _ = tcsetattr(borrowed_fd, SetArg::TCSANOW, &self.original);
+    }
 }
 
 #[cfg(test)]

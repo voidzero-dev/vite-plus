@@ -89,6 +89,34 @@ export default defineConfig({
 });
 ```
 
+## Slow config loading caused by heavy plugins
+
+When `vite.config.ts` imports heavy plugins at the top level, every `import` is evaluated eagerly, even for commands like `vp lint` or `vp fmt` that don't need those plugins. This can make config loading noticeably slow.
+
+Use `lazyPlugins` to wrap plugin loading. Plugins are only loaded for commands that need them (`dev`, `build`, `test`, `preview`), and skipped for everything else:
+
+```ts
+import { defineConfig, lazyPlugins } from 'vite-plus';
+import myPlugin from 'vite-plugin-foo';
+
+export default defineConfig({
+  plugins: lazyPlugins(() => [myPlugin()]),
+});
+```
+
+For heavy plugins that should be lazily imported, combine with dynamic `import()`:
+
+```ts
+import { defineConfig, lazyPlugins } from 'vite-plus';
+
+export default defineConfig({
+  plugins: lazyPlugins(async () => {
+    const { default: heavyPlugin } = await import('vite-plugin-heavy');
+    return [heavyPlugin()];
+  }),
+});
+```
+
 ## Asking for Help
 
 If you are stuck, please reach out:

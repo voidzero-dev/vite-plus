@@ -116,8 +116,6 @@ Done in 171ms using pnpm v10.16.1
 
   describe.skipIf(process.platform !== 'win32')('Windows cwd replacement', () => {
     test('mixed-separator cwd matches all-backslash output', () => {
-      // Simulates the CI failure: cwd has mixed separators (template literal),
-      // but Vite outputs all-backslash paths (path.resolve)
       const cwd =
         'C:\\Users\\RUNNER~1\\AppData\\Local\\Temp/vite-plus-test-abc/command-staged-broken-config';
       const output =
@@ -125,6 +123,14 @@ Done in 171ms using pnpm v10.16.1
       expect(replaceUnstableOutput(output, cwd)).toBe(
         'failed to load config from <cwd>/vite.config.ts',
       );
+    });
+
+    test('mixed-separator cwd matches all-forward-slash output', () => {
+      const cwd =
+        'C:\\Users\\RUNNER~1\\AppData\\Local\\Temp/vite-plus-test-abc/vite-plugins-async-test';
+      const output =
+        ' RUN  C:/Users/RUNNER~1/AppData/Local/Temp/vite-plus-test-abc/vite-plugins-async-test\n';
+      expect(replaceUnstableOutput(output, cwd)).toBe(' RUN  <cwd>\n');
     });
 
     test('all-backslash cwd matches all-backslash output', () => {
