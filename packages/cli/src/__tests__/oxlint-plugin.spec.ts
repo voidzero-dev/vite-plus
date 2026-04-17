@@ -10,8 +10,6 @@ import {
 } from '../oxlint-plugin-config.js';
 import { preferVitePlusImportsRule, rewriteVitePlusImportSpecifier } from '../oxlint-plugin.js';
 
-type TestedRule = Parameters<RuleTester['run']>[1];
-
 describe('oxlint plugin config defaults', () => {
   it('adds vite-plus js plugin and lint rule defaults', () => {
     expect(
@@ -89,7 +87,7 @@ new RuleTester({
   languageOptions: {
     sourceType: 'module',
   },
-}).run(PREFER_VITE_PLUS_IMPORTS_RULE_NAME, preferVitePlusImportsRule as TestedRule, {
+}).run(PREFER_VITE_PLUS_IMPORTS_RULE_NAME, preferVitePlusImportsRule, {
   valid: [
     `import { defineConfig } from 'vite-plus'`,
     `export { expect } from 'vite-plus/test'`,
