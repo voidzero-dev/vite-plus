@@ -112,11 +112,29 @@ jobs:
             If any of the three above fails, diagnose the root cause, fix it, and re-run
             the final validation. Do not exit with the task marked complete otherwise.
 
+            ### Running long commands (IMPORTANT)
+            Run every long-running command (`just build`, `pnpm bootstrap-cli:ci`,
+            `pnpm test`, `cargo check`, etc.) in the FOREGROUND — a single Bash tool call
+            that blocks until the command exits. The Bash tool already gives you a 20-minute
+            timeout per call, which is enough for these builds.
+
+            Do NOT do any of the following:
+            - Spawn a background process (`&`, `nohup`, `disown`, `setsid`, `screen`, `tmux`).
+            - Poll for process completion with `ps`, `pgrep`, `lsof`, `sleep` loops, or
+              repeated `ls` checks on build artifacts. Each polling Bash call costs a full
+              model round-trip and burns minutes without progress.
+            - "Monitor" a running build from a separate Bash call. If you want to know
+              whether a build succeeded, just run it in the foreground and read its exit
+              code and stdout/stderr in the single tool result.
+
+            If a foreground command legitimately hits the 20-minute Bash timeout, report
+            that and stop — do not start polling.
+
             ### Commit rule
             Do NOT run `git commit` or `git push`. A later workflow step commits every
             modified file for you.
           claude_args: |
-            --model opus --allowedTools "Bash,Edit,Replace,NotebookEditCell"
+            --model opus --max-turns 200 --allowedTools "Bash,Edit,Replace,NotebookEditCell"
           additional_permissions: |
             actions: read
 
