@@ -107,7 +107,7 @@ itertools = "0.14.0"
 itoa = "1.0.15"
 json-escape-simd = "3"
 json-strip-comments = "3"
-jsonschema = { version = "0.45.0", default-features = false }
+jsonschema = { version = "0.46.0", default-features = false }
 junction = "1.4.1"
 memchr = "2.7.4"
 mimalloc-safe = "0.1.52"
@@ -134,6 +134,7 @@ num_cpus = "1.17"
 owo-colors = "4.2.2"
 parking_lot = "0.12.5"
 pathdiff = "0.2.3"
+path-posix = "0.0.1"
 pnp = "0.12.7"
 percent-encoding = "2.3.1"
 petgraph = "0.8.2"
@@ -164,7 +165,6 @@ serial_test = "3.2.0"
 sha1 = "0.10.6"
 sha2 = "0.10.9"
 simdutf8 = "0.1.5"
-smallvec = "1.15.0"
 string_cache = "0.9.0"
 sugar_path = { version = "2.0.1", features = ["cached_current_dir"] }
 syn = { version = "2", default-features = false }
@@ -212,7 +212,7 @@ xxhash-rust = "0.8.15"
 zip = "7.2"
 
 # oxc crates with the same version
-oxc = { version = "0.123.0", features = [
+oxc = { version = "0.126.0", features = [
   "ast_visit",
   "transformer",
   "minifier",
@@ -224,16 +224,17 @@ oxc = { version = "0.123.0", features = [
   "regular_expression",
   "cfg",
 ] }
-oxc_allocator = { version = "0.123.0", features = ["pool"] }
-oxc_ast = "0.123.0"
-oxc_ecmascript = "0.123.0"
-oxc_parser = "0.123.0"
-oxc_span = "0.123.0"
-oxc_napi = "0.123.0"
-oxc_minify_napi = "0.123.0"
-oxc_parser_napi = "0.123.0"
-oxc_transform_napi = "0.123.0"
-oxc_traverse = "0.123.0"
+oxc_allocator = { version = "0.126.0", features = ["pool"] }
+oxc_ast = "0.126.0"
+oxc_ecmascript = "0.126.0"
+oxc_parser = "0.126.0"
+oxc_span = "0.126.0"
+oxc_napi = "0.126.0"
+oxc_str = "0.126.0"
+oxc_minify_napi = "0.126.0"
+oxc_parser_napi = "0.126.0"
+oxc_transform_napi = "0.126.0"
+oxc_traverse = "0.126.0"
 
 # oxc crates in their own repos
 oxc_index = { version = "4", features = ["rayon", "serde"] }
