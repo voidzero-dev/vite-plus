@@ -132,9 +132,9 @@ cli
         traverseUp: flags.config !== false,
       });
 
-      const configFiles: string[] = [];
+      const configDeps = new Set<string>();
       if (viteConfig.configFile) {
-        configFiles.push(viteConfig.configFile);
+        configDeps.add(viteConfig.configFile);
       }
 
       const configs: ResolvedConfig[] = [];
@@ -149,11 +149,11 @@ cli
           const existingPlugins = Array.isArray(merged.plugins) ? merged.plugins : [];
           merged.plugins = [...existingPlugins, externalDtsTypeOnlyPlugin()];
         }
-        const resolvedConfig = await resolveUserConfig(merged, flags);
+        const resolvedConfig = await resolveUserConfig(merged, flags, configDeps);
         configs.push(...resolvedConfig);
       }
 
-      await buildWithConfigs(configs, configFiles, runBuild);
+      await buildWithConfigs(configs, configDeps, runBuild);
     }
 
     await runBuild();
