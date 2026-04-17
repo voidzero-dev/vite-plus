@@ -2,10 +2,29 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const ROOT = process.cwd();
+const META_DIR = process.env.UPGRADE_DEPS_META_DIR;
+
+const isFullSha = (s) => /^[0-9a-f]{40}$/.test(s);
+
+/** @type {Map<string, { old: string | null, new: string, tag?: string }>} */
+const changes = new Map();
+
+function recordChange(name, oldValue, newValue, tag) {
+  const entry = { old: oldValue ?? null, new: newValue };
+  if (tag) {
+    entry.tag = tag;
+  }
+  changes.set(name, entry);
+  if (oldValue !== newValue) {
+    console.log(`  ${name}: ${oldValue ?? '(unset)'} -> ${newValue}`);
+  } else {
+    console.log(`  ${name}: ${newValue} (unchanged)`);
+  }
+}
 
 // ============ GitHub API ============
-async function getLatestTagCommit(owner, repo) {
-  const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/tags`, {
+async function getLatestTag(owner, repo) {
+  const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/tags?per_page=1`, {
     headers: {
       Authorization: `token ${process.env.GITHUB_TOKEN}`,
       Accept: 'application/vnd.github.v3+json',
@@ -18,11 +37,11 @@ async function getLatestTagCommit(owner, repo) {
   if (!Array.isArray(tags) || !tags.length) {
     throw new Error(`No tags found for ${owner}/${repo}`);
   }
-  if (!tags[0]?.commit?.sha) {
-    throw new Error(`Invalid tag structure for ${owner}/${repo}: missing commit SHA`);
+  if (!tags[0]?.commit?.sha || !tags[0]?.name) {
+    throw new Error(`Invalid tag structure for ${owner}/${repo}: missing SHA or name`);
   }
-  console.log(`${repo} -> ${tags[0].name}`);
-  return tags[0].commit.sha;
+  console.log(`${repo} -> ${tags[0].name} (${tags[0].commit.sha.slice(0, 7)})`);
+  return { sha: tags[0].commit.sha, tag: tags[0].name };
 }
 
 // ============ npm Registry ============
@@ -45,11 +64,16 @@ async function updateUpstreamVersions() {
   const filePath = path.join(ROOT, 'packages/tools/.upstream-versions.json');
   const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
 
-  // rolldown -> rolldown/rolldown
-  data.rolldown.hash = await getLatestTagCommit('rolldown', 'rolldown');
-
-  // vite -> vitejs/vite
-  data['vite'].hash = await getLatestTagCommit('vitejs', 'vite');
+  const oldRolldownHash = data.rolldown.hash;
+  const oldViteHash = data['vite'].hash;
+  const [rolldown, vite] = await Promise.all([
+    getLatestTag('rolldown', 'rolldown'),
+    getLatestTag('vitejs', 'vite'),
+  ]);
+  data.rolldown.hash = rolldown.sha;
+  data['vite'].hash = vite.sha;
+  recordChange('rolldown', oldRolldownHash, rolldown.sha, rolldown.tag);
+  recordChange('vite', oldViteHash, vite.sha, vite.tag);
 
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2) + '\n');
   console.log('Updated .upstream-versions.json');
@@ -60,38 +84,66 @@ async function updatePnpmWorkspace(versions) {
   const filePath = path.join(ROOT, 'pnpm-workspace.yaml');
   let content = fs.readFileSync(filePath, 'utf8');
 
-  // Update vitest-dev override (handle pre-release versions like -beta.1, -rc.0)
-  content = content.replace(
-    /vitest-dev: npm:vitest@\^[\d.]+(-[\w.]+)?/,
-    `vitest-dev: npm:vitest@^${versions.vitest}`,
-  );
+  // oxlint's trailing \n in the pattern disambiguates from oxlint-tsgolint.
+  const entries = [
+    {
+      name: 'vitest',
+      pattern: /vitest-dev: npm:vitest@\^([\d.]+(?:-[\w.]+)?)/,
+      replacement: `vitest-dev: npm:vitest@^${versions.vitest}`,
+      newVersion: versions.vitest,
+    },
+    {
+      name: 'tsdown',
+      pattern: /tsdown: \^([\d.]+(?:-[\w.]+)?)/,
+      replacement: `tsdown: ^${versions.tsdown}`,
+      newVersion: versions.tsdown,
+    },
+    {
+      name: '@oxc-node/cli',
+      pattern: /'@oxc-node\/cli': \^([\d.]+(?:-[\w.]+)?)/,
+      replacement: `'@oxc-node/cli': ^${versions.oxcNodeCli}`,
+      newVersion: versions.oxcNodeCli,
+    },
+    {
+      name: '@oxc-node/core',
+      pattern: /'@oxc-node\/core': \^([\d.]+(?:-[\w.]+)?)/,
+      replacement: `'@oxc-node/core': ^${versions.oxcNodeCore}`,
+      newVersion: versions.oxcNodeCore,
+    },
+    {
+      name: 'oxfmt',
+      pattern: /oxfmt: =([\d.]+(?:-[\w.]+)?)/,
+      replacement: `oxfmt: =${versions.oxfmt}`,
+      newVersion: versions.oxfmt,
+    },
+    {
+      name: 'oxlint',
+      pattern: /oxlint: =([\d.]+(?:-[\w.]+)?)\n/,
+      replacement: `oxlint: =${versions.oxlint}\n`,
+      newVersion: versions.oxlint,
+    },
+    {
+      name: 'oxlint-tsgolint',
+      pattern: /oxlint-tsgolint: =([\d.]+(?:-[\w.]+)?)/,
+      replacement: `oxlint-tsgolint: =${versions.oxlintTsgolint}`,
+      newVersion: versions.oxlintTsgolint,
+    },
+  ];
 
-  // Update tsdown in catalog (handle pre-release versions)
-  content = content.replace(/tsdown: \^[\d.]+(-[\w.]+)?/, `tsdown: ^${versions.tsdown}`);
-
-  // Update @oxc-node/cli in catalog
-  content = content.replace(
-    /'@oxc-node\/cli': \^[\d.]+(-[\w.]+)?/,
-    `'@oxc-node/cli': ^${versions.oxcNodeCli}`,
-  );
-
-  // Update @oxc-node/core in catalog
-  content = content.replace(
-    /'@oxc-node\/core': \^[\d.]+(-[\w.]+)?/,
-    `'@oxc-node/core': ^${versions.oxcNodeCore}`,
-  );
-
-  // Update oxfmt in catalog
-  content = content.replace(/oxfmt: =[\d.]+(-[\w.]+)?/, `oxfmt: =${versions.oxfmt}`);
-
-  // Update oxlint in catalog (but not oxlint-tsgolint)
-  content = content.replace(/oxlint: =[\d.]+(-[\w.]+)?\n/, `oxlint: =${versions.oxlint}\n`);
-
-  // Update oxlint-tsgolint in catalog
-  content = content.replace(
-    /oxlint-tsgolint: =[\d.]+(-[\w.]+)?/,
-    `oxlint-tsgolint: =${versions.oxlintTsgolint}`,
-  );
+  for (const { name, pattern, replacement, newVersion } of entries) {
+    let oldVersion;
+    content = content.replace(pattern, (_match, captured) => {
+      oldVersion = captured;
+      return replacement;
+    });
+    if (oldVersion === undefined) {
+      throw new Error(
+        `Failed to match ${name} in pnpm-workspace.yaml — the pattern ${pattern} is stale, ` +
+          `please update it in .github/scripts/upgrade-deps.mjs`,
+      );
+    }
+    recordChange(name, oldVersion, newVersion);
+  }
 
   fs.writeFileSync(filePath, content);
   console.log('Updated pnpm-workspace.yaml');
@@ -128,13 +180,91 @@ async function updateCorePackage(devtoolsVersion) {
   const filePath = path.join(ROOT, 'packages/core/package.json');
   const pkg = JSON.parse(fs.readFileSync(filePath, 'utf8'));
 
-  // Update @vitejs/devtools in devDependencies
-  if (pkg.devDependencies?.['@vitejs/devtools']) {
-    pkg.devDependencies['@vitejs/devtools'] = `^${devtoolsVersion}`;
+  const currentDevtools = pkg.devDependencies?.['@vitejs/devtools'];
+  if (!currentDevtools) {
+    return;
   }
+  pkg.devDependencies['@vitejs/devtools'] = `^${devtoolsVersion}`;
+  recordChange('@vitejs/devtools', currentDevtools.replace(/^[\^~]/, ''), devtoolsVersion);
 
   fs.writeFileSync(filePath, JSON.stringify(pkg, null, 2) + '\n');
   console.log('Updated packages/core/package.json');
+}
+
+// ============ Write metadata files for PR description ============
+function writeMetaFiles() {
+  if (!META_DIR) {
+    return;
+  }
+
+  fs.mkdirSync(META_DIR, { recursive: true });
+
+  const versionsObj = Object.fromEntries(changes);
+  fs.writeFileSync(
+    path.join(META_DIR, 'versions.json'),
+    JSON.stringify(versionsObj, null, 2) + '\n',
+  );
+
+  const changed = [...changes.entries()].filter(([, v]) => v.old !== v.new);
+  const unchanged = [...changes.entries()].filter(([, v]) => v.old === v.new);
+
+  const formatVersion = (v) => {
+    if (v.tag) {
+      return `${v.tag} (${v.new.slice(0, 7)})`;
+    }
+    if (isFullSha(v.new)) {
+      return v.new.slice(0, 7);
+    }
+    return v.new;
+  };
+  const formatOld = (v) => {
+    if (!v.old) {
+      return '(unset)';
+    }
+    if (isFullSha(v.old)) {
+      return v.old.slice(0, 7);
+    }
+    return v.old;
+  };
+
+  const commitLines = ['feat(deps): upgrade upstream dependencies', ''];
+  if (changed.length) {
+    for (const [name, v] of changed) {
+      commitLines.push(`- ${name}: ${formatOld(v)} -> ${formatVersion(v)}`);
+    }
+  } else {
+    commitLines.push('- no version changes detected');
+  }
+  commitLines.push('');
+  fs.writeFileSync(path.join(META_DIR, 'commit-message.txt'), commitLines.join('\n'));
+
+  const bodyLines = ['## Summary', ''];
+  if (changed.length) {
+    bodyLines.push('Automated daily upgrade of upstream dependencies.');
+  } else {
+    bodyLines.push('Automated daily upgrade run — no upstream version changes detected.');
+  }
+  bodyLines.push('', '## Dependency updates', '');
+  if (changed.length) {
+    bodyLines.push('| Package | From | To |');
+    bodyLines.push('| --- | --- | --- |');
+    for (const [name, v] of changed) {
+      bodyLines.push(`| \`${name}\` | \`${formatOld(v)}\` | \`${formatVersion(v)}\` |`);
+    }
+  } else {
+    bodyLines.push('_No version changes._');
+  }
+  if (unchanged.length) {
+    bodyLines.push('', '<details><summary>Unchanged dependencies</summary>', '');
+    for (const [name, v] of unchanged) {
+      bodyLines.push(`- \`${name}\`: \`${formatVersion(v)}\``);
+    }
+    bodyLines.push('', '</details>');
+  }
+  bodyLines.push('', '## Code changes', '', '_No additional code changes recorded._', '');
+  fs.writeFileSync(path.join(META_DIR, 'pr-body.md'), bodyLines.join('\n'));
+
+  console.log(`Wrote metadata files to ${META_DIR}`);
 }
 
 console.log('Fetching latest versions…');
@@ -180,5 +310,7 @@ await updatePnpmWorkspace({
 });
 await updateTestPackage(vitestVersion);
 await updateCorePackage(devtoolsVersion);
+
+writeMetaFiles();
 
 console.log('Done!');
