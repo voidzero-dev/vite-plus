@@ -863,7 +863,10 @@ async function executeMigrationPlan(
   if (plan.frameworkShimFrameworks) {
     updateMigrationProgress('Adding TypeScript shim');
     for (const framework of plan.frameworkShimFrameworks) {
-      if (!hasFrameworkShim(workspaceInfo.rootDir, framework)) {
+      if (
+        detectFramework(workspaceInfo.rootDir).includes(framework) &&
+        !hasFrameworkShim(workspaceInfo.rootDir, framework)
+      ) {
         addFrameworkShim(workspaceInfo.rootDir, framework, report);
       }
       for (const pkg of workspaceInfo.packages) {
