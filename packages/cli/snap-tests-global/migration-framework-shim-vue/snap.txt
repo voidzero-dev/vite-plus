@@ -1,0 +1,10 @@
+> vp migrate --no-interactive --no-hooks # migration should add Vue shim when vue dependency is detected
+VITE+ - The Unified Toolchain for the Web
+
+◇ Migrated . to Vite+<repeat>
+• Node <semver>  pnpm <semver>
+✓ Dependencies installed in <variable>ms
+• 1 config update applied
+
+[1]> cat src/env.d.ts # check Vue shim was written
+cat: src/env.d.ts: No such file or directory
