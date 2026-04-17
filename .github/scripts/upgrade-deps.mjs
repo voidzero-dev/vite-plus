@@ -84,9 +84,7 @@ async function updatePnpmWorkspace(versions) {
   const filePath = path.join(ROOT, 'pnpm-workspace.yaml');
   let content = fs.readFileSync(filePath, 'utf8');
 
-  // Each pattern has exactly one capture group (the current version) so the replace
-  // callback signature is `(match, captured, offset, string)` — no positional ambiguity.
-  // oxlint's trailing \n disambiguates from oxlint-tsgolint.
+  // oxlint's trailing \n in the pattern disambiguates from oxlint-tsgolint.
   const entries = [
     {
       name: 'vitest',

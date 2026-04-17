@@ -64,6 +64,7 @@ jobs:
 
       - name: Check upgrade dependencies
         id: check-upgrade-dependencies
+        timeout-minutes: 180
         uses: anthropics/claude-code-action@c3d45e8e941e1b2ad7b278c57482d9c5bf1f35b3 # Claude Code to 2.1.112
         env:
           RELEASE_BUILD: 'true'
@@ -229,7 +230,7 @@ jobs:
           # so guarantee a trailing newline regardless of what the generator wrote.
           ensure_trailing_newline() {
             local f="$1"
-            if [ -s "$f" ] && [ -n "$(tail -c1 "$f")" ]; then
+            if [ -n "$(tail -c1 "$f")" ]; then
               printf '\n' >> "$f"
             fi
           }
