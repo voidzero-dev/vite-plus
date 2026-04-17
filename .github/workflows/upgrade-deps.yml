@@ -228,6 +228,17 @@ jobs:
           COMMIT_FILE="${UPGRADE_DEPS_META_DIR}/commit-message.txt"
           BODY_FILE="${UPGRADE_DEPS_META_DIR}/pr-body.md"
 
+          # GitHub Actions heredoc outputs require the terminator on its own line,
+          # so guarantee a trailing newline regardless of what the generator wrote.
+          ensure_trailing_newline() {
+            local f="$1"
+            if [ -s "$f" ] && [ -n "$(tail -c1 "$f")" ]; then
+              printf '\n' >> "$f"
+            fi
+          }
+          ensure_trailing_newline "${COMMIT_FILE}"
+          ensure_trailing_newline "${BODY_FILE}"
+
           echo '--- commit-message.txt ---'
           cat "${COMMIT_FILE}"
           echo '--- pr-body.md ---'

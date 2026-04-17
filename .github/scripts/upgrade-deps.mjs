@@ -134,6 +134,12 @@ async function updatePnpmWorkspace(versions) {
 
   for (const { name, pattern, replacement, newVersion } of entries) {
     const oldVersion = content.match(pattern)?.[1];
+    if (!oldVersion) {
+      throw new Error(
+        `Failed to match ${name} in pnpm-workspace.yaml — the pattern ${pattern} is stale, ` +
+          `please update it in .github/scripts/upgrade-deps.mjs`,
+      );
+    }
     content = content.replace(pattern, replacement);
     recordChange(name, oldVersion, newVersion);
   }
