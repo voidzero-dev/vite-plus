@@ -1,6 +1,7 @@
 {
   "ignoredPlatforms": ["win32"],
   "commands": [
-    "cd packages/app-a && vp lint # sub-workspace has no-console:off but root has no-console:warn"
+    "cd packages/app-a && vp lint # sub-workspace has no-console:off but root has no-console:warn",
+    "vp lint # at root, no-console:warn should flag app-a's console.log"
   ]
 }

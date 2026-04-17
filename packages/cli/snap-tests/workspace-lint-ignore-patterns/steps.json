@@ -1,0 +1,8 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "commands": [
+    "# Tests whether oxlint honors a `**/`-prefixed glob in root lint.ignorePatterns.",
+    "# Mirrors how the vp repo declares ignorePatterns: ['**/snap-tests/**'].",
+    "vp lint"
+  ]
+}

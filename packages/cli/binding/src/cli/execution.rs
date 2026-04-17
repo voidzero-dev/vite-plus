@@ -7,22 +7,19 @@ use vite_task::ExitStatus;
 
 use super::{
     resolver::SubcommandResolver,
-    types::{CapturedCommandOutput, ResolvedUniversalViteConfig, SynthesizableSubcommand},
+    types::{CapturedCommandOutput, SynthesizableSubcommand},
 };
 
 /// Resolve a subcommand into a prepared `tokio::process::Command`.
 async fn resolve_and_build_command(
     resolver: &SubcommandResolver,
     subcommand: SynthesizableSubcommand,
-    resolved_vite_config: Option<&ResolvedUniversalViteConfig>,
     envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
     cwd: &AbsolutePathBuf,
     cwd_arc: &Arc<AbsolutePath>,
 ) -> Result<tokio::process::Command, Error> {
-    let resolved = resolver
-        .resolve(subcommand, resolved_vite_config, envs, cwd_arc)
-        .await
-        .map_err(|e| Error::Anyhow(e))?;
+    let resolved =
+        resolver.resolve(subcommand, envs, cwd_arc).await.map_err(|e| Error::Anyhow(e))?;
 
     // Resolve the program path using `which` to handle Windows .cmd/.bat files (PATHEXT)
     let program_path = {
@@ -52,14 +49,11 @@ async fn resolve_and_build_command(
 pub(super) async fn resolve_and_execute(
     resolver: &SubcommandResolver,
     subcommand: SynthesizableSubcommand,
-    resolved_vite_config: Option<&ResolvedUniversalViteConfig>,
     envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
     cwd: &AbsolutePathBuf,
     cwd_arc: &Arc<AbsolutePath>,
 ) -> Result<ExitStatus, Error> {
-    let mut cmd =
-        resolve_and_build_command(resolver, subcommand, resolved_vite_config, envs, cwd, cwd_arc)
-            .await?;
+    let mut cmd = resolve_and_build_command(resolver, subcommand, envs, cwd, cwd_arc).await?;
     let mut child = cmd.spawn().map_err(|e| Error::Anyhow(e.into()))?;
     let status = child.wait().await.map_err(|e| Error::Anyhow(e.into()))?;
     Ok(ExitStatus(status.code().unwrap_or(1) as u8))
@@ -75,16 +69,13 @@ pub(super) enum FilterStream {
 pub(super) async fn resolve_and_execute_with_filter(
     resolver: &SubcommandResolver,
     subcommand: SynthesizableSubcommand,
-    resolved_vite_config: Option<&ResolvedUniversalViteConfig>,
     envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
     cwd: &AbsolutePathBuf,
     cwd_arc: &Arc<AbsolutePath>,
     stream: FilterStream,
     filter: impl Fn(&str) -> Cow<'_, str>,
 ) -> Result<ExitStatus, Error> {
-    let mut cmd =
-        resolve_and_build_command(resolver, subcommand, resolved_vite_config, envs, cwd, cwd_arc)
-            .await?;
+    let mut cmd = resolve_and_build_command(resolver, subcommand, envs, cwd, cwd_arc).await?;
     match stream {
         FilterStream::Stdout => cmd.stdout(Stdio::piped()),
         FilterStream::Stderr => cmd.stderr(Stdio::piped()),
@@ -111,15 +102,12 @@ pub(super) async fn resolve_and_execute_with_filter(
 pub(crate) async fn resolve_and_capture_output(
     resolver: &SubcommandResolver,
     subcommand: SynthesizableSubcommand,
-    resolved_vite_config: Option<&ResolvedUniversalViteConfig>,
     envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
     cwd: &AbsolutePathBuf,
     cwd_arc: &Arc<AbsolutePath>,
     force_color_if_terminal: bool,
 ) -> Result<CapturedCommandOutput, Error> {
-    let mut cmd =
-        resolve_and_build_command(resolver, subcommand, resolved_vite_config, envs, cwd, cwd_arc)
-            .await?;
+    let mut cmd = resolve_and_build_command(resolver, subcommand, envs, cwd, cwd_arc).await?;
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
     if force_color_if_terminal && std::io::stdout().is_terminal() {

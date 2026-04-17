@@ -1,0 +1,15 @@
+> # Tests whether oxlint honors a `**/`-prefixed glob in root lint.ignorePatterns.
+> # Mirrors how the vp repo declares ignorePatterns: ['**/snap-tests/**'].
+[1]> vp lint
+
+  × eslint(no-console): Unexpected console statement.
+   ╭─[packages/included/src/index.js:2:3]
+ 1 │ function included() {
+ 2 │   console.log('this file is not in ignorePatterns');
+   ·   ───────────
+ 3 │   return 'included';
+   ╰────
+  help: Delete this console statement.
+
+Found 0 warnings and 1 error.
+Finished in <variable>ms on 3 files with <variable> rules using <variable> threads.

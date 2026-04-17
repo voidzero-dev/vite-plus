@@ -42,6 +42,7 @@ const guideSidebar = [
         items: [
           { text: 'Lint', link: '/guide/lint' },
           { text: 'Format', link: '/guide/fmt' },
+          { text: 'Nested Configuration', link: '/guide/nested-config' },
         ],
       },
       { text: 'Test', link: '/guide/test' },

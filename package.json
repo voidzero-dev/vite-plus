@@ -9,7 +9,7 @@
     "bootstrap-cli:ci": "pnpm install-global-cli",
     "install-global-cli": "tool install-global-cli",
     "tsgo": "tsgo -b tsconfig.json",
-    "lint": "vp lint --type-aware --type-check --threads 4",
+    "check": "vp check --disable-nested-config",
     "test": "vp test run && pnpm -r snap-test",
     "fmt": "vp fmt",
     "test:unit": "vp test run",
@@ -37,7 +37,7 @@
     "zod": "catalog:"
   },
   "lint-staged": {
-    "*.@(js|ts|tsx|md|yaml|yml)": "vp check --fix",
+    "*.@(js|ts|tsx|md|yaml|yml)": "vp check --fix --disable-nested-config",
     "*.rs": "cargo fmt --"
   },
   "engines": {

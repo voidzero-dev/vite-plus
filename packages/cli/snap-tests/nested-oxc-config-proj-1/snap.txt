@@ -1,0 +1,38 @@
+> # Regression test for oxc-project/oxc#20416: nested vite.config.ts in
+> # packages/proj-1 must override the workspace root config when `vp lint`
+> # and `vp fmt` run from that cwd. Root has `no-debugger: error` and
+> # `singleQuote: true`, proj-1 overrides both to `off` / `false`. If the
+> # root config leaks through, lint reports a debugger violation and fmt
+> # reports a quote-style diff.
+> cd packages/proj-1 && vp lint
+Found 0 warnings and 0 errors.
+Finished in <variable>ms on 2 files with <variable> rules using <variable> threads.
+
+> cd packages/proj-1 && vp fmt --check src
+Checking formatting...
+All matched files use the correct format.
+Finished in <variable>ms on 1 files using <variable> threads.
+
+> # Running from the workspace root must use the root config, so both
+> # commands should fail: lint flags the `debugger;` and fmt flags the
+> # double-quoted string in packages/proj-1/src/index.js.
+[1]> vp lint
+
+  × eslint(no-debugger): `debugger` statement is not allowed
+   ╭─[packages/proj-1/src/index.js:2:3]
+ 1 │ function hello() {
+ 2 │   debugger;
+   ·   ─────────
+ 3 │   return "hello from proj-1";
+   ╰────
+  help: Remove the debugger statement
+
+Found 0 warnings and 1 error.
+Finished in <variable>ms on 3 files with <variable> rules using <variable> threads.
+
+[1]> vp fmt --check packages/proj-1/src
+Checking formatting...
+packages/proj-1/src/index.js (<variable>ms)
+
+Format issues found in above 1 files. Run without `--check` to fix.
+Finished in <variable>ms on 1 files using <variable> threads.

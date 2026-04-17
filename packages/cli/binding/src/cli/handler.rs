@@ -71,8 +71,7 @@ impl CommandHandler for VitePlusCommandHandler {
                 )))
             }
             CLIArgs::Synthesizable(subcmd) => {
-                let resolved =
-                    self.resolver.resolve(subcmd, None, &command.envs, &command.cwd).await?;
+                let resolved = self.resolver.resolve(subcmd, &command.envs, &command.cwd).await?;
                 Ok(HandledCommand::Synthesized(resolved.into_synthetic_plan_request()))
             }
             CLIArgs::ViteTask(cmd) => Ok(HandledCommand::ViteTaskCommand(cmd)),
