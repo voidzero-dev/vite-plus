@@ -900,6 +900,11 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     }
     updateCreateProgress('Integrating into monorepo');
     rewriteMonorepoProject(fullPath, workspaceInfo.packageManager, undefined, compactOutput);
+    for (const framework of detectFramework(fullPath)) {
+      if (!hasFrameworkShim(fullPath, framework)) {
+        addFrameworkShim(fullPath, framework);
+      }
+    }
 
     if (workspaceInfo.packages.length > 0) {
       if (options.interactive) {

@@ -520,10 +520,19 @@ async function collectMigrationPlan(
   }
 
   // 11. Framework shim detection + prompt
-  const detectedFrameworks = detectFramework(rootDir);
+  // Collect unique frameworks from root and all workspace packages
+  const allDetectedFrameworks = new Set<Framework>(detectFramework(rootDir));
+  for (const pkg of packages ?? []) {
+    for (const framework of detectFramework(path.join(rootDir, pkg.path))) {
+      allDetectedFrameworks.add(framework);
+    }
+  }
   const frameworkShimFrameworks: Framework[] = [];
-  for (const framework of detectedFrameworks) {
-    if (!hasFrameworkShim(rootDir, framework)) {
+  for (const framework of allDetectedFrameworks) {
+    const anyMissingShim =
+      !hasFrameworkShim(rootDir, framework) ||
+      (packages ?? []).some((pkg) => !hasFrameworkShim(path.join(rootDir, pkg.path), framework));
+    if (anyMissingShim) {
       const addShim = await confirmFrameworkShim(framework, options.interactive);
       if (addShim) {
         frameworkShimFrameworks.push(framework);
@@ -854,7 +863,15 @@ async function executeMigrationPlan(
   if (plan.frameworkShimFrameworks) {
     updateMigrationProgress('Adding TypeScript shim');
     for (const framework of plan.frameworkShimFrameworks) {
-      addFrameworkShim(workspaceInfo.rootDir, framework, report);
+      if (!hasFrameworkShim(workspaceInfo.rootDir, framework)) {
+        addFrameworkShim(workspaceInfo.rootDir, framework, report);
+      }
+      for (const pkg of workspaceInfo.packages) {
+        const pkgPath = path.join(workspaceInfo.rootDir, pkg.path);
+        if (detectFramework(pkgPath).includes(framework) && !hasFrameworkShim(pkgPath, framework)) {
+          addFrameworkShim(pkgPath, framework, report);
+        }
+      }
     }
   }
 
