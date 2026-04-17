@@ -4,12 +4,16 @@ import path from 'node:path';
 const ROOT = process.cwd();
 const META_DIR = process.env.UPGRADE_DEPS_META_DIR;
 
+const isFullSha = (s) => /^[0-9a-f]{40}$/.test(s);
+
 /** @type {Map<string, { old: string | null, new: string, tag?: string }>} */
 const changes = new Map();
 
 function recordChange(name, oldValue, newValue, tag) {
   const entry = { old: oldValue ?? null, new: newValue };
-  if (tag) entry.tag = tag;
+  if (tag) {
+    entry.tag = tag;
+  }
   changes.set(name, entry);
   if (oldValue !== newValue) {
     console.log(`  ${name}: ${oldValue ?? '(unset)'} -> ${newValue}`);
@@ -181,7 +185,9 @@ async function updateCorePackage(devtoolsVersion) {
 
 // ============ Write metadata files for PR description ============
 function writeMetaFiles() {
-  if (!META_DIR) return;
+  if (!META_DIR) {
+    return;
+  }
 
   fs.mkdirSync(META_DIR, { recursive: true });
 
@@ -194,15 +200,22 @@ function writeMetaFiles() {
   const changed = [...changes.entries()].filter(([, v]) => v.old !== v.new);
   const unchanged = [...changes.entries()].filter(([, v]) => v.old === v.new);
 
-  const isFullSha = (s) => /^[0-9a-f]{40}$/.test(s);
   const formatVersion = (v) => {
-    if (v.tag) return `${v.tag} (${v.new.slice(0, 7)})`;
-    if (isFullSha(v.new)) return v.new.slice(0, 7);
+    if (v.tag) {
+      return `${v.tag} (${v.new.slice(0, 7)})`;
+    }
+    if (isFullSha(v.new)) {
+      return v.new.slice(0, 7);
+    }
     return v.new;
   };
   const formatOld = (v) => {
-    if (!v.old) return '(unset)';
-    if (isFullSha(v.old)) return v.old.slice(0, 7);
+    if (!v.old) {
+      return '(unset)';
+    }
+    if (isFullSha(v.old)) {
+      return v.old.slice(0, 7);
+    }
     return v.old;
   };
 
