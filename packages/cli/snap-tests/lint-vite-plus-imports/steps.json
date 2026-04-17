@@ -1,5 +1,6 @@
 {
   "commands": [
+    "vp lint src/index.ts src/types.ts # should fail before fix",
     "vp lint --fix src/index.ts src/types.ts # rewrite vite and vitest imports via the vite-plus oxlint plugin",
     "cat src/index.ts",
     "cat src/types.ts",
