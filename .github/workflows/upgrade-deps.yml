@@ -115,7 +115,7 @@ jobs:
             ### Running long commands (IMPORTANT)
             Run every long-running command (`just build`, `pnpm bootstrap-cli:ci`,
             `pnpm test`, `cargo check`, etc.) in the FOREGROUND — a single Bash tool call
-            that blocks until the command exits. The Bash tool already gives you a 20-minute
+            that blocks until the command exits. The Bash tool already gives you a 10-minute
             timeout per call, which is enough for these builds.
 
             Do NOT do any of the following:
@@ -127,7 +127,7 @@ jobs:
               whether a build succeeded, just run it in the foreground and read its exit
               code and stdout/stderr in the single tool result.
 
-            If a foreground command legitimately hits the 20-minute Bash timeout, report
+            If a foreground command legitimately hits the 10-minute Bash timeout, report
             that and stop — do not start polling.
 
             ### Commit rule
