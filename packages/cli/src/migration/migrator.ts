@@ -707,22 +707,17 @@ const FRAMEWORK_SHIMS: Record<Framework, string> = {
   astro: '/// <reference types="astro/client" />',
 };
 
-export function detectFramework(projectPath: string): Framework | null {
+export function detectFramework(projectPath: string): Framework[] {
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
-    return null;
+    return [];
   }
   const pkg = readJsonFile(packageJsonPath) as {
     dependencies?: Record<string, string>;
     devDependencies?: Record<string, string>;
   };
   const allDeps = { ...pkg.dependencies, ...pkg.devDependencies };
-  for (const framework of ['vue', 'astro'] as const) {
-    if (allDeps[framework]) {
-      return framework;
-    }
-  }
-  return null;
+  return (['vue', 'astro'] as const).filter((framework) => !!allDeps[framework]);
 }
 
 function getEnvDtsPath(projectPath: string): string {
