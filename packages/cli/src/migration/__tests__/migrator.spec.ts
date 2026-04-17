@@ -659,32 +659,40 @@ describe('framework shim', () => {
   });
 
   describe('detectFramework', () => {
-    it('returns vue when vue is in devDependencies', () => {
+    it('returns [vue] when vue is in devDependencies', () => {
       fs.writeFileSync(
         path.join(tmpDir, 'package.json'),
         JSON.stringify({ devDependencies: { vue: '^3.0.0' } }),
       );
-      expect(detectFramework(tmpDir)).toBe('vue');
+      expect(detectFramework(tmpDir)).toEqual(['vue']);
     });
 
-    it('returns astro when astro is in devDependencies', () => {
+    it('returns [astro] when astro is in devDependencies', () => {
       fs.writeFileSync(
         path.join(tmpDir, 'package.json'),
         JSON.stringify({ devDependencies: { astro: '^4.0.0' } }),
       );
-      expect(detectFramework(tmpDir)).toBe('astro');
+      expect(detectFramework(tmpDir)).toEqual(['astro']);
     });
 
-    it('returns null when no framework dependency is present', () => {
+    it('returns [vue, astro] when both are present', () => {
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify({ devDependencies: { vue: '^3.0.0', astro: '^4.0.0' } }),
+      );
+      expect(detectFramework(tmpDir)).toEqual(['vue', 'astro']);
+    });
+
+    it('returns [] when no framework dependency is present', () => {
       fs.writeFileSync(
         path.join(tmpDir, 'package.json'),
         JSON.stringify({ devDependencies: { vite: '^7.0.0' } }),
       );
-      expect(detectFramework(tmpDir)).toBeNull();
+      expect(detectFramework(tmpDir)).toEqual([]);
     });
 
-    it('returns null when package.json does not exist', () => {
-      expect(detectFramework(tmpDir)).toBeNull();
+    it('returns [] when package.json does not exist', () => {
+      expect(detectFramework(tmpDir)).toEqual([]);
     });
   });
 
@@ -761,23 +769,20 @@ describe('framework shim', () => {
       const existingShim =
         "declare module '*.vue' {\n  import type { DefineComponent } from 'vue';\n  const component: DefineComponent;\n  export default component;\n}\n";
       fs.writeFileSync(path.join(srcDir, 'env.d.ts'), existingShim);
-
-      const framework = detectFramework(
-        (() => {
-          fs.writeFileSync(
-            path.join(tmpDir, 'package.json'),
-            JSON.stringify({ devDependencies: { vue: '^3.0.0' } }),
-          );
-          return tmpDir;
-        })(),
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify({ devDependencies: { vue: '^3.0.0' } }),
       );
-      expect(framework).toBe('vue');
+
+      expect(detectFramework(tmpDir)).toEqual(['vue']);
       // Gate check: shim already present, so addFrameworkShim should NOT be called
       expect(hasFrameworkShim(tmpDir, 'vue')).toBe(true);
       // Verify content is unchanged if caller respects the gate
       const contentBefore = fs.readFileSync(path.join(srcDir, 'env.d.ts'), 'utf-8');
-      if (!hasFrameworkShim(tmpDir, 'vue')) {
-        addFrameworkShim(tmpDir, 'vue');
+      for (const framework of detectFramework(tmpDir)) {
+        if (!hasFrameworkShim(tmpDir, framework)) {
+          addFrameworkShim(tmpDir, framework);
+        }
       }
       const contentAfter = fs.readFileSync(path.join(srcDir, 'env.d.ts'), 'utf-8');
       expect(contentAfter).toBe(contentBefore);
@@ -789,10 +794,10 @@ describe('framework shim', () => {
         path.join(tmpDir, 'package.json'),
         JSON.stringify({ devDependencies: { vue: '^3.0.0' } }),
       );
-      const framework = detectFramework(tmpDir);
-      expect(framework).toBe('vue');
-      if (framework && !hasFrameworkShim(tmpDir, framework)) {
-        addFrameworkShim(tmpDir, framework);
+      for (const framework of detectFramework(tmpDir)) {
+        if (!hasFrameworkShim(tmpDir, framework)) {
+          addFrameworkShim(tmpDir, framework);
+        }
       }
       const content = fs.readFileSync(path.join(tmpDir, 'src', 'env.d.ts'), 'utf-8');
       expect(content).toContain("declare module '*.vue'");
@@ -803,12 +808,28 @@ describe('framework shim', () => {
         path.join(tmpDir, 'package.json'),
         JSON.stringify({ devDependencies: { astro: '^4.0.0' } }),
       );
-      const framework = detectFramework(tmpDir);
-      expect(framework).toBe('astro');
-      if (framework && !hasFrameworkShim(tmpDir, framework)) {
-        addFrameworkShim(tmpDir, framework);
+      for (const framework of detectFramework(tmpDir)) {
+        if (!hasFrameworkShim(tmpDir, framework)) {
+          addFrameworkShim(tmpDir, framework);
+        }
       }
       const content = fs.readFileSync(path.join(tmpDir, 'env.d.ts'), 'utf-8');
+      expect(content).toContain('/// <reference types="astro/client" />');
+    });
+
+    it('adds both vue and astro shims for Astro+Vue project', () => {
+      fs.mkdirSync(path.join(tmpDir, 'src'));
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify({ devDependencies: { vue: '^3.0.0', astro: '^4.0.0' } }),
+      );
+      for (const framework of detectFramework(tmpDir)) {
+        if (!hasFrameworkShim(tmpDir, framework)) {
+          addFrameworkShim(tmpDir, framework);
+        }
+      }
+      const content = fs.readFileSync(path.join(tmpDir, 'src', 'env.d.ts'), 'utf-8');
+      expect(content).toContain("declare module '*.vue'");
       expect(content).toContain('/// <reference types="astro/client" />');
     });
   });
