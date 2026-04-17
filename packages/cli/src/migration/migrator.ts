@@ -683,8 +683,11 @@ function cleanupDeprecatedTsconfigOptions(
   }
 }
 
-// Svelte is intentionally excluded: @sveltejs/vite-plugin-svelte and svelte-check handle
-// .svelte file types automatically. No env.d.ts shim is needed or documented officially.
+// .svelte files are handled by @sveltejs/vite-plugin-svelte (transpilation)
+// and svelte-check / Svelte Language Server (type checking).
+// Module resolution for `.svelte` imports is typically set up by the
+// project template (e.g. src/vite-env.d.ts in Vite svelte-ts, or
+// auto-generated tsconfig in SvelteKit) rather than this file.
 // https://svelte.dev/docs/svelte/typescript
 export type Framework = 'vue' | 'astro';
 
