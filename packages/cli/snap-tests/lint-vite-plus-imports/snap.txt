@@ -13,7 +13,7 @@ void defineConfig;
 void configPromise;
 
 > cat src/types.ts
-type TestFn = typeof import('vite-plus/test')['test'];
+type TestFn = (typeof import('vite-plus/test'))['test'];
 
 declare module 'vite-plus/test/browser-playwright' {}
 
