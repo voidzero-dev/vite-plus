@@ -41,11 +41,14 @@ import { accent, log, muted } from '../utils/terminal.ts';
 import type { PackageDependencies } from '../utils/types.ts';
 import { detectWorkspace } from '../utils/workspace.ts';
 import {
+  addFrameworkShim,
   checkVitestVersion,
   checkViteVersion,
   detectEslintProject,
+  detectFramework,
   detectNodeVersionManagerFile,
   detectPrettierProject,
+  hasFrameworkShim,
   installGitHooks,
   mergeViteConfigFiles,
   migrateEslintToOxlint,
@@ -54,6 +57,7 @@ import {
   preflightGitHooksSetup,
   rewriteMonorepo,
   rewriteStandaloneProject,
+  type Framework,
   type NodeVersionManagerDetection,
 } from './migrator.ts';
 import { createMigrationReport, type MigrationReport } from './report.ts';
@@ -194,6 +198,30 @@ async function confirmNodeVersionFileMigration(
   if (interactive) {
     const confirmed = await prompts.confirm({
       message,
+      initialValue: true,
+    });
+    if (prompts.isCancel(confirmed)) {
+      cancelAndExit();
+    }
+    return confirmed;
+  }
+  return true;
+}
+
+async function confirmFrameworkShim(
+  framework: Framework,
+  interactive: boolean,
+): Promise<boolean> {
+  const frameworkNames: Record<Framework, string> = { vue: 'Vue', astro: 'Astro' };
+  const name = frameworkNames[framework];
+  if (interactive) {
+    const confirmed = await prompts.confirm({
+      message:
+        `Add TypeScript shim for ${name} component files (*.${framework})?\n  ` +
+        styleText(
+          'gray',
+          `Lets TypeScript recognize .${framework} files until vp check fully supports them.`,
+        ),
       initialValue: true,
     });
     if (prompts.isCancel(confirmed)) {
@@ -356,6 +384,7 @@ interface MigrationPlan {
   prettierConfigFile?: string;
   migrateNodeVersionFile: boolean;
   nodeVersionDetection?: NodeVersionManagerDetection;
+  frameworkShimFramework?: Framework;
 }
 
 async function collectMigrationPlan(
@@ -493,6 +522,16 @@ async function collectMigrationPlan(
     );
   }
 
+  // 11. Framework shim detection + prompt
+  const detectedFramework = detectFramework(rootDir);
+  let frameworkShimFramework: Framework | undefined;
+  if (detectedFramework && !hasFrameworkShim(rootDir, detectedFramework)) {
+    const addShim = await confirmFrameworkShim(detectedFramework, options.interactive);
+    if (addShim) {
+      frameworkShimFramework = detectedFramework;
+    }
+  }
+
   const plan: MigrationPlan = {
     packageManager,
     shouldSetupHooks,
@@ -506,6 +545,7 @@ async function collectMigrationPlan(
     prettierConfigFile: prettierProject.configFile,
     migrateNodeVersionFile,
     nodeVersionDetection,
+    frameworkShimFramework,
   };
 
   return plan;
@@ -587,6 +627,9 @@ function showMigrationSummary(options: {
   }
   if (report.gitHooksConfigured) {
     log(`${styleText('gray', '•')} Git hooks configured`);
+  }
+  if (report.frameworkShimAdded) {
+    log(`${styleText('gray', '•')} TypeScript shim added for framework component files`);
   }
   if (report.warnings.length > 0) {
     log(`${styleText('yellow', '!')} Warnings:`);
@@ -807,7 +850,13 @@ async function executeMigrationPlan(
     silent: true,
   });
 
-  // 11. Reinstall after migration
+  // 11. Add framework shim if requested
+  if (plan.frameworkShimFramework) {
+    updateMigrationProgress('Adding TypeScript shim');
+    addFrameworkShim(workspaceInfo.rootDir, plan.frameworkShimFramework, report);
+  }
+
+  // 12. Reinstall after migration
   // npm needs --force to re-resolve packages with newly added overrides,
   // otherwise the stale lockfile prevents override resolution.
   const installArgs =
