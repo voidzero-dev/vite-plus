@@ -60,6 +60,9 @@ describe('applyToolInitConfigToViteConfig', () => {
     const content = fs.readFileSync(viteConfigPath, 'utf8');
     expect(content).toContain('import { defineConfig } from');
     expect(content).toContain('vite-plus');
+    expect(content).toContain('jsPlugins');
+    expect(content).toContain('vite-plus/oxlint-plugin');
+    expect(content).toContain('prefer-vite-plus-imports');
     expect(content).toContain('typeAware');
     expect(content).toContain('typeCheck');
     expect(fs.existsSync(path.join(projectPath, '.oxlintrc.json'))).toBe(false);
@@ -119,6 +122,8 @@ describe('applyToolInitConfigToViteConfig', () => {
     expect(result.action).toBe('added');
 
     const content = fs.readFileSync(path.join(projectPath, 'vite.config.ts'), 'utf8');
+    expect(content).toContain('vite-plus/oxlint-plugin');
+    expect(content).toContain('prefer-vite-plus-imports');
     expect(content).toContain('typeAware');
     expect(content).toContain('typeCheck');
     expect(content).not.toContain('jsx-a11y');
