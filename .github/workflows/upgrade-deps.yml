@@ -116,8 +116,26 @@ jobs:
             the task complete if either `just build` fails, `pnpm bootstrap-cli:ci && pnpm test`
             fails, or the snap-test diff shows an apparent regression.
 
-            Help me fix the errors in `build-upstream` steps if exists.
-            No need to commit changes after your fixing we have a following step to commit all file changes.
+            Help me fix every error that surfaces during this step. That includes, at
+            minimum:
+            - Failures in the `build-upstream` action (non-zero exit from any step inside
+              `.github/actions/build-upstream/action.yml`).
+            - `pnpm run lint` errors.
+            - `just build` failures.
+            - `pnpm bootstrap-cli:ci && pnpm test` failures.
+            - Snap-test regressions: `pnpm test` always exits 0 even when snapshot outputs
+              differ, so you MUST inspect the `git diff` on
+              `packages/cli/snap-tests/**/snap.txt` and
+              `packages/cli/snap-tests-global/**/snap.txt` and fix any change that looks
+              like a real regression (e.g., unexpected stack traces, missing output,
+              diverging CLI behavior). Cosmetic drift caused by the upstream upgrade
+              itself (e.g., a bumped version string in help output) is acceptable —
+              leave those in place.
+            - `cargo check --all-targets --all-features` errors if any Rust code was
+              modified, and stale `cargo shear` findings if `Cargo.toml` changed.
+
+            Do NOT commit any changes — a later workflow step handles the commit for all
+            modified files.
           claude_args: |
             --model opus --allowedTools "Bash,Edit,Replace,NotebookEditCell"
           additional_permissions: |
