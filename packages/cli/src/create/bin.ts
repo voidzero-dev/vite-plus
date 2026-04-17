@@ -6,6 +6,9 @@ import mri from 'mri';
 
 import { vitePlusHeader } from '../../binding/index.js';
 import {
+  addFrameworkShim,
+  detectFramework,
+  hasFrameworkShim,
   installGitHooks,
   rewriteMonorepo,
   rewriteMonorepoProject,
@@ -968,6 +971,10 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   } else {
     updateCreateProgress('Applying Vite+ project setup');
     rewriteStandaloneProject(fullPath, workspaceInfo, undefined, compactOutput);
+    const createdFramework = detectFramework(fullPath);
+    if (createdFramework && !hasFrameworkShim(fullPath, createdFramework)) {
+      addFrameworkShim(fullPath, createdFramework);
+    }
     if (shouldSetupHooks) {
       installGitHooks(fullPath, compactOutput);
     }
