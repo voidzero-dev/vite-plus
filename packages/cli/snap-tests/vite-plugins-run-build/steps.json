@@ -1,0 +1,9 @@
+{
+  "commands": [
+    {
+      "command": "vp run build-task",
+      "ignoreOutput": true
+    },
+    "cat dist/index.html | grep 'run-build-plugin-injected' # vp run build should load plugins from factory"
+  ]
+}

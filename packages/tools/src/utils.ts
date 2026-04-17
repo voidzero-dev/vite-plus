@@ -15,14 +15,16 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
 
   if (cwd) {
     // On Windows, cwd may have mixed separators (from template literals like `${tmp}/name`)
-    // while output uses all-backslash paths (from path.resolve()). Replace the all-backslash
-    // form of each path token, with trailing separator first so the separator after the
-    // placeholder is normalized to forward slash.
+    // while output may use all-backslash OR all-forward-slash paths depending on the tool.
+    // Try all three forms: all-backslash, all-forward-slash, and original mixed.
     const replacePathToken = (rawPath: string, placeholder: string) => {
       if (process.platform === 'win32') {
         const backslash = rawPath.replaceAll('/', '\\');
         output = output.replaceAll(backslash + '\\', placeholder + '/');
         output = output.replaceAll(backslash, placeholder);
+        const forwardslash = rawPath.replaceAll('\\', '/');
+        output = output.replaceAll(forwardslash + '/', placeholder + '/');
+        output = output.replaceAll(forwardslash, placeholder);
       }
       output = output.replaceAll(rawPath, placeholder);
     };
@@ -40,6 +42,7 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
     // Pattern: backslash between alphanumeric/dot/underscore/hyphen chars
     output = output.replaceAll(/([a-zA-Z0-9._-])\\([a-zA-Z0-9._-])/g, '$1/$2');
   }
+
   return (
     output
       // semver version

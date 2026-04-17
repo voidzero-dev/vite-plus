@@ -1,0 +1,7 @@
+{
+  "name": "vite-plugins-run-build-test",
+  "private": true,
+  "scripts": {
+    "build-task": "vp build"
+  }
+}

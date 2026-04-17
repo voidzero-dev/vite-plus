@@ -84,7 +84,7 @@ catalog:
   oxc-transform: =0.124.0
   oxfmt: =0.45.0
   oxlint: =1.60.0
-  oxlint-tsgolint: =0.21.0
+  oxlint-tsgolint: =0.21.1
   pathe: ^2.0.3
   picocolors: ^1.1.1
   picomatch: ^4.0.2
@@ -104,7 +104,7 @@ catalog:
   terser: ^5.44.1
   tinybench: ^6.0.0
   tinyexec: ^1.0.1
-  tsdown: ^0.21.8
+  tsdown: ^0.21.9
   tsx: ^4.20.6
   typescript: ^6.0.0
   unified: ^11.0.5
@@ -152,6 +152,8 @@ minimumReleaseAgeExclude:
   - lightningcss
   - lightningcss-*
   - baseline-browser-mapping
+  - import-without-cache
+  - logs-sdk
   - rolldown
   - rolldown-plugin-dts
   - tsdown
