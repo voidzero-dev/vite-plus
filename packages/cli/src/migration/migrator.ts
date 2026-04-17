@@ -4,6 +4,7 @@ import { styleText } from 'node:util';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import spawn from 'cross-spawn';
+import type { OxlintConfig } from 'oxlint';
 import semver from 'semver';
 import { Scalar, YAMLMap, YAMLSeq } from 'yaml';
 
@@ -16,6 +17,10 @@ import {
   rewriteImportsInDirectory,
   type DownloadPackageManagerResult,
 } from '../../binding/index.js';
+import {
+  createDefaultVitePlusLintConfig,
+  ensureVitePlusImportRuleDefaults,
+} from '../oxlint-plugin-config.ts';
 import { PackageManager, type WorkspaceInfo, type WorkspacePackage } from '../types/index.ts';
 import { runCommandSilently } from '../utils/command.ts';
 import {
@@ -1679,7 +1684,7 @@ export function mergeViteConfigFiles(
   if (configs.oxlintConfig) {
     // Inject options.typeAware and options.typeCheck defaults before merging
     const fullOxlintPath = path.join(projectPath, configs.oxlintConfig);
-    const oxlintJson = readJsonFile(fullOxlintPath, true) as { options?: Record<string, unknown> };
+    const oxlintJson = readJsonFile(fullOxlintPath, true) as OxlintConfig;
     if (!oxlintJson.options) {
       oxlintJson.options = {};
     }
@@ -1694,7 +1699,8 @@ export function mergeViteConfigFiles(
     } else {
       warnMigration(BASEURL_TSCONFIG_WARNING, report);
     }
-    fs.writeFileSync(fullOxlintPath, JSON.stringify(oxlintJson, null, 2));
+    const normalizedOxlintConfig = ensureVitePlusImportRuleDefaults(oxlintJson);
+    fs.writeFileSync(fullOxlintPath, JSON.stringify(normalizedOxlintConfig, null, 2));
     // merge oxlint config into vite.config.ts
     mergeAndRemoveJsonConfig(projectPath, viteConfig, configs.oxlintConfig, 'lint', silent, report);
   }
@@ -1714,14 +1720,15 @@ export function injectLintTypeCheckDefaults(
   silent = false,
   report?: MigrationReport,
 ): void {
-  if (hasBaseUrlInTsconfig(projectPath)) {
-    return;
-  }
   injectConfigDefaults(
     projectPath,
     'lint',
     '.vite-plus-lint-init.oxlintrc.json',
-    JSON.stringify({ options: { typeAware: true, typeCheck: true } }),
+    JSON.stringify(
+      createDefaultVitePlusLintConfig({
+        includeTypeAwareDefaults: !hasBaseUrlInTsconfig(projectPath),
+      }),
+    ),
     silent,
     report,
   );
