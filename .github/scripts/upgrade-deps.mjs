@@ -24,7 +24,7 @@ function recordChange(name, oldValue, newValue, tag) {
 
 // ============ GitHub API ============
 async function getLatestTag(owner, repo) {
-  const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/tags`, {
+  const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/tags?per_page=1`, {
     headers: {
       Authorization: `token ${process.env.GITHUB_TOKEN}`,
       Accept: 'application/vnd.github.v3+json',
@@ -84,64 +84,47 @@ async function updatePnpmWorkspace(versions) {
   const filePath = path.join(ROOT, 'pnpm-workspace.yaml');
   let content = fs.readFileSync(filePath, 'utf8');
 
-  // The capture regex returns the current version in $1; the replacement string
-  // substitutes the new version into the same anchor text.
-  // oxlint's trailing \n disambiguates from oxlint-tsgolint.
+  // The capture regex puts the current version in $1 and matches exactly what
+  // the new string will replace. oxlint's trailing \n disambiguates from oxlint-tsgolint.
   const entries = [
     {
       name: 'vitest',
-      pattern: /vitest-dev: npm:vitest@\^([\d.]+(?:-[\w.]+)?)/,
-      replacement: `vitest-dev: npm:vitest@^${versions.vitest}`,
+      pattern: /(vitest-dev: npm:vitest@\^)([\d.]+(?:-[\w.]+)?)/,
       newVersion: versions.vitest,
     },
-    {
-      name: 'tsdown',
-      pattern: /tsdown: \^([\d.]+(?:-[\w.]+)?)/,
-      replacement: `tsdown: ^${versions.tsdown}`,
-      newVersion: versions.tsdown,
-    },
+    { name: 'tsdown', pattern: /(tsdown: \^)([\d.]+(?:-[\w.]+)?)/, newVersion: versions.tsdown },
     {
       name: '@oxc-node/cli',
-      pattern: /'@oxc-node\/cli': \^([\d.]+(?:-[\w.]+)?)/,
-      replacement: `'@oxc-node/cli': ^${versions.oxcNodeCli}`,
+      pattern: /('@oxc-node\/cli': \^)([\d.]+(?:-[\w.]+)?)/,
       newVersion: versions.oxcNodeCli,
     },
     {
       name: '@oxc-node/core',
-      pattern: /'@oxc-node\/core': \^([\d.]+(?:-[\w.]+)?)/,
-      replacement: `'@oxc-node/core': ^${versions.oxcNodeCore}`,
+      pattern: /('@oxc-node\/core': \^)([\d.]+(?:-[\w.]+)?)/,
       newVersion: versions.oxcNodeCore,
     },
-    {
-      name: 'oxfmt',
-      pattern: /oxfmt: =([\d.]+(?:-[\w.]+)?)/,
-      replacement: `oxfmt: =${versions.oxfmt}`,
-      newVersion: versions.oxfmt,
-    },
-    {
-      name: 'oxlint',
-      pattern: /oxlint: =([\d.]+(?:-[\w.]+)?)\n/,
-      replacement: `oxlint: =${versions.oxlint}\n`,
-      newVersion: versions.oxlint,
-    },
+    { name: 'oxfmt', pattern: /(oxfmt: =)([\d.]+(?:-[\w.]+)?)/, newVersion: versions.oxfmt },
+    { name: 'oxlint', pattern: /(oxlint: =)([\d.]+(?:-[\w.]+)?)(\n)/, newVersion: versions.oxlint },
     {
       name: 'oxlint-tsgolint',
-      pattern: /oxlint-tsgolint: =([\d.]+(?:-[\w.]+)?)/,
-      replacement: `oxlint-tsgolint: =${versions.oxlintTsgolint}`,
+      pattern: /(oxlint-tsgolint: =)([\d.]+(?:-[\w.]+)?)/,
       newVersion: versions.oxlintTsgolint,
     },
   ];
 
-  for (const { name, pattern, replacement, newVersion } of entries) {
-    const oldVersion = content.match(pattern)?.[1];
-    if (!oldVersion) {
+  for (const { name, pattern, newVersion } of entries) {
+    let matched = false;
+    content = content.replace(pattern, (_match, prefix, oldVersion, suffix = '') => {
+      matched = true;
+      recordChange(name, oldVersion, newVersion);
+      return `${prefix}${newVersion}${suffix}`;
+    });
+    if (!matched) {
       throw new Error(
         `Failed to match ${name} in pnpm-workspace.yaml — the pattern ${pattern} is stale, ` +
           `please update it in .github/scripts/upgrade-deps.mjs`,
       );
     }
-    content = content.replace(pattern, replacement);
-    recordChange(name, oldVersion, newVersion);
   }
 
   fs.writeFileSync(filePath, content);
@@ -180,10 +163,11 @@ async function updateCorePackage(devtoolsVersion) {
   const pkg = JSON.parse(fs.readFileSync(filePath, 'utf8'));
 
   const currentDevtools = pkg.devDependencies?.['@vitejs/devtools'];
-  if (currentDevtools) {
-    pkg.devDependencies['@vitejs/devtools'] = `^${devtoolsVersion}`;
-    recordChange('@vitejs/devtools', currentDevtools.replace(/^[\^~]/, ''), devtoolsVersion);
+  if (!currentDevtools) {
+    return;
   }
+  pkg.devDependencies['@vitejs/devtools'] = `^${devtoolsVersion}`;
+  recordChange('@vitejs/devtools', currentDevtools.replace(/^[\^~]/, ''), devtoolsVersion);
 
   fs.writeFileSync(filePath, JSON.stringify(pkg, null, 2) + '\n');
   console.log('Updated packages/core/package.json');

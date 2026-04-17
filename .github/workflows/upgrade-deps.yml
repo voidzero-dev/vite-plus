@@ -72,70 +72,49 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           show_full_output: 'true'
           prompt: |
-            Check if the build-upstream steps failed and fix them.
+            Your goal: after the daily upstream-dependency upgrade, bring the project back
+            to a fully green state. The upgrade script has already bumped every dep to the
+            latest version and the `build-upstream` action has attempted a build — your job
+            is to diagnose and fix every error that surfaced, then prove the fix is complete
+            by running a final validation pass.
+
             ### Background
-            - The build-upstream steps are at ./.github/actions/build-upstream/action.yml
-            - The deps upgrade script is at ./.github/scripts/upgrade-deps.mjs
+            - Upgrade script: `./.github/scripts/upgrade-deps.mjs`
+            - Build-upstream action: `./.github/actions/build-upstream/action.yml`
+            - Package manager: `pnpm`. Do NOT downgrade any dep — we want the latest.
 
-            ### Instructions
-            - We are using `pnpm` as the package manager
-            - We are aiming to upgrade all dependencies to the latest versions in this workflow, so don't downgrade any dependencies.
-            - Compare tsdown CLI options with `vp pack` and sync any new or removed options. Follow the instructions in `.claude/skills/sync-tsdown-cli/SKILL.md`.
-            - Check `.claude/agents/cargo-workspace-merger.md` if rolldown hash is changed.
-            - Run the steps in `build-upstream` action.yml after your fixing. If no errors are found, you can safe to exit.
-            - Install global CLI after the build-upstream steps are successful, by running the following commands:
-              - `pnpm bootstrap-cli:ci`
-              - `echo "$HOME/.vite-plus/bin" >> $GITHUB_PATH`
-            - Run `pnpm run lint` to check if there are any issues after the build, if has, deep investigate it and fix it. You need to run `just build` before you can run `pnpm run lint`.
-            - If deps in our `Cargo.toml` need to be upgraded, you can refer to the `./.claude/agents/cargo-workspace-merger.md`
-              - If `Cargo.toml` has been modified, you need to run `cargo shear` to ensure there is nothing wrong with our dependencies.
-              - Run `cargo check --all-targets --all-features` to ensure everything works fine if any Rust related codes are modified.
-            - Run the following commands to ensure everything works fine:
-              vp -h
-              vp run -h
-              vp lint -h
-              vp test -h
-              vp build -h
-              vp fmt -h
-              vp pack -h
+            ### Fixups to perform (in order)
+            1. Re-run the steps in `./.github/actions/build-upstream/action.yml`; fix any
+               non-zero exits.
+            2. If the rolldown hash changed, follow `.claude/agents/cargo-workspace-merger.md`
+               to resync the workspace.
+            3. Compare tsdown CLI options with `vp pack` and sync new/removed options per
+               `.claude/skills/sync-tsdown-cli/SKILL.md`.
+            4. Install the global CLI:
+               - `pnpm bootstrap-cli:ci`
+               - `echo "$HOME/.vite-plus/bin" >> $GITHUB_PATH`
+            5. If any Rust code or `Cargo.toml` was modified, run `cargo check
+               --all-targets --all-features` and `cargo shear`; fix anything they report.
+            6. Run `pnpm run lint` (requires a prior `just build`); fix any errors.
+            7. Smoke-test the CLI: `vp -h`, `vp run -h`, `vp lint -h`, `vp test -h`,
+               `vp build -h`, `vp fmt -h`, `vp pack -h`.
 
-            ### Final check (BOTH must succeed before you exit)
-            This step is only complete when BOTH of the following pass. If either one fails,
-            diagnose and fix the root cause, then re-run both until they both succeed.
-            1. `just build` — must exit 0. If it fails, investigate the error, fix the
-               underlying issue, and run it again.
-            2. `pnpm bootstrap-cli:ci && pnpm test` — must exit 0. If it fails, investigate
-               the error, fix the underlying issue, and run it again. Note that the snap
-               tests inside `pnpm test` always exit 0 even when their outputs differ, so
-               after the command passes you MUST also inspect the `git diff` on
-               `packages/cli/snap-tests/**/snap.txt` and `packages/cli/snap-tests-global/**/snap.txt`
-               and decide whether each change is an acceptable consequence of the upstream
-               upgrade (e.g. a version string bump) or a real regression that needs fixing.
+            ### Final validation (this step is complete ONLY when all pass)
+            1. `just build` exits 0.
+            2. `pnpm bootstrap-cli:ci && pnpm test` exits 0.
+            3. `git diff` on `packages/cli/snap-tests/**/snap.txt` and
+               `packages/cli/snap-tests-global/**/snap.txt` contains no real regressions.
+               IMPORTANT: `pnpm test` always exits 0 even when snap outputs differ, so you
+               MUST inspect the diff yourself. Cosmetic drift from the upgrade (e.g. a
+               bumped version string in help output) is acceptable; unexpected stack
+               traces, missing output, or diverging CLI behavior are regressions to fix.
 
-            Only exit after you have confirmed both of the above succeed. Do not consider
-            the task complete if either `just build` fails, `pnpm bootstrap-cli:ci && pnpm test`
-            fails, or the snap-test diff shows an apparent regression.
+            If any of the three above fails, diagnose the root cause, fix it, and re-run
+            the final validation. Do not exit with the task marked complete otherwise.
 
-            Help me fix every error that surfaces during this step. That includes, at
-            minimum:
-            - Failures in the `build-upstream` action (non-zero exit from any step inside
-              `.github/actions/build-upstream/action.yml`).
-            - `pnpm run lint` errors.
-            - `just build` failures.
-            - `pnpm bootstrap-cli:ci && pnpm test` failures.
-            - Snap-test regressions: `pnpm test` always exits 0 even when snapshot outputs
-              differ, so you MUST inspect the `git diff` on
-              `packages/cli/snap-tests/**/snap.txt` and
-              `packages/cli/snap-tests-global/**/snap.txt` and fix any change that looks
-              like a real regression (e.g., unexpected stack traces, missing output,
-              diverging CLI behavior). Cosmetic drift caused by the upstream upgrade
-              itself (e.g., a bumped version string in help output) is acceptable —
-              leave those in place.
-            - `cargo check --all-targets --all-features` errors if any Rust code was
-              modified, and stale `cargo shear` findings if `Cargo.toml` changed.
-
-            Do NOT commit any changes — a later workflow step handles the commit for all
-            modified files.
+            ### Commit rule
+            Do NOT run `git commit` or `git push`. A later workflow step commits every
+            modified file for you.
           claude_args: |
             --model opus --allowedTools "Bash,Edit,Replace,NotebookEditCell"
           additional_permissions: |
