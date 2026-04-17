@@ -54,18 +54,34 @@ function rewriteVitePlusImportSpecifier(specifier: string): string | null {
     return `vite-plus/test/${specifier.slice('vitest/'.length)}`;
   }
 
-  for (const prefix of [
-    '@vitest/browser-playwright',
-    '@vitest/browser-preview',
-    '@vitest/browser-webdriverio',
-    '@vitest/browser',
-  ]) {
+  if (specifier === '@vitest/browser') {
+    return 'vite-plus/test/browser';
+  }
+
+  const browserSubpathRewrites: Record<string, string> = {
+    '@vitest/browser/context': 'vite-plus/test/browser/context',
+    '@vitest/browser/client': 'vite-plus/test/client',
+    '@vitest/browser/locators': 'vite-plus/test/locators',
+  };
+  if (specifier in browserSubpathRewrites) {
+    return browserSubpathRewrites[specifier];
+  }
+
+  for (const [prefix, provider] of [
+    ['@vitest/browser-playwright', 'playwright'],
+    ['@vitest/browser-preview', 'preview'],
+    ['@vitest/browser-webdriverio', 'webdriverio'],
+  ] as const) {
     if (specifier === prefix) {
       return `vite-plus/test/${prefix.slice('@vitest/'.length)}`;
     }
 
-    if (specifier.startsWith(`${prefix}/`)) {
-      return `vite-plus/test/${specifier.slice('@vitest/'.length)}`;
+    if (specifier === `${prefix}/context`) {
+      return 'vite-plus/test/browser/context';
+    }
+
+    if (specifier === `${prefix}/provider`) {
+      return `vite-plus/test/browser/providers/${provider}`;
     }
   }
 

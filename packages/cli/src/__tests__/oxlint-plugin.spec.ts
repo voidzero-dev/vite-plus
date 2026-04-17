@@ -61,9 +61,26 @@ describe('rewriteVitePlusImportSpecifier', () => {
     expect(rewriteVitePlusImportSpecifier('vitest')).toBe('vite-plus/test');
     expect(rewriteVitePlusImportSpecifier('vitest/config')).toBe('vite-plus');
     expect(rewriteVitePlusImportSpecifier('@vitest/browser')).toBe('vite-plus/test/browser');
-    expect(rewriteVitePlusImportSpecifier('@vitest/browser-playwright/provider')).toBe(
-      'vite-plus/test/browser-playwright/provider',
+    expect(rewriteVitePlusImportSpecifier('@vitest/browser/context')).toBe(
+      'vite-plus/test/browser/context',
     );
+    expect(rewriteVitePlusImportSpecifier('@vitest/browser/client')).toBe('vite-plus/test/client');
+    expect(rewriteVitePlusImportSpecifier('@vitest/browser/locators')).toBe(
+      'vite-plus/test/locators',
+    );
+    expect(rewriteVitePlusImportSpecifier('@vitest/browser-playwright/context')).toBe(
+      'vite-plus/test/browser/context',
+    );
+    expect(rewriteVitePlusImportSpecifier('@vitest/browser-playwright/provider')).toBe(
+      'vite-plus/test/browser/providers/playwright',
+    );
+    expect(rewriteVitePlusImportSpecifier('@vitest/browser-preview/provider')).toBe(
+      'vite-plus/test/browser/providers/preview',
+    );
+    expect(rewriteVitePlusImportSpecifier('@vitest/browser-webdriverio/provider')).toBe(
+      'vite-plus/test/browser/providers/webdriverio',
+    );
+    expect(rewriteVitePlusImportSpecifier('@vitest/browser-playwright/locators')).toBeNull();
     expect(rewriteVitePlusImportSpecifier('tsx')).toBeNull();
   });
 });
@@ -78,6 +95,14 @@ new RuleTester({
     `export { expect } from 'vite-plus/test'`,
     {
       code: `declare module 'vite-plus/test/browser' {}`,
+      filename: 'types.ts',
+    },
+    {
+      code: `type BrowserClient = typeof import('vite-plus/test/client')`,
+      filename: 'types.ts',
+    },
+    {
+      code: `type PlaywrightProvider = typeof import('vite-plus/test/browser/providers/playwright')`,
       filename: 'types.ts',
     },
     {
@@ -112,6 +137,24 @@ new RuleTester({
       errors: 1,
       filename: 'types.ts',
       output: `declare module 'vite-plus/test/browser-playwright' {}`,
+    },
+    {
+      code: `declare module '@vitest/browser-playwright/context' {}`,
+      errors: 1,
+      filename: 'types.ts',
+      output: `declare module 'vite-plus/test/browser/context' {}`,
+    },
+    {
+      code: `type BrowserClient = typeof import('@vitest/browser/client')`,
+      errors: 1,
+      filename: 'types.ts',
+      output: `type BrowserClient = typeof import('vite-plus/test/client')`,
+    },
+    {
+      code: `type PlaywrightProvider = typeof import('@vitest/browser-playwright/provider')`,
+      errors: 1,
+      filename: 'types.ts',
+      output: `type PlaywrightProvider = typeof import('vite-plus/test/browser/providers/playwright')`,
     },
     {
       code: `import foo = require('vite/client')`,
