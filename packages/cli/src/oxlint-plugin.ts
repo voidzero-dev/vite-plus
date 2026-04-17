@@ -1,25 +1,22 @@
+import type { RuleTester } from 'oxlint/plugins-dev';
+
 import {
   PREFER_VITE_PLUS_IMPORTS_RULE_NAME,
   VITE_PLUS_OXLINT_PLUGIN_NAME,
 } from './oxlint-plugin-config.ts';
 
-interface StringLiteralLike {
-  raw: string | null;
-  type: 'Literal';
-  value: string;
-}
+type OxlintRule = Parameters<RuleTester['run']>[1];
+type CreateFn = Exclude<OxlintRule['create'], undefined>;
+type OxlintVisitor = ReturnType<CreateFn>;
+type ReportContext = Parameters<CreateFn>[0];
+type VisitorNode<K extends keyof OxlintVisitor> = Parameters<NonNullable<OxlintVisitor[K]>>[0];
 
-interface ReportContext {
-  report(diagnostic: {
-    data: Record<string, string>;
-    fix: (fixer: Fixer) => unknown;
-    messageId: 'preferVitePlusImports';
-    node: StringLiteralLike;
-  }): void;
-}
-
-interface Fixer {
-  replaceText(node: unknown, text: string): unknown;
+type StringLiteralLike = VisitorNode<'ImportDeclaration'>['source'];
+interface OxlintPlugin {
+  meta: {
+    name: string;
+  };
+  rules: Record<string, OxlintRule>;
 }
 
 function isStringLiteralLike(value: unknown): value is StringLiteralLike {
@@ -116,7 +113,7 @@ function maybeReportLiteral(context: ReportContext, literal: StringLiteralLike |
   });
 }
 
-export const preferVitePlusImportsRule = {
+export const preferVitePlusImportsRule: OxlintRule = {
   meta: {
     type: 'problem',
     docs: {
@@ -129,30 +126,30 @@ export const preferVitePlusImportsRule = {
       preferVitePlusImports: "Use '{{to}}' instead of '{{from}}' in Vite+ projects.",
     },
   },
-  create(context: any) {
+  create(context: ReportContext) {
     return {
-      ImportDeclaration(node: { source: StringLiteralLike }) {
+      ImportDeclaration(node: VisitorNode<'ImportDeclaration'>) {
         maybeReportLiteral(context, node.source);
       },
-      ExportAllDeclaration(node: { source: StringLiteralLike }) {
+      ExportAllDeclaration(node: VisitorNode<'ExportAllDeclaration'>) {
         maybeReportLiteral(context, node.source);
       },
-      ExportNamedDeclaration(node: { source: StringLiteralLike | null }) {
+      ExportNamedDeclaration(node: VisitorNode<'ExportNamedDeclaration'>) {
         maybeReportLiteral(context, node.source);
       },
-      ImportExpression(node: { source: unknown }) {
+      ImportExpression(node: VisitorNode<'ImportExpression'>) {
         if (!isStringLiteralLike(node.source)) {
           return;
         }
         maybeReportLiteral(context, node.source);
       },
-      TSImportType(node: { source: StringLiteralLike }) {
+      TSImportType(node: VisitorNode<'TSImportType'>) {
         maybeReportLiteral(context, node.source);
       },
-      TSExternalModuleReference(node: { expression: StringLiteralLike }) {
+      TSExternalModuleReference(node: VisitorNode<'TSExternalModuleReference'>) {
         maybeReportLiteral(context, node.expression);
       },
-      TSModuleDeclaration(node: { global?: boolean; id: StringLiteralLike | { type: string } }) {
+      TSModuleDeclaration(node: VisitorNode<'TSModuleDeclaration'>) {
         if (node.global || !isStringLiteralLike(node.id)) {
           return;
         }
@@ -162,7 +159,7 @@ export const preferVitePlusImportsRule = {
   },
 };
 
-const plugin = {
+const plugin: OxlintPlugin = {
   meta: {
     name: VITE_PLUS_OXLINT_PLUGIN_NAME,
   },
