@@ -971,9 +971,10 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   } else {
     updateCreateProgress('Applying Vite+ project setup');
     rewriteStandaloneProject(fullPath, workspaceInfo, undefined, compactOutput);
-    const createdFramework = detectFramework(fullPath);
-    if (createdFramework && !hasFrameworkShim(fullPath, createdFramework)) {
-      addFrameworkShim(fullPath, createdFramework);
+    for (const framework of detectFramework(fullPath)) {
+      if (!hasFrameworkShim(fullPath, framework)) {
+        addFrameworkShim(fullPath, framework);
+      }
     }
     if (shouldSetupHooks) {
       installGitHooks(fullPath, compactOutput);

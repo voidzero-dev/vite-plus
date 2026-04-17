@@ -381,7 +381,7 @@ interface MigrationPlan {
   prettierConfigFile?: string;
   migrateNodeVersionFile: boolean;
   nodeVersionDetection?: NodeVersionManagerDetection;
-  frameworkShimFramework?: Framework;
+  frameworkShimFrameworks?: Framework[];
 }
 
 async function collectMigrationPlan(
@@ -520,12 +520,14 @@ async function collectMigrationPlan(
   }
 
   // 11. Framework shim detection + prompt
-  const detectedFramework = detectFramework(rootDir);
-  let frameworkShimFramework: Framework | undefined;
-  if (detectedFramework && !hasFrameworkShim(rootDir, detectedFramework)) {
-    const addShim = await confirmFrameworkShim(detectedFramework, options.interactive);
-    if (addShim) {
-      frameworkShimFramework = detectedFramework;
+  const detectedFrameworks = detectFramework(rootDir);
+  const frameworkShimFrameworks: Framework[] = [];
+  for (const framework of detectedFrameworks) {
+    if (!hasFrameworkShim(rootDir, framework)) {
+      const addShim = await confirmFrameworkShim(framework, options.interactive);
+      if (addShim) {
+        frameworkShimFrameworks.push(framework);
+      }
     }
   }
 
@@ -542,7 +544,7 @@ async function collectMigrationPlan(
     prettierConfigFile: prettierProject.configFile,
     migrateNodeVersionFile,
     nodeVersionDetection,
-    frameworkShimFramework,
+    frameworkShimFrameworks: frameworkShimFrameworks.length > 0 ? frameworkShimFrameworks : undefined,
   };
 
   return plan;
@@ -847,10 +849,12 @@ async function executeMigrationPlan(
     silent: true,
   });
 
-  // 11. Add framework shim if requested
-  if (plan.frameworkShimFramework) {
+  // 11. Add framework shims if requested
+  if (plan.frameworkShimFrameworks) {
     updateMigrationProgress('Adding TypeScript shim');
-    addFrameworkShim(workspaceInfo.rootDir, plan.frameworkShimFramework, report);
+    for (const framework of plan.frameworkShimFrameworks) {
+      addFrameworkShim(workspaceInfo.rootDir, framework, report);
+    }
   }
 
   // 12. Reinstall after migration
