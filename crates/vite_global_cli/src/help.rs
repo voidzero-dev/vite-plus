@@ -1182,6 +1182,6 @@ Options:
             documentation_url: Some("https://viteplus.dev/guide/demo"),
         });
 
-        assert!(output.contains("Documentation: https://viteplus.dev/guide/demo"));
+        assert!(strip_ansi(&output).contains("Documentation: https://viteplus.dev/guide/demo"));
     }
 }
