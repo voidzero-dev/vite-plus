@@ -732,16 +732,32 @@ function getEnvDtsPath(projectPath: string): string {
 }
 
 export function hasFrameworkShim(projectPath: string, framework: Framework): boolean {
-  const envDtsPath = getEnvDtsPath(projectPath);
-  if (!fs.existsSync(envDtsPath)) {
-    return false;
+  const dirsToScan = [projectPath, path.join(projectPath, 'src')];
+  for (const dir of dirsToScan) {
+    if (!fs.existsSync(dir)) {
+      continue;
+    }
+    let entries: string[];
+    try {
+      entries = fs.readdirSync(dir);
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (!entry.endsWith('.d.ts')) {
+        continue;
+      }
+      const content = fs.readFileSync(path.join(dir, entry), 'utf-8');
+      if (framework === 'astro') {
+        if (content.includes('astro/client')) {
+          return true;
+        }
+      } else if (content.includes(`'*.${framework}'`) || content.includes(`"*.${framework}"`)) {
+        return true;
+      }
+    }
   }
-
-  const content = fs.readFileSync(envDtsPath, 'utf-8');
-  if (framework === 'astro') {
-    return content.includes('astro/client');
-  }
-  return content.includes(`'*.${framework}'`) || content.includes(`"*.${framework}"`);
+  return false;
 }
 
 export function addFrameworkShim(

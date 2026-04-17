@@ -530,8 +530,11 @@ async function collectMigrationPlan(
   const frameworkShimFrameworks: Framework[] = [];
   for (const framework of allDetectedFrameworks) {
     const anyMissingShim =
-      !hasFrameworkShim(rootDir, framework) ||
-      (packages ?? []).some((pkg) => !hasFrameworkShim(path.join(rootDir, pkg.path), framework));
+      (detectFramework(rootDir).includes(framework) && !hasFrameworkShim(rootDir, framework)) ||
+      (packages ?? []).some((pkg) => {
+        const pkgPath = path.join(rootDir, pkg.path);
+        return detectFramework(pkgPath).includes(framework) && !hasFrameworkShim(pkgPath, framework);
+      });
     if (anyMissingShim) {
       const addShim = await confirmFrameworkShim(framework, options.interactive);
       if (addShim) {
