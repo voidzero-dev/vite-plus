@@ -702,7 +702,10 @@ describe('framework shim', () => {
     it('returns false when src/env.d.ts does not contain vue shim', () => {
       const srcDir = path.join(tmpDir, 'src');
       fs.mkdirSync(srcDir);
-      fs.writeFileSync(path.join(srcDir, 'env.d.ts'), '/// <reference types="vite-plus/client" />\n');
+      fs.writeFileSync(
+        path.join(srcDir, 'env.d.ts'),
+        '/// <reference types="vite-plus/client" />\n',
+      );
       expect(hasFrameworkShim(tmpDir, 'vue')).toBe(false);
     });
 
@@ -711,10 +714,7 @@ describe('framework shim', () => {
     });
 
     it('returns true when root env.d.ts contains astro/client reference', () => {
-      fs.writeFileSync(
-        path.join(tmpDir, 'env.d.ts'),
-        '/// <reference types="astro/client" />\n',
-      );
+      fs.writeFileSync(path.join(tmpDir, 'env.d.ts'), '/// <reference types="astro/client" />\n');
       expect(hasFrameworkShim(tmpDir, 'astro')).toBe(true);
     });
   });
@@ -758,7 +758,8 @@ describe('framework shim', () => {
       // Simulate create-vue having already written a shim into src/env.d.ts
       const srcDir = path.join(tmpDir, 'src');
       fs.mkdirSync(srcDir);
-      const existingShim = "declare module '*.vue' {\n  import type { DefineComponent } from 'vue';\n  const component: DefineComponent;\n  export default component;\n}\n";
+      const existingShim =
+        "declare module '*.vue' {\n  import type { DefineComponent } from 'vue';\n  const component: DefineComponent;\n  export default component;\n}\n";
       fs.writeFileSync(path.join(srcDir, 'env.d.ts'), existingShim);
 
       const framework = detectFramework(

@@ -208,10 +208,7 @@ async function confirmNodeVersionFileMigration(
   return true;
 }
 
-async function confirmFrameworkShim(
-  framework: Framework,
-  interactive: boolean,
-): Promise<boolean> {
+async function confirmFrameworkShim(framework: Framework, interactive: boolean): Promise<boolean> {
   const frameworkNames: Record<Framework, string> = { vue: 'Vue', astro: 'Astro' };
   const name = frameworkNames[framework];
   if (interactive) {
