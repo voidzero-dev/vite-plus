@@ -544,7 +544,8 @@ async function collectMigrationPlan(
     prettierConfigFile: prettierProject.configFile,
     migrateNodeVersionFile,
     nodeVersionDetection,
-    frameworkShimFrameworks: frameworkShimFrameworks.length > 0 ? frameworkShimFrameworks : undefined,
+    frameworkShimFrameworks:
+      frameworkShimFrameworks.length > 0 ? frameworkShimFrameworks : undefined,
   };
 
   return plan;
