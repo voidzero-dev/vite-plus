@@ -119,5 +119,11 @@
     "branch": "main",
     "hash": "6192f60653c124ae068efaf5d7d0a4134c95edbd",
     "forceFreshMigration": true
+  },
+  "f3-app": {
+    "repository": "https://github.com/fisand/f3-app.git",
+    "branch": "main",
+    "hash": "3a481a19aeaaf61316bd9f42880b71b8282ed7e5",
+    "forceFreshMigration": true
   }
 }

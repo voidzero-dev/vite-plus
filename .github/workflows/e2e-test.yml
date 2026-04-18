@@ -314,6 +314,11 @@ jobs:
             node-version: 24
             command: |
               vp check --fix
+          - name: f3-app
+            node-version: 24
+            command: |
+              vp run check
+              vp run build
         exclude:
           # frm-stack uses Docker (testcontainers) which doesn't work the same way on Windows
           - os: windows-latest
@@ -335,6 +340,10 @@ jobs:
           - os: windows-latest
             project:
               name: npmx.dev
+          # f3-app uses turbo + tanstack-start, ubuntu-only for now
+          - os: windows-latest
+            project:
+              name: f3-app
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
