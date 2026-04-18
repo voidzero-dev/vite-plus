@@ -1,0 +1,4 @@
+[1]> vp check --no-fmt --no-lint --no-type-check
+error: No checks enabled
+
+`vp check` did not run because all checks were disabled by the provided flags
