@@ -1,0 +1,2 @@
+> vp check --fix --no-lint --no-type-check
+pass: Formatting completed for checked files (<variable>ms)

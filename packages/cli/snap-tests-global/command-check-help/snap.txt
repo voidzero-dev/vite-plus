@@ -9,6 +9,7 @@ Options:
   --fix                            Auto-fix format and lint issues
   --no-fmt                         Skip format check
   --no-lint                        Skip lint check
+  --no-type-check                  Skip type check
   --no-error-on-unmatched-pattern  Do not exit with error when pattern is unmatched
   -h, --help                       Print help
 
@@ -31,6 +32,7 @@ Options:
   --fix                            Auto-fix format and lint issues
   --no-fmt                         Skip format check
   --no-lint                        Skip lint check
+  --no-type-check                  Skip type check
   --no-error-on-unmatched-pattern  Do not exit with error when pattern is unmatched
   -h, --help                       Print help
 
@@ -53,6 +55,7 @@ Options:
   --fix                            Auto-fix format and lint issues
   --no-fmt                         Skip format check
   --no-lint                        Skip lint check
+  --no-type-check                  Skip type check
   --no-error-on-unmatched-pattern  Do not exit with error when pattern is unmatched
   -h, --help                       Print help
 

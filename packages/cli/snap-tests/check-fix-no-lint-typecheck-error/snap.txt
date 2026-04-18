@@ -1,0 +1,4 @@
+[1]> vp check --fix --no-lint
+error: `vp check --fix --no-lint` cannot be combined with type-check enabled in config
+
+type-check diagnostics are read-only and cannot be auto-fixed. Add `--no-type-check` to format-only fix, or drop `--no-lint` to run lint fixes.

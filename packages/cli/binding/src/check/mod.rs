@@ -1,4 +1,5 @@
 mod analysis;
+mod sidecar;
 
 use std::{ffi::OsStr, sync::Arc, time::Instant};
 
@@ -8,9 +9,13 @@ use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_shared::output;
 use vite_task::ExitStatus;
 
-use self::analysis::{
-    LintMessageKind, analyze_fmt_check_output, analyze_lint_output, format_count, format_elapsed,
-    print_error_block, print_pass_line, print_stdout_block, print_summary_line,
+use self::{
+    analysis::{
+        LintMessageKind, analyze_fmt_check_output, analyze_lint_output, format_count,
+        format_elapsed, lint_config_type_check_enabled, print_error_block, print_pass_line,
+        print_stdout_block, print_summary_line,
+    },
+    sidecar::write_no_type_check_sidecar,
 };
 use crate::cli::{
     CapturedCommandOutput, SubcommandResolver, SynthesizableSubcommand, resolve_and_capture_output,
@@ -22,20 +27,13 @@ pub(crate) async fn execute_check(
     fix: bool,
     no_fmt: bool,
     no_lint: bool,
+    no_type_check: bool,
     no_error_on_unmatched_pattern: bool,
     paths: Vec<String>,
     envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
     cwd: &AbsolutePathBuf,
     cwd_arc: &Arc<AbsolutePath>,
 ) -> Result<ExitStatus, Error> {
-    if no_fmt && no_lint {
-        output::error("No checks enabled");
-        print_summary_line(
-            "`vp check` did not run because both `--no-fmt` and `--no-lint` were set",
-        );
-        return Ok(ExitStatus(1));
-    }
-
     let mut status = ExitStatus::SUCCESS;
     let has_paths = !paths.is_empty();
     // In --fix mode with file paths (the lint-staged use case), implicitly suppress
@@ -45,6 +43,52 @@ pub(crate) async fn execute_check(
     let mut fmt_fix_started: Option<Instant> = None;
     let mut deferred_lint_pass: Option<(String, String)> = None;
     let resolved_vite_config = resolver.resolve_universal_vite_config().await?;
+
+    // Per-phase enabled booleans derived from the raw flags plus the resolved
+    // config's `typeCheck` setting. `run_lint_phase` drives whether the lint
+    // subprocess starts at all — true when lint rules should run, or when
+    // type-check should run via oxlint's type-check-only path.
+    let config_type_check_enabled =
+        lint_config_type_check_enabled(resolved_vite_config.lint.as_ref());
+    let type_check_enabled = !no_type_check && config_type_check_enabled;
+    let lint_enabled = !no_lint;
+    let run_lint_phase = lint_enabled || type_check_enabled;
+
+    if no_fmt && !run_lint_phase {
+        output::error("No checks enabled");
+        print_summary_line(
+            "`vp check` did not run because all checks were disabled by the provided flags",
+        );
+        return Ok(ExitStatus(1));
+    }
+
+    // Reject `--fix --no-lint` when the project enables type-check. With lint
+    // rules skipped, oxlint would take the type-check-only path which it
+    // itself refuses to combine with `--fix`. Running fmt first and then
+    // hitting that rejection would leave the working tree partially formatted
+    // (a real hazard inside lint-staged). Failing up-front keeps the
+    // invocation transactional.
+    if fix && !lint_enabled && type_check_enabled {
+        output::error(
+            "`vp check --fix --no-lint` cannot be combined with type-check enabled in config",
+        );
+        print_summary_line(
+            "type-check diagnostics are read-only and cannot be auto-fixed. Add `--no-type-check` to format-only fix, or drop `--no-lint` to run lint fixes.",
+        );
+        return Ok(ExitStatus(1));
+    }
+
+    // Build the `--no-type-check` sidecar up front, before any fmt side effects.
+    // If temp-dir write fails (full tmpfs, read-only mount, permission denied),
+    // we surface the error before fmt modifies files, mirroring the
+    // transactional guarantee of the hard-error guard above. The returned
+    // guard lives through both fmt and lint phases and is dropped at function
+    // exit, cleaning up the temp file.
+    let sidecar = if lint_enabled && no_type_check && config_type_check_enabled {
+        write_no_type_check_sidecar(&resolved_vite_config)?
+    } else {
+        None
+    };
 
     if !no_fmt {
         let mut args = if fix { vec![] } else { vec!["--check".to_string()] };
@@ -109,7 +153,7 @@ pub(crate) async fn execute_check(
             }
         }
 
-        if fix && no_lint && status == ExitStatus::SUCCESS {
+        if fix && !run_lint_phase && status == ExitStatus::SUCCESS {
             print_pass_line(
                 "Formatting completed for checked files",
                 Some(&format!("({})", format_elapsed(fmt_start.elapsed()))),
@@ -127,12 +171,22 @@ pub(crate) async fn execute_check(
         }
     }
 
-    if !no_lint {
-        let lint_message_kind =
-            LintMessageKind::from_lint_config(resolved_vite_config.lint.as_ref());
+    if run_lint_phase {
+        let lint_message_kind = LintMessageKind::from_flags(lint_enabled, type_check_enabled);
         let mut args = Vec::new();
-        if fix {
+        // Hard-error guard above rejects (fix && !lint_enabled && type_check_enabled),
+        // so when this branch runs with `fix`, lint_enabled is always true. The
+        // `lint_enabled` check is defense-in-depth against future guard changes.
+        if fix && lint_enabled {
             args.push("--fix".to_string());
+        }
+        // `--type-check-only` suppresses lint rules and runs only type-check
+        // diagnostics. oxlint accepts this as a hidden flag (oxc#21184). When
+        // config `typeCheck` is false this flag forces type-check ON, so we
+        // only emit it on the `--no-lint` + `typeCheck: true` path and skip
+        // the lint phase entirely when type_check_enabled is false.
+        if !lint_enabled && type_check_enabled {
+            args.push("--type-check-only".to_string());
         }
         // `vp check` parses oxlint's human-readable summary output to print
         // unified pass/fail lines. When `GITHUB_ACTIONS=true`, oxlint auto-switches
@@ -146,10 +200,17 @@ pub(crate) async fn execute_check(
         if has_paths {
             args.extend(paths.iter().cloned());
         }
+
+        // `sidecar` was built up front to surface temp-dir write failures
+        // before fmt made any changes. Borrow its config here to route oxlint
+        // through the override when present; otherwise use the resolved
+        // config unchanged.
+        let lint_vite_config = sidecar.as_ref().map(|s| &s.config).unwrap_or(&resolved_vite_config);
+
         let captured = resolve_and_capture_output(
             resolver,
             SynthesizableSubcommand::Lint { args },
-            Some(&resolved_vite_config),
+            Some(lint_vite_config),
             envs,
             cwd,
             cwd_arc,

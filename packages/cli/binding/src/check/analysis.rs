@@ -39,23 +39,31 @@ pub(super) struct LintFailure {
 pub(super) enum LintMessageKind {
     LintOnly,
     LintAndTypeCheck,
+    // Used when lint rules are skipped but type-check still runs.
+    TypeCheckOnly,
 }
 
 impl LintMessageKind {
-    pub(super) fn from_lint_config(lint_config: Option<&serde_json::Value>) -> Self {
-        let type_check_enabled = lint_config
-            .and_then(|config| config.get("options"))
-            .and_then(|options| options.get("typeCheck"))
-            .and_then(serde_json::Value::as_bool)
-            .unwrap_or(false);
-
-        if type_check_enabled { Self::LintAndTypeCheck } else { Self::LintOnly }
+    // Selects a variant from the `(lint, type-check)` enabled tuple callers have
+    // already resolved, avoiding a second config lookup inside the helper.
+    pub(super) fn from_flags(lint_enabled: bool, type_check_enabled: bool) -> Self {
+        match (lint_enabled, type_check_enabled) {
+            (true, true) => Self::LintAndTypeCheck,
+            (true, false) => Self::LintOnly,
+            (false, true) => Self::TypeCheckOnly,
+            (false, false) => {
+                unreachable!(
+                    "from_flags called with (false, false) — caller must ensure lint or type-check runs before selecting a message kind"
+                )
+            }
+        }
     }
 
     pub(super) fn success_label(self) -> &'static str {
         match self {
             Self::LintOnly => "Found no warnings or lint errors",
             Self::LintAndTypeCheck => "Found no warnings, lint errors, or type errors",
+            Self::TypeCheckOnly => "Found no type errors",
         }
     }
 
@@ -63,6 +71,7 @@ impl LintMessageKind {
         match self {
             Self::LintOnly => "Lint warnings found",
             Self::LintAndTypeCheck => "Lint or type warnings found",
+            Self::TypeCheckOnly => "Type warnings found",
         }
     }
 
@@ -70,8 +79,17 @@ impl LintMessageKind {
         match self {
             Self::LintOnly => "Lint issues found",
             Self::LintAndTypeCheck => "Lint or type issues found",
+            Self::TypeCheckOnly => "Type errors found",
         }
     }
+}
+
+pub(super) fn lint_config_type_check_enabled(lint_config: Option<&serde_json::Value>) -> bool {
+    lint_config
+        .and_then(|config| config.get("options"))
+        .and_then(|options| options.get("typeCheck"))
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false)
 }
 
 fn parse_check_summary(line: &str) -> Option<CheckSummary> {
@@ -221,35 +239,4 @@ pub(super) fn analyze_lint_output(output: &str) -> Option<Result<LintSuccess, Li
     }
 
     Some(Err(LintFailure { summary, warnings, errors, diagnostics }))
-}
-
-#[cfg(test)]
-mod tests {
-    use serde_json::json;
-
-    use super::LintMessageKind;
-
-    #[test]
-    fn lint_message_kind_defaults_to_lint_only_without_typecheck() {
-        assert_eq!(LintMessageKind::from_lint_config(None), LintMessageKind::LintOnly);
-        assert_eq!(
-            LintMessageKind::from_lint_config(Some(&json!({ "options": {} }))),
-            LintMessageKind::LintOnly
-        );
-    }
-
-    #[test]
-    fn lint_message_kind_detects_typecheck_from_vite_config() {
-        let kind = LintMessageKind::from_lint_config(Some(&json!({
-            "options": {
-                "typeAware": true,
-                "typeCheck": true
-            }
-        })));
-
-        assert_eq!(kind, LintMessageKind::LintAndTypeCheck);
-        assert_eq!(kind.success_label(), "Found no warnings, lint errors, or type errors");
-        assert_eq!(kind.warning_heading(), "Lint or type warnings found");
-        assert_eq!(kind.issue_heading(), "Lint or type issues found");
-    }
 }

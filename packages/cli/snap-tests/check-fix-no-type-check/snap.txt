@@ -1,0 +1,3 @@
+> vp check --fix --no-type-check
+pass: Formatting completed for checked files (<variable>ms)
+pass: Found no warnings or lint errors in 2 files (<variable>ms, <variable> threads)

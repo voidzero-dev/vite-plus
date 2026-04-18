@@ -17,11 +17,11 @@ pub(crate) use execution::resolve_and_capture_output;
 // Re-exports for lib.rs and check/mod.rs
 pub use resolver::SubcommandResolver;
 use rustc_hash::FxHashMap;
-pub(crate) use types::CapturedCommandOutput;
 pub use types::{
     BoxedResolverFn, CliOptions, ResolveCommandResult, SynthesizableSubcommand,
     ViteConfigResolverFn,
 };
+pub(crate) use types::{CapturedCommandOutput, ResolvedUniversalViteConfig};
 use vite_error::Error;
 use vite_path::{AbsolutePath, AbsolutePathBuf};
 pub use vite_shared::init_tracing;
@@ -67,6 +67,7 @@ async fn execute_direct_subcommand(
             fix,
             no_fmt,
             no_lint,
+            no_type_check,
             no_error_on_unmatched_pattern,
             paths,
         } => {
@@ -75,6 +76,7 @@ async fn execute_direct_subcommand(
                 fix,
                 no_fmt,
                 no_lint,
+                no_type_check,
                 no_error_on_unmatched_pattern,
                 paths,
                 &envs,

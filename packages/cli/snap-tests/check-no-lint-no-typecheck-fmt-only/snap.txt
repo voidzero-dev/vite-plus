@@ -1,0 +1,2 @@
+> vp check --no-lint --no-type-check
+pass: All 4 files are correctly formatted (<variable>ms, <variable> threads)

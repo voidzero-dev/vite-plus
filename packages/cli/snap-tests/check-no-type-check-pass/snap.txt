@@ -1,0 +1,3 @@
+> vp check --no-type-check
+pass: All 4 files are correctly formatted (<variable>ms, <variable> threads)
+pass: Found no warnings or lint errors in 2 files (<variable>ms, <variable> threads)

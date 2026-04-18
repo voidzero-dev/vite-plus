@@ -17,6 +17,16 @@ vp check
 vp check --fix # Format and run autofixers.
 ```
 
+## Phase skip flags
+
+`vp check` runs three phases — format, lint rules, and type check — all enabled by default. Each phase can be skipped independently:
+
+| Flag | Skips |
+| ---- | ----- |
+| `--no-fmt` | Format check |
+| `--no-lint` | Lint rules (type check still runs if enabled in config) |
+| `--no-type-check` | Type check |
+
 ## Configuration
 
 `vp check` uses the same configuration you already define for linting and formatting:
