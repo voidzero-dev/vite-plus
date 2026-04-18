@@ -67,6 +67,7 @@ async fn execute_direct_subcommand(
             fix,
             no_fmt,
             no_lint,
+            no_type_check,
             no_error_on_unmatched_pattern,
             paths,
         } => {
@@ -75,6 +76,7 @@ async fn execute_direct_subcommand(
                 fix,
                 no_fmt,
                 no_lint,
+                no_type_check,
                 no_error_on_unmatched_pattern,
                 paths,
                 &envs,

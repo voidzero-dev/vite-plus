@@ -93,6 +93,9 @@ pub enum SynthesizableSubcommand {
         /// Skip lint check
         #[arg(long = "no-lint")]
         no_lint: bool,
+        /// Skip type check
+        #[arg(long = "no-type-check")]
+        no_type_check: bool,
         /// Do not exit with error when pattern is unmatched
         #[arg(long = "no-error-on-unmatched-pattern")]
         no_error_on_unmatched_pattern: bool,

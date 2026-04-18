@@ -22,6 +22,7 @@ pub(crate) async fn execute_check(
     fix: bool,
     no_fmt: bool,
     no_lint: bool,
+    _no_type_check: bool,
     no_error_on_unmatched_pattern: bool,
     paths: Vec<String>,
     envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
