@@ -23,15 +23,28 @@ Run "npm help install" for more info
 > vp run install # https://docs.npmjs.com/cli/v10/commands/npm-install
 $ vp install --production --silent
 
----
-vp run: npm-install-with-options#install not cached because it modified its input. (Run `vp run --last-details` for full details)
 
 > ls node_modules
 @oxlint
 tslib
 
 > vp run install # install again hit cache
-$ vp install --production --silent
+$ vp install --production --silent ◉ cache hit, replaying
 
 ---
-vp run: npm-install-with-options#install not cached because it modified its input. (Run `vp run --last-details` for full details)
+vp run: cache hit, <variable>ms saved.
+
+> vp run --last-details
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    Vite+ Task Runner • Execution Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Statistics:   1 tasks • 1 cache hits • 0 cache misses
+Performance:  100% cache hit rate, <variable>ms saved in total
+
+Task Details:
+────────────────────────────────────────────────
+  [1] npm-install-with-options#install: $ vp install --production --silent ✓
+      → Cache hit - output replayed - <variable>ms saved
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
