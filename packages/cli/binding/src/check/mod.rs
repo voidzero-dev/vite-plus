@@ -1,4 +1,5 @@
 mod analysis;
+mod sidecar;
 
 use std::{ffi::OsStr, sync::Arc, time::Instant};
 
