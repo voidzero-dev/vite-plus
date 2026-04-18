@@ -10,6 +10,7 @@ Options:
   --no-fmt                         Skip format check
   --no-lint                        Skip lint check
   --no-error-on-unmatched-pattern  Do not exit with error when pattern is unmatched
+  --disable-nested-config          Disable the automatic loading of nested configuration files (lint only)
   -h, --help                       Print help
 
 Examples:
@@ -32,6 +33,7 @@ Options:
   --no-fmt                         Skip format check
   --no-lint                        Skip lint check
   --no-error-on-unmatched-pattern  Do not exit with error when pattern is unmatched
+  --disable-nested-config          Disable the automatic loading of nested configuration files (lint only)
   -h, --help                       Print help
 
 Examples:
@@ -54,6 +56,7 @@ Options:
   --no-fmt                         Skip format check
   --no-lint                        Skip lint check
   --no-error-on-unmatched-pattern  Do not exit with error when pattern is unmatched
+  --disable-nested-config          Disable the automatic loading of nested configuration files (lint only)
   -h, --help                       Print help
 
 Examples:

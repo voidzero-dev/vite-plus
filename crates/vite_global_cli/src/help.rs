@@ -765,6 +765,10 @@ fn delegated_help_doc(command: &str) -> Option<HelpDoc> {
                             "--no-error-on-unmatched-pattern",
                             "Do not exit with error when pattern is unmatched",
                         ),
+                        row(
+                            "--disable-nested-config",
+                            "Disable the automatic loading of nested configuration files (lint only)",
+                        ),
                         row("-h, --help", "Print help"),
                     ],
                 ),

@@ -68,6 +68,7 @@ async fn execute_direct_subcommand(
             no_fmt,
             no_lint,
             no_error_on_unmatched_pattern,
+            disable_nested_config,
             paths,
         } => {
             return crate::check::execute_check(
@@ -76,6 +77,7 @@ async fn execute_direct_subcommand(
                 no_fmt,
                 no_lint,
                 no_error_on_unmatched_pattern,
+                disable_nested_config,
                 paths,
                 &envs,
                 cwd,
