@@ -2,8 +2,8 @@
 VITE+ - The Unified Toolchain for the Web
 
 Installing ./conflict-pkg globally...
-warn: Package './conflict-pkg' provides 'node' binary, but it conflicts with a core shim. Skipping.
-Installed ./conflict-pkg v<semver>
+warn: Package 'conflict-pkg' provides 'node' binary, but it conflicts with a core shim. Skipping.
+Installed conflict-pkg v<semver>
 Binaries: conflict-cli, node
 
 > vp remove -g conflict-pkg # Cleanup
@@ -13,8 +13,8 @@ Uninstalled conflict-pkg
 VITE+ - The Unified Toolchain for the Web
 
 Installing ./conflict-pkg globally...
-warn: Package './conflict-pkg' provides 'node' binary, but it conflicts with a core shim. Skipping.
-Installed ./conflict-pkg v<semver>
+warn: Package 'conflict-pkg' provides 'node' binary, but it conflicts with a core shim. Skipping.
+Installed conflict-pkg v<semver>
 Binaries: conflict-cli, node
 
 > vp remove -g conflict-pkg # Cleanup

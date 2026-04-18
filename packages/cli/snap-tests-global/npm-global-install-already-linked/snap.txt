@@ -14,7 +14,7 @@ npm-global-linked-cli works
 > npm install -g ./npm-global-linked-pkg # Should NOT show hint (binary already exists)
 
 added 1 package in <variable>ms
-Skipped 'npm-global-linked-cli': managed by `vp install -g ./npm-global-linked-pkg`. Run `vp uninstall -g ./npm-global-linked-pkg` to remove it first.
+Skipped 'npm-global-linked-cli': managed by `vp install -g npm-global-linked-pkg`. Run `vp uninstall -g npm-global-linked-pkg` to remove it first.
 
 > vp remove -g npm-global-linked-pkg # Cleanup
 Uninstalled npm-global-linked-pkg
