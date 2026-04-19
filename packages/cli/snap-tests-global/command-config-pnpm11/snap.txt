@@ -1,0 +1,32 @@
+> vp pm config --help # should show help
+VITE+ - The Unified Toolchain for the Web
+
+Usage: vp pm config <COMMAND>
+
+Manage package manager configuration
+
+Commands:
+  list    List all configuration
+  get     Get configuration value
+  set     Set configuration value
+  delete  Delete configuration key
+
+Options:
+  -h, --help  Print help
+
+Documentation: https://viteplus.dev/guide/install
+
+
+> vp pm config list --location project > /dev/null # should list all project configuration
+[1]> vp pm config set vite-plus-pm-config-test-key test-value --location project # should set config value in project scope
+ ERR_PNPM_CONFIG_SET_UNSUPPORTED_WORKSPACE_KEY  The key "vite-plus-pm-config-test-key" isn't supported by the workspace manifest
+
+Try "vitePlusPmConfigTestKey"
+
+> vp pm config get vite-plus-pm-config-test-key --location project # should get config value from project scope
+undefined
+
+[1]> vp pm config delete vite-plus-pm-config-test-key --location project # should delete config key from project scope
+ ERR_PNPM_CONFIG_SET_UNSUPPORTED_WORKSPACE_KEY  The key "vite-plus-pm-config-test-key" isn't supported by the workspace manifest
+
+Try "vitePlusPmConfigTestKey"
