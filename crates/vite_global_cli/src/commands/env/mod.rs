@@ -28,6 +28,7 @@ use vite_path::AbsolutePathBuf;
 
 use crate::{
     cli::{EnvArgs, EnvSubcommands},
+    commands::shell::{Shell, detect_shell},
     error::Error,
 };
 
@@ -166,10 +167,16 @@ async fn print_env(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
     .await?;
 
     let bin_dir = runtime.get_bin_prefix();
+    let snippet = match detect_shell() {
+        Shell::NuShell => {
+            format!("$env.PATH = ($env.PATH | prepend \"{}\")", bin_dir.as_path().display())
+        }
+        _ => format!("export PATH=\"{}:$PATH\"", bin_dir.as_path().display()),
+    };
 
     // Print shell snippet
     println!("# Add to your shell to use this Node.js version for this session:");
-    println!("export PATH=\"{}:$PATH\"", bin_dir.as_path().display());
+    println!("{snippet}");
 
     Ok(ExitStatus::default())
 }
