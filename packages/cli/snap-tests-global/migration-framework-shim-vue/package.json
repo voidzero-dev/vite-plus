@@ -1,0 +1,7 @@
+{
+  "name": "migration-framework-shim-vue",
+  "devDependencies": {
+    "vite": "^7.0.0",
+    "vue": "^3.0.0"
+  }
+}

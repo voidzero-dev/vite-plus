@@ -1,0 +1,3 @@
+> vp create astro --no-interactive -- my-astro-app --yes --skip-houston --template basics # create Astro app
+> cat my-astro-app/src/env.d.ts # check Astro shim
+/// <reference types="astro/client" />

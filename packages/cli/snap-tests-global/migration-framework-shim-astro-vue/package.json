@@ -1,0 +1,8 @@
+{
+  "name": "migration-framework-shim-astro-vue",
+  "devDependencies": {
+    "astro": "^4.0.0",
+    "vite": "^7.0.0",
+    "vue": "^3.0.0"
+  }
+}
