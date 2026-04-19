@@ -343,7 +343,7 @@
     "@types/semver": "catalog:",
     "@types/validate-npm-package-name": "catalog:",
     "@voidzero-dev/vite-plus-prompts": "workspace:*",
-    "@voidzero-dev/vite-plus-tools": "workspace:",
+    "@voidzero-dev/vite-plus-tools": "workspace:*",
     "cac": "catalog:",
     "cross-spawn": "catalog:",
     "detect-indent": "catalog:",
