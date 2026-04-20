@@ -846,7 +846,9 @@ async function main() {
 
   // Early return if already using Vite+ (only ESLint/hooks migration may be needed)
   // In force-override mode (file: tgz overrides), skip this check and run full migration
-  const rootPkg = readNearestPackageJson<PackageDependencies>(workspaceInfoOptional.rootDir);
+  const rootPkg = readNearestPackageJson(
+    workspaceInfoOptional.rootDir,
+  ) as PackageDependencies | null;
   if (hasVitePlusDependency(rootPkg) && !isForceOverrideMode()) {
     let didMigrate = false;
     let installDurationMs = 0;

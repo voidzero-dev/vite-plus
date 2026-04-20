@@ -1,0 +1,10 @@
+> vp test # async plugins factory should load vitest plugin with configureVitest hook
+ RUN  <cwd>
+
+ ✓ src/index.test.ts (1 test) <variable>ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  <date>
+   Duration  <variable>ms (transform <variable>ms, setup <variable>ms, import <variable>ms, tests <variable>ms, environment <variable>ms)
+

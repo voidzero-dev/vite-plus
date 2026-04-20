@@ -93,10 +93,31 @@ pub enum SynthesizableSubcommand {
         /// Skip lint check
         #[arg(long = "no-lint")]
         no_lint: bool,
+        /// Do not exit with error when pattern is unmatched
+        #[arg(long = "no-error-on-unmatched-pattern")]
+        no_error_on_unmatched_pattern: bool,
         /// File paths to check (passed through to fmt and lint)
         #[arg(trailing_var_arg = true)]
         paths: Vec<String>,
     },
+}
+
+impl SynthesizableSubcommand {
+    /// Return the command name string for use in `VP_COMMAND` env var.
+    pub(super) fn command_name(&self) -> &'static str {
+        match self {
+            Self::Lint { .. } => "lint",
+            Self::Fmt { .. } => "fmt",
+            Self::Build { .. } => "build",
+            Self::Test { .. } => "test",
+            Self::Pack { .. } => "pack",
+            Self::Dev { .. } => "dev",
+            Self::Preview { .. } => "preview",
+            Self::Doc { .. } => "doc",
+            Self::Install { .. } => "install",
+            Self::Check { .. } => "check",
+        }
+    }
 }
 
 /// Top-level CLI argument parser for vite-plus.

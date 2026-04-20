@@ -11,7 +11,28 @@
   ],
   "packageRules": [
     {
-      "matchPackageNames": ["vitest-dev"],
+      "description": "Ignore selected npm package updates",
+      "matchManagers": ["npm"],
+      "matchPackageNames": [
+        "rolldown",
+        "/^oxc-.*/",
+        "@oxc-node/*",
+        "@oxc-project/*",
+        "@vitejs/devtools",
+        "oxfmt",
+        "oxlint",
+        "oxlint-tsgolint",
+        "tsdown",
+        "vite",
+        "vitest",
+        "vitest-dev"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "Ignore oxc crate updates",
+      "matchManagers": ["cargo"],
+      "matchPackageNames": ["/^oxc([_-].*)?$/"],
       "enabled": false
     },
     {

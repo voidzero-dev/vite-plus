@@ -57,12 +57,24 @@ pub(super) async fn resolve_and_execute(
     cwd: &AbsolutePathBuf,
     cwd_arc: &Arc<AbsolutePath>,
 ) -> Result<ExitStatus, Error> {
+    let is_interactive = matches!(
+        subcommand,
+        SynthesizableSubcommand::Dev { .. } | SynthesizableSubcommand::Preview { .. }
+    );
+
     let mut cmd =
         resolve_and_build_command(resolver, subcommand, resolved_vite_config, envs, cwd, cwd_arc)
             .await?;
-    let mut child = cmd.spawn().map_err(|e| Error::Anyhow(e.into()))?;
-    let status = child.wait().await.map_err(|e| Error::Anyhow(e.into()))?;
-    Ok(ExitStatus(status.code().unwrap_or(1) as u8))
+
+    // For interactive commands (dev, preview), use terminal guard to restore terminal state on exit
+    if is_interactive {
+        let status = vite_command::execute_with_terminal_guard(cmd).await?;
+        Ok(ExitStatus(status.code().unwrap_or(1) as u8))
+    } else {
+        let mut child = cmd.spawn().map_err(|e| Error::Anyhow(e.into()))?;
+        let status = child.wait().await.map_err(|e| Error::Anyhow(e.into()))?;
+        Ok(ExitStatus(status.code().unwrap_or(1) as u8))
+    }
 }
 
 pub(super) enum FilterStream {

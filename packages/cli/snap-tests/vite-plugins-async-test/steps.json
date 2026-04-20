@@ -1,0 +1,5 @@
+{
+  "commands": [
+    "vp test # async plugins factory should load vitest plugin with configureVitest hook"
+  ]
+}

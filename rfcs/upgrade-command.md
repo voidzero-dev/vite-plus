@@ -302,7 +302,7 @@ Key differences on Windows:
 
 After the symlink swap (the **point of no return**), post-update operations are treated as non-fatal. Errors are printed to stderr as warnings but do not trigger the outer error handler (which would delete the now-active version directory).
 
-1. **Refresh shims**: Run the equivalent of `vp env setup --refresh` to ensure node/npm/npx shims point to the new version. If this fails, the user can run it manually.
+1. **Refresh shims**: Run the equivalent of `vp env setup --refresh` to ensure node/npm/npx shims point to the new version. This also refreshes trampoline `.exe` files for globally installed package shims (e.g., `corepack.exe`, `tsc.exe`) by scanning `BinConfig` entries. If this fails, the user can run it manually.
 2. **Cleanup old versions**: Remove old version directories, keeping the 5 most recent by **creation time** (matching `install.sh` behavior). The new version and the previous version are always protected from cleanup, even if they fall outside the top 5 (e.g., after a downgrade via `--rollback`).
 
 #### Step 7: Running Binary Consideration

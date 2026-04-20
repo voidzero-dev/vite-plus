@@ -1,0 +1,7 @@
+{
+  "name": "vite-plugins-run-lint-test",
+  "private": true,
+  "scripts": {
+    "lint-task": "vp lint src/"
+  }
+}

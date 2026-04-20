@@ -143,10 +143,10 @@ export function detectEslintProject(
   if (!fs.existsSync(packageJsonPath)) {
     return { hasDependency: false };
   }
-  const pkg = readJsonFile<{
+  const pkg = readJsonFile(packageJsonPath) as {
     devDependencies?: Record<string, string>;
     dependencies?: Record<string, string>;
-  }>(packageJsonPath);
+  };
   let hasDependency = !!(pkg.devDependencies?.eslint || pkg.dependencies?.eslint);
   const configs = detectConfigs(projectPath);
   let configFile = configs.eslintConfig;
@@ -159,10 +159,10 @@ export function detectEslintProject(
       if (!fs.existsSync(pkgJsonPath)) {
         continue;
       }
-      const wpPkg = readJsonFile<{
+      const wpPkg = readJsonFile(pkgJsonPath) as {
         devDependencies?: Record<string, string>;
         dependencies?: Record<string, string>;
-      }>(pkgJsonPath);
+      };
       if (wpPkg.devDependencies?.eslint || wpPkg.dependencies?.eslint) {
         hasDependency = true;
         break;
@@ -404,10 +404,10 @@ export function detectPrettierProject(
   if (!fs.existsSync(packageJsonPath)) {
     return { hasDependency: false };
   }
-  const pkg = readJsonFile<{
+  const pkg = readJsonFile(packageJsonPath) as {
     devDependencies?: Record<string, string>;
     dependencies?: Record<string, string>;
-  }>(packageJsonPath);
+  };
   let hasDependency = !!(pkg.devDependencies?.prettier || pkg.dependencies?.prettier);
   const configs = detectConfigs(projectPath);
   const configFile = configs.prettierConfig;
@@ -419,10 +419,10 @@ export function detectPrettierProject(
       if (!fs.existsSync(pkgJsonPath)) {
         continue;
       }
-      const wpPkg = readJsonFile<{
+      const wpPkg = readJsonFile(pkgJsonPath) as {
         devDependencies?: Record<string, string>;
         dependencies?: Record<string, string>;
-      }>(pkgJsonPath);
+      };
       if (wpPkg.devDependencies?.prettier || wpPkg.dependencies?.prettier) {
         hasDependency = true;
         break;
@@ -498,7 +498,7 @@ export async function migratePrettierToOxfmt(
     // so that `vp fmt --migrate=prettier` can read it
     if (prettierConfigFile === PRETTIER_PACKAGE_JSON_CONFIG) {
       const packageJsonPath = path.join(projectPath, 'package.json');
-      const pkg = readJsonFile<{ prettier?: unknown }>(packageJsonPath);
+      const pkg = readJsonFile(packageJsonPath) as { prettier?: unknown };
       if (pkg.prettier) {
         tempPrettierConfig = path.join(projectPath, '.prettierrc.json');
         fs.writeFileSync(tempPrettierConfig, JSON.stringify(pkg.prettier, null, 2));
@@ -1582,7 +1582,7 @@ export function mergeViteConfigFiles(
   if (configs.oxlintConfig) {
     // Inject options.typeAware and options.typeCheck defaults before merging
     const fullOxlintPath = path.join(projectPath, configs.oxlintConfig);
-    const oxlintJson = readJsonFile<{ options?: Record<string, unknown> }>(fullOxlintPath, true);
+    const oxlintJson = readJsonFile(fullOxlintPath, true) as { options?: Record<string, unknown> };
     if (!oxlintJson.options) {
       oxlintJson.options = {};
     }
@@ -1919,7 +1919,7 @@ export function getOldHooksDir(rootDir: string): string | undefined {
   if (!fs.existsSync(packageJsonPath)) {
     return undefined;
   }
-  const pkg = readJsonFile<{ scripts?: { prepare?: string } }>(packageJsonPath);
+  const pkg = readJsonFile(packageJsonPath) as { scripts?: { prepare?: string } };
   if (!pkg.scripts?.prepare) {
     return undefined;
   }
@@ -2023,9 +2023,9 @@ export function setupGitHooks(
   const hasStandaloneConfig = hasStandaloneLintStagedConfig(projectPath);
   if (!stagedMerged && !hasStandaloneConfig) {
     // Use lint-staged config from package.json if available, otherwise use default
-    const pkgData = readJsonFile<{ 'lint-staged'?: Record<string, string | string[]> }>(
-      packageJsonPath,
-    );
+    const pkgData = readJsonFile(packageJsonPath) as {
+      'lint-staged'?: Record<string, string | string[]>;
+    };
     const stagedConfig = pkgData?.['lint-staged'] ?? DEFAULT_STAGED_CONFIG;
     const updated = rewriteScripts(JSON.stringify(stagedConfig), readRulesYaml());
     const finalConfig: Record<string, string | string[]> = updated

@@ -20,6 +20,9 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: ./.github/actions/clone
 
+      - name: Set up metadata directory
+        run: echo "UPGRADE_DEPS_META_DIR=${RUNNER_TEMP}/upgrade-deps-meta" >> "$GITHUB_ENV"
+
       - uses: oxc-project/setup-rust@23f38cfb0c04af97a055f76acee94d5be71c7c82 # v1.0.16
         with:
           save-cache: ${{ github.ref_name == 'main' }}
@@ -59,7 +62,10 @@ jobs:
         env:
           RELEASE_BUILD: 'true'
 
-      - uses: anthropics/claude-code-action@eb99fb38f09dedf69f423f1315d6c0272ace56a0 # Claude Code to 2.1.72
+      - name: Check upgrade dependencies
+        id: check-upgrade-dependencies
+        timeout-minutes: 180
+        uses: anthropics/claude-code-action@c3d45e8e941e1b2ad7b278c57482d9c5bf1f35b3 # Claude Code to 2.1.112
         env:
           RELEASE_BUILD: 'true'
         with:
@@ -67,40 +73,69 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           show_full_output: 'true'
           prompt: |
-            Check if the build-upstream steps failed and fix them.
+            Your goal: after the daily upstream-dependency upgrade, bring the project back
+            to a fully green state. The upgrade script has already bumped every dep to the
+            latest version and the `build-upstream` action has attempted a build — your job
+            is to diagnose and fix every error that surfaced, then prove the fix is complete
+            by running a final validation pass.
+
             ### Background
-            - The build-upstream steps are at ./.github/actions/build-upstream/action.yml
-            - The deps upgrade script is at ./.github/scripts/upgrade-deps.mjs
+            - Upgrade script: `./.github/scripts/upgrade-deps.mjs`
+            - Build-upstream action: `./.github/actions/build-upstream/action.yml`
+            - Package manager: `pnpm`. Do NOT downgrade any dep — we want the latest.
 
-            ### Instructions
-            - We are using `pnpm` as the package manager
-            - We are aiming to upgrade all dependencies to the latest versions in this workflow, so don't downgrade any dependencies.
-            - Compare tsdown CLI options with `vp pack` and sync any new or removed options. Follow the instructions in `.claude/skills/sync-tsdown-cli/SKILL.md`.
-            - Check `.claude/agents/cargo-workspace-merger.md` if rolldown hash is changed.
-            - Run the steps in `build-upstream` action.yml after your fixing. If no errors are found, you can safe to exit.
-            - Install global CLI after the build-upstream steps are successful, by running the following commands:
-              - `pnpm bootstrap-cli:ci`
-              - `echo "$HOME/.vite-plus/bin" >> $GITHUB_PATH`
-            - Run `pnpm run lint` to check if there are any issues after the build, if has, deep investigate it and fix it. You need to run `just build` before you can run `pnpm run lint`.
-            - Run `pnpm run test` after `just build` to ensure all tests are successful.
-            - The snapshot tests in `pnpm run test` are always successful, you need to check the snapshot diffs in git to see if there is anything wrong after our deps upgrade.
-            - If deps in our `Cargo.toml` need to be upgraded, you can refer to the `./.claude/agents/cargo-workspace-merger.md`
-              - If `Cargo.toml` has been modified, you need to run `cargo shear` to ensure there is nothing wrong with our dependencies.
-              - Run `cargo check --all-targets --all-features` to ensure everything works fine if any Rust related codes are modified.
-            - Run the following commands to ensure everything works fine:
-              vp -h
-              vp run -h
-              vp lint -h
-              vp test -h
-              vp build -h
-              vp fmt -h
-              vp pack -h
-            - Your final step is to run `just build` to ensure all builds are successful.
+            ### Fixups to perform (in order)
+            1. Re-run the steps in `./.github/actions/build-upstream/action.yml`; fix any
+               non-zero exits.
+            2. If the rolldown hash changed, follow `.claude/agents/cargo-workspace-merger.md`
+               to resync the workspace.
+            3. Compare tsdown CLI options with `vp pack` and sync new/removed options per
+               `.claude/skills/sync-tsdown-cli/SKILL.md`.
+            4. Install the global CLI:
+               - `pnpm bootstrap-cli:ci`
+               - `echo "$HOME/.vite-plus/bin" >> $GITHUB_PATH`
+            5. If any Rust code or `Cargo.toml` was modified, run `cargo check
+               --all-targets --all-features` and `cargo shear`; fix anything they report.
+            6. Run `pnpm run lint` (requires a prior `just build`); fix any errors.
+            7. Smoke-test the CLI: `vp -h`, `vp run -h`, `vp lint -h`, `vp test -h`,
+               `vp build -h`, `vp fmt -h`, `vp pack -h`.
 
-            Help me fix the errors in `build-upstream` steps if exists.
-            No need to commit changes after your fixing we have a following step to commit all file changes.
+            ### Final validation (this step is complete ONLY when all pass)
+            1. `just build` exits 0.
+            2. `pnpm bootstrap-cli:ci && pnpm test` exits 0.
+            3. `git diff` on `packages/cli/snap-tests/**/snap.txt` and
+               `packages/cli/snap-tests-global/**/snap.txt` contains no real regressions.
+               IMPORTANT: `pnpm test` always exits 0 even when snap outputs differ, so you
+               MUST inspect the diff yourself. Cosmetic drift from the upgrade (e.g. a
+               bumped version string in help output) is acceptable; unexpected stack
+               traces, missing output, or diverging CLI behavior are regressions to fix.
+
+            If any of the three above fails, diagnose the root cause, fix it, and re-run
+            the final validation. Do not exit with the task marked complete otherwise.
+
+            ### Running long commands (IMPORTANT)
+            Run every long-running command (`just build`, `pnpm bootstrap-cli:ci`,
+            `pnpm test`, `cargo check`, etc.) in the FOREGROUND — a single Bash tool call
+            that blocks until the command exits. The Bash tool already gives you a 10-minute
+            timeout per call, which is enough for these builds.
+
+            Do NOT do any of the following:
+            - Spawn a background process (`&`, `nohup`, `disown`, `setsid`, `screen`, `tmux`).
+            - Poll for process completion with `ps`, `pgrep`, `lsof`, `sleep` loops, or
+              repeated `ls` checks on build artifacts. Each polling Bash call costs a full
+              model round-trip and burns minutes without progress.
+            - "Monitor" a running build from a separate Bash call. If you want to know
+              whether a build succeeded, just run it in the foreground and read its exit
+              code and stdout/stderr in the single tool result.
+
+            If a foreground command legitimately hits the 10-minute Bash timeout, report
+            that and stop — do not start polling.
+
+            ### Commit rule
+            Do NOT run `git commit` or `git push`. A later workflow step commits every
+            modified file for you.
           claude_args: |
-            --model opus --allowedTools "Bash,Edit,Replace,NotebookEditCell"
+            --model opus --max-turns 200 --allowedTools "Bash,Edit,Replace,NotebookEditCell"
           additional_permissions: |
             actions: read
 
@@ -116,6 +151,106 @@ jobs:
 
       - name: Format code
         run: pnpm fmt
+
+      - name: Enhance PR description with Claude
+        id: enhance-pr-description
+        continue-on-error: true
+        uses: anthropics/claude-code-action@c3d45e8e941e1b2ad7b278c57482d9c5bf1f35b3 # Claude Code to 2.1.112
+        with:
+          claude_code_oauth_token: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          show_full_output: 'true'
+          prompt: |
+            Your task is to generate an accurate commit message and PR description for this
+            automated upstream-dependency upgrade PR. All output must be written in English.
+
+            ### Inputs
+            - Version changes (old -> new) in JSON: `${{ env.UPGRADE_DEPS_META_DIR }}/versions.json`
+            - Baseline commit message: `${{ env.UPGRADE_DEPS_META_DIR }}/commit-message.txt`
+            - Baseline PR body: `${{ env.UPGRADE_DEPS_META_DIR }}/pr-body.md`
+            - The working directory is the project root; all upgraded files are staged or modified.
+              Use `git status` and `git diff` (including `git diff --stat` and focused per-file diffs)
+              to discover what actually changed beyond the raw version bumps.
+
+            ### Build outcomes from earlier steps
+            - Sync remote and build: ${{ steps.build.outcome }}
+            - build-upstream action: ${{ steps.build-upstream.outcome }}
+
+            ### Output files to OVERWRITE (these live outside the repo and will NOT be committed)
+            - `${{ env.UPGRADE_DEPS_META_DIR }}/commit-message.txt`
+            - `${{ env.UPGRADE_DEPS_META_DIR }}/pr-body.md`
+
+            ### Commit message format
+            - First line (title, <= 72 chars): `feat(deps): upgrade upstream dependencies`
+            - Blank line.
+            - A concise bulleted list of notable version changes, one bullet per package.
+              For `rolldown` and `vite`, include the tag name plus short SHA when available
+              (e.g. `rolldown: <old-short> -> v1.2.3 (<new-short>)`). Skip packages whose
+              old and new values are equal.
+            - If non-version code changes were required (e.g., tsdown CLI option sync,
+              rolldown workspace re-merge, snapshot updates, cargo shear cleanup),
+              add a trailing `Code changes:` block listing each change with a file path.
+
+            ### PR body format (Markdown)
+            Use these sections in order:
+            1. `## Summary` — 2-4 bullets describing what this PR does at a high level,
+               naming the most impactful upgrades (e.g., rolldown tag bump, vite bump,
+               vitest/tsdown bumps) and any required code adjustments.
+            2. `## Dependency updates` — a Markdown table with columns `Package | From | To`.
+               Use short 7-char SHAs for rolldown/vite hashes, and include the tag in the `To`
+               column when available. Omit packages whose old and new values are equal.
+            3. `## Code changes` — bullet list of the actual non-version edits, each naming
+               the file(s) touched. If the only changes are version bumps + lockfile + generated
+               bindings, write `- None beyond version bumps, lockfile, and formatter output.`.
+            4. `## Build status` — bullet list:
+               - `sync-remote-and-build`: ${{ steps.build.outcome }}
+               - `build-upstream`: ${{ steps.build-upstream.outcome }}
+
+            ### Rules
+            - Be factual. Only describe changes that are actually present in `git diff`. Do not
+              invent feature descriptions or behavior changes.
+            - Keep the tone terse and mechanical — this is an automated upgrade PR, not a
+              feature announcement.
+            - Do NOT run `git commit`, `git push`, or create any PR comment; simply write the
+              two output files. A later workflow step will consume them.
+            - Do NOT modify any file inside the repository working tree.
+          claude_args: |
+            --model opus --allowedTools "Bash,Read,Write,Edit"
+          additional_permissions: |
+            actions: read
+
+      - name: Read generated PR content
+        id: pr-content
+        run: |
+          set -euo pipefail
+          COMMIT_FILE="${UPGRADE_DEPS_META_DIR}/commit-message.txt"
+          BODY_FILE="${UPGRADE_DEPS_META_DIR}/pr-body.md"
+
+          # GitHub Actions heredoc outputs require the terminator on its own line,
+          # so guarantee a trailing newline regardless of what the generator wrote.
+          ensure_trailing_newline() {
+            local f="$1"
+            if [ -n "$(tail -c1 "$f")" ]; then
+              printf '\n' >> "$f"
+            fi
+          }
+          ensure_trailing_newline "${COMMIT_FILE}"
+          ensure_trailing_newline "${BODY_FILE}"
+
+          echo '--- commit-message.txt ---'
+          cat "${COMMIT_FILE}"
+          echo '--- pr-body.md ---'
+          cat "${BODY_FILE}"
+          echo '---'
+
+          {
+            echo 'commit-message<<UPGRADE_DEPS_COMMIT_EOF'
+            cat "${COMMIT_FILE}"
+            echo 'UPGRADE_DEPS_COMMIT_EOF'
+            echo 'body<<UPGRADE_DEPS_BODY_EOF'
+            cat "${BODY_FILE}"
+            echo 'UPGRADE_DEPS_BODY_EOF'
+          } >> "${GITHUB_OUTPUT}"
 
       - name: Close and delete previous PR
         env:
@@ -140,12 +275,5 @@ jobs:
           sign-commits: true
           token: ${{ secrets.AUTO_UPDATE_BRANCH_TOKEN }}
           branch-token: ${{ secrets.GITHUB_TOKEN }}
-          body: |
-            Automated daily upgrade of upstream dependencies:
-            - rolldown (latest tag)
-            - vite (latest tag)
-            - vitest (latest npm version)
-            - tsdown (latest npm version)
-
-            Build status: ${{ steps.build.outcome }}
-          commit-message: 'feat(deps): upgrade upstream dependencies'
+          body: ${{ steps.pr-content.outputs.body }}
+          commit-message: ${{ steps.pr-content.outputs.commit-message }}

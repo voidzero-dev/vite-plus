@@ -69,6 +69,22 @@ impl SubcommandResolver {
         envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
         cwd: &Arc<AbsolutePath>,
     ) -> anyhow::Result<ResolvedSubcommand> {
+        let command_name = subcommand.command_name();
+        let mut resolved = self.resolve_inner(subcommand, resolved_vite_config, envs, cwd).await?;
+        // Inject VP_COMMAND so that defineConfig's plugin factory knows which command is running,
+        // even when the subcommand is synthesized inside `vp run`.
+        let envs = Arc::make_mut(&mut resolved.envs);
+        envs.insert(Arc::from(OsStr::new("VP_COMMAND")), Arc::from(OsStr::new(command_name)));
+        Ok(resolved)
+    }
+
+    async fn resolve_inner(
+        &self,
+        subcommand: SynthesizableSubcommand,
+        resolved_vite_config: Option<&ResolvedUniversalViteConfig>,
+        envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
+        cwd: &Arc<AbsolutePath>,
+    ) -> anyhow::Result<ResolvedSubcommand> {
         match subcommand {
             SynthesizableSubcommand::Lint { mut args } => {
                 let cli_options = self.cli_options()?;

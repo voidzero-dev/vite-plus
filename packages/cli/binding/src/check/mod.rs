@@ -22,6 +22,7 @@ pub(crate) async fn execute_check(
     fix: bool,
     no_fmt: bool,
     no_lint: bool,
+    no_error_on_unmatched_pattern: bool,
     paths: Vec<String>,
     envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
     cwd: &AbsolutePathBuf,
@@ -37,14 +38,20 @@ pub(crate) async fn execute_check(
 
     let mut status = ExitStatus::SUCCESS;
     let has_paths = !paths.is_empty();
+    // In --fix mode with file paths (the lint-staged use case), implicitly suppress
+    // "no matching files" errors. This is also available as an explicit flag for
+    // non-fix use cases.
+    let suppress_unmatched = no_error_on_unmatched_pattern || (fix && has_paths);
     let mut fmt_fix_started: Option<Instant> = None;
     let mut deferred_lint_pass: Option<(String, String)> = None;
     let resolved_vite_config = resolver.resolve_universal_vite_config().await?;
 
     if !no_fmt {
         let mut args = if fix { vec![] } else { vec!["--check".to_string()] };
-        if has_paths {
+        if suppress_unmatched {
             args.push("--no-error-on-unmatched-pattern".to_string());
+        }
+        if has_paths {
             args.extend(paths.iter().cloned());
         }
         let fmt_start = Instant::now();
@@ -87,11 +94,17 @@ pub(crate) async fn execute_check(
                     ));
                 }
                 None => {
-                    print_error_block(
-                        "Formatting could not start",
-                        &combined_output,
-                        "Formatting failed before analysis started",
-                    );
+                    // oxfmt handles --no-error-on-unmatched-pattern natively and
+                    // exits 0 when no files match, so we only need to guard
+                    // against the edge case where output is unparsable but the
+                    // process still succeeded.
+                    if !(suppress_unmatched && status == ExitStatus::SUCCESS) {
+                        print_error_block(
+                            "Formatting could not start",
+                            &combined_output,
+                            "Formatting failed before analysis started",
+                        );
+                    }
                 }
             }
         }
@@ -127,6 +140,9 @@ pub(crate) async fn execute_check(
         // parser think linting never started. Force the default reporter here so the
         // captured output is stable across local and CI environments.
         args.push("--format=default".to_string());
+        if suppress_unmatched {
+            args.push("--no-error-on-unmatched-pattern".to_string());
+        }
         if has_paths {
             args.extend(paths.iter().cloned());
         }
@@ -177,11 +193,17 @@ pub(crate) async fn execute_check(
                 ));
             }
             None => {
-                output::error("Linting could not start");
-                if !combined_output.trim().is_empty() {
-                    print_stdout_block(&combined_output);
+                // oxlint handles --no-error-on-unmatched-pattern natively and
+                // exits 0 when no files match, so we only need to guard
+                // against the edge case where output is unparsable but the
+                // process still succeeded.
+                if !(suppress_unmatched && status == ExitStatus::SUCCESS) {
+                    output::error("Linting could not start");
+                    if !combined_output.trim().is_empty() {
+                        print_stdout_block(&combined_output);
+                    }
+                    print_summary_line("Linting failed before analysis started");
                 }
-                print_summary_line("Linting failed before analysis started");
             }
         }
         if status != ExitStatus::SUCCESS {
@@ -193,8 +215,10 @@ pub(crate) async fn execute_check(
     // (e.g. the curly rule adding braces to if-statements)
     if fix && !no_fmt && !no_lint {
         let mut args = Vec::new();
-        if has_paths {
+        if suppress_unmatched {
             args.push("--no-error-on-unmatched-pattern".to_string());
+        }
+        if has_paths {
             args.extend(paths.into_iter());
         }
         let captured = resolve_and_capture_output(
