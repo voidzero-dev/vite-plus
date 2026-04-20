@@ -176,9 +176,12 @@ pub(crate) async fn execute_check(
                 }
             }
             Some(Err(failure)) => {
+                // Trust the oxlint exit code: oxlint exits 0 for warning-only
+                // output by default and exits non-zero when `denyWarnings` (or
+                // `--deny-warnings`) promotes warnings to failures. The heading
+                // still reflects the findings (warnings vs errors).
                 if failure.errors == 0 && failure.warnings > 0 {
                     output::warn(lint_message_kind.warning_heading());
-                    status = ExitStatus::SUCCESS;
                 } else {
                     output::error(lint_message_kind.issue_heading());
                 }
