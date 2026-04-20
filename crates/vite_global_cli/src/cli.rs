@@ -2118,12 +2118,12 @@ pub fn command_with_help_with_options(render_options: RenderOptions) -> clap::Co
 /// Apply custom help formatting to a clap Command to match the JS CLI output.
 fn apply_custom_help(cmd: clap::Command, render_options: RenderOptions) -> clap::Command {
     let after_help = help::render_help_doc(&help::top_level_help_doc());
-    let options_heading = help::render_heading("Options");
     let header = if render_options.show_header && vite_shared::header::should_print_header() {
-        vite_shared::header::vite_plus_header()
+        format!("{}\n\n", vite_shared::header::vite_plus_header())
     } else {
         String::new()
     };
+    let options_heading = help::render_heading("Options");
     let help_template = format!("{header}{{after-help}}\n{options_heading}\n{{options}}\n");
 
     cmd.after_help(after_help).help_template(help_template)
@@ -2150,7 +2150,10 @@ pub fn try_parse_args_from_with_options(
 
 #[cfg(test)]
 mod tests {
-    use super::{has_flag_before_terminator, should_force_global_delegate};
+    use super::{
+        RenderOptions, command_with_help_with_options, has_flag_before_terminator,
+        should_force_global_delegate,
+    };
 
     #[test]
     fn detects_flag_before_option_terminator() {
@@ -2182,5 +2185,23 @@ mod tests {
     fn non_init_does_not_force_global_delegate() {
         assert!(!should_force_global_delegate("lint", &["src/index.ts".to_string()]));
         assert!(!should_force_global_delegate("fmt", &["--check".to_string()]));
+    }
+
+    #[test]
+    fn top_level_help_includes_header_when_enabled() {
+        let help = command_with_help_with_options(RenderOptions { show_header: true })
+            .render_help()
+            .to_string();
+
+        assert!(help.starts_with("VITE+ - The Unified Toolchain for the Web\n\n"));
+    }
+
+    #[test]
+    fn top_level_help_omits_header_when_disabled() {
+        let help = command_with_help_with_options(RenderOptions { show_header: false })
+            .render_help()
+            .to_string();
+
+        assert!(!help.starts_with("VITE+ - The Unified Toolchain for the Web"));
     }
 }
