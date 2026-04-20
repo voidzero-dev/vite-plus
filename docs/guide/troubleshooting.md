@@ -22,6 +22,39 @@ If you are migrating an existing project and it still depends on older Vite or V
 
 The Oxlint type checker path powered by `tsgolint` does not support `baseUrl`, so Vite+ skips `typeAware` and `typeCheck` when that setting is present.
 
+
+## `vp lint` / `vp fmt` may fail to read `vite.config.ts`
+
+`vp lint`, `vp fmt`, and the Oxc VS Code extension all read the `lint` / `fmt` blocks from `vite.config.ts`. Today that support has important limitations.
+
+### What is currently supported
+
+- Static object export:
+  - `export default { ... }`
+  - `export default defineConfig({ ... })`
+
+### What can fail in current integrations
+
+- Functional or async config:
+  - `defineConfig((env) => ({ ... }))`
+  - `defineConfig(async (env) => ({ ... }))`
+- Config files that rely on Vite transform/bundling behavior to execute.
+
+In scenarios reported in issue #930, Oxc-side integrations that read `vite.config.ts` can behave closer to native ESM loading (similar to Vite `--configLoader native`) than Vite's bundled default loader. That means configs depending on bundling/transforms can fail to load for lint/fmt/editor paths. See: https://github.com/voidzero-dev/vite-plus/issues/930
+
+### Workarounds
+
+- Prefer a static `defineConfig({ ... })` export when you need `lint` / `fmt` in `vite.config.ts`.
+- Avoid Node-specific globals (`__dirname` in ESM), unresolved TS-only imports, or JSON imports without import attributes in config code used by lint/fmt.
+- If needed, keep `.oxlintrc.*` / `.oxfmtrc.*` as temporary fallback, [although we do not recommend doing this normally](/guide/lint##configuration), while this integration behavior is being improved.
+
+### VS Code multi-root workspace note
+
+If VS Code has multiple folders open, the shared Oxc language server may pick a different workspace than expected. That can make it look like `vite.config.ts` support is missing.
+
+- Confirm the extension is using the intended workspace.
+- Confirm the workspace resolves to a recent Oxc/Oxlint/Oxfmt toolchain.
+
 ## `vp build` does not run my build script
 
 Unlike package managers, built-in commands cannot be overwritten. If you are trying to run a `package.json` script use `vp run build` instead.
@@ -53,6 +86,34 @@ export default defineConfig({
   staged: {
     '*': 'vp check --fix',
   },
+});
+```
+
+## Slow config loading caused by heavy plugins
+
+When `vite.config.ts` imports heavy plugins at the top level, every `import` is evaluated eagerly, even for commands like `vp lint` or `vp fmt` that don't need those plugins. This can make config loading noticeably slow.
+
+Use `lazyPlugins` to wrap plugin loading. Plugins are only loaded for commands that need them (`dev`, `build`, `test`, `preview`), and skipped for everything else:
+
+```ts
+import { defineConfig, lazyPlugins } from 'vite-plus';
+import myPlugin from 'vite-plugin-foo';
+
+export default defineConfig({
+  plugins: lazyPlugins(() => [myPlugin()]),
+});
+```
+
+For heavy plugins that should be lazily imported, combine with dynamic `import()`:
+
+```ts
+import { defineConfig, lazyPlugins } from 'vite-plus';
+
+export default defineConfig({
+  plugins: lazyPlugins(async () => {
+    const { default: heavyPlugin } = await import('vite-plugin-heavy');
+    return [heavyPlugin()];
+  }),
 });
 ```
 

@@ -1,9 +1,9 @@
 import path from 'node:path';
 
-import type { WorkspaceInfo, WorkspaceInfoOptional } from '../types/index.js';
-import { readJsonFile } from '../utils/json.js';
-import { prependToPathToEnvs } from './command.js';
-import { BuiltinTemplate, type TemplateInfo, TemplateType } from './templates/types.js';
+import type { WorkspaceInfo, WorkspaceInfoOptional } from '../types/index.ts';
+import { readJsonFile } from '../utils/json.ts';
+import { prependToPathToEnvs } from './command.ts';
+import { BuiltinTemplate, type TemplateInfo, TemplateType } from './templates/types.ts';
 
 // Check if template name is a GitHub URL
 export function isGitHubUrl(templateName: string): boolean {
@@ -83,11 +83,11 @@ export function discoverTemplate(
   if (localPackage) {
     const localPackagePath = path.join(workspaceInfo.rootDir, localPackage.path);
     const packageJsonPath = path.join(localPackagePath, 'package.json');
-    const pkg = readJsonFile<{
+    const pkg = readJsonFile(packageJsonPath) as {
       dependencies?: Record<string, string>;
       keywords?: string[];
       bin?: Record<string, string> | string;
-    }>(packageJsonPath);
+    };
     let binPath = '';
     if (pkg.bin) {
       if (typeof pkg.bin === 'string') {
@@ -133,11 +133,11 @@ export function discoverTemplate(
  * This follows the same convention as `npm create` / `pnpm create`:
  * - `vite` → `create-vite`
  * - `vite@latest` → `create-vite@latest`
- * - `@tanstack/start` → `@tanstack/create-start`
- * - `@tanstack/start@latest` → `@tanstack/create-start@latest`
  *
  * Special cases for packages where the convention doesn't work:
  * - `nitro` → `create-nitro-app` (create-nitro is abandoned)
+ * - `svelte` → `sv`
+ * - `@tanstack/start` → `@tanstack/cli` (@tanstack/create-start is deprecated)
  *
  * Skips expansion for:
  * - Builtin templates (`vite:*`)
@@ -169,7 +169,11 @@ export function expandCreateShorthand(templateName: string): string {
   if (templateName.startsWith('@')) {
     const slashIndex = templateName.indexOf('/');
     if (slashIndex === -1) {
-      return templateName;
+      // @scope or @scope@version → @scope/create[@version]
+      const atIndex = templateName.indexOf('@', 1);
+      const scope = atIndex === -1 ? templateName : templateName.slice(0, atIndex);
+      const version = atIndex === -1 ? '' : templateName.slice(atIndex);
+      return `${scope}/create${version}`;
     }
     const scope = templateName.slice(0, slashIndex);
     const rest = templateName.slice(slashIndex + 1);
@@ -182,6 +186,12 @@ export function expandCreateShorthand(templateName: string): string {
     if (name.startsWith('create-')) {
       return templateName;
     }
+
+    // Special cases where the default convention doesn't apply
+    if (scope === '@tanstack' && name === 'start') {
+      return `@tanstack/cli${version}`;
+    }
+
     return `${scope}/create-${name}${version}`;
   }
 
@@ -211,7 +221,7 @@ export function inferParentDir(
   workspaceInfo: WorkspaceInfoOptional,
 ): string | undefined {
   if (workspaceInfo.parentDirs.length === 0) {
-    return;
+    return undefined;
   }
   // apps/applications by default
   let rule = /app/i;
@@ -227,5 +237,5 @@ export function inferParentDir(
       return parentDir;
     }
   }
-  return;
+  return undefined;
 }

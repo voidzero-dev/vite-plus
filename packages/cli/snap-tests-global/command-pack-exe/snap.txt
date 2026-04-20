@@ -1,4 +1,4 @@
-> vp pack src/index.ts --exe
+> vp pack src/index.ts --exe 2>&1
 VITE+ - The Unified Toolchain for the Web
 
 ℹ entry: src/index.ts

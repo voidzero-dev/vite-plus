@@ -13,6 +13,7 @@ export default defineConfig({
   staged: {
     "*": "vp check --fix"
   },
+  fmt: {},
   lint: {"options":{"typeAware":true,"typeCheck":true}},
   plugins: [react()],
 });
@@ -26,16 +27,11 @@ export default defineConfig({
     "prepare": "vp config"
   },
   "devDependencies": {
+    "@vitejs/plugin-react": "catalog:",
     "vite": "catalog:",
     "vite-plus": "catalog:"
   },
-  "packageManager": "pnpm@<semver>+sha512.cf9998222162dd85864d0a8102e7892e7ba4ceadebbf5a31f9c2fce48dfce317a9c53b9f6464d1ef9042cba2e02ae02a9f7c143a2b438cd93c91840f0192b9dd",
-  "pnpm": {
-    "overrides": {
-      "react-click-away-listener>react": "0.0.0-experimental-7dc903cd-20251203",
-      "supertest>superagent": "9.0.2"
-    }
-  }
+  "packageManager": "pnpm@<semver>+sha512.cf9998222162dd85864d0a8102e7892e7ba4ceadebbf5a31f9c2fce48dfce317a9c53b9f6464d1ef9042cba2e02ae02a9f7c143a2b438cd93c91840f0192b9dd"
 }
 
 > cat pnpm-workspace.yaml # check pnpm-workspace.yaml
@@ -48,10 +44,11 @@ catalog:
   vite-plus: latest
 
 overrides:
-  '@vitejs/plugin-react>vite': 'npm:rolldown-vite@<semver>'
-  'supertest>superagent': '9.0.2'
+  '@vitejs/plugin-react>vite': 'npm:vite@<semver>'
+  'supertest>superagent': <semver>
   vite: 'catalog:'
   vitest: 'catalog:'
+  react-click-away-listener>react: <semver>
 peerDependencyRules:
   allowAny:
     - vite

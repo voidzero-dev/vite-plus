@@ -2,11 +2,11 @@
  * Build script for vite-plus CLI package
  *
  * This script performs the following main tasks:
- * 1. buildCli() - Compiles TypeScript sources (local CLI) via tsc
- * 2. buildGlobalModules() - Bundles global CLI modules (create, migrate, init, mcp, version) via rolldown
- * 3. buildNapiBinding() - Builds the native Rust binding via NAPI
- * 4. syncCorePackageExports() - Creates shim files to re-export from @voidzero-dev/vite-plus-core
- * 5. syncTestPackageExports() - Creates shim files to re-export from @voidzero-dev/vite-plus-test
+ * 1. buildWithTsdown() - Bundles all CLI entry points via tsdown
+ * 2. buildNapiBinding() - Builds the native Rust binding via NAPI
+ * 3. syncCorePackageExports() - Creates shim files to re-export from @voidzero-dev/vite-plus-core
+ * 4. syncTestPackageExports() - Creates shim files to re-export from @voidzero-dev/vite-plus-test
+ * 5. syncVersionsExport() - Generates ./versions module with bundled tool versions
  * 6. copySkillDocs() - Copies docs into skills/vite-plus/docs for runtime MCP access
  * 7. syncReadmeFromRoot() - Keeps package README in sync
  *
@@ -19,25 +19,18 @@
  */
 
 import { execSync } from 'node:child_process';
-import { existsSync, globSync, readFileSync, readdirSync, statSync } from 'node:fs';
-import { copyFile, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { existsSync, globSync, readdirSync, statSync } from 'node:fs';
+import { copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
 import { createBuildCommand, NapiCli } from '@napi-rs/cli';
 import { format } from 'oxfmt';
-import {
-  createCompilerHost,
-  createProgram,
-  formatDiagnostics,
-  parseJsonSourceFileConfigFileContent,
-  readJsonConfigFile,
-  sys,
-  ModuleKind,
-} from 'typescript';
 
-import { generateLicenseFile } from '../../scripts/generate-license.ts';
+import { generateLicenseFile } from '../../scripts/generate-license.js';
+import corePkg from '../core/package.json' with { type: 'json' };
+import testPkg from '../test/package.json' with { type: 'json' };
 
 const projectDir = dirname(fileURLToPath(import.meta.url));
 const TEST_PACKAGE_NAME = '@voidzero-dev/vite-plus-test';
@@ -59,14 +52,13 @@ const napiArgs = process.argv
   .filter((arg) => arg !== '--skip-native' && arg !== '--skip-ts');
 
 if (!skipTs) {
-  await buildCli();
-  buildGlobalModules();
+  buildWithTsdown();
   generateLicenseFile({
     title: 'Vite-Plus CLI license',
     packageName: 'Vite-Plus',
     outputPath: join(projectDir, 'LICENSE'),
     coreLicensePath: join(projectDir, '..', '..', 'LICENSE'),
-    bundledPaths: [join(projectDir, 'dist', 'global')],
+    bundledPaths: [join(projectDir, 'dist')],
     resolveFrom: [projectDir],
   });
   if (!existsSync(join(projectDir, 'LICENSE'))) {
@@ -80,6 +72,7 @@ if (!skipNative) {
 if (!skipTs) {
   await syncCorePackageExports();
   await syncTestPackageExports();
+  await syncVersionsExport();
 }
 await copySkillDocs();
 await syncReadmeFromRoot();
@@ -106,12 +99,12 @@ async function buildNapiBinding() {
     platform: true,
     jsBinding: 'index.cjs',
     dts: 'index.d.cts',
-    release: process.env.VITE_PLUS_CLI_DEBUG !== '1',
+    release: process.env.VP_CLI_DEBUG !== '1',
     features: process.env.RELEASE_BUILD ? ['rolldown'] : void 0,
   });
 
   const outputs = await task;
-  const viteConfig = await import('../../vite.config');
+  const viteConfig = await import('../../vite.config.js');
   for (const output of outputs) {
     if (output.kind !== 'node') {
       const { code, errors } = await format(output.path, await readFile(output.path, 'utf8'), {
@@ -129,112 +122,11 @@ async function buildNapiBinding() {
   }
 }
 
-async function buildCli() {
-  const tsconfig = readJsonConfigFile(join(projectDir, 'tsconfig.json'), sys.readFile.bind(sys));
-
-  const { options: initialOptions } = parseJsonSourceFileConfigFileContent(
-    tsconfig,
-    sys,
-    projectDir,
-  );
-
-  const options = {
-    ...initialOptions,
-    noEmit: false,
-    outDir: join(projectDir, 'dist'),
-  };
-
-  const cjsHost = createCompilerHost({
-    ...options,
-    module: ModuleKind.CommonJS,
-  });
-
-  const cjsProgram = createProgram({
-    rootNames: ['src/define-config.ts'],
-    options: {
-      ...options,
-      module: ModuleKind.CommonJS,
-    },
-    host: cjsHost,
-  });
-
-  const { diagnostics: cjsDiagnostics } = cjsProgram.emit();
-
-  if (cjsDiagnostics.length > 0) {
-    console.error(formatDiagnostics(cjsDiagnostics, cjsHost));
-    process.exit(1);
-  }
-  await rename(
-    join(projectDir, 'dist/define-config.js'),
-    join(projectDir, 'dist/define-config.cjs'),
-  );
-
-  const host = createCompilerHost(options);
-
-  const program = createProgram({
-    rootNames: globSync('src/**/*.{ts,cts}', {
-      cwd: projectDir,
-      exclude: [
-        '**/*/__tests__',
-        // Global CLI modules — bundled by rolldown instead of tsc
-        'src/create/**',
-        'src/init/**',
-        'src/mcp/**',
-        'src/migration/**',
-        'src/version.ts',
-        'src/types/**',
-      ],
-    }),
-    options,
-    host,
-  });
-
-  const { diagnostics } = program.emit();
-
-  if (diagnostics.length > 0) {
-    console.error(formatDiagnostics(diagnostics, host));
-    process.exit(1);
-  }
-}
-
-function buildGlobalModules() {
-  execSync('npx rolldown -c rolldown.config.ts', {
+function buildWithTsdown() {
+  execSync('npx tsdown', {
     cwd: projectDir,
     stdio: 'inherit',
   });
-  validateGlobalBundleExternals();
-}
-
-/**
- * Scan rolldown output for unbundled workspace package imports.
- *
- * Rolldown silently externalizes imports it can't resolve (no error, no warning).
- * If a workspace package's dist doesn't exist at bundle time (build order race,
- * clean checkout, etc.), the bare specifier stays in the output. Since these
- * packages are devDependencies — not installed in the global CLI's node_modules —
- * this causes a runtime ERR_MODULE_NOT_FOUND crash.
- *
- * Fail the build loudly instead of producing a broken install.
- */
-function validateGlobalBundleExternals() {
-  const globalDir = join(projectDir, 'dist/global');
-  const files = globSync('*.js', { cwd: globalDir });
-  const errors: string[] = [];
-
-  for (const file of files) {
-    const content = readFileSync(join(globalDir, file), 'utf8');
-    const matches = content.matchAll(/\bimport\s.*?from\s+["'](@voidzero-dev\/[^"']+)["']/g);
-    for (const match of matches) {
-      errors.push(`  ${file}: unbundled import of "${match[1]}"`);
-    }
-  }
-
-  if (errors.length > 0) {
-    throw new Error(
-      `Rolldown failed to bundle workspace packages in dist/global/:\n${errors.join('\n')}\n` +
-        `Ensure these packages are built before running the CLI build.`,
-    );
-  }
 }
 
 /**
@@ -423,6 +315,75 @@ async function syncTestPackageExports() {
   await updateCliPackageJson(cliPkgPath, generatedExports);
 
   console.log(`\nSynced ${Object.keys(generatedExports).length} exports from test package`);
+}
+
+/**
+ * Read version from a dependency's package.json in node_modules.
+ * Uses readFile because these packages don't export ./package.json.
+ *
+ * TODO: Once https://github.com/oxc-project/oxc/pull/20784 lands and oxlint/oxfmt/oxlint-tsgolint
+ * export ./package.json, this function can be removed and replaced with static imports:
+ * ```js
+ * import oxlintPkg from 'oxlint/package.json' with { type: 'json' };
+ * import oxfmtPkg from 'oxfmt/package.json' with { type: 'json' };
+ * import oxlintTsgolintPkg from 'oxlint-tsgolint/package.json' with { type: 'json' };
+ * ```
+ */
+async function readDepVersion(packageName: string): Promise<string | null> {
+  try {
+    const pkgPath = join(projectDir, 'node_modules', packageName, 'package.json');
+    const pkg = JSON.parse(await readFile(pkgPath, 'utf-8'));
+    return pkg.version ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Generate ./versions export module with bundled tool versions.
+ *
+ * Collects versions from:
+ * - core/test package.json bundledVersions (vite, rolldown, tsdown, vitest)
+ * - CLI dependency package.json (oxlint, oxfmt, oxlint-tsgolint)
+ *
+ * Generates dist/versions.js and dist/versions.d.ts with inlined constants.
+ */
+async function syncVersionsExport() {
+  console.log('\nSyncing versions export...');
+  const distDir = join(projectDir, 'dist');
+
+  // Collect versions from bundledVersions (core + test)
+  const versions: Record<string, string> = {
+    ...(corePkg as Record<string, any>).bundledVersions,
+    ...(testPkg as Record<string, any>).bundledVersions,
+  };
+
+  // Collect versions from CLI dependencies (oxlint, oxfmt, oxlint-tsgolint)
+  // These don't export ./package.json, so we read from node_modules directly
+  const depTools = ['oxlint', 'oxfmt', 'oxlint-tsgolint'] as const;
+  for (const name of depTools) {
+    const version = await readDepVersion(name);
+    if (version) {
+      versions[name] = version;
+    }
+  }
+
+  // dist/versions.js — inlined constants (no runtime I/O)
+  await writeFile(
+    join(distDir, 'versions.js'),
+    `export const versions = ${JSON.stringify(versions, null, 2)};\n`,
+  );
+
+  // dist/versions.d.ts — type declarations
+  const typeFields = Object.keys(versions)
+    .map((k) => `  readonly '${k}': string;`)
+    .join('\n');
+  await writeFile(
+    join(distDir, 'versions.d.ts'),
+    `export declare const versions: {\n${typeFields}\n};\n`,
+  );
+
+  console.log(`  Created ./versions (${Object.keys(versions).length} tools)`);
 }
 
 /**

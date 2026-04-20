@@ -20,6 +20,9 @@ runs:
     - name: Install previous release
       shell: bash
       run: |
+        # Always download the binding that matches the runner OS (not the
+        # Rust cross-compilation target). The rolldown binding is loaded by
+        # Node.js on the host to run JS build steps, not cross-compiled.
         if ${{ runner.os == 'Windows' }}; then
           export TARGET="win32-x64-msvc"
         elif ${{ runner.os == 'Linux' }}; then

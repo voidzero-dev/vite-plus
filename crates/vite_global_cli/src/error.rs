@@ -52,9 +52,16 @@ pub enum Error {
     #[error("Upgrade error: {0}")]
     Upgrade(Str),
 
-    #[error("Integrity mismatch: expected {expected}, got {actual}")]
-    IntegrityMismatch { expected: Str, actual: Str },
+    #[error("{0}")]
+    Setup(#[from] vite_setup::error::Error),
 
-    #[error("Unsupported integrity format: {0} (only sha512 is supported)")]
-    UnsupportedIntegrity(Str),
+    #[error(
+        "Node.js {version} is incompatible with Vite+ CLI.\nRequired by Vite+: {requirement}{version_source}\n\n{help}"
+    )]
+    NodeVersionIncompatible {
+        version: String,
+        requirement: String,
+        version_source: String,
+        help: String,
+    },
 }

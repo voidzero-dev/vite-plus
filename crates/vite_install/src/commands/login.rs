@@ -55,6 +55,10 @@ impl PackageManager {
                     args.push("login".into());
                 }
             }
+            PackageManagerType::Bun => {
+                bin_name = "npm".into();
+                args.push("login".into());
+            }
         }
 
         if let Some(registry) = options.registry {

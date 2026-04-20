@@ -5,9 +5,7 @@ VITE+ - The Unified Toolchain for the Web
 • Node <semver>  pnpm <semver>
 • 2 config updates applied
 
-> cat tsdown.config.json && exit 1 || true # check tsdown.config.json should be removed
-cat: tsdown.config.json: No such file or directory
-
+> test ! -f tsdown.config.json # check tsdown.config.json should be removed
 > cat vite.config.ts # check vite.config.ts
 import { defineConfig } from 'vite-plus';
 
@@ -24,6 +22,7 @@ export default defineConfig({
       "cwd": "./src"
     }
   },
+  fmt: {},
   lint: {"options":{"typeAware":true,"typeCheck":true}},
   server: {
     port: 3000,
@@ -40,17 +39,27 @@ export default defineConfig({
     "prepare": "vp config"
   },
   "devDependencies": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vite-plus": "latest"
-  },
-  "pnpm": {
-    "overrides": {
-      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-      "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
-    }
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
   },
   "packageManager": "pnpm@<semver>"
 }
+
+> cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog
+catalog:
+  vite: npm:@voidzero-dev/vite-plus-core@latest
+  vitest: npm:@voidzero-dev/vite-plus-test@latest
+  vite-plus: latest
+overrides:
+  vite: 'catalog:'
+  vitest: 'catalog:'
+peerDependencyRules:
+  allowAny:
+    - vite
+    - vitest
+  allowedVersions:
+    vite: '*'
+    vitest: '*'
 
 > vp migrate --no-interactive # run migration again to check if it is idempotent
 VITE+ - The Unified Toolchain for the Web
@@ -74,6 +83,7 @@ export default defineConfig({
       "cwd": "./src"
     }
   },
+  fmt: {},
   lint: {"options":{"typeAware":true,"typeCheck":true}},
   server: {
     port: 3000,
@@ -90,14 +100,8 @@ export default defineConfig({
     "prepare": "vp config"
   },
   "devDependencies": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vite-plus": "latest"
-  },
-  "pnpm": {
-    "overrides": {
-      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-      "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
-    }
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
   },
   "packageManager": "pnpm@<semver>"
 }

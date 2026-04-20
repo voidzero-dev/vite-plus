@@ -1,0 +1,15 @@
+{
+  "env": {
+    "npm_lifecycle_event": "prepare"
+  },
+  "commands": [
+    { "command": "git init", "ignoreOutput": true },
+    "vp config # should install hooks automatically without prompting",
+    "git config --local core.hooksPath # should be .vite-hooks/_",
+    "cat .vite-hooks/pre-commit # should have vp staged",
+    "cat vite.config.ts # should have staged config",
+    "vp config # run again to ensure idempotent",
+    "cat .vite-hooks/pre-commit # should remain unchanged",
+    "cat vite.config.ts # should remain unchanged"
+  ]
+}

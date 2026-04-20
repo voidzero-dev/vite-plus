@@ -1,0 +1,9 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "commands": [
+    "vp outdated --help # should show help",
+    "vp install # should install packages first",
+    "vp outdated testnpm2 # should show outdated package",
+    "vp outdated -r # should support recursive output"
+  ]
+}

@@ -84,7 +84,7 @@ export function installGlobalCli() {
     const binaryName = isWindows ? 'vp.exe' : 'vp';
     const binaryPath = findVpBinary(binaryName);
     if (!binaryPath) {
-      console.error(`Error: vp binary not found in ${path.join(repoRoot, 'target')}`);
+      console.error(`Error: vp binary not found in ${getTargetDirs().join(', ')}`);
       console.error('Run "cargo build -p vite_global_cli --release" first.');
       process.exit(1);
     }
@@ -117,15 +117,15 @@ export function installGlobalCli() {
 
     const env: Record<string, string> = {
       ...(process.env as Record<string, string>),
-      VITE_PLUS_LOCAL_TGZ: tgzPath,
-      VITE_PLUS_LOCAL_BINARY: binaryPath,
-      VITE_PLUS_HOME: installDir,
-      VITE_PLUS_VERSION: localDevVer,
+      VP_LOCAL_TGZ: tgzPath,
+      VP_LOCAL_BINARY: binaryPath,
+      VP_HOME: installDir,
+      VP_VERSION: localDevVer,
       CI: 'true',
       // Skip vp install in install.sh — we handle deps ourselves:
       // - Local dev: symlink monorepo node_modules
       // - CI (--tgz): rewrite @voidzero-dev/* deps to file: protocol and npm install
-      VITE_PLUS_SKIP_DEPS_INSTALL: '1',
+      VP_SKIP_DEPS_INSTALL: '1',
     };
 
     // Run platform-specific install script (use absolute paths)
@@ -161,23 +161,33 @@ export function installGlobalCli() {
   }
 }
 
+// Returns target directories to search, with CARGO_TARGET_DIR (e.g., Windows Dev Drive) first if set.
+function getTargetDirs(): string[] {
+  const dirs = [path.join(repoRoot, 'target')];
+  if (process.env.CARGO_TARGET_DIR) {
+    dirs.unshift(process.env.CARGO_TARGET_DIR);
+  }
+  return dirs;
+}
+
 // Find the vp binary in the target directory.
 // Checks target/release/ first (local builds), then target/<triple>/release/ (cross-compiled CI builds).
 function findVpBinary(binaryName: string) {
-  // 1. Direct release build: target/release/vp
-  const directPath = path.join(repoRoot, 'target', 'release', binaryName);
-  if (existsSync(directPath)) {
-    return directPath;
-  }
+  for (const targetDir of getTargetDirs()) {
+    const directPath = path.join(targetDir, 'release', binaryName);
+    if (existsSync(directPath)) {
+      return directPath;
+    }
 
-  // 2. Cross-compiled build: target/<triple>/release/vp (CI builds with --target)
-  const targetDir = path.join(repoRoot, 'target');
-  if (existsSync(targetDir)) {
-    for (const entry of readdirSync(targetDir)) {
-      const crossPath = path.join(targetDir, entry, 'release', binaryName);
-      if (existsSync(crossPath)) {
-        return crossPath;
+    try {
+      for (const entry of readdirSync(targetDir)) {
+        const crossPath = path.join(targetDir, entry, 'release', binaryName);
+        if (existsSync(crossPath)) {
+          return crossPath;
+        }
       }
+    } catch {
+      // Directory doesn't exist, continue to next
     }
   }
 

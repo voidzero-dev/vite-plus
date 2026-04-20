@@ -168,6 +168,64 @@ impl PackageManager {
                     output::warn("--json not supported by npm, ignoring flag");
                 }
             }
+            PackageManagerType::Bun => {
+                bin_name = "bun".into();
+
+                args.push("publish".into());
+
+                if let Some(target) = options.target {
+                    args.push(target.to_string());
+                }
+
+                if options.dry_run {
+                    args.push("--dry-run".into());
+                }
+
+                if let Some(tag) = options.tag {
+                    args.push("--tag".into());
+                    args.push(tag.to_string());
+                }
+
+                if let Some(access) = options.access {
+                    args.push("--access".into());
+                    args.push(access.to_string());
+                }
+
+                if let Some(otp) = options.otp {
+                    args.push("--otp".into());
+                    args.push(otp.to_string());
+                }
+
+                if options.no_git_checks {
+                    output::warn("--no-git-checks not supported by bun, ignoring flag");
+                }
+
+                if options.publish_branch.is_some() {
+                    output::warn("--publish-branch not supported by bun, ignoring flag");
+                }
+
+                if options.report_summary {
+                    output::warn("--report-summary not supported by bun, ignoring flag");
+                }
+
+                if options.force {
+                    output::warn("--force not supported by bun publish, ignoring flag");
+                }
+
+                if options.json {
+                    output::warn("--json not supported by bun publish, ignoring flag");
+                }
+
+                if options.recursive {
+                    output::warn("--recursive not supported by bun publish, ignoring flag");
+                }
+
+                if let Some(filters) = options.filters {
+                    if !filters.is_empty() {
+                        output::warn("--filter not supported by bun publish, ignoring flag");
+                    }
+                }
+            }
         }
 
         // Add pass-through args

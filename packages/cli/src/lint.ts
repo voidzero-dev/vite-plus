@@ -1,13 +1,4 @@
-export {
-  type AllowWarnDeny,
-  type DummyRule,
-  type DummyRuleMap,
-  type ExternalPluginEntry,
-  type ExternalPluginsConfig,
-  type OxlintConfig,
-  type OxlintEnv,
-  type OxlintGlobals,
-  type OxlintOverride,
-  type RuleCategories,
-  defineConfig,
-} from 'oxlint';
+// For now, `defineConfig()` is the only non-type exports from `oxlint`,
+// but in Vite+, users should use `defineConfig()` from 'vite-plus`.
+
+export type * from 'oxlint';

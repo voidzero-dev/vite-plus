@@ -7,22 +7,42 @@
     "packages/cli/snap-tests-todo/**",
     "bench/fixtures/**",
     "rolldown/**",
-    "rolldown-vite/**"
+    "vite/**"
   ],
   "packageRules": [
     {
-      "matchPackageNames": ["vitest-dev"],
+      "description": "Ignore selected npm package updates",
+      "matchManagers": ["npm"],
+      "matchPackageNames": [
+        "rolldown",
+        "/^oxc-.*/",
+        "@oxc-node/*",
+        "@oxc-project/*",
+        "@vitejs/devtools",
+        "oxfmt",
+        "oxlint",
+        "oxlint-tsgolint",
+        "tsdown",
+        "vite",
+        "vitest",
+        "vitest-dev"
+      ],
       "enabled": false
     },
     {
-      "matchPackageNames": [
+      "description": "Ignore oxc crate updates",
+      "matchManagers": ["cargo"],
+      "matchPackageNames": ["/^oxc([_-].*)?$/"],
+      "enabled": false
+    },
+    {
+      "matchDepNames": [
         "fspy",
         "vite_glob",
         "vite_path",
         "vite_str",
         "vite_task",
-        "vite_workspace",
-        "https://github.com/voidzero-dev/vite-task"
+        "vite_workspace"
       ],
       "enabled": false
     }

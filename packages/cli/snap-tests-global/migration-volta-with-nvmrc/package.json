@@ -1,0 +1,10 @@
+{
+  "name": "migration-volta-with-nvmrc",
+  "devDependencies": {
+    "vite": "^7.0.0"
+  },
+  "volta": {
+    "node": "18.0.0",
+    "npm": "9.0.0"
+  }
+}

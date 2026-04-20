@@ -64,7 +64,7 @@ $ vp pack src/index.ts
 index.mjs
 
 > vp run pack # should hit cache
-$ vp pack src/index.ts ✓ cache hit, replaying
+$ vp pack src/index.ts ◉ cache hit, replaying
 ℹ entry: src/index.ts
 ℹ Build start
 ℹ dist/index.mjs  <variable> kB │ gzip: <variable> kB

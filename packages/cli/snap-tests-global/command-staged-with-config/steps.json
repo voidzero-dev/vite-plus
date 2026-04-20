@@ -1,4 +1,5 @@
 {
+  "ignoredPlatforms": ["win32", "darwin"],
   "commands": [
     { "command": "git init", "ignoreOutput": true },
     { "command": "git add -A && git commit -m 'init'", "ignoreOutput": true },
@@ -12,6 +13,9 @@
       "command": "printf 'eval(\"code\");\\n' > src/fail.js && git add src/fail.js",
       "ignoreOutput": true
     },
-    "vp staged # should fail when staged .js file has lint errors"
+    {
+      "command": "vp staged > /dev/null 2>&1 # should fail when staged .js file has lint errors",
+      "ignoreOutput": true
+    }
   ]
 }

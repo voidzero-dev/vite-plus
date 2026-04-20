@@ -1,0 +1,10 @@
+{
+  "name": "migration-husky-latest-dist-tag",
+  "scripts": {
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "husky": "latest",
+    "vite": "^7.0.0"
+  }
+}

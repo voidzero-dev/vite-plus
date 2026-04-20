@@ -13,9 +13,9 @@ vp test                            # Run Vitest (dedicated command)
 vp lint                            # Run oxlint (dedicated command)
 
 # Run tasks across packages (explicit mode)
-vp run build -r                    # recursive with topological ordering
+vp run -r build                    # recursive with topological ordering
 vp run app#build web#build         # specific packages
-vp run build -r --no-topological   # recursive without implicit deps
+vp run -r --no-topological build   # recursive without implicit deps
 
 # Run task in current package (implicit mode - for non-built-in tasks)
 vp run dev                         # runs dev script from package.json
@@ -105,6 +105,12 @@ All user-facing output must go through shared output modules instead of raw prin
 
 - Run `cargo test` to execute all tests
 - You never need to run `pnpm install` in the test fixtures dir, vite-plus should able to load and parse the workspace without `pnpm install`.
+
+### Environment Variables in Tests
+
+- **Prefer `EnvConfig::test_scope()`**: For tests needing custom config values (VP_HOME, npm registry, etc.), use thread-local `EnvConfig::test_scope()` or `EnvConfig::test_guard()` from `vite_shared` — no `unsafe`, no `#[serial]`, full parallelism
+- **`#[serial]` required for `std::env::set_var`/`remove_var`**: Any test that directly modifies process env vars (PATH, VP_SHIM_TOOL, etc.) MUST have `#[serial_test::serial]` to prevent concurrent access races
+- **Clean up ALL related env vars**: When clearing env vars before a test, clear ALL vars that the function under test reads — not just the one being tested
 
 ## Build
 

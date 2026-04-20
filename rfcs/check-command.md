@@ -10,7 +10,7 @@ Currently, running a full code quality check requires chaining multiple commands
 
 ```bash
 # From the monorepo template's "ready" script:
-vp fmt && vp lint --type-aware && vp run test -r && vp run build -r
+vp fmt && vp lint --type-aware && vp run -r test && vp run -r build
 ```
 
 Pain points:
@@ -53,6 +53,7 @@ vp check --no-type-check
 | `--lint` / `--no-lint`             | ON      | Run lint check (`vp lint`)                              |
 | `--type-aware` / `--no-type-aware` | ON      | Enable type-aware lint rules (oxlint `--type-aware`)    |
 | `--type-check` / `--no-type-check` | ON      | Enable TypeScript type checking (oxlint `--type-check`) |
+| `--no-error-on-unmatched-pattern`  | OFF     | Do not exit with error when pattern is unmatched        |
 
 **Flag dependency:** `--type-check` requires `--type-aware` as a prerequisite.
 
@@ -73,8 +74,9 @@ vp check --fix src/index.ts src/utils.ts
 
 When file paths are provided:
 
-- `--no-error-on-unmatched-pattern` is automatically added to `fmt` args (prevents errors when paths don't match fmt patterns)
 - Paths are appended to both `fmt` and `lint` sub-commands
+- In `--fix` mode, `--no-error-on-unmatched-pattern` is implicitly enabled for both `fmt` and `lint`, preventing errors when all provided paths are excluded by ignorePatterns. This is the common lint-staged use case where staged files may not match tool-specific patterns.
+- Without `--fix`, unmatched patterns are reported as errors unless `--no-error-on-unmatched-pattern` is explicitly passed. Both oxfmt and oxlint support this flag natively.
 
 This enables lint-staged integration:
 
@@ -178,17 +180,23 @@ Commands::Check { args } => commands::delegate::execute(cwd, "check", &args).awa
 
 ### NAPI Binding
 
-Add `Check` to `SynthesizableSubcommand` in `packages/cli/binding/src/cli.rs`. The check command internally resolves and runs fmt + lint sequentially, reusing existing resolvers.
+The `Check` variant is defined in `SynthesizableSubcommand` in `packages/cli/binding/src/cli.rs`. The check command's orchestration logic lives in its own module at `packages/cli/binding/src/check/`, following the same directory-per-command pattern as `exec/`:
+
+- `check/mod.rs` — `execute_check()` orchestration (runs fmt + lint sequentially, handles `--fix` re-formatting)
+- `check/analysis.rs` — Output analysis types (`CheckSummary`, `LintMessageKind`, etc.), parsers, and formatting helpers
+
+The check module reuses `SubcommandResolver` and `resolve_and_capture_output` from `cli.rs` to resolve and run the underlying fmt/lint commands.
 
 ### TypeScript Side
 
 No new resolver needed — `vp check` reuses existing `resolve-lint.ts` and `resolve-fmt.ts`.
 
-### Key Files to Modify
+### Key Files
 
-1. `crates/vite_global_cli/src/cli.rs` — Add `Check` command variant and routing
-2. `packages/cli/binding/src/cli.rs` — Add check subcommand handling (sequential fmt + lint)
-3. `packages/cli/src/bin.ts` — (if needed for routing)
+1. `crates/vite_global_cli/src/cli.rs` — `Check` command variant and routing
+2. `packages/cli/binding/src/cli.rs` — `SynthesizableSubcommand::Check` definition, delegates to `check` module
+3. `packages/cli/binding/src/check/mod.rs` — Check command orchestration (`execute_check`)
+4. `packages/cli/binding/src/check/analysis.rs` — Output parsing and analysis types
 
 ## CLI Help Output
 
@@ -202,6 +210,7 @@ Options:
       --lint             Run lint check [default: true]
       --type-aware       Enable type-aware linting [default: true]
       --type-check       Enable TypeScript type checking [default: true]
+      --no-error-on-unmatched-pattern  Do not exit with error when no files match
   -h, --help             Print help
 ```
 
@@ -221,8 +230,47 @@ Options:
 With `vp check`, the monorepo template's "ready" script simplifies to:
 
 ```json
-"ready": "vp check && vp run test -r && vp run build -r"
+"ready": "vp check && vp run -r test && vp run -r build"
 ```
+
+## Caching
+
+When `vp check` is used as a package.json script (e.g., `"check": "vp check"`) and executed via `vp run check`, it supports task runner caching like other synthesized commands (`vp build`, `vp lint`, `vp fmt`).
+
+### Configuration
+
+Enable caching in `vite.config.ts`:
+
+```ts
+export default {
+  run: {
+    cache: true,
+  },
+};
+```
+
+With caching enabled, the second `vp run check` replays cached output when inputs haven't changed:
+
+```
+$ vp check ◉ cache hit, replaying
+pass: All 4 files are correctly formatted (105ms, 16 threads)
+pass: Found no warnings or lint errors in 2 files (452ms, 16 threads)
+```
+
+### Cache key
+
+The check command's cache fingerprint includes:
+
+- **Environment variable:** `OXLINT_TSGOLINT_PATH` (affects lint behavior)
+- **Input files:** Auto-tracked via fspy, excluding:
+  - `node_modules/.vite-temp/**` — config compilation cache (read+written by the vp CLI subprocess)
+  - `node_modules/.vite/task-cache/**` — task runner state files that change after each run
+
+These exclusions are defined by `check_cache_inputs()` in `cli.rs`.
+
+### How it differs from `vp fmt` / `vp lint`
+
+When `vp fmt` or `vp lint` appear in task scripts, the command handler resolves them to their underlying binaries (e.g., `node path/to/oxfmt.mjs`). The `vp check` command is different — it runs as a full `vp check` subprocess because it's a composite command that orchestrates both fmt and lint internally. This means the `vp` CLI process itself is tracked by fspy, which is why the `.vite-temp` and `.vite/task-cache` exclusions are necessary.
 
 ## Comparison with Other Tools
 
@@ -252,4 +300,11 @@ packages/cli/snap-tests/check-no-fmt/
   package.json
   steps.json     # { "steps": [{ "command": "vp check --no-fmt" }] }
   snap.txt       # Only lint runs
+
+packages/cli/snap-tests/check-cache-enabled/
+  package.json   # { "scripts": { "check": "vp check" } }
+  vite.config.ts # { run: { cache: true } }
+  steps.json     # Runs vp run check twice, expects cache hit on second run
+  src/index.js
+  snap.txt
 ```

@@ -1,8 +1,12 @@
 {
   "commands": [
-    { "command": "git init", "ignoreOutput": true },
+    {
+      "command": "git init",
+      "ignoreOutput": true
+    },
     "vp migrate --no-hooks --no-interactive # --no-hooks should keep husky/lint-staged and preserve config",
     "cat package.json # prepare script, lint-staged config, check-staged script, and deps should all be preserved",
+    "cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog",
     "test -d .husky && echo '.husky directory exists' || echo 'No .husky directory' # verify no .husky directory"
   ]
 }

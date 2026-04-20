@@ -1,0 +1,10 @@
+> vp run hello#build # first build
+> ls packages/hello/dist # should have the library
+index.cjs
+
+> vp run hello#build 2>&1 | grep -c 'cache hit' || echo 'no cache hit' # cache disabled, no cache hit
+0
+no cache hit
+
+> vp run hello#build 2>&1 | grep 'cache disabled' # should show cache disabled
+~/packages/hello$ vp pack ⊘ cache disabled

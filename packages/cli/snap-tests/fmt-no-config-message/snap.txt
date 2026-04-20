@@ -1,0 +1,16 @@
+> vp fmt 2>&1 # should show 'vp fmt --init' instead of 'oxfmt --init'
+Finished in <variable>ms on 4 files using <variable> threads.
+No config found, using defaults. Please add a config file or try `vp fmt --init` if needed.
+
+> vp fmt --init
+Added 'fmt' to 'vite.config.ts'.
+
+> cat vite.config.ts # should have fmt config
+export default {
+  fmt: {
+    ignorePatterns: [],
+  },
+};
+
+> vp fmt 2>&1 # should no longer show 'No config found' message
+Finished in <variable>ms on 4 files using <variable> threads.

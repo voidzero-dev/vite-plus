@@ -15,27 +15,33 @@ import {
   rewriteImportsInDirectory,
   type DownloadPackageManagerResult,
 } from '../../binding/index.js';
-import { PackageManager, type WorkspaceInfo, type WorkspacePackage } from '../types/index.js';
-import { runCommandSilently } from '../utils/command.js';
+import { PackageManager, type WorkspaceInfo, type WorkspacePackage } from '../types/index.ts';
+import { runCommandSilently } from '../utils/command.ts';
 import {
   BASEURL_TSCONFIG_WARNING,
   VITE_PLUS_NAME,
   VITE_PLUS_OVERRIDE_PACKAGES,
   VITE_PLUS_VERSION,
-} from '../utils/constants.js';
-import { editJsonFile, isJsonFile, readJsonFile } from '../utils/json.js';
-import { detectPackageMetadata } from '../utils/package.js';
-import { displayRelative, rulesDir } from '../utils/path.js';
-import { getSpinner } from '../utils/prompts.js';
-import { hasBaseUrlInTsconfig } from '../utils/tsconfig.js';
-import { editYamlFile, scalarString, type YamlDocument } from '../utils/yaml.js';
+  isForceOverrideMode,
+} from '../utils/constants.ts';
+import { editJsonFile, isJsonFile, readJsonFile } from '../utils/json.ts';
+import { detectPackageMetadata } from '../utils/package.ts';
+import { displayRelative, rulesDir } from '../utils/path.ts';
+import { getSpinner } from '../utils/prompts.ts';
+import {
+  findTsconfigFiles,
+  hasBaseUrlInTsconfig,
+  removeDeprecatedTsconfigFalseOption,
+} from '../utils/tsconfig.ts';
+import type { NpmWorkspaces } from '../utils/workspace.ts';
+import { editYamlFile, scalarString, type YamlDocument } from '../utils/yaml.ts';
 import {
   PRETTIER_CONFIG_FILES,
   PRETTIER_PACKAGE_JSON_CONFIG,
   detectConfigs,
   type ConfigFiles,
-} from './detector.js';
-import { addManualStep, addMigrationWarning, type MigrationReport } from './report.js';
+} from './detector.ts';
+import { addManualStep, addMigrationWarning, type MigrationReport } from './report.ts';
 
 // All known lint-staged config file names.
 // JSON-parseable ones come first so rewriteLintStagedConfigFile can rewrite them.
@@ -72,6 +78,13 @@ const REMOVE_PACKAGES = [
   '@vitest/browser-playwright',
   '@vitest/browser-webdriverio',
 ] as const;
+
+// When a browser provider package is removed, its runtime peer dependency
+// must be preserved in devDependencies so browser tests continue to work.
+const BROWSER_PROVIDER_PEER_DEPS: Record<string, string> = {
+  '@vitest/browser-playwright': 'playwright',
+  '@vitest/browser-webdriverio': 'webdriverio',
+};
 
 function warnMigration(message: string, report?: MigrationReport) {
   addMigrationWarning(report, message);
@@ -130,10 +143,10 @@ export function detectEslintProject(
   if (!fs.existsSync(packageJsonPath)) {
     return { hasDependency: false };
   }
-  const pkg = readJsonFile<{
+  const pkg = readJsonFile(packageJsonPath) as {
     devDependencies?: Record<string, string>;
     dependencies?: Record<string, string>;
-  }>(packageJsonPath);
+  };
   let hasDependency = !!(pkg.devDependencies?.eslint || pkg.dependencies?.eslint);
   const configs = detectConfigs(projectPath);
   let configFile = configs.eslintConfig;
@@ -146,10 +159,10 @@ export function detectEslintProject(
       if (!fs.existsSync(pkgJsonPath)) {
         continue;
       }
-      const wpPkg = readJsonFile<{
+      const wpPkg = readJsonFile(pkgJsonPath) as {
         devDependencies?: Record<string, string>;
         dependencies?: Record<string, string>;
-      }>(pkgJsonPath);
+      };
       if (wpPkg.devDependencies?.eslint || wpPkg.dependencies?.eslint) {
         hasDependency = true;
         break;
@@ -204,7 +217,7 @@ export async function migrateEslintToOxlint(
   packages?: WorkspacePackage[],
   options?: { silent?: boolean; report?: MigrationReport },
 ): Promise<boolean> {
-  const vpBin = process.env.VITE_PLUS_CLI_BIN ?? 'vp';
+  const vpBin = process.env.VP_CLI_BIN ?? 'vp';
   const spinner = options?.silent
     ? {
         start: () => {},
@@ -221,7 +234,10 @@ export async function migrateEslintToOxlint(
 
   // Steps 1-2: Only run @oxlint/migrate if there's an eslint config at root
   if (eslintConfigFile) {
-    const migratePackage = '@oxlint/migrate';
+    // Pin @oxlint/migrate to the bundled oxlint version.
+    // @ts-expect-error — resolved at runtime from dist/ → dist/versions.js
+    const { versions } = await import('../versions.js');
+    const migratePackage = `@oxlint/migrate@${versions.oxlint}`;
 
     // Step 1: Generate .oxlintrc.json from ESLint config
     spinner.start('Migrating ESLint config to Oxlint...');
@@ -388,10 +404,10 @@ export function detectPrettierProject(
   if (!fs.existsSync(packageJsonPath)) {
     return { hasDependency: false };
   }
-  const pkg = readJsonFile<{
+  const pkg = readJsonFile(packageJsonPath) as {
     devDependencies?: Record<string, string>;
     dependencies?: Record<string, string>;
-  }>(packageJsonPath);
+  };
   let hasDependency = !!(pkg.devDependencies?.prettier || pkg.dependencies?.prettier);
   const configs = detectConfigs(projectPath);
   const configFile = configs.prettierConfig;
@@ -403,10 +419,10 @@ export function detectPrettierProject(
       if (!fs.existsSync(pkgJsonPath)) {
         continue;
       }
-      const wpPkg = readJsonFile<{
+      const wpPkg = readJsonFile(pkgJsonPath) as {
         devDependencies?: Record<string, string>;
         dependencies?: Record<string, string>;
-      }>(pkgJsonPath);
+      };
       if (wpPkg.devDependencies?.prettier || wpPkg.dependencies?.prettier) {
         hasDependency = true;
         break;
@@ -459,7 +475,7 @@ export async function migratePrettierToOxfmt(
   packages?: WorkspacePackage[],
   options?: { silent?: boolean; report?: MigrationReport },
 ): Promise<boolean> {
-  const vpBin = process.env.VITE_PLUS_CLI_BIN ?? 'vp';
+  const vpBin = process.env.VP_CLI_BIN ?? 'vp';
   const spinner = options?.silent
     ? {
         start: () => {},
@@ -482,7 +498,7 @@ export async function migratePrettierToOxfmt(
     // so that `vp fmt --migrate=prettier` can read it
     if (prettierConfigFile === PRETTIER_PACKAGE_JSON_CONFIG) {
       const packageJsonPath = path.join(projectPath, 'package.json');
-      const pkg = readJsonFile<{ prettier?: unknown }>(packageJsonPath);
+      const pkg = readJsonFile(packageJsonPath) as { prettier?: unknown };
       if (pkg.prettier) {
         tempPrettierConfig = path.join(projectPath, '.prettierrc.json');
         fs.writeFileSync(tempPrettierConfig, JSON.stringify(pkg.prettier, null, 2));
@@ -538,7 +554,7 @@ export async function migratePrettierToOxfmt(
   const prettierIgnorePath = path.join(projectPath, '.prettierignore');
   if (fs.existsSync(prettierIgnorePath)) {
     warnMigration(
-      `${displayRelative(prettierIgnorePath)} found — Oxfmt uses .oxfmtignore. Please migrate manually.`,
+      `${displayRelative(prettierIgnorePath)} found — Oxfmt supports .prettierignore, but using the \`ignorePatterns\` option is recommended.`,
       options?.report,
     );
   }
@@ -642,6 +658,31 @@ function rewritePrettierLintStagedConfigFiles(projectPath: string, report?: Migr
   rewriteToolLintStagedConfigFiles(projectPath, rewritePrettier, 'prettier', report);
 }
 
+function cleanupDeprecatedTsconfigOptions(
+  projectPath: string,
+  silent = false,
+  report?: MigrationReport,
+): void {
+  const deprecatedOptions = ['esModuleInterop', 'allowSyntheticDefaultImports'];
+  const files = findTsconfigFiles(projectPath);
+  for (const filePath of files) {
+    for (const name of deprecatedOptions) {
+      if (removeDeprecatedTsconfigFalseOption(filePath, name)) {
+        if (report) {
+          report.removedConfigCount++;
+        }
+        if (!silent) {
+          prompts.log.success(`✔ Removed ${name}: false from ${displayRelative(filePath)}`);
+        }
+        warnMigration(
+          `Removed \`"${name}": false\` from ${displayRelative(filePath)} — this option has been deprecated. See https://github.com/oxc-project/tsgolint/issues/351, https://github.com/microsoft/TypeScript/issues/62529`,
+          report,
+        );
+      }
+    }
+  }
+}
+
 /**
  * Rewrite standalone project to add vite-plus dependencies
  * @param projectPath - The path to the project
@@ -660,6 +701,9 @@ export function rewriteStandaloneProject(
 
   const packageManager = workspaceInfo.packageManager;
   let extractedStagedConfig: Record<string, string | string[]> | null = null;
+  let remainingPnpmOverrides: Record<string, string> | undefined;
+  // Determined inside editJsonFile callback to avoid a redundant file read
+  let usePnpmWorkspaceYaml = false;
   editJsonFile<{
     overrides?: Record<string, string>;
     resolutions?: Record<string, string>;
@@ -668,10 +712,10 @@ export function rewriteStandaloneProject(
     scripts?: Record<string, string>;
     pnpm?: {
       overrides?: Record<string, string>;
-      // peerDependencyRules?: {
-      //   allowAny?: string[];
-      //   allowedVersions?: Record<string, string>;
-      // };
+      peerDependencyRules?: {
+        allowAny?: string[];
+        allowedVersions?: Record<string, string>;
+      };
     };
   }>(packageJsonPath, (pkg) => {
     if (packageManager === PackageManager.yarn) {
@@ -679,39 +723,96 @@ export function rewriteStandaloneProject(
         ...pkg.resolutions,
         ...VITE_PLUS_OVERRIDE_PACKAGES,
       };
-    } else if (packageManager === PackageManager.npm) {
+    } else if (packageManager === PackageManager.npm || packageManager === PackageManager.bun) {
       pkg.overrides = {
         ...pkg.overrides,
         ...VITE_PLUS_OVERRIDE_PACKAGES,
       };
     } else if (packageManager === PackageManager.pnpm) {
-      pkg.pnpm = {
-        ...pkg.pnpm,
-        overrides: {
-          ...pkg.pnpm?.overrides,
-          ...VITE_PLUS_OVERRIDE_PACKAGES,
-        },
-      };
+      // If package.json already has a "pnpm" field, keep using it;
+      // otherwise use pnpm-workspace.yaml.
+      usePnpmWorkspaceYaml = !pkg.pnpm;
+      if (usePnpmWorkspaceYaml) {
+        rewritePnpmWorkspaceYaml(projectPath);
+        // In force-override mode, also override vite-plus itself so transitive
+        // deps resolve to the local tgz instead of the published version.
+        if (isForceOverrideMode()) {
+          migratePnpmOverridesToWorkspaceYaml(projectPath, {
+            [VITE_PLUS_NAME]: VITE_PLUS_VERSION,
+          });
+        }
+      }
+      const overrideKeys = Object.keys(VITE_PLUS_OVERRIDE_PACKAGES);
+      if (!usePnpmWorkspaceYaml) {
+        // Project already has pnpm config in package.json -- keep using it.
+        pkg.pnpm = {
+          ...pkg.pnpm,
+          overrides: {
+            ...pkg.pnpm?.overrides,
+            ...VITE_PLUS_OVERRIDE_PACKAGES,
+            ...(isForceOverrideMode() ? { [VITE_PLUS_NAME]: VITE_PLUS_VERSION } : {}),
+          },
+          peerDependencyRules: {
+            ...pkg.pnpm?.peerDependencyRules,
+            allowAny: [
+              ...new Set([...(pkg.pnpm?.peerDependencyRules?.allowAny ?? []), ...overrideKeys]),
+            ],
+            allowedVersions: {
+              ...pkg.pnpm?.peerDependencyRules?.allowedVersions,
+              ...Object.fromEntries(overrideKeys.map((key) => [key, '*'])),
+            },
+          },
+        };
+      } else {
+        remainingPnpmOverrides = cleanupPnpmOverridesForWorkspaceYaml(pkg, overrideKeys);
+      }
+      // remove dependency selectors targeting vite (e.g. "vite-plugin-svgr>vite")
+      for (const key in pkg.pnpm?.overrides) {
+        if (key.includes('>')) {
+          const splits = key.split('>');
+          if (splits[splits.length - 1].trim() === 'vite') {
+            delete pkg.pnpm.overrides[key];
+          }
+        }
+      }
       // remove packages from `resolutions` field if they exist
       // https://pnpm.io/9.x/package_json#resolutions
-      for (const key of [...Object.keys(VITE_PLUS_OVERRIDE_PACKAGES), ...REMOVE_PACKAGES]) {
+      for (const key of [...overrideKeys, ...REMOVE_PACKAGES]) {
         if (pkg.resolutions?.[key]) {
           delete pkg.resolutions[key];
         }
       }
     }
 
-    extractedStagedConfig = rewritePackageJson(pkg, packageManager, false, skipStagedMigration);
+    extractedStagedConfig = rewritePackageJson(
+      pkg,
+      packageManager,
+      usePnpmWorkspaceYaml,
+      skipStagedMigration,
+    );
 
     // ensure vite-plus is in devDependencies
-    if (!pkg.devDependencies?.[VITE_PLUS_NAME]) {
+    if (!pkg.devDependencies?.[VITE_PLUS_NAME] || isForceOverrideMode()) {
+      const version =
+        usePnpmWorkspaceYaml && !VITE_PLUS_VERSION.startsWith('file:')
+          ? 'catalog:'
+          : VITE_PLUS_VERSION;
       pkg.devDependencies = {
         ...pkg.devDependencies,
-        [VITE_PLUS_NAME]: VITE_PLUS_VERSION,
+        [VITE_PLUS_NAME]: version,
       };
     }
     return pkg;
   });
+
+  // Move remaining non-Vite pnpm.overrides to pnpm-workspace.yaml
+  if (remainingPnpmOverrides) {
+    migratePnpmOverridesToWorkspaceYaml(projectPath, remainingPnpmOverrides);
+  }
+
+  if (packageManager === PackageManager.yarn) {
+    rewriteYarnrcYml(projectPath);
+  }
 
   // Merge extracted staged config into vite.config.ts, then remove lint-staged from package.json
   if (extractedStagedConfig) {
@@ -723,8 +824,10 @@ export function rewriteStandaloneProject(
   if (!skipStagedMigration) {
     rewriteLintStagedConfigFile(projectPath, report);
   }
+  cleanupDeprecatedTsconfigOptions(projectPath, silent, report);
   mergeViteConfigFiles(projectPath, silent, report);
   injectLintTypeCheckDefaults(projectPath, silent, report);
+  injectFmtDefaults(projectPath, silent, report);
   mergeTsdownConfigFile(projectPath, silent, report);
   // rewrite imports in all TypeScript/JavaScript files
   rewriteAllImports(projectPath, silent, report);
@@ -747,6 +850,8 @@ export function rewriteMonorepo(
     rewritePnpmWorkspaceYaml(workspaceInfo.rootDir);
   } else if (workspaceInfo.packageManager === PackageManager.yarn) {
     rewriteYarnrcYml(workspaceInfo.rootDir);
+  } else if (workspaceInfo.packageManager === PackageManager.bun) {
+    rewriteBunCatalog(workspaceInfo.rootDir);
   }
   rewriteRootWorkspacePackageJson(
     workspaceInfo.rootDir,
@@ -768,8 +873,10 @@ export function rewriteMonorepo(
   if (!skipStagedMigration) {
     rewriteLintStagedConfigFile(workspaceInfo.rootDir, report);
   }
+  cleanupDeprecatedTsconfigOptions(workspaceInfo.rootDir, silent, report);
   mergeViteConfigFiles(workspaceInfo.rootDir, silent, report);
   injectLintTypeCheckDefaults(workspaceInfo.rootDir, silent, report);
+  injectFmtDefaults(workspaceInfo.rootDir, silent, report);
   mergeTsdownConfigFile(workspaceInfo.rootDir, silent, report);
   // rewrite imports in all TypeScript/JavaScript files
   rewriteAllImports(workspaceInfo.rootDir, silent, report);
@@ -788,6 +895,7 @@ export function rewriteMonorepoProject(
   silent = false,
   report?: MigrationReport,
 ): void {
+  cleanupDeprecatedTsconfigOptions(projectPath, silent, report);
   mergeViteConfigFiles(projectPath, silent, report);
   mergeTsdownConfigFile(projectPath, silent, report);
 
@@ -837,7 +945,7 @@ function rewritePnpmWorkspaceYaml(projectPath: string): void {
       }
       doc.setIn(['overrides', scalarString(key)], scalarString(version));
     }
-    // remove dependency selector from vite, e.g. "vite-plugin-svgr>vite": "npm:rolldown-vite@7.0.12"
+    // remove dependency selector from vite, e.g. "vite-plugin-svgr>vite": "npm:vite@7.0.12"
     const overrides = doc.getIn(['overrides']) as YAMLMap<Scalar<string>, Scalar<string>>;
     for (const item of overrides.items) {
       if (item.key.value.includes('>')) {
@@ -906,6 +1014,102 @@ function rewritePnpmWorkspaceYaml(projectPath: string): void {
 }
 
 /**
+ * Clean up pnpm.overrides and peerDependencyRules from package.json when migrating
+ * to pnpm-workspace.yaml. Returns any remaining non-Vite overrides that need to be
+ * moved to pnpm-workspace.yaml.
+ */
+function cleanupPnpmOverridesForWorkspaceYaml(
+  pkg: {
+    pnpm?: {
+      overrides?: Record<string, string>;
+      peerDependencyRules?: { allowAny?: string[]; allowedVersions?: Record<string, string> };
+    };
+  },
+  overrideKeys: string[],
+): Record<string, string> | undefined {
+  // Remove Vite-managed keys from pnpm.overrides
+  for (const key of [...overrideKeys, ...REMOVE_PACKAGES]) {
+    if (pkg.pnpm?.overrides?.[key]) {
+      delete pkg.pnpm.overrides[key];
+    }
+  }
+  // Remove dependency selectors targeting vite
+  for (const key in pkg.pnpm?.overrides) {
+    if (key.includes('>')) {
+      const splits = key.split('>');
+      if (splits[splits.length - 1].trim() === 'vite') {
+        delete pkg.pnpm.overrides[key];
+      }
+    }
+  }
+  // Collect remaining overrides to move to pnpm-workspace.yaml then delete all
+  // (pnpm ignores workspace-level overrides when pnpm.overrides exists in package.json)
+  let remaining: Record<string, string> | undefined;
+  if (pkg.pnpm?.overrides && Object.keys(pkg.pnpm.overrides).length > 0) {
+    remaining = { ...pkg.pnpm.overrides };
+  }
+  delete pkg.pnpm?.overrides;
+  // Only remove Vite-managed peerDependencyRules entries, preserve custom ones
+  cleanupPeerDependencyRules(pkg.pnpm?.peerDependencyRules, overrideKeys);
+  if (pkg.pnpm?.peerDependencyRules && Object.keys(pkg.pnpm.peerDependencyRules).length === 0) {
+    delete pkg.pnpm.peerDependencyRules;
+  }
+  if (pkg.pnpm && Object.keys(pkg.pnpm).length === 0) {
+    delete pkg.pnpm;
+  }
+  return remaining;
+}
+
+/**
+ * Move remaining non-Vite pnpm.overrides from package.json to pnpm-workspace.yaml.
+ * pnpm ignores workspace-level overrides when pnpm.overrides exists in package.json,
+ * so all overrides must live in pnpm-workspace.yaml.
+ */
+function migratePnpmOverridesToWorkspaceYaml(
+  projectPath: string,
+  overrides: Record<string, string>,
+): void {
+  const pnpmWorkspaceYamlPath = path.join(projectPath, 'pnpm-workspace.yaml');
+  editYamlFile(pnpmWorkspaceYamlPath, (doc) => {
+    for (const [key, value] of Object.entries(overrides)) {
+      // Always overwrite: package.json value was the effective one before migration
+      // (pnpm ignores workspace overrides when pnpm.overrides exists in package.json)
+      doc.setIn(['overrides', scalarString(key)], scalarString(value));
+    }
+  });
+}
+
+/**
+ * Remove only Vite-managed entries from peerDependencyRules, preserving custom ones.
+ */
+function cleanupPeerDependencyRules(
+  peerDependencyRules:
+    | { allowAny?: string[]; allowedVersions?: Record<string, string> }
+    | undefined,
+  overrideKeys: string[],
+): void {
+  if (!peerDependencyRules) {
+    return;
+  }
+  if (Array.isArray(peerDependencyRules.allowAny)) {
+    peerDependencyRules.allowAny = peerDependencyRules.allowAny.filter(
+      (key) => !overrideKeys.includes(key),
+    );
+    if (peerDependencyRules.allowAny.length === 0) {
+      delete peerDependencyRules.allowAny;
+    }
+  }
+  if (peerDependencyRules.allowedVersions) {
+    for (const key of overrideKeys) {
+      delete peerDependencyRules.allowedVersions[key];
+    }
+    if (Object.keys(peerDependencyRules.allowedVersions).length === 0) {
+      delete peerDependencyRules.allowedVersions;
+    }
+  }
+}
+
+/**
  * Rewrite .yarnrc.yml to add vite-plus dependencies
  * @param projectPath - The path to the project
  */
@@ -916,6 +1120,9 @@ function rewriteYarnrcYml(projectPath: string): void {
   }
 
   editYamlFile(yarnrcYmlPath, (doc) => {
+    if (!doc.has('nodeLinker')) {
+      doc.set('nodeLinker', 'node-modules');
+    }
     // catalog
     rewriteCatalog(doc);
   });
@@ -948,6 +1155,61 @@ function rewriteCatalog(doc: YamlDocument): void {
 }
 
 /**
+ * Write catalog entries to root package.json for bun.
+ * Bun stores catalogs in package.json under the `catalog` key,
+ * unlike pnpm which uses pnpm-workspace.yaml.
+ * @see https://bun.sh/docs/pm/catalogs
+ */
+function rewriteBunCatalog(projectPath: string): void {
+  const packageJsonPath = path.join(projectPath, 'package.json');
+  if (!fs.existsSync(packageJsonPath)) {
+    return;
+  }
+
+  editJsonFile<{
+    workspaces?: NpmWorkspaces;
+    catalog?: Record<string, string>;
+    overrides?: Record<string, string>;
+  }>(packageJsonPath, (pkg) => {
+    // Bun supports catalogs in both workspaces.catalog and top-level catalog;
+    // prefer the location the user already chose to avoid moving their config.
+    const workspacesObj =
+      pkg.workspaces && !Array.isArray(pkg.workspaces) ? pkg.workspaces : undefined;
+    const catalog: Record<string, string> = {
+      ...(workspacesObj?.catalog ?? pkg.catalog),
+    };
+
+    for (const [key, value] of Object.entries(VITE_PLUS_OVERRIDE_PACKAGES)) {
+      if (!value.startsWith('file:')) {
+        catalog[key] = value;
+      }
+    }
+    if (!VITE_PLUS_VERSION.startsWith('file:')) {
+      catalog[VITE_PLUS_NAME] = VITE_PLUS_VERSION;
+    }
+
+    for (const name of REMOVE_PACKAGES) {
+      delete catalog[name];
+    }
+
+    if (workspacesObj?.catalog != null) {
+      workspacesObj.catalog = catalog;
+    } else {
+      pkg.catalog = catalog;
+    }
+
+    // bun overrides support catalog: references
+    const overrides: Record<string, string> = { ...pkg.overrides };
+    for (const [key, value] of Object.entries(VITE_PLUS_OVERRIDE_PACKAGES)) {
+      overrides[key] = value.startsWith('file:') ? value : 'catalog:';
+    }
+    pkg.overrides = overrides;
+
+    return pkg;
+  });
+}
+
+/**
  * Rewrite root workspace package.json to add vite-plus dependencies
  * @param projectPath - The path to the project
  */
@@ -961,12 +1223,17 @@ function rewriteRootWorkspacePackageJson(
     return;
   }
 
+  let remainingPnpmOverrides: Record<string, string> | undefined;
   editJsonFile<{
     resolutions?: Record<string, string>;
     overrides?: Record<string, string>;
     devDependencies?: Record<string, string>;
     pnpm?: {
       overrides?: Record<string, string>;
+      peerDependencyRules?: {
+        allowAny?: string[];
+        allowedVersions?: Record<string, string>;
+      };
     };
   }>(packageJsonPath, (pkg) => {
     if (packageManager === PackageManager.yarn) {
@@ -981,20 +1248,31 @@ function rewriteRootWorkspacePackageJson(
         ...pkg.overrides,
         ...VITE_PLUS_OVERRIDE_PACKAGES,
       };
+    } else if (packageManager === PackageManager.bun) {
+      // bun overrides are handled in rewriteBunCatalog() with catalog: references
     } else if (packageManager === PackageManager.pnpm) {
-      // pnpm use overrides field at pnpm-workspace.yaml
-      // so we don't need to set overrides field at package.json
-      // remove packages from `resolutions` field and `pnpm.overrides` field if they exist
-      // https://pnpm.io/9.x/package_json#resolutions
-      for (const key of [...Object.keys(VITE_PLUS_OVERRIDE_PACKAGES), ...REMOVE_PACKAGES]) {
-        if (pkg.pnpm?.overrides?.[key]) {
-          delete pkg.pnpm.overrides[key];
+      const overrideKeys = Object.keys(VITE_PLUS_OVERRIDE_PACKAGES);
+      if (isForceOverrideMode()) {
+        // In force-override mode, keep overrides in package.json pnpm.overrides
+        // because pnpm ignores pnpm-workspace.yaml overrides when pnpm.overrides
+        // exists in package.json (even with unrelated entries like rollup).
+        pkg.pnpm = {
+          ...pkg.pnpm,
+          overrides: {
+            ...pkg.pnpm?.overrides,
+            ...VITE_PLUS_OVERRIDE_PACKAGES,
+            [VITE_PLUS_NAME]: VITE_PLUS_VERSION,
+          },
+        };
+      } else {
+        for (const key of [...overrideKeys, ...REMOVE_PACKAGES]) {
+          if (pkg.resolutions?.[key]) {
+            delete pkg.resolutions[key];
+          }
         }
-        if (pkg.resolutions?.[key]) {
-          delete pkg.resolutions[key];
-        }
+        remainingPnpmOverrides = cleanupPnpmOverridesForWorkspaceYaml(pkg, overrideKeys);
       }
-      // remove dependency selector from vite, e.g. "vite-plugin-svgr>vite": "npm:rolldown-vite@7.0.12"
+      // remove dependency selectors targeting vite (e.g. "vite-plugin-svgr>vite")
       for (const key in pkg.pnpm?.overrides) {
         if (key.includes('>')) {
           const splits = key.split('>');
@@ -1017,6 +1295,11 @@ function rewriteRootWorkspacePackageJson(
     }
     return pkg;
   });
+
+  // Move remaining non-Vite pnpm.overrides to pnpm-workspace.yaml
+  if (remainingPnpmOverrides) {
+    migratePnpmOverridesToWorkspaceYaml(projectPath, remainingPnpmOverrides);
+  }
 
   // rewrite package.json
   rewriteMonorepoProject(projectPath, packageManager, skipStagedMigration);
@@ -1093,13 +1376,26 @@ export function rewritePackageJson(
   }
   // remove packages that are replaced with vite-plus
   for (const name of REMOVE_PACKAGES) {
-    if (pkg.devDependencies?.[name]) {
-      delete pkg.devDependencies[name];
+    const wasInDevDeps = !!pkg.devDependencies?.[name];
+    const wasInDeps = !!pkg.dependencies?.[name];
+    if (wasInDevDeps) {
+      delete pkg.devDependencies![name];
       needVitePlus = true;
     }
-    if (pkg.dependencies?.[name]) {
-      delete pkg.dependencies[name];
+    if (wasInDeps) {
+      delete pkg.dependencies![name];
       needVitePlus = true;
+    }
+    // e.g., removing @vitest/browser-playwright should keep `playwright` in devDeps
+    const peerDep = BROWSER_PROVIDER_PEER_DEPS[name];
+    if (
+      (wasInDevDeps || wasInDeps) &&
+      peerDep &&
+      !pkg.devDependencies?.[peerDep] &&
+      !pkg.dependencies?.[peerDep]
+    ) {
+      pkg.devDependencies ??= {};
+      pkg.devDependencies[peerDep] = '*';
     }
   }
   if (needVitePlus) {
@@ -1110,6 +1406,15 @@ export function rewritePackageJson(
       ...pkg.devDependencies,
       [VITE_PLUS_NAME]: version,
     };
+    // Add vitest to devDependencies when a remaining dependency likely peer-depends
+    // on vitest (e.g., vitest-browser-svelte). Without this, pnpm resolves the real
+    // vitest for peer deps instead of @voidzero-dev/vite-plus-test, causing
+    // third-party type augmentations to target the wrong module.
+    const allDeps = { ...pkg.dependencies, ...pkg.devDependencies };
+    if (!allDeps.vitest && Object.keys(allDeps).some((name) => name.includes('vitest'))) {
+      const ver = VITE_PLUS_OVERRIDE_PACKAGES.vitest;
+      pkg.devDependencies.vitest = supportCatalog && !ver.startsWith('file:') ? 'catalog:' : ver;
+    }
   }
   return extractedStagedConfig;
 }
@@ -1277,7 +1582,7 @@ export function mergeViteConfigFiles(
   if (configs.oxlintConfig) {
     // Inject options.typeAware and options.typeCheck defaults before merging
     const fullOxlintPath = path.join(projectPath, configs.oxlintConfig);
-    const oxlintJson = JSON.parse(fs.readFileSync(fullOxlintPath, 'utf8'));
+    const oxlintJson = readJsonFile(fullOxlintPath, true) as { options?: Record<string, unknown> };
     if (!oxlintJson.options) {
       oxlintJson.options = {};
     }
@@ -1320,6 +1625,21 @@ export function injectLintTypeCheckDefaults(
     'lint',
     '.vite-plus-lint-init.oxlintrc.json',
     JSON.stringify({ options: { typeAware: true, typeCheck: true } }),
+    silent,
+    report,
+  );
+}
+
+export function injectFmtDefaults(
+  projectPath: string,
+  silent = false,
+  report?: MigrationReport,
+): void {
+  injectConfigDefaults(
+    projectPath,
+    'fmt',
+    '.vite-plus-fmt-init.oxfmtrc.json',
+    JSON.stringify({}),
     silent,
     report,
   );
@@ -1394,7 +1714,7 @@ function mergeAndRemoveJsonConfig(
  * Merge a staged config object into vite.config.ts as `staged: { ... }`.
  * Writes the config to a temp JSON file, calls mergeJsonConfig NAPI, then cleans up.
  */
-function mergeStagedConfigToViteConfig(
+export function mergeStagedConfigToViteConfig(
   projectPath: string,
   stagedConfig: Record<string, string | string[]>,
   silent = false,
@@ -1440,7 +1760,7 @@ function mergeStagedConfigToViteConfig(
 /**
  * Check if vite.config.ts already has a `staged` config key.
  */
-function hasStagedConfigInViteConfig(projectPath: string): boolean {
+export function hasStagedConfigInViteConfig(projectPath: string): boolean {
   const configs = detectConfigs(projectPath);
   if (!configs.viteConfig) {
     return false;
@@ -1495,18 +1815,34 @@ function rewriteAllImports(projectPath: string, silent = false, report?: Migrati
 /**
  * Check if the project has an unsupported husky version (<9.0.0).
  * Uses `semver.coerce` to handle ranges like `^8.0.0` → `8.0.0`.
- * Accepts pre-loaded deps to avoid re-reading package.json when called
- * from contexts that already parsed it.
+ * When the specifier is not coercible (e.g. `"latest"`), falls back to
+ * the installed version in node_modules via `detectPackageMetadata`.
+ * Returns a reason string if hooks migration should be skipped, or null
+ * if husky is absent or compatible.
  */
 function checkUnsupportedHuskyVersion(
+  projectPath: string,
   deps: Record<string, string> | undefined,
   prodDeps: Record<string, string> | undefined,
-): boolean {
+): string | null {
   const huskyVersion = deps?.husky ?? prodDeps?.husky;
   if (!huskyVersion) {
-    return false;
+    return null;
   }
-  return semver.satisfies(semver.coerce(huskyVersion) ?? '0.0.0', '<9.0.0');
+  let coerced = semver.coerce(huskyVersion);
+  if (coerced == null) {
+    const installed = detectPackageMetadata(projectPath, 'husky');
+    if (installed) {
+      coerced = semver.coerce(installed.version);
+    }
+    if (coerced == null) {
+      return `Could not determine husky version from "${huskyVersion}" — please specify a semver-compatible version (e.g., "^9.0.0") and re-run migration.`;
+    }
+  }
+  if (semver.satisfies(coerced, '<9.0.0')) {
+    return 'Detected husky <9.0.0 — please upgrade to husky v9+ first, then re-run migration.';
+  }
+  return null;
 }
 
 const OTHER_HOOK_TOOLS = ['simple-git-hooks', 'lefthook', 'yorkie'] as const;
@@ -1581,16 +1917,16 @@ export function installGitHooks(
 export function getOldHooksDir(rootDir: string): string | undefined {
   const packageJsonPath = path.join(rootDir, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
-    return;
+    return undefined;
   }
-  const pkg = readJsonFile<{ scripts?: { prepare?: string } }>(packageJsonPath);
+  const pkg = readJsonFile(packageJsonPath) as { scripts?: { prepare?: string } };
   if (!pkg.scripts?.prepare) {
-    return;
+    return undefined;
   }
   const prepare = collapseHuskyInstall(pkg.scripts.prepare);
   const match = prepare.match(/\bhusky(?:\s+([\w./-]+))?/);
   if (!match) {
-    return;
+    return undefined;
   }
   return match[1] ?? '.husky';
 }
@@ -1620,8 +1956,9 @@ export function preflightGitHooksSetup(projectPath: string): string | null {
       return `Detected ${tool} — skipping git hooks setup. Please configure git hooks manually.`;
     }
   }
-  if (checkUnsupportedHuskyVersion(deps, prodDeps)) {
-    return 'Detected husky <9.0.0 — please upgrade to husky v9+ first, then re-run migration.';
+  const huskyReason = checkUnsupportedHuskyVersion(projectPath, deps, prodDeps);
+  if (huskyReason) {
+    return huskyReason;
   }
   if (hasUnsupportedLintStagedConfig(projectPath)) {
     return 'Unsupported lint-staged config format — skipping git hooks setup. Please configure git hooks manually.';
@@ -1686,10 +2023,10 @@ export function setupGitHooks(
   const hasStandaloneConfig = hasStandaloneLintStagedConfig(projectPath);
   if (!stagedMerged && !hasStandaloneConfig) {
     // Use lint-staged config from package.json if available, otherwise use default
-    const pkgData = readJsonFile<{ 'lint-staged'?: Record<string, string | string[]> }>(
-      packageJsonPath,
-    );
-    const stagedConfig = pkgData?.['lint-staged'] ?? { '*': 'vp check --fix' };
+    const pkgData = readJsonFile(packageJsonPath) as {
+      'lint-staged'?: Record<string, string | string[]>;
+    };
+    const stagedConfig = pkgData?.['lint-staged'] ?? DEFAULT_STAGED_CONFIG;
     const updated = rewriteScripts(JSON.stringify(stagedConfig), readRulesYaml());
     const finalConfig: Record<string, string | string[]> = updated
       ? JSON.parse(updated)
@@ -1753,7 +2090,7 @@ export function setupGitHooks(
     }
   }
 
-  const vpBin = process.env.VITE_PLUS_CLI_BIN ?? 'vp';
+  const vpBin = process.env.VP_CLI_BIN ?? 'vp';
 
   // Install git hooks via vp config (--hooks-only to skip agent setup, handled by migration)
   const configArgs = isCustomDir
@@ -1822,6 +2159,20 @@ const STALE_LINT_STAGED_PATTERNS = [
   /^((?:[A-Z_][A-Z0-9_]*(?:=\S*)?\s+)*)lint-staged\b/,
 ];
 
+const DEFAULT_STAGED_CONFIG: Record<string, string> = { '*': 'vp check --fix' };
+
+/**
+ * Ensure the pre-commit hook exists with `vp staged`, and that
+ * vite.config.ts contains a `staged` block (using the default config
+ * if none is present). Called by `vp config` after hook installation.
+ */
+export function ensurePreCommitHook(projectPath: string, dir = '.vite-hooks'): void {
+  if (!hasStagedConfigInViteConfig(projectPath)) {
+    mergeStagedConfigToViteConfig(projectPath, DEFAULT_STAGED_CONFIG, true);
+  }
+  createPreCommitHook(projectPath, dir);
+}
+
 export function createPreCommitHook(projectPath: string, dir = '.vite-hooks'): void {
   const huskyDir = path.join(projectPath, dir);
   fs.mkdirSync(huskyDir, { recursive: true });
@@ -1880,7 +2231,7 @@ export function createPreCommitHook(projectPath: string, dir = '.vite-hooks'): v
 export function rewritePrepareScript(rootDir: string): string | undefined {
   const packageJsonPath = path.join(rootDir, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
-    return;
+    return undefined;
   }
 
   let oldDir: string | undefined;
@@ -1930,4 +2281,150 @@ function setPackageManager(
     }
     return pkg;
   });
+}
+
+export type NodeVersionManagerDetection =
+  | { file: '.nvmrc'; voltaPresent?: true }
+  | { file: 'package.json'; voltaNodeVersion: string };
+
+/**
+ * Detect a .nvmrc file in the project directory.
+ * If not found, check for a Volta node version in package.json.
+ * If either is found, return the relevant info for migration.
+ * Returns undefined if not found or .node-version already exists.
+ */
+export function detectNodeVersionManagerFile(
+  projectPath: string,
+): NodeVersionManagerDetection | undefined {
+  // already has .node-version — skip detection to avoid false positives and preserve existing file
+  if (fs.existsSync(path.join(projectPath, '.node-version'))) {
+    return undefined;
+  }
+
+  const configs = detectConfigs(projectPath);
+
+  // .nvmrc takes priority over volta.node when both are present.
+  // voltaPresent is carried through so the migration step can remind the user
+  // to remove the now-redundant volta field from package.json.
+  if (configs.nvmrcFile) {
+    return configs.voltaNode ? { file: '.nvmrc', voltaPresent: true } : { file: '.nvmrc' };
+  }
+
+  if (configs.voltaNode) {
+    return { file: 'package.json', voltaNodeVersion: configs.voltaNode };
+  }
+
+  return undefined;
+}
+
+/**
+ * Parse a version alias from a .nvmrc file into a .node-version compatible string.
+ * Accepts the first line of .nvmrc (pre-trimmed).
+ * Returns null for unsupported aliases like "system", "default", "iojs".
+ */
+export function parseNvmrcVersion(alias: string): string | null {
+  const version = alias.trim();
+
+  if (!version) {
+    return null;
+  }
+
+  // "node" and "stable" mean "latest stable release" which maps closely to lts/*.
+  // Starting from Node 27, all releases will be LTS, so the gap is shrinking.
+  // We map these to lts/* and log the conversion so users are aware.
+  if (version === 'node' || version === 'stable') {
+    return 'lts/*';
+  }
+
+  // "iojs", "system", and "default" have no meaningful equivalent and cannot be auto-migrated.
+  if (version === 'iojs' || version === 'system' || version === 'default') {
+    return null;
+  }
+
+  // LTS aliases (lts/*, lts/iron, etc.) pass through as-is
+  if (version.startsWith('lts/')) {
+    return version;
+  }
+
+  // Strip optional 'v' prefix, then validate as a semver version or range
+  const normalized = version.startsWith('v') ? version.slice(1) : version;
+  if (!normalized || !semver.validRange(normalized)) {
+    return null;
+  }
+  return normalized;
+}
+
+/**
+ * Migrate .nvmrc or Volta node version from package.json to .node-version.
+ * - For .nvmrc: the source file is removed after migration.
+ * - For package.json (Volta): the volta field is left as-is; removal is left to the user's discretion.
+ * Returns true on success, false if migration was skipped or failed.
+ */
+export function migrateNodeVersionManagerFile(
+  projectPath: string,
+  detection: NodeVersionManagerDetection,
+  report?: MigrationReport,
+): boolean {
+  const nodeVersionPath = path.join(projectPath, '.node-version');
+
+  // Volta: node version was already extracted during detection — no package.json re-read needed
+  if (detection.file === 'package.json') {
+    const { voltaNodeVersion } = detection;
+
+    // Normalize Volta's "lts" alias to the .node-version compatible form
+    const resolvedVersion = voltaNodeVersion === 'lts' ? 'lts/*' : voltaNodeVersion;
+
+    if (!semver.valid(resolvedVersion) && resolvedVersion !== 'lts/*') {
+      warnMigration(
+        `package.json volta.node "${voltaNodeVersion}" is not an exact version. Pin an exact version (e.g. ${voltaNodeVersion}.0 or run \`volta pin node@${voltaNodeVersion}\`) then re-run migration.`,
+        report,
+      );
+      return false;
+    }
+
+    fs.writeFileSync(nodeVersionPath, `${resolvedVersion}\n`);
+    if (report) {
+      report.manualSteps.push('Remove the "volta" field from package.json');
+      report.nodeVersionFileMigrated = true;
+    } else {
+      prompts.log.info('You can now remove the "volta" field from package.json manually.');
+    }
+    return true;
+  }
+
+  // .nvmrc: parse version alias and write to .node-version
+  const sourcePath = path.join(projectPath, '.nvmrc');
+  const content = fs.readFileSync(sourcePath, 'utf8');
+  const originalAlias = content.split('\n')[0]?.trim() ?? '';
+  const version = parseNvmrcVersion(originalAlias);
+
+  if (!version) {
+    warnMigration(
+      '.nvmrc contains an unsupported version alias. Create .node-version manually with your desired Node.js version.',
+      report,
+    );
+    return false;
+  }
+
+  // TODO: remove this log once Node 27+ makes all releases LTS, at which point
+  // "node"/"stable" and "lts/*" will be effectively equivalent.
+  if (version === 'lts/*' && (originalAlias === 'node' || originalAlias === 'stable')) {
+    prompts.log.info(
+      `"${originalAlias}" in .nvmrc is not a specific version; automatically mapping to "lts/*"`,
+    );
+  }
+
+  fs.writeFileSync(nodeVersionPath, `${version}\n`);
+  fs.unlinkSync(sourcePath);
+
+  if (report) {
+    report.nodeVersionFileMigrated = true;
+    // Both .nvmrc and volta were present; .nvmrc was migrated but volta still lingers.
+    if (detection.voltaPresent) {
+      report.manualSteps.push('Remove the "volta" field from package.json');
+    }
+  } else if (detection.voltaPresent) {
+    prompts.log.info('You can now remove the "volta" field from package.json manually.');
+  }
+  return true;
 }

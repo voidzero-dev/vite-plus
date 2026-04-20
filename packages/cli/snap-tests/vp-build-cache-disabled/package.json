@@ -1,0 +1,8 @@
+{
+  "name": "vp-build-cache-disabled",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "packageManager": "pnpm@10.32.1"
+}

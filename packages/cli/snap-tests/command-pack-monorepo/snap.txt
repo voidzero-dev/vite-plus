@@ -1,24 +1,41 @@
-> vp run hello#build # should build the library
+> vp run hello#build # should build the library from root
 > ls packages/hello/dist # should have the library
 index.cjs
 
-> vp run hello#build 2>&1 | grep 'cache hit' # should hit cache
-~/packages/hello$ vp pack ✓ cache hit, replaying
+> vp run hello#build 2>&1 | grep 'cache hit' # should hit cache from root
+~/packages/hello$ vp pack ◉ cache hit, replaying
 vp run: cache hit, <variable>ms saved.
 
-> vp run array-config#build # should build the library supports array config
+> cd packages/hello && vp run build 2>&1 | grep 'cache hit' # should hit cache from sub dir
+~/packages/hello$ vp pack ◉ cache hit, replaying
+vp run: cache hit, <variable>ms saved.
+
+> cd packages/hello && vp pack 2>&1 # direct vp pack should not be cached
+> cd packages/hello && vp pack 2>&1 | grep -c 'cache' || echo 'no cache' # direct vp pack has no cache
+0
+no cache
+
+> echo 'export function hello() { console.log("changed"); }' > packages/hello/src/hello.ts
+> vp run hello#build 2>&1 | grep 'cache miss' # should miss cache after source change
+~/packages/hello$ vp pack ○ cache miss: 'packages/hello/src/hello.ts' modified, executing
+
+> cd packages/array-config && vp run build # should build the library from sub dir
 > ls packages/array-config/dist # should have the library
 index.d.mts
 index.mjs
 
-> vp run array-config#build 2>&1 | grep 'cache hit' # should hit cache
-~/packages/array-config$ vp pack ✓ cache hit, replaying
+> cd packages/array-config && vp run build 2>&1 | grep 'cache hit' # should hit cache from sub dir
+~/packages/array-config$ vp pack ◉ cache hit, replaying
 vp run: cache hit, <variable>ms saved.
 
-> vp run default-config#build # should build the library supports default config
+> vp run array-config#build 2>&1 | grep 'cache hit' # should hit cache from root after sub dir build
+~/packages/array-config$ vp pack ◉ cache hit, replaying
+vp run: cache hit, <variable>ms saved.
+
+> vp run default-config#build # should build the library from root
 > ls packages/default-config/dist # should have the library
 index.mjs
 
-> vp run default-config#build 2>&1 | grep 'cache hit' # should hit cache
-~/packages/default-config$ vp pack ✓ cache hit, replaying
+> cd packages/default-config && vp run build 2>&1 | grep 'cache hit' # should hit cache from sub dir
+~/packages/default-config$ vp pack ◉ cache hit, replaying
 vp run: cache hit, <variable>ms saved.

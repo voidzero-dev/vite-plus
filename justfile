@@ -16,11 +16,29 @@ _clean_dist:
 _clean_dist:
   Remove-Item -Path 'packages/*/dist' -Recurse -Force -ErrorAction SilentlyContinue
 
-init: _clean_dist
+init: _clean_dist _fix_symlinks
   cargo binstall watchexec-cli cargo-insta typos-cli cargo-shear dprint taplo-cli -y
   node packages/tools/src/index.ts sync-remote
   pnpm install
   pnpm -C docs install
+
+[unix]
+_fix_symlinks:
+  #!/usr/bin/env bash
+  if [ "$(git config --get core.symlinks)" != "true" ]; then \
+    echo "Enabling core.symlinks and re-checking out symlinks..."; \
+    git config core.symlinks true; \
+    git ls-files -s | grep '^120000' | cut -f2 | while read -r f; do git checkout -- "$f"; done; \
+  fi
+
+[windows]
+_fix_symlinks:
+  $symlinks = git config --get core.symlinks; \
+  if ($symlinks -ne 'true') { \
+    Write-Host 'Enabling core.symlinks and re-checking out symlinks...'; \
+    git config core.symlinks true; \
+    git ls-files -s | Where-Object { $_ -match '^120000' } | ForEach-Object { ($_ -split "`t", 2)[1] } | ForEach-Object { git checkout -- $_ }; \
+  }
 
 build:
   pnpm install

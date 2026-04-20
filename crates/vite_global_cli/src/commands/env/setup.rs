@@ -12,18 +12,18 @@
 //! On Windows:
 //! - bin/vp.exe, bin/node.exe, bin/npm.exe, bin/npx.exe are trampoline executables
 //! - Each trampoline detects its tool name from its own filename and spawns
-//!   current\bin\vp.exe with VITE_PLUS_SHIM_TOOL env var set
+//!   current\bin\vp.exe with VP_SHIM_TOOL env var set
 //! - This avoids the "Terminate batch job (Y/N)?" prompt from .cmd wrappers
 
 use std::process::ExitStatus;
 
 use owo_colors::OwoColorize;
 
-use super::config::{get_bin_dir, get_vite_plus_home};
+use super::config::{get_bin_dir, get_vp_home};
 use crate::{error::Error, help};
 
-/// Tools to create shims for (node, npm, npx, vpx)
-const SHIM_TOOLS: &[&str] = &["node", "npm", "npx", "vpx"];
+/// Tools to create shims for (node, npm, npx, vpx, vpr)
+pub(crate) const SHIM_TOOLS: &[&str] = &["node", "npm", "npx", "vpx", "vpr"];
 
 fn accent_command(command: &str) -> String {
     if help::should_style_help() {
@@ -35,10 +35,13 @@ fn accent_command(command: &str) -> String {
 
 /// Execute the setup command.
 pub async fn execute(refresh: bool, env_only: bool) -> Result<ExitStatus, Error> {
-    let vite_plus_home = get_vite_plus_home()?;
+    let vite_plus_home = get_vp_home()?;
 
     // Ensure home directory exists (env files are written here)
     tokio::fs::create_dir_all(&vite_plus_home).await?;
+
+    // TODO: remove this cleanup logic before the beta release
+    cleanup_legacy_completion_dir(&vite_plus_home).await;
 
     // Create env files with PATH guard (prevents duplicate PATH entries)
     create_env_files(&vite_plus_home).await?;
@@ -76,6 +79,13 @@ pub async fn execute(refresh: bool, env_only: bool) -> Result<ExitStatus, Error>
             created.push(*tool);
         } else {
             skipped.push(*tool);
+        }
+    }
+
+    #[cfg(windows)]
+    if refresh {
+        if let Err(e) = refresh_package_shims(&bin_dir).await {
+            tracing::warn!("Failed to refresh package shims: {}", e);
         }
     }
 
@@ -189,11 +199,8 @@ async fn create_shim(
         if !refresh {
             return Ok(false);
         }
-        // Remove existing shim for refresh.
-        // On Windows, .exe files may be locked (by antivirus, indexer, or
-        // still-running processes), so rename to .old first instead of deleting.
         #[cfg(windows)]
-        rename_to_old(&shim_path).await;
+        remove_or_rename_to_old(&shim_path).await;
         #[cfg(not(windows))]
         {
             tokio::fs::remove_file(&shim_path).await?;
@@ -248,7 +255,7 @@ async fn create_unix_shim(
 ///
 /// Each tool gets a copy of the trampoline binary renamed to `<tool>.exe`.
 /// The trampoline detects its tool name from its own filename and spawns
-/// vp.exe with `VITE_PLUS_SHIM_TOOL` set, avoiding the "Terminate batch job?"
+/// vp.exe with `VP_SHIM_TOOL` set, avoiding the "Terminate batch job?"
 /// prompt that `.cmd` wrappers cause on Ctrl+C.
 ///
 /// See: <https://github.com/voidzero-dev/vite-plus/issues/835>
@@ -270,14 +277,54 @@ async fn create_windows_shim(
     Ok(())
 }
 
+/// Refresh trampoline `.exe` files for package shims installed via `vp install -g`.
+///
+/// Discovers all package binaries tracked by BinConfig with `source: Vp`
+/// and replaces their `.exe` with the current trampoline.
+#[cfg(windows)]
+async fn refresh_package_shims(bin_dir: &vite_path::AbsolutePath) -> Result<(), Error> {
+    use super::bin_config::BinConfig;
+
+    let package_bins = BinConfig::find_all_vp_source().await?;
+
+    if package_bins.is_empty() {
+        return Ok(());
+    }
+
+    let trampoline_src = get_trampoline_path()?;
+
+    for bin_name in &package_bins {
+        // Core shims (SHIM_TOOLS + vp) are already refreshed by the main loop.
+        if bin_name == "vp" || SHIM_TOOLS.contains(&bin_name.as_str()) {
+            continue;
+        }
+
+        let shim_path = bin_dir.join(format!("{bin_name}.exe"));
+
+        remove_or_rename_to_old(&shim_path).await;
+
+        if let Err(e) = tokio::fs::copy(trampoline_src.as_path(), &shim_path).await {
+            tracing::warn!("Failed to refresh package shim {}: {}", bin_name, e);
+            continue;
+        }
+
+        // Remove legacy .cmd/shell wrappers that could shadow the .exe in Git Bash.
+        cleanup_legacy_windows_shim(bin_dir, bin_name).await;
+
+        tracing::debug!("Refreshed package trampoline shim {:?}", shim_path);
+    }
+
+    Ok(())
+}
+
 /// Get the path to the trampoline template binary (vp-shim.exe).
 ///
 /// The trampoline binary is distributed alongside vp.exe in the same directory.
-/// In tests, `VITE_PLUS_TRAMPOLINE_PATH` can override the resolved path.
+/// In tests, `VP_TRAMPOLINE_PATH` can override the resolved path.
 #[cfg(windows)]
 pub(crate) fn get_trampoline_path() -> Result<vite_path::AbsolutePathBuf, Error> {
     // Allow tests to override the trampoline path
-    if let Ok(override_path) = std::env::var(vite_shared::env_vars::VITE_PLUS_TRAMPOLINE_PATH) {
+    if let Ok(override_path) = std::env::var(vite_shared::env_vars::VP_TRAMPOLINE_PATH) {
         let path = std::path::PathBuf::from(override_path);
         if path.exists() {
             return vite_path::AbsolutePathBuf::new(path)
@@ -304,6 +351,22 @@ pub(crate) fn get_trampoline_path() -> Result<vite_path::AbsolutePathBuf, Error>
 
     vite_path::AbsolutePathBuf::new(trampoline)
         .ok_or_else(|| Error::ConfigError("Invalid trampoline path".into()))
+}
+
+/// Try to delete an `.exe` file; if deletion fails (e.g., file is locked by a
+/// running process), fall back to renaming it to `.old`.
+///
+/// This avoids accumulating `.old` files when the exe is not in use.
+#[cfg(windows)]
+pub(crate) async fn remove_or_rename_to_old(path: &vite_path::AbsolutePath) {
+    match tokio::fs::remove_file(path).await {
+        Ok(()) => return,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return,
+        Err(e) => {
+            tracing::debug!("remove_file failed ({}), attempting rename", e);
+        }
+    }
+    rename_to_old(path).await;
 }
 
 /// Rename an existing `.exe` to a timestamped `.old` file instead of deleting.
@@ -369,11 +432,23 @@ pub(crate) async fn cleanup_legacy_windows_shim(bin_dir: &vite_path::AbsolutePat
     }
 }
 
+/// Remove `~/.vite-plus/completion` directory
+///
+/// In older versions, static completion scripts were generated in `~/.vite-plus/completion/`.
+/// This is no longer needed with dynamic completion support.
+async fn cleanup_legacy_completion_dir(vite_plus_home: &vite_path::AbsolutePath) {
+    let completion_dir = vite_plus_home.join("completion");
+    if tokio::fs::remove_dir_all(&completion_dir).await.is_ok() {
+        tracing::debug!("Removed legacy completion directory: {:?}", completion_dir);
+    }
+}
+
 /// Create env files with PATH guard (prevents duplicate PATH entries).
 ///
 /// Creates:
 /// - `~/.vite-plus/env` (POSIX shell — bash/zsh) with `vp()` wrapper function
 /// - `~/.vite-plus/env.fish` (fish shell) with `vp` wrapper function
+/// - `~/.vite-plus/env.nu` (Nushell) with `vp env use` wrapper function
 /// - `~/.vite-plus/env.ps1` (PowerShell) with PATH setup + `vp` function
 /// - `~/.vite-plus/bin/vp-use.cmd` (cmd.exe wrapper for `vp env use`)
 async fn create_env_files(vite_plus_home: &vite_path::AbsolutePath) -> Result<(), Error> {
@@ -381,20 +456,27 @@ async fn create_env_files(vite_plus_home: &vite_path::AbsolutePath) -> Result<()
 
     // Use $HOME-relative path if install dir is under HOME (like rustup's ~/.cargo/env)
     // This makes the env file portable across sessions where HOME may differ
-    let bin_path_ref = if let Some(home_dir) = vite_shared::EnvConfig::get().user_home {
-        if let Ok(suffix) = bin_path.as_path().strip_prefix(&home_dir) {
-            format!("$HOME/{}", suffix.display())
-        } else {
-            bin_path.as_path().display().to_string()
-        }
-    } else {
-        bin_path.as_path().display().to_string()
+    let home_dir = vite_shared::EnvConfig::get().user_home;
+    let to_ref = |path: &vite_path::AbsolutePath| -> String {
+        home_dir
+            .as_ref()
+            .and_then(|h| path.as_path().strip_prefix(h).ok())
+            .map(|s| {
+                // Normalize to forward slashes for $HOME/... paths (POSIX-style)
+                format!("$HOME/{}", s.display().to_string().replace('\\', "/"))
+            })
+            .unwrap_or_else(|| path.as_path().display().to_string())
     };
+    let bin_path_ref = to_ref(&bin_path);
+    // Nushell requires `~` instead of `$HOME` in string literals — `$HOME` is not expanded
+    // at parse time, so PATH entries would contain a literal "$HOME/..." segment.
+    let bin_path_ref_nu = bin_path_ref.replace("$HOME/", "~/");
 
     // POSIX env file (bash/zsh)
     // When sourced multiple times, removes existing entry and re-prepends to front
     // Uses parameter expansion to split PATH around the bin entry in O(1) operations
     // Includes vp() shell function wrapper for `vp env use` (evals stdout)
+    // Includes shell completion support
     let env_content = r#"#!/bin/sh
 # Vite+ environment setup (https://viteplus.dev)
 __vp_bin="__VP_BIN__"
@@ -415,16 +497,32 @@ esac
 unset __vp_bin
 
 # Shell function wrapper: intercepts `vp env use` to eval its stdout,
-# which sets/unsets VITE_PLUS_NODE_VERSION in the current shell session.
+# which sets/unsets VP_NODE_VERSION in the current shell session.
 vp() {
     if [ "$1" = "env" ] && [ "$2" = "use" ]; then
         case " $* " in *" -h "*|*" --help "*) command vp "$@"; return; esac
-        __vp_out="$(VITE_PLUS_ENV_USE_EVAL_ENABLE=1 command vp "$@")" || return $?
+        __vp_out="$(VP_ENV_USE_EVAL_ENABLE=1 command vp "$@")" || return $?
         eval "$__vp_out"
     else
         command vp "$@"
     fi
 }
+
+# Dynamic shell completion for bash/zsh
+if [ -n "$BASH_VERSION" ] && type complete >/dev/null 2>&1; then
+    eval "$(VP_COMPLETE=bash command vp)"
+elif [ -n "$ZSH_VERSION" ] && type compdef >/dev/null 2>&1; then
+    eval "$(VP_COMPLETE=zsh command vp)"
+    eval '
+    _vpr_complete() {
+        local -a orig=("${words[@]}")
+        words=("vp" "run" "${orig[@]:1}")
+        CURRENT=$((CURRENT + 1))
+        ${=_comps[vp]}
+    }
+    compdef _vpr_complete vpr
+    '
+fi
 "#
     .replace("__VP_BIN__", &bin_path_ref);
     let env_file = vite_plus_home.join("env");
@@ -437,23 +535,99 @@ and set -e PATH[$__vp_idx]
 set -gx PATH __VP_BIN__ $PATH
 
 # Shell function wrapper: intercepts `vp env use` to eval its stdout,
-# which sets/unsets VITE_PLUS_NODE_VERSION in the current shell session.
+# which sets/unsets VP_NODE_VERSION in the current shell session.
 function vp
     if test (count $argv) -ge 2; and test "$argv[1]" = "env"; and test "$argv[2]" = "use"
         if contains -- -h $argv; or contains -- --help $argv
             command vp $argv; return
         end
-        set -lx VITE_PLUS_ENV_USE_EVAL_ENABLE 1
-        set -l __vp_out (command vp $argv); or return $status
-        eval $__vp_out
+        set -lx VP_ENV_USE_EVAL_ENABLE 1
+        set -l __vp_out (env FISH_VERSION=$FISH_VERSION command vp $argv); or return $status
+        eval (string join ';' $__vp_out)
     else
         command vp $argv
     end
 end
+
+# Dynamic shell completion for fish
+VP_COMPLETE=fish command vp | source
+
+function __vpr_complete
+    set -l tokens (commandline --current-process --tokenize --cut-at-cursor)
+    set -l current (commandline --current-token)
+    VP_COMPLETE=fish command vp -- vp run $tokens[2..] $current
+end
+complete -c vpr --keep-order --exclusive --arguments "(__vpr_complete)"
 "#
     .replace("__VP_BIN__", &bin_path_ref);
     let env_fish_file = vite_plus_home.join("env.fish");
     tokio::fs::write(&env_fish_file, env_fish_content).await?;
+
+    // Nushell env file with vp wrapper function.
+    // Completions delegate to Fish dynamically (VP_COMPLETE=fish) because clap_complete_nushell
+    // generates multiple rest params (e.g. for `vp install`), which Nushell does not support.
+    let env_nu_content = r#"# Vite+ environment setup (https://viteplus.dev)
+$env.PATH = ($env.PATH | where { $in != "__VP_BIN__" } | prepend "__VP_BIN__")
+
+# Shell function wrapper: intercepts `vp env use` to parse its stdout,
+# which sets/unsets VP_NODE_VERSION in the current shell session.
+def --env --wrapped vp [...args: string@"nu-complete vp"] {
+    if ($args | length) >= 2 and $args.0 == "env" and $args.1 == "use" {
+        if ("-h" in $args) or ("--help" in $args) {
+            ^vp ...$args
+            return
+        }
+        let out = (with-env { VP_ENV_USE_EVAL_ENABLE: "1", VP_SHELL_NU: "1" } {
+            ^vp ...$args
+        })
+        let lines = ($out | lines)
+        let exports = ($lines | where { $in =~ '^\$env\.' } | parse '$env.{key} = "{value}"')
+        let export_keys = ($exports | get key? | default [])
+        # Exclude keys that also appear in exports: when vp emits `hide-env X` then
+        # `$env.X = "v"` (e.g. `vp env use` with no args resolving from .node-version),
+        # the set should win.
+        let unsets = ($lines | where { $in =~ '^hide-env ' } | parse 'hide-env {key}' | get key? | default [] | where { $in not-in $export_keys })
+        if ($exports | is-not-empty) {
+            load-env ($exports | reduce -f {} {|it, acc| $acc | insert $it.key $it.value})
+        }
+        for key in $unsets {
+            if ($key in $env) { hide-env $key }
+        }
+    } else {
+        ^vp ...$args
+    }
+}
+
+# Shell completion for nushell (delegates to fish completions dynamically)
+def "nu-complete vp" [context: string] {
+    let fish_cmd = $"VP_COMPLETE=fish command vp | source; complete '--do-complete=($context)'"
+    fish --command $fish_cmd | from tsv --flexible --noheaders --no-infer | rename value description | update value {|row|
+        let value = $row.value
+        let need_quote = ['\' ',' '[' ']' '(' ')' ' ' '\t' "'" '"' "`"] | any {$in in $value}
+        if ($need_quote and ($value | path exists)) {
+            let expanded_path = if ($value starts-with ~) {$value | path expand --no-symlink} else {$value}
+            $'"($expanded_path | str replace --all "\"" "\\\"")"'
+        } else {$value}
+    }
+}
+# Completion logic for vpr (translates context to 'vp run ...')
+def "nu-complete vpr" [context: string] {
+    let modified_context = ($context | str replace -r '^vpr' 'vp run')
+    let fish_cmd = $"VP_COMPLETE=fish command vp | source; complete '--do-complete=($modified_context)'"
+    fish --command $fish_cmd | from tsv --flexible --noheaders --no-infer | rename value description | update value {|row|
+        let value = $row.value
+        let need_quote = ['\' ',' '[' ']' '(' ')' ' ' '\t' "'" '"' "`"] | any {$in in $value}
+        if ($need_quote and ($value | path exists)) {
+            let expanded_path = if ($value starts-with ~) {$value | path expand --no-symlink} else {$value}
+            $'"($expanded_path | str replace --all "\"" "\\\"")"'
+        } else {$value}
+    }
+}
+export extern "vpr" [...args: string@"nu-complete vpr"]
+"#
+    .replace("__VP_BIN__", &bin_path_ref_nu);
+    let env_nu_file = vite_plus_home.join("env.nu");
+    tokio::fs::write(&env_nu_file, env_nu_content).await?;
 
     // PowerShell env file
     let env_ps1_content = r#"# Vite+ environment setup (https://viteplus.dev)
@@ -463,13 +637,13 @@ if ($env:Path -split ';' -notcontains $__vp_bin) {
 }
 
 # Shell function wrapper: intercepts `vp env use` to eval its stdout,
-# which sets/unsets VITE_PLUS_NODE_VERSION in the current shell session.
+# which sets/unsets VP_NODE_VERSION in the current shell session.
 function vp {
     if ($args.Count -ge 2 -and $args[0] -eq "env" -and $args[1] -eq "use") {
         if ($args -contains "-h" -or $args -contains "--help") {
             & (Join-Path $__vp_bin "vp.exe") @args; return
         }
-        $env:VITE_PLUS_ENV_USE_EVAL_ENABLE = "1"
+        $env:VP_ENV_USE_EVAL_ENABLE = "1"
         $output = & (Join-Path $__vp_bin "vp.exe") @args 2>&1 | ForEach-Object {
             if ($_ -is [System.Management.Automation.ErrorRecord]) {
                 Write-Host $_.Exception.Message
@@ -477,7 +651,7 @@ function vp {
                 $_
             }
         }
-        Remove-Item Env:VITE_PLUS_ENV_USE_EVAL_ENABLE -ErrorAction SilentlyContinue
+        Remove-Item Env:VP_ENV_USE_EVAL_ENABLE -ErrorAction SilentlyContinue
         if ($LASTEXITCODE -eq 0 -and $output) {
             Invoke-Expression ($output -join "`n")
         }
@@ -485,6 +659,32 @@ function vp {
         & (Join-Path $__vp_bin "vp.exe") @args
     }
 }
+
+# Dynamic shell completion for PowerShell
+$env:VP_COMPLETE = "powershell"
+& (Join-Path $__vp_bin "vp.exe") | Out-String | Invoke-Expression
+Remove-Item Env:\VP_COMPLETE -ErrorAction SilentlyContinue
+
+$__vpr_comp = {
+    param($wordToComplete, $commandAst, $cursorPosition)
+    $prev = $env:VP_COMPLETE
+    $env:VP_COMPLETE = "powershell"
+    $commandLine = $commandAst.Extent.Text
+    $args = $commandLine.Substring(0, [math]::Min($cursorPosition, $commandLine.Length))
+    $args = $args -replace '^(vpr\.exe|vpr)\b', 'vp run'
+    if ($wordToComplete -eq "") { $args += " ''" }
+    $results = Invoke-Expression @"
+& (Join-Path $__vp_bin 'vp.exe') -- $args
+"@;
+    if ($prev) { $env:VP_COMPLETE = $prev } else { Remove-Item Env:\VP_COMPLETE }
+    $results | ForEach-Object {
+        $split = $_.Split("`t")
+        $cmd = $split[0];
+        if ($split.Length -eq 2) { $help = $split[1] } else { $help = $split[0] }
+        [System.Management.Automation.CompletionResult]::new($cmd, $cmd, 'ParameterValue', $help)
+    }
+}
+Register-ArgumentCompleter -Native -CommandName vpr -ScriptBlock $__vpr_comp
 "#;
 
     // For PowerShell, use the actual absolute path (not $HOME-relative)
@@ -495,7 +695,7 @@ function vp {
 
     // cmd.exe wrapper for `vp env use` (cmd.exe cannot define shell functions)
     // Users run `vp-use 24` in cmd.exe instead of `vp env use 24`
-    let vp_use_cmd_content = "@echo off\r\nset VITE_PLUS_ENV_USE_EVAL_ENABLE=1\r\nfor /f \"delims=\" %%i in ('%~dp0..\\current\\bin\\vp.exe env use %*') do %%i\r\nset VITE_PLUS_ENV_USE_EVAL_ENABLE=\r\n";
+    let vp_use_cmd_content = "@echo off\r\nset VP_ENV_USE_EVAL_ENABLE=1\r\nfor /f \"delims=\" %%i in ('%~dp0..\\current\\bin\\vp.exe env use %*') do %%i\r\nset VP_ENV_USE_EVAL_ENABLE=\r\n";
     // Only write if bin directory exists (it may not during --env-only)
     if tokio::fs::try_exists(&bin_path).await.unwrap_or(false) {
         let vp_use_cmd_file = bin_path.join("vp-use.cmd");
@@ -512,14 +712,16 @@ fn print_path_instructions(bin_dir: &vite_path::AbsolutePath) {
         .parent()
         .map(|p| p.as_path().display().to_string())
         .unwrap_or_else(|| bin_dir.as_path().display().to_string());
-    let home_path = if let Ok(home_dir) = std::env::var("HOME") {
+    let (home_path, nu_home_path) = if let Ok(home_dir) = std::env::var("HOME") {
         if let Some(suffix) = home_path.strip_prefix(&home_dir) {
-            format!("$HOME{suffix}")
+            // POSIX/Fish use $HOME; Nushell's `source` is a parse-time keyword
+            // that cannot expand $HOME (a runtime env var), so use ~ instead.
+            (format!("$HOME{suffix}"), format!("~{suffix}"))
         } else {
-            home_path
+            (home_path.clone(), home_path)
         }
     } else {
-        home_path
+        (home_path.clone(), home_path)
     };
 
     println!("{}", help::render_heading("Next Steps"));
@@ -530,6 +732,10 @@ fn print_path_instructions(bin_dir: &vite_path::AbsolutePath) {
     println!("  For fish shell, add to ~/.config/fish/config.fish:");
     println!();
     println!("  source \"{home_path}/env.fish\"");
+    println!();
+    println!("  For Nushell, add to ~/.config/nushell/config.nu:");
+    println!();
+    println!("  source \"{nu_home_path}/env.nu\"");
     println!();
     println!("  For PowerShell, add to your $PROFILE:");
     println!();
@@ -584,10 +790,44 @@ mod tests {
 
         let env_path = home.join("env");
         let env_fish_path = home.join("env.fish");
+        let env_nu_path = home.join("env.nu");
         let env_ps1_path = home.join("env.ps1");
         assert!(env_path.as_path().exists(), "env file should be created");
         assert!(env_fish_path.as_path().exists(), "env.fish file should be created");
+        assert!(env_nu_path.as_path().exists(), "env.nu file should be created");
         assert!(env_ps1_path.as_path().exists(), "env.ps1 file should be created");
+    }
+
+    #[tokio::test]
+    async fn test_create_env_files_nu_contains_path_guard() {
+        let temp_dir = TempDir::new().unwrap();
+        let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let _guard = home_guard(temp_dir.path());
+
+        create_env_files(&home).await.unwrap();
+
+        let nu_content = tokio::fs::read_to_string(home.join("env.nu")).await.unwrap();
+        assert!(
+            !nu_content.contains("__VP_BIN__"),
+            "env.nu should not contain __VP_BIN__ placeholder"
+        );
+        assert!(
+            nu_content.contains("~/bin"),
+            "env.nu should reference ~/bin (not $HOME/bin — Nushell does not expand $HOME in string literals)"
+        );
+        assert!(
+            nu_content.contains("VP_ENV_USE_EVAL_ENABLE"),
+            "env.nu should set VP_ENV_USE_EVAL_ENABLE"
+        );
+        assert!(
+            nu_content.contains("VP_COMPLETE=fish"),
+            "env.nu should use dynamic Fish completion delegation"
+        );
+        assert!(
+            nu_content.contains("VP_SHELL_NU"),
+            "env.nu should use VP_SHELL_NU explicit marker instead of inherited NU_VERSION"
+        );
+        assert!(nu_content.contains("load-env"), "env.nu should use load-env to apply exports");
     }
 
     #[tokio::test]
@@ -813,11 +1053,51 @@ mod tests {
         assert!(status.success(), "execute --env-only should succeed");
 
         // Directory should now exist
-        assert!(fresh_home.exists(), "VITE_PLUS_HOME directory should be created");
+        assert!(fresh_home.exists(), "VP_HOME directory should be created");
 
         // Env files should be written
         assert!(fresh_home.join("env").exists(), "env file should be created");
         assert!(fresh_home.join("env.fish").exists(), "env.fish file should be created");
         assert!(fresh_home.join("env.ps1").exists(), "env.ps1 file should be created");
+    }
+
+    #[tokio::test]
+    async fn test_create_env_files_contains_dynamic_completion() {
+        let temp_dir = TempDir::new().unwrap();
+        let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let _guard = home_guard(temp_dir.path());
+
+        create_env_files(&home).await.unwrap();
+
+        let env_content = tokio::fs::read_to_string(home.join("env")).await.unwrap();
+        let fish_content = tokio::fs::read_to_string(home.join("env.fish")).await.unwrap();
+        let ps1_content = tokio::fs::read_to_string(home.join("env.ps1")).await.unwrap();
+
+        assert!(
+            env_content.contains("VP_COMPLETE=bash") && env_content.contains("VP_COMPLETE=zsh"),
+            "env file should contain completion for bash and zsh"
+        );
+        assert!(
+            fish_content.contains("VP_COMPLETE=fish"),
+            "env.fish file should contain completion for fish"
+        );
+        assert!(
+            ps1_content.contains("VP_COMPLETE = \"powershell\""),
+            "env.ps1 file should contain completion for PowerShell"
+        );
+
+        assert!(
+            env_content.contains("compdef _vpr_complete vpr"),
+            "env should have vpr completion for zsh"
+        );
+        assert!(
+            env_content.contains("eval '") && env_content.contains("_vpr_complete() {"),
+            "env should wrap zsh-specific code in eval"
+        );
+        assert!(fish_content.contains("complete -c vpr"), "env.fish should have vpr completion");
+        assert!(
+            ps1_content.contains("Register-ArgumentCompleter -Native -CommandName vpr"),
+            "env.ps1 should have vpr completion"
+        );
     }
 }

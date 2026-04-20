@@ -1,0 +1,19 @@
+> vp pm cache --help # should show help
+VITE+ - The Unified Toolchain for the Web
+
+Usage: vp pm cache <SUBCOMMAND> [-- <PASS_THROUGH_ARGS>...]
+
+Manage package cache
+
+Arguments:
+  <SUBCOMMAND>            Subcommand: dir, path, clean
+  [PASS_THROUGH_ARGS]...  Additional arguments
+
+Options:
+  -h, --help  Print help
+
+Documentation: https://viteplus.dev/guide/install
+
+
+> vp pm cache dir > /dev/null # should show cache directory
+> vp pm cache path > /dev/null # should show cache path (alias for dir)

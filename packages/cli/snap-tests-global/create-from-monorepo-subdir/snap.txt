@@ -19,3 +19,19 @@ Not in scripts/helper/
 > cd scripts/helper && vp create --no-interactive vite:application --directory apps/custom-app # --directory from non-workspace dir
 > test -f apps/custom-app/package.json && echo 'Created at apps/custom-app with --directory' || echo 'NOT at apps/custom-app'
 Created at apps/custom-app with --directory
+
+> mkdir -p apps/dot-test && cd apps/dot-test && vp create --no-interactive vite:application --directory . # --directory . from monorepo subdir
+> test -f apps/dot-test/package.json && echo 'Created at apps/dot-test with --directory .' || echo 'NOT at apps/dot-test'
+Created at apps/dot-test with --directory .
+
+> vp create --no-interactive vite:application --directory . 2>&1 || true # --directory . from monorepo root should fail
+Cannot scaffold into the monorepo root directory. Use --directory to specify a target directory
+
+
+> mkdir -p apps/website/src && cd apps/website/src && vp create --no-interactive vite:application --directory . 2>&1 || true # --directory . inside existing package should fail
+Cannot scaffold inside existing package "website" (apps/website). Use --directory to specify a different location
+
+
+> cd apps/website && vp create --no-interactive vite:application --directory . 2>&1 || true # --directory . at existing package root should fail
+Cannot scaffold inside existing package "website" (apps/website). Use --directory to specify a different location
+

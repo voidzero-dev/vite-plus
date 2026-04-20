@@ -202,3 +202,7 @@ Or, if you are using Yarn:
   "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
 }
 ```
+
+## Sponsors
+
+Thanks to [namespace.so](https://namespace.so) for powering our CI/CD pipelines with fast, free macOS and Linux runners.

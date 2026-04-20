@@ -1,0 +1,40 @@
+> vp migrate --no-interactive # vitest should be added to devDeps when vitest-browser-svelte is present
+VITE+ - The Unified Toolchain for the Web
+
+◇ Migrated . to Vite+<repeat>
+• Node <semver>  pnpm <semver>
+• 2 config updates applied
+
+> cat package.json # vitest should be in devDependencies
+{
+  "name": "migration-vitest-peer-dep",
+  "scripts": {
+    "dev": "vp dev",
+    "build": "vp build",
+    "test": "vp test",
+    "prepare": "vp config"
+  },
+  "devDependencies": {
+    "vite": "catalog:",
+    "vitest-browser-svelte": "^2.1.0",
+    "vite-plus": "catalog:",
+    "vitest": "catalog:"
+  },
+  "packageManager": "pnpm@<semver>"
+}
+
+> cat pnpm-workspace.yaml
+catalog:
+  vite: npm:@voidzero-dev/vite-plus-core@latest
+  vitest: npm:@voidzero-dev/vite-plus-test@latest
+  vite-plus: latest
+overrides:
+  vite: 'catalog:'
+  vitest: 'catalog:'
+peerDependencyRules:
+  allowAny:
+    - vite
+    - vitest
+  allowedVersions:
+    vite: '*'
+    vitest: '*'

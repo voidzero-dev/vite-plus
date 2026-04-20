@@ -36,12 +36,8 @@ export default defineConfig({
   plugins: [react()],
 });
 
-> cat .oxlintrc.json && exit 1 || true # check .oxlintrc.json is removed
-cat: .oxlintrc.json: No such file or directory
-
-> cat .oxfmtrc.json && exit 1 || true # check .oxfmtrc.json is removed
-cat: .oxfmtrc.json: No such file or directory
-
+> test ! -f .oxlintrc.json # check .oxlintrc.json is removed
+> test ! -f .oxfmtrc.json # check .oxfmtrc.json is removed
 > cat package.json # check package.json
 {
   "name": "migration-monorepo-pnpm",
@@ -62,6 +58,7 @@ cat: .oxfmtrc.json: No such file or directory
     "testnpm2": "1.0.0"
   },
   "devDependencies": {
+    "@vitejs/plugin-react": "catalog:",
     "vite": "catalog:",
     "vitest": "catalog:",
     "vite-plus": "catalog:"
@@ -173,5 +170,4 @@ export default defineConfig({
   
 });
 
-> cat packages/only-oxlint/.oxlintrc.json && exit 1 || true # check only-oxlint .oxlintrc.json is removed
-cat: packages/only-oxlint/.oxlintrc.json: No such file or directory
+> test ! -f packages/only-oxlint/.oxlintrc.json # check only-oxlint .oxlintrc.json is removed

@@ -1,0 +1,5 @@
+> vp run check # vp check should have cache disabled without run.cache
+$ vp check ⊘ cache disabled
+pass: All 3 files are correctly formatted (<variable>ms, <variable> threads)
+pass: Found no warnings or lint errors in 1 file (<variable>ms, <variable> threads)
+

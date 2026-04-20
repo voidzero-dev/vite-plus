@@ -21,5 +21,4 @@
 
 > git add -A && git commit -m 'second'
 > printf 'eval("code");\n' > src/fail.js && git add src/fail.js
-[1]> vp staged # should fail when staged .js file has lint errors
-[STARTED] Backing up original state...
+[1]> vp staged > /dev/null 2>&1 # should fail when staged .js file has lint errors

@@ -2,7 +2,7 @@
 
 ## Summary
 
-Add `vp link` (alias: `vp ln`) and `vp unlink` commands that automatically adapt to the detected package manager (pnpm/yarn/npm) for creating and removing symlinks to local packages, making them accessible system-wide or in other locations. This enables local package development and testing workflows.
+Add `vp link` (alias: `vp ln`) and `vp unlink` commands that automatically adapt to the detected package manager (pnpm/yarn/npm/bun) for creating and removing symlinks to local packages, making them accessible system-wide or in other locations. This enables local package development and testing workflows.
 
 ## Motivation
 
@@ -139,11 +139,16 @@ vp unlink -r
 - https://docs.npmjs.com/cli/v11/commands/npm-link
 - npm link creates symlinks between packages
 
-| Vite+ Command   | pnpm              | yarn@1            | yarn@2+           | npm              | Description                                             |
-| --------------- | ----------------- | ----------------- | ----------------- | ---------------- | ------------------------------------------------------- |
-| `vp link`       | `pnpm link`       | `yarn link`       | `yarn link`       | `npm link`       | Register current package or link to local directory     |
-| `vp link <pkg>` | `pnpm link <pkg>` | `yarn link <pkg>` | `yarn link <pkg>` | `npm link <pkg>` | Links package to current project                        |
-| `vp link <dir>` | `pnpm link <dir>` | `yarn link <dir>` | `yarn link <dir>` | `npm link <dir>` | Links package from `<dir>` directory to current project |
+**bun references:**
+
+- https://bun.sh/docs/cli/link
+- bun link creates symlinks for local packages
+
+| Vite+ Command   | pnpm              | yarn@1            | yarn@2+           | npm              | bun              | Description                                             |
+| --------------- | ----------------- | ----------------- | ----------------- | ---------------- | ---------------- | ------------------------------------------------------- |
+| `vp link`       | `pnpm link`       | `yarn link`       | `yarn link`       | `npm link`       | `bun link`       | Register current package or link to local directory     |
+| `vp link <pkg>` | `pnpm link <pkg>` | `yarn link <pkg>` | `yarn link <pkg>` | `npm link <pkg>` | `bun link <pkg>` | Links package to current project                        |
+| `vp link <dir>` | `pnpm link <dir>` | `yarn link <dir>` | `yarn link <dir>` | `npm link <dir>` | `bun link <dir>` | Links package from `<dir>` directory to current project |
 
 #### Unlink Command Mapping
 
@@ -163,11 +168,11 @@ vp unlink -r
 - https://docs.npmjs.com/cli/v11/commands/npm-uninstall
 - npm unlink removes symlinks
 
-| Vite+ Command           | pnpm                      | yarn@1              | yarn@2+             | npm                | Description                        |
-| ----------------------- | ------------------------- | ------------------- | ------------------- | ------------------ | ---------------------------------- |
-| `vp unlink`             | `pnpm unlink`             | `yarn unlink`       | `yarn unlink`       | `npm unlink`       | Unlinks current package            |
-| `vp unlink <pkg>`       | `pnpm unlink <pkg>`       | `yarn unlink <pkg>` | `yarn unlink <pkg>` | `npm unlink <pkg>` | Unlinks specific package           |
-| `vp unlink --recursive` | `pnpm unlink --recursive` | N/A                 | `yarn unlink --all` | N/A                | Unlinks in every workspace package |
+| Vite+ Command           | pnpm                      | yarn@1              | yarn@2+             | npm                | bun          | Description                        |
+| ----------------------- | ------------------------- | ------------------- | ------------------- | ------------------ | ------------ | ---------------------------------- |
+| `vp unlink`             | `pnpm unlink`             | `yarn unlink`       | `yarn unlink`       | `npm unlink`       | `bun unlink` | Unlinks current package            |
+| `vp unlink <pkg>`       | `pnpm unlink <pkg>`       | `yarn unlink <pkg>` | `yarn unlink <pkg>` | `npm unlink <pkg>` | `bun unlink` | Unlinks specific package           |
+| `vp unlink --recursive` | `pnpm unlink --recursive` | N/A                 | `yarn unlink --all` | N/A                | N/A          | Unlinks in every workspace package |
 
 ### Link/Unlink Behavior Differences Across Package Managers
 
@@ -216,6 +221,18 @@ vp unlink -r
 
 - `npm unlink`: Removes global symlink for current package
 - `npm unlink <pkg>`: Removes package from current project
+
+#### bun
+
+**Link behavior:**
+
+- `bun link`: Registers current package as a linkable package
+- `bun link <pkg>`: Links a registered package to current project
+- `--save`: Adds `link:` prefix to package.json dependency entry
+
+**Unlink behavior:**
+
+- `bun unlink`: Unlinks current package
 
 ### Implementation Architecture
 
@@ -740,6 +757,7 @@ $ vp link
 - yarn@4.x
 - npm@10.x
 - npm@11.x
+- bun@1.x [WIP]
 
 ### Unit Tests
 
@@ -992,13 +1010,14 @@ npm install my-lib@latest
 
 ## Package Manager Compatibility
 
-| Feature              | pnpm                    | yarn@1           | yarn@2+           | npm              | Notes            |
-| -------------------- | ----------------------- | ---------------- | ----------------- | ---------------- | ---------------- |
-| Link package/dir     | `link`                  | `link`           | `link`            | `link`           | All supported    |
-| Link with package    | `link <pkg>`            | `link <pkg>`     | `link <pkg>`      | `link <pkg>`     | All supported    |
-| Link local directory | `link <dir>`            | `link <dir>`     | `link <dir>`      | `link <dir>`     | All supported    |
-| Unlink               | `unlink`                | `unlink`         | `unlink`          | `unlink`         | All supported    |
-| Recursive unlink     | ✅ `unlink --recursive` | ❌ Not supported | ✅ `unlink --all` | ❌ Not supported | pnpm and yarn@2+ |
+| Feature              | pnpm                    | yarn@1           | yarn@2+           | npm              | bun              | Notes            |
+| -------------------- | ----------------------- | ---------------- | ----------------- | ---------------- | ---------------- | ---------------- |
+| Link package/dir     | `link`                  | `link`           | `link`            | `link`           | `link`           | All supported    |
+| Link with package    | `link <pkg>`            | `link <pkg>`     | `link <pkg>`      | `link <pkg>`     | `link <pkg>`     | All supported    |
+| Link local directory | `link <dir>`            | `link <dir>`     | `link <dir>`      | `link <dir>`     | `link <dir>`     | All supported    |
+| Save to package.json | N/A                     | N/A              | N/A               | N/A              | `--save`         | bun-specific     |
+| Unlink               | `unlink`                | `unlink`         | `unlink`          | `unlink`         | `unlink`         | All supported    |
+| Recursive unlink     | ✅ `unlink --recursive` | ❌ Not supported | ✅ `unlink --all` | ❌ Not supported | ❌ Not supported | pnpm and yarn@2+ |
 
 ## Future Enhancements
 
@@ -1090,7 +1109,7 @@ vp link --verify
 
 ## Conclusion
 
-This RFC proposes adding `vp link` and `vp unlink` commands to provide a unified interface for local package development across pnpm/yarn/npm. The design:
+This RFC proposes adding `vp link` and `vp unlink` commands to provide a unified interface for local package development across pnpm/yarn/npm/bun. The design:
 
 - ✅ Automatically adapts to detected package manager
 - ✅ Supports both package and local directory linking

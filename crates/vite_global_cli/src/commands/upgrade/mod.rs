@@ -3,19 +3,15 @@
 //! Downloads and installs a new version of the CLI from the npm registry
 //! with SHA-512 integrity verification.
 
-mod install;
-mod integrity;
-mod platform;
-mod registry;
-
 use std::process::ExitStatus;
 
 use owo_colors::OwoColorize;
 use vite_install::request::HttpClient;
 use vite_path::AbsolutePathBuf;
+use vite_setup::{install, integrity, platform, registry};
 use vite_shared::output;
 
-use crate::{commands::env::config::get_vite_plus_home, error::Error};
+use crate::{commands::env::config::get_vp_home, error::Error};
 
 /// Options for the upgrade command.
 pub struct UpgradeOptions {
@@ -35,13 +31,10 @@ pub struct UpgradeOptions {
     pub registry: Option<String>,
 }
 
-/// Maximum number of old versions to keep.
-const MAX_VERSIONS_KEEP: usize = 5;
-
 /// Execute the upgrade command.
 #[allow(clippy::print_stdout, clippy::print_stderr)]
 pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
-    let install_dir = get_vite_plus_home()?;
+    let install_dir = get_vp_home()?;
 
     // Handle --rollback
     if options.rollback {
@@ -154,7 +147,7 @@ async fn install_platform_and_main(
     install::extract_platform_package(platform_data, version_dir).await?;
 
     // Verify binary was extracted
-    let binary_name = if cfg!(windows) { "vp.exe" } else { "vp" };
+    let binary_name = vite_setup::VP_BINARY_NAME;
     let binary_path = version_dir.join("bin").join(binary_name);
     if !tokio::fs::try_exists(&binary_path).await.unwrap_or(false) {
         return Err(Error::Upgrade(
@@ -165,8 +158,8 @@ async fn install_platform_and_main(
     // Generate wrapper package.json that declares vite-plus as a dependency
     install::generate_wrapper_package_json(version_dir, new_version).await?;
 
-    // Install production dependencies (npm installs vite-plus + all transitive deps)
-    install::install_production_deps(version_dir, registry).await?;
+    // Install production dependencies (pnpm installs vite-plus + all transitive deps)
+    install::install_production_deps(version_dir, registry, silent, new_version).await?;
 
     // Save previous version for rollback
     let previous_version = install::save_previous_version(install_dir).await?;
@@ -184,7 +177,8 @@ async fn install_platform_and_main(
     if let Some(ref prev) = previous_version {
         protected.push(prev.as_str());
     }
-    if let Err(e) = install::cleanup_old_versions(install_dir, MAX_VERSIONS_KEEP, &protected).await
+    if let Err(e) =
+        install::cleanup_old_versions(install_dir, vite_setup::MAX_VERSIONS_KEEP, &protected).await
     {
         output::warn(&format!("Old version cleanup failed (non-fatal): {e}"));
     }

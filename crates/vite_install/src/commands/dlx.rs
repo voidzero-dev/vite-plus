@@ -52,6 +52,7 @@ impl PackageManager {
                     self.resolve_yarn_dlx(options, envs)
                 }
             }
+            PackageManagerType::Bun => self.resolve_bun_dlx(options, envs),
         }
     }
 
@@ -186,6 +187,36 @@ impl PackageManager {
 
         let args = build_npx_args(options);
         ResolveCommandResult { bin_path: "npx".into(), args, envs }
+    }
+
+    fn resolve_bun_dlx(
+        &self,
+        options: &DlxCommandOptions,
+        envs: HashMap<String, String>,
+    ) -> ResolveCommandResult {
+        let mut args = Vec::new();
+
+        // Use `bun x` instead of `bunx` for better cross-platform compatibility.
+        // Some installation methods (e.g. mise) don't add bunx to PATH on Windows.
+        args.push("x".into());
+
+        // --packages flags must come before the package spec
+        for pkg in options.packages {
+            args.push("--package".into());
+            args.push(pkg.clone());
+        }
+
+        // Add package spec
+        args.push(options.package_spec.into());
+
+        // Add command arguments
+        args.extend(options.args.iter().cloned());
+
+        if options.shell_mode {
+            output::warn("bun x does not support shell mode (-c)");
+        }
+
+        ResolveCommandResult { bin_path: "bun".into(), args, envs }
     }
 }
 

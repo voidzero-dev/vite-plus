@@ -18,17 +18,27 @@ VITE+ - The Unified Toolchain for the Web
   "devDependencies": {
     "husky": "^9.1.7",
     "lint-staged": "^16.2.6",
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vite-plus": "latest"
-  },
-  "pnpm": {
-    "overrides": {
-      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-      "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
-    }
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
   },
   "packageManager": "pnpm@<semver>"
 }
+
+> cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog
+catalog:
+  vite: npm:@voidzero-dev/vite-plus-core@latest
+  vitest: npm:@voidzero-dev/vite-plus-test@latest
+  vite-plus: latest
+overrides:
+  vite: 'catalog:'
+  vitest: 'catalog:'
+peerDependencyRules:
+  allowAny:
+    - vite
+    - vitest
+  allowedVersions:
+    vite: '*'
+    vitest: '*'
 
 > cat lint-staged.config.ts # check TS config is not modified
 export default {

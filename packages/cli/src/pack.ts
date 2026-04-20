@@ -1,7 +1,6 @@
 import type { UserConfig as TsdownUserConfig } from '@voidzero-dev/vite-plus-core/pack';
 
-export { defineConfig, build, globalLogger } from '@voidzero-dev/vite-plus-core/pack';
-export type * from '@voidzero-dev/vite-plus-core/pack';
+export * from '@voidzero-dev/vite-plus-core/pack';
 
 export interface PackUserConfig extends TsdownUserConfig {
   /**

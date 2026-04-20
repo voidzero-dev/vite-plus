@@ -30,12 +30,8 @@ ESLint comments replaced
   "packageManager": "pnpm@<semver>"
 }
 
-> cat eslint.config.mjs && exit 1 || true # check flat config is removed
-cat: eslint.config.mjs: No such file or directory
-
-> cat .eslintrc && exit 1 || true # check legacy config is also removed
-cat: .eslintrc: No such file or directory
-
+> test ! -f eslint.config.mjs # check flat config is removed
+> test ! -f .eslintrc # check legacy config is also removed
 > cat vite.config.ts # check oxlint config merged into vite.config.ts
 import { defineConfig } from 'vite-plus';
 

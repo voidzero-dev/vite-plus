@@ -2,7 +2,7 @@
 
 ## Summary
 
-Add `vp pm` command group that provides a set of utilities for working with package managers. The `pm` command group offers direct access to package manager utilities like cache management, package publishing, configuration, and more. These are pass-through commands that delegate to the detected package manager (pnpm/npm/yarn) with minimal processing, providing a unified interface across different package managers.
+Add `vp pm` command group that provides a set of utilities for working with package managers. The `pm` command group offers direct access to package manager utilities like cache management, package publishing, configuration, and more. These are pass-through commands that delegate to the detected package manager (pnpm/npm/yarn/bun) with minimal processing, providing a unified interface across different package managers.
 
 ## Motivation
 
@@ -730,6 +730,22 @@ vp pm ping --registry https://custom-registry.com
 
 - `--registry <url>`: Registry URL to ping
 
+### Bun-Specific Subcommands
+
+Bun provides several `bun pm` subcommands that may not have direct equivalents in other package managers:
+
+- `bun pm ls` / `bun list` - List installed packages
+- `bun pm bin` - Show the bin directory for installed binaries
+- `bun pm cache` / `bun pm cache rm` - Cache management (show cache path / remove cached packages)
+- `bun pm whoami` - Show the currently logged-in npm registry username
+- `bun pm pack` - Create a tarball of the package (supports `--destination`, `--dry-run`)
+- `bun pm trust` / `bun pm untrusted` - Manage trusted dependencies (allow lifecycle scripts)
+- `bun pm version` - Show the installed version of bun
+- `bun pm pkg` - Manage package.json fields programmatically
+- `bun publish` - Publish package to the npm registry (direct subcommand, not `bun pm publish`)
+
+**Note:** Many npm registry operations (login, logout, owner, dist-tag, deprecate, search, fund, ping, token) do not have native bun equivalents and delegate to `npm` when using bun as the package manager.
+
 ### Command Mapping
 
 #### Prune Command
@@ -747,16 +763,17 @@ vp pm ping --registry https://custom-registry.com
 - https://classic.yarnpkg.com/en/docs/cli/prune
 - The prune command isn't necessary. yarn install will prune extraneous packages.
 
-| Vite+ Flag      | pnpm            | npm               | yarn | Description                 |
-| --------------- | --------------- | ----------------- | ---- | --------------------------- |
-| `vp pm prune`   | `pnpm prune`    | `npm prune`       | N/A  | Remove unnecessary packages |
-| `--prod`        | `--prod`        | `--omit=dev`      | N/A  | Remove devDependencies      |
-| `--no-optional` | `--no-optional` | `--omit=optional` | N/A  | Remove optional deps        |
+| Vite+ Flag      | pnpm            | npm               | yarn | bun | Description                 |
+| --------------- | --------------- | ----------------- | ---- | --- | --------------------------- |
+| `vp pm prune`   | `pnpm prune`    | `npm prune`       | N/A  | N/A | Remove unnecessary packages |
+| `--prod`        | `--prod`        | `--omit=dev`      | N/A  | N/A | Remove devDependencies      |
+| `--no-optional` | `--no-optional` | `--omit=optional` | N/A  | N/A | Remove optional deps        |
 
 **Note:**
 
 - npm supports prune with `--omit=dev` (for prod) and `--omit=optional` (for no-optional)
 - yarn doesn't have a prune command (automatic during install)
+- bun doesn't have a prune command
 
 #### Pack Command
 
@@ -774,15 +791,16 @@ vp pm ping --registry https://custom-registry.com
 - https://yarnpkg.com/cli/pack
 - https://yarnpkg.com/cli/workspaces/foreach (for yarn@2+ recursive packing)
 
-| Vite+ Flag                  | pnpm                 | npm                  | yarn@1       | yarn@2+                                       | Description                       |
-| --------------------------- | -------------------- | -------------------- | ------------ | --------------------------------------------- | --------------------------------- |
-| `vp pm pack`                | `pnpm pack`          | `npm pack`           | `yarn pack`  | `yarn pack`                                   | Create package tarball            |
-| `-r, --recursive`           | `--recursive`        | `--workspaces`       | N/A          | `workspaces foreach --all pack`               | Pack all workspace packages       |
-| `--filter <pattern>`        | `--filter`           | `--workspace`        | N/A          | `workspaces foreach --include <pattern> pack` | Filter packages to pack           |
-| `--out <path>`              | `--out`              | N/A                  | `--filename` | `--out`                                       | Output file path (supports %s/%v) |
-| `--pack-destination <dir>`  | `--pack-destination` | `--pack-destination` | N/A          | N/A                                           | Output directory                  |
-| `--pack-gzip-level <level>` | `--pack-gzip-level`  | N/A                  | N/A          | N/A                                           | Gzip compression level (0-9)      |
-| `--json`                    | `--json`             | `--json`             | `--json`     | `--json`                                      | JSON output                       |
+| Vite+ Flag                  | pnpm                 | npm                  | yarn@1       | yarn@2+                                       | bun             | Description                       |
+| --------------------------- | -------------------- | -------------------- | ------------ | --------------------------------------------- | --------------- | --------------------------------- |
+| `vp pm pack`                | `pnpm pack`          | `npm pack`           | `yarn pack`  | `yarn pack`                                   | `bun pm pack`   | Create package tarball            |
+| `-r, --recursive`           | `--recursive`        | `--workspaces`       | N/A          | `workspaces foreach --all pack`               | N/A             | Pack all workspace packages       |
+| `--filter <pattern>`        | `--filter`           | `--workspace`        | N/A          | `workspaces foreach --include <pattern> pack` | N/A             | Filter packages to pack           |
+| `--out <path>`              | `--out`              | N/A                  | `--filename` | `--out`                                       | `--filename`    | Output file path (supports %s/%v) |
+| `--pack-destination <dir>`  | `--pack-destination` | `--pack-destination` | N/A          | N/A                                           | `--destination` | Output directory                  |
+| `--pack-gzip-level <level>` | `--pack-gzip-level`  | N/A                  | N/A          | N/A                                           | `--gzip-level`  | Gzip compression level (0-9)      |
+| `--json`                    | `--json`             | `--json`             | `--json`     | `--json`                                      | N/A             | JSON output                       |
+| `--dry-run`                 | N/A                  | `--dry-run`          | N/A          | N/A                                           | `--dry-run`     | Preview without creating tarball  |
 
 **Note:**
 
@@ -804,8 +822,9 @@ vp pm ping --registry https://custom-registry.com
   - Supported by pnpm and npm
   - yarn does not support this option (prints warning and ignores)
 - `--pack-gzip-level <level>`: Gzip compression level (0-9)
-  - Only supported by pnpm
+  - Supported by pnpm and bun (bun uses `--gzip-level`)
   - npm and yarn do not support this option (prints warning and ignores)
+- bun uses `bun pm pack` (not `bun pack`), supports `--destination` and `--dry-run` flags
 
 #### List Command
 
@@ -821,22 +840,22 @@ vp pm ping --registry https://custom-registry.com
 
 - https://classic.yarnpkg.com/en/docs/cli/list
 
-| Vite+ Flag           | pnpm              | npm                             | yarn@1        | yarn@2+       | Description                                   |
-| -------------------- | ----------------- | ------------------------------- | ------------- | ------------- | --------------------------------------------- |
-| `vp pm list`         | `pnpm list`       | `npm list`                      | `yarn list`   | N/A           | List installed packages                       |
-| `--depth <n>`        | `--depth <n>`     | `--depth <n>`                   | `--depth <n>` | N/A           | Limit tree depth                              |
-| `--json`             | `--json`          | `--json`                        | `--json`      | N/A           | JSON output                                   |
-| `--long`             | `--long`          | `--long`                        | N/A           | N/A           | Extended info                                 |
-| `--parseable`        | `--parseable`     | `--parseable`                   | N/A           | N/A           | Parseable format                              |
-| `-P, --prod`         | `--prod`          | `--include prod --include peer` | N/A           | N/A           | Production deps only                          |
-| `-D, --dev`          | `--dev`           | `--include dev`                 | N/A           | N/A           | Dev deps only                                 |
-| `--no-optional`      | `--no-optional`   | `--omit optional`               | N/A           | N/A           | Exclude optional deps                         |
-| `--exclude-peers`    | `--exclude-peers` | `--omit peer`                   | N/A           | N/A           | Exclude peer deps                             |
-| `--only-projects`    | `--only-projects` | N/A                             | N/A           | N/A           | Show only project packages (pnpm)             |
-| `--find-by <name>`   | `--find-by`       | N/A                             | N/A           | N/A           | Use finder function from .pnpmfile.cjs (pnpm) |
-| `-r, --recursive`    | `--recursive`     | `--workspaces`                  | N/A           | N/A           | List across workspaces                        |
-| `--filter <pattern>` | `--filter`        | `--workspace`                   | N/A           | N/A           | Filter workspace                              |
-| `-g, --global`       | `npm list -g`     | `npm list -g`                   | `npm list -g` | `npm list -g` | List global packages                          |
+| Vite+ Flag           | pnpm              | npm                             | yarn@1        | yarn@2+       | bun           | Description                                   |
+| -------------------- | ----------------- | ------------------------------- | ------------- | ------------- | ------------- | --------------------------------------------- |
+| `vp pm list`         | `pnpm list`       | `npm list`                      | `yarn list`   | N/A           | `bun pm ls`   | List installed packages                       |
+| `--depth <n>`        | `--depth <n>`     | `--depth <n>`                   | `--depth <n>` | N/A           | N/A           | Limit tree depth                              |
+| `--json`             | `--json`          | `--json`                        | `--json`      | N/A           | N/A           | JSON output                                   |
+| `--long`             | `--long`          | `--long`                        | N/A           | N/A           | N/A           | Extended info                                 |
+| `--parseable`        | `--parseable`     | `--parseable`                   | N/A           | N/A           | N/A           | Parseable format                              |
+| `-P, --prod`         | `--prod`          | `--include prod --include peer` | N/A           | N/A           | N/A           | Production deps only                          |
+| `-D, --dev`          | `--dev`           | `--include dev`                 | N/A           | N/A           | N/A           | Dev deps only                                 |
+| `--no-optional`      | `--no-optional`   | `--omit optional`               | N/A           | N/A           | N/A           | Exclude optional deps                         |
+| `--exclude-peers`    | `--exclude-peers` | `--omit peer`                   | N/A           | N/A           | N/A           | Exclude peer deps                             |
+| `--only-projects`    | `--only-projects` | N/A                             | N/A           | N/A           | N/A           | Show only project packages (pnpm)             |
+| `--find-by <name>`   | `--find-by`       | N/A                             | N/A           | N/A           | N/A           | Use finder function from .pnpmfile.cjs (pnpm) |
+| `-r, --recursive`    | `--recursive`     | `--workspaces`                  | N/A           | N/A           | N/A           | List across workspaces                        |
+| `--filter <pattern>` | `--filter`        | `--workspace`                   | N/A           | N/A           | N/A           | Filter workspace                              |
+| `-g, --global`       | `npm list -g`     | `npm list -g`                   | `npm list -g` | `npm list -g` | `npm list -g` | List global packages                          |
 
 **Note:**
 
@@ -900,15 +919,15 @@ vp pm ping --registry https://custom-registry.com
 - https://classic.yarnpkg.com/en/docs/cli/info (delegates to npm view)
 - https://yarnpkg.com/cli/npm/info (delegates to npm view)
 
-| Vite+ Flag   | pnpm       | npm        | yarn@1     | yarn@2+    | Description       |
-| ------------ | ---------- | ---------- | ---------- | ---------- | ----------------- |
-| `vp pm view` | `npm view` | `npm view` | `npm view` | `npm view` | View package info |
-| `--json`     | `--json`   | `--json`   | `--json`   | `--json`   | JSON output       |
+| Vite+ Flag   | pnpm       | npm        | yarn@1     | yarn@2+    | bun        | Description       |
+| ------------ | ---------- | ---------- | ---------- | ---------- | ---------- | ----------------- |
+| `vp pm view` | `npm view` | `npm view` | `npm view` | `npm view` | `bun info` | View package info |
+| `--json`     | `--json`   | `--json`   | `--json`   | `--json`   | `--json`   | JSON output       |
 
 **Note:**
 
-- All package managers delegate to `npm view` for viewing package information
-- pnpm and yarn both use npm's view/info functionality internally
+- pnpm and yarn delegate to `npm view` for viewing package information
+- bun has a native `bun info` command for viewing package information
 - Aliases: `vp pm info` and `vp pm show` work the same as `vp pm view`
 
 #### Publish Command
@@ -926,20 +945,20 @@ vp pm ping --registry https://custom-registry.com
 - https://classic.yarnpkg.com/en/docs/cli/publish (delegates to npm publish)
 - https://yarnpkg.com/cli/npm/publish (delegates to npm publish)
 
-| Vite+ Flag                  | pnpm               | npm                | yarn@1             | yarn@2+            | Description                 |
-| --------------------------- | ------------------ | ------------------ | ------------------ | ------------------ | --------------------------- |
-| `vp pm publish`             | `pnpm publish`     | `npm publish`      | `npm publish`      | `npm publish`      | Publish package             |
-| `--dry-run`                 | `--dry-run`        | `--dry-run`        | `--dry-run`        | `--dry-run`        | Preview without publishing  |
-| `--tag <tag>`               | `--tag <tag>`      | `--tag <tag>`      | `--tag <tag>`      | `--tag <tag>`      | Publish tag                 |
-| `--access <level>`          | `--access <level>` | `--access <level>` | `--access <level>` | `--access <level>` | Public/restricted           |
-| `--otp <otp>`               | `--otp`            | `--otp`            | `--otp`            | `--otp`            | One-time password           |
-| `--no-git-checks`           | `--no-git-checks`  | N/A                | N/A                | N/A                | Skip git checks (pnpm)      |
-| `--publish-branch <branch>` | `--publish-branch` | N/A                | N/A                | N/A                | Set publish branch (pnpm)   |
-| `--report-summary`          | `--report-summary` | N/A                | N/A                | N/A                | Save publish summary (pnpm) |
-| `--force`                   | `--force`          | `--force`          | `--force`          | `--force`          | Force publish               |
-| `--json`                    | `--json`           | N/A                | N/A                | N/A                | JSON output (pnpm)          |
-| `-r, --recursive`           | `--recursive`      | `--workspaces`     | N/A                | N/A                | Publish workspaces          |
-| `--filter <pattern>`        | `--filter`         | `--workspace`      | N/A                | N/A                | Filter workspace            |
+| Vite+ Flag                  | pnpm               | npm                | yarn@1             | yarn@2+            | bun           | Description                 |
+| --------------------------- | ------------------ | ------------------ | ------------------ | ------------------ | ------------- | --------------------------- |
+| `vp pm publish`             | `pnpm publish`     | `npm publish`      | `npm publish`      | `npm publish`      | `bun publish` | Publish package             |
+| `--dry-run`                 | `--dry-run`        | `--dry-run`        | `--dry-run`        | `--dry-run`        | `--dry-run`   | Preview without publishing  |
+| `--tag <tag>`               | `--tag <tag>`      | `--tag <tag>`      | `--tag <tag>`      | `--tag <tag>`      | `--tag <tag>` | Publish tag                 |
+| `--access <level>`          | `--access <level>` | `--access <level>` | `--access <level>` | `--access <level>` | `--access`    | Public/restricted           |
+| `--otp <otp>`               | `--otp`            | `--otp`            | `--otp`            | `--otp`            | N/A           | One-time password           |
+| `--no-git-checks`           | `--no-git-checks`  | N/A                | N/A                | N/A                | N/A           | Skip git checks (pnpm)      |
+| `--publish-branch <branch>` | `--publish-branch` | N/A                | N/A                | N/A                | N/A           | Set publish branch (pnpm)   |
+| `--report-summary`          | `--report-summary` | N/A                | N/A                | N/A                | N/A           | Save publish summary (pnpm) |
+| `--force`                   | `--force`          | `--force`          | `--force`          | `--force`          | N/A           | Force publish               |
+| `--json`                    | `--json`           | N/A                | N/A                | N/A                | N/A           | JSON output (pnpm)          |
+| `-r, --recursive`           | `--recursive`      | `--workspaces`     | N/A                | N/A                | N/A           | Publish workspaces          |
+| `--filter <pattern>`        | `--filter`         | `--workspace`      | N/A                | N/A                | N/A           | Filter workspace            |
 
 **Note:**
 
@@ -986,12 +1005,12 @@ vp pm ping --registry https://custom-registry.com
 - https://classic.yarnpkg.com/en/docs/cli/owner (delegates to npm owner)
 - https://yarnpkg.com/cli/npm/owner (delegates to npm owner)
 
-| Vite+ Flag                | pnpm             | npm              | yarn@1           | yarn@2+          | Description         |
-| ------------------------- | ---------------- | ---------------- | ---------------- | ---------------- | ------------------- |
-| `vp pm owner list <pkg>`  | `npm owner list` | `npm owner list` | `npm owner list` | `npm owner list` | List package owners |
-| `vp pm owner add <u> <p>` | `npm owner add`  | `npm owner add`  | `npm owner add`  | `npm owner add`  | Add owner           |
-| `vp pm owner rm <u> <p>`  | `npm owner rm`   | `npm owner rm`   | `npm owner rm`   | `npm owner rm`   | Remove owner        |
-| `--otp <otp>`             | `--otp`          | `--otp`          | `--otp`          | `--otp`          | One-time password   |
+| Vite+ Flag                | pnpm             | npm              | yarn@1           | yarn@2+          | bun              | Description         |
+| ------------------------- | ---------------- | ---------------- | ---------------- | ---------------- | ---------------- | ------------------- |
+| `vp pm owner list <pkg>`  | `npm owner list` | `npm owner list` | `npm owner list` | `npm owner list` | `npm owner list` | List package owners |
+| `vp pm owner add <u> <p>` | `npm owner add`  | `npm owner add`  | `npm owner add`  | `npm owner add`  | `npm owner add`  | Add owner           |
+| `vp pm owner rm <u> <p>`  | `npm owner rm`   | `npm owner rm`   | `npm owner rm`   | `npm owner rm`   | `npm owner rm`   | Remove owner        |
+| `--otp <otp>`             | `--otp`          | `--otp`          | `--otp`          | `--otp`          | `--otp`          | One-time password   |
 
 **Note:**
 
@@ -1014,11 +1033,11 @@ vp pm ping --registry https://custom-registry.com
 - https://classic.yarnpkg.com/en/docs/cli/cache
 - https://yarnpkg.com/cli/cache
 
-| Vite+ Flag          | pnpm               | npm                    | yarn@1             | yarn@2+                       | Description          |
-| ------------------- | ------------------ | ---------------------- | ------------------ | ----------------------------- | -------------------- |
-| `vp pm cache dir`   | `pnpm store path`  | `npm config get cache` | `yarn cache dir`   | `yarn config get cacheFolder` | Show cache directory |
-| `vp pm cache path`  | Alias for `dir`    | Alias for `dir`        | Alias for `dir`    | Alias for `dir`               | Alias for dir        |
-| `vp pm cache clean` | `pnpm store prune` | `npm cache clean`      | `yarn cache clean` | `yarn cache clean`            | Clean cache          |
+| Vite+ Flag          | pnpm               | npm                    | yarn@1             | yarn@2+                       | bun               | Description          |
+| ------------------- | ------------------ | ---------------------- | ------------------ | ----------------------------- | ----------------- | -------------------- |
+| `vp pm cache dir`   | `pnpm store path`  | `npm config get cache` | `yarn cache dir`   | `yarn config get cacheFolder` | `bun pm cache`    | Show cache directory |
+| `vp pm cache path`  | Alias for `dir`    | Alias for `dir`        | Alias for `dir`    | Alias for `dir`               | Alias for `dir`   | Alias for dir        |
+| `vp pm cache clean` | `pnpm store prune` | `npm cache clean`      | `yarn cache clean` | `yarn cache clean`            | `bun pm cache rm` | Clean cache          |
 
 **Note:**
 
@@ -1044,15 +1063,15 @@ vp pm ping --registry https://custom-registry.com
 - https://classic.yarnpkg.com/en/docs/cli/config
 - https://yarnpkg.com/cli/config
 
-| Vite+ Flag                  | pnpm                 | npm                 | yarn@1               | yarn@2+                     | Description        |
-| --------------------------- | -------------------- | ------------------- | -------------------- | --------------------------- | ------------------ |
-| `vp pm config list`         | `pnpm config list`   | `npm config list`   | `yarn config list`   | `yarn config`               | List configuration |
-| `vp pm config get <key>`    | `pnpm config get`    | `npm config get`    | `yarn config get`    | `yarn config get`           | Get config value   |
-| `vp pm config set <k> <v>`  | `pnpm config set`    | `npm config set`    | `yarn config set`    | `yarn config set`           | Set config value   |
-| `vp pm config delete <key>` | `pnpm config delete` | `npm config delete` | `yarn config delete` | `yarn config unset`         | Delete config key  |
-| `--json`                    | `--json`             | `--json`            | `--json`             | `--json`                    | JSON output        |
-| `-g, --global`              | `--global`           | `--global`          | `--global`           | `--home`                    | Global config      |
-| `--location <location>`     | `--location`         | `--location`        | N/A                  | Maps to `--home` for global | Config location    |
+| Vite+ Flag                  | pnpm                 | npm                 | yarn@1               | yarn@2+                     | bun | Description        |
+| --------------------------- | -------------------- | ------------------- | -------------------- | --------------------------- | --- | ------------------ |
+| `vp pm config list`         | `pnpm config list`   | `npm config list`   | `yarn config list`   | `yarn config`               | N/A | List configuration |
+| `vp pm config get <key>`    | `pnpm config get`    | `npm config get`    | `yarn config get`    | `yarn config get`           | N/A | Get config value   |
+| `vp pm config set <k> <v>`  | `pnpm config set`    | `npm config set`    | `yarn config set`    | `yarn config set`           | N/A | Set config value   |
+| `vp pm config delete <key>` | `pnpm config delete` | `npm config delete` | `yarn config delete` | `yarn config unset`         | N/A | Delete config key  |
+| `--json`                    | `--json`             | `--json`            | `--json`             | `--json`                    | N/A | JSON output        |
+| `-g, --global`              | `--global`           | `--global`          | `--global`           | `--home`                    | N/A | Global config      |
+| `--location <location>`     | `--location`         | `--location`        | N/A                  | Maps to `--home` for global | N/A | Config location    |
 
 **Note:**
 
@@ -1087,11 +1106,11 @@ vp pm ping --registry https://custom-registry.com
 - https://classic.yarnpkg.com/en/docs/cli/login
 - https://yarnpkg.com/cli/npm/login
 
-| Vite+ Flag         | pnpm         | npm          | yarn@1       | yarn@2+          | Description          |
-| ------------------ | ------------ | ------------ | ------------ | ---------------- | -------------------- |
-| `vp pm login`      | `npm login`  | `npm login`  | `yarn login` | `yarn npm login` | Log in to registry   |
-| `--registry <url>` | `--registry` | `--registry` | `--registry` | `--registry`     | Registry URL         |
-| `--scope <scope>`  | `--scope`    | `--scope`    | `--scope`    | `--scope`        | Associate with scope |
+| Vite+ Flag         | pnpm         | npm          | yarn@1       | yarn@2+          | bun          | Description          |
+| ------------------ | ------------ | ------------ | ------------ | ---------------- | ------------ | -------------------- |
+| `vp pm login`      | `npm login`  | `npm login`  | `yarn login` | `yarn npm login` | `npm login`  | Log in to registry   |
+| `--registry <url>` | `--registry` | `--registry` | `--registry` | `--registry`     | `--registry` | Registry URL         |
+| `--scope <scope>`  | `--scope`    | `--scope`    | `--scope`    | `--scope`        | `--scope`    | Associate with scope |
 
 **Note:**
 
@@ -1114,11 +1133,11 @@ vp pm ping --registry https://custom-registry.com
 - https://classic.yarnpkg.com/en/docs/cli/logout
 - https://yarnpkg.com/cli/npm/logout
 
-| Vite+ Flag         | pnpm         | npm          | yarn@1        | yarn@2+           | Description           |
-| ------------------ | ------------ | ------------ | ------------- | ----------------- | --------------------- |
-| `vp pm logout`     | `npm logout` | `npm logout` | `yarn logout` | `yarn npm logout` | Log out from registry |
-| `--registry <url>` | `--registry` | `--registry` | `--registry`  | `--registry`      | Registry URL          |
-| `--scope <scope>`  | `--scope`    | `--scope`    | `--scope`     | `--scope`         | Scoped registry       |
+| Vite+ Flag         | pnpm         | npm          | yarn@1        | yarn@2+           | bun          | Description           |
+| ------------------ | ------------ | ------------ | ------------- | ----------------- | ------------ | --------------------- |
+| `vp pm logout`     | `npm logout` | `npm logout` | `yarn logout` | `yarn npm logout` | `npm logout` | Log out from registry |
+| `--registry <url>` | `--registry` | `--registry` | `--registry`  | `--registry`      | `--registry` | Registry URL          |
+| `--scope <scope>`  | `--scope`    | `--scope`    | `--scope`     | `--scope`         | `--scope`    | Scoped registry       |
 
 **Note:**
 
@@ -1140,10 +1159,10 @@ vp pm ping --registry https://custom-registry.com
 
 - https://yarnpkg.com/cli/npm/whoami
 
-| Vite+ Flag         | pnpm         | npm          | yarn@1     | yarn@2+           | Description         |
-| ------------------ | ------------ | ------------ | ---------- | ----------------- | ------------------- |
-| `vp pm whoami`     | `npm whoami` | `npm whoami` | N/A (warn) | `yarn npm whoami` | Show logged-in user |
-| `--registry <url>` | `--registry` | `--registry` | N/A        | `--registry`      | Registry URL        |
+| Vite+ Flag         | pnpm         | npm          | yarn@1     | yarn@2+           | bun             | Description         |
+| ------------------ | ------------ | ------------ | ---------- | ----------------- | --------------- | ------------------- |
+| `vp pm whoami`     | `npm whoami` | `npm whoami` | N/A (warn) | `yarn npm whoami` | `bun pm whoami` | Show logged-in user |
+| `--registry <url>` | `--registry` | `--registry` | N/A        | `--registry`      | N/A             | Registry URL        |
 
 **Note:**
 
@@ -1157,13 +1176,13 @@ vp pm ping --registry https://custom-registry.com
 
 - https://docs.npmjs.com/cli/v11/commands/npm-token
 
-| Vite+ Flag           | pnpm               | npm                | yarn@1     | yarn@2+    | Description      |
-| -------------------- | ------------------ | ------------------ | ---------- | ---------- | ---------------- |
-| `vp pm token list`   | `npm token list`   | `npm token list`   | N/A (warn) | N/A (warn) | List tokens      |
-| `vp pm token create` | `npm token create` | `npm token create` | N/A (warn) | N/A (warn) | Create token     |
-| `vp pm token revoke` | `npm token revoke` | `npm token revoke` | N/A (warn) | N/A (warn) | Revoke token     |
-| `--read-only`        | `--read-only`      | `--read-only`      | N/A        | N/A        | Read-only token  |
-| `--cidr <cidr>`      | `--cidr`           | `--cidr`           | N/A        | N/A        | CIDR restriction |
+| Vite+ Flag           | pnpm               | npm                | yarn@1     | yarn@2+    | bun        | Description      |
+| -------------------- | ------------------ | ------------------ | ---------- | ---------- | ---------- | ---------------- |
+| `vp pm token list`   | `npm token list`   | `npm token list`   | N/A (warn) | N/A (warn) | N/A (warn) | List tokens      |
+| `vp pm token create` | `npm token create` | `npm token create` | N/A (warn) | N/A (warn) | N/A (warn) | Create token     |
+| `vp pm token revoke` | `npm token revoke` | `npm token revoke` | N/A (warn) | N/A (warn) | N/A (warn) | Revoke token     |
+| `--read-only`        | `--read-only`      | `--read-only`      | N/A        | N/A        | N/A        | Read-only token  |
+| `--cidr <cidr>`      | `--cidr`           | `--cidr`           | N/A        | N/A        | N/A        | CIDR restriction |
 
 **Note:**
 
@@ -1185,13 +1204,13 @@ vp pm ping --registry https://custom-registry.com
 - https://classic.yarnpkg.com/en/docs/cli/audit
 - https://yarnpkg.com/cli/npm/audit
 
-| Vite+ Flag              | pnpm            | npm             | yarn@1          | yarn@2+                    | Description        |
-| ----------------------- | --------------- | --------------- | --------------- | -------------------------- | ------------------ |
-| `vp pm audit`           | `pnpm audit`    | `npm audit`     | `yarn audit`    | `yarn npm audit`           | Run security audit |
-| `--json`                | `--json`        | `--json`        | `--json`        | `--json`                   | JSON output        |
-| `--prod`                | `--prod`        | `--omit=dev`    | `--groups prod` | `--environment production` | Production only    |
-| `--audit-level <level>` | `--audit-level` | `--audit-level` | `--level`       | `--severity`               | Minimum severity   |
-| `fix`                   | `--fix`         | `npm audit fix` | N/A             | N/A                        | Auto-fix           |
+| Vite+ Flag              | pnpm            | npm             | yarn@1          | yarn@2+                    | bun             | Description        |
+| ----------------------- | --------------- | --------------- | --------------- | -------------------------- | --------------- | ------------------ |
+| `vp pm audit`           | `pnpm audit`    | `npm audit`     | `yarn audit`    | `yarn npm audit`           | `bun audit`     | Run security audit |
+| `--json`                | `--json`        | `--json`        | `--json`        | `--json`                   | `--json`        | JSON output        |
+| `--prod`                | `--prod`        | `--omit=dev`    | `--groups prod` | `--environment production` | N/A             | Production only    |
+| `--audit-level <level>` | `--audit-level` | `--audit-level` | `--level`       | `--severity`               | `--audit-level` | Minimum severity   |
+| `fix`                   | `--fix`         | `npm audit fix` | N/A             | N/A                        | N/A             | Auto-fix           |
 
 **Note:**
 
@@ -1213,12 +1232,12 @@ vp pm ping --registry https://custom-registry.com
 - https://classic.yarnpkg.com/en/docs/cli/tag
 - https://yarnpkg.com/cli/npm/tag
 
-| Vite+ Flag                       | pnpm                | npm                 | yarn@1          | yarn@2+             | Description       |
-| -------------------------------- | ------------------- | ------------------- | --------------- | ------------------- | ----------------- |
-| `vp pm dist-tag list <pkg>`      | `npm dist-tag list` | `npm dist-tag list` | `yarn tag list` | `yarn npm tag list` | List tags         |
-| `vp pm dist-tag add <pkg> <tag>` | `npm dist-tag add`  | `npm dist-tag add`  | `yarn tag add`  | `yarn npm tag add`  | Add tag           |
-| `vp pm dist-tag rm <pkg> <tag>`  | `npm dist-tag rm`   | `npm dist-tag rm`   | `yarn tag rm`   | `yarn npm tag rm`   | Remove tag        |
-| `--otp <otp>`                    | `--otp`             | `--otp`             | `--otp`         | `--otp`             | One-time password |
+| Vite+ Flag                       | pnpm                | npm                 | yarn@1          | yarn@2+             | bun                 | Description       |
+| -------------------------------- | ------------------- | ------------------- | --------------- | ------------------- | ------------------- | ----------------- |
+| `vp pm dist-tag list <pkg>`      | `npm dist-tag list` | `npm dist-tag list` | `yarn tag list` | `yarn npm tag list` | `npm dist-tag list` | List tags         |
+| `vp pm dist-tag add <pkg> <tag>` | `npm dist-tag add`  | `npm dist-tag add`  | `yarn tag add`  | `yarn npm tag add`  | `npm dist-tag add`  | Add tag           |
+| `vp pm dist-tag rm <pkg> <tag>`  | `npm dist-tag rm`   | `npm dist-tag rm`   | `yarn tag rm`   | `yarn npm tag rm`   | `npm dist-tag rm`   | Remove tag        |
+| `--otp <otp>`                    | `--otp`             | `--otp`             | `--otp`         | `--otp`             | `--otp`             | One-time password |
 
 **Note:**
 
@@ -1233,11 +1252,11 @@ vp pm ping --registry https://custom-registry.com
 
 - https://docs.npmjs.com/cli/v11/commands/npm-deprecate
 
-| Vite+ Flag                    | pnpm            | npm             | yarn@1          | yarn@2+         | Description         |
-| ----------------------------- | --------------- | --------------- | --------------- | --------------- | ------------------- |
-| `vp pm deprecate <pkg> <msg>` | `npm deprecate` | `npm deprecate` | `npm deprecate` | `npm deprecate` | Deprecate a package |
-| `--otp <otp>`                 | `--otp`         | `--otp`         | `--otp`         | `--otp`         | One-time password   |
-| `--registry <url>`            | `--registry`    | `--registry`    | `--registry`    | `--registry`    | Registry URL        |
+| Vite+ Flag                    | pnpm            | npm             | yarn@1          | yarn@2+         | bun             | Description         |
+| ----------------------------- | --------------- | --------------- | --------------- | --------------- | --------------- | ------------------- |
+| `vp pm deprecate <pkg> <msg>` | `npm deprecate` | `npm deprecate` | `npm deprecate` | `npm deprecate` | `npm deprecate` | Deprecate a package |
+| `--otp <otp>`                 | `--otp`         | `--otp`         | `--otp`         | `--otp`         | `--otp`         | One-time password   |
+| `--registry <url>`            | `--registry`    | `--registry`    | `--registry`    | `--registry`    | `--registry`    | Registry URL        |
 
 **Note:**
 
@@ -1250,12 +1269,12 @@ vp pm ping --registry https://custom-registry.com
 
 - https://docs.npmjs.com/cli/v11/commands/npm-search
 
-| Vite+ Flag             | pnpm            | npm             | yarn@1          | yarn@2+         | Description         |
-| ---------------------- | --------------- | --------------- | --------------- | --------------- | ------------------- |
-| `vp pm search <terms>` | `npm search`    | `npm search`    | `npm search`    | `npm search`    | Search for packages |
-| `--json`               | `--json`        | `--json`        | `--json`        | `--json`        | JSON output         |
-| `--long`               | `--long`        | `--long`        | `--long`        | `--long`        | Extended info       |
-| `--searchlimit <n>`    | `--searchlimit` | `--searchlimit` | `--searchlimit` | `--searchlimit` | Limit results       |
+| Vite+ Flag             | pnpm            | npm             | yarn@1          | yarn@2+         | bun             | Description         |
+| ---------------------- | --------------- | --------------- | --------------- | --------------- | --------------- | ------------------- |
+| `vp pm search <terms>` | `npm search`    | `npm search`    | `npm search`    | `npm search`    | `npm search`    | Search for packages |
+| `--json`               | `--json`        | `--json`        | `--json`        | `--json`        | `--json`        | JSON output         |
+| `--long`               | `--long`        | `--long`        | `--long`        | `--long`        | `--long`        | Extended info       |
+| `--searchlimit <n>`    | `--searchlimit` | `--searchlimit` | `--searchlimit` | `--searchlimit` | `--searchlimit` | Limit results       |
 
 **Note:**
 
@@ -1271,10 +1290,10 @@ vp pm ping --registry https://custom-registry.com
 
 - https://docs.npmjs.com/cli/v11/commands/npm-rebuild
 
-| Vite+ Flag               | pnpm                 | npm                 | yarn@1     | yarn@2+    | Description           |
-| ------------------------ | -------------------- | ------------------- | ---------- | ---------- | --------------------- |
-| `vp pm rebuild`          | `pnpm rebuild`       | `npm rebuild`       | N/A (warn) | N/A (warn) | Rebuild native addons |
-| `vp pm rebuild <pkg...>` | `pnpm rebuild <pkg>` | `npm rebuild <pkg>` | N/A (warn) | N/A (warn) | Rebuild specific pkgs |
+| Vite+ Flag               | pnpm                 | npm                 | yarn@1     | yarn@2+    | bun        | Description           |
+| ------------------------ | -------------------- | ------------------- | ---------- | ---------- | ---------- | --------------------- |
+| `vp pm rebuild`          | `pnpm rebuild`       | `npm rebuild`       | N/A (warn) | N/A (warn) | N/A (warn) | Rebuild native addons |
+| `vp pm rebuild <pkg...>` | `pnpm rebuild <pkg>` | `npm rebuild <pkg>` | N/A (warn) | N/A (warn) | N/A (warn) | Rebuild specific pkgs |
 
 **Note:**
 
@@ -1290,12 +1309,12 @@ vp pm ping --registry https://custom-registry.com
 
 - https://docs.npmjs.com/cli/v11/commands/npm-fund
 
-| Vite+ Flag         | pnpm       | npm        | yarn@1     | yarn@2+    | Description           |
-| ------------------ | ---------- | ---------- | ---------- | ---------- | --------------------- |
-| `vp pm fund`       | `npm fund` | `npm fund` | N/A (warn) | N/A (warn) | Show funding info     |
-| `vp pm fund <pkg>` | `npm fund` | `npm fund` | N/A (warn) | N/A (warn) | Fund for specific pkg |
-| `--json`           | `--json`   | `--json`   | N/A        | N/A        | JSON output           |
-| `--depth <n>`      | `--depth`  | `--depth`  | N/A        | N/A        | Limit depth           |
+| Vite+ Flag         | pnpm       | npm        | yarn@1     | yarn@2+    | bun        | Description           |
+| ------------------ | ---------- | ---------- | ---------- | ---------- | ---------- | --------------------- |
+| `vp pm fund`       | `npm fund` | `npm fund` | N/A (warn) | N/A (warn) | N/A (warn) | Show funding info     |
+| `vp pm fund <pkg>` | `npm fund` | `npm fund` | N/A (warn) | N/A (warn) | N/A (warn) | Fund for specific pkg |
+| `--json`           | `--json`   | `--json`   | N/A        | N/A        | N/A        | JSON output           |
+| `--depth <n>`      | `--depth`  | `--depth`  | N/A        | N/A        | N/A        | Limit depth           |
 
 **Note:**
 
@@ -1309,10 +1328,10 @@ vp pm ping --registry https://custom-registry.com
 
 - https://docs.npmjs.com/cli/v11/commands/npm-ping
 
-| Vite+ Flag         | pnpm         | npm          | yarn@1       | yarn@2+      | Description   |
-| ------------------ | ------------ | ------------ | ------------ | ------------ | ------------- |
-| `vp pm ping`       | `npm ping`   | `npm ping`   | `npm ping`   | `npm ping`   | Ping registry |
-| `--registry <url>` | `--registry` | `--registry` | `--registry` | `--registry` | Registry URL  |
+| Vite+ Flag         | pnpm         | npm          | yarn@1       | yarn@2+      | bun          | Description   |
+| ------------------ | ------------ | ------------ | ------------ | ------------ | ------------ | ------------- |
+| `vp pm ping`       | `npm ping`   | `npm ping`   | `npm ping`   | `npm ping`   | `npm ping`   | Ping registry |
+| `--registry <url>` | `--registry` | `--registry` | `--registry` | `--registry` | `--registry` | Registry URL  |
 
 **Note:**
 
@@ -2176,27 +2195,27 @@ Examples:
 
 ## Package Manager Compatibility
 
-| Subcommand | pnpm       | npm     | yarn@1     | yarn@2+          | Notes                                   |
-| ---------- | ---------- | ------- | ---------- | ---------------- | --------------------------------------- |
-| prune      | ✅ Full    | ✅ Full | ❌ N/A     | ❌ N/A           | npm uses --omit flags, yarn auto-prunes |
-| pack       | ✅ Full    | ✅ Full | ✅ Full    | ✅ Full          | All supported                           |
-| list/ls    | ✅ Full    | ✅ Full | ⚠️ Limited | ❌ N/A           | yarn@1 no -r, yarn@2+ not supported     |
-| view       | ✅ Full    | ✅ Full | ⚠️ `info`  | ⚠️ `info`        | yarn uses different name                |
-| publish    | ✅ Full    | ✅ Full | ✅ Full    | ⚠️ `npm publish` | yarn@2+ uses npm plugin                 |
-| owner      | ✅ Full    | ✅ Full | ✅ Full    | ⚠️ `npm owner`   | yarn@2+ uses npm plugin                 |
-| cache      | ⚠️ `store` | ✅ Full | ✅ Full    | ✅ Full          | pnpm uses different command             |
-| config     | ✅ Full    | ✅ Full | ✅ Full    | ⚠️ Different     | yarn@2+ has different API               |
-| login      | ✅ `npm`   | ✅ Full | ✅ Full    | ⚠️ `npm login`   | pnpm delegates to npm                   |
-| logout     | ✅ `npm`   | ✅ Full | ✅ Full    | ⚠️ `npm logout`  | pnpm delegates to npm                   |
-| whoami     | ✅ `npm`   | ✅ Full | ❌ N/A     | ⚠️ `npm whoami`  | yarn@1 not supported                    |
-| token      | ✅ `npm`   | ✅ Full | ❌ N/A     | ❌ N/A           | Always delegates to npm                 |
-| audit      | ✅ Full    | ✅ Full | ✅ Full    | ⚠️ `npm audit`   | yarn@2+ uses npm plugin                 |
-| dist-tag   | ✅ `npm`   | ✅ Full | ⚠️ `tag`   | ⚠️ `npm tag`     | Different command names                 |
-| deprecate  | ✅ `npm`   | ✅ Full | ✅ `npm`   | ✅ `npm`         | Always delegates to npm                 |
-| search     | ✅ `npm`   | ✅ Full | ✅ `npm`   | ✅ `npm`         | Always delegates to npm                 |
-| rebuild    | ✅ Full    | ✅ Full | ❌ N/A     | ❌ N/A           | yarn does not support                   |
-| fund       | ✅ `npm`   | ✅ Full | ❌ N/A     | ❌ N/A           | Always delegates to npm                 |
-| ping       | ✅ `npm`   | ✅ Full | ✅ `npm`   | ✅ `npm`         | Always delegates to npm                 |
+| Subcommand | pnpm       | npm     | yarn@1     | yarn@2+          | bun                | Notes                                   |
+| ---------- | ---------- | ------- | ---------- | ---------------- | ------------------ | --------------------------------------- |
+| prune      | ✅ Full    | ✅ Full | ❌ N/A     | ❌ N/A           | ❌ N/A             | npm uses --omit flags, yarn auto-prunes |
+| pack       | ✅ Full    | ✅ Full | ✅ Full    | ✅ Full          | ✅ `bun pm pack`   | bun uses `bun pm pack`                  |
+| list/ls    | ✅ Full    | ✅ Full | ⚠️ Limited | ❌ N/A           | ⚠️ `bun pm ls`     | bun has basic list support              |
+| view       | ✅ Full    | ✅ Full | ⚠️ `info`  | ⚠️ `info`        | ✅ `npm view`      | delegates to npm                        |
+| publish    | ✅ Full    | ✅ Full | ✅ Full    | ⚠️ `npm publish` | ✅ `bun publish`   | bun has native publish                  |
+| owner      | ✅ Full    | ✅ Full | ✅ Full    | ⚠️ `npm owner`   | ✅ `npm owner`     | delegates to npm                        |
+| cache      | ⚠️ `store` | ✅ Full | ✅ Full    | ✅ Full          | ⚠️ `bun pm cache`  | bun uses `bun pm cache`                 |
+| config     | ✅ Full    | ✅ Full | ✅ Full    | ⚠️ Different     | ❌ N/A             | bun has no config command               |
+| login      | ✅ `npm`   | ✅ Full | ✅ Full    | ⚠️ `npm login`   | ✅ `npm login`     | delegates to npm                        |
+| logout     | ✅ `npm`   | ✅ Full | ✅ Full    | ⚠️ `npm logout`  | ✅ `npm logout`    | delegates to npm                        |
+| whoami     | ✅ `npm`   | ✅ Full | ❌ N/A     | ⚠️ `npm whoami`  | ✅ `bun pm whoami` | bun has native whoami                   |
+| token      | ✅ `npm`   | ✅ Full | ❌ N/A     | ❌ N/A           | ❌ N/A             | Always delegates to npm                 |
+| audit      | ✅ Full    | ✅ Full | ✅ Full    | ⚠️ `npm audit`   | ✅ `bun audit`     | bun has native audit support            |
+| dist-tag   | ✅ `npm`   | ✅ Full | ⚠️ `tag`   | ⚠️ `npm tag`     | ✅ `npm dist-tag`  | delegates to npm                        |
+| deprecate  | ✅ `npm`   | ✅ Full | ✅ `npm`   | ✅ `npm`         | ✅ `npm deprecate` | Always delegates to npm                 |
+| search     | ✅ `npm`   | ✅ Full | ✅ `npm`   | ✅ `npm`         | ✅ `npm search`    | Always delegates to npm                 |
+| rebuild    | ✅ Full    | ✅ Full | ❌ N/A     | ❌ N/A           | ❌ N/A             | bun has no rebuild command              |
+| fund       | ✅ `npm`   | ✅ Full | ❌ N/A     | ❌ N/A           | ❌ N/A             | Always delegates to npm                 |
+| ping       | ✅ `npm`   | ✅ Full | ✅ `npm`   | ✅ `npm`         | ✅ `npm ping`      | Always delegates to npm                 |
 
 ## Future Enhancements
 
@@ -2308,7 +2327,7 @@ vp pm list --filter app
 
 ## Conclusion
 
-This RFC proposes adding `vp pm` command group to provide unified access to package manager utilities across pnpm/npm/yarn. The design:
+This RFC proposes adding `vp pm` command group to provide unified access to package manager utilities across pnpm/npm/yarn/bun. The design:
 
 - ✅ Pass-through architecture for maximum flexibility
 - ✅ Command name translation for common operations

@@ -6,7 +6,7 @@ added 1 package in <variable>ms
 > test -f custom-prefix-on-path/bin/npm-global-on-path-cli && echo 'binary in custom prefix' # Verify installed to custom prefix
 binary in custom prefix
 
-> test ! -L $VITE_PLUS_HOME/bin/npm-global-on-path-cli && echo 'no link created' # No link should be created
+> test ! -L $VP_HOME/bin/npm-global-on-path-cli && echo 'no link created' # No link should be created
 no link created
 
 > NPM_CONFIG_PREFIX=$(pwd)/custom-prefix-on-path npm uninstall -g npm-global-on-path-pkg; rm -rf custom-prefix-on-path # Cleanup

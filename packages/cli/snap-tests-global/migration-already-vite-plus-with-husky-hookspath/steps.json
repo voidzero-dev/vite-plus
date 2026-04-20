@@ -1,10 +1,22 @@
 {
   "commands": [
-    { "command": "git init", "ignoreOutput": true },
-    { "command": "git config core.hooksPath .husky/_", "ignoreOutput": true },
+    {
+      "command": "git init",
+      "ignoreOutput": true
+    },
+    {
+      "command": "git config core.hooksPath .husky/_",
+      "ignoreOutput": true
+    },
     "vp migrate --no-interactive # should override husky's core.hooksPath and migrate hooks",
     "cat package.json # husky/lint-staged should be removed, prepare should be vp config",
     "cat .vite-hooks/pre-commit # pre-commit hook should be rewritten",
     "git config --local core.hooksPath # should be .vite-hooks/_"
+  ],
+  "ignoredPlatforms": [
+    {
+      "os": "linux",
+      "libc": "musl"
+    }
   ]
 }

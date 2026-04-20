@@ -3,12 +3,12 @@
   "ignoredPlatforms": ["win32"],
   "commands": [
     "vp install -g ./env-binary-conflict-pkg-a # Install pkg-a which provides env-binary-conflict-cli binary",
-    "cat $VITE_PLUS_HOME/bins/env-binary-conflict-cli.json # Bin config should point to pkg-a",
+    "cat $VP_HOME/bins/env-binary-conflict-cli.json # Bin config should point to pkg-a",
     "vp install -g ./env-binary-conflict-pkg-b # Try to install pkg-b without force - should fail",
-    "cat $VITE_PLUS_HOME/bins/env-binary-conflict-cli.json # Bin config should still point to pkg-a",
+    "cat $VP_HOME/bins/env-binary-conflict-cli.json # Bin config should still point to pkg-a",
     "vp install -g --force ./env-binary-conflict-pkg-b # Force install pkg-b - should auto-uninstall pkg-a",
-    "cat $VITE_PLUS_HOME/bins/env-binary-conflict-cli.json # Bin config should now point to pkg-b",
+    "cat $VP_HOME/bins/env-binary-conflict-cli.json # Bin config should now point to pkg-b",
     "vp remove -g env-binary-conflict-pkg-b # Cleanup",
-    "test ! -f $VITE_PLUS_HOME/bins/env-binary-conflict-cli.json && echo 'bin config removed' # Bin config should be deleted"
+    "test ! -f $VP_HOME/bins/env-binary-conflict-cli.json && echo 'bin config removed' # Bin config should be deleted"
   ]
 }

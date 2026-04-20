@@ -1,0 +1,7 @@
+{
+  "name": "check-cache-enabled-test",
+  "type": "module",
+  "scripts": {
+    "check": "vp check"
+  }
+}

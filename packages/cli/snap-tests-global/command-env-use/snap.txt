@@ -18,11 +18,11 @@ Documentation: https://viteplus.dev/guide/env
 
 
 > vp env use 20.18.0 --no-install # should output export command to stdout
-export VITE_PLUS_NODE_VERSION=20.18.0
+export VP_NODE_VERSION=20.18.0
 Using Node.js v<semver> (resolved from <semver>)
 
 > vp env use --unset # should output unset command to stdout
-unset VITE_PLUS_NODE_VERSION
+unset VP_NODE_VERSION
 Reverted to file-based Node.js version resolution
 
 [1]> vp env use d # should show friendly error for invalid version

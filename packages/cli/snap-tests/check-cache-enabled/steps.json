@@ -1,0 +1,9 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "commands": [
+    "vp run check # first run should be cache miss",
+    "vp run check # second run should be cache hit",
+    "echo 'export const foo = 1;' > src/foo.js",
+    "vp run check # third run should be cache miss after new file added"
+  ]
+}

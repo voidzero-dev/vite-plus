@@ -66,6 +66,10 @@
       "import": "./binding/index.cjs",
       "require": "./binding/index.cjs"
     },
+    "./fmt": {
+      "types": "./dist/fmt.d.ts",
+      "import": "./dist/fmt.js"
+    },
     "./lint": {
       "types": "./dist/lint.d.ts",
       "import": "./dist/lint.js"
@@ -74,6 +78,10 @@
     "./pack": {
       "types": "./dist/pack.d.ts",
       "import": "./dist/pack.js"
+    },
+    "./versions": {
+      "types": "./dist/versions.d.ts",
+      "default": "./dist/versions.js"
     },
     "./test": {
       "import": {
@@ -92,6 +100,9 @@
     },
     "./test/optional-types.js": {
       "types": "./dist/test/optional-types.js.d.ts"
+    },
+    "./test/optional-runtime-types.js": {
+      "types": "./dist/test/optional-runtime-types.js.d.ts"
     },
     "./test/globals": {
       "types": "./dist/test/globals.d.ts"
@@ -320,12 +331,9 @@
     "@oxc-project/types": "catalog:",
     "@voidzero-dev/vite-plus-core": "workspace:*",
     "@voidzero-dev/vite-plus-test": "workspace:*",
-    "cac": "catalog:",
-    "cross-spawn": "catalog:",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
-    "oxlint-tsgolint": "catalog:",
-    "picocolors": "catalog:"
+    "oxlint-tsgolint": "catalog:"
   },
   "devDependencies": {
     "@napi-rs/cli": "catalog:",
@@ -335,14 +343,17 @@
     "@types/semver": "catalog:",
     "@types/validate-npm-package-name": "catalog:",
     "@voidzero-dev/vite-plus-prompts": "workspace:*",
-    "@voidzero-dev/vite-plus-tools": "workspace:",
+    "@voidzero-dev/vite-plus-tools": "workspace:*",
+    "cac": "catalog:",
+    "cross-spawn": "catalog:",
     "detect-indent": "catalog:",
     "detect-newline": "catalog:",
     "glob": "catalog:",
+    "jsonc-parser": "catalog:",
     "lint-staged": "catalog:",
     "minimatch": "catalog:",
     "mri": "catalog:",
-    "rolldown": "workspace:*",
+    "picocolors": "catalog:",
     "rolldown-plugin-dts": "catalog:",
     "semver": "catalog:",
     "tsdown": "catalog:",
@@ -357,7 +368,9 @@
       "aarch64-apple-darwin",
       "x86_64-apple-darwin",
       "aarch64-unknown-linux-gnu",
+      "aarch64-unknown-linux-musl",
       "x86_64-unknown-linux-gnu",
+      "x86_64-unknown-linux-musl",
       "x86_64-pc-windows-msvc",
       "aarch64-pc-windows-msvc"
     ]

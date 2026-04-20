@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatTargetDir, getProjectDirFromPackageName } from '../utils.js';
+import {
+  deriveDefaultPackageName,
+  formatTargetDir,
+  getProjectDirFromPackageName,
+} from '../utils.js';
 
 describe('getProjectDirFromPackageName', () => {
   it('should get project dir from package name', () => {
@@ -10,8 +14,21 @@ describe('getProjectDirFromPackageName', () => {
 });
 
 describe('formatTargetDir', () => {
+  it('should format "." as current directory with empty package name', () => {
+    expect(formatTargetDir('.')).toEqual({
+      directory: '.',
+      packageName: '',
+    });
+  });
+
+  it('should format "./" as current directory with empty package name', () => {
+    expect(formatTargetDir('./')).toEqual({
+      directory: '.',
+      packageName: '',
+    });
+  });
+
   it('should format target dir with invalid input', () => {
-    expect(formatTargetDir('.')).matchSnapshot();
     expect(formatTargetDir('/foo/bar')).matchSnapshot();
     expect(formatTargetDir('@scope/')).matchSnapshot();
     expect(formatTargetDir('../../foo/bar')).matchSnapshot();
@@ -43,5 +60,30 @@ describe('formatTargetDir', () => {
   it('should format target dir with invalid package name', () => {
     expect(formatTargetDir('my-package@').error).matchSnapshot();
     expect(formatTargetDir('my-package@1.0.0').error).matchSnapshot();
+  });
+});
+
+describe('deriveDefaultPackageName', () => {
+  it('should derive package name from directory basename', () => {
+    expect(deriveDefaultPackageName('/home/user/my-app', undefined, 'fallback')).toBe('my-app');
+  });
+
+  it('should derive scoped package name when scope is provided', () => {
+    expect(deriveDefaultPackageName('/home/user/my-app', '@my-scope', 'fallback')).toBe(
+      '@my-scope/my-app',
+    );
+  });
+
+  it('should fallback to random name when directory name is invalid', () => {
+    const result = deriveDefaultPackageName('/home/user/.hidden', undefined, 'vite-plus-app');
+    // directory name starts with '.', so a random name is generated instead
+    expect(result).not.toBe('.hidden');
+    expect(result.length).toBeGreaterThan(0);
+  });
+
+  it('should fallback when directory is filesystem root', () => {
+    const result = deriveDefaultPackageName('/', undefined, 'vite-plus-app');
+    // basename of '/' is empty, so a random name is generated
+    expect(result.length).toBeGreaterThan(0);
   });
 });

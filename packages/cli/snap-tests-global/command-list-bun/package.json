@@ -1,0 +1,14 @@
+{
+  "name": "command-list-bun",
+  "version": "1.0.0",
+  "dependencies": {
+    "testnpm2": "1.0.1"
+  },
+  "devDependencies": {
+    "test-vite-plus-package": "1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "1.0.0"
+  },
+  "packageManager": "bun@1.3.11"
+}

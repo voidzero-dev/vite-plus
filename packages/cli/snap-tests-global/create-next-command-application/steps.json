@@ -1,0 +1,8 @@
+{
+  "commands": [
+    {
+      "command": "vp create vite:application --no-interactive # verify next command suggests vp run",
+      "ignoreOutput": false
+    }
+  ]
+}

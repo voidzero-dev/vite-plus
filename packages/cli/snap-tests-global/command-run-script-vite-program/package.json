@@ -1,0 +1,13 @@
+{
+  "name": "command-run-script-vite-program",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "vite",
+    "dev-help": "vite -h",
+    "dev-version": "vite --version",
+    "hello": "echo hello from script",
+    "hello-vpr": "vpr hello",
+    "ready": "vpr hello-vpr && vpr dev-version"
+  },
+  "packageManager": "pnpm@10.19.0"
+}

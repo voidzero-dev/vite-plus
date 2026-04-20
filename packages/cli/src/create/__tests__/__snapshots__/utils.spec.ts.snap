@@ -3,7 +3,7 @@
 exports[`formatTargetDir > should format target dir with invalid input 1`] = `
 {
   "directory": "",
-  "error": "Parsed package name "." is invalid: name cannot start with a period",
+  "error": "Absolute path is not allowed",
   "packageName": "",
 }
 `;
@@ -11,20 +11,12 @@ exports[`formatTargetDir > should format target dir with invalid input 1`] = `
 exports[`formatTargetDir > should format target dir with invalid input 2`] = `
 {
   "directory": "",
-  "error": "Absolute path is not allowed",
-  "packageName": "",
-}
-`;
-
-exports[`formatTargetDir > should format target dir with invalid input 3`] = `
-{
-  "directory": "",
   "error": "Parsed package name "@scope" is invalid: name can only contain URL-friendly characters",
   "packageName": "",
 }
 `;
 
-exports[`formatTargetDir > should format target dir with invalid input 4`] = `
+exports[`formatTargetDir > should format target dir with invalid input 3`] = `
 {
   "directory": "",
   "error": "Relative path contains ".." which is not allowed",

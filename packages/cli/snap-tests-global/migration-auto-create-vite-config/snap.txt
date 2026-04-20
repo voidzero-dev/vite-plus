@@ -1,4 +1,4 @@
-> vp migrate --no-interactive # migration should auto create vite.config.ts and remove oxlintrc and oxfmtrc
+> vp migrate --no-interactive 2>&1 # migration should auto create vite.config.ts and remove oxlintrc and oxfmtrc
 VITE+ - The Unified Toolchain for the Web
 
 ◇ Migrated . to Vite+<repeat>
@@ -30,25 +30,31 @@ export default defineConfig({
   },
 });
 
-> cat .oxlintrc.json && exit 1 || true # check .oxlintrc.json is removed
-cat: .oxlintrc.json: No such file or directory
-
-> cat .oxfmtrc.json && exit 1 || true # check .oxfmtrc.json is removed
-cat: .oxfmtrc.json: No such file or directory
-
+> test ! -f .oxlintrc.json # check .oxlintrc.json is removed
+> test ! -f .oxfmtrc.json # check .oxfmtrc.json is removed
 > cat package.json # check package.json
 {
   "devDependencies": {
-    "vite-plus": "latest"
-  },
-  "pnpm": {
-    "overrides": {
-      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-      "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
-    }
+    "vite-plus": "catalog:"
   },
   "packageManager": "pnpm@<semver>",
   "scripts": {
     "prepare": "vp config"
   }
 }
+
+> cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog
+catalog:
+  vite: npm:@voidzero-dev/vite-plus-core@latest
+  vitest: npm:@voidzero-dev/vite-plus-test@latest
+  vite-plus: latest
+overrides:
+  vite: 'catalog:'
+  vitest: 'catalog:'
+peerDependencyRules:
+  allowAny:
+    - vite
+    - vitest
+  allowedVersions:
+    vite: '*'
+    vitest: '*'

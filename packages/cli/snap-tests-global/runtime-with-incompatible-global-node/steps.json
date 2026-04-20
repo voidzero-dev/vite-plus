@@ -1,0 +1,6 @@
+{
+  "serial": true,
+  "env": {},
+  "commands": [{ "command": "vp env default 20.0.0", "ignoreOutput": true }, "vp migrate --yes"],
+  "after": ["vp env default lts"]
+}

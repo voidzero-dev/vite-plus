@@ -4,7 +4,7 @@
 
 ## Overview
 
-Use Vite+ to manage dependencies across pnpm, npm, and Yarn. Instead of switching between `pnpm install`, `npm install`, and `yarn install`, you can keep using `vp install`, `vp add`, `vp remove`, and the rest of the Vite+ package-management commands.
+Use Vite+ to manage dependencies across pnpm, npm, Yarn, and Bun. Instead of switching between `pnpm install`, `npm install`, `yarn install`, and `bun install`, you can keep using `vp install`, `vp add`, `vp remove`, and the rest of the Vite+ package-management commands.
 
 Vite+ detects the package manager from the workspace root in this order:
 
@@ -13,8 +13,10 @@ Vite+ detects the package manager from the workspace root in this order:
 3. `pnpm-lock.yaml`
 4. `yarn.lock` or `.yarnrc.yml`
 5. `package-lock.json`
-6. `.pnpmfile.cjs` or `pnpmfile.cjs`
-7. `yarn.config.cjs`
+6. `bun.lock` or `bun.lockb`
+7. `.pnpmfile.cjs` or `pnpmfile.cjs`
+8. `bunfig.toml`
+9. `yarn.config.cjs`
 
 If none of those files are present, `vp` falls back to `pnpm` by default. Vite+ automatically downloads the matching package manager and uses it for the command you ran.
 
@@ -34,7 +36,7 @@ vp install --filter web
 vp install -w
 ```
 
-`vp install` maps to the correct underlying install behavior for the detected package manager, including the right lockfile flags for pnpm, npm, and Yarn.
+`vp install` maps to the correct underlying install behavior for the detected package manager, including the right lockfile flags for pnpm, npm, Yarn, and Bun.
 
 ## Global Packages
 
@@ -58,6 +60,7 @@ Vite+ provides all the familiar package management commands:
 - `vp list` shows installed packages
 - `vp why <pkg>` explains why a package is present
 - `vp info <pkg>` shows registry metadata for a package
+- `vp rebuild` rebuilds native modules (e.g. after switching Node.js versions)
 - `vp link` and `vp unlink` manage local package links
 - `vp dlx <pkg>` runs a package binary without adding it to the project
 - `vp pm <command>` forwards a raw package-manager-specific command when you need behavior outside the normalized `vp` command set
@@ -112,6 +115,20 @@ Use these when you need to understand the current state of dependencies.
 - `vp list` shows installed packages
 - `vp why react` explains why `react` is installed
 - `vp info react` shows registry metadata such as versions and dist-tags
+
+#### Rebuild
+
+Use `vp rebuild` when native modules need to be recompiled, for example after switching Node.js versions or when a C/C++ addon fails to load.
+
+- `vp rebuild` rebuilds all native modules
+- `vp rebuild -- <args>` passes extra arguments to the underlying package manager
+
+```bash
+vp rebuild
+vp rebuild -- --update-binary
+```
+
+`vp rebuild` is a shorthand for `vp pm rebuild`.
 
 #### Advanced
 

@@ -142,6 +142,28 @@ impl PackageManager {
                     }
                 }
             }
+            PackageManagerType::Bun => {
+                bin_name = "bun".into();
+                args.push("audit".into());
+
+                if options.fix {
+                    output::warn("bun audit does not support --fix");
+                    return None;
+                }
+
+                if let Some(level) = options.level {
+                    args.push("--audit-level".into());
+                    args.push(level.to_string());
+                }
+
+                if options.production {
+                    output::warn("--production not supported by bun audit, ignoring flag");
+                }
+
+                if options.json {
+                    args.push("--json".into());
+                }
+            }
         }
 
         // Add pass-through args
@@ -318,6 +340,70 @@ mod tests {
         let result = result.unwrap();
         assert_eq!(result.bin_path, "yarn");
         assert_eq!(result.args, vec!["audit", "--level", "high"]);
+    }
+
+    #[test]
+    fn test_bun_audit_basic() {
+        let pm = create_mock_package_manager(PackageManagerType::Bun, "1.3.11");
+        let result = pm.resolve_audit_command(&AuditCommandOptions {
+            fix: false,
+            json: false,
+            level: None,
+            production: false,
+            pass_through_args: None,
+        });
+        assert!(result.is_some());
+        let result = result.unwrap();
+        assert_eq!(result.bin_path, "bun");
+        assert!(result.args.contains(&"audit".to_string()), "should contain 'audit'");
+        assert!(!result.args.contains(&"pm".to_string()), "should NOT use 'bun pm audit'");
+    }
+
+    #[test]
+    fn test_bun_audit_level() {
+        let pm = create_mock_package_manager(PackageManagerType::Bun, "1.3.11");
+        let result = pm.resolve_audit_command(&AuditCommandOptions {
+            fix: false,
+            json: false,
+            level: Some("high"),
+            production: false,
+            pass_through_args: None,
+        });
+        assert!(result.is_some());
+        let result = result.unwrap();
+        assert!(
+            result.args.contains(&"--audit-level".to_string()),
+            "should use --audit-level not --level"
+        );
+        assert!(result.args.contains(&"high".to_string()));
+    }
+
+    #[test]
+    fn test_bun_audit_fix_not_supported() {
+        let pm = create_mock_package_manager(PackageManagerType::Bun, "1.3.11");
+        let result = pm.resolve_audit_command(&AuditCommandOptions {
+            fix: true,
+            json: false,
+            level: None,
+            production: false,
+            pass_through_args: None,
+        });
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_bun_audit_json() {
+        let pm = create_mock_package_manager(PackageManagerType::Bun, "1.3.11");
+        let result = pm.resolve_audit_command(&AuditCommandOptions {
+            fix: false,
+            json: true,
+            level: None,
+            production: false,
+            pass_through_args: None,
+        });
+        assert!(result.is_some());
+        let result = result.unwrap();
+        assert_eq!(result.args, vec!["audit", "--json"]);
     }
 
     #[test]

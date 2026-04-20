@@ -4,41 +4,41 @@ input_content 1
 
 
 > FOO=1 vp run hello # hit cache
-$ node hello.mjs ✓ cache hit, replaying
+$ node hello.mjs ◉ cache hit, replaying
 input_content 1
 
 ---
 vp run: cache hit, <variable>ms saved.
 
 > FOO=2 vp run hello # env changed
-$ node hello.mjs ✗ cache miss: envs changed, executing
+$ node hello.mjs ○ cache miss: envs changed, executing
 input_content 2
 
 
 > FOO=2 BAR=1 vp run hello # env added
-$ node hello.mjs ✗ cache miss: envs changed, executing
+$ node hello.mjs ○ cache miss: envs changed, executing
 input_content 2
 
 
 > vp run hello # env removed
-$ node hello.mjs ✗ cache miss: envs changed, executing
+$ node hello.mjs ○ cache miss: envs changed, executing
 input_content undefined
 
 
 > echo bar > input.txt
 > vp run hello # input changed
-$ node hello.mjs ✗ cache miss: 'input.txt' modified, executing
+$ node hello.mjs ○ cache miss: 'input.txt' modified, executing
 bar undefined
 
 
 > # set untrackedEnv via env var
 > VITE_TASK_PASS_THROUGH_ENVS=PTE vp run hello # untrackedEnv changed
-$ node hello.mjs ✗ cache miss: untracked env config changed, executing
+$ node hello.mjs ○ cache miss: untracked env config changed, executing
 bar undefined
 
 
 > # set cwd via env var (keep untrackedEnv from previous step)
 > VITE_TASK_PASS_THROUGH_ENVS=PTE VITE_TASK_CWD=subfolder vp run hello # cwd changed
-~/subfolder$ node hello.mjs ✗ cache miss: working directory changed, executing
+~/subfolder$ node hello.mjs ○ cache miss: working directory changed, executing
 hello from subfolder
 

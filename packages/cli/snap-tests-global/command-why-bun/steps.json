@@ -1,0 +1,8 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "commands": [
+    "vp why --help # should show help",
+    "vp install # should install packages first",
+    "vp why testnpm2 # should show why package is installed"
+  ]
+}

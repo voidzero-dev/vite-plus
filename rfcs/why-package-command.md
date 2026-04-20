@@ -2,7 +2,7 @@
 
 ## Summary
 
-Add `vp why` (alias: `vp explain`) command that automatically adapts to the detected package manager (pnpm/npm/yarn) for showing all packages that depend on a specified package. This helps developers understand dependency relationships, audit package usage, and debug dependency tree issues.
+Add `vp why` (alias: `vp explain`) command that automatically adapts to the detected package manager (pnpm/npm/yarn/bun) for showing all packages that depend on a specified package. This helps developers understand dependency relationships, audit package usage, and debug dependency tree issues.
 
 ## Motivation
 
@@ -138,22 +138,22 @@ vp why typescript -g            # Check globally installed packages
 - https://yarnpkg.com/cli/why (yarn@2+)
 - Identifies why a package has been installed
 
-| Vite+ Flag                | pnpm                      | npm                     | yarn@1              | yarn@2+                  | Description                                                     |
-| ------------------------- | ------------------------- | ----------------------- | ------------------- | ------------------------ | --------------------------------------------------------------- |
-| `vp why <pkg>`            | `pnpm why <pkg>`          | `npm explain <pkg>`     | `yarn why <pkg>`    | `yarn why <pkg> --peers` | Show why package is installed                                   |
-| `--json`                  | `--json`                  | `--json`                | `--json`            | `--json`                 | JSON output format                                              |
-| `--long`                  | `--long`                  | N/A                     | N/A                 | N/A                      | Verbose output (pnpm only)                                      |
-| `--parseable`             | `--parseable`             | N/A                     | N/A                 | N/A                      | Parseable format (pnpm only)                                    |
-| `-r, --recursive`         | `-r, --recursive`         | N/A                     | N/A                 | `--recursive`            | Check across all workspaces                                     |
-| `--filter <pattern>`      | `--filter <pattern>`      | `--workspace <pattern>` | N/A                 | N/A                      | Target specific workspace (pnpm/npm)                            |
-| `-w, --workspace-root`    | `-w`                      | N/A                     | N/A                 | N/A                      | Check in workspace root (pnpm-specific)                         |
-| `-P, --prod`              | `-P, --prod`              | N/A                     | N/A                 | N/A                      | Only production dependencies (pnpm only)                        |
-| `-D, --dev`               | `-D, --dev`               | N/A                     | N/A                 | N/A                      | Only dev dependencies (pnpm only)                               |
-| `--depth <number>`        | `--depth <number>`        | N/A                     | N/A                 | N/A                      | Limit tree depth (pnpm only)                                    |
-| `--no-optional`           | `--no-optional`           | N/A                     | `--ignore-optional` | N/A                      | Exclude optional dependencies (pnpm only)                       |
-| `-g, --global`            | `-g, --global`            | N/A                     | N/A                 | N/A                      | Check globally installed packages                               |
-| `--exclude-peers`         | `--exclude-peers`         | N/A                     | N/A                 | Removes `--peers` flag   | Exclude peer dependencies (yarn@2+ defaults to including peers) |
-| `--find-by <finder_name>` | `--find-by <finder_name>` | N/A                     | N/A                 | N/A                      | Use finder function from .pnpmfile.cjs                          |
+| Vite+ Flag                | pnpm                      | npm                     | yarn@1              | yarn@2+                  | bun             | Description                                                     |
+| ------------------------- | ------------------------- | ----------------------- | ------------------- | ------------------------ | --------------- | --------------------------------------------------------------- |
+| `vp why <pkg>`            | `pnpm why <pkg>`          | `npm explain <pkg>`     | `yarn why <pkg>`    | `yarn why <pkg> --peers` | `bun why <pkg>` | Show why package is installed                                   |
+| `--json`                  | `--json`                  | `--json`                | `--json`            | `--json`                 | N/A             | JSON output format                                              |
+| `--long`                  | `--long`                  | N/A                     | N/A                 | N/A                      | N/A             | Verbose output (pnpm only)                                      |
+| `--parseable`             | `--parseable`             | N/A                     | N/A                 | N/A                      | N/A             | Parseable format (pnpm only)                                    |
+| `-r, --recursive`         | `-r, --recursive`         | N/A                     | N/A                 | `--recursive`            | N/A             | Check across all workspaces                                     |
+| `--filter <pattern>`      | `--filter <pattern>`      | `--workspace <pattern>` | N/A                 | N/A                      | N/A             | Target specific workspace (pnpm/npm)                            |
+| `-w, --workspace-root`    | `-w`                      | N/A                     | N/A                 | N/A                      | N/A             | Check in workspace root (pnpm-specific)                         |
+| `-P, --prod`              | `-P, --prod`              | N/A                     | N/A                 | N/A                      | N/A             | Only production dependencies (pnpm only)                        |
+| `-D, --dev`               | `-D, --dev`               | N/A                     | N/A                 | N/A                      | N/A             | Only dev dependencies (pnpm only)                               |
+| `--depth <number>`        | `--depth <number>`        | N/A                     | N/A                 | N/A                      | `--depth`       | Limit tree depth (pnpm/bun)                                     |
+| `--no-optional`           | `--no-optional`           | N/A                     | `--ignore-optional` | N/A                      | N/A             | Exclude optional dependencies (pnpm only)                       |
+| `-g, --global`            | `-g, --global`            | N/A                     | N/A                 | N/A                      | N/A             | Check globally installed packages                               |
+| `--exclude-peers`         | `--exclude-peers`         | N/A                     | N/A                 | Removes `--peers` flag   | N/A             | Exclude peer dependencies (yarn@2+ defaults to including peers) |
+| `--find-by <finder_name>` | `--find-by <finder_name>` | N/A                     | N/A                 | N/A                      | N/A             | Use finder function from .pnpmfile.cjs                          |
 
 **Note:**
 
@@ -162,6 +162,7 @@ vp why typescript -g            # Check globally installed packages
 - yarn has `why` command in both v1 and v2+, but different output formats, only supports single package
 - pnpm has the most comprehensive filtering and output options
 - npm has simpler output focused on the dependency path
+- bun uses `bun why <pkg>` as a direct subcommand (not `bun pm why`); it provides a tree visualization of dependency relationships
 
 **Aliases:**
 
@@ -989,6 +990,7 @@ vp why react --json  # On yarn
 - yarn@4.x
 - npm@10.x
 - npm@11.x
+- bun@1.x [WIP]
 
 ### Unit Tests
 
@@ -1253,19 +1255,20 @@ vp why package --prod --json
 
 ## Package Manager Compatibility
 
-| Feature          | pnpm              | npm              | yarn@1           | yarn@2+          | Notes                   |
-| ---------------- | ----------------- | ---------------- | ---------------- | ---------------- | ----------------------- |
-| Basic command    | `why`             | `explain`        | `why`            | `why`            | npm uses different name |
-| Multiple pkgs    | ✅ Supported      | ✅ Supported     | ❌ Single only   | ❌ Single only   | pnpm and npm            |
-| Glob patterns    | ✅ Supported      | ❌ Not supported | ❌ Not supported | ❌ Not supported | pnpm only               |
-| JSON output      | ✅ `--json`       | ✅ `--json`      | ❌ Not supported | ❌ Not supported | pnpm and npm only       |
-| Long output      | ✅ `--long`       | ❌ Not supported | ❌ Not supported | ❌ Not supported | pnpm only               |
-| Parseable        | ✅ `--parseable`  | ❌ Not supported | ❌ Not supported | ❌ Not supported | pnpm only               |
-| Recursive        | ✅ `-r`           | ❌ Not supported | ❌ Not supported | ✅ `--recursive` | pnpm and yarn@2+        |
-| Workspace filter | ✅ `--filter`     | ✅ `--workspace` | ❌ Not supported | ❌ Not supported | pnpm and npm            |
-| Dep type filter  | ✅ `--prod/--dev` | ❌ Not supported | ❌ Not supported | ❌ Not supported | pnpm only               |
-| Depth limit      | ✅ `--depth`      | ❌ Not supported | ❌ Not supported | ❌ Not supported | pnpm only               |
-| Global check     | ✅ `-g`           | ❌ Not supported | ❌ Not supported | ❌ Not supported | pnpm only               |
+| Feature          | pnpm              | npm              | yarn@1           | yarn@2+          | bun              | Notes                   |
+| ---------------- | ----------------- | ---------------- | ---------------- | ---------------- | ---------------- | ----------------------- |
+| Basic command    | `why`             | `explain`        | `why`            | `why`            | `why`            | npm uses different name |
+| Multiple pkgs    | ✅ Supported      | ✅ Supported     | ❌ Single only   | ❌ Single only   | ❌ Single only   | pnpm and npm            |
+| Glob patterns    | ✅ Supported      | ❌ Not supported | ❌ Not supported | ❌ Not supported | ❌ Not supported | pnpm only               |
+| JSON output      | ✅ `--json`       | ✅ `--json`      | ❌ Not supported | ❌ Not supported | ❌ Not supported | pnpm and npm only       |
+| Long output      | ✅ `--long`       | ❌ Not supported | ❌ Not supported | ❌ Not supported | ❌ Not supported | pnpm only               |
+| Parseable        | ✅ `--parseable`  | ❌ Not supported | ❌ Not supported | ❌ Not supported | ❌ Not supported | pnpm only               |
+| Recursive        | ✅ `-r`           | ❌ Not supported | ❌ Not supported | ✅ `--recursive` | ❌ Not supported | pnpm and yarn@2+        |
+| Workspace filter | ✅ `--filter`     | ✅ `--workspace` | ❌ Not supported | ❌ Not supported | ❌ Not supported | pnpm and npm            |
+| Dep type filter  | ✅ `--prod/--dev` | ❌ Not supported | ❌ Not supported | ❌ Not supported | ❌ Not supported | pnpm only               |
+| Depth limit      | ✅ `--depth`      | ❌ Not supported | ❌ Not supported | ❌ Not supported | ✅ `--depth`     | pnpm and bun            |
+| Global check     | ✅ `-g`           | ❌ Not supported | ❌ Not supported | ❌ Not supported | ❌ Not supported | pnpm only               |
+| Tree view        | ❌ Not supported  | ❌ Not supported | ❌ Not supported | ❌ Not supported | ✅ Built-in      | bun shows tree view     |
 
 ## Future Enhancements
 
@@ -1365,7 +1368,7 @@ Total impact: 23.3MB
 
 ## Conclusion
 
-This RFC proposes adding `vp why` command to provide a unified interface for understanding dependency relationships across pnpm/npm/yarn. The design:
+This RFC proposes adding `vp why` command to provide a unified interface for understanding dependency relationships across pnpm/npm/yarn/bun. The design:
 
 - ✅ Automatically adapts to detected package manager
 - ✅ Supports multiple packages (pnpm) with graceful degradation

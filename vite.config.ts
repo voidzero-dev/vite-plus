@@ -17,6 +17,7 @@ export default defineConfig({
       'no-console': ['error', { allow: ['error'] }],
       'no-shadow': 'off',
       'typescript/no-unnecessary-boolean-literal-compare': 'off',
+      'typescript/no-unnecessary-type-arguments': 'off',
       'typescript/no-unsafe-type-assertion': 'off',
       curly: 'error',
     },
@@ -55,7 +56,7 @@ export default defineConfig({
   test: {
     exclude: [
       './ecosystem-ci/**',
-      './rolldown-vite/**',
+      './vite/**',
       './rolldown/**',
       '**/node_modules/**',
       '**/snap-tests/**',
@@ -77,7 +78,8 @@ export default defineConfig({
       'packages/test/**.d.ts',
       'packages/test/**.mjs',
       'packages/test/browser/',
-      'rolldown-vite',
+      'packages/cli/src/run-config.ts',
+      'vite',
       'rolldown',
     ],
     singleQuote: true,

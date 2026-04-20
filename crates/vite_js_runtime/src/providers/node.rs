@@ -16,7 +16,12 @@ use crate::{
 };
 
 /// Default Node.js distribution base URL
+#[cfg(not(target_env = "musl"))]
 const DEFAULT_NODE_DIST_URL: &str = "https://nodejs.org/dist";
+
+/// Unofficial builds URL for musl (official nodejs.org only provides glibc binaries)
+#[cfg(target_env = "musl")]
+const DEFAULT_NODE_DIST_URL: &str = "https://unofficial-builds.nodejs.org/download/release";
 
 /// Environment variable to override the Node.js distribution URL
 
@@ -308,6 +313,16 @@ impl NodeProvider {
         find_latest_lts_version(&versions)
     }
 
+    /// Get the absolute latest version, including non-LTS.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if no version is found or the version index cannot be fetched.
+    pub async fn resolve_absolute_latest_version(&self) -> Result<Str, Error> {
+        let versions = self.fetch_version_index().await?;
+        find_absolute_latest_version(&versions)
+    }
+
     /// Check if a version string is an LTS alias (e.g., `lts/*`, `lts/iron`, `lts/-1`).
     ///
     /// Returns `true` for LTS alias formats:
@@ -456,6 +471,21 @@ fn find_latest_lts_version(versions: &[NodeVersionEntry]) -> Result<Str, Error> 
     })
 }
 
+/// Find the absolute latest version, regardless of LTS status.
+///
+/// The version index is sorted newest-first, so we take the first entry.
+fn find_absolute_latest_version(versions: &[NodeVersionEntry]) -> Result<Str, Error> {
+    versions
+        .first()
+        .map(|entry| {
+            let version_str = entry.version.strip_prefix('v').unwrap_or(&entry.version);
+            version_str.into()
+        })
+        .ok_or_else(|| Error::VersionIndexParseFailed {
+            reason: "No version found in version index".into(),
+        })
+}
+
 /// Resolve a version requirement to a matching version from a list.
 ///
 /// Prefers LTS versions over non-LTS versions. Returns the highest LTS version
@@ -528,7 +558,7 @@ fn calculate_expires_at(max_age: Option<u64>) -> u64 {
 
 /// Get the Node.js distribution base URL
 ///
-/// Returns the value of `VITE_NODE_DIST_MIRROR` environment variable if set,
+/// Returns the value of `VP_NODE_DIST_MIRROR` environment variable if set,
 /// otherwise returns the default `https://nodejs.org/dist`.
 fn get_dist_url() -> Str {
     vite_shared::EnvConfig::get().node_dist_mirror.map_or_else(
@@ -553,6 +583,12 @@ impl JsRuntimeProvider for NodeProvider {
             crate::platform::Arch::X64 => "x64",
             crate::platform::Arch::Arm64 => "arm64",
         };
+        // On musl targets, append "-musl" to match unofficial-builds filename pattern
+        // e.g. "linux-x64-musl" instead of "linux-x64"
+        #[cfg(target_env = "musl")]
+        if platform.os == Os::Linux {
+            return vite_str::format!("{os}-{arch}-musl");
+        }
         vite_str::format!("{os}-{arch}")
     }
 
@@ -616,9 +652,19 @@ mod tests {
     fn test_platform_string() {
         let provider = NodeProvider::new();
 
+        #[cfg(not(target_env = "musl"))]
         let cases = [
             (Platform { os: Os::Linux, arch: Arch::X64 }, "linux-x64"),
             (Platform { os: Os::Linux, arch: Arch::Arm64 }, "linux-arm64"),
+            (Platform { os: Os::Darwin, arch: Arch::X64 }, "darwin-x64"),
+            (Platform { os: Os::Darwin, arch: Arch::Arm64 }, "darwin-arm64"),
+            (Platform { os: Os::Windows, arch: Arch::X64 }, "win-x64"),
+            (Platform { os: Os::Windows, arch: Arch::Arm64 }, "win-arm64"),
+        ];
+        #[cfg(target_env = "musl")]
+        let cases = [
+            (Platform { os: Os::Linux, arch: Arch::X64 }, "linux-x64-musl"),
+            (Platform { os: Os::Linux, arch: Arch::Arm64 }, "linux-arm64-musl"),
             (Platform { os: Os::Darwin, arch: Arch::X64 }, "darwin-x64"),
             (Platform { os: Os::Darwin, arch: Arch::Arm64 }, "darwin-arm64"),
             (Platform { os: Os::Windows, arch: Arch::X64 }, "win-x64"),
@@ -637,19 +683,38 @@ mod tests {
 
         let info = provider.get_download_info("22.13.1", platform);
 
-        assert_eq!(info.archive_filename, "node-v22.13.1-linux-x64.tar.gz");
-        assert_eq!(
-            info.archive_url,
-            "https://nodejs.org/dist/v22.13.1/node-v22.13.1-linux-x64.tar.gz"
-        );
-        assert_eq!(info.archive_format, ArchiveFormat::TarGz);
-        assert_eq!(info.extracted_dir_name, "node-v22.13.1-linux-x64");
-
-        if let HashVerification::ShasumsFile { url } = &info.hash_verification {
-            assert_eq!(url, "https://nodejs.org/dist/v22.13.1/SHASUMS256.txt");
-        } else {
-            panic!("Expected ShasumsFile verification");
+        #[cfg(not(target_env = "musl"))]
+        {
+            assert_eq!(info.archive_filename, "node-v22.13.1-linux-x64.tar.gz");
+            assert_eq!(
+                info.archive_url,
+                "https://nodejs.org/dist/v22.13.1/node-v22.13.1-linux-x64.tar.gz"
+            );
+            assert_eq!(info.extracted_dir_name, "node-v22.13.1-linux-x64");
+            if let HashVerification::ShasumsFile { url } = &info.hash_verification {
+                assert_eq!(url, "https://nodejs.org/dist/v22.13.1/SHASUMS256.txt");
+            } else {
+                panic!("Expected ShasumsFile verification");
+            }
         }
+        #[cfg(target_env = "musl")]
+        {
+            assert_eq!(info.archive_filename, "node-v22.13.1-linux-x64-musl.tar.gz");
+            assert_eq!(
+                info.archive_url,
+                "https://unofficial-builds.nodejs.org/download/release/v22.13.1/node-v22.13.1-linux-x64-musl.tar.gz"
+            );
+            assert_eq!(info.extracted_dir_name, "node-v22.13.1-linux-x64-musl");
+            if let HashVerification::ShasumsFile { url } = &info.hash_verification {
+                assert_eq!(
+                    url,
+                    "https://unofficial-builds.nodejs.org/download/release/v22.13.1/SHASUMS256.txt"
+                );
+            } else {
+                panic!("Expected ShasumsFile verification");
+            }
+        }
+        assert_eq!(info.archive_format, ArchiveFormat::TarGz);
     }
 
     #[test]
@@ -724,7 +789,7 @@ fedcba987654  node-v22.13.1-win-x64.zip";
     #[test]
     fn test_get_dist_url_default() {
         vite_shared::EnvConfig::test_scope(vite_shared::EnvConfig::for_test(), || {
-            assert_eq!(get_dist_url(), "https://nodejs.org/dist");
+            assert_eq!(get_dist_url(), DEFAULT_NODE_DIST_URL);
         });
     }
 
@@ -1141,6 +1206,49 @@ fedcba987654  node-v22.13.1-win-x64.zip";
         // ^20.18.0 should return 20.19.0 (the only LTS in range)
         let result = resolve_version_from_list("^20.18.0", &versions).unwrap();
         assert_eq!(result, "20.19.0");
+    }
+
+    // ========================================================================
+    // Absolute Latest Version Tests
+    // ========================================================================
+
+    #[test]
+    fn test_find_absolute_latest_version() {
+        use super::find_absolute_latest_version;
+
+        let versions = vec![
+            NodeVersionEntry { version: "v25.5.0".into(), lts: LtsInfo::NotLts },
+            NodeVersionEntry { version: "v24.5.0".into(), lts: LtsInfo::Codename("Jod".into()) },
+            NodeVersionEntry { version: "v22.15.0".into(), lts: LtsInfo::Codename("Jod".into()) },
+            NodeVersionEntry { version: "v20.19.0".into(), lts: LtsInfo::Codename("Iron".into()) },
+        ];
+
+        // Should return the absolute highest version, not LTS
+        let result = find_absolute_latest_version(&versions).unwrap();
+        assert_eq!(result, "25.5.0");
+    }
+
+    #[test]
+    fn test_find_absolute_latest_version_all_lts() {
+        use super::find_absolute_latest_version;
+
+        let versions = vec![
+            NodeVersionEntry { version: "v24.5.0".into(), lts: LtsInfo::Codename("Jod".into()) },
+            NodeVersionEntry { version: "v22.15.0".into(), lts: LtsInfo::Codename("Jod".into()) },
+        ];
+
+        // When all versions are LTS, return the highest
+        let result = find_absolute_latest_version(&versions).unwrap();
+        assert_eq!(result, "24.5.0");
+    }
+
+    #[test]
+    fn test_find_absolute_latest_version_empty() {
+        use super::find_absolute_latest_version;
+
+        let versions: Vec<NodeVersionEntry> = vec![];
+        let result = find_absolute_latest_version(&versions);
+        assert!(result.is_err());
     }
 
     // ========================================================================

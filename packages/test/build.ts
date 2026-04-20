@@ -56,7 +56,7 @@ import { format } from 'oxfmt';
 import { build } from 'rolldown';
 import { dts } from 'rolldown-plugin-dts';
 
-import { generateLicenseFile } from '../../scripts/generate-license.ts';
+import { generateLicenseFile } from '../../scripts/generate-license.js';
 import pkg from './package.json' with { type: 'json' };
 
 const projectDir = dirname(fileURLToPath(import.meta.url));
@@ -65,6 +65,7 @@ const distDir = resolve(projectDir, 'dist');
 const vendorDir = resolve(distDir, 'vendor');
 
 const CORE_PACKAGE_NAME = '@voidzero-dev/vite-plus-core';
+const TEST_PACKAGE_NAME = '@voidzero-dev/vite-plus-test';
 
 // @vitest/* packages to copy (not bundle) to preserve browser/Node.js separation
 // These are copied from node_modules to dist/@vitest/ to avoid shared chunks
@@ -224,12 +225,13 @@ await createBrowserEntryFiles();
 await patchModuleAugmentations();
 await patchChaiTypeReference();
 await patchMockerHoistedModule();
+await patchServerDepsInline();
 const pluginExports = await createPluginExports();
 await mergePackageJson(pluginExports);
 generateLicenseFile({
   title: 'Vite-Plus test license',
   packageName: 'Vite-Plus',
-  outputPath: join(projectDir, 'LICENSE.md'),
+  outputPath: join(projectDir, 'LICENSE'),
   coreLicensePath: join(projectDir, '..', '..', 'LICENSE'),
   bundledPaths: [distDir],
   resolveFrom: [projectDir, join(projectDir, '..', '..')],
@@ -240,10 +242,9 @@ generateLicenseFile({
     })),
   ],
 });
-if (!existsSync(join(projectDir, 'LICENSE.md'))) {
-  throw new Error('LICENSE.md was not generated during build');
+if (!existsSync(join(projectDir, 'LICENSE'))) {
+  throw new Error('LICENSE was not generated during build');
 }
-await syncLicenseFromRoot();
 await validateExternalDeps();
 
 async function mergePackageJson(pluginExports: Array<{ exportPath: string; shimFile: string }>) {
@@ -432,12 +433,6 @@ async function mergePackageJson(pluginExports: Array<{ exportPath: string; shimF
   await writeFile(destPackageJsonPath, code);
 }
 
-async function syncLicenseFromRoot() {
-  const rootLicensePath = join(projectDir, '..', '..', 'LICENSE');
-  const packageLicensePath = join(projectDir, 'LICENSE');
-  await copyFile(rootLicensePath, packageLicensePath);
-}
-
 async function bundleVitest() {
   const vitestDestDir = projectDir;
 
@@ -449,6 +444,7 @@ async function bundleVitest() {
       join(vitestSourceDir, 'node_modules/**'),
       join(vitestSourceDir, 'package.json'),
       join(vitestSourceDir, 'README.md'),
+      join(vitestSourceDir, 'LICENSE.md'),
     ],
   });
 
@@ -479,7 +475,8 @@ async function bundleVitest() {
         .replaceAll(/require\("vite"\)/g, `require("${CORE_PACKAGE_NAME}")`)
         .replaceAll(`import 'vite';`, `import '${CORE_PACKAGE_NAME}';`)
         .replaceAll(`'vite/module-runner'`, `'${CORE_PACKAGE_NAME}/module-runner'`)
-        .replaceAll(`declare module "vite"`, `declare module "${CORE_PACKAGE_NAME}"`);
+        .replaceAll(`declare module "vite"`, `declare module "${CORE_PACKAGE_NAME}"`)
+        .replaceAll(/import\(['"]vitest['"]\)/g, `import('${TEST_PACKAGE_NAME}')`);
       console.log(`Replaced vite imports in ${destPath}`);
       await writeFile(destPath, content, 'utf-8');
     } else {
@@ -520,11 +517,11 @@ async function brandVitest() {
     // 1. CLI name: cac("vitest") → cac("vp test")
     patchString('cac name', 'cac("vitest")', 'cac("vp test")');
 
-    // 2. Version: var version = "<semver>" → use VITE_PLUS_VERSION env var with fallback
+    // 2. Version: var version = "<semver>" → use VP_VERSION env var with fallback
     patchString(
       'version',
       /var version = "(\d+\.\d+\.\d+[^"]*)"/,
-      'var version = process.env.VITE_PLUS_VERSION || "$1"',
+      'var version = process.env.VP_VERSION || "$1"',
     );
 
     // 3. Banner regex: /^vitest\/\d+\.\d+\.\d+$/ → /^vp test\/[\d.]+$/
@@ -931,8 +928,9 @@ async function rewriteVitestImports(leafDepToVendorPath: Map<string, string>) {
       vitest: resolve(distDir, 'index.js'),
       'vitest/node': resolve(distDir, 'node.js'),
       'vitest/config': resolve(distDir, 'config.js'),
-      // vitest/browser exports page, server, etc from @vitest/browser
-      'vitest/browser': resolve(distDir, '@vitest/browser/index.js'),
+      // vitest/browser exports page, server, CDPSession, BrowserCommands, etc from @vitest/browser/context
+      // This matches vitest's own package.json exports: "./browser" -> "./browser/context.d.ts"
+      'vitest/browser': resolve(distDir, '@vitest/browser/context.js'),
       // vitest/internal/browser exports browser-safe __INTERNAL and stringify (NOT @vitest/browser/index.js which has Node.js code)
       'vitest/internal/browser': resolve(distDir, 'browser.js'),
       'vitest/runners': resolve(distDir, 'runners.js'),
@@ -1457,8 +1455,16 @@ async function patchVitestBrowserPackage() {
 
   // 1. Inject vitest:vendor-aliases plugin into BrowserPlugin return array
   // This allows imports like @vitest/runner to be resolved to our copied @vitest files
+  // Exclude @vitest/browser/context from vendor-aliases so that BrowserContext
+  // plugin's resolveId can intercept the bare specifier and return the virtual
+  // module (which includes the dynamically generated `server` export).
+  // Without this, vendor-aliases resolves the bare specifier to the static
+  // context.js file (which has no `server`), bypassing BrowserContext entirely.
+  // See: https://github.com/voidzero-dev/vite-plus/issues/1086
+  const VENDOR_ALIASES_EXCLUDE = new Set(['@vitest/browser/context']);
+
   const mappingEntries = Object.entries(VITEST_PACKAGE_TO_PATH)
-    .filter(([pkg]) => pkg.startsWith('@vitest/'))
+    .filter(([pkg]) => pkg.startsWith('@vitest/') && !VENDOR_ALIASES_EXCLUDE.has(pkg))
     .map(([pkg, file]) => `'${pkg}': resolve(packageRoot, '${file}')`)
     .join(',\n      ');
 
@@ -1624,6 +1630,18 @@ async function patchVitestBrowserPackage() {
         'This likely means vitest code has changed and the patch needs to be updated.',
     );
   }
+
+  // 5. Patch version to use VP_VERSION, preventing the "Running mixed versions" warning
+  const versionPattern = /var version = "(\d+\.\d+\.\d+[^"]*)"/;
+  const beforeVersion = content;
+  content = content.replace(versionPattern, 'var version = process.env.VP_VERSION || "$1"');
+  if (content === beforeVersion) {
+    throw new Error(
+      'Failed to patch version in @vitest/browser/index.js: pattern not found. ' +
+        'This likely means vitest code has changed and the patch needs to be updated.',
+    );
+  }
+  console.log('  Patched version to use VP_VERSION env var');
 
   await writeFile(browserIndexPath, content, 'utf-8');
   console.log('  Successfully patched @vitest/browser/index.js');
@@ -2064,7 +2082,7 @@ export * from '../dist/@vitest/browser/context.d.ts'
 }
 
 /**
- * Patch module augmentations in global.d.*.d.ts files to use relative paths.
+ * Patch module augmentations in global.d.*.d.ts files.
  *
  * The original vitest types use module augmentation like:
  *   declare module "@vitest/expect" { interface Assertion<T> { toMatchSnapshot: ... } }
@@ -2073,12 +2091,11 @@ export * from '../dist/@vitest/browser/context.d.ts'
  * "@vitest/expect" doesn't exist as a package for consumers. This breaks the
  * module augmentation - TypeScript can't find @vitest/expect to augment.
  *
- * The fix: Change module augmentation to use relative paths that TypeScript CAN resolve:
- *   declare module "../@vitest/expect/index.js" { ... }
- *
- * This makes TypeScript augment the same module that our index.d.ts imports from,
- * so the augmented properties (toMatchSnapshot, toMatchInlineSnapshot, etc.)
- * appear on the Assertion type that consumers import.
+ * The fix has two parts:
+ * 1. Change module augmentation to use relative paths that TypeScript CAN resolve:
+ *      declare module "../@vitest/expect/index.js" { ... }
+ * 2. Merge augmented interface/type definitions into the target .d.ts files so that
+ *    downstream DTS bundlers (rolldown) can resolve them without cross-file augmentation.
  */
 async function patchModuleAugmentations() {
   console.log('\nPatching module augmentations in global.d.*.d.ts files...');
@@ -2096,29 +2113,178 @@ async function patchModuleAugmentations() {
     return;
   }
 
-  // Module augmentation mappings: bare specifier -> relative path from chunks/
-  const augmentationMappings: Record<string, string> = {
-    '@vitest/expect': '../@vitest/expect/index.js',
-    '@vitest/runner': '../@vitest/runner/index.js',
+  // Module augmentation mappings: bare specifier -> [relative path, target .d.ts file]
+  const augmentationMappings: Record<string, { relativePath: string; targetFile: string }> = {
+    '@vitest/expect': {
+      relativePath: '../@vitest/expect/index.js',
+      targetFile: join(distDir, '@vitest/expect/index.d.ts'),
+    },
+    '@vitest/runner': {
+      relativePath: '../@vitest/runner/index.js',
+      targetFile: join(distDir, '@vitest/runner/utils.d.ts'),
+    },
   };
 
   for (const file of globalDtsFiles) {
     let content = await readFile(file, 'utf-8');
     let modified = false;
 
-    for (const [bareSpecifier, relativePath] of Object.entries(augmentationMappings)) {
+    for (const [bareSpecifier, { relativePath, targetFile }] of Object.entries(
+      augmentationMappings,
+    )) {
       const oldPattern = `declare module "${bareSpecifier}"`;
-      const newPattern = `declare module "${relativePath}"`;
 
-      if (content.includes(oldPattern)) {
-        content = content.replaceAll(oldPattern, newPattern);
-        modified = true;
-        console.log(`  Patched: ${bareSpecifier} -> ${relativePath} in ${basename(file)}`);
+      // Extract the augmentation block content using brace matching
+      const startIdx = content.indexOf(oldPattern);
+      const braceStart = startIdx !== -1 ? content.indexOf('{', startIdx) : -1;
+      if (braceStart === -1) {
+        continue;
       }
+
+      let depth = 0;
+      let braceEnd = -1;
+      for (let i = braceStart; i < content.length; i++) {
+        if (content[i] === '{') {
+          depth++;
+        } else if (content[i] === '}') {
+          depth--;
+          if (depth === 0) {
+            braceEnd = i;
+            break;
+          }
+        }
+      }
+      if (braceEnd === -1) {
+        continue;
+      }
+
+      const innerContent = content.slice(braceStart + 1, braceEnd).trim();
+
+      // Merge only NEW type declarations into the target .d.ts file.
+      // Interfaces that already exist (e.g., ExpectStatic, Assertion, MatcherState) must NOT
+      // be re-declared, as that would shadow extends clauses and break call signatures.
+      if (innerContent && existsSync(targetFile)) {
+        let targetContent = await readFile(targetFile, 'utf-8');
+
+        // Extract individual interface blocks from the augmentation content
+        const interfaceRegex = /(?:export\s+)?interface\s+(\w+)(?:<[^>]*>)?\s*\{/g;
+        let match;
+        const newDeclarations: string[] = [];
+
+        while ((match = interfaceRegex.exec(innerContent)) !== null) {
+          const name = match[1];
+          // Only merge if this interface does NOT already exist in the target file.
+          // Check both direct declarations (interface Name) and re-exports (export type { Name }).
+          const hasDirectDecl = new RegExp(`\\binterface\\s+${name}\\b`).test(targetContent);
+          const exportTypeMatch = targetContent.match(/export\s+type\s*\{([^}]*)\}/);
+          const isReExported =
+            exportTypeMatch != null && new RegExp(`\\b${name}\\b`).test(exportTypeMatch[1]);
+          if (hasDirectDecl || isReExported) {
+            console.log(
+              `  Skipped existing interface "${name}" (already in ${basename(targetFile)})`,
+            );
+            continue;
+          }
+
+          // Extract this interface block using brace matching
+          const ifaceStart = match.index;
+          const ifaceBraceStart = innerContent.indexOf('{', ifaceStart);
+          let ifaceDepth = 0;
+          let ifaceBraceEnd = -1;
+          for (let i = ifaceBraceStart; i < innerContent.length; i++) {
+            if (innerContent[i] === '{') {
+              ifaceDepth++;
+            } else if (innerContent[i] === '}') {
+              ifaceDepth--;
+              if (ifaceDepth === 0) {
+                ifaceBraceEnd = i;
+                break;
+              }
+            }
+          }
+          if (ifaceBraceEnd === -1) {
+            continue;
+          }
+
+          let block = innerContent.slice(ifaceStart, ifaceBraceEnd + 1).trim();
+          if (!block.startsWith('export')) {
+            block = `export ${block}`;
+          }
+          newDeclarations.push(block);
+          console.log(`  Merged new interface "${name}" into ${basename(targetFile)}`);
+        }
+
+        if (newDeclarations.length > 0) {
+          targetContent += `\n// Merged from module augmentation: declare module "${bareSpecifier}"\n${newDeclarations.join('\n')}\n`;
+          await writeFile(targetFile, targetContent, 'utf-8');
+        }
+      }
+
+      // Rewrite declare module path to relative
+      const newPattern = `declare module "${relativePath}"`;
+      content = content.replaceAll(oldPattern, newPattern);
+      modified = true;
+      console.log(`  Patched: ${bareSpecifier} -> ${relativePath} in ${basename(file)}`);
     }
 
     if (modified) {
       await writeFile(file, content, 'utf-8');
+    }
+  }
+
+  // Re-export BrowserCommands from context.d.ts (imported but not exported)
+  const contextDtsPath = join(distDir, '@vitest/browser/context.d.ts');
+  if (existsSync(contextDtsPath)) {
+    let content = await readFile(contextDtsPath, 'utf-8');
+    if (
+      content.includes('BrowserCommands') &&
+      !content.match(/export\s+(type\s+)?\{[^}]*BrowserCommands/)
+    ) {
+      content += '\nexport type { BrowserCommands };\n';
+      await writeFile(contextDtsPath, content, 'utf-8');
+      console.log('  Added BrowserCommands re-export to context.d.ts');
+    }
+  }
+
+  // Validate: ensure no duplicate top-level interface declarations were introduced by merging.
+  // Only count interfaces at the module scope (not nested inside declare global, namespace, etc.)
+  for (const [bareSpecifier, { targetFile }] of Object.entries(augmentationMappings)) {
+    if (!existsSync(targetFile)) {
+      continue;
+    }
+    const finalContent = await readFile(targetFile, 'utf-8');
+
+    // Extract top-level interface names by tracking brace depth
+    const topLevelInterfaces: string[] = [];
+    let depth = 0;
+    for (let i = 0; i < finalContent.length; i++) {
+      if (finalContent[i] === '{') {
+        depth++;
+      } else if (finalContent[i] === '}') {
+        depth--;
+      } else if (depth === 0) {
+        const remaining = finalContent.slice(i);
+        const m = remaining.match(/^interface\s+(\w+)/);
+        if (m) {
+          topLevelInterfaces.push(m[1]);
+          i += m[0].length - 1;
+        }
+      }
+    }
+
+    const counts = new Map<string, number>();
+    for (const name of topLevelInterfaces) {
+      counts.set(name, (counts.get(name) || 0) + 1);
+    }
+
+    for (const [name, count] of counts) {
+      if (count > 1) {
+        throw new Error(
+          `Interface "${name}" is declared ${count} times at top level in ${basename(targetFile)}. ` +
+            `Module augmentation merge for "${bareSpecifier}" likely created a duplicate ` +
+            `declaration that will shadow extends clauses and break type signatures.`,
+        );
+      }
     }
   }
 }
@@ -2201,6 +2367,83 @@ async function patchMockerHoistedModule() {
         'This likely means vitest code has changed and the patch needs to be updated.',
     );
   }
+}
+
+/**
+ * Patch vitest's ModuleRunnerTransform plugin to automatically add known
+ * packages that use `expect.extend()` internally to `server.deps.inline`.
+ *
+ * When third-party libraries (e.g., @testing-library/jest-dom) call
+ * `require('vitest').expect.extend(matchers)`, the npm override causes
+ * a separate module instance to be created, so matchers are registered
+ * on a different `chai` instance than the one used by the test runner.
+ *
+ * By inlining these packages via `server.deps.inline`, the Vite module
+ * runner processes them through its transform pipeline, ensuring they
+ * share the same module instance as the test runner.
+ *
+ * See: https://github.com/voidzero-dev/vite-plus/issues/897
+ */
+async function patchServerDepsInline() {
+  console.log('\nPatching server.deps.inline for expect.extend compatibility...');
+
+  let cliApiChunk: string | undefined;
+  for await (const chunk of fsGlob(join(distDir, 'chunks/cli-api.*.js'))) {
+    cliApiChunk = chunk;
+    break;
+  }
+
+  if (!cliApiChunk) {
+    throw new Error('cli-api chunk not found for patchServerDepsInline');
+  }
+
+  let content = await readFile(cliApiChunk, 'utf-8');
+
+  // Packages that internally call expect.extend() and break under npm override.
+  // These must be inlined so they share the same vitest module instance.
+  const inlinePackages = ['@testing-library/jest-dom', '@storybook/test', 'jest-extended'];
+
+  // Find the configResolved handler in ModuleRunnerTransform (vitest:environments-module-runner)
+  // and inject our inline packages after the existing server.deps.inline logic.
+  const original = `if (external.length) {
+          testConfig.server.deps.external ??= [];
+          testConfig.server.deps.external.push(...external);
+        }`;
+
+  const patched = `if (external.length) {
+          testConfig.server.deps.external ??= [];
+          testConfig.server.deps.external.push(...external);
+        }
+        // Auto-inline packages that use expect.extend() internally (#897)
+        // Only inline packages that are actually installed in the project.
+        if (testConfig.server.deps.inline !== true) {
+          testConfig.server.deps.inline ??= [];
+          if (Array.isArray(testConfig.server.deps.inline)) {
+            const _require = createRequire(config.root + "/package.json");
+            const autoInline = ${JSON.stringify(inlinePackages)};
+            for (const pkg of autoInline) {
+              if (testConfig.server.deps.inline.includes(pkg)) continue;
+              try {
+                _require.resolve(pkg);
+                testConfig.server.deps.inline.push(pkg);
+              } catch {
+                // Package not installed in the project — skip silently
+              }
+            }
+          }
+        }`;
+
+  if (!content.includes(original)) {
+    throw new Error(
+      'Could not find server.deps.external pattern in ' +
+        cliApiChunk +
+        '. This likely means vitest code has changed and the patch needs to be updated.',
+    );
+  }
+
+  content = content.replace(original, patched);
+  await writeFile(cliApiChunk, content, 'utf-8');
+  console.log(`  Added auto-inline for: ${inlinePackages.join(', ')}`);
 }
 
 /**

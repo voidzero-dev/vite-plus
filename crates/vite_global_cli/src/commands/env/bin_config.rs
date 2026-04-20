@@ -10,7 +10,7 @@
 use serde::{Deserialize, Serialize};
 use vite_path::AbsolutePathBuf;
 
-use super::config::get_vite_plus_home;
+use super::config::get_vp_home;
 use crate::error::Error;
 
 /// Source that installed a binary.
@@ -54,7 +54,7 @@ impl BinConfig {
 
     /// Get the bins directory path (~/.vite-plus/bins/).
     pub fn bins_dir() -> Result<AbsolutePathBuf, Error> {
-        Ok(get_vite_plus_home()?.join("bins"))
+        Ok(get_vp_home()?.join("bins"))
     }
 
     /// Get the path to a binary's config file.
@@ -137,11 +137,25 @@ impl BinConfig {
         Ok(())
     }
 
+    /// Find all binaries with `Vp` source (installed via `vp install -g`).
+    ///
+    /// Used during shim refresh to discover package shims that need their
+    /// trampoline executables updated after a vite-plus upgrade.
+    #[cfg_attr(not(windows), allow(dead_code))] // Only called from #[cfg(windows)] refresh_package_shims
+    pub async fn find_all_vp_source() -> Result<Vec<String>, Error> {
+        Self::find_bins_where(|config| config.source == BinSource::Vp).await
+    }
+
     /// Find all binaries installed by a package.
     ///
     /// This is used as a fallback during uninstall when PackageMetadata is missing
     /// (orphan recovery).
     pub async fn find_by_package(package_name: &str) -> Result<Vec<String>, Error> {
+        Self::find_bins_where(|config| config.package == package_name).await
+    }
+
+    /// Scan `~/.vite-plus/bins/` and return names of binaries matching a predicate.
+    async fn find_bins_where(predicate: impl Fn(&BinConfig) -> bool) -> Result<Vec<String>, Error> {
         let bins_dir = Self::bins_dir()?;
         if !tokio::fs::try_exists(&bins_dir).await.unwrap_or(false) {
             return Ok(Vec::new());
@@ -155,7 +169,7 @@ impl BinConfig {
             if path.extension().is_some_and(|e| e == "json") {
                 if let Ok(content) = tokio::fs::read_to_string(&path).await {
                     if let Ok(config) = serde_json::from_str::<BinConfig>(&content) {
-                        if config.package == package_name {
+                        if predicate(&config) {
                             bins.push(config.name);
                         }
                     }
@@ -345,5 +359,54 @@ mod tests {
 
         // Delete again should not error
         BinConfig::delete_sync("codex").unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_find_all_vp_source() {
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = vite_shared::EnvConfig::test_guard(
+            vite_shared::EnvConfig::for_test_with_home(temp_dir.path()),
+        );
+
+        // Create Vp-source configs
+        let tsc = BinConfig::new(
+            "tsc".to_string(),
+            "typescript".to_string(),
+            "5.0.0".to_string(),
+            "20.18.0".to_string(),
+        );
+        tsc.save().await.unwrap();
+
+        let corepack = BinConfig::new(
+            "corepack".to_string(),
+            "corepack".to_string(),
+            "0.20.0".to_string(),
+            "20.18.0".to_string(),
+        );
+        corepack.save().await.unwrap();
+
+        // Create Npm-source config (should be excluded)
+        let codex = BinConfig::new_npm(
+            "codex".to_string(),
+            "@openai/codex".to_string(),
+            "22.22.0".to_string(),
+        );
+        codex.save().await.unwrap();
+
+        let mut vp_bins = BinConfig::find_all_vp_source().await.unwrap();
+        vp_bins.sort();
+        assert_eq!(vp_bins.len(), 2);
+        assert_eq!(vp_bins, vec!["corepack", "tsc"]);
+    }
+
+    #[tokio::test]
+    async fn test_find_all_vp_source_empty_bins_dir() {
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = vite_shared::EnvConfig::test_guard(
+            vite_shared::EnvConfig::for_test_with_home(temp_dir.path()),
+        );
+
+        let vp_bins = BinConfig::find_all_vp_source().await.unwrap();
+        assert!(vp_bins.is_empty());
     }
 }

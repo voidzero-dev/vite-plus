@@ -1,4 +1,4 @@
 {
-  "ignoredPlatforms": ["win32"],
+  "ignoredPlatforms": ["win32", { "os": "linux", "libc": "musl" }],
   "commands": ["vp upgrade --check # check for updates without installing"]
 }

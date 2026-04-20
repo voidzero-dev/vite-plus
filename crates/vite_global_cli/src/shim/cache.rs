@@ -39,7 +39,7 @@ pub struct ResolveCacheEntry {
     pub is_range: bool,
 }
 
-/// Resolution cache stored in VITE_PLUS_HOME/cache/resolve_cache.json.
+/// Resolution cache stored in VP_HOME/cache/resolve_cache.json.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ResolveCache {
     /// Cache format version for upgrade compatibility
@@ -184,8 +184,16 @@ impl ResolveCache {
 
 /// Get the cache file path.
 pub fn get_cache_path() -> Option<AbsolutePathBuf> {
-    let home = crate::commands::env::config::get_vite_plus_home().ok()?;
+    let home = crate::commands::env::config::get_vp_home().ok()?;
     Some(home.join("cache").join("resolve_cache.json"))
+}
+
+/// Invalidate the entire resolve cache by deleting the cache file.
+/// Called after version configuration changes (e.g., `vp env default`, `vp env pin`, `vp env unpin`).
+pub fn invalidate_cache() {
+    if let Some(cache_path) = get_cache_path() {
+        std::fs::remove_file(cache_path.as_path()).ok();
+    }
 }
 
 /// Get the mtime of a file as Unix timestamp.
@@ -334,5 +342,54 @@ mod tests {
         // Range version cache should still be valid within TTL
         assert!(cached_entry.is_some(), "Range version cache should be valid within TTL");
         assert_eq!(cached_entry.unwrap().version, "20.20.0");
+    }
+
+    // Run serially: mutates VP_HOME env var which affects get_cache_path()
+    #[test]
+    #[serial_test::serial]
+    fn test_invalidate_cache_removes_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Set VP_HOME to temp dir so invalidate_cache() targets our test file
+        let cache_dir = temp_path.join("cache");
+        std::fs::create_dir_all(&cache_dir).unwrap();
+        let cache_file = cache_dir.join("resolve_cache.json");
+
+        // Create a cache with an entry and save it
+        let mut cache = ResolveCache::default();
+        cache.insert(
+            &temp_path,
+            ResolveCacheEntry {
+                version: "20.18.0".to_string(),
+                source: ".node-version".to_string(),
+                project_root: None,
+                resolved_at: now_timestamp(),
+                version_file_mtime: 0,
+                source_path: None,
+                is_range: false,
+            },
+        );
+        cache.save(&cache_file);
+        assert!(std::fs::metadata(cache_file.as_path()).is_ok(), "Cache file should exist");
+
+        // Point VP_HOME to our temp dir and call invalidate_cache
+        unsafe {
+            std::env::set_var(vite_shared::env_vars::VP_HOME, temp_path.as_path());
+        }
+        invalidate_cache();
+        unsafe {
+            std::env::remove_var(vite_shared::env_vars::VP_HOME);
+        }
+
+        // Cache file should be removed
+        assert!(
+            std::fs::metadata(cache_file.as_path()).is_err(),
+            "Cache file should be removed after invalidation"
+        );
+
+        // Loading from removed file should return empty default cache
+        let loaded_cache = ResolveCache::load(&cache_file);
+        assert!(loaded_cache.get(&temp_path).is_none(), "Cache should be empty after invalidation");
     }
 }

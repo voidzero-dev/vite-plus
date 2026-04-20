@@ -7,6 +7,7 @@
 #[cfg(feature = "rolldown")]
 pub extern crate rolldown_binding;
 
+mod check;
 mod cli;
 mod exec;
 // These modules export NAPI functions only called from JavaScript at runtime.
@@ -28,10 +29,21 @@ use crate::cli::{
     BoxedResolverFn, CliOptions as ViteTaskCliOptions, ResolveCommandResult, ViteConfigResolverFn,
 };
 
-/// Module initialization - sets up tracing for debugging
+/// Module initialization - sets up tracing and panic hook
 #[napi_derive::module_init]
+#[allow(clippy::disallowed_macros)]
 pub fn init() {
     crate::cli::init_tracing();
+
+    // Install a Vite+ panic hook so panics are correctly attributed to Vite+.
+    let default_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        eprintln!("Vite+ panicked. This is a bug in Vite+, not your code.");
+        default_hook(info);
+        eprintln!(
+            "\nPlease report this issue at: https://github.com/voidzero-dev/vite-plus/issues/new?template=bug_report.yml"
+        );
+    }));
 }
 
 /// Configuration options passed from JavaScript to Rust.

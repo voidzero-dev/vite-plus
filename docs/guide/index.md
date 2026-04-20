@@ -18,6 +18,12 @@ curl -fsSL https://vite.plus | bash
 irm https://vite.plus/ps1 | iex
 ```
 
+Alternatively, download and run [`vp-setup.exe`](https://setup.viteplus.dev).
+
+::: tip SmartScreen warning
+The `vp-setup.exe` is not yet code-signed. Your browser may show a warning when downloading. Click **"..."** → **"Keep"** → **"Keep anyway"** to proceed. If Windows Defender SmartScreen blocks the file when you run it, click **"More info"** → **"Run anyway"**.
+:::
+
 After installation, open a new shell and run:
 
 ```bash
@@ -26,6 +32,35 @@ vp help
 
 ::: info
 Vite+ will manage your global Node.js runtime and package manager. If you'd like to opt out of this behavior, run `vp env off`. If you realize Vite+ is not for you, type `vp implode`, but please [share your feedback with us](https://discord.gg/cAnsqHh5PX).
+:::
+
+::: details Using a minor platform (CPU architecture, OS) ?
+
+Prebuilt binaries are distributed for the following platforms (grouped by [Node.js v24 platform support tier](https://github.com/nodejs/node/blob/v24.x/BUILDING.md#platform-list)):
+
+- Tier 1
+  - Linux x64 glibc (`x86_64-unknown-linux-gnu`)
+  - Linux arm64 glibc (`aarch64-unknown-linux-gnu`)
+  - Windows x64 (`x86_64-pc-windows-msvc`)
+  - macOS x64 (`x86_64-apple-darwin`)
+  - macOS arm64 (`aarch64-apple-darwin`)
+- Tier 2
+  - Windows arm64 (`aarch64-pc-windows-msvc`)
+- Experimental
+  - Linux x64 musl (`x86_64-unknown-linux-musl`)
+- Other
+  - Linux arm64 musl (`aarch64-unknown-linux-musl`)
+
+If a prebuilt binary is not available for your platform, installation will fail with an error.
+
+On Alpine Linux (musl), you need to install `libstdc++` before using Vite+:
+
+```sh
+apk add libstdc++
+```
+
+This is required because the managed [unofficial-builds](https://unofficial-builds.nodejs.org/) Node.js runtime depends on the GNU C++ standard library.
+
 :::
 
 ## Quick Start
@@ -65,10 +100,10 @@ Vite+ can handle the entire local frontend development cycle from starting a pro
 ### Execute
 
 - [`vp run`](/guide/run) runs tasks across workspaces with caching.
-- [`vp cache`](/guide/cache) clears task cache entries.
-- [`vpx`](/guide/vpx) runs binaries globally.
+- [`vp cache clean`](/guide/cache) clears task cache entries.
+- [`vpx`](/guide/vpx) downloads and runs binaries globally.
 - [`vp exec`](/guide/vpx) runs local project binaries.
-- [`vp dlx`](/guide/vpx) runs package binaries without adding them as dependencies.
+- [`vp dlx`](/guide/vpx) downloads and runs package binaries without adding them as dependencies.
 
 ### Build
 
@@ -87,7 +122,7 @@ Vite+ can handle the entire local frontend development cycle from starting a pro
 - [`vp implode`](/guide/implode) removes `vp` and related Vite+ data from your machine.
 
 ::: info
-Vite+ ships with many predefined commands such as `vp build`, `vp test`, and `vp dev`. These commands are built in and cannot be changed. If you want to run a command from your `package.json` scripts, use `vp run <command>`.
+Vite+ ships with many predefined commands such as `vp build`, `vp test`, and `vp dev`. These commands are built-in and cannot be changed. If you want to run a command from your `package.json` scripts, use `vp run <command>` or `vpr <command>`.
 
 [Learn more about `vp run`.](/guide/run)
 :::

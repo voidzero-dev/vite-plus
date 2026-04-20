@@ -1,0 +1,7 @@
+{
+  "commands": [
+    "vp migrate --no-interactive # vitest should be added to devDeps when vitest-browser-svelte is present",
+    "cat package.json # vitest should be in devDependencies",
+    "cat pnpm-workspace.yaml"
+  ]
+}

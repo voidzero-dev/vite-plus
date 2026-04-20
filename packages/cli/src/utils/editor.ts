@@ -1,10 +1,11 @@
 import fs from 'node:fs';
 import fsPromises from 'node:fs/promises';
 import path from 'node:path';
+import { styleText } from 'node:util';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
-import { readJsonFile, writeJsonFile } from './json.js';
+import { readJsonFile, writeJsonFile } from './json.ts';
 
 const VSCODE_SETTINGS = {
   // Set as default over per-lang to avoid conflicts with other formatters
@@ -27,9 +28,7 @@ const ZED_SETTINGS = {
     oxlint: {
       initialization_options: {
         settings: {
-          configPath: './.oxlintrc.json',
           run: 'onType',
-          disableNestedConfig: false,
           fixKind: 'safe_fix',
           typeAware: true,
           unusedDisableDirectives: 'deny',
@@ -122,7 +121,7 @@ const ZED_SETTINGS = {
       prettier: { allowed: false },
       formatter: [{ language_server: { name: 'oxfmt' } }],
     },
-    Vue: {
+    'Vue.js': {
       format_on_save: 'on',
       prettier: { allowed: false },
       formatter: [{ language_server: { name: 'oxfmt' } }],
@@ -177,14 +176,19 @@ export async function selectEditor({
       value: option.id,
       hint: option.targetDir,
     }));
-    const noneOption = {
-      label: 'None',
+    const otherOption = {
+      label: 'Other',
       value: null,
       hint: 'Skip writing editor configs',
     };
     const selectedEditor = await prompts.select({
-      message: 'Which editor are you using?',
-      options: [...editorOptions, noneOption],
+      message:
+        'Which editor are you using?\n  ' +
+        styleText(
+          'gray',
+          'Writes editor config files to enable recommended extensions and Oxlint/Oxfmt integrations.',
+        ),
+      options: [...editorOptions, otherOption],
       initialValue: 'vscode',
     });
 
@@ -263,12 +267,14 @@ export async function writeEditorConfigs({
   interactive,
   conflictDecisions,
   silent = false,
+  extraVsCodeSettings,
 }: {
   projectRoot: string;
   editorId: EditorId | undefined;
   interactive: boolean;
   conflictDecisions?: Map<string, 'merge' | 'skip'>;
   silent?: boolean;
+  extraVsCodeSettings?: Record<string, string>;
 }) {
   if (!editorId) {
     return;
@@ -282,7 +288,11 @@ export async function writeEditorConfigs({
   const targetDir = path.join(projectRoot, editorConfig.targetDir);
   await fsPromises.mkdir(targetDir, { recursive: true });
 
-  for (const [fileName, incoming] of Object.entries(editorConfig.files)) {
+  for (const [fileName, baseIncoming] of Object.entries(editorConfig.files)) {
+    const incoming =
+      editorId === 'vscode' && fileName === 'settings.json' && extraVsCodeSettings
+        ? { ...extraVsCodeSettings, ...baseIncoming }
+        : baseIncoming;
     const filePath = path.join(targetDir, fileName);
 
     if (fs.existsSync(filePath)) {
@@ -295,7 +305,12 @@ export async function writeEditorConfigs({
         conflictAction = preResolved;
       } else if (interactive) {
         const action = await prompts.select({
-          message: `${displayPath} already exists.`,
+          message:
+            `${displayPath} already exists.\n  ` +
+            styleText(
+              'gray',
+              `Vite+ adds ${editorConfig.label} settings for the built-in linter and formatter. Merge adds new keys without overwriting existing ones.`,
+            ),
           options: [
             {
               label: 'Merge',
@@ -340,7 +355,7 @@ function mergeAndWriteEditorConfig(
   displayPath: string,
   silent = false,
 ) {
-  const existing = readJsonFile(filePath);
+  const existing = readJsonFile(filePath, true);
   const merged = mergeEditorConfigs(existing, incoming, fileName);
   writeJsonFile(filePath, merged);
   if (!silent) {

@@ -9,6 +9,7 @@ export interface MigrationReport {
   rewrittenImportErrors: Array<{ path: string; message: string }>;
   eslintMigrated: boolean;
   prettierMigrated: boolean;
+  nodeVersionFileMigrated: boolean;
   gitHooksConfigured: boolean;
   warnings: string[];
   manualSteps: string[];
@@ -26,6 +27,7 @@ export function createMigrationReport(): MigrationReport {
     rewrittenImportErrors: [],
     eslintMigrated: false,
     prettierMigrated: false,
+    nodeVersionFileMigrated: false,
     gitHooksConfigured: false,
     warnings: [],
     manualSteps: [],
