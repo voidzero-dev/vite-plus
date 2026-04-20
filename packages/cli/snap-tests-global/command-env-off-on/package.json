@@ -1,0 +1,12 @@
+{
+  "name": "command-env-off-on",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "assert-managed": "node src/assert-managed.mjs",
+    "assert-not-managed": "node src/assert-not-managed.mjs"
+  },
+  "engines": {
+    "node": "22.12.0"
+  }
+}

@@ -19,8 +19,9 @@ Develop:
   test   Run tests
 
 Execute:
-  run    Run tasks
+  run    Run tasks (also available as standalone `vpr`)
   exec   Execute a command from local node_modules/.bin
+  node   Run a Node.js script (shorthand for `env exec node`)
   dlx    Execute a package binary without installing it as a dependency
   cache  Manage the task cache
 
@@ -40,6 +41,7 @@ Manage Dependencies:
   info, view, show           View package information from the registry
   link, ln                   Link packages for local development
   unlink                     Unlink packages
+  rebuild                    Rebuild native modules
   pm                         Forward a command to the package manager
 
 Maintain:
@@ -367,7 +369,7 @@ Usage: vp env [COMMAND]
 Manage Node.js versions
 
 Setup:
-  setup  Create or update shims in VITE_PLUS_HOME/bin
+  setup  Create or update shims in VP_HOME/bin
   on     Enable managed mode - shims always use vite-plus managed Node.js
   off    Enable system-first mode - shims prefer system Node.js, fallback to managed
   print  Print shell snippet to set environment for current session

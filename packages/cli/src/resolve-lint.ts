@@ -11,12 +11,12 @@
  * provides ESLint-compatible linting with significantly better performance.
  */
 
-import { existsSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { relative } from 'node:path/win32';
 import { fileURLToPath } from 'node:url';
 
-import { DEFAULT_ENVS, resolve } from './utils/constants.js';
+import { DEFAULT_ENVS, resolve } from './utils/constants.ts';
 
 /**
  * Resolves the oxlint binary path and environment variables.
@@ -42,17 +42,36 @@ export async function lint(): Promise<{
   const binPath = join(oxlintPackageRoot, 'bin', 'oxlint');
   let oxlintTsgolintPath = resolve('oxlint-tsgolint/bin/tsgolint');
   if (process.platform === 'win32') {
-    // If on Windows, resolve the tsgolint binary from the local node_modules
-    oxlintTsgolintPath = join(
-      dirname(fileURLToPath(import.meta.url)),
-      '..',
-      'node_modules',
-      '.bin',
-      'tsgolint.cmd',
-    );
-    if (!existsSync(oxlintTsgolintPath)) {
-      // Fallback to the cwd node_modules
-      oxlintTsgolintPath = join(process.cwd(), 'node_modules', '.bin', 'tsgolint.cmd');
+    // On Windows, try .exe first (bun creates .exe), then .cmd (npm/pnpm/yarn create .cmd)
+    const scriptDir = dirname(fileURLToPath(import.meta.url));
+    const localBinDir = join(scriptDir, '..', 'node_modules', '.bin');
+    const oxlintTsgolintPackagePath = dirname(dirname(oxlintTsgolintPath));
+    const projectBinDir = join(oxlintTsgolintPackagePath, '..', '.bin');
+    const pathCandidates = [
+      join(localBinDir, 'tsgolint.exe'),
+      join(localBinDir, 'tsgolint.cmd'),
+      join(projectBinDir, 'tsgolint.exe'),
+      join(projectBinDir, 'tsgolint.cmd'),
+    ];
+    oxlintTsgolintPath = pathCandidates.find((p) => existsSync(p)) ?? '';
+    // Bun stores packages in .bun/ cache dirs where the symlinked paths above won't match.
+    if (!oxlintTsgolintPath) {
+      try {
+        const realPkgDir = realpathSync(join(scriptDir, '..'));
+        const realBinDir = join(dirname(realPkgDir), '.bin');
+        oxlintTsgolintPath =
+          [join(realBinDir, 'tsgolint.exe'), join(realBinDir, 'tsgolint.cmd')].find((p) =>
+            existsSync(p),
+          ) ?? '';
+      } catch {
+        // realpath failed, fall through to default
+      }
+    }
+    if (!oxlintTsgolintPath) {
+      throw new Error(
+        'Unable to resolve oxlint-tsgolint executable, tried:\n' +
+          pathCandidates.map((path) => `- ${path}`).join('\n'),
+      );
     }
     const relativePath = relative(process.cwd(), oxlintTsgolintPath);
     // Only prepend .\ if it's actually a relative path (not an absolute path returned by relative())

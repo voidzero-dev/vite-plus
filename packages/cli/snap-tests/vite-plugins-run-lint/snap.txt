@@ -1,0 +1,5 @@
+> vp run lint-task # vp run lint should not load plugins (heavy-plugin.ts throws if imported)
+$ vp lint src/ ⊘ cache disabled
+Found 0 warnings and 0 errors.
+Finished in <variable>ms on 1 file with <variable> rules using <variable> threads.
+

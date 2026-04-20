@@ -28,6 +28,7 @@ impl PackageManager {
 
     /// Resolve the ping command.
     /// All package managers delegate to npm ping.
+    /// Bun does not support ping, falls back to npm.
     #[must_use]
     pub fn resolve_ping_command(&self, options: &PingCommandOptions) -> ResolveCommandResult {
         let bin_name: String = "npm".to_string();

@@ -171,7 +171,7 @@ A set of common environment variables are automatically passed through to all ta
 
 ### `input`
 
-- **Type:** `Array<string | { auto: boolean }>`
+- **Type:** `Array<string | { auto: boolean } | { pattern: string, base: "workspace" | "package" }>`
 - **Default:** `[{ auto: true }]` (auto-inferred)
 
 Vite Task automatically detects which files are used by a command (see [Automatic File Tracking](/guide/cache#automatic-file-tracking)). The `input` option can be used to explicitly include or exclude certain files.
@@ -199,6 +199,24 @@ tasks: {
 }
 ```
 
+**Resolve patterns relative to the workspace root** using the object form:
+
+```ts
+tasks: {
+  build: {
+    command: 'vp build',
+    input: [
+      { auto: true },
+      { pattern: 'shared-config/**', base: 'workspace' },
+    ],
+  },
+}
+```
+
+The `base` field is required and controls how the glob pattern is resolved:
+- `"package"`: relative to the package directory
+- `"workspace"`: relative to the workspace root
+
 **Disable file tracking** entirely and cache only on command/env changes:
 
 ```ts
@@ -211,7 +229,7 @@ tasks: {
 ```
 
 ::: tip
-Glob patterns are resolved relative to the package directory, not the task's `cwd`.
+String glob patterns are resolved relative to the package directory by default. Use the object form with `base: "workspace"` to resolve relative to the workspace root.
 :::
 
 ### `cwd`

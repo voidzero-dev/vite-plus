@@ -1,0 +1,34 @@
+> vp run app#build # should build the app from root
+> ls packages/app/dist # should have the build output
+assets
+index.html
+
+> vp run app#build 2>&1 | grep 'cache hit' # should hit cache from root
+~/packages/app$ vp build ◉ cache hit, replaying
+vp run: cache hit, <variable>ms saved.
+
+> cd packages/app && vp run build 2>&1 | grep 'cache hit' # should hit cache from sub dir
+~/packages/app$ vp build ◉ cache hit, replaying
+vp run: cache hit, <variable>ms saved.
+
+> cd packages/app && vp build 2>&1 # direct vp build should not be cached
+> cd packages/app && vp build 2>&1 | grep -c 'cache' || echo 'no cache' # direct vp build has no cache
+0
+no cache
+
+> echo '<html><body><script type="module">console.log("changed");</script></body></html>' > packages/app/index.html
+> vp run app#build 2>&1 | grep 'cache miss' # should miss cache after source change
+~/packages/app$ vp build ○ cache miss: 'packages/app/index.html' modified, executing
+
+> cd packages/web && vp run build # should build from sub dir first
+> ls packages/web/dist # should have the build output
+assets
+index.html
+
+> cd packages/web && vp run build 2>&1 | grep 'cache hit' # should hit cache from sub dir
+~/packages/web$ vp build ◉ cache hit, replaying
+vp run: cache hit, <variable>ms saved.
+
+> vp run web#build 2>&1 | grep 'cache hit' # should hit cache from root after sub dir build
+~/packages/web$ vp build ◉ cache hit, replaying
+vp run: cache hit, <variable>ms saved.

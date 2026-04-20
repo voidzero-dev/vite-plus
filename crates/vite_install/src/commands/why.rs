@@ -200,6 +200,53 @@ impl PackageManager {
                     output::warn("--find-by not supported by npm");
                 }
             }
+            PackageManagerType::Bun => {
+                bin_name = "bun".into();
+
+                // bun has a direct `why` subcommand (not `bun pm why`)
+                args.push("why".into());
+
+                // Add packages
+                args.extend_from_slice(options.packages);
+
+                // Warn about unsupported flags
+                if options.json {
+                    output::warn("--json not supported by bun why");
+                }
+                if options.long {
+                    output::warn("--long not supported by bun why");
+                }
+                if options.parseable {
+                    output::warn("--parseable not supported by bun why");
+                }
+                if options.recursive {
+                    output::warn("--recursive not supported by bun why");
+                }
+                if let Some(filters) = options.filters {
+                    if !filters.is_empty() {
+                        output::warn("--filter not supported by bun why");
+                    }
+                }
+                if options.workspace_root {
+                    output::warn("--workspace-root not supported by bun why");
+                }
+                if options.prod || options.dev {
+                    output::warn("--prod/--dev not supported by bun why");
+                }
+                if let Some(depth) = options.depth {
+                    args.push("--depth".into());
+                    args.push(depth.to_string());
+                }
+                if options.no_optional {
+                    output::warn("--no-optional not supported by bun why");
+                }
+                if options.exclude_peers {
+                    output::warn("--exclude-peers not supported by bun why");
+                }
+                if options.find_by.is_some() {
+                    output::warn("--find-by not supported by bun why");
+                }
+            }
         }
 
         // Add pass-through args
@@ -379,5 +426,18 @@ mod tests {
         });
         assert_eq!(result.bin_path, "pnpm");
         assert_eq!(result.args, vec!["why", "--find-by", "customFinder", "react"]);
+    }
+
+    #[test]
+    fn test_bun_why_with_depth() {
+        let pm = create_mock_package_manager(PackageManagerType::Bun, "1.3.11");
+        let packages = vec!["testnpm2".to_string()];
+        let result = pm.resolve_why_command(&WhyCommandOptions {
+            packages: &packages,
+            depth: Some(2),
+            ..Default::default()
+        });
+        assert!(result.args.contains(&"--depth".to_string()));
+        assert!(result.args.contains(&"2".to_string()));
     }
 }

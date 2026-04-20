@@ -1,0 +1,9 @@
+{
+  "commands": [
+    {
+      "command": "vp build",
+      "ignoreOutput": true
+    },
+    "cat dist/index.html | grep 'sync-plugin-injected' # sync vitePlugins() should apply plugins during build"
+  ]
+}

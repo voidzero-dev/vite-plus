@@ -1,23 +1,31 @@
 {
-  "ignoredPlatforms": ["win32"],
   "commands": [
     {
-      "command": "vp run hello#build # should build the library",
+      "command": "vp run hello#build # should build the library from root",
       "ignoreOutput": true
     },
     "ls packages/hello/dist # should have the library",
-    "vp run hello#build 2>&1 # should hit cache but not working for now",
+    "vp run hello#build 2>&1 | grep 'cache hit' # should hit cache from root",
+    "cd packages/hello && vp run build 2>&1 | grep 'cache hit' # should hit cache from sub dir",
     {
-      "command": "vp run array-config#build # should build the library supports array config",
+      "command": "cd packages/hello && vp pack 2>&1 # direct vp pack should not be cached",
+      "ignoreOutput": true
+    },
+    "cd packages/hello && vp pack 2>&1 | grep -c 'cache' || echo 'no cache' # direct vp pack has no cache",
+    "echo 'export function hello() { console.log(\"changed\"); }' > packages/hello/src/hello.ts",
+    "vp run hello#build 2>&1 | grep 'cache miss' # should miss cache after source change",
+    {
+      "command": "cd packages/array-config && vp run build # should build the library from sub dir",
       "ignoreOutput": true
     },
     "ls packages/array-config/dist # should have the library",
-    "vp run array-config#build 2>&1 # should hit cache but not working",
+    "cd packages/array-config && vp run build 2>&1 | grep 'cache hit' # should hit cache from sub dir",
+    "vp run array-config#build 2>&1 | grep 'cache hit' # should hit cache from root after sub dir build",
     {
-      "command": "vp run default-config#build # should build the library supports default config",
+      "command": "vp run default-config#build # should build the library from root",
       "ignoreOutput": true
     },
     "ls packages/default-config/dist # should have the library",
-    "vp run default-config#build 2>&1 # should hit cache but not working"
+    "cd packages/default-config && vp run build 2>&1 | grep 'cache hit' # should hit cache from sub dir"
   ]
 }

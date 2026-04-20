@@ -1,49 +1,41 @@
-> vp run hello#build # should build the library
+> vp run hello#build # should build the library from root
 > ls packages/hello/dist # should have the library
 index.cjs
 
-> vp run hello#build 2>&1 # should hit cache but not working for now
-~/packages/hello$ vp pack
-ℹ entry: src/index.ts
-ℹ Build start
-ℹ Cleaning 1 files
-ℹ dist/index.cjs  <variable> kB │ gzip: <variable> kB
-ℹ 1 files, total: <variable> kB
-✔ Build complete in <variable>ms
+> vp run hello#build 2>&1 | grep 'cache hit' # should hit cache from root
+~/packages/hello$ vp pack ◉ cache hit, replaying
+vp run: cache hit, <variable>ms saved.
 
----
-vp run: hello#build not cached because it modified its input. (Run `vp run --last-details` for full details)
+> cd packages/hello && vp run build 2>&1 | grep 'cache hit' # should hit cache from sub dir
+~/packages/hello$ vp pack ◉ cache hit, replaying
+vp run: cache hit, <variable>ms saved.
 
-> vp run array-config#build # should build the library supports array config
+> cd packages/hello && vp pack 2>&1 # direct vp pack should not be cached
+> cd packages/hello && vp pack 2>&1 | grep -c 'cache' || echo 'no cache' # direct vp pack has no cache
+0
+no cache
+
+> echo 'export function hello() { console.log("changed"); }' > packages/hello/src/hello.ts
+> vp run hello#build 2>&1 | grep 'cache miss' # should miss cache after source change
+~/packages/hello$ vp pack ○ cache miss: 'packages/hello/src/hello.ts' modified, executing
+
+> cd packages/array-config && vp run build # should build the library from sub dir
 > ls packages/array-config/dist # should have the library
 index.d.mts
 index.mjs
 
-> vp run array-config#build 2>&1 # should hit cache but not working
-~/packages/array-config$ vp pack
-ℹ entry: src/sub/index.ts
-ℹ Build start
-ℹ Cleaning 2 files
-ℹ dist/index.mjs    <variable> kB │ gzip: <variable> kB
-ℹ dist/index.d.mts  <variable> kB │ gzip: <variable> kB
-ℹ 2 files, total: <variable> kB
-✔ Build complete in <variable>ms
+> cd packages/array-config && vp run build 2>&1 | grep 'cache hit' # should hit cache from sub dir
+~/packages/array-config$ vp pack ◉ cache hit, replaying
+vp run: cache hit, <variable>ms saved.
 
----
-vp run: array-config#build not cached because it modified its input. (Run `vp run --last-details` for full details)
+> vp run array-config#build 2>&1 | grep 'cache hit' # should hit cache from root after sub dir build
+~/packages/array-config$ vp pack ◉ cache hit, replaying
+vp run: cache hit, <variable>ms saved.
 
-> vp run default-config#build # should build the library supports default config
+> vp run default-config#build # should build the library from root
 > ls packages/default-config/dist # should have the library
 index.mjs
 
-> vp run default-config#build 2>&1 # should hit cache but not working
-~/packages/default-config$ vp pack
-ℹ entry: src/index.ts
-ℹ Build start
-ℹ Cleaning 1 files
-ℹ dist/index.mjs  <variable> kB │ gzip: <variable> kB
-ℹ 1 files, total: <variable> kB
-✔ Build complete in <variable>ms
-
----
-vp run: default-config#build not cached because it modified its input. (Run `vp run --last-details` for full details)
+> cd packages/default-config && vp run build 2>&1 | grep 'cache hit' # should hit cache from sub dir
+~/packages/default-config$ vp pack ◉ cache hit, replaying
+vp run: cache hit, <variable>ms saved.

@@ -25,7 +25,13 @@ runs:
       id: cache-key
       shell: bash
       run: |
-        echo "key=napi-binding-v3-${{ inputs.target }}-${{ env.RELEASE_BUILD }}-${{ env.DEBUG }}-${{ env.VERSION }}-${{ env.NPM_TAG }}-${{ hashFiles('packages/tools/.upstream-versions.json', 'Cargo.lock', 'crates/**/*.rs', 'crates/*/Cargo.toml', 'packages/cli/binding/**/*.rs', 'packages/cli/binding/Cargo.toml', 'Cargo.toml', '.cargo/config.toml', 'packages/cli/package.json', 'packages/cli/build.ts') }}" >> $GITHUB_OUTPUT
+        echo "key=napi-binding-v3-${{ inputs.target }}-${{ env.RELEASE_BUILD }}-${{ env.DEBUG }}-${{ env.VERSION }}-${{ env.NPM_TAG }}-${{ hashFiles('packages/tools/.upstream-versions.json', 'Cargo.lock', 'crates/**/*.rs', 'crates/*/Cargo.toml', 'packages/cli/binding/**/*.rs', 'packages/cli/binding/Cargo.toml', 'Cargo.toml', '.cargo/config.toml', 'packages/cli/package.json', 'packages/cli/build.ts', 'packages/cli/tsdown.config.ts') }}" >> $GITHUB_OUTPUT
+
+    # Resolve the Rust target directory (CARGO_TARGET_DIR from setup-rust, or default "target")
+    - name: Resolve Rust target directory
+      id: rust-target
+      shell: bash
+      run: echo "dir=${CARGO_TARGET_DIR:-target}" >> $GITHUB_OUTPUT
 
     # Cache NAPI bindings and Rust CLI binary (the slow parts, especially on Windows)
     - name: Restore NAPI binding cache
@@ -38,9 +44,10 @@ runs:
           packages/cli/binding/index.d.ts
           packages/cli/binding/index.cjs
           packages/cli/binding/index.d.cts
-          target/${{ inputs.target }}/release/vp
-          target/${{ inputs.target }}/release/vp.exe
-          target/${{ inputs.target }}/release/vp-shim.exe
+          ${{ steps.rust-target.outputs.dir }}/${{ inputs.target }}/release/vp
+          ${{ steps.rust-target.outputs.dir }}/${{ inputs.target }}/release/vp.exe
+          ${{ steps.rust-target.outputs.dir }}/${{ inputs.target }}/release/vp-shim.exe
+          ${{ steps.rust-target.outputs.dir }}/${{ inputs.target }}/release/vp-setup.exe
         key: ${{ steps.cache-key.outputs.key }}
 
     # Apply Vite+ branding patches to vite source (CI checks out
@@ -137,6 +144,11 @@ runs:
       shell: bash
       run: cargo build --release --target ${{ inputs.target }} -p vite_trampoline
 
+    - name: Build installer binary (Windows only)
+      if: steps.cache-restore.outputs.cache-hit != 'true' && contains(inputs.target, 'windows')
+      shell: bash
+      run: cargo build --release --target ${{ inputs.target }} -p vite_installer
+
     - name: Save NAPI binding cache
       if: steps.cache-restore.outputs.cache-hit != 'true'
       uses: actions/cache/save@94b89442628ad1d101e352b7ee38f30e1bef108e # v5
@@ -147,9 +159,10 @@ runs:
           packages/cli/binding/index.d.ts
           packages/cli/binding/index.cjs
           packages/cli/binding/index.d.cts
-          target/${{ inputs.target }}/release/vp
-          target/${{ inputs.target }}/release/vp.exe
-          target/${{ inputs.target }}/release/vp-shim.exe
+          ${{ steps.rust-target.outputs.dir }}/${{ inputs.target }}/release/vp
+          ${{ steps.rust-target.outputs.dir }}/${{ inputs.target }}/release/vp.exe
+          ${{ steps.rust-target.outputs.dir }}/${{ inputs.target }}/release/vp-shim.exe
+          ${{ steps.rust-target.outputs.dir }}/${{ inputs.target }}/release/vp-setup.exe
         key: ${{ steps.cache-key.outputs.key }}
 
     # Build vite-plus TypeScript after native bindings are ready

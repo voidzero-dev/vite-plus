@@ -1,8 +1,12 @@
 {
   "commands": [
-    { "command": "git init", "ignoreOutput": true },
+    {
+      "command": "git init",
+      "ignoreOutput": true
+    },
     "vp migrate --no-interactive # should warn about husky v8 and skip hooks setup",
     "cat package.json # husky/lint-staged should remain in devDeps, prepare should stay as husky",
+    "cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog",
     "cat .husky/pre-commit # hook file should be unchanged (still has bootstrap)",
     "cat .husky/commit-msg # hook file should be unchanged (still has bootstrap)"
   ]

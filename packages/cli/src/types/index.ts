@@ -1,2 +1,2 @@
-export * from './package.js';
-export * from './workspace.js';
+export * from './package.ts';
+export * from './workspace.ts';

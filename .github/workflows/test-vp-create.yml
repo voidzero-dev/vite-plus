@@ -1,0 +1,274 @@
+name: Test vp create
+
+permissions: {}
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'packages/cli/src/create/**'
+      - 'packages/cli/templates/**'
+      - 'packages/cli/src/migration/**'
+      - '.github/workflows/test-vp-create.yml'
+  pull_request:
+    types: [opened, synchronize, labeled]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.ref_name != 'main' }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  detect-changes:
+    runs-on: namespace-profile-linux-x64-default
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      related-files-changed: ${{ steps.filter.outputs.related-files }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
+        id: filter
+        with:
+          filters: |
+            related-files:
+              - 'packages/cli/src/create/**'
+              - 'packages/cli/templates/**'
+              - 'packages/cli/src/migration/**'
+              - .github/workflows/test-vp-create.yml
+
+  download-previous-rolldown-binaries:
+    needs: detect-changes
+    runs-on: namespace-profile-linux-x64-default
+    # Run if: not a PR, OR PR has 'test: create-e2e' label, OR create-related files changed
+    if: >-
+      github.event_name != 'pull_request' ||
+      contains(github.event.pull_request.labels.*.name, 'test: create-e2e') ||
+      needs.detect-changes.outputs.related-files-changed == 'true'
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: ./.github/actions/download-rolldown-binaries
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  build:
+    name: Build vite-plus packages
+    runs-on: namespace-profile-linux-x64-default
+    permissions:
+      contents: read
+      packages: read
+    needs:
+      - download-previous-rolldown-binaries
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: ./.github/actions/clone
+
+      - uses: oxc-project/setup-rust@23f38cfb0c04af97a055f76acee94d5be71c7c82 # v1.0.16
+        with:
+          save-cache: ${{ github.ref_name == 'main' }}
+          cache-key: create-e2e-build
+
+      - uses: oxc-project/setup-node@4c26e7cb3605b6bdef5450dacd02c434b10fd8ba # v1.2.0
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: rolldown-binaries
+          path: ./rolldown/packages/rolldown/src
+          merge-multiple: true
+
+      - name: Build with upstream
+        uses: ./.github/actions/build-upstream
+        with:
+          target: x86_64-unknown-linux-gnu
+
+      - name: Pack packages into tgz
+        run: |
+          mkdir -p tmp/tgz
+          cd packages/core && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
+          cd packages/test && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
+          cd packages/cli && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
+          # Copy vp binary for test jobs
+          cp target/x86_64-unknown-linux-gnu/release/vp tmp/tgz/vp
+          ls -la tmp/tgz
+
+      - name: Upload tgz artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: vite-plus-packages
+          path: tmp/tgz/
+          retention-days: 1
+
+  test-vp-create:
+    name: vp create ${{ matrix.template.name }} (${{ matrix.package-manager }})
+    runs-on: namespace-profile-linux-x64-default
+    permissions:
+      contents: read
+    needs:
+      - build
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        template:
+          - name: monorepo
+            create-args: vite:monorepo --directory test-project
+            template-args: ''
+            verify-command: vp run ready
+          - name: application
+            create-args: vite:application --directory test-project
+            template-args: '-- --template vanilla-ts'
+            verify-command: vp run build
+          - name: library
+            create-args: vite:library --directory test-project
+            template-args: ''
+            verify-command: |
+              vp run build
+              vp run test
+        package-manager:
+          - pnpm
+          - npm
+          - yarn
+          - bun
+    env:
+      VP_OVERRIDE_PACKAGES: '{"vite":"file:${{ github.workspace }}/tmp/tgz/voidzero-dev-vite-plus-core-0.0.0.tgz","vitest":"file:${{ github.workspace }}/tmp/tgz/voidzero-dev-vite-plus-test-0.0.0.tgz","@voidzero-dev/vite-plus-core":"file:${{ github.workspace }}/tmp/tgz/voidzero-dev-vite-plus-core-0.0.0.tgz","@voidzero-dev/vite-plus-test":"file:${{ github.workspace }}/tmp/tgz/voidzero-dev-vite-plus-test-0.0.0.tgz"}'
+      VP_VERSION: 'file:${{ github.workspace }}/tmp/tgz/vite-plus-0.0.0.tgz'
+      # Force full dependency rewriting so the library template's existing
+      # vite-plus dep gets overridden with the local tgz
+      VP_FORCE_MIGRATE: '1'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: 24
+
+      - name: Download vite-plus packages
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: vite-plus-packages
+          path: tmp/tgz
+
+      - name: Install vp CLI
+        run: |
+          mkdir -p target/release
+          cp tmp/tgz/vp target/release/vp
+          chmod +x target/release/vp
+          node $GITHUB_WORKSPACE/packages/tools/src/install-global-cli.ts --tgz $GITHUB_WORKSPACE/tmp/tgz/vite-plus-0.0.0.tgz
+          echo "$HOME/.vite-plus/bin" >> $GITHUB_PATH
+
+      - name: Verify vp installation
+        run: |
+          which vp
+          vp --version
+
+      - name: Run vp create ${{ matrix.template.name }} with ${{ matrix.package-manager }}
+        working-directory: ${{ runner.temp }}
+        run: |
+          vp create ${{ matrix.template.create-args }} \
+            --no-interactive \
+            --no-agent \
+            --package-manager ${{ matrix.package-manager }} \
+            ${{ matrix.template.template-args }}
+
+      - name: Verify project structure
+        working-directory: ${{ runner.temp }}/test-project
+        run: |
+          # package.json must exist
+          test -f package.json
+          echo "✓ package.json exists"
+          cat package.json
+
+          # List all files for debugging
+          echo "--- Project root files ---"
+          ls -la
+
+          # Check correct lockfile exists
+          case "${{ matrix.package-manager }}" in
+            pnpm)
+              test -f pnpm-lock.yaml
+              echo "✓ pnpm-lock.yaml exists"
+              ;;
+            npm)
+              test -f package-lock.json
+              echo "✓ package-lock.json exists"
+              ;;
+            yarn)
+              test -f yarn.lock
+              echo "✓ yarn.lock exists"
+              ;;
+            bun)
+              if [ -f bun.lock ]; then
+                echo "✓ bun.lock exists"
+              elif [ -f bun.lockb ]; then
+                echo "✓ bun.lockb exists"
+              else
+                echo "✗ No bun lockfile found"
+                exit 1
+              fi
+              ;;
+          esac
+
+          # node_modules must exist (vp install ran successfully)
+          test -d node_modules
+          echo "✓ node_modules exists"
+
+          # Monorepo-specific checks
+          if [ "${{ matrix.template.name }}" = "monorepo" ]; then
+            test -d apps/website
+            echo "✓ apps/website exists"
+            test -d packages/utils
+            echo "✓ packages/utils exists"
+
+            case "${{ matrix.package-manager }}" in
+              pnpm)
+                test -f pnpm-workspace.yaml
+                echo "✓ pnpm-workspace.yaml exists"
+                ;;
+              yarn)
+                test -f .yarnrc.yml
+                echo "✓ .yarnrc.yml exists"
+                ;;
+            esac
+          fi
+
+      - name: Verify local tgz packages installed
+        working-directory: ${{ runner.temp }}/test-project
+        run: |
+          node -e "
+            const path = require('path');
+            const pkg = require(path.resolve('node_modules/vite-plus/package.json'));
+            if (pkg.version !== '0.0.0') {
+              console.error('Expected vite-plus@0.0.0, got ' + pkg.version);
+              process.exit(1);
+            }
+            console.log('✓ vite-plus@' + pkg.version + ' installed correctly');
+          "
+
+      - name: Run vp check
+        working-directory: ${{ runner.temp }}/test-project
+        run: vp check
+
+      - name: Verify project builds
+        working-directory: ${{ runner.temp }}/test-project
+        run: ${{ matrix.template.verify-command }}
+
+      - name: Verify cache (monorepo only)
+        if: matrix.template.name == 'monorepo'
+        working-directory: ${{ runner.temp }}/test-project
+        run: |
+          output=$(vp run ready 2>&1)
+          echo "$output"
+          if ! echo "$output" | grep -q 'cache hit (100%)'; then
+            echo "✗ Expected 100% cache hit on second run"
+            exit 1
+          fi
+          echo "✓ 100% cache hit verified"

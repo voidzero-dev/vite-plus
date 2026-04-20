@@ -5,21 +5,21 @@
 #   irm https://vite.plus/ps1 | iex
 #
 # Environment variables:
-#   VITE_PLUS_VERSION - Version to install (default: latest)
-#   VITE_PLUS_HOME - Installation directory (default: $env:USERPROFILE\.vite-plus)
+#   VP_VERSION - Version to install (default: latest)
+#   VP_HOME - Installation directory (default: $env:USERPROFILE\.vite-plus)
 #   NPM_CONFIG_REGISTRY - Custom npm registry URL (default: https://registry.npmjs.org)
-#   VITE_PLUS_LOCAL_TGZ - Path to local vite-plus.tgz (for development/testing)
+#   VP_LOCAL_TGZ - Path to local vite-plus.tgz (for development/testing)
 
 $ErrorActionPreference = "Stop"
 
-$ViteVersion = if ($env:VITE_PLUS_VERSION) { $env:VITE_PLUS_VERSION } else { "latest" }
-$InstallDir = if ($env:VITE_PLUS_HOME) { $env:VITE_PLUS_HOME } else { "$env:USERPROFILE\.vite-plus" }
+$ViteVersion = if ($env:VP_VERSION) { $env:VP_VERSION } else { "latest" }
+$InstallDir = if ($env:VP_HOME) { $env:VP_HOME } else { "$env:USERPROFILE\.vite-plus" }
 # npm registry URL (strip trailing slash if present)
 $NpmRegistry = if ($env:NPM_CONFIG_REGISTRY) { $env:NPM_CONFIG_REGISTRY.TrimEnd('/') } else { "https://registry.npmjs.org" }
 # Local tarball for development/testing
-$LocalTgz = $env:VITE_PLUS_LOCAL_TGZ
+$LocalTgz = $env:VP_LOCAL_TGZ
 # Local binary path (set by install-global-cli.ts for local dev)
-$LocalBinary = $env:VITE_PLUS_LOCAL_BINARY
+$LocalBinary = $env:VP_LOCAL_BINARY
 
 function Write-Info {
     param([string]$Message)
@@ -44,6 +44,88 @@ function Write-Error-Exit {
     Write-Host "error: " -ForegroundColor Red -NoNewline
     Write-Host $Message
     exit 1
+}
+
+function Test-ReleaseAgeError {
+    param([string]$LogPath)
+    if (-not (Test-Path $LogPath)) {
+        return $false
+    }
+
+    $content = Get-Content -Path $LogPath -Raw
+    # This wrapper install path is pinned to pnpm via packageManager, so this
+    # detection follows pnpm's resolver/reporter output rather than npm/yarn.
+    #
+    # pnpm's PnpmError prefixes internal codes with ERR_PNPM_, so
+    # NO_MATURE_MATCHING_VERSION is normally printed as
+    # ERR_PNPM_NO_MATURE_MATCHING_VERSION. npm-resolver emits that code with the
+    # "does not meet the minimumReleaseAge constraint" message when
+    # publishedBy/minimumReleaseAge rejects a matching version.
+    # https://github.com/pnpm/pnpm/blob/16cfde66ec71125d692ea828eba2a5f9b3cc54fc/core/error/src/index.ts#L18-L20
+    # https://github.com/pnpm/pnpm/blob/16cfde66ec71125d692ea828eba2a5f9b3cc54fc/resolving/npm-resolver/src/index.ts#L76-L84
+    #
+    # default-reporter may append guidance mentioning minimumReleaseAgeExclude
+    # when the error has an immatureVersion, so that token is also a useful
+    # release-age signal. minimum-release-age is pnpm's .npmrc key; npm's
+    # min-release-age is intentionally not treated as a pnpm signal here.
+    # https://github.com/pnpm/pnpm/blob/16cfde66ec71125d692ea828eba2a5f9b3cc54fc/cli/default-reporter/src/reportError.ts#L163-L164
+    # https://github.com/pnpm/pnpm/blob/16cfde66ec71125d692ea828eba2a5f9b3cc54fc/config/reader/src/types.ts#L73-L74
+    $hasReleaseAgeText = $content -match "does not meet the minimumReleaseAge constraint" `
+        -or $content -match "minimumReleaseAge" `
+        -or $content -match "minimumReleaseAgeExclude" `
+        -or $content -match "minimum release age" `
+        -or $content -match "minimum-release-age"
+
+    # pnpm can also surface ERR_PNPM_NO_MATCHING_VERSION when minimumReleaseAge
+    # filters out all candidates. That code is also used for real missing
+    # versions, so require age-gate context before prompting for a bypass.
+    # https://github.com/pnpm/pnpm/blob/16cfde66ec71125d692ea828eba2a5f9b3cc54fc/deps/inspection/outdated/src/createManifestGetter.ts#L66-L76
+    return $content -match "ERR_PNPM_NO_MATURE_MATCHING_VERSION" `
+        -or $content -match "NO_MATURE_MATCHING_VERSION" `
+        -or (($content -match "ERR_PNPM_NO_MATCHING_VERSION") -and $hasReleaseAgeText) `
+        -or $hasReleaseAgeText
+}
+
+function Confirm-ReleaseAgeOverride {
+    if ($env:CI -eq "true") {
+        return $false
+    }
+    if (-not [Environment]::UserInteractive) {
+        return $false
+    }
+
+    Write-Host ""
+    Write-Warn "Your minimumReleaseAge setting prevented installing vite-plus@$ViteVersion."
+    Write-Host "This setting helps protect against newly published compromised packages."
+    Write-Host "Proceeding will disable this protection for this Vite+ install only."
+    $response = Read-Host "Do you want to proceed? (y/N)"
+    return $response -match "^(?i:y|yes)$"
+}
+
+function Write-ReleaseAgeOverride {
+    Set-Content -Path (Join-Path $VersionDir ".npmrc") -Value "minimum-release-age=0"
+}
+
+function Write-InstallFailure {
+    param([string]$LogPath)
+    if ($env:CI -eq "true") {
+        Write-Host "error: " -ForegroundColor Red -NoNewline
+        Write-Host "Failed to install dependencies. Log output:"
+        Get-Content -Path $LogPath | ForEach-Object { Write-Host $_ }
+    } else {
+        Write-Error-Exit "Failed to install dependencies. See log for details: $LogPath"
+    }
+}
+
+function Write-ReleaseAgeFailure {
+    param([string]$LogPath)
+    if ($env:CI -eq "true") {
+        Write-Host "error: " -ForegroundColor Red -NoNewline
+        Write-Host "Install blocked by your minimumReleaseAge setting. Log output:"
+        Get-Content -Path $LogPath | ForEach-Object { Write-Host $_ }
+    } else {
+        Write-Error-Exit "Install blocked by your minimumReleaseAge setting. Wait until the package is old enough or adjust your package manager configuration explicitly. See log for details: $LogPath"
+    }
 }
 
 function Get-Architecture {
@@ -74,7 +156,7 @@ function Get-PackageMetadata {
                 try {
                     $errorJson = $errorMsg | ConvertFrom-Json
                     if ($errorJson.error) {
-                        Write-Error-Exit "Failed to fetch version '${versionPath}': $($errorJson.error)"
+                        Write-Error-Exit "Failed to fetch version '${versionPath}': $($errorJson.error)`n  URL: $metadataUrl"
                     }
                 } catch {
                     # JSON parsing failed, fall through to generic error
@@ -85,11 +167,17 @@ function Get-PackageMetadata {
         # Check for error in successful response
         # npm can return {"error":"..."} object or a plain string like "version not found: test"
         if ($script:PackageMetadata -is [string]) {
-            # Plain string response means error
-            Write-Error-Exit "Failed to fetch version '${versionPath}': $script:PackageMetadata"
+            # Some registries (e.g. JFrog) may return JSON with a non-JSON content type,
+            # causing Invoke-RestMethod to return a raw string. Try parsing it as JSON first.
+            try {
+                $script:PackageMetadata = $script:PackageMetadata | ConvertFrom-Json
+            } catch {
+                # Not valid JSON - treat as plain string error
+                Write-Error-Exit "Failed to fetch version '${versionPath}': $script:PackageMetadata`n  URL: $metadataUrl"
+            }
         }
         if ($script:PackageMetadata.error) {
-            Write-Error-Exit "Failed to fetch version '${versionPath}': $($script:PackageMetadata.error)"
+            Write-Error-Exit "Failed to fetch version '${versionPath}': $($script:PackageMetadata.error)`n  URL: $metadataUrl"
         }
     }
     return $script:PackageMetadata
@@ -206,10 +294,10 @@ function Setup-NodeManager {
     $binPath = "$InstallDir\bin"
 
     # Explicit override via environment variable
-    if ($env:VITE_PLUS_NODE_MANAGER -eq "yes") {
+    if ($env:VP_NODE_MANAGER -eq "yes") {
         Refresh-Shims -BinDir $BinDir
         return "true"
-    } elseif ($env:VITE_PLUS_NODE_MANAGER -eq "no") {
+    } elseif ($env:VP_NODE_MANAGER -eq "no") {
         return "false"
     }
 
@@ -243,7 +331,9 @@ function Setup-NodeManager {
     $isInteractive = [Environment]::UserInteractive
     if ($isInteractive) {
         Write-Host ""
-        Write-Host "Would you want Vite+ to manage Node.js versions?"
+        Write-Host "Would you like Vite+ to manage your Node.js versions?"
+        Write-Host "It adds ``node``, ``npm``, and ``npx`` shims to ~/.vite-plus/bin/ and automatically uses the right version."
+        Write-Host "Opt out anytime with ``vp env off``."
         $response = Read-Host "Press Enter to accept (Y/n)"
 
         if ($response -eq '' -or $response -eq 'y' -or $response -eq 'Y') {
@@ -305,7 +395,7 @@ function Main {
                 Copy-Item -Path $shimSource -Destination (Join-Path $BinDir "vp-shim.exe") -Force
             }
         } else {
-            Write-Error-Exit "VITE_PLUS_LOCAL_BINARY must be set when using VITE_PLUS_LOCAL_TGZ"
+            Write-Error-Exit "VP_LOCAL_BINARY must be set when using VP_LOCAL_TGZ"
         }
     } else {
         # Download from npm registry — extract only the vp binary from CLI platform package
@@ -342,34 +432,59 @@ function Main {
         }
     }
 
+    # Remove Zone.Identifier (Mark of the Web) from downloaded binaries so
+    # Windows SmartScreen / Defender won't block execution.
+    Get-ChildItem -Path $BinDir -Filter "*.exe" | Unblock-File
+
     # Generate wrapper package.json that declares vite-plus as a dependency.
-    # npm will install vite-plus and all transitive deps via `vp install`.
+    # pnpm will install vite-plus and all transitive deps via `vp install`.
+    # The packageManager field pins pnpm to a known-good version.
     $wrapperJson = @{
         name = "vp-global"
         version = $ViteVersion
         private = $true
+        packageManager = "pnpm@10.33.0"
         dependencies = @{
             "vite-plus" = $ViteVersion
         }
     } | ConvertTo-Json -Depth 10
     Set-Content -Path (Join-Path $VersionDir "package.json") -Value $wrapperJson
 
-    # Isolate from user's global package manager config that may block
-    # installing recently-published packages (e.g. pnpm's minimumReleaseAge,
-    # npm's min-release-age) by creating a local .npmrc in the version directory.
-    Set-Content -Path (Join-Path $VersionDir ".npmrc") -Value "minimum-release-age=0`nmin-release-age=0"
-
-    # Install production dependencies (skip if VITE_PLUS_SKIP_DEPS_INSTALL is set,
+    # Install production dependencies (skip if VP_SKIP_DEPS_INSTALL is set,
     # e.g. during local dev where install-global-cli.ts handles deps separately)
-    if (-not $env:VITE_PLUS_SKIP_DEPS_INSTALL) {
+    if (-not $env:VP_SKIP_DEPS_INSTALL) {
         $installLog = Join-Path $VersionDir "install.log"
         Push-Location $VersionDir
         try {
-            $env:CI = "true"
-            & "$BinDir\vp.exe" install --silent *> $installLog
-            if ($LASTEXITCODE -ne 0) {
-                Write-Host "error: Failed to install dependencies. See log for details: $installLog" -ForegroundColor Red
-                exit 1
+            # Use cmd /c so CI=true is scoped to the child process only,
+            # avoiding leaking it into the user's shell session.
+            # Do not pass --silent to the inner install: pnpm suppresses the
+            # release-age error body in silent mode, which would leave
+            # install.log empty and make the release-age gate impossible to
+            # detect. Output is already captured to install.log here.
+            $output = cmd /c "set CI=true && `"$BinDir\vp.exe`" install" 2>&1
+            $installExitCode = $LASTEXITCODE
+            $output | Out-File $installLog
+            if ($installExitCode -ne 0) {
+                if (Test-ReleaseAgeError $installLog) {
+                    if (Confirm-ReleaseAgeOverride) {
+                        # Write the override only after explicit consent, then retry once.
+                        Write-ReleaseAgeOverride
+                        $retryOutput = cmd /c "set CI=true && `"$BinDir\vp.exe`" install" 2>&1
+                        $retryExitCode = $LASTEXITCODE
+                        $retryOutput | Out-File $installLog
+                        if ($retryExitCode -ne 0) {
+                            Write-InstallFailure $installLog
+                            exit 1
+                        }
+                    } else {
+                        Write-ReleaseAgeFailure $installLog
+                        exit 1
+                    }
+                } else {
+                    Write-InstallFailure $installLog
+                    exit 1
+                }
             }
         } finally {
             Pop-Location
@@ -410,8 +525,8 @@ function Main {
         # Keep consistent with the original install.ps1 wrapper format
         $wrapperContent = @"
 @echo off
-set VITE_PLUS_HOME=%~dp0..
-"%VITE_PLUS_HOME%\current\bin\vp.exe" %*
+set VP_HOME=%~dp0..
+"%VP_HOME%\current\bin\vp.exe" %*
 exit /b %ERRORLEVEL%
 "@
         Set-Content -Path "$InstallDir\bin\vp.cmd" -Value $wrapperContent -NoNewline
@@ -419,9 +534,9 @@ exit /b %ERRORLEVEL%
         # Also create shell script wrapper for Git Bash/MSYS
         $shContent = @"
 #!/bin/sh
-VITE_PLUS_HOME="`$(dirname "`$(dirname "`$(readlink -f "`$0" 2>/dev/null || echo "`$0")")")"
-export VITE_PLUS_HOME
-exec "`$VITE_PLUS_HOME/current/bin/vp.exe" "`$@"
+VP_HOME="`$(dirname "`$(dirname "`$(readlink -f "`$0" 2>/dev/null || echo "`$0")")")"
+export VP_HOME
+exec "`$VP_HOME/current/bin/vp.exe" "`$@"
 "@
         Set-Content -Path "$InstallDir\bin\vp" -Value $shContent -NoNewline
     }

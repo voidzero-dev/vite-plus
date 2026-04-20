@@ -2,7 +2,7 @@
 
 ## Summary
 
-Add `vite outdated` command that automatically adapts to the detected package manager (pnpm/npm/yarn) for checking outdated packages. This helps developers identify packages that have newer versions available, maintain up-to-date dependencies, and manage security vulnerabilities by showing which packages can be updated.
+Add `vite outdated` command that automatically adapts to the detected package manager (pnpm/npm/yarn/bun) for checking outdated packages. This helps developers identify packages that have newer versions available, maintain up-to-date dependencies, and manage security vulnerabilities by showing which packages can be updated.
 
 ## Motivation
 
@@ -147,21 +147,26 @@ vite outdated -g                      # Check globally installed packages
 - https://yarnpkg.com/cli/upgrade-interactive (yarn@2+)
 - Checks for outdated package dependencies
 
-| Vite+ Flag             | pnpm                   | npm                                 | yarn@1          | yarn@2+                    | Description                                   |
-| ---------------------- | ---------------------- | ----------------------------------- | --------------- | -------------------------- | --------------------------------------------- |
-| `vite outdated`        | `pnpm outdated`        | `npm outdated`                      | `yarn outdated` | `yarn upgrade-interactive` | Check for outdated packages                   |
-| `<pattern>...`         | `<pattern>...`         | `[[@scope/]<pkg>]`                  | `[<package>]`   | N/A                        | Package patterns to check                     |
-| `--long`               | `--long`               | `--long`                            | N/A             | N/A                        | Extended output format                        |
-| `--format <format>`    | `--format <format>`    | json: `--json`/ list: `--parseable` | `--json`        | N/A                        | Output format (table/list/json)               |
-| `-r, --recursive`      | `-r, --recursive`      | `--all`                             | N/A             | N/A                        | Check across all workspaces                   |
-| `--filter <pattern>`   | `--filter <pattern>`   | `--workspace <pattern>`             | N/A             | N/A                        | Target specific workspace                     |
-| `-w, --workspace-root` | `-w, --workspace-root` | `--include-workspace-root`          | N/A             | N/A                        | Include workspace root                        |
-| `-P, --prod`           | `-P, --prod`           | N/A                                 | N/A             | N/A                        | Only production dependencies (pnpm-specific)  |
-| `-D, --dev`            | `-D, --dev`            | N/A                                 | N/A             | N/A                        | Only dev dependencies (pnpm-specific)         |
-| `--no-optional`        | `--no-optional`        | N/A                                 | N/A             | N/A                        | Exclude optional dependencies (pnpm-specific) |
-| `--compatible`         | `--compatible`         | N/A                                 | N/A             | N/A                        | Only show compatible versions (pnpm-specific) |
-| `--sort-by <field>`    | `--sort-by <field>`    | N/A                                 | N/A             | N/A                        | Sort results by field (pnpm-specific)         |
-| `-g, --global`         | `-g, --global`         | `-g, --global`                      | N/A             | N/A                        | Check globally installed packages             |
+**bun references:**
+
+- https://bun.sh/docs/cli/outdated
+- Checks for outdated packages in the current project
+
+| Vite+ Flag             | pnpm                   | npm                                 | yarn@1          | yarn@2+                    | bun                  | Description                                   |
+| ---------------------- | ---------------------- | ----------------------------------- | --------------- | -------------------------- | -------------------- | --------------------------------------------- |
+| `vite outdated`        | `pnpm outdated`        | `npm outdated`                      | `yarn outdated` | `yarn upgrade-interactive` | `bun outdated`       | Check for outdated packages                   |
+| `<pattern>...`         | `<pattern>...`         | `[[@scope/]<pkg>]`                  | `[<package>]`   | N/A                        | N/A                  | Package patterns to check                     |
+| `--long`               | `--long`               | `--long`                            | N/A             | N/A                        | N/A                  | Extended output format                        |
+| `--format <format>`    | `--format <format>`    | json: `--json`/ list: `--parseable` | `--json`        | N/A                        | N/A                  | Output format (table/list/json)               |
+| `-r, --recursive`      | `-r, --recursive`      | `--all`                             | N/A             | N/A                        | `-r` / `--recursive` | Check across all workspaces                   |
+| `--filter <pattern>`   | `--filter <pattern>`   | `--workspace <pattern>`             | N/A             | N/A                        | `--filter` / `-F`    | Target specific workspace                     |
+| `-w, --workspace-root` | `-w, --workspace-root` | `--include-workspace-root`          | N/A             | N/A                        | N/A                  | Include workspace root                        |
+| `-P, --prod`           | `-P, --prod`           | N/A                                 | N/A             | N/A                        | `--production`       | Only production dependencies                  |
+| `-D, --dev`            | `-D, --dev`            | N/A                                 | N/A             | N/A                        | N/A                  | Only dev dependencies (pnpm-specific)         |
+| `--no-optional`        | `--no-optional`        | N/A                                 | N/A             | N/A                        | `--omit optional`    | Exclude optional dependencies                 |
+| `--compatible`         | `--compatible`         | N/A                                 | N/A             | N/A                        | N/A                  | Only show compatible versions (pnpm-specific) |
+| `--sort-by <field>`    | `--sort-by <field>`    | N/A                                 | N/A             | N/A                        | N/A                  | Sort results by field (pnpm-specific)         |
+| `-g, --global`         | `-g, --global`         | `-g, --global`                      | N/A             | N/A                        | N/A                  | Check globally installed packages             |
 
 **Note:**
 
@@ -170,6 +175,8 @@ vite outdated -g                      # Check globally installed packages
 - yarn@1 accepts package names but limited filtering options
 - yarn@2+ uses interactive mode (`upgrade-interactive`) instead of traditional `outdated`
 - pnpm has the most comprehensive filtering and output options
+- bun supports `--filter` / `-F` for workspace filtering, `-r` / `--recursive` for checking across all workspaces, `--production` for production-only, and `--omit optional` for excluding optional dependencies
+- bun does not support JSON output format (`--format json`)
 
 ### Outdated Behavior Differences Across Package Managers
 
@@ -1002,6 +1009,7 @@ vp outdated --update
 - yarn@4.x
 - npm@10.x
 - npm@11.x
+- bun@1.x [WIP]
 
 ### Unit Tests
 
@@ -1286,21 +1294,21 @@ vite outdated -g typescript
 
 ## Package Manager Compatibility
 
-| Feature             | pnpm               | npm                           | yarn@1           | yarn@2+             | Notes                    |
-| ------------------- | ------------------ | ----------------------------- | ---------------- | ------------------- | ------------------------ |
-| Basic command       | ✅ `outdated`      | ✅ `outdated`                 | ✅ `outdated`    | ⚠️ `upgrade-int...` | yarn@2+ uses interactive |
-| Pattern matching    | ✅ Glob patterns   | ⚠️ Package names              | ⚠️ Package names | ❌ Not supported    | pnpm supports globs      |
-| JSON output         | ✅ `--format json` | ✅ `--json`                   | ❌ Not supported | ❌ Not supported    | Different flags          |
-| Long output         | ✅ `--long`        | ✅ `--long`                   | ❌ Not supported | ❌ Not supported    | pnpm and npm only        |
-| Parseable           | ❌ Not supported   | ✅ `--parseable`              | ❌ Not supported | ❌ Not supported    | npm only                 |
-| Recursive           | ✅ `-r`            | ❌ Not supported              | ❌ Not supported | ❌ Not supported    | pnpm only                |
-| Workspace filter    | ✅ `--filter`      | ✅ `--workspace`              | ❌ Not supported | ❌ Not supported    | Different flags          |
-| Workspace root      | ✅ `-w`            | ✅ `--include-workspace-root` | ❌ Not supported | ❌ Not supported    | Different flags          |
-| Dep type filter     | ✅ `--prod/--dev`  | ❌ Not supported              | ❌ Not supported | ❌ Not supported    | pnpm only                |
-| Compatible only     | ✅ `--compatible`  | ❌ Not supported              | ❌ Not supported | ❌ Not supported    | pnpm only                |
-| Sort results        | ✅ `--sort-by`     | ❌ Not supported              | ❌ Not supported | ❌ Not supported    | pnpm only                |
-| Global check        | ✅ `-g`            | ✅ `-g`                       | ❌ Not supported | ❌ Not supported    | pnpm and npm             |
-| Show all transitive | ⚠️ Use `-r`        | ✅ `--all`                    | ❌ Not supported | ❌ Not supported    | Different approaches     |
+| Feature             | pnpm               | npm                           | yarn@1           | yarn@2+             | bun                  | Notes                    |
+| ------------------- | ------------------ | ----------------------------- | ---------------- | ------------------- | -------------------- | ------------------------ |
+| Basic command       | ✅ `outdated`      | ✅ `outdated`                 | ✅ `outdated`    | ⚠️ `upgrade-int...` | ✅ `outdated`        | yarn@2+ uses interactive |
+| Pattern matching    | ✅ Glob patterns   | ⚠️ Package names              | ⚠️ Package names | ❌ Not supported    | ❌ Not supported     | pnpm supports globs      |
+| JSON output         | ✅ `--format json` | ✅ `--json`                   | ❌ Not supported | ❌ Not supported    | ❌ Not supported     | Different flags          |
+| Long output         | ✅ `--long`        | ✅ `--long`                   | ❌ Not supported | ❌ Not supported    | ❌ Not supported     | pnpm and npm only        |
+| Parseable           | ❌ Not supported   | ✅ `--parseable`              | ❌ Not supported | ❌ Not supported    | ❌ Not supported     | npm only                 |
+| Recursive           | ✅ `-r`            | ❌ Not supported              | ❌ Not supported | ❌ Not supported    | ✅ `-r`              | pnpm and bun             |
+| Workspace filter    | ✅ `--filter`      | ✅ `--workspace`              | ❌ Not supported | ❌ Not supported    | ✅ `--filter` / `-F` | Different flags          |
+| Workspace root      | ✅ `-w`            | ✅ `--include-workspace-root` | ❌ Not supported | ❌ Not supported    | ❌ Not supported     | Different flags          |
+| Dep type filter     | ✅ `--prod/--dev`  | ❌ Not supported              | ❌ Not supported | ❌ Not supported    | ❌ Not supported     | pnpm only                |
+| Compatible only     | ✅ `--compatible`  | ❌ Not supported              | ❌ Not supported | ❌ Not supported    | ❌ Not supported     | pnpm only                |
+| Sort results        | ✅ `--sort-by`     | ❌ Not supported              | ❌ Not supported | ❌ Not supported    | ❌ Not supported     | pnpm only                |
+| Global check        | ✅ `-g`            | ✅ `-g`                       | ❌ Not supported | ❌ Not supported    | ❌ Not supported     | pnpm and npm             |
+| Show all transitive | ⚠️ Use `-r`        | ✅ `--all`                    | ❌ Not supported | ❌ Not supported    | ❌ Not supported     | Different approaches     |
 
 ## Future Enhancements
 
@@ -1415,7 +1423,7 @@ Changes:
 
 ## Conclusion
 
-This RFC proposes adding `vite outdated` command to provide a unified interface for checking outdated packages across pnpm/npm/yarn. The design:
+This RFC proposes adding `vite outdated` command to provide a unified interface for checking outdated packages across pnpm/npm/yarn/bun. The design:
 
 - ✅ Automatically adapts to detected package manager
 - ✅ Supports pattern matching (pnpm) with graceful degradation

@@ -65,7 +65,7 @@ fn documentation_url_for_command_path(command_path: &[&str]) -> Option<&'static 
         ["config"] | ["staged"] => Some("https://viteplus.dev/guide/commit-hooks"),
         [
             "install" | "add" | "remove" | "update" | "dedupe" | "outdated" | "list" | "ls" | "why"
-            | "info" | "view" | "show" | "link" | "unlink" | "pm",
+            | "info" | "view" | "show" | "link" | "unlink" | "rebuild" | "pm",
             ..,
         ] => Some("https://viteplus.dev/guide/install"),
         ["dev"] => Some("https://viteplus.dev/guide/dev"),
@@ -449,8 +449,9 @@ pub fn top_level_help_doc() -> HelpDoc {
             section_rows(
                 "Execute",
                 vec![
-                    row("run", "Run tasks"),
+                    row("run", "Run tasks (also available as standalone `vpr`)"),
                     row("exec", "Execute a command from local node_modules/.bin"),
+                    row("node", "Run a Node.js script (shorthand for `env exec node`)"),
                     row("dlx", "Execute a package binary without installing it as a dependency"),
                     row("cache", "Manage the task cache"),
                 ],
@@ -476,6 +477,7 @@ pub fn top_level_help_doc() -> HelpDoc {
                     row("info, view, show", "View package information from the registry"),
                     row("link, ln", "Link packages for local development"),
                     row("unlink", "Unlink packages"),
+                    row("rebuild", "Rebuild native modules"),
                     row("pm", "Forward a command to the package manager"),
                 ],
             ),
@@ -499,7 +501,7 @@ fn env_help_doc() -> HelpDoc {
             section_rows(
                 "Setup",
                 vec![
-                    row("setup", "Create or update shims in VITE_PLUS_HOME/bin"),
+                    row("setup", "Create or update shims in VP_HOME/bin"),
                     row("on", "Enable managed mode - shims always use vite-plus managed Node.js"),
                     row(
                         "off",
@@ -759,6 +761,10 @@ fn delegated_help_doc(command: &str) -> Option<HelpDoc> {
                         row("--fix", "Auto-fix format and lint issues"),
                         row("--no-fmt", "Skip format check"),
                         row("--no-lint", "Skip lint check"),
+                        row(
+                            "--no-error-on-unmatched-pattern",
+                            "Do not exit with error when pattern is unmatched",
+                        ),
                         row("-h, --help", "Print help"),
                     ],
                 ),
@@ -1176,6 +1182,6 @@ Options:
             documentation_url: Some("https://viteplus.dev/guide/demo"),
         });
 
-        assert!(output.contains("Documentation: https://viteplus.dev/guide/demo"));
+        assert!(strip_ansi(&output).contains("Documentation: https://viteplus.dev/guide/demo"));
     }
 }

@@ -97,7 +97,7 @@ export function brandVite(rootDir: string = process.cwd()) {
     replaceInFile(
       constantsFile,
       'export const VERSION = version as string',
-      'export const VERSION = version as string\n\nexport const VITE_PLUS_VERSION: string = process.env.VITE_PLUS_VERSION || VERSION',
+      'export const VERSION = version as string\n\nexport const VITE_PLUS_VERSION: string = process.env.VP_VERSION || VERSION',
     ),
   );
 

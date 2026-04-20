@@ -1,0 +1,11 @@
+> vp run app#build # first build
+> ls packages/app/dist # should have the build output
+assets
+index.html
+
+> vp run app#build 2>&1 | grep -c 'cache hit' || echo 'no cache hit' # cache disabled, no cache hit
+0
+no cache hit
+
+> vp run app#build 2>&1 | grep 'cache disabled' # should show cache disabled
+~/packages/app$ vp build ⊘ cache disabled

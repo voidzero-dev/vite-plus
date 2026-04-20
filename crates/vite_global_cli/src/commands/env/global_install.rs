@@ -408,14 +408,12 @@ async fn create_package_shim(
     {
         let shim_path = bin_dir.join(format!("{}.exe", bin_name));
 
-        // Skip if already exists (e.g., re-installing the same package)
-        if tokio::fs::try_exists(&shim_path).await.unwrap_or(false) {
-            return Ok(());
-        }
+        // Delete before overwrite; falls back to rename if the exe is locked.
+        super::setup::remove_or_rename_to_old(&shim_path).await;
 
         // Copy the trampoline binary as <bin_name>.exe.
         // The trampoline detects the tool name from its own filename and sets
-        // VITE_PLUS_SHIM_TOOL env var before spawning vp.exe.
+        // VP_SHIM_TOOL env var before spawning vp.exe.
         let trampoline_src = super::setup::get_trampoline_path()?;
         tokio::fs::copy(trampoline_src.as_path(), &shim_path).await?;
 
@@ -470,7 +468,7 @@ async fn remove_package_shim(
 mod tests {
     use super::*;
 
-    /// RAII guard that sets `VITE_PLUS_TRAMPOLINE_PATH` to a fake binary on creation
+    /// RAII guard that sets `VP_TRAMPOLINE_PATH` to a fake binary on creation
     /// and clears it on drop. Ensures cleanup even on test panics.
     #[cfg(windows)]
     struct FakeTrampolineGuard;
@@ -481,7 +479,7 @@ mod tests {
             let trampoline = dir.join("vp-shim.exe");
             std::fs::write(&trampoline, b"fake-trampoline").unwrap();
             unsafe {
-                std::env::set_var(vite_shared::env_vars::VITE_PLUS_TRAMPOLINE_PATH, &trampoline);
+                std::env::set_var(vite_shared::env_vars::VP_TRAMPOLINE_PATH, &trampoline);
             }
             Self
         }
@@ -491,7 +489,7 @@ mod tests {
     impl Drop for FakeTrampolineGuard {
         fn drop(&mut self) {
             unsafe {
-                std::env::remove_var(vite_shared::env_vars::VITE_PLUS_TRAMPOLINE_PATH);
+                std::env::remove_var(vite_shared::env_vars::VP_TRAMPOLINE_PATH);
             }
         }
     }

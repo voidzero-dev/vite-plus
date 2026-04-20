@@ -35,7 +35,7 @@ fn abbreviate_home_path(path: &AbsolutePath, user_home: &AbsolutePath) -> Str {
 const VITE_PLUS_COMMENT: &str = "# Vite+ bin";
 
 pub fn execute(yes: bool) -> Result<ExitStatus, Error> {
-    let Ok(home_dir) = vite_shared::get_vite_plus_home() else {
+    let Ok(home_dir) = vite_shared::get_vp_home() else {
         output::info("vite-plus is not installed (could not determine home directory)");
         return Ok(exit_status(0));
     };

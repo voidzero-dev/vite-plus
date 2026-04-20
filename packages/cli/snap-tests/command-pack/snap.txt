@@ -59,20 +59,17 @@ $ vp pack src/index.ts
 ℹ 1 files, total: <variable> kB
 ✔ Build complete in <variable>ms
 
----
-vp run: command-pack#pack not cached because it modified its input. (Run `vp run --last-details` for full details)
 
 > ls dist # should have the library
 index.mjs
 
 > vp run pack # should hit cache
-$ vp pack src/index.ts
+$ vp pack src/index.ts ◉ cache hit, replaying
 ℹ entry: src/index.ts
 ℹ Build start
-ℹ Cleaning 1 files
 ℹ dist/index.mjs  <variable> kB │ gzip: <variable> kB
 ℹ 1 files, total: <variable> kB
 ✔ Build complete in <variable>ms
 
 ---
-vp run: command-pack#pack not cached because it modified its input. (Run `vp run --last-details` for full details)
+vp run: cache hit, <variable>ms saved.

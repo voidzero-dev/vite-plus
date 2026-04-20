@@ -120,6 +120,15 @@ export const multiselect = <Value>(opts: MultiSelectOptions<Value>) => {
     );
   };
   const required = opts.required ?? true;
+  const hint =
+    '  ' +
+    color.reset(
+      color.dim(
+        `Press ${color.gray(color.bgWhite(color.inverse(' space ')))} to select, ${color.gray(
+          color.bgWhite(color.inverse(' enter ')),
+        )} to submit`,
+      ),
+    );
 
   return new MultiSelectPrompt({
     options: opts.options,
@@ -131,14 +140,9 @@ export const multiselect = <Value>(opts: MultiSelectOptions<Value>) => {
     cursorAt: opts.cursorAt,
     validate(selected: Value[] | undefined) {
       if (required && (selected === undefined || selected.length === 0)) {
-        return `Please select at least one option.\n${color.reset(
-          color.dim(
-            `Press ${color.gray(color.bgWhite(color.inverse(' space ')))} to select, ${color.gray(
-              color.bgWhite(color.inverse(' enter ')),
-            )} to submit`,
-          ),
-        )}`;
+        return `Please select at least one option.\n${hint}`;
       }
+      return undefined;
     },
     render() {
       const hasGuide = opts.withGuide ?? false;
@@ -220,7 +224,7 @@ export const multiselect = <Value>(opts: MultiSelectOptions<Value>) => {
             columnPadding: prefix.length,
             rowPadding: titleLineCount + footerLineCount,
             style: styleOption,
-          }).join(`\n${prefix}`)}\n${footer}\n`;
+          }).join(`\n${prefix}`)}\n${hint}\n${footer}\n`;
         }
         default: {
           const prefix = hasGuide ? `${color.blue(S_BAR)} ` : nestedPrefix;
@@ -235,7 +239,7 @@ export const multiselect = <Value>(opts: MultiSelectOptions<Value>) => {
             columnPadding: prefix.length,
             rowPadding: titleLineCount + footerLineCount,
             style: styleOption,
-          }).join(`\n${prefix}`)}\n${hasGuide ? color.blue(S_BAR_END) : ''}\n`;
+          }).join(`\n${prefix}`)}\n${hint}\n${hasGuide ? color.blue(S_BAR_END) : ''}\n`;
         }
       }
     },

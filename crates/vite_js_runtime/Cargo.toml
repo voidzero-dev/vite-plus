@@ -32,7 +32,7 @@ zip = { workspace = true }
 reqwest = { workspace = true, features = ["stream", "native-tls-vendored"] }
 
 [target.'cfg(not(target_os = "windows"))'.dependencies]
-reqwest = { workspace = true, features = ["stream", "rustls-tls"] }
+reqwest = { workspace = true, features = ["stream", "rustls-no-provider"] }
 
 [dev-dependencies]
 tempfile = { workspace = true }

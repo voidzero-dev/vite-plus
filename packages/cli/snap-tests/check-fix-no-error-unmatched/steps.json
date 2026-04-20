@@ -1,0 +1,9 @@
+{
+  "commands": [
+    "vp check --fix src/ignored/index.js # all files excluded by ignorePatterns, should pass in --fix mode",
+    "vp check --fix package.json # non-lintable file, should pass in --fix mode",
+    "vp check --no-error-on-unmatched-pattern src/ignored/index.js # explicit flag without --fix, should also pass",
+    "vp check --fix --no-error-on-unmatched-pattern src/ignored/index.js # both flags set, should pass",
+    "vp check src/ignored/index.js # without --fix or explicit flag, should exit non-zero"
+  ]
+}

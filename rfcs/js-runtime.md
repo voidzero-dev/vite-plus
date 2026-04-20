@@ -182,8 +182,11 @@ impl NodeProvider {
     /// Resolve version requirement (e.g., "^24.4.0") to exact version
     pub async fn resolve_version(&self, version_req: &str) -> Result<Str, Error>;
 
-    /// Get latest version (first entry in index)
+    /// Get latest LTS version
     pub async fn resolve_latest_version(&self) -> Result<Str, Error>;
+
+    /// Get absolute latest version (including non-LTS)
+    pub async fn resolve_absolute_latest_version(&self) -> Result<Str, Error>;
 }
 ```
 
@@ -431,10 +434,10 @@ https://nodejs.org/dist/v{version}/node-v{version}-{platform}.{ext}
 
 ### Custom Mirror Support
 
-The distribution URL can be overridden using the `VITE_NODE_DIST_MIRROR` environment variable. This is useful for corporate environments or regions where nodejs.org might be slow or blocked.
+The distribution URL can be overridden using the `VP_NODE_DIST_MIRROR` environment variable. This is useful for corporate environments or regions where nodejs.org might be slow or blocked.
 
 ```bash
-VITE_NODE_DIST_MIRROR=https://example.com/mirrors/node vp build
+VP_NODE_DIST_MIRROR=https://example.com/mirrors/node vp build
 ```
 
 The mirror URL should have the same directory structure as the official distribution. Trailing slashes are automatically trimmed.
@@ -677,7 +680,7 @@ pub enum Error {
 4. ✅ Handles concurrent downloads safely
 5. ✅ Returns version and binary path
 6. ✅ Comprehensive test coverage
-7. ✅ Custom mirrors via `VITE_NODE_DIST_MIRROR` environment variable
+7. ✅ Custom mirrors via `VP_NODE_DIST_MIRROR` environment variable
 8. ✅ Support `devEngines.runtime` from package.json
 9. ✅ Support semver ranges (^, ~, etc.) with version resolution
 10. ✅ Version index caching with 1-hour TTL

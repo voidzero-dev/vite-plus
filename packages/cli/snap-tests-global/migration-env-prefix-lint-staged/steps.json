@@ -1,8 +1,12 @@
 {
   "commands": [
-    { "command": "git init", "ignoreOutput": true },
+    {
+      "command": "git init",
+      "ignoreOutput": true
+    },
     "vp migrate --no-interactive # migration should replace env-prefixed lint-staged in pre-commit",
     "cat package.json # check husky/lint-staged removed, staged config in vite.config.ts",
+    "cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog",
     "cat vite.config.ts # check staged config migrated to vite.config.ts",
     "cat .vite-hooks/pre-commit # check env prefix preserved with vp staged"
   ]

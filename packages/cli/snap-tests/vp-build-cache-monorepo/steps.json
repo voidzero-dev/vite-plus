@@ -1,0 +1,25 @@
+{
+  "commands": [
+    {
+      "command": "vp run app#build # should build the app from root",
+      "ignoreOutput": true
+    },
+    "ls packages/app/dist # should have the build output",
+    "vp run app#build 2>&1 | grep 'cache hit' # should hit cache from root",
+    "cd packages/app && vp run build 2>&1 | grep 'cache hit' # should hit cache from sub dir",
+    {
+      "command": "cd packages/app && vp build 2>&1 # direct vp build should not be cached",
+      "ignoreOutput": true
+    },
+    "cd packages/app && vp build 2>&1 | grep -c 'cache' || echo 'no cache' # direct vp build has no cache",
+    "echo '<html><body><script type=\"module\">console.log(\"changed\");</script></body></html>' > packages/app/index.html",
+    "vp run app#build 2>&1 | grep 'cache miss' # should miss cache after source change",
+    {
+      "command": "cd packages/web && vp run build # should build from sub dir first",
+      "ignoreOutput": true
+    },
+    "ls packages/web/dist # should have the build output",
+    "cd packages/web && vp run build 2>&1 | grep 'cache hit' # should hit cache from sub dir",
+    "vp run web#build 2>&1 | grep 'cache hit' # should hit cache from root after sub dir build"
+  ]
+}

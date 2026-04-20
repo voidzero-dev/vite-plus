@@ -15,6 +15,7 @@ export default defineConfig({
   staged: {
     "*": "vp check --fix"
   },
+  fmt: {},
   lint: {
     "rules": {
       "no-unused-vars": "error"
@@ -64,6 +65,7 @@ export default defineConfig({
 }
 
 > cat .yarnrc.yml # check .yarnrc.yml
+nodeLinker: node-modules
 catalog:
   vite: npm:@voidzero-dev/vite-plus-core@latest
   vitest: npm:@voidzero-dev/vite-plus-test@latest

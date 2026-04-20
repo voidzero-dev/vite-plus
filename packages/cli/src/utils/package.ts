@@ -2,8 +2,8 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 
-import { VITE_PLUS_NAME } from './constants.js';
-import { readJsonFile } from './json.js';
+import { VITE_PLUS_NAME } from './constants.ts';
+import { readJsonFile } from './json.ts';
 
 export function getScopeFromPackageName(packageName: string): string {
   if (packageName.startsWith('@')) {
@@ -44,11 +44,11 @@ export function detectPackageMetadata(
  * @param currentDir - The current directory to start searching from.
  * @returns The package.json content as a JSON object, or null if no package.json is found.
  */
-export function readNearestPackageJson<T = Record<string, unknown>>(currentDir: string): T | null {
+export function readNearestPackageJson(currentDir: string): Record<string, unknown> | null {
   do {
     const packageJsonPath = path.join(currentDir, 'package.json');
     if (fs.existsSync(packageJsonPath)) {
-      return readJsonFile<T>(packageJsonPath);
+      return readJsonFile(packageJsonPath);
     }
     currentDir = path.dirname(currentDir);
   } while (currentDir !== path.dirname(currentDir));

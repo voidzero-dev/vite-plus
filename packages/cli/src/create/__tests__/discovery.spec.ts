@@ -21,13 +21,13 @@ describe('expandCreateShorthand', () => {
   });
 
   it('should expand scoped names to @scope/create-* packages', () => {
-    expect(expandCreateShorthand('@tanstack/start')).toBe('@tanstack/create-start');
+    expect(expandCreateShorthand('@tanstack/start')).toBe('@tanstack/cli');
     expect(expandCreateShorthand('@my-org/app')).toBe('@my-org/create-app');
   });
 
   it('should expand scoped names with version', () => {
-    expect(expandCreateShorthand('@tanstack/start@latest')).toBe('@tanstack/create-start@latest');
-    expect(expandCreateShorthand('@tanstack/start@1.0.0')).toBe('@tanstack/create-start@1.0.0');
+    expect(expandCreateShorthand('@tanstack/start@latest')).toBe('@tanstack/cli@latest');
+    expect(expandCreateShorthand('@tanstack/start@1.0.0')).toBe('@tanstack/cli@1.0.0');
   });
 
   it('should not expand names already starting with create-', () => {

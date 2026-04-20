@@ -1,0 +1,16 @@
+> vp node -v # Shorthand: version resolved from package.json engines.node
+v20.18.0
+
+> vp node script.js # Execute a local JS file (primary use case)
+node version: v<semver>
+script args: []
+
+> vp node script.js foo bar --flag # Forward script args to the local file
+node version: v<semver>
+script args: ["foo","bar","--flag"]
+
+> vp node -e "console.log('Hello from vp node')" # Inline script via -e
+Hello from vp node
+
+> vp env exec node -v # Equivalence check: same output as shorthand
+v20.18.0

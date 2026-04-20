@@ -173,6 +173,39 @@ impl PackageManager {
                     args.push("--json".into());
                 }
             }
+            PackageManagerType::Bun => {
+                args.push("pm".into());
+                args.push("pack".into());
+
+                if options.recursive {
+                    output::warn("--recursive not supported by bun pm pack, ignoring flag");
+                }
+
+                if let Some(filters) = options.filters {
+                    if !filters.is_empty() {
+                        output::warn("--filter not supported by bun pm pack, ignoring flag");
+                    }
+                }
+
+                if let Some(out) = options.out {
+                    args.push("--filename".into());
+                    args.push(out.to_string());
+                }
+
+                if let Some(dest) = options.pack_destination {
+                    args.push("--destination".into());
+                    args.push(dest.to_string());
+                }
+
+                if let Some(level) = options.pack_gzip_level {
+                    args.push("--gzip-level".into());
+                    args.push(level.to_string());
+                }
+
+                if options.json {
+                    output::warn("--json not supported by bun pm pack, ignoring flag");
+                }
+            }
         }
 
         // Add pass-through args
@@ -517,6 +550,28 @@ mod tests {
         // Verify directory was created
         assert!(dest_path.as_path().exists());
         assert!(dest_path.as_path().is_dir());
+    }
+
+    #[test]
+    fn test_bun_pack_with_out_maps_to_filename() {
+        let pm = create_mock_package_manager(PackageManagerType::Bun, "1.3.11");
+        let result = pm.resolve_pack_command(&PackCommandOptions {
+            out: Some("custom.tgz"),
+            ..Default::default()
+        });
+        assert!(result.args.contains(&"--filename".to_string()));
+        assert!(result.args.contains(&"custom.tgz".to_string()));
+    }
+
+    #[test]
+    fn test_bun_pack_with_gzip_level() {
+        let pm = create_mock_package_manager(PackageManagerType::Bun, "1.3.11");
+        let result = pm.resolve_pack_command(&PackCommandOptions {
+            pack_gzip_level: Some(5),
+            ..Default::default()
+        });
+        assert!(result.args.contains(&"--gzip-level".to_string()));
+        assert!(result.args.contains(&"5".to_string()));
     }
 
     #[tokio::test]

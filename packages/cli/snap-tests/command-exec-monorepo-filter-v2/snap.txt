@@ -13,38 +13,38 @@ hello
 app-b$ echo hello
 hello
 
-> vp exec --filter 'app-a lib-c' -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # whitespace splitting: 'a b' => two filters
-lib-c$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+> vp exec --filter 'app-a lib-c' -- node -e "console.log(process.env.VP_PACKAGE_NAME)" # whitespace splitting: 'a b' => two filters
+lib-c$ node -e console.log(process.env.VP_PACKAGE_NAME)
 lib-c
-app-a$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+app-a$ node -e console.log(process.env.VP_PACKAGE_NAME)
 app-a
 
-> vp exec --filter 'app-a  app-b' -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # whitespace splitting with extra spaces
-app-a$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+> vp exec --filter 'app-a  app-b' -- node -e "console.log(process.env.VP_PACKAGE_NAME)" # whitespace splitting with extra spaces
+app-a$ node -e console.log(process.env.VP_PACKAGE_NAME)
 app-a
-app-b$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+app-b$ node -e console.log(process.env.VP_PACKAGE_NAME)
 app-b
 
 > vp exec --filter nonexistent-pkg -- echo hello # unmatched filter warning
 warn: No packages matched the filter 'nonexistent-pkg'
 warn: No packages matched the filter(s)
 
-> vp exec --filter nonexistent-pkg --filter app-a -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # unmatched + matched filter
+> vp exec --filter nonexistent-pkg --filter app-a -- node -e "console.log(process.env.VP_PACKAGE_NAME)" # unmatched + matched filter
 warn: No packages matched the filter 'nonexistent-pkg'
 app-a
 
-> vp exec -w --filter app-a -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # -w + --filter is additive (root + filtered)
-app-a$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+> vp exec -w --filter app-a -- node -e "console.log(process.env.VP_PACKAGE_NAME)" # -w + --filter is additive (root + filtered)
+app-a$ node -e console.log(process.env.VP_PACKAGE_NAME)
 app-a
-exec-monorepo-filter-v2$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+exec-monorepo-filter-v2$ node -e console.log(process.env.VP_PACKAGE_NAME)
 exec-monorepo-filter-v2
 
-> vp exec -w --filter 'app-*' -- node -e "console.log(process.env.VITE_PLUS_PACKAGE_NAME)" # -w + glob filter additive
-app-a$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+> vp exec -w --filter 'app-*' -- node -e "console.log(process.env.VP_PACKAGE_NAME)" # -w + glob filter additive
+app-a$ node -e console.log(process.env.VP_PACKAGE_NAME)
 app-a
-exec-monorepo-filter-v2$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+exec-monorepo-filter-v2$ node -e console.log(process.env.VP_PACKAGE_NAME)
 exec-monorepo-filter-v2
-app-b$ node -e console.log(process.env.VITE_PLUS_PACKAGE_NAME)
+app-b$ node -e console.log(process.env.VP_PACKAGE_NAME)
 app-b
 
 [1]> vp exec -r --filter app-a -- echo hello # -r + --filter conflict error

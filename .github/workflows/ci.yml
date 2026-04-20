@@ -44,7 +44,7 @@ jobs:
     outputs:
       code-changed: ${{ steps.filter.outputs.code }}
     steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
         id: filter
         with:
@@ -60,7 +60,7 @@ jobs:
       contents: read
       packages: read
     steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: ./.github/actions/download-rolldown-binaries
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -80,7 +80,7 @@ jobs:
             target: aarch64-apple-darwin
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: ./.github/actions/clone
 
       - name: Setup Dev Drive
@@ -93,7 +93,7 @@ jobs:
             CARGO_HOME,{{ DEV_DRIVE }}/.cargo
             RUSTUP_HOME,{{ DEV_DRIVE }}/.rustup
 
-      - uses: oxc-project/setup-rust@d286d43bc1f606abbd98096666ff8be68c8d5f57 # v1.0.0
+      - uses: oxc-project/setup-rust@23f38cfb0c04af97a055f76acee94d5be71c7c82 # v1.0.16
         with:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: test
@@ -126,7 +126,7 @@ jobs:
         shell: sh {0}
         run: apk add --no-cache bash curl git musl-dev gcc g++ python3 cmake make
 
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: ./.github/actions/clone
 
       - name: Install rustup
@@ -152,10 +152,10 @@ jobs:
     name: Lint
     runs-on: namespace-profile-linux-x64-default
     steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: ./.github/actions/clone
 
-      - uses: oxc-project/setup-rust@d286d43bc1f606abbd98096666ff8be68c8d5f57 # v1.0.0
+      - uses: oxc-project/setup-rust@23f38cfb0c04af97a055f76acee94d5be71c7c82 # v1.0.16
         with:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: lint
@@ -168,17 +168,20 @@ jobs:
           # cargo clippy --all-targets --all-features -- -D warnings
           # RUSTDOCFLAGS='-D warnings' cargo doc --no-deps --document-private-items
 
-      - uses: crate-ci/typos@631208b7aac2daa8b707f55e7331f9112b0e062d # v1.44.0
+      - uses: crate-ci/typos@cf5f1c29a8ac336af8568821ec41919923b05a83 # v1.45.1
         with:
           files: .
 
-      - uses: oxc-project/setup-node@fdbf0dfd334c4e6d56ceeb77d91c76339c2a0885 # v1.0.4
+      - uses: oxc-project/setup-node@4c26e7cb3605b6bdef5450dacd02c434b10fd8ba # v1.2.0
 
       - name: Install docs dependencies
         run: pnpm -C docs install --frozen-lockfile
 
+      # Retry once because `pnpm dedupe --check` re-resolves all dependencies and
+      # can non-deterministically flag optional transitive peers (e.g. oxc-resolver
+      # via dts-resolver) as dedup-able depending on async resolution order.
       - name: Deduplicate dependencies
-        run: pnpm dedupe --check
+        run: pnpm dedupe --check || pnpm dedupe --check
 
   cli-e2e-test:
     name: CLI E2E test
@@ -196,7 +199,7 @@ jobs:
             target: x86_64-pc-windows-msvc
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: ./.github/actions/clone
 
       - name: Setup Dev Drive
@@ -209,13 +212,13 @@ jobs:
             CARGO_HOME,{{ DEV_DRIVE }}/.cargo
             RUSTUP_HOME,{{ DEV_DRIVE }}/.rustup
 
-      - uses: oxc-project/setup-rust@d286d43bc1f606abbd98096666ff8be68c8d5f57 # v1.0.0
+      - uses: oxc-project/setup-rust@23f38cfb0c04af97a055f76acee94d5be71c7c82 # v1.0.16
         with:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: cli-e2e-test-${{ matrix.target }}
           target-dir: ${{ runner.os == 'Windows' && format('{0}/target', env.DEV_DRIVE) || '' }}
 
-      - uses: oxc-project/setup-node@fdbf0dfd334c4e6d56ceeb77d91c76339c2a0885 # v1.0.4
+      - uses: oxc-project/setup-node@4c26e7cb3605b6bdef5450dacd02c434b10fd8ba # v1.2.0
 
       - name: Install docs dependencies
         run: pnpm -C docs install --frozen-lockfile
@@ -252,6 +255,11 @@ jobs:
 
       - name: Run vp check
         run: vp check
+
+      - name: Run unit tests
+        run: RUST_BACKTRACE=1 pnpm test:unit
+        env:
+          RUST_MIN_STACK: 8388608
 
       - name: Test global package install (powershell)
         if: ${{ matrix.os == 'windows-latest' }}
@@ -383,21 +391,6 @@ jobs:
           vp env doctor
           vp env use --unset
           node --version
-
-      - name: Install Playwright browsers
-        run: pnpx playwright install chromium
-
-      - name: Run CLI snapshot tests
-        run: |
-          RUST_BACKTRACE=1 pnpm test
-          if ! git diff --quiet; then
-            echo "::error::Snapshot diff detected. Run 'pnpm -F vite-plus snap-test' locally and commit the updated snap.txt files."
-            git diff --stat
-            git diff
-            exit 1
-          fi
-        env:
-          RUST_MIN_STACK: 8388608
 
       # Upgrade tests (merged from separate job to avoid duplicate build)
       - name: Test upgrade (bash)
@@ -531,7 +524,16 @@ jobs:
       - name: Test implode (bash)
         shell: bash
         run: |
-          vp implode --yes
+          # Retry on Windows — file locks can cause transient "Access is denied" errors
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            for i in 1 2 3; do
+              vp implode --yes && break
+              echo "Retry $i: vp implode failed, waiting 5s..."
+              sleep 5
+            done
+          else
+            vp implode --yes
+          fi
           ls -la ~/
           VP_HOME="${USERPROFILE:-$HOME}/.vite-plus"
           if [ -d "$VP_HOME" ]; then
@@ -546,7 +548,13 @@ jobs:
         if: ${{ matrix.os == 'windows-latest' }}
         shell: pwsh
         run: |
-          vp implode --yes
+          # Retry — Windows file locks can cause transient "Access is denied" errors
+          foreach ($i in 1..3) {
+            vp implode --yes
+            if ($LASTEXITCODE -eq 0) { break }
+            Write-Host "Retry $i`: vp implode failed, waiting 5s..."
+            Start-Sleep -Seconds 5
+          }
           Start-Sleep -Seconds 5
           dir "$env:USERPROFILE\"
           if (Test-Path "$env:USERPROFILE\.vite-plus") {
@@ -560,9 +568,16 @@ jobs:
         if: ${{ matrix.os == 'windows-latest' }}
         shell: cmd
         run: |
+          REM Retry — Windows file locks can cause transient "Access is denied" errors
           REM vp.exe renames its own parent directory; cmd.exe may report
           REM "The system cannot find the path specified" on exit — ignore it.
-          vp implode --yes || ver >NUL
+          for /L %%i in (1,1,3) do (
+            vp implode --yes || ver >NUL
+            if not exist "%USERPROFILE%\.vite-plus" goto implode_done
+            echo Retry %%i: vp implode failed, waiting 5s...
+            timeout /T 5 /NOBREAK >NUL
+          )
+          :implode_done
           timeout /T 5 /NOBREAK >NUL
           dir "%USERPROFILE%\"
           if exist "%USERPROFILE%\.vite-plus" (
@@ -572,21 +587,119 @@ jobs:
           pnpm bootstrap-cli:ci
           vp --version
 
+  cli-snap-test:
+    name: CLI snap test (${{ matrix.target }}, ${{ matrix.shard }}/${{ matrix.shardTotal }})
+    needs:
+      - download-previous-rolldown-binaries
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: namespace-profile-linux-x64-default
+            target: x86_64-unknown-linux-gnu
+            shard: 1
+            shardTotal: 3
+          - os: namespace-profile-linux-x64-default
+            target: x86_64-unknown-linux-gnu
+            shard: 2
+            shardTotal: 3
+          - os: namespace-profile-linux-x64-default
+            target: x86_64-unknown-linux-gnu
+            shard: 3
+            shardTotal: 3
+          - os: namespace-profile-mac-default
+            target: aarch64-apple-darwin
+            shard: 1
+            shardTotal: 3
+          - os: namespace-profile-mac-default
+            target: aarch64-apple-darwin
+            shard: 2
+            shardTotal: 3
+          - os: namespace-profile-mac-default
+            target: aarch64-apple-darwin
+            shard: 3
+            shardTotal: 3
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            shard: 1
+            shardTotal: 3
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            shard: 2
+            shardTotal: 3
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            shard: 3
+            shardTotal: 3
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: ./.github/actions/clone
+
+      - name: Setup Dev Drive
+        if: runner.os == 'Windows'
+        uses: samypr100/setup-dev-drive@30f0f98ae5636b2b6501e181dfb3631b9974818d # v4.0.0
+        with:
+          drive-size: 12GB
+          drive-format: ReFS
+          env-mapping: |
+            CARGO_HOME,{{ DEV_DRIVE }}/.cargo
+            RUSTUP_HOME,{{ DEV_DRIVE }}/.rustup
+
+      - uses: oxc-project/setup-rust@23f38cfb0c04af97a055f76acee94d5be71c7c82 # v1.0.16
+        with:
+          save-cache: ${{ github.ref_name == 'main' }}
+          cache-key: cli-snap-test-${{ matrix.target }}
+          target-dir: ${{ runner.os == 'Windows' && format('{0}/target', env.DEV_DRIVE) || '' }}
+
+      - uses: oxc-project/setup-node@4c26e7cb3605b6bdef5450dacd02c434b10fd8ba # v1.2.0
+
+      - name: Install docs dependencies
+        run: pnpm -C docs install --frozen-lockfile
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: rolldown-binaries
+          path: ./rolldown/packages/rolldown/src
+          merge-multiple: true
+
+      - name: Build with upstream
+        uses: ./.github/actions/build-upstream
+        with:
+          target: ${{ matrix.target }}
+
+      - name: Install Global CLI vp
+        run: |
+          pnpm bootstrap-cli:ci
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            echo "$USERPROFILE\.vite-plus\bin" >> $GITHUB_PATH
+          else
+            echo "$HOME/.vite-plus/bin" >> $GITHUB_PATH
+          fi
+
+      - name: Run CLI snapshot tests (shard ${{ matrix.shard }}/${{ matrix.shardTotal }})
+        run: |
+          RUST_BACKTRACE=1 pnpm -F ./packages/cli snap-test-local --shard=${{ matrix.shard }}/${{ matrix.shardTotal }}
+          RUST_BACKTRACE=1 pnpm -F ./packages/cli snap-test-global --shard=${{ matrix.shard }}/${{ matrix.shardTotal }}
+          bash .github/scripts/retry-failed-snap-tests.sh
+        env:
+          RUST_MIN_STACK: 8388608
+
   cli-e2e-test-musl:
     name: CLI E2E test (Linux x64 musl)
     needs:
       - download-previous-rolldown-binaries
     runs-on: namespace-profile-linux-x64-default
     steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: ./.github/actions/clone
 
-      - uses: oxc-project/setup-rust@d286d43bc1f606abbd98096666ff8be68c8d5f57 # v1.0.0
+      - uses: oxc-project/setup-rust@23f38cfb0c04af97a055f76acee94d5be71c7c82 # v1.0.16
         with:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: cli-e2e-test-musl
 
-      - uses: oxc-project/setup-node@fdbf0dfd334c4e6d56ceeb77d91c76339c2a0885 # v1.0.4
+      - uses: oxc-project/setup-node@4c26e7cb3605b6bdef5450dacd02c434b10fd8ba # v1.2.0
 
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
@@ -642,15 +755,9 @@ jobs:
               tsc --version
               vp uninstall -g typescript
 
-              # Run snap tests
               git config --global --add safe.directory /workspace
               RUST_BACKTRACE=1 pnpm test
-              if ! git diff --quiet; then
-                echo '::error::Snapshot diff detected. Run pnpm -F vite-plus snap-test locally and commit the updated snap.txt files.'
-                git diff --stat
-                git diff
-                exit 1
-              fi
+              bash .github/scripts/retry-failed-snap-tests.sh
             "
 
   install-e2e-test:
@@ -663,15 +770,15 @@ jobs:
       github.event_name != 'pull_request' ||
       contains(github.event.pull_request.labels.*.name, 'test: install-e2e')
     steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: ./.github/actions/clone
 
-      - uses: oxc-project/setup-rust@d286d43bc1f606abbd98096666ff8be68c8d5f57 # v1.0.0
+      - uses: oxc-project/setup-rust@23f38cfb0c04af97a055f76acee94d5be71c7c82 # v1.0.16
         with:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: install-e2e-test
 
-      - uses: oxc-project/setup-node@fdbf0dfd334c4e6d56ceeb77d91c76339c2a0885 # v1.0.4
+      - uses: oxc-project/setup-node@4c26e7cb3605b6bdef5450dacd02c434b10fd8ba # v1.2.0
 
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
@@ -715,7 +822,7 @@ jobs:
             fi
             git clone --depth 1 "https://github.com/$repo.git" "$RUNNER_TEMP/$dir_name"
             cd "$RUNNER_TEMP/$dir_name"
-            vp install
+            vp install --no-frozen-lockfile
             # run again to show install cache increase by time
             time vp install
             echo "✓ Successfully installed dependencies for $repo"
@@ -731,6 +838,7 @@ jobs:
       - lint
       - cli-e2e-test
       - cli-e2e-test-musl
+      - cli-snap-test
     steps:
       - run: exit 1
         # Thank you, next https://github.com/vercel/next.js/blob/canary/.github/workflows/build_and_test.yml#L379

@@ -1,9 +1,9 @@
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
 import { downloadPackageManager as downloadPackageManagerBinding } from '../../binding/index.js';
-import { PackageManager } from '../types/index.js';
-import { runCommandSilently } from './command.js';
-import { accent } from './terminal.js';
+import { PackageManager } from '../types/index.ts';
+import { runCommandSilently } from './command.ts';
+import { accent } from './terminal.ts';
 
 export interface CommandRunSummary {
   durationMs: number;
@@ -24,6 +24,7 @@ export async function selectPackageManager(interactive?: boolean, silent = false
         { value: PackageManager.pnpm, hint: 'recommended' },
         { value: PackageManager.yarn },
         { value: PackageManager.npm },
+        { value: PackageManager.bun },
       ],
       initialValue: PackageManager.pnpm,
     });
@@ -65,7 +66,7 @@ export async function runViteInstall(
   options?: { silent?: boolean },
 ) {
   // install dependencies on non-CI environment
-  if (process.env.VITE_PLUS_SKIP_INSTALL) {
+  if (process.env.VP_SKIP_INSTALL) {
     return { durationMs: 0, status: 'skipped' } satisfies CommandRunSummary;
   }
 
@@ -73,7 +74,7 @@ export async function runViteInstall(
   const startTime = Date.now();
   spinner.start(`Installing dependencies...`);
   const { exitCode, stderr, stdout } = await runCommandSilently({
-    command: process.env.VITE_PLUS_CLI_BIN ?? 'vp',
+    command: process.env.VP_CLI_BIN ?? 'vp',
     args: ['install', ...(extraArgs ?? [])],
     cwd,
     envs: process.env,
@@ -109,7 +110,7 @@ export async function runViteFmt(
   spinner.start(`Formatting code...`);
 
   const { exitCode, stderr, stdout } = await runCommandSilently({
-    command: process.env.VITE_PLUS_CLI_BIN ?? 'vp',
+    command: process.env.VP_CLI_BIN ?? 'vp',
     args: ['fmt', '--write', ...(paths ?? [])],
     cwd,
     envs: process.env,

@@ -232,10 +232,12 @@ Node.js version v22.22.0 does not support `exe` option. Please upgrade to Node.j
 
 These are distinct commands:
 
-| Command      | Purpose                       | Output              |
-| ------------ | ----------------------------- | ------------------- |
-| `vp pack`    | Library bundling via tsdown   | `dist/` directory   |
-| `vp pm pack` | Tarball creation via npm/pnpm | `.tgz` package file |
+| Command      | Purpose                           | Output              |
+| ------------ | --------------------------------- | ------------------- |
+| `vp pack`    | Library bundling via tsdown       | `dist/` directory   |
+| `vp pm pack` | Tarball creation via npm/pnpm/bun | `.tgz` package file |
+
+**Note:** For tarball creation, bun uses `bun pm pack` (not `bun pack`). It supports `--destination` and `--dry-run` flags. See the [pm-command-group RFC](./pm-command-group.md) for the full command mapping.
 
 ## Design Decisions
 

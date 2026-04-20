@@ -11,6 +11,8 @@ export interface ConfigFiles {
   eslintLegacyConfig?: string;
   prettierConfig?: string; // e.g. '.prettierrc.json', 'prettier.config.js', PRETTIER_PACKAGE_JSON_CONFIG
   prettierIgnore?: boolean;
+  nvmrcFile?: boolean;
+  voltaNode?: string;
 }
 
 // Sentinel value indicating Prettier config lives inside package.json "prettier" key.
@@ -98,7 +100,7 @@ export function detectConfigs(projectPath: string): ConfigFiles {
 
   // Check for oxlint configs
   // https://oxc.rs/docs/guide/usage/linter/config.html#configuration-file-format
-  const oxlintConfigs = ['.oxlintrc.json'];
+  const oxlintConfigs = ['.oxlintrc.json', '.oxlintrc.jsonc'];
   for (const config of oxlintConfigs) {
     if (fs.existsSync(path.join(projectPath, config))) {
       configs.oxlintConfig = config;
@@ -157,25 +159,34 @@ export function detectConfigs(projectPath: string): ConfigFiles {
       break;
     }
   }
-  // Check for "prettier" key in package.json if no config file found
-  if (!configs.prettierConfig) {
-    const packageJsonPath = path.join(projectPath, 'package.json');
-    if (fs.existsSync(packageJsonPath)) {
-      try {
-        const content = fs.readFileSync(packageJsonPath, 'utf8');
-        const pkg = JSON.parse(content);
-        if (pkg.prettier) {
-          configs.prettierConfig = PRETTIER_PACKAGE_JSON_CONFIG;
-        }
-      } catch {
-        // ignore parse errors
-      }
-    }
-  }
-
   // Check for .prettierignore
   if (fs.existsSync(path.join(projectPath, '.prettierignore'))) {
     configs.prettierIgnore = true;
+  }
+
+  // Check for .nvmrc (nvm)
+  if (fs.existsSync(path.join(projectPath, '.nvmrc'))) {
+    configs.nvmrcFile = true;
+  }
+
+  // Check package.json for "prettier" key and Volta node version
+  const packageJsonPath = path.join(projectPath, 'package.json');
+  if (fs.existsSync(packageJsonPath)) {
+    try {
+      const content = fs.readFileSync(packageJsonPath, 'utf8');
+      const pkg = JSON.parse(content);
+
+      if (!configs.prettierConfig && pkg.prettier) {
+        configs.prettierConfig = PRETTIER_PACKAGE_JSON_CONFIG;
+      }
+
+      const voltaNode = pkg.volta?.node;
+      if (typeof voltaNode === 'string') {
+        configs.voltaNode = voltaNode;
+      }
+    } catch {
+      // ignore parse errors
+    }
   }
 
   return configs;

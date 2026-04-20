@@ -4,7 +4,7 @@ import path from 'node:path';
 import spawn from 'cross-spawn';
 
 import { runCommand as runCommandWithFspy } from '../../binding/index.js';
-import type { WorkspaceInfo } from '../types/index.js';
+import type { WorkspaceInfo } from '../types/index.ts';
 
 export interface ExecutionResult {
   exitCode: number;
@@ -153,6 +153,8 @@ export function getPackageRunner(workspaceInfo: WorkspaceInfo) {
         command: 'yarn',
         args: ['dlx'],
       };
+    case 'bun':
+      return { command: 'bun', args: ['x'] };
     case 'npm':
     default:
       return { command: 'npx', args: [] };
@@ -166,10 +168,9 @@ export function formatDlxCommand(
   workspaceInfo: WorkspaceInfo,
 ) {
   const runner = getPackageRunner(workspaceInfo);
-  const dlxArgs = runner.command === 'npm' ? ['--', ...args] : args;
   return {
     command: runner.command,
-    args: [...runner.args, packageName, ...dlxArgs],
+    args: [...runner.args, packageName, ...args],
   };
 }
 

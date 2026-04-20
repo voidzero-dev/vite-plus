@@ -9,13 +9,13 @@ tip: Use `vp install -g ./npm-global-custom-prefix-pkg` for managed shims that p
 > test -f custom-prefix/bin/npm-global-custom-prefix-cli && echo 'binary in custom prefix' # Verify installed to custom prefix
 binary in custom prefix
 
-> test -L $VITE_PLUS_HOME/bin/npm-global-custom-prefix-cli && echo 'link created' # Link should exist
+> test -L $VP_HOME/bin/npm-global-custom-prefix-cli && echo 'link created' # Link should exist
 link created
 
 > npm-global-custom-prefix-cli # Should be callable via the link
 npm-global-custom-prefix-cli works
 
-> rm -f $VITE_PLUS_HOME/bin/npm-global-custom-prefix-cli # Cleanup link
+> rm -f $VP_HOME/bin/npm-global-custom-prefix-cli # Cleanup link
 > NPM_CONFIG_PREFIX=$(pwd)/custom-prefix npm uninstall -g npm-global-custom-prefix-pkg; rm -rf custom-prefix # Cleanup
 
 removed 1 package in <variable>ms

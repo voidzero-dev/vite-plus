@@ -1,8 +1,12 @@
 {
   "commands": [
-    { "command": "git init", "ignoreOutput": true },
+    {
+      "command": "git init",
+      "ignoreOutput": true
+    },
     "vp migrate --no-interactive # migration should compose vp config with existing prepare script",
     "cat package.json # check prepare script is composed: vp config && npm run build",
+    "cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog",
     "cat .vite-hooks/pre-commit # check pre-commit hook"
   ]
 }

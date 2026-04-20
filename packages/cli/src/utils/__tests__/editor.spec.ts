@@ -38,6 +38,26 @@ describe('writeEditorConfigs', () => {
     expect(settings['editor.defaultFormatter']).toBe('oxc.oxc-vscode');
     expect(settings['oxc.fmt.configPath']).toBe('./vite.config.ts');
     expect(settings['editor.formatOnSave']).toBe(true);
+    expect(settings['npm.scriptRunner']).toBeUndefined();
+  });
+
+  it('includes additionalSettings in vscode settings.json when provided', async () => {
+    const projectRoot = createTempDir();
+
+    await writeEditorConfigs({
+      projectRoot,
+      editorId: 'vscode',
+      interactive: false,
+      silent: true,
+      extraVsCodeSettings: { 'npm.scriptRunner': 'vp' },
+    });
+
+    const settings = JSON.parse(
+      fs.readFileSync(path.join(projectRoot, '.vscode', 'settings.json'), 'utf8'),
+    ) as Record<string, unknown>;
+
+    expect(settings['npm.scriptRunner']).toBe('vp');
+    expect(settings['editor.defaultFormatter']).toBe('oxc.oxc-vscode');
   });
 
   it('merges existing vscode JSONC settings (comments, trailing commas)', async () => {
@@ -64,6 +84,7 @@ describe('writeEditorConfigs', () => {
       editorId: 'vscode',
       interactive: false,
       silent: true,
+      extraVsCodeSettings: { 'npm.scriptRunner': 'vp' },
     });
 
     const settings = JSON.parse(
@@ -76,10 +97,56 @@ describe('writeEditorConfigs', () => {
     // New keys are added
     expect(settings['editor.defaultFormatter']).toBe('oxc.oxc-vscode');
     expect(settings['oxc.fmt.configPath']).toBe('./vite.config.ts');
+    expect(settings['npm.scriptRunner']).toBe('vp');
 
     const codeActions = settings['editor.codeActionsOnSave'] as Record<string, unknown>;
     expect(codeActions['source.organizeImports']).toBe('explicit');
     expect(codeActions['source.fixAll.oxc']).toBe('explicit');
+  });
+
+  it('does not apply extraVsCodeSettings to zed editor', async () => {
+    const projectRoot = createTempDir();
+
+    await writeEditorConfigs({
+      projectRoot,
+      editorId: 'zed',
+      interactive: false,
+      silent: true,
+      extraVsCodeSettings: { 'npm.scriptRunner': 'vp' },
+    });
+
+    const settings = JSON.parse(
+      fs.readFileSync(path.join(projectRoot, '.zed', 'settings.json'), 'utf8'),
+    ) as Record<string, unknown>;
+
+    expect(settings['npm.scriptRunner']).toBeUndefined();
+  });
+
+  it('preserves existing npm.scriptRunner during merge with extraVsCodeSettings', async () => {
+    const projectRoot = createTempDir();
+
+    const vscodeDir = path.join(projectRoot, '.vscode');
+    fs.mkdirSync(vscodeDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(vscodeDir, 'settings.json'),
+      JSON.stringify({ 'npm.scriptRunner': 'npm' }),
+      'utf8',
+    );
+
+    await writeEditorConfigs({
+      projectRoot,
+      editorId: 'vscode',
+      interactive: false,
+      silent: true,
+      extraVsCodeSettings: { 'npm.scriptRunner': 'vp' },
+    });
+
+    const settings = JSON.parse(
+      fs.readFileSync(path.join(projectRoot, '.vscode', 'settings.json'), 'utf8'),
+    ) as Record<string, unknown>;
+
+    // deepMerge preserves existing keys — 'npm' is not overwritten by 'vp'
+    expect(settings['npm.scriptRunner']).toBe('npm');
   });
 
   it('writes zed settings that align formatter config with vite.config.ts', async () => {

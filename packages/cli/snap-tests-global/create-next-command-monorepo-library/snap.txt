@@ -1,0 +1,6 @@
+> vp create vite:library --no-interactive # monorepo: next command should suggest vp run
+
+Using default package name: vite-plus-library
+◇ Scaffolded packages/vite-plus-library with TypeScript library
+• Node <semver>  pnpm <semver>
+→ Next: cd packages/vite-plus-library && vp run

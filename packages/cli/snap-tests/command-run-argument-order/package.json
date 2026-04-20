@@ -1,0 +1,6 @@
+{
+  "name": "run-argument-order",
+  "workspaces": [
+    "packages/*"
+  ]
+}

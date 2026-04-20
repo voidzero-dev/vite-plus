@@ -4,6 +4,7 @@
     "cat tsdown.config.ts # check tsdown.config.ts",
     "cat vite.config.ts # check vite.config.ts",
     "cat package.json # check package.json",
+    "cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog",
     "vp migrate --no-interactive # run migration again to check if it is idempotent",
     "cat tsdown.config.ts # check tsdown.config.ts",
     "cat vite.config.ts # check vite.config.ts",

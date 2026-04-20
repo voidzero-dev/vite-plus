@@ -8,7 +8,7 @@ import {
   resolveUserConfig,
   buildWithConfigs,
   enableDebug,
-} from '../pack';
+} from '../pack.js';
 
 test('should export all pack APIs from @voidzero-dev/vite-plus-core/pack', () => {
   expect(defineConfig).toBeTypeOf('function');

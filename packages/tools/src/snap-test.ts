@@ -10,7 +10,7 @@ import { debuglog, parseArgs } from 'node:util';
 import { npath } from '@yarnpkg/fslib';
 import { execute } from '@yarnpkg/shell';
 
-import { isPassThroughEnv, replaceUnstableOutput } from './utils';
+import { isPassThroughEnv, replaceUnstableOutput } from './utils.js';
 
 const debug = debuglog('vite-plus/snap-test');
 
@@ -66,6 +66,32 @@ function expandHome(p: string): string {
   return p.startsWith('~') ? path.join(homedir(), p.slice(1)) : p;
 }
 
+function parseShard(value: string): { index: number; total: number } {
+  const match = value.match(/^(\d+)\/(\d+)$/);
+  if (!match) {
+    throw new Error(
+      `Invalid --shard format: "${value}". Expected format: --shard=<index>/<total> (e.g., --shard=1/3)`,
+    );
+  }
+  const index = Number(match[1]);
+  const total = Number(match[2]);
+  if (total < 1) {
+    throw new Error(`Invalid --shard total: ${total}. Must be >= 1`);
+  }
+  if (index < 1 || index > total) {
+    throw new Error(`Invalid --shard index: ${index}. Must be between 1 and ${total}`);
+  }
+  return { index, total };
+}
+
+function selectShard<T>(items: T[], index: number, total: number): T[] {
+  const chunkSize = Math.ceil(items.length / total);
+  const start = (index - 1) * chunkSize;
+  return items.slice(start, start + chunkSize);
+}
+
+const NPM_GLOBAL_PREFIX_DIR = 'npm-global-lib-for-snap-tests';
+
 export async function snapTest() {
   const { positionals, values } = parseArgs({
     allowPositionals: true,
@@ -73,10 +99,12 @@ export async function snapTest() {
     options: {
       dir: { type: 'string' },
       'bin-dir': { type: 'string' },
+      shard: { type: 'string' },
     },
   });
 
   const filter = positionals[0] ?? ''; // Optional filter to run specific test cases
+  const shard = values.shard ? parseShard(values.shard) : undefined;
 
   // Create a unique temporary directory for testing
   // On macOS, `tmpdir()` is a symlink. Resolve it so that we can replace the resolved cwd in outputs.
@@ -85,6 +113,9 @@ export async function snapTest() {
   const systemTmpDir = fs.realpathSync(tmpdir());
   const tempTmpDir = `${systemTmpDir}/vite-plus-test-${randomUUID().replaceAll('-', '')}`;
   fs.mkdirSync(tempTmpDir, { recursive: true });
+  // Pre-create the npm global prefix directory so tests using npm global
+  // operations (link, outdated -g, etc.) don't fail with ENOENT.
+  fs.mkdirSync(path.join(tempTmpDir, NPM_GLOBAL_PREFIX_DIR, 'lib'), { recursive: true });
 
   // Clean up stale .node-version and package.json in the system temp directory.
   // vite-plus walks up the directory tree to resolve Node.js versions, so leftover
@@ -141,10 +172,10 @@ export async function snapTest() {
 
   const casesDir = path.resolve(values.dir || 'snap-tests');
 
-  const serialTasks: (() => Promise<void>)[] = [];
-  const parallelTasks: (() => Promise<void>)[] = [];
+  // Collect valid test case names (sorted for deterministic sharding)
+  const validCaseNames: string[] = [];
   const missingStepsJson: string[] = [];
-  for (const caseName of fs.readdirSync(casesDir)) {
+  for (const caseName of fs.readdirSync(casesDir).toSorted()) {
     if (caseName.startsWith('.')) {
       continue;
     }
@@ -158,13 +189,7 @@ export async function snapTest() {
       continue;
     }
     if (caseName.includes(filter)) {
-      const steps: Steps = JSON.parse(readFileSync(stepsPath, 'utf-8'));
-      const task = () => runTestCase(caseName, tempTmpDir, casesDir, values['bin-dir']);
-      if (steps.serial) {
-        serialTasks.push(task);
-      } else {
-        parallelTasks.push(task);
-      }
+      validCaseNames.push(caseName);
     }
   }
 
@@ -174,15 +199,35 @@ export async function snapTest() {
     );
   }
 
+  // Apply sharding to select a subset of test cases
+  const selectedCases = shard
+    ? selectShard(validCaseNames, shard.index, shard.total)
+    : validCaseNames;
+
+  const serialTasks: (() => Promise<void>)[] = [];
+  const parallelTasks: (() => Promise<void>)[] = [];
+  for (const caseName of selectedCases) {
+    const stepsPath = path.join(casesDir, caseName, 'steps.json');
+    const steps: Steps = JSON.parse(readFileSync(stepsPath, 'utf-8'));
+    const task = () => runTestCase(caseName, tempTmpDir, casesDir, values['bin-dir']);
+    if (steps.serial) {
+      serialTasks.push(task);
+    } else {
+      parallelTasks.push(task);
+    }
+  }
+
   const totalCount = serialTasks.length + parallelTasks.length;
   if (totalCount > 0) {
     const cpuCount = cpus().length;
+    const shardInfo = shard ? `, shard ${shard.index}/${shard.total}` : '';
     console.log(
-      'Running %d test cases (%d serial + %d parallel, concurrency limit %d)',
+      'Running %d test cases (%d serial + %d parallel, concurrency limit %d%s)',
       totalCount,
       serialTasks.length,
       parallelTasks.length,
       cpuCount,
+      shardInfo,
     );
     await runWithConcurrencyLimit(serialTasks, 1);
     await runWithConcurrencyLimit(parallelTasks, cpuCount);
@@ -300,38 +345,38 @@ async function runTestCase(name: string, tempTmpDir: string, casesDir: string, b
     ...passThroughEnvs,
     // Indicate CLI is running in test mode, so that it prints more detailed outputs.
     // Also disables tips for stable snapshots.
-    VITE_PLUS_CLI_TEST: '1',
+    VP_CLI_TEST: '1',
     // Suppress Node.js runtime warnings (e.g. MODULE_TYPELESS_PACKAGE_JSON)
     // to keep snap outputs stable across Node.js versions.
     NODE_NO_WARNINGS: '1',
     NO_COLOR: 'true',
     // set CI=true make sure snap-tests are stable on GitHub Actions
     CI: 'true',
-    VITE_PLUS_HOME: path.join(homedir(), '.vite-plus'),
+    VP_HOME: path.join(homedir(), '.vite-plus'),
     // Set git identity so `git commit` works on CI runners without global git config
     GIT_AUTHOR_NAME: 'Test',
     GIT_COMMITTER_NAME: 'Test',
     GIT_AUTHOR_EMAIL: 'vite-plus-test@test.com',
     GIT_COMMITTER_EMAIL: 'vite-plus-test@test.com',
     // Skip `vp install` inside `vp migrate` — snap tests don't need real installs
-    VITE_PLUS_SKIP_INSTALL: '1',
+    VP_SKIP_INSTALL: '1',
     // make sure npm install global packages to the temporary directory
-    NPM_CONFIG_PREFIX: path.join(tempTmpDir, 'npm-global-lib-for-snap-tests'),
+    NPM_CONFIG_PREFIX: path.join(tempTmpDir, NPM_GLOBAL_PREFIX_DIR),
 
     // A test case can override/unset environment variables above.
-    // For example, VITE_PLUS_CLI_TEST/CI can be unset to test the real-world outputs.
+    // For example, VP_CLI_TEST/CI can be unset to test the real-world outputs.
     ...steps.env,
   };
 
-  // Unset VITE_PLUS_NODE_VERSION to prevent `vp env use` session overrides
-  // from leaking into snap tests (it passes through via the VITE_* pattern).
-  delete env['VITE_PLUS_NODE_VERSION'];
+  // Unset VP_NODE_VERSION to prevent `vp env use` session overrides
+  // from leaking into snap tests.
+  delete env['VP_NODE_VERSION'];
 
-  // Unset VITE_PLUS_TOOL_RECURSION to prevent the shim recursion guard from
+  // Unset VP_TOOL_RECURSION to prevent the shim recursion guard from
   // leaking into snap tests. When `pnpm` runs the test via the `vp` shim, vp
   // sets this marker before exec. Without clearing it, every npm/node command
   // in the test would bypass the managed shim and fall through to the system binary.
-  delete env['VITE_PLUS_TOOL_RECURSION'];
+  delete env['VP_TOOL_RECURSION'];
 
   // Sometimes on Windows, the PATH variable is named 'Path'
   if ('Path' in env && !('PATH' in env)) {
@@ -341,7 +386,7 @@ async function runTestCase(name: string, tempTmpDir: string, casesDir: string, b
   // The node shim prepends ~/.vite-plus/js_runtime/node/VERSION/bin/ to PATH,
   // which leaks into this process. Strip internal vite-plus paths so the test
   // environment simulates a clean user PATH (only the shim bin dir + system paths).
-  const vitePlusJsRuntime = path.join(env['VITE_PLUS_HOME'], 'js_runtime');
+  const vitePlusJsRuntime = path.join(env['VP_HOME'], 'js_runtime');
   env['PATH'] = [
     // Extend PATH to include the package's bin directory
     // --bin-dir overrides the default for cases like global CLI tests

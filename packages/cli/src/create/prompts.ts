@@ -4,9 +4,9 @@ import path from 'node:path';
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import validateNpmPackageName from 'validate-npm-package-name';
 
-import { accent } from '../utils/terminal.js';
-import { getRandomProjectName } from './random-name.js';
-import { getProjectDirFromPackageName } from './utils.js';
+import { accent } from '../utils/terminal.ts';
+import { getRandomProjectName } from './random-name.ts';
+import { getProjectDirFromPackageName } from './utils.ts';
 
 export async function promptPackageNameAndTargetDir(
   defaultPackageName: string,
@@ -22,11 +22,11 @@ export async function promptPackageNameAndTargetDir(
       defaultValue: defaultPackageName,
       validate: (value) => {
         if (value == null || value.length === 0) {
-          return;
+          return undefined;
         }
         const result = value ? validateNpmPackageName(value) : null;
         if (result?.validForNewPackages) {
-          return;
+          return undefined;
         }
         return result?.errors?.[0] ?? result?.warnings?.[0] ?? 'Invalid package name';
       },

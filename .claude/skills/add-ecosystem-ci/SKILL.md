@@ -84,10 +84,40 @@ Present the auto-detected configuration and ask user to confirm or modify:
 
 ## Step 4: Verify
 
-Test the clone locally:
+### 4.1 Build fresh tgz packages
+
+Always rebuild tgz packages from latest source to avoid using stale cached versions:
+
+```bash
+# Rebuild the global CLI first (includes Rust binary + NAPI binding)
+pnpm bootstrap-cli
+
+# Pack fresh tgz files into tmp/tgz/
+rm -rf tmp/tgz && mkdir -p tmp/tgz
+cd packages/core && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
+cd packages/test && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
+cd packages/cli && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
+ls -la tmp/tgz
+```
+
+### 4.2 Clone and test locally
 
 ```bash
 node ecosystem-ci/clone.ts project-name
+```
+
+### 4.3 Patch and run commands
+
+```bash
+# Run from the ecosystem-ci temp directory
+cd $(node -e "const os=require('os'); console.log(os.tmpdir() + '/vite-plus-ecosystem-ci')")
+
+# Migrate the project (uses tgz files from tmp/tgz/)
+node /path/to/vite-plus/ecosystem-ci/patch-project.ts project-name
+
+# Run the configured commands
+cd project-name
+vp run build
 ```
 
 3. **Add OS exclusion to `.github/workflows/e2e-test.yml`** (if not running on both):

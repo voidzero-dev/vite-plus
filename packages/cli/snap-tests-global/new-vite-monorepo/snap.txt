@@ -16,7 +16,7 @@ vite.config.ts
   "private": true,
   "type": "module",
   "scripts": {
-    "ready": "vp fmt && vp lint && vp run test -r && vp run build -r",
+    "ready": "vp check && vp run -r test && vp run -r build",
     "dev": "vp run website#dev",
     "prepare": "vp config"
   },
@@ -28,6 +28,20 @@ vite.config.ts
   },
   "packageManager": "pnpm@<semver>"
 }
+
+> cat vite-plus-monorepo/vite.config.ts # check vite config has cache enabled
+import { defineConfig } from "vite-plus";
+
+export default defineConfig({
+  staged: {
+    "*": "vp check --fix",
+  },
+  fmt: {},
+  lint: { options: { typeAware: true, typeCheck: true } },
+  run: {
+    cache: true,
+  },
+});
 
 > cat vite-plus-monorepo/pnpm-workspace.yaml # check workspace config
 packages:
@@ -126,7 +140,7 @@ vite.config.ts
   "private": true,
   "type": "module",
   "scripts": {
-    "ready": "vp fmt && vp lint && vp run test -r && vp run build -r",
+    "ready": "vp check && vp run -r test && vp run -r build",
     "dev": "vp run website#dev",
     "prepare": "vp config"
   },

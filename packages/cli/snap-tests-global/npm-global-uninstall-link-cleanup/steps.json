@@ -4,8 +4,8 @@
   "ignoredPlatforms": ["win32"],
   "commands": [
     "npm install -g ./npm-global-uninstall-pkg # Install package first",
-    "test -L $VITE_PLUS_HOME/bin/npm-global-uninstall-cli && echo 'link exists' # Link should exist after install",
+    "test -L $VP_HOME/bin/npm-global-uninstall-cli && echo 'link exists' # Link should exist after install",
     "npm uninstall -g npm-global-uninstall-pkg # Uninstall should remove the link",
-    "test -L $VITE_PLUS_HOME/bin/npm-global-uninstall-cli && echo 'link exists' || echo 'link removed' # Link should be gone"
+    "test -L $VP_HOME/bin/npm-global-uninstall-cli && echo 'link exists' || echo 'link removed' # Link should be gone"
   ]
 }
