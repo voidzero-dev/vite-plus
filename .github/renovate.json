@@ -17,6 +17,8 @@
         "rolldown",
         "/^oxc-.*/",
         "@oxc-node/*",
+        "@oxc-project/*",
+        "@vitejs/devtools",
         "oxfmt",
         "oxlint",
         "oxlint-tsgolint",
