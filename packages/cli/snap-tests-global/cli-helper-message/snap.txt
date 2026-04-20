@@ -1,6 +1,5 @@
 > vp -h # show help message
 
-
 Usage: vp [COMMAND]
 
 Start:
