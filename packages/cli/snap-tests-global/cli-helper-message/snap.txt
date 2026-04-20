@@ -28,8 +28,8 @@ Execute:
 Build:
   build    Build for production
   pack     Build library
-  release  Version and publish workspace packages with readiness checks, confirmation, and optional changelog generation
   preview  Preview production build
+  release  Version and publish workspace packages with readiness checks, confirmation, and optional changelog generation
 
 Manage Dependencies:
   add                        Add packages to dependencies
