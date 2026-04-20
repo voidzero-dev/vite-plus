@@ -320,8 +320,7 @@ async fn main() -> ExitCode {
     }
 
     // Parse CLI arguments (using custom help formatting)
-    let parse_result =
-        try_parse_args_from_with_options(normalized_args, RenderOptions { show_header: false });
+    let parse_result = try_parse_args_from(normalized_args);
 
     // Spawn background upgrade check for eligible commands
     let upgrade_handle = match &parse_result {

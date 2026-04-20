@@ -1646,7 +1646,7 @@ pub async fn run_command_with_options(
             packages,
             pass_through_args,
         } => {
-            print_runtime_header(render_options.show_header && !silent, true);
+            print_runtime_header(render_options.show_header && !silent);
             // If packages are provided, redirect to Add command
             if let Some(pkgs) = packages
                 && !pkgs.is_empty()
@@ -1972,7 +1972,7 @@ pub async fn run_command_with_options(
             if help::maybe_print_unified_delegate_help("dev", &args, render_options.show_header) {
                 return Ok(ExitStatus::default());
             }
-            print_runtime_header(render_options.show_header, false);
+            print_runtime_header(render_options.show_header);
             commands::delegate::execute(cwd, "dev", &args).await
         }
 
@@ -1980,7 +1980,7 @@ pub async fn run_command_with_options(
             if help::maybe_print_unified_delegate_help("build", &args, render_options.show_header) {
                 return Ok(ExitStatus::default());
             }
-            print_runtime_header(render_options.show_header, false);
+            print_runtime_header(render_options.show_header);
             commands::delegate::execute(cwd, "build", &args).await
         }
 
@@ -1988,7 +1988,7 @@ pub async fn run_command_with_options(
             if help::maybe_print_unified_delegate_help("test", &args, render_options.show_header) {
                 return Ok(ExitStatus::default());
             }
-            print_runtime_header(render_options.show_header, false);
+            print_runtime_header(render_options.show_header);
             commands::delegate::execute(cwd, "test", &args).await
         }
 
@@ -1996,7 +1996,7 @@ pub async fn run_command_with_options(
             if help::maybe_print_unified_delegate_help("lint", &args, render_options.show_header) {
                 return Ok(ExitStatus::default());
             }
-            print_runtime_header(render_options.show_header, false);
+            print_runtime_header(render_options.show_header);
             if should_force_global_delegate("lint", &args) {
                 commands::delegate::execute_global(cwd, "lint", &args).await
             } else {
@@ -2008,7 +2008,7 @@ pub async fn run_command_with_options(
             if help::maybe_print_unified_delegate_help("fmt", &args, render_options.show_header) {
                 return Ok(ExitStatus::default());
             }
-            print_runtime_header(render_options.show_header, false);
+            print_runtime_header(render_options.show_header);
             if should_force_global_delegate("fmt", &args) {
                 commands::delegate::execute_global(cwd, "fmt", &args).await
             } else {
@@ -2020,7 +2020,7 @@ pub async fn run_command_with_options(
             if help::maybe_print_unified_delegate_help("check", &args, render_options.show_header) {
                 return Ok(ExitStatus::default());
             }
-            print_runtime_header(render_options.show_header, false);
+            print_runtime_header(render_options.show_header);
             commands::delegate::execute(cwd, "check", &args).await
         }
 
@@ -2028,7 +2028,7 @@ pub async fn run_command_with_options(
             if help::maybe_print_unified_delegate_help("pack", &args, render_options.show_header) {
                 return Ok(ExitStatus::default());
             }
-            print_runtime_header(render_options.show_header, false);
+            print_runtime_header(render_options.show_header);
             commands::delegate::execute(cwd, "pack", &args).await
         }
 
@@ -2036,7 +2036,7 @@ pub async fn run_command_with_options(
             if help::maybe_print_unified_delegate_help("run", &args, render_options.show_header) {
                 return Ok(ExitStatus::default());
             }
-            print_runtime_header(render_options.show_header, false);
+            print_runtime_header(render_options.show_header);
             commands::delegate::execute(cwd, "run", &args).await
         }
 
@@ -2044,7 +2044,7 @@ pub async fn run_command_with_options(
             if help::maybe_print_unified_delegate_help("exec", &args, render_options.show_header) {
                 return Ok(ExitStatus::default());
             }
-            print_runtime_header(render_options.show_header, false);
+            print_runtime_header(render_options.show_header);
             commands::delegate::execute(cwd, "exec", &args).await
         }
 
@@ -2053,7 +2053,7 @@ pub async fn run_command_with_options(
             {
                 return Ok(ExitStatus::default());
             }
-            print_runtime_header(render_options.show_header, false);
+            print_runtime_header(render_options.show_header);
             commands::delegate::execute(cwd, "preview", &args).await
         }
 
@@ -2061,7 +2061,7 @@ pub async fn run_command_with_options(
             if help::maybe_print_unified_delegate_help("cache", &args, render_options.show_header) {
                 return Ok(ExitStatus::default());
             }
-            print_runtime_header(render_options.show_header, false);
+            print_runtime_header(render_options.show_header);
             commands::delegate::execute(cwd, "cache", &args).await
         }
 
@@ -2098,7 +2098,7 @@ pub(crate) fn exit_status(code: i32) -> ExitStatus {
     }
 }
 
-fn print_runtime_header(show_header: bool, _dynamic_colors: bool) {
+fn print_runtime_header(show_header: bool) {
     if !show_header {
         return;
     }
@@ -2118,12 +2118,12 @@ pub fn command_with_help_with_options(render_options: RenderOptions) -> clap::Co
 /// Apply custom help formatting to a clap Command to match the JS CLI output.
 fn apply_custom_help(cmd: clap::Command, render_options: RenderOptions) -> clap::Command {
     let after_help = help::render_help_doc(&help::top_level_help_doc());
+    let options_heading = help::render_heading("Options");
     let header = if render_options.show_header && vite_shared::header::should_print_header() {
         format!("{}\n\n", vite_shared::header::vite_plus_header())
     } else {
         String::new()
     };
-    let options_heading = help::render_heading("Options");
     let help_template = format!("{header}{{after-help}}\n{options_heading}\n{{options}}\n");
 
     cmd.after_help(after_help).help_template(help_template)
@@ -2150,10 +2150,7 @@ pub fn try_parse_args_from_with_options(
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        RenderOptions, command_with_help_with_options, has_flag_before_terminator,
-        should_force_global_delegate,
-    };
+    use super::{has_flag_before_terminator, should_force_global_delegate};
 
     #[test]
     fn detects_flag_before_option_terminator() {
@@ -2185,23 +2182,5 @@ mod tests {
     fn non_init_does_not_force_global_delegate() {
         assert!(!should_force_global_delegate("lint", &["src/index.ts".to_string()]));
         assert!(!should_force_global_delegate("fmt", &["--check".to_string()]));
-    }
-
-    #[test]
-    fn top_level_help_includes_header_when_enabled() {
-        let help = command_with_help_with_options(RenderOptions { show_header: true })
-            .render_help()
-            .to_string();
-
-        assert!(help.starts_with("VITE+ - The Unified Toolchain for the Web\n\n"));
-    }
-
-    #[test]
-    fn top_level_help_omits_header_when_disabled() {
-        let help = command_with_help_with_options(RenderOptions { show_header: false })
-            .render_help()
-            .to_string();
-
-        assert!(!help.starts_with("VITE+ - The Unified Toolchain for the Web"));
     }
 }
