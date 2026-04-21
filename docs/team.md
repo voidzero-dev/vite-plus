@@ -11,7 +11,7 @@ import {
   VPTeamPageSection,
   VPTeamMembers
 } from '@voidzero-dev/vitepress-theme'
-import { core } from './_data/team'vp
+import { core } from './_data/team'
 </script>
 
 <VPTeamPage>
