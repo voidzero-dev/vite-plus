@@ -10,7 +10,10 @@ export const core = [
   {
     avatar: 'https://github.com/branchseer.png',
     name: 'Wang Chi',
-    links: [{ icon: 'github', link: 'https://github.com/branchseer' }],
+    links: [
+      { icon: 'github', link: 'https://github.com/branchseer' },
+      { icon: 'x', link: 'https://x.com/branchseer' }
+    ],
   },
   {
     avatar: 'https://github.com/Brooooooklyn.png',
@@ -36,6 +39,22 @@ export const core = [
       { icon: 'github', link: 'https://github.com/TheAlexLichter' },
       { icon: 'x', link: 'https://x.com/TheAlexLichter' },
       { icon: 'bluesky', link: 'https://bsky.app/profile/thealexlichter.com' },
+    ],
+  },
+  {
+    avatar: 'https://github.com/camc314.png',
+    name: 'Cameron Clark',
+    links: [
+      { icon: 'github', link: 'https://github.com/camc314' },
+      { icon: 'x', link: 'https://x.com/cameron_C2' },
+    ],
+  },
+  {
+    avatar: 'https://github.com/leaysgur.png',
+    name: 'Yuji Sugiura',
+    links: [
+      { icon: 'github', link: 'https://github.com/leaysgur' },
+      { icon: 'x', link: 'https://x.com/leaysgur' },
     ],
   },
   {
