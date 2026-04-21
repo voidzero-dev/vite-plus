@@ -76,6 +76,7 @@
     },
     "./oxlint-plugin": {
       "module-sync": "./dist/oxlint-plugin.js",
+      "node": "./dist/oxlint-plugin.js",
       "import": "./dist/oxlint-plugin.js",
       "default": "./dist/oxlint-plugin.js",
       "types": "./dist/oxlint-plugin.d.ts"
