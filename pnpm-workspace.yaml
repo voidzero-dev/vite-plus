@@ -17,8 +17,9 @@ catalog:
   '@nkzw/safe-word-list': ^3.1.0
   '@oxc-node/cli': ^0.1.0
   '@oxc-node/core': ^0.1.0
-  '@oxc-project/runtime': =0.127.0
-  '@oxc-project/types': =0.127.0
+  '@oxc-project/runtime': =0.126.0
+  '@oxc-project/types': =0.126.0
+  '@oxlint/plugins': =1.60.0
   '@pnpm/find-workspace-packages': ^6.0.9
   '@rollup/plugin-commonjs': ^29.0.0
   '@rollup/plugin-json': ^6.1.0
