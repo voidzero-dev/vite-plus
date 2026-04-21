@@ -3,6 +3,7 @@
     "vp install --help # print help message",
     "vp run install # https://docs.npmjs.com/cli/v10/commands/npm-install",
     "ls node_modules",
-    "vp run install # install again hit cache"
+    "vp run install # install again hit cache",
+    "vp run --last-details"
   ]
 }

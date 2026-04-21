@@ -121,6 +121,13 @@ jobs:
       # Pin Rust tooling paths to avoid $HOME mismatch issues.
       CARGO_HOME: /root/.cargo
       RUSTUP_HOME: /root/.rustup
+      # `-crt-static`: vite-task's `fspy_preload_unix` cdylib (unconditional
+      # build-dep since voidzero-dev/vite-task#344) can't link against a
+      # static musl libc. vite+ ships as a NAPI module that links musl libc
+      # dynamically anyway, so matching here is correct.
+      # Must mirror `.cargo/config.toml` rustflags — RUSTFLAGS env overrides
+      # both [build] and [target.*] levels.
+      RUSTFLAGS: --cfg tokio_unstable -C link-args=-Wl,--warn-unresolved-symbols -C target-feature=-crt-static
     steps:
       - name: Install Alpine dependencies
         shell: sh {0}
