@@ -65,6 +65,20 @@ export const core = [
     ],
   },
   {
+    avatar: 'https://github.com/nekomoyi.png',
+    name: 'nekomoyi',
+    links: [
+      { icon: 'github', link: 'https://github.com/nekomoyi' },
+    ],
+  },
+  {
+    avatar: 'https://github.com/HaasStefan.png',
+    name: 'Stefan Haas',
+    links: [
+      { icon: 'github', link: 'https://github.com/HaasStefan' },
+    ],
+  },
+  {
     avatar: 'https://github.com/naokihaba.png',
     name: 'naokihaba',
     links: [
