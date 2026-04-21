@@ -76,7 +76,9 @@
     },
     "./oxlint-plugin": {
       "types": "./dist/oxlint-plugin.d.ts",
-      "import": "./dist/oxlint-plugin.js"
+      "module-sync": "./dist/oxlint-plugin.js",
+      "import": "./dist/oxlint-plugin.js",
+      "default": "./dist/oxlint-plugin.js"
     },
     "./package.json": "./package.json",
     "./pack": {
