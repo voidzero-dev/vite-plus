@@ -95,6 +95,7 @@ Output Options:
 Config Options
     -c, --config=PATH        Path to the configuration file (.json, .jsonc, .ts, .mts, .cts, .js,
                              .mjs, .cjs)
+        --disable-nested-config  Do not search for configuration files in subdirectories
 
 Ignore Options
         --ignore-path=PATH   Path to ignore file(s). Can be specified multiple times. If not
@@ -234,7 +235,7 @@ Options:
   --assetsInlineLimit <number>  [number] static asset base64 inline threshold in bytes (default: 4096) 
   --ssr [entry]                 [string] build specified entry for server-side rendering 
   --sourcemap [output]          [boolean | "inline" | "hidden"] output source maps for build (default: false) 
-  --minify [minifier]           [boolean | "terser" | "esbuild"] enable/disable minification, or specify minifier to use (default: esbuild) 
+  --minify [minifier]           [boolean | "oxc" | "terser" | "esbuild"] enable/disable minification, or specify minifier to use (default: oxc) 
   --manifest [name]             [boolean | string] emit build manifest json 
   --ssrManifest [name]          [boolean | string] emit ssr manifest json 
   --emptyOutDir                 [boolean] force empty outDir when it's outside of root 

@@ -2,6 +2,7 @@
 VITE+ - The Unified Toolchain for the Web
 
 bun install v<semver> (af24e281)
+warn: Slow filesystem detected. If <homedir>/.bun/install/cache is a network drive, consider setting $BUN_INSTALL_CACHE_DIR to a local folder.
 
 + test-vite-plus-package@<semver>
 + test-vite-plus-package-optional@<semver>
