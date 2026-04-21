@@ -333,6 +333,7 @@
   },
   "dependencies": {
     "@oxc-project/types": "catalog:",
+    "@oxlint/plugins": "catalog:",
     "@voidzero-dev/vite-plus-core": "workspace:*",
     "@voidzero-dev/vite-plus-test": "workspace:*",
     "oxfmt": "catalog:",
