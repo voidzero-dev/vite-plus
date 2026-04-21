@@ -4,8 +4,10 @@
 // This enables IDE extensions (e.g., oxc-vscode) to discover and start the LSP server.
 // Binary resolution follows the same approach as `src/resolve-fmt.ts`.
 
-if (!process.argv.includes('--lsp')) {
-  console.error('This oxfmt wrapper is for IDE extension use only (--lsp mode).');
+const isLSP = process.argv.includes('--lsp');
+const isStdin = process.argv.some((arg) => arg.startsWith('--stdin-filepath'));
+if (!isLSP && !isStdin) {
+  console.error('This oxfmt wrapper is for IDE extension use only (lsp or stdin mode).');
   console.error('To format your code, run: vp fmt');
   process.exit(1);
 }
