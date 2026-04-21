@@ -33,8 +33,8 @@ use self::{
     execution::{FilterStream, resolve_and_execute, resolve_and_execute_with_filter},
     handler::{VitePlusCommandHandler, VitePlusConfigLoader},
     help::{
-        handle_cli_parse_error, normalize_help_args, print_help, should_print_help,
-        should_suppress_subcommand_stdout,
+        handle_cli_parse_error, normalize_help_args, print_help, should_capture_help_stdout,
+        should_print_help, should_suppress_subcommand_stdout,
     },
     types::CLIArgs,
 };
@@ -94,6 +94,18 @@ async fn execute_direct_subcommand(
                     &cwd_arc,
                     FilterStream::Stdout,
                     |_| Cow::Borrowed(""),
+                )
+                .await?
+            } else if should_capture_help_stdout(&other) {
+                resolve_and_execute_with_filter(
+                    &resolver,
+                    other,
+                    None,
+                    &envs,
+                    cwd,
+                    &cwd_arc,
+                    FilterStream::Stdout,
+                    |s| Cow::Borrowed(s),
                 )
                 .await?
             } else if matches!(&other, SynthesizableSubcommand::Fmt { .. }) {

@@ -8,7 +8,7 @@ use vite_task::config::user::{
 };
 
 use super::{
-    help::should_prepend_vitest_run,
+    help::{has_help_flag_before_terminator, should_prepend_vitest_run},
     types::{CliOptions, ResolvedSubcommand, ResolvedUniversalViteConfig, SynthesizableSubcommand},
 };
 
@@ -94,15 +94,18 @@ impl SubcommandResolver {
                     .to_str()
                     .ok_or_else(|| anyhow::anyhow!("lint JS path is not valid UTF-8"))?;
                 let owned_resolved_vite_config;
-                let resolved_vite_config = if let Some(config) = resolved_vite_config {
-                    config
+                let resolved_vite_config = if has_help_flag_before_terminator(&args) {
+                    None
+                } else if let Some(config) = resolved_vite_config {
+                    Some(config)
                 } else {
                     owned_resolved_vite_config = self.resolve_universal_vite_config().await?;
-                    &owned_resolved_vite_config
+                    Some(&owned_resolved_vite_config)
                 };
 
-                if let (Some(_), Some(config_file)) =
-                    (&resolved_vite_config.lint, &resolved_vite_config.config_file)
+                if let Some(resolved_vite_config) = resolved_vite_config
+                    && let (Some(_), Some(config_file)) =
+                        (&resolved_vite_config.lint, &resolved_vite_config.config_file)
                 {
                     args.insert(0, "-c".to_string());
                     args.insert(1, config_file.clone());
@@ -130,15 +133,18 @@ impl SubcommandResolver {
                     .to_str()
                     .ok_or_else(|| anyhow::anyhow!("fmt JS path is not valid UTF-8"))?;
                 let owned_resolved_vite_config;
-                let resolved_vite_config = if let Some(config) = resolved_vite_config {
-                    config
+                let resolved_vite_config = if has_help_flag_before_terminator(&args) {
+                    None
+                } else if let Some(config) = resolved_vite_config {
+                    Some(config)
                 } else {
                     owned_resolved_vite_config = self.resolve_universal_vite_config().await?;
-                    &owned_resolved_vite_config
+                    Some(&owned_resolved_vite_config)
                 };
 
-                if let (Some(_), Some(config_file)) =
-                    (&resolved_vite_config.fmt, &resolved_vite_config.config_file)
+                if let Some(resolved_vite_config) = resolved_vite_config
+                    && let (Some(_), Some(config_file)) =
+                        (&resolved_vite_config.fmt, &resolved_vite_config.config_file)
                 {
                     args.insert(0, "-c".to_string());
                     args.insert(1, config_file.clone());

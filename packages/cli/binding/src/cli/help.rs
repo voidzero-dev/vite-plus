@@ -56,6 +56,12 @@ fn has_flag_before_terminator(args: &[String], flag: &str) -> bool {
     false
 }
 
+pub(super) fn has_help_flag_before_terminator(args: &[String]) -> bool {
+    args.iter()
+        .take_while(|arg| arg.as_str() != "--")
+        .any(|arg| matches!(arg.as_str(), "-h" | "--help"))
+}
+
 pub(super) fn should_suppress_subcommand_stdout(subcommand: &SynthesizableSubcommand) -> bool {
     match subcommand {
         SynthesizableSubcommand::Lint { args } => has_flag_before_terminator(args, "--init"),
@@ -65,6 +71,15 @@ pub(super) fn should_suppress_subcommand_stdout(subcommand: &SynthesizableSubcom
         }
         _ => false,
     }
+}
+
+pub(super) fn should_capture_help_stdout(subcommand: &SynthesizableSubcommand) -> bool {
+    let args = match subcommand {
+        SynthesizableSubcommand::Lint { args } | SynthesizableSubcommand::Fmt { args } => args,
+        _ => return false,
+    };
+
+    has_help_flag_before_terminator(args)
 }
 
 pub(super) fn should_prepend_vitest_run(args: &[String]) -> bool {
@@ -293,6 +308,25 @@ mod tests {
     fn normal_lint_does_not_suppress_stdout() {
         let subcommand = SynthesizableSubcommand::Lint { args: vec!["src/index.ts".to_string()] };
         assert!(!should_suppress_subcommand_stdout(&subcommand));
+    }
+
+    #[test]
+    fn lint_help_captures_stdout() {
+        let subcommand = SynthesizableSubcommand::Lint { args: vec!["--help".to_string()] };
+        assert!(should_capture_help_stdout(&subcommand));
+    }
+
+    #[test]
+    fn fmt_short_help_captures_stdout() {
+        let subcommand = SynthesizableSubcommand::Fmt { args: vec!["-h".to_string()] };
+        assert!(should_capture_help_stdout(&subcommand));
+    }
+
+    #[test]
+    fn help_after_terminator_is_not_captured() {
+        let subcommand =
+            SynthesizableSubcommand::Lint { args: vec!["--".to_string(), "--help".to_string()] };
+        assert!(!should_capture_help_stdout(&subcommand));
     }
 
     #[test]
