@@ -6,15 +6,10 @@ import {
   VITE_PLUS_OXLINT_PLUGIN_NAME,
 } from './oxlint-plugin-config.ts';
 
-function isStringLiteralLike(value: unknown): value is ESTree.StringLiteral {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'type' in value &&
-    value.type === 'Literal' &&
-    'value' in value &&
-    typeof value.value === 'string'
-  );
+function isStringLiteralLike(
+  value: ESTree.Expression | ESTree.TSModuleDeclaration['id'],
+): value is ESTree.StringLiteral {
+  return value.type === 'Literal';
 }
 
 function rewriteVitePlusImportSpecifier(specifier: string): string | null {
