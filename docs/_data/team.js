@@ -76,6 +76,8 @@ export const core = [
     name: 'Stefan Haas',
     links: [
       { icon: 'github', link: 'https://github.com/HaasStefan' },
+      { icon: 'x', link: 'https://x.com/StefanvHaas' },
+      { icon: 'linkedin', link: 'https://www.linkedin.com/in/stefan-haas-angular' },
     ],
   },
   {
