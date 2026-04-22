@@ -7,7 +7,6 @@ use vite_shared::output;
 
 use crate::package_manager::{
     PackageManager, PackageManagerType, ResolveCommandResult, format_path_env,
-    resolve_global_npm_bin_path,
 };
 
 /// Options for the list command.
@@ -39,27 +38,8 @@ impl PackageManager {
         options: &ListCommandOptions<'_>,
         cwd: impl AsRef<AbsolutePath>,
     ) -> Result<ExitStatus, Error> {
-        let Some(resolve_command) = self.resolve_list_command_with_global_npm_bin(options, None)
-        else {
+        let Some(resolve_command) = self.resolve_list_command(options) else {
             // Command not supported, return success
-            return Ok(ExitStatus::default());
-        };
-        run_command(&resolve_command.bin_path, &resolve_command.args, &resolve_command.envs, cwd)
-            .await
-    }
-
-    /// Run the list command with an explicit npm binary for global lists.
-    /// Returns ExitStatus with success (0) if the command is not supported.
-    #[must_use]
-    pub async fn run_list_command_with_global_npm_bin(
-        &self,
-        options: &ListCommandOptions<'_>,
-        cwd: impl AsRef<AbsolutePath>,
-        global_npm_bin_path: Option<&AbsolutePath>,
-    ) -> Result<ExitStatus, Error> {
-        let Some(resolve_command) =
-            self.resolve_list_command_with_global_npm_bin(options, global_npm_bin_path)
-        else {
             return Ok(ExitStatus::default());
         };
         run_command(&resolve_command.bin_path, &resolve_command.args, &resolve_command.envs, cwd)
@@ -73,17 +53,6 @@ impl PackageManager {
         &self,
         options: &ListCommandOptions,
     ) -> Option<ResolveCommandResult> {
-        self.resolve_list_command_with_global_npm_bin(options, None)
-    }
-
-    /// Resolve the list command with an explicit npm binary for global lists.
-    /// Returns None if the command is not supported by the package manager.
-    #[must_use]
-    pub fn resolve_list_command_with_global_npm_bin(
-        &self,
-        options: &ListCommandOptions,
-        global_npm_bin_path: Option<&AbsolutePath>,
-    ) -> Option<ResolveCommandResult> {
         // yarn@2+ does not support list command
         if self.client == PackageManagerType::Yarn && !self.version.starts_with("1.") {
             output::warn("yarn@2+ does not support 'list' command");
@@ -96,7 +65,7 @@ impl PackageManager {
         // Global packages should use npm cli only (since global installs use npm)
         let bin_name: String;
         if options.global {
-            bin_name = resolve_global_npm_bin_path(global_npm_bin_path);
+            bin_name = "npm".into();
             Self::format_npm_list_args(&mut args, options);
             args.push("-g".into());
 
@@ -509,24 +478,6 @@ mod tests {
         let result = result.unwrap();
         assert_eq!(result.bin_path, "npm");
         assert_eq!(result.args, vec!["list", "--depth", "0", "-g"]);
-    }
-
-    #[test]
-    fn test_global_list_uses_explicit_npm_bin() {
-        let pm = create_mock_package_manager(PackageManagerType::Pnpm, "10.0.0");
-        let npm_bin = if cfg!(windows) {
-            AbsolutePathBuf::new("C:\\node\\npm.cmd".into()).unwrap()
-        } else {
-            AbsolutePathBuf::new("/node/bin/npm".into()).unwrap()
-        };
-        let result = pm
-            .resolve_list_command_with_global_npm_bin(
-                &ListCommandOptions { global: true, ..Default::default() },
-                Some(&npm_bin),
-            )
-            .unwrap();
-        assert_eq!(result.bin_path, npm_bin.as_path().display().to_string());
-        assert_eq!(result.args, vec!["list", "-g"]);
     }
 
     #[test]

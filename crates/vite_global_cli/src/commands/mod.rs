@@ -120,12 +120,21 @@ pub(crate) fn managed_npm_bin_for_global_command(
     }
 
     let npm_bin = npm_bin_path_from_node_bin_prefix(node_bin_prefix);
-    vite_command::resolve_bin(
+    match vite_command::resolve_bin(
         npm_bin.as_path().as_os_str().to_string_lossy().as_ref(),
         None,
         node_bin_prefix,
-    )
-    .ok()
+    ) {
+        Ok(npm_bin) => Some(npm_bin),
+        Err(error) => {
+            tracing::debug!(
+                npm_bin = ?npm_bin,
+                ?error,
+                "Falling back to npm from PATH for global command"
+            );
+            None
+        }
+    }
 }
 
 /// Build a PackageManager, converting PackageJsonNotFound into a friendly error message.
