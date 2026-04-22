@@ -217,7 +217,7 @@
     "node": "^20.19.0 || >=22.12.0"
   },
   "bundledVersions": {
-    "vite": "8.0.8",
+    "vite": "8.0.9",
     "rolldown": "1.0.0-rc.16",
     "tsdown": "0.21.9"
   }
