@@ -20,7 +20,7 @@ import {
   selectAgentTargetPaths,
   writeAgentInstructions,
 } from '../utils/agent.ts';
-import { detectExistingEditor, selectEditor, writeEditorConfigs } from '../utils/editor.ts';
+import { detectExistingEditors, selectEditors, writeEditorConfigs } from '../utils/editor.ts';
 import { renderCliDoc } from '../utils/help.ts';
 import { displayRelative } from '../utils/path.ts';
 import {
@@ -438,7 +438,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   let selectedTemplateName = templateName as string;
   let selectedTemplateArgs = [...templateArgs];
   let selectedAgentTargetPaths: string[] | undefined;
-  let selectedEditor: Awaited<ReturnType<typeof selectEditor>>;
+  let selectedEditors: Awaited<ReturnType<typeof selectEditors>>;
   let selectedParentDir: string | undefined;
   let remoteTargetDir: string | undefined;
   let shouldSetupHooks = false;
@@ -678,13 +678,13 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
           onCancel: () => cancelAndExit(),
         });
 
-  const existingEditor =
+  const existingEditors =
     options.editor || !options.interactive
       ? undefined
-      : detectExistingEditor(workspaceInfoOptional.rootDir);
-  selectedEditor =
-    existingEditor ??
-    (await selectEditor({
+      : detectExistingEditors(workspaceInfoOptional.rootDir);
+  selectedEditors =
+    existingEditors ??
+    (await selectEditors({
       interactive: options.interactive,
       editor: options.editor,
       onCancel: () => cancelAndExit(),
@@ -796,7 +796,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     pauseCreateProgress();
     await writeEditorConfigs({
       projectRoot: fullPath,
-      editorId: selectedEditor,
+      editorId: selectedEditors,
       interactive: options.interactive,
       silent: compactOutput,
       extraVsCodeSettings: { 'npm.scriptRunner': 'vp' },
@@ -886,7 +886,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   pauseCreateProgress();
   await writeEditorConfigs({
     projectRoot: fullPath,
-    editorId: selectedEditor,
+    editorId: selectedEditors,
     interactive: options.interactive,
     silent: compactOutput,
     extraVsCodeSettings: { 'npm.scriptRunner': 'vp' },
