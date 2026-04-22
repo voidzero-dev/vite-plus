@@ -1,6 +1,4 @@
 > vp --version
-VITE+ - The Unified Toolchain for the Web
-
 vp v<semver>
 
 Local vite-plus:

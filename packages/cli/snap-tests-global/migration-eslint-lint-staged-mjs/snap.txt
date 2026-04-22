@@ -1,6 +1,4 @@
 > vp migrate --no-interactive # migration should warn about non-JSON lint-staged config
-VITE+ - The Unified Toolchain for the Web
-
 
 Migrating ESLint config to Oxlint...
 

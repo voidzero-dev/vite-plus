@@ -1,6 +1,4 @@
 > vp migrate --no-interactive # vitest should be added to devDeps when vitest-browser-svelte is present
-VITE+ - The Unified Toolchain for the Web
-
 ◇ Migrated . to Vite+<repeat>
 • Node <semver>  pnpm <semver>
 • 2 config updates applied

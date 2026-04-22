@@ -32,7 +32,7 @@ import {
   runViteInstall,
   selectPackageManager,
 } from '../utils/prompts.ts';
-import { accent, muted, log, success } from '../utils/terminal.ts';
+import { accent, muted, log, printHeader, success } from '../utils/terminal.ts';
 import {
   detectWorkspace,
   updatePackageJsonWithDeps,
@@ -364,7 +364,7 @@ async function main() {
 
   // #region Handle help flag
   if (options.help) {
-    log(vitePlusHeader() + '\n');
+    printHeader();
     log(helpMessage);
     return;
   }
@@ -1005,7 +1005,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
 }
 
 async function showAvailableTemplates() {
-  log(vitePlusHeader() + '\n');
+  printHeader();
   log(listTemplatesMessage);
 }
 

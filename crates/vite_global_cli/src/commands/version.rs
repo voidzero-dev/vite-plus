@@ -161,8 +161,7 @@ fn detect_system_node_version() -> Option<String> {
 
 /// Execute the `--version` command.
 pub async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
-    println!("{}", vite_shared::header::vite_plus_header());
-    println!();
+    vite_shared::header::print_header();
 
     println!("vp v{}", env!("CARGO_PKG_VERSION"));
     println!();

@@ -1,6 +1,4 @@
 > vp install -g ./recursive-cli-pkg # Install test package
-VITE+ - The Unified Toolchain for the Web
-
 Installing ./recursive-cli-pkg globally...
 Installed ./recursive-cli-pkg v<semver>
 Binaries: recursive-cli

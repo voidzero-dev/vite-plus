@@ -125,8 +125,6 @@ Done in <variable>ms using pnpm v<semver>
 }
 
 > vp install test-vite-plus-package@1.0.0 --filter "*" --workspace-root --save-catalog && cat package.json packages/app/package.json packages/utils/package.json pnpm-workspace.yaml # should install packages alias for add command
-VITE+ - The Unified Toolchain for the Web
-
 .                                        |   +1 +<repeat>
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 Done in <variable>ms using pnpm v<semver>

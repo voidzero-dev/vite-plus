@@ -1,7 +1,5 @@
 > git init
 > vp migrate --no-interactive # migration should compose vp config with existing prepare script
-VITE+ - The Unified Toolchain for the Web
-
 ◇ Migrated . to Vite+<repeat>
 • Node <semver>  pnpm <semver>
 • 2 config updates applied

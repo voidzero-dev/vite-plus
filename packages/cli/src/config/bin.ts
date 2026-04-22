@@ -9,12 +9,11 @@ import { join } from 'node:path';
 
 import mri from 'mri';
 
-import { vitePlusHeader } from '../../binding/index.js';
 import { ensurePreCommitHook, hasStagedConfigInViteConfig } from '../migration/migrator.ts';
 import { updateExistingAgentInstructions } from '../utils/agent.ts';
 import { renderCliDoc } from '../utils/help.ts';
 import { defaultInteractive, promptGitHooks } from '../utils/prompts.ts';
-import { log } from '../utils/terminal.ts';
+import { log, printHeader } from '../utils/terminal.ts';
 import { install } from './hooks.ts';
 
 async function main() {
@@ -46,7 +45,7 @@ async function main() {
         },
       ],
     });
-    log(vitePlusHeader() + '\n');
+    printHeader();
     log(helpMessage);
     return;
   }

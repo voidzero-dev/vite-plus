@@ -1,6 +1,4 @@
 > vp pm owner --help # should show help
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp pm owner <COMMAND>
 
 Manage package owners

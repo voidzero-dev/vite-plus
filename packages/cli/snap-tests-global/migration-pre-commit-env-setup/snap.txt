@@ -7,8 +7,6 @@ npx lint-staged
 npm test
 
 > vp migrate --no-interactive # migration should replace lint-staged in-place
-VITE+ - The Unified Toolchain for the Web
-
 ◇ Migrated . to Vite+<repeat>
 • Node <semver>  pnpm <semver>
 • 2 config updates applied

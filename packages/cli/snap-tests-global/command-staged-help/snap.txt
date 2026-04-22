@@ -1,6 +1,4 @@
 > vp staged -h
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp staged [options]
 
 Run linters on staged files using staged config from vite.config.ts.
@@ -27,8 +25,6 @@ Documentation: https://viteplus.dev/guide/commit-hooks
 
 
 > vp staged --help
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp staged [options]
 
 Run linters on staged files using staged config from vite.config.ts.
@@ -55,8 +51,6 @@ Documentation: https://viteplus.dev/guide/commit-hooks
 
 
 > vp help staged
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp staged [options]
 
 Run linters on staged files using staged config from vite.config.ts.

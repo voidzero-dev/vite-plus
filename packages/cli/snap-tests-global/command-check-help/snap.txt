@@ -1,6 +1,4 @@
 > vp check -h
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp check [OPTIONS] [PATHS]...
 
 Run format, lint, and type checks.
@@ -21,8 +19,6 @@ Documentation: https://viteplus.dev/guide/check
 
 
 > vp check --help
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp check [OPTIONS] [PATHS]...
 
 Run format, lint, and type checks.
@@ -43,8 +39,6 @@ Documentation: https://viteplus.dev/guide/check
 
 
 > vp help check
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp check [OPTIONS] [PATHS]...
 
 Run format, lint, and type checks.

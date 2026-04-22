@@ -1,6 +1,4 @@
 > vp update --help # should show help
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp update [OPTIONS] [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
 
 Update packages to their latest versions

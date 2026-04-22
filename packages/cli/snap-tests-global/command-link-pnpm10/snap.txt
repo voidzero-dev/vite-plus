@@ -1,6 +1,4 @@
 > vp link -h # should show help message
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp link [PACKAGE|DIR] [ARGS]...
 
 Link packages for local development
@@ -16,8 +14,6 @@ Documentation: https://viteplus.dev/guide/install
 
 
 > vp install # install initial dependencies
-VITE+ - The Unified Toolchain for the Web
-
 Packages: +<variable>
 +<repeat>
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done

@@ -169,14 +169,16 @@ fn print_unknown_argument_error(error: &clap::Error) -> bool {
 }
 
 pub(super) fn print_help() {
-    let header = vite_shared::header::vite_plus_header();
+    let header = if vite_shared::header::should_print_header() {
+        format!("{}\n\n", vite_shared::header::vite_plus_header())
+    } else {
+        String::new()
+    };
     let bold = "\x1b[1m";
     let bold_underline = "\x1b[1;4m";
     let reset = "\x1b[0m";
     println!(
-        "{header}
-
-{bold_underline}Usage:{reset} {bold}vp{reset} <COMMAND>
+        "{header}{bold_underline}Usage:{reset} {bold}vp{reset} <COMMAND>
 
 {bold_underline}Core Commands:{reset}
   {bold}dev{reset}            Run the development server

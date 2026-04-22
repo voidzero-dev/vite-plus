@@ -211,8 +211,6 @@ Done in <variable>ms <variable>ms
 }
 
 > vp install -O test-vite-plus-package-optional --filter "*" && cat package.json packages/app/package.json packages/admin/package.json packages/utils/package.json # should install packages alias for add command
-VITE+ - The Unified Toolchain for the Web
-
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0085: │ + test-vite-plus-package-optional@npm:1.0.0
