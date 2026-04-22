@@ -45,7 +45,9 @@ jobs:
 
       - name: Set final version
         id: version
-        run: echo "version=${{ inputs.version || steps.computed.outputs.version }}" >> $GITHUB_OUTPUT
+        env:
+          VERSION: ${{ inputs.version || steps.computed.outputs.version }}
+        run: echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
   build-rust:
     runs-on: ${{ matrix.settings.os }}
@@ -199,7 +201,6 @@ jobs:
           node-version-file: .node-version
           package-manager-cache: false
           registry-url: 'https://registry.npmjs.org'
-          cache: 'pnpm'
 
       - name: Install dependencies
         run: pnpm install
