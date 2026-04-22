@@ -36,7 +36,6 @@ export default defineConfig([
       'migration/bin': './src/migration/bin.ts',
       version: './src/version.ts',
       'config/bin': './src/config/bin.ts',
-      'mcp/bin': './src/mcp/bin.ts',
       'staged/bin': './src/staged/bin.ts',
     },
     outDir: 'dist',

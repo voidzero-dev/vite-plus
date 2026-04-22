@@ -7,7 +7,7 @@
  * 3. syncCorePackageExports() - Creates shim files to re-export from @voidzero-dev/vite-plus-core
  * 4. syncTestPackageExports() - Creates shim files to re-export from @voidzero-dev/vite-plus-test
  * 5. syncVersionsExport() - Generates ./versions module with bundled tool versions
- * 6. copySkillDocs() - Copies docs into skills/vite-plus/docs for runtime MCP access
+ * 6. copyBundledDocs() - Copies docs into docs/ for bundled package access
  * 7. syncReadmeFromRoot() - Keeps package README in sync
  *
  * The sync functions allow this package to be a drop-in replacement for 'vite' by
@@ -19,7 +19,7 @@
  */
 
 import { execSync } from 'node:child_process';
-import { existsSync, globSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, statSync } from 'node:fs';
 import { copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -74,7 +74,7 @@ if (!skipTs) {
   await syncTestPackageExports();
   await syncVersionsExport();
 }
-await copySkillDocs();
+await copyBundledDocs();
 await syncReadmeFromRoot();
 
 async function buildNapiBinding() {
@@ -387,18 +387,18 @@ async function syncVersionsExport() {
 }
 
 /**
- * Copy markdown doc files from the monorepo docs/ directory into skills/vite-plus/docs/,
- * preserving the relative directory structure. This keeps stable file paths for
- * skills routing and MCP page slugs.
+ * Copy the docs source tree into docs/, preserving relative paths.
+ * Generated VitePress output and installed dependencies are excluded so the package
+ * only ships authoring sources and referenced assets.
  */
-async function copySkillDocs() {
-  console.log('\nCopying skill docs...');
+async function copyBundledDocs() {
+  console.log('\nCopying bundled docs...');
 
   const docsSourceDir = join(projectDir, '..', '..', 'docs');
-  const docsTargetDir = join(projectDir, 'skills', 'vite-plus', 'docs');
+  const docsTargetDir = join(projectDir, 'docs');
 
   if (!existsSync(docsSourceDir)) {
-    console.log('  Docs source directory not found, skipping skill docs copy');
+    console.log('  Docs source directory not found, skipping docs copy');
     return;
   }
 
@@ -406,23 +406,8 @@ async function copySkillDocs() {
   await rm(docsTargetDir, { recursive: true, force: true });
   await mkdir(docsTargetDir, { recursive: true });
 
-  // Find all markdown files recursively and copy them with their relative paths.
-  const mdFiles = globSync('**/*.md', { cwd: docsSourceDir }).filter(
-    (f) => !f.includes('node_modules') && f !== 'index.md',
-  );
-  // eslint-disable-next-line unicorn/no-array-sort -- sorted traversal keeps output deterministic
-  mdFiles.sort();
-
-  let copied = 0;
-  for (const relPath of mdFiles) {
-    const sourcePath = join(docsSourceDir, relPath);
-    const targetPath = join(docsTargetDir, relPath);
-    await mkdir(dirname(targetPath), { recursive: true });
-    await copyFile(sourcePath, targetPath);
-    copied++;
-  }
-
-  console.log(`  Copied ${copied} doc files to skills/vite-plus/docs/ (with paths preserved)`);
+  const copied = await copyDocsTree(docsSourceDir, docsTargetDir);
+  console.log(`  Copied ${copied} docs files to docs/ (with paths preserved)`);
 }
 
 async function syncReadmeFromRoot() {
@@ -458,6 +443,49 @@ function splitReadme(content: string, label: string) {
     prefix: content.slice(0, delimiterWithNewlineEnd).trim(),
     suffix: content.slice(delimiterWithNewlineEnd).trim(),
   };
+}
+
+async function copyDocsTree(
+  docsSourceDir: string,
+  docsTargetDir: string,
+  relativePath = '',
+): Promise<number> {
+  let copied = 0;
+  const currentDir = join(docsSourceDir, relativePath);
+
+  for (const entry of readdirSync(currentDir, { withFileTypes: true })) {
+    const entryRelPath = relativePath ? join(relativePath, entry.name) : entry.name;
+    const normalizedPath = entryRelPath.replaceAll('\\', '/');
+
+    if (shouldSkipDocsPath(normalizedPath)) {
+      continue;
+    }
+
+    const sourcePath = join(docsSourceDir, entryRelPath);
+    const targetPath = join(docsTargetDir, entryRelPath);
+
+    if (entry.isDirectory()) {
+      await mkdir(targetPath, { recursive: true });
+      copied += await copyDocsTree(docsSourceDir, docsTargetDir, entryRelPath);
+      continue;
+    }
+
+    if (!entry.isFile()) {
+      continue;
+    }
+
+    await mkdir(dirname(targetPath), { recursive: true });
+    await copyFile(sourcePath, targetPath);
+    copied++;
+  }
+
+  return copied;
+}
+
+function shouldSkipDocsPath(relativePath: string) {
+  return ['node_modules', '.vitepress/cache', '.vitepress/dist'].some(
+    (prefix) => relativePath === prefix || relativePath.startsWith(`${prefix}/`),
+  );
 }
 
 type ExportValue =
