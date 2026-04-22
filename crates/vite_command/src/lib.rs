@@ -3,7 +3,6 @@ use std::os::fd::{BorrowedFd, RawFd};
 use std::{
     collections::HashMap,
     ffi::OsStr,
-    path::Path,
     process::{ExitStatus, Stdio},
 };
 
@@ -31,15 +30,6 @@ pub fn resolve_bin(
     path_env: Option<&OsStr>,
     cwd: impl AsRef<AbsolutePath>,
 ) -> Result<AbsolutePathBuf, Error> {
-    let candidate = Path::new(bin_name);
-    if candidate.is_absolute() {
-        if candidate.exists() {
-            return AbsolutePathBuf::new(candidate.to_path_buf())
-                .ok_or_else(|| Error::CannotFindBinaryPath(bin_name.into()));
-        }
-        return Err(Error::CannotFindBinaryPath(bin_name.into()));
-    }
-
     let current_path;
     let path_env = match path_env {
         Some(p) => p,
@@ -369,6 +359,33 @@ mod tests {
             let envs = HashMap::new();
             let result = run_command(&bin_path, &args, &envs, &temp_dir_path).await;
             assert!(result.is_ok(), "Should run absolute binary path, but got error: {:?}", result);
+        }
+
+        #[cfg(unix)]
+        #[tokio::test]
+        async fn test_run_command_rejects_non_executable_absolute_binary_path() {
+            let temp_dir = create_temp_dir();
+            let temp_dir_path =
+                AbsolutePathBuf::new(temp_dir.path().canonicalize().unwrap().to_path_buf())
+                    .unwrap();
+            let script_path = temp_dir_path.join("test-bin");
+            std::fs::write(&script_path, "#!/bin/sh\nexit 0\n").unwrap();
+            let envs = HashMap::new();
+            let result = run_command(
+                &script_path.as_path().display().to_string(),
+                &[] as &[&str],
+                &envs,
+                &temp_dir_path,
+            )
+            .await;
+            assert!(result.is_err(), "Should reject non-executable absolute binary path");
+            assert_eq!(
+                result.unwrap_err().to_string(),
+                format!(
+                    "Cannot find binary path for command '{}'",
+                    script_path.as_path().display()
+                )
+            );
         }
 
         #[tokio::test]
