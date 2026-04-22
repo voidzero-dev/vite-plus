@@ -18,9 +18,12 @@ runs:
     - name: Compute next patch version
       id: version
       shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        NPM_TAG: ${{ inputs.npm_tag }}
       run: |
         git fetch --tags --quiet
-        npm install --prefix ${{ github.action_path }} semver > /dev/null 2>&1
-        VERSION_OUTPUT=$(node ${{ github.action_path }}/compute-version.mjs "${{ inputs.npm_tag }}")
+        npm install --prefix "$ACTION_PATH" semver > /dev/null 2>&1
+        VERSION_OUTPUT=$(node "$ACTION_PATH/compute-version.mjs" "$NPM_TAG")
         echo "$VERSION_OUTPUT"
         echo "$VERSION_OUTPUT" | tail -n 1 >> $GITHUB_OUTPUT
