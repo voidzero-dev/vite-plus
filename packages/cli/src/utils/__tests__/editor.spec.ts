@@ -24,9 +24,7 @@ afterEach(() => {
 
 describe('selectEditors', () => {
   it('prompts with editor config targets and supports multiple selections', async () => {
-    const multiselectSpy = vi
-      .spyOn(prompts, 'multiselect')
-      .mockResolvedValue(['vscode', 'zed']);
+    const multiselectSpy = vi.spyOn(prompts, 'multiselect').mockResolvedValue(['vscode', 'zed']);
 
     await expect(
       selectEditors({
