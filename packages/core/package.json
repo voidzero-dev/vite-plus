@@ -109,7 +109,7 @@
     "postcss": "^8.5.6"
   },
   "devDependencies": {
-    "@ast-grep/napi": "^0.40.4",
+    "@ast-grep/napi": "^0.42.1",
     "@babel/generator": "^7.28.5",
     "@babel/parser": "^7.28.5",
     "@babel/types": "^7.28.5",
