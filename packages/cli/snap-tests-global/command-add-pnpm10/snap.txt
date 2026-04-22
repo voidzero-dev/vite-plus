@@ -1,6 +1,4 @@
 > vp add --help # should show help
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp add [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
 
 Add packages to dependencies
@@ -76,8 +74,6 @@ Done in <variable>ms using pnpm v<semver>
 }
 
 > vp install test-vite-plus-package@1.0.0 --save-peer && cat package.json # should install package alias for add
-VITE+ - The Unified Toolchain for the Web
-
 Packages: +<variable>
 +<repeat>
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done

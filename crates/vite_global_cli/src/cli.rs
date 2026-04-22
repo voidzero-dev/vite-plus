@@ -2102,8 +2102,7 @@ fn print_runtime_header(show_header: bool) {
     if !show_header {
         return;
     }
-    println!("{}", vite_shared::header::vite_plus_header());
-    println!();
+    vite_shared::header::print_header();
 }
 
 /// Build a clap Command with custom help formatting matching the JS CLI output.
@@ -2120,7 +2119,7 @@ pub fn command_with_help_with_options(render_options: RenderOptions) -> clap::Co
 fn apply_custom_help(cmd: clap::Command, render_options: RenderOptions) -> clap::Command {
     let after_help = help::render_help_doc(&help::top_level_help_doc());
     let options_heading = help::render_heading("Options");
-    let header = if render_options.show_header {
+    let header = if render_options.show_header && vite_shared::header::should_print_header() {
         vite_shared::header::vite_plus_header()
     } else {
         String::new()

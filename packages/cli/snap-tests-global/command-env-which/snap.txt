@@ -2,36 +2,26 @@
 v20.18.0
 
 > vp env which node # Core tool - shows resolved Node.js binary path
-VITE+ - The Unified Toolchain for the Web
-
 <vite-plus-home>/js_runtime/node/<semver>/bin/node
   Version:    <semver>
   Source:     <cwd>/.node-version
 
 > vp env which npm # Core tool - shows resolved npm binary path
-VITE+ - The Unified Toolchain for the Web
-
 <vite-plus-home>/js_runtime/node/<semver>/bin/npm
   Version:    <semver>
   Source:     <cwd>/.node-version
 
 > vp env which npx # Core tool - shows resolved npx binary path
-VITE+ - The Unified Toolchain for the Web
-
 <vite-plus-home>/js_runtime/node/<semver>/bin/npx
   Version:    <semver>
   Source:     <cwd>/.node-version
 
 > vp install -g cowsay@1.6.0 # Install a global package via vp
-VITE+ - The Unified Toolchain for the Web
-
 Installing cowsay@<semver> globally...
 Installed cowsay v<semver>
 Binaries: cowsay, cowthink
 
 > vp env which cowsay # Global package - shows binary path with metadata
-VITE+ - The Unified Toolchain for the Web
-
 <vite-plus-home>/packages/cowsay/lib/node_modules/cowsay/./cli.js
   Package:    cowsay@<semver>
   Binaries:   cowsay, cowthink
@@ -42,8 +32,6 @@ VITE+ - The Unified Toolchain for the Web
 Uninstalled cowsay
 
 [1]> vp env which unknown-tool # Unknown tool - error message
-VITE+ - The Unified Toolchain for the Web
-
 error: tool 'unknown-tool' not found
 Not a core tool (node, npm, npx) or installed global package.
 Run 'vp list -g' to see installed packages.

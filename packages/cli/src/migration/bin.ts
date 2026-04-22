@@ -5,7 +5,6 @@ import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import mri from 'mri';
 import semver from 'semver';
 
-import { vitePlusHeader } from '../../binding/index.js';
 import {
   PackageManager,
   type WorkspaceInfo,
@@ -37,7 +36,7 @@ import {
   selectPackageManager,
   upgradeYarn,
 } from '../utils/prompts.ts';
-import { accent, log, muted } from '../utils/terminal.ts';
+import { accent, log, muted, printHeader } from '../utils/terminal.ts';
 import type { PackageDependencies } from '../utils/types.ts';
 import { detectWorkspace } from '../utils/workspace.ts';
 import {
@@ -910,12 +909,12 @@ async function main() {
   const { projectPath, options } = parseArgs();
 
   if (options.help) {
-    log(vitePlusHeader() + '\n');
+    printHeader();
     log(helpMessage);
     return;
   }
 
-  log(`${vitePlusHeader()}\n`);
+  printHeader();
 
   const workspaceInfoOptional = await detectWorkspace(projectPath);
   const resolvedPackageManager = workspaceInfoOptional.packageManager ?? 'unknown';

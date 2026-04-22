@@ -1,6 +1,4 @@
 > vp migrate --no-interactive --no-hooks # migration should add both Vue and Astro shims
-VITE+ - The Unified Toolchain for the Web
-
 ◇ Migrated . to Vite+<repeat>
 • Node <semver>  pnpm <semver>
 ✓ Dependencies installed in <variable>ms

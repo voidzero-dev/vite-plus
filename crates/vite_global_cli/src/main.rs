@@ -116,8 +116,7 @@ fn extract_invalid_subcommand_details(error: &clap::Error) -> Option<InvalidSubc
 }
 
 fn print_invalid_subcommand_error(details: &InvalidSubcommandDetails) {
-    println!("{}", vite_shared::header::vite_plus_header());
-    println!();
+    vite_shared::header::print_header();
 
     let highlighted_subcommand = details.invalid_subcommand.bright_blue().to_string();
     output::error(&format!("Command '{highlighted_subcommand}' not found"));
@@ -237,8 +236,7 @@ fn print_unknown_argument_error(error: &clap::Error) -> bool {
         return false;
     };
 
-    println!("{}", vite_shared::header::vite_plus_header());
-    println!();
+    vite_shared::header::print_header();
 
     let highlighted_argument = invalid_argument.bright_blue().to_string();
     output::error(&format!("Unexpected argument '{highlighted_argument}'"));

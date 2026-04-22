@@ -1,6 +1,4 @@
 > vp create --help # show help
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp create [TEMPLATE] [OPTIONS] [-- TEMPLATE_OPTIONS]
 
 Use any builtin, local or remote template with Vite+.
@@ -55,8 +53,6 @@ Documentation: https://viteplus.dev/guide/create
 
 
 > vp create --list # list templates
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp create --list
 
 List available builtin and popular project templates.

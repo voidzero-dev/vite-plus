@@ -536,6 +536,36 @@ pub fn vite_plus_header() -> String {
     render_header_variant(header_colors.blue, &header_colors.suffix_gradient, true, true)
 }
 
+/// Whether the Vite+ banner should be emitted in the current environment.
+///
+/// The banner is cosmetic and assumes an interactive terminal; it's
+/// suppressed when:
+/// - stdout is piped or redirected (lefthook/husky, `execSync`, CI, pagers).
+/// - a git commit-flow hook is running. Direct shell hooks inherit the
+///   terminal for stdout, so the TTY check alone doesn't catch them; git
+///   sets `GIT_INDEX_FILE` for pre-commit / commit-msg / prepare-commit-msg,
+///   which is where `vp check --fix` typically runs.
+#[must_use]
+pub fn should_print_header() -> bool {
+    if !std::io::stdout().is_terminal() {
+        return false;
+    }
+    if std::env::var_os("GIT_INDEX_FILE").is_some() {
+        return false;
+    }
+    true
+}
+
+/// Emit the Vite+ banner (header line + trailing blank line) to stdout, but
+/// only when the environment is interactive. No-op otherwise.
+pub fn print_header() {
+    if !should_print_header() {
+        return;
+    }
+    println!("{}", vite_plus_header());
+    println!();
+}
+
 #[cfg(all(test, unix))]
 mod tests {
     use std::io::{BufReader, Cursor};

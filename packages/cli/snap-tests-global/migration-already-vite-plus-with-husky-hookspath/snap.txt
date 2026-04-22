@@ -1,8 +1,6 @@
 > git init
 > git config core.hooksPath .husky/_
 > vp migrate --no-interactive # should override husky's core.hooksPath and migrate hooks
-VITE+ - The Unified Toolchain for the Web
-
 ◇ Updated .
 • Node <semver>  unknown latest
 • 2 config updates applied

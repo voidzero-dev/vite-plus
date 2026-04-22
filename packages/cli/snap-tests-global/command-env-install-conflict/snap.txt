@@ -1,6 +1,4 @@
 > vp install -g ./conflict-pkg # Install package with conflicting binary name (uses cwd version)
-VITE+ - The Unified Toolchain for the Web
-
 Installing ./conflict-pkg globally...
 warn: Package './conflict-pkg' provides 'node' binary, but it conflicts with a core shim. Skipping.
 Installed ./conflict-pkg v<semver>
@@ -10,8 +8,6 @@ Binaries: conflict-cli, node
 Uninstalled conflict-pkg
 
 > vp install -g --node 20 ./conflict-pkg # Install with specific Node.js version
-VITE+ - The Unified Toolchain for the Web
-
 Installing ./conflict-pkg globally...
 warn: Package './conflict-pkg' provides 'node' binary, but it conflicts with a core shim. Skipping.
 Installed ./conflict-pkg v<semver>
