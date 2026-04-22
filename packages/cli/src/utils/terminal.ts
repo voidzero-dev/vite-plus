@@ -1,6 +1,6 @@
 import { styleText } from 'node:util';
 
-import { vitePlusHeader } from '../../binding/index.js';
+import { shouldPrintVitePlusHeader, vitePlusHeader } from '../../binding/index.js';
 
 export function log(message: string) {
   /* oxlint-disable-next-line no-console */
@@ -9,19 +9,11 @@ export function log(message: string) {
 
 /**
  * Emit the Vite+ banner (header line + trailing blank line) to stdout.
- *
- * Silent when:
- * - stdout is piped or redirected (lefthook/husky, `execSync`, CI, pagers) —
- *   the banner's ANSI styling renders inconsistently there.
- * - a git commit-flow hook is running. Direct shell hooks inherit the
- *   terminal for stdout, so the TTY check alone doesn't catch them; git
- *   sets `GIT_INDEX_FILE` for pre-commit / commit-msg / prepare-commit-msg.
+ * Gating (non-TTY, git hooks) lives in `shouldPrintVitePlusHeader` on the
+ * Rust side so both CLIs stay in sync.
  */
 export function printHeader() {
-  if (!process.stdout.isTTY) {
-    return;
-  }
-  if (process.env.GIT_INDEX_FILE) {
+  if (!shouldPrintVitePlusHeader()) {
     return;
   }
   log(vitePlusHeader());

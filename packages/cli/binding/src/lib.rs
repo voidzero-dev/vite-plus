@@ -215,3 +215,12 @@ pub async fn run(options: CliOptions) -> Result<i32> {
 pub fn vite_plus_header() -> String {
     vite_shared::header::vite_plus_header()
 }
+
+/// Whether the Vite+ banner should be emitted in the current environment.
+///
+/// Mirrors `vite_shared::header::should_print_header` so both CLIs apply
+/// the same TTY + git-hook gating without duplicating the rules in JS.
+#[napi]
+pub fn should_print_vite_plus_header() -> bool {
+    vite_shared::header::should_print_header()
+}
