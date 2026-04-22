@@ -20,8 +20,8 @@
 
 import { execSync } from 'node:child_process';
 import { existsSync, readdirSync, statSync } from 'node:fs';
-import { copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { copyFile, cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
@@ -402,12 +402,17 @@ async function copyBundledDocs() {
     return;
   }
 
-  // Clean and recreate target directory
+  const skipPrefixes = ['node_modules', '.vitepress/cache', '.vitepress/dist'];
   await rm(docsTargetDir, { recursive: true, force: true });
-  await mkdir(docsTargetDir, { recursive: true });
+  await cp(docsSourceDir, docsTargetDir, {
+    recursive: true,
+    filter: (src) => {
+      const rel = relative(docsSourceDir, src).replaceAll('\\', '/');
+      return !skipPrefixes.some((prefix) => rel === prefix || rel.startsWith(`${prefix}/`));
+    },
+  });
 
-  const copied = await copyDocsTree(docsSourceDir, docsTargetDir);
-  console.log(`  Copied ${copied} docs files to docs/ (with paths preserved)`);
+  console.log('  Copied docs to docs/ (with paths preserved)');
 }
 
 async function syncReadmeFromRoot() {
@@ -443,49 +448,6 @@ function splitReadme(content: string, label: string) {
     prefix: content.slice(0, delimiterWithNewlineEnd).trim(),
     suffix: content.slice(delimiterWithNewlineEnd).trim(),
   };
-}
-
-async function copyDocsTree(
-  docsSourceDir: string,
-  docsTargetDir: string,
-  relativePath = '',
-): Promise<number> {
-  let copied = 0;
-  const currentDir = join(docsSourceDir, relativePath);
-
-  for (const entry of readdirSync(currentDir, { withFileTypes: true })) {
-    const entryRelPath = relativePath ? join(relativePath, entry.name) : entry.name;
-    const normalizedPath = entryRelPath.replaceAll('\\', '/');
-
-    if (shouldSkipDocsPath(normalizedPath)) {
-      continue;
-    }
-
-    const sourcePath = join(docsSourceDir, entryRelPath);
-    const targetPath = join(docsTargetDir, entryRelPath);
-
-    if (entry.isDirectory()) {
-      await mkdir(targetPath, { recursive: true });
-      copied += await copyDocsTree(docsSourceDir, docsTargetDir, entryRelPath);
-      continue;
-    }
-
-    if (!entry.isFile()) {
-      continue;
-    }
-
-    await mkdir(dirname(targetPath), { recursive: true });
-    await copyFile(sourcePath, targetPath);
-    copied++;
-  }
-
-  return copied;
-}
-
-function shouldSkipDocsPath(relativePath: string) {
-  return ['node_modules', '.vitepress/cache', '.vitepress/dist'].some(
-    (prefix) => relativePath === prefix || relativePath.startsWith(`${prefix}/`),
-  );
 }
 
 type ExportValue =
