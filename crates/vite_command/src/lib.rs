@@ -3,6 +3,7 @@ use std::os::fd::{BorrowedFd, RawFd};
 use std::{
     collections::HashMap,
     ffi::OsStr,
+    path::Path,
     process::{ExitStatus, Stdio},
 };
 
@@ -30,6 +31,15 @@ pub fn resolve_bin(
     path_env: Option<&OsStr>,
     cwd: impl AsRef<AbsolutePath>,
 ) -> Result<AbsolutePathBuf, Error> {
+    let candidate = Path::new(bin_name);
+    if candidate.is_absolute() {
+        if candidate.exists() {
+            return AbsolutePathBuf::new(candidate.to_path_buf())
+                .ok_or_else(|| Error::CannotFindBinaryPath(bin_name.into()));
+        }
+        return Err(Error::CannotFindBinaryPath(bin_name.into()));
+    }
+
     let current_path;
     let path_env = match path_env {
         Some(p) => p,
@@ -329,6 +339,36 @@ mod tests {
             )]);
             let result = run_command("npm", &["--version"], &envs, &temp_dir_path).await;
             assert!(result.is_ok(), "Should run command successfully, but got error: {:?}", result);
+        }
+
+        #[tokio::test]
+        async fn test_run_command_with_absolute_binary_path() {
+            let temp_dir = create_temp_dir();
+            let temp_dir_path =
+                AbsolutePathBuf::new(temp_dir.path().canonicalize().unwrap().to_path_buf())
+                    .unwrap();
+
+            #[cfg(unix)]
+            let (bin_path, args) = {
+                use std::os::unix::fs::PermissionsExt;
+
+                let script_path = temp_dir_path.join("test-bin");
+                std::fs::write(&script_path, "#!/bin/sh\nexit 0\n").unwrap();
+                let mut permissions = std::fs::metadata(&script_path).unwrap().permissions();
+                permissions.set_mode(0o755);
+                std::fs::set_permissions(&script_path, permissions).unwrap();
+                (script_path.as_path().display().to_string(), Vec::<&str>::new())
+            };
+
+            #[cfg(not(unix))]
+            let (bin_path, args) = {
+                let current_exe = std::env::current_exe().unwrap();
+                (current_exe.to_string_lossy().to_string(), vec!["--help"])
+            };
+
+            let envs = HashMap::new();
+            let result = run_command(&bin_path, &args, &envs, &temp_dir_path).await;
+            assert!(result.is_ok(), "Should run absolute binary path, but got error: {:?}", result);
         }
 
         #[tokio::test]

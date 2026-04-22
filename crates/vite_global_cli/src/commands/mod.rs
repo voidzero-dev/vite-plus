@@ -25,8 +25,10 @@
 
 use std::{collections::HashMap, io::BufReader};
 
-use vite_install::package_manager::{PackageManager, PackageManagerType};
-use vite_path::AbsolutePath;
+use vite_install::package_manager::{
+    PackageManager, PackageManagerType, npm_bin_path_from_node_bin_prefix,
+};
+use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_shared::{PrependOptions, prepend_to_path_env};
 
 use crate::{error::Error, js_executor::JsExecutor};
@@ -86,7 +88,9 @@ pub async fn ensure_package_json(project_path: &AbsolutePath) -> Result<(), Erro
 ///
 /// If `project_path` contains a package.json, uses the project's runtime
 /// (based on devEngines.runtime). Otherwise, falls back to the CLI's runtime.
-pub async fn prepend_js_runtime_to_path_env(project_path: &AbsolutePath) -> Result<(), Error> {
+pub async fn prepend_js_runtime_to_path_env(
+    project_path: &AbsolutePath,
+) -> Result<AbsolutePathBuf, Error> {
     let mut executor = JsExecutor::new(None);
 
     // Use project runtime if package.json exists, otherwise use CLI runtime
@@ -104,7 +108,14 @@ pub async fn prepend_js_runtime_to_path_env(project_path: &AbsolutePath) -> Resu
         tracing::debug!("Set PATH to include {:?}", node_bin_prefix);
     }
 
-    Ok(())
+    Ok(node_bin_prefix)
+}
+
+pub(crate) fn managed_npm_bin_for_global_command(
+    global: bool,
+    node_bin_prefix: &AbsolutePath,
+) -> Option<AbsolutePathBuf> {
+    global.then(|| npm_bin_path_from_node_bin_prefix(node_bin_prefix))
 }
 
 /// Build a PackageManager, converting PackageJsonNotFound into a friendly error message.
@@ -200,6 +211,19 @@ mod tests {
     use vite_path::AbsolutePathBuf;
 
     use super::*;
+
+    #[test]
+    fn test_managed_npm_bin_for_global_command_only_when_global() {
+        let node_bin_prefix = if cfg!(windows) {
+            AbsolutePathBuf::new("C:\\node".into()).unwrap()
+        } else {
+            AbsolutePathBuf::new("/node/bin".into()).unwrap()
+        };
+        let npm_bin = managed_npm_bin_for_global_command(true, &node_bin_prefix).unwrap();
+        let expected = npm_bin_path_from_node_bin_prefix(&node_bin_prefix);
+        assert_eq!(npm_bin, expected);
+        assert!(managed_npm_bin_for_global_command(false, &node_bin_prefix).is_none());
+    }
 
     #[test]
     fn test_has_vite_plus_in_dev_dependencies() {

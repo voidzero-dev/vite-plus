@@ -7,6 +7,7 @@ use vite_shared::output;
 
 use crate::package_manager::{
     PackageManager, PackageManagerType, ResolveCommandResult, format_path_env,
+    resolve_global_npm_bin_path,
 };
 
 /// Output format for the outdated command.
@@ -77,7 +78,22 @@ impl PackageManager {
         options: &OutdatedCommandOptions<'_>,
         cwd: impl AsRef<AbsolutePath>,
     ) -> Result<ExitStatus, Error> {
-        let resolve_command = self.resolve_outdated_command(options);
+        let resolve_command = self.resolve_outdated_command_with_global_npm_bin(options, None);
+        run_command(&resolve_command.bin_path, &resolve_command.args, &resolve_command.envs, cwd)
+            .await
+    }
+
+    /// Run the outdated command with an explicit npm binary for global checks.
+    /// Return the exit status of the command.
+    #[must_use]
+    pub async fn run_outdated_command_with_global_npm_bin(
+        &self,
+        options: &OutdatedCommandOptions<'_>,
+        cwd: impl AsRef<AbsolutePath>,
+        global_npm_bin_path: Option<&AbsolutePath>,
+    ) -> Result<ExitStatus, Error> {
+        let resolve_command =
+            self.resolve_outdated_command_with_global_npm_bin(options, global_npm_bin_path);
         run_command(&resolve_command.bin_path, &resolve_command.args, &resolve_command.envs, cwd)
             .await
     }
@@ -88,13 +104,23 @@ impl PackageManager {
         &self,
         options: &OutdatedCommandOptions,
     ) -> ResolveCommandResult {
+        self.resolve_outdated_command_with_global_npm_bin(options, None)
+    }
+
+    /// Resolve the outdated command with an explicit npm binary for global checks.
+    #[must_use]
+    pub fn resolve_outdated_command_with_global_npm_bin(
+        &self,
+        options: &OutdatedCommandOptions,
+        global_npm_bin_path: Option<&AbsolutePath>,
+    ) -> ResolveCommandResult {
         let bin_name: String;
         let envs = HashMap::from([("PATH".to_string(), format_path_env(self.get_bin_prefix()))]);
         let mut args: Vec<String> = Vec::new();
 
         // Global packages should use npm cli only
         if options.global {
-            bin_name = "npm".into();
+            bin_name = resolve_global_npm_bin_path(global_npm_bin_path);
             Self::format_npm_outdated_args(&mut args, options);
             args.push("-g".into());
         } else {
@@ -481,6 +507,22 @@ mod tests {
             ..Default::default()
         });
         assert_eq!(result.bin_path, "npm");
+        assert_eq!(result.args, vec!["outdated", "-g"]);
+    }
+
+    #[test]
+    fn test_global_outdated_uses_explicit_npm_bin() {
+        let pm = create_mock_package_manager(PackageManagerType::Pnpm, "10.0.0");
+        let npm_bin = if cfg!(windows) {
+            AbsolutePathBuf::new("C:\\node\\npm.cmd".into()).unwrap()
+        } else {
+            AbsolutePathBuf::new("/node/bin/npm".into()).unwrap()
+        };
+        let result = pm.resolve_outdated_command_with_global_npm_bin(
+            &OutdatedCommandOptions { global: true, ..Default::default() },
+            Some(&npm_bin),
+        );
+        assert_eq!(result.bin_path, npm_bin.as_path().display().to_string());
         assert_eq!(result.args, vec!["outdated", "-g"]);
     }
 

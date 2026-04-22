@@ -6,7 +6,7 @@ use vite_install::{
 };
 use vite_path::AbsolutePathBuf;
 
-use super::prepend_js_runtime_to_path_env;
+use super::{managed_npm_bin_for_global_command, prepend_js_runtime_to_path_env};
 use crate::error::Error;
 
 /// Add command for adding packages to dependencies.
@@ -35,7 +35,7 @@ impl AddCommand {
         allow_build: Option<&str>,
         pass_through_args: Option<&[String]>,
     ) -> Result<ExitStatus, Error> {
-        prepend_js_runtime_to_path_env(&self.cwd).await?;
+        let node_bin_prefix = prepend_js_runtime_to_path_env(&self.cwd).await?;
         super::ensure_package_json(&self.cwd).await?;
 
         let add_command_options = AddCommandOptions {
@@ -53,8 +53,15 @@ impl AddCommand {
 
         // Detect package manager
         let package_manager = PackageManager::builder(&self.cwd).build_with_default().await?;
+        let global_npm_bin_path = managed_npm_bin_for_global_command(global, &node_bin_prefix);
 
-        Ok(package_manager.run_add_command(&add_command_options, &self.cwd).await?)
+        Ok(package_manager
+            .run_add_command_with_global_npm_bin(
+                &add_command_options,
+                &self.cwd,
+                global_npm_bin_path.as_deref(),
+            )
+            .await?)
     }
 }
 

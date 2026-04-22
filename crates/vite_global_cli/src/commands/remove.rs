@@ -3,7 +3,9 @@ use std::process::ExitStatus;
 use vite_install::commands::remove::RemoveCommandOptions;
 use vite_path::AbsolutePathBuf;
 
-use super::{build_package_manager, prepend_js_runtime_to_path_env};
+use super::{
+    build_package_manager, managed_npm_bin_for_global_command, prepend_js_runtime_to_path_env,
+};
 use crate::error::Error;
 
 /// Remove command for removing packages from dependencies.
@@ -31,7 +33,7 @@ impl RemoveCommand {
         global: bool,
         pass_through_args: Option<&[String]>,
     ) -> Result<ExitStatus, Error> {
-        prepend_js_runtime_to_path_env(&self.cwd).await?;
+        let node_bin_prefix = prepend_js_runtime_to_path_env(&self.cwd).await?;
 
         let package_manager = build_package_manager(&self.cwd).await?;
 
@@ -46,7 +48,14 @@ impl RemoveCommand {
             save_prod,
             pass_through_args,
         };
-        Ok(package_manager.run_remove_command(&remove_command_options, &self.cwd).await?)
+        let global_npm_bin_path = managed_npm_bin_for_global_command(global, &node_bin_prefix);
+        Ok(package_manager
+            .run_remove_command_with_global_npm_bin(
+                &remove_command_options,
+                &self.cwd,
+                global_npm_bin_path.as_deref(),
+            )
+            .await?)
     }
 }
 

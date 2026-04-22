@@ -66,6 +66,18 @@ pub struct ResolveCommandResult {
     pub envs: HashMap<String, String>,
 }
 
+#[must_use]
+pub fn npm_bin_path_from_node_bin_prefix(node_bin_prefix: &AbsolutePath) -> AbsolutePathBuf {
+    if cfg!(windows) { node_bin_prefix.join("npm.cmd") } else { node_bin_prefix.join("npm") }
+}
+
+#[must_use]
+pub(crate) fn resolve_global_npm_bin_path(global_npm_bin_path: Option<&AbsolutePath>) -> String {
+    global_npm_bin_path
+        .map(|path| path.as_path().display().to_string())
+        .unwrap_or_else(|| "npm".into())
+}
+
 /// The package manager.
 /// Use `PackageManager::builder()` to create a package manager.
 /// Then use `PackageManager::resolve_command()` to resolve the command result.
@@ -1012,6 +1024,22 @@ mod tests {
     fn create_pnpm_workspace_yaml(dir: &AbsolutePath, content: &str) {
         fs::write(dir.join("pnpm-workspace.yaml"), content)
             .expect("Failed to write pnpm-workspace.yaml");
+    }
+
+    #[test]
+    fn test_npm_bin_path_from_node_bin_prefix() {
+        let node_bin_prefix = if cfg!(windows) {
+            AbsolutePathBuf::new("C:\\node".into()).unwrap()
+        } else {
+            AbsolutePathBuf::new("/node/bin".into()).unwrap()
+        };
+        let npm_bin = npm_bin_path_from_node_bin_prefix(&node_bin_prefix);
+        let expected = if cfg!(windows) {
+            node_bin_prefix.join("npm.cmd")
+        } else {
+            node_bin_prefix.join("npm")
+        };
+        assert_eq!(npm_bin, expected);
     }
 
     #[test]

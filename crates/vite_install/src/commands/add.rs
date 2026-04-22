@@ -7,6 +7,7 @@ use vite_shared::output;
 
 use crate::package_manager::{
     PackageManager, PackageManagerType, ResolveCommandResult, format_path_env,
+    resolve_global_npm_bin_path,
 };
 
 /// The type of dependency to save.
@@ -46,7 +47,22 @@ impl PackageManager {
         options: &AddCommandOptions<'_>,
         cwd: impl AsRef<AbsolutePath>,
     ) -> Result<ExitStatus, Error> {
-        let resolve_command = self.resolve_add_command(options);
+        let resolve_command = self.resolve_add_command_with_global_npm_bin(options, None);
+        run_command(&resolve_command.bin_path, &resolve_command.args, &resolve_command.envs, cwd)
+            .await
+    }
+
+    /// Run the add command with an explicit npm binary for global installs.
+    /// Return the exit status of the command.
+    #[must_use]
+    pub async fn run_add_command_with_global_npm_bin(
+        &self,
+        options: &AddCommandOptions<'_>,
+        cwd: impl AsRef<AbsolutePath>,
+        global_npm_bin_path: Option<&AbsolutePath>,
+    ) -> Result<ExitStatus, Error> {
+        let resolve_command =
+            self.resolve_add_command_with_global_npm_bin(options, global_npm_bin_path);
         run_command(&resolve_command.bin_path, &resolve_command.args, &resolve_command.envs, cwd)
             .await
     }
@@ -54,13 +70,23 @@ impl PackageManager {
     /// Resolve the add command.
     #[must_use]
     pub fn resolve_add_command(&self, options: &AddCommandOptions) -> ResolveCommandResult {
+        self.resolve_add_command_with_global_npm_bin(options, None)
+    }
+
+    /// Resolve the add command with an explicit npm binary for global installs.
+    #[must_use]
+    pub fn resolve_add_command_with_global_npm_bin(
+        &self,
+        options: &AddCommandOptions,
+        global_npm_bin_path: Option<&AbsolutePath>,
+    ) -> ResolveCommandResult {
         let bin_name: String;
         let envs = HashMap::from([("PATH".to_string(), format_path_env(self.get_bin_prefix()))]);
         let mut args: Vec<String> = Vec::new();
 
         // global packages should use npm cli only
         if options.global {
-            bin_name = "npm".into();
+            bin_name = resolve_global_npm_bin_path(global_npm_bin_path);
             args.push("install".into());
             args.push("--global".into());
             if let Some(pass_through_args) = options.pass_through_args {
@@ -599,5 +625,25 @@ mod tests {
         });
         assert_eq!(result.args, vec!["add", "--allow-build=react,napi", "react"]);
         assert_eq!(result.bin_path, "pnpm");
+    }
+
+    #[test]
+    fn test_global_add_uses_explicit_npm_bin() {
+        let pm = create_mock_package_manager(PackageManagerType::Pnpm);
+        let npm_bin = if cfg!(windows) {
+            AbsolutePathBuf::new("C:\\node\\npm.cmd".into()).unwrap()
+        } else {
+            AbsolutePathBuf::new("/node/bin/npm".into()).unwrap()
+        };
+        let result = pm.resolve_add_command_with_global_npm_bin(
+            &AddCommandOptions {
+                packages: &["typescript".to_string()],
+                global: true,
+                ..Default::default()
+            },
+            Some(&npm_bin),
+        );
+        assert_eq!(result.args, vec!["install", "--global", "typescript"]);
+        assert_eq!(result.bin_path, npm_bin.as_path().display().to_string());
     }
 }
