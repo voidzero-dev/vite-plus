@@ -115,7 +115,12 @@ pub(crate) fn managed_npm_bin_for_global_command(
     global: bool,
     node_bin_prefix: &AbsolutePath,
 ) -> Option<AbsolutePathBuf> {
-    global.then(|| npm_bin_path_from_node_bin_prefix(node_bin_prefix))
+    if !global {
+        return None;
+    }
+
+    let npm_bin = npm_bin_path_from_node_bin_prefix(node_bin_prefix);
+    npm_bin.as_path().exists().then_some(npm_bin)
 }
 
 /// Build a PackageManager, converting PackageJsonNotFound into a friendly error message.
@@ -213,16 +218,22 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_managed_npm_bin_for_global_command_only_when_global() {
-        let node_bin_prefix = if cfg!(windows) {
-            AbsolutePathBuf::new("C:\\node".into()).unwrap()
-        } else {
-            AbsolutePathBuf::new("/node/bin".into()).unwrap()
-        };
-        let npm_bin = managed_npm_bin_for_global_command(true, &node_bin_prefix).unwrap();
+    fn test_managed_npm_bin_for_global_command_uses_existing_adjacent_npm() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let node_bin_prefix = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
         let expected = npm_bin_path_from_node_bin_prefix(&node_bin_prefix);
+        std::fs::write(&expected, "").unwrap();
+
+        let npm_bin = managed_npm_bin_for_global_command(true, &node_bin_prefix).unwrap();
         assert_eq!(npm_bin, expected);
         assert!(managed_npm_bin_for_global_command(false, &node_bin_prefix).is_none());
+    }
+
+    #[test]
+    fn test_managed_npm_bin_for_global_command_falls_back_when_adjacent_npm_is_missing() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let node_bin_prefix = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        assert!(managed_npm_bin_for_global_command(true, &node_bin_prefix).is_none());
     }
 
     #[test]
