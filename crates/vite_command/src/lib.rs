@@ -340,14 +340,12 @@ mod tests {
 
             #[cfg(unix)]
             let (bin_path, args) = {
-                use std::os::unix::fs::PermissionsExt;
-
-                let script_path = temp_dir_path.join("test-bin");
-                std::fs::write(&script_path, "#!/bin/sh\nexit 0\n").unwrap();
-                let mut permissions = std::fs::metadata(&script_path).unwrap().permissions();
-                permissions.set_mode(0o755);
-                std::fs::set_permissions(&script_path, permissions).unwrap();
-                (script_path.as_path().display().to_string(), Vec::<&str>::new())
+                let true_path = if std::path::Path::new("/bin/true").exists() {
+                    "/bin/true"
+                } else {
+                    "/usr/bin/true"
+                };
+                (true_path.to_string(), Vec::<&str>::new())
             };
 
             #[cfg(not(unix))]
