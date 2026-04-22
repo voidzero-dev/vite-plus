@@ -1,0 +1,21 @@
+> vp lint --help | head -n 20 # print help message and no panicked
+Usage: [-c=<./.oxlintrc.json>] [PATH]...
+
+Basic Configuration
+    -c, --config=<./.oxlintrc.json>  Oxlint configuration file
+                              * `.json` and `.jsonc` config files are supported in all runtimes
+                              * JavaScript/TypeScript config files are experimental and require
+                              running via Node.js
+                              * you can use comments in configuration files.
+                              * tries to be compatible with ESLint v8's format
+        --tsconfig=<./tsconfig.json>  Override the TypeScript config used for import resolution.
+                              Oxlint automatically discovers the relevant `tsconfig.json` for each
+                              file. Use this only when your project uses a non-standard tsconfig
+                              name or location.
+        --init                Initialize oxlint configuration with default values
+
+Allowing / Denying Multiple Lints
+   Accumulate rules and categories from left to right on the command-line.
+   For example `-D correctness -A no-debugger` or `-A all -D no-debugger`.
+   The categories are:
+   * `correctness` - Code that is outright wrong or useless (default)

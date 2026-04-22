@@ -155,6 +155,7 @@ export const EDITORS = [
 ] as const;
 
 export type EditorId = (typeof EDITORS)[number]['id'];
+type EditorSelection = EditorId | readonly EditorId[] | undefined;
 
 export async function selectEditor({
   interactive,
@@ -210,16 +211,68 @@ export async function selectEditor({
   return undefined;
 }
 
+export async function selectEditors({
+  interactive,
+  editor,
+  onCancel,
+}: {
+  interactive: boolean;
+  editor?: string | false;
+  onCancel: () => void;
+}): Promise<EditorId[] | undefined> {
+  if (editor === false) {
+    return undefined;
+  }
+
+  if (interactive && !editor) {
+    const selectedEditors = await prompts.multiselect({
+      message:
+        'Which editors are you using?\n  ' +
+        styleText(
+          'gray',
+          'Writes editor config files to enable recommended extensions and Oxlint/Oxfmt integrations.',
+        ),
+      options: EDITORS.map((option) => ({
+        label: option.label,
+        value: option.id,
+        hint: option.targetDir,
+      })),
+      initialValues: ['vscode'],
+      required: false,
+    });
+
+    if (prompts.isCancel(selectedEditors)) {
+      onCancel();
+      return undefined;
+    }
+
+    return selectedEditors.length === 0 ? undefined : resolveEditorIds(selectedEditors);
+  }
+
+  if (editor) {
+    const editorId = resolveEditorId(editor);
+    return editorId ? [editorId] : undefined;
+  }
+
+  return undefined;
+}
+
 export function detectExistingEditor(projectRoot: string): EditorId | undefined {
+  return detectExistingEditors(projectRoot)?.[0];
+}
+
+export function detectExistingEditors(projectRoot: string): EditorId[] | undefined {
+  const editors: EditorId[] = [];
   for (const option of EDITORS) {
     for (const fileName of Object.keys(option.files)) {
       const filePath = path.join(projectRoot, option.targetDir, fileName);
       if (fs.existsSync(filePath)) {
-        return option.id;
+        editors.push(option.id);
+        break;
       }
     }
   }
-  return undefined;
+  return editors.length === 0 ? undefined : editors;
 }
 
 export interface EditorConflictInfo {
@@ -270,16 +323,44 @@ export async function writeEditorConfigs({
   extraVsCodeSettings,
 }: {
   projectRoot: string;
-  editorId: EditorId | undefined;
+  editorId: EditorSelection;
   interactive: boolean;
   conflictDecisions?: Map<string, 'merge' | 'skip'>;
   silent?: boolean;
   extraVsCodeSettings?: Record<string, string>;
 }) {
-  if (!editorId) {
+  const editorIds = normalizeEditorSelection(editorId);
+  if (editorIds.length === 0) {
     return;
   }
 
+  for (const currentEditorId of editorIds) {
+    await writeEditorConfig({
+      projectRoot,
+      editorId: currentEditorId,
+      interactive,
+      conflictDecisions,
+      silent,
+      extraVsCodeSettings,
+    });
+  }
+}
+
+async function writeEditorConfig({
+  projectRoot,
+  editorId,
+  interactive,
+  conflictDecisions,
+  silent,
+  extraVsCodeSettings,
+}: {
+  projectRoot: string;
+  editorId: EditorId;
+  interactive: boolean;
+  conflictDecisions?: Map<string, 'merge' | 'skip'>;
+  silent: boolean;
+  extraVsCodeSettings?: Record<string, string>;
+}) {
   const editorConfig = EDITORS.find((e) => e.id === editorId);
   if (!editorConfig) {
     return;
@@ -300,7 +381,7 @@ export async function writeEditorConfigs({
 
       // Determine conflict action from pre-resolved decisions, interactive prompt, or default
       let conflictAction: 'merge' | 'skip';
-      const preResolved = conflictDecisions?.get(fileName);
+      const preResolved = conflictDecisions?.get(displayPath) ?? conflictDecisions?.get(fileName);
       if (preResolved) {
         conflictAction = preResolved;
       } else if (interactive) {
@@ -346,6 +427,13 @@ export async function writeEditorConfigs({
       prompts.log.success(`Wrote editor config to ${editorConfig.targetDir}/${fileName}`);
     }
   }
+}
+
+function normalizeEditorSelection(editorId: EditorSelection): EditorId[] {
+  if (!editorId) {
+    return [];
+  }
+  return [...new Set(Array.isArray(editorId) ? editorId : [editorId])];
 }
 
 function mergeAndWriteEditorConfig(
@@ -415,4 +503,13 @@ function resolveEditorId(editor: string): EditorId | undefined {
     (option) => option.id === normalized || option.label.toLowerCase() === normalized,
   );
   return match?.id;
+}
+
+function resolveEditorIds(editors: readonly string[]): EditorId[] | undefined {
+  const editorIds = editors.flatMap((editor) => {
+    const editorId = resolveEditorId(editor);
+    return editorId ? [editorId] : [];
+  });
+  const uniqueEditorIds = [...new Set(editorIds)];
+  return uniqueEditorIds.length === 0 ? undefined : uniqueEditorIds;
 }

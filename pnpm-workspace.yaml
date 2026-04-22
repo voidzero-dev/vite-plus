@@ -17,8 +17,8 @@ catalog:
   '@nkzw/safe-word-list': ^3.1.0
   '@oxc-node/cli': ^0.1.0
   '@oxc-node/core': ^0.1.0
-  '@oxc-project/runtime': =0.126.0
-  '@oxc-project/types': =0.126.0
+  '@oxc-project/runtime': =0.127.0
+  '@oxc-project/types': =0.127.0
   '@pnpm/find-workspace-packages': ^6.0.9
   '@rollup/plugin-commonjs': ^29.0.0
   '@rollup/plugin-json': ^6.1.0
@@ -79,11 +79,11 @@ catalog:
   mocha: ^11.7.5
   mri: ^1.2.0
   next: ^15.4.3
-  oxc-minify: =0.126.0
-  oxc-parser: =0.126.0
-  oxc-transform: =0.126.0
-  oxfmt: =0.45.0
-  oxlint: =1.60.0
+  oxc-minify: =0.127.0
+  oxc-parser: =0.127.0
+  oxc-transform: =0.127.0
+  oxfmt: =0.46.0
+  oxlint: =1.61.0
   oxlint-tsgolint: =0.21.1
   pathe: ^2.0.3
   picocolors: ^1.1.1
@@ -167,7 +167,7 @@ overrides:
   rolldown: workspace:rolldown@*
   vite: workspace:@voidzero-dev/vite-plus-core@*
   vitest: workspace:@voidzero-dev/vite-plus-test@*
-  vitest-dev: npm:vitest@^4.1.4
+  vitest-dev: npm:vitest@^4.1.5
 packageExtensions:
   sass-embedded:
     peerDependencies:
@@ -181,7 +181,7 @@ packageExtensions:
 patchedDependencies:
   sirv@3.0.2: vite/patches/sirv@3.0.2.patch
   chokidar@3.6.0: vite/patches/chokidar@3.6.0.patch
-  dotenv-expand@12.0.3: vite/patches/dotenv-expand@12.0.3.patch
+  dotenv-expand@13.0.0: vite/patches/dotenv-expand@13.0.0.patch
 peerDependencyRules:
   allowAny:
     - vite
