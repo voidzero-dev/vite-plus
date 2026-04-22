@@ -160,12 +160,12 @@ jobs:
           path: ./packages/cli/dist
           if-no-files-found: error
 
-      - name: Upload cli skills (docs for agent integration)
+      - name: Upload cli docs
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
         with:
-          name: cli-skills
-          path: ./packages/cli/skills
+          name: cli-docs
+          path: ./packages/cli/docs
           if-no-files-found: error
 
       - name: Upload LICENSE files
@@ -210,11 +210,11 @@ jobs:
           pattern: cli
           merge-multiple: true
 
-      - name: Download cli skills
+      - name: Download cli docs
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          path: packages/cli/skills
-          pattern: cli-skills
+          path: packages/cli/docs
+          pattern: cli-docs
           merge-multiple: true
 
       - name: Download cli binding
