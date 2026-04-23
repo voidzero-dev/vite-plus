@@ -441,6 +441,7 @@ async function main() {
   let remoteTargetDir: string | undefined;
   let shouldSetupHooks = false;
   let bundledLocalPath: string | undefined;
+  let skipShorthandExpansion = false;
   const installArgs = process.env.CI ? ['--no-frozen-lockfile'] : undefined;
 
   // Honor `create.defaultTemplate` from vite.config.ts when no CLI arg was passed.
@@ -460,6 +461,10 @@ async function main() {
     });
     if (resolved.kind === 'replaced') {
       selectedTemplateName = resolved.templateName;
+      // Manifest entries are fully-qualified by their author.
+      // Prevent `expandCreateShorthand` from rewriting e.g.
+      // `@your-org/template-web` into `@your-org/create-template-web`.
+      skipShorthandExpansion = true;
     } else if (resolved.kind === 'bundled') {
       bundledLocalPath = resolved.bundledLocalPath;
     } else if (resolved.kind === 'escape-hatch') {
@@ -790,6 +795,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     workspaceInfo,
     options.interactive,
     bundledLocalPath,
+    skipShorthandExpansion,
   );
 
   if (selectedParentDir) {
