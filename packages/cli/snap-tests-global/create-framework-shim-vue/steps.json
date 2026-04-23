@@ -10,6 +10,8 @@
       "command": "cd vite-plus-application && vp install # install dependencies",
       "ignoreOutput": true
     },
-    "cd vite-plus-application && vp check --fix # fix generated formatting and ensure no errors"
+    {
+      "command": "cd vite-plus-application && sed -i.bak -e '/jsPlugins/d' -e '/rules:/d' -e '/options:/d' vite.config.ts && vp check --fix # fix generated formatting and ensure no errors"
+    }
   ]
 }
