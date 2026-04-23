@@ -16,15 +16,8 @@ Documentation: https://viteplus.dev/guide/install
 
 
 > vp pm config list --location project > /dev/null # should list all project configuration
-[1]> vp pm config set vite-plus-pm-config-test-key test-value --location project # should set config value in project scope
- ERR_PNPM_CONFIG_SET_UNSUPPORTED_WORKSPACE_KEY  The key "vite-plus-pm-config-test-key" isn't supported by the workspace manifest
+> vp pm config set vitePlusPmConfigTestKey test-value --location project # should set config value in project scope
+> vp pm config get vitePlusPmConfigTestKey --location project # should get config value from project scope
+test-value
 
-Try "vitePlusPmConfigTestKey"
-
-> vp pm config get vite-plus-pm-config-test-key --location project # should get config value from project scope
-undefined
-
-[1]> vp pm config delete vite-plus-pm-config-test-key --location project # should delete config key from project scope
- ERR_PNPM_CONFIG_SET_UNSUPPORTED_WORKSPACE_KEY  The key "vite-plus-pm-config-test-key" isn't supported by the workspace manifest
-
-Try "vitePlusPmConfigTestKey"
+> vp pm config delete vitePlusPmConfigTestKey --location project # should delete config key from project scope
