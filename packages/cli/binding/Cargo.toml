@@ -1,7 +1,11 @@
 [package]
 name = "vite-plus-cli"
 version = "0.0.0"
+authors.workspace = true
 edition.workspace = true
+license.workspace = true
+publish = false
+rust-version.workspace = true
 
 [features]
 rolldown = ["dep:rolldown_binding"]
