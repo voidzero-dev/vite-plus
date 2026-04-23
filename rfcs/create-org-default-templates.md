@@ -466,9 +466,11 @@ Rule:
   is filtered out before the picker renders.
 - All other entries are shown.
 
-If filtering empties the list entirely, `vp create @org` errors with a clear
-message ("no templates from `@org/create` are applicable inside a
-monorepo") rather than showing an empty picker.
+If filtering empties the list entirely, `vp create @org` prints an
+`info:` note ("No templates from `@org/create` are applicable inside a
+monorepo — showing Vite+ built-in templates instead.") and routes to the
+built-in picker, so the user never sees an empty picker and isn't left
+at a dead end.
 
 ### Direct-selection behavior
 
@@ -642,21 +644,21 @@ either way; they continue to run your `bin` script.
 
 ## Error Handling
 
-| Situation                                                                       | Behavior                                                                                                      |
-| ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `@org/create` does not exist on npm                                             | Same "template not found" error as today.                                                                     |
-| `@org/create` exists, no `vp.templates`                                         | Fall through to today's behavior: run `@org/create`. No error.                                                |
-| `vp.templates` is not an array                                                  | Schema error: `@org/create: vp.templates must be an array`.                                                   |
-| Manifest entry missing `name` / `description` / `template`                      | Schema error with the offending index and field.                                                              |
-| Manifest entry has duplicate `name`                                             | Schema error listing the duplicate.                                                                           |
-| Chosen template fails to resolve (404, bad URL)                                 | Downstream error with context: `selected 'web' from @nkzw/create: <downstream error>`.                        |
-| Network failure fetching manifest                                               | Hard error. Never silently skip the picker when the user explicitly typed `@org`.                             |
-| `--no-interactive` without `@org/<name>`                                        | Error listing valid names (see above).                                                                        |
-| All manifest entries filtered (e.g. all `monorepo: true` inside a monorepo)     | Error: `no templates from @org/create are applicable inside a monorepo`.                                      |
-| `vp create @org/<name>` where `name` has `monorepo: true` and cwd is a monorepo | Same error as the builtin: `Cannot create a monorepo inside an existing monorepo` (mirrors `bin.ts:468-472`). |
-| Bundled path (`./foo`) resolves outside `@org/create` root                      | Schema error at manifest-validation time: `vp.templates[i].template escapes the package root`.                |
-| Bundled path points to a directory that does not exist in the tarball           | Scaffolding error: `selected 'demo' from @nkzw/create: ./templates/demo not found in @nkzw/create@1.0.0`.     |
-| Tarball download or extraction fails                                            | Hard error with the upstream cause. Cached partial extractions are cleaned up before retry.                   |
+| Situation                                                                       | Behavior                                                                                                                                                                                                   |
+| ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@org/create` does not exist on npm                                             | Same "template not found" error as today.                                                                                                                                                                  |
+| `@org/create` exists, no `vp.templates`                                         | Fall through to today's behavior: run `@org/create`. No error.                                                                                                                                             |
+| `vp.templates` is not an array                                                  | Schema error: `@org/create: vp.templates must be an array`.                                                                                                                                                |
+| Manifest entry missing `name` / `description` / `template`                      | Schema error with the offending index and field.                                                                                                                                                           |
+| Manifest entry has duplicate `name`                                             | Schema error listing the duplicate.                                                                                                                                                                        |
+| Chosen template fails to resolve (404, bad URL)                                 | Downstream error with context: `selected 'web' from @nkzw/create: <downstream error>`.                                                                                                                     |
+| Network failure fetching manifest                                               | Hard error. Never silently skip the picker when the user explicitly typed `@org`.                                                                                                                          |
+| `--no-interactive` without `@org/<name>`                                        | Error listing valid names (see above).                                                                                                                                                                     |
+| All manifest entries filtered (e.g. all `monorepo: true` inside a monorepo)     | Print an `info:` note (`"No templates from @org/create are applicable inside a monorepo — showing Vite+ built-in templates instead."`) and route to the built-in picker. Keeps the user out of a dead end. |
+| `vp create @org/<name>` where `name` has `monorepo: true` and cwd is a monorepo | Same error as the builtin: `Cannot create a monorepo inside an existing monorepo` (mirrors `bin.ts:468-472`).                                                                                              |
+| Bundled path (`./foo`) resolves outside `@org/create` root                      | Schema error at manifest-validation time: `vp.templates[i].template escapes the package root`.                                                                                                             |
+| Bundled path points to a directory that does not exist in the tarball           | Scaffolding error: `selected 'demo' from @nkzw/create: ./templates/demo not found in @nkzw/create@1.0.0`.                                                                                                  |
+| Tarball download or extraction fails                                            | Hard error with the upstream cause. Cached partial extractions are cleaned up before retry.                                                                                                                |
 
 ## Alternatives Considered
 

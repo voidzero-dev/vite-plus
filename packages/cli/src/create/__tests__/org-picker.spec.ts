@@ -8,14 +8,16 @@ import {
   pickOrgTemplate,
 } from '../org-picker.js';
 
-const { mockSelect, mockIsCancel } = vi.hoisted(() => ({
+const { mockSelect, mockIsCancel, mockLogInfo } = vi.hoisted(() => ({
   mockSelect: vi.fn(),
   mockIsCancel: vi.fn((value: unknown) => value === '__cancel__'),
+  mockLogInfo: vi.fn(),
 }));
 
 vi.mock('@voidzero-dev/vite-plus-prompts', () => ({
   select: mockSelect,
   isCancel: mockIsCancel,
+  log: { info: mockLogInfo },
 }));
 
 function manifest(overrides?: Partial<OrgManifest>): OrgManifest {
@@ -91,7 +93,8 @@ describe('pickOrgTemplate', () => {
     expect(await pickOrgTemplate(manifest(), { isMonorepo: false })).toBe(ORG_PICKER_CANCEL);
   });
 
-  it('returns the escape-hatch sentinel when every entry is filtered out', async () => {
+  it('returns the escape-hatch sentinel with an info note when every entry is filtered out', async () => {
+    mockLogInfo.mockClear();
     const allMonorepo = manifest({
       templates: [
         { name: 'a', description: 'a', template: './a', monorepo: true },
@@ -101,6 +104,8 @@ describe('pickOrgTemplate', () => {
     const result = await pickOrgTemplate(allMonorepo, { isMonorepo: true });
     expect(result).toBe(ORG_PICKER_BUILTIN_ESCAPE);
     expect(mockSelect).not.toHaveBeenCalled();
+    expect(mockLogInfo).toHaveBeenCalledOnce();
+    expect(mockLogInfo.mock.calls[0][0]).toMatch(/applicable inside a monorepo/);
   });
 });
 

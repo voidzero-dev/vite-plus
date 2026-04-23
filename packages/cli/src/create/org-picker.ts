@@ -35,9 +35,11 @@ export async function pickOrgTemplate(
 ): Promise<OrgPickerResult> {
   const filtered = filterManifestForContext(manifest.templates, opts.isMonorepo);
   if (filtered.length === 0) {
-    // Rather than show a picker containing only the escape hatch, send
-    // callers to the built-in flow directly — the most useful thing for a
-    // user who ended up with nothing applicable to their workspace.
+    // Nothing from the manifest applies here; surface the reason and fall
+    // through to the built-in picker so the user isn't left at a dead end.
+    prompts.log.info(
+      `No templates from ${manifest.packageName} are applicable inside a monorepo — showing Vite+ built-in templates instead.`,
+    );
     return ORG_PICKER_BUILTIN_ESCAPE;
   }
 
