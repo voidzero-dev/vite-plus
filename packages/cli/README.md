@@ -152,9 +152,9 @@ You can run `vp create` inside of a project to add new apps or libraries to your
 
 Organizations can expose a curated set of templates under their npm scope by
 publishing `@org/create` with a `vp.templates` manifest in its `package.json`.
-Engineers can then type `vp create @org` to pick from that list
-interactively, or set `create: { defaultTemplate: '@org' }` in
-`vite.config.ts` to make it the default for bare `vp create`. See the
+Once published, `vp create @org` opens an interactive picker over those
+templates, and setting `create: { defaultTemplate: '@org' }` in
+`vite.config.ts` makes it the default for bare `vp create`. See the
 [Organization Templates guide](https://viteplus.dev/guide/create#organization-templates)
 for the authoring workflow and
 [`create.defaultTemplate`](https://viteplus.dev/config/create) for the

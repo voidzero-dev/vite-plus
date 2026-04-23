@@ -89,7 +89,7 @@ vp create https://github.com/user/template-repo
 
 ## Organization Templates
 
-An organization can publish a curated set of templates under a single npm scope by shipping an `@org/create` package whose `package.json` carries a `vp.templates` manifest. Engineers then type the scope and get an interactive picker over the listed templates.
+An organization can publish a curated set of templates under a single npm scope by shipping an `@org/create` package whose `package.json` carries a `vp.templates` manifest. Once published, `vp create @org` opens an interactive picker over those templates.
 
 ### Pick from an org
 
