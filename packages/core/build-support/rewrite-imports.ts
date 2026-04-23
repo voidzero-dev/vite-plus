@@ -7,6 +7,9 @@ export const RewriteImportsPlugin: Plugin = {
   resolveId: {
     order: 'pre',
     handler(id: string) {
+      if (id === 'vite') {
+        return { id: pkgJson.name, external: true };
+      }
       if (id.startsWith('vite/')) {
         return { id: id.replace(/^vite\//, `${pkgJson.name}/`), external: true };
       }
