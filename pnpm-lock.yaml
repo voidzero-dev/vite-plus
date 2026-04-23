@@ -15,12 +15,6 @@ catalogs:
     '@babel/preset-typescript':
       specifier: ^7.24.7
       version: 7.28.5
-    '@emnapi/core':
-      specifier: ^1.9.2
-      version: 1.10.0
-    '@emnapi/runtime':
-      specifier: ^1.9.2
-      version: 1.10.0
     '@napi-rs/cli':
       specifier: ^3.6.1
       version: 3.6.1
@@ -37,11 +31,11 @@ catalogs:
       specifier: ^0.1.0
       version: 0.1.0
     '@oxc-project/runtime':
-      specifier: '=0.126.0'
-      version: 0.126.0
+      specifier: '=0.127.0'
+      version: 0.127.0
     '@oxc-project/types':
-      specifier: '=0.126.0'
-      version: 0.126.0
+      specifier: '=0.127.0'
+      version: 0.127.0
     '@oxlint/plugins':
       specifier: '=1.61.0'
       version: 1.61.0
@@ -339,7 +333,7 @@ importers:
     dependencies:
       '@oxc-project/types':
         specifier: 'catalog:'
-        version: 0.126.0
+        version: 0.127.0
       '@oxlint/plugins':
         specifier: 'catalog:'
         version: 1.61.0
@@ -439,10 +433,10 @@ importers:
         version: 0.18.2
       '@oxc-project/runtime':
         specifier: 'catalog:'
-        version: 0.126.0
+        version: 0.127.0
       '@oxc-project/types':
         specifier: 'catalog:'
-        version: 0.126.0
+        version: 0.127.0
       '@tsdown/css':
         specifier: 0.21.10
         version: 0.21.10(jiti@2.6.1)(postcss-import@16.1.1(postcss@8.5.10))(postcss-modules@6.0.1(postcss@8.5.10))(postcss@8.5.10)(sass-embedded@1.99.0(source-map-js@1.2.1))(sass@1.99.0)(tsdown@0.21.10)(tsx@4.21.0)(yaml@2.8.2)
@@ -792,7 +786,7 @@ importers:
         version: 0.1.0
       '@oxc-project/runtime':
         specifier: 'catalog:'
-        version: 0.126.0
+        version: 0.127.0
       '@types/node':
         specifier: 'catalog:'
         version: 24.10.3
@@ -882,10 +876,10 @@ importers:
   rolldown/packages/browser:
     dependencies:
       '@emnapi/core':
-        specifier: 'catalog:'
+        specifier: 1.10.0
         version: 1.10.0
       '@emnapi/runtime':
-        specifier: 'catalog:'
+        specifier: 1.10.0
         version: 1.10.0
       '@napi-rs/wasm-runtime':
         specifier: 'catalog:'
@@ -916,7 +910,7 @@ importers:
     dependencies:
       '@oxc-project/types':
         specifier: 'catalog:'
-        version: 0.126.0
+        version: 0.127.0
       '@rolldown/pluginutils':
         specifier: workspace:@rolldown/pluginutils@*
         version: link:../pluginutils
@@ -3693,8 +3687,8 @@ packages:
     resolution: {integrity: sha512-7fvACzS46TkHuzA+Tag8ac40qfwURXRTdc4AtyItF59AoNPOO/QjPMqPyvJH8CaUdGu0ntWDX1CCUNyLMxxX5g==}
     engines: {node: ^20.19.0 || >=22.12.0}
 
-  '@oxc-project/runtime@0.126.0':
-    resolution: {integrity: sha512-oksjxfqDNmIYMGlIgLzYgnz5YjZax27RtQezsPpKEGo9AC5LOaIGHsivCCeaAWdCtPnRyjZXM/7svreCC8kZVQ==}
+  '@oxc-project/runtime@0.127.0':
+    resolution: {integrity: sha512-UQYLxAhDDPHm++szfa4z0RTdcPq5vaywrAoEA2n1YaAKeanXQdjHsoT6x1gP3U97RN8LZ7yHsSOrKPCcA6mCqw==}
     engines: {node: ^20.19.0 || >=22.12.0}
 
   '@oxc-project/types@0.120.0':
@@ -11680,7 +11674,7 @@ snapshots:
 
   '@oxc-project/runtime@0.120.0': {}
 
-  '@oxc-project/runtime@0.126.0': {}
+  '@oxc-project/runtime@0.127.0': {}
 
   '@oxc-project/types@0.120.0': {}
 
