@@ -155,7 +155,10 @@ publishing `@org/create` with a `vp.templates` manifest in its `package.json`.
 Engineers can then type `vp create @org` to pick from that list
 interactively, or set `create: { defaultTemplate: '@org' }` in
 `vite.config.ts` to make it the default for bare `vp create`. See the
-[RFC](../../rfcs/create-org-default-templates.md) for the full spec.
+[Organization Templates guide](https://viteplus.dev/guide/create#organization-templates)
+for the authoring workflow and
+[`create.defaultTemplate`](https://viteplus.dev/config/create) for the
+config reference.
 
 ### Migrating an existing project
 
