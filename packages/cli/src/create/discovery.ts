@@ -47,6 +47,7 @@ export function discoverTemplate(
   workspaceInfo: WorkspaceInfo,
   interactive?: boolean,
   bundledLocalPath?: string,
+  skipShorthand?: boolean,
 ): TemplateInfo {
   const envs = prependToPathToEnvs(workspaceInfo.downloadPackageManager.binPrefix, {
     ...process.env,
@@ -130,7 +131,10 @@ export function discoverTemplate(
     }
   }
 
-  const expandedName = expandCreateShorthand(templateName);
+  // Manifest-resolved entries (`{ kind: 'replaced' }` from org-resolve.ts)
+  // are already fully qualified by the manifest author — `@scope/template-web`
+  // means exactly that package, NOT `@scope/create-template-web`.
+  const expandedName = skipShorthand ? templateName : expandCreateShorthand(templateName);
   return {
     command: expandedName,
     args: [...templateArgs],
