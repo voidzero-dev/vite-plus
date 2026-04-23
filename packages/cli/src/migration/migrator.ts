@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { styleText } from 'node:util';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import spawn from 'cross-spawn';
@@ -27,7 +28,7 @@ import {
 import { editJsonFile, isJsonFile, readJsonFile } from '../utils/json.ts';
 import { detectPackageMetadata } from '../utils/package.ts';
 import { displayRelative, rulesDir } from '../utils/path.ts';
-import { getSpinner } from '../utils/prompts.ts';
+import { cancelAndExit, getSpinner } from '../utils/prompts.ts';
 import {
   findTsconfigFiles,
   hasBaseUrlInTsconfig,
@@ -2366,7 +2367,7 @@ export function rewritePrepareScript(rootDir: string): string | undefined {
   return oldDir;
 }
 
-function setPackageManager(
+export function setPackageManager(
   projectDir: string,
   downloadPackageManager: DownloadPackageManagerResult,
 ) {
@@ -2521,6 +2522,129 @@ export function migrateNodeVersionManagerFile(
     }
   } else if (detection.voltaPresent) {
     prompts.log.info('You can now remove the "volta" field from package.json manually.');
+  }
+  return true;
+}
+
+export function warnPackageLevelEslint() {
+  prompts.log.warn(
+    'ESLint detected in workspace packages but no root config found. Package-level ESLint must be migrated manually.',
+  );
+}
+
+export function warnLegacyEslintConfig(legacyConfigFile: string) {
+  prompts.log.warn(
+    `Legacy ESLint configuration detected (${legacyConfigFile}). ` +
+      'Automatic migration to Oxlint requires ESLint v9+ with flat config format (eslint.config.*). ' +
+      'Please upgrade to ESLint v9 first: https://eslint.org/docs/latest/use/migrate-to-9.0.0',
+  );
+}
+
+export async function confirmEslintMigration(interactive: boolean): Promise<boolean> {
+  if (interactive) {
+    const confirmed = await prompts.confirm({
+      message:
+        'Migrate ESLint rules to Oxlint using @oxlint/migrate?\n  ' +
+        styleText(
+          'gray',
+          "Oxlint is Vite+'s built-in linter — significantly faster than ESLint with compatible rule support. @oxlint/migrate converts your existing rules automatically.",
+        ),
+      initialValue: true,
+    });
+    if (prompts.isCancel(confirmed)) {
+      cancelAndExit();
+    }
+    return confirmed;
+  }
+  return true;
+}
+
+export async function promptEslintMigration(
+  projectPath: string,
+  interactive: boolean,
+  packages?: WorkspacePackage[],
+): Promise<boolean> {
+  const eslintProject = detectEslintProject(projectPath, packages);
+  if (eslintProject.hasDependency && !eslintProject.configFile && eslintProject.legacyConfigFile) {
+    warnLegacyEslintConfig(eslintProject.legacyConfigFile);
+    return false;
+  }
+  if (!eslintProject.hasDependency) {
+    return false;
+  }
+  if (!eslintProject.configFile) {
+    // Packages have eslint but no root config → warn and skip
+    warnPackageLevelEslint();
+    return false;
+  }
+  const confirmed = await confirmEslintMigration(interactive);
+  if (!confirmed) {
+    return false;
+  }
+  const ok = await migrateEslintToOxlint(
+    projectPath,
+    interactive,
+    eslintProject.configFile,
+    packages,
+  );
+  if (!ok) {
+    cancelAndExit('ESLint migration failed.', 1);
+  }
+  return true;
+}
+
+export function warnPackageLevelPrettier() {
+  prompts.log.warn(
+    'Prettier detected in workspace packages but no root config found. Package-level Prettier must be migrated manually.',
+  );
+}
+
+export async function confirmPrettierMigration(interactive: boolean): Promise<boolean> {
+  if (interactive) {
+    const confirmed = await prompts.confirm({
+      message:
+        'Migrate Prettier to Oxfmt?\n  ' +
+        styleText(
+          'gray',
+          "Oxfmt is Vite+'s built-in formatter that replaces Prettier with faster performance. Your configuration will be converted automatically.",
+        ),
+      initialValue: true,
+    });
+    if (prompts.isCancel(confirmed)) {
+      cancelAndExit();
+    }
+    return confirmed;
+  }
+  prompts.log.info('Prettier configuration detected. Auto-migrating to Oxfmt...');
+  return true;
+}
+
+export async function promptPrettierMigration(
+  projectPath: string,
+  interactive: boolean,
+  packages?: WorkspacePackage[],
+): Promise<boolean> {
+  const prettierProject = detectPrettierProject(projectPath, packages);
+  if (!prettierProject.hasDependency) {
+    return false;
+  }
+  if (!prettierProject.configFile) {
+    // Packages have prettier but no root config → warn and skip
+    warnPackageLevelPrettier();
+    return false;
+  }
+  const confirmed = await confirmPrettierMigration(interactive);
+  if (!confirmed) {
+    return false;
+  }
+  const ok = await migratePrettierToOxfmt(
+    projectPath,
+    interactive,
+    prettierProject.configFile,
+    packages,
+  );
+  if (!ok) {
+    cancelAndExit('Prettier migration failed.', 1);
   }
   return true;
 }

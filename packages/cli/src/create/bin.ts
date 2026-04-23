@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 import { styleText } from 'node:util';
 
@@ -7,12 +8,17 @@ import mri from 'mri';
 import { vitePlusHeader } from '../../binding/index.js';
 import {
   addFrameworkShim,
+  detectEslintProject,
   detectFramework,
+  detectPrettierProject,
   hasFrameworkShim,
   installGitHooks,
+  promptEslintMigration,
+  promptPrettierMigration,
   rewriteMonorepo,
   rewriteMonorepoProject,
   rewriteStandaloneProject,
+  setPackageManager,
 } from '../migration/migrator.ts';
 import { DependencyType, PackageManager, type WorkspaceInfo } from '../types/index.ts';
 import {
@@ -893,17 +899,49 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   });
   resumeCreateProgress();
 
+  // The migrate-before-rewrite reorder is only needed when the template
+  // actually ships ESLint or Prettier (e.g. `create-vite --template
+  // react-ts`). Builtin templates (vite:library, vite:application,
+  // vite:monorepo) don't — their package.json already references vite-plus
+  // and relies on `rewrite*Project` to add tarball overrides BEFORE the
+  // first install, so install-first would break CI's local-tarball resolve.
+  const shouldMigrateLintFmtTools =
+    detectEslintProject(fullPath).hasDependency || detectPrettierProject(fullPath).hasDependency;
+
   let installSummary: CommandRunSummary | undefined;
+
+  // For templates that ship ESLint/Prettier, install template deps first so
+  // `@oxlint/migrate` can resolve eslint.config.js's plugin imports, then
+  // migrate before the vite-plus rewrite so the generated .oxlintrc/.oxfmtrc
+  // get merged into vite.config.ts — matching `vp migrate`. Pin the
+  // packageManager field (vite_install hardcodes pnpm in CI/non-TTY when no
+  // signal is present) and force yarn's classic node_modules layout
+  // (Plug'n'Play zip entries break @oxlint/migrate's fileURLToPath resolution).
+  const installAndMigrate = async (installCwd: string) => {
+    setPackageManager(fullPath, workspaceInfo.downloadPackageManager);
+    if (workspaceInfo.packageManager === PackageManager.yarn) {
+      const yarnrcPath = path.join(fullPath, '.yarnrc.yml');
+      if (!fs.existsSync(yarnrcPath)) {
+        fs.writeFileSync(yarnrcPath, 'nodeLinker: node-modules\n');
+      }
+    }
+    updateCreateProgress('Installing dependencies');
+    installSummary = await runViteInstall(installCwd, options.interactive, installArgs, {
+      silent: compactOutput,
+    });
+    if (installSummary.status !== 'installed') {
+      return;
+    }
+    updateCreateProgress('Migrating lint and format tools');
+    pauseCreateProgress();
+    await promptEslintMigration(fullPath, /* interactive */ false);
+    await promptPrettierMigration(fullPath, /* interactive */ false);
+    resumeCreateProgress();
+  };
+
   if (isMonorepo) {
     if (!compactOutput) {
       prompts.log.step('Monorepo integration...');
-    }
-    updateCreateProgress('Integrating into monorepo');
-    rewriteMonorepoProject(fullPath, workspaceInfo.packageManager, undefined, compactOutput);
-    for (const framework of detectFramework(fullPath)) {
-      if (!hasFrameworkShim(fullPath, framework)) {
-        addFrameworkShim(fullPath, framework);
-      }
     }
 
     if (workspaceInfo.packages.length > 0) {
@@ -965,6 +1003,16 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     }
 
     updateWorkspaceConfig(projectDir, workspaceInfo);
+    if (shouldMigrateLintFmtTools) {
+      await installAndMigrate(workspaceInfo.rootDir);
+    }
+    updateCreateProgress('Integrating into monorepo');
+    rewriteMonorepoProject(fullPath, workspaceInfo.packageManager, undefined, compactOutput);
+    for (const framework of detectFramework(fullPath)) {
+      if (!hasFrameworkShim(fullPath, framework)) {
+        addFrameworkShim(fullPath, framework);
+      }
+    }
     updateCreateProgress('Installing dependencies');
     installSummary = await runViteInstall(workspaceInfo.rootDir, options.interactive, installArgs, {
       silent: compactOutput,
@@ -974,6 +1022,9 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       silent: compactOutput,
     });
   } else {
+    if (shouldMigrateLintFmtTools) {
+      await installAndMigrate(fullPath);
+    }
     updateCreateProgress('Applying Vite+ project setup');
     rewriteStandaloneProject(fullPath, workspaceInfo, undefined, compactOutput);
     for (const framework of detectFramework(fullPath)) {
