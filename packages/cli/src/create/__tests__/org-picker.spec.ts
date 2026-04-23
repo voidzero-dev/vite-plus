@@ -8,16 +8,14 @@ import {
   pickOrgTemplate,
 } from '../org-picker.js';
 
-const { mockSelect, mockIsCancel, mockLogInfo } = vi.hoisted(() => ({
+const { mockSelect, mockIsCancel } = vi.hoisted(() => ({
   mockSelect: vi.fn(),
   mockIsCancel: vi.fn((value: unknown) => value === '__cancel__'),
-  mockLogInfo: vi.fn(),
 }));
 
 vi.mock('@voidzero-dev/vite-plus-prompts', () => ({
   select: mockSelect,
   isCancel: mockIsCancel,
-  log: { info: mockLogInfo },
 }));
 
 function manifest(overrides?: Partial<OrgManifest>): OrgManifest {
@@ -75,17 +73,16 @@ describe('pickOrgTemplate', () => {
   });
 
   it('returns the escape-hatch sentinel when the escape entry is picked', async () => {
-    // The picker assigns the sentinel `value` to the escape-hatch option;
-    // emulate `select` resolving with whatever value that is.
-    let escapeValue: string | undefined;
-    mockSelect.mockImplementation(async (opts: { options: { value: string; label: string }[] }) => {
-      escapeValue = opts.options.find((o) => o.label === 'Vite+ built-in templates')?.value;
-      return escapeValue;
-    });
+    // Emulate `select` resolving with whatever value the picker assigned
+    // to its escape-hatch option. If the option isn't in the list at all,
+    // the assertion below fails.
+    mockSelect.mockImplementation(
+      async (opts: { options: { value: string; label: string }[] }) =>
+        opts.options.find((o) => o.label === 'Vite+ built-in templates')?.value,
+    );
     expect(await pickOrgTemplate(manifest(), { isMonorepo: false })).toBe(
       ORG_PICKER_BUILTIN_ESCAPE,
     );
-    expect(escapeValue).toBeDefined();
   });
 
   it('returns the cancel sentinel when the prompt is cancelled', async () => {
@@ -93,8 +90,7 @@ describe('pickOrgTemplate', () => {
     expect(await pickOrgTemplate(manifest(), { isMonorepo: false })).toBe(ORG_PICKER_CANCEL);
   });
 
-  it('returns the escape-hatch sentinel with an info note when every entry is filtered out', async () => {
-    mockLogInfo.mockClear();
+  it('returns the escape-hatch sentinel when every entry is filtered out', async () => {
     const allMonorepo = manifest({
       templates: [
         { name: 'a', description: 'a', template: './a', monorepo: true },
@@ -104,8 +100,6 @@ describe('pickOrgTemplate', () => {
     const result = await pickOrgTemplate(allMonorepo, { isMonorepo: true });
     expect(result).toBe(ORG_PICKER_BUILTIN_ESCAPE);
     expect(mockSelect).not.toHaveBeenCalled();
-    expect(mockLogInfo).toHaveBeenCalledOnce();
-    expect(mockLogInfo.mock.calls[0][0]).toMatch(/applicable inside a monorepo/);
   });
 });
 

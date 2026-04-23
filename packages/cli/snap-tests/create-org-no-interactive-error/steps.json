@@ -1,5 +1,5 @@
 {
   "commands": [
-    "node mock-server.mjs -- vp create @your-org --no-interactive # prints manifest table, exits 1"
+    "node $SNAP_CASES_DIR/.shared/mock-npm-registry.mjs -- vp create @your-org --no-interactive # prints manifest table, exits 1"
   ]
 }
