@@ -22,15 +22,15 @@ vi.mock('@voidzero-dev/vite-plus-prompts', () => ({
 
 function manifest(overrides?: Partial<OrgManifest>): OrgManifest {
   return {
-    scope: '@acme',
-    packageName: '@acme/create',
+    scope: '@your-org',
+    packageName: '@your-org/create',
     version: '1.0.0',
     tarballUrl: 'https://example/create-1.0.0.tgz',
     integrity: 'sha512-fake',
     templates: [
       { name: 'monorepo', description: 'Full scaffold', template: './m', monorepo: true },
-      { name: 'web', description: 'Web app', template: '@acme/template-web' },
-      { name: 'library', description: 'Library', template: '@acme/template-library' },
+      { name: 'web', description: 'Web app', template: '@your-org/template-web' },
+      { name: 'library', description: 'Library', template: '@your-org/template-library' },
     ],
     ...overrides,
   };
@@ -116,7 +116,7 @@ describe('formatManifestTable', () => {
     expect(lines[0]).toMatch(/^ {2}NAME\s+DESCRIPTION\s+TEMPLATE/);
     // Every row includes name, description, and template specifier.
     expect(lines[1]).toMatch(/monorepo\s+Full scaffold\s+\.\/m/);
-    expect(lines[2]).toMatch(/web\s+Web app\s+@acme\/template-web/);
+    expect(lines[2]).toMatch(/web\s+Web app\s+@your-org\/template-web/);
   });
 
   it('filters monorepo entries inside a monorepo and reports the count', () => {

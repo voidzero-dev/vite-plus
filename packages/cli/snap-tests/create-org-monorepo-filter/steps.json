@@ -1,5 +1,5 @@
 {
   "commands": [
-    "node mock-server.mjs -- vp create @acme --no-interactive # inside monorepo, hides monorepo:true entries + shows omitted footer"
+    "node mock-server.mjs -- vp create @your-org --no-interactive # inside monorepo, hides monorepo:true entries + shows omitted footer"
   ]
 }
