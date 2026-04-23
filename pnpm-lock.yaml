@@ -15,6 +15,12 @@ catalogs:
     '@babel/preset-typescript':
       specifier: ^7.24.7
       version: 7.28.5
+    '@emnapi/core':
+      specifier: ^1.9.2
+      version: 1.10.0
+    '@emnapi/runtime':
+      specifier: ^1.9.2
+      version: 1.10.0
     '@napi-rs/cli':
       specifier: ^3.6.1
       version: 3.6.1
@@ -876,10 +882,10 @@ importers:
   rolldown/packages/browser:
     dependencies:
       '@emnapi/core':
-        specifier: 1.10.0
+        specifier: 'catalog:'
         version: 1.10.0
       '@emnapi/runtime':
-        specifier: 1.10.0
+        specifier: 'catalog:'
         version: 1.10.0
       '@napi-rs/wasm-runtime':
         specifier: 'catalog:'
