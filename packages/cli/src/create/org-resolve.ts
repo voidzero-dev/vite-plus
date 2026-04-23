@@ -80,6 +80,10 @@ async function resolveEntry(
   manifest: OrgManifest,
   entry: OrgTemplateEntry,
 ): Promise<OrgResolution> {
+  // Breadcrumb so a later downstream failure (e.g. the referenced
+  // `@org/template-web` package is missing) still tells the user what
+  // manifest entry produced that chain.
+  prompts.log.info(`selected '${entry.name}' from ${manifest.packageName}`);
   if (isRelativePath(entry.template)) {
     const extracted = await ensureOrgPackageExtracted(manifest);
     const bundledLocalPath = resolveBundledPath(extracted, entry.template);
