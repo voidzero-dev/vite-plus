@@ -131,6 +131,15 @@ export async function resolveOrgManifestForCreate(args: {
   }
 
   if (!manifest) {
+    // Scope-only input (`vp create @org`) strongly implies the user
+    // expected the picker. Be explicit about why it didn't engage, so a
+    // later `ERR_NO_BIN` from the package manager doesn't look mysterious.
+    // Per-entry `vp create @org/name` stays silent since it's ambiguous.
+    if (orgSpec.name === undefined) {
+      prompts.log.info(
+        `No \`vp.templates\` manifest in ${orgSpec.scope}/create — running it as a normal package.`,
+      );
+    }
     return { kind: 'passthrough' };
   }
 
