@@ -85,8 +85,43 @@ importers:
         specifier: link:../test-lib-pnpm
         version: link:../test-lib-pnpm
 
-[1]> vp unlink ../test-lib-pnpm && vp unlink testnpm2 && cat package.json pnpm-lock.yaml # should unlink the package
+> vp unlink ../test-lib-pnpm -- --no-frozen-lockfile && vp unlink testnpm2 -- --no-frozen-lockfile && cat package.json pnpm-lock.yaml # should unlink the package (pnpm v11 requires --no-frozen-lockfile under CI=true to avoid ERR_PNPM_LOCKFILE_CONFIG_MISMATCH)
 Already up to date
- ERR_PNPM_LOCKFILE_CONFIG_MISMATCH  Cannot proceed with the frozen installation. The current "overrides" configuration doesn't match the value found in the lockfile
+testnpm2 is linked to <cwd>/node_modules from <cwd>/../test-lib-pnpm
+Already up to date
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 
-Update your lockfile using "pnpm install --no-frozen-lockfile"
+dependencies:
+- testnpm2 <semver>
++ testnpm2 <semver>
+
+{
+  "name": "command-link-pnpm11",
+  "version": "1.0.0",
+  "dependencies": {
+    "testnpm2": "*"
+  },
+  "packageManager": "pnpm@<semver>
+}
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    dependencies:
+      testnpm2:
+        specifier: '*'
+        version: <semver>
+
+packages:
+
+  testnpm2@<semver>:
+    resolution: {integrity: sha512-<hash>
+
+snapshots:
+
+  testnpm2@<semver>: {}

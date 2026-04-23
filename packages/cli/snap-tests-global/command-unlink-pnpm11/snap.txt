@@ -29,16 +29,29 @@ dependencies:
   }
 }
 
-[1]> vp unlink unlink-test-lib && cat package.json # should unlink the package
- ERR_PNPM_LOCKFILE_CONFIG_MISMATCH  Cannot proceed with the frozen installation. The current "overrides" configuration doesn't match the value found in the lockfile
+> vp unlink unlink-test-lib -- --no-frozen-lockfile && cat package.json # should unlink the package (pnpm v11 requires --no-frozen-lockfile under CI=true)
+Already up to date
 
-Update your lockfile using "pnpm install --no-frozen-lockfile"
+{
+  "name": "command-unlink-pnpm11",
+  "version": "1.0.0",
+  "packageManager": "pnpm@<semver>
+  "dependencies": {
+    "unlink-test-lib": "link:../unlink-test-lib"
+  }
+}
 
 > vp link ../unlink-test-lib # link again
-Lockfile is up to date, resolution step is skipped
 
 
-[1]> vp unlink && cat package.json # should unlink all packages
- ERR_PNPM_LOCKFILE_CONFIG_MISMATCH  Cannot proceed with the frozen installation. The current "overrides" configuration doesn't match the value found in the lockfile
+> vp unlink -- --no-frozen-lockfile && cat package.json # should unlink all packages
+Already up to date
 
-Update your lockfile using "pnpm install --no-frozen-lockfile"
+{
+  "name": "command-unlink-pnpm11",
+  "version": "1.0.0",
+  "packageManager": "pnpm@<semver>
+  "dependencies": {
+    "unlink-test-lib": "link:../unlink-test-lib"
+  }
+}
