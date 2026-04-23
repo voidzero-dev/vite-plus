@@ -12,12 +12,12 @@ jobs:
     if: github.event.repository.fork == false
     runs-on: ubuntu-latest
     permissions:
-      contents: write
-      pull-requests: write
       actions: read
       id-token: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/clone
 
       - name: Set up metadata directory
@@ -252,9 +252,15 @@ jobs:
             echo 'UPGRADE_DEPS_BODY_EOF'
           } >> "${GITHUB_OUTPUT}"
 
+      - uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
+        id: app-token
+        with:
+          client-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
       - name: Close and delete previous PR
         env:
-          GH_TOKEN: ${{ secrets.AUTO_UPDATE_BRANCH_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           # Find PR with the deps/upstream-update branch
           PR_NUMBER=$(gh pr list --head deps/upstream-update --json number --jq '.[0].number')
@@ -273,7 +279,6 @@ jobs:
           branch: deps/upstream-update
           title: 'feat(deps): upgrade upstream dependencies'
           sign-commits: true
-          token: ${{ secrets.AUTO_UPDATE_BRANCH_TOKEN }}
-          branch-token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
           body: ${{ steps.pr-content.outputs.body }}
           commit-message: ${{ steps.pr-content.outputs.commit-message }}
