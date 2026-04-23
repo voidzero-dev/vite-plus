@@ -181,7 +181,7 @@ An invalid manifest is a hard error, not a silent fall-through — a maintainer 
 
 ### Bundled subdirectory templates
 
-Relative `./...` paths resolve against the enclosing `@org/create` package root — **not** the user's cwd. Vite+ downloads the tarball once per published version (honoring `NPM_CONFIG_REGISTRY`), verifies its SHA-512 integrity against `dist.integrity`, and extracts it under `$VP_HOME/tmp/create-org/<scope>/<name>/<version>/`. Subsequent invocations reuse the cache. The referenced directory is copied verbatim — no template-engine processing. Paths that escape the package root are rejected at schema-validation time.
+Relative `./...` paths resolve against the enclosing `@org/create` package root — **not** the user's cwd. The referenced directory is copied verbatim into the target project (no template-engine processing). Paths that escape the package root are rejected.
 
 ### Make the org the default in a repo
 
@@ -201,7 +201,7 @@ The picker always appends a trailing **Vite+ built-in templates** entry so `vite
 
 ### Non-interactive inspection
 
-`vp create @org --no-interactive` prints a stable, fixed-column table of the manifest (name, description, resolved template specifier) and exits 1. The output is machine-parseable, so scripts and AI agents can recover the list without a separate `--list` flag:
+`vp create @org --no-interactive` prints the manifest as a table and exits 1:
 
 ```
 A template name is required when running `vp create @your-org` in non-interactive mode.
