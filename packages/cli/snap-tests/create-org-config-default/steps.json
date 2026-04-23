@@ -1,0 +1,5 @@
+{
+  "commands": [
+    "node $SNAP_CASES_DIR/.shared/mock-npm-registry.mjs -- vp create --no-interactive # bare vp create picks up create.defaultTemplate from vite.config.ts"
+  ]
+}
