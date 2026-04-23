@@ -1,0 +1,13 @@
+[1]> node mock-server.mjs -- vp create @nkzw --no-interactive # inside monorepo, hides monorepo:true entries + shows omitted footer
+error: vp create @nkzw requires a template selection in non-interactive mode.
+
+available templates from @nkzw/create:
+
+  NAME     DESCRIPTION                      TEMPLATE
+  web      Web app template (Vite + React)  @nkzw/template-web
+  library  TypeScript library template      @nkzw/template-library
+
+(omitted 1 monorepo-only entry because this workspace is already a monorepo)
+
+hint: rerun with an explicit selection, e.g. `vp create @nkzw/web`,
+      or use a Vite+ built-in template like `vp create vite:application`.

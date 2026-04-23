@@ -1,0 +1,5 @@
+{
+  "commands": [
+    "node mock-server.mjs -- vp create @nkzw --no-interactive # inside monorepo, hides monorepo:true entries + shows omitted footer"
+  ]
+}
