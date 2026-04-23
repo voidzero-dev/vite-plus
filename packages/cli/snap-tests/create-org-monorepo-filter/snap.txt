@@ -1,4 +1,4 @@
-[1]> node mock-server.mjs -- vp create @your-org --no-interactive # inside monorepo, hides monorepo:true entries + shows omitted footer
+[1]> node $SNAP_CASES_DIR/.shared/mock-npm-registry.mjs -- vp create @your-org --no-interactive # inside monorepo, hides monorepo:true entries + shows omitted footer
 error: vp create @your-org requires a template selection in non-interactive mode.
 
 available templates from @your-org/create:

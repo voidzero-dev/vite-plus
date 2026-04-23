@@ -140,6 +140,13 @@ export async function resolveOrgManifestForCreate(args: {
       cancelAndExit();
     }
     if (picked === ORG_PICKER_BUILTIN_ESCAPE) {
+      // Only the in-monorepo filter can empty the list today; the message
+      // stays in sync if more context-specific filters are added here.
+      if (args.isMonorepo && manifest.templates.every((t) => t.monorepo)) {
+        prompts.log.info(
+          `No templates from ${manifest.packageName} are applicable inside a monorepo — showing Vite+ built-in templates instead.`,
+        );
+      }
       return { kind: 'escape-hatch' };
     }
     rejectMonorepoEntryInsideMonorepo(picked.entry, args.isMonorepo);

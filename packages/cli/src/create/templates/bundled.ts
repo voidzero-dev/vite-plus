@@ -23,10 +23,9 @@ export async function executeBundledTemplate(
     copyDir(templateInfo.localPath, destDir);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      throw new Error(
-        `bundled template directory not found inside the extracted @org/create package: ${templateInfo.localPath}`,
-        { cause: error },
-      );
+      throw new Error(`bundled template directory not found: ${templateInfo.localPath}`, {
+        cause: error,
+      });
     }
     throw error;
   }

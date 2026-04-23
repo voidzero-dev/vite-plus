@@ -35,11 +35,7 @@ export async function pickOrgTemplate(
 ): Promise<OrgPickerResult> {
   const filtered = filterManifestForContext(manifest.templates, opts.isMonorepo);
   if (filtered.length === 0) {
-    // Nothing from the manifest applies here; surface the reason and fall
-    // through to the built-in picker so the user isn't left at a dead end.
-    prompts.log.info(
-      `No templates from ${manifest.packageName} are applicable inside a monorepo — showing Vite+ built-in templates instead.`,
-    );
+    // Caller surfaces the context-specific reason before falling through.
     return ORG_PICKER_BUILTIN_ESCAPE;
   }
 

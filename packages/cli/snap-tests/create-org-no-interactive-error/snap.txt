@@ -1,4 +1,4 @@
-[1]> node mock-server.mjs -- vp create @your-org --no-interactive # prints manifest table, exits 1
+[1]> node $SNAP_CASES_DIR/.shared/mock-npm-registry.mjs -- vp create @your-org --no-interactive # prints manifest table, exits 1
 error: vp create @your-org requires a template selection in non-interactive mode.
 
 available templates from @your-org/create:
