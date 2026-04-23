@@ -453,10 +453,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   let bundledLocalPath: string | undefined;
   const installArgs = process.env.CI ? ['--no-frozen-lockfile'] : undefined;
 
-  // If no template was passed on the command line, honor the configured
-  // default (see `create.defaultTemplate` in vite.config.ts). If that
-  // default resolves to an `@scope` with a manifest, the block below will
-  // render the org picker just as if the user had typed `@scope`.
+  // Honor `create.defaultTemplate` from vite.config.ts when no CLI arg was passed.
   if (!selectedTemplateName) {
     const defaultTemplate = await getConfiguredDefaultTemplate(workspaceInfoOptional.rootDir);
     if (defaultTemplate) {
@@ -464,9 +461,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     }
   }
 
-  // Resolve `@scope[/name]` org-manifest templates before falling back to
-  // the generic builtin picker. This runs regardless of how the name was
-  // obtained (CLI arg or `create.defaultTemplate`).
+  // Resolve `@scope[/name]` org manifests before the generic builtin picker.
   if (selectedTemplateName) {
     const resolved = await resolveOrgManifestForCreate({
       templateName: selectedTemplateName,
@@ -476,14 +471,10 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     if (resolved.kind === 'replaced') {
       selectedTemplateName = resolved.templateName;
     } else if (resolved.kind === 'bundled') {
-      selectedTemplateName = resolved.templateName;
       bundledLocalPath = resolved.bundledLocalPath;
     } else if (resolved.kind === 'escape-hatch') {
-      // User picked "Vite+ built-in templates" from the org picker — fall
-      // through to the generic builtin prompt below.
       selectedTemplateName = '';
     }
-    // 'passthrough' → keep selectedTemplateName as-is.
   }
 
   if (!selectedTemplateName) {
@@ -501,9 +492,6 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
 
   const isBuiltinTemplate = selectedTemplateName.startsWith('vite:');
   const isBundledTemplate = bundledLocalPath !== undefined;
-  // Bundled templates are scaffolded by directory copy just like builtins
-  // — treat them the same way for the compactOutput / --directory paths
-  // below.
   const isDirectScaffoldTemplate = isBuiltinTemplate || isBundledTemplate;
 
   // Remote templates (e.g., @tanstack/cli, custom templates) run their own
@@ -627,18 +615,19 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     }
   }
 
+  const directScaffoldFallbackName = isBundledTemplate
+    ? 'vite-plus-template'
+    : selectedTemplateName === BuiltinTemplate.monorepo
+      ? 'vite-plus-monorepo'
+      : `vite-plus-${selectedTemplateName.split(':')[1]}`;
+
   if (isDirectScaffoldTemplate && (!targetDir || targetDir === '.')) {
     if (targetDir === '.') {
       // Current directory: auto-derive package name from cwd, no prompt
-      const fallbackName = isBundledTemplate
-        ? 'vite-plus-template'
-        : selectedTemplateName === BuiltinTemplate.monorepo
-          ? 'vite-plus-monorepo'
-          : `vite-plus-${selectedTemplateName.split(':')[1]}`;
       packageName = deriveDefaultPackageName(
         cwd,
         workspaceInfoOptional.monorepoScope,
-        fallbackName,
+        directScaffoldFallbackName,
       );
       if (isMonorepo) {
         if (!cwdRelativeToRoot) {
@@ -671,12 +660,9 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       packageName = selected.packageName;
       targetDir = selected.targetDir;
     } else {
-      const fallbackName = isBundledTemplate
-        ? 'vite-plus-template'
-        : `vite-plus-${selectedTemplateName.split(':')[1]}`;
       const defaultPackageName = getRandomProjectName({
         scope: workspaceInfoOptional.monorepoScope,
-        fallbackName,
+        fallbackName: directScaffoldFallbackName,
       });
       const selected = await promptPackageNameAndTargetDir(defaultPackageName, options.interactive);
       packageName = selected.packageName;
@@ -883,10 +869,6 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
 
   let result: ExecutionResult;
   if (templateInfo.type === TemplateType.bundled) {
-    // Bundled subdirectory template from an @org/create manifest: the
-    // pre-fill block above has already prompted for packageName and
-    // targetDir. Scaffold by copying the extracted directory (localPath)
-    // into targetDir, then fix up package.json name.
     pauseCreateProgress();
     await checkProjectDirExists(path.join(workspaceInfo.rootDir, targetDir), options.interactive);
     resumeCreateProgress();

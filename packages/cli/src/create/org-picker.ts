@@ -6,11 +6,10 @@ import {
   type OrgTemplateEntry,
 } from './org-manifest.ts';
 
-/**
- * Sentinel `value` used by the picker's trailing "Vite+ built-in templates"
- * entry. Callers compare against this to detect the escape-hatch path.
- */
-export const BUILTIN_ESCAPE_VALUE = '__vp_builtin_escape__';
+// Sentinel `value` for the picker's trailing "Vite+ built-in templates"
+// entry. Internal to this module — callers react to
+// `ORG_PICKER_BUILTIN_ESCAPE` instead.
+const BUILTIN_ESCAPE_VALUE = '__vp_builtin_escape__';
 
 export const ORG_PICKER_CANCEL = Symbol('org-picker-cancel');
 export const ORG_PICKER_BUILTIN_ESCAPE = Symbol('org-picker-builtin-escape');
@@ -73,24 +72,10 @@ export async function pickOrgTemplate(
   return { kind: 'entry', entry };
 }
 
-function padRight(value: string, width: number): string {
-  if (value.length >= width) {
-    return value;
-  }
-  return value + ' '.repeat(width - value.length);
-}
-
 /**
- * Render the manifest as a plain-text table suitable for the
- * `--no-interactive` error output. Context-filtered the same way as the
- * picker.
- *
- * The output is deliberately machine-parseable (fixed column order,
- * whitespace-separated) so that AI agents and scripts can recover the
+ * Render the manifest as a plain-text table for the `--no-interactive`
+ * error output. Fixed column order so AI agents and scripts can recover
  * available template names without a `--json` flag.
- *
- * Returns `{ lines, filteredCount }` so the caller can decide whether to
- * add a "(omitted N monorepo-only entries)" footer line.
  */
 export function formatManifestTable(
   manifest: OrgManifest,
@@ -105,10 +90,10 @@ export function formatManifestTable(
     ...visible.map((entry) => entry.description.length),
   );
   const lines: string[] = [];
-  lines.push(`  ${padRight('NAME', nameWidth)}  ${padRight('DESCRIPTION', descWidth)}  TEMPLATE`);
+  lines.push(`  ${'NAME'.padEnd(nameWidth)}  ${'DESCRIPTION'.padEnd(descWidth)}  TEMPLATE`);
   for (const entry of visible) {
     lines.push(
-      `  ${padRight(entry.name, nameWidth)}  ${padRight(entry.description, descWidth)}  ${entry.template}`,
+      `  ${entry.name.padEnd(nameWidth)}  ${entry.description.padEnd(descWidth)}  ${entry.template}`,
     );
   }
   return { lines, filteredCount };

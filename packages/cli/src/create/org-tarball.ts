@@ -7,20 +7,12 @@ import { parseTarGzip } from 'nanotar';
 
 import type { OrgManifest } from './org-manifest.ts';
 
-/**
- * Resolve the cache root for extracted org-create packages. Honors
- * `$VP_HOME` just like the rest of the installer (see
- * `packages/tools/src/snap-test.ts:31`), falling back to `~/.vite-plus`.
- */
 function getCacheRoot(): string {
   const home = process.env.VP_HOME || path.join(os.homedir(), '.vite-plus');
   return path.join(home, 'tmp', 'create-org');
 }
 
 function getExtractionDir(manifest: OrgManifest): string {
-  // Cache at `$VP_HOME/tmp/create-org/<@scope>/create/<version>/`. The
-  // scope segment already contains the leading `@`, which is fine on all
-  // platforms supported by vp (Node 20+).
   return path.join(getCacheRoot(), manifest.scope, 'create', manifest.version);
 }
 
@@ -155,6 +147,9 @@ export async function ensureOrgPackageExtracted(manifest: OrgManifest): Promise<
  * Resolve a manifest entry's relative `./...` path against an already-
  * extracted package root, rejecting any path that escapes the root (via
  * `..` walks or an absolute specifier).
+ *
+ * Existence is NOT checked here — the subsequent `copyDir` surfaces any
+ * missing-directory error with a clearer errno.
  */
 export function resolveBundledPath(extractedRoot: string, relativePath: string): string {
   if (path.isAbsolute(relativePath)) {
@@ -164,9 +159,6 @@ export function resolveBundledPath(extractedRoot: string, relativePath: string):
   const resolvedTarget = path.resolve(extractedRoot, relativePath);
   if (resolvedTarget !== resolvedRoot && !resolvedTarget.startsWith(`${resolvedRoot}${path.sep}`)) {
     throw new Error(`bundled template path escapes the package root: ${relativePath}`);
-  }
-  if (!fs.existsSync(resolvedTarget)) {
-    throw new Error(`bundled template path not found in package: ${relativePath}`);
   }
   return resolvedTarget;
 }

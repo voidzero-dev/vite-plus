@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { OrgManifest } from '../org-manifest.js';
 import {
-  BUILTIN_ESCAPE_VALUE,
   formatManifestTable,
   ORG_PICKER_BUILTIN_ESCAPE,
   ORG_PICKER_CANCEL,
@@ -45,16 +44,23 @@ describe('pickOrgTemplate', () => {
     mockSelect.mockResolvedValue('web');
     await pickOrgTemplate(manifest(), { isMonorepo: false });
     const passedOptions = mockSelect.mock.calls[0][0].options;
-    const values = passedOptions.map((o: { value: string }) => o.value);
-    expect(values).toEqual(['monorepo', 'web', 'library', BUILTIN_ESCAPE_VALUE]);
+    expect(passedOptions.map((o: { value: string }) => o.value).slice(0, -1)).toEqual([
+      'monorepo',
+      'web',
+      'library',
+    ]);
+    expect(passedOptions.at(-1)).toMatchObject({ label: 'Vite+ built-in templates' });
   });
 
   it('filters monorepo:true entries when isMonorepo is true', async () => {
     mockSelect.mockResolvedValue('web');
     await pickOrgTemplate(manifest(), { isMonorepo: true });
     const passedOptions = mockSelect.mock.calls[0][0].options;
-    const values = passedOptions.map((o: { value: string }) => o.value);
-    expect(values).toEqual(['web', 'library', BUILTIN_ESCAPE_VALUE]);
+    expect(passedOptions.map((o: { value: string }) => o.value).slice(0, -1)).toEqual([
+      'web',
+      'library',
+    ]);
+    expect(passedOptions.at(-1)).toMatchObject({ label: 'Vite+ built-in templates' });
   });
 
   it('returns the entry for a non-escape selection', async () => {
@@ -67,10 +73,17 @@ describe('pickOrgTemplate', () => {
   });
 
   it('returns the escape-hatch sentinel when the escape entry is picked', async () => {
-    mockSelect.mockResolvedValue(BUILTIN_ESCAPE_VALUE);
+    // The picker assigns the sentinel `value` to the escape-hatch option;
+    // emulate `select` resolving with whatever value that is.
+    let escapeValue: string | undefined;
+    mockSelect.mockImplementation(async (opts: { options: { value: string; label: string }[] }) => {
+      escapeValue = opts.options.find((o) => o.label === 'Vite+ built-in templates')?.value;
+      return escapeValue;
+    });
     expect(await pickOrgTemplate(manifest(), { isMonorepo: false })).toBe(
       ORG_PICKER_BUILTIN_ESCAPE,
     );
+    expect(escapeValue).toBeDefined();
   });
 
   it('returns the cancel sentinel when the prompt is cancelled', async () => {

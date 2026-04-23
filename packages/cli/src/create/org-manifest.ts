@@ -1,10 +1,9 @@
+import path from 'node:path';
+
 import { getNpmRegistry } from '../utils/package.ts';
 
 /**
  * A single entry in an org's template manifest.
- *
- * Matches the `vp.templates[]` shape documented in
- * `rfcs/create-org-default-templates.md`.
  */
 export interface OrgTemplateEntry {
   name: string;
@@ -55,10 +54,8 @@ export function parseOrgScopedSpec(spec: string): { scope: string; name?: string
 }
 
 /**
- * Error thrown when a manifest's `vp.templates` field is present but
- * structurally invalid. The picker always treats these as fatal, never a
- * silent fall-through, because the maintainer clearly intended to ship a
- * manifest.
+ * Schema-level failure. Never falls through silently — a maintainer who
+ * shipped an invalid manifest should see the offending field.
  */
 export class OrgManifestSchemaError extends Error {
   constructor(
@@ -70,17 +67,10 @@ export class OrgManifestSchemaError extends Error {
   }
 }
 
-function isRelativePath(spec: string): boolean {
+export function isRelativePath(spec: string): boolean {
   return spec.startsWith('./') || spec.startsWith('../');
 }
 
-/**
- * Validate a single manifest entry and return the normalized shape.
- *
- * Relative `./` / `../` paths are checked against a best-effort escape
- * rule here; a second belt-and-suspenders check runs when the tarball is
- * extracted (see `org-tarball.ts`).
- */
 function validateEntry(entry: unknown, index: number, packageName: string): OrgTemplateEntry {
   if (!entry || typeof entry !== 'object') {
     throw new OrgManifestSchemaError(`vp.templates[${index}] must be an object`, packageName);
@@ -123,22 +113,15 @@ function validateEntry(entry: unknown, index: number, packageName: string): OrgT
   }
 
   if (isRelativePath(template)) {
-    // Disallow paths that explicitly walk out of the package via `..`.
-    // (The tarball extractor enforces this a second time after resolving.)
-    const segments = template.split(/[/\\]/);
-    let depth = 0;
-    for (const segment of segments) {
-      if (segment === '..') {
-        depth -= 1;
-      } else if (segment !== '.' && segment !== '') {
-        depth += 1;
-      }
-      if (depth < 0) {
-        throw new OrgManifestSchemaError(
-          `vp.templates[${index}].template escapes the package root: ${template}`,
-          packageName,
-        );
-      }
+    // Defense-in-depth only: `resolveBundledPath` enforces the authoritative
+    // check after extraction. We reject obvious root-escapes here so schema
+    // errors surface before any tarball download happens.
+    const resolved = path.posix.resolve('/root', template.replaceAll('\\', '/'));
+    if (resolved !== '/root' && !resolved.startsWith('/root/')) {
+      throw new OrgManifestSchemaError(
+        `vp.templates[${index}].template escapes the package root: ${template}`,
+        packageName,
+      );
     }
   }
 
