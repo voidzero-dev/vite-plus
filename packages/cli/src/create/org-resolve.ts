@@ -1,7 +1,6 @@
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
 import { findViteConfigUp } from '../resolve-vite-config.ts';
-import { errorMsg } from '../utils/terminal.ts';
 import {
   isRelativePath,
   OrgManifestSchemaError,
@@ -41,30 +40,37 @@ function printNonInteractiveTable(
   isMonorepo: boolean,
 ): void {
   const { lines, filteredCount } = formatManifestTable(manifest, isMonorepo);
-  errorMsg(`vp create ${orgSpec.scope} requires a template selection in non-interactive mode.`);
-  const stderrBody: string[] = [
+  const firstVisible = manifest.templates.find((t) => !(t.monorepo && isMonorepo));
+  const body: string[] = [
     '',
-    `available templates from ${manifest.packageName}:`,
+    `A template name is required when running \`vp create ${orgSpec.scope}\` in non-interactive mode.`,
+    '',
+    `Available templates in ${manifest.packageName}:`,
     '',
     ...lines,
   ];
   if (filteredCount > 0) {
-    stderrBody.push(
+    body.push(
       '',
       `(omitted ${filteredCount} monorepo-only ${
         filteredCount === 1 ? 'entry' : 'entries'
       } because this workspace is already a monorepo)`,
     );
   }
-  stderrBody.push('');
-  const firstVisible = manifest.templates.find((t) => !(t.monorepo && isMonorepo));
+  body.push('', 'Examples:');
   if (firstVisible) {
-    stderrBody.push(
-      `hint: rerun with an explicit selection, e.g. \`vp create ${orgSpec.scope}/${firstVisible.name}\`,`,
+    body.push(
+      '  # Scaffold a specific template from the org',
+      `  vp create ${orgSpec.scope}/${firstVisible.name} --no-interactive`,
+      '',
     );
   }
-  stderrBody.push('      or use a Vite+ built-in template like `vp create vite:application`.');
-  process.stderr.write(`${stderrBody.join('\n')}\n`);
+  body.push(
+    '  # Or use a Vite+ built-in template',
+    '  vp create vite:application --no-interactive',
+    '',
+  );
+  process.stderr.write(body.join('\n'));
 }
 
 function rejectMonorepoEntryInsideMonorepo(entry: OrgTemplateEntry, isMonorepo: boolean): void {
@@ -111,19 +117,17 @@ export async function resolveOrgManifestForCreate(args: {
     return { kind: 'passthrough' };
   }
 
+  // Never silently skip the picker when the user explicitly typed `@org`.
   let manifest: OrgManifest | null;
   try {
     manifest = await readOrgManifest(orgSpec.scope);
   } catch (error) {
-    if (error instanceof OrgManifestSchemaError) {
-      prompts.log.error(error.message);
-    } else {
-      prompts.log.error(
-        `Failed to read ${orgSpec.scope}/create manifest: ${(error as Error).message}`,
-      );
-    }
-    // Never silently skip the picker when the user explicitly typed `@org`.
-    cancelAndExit('Failed to resolve org template manifest', 1);
+    const message =
+      error instanceof OrgManifestSchemaError
+        ? error.message
+        : `Failed to read ${orgSpec.scope}/create manifest: ${(error as Error).message}`;
+    prompts.log.error(message);
+    process.exit(1);
   }
 
   if (!manifest) {

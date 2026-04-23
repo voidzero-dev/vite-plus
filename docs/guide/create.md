@@ -204,17 +204,21 @@ The picker always appends a trailing **Vite+ built-in templates** entry so `vite
 `vp create @org --no-interactive` prints a stable, fixed-column table of the manifest (name, description, resolved template specifier) and exits 1. The output is machine-parseable, so scripts and AI agents can recover the list without a separate `--list` flag:
 
 ```
-error: vp create @your-org requires a template selection in non-interactive mode.
+A template name is required when running `vp create @your-org` in non-interactive mode.
 
-available templates from @your-org/create:
+Available templates in @your-org/create:
 
   NAME     DESCRIPTION                          TEMPLATE
   web      Web app template (Vite + React)      @your-org/template-web
   library  TypeScript library template          @your-org/template-library
   demo     Bundled demo template                ./templates/demo
 
-hint: rerun with an explicit selection, e.g. `vp create @your-org/web`,
-      or use a Vite+ built-in template like `vp create vite:application`.
+Examples:
+  # Scaffold a specific template from the org
+  vp create @your-org/web --no-interactive
+
+  # Or use a Vite+ built-in template
+  vp create vite:application --no-interactive
 ```
 
 ### Publishing checklist
