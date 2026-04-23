@@ -1,0 +1,5 @@
+[1]> node $SNAP_CASES_DIR/.shared/mock-npm-registry.mjs -- vp create @your-org --no-interactive # `../outside` path rejected at schema-validation, before any tarball fetch
+
+@your-org/create: vp.templates[0].template escapes the package root: ../outside
+Failed to resolve org template manifest
+
