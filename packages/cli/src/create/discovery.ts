@@ -52,10 +52,8 @@ export function discoverTemplate(
     ...process.env,
   });
   const parentDir = inferParentDir(templateName, workspaceInfo);
-  // Bundled subdirectory template — a manifest entry with a `./path`
-  // specifier that has already been resolved to an absolute path against
-  // the extracted @org/create tarball. See
-  // `rfcs/create-org-default-templates.md` and `org-tarball.ts`.
+  // Pre-resolved bundled subdirectory from an @org/create manifest
+  // (see `org-resolve.ts` → `org-tarball.ts`).
   if (bundledLocalPath) {
     return {
       command: '',

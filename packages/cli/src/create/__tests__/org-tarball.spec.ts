@@ -39,9 +39,11 @@ describe('resolveBundledPath', () => {
     expect(() => resolveBundledPath(root, '/etc/passwd')).toThrow(/must be relative/);
   });
 
-  it('errors when the target directory does not exist', () => {
+  it('returns the resolved path even when it does not exist (caller handles ENOENT)', () => {
     const root = tmpExtractedRoot();
-    expect(() => resolveBundledPath(root, './templates/ghost')).toThrow(/not found/);
+    expect(resolveBundledPath(root, './templates/ghost')).toBe(
+      path.join(root, 'templates', 'ghost'),
+    );
   });
 
   it('normalizes trailing slashes', () => {

@@ -1,6 +1,9 @@
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
+import { findViteConfigUp } from '../resolve-vite-config.ts';
+import { errorMsg } from '../utils/terminal.ts';
 import {
+  isRelativePath,
   OrgManifestSchemaError,
   parseOrgScopedSpec,
   readOrgManifest,
@@ -17,23 +20,19 @@ import { ensureOrgPackageExtracted, resolveBundledPath } from './org-tarball.ts'
 import { cancelAndExit } from './prompts.ts';
 
 /**
- * Resolution outcome for an org template spec. The caller (bin.ts) acts on
- * each variant:
+ * Resolution outcome for an org template spec.
  *
- * - `passthrough`: no manifest applied; `selectedTemplateName` stays as-is.
- * - `replaced`: manifest entry was selected and resolves to a non-bundled
- *   specifier (npm, github, vite:*, local). Caller should use the
- *   returned `templateName`.
+ * - `passthrough`: no manifest applied; caller keeps the original spec.
+ * - `replaced`: manifest entry resolves to a non-bundled specifier (npm,
+ *   github, vite:*, local). Caller uses `templateName`.
  * - `bundled`: manifest entry uses a relative path; tarball has been
- *   extracted; caller should pass `bundledLocalPath` into
- *   `discoverTemplate`.
- * - `escape-hatch`: user picked "Vite+ built-in templates" from the org
- *   picker. Caller should fall through to the normal builtin flow.
+ *   extracted; caller passes `bundledLocalPath` into `discoverTemplate`.
+ * - `escape-hatch`: user picked "Vite+ built-in templates" from the picker.
  */
 export type OrgResolution =
   | { kind: 'passthrough' }
   | { kind: 'replaced'; templateName: string; entry: OrgTemplateEntry }
-  | { kind: 'bundled'; bundledLocalPath: string; entry: OrgTemplateEntry; templateName: string }
+  | { kind: 'bundled'; bundledLocalPath: string; entry: OrgTemplateEntry }
   | { kind: 'escape-hatch' };
 
 function printNonInteractiveTable(
@@ -42,32 +41,30 @@ function printNonInteractiveTable(
   isMonorepo: boolean,
 ): void {
   const { lines, filteredCount } = formatManifestTable(manifest, isMonorepo);
-  const stderr = process.stderr;
-  stderr.write(
-    `error: vp create ${orgSpec.scope} requires a template selection in non-interactive mode.\n`,
-  );
-  stderr.write('\n');
-  stderr.write(`available templates from ${manifest.packageName}:\n`);
-  stderr.write('\n');
-  for (const line of lines) {
-    stderr.write(`${line}\n`);
-  }
+  errorMsg(`vp create ${orgSpec.scope} requires a template selection in non-interactive mode.`);
+  const stderrBody: string[] = [
+    '',
+    `available templates from ${manifest.packageName}:`,
+    '',
+    ...lines,
+  ];
   if (filteredCount > 0) {
-    stderr.write('\n');
-    stderr.write(
+    stderrBody.push(
+      '',
       `(omitted ${filteredCount} monorepo-only ${
         filteredCount === 1 ? 'entry' : 'entries'
-      } because this workspace is already a monorepo)\n`,
+      } because this workspace is already a monorepo)`,
     );
   }
-  stderr.write('\n');
+  stderrBody.push('');
   const firstVisible = manifest.templates.find((t) => !(t.monorepo && isMonorepo));
   if (firstVisible) {
-    stderr.write(
-      `hint: rerun with an explicit selection, e.g. \`vp create ${orgSpec.scope}/${firstVisible.name}\`,\n`,
+    stderrBody.push(
+      `hint: rerun with an explicit selection, e.g. \`vp create ${orgSpec.scope}/${firstVisible.name}\`,`,
     );
   }
-  stderr.write('      or use a Vite+ built-in template like `vp create vite:application`.\n');
+  stderrBody.push('      or use a Vite+ built-in template like `vp create vite:application`.');
+  process.stderr.write(`${stderrBody.join('\n')}\n`);
 }
 
 function rejectMonorepoEntryInsideMonorepo(entry: OrgTemplateEntry, isMonorepo: boolean): void {
@@ -82,16 +79,11 @@ function rejectMonorepoEntryInsideMonorepo(entry: OrgTemplateEntry, isMonorepo: 
 async function resolveEntry(
   manifest: OrgManifest,
   entry: OrgTemplateEntry,
-  orgSpec: { scope: string; name?: string },
 ): Promise<OrgResolution> {
-  if (entry.template.startsWith('./') || entry.template.startsWith('../')) {
+  if (isRelativePath(entry.template)) {
     const extracted = await ensureOrgPackageExtracted(manifest);
     const bundledLocalPath = resolveBundledPath(extracted, entry.template);
-    // Keep the original @scope spec visible to downstream logging /
-    // parent-dir inference. Bundled scaffolding is driven by
-    // bundledLocalPath.
-    const templateName = orgSpec.name ? `${orgSpec.scope}/${entry.name}` : orgSpec.scope;
-    return { kind: 'bundled', bundledLocalPath, entry, templateName };
+    return { kind: 'bundled', bundledLocalPath, entry };
   }
   return { kind: 'replaced', templateName: entry.template, entry };
 }
@@ -119,8 +111,6 @@ export async function resolveOrgManifestForCreate(args: {
   try {
     manifest = await readOrgManifest(orgSpec.scope);
   } catch (error) {
-    // Hard error — never silently skip the picker when the user
-    // explicitly typed `@org`.
     if (error instanceof OrgManifestSchemaError) {
       prompts.log.error(error.message);
     } else {
@@ -128,9 +118,8 @@ export async function resolveOrgManifestForCreate(args: {
         `Failed to read ${orgSpec.scope}/create manifest: ${(error as Error).message}`,
       );
     }
+    // Never silently skip the picker when the user explicitly typed `@org`.
     cancelAndExit('Failed to resolve org template manifest', 1);
-    // cancelAndExit exits the process; this is unreachable.
-    return { kind: 'passthrough' };
   }
 
   if (!manifest) {
@@ -145,23 +134,21 @@ export async function resolveOrgManifestForCreate(args: {
     const picked = await pickOrgTemplate(manifest, { isMonorepo: args.isMonorepo });
     if (picked === ORG_PICKER_CANCEL) {
       cancelAndExit();
-      return { kind: 'passthrough' };
     }
     if (picked === ORG_PICKER_BUILTIN_ESCAPE) {
       return { kind: 'escape-hatch' };
     }
     rejectMonorepoEntryInsideMonorepo(picked.entry, args.isMonorepo);
-    return resolveEntry(manifest, picked.entry, orgSpec);
+    return resolveEntry(manifest, picked.entry);
   }
 
   const entry = manifest.templates.find((candidate) => candidate.name === orgSpec.name);
   if (!entry) {
-    // No matching manifest entry → fall through to the existing
-    // `@scope/create-name` shorthand handled by discovery.ts.
+    // Fall through to the existing `@scope/create-name` shorthand in discovery.ts.
     return { kind: 'passthrough' };
   }
   rejectMonorepoEntryInsideMonorepo(entry, args.isMonorepo);
-  return resolveEntry(manifest, entry, orgSpec);
+  return resolveEntry(manifest, entry);
 }
 
 /**
@@ -173,13 +160,13 @@ export async function resolveOrgManifestForCreate(args: {
 export async function getConfiguredDefaultTemplate(
   workspaceRootDir: string,
 ): Promise<string | undefined> {
-  // Cheap pre-check: if no vite config file exists, skip the heavyweight
-  // resolveViteConfig import entirely.
-  const { findViteConfigUp, resolveViteConfig } = await import('../resolve-vite-config.ts');
   if (!findViteConfigUp(workspaceRootDir, workspaceRootDir)) {
     return undefined;
   }
   try {
+    // Dynamic-import the heavy resolver only when a config file is present;
+    // bare `vp create` in a fresh dir should not pay this cost.
+    const { resolveViteConfig } = await import('../resolve-vite-config.ts');
     const config = (await resolveViteConfig(workspaceRootDir)) as {
       create?: { defaultTemplate?: unknown };
     };
