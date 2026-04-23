@@ -47,6 +47,7 @@ import {
 import type { ExecutionResult } from './command.ts';
 import { discoverTemplate, inferGitHubRepoName, inferParentDir, isGitHubUrl } from './discovery.ts';
 import { getInitialTemplateOptions } from './initial-template-options.ts';
+import { getConfiguredDefaultTemplate, resolveOrgManifestForCreate } from './org-resolve.ts';
 import {
   cancelAndExit,
   checkProjectDirExists,
@@ -57,6 +58,7 @@ import {
 import { getRandomProjectName } from './random-name.ts';
 import {
   executeBuiltinTemplate,
+  executeBundledTemplate,
   executeMonorepoTemplate,
   executeRemoteTemplate,
 } from './templates/index.ts';
@@ -448,7 +450,41 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   let selectedParentDir: string | undefined;
   let remoteTargetDir: string | undefined;
   let shouldSetupHooks = false;
+  let bundledLocalPath: string | undefined;
   const installArgs = process.env.CI ? ['--no-frozen-lockfile'] : undefined;
+
+  // If no template was passed on the command line, honor the configured
+  // default (see `create.defaultTemplate` in vite.config.ts). If that
+  // default resolves to an `@scope` with a manifest, the block below will
+  // render the org picker just as if the user had typed `@scope`.
+  if (!selectedTemplateName) {
+    const defaultTemplate = await getConfiguredDefaultTemplate(workspaceInfoOptional.rootDir);
+    if (defaultTemplate) {
+      selectedTemplateName = defaultTemplate;
+    }
+  }
+
+  // Resolve `@scope[/name]` org-manifest templates before falling back to
+  // the generic builtin picker. This runs regardless of how the name was
+  // obtained (CLI arg or `create.defaultTemplate`).
+  if (selectedTemplateName) {
+    const resolved = await resolveOrgManifestForCreate({
+      templateName: selectedTemplateName,
+      isMonorepo,
+      interactive: options.interactive,
+    });
+    if (resolved.kind === 'replaced') {
+      selectedTemplateName = resolved.templateName;
+    } else if (resolved.kind === 'bundled') {
+      selectedTemplateName = resolved.templateName;
+      bundledLocalPath = resolved.bundledLocalPath;
+    } else if (resolved.kind === 'escape-hatch') {
+      // User picked "Vite+ built-in templates" from the org picker — fall
+      // through to the generic builtin prompt below.
+      selectedTemplateName = '';
+    }
+    // 'passthrough' → keep selectedTemplateName as-is.
+  }
 
   if (!selectedTemplateName) {
     const template = await prompts.select({
@@ -464,14 +500,19 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   }
 
   const isBuiltinTemplate = selectedTemplateName.startsWith('vite:');
+  const isBundledTemplate = bundledLocalPath !== undefined;
+  // Bundled templates are scaffolded by directory copy just like builtins
+  // — treat them the same way for the compactOutput / --directory paths
+  // below.
+  const isDirectScaffoldTemplate = isBuiltinTemplate || isBundledTemplate;
 
   // Remote templates (e.g., @tanstack/cli, custom templates) run their own
   // interactive CLI, so verbose mode is needed to show their output.
-  if (!isBuiltinTemplate) {
+  if (!isDirectScaffoldTemplate) {
     compactOutput = false;
   }
 
-  if (targetDir && !isBuiltinTemplate) {
+  if (targetDir && !isDirectScaffoldTemplate) {
     cancelAndExit('The --directory option is only available for builtin templates', 1);
   }
   if (selectedTemplateName === BuiltinTemplate.monorepo && isMonorepo) {
@@ -586,11 +627,12 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     }
   }
 
-  if (isBuiltinTemplate && (!targetDir || targetDir === '.')) {
+  if (isDirectScaffoldTemplate && (!targetDir || targetDir === '.')) {
     if (targetDir === '.') {
       // Current directory: auto-derive package name from cwd, no prompt
-      const fallbackName =
-        selectedTemplateName === BuiltinTemplate.monorepo
+      const fallbackName = isBundledTemplate
+        ? 'vite-plus-template'
+        : selectedTemplateName === BuiltinTemplate.monorepo
           ? 'vite-plus-monorepo'
           : `vite-plus-${selectedTemplateName.split(':')[1]}`;
       packageName = deriveDefaultPackageName(
@@ -629,9 +671,12 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       packageName = selected.packageName;
       targetDir = selected.targetDir;
     } else {
+      const fallbackName = isBundledTemplate
+        ? 'vite-plus-template'
+        : `vite-plus-${selectedTemplateName.split(':')[1]}`;
       const defaultPackageName = getRandomProjectName({
         scope: workspaceInfoOptional.monorepoScope,
-        fallbackName: `vite-plus-${selectedTemplateName.split(':')[1]}`,
+        fallbackName,
       });
       const selected = await promptPackageNameAndTargetDir(defaultPackageName, options.interactive);
       packageName = selected.packageName;
@@ -748,6 +793,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     selectedTemplateArgs,
     workspaceInfo,
     options.interactive,
+    bundledLocalPath,
   );
 
   if (selectedParentDir) {
@@ -836,7 +882,21 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   // #region Handle single project template
 
   let result: ExecutionResult;
-  if (templateInfo.type === TemplateType.builtin) {
+  if (templateInfo.type === TemplateType.bundled) {
+    // Bundled subdirectory template from an @org/create manifest: the
+    // pre-fill block above has already prompted for packageName and
+    // targetDir. Scaffold by copying the extracted directory (localPath)
+    // into targetDir, then fix up package.json name.
+    pauseCreateProgress();
+    await checkProjectDirExists(path.join(workspaceInfo.rootDir, targetDir), options.interactive);
+    resumeCreateProgress();
+    updateCreateProgress('Copying template files');
+    result = await executeBundledTemplate(workspaceInfo, {
+      ...templateInfo,
+      packageName,
+      targetDir,
+    });
+  } else if (templateInfo.type === TemplateType.builtin) {
     // prompt for package name if not provided
     if (!targetDir) {
       const defaultPackageName = getRandomProjectName({

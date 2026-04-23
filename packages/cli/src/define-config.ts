@@ -24,6 +24,21 @@ declare module '@voidzero-dev/vite-plus-core' {
     run?: RunConfig;
 
     staged?: StagedConfig;
+
+    /**
+     * Options for `vp create`.
+     *
+     * See `rfcs/create-org-default-templates.md` for the full specification.
+     */
+    create?: {
+      /**
+       * When `vp create` is invoked with no template argument, use this
+       * value as if the user had typed it — typically a scope like
+       * `'@nkzw'` paired with an `@nkzw/create` package that exposes a
+       * `vp.templates` manifest.
+       */
+      defaultTemplate?: string;
+    };
   }
 }
 
