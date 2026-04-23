@@ -1,11 +1,11 @@
-[1]> node mock-server.mjs -- vp create @nkzw --no-interactive # prints manifest table, exits 1
-error: vp create @nkzw requires a template selection in non-interactive mode.
+[1]> node mock-server.mjs -- vp create @acme --no-interactive # prints manifest table, exits 1
+error: vp create @acme requires a template selection in non-interactive mode.
 
-available templates from @nkzw/create:
+available templates from @acme/create:
 
   NAME     DESCRIPTION                  TEMPLATE
-  web      Web app template             @nkzw/template-web
-  library  TypeScript library template  @nkzw/template-library
+  web      Web app template             @acme/template-web
+  library  TypeScript library template  @acme/template-library
 
-hint: rerun with an explicit selection, e.g. `vp create @nkzw/web`,
+hint: rerun with an explicit selection, e.g. `vp create @acme/web`,
       or use a Vite+ built-in template like `vp create vite:application`.

@@ -94,11 +94,11 @@ An organization can publish a curated set of templates under a single npm scope 
 ### Pick from an org
 
 ```bash
-# Open an interactive picker over @nkzw/create's manifest
-vp create @nkzw
+# Open an interactive picker over @acme/create's manifest
+vp create @acme
 
 # Run a specific manifest entry directly
-vp create @nkzw/web
+vp create @acme/web
 
 # Set the org as the default for a repo (see create.defaultTemplate config)
 vp create
@@ -113,7 +113,7 @@ There are two common layouts. Pick the one that matches the org's template count
 **Bundled (recommended for most orgs).** All templates live as subdirectories of `@org/create` itself. Manifest entries use relative `./path` values. One repo, one publish, one versioning story — the same pattern used by `create-vite` and `create-next-app`.
 
 ```
-@nkzw/create/
+@acme/create/
 ├── package.json              # "vp": { "templates": [{ "template": "./templates/web" }, ...] }
 ├── templates/
 │   ├── web/
@@ -126,8 +126,8 @@ There are two common layouts. Pick the one that matches the org's template count
 **Manifest-only.** When the org already publishes independent `@org/template-*` packages (or hosts them on GitHub), `@org/create` stays a thin index.
 
 ```
-@nkzw/create/
-├── package.json              # "vp": { "templates": [{ "template": "@nkzw/template-web" }, ...] }
+@acme/create/
+├── package.json              # "vp": { "templates": [{ "template": "@acme/template-web" }, ...] }
 └── README.md
 ```
 
@@ -141,20 +141,20 @@ The manifest lives at `vp.templates` in `@org/create`'s `package.json`:
 
 ```json
 {
-  "name": "@nkzw/create",
+  "name": "@acme/create",
   "version": "1.0.0",
   "vp": {
     "templates": [
       {
         "name": "monorepo",
-        "description": "Full Nakazawa Tech monorepo",
-        "template": "@nkzw/template-monorepo",
+        "description": "Full Acme Corp monorepo",
+        "template": "@acme/template-monorepo",
         "monorepo": true
       },
       {
         "name": "web",
         "description": "Web app template (Vite + React)",
-        "template": "@nkzw/template-web",
+        "template": "@acme/template-web",
         "keywords": ["web", "react", "app"]
       },
       {
@@ -177,7 +177,7 @@ Each entry supports:
 | `keywords`    | no       | Filter terms for picker search.                                                                                                                                                                                                              |
 | `monorepo`    | no       | If `true`, marks this entry as a monorepo-creating template. Hidden from the picker when `vp create` runs inside an existing monorepo, mirroring the built-in `vite:monorepo` filter.                                                        |
 
-An invalid manifest is a hard error, not a silent fall-through — a maintainer who shipped a manifest should hear about the offending field, e.g. `@nkzw/create: vp.templates[2].template must be a non-empty string`.
+An invalid manifest is a hard error, not a silent fall-through — a maintainer who shipped a manifest should hear about the offending field, e.g. `@acme/create: vp.templates[2].template must be a non-empty string`.
 
 ### Bundled subdirectory templates
 
@@ -191,11 +191,11 @@ Commit this in `vite.config.ts` at the project root:
 import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
-  create: { defaultTemplate: '@nkzw' },
+  create: { defaultTemplate: '@acme' },
 });
 ```
 
-Now `vp create` (with no argument) drops straight into the `@nkzw` picker. See [`create.defaultTemplate`](/config/create) for details.
+Now `vp create` (with no argument) drops straight into the `@acme` picker. See [`create.defaultTemplate`](/config/create) for details.
 
 The picker always appends a trailing **Vite+ built-in templates** entry so `vite:monorepo` / `vite:application` / `vite:library` / `vite:generator` stay reachable from the picker — selecting it routes to the standard built-in flow. For scripts and CI, explicit specifiers (`vp create vite:library`) bypass the configured default.
 
@@ -204,16 +204,16 @@ The picker always appends a trailing **Vite+ built-in templates** entry so `vite
 `vp create @org --no-interactive` prints a stable, fixed-column table of the manifest (name, description, resolved template specifier) and exits 1. The output is machine-parseable, so scripts and AI agents can recover the list without a separate `--list` flag:
 
 ```
-error: vp create @nkzw requires a template selection in non-interactive mode.
+error: vp create @acme requires a template selection in non-interactive mode.
 
-available templates from @nkzw/create:
+available templates from @acme/create:
 
   NAME     DESCRIPTION                          TEMPLATE
-  web      Web app template (Vite + React)      @nkzw/template-web
-  library  TypeScript library template          @nkzw/template-library
+  web      Web app template (Vite + React)      @acme/template-web
+  library  TypeScript library template          @acme/template-library
   demo     Bundled demo template                ./templates/demo
 
-hint: rerun with an explicit selection, e.g. `vp create @nkzw/web`,
+hint: rerun with an explicit selection, e.g. `vp create @acme/web`,
       or use a Vite+ built-in template like `vp create vite:application`.
 ```
 

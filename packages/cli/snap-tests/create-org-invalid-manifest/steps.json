@@ -1,5 +1,5 @@
 {
   "commands": [
-    "node mock-server.mjs -- vp create @nkzw --no-interactive # invalid manifest -> schema error"
+    "node mock-server.mjs -- vp create @acme --no-interactive # invalid manifest -> schema error"
   ]
 }

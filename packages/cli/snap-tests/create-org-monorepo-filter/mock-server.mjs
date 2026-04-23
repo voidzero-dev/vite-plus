@@ -1,6 +1,6 @@
 // Minimal mock npm registry used by `create-org-*` snap-tests.
 //
-// Reads `./mock-manifest.json` (keyed by URL path, e.g. `"@nkzw/create"`) and
+// Reads `./mock-manifest.json` (keyed by URL path, e.g. `"@acme/create"`) and
 // optionally serves `.tgz` tarballs from `./tarballs/<name>`. Picks an
 // ephemeral port, sets `NPM_CONFIG_REGISTRY` on the child environment, spawns
 // the wrapped command, and tears down when the child exits.

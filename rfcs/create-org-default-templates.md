@@ -43,8 +43,8 @@ single product surface to their engineers. Today, to pick one of an org's
 four templates, an engineer has to:
 
 1. Know the exact package name of the template they want.
-2. Type the full command: `vp create @nkzw/create-web`,
-   `vp create @nkzw/create-mobile`, etc.
+2. Type the full command: `vp create @acme/create-web`,
+   `vp create @acme/create-mobile`, etc.
 3. Find these names in a README, a wiki, or Slack.
 
 This works, but it isn't discoverable, and it forces the org to document
@@ -55,13 +55,13 @@ a single memorable entry point outperforms a list of names.
 ### What engineers should be able to type
 
 ```bash
-# Interactively pick a template from the @nkzw org
-vp create @nkzw
+# Interactively pick a template from the @acme org
+vp create @acme
 
 # Pick a specific one directly
-vp create @nkzw/web
+vp create @acme/web
 
-# Inside a repo that sets @nkzw as the default:
+# Inside a repo that sets @acme as the default:
 vp create
 ```
 
@@ -94,11 +94,11 @@ This RFC is additive. A non-trivial amount of the feature already ships.
 So the following already works today:
 
 ```bash
-# Already works: runs @nkzw/create
-vp create @nkzw
+# Already works: runs @acme/create
+vp create @acme
 
-# Already works: runs @nkzw/create-web
-vp create @nkzw/web
+# Already works: runs @acme/create-web
+vp create @acme/web
 ```
 
 The piece that doesn't exist yet is **discovering and choosing between multiple
@@ -140,41 +140,41 @@ The manifest lives at `vp.templates` in `@org/create`'s `package.json`.
 
 ```json
 {
-  "name": "@nkzw/create",
+  "name": "@acme/create",
   "version": "1.0.0",
-  "description": "Project templates from the @nkzw org",
+  "description": "Project templates from the @acme org",
   "vp": {
     "templates": [
       {
         "name": "monorepo",
-        "description": "Full Nakazawa Tech monorepo scaffold",
-        "template": "@nkzw/template-monorepo",
+        "description": "Full Acme Corp monorepo scaffold",
+        "template": "@acme/template-monorepo",
         "monorepo": true
       },
       {
         "name": "web",
         "description": "Web app template (Vite + React)",
-        "template": "@nkzw/template-web",
+        "template": "@acme/template-web",
         "keywords": ["web", "react", "app"]
       },
       {
         "name": "mobile",
         "description": "Mobile app (React Native) template",
-        "template": "@nkzw/template-mobile"
+        "template": "@acme/template-mobile"
       },
       {
         "name": "server",
         "description": "Server template (Node + Fastify)",
-        "template": "github:nkzw-tech/template-server"
+        "template": "github:acme-corp/template-server"
       },
       {
         "name": "library",
         "description": "TypeScript library template",
-        "template": "@nkzw/template-library"
+        "template": "@acme/template-library"
       },
       {
         "name": "demo",
-        "description": "Bundled demo template (lives inside @nkzw/create)",
+        "description": "Bundled demo template (lives inside @acme/create)",
         "template": "./templates/demo"
       }
     ]
@@ -189,7 +189,7 @@ The manifest lives at `vp.templates` in `@org/create`'s `package.json`.
 | `vp.templates`               | `TemplateEntry[]` | yes      | Non-empty array. Empty arrays are treated as "no manifest" (fall through to `@org/create` run).                                                                                                                                                                                                                                                                                    |
 | `vp.templates[].name`        | `string`          | yes      | Kebab-case. Used for `vp create @org/<name>` direct selection. Must be unique within the array.                                                                                                                                                                                                                                                                                    |
 | `vp.templates[].description` | `string`          | yes      | One-line description shown in the picker.                                                                                                                                                                                                                                                                                                                                          |
-| `vp.templates[].template`    | `string`          | yes      | One of: (a) an npm package specifier (`@nkzw/template-web`, optionally `@version`), (b) a GitHub URL (`github:user/repo`, `https://github.com/...`), (c) a `vite:*` builtin, (d) a local workspace package name, or (e) a relative path (`./templates/demo`, `../foo`) that resolves against the enclosing `@org/create` package root. See "Bundled subdirectory templates" below. |
+| `vp.templates[].template`    | `string`          | yes      | One of: (a) an npm package specifier (`@acme/template-web`, optionally `@version`), (b) a GitHub URL (`github:user/repo`, `https://github.com/...`), (c) a `vite:*` builtin, (d) a local workspace package name, or (e) a relative path (`./templates/demo`, `../foo`) that resolves against the enclosing `@org/create` package root. See "Bundled subdirectory templates" below. |
 | `vp.templates[].keywords`    | `string[]`        | no       | Filter terms for picker search.                                                                                                                                                                                                                                                                                                                                                    |
 | `vp.templates[].monorepo`    | `boolean`         | no       | If `true`, marks this entry as a _monorepo-creating_ template. Hidden from the picker when `vp create` is invoked inside an existing monorepo. Mirrors the built-in behavior that filters `vite:monorepo` out of `getInitialTemplateOptions` (`packages/cli/src/create/initial-template-options.ts:9-31`). Defaults to `false`.                                                    |
 
@@ -197,7 +197,7 @@ The manifest lives at `vp.templates` in `@org/create`'s `package.json`.
 
 A present-but-invalid `vp.templates` field should **not** silently fall through
 to the shorthand. It should produce a schema error with the offending field
-path (e.g. `@nkzw/create: vp.templates[2].template is required`), because the
+path (e.g. `@acme/create: vp.templates[2].template is required`), because the
 maintainer clearly intended to provide a manifest and should be told what's
 wrong.
 
@@ -347,7 +347,7 @@ declare module '@voidzero-dev/vite-plus-core' {
        * as the default (equivalent to `vp create <defaultTemplate>`).
        *
        * Accepts any value that would work as the first argument to
-       * `vp create` — typically a scope like `@nkzw`.
+       * `vp create` — typically a scope like `@acme`.
        */
       defaultTemplate?: string;
     };
@@ -362,7 +362,7 @@ import { defineConfig } from '@voidzero-dev/vite-plus';
 
 export default defineConfig({
   create: {
-    defaultTemplate: '@nkzw',
+    defaultTemplate: '@acme',
   },
 });
 ```
@@ -388,8 +388,8 @@ templates" entry. Selecting it drops the user into the existing
 (`packages/cli/src/create/initial-template-options.ts:9-31`) unchanged:
 
 ```
-? Pick a template from @nkzw
-❯ monorepo   Full Nakazawa Tech monorepo scaffold
+? Pick a template from @acme
+❯ monorepo   Full Acme Corp monorepo scaffold
   web        Web app template (Vite + React)
   mobile     Mobile app (React Native) template
   server     Server template (Node + Fastify)
@@ -420,7 +420,7 @@ The `--no-interactive` error output for `vp create @org` mentions this in
 the hint line, so an agent reading the table can pivot:
 
 ```
-hint: rerun with an explicit selection, e.g. `vp create @nkzw/web`,
+hint: rerun with an explicit selection, e.g. `vp create @acme/web`,
       or use a Vite+ built-in template like `vp create vite:application`.
 ```
 
@@ -429,7 +429,7 @@ hint: rerun with an explicit selection, e.g. `vp create @nkzw/web`,
 - **User-level default** at `~/.vite-plus/config.json`. Deferred to a future
   RFC to keep this one tight. Callers who want a personal default can commit
   the project config.
-- **Multiple defaults** (e.g. a picker spanning `['@nkzw', '@vercel']`).
+- **Multiple defaults** (e.g. a picker spanning `['@acme', '@vercel']`).
   If that need surfaces later, it warrants a separate field
   (`defaultTemplates: string[]`) rather than overloading the singular form.
 
@@ -443,7 +443,7 @@ below), followed by a trailing **Vite+ built-in templates** entry (see
 "Keeping access to the Vite+ built-in templates" above). Sketch:
 
 ```
-? Pick a template from @nkzw
+? Pick a template from @acme
 ❯ web       Web app template (Vite + React)
   mobile    Mobile app (React Native) template
   server    Server template (Node + Fastify)
@@ -501,18 +501,18 @@ context (name, description, underlying template) to pick an appropriate
 option and retry with `vp create @org/<name>`:
 
 ```
-error: vp create @nkzw requires a template selection in non-interactive mode.
+error: vp create @acme requires a template selection in non-interactive mode.
 
-available templates from @nkzw/create:
+available templates from @acme/create:
 
   NAME     DESCRIPTION                          TEMPLATE
-  web      Web app template (Vite + React)      @nkzw/template-web
-  mobile   Mobile app (React Native) template   @nkzw/template-mobile
-  server   Server template (Node + Fastify)     github:nkzw-tech/template-server
-  library  TypeScript library template          @nkzw/template-library
+  web      Web app template (Vite + React)      @acme/template-web
+  mobile   Mobile app (React Native) template   @acme/template-mobile
+  server   Server template (Node + Fastify)     github:acme-corp/template-server
+  library  TypeScript library template          @acme/template-library
   demo     Bundled demo template                ./templates/demo
 
-hint: rerun with an explicit selection, e.g. `vp create @nkzw/web`,
+hint: rerun with an explicit selection, e.g. `vp create @acme/web`,
       or use a Vite+ built-in template like `vp create vite:application`.
 ```
 
@@ -545,7 +545,7 @@ pattern used by `create-vite`, `create-next-app`, and most enterprise
 scaffolding kits — one repo, one publish, one versioning story.
 
 ```
-@nkzw/create/
+@acme/create/
 ├── package.json              # "vp": { "templates": [{ "template": "./templates/demo" }, ...] }
 ├── templates/
 │   ├── demo/
@@ -562,7 +562,7 @@ templates on GitHub) and wants `@org/create` to be a thin index. Manifest
 entries use npm specifiers or `github:` URLs.
 
 ```
-@nkzw/create/
+@acme/create/
 ├── package.json              # "vp": { "templates": [{ "template": "@org/template-web" }, ...] }
 └── README.md
 ```
@@ -576,7 +576,7 @@ strongly recommended that `@org/create` remains **runnable as a classic
 `npm create` / `yarn create`. Typical layout adds a bin script:
 
 ```
-@nkzw/create/
+@acme/create/
 ├── package.json         # "bin": { "create": "./bin.js" }, and "vp.templates"
 ├── bin.js               # small launcher that runs the picker for npm users
 ├── templates/...        # (if using Layout 1)
@@ -585,8 +585,8 @@ strongly recommended that `@org/create` remains **runnable as a classic
 
 This gives you:
 
-- `npm create @nkzw` / `yarn create @nkzw` → runs your `bin.js` (legacy path).
-- `vp create @nkzw` → reads the manifest directly, no `bin.js` execution.
+- `npm create @acme` / `yarn create @acme` → runs your `bin.js` (legacy path).
+- `vp create @acme` → reads the manifest directly, no `bin.js` execution.
 
 ### Choosing what the manifest entries point to
 
@@ -620,7 +620,7 @@ individual packages inside the monorepo.
 
 The manifest is resolved against `@org/create@latest` by default. Org
 maintainers can pin a specific version per entry (e.g.
-`@nkzw/template-web@2.3.0`) inside the `template` field. We do not add a
+`@acme/template-web@2.3.0`) inside the `template` field. We do not add a
 separate `version` field on the manifest entry to avoid two competing knobs.
 
 ### Publishing checklist
@@ -651,13 +651,13 @@ either way; they continue to run your `bin` script.
 | `vp.templates` is not an array                                                  | Schema error: `@org/create: vp.templates must be an array`.                                                                                                                                                |
 | Manifest entry missing `name` / `description` / `template`                      | Schema error with the offending index and field.                                                                                                                                                           |
 | Manifest entry has duplicate `name`                                             | Schema error listing the duplicate.                                                                                                                                                                        |
-| Chosen template fails to resolve (404, bad URL)                                 | Downstream error with context: `selected 'web' from @nkzw/create: <downstream error>`.                                                                                                                     |
+| Chosen template fails to resolve (404, bad URL)                                 | Downstream error with context: `selected 'web' from @acme/create: <downstream error>`.                                                                                                                     |
 | Network failure fetching manifest                                               | Hard error. Never silently skip the picker when the user explicitly typed `@org`.                                                                                                                          |
 | `--no-interactive` without `@org/<name>`                                        | Error listing valid names (see above).                                                                                                                                                                     |
 | All manifest entries filtered (e.g. all `monorepo: true` inside a monorepo)     | Print an `info:` note (`"No templates from @org/create are applicable inside a monorepo — showing Vite+ built-in templates instead."`) and route to the built-in picker. Keeps the user out of a dead end. |
 | `vp create @org/<name>` where `name` has `monorepo: true` and cwd is a monorepo | Same error as the builtin: `Cannot create a monorepo inside an existing monorepo` (mirrors `bin.ts:468-472`).                                                                                              |
 | Bundled path (`./foo`) resolves outside `@org/create` root                      | Schema error at manifest-validation time: `vp.templates[i].template escapes the package root`.                                                                                                             |
-| Bundled path points to a directory that does not exist in the tarball           | Scaffolding error: `selected 'demo' from @nkzw/create: ./templates/demo not found in @nkzw/create@1.0.0`.                                                                                                  |
+| Bundled path points to a directory that does not exist in the tarball           | Scaffolding error: `selected 'demo' from @acme/create: ./templates/demo not found in @acme/create@1.0.0`.                                                                                                  |
 | Tarball download or extraction fails                                            | Hard error with the upstream cause. Cached partial extractions are cleaned up before retry.                                                                                                                |
 
 ## Alternatives Considered
@@ -783,8 +783,8 @@ Usage: vp create [TEMPLATE] [OPTIONS] [-- TEMPLATE_OPTIONS]
 
 Arguments:
   TEMPLATE           Template to scaffold from. May be:
-                       - an org scope (e.g. @nkzw) for org templates
-                       - a scoped name (e.g. @nkzw/web) for a specific
+                       - an org scope (e.g. @acme) for org templates
+                       - a scoped name (e.g. @acme/web) for a specific
                          template from an org's manifest
                        - any value accepted today: create-*, github:*, vite:*,
                          local package name
@@ -813,14 +813,14 @@ Configuration (vite.config.ts):
 
 ```bash
 # Discovery
-vp create @nkzw
+vp create @acme
 # → picker with: web, mobile, server, library
 
 # Direct
-vp create @nkzw/server
+vp create @acme/server
 
 # Non-interactive (CI)
-vp create @nkzw/library --no-interactive --directory ./packages/new-lib
+vp create @acme/library --no-interactive --directory ./packages/new-lib
 ```
 
 ### Enterprise monorepo with a default
