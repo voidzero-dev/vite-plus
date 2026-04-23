@@ -392,23 +392,6 @@ async function main() {
   }
   // #endregion
 
-  // #region Handle required arguments
-  if (!templateName && !options.interactive) {
-    console.error(`
-A template name is required when running in non-interactive mode
-
-Usage: vp create [TEMPLATE] [OPTIONS] [-- TEMPLATE_OPTIONS]
-
-Example:
-  ${muted('# Create a new application in non-interactive mode with a custom target directory')}
-  vp create vite:application --no-interactive --directory=apps/my-app
-
-Use \`vp create --list\` to list all available templates, or run \`vp create --help\` for more information.
-`);
-    process.exit(1);
-  }
-  // #endregion
-
   // #region Prepare Stage
   if (options.interactive) {
     prompts.intro(vitePlusHeader());
@@ -482,6 +465,26 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     } else if (resolved.kind === 'escape-hatch') {
       selectedTemplateName = '';
     }
+  }
+
+  // Guard only after the CLI arg → `create.defaultTemplate` → @org manifest
+  // chain has had a chance to fill `selectedTemplateName`. A user in a repo
+  // with `create.defaultTemplate` set should be able to run `vp create
+  // --no-interactive` and hit the configured default (which itself may
+  // print its own manifest table for an @org scope).
+  if (!selectedTemplateName && !options.interactive) {
+    console.error(`
+A template name is required when running in non-interactive mode
+
+Usage: vp create [TEMPLATE] [OPTIONS] [-- TEMPLATE_OPTIONS]
+
+Example:
+  ${muted('# Create a new application in non-interactive mode with a custom target directory')}
+  vp create vite:application --no-interactive --directory=apps/my-app
+
+Use \`vp create --list\` to list all available templates, or run \`vp create --help\` for more information.
+`);
+    process.exit(1);
   }
 
   if (!selectedTemplateName) {
