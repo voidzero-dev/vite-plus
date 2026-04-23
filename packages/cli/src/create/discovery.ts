@@ -46,11 +46,27 @@ export function discoverTemplate(
   templateArgs: string[],
   workspaceInfo: WorkspaceInfo,
   interactive?: boolean,
+  bundledLocalPath?: string,
 ): TemplateInfo {
   const envs = prependToPathToEnvs(workspaceInfo.downloadPackageManager.binPrefix, {
     ...process.env,
   });
   const parentDir = inferParentDir(templateName, workspaceInfo);
+  // Bundled subdirectory template — a manifest entry with a `./path`
+  // specifier that has already been resolved to an absolute path against
+  // the extracted @org/create tarball. See
+  // `rfcs/create-org-default-templates.md` and `org-tarball.ts`.
+  if (bundledLocalPath) {
+    return {
+      command: '',
+      args: [...templateArgs],
+      envs,
+      type: TemplateType.bundled,
+      parentDir,
+      interactive,
+      localPath: bundledLocalPath,
+    };
+  }
   // Check for built-in templates
   if (templateName.startsWith('vite:')) {
     return {

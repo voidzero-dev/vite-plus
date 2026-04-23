@@ -65,6 +65,16 @@ export function hasVitePlusDependency(
 }
 
 /**
+ * Resolve the npm registry base URL, honoring `NPM_CONFIG_REGISTRY` when set.
+ * The returned URL is stripped of any trailing slash so callers can safely
+ * append `/${packageName}`.
+ */
+export function getNpmRegistry(): string {
+  const registry = process.env.NPM_CONFIG_REGISTRY || 'https://registry.npmjs.org';
+  return registry.replace(/\/+$/, '');
+}
+
+/**
  * Check if an npm package exists in the public registry.
  * Returns true if the package exists or if the check could not be performed (network error, timeout).
  * Returns false only if the registry definitively responds with 404.
@@ -73,7 +83,7 @@ export async function checkNpmPackageExists(packageName: string): Promise<boolea
   const atIndex = packageName.indexOf('@', 2);
   const name = atIndex === -1 ? packageName : packageName.slice(0, atIndex);
   try {
-    const response = await fetch(`https://registry.npmjs.org/${name}`, {
+    const response = await fetch(`${getNpmRegistry()}/${name}`, {
       method: 'HEAD',
       signal: AbortSignal.timeout(3000),
     });

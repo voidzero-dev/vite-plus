@@ -482,11 +482,12 @@ extends to manifest entries with `monorepo: true`.
 Keyword search: typing filters against `name`, `description`, and
 `keywords`. Arrow keys + Enter select; Ctrl-C cancels.
 
-**Decision**: reuse the `@inquirer/prompts` `select` primitive already wired
-into `vp create` (`packages/cli/src/create/bin.ts`), with prefix filtering
-over `name` / `description` / `keywords`. If real usage surfaces friction
-(e.g., orgs with many templates), revisit with a fuzzy-search picker like
-`@inquirer/search` in a follow-up.
+**Decision**: reuse the `@voidzero-dev/vite-plus-prompts` `select` primitive
+already wired into `vp create` (`packages/cli/src/create/bin.ts:5`, which
+wraps `@clack/core`), with prefix filtering over `name` / `description` /
+`keywords`. If real usage surfaces friction (e.g., orgs with many
+templates), revisit with a fuzzy-search picker (e.g. based on
+`@voidzero-dev/vite-plus-prompts`' `autocomplete`) in a follow-up.
 
 ### `--no-interactive`
 
@@ -712,7 +713,7 @@ Four phases, each independently shippable.
   `expandCreateShorthand`.
 - Schema validation for `vp.templates` (simple hand-rolled checks; no new
   dep).
-- Interactive picker using `@inquirer/prompts` `select`.
+- Interactive picker using `@voidzero-dev/vite-plus-prompts` `select`.
 - Direct selection: `vp create @org/name` uses manifest when present.
 - Tarball fetch + extract (`ensureOrgPackageExtracted`) with
   `$VP_HOME/tmp/create-org/<scope>/<name>/<version>/` cache, plus the
@@ -866,9 +867,10 @@ vp create vite:library
 
 ## Resolved Decisions
 
-- **Picker implementation**: plain `@inquirer/prompts` `select` with prefix
-  filtering. Upgrade to a fuzzy-search picker (`@inquirer/search`) in a
-  follow-up if real usage reports friction.
+- **Picker implementation**: plain `@voidzero-dev/vite-plus-prompts`
+  `select` with prefix filtering. Upgrade to a fuzzy-search picker (e.g.
+  the wrapper's `autocomplete`) in a follow-up if real usage reports
+  friction.
 - **No `--list` flag**: manifest inspection goes through
   `vp create @org --no-interactive`, which prints the full manifest table
   (name, description, resolved template specifier) as part of its error
