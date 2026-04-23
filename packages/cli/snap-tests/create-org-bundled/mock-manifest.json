@@ -1,0 +1,24 @@
+{
+  "@nkzw/create": {
+    "name": "@nkzw/create",
+    "dist-tags": { "latest": "1.0.0" },
+    "versions": {
+      "1.0.0": {
+        "version": "1.0.0",
+        "dist": {
+          "tarball": "{REGISTRY}/@nkzw/create/-/create-1.0.0.tgz",
+          "integrity": "sha512-h4Q9x+aUa2RUJGBe7JCZnWpGMyd8VHXPfL9+EBxrA2EWRV8rlmMCP45B3woZ8xA2fmkE/jUy1W7OM2GCjoPWQA=="
+        },
+        "vp": {
+          "templates": [
+            {
+              "name": "demo",
+              "description": "Bundled demo template",
+              "template": "./templates/demo"
+            }
+          ]
+        }
+      }
+    }
+  }
+}
