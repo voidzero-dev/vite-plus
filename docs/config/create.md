@@ -11,12 +11,12 @@ import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   create: {
-    defaultTemplate: '@nkzw',
+    defaultTemplate: '@acme',
   },
 });
 ```
 
-Any value accepted by `vp create` as a first argument works here — `@nkzw` for an org picker, `@nkzw/web` for a direct manifest entry, `vite:application` for a built-in, etc.
+Any value accepted by `vp create` as a first argument works here — `@acme` for an org picker, `@acme/web` for a direct manifest entry, `vite:application` for a built-in, etc.
 
 ## Precedence
 
