@@ -501,9 +501,9 @@ context (name, description, underlying template) to pick an appropriate
 option and retry with `vp create @org/<name>`:
 
 ```
-error: vp create @your-org requires a template selection in non-interactive mode.
+A template name is required when running `vp create @your-org` in non-interactive mode.
 
-available templates from @your-org/create:
+Available templates in @your-org/create:
 
   NAME     DESCRIPTION                          TEMPLATE
   web      Web app template (Vite + React)      @your-org/template-web
@@ -512,9 +512,18 @@ available templates from @your-org/create:
   library  TypeScript library template          @your-org/template-library
   demo     Bundled demo template                ./templates/demo
 
-hint: rerun with an explicit selection, e.g. `vp create @your-org/web`,
-      or use a Vite+ built-in template like `vp create vite:application`.
+Examples:
+  # Scaffold a specific template from the org
+  vp create @your-org/web --no-interactive
+
+  # Or use a Vite+ built-in template
+  vp create vite:application --no-interactive
 ```
+
+Shape matches the existing `vp create` missing-argument message
+(`packages/cli/src/create/bin.ts:387-399`) — same opening sentence pattern,
+same `Examples:` block — so users see a consistent shape for any
+missing-template error across the command.
 
 Notes:
 
