@@ -1,4 +1,8 @@
 [1]> vp dlx -s print-current-version # should print Node.js version 22.11.0 from devEngines.runtime
-ERROR: This version of pnpm requires at least Node.js v22.13
-The current version of Node.js is v<semver>
-Visit https://r.pnpm.io/comp to see the list of past pnpm versions with respective Node.js version support.
+error: Node.js <semver> is incompatible with Vite+ CLI.
+Required by Vite+: ^20.19.0 || >=22.12.0
+Resolved from: devEngines.runtime
+
+
+Fix this project: vp env pin lts
+Temporary override: vp env use lts

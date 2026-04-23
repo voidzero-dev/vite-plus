@@ -1,6 +1,4 @@
 > vp update --help # should show help
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp update [OPTIONS] [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
 
 Update packages to their latest versions
@@ -32,17 +30,12 @@ Packages: +<variable>
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 
 dependencies:
-+ @pnpm/exe <semver>
-+ pnpm <semver>
-- testnpm2 *
 + testnpm2 <semver>
 
 optionalDependencies:
-- test-vite-plus-package-optional *
 + test-vite-plus-package-optional <semver>
 
 devDependencies:
-- test-vite-plus-package *
 + test-vite-plus-package <semver>
 
 Done in <variable>ms using pnpm v<semver>

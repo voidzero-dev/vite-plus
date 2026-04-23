@@ -1,6 +1,4 @@
 > vp dedupe --help # should show help
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp dedupe [OPTIONS] [-- <PASS_THROUGH_ARGS>...]
 
 Deduplicate dependencies
@@ -20,15 +18,12 @@ Already up to date
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 
 dependencies:
-+ @pnpm/exe <semver>
-+ pnpm <semver>
-- testnpm2 <semver>
++ testnpm2 <semver>
 
 optionalDependencies:
-- test-vite-plus-package-optional <semver>
++ test-vite-plus-package-optional <semver>
 
 devDependencies:
-- test-vite-plus-package <semver>
 + test-vite-plus-package <semver>
 
 {

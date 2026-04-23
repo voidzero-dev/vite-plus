@@ -1,6 +1,4 @@
 > vp pm pack --help # should show help
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp pm pack [OPTIONS] [-- <PASS_THROUGH_ARGS>...]
 
 Create a tarball of the package
@@ -25,6 +23,7 @@ package: command-pack-pnpm11@<semver>
 Tarball Contents
 output.log
 package.json
+snap.txt
 steps.json
 Tarball Details
 command-pack-pnpm11-1.0.0.tgz
@@ -35,6 +34,7 @@ Tarball Contents
 command-pack-pnpm11-1.0.0.tgz
 output.log
 package.json
+snap.txt
 steps.json
 Tarball Details
 <cwd>/dist/package.tgz
@@ -45,6 +45,7 @@ Tarball Contents
 command-pack-pnpm11-1.0.0.tgz
 output.log
 package.json
+snap.txt
 steps.json
 Tarball Details
 <cwd>/dist/command-pack-pnpm11-1.0.0.tgz
@@ -63,6 +64,9 @@ Tarball Details
     },
     {
       "path": "package.json"
+    },
+    {
+      "path": "snap.txt"
     },
     {
       "path": "steps.json"
@@ -86,6 +90,9 @@ Tarball Details
       "path": "package.json"
     },
     {
+      "path": "snap.txt"
+    },
+    {
       "path": "steps.json"
     }
   ]
@@ -97,6 +104,7 @@ Tarball Contents
 command-pack-pnpm11-1.0.0.tgz
 output.log
 package.json
+snap.txt
 steps.json
 Tarball Details
 command-pack-pnpm11-1.0.0.tgz

@@ -753,6 +753,7 @@ $ vp link
 
 - pnpm@9.x
 - pnpm@10.x
+- pnpm@11.x [WIP] (unlink currently blocked by `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH`)
 - yarn@1.x
 - yarn@4.x
 - npm@10.x

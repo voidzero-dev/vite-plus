@@ -1,6 +1,4 @@
 > vp outdated --help # should show help
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp outdated [OPTIONS] [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
 
 Check for outdated packages
@@ -27,22 +25,17 @@ Documentation: https://viteplus.dev/guide/install
 
 
 > vp install # should install packages first
-VITE+ - The Unified Toolchain for the Web
-
 Packages: +<variable>
 +<repeat>
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 
 dependencies:
-+ @pnpm/exe <semver>
-+ pnpm <semver>
-- testnpm2 <semver>
++ testnpm2 <semver> (1.0.1 is available)
 
 optionalDependencies:
-- test-vite-plus-other-optional <semver>
++ test-vite-plus-other-optional <semver> (1.1.0 is available)
 
 devDependencies:
-- test-vite-plus-top-package <semver>
 + test-vite-plus-top-package <semver> (1.1.0 is available)
 
 Done in <variable>ms using pnpm v<semver>

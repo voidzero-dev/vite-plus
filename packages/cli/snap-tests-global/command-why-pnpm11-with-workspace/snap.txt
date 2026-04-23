@@ -1,15 +1,10 @@
 > vp install
-VITE+ - The Unified Toolchain for the Web
-
 Scope: all <variable> workspace projects
 Packages: +<variable>
 +<repeat>
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 
 dependencies:
-+ @pnpm/exe <semver>
-+ pnpm <semver>
-- testnpm2 <semver>
 + testnpm2 <semver> (1.0.1 is available)
 
 Done in <variable>ms using pnpm v<semver>

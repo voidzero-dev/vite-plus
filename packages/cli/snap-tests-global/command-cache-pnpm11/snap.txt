@@ -1,6 +1,4 @@
 > vp pm cache --help # should show help
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp pm cache <SUBCOMMAND> [-- <PASS_THROUGH_ARGS>...]
 
 Manage package cache

@@ -1,28 +1,18 @@
 > vp install # should install packages first
-VITE+ - The Unified Toolchain for the Web
-
 Packages: +<variable>
 +<repeat>
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 
 dependencies:
-+ @pnpm/exe <semver>
-+ pnpm <semver>
 + test-vite-plus-package-optional <semver>
-- testnpm2 <semver>
-
-peerDependencies:
-- test-vite-plus-package-optional <semver>
++ testnpm2 <semver>
 
 devDependencies:
-- test-vite-plus-package <semver>
 + test-vite-plus-package <semver>
 
 Done in <variable>ms using pnpm v<semver>
 
 > vp pm list --help # should show help
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp pm list [OPTIONS] [PATTERN] [-- <PASS_THROUGH_ARGS>...]
 
 List installed packages

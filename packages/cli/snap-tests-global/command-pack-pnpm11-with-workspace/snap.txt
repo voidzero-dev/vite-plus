@@ -6,6 +6,7 @@ package.json
 packages/app/package.json
 packages/utils/package.json
 pnpm-workspace.yaml
+snap.txt
 steps.json
 Tarball Details
 command-pack-pnpm11-with-workspace-1.0.0.tgz
@@ -59,6 +60,9 @@ command-pack-pnpm11-with-workspace-1.0.0.tgz
         "path": "pnpm-workspace.yaml"
       },
       {
+        "path": "snap.txt"
+      },
+      {
         "path": "steps.json"
       }
     ]
@@ -107,6 +111,7 @@ package.json
 packages/app/package.json
 packages/utils/package.json
 pnpm-workspace.yaml
+snap.txt
 steps.json
 vite-plus-test-utils-1.0.0.tgz
 Tarball Details
@@ -123,6 +128,7 @@ package.json
 packages/app/package.json
 packages/utils/package.json
 pnpm-workspace.yaml
+snap.txt
 steps.json
 vite-plus-test-utils-1.0.0.tgz
 Tarball Details
@@ -139,6 +145,7 @@ package.json
 packages/app/package.json
 packages/utils/package.json
 pnpm-workspace.yaml
+snap.txt
 steps.json
 vite-plus-test-utils-1.0.0.tgz
 Tarball Details
@@ -173,6 +180,9 @@ command-pack-pnpm11-with-workspace-1.0.0.tgz
     },
     {
       "path": "pnpm-workspace.yaml"
+    },
+    {
+      "path": "snap.txt"
     },
     {
       "path": "steps.json"

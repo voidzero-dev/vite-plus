@@ -1,6 +1,4 @@
 > vp unlink -h # should show help message
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp unlink [OPTIONS] [PACKAGE|DIR] [ARGS]...
 
 Unlink packages
@@ -20,9 +18,6 @@ Documentation: https://viteplus.dev/guide/install
 > vp link ../unlink-test-lib && cat package.json # link the library first
 
 dependencies:
-+ @pnpm/exe <semver>
-+ pnpm <semver>
-- unlink-test-lib link:../unlink-test-lib
 + unlink-test-lib <semver> <- ../unlink-test-lib
 
 {

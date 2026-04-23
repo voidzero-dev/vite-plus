@@ -1,11 +1,6 @@
 > vp update testnpm2 --latest -w && cat package.json # should update in workspace root
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 
-dependencies:
-+ @pnpm/exe <semver>
-+ pnpm <semver>
-- testnpm2 *
-
 Packages: +<variable>
 +<repeat>
 Done in <variable>ms using pnpm v<semver>

@@ -1,27 +1,20 @@
 > vp install # should install packages first
-VITE+ - The Unified Toolchain for the Web
-
 Packages: +<variable>
 +<repeat>
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 
 dependencies:
-+ @pnpm/exe <semver>
-+ pnpm <semver>
-- testnpm2 <semver>
++ testnpm2 <semver>
 
 optionalDependencies:
-- test-vite-plus-package-optional <semver>
++ test-vite-plus-package-optional <semver>
 
 devDependencies:
-- test-vite-plus-package <semver>
 + test-vite-plus-package <semver>
 
 Done in <variable>ms using pnpm v<semver>
 
 > vp pm prune --help # should show help
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp pm prune [OPTIONS] [-- <PASS_THROUGH_ARGS>...]
 
 Remove unnecessary packages
