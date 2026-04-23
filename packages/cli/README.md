@@ -150,6 +150,13 @@ vp create
 
 You can run `vp create` inside of a project to add new apps or libraries to your project.
 
+Organizations can expose a curated set of templates under their npm scope by
+publishing `@org/create` with a `vp.templates` manifest in its `package.json`.
+Engineers can then type `vp create @org` to pick from that list
+interactively, or set `create: { defaultTemplate: '@org' }` in
+`vite.config.ts` to make it the default for bare `vp create`. See the
+[RFC](../../rfcs/create-org-default-templates.md) for the full spec.
+
 ### Migrating an existing project
 
 You can migrate an existing project to Vite+:
