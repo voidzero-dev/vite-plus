@@ -395,8 +395,14 @@ templates" entry. Selecting it drops the user into the existing
   server     Server template (Node + Fastify)
   library    TypeScript library template
   ──────────────────
-  › Vite+ built-in templates   Use defaults (monorepo / application / library / generator)
+  › Vite+ built-in templates   Use defaults (monorepo / application / library)
 ```
+
+The hint trailing "Vite+ built-in templates" matches what
+`getInitialTemplateOptions` actually offers for the current workspace
+context — inside an existing monorepo the hint reads "Use defaults
+(application / library)" since `vite:monorepo` is filtered out and
+`vite:generator` isn't part of the picker.
 
 Rules:
 
@@ -449,7 +455,7 @@ below), followed by a trailing **Vite+ built-in templates** entry (see
   server    Server template (Node + Fastify)
   library   TypeScript library template
   ──────────────────
-  › Vite+ built-in templates   Use defaults (monorepo / application / library / generator)
+  › Vite+ built-in templates   Use defaults (monorepo / application / library)
 ```
 
 ### Context-aware filtering

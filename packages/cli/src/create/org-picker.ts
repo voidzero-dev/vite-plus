@@ -44,10 +44,16 @@ export async function pickOrgTemplate(
     label: entry.name,
     hint: entry.description,
   }));
+  // Mirror `getInitialTemplateOptions(isMonorepo)`: `monorepo` is hidden
+  // inside an existing monorepo (and would be rejected at scaffold time
+  // anyway); `generator` isn't part of the builtin picker at all.
+  const builtinHint = opts.isMonorepo
+    ? 'Use defaults (application / library)'
+    : 'Use defaults (monorepo / application / library)';
   options.push({
     value: BUILTIN_ESCAPE_VALUE,
     label: 'Vite+ built-in templates',
-    hint: 'Use defaults (monorepo / application / library / generator)',
+    hint: builtinHint,
   });
 
   const picked = await prompts.select({
