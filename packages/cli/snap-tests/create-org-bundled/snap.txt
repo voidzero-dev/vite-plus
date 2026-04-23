@@ -1,6 +1,6 @@
-> node mock-server.mjs -- vp create @acme/demo --no-interactive --directory my-demo-app # bundled template: extract tarball, copy subdir
+> node mock-server.mjs -- vp create @your-org/demo --no-interactive --directory my-demo-app # bundled template: extract tarball, copy subdir
 
-selected 'demo' from @acme/create
+selected 'demo' from @your-org/create
 ◇ Scaffolded my-demo-app
 • Node <semver>  pnpm <semver>
 → Next: cd my-demo-app && vp run

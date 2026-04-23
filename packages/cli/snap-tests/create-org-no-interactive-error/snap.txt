@@ -1,11 +1,11 @@
-[1]> node mock-server.mjs -- vp create @acme --no-interactive # prints manifest table, exits 1
-error: vp create @acme requires a template selection in non-interactive mode.
+[1]> node mock-server.mjs -- vp create @your-org --no-interactive # prints manifest table, exits 1
+error: vp create @your-org requires a template selection in non-interactive mode.
 
-available templates from @acme/create:
+available templates from @your-org/create:
 
   NAME     DESCRIPTION                  TEMPLATE
-  web      Web app template             @acme/template-web
-  library  TypeScript library template  @acme/template-library
+  web      Web app template             @your-org/template-web
+  library  TypeScript library template  @your-org/template-library
 
-hint: rerun with an explicit selection, e.g. `vp create @acme/web`,
+hint: rerun with an explicit selection, e.g. `vp create @your-org/web`,
       or use a Vite+ built-in template like `vp create vite:application`.

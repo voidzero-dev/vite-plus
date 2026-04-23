@@ -1,5 +1,5 @@
-[1]> node mock-server.mjs -- vp create @acme --no-interactive # invalid manifest -> schema error
+[1]> node mock-server.mjs -- vp create @your-org --no-interactive # invalid manifest -> schema error
 
-@acme/create: vp.templates[0].template must be a non-empty string
+@your-org/create: vp.templates[0].template must be a non-empty string
 Failed to resolve org template manifest
 

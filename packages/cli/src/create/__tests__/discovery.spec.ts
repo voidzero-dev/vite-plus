@@ -85,12 +85,12 @@ describe('GitHub template helpers', () => {
   });
 
   it('should infer the repository name from GitHub templates', () => {
-    expect(inferGitHubRepoName('github:acme-corp/fate-template')).toBe('fate-template');
-    expect(inferGitHubRepoName('https://github.com/acme-corp/fate-template')).toBe('fate-template');
+    expect(inferGitHubRepoName('github:your-org/fate-template')).toBe('fate-template');
+    expect(inferGitHubRepoName('https://github.com/your-org/fate-template')).toBe('fate-template');
   });
 
   it('should resolve GitHub templates to degit without reusing the original URL as destination', () => {
-    const template = discoverTemplate('https://github.com/acme-corp/fate-template', ['my-app'], {
+    const template = discoverTemplate('https://github.com/your-org/fate-template', ['my-app'], {
       rootDir: '/tmp/workspace',
       isMonorepo: false,
       monorepoScope: '',
@@ -106,6 +106,6 @@ describe('GitHub template helpers', () => {
     });
 
     expect(template.command).toBe('degit');
-    expect(template.args).toEqual(['acme-corp/fate-template', 'my-app']);
+    expect(template.args).toEqual(['your-org/fate-template', 'my-app']);
   });
 });

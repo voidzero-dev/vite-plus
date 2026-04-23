@@ -1,13 +1,13 @@
-[1]> node mock-server.mjs -- vp create @acme --no-interactive # inside monorepo, hides monorepo:true entries + shows omitted footer
-error: vp create @acme requires a template selection in non-interactive mode.
+[1]> node mock-server.mjs -- vp create @your-org --no-interactive # inside monorepo, hides monorepo:true entries + shows omitted footer
+error: vp create @your-org requires a template selection in non-interactive mode.
 
-available templates from @acme/create:
+available templates from @your-org/create:
 
   NAME     DESCRIPTION                      TEMPLATE
-  web      Web app template (Vite + React)  @acme/template-web
-  library  TypeScript library template      @acme/template-library
+  web      Web app template (Vite + React)  @your-org/template-web
+  library  TypeScript library template      @your-org/template-library
 
 (omitted 1 monorepo-only entry because this workspace is already a monorepo)
 
-hint: rerun with an explicit selection, e.g. `vp create @acme/web`,
+hint: rerun with an explicit selection, e.g. `vp create @your-org/web`,
       or use a Vite+ built-in template like `vp create vite:application`.
