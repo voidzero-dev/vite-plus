@@ -104,7 +104,7 @@ catalog:
   terser: ^5.44.1
   tinybench: ^6.0.0
   tinyexec: ^1.0.1
-  tsdown: ^0.21.9
+  tsdown: ^0.21.10
   tsx: ^4.20.6
   typescript: ^6.0.0
   unified: ^11.0.5
