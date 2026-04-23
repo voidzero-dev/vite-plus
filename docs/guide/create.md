@@ -86,3 +86,142 @@ vp create create-next-app
 vp create github:user/repo
 vp create https://github.com/user/template-repo
 ```
+
+## Organization Templates
+
+An organization can publish a curated set of templates under a single npm scope by shipping an `@org/create` package whose `package.json` carries a `vp.templates` manifest. Engineers then type the scope and get an interactive picker over the listed templates.
+
+### Pick from an org
+
+```bash
+# Open an interactive picker over @nkzw/create's manifest
+vp create @nkzw
+
+# Run a specific manifest entry directly
+vp create @nkzw/web
+
+# Set the org as the default for a repo (see create.defaultTemplate config)
+vp create
+```
+
+Behind the scenes, `vp create @org` maps to `@org/create` (the existing npm `create-*` convention). If that package has no `vp.templates` field, Vite+ falls back to running the package normally — so adopting the manifest is zero-risk for orgs that already publish `@org/create`.
+
+### Authoring `@org/create`
+
+There are two common layouts. Pick the one that matches the org's template count and release cadence.
+
+**Bundled (recommended for most orgs).** All templates live as subdirectories of `@org/create` itself. Manifest entries use relative `./path` values. One repo, one publish, one versioning story — the same pattern used by `create-vite` and `create-next-app`.
+
+```
+@nkzw/create/
+├── package.json              # "vp": { "templates": [{ "template": "./templates/web" }, ...] }
+├── templates/
+│   ├── web/
+│   │   ├── package.json
+│   │   └── src/...
+│   └── library/...
+└── README.md
+```
+
+**Manifest-only.** When the org already publishes independent `@org/template-*` packages (or hosts them on GitHub), `@org/create` stays a thin index.
+
+```
+@nkzw/create/
+├── package.json              # "vp": { "templates": [{ "template": "@nkzw/template-web" }, ...] }
+└── README.md
+```
+
+The two layouts can be mixed — a manifest can point most entries at external packages and keep a few as bundled subdirectories.
+
+Optionally, provide a `bin` script so `npm create @org` (the legacy path) keeps working for non-Vite+ users. `vp create @org` reads the manifest directly and never runs the `bin`.
+
+### Manifest schema
+
+The manifest lives at `vp.templates` in `@org/create`'s `package.json`:
+
+```json
+{
+  "name": "@nkzw/create",
+  "version": "1.0.0",
+  "vp": {
+    "templates": [
+      {
+        "name": "monorepo",
+        "description": "Full Nakazawa Tech monorepo",
+        "template": "@nkzw/template-monorepo",
+        "monorepo": true
+      },
+      {
+        "name": "web",
+        "description": "Web app template (Vite + React)",
+        "template": "@nkzw/template-web",
+        "keywords": ["web", "react", "app"]
+      },
+      {
+        "name": "demo",
+        "description": "Bundled demo template",
+        "template": "./templates/demo"
+      }
+    ]
+  }
+}
+```
+
+Each entry supports:
+
+| Field         | Required | Notes                                                                                                                                                                                                                                        |
+| ------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`        | yes      | Kebab-case identifier. Used by `vp create @org/<name>` for direct selection. Must be unique within the array.                                                                                                                                |
+| `description` | yes      | One-line description shown in the picker.                                                                                                                                                                                                    |
+| `template`    | yes      | An npm specifier (`@org/template-foo`, optionally `@version`), a GitHub URL (`github:user/repo`), a `vite:*` builtin, a local workspace package name, or a relative path (`./templates/foo`) that resolves against the `@org/create` root. |
+| `keywords`    | no       | Filter terms for picker search.                                                                                                                                                                                                              |
+| `monorepo`    | no       | If `true`, marks this entry as a monorepo-creating template. Hidden from the picker when `vp create` runs inside an existing monorepo, mirroring the built-in `vite:monorepo` filter.                                                        |
+
+An invalid manifest is a hard error, not a silent fall-through — a maintainer who shipped a manifest should hear about the offending field, e.g. `@nkzw/create: vp.templates[2].template must be a non-empty string`.
+
+### Bundled subdirectory templates
+
+Relative `./...` paths resolve against the enclosing `@org/create` package root — **not** the user's cwd. Vite+ downloads the tarball once per published version (honoring `NPM_CONFIG_REGISTRY`), verifies its SHA-512 integrity against `dist.integrity`, and extracts it under `$VP_HOME/tmp/create-org/<scope>/<name>/<version>/`. Subsequent invocations reuse the cache. The referenced directory is copied verbatim — no template-engine processing. Paths that escape the package root are rejected at schema-validation time.
+
+### Make the org the default in a repo
+
+Commit this in `vite.config.ts` at the project root:
+
+```ts
+import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  create: { defaultTemplate: '@nkzw' },
+});
+```
+
+Now `vp create` (with no argument) drops straight into the `@nkzw` picker. See [`create.defaultTemplate`](/config/create) for details.
+
+The picker always appends a trailing **Vite+ built-in templates** entry so `vite:monorepo` / `vite:application` / `vite:library` / `vite:generator` stay reachable from the picker — selecting it routes to the standard built-in flow. For scripts and CI, explicit specifiers (`vp create vite:library`) bypass the configured default.
+
+### Non-interactive inspection
+
+`vp create @org --no-interactive` prints a stable, fixed-column table of the manifest (name, description, resolved template specifier) and exits 1. The output is machine-parseable, so scripts and AI agents can recover the list without a separate `--list` flag:
+
+```
+error: vp create @nkzw requires a template selection in non-interactive mode.
+
+available templates from @nkzw/create:
+
+  NAME     DESCRIPTION                          TEMPLATE
+  web      Web app template (Vite + React)      @nkzw/template-web
+  library  TypeScript library template          @nkzw/template-library
+  demo     Bundled demo template                ./templates/demo
+
+hint: rerun with an explicit selection, e.g. `vp create @nkzw/web`,
+      or use a Vite+ built-in template like `vp create vite:application`.
+```
+
+### Publishing checklist
+
+1. Create `@org/create` (scoped npm package) if you don't already have one.
+2. Add a `vp.templates` array to `package.json`. (Bundle the templates under `./templates/...` or point at external packages.)
+3. (Optional) Provide a `bin` launcher for `npm create @org` compatibility.
+4. Publish.
+5. Verify: `vp create @org --no-interactive` prints the manifest table; `vp create @org` opens the picker.
+6. (Optional) Commit `create: { defaultTemplate: '@org' }` in your internal template repos.
