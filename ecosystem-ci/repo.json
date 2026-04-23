@@ -119,5 +119,11 @@
     "branch": "main",
     "hash": "6192f60653c124ae068efaf5d7d0a4134c95edbd",
     "forceFreshMigration": true
+  },
+  "varlet": {
+    "repository": "https://github.com/varletjs/varlet.git",
+    "branch": "dev",
+    "hash": "83f6c6a418ab9319e07d719d86d4fa952f99e266",
+    "forceFreshMigration": true
   }
 }

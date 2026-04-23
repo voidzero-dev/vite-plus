@@ -123,16 +123,29 @@ jobs:
             create-args: vite:monorepo --directory test-project
             template-args: ''
             verify-command: vp run ready
+            verify-migration: 'false'
           - name: application
             create-args: vite:application --directory test-project
             template-args: '-- --template vanilla-ts'
             verify-command: vp run build
+            verify-migration: 'false'
           - name: library
             create-args: vite:library --directory test-project
             template-args: ''
             verify-command: |
               vp run build
               vp run test
+            verify-migration: 'false'
+          # Remote template that ships ESLint (+ an eslint.config.js importing
+          # @eslint/js etc.). Exercises the migrate-before-rewrite reorder in
+          # `vp create`: after scaffold, ESLint → oxlint and Prettier → oxfmt
+          # run before the vite-plus rewrite so `.oxlintrc` / `.oxfmtrc` get
+          # merged into vite.config.ts.
+          - name: remote-vite-react-ts
+            create-args: vite@9.0.5
+            template-args: '-- test-project --template react-ts'
+            verify-command: vp run build
+            verify-migration: 'true'
         package-manager:
           - pnpm
           - npm
@@ -251,6 +264,41 @@ jobs:
               process.exit(1);
             }
             console.log('✓ vite-plus@' + pkg.version + ' installed correctly');
+          "
+
+      - name: Verify ESLint/Prettier auto-migration
+        if: matrix.template.verify-migration == 'true'
+        working-directory: ${{ runner.temp }}/test-project
+        run: |
+          # eslint.config.js must be gone (migration deleted it)
+          test ! -f eslint.config.js
+          echo "✓ eslint.config.js removed"
+
+          # .oxlintrc.json must NOT be loose on disk — it was merged into
+          # vite.config.ts by the rewrite step that runs after migration.
+          test ! -f .oxlintrc.json
+          echo "✓ .oxlintrc.json merged into vite.config.ts"
+
+          # vite.config.ts must contain the merged oxlint config.
+          grep -q '^[[:space:]]*lint:' vite.config.ts
+          echo "✓ vite.config.ts has merged lint section"
+
+          # package.json: eslint devDep removed, vite-plus present, lint script rewritten.
+          node -e "
+            const pkg = require('./package.json');
+            if (pkg.devDependencies && pkg.devDependencies.eslint) {
+              console.error('✗ eslint devDependency should have been removed');
+              process.exit(1);
+            }
+            if (!pkg.devDependencies || !pkg.devDependencies['vite-plus']) {
+              console.error('✗ vite-plus devDependency missing');
+              process.exit(1);
+            }
+            if (!pkg.scripts || !pkg.scripts.lint || !pkg.scripts.lint.includes('vp lint')) {
+              console.error('✗ lint script should invoke vp lint, got: ' + (pkg.scripts && pkg.scripts.lint));
+              process.exit(1);
+            }
+            console.log('✓ package.json migrated (eslint gone, vite-plus added, lint script rewritten)');
           "
 
       - name: Run vp check

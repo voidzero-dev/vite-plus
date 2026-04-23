@@ -28,8 +28,8 @@
     "binding/index.d.ts",
     "binding/index.js",
     "dist/test",
+    "docs",
     "rules",
-    "skills",
     "templates"
   ],
   "type": "module",
