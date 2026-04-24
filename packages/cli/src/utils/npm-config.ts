@@ -55,20 +55,30 @@ function loadFileInto(filePath: string, config: NpmConfig): void {
 function getNpmConfig(): NpmConfig {
   const config: NpmConfig = new Map();
   // Layer in order of increasing precedence: user → project → env.
-  loadFileInto(path.join(os.homedir(), '.npmrc'), config);
-  let dir = process.cwd();
+  const homeNpmrc = path.resolve(os.homedir(), '.npmrc');
+  loadFileInto(homeNpmrc, config);
+  // Collect project `.npmrc` paths from cwd up to the filesystem root,
+  // then apply them in reverse (root-side first, cwd last) so the
+  // innermost file wins. Skip the `$HOME/.npmrc` we already loaded so
+  // it doesn't re-overwrite project-level settings when cwd is under
+  // `$HOME`.
+  const projectRcs: string[] = [];
+  let dir = path.resolve(process.cwd());
   const seen = new Set<string>();
   while (dir && !seen.has(dir)) {
     seen.add(dir);
-    const candidate = path.join(dir, '.npmrc');
-    if (fs.existsSync(candidate)) {
-      loadFileInto(candidate, config);
+    const candidate = path.resolve(dir, '.npmrc');
+    if (candidate !== homeNpmrc && fs.existsSync(candidate)) {
+      projectRcs.push(candidate);
     }
     const parent = path.dirname(dir);
     if (parent === dir) {
       break;
     }
     dir = parent;
+  }
+  for (let i = projectRcs.length - 1; i >= 0; i -= 1) {
+    loadFileInto(projectRcs[i], config);
   }
   for (const [envKey, envValue] of Object.entries(process.env)) {
     if (envValue === undefined) {
