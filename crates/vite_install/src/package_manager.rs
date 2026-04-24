@@ -469,7 +469,12 @@ pub async fn download_package_manager(
     // The lock is automatically skipped on NFS filesystems where locking is unreliable.
     let lock_path = parent_dir.join(format!("{version}.lock"));
     tracing::debug!("Acquire lock file: {:?}", lock_path);
-    let lock_file = File::create(lock_path.as_path())?;
+    let lock_file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(lock_path.as_path())?;
     // Acquire exclusive lock (blocks until available)
     lock_file.lock()?;
     tracing::debug!("Lock acquired: {:?}", lock_path);
@@ -602,7 +607,12 @@ async fn download_bun_package_manager(
     // Acquire lock for atomic rename
     let lock_path = parent_dir.join(format!("{version}.lock"));
     tracing::debug!("Acquire lock file: {:?}", lock_path);
-    let lock_file = File::create(lock_path.as_path())?;
+    let lock_file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(lock_path.as_path())?;
     lock_file.lock()?;
     tracing::debug!("Lock acquired: {:?}", lock_path);
 
