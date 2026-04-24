@@ -27,19 +27,20 @@ jobs:
     name: Cargo Deny
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          persist-credentials: false
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
       - name: Output rolldown hash
         id: upstream-versions
         run: node -e "console.log('ROLLDOWN_HASH=' + require('./packages/tools/.upstream-versions.json').rolldown.hash)" >> $GITHUB_OUTPUT
 
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          repository: rolldown/rolldown
-          path: rolldown
-          ref: ${{ steps.upstream-versions.outputs.ROLLDOWN_HASH }}
+      - name: Clone rolldown
+        shell: bash
+        run: |
+          git init rolldown
+          git -C rolldown remote add origin https://github.com/rolldown/rolldown
+          git -C rolldown config --local gc.auto 0
+          git -C rolldown fetch --no-tags --depth=1 origin "${{ steps.upstream-versions.outputs.ROLLDOWN_HASH }}"
+          git -C rolldown checkout --force FETCH_HEAD
 
       - uses: oxc-project/setup-rust@23f38cfb0c04af97a055f76acee94d5be71c7c82 # v1.0.16
         with:

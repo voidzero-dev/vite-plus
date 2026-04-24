@@ -31,17 +31,23 @@ runs:
         node -e "console.log('ECOSYSTEM_CI_PROJECT_REPOSITORY=' + require('./ecosystem-ci/repo.json')['${{ inputs.ecosystem-ci-project }}'].repository.replace('https://github.com/', '').replace('.git', ''))" >> $GITHUB_OUTPUT
         echo "ECOSYSTEM_CI_PROJECT_PATH=${{ runner.temp }}/vite-plus-ecosystem-ci/${{ inputs.ecosystem-ci-project }}" >> $GITHUB_OUTPUT
 
-    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      with:
-        repository: rolldown/rolldown
-        path: rolldown
-        ref: ${{ steps.upstream-versions.outputs.ROLLDOWN_HASH }}
+    - name: Clone rolldown
+      shell: bash
+      run: |
+        git init rolldown
+        git -C rolldown remote add origin https://github.com/rolldown/rolldown
+        git -C rolldown config --local gc.auto 0
+        git -C rolldown fetch --no-tags --depth=1 origin "${{ steps.upstream-versions.outputs.ROLLDOWN_HASH }}"
+        git -C rolldown checkout --force FETCH_HEAD
 
-    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      with:
-        repository: vitejs/vite
-        path: vite
-        ref: ${{ steps.upstream-versions.outputs.ROLLDOWN_VITE_HASH }}
+    - name: Clone vite
+      shell: bash
+      run: |
+        git init vite
+        git -C vite remote add origin https://github.com/vitejs/vite
+        git -C vite config --local gc.auto 0
+        git -C vite fetch --no-tags --depth=1 origin "${{ steps.upstream-versions.outputs.ROLLDOWN_VITE_HASH }}"
+        git -C vite checkout --force FETCH_HEAD
 
     # Disable autocrlf to preserve LF line endings on Windows
     # This prevents prettier/eslint from failing with "Delete ␍" errors
