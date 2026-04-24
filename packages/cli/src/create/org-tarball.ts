@@ -33,8 +33,10 @@ function verifyIntegrity(bytes: Uint8Array, integrity: string | undefined): void
   }
   const parsed = parseIntegrity(integrity);
   if (!parsed) {
-    // Unknown format — don't fail hard, but don't silently accept either.
-    // Registry responses normally include sha512; anything else is unusual.
+    // Unknown integrity format — skip verification. Registry responses
+    // normally advertise `sha512-<base64>`; anything else is unusual
+    // enough that we'd rather let the extract continue than fail hard
+    // on a format we don't understand.
     return;
   }
   const hash = createHash(parsed.algorithm);
