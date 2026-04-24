@@ -73,14 +73,17 @@ export function isRelativePath(spec: string): boolean {
 
 function validateEntry(entry: unknown, index: number, packageName: string): OrgTemplateEntry {
   if (!entry || typeof entry !== 'object') {
-    throw new OrgManifestSchemaError(`vp.templates[${index}] must be an object`, packageName);
+    throw new OrgManifestSchemaError(
+      `createConfig.templates[${index}] must be an object`,
+      packageName,
+    );
   }
   const raw = entry as Record<string, unknown>;
   const requireString = (field: string): string => {
     const value = raw[field];
     if (typeof value !== 'string' || value.length === 0) {
       throw new OrgManifestSchemaError(
-        `vp.templates[${index}].${field} must be a non-empty string`,
+        `createConfig.templates[${index}].${field} must be a non-empty string`,
         packageName,
       );
     }
@@ -94,7 +97,7 @@ function validateEntry(entry: unknown, index: number, packageName: string): OrgT
   if (raw.keywords !== undefined) {
     if (!Array.isArray(raw.keywords) || raw.keywords.some((k) => typeof k !== 'string')) {
       throw new OrgManifestSchemaError(
-        `vp.templates[${index}].keywords must be an array of strings`,
+        `createConfig.templates[${index}].keywords must be an array of strings`,
         packageName,
       );
     }
@@ -105,7 +108,7 @@ function validateEntry(entry: unknown, index: number, packageName: string): OrgT
   if (raw.monorepo !== undefined) {
     if (typeof raw.monorepo !== 'boolean') {
       throw new OrgManifestSchemaError(
-        `vp.templates[${index}].monorepo must be a boolean`,
+        `createConfig.templates[${index}].monorepo must be a boolean`,
         packageName,
       );
     }
@@ -119,7 +122,7 @@ function validateEntry(entry: unknown, index: number, packageName: string): OrgT
     const resolved = path.posix.resolve('/root', template.replaceAll('\\', '/'));
     if (resolved !== '/root' && !resolved.startsWith('/root/')) {
       throw new OrgManifestSchemaError(
-        `vp.templates[${index}].template escapes the package root: ${template}`,
+        `createConfig.templates[${index}].template escapes the package root: ${template}`,
         packageName,
       );
     }
@@ -138,16 +141,16 @@ function validateManifest(raw: unknown, packageName: string): OrgTemplateEntry[]
   if (!raw || typeof raw !== 'object') {
     return null;
   }
-  const vp = (raw as { vp?: unknown }).vp;
-  if (!vp || typeof vp !== 'object') {
+  const createConfig = (raw as { createConfig?: unknown }).createConfig;
+  if (!createConfig || typeof createConfig !== 'object') {
     return null;
   }
-  const templates = (vp as { templates?: unknown }).templates;
+  const templates = (createConfig as { templates?: unknown }).templates;
   if (templates === undefined) {
     return null;
   }
   if (!Array.isArray(templates)) {
-    throw new OrgManifestSchemaError('vp.templates must be an array', packageName);
+    throw new OrgManifestSchemaError('createConfig.templates must be an array', packageName);
   }
   if (templates.length === 0) {
     // Treat empty array as "no manifest" — fall through to normal @org/create behavior.
@@ -159,7 +162,7 @@ function validateManifest(raw: unknown, packageName: string): OrgTemplateEntry[]
     const entry = validateEntry(templates[index], index, packageName);
     if (seen.has(entry.name)) {
       throw new OrgManifestSchemaError(
-        `vp.templates[${index}].name duplicates an earlier entry: "${entry.name}"`,
+        `createConfig.templates[${index}].name duplicates an earlier entry: "${entry.name}"`,
         packageName,
       );
     }
@@ -177,7 +180,7 @@ interface RegistryPackument {
 
 interface RegistryVersionMeta {
   version?: string;
-  vp?: unknown;
+  createConfig?: unknown;
   dist?: {
     tarball?: string;
     integrity?: string;
@@ -203,15 +206,15 @@ async function fetchPackument(packageName: string): Promise<RegistryPackument | 
 }
 
 /**
- * Fetch `@scope/create` from the npm registry and parse its `vp.templates`
+ * Fetch `@scope/create` from the npm registry and parse its `createConfig.templates`
  * manifest.
  *
  * Returns `null` when:
  * - the package does not exist on the registry (404), or
- * - the package exists but has no `vp.templates` field
+ * - the package exists but has no `createConfig.templates` field
  *
  * Throws when:
- * - the `vp.templates` field is present but malformed (`OrgManifestSchemaError`), or
+ * - the `createConfig.templates` field is present but malformed (`OrgManifestSchemaError`), or
  * - the registry request fails for any non-404 reason
  */
 export async function readOrgManifest(scope: string): Promise<OrgManifest | null> {

@@ -89,7 +89,7 @@ vp create https://github.com/user/template-repo
 
 ## Organization Templates
 
-An organization can publish a curated set of templates under a single npm scope by shipping an `@org/create` package whose `package.json` carries a `vp.templates` manifest. Once published, `vp create @org` opens an interactive picker over those templates.
+An organization can publish a curated set of templates under a single npm scope by shipping an `@org/create` package whose `package.json` carries a `createConfig.templates` manifest. Once published, `vp create @org` opens an interactive picker over those templates.
 
 ### Pick from an org
 
@@ -104,7 +104,7 @@ vp create @your-org/web
 vp create
 ```
 
-Behind the scenes, `vp create @org` maps to `@org/create` (the existing npm `create-*` convention). If that package has no `vp.templates` field, Vite+ falls back to running the package normally — so adopting the manifest is zero-risk for orgs that already publish `@org/create`.
+Behind the scenes, `vp create @org` maps to `@org/create` (the existing npm `create-*` convention). If that package has no `createConfig.templates` field, Vite+ falls back to running the package normally — so adopting the manifest is zero-risk for orgs that already publish `@org/create`.
 
 ### Authoring `@org/create`
 
@@ -114,7 +114,7 @@ There are two common layouts. Pick the one that matches the org's template count
 
 ```
 @your-org/create/
-├── package.json              # "vp": { "templates": [{ "template": "./templates/web" }, ...] }
+├── package.json              # "createConfig": { "templates": [{ "template": "./templates/web" }, ...] }
 ├── templates/
 │   ├── web/
 │   │   ├── package.json
@@ -127,7 +127,7 @@ There are two common layouts. Pick the one that matches the org's template count
 
 ```
 @your-org/create/
-├── package.json              # "vp": { "templates": [{ "template": "@your-org/template-web" }, ...] }
+├── package.json              # "createConfig": { "templates": [{ "template": "@your-org/template-web" }, ...] }
 └── README.md
 ```
 
@@ -137,13 +137,13 @@ Optionally, provide a `bin` script so `npm create @org` (the legacy path) keeps 
 
 ### Manifest schema
 
-The manifest lives at `vp.templates` in `@org/create`'s `package.json`:
+The manifest lives at `createConfig.templates` in `@org/create`'s `package.json`:
 
 ```json
 {
   "name": "@your-org/create",
   "version": "1.0.0",
-  "vp": {
+  "createConfig": {
     "templates": [
       {
         "name": "monorepo",
@@ -177,7 +177,7 @@ Each entry supports:
 | `keywords`    | no       | Filter terms for picker search.                                                                                                                                                                                                              |
 | `monorepo`    | no       | If `true`, marks this entry as a monorepo-creating template. Hidden from the picker when `vp create` runs inside an existing monorepo, mirroring the built-in `vite:monorepo` filter.                                                        |
 
-An invalid manifest is a hard error, not a silent fall-through — a maintainer who shipped a manifest should hear about the offending field, e.g. `@your-org/create: vp.templates[2].template must be a non-empty string`.
+An invalid manifest is a hard error, not a silent fall-through — a maintainer who shipped a manifest should hear about the offending field, e.g. `@your-org/create: createConfig.templates[2].template must be a non-empty string`.
 
 ### Bundled subdirectory templates
 
@@ -224,7 +224,7 @@ Examples:
 ### Publishing checklist
 
 1. Create `@org/create` (scoped npm package) if you don't already have one.
-2. Add a `vp.templates` array to `package.json`. (Bundle the templates under `./templates/...` or point at external packages.)
+2. Add a `createConfig.templates` array to `package.json`. (Bundle the templates under `./templates/...` or point at external packages.)
 3. (Optional) Provide a `bin` launcher for `npm create @org` compatibility.
 4. Publish.
 5. Verify: `vp create @org --no-interactive` prints the manifest table; `vp create @org` opens the picker.

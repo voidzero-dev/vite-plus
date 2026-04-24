@@ -7,9 +7,9 @@
         "version": "1.0.0",
         "dist": {
           "tarball": "{REGISTRY}/@your-org/create/-/create-1.0.0.tgz",
-          "integrity": "sha512-h4Q9x+aUa2RUJGBe7JCZnWpGMyd8VHXPfL9+EBxrA2EWRV8rlmMCP45B3woZ8xA2fmkE/jUy1W7OM2GCjoPWQA=="
+          "integrity": "sha512-swwZCXG8RDBJNTmiw3zCOBCQx9bCg7wHqoW37aV7BgGYfBUU7n7c+efbSCg0+FpdLhgeUjEMP5IAO+8exmeFKg=="
         },
-        "vp": {
+        "createConfig": {
           "templates": [
             {
               "name": "demo",

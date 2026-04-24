@@ -35,7 +35,7 @@ declare module '@voidzero-dev/vite-plus-core' {
        * When `vp create` is invoked with no template argument, use this
        * value as if the user had typed it — typically a scope like
        * `'@your-org'` paired with a `@your-org/create` package that exposes a
-       * `vp.templates` manifest.
+       * `createConfig.templates` manifest.
        */
       defaultTemplate?: string;
     };
