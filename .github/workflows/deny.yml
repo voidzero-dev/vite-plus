@@ -40,6 +40,7 @@ jobs:
           repository: rolldown/rolldown
           path: rolldown
           ref: ${{ steps.upstream-versions.outputs.ROLLDOWN_HASH }}
+          persist-credentials: false
 
       - uses: oxc-project/setup-rust@23f38cfb0c04af97a055f76acee94d5be71c7c82 # v1.0.16
         with:
