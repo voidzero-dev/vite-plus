@@ -444,7 +444,6 @@ async function main() {
   let skipShorthandExpansion = false;
   const installArgs = process.env.CI ? ['--no-frozen-lockfile'] : undefined;
 
-  // Honor `create.defaultTemplate` from vite.config.ts when no CLI arg was passed.
   if (!selectedTemplateName) {
     const defaultTemplate = await getConfiguredDefaultTemplate(workspaceInfoOptional.rootDir);
     if (defaultTemplate) {
@@ -452,7 +451,6 @@ async function main() {
     }
   }
 
-  // Resolve `@scope[/name]` org manifests before the generic builtin picker.
   if (selectedTemplateName) {
     const resolved = await resolveOrgManifestForCreate({
       templateName: selectedTemplateName,
@@ -461,9 +459,9 @@ async function main() {
     });
     if (resolved.kind === 'replaced') {
       selectedTemplateName = resolved.templateName;
-      // Manifest entries are fully-qualified by their author.
-      // Prevent `expandCreateShorthand` from rewriting e.g.
-      // `@your-org/template-web` into `@your-org/create-template-web`.
+      // Manifest entries are fully-qualified by their author; prevent
+      // `expandCreateShorthand` from rewriting `@your-org/template-web`
+      // into `@your-org/create-template-web`.
       skipShorthandExpansion = true;
     } else if (resolved.kind === 'bundled') {
       bundledLocalPath = resolved.bundledLocalPath;
@@ -472,11 +470,8 @@ async function main() {
     }
   }
 
-  // Guard only after the CLI arg → `create.defaultTemplate` → @org manifest
-  // chain has had a chance to fill `selectedTemplateName`. A user in a repo
-  // with `create.defaultTemplate` set should be able to run `vp create
-  // --no-interactive` and hit the configured default (which itself may
-  // print its own manifest table for an @org scope).
+  // Guard runs after the arg → `create.defaultTemplate` → @org resolution
+  // chain so `--no-interactive` works with a configured default.
   if (!selectedTemplateName && !options.interactive) {
     console.error(`
 A template name is required when running in non-interactive mode

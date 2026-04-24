@@ -1,7 +1,8 @@
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
-import { findViteConfigUp } from '../resolve-vite-config.ts';
+import { findViteConfigUp, resolveViteConfig } from '../resolve-vite-config.ts';
 import {
+  filterManifestForContext,
   isRelativePath,
   OrgManifestSchemaError,
   parseOrgScopedSpec,
@@ -30,8 +31,8 @@ import { cancelAndExit } from './prompts.ts';
  */
 export type OrgResolution =
   | { kind: 'passthrough' }
-  | { kind: 'replaced'; templateName: string; entry: OrgTemplateEntry }
-  | { kind: 'bundled'; bundledLocalPath: string; entry: OrgTemplateEntry }
+  | { kind: 'replaced'; templateName: string }
+  | { kind: 'bundled'; bundledLocalPath: string }
   | { kind: 'escape-hatch' };
 
 function printNonInteractiveTable(
@@ -40,7 +41,7 @@ function printNonInteractiveTable(
   isMonorepo: boolean,
 ): void {
   const { lines, filteredCount } = formatManifestTable(manifest, isMonorepo);
-  const firstVisible = manifest.templates.find((t) => !(t.monorepo && isMonorepo));
+  const [firstVisible] = filterManifestForContext(manifest.templates, isMonorepo);
   const body: string[] = [
     '',
     `A template name is required when running \`vp create ${orgSpec.scope}\` in non-interactive mode.`,
@@ -89,9 +90,9 @@ async function resolveEntry(
   if (isRelativePath(entry.template)) {
     const extracted = await ensureOrgPackageExtracted(manifest);
     const bundledLocalPath = resolveBundledPath(extracted, entry.template);
-    return { kind: 'bundled', bundledLocalPath, entry };
+    return { kind: 'bundled', bundledLocalPath };
   }
-  return { kind: 'replaced', templateName: entry.template, entry };
+  return { kind: 'replaced', templateName: entry.template };
 }
 
 /**
@@ -122,17 +123,16 @@ export async function resolveOrgManifestForCreate(args: {
       error instanceof OrgManifestSchemaError
         ? error.message
         : `Failed to read ${orgSpec.scope}/create manifest: ${(error as Error).message}`;
-    prompts.log.error(message);
-    process.exit(1);
+    cancelAndExit(message, 1);
   }
 
   if (!manifest) {
     if (orgSpec.name !== undefined) {
       // `@org:name` is an explicit manifest lookup; no manifest → hard error.
-      prompts.log.error(
+      cancelAndExit(
         `No \`createConfig.templates\` manifest in ${orgSpec.scope}/create — \`@org:name\` requires one.`,
+        1,
       );
-      process.exit(1);
     }
     // Scope-only input (`vp create @org`) strongly implies the user
     // expected the picker. Be explicit about why it didn't engage, so a
@@ -169,14 +169,13 @@ export async function resolveOrgManifestForCreate(args: {
   const entry = manifest.templates.find((candidate) => candidate.name === orgSpec.name);
   if (!entry) {
     // `@scope:name` is an explicit manifest lookup — no ambiguous fall-through.
-    const available = manifest.templates
-      .filter((t) => !(t.monorepo && args.isMonorepo))
+    const available = filterManifestForContext(manifest.templates, args.isMonorepo)
       .map((t) => t.name)
       .join(', ');
-    prompts.log.error(
+    cancelAndExit(
       `No template named "${orgSpec.name}" in ${manifest.packageName}. Available: ${available || '(none applicable in this context)'}.`,
+      1,
     );
-    process.exit(1);
   }
   rejectMonorepoEntryInsideMonorepo(entry, args.isMonorepo);
   return resolveEntry(manifest, entry);
@@ -195,9 +194,6 @@ export async function getConfiguredDefaultTemplate(
     return undefined;
   }
   try {
-    // Dynamic-import the heavy resolver only when a config file is present;
-    // bare `vp create` in a fresh dir should not pay this cost.
-    const { resolveViteConfig } = await import('../resolve-vite-config.ts');
     const config = (await resolveViteConfig(workspaceRootDir)) as {
       create?: { defaultTemplate?: unknown };
     };

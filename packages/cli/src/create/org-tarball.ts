@@ -46,6 +46,8 @@ function verifyIntegrity(bytes: Uint8Array, integrity: string | undefined): void
   }
 }
 
+const MAX_TARBALL_BYTES = 50 * 1024 * 1024;
+
 async function downloadTarball(url: string): Promise<Uint8Array> {
   const response = await fetch(url, {
     signal: AbortSignal.timeout(30_000),
@@ -53,13 +55,40 @@ async function downloadTarball(url: string): Promise<Uint8Array> {
   if (!response.ok) {
     throw new Error(`failed to download tarball (${response.status}): ${url}`);
   }
-  const buffer = await response.arrayBuffer();
-  // Cap at 50 MB to avoid pathological inputs exhausting memory. Real-world
-  // create-* packages are tens of KB.
-  if (buffer.byteLength > 50 * 1024 * 1024) {
-    throw new Error(`tarball exceeds 50 MB size limit: ${url}`);
+  // Cheap pre-check when the server reports Content-Length; streaming loop
+  // below is authoritative for servers that omit the header.
+  const contentLength = Number(response.headers.get('content-length'));
+  if (Number.isFinite(contentLength) && contentLength > MAX_TARBALL_BYTES) {
+    throw new Error(`tarball exceeds ${MAX_TARBALL_BYTES} byte size limit: ${url}`);
   }
-  return new Uint8Array(buffer);
+  // Stream the body so a 1 GB response is rejected before it's fully
+  // buffered. Real-world create-* packages are tens of KB, so the cap is
+  // only ever a safety net for malicious or misconfigured publishers.
+  const reader = response.body?.getReader();
+  if (!reader) {
+    throw new Error(`tarball response has no body: ${url}`);
+  }
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+    total += value.byteLength;
+    if (total > MAX_TARBALL_BYTES) {
+      await reader.cancel();
+      throw new Error(`tarball exceeds ${MAX_TARBALL_BYTES} byte size limit: ${url}`);
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
 }
 
 /**
