@@ -212,7 +212,7 @@ xxhash-rust = "0.8.15"
 zip = "7.2"
 
 # oxc crates with the same version
-oxc = { version = "0.126.0", features = [
+oxc = { version = "0.127.0", features = [
   "ast_visit",
   "transformer",
   "minifier",
@@ -224,17 +224,17 @@ oxc = { version = "0.126.0", features = [
   "regular_expression",
   "cfg",
 ] }
-oxc_allocator = { version = "0.126.0", features = ["pool"] }
-oxc_ast = "0.126.0"
-oxc_ecmascript = "0.126.0"
-oxc_parser = "0.126.0"
-oxc_span = "0.126.0"
-oxc_napi = "0.126.0"
-oxc_str = "0.126.0"
-oxc_minify_napi = "0.126.0"
-oxc_parser_napi = "0.126.0"
-oxc_transform_napi = "0.126.0"
-oxc_traverse = "0.126.0"
+oxc_allocator = { version = "0.127.0", features = ["pool"] }
+oxc_ast = "0.127.0"
+oxc_ecmascript = "0.127.0"
+oxc_parser = "0.127.0"
+oxc_span = "0.127.0"
+oxc_napi = "0.127.0"
+oxc_str = "0.127.0"
+oxc_minify_napi = "0.127.0"
+oxc_parser_napi = "0.127.0"
+oxc_transform_napi = "0.127.0"
+oxc_traverse = "0.127.0"
 
 # oxc crates in their own repos
 oxc_index = { version = "4", features = ["rayon", "serde"] }
