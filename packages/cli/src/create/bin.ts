@@ -441,6 +441,7 @@ async function main() {
   let remoteTargetDir: string | undefined;
   let shouldSetupHooks = false;
   let bundledLocalPath: string | undefined;
+  let bundledEntryName: string | undefined;
   let isBundledMonorepo = false;
   let skipShorthandExpansion = false;
   const installArgs = process.env.CI ? ['--no-frozen-lockfile'] : undefined;
@@ -466,6 +467,7 @@ async function main() {
       skipShorthandExpansion = true;
     } else if (resolved.kind === 'bundled') {
       bundledLocalPath = resolved.bundledLocalPath;
+      bundledEntryName = resolved.entryName;
       isBundledMonorepo = resolved.monorepo === true;
     } else if (resolved.kind === 'escape-hatch') {
       selectedTemplateName = '';
@@ -631,7 +633,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   }
 
   const directScaffoldFallbackName = isBundledTemplate
-    ? 'vite-plus-template'
+    ? `vite-plus-${bundledEntryName ?? 'template'}`
     : selectedTemplateName === BuiltinTemplate.monorepo
       ? 'vite-plus-monorepo'
       : `vite-plus-${selectedTemplateName.split(':')[1]}`;
