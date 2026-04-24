@@ -4,7 +4,7 @@
 
 ## `create.defaultTemplate`
 
-When `vp create` is invoked with no `TEMPLATE` argument, Vite+ uses this value as if the user had typed it. Typically set to an npm scope whose `@scope/create` package publishes a `vp.templates` manifest — so bare `vp create` drops into the org picker.
+When `vp create` is invoked with no `TEMPLATE` argument, Vite+ uses this value as if the user had typed it. Typically set to an npm scope whose `@scope/create` package publishes a `createConfig.templates` manifest — so bare `vp create` drops into the org picker.
 
 ```ts
 import { defineConfig } from 'vite-plus';

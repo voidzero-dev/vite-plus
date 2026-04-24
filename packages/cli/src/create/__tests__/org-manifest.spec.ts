@@ -65,7 +65,7 @@ function packument(vpTemplates: unknown, extra: Record<string, unknown> = {}) {
           tarball: 'https://registry.npmjs.org/@your-org/create/-/create-1.0.0.tgz',
           integrity: 'sha512-fake',
         },
-        vp: vpTemplates !== undefined ? { templates: vpTemplates } : undefined,
+        createConfig: vpTemplates !== undefined ? { templates: vpTemplates } : undefined,
         ...extra,
       },
     },
@@ -92,12 +92,12 @@ describe('readOrgManifest', () => {
     expect(await readOrgManifest('@your-org')).toBeNull();
   });
 
-  it('returns null when the package has no vp.templates field', async () => {
+  it('returns null when the package has no createConfig.templates field', async () => {
     mockFetchJson(packument(undefined));
     expect(await readOrgManifest('@your-org')).toBeNull();
   });
 
-  it('returns null when vp.templates is an empty array', async () => {
+  it('returns null when createConfig.templates is an empty array', async () => {
     mockFetchJson(packument([]));
     expect(await readOrgManifest('@your-org')).toBeNull();
   });
@@ -119,14 +119,16 @@ describe('readOrgManifest', () => {
     expect(manifest?.templates[1].monorepo).toBe(true);
   });
 
-  it('throws on non-array vp.templates', async () => {
+  it('throws on non-array createConfig.templates', async () => {
     mockFetchJson(packument('nope'));
     await expect(readOrgManifest('@your-org')).rejects.toBeInstanceOf(OrgManifestSchemaError);
   });
 
   it('throws on an entry missing required fields', async () => {
     mockFetchJson(packument([{ name: 'web', description: 'no template yet' }]));
-    await expect(readOrgManifest('@your-org')).rejects.toThrow(/vp\.templates\[0]\.template/);
+    await expect(readOrgManifest('@your-org')).rejects.toThrow(
+      /createConfig\.templates\[0]\.template/,
+    );
   });
 
   it('throws on duplicate entry names', async () => {
@@ -166,7 +168,7 @@ describe('readOrgManifest', () => {
         '1.0.0': {
           version: '1.0.0',
           dist: {},
-          vp: { templates: [{ name: 'a', description: 'a', template: '@a/a' }] },
+          createConfig: { templates: [{ name: 'a', description: 'a', template: '@a/a' }] },
         },
       },
     });

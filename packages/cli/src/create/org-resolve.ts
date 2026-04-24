@@ -100,7 +100,7 @@ async function resolveEntry(
 
 /**
  * If `selectedTemplateName` points at an `@scope[/name]` org whose
- * `@scope/create` package publishes a `vp.templates` manifest, apply the
+ * `@scope/create` package publishes a `createConfig.templates` manifest, apply the
  * manifest rules (picker / direct lookup / escape hatch / bundled
  * extraction) and report the outcome.
  *
@@ -137,7 +137,7 @@ export async function resolveOrgManifestForCreate(args: {
     // Per-entry `vp create @org/name` stays silent since it's ambiguous.
     if (orgSpec.name === undefined) {
       prompts.log.info(
-        `No \`vp.templates\` manifest in ${orgSpec.scope}/create — running it as a normal package.`,
+        `No \`createConfig.templates\` manifest in ${orgSpec.scope}/create — running it as a normal package.`,
       );
     }
     return { kind: 'passthrough' };
