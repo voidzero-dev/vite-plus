@@ -4,7 +4,12 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { cleanupStaleStagingDirs, normalizeEntryName, resolveBundledPath } from '../org-tarball.js';
+import {
+  cleanupStaleStagingDirs,
+  normalizeEntryName,
+  parseEntryMode,
+  resolveBundledPath,
+} from '../org-tarball.js';
 
 describe('resolveBundledPath', () => {
   const scratchDirs: string[] = [];
@@ -79,6 +84,24 @@ describe('normalizeEntryName', () => {
   it('returns null for entries outside the `package/` root', () => {
     expect(normalizeEntryName('not-package/foo.ts')).toBeNull();
     expect(normalizeEntryName('node_modules/foo/package.json')).toBeNull();
+  });
+});
+
+describe('parseEntryMode', () => {
+  it('parses octal `755` as 0o755', () => {
+    expect(parseEntryMode('755')).toBe(0o755);
+  });
+
+  it('parses a longer octal string and masks to permission bits', () => {
+    expect(parseEntryMode('100755')).toBe(0o755);
+    // `104755` carries the setuid bit (0o4000) — drop it.
+    expect(parseEntryMode('104755')).toBe(0o755);
+  });
+
+  it('returns undefined for missing or unparseable modes', () => {
+    expect(parseEntryMode(undefined)).toBeUndefined();
+    expect(parseEntryMode('')).toBeUndefined();
+    expect(parseEntryMode('not-a-number')).toBeUndefined();
   });
 });
 

@@ -113,6 +113,23 @@ async function downloadTarball(url: string): Promise<Uint8Array> {
 const STAGING_SUFFIX_PREFIX = '.tmp-';
 
 /**
+ * Parse a tar entry's stored mode (always octal) into the numeric
+ * permission bits (low 9 bits — `rwxrwxrwx`). Returns `undefined` when
+ * the mode is missing or unparseable so the caller leaves the file with
+ * its default (umask-derived) permissions instead of downgrading.
+ */
+export function parseEntryMode(raw: string | undefined): number | undefined {
+  if (!raw) {
+    return undefined;
+  }
+  const parsed = Number.parseInt(raw, 8);
+  if (!Number.isFinite(parsed)) {
+    return undefined;
+  }
+  return parsed & 0o777;
+}
+
+/**
  * Strip the `package/` prefix from an `npm pack` tarball entry. Returns
  * `null` for entries to skip (root dir, PaxHeader, anything outside
  * `package/`).
@@ -161,6 +178,14 @@ async function extractTarballTo(bytes: Uint8Array, destDir: string): Promise<voi
       await fs.promises.mkdir(path.dirname(targetPath), { recursive: true });
       const data = entry.data ?? new Uint8Array(0);
       await fs.promises.writeFile(targetPath, data);
+      // Preserve the tar entry's mode so bundled templates can ship
+      // executable files (e.g. `gradlew`, `mvnw`, `scripts/*.sh`). Mask
+      // to the permission bits only — setuid/setgid/sticky have no
+      // business in a scaffolded project template.
+      const mode = parseEntryMode(entry.attrs?.mode);
+      if (mode !== undefined) {
+        await fs.promises.chmod(targetPath, mode);
+      }
     }
     try {
       await fs.promises.rename(stagingDir, destDir);
