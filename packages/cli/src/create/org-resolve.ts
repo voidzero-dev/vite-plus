@@ -34,7 +34,7 @@ import { cancelAndExit } from './prompts.ts';
 export type OrgResolution =
   | { kind: 'passthrough' }
   | { kind: 'replaced'; templateName: string }
-  | { kind: 'bundled'; bundledLocalPath: string; monorepo: boolean }
+  | { kind: 'bundled'; bundledLocalPath: string; monorepo?: true }
   | { kind: 'escape-hatch' };
 
 function printNonInteractiveTable(
@@ -92,7 +92,11 @@ async function resolveEntry(
   if (isRelativePath(entry.template)) {
     const extracted = await ensureOrgPackageExtracted(manifest);
     const bundledLocalPath = resolveBundledPath(extracted, entry.template);
-    return { kind: 'bundled', bundledLocalPath, monorepo: entry.monorepo === true };
+    return {
+      kind: 'bundled',
+      bundledLocalPath,
+      ...(entry.monorepo === true ? { monorepo: true as const } : {}),
+    };
   }
   return { kind: 'replaced', templateName: entry.template };
 }

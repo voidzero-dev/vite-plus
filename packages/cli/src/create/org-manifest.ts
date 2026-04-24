@@ -1,6 +1,6 @@
 import path from 'node:path';
 
-import { getNpmAuthHeader, getNpmRegistry } from '../utils/package.ts';
+import { fetchNpmResource, getNpmRegistry } from '../utils/npm-config.ts';
 
 /**
  * A single entry in an org's template manifest.
@@ -214,24 +214,11 @@ async function fetchPackument(
   // npm's registry URLs keep `@` and `/` unencoded
   // (`https://registry.npmjs.org/@scope/name`). Match that — private
   // registries often route on the literal path.
-  const registry = getNpmRegistry(scope);
-  const url = `${registry}/${packageName}`;
-  let response = await fetch(url, {
+  const url = `${getNpmRegistry(scope)}/${packageName}`;
+  const response = await fetchNpmResource(url, {
     headers: { accept: 'application/json' },
-    signal: AbortSignal.timeout(5000),
+    timeoutMs: 5000,
   });
-  // Public registries don't need a credential — avoid leaking tokens
-  // when the default registry is fine. Retry with auth only if the
-  // server explicitly asks for it.
-  if (response.status === 401 || response.status === 403) {
-    const authorization = getNpmAuthHeader(url);
-    if (authorization) {
-      response = await fetch(url, {
-        headers: { accept: 'application/json', authorization },
-        signal: AbortSignal.timeout(5000),
-      });
-    }
-  }
   if (response.status === 404) {
     return null;
   }

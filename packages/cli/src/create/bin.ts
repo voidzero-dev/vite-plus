@@ -466,7 +466,7 @@ async function main() {
       skipShorthandExpansion = true;
     } else if (resolved.kind === 'bundled') {
       bundledLocalPath = resolved.bundledLocalPath;
-      isBundledMonorepo = resolved.monorepo;
+      isBundledMonorepo = resolved.monorepo === true;
     } else if (resolved.kind === 'escape-hatch') {
       selectedTemplateName = '';
     }
