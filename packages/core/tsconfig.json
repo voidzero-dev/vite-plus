@@ -1,8 +1,0 @@
-{
-  "extends": "../../tsconfig.json",
-  "compilerOptions": {
-    "experimentalDecorators": true
-  },
-  "include": ["build-support/**/*", "__tests__/**/*"],
-  "exclude": ["dist", "node_modules"]
-}

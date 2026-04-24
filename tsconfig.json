@@ -13,7 +13,8 @@
     "strict": true,
     "target": "esnext",
     "types": ["node"],
-    "verbatimModuleSyntax": true
+    "verbatimModuleSyntax": true,
+    "experimentalDecorators": true
   },
   "exclude": [
     "ecosystem-ci",
