@@ -94,18 +94,11 @@ async function downloadTarball(url: string): Promise<Uint8Array> {
 const STAGING_SUFFIX_PREFIX = '.tmp-';
 
 /**
- * Strip the conventional `package/` directory prefix that npm adds to every
- * tarball entry. Returns the trimmed path, or `null` if the entry should be
- * skipped (e.g. the root `package/` directory itself, PaxHeaders).
- *
- * `npm pack` / `npm publish` always wrap contents under `package/`, but a
- * registry tarball is still just a standard `.tgz` — some older publishers
- * (hand-rolled release scripts, legacy one-off tarballs from Artifactory)
- * emit entries without that prefix. Accepting them unchanged preserves the
- * behavior of package managers that happily install those tarballs today.
- * Convention reference:
- * https://docs.npmjs.com/cli/v10/configuring-npm/package-json (see "files")
- * and https://docs.npmjs.com/cli/v10/commands/npm-pack.
+ * Strip the `package/` prefix that `npm pack` wraps around every tarball
+ * entry, returning the path within the package. Returns `null` for any
+ * entry the extractor should skip: the root `package/` directory itself,
+ * PaxHeader metadata, and anything not under `package/` (only `npm pack`
+ * tarballs are supported — other entries are silently ignored).
  */
 function normalizeEntryName(rawName: string): string | null {
   const name = rawName.replace(/^\.\//, '').replace(/\\/g, '/');
@@ -115,10 +108,10 @@ function normalizeEntryName(rawName: string): string | null {
   if (name.startsWith('PaxHeader/') || name.includes('/PaxHeader/')) {
     return null;
   }
-  if (name.startsWith('package/')) {
-    return name.slice('package/'.length);
+  if (!name.startsWith('package/')) {
+    return null;
   }
-  return name;
+  return name.slice('package/'.length);
 }
 
 async function extractTarballTo(bytes: Uint8Array, destDir: string): Promise<void> {
