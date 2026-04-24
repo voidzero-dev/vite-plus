@@ -21,7 +21,10 @@ describe('parseOrgScopedSpec', () => {
   });
 
   it('parses @scope@version without a name', () => {
-    expect(parseOrgScopedSpec('@your-org@latest')).toEqual({ scope: '@your-org' });
+    expect(parseOrgScopedSpec('@your-org@latest')).toEqual({
+      scope: '@your-org',
+      version: 'latest',
+    });
   });
 
   it('parses @scope:name', () => {
@@ -29,7 +32,11 @@ describe('parseOrgScopedSpec', () => {
   });
 
   it('parses @scope:name@version', () => {
-    expect(parseOrgScopedSpec('@your-org:web@1.2.3')).toEqual({ scope: '@your-org', name: 'web' });
+    expect(parseOrgScopedSpec('@your-org:web@1.2.3')).toEqual({
+      scope: '@your-org',
+      name: 'web',
+      version: '1.2.3',
+    });
   });
 
   it('treats @scope: (empty name) as scope-only', () => {
@@ -60,7 +67,11 @@ describe('filterManifestForContext', () => {
   });
 });
 
-function packument(vpTemplates: unknown, extra: Record<string, unknown> = {}) {
+function packument(
+  vpTemplates: unknown,
+  extra: Record<string, unknown> = {},
+  extraVersions: Record<string, unknown> = {},
+) {
   return {
     name: '@your-org/create',
     'dist-tags': { latest: '1.0.0' },
@@ -74,6 +85,7 @@ function packument(vpTemplates: unknown, extra: Record<string, unknown> = {}) {
         createConfig: vpTemplates !== undefined ? { templates: vpTemplates } : undefined,
         ...extra,
       },
+      ...extraVersions,
     },
   };
 }
@@ -208,5 +220,123 @@ describe('readOrgManifest', () => {
         process.env.NPM_CONFIG_REGISTRY = original;
       }
     }
+  });
+
+  it('honors scope-specific npm_config_@scope:registry env', async () => {
+    const key = 'npm_config_@your-org:registry';
+    const original = process.env[key];
+    process.env[key] = 'https://private.example.com/';
+    try {
+      const mockFetch = mockFetchJson(
+        packument([{ name: 'a', description: 'a', template: '@a/a' }]),
+      );
+      await readOrgManifest('@your-org');
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://private.example.com/@your-org/create',
+        expect.any(Object),
+      );
+    } finally {
+      if (original === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = original;
+      }
+    }
+  });
+
+  it('retries with Bearer auth after a 401 when a matching _authToken is configured', async () => {
+    const registryKey = 'npm_config_@your-org:registry';
+    const tokenKey = 'npm_config_//private.example.com/:_authToken';
+    const originals = {
+      [registryKey]: process.env[registryKey],
+      [tokenKey]: process.env[tokenKey],
+    };
+    process.env[registryKey] = 'https://private.example.com/';
+    process.env[tokenKey] = 'SECRET-TOKEN';
+    try {
+      const body = packument([{ name: 'a', description: 'a', template: '@a/a' }]);
+      const mockFetch = vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValueOnce({ status: 401, ok: false } as Response)
+        .mockResolvedValueOnce({
+          status: 200,
+          ok: true,
+          async json() {
+            return body;
+          },
+        } as unknown as Response);
+      await readOrgManifest('@your-org');
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+      const [, firstInit] = mockFetch.mock.calls[0] as [string, RequestInit];
+      expect(
+        (firstInit.headers as Record<string, string> | undefined)?.authorization,
+      ).toBeUndefined();
+      const [, secondInit] = mockFetch.mock.calls[1] as [string, RequestInit];
+      expect((secondInit.headers as Record<string, string>).authorization).toBe(
+        'Bearer SECRET-TOKEN',
+      );
+    } finally {
+      for (const [k, v] of Object.entries(originals)) {
+        if (v === undefined) {
+          delete process.env[k];
+        } else {
+          process.env[k] = v;
+        }
+      }
+    }
+  });
+
+  it('does not send auth when the first request succeeds', async () => {
+    const mockFetch = mockFetchJson(packument([{ name: 'a', description: 'a', template: '@a/a' }]));
+    await readOrgManifest('@your-org');
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect((init.headers as Record<string, string>).authorization).toBeUndefined();
+  });
+
+  it('resolves a pinned version instead of dist-tags.latest', async () => {
+    const body = packument(
+      [{ name: 'web', description: 'v1', template: '@your-org/template-web' }],
+      {},
+      {
+        '2.0.0-beta.1': {
+          version: '2.0.0-beta.1',
+          dist: {
+            tarball: 'https://registry.npmjs.org/@your-org/create/-/create-2.0.0-beta.1.tgz',
+            integrity: 'sha512-beta',
+          },
+          createConfig: {
+            templates: [
+              { name: 'web', description: 'beta v2', template: '@your-org/template-web' },
+            ],
+          },
+        },
+      },
+    );
+    mockFetchJson(body);
+    const manifest = await readOrgManifest('@your-org', '2.0.0-beta.1');
+    expect(manifest?.version).toBe('2.0.0-beta.1');
+    expect(manifest?.templates[0].description).toBe('beta v2');
+    expect(manifest?.tarballUrl).toMatch(/create-2\.0\.0-beta\.1\.tgz$/);
+  });
+
+  it('resolves a dist-tag alias when passed as a version', async () => {
+    const body = packument(
+      [{ name: 'web', description: 'v1', template: '@your-org/template-web' }],
+      {},
+    );
+    (body as { 'dist-tags': Record<string, string> })['dist-tags'].next = '1.0.0';
+    mockFetchJson(body);
+    const manifest = await readOrgManifest('@your-org', 'next');
+    expect(manifest?.version).toBe('1.0.0');
+  });
+
+  it('throws when a pinned version is unknown', async () => {
+    mockFetchJson(
+      packument([{ name: 'web', description: 'v1', template: '@your-org/template-web' }]),
+    );
+    await expect(readOrgManifest('@your-org', '9.9.9')).rejects.toThrow(
+      /version "9\.9\.9" not found/,
+    );
   });
 });

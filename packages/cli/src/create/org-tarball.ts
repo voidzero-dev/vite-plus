@@ -5,6 +5,7 @@ import path from 'node:path';
 
 import { parseTarGzip } from 'nanotar';
 
+import { getNpmAuthHeader } from '../utils/package.ts';
 import type { OrgManifest } from './org-manifest.ts';
 
 function getCacheRoot(): string {
@@ -48,10 +49,28 @@ function verifyIntegrity(bytes: Uint8Array, integrity: string | undefined): void
 
 const MAX_TARBALL_BYTES = 50 * 1024 * 1024;
 
-async function downloadTarball(url: string): Promise<Uint8Array> {
-  const response = await fetch(url, {
+async function fetchTarball(url: string): Promise<Response> {
+  const first = await fetch(url, {
     signal: AbortSignal.timeout(30_000),
   });
+  // Public tarballs don't need a credential — only reach into `.npmrc`
+  // when the server challenges us, so we don't leak tokens to mirrors
+  // that don't expect them.
+  if (first.status !== 401 && first.status !== 403) {
+    return first;
+  }
+  const authorization = getNpmAuthHeader(url);
+  if (!authorization) {
+    return first;
+  }
+  return fetch(url, {
+    headers: { authorization },
+    signal: AbortSignal.timeout(30_000),
+  });
+}
+
+async function downloadTarball(url: string): Promise<Uint8Array> {
+  const response = await fetchTarball(url);
   if (!response.ok) {
     throw new Error(`failed to download tarball (${response.status}): ${url}`);
   }

@@ -441,6 +441,7 @@ async function main() {
   let remoteTargetDir: string | undefined;
   let shouldSetupHooks = false;
   let bundledLocalPath: string | undefined;
+  let isBundledMonorepo = false;
   let skipShorthandExpansion = false;
   const installArgs = process.env.CI ? ['--no-frozen-lockfile'] : undefined;
 
@@ -465,6 +466,7 @@ async function main() {
       skipShorthandExpansion = true;
     } else if (resolved.kind === 'bundled') {
       bundledLocalPath = resolved.bundledLocalPath;
+      isBundledMonorepo = resolved.monorepo;
     } else if (resolved.kind === 'escape-hatch') {
       selectedTemplateName = '';
     }
@@ -818,15 +820,21 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   // #endregion
 
   // #region Handle monorepo template
-  if (templateInfo.command === BuiltinTemplate.monorepo) {
+  if (templateInfo.command === BuiltinTemplate.monorepo || isBundledMonorepo) {
     updateCreateProgress('Creating monorepo');
     await checkProjectDirExists(path.join(workspaceInfo.rootDir, targetDir), options.interactive);
-    const result = await executeMonorepoTemplate(
-      workspaceInfo,
-      { ...templateInfo, packageName, targetDir },
-      options.interactive,
-      { silent: compactOutput },
-    );
+    const result = isBundledMonorepo
+      ? await executeBundledTemplate(workspaceInfo, {
+          ...templateInfo,
+          packageName,
+          targetDir,
+        })
+      : await executeMonorepoTemplate(
+          workspaceInfo,
+          { ...templateInfo, packageName, targetDir },
+          options.interactive,
+          { silent: compactOutput },
+        );
     const { projectDir } = result;
     if (result.exitCode !== 0 || !projectDir) {
       failCreateProgress('Scaffolding failed');

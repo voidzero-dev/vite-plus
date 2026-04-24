@@ -27,12 +27,14 @@ import { cancelAndExit } from './prompts.ts';
  *   github, vite:*, local). Caller uses `templateName`.
  * - `bundled`: manifest entry uses a relative path; tarball has been
  *   extracted; caller passes `bundledLocalPath` into `discoverTemplate`.
+ *   `monorepo: true` entries flow the caller into the monorepo scaffold
+ *   path (parent-dir prompt + `rewriteMonorepo` integration).
  * - `escape-hatch`: user picked "Vite+ built-in templates" from the picker.
  */
 export type OrgResolution =
   | { kind: 'passthrough' }
   | { kind: 'replaced'; templateName: string }
-  | { kind: 'bundled'; bundledLocalPath: string }
+  | { kind: 'bundled'; bundledLocalPath: string; monorepo: boolean }
   | { kind: 'escape-hatch' };
 
 function printNonInteractiveTable(
@@ -90,7 +92,7 @@ async function resolveEntry(
   if (isRelativePath(entry.template)) {
     const extracted = await ensureOrgPackageExtracted(manifest);
     const bundledLocalPath = resolveBundledPath(extracted, entry.template);
-    return { kind: 'bundled', bundledLocalPath };
+    return { kind: 'bundled', bundledLocalPath, monorepo: entry.monorepo === true };
   }
   return { kind: 'replaced', templateName: entry.template };
 }
@@ -117,7 +119,7 @@ export async function resolveOrgManifestForCreate(args: {
   // Never silently skip the picker when the user explicitly typed `@org`.
   let manifest: OrgManifest | null;
   try {
-    manifest = await readOrgManifest(orgSpec.scope);
+    manifest = await readOrgManifest(orgSpec.scope, orgSpec.version);
   } catch (error) {
     const message =
       error instanceof OrgManifestSchemaError
