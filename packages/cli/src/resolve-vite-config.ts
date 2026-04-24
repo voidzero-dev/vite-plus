@@ -39,13 +39,21 @@ function hasViteConfig(dir: string): boolean {
 }
 
 /**
- * Find the workspace / repo root by walking up from `startDir` looking
- * for monorepo markers (`pnpm-workspace.yaml`, `workspaces` in
- * `package.json`, `lerna.json`) or — as a last resort — a `.git`
- * directory signaling a standalone repo boundary.
+ * Find the workspace / repo root by walking up from `startDir`.
+ *
+ * Primary pass: stop at the first `pnpm-workspace.yaml`, `workspaces`
+ * in `package.json`, or `lerna.json` — the authoritative monorepo
+ * markers.
+ *
+ * Fallback pass: if no marker is found anywhere in the ancestry, walk
+ * again looking for `.git` so standalone git repos still resolve to
+ * their repo boundary. `.git` is deliberately NOT checked in the first
+ * pass — a subproject with its own `.git` (git submodule, nested clone)
+ * must not preempt a monorepo marker higher up the tree.
  */
 export function findWorkspaceRoot(startDir: string): string | undefined {
-  let dir = path.resolve(startDir);
+  const startResolved = path.resolve(startDir);
+  let dir = startResolved;
   while (true) {
     if (fs.existsSync(path.join(dir, 'pnpm-workspace.yaml'))) {
       return dir;
@@ -64,6 +72,16 @@ export function findWorkspaceRoot(startDir: string): string | undefined {
     if (fs.existsSync(path.join(dir, 'lerna.json'))) {
       return dir;
     }
+    const parent = path.dirname(dir);
+    if (parent === dir) {
+      break;
+    }
+    dir = parent;
+  }
+  // Fallback: no monorepo marker found in the ancestry. Walk again
+  // looking for a `.git` directory as the standalone repo boundary.
+  dir = startResolved;
+  while (true) {
     if (fs.existsSync(path.join(dir, '.git'))) {
       return dir;
     }
