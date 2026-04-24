@@ -86,7 +86,7 @@ Snap test files are at `packages/cli/snap-tests/*/snap.txt` and `packages/cli/sn
 
 ### 9. Verify CI
 
-After creating the PR, automatically subscribe to PR activity via `subscribe_pr_activity` and watch CI — do NOT ask the user first. Ensure the `done` check passes. Key checks to monitor:
+After creating the PR, automatically watch CI without asking the user first. Ensure the `done` check passes. Key checks to monitor:
 
 - **Lint**: Clippy and format checks
 - **Test** (Linux, Mac, Windows): Rust unit tests
