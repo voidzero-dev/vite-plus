@@ -95,7 +95,7 @@ const STAGING_SUFFIX_PREFIX = '.tmp-';
 /**
  * Parse a tar entry's stored mode (always octal) into the numeric
  * permission bits (low 9 bits — `rwxrwxrwx`). Returns `undefined` when
- * the mode is missing or unparseable so the caller leaves the file with
+ * the mode is missing or unparsable so the caller leaves the file with
  * its default (umask-derived) permissions instead of downgrading.
  */
 export function parseEntryMode(raw: string | undefined): number | undefined {
