@@ -5,11 +5,12 @@ import path from 'node:path';
 type NpmConfig = Map<string, string>;
 
 function expandNpmrcValue(raw: string): string {
-  // Strip surrounding quotes and expand `${VAR}` references.
-  // Narrow subset of npm's `.npmrc` behavior — covers only the keys we
-  // actually read (registry / @scope:registry / :_authToken / :_auth /
-  // :username / :_password). Escape sequences and nested expansion are
-  // intentionally ignored.
+  // Strip surrounding quotes and expand `${VAR}` references. Covers only
+  // the value shapes used by the keys we actually read (registry /
+  // @scope:registry / :_authToken / :_auth / :username / :_password).
+  // Intentionally NOT handled: `\$` backslash escapes, `${VAR-default}`
+  // fallbacks, inline `;` comments after a value, and `key[]=` list
+  // syntax. Extend when a caller needs any of those.
   let value = raw.trim();
   if (
     (value.startsWith('"') && value.endsWith('"')) ||
@@ -167,7 +168,7 @@ export function getNpmAuthHeader(registryOrUrl: string): string | undefined {
  */
 export async function fetchNpmResource(
   url: string,
-  init: RequestInit & { timeoutMs: number },
+  init: Omit<RequestInit, 'signal'> & { timeoutMs: number },
 ): Promise<Response> {
   const { timeoutMs, headers: callerHeaders, ...rest } = init;
   const first = await fetch(url, {
