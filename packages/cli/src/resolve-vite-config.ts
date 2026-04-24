@@ -39,10 +39,12 @@ function hasViteConfig(dir: string): boolean {
 }
 
 /**
- * Find the workspace root by walking up from `startDir` looking for
- * monorepo indicators (pnpm-workspace.yaml, workspaces in package.json, lerna.json).
+ * Find the workspace / repo root by walking up from `startDir` looking
+ * for monorepo markers (`pnpm-workspace.yaml`, `workspaces` in
+ * `package.json`, `lerna.json`) or — as a last resort — a `.git`
+ * directory signaling a standalone repo boundary.
  */
-function findWorkspaceRoot(startDir: string): string | undefined {
+export function findWorkspaceRoot(startDir: string): string | undefined {
   let dir = path.resolve(startDir);
   while (true) {
     if (fs.existsSync(path.join(dir, 'pnpm-workspace.yaml'))) {
@@ -60,6 +62,9 @@ function findWorkspaceRoot(startDir: string): string | undefined {
       }
     }
     if (fs.existsSync(path.join(dir, 'lerna.json'))) {
+      return dir;
+    }
+    if (fs.existsSync(path.join(dir, '.git'))) {
       return dir;
     }
     const parent = path.dirname(dir);
