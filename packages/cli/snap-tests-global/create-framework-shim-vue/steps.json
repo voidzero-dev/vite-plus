@@ -1,5 +1,6 @@
 {
   "ignoredPlatforms": ["win32"],
+  "linkCheckoutPackages": true,
   "commands": [
     {
       "command": "vp create vite:application --no-interactive -- --template vue-ts # create Vue+TS app",
@@ -10,8 +11,6 @@
       "command": "cd vite-plus-application && vp install # install dependencies",
       "ignoreOutput": true
     },
-    {
-      "command": "cd vite-plus-application && sed -i.bak -e '/jsPlugins/d' -e '/rules:/d' -e '/options:/d' vite.config.ts && vp check --fix # fix generated formatting and ensure no errors"
-    }
+    "cd vite-plus-application && vp check --fix # fix generated formatting and ensure no errors"
   ]
 }

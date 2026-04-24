@@ -7,6 +7,6 @@ declare module '*.vue' {
 }
 
 > cd vite-plus-application && vp install # install dependencies
-> cd vite-plus-application && sed -i.bak -e '/jsPlugins/d' -e '/rules:/d' -e '/options:/d' vite.config.ts && vp check --fix # fix generated formatting and ensure no errors
+> cd vite-plus-application && vp check --fix # fix generated formatting and ensure no errors
 pass: Formatting completed for checked files (<variable>ms)
-pass: Found no warnings or lint errors in 5 files (<variable>ms, <variable> threads)
+pass: Found no warnings, lint errors, or type errors in 5 files (<variable>ms, <variable> threads)
