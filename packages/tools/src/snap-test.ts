@@ -196,7 +196,7 @@ function assertGlobalCliBinaryMatchesCheckout(binDir: string, casesDir: string):
   if (shouldCheckMtime && fs.statSync(builtBinary).mtimeMs + 1000 < newestSourceMtime) {
     throw new Error(
       `Built Vite+ global CLI binary is older than the current checkout: ${builtBinary}\n` +
-      'Run `cargo build -p vite_global_cli --release` before snap-test-global.',
+        'Run `cargo build -p vite_global_cli --release` before snap-test-global.',
     );
   }
 
