@@ -98,7 +98,7 @@ An organization can publish a curated set of templates under a single npm scope 
 vp create @your-org
 
 # Run a specific manifest entry directly
-vp create @your-org/web
+vp create @your-org:web
 
 # Set the org as the default for a repo (see create.defaultTemplate config)
 vp create
@@ -171,7 +171,7 @@ Each entry supports:
 
 | Field         | Required | Notes                                                                                                                                                                                                                                        |
 | ------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `name`        | yes      | Kebab-case identifier. Used by `vp create @org/<name>` for direct selection. Must be unique within the array.                                                                                                                                |
+| `name`        | yes      | Kebab-case identifier. Used by `vp create @org:<name>` for direct selection. Must be unique within the array.                                                                                                                                |
 | `description` | yes      | One-line description shown in the picker.                                                                                                                                                                                                    |
 | `template`    | yes      | An npm specifier (`@org/template-foo`, optionally `@version`), a GitHub URL (`github:user/repo`), a `vite:*` builtin, a local workspace package name, or a relative path (`./templates/foo`) that resolves against the `@org/create` root. |
 | `keywords`    | no       | Filter terms for picker search.                                                                                                                                                                                                              |
@@ -215,7 +215,7 @@ Available templates in @your-org/create:
 
 Examples:
   # Scaffold a specific template from the org
-  vp create @your-org/web --no-interactive
+  vp create @your-org:web --no-interactive
 
   # Or use a Vite+ built-in template
   vp create vite:application --no-interactive

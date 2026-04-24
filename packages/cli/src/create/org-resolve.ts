@@ -61,7 +61,7 @@ function printNonInteractiveTable(
   if (firstVisible) {
     body.push(
       '  # Scaffold a specific template from the org',
-      `  vp create ${orgSpec.scope}/${firstVisible.name} --no-interactive`,
+      `  vp create ${orgSpec.scope}:${firstVisible.name} --no-interactive`,
       '',
     );
   }
@@ -131,15 +131,19 @@ export async function resolveOrgManifestForCreate(args: {
   }
 
   if (!manifest) {
+    if (orgSpec.name !== undefined) {
+      // `@org:name` is an explicit manifest lookup; no manifest → hard error.
+      prompts.log.error(
+        `No \`createConfig.templates\` manifest in ${orgSpec.scope}/create — \`@org:name\` requires one.`,
+      );
+      process.exit(1);
+    }
     // Scope-only input (`vp create @org`) strongly implies the user
     // expected the picker. Be explicit about why it didn't engage, so a
     // later `ERR_NO_BIN` from the package manager doesn't look mysterious.
-    // Per-entry `vp create @org/name` stays silent since it's ambiguous.
-    if (orgSpec.name === undefined) {
-      prompts.log.info(
-        `No \`createConfig.templates\` manifest in ${orgSpec.scope}/create — running it as a normal package.`,
-      );
-    }
+    prompts.log.info(
+      `No \`createConfig.templates\` manifest in ${orgSpec.scope}/create — running it as a normal package.`,
+    );
     return { kind: 'passthrough' };
   }
 
@@ -168,8 +172,15 @@ export async function resolveOrgManifestForCreate(args: {
 
   const entry = manifest.templates.find((candidate) => candidate.name === orgSpec.name);
   if (!entry) {
-    // Fall through to the existing `@scope/create-name` shorthand in discovery.ts.
-    return { kind: 'passthrough' };
+    // `@scope:name` is an explicit manifest lookup — no ambiguous fall-through.
+    const available = manifest.templates
+      .filter((t) => !(t.monorepo && args.isMonorepo))
+      .map((t) => t.name)
+      .join(', ');
+    prompts.log.error(
+      `No template named "${orgSpec.name}" in ${manifest.packageName}. Available: ${available || '(none applicable in this context)'}.`,
+    );
+    process.exit(1);
   }
   rejectMonorepoEntryInsideMonorepo(entry, args.isMonorepo);
   return resolveEntry(manifest, entry);

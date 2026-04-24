@@ -1,5 +1,5 @@
 {
   "commands": [
-    "node $SNAP_CASES_DIR/.shared/mock-npm-registry.mjs -- vp create @your-org/monorepo --no-interactive # direct-selecting a monorepo entry inside a monorepo -> refuse"
+    "node $SNAP_CASES_DIR/.shared/mock-npm-registry.mjs -- vp create @your-org:monorepo --no-interactive # direct-selecting a monorepo entry inside a monorepo -> refuse"
   ]
 }

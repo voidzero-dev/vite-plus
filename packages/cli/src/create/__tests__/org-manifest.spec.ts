@@ -24,16 +24,22 @@ describe('parseOrgScopedSpec', () => {
     expect(parseOrgScopedSpec('@your-org@latest')).toEqual({ scope: '@your-org' });
   });
 
-  it('parses @scope/name', () => {
-    expect(parseOrgScopedSpec('@your-org/web')).toEqual({ scope: '@your-org', name: 'web' });
+  it('parses @scope:name', () => {
+    expect(parseOrgScopedSpec('@your-org:web')).toEqual({ scope: '@your-org', name: 'web' });
   });
 
-  it('parses @scope/name@version', () => {
-    expect(parseOrgScopedSpec('@your-org/web@1.2.3')).toEqual({ scope: '@your-org', name: 'web' });
+  it('parses @scope:name@version', () => {
+    expect(parseOrgScopedSpec('@your-org:web@1.2.3')).toEqual({ scope: '@your-org', name: 'web' });
   });
 
-  it('treats a trailing slash as scope-only', () => {
-    expect(parseOrgScopedSpec('@your-org/')).toEqual({ scope: '@your-org' });
+  it('treats @scope: (empty name) as scope-only', () => {
+    expect(parseOrgScopedSpec('@your-org:')).toEqual({ scope: '@your-org' });
+  });
+
+  it('returns null for the @scope/name slash form (reserved for existing shorthand)', () => {
+    expect(parseOrgScopedSpec('@your-org/web')).toBeNull();
+    expect(parseOrgScopedSpec('@your-org/create-web')).toBeNull();
+    expect(parseOrgScopedSpec('@your-org/')).toBeNull();
   });
 });
 

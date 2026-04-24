@@ -12,7 +12,7 @@ Available templates in @your-org/create:
 
 Examples:
   # Scaffold a specific template from the org
-  vp create @your-org/web --no-interactive
+  vp create @your-org:web --no-interactive
 
   # Or use a Vite+ built-in template
   vp create vite:application --no-interactive

@@ -27,24 +27,35 @@ export interface OrgManifest {
 }
 
 /**
- * Parse the leading `@scope[/name]` segment of a template specifier, ignoring
- * any trailing `@version` suffix on the name.
+ * Parse the org picker specifier: `@scope` (scope only → picker) or
+ * `@scope:name` (direct manifest-entry selection). Colon mirrors the
+ * existing `vite:monorepo` / `vite:library` builtin-template syntax and
+ * keeps manifest entries syntactically distinct from real
+ * `@scope/package-name` npm specifiers.
  *
- * Returns `null` if the input does not look like an org-scoped reference.
+ * Returns `null` for anything else — including the plain `@scope/name`
+ * form, which routes to the existing `@scope/create-name` shorthand as
+ * it did before the org-manifest feature.
  */
 export function parseOrgScopedSpec(spec: string): { scope: string; name?: string } | null {
   if (!spec.startsWith('@')) {
     return null;
   }
-  const slashIndex = spec.indexOf('/');
-  if (slashIndex === -1) {
-    // `@scope` or `@scope@version`
+  // Reject `@scope/anything` — let that form fall through to the
+  // pre-feature shorthand path in `expandCreateShorthand`.
+  if (spec.includes('/')) {
+    return null;
+  }
+  const colonIndex = spec.indexOf(':');
+  if (colonIndex === -1) {
+    // `@scope` or `@scope@version` → scope-only picker.
     const atIndex = spec.indexOf('@', 1);
     const scope = atIndex === -1 ? spec : spec.slice(0, atIndex);
     return { scope };
   }
-  const scope = spec.slice(0, slashIndex);
-  const rest = spec.slice(slashIndex + 1);
+  const scope = spec.slice(0, colonIndex);
+  const rest = spec.slice(colonIndex + 1);
+  // `@scope:name@version` — strip the optional version suffix.
   const atIndex = rest.indexOf('@');
   const name = atIndex === -1 ? rest : rest.slice(0, atIndex);
   if (!name) {
