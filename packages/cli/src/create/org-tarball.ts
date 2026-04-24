@@ -91,10 +91,21 @@ async function downloadTarball(url: string): Promise<Uint8Array> {
   return bytes;
 }
 
+const STAGING_SUFFIX_PREFIX = '.tmp-';
+
 /**
  * Strip the conventional `package/` directory prefix that npm adds to every
  * tarball entry. Returns the trimmed path, or `null` if the entry should be
  * skipped (e.g. the root `package/` directory itself, PaxHeaders).
+ *
+ * `npm pack` / `npm publish` always wrap contents under `package/`, but a
+ * registry tarball is still just a standard `.tgz` — some older publishers
+ * (hand-rolled release scripts, legacy one-off tarballs from Artifactory)
+ * emit entries without that prefix. Accepting them unchanged preserves the
+ * behavior of package managers that happily install those tarballs today.
+ * Convention reference:
+ * https://docs.npmjs.com/cli/v10/configuring-npm/package-json (see "files")
+ * and https://docs.npmjs.com/cli/v10/commands/npm-pack.
  */
 function normalizeEntryName(rawName: string): string | null {
   const name = rawName.replace(/^\.\//, '').replace(/\\/g, '/');
@@ -107,7 +118,6 @@ function normalizeEntryName(rawName: string): string | null {
   if (name.startsWith('package/')) {
     return name.slice('package/'.length);
   }
-  // Some publishers use a custom root directory; accept it too.
   return name;
 }
 
@@ -115,8 +125,9 @@ async function extractTarballTo(bytes: Uint8Array, destDir: string): Promise<voi
   const entries = await parseTarGzip(bytes);
   // Extract into a staging directory first so partial failures don't leave
   // a half-populated final cache path that future runs would skip.
-  const stagingDir = `${destDir}.tmp-${process.pid}-${Date.now()}`;
+  const stagingDir = `${destDir}${STAGING_SUFFIX_PREFIX}${process.pid}-${Date.now()}`;
   await fs.promises.mkdir(stagingDir, { recursive: true });
+  const resolvedStaging = path.resolve(stagingDir);
   try {
     for (const entry of entries) {
       const relativeName = normalizeEntryName(entry.name);
@@ -126,7 +137,6 @@ async function extractTarballTo(bytes: Uint8Array, destDir: string): Promise<voi
       const targetPath = path.join(stagingDir, relativeName);
       // Defense-in-depth: make sure the resolved path is still inside the
       // staging directory (no `..` escapes via crafted tar entries).
-      const resolvedStaging = path.resolve(stagingDir);
       const resolvedTarget = path.resolve(targetPath);
       if (
         resolvedTarget !== resolvedStaging &&
@@ -142,12 +152,61 @@ async function extractTarballTo(bytes: Uint8Array, destDir: string): Promise<voi
       const data = entry.data ?? new Uint8Array(0);
       await fs.promises.writeFile(targetPath, data);
     }
-    await fs.promises.rename(stagingDir, destDir);
+    try {
+      await fs.promises.rename(stagingDir, destDir);
+    } catch (error) {
+      // A concurrent `vp create` already populated `destDir`; treat as a
+      // cache hit and drop our now-redundant staging tree. The TOCTOU
+      // check in `ensureOrgPackageExtracted` makes this the winning branch
+      // for a parallel-invocation race rather than a hard failure.
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === 'ENOTEMPTY' || code === 'EEXIST' || code === 'EPERM') {
+        await fs.promises.rm(stagingDir, { recursive: true, force: true }).catch(() => {});
+        return;
+      }
+      throw error;
+    }
   } catch (error) {
-    // Clean up the staging dir on failure.
     await fs.promises.rm(stagingDir, { recursive: true, force: true }).catch(() => {});
     throw error;
   }
+}
+
+const STAGING_STALE_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Remove `<destDir>.tmp-*` siblings left behind by a previous crash so
+ * repeated aborts don't accumulate orphaned staging trees. Only deletes
+ * entries whose mtime is older than 24 hours — a concurrent `vp create`
+ * that's still actively extracting will always be younger than that, so
+ * the age gate keeps this safe to run at the top of every extract.
+ */
+async function cleanupStaleStagingDirs(destDir: string): Promise<void> {
+  const parent = path.dirname(destDir);
+  const basename = path.basename(destDir);
+  const prefix = `${basename}${STAGING_SUFFIX_PREFIX}`;
+  let entries: string[];
+  try {
+    entries = await fs.promises.readdir(parent);
+  } catch {
+    return;
+  }
+  const cutoff = Date.now() - STAGING_STALE_MS;
+  await Promise.all(
+    entries
+      .filter((name) => name.startsWith(prefix))
+      .map(async (name) => {
+        const fullPath = path.join(parent, name);
+        try {
+          const stats = await fs.promises.stat(fullPath);
+          if (stats.mtimeMs < cutoff) {
+            await fs.promises.rm(fullPath, { recursive: true, force: true });
+          }
+        } catch {
+          // Entry vanished between readdir and stat/rm — nothing to do.
+        }
+      }),
+  );
 }
 
 /**
@@ -157,7 +216,8 @@ async function extractTarballTo(bytes: Uint8Array, destDir: string): Promise<voi
  * `package.json`).
  *
  * Idempotent: subsequent calls for the same `<scope, version>` reuse the
- * cached extraction.
+ * cached extraction. Concurrent calls race on the final rename; the loser
+ * cleans up and returns the existing directory.
  */
 export async function ensureOrgPackageExtracted(manifest: OrgManifest): Promise<string> {
   const extractedRoot = getExtractionDir(manifest);
@@ -166,6 +226,7 @@ export async function ensureOrgPackageExtracted(manifest: OrgManifest): Promise<
   }
   const parent = path.dirname(extractedRoot);
   await fs.promises.mkdir(parent, { recursive: true });
+  await cleanupStaleStagingDirs(extractedRoot);
   const bytes = await downloadTarball(manifest.tarballUrl);
   verifyIntegrity(bytes, manifest.integrity);
   await extractTarballTo(bytes, extractedRoot);
