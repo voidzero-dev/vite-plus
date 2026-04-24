@@ -53,4 +53,20 @@ describe('getConfiguredDefaultTemplate', () => {
     fs.writeFileSync(path.join(repoRoot, 'package.json'), '{"name":"fixture"}');
     expect(await getConfiguredDefaultTemplate(repoRoot)).toBeUndefined();
   });
+
+  it('prefers the monorepo root over a nested `.git` subproject', async () => {
+    // Monorepo root carries the vite config + workspace marker…
+    fs.writeFileSync(path.join(repoRoot, 'pnpm-workspace.yaml'), "packages:\n  - 'apps/*'\n");
+    fs.writeFileSync(
+      path.join(repoRoot, 'vite.config.ts'),
+      "export default { create: { defaultTemplate: '@your-org' } };\n",
+    );
+    fs.writeFileSync(path.join(repoRoot, 'package.json'), '{"name":"monorepo"}');
+    // …but a nested package has its own `.git` (e.g. submodule). The
+    // nested `.git` must NOT shadow the monorepo marker above it.
+    const nested = path.join(repoRoot, 'apps', 'web');
+    fs.mkdirSync(path.join(nested, '.git'), { recursive: true });
+    fs.writeFileSync(path.join(nested, 'package.json'), '{"name":"web"}');
+    expect(await getConfiguredDefaultTemplate(nested)).toBe('@your-org');
+  });
 });
