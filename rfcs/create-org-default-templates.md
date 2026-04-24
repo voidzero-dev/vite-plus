@@ -58,8 +58,8 @@ a single memorable entry point outperforms a list of names.
 # Interactively pick a template from the @your-org org
 vp create @your-org
 
-# Pick a specific one directly
-vp create @your-org/web
+# Pick a specific manifest entry directly
+vp create @your-org:web
 
 # Inside a repo that sets @your-org as the default:
 vp create
@@ -114,25 +114,28 @@ templates owned by the same org**. That is what this RFC specifies.
    `@org/create`'s `package.json` from the npm registry.
 4. If the `package.json` contains a `createConfig.templates` field, Vite+ renders an
    interactive picker over those entries.
-5. After the user picks (or passes `@org/<name>` directly), Vite+ resolves the
-   selected entry's `template` field through the existing `discoverTemplate`
-   pipeline — which supports npm, GitHub, builtin `vite:*`, and local
-   workspace packages.
+5. After the user picks (or passes `@org:<name>` directly — colon separator
+   mirrors the existing `vite:monorepo` / `vite:library` builtin syntax and
+   keeps manifest entries syntactically distinct from real `@org/package`
+   npm specifiers), Vite+ resolves the selected entry's `template` field
+   through the existing `discoverTemplate` pipeline — which supports npm,
+   GitHub, builtin `vite:*`, and local workspace packages.
 6. If `createConfig.templates` is **absent**, Vite+ falls through to today's behavior
    and executes `@org/create` as a normal template. This keeps the feature
    zero-risk for org owners who haven't opted in.
 
 ### Command matrix
 
-| Command                          | Manifest present? | Behavior                                                        |
-| -------------------------------- | ----------------- | --------------------------------------------------------------- |
-| `vp create @org`                 | yes               | Fetch manifest → picker → run chosen template                   |
-| `vp create @org`                 | no                | Run `@org/create` as today (unchanged)                          |
-| `vp create @org/name`            | yes, has `name`   | Run manifest entry `name` (manifest wins)                       |
-| `vp create @org/name`            | yes, no `name`    | Fall back to `@org/create-name` shorthand                       |
-| `vp create @org/name`            | no                | Run `@org/create-name` as today (unchanged)                     |
-| `vp create` (in configured repo) | yes               | Same as `vp create @org` where `@org` is the configured default |
-| `vp create <anything-else>`      | n/a               | Unchanged                                                       |
+| Command                          | Manifest present? | Behavior                                                                       |
+| -------------------------------- | ----------------- | ------------------------------------------------------------------------------ |
+| `vp create @org`                 | yes               | Fetch manifest → picker → run chosen template                                  |
+| `vp create @org`                 | no                | Run `@org/create` as today (unchanged)                                         |
+| `vp create @org:name`            | yes, has `name`   | Run manifest entry `name`                                                      |
+| `vp create @org:name`            | yes, no `name`    | Hard error listing available manifest entry names                              |
+| `vp create @org:name`            | no                | Same hard error — `:`-form is explicit manifest lookup, no silent fall-through |
+| `vp create @org/name`            | n/a               | Unchanged from pre-feature: existing `@org/create-name` shorthand              |
+| `vp create` (in configured repo) | yes               | Same as `vp create @org` where `@org` is the configured default                |
+| `vp create <anything-else>`      | n/a               | Unchanged                                                                      |
 
 ## Manifest Schema
 
@@ -187,7 +190,7 @@ The manifest lives at `createConfig.templates` in `@org/create`'s `package.json`
 | Field                                  | Type              | Required | Notes                                                                                                                                                                                                                                                                                                                                                                                  |
 | -------------------------------------- | ----------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `createConfig.templates`               | `TemplateEntry[]` | yes      | Non-empty array. Empty arrays are treated as "no manifest" (fall through to `@org/create` run).                                                                                                                                                                                                                                                                                        |
-| `createConfig.templates[].name`        | `string`          | yes      | Kebab-case. Used for `vp create @org/<name>` direct selection. Must be unique within the array.                                                                                                                                                                                                                                                                                        |
+| `createConfig.templates[].name`        | `string`          | yes      | Kebab-case. Used for `vp create @org:<name>` direct selection. Must be unique within the array.                                                                                                                                                                                                                                                                                        |
 | `createConfig.templates[].description` | `string`          | yes      | One-line description shown in the picker.                                                                                                                                                                                                                                                                                                                                              |
 | `createConfig.templates[].template`    | `string`          | yes      | One of: (a) an npm package specifier (`@your-org/template-web`, optionally `@version`), (b) a GitHub URL (`github:user/repo`, `https://github.com/...`), (c) a `vite:*` builtin, (d) a local workspace package name, or (e) a relative path (`./templates/demo`, `../foo`) that resolves against the enclosing `@org/create` package root. See "Bundled subdirectory templates" below. |
 | `createConfig.templates[].keywords`    | `string[]`        | no       | Filter terms for picker search.                                                                                                                                                                                                                                                                                                                                                        |
@@ -291,7 +294,7 @@ if (templateName.startsWith('@')) {
       // Everything else: recurse through existing discoverTemplate.
       return discoverTemplate(entry.template, templateArgs, workspaceInfo, interactive);
     }
-    // `vp create @org/name` with no matching entry → fall through to shorthand.
+    // `vp create @org:name` with no matching entry → hard error (no fall-through).
   }
 }
 
@@ -426,7 +429,7 @@ The `--no-interactive` error output for `vp create @org` mentions this in
 the hint line, so an agent reading the table can pivot:
 
 ```
-hint: rerun with an explicit selection, e.g. `vp create @your-org/web`,
+hint: rerun with an explicit selection, e.g. `vp create @your-org:web`,
       or use a Vite+ built-in template like `vp create vite:application`.
 ```
 
@@ -480,7 +483,7 @@ at a dead end.
 
 ### Direct-selection behavior
 
-`vp create @org/<name>` bypasses the picker, so filtering does not apply —
+`vp create @org:<name>` bypasses the picker, so filtering does not apply —
 but an explicit selection of a `monorepo: true` entry from _within_ a
 monorepo is almost certainly a mistake. Vite+ already refuses
 `vite:monorepo` in this situation at `packages/cli/src/create/bin.ts:468-472`.
@@ -504,7 +507,7 @@ command errors and prints the full manifest table — the same table a
 dedicated `--list` flag would have produced. This keeps the surface small
 (no extra flag), and, critically, gives AI agents reading the output enough
 context (name, description, underlying template) to pick an appropriate
-option and retry with `vp create @org/<name>`:
+option and retry with `vp create @org:<name>`:
 
 ```
 A template name is required when running `vp create @your-org` in non-interactive mode.
@@ -520,7 +523,7 @@ Available templates in @your-org/create:
 
 Examples:
   # Scaffold a specific template from the org
-  vp create @your-org/web --no-interactive
+  vp create @your-org:web --no-interactive
 
   # Or use a Vite+ built-in template
   vp create vite:application --no-interactive
@@ -659,21 +662,22 @@ either way; they continue to run your `bin` script.
 
 ## Error Handling
 
-| Situation                                                                       | Behavior                                                                                                                                                                                                   |
-| ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@org/create` does not exist on npm                                             | Same "template not found" error as today.                                                                                                                                                                  |
-| `@org/create` exists, no `createConfig.templates`                               | Fall through to today's behavior: run `@org/create`. No error.                                                                                                                                             |
-| `createConfig.templates` is not an array                                        | Schema error: `@org/create: createConfig.templates must be an array`.                                                                                                                                      |
-| Manifest entry missing `name` / `description` / `template`                      | Schema error with the offending index and field.                                                                                                                                                           |
-| Manifest entry has duplicate `name`                                             | Schema error listing the duplicate.                                                                                                                                                                        |
-| Chosen template fails to resolve (404, bad URL)                                 | Downstream error with context: `selected 'web' from @your-org/create: <downstream error>`.                                                                                                                 |
-| Network failure fetching manifest                                               | Hard error. Never silently skip the picker when the user explicitly typed `@org`.                                                                                                                          |
-| `--no-interactive` without `@org/<name>`                                        | Error listing valid names (see above).                                                                                                                                                                     |
-| All manifest entries filtered (e.g. all `monorepo: true` inside a monorepo)     | Print an `info:` note (`"No templates from @org/create are applicable inside a monorepo — showing Vite+ built-in templates instead."`) and route to the built-in picker. Keeps the user out of a dead end. |
-| `vp create @org/<name>` where `name` has `monorepo: true` and cwd is a monorepo | Same error as the builtin: `Cannot create a monorepo inside an existing monorepo` (mirrors `bin.ts:468-472`).                                                                                              |
-| Bundled path (`./foo`) resolves outside `@org/create` root                      | Schema error at manifest-validation time: `createConfig.templates[i].template escapes the package root`.                                                                                                   |
-| Bundled path points to a directory that does not exist in the tarball           | Scaffolding error: `selected 'demo' from @your-org/create: ./templates/demo not found in @your-org/create@1.0.0`.                                                                                          |
-| Tarball download or extraction fails                                            | Hard error with the upstream cause. Cached partial extractions are cleaned up before retry.                                                                                                                |
+| Situation                                                                          | Behavior                                                                                                                                                                                                   |
+| ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@org/create` does not exist on npm                                                | Same "template not found" error as today.                                                                                                                                                                  |
+| `@org/create` exists, no `createConfig.templates`                                  | Fall through to today's behavior: run `@org/create`. No error.                                                                                                                                             |
+| `createConfig.templates` is not an array                                           | Schema error: `@org/create: createConfig.templates must be an array`.                                                                                                                                      |
+| Manifest entry missing `name` / `description` / `template`                         | Schema error with the offending index and field.                                                                                                                                                           |
+| Manifest entry has duplicate `name`                                                | Schema error listing the duplicate.                                                                                                                                                                        |
+| Chosen template fails to resolve (404, bad URL)                                    | Downstream error with context: `selected 'web' from @your-org/create: <downstream error>`.                                                                                                                 |
+| Network failure fetching manifest                                                  | Hard error. Never silently skip the picker when the user explicitly typed `@org`.                                                                                                                          |
+| `--no-interactive` without `@org:<name>`                                           | Error listing valid names (see above).                                                                                                                                                                     |
+| All manifest entries filtered (e.g. all `monorepo: true` inside a monorepo)        | Print an `info:` note (`"No templates from @org/create are applicable inside a monorepo — showing Vite+ built-in templates instead."`) and route to the built-in picker. Keeps the user out of a dead end. |
+| `vp create @org:<name>` where `name` has `monorepo: true` and cwd is a monorepo    | Same error as the builtin: `Cannot create a monorepo inside an existing monorepo` (mirrors `bin.ts:468-472`).                                                                                              |
+| `vp create @org:<name>` where `name` isn't in the manifest (or manifest is absent) | Hard error listing the available entries — no silent fall-through to the `@org/create-name` shorthand, which is reserved for the slash-form.                                                               |
+| Bundled path (`./foo`) resolves outside `@org/create` root                         | Schema error at manifest-validation time: `createConfig.templates[i].template escapes the package root`.                                                                                                   |
+| Bundled path points to a directory that does not exist in the tarball              | Scaffolding error: `selected 'demo' from @your-org/create: ./templates/demo not found in @your-org/create@1.0.0`.                                                                                          |
+| Tarball download or extraction fails                                               | Hard error with the upstream cause. Cached partial extractions are cleaned up before retry.                                                                                                                |
 
 ## Alternatives Considered
 
@@ -731,7 +735,7 @@ Four phases, each independently shippable.
 - Schema validation for `createConfig.templates` (simple hand-rolled checks; no new
   dep).
 - Interactive picker using `@voidzero-dev/vite-plus-prompts` `select`.
-- Direct selection: `vp create @org/name` uses manifest when present.
+- Direct selection: `vp create @org:name` picks the manifest entry named `name`; misses (or absent manifest) are hard errors.
 - Tarball fetch + extract (`ensureOrgPackageExtracted`) with
   `$VP_HOME/tmp/create-org/<scope>/<name>/<version>/` cache, plus the
   directory-copy scaffold path for bundled `./` entries.
@@ -772,7 +776,7 @@ Fixture additions under `packages/cli/snap-tests-global/create-org-*`:
 | `create-org-config-default`              | `vp create` in repo with `defaultTemplate` uses it                                                                |
 | `create-org-invalid-manifest`            | Invalid `createConfig.templates` produces a schema error                                                          |
 | `create-org-monorepo-filter`             | `monorepo: true` entries hidden from picker and `--no-interactive` output when run inside a monorepo              |
-| `create-org-monorepo-direct-in-monorepo` | `vp create @org/<monorepo-entry>` errors with "cannot create a monorepo inside an existing monorepo"              |
+| `create-org-monorepo-direct-in-monorepo` | `vp create @org:<monorepo-entry>` errors with "cannot create a monorepo inside an existing monorepo"              |
 | `create-org-builtin-escape-hatch`        | Org picker always ends with a "Vite+ built-in templates" entry that routes to `getInitialTemplateOptions`         |
 | `create-org-bundled-subdir`              | Manifest entry with `./templates/demo` fetches tarball, extracts to `$VP_HOME/tmp/create-org/...`, scaffolds dir  |
 | `create-org-bundled-escape-check`        | `./../outside` path is rejected at schema-validation time before any tarball fetch                                |
@@ -799,10 +803,10 @@ Usage: vp create [TEMPLATE] [OPTIONS] [-- TEMPLATE_OPTIONS]
 Arguments:
   TEMPLATE           Template to scaffold from. May be:
                        - an org scope (e.g. @your-org) for org templates
-                       - a scoped name (e.g. @your-org/web) for a specific
-                         template from an org's manifest
+                       - an org entry (e.g. @your-org:web) for a specific
+                         manifest entry
                        - any value accepted today: create-*, github:*, vite:*,
-                         local package name
+                         @scope/package, local package name
                      When omitted, uses `create.defaultTemplate` from
                      vite.config.ts if set.
 
@@ -819,8 +823,11 @@ Configuration (vite.config.ts):
   working unchanged until they opt in by adding `createConfig.templates`.
 - **Plain `npm create @org` / `yarn create @org`**: unaffected. Those
   consumers run the package's `bin` script, which is outside Vite+'s scope.
-- **Existing `@org/create-name` shorthand**: preserved as a fallback when
-  the manifest doesn't mention `name`.
+- **Existing `@org/name` shorthand**: untouched. `vp create @org/foo`
+  still expands to `@org/create-foo` exactly as it did before this
+  feature. Manifest lookup is only triggered by the `:` separator
+  (`vp create @org:foo`), so there's no collision with real
+  `@org/anything` npm packages.
 
 ## Real-World Usage Examples
 
@@ -832,10 +839,10 @@ vp create @your-org
 # → picker with: web, mobile, server, library
 
 # Direct
-vp create @your-org/server
+vp create @your-org:server
 
 # Non-interactive (CI)
-vp create @your-org/library --no-interactive --directory ./packages/new-lib
+vp create @your-org:library --no-interactive --directory ./packages/new-lib
 ```
 
 ### Enterprise monorepo with a default
