@@ -3,7 +3,6 @@
   "compilerOptions": {
     "experimentalDecorators": true
   },
-  "files": [],
-  "include": [],
-  "exclude": ["**/*"]
+  "include": ["build-support/**/*", "__tests__/**/*"],
+  "exclude": ["dist", "node_modules"]
 }
