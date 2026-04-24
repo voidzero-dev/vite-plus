@@ -1,6 +1,6 @@
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
-import { findViteConfigUp, resolveViteConfig } from '../resolve-vite-config.ts';
+import { findViteConfigUp, findWorkspaceRoot, resolveViteConfig } from '../resolve-vite-config.ts';
 import {
   filterManifestForContext,
   isRelativePath,
@@ -189,19 +189,24 @@ export async function resolveOrgManifestForCreate(args: {
 }
 
 /**
- * Read `create.defaultTemplate` from the project's `vite.config.ts`.
+ * Read `create.defaultTemplate` from the workspace/repo root's
+ * `vite.config.ts`.
+ *
+ * Walks up from `startDir` to find the nearest project root (monorepo
+ * marker or `.git` directory) and reads the config from there, so
+ * `vp create` picks up the configured default regardless of which
+ * subdirectory the command is invoked from.
  *
  * Best-effort: if there's no config file or evaluation fails, return
  * `undefined` so the create flow behaves as if no default was set.
  */
-export async function getConfiguredDefaultTemplate(
-  workspaceRootDir: string,
-): Promise<string | undefined> {
-  if (!findViteConfigUp(workspaceRootDir, workspaceRootDir)) {
+export async function getConfiguredDefaultTemplate(startDir: string): Promise<string | undefined> {
+  const projectRoot = findWorkspaceRoot(startDir) ?? startDir;
+  if (!findViteConfigUp(projectRoot, projectRoot)) {
     return undefined;
   }
   try {
-    const config = (await resolveViteConfig(workspaceRootDir)) as {
+    const config = (await resolveViteConfig(projectRoot)) as {
       create?: { defaultTemplate?: unknown };
     };
     const value = config.create?.defaultTemplate;
