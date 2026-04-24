@@ -133,24 +133,23 @@ function resolveBuiltGlobalCliBinary(casesDir: string): string {
     path.join(repoRoot, 'target'),
   ];
   const candidates = targetDirs.flatMap((targetDir) => {
-    const directCandidates = [
+    const targetCandidates = [
       path.join(targetDir, 'release', binaryName),
       path.join(targetDir, 'debug', binaryName),
     ];
     if (!fs.existsSync(targetDir)) {
-      return directCandidates;
+      return targetCandidates;
     }
 
-    return [
-      ...directCandidates,
-      ...fs
-        .readdirSync(targetDir, { withFileTypes: true })
-        .filter((entry) => entry.isDirectory())
-        .flatMap((entry) => [
+    for (const entry of fs.readdirSync(targetDir, { withFileTypes: true })) {
+      if (entry.isDirectory()) {
+        targetCandidates.push(
           path.join(targetDir, entry.name, 'release', binaryName),
           path.join(targetDir, entry.name, 'debug', binaryName),
-        ]),
-    ];
+        );
+      }
+    }
+    return targetCandidates;
   });
   const binaryPath = candidates.find((candidate) => fs.existsSync(candidate));
   if (!binaryPath) {
