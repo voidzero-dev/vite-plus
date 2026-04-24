@@ -39,18 +39,11 @@ export function hasViteConfig(dir: string): boolean {
 }
 
 /**
- * Find the workspace / repo root by walking up from `startDir`.
- *
- * Monorepo markers (`pnpm-workspace.yaml`, `workspaces` in `package.json`,
- * `lerna.json`) win globally — they always take precedence over any
- * `.git` seen along the way, so a subproject with its own `.git` (git
- * submodule, nested clone) can't preempt a marker higher up the tree.
- * `.git` is only returned when the walk finishes without finding any
- * monorepo marker.
+ * Find the workspace root by walking up from `startDir` looking for
+ * monorepo indicators (pnpm-workspace.yaml, workspaces in package.json, lerna.json).
  */
 export function findWorkspaceRoot(startDir: string): string | undefined {
   let dir = path.resolve(startDir);
-  let gitFallback: string | undefined;
   while (true) {
     if (fs.existsSync(path.join(dir, 'pnpm-workspace.yaml'))) {
       return dir;
@@ -69,16 +62,13 @@ export function findWorkspaceRoot(startDir: string): string | undefined {
     if (fs.existsSync(path.join(dir, 'lerna.json'))) {
       return dir;
     }
-    if (gitFallback === undefined && fs.existsSync(path.join(dir, '.git'))) {
-      gitFallback = dir;
-    }
     const parent = path.dirname(dir);
     if (parent === dir) {
       break;
     }
     dir = parent;
   }
-  return gitFallback;
+  return undefined;
 }
 
 export interface ResolveViteConfigOptions {
