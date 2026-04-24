@@ -562,7 +562,9 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
 
       - name: Verify minimumReleaseAge blocks non-interactive install
         shell: powershell
