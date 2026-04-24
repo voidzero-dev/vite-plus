@@ -53,8 +53,6 @@ export function discoverTemplate(
     ...process.env,
   });
   const parentDir = inferParentDir(templateName, workspaceInfo);
-  // Pre-resolved bundled subdirectory from an @org/create manifest
-  // (see `org-resolve.ts` → `org-tarball.ts`).
   if (bundledLocalPath) {
     return {
       command: '',
@@ -131,9 +129,8 @@ export function discoverTemplate(
     }
   }
 
-  // Manifest-resolved entries (`{ kind: 'replaced' }` from org-resolve.ts)
-  // are already fully qualified by the manifest author — `@scope/template-web`
-  // means exactly that package, NOT `@scope/create-template-web`.
+  // Manifest-resolved entries are already fully qualified by the author —
+  // `@scope/template-web` means that exact package, not `@scope/create-template-web`.
   const expandedName = skipShorthand ? templateName : expandCreateShorthand(templateName);
   return {
     command: expandedName,
