@@ -125,42 +125,70 @@ function resolveGlobalCliBinary(binDir: string): string {
   return fs.realpathSync(binaryPath);
 }
 
-function resolveBuiltGlobalCliBinary(casesDir: string): string {
+function resolveInstalledGlobalCliTargetBinary(binDir: string): string {
   const binaryName = process.platform === 'win32' ? 'vp.exe' : 'vp';
+  const binaryPath = path.join(
+    path.resolve(expandHome(binDir)),
+    '..',
+    'current',
+    'bin',
+    binaryName,
+  );
+  if (!fs.existsSync(binaryPath)) {
+    throw new Error(`Unable to find installed global snap test vp binary at ${binaryPath}`);
+  }
+
+  return fs.realpathSync(binaryPath);
+}
+
+function resolveBuiltGlobalCliArtifact(
+  casesDir: string,
+  binaryName: string,
+  packageName: string,
+): string {
   const repoRoot = resolveRepoRoot(casesDir);
-  const targetDirs = [
-    ...(process.env.CARGO_TARGET_DIR ? [process.env.CARGO_TARGET_DIR] : []),
-    path.join(repoRoot, 'target'),
-  ];
-  const candidates = targetDirs.flatMap((targetDir) => {
-    const targetCandidates = [
+  const targetDirs = [path.join(repoRoot, 'target')];
+  if (process.env.CARGO_TARGET_DIR) {
+    targetDirs.unshift(process.env.CARGO_TARGET_DIR);
+  }
+  const candidates: string[] = [];
+  for (const targetDir of targetDirs) {
+    candidates.push(
       path.join(targetDir, 'release', binaryName),
       path.join(targetDir, 'debug', binaryName),
-    ];
+    );
     if (!fs.existsSync(targetDir)) {
-      return targetCandidates;
+      continue;
     }
 
     for (const entry of fs.readdirSync(targetDir, { withFileTypes: true })) {
       if (entry.isDirectory()) {
-        targetCandidates.push(
+        candidates.push(
           path.join(targetDir, entry.name, 'release', binaryName),
           path.join(targetDir, entry.name, 'debug', binaryName),
         );
       }
     }
-    return targetCandidates;
-  });
+  }
   const binaryPath = candidates.find((candidate) => fs.existsSync(candidate));
   if (!binaryPath) {
     throw new Error(
-      `Unable to find built Vite+ global CLI binary for global snap tests. Tried:\n${candidates
+      `Unable to find built Vite+ global CLI ${binaryName} for global snap tests. Tried:\n${candidates
         .map((candidate) => `- ${candidate}`)
-        .join('\n')}\nRun \`cargo build -p vite_global_cli --release\` before snap-test-global.`,
+        .join('\n')}\nRun \`cargo build -p ${packageName} --release\` before snap-test-global.`,
     );
   }
 
   return fs.realpathSync(binaryPath);
+}
+
+function resolveBuiltGlobalCliBinary(casesDir: string): string {
+  const binaryName = process.platform === 'win32' ? 'vp.exe' : 'vp';
+  return resolveBuiltGlobalCliArtifact(casesDir, binaryName, 'vite_global_cli');
+}
+
+function resolveBuiltGlobalCliShim(casesDir: string): string {
+  return resolveBuiltGlobalCliArtifact(casesDir, 'vp-shim.exe', 'vite_trampoline');
 }
 
 function newestMtimeMs(filePath: string): number {
@@ -200,8 +228,28 @@ function assertGlobalCliBinaryMatchesCheckout(binDir: string, casesDir: string):
   }
 
   const globalBinary = resolveGlobalCliBinary(binDir);
-  if (fileContentsEqual(globalBinary, builtBinary)) {
+  if (process.platform !== 'win32' && fileContentsEqual(globalBinary, builtBinary)) {
     return;
+  }
+
+  if (process.platform === 'win32') {
+    const builtShim = resolveBuiltGlobalCliShim(casesDir);
+    const installedTargetBinary = resolveInstalledGlobalCliTargetBinary(binDir);
+    if (
+      fileContentsEqual(globalBinary, builtShim) &&
+      fileContentsEqual(installedTargetBinary, builtBinary)
+    ) {
+      return;
+    }
+
+    throw new Error(
+      `Global snap tests would use stale Windows vp binaries.\n` +
+        `Entrypoint: ${globalBinary}\n` +
+        `Expected entrypoint to match the current checkout shim at ${builtShim}.\n` +
+        `Installed target: ${installedTargetBinary}\n` +
+        `Expected target to match the current checkout build at ${builtBinary}.\n` +
+        'Run `pnpm bootstrap-cli` or `pnpm bootstrap-cli:ci` before snap-test-global.',
+    );
   }
 
   throw new Error(
