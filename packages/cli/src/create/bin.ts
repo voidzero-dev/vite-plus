@@ -516,7 +516,10 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   }
 
   if (targetDir && !isDirectScaffoldTemplate) {
-    cancelAndExit('The --directory option is only available for builtin templates', 1);
+    cancelAndExit(
+      'The --directory option is only available for builtin and bundled @org templates',
+      1,
+    );
   }
   if (selectedTemplateName === BuiltinTemplate.monorepo && isMonorepo) {
     prompts.log.info(
