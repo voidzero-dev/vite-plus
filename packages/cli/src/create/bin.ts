@@ -633,7 +633,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   }
 
   const directScaffoldFallbackName = isBundledTemplate
-    ? `vite-plus-${bundledEntryName ?? 'template'}`
+    ? `vite-plus-${bundledEntryName}`
     : selectedTemplateName === BuiltinTemplate.monorepo
       ? 'vite-plus-monorepo'
       : `vite-plus-${selectedTemplateName.split(':')[1]}`;

@@ -34,26 +34,23 @@ export function findViteConfigUp(startDir: string, stopDir: string): string | un
   return undefined;
 }
 
-function hasViteConfig(dir: string): boolean {
+export function hasViteConfig(dir: string): boolean {
   return VITE_CONFIG_FILES.some((f) => fs.existsSync(path.join(dir, f)));
 }
 
 /**
  * Find the workspace / repo root by walking up from `startDir`.
  *
- * Primary pass: stop at the first `pnpm-workspace.yaml`, `workspaces`
- * in `package.json`, or `lerna.json` — the authoritative monorepo
- * markers.
- *
- * Fallback pass: if no marker is found anywhere in the ancestry, walk
- * again looking for `.git` so standalone git repos still resolve to
- * their repo boundary. `.git` is deliberately NOT checked in the first
- * pass — a subproject with its own `.git` (git submodule, nested clone)
- * must not preempt a monorepo marker higher up the tree.
+ * Monorepo markers (`pnpm-workspace.yaml`, `workspaces` in `package.json`,
+ * `lerna.json`) win globally — they always take precedence over any
+ * `.git` seen along the way, so a subproject with its own `.git` (git
+ * submodule, nested clone) can't preempt a marker higher up the tree.
+ * `.git` is only returned when the walk finishes without finding any
+ * monorepo marker.
  */
 export function findWorkspaceRoot(startDir: string): string | undefined {
-  const startResolved = path.resolve(startDir);
-  let dir = startResolved;
+  let dir = path.resolve(startDir);
+  let gitFallback: string | undefined;
   while (true) {
     if (fs.existsSync(path.join(dir, 'pnpm-workspace.yaml'))) {
       return dir;
@@ -72,18 +69,8 @@ export function findWorkspaceRoot(startDir: string): string | undefined {
     if (fs.existsSync(path.join(dir, 'lerna.json'))) {
       return dir;
     }
-    const parent = path.dirname(dir);
-    if (parent === dir) {
-      break;
-    }
-    dir = parent;
-  }
-  // Fallback: no monorepo marker found in the ancestry. Walk again
-  // looking for a `.git` directory as the standalone repo boundary.
-  dir = startResolved;
-  while (true) {
-    if (fs.existsSync(path.join(dir, '.git'))) {
-      return dir;
+    if (gitFallback === undefined && fs.existsSync(path.join(dir, '.git'))) {
+      gitFallback = dir;
     }
     const parent = path.dirname(dir);
     if (parent === dir) {
@@ -91,7 +78,7 @@ export function findWorkspaceRoot(startDir: string): string | undefined {
     }
     dir = parent;
   }
-  return undefined;
+  return gitFallback;
 }
 
 export interface ResolveViteConfigOptions {

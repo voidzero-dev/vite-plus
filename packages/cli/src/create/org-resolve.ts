@@ -1,6 +1,6 @@
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
-import { findViteConfigUp, findWorkspaceRoot, resolveViteConfig } from '../resolve-vite-config.ts';
+import { findWorkspaceRoot, hasViteConfig, resolveViteConfig } from '../resolve-vite-config.ts';
 import {
   filterManifestForContext,
   isRelativePath,
@@ -202,7 +202,7 @@ export async function resolveOrgManifestForCreate(args: {
  */
 export async function getConfiguredDefaultTemplate(startDir: string): Promise<string | undefined> {
   const projectRoot = findWorkspaceRoot(startDir) ?? startDir;
-  if (!findViteConfigUp(projectRoot, projectRoot)) {
+  if (!hasViteConfig(projectRoot)) {
     return undefined;
   }
   try {
