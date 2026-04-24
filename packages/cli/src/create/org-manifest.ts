@@ -1,6 +1,6 @@
 import path from 'node:path';
 
-import { getNpmRegistry } from '../utils/package.ts';
+import { getNpmAuthHeader, getNpmRegistry } from '../utils/package.ts';
 
 /**
  * A single entry in an org's template manifest.
@@ -36,8 +36,13 @@ export interface OrgManifest {
  * Returns `null` for anything else — including the plain `@scope/name`
  * form, which routes to the existing `@scope/create-name` shorthand as
  * it did before the org-manifest feature.
+ *
+ * The optional `version` suffix (`@scope@1.2.3`, `@scope:name@1.2.3`)
+ * pins `@scope/create` to a specific release rather than `dist-tags.latest`.
  */
-export function parseOrgScopedSpec(spec: string): { scope: string; name?: string } | null {
+export function parseOrgScopedSpec(
+  spec: string,
+): { scope: string; name?: string; version?: string } | null {
   if (!spec.startsWith('@')) {
     return null;
   }
@@ -50,18 +55,22 @@ export function parseOrgScopedSpec(spec: string): { scope: string; name?: string
   if (colonIndex === -1) {
     // `@scope` or `@scope@version` → scope-only picker.
     const atIndex = spec.indexOf('@', 1);
-    const scope = atIndex === -1 ? spec : spec.slice(0, atIndex);
-    return { scope };
+    if (atIndex === -1) {
+      return { scope: spec };
+    }
+    const version = spec.slice(atIndex + 1);
+    return version ? { scope: spec.slice(0, atIndex), version } : { scope: spec.slice(0, atIndex) };
   }
   const scope = spec.slice(0, colonIndex);
   const rest = spec.slice(colonIndex + 1);
-  // `@scope:name@version` — strip the optional version suffix.
+  // `@scope:name@version` — split out the optional version suffix.
   const atIndex = rest.indexOf('@');
   const name = atIndex === -1 ? rest : rest.slice(0, atIndex);
+  const version = atIndex === -1 ? '' : rest.slice(atIndex + 1);
   if (!name) {
-    return { scope };
+    return version ? { scope, version } : { scope };
   }
-  return { scope, name };
+  return version ? { scope, name, version } : { scope, name };
 }
 
 /**
@@ -198,15 +207,31 @@ interface RegistryVersionMeta {
   };
 }
 
-async function fetchPackument(packageName: string): Promise<RegistryPackument | null> {
+async function fetchPackument(
+  scope: string,
+  packageName: string,
+): Promise<RegistryPackument | null> {
   // npm's registry URLs keep `@` and `/` unencoded
   // (`https://registry.npmjs.org/@scope/name`). Match that — private
   // registries often route on the literal path.
-  const url = `${getNpmRegistry()}/${packageName}`;
-  const response = await fetch(url, {
+  const registry = getNpmRegistry(scope);
+  const url = `${registry}/${packageName}`;
+  let response = await fetch(url, {
     headers: { accept: 'application/json' },
     signal: AbortSignal.timeout(5000),
   });
+  // Public registries don't need a credential — avoid leaking tokens
+  // when the default registry is fine. Retry with auth only if the
+  // server explicitly asks for it.
+  if (response.status === 401 || response.status === 403) {
+    const authorization = getNpmAuthHeader(url);
+    if (authorization) {
+      response = await fetch(url, {
+        headers: { accept: 'application/json', authorization },
+        signal: AbortSignal.timeout(5000),
+      });
+    }
+  }
   if (response.status === 404) {
     return null;
   }
@@ -227,21 +252,40 @@ async function fetchPackument(packageName: string): Promise<RegistryPackument | 
  * Throws when:
  * - the `createConfig.templates` field is present but malformed (`OrgManifestSchemaError`), or
  * - the registry request fails for any non-404 reason
+ *
+ * `requestedVersion` pins the lookup to a specific `versions[...]` entry
+ * (equivalent to `vp create @scope@1.2.3`); omit it to resolve `dist-tags.latest`.
  */
-export async function readOrgManifest(scope: string): Promise<OrgManifest | null> {
+export async function readOrgManifest(
+  scope: string,
+  requestedVersion?: string,
+): Promise<OrgManifest | null> {
   if (!scope.startsWith('@')) {
     return null;
   }
   const packageName = `${scope}/create`;
-  const packument = await fetchPackument(packageName);
+  const packument = await fetchPackument(scope, packageName);
   if (!packument) {
     return null;
   }
-  const latestTag = packument['dist-tags']?.latest;
-  if (!latestTag) {
-    return null;
+  let resolvedVersion: string | undefined;
+  if (requestedVersion) {
+    resolvedVersion =
+      packument['dist-tags']?.[requestedVersion] ??
+      (packument.versions?.[requestedVersion] ? requestedVersion : undefined);
+    if (!resolvedVersion) {
+      throw new OrgManifestSchemaError(
+        `version "${requestedVersion}" not found (known tags: ${Object.keys(packument['dist-tags'] ?? {}).join(', ') || 'none'})`,
+        packageName,
+      );
+    }
+  } else {
+    resolvedVersion = packument['dist-tags']?.latest;
+    if (!resolvedVersion) {
+      return null;
+    }
   }
-  const meta = packument.versions?.[latestTag];
+  const meta = packument.versions?.[resolvedVersion];
   if (!meta) {
     return null;
   }
@@ -250,12 +294,12 @@ export async function readOrgManifest(scope: string): Promise<OrgManifest | null
     return null;
   }
   if (!meta.dist?.tarball) {
-    throw new OrgManifestSchemaError(`missing dist.tarball for ${latestTag}`, packageName);
+    throw new OrgManifestSchemaError(`missing dist.tarball for ${resolvedVersion}`, packageName);
   }
   return {
     scope,
     packageName,
-    version: latestTag,
+    version: resolvedVersion,
     tarballUrl: meta.dist.tarball,
     integrity: meta.dist.integrity,
     templates,

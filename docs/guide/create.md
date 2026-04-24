@@ -100,11 +100,17 @@ vp create @your-org
 # Run a specific manifest entry directly
 vp create @your-org:web
 
+# Pin to an exact version or a dist-tag
+vp create @your-org@1.2.3
+vp create @your-org:web@next
+
 # Set the org as the default for a repo (see create.defaultTemplate config)
 vp create
 ```
 
 Behind the scenes, `vp create @org` maps to `@org/create` (the existing npm `create-*` convention). If that package has no `createConfig.templates` field, Vite+ falls back to running the package normally — so adopting the manifest is zero-risk for orgs that already publish `@org/create`.
+
+Private registries work automatically: Vite+ reads `.npmrc` files from the project root and `~/`, honoring `@your-org:registry=...` scope mappings and `//host/:_authToken=...` credentials.
 
 ### Authoring `@org/create`
 
