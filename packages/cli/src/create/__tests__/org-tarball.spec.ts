@@ -98,7 +98,7 @@ describe('parseEntryMode', () => {
     expect(parseEntryMode('104755')).toBe(0o755);
   });
 
-  it('returns undefined for missing or unparseable modes', () => {
+  it('returns undefined for missing or unparsable modes', () => {
     expect(parseEntryMode(undefined)).toBeUndefined();
     expect(parseEntryMode('')).toBeUndefined();
     expect(parseEntryMode('not-a-number')).toBeUndefined();
