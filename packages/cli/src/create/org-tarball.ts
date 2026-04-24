@@ -94,13 +94,11 @@ async function downloadTarball(url: string): Promise<Uint8Array> {
 const STAGING_SUFFIX_PREFIX = '.tmp-';
 
 /**
- * Strip the `package/` prefix that `npm pack` wraps around every tarball
- * entry, returning the path within the package. Returns `null` for any
- * entry the extractor should skip: the root `package/` directory itself,
- * PaxHeader metadata, and anything not under `package/` (only `npm pack`
- * tarballs are supported — other entries are silently ignored).
+ * Strip the `package/` prefix from an `npm pack` tarball entry. Returns
+ * `null` for entries to skip (root dir, PaxHeader, anything outside
+ * `package/`).
  */
-function normalizeEntryName(rawName: string): string | null {
+export function normalizeEntryName(rawName: string): string | null {
   const name = rawName.replace(/^\.\//, '').replace(/\\/g, '/');
   if (!name || name === 'package' || name === 'package/') {
     return null;
@@ -148,12 +146,15 @@ async function extractTarballTo(bytes: Uint8Array, destDir: string): Promise<voi
     try {
       await fs.promises.rename(stagingDir, destDir);
     } catch (error) {
-      // A concurrent `vp create` already populated `destDir`; treat as a
-      // cache hit and drop our now-redundant staging tree. The TOCTOU
-      // check in `ensureOrgPackageExtracted` makes this the winning branch
-      // for a parallel-invocation race rather than a hard failure.
+      // `rename` reports ENOTEMPTY/EEXIST when a concurrent extractor
+      // already populated `destDir`. Confirm that's actually what happened
+      // (rather than permissions / read-only FS masquerading as a race)
+      // before swallowing the error and treating our work as redundant.
       const code = (error as NodeJS.ErrnoException).code;
-      if (code === 'ENOTEMPTY' || code === 'EEXIST' || code === 'EPERM') {
+      if (
+        (code === 'ENOTEMPTY' || code === 'EEXIST') &&
+        fs.existsSync(path.join(destDir, 'package.json'))
+      ) {
         await fs.promises.rm(stagingDir, { recursive: true, force: true }).catch(() => {});
         return;
       }
@@ -174,7 +175,7 @@ const STAGING_STALE_MS = 24 * 60 * 60 * 1000;
  * that's still actively extracting will always be younger than that, so
  * the age gate keeps this safe to run at the top of every extract.
  */
-async function cleanupStaleStagingDirs(destDir: string): Promise<void> {
+export async function cleanupStaleStagingDirs(destDir: string): Promise<void> {
   const parent = path.dirname(destDir);
   const basename = path.basename(destDir);
   const prefix = `${basename}${STAGING_SUFFIX_PREFIX}`;

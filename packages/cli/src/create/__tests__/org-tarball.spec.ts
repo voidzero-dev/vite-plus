@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { resolveBundledPath } from '../org-tarball.js';
+import { cleanupStaleStagingDirs, normalizeEntryName, resolveBundledPath } from '../org-tarball.js';
 
 describe('resolveBundledPath', () => {
   const scratchDirs: string[] = [];
@@ -51,5 +51,86 @@ describe('resolveBundledPath', () => {
     expect(resolveBundledPath(root, './templates/demo/')).toBe(
       path.join(root, 'templates', 'demo'),
     );
+  });
+});
+
+describe('normalizeEntryName', () => {
+  it('strips the `package/` prefix', () => {
+    expect(normalizeEntryName('package/README.md')).toBe('README.md');
+    expect(normalizeEntryName('package/src/index.ts')).toBe('src/index.ts');
+  });
+
+  it('normalizes leading `./` and backslashes to forward slashes', () => {
+    expect(normalizeEntryName('./package/src/index.ts')).toBe('src/index.ts');
+    expect(normalizeEntryName('package\\src\\index.ts')).toBe('src/index.ts');
+  });
+
+  it('returns null for the root `package/` directory and empty names', () => {
+    expect(normalizeEntryName('package')).toBeNull();
+    expect(normalizeEntryName('package/')).toBeNull();
+    expect(normalizeEntryName('')).toBeNull();
+  });
+
+  it('returns null for PaxHeader metadata entries', () => {
+    expect(normalizeEntryName('PaxHeader/foo')).toBeNull();
+    expect(normalizeEntryName('package/PaxHeader/foo')).toBeNull();
+  });
+
+  it('returns null for entries outside the `package/` root', () => {
+    expect(normalizeEntryName('not-package/foo.ts')).toBeNull();
+    expect(normalizeEntryName('node_modules/foo/package.json')).toBeNull();
+  });
+});
+
+describe('cleanupStaleStagingDirs', () => {
+  const scratchDirs: string[] = [];
+
+  afterEach(() => {
+    for (const dir of scratchDirs.splice(0)) {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  function tmpDestDir(): { destDir: string; parent: string; base: string } {
+    const parent = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-org-cleanup-'));
+    scratchDirs.push(parent);
+    const base = 'create-1.0.0';
+    return { destDir: path.join(parent, base), parent, base };
+  }
+
+  function makeStaging(parent: string, base: string, ageMs: number): string {
+    const name = `${base}.tmp-${process.pid}-${Date.now() - ageMs}`;
+    const dir = path.join(parent, name);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'marker'), '');
+    const then = new Date(Date.now() - ageMs);
+    fs.utimesSync(dir, then, then);
+    return dir;
+  }
+
+  it('deletes siblings older than 24h', async () => {
+    const { destDir, parent, base } = tmpDestDir();
+    const stale = makeStaging(parent, base, 25 * 60 * 60 * 1000);
+    await cleanupStaleStagingDirs(destDir);
+    expect(fs.existsSync(stale)).toBe(false);
+  });
+
+  it('leaves fresh siblings in place (concurrency safety)', async () => {
+    const { destDir, parent, base } = tmpDestDir();
+    const fresh = makeStaging(parent, base, 60 * 1000);
+    await cleanupStaleStagingDirs(destDir);
+    expect(fs.existsSync(fresh)).toBe(true);
+  });
+
+  it('ignores unrelated siblings (different basename prefix)', async () => {
+    const { destDir, parent } = tmpDestDir();
+    const other = makeStaging(parent, 'unrelated-2.0.0', 48 * 60 * 60 * 1000);
+    await cleanupStaleStagingDirs(destDir);
+    expect(fs.existsSync(other)).toBe(true);
+  });
+
+  it('tolerates a missing parent directory', async () => {
+    const destDir = path.join(os.tmpdir(), 'vp-org-cleanup-missing', 'nope');
+    await expect(cleanupStaleStagingDirs(destDir)).resolves.toBeUndefined();
   });
 });
