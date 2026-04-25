@@ -24,6 +24,7 @@ pub(crate) async fn execute_check(
     no_fmt: bool,
     no_lint: bool,
     no_error_on_unmatched_pattern: bool,
+    disable_nested_config: bool,
     paths: Vec<String>,
     envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
     cwd: &AbsolutePathBuf,
@@ -151,6 +152,9 @@ pub(crate) async fn execute_check(
         }
         if suppress_unmatched {
             args.push("--no-error-on-unmatched-pattern".to_string());
+        }
+        if disable_nested_config {
+            args.push("--disable-nested-config".to_string());
         }
         if has_paths {
             args.extend(paths.iter().cloned());
