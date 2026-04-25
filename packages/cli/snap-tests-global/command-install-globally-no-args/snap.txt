@@ -1,3 +1,3 @@
-[1]> vp install -g # No packages provided — should error and not run workspace install
+[1]> vp install -g # Should error when no packages provided
 error: `vp install -g` requires at least one package name.
 To reinstall all globally installed packages, use `vp update -g`.
