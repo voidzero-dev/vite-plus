@@ -16,20 +16,12 @@ function getCacheRoot(): string {
 /**
  * Cache extracted tarballs under `<host>/<scope>/create/<version>` so two
  * repos resolving the same `<scope>@<version>` through different registries
- * (via `.npmrc` scope mappings) don't share a cache slot. The host comes
- * from `manifest.tarballUrl`; if that URL is malformed we fall back to a
- * `_unknown` segment rather than poisoning the default-registry slot.
+ * (via `.npmrc` scope mappings) don't share a cache slot. The registry
+ * guarantees `manifest.tarballUrl` is a valid URL, so any parse failure
+ * here is a real bug worth surfacing.
  */
 function getExtractionDir(manifest: OrgManifest): string {
-  let host: string;
-  try {
-    // `new URL('https:/typo').host` parses successfully but yields `''`,
-    // which would join into an empty path segment; fall back the same
-    // way as a hard parse failure.
-    host = new URL(manifest.tarballUrl).host || '_unknown';
-  } catch {
-    host = '_unknown';
-  }
+  const { host } = new URL(manifest.tarballUrl);
   return path.join(getCacheRoot(), host, manifest.scope, 'create', manifest.version);
 }
 
