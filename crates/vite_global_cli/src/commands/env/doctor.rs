@@ -419,6 +419,10 @@ fn print_path_fix(bin_dir: &vite_path::AbsolutePath) {
         println!();
         println!("  source \"{home_path}/env.fish\"");
         println!();
+        println!("  {}", "For Nushell, add to ~/.config/nushell/config.nu:".dimmed());
+        println!();
+        println!("  source '{home_path}/env.nu'");
+        println!();
         println!("  {}", "Then restart your terminal.".dimmed());
     }
 
