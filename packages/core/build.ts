@@ -422,6 +422,7 @@ async function bundleTsdown() {
       format: 'esm',
       dir: join(projectDir, 'dist/tsdown'),
     },
+    external: (id: string) => tsdownExternal.some((e) => id.startsWith(e)),
     plugins: [
       RewriteImportsPlugin,
       dts({
