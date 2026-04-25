@@ -1,9 +1,12 @@
 # RFC: Organization Default Templates for `vp create`
 
-> Status: Draft (Round 4) — adds support for bundled subdirectory templates
-> inside `@org/create` itself (`./templates/foo` paths), so orgs can ship
-> one package containing N templates instead of publishing N packages.
-> See the "Resolved Decisions" section at the bottom for the settled list.
+> Status: **Implemented** on branch `vp-create-support-org` (PR #1398).
+> Sections below describe the design as shipped; the trailing "Resolved
+> Decisions" list reflects every decision that landed during
+> implementation, including ones that emerged from review (`.npmrc`
+> registry/auth, `__vp_` reserved prefix, sanitized cache host segment,
+> and others). The "Implementation State" section near the bottom
+> points at the concrete files.
 
 ## Summary
 
@@ -157,8 +160,7 @@ The manifest lives at `createConfig.templates` in `@org/create`'s `package.json`
       {
         "name": "web",
         "description": "Web app template (Vite + React)",
-        "template": "@your-org/template-web",
-        "keywords": ["web", "react", "app"]
+        "template": "@your-org/template-web"
       },
       {
         "name": "mobile",
@@ -190,10 +192,9 @@ The manifest lives at `createConfig.templates` in `@org/create`'s `package.json`
 | Field                                  | Type              | Required | Notes                                                                                                                                                                                                                                                                                                                                                                                  |
 | -------------------------------------- | ----------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `createConfig.templates`               | `TemplateEntry[]` | yes      | Non-empty array. Empty arrays are treated as "no manifest" (fall through to `@org/create` run).                                                                                                                                                                                                                                                                                        |
-| `createConfig.templates[].name`        | `string`          | yes      | Kebab-case. Used for `vp create @org:<name>` direct selection. Must be unique within the array.                                                                                                                                                                                                                                                                                        |
+| `createConfig.templates[].name`        | `string`          | yes      | Kebab-case. Used for `vp create @org:<name>` direct selection. Must be unique within the array. Names starting with `__vp_` are reserved for internal sentinel values and rejected at schema validation.                                                                                                                                                                               |
 | `createConfig.templates[].description` | `string`          | yes      | One-line description shown in the picker.                                                                                                                                                                                                                                                                                                                                              |
 | `createConfig.templates[].template`    | `string`          | yes      | One of: (a) an npm package specifier (`@your-org/template-web`, optionally `@version`), (b) a GitHub URL (`github:user/repo`, `https://github.com/...`), (c) a `vite:*` builtin, (d) a local workspace package name, or (e) a relative path (`./templates/demo`, `../foo`) that resolves against the enclosing `@org/create` package root. See "Bundled subdirectory templates" below. |
-| `createConfig.templates[].keywords`    | `string[]`        | no       | Filter terms for picker search.                                                                                                                                                                                                                                                                                                                                                        |
 | `createConfig.templates[].monorepo`    | `boolean`         | no       | If `true`, marks this entry as a _monorepo-creating_ template. Hidden from the picker when `vp create` is invoked inside an existing monorepo. Mirrors the built-in behavior that filters `vite:monorepo` out of `getInitialTemplateOptions` (`packages/cli/src/create/initial-template-options.ts:9-31`). Defaults to `false`.                                                        |
 
 ### Invalid manifests
@@ -253,9 +254,13 @@ themselves — is the entire on-disk surface they need to ship.
 **Tarball fetch and extract**: when `vp create` resolves a bundled path, it
 fetches the tarball URL from the registry JSON it already pulled for the
 manifest (`dist.tarball`), downloads it directly over HTTPS (honoring
-`NPM_CONFIG_REGISTRY`), and extracts it to a per-version cache under
-`$VP_HOME/tmp/create-org/<scope>/<name>/<version>/`. Subsequent invocations
-reuse the cached extraction. A small tar-reader implementation (no external
+`.npmrc` scope registries + `NPM_CONFIG_REGISTRY`), and extracts it to a
+per-version cache under
+`$VP_HOME/tmp/create-org/<host>/<scope>/create/<version>/`. The leading
+`<host>` segment (sanitized for Windows-illegal characters) keeps two repos
+that resolve the same `<scope>@<version>` through different registries from
+sharing a cache slot. Subsequent invocations against the same host reuse
+the cached extraction. A small tar-reader implementation (no external
 install step, no spawning `npm pack`) keeps resolution fast and independent
 of the user's package manager.
 
@@ -303,36 +308,46 @@ const expandedName = expandCreateShorthand(templateName);
 ...
 ```
 
-`readOrgManifest` is a new helper (co-located with
-`checkNpmPackageExists` in `packages/cli/src/utils/package.ts:72-84`). It
-should:
+`readOrgManifest` lives in `packages/cli/src/create/org-manifest.ts`. It:
 
-- Fetch `https://registry.npmjs.org/@scope/create` (with
-  `NPM_CONFIG_REGISTRY` applied) and extract `versions[latest].createConfig.templates`.
-  The registry response also carries `versions[latest].dist.tarball`, which
-  is retained on the returned manifest so bundled-path entries can be
-  extracted without a second registry round-trip.
-- Return `null` on 404 (package doesn't exist → caller falls through to the
-  existing shorthand path).
-- **Throw** on network failures (timeout, DNS, non-404 HTTP errors) so the
-  caller surfaces a hard error instead of silently skipping the picker.
-- **Throw** a schema error when `createConfig.templates` is present but malformed.
-- Return `null` when the package exists but has no `createConfig.templates` field
-  (caller falls through to executing `@org/create` as today).
+- Fetches the packument from the scope's registry (resolved via
+  `getNpmRegistry(scope)` in `packages/cli/src/utils/npm-config.ts`, which
+  layers `~/.npmrc` → project `.npmrc` → `npm_config_*` env vars and
+  honors `@scope:registry=...` overrides).
+- Anonymous on the first request; retries with the matching `_authToken`
+  / `_auth` / `username:_password` from `.npmrc` only if the server
+  returns 401/403, so public registries never see the token.
+- Resolves the manifest version: when `parseOrgScopedSpec` extracted a
+  version (`@scope@1.2.3`, `@scope:web@next`), looks it up in
+  `dist-tags[...]` first, then `versions[...]` directly; otherwise
+  `dist-tags.latest`. Unknown versions are a hard error.
+- Returns `null` on 404 (package doesn't exist → scope-only input falls
+  through to the existing shorthand path; `@org:name` is a hard error).
+- **Throws** on non-404 HTTP errors and on schema violations.
+- Carries `tarballUrl` and `integrity` on the returned manifest so
+  bundled-path entries can be extracted without a second registry
+  round-trip.
 
-`ensureOrgPackageExtracted` is a new helper that:
+`ensureOrgPackageExtracted` (`packages/cli/src/create/org-tarball.ts`):
 
 - Computes the cache path
-  `$VP_HOME/tmp/create-org/<scope>/<name>/<version>/` (reuses the existing
-  `VP_HOME` machinery in `crates/vite_shared/src/home.rs`).
+  `$VP_HOME/tmp/create-org/<host>/<scope>/create/<version>/`. The
+  `<host>` segment comes from `manifest.tarballUrl` (sanitized via
+  `sanitizeHostForPath` to replace Windows-illegal characters like `:`
+  in `localhost:4873`); two repos resolving the same
+  `<scope>@<version>` through different registries don't collide on
+  one cache slot.
 - Returns the cached root immediately if the extraction already exists.
-- Otherwise streams the tarball over HTTPS, validates its integrity against
-  the `dist.integrity` field from the registry JSON, and extracts with a
-  small dependency-light tar reader (no child process, no package-manager
-  involvement).
+- Otherwise streams the tarball over HTTPS (auth retry mirrors the
+  manifest fetch), enforces a 50 MB cap, validates `dist.integrity`,
+  and extracts with `nanotar` to a staging dir that's atomically
+  renamed into place. Sibling `.tmp-*` staging dirs older than 24h are
+  pruned at the start of each fresh extract.
+- Tar entries outside `package/` are skipped; their stored mode bits
+  are preserved (so `gradlew` and friends stay executable).
 - `resolveBundledPath(extractedRoot, entry.template)` normalizes the
-  relative path and rejects any result that escapes `extractedRoot` (i.e.
-  `../` sequences that would leave the package root).
+  relative path and rejects any result that escapes `extractedRoot`
+  (`../` sequences that would leave the package root).
 
 ## Default Org Config
 
@@ -722,76 +737,72 @@ to spin up a JS runtime.
 existing template-resolution, parent-directory inference, and runner
 plumbing.
 
-## Implementation Plan
+## Implementation State
 
-Four phases, each independently shippable.
+Shipped on branch `vp-create-support-org` (PR #1398). Concrete
+landings:
 
-### Phase 1 — Core
+| Module                                          | Role                                                                                                                 |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `packages/cli/src/create/org-manifest.ts`       | `parseOrgScopedSpec`, `readOrgManifest`, schema validation (incl. `__vp_` reserved-prefix check).                    |
+| `packages/cli/src/create/org-resolve.ts`        | `resolveOrgManifestForCreate`, `getConfiguredDefaultTemplate`, picker / `--no-interactive` table dispatch.           |
+| `packages/cli/src/create/org-picker.ts`         | `pickOrgTemplate` interactive picker, escape-hatch entry, context-aware filtering.                                   |
+| `packages/cli/src/create/org-tarball.ts`        | `ensureOrgPackageExtracted`, `resolveBundledPath`, `sanitizeHostForPath`, integrity verification, mode preservation. |
+| `packages/cli/src/create/templates/bundled.ts`  | `executeBundledTemplate` (directory-copy scaffold for relative-path manifest entries).                               |
+| `packages/cli/src/create/discovery.ts`          | `bundledLocalPath` + `skipShorthand` parameters threading manifest results into the existing template flow.          |
+| `packages/cli/src/create/bin.ts`                | Unified monorepo branch (builtin + bundled), git-init prompt, `injectCreateDefaultTemplate` for `@org` monorepos.    |
+| `packages/cli/src/create/utils.ts`              | `ensureGitignoreNodeModules` post-`git init` guarantee.                                                              |
+| `packages/cli/src/define-config.ts`             | `create: { defaultTemplate?: string }` augmentation on `UserConfig`.                                                 |
+| `packages/cli/src/migration/migrator.ts`        | `injectCreateDefaultTemplate` helper (called from `bin.ts`, gated on bundled monorepo).                              |
+| `packages/cli/src/utils/npm-config.ts`          | `.npmrc` parser, `getNpmRegistry(scope?)`, `getNpmAuthHeader(url)`, `fetchNpmResource` (401/403 retry).              |
+| `packages/cli/src/resolve-vite-config.ts`       | `findWorkspaceRoot` exported for the default-template walk-up.                                                       |
+| `docs/guide/create.md`, `docs/config/create.md` | Authoring guide and `create.defaultTemplate` reference.                                                              |
 
-- Add `readOrgManifest` helper in `packages/cli/src/utils/package.ts`.
-- Extend `discoverTemplate` in
-  `packages/cli/src/create/discovery.ts` with the manifest branch before
-  `expandCreateShorthand`.
-- Schema validation for `createConfig.templates` (simple hand-rolled checks; no new
-  dep).
-- Interactive picker using `@voidzero-dev/vite-plus-prompts` `select`.
-- Direct selection: `vp create @org:name` picks the manifest entry named `name`; misses (or absent manifest) are hard errors.
-- Tarball fetch + extract (`ensureOrgPackageExtracted`) with
-  `$VP_HOME/tmp/create-org/<scope>/<name>/<version>/` cache, plus the
-  directory-copy scaffold path for bundled `./` entries.
+## Testing
 
-### Phase 2 — Config
+End-to-end snap-test fixtures under `packages/cli/snap-tests/` use a
+shared local mock registry (`.shared/mock-npm-registry.mjs`) that
+serves a per-fixture `mock-manifest.json` and any tarballs in
+`<fixture>/tarballs/`. CI stays fast and offline.
 
-- Add `create: { defaultTemplate }` to `UserConfig` in
-  `packages/cli/src/define-config.ts`.
-- Wire the config read in `packages/cli/src/create/bin.ts` so bare
-  `vp create` with a configured default is equivalent to
-  `vp create <defaultTemplate>`.
-- CLI arg still wins over config.
+| Fixture                                  | What it verifies                                                                                                                     |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `create-org-bundled`                     | `vp create @org:<entry>` extracts the tarball and scaffolds a single-project bundled subdirectory.                                   |
+| `create-org-bundled-escape-check`        | `./../outside` paths rejected at schema validation before any tarball fetch.                                                         |
+| `create-org-bundled-monorepo`            | Bundled `monorepo: true` entry: scaffold + `git init` + `create.defaultTemplate: '@org'` injection + `node_modules` in `.gitignore`. |
+| `create-org-config-default`              | `vp create` in a repo with `create.defaultTemplate` uses the configured org.                                                         |
+| `create-org-invalid-manifest`            | Invalid `createConfig.templates` produces a schema error.                                                                            |
+| `create-org-monorepo-filter`             | `monorepo: true` entries hidden from picker / `--no-interactive` output when run inside a monorepo.                                  |
+| `create-org-monorepo-direct-in-monorepo` | `vp create @org:<monorepo-entry>` inside a monorepo errors loudly.                                                                   |
+| `create-org-no-interactive-error`        | `--no-interactive` without a name errors and prints the full manifest table (name + description + template).                         |
+| `snap-tests-global/new-vite-monorepo`    | Builtin `vp create vite:monorepo` does NOT auto-inject `create.defaultTemplate` (negative case for the gating).                      |
 
-### Phase 3 — UX polish
+Unit tests under `packages/cli/src/**/__tests__/`:
 
-- `--no-interactive` error message listing available names.
-- Clear error message on network failure when fetching the manifest.
-- Context-aware filtering of `monorepo: true` entries when invoked inside
-  an existing monorepo (mirrors `initial-template-options.ts:9-31`).
+- `org-manifest.spec.ts` — `parseOrgScopedSpec` (incl. `@scope@version`,
+  `@scope:name@version` forms), `filterManifestForContext`,
+  `readOrgManifest` happy path + schema errors + version pinning + auth
+  retry on 401/403.
+- `org-tarball.spec.ts` — `parseEntryMode`, `normalizeEntryName`,
+  `cleanupStaleStagingDirs`, `resolveBundledPath` path-escape,
+  `sanitizeHostForPath` (Windows-illegal chars).
+- `org-picker.spec.ts` — interactive picker filtering + escape-hatch
+  routing + per-call UUID sentinel.
+- `org-resolve.spec.ts` — `getConfiguredDefaultTemplate` walk-up via
+  monorepo markers.
+- `utils.spec.ts` — `ensureGitignoreNodeModules` (fresh / append /
+  no-newline / no-op / trailing-slash / CRLF / `node_modules/sub` /
+  `!node_modules` cases).
+- `migrator.spec.ts` — `injectCreateDefaultTemplate` (injects when
+  scope is set, skips when empty, preserves an existing `create:`).
+- `npm-config.spec.ts` (`packages/cli/src/utils/__tests__/`) —
+  `.npmrc` precedence (project > user), scoped registry resolution,
+  `_authToken` extraction.
 
-### Phase 4 — Docs
-
-- Authoring guide on viteplus.dev (mirrors this RFC's authoring section).
-- Changelog entry.
-- Update `packages/cli/README.md` `vp create` section.
-
-## Testing Strategy
-
-Fixture additions under `packages/cli/snap-tests-global/create-org-*`:
-
-| Fixture                                  | What it verifies                                                                                                  |
-| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `create-org-with-manifest`               | `vp create @org` opens picker and runs selection                                                                  |
-| `create-org-no-manifest`                 | `vp create @org` falls through to `@org/create`                                                                   |
-| `create-org-direct-name-hit`             | `vp create @org/web` uses manifest entry                                                                          |
-| `create-org-direct-name-miss`            | `vp create @org/web` falls back to shorthand                                                                      |
-| `create-org-no-interactive-error`        | `--no-interactive` without name errors clearly and prints the full manifest table (name + description + template) |
-| `create-org-config-default`              | `vp create` in repo with `defaultTemplate` uses it                                                                |
-| `create-org-invalid-manifest`            | Invalid `createConfig.templates` produces a schema error                                                          |
-| `create-org-monorepo-filter`             | `monorepo: true` entries hidden from picker and `--no-interactive` output when run inside a monorepo              |
-| `create-org-monorepo-direct-in-monorepo` | `vp create @org:<monorepo-entry>` errors with "cannot create a monorepo inside an existing monorepo"              |
-| `create-org-builtin-escape-hatch`        | Org picker always ends with a "Vite+ built-in templates" entry that routes to `getInitialTemplateOptions`         |
-| `create-org-bundled-subdir`              | Manifest entry with `./templates/demo` fetches tarball, extracts to `$VP_HOME/tmp/create-org/...`, scaffolds dir  |
-| `create-org-bundled-escape-check`        | `./../outside` path is rejected at schema-validation time before any tarball fetch                                |
-
-Unit tests:
-
-- `readOrgManifest` parsing + schema validation.
-- Resolution logic (manifest wins over shorthand).
-
-Integration: the registry fetch is exercised against a local mock registry
-/ stubbed `fetch`, so CI stays fast and offline. We do **not** publish a
-dedicated `@voidzero-dev/create-test-fixture` package; the marginal value of
-catching registry-surface regressions isn't worth the maintenance surface.
-If the npm registry API ever changes in a breaking way, the bug will surface
-the first time a user hits it and we can add a thin smoke test at that point.
+The snap-tests use stubbed `fetch` for unit-level scenarios and the
+mock registry for end-to-end scenarios. We do **not** publish a
+dedicated `@voidzero-dev/create-test-fixture` package; registry-surface
+regressions are low-frequency and can be patched downstream.
 
 ## CLI Help Output
 
@@ -913,8 +924,9 @@ vp create vite:library
 - **Bundled subdirectory templates**: manifest entries may use relative
   paths (`./templates/demo`) that resolve against the enclosing
   `@org/create` package root. Vite+ fetches and extracts the tarball once
-  per version into `$VP_HOME/tmp/create-org/<scope>/<name>/<version>/`,
-  then scaffolds by directory copy. This lets an org ship N templates in a
+  per `<host>/<scope>/<version>` into
+  `$VP_HOME/tmp/create-org/<host>/<scope>/create/<version>/`, then
+  scaffolds by directory copy. This lets an org ship N templates in a
   single package rather than publishing N independent `@org/template-*`
   packages — the dominant pattern in `create-*` ecosystems
   (`create-vite`, `create-next-app`, enterprise kits). Paths that escape
@@ -929,6 +941,66 @@ string[]` field rather than overloading the singular form.
 - **No `--json` output mode on day one**: the fixed-column text table from
   `--no-interactive` is already machine-parseable. Revisit if downstream
   tooling reports friction.
+
+### Decisions added during implementation
+
+- **`@scope:name` (colon) as the manifest-entry separator**: not
+  `@scope/name` (which collides with real npm package specifiers and
+  the existing `@scope/create-name` shorthand). Mirrors the existing
+  `vite:monorepo` / `vite:library` syntax for builtin templates.
+- **`createConfig.templates` (not `vp.templates`)**: tool-neutral key
+  name mirroring the existing `publishConfig` precedent. Other
+  scaffolders can adopt the same convention without an opinionated
+  `vp` namespace.
+- **Pinned versions are honored**: `@scope@1.2.3` and
+  `@scope:name@next` resolve through `dist-tags[...]` first then
+  `versions[...]`. Unknown versions are a hard error.
+- **`.npmrc` registry + auth, retry on challenge**: the resolver layers
+  user / project `.npmrc` with `npm_config_*` env vars and honors
+  `@scope:registry=...` overrides. The first request goes anonymous;
+  the resolver only sends the matching `_authToken` / `_auth` /
+  username:\_password on a 401/403 challenge so public registries never
+  see the token.
+- **Reserved `__vp_` prefix on entry names**: schema validation rejects
+  manifest names starting with `__vp_`. Internal sentinel values (e.g.
+  the picker's escape-hatch UUID) live under that prefix and can never
+  collide with a user-authored entry.
+- **Registry-aware cache key**: cache path includes a
+  `sanitizeHostForPath(<tarballUrl host>)` segment so two repos that
+  resolve the same `<scope>@<version>` through different `.npmrc`
+  scope mappings don't share a slot. Sanitization replaces
+  Windows-illegal characters (`\ / : * ? " < > |` plus IPv6 brackets)
+  with `_`.
+- **Atomic extract with stale-staging cleanup**: tarballs extract into
+  `<destDir>.tmp-<pid>-<timestamp>` and atomically rename into place;
+  rename-races resolve the loser to a cache hit. Sibling staging dirs
+  older than 24h are pruned at the start of each fresh extract.
+- **Tar-entry mode preservation**: `gradlew`, `mvnw`, `bin/*`, and
+  similar files keep their `0755` bits through the extract. `setuid`,
+  `setgid`, and sticky bits are stripped — those have no place in a
+  user-land scaffold.
+- **`keywords` field dropped**: prototyped in early rounds but never
+  consumed by the picker. Removed from the schema entirely (YAGNI)
+  rather than left validated-but-unused.
+- **`create.defaultTemplate` auto-injection is gated**: only fires
+  when the user just scaffolded from `vp create @scope:<entry>` AND
+  the entry is `monorepo: true`. Builtin `vp create vite:monorepo`
+  with a scoped package name does NOT auto-inject — the scope there
+  is just an npm-publish detail, not a template-org choice.
+- **Git-init prompt unified across monorepo paths**: prompt + spawn
+  live in `bin.ts`'s monorepo branch where `vite:monorepo` and
+  bundled `@org` monorepos converge; both ask, both default to yes
+  in non-interactive mode.
+- **`.gitignore` always excludes `node_modules` after `git init`**:
+  bundled `@org` templates may ship without a `.gitignore`. After
+  `git init` succeeds, `ensureGitignoreNodeModules` either creates a
+  fresh `node_modules\n` file or appends the line if missing, with
+  CRLF/`node_modules/`/`!node_modules` edge cases handled. No-op when
+  the line is already present.
+- **`findWorkspaceRoot` stays monorepo-marker-only**: extending it to
+  recognize `.git` was prototyped and reverted. Standalone repos with
+  no monorepo markers don't get config walk-up — call sites either
+  point at the right starting directory or accept the deferral.
 
 ## Conclusion
 
