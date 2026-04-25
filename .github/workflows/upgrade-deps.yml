@@ -89,13 +89,18 @@ jobs:
             - Build-upstream action: `./.github/actions/build-upstream/action.yml`
             - Package manager: `pnpm`. Do NOT downgrade any dep — we want the latest.
 
+            ### Outcomes from earlier steps (both ran with continue-on-error)
+            - Sync remote and build: ${{ steps.build.outcome }}
+            - build-upstream action: ${{ steps.build-upstream.outcome }}
+
             ### Fixups to perform (in order)
-            1. Run `pnpm tool sync-remote` and ensure it exits 0 — earlier failures
-               here are swallowed by `continue-on-error`, so verify directly. The most
-               common failure is a cross-major semver conflict in the merged catalog,
-               e.g. `Incompatible semver ranges for <pkg>: ^X vs ^Y`. The merger refuses
-               to auto-resolve cross-major conflicts for packages outside its synced
-               list (oxc-*, vitest deps). For passthrough deps that vp does NOT import
+            1. If the `Sync remote and build` outcome above is `failure`, fix it FIRST —
+               nothing else will work until the merged workspace is correct. Re-run
+               `pnpm tool sync-remote` and read the error. The most common cause is a
+               cross-major semver conflict in the merged catalog, e.g.
+               `Incompatible semver ranges for <pkg>: ^X vs ^Y`. The merger refuses to
+               auto-resolve cross-major conflicts for packages outside its synced list
+               (oxc-*, vitest deps). For passthrough deps that vp does NOT import
                directly (e.g. `diff`, `acorn`, `astring`, anything only present in
                `rolldown/scripts/package.json` or vite's internals), bump vp's
                `pnpm-workspace.yaml` catalog entry to match the rolldown/vite version,
