@@ -1684,6 +1684,15 @@ pub async fn run_command_with_options(
                     .await;
             }
 
+            // No packages provided — reject if --global was passed
+            if global {
+                vite_shared::output::error(
+                    "`vp install -g` requires at least one package name.\n\
+                     To reinstall all globally installed packages, use `vp update -g`.",
+                );
+                return Ok(exit_status(1));
+            }
+
             // No packages provided, run regular install
             let options = InstallCommandOptions {
                 prod,
