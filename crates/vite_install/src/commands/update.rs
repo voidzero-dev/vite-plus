@@ -14,7 +14,6 @@ use crate::package_manager::{
 pub struct UpdateCommandOptions<'a> {
     pub packages: &'a [String],
     pub latest: bool,
-    pub global: bool,
     pub recursive: bool,
     pub filters: Option<&'a [String]>,
     pub workspace_root: bool,
@@ -236,7 +235,6 @@ mod tests {
         let result = pm.resolve_update_command(&UpdateCommandOptions {
             packages: &["react".to_string()],
             latest: false,
-            global: false,
             recursive: false,
             filters: None,
             workspace_root: false,
@@ -523,18 +521,6 @@ mod tests {
             ..Default::default()
         });
         assert_eq!(result.args, vec!["update", "--no-save", "react"]);
-        assert_eq!(result.bin_path, "npm");
-    }
-
-    #[test]
-    fn test_global_update() {
-        let pm = create_mock_package_manager(PackageManagerType::Pnpm, "10.0.0");
-        let result = pm.resolve_update_command(&UpdateCommandOptions {
-            packages: &["typescript".to_string()],
-            global: true,
-            ..Default::default()
-        });
-        assert_eq!(result.args, vec!["update", "--global", "typescript"]);
         assert_eq!(result.bin_path, "npm");
     }
 
