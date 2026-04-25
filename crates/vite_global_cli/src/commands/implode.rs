@@ -266,11 +266,15 @@ fn spawn_deferred_delete(trash_path: &std::path::Path) -> std::io::Result<std::p
 /// Check if file content contains Vite+ sourcing lines.
 fn is_vite_plus_source_line(line: &str) -> bool {
     let trimmed = line.trim_start();
-    (trimmed.starts_with(". ") || trimmed.starts_with("source "))
-        && ["env", "env.fish", "env.nu"].iter().any(|env_file| {
-            trimmed.contains(&format!(".vite-plus/{env_file}\""))
-                || trimmed.contains(&format!(".vite-plus\\{env_file}\""))
-        })
+    [
+        (". ", ".vite-plus/env\""),
+        ("source ", ".vite-plus/env\""),
+        ("source ", ".vite-plus/env.fish\""),
+        ("source ", ".vite-plus/env.nu'"),
+        ("source ", ".vite-plus\\env.nu'"),
+    ]
+    .iter()
+    .any(|(prefix, suffix)| trimmed.starts_with(prefix) && trimmed.contains(suffix))
 }
 
 /// Remove Vite+ lines from content, returning the cleaned string.
@@ -369,14 +373,14 @@ mod tests {
 
     #[test]
     fn test_remove_vite_plus_lines_nushell() {
-        let content = "# existing config\n\n# Vite+ bin (https://viteplus.dev)\nsource \"~/.vite-plus/env.nu\"\n";
+        let content = "# existing config\n\n# Vite+ bin (https://viteplus.dev)\nsource '~/.vite-plus/env.nu'\n";
         let result = remove_vite_plus_lines(content);
         assert_eq!(&*result, "# existing config\n");
     }
 
     #[test]
     fn test_remove_vite_plus_lines_nushell_windows_path() {
-        let content = "# existing config\nsource \"~\\.vite-plus\\env.nu\"\n";
+        let content = "# existing config\nsource '~\\.vite-plus\\env.nu'\n";
         let result = remove_vite_plus_lines(content);
         assert_eq!(&*result, "# existing config\n");
     }
@@ -591,8 +595,7 @@ mod tests {
         std::fs::create_dir_all(&home).unwrap();
         std::fs::create_dir_all(&nushell_dir).unwrap();
 
-        std::fs::write(nushell_dir.join("vite-plus.nu"), "source \"~/.vite-plus/env.nu\"\n")
-            .unwrap();
+        std::fs::write(nushell_dir.join("vite-plus.nu"), "source '~/.vite-plus/env.nu'\n").unwrap();
 
         let _guard = ProfileEnvGuard::new(None, None, Some(&xdg_data));
 
