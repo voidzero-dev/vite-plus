@@ -1,0 +1,110 @@
+> vp pm pack --help # should show help
+Usage: vp pm pack [OPTIONS] [-- <PASS_THROUGH_ARGS>...]
+
+Create a tarball of the package
+
+Arguments:
+  [PASS_THROUGH_ARGS]...  Additional arguments
+
+Options:
+  -r, --recursive                        Pack all workspace packages
+  --filter <PATTERN>                     Filter packages to pack
+  --out <OUT>                            Output path for the tarball
+  --pack-destination <PACK_DESTINATION>  Directory where the tarball will be saved
+  --pack-gzip-level <PACK_GZIP_LEVEL>    Gzip compression level (0-9)
+  --json                                 Output in JSON format
+  -h, --help                             Print help
+
+Documentation: https://viteplus.dev/guide/install
+
+
+> vp pm pack && rm -rf *.tgz # should pack current package
+package: command-pack-pnpm11@<semver>
+Tarball Contents
+output.log
+package.json
+snap.txt
+steps.json
+Tarball Details
+command-pack-pnpm11-1.0.0.tgz
+
+> vp pm pack --out ./dist/package.tgz && rm -rf ./dist # should pack with output file
+package: command-pack-pnpm11@<semver>
+Tarball Contents
+command-pack-pnpm11-1.0.0.tgz
+output.log
+package.json
+snap.txt
+steps.json
+Tarball Details
+<cwd>/dist/package.tgz
+
+> vp pm pack --pack-destination ./dist && rm -rf ./dist # should pack with destination
+package: command-pack-pnpm11@<semver>
+Tarball Contents
+command-pack-pnpm11-1.0.0.tgz
+output.log
+package.json
+snap.txt
+steps.json
+Tarball Details
+<cwd>/dist/command-pack-pnpm11-1.0.0.tgz
+
+> vp pm pack --json --pack-gzip-level 9 && rm -rf *.tgz # should pack with gzip compression level
+{
+  "name": "command-pack-pnpm11",
+  "version": "1.0.0",
+  "filename": "command-pack-pnpm11-1.0.0.tgz",
+  "files": [
+    {
+      "path": "command-pack-pnpm11-1.0.0.tgz"
+    },
+    {
+      "path": "output.log"
+    },
+    {
+      "path": "package.json"
+    },
+    {
+      "path": "snap.txt"
+    },
+    {
+      "path": "steps.json"
+    }
+  ]
+}
+
+> vp pm pack --json && rm -rf *.tgz # should pack with json output
+{
+  "name": "command-pack-pnpm11",
+  "version": "1.0.0",
+  "filename": "command-pack-pnpm11-1.0.0.tgz",
+  "files": [
+    {
+      "path": "command-pack-pnpm11-1.0.0.tgz"
+    },
+    {
+      "path": "output.log"
+    },
+    {
+      "path": "package.json"
+    },
+    {
+      "path": "snap.txt"
+    },
+    {
+      "path": "steps.json"
+    }
+  ]
+}
+
+> vp pm pack -- --loglevel=warn && rm -rf *.tgz # should support pass through arguments
+package: command-pack-pnpm11@<semver>
+Tarball Contents
+command-pack-pnpm11-1.0.0.tgz
+output.log
+package.json
+snap.txt
+steps.json
+Tarball Details
+command-pack-pnpm11-1.0.0.tgz
