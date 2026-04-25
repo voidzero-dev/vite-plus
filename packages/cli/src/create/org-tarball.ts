@@ -14,6 +14,16 @@ function getCacheRoot(): string {
 }
 
 /**
+ * Replace characters that are illegal in Windows path segments
+ * (`\ / : * ? " < > |` plus the IPv6 bracket pair `[ ]`). The host
+ * comes from `new URL(...).host` which can carry a port (`:4873`) or
+ * IPv6 literal (`[::1]`); both end up in the cache path otherwise.
+ */
+export function sanitizeHostForPath(host: string): string {
+  return host.replaceAll(/[\\/:*?"<>|[\]]/g, '_');
+}
+
+/**
  * Cache extracted tarballs under `<host>/<scope>/create/<version>` so two
  * repos resolving the same `<scope>@<version>` through different registries
  * (via `.npmrc` scope mappings) don't share a cache slot. The registry
@@ -22,7 +32,13 @@ function getCacheRoot(): string {
  */
 function getExtractionDir(manifest: OrgManifest): string {
   const { host } = new URL(manifest.tarballUrl);
-  return path.join(getCacheRoot(), host, manifest.scope, 'create', manifest.version);
+  return path.join(
+    getCacheRoot(),
+    sanitizeHostForPath(host),
+    manifest.scope,
+    'create',
+    manifest.version,
+  );
 }
 
 function parseIntegrity(integrity: string): { algorithm: string; expected: string } | null {

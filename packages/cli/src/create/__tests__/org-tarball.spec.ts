@@ -9,6 +9,7 @@ import {
   normalizeEntryName,
   parseEntryMode,
   resolveBundledPath,
+  sanitizeHostForPath,
 } from '../org-tarball.js';
 
 describe('resolveBundledPath', () => {
@@ -84,6 +85,21 @@ describe('normalizeEntryName', () => {
   it('returns null for entries outside the `package/` root', () => {
     expect(normalizeEntryName('not-package/foo.ts')).toBeNull();
     expect(normalizeEntryName('node_modules/foo/package.json')).toBeNull();
+  });
+});
+
+describe('sanitizeHostForPath', () => {
+  it('passes through plain hostnames untouched', () => {
+    expect(sanitizeHostForPath('registry.npmjs.org')).toBe('registry.npmjs.org');
+    expect(sanitizeHostForPath('private.example.com')).toBe('private.example.com');
+  });
+
+  it('replaces the port `:` so the cache path is valid on Windows', () => {
+    expect(sanitizeHostForPath('localhost:4873')).toBe('localhost_4873');
+  });
+
+  it('strips IPv6 brackets and colons from the literal', () => {
+    expect(sanitizeHostForPath('[::1]:4873')).toBe('___1__4873');
   });
 });
 
