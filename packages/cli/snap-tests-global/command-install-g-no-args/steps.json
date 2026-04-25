@@ -1,0 +1,5 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "env": {},
+  "commands": ["vp install -g # No packages provided — should error and not run workspace install"]
+}
