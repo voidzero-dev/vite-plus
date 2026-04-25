@@ -3,6 +3,7 @@ import path from 'node:path';
 import { styleText } from 'node:util';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
+import spawn from 'cross-spawn';
 import mri from 'mri';
 
 import { vitePlusHeader } from '../../binding/index.js';
@@ -823,6 +824,25 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
 
   // #region Handle monorepo template
   if (templateInfo.command === BuiltinTemplate.monorepo || isBundledMonorepo) {
+    // Ask up-front so the prompt isn't buried under scaffold output.
+    let shouldInitGit = true;
+    if (options.interactive && !compactOutput) {
+      pauseCreateProgress();
+      const selected = await prompts.confirm({
+        message: 'Initialize git repository:',
+        initialValue: true,
+      });
+      resumeCreateProgress();
+      if (prompts.isCancel(selected)) {
+        prompts.log.info('Operation cancelled. Skipping git initialization');
+        shouldInitGit = false;
+      } else {
+        shouldInitGit = selected;
+      }
+    } else if (!compactOutput) {
+      prompts.log.info('Initializing git repository (default: yes)');
+    }
+
     updateCreateProgress('Creating monorepo');
     await checkProjectDirExists(path.join(workspaceInfo.rootDir, targetDir), options.interactive);
     const result = isBundledMonorepo
@@ -834,7 +854,6 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       : await executeMonorepoTemplate(
           workspaceInfo,
           { ...templateInfo, packageName, targetDir },
-          options.interactive,
           { silent: compactOutput },
         );
     const { projectDir } = result;
@@ -845,6 +864,19 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
 
     // rewrite monorepo to add vite-plus dependencies
     const fullPath = path.join(workspaceInfo.rootDir, projectDir);
+    if (shouldInitGit) {
+      const gitResult = spawn.sync('git', ['init'], { stdio: 'pipe', cwd: fullPath });
+      if (gitResult.status === 0) {
+        if (!compactOutput) {
+          prompts.log.success('Git repository initialized');
+        }
+      } else {
+        prompts.log.warn('Failed to initialize git repository');
+        if (gitResult.stderr) {
+          prompts.log.info(gitResult.stderr.toString());
+        }
+      }
+    }
     updateCreateProgress('Writing agent instructions');
     pauseCreateProgress();
     await writeAgentInstructions({

@@ -974,6 +974,7 @@ export function rewriteMonorepo(
   mergeViteConfigFiles(workspaceInfo.rootDir, silent, report);
   injectLintTypeCheckDefaults(workspaceInfo.rootDir, silent, report);
   injectFmtDefaults(workspaceInfo.rootDir, silent, report);
+  injectCreateDefaultTemplate(workspaceInfo.rootDir, workspaceInfo.monorepoScope, silent, report);
   mergeTsdownConfigFile(workspaceInfo.rootDir, silent, report);
   // rewrite imports in all TypeScript/JavaScript files
   rewriteAllImports(workspaceInfo.rootDir, silent, report);
@@ -1737,6 +1738,32 @@ export function injectFmtDefaults(
     'fmt',
     '.vite-plus-fmt-init.oxfmtrc.json',
     JSON.stringify({}),
+    silent,
+    report,
+  );
+}
+
+/**
+ * Wire `create.defaultTemplate: '<scope>'` into the new monorepo's
+ * `vite.config.ts` so a bare `vp create` from anywhere in the workspace
+ * opens the org's template picker by default. Only runs when the user
+ * gave the workspace a scoped name (`@scope/foo`); unscoped monorepos
+ * have no scope to point at.
+ */
+export function injectCreateDefaultTemplate(
+  projectPath: string,
+  scope: string,
+  silent = false,
+  report?: MigrationReport,
+): void {
+  if (!scope) {
+    return;
+  }
+  injectConfigDefaults(
+    projectPath,
+    'create',
+    '.vite-plus-create-init.json',
+    JSON.stringify({ defaultTemplate: scope }),
     silent,
     report,
   );
