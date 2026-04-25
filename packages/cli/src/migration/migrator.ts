@@ -974,7 +974,6 @@ export function rewriteMonorepo(
   mergeViteConfigFiles(workspaceInfo.rootDir, silent, report);
   injectLintTypeCheckDefaults(workspaceInfo.rootDir, silent, report);
   injectFmtDefaults(workspaceInfo.rootDir, silent, report);
-  injectCreateDefaultTemplate(workspaceInfo.rootDir, workspaceInfo.monorepoScope, silent, report);
   mergeTsdownConfigFile(workspaceInfo.rootDir, silent, report);
   // rewrite imports in all TypeScript/JavaScript files
   rewriteAllImports(workspaceInfo.rootDir, silent, report);
@@ -1745,10 +1744,11 @@ export function injectFmtDefaults(
 
 /**
  * Wire `create.defaultTemplate: '<scope>'` into the new monorepo's
- * `vite.config.ts` so a bare `vp create` from anywhere in the workspace
- * opens the org's template picker by default. Only runs when the user
- * gave the workspace a scoped name (`@scope/foo`); unscoped monorepos
- * have no scope to point at.
+ * `vite.config.ts`. The caller is `bin.ts`, only when scaffolding a
+ * monorepo from a bundled `@org` manifest entry — that's the case where
+ * the user just picked a template from a specific org and naturally
+ * wants subsequent `vp create` invocations from the workspace to default
+ * to that same org's picker.
  */
 export function injectCreateDefaultTemplate(
   projectPath: string,

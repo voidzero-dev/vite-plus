@@ -34,13 +34,6 @@
       "ignoreOutput": true
     },
     "ls my-vite-plus-monorepo | LC_ALL=C sort # check files created",
-    "cat my-vite-plus-monorepo/package.json # check package.json",
-    {
-      "command": "vp create vite:monorepo --no-interactive --directory @your-org/scoped-monorepo # scoped monorepo: defaultTemplate auto-injected",
-      "ignoreOutput": true
-    },
-    "cat scoped-monorepo/package.json # scoped package name preserved",
-    "cat scoped-monorepo/vite.config.ts # create.defaultTemplate set to @your-org",
-    "test -d scoped-monorepo/.git && echo 'Git initialized' || echo 'No git' # git still initialized for scoped monorepo"
+    "cat my-vite-plus-monorepo/package.json # check package.json"
   ]
 }

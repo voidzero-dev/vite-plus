@@ -27,14 +27,22 @@ import { cancelAndExit } from './prompts.ts';
  *   github, vite:*, local). Caller uses `templateName`.
  * - `bundled`: manifest entry uses a relative path; tarball has been
  *   extracted; caller passes `bundledLocalPath` into `discoverTemplate`.
- *   `monorepo: true` entries flow the caller into the monorepo scaffold
- *   path (parent-dir prompt + `rewriteMonorepo` integration).
+ *   `scope` carries the resolved `@org` so a `monorepo: true` scaffold
+ *   can wire `create.defaultTemplate` back to that same org. `monorepo`
+ *   flows the caller into the monorepo scaffold path (parent-dir prompt
+ *   + `rewriteMonorepo` integration).
  * - `escape-hatch`: user picked "Vite+ built-in templates" from the picker.
  */
 export type OrgResolution =
   | { kind: 'passthrough' }
   | { kind: 'replaced'; templateName: string }
-  | { kind: 'bundled'; bundledLocalPath: string; entryName: string; monorepo?: true }
+  | {
+      kind: 'bundled';
+      bundledLocalPath: string;
+      entryName: string;
+      scope: string;
+      monorepo?: true;
+    }
   | { kind: 'escape-hatch' };
 
 function printNonInteractiveTable(
@@ -96,6 +104,7 @@ async function resolveEntry(
       kind: 'bundled',
       bundledLocalPath,
       entryName: entry.name,
+      scope: manifest.scope,
       ...(entry.monorepo === true ? { monorepo: true as const } : {}),
     };
   }

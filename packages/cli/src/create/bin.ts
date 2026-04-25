@@ -13,6 +13,7 @@ import {
   detectFramework,
   detectPrettierProject,
   hasFrameworkShim,
+  injectCreateDefaultTemplate,
   installGitHooks,
   promptEslintMigration,
   promptPrettierMigration,
@@ -443,6 +444,7 @@ async function main() {
   let shouldSetupHooks = false;
   let bundledLocalPath: string | undefined;
   let bundledEntryName: string | undefined;
+  let bundledOrgScope: string | undefined;
   let isBundledMonorepo = false;
   let skipShorthandExpansion = false;
   const installArgs = process.env.CI ? ['--no-frozen-lockfile'] : undefined;
@@ -469,6 +471,7 @@ async function main() {
     } else if (resolved.kind === 'bundled') {
       bundledLocalPath = resolved.bundledLocalPath;
       bundledEntryName = resolved.entryName;
+      bundledOrgScope = resolved.scope;
       isBundledMonorepo = resolved.monorepo === true;
     } else if (resolved.kind === 'escape-hatch') {
       selectedTemplateName = '';
@@ -899,6 +902,15 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     workspaceInfo.rootDir = fullPath;
     updateCreateProgress('Integrating monorepo');
     rewriteMonorepo(workspaceInfo, undefined, compactOutput);
+    if (isBundledMonorepo && bundledOrgScope) {
+      // Wire `create.defaultTemplate: '<scope>'` into the new workspace's
+      // vite.config.ts so a bare `vp create` from inside it opens the
+      // same org's picker. Only triggers when the user just scaffolded
+      // from `vp create @scope:<entry>` — for builtin `vite:monorepo`,
+      // even a scoped package name doesn't imply the user wants that
+      // scope as their template default.
+      injectCreateDefaultTemplate(fullPath, bundledOrgScope, compactOutput);
+    }
     if (shouldSetupHooks) {
       installGitHooks(fullPath, compactOutput);
     }
