@@ -193,9 +193,42 @@ fn exit_status(code: i32) -> ExitStatus {
 
 #[cfg(test)]
 mod tests {
+    use std::ffi::OsString;
+
     use serial_test::serial;
+    use tempfile::TempDir;
 
     use super::*;
+
+    struct VpHomeGuard {
+        original_vp_home: Option<OsString>,
+        _temp_dir: TempDir,
+    }
+
+    impl VpHomeGuard {
+        fn new() -> Self {
+            let temp_dir = TempDir::new().unwrap();
+            let original_vp_home = std::env::var_os(env_vars::VP_HOME);
+            // SAFETY: This test helper is only used from serial tests and restores the
+            // process-global environment before dropping.
+            unsafe {
+                std::env::set_var(env_vars::VP_HOME, temp_dir.path());
+            }
+            Self { original_vp_home, _temp_dir: temp_dir }
+        }
+    }
+
+    impl Drop for VpHomeGuard {
+        fn drop(&mut self) {
+            // SAFETY: We restore the original process-global environment captured in new().
+            unsafe {
+                match &self.original_vp_home {
+                    Some(value) => std::env::set_var(env_vars::VP_HOME, value),
+                    None => std::env::remove_var(env_vars::VP_HOME),
+                }
+            }
+        }
+    }
 
     #[tokio::test]
     async fn test_execute_missing_command() {
@@ -208,10 +241,11 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn test_execute_node_version() {
+        let _guard = VpHomeGuard::new();
         // Run 'node --version' with a specific Node.js version
         let command = vec!["node".to_string(), "--version".to_string()];
         let result = execute(Some("20.18.0"), None, &command).await;
-        assert!(result.is_ok());
+        assert!(result.is_ok(), "{result:?}");
         let status = result.unwrap();
         assert!(status.success());
     }

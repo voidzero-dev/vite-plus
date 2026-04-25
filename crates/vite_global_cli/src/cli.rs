@@ -613,6 +613,74 @@ pub enum Commands {
         args: Vec<String>,
     },
 
+    /// Version workspace packages locally, then publish them from trusted-publishing CI with readiness checks and optional changelog generation
+    Release {
+        /// Preview the release plan without changing files or publishing
+        #[arg(long)]
+        dry_run: bool,
+
+        /// During dry-runs, omit publish simulation and show only versioning/changelog actions
+        #[arg(long)]
+        skip_publish: bool,
+
+        /// Treat this release as the first one and ignore existing release tags
+        #[arg(long)]
+        first_release: bool,
+
+        /// Generate root and per-package changelogs
+        #[arg(long, overrides_with = "no_changelog")]
+        changelog: bool,
+
+        /// Skip changelog generation
+        #[arg(long, overrides_with = "changelog")]
+        no_changelog: bool,
+
+        /// Override the computed release version. Useful when retrying a partial publish.
+        #[arg(long, value_name = "VERSION")]
+        version: Option<String>,
+
+        /// Publish a prerelease using the provided identifier (for example: alpha, beta, rc)
+        #[arg(long, value_name = "TAG")]
+        preid: Option<String>,
+
+        /// Legacy TOTP code for npm 2FA publish flows. Prefer trusted publishing or passkey/security-key auth when possible.
+        #[arg(long, value_name = "OTP")]
+        otp: Option<String>,
+
+        /// Release only matching workspace packages. When multiple values are provided,
+        /// their order is used as a tie-breaker between independent packages.
+        #[arg(long, value_name = "PATTERN", value_delimiter = ',')]
+        projects: Option<Vec<String>>,
+
+        /// Create git tags for released packages
+        #[arg(long, overrides_with = "no_git_tag")]
+        git_tag: bool,
+
+        /// Skip git tag creation in preview mode
+        #[arg(long, overrides_with = "git_tag")]
+        no_git_tag: bool,
+
+        /// Create a git commit for release changes
+        #[arg(long, overrides_with = "no_git_commit")]
+        git_commit: bool,
+
+        /// Skip the release commit
+        #[arg(long, overrides_with = "git_commit")]
+        no_git_commit: bool,
+
+        /// Run detected release checks before publishing. Real releases do this by default.
+        #[arg(long, overrides_with = "no_run_checks")]
+        run_checks: bool,
+
+        /// Skip release checks before publishing
+        #[arg(long, overrides_with = "run_checks")]
+        no_run_checks: bool,
+
+        /// Skip the final confirmation prompt
+        #[arg(long, short = 'y', alias = "force")]
+        yes: bool,
+    },
+
     /// Run tasks
     #[command(disable_help_flag = true)]
     Run {
@@ -2030,6 +2098,45 @@ pub async fn run_command_with_options(
             }
             print_runtime_header(render_options.show_header);
             commands::delegate::execute(cwd, "pack", &args).await
+        }
+
+        Commands::Release {
+            dry_run,
+            skip_publish,
+            first_release,
+            changelog,
+            no_changelog,
+            version,
+            preid,
+            otp,
+            projects,
+            git_tag: _,
+            no_git_tag,
+            git_commit: _,
+            no_git_commit,
+            run_checks,
+            no_run_checks,
+            yes,
+        } => {
+            let run_checks = if dry_run { run_checks } else { !no_run_checks || run_checks };
+            commands::release::execute(
+                cwd,
+                commands::release::ReleaseOptions {
+                    dry_run,
+                    skip_publish,
+                    first_release,
+                    changelog: changelog && !no_changelog,
+                    version,
+                    preid,
+                    otp,
+                    projects,
+                    git_tag: !no_git_tag,
+                    git_commit: !no_git_commit,
+                    run_checks,
+                    yes,
+                },
+            )
+            .await
         }
 
         Commands::Run { args } => {

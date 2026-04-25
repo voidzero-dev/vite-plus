@@ -1,0 +1,47 @@
+> git init
+> git add -A && git commit -m 'chore: init'
+> printf '\nexport const feature = 2;\n' >> packages/pkg-a/src/index.js && git add packages/pkg-a/src/index.js && git commit -m 'feat: add release fixture'
+> vp release --dry-run --skip-publish --no-run-checks --yes
+info: Planned releases:
+  pkg-a <semver> -> <semver> (minor)
+note: Dry run enabled; no files will be changed.
+note: Changelog generation is disabled for this run.
+note: Release checks are disabled for this run.
+
+info: Pre-release readiness:
+  package scripts:
+    - pkg-a: build
+  trusted publishing:
+    environment: not detected (local shell or unsupported CI provider)
+    provenance: will be enabled automatically when the same release runs from trusted-publishing CI
+    interactive fallback: prefer npm passkey/security-key auth; use `--otp` only for legacy TOTP fallback
+note: Release checks can run from these detected scripts; real releases do so by default and dry-runs can opt in with `--run-checks`.
+note: Review this summary, then confirm to continue.
+note: Local dry-runs validate packaging and publish command shape, but OIDC auth and trusted-publishing provenance are only exercised from CI.
+warn: This environment cannot produce the npm provenance attestations required by the hardened release policy. Use `vp release --dry-run` locally and publish from GitHub Actions on a GitHub-hosted runner or from GitLab CI shared runners.
+note: Would update 1 release file(s) (1 manifests)
+note: Would skip changelog generation because --changelog was not provided.
+note: Would create release commit: chore(release): publish pkg-a@<semver>
+note: Would create git tag release/pkg-a/v<semver>
+note: Would create repository git tag v<semver>
+note: Would skip the final confirmation because --yes was provided.
+note: Would skip release checks for this run.
+note: Would skip publishing because --skip-publish was provided.
+note: Release checks are disabled for this run.
+
+info: Dry-run summary:
+  packages planned: 1
+  files covered: 1 total (1 manifests)
+  native publish check: skipped by --skip-publish
+  trusted publish target: not detected (local shell or unsupported CI provider)
+  repository tag: v<semver>
+  interactive fallback auth: passkey/security-key preferred; `--otp` remains legacy-only
+  rollback coverage:
+    - temporary package.json rewrites are restored after publish checks and publish
+    - final release files are applied transactionally before the release commit
+    - partially created local release tags are removed if tag creation fails
+    - OIDC auth and provenance are not exercised in this local preview; rerun from CI for the full trusted-publish path
+
+> git status --short
+> git tag --list 'v*'
+> git tag --list 'release/*'
