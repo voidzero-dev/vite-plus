@@ -1,0 +1,13 @@
+diff --git a/dist/rolldown/shared/normalize-string-or-regex-E9GT23QI.mjs b/dist/rolldown/shared/normalize-string-or-regex-E9GT23QI.mjs
+index 1234567..abcdefg 100644
+--- a/dist/rolldown/shared/normalize-string-or-regex-E9GT23QI.mjs
++++ b/dist/rolldown/shared/normalize-string-or-regex-E9GT23QI.mjs
+@@ -25,7 +25,7 @@ function makeBuiltinPluginCallable(plugin) {
+ 				}));
+ 			}
+ 		};
+-		const order = callablePlugin.getOrder(key);
++		const order = callablePlugin.getOrder ? callablePlugin.getOrder(key) : void 0;
+ 		if (order == void 0) wrappedPlugin[key] = wrappedHook;
+ 		else wrappedPlugin[key] = {
+ 			handler: wrappedHook,
