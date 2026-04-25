@@ -69,8 +69,10 @@ export async function pickOrgTemplate(
     return ORG_PICKER_BUILTIN_ESCAPE;
   }
   if (!found) {
-    // Should never happen — the select only surfaces values we registered.
-    return ORG_PICKER_CANCEL;
+    // Unreachable: every option's `value` was just registered in `lookup`
+    // a few lines above. Throw rather than masquerade as a cancel — a
+    // missing entry would mean a real internal bug.
+    throw new Error(`org-picker: prompts.select returned an unregistered value: ${picked}`);
   }
   return { kind: 'entry', entry: found };
 }

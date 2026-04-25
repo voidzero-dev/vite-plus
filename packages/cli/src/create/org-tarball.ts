@@ -21,11 +21,14 @@ function getCacheRoot(): string {
  * `_unknown` segment rather than poisoning the default-registry slot.
  */
 function getExtractionDir(manifest: OrgManifest): string {
-  let host = '_unknown';
+  let host: string;
   try {
-    host = new URL(manifest.tarballUrl).host;
+    // `new URL('https:/typo').host` parses successfully but yields `''`,
+    // which would join into an empty path segment; fall back the same
+    // way as a hard parse failure.
+    host = new URL(manifest.tarballUrl).host || '_unknown';
   } catch {
-    // Keep the fallback.
+    host = '_unknown';
   }
   return path.join(getCacheRoot(), host, manifest.scope, 'create', manifest.version);
 }

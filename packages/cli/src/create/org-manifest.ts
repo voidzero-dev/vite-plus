@@ -109,6 +109,10 @@ function validateEntry(entry: unknown, index: number, packageName: string): OrgT
     return value;
   };
   const name = requireString('name');
+  // `__vp_` is reserved for internal sentinel values (e.g. the
+  // org-picker's escape-hatch nonce in `org-picker.ts`). Reject the
+  // prefix at schema time so a manifest entry can never collide with
+  // those sentinels regardless of what the picker does internally.
   if (name.startsWith('__vp_')) {
     throw new OrgManifestSchemaError(
       `createConfig.templates[${index}].name uses the reserved \`__vp_\` prefix`,
