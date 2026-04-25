@@ -37,3 +37,6 @@ peerDependencyRules:
 
 > test -d my-mono/.git && echo 'Git initialized' || echo 'No git' # git-init prompt covers bundled monorepo path
 Git initialized
+
+> cat my-mono/.gitignore # node_modules excluded even though tarball shipped no .gitignore
+node_modules

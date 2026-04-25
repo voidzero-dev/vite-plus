@@ -65,7 +65,7 @@ import {
   executeRemoteTemplate,
 } from './templates/index.ts';
 import { BuiltinTemplate, TemplateType } from './templates/types.ts';
-import { deriveDefaultPackageName, formatTargetDir } from './utils.ts';
+import { deriveDefaultPackageName, ensureGitignoreNodeModules, formatTargetDir } from './utils.ts';
 
 const helpMessage = renderCliDoc({
   usage: 'vp create [TEMPLATE] [OPTIONS] [-- TEMPLATE_OPTIONS]',
@@ -873,6 +873,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
         if (!compactOutput) {
           prompts.log.success('Git repository initialized');
         }
+        ensureGitignoreNodeModules(fullPath);
       } else {
         prompts.log.warn('Failed to initialize git repository');
         if (gitResult.stderr) {
