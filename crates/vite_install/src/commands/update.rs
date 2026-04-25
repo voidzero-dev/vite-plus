@@ -48,19 +48,6 @@ impl PackageManager {
         let envs = HashMap::from([("PATH".to_string(), format_path_env(self.get_bin_prefix()))]);
         let mut args: Vec<String> = Vec::new();
 
-        // global packages should use npm cli only
-        if options.global {
-            bin_name = "npm".into();
-            args.push("update".into());
-            args.push("--global".into());
-            if let Some(pass_through_args) = options.pass_through_args {
-                args.extend_from_slice(pass_through_args);
-            }
-            args.extend_from_slice(options.packages);
-
-            return ResolveCommandResult { bin_path: bin_name, args, envs };
-        }
-
         match self.client {
             PackageManagerType::Pnpm => {
                 bin_name = "pnpm".into();
