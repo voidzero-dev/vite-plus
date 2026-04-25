@@ -315,7 +315,7 @@ function Configure-Nushell {
 
     $autoloadFile = Join-Path $autoloadDir "vite-plus.nu"
     $nuEnvRef= (Join-Path $InstallDir "env.nu") -replace [regex]::Escape($env:USERPROFILE), '~'
-    $content = "# Vite+ bin (https://viteplus.dev)`n" + ('source `'+ $nuEnvRef +'`') + "`n"
+    $content = "# Vite+ bin (https://viteplus.dev)`n" + ("source '"+ $nuEnvRef +"'") + "`n"
 
     try {
         New-Item -ItemType Directory -Force -Path $autoloadDir | Out-Null
@@ -690,7 +690,7 @@ exec "`$VP_HOME/current/bin/vp.exe" "`$@"
         if ($nushellResult.Status -eq "failed") {
             Write-Host "  To use vp in Nushell, create a vite-plus.nu file in your preferred vendor autoload directory with:"
             Write-Host ""
-            Write-Host "    source `"$displayDir\env.nu`""
+            Write-Host "    source '$displayDir\env.nu'"
             Write-Host ""
         }
         Write-Host "  Or run vp directly:"

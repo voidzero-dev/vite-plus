@@ -914,7 +914,7 @@ mod tests {
         std::fs::create_dir_all(&fake_home).unwrap();
         std::fs::create_dir_all(&fish_dir).unwrap();
 
-        std::fs::write(fish_dir.join("vite-plus.nu"), "source \"~/.vite-plus/env.nu\"\n").unwrap();
+        std::fs::write(fish_dir.join("vite-plus.nu"), "source '~/.vite-plus/env.nu'\n").unwrap();
 
         let _guard = ProfileEnvGuard::new(&fake_home, None, None, Some(&xdg_data));
 
@@ -1006,11 +1006,8 @@ mod tests {
         let nushell_autoload_dir = fake_home.join(nushell_autoload_path);
         std::fs::create_dir_all(&nushell_autoload_dir).unwrap();
 
-        std::fs::write(
-            nushell_autoload_dir.join("vite-plus.nu"),
-            "source \"~/.vite-plus/env.nu\"\n",
-        )
-        .unwrap();
+        std::fs::write(nushell_autoload_dir.join("vite-plus.nu"), "source '~/.vite-plus/env.nu'\n")
+            .unwrap();
 
         let _guard = ProfileEnvGuard::new(&fake_home, None, None, None);
 

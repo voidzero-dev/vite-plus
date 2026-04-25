@@ -737,7 +737,7 @@ fn print_path_instructions(bin_dir: &vite_path::AbsolutePath) {
     println!();
     println!("  For Nushell, add to ~/.config/nushell/config.nu:");
     println!();
-    println!("  source \"{nu_home_path}/env.nu\"");
+    println!("  source '{nu_home_path}/env.nu'");
     println!();
     println!("  For PowerShell, add to your $PROFILE:");
     println!();

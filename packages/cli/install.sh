@@ -654,7 +654,7 @@ configure_nushell_path() {
 
   local nushell_autoload="$nushell_dir/vite-plus.nu"
   local nushell_content="# Vite+ bin (https://viteplus.dev)
-source \"$INSTALL_DIR_REF_NU/env.nu\"
+source '$INSTALL_DIR_REF_NU/env.nu'
 "
 
   local result=0
@@ -1047,7 +1047,7 @@ WRAPPER_EOF
     echo "    - Fish: create ${XDG_CONFIG_HOME:-$HOME/.config}/fish/conf.d/vite-plus.fish with:"
     echo "        source \"$INSTALL_DIR_REF_POSIX/env.fish\""
     echo "    - Nushell: create a vendor autoload file with:"
-    echo "        source \"$INSTALL_DIR_REF_NU/env.nu\""
+    echo "        source '$INSTALL_DIR_REF_NU/env.nu'"
     echo ""
     echo "  Or run vp directly:"
     echo ""
