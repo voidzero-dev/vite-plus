@@ -49,7 +49,11 @@ import {
 import type { ExecutionResult } from './command.ts';
 import { discoverTemplate, inferGitHubRepoName, inferParentDir, isGitHubUrl } from './discovery.ts';
 import { getInitialTemplateOptions } from './initial-template-options.ts';
-import { getConfiguredDefaultTemplate, resolveOrgManifestForCreate } from './org-resolve.ts';
+import {
+  getConfiguredDefaultTemplate,
+  type OrgResolution,
+  resolveOrgManifestForCreate,
+} from './org-resolve.ts';
 import {
   cancelAndExit,
   checkProjectDirExists,
@@ -442,10 +446,7 @@ async function main() {
   let selectedParentDir: string | undefined;
   let remoteTargetDir: string | undefined;
   let shouldSetupHooks = false;
-  let bundledLocalPath: string | undefined;
-  let bundledEntryName: string | undefined;
-  let bundledOrgScope: string | undefined;
-  let isBundledMonorepo = false;
+  let bundled: Extract<OrgResolution, { kind: 'bundled' }> | undefined;
   let skipShorthandExpansion = false;
   const installArgs = process.env.CI ? ['--no-frozen-lockfile'] : undefined;
 
@@ -469,10 +470,7 @@ async function main() {
       // into `@your-org/create-template-web`.
       skipShorthandExpansion = true;
     } else if (resolved.kind === 'bundled') {
-      bundledLocalPath = resolved.bundledLocalPath;
-      bundledEntryName = resolved.entryName;
-      bundledOrgScope = resolved.scope;
-      isBundledMonorepo = resolved.monorepo === true;
+      bundled = resolved;
     } else if (resolved.kind === 'escape-hatch') {
       selectedTemplateName = '';
     }
@@ -509,7 +507,8 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   }
 
   const isBuiltinTemplate = selectedTemplateName.startsWith('vite:');
-  const isBundledTemplate = bundledLocalPath !== undefined;
+  const isBundledTemplate = bundled !== undefined;
+  const isBundledMonorepo = bundled?.monorepo === true;
   const isDirectScaffoldTemplate = isBuiltinTemplate || isBundledTemplate;
 
   // Remote templates (e.g., @tanstack/cli, custom templates) run their own
@@ -636,8 +635,8 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     }
   }
 
-  const directScaffoldFallbackName = isBundledTemplate
-    ? `vite-plus-${bundledEntryName}`
+  const directScaffoldFallbackName = bundled
+    ? `vite-plus-${bundled.entryName}`
     : selectedTemplateName === BuiltinTemplate.monorepo
       ? 'vite-plus-monorepo'
       : `vite-plus-${selectedTemplateName.split(':')[1]}`;
@@ -800,7 +799,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     selectedTemplateArgs,
     workspaceInfo,
     options.interactive,
-    bundledLocalPath,
+    bundled?.bundledLocalPath,
     skipShorthandExpansion,
   );
 
@@ -903,14 +902,14 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     workspaceInfo.rootDir = fullPath;
     updateCreateProgress('Integrating monorepo');
     rewriteMonorepo(workspaceInfo, undefined, compactOutput);
-    if (isBundledMonorepo && bundledOrgScope) {
+    if (bundled?.monorepo) {
       // Wire `create.defaultTemplate: '<scope>'` into the new workspace's
       // vite.config.ts so a bare `vp create` from inside it opens the
       // same org's picker. Only triggers when the user just scaffolded
       // from `vp create @scope:<entry>` — for builtin `vite:monorepo`,
       // even a scoped package name doesn't imply the user wants that
       // scope as their template default.
-      injectCreateDefaultTemplate(fullPath, bundledOrgScope, compactOutput);
+      injectCreateDefaultTemplate(fullPath, bundled.scope, compactOutput);
     }
     if (shouldSetupHooks) {
       installGitHooks(fullPath, compactOutput);

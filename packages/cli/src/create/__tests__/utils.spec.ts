@@ -138,4 +138,23 @@ describe('ensureGitignoreNodeModules', () => {
     ensureGitignoreNodeModules(projectDir);
     expect(gitignore()).toBe(existing);
   });
+
+  it('handles CRLF line endings without re-appending', () => {
+    const existing = 'node_modules\r\ndist\r\n';
+    fs.writeFileSync(path.join(projectDir, '.gitignore'), existing);
+    ensureGitignoreNodeModules(projectDir);
+    expect(gitignore()).toBe(existing);
+  });
+
+  it('does not consider a `node_modules/sub` subpath as already excluded', () => {
+    fs.writeFileSync(path.join(projectDir, '.gitignore'), 'node_modules/sub\n');
+    ensureGitignoreNodeModules(projectDir);
+    expect(gitignore()).toBe('node_modules/sub\nnode_modules\n');
+  });
+
+  it('does not match `!node_modules` (an explicit un-ignore override)', () => {
+    fs.writeFileSync(path.join(projectDir, '.gitignore'), '!node_modules\n');
+    ensureGitignoreNodeModules(projectDir);
+    expect(gitignore()).toBe('!node_modules\nnode_modules\n');
+  });
 });
