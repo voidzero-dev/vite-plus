@@ -13,8 +13,21 @@ function getCacheRoot(): string {
   return path.join(home, 'tmp', 'create-org');
 }
 
+/**
+ * Cache extracted tarballs under `<host>/<scope>/create/<version>` so two
+ * repos resolving the same `<scope>@<version>` through different registries
+ * (via `.npmrc` scope mappings) don't share a cache slot. The host comes
+ * from `manifest.tarballUrl`; if that URL is malformed we fall back to a
+ * `_unknown` segment rather than poisoning the default-registry slot.
+ */
 function getExtractionDir(manifest: OrgManifest): string {
-  return path.join(getCacheRoot(), manifest.scope, 'create', manifest.version);
+  let host = '_unknown';
+  try {
+    host = new URL(manifest.tarballUrl).host;
+  } catch {
+    // Keep the fallback.
+  }
+  return path.join(getCacheRoot(), host, manifest.scope, 'create', manifest.version);
 }
 
 function parseIntegrity(integrity: string): { algorithm: string; expected: string } | null {

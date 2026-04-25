@@ -164,6 +164,13 @@ describe('readOrgManifest', () => {
     await expect(readOrgManifest('@your-org')).rejects.toThrow(/escapes the package root/);
   });
 
+  it('throws when an entry name uses the reserved `__vp_` prefix', async () => {
+    mockFetchJson(
+      packument([{ name: '__vp_builtin_escape__', description: 'collides', template: '@a/b' }]),
+    );
+    await expect(readOrgManifest('@your-org')).rejects.toThrow(/uses the reserved `__vp_` prefix/);
+  });
+
   it('throws on non-boolean monorepo field', async () => {
     mockFetchJson(
       packument([

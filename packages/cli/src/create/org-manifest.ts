@@ -9,7 +9,6 @@ export interface OrgTemplateEntry {
   name: string;
   description: string;
   template: string;
-  keywords?: string[];
   monorepo?: boolean;
 }
 
@@ -110,19 +109,14 @@ function validateEntry(entry: unknown, index: number, packageName: string): OrgT
     return value;
   };
   const name = requireString('name');
+  if (name.startsWith('__vp_')) {
+    throw new OrgManifestSchemaError(
+      `createConfig.templates[${index}].name uses the reserved \`__vp_\` prefix`,
+      packageName,
+    );
+  }
   const description = requireString('description');
   const template = requireString('template');
-
-  let keywords: string[] | undefined;
-  if (raw.keywords !== undefined) {
-    if (!Array.isArray(raw.keywords) || raw.keywords.some((k) => typeof k !== 'string')) {
-      throw new OrgManifestSchemaError(
-        `createConfig.templates[${index}].keywords must be an array of strings`,
-        packageName,
-      );
-    }
-    keywords = raw.keywords as string[];
-  }
 
   let monorepo: boolean | undefined;
   if (raw.monorepo !== undefined) {
@@ -152,7 +146,6 @@ function validateEntry(entry: unknown, index: number, packageName: string): OrgT
     name,
     description,
     template,
-    ...(keywords !== undefined ? { keywords } : {}),
     ...(monorepo !== undefined ? { monorepo } : {}),
   };
 }

@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
 import {
@@ -6,11 +8,6 @@ import {
   type OrgTemplateEntry,
 } from './org-manifest.ts';
 
-// Sentinel `value` for the picker's trailing "Vite+ built-in templates"
-// entry. Internal to this module — callers react to
-// `ORG_PICKER_BUILTIN_ESCAPE` instead.
-const BUILTIN_ESCAPE_VALUE = '__vp_builtin_escape__';
-
 export const ORG_PICKER_CANCEL = Symbol('org-picker-cancel');
 export const ORG_PICKER_BUILTIN_ESCAPE = Symbol('org-picker-builtin-escape');
 
@@ -18,6 +15,8 @@ export type OrgPickerResult =
   | { kind: 'entry'; entry: OrgTemplateEntry }
   | typeof ORG_PICKER_CANCEL
   | typeof ORG_PICKER_BUILTIN_ESCAPE;
+
+const ESCAPE_HATCH = Symbol('builtin-escape');
 
 /**
  * Render the interactive picker for an org manifest. Always appends a
@@ -39,22 +38,23 @@ export async function pickOrgTemplate(
     return ORG_PICKER_BUILTIN_ESCAPE;
   }
 
-  const options: { value: string; label: string; hint?: string }[] = filtered.map((entry) => ({
-    value: entry.name,
-    label: entry.name,
-    hint: entry.description,
-  }));
+  // Per-invocation nonce — guarantees the escape hatch's `value` can't
+  // collide with any user-provided manifest entry name no matter what
+  // they chose.
+  const escapeValue = `__vp_builtin_escape__::${randomUUID()}`;
+  const lookup = new Map<string, OrgTemplateEntry | typeof ESCAPE_HATCH>();
+  const options: { value: string; label: string; hint?: string }[] = filtered.map((entry) => {
+    lookup.set(entry.name, entry);
+    return { value: entry.name, label: entry.name, hint: entry.description };
+  });
+  lookup.set(escapeValue, ESCAPE_HATCH);
   // Mirror `getInitialTemplateOptions(isMonorepo)`: `monorepo` is hidden
   // inside an existing monorepo (and would be rejected at scaffold time
   // anyway); `generator` isn't part of the builtin picker at all.
   const builtinHint = opts.isMonorepo
     ? 'Use defaults (application / library)'
     : 'Use defaults (monorepo / application / library)';
-  options.push({
-    value: BUILTIN_ESCAPE_VALUE,
-    label: 'Vite+ built-in templates',
-    hint: builtinHint,
-  });
+  options.push({ value: escapeValue, label: 'Vite+ built-in templates', hint: builtinHint });
 
   const picked = await prompts.select({
     message: `Pick a template from ${manifest.scope}`,
@@ -64,16 +64,15 @@ export async function pickOrgTemplate(
   if (prompts.isCancel(picked)) {
     return ORG_PICKER_CANCEL;
   }
-  if (picked === BUILTIN_ESCAPE_VALUE) {
+  const found = lookup.get(picked);
+  if (found === ESCAPE_HATCH) {
     return ORG_PICKER_BUILTIN_ESCAPE;
   }
-  const entry = filtered.find((candidate) => candidate.name === picked);
-  if (!entry) {
-    // Should never happen — the select only surfaces values we produced —
-    // but fall back cleanly.
+  if (!found) {
+    // Should never happen — the select only surfaces values we registered.
     return ORG_PICKER_CANCEL;
   }
-  return { kind: 'entry', entry };
+  return { kind: 'entry', entry: found };
 }
 
 /**

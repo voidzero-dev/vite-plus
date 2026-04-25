@@ -189,13 +189,13 @@ export async function resolveOrgManifestForCreate(args: {
 }
 
 /**
- * Read `create.defaultTemplate` from the workspace/repo root's
- * `vite.config.ts`.
+ * Read `create.defaultTemplate` from the workspace root's `vite.config.ts`.
  *
- * Walks up from `startDir` to find the nearest project root (monorepo
- * marker or `.git` directory) and reads the config from there, so
- * `vp create` picks up the configured default regardless of which
- * subdirectory the command is invoked from.
+ * Walks up from `startDir` via `findWorkspaceRoot` (monorepo markers
+ * only — `pnpm-workspace.yaml`, `workspaces` in `package.json`,
+ * `lerna.json`) so monorepo invocations from any subdirectory still
+ * pick up the root config. Standalone repos without a monorepo marker
+ * only see a config that sits at `startDir` itself.
  *
  * Best-effort: if there's no config file or evaluation fails, return
  * `undefined` so the create flow behaves as if no default was set.
