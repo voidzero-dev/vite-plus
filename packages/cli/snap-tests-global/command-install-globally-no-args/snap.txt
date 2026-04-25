@@ -1,4 +1,4 @@
-[1]> vp install -g # Should error when no packages provided
+[2]> vp install -g # Should error when no packages provided
 error: the following required arguments were not provided:
   <PACKAGES>...
 
