@@ -145,8 +145,8 @@ pub enum Commands {
         #[arg(long)]
         save_catalog: bool,
 
-        /// Install globally (only when adding packages)
-        #[arg(short = 'g', long)]
+        /// Install globally (requires package names)
+        #[arg(short = 'g', long, requires = "packages")]
         global: bool,
 
         /// Node.js version to use for global installation (only with -g)
@@ -1682,15 +1682,6 @@ pub async fn run_command_with_options(
                         pass_through_args.as_deref(),
                     )
                     .await;
-            }
-
-            // No packages provided — reject if --global was passed
-            if global {
-                vite_shared::output::error(
-                    "`vp install -g` requires at least one package name.\n\
-                     To reinstall all globally installed packages, use `vp update -g`.",
-                );
-                return Ok(exit_status(1));
             }
 
             // No packages provided, run regular install

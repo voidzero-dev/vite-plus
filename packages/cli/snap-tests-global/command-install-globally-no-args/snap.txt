@@ -1,3 +1,7 @@
 [1]> vp install -g # Should error when no packages provided
-error: `vp install -g` requires at least one package name.
-To reinstall all globally installed packages, use `vp update -g`.
+error: the following required arguments were not provided:
+  <PACKAGES>...
+
+Usage: vp install --global <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
+
+For more information, try '--help'.
