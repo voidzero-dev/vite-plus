@@ -36,6 +36,7 @@ jobs:
         with:
           fetch-depth: 0
           fetch-tags: true
+          persist-credentials: false
       - uses: ./.github/actions/set-snapshot-version
         if: ${{ inputs.version == '' }}
         id: computed

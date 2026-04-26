@@ -25,7 +25,9 @@ runs:
       id: cache-key
       shell: bash
       run: |
-        echo "key=napi-binding-v3-${{ inputs.target }}-${{ env.RELEASE_BUILD }}-${{ env.DEBUG }}-${{ env.VERSION }}-${{ env.NPM_TAG }}-${{ hashFiles('packages/tools/.upstream-versions.json', 'Cargo.lock', 'crates/**/*.rs', 'crates/*/Cargo.toml', 'packages/cli/binding/**/*.rs', 'packages/cli/binding/Cargo.toml', 'Cargo.toml', '.cargo/config.toml', 'packages/cli/package.json', 'packages/cli/build.ts', 'packages/cli/tsdown.config.ts') }}" >> $GITHUB_OUTPUT
+        echo "key=napi-binding-v3-${INPUTS_TARGET}-${{ env.RELEASE_BUILD }}-${{ env.DEBUG }}-${{ env.VERSION }}-${{ env.NPM_TAG }}-${{ hashFiles('packages/tools/.upstream-versions.json', 'Cargo.lock', 'crates/**/*.rs', 'crates/*/Cargo.toml', 'packages/cli/binding/**/*.rs', 'packages/cli/binding/Cargo.toml', 'Cargo.toml', '.cargo/config.toml', 'packages/cli/package.json', 'packages/cli/build.ts', 'packages/cli/tsdown.config.ts') }}" >> $GITHUB_OUTPUT
+      env:
+        INPUTS_TARGET: ${{ inputs.target }}
 
     # Resolve the Rust target directory (CARGO_TARGET_DIR from setup-rust, or default "target")
     - name: Resolve Rust target directory
@@ -70,7 +72,9 @@ runs:
     - name: Add musl Rust target
       if: steps.cache-restore.outputs.cache-hit != 'true' && contains(inputs.target, 'musl')
       shell: bash
-      run: rustup target add ${{ inputs.target }}
+      run: rustup target add ${INPUTS_TARGET}
+      env:
+        INPUTS_TARGET: ${{ inputs.target }}
 
     - name: Setup zig (musl)
       if: steps.cache-restore.outputs.cache-hit != 'true' && contains(inputs.target, 'musl')
@@ -90,64 +94,75 @@ runs:
       shell: bash
       if: steps.cache-restore.outputs.cache-hit != 'true' && contains(inputs.target, 'linux') && !contains(inputs.target, 'musl')
       run: |
-        pnpm --filter=vite-plus build-native --target ${{ inputs.target }} --use-napi-cross
+        pnpm --filter=vite-plus build-native --target ${INPUTS_TARGET} --use-napi-cross
       env:
         TARGET_CC: clang
         TARGET_CFLAGS: ${{ contains(inputs.target, 'aarch64') && '-D_BSD_SOURCE' || '' }}
         DEBUG: napi:*
+        INPUTS_TARGET: ${{ inputs.target }}
 
     - name: Build NAPI bindings (Linux musl)
       shell: bash
       if: steps.cache-restore.outputs.cache-hit != 'true' && contains(inputs.target, 'musl')
       run: |
-        pnpm --filter=vite-plus build-native --target ${{ inputs.target }} -x
+        pnpm --filter=vite-plus build-native --target ${INPUTS_TARGET} -x
       env:
         TARGET_CC: clang
         TARGET_CFLAGS: ${{ contains(inputs.target, 'aarch64') && '-D_BSD_SOURCE' || '' }}
         DEBUG: napi:*
+        INPUTS_TARGET: ${{ inputs.target }}
 
     - name: Build NAPI bindings (non-Linux targets)
       shell: bash
       if: steps.cache-restore.outputs.cache-hit != 'true' && !contains(inputs.target, 'linux')
       run: |
-        pnpm --filter=vite-plus build-native --target ${{ inputs.target }}
+        pnpm --filter=vite-plus build-native --target ${INPUTS_TARGET}
       env:
         DEBUG: napi:*
+        INPUTS_TARGET: ${{ inputs.target }}
 
     - name: Build Rust CLI binary (Linux gnu)
       if: steps.cache-restore.outputs.cache-hit != 'true' && contains(inputs.target, 'linux') && !contains(inputs.target, 'musl')
       shell: bash
       run: |
-        pnpm exec napi build --use-napi-cross --target ${{ inputs.target }} --release -p vite_global_cli
+        pnpm exec napi build --use-napi-cross --target ${INPUTS_TARGET} --release -p vite_global_cli
       env:
         TARGET_CC: clang
         TARGET_CFLAGS: ${{ contains(inputs.target, 'aarch64') && '-D_BSD_SOURCE' || '' }}
         DEBUG: napi:*
+        INPUTS_TARGET: ${{ inputs.target }}
 
     - name: Build Rust CLI binary (Linux musl)
       if: steps.cache-restore.outputs.cache-hit != 'true' && contains(inputs.target, 'musl')
       shell: bash
       run: |
-        pnpm exec napi build -x --target ${{ inputs.target }} --release -p vite_global_cli
+        pnpm exec napi build -x --target ${INPUTS_TARGET} --release -p vite_global_cli
       env:
         TARGET_CC: clang
         TARGET_CFLAGS: ${{ contains(inputs.target, 'aarch64') && '-D_BSD_SOURCE' || '' }}
         DEBUG: napi:*
+        INPUTS_TARGET: ${{ inputs.target }}
 
     - name: Build Rust CLI binary (non-Linux targets)
       if: steps.cache-restore.outputs.cache-hit != 'true' && !contains(inputs.target, 'linux')
       shell: bash
-      run: cargo build --release --target ${{ inputs.target }} -p vite_global_cli
+      run: cargo build --release --target ${INPUTS_TARGET} -p vite_global_cli
+      env:
+        INPUTS_TARGET: ${{ inputs.target }}
 
     - name: Build trampoline shim binary (Windows only)
       if: steps.cache-restore.outputs.cache-hit != 'true' && contains(inputs.target, 'windows')
       shell: bash
-      run: cargo build --release --target ${{ inputs.target }} -p vite_trampoline
+      run: cargo build --release --target ${INPUTS_TARGET} -p vite_trampoline
+      env:
+        INPUTS_TARGET: ${{ inputs.target }}
 
     - name: Build installer binary (Windows only)
       if: steps.cache-restore.outputs.cache-hit != 'true' && contains(inputs.target, 'windows')
       shell: bash
-      run: cargo build --release --target ${{ inputs.target }} -p vite_installer
+      run: cargo build --release --target ${INPUTS_TARGET} -p vite_installer
+      env:
+        INPUTS_TARGET: ${{ inputs.target }}
 
     - name: Save NAPI binding cache
       if: steps.cache-restore.outputs.cache-hit != 'true'
