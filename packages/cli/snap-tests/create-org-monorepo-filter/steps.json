@@ -1,0 +1,5 @@
+{
+  "commands": [
+    "node $SNAP_CASES_DIR/.shared/mock-npm-registry.mjs -- vp create @your-org --no-interactive # inside monorepo, hides monorepo:true entries + shows omitted footer"
+  ]
+}

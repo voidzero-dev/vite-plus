@@ -3,7 +3,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
-import spawn from 'cross-spawn';
 
 import { rewriteMonorepoProject } from '../../migration/migrator.ts';
 import { PackageManager, type WorkspaceInfo } from '../../types/index.ts';
@@ -21,7 +20,6 @@ export const InitialMonorepoAppDir = 'apps/website';
 export async function executeMonorepoTemplate(
   workspaceInfo: WorkspaceInfo,
   templateInfo: BuiltinTemplateInfo,
-  interactive: boolean,
   options?: { silent?: boolean },
 ): Promise<ExecutionResult> {
   assert(templateInfo.packageName, 'packageName is required');
@@ -29,25 +27,6 @@ export async function executeMonorepoTemplate(
 
   workspaceInfo.monorepoScope = getScopeFromPackageName(templateInfo.packageName);
   const fullPath = path.join(workspaceInfo.rootDir, templateInfo.targetDir);
-
-  // Ask user to init git repository before creation starts.
-  let initGit = true; // Default to yes
-  if (interactive && !options?.silent) {
-    const selected = await prompts.confirm({
-      message: `Initialize git repository:`,
-      initialValue: true,
-    });
-    if (prompts.isCancel(selected)) {
-      prompts.log.info('Operation cancelled. Skipping git initialization');
-      initGit = false;
-    } else {
-      initGit = selected;
-    }
-  } else {
-    if (!options?.silent) {
-      prompts.log.info(`Initializing git repository (default: yes)`);
-    }
-  }
 
   if (!options?.silent) {
     prompts.log.info(`Target directory: ${formatDisplayTargetDir(templateInfo.targetDir)}`);
@@ -107,24 +86,6 @@ export async function executeMonorepoTemplate(
 
   if (!options?.silent) {
     prompts.log.success('Monorepo template created');
-  }
-
-  if (initGit) {
-    const gitResult = spawn.sync('git', ['init'], {
-      stdio: 'pipe',
-      cwd: fullPath,
-    });
-
-    if (gitResult.status === 0) {
-      if (!options?.silent) {
-        prompts.log.success('Git repository initialized');
-      }
-    } else {
-      prompts.log.warn('Failed to initialize git repository');
-      if (gitResult.stderr) {
-        prompts.log.info(gitResult.stderr.toString());
-      }
-    }
   }
 
   // Automatically create a default application in apps/website

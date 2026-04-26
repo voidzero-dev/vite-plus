@@ -1,0 +1,25 @@
+{
+  "@your-org/create": {
+    "name": "@your-org/create",
+    "dist-tags": { "latest": "1.0.0" },
+    "versions": {
+      "1.0.0": {
+        "version": "1.0.0",
+        "dist": {
+          "tarball": "{REGISTRY}/@your-org/create/-/create-1.0.0.tgz",
+          "integrity": "sha512-uIdfZ0qxDoaaESGePfk1CxcdTcfn91L2sqg0EQZelwxnPRFJRCLKaj12l95rXZdsV+e1wSL0XC+ZsKxhI95h+g=="
+        },
+        "createConfig": {
+          "templates": [
+            {
+              "name": "workspace",
+              "description": "Bundled monorepo workspace",
+              "template": "./templates/workspace",
+              "monorepo": true
+            }
+          ]
+        }
+      }
+    }
+  }
+}
