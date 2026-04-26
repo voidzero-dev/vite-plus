@@ -74,30 +74,51 @@ jobs:
           show_full_output: 'true'
           prompt: |
             Your goal: after the daily upstream-dependency upgrade, bring the project back
-            to a fully green state. The upgrade script has already bumped every dep to the
-            latest version and the `build-upstream` action has attempted a build — your job
-            is to diagnose and fix every error that surfaced, then prove the fix is complete
-            by running a final validation pass.
+            to a fully green state. The upgrade script has bumped every dep to the latest
+            version, the `Sync remote and build` step has attempted to merge the rolldown
+            and vite catalogs into the workspace, and the `build-upstream` action has
+            attempted a build — your job is to diagnose and fix every error that surfaced,
+            then prove the fix is complete by running a final validation pass.
 
             ### Background
             - Upgrade script: `./.github/scripts/upgrade-deps.mjs`
+            - Sync-remote tool: `pnpm tool sync-remote` (source in
+              `packages/tools/src/sync-remote-deps.ts`) — clones rolldown/vite into the
+              working tree and merges their pnpm-workspace catalogs into the root
+              `pnpm-workspace.yaml`.
             - Build-upstream action: `./.github/actions/build-upstream/action.yml`
             - Package manager: `pnpm`. Do NOT downgrade any dep — we want the latest.
 
+            ### Outcomes from earlier steps (both ran with continue-on-error)
+            - Sync remote and build: ${{ steps.build.outcome }}
+            - build-upstream action: ${{ steps.build-upstream.outcome }}
+
             ### Fixups to perform (in order)
-            1. Re-run the steps in `./.github/actions/build-upstream/action.yml`; fix any
+            1. If the `Sync remote and build` outcome above is `failure`, fix it FIRST —
+               nothing else will work until the merged workspace is correct. Re-run
+               `pnpm tool sync-remote` and read the error. The most common cause is a
+               cross-major semver conflict in the merged catalog, e.g.
+               `Incompatible semver ranges for <pkg>: ^X vs ^Y`. The merger refuses to
+               auto-resolve cross-major conflicts for packages outside its synced list
+               (oxc-*, vitest deps). For passthrough deps that vp does NOT import
+               directly (e.g. `diff`, `acorn`, `astring`, anything only present in
+               `rolldown/scripts/package.json` or vite's internals), bump vp's
+               `pnpm-workspace.yaml` catalog entry to match the rolldown/vite version,
+               then re-run `pnpm tool sync-remote` until it exits 0. Finish with
+               `pnpm install --no-frozen-lockfile`.
+            2. Re-run the steps in `./.github/actions/build-upstream/action.yml`; fix any
                non-zero exits.
-            2. If the rolldown hash changed, follow `.claude/agents/cargo-workspace-merger.md`
+            3. If the rolldown hash changed, follow `.claude/agents/cargo-workspace-merger.md`
                to resync the workspace.
-            3. Compare tsdown CLI options with `vp pack` and sync new/removed options per
+            4. Compare tsdown CLI options with `vp pack` and sync new/removed options per
                `.claude/skills/sync-tsdown-cli/SKILL.md`.
-            4. Install the global CLI:
+            5. Install the global CLI:
                - `pnpm bootstrap-cli:ci`
                - `echo "$HOME/.vite-plus/bin" >> $GITHUB_PATH`
-            5. If any Rust code or `Cargo.toml` was modified, run `cargo check
+            6. If any Rust code or `Cargo.toml` was modified, run `cargo check
                --all-targets --all-features` and `cargo shear`; fix anything they report.
-            6. Run `pnpm run lint` (requires a prior `just build`); fix any errors.
-            7. Smoke-test the CLI: `vp -h`, `vp run -h`, `vp lint -h`, `vp test -h`,
+            7. Run `pnpm run lint` (requires a prior `just build`); fix any errors.
+            8. Smoke-test the CLI: `vp -h`, `vp run -h`, `vp lint -h`, `vp test -h`,
                `vp build -h`, `vp fmt -h`, `vp pack -h`.
 
             ### Final validation (this step is complete ONLY when all pass)
