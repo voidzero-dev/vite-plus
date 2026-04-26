@@ -53,6 +53,7 @@ jobs:
       contents: read
     env:
       VERSION: ${{ needs.prepare.outputs.version }}
+      VITE_PLUS_VERSION: ${{ needs.prepare.outputs.version }}
     strategy:
       fail-fast: false
       matrix:
@@ -90,17 +91,10 @@ jobs:
         shell: bash
         run: |
           pnpm exec tool replace-file-content packages/cli/binding/Cargo.toml 'version = "0.0.0"' 'version = "${{ env.VERSION }}"'
-          pnpm exec tool replace-file-content crates/vite_global_cli/Cargo.toml 'version = "0.0.0"' 'version = "${{ env.VERSION }}"'
-          cat crates/vite_global_cli/Cargo.toml
 
       - name: Verify version replacement
         shell: bash
         run: |
-          if grep -q 'version = "0.0.0"' crates/vite_global_cli/Cargo.toml; then
-            echo "ERROR: Version replacement failed for crates/vite_global_cli/Cargo.toml"
-            head -5 crates/vite_global_cli/Cargo.toml
-            exit 1
-          fi
           if grep -q 'version = "0.0.0"' packages/cli/binding/Cargo.toml; then
             echo "ERROR: Version replacement failed for packages/cli/binding/Cargo.toml"
             head -5 packages/cli/binding/Cargo.toml
