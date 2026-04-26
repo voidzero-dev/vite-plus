@@ -24,7 +24,6 @@ impl UpdateCommand {
         self,
         packages: &[String],
         latest: bool,
-        global: bool,
         recursive: bool,
         filters: Option<&[String]>,
         workspace_root: bool,
@@ -43,7 +42,6 @@ impl UpdateCommand {
         let update_command_options = UpdateCommandOptions {
             packages,
             latest,
-            global,
             recursive,
             filters,
             workspace_root,

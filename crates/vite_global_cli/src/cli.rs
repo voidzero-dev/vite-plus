@@ -1840,7 +1840,6 @@ pub async fn run_command_with_options(
                 .execute(
                     &packages,
                     latest,
-                    global,
                     recursive,
                     filter.as_deref(),
                     workspace_root,
