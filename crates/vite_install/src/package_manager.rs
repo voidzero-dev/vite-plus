@@ -497,12 +497,7 @@ pub async fn download_package_manager(
 /// where `File::create` implies truncation, which is forbidden when another
 /// process holds an exclusive lock on the file.
 fn open_lock_file(lock_path: &Path) -> io::Result<File> {
-    fs::OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .truncate(false)
-        .open(lock_path)
+    fs::OpenOptions::new().read(true).write(true).create(true).truncate(false).open(lock_path)
 }
 
 /// Get the platform-specific npm package name for bun.
