@@ -469,7 +469,7 @@ pub async fn download_package_manager(
     // The lock is automatically skipped on NFS filesystems where locking is unreliable.
     let lock_path = parent_dir.join(format!("{version}.lock"));
     tracing::debug!("Acquire lock file: {:?}", lock_path);
-    let lock_file = File::create(lock_path.as_path())?;
+    let lock_file = open_lock_file(lock_path.as_path())?;
     // Acquire exclusive lock (blocks until available)
     lock_file.lock()?;
     tracing::debug!("Lock acquired: {:?}", lock_path);
@@ -491,6 +491,13 @@ pub async fn download_package_manager(
     create_shim_files(package_manager_type, &bin_prefix).await?;
 
     Ok((install_dir, package_name, version))
+}
+
+/// Open a lock file without truncating it. This is required on Windows
+/// where `File::create` implies truncation, which is forbidden when another
+/// process holds an exclusive lock on the file.
+fn open_lock_file(lock_path: &Path) -> io::Result<File> {
+    fs::OpenOptions::new().read(true).write(true).create(true).truncate(false).open(lock_path)
 }
 
 /// Get the platform-specific npm package name for bun.
@@ -602,7 +609,7 @@ async fn download_bun_package_manager(
     // Acquire lock for atomic rename
     let lock_path = parent_dir.join(format!("{version}.lock"));
     tracing::debug!("Acquire lock file: {:?}", lock_path);
-    let lock_file = File::create(lock_path.as_path())?;
+    let lock_file = open_lock_file(lock_path.as_path())?;
     lock_file.lock()?;
     tracing::debug!("Lock acquired: {:?}", lock_path);
 
@@ -2508,5 +2515,35 @@ mod tests {
             name.ends_with("-musl"),
             "On musl targets, package name should end with -musl, got: {name}"
         );
+    }
+    /// Note: The true ERROR_SHARING_VIOLATION occurs when *multiple processes*
+    /// attempt to lock the file concurrently on Windows (e.g. during parallel MSBuild tasks).
+    /// Standard cargo tests run in a single process, which the Windows OS allows to bypass
+    /// the truncation violation. This test validates the safe `OpenOptions` syntax
+    /// and ensures `open_lock_file` successfully acquires and releases locks without panicking.
+    #[test]
+    fn test_concurrent_lock_file_creation_windows_compat() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let lock_path = temp_dir.path().join("test_concurrent.lock");
+
+        // Process 1: Open and acquire exclusive lock using the new approach
+        let lock_file1 = super::open_lock_file(&lock_path).expect("Failed to open lock file 1");
+
+        // Acquire lock
+        lock_file1.lock().expect("Failed to lock file 1");
+
+        // Process 2: Attempt to open the same file while it is exclusively locked.
+        // In the buggy implementation (`File::create`), this would throw ERROR_SHARING_VIOLATION
+        // on Windows because `create` implies `truncate`, which Windows forbids for locked files.
+        let open_result = super::open_lock_file(&lock_path);
+
+        assert!(
+            open_result.is_ok(),
+            "Expected second handle to open successfully even when locked, but got: {:?}",
+            open_result.err()
+        );
+
+        // Release lock
+        lock_file1.unlock().expect("Failed to unlock file 1");
     }
 }
