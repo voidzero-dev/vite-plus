@@ -1,5 +1,6 @@
 {
   "ignoredPlatforms": ["win32"],
+  "linkCheckoutPackages": true,
   "commands": [
     {
       "command": "vp create astro --no-interactive -- my-astro-app --yes --skip-houston --template basics # create Astro app",

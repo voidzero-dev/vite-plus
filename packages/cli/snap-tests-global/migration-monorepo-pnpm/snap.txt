@@ -24,12 +24,19 @@ export default defineConfig({
   },
   lint: {
     "rules": {
-      "no-unused-vars": "error"
+      "no-unused-vars": "error",
+      "vite-plus/prefer-vite-plus-imports": "error"
     },
     "options": {
       "typeAware": true,
       "typeCheck": true
-    }
+    },
+    "jsPlugins": [
+      {
+        "name": "vite-plus",
+        "specifier": "vite-plus/oxlint-plugin"
+      }
+    ]
   },
   plugins: [react()],
 });
@@ -158,12 +165,19 @@ import { defineConfig } from 'vite-plus';
 export default defineConfig({
   lint: {
     "rules": {
-      "no-unused-vars": "warn"
+      "no-unused-vars": "warn",
+      "vite-plus/prefer-vite-plus-imports": "error"
     },
     "options": {
       "typeAware": true,
       "typeCheck": true
-    }
+    },
+    "jsPlugins": [
+      {
+        "name": "vite-plus",
+        "specifier": "vite-plus/oxlint-plugin"
+      }
+    ]
   },
   
 });
