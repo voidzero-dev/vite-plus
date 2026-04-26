@@ -276,6 +276,73 @@ function Configure-UserPath {
     }
 }
 
+function Get-NushellVendorAutoloadDir {
+    $nushellCommand = Get-Command nu -ErrorAction SilentlyContinue
+    if ($null -eq $nushellCommand) {
+        return $null
+    }
+
+    try {
+        $dirsOutput = & $nushellCommand.Source -c '$nu.vendor-autoload-dirs | reverse | each {|dir| $dir } | str join (char nl)' 2>$null
+    } catch {
+        return $null
+    }
+
+    foreach ($dir in ($dirsOutput -split "\r?\n")) {
+        if (-not [string]::IsNullOrWhiteSpace($dir)) {
+            return $dir
+        }
+    }
+
+    return $null
+}
+
+function Configure-Nushell {
+    $autoloadDir = Get-NushellVendorAutoloadDir
+    if ($null -eq $autoloadDir) {
+        if ($null -eq (Get-Command nu -ErrorAction SilentlyContinue)) {
+            return [pscustomobject]@{
+                Status = "skipped"
+                Message = "skipped (not installed)"
+            }
+        }
+
+        return [pscustomobject]@{
+            Status = "failed"
+            Message = "failed (could not determine vendor autoload dir)"
+        }
+    }
+
+    $autoloadFile = Join-Path $autoloadDir "vite-plus.nu"
+    $nuEnvRef= (Join-Path $InstallDir "env.nu") -replace [regex]::Escape($env:USERPROFILE), '~'
+    $content = "# Vite+ bin (https://viteplus.dev)`n" + ("source '"+ $nuEnvRef +"'") + "`n"
+
+    try {
+        New-Item -ItemType Directory -Force -Path $autoloadDir | Out-Null
+        if (Test-Path $autoloadFile) {
+            $existing = Get-Content -Path $autoloadFile -Raw
+            if ($existing -eq $content) {
+                return [pscustomobject]@{
+                    Status = "already"
+                    Message = "already configured $autoloadFile"
+                }
+            }
+        }
+
+        [System.IO.File]::WriteAllText($autoloadFile, $content)
+        return [pscustomobject]@{
+            Status = "true"
+            Message = "updated $autoloadFile"
+        }
+    } catch {
+        Write-Warn "Could not configure Nushell automatically."
+        return [pscustomobject]@{
+            Status = "failed"
+            Message = "failed $autoloadFile"
+        }
+    }
+}
+
 # Run vp env setup --refresh, showing output only on failure
 function Refresh-Shims {
     param([string]$BinDir)
@@ -544,8 +611,11 @@ exec "`$VP_HOME/current/bin/vp.exe" "`$@"
     # Cleanup old versions
     Cleanup-OldVersions -InstallDir $InstallDir
 
-    # Configure user PATH (always attempted)
+    # Configure Windows-native shell access via the User PATH
     $pathResult = Configure-UserPath
+
+    # Configure Nushell autoload if Nushell is installed
+    $nushellResult = Configure-Nushell
 
     # Setup Node.js version manager (shims) - separate component
     $nodeManagerResult = Setup-NodeManager -BinDir $BinDir
@@ -586,23 +656,43 @@ exec "`$VP_HOME/current/bin/vp.exe" "`$@"
     Write-Host ""
     Write-Host "  Run ${BRIGHT_BLUE}vp help${NC} to see available commands."
 
-    # Show note if PATH was updated
-    if ($pathResult -eq "true") {
+    Write-Host ""
+    Write-Host "  Shell configuration:"
+    switch ($pathResult) {
+        "true" { Write-Host "    - Windows PATH: updated" }
+        "already" { Write-Host "    - Windows PATH: already configured" }
+        "failed" { Write-Host "    - Windows PATH: failed" }
+        default { Write-Host "    - Windows PATH: skipped" }
+    }
+    if ($nushellResult.Status -ne "skipped") {
+      Write-Host "    - Nushell: $($nushellResult.Message)"
+    }
+
+    # Show note if PATH or Nushell was updated
+    if ($pathResult -eq "true" -or $nushellResult.Status -eq "true") {
         Write-Host ""
         Write-Host "  Note: Restart your terminal and IDE for changes to take effect."
     }
 
-    # Show manual PATH instructions if PATH could not be configured
-    if ($pathResult -eq "failed") {
+    # Show manual PATH/Nushell instructions if anything still needs manual setup
+    if ($pathResult -eq "failed" -or $nushellResult.Status -eq "failed") {
         Write-Host ""
-        Write-Host "  ${YELLOW}note${NC}: Could not automatically add vp to your PATH."
+        Write-Host "  ${YELLOW}note${NC}: Some shells still need manual setup."
         Write-Host ""
         Write-Host "  vp was installed to: ${BOLD}${displayDir}\bin${NC}"
         Write-Host ""
-        Write-Host "  To use vp, manually add it to your PATH:"
-        Write-Host ""
-        Write-Host "    [Environment]::SetEnvironmentVariable('Path', '$InstallDir\bin;' + [Environment]::GetEnvironmentVariable('Path', 'User'), 'User')"
-        Write-Host ""
+        if ($pathResult -eq "failed") {
+            Write-Host "  To use vp in Powershell/cmd, manually add it to your PATH:"
+            Write-Host ""
+            Write-Host "    [Environment]::SetEnvironmentVariable('Path', '$InstallDir\bin;' + [Environment]::GetEnvironmentVariable('Path', 'User'), 'User')"
+            Write-Host ""
+        }
+        if ($nushellResult.Status -eq "failed") {
+            Write-Host "  To use vp in Nushell, create a vite-plus.nu file in your preferred vendor autoload directory with:"
+            Write-Host ""
+            Write-Host "    source '$displayDir\env.nu'"
+            Write-Host ""
+        }
         Write-Host "  Or run vp directly:"
         Write-Host ""
         Write-Host "    & `"$InstallDir\bin\vp.exe`""
