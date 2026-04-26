@@ -2528,8 +2528,6 @@ mod tests {
     /// and ensures `open_lock_file` successfully acquires and releases locks without panicking.
     #[test]
     fn test_concurrent_lock_file_creation_windows_compat() {
-        use std::fs;
-
         let temp_dir = tempfile::tempdir().unwrap();
         let lock_path = temp_dir.path().join("test_concurrent.lock");
 
