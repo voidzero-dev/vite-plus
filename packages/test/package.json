@@ -272,7 +272,7 @@
     }
   },
   "scripts": {
-    "build": "oxnode -C dev ./build.ts"
+    "build": "cross-env OXC_TSCONFIG_PATH=../../tsconfig.json oxnode -C dev ./build.ts"
   },
   "dependencies": {
     "@standard-schema/spec": "^1.1.0",
@@ -306,6 +306,7 @@
     "@vitest/utils": "4.1.5",
     "chai": "^6.2.1",
     "convert-source-map": "^2.0.0",
+    "cross-env": "catalog:",
     "estree-walker": "^3.0.3",
     "expect-type": "^1.2.2",
     "magic-string": "^0.30.21",
