@@ -641,10 +641,10 @@ if ($env:Path -split ';' -notcontains $__vp_bin) {
 function vp {
     if ($args.Count -ge 2 -and $args[0] -eq "env" -and $args[1] -eq "use") {
         if ($args -contains "-h" -or $args -contains "--help") {
-            & (Join-Path $__vp_bin "vp.exe") @args; return
+            & (Join-Path $__vp_bin "vp") @args; return
         }
         $env:VP_ENV_USE_EVAL_ENABLE = "1"
-        $output = & (Join-Path $__vp_bin "vp.exe") @args 2>&1 | ForEach-Object {
+        $output = & (Join-Path $__vp_bin "vp") @args 2>&1 | ForEach-Object {
             if ($_ -is [System.Management.Automation.ErrorRecord]) {
                 Write-Host $_.Exception.Message
             } else {
@@ -656,13 +656,13 @@ function vp {
             Invoke-Expression ($output -join "`n")
         }
     } else {
-        & (Join-Path $__vp_bin "vp.exe") @args
+        & (Join-Path $__vp_bin "vp") @args
     }
 }
 
 # Dynamic shell completion for PowerShell
 $env:VP_COMPLETE = "powershell"
-& (Join-Path $__vp_bin "vp.exe") | Out-String | Invoke-Expression
+& (Join-Path $__vp_bin "vp") | Out-String | Invoke-Expression
 Remove-Item Env:\VP_COMPLETE -ErrorAction SilentlyContinue
 
 $__vpr_comp = {
@@ -674,7 +674,7 @@ $__vpr_comp = {
     $args = $args -replace '^(vpr\.exe|vpr)\b', 'vp run'
     if ($wordToComplete -eq "") { $args += " ''" }
     $results = Invoke-Expression @"
-& (Join-Path $__vp_bin 'vp.exe') -- $args
+& (Join-Path $__vp_bin 'vp') -- $args
 "@;
     if ($prev) { $env:VP_COMPLETE = $prev } else { Remove-Item Env:\VP_COMPLETE }
     $results | ForEach-Object {
