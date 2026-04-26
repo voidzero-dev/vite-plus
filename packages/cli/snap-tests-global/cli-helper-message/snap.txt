@@ -103,7 +103,7 @@ Options:
   --save-peer           Save to peerDependencies (only when adding packages)
   -O, --save-optional   Save to optionalDependencies (only when adding packages)
   --save-catalog        Save the new dependency to the default catalog (only when adding packages)
-  -g, --global          Install globally (only when adding packages)
+  -g, --global          Install globally (requires package names)
   --node <NODE>         Node.js version to use for global installation (only with -g)
   -h, --help            Print help
 

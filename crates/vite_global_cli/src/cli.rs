@@ -145,8 +145,8 @@ pub enum Commands {
         #[arg(long)]
         save_catalog: bool,
 
-        /// Install globally (only when adding packages)
-        #[arg(short = 'g', long)]
+        /// Install globally (requires package names)
+        #[arg(short = 'g', long, requires = "packages")]
         global: bool,
 
         /// Node.js version to use for global installation (only with -g)

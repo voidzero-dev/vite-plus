@@ -1,0 +1,4 @@
+{
+  "env": {},
+  "commands": ["vp install -g # Should error when no packages provided"]
+}
