@@ -1,0 +1,3 @@
+[1]> node $SNAP_CASES_DIR/.shared/mock-npm-registry.mjs -- vp create @your-org --no-interactive # `../outside` path rejected at schema-validation, before any tarball fetch
+@your-org/create: createConfig.templates[0].template escapes the package root: ../outside
+

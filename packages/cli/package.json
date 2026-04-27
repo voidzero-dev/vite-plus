@@ -353,6 +353,7 @@
     "lint-staged": "catalog:",
     "minimatch": "catalog:",
     "mri": "catalog:",
+    "nanotar": "catalog:",
     "picocolors": "catalog:",
     "rolldown-plugin-dts": "catalog:",
     "semver": "catalog:",

@@ -1,7 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   deriveDefaultPackageName,
+  ensureGitignoreNodeModules,
   formatTargetDir,
   getProjectDirFromPackageName,
 } from '../utils.js';
@@ -85,5 +90,71 @@ describe('deriveDefaultPackageName', () => {
     const result = deriveDefaultPackageName('/', undefined, 'vite-plus-app');
     // basename of '/' is empty, so a random name is generated
     expect(result.length).toBeGreaterThan(0);
+  });
+});
+
+describe('ensureGitignoreNodeModules', () => {
+  let projectDir: string;
+
+  beforeEach(() => {
+    projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-gitignore-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(projectDir, { recursive: true, force: true });
+  });
+
+  function gitignore(): string {
+    return fs.readFileSync(path.join(projectDir, '.gitignore'), 'utf-8');
+  }
+
+  it('creates a fresh `.gitignore` with `node_modules` when none exists', () => {
+    ensureGitignoreNodeModules(projectDir);
+    expect(gitignore()).toBe('node_modules\n');
+  });
+
+  it('appends `node_modules` to an existing `.gitignore` that omits it', () => {
+    fs.writeFileSync(path.join(projectDir, '.gitignore'), 'dist\n*.log\n');
+    ensureGitignoreNodeModules(projectDir);
+    expect(gitignore()).toBe('dist\n*.log\nnode_modules\n');
+  });
+
+  it('terminates the last line first when the existing file lacks a trailing newline', () => {
+    fs.writeFileSync(path.join(projectDir, '.gitignore'), 'dist');
+    ensureGitignoreNodeModules(projectDir);
+    expect(gitignore()).toBe('dist\nnode_modules\n');
+  });
+
+  it('is a no-op when `node_modules` already appears as a standalone line', () => {
+    const existing = '# Logs\n*.log\nnode_modules\ndist\n';
+    fs.writeFileSync(path.join(projectDir, '.gitignore'), existing);
+    ensureGitignoreNodeModules(projectDir);
+    expect(gitignore()).toBe(existing);
+  });
+
+  it('treats `node_modules/` (with trailing slash) as a match', () => {
+    const existing = 'node_modules/\ndist\n';
+    fs.writeFileSync(path.join(projectDir, '.gitignore'), existing);
+    ensureGitignoreNodeModules(projectDir);
+    expect(gitignore()).toBe(existing);
+  });
+
+  it('handles CRLF line endings without re-appending', () => {
+    const existing = 'node_modules\r\ndist\r\n';
+    fs.writeFileSync(path.join(projectDir, '.gitignore'), existing);
+    ensureGitignoreNodeModules(projectDir);
+    expect(gitignore()).toBe(existing);
+  });
+
+  it('does not consider a `node_modules/sub` subpath as already excluded', () => {
+    fs.writeFileSync(path.join(projectDir, '.gitignore'), 'node_modules/sub\n');
+    ensureGitignoreNodeModules(projectDir);
+    expect(gitignore()).toBe('node_modules/sub\nnode_modules\n');
+  });
+
+  it('does not match `!node_modules` (an explicit un-ignore override)', () => {
+    fs.writeFileSync(path.join(projectDir, '.gitignore'), '!node_modules\n');
+    ensureGitignoreNodeModules(projectDir);
+    expect(gitignore()).toBe('!node_modules\nnode_modules\n');
   });
 });
