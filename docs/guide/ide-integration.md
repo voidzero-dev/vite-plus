@@ -13,17 +13,13 @@ When you create or migrate a project, Vite+ prompts whether you want editor conf
 
 You can also manually set up the VS Code config:
 
-`.vscode/extensions.json`
-
-```json
+```json [.vscode/extensions.json]
 {
   "recommendations": ["VoidZero.vite-plus-extension-pack"]
 }
 ```
 
-`.vscode/settings.json`
-
-```json
+```json [.vscode/settings.json]
 {
   "editor.defaultFormatter": "oxc.oxc-vscode",
   "oxc.fmt.configPath": "./vite.config.ts",
@@ -39,7 +35,7 @@ This gives the project a shared default formatter and enables Oxc-powered fix ac
 
 To let the VS Code NPM Scripts panel run scripts through `vp`, add the following to your `.vscode/settings.json`:
 
-```json
+```json [.vscode/settings.json]
 {
   "npm.scriptRunner": "vp"
 }
@@ -55,9 +51,7 @@ When you create or migrate a project, Vite+ prompts you to choose whether you wa
 
 You can also manually set up the Zed config:
 
-`.zed/settings.json`
-
-```json
+```json [.zed/settings.json]
 {
   "lsp": {
     "oxlint": {
