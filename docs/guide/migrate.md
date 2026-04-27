@@ -114,8 +114,7 @@ const { page } = await import('vite-plus/test/browser/context');
 
 If your project uses a `tsdown.config.ts`, move its options into the `pack` block in `vite.config.ts`:
 
-```ts
-// before — tsdown.config.ts
+```ts [tsdown.config.ts] {4-6}
 import { defineConfig } from 'tsdown';
 
 export default defineConfig({
@@ -123,8 +122,9 @@ export default defineConfig({
   dts: true,
   format: ['esm', 'cjs'],
 });
+```
 
-// after — vite.config.ts
+```ts [vite.config.ts] {4-8}
 import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
@@ -144,8 +144,7 @@ Vite+ replaces lint-staged with its own `staged` block in `vite.config.ts`. Only
 
 Move your lint-staged rules into the `staged` block:
 
-```ts
-// vite.config.ts
+```ts [vite.config.ts]
 import { defineConfig } from 'vite-plus';
 
 export default defineConfig({

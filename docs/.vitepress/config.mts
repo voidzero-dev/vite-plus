@@ -4,6 +4,7 @@ import type { VoidZeroThemeConfig } from '@voidzero-dev/vitepress-theme';
 import { extendConfig } from '@voidzero-dev/vitepress-theme/config';
 import { defineConfig, type HeadConfig } from 'vitepress';
 import { withMermaid } from 'vitepress-plugin-mermaid';
+import { groupIconMdPlugin, groupIconVitePlugin } from 'vitepress-plugin-group-icons'
 
 const taskRunnerGuideItems = [
   {
@@ -122,6 +123,13 @@ export default extendConfig(
             { find: /^dayjs$/, replacement: 'dayjs/esm' },
           ],
         },
+        plugins: [
+          groupIconVitePlugin({
+            customIcon: {
+              tsdown: 'https://tsdown.dev/tsdown.svg'
+            }
+          })
+        ],
       },
       themeConfig: {
         variant: 'viteplus' as VoidZeroThemeConfig['variant'],
@@ -237,6 +245,11 @@ export default extendConfig(
         ];
 
         return [...ogInfo, canonicalUrlEntry];
+      },
+      markdown: {
+        config(md) {
+          md.use(groupIconMdPlugin)
+        },
       },
     }),
   ),

@@ -20,6 +20,9 @@ importers:
       typewriter-effect:
         specifier: ^2.22.0
         version: 2.22.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      vitepress-plugin-group-icons:
+        specifier: ^1.7.5
+        version: 1.7.5(vite@7.3.1(jiti@2.6.1)(lightningcss@1.31.1))
       vitepress-plugin-mermaid:
         specifier: ^2.0.17
         version: 2.0.17(mermaid@11.13.0)(vitepress@2.0.0-alpha.15(jiti@2.6.1)(lightningcss@1.31.1)(oxc-minify@0.120.0)(postcss@8.5.8))
@@ -272,8 +275,14 @@ packages:
   '@floating-ui/vue@1.1.11':
     resolution: {integrity: sha512-HzHKCNVxnGS35r9fCHBc3+uCnjw9IWIlCPL683cGgM9Kgj2BiAl8x1mS7vtvP6F9S/e/q4O6MApwSHj8hNLGfw==}
 
+  '@iconify-json/logos@1.2.11':
+    resolution: {integrity: sha512-fOo4pGEatuyuCFNL+cwquYMa2Im0oJHRHV7lt/Qqs5Ode/lPImHCQcfTtPzZj7qYMPb/h8YHN3TG54uEowrjNQ==}
+
   '@iconify-json/simple-icons@1.2.74':
     resolution: {integrity: sha512-yqaohfY6jnYjTVpuTkaBQHrWbdUrQyWXhau0r/0EZiNWYXPX/P8WWwl1DoLH5CbvDjjcWQw5J0zADhgCUklOqA==}
+
+  '@iconify-json/vscode-icons@1.2.46':
+    resolution: {integrity: sha512-ZuLQscdXzGfUy1BtpNE74rNRjhNkcT/BLUbclQpY7aNLS2ByBuF9RzSjJQ1c0nqRyyInBFWmEL8DbTufw6w5Vw==}
 
   '@iconify/types@2.0.0':
     resolution: {integrity: sha512-+wluvCrRhXrhyOmRDJ3q8mux9JkKy5SJ/v8ol2tu4FVjyYvtEzkc/3pK15ET6RKg4b4w4BmTk1+gsCUhf21Ykg==}
@@ -1641,6 +1650,14 @@ packages:
       yaml:
         optional: true
 
+  vitepress-plugin-group-icons@1.7.5:
+    resolution: {integrity: sha512-QzcroUuIiVKyXpmEiiHVbfRTQIy9Zbwxpk5JC/zavO8mavitwumz2RZWlwTchMCCHducYyPptkYvXvdnNUWkog==}
+    peerDependencies:
+      vite: '>=3'
+    peerDependenciesMeta:
+      vite:
+        optional: true
+
   vitepress-plugin-mermaid@2.0.17:
     resolution: {integrity: sha512-IUzYpwf61GC6k0XzfmAmNrLvMi9TRrVRMsUyCA8KNXhg/mQ1VqWnO0/tBVPiX5UoKF1mDUwqn5QV4qAJl6JnUg==}
     peerDependencies:
@@ -1871,7 +1888,15 @@ snapshots:
       - '@vue/composition-api'
       - vue
 
+  '@iconify-json/logos@1.2.11':
+    dependencies:
+      '@iconify/types': 2.0.0
+
   '@iconify-json/simple-icons@1.2.74':
+    dependencies:
+      '@iconify/types': 2.0.0
+
+  '@iconify-json/vscode-icons@1.2.46':
     dependencies:
       '@iconify/types': 2.0.0
 
@@ -3238,6 +3263,14 @@ snapshots:
       fsevents: 2.3.3
       jiti: 2.6.1
       lightningcss: 1.31.1
+
+  vitepress-plugin-group-icons@1.7.5(vite@7.3.1(jiti@2.6.1)(lightningcss@1.31.1)):
+    dependencies:
+      '@iconify-json/logos': 1.2.11
+      '@iconify-json/vscode-icons': 1.2.46
+      '@iconify/utils': 3.1.0
+    optionalDependencies:
+      vite: 7.3.1(jiti@2.6.1)(lightningcss@1.31.1)
 
   vitepress-plugin-mermaid@2.0.17(mermaid@11.13.0)(vitepress@2.0.0-alpha.15(jiti@2.6.1)(lightningcss@1.31.1)(oxc-minify@0.120.0)(postcss@8.5.8)):
     dependencies:
