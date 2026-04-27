@@ -269,32 +269,34 @@ jobs:
           RUST_MIN_STACK: 8388608
 
       - name: Test global package install (powershell)
-        if: ${{ matrix.os == 'windows-latest' }}
         shell: pwsh
         run: |
-          echo "PATH: $env:Path"
-          where.exe node
-          where.exe npm
-          where.exe npx
-          where.exe vp
+          $vpHome = Join-Path $HOME ".vite-plus"
+          $vpBin = Join-Path $vpHome "bin"
+
+          Write-Host "PATH: $env:Path"
+          Get-Command node
+          Get-Command npm
+          Get-Command npx
+          Get-Command vp
           vp env doctor
 
           # Test 1: Install a JS-based CLI (typescript)
           vp install -g typescript
           tsc --version
-          where.exe tsc
+          Get-Command tsc
 
           # Test 2: Verify the package was installed correctly
-          Get-ChildItem "$env:USERPROFILE\.vite-plus\packages\typescript\"
-          Get-ChildItem "$env:USERPROFILE\.vite-plus\bin\"
+          Get-ChildItem (Join-Path $vpHome "packages/typescript")
+          Get-ChildItem $vpBin
 
           # Test 3: Uninstall
           vp uninstall -g typescript
 
           # Test 4: Verify uninstall removed shim
           Write-Host "Checking bin dir after uninstall:"
-          Get-ChildItem "$env:USERPROFILE\.vite-plus\bin\"
-          $shimPath = "$env:USERPROFILE\.vite-plus\bin\tsc.cmd"
+          Get-ChildItem $vpBin
+          $shimPath = if ($IsWindows) { Join-Path $vpBin "tsc.cmd" } else { Join-Path $vpBin "tsc" }
           if (Test-Path $shimPath) {
             Write-Error "tsc shim file still exists at $shimPath"
             exit 1
@@ -444,14 +446,14 @@ jobs:
           fi
 
       - name: Test upgrade (powershell)
-        if: ${{ matrix.os == 'windows-latest' }}
         shell: pwsh
         run: |
-          Get-ChildItem "$env:USERPROFILE\.vite-plus\"
+          $vpHome = Join-Path $HOME ".vite-plus"
+          Get-ChildItem $vpHome
 
           # Helper to read the installed CLI version from package.json
           function Get-CliVersion {
-            node -p "require(require('path').resolve(process.env.USERPROFILE, '.vite-plus', 'current', 'node_modules', 'vite-plus', 'package.json')).version"
+            node -p "require(require('path').resolve(process.env.USERPROFILE || process.env.HOME, '.vite-plus', 'current', 'node_modules', 'vite-plus', 'package.json')).version"
           }
 
           # Save initial (dev build) version
@@ -466,7 +468,7 @@ jobs:
           vp --version
           vp env doctor
 
-          Get-ChildItem "$env:USERPROFILE\.vite-plus\"
+          Get-ChildItem $vpHome
 
           # Verify version changed after update
           $updatedVersion = Get-CliVersion
@@ -552,20 +554,26 @@ jobs:
           vp --version
 
       - name: Test implode (powershell)
-        if: ${{ matrix.os == 'windows-latest' }}
         shell: pwsh
         run: |
-          # Retry — Windows file locks can cause transient "Access is denied" errors
-          foreach ($i in 1..3) {
-            vp implode --yes
-            if ($LASTEXITCODE -eq 0) { break }
-            Write-Host "Retry $i`: vp implode failed, waiting 5s..."
+          $vpHome = Join-Path $HOME ".vite-plus"
+
+          if ($IsWindows) {
+            # Retry — Windows file locks can cause transient "Access is denied" errors
+            foreach ($i in 1..3) {
+              vp implode --yes
+              if ($LASTEXITCODE -eq 0) { break }
+              Write-Host "Retry $i`: vp implode failed, waiting 5s..."
+              Start-Sleep -Seconds 5
+            }
             Start-Sleep -Seconds 5
+          } else {
+            vp implode --yes
           }
-          Start-Sleep -Seconds 5
-          dir "$env:USERPROFILE\"
-          if (Test-Path "$env:USERPROFILE\.vite-plus") {
-            Write-Error "~/.vite-plus still exists after implode"
+
+          Get-ChildItem $HOME
+          if (Test-Path $vpHome) {
+            Write-Error "$vpHome still exists after implode"
             exit 1
           }
           pnpm bootstrap-cli:ci
