@@ -22,7 +22,7 @@ Put lint configuration directly in the `lint` block in `vite.config.ts` so all y
 
 For the upstream rule set, options, and compatibility details, see the [Oxlint docs](https://oxc.rs/docs/guide/usage/linter.html).
 
-```ts
+```ts [vite.config.ts]
 import { defineConfig } from 'vite-plus';
 
 export default defineConfig({

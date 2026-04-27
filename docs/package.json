@@ -12,6 +12,7 @@
     "mermaid": "^11.13.0",
     "reka-ui": "^2.7.0",
     "typewriter-effect": "^2.22.0",
+    "vitepress-plugin-group-icons": "^1.7.5",
     "vitepress-plugin-mermaid": "^2.0.17",
     "vue": "^3.5.27",
     "vue3-carousel": "^0.16.0"
