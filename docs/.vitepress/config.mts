@@ -168,6 +168,7 @@ export default extendConfig(
               text: 'Configuration',
               items: [
                 { text: 'Configuring Vite+', link: '/config/' },
+                { text: 'Create', link: '/config/create' },
                 { text: 'Run', link: '/config/run' },
                 { text: 'Format', link: '/config/fmt' },
                 { text: 'Lint', link: '/config/lint' },
