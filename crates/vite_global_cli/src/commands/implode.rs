@@ -7,29 +7,17 @@ use std::{
 
 use directories::BaseDirs;
 use owo_colors::OwoColorize;
-use vite_path::{AbsolutePath, AbsolutePathBuf};
+use vite_path::AbsolutePathBuf;
 use vite_shared::output;
 use vite_str::Str;
 
-use crate::{cli::exit_status, error::Error};
-
-/// All shell profile paths to check, with `is_snippet` flag.
-const SHELL_PROFILES: &[(&str, bool)] = &[
-    (".zshenv", false),
-    (".zshrc", false),
-    (".bash_profile", false),
-    (".bashrc", false),
-    (".profile", false),
-    (".config/fish/conf.d/vite-plus.fish", true),
-];
-
-/// Abbreviate a path for display: replace `$HOME` prefix with `~`.
-fn abbreviate_home_path(path: &AbsolutePath, user_home: &AbsolutePath) -> Str {
-    match path.strip_prefix(user_home) {
-        Ok(Some(suffix)) => vite_str::format!("~/{suffix}"),
-        _ => Str::from(path.to_string()),
-    }
-}
+use crate::{
+    cli::exit_status,
+    commands::shell::{
+        ALL_SHELL_PROFILES, ShellProfileKind, abbreviate_home_path, resolve_profile_path,
+    },
+    error::Error,
+};
 
 /// Comment marker written by the install script above the sourcing line.
 const VITE_PLUS_COMMENT: &str = "# Vite+ bin";
@@ -106,39 +94,12 @@ enum AffectedProfileKind {
 fn collect_affected_profiles(user_home: &AbsolutePathBuf) -> Vec<AffectedProfile> {
     let mut affected = Vec::new();
 
-    // Build full list of (display_name, path, is_snippet) from the base set
-    let mut profiles: Vec<(Str, AbsolutePathBuf, bool)> = SHELL_PROFILES
-        .iter()
-        .map(|&(name, is_snippet)| {
-            (vite_str::format!("~/{name}"), user_home.join(name), is_snippet)
-        })
-        .collect();
+    for profile in ALL_SHELL_PROFILES {
+        let path = resolve_profile_path(profile, user_home);
+        let name = abbreviate_home_path(&path, user_home);
 
-    // If ZDOTDIR is set and differs from $HOME, also check there.
-    if let Ok(zdotdir) = std::env::var("ZDOTDIR")
-        && let Some(zdotdir_path) = AbsolutePathBuf::new(zdotdir.into())
-        && zdotdir_path != *user_home
-    {
-        for name in [".zshenv", ".zshrc"] {
-            let path = zdotdir_path.join(name);
-            let display = abbreviate_home_path(&path, user_home);
-            profiles.push((display, path, false));
-        }
-    }
-
-    // If XDG_CONFIG_HOME is set and differs from $HOME/.config, also check there.
-    if let Ok(xdg_config) = std::env::var("XDG_CONFIG_HOME")
-        && let Some(xdg_path) = AbsolutePathBuf::new(xdg_config.into())
-        && xdg_path != user_home.join(".config")
-    {
-        let path = xdg_path.join("fish/conf.d/vite-plus.fish");
-        let display = abbreviate_home_path(&path, user_home);
-        profiles.push((display, path, true));
-    }
-
-    for (name, path, is_snippet) in profiles {
         // For snippets, check if the file exists only
-        if is_snippet {
+        if matches!(profile.kind, ShellProfileKind::Snippet) {
             if let Ok(true) = std::fs::exists(&path) {
                 affected.push(AffectedProfile { name, path, kind: AffectedProfileKind::Snippet })
             }
@@ -147,7 +108,7 @@ fn collect_affected_profiles(user_home: &AbsolutePathBuf) -> Vec<AffectedProfile
         // Read directly — if the file doesn't exist, read_to_string returns Err
         // which .ok().filter() handles gracefully (no redundant exists() check).
         if let Some(content) =
-            std::fs::read_to_string(&path).ok().filter(|c| has_vite_plus_lines(c))
+            std::fs::read_to_string(&path).ok().filter(|c| c.lines().any(is_vite_plus_source_line))
         {
             affected.push(AffectedProfile {
                 name,
@@ -303,19 +264,26 @@ fn spawn_deferred_delete(trash_path: &std::path::Path) -> std::io::Result<std::p
 }
 
 /// Check if file content contains Vite+ sourcing lines.
-fn has_vite_plus_lines(content: &str) -> bool {
-    let pattern = ".vite-plus/env\"";
-    content.lines().any(|line| line.contains(pattern))
+fn is_vite_plus_source_line(line: &str) -> bool {
+    let trimmed = line.trim_start();
+    [
+        (". ", ".vite-plus/env\""),
+        ("source ", ".vite-plus/env\""),
+        ("source ", ".vite-plus/env.fish\""),
+        ("source ", ".vite-plus/env.nu'"),
+        ("source ", ".vite-plus\\env.nu'"),
+    ]
+    .iter()
+    .any(|(prefix, suffix)| trimmed.starts_with(prefix) && trimmed.contains(suffix))
 }
 
 /// Remove Vite+ lines from content, returning the cleaned string.
 fn remove_vite_plus_lines(content: &str) -> Str {
-    let pattern = ".vite-plus/env\"";
     let lines: Vec<&str> = content.lines().collect();
     let mut remove_indices = Vec::new();
 
     for (i, line) in lines.iter().enumerate() {
-        if line.contains(pattern) {
+        if is_vite_plus_source_line(line) {
             remove_indices.push(i);
             // Also remove the comment line above
             if i > 0 && lines[i - 1].contains(VITE_PLUS_COMMENT) {
@@ -394,6 +362,27 @@ mod tests {
         let content = "# existing\n. \"/home/user/.vite-plus/env\"\n";
         let result = remove_vite_plus_lines(content);
         assert_eq!(&*result, "# existing\n");
+    }
+
+    #[test]
+    fn test_remove_vite_plus_lines_fish() {
+        let content = "# existing config\n\n# Vite+ bin (https://viteplus.dev)\nsource \"$HOME/.vite-plus/env.fish\"\n";
+        let result = remove_vite_plus_lines(content);
+        assert_eq!(&*result, "# existing config\n");
+    }
+
+    #[test]
+    fn test_remove_vite_plus_lines_nushell() {
+        let content = "# existing config\n\n# Vite+ bin (https://viteplus.dev)\nsource '~/.vite-plus/env.nu'\n";
+        let result = remove_vite_plus_lines(content);
+        assert_eq!(&*result, "# existing config\n");
+    }
+
+    #[test]
+    fn test_remove_vite_plus_lines_nushell_windows_path() {
+        let content = "# existing config\nsource '~\\.vite-plus\\env.nu'\n";
+        let result = remove_vite_plus_lines(content);
+        assert_eq!(&*result, "# existing config\n");
     }
 
     #[test]
@@ -476,8 +465,8 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
 
-        // Clear ZDOTDIR/XDG_CONFIG_HOME so the test environment doesn't affect results
-        let _guard = ProfileEnvGuard::new(None, None);
+        // Clear env overrides so the test environment doesn't affect results
+        let _guard = ProfileEnvGuard::new(None, None, None);
 
         // Main profile with vite-plus line
         std::fs::write(home.join(".zshrc"), ". \"$HOME/.vite-plus/env\"\n").unwrap();
@@ -494,19 +483,25 @@ mod tests {
         assert!(matches!(&profiles[1].kind, AffectedProfileKind::Snippet));
     }
 
-    /// Guard that saves and restores ZDOTDIR and XDG_CONFIG_HOME env vars.
+    /// Guard that saves and restores profile-related env vars.
     #[cfg(not(windows))]
     struct ProfileEnvGuard {
         original_zdotdir: Option<std::ffi::OsString>,
         original_xdg_config: Option<std::ffi::OsString>,
+        original_xdg_data: Option<std::ffi::OsString>,
     }
 
     #[cfg(not(windows))]
     impl ProfileEnvGuard {
-        fn new(zdotdir: Option<&std::path::Path>, xdg_config: Option<&std::path::Path>) -> Self {
+        fn new(
+            zdotdir: Option<&std::path::Path>,
+            xdg_config: Option<&std::path::Path>,
+            xdg_data: Option<&std::path::Path>,
+        ) -> Self {
             let guard = Self {
                 original_zdotdir: std::env::var_os("ZDOTDIR"),
                 original_xdg_config: std::env::var_os("XDG_CONFIG_HOME"),
+                original_xdg_data: std::env::var_os("XDG_DATA_HOME"),
             };
             unsafe {
                 match zdotdir {
@@ -516,6 +511,10 @@ mod tests {
                 match xdg_config {
                     Some(v) => std::env::set_var("XDG_CONFIG_HOME", v),
                     None => std::env::remove_var("XDG_CONFIG_HOME"),
+                }
+                match xdg_data {
+                    Some(v) => std::env::set_var("XDG_DATA_HOME", v),
+                    None => std::env::remove_var("XDG_DATA_HOME"),
                 }
             }
             guard
@@ -534,6 +533,10 @@ mod tests {
                     Some(v) => std::env::set_var("XDG_CONFIG_HOME", v),
                     None => std::env::remove_var("XDG_CONFIG_HOME"),
                 }
+                match &self.original_xdg_data {
+                    Some(v) => std::env::set_var("XDG_DATA_HOME", v),
+                    None => std::env::remove_var("XDG_DATA_HOME"),
+                }
             }
         }
     }
@@ -550,7 +553,7 @@ mod tests {
 
         std::fs::write(zdotdir.join(".zshenv"), ". \"$HOME/.vite-plus/env\"\n").unwrap();
 
-        let _guard = ProfileEnvGuard::new(Some(&zdotdir), None);
+        let _guard = ProfileEnvGuard::new(Some(&zdotdir), None, None);
 
         let profiles = collect_affected_profiles(&home);
         let zdotdir_profiles: Vec<_> =
@@ -572,11 +575,33 @@ mod tests {
 
         std::fs::write(fish_dir.join("vite-plus.fish"), "").unwrap();
 
-        let _guard = ProfileEnvGuard::new(None, Some(&xdg_config));
+        let _guard = ProfileEnvGuard::new(None, Some(&xdg_config), None);
 
         let profiles = collect_affected_profiles(&home);
         let xdg_profiles: Vec<_> =
             profiles.iter().filter(|p| p.path.as_path().starts_with(&xdg_config)).collect();
+        assert_eq!(xdg_profiles.len(), 1);
+        assert!(matches!(&xdg_profiles[0].kind, AffectedProfileKind::Snippet));
+    }
+
+    #[test]
+    #[serial]
+    #[cfg(not(windows))]
+    fn test_collect_affected_profiles_xdg_data() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let home = AbsolutePathBuf::new(temp_dir.path().join("home")).unwrap();
+        let xdg_data = temp_dir.path().join("xdg_data");
+        let nushell_dir = xdg_data.join("nushell/vendor/autoload");
+        std::fs::create_dir_all(&home).unwrap();
+        std::fs::create_dir_all(&nushell_dir).unwrap();
+
+        std::fs::write(nushell_dir.join("vite-plus.nu"), "source '~/.vite-plus/env.nu'\n").unwrap();
+
+        let _guard = ProfileEnvGuard::new(None, None, Some(&xdg_data));
+
+        let profiles = collect_affected_profiles(&home);
+        let xdg_profiles: Vec<_> =
+            profiles.iter().filter(|p| p.path.as_path().starts_with(&xdg_data)).collect();
         assert_eq!(xdg_profiles.len(), 1);
         assert!(matches!(&xdg_profiles[0].kind, AffectedProfileKind::Snippet));
     }
