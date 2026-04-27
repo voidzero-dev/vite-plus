@@ -29,7 +29,7 @@ import {
   writeAgentInstructions,
 } from '../utils/agent.ts';
 import { detectExistingEditors, selectEditors, writeEditorConfigs } from '../utils/editor.ts';
-import { initGitRepository } from '../utils/git.ts';
+import { createInitialCommit, initGitRepository } from '../utils/git.ts';
 import { renderCliDoc } from '../utils/help.ts';
 import { displayRelative } from '../utils/path.ts';
 import {
@@ -933,6 +933,10 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     });
     updateCreateProgress('Formatting code');
     await runViteFmt(fullPath, options.interactive, undefined, { silent: compactOutput });
+    if (shouldSetupGit) {
+      updateCreateProgress('Creating initial commit');
+      await createInitialCommit(fullPath);
+    }
     clearCreateProgress();
     showCreateSummary({
       description: describeScaffold(selectedTemplateName, selectedTemplateArgs),
@@ -1149,7 +1153,9 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       silent: compactOutput,
     });
     if (shouldSetupGit) {
+      updateCreateProgress('Creating initial commit');
       await initGitRepository(workspaceInfo.rootDir);
+      await createInitialCommit(workspaceInfo.rootDir);
     }
   } else {
     if (shouldMigrateLintFmtTools) {
@@ -1177,6 +1183,10 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     });
     updateCreateProgress('Formatting code');
     await runViteFmt(fullPath, options.interactive, undefined, { silent: compactOutput });
+    if (shouldSetupGit) {
+      updateCreateProgress('Creating initial commit');
+      await createInitialCommit(fullPath);
+    }
   }
 
   clearCreateProgress();

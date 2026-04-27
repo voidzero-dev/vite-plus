@@ -9,3 +9,19 @@ export async function initGitRepository(cwd: string): Promise<boolean> {
   });
   return result.exitCode === 0;
 }
+
+export async function createInitialCommit(cwd: string): Promise<boolean> {
+  await runCommandSilently({
+    command: 'git',
+    args: ['add', '-A'],
+    cwd,
+    envs: process.env,
+  });
+  const result = await runCommandSilently({
+    command: 'git',
+    args: ['commit', '-m', 'Initial commit from Vite+'],
+    cwd,
+    envs: process.env,
+  });
+  return result.exitCode === 0;
+}
