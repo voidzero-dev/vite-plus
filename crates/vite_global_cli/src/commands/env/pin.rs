@@ -220,39 +220,11 @@ pub async fn do_unpin(cwd: &AbsolutePathBuf) -> Result<ExitStatus, Error> {
 
 #[cfg(test)]
 mod tests {
-    use std::ffi::OsString;
-
     use serial_test::serial;
     use tempfile::TempDir;
     use vite_path::AbsolutePathBuf;
 
     use super::*;
-
-    struct EnvVarGuard {
-        key: &'static str,
-        original: Option<OsString>,
-    }
-
-    impl EnvVarGuard {
-        fn set(key: &'static str, value: &std::path::Path) -> Self {
-            let original = std::env::var_os(key);
-            unsafe {
-                std::env::set_var(key, value);
-            }
-            Self { key, original }
-        }
-    }
-
-    impl Drop for EnvVarGuard {
-        fn drop(&mut self) {
-            unsafe {
-                match &self.original {
-                    Some(value) => std::env::set_var(self.key, value),
-                    None => std::env::remove_var(self.key),
-                }
-            }
-        }
-    }
 
     #[tokio::test]
     async fn test_show_pinned_no_file() {
@@ -295,11 +267,9 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial]
     async fn test_do_unpin() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _vp_home = EnvVarGuard::set(vite_shared::env_vars::VP_HOME, temp_path.as_path());
 
         // Create .node-version
         let node_version_path = temp_path.join(".node-version");
@@ -320,7 +290,10 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
 
-        let _vp_home = EnvVarGuard::set(vite_shared::env_vars::VP_HOME, temp_path.as_path());
+        // Point VP_HOME to temp dir
+        unsafe {
+            std::env::set_var(vite_shared::env_vars::VP_HOME, temp_path.as_path());
+        }
 
         // Create cache file manually
         let cache_dir = temp_path.join("cache");
@@ -343,6 +316,11 @@ mod tests {
             std::fs::metadata(cache_file.as_path()).is_err(),
             "Cache file should be removed after unpin"
         );
+
+        // Cleanup
+        unsafe {
+            std::env::remove_var(vite_shared::env_vars::VP_HOME);
+        }
     }
 
     // Run serially: mutates VP_HOME env var which affects invalidate_cache()
@@ -352,7 +330,10 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
 
-        let _vp_home = EnvVarGuard::set(vite_shared::env_vars::VP_HOME, temp_path.as_path());
+        // Point VP_HOME to temp dir
+        unsafe {
+            std::env::set_var(vite_shared::env_vars::VP_HOME, temp_path.as_path());
+        }
 
         // Create cache file manually
         let cache_dir = temp_path.join("cache");
@@ -379,6 +360,11 @@ mod tests {
             std::fs::metadata(cache_file.as_path()).is_err(),
             "Cache file should be removed after pin"
         );
+
+        // Cleanup
+        unsafe {
+            std::env::remove_var(vite_shared::env_vars::VP_HOME);
+        }
     }
 
     #[tokio::test]
