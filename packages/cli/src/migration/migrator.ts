@@ -1245,12 +1245,15 @@ function getCatalogDependencySpec(
   currentValue: string | undefined,
   version: string,
   supportCatalog: boolean,
-  options?: { allowFileProtocol?: boolean },
+  options?: { dependencyField?: 'peerDependencies' },
 ): string {
+  if (
+    options?.dependencyField === 'peerDependencies' &&
+    (!supportCatalog || version.startsWith('file:'))
+  ) {
+    return currentValue ?? version;
+  }
   if (!supportCatalog || version.startsWith('file:')) {
-    if (version.startsWith('file:') && options?.allowFileProtocol === false) {
-      return currentValue ?? version;
-    }
     return version;
   }
   return currentValue?.startsWith('catalog:') ? currentValue : 'catalog:';
@@ -1560,7 +1563,7 @@ export function rewritePackageJson(
     for (const dependencies of dependencyGroups) {
       if (dependencies?.[key]) {
         dependencies[key] = getCatalogDependencySpec(dependencies[key], version, supportCatalog, {
-          allowFileProtocol: dependencies !== pkg.peerDependencies,
+          dependencyField: dependencies === pkg.peerDependencies ? 'peerDependencies' : undefined,
         });
         needVitePlus = true;
       }

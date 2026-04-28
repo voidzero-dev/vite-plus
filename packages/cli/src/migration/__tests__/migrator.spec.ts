@@ -196,6 +196,27 @@ describe('rewritePackageJson', () => {
     ).toBe('catalog:');
   });
 
+  it('preserves peer dependency ranges outside catalog mode', async () => {
+    const pkg = {
+      peerDependencies: {
+        vite: '^7.0.0',
+        vitest: '^4.0.0',
+      },
+      optionalDependencies: {
+        vite: '^7.0.0',
+      },
+    };
+
+    rewritePackageJson(pkg, PackageManager.npm);
+
+    expect(pkg.peerDependencies.vite).toBe('^7.0.0');
+    expect(pkg.peerDependencies.vitest).toBe('^4.0.0');
+    expect(pkg.optionalDependencies.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+    expect(
+      (pkg as { devDependencies?: Record<string, string> }).devDependencies?.['vite-plus'],
+    ).toBe('latest');
+  });
+
   it('should preserve playwright when removing @vitest/browser-playwright', async () => {
     const pkg = {
       devDependencies: {
