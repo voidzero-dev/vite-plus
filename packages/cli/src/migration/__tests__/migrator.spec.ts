@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { parse as parseYaml } from 'yaml';
 
 import { PackageManager } from '../../types/index.js';
 import { createMigrationReport } from '../report.js';
@@ -134,6 +135,65 @@ describe('rewritePackageJson', () => {
     };
     rewritePackageJson(pkg, PackageManager.yarn, true);
     expect(pkg).toMatchSnapshot();
+  });
+
+  it('preserves named catalog dependency specs in monorepo projects', async () => {
+    const pkg = {
+      devDependencies: {
+        vite: 'catalog:vite7',
+        vitest: 'catalog:',
+      },
+      dependencies: {
+        vitest: 'catalog:test',
+      },
+    };
+
+    rewritePackageJson(pkg, PackageManager.pnpm, true);
+
+    expect(pkg.devDependencies.vite).toBe('catalog:vite7');
+    expect(pkg.devDependencies.vitest).toBe('catalog:');
+    expect(pkg.dependencies.vitest).toBe('catalog:test');
+    expect((pkg.devDependencies as Record<string, string>)['vite-plus']).toBe('catalog:');
+  });
+
+  it('uses default catalog specs for non-catalog dependency specs in monorepo projects', async () => {
+    const pkg = {
+      devDependencies: {
+        vite: '^7.0.0',
+      },
+      dependencies: {
+        vitest: '^4.0.0',
+      },
+    };
+
+    rewritePackageJson(pkg, PackageManager.yarn, true);
+
+    expect(pkg.devDependencies.vite).toBe('catalog:');
+    expect(pkg.dependencies.vitest).toBe('catalog:');
+    expect((pkg.devDependencies as Record<string, string>)['vite-plus']).toBe('catalog:');
+  });
+
+  it('rewrites peer and optional dependency catalog specs in monorepo projects', async () => {
+    const pkg = {
+      peerDependencies: {
+        vite: 'catalog:vite7',
+        tsdown: 'catalog:build',
+      },
+      optionalDependencies: {
+        vitest: 'catalog:test',
+        oxlint: 'catalog:build',
+      },
+    };
+
+    rewritePackageJson(pkg, PackageManager.pnpm, true);
+
+    expect(pkg.peerDependencies.vite).toBe('catalog:vite7');
+    expect(pkg.peerDependencies).not.toHaveProperty('tsdown');
+    expect(pkg.optionalDependencies.vitest).toBe('catalog:test');
+    expect(pkg.optionalDependencies).not.toHaveProperty('oxlint');
+    expect(
+      (pkg as { devDependencies?: Record<string, string> }).devDependencies?.['vite-plus'],
+    ).toBe('catalog:');
   });
 
   it('should preserve playwright when removing @vitest/browser-playwright', async () => {
@@ -454,6 +514,10 @@ function readYaml(filePath: string): string {
   return fs.readFileSync(filePath, 'utf8');
 }
 
+function readYamlObject(filePath: string): Record<string, unknown> {
+  return parseYaml(readYaml(filePath)) as Record<string, unknown>;
+}
+
 describe('rewriteStandaloneProject pnpm workspace yaml', () => {
   let tmpDir: string;
 
@@ -560,6 +624,147 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(yaml).toContain("vite: 'catalog:'");
     expect(yaml).toContain("vitest: 'catalog:'");
   });
+
+  it('rewrites named catalogs in pnpm-workspace.yaml without adding new entries', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { vite: 'catalog:vite7' },
+        peerDependencies: { tsdown: 'catalog:test' },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'overrides:',
+        '  vite: catalog:vite7',
+        'catalogs:',
+        '  vite7:',
+        '    react: ^18.0.0',
+        '    vite: ^7.0.0',
+        '    vite-plus: ^0.0.0',
+        '  test:',
+        '    vitest: ^4.0.0',
+        '    tsdown: ^0.1.0',
+        '',
+      ].join('\n'),
+    );
+
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+    const yaml = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      overrides: Record<string, string>;
+      catalogs: Record<string, Record<string, string>>;
+    };
+    expect(yaml.overrides.vite).toBe('catalog:vite7');
+    expect(yaml.overrides.vitest).toBe('catalog:');
+    expect(yaml.catalogs.vite7.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+    expect(yaml.catalogs.vite7.react).toBe('^18.0.0');
+    expect(yaml.catalogs.vite7['vite-plus']).toBe('latest');
+    expect(yaml.catalogs.test.vitest).toBe('npm:@voidzero-dev/vite-plus-test@latest');
+    expect(yaml.catalogs.test.tsdown).toBeUndefined();
+    expect(yaml.catalogs.test['vite-plus']).toBeUndefined();
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+      peerDependencies: Record<string, string>;
+    };
+    expect(pkg.devDependencies.vite).toBe('catalog:vite7');
+    expect(pkg.devDependencies['vite-plus']).toBe('catalog:');
+    expect(pkg.peerDependencies).not.toHaveProperty('tsdown');
+  });
+
+  it('preserves named pnpm overrides when moving root overrides to pnpm-workspace.yaml', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'pnpm-monorepo',
+        workspaces: ['packages/*'],
+        devDependencies: { vite: 'catalog:vite7' },
+        pnpm: {
+          overrides: {
+            vite: 'catalog:vite7',
+            react: '^18.0.0',
+          },
+        },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      ['packages:', '  - packages/*', 'catalogs:', '  vite7:', '    vite: ^7.0.0', ''].join('\n'),
+    );
+
+    rewriteMonorepo(makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true);
+
+    const yaml = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      overrides: Record<string, string>;
+      catalogs: Record<string, Record<string, string>>;
+    };
+    expect(yaml.overrides.vite).toBe('catalog:vite7');
+    expect(yaml.overrides.vitest).toBe('catalog:');
+    expect(yaml.overrides.react).toBe('^18.0.0');
+    expect(yaml.catalogs.vite7.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      pnpm?: unknown;
+    };
+    expect(pkg.pnpm).toBeUndefined();
+  });
+});
+
+describe('rewriteMonorepo yarn catalog', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-yarn-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('rewrites named catalogs in .yarnrc.yml and keeps nodeLinker', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'yarn-monorepo',
+        workspaces: ['packages/*'],
+        devDependencies: { vite: 'catalog:vite7' },
+        packageManager: 'yarn@4.10.0',
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, '.yarnrc.yml'),
+      [
+        'catalogs:',
+        '  vite7:',
+        '    react: ^18.0.0',
+        '    vite: ^7.0.0',
+        '  test:',
+        '    vitest: ^4.0.0',
+        '    oxlint: ^1.0.0',
+        '',
+      ].join('\n'),
+    );
+
+    rewriteMonorepo(makeWorkspaceInfo(tmpDir, PackageManager.yarn), true);
+
+    const yarnrc = readYamlObject(path.join(tmpDir, '.yarnrc.yml')) as {
+      nodeLinker: string;
+      catalogs: Record<string, Record<string, string>>;
+    };
+    expect(yarnrc.nodeLinker).toBe('node-modules');
+    expect(yarnrc.catalogs.vite7.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+    expect(yarnrc.catalogs.vite7.react).toBe('^18.0.0');
+    expect(yarnrc.catalogs.test.vitest).toBe('npm:@voidzero-dev/vite-plus-test@latest');
+    expect(yarnrc.catalogs.test.oxlint).toBeUndefined();
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    expect(pkg.devDependencies.vite).toBe('catalog:vite7');
+  });
 });
 
 describe('rewriteMonorepo bun catalog', () => {
@@ -644,6 +849,109 @@ describe('rewriteMonorepo bun catalog', () => {
     // workspaces object should be preserved
     const workspaces = pkg.workspaces as { packages: string[] };
     expect(workspaces.packages).toEqual(['packages/*']);
+  });
+
+  it('rewrites top-level named catalogs and preserves named overrides', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'bun-monorepo',
+        workspaces: ['packages/*'],
+        catalogs: {
+          build: { vite: '^7.0.0', react: '^19.0.0', tsdown: '^0.1.0' },
+          test: { vitest: '^4.0.0' },
+        },
+        overrides: { vite: 'catalog:build' },
+        devDependencies: { vite: 'catalog:build' },
+        packageManager: 'bun@1.3.11',
+      }),
+    );
+
+    rewriteMonorepo(makeWorkspaceInfo(tmpDir, PackageManager.bun), true);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      catalog: Record<string, string>;
+      catalogs: Record<string, Record<string, string>>;
+      overrides: Record<string, string>;
+      devDependencies: Record<string, string>;
+    };
+    expect(pkg.catalog.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+    expect(pkg.catalogs.build.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+    expect(pkg.catalogs.build.react).toBe('^19.0.0');
+    expect(pkg.catalogs.build.tsdown).toBeUndefined();
+    expect(pkg.catalogs.test.vitest).toBe('npm:@voidzero-dev/vite-plus-test@latest');
+    expect(pkg.overrides.vite).toBe('catalog:build');
+    expect(pkg.overrides.vitest).toBe('catalog:');
+    expect(pkg.devDependencies.vite).toBe('catalog:build');
+  });
+
+  it('rewrites workspaces named catalogs and writes default catalog beside them', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'bun-monorepo',
+        workspaces: {
+          packages: ['packages/*'],
+          catalogs: {
+            build: { vite: '^7.0.0', oxlint: '^1.0.0' },
+            test: { vitest: '^4.0.0', vite: '^7.0.0' },
+          },
+        },
+        devDependencies: { vite: '^7.0.0' },
+        packageManager: 'bun@1.3.11',
+      }),
+    );
+
+    rewriteMonorepo(makeWorkspaceInfo(tmpDir, PackageManager.bun), true);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      catalog?: Record<string, string>;
+      workspaces: {
+        catalog: Record<string, string>;
+        catalogs: Record<string, Record<string, string>>;
+      };
+      overrides: Record<string, string>;
+    };
+    expect(pkg.catalog).toBeUndefined();
+    expect(pkg.workspaces.catalog.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+    expect(pkg.workspaces.catalog['vite-plus']).toBe('latest');
+    expect(pkg.workspaces.catalogs.build.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+    expect(pkg.workspaces.catalogs.build.oxlint).toBeUndefined();
+    expect(pkg.workspaces.catalogs.test.vitest).toBe('npm:@voidzero-dev/vite-plus-test@latest');
+    expect(pkg.workspaces.catalogs.test.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+    expect(pkg.overrides.vite).toBe('catalog:');
+  });
+
+  it('keeps an existing top-level default catalog when workspaces named catalogs exist', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'bun-monorepo',
+        workspaces: {
+          packages: ['packages/*'],
+          catalogs: {
+            build: { vite: '^7.0.0' },
+          },
+        },
+        catalog: { react: '^19.0.0' },
+        devDependencies: { vite: '^7.0.0' },
+        packageManager: 'bun@1.3.11',
+      }),
+    );
+
+    rewriteMonorepo(makeWorkspaceInfo(tmpDir, PackageManager.bun), true);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      catalog: Record<string, string>;
+      workspaces: {
+        catalog?: Record<string, string>;
+        catalogs: Record<string, Record<string, string>>;
+      };
+    };
+    expect(pkg.catalog.react).toBe('^19.0.0');
+    expect(pkg.catalog.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+    expect(pkg.workspaces.catalog).toBeUndefined();
+    expect(pkg.workspaces.catalogs.build.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
   });
 });
 

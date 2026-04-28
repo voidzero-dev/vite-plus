@@ -86,4 +86,44 @@ describe('rewriteMonorepo bun catalog with file: protocol', () => {
       'file:/tmp/tgz/voidzero-dev-vite-plus-test-0.0.0.tgz',
     );
   });
+
+  it('does not write file: paths into named catalogs', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'bun-monorepo',
+        workspaces: {
+          packages: ['packages/*'],
+          catalogs: {
+            build: {
+              vite: '^7.0.0',
+              vitest: '^4.0.0',
+              tsdown: '^0.1.0',
+            },
+          },
+        },
+        devDependencies: { vite: 'catalog:build' },
+        overrides: { vite: 'catalog:build' },
+        packageManager: 'bun@1.3.11',
+      }),
+    );
+
+    rewriteMonorepo(makeWorkspaceInfo(tmpDir, PackageManager.bun), true);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      workspaces: {
+        catalog: Record<string, string>;
+        catalogs: Record<string, Record<string, string>>;
+      };
+      overrides: Record<string, string>;
+      devDependencies: Record<string, string>;
+    };
+    expect(pkg.workspaces.catalog.vite).toBeUndefined();
+    expect(pkg.workspaces.catalog.vitest).toBeUndefined();
+    expect(pkg.workspaces.catalogs.build.vite).toBe('^7.0.0');
+    expect(pkg.workspaces.catalogs.build.vitest).toBe('^4.0.0');
+    expect(pkg.workspaces.catalogs.build.tsdown).toBeUndefined();
+    expect(pkg.overrides.vite).toBe('file:/tmp/tgz/voidzero-dev-vite-plus-core-0.0.0.tgz');
+    expect(pkg.devDependencies.vite).toBe('file:/tmp/tgz/voidzero-dev-vite-plus-core-0.0.0.tgz');
+  });
 });

@@ -30,7 +30,7 @@ export default defineConfig({
 {
   "name": "migration-skip-vite-peer-dependency",
   "peerDependencies": {
-    "vite": "^6.0.0"
+    "vite": "catalog:"
   },
   "devDependencies": {
     "vite-plus": "catalog:"

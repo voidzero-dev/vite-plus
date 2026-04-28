@@ -1035,20 +1035,23 @@ function rewritePnpmWorkspaceYaml(projectPath: string): void {
     rewriteCatalog(doc);
 
     // overrides
+    const overrides = doc.getIn(['overrides']);
     for (const key of Object.keys(VITE_PLUS_OVERRIDE_PACKAGES)) {
-      let version = VITE_PLUS_OVERRIDE_PACKAGES[key];
-      if (!version.startsWith('file:')) {
-        version = 'catalog:';
-      }
+      const currentVersion = getYamlMapScalarStringValue(overrides, key);
+      const version = getCatalogDependencySpec(
+        currentVersion,
+        VITE_PLUS_OVERRIDE_PACKAGES[key],
+        true,
+      );
       doc.setIn(['overrides', scalarString(key)], scalarString(version));
     }
     // remove dependency selector from vite, e.g. "vite-plugin-svgr>vite": "npm:vite@7.0.12"
-    const overrides = doc.getIn(['overrides']) as YAMLMap<Scalar<string>, Scalar<string>>;
-    for (const item of overrides.items) {
+    const updatedOverrides = doc.getIn(['overrides']) as YAMLMap<Scalar<string>, Scalar<string>>;
+    for (const item of updatedOverrides.items) {
       if (item.key.value.includes('>')) {
         const splits = item.key.value.split('>');
         if (splits[splits.length - 1].trim() === 'vite') {
-          overrides.delete(item.key);
+          updatedOverrides.delete(item.key);
         }
       }
     }
@@ -1125,9 +1128,15 @@ function cleanupPnpmOverridesForWorkspaceYaml(
   overrideKeys: string[],
 ): Record<string, string> | undefined {
   // Remove Vite-managed keys from pnpm.overrides
+  const namedCatalogOverrides: Record<string, string> = {};
+  const overrides = pkg.pnpm?.overrides;
   for (const key of [...overrideKeys, ...REMOVE_PACKAGES]) {
-    if (pkg.pnpm?.overrides?.[key]) {
-      delete pkg.pnpm.overrides[key];
+    const value = overrides?.[key];
+    if (value) {
+      if (overrideKeys.includes(key) && value.startsWith('catalog:') && value !== 'catalog:') {
+        namedCatalogOverrides[key] = value;
+      }
+      delete overrides[key];
     }
   }
   // Remove dependency selectors targeting vite
@@ -1142,8 +1151,11 @@ function cleanupPnpmOverridesForWorkspaceYaml(
   // Collect remaining overrides to move to pnpm-workspace.yaml then delete all
   // (pnpm ignores workspace-level overrides when pnpm.overrides exists in package.json)
   let remaining: Record<string, string> | undefined;
+  if (Object.keys(namedCatalogOverrides).length > 0) {
+    remaining = { ...namedCatalogOverrides };
+  }
   if (pkg.pnpm?.overrides && Object.keys(pkg.pnpm.overrides).length > 0) {
-    remaining = { ...pkg.pnpm.overrides };
+    remaining = { ...remaining, ...pkg.pnpm.overrides };
   }
   delete pkg.pnpm?.overrides;
   // Only remove Vite-managed peerDependencyRules entries, preserve custom ones
@@ -1229,6 +1241,34 @@ function rewriteYarnrcYml(projectPath: string): void {
  * Rewrite catalog in pnpm-workspace.yaml or .yarnrc.yml
  * @param doc - The document to rewrite
  */
+function getCatalogDependencySpec(
+  currentValue: string | undefined,
+  version: string,
+  supportCatalog: boolean,
+): string {
+  if (!supportCatalog || version.startsWith('file:')) {
+    return version;
+  }
+  return currentValue?.startsWith('catalog:') ? currentValue : 'catalog:';
+}
+
+function getYamlMapScalarStringValue(map: unknown, key: string): string | undefined {
+  if (!(map instanceof YAMLMap)) {
+    return undefined;
+  }
+  for (const item of map.items) {
+    if (
+      item.key instanceof Scalar &&
+      item.key.value === key &&
+      item.value instanceof Scalar &&
+      typeof item.value.value === 'string'
+    ) {
+      return item.value.value;
+    }
+  }
+  return undefined;
+}
+
 function rewriteCatalog(doc: YamlDocument): void {
   for (const [key, value] of Object.entries(VITE_PLUS_OVERRIDE_PACKAGES)) {
     // ERR_PNPM_CATALOG_IN_OVERRIDES  Could not resolve a catalog in the overrides: The entry for 'vite' in catalog 'default' declares a dependency using the 'file' protocol
@@ -1248,7 +1288,53 @@ function rewriteCatalog(doc: YamlDocument): void {
     }
   }
 
-  // TODO: rewrite `catalogs` when OVERRIDE_PACKAGES exists in catalog
+  const catalogs = doc.getIn(['catalogs']);
+  if (!(catalogs instanceof YAMLMap)) {
+    return;
+  }
+  for (const item of catalogs.items) {
+    const catalogName = item.key instanceof Scalar ? item.key.value : undefined;
+    if (typeof catalogName !== 'string' || !(item.value instanceof YAMLMap)) {
+      continue;
+    }
+    for (const [key, value] of Object.entries(VITE_PLUS_OVERRIDE_PACKAGES)) {
+      const catalogPath = ['catalogs', catalogName, key];
+      if (!value.startsWith('file:') && doc.hasIn(catalogPath)) {
+        doc.setIn(catalogPath, scalarString(value));
+      }
+    }
+    const vitePlusPath = ['catalogs', catalogName, VITE_PLUS_NAME];
+    if (!VITE_PLUS_VERSION.startsWith('file:') && doc.hasIn(vitePlusPath)) {
+      doc.setIn(vitePlusPath, scalarString(VITE_PLUS_VERSION));
+    }
+    for (const name of REMOVE_PACKAGES) {
+      const catalogPath = ['catalogs', catalogName, name];
+      if (doc.hasIn(catalogPath)) {
+        doc.deleteIn(catalogPath);
+      }
+    }
+  }
+}
+
+function rewriteCatalogObject(catalog: Record<string, string>, addMissing: boolean): void {
+  for (const [key, value] of Object.entries(VITE_PLUS_OVERRIDE_PACKAGES)) {
+    if (value.startsWith('file:') || (!addMissing && !(key in catalog))) {
+      continue;
+    }
+    catalog[key] = value;
+  }
+  if (!VITE_PLUS_VERSION.startsWith('file:') && (addMissing || VITE_PLUS_NAME in catalog)) {
+    catalog[VITE_PLUS_NAME] = VITE_PLUS_VERSION;
+  }
+  for (const name of REMOVE_PACKAGES) {
+    delete catalog[name];
+  }
+}
+
+function rewriteCatalogsObject(catalogs: Record<string, Record<string, string>>): void {
+  for (const catalog of Object.values(catalogs)) {
+    rewriteCatalogObject(catalog, false);
+  }
 }
 
 /**
@@ -1266,39 +1352,37 @@ function rewriteBunCatalog(projectPath: string): void {
   editJsonFile<{
     workspaces?: NpmWorkspaces;
     catalog?: Record<string, string>;
+    catalogs?: Record<string, Record<string, string>>;
     overrides?: Record<string, string>;
   }>(packageJsonPath, (pkg) => {
     // Bun supports catalogs in both workspaces.catalog and top-level catalog;
     // prefer the location the user already chose to avoid moving their config.
     const workspacesObj =
       pkg.workspaces && !Array.isArray(pkg.workspaces) ? pkg.workspaces : undefined;
+    const useWorkspacesCatalog =
+      workspacesObj?.catalog != null || (pkg.catalog == null && workspacesObj?.catalogs != null);
     const catalog: Record<string, string> = {
-      ...(workspacesObj?.catalog ?? pkg.catalog),
+      ...(useWorkspacesCatalog ? workspacesObj?.catalog : pkg.catalog),
     };
 
-    for (const [key, value] of Object.entries(VITE_PLUS_OVERRIDE_PACKAGES)) {
-      if (!value.startsWith('file:')) {
-        catalog[key] = value;
-      }
-    }
-    if (!VITE_PLUS_VERSION.startsWith('file:')) {
-      catalog[VITE_PLUS_NAME] = VITE_PLUS_VERSION;
-    }
+    rewriteCatalogObject(catalog, true);
 
-    for (const name of REMOVE_PACKAGES) {
-      delete catalog[name];
-    }
-
-    if (workspacesObj?.catalog != null) {
+    if (useWorkspacesCatalog) {
       workspacesObj.catalog = catalog;
     } else {
       pkg.catalog = catalog;
+    }
+    if (workspacesObj?.catalogs) {
+      rewriteCatalogsObject(workspacesObj.catalogs);
+    }
+    if (pkg.catalogs) {
+      rewriteCatalogsObject(pkg.catalogs);
     }
 
     // bun overrides support catalog: references
     const overrides: Record<string, string> = { ...pkg.overrides };
     for (const [key, value] of Object.entries(VITE_PLUS_OVERRIDE_PACKAGES)) {
-      overrides[key] = value.startsWith('file:') ? value : 'catalog:';
+      overrides[key] = getCatalogDependencySpec(overrides[key], value, true);
     }
     pkg.overrides = overrides;
 
@@ -1435,6 +1519,8 @@ export function rewritePackageJson(
     'lint-staged'?: Record<string, string | string[]>;
     devDependencies?: Record<string, string>;
     dependencies?: Record<string, string>;
+    peerDependencies?: Record<string, string>;
+    optionalDependencies?: Record<string, string>;
   },
   packageManager: PackageManager,
   isMonorepo?: boolean,
@@ -1458,38 +1544,43 @@ export function rewritePackageJson(
     const updated = rewriteScripts(JSON.stringify(config), readRulesYaml());
     extractedStagedConfig = updated ? JSON.parse(updated) : config;
   }
-  const supportCatalog = isMonorepo && packageManager !== PackageManager.npm;
+  const supportCatalog = !!isMonorepo && packageManager !== PackageManager.npm;
   let needVitePlus = false;
+  const dependencyGroups = [
+    pkg.devDependencies,
+    pkg.dependencies,
+    pkg.peerDependencies,
+    pkg.optionalDependencies,
+  ];
   for (const [key, version] of Object.entries(VITE_PLUS_OVERRIDE_PACKAGES)) {
-    const value = supportCatalog && !version.startsWith('file:') ? 'catalog:' : version;
-    if (pkg.devDependencies?.[key]) {
-      pkg.devDependencies[key] = value;
-      needVitePlus = true;
-    }
-    if (pkg.dependencies?.[key]) {
-      pkg.dependencies[key] = value;
-      needVitePlus = true;
+    for (const dependencies of dependencyGroups) {
+      if (dependencies?.[key]) {
+        dependencies[key] = getCatalogDependencySpec(dependencies[key], version, supportCatalog);
+        needVitePlus = true;
+      }
     }
   }
   // remove packages that are replaced with vite-plus
   for (const name of REMOVE_PACKAGES) {
-    const wasInDevDeps = !!pkg.devDependencies?.[name];
-    const wasInDeps = !!pkg.dependencies?.[name];
-    if (wasInDevDeps) {
-      delete pkg.devDependencies![name];
-      needVitePlus = true;
+    let wasRemoved = false;
+    for (const dependencies of dependencyGroups) {
+      if (dependencies?.[name]) {
+        delete dependencies[name];
+        wasRemoved = true;
+      }
     }
-    if (wasInDeps) {
-      delete pkg.dependencies![name];
+    if (wasRemoved) {
       needVitePlus = true;
     }
     // e.g., removing @vitest/browser-playwright should keep `playwright` in devDeps
     const peerDep = BROWSER_PROVIDER_PEER_DEPS[name];
     if (
-      (wasInDevDeps || wasInDeps) &&
+      wasRemoved &&
       peerDep &&
       !pkg.devDependencies?.[peerDep] &&
-      !pkg.dependencies?.[peerDep]
+      !pkg.dependencies?.[peerDep] &&
+      !pkg.peerDependencies?.[peerDep] &&
+      !pkg.optionalDependencies?.[peerDep]
     ) {
       pkg.devDependencies ??= {};
       pkg.devDependencies[peerDep] = '*';
@@ -1507,10 +1598,15 @@ export function rewritePackageJson(
     // on vitest (e.g., vitest-browser-svelte). Without this, pnpm resolves the real
     // vitest for peer deps instead of @voidzero-dev/vite-plus-test, causing
     // third-party type augmentations to target the wrong module.
-    const allDeps = { ...pkg.dependencies, ...pkg.devDependencies };
+    const allDeps = {
+      ...pkg.dependencies,
+      ...pkg.devDependencies,
+      ...pkg.peerDependencies,
+      ...pkg.optionalDependencies,
+    };
     if (!allDeps.vitest && Object.keys(allDeps).some((name) => name.includes('vitest'))) {
       const ver = VITE_PLUS_OVERRIDE_PACKAGES.vitest;
-      pkg.devDependencies.vitest = supportCatalog && !ver.startsWith('file:') ? 'catalog:' : ver;
+      pkg.devDependencies.vitest = getCatalogDependencySpec(undefined, ver, supportCatalog);
     }
   }
   return extractedStagedConfig;
