@@ -21,7 +21,7 @@ vi.mock('../../utils/constants.js', async (importOriginal) => {
   };
 });
 
-const { rewriteMonorepo } = await import('../migrator.js');
+const { rewriteMonorepo, rewritePackageJson } = await import('../migrator.js');
 
 function makeWorkspaceInfo(rootDir: string, packageManager: PackageManager): WorkspaceInfo {
   return {
@@ -125,5 +125,28 @@ describe('rewriteMonorepo bun catalog with file: protocol', () => {
     expect(pkg.workspaces.catalogs.build.tsdown).toBeUndefined();
     expect(pkg.overrides.vite).toBe('file:/tmp/tgz/voidzero-dev-vite-plus-core-0.0.0.tgz');
     expect(pkg.devDependencies.vite).toBe('file:/tmp/tgz/voidzero-dev-vite-plus-core-0.0.0.tgz');
+  });
+
+  it('does not write file: paths into peer dependencies', () => {
+    const pkg = {
+      peerDependencies: {
+        vite: '^7.0.0',
+        vitest: 'catalog:test',
+      },
+      optionalDependencies: {
+        vite: '^7.0.0',
+      },
+    };
+
+    rewritePackageJson(pkg, PackageManager.pnpm, true);
+
+    expect(pkg.peerDependencies.vite).toBe('^7.0.0');
+    expect(pkg.peerDependencies.vitest).toBe('catalog:test');
+    expect(pkg.optionalDependencies.vite).toBe(
+      'file:/tmp/tgz/voidzero-dev-vite-plus-core-0.0.0.tgz',
+    );
+    expect(
+      (pkg as { devDependencies?: Record<string, string> }).devDependencies?.['vite-plus'],
+    ).toBe('file:/tmp/tgz/vite-plus-0.0.0.tgz');
   });
 });

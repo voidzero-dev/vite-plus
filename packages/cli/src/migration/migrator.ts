@@ -1245,8 +1245,12 @@ function getCatalogDependencySpec(
   currentValue: string | undefined,
   version: string,
   supportCatalog: boolean,
+  options?: { allowFileProtocol?: boolean },
 ): string {
   if (!supportCatalog || version.startsWith('file:')) {
+    if (version.startsWith('file:') && options?.allowFileProtocol === false) {
+      return currentValue ?? version;
+    }
     return version;
   }
   return currentValue?.startsWith('catalog:') ? currentValue : 'catalog:';
@@ -1555,7 +1559,9 @@ export function rewritePackageJson(
   for (const [key, version] of Object.entries(VITE_PLUS_OVERRIDE_PACKAGES)) {
     for (const dependencies of dependencyGroups) {
       if (dependencies?.[key]) {
-        dependencies[key] = getCatalogDependencySpec(dependencies[key], version, supportCatalog);
+        dependencies[key] = getCatalogDependencySpec(dependencies[key], version, supportCatalog, {
+          allowFileProtocol: dependencies !== pkg.peerDependencies,
+        });
         needVitePlus = true;
       }
     }
