@@ -250,6 +250,27 @@ describe('rewritePackageJson', () => {
     expect(npmPkg.optionalDependencies.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
   });
 
+  it('adds local vitest when only a peer vitest exists for vitest-adjacent packages', async () => {
+    const pkg = {
+      dependencies: {
+        'vitest-browser-svelte': '^1.0.0',
+      },
+      peerDependencies: {
+        vitest: '^4.0.0',
+      },
+    };
+
+    rewritePackageJson(pkg, PackageManager.pnpm, true);
+
+    expect(pkg.peerDependencies.vitest).toBe('^4.0.0');
+    expect((pkg as { devDependencies?: Record<string, string> }).devDependencies?.vitest).toBe(
+      'catalog:',
+    );
+    expect(
+      (pkg as { devDependencies?: Record<string, string> }).devDependencies?.['vite-plus'],
+    ).toBe('catalog:');
+  });
+
   it('should preserve playwright when removing @vitest/browser-playwright', async () => {
     const pkg = {
       devDependencies: {

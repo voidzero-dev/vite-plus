@@ -1759,13 +1759,15 @@ export function rewritePackageJson(
     // on vitest (e.g., vitest-browser-svelte). Without this, pnpm resolves the real
     // vitest for peer deps instead of @voidzero-dev/vite-plus-test, causing
     // third-party type augmentations to target the wrong module.
-    const allDeps = {
+    const installableDeps = {
       ...pkg.dependencies,
       ...pkg.devDependencies,
-      ...pkg.peerDependencies,
       ...pkg.optionalDependencies,
     };
-    if (!allDeps.vitest && Object.keys(allDeps).some((name) => name.includes('vitest'))) {
+    if (
+      !installableDeps.vitest &&
+      Object.keys(installableDeps).some((name) => name.includes('vitest'))
+    ) {
       const ver = VITE_PLUS_OVERRIDE_PACKAGES.vitest;
       pkg.devDependencies.vitest = getCatalogDependencySpec(undefined, ver, supportCatalog);
     }
