@@ -135,6 +135,11 @@ pub struct EnvConfig {
     ///
     /// Env: `VP_SHELL_NU`
     pub vp_shell_nu: bool,
+
+    /// Explicit PowerShell eval signal set by the `env.ps1` wrapper.
+    ///
+    /// Env: `VP_SHELL_PWSH`
+    pub vp_shell_pwsh: bool,
 }
 
 impl EnvConfig {
@@ -166,6 +171,7 @@ impl EnvConfig {
             ps_module_path: std::env::var("PSModulePath").ok(),
             nu_version: std::env::var("NU_VERSION").ok(),
             vp_shell_nu: std::env::var(env_vars::VP_SHELL_NU).is_ok(),
+            vp_shell_pwsh: std::env::var(env_vars::VP_SHELL_PWSH).is_ok(),
         }
     }
 
@@ -250,6 +256,7 @@ impl EnvConfig {
             ps_module_path: None,
             nu_version: None,
             vp_shell_nu: false,
+            vp_shell_pwsh: false,
         }
     }
 
