@@ -1,0 +1,8 @@
+[1]> vp check
+error: Node.js <semver> is incompatible with Vite+ CLI.
+Required by Vite+: ^20.19.0 || >=22.12.0
+Resolved from: .node-version
+
+
+Fix this project: vp env pin lts
+Temporary override: vp env use lts

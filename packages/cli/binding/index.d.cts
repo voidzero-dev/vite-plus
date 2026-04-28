@@ -369,5 +369,13 @@ export interface RunCommandResult {
   pathAccesses: Record<string, PathAccess>;
 }
 
+/**
+ * Whether the Vite+ banner should be emitted in the current environment.
+ *
+ * Mirrors `vite_shared::header::should_print_header` so both CLIs apply
+ * the same TTY + git-hook gating without duplicating the rules in JS.
+ */
+export declare function shouldPrintVitePlusHeader(): boolean;
+
 /** Render the Vite+ header using the Rust implementation. */
 export declare function vitePlusHeader(): string;

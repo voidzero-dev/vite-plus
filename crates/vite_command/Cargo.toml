@@ -4,6 +4,7 @@ version = "0.0.0"
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
+publish = false
 rust-version.workspace = true
 
 [dependencies]
@@ -16,7 +17,7 @@ vite_path = { workspace = true }
 which = { workspace = true, features = ["tracing"] }
 
 [target.'cfg(not(target_os = "windows"))'.dependencies]
-nix = { workspace = true }
+nix = { workspace = true, features = ["term"] }
 
 [dev-dependencies]
 tempfile = { workspace = true }

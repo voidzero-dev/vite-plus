@@ -168,10 +168,9 @@ export function formatDlxCommand(
   workspaceInfo: WorkspaceInfo,
 ) {
   const runner = getPackageRunner(workspaceInfo);
-  const dlxArgs = runner.command === 'npx' ? ['--', ...args] : args;
   return {
     command: runner.command,
-    args: [...runner.args, packageName, ...dlxArgs],
+    args: [...runner.args, packageName, ...args],
   };
 }
 

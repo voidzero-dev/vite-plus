@@ -71,7 +71,7 @@
   "vinext": {
     "repository": "https://github.com/cloudflare/vinext.git",
     "branch": "main",
-    "hash": "f78dd2b39f5b02242417e0a684b1f2f55d3dbdff",
+    "hash": "88e57e1bcfef02b7463ebf08bcc355d207f7142c",
     "forceFreshMigration": true
   },
   "reactive-resume": {
@@ -118,6 +118,12 @@
     "repository": "https://github.com/why-reproductions-are-required/vite-plus-vitest-type-aug.git",
     "branch": "main",
     "hash": "6192f60653c124ae068efaf5d7d0a4134c95edbd",
+    "forceFreshMigration": true
+  },
+  "varlet": {
+    "repository": "https://github.com/varletjs/varlet.git",
+    "branch": "dev",
+    "hash": "83f6c6a418ab9319e07d719d86d4fa952f99e266",
     "forceFreshMigration": true
   }
 }

@@ -1,8 +1,23 @@
 import { styleText } from 'node:util';
 
+import { shouldPrintVitePlusHeader, vitePlusHeader } from '../../binding/index.js';
+
 export function log(message: string) {
   /* oxlint-disable-next-line no-console */
   console.log(message);
+}
+
+/**
+ * Emit the Vite+ banner (header line + trailing blank line) to stdout.
+ * Gating (non-TTY, git hooks) lives in `shouldPrintVitePlusHeader` on the
+ * Rust side so both CLIs stay in sync.
+ */
+export function printHeader() {
+  if (!shouldPrintVitePlusHeader()) {
+    return;
+  }
+  log(vitePlusHeader());
+  log('');
 }
 
 export function accent(text: string) {

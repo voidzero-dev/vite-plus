@@ -32,7 +32,7 @@ jobs:
     outputs:
       related-files-changed: ${{ steps.filter.outputs.related-files }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
         id: filter
         with:
@@ -55,7 +55,7 @@ jobs:
       contents: read
       packages: read
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/download-rolldown-binaries
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -77,12 +77,13 @@ jobs:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
       # Disable Windows Defender real-time scanning to speed up I/O-heavy builds (~30-50% faster)
       - name: Disable Windows Defender
         if: runner.os == 'Windows'
+        continue-on-error: true
         shell: powershell
         run: Set-MpPreference -DisableRealtimeMonitoring $true
 
@@ -313,6 +314,15 @@ jobs:
             node-version: 24
             command: |
               vp check --fix
+          - name: varlet
+            node-version: 22
+            command: |
+              # scripts/bootstrap.mjs spawns `pnpm build` via tinyexec and needs
+              # pnpm on PATH (not exposed by the vp install itself).
+              vp i -g pnpm
+              node scripts/bootstrap.mjs
+              vp run lint
+              vp run test:coverage
         exclude:
           # frm-stack uses Docker (testcontainers) which doesn't work the same way on Windows
           - os: windows-latest
@@ -334,9 +344,13 @@ jobs:
           - os: windows-latest
             project:
               name: npmx.dev
+          # varlet upstream CI is ubuntu-only
+          - os: windows-latest
+            project:
+              name: varlet
 
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
         with:
           ecosystem-ci-project: ${{ matrix.project.name }}
@@ -344,6 +358,7 @@ jobs:
       # Disable Windows Defender real-time scanning to speed up I/O-heavy operations
       - name: Disable Windows Defender
         if: runner.os == 'Windows'
+        continue-on-error: true
         shell: powershell
         run: Set-MpPreference -DisableRealtimeMonitoring $true
 

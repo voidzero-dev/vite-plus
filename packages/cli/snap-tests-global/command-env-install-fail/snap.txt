@@ -1,6 +1,4 @@
 [1]> vp install -g voidzero-nonexistent-pkg-xyz-12345 # Install non-existent package
-VITE+ - The Unified Toolchain for the Web
-
 Installing voidzero-nonexistent-pkg-xyz-12345 globally...
 npm error code E404
 npm error 404 Not Found - GET https://registry.<domain>/voidzero-nonexistent-pkg-xyz-12345 - Not found

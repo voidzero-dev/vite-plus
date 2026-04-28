@@ -8,6 +8,8 @@ on:
     paths:
       - 'packages/cli/install.sh'
       - 'packages/cli/install.ps1'
+      - 'crates/vite_installer/**'
+      - 'crates/vite_setup/**'
       - '.github/workflows/test-standalone-install.yml'
 
 concurrency:
@@ -38,7 +40,7 @@ jobs:
           - os: macos-latest
             name: macOS ARM64
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
       - name: Run install.sh
         run: cat packages/cli/install.sh | bash
@@ -120,7 +122,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
       - name: Make shell config files read-only
         run: |
@@ -155,7 +157,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3.6.0
@@ -219,7 +221,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
       - name: Run install.sh in Alpine container
         run: |
@@ -272,7 +274,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3.6.0
@@ -331,7 +333,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
       - name: Assert PowerShell 5.x
         shell: powershell
@@ -413,7 +415,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
       - name: Run install.ps1
         shell: pwsh
@@ -480,7 +482,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
       - name: Install PowerShell 7.6
         shell: pwsh
@@ -640,7 +642,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
       - name: Run install.ps1
         shell: pwsh
@@ -786,3 +788,57 @@ jobs:
           which npm
           which npx
           which vp
+
+  test-vp-setup-exe:
+    name: Test vp-setup.exe (pwsh)
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - uses: ./.github/actions/clone
+
+      - name: Setup Dev Drive
+        uses: samypr100/setup-dev-drive@30f0f98ae5636b2b6501e181dfb3631b9974818d # v4.0.0
+        with:
+          drive-size: 12GB
+          drive-format: ReFS
+          env-mapping: |
+            CARGO_HOME,{{ DEV_DRIVE }}/.cargo
+            RUSTUP_HOME,{{ DEV_DRIVE }}/.rustup
+
+      - uses: oxc-project/setup-rust@23f38cfb0c04af97a055f76acee94d5be71c7c82 # v1.0.16
+        with:
+          target-dir: ${{ format('{0}/target', env.DEV_DRIVE) }}
+
+      - name: Build vp-setup.exe
+        shell: bash
+        run: cargo build --release -p vite_installer
+
+      - name: Install via vp-setup.exe (silent)
+        shell: pwsh
+        run: ${{ format('{0}/target/release/vp-setup.exe', env.DEV_DRIVE) }}
+        env:
+          VP_VERSION: alpha
+
+      - name: Set PATH
+        shell: bash
+        run: echo "$USERPROFILE/.vite-plus/bin" >> $GITHUB_PATH
+
+      - name: Verify installation
+        shell: pwsh
+        run: |
+          vp --version
+          vp --help
+
+      - name: Verify installation (cmd)
+        shell: cmd
+        run: |
+          vp --version
+          vp --help
+
+      - name: Verify installation (bash)
+        shell: bash
+        run: |
+          vp --version
+          vp --help

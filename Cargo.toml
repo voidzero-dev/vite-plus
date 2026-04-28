@@ -89,7 +89,7 @@ dunce = "1.0.5"
 fast-glob = "1.0.0"
 flate2 = { version = "=1.1.9", features = ["zlib-rs"] }
 form_urlencoded = "1.2.1"
-fspy = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "076cef486127e6cd1fefc58945f00dac316888ca" }
+fspy = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "d1b8cdae8b6df5eab8b9f1143ceb4fb13933a5ef" }
 futures = "0.3.31"
 futures-util = "0.3.31"
 glob = "0.3.2"
@@ -107,7 +107,7 @@ itertools = "0.14.0"
 itoa = "1.0.15"
 json-escape-simd = "3"
 json-strip-comments = "3"
-jsonschema = { version = "0.45.0", default-features = false }
+jsonschema = { version = "0.46.0", default-features = false }
 junction = "1.4.1"
 memchr = "2.7.4"
 mimalloc-safe = "0.1.52"
@@ -134,6 +134,7 @@ num_cpus = "1.17"
 owo-colors = "4.2.2"
 parking_lot = "0.12.5"
 pathdiff = "0.2.3"
+path-posix = "0.0.1"
 pnp = "0.12.7"
 percent-encoding = "2.3.1"
 petgraph = "0.8.2"
@@ -164,7 +165,6 @@ serial_test = "3.2.0"
 sha1 = "0.10.6"
 sha2 = "0.10.9"
 simdutf8 = "0.1.5"
-smallvec = "1.15.0"
 string_cache = "0.9.0"
 sugar_path = { version = "2.0.1", features = ["cached_current_dir"] }
 syn = { version = "2", default-features = false }
@@ -194,23 +194,25 @@ vfs = "0.13.0"
 vite_command = { path = "crates/vite_command" }
 vite_error = { path = "crates/vite_error" }
 vite_js_runtime = { path = "crates/vite_js_runtime" }
-vite_glob = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "076cef486127e6cd1fefc58945f00dac316888ca" }
+vite_glob = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "d1b8cdae8b6df5eab8b9f1143ceb4fb13933a5ef" }
 vite_install = { path = "crates/vite_install" }
 vite_migration = { path = "crates/vite_migration" }
+vite_setup = { path = "crates/vite_setup" }
 vite_shared = { path = "crates/vite_shared" }
 vite_static_config = { path = "crates/vite_static_config" }
-vite_path = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "076cef486127e6cd1fefc58945f00dac316888ca" }
-vite_str = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "076cef486127e6cd1fefc58945f00dac316888ca" }
-vite_task = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "076cef486127e6cd1fefc58945f00dac316888ca" }
-vite_workspace = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "076cef486127e6cd1fefc58945f00dac316888ca" }
+vite_path = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "d1b8cdae8b6df5eab8b9f1143ceb4fb13933a5ef" }
+vite_str = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "d1b8cdae8b6df5eab8b9f1143ceb4fb13933a5ef" }
+vite_task = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "d1b8cdae8b6df5eab8b9f1143ceb4fb13933a5ef" }
+vite_workspace = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "d1b8cdae8b6df5eab8b9f1143ceb4fb13933a5ef" }
 walkdir = "2.5.0"
 wax = "0.6.0"
 which = "8.0.0"
+winreg = "0.56.0"
 xxhash-rust = "0.8.15"
 zip = "7.2"
 
 # oxc crates with the same version
-oxc = { version = "0.123.0", features = [
+oxc = { version = "0.127.0", features = [
   "ast_visit",
   "transformer",
   "minifier",
@@ -222,16 +224,17 @@ oxc = { version = "0.123.0", features = [
   "regular_expression",
   "cfg",
 ] }
-oxc_allocator = { version = "0.123.0", features = ["pool"] }
-oxc_ast = "0.123.0"
-oxc_ecmascript = "0.123.0"
-oxc_parser = "0.123.0"
-oxc_span = "0.123.0"
-oxc_napi = "0.123.0"
-oxc_minify_napi = "0.123.0"
-oxc_parser_napi = "0.123.0"
-oxc_transform_napi = "0.123.0"
-oxc_traverse = "0.123.0"
+oxc_allocator = { version = "0.127.0", features = ["pool"] }
+oxc_ast = "0.127.0"
+oxc_ecmascript = "0.127.0"
+oxc_parser = "0.127.0"
+oxc_span = "0.127.0"
+oxc_napi = "0.127.0"
+oxc_str = "0.127.0"
+oxc_minify_napi = "0.127.0"
+oxc_parser_napi = "0.127.0"
+oxc_transform_napi = "0.127.0"
+oxc_traverse = "0.127.0"
 
 # oxc crates in their own repos
 oxc_index = { version = "4", features = ["rayon", "serde"] }
@@ -333,4 +336,8 @@ panic = "abort" # Let it crash and force ourselves to write safe Rust.
 # The trampoline binary is copied per shim tool (~5-10 copies), so optimize for
 # size instead of speed. This reduces it from ~200KB to ~100KB on Windows.
 [profile.release.package.vite_trampoline]
+opt-level = "z"
+
+# The installer binary is downloaded by users, so optimize for size.
+[profile.release.package.vite_installer]
 opt-level = "z"

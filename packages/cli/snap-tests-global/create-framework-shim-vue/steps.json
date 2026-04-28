@@ -1,0 +1,15 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "commands": [
+    {
+      "command": "vp create vite:application --no-interactive -- --template vue-ts # create Vue+TS app",
+      "ignoreOutput": true
+    },
+    "cat vite-plus-application/src/env.d.ts # check Vue shim was added",
+    {
+      "command": "cd vite-plus-application && vp install # install dependencies",
+      "ignoreOutput": true
+    },
+    "cd vite-plus-application && vp check --fix # fix generated formatting and ensure no errors"
+  ]
+}

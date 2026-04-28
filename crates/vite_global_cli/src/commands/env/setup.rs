@@ -23,7 +23,7 @@ use super::config::{get_bin_dir, get_vp_home};
 use crate::{error::Error, help};
 
 /// Tools to create shims for (node, npm, npx, vpx, vpr)
-const SHIM_TOOLS: &[&str] = &["node", "npm", "npx", "vpx", "vpr"];
+pub(crate) const SHIM_TOOLS: &[&str] = &["node", "npm", "npx", "vpx", "vpr"];
 
 fn accent_command(command: &str) -> String {
     if help::should_style_help() {
@@ -79,6 +79,13 @@ pub async fn execute(refresh: bool, env_only: bool) -> Result<ExitStatus, Error>
             created.push(*tool);
         } else {
             skipped.push(*tool);
+        }
+    }
+
+    #[cfg(windows)]
+    if refresh {
+        if let Err(e) = refresh_package_shims(&bin_dir).await {
+            tracing::warn!("Failed to refresh package shims: {}", e);
         }
     }
 
@@ -192,11 +199,8 @@ async fn create_shim(
         if !refresh {
             return Ok(false);
         }
-        // Remove existing shim for refresh.
-        // On Windows, .exe files may be locked (by antivirus, indexer, or
-        // still-running processes), so rename to .old first instead of deleting.
         #[cfg(windows)]
-        rename_to_old(&shim_path).await;
+        remove_or_rename_to_old(&shim_path).await;
         #[cfg(not(windows))]
         {
             tokio::fs::remove_file(&shim_path).await?;
@@ -273,6 +277,46 @@ async fn create_windows_shim(
     Ok(())
 }
 
+/// Refresh trampoline `.exe` files for package shims installed via `vp install -g`.
+///
+/// Discovers all package binaries tracked by BinConfig with `source: Vp`
+/// and replaces their `.exe` with the current trampoline.
+#[cfg(windows)]
+async fn refresh_package_shims(bin_dir: &vite_path::AbsolutePath) -> Result<(), Error> {
+    use super::bin_config::BinConfig;
+
+    let package_bins = BinConfig::find_all_vp_source().await?;
+
+    if package_bins.is_empty() {
+        return Ok(());
+    }
+
+    let trampoline_src = get_trampoline_path()?;
+
+    for bin_name in &package_bins {
+        // Core shims (SHIM_TOOLS + vp) are already refreshed by the main loop.
+        if bin_name == "vp" || SHIM_TOOLS.contains(&bin_name.as_str()) {
+            continue;
+        }
+
+        let shim_path = bin_dir.join(format!("{bin_name}.exe"));
+
+        remove_or_rename_to_old(&shim_path).await;
+
+        if let Err(e) = tokio::fs::copy(trampoline_src.as_path(), &shim_path).await {
+            tracing::warn!("Failed to refresh package shim {}: {}", bin_name, e);
+            continue;
+        }
+
+        // Remove legacy .cmd/shell wrappers that could shadow the .exe in Git Bash.
+        cleanup_legacy_windows_shim(bin_dir, bin_name).await;
+
+        tracing::debug!("Refreshed package trampoline shim {:?}", shim_path);
+    }
+
+    Ok(())
+}
+
 /// Get the path to the trampoline template binary (vp-shim.exe).
 ///
 /// The trampoline binary is distributed alongside vp.exe in the same directory.
@@ -307,6 +351,22 @@ pub(crate) fn get_trampoline_path() -> Result<vite_path::AbsolutePathBuf, Error>
 
     vite_path::AbsolutePathBuf::new(trampoline)
         .ok_or_else(|| Error::ConfigError("Invalid trampoline path".into()))
+}
+
+/// Try to delete an `.exe` file; if deletion fails (e.g., file is locked by a
+/// running process), fall back to renaming it to `.old`.
+///
+/// This avoids accumulating `.old` files when the exe is not in use.
+#[cfg(windows)]
+pub(crate) async fn remove_or_rename_to_old(path: &vite_path::AbsolutePath) {
+    match tokio::fs::remove_file(path).await {
+        Ok(()) => return,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return,
+        Err(e) => {
+            tracing::debug!("remove_file failed ({}), attempting rename", e);
+        }
+    }
+    rename_to_old(path).await;
 }
 
 /// Rename an existing `.exe` to a timestamped `.old` file instead of deleting.
@@ -581,10 +641,11 @@ if ($env:Path -split ';' -notcontains $__vp_bin) {
 function vp {
     if ($args.Count -ge 2 -and $args[0] -eq "env" -and $args[1] -eq "use") {
         if ($args -contains "-h" -or $args -contains "--help") {
-            & (Join-Path $__vp_bin "vp.exe") @args; return
+            & (Join-Path $__vp_bin "vp") @args; return
         }
         $env:VP_ENV_USE_EVAL_ENABLE = "1"
-        $output = & (Join-Path $__vp_bin "vp.exe") @args 2>&1 | ForEach-Object {
+        $env:VP_SHELL_PWSH = "1"
+        $output = & (Join-Path $__vp_bin "vp") @args 2>&1 | ForEach-Object {
             if ($_ -is [System.Management.Automation.ErrorRecord]) {
                 Write-Host $_.Exception.Message
             } else {
@@ -592,17 +653,18 @@ function vp {
             }
         }
         Remove-Item Env:VP_ENV_USE_EVAL_ENABLE -ErrorAction SilentlyContinue
+        Remove-Item Env:VP_SHELL_PWSH -ErrorAction SilentlyContinue
         if ($LASTEXITCODE -eq 0 -and $output) {
             Invoke-Expression ($output -join "`n")
         }
     } else {
-        & (Join-Path $__vp_bin "vp.exe") @args
+        & (Join-Path $__vp_bin "vp") @args
     }
 }
 
 # Dynamic shell completion for PowerShell
 $env:VP_COMPLETE = "powershell"
-& (Join-Path $__vp_bin "vp.exe") | Out-String | Invoke-Expression
+& (Join-Path $__vp_bin "vp") | Out-String | Invoke-Expression
 Remove-Item Env:\VP_COMPLETE -ErrorAction SilentlyContinue
 
 $__vpr_comp = {
@@ -614,7 +676,7 @@ $__vpr_comp = {
     $args = $args -replace '^(vpr\.exe|vpr)\b', 'vp run'
     if ($wordToComplete -eq "") { $args += " ''" }
     $results = Invoke-Expression @"
-& (Join-Path $__vp_bin 'vp.exe') -- $args
+& (Join-Path $__vp_bin 'vp') -- $args
 "@;
     if ($prev) { $env:VP_COMPLETE = $prev } else { Remove-Item Env:\VP_COMPLETE }
     $results | ForEach-Object {

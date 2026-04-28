@@ -1,6 +1,4 @@
 > vp migrate --no-interactive # migration should merge pnpm overrides with dependency selector
-VITE+ - The Unified Toolchain for the Web
-
 ◇ Migrated . to Vite+<repeat>
 • Node <semver>  pnpm <semver>
 • 1 config update applied, 1 file had imports rewritten

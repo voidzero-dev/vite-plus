@@ -36,32 +36,60 @@ use crate::cli::{
 
 /// Normalize CLI arguments:
 /// - `vp list ...` / `vp ls ...` → `vp pm list ...`
+/// - `vp rebuild ...` → `vp pm rebuild ...`
 /// - `vp help [command]` → `vp [command] --help`
+/// - `vp node [args...]` → `vp env exec node [args...]`
 fn normalize_args(args: Vec<String>) -> Vec<String> {
-    match args.get(1).map(String::as_str) {
-        // `vp list ...` → `vp pm list ...`
-        // `vp ls ...` → `vp pm list ...`
-        Some("list" | "ls") => {
-            let mut normalized = Vec::with_capacity(args.len() + 1);
-            normalized.push(args[0].clone());
-            normalized.push("pm".to_string());
-            normalized.push("list".to_string());
-            normalized.extend(args[2..].iter().cloned());
-            normalized
-        }
-        // `vp help` alone -> show main help
-        Some("help") if args.len() == 2 => vec![args[0].clone(), "--help".to_string()],
-        // `vp help [command] [args...]` -> `vp [command] --help [args...]`
-        Some("help") if args.len() > 2 => {
-            let mut normalized = Vec::with_capacity(args.len());
-            normalized.push(args[0].clone());
-            normalized.push(args[2].clone());
-            normalized.push("--help".to_string());
-            normalized.extend(args[3..].iter().cloned());
-            normalized
-        }
-        // No transformation needed
-        _ => args,
+    let mut normalized = args;
+    loop {
+        let next = match normalized.get(1).map(String::as_str) {
+            // `vp list ...` → `vp pm list ...`
+            // `vp ls ...` → `vp pm list ...`
+            Some("list" | "ls") => {
+                let mut next = Vec::with_capacity(normalized.len() + 1);
+                next.push(normalized[0].clone());
+                next.push("pm".to_string());
+                next.push("list".to_string());
+                next.extend(normalized[2..].iter().cloned());
+                next
+            }
+            // `vp rebuild ...` → `vp pm rebuild ...`
+            Some("rebuild") => {
+                let mut next = Vec::with_capacity(normalized.len() + 1);
+                next.push(normalized[0].clone());
+                next.push("pm".to_string());
+                next.push("rebuild".to_string());
+                next.extend(normalized[2..].iter().cloned());
+                next
+            }
+            // `vp help` alone -> show main help
+            Some("help") if normalized.len() == 2 => {
+                vec![normalized[0].clone(), "--help".to_string()]
+            }
+            // `vp help [command] [args...]` -> `vp [command] --help [args...]`
+            Some("help") if normalized.len() > 2 => {
+                let mut next = Vec::with_capacity(normalized.len());
+                next.push(normalized[0].clone());
+                next.push(normalized[2].clone());
+                next.push("--help".to_string());
+                next.extend(normalized[3..].iter().cloned());
+                next
+            }
+            // `vp node [args...]` → `vp env exec node [args...]`
+            Some("node") => {
+                let mut next = Vec::with_capacity(normalized.len() + 2);
+                next.push(normalized[0].clone());
+                next.push("env".to_string());
+                next.push("exec".to_string());
+                next.push("node".to_string());
+                next.extend(normalized[2..].iter().cloned());
+                next
+            }
+            // No transformation needed
+            _ => return normalized,
+        };
+
+        normalized = next;
     }
 }
 
@@ -88,8 +116,7 @@ fn extract_invalid_subcommand_details(error: &clap::Error) -> Option<InvalidSubc
 }
 
 fn print_invalid_subcommand_error(details: &InvalidSubcommandDetails) {
-    println!("{}", vite_shared::header::vite_plus_header());
-    println!();
+    vite_shared::header::print_header();
 
     let highlighted_subcommand = details.invalid_subcommand.bright_blue().to_string();
     output::error(&format!("Command '{highlighted_subcommand}' not found"));
@@ -209,8 +236,7 @@ fn print_unknown_argument_error(error: &clap::Error) -> bool {
         return false;
     };
 
-    println!("{}", vite_shared::header::vite_plus_header());
-    println!();
+    vite_shared::header::print_header();
 
     let highlighted_argument = invalid_argument.bright_blue().to_string();
     output::error(&format!("Unexpected argument '{highlighted_argument}'"));
@@ -402,8 +428,54 @@ mod tests {
 
     use super::{
         extract_unknown_argument, has_pass_as_value_suggestion, is_affirmative_response,
-        replace_top_level_typoed_subcommand, try_parse_args_from,
+        normalize_args, replace_top_level_typoed_subcommand, try_parse_args_from,
     };
+
+    fn s(v: &[&str]) -> Vec<String> {
+        v.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn normalize_args_rewrites_vp_node_to_env_exec_node() {
+        let input = s(&["vp", "node", "script.js", "foo", "--flag"]);
+        let normalized = normalize_args(input);
+        assert_eq!(normalized, s(&["vp", "env", "exec", "node", "script.js", "foo", "--flag"]));
+    }
+
+    #[test]
+    fn normalize_args_rewrites_bare_vp_node() {
+        let input = s(&["vp", "node"]);
+        let normalized = normalize_args(input);
+        assert_eq!(normalized, s(&["vp", "env", "exec", "node"]));
+    }
+
+    #[test]
+    fn normalize_args_rewrites_bare_vp_rebuild() {
+        let input = s(&["vp", "rebuild"]);
+        let normalized = normalize_args(input);
+        assert_eq!(normalized, s(&["vp", "pm", "rebuild"]));
+    }
+
+    #[test]
+    fn normalize_args_rewrites_vp_rebuild_with_args() {
+        let input = s(&["vp", "rebuild", "--", "--update-binary"]);
+        let normalized = normalize_args(input);
+        assert_eq!(normalized, s(&["vp", "pm", "rebuild", "--", "--update-binary"]));
+    }
+
+    #[test]
+    fn normalize_args_rewrites_vp_help_rebuild() {
+        let input = s(&["vp", "help", "rebuild"]);
+        let normalized = normalize_args(input);
+        assert_eq!(normalized, s(&["vp", "pm", "rebuild", "--help"]));
+    }
+
+    #[test]
+    fn normalize_args_rewrites_vp_help_node() {
+        let input = s(&["vp", "help", "node"]);
+        let normalized = normalize_args(input);
+        assert_eq!(normalized, s(&["vp", "env", "exec", "node", "--help"]));
+    }
 
     #[test]
     fn unknown_argument_detected_without_pass_as_value_hint() {

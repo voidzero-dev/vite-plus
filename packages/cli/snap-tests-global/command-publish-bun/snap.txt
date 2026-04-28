@@ -1,6 +1,4 @@
 > vp pm publish --help # should show help
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp pm publish [OPTIONS] [TARBALL|FOLDER] [-- <PASS_THROUGH_ARGS>...]
 
 Publish package to registry

@@ -1,6 +1,4 @@
 > vp install # should install packages first
-VITE+ - The Unified Toolchain for the Web
-
 bun install v<semver> (af24e281)
 
 + test-vite-plus-package@<semver>
@@ -10,8 +8,6 @@ bun install v<semver> (af24e281)
 3 packages installed [<variable>ms]
 
 > vp pm list --help # should show help
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp pm list [OPTIONS] [PATTERN] [-- <PASS_THROUGH_ARGS>...]
 
 List installed packages

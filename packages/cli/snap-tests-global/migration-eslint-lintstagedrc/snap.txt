@@ -1,6 +1,4 @@
 > vp migrate --no-interactive # migration should detect eslint and auto-migrate including lintstagedrc
-VITE+ - The Unified Toolchain for the Web
-
 ◇ Migrated . to Vite+<repeat>
 • Node <semver>  pnpm <semver>
 • 5 config updates applied

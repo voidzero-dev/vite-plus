@@ -83,11 +83,11 @@ export function discoverTemplate(
   if (localPackage) {
     const localPackagePath = path.join(workspaceInfo.rootDir, localPackage.path);
     const packageJsonPath = path.join(localPackagePath, 'package.json');
-    const pkg = readJsonFile<{
+    const pkg = readJsonFile(packageJsonPath) as {
       dependencies?: Record<string, string>;
       keywords?: string[];
       bin?: Record<string, string> | string;
-    }>(packageJsonPath);
+    };
     let binPath = '';
     if (pkg.bin) {
       if (typeof pkg.bin === 'string') {

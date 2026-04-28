@@ -1,0 +1,5 @@
+{
+  "commands": [
+    "vp run lint-task # vp run lint should not load plugins (heavy-plugin.ts throws if imported)"
+  ]
+}

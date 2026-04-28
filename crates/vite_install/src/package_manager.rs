@@ -8,7 +8,7 @@ use std::{
 
 use crossterm::{
     cursor,
-    event::{self, Event, KeyCode, KeyEvent},
+    event::{self, Event, KeyCode, KeyEvent, KeyEventKind},
     execute,
     style::{Color, Print, ResetColor, SetForegroundColor},
     terminal,
@@ -386,14 +386,27 @@ pub async fn download_package_manager(
         version_or_latest.into()
     };
 
+    // Reject anything that is not strict semver `major.minor.patch[-prerelease][+build]`.
+    // This prevents path traversal via the version being interpolated into
+    // `$VP_HOME/package_manager/{name}/{version}` below, since `AbsolutePath::join`
+    // does not normalize `..` components. Also guards against registry-controlled
+    // "latest" lookups returning a malicious value.
+    let parsed_version = Version::parse(&version).map_err(|_| {
+        Error::InvalidArgument(
+            format!(
+                "invalid {package_manager_type} version {version:?}: expected semver 'major.minor.patch'"
+            )
+            .into(),
+        )
+    })?;
+
     let mut package_name: Str = package_manager_type.to_string().into();
     // handle yarn >= 2.0.0 to use `@yarnpkg/cli-dist` as package name
     // @see https://github.com/nodejs/corepack/blob/main/config.json#L135
-    if matches!(package_manager_type, PackageManagerType::Yarn) {
-        let version_req = VersionReq::parse(">=2.0.0")?;
-        if version_req.matches(&Version::parse(&version)?) {
-            package_name = "@yarnpkg/cli-dist".into();
-        }
+    if matches!(package_manager_type, PackageManagerType::Yarn)
+        && VersionReq::parse(">=2.0.0")?.matches(&parsed_version)
+    {
+        package_name = "@yarnpkg/cli-dist".into();
     }
 
     let home_dir = vite_shared::get_vp_home()?;
@@ -456,7 +469,7 @@ pub async fn download_package_manager(
     // The lock is automatically skipped on NFS filesystems where locking is unreliable.
     let lock_path = parent_dir.join(format!("{version}.lock"));
     tracing::debug!("Acquire lock file: {:?}", lock_path);
-    let lock_file = File::create(lock_path.as_path())?;
+    let lock_file = open_lock_file(lock_path.as_path())?;
     // Acquire exclusive lock (blocks until available)
     lock_file.lock()?;
     tracing::debug!("Lock acquired: {:?}", lock_path);
@@ -478,6 +491,13 @@ pub async fn download_package_manager(
     create_shim_files(package_manager_type, &bin_prefix).await?;
 
     Ok((install_dir, package_name, version))
+}
+
+/// Open a lock file without truncating it. This is required on Windows
+/// where `File::create` implies truncation, which is forbidden when another
+/// process holds an exclusive lock on the file.
+fn open_lock_file(lock_path: &Path) -> io::Result<File> {
+    fs::OpenOptions::new().read(true).write(true).create(true).truncate(false).open(lock_path)
 }
 
 /// Get the platform-specific npm package name for bun.
@@ -589,7 +609,7 @@ async fn download_bun_package_manager(
     // Acquire lock for atomic rename
     let lock_path = parent_dir.join(format!("{version}.lock"));
     tracing::debug!("Acquire lock file: {:?}", lock_path);
-    let lock_file = File::create(lock_path.as_path())?;
+    let lock_file = open_lock_file(lock_path.as_path())?;
     lock_file.lock()?;
     tracing::debug!("Lock acquired: {:?}", lock_path);
 
@@ -826,63 +846,69 @@ fn interactive_package_manager_menu() -> Result<PackageManagerType, Error> {
             execute!(io::stdout(), cursor::MoveUp((options.len() - 1) as u16))?;
         }
 
-        // Read keyboard input
-        if let Event::Key(KeyEvent { code, modifiers, .. }) = event::read()? {
-            match code {
-                // Handle Ctrl+C for exit
-                KeyCode::Char('c') if modifiers.contains(event::KeyModifiers::CONTROL) => {
-                    // Clean up terminal before exiting
-                    terminal::disable_raw_mode()?;
-                    execute!(
-                        io::stdout(),
-                        cursor::Show,
-                        cursor::MoveDown(options.len() as u16),
-                        Print("\n\n"),
-                        SetForegroundColor(Color::Yellow),
-                        Print("⚠ Installation cancelled by user\n"),
-                        ResetColor
-                    )?;
-                    return Err(Error::UserCancelled);
+        // Read keyboard input, skipping non-Press events (e.g. Release on Windows)
+        let (code, modifiers) = loop {
+            if let Event::Key(KeyEvent { code, modifiers, kind, .. }) = event::read()? {
+                if kind == KeyEventKind::Press {
+                    break (code, modifiers);
                 }
-                KeyCode::Up => {
-                    selected_index = selected_index.saturating_sub(1);
-                }
-                KeyCode::Down => {
-                    if selected_index < options.len() - 1 {
-                        selected_index += 1;
-                    }
-                }
-                KeyCode::Enter | KeyCode::Char(' ') => {
-                    break Ok(options[selected_index].1);
-                }
-                KeyCode::Char('1') => {
-                    break Ok(options[0].1);
-                }
-                KeyCode::Char('2') if options.len() > 1 => {
-                    break Ok(options[1].1);
-                }
-                KeyCode::Char('3') if options.len() > 2 => {
-                    break Ok(options[2].1);
-                }
-                KeyCode::Char('4') if options.len() > 3 => {
-                    break Ok(options[3].1);
-                }
-                KeyCode::Esc | KeyCode::Char('q') => {
-                    // Exit on escape/quit
-                    terminal::disable_raw_mode()?;
-                    execute!(
-                        io::stdout(),
-                        cursor::Show,
-                        cursor::MoveDown(options.len() as u16),
-                        Print("\n\n"),
-                        SetForegroundColor(Color::Yellow),
-                        Print("⚠ Installation cancelled by user\n"),
-                        ResetColor
-                    )?;
-                    return Err(Error::UserCancelled);
-                }
-                _ => {}
             }
+        };
+
+        match code {
+            // Handle Ctrl+C for exit
+            KeyCode::Char('c') if modifiers.contains(event::KeyModifiers::CONTROL) => {
+                // Clean up terminal before exiting
+                terminal::disable_raw_mode()?;
+                execute!(
+                    io::stdout(),
+                    cursor::Show,
+                    cursor::MoveDown(options.len() as u16),
+                    Print("\n\n"),
+                    SetForegroundColor(Color::Yellow),
+                    Print("⚠ Installation cancelled by user\n"),
+                    ResetColor
+                )?;
+                return Err(Error::UserCancelled);
+            }
+            KeyCode::Up => {
+                selected_index = selected_index.saturating_sub(1);
+            }
+            KeyCode::Down => {
+                if selected_index < options.len() - 1 {
+                    selected_index += 1;
+                }
+            }
+            KeyCode::Enter | KeyCode::Char(' ') => {
+                break Ok(options[selected_index].1);
+            }
+            KeyCode::Char('1') => {
+                break Ok(options[0].1);
+            }
+            KeyCode::Char('2') if options.len() > 1 => {
+                break Ok(options[1].1);
+            }
+            KeyCode::Char('3') if options.len() > 2 => {
+                break Ok(options[2].1);
+            }
+            KeyCode::Char('4') if options.len() > 3 => {
+                break Ok(options[3].1);
+            }
+            KeyCode::Esc | KeyCode::Char('q') => {
+                // Exit on escape/quit
+                terminal::disable_raw_mode()?;
+                execute!(
+                    io::stdout(),
+                    cursor::Show,
+                    cursor::MoveDown(options.len() as u16),
+                    Print("\n\n"),
+                    SetForegroundColor(Color::Yellow),
+                    Print("⚠ Installation cancelled by user\n"),
+                    ResetColor
+                )?;
+                return Err(Error::UserCancelled);
+            }
+            _ => {}
         }
     };
 
@@ -1835,6 +1861,24 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_download_package_manager_rejects_path_traversal_version() {
+        // Versions containing path separators or traversal components must be
+        // rejected before any filesystem operations: `AbsolutePath::join` does
+        // not normalize `..`, so a bad version would escape the home dir.
+        for bad in ["../../../escape", "..", "1.0.0/../../escape", "/foo/bar", "1.0.0\0", ""] {
+            let result = download_package_manager(PackageManagerType::Pnpm, bad, None).await;
+            match result {
+                Err(Error::InvalidArgument(_)) => {}
+                other => panic!("expected InvalidArgument for {bad:?}, got {other:?}"),
+            }
+        }
+
+        // Bun takes a separate code path but shares the same pre-validation.
+        let result = download_package_manager(PackageManagerType::Bun, "../../escape", None).await;
+        assert!(matches!(result, Err(Error::InvalidArgument(_))));
+    }
+
+    #[tokio::test]
     async fn test_download_package_manager() {
         let result = download_package_manager(PackageManagerType::Yarn, "4.9.2", None).await;
         assert!(result.is_ok());
@@ -2471,5 +2515,35 @@ mod tests {
             name.ends_with("-musl"),
             "On musl targets, package name should end with -musl, got: {name}"
         );
+    }
+    /// Note: The true ERROR_SHARING_VIOLATION occurs when *multiple processes*
+    /// attempt to lock the file concurrently on Windows (e.g. during parallel MSBuild tasks).
+    /// Standard cargo tests run in a single process, which the Windows OS allows to bypass
+    /// the truncation violation. This test validates the safe `OpenOptions` syntax
+    /// and ensures `open_lock_file` successfully acquires and releases locks without panicking.
+    #[test]
+    fn test_concurrent_lock_file_creation_windows_compat() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let lock_path = temp_dir.path().join("test_concurrent.lock");
+
+        // Process 1: Open and acquire exclusive lock using the new approach
+        let lock_file1 = super::open_lock_file(&lock_path).expect("Failed to open lock file 1");
+
+        // Acquire lock
+        lock_file1.lock().expect("Failed to lock file 1");
+
+        // Process 2: Attempt to open the same file while it is exclusively locked.
+        // In the buggy implementation (`File::create`), this would throw ERROR_SHARING_VIOLATION
+        // on Windows because `create` implies `truncate`, which Windows forbids for locked files.
+        let open_result = super::open_lock_file(&lock_path);
+
+        assert!(
+            open_result.is_ok(),
+            "Expected second handle to open successfully even when locked, but got: {:?}",
+            open_result.err()
+        );
+
+        // Release lock
+        lock_file1.unlock().expect("Failed to unlock file 1");
     }
 }

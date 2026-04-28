@@ -1,8 +1,6 @@
 > git init
 > git config core.hooksPath .custom-hooks
 > vp migrate --no-interactive # should skip hooks because core.hooksPath is already set
-VITE+ - The Unified Toolchain for the Web
-
 ◇ Migrated . to Vite+<repeat>
 • Node <semver>  pnpm <semver>
 • 2 config updates applied

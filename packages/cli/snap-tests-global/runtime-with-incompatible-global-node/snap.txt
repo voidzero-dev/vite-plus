@@ -1,0 +1,9 @@
+> vp env default 20.0.0
+[1]> vp migrate --yes
+error: Node.js <semver> is incompatible with Vite+ CLI.
+Required by Vite+: ^20.19.0 || >=22.12.0
+Resolved from: default
+
+
+Set a compatible version globally: vp env default lts
+Temporary override: vp env use lts

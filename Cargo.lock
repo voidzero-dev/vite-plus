@@ -1014,7 +1014,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7faa7469a93a566e9ccc1c73fe783b4a65c274c5ace346038dca9c39fe0030ad"
 dependencies = [
  "const_format_proc_macros",
- "konst",
 ]
 
 [[package]]
@@ -1295,6 +1294,16 @@ dependencies = [
 
 [[package]]
 name = "darling"
+version = "0.21.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9cdf337090841a411e2a7f3deb9187445851f91b309c0c0a29e05f74a00a48c0"
+dependencies = [
+ "darling_core 0.21.3",
+ "darling_macro 0.21.3",
+]
+
+[[package]]
+name = "darling"
 version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "25ae13da2f202d56bd7f91c25fba009e7717a1e4a1cc98a76d844b65ae912e9d"
@@ -1308,6 +1317,20 @@ name = "darling_core"
 version = "0.20.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0d00b9596d185e565c2207a0b01f8bd1a135483d02d9b7b0a54b11da8d53412e"
+dependencies = [
+ "fnv",
+ "ident_case",
+ "proc-macro2",
+ "quote",
+ "strsim",
+ "syn 2.0.117",
+]
+
+[[package]]
+name = "darling_core"
+version = "0.21.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1247195ecd7e3c85f83c8d2a366e4210d588e802133e1e355180a9870b517ea4"
 dependencies = [
  "fnv",
  "ident_case",
@@ -1337,6 +1360,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc34b93ccb385b40dc71c6fceac4b2ad23662c7eeb248cf10d529b7e055b6ead"
 dependencies = [
  "darling_core 0.20.11",
+ "quote",
+ "syn 2.0.117",
+]
+
+[[package]]
+name = "darling_macro"
+version = "0.21.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d38308df82d1080de0afee5d069fa14b0326a88c14f15c5ccda35b4a6c414c81"
+dependencies = [
+ "darling_core 0.21.3",
  "quote",
  "syn 2.0.117",
 ]
@@ -1838,14 +1872,12 @@ dependencies = [
 [[package]]
 name = "fspy"
 version = "0.1.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=076cef486127e6cd1fefc58945f00dac316888ca#076cef486127e6cd1fefc58945f00dac316888ca"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d1b8cdae8b6df5eab8b9f1143ceb4fb13933a5ef#d1b8cdae8b6df5eab8b9f1143ceb4fb13933a5ef"
 dependencies = [
  "allocator-api2",
  "anyhow",
- "bincode",
  "bstr",
  "bumpalo",
- "const_format",
  "derive_more",
  "flate2",
  "fspy_detours_sys",
@@ -1856,10 +1888,12 @@ dependencies = [
  "fspy_shared_unix",
  "futures-util",
  "libc",
- "nix 0.30.1",
+ "materialized_artifact",
+ "materialized_artifact_build",
+ "nix 0.31.2",
  "ouroboros",
- "rand 0.9.2",
  "rustc-hash",
+ "sha2",
  "tar",
  "tempfile",
  "thiserror 2.0.18",
@@ -1867,14 +1901,14 @@ dependencies = [
  "tokio-util",
  "which",
  "winapi",
+ "wincode",
  "winsafe",
- "xxhash-rust",
 ]
 
 [[package]]
 name = "fspy_detours_sys"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=076cef486127e6cd1fefc58945f00dac316888ca#076cef486127e6cd1fefc58945f00dac316888ca"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d1b8cdae8b6df5eab8b9f1143ceb4fb13933a5ef#d1b8cdae8b6df5eab8b9f1143ceb4fb13933a5ef"
 dependencies = [
  "cc",
  "winapi",
@@ -1883,24 +1917,23 @@ dependencies = [
 [[package]]
 name = "fspy_preload_unix"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=076cef486127e6cd1fefc58945f00dac316888ca#076cef486127e6cd1fefc58945f00dac316888ca"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d1b8cdae8b6df5eab8b9f1143ceb4fb13933a5ef#d1b8cdae8b6df5eab8b9f1143ceb4fb13933a5ef"
 dependencies = [
  "anyhow",
- "bincode",
  "bstr",
  "ctor",
  "fspy_shared",
  "fspy_shared_unix",
  "libc",
- "nix 0.30.1",
+ "nix 0.31.2",
+ "wincode",
 ]
 
 [[package]]
 name = "fspy_preload_windows"
 version = "0.1.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=076cef486127e6cd1fefc58945f00dac316888ca#076cef486127e6cd1fefc58945f00dac316888ca"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d1b8cdae8b6df5eab8b9f1143ceb4fb13933a5ef#d1b8cdae8b6df5eab8b9f1143ceb4fb13933a5ef"
 dependencies = [
- "bincode",
  "constcat",
  "fspy_detours_sys",
  "fspy_shared",
@@ -1908,60 +1941,62 @@ dependencies = [
  "smallvec 2.0.0-alpha.12",
  "widestring",
  "winapi",
+ "wincode",
  "winsafe",
 ]
 
 [[package]]
 name = "fspy_seccomp_unotify"
 version = "0.1.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=076cef486127e6cd1fefc58945f00dac316888ca#076cef486127e6cd1fefc58945f00dac316888ca"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d1b8cdae8b6df5eab8b9f1143ceb4fb13933a5ef#d1b8cdae8b6df5eab8b9f1143ceb4fb13933a5ef"
 dependencies = [
- "bincode",
  "futures-util",
  "libc",
- "nix 0.30.1",
+ "nix 0.31.2",
  "passfd",
  "seccompiler",
  "syscalls",
  "tempfile",
  "tokio",
  "tracing",
+ "wincode",
 ]
 
 [[package]]
 name = "fspy_shared"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=076cef486127e6cd1fefc58945f00dac316888ca#076cef486127e6cd1fefc58945f00dac316888ca"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d1b8cdae8b6df5eab8b9f1143ceb4fb13933a5ef#d1b8cdae8b6df5eab8b9f1143ceb4fb13933a5ef"
 dependencies = [
  "allocator-api2",
- "bincode",
  "bitflags 2.11.0",
  "bstr",
  "bytemuck",
+ "native_str",
  "os_str_bytes",
  "shared_memory",
  "thiserror 2.0.18",
  "tracing",
  "uuid",
  "winapi",
+ "wincode",
 ]
 
 [[package]]
 name = "fspy_shared_unix"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=076cef486127e6cd1fefc58945f00dac316888ca#076cef486127e6cd1fefc58945f00dac316888ca"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d1b8cdae8b6df5eab8b9f1143ceb4fb13933a5ef#d1b8cdae8b6df5eab8b9f1143ceb4fb13933a5ef"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
- "bincode",
  "bstr",
  "elf",
  "fspy_seccomp_unotify",
  "fspy_shared",
  "memmap2",
- "nix 0.30.1",
+ "nix 0.31.2",
  "phf 0.11.3",
  "stackalloc",
+ "wincode",
 ]
 
 [[package]]
@@ -2190,6 +2225,15 @@ dependencies = [
  "allocator-api2",
  "equivalent",
  "foldhash 0.2.0",
+]
+
+[[package]]
+name = "hashbrown"
+version = "0.17.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f467dd6dccf739c208452f8014c75c18bb8301b050ad1cfb27153803edb0f51"
+dependencies = [
+ "allocator-api2",
 ]
 
 [[package]]
@@ -2843,9 +2887,9 @@ dependencies = [
 
 [[package]]
 name = "jsonschema"
-version = "0.45.0"
+version = "0.46.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6f29616f6e19415398eb186964fb7cbbeef572c79bede3622a8277667924bbe3"
+checksum = "84695c6689b01384700a3d93acecbd07231ee6fff1bf22ae980b4c307e6ddfd5"
 dependencies = [
  "ahash",
  "bytecount",
@@ -2877,21 +2921,6 @@ dependencies = [
  "scopeguard",
  "windows-sys 0.61.2",
 ]
-
-[[package]]
-name = "konst"
-version = "0.2.19"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "330f0e13e6483b8c34885f7e6c9f19b1a7bd449c673fbb948a51c99d66ef74f4"
-dependencies = [
- "konst_macro_rules",
-]
-
-[[package]]
-name = "konst_macro_rules"
-version = "0.2.19"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4933f3f57a8e9d9da04db23fb153356ecaf00cbd14aee46279c33dc80925c37"
 
 [[package]]
 name = "kqueue"
@@ -2979,9 +3008,9 @@ checksum = "2c4a545a15244c7d945065b5d392b2d2d7f21526fba56ce51467b06ed445e8f7"
 
 [[package]]
 name = "libc"
-version = "0.2.183"
+version = "0.2.186"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b5b646652bf6661599e1da8901b3b9522896f01e736bad5f723fe7a3a27f899d"
+checksum = "68ab91017fe16c622486840e4c83c9a37afeff978bd239b5293d61ece587de66"
 
 [[package]]
 name = "libloading"
@@ -3093,6 +3122,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "materialized_artifact"
+version = "0.0.0"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d1b8cdae8b6df5eab8b9f1143ceb4fb13933a5ef#d1b8cdae8b6df5eab8b9f1143ceb4fb13933a5ef"
+dependencies = [
+ "tempfile",
+]
+
+[[package]]
+name = "materialized_artifact_build"
+version = "0.0.0"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d1b8cdae8b6df5eab8b9f1143ceb4fb13933a5ef#d1b8cdae8b6df5eab8b9f1143ceb4fb13933a5ef"
+dependencies = [
+ "xxhash-rust",
+]
+
+[[package]]
 name = "memchr"
 version = "2.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3124,6 +3169,12 @@ checksum = "488016bfae457b036d996092f6cb448677611ce4449e970ceaf42695203f218a"
 dependencies = [
  "autocfg",
 ]
+
+[[package]]
+name = "micromap"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c2a86d3146ed3995b5913c414f6664344b9617457320782e64f0bb44afd49d74"
 
 [[package]]
 name = "miette"
@@ -3293,6 +3344,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "native_str"
+version = "0.0.0"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d1b8cdae8b6df5eab8b9f1143ceb4fb13933a5ef#d1b8cdae8b6df5eab8b9f1143ceb4fb13933a5ef"
+dependencies = [
+ "allocator-api2",
+ "bytemuck",
+ "wincode",
+]
+
+[[package]]
 name = "new_debug_unreachable"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3330,7 +3391,6 @@ dependencies = [
  "cfg-if",
  "cfg_aliases",
  "libc",
- "memoffset 0.9.1",
 ]
 
 [[package]]
@@ -3343,6 +3403,7 @@ dependencies = [
  "cfg-if",
  "cfg_aliases",
  "libc",
+ "memoffset 0.9.1",
 ]
 
 [[package]]
@@ -3691,9 +3752,9 @@ dependencies = [
 
 [[package]]
 name = "oxc"
-version = "0.123.0"
+version = "0.127.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b1230c7eec5665eab1703cad92ce652e664c1abdfc4db0132e427f179cc0780"
+checksum = "4d99863e44076816f2ebf99d8407fac9eeea6692feac5c3c5f3d0dafe785fe98"
 dependencies = [
  "oxc_allocator",
  "oxc_ast",
@@ -3728,9 +3789,9 @@ dependencies = [
 
 [[package]]
 name = "oxc-miette"
-version = "2.7.0"
+version = "2.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "60a7ba54c704edefead1f44e9ef09c43e5cfae666bdc33516b066011f0e6ebf7"
+checksum = "4356a61f2ed4c9b3610245215fbf48970eb277126919f87db9d0efa93a74245c"
 dependencies = [
  "cfg-if",
  "owo-colors",
@@ -3743,9 +3804,9 @@ dependencies = [
 
 [[package]]
 name = "oxc-miette-derive"
-version = "2.7.0"
+version = "2.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d4faecb54d0971f948fbc1918df69b26007e6f279a204793669542e1e8b75eb3"
+checksum = "b237422b014f8f8fff75bb9379e697d13f8d57551a22c88bebb39f073c1bf696"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3754,12 +3815,12 @@ dependencies = [
 
 [[package]]
 name = "oxc_allocator"
-version = "0.123.0"
+version = "0.127.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e6fc6ce99f6a28fd477c6df500bbc9bf1c39db166952e15bea218459cc0db0c"
+checksum = "bd3b8bfef454857d3d9ca08fb84c8955da8591b5a82a21bb34a7ebbf94da7b0f"
 dependencies = [
  "allocator-api2",
- "hashbrown 0.16.1",
+ "hashbrown 0.17.0",
  "oxc_data_structures",
  "oxc_estree",
  "rustc-hash",
@@ -3768,9 +3829,9 @@ dependencies = [
 
 [[package]]
 name = "oxc_ast"
-version = "0.123.0"
+version = "0.127.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "49fa0813bf9fcff5a4e48fc186ee15a0d276b30b0b575389a34a530864567819"
+checksum = "381ae8356082431bd7e217dd78c7179bfc379dbbe7a32494e28be4fc678812c7"
 dependencies = [
  "bitflags 2.11.0",
  "oxc_allocator",
@@ -3780,14 +3841,15 @@ dependencies = [
  "oxc_estree",
  "oxc_regular_expression",
  "oxc_span",
+ "oxc_str",
  "oxc_syntax",
 ]
 
 [[package]]
 name = "oxc_ast_macros"
-version = "0.123.0"
+version = "0.127.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a2b2a2e09ff0dd4790a5ceb4a93349e0ea769d4d98d778946de48decb763b18"
+checksum = "c50246449a5fa669debd2debeb90be4c30f0a3a2e954f852ec40e5ef49701285"
 dependencies = [
  "phf 0.13.1",
  "proc-macro2",
@@ -3797,9 +3859,9 @@ dependencies = [
 
 [[package]]
 name = "oxc_ast_visit"
-version = "0.123.0"
+version = "0.127.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ef6d2304cb25dbbd028440591bf289ef16e3df98517930e79dcc304be64b3045"
+checksum = "82466fd1885834078becf1385380c40624bf511723b695104b21f293c7dc5271"
 dependencies = [
  "oxc_allocator",
  "oxc_ast",
@@ -3809,9 +3871,9 @@ dependencies = [
 
 [[package]]
 name = "oxc_cfg"
-version = "0.123.0"
+version = "0.127.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cbbd9896ba563247523a8f7acccdf91e32d0faa7a70a28d88a36f4db57899fb2"
+checksum = "0afb022880582d5a43908ec36c0271ec5e30a92e17567c273feb3c7a584c942f"
 dependencies = [
  "bitflags 2.11.0",
  "itertools 0.14.0",
@@ -3823,9 +3885,9 @@ dependencies = [
 
 [[package]]
 name = "oxc_codegen"
-version = "0.123.0"
+version = "0.127.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce92b24319ee9fbfa14a5cc488a5ba91bb04bac070c4bad0ba18c772060d19c0"
+checksum = "b69f394fa01810f99943a9191dde9d5757bdccd5c06347af62663eea671a5153"
 dependencies = [
  "bitflags 2.11.0",
  "cow-utils",
@@ -3838,15 +3900,16 @@ dependencies = [
  "oxc_semantic",
  "oxc_sourcemap",
  "oxc_span",
+ "oxc_str",
  "oxc_syntax",
  "rustc-hash",
 ]
 
 [[package]]
 name = "oxc_compat"
-version = "0.123.0"
+version = "0.127.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bd5a3de8c67c960a20bc0177d54498d1a96275c38eb78a0975b4ffdc5a1fb13a"
+checksum = "20b656d726e4dafe2341759dc2f1fefa39fc736773f382885714f139d4dc69cc"
 dependencies = [
  "cow-utils",
  "oxc-browserslist",
@@ -3857,18 +3920,18 @@ dependencies = [
 
 [[package]]
 name = "oxc_data_structures"
-version = "0.123.0"
+version = "0.127.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c8e8f59bed9522098da177d894dc8635fb3eae218ff97d9c695900cb11fd10a2"
+checksum = "1defc2fd17ee94f2c8511b0c4a4756d5868fbee891478953f2354ef444b1962f"
 dependencies = [
  "ropey",
 ]
 
 [[package]]
 name = "oxc_diagnostics"
-version = "0.123.0"
+version = "0.127.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e0476859d4319f2b063f7c4a3120ee5b7e3e48032865ca501f8545ff44badcff"
+checksum = "1d7ccb0e8e7c9f1fb75e0700b2c75d9d854e534a7a356b13d2936893651f2b98"
 dependencies = [
  "cow-utils",
  "oxc-miette",
@@ -3877,9 +3940,9 @@ dependencies = [
 
 [[package]]
 name = "oxc_ecmascript"
-version = "0.123.0"
+version = "0.127.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1bcf46e5b1a6f8ea3797e887a9db4c79ed15894ca8685eb628da462d4c4e913f"
+checksum = "1904566c4e725c1511c88166ec203ae97bebb62887441b4a29b1e7757ec39859"
 dependencies = [
  "cow-utils",
  "num-bigint",
@@ -3893,9 +3956,9 @@ dependencies = [
 
 [[package]]
 name = "oxc_estree"
-version = "0.123.0"
+version = "0.127.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2251e6b61eab7b96f0e9d140b68b0f0d8a851c7d260725433e18b1babdcb9430"
+checksum = "e87cd0e290bab4cb5d81377bbc1ebd414f01a7af72d7f8e5ccbb4a9a157d71df"
 dependencies = [
  "dragonbox_ecma",
  "itoa",
@@ -3904,9 +3967,9 @@ dependencies = [
 
 [[package]]
 name = "oxc_estree_tokens"
-version = "0.123.0"
+version = "0.127.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf4ff2f5c23057c3b6404290efe099851b2717662d9653ebc4de38df53d93eca"
+checksum = "bf370c76704818f3a945d20cd88569d832f6e08f0c6ffddcf31db2ec33c15e75"
 dependencies = [
  "itoa",
  "oxc_ast",
@@ -3930,9 +3993,9 @@ dependencies = [
 
 [[package]]
 name = "oxc_isolated_declarations"
-version = "0.123.0"
+version = "0.127.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08b77942dc4da422271ee1f9849bdb507e815bae4093f27d0382f85f32ff41b4"
+checksum = "51aded9db10bd75a59116186779b70a2a7451c331b7c057778a4e9b57a70f31f"
 dependencies = [
  "bitflags 2.11.0",
  "oxc_allocator",
@@ -3941,15 +4004,16 @@ dependencies = [
  "oxc_diagnostics",
  "oxc_ecmascript",
  "oxc_span",
+ "oxc_str",
  "oxc_syntax",
  "rustc-hash",
 ]
 
 [[package]]
 name = "oxc_mangler"
-version = "0.123.0"
+version = "0.127.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1096e5ba07fb76a6331d7cb62803c0f7a69a7dff93fa93352c9d8d3532465ea4"
+checksum = "dc7dcb6b22f8e7aa9a8d2afa8f29e62a7892a02de780dab976aa42eb09e977a9"
 dependencies = [
  "itertools 0.14.0",
  "oxc_allocator",
@@ -3958,15 +4022,16 @@ dependencies = [
  "oxc_index",
  "oxc_semantic",
  "oxc_span",
+ "oxc_str",
  "oxc_syntax",
  "rustc-hash",
 ]
 
 [[package]]
 name = "oxc_minifier"
-version = "0.123.0"
+version = "0.127.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dbd187caf751545b5cdfae89d6fd18e4edd532bf07b4401ff31c81670ed8bdcc"
+checksum = "59700b3cd4906c9e1878ac925bd86a284a1efd0a69353516f65ffc3ebb08a8ff"
 dependencies = [
  "cow-utils",
  "itoa",
@@ -3990,9 +4055,9 @@ dependencies = [
 
 [[package]]
 name = "oxc_minify_napi"
-version = "0.123.0"
+version = "0.127.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "778873e8c71768531393229c448c4b9a27882400b869618f9bdbb4f103a924de"
+checksum = "dbe4a24afbd774e68ac00836a158182e2d2fc4a88dc5be07d472d2673d5a5809"
 dependencies = [
  "napi",
  "napi-build",
@@ -4010,9 +4075,9 @@ dependencies = [
 
 [[package]]
 name = "oxc_napi"
-version = "0.123.0"
+version = "0.127.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ff9776efeaa305817485c69e219bd952ec9b1012ff2cc582e271f3cfd4b10b06"
+checksum = "5169390b838d305df7c980b6ac301b65f3691906f510589d723313678b27ca8e"
 dependencies = [
  "napi",
  "napi-build",
@@ -4026,9 +4091,9 @@ dependencies = [
 
 [[package]]
 name = "oxc_parser"
-version = "0.123.0"
+version = "0.127.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "439d2580047b77faf6e60d358b48e5292e0e026b9cfc158d46ddd0175244bb26"
+checksum = "c71acdb67749ff68bfbbd346da7dd2fe4947964be49ac9ec34d73d10a2396dcd"
 dependencies = [
  "bitflags 2.11.0",
  "cow-utils",
@@ -4042,6 +4107,7 @@ dependencies = [
  "oxc_ecmascript",
  "oxc_regular_expression",
  "oxc_span",
+ "oxc_str",
  "oxc_syntax",
  "rustc-hash",
  "seq-macro",
@@ -4049,9 +4115,9 @@ dependencies = [
 
 [[package]]
 name = "oxc_parser_napi"
-version = "0.123.0"
+version = "0.127.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f19c537c88ba817e9ce5def66ee6ddebddc8ad7f314540fe018e11d1949fbf9"
+checksum = "2c3dad0696612fdd29f773815084545e2c7c9b8e5de1c024c5a77450e6f9db23"
 dependencies = [
  "napi",
  "napi-build",
@@ -4061,20 +4127,22 @@ dependencies = [
  "oxc_estree",
  "oxc_estree_tokens",
  "oxc_napi",
+ "oxc_str",
  "rustc-hash",
 ]
 
 [[package]]
 name = "oxc_regular_expression"
-version = "0.123.0"
+version = "0.127.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0fb5669d3298a92d440afec516943745794cb4cf977911728cd73e3438db87b9"
+checksum = "08a1273168ec6d8083e161565d264847249b9aad51c430d92d344303ede058b2"
 dependencies = [
  "bitflags 2.11.0",
  "oxc_allocator",
  "oxc_ast_macros",
  "oxc_diagnostics",
  "oxc_span",
+ "oxc_str",
  "phf 0.13.1",
  "rustc-hash",
  "unicode-id-start",
@@ -4123,9 +4191,9 @@ dependencies = [
 
 [[package]]
 name = "oxc_semantic"
-version = "0.123.0"
+version = "0.127.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "487e9ef54375b23b159eef73746a02b505c3ae70b9c302610680d3c68a3bb62c"
+checksum = "63d4f8a0d3eb4e8e03aa413f54300235cb0314dc26649d2ff19f609b7b478272"
 dependencies = [
  "itertools 0.14.0",
  "memchr",
@@ -4137,6 +4205,7 @@ dependencies = [
  "oxc_ecmascript",
  "oxc_index",
  "oxc_span",
+ "oxc_str",
  "oxc_syntax",
  "rustc-hash",
  "self_cell",
@@ -4160,9 +4229,9 @@ dependencies = [
 
 [[package]]
 name = "oxc_span"
-version = "0.123.0"
+version = "0.127.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1d452f6a664627bdd0f1f1586f9258f81cd7edc5c83e9ef50019f701ef1722d"
+checksum = "9af84474452c3caa7aca1bcaca04b6e16552fe29472059b7921ae7a69790dccf"
 dependencies = [
  "compact_str",
  "oxc-miette",
@@ -4175,12 +4244,12 @@ dependencies = [
 
 [[package]]
 name = "oxc_str"
-version = "0.123.0"
+version = "0.127.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5c7a27c4371f69387f3d6f8fa56f70e4c6fa6aedc399285de6ec02bb9fd148d7"
+checksum = "136bcc6bed1182df0b9c529e478da55a490b38ba5f1189abf2e7a9b13f46f0b1"
 dependencies = [
  "compact_str",
- "hashbrown 0.16.1",
+ "hashbrown 0.17.0",
  "oxc_allocator",
  "oxc_estree",
  "serde",
@@ -4188,9 +4257,9 @@ dependencies = [
 
 [[package]]
 name = "oxc_syntax"
-version = "0.123.0"
+version = "0.127.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d60d91023aafc256ab99c3dbf6181473e495695029c0152d2093e87df18ffe2"
+checksum = "b448a086623714675f66b79271e25fa2b51708255fa6af7dad83be88cc6e8726"
 dependencies = [
  "bitflags 2.11.0",
  "cow-utils",
@@ -4201,6 +4270,7 @@ dependencies = [
  "oxc_estree",
  "oxc_index",
  "oxc_span",
+ "oxc_str",
  "phf 0.13.1",
  "serde",
  "unicode-id-start",
@@ -4208,9 +4278,9 @@ dependencies = [
 
 [[package]]
 name = "oxc_transform_napi"
-version = "0.123.0"
+version = "0.127.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "072cbc2cce7ceb39c77cf9273ff1b2eb5a8510812b97c9e524ed05fe8c81658f"
+checksum = "d306051b710415c96e53298cd3cbd9f27a66ffe7061d8222795f9b08d341b720"
 dependencies = [
  "napi",
  "napi-build",
@@ -4223,9 +4293,9 @@ dependencies = [
 
 [[package]]
 name = "oxc_transformer"
-version = "0.123.0"
+version = "0.127.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "226d77c70778860c4b4888e4aa52f1b4799bfc67093aa5070f367848ff8df09b"
+checksum = "0234f59f2ef97351d34ce7bb2329de0c11abead892f29b26d01d6a501cd5cf10"
 dependencies = [
  "base64 0.22.1",
  "compact_str",
@@ -4242,6 +4312,7 @@ dependencies = [
  "oxc_regular_expression",
  "oxc_semantic",
  "oxc_span",
+ "oxc_str",
  "oxc_syntax",
  "oxc_traverse",
  "rustc-hash",
@@ -4252,9 +4323,9 @@ dependencies = [
 
 [[package]]
 name = "oxc_transformer_plugins"
-version = "0.123.0"
+version = "0.127.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "444d9b756b9f4fe02f4d6340f2c06ec3334991c92e144e8c07ba91d1e81dbe72"
+checksum = "63dc85f7d8a03e794c86551d5d580254eded49f80f559443eb205266bde57f6b"
 dependencies = [
  "cow-utils",
  "itoa",
@@ -4266,6 +4337,7 @@ dependencies = [
  "oxc_parser",
  "oxc_semantic",
  "oxc_span",
+ "oxc_str",
  "oxc_syntax",
  "oxc_transformer",
  "oxc_traverse",
@@ -4274,9 +4346,9 @@ dependencies = [
 
 [[package]]
 name = "oxc_traverse"
-version = "0.123.0"
+version = "0.127.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c31aba1910999e2f9a1cc9c47a490caaed828bb119351abe20a2a7851d554963"
+checksum = "648c4e7c8ee0a8d2ff28751cc9dc8d5502a7d3b2b96d4fa73de7fb31b46d54c6"
 dependencies = [
  "itoa",
  "oxc_allocator",
@@ -4341,10 +4413,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "pastey"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b867cad97c0791bbd3aaa6472142568c6c9e8f71937e98379f584cfb0cf35bec"
+
+[[package]]
 name = "path-clean"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "17359afc20d7ab31fdb42bb844c8b3bb1dabd7dcf7e68428492da7f16966fcef"
+
+[[package]]
+name = "path-posix"
+version = "0.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "252f3dfa42084a2ba8294ec1cf6bf7beaed19753989bd17da833c33c6a3ddf9d"
+dependencies = [
+ "memchr",
+]
 
 [[package]]
 name = "pathdiff"
@@ -4734,7 +4821,7 @@ dependencies = [
 [[package]]
 name = "pty_terminal_test_client"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=076cef486127e6cd1fefc58945f00dac316888ca#076cef486127e6cd1fefc58945f00dac316888ca"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d1b8cdae8b6df5eab8b9f1143ceb4fb13933a5ef#d1b8cdae8b6df5eab8b9f1143ceb4fb13933a5ef"
 
 [[package]]
 name = "quote"
@@ -4908,14 +4995,16 @@ dependencies = [
 
 [[package]]
 name = "referencing"
-version = "0.45.0"
+version = "0.46.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b8a618c14f8ba29d8193bb55e2bf13e4fb2b1115313ecb7ae94b43100c7ac7d5"
+checksum = "a2d5554bf79f4acf770dc3193b44b2d63b348f5f7b7448a0ea1191b37b620728"
 dependencies = [
  "ahash",
  "fluent-uri",
  "getrandom 0.3.4",
  "hashbrown 0.16.1",
+ "itoa",
+ "micromap",
  "parking_lot",
  "percent-encoding",
  "serde_json",
@@ -5044,6 +5133,7 @@ dependencies = [
  "oxc_allocator",
  "oxc_ecmascript",
  "oxc_index",
+ "oxc_str",
  "oxc_traverse",
  "petgraph 0.8.3",
  "rayon",
@@ -5225,6 +5315,7 @@ dependencies = [
  "oxc_ecmascript",
  "oxc_index",
  "oxc_resolver",
+ "oxc_str",
  "rolldown_ecmascript",
  "rolldown_error",
  "rolldown_sourcemap",
@@ -5300,6 +5391,7 @@ dependencies = [
  "arcstr",
  "oxc",
  "oxc_sourcemap",
+ "oxc_str",
  "rolldown_error",
  "self_cell",
 ]
@@ -5312,7 +5404,6 @@ dependencies = [
  "oxc",
  "rolldown_common",
  "rolldown_utils",
- "smallvec 1.15.1",
 ]
 
 [[package]]
@@ -5494,6 +5585,7 @@ dependencies = [
  "rolldown_common",
  "rolldown_plugin",
  "rolldown_utils",
+ "serde_json",
 ]
 
 [[package]]
@@ -5597,6 +5689,7 @@ dependencies = [
  "fast-glob",
  "itoa",
  "oxc",
+ "path-posix",
  "rolldown_common",
  "rolldown_ecmascript_utils",
  "rolldown_plugin",
@@ -5848,6 +5941,7 @@ dependencies = [
  "nom 8.0.0",
  "oxc",
  "oxc_index",
+ "oxc_str",
  "rayon",
  "regex",
  "regress",
@@ -6011,9 +6105,9 @@ checksum = "f87165f0995f63a9fbeea62b64d10b4d9d8e78ec6d7d51fb2125fda7bb36788f"
 
 [[package]]
 name = "rustls-webpki"
-version = "0.103.10"
+version = "0.103.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df33b2b81ac578cabaf06b89b0631153a3f416b0a886e8a7a1707fb51abbd1ef"
+checksum = "61c429a8649f110dddef65e2a5ad240f747e85f7758a6bccc7e5777bd33f756e"
 dependencies = [
  "ring",
  "rustls-pki-types",
@@ -6099,7 +6193,7 @@ checksum = "490dcfcbfef26be6800d11870ff2df8774fa6e86d047e3e8c8a76b25655e41ca"
 [[package]]
 name = "seccompiler"
 version = "0.5.0"
-source = "git+https://github.com/branchseer/seccompiler?branch=seccomp-action-raw#dbccf624efc19685e8b85beb7b0a9fdda0678da2"
+source = "git+https://github.com/rust-vmm/seccompiler?rev=08587106340b8e3cb361c7561411510039436857#08587106340b8e3cb361c7561411510039436857"
 dependencies = [
  "libc",
 ]
@@ -6223,6 +6317,19 @@ dependencies = [
  "serde",
  "serde_core",
  "zmij",
+]
+
+[[package]]
+name = "serde_norway"
+version = "0.9.42"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e408f29489b5fd500fab51ff1484fc859bb655f32c671f307dcd733b72e8168c"
+dependencies = [
+ "indexmap",
+ "itoa",
+ "ryu",
+ "serde",
+ "unsafe-libyaml-norway",
 ]
 
 [[package]]
@@ -7164,6 +7271,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "673aac59facbab8a9007c7f6108d11f63b603f7cabff99fabf650fea5c32b861"
 
 [[package]]
+name = "unsafe-libyaml-norway"
+version = "0.2.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b39abd59bf32521c7f2301b52d05a6a2c975b6003521cbd0c6dc1582f0a22104"
+
+[[package]]
 name = "untrusted"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7383,7 +7496,7 @@ dependencies = [
 [[package]]
 name = "vite_glob"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=076cef486127e6cd1fefc58945f00dac316888ca#076cef486127e6cd1fefc58945f00dac316888ca"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d1b8cdae8b6df5eab8b9f1143ceb4fb13933a5ef#d1b8cdae8b6df5eab8b9f1143ceb4fb13933a5ef"
 dependencies = [
  "thiserror 2.0.18",
  "vite_path",
@@ -7394,22 +7507,17 @@ dependencies = [
 name = "vite_global_cli"
 version = "0.0.0"
 dependencies = [
- "base64-simd",
  "chrono",
  "clap",
  "clap_complete",
  "crossterm",
  "directories",
- "flate2",
- "junction",
  "node-semver",
  "owo-colors",
  "oxc_resolver",
  "serde",
  "serde_json",
  "serial_test",
- "sha2",
- "tar",
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
@@ -7419,6 +7527,7 @@ dependencies = [
  "vite_install",
  "vite_js_runtime",
  "vite_path",
+ "vite_setup",
  "vite_shared",
  "vite_str",
  "vite_workspace",
@@ -7427,7 +7536,7 @@ dependencies = [
 [[package]]
 name = "vite_graph_ser"
 version = "0.1.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=076cef486127e6cd1fefc58945f00dac316888ca#076cef486127e6cd1fefc58945f00dac316888ca"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d1b8cdae8b6df5eab8b9f1143ceb4fb13933a5ef#d1b8cdae8b6df5eab8b9f1143ceb4fb13933a5ef"
 dependencies = [
  "petgraph 0.8.3",
  "serde",
@@ -7463,6 +7572,22 @@ dependencies = [
  "vite_shared",
  "vite_str",
  "vite_workspace",
+]
+
+[[package]]
+name = "vite_installer"
+version = "0.0.0"
+dependencies = [
+ "clap",
+ "indicatif",
+ "owo-colors",
+ "tokio",
+ "vite_install",
+ "vite_path",
+ "vite_setup",
+ "vite_shared",
+ "which",
+ "winreg",
 ]
 
 [[package]]
@@ -7510,25 +7635,46 @@ dependencies = [
 [[package]]
 name = "vite_path"
 version = "0.1.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=076cef486127e6cd1fefc58945f00dac316888ca#076cef486127e6cd1fefc58945f00dac316888ca"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d1b8cdae8b6df5eab8b9f1143ceb4fb13933a5ef#d1b8cdae8b6df5eab8b9f1143ceb4fb13933a5ef"
 dependencies = [
- "bincode",
  "diff-struct",
  "path-clean",
  "ref-cast",
  "serde",
  "thiserror 2.0.18",
  "vite_str",
+ "wincode",
 ]
 
 [[package]]
 name = "vite_select"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=076cef486127e6cd1fefc58945f00dac316888ca#076cef486127e6cd1fefc58945f00dac316888ca"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d1b8cdae8b6df5eab8b9f1143ceb4fb13933a5ef#d1b8cdae8b6df5eab8b9f1143ceb4fb13933a5ef"
 dependencies = [
  "anyhow",
  "crossterm",
  "nucleo-matcher",
+ "vite_str",
+]
+
+[[package]]
+name = "vite_setup"
+version = "0.0.0"
+dependencies = [
+ "base64-simd",
+ "flate2",
+ "junction",
+ "node-semver",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tar",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "vite_install",
+ "vite_path",
  "vite_str",
 ]
 
@@ -7553,14 +7699,14 @@ dependencies = [
 [[package]]
 name = "vite_shell"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=076cef486127e6cd1fefc58945f00dac316888ca#076cef486127e6cd1fefc58945f00dac316888ca"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d1b8cdae8b6df5eab8b9f1143ceb4fb13933a5ef#d1b8cdae8b6df5eab8b9f1143ceb4fb13933a5ef"
 dependencies = [
- "bincode",
  "brush-parser 0.3.0 (git+https://github.com/reubeno/brush?rev=dcb760933b10ee0433d7b740a5709b06f5c67c6b)",
  "diff-struct",
  "serde",
  "shell-escape",
  "vite_str",
+ "wincode",
 ]
 
 [[package]]
@@ -7580,29 +7726,27 @@ dependencies = [
 [[package]]
 name = "vite_str"
 version = "0.1.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=076cef486127e6cd1fefc58945f00dac316888ca#076cef486127e6cd1fefc58945f00dac316888ca"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d1b8cdae8b6df5eab8b9f1143ceb4fb13933a5ef#d1b8cdae8b6df5eab8b9f1143ceb4fb13933a5ef"
 dependencies = [
- "bincode",
  "compact_str",
  "diff-struct",
  "serde",
+ "wincode",
 ]
 
 [[package]]
 name = "vite_task"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=076cef486127e6cd1fefc58945f00dac316888ca#076cef486127e6cd1fefc58945f00dac316888ca"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d1b8cdae8b6df5eab8b9f1143ceb4fb13933a5ef#d1b8cdae8b6df5eab8b9f1143ceb4fb13933a5ef"
 dependencies = [
  "anyhow",
  "async-trait",
- "bincode",
- "bstr",
  "clap",
  "ctrlc",
  "derive_more",
  "fspy",
  "futures-util",
- "nix 0.30.1",
+ "nix 0.31.2",
  "once_cell",
  "owo-colors",
  "petgraph 0.8.3",
@@ -7625,16 +7769,16 @@ dependencies = [
  "vite_workspace",
  "wax 0.7.0",
  "winapi",
+ "wincode",
 ]
 
 [[package]]
 name = "vite_task_graph"
 version = "0.1.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=076cef486127e6cd1fefc58945f00dac316888ca#076cef486127e6cd1fefc58945f00dac316888ca"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d1b8cdae8b6df5eab8b9f1143ceb4fb13933a5ef#d1b8cdae8b6df5eab8b9f1143ceb4fb13933a5ef"
 dependencies = [
  "anyhow",
  "async-trait",
- "bincode",
  "monostate",
  "petgraph 0.8.3",
  "rustc-hash",
@@ -7647,17 +7791,19 @@ dependencies = [
  "vite_str",
  "vite_workspace",
  "wax 0.7.0",
+ "wincode",
 ]
 
 [[package]]
 name = "vite_task_plan"
 version = "0.1.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=076cef486127e6cd1fefc58945f00dac316888ca#076cef486127e6cd1fefc58945f00dac316888ca"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d1b8cdae8b6df5eab8b9f1143ceb4fb13933a5ef#d1b8cdae8b6df5eab8b9f1143ceb4fb13933a5ef"
 dependencies = [
  "anyhow",
  "async-trait",
- "bincode",
+ "cow-utils",
  "futures-util",
+ "pathdiff",
  "petgraph 0.8.3",
  "rustc-hash",
  "serde",
@@ -7673,6 +7819,7 @@ dependencies = [
  "vite_str",
  "vite_task_graph",
  "which",
+ "wincode",
 ]
 
 [[package]]
@@ -7682,14 +7829,14 @@ version = "0.0.0"
 [[package]]
 name = "vite_workspace"
 version = "0.0.0"
-source = "git+https://github.com/voidzero-dev/vite-task.git?rev=076cef486127e6cd1fefc58945f00dac316888ca#076cef486127e6cd1fefc58945f00dac316888ca"
+source = "git+https://github.com/voidzero-dev/vite-task.git?rev=d1b8cdae8b6df5eab8b9f1143ceb4fb13933a5ef#d1b8cdae8b6df5eab8b9f1143ceb4fb13933a5ef"
 dependencies = [
  "clap",
  "petgraph 0.8.3",
  "rustc-hash",
  "serde",
  "serde_json",
- "serde_yml",
+ "serde_norway",
  "thiserror 2.0.18",
  "tracing",
  "vec1",
@@ -7968,6 +8115,31 @@ name = "winapi-x86_64-pc-windows-gnu"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
+
+[[package]]
+name = "wincode"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b2f42dd20febad683d07044c5f543e57f822512ebebaf2c827705c99a0ad4575"
+dependencies = [
+ "pastey",
+ "proc-macro2",
+ "quote",
+ "thiserror 2.0.18",
+ "wincode-derive",
+]
+
+[[package]]
+name = "wincode-derive"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fca057fc9a13dd19cdb64ef558635d43c42667c0afa1ae7915ea1fa66993fd1a"
+dependencies = [
+ "darling 0.21.3",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
+]
 
 [[package]]
 name = "windows"
@@ -8343,6 +8515,16 @@ name = "windows_x86_64_msvc"
 version = "0.53.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6bbff5f0aada427a1e5a6da5f1f98158182f26556f345ac9e04d36d0ebed650"
+
+[[package]]
+name = "winreg"
+version = "0.56.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7d6f32a0ff4a9f6f01231eb2059cc85479330739333e0e58cadf03b6af2cca10"
+dependencies = [
+ "cfg-if",
+ "windows-sys 0.61.2",
+]
 
 [[package]]
 name = "winsafe"
