@@ -177,8 +177,6 @@ const CJS_REEXPORT_PACKAGES = new Set(['expect-type']);
 // Node built-in modules (including node: prefix variants)
 const NODE_BUILTINS = new Set([...builtinModules, ...builtinModules.map((m) => `node:${m}`)]);
 
-await rm(distDir, { recursive: true, force: true });
-
 // Step 1: Copy vitest-dev dist files (rewriting vite -> core package)
 await bundleVitest();
 
