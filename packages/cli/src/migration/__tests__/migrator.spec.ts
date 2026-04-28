@@ -797,6 +797,43 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(pkg.pnpm).toBeUndefined();
   });
 
+  it('preserves default pnpm catalog overrides over stale workspace named overrides', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'pnpm-monorepo',
+        workspaces: ['packages/*'],
+        devDependencies: { vite: 'catalog:' },
+        pnpm: {
+          overrides: {
+            vite: 'catalog:',
+          },
+        },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'packages:',
+        '  - packages/*',
+        'overrides:',
+        '  vite: catalog:vite7',
+        'catalogs:',
+        '  vite7:',
+        '    vite: ^7.0.0',
+        '',
+      ].join('\n'),
+    );
+
+    rewriteMonorepo(makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true);
+
+    const yaml = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      overrides: Record<string, string>;
+    };
+    expect(yaml.overrides.vite).toBe('catalog:');
+    expect(yaml.overrides.vitest).toBe('catalog:');
+  });
+
   it('does not resolve peer dependency catalog specs to migrated aliases', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),

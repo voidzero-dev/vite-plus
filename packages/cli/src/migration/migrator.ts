@@ -1169,13 +1169,13 @@ function cleanupPnpmOverridesForWorkspaceYaml(
   overrideKeys: string[],
 ): Record<string, string> | undefined {
   // Remove Vite-managed keys from pnpm.overrides
-  const namedCatalogOverrides: Record<string, string> = {};
+  const catalogOverrides: Record<string, string> = {};
   const overrides = pkg.pnpm?.overrides;
   for (const key of [...overrideKeys, ...REMOVE_PACKAGES]) {
     const value = overrides?.[key];
     if (value) {
-      if (overrideKeys.includes(key) && value.startsWith('catalog:') && value !== 'catalog:') {
-        namedCatalogOverrides[key] = value;
+      if (overrideKeys.includes(key) && value.startsWith('catalog:')) {
+        catalogOverrides[key] = value;
       }
       delete overrides[key];
     }
@@ -1192,8 +1192,8 @@ function cleanupPnpmOverridesForWorkspaceYaml(
   // Collect remaining overrides to move to pnpm-workspace.yaml then delete all
   // (pnpm ignores workspace-level overrides when pnpm.overrides exists in package.json)
   let remaining: Record<string, string> | undefined;
-  if (Object.keys(namedCatalogOverrides).length > 0) {
-    remaining = { ...namedCatalogOverrides };
+  if (Object.keys(catalogOverrides).length > 0) {
+    remaining = { ...catalogOverrides };
   }
   if (pkg.pnpm?.overrides && Object.keys(pkg.pnpm.overrides).length > 0) {
     remaining = { ...remaining, ...pkg.pnpm.overrides };
