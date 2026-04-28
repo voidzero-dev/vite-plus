@@ -173,6 +173,25 @@ describe('rewritePackageJson', () => {
     expect((pkg.devDependencies as Record<string, string>)['vite-plus']).toBe('catalog:');
   });
 
+  it('uses override specs for yarn optional dependencies in monorepo projects', async () => {
+    const pkg = {
+      devDependencies: {
+        vite: '^7.0.0',
+      },
+      optionalDependencies: {
+        vite: '^7.0.0',
+        vitest: 'catalog:test',
+      },
+    };
+
+    rewritePackageJson(pkg, PackageManager.yarn, true);
+
+    expect(pkg.devDependencies.vite).toBe('catalog:');
+    expect(pkg.optionalDependencies.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+    expect(pkg.optionalDependencies.vitest).toBe('npm:@voidzero-dev/vite-plus-test@latest');
+    expect((pkg.devDependencies as Record<string, string>)['vite-plus']).toBe('catalog:');
+  });
+
   it('rewrites peer and optional dependency catalog specs in monorepo projects', async () => {
     const pkg = {
       peerDependencies: {

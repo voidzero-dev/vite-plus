@@ -87,6 +87,12 @@ const BROWSER_PROVIDER_PEER_DEPS: Record<string, string> = {
   '@vitest/browser-webdriverio': 'webdriverio',
 };
 
+type PackageJsonDependencyField =
+  | 'devDependencies'
+  | 'dependencies'
+  | 'peerDependencies'
+  | 'optionalDependencies';
+
 function warnMigration(message: string, report?: MigrationReport) {
   addMigrationWarning(report, message);
   if (!report) {
@@ -1245,10 +1251,16 @@ function getCatalogDependencySpec(
   currentValue: string | undefined,
   version: string,
   supportCatalog: boolean,
-  options?: { dependencyField?: 'peerDependencies' },
+  options?: { dependencyField?: PackageJsonDependencyField; packageManager?: PackageManager },
 ): string {
   if (options?.dependencyField === 'peerDependencies') {
     return currentValue ?? version;
+  }
+  if (
+    options?.dependencyField === 'optionalDependencies' &&
+    options?.packageManager === PackageManager.yarn
+  ) {
+    return version;
   }
   if (!supportCatalog || version.startsWith('file:')) {
     return version;
@@ -1550,17 +1562,21 @@ export function rewritePackageJson(
   }
   const supportCatalog = !!isMonorepo && packageManager !== PackageManager.npm;
   let needVitePlus = false;
-  const dependencyGroups = [
-    pkg.devDependencies,
-    pkg.dependencies,
-    pkg.peerDependencies,
-    pkg.optionalDependencies,
+  const dependencyGroups: {
+    dependencyField: PackageJsonDependencyField;
+    dependencies: Record<string, string> | undefined;
+  }[] = [
+    { dependencyField: 'devDependencies', dependencies: pkg.devDependencies },
+    { dependencyField: 'dependencies', dependencies: pkg.dependencies },
+    { dependencyField: 'peerDependencies', dependencies: pkg.peerDependencies },
+    { dependencyField: 'optionalDependencies', dependencies: pkg.optionalDependencies },
   ];
   for (const [key, version] of Object.entries(VITE_PLUS_OVERRIDE_PACKAGES)) {
-    for (const dependencies of dependencyGroups) {
+    for (const { dependencyField, dependencies } of dependencyGroups) {
       if (dependencies?.[key]) {
         dependencies[key] = getCatalogDependencySpec(dependencies[key], version, supportCatalog, {
-          dependencyField: dependencies === pkg.peerDependencies ? 'peerDependencies' : undefined,
+          dependencyField,
+          packageManager,
         });
         needVitePlus = true;
       }
@@ -1569,7 +1585,7 @@ export function rewritePackageJson(
   // remove packages that are replaced with vite-plus
   for (const name of REMOVE_PACKAGES) {
     let wasRemoved = false;
-    for (const dependencies of dependencyGroups) {
+    for (const { dependencies } of dependencyGroups) {
       if (dependencies?.[name]) {
         delete dependencies[name];
         wasRemoved = true;
