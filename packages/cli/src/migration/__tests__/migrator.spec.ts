@@ -196,7 +196,7 @@ describe('rewritePackageJson', () => {
     ).toBe('catalog:');
   });
 
-  it('preserves peer dependency ranges outside catalog mode', async () => {
+  it('preserves peer dependency ranges', async () => {
     const pkg = {
       peerDependencies: {
         vite: '^7.0.0',
@@ -207,14 +207,28 @@ describe('rewritePackageJson', () => {
       },
     };
 
-    rewritePackageJson(pkg, PackageManager.npm);
+    rewritePackageJson(pkg, PackageManager.pnpm, true);
 
     expect(pkg.peerDependencies.vite).toBe('^7.0.0');
     expect(pkg.peerDependencies.vitest).toBe('^4.0.0');
-    expect(pkg.optionalDependencies.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+    expect(pkg.optionalDependencies.vite).toBe('catalog:');
     expect(
       (pkg as { devDependencies?: Record<string, string> }).devDependencies?.['vite-plus'],
-    ).toBe('latest');
+    ).toBe('catalog:');
+
+    const npmPkg = {
+      peerDependencies: {
+        vite: '^7.0.0',
+      },
+      optionalDependencies: {
+        vite: '^7.0.0',
+      },
+    };
+
+    rewritePackageJson(npmPkg, PackageManager.npm);
+
+    expect(npmPkg.peerDependencies.vite).toBe('^7.0.0');
+    expect(npmPkg.optionalDependencies.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
   });
 
   it('should preserve playwright when removing @vitest/browser-playwright', async () => {

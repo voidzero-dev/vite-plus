@@ -42,7 +42,7 @@ export default defineConfig({
 {
   "name": "my-vite-plugin",
   "peerDependencies": {
-    "vite": "catalog:"
+    "vite": "^6.0.0"
   },
   "devDependencies": {
     "vite-plus": "catalog:"

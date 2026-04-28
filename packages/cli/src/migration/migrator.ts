@@ -1247,10 +1247,7 @@ function getCatalogDependencySpec(
   supportCatalog: boolean,
   options?: { dependencyField?: 'peerDependencies' },
 ): string {
-  if (
-    options?.dependencyField === 'peerDependencies' &&
-    (!supportCatalog || version.startsWith('file:'))
-  ) {
+  if (options?.dependencyField === 'peerDependencies') {
     return currentValue ?? version;
   }
   if (!supportCatalog || version.startsWith('file:')) {
