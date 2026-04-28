@@ -179,9 +179,9 @@ describe('writeEditorConfigs', () => {
     expect(settings['editor.defaultFormatter']).toBe('oxc.oxc-vscode');
     expect(settings['oxc.fmt.configPath']).toBe('./vite.config.ts');
     expect(settings['npm.scriptRunner']).toBe('vp');
-    expect(settings['[typescriptreact]']).toEqual({
-      'editor.defaultFormatter': 'oxc.oxc-vscode',
-    });
+    for (const lang of ['[javascript]', '[javascriptreact]', '[typescriptreact]']) {
+      expect(settings[lang]).toEqual({ 'editor.defaultFormatter': 'oxc.oxc-vscode' });
+    }
 
     const codeActions = settings['editor.codeActionsOnSave'] as Record<string, unknown>;
     expect(codeActions['source.organizeImports']).toBe('explicit');
