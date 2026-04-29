@@ -16,4 +16,13 @@ describe('build artifacts', () => {
     expect(content).toContain('__dirname');
     expect(content).toContain('__filename');
   });
+
+  it('should include tsdown client.d.ts in dist/tsdown for pack/client support', () => {
+    const clientPath = path.join(distDir, 'tsdown/client.d.ts');
+    expect(fs.existsSync(clientPath), `${clientPath} should exist`).toBe(true);
+
+    const content = fs.readFileSync(clientPath, 'utf8');
+    expect(content).toContain('ImportMeta');
+    expect(content).toContain('glob');
+  });
 });

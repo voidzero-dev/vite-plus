@@ -79,6 +79,9 @@
       "types": "./dist/pack.d.ts",
       "import": "./dist/pack.js"
     },
+    "./pack/client": {
+      "types": "./dist/pack-client.d.ts"
+    },
     "./versions": {
       "types": "./dist/versions.d.ts",
       "default": "./dist/versions.js"

@@ -168,6 +168,13 @@ async function syncCorePackageExports() {
     `/// <reference types="${CORE_PACKAGE_NAME}/client" />\n`,
   );
 
+  // Create ./pack/client shim (types only) - ambient type declarations for tsdown bundler features
+  console.log('  Creating ./pack/client');
+  await writeFile(
+    join(distDir, 'pack-client.d.ts'),
+    `/// <reference types="${CORE_PACKAGE_NAME}/pack/client" />\n`,
+  );
+
   // Create ./module-runner shim
   console.log('  Creating ./module-runner');
   await writeFile(
