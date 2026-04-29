@@ -141,21 +141,14 @@ pub async fn dispatch(
             workspace_root,
             recursive,
             global,
-            dry_run,
+            // `--dry-run` is clap-required to coexist with `-g`, and `-g` is
+            // either intercepted by the global CLI's `run_package_manager_command`
+            // (managed flow) or rejected by the local CLI binding's
+            // `execute_pm_command`. Either way, this arm only sees `dry_run: false`.
+            dry_run: _,
             packages,
             pass_through_args,
         } => {
-            // `--dry-run` (which clap requires alongside `-g`) is honored by the
-            // global CLI's vite-plus-managed uninstall flow. The shared
-            // dispatcher reaches this arm only for non-managed paths
-            // (project-scoped removes, or local-CLI global removes), and the
-            // underlying `RemoveCommandOptions` has no preview field. Refuse
-            // rather than silently performing a real uninstall.
-            if dry_run {
-                return Err(Error::UserMessage(
-                    "`--dry-run` is only supported by the globally-installed `vp` CLI for managed packages. Run the command without `--dry-run` to actually remove the package.".into(),
-                ));
-            }
             let options = RemoveCommandOptions {
                 packages: &packages,
                 filters: filter.as_deref(),

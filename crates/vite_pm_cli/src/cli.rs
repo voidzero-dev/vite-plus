@@ -494,6 +494,22 @@ impl PackageManagerCommand {
         }
     }
 
+    /// Whether this invocation hits the vite-plus-managed-global flow on the
+    /// global CLI. The local CLI binding refuses these cases (it has no
+    /// managed package store of its own); pass-through `-g` cases like
+    /// `outdated -g`, `why -g`, and `pm config get -g` return `false` and
+    /// keep working on both CLIs.
+    pub fn is_managed_global(&self) -> bool {
+        match self {
+            Self::Install { global, .. }
+            | Self::Add { global, .. }
+            | Self::Remove { global, .. }
+            | Self::Update { global, .. } => *global,
+            Self::Pm(PmCommands::List { global, .. }) => *global,
+            _ => false,
+        }
+    }
+
     /// Determine the save dependency type from CLI flags shared by `Install` and `Add`.
     pub fn determine_save_dependency_type(
         save_dev: bool,

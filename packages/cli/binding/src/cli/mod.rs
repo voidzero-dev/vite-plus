@@ -198,6 +198,15 @@ async fn execute_pm_command(
     command: vite_pm_cli::PackageManagerCommand,
     cwd: &AbsolutePath,
 ) -> Result<ExitStatus, Error> {
+    // `-g`/`--global` operations on install/add/remove/update/`pm list` map to
+    // a vite-plus-managed package store on the global CLI; the local CLI has
+    // no such store, so refuse rather than silently doing the wrong thing
+    // (mutating the project, dropping `--node`, ignoring `--dry-run`, …).
+    if command.is_managed_global() {
+        return Err(Error::Anyhow(anyhow::anyhow!(
+            "Global package operations (`-g`/`--global`) are only supported by the globally-installed `vp` CLI. See https://viteplus.dev/guide/ to install it, then run the same command via the global `vp` binary.",
+        )));
+    }
     let status = vite_pm_cli::dispatch(cwd, command)
         .await
         .map_err(|e| Error::Anyhow(anyhow::Error::new(e)))?;
