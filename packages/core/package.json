@@ -100,7 +100,7 @@
     "./types/internal/*": null
   },
   "scripts": {
-    "build": "oxnode -C dev ./build.ts"
+    "build": "cross-env OXC_TSCONFIG_PATH=../../tsconfig.json oxnode -C dev ./build.ts"
   },
   "dependencies": {
     "@oxc-project/runtime": "catalog:",
@@ -116,6 +116,7 @@
     "@oxc-node/cli": "catalog:",
     "@oxc-node/core": "catalog:",
     "@vitejs/devtools": "^0.1.15",
+    "cross-env": "catalog:",
     "es-module-lexer": "^1.7.0",
     "hookable": "^6.0.1",
     "magic-string": "^0.30.21",
