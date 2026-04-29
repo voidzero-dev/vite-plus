@@ -64,20 +64,15 @@ pub enum Error {
         version_source: String,
         help: String,
     },
+
+    #[error(transparent)]
+    PmCli(#[from] vite_pm_cli::Error),
 }
 
-// Explicit per-variant remap (not `#[from]`) so `UserMessage` stays a
-// distinct variant `main.rs` can pattern-match to skip the "error: "
-// prefix when the message originates from the PM crate.
-impl From<vite_pm_cli::Error> for Error {
-    fn from(err: vite_pm_cli::Error) -> Self {
-        match err {
-            vite_pm_cli::Error::Install(e) => Self::Install(e),
-            vite_pm_cli::Error::Workspace(e) => Self::Workspace(e),
-            vite_pm_cli::Error::CommandExecution(e) => Self::CommandExecution(e),
-            vite_pm_cli::Error::Json(e) => Self::JsonError(e),
-            vite_pm_cli::Error::UserMessage(s) => Self::UserMessage(s),
-            vite_pm_cli::Error::Other(s) => Self::Other(s),
-        }
+impl Error {
+    /// Whether this error should be printed without the "error: " prefix
+    /// (a friendly user-facing message, not a stack trace).
+    pub fn is_user_message(&self) -> bool {
+        matches!(self, Self::UserMessage(_) | Self::PmCli(vite_pm_cli::Error::UserMessage(_)))
     }
 }
