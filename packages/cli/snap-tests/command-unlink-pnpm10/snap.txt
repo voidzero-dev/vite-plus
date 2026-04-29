@@ -1,0 +1,53 @@
+> vp unlink -h # should show help message
+Unlink packages
+
+Usage: vp unlink [OPTIONS] [PACKAGE|DIR] [ARGS]...
+
+Arguments:
+  [PACKAGE|DIR]  Package name to unlink
+  [ARGS]...      Arguments to pass to package manager
+
+Options:
+  -r, --recursive  Unlink in every workspace package
+  -h, --help       Print help
+
+> mkdir -p ../unlink-test-lib && echo '{"name": "unlink-test-lib", "version": "1.0.0"}' > ../unlink-test-lib/package.json # create test library
+> vp link ../unlink-test-lib && cat package.json # link the library first
+
+dependencies:
++ unlink-test-lib <semver> <- ../unlink-test-lib
+
+{
+  "name": "command-unlink-pnpm10",
+  "version": "1.0.0",
+  "packageManager": "pnpm@<semver>",
+  "dependencies": {
+    "unlink-test-lib": "link:../unlink-test-lib"
+  }
+}
+
+> vp unlink unlink-test-lib && cat package.json # should unlink the package
+Nothing to unlink
+{
+  "name": "command-unlink-pnpm10",
+  "version": "1.0.0",
+  "packageManager": "pnpm@<semver>",
+  "dependencies": {
+    "unlink-test-lib": "link:../unlink-test-lib"
+  }
+}
+
+> vp link ../unlink-test-lib # link again
+Lockfile is up to date, resolution step is skipped
+
+
+> vp unlink && cat package.json # should unlink all packages
+Nothing to unlink
+{
+  "name": "command-unlink-pnpm10",
+  "version": "1.0.0",
+  "packageManager": "pnpm@<semver>",
+  "dependencies": {
+    "unlink-test-lib": "link:../unlink-test-lib"
+  }
+}

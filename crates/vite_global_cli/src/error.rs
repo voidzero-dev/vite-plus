@@ -65,3 +65,19 @@ pub enum Error {
         help: String,
     },
 }
+
+// Flatten `vite_pm_cli::Error` into the matching `Error` variant so callers
+// like `main.rs` that pattern-match on `UserMessage` (to skip the "error: "
+// prefix) keep working when the message originates from the PM crate.
+impl From<vite_pm_cli::Error> for Error {
+    fn from(err: vite_pm_cli::Error) -> Self {
+        match err {
+            vite_pm_cli::Error::Install(e) => Self::Install(e),
+            vite_pm_cli::Error::Workspace(e) => Self::Workspace(e),
+            vite_pm_cli::Error::CommandExecution(e) => Self::CommandExecution(e),
+            vite_pm_cli::Error::Json(e) => Self::JsonError(e),
+            vite_pm_cli::Error::UserMessage(s) => Self::UserMessage(s),
+            vite_pm_cli::Error::Other(s) => Self::Other(s),
+        }
+    }
+}

@@ -1,0 +1,11 @@
+[1]> vp pm ls # should show friendly error
+error: No package.json found.
+
+[1]> vp pm prune # should show friendly error
+error: No package.json found.
+
+[1]> vp outdated # should show friendly error
+error: No package.json found.
+
+[1]> vp why lodash # should show friendly error
+error: No package.json found.
