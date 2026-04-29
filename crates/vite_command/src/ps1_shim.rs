@@ -82,7 +82,7 @@ mod tests {
     }
 
     fn host_arc(root: &AbsolutePath) -> Arc<AbsolutePath> {
-        Arc::<AbsolutePath>::from(abs(root.as_path().join("powershell.exe")))
+        Arc::from(abs(root.as_path().join("powershell.exe")))
     }
 
     #[test]

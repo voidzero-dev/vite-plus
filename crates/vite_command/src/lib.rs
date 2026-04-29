@@ -2,7 +2,7 @@
 use std::os::fd::{BorrowedFd, RawFd};
 use std::{
     collections::HashMap,
-    ffi::OsStr,
+    ffi::{OsStr, OsString},
     process::{ExitStatus, Stdio},
 };
 
@@ -52,7 +52,7 @@ fn resolve_program(
     bin_name: &str,
     envs: &HashMap<String, String>,
     cwd: &AbsolutePath,
-) -> Result<(AbsolutePathBuf, Vec<std::ffi::OsString>), Error> {
+) -> Result<(AbsolutePathBuf, Vec<OsString>), Error> {
     let bin_path = resolve_bin(bin_name, envs.get("PATH").map(|p| OsStr::new(p.as_str())), cwd)?;
     Ok(match ps1_shim::rewrite_cmd_to_powershell(&bin_path) {
         Some(rewritten) => rewritten,
