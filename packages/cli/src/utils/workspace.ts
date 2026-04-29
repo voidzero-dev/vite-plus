@@ -18,7 +18,13 @@ import { getScopeFromPackageName } from './package.ts';
 import { editYamlFile, readYamlFile } from './yaml.ts';
 
 // npm/yarn use an array; Bun catalogs and Yarn classic nohoist use an object with `packages`.
-export type NpmWorkspaces = string[] | { packages?: string[]; catalog?: Record<string, string> };
+export type NpmWorkspaces =
+  | string[]
+  | {
+      packages?: string[];
+      catalog?: Record<string, string>;
+      catalogs?: Record<string, Record<string, string>>;
+    };
 
 export function findPackageJsonFilesFromPatterns(patterns: string[], cwd: string): string[] {
   if (patterns.length === 0) {
