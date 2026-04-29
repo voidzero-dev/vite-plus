@@ -10,23 +10,21 @@
 //! `.cmd` whose `.ps1` sibling exists. Package manager shims (`npm.cmd`,
 //! `pnpm.cmd`, `yarn.cmd`, `npx.cmd`) live in `~/.vite-plus/js_runtime/...`
 //! or system PATH — outside any `node_modules/.bin` — so the structural
-//! check there is too narrow for this code path. If a `.ps1` sibling exists,
-//! the same tool that emitted the `.cmd` (npm cmd-shim, pnpm, yarn) emitted
-//! the `.ps1` with equivalent semantics.
+//! check there is too narrow for this code path.
+//!
+//! The cross-platform primitives (`POWERSHELL_PREFIX`, `powershell_host`,
+//! `find_ps1_sibling`) live in the `vite_powershell` crate and are shared
+//! with `vite_task_plan::ps1_shim`. This module composes them with vp's
+//! own conventions: absolute `.ps1` path in args (no cache fingerprint to
+//! keep portable) and `Vec<OsString>` return type (matches the spawn API).
 //!
 //! See <https://github.com/voidzero-dev/vite-plus/issues/1489>
 //! and <https://github.com/voidzero-dev/vite-plus/issues/1176>.
 
-use std::ffi::OsString;
+use std::{ffi::OsString, sync::Arc};
 
 use vite_path::{AbsolutePath, AbsolutePathBuf};
-
-/// Fixed arguments prepended before the `.ps1` path. `-NoProfile`/`-NoLogo`
-/// skip user profile loading; `-ExecutionPolicy Bypass` allows running the
-/// unsigned shims that npm/pnpm/yarn install.
-#[cfg(any(windows, test))]
-const POWERSHELL_PREFIX: &[&str] =
-    &["-NoProfile", "-NoLogo", "-ExecutionPolicy", "Bypass", "-File"];
+use vite_powershell::{POWERSHELL_PREFIX, find_ps1_sibling, powershell_host};
 
 /// Rewrite a resolved `.cmd` invocation to go through PowerShell.
 ///
@@ -40,7 +38,6 @@ const POWERSHELL_PREFIX: &[&str] =
 /// - no PowerShell host (`pwsh.exe` or `powershell.exe`) is on PATH,
 /// - the resolved path is not a `.cmd` (case-insensitive),
 /// - the `.cmd` has no sibling `.ps1`.
-#[cfg(windows)]
 #[must_use]
 pub fn rewrite_cmd_to_powershell(
     resolved: &AbsolutePath,
@@ -49,33 +46,11 @@ pub fn rewrite_cmd_to_powershell(
     rewrite_with_host(resolved, host)
 }
 
-#[cfg(not(windows))]
-#[must_use]
-pub const fn rewrite_cmd_to_powershell(
-    _resolved: &AbsolutePath,
-) -> Option<(AbsolutePathBuf, Vec<OsString>)> {
-    None
-}
-
-/// Cached location of the PowerShell host. Prefers cross-platform `pwsh.exe`
-/// when present, falling back to the Windows built-in `powershell.exe`.
-#[cfg(windows)]
-fn powershell_host() -> Option<&'static AbsolutePathBuf> {
-    use std::sync::LazyLock;
-
-    static POWERSHELL_HOST: LazyLock<Option<AbsolutePathBuf>> = LazyLock::new(|| {
-        let resolved = which::which("pwsh.exe").or_else(|_| which::which("powershell.exe")).ok()?;
-        AbsolutePathBuf::new(resolved)
-    });
-    POWERSHELL_HOST.as_ref()
-}
-
 /// Pure rewrite logic. Factored out so tests can drive it on any platform
 /// without depending on a real `powershell.exe`.
-#[cfg(any(windows, test))]
 fn rewrite_with_host(
     resolved: &AbsolutePath,
-    host: &AbsolutePathBuf,
+    host: &Arc<AbsolutePath>,
 ) -> Option<(AbsolutePathBuf, Vec<OsString>)> {
     let ps1 = find_ps1_sibling(resolved)?;
 
@@ -90,22 +65,7 @@ fn rewrite_with_host(
         POWERSHELL_PREFIX.iter().copied().map(OsString::from).collect();
     prefix_args.push(ps1.as_path().as_os_str().to_owned());
 
-    Some((host.clone(), prefix_args))
-}
-
-#[cfg(any(windows, test))]
-fn find_ps1_sibling(resolved: &AbsolutePath) -> Option<AbsolutePathBuf> {
-    let ext = resolved.as_path().extension().and_then(|e| e.to_str())?;
-    if !ext.eq_ignore_ascii_case("cmd") {
-        return None;
-    }
-
-    let ps1 = resolved.with_extension("ps1");
-    if !ps1.as_path().is_file() {
-        return None;
-    }
-
-    Some(ps1)
+    Some((host.to_absolute_path_buf(), prefix_args))
 }
 
 #[cfg(test)]
@@ -121,6 +81,10 @@ mod tests {
         AbsolutePathBuf::new(buf).unwrap()
     }
 
+    fn host_arc(root: &AbsolutePath) -> Arc<AbsolutePath> {
+        Arc::<AbsolutePath>::from(abs(root.as_path().join("powershell.exe")))
+    }
+
     #[test]
     fn rewrites_cmd_to_powershell_with_sibling_ps1() {
         let dir = tempdir().unwrap();
@@ -128,7 +92,7 @@ mod tests {
         fs::write(root.as_path().join("npm.cmd"), "").unwrap();
         fs::write(root.as_path().join("npm.ps1"), "").unwrap();
 
-        let host = abs(root.as_path().join("powershell.exe"));
+        let host = host_arc(&root);
         let resolved = abs(root.as_path().join("npm.cmd"));
 
         let (program, prefix_args) = rewrite_with_host(&resolved, &host).expect("should rewrite");
@@ -144,53 +108,13 @@ mod tests {
     }
 
     #[test]
-    fn rewrites_uppercase_cmd_extension() {
-        let dir = tempdir().unwrap();
-        let root = abs(dir.path().canonicalize().unwrap());
-        fs::write(root.as_path().join("pnpm.CMD"), "").unwrap();
-        fs::write(root.as_path().join("pnpm.ps1"), "").unwrap();
-
-        let host = abs(root.as_path().join("powershell.exe"));
-        let resolved = abs(root.as_path().join("pnpm.CMD"));
-
-        let result = rewrite_with_host(&resolved, &host);
-        assert!(result.is_some(), "case-insensitive .CMD should still rewrite");
-    }
-
-    #[test]
     fn returns_none_when_no_ps1_sibling() {
         let dir = tempdir().unwrap();
         let root = abs(dir.path().canonicalize().unwrap());
         fs::write(root.as_path().join("npm.cmd"), "").unwrap();
 
-        let host = abs(root.as_path().join("powershell.exe"));
+        let host = host_arc(&root);
         let resolved = abs(root.as_path().join("npm.cmd"));
-
-        assert!(rewrite_with_host(&resolved, &host).is_none());
-    }
-
-    #[test]
-    fn returns_none_for_exe() {
-        let dir = tempdir().unwrap();
-        let root = abs(dir.path().canonicalize().unwrap());
-        fs::write(root.as_path().join("bun.exe"), "").unwrap();
-        fs::write(root.as_path().join("bun.ps1"), "").unwrap();
-
-        let host = abs(root.as_path().join("powershell.exe"));
-        let resolved = abs(root.as_path().join("bun.exe"));
-
-        assert!(rewrite_with_host(&resolved, &host).is_none());
-    }
-
-    #[test]
-    fn returns_none_for_no_extension() {
-        let dir = tempdir().unwrap();
-        let root = abs(dir.path().canonicalize().unwrap());
-        fs::write(root.as_path().join("node"), "").unwrap();
-        fs::write(root.as_path().join("node.ps1"), "").unwrap();
-
-        let host = abs(root.as_path().join("powershell.exe"));
-        let resolved = abs(root.as_path().join("node"));
 
         assert!(rewrite_with_host(&resolved, &host).is_none());
     }
