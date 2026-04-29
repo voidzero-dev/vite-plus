@@ -14,11 +14,10 @@
 //!     pnpm/yarn/bun).
 //!
 //! Anything outside `$VP_HOME` — system tools, globally-installed npm
-//! shims, third-party CLIs whose `.cmd` and `.ps1` wrappers may not be
-//! semantically equivalent, hosts that intentionally block unsigned
-//! `.ps1` execution — is left alone. Stricter scoping means the prior
-//! `.cmd` path still runs there, but that matches the pre-fix status quo
-//! and avoids broadening execution semantics for unrelated commands.
+//! shims, third-party CLIs whose `.cmd` and `.ps1` wrappers may diverge —
+//! keeps its existing `.cmd` path (Ctrl+C corruption included), so we
+//! don't silently change execution semantics for unrelated commands or
+//! bypass execution policies on locked-down hosts.
 //!
 //! The task-layer rewrite (`vite_task_plan::ps1_shim`) is scoped
 //! differently — to `node_modules/.bin/*.cmd` inside the workspace — and
@@ -128,8 +127,8 @@ mod tests {
 
         assert_eq!(program.as_path(), host.as_path());
         let as_strs: Vec<&str> = prefix_args.iter().filter_map(|a| a.to_str()).collect();
-        let ps1_str = bin_dir.join("npm.ps1");
-        let ps1_str = ps1_str.to_str().unwrap();
+        let ps1_path = bin_dir.join("npm.ps1");
+        let ps1_str = ps1_path.to_str().unwrap();
         assert_eq!(
             as_strs,
             vec!["-NoProfile", "-NoLogo", "-ExecutionPolicy", "Bypass", "-File", ps1_str]
