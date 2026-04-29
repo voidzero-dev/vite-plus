@@ -79,7 +79,7 @@ If `vp staged` fails or your pre-commit hook does not run:
 
 A minimal staged config looks like this:
 
-```ts
+```ts [vite.config.ts]
 import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
@@ -95,7 +95,7 @@ When `vite.config.ts` imports heavy plugins at the top level, every `import` is 
 
 Use `lazyPlugins` to wrap plugin loading. Plugins are only loaded for commands that need them (`dev`, `build`, `test`, `preview`), and skipped for everything else:
 
-```ts
+```ts [vite.config.ts]
 import { defineConfig, lazyPlugins } from 'vite-plus';
 import myPlugin from 'vite-plugin-foo';
 
@@ -106,7 +106,7 @@ export default defineConfig({
 
 For heavy plugins that should be lazily imported, combine with dynamic `import()`:
 
-```ts
+```ts [vite.config.ts]
 import { defineConfig, lazyPlugins } from 'vite-plus';
 
 export default defineConfig({
