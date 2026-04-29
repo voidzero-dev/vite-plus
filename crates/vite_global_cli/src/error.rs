@@ -66,9 +66,9 @@ pub enum Error {
     },
 }
 
-// Flatten `vite_pm_cli::Error` into the matching `Error` variant so callers
-// like `main.rs` that pattern-match on `UserMessage` (to skip the "error: "
-// prefix) keep working when the message originates from the PM crate.
+// Explicit per-variant remap (not `#[from]`) so `UserMessage` stays a
+// distinct variant `main.rs` can pattern-match to skip the "error: "
+// prefix when the message originates from the PM crate.
 impl From<vite_pm_cli::Error> for Error {
     fn from(err: vite_pm_cli::Error) -> Self {
         match err {

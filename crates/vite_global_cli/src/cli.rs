@@ -546,9 +546,9 @@ async fn run_package_manager_command(
     }
 }
 
-// These messages preserve the bare-line format expected by snap-test
-// fixtures (no "error:" / "info:" prefix), matching the original
-// per-command handlers' `eprintln!`/`println!` calls.
+// snap-test fixtures expect bare lines (no "error:"/"info:" prefix), so
+// these helpers use raw eprintln!/println! despite the project's
+// "no raw eprintln" rule.
 #[allow(clippy::disallowed_macros)]
 async fn managed_install(
     packages: &[String],
@@ -557,7 +557,7 @@ async fn managed_install(
 ) -> Result<ExitStatus, Error> {
     for package in packages {
         if let Err(e) = crate::commands::env::global_install::install(package, node, force).await {
-            eprintln!("Failed to install {}: {}", package, e);
+            eprintln!("Failed to install {package}: {e}");
             return Ok(exit_status(1));
         }
     }
@@ -568,7 +568,7 @@ async fn managed_install(
 async fn managed_uninstall(packages: &[String], dry_run: bool) -> Result<ExitStatus, Error> {
     for package in packages {
         if let Err(e) = crate::commands::env::global_install::uninstall(package, dry_run).await {
-            eprintln!("Failed to uninstall {}: {}", package, e);
+            eprintln!("Failed to uninstall {package}: {e}");
             return Ok(exit_status(1));
         }
     }
