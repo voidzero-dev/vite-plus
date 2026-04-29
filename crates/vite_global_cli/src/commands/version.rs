@@ -163,7 +163,7 @@ fn detect_system_node_version() -> Option<String> {
 pub async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
     vite_shared::header::print_header();
 
-    println!("vp v{}", env!("CARGO_PKG_VERSION"));
+    println!("vp v{}", env!("VITE_PLUS_VERSION"));
     println!();
 
     // Local vite-plus and tools
