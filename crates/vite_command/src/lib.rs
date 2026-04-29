@@ -45,6 +45,21 @@ pub fn resolve_bin(
     AbsolutePathBuf::new(path).ok_or_else(|| Error::CannotFindBinaryPath(bin_name.into()))
 }
 
+/// Resolve `bin_name` to a path and apply the Windows `.cmd` → PowerShell
+/// rewrite. Returns the program to spawn and the arg prefix to prepend
+/// before the user args (empty when no rewrite applies).
+fn resolve_program(
+    bin_name: &str,
+    envs: &HashMap<String, String>,
+    cwd: &AbsolutePath,
+) -> Result<(AbsolutePathBuf, Vec<std::ffi::OsString>), Error> {
+    let bin_path = resolve_bin(bin_name, envs.get("PATH").map(|p| OsStr::new(p.as_str())), cwd)?;
+    Ok(match ps1_shim::rewrite_cmd_to_powershell(&bin_path) {
+        Some(rewritten) => rewritten,
+        None => (bin_path, Vec::new()),
+    })
+}
+
 /// Build a `tokio::process::Command` for a pre-resolved binary path.
 /// Sets inherited stdio and `fix_stdio_streams` (Unix pre_exec).
 /// Callers can further customize (add args, envs, override stdio, etc.).
@@ -142,12 +157,7 @@ where
     S: AsRef<OsStr>,
 {
     let cwd = cwd.as_ref();
-    let paths = envs.get("PATH");
-    let bin_path = resolve_bin(bin_name, paths.map(|p| OsStr::new(p.as_str())), cwd)?;
-    let (program, prefix_args) = match ps1_shim::rewrite_cmd_to_powershell(&bin_path) {
-        Some(rewritten) => rewritten,
-        None => (bin_path, Vec::new()),
-    };
+    let (program, prefix_args) = resolve_program(bin_name, envs, cwd)?;
     let mut cmd = build_command(&program, cwd);
     cmd.args(&prefix_args).args(args).envs(envs);
     let status = cmd.status().await?;
@@ -177,11 +187,7 @@ where
     S: AsRef<OsStr>,
 {
     let cwd = cwd.as_ref();
-    let bin_path = resolve_bin(bin_name, envs.get("PATH").map(|p| OsStr::new(p.as_str())), cwd)?;
-    let (program, prefix_args) = match ps1_shim::rewrite_cmd_to_powershell(&bin_path) {
-        Some(rewritten) => rewritten,
-        None => (bin_path, Vec::new()),
-    };
+    let (program, prefix_args) = resolve_program(bin_name, envs, cwd)?;
 
     let mut cmd = fspy::Command::new(program.as_path());
     cmd.args(&prefix_args)
