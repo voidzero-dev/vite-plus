@@ -547,9 +547,8 @@ async fn run_package_manager_command(
 }
 
 // snap-test fixtures expect bare lines (no "error:"/"info:" prefix), so
-// these helpers use raw eprintln!/println! despite the project's
-// "no raw eprintln" rule.
-#[allow(clippy::disallowed_macros)]
+// these helpers use `output::raw_stderr`/`output::raw` rather than the
+// prefixed `output::error`/`output::info`.
 async fn managed_install(
     packages: &[String],
     node: Option<&str>,
@@ -557,32 +556,30 @@ async fn managed_install(
 ) -> Result<ExitStatus, Error> {
     for package in packages {
         if let Err(e) = crate::commands::env::global_install::install(package, node, force).await {
-            eprintln!("Failed to install {package}: {e}");
+            vite_shared::output::raw_stderr(&format!("Failed to install {package}: {e}"));
             return Ok(exit_status(1));
         }
     }
     Ok(ExitStatus::default())
 }
 
-#[allow(clippy::disallowed_macros)]
 async fn managed_uninstall(packages: &[String], dry_run: bool) -> Result<ExitStatus, Error> {
     for package in packages {
         if let Err(e) = crate::commands::env::global_install::uninstall(package, dry_run).await {
-            eprintln!("Failed to uninstall {package}: {e}");
+            vite_shared::output::raw_stderr(&format!("Failed to uninstall {package}: {e}"));
             return Ok(exit_status(1));
         }
     }
     Ok(ExitStatus::default())
 }
 
-#[allow(clippy::disallowed_macros)]
 async fn managed_update(packages: &[String]) -> Result<ExitStatus, Error> {
     use crate::commands::env::package_metadata::PackageMetadata;
 
     let to_update: Vec<String> = if packages.is_empty() {
         let all = PackageMetadata::list_all().await?;
         if all.is_empty() {
-            println!("No global packages installed.");
+            vite_shared::output::raw("No global packages installed.");
             return Ok(ExitStatus::default());
         }
         all.iter().map(|p| p.name.clone()).collect()

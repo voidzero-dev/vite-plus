@@ -62,3 +62,15 @@ pub fn raw(msg: &str) {
 pub fn raw_inline(msg: &str) {
     print!("{msg}");
 }
+
+/// Print a raw message to stderr with no prefix or formatting.
+#[allow(clippy::print_stderr, clippy::disallowed_macros)]
+pub fn raw_stderr(msg: &str) {
+    eprintln!("{msg}");
+}
+
+/// Print a raw message to stderr without a trailing newline.
+#[allow(clippy::print_stderr, clippy::disallowed_macros)]
+pub fn raw_stderr_inline(msg: &str) {
+    eprint!("{msg}");
+}
