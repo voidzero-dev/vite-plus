@@ -50,8 +50,14 @@ pub async fn run_add(
     cwd: &AbsolutePath,
     options: &AddCommandOptions<'_>,
 ) -> Result<ExitStatus, Error> {
-    ensure_package_json(cwd).await?;
-    let pm = PackageManager::builder(cwd).build_with_default().await?;
+    let pm = if options.global {
+        // Global add doesn't need a project; fall back to npm if no package.json
+        // is present so the underlying PM still has a binary to dispatch to.
+        build_package_manager_or_npm_default(cwd).await?
+    } else {
+        ensure_package_json(cwd).await?;
+        PackageManager::builder(cwd).build_with_default().await?
+    };
     Ok(pm.run_add_command(options, cwd).await?)
 }
 
@@ -68,7 +74,13 @@ pub async fn run_remove(
     cwd: &AbsolutePath,
     options: &RemoveCommandOptions<'_>,
 ) -> Result<ExitStatus, Error> {
-    let pm = build_package_manager(cwd).await?;
+    let pm = if options.global {
+        // Global remove doesn't need a project; fall back to npm if no
+        // package.json is present.
+        build_package_manager_or_npm_default(cwd).await?
+    } else {
+        build_package_manager(cwd).await?
+    };
     Ok(pm.run_remove_command(options, cwd).await?)
 }
 
