@@ -96,6 +96,9 @@ pub enum SynthesizableSubcommand {
         /// Do not exit with error when pattern is unmatched
         #[arg(long = "no-error-on-unmatched-pattern")]
         no_error_on_unmatched_pattern: bool,
+        /// Disable the automatic loading of nested configuration files (forwarded to lint; ignored by fmt)
+        #[arg(long)]
+        disable_nested_config: bool,
         /// File paths to check (passed through to fmt and lint)
         #[arg(trailing_var_arg = true)]
         paths: Vec<String>,
