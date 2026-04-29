@@ -7468,6 +7468,7 @@ dependencies = [
  "vite_error",
  "vite_path",
  "vite_powershell",
+ "vite_shared",
  "which",
 ]
 
