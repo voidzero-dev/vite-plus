@@ -586,7 +586,13 @@ async fn managed_update(packages: &[String]) -> Result<ExitStatus, Error> {
     } else {
         packages.to_vec()
     };
-    managed_install(&to_update, None, false).await
+    for package in &to_update {
+        if let Err(e) = crate::commands::env::global_install::install(package, None, false).await {
+            vite_shared::output::raw_stderr(&format!("Failed to update {package}: {e}"));
+            return Ok(exit_status(1));
+        }
+    }
+    Ok(ExitStatus::default())
 }
 
 /// Run the CLI command.
