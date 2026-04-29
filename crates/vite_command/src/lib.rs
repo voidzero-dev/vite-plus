@@ -12,6 +12,8 @@ use tokio_util::sync::CancellationToken;
 use vite_error::Error;
 use vite_path::{AbsolutePath, AbsolutePathBuf, RelativePathBuf};
 
+mod ps1_shim;
+
 /// Result of running a command with fspy tracking.
 #[derive(Debug)]
 pub struct FspyCommandResult {
@@ -142,8 +144,12 @@ where
     let cwd = cwd.as_ref();
     let paths = envs.get("PATH");
     let bin_path = resolve_bin(bin_name, paths.map(|p| OsStr::new(p.as_str())), cwd)?;
-    let mut cmd = build_command(&bin_path, cwd);
-    cmd.args(args).envs(envs);
+    let (program, prefix_args) = match ps1_shim::rewrite_cmd_to_powershell(&bin_path) {
+        Some(rewritten) => rewritten,
+        None => (bin_path, Vec::new()),
+    };
+    let mut cmd = build_command(&program, cwd);
+    cmd.args(&prefix_args).args(args).envs(envs);
     let status = cmd.status().await?;
     Ok(status)
 }
@@ -171,8 +177,15 @@ where
     S: AsRef<OsStr>,
 {
     let cwd = cwd.as_ref();
-    let mut cmd = fspy::Command::new(bin_name);
-    cmd.args(args)
+    let bin_path = resolve_bin(bin_name, envs.get("PATH").map(|p| OsStr::new(p.as_str())), cwd)?;
+    let (program, prefix_args) = match ps1_shim::rewrite_cmd_to_powershell(&bin_path) {
+        Some(rewritten) => rewritten,
+        None => (bin_path, Vec::new()),
+    };
+
+    let mut cmd = fspy::Command::new(program.as_path());
+    cmd.args(&prefix_args)
+        .args(args)
         // set system environment variables first
         .envs(std::env::vars_os())
         // then set custom environment variables
@@ -454,12 +467,9 @@ mod tests {
                 run_command_with_fspy("npm-not-exists", &["--version"], &envs, &temp_dir_path)
                     .await;
             assert!(result.is_err(), "Should not find binary path, but got: {:?}", result);
-            assert!(
-                result
-                    .err()
-                    .unwrap()
-                    .to_string()
-                    .contains("could not resolve the full path of program '\"npm-not-exists\"'")
+            assert_eq!(
+                result.unwrap_err().to_string(),
+                "Cannot find binary path for command 'npm-not-exists'"
             );
         }
     }
