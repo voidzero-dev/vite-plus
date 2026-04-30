@@ -8,11 +8,16 @@ import type { ExecutionResult, RunCommandOptions } from '../utils/command.ts';
 export type { ExecutionResult, RunCommandOptions, RunCommandResult } from '../utils/command.ts';
 export { runCommand, runCommandSilently } from '../utils/command.ts';
 
-// Run a command and detect the project directory
+/** Set by `runCommandAndDetectProjectDir` and the template executors
+ * that call it; plain `runCommand` / `runCommandSilently` don't. */
+export interface ExecutionWithProjectDir extends ExecutionResult {
+  projectDir?: string;
+}
+
 export async function runCommandAndDetectProjectDir(
   options: RunCommandOptions,
   parentDir?: string,
-): Promise<ExecutionResult> {
+): Promise<ExecutionWithProjectDir> {
   const cwd = parentDir ? path.join(options.cwd, parentDir) : options.cwd;
   const existingDirs = new Set<string>();
   if (parentDir) {
