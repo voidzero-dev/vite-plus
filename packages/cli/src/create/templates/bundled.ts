@@ -2,7 +2,7 @@ import assert from 'node:assert';
 import path from 'node:path';
 
 import type { WorkspaceInfo } from '../../types/index.ts';
-import type { ExecutionResult } from '../command.ts';
+import type { ExecutionWithProjectDir } from '../command.ts';
 import { copyDir, setPackageName } from '../utils.ts';
 import type { BuiltinTemplateInfo } from './types.ts';
 
@@ -13,7 +13,7 @@ import type { BuiltinTemplateInfo } from './types.ts';
 export async function executeBundledTemplate(
   workspaceInfo: WorkspaceInfo,
   templateInfo: BuiltinTemplateInfo,
-): Promise<ExecutionResult> {
+): Promise<ExecutionWithProjectDir> {
   assert(templateInfo.localPath, 'localPath is required for bundled templates');
   assert(templateInfo.targetDir, 'targetDir is required');
   assert(templateInfo.packageName, 'packageName is required');
