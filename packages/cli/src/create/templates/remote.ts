@@ -2,13 +2,12 @@ import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import colors from 'picocolors';
 
 import type { WorkspaceInfo } from '../../types/index.ts';
+import { runCommand, runCommandSilently } from '../../utils/command.ts';
 import { checkNpmPackageExists } from '../../utils/package.ts';
 import {
   type ExecutionWithProjectDir,
   formatDlxCommand,
-  runCommand,
   runCommandAndDetectProjectDir,
-  runCommandSilently,
 } from '../command.ts';
 import type { TemplateInfo } from './types.ts';
 

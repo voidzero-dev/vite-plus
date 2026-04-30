@@ -5,9 +5,6 @@ import { runCommand as runCommandWithFspy } from '../../binding/index.js';
 import type { WorkspaceInfo } from '../types/index.ts';
 import type { ExecutionResult, RunCommandOptions } from '../utils/command.ts';
 
-export type { ExecutionResult, RunCommandOptions, RunCommandResult } from '../utils/command.ts';
-export { runCommand, runCommandSilently } from '../utils/command.ts';
-
 /** Set by `runCommandAndDetectProjectDir` and the template executors
  * that call it; plain `runCommand` / `runCommandSilently` don't. */
 export interface ExecutionWithProjectDir extends ExecutionResult {
