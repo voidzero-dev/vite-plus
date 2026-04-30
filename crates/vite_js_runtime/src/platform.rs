@@ -11,6 +11,7 @@ pub struct Platform {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Os {
     Linux,
+    Android,
     Darwin,
     Windows,
 }
@@ -47,9 +48,13 @@ impl Os {
     /// Compilation will fail on unsupported operating systems.
     #[must_use]
     pub const fn current() -> Self {
-        #[cfg(any(target_os = "android", target_os = "linux"))]
+        #[cfg(target_os = "linux")]
         {
             return Self::Linux;
+        }
+         #[cfg(target_os = "android")]
+        {
+            return Self::Android;
         }
         #[cfg(target_os = "macos")]
         {
@@ -63,7 +68,8 @@ impl Os {
             target_os = "android",
             target_os = "linux",
             target_os = "macos",
-            target_os = "windows"
+            target_os = "windows",
+            target_os = "android"
         )))]
         {
             compile_error!(
@@ -77,6 +83,7 @@ impl fmt::Display for Os {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Linux => write!(f, "linux"),
+            Self::Android => write!(f, "android"),
             Self::Darwin => write!(f, "darwin"),
             Self::Windows => write!(f, "windows"),
         }

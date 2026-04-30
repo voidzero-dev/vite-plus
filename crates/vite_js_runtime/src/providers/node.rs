@@ -169,7 +169,7 @@ impl NodeProvider {
     const fn archive_format(platform: Platform) -> ArchiveFormat {
         match platform.os {
             Os::Windows => ArchiveFormat::Zip,
-            Os::Linux | Os::Darwin => ArchiveFormat::TarGz,
+            Os::Linux | Os::Darwin | Os::Android => ArchiveFormat::TarGz,
         }
     }
 
@@ -576,6 +576,7 @@ impl JsRuntimeProvider for NodeProvider {
     fn platform_string(&self, platform: Platform) -> Str {
         let os = match platform.os {
             Os::Linux => "linux",
+            Os::Android => "android",
             Os::Darwin => "darwin",
             Os::Windows => "win",
         };
@@ -615,14 +616,14 @@ impl JsRuntimeProvider for NodeProvider {
     fn binary_relative_path(&self, platform: Platform) -> Str {
         match platform.os {
             Os::Windows => "node.exe".into(),
-            Os::Linux | Os::Darwin => "bin/node".into(),
+            Os::Linux | Os::Darwin | Os::Android => "bin/node".into(),
         }
     }
 
     fn bin_dir_relative_path(&self, platform: Platform) -> Str {
         match platform.os {
             Os::Windows => "".into(),
-            Os::Linux | Os::Darwin => "bin".into(),
+            Os::Linux | Os::Darwin | Os::Android => "bin".into(),
         }
     }
 
