@@ -168,7 +168,13 @@ export async function snapTest() {
   );
 
   // Clean up the temporary directory on exit
-  process.on('exit', () => fs.rmSync(tempTmpDir, { recursive: true, force: true }));
+  process.on('exit', () => {
+    try {
+      fs.rmSync(tempTmpDir, { recursive: true, force: true });
+    } catch (error) {
+      console.error('Error cleaning up temporary directory: %s, %s', tempTmpDir, error);
+    }
+  });
 
   const casesDir = path.resolve(values.dir || 'snap-tests');
 
