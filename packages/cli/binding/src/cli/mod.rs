@@ -60,7 +60,6 @@ async fn execute_direct_subcommand(
             .map(|(k, v)| (Arc::from(k.as_os_str()), Arc::from(v.as_os_str())))
             .collect(),
     );
-    let cwd_arc: Arc<AbsolutePath> = cwd.clone().into();
 
     let status = match subcommand {
         SynthesizableSubcommand::Check {
@@ -79,7 +78,6 @@ async fn execute_direct_subcommand(
                 paths,
                 &envs,
                 cwd,
-                &cwd_arc,
             )
             .await;
         }
@@ -91,7 +89,6 @@ async fn execute_direct_subcommand(
                     None,
                     &envs,
                     cwd,
-                    &cwd_arc,
                     FilterStream::Stdout,
                     |_| Cow::Borrowed(""),
                 )
@@ -103,13 +100,12 @@ async fn execute_direct_subcommand(
                     None,
                     &envs,
                     cwd,
-                    &cwd_arc,
                     FilterStream::Stderr,
                     |s| s.cow_replace("oxfmt --init", "vp fmt --init"),
                 )
                 .await?
             } else {
-                resolve_and_execute(&resolver, other, None, &envs, cwd, &cwd_arc).await?
+                resolve_and_execute(&resolver, other, None, &envs, cwd).await?
             }
         }
     };
@@ -191,8 +187,30 @@ pub async fn main(
     match cli_args {
         CLIArgs::Synthesizable(subcmd) => execute_direct_subcommand(subcmd, &cwd, options).await,
         CLIArgs::ViteTask(command) => execute_vite_task_command(command, cwd, options).await,
+        CLIArgs::PackageManager(pm) => execute_pm_command(pm, &cwd).await,
         CLIArgs::Exec(exec_args) => crate::exec::execute(exec_args, &cwd).await,
     }
+}
+
+/// Execute a package-manager command directly through `vite_pm_cli`,
+/// bypassing the vite-task scheduler — PM operations don't need caching.
+async fn execute_pm_command(
+    command: vite_pm_cli::PackageManagerCommand,
+    cwd: &AbsolutePath,
+) -> Result<ExitStatus, Error> {
+    // `-g`/`--global` operations on install/add/remove/update/`pm list` map to
+    // a vite-plus-managed package store on the global CLI; the local CLI has
+    // no such store, so refuse rather than silently doing the wrong thing
+    // (mutating the project, dropping `--node`, ignoring `--dry-run`, …).
+    if command.is_managed_global() {
+        return Err(Error::Anyhow(anyhow::anyhow!(
+            "Global package operations (`-g`/`--global`) are only supported by the globally-installed `vp` CLI. See https://viteplus.dev/guide/ to install it, then run the same command via the global `vp` binary.",
+        )));
+    }
+    let status = vite_pm_cli::dispatch(cwd, command)
+        .await
+        .map_err(|e| Error::Anyhow(anyhow::Error::new(e)))?;
+    Ok(ExitStatus(status.code().unwrap_or(1) as u8))
 }
 
 #[cfg(test)]

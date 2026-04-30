@@ -122,8 +122,8 @@ The Rust `vp` binary (`crates/vite_global_cli/`) routes commands in two categori
      │    (Rust)      │         │   (Node.js)    │
      └───────┬────────┘         └───────┬────────┘
              │                          │
-       Handled in                oxc_resolver finds
-       Rust directly             local vite-plus
+       vite_pm_cli::                oxc_resolver finds
+       dispatch                     local vite-plus
              │                          │
              ▼                    ┌─────┴─────┐
      ┌────────────────┐          │  found?   │
@@ -146,6 +146,12 @@ The Rust `vp` binary (`crates/vite_global_cli/`) routes commands in two categori
                               │ lint, fmt, run  │
                               │   → NAPI        │
                               ├────────────────┤
+                              │ install, add,   │
+                              │ remove, update  │
+                              │ dlx, pm <…>     │
+                              │   → NAPI        │
+                              │   → vite_pm_cli │
+                              ├────────────────┤
                               │ create, migrate │
                               │ --version       │
                               │   → dist/       │
@@ -153,8 +159,8 @@ The Rust `vp` binary (`crates/vite_global_cli/`) routes commands in two categori
                               └────────────────┘
 ```
 
-- **Category A (Package Manager)**: `install`, `add`, `remove`, `update`, etc. — Handled directly in Rust
-- **Category B (JavaScript)**: All other commands (`build`, `test`, `lint`, `create`, `migrate`, `--version`, etc.) — Rust uses `oxc_resolver` to find the project's local `vite-plus/dist/bin.js` and runs it. Falls back to the global installation's `dist/bin.js` if no local installation exists. The unified `bin.ts` entry point then routes to either NAPI bindings (task commands) or rolldown-bundled modules in `dist/global/` (create, migrate, version).
+- **Category A (Package Manager)**: `install`, `add`, `remove`, `update`, `dedupe`, `outdated`, `why`, `info`, `link`, `unlink`, `dlx`, `pm <subcmd>` — clap definitions and dispatch live in the shared `crates/vite_pm_cli/` crate. Both the global CLI and the local CLI binding flatten `vite_pm_cli::PackageManagerCommand` into their top-level argument parser and call `vite_pm_cli::dispatch` to run the underlying package manager (pnpm/npm/yarn/bun). The global CLI additionally intercepts `--global` for vite-plus-managed installs (`commands::env::global_install`) before delegating.
+- **Category B (JavaScript)**: All other commands (`build`, `test`, `lint`, `create`, `migrate`, `--version`, etc.) — Rust uses `oxc_resolver` to find the project's local `vite-plus/dist/bin.js` and runs it. Falls back to the global installation's `dist/bin.js` if no local installation exists. The unified `bin.ts` entry point then routes to either NAPI bindings (task commands and PM commands, the latter via `vite_pm_cli::dispatch`) or rolldown-bundled modules in `dist/global/` (create, migrate, version).
 
 ### Global scripts_dir Resolution (Rust)
 
@@ -261,6 +267,13 @@ if (command === 'create') {
     - Install scripts (`install.sh`, `install.ps1`) construct CLI package suffix directly instead of querying optionalDependencies
     - Upgrade registry (`registry.rs`) queries CLI packages directly instead of looking up optionalDependencies
     - Reduces download size for `npm install vite-plus` (no longer includes unused `vp` binary)
+
+11. **Brought all PM commands to the local CLI** via a shared `vite_pm_cli` crate:
+    - Extracted clap definitions and dispatcher for every PM command (`install`, `add`, `remove`, `update`, `dedupe`, `outdated`, `why`, `info`, `link`, `unlink`, `dlx`, `pm <subcmd>`) into `crates/vite_pm_cli/`. Both `vite_global_cli` and the `packages/cli/binding/` NAPI crate flatten `PackageManagerCommand` into their top-level argument parser and call `vite_pm_cli::dispatch`.
+    - Previously the local CLI binding only knew the `install` shortcut; every other PM command produced clap's "unknown subcommand" error. Now `npx vp add <pkg>`, `vp remove`, `vp pm publish`, etc. all work identically on global and local.
+    - The global CLI keeps a thin wrapper for `--global` paths (`commands::env::global_install`) that intercepts before delegating to `vite_pm_cli::dispatch`. The local CLI delegates directly and bypasses the vite-task scheduler since PM operations don't need caching.
+    - Deleted per-command modules `crates/vite_global_cli/src/commands/{add,remove,install,update,dedupe,outdated,why,link,unlink,dlx,pm}.rs`.
+    - Mirrored one representative pnpm10 fixture per command into `packages/cli/snap-tests/` to lock in parity.
 
 ## Verification
 

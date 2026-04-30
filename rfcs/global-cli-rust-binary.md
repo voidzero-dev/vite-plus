@@ -405,25 +405,16 @@ impl JsExecutor {
 
 - `crates/vite_global_cli/Cargo.toml`
 - `crates/vite_global_cli/src/main.rs`
-- `crates/vite_global_cli/src/cli.rs`
+- `crates/vite_global_cli/src/cli.rs` # Top-level clap parser; flattens `vite_pm_cli::PackageManagerCommand` for all PM subcommands and intercepts `--global` for managed installs
 - `crates/vite_global_cli/src/commands/mod.rs`
-- `crates/vite_global_cli/src/commands/add.rs` # Add packages (struct-based: AddCommand)
-- `crates/vite_global_cli/src/commands/install.rs` # Install dependencies (struct-based: InstallCommand)
-- `crates/vite_global_cli/src/commands/remove.rs` # Remove packages (struct-based: RemoveCommand)
-- `crates/vite_global_cli/src/commands/update.rs` # Update packages (struct-based: UpdateCommand)
-- `crates/vite_global_cli/src/commands/dedupe.rs` # Deduplicate deps (struct-based: DedupeCommand)
-- `crates/vite_global_cli/src/commands/outdated.rs` # Check outdated (struct-based: OutdatedCommand)
-- `crates/vite_global_cli/src/commands/why.rs` # Explain dependency (struct-based: WhyCommand)
-- `crates/vite_global_cli/src/commands/link.rs` # Link packages (struct-based: LinkCommand)
-- `crates/vite_global_cli/src/commands/unlink.rs` # Unlink packages (struct-based: UnlinkCommand)
-- `crates/vite_global_cli/src/commands/dlx.rs` # Execute package (struct-based: DlxCommand)
-- `crates/vite_global_cli/src/commands/pm.rs` # PM subcommands (prune, pack, list, etc.)
 - `crates/vite_global_cli/src/commands/new.rs` # Project scaffolding
 - `crates/vite_global_cli/src/commands/migrate.rs` # Migration command
 - `crates/vite_global_cli/src/commands/delegate.rs` # Local CLI delegation
 - `crates/vite_global_cli/src/commands/version.rs` # Version display
 - `crates/vite_global_cli/src/js_executor.rs`
 - `crates/vite_global_cli/src/error.rs`
+
+> **Note:** PM command clap definitions and dispatch (`add`, `install`, `remove`, `update`, `dedupe`, `outdated`, `why`, `info`, `link`, `unlink`, `dlx`, `pm <subcmd>`) live in the shared `crates/vite_pm_cli/` crate so they can be reused by both `vite_global_cli` and the local CLI's NAPI binding (`packages/cli/binding/`). The earlier per-command modules under `crates/vite_global_cli/src/commands/` (`add.rs`, `install.rs`, `remove.rs`, …) have been removed in favour of `vite_pm_cli::dispatch`.
 
 **Success Criteria:**
 

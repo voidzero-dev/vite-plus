@@ -1,0 +1,13 @@
+{
+  "commands": [
+    "vp install -g testnpm2 # rejected: managed install",
+    "vp install -g testnpm2 --node 20 # rejected: --node implicitly covered",
+    "vp add -g testnpm2 # rejected: managed add",
+    "vp add -g testnpm2 --node 20 # rejected: --node implicitly covered",
+    "vp remove -g testnpm2 # rejected: managed uninstall",
+    "vp remove -g --dry-run testnpm2 # rejected: --dry-run implicitly covered",
+    "vp update -g # rejected: managed update",
+    "vp update -g testnpm2 # rejected: managed update with package",
+    "vp pm ls -g # rejected: managed packages listing"
+  ]
+}

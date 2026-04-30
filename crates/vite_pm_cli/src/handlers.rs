@@ -1,72 +1,170 @@
-//! Package manager commands (Category A).
-//!
-//! This module handles the `pm` subcommand and the `info` command which are
-//! routed through helper functions. Other PM commands (add, install, remove, etc.)
-//! are implemented as separate command modules with struct-based patterns.
+//! Handlers that wrap `vite_install`'s `PackageManager::run_*_command`
+//! family, returning the underlying process exit status.
 
-use std::process::ExitStatus;
+use std::{collections::HashMap, process::ExitStatus};
 
-use vite_install::commands::{
-    audit::AuditCommandOptions,
-    cache::CacheCommandOptions,
-    config::ConfigCommandOptions,
-    deprecate::DeprecateCommandOptions,
-    dist_tag::{DistTagCommandOptions, DistTagSubcommand},
-    fund::FundCommandOptions,
-    list::ListCommandOptions,
-    login::LoginCommandOptions,
-    logout::LogoutCommandOptions,
-    owner::OwnerSubcommand,
-    pack::PackCommandOptions,
-    ping::PingCommandOptions,
-    prune::PruneCommandOptions,
-    publish::PublishCommandOptions,
-    rebuild::RebuildCommandOptions,
-    search::SearchCommandOptions,
-    token::TokenSubcommand,
-    view::ViewCommandOptions,
-    whoami::WhoamiCommandOptions,
+use vite_command::run_command;
+use vite_install::{
+    PackageManager,
+    commands::{
+        add::AddCommandOptions,
+        audit::AuditCommandOptions,
+        cache::CacheCommandOptions,
+        config::ConfigCommandOptions,
+        dedupe::DedupeCommandOptions,
+        deprecate::DeprecateCommandOptions,
+        dist_tag::{DistTagCommandOptions, DistTagSubcommand},
+        dlx::{DlxCommandOptions, build_npx_args},
+        fund::FundCommandOptions,
+        install::InstallCommandOptions,
+        link::LinkCommandOptions,
+        list::ListCommandOptions,
+        login::LoginCommandOptions,
+        logout::LogoutCommandOptions,
+        outdated::OutdatedCommandOptions,
+        owner::OwnerSubcommand,
+        pack::PackCommandOptions,
+        ping::PingCommandOptions,
+        prune::PruneCommandOptions,
+        publish::PublishCommandOptions,
+        rebuild::RebuildCommandOptions,
+        remove::RemoveCommandOptions,
+        search::SearchCommandOptions,
+        token::TokenSubcommand,
+        unlink::UnlinkCommandOptions,
+        update::UpdateCommandOptions,
+        view::ViewCommandOptions,
+        whoami::WhoamiCommandOptions,
+        why::WhyCommandOptions,
+    },
 };
-use vite_path::AbsolutePathBuf;
+use vite_path::AbsolutePath;
 
-use super::{
-    build_package_manager, build_package_manager_or_npm_default, prepend_js_runtime_to_path_env,
-};
 use crate::{
     cli::{ConfigCommands, DistTagCommands, OwnerCommands, PmCommands, TokenCommands},
     error::Error,
+    helpers::{build_package_manager, build_package_manager_or_npm_default, ensure_package_json},
 };
 
-/// Execute the info command.
-pub async fn execute_info(
-    cwd: AbsolutePathBuf,
-    package: &str,
-    field: Option<&str>,
-    json: bool,
-    pass_through_args: Option<&[String]>,
+pub async fn run_add(
+    cwd: &AbsolutePath,
+    options: &AddCommandOptions<'_>,
 ) -> Result<ExitStatus, Error> {
-    prepend_js_runtime_to_path_env(&cwd).await?;
-
-    let package_manager = build_package_manager_or_npm_default(&cwd).await?;
-
-    let options = ViewCommandOptions { package, field, json, pass_through_args };
-
-    Ok(package_manager.run_view_command(&options, &cwd).await?)
+    ensure_package_json(cwd).await?;
+    let pm = PackageManager::builder(cwd).build_with_default().await?;
+    Ok(pm.run_add_command(options, cwd).await?)
 }
 
-/// Execute a pm subcommand.
-pub async fn execute_pm_subcommand(
-    cwd: AbsolutePathBuf,
-    command: PmCommands,
+pub async fn run_install(
+    cwd: &AbsolutePath,
+    options: &InstallCommandOptions<'_>,
 ) -> Result<ExitStatus, Error> {
-    // Intercept `pm list -g` to use vite-plus managed global packages listing
-    if let PmCommands::List { global: true, json, ref pattern, .. } = command {
-        return crate::commands::env::packages::execute(json, pattern.as_deref()).await;
+    ensure_package_json(cwd).await?;
+    let pm = PackageManager::builder(cwd).build_with_default().await?;
+    Ok(pm.run_install_command(options, cwd).await?)
+}
+
+pub async fn run_remove(
+    cwd: &AbsolutePath,
+    options: &RemoveCommandOptions<'_>,
+) -> Result<ExitStatus, Error> {
+    let pm = build_package_manager(cwd).await?;
+    Ok(pm.run_remove_command(options, cwd).await?)
+}
+
+pub async fn run_update(
+    cwd: &AbsolutePath,
+    options: &UpdateCommandOptions<'_>,
+) -> Result<ExitStatus, Error> {
+    let pm = build_package_manager(cwd).await?;
+    Ok(pm.run_update_command(options, cwd).await?)
+}
+
+pub async fn run_dedupe(
+    cwd: &AbsolutePath,
+    options: &DedupeCommandOptions<'_>,
+) -> Result<ExitStatus, Error> {
+    let pm = build_package_manager(cwd).await?;
+    Ok(pm.run_dedupe_command(options, cwd).await?)
+}
+
+pub async fn run_outdated(
+    cwd: &AbsolutePath,
+    options: &OutdatedCommandOptions<'_>,
+) -> Result<ExitStatus, Error> {
+    let pm = build_package_manager(cwd).await?;
+    Ok(pm.run_outdated_command(options, cwd).await?)
+}
+
+pub async fn run_why(
+    cwd: &AbsolutePath,
+    options: &WhyCommandOptions<'_>,
+) -> Result<ExitStatus, Error> {
+    let pm = build_package_manager(cwd).await?;
+    Ok(pm.run_why_command(options, cwd).await?)
+}
+
+pub async fn run_info(
+    cwd: &AbsolutePath,
+    options: &ViewCommandOptions<'_>,
+) -> Result<ExitStatus, Error> {
+    let pm = build_package_manager_or_npm_default(cwd).await?;
+    Ok(pm.run_view_command(options, cwd).await?)
+}
+
+pub async fn run_link(
+    cwd: &AbsolutePath,
+    options: &LinkCommandOptions<'_>,
+) -> Result<ExitStatus, Error> {
+    let pm = build_package_manager(cwd).await?;
+    Ok(pm.run_link_command(options, cwd).await?)
+}
+
+pub async fn run_unlink(
+    cwd: &AbsolutePath,
+    options: &UnlinkCommandOptions<'_>,
+) -> Result<ExitStatus, Error> {
+    let pm = build_package_manager(cwd).await?;
+    Ok(pm.run_unlink_command(options, cwd).await?)
+}
+
+pub async fn run_dlx(
+    cwd: &AbsolutePath,
+    packages: Vec<String>,
+    shell_mode: bool,
+    silent: bool,
+    args: Vec<String>,
+) -> Result<ExitStatus, Error> {
+    if args.is_empty() {
+        return Err(Error::Other("dlx requires a package name".into()));
     }
 
-    prepend_js_runtime_to_path_env(&cwd).await?;
+    let package_spec = &args[0];
+    let command_args: Vec<String> = args[1..].to_vec();
 
-    // Project-dependent commands require package.json; standalone ones fall back to npm.
+    let options = DlxCommandOptions {
+        packages: &packages,
+        package_spec,
+        args: &command_args,
+        shell_mode,
+        silent,
+    };
+
+    match PackageManager::builder(cwd).build_with_default().await {
+        Ok(pm) => Ok(pm.run_dlx_command(&options, cwd).await?),
+        Err(vite_error::Error::WorkspaceError(vite_workspace::Error::PackageJsonNotFound(_))) => {
+            let npx_args = build_npx_args(&options);
+            let envs = HashMap::new();
+            Ok(run_command("npx", &npx_args, &envs, cwd).await?)
+        }
+        Err(e) => Err(Error::Install(e)),
+    }
+}
+
+pub async fn run_pm_subcommand(
+    cwd: &AbsolutePath,
+    command: PmCommands,
+) -> Result<ExitStatus, Error> {
     let needs_project = matches!(
         command,
         PmCommands::Prune { .. }
@@ -78,10 +176,10 @@ pub async fn execute_pm_subcommand(
             | PmCommands::Audit { .. }
     );
 
-    let package_manager = if needs_project {
-        build_package_manager(&cwd).await?
+    let pm = if needs_project {
+        build_package_manager(cwd).await?
     } else {
-        build_package_manager_or_npm_default(&cwd).await?
+        build_package_manager_or_npm_default(cwd).await?
     };
 
     match command {
@@ -91,7 +189,7 @@ pub async fn execute_pm_subcommand(
                 no_optional,
                 pass_through_args: pass_through_args.as_deref(),
             };
-            Ok(package_manager.run_prune_command(&options, &cwd).await?)
+            Ok(pm.run_prune_command(&options, cwd).await?)
         }
 
         PmCommands::Pack {
@@ -112,7 +210,7 @@ pub async fn execute_pm_subcommand(
                 json,
                 pass_through_args: pass_through_args.as_deref(),
             };
-            Ok(package_manager.run_pack_command(&options, &cwd).await?)
+            Ok(pm.run_pack_command(&options, cwd).await?)
         }
 
         PmCommands::List {
@@ -149,7 +247,7 @@ pub async fn execute_pm_subcommand(
                 global,
                 pass_through_args: pass_through_args.as_deref(),
             };
-            Ok(package_manager.run_list_command(&options, &cwd).await?)
+            Ok(pm.run_list_command(&options, cwd).await?)
         }
 
         PmCommands::View { package, field, json, pass_through_args } => {
@@ -159,7 +257,7 @@ pub async fn execute_pm_subcommand(
                 json,
                 pass_through_args: pass_through_args.as_deref(),
             };
-            Ok(package_manager.run_view_command(&options, &cwd).await?)
+            Ok(pm.run_view_command(&options, cwd).await?)
         }
 
         PmCommands::Publish {
@@ -192,7 +290,7 @@ pub async fn execute_pm_subcommand(
                 filters: filter.as_deref(),
                 pass_through_args: pass_through_args.as_deref(),
             };
-            Ok(package_manager.run_publish_command(&options, &cwd).await?)
+            Ok(pm.run_publish_command(&options, cwd).await?)
         }
 
         PmCommands::Owner(owner_command) => {
@@ -205,7 +303,7 @@ pub async fn execute_pm_subcommand(
                     OwnerSubcommand::Rm { user, package, otp }
                 }
             };
-            Ok(package_manager.run_owner_command(&subcommand, &cwd).await?)
+            Ok(pm.run_owner_command(&subcommand, cwd).await?)
         }
 
         PmCommands::Cache { subcommand, pass_through_args } => {
@@ -213,7 +311,7 @@ pub async fn execute_pm_subcommand(
                 subcommand: &subcommand,
                 pass_through_args: pass_through_args.as_deref(),
             };
-            Ok(package_manager.run_cache_command(&options, &cwd).await?)
+            Ok(pm.run_cache_command(&options, cwd).await?)
         }
 
         PmCommands::Config(config_command) => match config_command {
@@ -223,10 +321,10 @@ pub async fn execute_pm_subcommand(
                     key: None,
                     value: None,
                     json,
-                    location: if global { Some("global") } else { location.as_deref() },
+                    location: config_location(global, location.as_deref()),
                     pass_through_args: None,
                 };
-                Ok(package_manager.run_config_command(&options, &cwd).await?)
+                Ok(pm.run_config_command(&options, cwd).await?)
             }
             ConfigCommands::Get { key, json, global, location } => {
                 let options = ConfigCommandOptions {
@@ -234,10 +332,10 @@ pub async fn execute_pm_subcommand(
                     key: Some(key.as_str()),
                     value: None,
                     json,
-                    location: if global { Some("global") } else { location.as_deref() },
+                    location: config_location(global, location.as_deref()),
                     pass_through_args: None,
                 };
-                Ok(package_manager.run_config_command(&options, &cwd).await?)
+                Ok(pm.run_config_command(&options, cwd).await?)
             }
             ConfigCommands::Set { key, value, json, global, location } => {
                 let options = ConfigCommandOptions {
@@ -245,10 +343,10 @@ pub async fn execute_pm_subcommand(
                     key: Some(key.as_str()),
                     value: Some(value.as_str()),
                     json,
-                    location: if global { Some("global") } else { location.as_deref() },
+                    location: config_location(global, location.as_deref()),
                     pass_through_args: None,
                 };
-                Ok(package_manager.run_config_command(&options, &cwd).await?)
+                Ok(pm.run_config_command(&options, cwd).await?)
             }
             ConfigCommands::Delete { key, global, location } => {
                 let options = ConfigCommandOptions {
@@ -256,10 +354,10 @@ pub async fn execute_pm_subcommand(
                     key: Some(key.as_str()),
                     value: None,
                     json: false,
-                    location: if global { Some("global") } else { location.as_deref() },
+                    location: config_location(global, location.as_deref()),
                     pass_through_args: None,
                 };
-                Ok(package_manager.run_config_command(&options, &cwd).await?)
+                Ok(pm.run_config_command(&options, cwd).await?)
             }
         },
 
@@ -269,7 +367,7 @@ pub async fn execute_pm_subcommand(
                 scope: scope.as_deref(),
                 pass_through_args: pass_through_args.as_deref(),
             };
-            Ok(package_manager.run_login_command(&options, &cwd).await?)
+            Ok(pm.run_login_command(&options, cwd).await?)
         }
 
         PmCommands::Logout { registry, scope, pass_through_args } => {
@@ -278,7 +376,7 @@ pub async fn execute_pm_subcommand(
                 scope: scope.as_deref(),
                 pass_through_args: pass_through_args.as_deref(),
             };
-            Ok(package_manager.run_logout_command(&options, &cwd).await?)
+            Ok(pm.run_logout_command(&options, cwd).await?)
         }
 
         PmCommands::Whoami { registry, pass_through_args } => {
@@ -286,7 +384,7 @@ pub async fn execute_pm_subcommand(
                 registry: registry.as_deref(),
                 pass_through_args: pass_through_args.as_deref(),
             };
-            Ok(package_manager.run_whoami_command(&options, &cwd).await?)
+            Ok(pm.run_whoami_command(&options, cwd).await?)
         }
 
         PmCommands::Token(token_command) => {
@@ -301,7 +399,7 @@ pub async fn execute_pm_subcommand(
                     TokenSubcommand::Revoke { token, registry, pass_through_args }
                 }
             };
-            Ok(package_manager.run_token_command(&subcommand, &cwd).await?)
+            Ok(pm.run_token_command(&subcommand, cwd).await?)
         }
 
         PmCommands::Audit { fix, json, level, production, pass_through_args } => {
@@ -312,7 +410,7 @@ pub async fn execute_pm_subcommand(
                 production,
                 pass_through_args: pass_through_args.as_deref(),
             };
-            Ok(package_manager.run_audit_command(&options, &cwd).await?)
+            Ok(pm.run_audit_command(&options, cwd).await?)
         }
 
         PmCommands::DistTag(dist_tag_command) => {
@@ -324,7 +422,7 @@ pub async fn execute_pm_subcommand(
                 DistTagCommands::Rm { package, tag } => DistTagSubcommand::Rm { package, tag },
             };
             let options = DistTagCommandOptions { subcommand, pass_through_args: None };
-            Ok(package_manager.run_dist_tag_command(&options, &cwd).await?)
+            Ok(pm.run_dist_tag_command(&options, cwd).await?)
         }
 
         PmCommands::Deprecate { package, message, otp, registry, pass_through_args } => {
@@ -335,7 +433,7 @@ pub async fn execute_pm_subcommand(
                 registry: registry.as_deref(),
                 pass_through_args: pass_through_args.as_deref(),
             };
-            Ok(package_manager.run_deprecate_command(&options, &cwd).await?)
+            Ok(pm.run_deprecate_command(&options, cwd).await?)
         }
 
         PmCommands::Search { terms, json, long, registry, pass_through_args } => {
@@ -346,18 +444,18 @@ pub async fn execute_pm_subcommand(
                 registry: registry.as_deref(),
                 pass_through_args: pass_through_args.as_deref(),
             };
-            Ok(package_manager.run_search_command(&options, &cwd).await?)
+            Ok(pm.run_search_command(&options, cwd).await?)
         }
 
         PmCommands::Rebuild { pass_through_args } => {
             let options = RebuildCommandOptions { pass_through_args: pass_through_args.as_deref() };
-            Ok(package_manager.run_rebuild_command(&options, &cwd).await?)
+            Ok(pm.run_rebuild_command(&options, cwd).await?)
         }
 
         PmCommands::Fund { json, pass_through_args } => {
             let options =
                 FundCommandOptions { json, pass_through_args: pass_through_args.as_deref() };
-            Ok(package_manager.run_fund_command(&options, &cwd).await?)
+            Ok(pm.run_fund_command(&options, cwd).await?)
         }
 
         PmCommands::Ping { registry, pass_through_args } => {
@@ -365,18 +463,11 @@ pub async fn execute_pm_subcommand(
                 registry: registry.as_deref(),
                 pass_through_args: pass_through_args.as_deref(),
             };
-            Ok(package_manager.run_ping_command(&options, &cwd).await?)
+            Ok(pm.run_ping_command(&options, cwd).await?)
         }
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use vite_install::commands::add::SaveDependencyType;
-
-    #[test]
-    fn test_save_dependency_type() {
-        assert!(matches!(SaveDependencyType::Dev, SaveDependencyType::Dev));
-        assert!(matches!(SaveDependencyType::Production, SaveDependencyType::Production));
-    }
+fn config_location(global: bool, location: Option<&str>) -> Option<&str> {
+    if global { Some("global") } else { location }
 }

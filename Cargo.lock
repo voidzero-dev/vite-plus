@@ -7448,6 +7448,7 @@ dependencies = [
  "vite_install",
  "vite_migration",
  "vite_path",
+ "vite_pm_cli",
  "vite_shared",
  "vite_static_config",
  "vite_str",
@@ -7527,6 +7528,7 @@ dependencies = [
  "vite_install",
  "vite_js_runtime",
  "vite_path",
+ "vite_pm_cli",
  "vite_setup",
  "vite_shared",
  "vite_str",
@@ -7644,6 +7646,23 @@ dependencies = [
  "thiserror 2.0.18",
  "vite_str",
  "wincode",
+]
+
+[[package]]
+name = "vite_pm_cli"
+version = "0.0.0"
+dependencies = [
+ "clap",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "vite_command",
+ "vite_error",
+ "vite_install",
+ "vite_path",
+ "vite_str",
+ "vite_workspace",
 ]
 
 [[package]]

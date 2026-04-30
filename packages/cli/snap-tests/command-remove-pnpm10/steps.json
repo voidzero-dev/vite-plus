@@ -1,0 +1,13 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "commands": [
+    "vp remove --help # should show help",
+    "vp remove # should error because no packages specified",
+    "vp remove testnpm2 -D && cat package.json # should error when remove not exists package from dev dependencies",
+    "vp add testnpm2 && vp add -D test-vite-plus-install && vp add -O test-vite-plus-package-optional && cat package.json # should add packages to dependencies",
+    "vp remove testnpm2 test-vite-plus-install && cat package.json # should remove packages from dependencies",
+    "vp remove -O test-vite-plus-package-optional -- --loglevel=warn && cat package.json # support remove package from optional dependencies and pass through arguments",
+    "vp remove -g --dry-run testnpm2 && cat package.json # support remove global package with dry-run",
+    "vp rm --stream foo && should show tips to use pass through arguments when options are not supported"
+  ]
+}

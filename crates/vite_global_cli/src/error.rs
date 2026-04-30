@@ -64,4 +64,15 @@ pub enum Error {
         version_source: String,
         help: String,
     },
+
+    #[error(transparent)]
+    PmCli(#[from] vite_pm_cli::Error),
+}
+
+impl Error {
+    /// Whether this error should be printed without the "error: " prefix
+    /// (a friendly user-facing message, not a stack trace).
+    pub fn is_user_message(&self) -> bool {
+        matches!(self, Self::UserMessage(_) | Self::PmCli(vite_pm_cli::Error::UserMessage(_)))
+    }
 }
