@@ -6,22 +6,27 @@
 //! job (Y/N)?" on Ctrl+C, which leaves the terminal corrupt. Routing through
 //! `PowerShell` sidesteps the prompt and lets Ctrl+C propagate cleanly.
 //!
-//! The rewrite is intentionally **scoped to paths inside `$VP_HOME`**
-//! (`~/.vite-plus` by default). vp's managed shims live there:
-//!   - `$VP_HOME/js_runtime/node/<ver>/{npm,npx}.cmd` (npm/npx shipped with
-//!     the managed Node.js),
-//!   - `$VP_HOME/package_manager/<pm>/<ver>/<pm>/bin/<pm>.cmd` (downloaded
-//!     pnpm/yarn/bun).
+//! The rewrite is scoped to two patterns:
+//!   - Inside `$VP_HOME` (`~/.vite-plus` by default) — vp's managed shims:
+//!     - `$VP_HOME/js_runtime/node/<ver>/{npm,npx}.cmd`,
+//!     - `$VP_HOME/package_manager/<pm>/<ver>/<pm>/bin/<pm>.cmd`.
+//!   - Any `<...>/node_modules/.bin/*.cmd` — the canonical layout for
+//!     npm/pnpm/yarn-emitted shims (cmd-shim writes both `.cmd` and `.ps1`
+//!     so the wrappers stay equivalent).
 //!
-//! Anything outside `$VP_HOME` — system tools, globally-installed npm
-//! shims, third-party CLIs whose `.cmd` and `.ps1` wrappers may diverge —
-//! keeps its existing `.cmd` path (Ctrl+C corruption included), so we
-//! don't silently change execution semantics for unrelated commands or
-//! bypass execution policies on locked-down hosts.
+//! Anything outside both patterns — system tools, third-party CLIs whose
+//! `.cmd` and `.ps1` wrappers may diverge — keeps its existing `.cmd`
+//! path (Ctrl+C corruption included), so we don't silently change
+//! execution semantics for unrelated commands or bypass execution
+//! policies on locked-down hosts.
 //!
-//! The task-layer rewrite (`vite_task_plan::ps1_shim`) is scoped
-//! differently — to `node_modules/.bin/*.cmd` inside the workspace — and
-//! covers `vp run <script>`. The two scopes don't overlap.
+//! The task-layer rewrite (`vite_task_plan::ps1_shim`) covers the same
+//! `node_modules/.bin/*.cmd` pattern at task-graph plan time for `vp run
+//! <script>`. The two are complementary: the task-layer version records
+//! cwd-relative `.ps1` paths in the plan's spawn fingerprint (so it stays
+//! portable across machines), this one applies absolute-path rewriting at
+//! spawn time for paths the task layer doesn't see (pm-routed flows that
+//! go through `vite_command::run_command`).
 //!
 //! See <https://github.com/voidzero-dev/vite-plus/issues/1489>
 //! and <https://github.com/voidzero-dev/vite-plus/issues/1176>.
@@ -42,7 +47,8 @@ use vite_powershell::{POWERSHELL_PREFIX, find_ps1_sibling, powershell_host};
 /// - not on Windows,
 /// - no PowerShell host (`pwsh.exe` or `powershell.exe`) is on PATH,
 /// - `$VP_HOME` could not be resolved,
-/// - the resolved path is **outside** `$VP_HOME`,
+/// - the resolved path is outside `$VP_HOME` AND not under any
+///   `node_modules/.bin/`,
 /// - the resolved path is not a `.cmd` (case-insensitive),
 /// - the `.cmd` has no sibling `.ps1`.
 #[must_use]
@@ -73,7 +79,7 @@ fn rewrite_in_scope(
     vp_home: &AbsolutePath,
     host: &Arc<AbsolutePath>,
 ) -> Option<(AbsolutePathBuf, Vec<OsString>)> {
-    if !resolved.as_path().starts_with(vp_home.as_path()) {
+    if !is_in_managed_scope(resolved, vp_home) {
         return None;
     }
     let ps1 = find_ps1_sibling(resolved)?;
@@ -90,6 +96,24 @@ fn rewrite_in_scope(
     prefix_args.push(ps1.as_path().as_os_str().to_owned());
 
     Some((host.to_absolute_path_buf(), prefix_args))
+}
+
+fn is_in_managed_scope(resolved: &AbsolutePath, vp_home: &AbsolutePath) -> bool {
+    resolved.as_path().starts_with(vp_home.as_path()) || is_in_node_modules_bin(resolved)
+}
+
+/// `true` when `resolved` is `<...>/node_modules/.bin/<file>` (matched
+/// case-insensitively on the `.bin`/`node_modules` components — Windows
+/// is case-insensitive, and pnpm's hoisted layouts can vary in casing).
+fn is_in_node_modules_bin(resolved: &AbsolutePath) -> bool {
+    let mut parents = resolved.as_path().components().rev();
+    parents.next(); // shim filename
+    let Some(bin) = parents.next() else { return false };
+    if !bin.as_os_str().eq_ignore_ascii_case(".bin") {
+        return false;
+    }
+    let Some(node_modules) = parents.next() else { return false };
+    node_modules.as_os_str().eq_ignore_ascii_case("node_modules")
 }
 
 #[cfg(test)]
@@ -135,22 +159,62 @@ mod tests {
         );
     }
 
-    /// Regression for the Codex review: the rewrite must NOT retarget
-    /// `.cmd` files that live outside `$VP_HOME` even when a sibling
-    /// `.ps1` exists. Otherwise unrelated PATH commands (system tools,
-    /// globally installed npm wrappers, third-party CLIs whose `.cmd`
-    /// and `.ps1` wrappers diverge) would silently switch to PowerShell
-    /// with `-ExecutionPolicy Bypass`.
+    /// Any `<...>/node_modules/.bin/*.cmd` rewrites, regardless of where
+    /// the project root sits — covers single-package projects, hoisted
+    /// monorepos, and globally-installed shims uniformly.
     #[test]
-    fn returns_none_for_cmd_outside_vp_home() {
+    fn rewrites_cmd_in_node_modules_bin() {
+        let dir = tempdir().unwrap();
+        let root = abs(dir.path().canonicalize().unwrap());
+        // vp_home points elsewhere — this scope is the node_modules path.
+        let vp_home_path = root.as_path().join("vite-plus");
+        fs::create_dir_all(&vp_home_path).unwrap();
+        let vp_home = abs(vp_home_path);
+
+        let bin = root.as_path().join("my-project").join("node_modules").join(".bin");
+        fs::create_dir_all(&bin).unwrap();
+        fs::write(bin.join("vite.cmd"), "").unwrap();
+        fs::write(bin.join("vite.ps1"), "").unwrap();
+
+        let host = host_arc(&root);
+        let resolved = abs(bin.join("vite.cmd"));
+
+        let result = rewrite_in_scope(&resolved, &vp_home, &host);
+        assert!(result.is_some(), "any node_modules/.bin/*.cmd must rewrite");
+    }
+
+    /// The `.bin`/`node_modules` component check is case-insensitive so
+    /// a `.CMD` shim under `Node_Modules\.Bin\` (or any casing variant)
+    /// still matches.
+    #[test]
+    fn rewrites_cmd_in_node_modules_bin_case_insensitive() {
+        let dir = tempdir().unwrap();
+        let root = abs(dir.path().canonicalize().unwrap());
+        let vp_home = abs(root.as_path().join("vite-plus"));
+        fs::create_dir_all(vp_home.as_path()).unwrap();
+
+        let bin = root.as_path().join("Node_Modules").join(".Bin");
+        fs::create_dir_all(&bin).unwrap();
+        fs::write(bin.join("vite.cmd"), "").unwrap();
+        fs::write(bin.join("vite.ps1"), "").unwrap();
+
+        let host = host_arc(&root);
+        let resolved = abs(bin.join("vite.cmd"));
+
+        assert!(rewrite_in_scope(&resolved, &vp_home, &host).is_some());
+    }
+
+    /// A `.cmd`+`.ps1` pair outside `$VP_HOME` AND outside any
+    /// `node_modules/.bin/` (e.g. a system tool living at `<root>/global/bin/foo.cmd`)
+    /// must NOT be retargeted.
+    #[test]
+    fn returns_none_for_cmd_outside_managed_scope() {
         let dir = tempdir().unwrap();
         let root = abs(dir.path().canonicalize().unwrap());
         let vp_home_path = root.as_path().join("vite-plus");
         fs::create_dir_all(&vp_home_path).unwrap();
         let vp_home = abs(vp_home_path);
 
-        // A `.cmd`+`.ps1` pair *outside* vp_home — e.g. a global install at
-        // `%AppData%\npm\node_modules\.bin\foo.cmd` or any third-party tool.
         let outside_bin = root.as_path().join("global").join("bin");
         fs::create_dir_all(&outside_bin).unwrap();
         fs::write(outside_bin.join("foo.cmd"), "").unwrap();
@@ -161,7 +225,7 @@ mod tests {
 
         assert!(
             rewrite_in_scope(&resolved, &vp_home, &host).is_none(),
-            "rewrite must stay hands-off for .cmd outside $VP_HOME"
+            "rewrite must stay hands-off for .cmd outside both vp_home and node_modules/.bin"
         );
     }
 
