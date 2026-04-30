@@ -1,0 +1,6 @@
+[1]> node $SNAP_CASES_DIR/.shared/mock-npm-registry.mjs -- vp create @your-org:monorepo --no-interactive # direct-selecting a monorepo entry inside a monorepo -> refuse
+
+You are already in a monorepo workspace.
+Use a different template or run this command outside the monorepo
+Cannot create a monorepo inside an existing monorepo
+
