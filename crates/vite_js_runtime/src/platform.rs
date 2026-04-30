@@ -50,11 +50,11 @@ impl Os {
     pub const fn current() -> Self {
         #[cfg(target_os = "linux")]
         {
-            return Self::Linux;
+            Self::Linux
         }
          #[cfg(target_os = "android")]
         {
-            return Self::Android;
+            Self::Android
         }
         #[cfg(target_os = "macos")]
         {
