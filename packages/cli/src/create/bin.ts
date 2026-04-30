@@ -46,7 +46,7 @@ import {
   updatePackageJsonWithDeps,
   updateWorkspaceConfig,
 } from '../utils/workspace.ts';
-import type { ExecutionResult } from './command.ts';
+import type { ExecutionWithProjectDir } from './command.ts';
 import { discoverTemplate, inferGitHubRepoName, inferParentDir, isGitHubUrl } from './discovery.ts';
 import { getInitialTemplateOptions } from './initial-template-options.ts';
 import {
@@ -937,7 +937,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
 
   // #region Handle single project template
 
-  let result: ExecutionResult;
+  let result: ExecutionWithProjectDir;
   if (templateInfo.type === TemplateType.bundled) {
     pauseCreateProgress();
     await checkProjectDirExists(path.join(workspaceInfo.rootDir, targetDir), options.interactive);
