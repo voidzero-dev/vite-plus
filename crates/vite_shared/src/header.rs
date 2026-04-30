@@ -527,17 +527,36 @@ fn render_header_variant(
 
 /// Set the terminal window title using OSC 0 escape sequence.
 ///
-/// Writes `ESC ] 0 ; <title> BEL` to stdout when stdout is a terminal.
-/// This is a no-op when stdout is not a terminal or when running in CI.
+/// Writes `ESC ] 0 ; <title> BEL` only when stdout looks like a terminal with
+/// ANSI/VT escape support. This is a best-effort hint: unsupported terminals
+/// may ignore it, and environments without escape support are treated as no-op.
 pub fn set_terminal_title(title: &str) {
     use std::io::Write;
 
-    if !std::io::stdout().is_terminal() || std::env::var_os("CI").is_some() {
+    if !should_set_terminal_title() {
+        return;
+    }
+
+    let title = sanitize_terminal_title(title);
+    if title.is_empty() {
         return;
     }
 
     let _ = write!(std::io::stdout(), "\x1b]0;{title}\x07");
     let _ = std::io::stdout().flush();
+}
+
+fn should_set_terminal_title() -> bool {
+    let stdout = std::io::stdout();
+
+    stdout.is_terminal()
+        && std::env::var_os("CI").is_none()
+        && std::env::var_os("GITHUB_ACTIONS").is_none()
+        && on(Stream::Stdout).is_some()
+}
+
+fn sanitize_terminal_title(title: &str) -> String {
+    title.chars().filter(|ch| !matches!(ch, '\u{0000}'..='\u{001f}' | '\u{007f}')).collect()
 }
 
 /// Render the Vite+ CLI header string with JS-parity coloring behavior.
@@ -559,6 +578,17 @@ mod tests {
         Rgb, gradient_eased, parse_osc4_rgb, parse_osc10_rgb, parse_rgb_triplet,
         query_terminal_colors, read_until_either, to_8bit,
     };
+
+    #[test]
+    fn sanitize_terminal_title_strips_control_chars() {
+        assert_eq!(sanitize_terminal_title("my\x1b]2;bad\x07project"), "my]2;badproject");
+        assert_eq!(sanitize_terminal_title("vite-plus"), "vite-plus");
+    }
+
+    #[test]
+    fn sanitize_terminal_title_can_return_empty() {
+        assert_eq!(sanitize_terminal_title("\x1b\x07\n"), "");
+    }
 
     #[test]
     fn to_8bit_matches_js_rules() {
