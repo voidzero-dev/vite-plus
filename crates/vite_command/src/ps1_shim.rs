@@ -20,18 +20,10 @@
 //! execution semantics for unrelated commands or bypass execution
 //! policies on locked-down hosts.
 //!
-//! The task-layer rewrite (`vite_task_plan::ps1_shim`) covers the same
-//! `node_modules/.bin/*.cmd` pattern at task-graph plan time for `vp run
-//! <script>`. The two are complementary: the task-layer version records
-//! cwd-relative `.ps1` paths in the plan's spawn fingerprint (so it stays
-//! portable across machines), this one applies absolute-path rewriting at
-//! spawn time for paths the task layer doesn't see (pm-routed flows that
-//! go through `vite_command::run_command`).
-//!
 //! See <https://github.com/voidzero-dev/vite-plus/issues/1489>
 //! and <https://github.com/voidzero-dev/vite-plus/issues/1176>.
 
-use std::{ffi::OsString, sync::Arc};
+use std::ffi::OsString;
 
 use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_powershell::{POWERSHELL_PREFIX, find_ps1_sibling, powershell_host};
@@ -77,7 +69,7 @@ fn vp_home() -> Option<&'static AbsolutePathBuf> {
 fn rewrite_in_scope(
     resolved: &AbsolutePath,
     vp_home: &AbsolutePath,
-    host: &Arc<AbsolutePath>,
+    host: &AbsolutePath,
 ) -> Option<(AbsolutePathBuf, Vec<OsString>)> {
     if !is_in_managed_scope(resolved, vp_home) {
         return None;
@@ -129,8 +121,8 @@ mod tests {
         AbsolutePathBuf::new(buf).unwrap()
     }
 
-    fn host_arc(root: &AbsolutePath) -> Arc<AbsolutePath> {
-        Arc::from(abs(root.as_path().join("powershell.exe")))
+    fn host_buf(root: &AbsolutePath) -> AbsolutePathBuf {
+        abs(root.as_path().join("powershell.exe"))
     }
 
     #[test]
@@ -143,7 +135,7 @@ mod tests {
         fs::write(bin_dir.join("npm.cmd"), "").unwrap();
         fs::write(bin_dir.join("npm.ps1"), "").unwrap();
 
-        let host = host_arc(&vp_home);
+        let host = host_buf(&vp_home);
         let resolved = abs(bin_dir.join("npm.cmd"));
 
         let (program, prefix_args) =
@@ -176,7 +168,7 @@ mod tests {
         fs::write(bin.join("vite.cmd"), "").unwrap();
         fs::write(bin.join("vite.ps1"), "").unwrap();
 
-        let host = host_arc(&root);
+        let host = host_buf(&root);
         let resolved = abs(bin.join("vite.cmd"));
 
         let result = rewrite_in_scope(&resolved, &vp_home, &host);
@@ -198,7 +190,7 @@ mod tests {
         fs::write(bin.join("vite.cmd"), "").unwrap();
         fs::write(bin.join("vite.ps1"), "").unwrap();
 
-        let host = host_arc(&root);
+        let host = host_buf(&root);
         let resolved = abs(bin.join("vite.cmd"));
 
         assert!(rewrite_in_scope(&resolved, &vp_home, &host).is_some());
@@ -220,7 +212,7 @@ mod tests {
         fs::write(outside_bin.join("foo.cmd"), "").unwrap();
         fs::write(outside_bin.join("foo.ps1"), "").unwrap();
 
-        let host = host_arc(&root);
+        let host = host_buf(&root);
         let resolved = abs(outside_bin.join("foo.cmd"));
 
         assert!(
@@ -235,7 +227,7 @@ mod tests {
         let vp_home = abs(dir.path().canonicalize().unwrap());
         fs::write(vp_home.as_path().join("npm.cmd"), "").unwrap();
 
-        let host = host_arc(&vp_home);
+        let host = host_buf(&vp_home);
         let resolved = abs(vp_home.as_path().join("npm.cmd"));
 
         assert!(rewrite_in_scope(&resolved, &vp_home, &host).is_none());
