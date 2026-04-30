@@ -53,15 +53,7 @@ fn resolve_program(
     envs: &HashMap<String, String>,
     cwd: &AbsolutePath,
 ) -> Result<(AbsolutePathBuf, Vec<OsString>), Error> {
-    // Look up PATH case-insensitively: on Windows the canonical key is `Path`
-    // and the TS layer's `prependToPathToEnvs` preserves whatever casing the
-    // process started with. Hard-coding `"PATH"` would miss a `Path`-keyed
-    // override and silently fall back to the process PATH (where the
-    // prepended package-manager bin dir is absent).
-    let path_env = envs
-        .iter()
-        .find(|(k, _)| k.eq_ignore_ascii_case("path"))
-        .map(|(_, v)| OsStr::new(v.as_str()));
+    let path_env = envs.get("PATH").map(|p| OsStr::new(p.as_str()));
     let bin_path = resolve_bin(bin_name, path_env, cwd)?;
     Ok(match ps1_shim::rewrite_cmd_to_powershell(&bin_path) {
         Some(rewritten) => rewritten,
@@ -374,50 +366,6 @@ mod tests {
             assert_eq!(
                 result.unwrap_err().to_string(),
                 "Cannot find binary path for command 'npm-not-exists'"
-            );
-        }
-    }
-
-    #[cfg(windows)]
-    mod resolve_program_tests {
-        use super::*;
-
-        // Regression for voidzero-dev/vite-plus#1489 follow-up: on Windows the
-        // PATH environment variable is conventionally keyed `Path` (and the
-        // TS layer's `prependToPathToEnvs` preserves that casing when adding
-        // the downloaded package-manager bin dir). `resolve_program` must
-        // look up PATH case-insensitively or it falls back to the process
-        // environment and can't find the prepended shim.
-        #[test]
-        fn resolve_program_finds_binary_via_lowercase_path_key() {
-            let temp_dir = create_temp_dir();
-            let temp_dir_path =
-                AbsolutePathBuf::new(temp_dir.path().canonicalize().unwrap().to_path_buf())
-                    .unwrap();
-
-            // Unique name so it can't accidentally resolve via the process PATH.
-            let bin_name = "vp_test_resolve_program_path_casing";
-            let bin_path = temp_dir.path().join(format!("{bin_name}.exe"));
-            std::fs::write(&bin_path, b"").unwrap();
-
-            // `Path`, not `PATH` — the real-world Windows casing.
-            let envs = HashMap::from([(
-                "Path".to_string(),
-                temp_dir_path.as_path().to_string_lossy().into_owned(),
-            )]);
-
-            let result = resolve_program(bin_name, &envs, &temp_dir_path);
-            assert!(
-                result.is_ok(),
-                "resolve_program must find the binary via the `Path` env key on Windows; got: {:?}",
-                result.err()
-            );
-            let (program, prefix_args) = result.unwrap();
-            assert!(prefix_args.is_empty(), "no .ps1 sibling, no PowerShell prefix expected");
-            assert_eq!(
-                program.as_path().file_stem().and_then(|s| s.to_str()),
-                Some(bin_name),
-                "resolved program should be the .exe in the tempdir"
             );
         }
     }
