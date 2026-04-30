@@ -1,22 +1,12 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import spawn from 'cross-spawn';
-
 import { runCommand as runCommandWithFspy } from '../../binding/index.js';
 import type { WorkspaceInfo } from '../types/index.ts';
+import type { ExecutionResult, RunCommandOptions } from '../utils/command.ts';
 
-export interface ExecutionResult {
-  exitCode: number;
-  projectDir?: string;
-}
-
-export interface RunCommandOptions {
-  command: string;
-  args: string[];
-  cwd: string;
-  envs: NodeJS.ProcessEnv;
-}
+export type { ExecutionResult, RunCommandOptions, RunCommandResult } from '../utils/command.ts';
+export { runCommand, runCommandSilently } from '../utils/command.ts';
 
 // Run a command and detect the project directory
 export async function runCommandAndDetectProjectDir(
@@ -87,57 +77,6 @@ export async function runCommandAndDetectProjectDir(
     exitCode: result.exitCode,
     projectDir,
   };
-}
-
-export interface RunCommandResult extends ExecutionResult {
-  stdout: Buffer;
-  stderr: Buffer;
-}
-
-export async function runCommandSilently(options: RunCommandOptions): Promise<RunCommandResult> {
-  const child = spawn(options.command, options.args, {
-    stdio: 'pipe',
-    cwd: options.cwd,
-    env: options.envs,
-  });
-  const promise = new Promise<RunCommandResult>((resolve, reject) => {
-    const stdout: Buffer[] = [];
-    const stderr: Buffer[] = [];
-    child.stdout?.on('data', (data) => {
-      stdout.push(data);
-    });
-    child.stderr?.on('data', (data) => {
-      stderr.push(data);
-    });
-    child.on('close', (code) => {
-      resolve({
-        exitCode: code ?? 0,
-        stdout: Buffer.concat(stdout),
-        stderr: Buffer.concat(stderr),
-      });
-    });
-    child.on('error', (err) => {
-      reject(err);
-    });
-  });
-  return await promise;
-}
-
-export async function runCommand(options: RunCommandOptions): Promise<ExecutionResult> {
-  const child = spawn(options.command, options.args, {
-    stdio: 'inherit',
-    cwd: options.cwd,
-    env: options.envs,
-  });
-  const promise = new Promise<ExecutionResult>((resolve, reject) => {
-    child.on('close', (code) => {
-      resolve({ exitCode: code ?? 0 });
-    });
-    child.on('error', (err) => {
-      reject(err);
-    });
-  });
-  return await promise;
 }
 
 // Get the package runner command for each package manager
