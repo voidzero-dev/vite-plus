@@ -2,13 +2,12 @@ import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import colors from 'picocolors';
 
 import type { WorkspaceInfo } from '../../types/index.ts';
+import { runCommand, runCommandSilently } from '../../utils/command.ts';
 import { checkNpmPackageExists } from '../../utils/package.ts';
 import {
-  type ExecutionResult,
+  type ExecutionWithProjectDir,
   formatDlxCommand,
-  runCommand,
   runCommandAndDetectProjectDir,
-  runCommandSilently,
 } from '../command.ts';
 import type { TemplateInfo } from './types.ts';
 
@@ -18,14 +17,14 @@ export async function executeRemoteTemplate(
   workspaceInfo: WorkspaceInfo,
   templateInfo: TemplateInfo,
   options?: { silent?: boolean },
-): Promise<ExecutionResult> {
+): Promise<ExecutionWithProjectDir> {
   const silent = options?.silent ?? false;
   if (!silent) {
     prompts.log.step('Generating project…');
   }
 
   let isGitHubTemplate = templateInfo.command === 'degit';
-  let result: ExecutionResult;
+  let result: ExecutionWithProjectDir;
   if (templateInfo.command === 'node') {
     // Template found locally - execute directly
     const command = templateInfo.command;
@@ -84,7 +83,7 @@ export async function runRemoteTemplateCommand(
   templateInfo: TemplateInfo,
   detectCreatedProjectDir?: boolean,
   silent = false,
-): Promise<ExecutionResult> {
+): Promise<ExecutionWithProjectDir> {
   autoFixRemoteTemplateCommand(templateInfo, workspaceInfo);
   const remotePackageName = templateInfo.command;
   const execArgs = [...templateInfo.args];

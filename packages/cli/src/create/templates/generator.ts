@@ -6,7 +6,7 @@ import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import type { WorkspaceInfo } from '../../types/index.ts';
 import { editJsonFile } from '../../utils/json.ts';
 import { templatesDir } from '../../utils/path.ts';
-import type { ExecutionResult } from '../command.ts';
+import type { ExecutionWithProjectDir } from '../command.ts';
 import { copyDir } from '../utils.ts';
 import type { BuiltinTemplateInfo } from './types.ts';
 
@@ -15,7 +15,7 @@ export async function executeGeneratorScaffold(
   workspaceInfo: WorkspaceInfo,
   templateInfo: BuiltinTemplateInfo,
   options?: { silent?: boolean },
-): Promise<ExecutionResult> {
+): Promise<ExecutionWithProjectDir> {
   if (!options?.silent) {
     prompts.log.step('Creating generator scaffold...');
   }

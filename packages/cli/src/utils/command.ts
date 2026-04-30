@@ -7,15 +7,21 @@ export interface RunCommandOptions {
   envs: NodeJS.ProcessEnv;
 }
 
-export interface RunCommandResult {
+export interface ExecutionResult {
   exitCode: number;
+}
+
+export interface RunCommandResult extends ExecutionResult {
   stdout: Buffer;
   stderr: Buffer;
 }
 
 export async function runCommandSilently(options: RunCommandOptions): Promise<RunCommandResult> {
   const child = spawn(options.command, options.args, {
-    stdio: 'pipe',
+    // No stdin pipe: leaving one open would deadlock any descendant `.ps1`
+    // shim whose `$MyInvocation.ExpectingInput` branch waits for EOF on
+    // stdin before invoking `node`.
+    stdio: ['ignore', 'pipe', 'pipe'],
     cwd: options.cwd,
     env: options.envs,
   });
@@ -42,15 +48,15 @@ export async function runCommandSilently(options: RunCommandOptions): Promise<Ru
   return await promise;
 }
 
-export async function runCommand(options: RunCommandOptions): Promise<number> {
+export async function runCommand(options: RunCommandOptions): Promise<ExecutionResult> {
   const child = spawn(options.command, options.args, {
     stdio: 'inherit',
     cwd: options.cwd,
     env: options.envs,
   });
-  return new Promise<number>((resolve, reject) => {
+  return new Promise<ExecutionResult>((resolve, reject) => {
     child.on('close', (code) => {
-      resolve(code ?? 0);
+      resolve({ exitCode: code ?? 0 });
     });
     child.on('error', (err) => {
       reject(err);

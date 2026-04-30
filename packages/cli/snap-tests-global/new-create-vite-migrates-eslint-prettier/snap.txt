@@ -1,4 +1,60 @@
 > vp create vite@9.0.5 --no-interactive -- my-react-ts --template react-ts # create vite app with pinned version + react-ts template, should auto-migrate ESLint -> Oxlint and merge lint config into vite.config.ts
+
+Using default package manager: pnpm
+
+pnpm@latest installing...
+
+pnpm@<semver> installed
+
+Generating project…
+
+Running: pnpm dlx create-vite@<semver> my-react-ts --template react-ts --no-immediate --no-rolldown
+│
+◇  Scaffolding project in <cwd>/my-react-ts...
+│
+└  Done. Now run:
+
+  cd my-react-ts
+  pnpm install
+  pnpm dev
+
+
+Wrote agent instructions to AGENTS.md
+
+Installing dependencies...
+
+Dependencies installed
+
+Migrating ESLint config to Oxlint...
+
+ESLint config migrated to .oxlintrc.json
+
+Replacing ESLint comments with Oxlint equivalents...
+
+ESLint comments replaced
+
+✔ Removed my-react-ts/eslint.config.js
+
+✔ Merged my-react-ts/.oxlintrc.json into my-react-ts/vite.config.ts
+
+Rewrote imports in one file
+
+  my-react-ts/vite.config.ts
+
+✔ Merged staged config into my-react-ts/vite.config.ts
+
+Installing dependencies...
+
+Dependencies installed
+
+Formatting code...
+
+Code formatted
+◇ Scaffolded my-react-ts with React + TypeScript
+• Node <semver>  pnpm <semver>
+✓ Dependencies installed in <variable>ms
+→ Next: cd my-react-ts && vp run
+
 > test ! -f my-react-ts/eslint.config.js && echo 'eslint.config.js removed' # eslint config deleted
 eslint.config.js removed
 

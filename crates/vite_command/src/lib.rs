@@ -2,7 +2,7 @@
 use std::os::fd::{BorrowedFd, RawFd};
 use std::{
     collections::HashMap,
-    ffi::OsStr,
+    ffi::{OsStr, OsString},
     process::{ExitStatus, Stdio},
 };
 
@@ -11,6 +11,8 @@ use tokio::process::Command;
 use tokio_util::sync::CancellationToken;
 use vite_error::Error;
 use vite_path::{AbsolutePath, AbsolutePathBuf, RelativePathBuf};
+
+mod ps1_shim;
 
 /// Result of running a command with fspy tracking.
 #[derive(Debug)]
@@ -41,6 +43,22 @@ pub fn resolve_bin(
     let path = which::which_in(bin_name, Some(path_env), cwd.as_ref())
         .map_err(|_| Error::CannotFindBinaryPath(bin_name.into()))?;
     AbsolutePathBuf::new(path).ok_or_else(|| Error::CannotFindBinaryPath(bin_name.into()))
+}
+
+/// Resolve `bin_name` to a path and apply the Windows `.cmd` → PowerShell
+/// rewrite. Returns the program to spawn and the arg prefix to prepend
+/// before the user args (empty when no rewrite applies).
+fn resolve_program(
+    bin_name: &str,
+    envs: &HashMap<String, String>,
+    cwd: &AbsolutePath,
+) -> Result<(AbsolutePathBuf, Vec<OsString>), Error> {
+    let path_env = envs.get("PATH").map(|p| OsStr::new(p.as_str()));
+    let bin_path = resolve_bin(bin_name, path_env, cwd)?;
+    Ok(match ps1_shim::rewrite_cmd_to_powershell(&bin_path) {
+        Some(rewritten) => rewritten,
+        None => (bin_path, Vec::new()),
+    })
 }
 
 /// Build a `tokio::process::Command` for a pre-resolved binary path.
@@ -140,10 +158,9 @@ where
     S: AsRef<OsStr>,
 {
     let cwd = cwd.as_ref();
-    let paths = envs.get("PATH");
-    let bin_path = resolve_bin(bin_name, paths.map(|p| OsStr::new(p.as_str())), cwd)?;
-    let mut cmd = build_command(&bin_path, cwd);
-    cmd.args(args).envs(envs);
+    let (program, prefix_args) = resolve_program(bin_name, envs, cwd)?;
+    let mut cmd = build_command(&program, cwd);
+    cmd.args(&prefix_args).args(args).envs(envs);
     let status = cmd.status().await?;
     Ok(status)
 }
