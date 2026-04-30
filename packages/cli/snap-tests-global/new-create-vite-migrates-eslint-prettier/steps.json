@@ -6,7 +6,7 @@
   "commands": [
     {
       "command": "vp create vite@9.0.5 --no-interactive -- my-react-ts --template react-ts # create vite app with pinned version + react-ts template, should auto-migrate ESLint -> Oxlint and merge lint config into vite.config.ts",
-      "ignoreOutput": true
+      "ignoreOutput": false
     },
     "test ! -f my-react-ts/eslint.config.js && echo 'eslint.config.js removed' # eslint config deleted",
     "test ! -f my-react-ts/.oxlintrc.json && echo '.oxlintrc.json merged into vite.config.ts' # migration output merged by rewrite step (matches vp migrate)",

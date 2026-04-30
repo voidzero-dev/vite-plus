@@ -9,9 +9,6 @@ export interface RunCommandOptions {
 
 export interface ExecutionResult {
   exitCode: number;
-  /** Set by `runCommandAndDetectProjectDir` (in `create/command.ts`); plain
-   * `runCommand` / `runCommandSilently` leave it undefined. */
-  projectDir?: string;
 }
 
 export interface RunCommandResult extends ExecutionResult {
