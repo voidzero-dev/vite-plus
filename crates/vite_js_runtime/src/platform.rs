@@ -11,6 +11,7 @@ pub struct Platform {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Os {
     Linux,
+    Android,
     Darwin,
     Windows,
 }
@@ -51,6 +52,10 @@ impl Os {
         {
             Self::Linux
         }
+        #[cfg(target_os = "android")]
+        {
+            Self::Android
+        }
         #[cfg(target_os = "macos")]
         {
             Self::Darwin
@@ -59,7 +64,13 @@ impl Os {
         {
             Self::Windows
         }
-        #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+        #[cfg(not(any(
+            target_os = "android",
+            target_os = "linux",
+            target_os = "macos",
+            target_os = "windows",
+            target_os = "android"
+        )))]
         {
             compile_error!(
                 "Unsupported operating system. vite_js_runtime only supports Linux, macOS, and Windows."
@@ -72,6 +83,7 @@ impl fmt::Display for Os {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Linux => write!(f, "linux"),
+            Self::Android => write!(f, "android"),
             Self::Darwin => write!(f, "darwin"),
             Self::Windows => write!(f, "windows"),
         }

@@ -8,7 +8,6 @@ publish = false
 rust-version.workspace = true
 
 [dependencies]
-fspy = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
 tracing = { workspace = true }
@@ -18,6 +17,9 @@ which = { workspace = true, features = ["tracing"] }
 
 [target.'cfg(not(target_os = "windows"))'.dependencies]
 nix = { workspace = true, features = ["term"] }
+
+[target.'cfg(not(target_os = "android"))'.dependencies]
+fspy = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

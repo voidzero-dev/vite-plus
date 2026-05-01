@@ -6,13 +6,19 @@ use std::{
     process::{ExitStatus, Stdio},
 };
 
+#[cfg(not(target_os = "android"))]
 use fspy::AccessMode;
 use tokio::process::Command;
+#[cfg(not(target_os = "android"))]
 use tokio_util::sync::CancellationToken;
 use vite_error::Error;
-use vite_path::{AbsolutePath, AbsolutePathBuf, RelativePathBuf};
+#[cfg(not(target_os = "android"))]
+use vite_path::RelativePathBuf;
+use vite_path::{AbsolutePath, AbsolutePathBuf};
 
 /// Result of running a command with fspy tracking.
+
+#[cfg(not(target_os = "android"))]
 #[derive(Debug)]
 pub struct FspyCommandResult {
     /// The termination status of the command.
@@ -160,6 +166,7 @@ where
 /// # Returns
 ///
 /// Returns a FspyCommandResult containing the exit status and path accesses.
+#[cfg(not(target_os = "android"))]
 pub async fn run_command_with_fspy<I, S>(
     bin_name: &str,
     args: I,
