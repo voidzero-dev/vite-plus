@@ -52,7 +52,7 @@ impl Os {
         {
             Self::Linux
         }
-         #[cfg(target_os = "android")]
+        #[cfg(target_os = "android")]
         {
             Self::Android
         }
