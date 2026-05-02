@@ -181,6 +181,8 @@ pub(super) fn print_help() {
         "{header}{bold_underline}Usage:{reset} {bold}vp{reset} <COMMAND>
 
 {bold_underline}Core Commands:{reset}
+  {bold}create{reset}         Create a new project from a template
+  {bold}migrate{reset}        Migrate an existing project to Vite+
   {bold}dev{reset}            Run the development server
   {bold}build{reset}          Build for production
   {bold}test{reset}           Run tests
