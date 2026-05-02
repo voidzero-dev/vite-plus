@@ -1,6 +1,4 @@
 > vp migrate --no-interactive 2>&1 # migration should auto create vite.config.ts and remove oxlintrc and oxfmtrc
-VITE+ - The Unified Toolchain for the Web
-
 ◇ Migrated . to Vite+<repeat>
 • Node <semver>  pnpm <semver>
 • 4 config updates applied

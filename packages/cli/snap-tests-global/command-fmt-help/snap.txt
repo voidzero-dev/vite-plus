@@ -1,6 +1,4 @@
 > vp fmt -h
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp fmt [PATH]... [OPTIONS]
 
 Format code.
@@ -23,8 +21,6 @@ Documentation: https://viteplus.dev/guide/fmt
 
 
 > vp fmt --help
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp fmt [PATH]... [OPTIONS]
 
 Format code.
@@ -47,8 +43,6 @@ Documentation: https://viteplus.dev/guide/fmt
 
 
 > vp help fmt
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp fmt [PATH]... [OPTIONS]
 
 Format code.

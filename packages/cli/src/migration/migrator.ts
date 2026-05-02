@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { styleText } from 'node:util';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import spawn from 'cross-spawn';
@@ -27,7 +28,7 @@ import {
 import { editJsonFile, isJsonFile, readJsonFile } from '../utils/json.ts';
 import { detectPackageMetadata } from '../utils/package.ts';
 import { displayRelative, rulesDir } from '../utils/path.ts';
-import { getSpinner } from '../utils/prompts.ts';
+import { cancelAndExit, getSpinner } from '../utils/prompts.ts';
 import {
   findTsconfigFiles,
   hasBaseUrlInTsconfig,
@@ -680,6 +681,102 @@ function cleanupDeprecatedTsconfigOptions(
         );
       }
     }
+  }
+}
+
+// .svelte files are handled by @sveltejs/vite-plugin-svelte (transpilation)
+// and svelte-check / Svelte Language Server (type checking).
+// Module resolution for `.svelte` imports is typically set up by the
+// project template (e.g. src/vite-env.d.ts in Vite svelte-ts, or
+// auto-generated tsconfig in SvelteKit) rather than this file.
+// https://svelte.dev/docs/svelte/typescript
+export type Framework = 'vue' | 'astro';
+
+const FRAMEWORK_SHIMS: Record<Framework, string> = {
+  // https://vuejs.org/guide/typescript/overview#volar-takeover-mode
+  vue: [
+    "declare module '*.vue' {",
+    "  import type { DefineComponent } from 'vue';",
+    '  const component: DefineComponent<{}, {}, unknown>;',
+    '  export default component;',
+    '}',
+  ].join('\n'),
+  // astro/client is the pre-v4.14 form; v4.14+ prefers `/// <reference path="../.astro/types.d.ts" />`
+  // but .astro/types.d.ts is generated at build time and may not exist yet after migration.
+  // astro/client remains valid and is still used in official Astro integrations.
+  // https://docs.astro.build/en/guides/typescript/#extending-global-types
+  astro: '/// <reference types="astro/client" />',
+};
+
+export function detectFramework(projectPath: string): Framework[] {
+  const packageJsonPath = path.join(projectPath, 'package.json');
+  if (!fs.existsSync(packageJsonPath)) {
+    return [];
+  }
+  const pkg = readJsonFile(packageJsonPath) as {
+    dependencies?: Record<string, string>;
+    devDependencies?: Record<string, string>;
+  };
+  const allDeps = { ...pkg.dependencies, ...pkg.devDependencies };
+  return (['vue', 'astro'] as const).filter((framework) => !!allDeps[framework]);
+}
+
+function getEnvDtsPath(projectPath: string): string {
+  const srcEnvDts = path.join(projectPath, 'src', 'env.d.ts');
+  const rootEnvDts = path.join(projectPath, 'env.d.ts');
+  for (const candidate of [srcEnvDts, rootEnvDts]) {
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return fs.existsSync(path.join(projectPath, 'src')) ? srcEnvDts : rootEnvDts;
+}
+
+export function hasFrameworkShim(projectPath: string, framework: Framework): boolean {
+  const dirsToScan = [projectPath, path.join(projectPath, 'src')];
+  for (const dir of dirsToScan) {
+    if (!fs.existsSync(dir)) {
+      continue;
+    }
+    let entries: string[];
+    try {
+      entries = fs.readdirSync(dir);
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (!entry.endsWith('.d.ts')) {
+        continue;
+      }
+      const content = fs.readFileSync(path.join(dir, entry), 'utf-8');
+      if (framework === 'astro') {
+        if (content.includes('astro/client')) {
+          return true;
+        }
+      } else if (content.includes(`'*.${framework}'`) || content.includes(`"*.${framework}"`)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+export function addFrameworkShim(
+  projectPath: string,
+  framework: Framework,
+  report?: MigrationReport,
+): void {
+  const envDtsPath = getEnvDtsPath(projectPath);
+  const shim = FRAMEWORK_SHIMS[framework];
+  if (fs.existsSync(envDtsPath)) {
+    const existing = fs.readFileSync(envDtsPath, 'utf-8');
+    fs.writeFileSync(envDtsPath, `${existing.trimEnd()}\n\n${shim}\n`, 'utf-8');
+  } else {
+    fs.mkdirSync(path.dirname(envDtsPath), { recursive: true });
+    fs.writeFileSync(envDtsPath, `${shim}\n`, 'utf-8');
+  }
+  if (report) {
+    report.frameworkShimAdded = true;
   }
 }
 
@@ -2270,7 +2367,7 @@ export function rewritePrepareScript(rootDir: string): string | undefined {
   return oldDir;
 }
 
-function setPackageManager(
+export function setPackageManager(
   projectDir: string,
   downloadPackageManager: DownloadPackageManagerResult,
 ) {
@@ -2425,6 +2522,129 @@ export function migrateNodeVersionManagerFile(
     }
   } else if (detection.voltaPresent) {
     prompts.log.info('You can now remove the "volta" field from package.json manually.');
+  }
+  return true;
+}
+
+export function warnPackageLevelEslint() {
+  prompts.log.warn(
+    'ESLint detected in workspace packages but no root config found. Package-level ESLint must be migrated manually.',
+  );
+}
+
+export function warnLegacyEslintConfig(legacyConfigFile: string) {
+  prompts.log.warn(
+    `Legacy ESLint configuration detected (${legacyConfigFile}). ` +
+      'Automatic migration to Oxlint requires ESLint v9+ with flat config format (eslint.config.*). ' +
+      'Please upgrade to ESLint v9 first: https://eslint.org/docs/latest/use/migrate-to-9.0.0',
+  );
+}
+
+export async function confirmEslintMigration(interactive: boolean): Promise<boolean> {
+  if (interactive) {
+    const confirmed = await prompts.confirm({
+      message:
+        'Migrate ESLint rules to Oxlint using @oxlint/migrate?\n  ' +
+        styleText(
+          'gray',
+          "Oxlint is Vite+'s built-in linter — significantly faster than ESLint with compatible rule support. @oxlint/migrate converts your existing rules automatically.",
+        ),
+      initialValue: true,
+    });
+    if (prompts.isCancel(confirmed)) {
+      cancelAndExit();
+    }
+    return confirmed;
+  }
+  return true;
+}
+
+export async function promptEslintMigration(
+  projectPath: string,
+  interactive: boolean,
+  packages?: WorkspacePackage[],
+): Promise<boolean> {
+  const eslintProject = detectEslintProject(projectPath, packages);
+  if (eslintProject.hasDependency && !eslintProject.configFile && eslintProject.legacyConfigFile) {
+    warnLegacyEslintConfig(eslintProject.legacyConfigFile);
+    return false;
+  }
+  if (!eslintProject.hasDependency) {
+    return false;
+  }
+  if (!eslintProject.configFile) {
+    // Packages have eslint but no root config → warn and skip
+    warnPackageLevelEslint();
+    return false;
+  }
+  const confirmed = await confirmEslintMigration(interactive);
+  if (!confirmed) {
+    return false;
+  }
+  const ok = await migrateEslintToOxlint(
+    projectPath,
+    interactive,
+    eslintProject.configFile,
+    packages,
+  );
+  if (!ok) {
+    cancelAndExit('ESLint migration failed.', 1);
+  }
+  return true;
+}
+
+export function warnPackageLevelPrettier() {
+  prompts.log.warn(
+    'Prettier detected in workspace packages but no root config found. Package-level Prettier must be migrated manually.',
+  );
+}
+
+export async function confirmPrettierMigration(interactive: boolean): Promise<boolean> {
+  if (interactive) {
+    const confirmed = await prompts.confirm({
+      message:
+        'Migrate Prettier to Oxfmt?\n  ' +
+        styleText(
+          'gray',
+          "Oxfmt is Vite+'s built-in formatter that replaces Prettier with faster performance. Your configuration will be converted automatically.",
+        ),
+      initialValue: true,
+    });
+    if (prompts.isCancel(confirmed)) {
+      cancelAndExit();
+    }
+    return confirmed;
+  }
+  prompts.log.info('Prettier configuration detected. Auto-migrating to Oxfmt...');
+  return true;
+}
+
+export async function promptPrettierMigration(
+  projectPath: string,
+  interactive: boolean,
+  packages?: WorkspacePackage[],
+): Promise<boolean> {
+  const prettierProject = detectPrettierProject(projectPath, packages);
+  if (!prettierProject.hasDependency) {
+    return false;
+  }
+  if (!prettierProject.configFile) {
+    // Packages have prettier but no root config → warn and skip
+    warnPackageLevelPrettier();
+    return false;
+  }
+  const confirmed = await confirmPrettierMigration(interactive);
+  if (!confirmed) {
+    return false;
+  }
+  const ok = await migratePrettierToOxfmt(
+    projectPath,
+    interactive,
+    prettierProject.configFile,
+    packages,
+  );
+  if (!ok) {
+    cancelAndExit('Prettier migration failed.', 1);
   }
   return true;
 }

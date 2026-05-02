@@ -1,0 +1,15 @@
+> vp migrate --no-interactive --no-hooks # migration should add both Vue and Astro shims
+◇ Migrated . to Vite+<repeat>
+• Node <semver>  pnpm <semver>
+✓ Dependencies installed in <variable>ms
+• 1 config update applied
+• TypeScript shim added for framework component files
+
+> cat src/env.d.ts # check both shims were written
+declare module '*.vue' {
+  import type { DefineComponent } from 'vue';
+  const component: DefineComponent<{}, {}, unknown>;
+  export default component;
+}
+
+/// <reference types="astro/client" />

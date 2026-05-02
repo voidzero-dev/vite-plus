@@ -1,6 +1,4 @@
 > vp migrate --no-interactive # migration should rewrite bare eslint but leave npx wrappers unchanged
-VITE+ - The Unified Toolchain for the Web
-
 ◇ Migrated . to Vite+<repeat>
 • Node <semver>  pnpm <semver>
 • 4 config updates applied

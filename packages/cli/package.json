@@ -28,8 +28,8 @@
     "binding/index.d.ts",
     "binding/index.js",
     "dist/test",
+    "docs",
     "rules",
-    "skills",
     "templates"
   ],
   "type": "module",
@@ -338,7 +338,7 @@
   "devDependencies": {
     "@napi-rs/cli": "catalog:",
     "@nkzw/safe-word-list": "catalog:",
-    "@oxc-node/core": "^0.0.32",
+    "@oxc-node/core": "catalog:",
     "@types/cross-spawn": "catalog:",
     "@types/semver": "catalog:",
     "@types/validate-npm-package-name": "catalog:",

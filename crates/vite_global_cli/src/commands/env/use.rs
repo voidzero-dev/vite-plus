@@ -36,7 +36,7 @@ fn detect_shell() -> Shell {
         Shell::Fish
     } else if config.vp_shell_nu {
         Shell::NuShell
-    } else if cfg!(windows) && config.ps_module_path.is_some() {
+    } else if config.vp_shell_pwsh {
         Shell::PowerShell
     } else if cfg!(windows) {
         Shell::Cmd
@@ -178,15 +178,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_detect_shell_posix_even_with_psmodulepath() {
+    fn test_detect_shell_pwsh() {
         let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig {
-            ps_module_path: Some("/some/path".into()),
+            vp_shell_pwsh: true,
             ..vite_shared::EnvConfig::for_test()
         });
         let shell = detect_shell();
-        #[cfg(not(windows))]
-        assert!(matches!(shell, Shell::Posix));
-        #[cfg(windows)]
         assert!(matches!(shell, Shell::PowerShell));
     }
 

@@ -1,6 +1,4 @@
 > vp -h # show help message
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp <COMMAND>
 
 Core Commands:
@@ -25,8 +23,6 @@ Options:
   -h, --help  Print help
 
 > vp -V # show version
-VITE+ - The Unified Toolchain for the Web
-
 vp v<semver>
 
 Local vite-plus:

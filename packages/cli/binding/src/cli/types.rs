@@ -90,7 +90,7 @@ pub enum SynthesizableSubcommand {
         /// Skip format check
         #[arg(long = "no-fmt")]
         no_fmt: bool,
-        /// Skip lint check
+        /// Skip lint rules; type-check still runs when `lint.options.typeCheck` is true
         #[arg(long = "no-lint")]
         no_lint: bool,
         /// Do not exit with error when pattern is unmatched

@@ -1,0 +1,15 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "commands": [
+    {
+      "command": "vp create astro --no-interactive -- my-astro-app --yes --skip-houston --template basics # create Astro app",
+      "ignoreOutput": true
+    },
+    "cat my-astro-app/src/env.d.ts # check Astro shim",
+    {
+      "command": "cd my-astro-app && vp install -- --no-frozen-lockfile # install dependencies",
+      "ignoreOutput": true
+    },
+    "cd my-astro-app && vp check --fix # fix generated formatting and ensure no errors"
+  ]
+}

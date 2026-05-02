@@ -5,6 +5,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PackageManager } from '../../types/index.js';
+import { createMigrationReport } from '../report.js';
 
 // Mock VITE_PLUS_VERSION to a stable value for snapshot tests.
 // When tests run via `vp test`, the env var is injected with the actual version,
@@ -21,6 +22,9 @@ const {
   parseNvmrcVersion,
   detectNodeVersionManagerFile,
   migrateNodeVersionManagerFile,
+  detectFramework,
+  hasFrameworkShim,
+  addFrameworkShim,
 } = await import('../migrator.js');
 
 describe('rewritePackageJson', () => {
@@ -304,6 +308,7 @@ describe('migrateNodeVersionManagerFile', () => {
       prettierMigrated: false,
       nodeVersionFileMigrated: false,
       gitHooksConfigured: false,
+      frameworkShimAdded: false,
       warnings: [],
       manualSteps: [],
     };
@@ -334,6 +339,7 @@ describe('migrateNodeVersionManagerFile', () => {
       prettierMigrated: false,
       nodeVersionFileMigrated: false,
       gitHooksConfigured: false,
+      frameworkShimAdded: false,
       warnings: [],
       manualSteps: [],
     };
@@ -366,6 +372,7 @@ describe('migrateNodeVersionManagerFile', () => {
       prettierMigrated: false,
       nodeVersionFileMigrated: false,
       gitHooksConfigured: false,
+      frameworkShimAdded: false,
       warnings: [],
       manualSteps: [],
     };
@@ -401,6 +408,7 @@ describe('migrateNodeVersionManagerFile', () => {
       prettierMigrated: false,
       nodeVersionFileMigrated: false,
       gitHooksConfigured: false,
+      frameworkShimAdded: false,
       warnings: [],
       manualSteps: [],
     };
@@ -636,5 +644,193 @@ describe('rewriteMonorepo bun catalog', () => {
     // workspaces object should be preserved
     const workspaces = pkg.workspaces as { packages: string[] };
     expect(workspaces.packages).toEqual(['packages/*']);
+  });
+});
+
+describe('framework shim', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  describe('detectFramework', () => {
+    it('returns [vue] when vue is in devDependencies', () => {
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify({ devDependencies: { vue: '^3.0.0' } }),
+      );
+      expect(detectFramework(tmpDir)).toEqual(['vue']);
+    });
+
+    it('returns [astro] when astro is in devDependencies', () => {
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify({ devDependencies: { astro: '^4.0.0' } }),
+      );
+      expect(detectFramework(tmpDir)).toEqual(['astro']);
+    });
+
+    it('returns [vue, astro] when both are present', () => {
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify({ devDependencies: { vue: '^3.0.0', astro: '^4.0.0' } }),
+      );
+      expect(detectFramework(tmpDir)).toEqual(['vue', 'astro']);
+    });
+
+    it('returns [] when no framework dependency is present', () => {
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify({ devDependencies: { vite: '^7.0.0' } }),
+      );
+      expect(detectFramework(tmpDir)).toEqual([]);
+    });
+
+    it('returns [] when package.json does not exist', () => {
+      expect(detectFramework(tmpDir)).toEqual([]);
+    });
+  });
+
+  describe('hasFrameworkShim', () => {
+    it('returns true when src/env.d.ts contains vue shim', () => {
+      const srcDir = path.join(tmpDir, 'src');
+      fs.mkdirSync(srcDir);
+      fs.writeFileSync(
+        path.join(srcDir, 'env.d.ts'),
+        "declare module '*.vue' { export default {} }\n",
+      );
+      expect(hasFrameworkShim(tmpDir, 'vue')).toBe(true);
+    });
+
+    it('returns false when src/env.d.ts does not contain vue shim', () => {
+      const srcDir = path.join(tmpDir, 'src');
+      fs.mkdirSync(srcDir);
+      fs.writeFileSync(
+        path.join(srcDir, 'env.d.ts'),
+        '/// <reference types="vite-plus/client" />\n',
+      );
+      expect(hasFrameworkShim(tmpDir, 'vue')).toBe(false);
+    });
+
+    it('returns false when env.d.ts does not exist', () => {
+      expect(hasFrameworkShim(tmpDir, 'vue')).toBe(false);
+    });
+
+    it('returns true when root env.d.ts contains astro/client reference', () => {
+      fs.writeFileSync(path.join(tmpDir, 'env.d.ts'), '/// <reference types="astro/client" />\n');
+      expect(hasFrameworkShim(tmpDir, 'astro')).toBe(true);
+    });
+  });
+
+  describe('addFrameworkShim', () => {
+    it('creates src/env.d.ts with vue shim when src/ exists and no env.d.ts', () => {
+      fs.mkdirSync(path.join(tmpDir, 'src'));
+      addFrameworkShim(tmpDir, 'vue');
+      const content = fs.readFileSync(path.join(tmpDir, 'src', 'env.d.ts'), 'utf-8');
+      expect(content).toContain("declare module '*.vue'");
+      expect(content).toContain('DefineComponent');
+    });
+
+    it('creates root env.d.ts with vue shim when no src/ dir', () => {
+      addFrameworkShim(tmpDir, 'vue');
+      const content = fs.readFileSync(path.join(tmpDir, 'env.d.ts'), 'utf-8');
+      expect(content).toContain("declare module '*.vue'");
+    });
+
+    it('appends vue shim to existing src/env.d.ts', () => {
+      const srcDir = path.join(tmpDir, 'src');
+      fs.mkdirSync(srcDir);
+      const existing = '/// <reference types="vite-plus/client" />\n';
+      fs.writeFileSync(path.join(srcDir, 'env.d.ts'), existing);
+      addFrameworkShim(tmpDir, 'vue');
+      const content = fs.readFileSync(path.join(srcDir, 'env.d.ts'), 'utf-8');
+      expect(content).toContain('/// <reference types="vite-plus/client" />');
+      expect(content).toContain("declare module '*.vue'");
+    });
+
+    it('sets frameworkShimAdded on report', () => {
+      fs.mkdirSync(path.join(tmpDir, 'src'));
+      const report = createMigrationReport();
+      addFrameworkShim(tmpDir, 'vue', report);
+      expect(report.frameworkShimAdded).toBe(true);
+    });
+  });
+
+  describe('create flow integration', () => {
+    it('does not add duplicate shim when template already wrote env.d.ts', () => {
+      // Simulate create-vue having already written a shim into src/env.d.ts
+      const srcDir = path.join(tmpDir, 'src');
+      fs.mkdirSync(srcDir);
+      const existingShim =
+        "declare module '*.vue' {\n  import type { DefineComponent } from 'vue';\n  const component: DefineComponent;\n  export default component;\n}\n";
+      fs.writeFileSync(path.join(srcDir, 'env.d.ts'), existingShim);
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify({ devDependencies: { vue: '^3.0.0' } }),
+      );
+
+      expect(detectFramework(tmpDir)).toEqual(['vue']);
+      // Gate check: shim already present, so addFrameworkShim should NOT be called
+      expect(hasFrameworkShim(tmpDir, 'vue')).toBe(true);
+      // Verify content is unchanged if caller respects the gate
+      const contentBefore = fs.readFileSync(path.join(srcDir, 'env.d.ts'), 'utf-8');
+      for (const framework of detectFramework(tmpDir)) {
+        if (!hasFrameworkShim(tmpDir, framework)) {
+          addFrameworkShim(tmpDir, framework);
+        }
+      }
+      const contentAfter = fs.readFileSync(path.join(srcDir, 'env.d.ts'), 'utf-8');
+      expect(contentAfter).toBe(contentBefore);
+    });
+
+    it('adds shim for vue project created without env.d.ts', () => {
+      fs.mkdirSync(path.join(tmpDir, 'src'));
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify({ devDependencies: { vue: '^3.0.0' } }),
+      );
+      for (const framework of detectFramework(tmpDir)) {
+        if (!hasFrameworkShim(tmpDir, framework)) {
+          addFrameworkShim(tmpDir, framework);
+        }
+      }
+      const content = fs.readFileSync(path.join(tmpDir, 'src', 'env.d.ts'), 'utf-8');
+      expect(content).toContain("declare module '*.vue'");
+    });
+
+    it('adds astro shim for astro project without env.d.ts', () => {
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify({ devDependencies: { astro: '^4.0.0' } }),
+      );
+      for (const framework of detectFramework(tmpDir)) {
+        if (!hasFrameworkShim(tmpDir, framework)) {
+          addFrameworkShim(tmpDir, framework);
+        }
+      }
+      const content = fs.readFileSync(path.join(tmpDir, 'env.d.ts'), 'utf-8');
+      expect(content).toContain('/// <reference types="astro/client" />');
+    });
+
+    it('adds both vue and astro shims for Astro+Vue project', () => {
+      fs.mkdirSync(path.join(tmpDir, 'src'));
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify({ devDependencies: { vue: '^3.0.0', astro: '^4.0.0' } }),
+      );
+      for (const framework of detectFramework(tmpDir)) {
+        if (!hasFrameworkShim(tmpDir, framework)) {
+          addFrameworkShim(tmpDir, framework);
+        }
+      }
+      const content = fs.readFileSync(path.join(tmpDir, 'src', 'env.d.ts'), 'utf-8');
+      expect(content).toContain("declare module '*.vue'");
+      expect(content).toContain('/// <reference types="astro/client" />');
+    });
   });
 });

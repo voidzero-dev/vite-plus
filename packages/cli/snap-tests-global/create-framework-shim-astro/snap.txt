@@ -1,0 +1,8 @@
+> vp create astro --no-interactive -- my-astro-app --yes --skip-houston --template basics # create Astro app
+> cat my-astro-app/src/env.d.ts # check Astro shim
+/// <reference types="astro/client" />
+
+> cd my-astro-app && vp install -- --no-frozen-lockfile # install dependencies
+> cd my-astro-app && vp check --fix # fix generated formatting and ensure no errors
+pass: Formatting completed for checked files (<variable>ms)
+pass: Found no warnings, lint errors, or type errors in 6 files (<variable>ms, <variable> threads)

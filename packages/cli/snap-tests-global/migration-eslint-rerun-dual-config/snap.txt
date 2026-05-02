@@ -1,6 +1,4 @@
 > vp migrate --no-interactive # should detect vite-plus + eslint and auto-migrate eslint
-VITE+ - The Unified Toolchain for the Web
-
 
 Migrating ESLint config to Oxlint...
 

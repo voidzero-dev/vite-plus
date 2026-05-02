@@ -1,6 +1,4 @@
 > vp migrate --no-interactive # should detect vite-plus + prettier and auto-migrate prettier
-VITE+ - The Unified Toolchain for the Web
-
 
 Prettier configuration detected. Auto-migrating to Oxfmt...
 

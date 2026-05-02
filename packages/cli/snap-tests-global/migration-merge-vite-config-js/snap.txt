@@ -1,6 +1,4 @@
 > vp migrate --no-interactive # migration should merge vite.config.js and remove oxlintrc
-VITE+ - The Unified Toolchain for the Web
-
 ◇ Migrated . to Vite+<repeat>
 • Node <semver>  pnpm <semver>
 • 2 config updates applied

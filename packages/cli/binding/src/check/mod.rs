@@ -10,7 +10,8 @@ use vite_task::ExitStatus;
 
 use self::analysis::{
     LintMessageKind, analyze_fmt_check_output, analyze_lint_output, format_count, format_elapsed,
-    print_error_block, print_pass_line, print_stdout_block, print_summary_line,
+    lint_config_type_check_enabled, print_error_block, print_pass_line, print_stdout_block,
+    print_summary_line,
 };
 use crate::cli::{
     CapturedCommandOutput, SubcommandResolver, SynthesizableSubcommand, resolve_and_capture_output,
@@ -28,14 +29,6 @@ pub(crate) async fn execute_check(
     cwd: &AbsolutePathBuf,
     cwd_arc: &Arc<AbsolutePath>,
 ) -> Result<ExitStatus, Error> {
-    if no_fmt && no_lint {
-        output::error("No checks enabled");
-        print_summary_line(
-            "`vp check` did not run because both `--no-fmt` and `--no-lint` were set",
-        );
-        return Ok(ExitStatus(1));
-    }
-
     let mut status = ExitStatus::SUCCESS;
     let has_paths = !paths.is_empty();
     // In --fix mode with file paths (the lint-staged use case), implicitly suppress
@@ -45,6 +38,18 @@ pub(crate) async fn execute_check(
     let mut fmt_fix_started: Option<Instant> = None;
     let mut deferred_lint_pass: Option<(String, String)> = None;
     let resolved_vite_config = resolver.resolve_universal_vite_config().await?;
+
+    let type_check_enabled = lint_config_type_check_enabled(resolved_vite_config.lint.as_ref());
+    let lint_enabled = !no_lint;
+    let run_lint_phase = lint_enabled || type_check_enabled;
+
+    if no_fmt && !run_lint_phase {
+        output::error("No checks enabled");
+        print_summary_line(
+            "Enable `lint.options.typeCheck` in vite.config.ts to use `vp check --no-fmt --no-lint` for type-check only, or drop a flag to re-enable fmt/lint.",
+        );
+        return Ok(ExitStatus(1));
+    }
 
     if !no_fmt {
         let mut args = if fix { vec![] } else { vec!["--check".to_string()] };
@@ -109,7 +114,7 @@ pub(crate) async fn execute_check(
             }
         }
 
-        if fix && no_lint && status == ExitStatus::SUCCESS {
+        if fix && !run_lint_phase && status == ExitStatus::SUCCESS {
             print_pass_line(
                 "Formatting completed for checked files",
                 Some(&format!("({})", format_elapsed(fmt_start.elapsed()))),
@@ -127,11 +132,12 @@ pub(crate) async fn execute_check(
         }
     }
 
-    if !no_lint {
-        let lint_message_kind =
-            LintMessageKind::from_lint_config(resolved_vite_config.lint.as_ref());
+    if run_lint_phase {
+        let lint_message_kind = LintMessageKind::from_flags(lint_enabled, type_check_enabled);
         let mut args = Vec::new();
-        if fix {
+        // oxlint cannot auto-fix type diagnostics, so `--fix` is dropped on the
+        // type-check-only path.
+        if fix && lint_enabled {
             args.push("--fix".to_string());
         }
         // `vp check` parses oxlint's human-readable summary output to print
@@ -140,6 +146,9 @@ pub(crate) async fn execute_check(
         // parser think linting never started. Force the default reporter here so the
         // captured output is stable across local and CI environments.
         args.push("--format=default".to_string());
+        if !lint_enabled && type_check_enabled {
+            args.push("--type-check-only".to_string());
+        }
         if suppress_unmatched {
             args.push("--no-error-on-unmatched-pattern".to_string());
         }
@@ -178,7 +187,6 @@ pub(crate) async fn execute_check(
             Some(Err(failure)) => {
                 if failure.errors == 0 && failure.warnings > 0 {
                     output::warn(lint_message_kind.warning_heading());
-                    status = ExitStatus::SUCCESS;
                 } else {
                     output::error(lint_message_kind.issue_heading());
                 }
@@ -207,13 +215,18 @@ pub(crate) async fn execute_check(
             }
         }
         if status != ExitStatus::SUCCESS {
+            // Surface fmt `--fix` completion before bailing so users can see
+            // the working tree was mutated before the lint/type-check error.
+            if fix && !no_fmt {
+                flush_deferred_pass_lines(&mut fmt_fix_started, &mut deferred_lint_pass);
+            }
             return Ok(status);
         }
     }
 
     // Re-run fmt after lint --fix, since lint fixes can break formatting
-    // (e.g. the curly rule adding braces to if-statements)
-    if fix && !no_fmt && !no_lint {
+    // (e.g. the curly rule adding braces to if-statements).
+    if fix && !no_fmt && lint_enabled {
         let mut args = Vec::new();
         if suppress_unmatched {
             args.push("--no-error-on-unmatched-pattern".to_string());
@@ -241,18 +254,31 @@ pub(crate) async fn execute_check(
             );
             return Ok(status);
         }
-        if let Some(started) = fmt_fix_started {
-            print_pass_line(
-                "Formatting completed for checked files",
-                Some(&format!("({})", format_elapsed(started.elapsed()))),
-            );
-        }
-        if let Some((message, detail)) = deferred_lint_pass.take() {
-            print_pass_line(&message, Some(&detail));
-        }
+        flush_deferred_pass_lines(&mut fmt_fix_started, &mut deferred_lint_pass);
+    }
+
+    // Type-check-only mode skips the re-fmt block above, so flush deferred
+    // pass lines here.
+    if fix && !no_fmt && run_lint_phase && !lint_enabled {
+        flush_deferred_pass_lines(&mut fmt_fix_started, &mut deferred_lint_pass);
     }
 
     Ok(status)
+}
+
+fn flush_deferred_pass_lines(
+    fmt_fix_started: &mut Option<Instant>,
+    deferred_lint_pass: &mut Option<(String, String)>,
+) {
+    if let Some(started) = fmt_fix_started.take() {
+        print_pass_line(
+            "Formatting completed for checked files",
+            Some(&format!("({})", format_elapsed(started.elapsed()))),
+        );
+    }
+    if let Some((message, detail)) = deferred_lint_pass.take() {
+        print_pass_line(&message, Some(&detail));
+    }
 }
 
 /// Combine stdout and stderr from a captured command output.

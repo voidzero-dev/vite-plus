@@ -1,6 +1,4 @@
 > vp pm pack --help # should show help
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp pm pack [OPTIONS] [-- <PASS_THROUGH_ARGS>...]
 
 Create a tarball of the package

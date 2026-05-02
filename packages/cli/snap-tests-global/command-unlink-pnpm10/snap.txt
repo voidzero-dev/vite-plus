@@ -1,6 +1,4 @@
 > vp unlink -h # should show help message
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp unlink [OPTIONS] [PACKAGE|DIR] [ARGS]...
 
 Unlink packages

@@ -1,6 +1,4 @@
 > vp pm view --help # should show help
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp pm view [OPTIONS] <PACKAGE> [FIELD] [-- <PASS_THROUGH_ARGS>...]
 
 View package information from the registry

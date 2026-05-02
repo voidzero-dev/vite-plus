@@ -1,6 +1,4 @@
 > vp -h # help message
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp <COMMAND>
 
 Core Commands:
@@ -95,6 +93,7 @@ Output Options:
 Config Options
     -c, --config=PATH        Path to the configuration file (.json, .jsonc, .ts, .mts, .cts, .js,
                              .mjs, .cjs)
+        --disable-nested-config  Do not search for configuration files in subdirectories
 
 Ignore Options
         --ignore-path=PATH   Path to ignore file(s). Can be specified multiple times. If not
@@ -234,7 +233,7 @@ Options:
   --assetsInlineLimit <number>  [number] static asset base64 inline threshold in bytes (default: 4096) 
   --ssr [entry]                 [string] build specified entry for server-side rendering 
   --sourcemap [output]          [boolean | "inline" | "hidden"] output source maps for build (default: false) 
-  --minify [minifier]           [boolean | "terser" | "esbuild"] enable/disable minification, or specify minifier to use (default: esbuild) 
+  --minify [minifier]           [boolean | "oxc" | "terser" | "esbuild"] enable/disable minification, or specify minifier to use (default: oxc) 
   --manifest [name]             [boolean | string] emit build manifest json 
   --ssrManifest [name]          [boolean | string] emit ssr manifest json 
   --emptyOutDir                 [boolean] force empty outDir when it's outside of root 
@@ -293,7 +292,7 @@ Options:
   --api [port]                                               Specify server port. Note if the port is already being used, Vite will automatically try the next available port so this may not be the actual port the server ends up listening on. If true will be set to 51204. Use '--help --api' for more info. 
   --silent [value]                                           Silent console output from tests. Use 'passed-only' to see logs from failing tests only. 
   --hideSkippedTests                                         Hide logs for skipped tests 
-  --reporter <name>                                          Specify reporters (default, agent, blob, verbose, dot, json, tap, tap-flat, junit, tree, hanging-process, github-actions) 
+  --reporter <name>                                          Specify reporters (default, agent, minimal, blob, verbose, dot, json, tap, tap-flat, junit, tree, hanging-process, github-actions) 
   --outputFile <filename/-s>                                 Write test results to a file when supporter reporter is also specified, use cac's dot notation for individual outputs of multiple reporters (example: --outputFile.tap=./tap.txt) 
   --coverage                                                 Enable coverage report. Use '--help --coverage' for more info. 
   --mode <name>                                              Override Vite mode (default: test or benchmark) 

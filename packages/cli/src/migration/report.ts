@@ -11,6 +11,7 @@ export interface MigrationReport {
   prettierMigrated: boolean;
   nodeVersionFileMigrated: boolean;
   gitHooksConfigured: boolean;
+  frameworkShimAdded: boolean;
   warnings: string[];
   manualSteps: string[];
 }
@@ -29,6 +30,7 @@ export function createMigrationReport(): MigrationReport {
     prettierMigrated: false,
     nodeVersionFileMigrated: false,
     gitHooksConfigured: false,
+    frameworkShimAdded: false,
     warnings: [],
     manualSteps: [],
   };

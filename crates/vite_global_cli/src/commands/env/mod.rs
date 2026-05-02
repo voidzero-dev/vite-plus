@@ -32,8 +32,7 @@ use crate::{
 };
 
 fn print_env_header() {
-    println!("{}", vite_shared::header::vite_plus_header());
-    println!();
+    vite_shared::header::print_header();
 }
 
 fn should_print_env_header(subcommand: &EnvSubcommands) -> bool {
@@ -140,8 +139,7 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
     if !crate::help::print_unified_clap_help_for_path(&["env"]) {
         // Fallback to clap's built-in help printer if unified rendering fails.
         use clap::CommandFactory;
-        println!("{}", vite_shared::header::vite_plus_header());
-        println!();
+        vite_shared::header::print_header();
         crate::cli::Args::command()
             .find_subcommand("env")
             .unwrap()

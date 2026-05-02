@@ -1,6 +1,4 @@
 > vp -h # vp should show help same as vite
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp <COMMAND>
 
 Core Commands:
