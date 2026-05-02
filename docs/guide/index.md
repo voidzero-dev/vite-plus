@@ -109,6 +109,7 @@ Vite+ can handle the entire local frontend development cycle from starting a pro
 
 - [`vp build`](/guide/build) builds apps.
 - [`vp pack`](/guide/pack) builds libraries or standalone artifacts.
+- [`vp release`](/guide/release) versions and publishes workspace packages.
 - [`vp preview`](/guide/build) previews the production build locally.
 
 ### Manage Dependencies

@@ -57,6 +57,7 @@ const guideSidebar = [
     items: [
       { text: 'Build', link: '/guide/build' },
       { text: 'Pack', link: '/guide/pack' },
+      { text: 'Release', link: '/guide/release' },
     ],
   },
   {

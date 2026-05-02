@@ -157,6 +157,7 @@ pub mod install;
 pub mod link;
 pub mod outdated;
 pub mod pm;
+pub mod release;
 pub mod remove;
 pub mod unlink;
 pub mod update;

@@ -83,6 +83,12 @@ const COMMANDS: &[CommandEntry] = &[
     },
     CommandEntry { label: "pack", command: "pack", summary: "Build library.", append_help: false },
     CommandEntry {
+        label: "release",
+        command: "release",
+        summary: "Version and publish workspace packages with readiness checks, confirmation, and optional changelog generation.",
+        append_help: false,
+    },
+    CommandEntry {
         label: "preview",
         command: "preview",
         summary: "Preview production build.",
