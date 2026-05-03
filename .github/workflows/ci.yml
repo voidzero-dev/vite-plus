@@ -45,7 +45,7 @@ jobs:
       code-changed: ${{ steps.filter.outputs.code }}
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
-      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
+      - uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590 # v3.0.3
         id: filter
         with:
           filters: |
@@ -179,7 +179,7 @@ jobs:
         with:
           files: .
 
-      - uses: oxc-project/setup-node@4c26e7cb3605b6bdef5450dacd02c434b10fd8ba # v1.2.0
+      - uses: oxc-project/setup-node@ab97f03642370d79a7e96dd286bd02a1be40e0ba # v1.3.0
 
       - name: Install docs dependencies
         run: pnpm -C docs install --frozen-lockfile
@@ -225,7 +225,7 @@ jobs:
           cache-key: cli-e2e-test-${{ matrix.target }}
           target-dir: ${{ runner.os == 'Windows' && format('{0}/target', env.DEV_DRIVE) || '' }}
 
-      - uses: oxc-project/setup-node@4c26e7cb3605b6bdef5450dacd02c434b10fd8ba # v1.2.0
+      - uses: oxc-project/setup-node@ab97f03642370d79a7e96dd286bd02a1be40e0ba # v1.3.0
 
       - name: Install docs dependencies
         run: pnpm -C docs install --frozen-lockfile
@@ -673,7 +673,7 @@ jobs:
           cache-key: cli-snap-test-${{ matrix.target }}
           target-dir: ${{ runner.os == 'Windows' && format('{0}/target', env.DEV_DRIVE) || '' }}
 
-      - uses: oxc-project/setup-node@4c26e7cb3605b6bdef5450dacd02c434b10fd8ba # v1.2.0
+      - uses: oxc-project/setup-node@ab97f03642370d79a7e96dd286bd02a1be40e0ba # v1.3.0
 
       - name: Install docs dependencies
         run: pnpm -C docs install --frozen-lockfile
@@ -720,7 +720,7 @@ jobs:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: cli-e2e-test-musl
 
-      - uses: oxc-project/setup-node@4c26e7cb3605b6bdef5450dacd02c434b10fd8ba # v1.2.0
+      - uses: oxc-project/setup-node@ab97f03642370d79a7e96dd286bd02a1be40e0ba # v1.3.0
 
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
@@ -799,7 +799,7 @@ jobs:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: install-e2e-test
 
-      - uses: oxc-project/setup-node@4c26e7cb3605b6bdef5450dacd02c434b10fd8ba # v1.2.0
+      - uses: oxc-project/setup-node@ab97f03642370d79a7e96dd286bd02a1be40e0ba # v1.3.0
 
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:

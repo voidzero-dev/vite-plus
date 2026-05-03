@@ -29,7 +29,7 @@ jobs:
           cache-key: upgrade-deps
           tools: just,cargo-shear
 
-      - uses: oxc-project/setup-node@4c26e7cb3605b6bdef5450dacd02c434b10fd8ba # v1.2.0
+      - uses: oxc-project/setup-node@ab97f03642370d79a7e96dd286bd02a1be40e0ba # v1.3.0
 
       - name: Rustup Adds Target
         run: rustup target add x86_64-unknown-linux-gnu
