@@ -14,7 +14,7 @@
     "dev": "node bin/index.ts"
   },
   "dependencies": {
-    "bingo": "^0.7.0",
+    "bingo": "^0.9.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {
