@@ -21,5 +21,5 @@
       "@components/*": ["../node_modules/@voidzero-dev/vitepress-theme/src/components/*"]
     }
   },
-  "include": ["**/*.ts", "**/*.d.ts", "**/*.vue"]
+  "include": ["**/*.ts", "**/*.d.ts", "**/*.vue", "theme/data/*.json"]
 }

@@ -1,0 +1,41 @@
+name: Update trusted stack stats
+
+on:
+  schedule:
+    # Weekly: Monday 06:00 UTC
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  update:
+    if: github.repository == 'voidzero-dev/vite-plus' && github.event.repository.fork == false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: '22'
+
+      - name: Fetch npm and GitHub stats
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node docs/scripts/fetch-trusted-stack-stats.mjs
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/.vitepress/theme/data/trusted-stack-stats.json
+          if git diff --cached --quiet; then
+            echo "No changes to trusted-stack-stats.json"
+            exit 0
+          fi
+          git commit -m "chore(docs): refresh trusted stack stats"
+          git push
