@@ -72,7 +72,7 @@ export const core = [
     name: "kazupon",
     links: [
       { icon: "github", link: "https://github.com/kazupon" },
-      { icon: "x", link: "https://x.com/kazu_pon" },
+      { icon: "x", link: "https://x.com/kazupon" },
       { icon: "bluesky", link: "https://bsky.app/profile/kazupon.dev" },
     ],
   },
