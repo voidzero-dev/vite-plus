@@ -6,7 +6,8 @@
     "dev": "vitepress dev",
     "build": "cp ../packages/cli/install.sh ../packages/cli/install.ps1 public/ && vitepress build",
     "preview": "vitepress preview",
-    "update-trusted-stack-stats": "node ./scripts/fetch-trusted-stack-stats.mjs"
+    "update-trusted-stack-stats": "node ./scripts/fetch-trusted-stack-stats.ts",
+    "update-trusted-stack-stats:check": "pnpm exec tsc -p ./scripts/tsconfig.json --noEmit"
   },
   "dependencies": {
     "@iconify/vue": "^5.0.0",
@@ -19,9 +20,11 @@
     "vue3-carousel": "^0.16.0"
   },
   "devDependencies": {
+    "@types/node": "catalog:",
     "@voidzero-dev/vitepress-theme": "4.8.3",
     "oxc-minify": "^0.120.0",
     "tailwindcss": "^4.1.18",
+    "typescript": "catalog:",
     "vitepress": "2.0.0-alpha.15"
   },
   "packageManager": "pnpm@10.33.0"

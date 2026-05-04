@@ -16,6 +16,7 @@
     "docs:dev": "pnpm -C docs dev",
     "docs:build": "pnpm -C docs build",
     "docs:update-trusted-stack-stats": "pnpm -C docs update-trusted-stack-stats",
+    "docs:update-trusted-stack-stats:check": "pnpm -C docs update-trusted-stack-stats:check",
     "prepare": "husky"
   },
   "devDependencies": {

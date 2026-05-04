@@ -2,28 +2,37 @@
  * Fetches last-week npm download counts and GitHub star counts, then writes
  * docs/.vitepress/theme/data/trusted-stack-stats.json for the docs home page.
  *
- * Run from repo root: `pnpm -C docs update-trusted-stack-stats`
- * Or: `node docs/scripts/fetch-trusted-stack-stats.mjs`
+ * Requires Node.js >=22.18 (strip types). Run:
+ *   `pnpm -C docs update-trusted-stack-stats`
+ * or: `node docs/scripts/fetch-trusted-stack-stats.ts`
  */
 import { writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import type {
+  TrustedStackProjectId,
+  TrustedStackStatProject,
+  TrustedStackStatsFile,
+} from '../.vitepress/theme/data/trusted-stack-stats.types';
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const OUT = join(__dirname, '../.vitepress/theme/data/trusted-stack-stats.json');
 
-const PROJECTS = [
+interface ProjectSource {
+  readonly id: TrustedStackProjectId;
+  readonly npmPackage: string;
+  readonly githubRepo: string;
+}
+
+const PROJECTS: readonly ProjectSource[] = [
   { id: 'vite', npmPackage: 'vite', githubRepo: 'vitejs/vite' },
   { id: 'vitest', npmPackage: 'vitest', githubRepo: 'vitest-dev/vitest' },
   /** OXC row uses `oxlint` npm weekly downloads as a concrete proxy for the Oxc toolchain. */
   { id: 'oxc', npmPackage: 'oxlint', githubRepo: 'oxc-project/oxc' },
 ];
 
-/**
- * @param {number} n
- * @returns {string}
- */
-function formatWeeklyDownloads(n) {
+function formatWeeklyDownloads(n: number): string {
   if (n >= 10_000_000) {
     return `${Math.round(n / 1e6)}m+`;
   }
@@ -32,46 +41,51 @@ function formatWeeklyDownloads(n) {
   return `${s}m+`;
 }
 
-/**
- * @param {number} s
- * @returns {string}
- */
-function formatStars(s) {
+function formatStars(s: number): string {
   return `${(s / 1000).toFixed(1)}k`;
 }
 
-/**
- * @param {string} pkg
- * @returns {Promise<number>}
- */
-async function npmLastWeekDownloads(pkg) {
+function parseNpmDownloadsJson(data: unknown, pkg: string): number {
+  if (typeof data !== 'object' || data === null || !('downloads' in data)) {
+    throw new Error(`npm API ${pkg}: unexpected payload`);
+  }
+  const downloads = (data as { downloads: unknown }).downloads;
+  if (typeof downloads !== 'number') {
+    throw new Error(`npm API ${pkg}: unexpected payload`);
+  }
+  return downloads;
+}
+
+async function npmLastWeekDownloads(pkg: string): Promise<number> {
   const url = `https://api.npmjs.org/downloads/point/last-week/${encodeURIComponent(pkg)}`;
   const res = await fetch(url);
   if (!res.ok) {
     const body = await res.text();
     throw new Error(`npm API ${pkg}: HTTP ${res.status} ${body}`);
   }
-  const data = await res.json();
-  if (typeof data.downloads !== 'number') {
-    throw new Error(`npm API ${pkg}: unexpected payload`);
-  }
-  return data.downloads;
+  return parseNpmDownloadsJson(await res.json(), pkg);
 }
 
-/**
- * @param {string} repo "owner/name"
- * @returns {Promise<number>}
- */
-async function fetchGithubStargazers(repo) {
+function parseGithubRepoJson(data: unknown, repo: string): number {
+  if (typeof data !== 'object' || data === null || !('stargazers_count' in data)) {
+    throw new Error(`GitHub API ${repo}: unexpected payload`);
+  }
+  const count = (data as { stargazers_count: unknown }).stargazers_count;
+  if (typeof count !== 'number') {
+    throw new Error(`GitHub API ${repo}: unexpected payload`);
+  }
+  return count;
+}
+
+async function fetchGithubStargazers(repo: string): Promise<number> {
   const url = `https://api.github.com/repos/${repo}`;
-  /** @type {Record<string, string>} */
-  const headers = {
+  const headers: Record<string, string> = {
     Accept: 'application/vnd.github+json',
     'X-GitHub-Api-Version': '2022-11-28',
-    'User-Agent': 'voidzero-dev/vite-plus (docs/scripts/fetch-trusted-stack-stats.mjs)',
+    'User-Agent': 'voidzero-dev/vite-plus (docs/scripts/fetch-trusted-stack-stats.ts)',
   };
   const token = process.env.GITHUB_TOKEN;
-  if (token) {
+  if (token !== undefined && token !== '') {
     headers.Authorization = `Bearer ${token}`;
   }
   const res = await fetch(url, { headers });
@@ -79,21 +93,17 @@ async function fetchGithubStargazers(repo) {
     const body = await res.text();
     throw new Error(`GitHub API ${repo}: HTTP ${res.status} ${body}`);
   }
-  const data = await res.json();
-  if (typeof data.stargazers_count !== 'number') {
-    throw new Error(`GitHub API ${repo}: unexpected payload`);
-  }
-  return data.stargazers_count;
+  return parseGithubRepoJson(await res.json(), repo);
 }
 
-async function main() {
-  const projects = [];
+async function main(): Promise<void> {
+  const projects: TrustedStackStatProject[] = [];
   for (const p of PROJECTS) {
     const [npmWeeklyDownloads, stars] = await Promise.all([
       npmLastWeekDownloads(p.npmPackage),
       fetchGithubStargazers(p.githubRepo),
     ]);
-    projects.push({
+    const row: TrustedStackStatProject = {
       id: p.id,
       npmPackage: p.npmPackage,
       githubRepo: p.githubRepo,
@@ -101,14 +111,15 @@ async function main() {
       githubStargazers: stars,
       npmWeeklyDownloadsDisplay: formatWeeklyDownloads(npmWeeklyDownloads),
       githubStarsDisplay: formatStars(stars),
-    });
+    };
+    projects.push(row);
   }
-  const payload = { projects };
+  const payload: TrustedStackStatsFile = { projects };
   await writeFile(OUT, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
   console.log(`Wrote ${OUT} at ${new Date().toISOString()}`);
 }
 
-main().catch((err) => {
+void main().catch((err: unknown) => {
   console.error(err);
   process.exitCode = 1;
 });

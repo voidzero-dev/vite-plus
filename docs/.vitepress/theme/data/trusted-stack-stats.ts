@@ -1,20 +1,8 @@
 import raw from './trusted-stack-stats.json';
 
-export type TrustedStackProjectId = 'vite' | 'vitest' | 'oxc';
+import type { TrustedStackProjectId, TrustedStackStatProject, TrustedStackStatsFile } from './trusted-stack-stats.types';
 
-export interface TrustedStackStatProject {
-  id: TrustedStackProjectId;
-  npmPackage: string;
-  githubRepo: string;
-  npmWeeklyDownloads: number;
-  githubStargazers: number;
-  npmWeeklyDownloadsDisplay: string;
-  githubStarsDisplay: string;
-}
-
-export interface TrustedStackStatsFile {
-  projects: TrustedStackStatProject[];
-}
+export type { TrustedStackProjectId, TrustedStackStatProject, TrustedStackStatsFile } from './trusted-stack-stats.types';
 
 export const trustedStackStats = raw as TrustedStackStatsFile;
 

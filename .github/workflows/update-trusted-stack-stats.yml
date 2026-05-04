@@ -16,8 +16,11 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
@@ -26,16 +29,20 @@ jobs:
       - name: Fetch npm and GitHub stats
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: node docs/scripts/fetch-trusted-stack-stats.mjs
+        run: node docs/scripts/fetch-trusted-stack-stats.ts
 
-      - name: Commit and push if changed
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/.vitepress/theme/data/trusted-stack-stats.json
-          if git diff --cached --quiet; then
-            echo "No changes to trusted-stack-stats.json"
-            exit 0
-          fi
-          git commit -m "chore(docs): refresh trusted stack stats"
-          git push
+      - name: Create or update PR
+        uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7.0.11
+        with:
+          base: main
+          branch: chore/docs-trusted-stack-stats
+          title: 'chore(docs): refresh trusted stack stats'
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: 'chore(docs): refresh trusted stack stats'
+          add-paths: |
+            docs/.vitepress/theme/data/trusted-stack-stats.json
+          body: |
+            Automated update of trusted stack statistics on the docs homepage.
+
+            - npm weekly downloads (last-week): vite, vitest, oxlint
+            - GitHub stars: vitejs/vite, vitest-dev/vitest, oxc-project/oxc
