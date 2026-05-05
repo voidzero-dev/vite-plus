@@ -42,7 +42,7 @@ jobs:
         id: upgrade
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: node .github/scripts/upgrade-deps.mjs
+        run: node .github/scripts/upgrade-deps.ts
 
       - name: Sync remote and build
         id: build
@@ -81,7 +81,7 @@ jobs:
             then prove the fix is complete by running a final validation pass.
 
             ### Background
-            - Upgrade script: `./.github/scripts/upgrade-deps.mjs`
+            - Upgrade script: `./.github/scripts/upgrade-deps.ts`
             - Sync-remote tool: `pnpm tool sync-remote` (source in
               `packages/tools/src/sync-remote-deps.ts`) — clones rolldown/vite into the
               working tree and merges their pnpm-workspace catalogs into the root
