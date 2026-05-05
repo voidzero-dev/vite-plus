@@ -539,23 +539,23 @@ set -gx PATH __VP_BIN__ $PATH
 function vp
     if test (count $argv) -ge 2; and test "$argv[1]" = "env"; and test "$argv[2]" = "use"
         if contains -- -h $argv; or contains -- --help $argv
-            command vp $argv; return
+            __VP_BIN__/vp $argv; return
         end
         set -lx VP_ENV_USE_EVAL_ENABLE 1
-        set -l __vp_out (env FISH_VERSION=$FISH_VERSION command vp $argv); or return $status
+        set -l __vp_out (env FISH_VERSION=$FISH_VERSION __VP_BIN__/vp $argv); or return $status
         eval (string join ';' $__vp_out)
     else
-        command vp $argv
+        __VP_BIN__/vp $argv
     end
 end
 
 # Dynamic shell completion for fish
-VP_COMPLETE=fish command vp | source
+VP_COMPLETE=fish __VP_BIN__/vp | source
 
 function __vpr_complete
     set -l tokens (commandline --current-process --tokenize --cut-at-cursor)
     set -l current (commandline --current-token)
-    VP_COMPLETE=fish command vp -- vp run $tokens[2..] $current
+    VP_COMPLETE=fish __VP_BIN__/vp -- vp run $tokens[2..] $current
 end
 complete -c vpr --keep-order --exclusive --arguments "(__vpr_complete)"
 "#
