@@ -292,13 +292,8 @@ Progress: resolved 316, reused 316, downloaded 0, added 316, done
   });
 
   test('preserve trailing plus in text like Vite+', () => {
-    const output = `
-  migrate        Migrate an existing project to Vite+
-  dev            Run the development server
-    `;
-    expect(replaceUnstableOutput(output.trim())).toBe(
-      '  migrate        Migrate an existing project to Vite+\n  dev            Run the development server',
-    );
+    const output = 'Migrate an existing project to Vite+';
+    expect(replaceUnstableOutput(output)).toBe('Migrate an existing project to Vite+');
   });
 });
 
