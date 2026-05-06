@@ -156,7 +156,7 @@ jobs:
             Do NOT run `git commit` or `git push`. A later workflow step commits every
             modified file for you.
           claude_args: |
-            --model opus --max-turns 200 --allowedTools "Bash,Edit,Replace,NotebookEditCell"
+            --model opus --max-turns 400 --allowedTools "Bash,Edit,Replace,NotebookEditCell"
           additional_permissions: |
             actions: read
 
