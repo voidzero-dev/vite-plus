@@ -91,7 +91,7 @@ await mergePackageJson();
 
 async function buildVite() {
   const newViteRolldownConfig = viteRolldownConfig.map((config) => {
-    config.tsconfig = join(projectDir, 'tsconfig.json');
+    config.tsconfig = join(projectDir, '..', '..', 'tsconfig.json');
     config.cwd = projectDir;
 
     if (Array.isArray(config.external)) {

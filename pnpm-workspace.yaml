@@ -56,6 +56,7 @@ catalog:
   change-case: ^5.4.4
   connect: ^3.7.0
   consola: ^3.4.2
+  cross-env: ^10.1.0
   cross-spawn: ^7.0.5
   debug: ^4.4.3
   dedent: ^1.5.3
