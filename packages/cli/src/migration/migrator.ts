@@ -35,7 +35,7 @@ import {
   removeDeprecatedTsconfigFalseOption,
 } from '../utils/tsconfig.ts';
 import type { NpmWorkspaces } from '../utils/workspace.ts';
-import { editYamlFile, scalarString, type YamlDocument } from '../utils/yaml.ts';
+import { editYamlFile, readYamlFile, scalarString, type YamlDocument } from '../utils/yaml.ts';
 import {
   PRETTIER_CONFIG_FILES,
   PRETTIER_PACKAGE_JSON_CONFIG,
@@ -86,6 +86,22 @@ const BROWSER_PROVIDER_PEER_DEPS: Record<string, string> = {
   '@vitest/browser-playwright': 'playwright',
   '@vitest/browser-webdriverio': 'webdriverio',
 };
+
+const PUBLIC_PEER_DEPENDENCY_FALLBACKS: Record<string, string> = {
+  vite: '*',
+  vitest: '*',
+};
+
+type PackageJsonDependencyField =
+  | 'devDependencies'
+  | 'dependencies'
+  | 'peerDependencies'
+  | 'optionalDependencies';
+
+type CatalogDependencyResolver = (
+  catalogSpec: string,
+  dependencyName: string,
+) => string | undefined;
 
 function warnMigration(message: string, report?: MigrationReport) {
   addMigrationWarning(report, message);
@@ -797,8 +813,11 @@ export function rewriteStandaloneProject(
   }
 
   const packageManager = workspaceInfo.packageManager;
+  const catalogDependencyResolver = createCatalogDependencyResolver(projectPath, packageManager);
   let extractedStagedConfig: Record<string, string | string[]> | null = null;
   let remainingPnpmOverrides: Record<string, string> | undefined;
+  let shouldRewritePnpmWorkspaceYaml = false;
+  let shouldAddPnpmWorkspaceVitePlusOverride = false;
   // Determined inside editJsonFile callback to avoid a redundant file read
   let usePnpmWorkspaceYaml = false;
   editJsonFile<{
@@ -806,6 +825,8 @@ export function rewriteStandaloneProject(
     resolutions?: Record<string, string>;
     devDependencies?: Record<string, string>;
     dependencies?: Record<string, string>;
+    peerDependencies?: Record<string, string>;
+    optionalDependencies?: Record<string, string>;
     scripts?: Record<string, string>;
     pnpm?: {
       overrides?: Record<string, string>;
@@ -830,14 +851,8 @@ export function rewriteStandaloneProject(
       // otherwise use pnpm-workspace.yaml.
       usePnpmWorkspaceYaml = !pkg.pnpm;
       if (usePnpmWorkspaceYaml) {
-        rewritePnpmWorkspaceYaml(projectPath);
-        // In force-override mode, also override vite-plus itself so transitive
-        // deps resolve to the local tgz instead of the published version.
-        if (isForceOverrideMode()) {
-          migratePnpmOverridesToWorkspaceYaml(projectPath, {
-            [VITE_PLUS_NAME]: VITE_PLUS_VERSION,
-          });
-        }
+        shouldRewritePnpmWorkspaceYaml = true;
+        shouldAddPnpmWorkspaceVitePlusOverride = isForceOverrideMode();
       }
       const overrideKeys = Object.keys(VITE_PLUS_OVERRIDE_PACKAGES);
       if (!usePnpmWorkspaceYaml) {
@@ -886,6 +901,7 @@ export function rewriteStandaloneProject(
       packageManager,
       usePnpmWorkspaceYaml,
       skipStagedMigration,
+      catalogDependencyResolver,
     );
 
     // ensure vite-plus is in devDependencies
@@ -902,9 +918,19 @@ export function rewriteStandaloneProject(
     return pkg;
   });
 
+  if (shouldRewritePnpmWorkspaceYaml) {
+    rewritePnpmWorkspaceYaml(projectPath);
+  }
+
   // Move remaining non-Vite pnpm.overrides to pnpm-workspace.yaml
   if (remainingPnpmOverrides) {
     migratePnpmOverridesToWorkspaceYaml(projectPath, remainingPnpmOverrides);
+  }
+
+  if (shouldAddPnpmWorkspaceVitePlusOverride) {
+    migratePnpmOverridesToWorkspaceYaml(projectPath, {
+      [VITE_PLUS_NAME]: VITE_PLUS_VERSION,
+    });
   }
 
   if (packageManager === PackageManager.yarn) {
@@ -942,6 +968,10 @@ export function rewriteMonorepo(
   silent = false,
   report?: MigrationReport,
 ): void {
+  const catalogDependencyResolver = createCatalogDependencyResolver(
+    workspaceInfo.rootDir,
+    workspaceInfo.packageManager,
+  );
   // rewrite root workspace
   if (workspaceInfo.packageManager === PackageManager.pnpm) {
     rewritePnpmWorkspaceYaml(workspaceInfo.rootDir);
@@ -954,6 +984,7 @@ export function rewriteMonorepo(
     workspaceInfo.rootDir,
     workspaceInfo.packageManager,
     skipStagedMigration,
+    catalogDependencyResolver,
   );
 
   // rewrite packages
@@ -964,6 +995,7 @@ export function rewriteMonorepo(
       skipStagedMigration,
       silent,
       report,
+      catalogDependencyResolver,
     );
   }
 
@@ -991,6 +1023,7 @@ export function rewriteMonorepoProject(
   skipStagedMigration?: boolean,
   silent = false,
   report?: MigrationReport,
+  catalogDependencyResolver?: CatalogDependencyResolver,
 ): void {
   cleanupDeprecatedTsconfigOptions(projectPath, silent, report);
   mergeViteConfigFiles(projectPath, silent, report);
@@ -1005,10 +1038,18 @@ export function rewriteMonorepoProject(
   editJsonFile<{
     devDependencies?: Record<string, string>;
     dependencies?: Record<string, string>;
+    peerDependencies?: Record<string, string>;
+    optionalDependencies?: Record<string, string>;
     scripts?: Record<string, string>;
   }>(packageJsonPath, (pkg) => {
     // rewrite scripts in package.json
-    extractedStagedConfig = rewritePackageJson(pkg, packageManager, true, skipStagedMigration);
+    extractedStagedConfig = rewritePackageJson(
+      pkg,
+      packageManager,
+      true,
+      skipStagedMigration,
+      catalogDependencyResolver,
+    );
     return pkg;
   });
 
@@ -1035,20 +1076,23 @@ function rewritePnpmWorkspaceYaml(projectPath: string): void {
     rewriteCatalog(doc);
 
     // overrides
+    const overrides = doc.getIn(['overrides']);
     for (const key of Object.keys(VITE_PLUS_OVERRIDE_PACKAGES)) {
-      let version = VITE_PLUS_OVERRIDE_PACKAGES[key];
-      if (!version.startsWith('file:')) {
-        version = 'catalog:';
-      }
+      const currentVersion = getYamlMapScalarStringValue(overrides, key);
+      const version = getCatalogDependencySpec(
+        currentVersion,
+        VITE_PLUS_OVERRIDE_PACKAGES[key],
+        true,
+      );
       doc.setIn(['overrides', scalarString(key)], scalarString(version));
     }
     // remove dependency selector from vite, e.g. "vite-plugin-svgr>vite": "npm:vite@7.0.12"
-    const overrides = doc.getIn(['overrides']) as YAMLMap<Scalar<string>, Scalar<string>>;
-    for (const item of overrides.items) {
+    const updatedOverrides = doc.getIn(['overrides']) as YAMLMap<Scalar<string>, Scalar<string>>;
+    for (const item of updatedOverrides.items) {
       if (item.key.value.includes('>')) {
         const splits = item.key.value.split('>');
         if (splits[splits.length - 1].trim() === 'vite') {
-          overrides.delete(item.key);
+          updatedOverrides.delete(item.key);
         }
       }
     }
@@ -1125,9 +1169,15 @@ function cleanupPnpmOverridesForWorkspaceYaml(
   overrideKeys: string[],
 ): Record<string, string> | undefined {
   // Remove Vite-managed keys from pnpm.overrides
+  const catalogOverrides: Record<string, string> = {};
+  const overrides = pkg.pnpm?.overrides;
   for (const key of [...overrideKeys, ...REMOVE_PACKAGES]) {
-    if (pkg.pnpm?.overrides?.[key]) {
-      delete pkg.pnpm.overrides[key];
+    const value = overrides?.[key];
+    if (value) {
+      if (overrideKeys.includes(key) && value.startsWith('catalog:')) {
+        catalogOverrides[key] = value;
+      }
+      delete overrides[key];
     }
   }
   // Remove dependency selectors targeting vite
@@ -1142,8 +1192,11 @@ function cleanupPnpmOverridesForWorkspaceYaml(
   // Collect remaining overrides to move to pnpm-workspace.yaml then delete all
   // (pnpm ignores workspace-level overrides when pnpm.overrides exists in package.json)
   let remaining: Record<string, string> | undefined;
+  if (Object.keys(catalogOverrides).length > 0) {
+    remaining = { ...catalogOverrides };
+  }
   if (pkg.pnpm?.overrides && Object.keys(pkg.pnpm.overrides).length > 0) {
-    remaining = { ...pkg.pnpm.overrides };
+    remaining = { ...remaining, ...pkg.pnpm.overrides };
   }
   delete pkg.pnpm?.overrides;
   // Only remove Vite-managed peerDependencyRules entries, preserve custom ones
@@ -1229,6 +1282,128 @@ function rewriteYarnrcYml(projectPath: string): void {
  * Rewrite catalog in pnpm-workspace.yaml or .yarnrc.yml
  * @param doc - The document to rewrite
  */
+function getCatalogDependencySpec(
+  currentValue: string | undefined,
+  version: string,
+  supportCatalog: boolean,
+  options?: {
+    dependencyField?: PackageJsonDependencyField;
+    dependencyName?: string;
+    packageManager?: PackageManager;
+    catalogDependencyResolver?: CatalogDependencyResolver;
+  },
+): string {
+  if (options?.dependencyField === 'peerDependencies') {
+    if (currentValue?.startsWith('catalog:') && options.dependencyName) {
+      const resolved = options.catalogDependencyResolver?.(currentValue, options.dependencyName);
+      if (resolved && !isVitePlusOverrideSpec(resolved)) {
+        return resolved;
+      }
+      return PUBLIC_PEER_DEPENDENCY_FALLBACKS[options.dependencyName] ?? currentValue;
+    }
+    return currentValue ?? version;
+  }
+  if (
+    options?.dependencyField === 'optionalDependencies' &&
+    options?.packageManager === PackageManager.yarn
+  ) {
+    return version;
+  }
+  if (!supportCatalog || version.startsWith('file:')) {
+    return version;
+  }
+  return currentValue?.startsWith('catalog:') ? currentValue : 'catalog:';
+}
+
+function isVitePlusOverrideSpec(value: string): boolean {
+  return (
+    Object.values(VITE_PLUS_OVERRIDE_PACKAGES).includes(value) ||
+    value.startsWith('npm:@voidzero-dev/vite-plus-')
+  );
+}
+
+function createCatalogDependencyResolver(
+  projectPath: string,
+  packageManager: PackageManager,
+): CatalogDependencyResolver | undefined {
+  if (packageManager === PackageManager.pnpm) {
+    const pnpmWorkspaceYamlPath = path.join(projectPath, 'pnpm-workspace.yaml');
+    if (!fs.existsSync(pnpmWorkspaceYamlPath)) {
+      return undefined;
+    }
+    const doc = readYamlFile(pnpmWorkspaceYamlPath) as {
+      catalog?: Record<string, string>;
+      catalogs?: Record<string, Record<string, string>>;
+    } | null;
+    return createCatalogDependencyResolverFromCatalogs(doc?.catalog, doc?.catalogs);
+  }
+  if (packageManager === PackageManager.yarn) {
+    const yarnrcYmlPath = path.join(projectPath, '.yarnrc.yml');
+    if (!fs.existsSync(yarnrcYmlPath)) {
+      return undefined;
+    }
+    const doc = readYamlFile(yarnrcYmlPath) as {
+      catalog?: Record<string, string>;
+      catalogs?: Record<string, Record<string, string>>;
+    } | null;
+    return createCatalogDependencyResolverFromCatalogs(doc?.catalog, doc?.catalogs);
+  }
+  if (packageManager === PackageManager.bun) {
+    const packageJsonPath = path.join(projectPath, 'package.json');
+    if (!fs.existsSync(packageJsonPath)) {
+      return undefined;
+    }
+    const pkg = readJsonFile(packageJsonPath) as {
+      workspaces?: NpmWorkspaces;
+      catalog?: Record<string, string>;
+      catalogs?: Record<string, Record<string, string>>;
+    };
+    const workspacesObj =
+      pkg.workspaces && !Array.isArray(pkg.workspaces) ? pkg.workspaces : undefined;
+    return (catalogSpec, dependencyName) => {
+      const catalogName = catalogSpec.slice('catalog:'.length);
+      if (catalogName) {
+        return (
+          workspacesObj?.catalogs?.[catalogName]?.[dependencyName] ??
+          pkg.catalogs?.[catalogName]?.[dependencyName]
+        );
+      }
+      return workspacesObj?.catalog?.[dependencyName] ?? pkg.catalog?.[dependencyName];
+    };
+  }
+  return undefined;
+}
+
+function createCatalogDependencyResolverFromCatalogs(
+  catalog: Record<string, string> | undefined,
+  catalogs: Record<string, Record<string, string>> | undefined,
+): CatalogDependencyResolver {
+  return (catalogSpec, dependencyName) => {
+    const catalogName = catalogSpec.slice('catalog:'.length);
+    if (catalogName) {
+      return catalogs?.[catalogName]?.[dependencyName];
+    }
+    return catalog?.[dependencyName];
+  };
+}
+
+function getYamlMapScalarStringValue(map: unknown, key: string): string | undefined {
+  if (!(map instanceof YAMLMap)) {
+    return undefined;
+  }
+  for (const item of map.items) {
+    if (
+      item.key instanceof Scalar &&
+      item.key.value === key &&
+      item.value instanceof Scalar &&
+      typeof item.value.value === 'string'
+    ) {
+      return item.value.value;
+    }
+  }
+  return undefined;
+}
+
 function rewriteCatalog(doc: YamlDocument): void {
   for (const [key, value] of Object.entries(VITE_PLUS_OVERRIDE_PACKAGES)) {
     // ERR_PNPM_CATALOG_IN_OVERRIDES  Could not resolve a catalog in the overrides: The entry for 'vite' in catalog 'default' declares a dependency using the 'file' protocol
@@ -1248,7 +1423,53 @@ function rewriteCatalog(doc: YamlDocument): void {
     }
   }
 
-  // TODO: rewrite `catalogs` when OVERRIDE_PACKAGES exists in catalog
+  const catalogs = doc.getIn(['catalogs']);
+  if (!(catalogs instanceof YAMLMap)) {
+    return;
+  }
+  for (const item of catalogs.items) {
+    const catalogName = item.key instanceof Scalar ? item.key.value : undefined;
+    if (typeof catalogName !== 'string' || !(item.value instanceof YAMLMap)) {
+      continue;
+    }
+    for (const [key, value] of Object.entries(VITE_PLUS_OVERRIDE_PACKAGES)) {
+      const catalogPath = ['catalogs', catalogName, key];
+      if (!value.startsWith('file:') && doc.hasIn(catalogPath)) {
+        doc.setIn(catalogPath, scalarString(value));
+      }
+    }
+    const vitePlusPath = ['catalogs', catalogName, VITE_PLUS_NAME];
+    if (!VITE_PLUS_VERSION.startsWith('file:') && doc.hasIn(vitePlusPath)) {
+      doc.setIn(vitePlusPath, scalarString(VITE_PLUS_VERSION));
+    }
+    for (const name of REMOVE_PACKAGES) {
+      const catalogPath = ['catalogs', catalogName, name];
+      if (doc.hasIn(catalogPath)) {
+        doc.deleteIn(catalogPath);
+      }
+    }
+  }
+}
+
+function rewriteCatalogObject(catalog: Record<string, string>, addMissing: boolean): void {
+  for (const [key, value] of Object.entries(VITE_PLUS_OVERRIDE_PACKAGES)) {
+    if (value.startsWith('file:') || (!addMissing && !(key in catalog))) {
+      continue;
+    }
+    catalog[key] = value;
+  }
+  if (!VITE_PLUS_VERSION.startsWith('file:') && (addMissing || VITE_PLUS_NAME in catalog)) {
+    catalog[VITE_PLUS_NAME] = VITE_PLUS_VERSION;
+  }
+  for (const name of REMOVE_PACKAGES) {
+    delete catalog[name];
+  }
+}
+
+function rewriteCatalogsObject(catalogs: Record<string, Record<string, string>>): void {
+  for (const catalog of Object.values(catalogs)) {
+    rewriteCatalogObject(catalog, false);
+  }
 }
 
 /**
@@ -1266,39 +1487,43 @@ function rewriteBunCatalog(projectPath: string): void {
   editJsonFile<{
     workspaces?: NpmWorkspaces;
     catalog?: Record<string, string>;
+    catalogs?: Record<string, Record<string, string>>;
     overrides?: Record<string, string>;
   }>(packageJsonPath, (pkg) => {
     // Bun supports catalogs in both workspaces.catalog and top-level catalog;
     // prefer the location the user already chose to avoid moving their config.
     const workspacesObj =
       pkg.workspaces && !Array.isArray(pkg.workspaces) ? pkg.workspaces : undefined;
+    const useWorkspacesCatalog =
+      workspacesObj?.catalog != null || (pkg.catalog == null && workspacesObj?.catalogs != null);
     const catalog: Record<string, string> = {
-      ...(workspacesObj?.catalog ?? pkg.catalog),
+      ...(useWorkspacesCatalog ? workspacesObj?.catalog : pkg.catalog),
     };
 
-    for (const [key, value] of Object.entries(VITE_PLUS_OVERRIDE_PACKAGES)) {
-      if (!value.startsWith('file:')) {
-        catalog[key] = value;
-      }
-    }
-    if (!VITE_PLUS_VERSION.startsWith('file:')) {
-      catalog[VITE_PLUS_NAME] = VITE_PLUS_VERSION;
-    }
+    rewriteCatalogObject(catalog, true);
 
-    for (const name of REMOVE_PACKAGES) {
-      delete catalog[name];
-    }
-
-    if (workspacesObj?.catalog != null) {
+    if (useWorkspacesCatalog) {
       workspacesObj.catalog = catalog;
+      if (pkg.catalog) {
+        rewriteCatalogObject(pkg.catalog, false);
+      }
     } else {
       pkg.catalog = catalog;
+      if (workspacesObj?.catalog) {
+        rewriteCatalogObject(workspacesObj.catalog, false);
+      }
+    }
+    if (workspacesObj?.catalogs) {
+      rewriteCatalogsObject(workspacesObj.catalogs);
+    }
+    if (pkg.catalogs) {
+      rewriteCatalogsObject(pkg.catalogs);
     }
 
     // bun overrides support catalog: references
     const overrides: Record<string, string> = { ...pkg.overrides };
     for (const [key, value] of Object.entries(VITE_PLUS_OVERRIDE_PACKAGES)) {
-      overrides[key] = value.startsWith('file:') ? value : 'catalog:';
+      overrides[key] = getCatalogDependencySpec(overrides[key], value, true);
     }
     pkg.overrides = overrides;
 
@@ -1314,6 +1539,7 @@ function rewriteRootWorkspacePackageJson(
   projectPath: string,
   packageManager: PackageManager,
   skipStagedMigration?: boolean,
+  catalogDependencyResolver?: CatalogDependencyResolver,
 ): void {
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
@@ -1325,6 +1551,9 @@ function rewriteRootWorkspacePackageJson(
     resolutions?: Record<string, string>;
     overrides?: Record<string, string>;
     devDependencies?: Record<string, string>;
+    dependencies?: Record<string, string>;
+    peerDependencies?: Record<string, string>;
+    optionalDependencies?: Record<string, string>;
     pnpm?: {
       overrides?: Record<string, string>;
       peerDependencyRules?: {
@@ -1399,7 +1628,14 @@ function rewriteRootWorkspacePackageJson(
   }
 
   // rewrite package.json
-  rewriteMonorepoProject(projectPath, packageManager, skipStagedMigration);
+  rewriteMonorepoProject(
+    projectPath,
+    packageManager,
+    skipStagedMigration,
+    undefined,
+    undefined,
+    catalogDependencyResolver,
+  );
 }
 
 const RULES_YAML_PATH = path.join(rulesDir, 'vite-tools.yml');
@@ -1435,10 +1671,13 @@ export function rewritePackageJson(
     'lint-staged'?: Record<string, string | string[]>;
     devDependencies?: Record<string, string>;
     dependencies?: Record<string, string>;
+    peerDependencies?: Record<string, string>;
+    optionalDependencies?: Record<string, string>;
   },
   packageManager: PackageManager,
   isMonorepo?: boolean,
   skipStagedMigration?: boolean,
+  catalogDependencyResolver?: CatalogDependencyResolver,
 ): Record<string, string | string[]> | null {
   if (pkg.scripts) {
     const updated = rewriteScripts(
@@ -1458,38 +1697,51 @@ export function rewritePackageJson(
     const updated = rewriteScripts(JSON.stringify(config), readRulesYaml());
     extractedStagedConfig = updated ? JSON.parse(updated) : config;
   }
-  const supportCatalog = isMonorepo && packageManager !== PackageManager.npm;
+  const supportCatalog = !!isMonorepo && packageManager !== PackageManager.npm;
   let needVitePlus = false;
+  const dependencyGroups: {
+    dependencyField: PackageJsonDependencyField;
+    dependencies: Record<string, string> | undefined;
+  }[] = [
+    { dependencyField: 'devDependencies', dependencies: pkg.devDependencies },
+    { dependencyField: 'dependencies', dependencies: pkg.dependencies },
+    { dependencyField: 'peerDependencies', dependencies: pkg.peerDependencies },
+    { dependencyField: 'optionalDependencies', dependencies: pkg.optionalDependencies },
+  ];
   for (const [key, version] of Object.entries(VITE_PLUS_OVERRIDE_PACKAGES)) {
-    const value = supportCatalog && !version.startsWith('file:') ? 'catalog:' : version;
-    if (pkg.devDependencies?.[key]) {
-      pkg.devDependencies[key] = value;
-      needVitePlus = true;
-    }
-    if (pkg.dependencies?.[key]) {
-      pkg.dependencies[key] = value;
-      needVitePlus = true;
+    for (const { dependencyField, dependencies } of dependencyGroups) {
+      if (dependencies?.[key]) {
+        dependencies[key] = getCatalogDependencySpec(dependencies[key], version, supportCatalog, {
+          dependencyField,
+          dependencyName: key,
+          packageManager,
+          catalogDependencyResolver,
+        });
+        needVitePlus = true;
+      }
     }
   }
   // remove packages that are replaced with vite-plus
   for (const name of REMOVE_PACKAGES) {
-    const wasInDevDeps = !!pkg.devDependencies?.[name];
-    const wasInDeps = !!pkg.dependencies?.[name];
-    if (wasInDevDeps) {
-      delete pkg.devDependencies![name];
-      needVitePlus = true;
+    let wasRemoved = false;
+    for (const { dependencies } of dependencyGroups) {
+      if (dependencies?.[name]) {
+        delete dependencies[name];
+        wasRemoved = true;
+      }
     }
-    if (wasInDeps) {
-      delete pkg.dependencies![name];
+    if (wasRemoved) {
       needVitePlus = true;
     }
     // e.g., removing @vitest/browser-playwright should keep `playwright` in devDeps
     const peerDep = BROWSER_PROVIDER_PEER_DEPS[name];
     if (
-      (wasInDevDeps || wasInDeps) &&
+      wasRemoved &&
       peerDep &&
       !pkg.devDependencies?.[peerDep] &&
-      !pkg.dependencies?.[peerDep]
+      !pkg.dependencies?.[peerDep] &&
+      !pkg.peerDependencies?.[peerDep] &&
+      !pkg.optionalDependencies?.[peerDep]
     ) {
       pkg.devDependencies ??= {};
       pkg.devDependencies[peerDep] = '*';
@@ -1507,10 +1759,17 @@ export function rewritePackageJson(
     // on vitest (e.g., vitest-browser-svelte). Without this, pnpm resolves the real
     // vitest for peer deps instead of @voidzero-dev/vite-plus-test, causing
     // third-party type augmentations to target the wrong module.
-    const allDeps = { ...pkg.dependencies, ...pkg.devDependencies };
-    if (!allDeps.vitest && Object.keys(allDeps).some((name) => name.includes('vitest'))) {
+    const installableDeps = {
+      ...pkg.dependencies,
+      ...pkg.devDependencies,
+      ...pkg.optionalDependencies,
+    };
+    if (
+      !installableDeps.vitest &&
+      Object.keys(installableDeps).some((name) => name.includes('vitest'))
+    ) {
       const ver = VITE_PLUS_OVERRIDE_PACKAGES.vitest;
-      pkg.devDependencies.vitest = supportCatalog && !ver.startsWith('file:') ? 'catalog:' : ver;
+      pkg.devDependencies.vitest = getCatalogDependencySpec(undefined, ver, supportCatalog);
     }
   }
   return extractedStagedConfig;
