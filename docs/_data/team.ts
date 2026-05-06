@@ -1,5 +1,6 @@
-/** @type {import('@voidzero-dev/vitepress-theme').TeamMember[]} */
-export const core = [
+import type { DefaultTheme } from "vitepress";
+
+export const core: DefaultTheme.TeamMember[] = [
   {
     avatar: "https://github.com/fengmk2.png",
     name: "MK",
@@ -117,5 +118,4 @@ export const core = [
   },
 ];
 
-/** @type {import('@voidzero-dev/vitepress-theme').TeamMember[]} */
-export const emeriti = [];
+export const emeriti: DefaultTheme.TeamMember[] = [];
