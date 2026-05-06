@@ -9,6 +9,7 @@ interface Package {
   hasVitePlusConfig: boolean;
 }
 
+// oxlint-disable-next-line no-underscore-dangle
 const __dirname = path.join(fileURLToPath(import.meta.url), '..');
 
 class MonorepoGenerator {
