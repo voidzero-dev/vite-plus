@@ -83,7 +83,7 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
       .replaceAll(/ ?WARN\s+Skip\s+adding .+?\n/g, '')
       .replaceAll(/ ?WARN\s+Request\s+took .+?\n/g, '')
       .replaceAll(/Scope: all \d+ workspace projects/g, 'Scope: all <variable> workspace projects')
-      .replaceAll(/\++\n/g, '+<repeat>\n')
+      .replaceAll(/\+{2,}\n/g, '+<repeat>\n')
       // ignore pnpm registry request error warning log
       .replaceAll(/ ?WARN\s+GET\s+https:\/\/registry\..+?\n/g, '')
       // ignore bun resolution progress (appears intermittently depending on cache state)
