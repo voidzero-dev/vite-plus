@@ -753,6 +753,7 @@ $ vp link
 
 - pnpm@9.x
 - pnpm@10.x
+- pnpm@11.x (pass `-- --no-frozen-lockfile` to `vp unlink` under CI=true; see snap-tests `command-unlink-pnpm11`)
 - yarn@1.x
 - yarn@4.x
 - npm@10.x

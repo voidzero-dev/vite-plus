@@ -1,0 +1,6 @@
+{
+  "commands": [
+    "vpx --help # should show vpx help message",
+    "vpx -s cowsay hello # should run cowsay via dlx fallback"
+  ]
+}

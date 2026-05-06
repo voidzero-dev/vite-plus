@@ -1,0 +1,57 @@
+> vp unlink -h # should show help message
+Usage: vp unlink [OPTIONS] [PACKAGE|DIR] [ARGS]...
+
+Unlink packages
+
+Arguments:
+  [PACKAGE|DIR]  Package name to unlink
+  [ARGS]...      Arguments to pass to package manager
+
+Options:
+  -r, --recursive  Unlink in every workspace package
+  -h, --help       Print help
+
+Documentation: https://viteplus.dev/guide/install
+
+
+> mkdir -p ../unlink-test-lib && echo '{"name": "unlink-test-lib", "version": "1.0.0"}' > ../unlink-test-lib/package.json # create test library
+> vp link ../unlink-test-lib && cat package.json # link the library first
+
+dependencies:
++ unlink-test-lib <semver> <- ../unlink-test-lib
+
+{
+  "name": "command-unlink-pnpm11",
+  "version": "1.0.0",
+  "packageManager": "pnpm@<semver>",
+  "dependencies": {
+    "unlink-test-lib": "link:../unlink-test-lib"
+  }
+}
+
+> vp unlink unlink-test-lib -- --no-frozen-lockfile && cat package.json # should unlink the package (pnpm v11 requires --no-frozen-lockfile under CI=true)
+Already up to date
+
+{
+  "name": "command-unlink-pnpm11",
+  "version": "1.0.0",
+  "packageManager": "pnpm@<semver>",
+  "dependencies": {
+    "unlink-test-lib": "link:../unlink-test-lib"
+  }
+}
+
+> vp link ../unlink-test-lib # link again
+
+
+> vp unlink -- --no-frozen-lockfile && cat package.json # should unlink all packages
+Already up to date
+
+{
+  "name": "command-unlink-pnpm11",
+  "version": "1.0.0",
+  "packageManager": "pnpm@<semver>",
+  "dependencies": {
+    "unlink-test-lib": "link:../unlink-test-lib"
+  }
+}
