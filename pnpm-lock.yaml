@@ -1167,7 +1167,7 @@ importers:
         specifier: ^1.2.0
         version: 1.2.0
       tsdown:
-        specifier: ^0.21.10
+        specifier: ^0.21.9
         version: 0.21.10(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.21.10)(@tsdown/exe@0.21.10)(@typescript/native-preview@7.0.0-dev.20260122.2)(@vitejs/devtools@0.1.18(@pnpm/logger@1001.0.1)(typescript@6.0.2)(vite@packages+core))(oxc-resolver@11.19.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0))(publint@0.3.18)(typescript@6.0.2)(unplugin-unused@0.5.6)
 
   vite/packages/plugin-legacy:
