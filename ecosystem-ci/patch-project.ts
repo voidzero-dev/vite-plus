@@ -36,11 +36,11 @@ if (project === 'vinext') {
   // upgrade-deps PRs can install transitive deps that were just published.
   const workspacePath = join(repoRoot, 'pnpm-workspace.yaml');
   const workspace = await readFile(workspacePath, 'utf-8');
-  await writeFile(
-    workspacePath,
-    workspace.replace(/^minimumReleaseAge:.*$/m, 'minimumReleaseAge: 0'),
-    'utf-8',
-  );
+  const patched = workspace.replace(/^minimumReleaseAge:.*$/m, 'minimumReleaseAge: 0');
+  if (patched === workspace) {
+    throw new Error(`vinext patch: \`minimumReleaseAge:\` not found in ${workspacePath}`);
+  }
+  await writeFile(workspacePath, patched, 'utf-8');
 }
 
 // Projects that already use vite-plus need VP_FORCE_MIGRATE=1 so
