@@ -30,6 +30,19 @@ if (project === 'rollipop') {
   );
 }
 
+if (project === 'vinext') {
+  // vinext sets `minimumReleaseAge` (24h) which blocks fresh upstream upgrades
+  // (e.g. oxc 0.129.0 published <24h ago). Disable it for the ecosystem run so
+  // upgrade-deps PRs can install transitive deps that were just published.
+  const workspacePath = join(repoRoot, 'pnpm-workspace.yaml');
+  const workspace = await readFile(workspacePath, 'utf-8');
+  await writeFile(
+    workspacePath,
+    workspace.replace(/^minimumReleaseAge:.*$/m, 'minimumReleaseAge: 0'),
+    'utf-8',
+  );
+}
+
 // Projects that already use vite-plus need VP_FORCE_MIGRATE=1 so
 // vp migrate runs full dependency rewriting instead of skipping.
 const forceFreshMigration = 'forceFreshMigration' in repoConfig && repoConfig.forceFreshMigration;
