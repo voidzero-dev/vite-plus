@@ -1015,8 +1015,8 @@ mod tests {
             "env.fish should check for 'use' subcommand"
         );
         assert!(
-            fish_content.contains("command vp $argv"),
-            "env.fish should use 'command vp' for passthrough"
+            fish_content.contains("/vp $argv"),
+            "env.fish should use absolute path to vp for passthrough"
         );
     }
 
