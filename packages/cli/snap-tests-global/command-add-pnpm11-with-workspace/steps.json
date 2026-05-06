@@ -1,0 +1,13 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "commands": [
+    "vp add testnpm2 -D -w && cat package.json # should add package to workspace root",
+    "vp add @vite-plus-test/utils --workspace && cat package.json # should add @vite-plus-test/utils to workspace root",
+    "vp add testnpm2 test-vite-plus-install@1.0.0 --filter app && cat package.json packages/app/package.json packages/utils/package.json # should add packages to packages/app",
+    "vp add @vite-plus-test/utils --workspace --filter app && cat package.json packages/app/package.json packages/utils/package.json # should add @vite-plus-test/utils to packages/app",
+    "vp add -E testnpm2 test-vite-plus-install --filter \"*\" && cat package.json packages/app/package.json packages/utils/package.json # should add testnpm2 test-vite-plus-install to all packages except workspace root",
+    "vp install test-vite-plus-package@1.0.0 --filter \"*\" --workspace-root --save-catalog && cat package.json packages/app/package.json packages/utils/package.json pnpm-workspace.yaml # should install packages alias for add command",
+    "vp add --filter app test-vite-plus-package-optional --save-catalog-name v1 && cat packages/app/package.json pnpm-workspace.yaml # should add with save-catalog-name",
+    "vp add --filter=./packages/utils test-vite-plus-package-optional -O --save-catalog-name v2 && cat packages/utils/package.json pnpm-workspace.yaml # should add other with save-catalog-name"
+  ]
+}

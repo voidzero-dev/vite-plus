@@ -7,9 +7,17 @@ import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
 import { readJsonFile, writeJsonFile } from './json.ts';
 
+// Language-specific overrides because user-level [lang] settings beat the workspace default
+const VSCODE_LANGUAGE_OVERRIDES = {
+  '[javascript]': { 'editor.defaultFormatter': 'oxc.oxc-vscode' },
+  '[javascriptreact]': { 'editor.defaultFormatter': 'oxc.oxc-vscode' },
+  '[typescript]': { 'editor.defaultFormatter': 'oxc.oxc-vscode' },
+  '[typescriptreact]': { 'editor.defaultFormatter': 'oxc.oxc-vscode' },
+} as const;
+
 const VSCODE_SETTINGS = {
-  // Set as default over per-lang to avoid conflicts with other formatters
   'editor.defaultFormatter': 'oxc.oxc-vscode',
+  ...VSCODE_LANGUAGE_OVERRIDES,
   'oxc.fmt.configPath': './vite.config.ts',
   'editor.formatOnSave': true,
   // Oxfmt does not support partial formatting

@@ -559,6 +559,7 @@ vp dedupe:run
 
 - pnpm@9.x (WIP)
 - pnpm@10.x
+- pnpm@11.x
 - yarn@4.x (yarn@2+)
 - npm@10.x
 - npm@11.x (WIP)

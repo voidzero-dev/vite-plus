@@ -10,7 +10,7 @@ That means you usually do not need separate `setup-node`, package-manager setup,
 
 ## GitHub Actions
 
-```yaml
+```yaml [.github/workflows/ci.yml]
 - uses: voidzero-dev/setup-vp@v1
   with:
     node-version: '22'
@@ -29,7 +29,7 @@ If you are migrating an existing GitHub Actions workflow, you can often replace 
 
 #### Before:
 
-```yaml
+```yaml [.github/workflows/ci.yml]
 - uses: actions/setup-node@v4
   with:
     node-version: '24'
@@ -52,7 +52,7 @@ If you are migrating an existing GitHub Actions workflow, you can often replace 
 
 #### After:
 
-```yaml
+```yaml [.github/workflows/ci.yml]
 - uses: voidzero-dev/setup-vp@v1
   with:
     node-version: '24'

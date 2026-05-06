@@ -4,13 +4,79 @@ import path from 'node:path';
 const ROOT = process.cwd();
 const META_DIR = process.env.UPGRADE_DEPS_META_DIR;
 
-const isFullSha = (s) => /^[0-9a-f]{40}$/.test(s);
+type Change = {
+  old: string | null;
+  new: string;
+  tag?: string;
+};
 
-/** @type {Map<string, { old: string | null, new: string, tag?: string }>} */
-const changes = new Map();
+type GitHubTag = {
+  name?: unknown;
+  commit?: {
+    sha?: unknown;
+  };
+};
 
-function recordChange(name, oldValue, newValue, tag) {
-  const entry = { old: oldValue ?? null, new: newValue };
+type LatestTag = {
+  sha: string;
+  tag: string;
+};
+
+type NpmLatestResponse = {
+  version?: unknown;
+};
+
+type UpstreamVersions = {
+  rolldown: {
+    hash: string;
+  };
+  vite: {
+    hash: string;
+  };
+};
+
+type PnpmWorkspaceVersions = {
+  vitest: string;
+  tsdown: string;
+  oxcNodeCli: string;
+  oxcNodeCore: string;
+  oxfmt: string;
+  oxlint: string;
+  oxlintTsgolint: string;
+  oxcProjectRuntime: string;
+  oxcProjectTypes: string;
+  oxcMinify: string;
+  oxcParser: string;
+  oxcTransform: string;
+};
+
+type PnpmWorkspaceEntry = {
+  name: string;
+  pattern: RegExp;
+  replacement: string;
+  newVersion: string;
+};
+
+type PackageJson = {
+  devDependencies?: Record<string, string>;
+  peerDependencies?: Record<string, string>;
+};
+
+const isFullSha = (s: string): boolean => /^[0-9a-f]{40}$/.test(s);
+
+const changes = new Map<string, Change>();
+
+function readJsonFile(filePath: string) {
+  return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+}
+
+function recordChange(
+  name: string,
+  oldValue: string | null | undefined,
+  newValue: string,
+  tag?: string,
+) {
+  const entry: Change = { old: oldValue ?? null, new: newValue };
   if (tag) {
     entry.tag = tag;
   }
@@ -23,7 +89,7 @@ function recordChange(name, oldValue, newValue, tag) {
 }
 
 // ============ GitHub API ============
-async function getLatestTag(owner, repo) {
+async function getLatestTag(owner: string, repo: string): Promise<LatestTag> {
   const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/tags?per_page=1`, {
     headers: {
       Authorization: `token ${process.env.GITHUB_TOKEN}`,
@@ -33,45 +99,46 @@ async function getLatestTag(owner, repo) {
   if (!res.ok) {
     throw new Error(`Failed to fetch tags for ${owner}/${repo}: ${res.status} ${res.statusText}`);
   }
-  const tags = await res.json();
+  const tags = (await res.json()) as GitHubTag[];
   if (!Array.isArray(tags) || !tags.length) {
     throw new Error(`No tags found for ${owner}/${repo}`);
   }
-  if (!tags[0]?.commit?.sha || !tags[0]?.name) {
+  const [latest] = tags;
+  if (typeof latest?.commit?.sha !== 'string' || typeof latest.name !== 'string') {
     throw new Error(`Invalid tag structure for ${owner}/${repo}: missing SHA or name`);
   }
-  console.log(`${repo} -> ${tags[0].name} (${tags[0].commit.sha.slice(0, 7)})`);
-  return { sha: tags[0].commit.sha, tag: tags[0].name };
+  console.log(`${repo} -> ${latest.name} (${latest.commit.sha.slice(0, 7)})`);
+  return { sha: latest.commit.sha, tag: latest.name };
 }
 
 // ============ npm Registry ============
-async function getLatestNpmVersion(packageName) {
+async function getLatestNpmVersion(packageName: string): Promise<string> {
   const res = await fetch(`https://registry.npmjs.org/${packageName}/latest`);
   if (!res.ok) {
     throw new Error(
       `Failed to fetch npm version for ${packageName}: ${res.status} ${res.statusText}`,
     );
   }
-  const data = await res.json();
-  if (!data?.version) {
+  const data = (await res.json()) as NpmLatestResponse;
+  if (typeof data.version !== 'string') {
     throw new Error(`Invalid npm response for ${packageName}: missing version field`);
   }
   return data.version;
 }
 
 // ============ Update .upstream-versions.json ============
-async function updateUpstreamVersions() {
+async function updateUpstreamVersions(): Promise<void> {
   const filePath = path.join(ROOT, 'packages/tools/.upstream-versions.json');
-  const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  const data: UpstreamVersions = readJsonFile(filePath);
 
   const oldRolldownHash = data.rolldown.hash;
-  const oldViteHash = data['vite'].hash;
+  const oldViteHash = data.vite.hash;
   const [rolldown, vite] = await Promise.all([
     getLatestTag('rolldown', 'rolldown'),
     getLatestTag('vitejs', 'vite'),
   ]);
   data.rolldown.hash = rolldown.sha;
-  data['vite'].hash = vite.sha;
+  data.vite.hash = vite.sha;
   recordChange('rolldown', oldRolldownHash, rolldown.sha, rolldown.tag);
   recordChange('vite', oldViteHash, vite.sha, vite.tag);
 
@@ -80,12 +147,12 @@ async function updateUpstreamVersions() {
 }
 
 // ============ Update pnpm-workspace.yaml ============
-async function updatePnpmWorkspace(versions) {
+async function updatePnpmWorkspace(versions: PnpmWorkspaceVersions): Promise<void> {
   const filePath = path.join(ROOT, 'pnpm-workspace.yaml');
   let content = fs.readFileSync(filePath, 'utf8');
 
   // oxlint's trailing \n in the pattern disambiguates from oxlint-tsgolint.
-  const entries = [
+  const entries: PnpmWorkspaceEntry[] = [
     {
       name: 'vitest',
       pattern: /vitest-dev: npm:vitest@\^([\d.]+(?:-[\w.]+)?)/,
@@ -161,15 +228,15 @@ async function updatePnpmWorkspace(versions) {
   ];
 
   for (const { name, pattern, replacement, newVersion } of entries) {
-    let oldVersion;
-    content = content.replace(pattern, (_match, captured) => {
+    let oldVersion: string | undefined;
+    content = content.replace(pattern, (_match: string, captured: string) => {
       oldVersion = captured;
       return replacement;
     });
     if (oldVersion === undefined) {
       throw new Error(
         `Failed to match ${name} in pnpm-workspace.yaml — the pattern ${pattern} is stale, ` +
-          `please update it in .github/scripts/upgrade-deps.mjs`,
+          `please update it in .github/scripts/upgrade-deps.ts`,
       );
     }
     recordChange(name, oldVersion, newVersion);
@@ -180,20 +247,24 @@ async function updatePnpmWorkspace(versions) {
 }
 
 // ============ Update packages/test/package.json ============
-async function updateTestPackage(vitestVersion) {
+async function updateTestPackage(vitestVersion: string): Promise<void> {
   const filePath = path.join(ROOT, 'packages/test/package.json');
-  const pkg = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  const pkg: PackageJson = readJsonFile(filePath);
+  const devDependencies = pkg.devDependencies;
+  if (!devDependencies) {
+    throw new Error('packages/test/package.json is missing devDependencies');
+  }
 
   // Update all @vitest/* devDependencies
-  for (const dep of Object.keys(pkg.devDependencies)) {
+  for (const dep of Object.keys(devDependencies)) {
     if (dep.startsWith('@vitest/')) {
-      pkg.devDependencies[dep] = vitestVersion;
+      devDependencies[dep] = vitestVersion;
     }
   }
 
   // Update vitest-dev devDependency
-  if (pkg.devDependencies['vitest-dev']) {
-    pkg.devDependencies['vitest-dev'] = `^${vitestVersion}`;
+  if (devDependencies['vitest-dev']) {
+    devDependencies['vitest-dev'] = `^${vitestVersion}`;
   }
 
   // Update @vitest/ui peerDependency if present
@@ -206,15 +277,16 @@ async function updateTestPackage(vitestVersion) {
 }
 
 // ============ Update packages/core/package.json ============
-async function updateCorePackage(devtoolsVersion) {
+async function updateCorePackage(devtoolsVersion: string): Promise<void> {
   const filePath = path.join(ROOT, 'packages/core/package.json');
-  const pkg = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  const pkg: PackageJson = readJsonFile(filePath);
 
-  const currentDevtools = pkg.devDependencies?.['@vitejs/devtools'];
+  const devDependencies = pkg.devDependencies;
+  const currentDevtools = devDependencies?.['@vitejs/devtools'];
   if (!currentDevtools) {
     return;
   }
-  pkg.devDependencies['@vitejs/devtools'] = `^${devtoolsVersion}`;
+  devDependencies['@vitejs/devtools'] = `^${devtoolsVersion}`;
   recordChange('@vitejs/devtools', currentDevtools.replace(/^[\^~]/, ''), devtoolsVersion);
 
   fs.writeFileSync(filePath, JSON.stringify(pkg, null, 2) + '\n');
@@ -222,7 +294,7 @@ async function updateCorePackage(devtoolsVersion) {
 }
 
 // ============ Write metadata files for PR description ============
-function writeMetaFiles() {
+function writeMetaFiles(): void {
   if (!META_DIR) {
     return;
   }
@@ -238,7 +310,7 @@ function writeMetaFiles() {
   const changed = [...changes.entries()].filter(([, v]) => v.old !== v.new);
   const unchanged = [...changes.entries()].filter(([, v]) => v.old === v.new);
 
-  const formatVersion = (v) => {
+  const formatVersion = (v: Change): string => {
     if (v.tag) {
       return `${v.tag} (${v.new.slice(0, 7)})`;
     }
@@ -247,7 +319,7 @@ function writeMetaFiles() {
     }
     return v.new;
   };
-  const formatOld = (v) => {
+  const formatOld = (v: Change): string => {
     if (!v.old) {
       return '(unset)';
     }

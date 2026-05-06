@@ -1,0 +1,217 @@
+> vp install # should install packages first
+Packages: +<variable>
++<repeat>
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+
+dependencies:
++ test-vite-plus-package-optional <semver>
++ testnpm2 <semver>
+
+devDependencies:
++ test-vite-plus-package <semver>
+
+Done in <variable>ms using pnpm v<semver>
+
+> vp pm list --help # should show help
+Usage: vp pm list [OPTIONS] [PATTERN] [-- <PASS_THROUGH_ARGS>...]
+
+List installed packages
+
+Arguments:
+  [PATTERN]               Package pattern to filter
+  [PASS_THROUGH_ARGS]...  Additional arguments
+
+Options:
+  --depth <DEPTH>          Maximum depth of dependency tree
+  --json                   Output in JSON format
+  --long                   Show extended information
+  --parseable              Parseable output format
+  -P, --prod               Only production dependencies
+  -D, --dev                Only dev dependencies
+  --no-optional            Exclude optional dependencies
+  --exclude-peers          Exclude peer dependencies
+  --only-projects          Show only project packages
+  --find-by <FINDER_NAME>  Use a finder function
+  -r, --recursive          List across all workspaces
+  --filter <PATTERN>       Filter packages in monorepo
+  -g, --global             List global packages
+  -h, --help               Print help
+
+Documentation: https://viteplus.dev/guide/install
+
+
+> vp pm list # should list installed packages
+Legend: production dependency, optional only, dev only
+
+command-list-pnpm11@<semver> <cwd>
+│
+│   dependencies:
+├── test-vite-plus-package-optional@<semver>
+├── testnpm2@<semver>
+│
+│   devDependencies:
+└── test-vite-plus-package@<semver>
+
+3 packages
+
+> vp pm list testnpm2 # should list specific package
+Legend: production dependency, optional only, dev only
+
+command-list-pnpm11@<semver> <cwd>
+│
+│   dependencies:
+└── testnpm2@<semver>
+
+1 package
+
+> vp pm list --depth 0 # should list packages with depth limit
+Legend: production dependency, optional only, dev only
+
+command-list-pnpm11@<semver> <cwd>
+│
+│   dependencies:
+├── test-vite-plus-package-optional@<semver>
+├── testnpm2@<semver>
+│
+│   devDependencies:
+└── test-vite-plus-package@<semver>
+
+3 packages
+
+> vp pm list --json # should list packages in JSON format
+[
+  {
+    "name": "command-list-pnpm11",
+    "version": "1.0.0",
+    "path": "<cwd>",
+    "private": false,
+    "dependencies": {
+      "test-vite-plus-package-optional": {
+        "from": "test-vite-plus-package-optional",
+        "version": "1.0.0",
+        "resolved": "https://registry.<domain>/test-vite-plus-package-optional/-/test-vite-plus-package-optional-1.0.0.tgz",
+        "path": "<cwd>/node_modules/.pnpm/test-vite-plus-package-optional@<semver>/node_modules/test-vite-plus-package-optional"
+      },
+      "testnpm2": {
+        "from": "testnpm2",
+        "version": "1.0.1",
+        "resolved": "https://registry.<domain>/testnpm2/-/testnpm2-1.0.1.tgz",
+        "path": "<cwd>/node_modules/.pnpm/testnpm2@<semver>/node_modules/testnpm2"
+      }
+    },
+    "devDependencies": {
+      "test-vite-plus-package": {
+        "from": "test-vite-plus-package",
+        "version": "1.0.0",
+        "resolved": "https://registry.<domain>/test-vite-plus-package/-/test-vite-plus-package-1.0.0.tgz",
+        "path": "<cwd>/node_modules/.pnpm/test-vite-plus-package@<semver>/node_modules/test-vite-plus-package"
+      }
+    }
+  }
+]
+
+> vp pm list --long # should list packages with extended info
+Legend: production dependency, optional only, dev only
+
+command-list-pnpm11@<semver> <cwd>
+│
+│   dependencies:
+├── test-vite-plus-package-optional@<semver>
+│   just for snap-test
+│   <cwd>/node_modules/.pnpm/test-vite-plus-package-optional@<semver>/node_modules/test-vite-plus-package-optional
+├── testnpm2@<semver>
+│   <cwd>/node_modules/.pnpm/testnpm2@<semver>/node_modules/testnpm2
+│
+│   devDependencies:
+└── test-vite-plus-package@<semver>
+    just for snap-test
+    <cwd>/node_modules/.pnpm/test-vite-plus-package@<semver>/node_modules/test-vite-plus-package
+
+3 packages
+
+> vp pm list --parseable # should list packages in parseable format
+<cwd>
+<cwd>/node_modules/.pnpm/test-vite-plus-package@<semver>/node_modules/test-vite-plus-package
+<cwd>/node_modules/.pnpm/test-vite-plus-package-optional@<semver>/node_modules/test-vite-plus-package-optional
+<cwd>/node_modules/.pnpm/testnpm2@<semver>/node_modules/testnpm2
+
+> vp pm list --prod # should list production dependencies only
+Legend: production dependency, optional only, dev only
+
+command-list-pnpm11@<semver> <cwd>
+│
+│   dependencies:
+├── test-vite-plus-package-optional@<semver>
+└── testnpm2@<semver>
+
+2 packages
+
+> vp pm list --dev # should list development dependencies only
+Legend: production dependency, optional only, dev only
+
+command-list-pnpm11@<semver> <cwd>
+│
+│   devDependencies:
+└── test-vite-plus-package@<semver>
+
+1 package
+
+> vp pm list --no-optional # should exclude optional dependencies
+Legend: production dependency, optional only, dev only
+
+command-list-pnpm11@<semver> <cwd>
+│
+│   dependencies:
+├── test-vite-plus-package-optional@<semver>
+├── testnpm2@<semver>
+│
+│   devDependencies:
+└── test-vite-plus-package@<semver>
+
+3 packages
+
+> vp pm list --exclude-peers # should exclude peer dependencies
+Legend: production dependency, optional only, dev only
+
+command-list-pnpm11@<semver> <cwd>
+│
+│   dependencies:
+├── test-vite-plus-package-optional@<semver>
+├── testnpm2@<semver>
+│
+│   devDependencies:
+└── test-vite-plus-package@<semver>
+
+3 packages
+
+> vp pm list --only-projects # should list only workspace projects (pnpm-specific)
+[1]> vp pm list --find-by customFinder # should use custom finder (pnpm-specific)
+[ERR_PNPM_FINDER_NOT_FOUND] No finder with name customFinder is found
+
+> vp pm list --recursive # should list packages recursively in workspace
+Legend: production dependency, optional only, dev only
+
+command-list-pnpm11@<semver> <cwd>
+│
+│   dependencies:
+├── test-vite-plus-package-optional@<semver>
+├── testnpm2@<semver>
+│
+│   devDependencies:
+└── test-vite-plus-package@<semver>
+
+3 packages
+
+> vp pm list -- --loglevel=warn # should support pass through arguments
+Legend: production dependency, optional only, dev only
+
+command-list-pnpm11@<semver> <cwd>
+│
+│   dependencies:
+├── test-vite-plus-package-optional@<semver>
+├── testnpm2@<semver>
+│
+│   devDependencies:
+└── test-vite-plus-package@<semver>
+
+3 packages

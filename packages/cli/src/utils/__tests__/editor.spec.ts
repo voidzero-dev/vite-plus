@@ -111,6 +111,9 @@ describe('writeEditorConfigs', () => {
     expect(settings['oxc.fmt.configPath']).toBe('./vite.config.ts');
     expect(settings['editor.formatOnSave']).toBe(true);
     expect(settings['npm.scriptRunner']).toBeUndefined();
+    for (const lang of ['[javascript]', '[javascriptreact]', '[typescript]', '[typescriptreact]']) {
+      expect(settings[lang]).toEqual({ 'editor.defaultFormatter': 'oxc.oxc-vscode' });
+    }
   });
 
   it('includes additionalSettings in vscode settings.json when provided', async () => {
@@ -142,6 +145,9 @@ describe('writeEditorConfigs', () => {
       `{
   // JSONC comment
   "editor.formatOnSave": false,
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+  },
   "editor.codeActionsOnSave": {
     // preserve existing key
     "source.organizeImports": "explicit",
@@ -165,11 +171,17 @@ describe('writeEditorConfigs', () => {
 
     // Existing key is preserved (merge never overwrites)
     expect(settings['editor.formatOnSave']).toBe(false);
+    expect(settings['[typescript]']).toEqual({
+      'editor.defaultFormatter': 'esbenp.prettier-vscode',
+    });
 
     // New keys are added
     expect(settings['editor.defaultFormatter']).toBe('oxc.oxc-vscode');
     expect(settings['oxc.fmt.configPath']).toBe('./vite.config.ts');
     expect(settings['npm.scriptRunner']).toBe('vp');
+    for (const lang of ['[javascript]', '[javascriptreact]', '[typescriptreact]']) {
+      expect(settings[lang]).toEqual({ 'editor.defaultFormatter': 'oxc.oxc-vscode' });
+    }
 
     const codeActions = settings['editor.codeActionsOnSave'] as Record<string, unknown>;
     expect(codeActions['source.organizeImports']).toBe('explicit');

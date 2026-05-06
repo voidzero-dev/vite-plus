@@ -65,7 +65,7 @@ Automatic tracking can sometimes include more files than necessary, causing unne
 
 Use the [`input`](/config/run#input) option to exclude files or to replace automatic tracking with explicit file patterns:
 
-```ts
+```ts [vite.config.ts]
 tasks: {
   build: {
     command: 'tsc',
@@ -80,7 +80,7 @@ By default, tasks run in a clean environment. Only a small set of common variabl
 
 To add an environment variable to the cache key, add it to [`env`](/config/run#env). Changing its value then invalidates the cache:
 
-```ts
+```ts [vite.config.ts]
 tasks: {
   build: {
     command: 'webpack --mode production',

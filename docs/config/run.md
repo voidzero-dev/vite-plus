@@ -2,7 +2,7 @@
 
 You can configure Vite Task under the `run` field in `vite.config.ts`. Check out [`vp run`](/guide/run) to learn more about running scripts and tasks with Vite+.
 
-```ts
+```ts [vite.config.ts]
 import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
@@ -27,7 +27,7 @@ Whether to automatically run `preX`/`postX` package.json scripts as lifecycle ho
 
 When enabled (the default), running a script like `test` will automatically run `pretest` before it and `posttest` after it, if they exist in `package.json`.
 
-```ts
+```ts [vite.config.ts]
 export default defineConfig({
   run: {
     enablePrePostScripts: false, // Disable pre/post lifecycle hooks
@@ -46,7 +46,7 @@ This option can only be set in the workspace root's `vite.config.ts`. Setting it
 
 Controls whether task results are cached and replayed on subsequent runs.
 
-```ts
+```ts [vite.config.ts]
 export default defineConfig({
   run: {
     cache: {
@@ -71,7 +71,7 @@ Defines tasks that can be run with `vp run <task>`.
 
 Defines the shell command to run for the task.
 
-```ts
+```ts [vite.config.ts]
 tasks: {
   build: {
     command: 'vp build',
@@ -90,7 +90,7 @@ Commands joined with `&&` are automatically split into independently cached sub-
 
 Tasks that must complete successfully before this one starts.
 
-```ts
+```ts [vite.config.ts]
 tasks: {
   deploy: {
     command: 'deploy-script --prod',
@@ -101,7 +101,7 @@ tasks: {
 
 Dependencies can reference tasks in other packages using the `package#task` format:
 
-```ts
+```ts [vite.config.ts]
 dependsOn: ['@my/core#build', '@my/utils#lint'];
 ```
 
@@ -114,7 +114,7 @@ See [Task Dependencies](/guide/run#task-dependencies) for details on how explici
 
 Whether to cache this task's output. Set to `false` for tasks that should never be cached, like dev servers:
 
-```ts
+```ts [vite.config.ts]
 tasks: {
   dev: {
     command: 'vp dev',
@@ -130,7 +130,7 @@ tasks: {
 
 Environment variables included in the cache fingerprint. When any listed variable's value changes, the cache is invalidated.
 
-```ts
+```ts [vite.config.ts]
 tasks: {
   build: {
     command: 'vp build',
@@ -153,7 +153,7 @@ $ NODE_ENV=production vp run build     # cache miss: variable changed
 
 Environment variables passed to the task process but **not** included in the cache fingerprint. Changing these values won't invalidate the cache.
 
-```ts
+```ts [vite.config.ts]
 tasks: {
   build: {
     command: 'vp build',
@@ -178,7 +178,7 @@ Vite Task automatically detects which files are used by a command (see [Automati
 
 **Exclude files** from automatic tracking:
 
-```ts
+```ts [vite.config.ts]
 tasks: {
   build: {
     command: 'vp build',
@@ -190,7 +190,7 @@ tasks: {
 
 **Specify explicit files** only without automatic tracking:
 
-```ts
+```ts [vite.config.ts]
 tasks: {
   build: {
     command: 'vp build',
@@ -201,7 +201,7 @@ tasks: {
 
 **Resolve patterns relative to the workspace root** using the object form:
 
-```ts
+```ts [vite.config.ts]
 tasks: {
   build: {
     command: 'vp build',
@@ -219,7 +219,7 @@ The `base` field is required and controls how the glob pattern is resolved:
 
 **Disable file tracking** entirely and cache only on command/env changes:
 
-```ts
+```ts [vite.config.ts]
 tasks: {
   greet: {
     command: 'node greet.mjs',
@@ -239,7 +239,7 @@ String glob patterns are resolved relative to the package directory by default. 
 
 Working directory for the task, relative to the package root.
 
-```ts
+```ts [vite.config.ts]
 tasks: {
   'test-e2e': {
     command: 'vp test',
