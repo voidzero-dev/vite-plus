@@ -16,7 +16,7 @@
     "verbatimModuleSyntax": true
   },
   "exclude": [
-    "ecosystem-ci",
+    "packages/cli/docs",
     "packages/cli/snap-tests",
     "packages/cli/snap-tests-global",
     // Symlinks to vite submodule files that don't use .js extensions;

@@ -1,0 +1,11 @@
+{
+  "name": "command-pack-pnpm11",
+  "version": "1.0.0",
+  "dependencies": {
+    "testnpm2": "1.0.1"
+  },
+  "devDependencies": {
+    "test-vite-plus-package": "1.0.0"
+  },
+  "packageManager": "pnpm@11.0.6"
+}
