@@ -1,6 +1,6 @@
 > git init
 > vp migrate --no-interactive # should warn when staged already exists in vite.config.ts
-◇ Migrated . to Vite+<repeat>
+◇ Migrated . to Vite+
 • Node <semver>  pnpm <semver>
 • Git hooks configured
 ! Warnings:

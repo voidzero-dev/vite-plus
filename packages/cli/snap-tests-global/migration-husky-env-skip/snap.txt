@@ -1,6 +1,6 @@
 > git init
 > vp migrate --no-interactive # with HUSKY=0, vp config should skip and warn instead of reporting success
-◇ Migrated . to Vite+<repeat>
+◇ Migrated . to Vite+
 • Node <semver>  pnpm <semver>
 • 2 config updates applied
 ! Warnings:

@@ -67,7 +67,7 @@ Documentation: https://viteplus.dev/guide/migrate
 
 
 > vp migrate --no-interactive # migration work with lintstagedrc.json
-◇ Migrated . to Vite+<repeat>
+◇ Migrated . to Vite+
 • Node <semver>  pnpm <semver>
 • 2 config updates applied
 ! Warnings:

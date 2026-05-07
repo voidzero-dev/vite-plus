@@ -1,5 +1,5 @@
 > vp migrate --no-interactive # .nvmrc should take priority over volta.node
-◇ Migrated . to Vite+<repeat>
+◇ Migrated . to Vite+
 • Node <semver>  pnpm <semver>
 • 2 config updates applied
 • Node version manager file migrated to .node-version

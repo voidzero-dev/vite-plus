@@ -2,7 +2,7 @@
 > vp migrate --no-interactive # migration should not support non-json format lintstagedrc
 
 ⚠ Unsupported lint-staged config format — skipping git hooks setup. Please configure git hooks manually.
-◇ Migrated . to Vite+<repeat>
+◇ Migrated . to Vite+
 • Node <semver>  pnpm <semver>
 • 1 config update applied
 

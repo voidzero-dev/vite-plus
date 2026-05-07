@@ -1,7 +1,7 @@
 > vp migrate --no-interactive # migration should merge vite.config.ts and remove oxlintrc
 
 ✔ Merged .oxlintrc.json into vite.config.ts
-◇ Migrated . to Vite+<repeat>
+◇ Migrated . to Vite+
 • Node <semver>  yarn <semver>
 • 1 config update applied, 1 file had imports rewritten
 

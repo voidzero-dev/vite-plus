@@ -2,7 +2,7 @@
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 
 Packages: +<variable>
-+<repeat>
++
 Done in <variable>ms using pnpm v<semver>
 {
   "name": "command-update-pnpm10-with-workspace",
@@ -16,7 +16,7 @@ Done in <variable>ms using pnpm v<semver>
 > vp update testnpm2 --latest --filter app && cat packages/app/package.json # should update in specific package
 .                                        |  WARN  `node_modules` is present. Lockfile only installation will make it out-of-date
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
-.                                        |   +2 +<repeat>
+.                                        |   +2 +
 Done in <variable>ms using pnpm v<semver>
 {
   "name": "app",

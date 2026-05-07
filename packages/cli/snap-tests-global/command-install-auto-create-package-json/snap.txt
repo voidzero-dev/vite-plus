@@ -8,7 +8,7 @@ no package.json
 }
 > vp add testnpm2 -D && cat package.json # should add package to auto-created package.json
 Packages: +<variable>
-+<repeat>
++
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 
 devDependencies:

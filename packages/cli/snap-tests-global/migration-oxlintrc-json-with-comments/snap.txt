@@ -1,5 +1,5 @@
 > vp migrate --no-interactive 2>&1 # migration should handle .oxlintrc.json with JSONC comments
-◇ Migrated . to Vite+<repeat>
+◇ Migrated . to Vite+
 • Node <semver>  pnpm <semver>
 • 3 config updates applied
 

@@ -5,7 +5,7 @@ devDependencies:
 + testnpm2 ^1.0.1
 
 Packages: +<variable>
-+<repeat>
++
 Done in <variable>ms using pnpm v<semver>
 {
   "name": "command-add-pnpm10-with-workspace",
@@ -38,7 +38,7 @@ Done in <variable>ms using pnpm v<semver>
 
 > vp add testnpm2 test-vite-plus-install@1.0.0 --filter app && cat package.json packages/app/package.json packages/utils/package.json # should add packages to packages/app
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
-.                                        |   +1 +<repeat>
+.                                        |   +1 +
 Done in <variable>ms using pnpm v<semver>
 {
   "name": "command-add-pnpm10-with-workspace",
@@ -125,7 +125,7 @@ Done in <variable>ms using pnpm v<semver>
 }
 
 > vp install test-vite-plus-package@1.0.0 --filter "*" --workspace-root --save-catalog && cat package.json packages/app/package.json packages/utils/package.json pnpm-workspace.yaml # should install packages alias for add command
-.                                        |   +1 +<repeat>
+.                                        |   +1 +
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 Done in <variable>ms using pnpm v<semver>
 {
@@ -167,7 +167,7 @@ catalog:
 
 > vp add --filter app test-vite-plus-package-optional --save-catalog-name v1 && cat packages/app/package.json pnpm-workspace.yaml # should add with save-catalog-name
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
-.                                        |   +1 +<repeat>
+.                                        |   +1 +
 Done in <variable>ms using pnpm v<semver>
 {
   "name": "app",

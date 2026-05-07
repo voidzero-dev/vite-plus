@@ -1,7 +1,7 @@
 > vp migrate --no-interactive # hooks should be skipped due to simple-git-hooks
 
 ⚠ Detected simple-git-hooks — skipping git hooks setup. Please configure git hooks manually.
-◇ Migrated . to Vite+<repeat>
+◇ Migrated . to Vite+
 • Node <semver>  pnpm <semver>
 • 1 config update applied
 

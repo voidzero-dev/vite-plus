@@ -280,6 +280,21 @@ hello world
     `;
     expect(replaceUnstableOutput(output.trim())).toMatchSnapshot();
   });
+
+  test('replace pnpm progress plus markers with <repeat>', () => {
+    const output = `
+Scope: all 6 workspace projects
+Packages: +312
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Progress: resolved 316, reused 316, downloaded 0, added 316, done
+    `;
+    expect(replaceUnstableOutput(output.trim())).toMatchSnapshot();
+  });
+
+  test('preserve trailing plus in text like Vite+', () => {
+    const output = 'Migrate an existing project to Vite+';
+    expect(replaceUnstableOutput(output)).toBe('Migrate an existing project to Vite+');
+  });
 });
 
 describe('isPassThroughEnv()', () => {

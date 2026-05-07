@@ -52,6 +52,13 @@ exports[`replaceUnstableOutput() > replace ignore tarball download average speed
  WARN  Tarball download average speed 34 KiB/s (size 347 KiB) is below 50 KiB/s: https://registry.<domain>/undici/-/undici-7.16.0.tgz (GET)"
 `;
 
+exports[`replaceUnstableOutput() > replace pnpm progress plus markers with <repeat> 1`] = `
+"Scope: all <variable> workspace projects
+Packages: +<variable>
++<repeat>
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done"
+`;
+
 exports[`replaceUnstableOutput() > replace pnpm registry request error warning log 1`] = `"Progress: resolved"`;
 
 exports[`replaceUnstableOutput() > replace tsdown output 1`] = `

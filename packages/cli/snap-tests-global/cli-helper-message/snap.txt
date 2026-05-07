@@ -4,7 +4,7 @@ Usage: vp [COMMAND]
 
 Start:
   create      Create a new project from a template
-  migrate     Migrate an existing project to Vite+<repeat>
+  migrate     Migrate an existing project to Vite+
   config      Configure hooks and agent integration
   staged      Run linters on staged files
   install, i  Install all dependencies, or add packages if package names are provided

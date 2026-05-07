@@ -265,8 +265,14 @@ jobs:
             node-version: 24
             command: |
               vp run build
-              vp check --fix
-              vp run check
+              # Report-only: oxlint 1.63 drops the `eslint-` prefix from plugin names
+              # (https://github.com/oxc-project/oxc/pull/21806), invalidating vinext's existing
+              # `oxlint-disable-next-line eslint-plugin-react-hooks/...` directive, and tightens
+              # a couple of unused-import checks. vinext can only update its source after a
+              # vite-plus release ships these oxlint changes, so don't fail the matrix on the
+              # surfaced errors yet.
+              vp check --fix || true
+              vp run check || true
               vp run test
           - name: reactive-resume
             node-version: 24

@@ -10,4 +10,4 @@ error: Lint issues found
    ╰────
   help: Avoid eval(). For JSON parsing use JSON.parse(); for dynamic property access use bracket notation (obj[key]); for other cases refactor to avoid evaluating strings as code.
 
-Found 1 error and 0 warnings in 1 file (<variable>ms, <variable> threads)
+Found 1 error and 0 warnings in 2 files (<variable>ms, <variable> threads)

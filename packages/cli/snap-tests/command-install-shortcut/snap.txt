@@ -1,7 +1,7 @@
 > vp run install # install shortcut
 $ vp install
 Packages: +<variable>
-+<repeat>
++
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 
 dependencies:

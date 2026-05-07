@@ -1,5 +1,5 @@
 > vp migrate --no-interactive # should remove esModuleInterop: false from tsconfig.json
-◇ Migrated . to Vite+<repeat>
+◇ Migrated . to Vite+
 • Node <semver>  pnpm <semver>
 • 4 config updates applied
 ! Warnings:

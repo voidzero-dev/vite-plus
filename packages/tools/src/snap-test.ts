@@ -271,6 +271,7 @@ interface Steps {
   serial?: boolean;
 }
 
+// oxlint-disable-next-line no-underscore-dangle
 let _isMusl: boolean | null = null;
 
 function isMusl(): boolean {
