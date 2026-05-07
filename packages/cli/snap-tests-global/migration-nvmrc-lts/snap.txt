@@ -1,5 +1,5 @@
 > vp migrate --no-interactive # migration should detect .nvmrc with lts alias and auto-migrate
-◇ Migrated . to Vite+<repeat>
+◇ Migrated . to Vite+
 • Node <semver>  pnpm <semver>
 • 2 config updates applied
 • Node version manager file migrated to .node-version

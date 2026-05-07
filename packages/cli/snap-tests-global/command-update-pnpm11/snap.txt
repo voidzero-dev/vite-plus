@@ -123,7 +123,7 @@ Done in <variable>ms using pnpm v<semver>
 > vp rm testnpm2 # should remove package from dependencies for the next test
 > vp add testnpm2@1.0.0 -O && vp update --no-optional --latest && cat package.json # should skip optional dependencies
 Packages: +<variable>
-+<repeat>
++
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 
 optionalDependencies:

@@ -1,5 +1,5 @@
 > vp migrate --no-interactive # migration should detect eslint and auto-migrate including lint-staged
-◇ Migrated . to Vite+<repeat>
+◇ Migrated . to Vite+
 • Node <semver>  pnpm <semver>
 • 4 config updates applied
 • ESLint rules migrated to Oxlint

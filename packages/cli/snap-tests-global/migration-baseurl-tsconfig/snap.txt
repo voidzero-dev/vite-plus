@@ -1,5 +1,5 @@
 > vp migrate --no-interactive # migration should skip typeAware/typeCheck when tsconfig has baseUrl
-◇ Migrated . to Vite+<repeat>
+◇ Migrated . to Vite+
 • Node <semver>  pnpm <semver>
 • 3 config updates applied
 ! Warnings:

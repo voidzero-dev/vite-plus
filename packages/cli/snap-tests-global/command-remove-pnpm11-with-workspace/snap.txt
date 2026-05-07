@@ -1,11 +1,11 @@
 > vp add testnpm2 -D -w --filter=* && vp add test-vite-plus-install -w --filter=* && vp add test-vite-plus-package-optional -O --filter=* && cat package.json packages/app/package.json packages/utils/package.json # prepare packages
-.                                        |   +1 +<repeat>
+.                                        |   +1 +
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 Done in <variable>ms using pnpm v<semver>
-.                                        |   +1 +<repeat>
+.                                        |   +1 +
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 Done in <variable>ms using pnpm v<semver>
-.                                        |   +1 +<repeat>
+.                                        |   +1 +
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 Done in <variable>ms using pnpm v<semver>
 {

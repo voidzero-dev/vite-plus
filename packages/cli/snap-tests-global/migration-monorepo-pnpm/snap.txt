@@ -3,7 +3,7 @@
 ✔ Merged .oxlintrc.json into vite.config.ts
 
 ✔ Merged .oxfmtrc.json into vite.config.ts
-◇ Migrated . to Vite+<repeat>
+◇ Migrated . to Vite+
 • Node <semver>  pnpm <semver>
 • 3 config updates applied, 1 file had imports rewritten
 

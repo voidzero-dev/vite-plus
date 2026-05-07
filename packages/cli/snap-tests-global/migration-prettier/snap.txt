@@ -1,7 +1,7 @@
 > vp migrate --no-interactive # migration should detect prettier and auto-migrate
 
 Prettier configuration detected. Auto-migrating to Oxfmt...
-◇ Migrated . to Vite+<repeat>
+◇ Migrated . to Vite+
 • Node <semver>  pnpm <semver>
 • 2 config updates applied
 • Prettier migrated to Oxfmt

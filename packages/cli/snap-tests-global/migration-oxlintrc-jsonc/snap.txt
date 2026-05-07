@@ -1,5 +1,5 @@
 > vp migrate --no-interactive 2>&1 # migration should detect .oxlintrc.jsonc and .oxfmtrc.jsonc
-◇ Migrated . to Vite+<repeat>
+◇ Migrated . to Vite+
 • Node <semver>  pnpm <semver>
 • 4 config updates applied
 

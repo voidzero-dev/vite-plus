@@ -2,7 +2,7 @@
 > vp migrate --no-interactive # should warn about husky v8, preserve lint-staged config
 
 ⚠ Detected husky <9.0.0 — please upgrade to husky v9+ first, then re-run migration.
-◇ Migrated . to Vite+<repeat>
+◇ Migrated . to Vite+
 • Node <semver>  pnpm <semver>
 • 1 config update applied
 

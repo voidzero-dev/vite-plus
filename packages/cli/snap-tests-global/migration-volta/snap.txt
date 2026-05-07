@@ -1,5 +1,5 @@
 > vp migrate --no-interactive # migration should detect volta.node in package.json and migrate to .node-version
-◇ Migrated . to Vite+<repeat>
+◇ Migrated . to Vite+
 • Node <semver>  pnpm <semver>
 • 2 config updates applied
 • Node version manager file migrated to .node-version

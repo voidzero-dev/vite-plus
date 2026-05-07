@@ -1,7 +1,7 @@
 > vp migrate --no-interactive # migration should work with bun object-form workspaces
 
 ✔ Merged .oxlintrc.json into vite.config.ts
-◇ Migrated . to Vite+<repeat>
+◇ Migrated . to Vite+
 • Node <semver>  bun <semver>
 • 1 config update applied, 1 file had imports rewritten
 
