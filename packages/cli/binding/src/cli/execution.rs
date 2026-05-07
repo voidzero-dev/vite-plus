@@ -2,7 +2,7 @@ use std::{borrow::Cow, ffi::OsStr, io::IsTerminal, process::Stdio, sync::Arc};
 
 use rustc_hash::FxHashMap;
 use vite_error::Error;
-use vite_path::{AbsolutePath, AbsolutePathBuf};
+use vite_path::AbsolutePathBuf;
 use vite_task::ExitStatus;
 
 use super::{
@@ -17,10 +17,9 @@ async fn resolve_and_build_command(
     resolved_vite_config: Option<&ResolvedUniversalViteConfig>,
     envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
     cwd: &AbsolutePathBuf,
-    cwd_arc: &Arc<AbsolutePath>,
 ) -> Result<tokio::process::Command, Error> {
     let resolved = resolver
-        .resolve(subcommand, resolved_vite_config, envs, cwd_arc)
+        .resolve(subcommand, resolved_vite_config, envs)
         .await
         .map_err(|e| Error::Anyhow(e))?;
 
@@ -55,7 +54,6 @@ pub(super) async fn resolve_and_execute(
     resolved_vite_config: Option<&ResolvedUniversalViteConfig>,
     envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
     cwd: &AbsolutePathBuf,
-    cwd_arc: &Arc<AbsolutePath>,
 ) -> Result<ExitStatus, Error> {
     let is_interactive = matches!(
         subcommand,
@@ -63,8 +61,7 @@ pub(super) async fn resolve_and_execute(
     );
 
     let mut cmd =
-        resolve_and_build_command(resolver, subcommand, resolved_vite_config, envs, cwd, cwd_arc)
-            .await?;
+        resolve_and_build_command(resolver, subcommand, resolved_vite_config, envs, cwd).await?;
 
     // For interactive commands (dev, preview), use terminal guard to restore terminal state on exit
     if is_interactive {
@@ -90,13 +87,11 @@ pub(super) async fn resolve_and_execute_with_filter(
     resolved_vite_config: Option<&ResolvedUniversalViteConfig>,
     envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
     cwd: &AbsolutePathBuf,
-    cwd_arc: &Arc<AbsolutePath>,
     stream: FilterStream,
     filter: impl Fn(&str) -> Cow<'_, str>,
 ) -> Result<ExitStatus, Error> {
     let mut cmd =
-        resolve_and_build_command(resolver, subcommand, resolved_vite_config, envs, cwd, cwd_arc)
-            .await?;
+        resolve_and_build_command(resolver, subcommand, resolved_vite_config, envs, cwd).await?;
     match stream {
         FilterStream::Stdout => cmd.stdout(Stdio::piped()),
         FilterStream::Stderr => cmd.stderr(Stdio::piped()),
@@ -126,12 +121,10 @@ pub(crate) async fn resolve_and_capture_output(
     resolved_vite_config: Option<&ResolvedUniversalViteConfig>,
     envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
     cwd: &AbsolutePathBuf,
-    cwd_arc: &Arc<AbsolutePath>,
     force_color_if_terminal: bool,
 ) -> Result<CapturedCommandOutput, Error> {
     let mut cmd =
-        resolve_and_build_command(resolver, subcommand, resolved_vite_config, envs, cwd, cwd_arc)
-            .await?;
+        resolve_and_build_command(resolver, subcommand, resolved_vite_config, envs, cwd).await?;
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
     if force_color_if_terminal && std::io::stdout().is_terminal() {

@@ -197,6 +197,7 @@ vite_js_runtime = { path = "crates/vite_js_runtime" }
 vite_glob = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "d1b8cdae8b6df5eab8b9f1143ceb4fb13933a5ef" }
 vite_install = { path = "crates/vite_install" }
 vite_migration = { path = "crates/vite_migration" }
+vite_pm_cli = { path = "crates/vite_pm_cli" }
 vite_setup = { path = "crates/vite_setup" }
 vite_shared = { path = "crates/vite_shared" }
 vite_static_config = { path = "crates/vite_static_config" }

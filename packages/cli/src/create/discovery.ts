@@ -46,11 +46,24 @@ export function discoverTemplate(
   templateArgs: string[],
   workspaceInfo: WorkspaceInfo,
   interactive?: boolean,
+  bundledLocalPath?: string,
+  skipShorthand?: boolean,
 ): TemplateInfo {
   const envs = prependToPathToEnvs(workspaceInfo.downloadPackageManager.binPrefix, {
     ...process.env,
   });
   const parentDir = inferParentDir(templateName, workspaceInfo);
+  if (bundledLocalPath) {
+    return {
+      command: '',
+      args: [...templateArgs],
+      envs,
+      type: TemplateType.bundled,
+      parentDir,
+      interactive,
+      localPath: bundledLocalPath,
+    };
+  }
   // Check for built-in templates
   if (templateName.startsWith('vite:')) {
     return {
@@ -116,7 +129,9 @@ export function discoverTemplate(
     }
   }
 
-  const expandedName = expandCreateShorthand(templateName);
+  // Manifest-resolved entries are already fully qualified by the author —
+  // `@scope/template-web` means that exact package, not `@scope/create-template-web`.
+  const expandedName = skipShorthand ? templateName : expandCreateShorthand(templateName);
   return {
     command: expandedName,
     args: [...templateArgs],

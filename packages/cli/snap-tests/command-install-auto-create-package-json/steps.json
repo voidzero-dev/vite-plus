@@ -1,0 +1,8 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "commands": [
+    "test ! -f package.json && echo 'no package.json' # verify no package.json exists",
+    "vp install --silent && cat package.json # should auto-create package.json and install",
+    "vp add testnpm2 -D && cat package.json # should add package to auto-created package.json"
+  ]
+}

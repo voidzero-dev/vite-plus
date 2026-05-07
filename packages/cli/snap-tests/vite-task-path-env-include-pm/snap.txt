@@ -1,6 +1,4 @@
 > vp install --no-frozen-lockfile
-➤ YN0050: The --frozen-lockfile option is deprecated; use --immutable and/or --immutable-cache instead
-
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0000: └ Completed

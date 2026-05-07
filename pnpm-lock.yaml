@@ -156,6 +156,9 @@ catalogs:
     mri:
       specifier: ^1.2.0
       version: 1.2.0
+    nanotar:
+      specifier: ^0.3.0
+      version: 0.3.0
     oxc-parser:
       specifier: '=0.129.0'
       version: 0.129.0
@@ -398,6 +401,9 @@ importers:
       mri:
         specifier: 'catalog:'
         version: 1.2.0
+      nanotar:
+        specifier: 'catalog:'
+        version: 0.3.0
       picocolors:
         specifier: 'catalog:'
         version: 1.1.1
@@ -7674,6 +7680,9 @@ packages:
     resolution: {integrity: sha512-ZUvP7KeBLe3OZ1ypw6dI/TzYJuvHP77IM4Ry73waSQTLn8/g8rpdjfyVAh7t1/+FjBtG4lCP42MEbDxOsRpBMw==}
     engines: {node: ^18 || >=20}
     hasBin: true
+
+  nanotar@0.3.0:
+    resolution: {integrity: sha512-Kv2JYYiCzt16Kt5QwAc9BFG89xfPNBx+oQL4GQXD9nLqPkZBiNaqaCWtwnbk/q7UVsTYevvM1b0UF8zmEI4pCg==}
 
   napi-postinstall@0.3.4:
     resolution: {integrity: sha512-PHI5f1O0EP5xJ9gQmFGMS6IZcrVvTjpXjz7Na41gTE7eE2hK11lg04CECCYEEjdc17EV4DO+fkGEtt7TpTaTiQ==}
@@ -15393,6 +15402,8 @@ snapshots:
   nanoid@3.3.11: {}
 
   nanoid@5.1.9: {}
+
+  nanotar@0.3.0: {}
 
   napi-postinstall@0.3.4: {}
 

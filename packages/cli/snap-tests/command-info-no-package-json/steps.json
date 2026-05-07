@@ -1,0 +1,6 @@
+{
+  "commands": [
+    "vp info vite@2.0.0 version # should work without package.json",
+    "vp pm view vite@2.0.0 version # should work without package.json"
+  ]
+}

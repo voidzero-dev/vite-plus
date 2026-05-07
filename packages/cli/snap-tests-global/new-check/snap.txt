@@ -9,6 +9,9 @@ Arguments:
             - Remote: vite, @tanstack/start, create-next-app,
               create-nuxt, github:user/repo, https://github.com/user/template-repo, etc.
             - Local: @company/generator-*, ./tools/create-ui-component
+            - Org scope: @your-org → picker from @your-org/create's createConfig.templates manifest
+            - Org entry: @your-org:web → manifest entry "web" from @your-org/create
+            When omitted, uses `create.defaultTemplate` from vite.config.ts if set.
 
 Options:
   --directory DIR         Target directory for the generated project.
@@ -48,6 +51,10 @@ Examples:
   # Use templates from GitHub (via degit)
   vp create github:user/repo
   vp create https://github.com/user/template-repo
+
+  # Pick from an org that publishes @scope/create with createConfig.templates
+  vp create @your-org # interactive picker
+  vp create @your-org:web # direct manifest-entry selection
 
 Documentation: https://viteplus.dev/guide/create
 

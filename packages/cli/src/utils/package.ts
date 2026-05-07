@@ -4,6 +4,7 @@ import path from 'node:path';
 
 import { VITE_PLUS_NAME } from './constants.ts';
 import { readJsonFile } from './json.ts';
+import { fetchNpmResource, getNpmRegistry } from './npm-config.ts';
 
 export function getScopeFromPackageName(packageName: string): string {
   if (packageName.startsWith('@')) {
@@ -65,17 +66,18 @@ export function hasVitePlusDependency(
 }
 
 /**
- * Check if an npm package exists in the public registry.
+ * Check if an npm package exists on its resolved registry.
  * Returns true if the package exists or if the check could not be performed (network error, timeout).
  * Returns false only if the registry definitively responds with 404.
  */
 export async function checkNpmPackageExists(packageName: string): Promise<boolean> {
   const atIndex = packageName.indexOf('@', 2);
   const name = atIndex === -1 ? packageName : packageName.slice(0, atIndex);
+  const scope = getScopeFromPackageName(name);
   try {
-    const response = await fetch(`https://registry.npmjs.org/${name}`, {
+    const response = await fetchNpmResource(`${getNpmRegistry(scope)}/${name}`, {
       method: 'HEAD',
-      signal: AbortSignal.timeout(3000),
+      timeoutMs: 3000,
     });
     return response.status !== 404;
   } catch {

@@ -3,6 +3,7 @@ import path from 'node:path';
 import { styleText } from 'node:util';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
+import spawn from 'cross-spawn';
 import mri from 'mri';
 
 import { vitePlusHeader } from '../../binding/index.js';
@@ -12,6 +13,7 @@ import {
   detectFramework,
   detectPrettierProject,
   hasFrameworkShim,
+  injectCreateDefaultTemplate,
   installGitHooks,
   promptEslintMigration,
   promptPrettierMigration,
@@ -48,6 +50,11 @@ import type { ExecutionResult } from './command.ts';
 import { discoverTemplate, inferGitHubRepoName, inferParentDir, isGitHubUrl } from './discovery.ts';
 import { getInitialTemplateOptions } from './initial-template-options.ts';
 import {
+  getConfiguredDefaultTemplate,
+  type OrgResolution,
+  resolveOrgManifestForCreate,
+} from './org-resolve.ts';
+import {
   cancelAndExit,
   checkProjectDirExists,
   promptPackageNameAndTargetDir,
@@ -57,11 +64,12 @@ import {
 import { getRandomProjectName } from './random-name.ts';
 import {
   executeBuiltinTemplate,
+  executeBundledTemplate,
   executeMonorepoTemplate,
   executeRemoteTemplate,
 } from './templates/index.ts';
 import { BuiltinTemplate, TemplateType } from './templates/types.ts';
-import { deriveDefaultPackageName, formatTargetDir } from './utils.ts';
+import { deriveDefaultPackageName, ensureGitignoreNodeModules, formatTargetDir } from './utils.ts';
 
 const helpMessage = renderCliDoc({
   usage: 'vp create [TEMPLATE] [OPTIONS] [-- TEMPLATE_OPTIONS]',
@@ -79,6 +87,9 @@ const helpMessage = renderCliDoc({
             '- Remote: vite, @tanstack/start, create-next-app,',
             '  create-nuxt, github:user/repo, https://github.com/user/template-repo, etc.',
             '- Local: @company/generator-*, ./tools/create-ui-component',
+            `- Org scope: ${accent('@your-org')} → picker from ${accent('@your-org/create')}'s ${accent('createConfig.templates')} manifest`,
+            `- Org entry: ${accent('@your-org:web')} → manifest entry "web" from ${accent('@your-org/create')}`,
+            `When omitted, uses \`create.defaultTemplate\` from vite.config.ts if set.`,
           ],
         },
       ],
@@ -139,6 +150,10 @@ const helpMessage = renderCliDoc({
         `  ${muted('# Use templates from GitHub (via degit)')}`,
         `  ${accent('vp create github:user/repo')}`,
         `  ${accent('vp create https://github.com/user/template-repo')}`,
+        '',
+        `  ${muted('# Pick from an org that publishes @scope/create with createConfig.templates')}`,
+        `  ${accent('vp create @your-org')} ${muted('# interactive picker')}`,
+        `  ${accent('vp create @your-org:web')} ${muted('# direct manifest-entry selection')}`,
       ],
     },
   ],
@@ -383,23 +398,6 @@ async function main() {
   }
   // #endregion
 
-  // #region Handle required arguments
-  if (!templateName && !options.interactive) {
-    console.error(`
-A template name is required when running in non-interactive mode
-
-Usage: vp create [TEMPLATE] [OPTIONS] [-- TEMPLATE_OPTIONS]
-
-Example:
-  ${muted('# Create a new application in non-interactive mode with a custom target directory')}
-  vp create vite:application --no-interactive --directory=apps/my-app
-
-Use \`vp create --list\` to list all available templates, or run \`vp create --help\` for more information.
-`);
-    process.exit(1);
-  }
-  // #endregion
-
   // #region Prepare Stage
   if (options.interactive) {
     prompts.intro(vitePlusHeader());
@@ -448,7 +446,52 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   let selectedParentDir: string | undefined;
   let remoteTargetDir: string | undefined;
   let shouldSetupHooks = false;
+  let bundled: Extract<OrgResolution, { kind: 'bundled' }> | undefined;
+  let skipShorthandExpansion = false;
   const installArgs = process.env.CI ? ['--no-frozen-lockfile'] : undefined;
+
+  if (!selectedTemplateName) {
+    const defaultTemplate = await getConfiguredDefaultTemplate(workspaceInfoOptional.rootDir);
+    if (defaultTemplate) {
+      selectedTemplateName = defaultTemplate;
+    }
+  }
+
+  if (selectedTemplateName) {
+    const resolved = await resolveOrgManifestForCreate({
+      templateName: selectedTemplateName,
+      isMonorepo,
+      interactive: options.interactive,
+    });
+    if (resolved.kind === 'replaced') {
+      selectedTemplateName = resolved.templateName;
+      // Manifest entries are fully-qualified by their author; prevent
+      // `expandCreateShorthand` from rewriting `@your-org/template-web`
+      // into `@your-org/create-template-web`.
+      skipShorthandExpansion = true;
+    } else if (resolved.kind === 'bundled') {
+      bundled = resolved;
+    } else if (resolved.kind === 'escape-hatch') {
+      selectedTemplateName = '';
+    }
+  }
+
+  // Guard runs after the arg → `create.defaultTemplate` → @org resolution
+  // chain so `--no-interactive` works with a configured default.
+  if (!selectedTemplateName && !options.interactive) {
+    console.error(`
+A template name is required when running in non-interactive mode
+
+Usage: vp create [TEMPLATE] [OPTIONS] [-- TEMPLATE_OPTIONS]
+
+Example:
+  ${muted('# Create a new application in non-interactive mode with a custom target directory')}
+  vp create vite:application --no-interactive --directory=apps/my-app
+
+Use \`vp create --list\` to list all available templates, or run \`vp create --help\` for more information.
+`);
+    process.exit(1);
+  }
 
   if (!selectedTemplateName) {
     const template = await prompts.select({
@@ -464,15 +507,21 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   }
 
   const isBuiltinTemplate = selectedTemplateName.startsWith('vite:');
+  const isBundledTemplate = bundled !== undefined;
+  const isBundledMonorepo = bundled?.monorepo === true;
+  const isDirectScaffoldTemplate = isBuiltinTemplate || isBundledTemplate;
 
   // Remote templates (e.g., @tanstack/cli, custom templates) run their own
   // interactive CLI, so verbose mode is needed to show their output.
-  if (!isBuiltinTemplate) {
+  if (!isDirectScaffoldTemplate) {
     compactOutput = false;
   }
 
-  if (targetDir && !isBuiltinTemplate) {
-    cancelAndExit('The --directory option is only available for builtin templates', 1);
+  if (targetDir && !isDirectScaffoldTemplate) {
+    cancelAndExit(
+      'The --directory option is only available for builtin and bundled @org templates',
+      1,
+    );
   }
   if (selectedTemplateName === BuiltinTemplate.monorepo && isMonorepo) {
     prompts.log.info(
@@ -586,17 +635,19 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     }
   }
 
-  if (isBuiltinTemplate && (!targetDir || targetDir === '.')) {
+  const directScaffoldFallbackName = bundled
+    ? `vite-plus-${bundled.entryName}`
+    : selectedTemplateName === BuiltinTemplate.monorepo
+      ? 'vite-plus-monorepo'
+      : `vite-plus-${selectedTemplateName.split(':')[1]}`;
+
+  if (isDirectScaffoldTemplate && (!targetDir || targetDir === '.')) {
     if (targetDir === '.') {
       // Current directory: auto-derive package name from cwd, no prompt
-      const fallbackName =
-        selectedTemplateName === BuiltinTemplate.monorepo
-          ? 'vite-plus-monorepo'
-          : `vite-plus-${selectedTemplateName.split(':')[1]}`;
       packageName = deriveDefaultPackageName(
         cwd,
         workspaceInfoOptional.monorepoScope,
-        fallbackName,
+        directScaffoldFallbackName,
       );
       if (isMonorepo) {
         if (!cwdRelativeToRoot) {
@@ -631,7 +682,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     } else {
       const defaultPackageName = getRandomProjectName({
         scope: workspaceInfoOptional.monorepoScope,
-        fallbackName: `vite-plus-${selectedTemplateName.split(':')[1]}`,
+        fallbackName: directScaffoldFallbackName,
       });
       const selected = await promptPackageNameAndTargetDir(defaultPackageName, options.interactive);
       packageName = selected.packageName;
@@ -748,6 +799,8 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     selectedTemplateArgs,
     workspaceInfo,
     options.interactive,
+    bundled?.bundledLocalPath,
+    skipShorthandExpansion,
   );
 
   if (selectedParentDir) {
@@ -772,15 +825,39 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   // #endregion
 
   // #region Handle monorepo template
-  if (templateInfo.command === BuiltinTemplate.monorepo) {
+  if (templateInfo.command === BuiltinTemplate.monorepo || isBundledMonorepo) {
+    // Ask up-front so the prompt isn't buried under scaffold output.
+    let shouldInitGit = true;
+    if (options.interactive && !compactOutput) {
+      pauseCreateProgress();
+      const selected = await prompts.confirm({
+        message: 'Initialize git repository:',
+        initialValue: true,
+      });
+      resumeCreateProgress();
+      if (prompts.isCancel(selected)) {
+        prompts.log.info('Operation cancelled. Skipping git initialization');
+        shouldInitGit = false;
+      } else {
+        shouldInitGit = selected;
+      }
+    } else if (!compactOutput) {
+      prompts.log.info('Initializing git repository (default: yes)');
+    }
+
     updateCreateProgress('Creating monorepo');
     await checkProjectDirExists(path.join(workspaceInfo.rootDir, targetDir), options.interactive);
-    const result = await executeMonorepoTemplate(
-      workspaceInfo,
-      { ...templateInfo, packageName, targetDir },
-      options.interactive,
-      { silent: compactOutput },
-    );
+    const result = isBundledMonorepo
+      ? await executeBundledTemplate(workspaceInfo, {
+          ...templateInfo,
+          packageName,
+          targetDir,
+        })
+      : await executeMonorepoTemplate(
+          workspaceInfo,
+          { ...templateInfo, packageName, targetDir },
+          { silent: compactOutput },
+        );
     const { projectDir } = result;
     if (result.exitCode !== 0 || !projectDir) {
       failCreateProgress('Scaffolding failed');
@@ -789,6 +866,20 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
 
     // rewrite monorepo to add vite-plus dependencies
     const fullPath = path.join(workspaceInfo.rootDir, projectDir);
+    if (shouldInitGit) {
+      const gitResult = spawn.sync('git', ['init'], { stdio: 'pipe', cwd: fullPath });
+      if (gitResult.status === 0) {
+        if (!compactOutput) {
+          prompts.log.success('Git repository initialized');
+        }
+        ensureGitignoreNodeModules(fullPath);
+      } else {
+        prompts.log.warn('Failed to initialize git repository');
+        if (gitResult.stderr) {
+          prompts.log.info(gitResult.stderr.toString());
+        }
+      }
+    }
     updateCreateProgress('Writing agent instructions');
     pauseCreateProgress();
     await writeAgentInstructions({
@@ -811,6 +902,15 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     workspaceInfo.rootDir = fullPath;
     updateCreateProgress('Integrating monorepo');
     rewriteMonorepo(workspaceInfo, undefined, compactOutput);
+    if (bundled?.monorepo) {
+      // Wire `create.defaultTemplate: '<scope>'` into the new workspace's
+      // vite.config.ts so a bare `vp create` from inside it opens the
+      // same org's picker. Only triggers when the user just scaffolded
+      // from `vp create @scope:<entry>` — for builtin `vite:monorepo`,
+      // even a scoped package name doesn't imply the user wants that
+      // scope as their template default.
+      injectCreateDefaultTemplate(fullPath, bundled.scope, compactOutput);
+    }
     if (shouldSetupHooks) {
       installGitHooks(fullPath, compactOutput);
     }
@@ -836,7 +936,17 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   // #region Handle single project template
 
   let result: ExecutionResult;
-  if (templateInfo.type === TemplateType.builtin) {
+  if (templateInfo.type === TemplateType.bundled) {
+    pauseCreateProgress();
+    await checkProjectDirExists(path.join(workspaceInfo.rootDir, targetDir), options.interactive);
+    resumeCreateProgress();
+    updateCreateProgress('Copying template files');
+    result = await executeBundledTemplate(workspaceInfo, {
+      ...templateInfo,
+      packageName,
+      targetDir,
+    });
+  } else if (templateInfo.type === TemplateType.builtin) {
     // prompt for package name if not provided
     if (!targetDir) {
       const defaultPackageName = getRandomProjectName({

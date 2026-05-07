@@ -363,6 +363,10 @@ async function runTestCase(name: string, tempTmpDir: string, casesDir: string, b
     VP_SKIP_INSTALL: '1',
     // make sure npm install global packages to the temporary directory
     NPM_CONFIG_PREFIX: path.join(tempTmpDir, NPM_GLOBAL_PREFIX_DIR),
+    // Absolute path to the source casesDir, so fixtures can reference
+    // shared helper scripts under `<casesDir>/.shared/` without
+    // duplicating them into every fixture directory.
+    SNAP_CASES_DIR: casesDir,
 
     // A test case can override/unset environment variables above.
     // For example, VP_CLI_TEST/CI can be unset to test the real-world outputs.

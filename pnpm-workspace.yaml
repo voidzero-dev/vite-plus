@@ -78,6 +78,7 @@ catalog:
   minimatch: ^10.0.3
   mocha: ^11.7.5
   mri: ^1.2.0
+  nanotar: ^0.3.0
   next: ^15.4.3
   oxc-minify: =0.129.0
   oxc-parser: =0.129.0
@@ -162,6 +163,8 @@ minimumReleaseAgeExclude:
   - vitepress
   - vitest
   - vue-virtual-scroller
+  # Renovate security update: lodash-es@4.18.1
+  - lodash-es@4.18.1
 overrides:
   '@rolldown/pluginutils': workspace:@rolldown/pluginutils@*
   rolldown: workspace:rolldown@*

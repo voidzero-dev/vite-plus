@@ -196,8 +196,8 @@ async fn run_corrected_args(cwd: &vite_path::AbsolutePathBuf, raw_args: &[String
     match run_command_with_options(cwd.clone(), parsed, render_options).await {
         Ok(exit_status) => exit_status_to_exit_code(exit_status),
         Err(e) => {
-            if matches!(&e, error::Error::UserMessage(_)) {
-                eprintln!("{e}");
+            if e.is_user_message() {
+                output::raw_stderr(&format!("{e}"));
             } else {
                 output::error(&format!("{e}"));
             }
@@ -395,8 +395,8 @@ async fn main() -> ExitCode {
         Ok(args) => match run_command(cwd.clone(), args).await {
             Ok(exit_status) => exit_status_to_exit_code(exit_status),
             Err(e) => {
-                if matches!(&e, error::Error::UserMessage(_)) {
-                    eprintln!("{e}");
+                if e.is_user_message() {
+                    output::raw_stderr(&format!("{e}"));
                 } else {
                     output::error(&format!("{e}"));
                 }

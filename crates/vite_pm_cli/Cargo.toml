@@ -1,0 +1,24 @@
+[package]
+name = "vite_pm_cli"
+version = "0.0.0"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+rust-version.workspace = true
+
+[dependencies]
+clap = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["fs", "process", "rt", "macros"] }
+tracing = { workspace = true }
+vite_command = { workspace = true }
+vite_error = { workspace = true }
+vite_install = { workspace = true }
+vite_path = { workspace = true }
+vite_str = { workspace = true }
+vite_workspace = { workspace = true }
+
+[lints]
+workspace = true

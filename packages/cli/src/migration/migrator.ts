@@ -2001,6 +2001,33 @@ export function injectFmtDefaults(
   );
 }
 
+/**
+ * Wire `create.defaultTemplate: '<scope>'` into the new monorepo's
+ * `vite.config.ts`. The caller is `bin.ts`, only when scaffolding a
+ * monorepo from a bundled `@org` manifest entry — that's the case where
+ * the user just picked a template from a specific org and naturally
+ * wants subsequent `vp create` invocations from the workspace to default
+ * to that same org's picker.
+ */
+export function injectCreateDefaultTemplate(
+  projectPath: string,
+  scope: string,
+  silent = false,
+  report?: MigrationReport,
+): void {
+  if (!scope) {
+    return;
+  }
+  injectConfigDefaults(
+    projectPath,
+    'create',
+    '.vite-plus-create-init.json',
+    JSON.stringify({ defaultTemplate: scope }),
+    silent,
+    report,
+  );
+}
+
 function injectConfigDefaults(
   projectPath: string,
   configKey: string,

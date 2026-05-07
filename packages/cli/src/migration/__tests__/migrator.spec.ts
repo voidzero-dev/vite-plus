@@ -26,6 +26,7 @@ const {
   detectFramework,
   hasFrameworkShim,
   addFrameworkShim,
+  injectCreateDefaultTemplate,
 } = await import('../migrator.js');
 
 describe('rewritePackageJson', () => {
@@ -1336,6 +1337,49 @@ describe('framework shim', () => {
       const content = fs.readFileSync(path.join(tmpDir, 'src', 'env.d.ts'), 'utf-8');
       expect(content).toContain("declare module '*.vue'");
       expect(content).toContain('/// <reference types="astro/client" />');
+    });
+  });
+
+  describe('injectCreateDefaultTemplate', () => {
+    let tmpDir: string;
+
+    beforeEach(() => {
+      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-migrator-create-default-'));
+    });
+
+    afterEach(() => {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    });
+
+    function writeViteConfig(body: string): void {
+      fs.writeFileSync(
+        path.join(tmpDir, 'vite.config.ts'),
+        `import { defineConfig } from 'vite-plus';\n\nexport default defineConfig(${body});\n`,
+      );
+    }
+
+    it('injects `create.defaultTemplate` when scope is set and no `create:` exists', () => {
+      writeViteConfig('{ run: { cache: true } }');
+      injectCreateDefaultTemplate(tmpDir, '@your-org', true);
+      const content = fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf-8');
+      expect(content).toContain('create:');
+      expect(content).toContain('"defaultTemplate":"@your-org"');
+    });
+
+    it('skips injection when scope is empty (no scope to default to)', () => {
+      writeViteConfig('{ run: { cache: true } }');
+      injectCreateDefaultTemplate(tmpDir, '', true);
+      const content = fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf-8');
+      expect(content).not.toContain('create:');
+      expect(content).not.toContain('defaultTemplate');
+    });
+
+    it('preserves an existing `create:` block instead of overwriting it', () => {
+      writeViteConfig("{ create: { defaultTemplate: '@other' }, run: { cache: true } }");
+      injectCreateDefaultTemplate(tmpDir, '@your-org', true);
+      const content = fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf-8');
+      expect(content).toContain("'@other'");
+      expect(content).not.toContain('@your-org');
     });
   });
 });

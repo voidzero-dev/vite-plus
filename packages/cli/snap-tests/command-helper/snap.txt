@@ -2,6 +2,8 @@
 Usage: vp <COMMAND>
 
 Core Commands:
+  create         Create a new project from a template
+  migrate        Migrate an existing project to Vite+
   dev            Run the development server
   build          Build for production
   test           Run tests

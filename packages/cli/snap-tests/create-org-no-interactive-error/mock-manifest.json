@@ -1,0 +1,29 @@
+{
+  "@your-org/create": {
+    "name": "@your-org/create",
+    "dist-tags": { "latest": "1.0.0" },
+    "versions": {
+      "1.0.0": {
+        "version": "1.0.0",
+        "dist": {
+          "tarball": "http://placeholder/@your-org/create/-/create-1.0.0.tgz",
+          "integrity": "sha512-fake"
+        },
+        "createConfig": {
+          "templates": [
+            {
+              "name": "web",
+              "description": "Web app template",
+              "template": "@your-org/template-web"
+            },
+            {
+              "name": "library",
+              "description": "TypeScript library template",
+              "template": "@your-org/template-library"
+            }
+          ]
+        }
+      }
+    }
+  }
+}
