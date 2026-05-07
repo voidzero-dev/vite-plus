@@ -20,6 +20,12 @@
 //! execution semantics for unrelated commands or bypass execution
 //! policies on locked-down hosts.
 //!
+//! The rewrite is also skipped when stdin is not a terminal. The
+//! `pnpm`/`npm`/`yarn` `.ps1` wrappers introspect stdin (e.g.
+//! `$MyInvocation.ExpectingInput`) and hang when stdin is piped or
+//! null; in that environment there is no terminal to corrupt with the
+//! Ctrl+C prompt anyway, so falling back to `.cmd` is strictly safer.
+//!
 //! See <https://github.com/voidzero-dev/vite-plus/issues/1489>
 //! and <https://github.com/voidzero-dev/vite-plus/issues/1176>.
 
@@ -38,6 +44,8 @@ use vite_powershell::{POWERSHELL_PREFIX, find_ps1_sibling, powershell_host};
 /// Returns `None` when:
 /// - not on Windows,
 /// - no PowerShell host (`pwsh.exe` or `powershell.exe`) is on PATH,
+/// - stdin is not a terminal (the `.ps1` wrappers hang on piped/null
+///   stdin and the Ctrl+C concern doesn't apply without a TTY),
 /// - the resolved path is outside `$VP_HOME` (or `$VP_HOME` is
 ///   unresolvable) AND not under any `node_modules/.bin/`,
 /// - the resolved path is not a `.cmd` (case-insensitive),
@@ -47,7 +55,18 @@ pub fn rewrite_cmd_to_powershell(
     resolved: &AbsolutePath,
 ) -> Option<(AbsolutePathBuf, Vec<OsString>)> {
     let host = powershell_host()?;
-    rewrite_in_scope(resolved, vp_home().map(AsRef::as_ref), host)
+    rewrite_in_scope(resolved, vp_home().map(AsRef::as_ref), host, is_stdin_terminal())
+}
+
+/// Cached `stdin.is_terminal()`. The TTY-ness of the parent's stdin
+/// is fixed for the process lifetime, and `build_command` always
+/// inherits stdin into spawned children — so a TTY here means a TTY
+/// in the child too.
+fn is_stdin_terminal() -> bool {
+    use std::{io::IsTerminal, sync::LazyLock};
+
+    static IS_TTY: LazyLock<bool> = LazyLock::new(|| std::io::stdin().is_terminal());
+    *IS_TTY
 }
 
 /// Cached `$VP_HOME` (`~/.vite-plus` by default; overridable via env var).
@@ -68,7 +87,11 @@ fn rewrite_in_scope(
     resolved: &AbsolutePath,
     vp_home: Option<&AbsolutePath>,
     host: &AbsolutePath,
+    is_interactive: bool,
 ) -> Option<(AbsolutePathBuf, Vec<OsString>)> {
+    if !is_interactive {
+        return None;
+    }
     if !is_in_managed_scope(resolved, vp_home) {
         return None;
     }
@@ -138,7 +161,7 @@ mod tests {
         let resolved = abs(bin_dir.join("npm.cmd"));
 
         let (program, prefix_args) =
-            rewrite_in_scope(&resolved, Some(&vp_home), &host).expect("should rewrite");
+            rewrite_in_scope(&resolved, Some(&vp_home), &host, true).expect("should rewrite");
 
         assert_eq!(program.as_path(), host.as_path());
         let as_strs: Vec<&str> = prefix_args.iter().filter_map(|a| a.to_str()).collect();
@@ -170,8 +193,30 @@ mod tests {
         let host = host_buf(&root);
         let resolved = abs(bin.join("vite.cmd"));
 
-        let result = rewrite_in_scope(&resolved, Some(&vp_home), &host);
+        let result = rewrite_in_scope(&resolved, Some(&vp_home), &host, true);
         assert!(result.is_some(), "any node_modules/.bin/*.cmd must rewrite");
+    }
+
+    /// `pnpm`/`npm`/`yarn` `.ps1` wrappers introspect stdin and hang
+    /// when stdin is piped or null (CI, snap tests, scripted invocations).
+    /// In that environment the rewrite is unwanted; the spawn falls back
+    /// to `.cmd` directly.
+    #[test]
+    fn skips_rewrite_when_not_interactive() {
+        let dir = tempdir().unwrap();
+        let root = abs(dir.path().canonicalize().unwrap());
+        let bin = root.as_path().join("my-project").join("node_modules").join(".bin");
+        fs::create_dir_all(&bin).unwrap();
+        fs::write(bin.join("vite.cmd"), "").unwrap();
+        fs::write(bin.join("vite.ps1"), "").unwrap();
+
+        let host = host_buf(&root);
+        let resolved = abs(bin.join("vite.cmd"));
+
+        assert!(
+            rewrite_in_scope(&resolved, None, &host, false).is_none(),
+            "non-interactive spawns must not be rewritten through PowerShell"
+        );
     }
 
     /// `vp_home` may be unresolvable in unusual environments (CI containers
@@ -191,7 +236,7 @@ mod tests {
         let resolved = abs(bin.join("vite.cmd"));
 
         assert!(
-            rewrite_in_scope(&resolved, None, &host).is_some(),
+            rewrite_in_scope(&resolved, None, &host, true).is_some(),
             "node_modules/.bin must rewrite even without a resolvable vp_home"
         );
     }
@@ -214,7 +259,7 @@ mod tests {
         let host = host_buf(&root);
         let resolved = abs(bin.join("vite.cmd"));
 
-        assert!(rewrite_in_scope(&resolved, Some(&vp_home), &host).is_some());
+        assert!(rewrite_in_scope(&resolved, Some(&vp_home), &host, true).is_some());
     }
 
     /// A `.cmd`+`.ps1` pair outside `$VP_HOME` AND outside any
@@ -237,7 +282,7 @@ mod tests {
         let resolved = abs(outside_bin.join("foo.cmd"));
 
         assert!(
-            rewrite_in_scope(&resolved, Some(&vp_home), &host).is_none(),
+            rewrite_in_scope(&resolved, Some(&vp_home), &host, true).is_none(),
             "rewrite must stay hands-off for .cmd outside both vp_home and node_modules/.bin"
         );
     }
@@ -251,6 +296,6 @@ mod tests {
         let host = host_buf(&vp_home);
         let resolved = abs(vp_home.as_path().join("npm.cmd"));
 
-        assert!(rewrite_in_scope(&resolved, Some(&vp_home), &host).is_none());
+        assert!(rewrite_in_scope(&resolved, Some(&vp_home), &host, true).is_none());
     }
 }
