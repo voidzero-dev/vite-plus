@@ -689,7 +689,24 @@ jobs:
 
       - name: Run targeted snap test (new-create-vite-migrates-eslint-prettier)
         shell: bash
+        # TEMP DEBUG: override TEMP/TMP to point at the Dev Drive (ReFS).
+        # Hypothesis: NTFS-on-C: preserves the junction-target backslashes
+        # when Node walks pnpm's reparse points, which produces the mixed
+        # `\` / `/` path that breaks `#module-sync-enabled` resolution.
+        # ReFS-on-D: doesn't. The manual repro on D:\a\_temp succeeds, the
+        # snap test on C:\Users\...\AppData\Local\Temp fails — same code,
+        # same Node, same pnpm. Forcing TEMP onto the Dev Drive should
+        # confirm the filesystem hypothesis.
+        env:
+          RUST_MIN_STACK: 8388608
+          TEMP: ${{ runner.os == 'Windows' && format('{0}\Temp', env.DEV_DRIVE) || '' }}
+          TMP: ${{ runner.os == 'Windows' && format('{0}\Temp', env.DEV_DRIVE) || '' }}
         run: |
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            mkdir -p "$TEMP"
+            echo "TEMP set to: $TEMP"
+            echo "TMP  set to: $TMP"
+          fi
           set +e
           RUST_BACKTRACE=full pnpm -F ./packages/cli snap-test-global new-create-vite-migrates-eslint-prettier
           status=$?
@@ -704,8 +721,6 @@ jobs:
           fi
           # Test passed cleanly — skip the manual repro below.
           touch /tmp/snap-test-passed
-        env:
-          RUST_MIN_STACK: 8388608
 
       - name: Debug reproduction (manual vp create + vp fmt)
         if: ${{ !cancelled() }}
