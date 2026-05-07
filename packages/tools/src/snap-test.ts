@@ -586,6 +586,10 @@ async function runTestCase(
     VP_SKIP_INSTALL: '1',
     // make sure npm install global packages to the temporary directory
     NPM_CONFIG_PREFIX: path.join(tempTmpDir, NPM_GLOBAL_PREFIX_DIR),
+    // Absolute path to the source casesDir, so fixtures can reference
+    // shared helper scripts under `<casesDir>/.shared/` without
+    // duplicating them into every fixture directory.
+    SNAP_CASES_DIR: casesDir,
     // Global CLI snap tests execute the Rust binary from --bin-dir, but the JS
     // entry should come from this checkout instead of a stale ~/.vite-plus install.
     ...(globalCliScriptsDir ? { VITE_GLOBAL_CLI_JS_SCRIPTS_DIR: globalCliScriptsDir } : {}),
