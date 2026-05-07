@@ -716,21 +716,25 @@ jobs:
             echo "Snap test passed; skipping debug repro."
             exit 0
           fi
+
+          # IMPORTANT: do NOT use `set -e`. We want every diagnostic group
+          # to run independently so one failing line can't mask the rest.
+          set +e
           set -x
+
           repro_dir="${RUNNER_TEMP}/vp-debug-repro"
           rm -rf "$repro_dir"
           mkdir -p "$repro_dir"
           cd "$repro_dir"
+          repro_dir_abs="$(pwd)"
 
           # Reproduce the exact failing flow.
           cat > package.json <<'JSON'
           { "name": "new-create-vite-migrates-eslint-prettier", "private": true }
           JSON
 
-          set +e
           vp create vite@9.0.5 --no-interactive -- my-react-ts --template react-ts
           create_status=$?
-          set -e
           echo "vp create exit: $create_status"
 
           if [ ! -d my-react-ts ]; then
@@ -738,12 +742,14 @@ jobs:
             exit 1
           fi
 
+          my_react_ts_abs="$repro_dir_abs/my-react-ts"
+
           echo "::group::my-react-ts/package.json"
           cat my-react-ts/package.json
           echo "::endgroup::"
 
           echo "::group::my-react-ts/vite.config.ts (post-migrate, pre-fmt or unformatted on failure)"
-          cat my-react-ts/vite.config.ts || true
+          cat my-react-ts/vite.config.ts
           echo "::endgroup::"
 
           echo "::group::pnpm layout for vite-plus-core"
@@ -755,44 +761,82 @@ jobs:
 
           echo "::group::vite-plus-core package.json (#module-sync-enabled imports check)"
           while IFS= read -r d; do
-            pkg="$d/node_modules/@voidzero-dev/vite-plus-core/package.json"
-            if [ -f "$pkg" ]; then
-              echo "--- $pkg ---"
-              cat "$pkg"
-              echo ""
-              echo "(imports field via node):"
-              node -e "const p = require('$pkg'); console.log(JSON.stringify(p.imports || null, null, 2));"
+            # Build absolute path so node -e and require() both work cleanly.
+            pkg_rel="$d/node_modules/@voidzero-dev/vite-plus-core/package.json"
+            pkg_abs="$repro_dir_abs/$pkg_rel"
+            if [ -f "$pkg_abs" ]; then
+              echo "--- $pkg_rel ---"
+              echo "(imports field via node, absolute path: $pkg_abs):"
+              node -e "const p = require(process.argv[1]); console.log(JSON.stringify(p.imports || null, null, 2));" "$pkg_abs"
             fi
           done < /tmp/vite-plus-core-pnpm-dirs.txt
           echo "::endgroup::"
 
           echo "::group::Locate the file that imports #module-sync-enabled"
-          grep -rln "module-sync-enabled" my-react-ts/node_modules/.pnpm 2>/dev/null | head -10 || true
+          grep -rln "module-sync-enabled" my-react-ts/node_modules/.pnpm 2>/dev/null | head -20
+          echo "::endgroup::"
+
+          echo "::group::Print 5 lines around the #module-sync-enabled import in chunks/node.js"
+          chunk_rel=$(grep -rln "module-sync-enabled" my-react-ts/node_modules/.pnpm 2>/dev/null | grep "vite-plus-core/dist/vite/node/chunks/node.js" | head -1)
+          echo "chunk_rel=$chunk_rel"
+          if [ -n "$chunk_rel" ]; then
+            grep -n "module-sync-enabled\|#module" "$chunk_rel" || true
+          fi
+          echo "::endgroup::"
+
+          echo "::group::Resolve 'vite-plus' from inside my-react-ts (what Node sees as importer chain)"
+          # Walk Node's resolution from my-react-ts, then chase down to the
+          # vite-plus-core chunks/node.js to see the actual realpath/import.meta.url.
+          node -e "
+            const path=require('path');
+            const Module=require('module');
+            const cwd=process.argv[1];
+            const m=Module.createRequire(path.join(cwd, 'package.json'));
+            try {
+              const p=m.resolve('vite-plus');
+              console.log('vite-plus resolved to:', p);
+              console.log('realpath:', require('fs').realpathSync(p));
+            } catch (e) { console.error('resolve error:', e); }
+          " "$my_react_ts_abs"
           echo "::endgroup::"
 
           echo "::group::Manual vp fmt --write reproduction with verbose Node logging"
-          cd my-react-ts
-          set +e
-          NODE_OPTIONS='--trace-warnings --enable-source-maps' RUST_BACKTRACE=full \
-            vp fmt --write 2>&1 | tee /tmp/vp-fmt-output.txt
-          fmt_status=$?
-          set -e
-          echo "vp fmt exit: $fmt_status"
+          (
+            cd my-react-ts
+            NODE_OPTIONS='--trace-warnings --enable-source-maps' RUST_BACKTRACE=full \
+              vp fmt --write 2>&1 | tee /tmp/vp-fmt-output.txt
+            echo "vp fmt exit: ${PIPESTATUS[0]}"
+          )
           echo "::endgroup::"
 
-          echo "::group::Direct Node import attempt (bypass vp.exe)"
-          # Try the same import that the resolver does, with full path normalization,
-          # to see Node's raw stack trace and which package.json it walks up to.
-          set +e
-          file=$(grep -rln "module-sync-enabled" node_modules/.pnpm 2>/dev/null | grep "vite-plus-core/dist/vite/node/chunks/node.js" | head -1)
-          echo "Importer file: $file"
-          if [ -n "$file" ]; then
-            absfile=$(cd "$(dirname "$file")" && pwd -W 2>/dev/null || cd "$(dirname "$file")" && pwd)/$(basename "$file")
-            echo "Absolute path (mixed-sep test): $absfile"
+          echo "::group::Direct Node ESM import of chunks/node.js (bypass vp.exe — surfaces raw stack)"
+          # Try the same import that the resolver does, with the absolute path,
+          # so we see Node's raw stack trace and which package.json it walks up to.
+          if [ -n "$chunk_rel" ]; then
+            absfile="$repro_dir_abs/$chunk_rel"
+            echo "Absolute path: $absfile"
+            # Build a file:// URL that Node accepts on Windows. On bash-on-Windows
+            # the path may begin with /c/... — convert to C:/...
+            url=$(node -e "console.log(require('url').pathToFileURL(process.argv[1]).href)" "$absfile")
+            echo "file URL: $url"
             NODE_OPTIONS='--trace-warnings --enable-source-maps' \
-              node --input-type=module -e "import('file://$absfile').then(() => console.log('OK')).catch(e => { console.error(e); process.exit(1); })"
+              node --input-type=module -e "import(process.argv[1]).then(() => console.log('IMPORT OK')).catch(e => { console.error('IMPORT FAILED:', e); process.exit(1); })" "$url"
+          else
+            echo "(no chunks/node.js found — skip)"
           fi
-          set -e
+          echo "::endgroup::"
+
+          echo "::group::Try the same import with both pnpm symlink path AND realpath"
+          # The pnpm layout uses a symlink/junction at <my-react-ts>/node_modules/vite-plus-core
+          # → real path under .pnpm/<truncated>/node_modules/<scope>/<pkg>. Some Node
+          # versions resolve subpath imports using one or the other; print both.
+          if [ -d my-react-ts/node_modules/@voidzero-dev/vite-plus-core ]; then
+            echo "symlink path:"
+            ls -la my-react-ts/node_modules/@voidzero-dev/vite-plus-core 2>&1 | head -5
+            echo "realpath:"
+            node -e "console.log(require('fs').realpathSync(process.argv[1]))" \
+              "$my_react_ts_abs/node_modules/@voidzero-dev/vite-plus-core"
+          fi
           echo "::endgroup::"
 
           # Always exit non-zero so we surface the failure in CI.
