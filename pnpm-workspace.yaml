@@ -162,6 +162,8 @@ minimumReleaseAgeExclude:
   - vitepress
   - vitest
   - vue-virtual-scroller
+  # Renovate security update: lodash-es@4.18.1
+  - lodash-es@4.18.1
 overrides:
   '@rolldown/pluginutils': workspace:@rolldown/pluginutils@*
   rolldown: workspace:rolldown@*
