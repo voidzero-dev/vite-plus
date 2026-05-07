@@ -38,9 +38,8 @@ use vite_powershell::{POWERSHELL_PREFIX, find_ps1_sibling, powershell_host};
 /// Returns `None` when:
 /// - not on Windows,
 /// - no PowerShell host (`pwsh.exe` or `powershell.exe`) is on PATH,
-/// - `$VP_HOME` could not be resolved,
-/// - the resolved path is outside `$VP_HOME` AND not under any
-///   `node_modules/.bin/`,
+/// - the resolved path is outside `$VP_HOME` (or `$VP_HOME` is
+///   unresolvable) AND not under any `node_modules/.bin/`,
 /// - the resolved path is not a `.cmd` (case-insensitive),
 /// - the `.cmd` has no sibling `.ps1`.
 #[must_use]
@@ -48,14 +47,13 @@ pub fn rewrite_cmd_to_powershell(
     resolved: &AbsolutePath,
 ) -> Option<(AbsolutePathBuf, Vec<OsString>)> {
     let host = powershell_host()?;
-    let vp_home = vp_home()?;
-    rewrite_in_scope(resolved, vp_home, host)
+    rewrite_in_scope(resolved, vp_home().map(AsRef::as_ref), host)
 }
 
 /// Cached `$VP_HOME` (`~/.vite-plus` by default; overridable via env var).
-/// `None` only if `vite_shared::get_vp_home()` failed to resolve a home —
-/// in that case we conservatively skip the rewrite rather than retarget
-/// arbitrary PATH commands.
+/// Returns `None` if `vite_shared::get_vp_home()` failed; the rewrite still
+/// applies to `node_modules/.bin/*.cmd` paths in that case (the two scopes
+/// are independent).
 fn vp_home() -> Option<&'static AbsolutePathBuf> {
     use std::sync::LazyLock;
 
@@ -68,7 +66,7 @@ fn vp_home() -> Option<&'static AbsolutePathBuf> {
 /// without depending on a real `powershell.exe` or a real `$VP_HOME`.
 fn rewrite_in_scope(
     resolved: &AbsolutePath,
-    vp_home: &AbsolutePath,
+    vp_home: Option<&AbsolutePath>,
     host: &AbsolutePath,
 ) -> Option<(AbsolutePathBuf, Vec<OsString>)> {
     if !is_in_managed_scope(resolved, vp_home) {
@@ -90,8 +88,9 @@ fn rewrite_in_scope(
     Some((host.to_absolute_path_buf(), prefix_args))
 }
 
-fn is_in_managed_scope(resolved: &AbsolutePath, vp_home: &AbsolutePath) -> bool {
-    resolved.as_path().starts_with(vp_home.as_path()) || is_in_node_modules_bin(resolved)
+fn is_in_managed_scope(resolved: &AbsolutePath, vp_home: Option<&AbsolutePath>) -> bool {
+    let in_vp_home = vp_home.is_some_and(|home| resolved.as_path().starts_with(home.as_path()));
+    in_vp_home || is_in_node_modules_bin(resolved)
 }
 
 /// `true` when `resolved` is `<...>/node_modules/.bin/<file>` (matched
@@ -139,7 +138,7 @@ mod tests {
         let resolved = abs(bin_dir.join("npm.cmd"));
 
         let (program, prefix_args) =
-            rewrite_in_scope(&resolved, &vp_home, &host).expect("should rewrite");
+            rewrite_in_scope(&resolved, Some(&vp_home), &host).expect("should rewrite");
 
         assert_eq!(program.as_path(), host.as_path());
         let as_strs: Vec<&str> = prefix_args.iter().filter_map(|a| a.to_str()).collect();
@@ -171,8 +170,30 @@ mod tests {
         let host = host_buf(&root);
         let resolved = abs(bin.join("vite.cmd"));
 
-        let result = rewrite_in_scope(&resolved, &vp_home, &host);
+        let result = rewrite_in_scope(&resolved, Some(&vp_home), &host);
         assert!(result.is_some(), "any node_modules/.bin/*.cmd must rewrite");
+    }
+
+    /// `vp_home` may be unresolvable in unusual environments (CI containers
+    /// missing $HOME, sandboxed shells); when that happens the
+    /// `node_modules/.bin` scope must still rewrite, since it is
+    /// architecturally independent from the `$VP_HOME` scope.
+    #[test]
+    fn rewrites_cmd_in_node_modules_bin_when_vp_home_unresolved() {
+        let dir = tempdir().unwrap();
+        let root = abs(dir.path().canonicalize().unwrap());
+        let bin = root.as_path().join("my-project").join("node_modules").join(".bin");
+        fs::create_dir_all(&bin).unwrap();
+        fs::write(bin.join("vite.cmd"), "").unwrap();
+        fs::write(bin.join("vite.ps1"), "").unwrap();
+
+        let host = host_buf(&root);
+        let resolved = abs(bin.join("vite.cmd"));
+
+        assert!(
+            rewrite_in_scope(&resolved, None, &host).is_some(),
+            "node_modules/.bin must rewrite even without a resolvable vp_home"
+        );
     }
 
     /// The `.bin`/`node_modules` component check is case-insensitive so
@@ -193,7 +214,7 @@ mod tests {
         let host = host_buf(&root);
         let resolved = abs(bin.join("vite.cmd"));
 
-        assert!(rewrite_in_scope(&resolved, &vp_home, &host).is_some());
+        assert!(rewrite_in_scope(&resolved, Some(&vp_home), &host).is_some());
     }
 
     /// A `.cmd`+`.ps1` pair outside `$VP_HOME` AND outside any
@@ -216,7 +237,7 @@ mod tests {
         let resolved = abs(outside_bin.join("foo.cmd"));
 
         assert!(
-            rewrite_in_scope(&resolved, &vp_home, &host).is_none(),
+            rewrite_in_scope(&resolved, Some(&vp_home), &host).is_none(),
             "rewrite must stay hands-off for .cmd outside both vp_home and node_modules/.bin"
         );
     }
@@ -230,6 +251,6 @@ mod tests {
         let host = host_buf(&vp_home);
         let resolved = abs(vp_home.as_path().join("npm.cmd"));
 
-        assert!(rewrite_in_scope(&resolved, &vp_home, &host).is_none());
+        assert!(rewrite_in_scope(&resolved, Some(&vp_home), &host).is_none());
     }
 }
