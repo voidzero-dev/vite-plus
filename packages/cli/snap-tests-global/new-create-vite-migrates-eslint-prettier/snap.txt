@@ -9,6 +9,9 @@ pnpm@<semver> installed
 Generating project…
 
 Running: pnpm dlx create-vite@<semver> my-react-ts --template react-ts --no-immediate --no-rolldown
+Packages: +<variable>
++
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 │
 ◇  Scaffolding project in <cwd>/my-react-ts...
 │

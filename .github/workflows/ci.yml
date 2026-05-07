@@ -615,11 +615,39 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # TEMP: matrix trimmed to only the failing combo
-        # (windows-latest × shard 3/3) to speed up debug iteration on
-        # `new-create-vite-migrates-eslint-prettier`. Revert this block to
-        # the full 3-OS × 3-shard grid before merging.
         include:
+          - os: namespace-profile-linux-x64-default
+            target: x86_64-unknown-linux-gnu
+            shard: 1
+            shardTotal: 3
+          - os: namespace-profile-linux-x64-default
+            target: x86_64-unknown-linux-gnu
+            shard: 2
+            shardTotal: 3
+          - os: namespace-profile-linux-x64-default
+            target: x86_64-unknown-linux-gnu
+            shard: 3
+            shardTotal: 3
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            shard: 1
+            shardTotal: 3
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            shard: 2
+            shardTotal: 3
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            shard: 3
+            shardTotal: 3
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            shard: 1
+            shardTotal: 3
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            shard: 2
+            shardTotal: 3
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             shard: 3
@@ -635,9 +663,20 @@ jobs:
         with:
           drive-size: 12GB
           drive-format: ReFS
+          # Route TEMP/TMP onto the Dev Drive (ReFS) so `tmpdir()` from
+          # `packages/tools/src/snap-test.ts` lives on a filesystem that
+          # cleanly resolves pnpm's junction reparse points. NTFS-on-C:
+          # preserves the junction-target backslashes during resolution,
+          # which produces mixed `\` / `/` paths that break Node's ESM
+          # subpath-import walk-up (`#module-sync-enabled` inside
+          # `@voidzero-dev/vite-plus-core` → `ERR_PACKAGE_IMPORT_NOT_DEFINED`
+          # during `vp fmt --write` in the
+          # `new-create-vite-migrates-eslint-prettier` snap test).
           env-mapping: |
             CARGO_HOME,{{ DEV_DRIVE }}/.cargo
             RUSTUP_HOME,{{ DEV_DRIVE }}/.rustup
+            TEMP,{{ DEV_DRIVE }}/Temp
+            TMP,{{ DEV_DRIVE }}/Temp
 
       - uses: oxc-project/setup-rust@23f38cfb0c04af97a055f76acee94d5be71c7c82 # v1.0.16
         with:
@@ -670,192 +709,11 @@ jobs:
             echo "$HOME/.vite-plus/bin" >> $GITHUB_PATH
           fi
 
-      # TEMP: replaced full snap-test run with a single targeted test for
-      # debugging `new-create-vite-migrates-eslint-prettier` failure on
-      # Windows. Revert before merging.
-      - name: Toolchain versions
-        shell: bash
+      - name: Run CLI snapshot tests (shard ${{ matrix.shard }}/${{ matrix.shardTotal }})
         run: |
-          echo "::group::Versions"
-          node --version
-          pnpm --version
-          which node && which pnpm
-          vp --version || true
-          vp env doctor || true
-          if [[ "$RUNNER_OS" == "Windows" ]]; then
-            powershell -NoProfile -Command "[Environment]::OSVersion.VersionString"
-          fi
-          echo "::endgroup::"
-
-      - name: Run targeted snap test (new-create-vite-migrates-eslint-prettier)
-        shell: bash
-        # TEMP DEBUG: override TEMP/TMP to point at the Dev Drive (ReFS).
-        # Hypothesis: NTFS-on-C: preserves the junction-target backslashes
-        # when Node walks pnpm's reparse points, which produces the mixed
-        # `\` / `/` path that breaks `#module-sync-enabled` resolution.
-        # ReFS-on-D: doesn't. The manual repro on D:\a\_temp succeeds, the
-        # snap test on C:\Users\...\AppData\Local\Temp fails — same code,
-        # same Node, same pnpm. Forcing TEMP onto the Dev Drive should
-        # confirm the filesystem hypothesis.
-        env:
-          RUST_MIN_STACK: 8388608
-          TEMP: ${{ runner.os == 'Windows' && format('{0}\Temp', env.DEV_DRIVE) || '' }}
-          TMP: ${{ runner.os == 'Windows' && format('{0}\Temp', env.DEV_DRIVE) || '' }}
-        run: |
-          if [[ "$RUNNER_OS" == "Windows" ]]; then
-            mkdir -p "$TEMP"
-            echo "TEMP set to: $TEMP"
-            echo "TMP  set to: $TMP"
-          fi
-          set +e
-          RUST_BACKTRACE=full pnpm -F ./packages/cli snap-test-global new-create-vite-migrates-eslint-prettier
-          status=$?
-          echo "::group::snap.txt diff (if any)"
-          git diff -- 'packages/cli/snap-tests-global/new-create-vite-migrates-eslint-prettier/snap.txt' || true
-          echo "::endgroup::"
-          # Exit non-zero if either the snap-test process failed OR the
-          # snap.txt diverged from the committed snapshot.
-          if [ $status -ne 0 ] || ! git diff --quiet -- 'packages/cli/snap-tests-global/new-create-vite-migrates-eslint-prettier/snap.txt'; then
-            echo "::warning::Snap test failed; running debug reproduction below."
-            exit 0
-          fi
-          # Test passed cleanly — skip the manual repro below.
-          touch /tmp/snap-test-passed
-
-      - name: Debug reproduction (manual vp create + vp fmt)
-        if: ${{ !cancelled() }}
-        shell: bash
-        run: |
-          # Skip if the targeted snap test already passed.
-          if [ -f /tmp/snap-test-passed ]; then
-            echo "Snap test passed; skipping debug repro."
-            exit 0
-          fi
-
-          # IMPORTANT: do NOT use `set -e`. We want every diagnostic group
-          # to run independently so one failing line can't mask the rest.
-          set +e
-          set -x
-
-          repro_dir="${RUNNER_TEMP}/vp-debug-repro"
-          rm -rf "$repro_dir"
-          mkdir -p "$repro_dir"
-          cd "$repro_dir"
-          repro_dir_abs="$(pwd)"
-
-          # Reproduce the exact failing flow.
-          cat > package.json <<'JSON'
-          { "name": "new-create-vite-migrates-eslint-prettier", "private": true }
-          JSON
-
-          vp create vite@9.0.5 --no-interactive -- my-react-ts --template react-ts
-          create_status=$?
-          echo "vp create exit: $create_status"
-
-          if [ ! -d my-react-ts ]; then
-            echo "::error::my-react-ts not created — vp create itself failed"
-            exit 1
-          fi
-
-          my_react_ts_abs="$repro_dir_abs/my-react-ts"
-
-          echo "::group::my-react-ts/package.json"
-          cat my-react-ts/package.json
-          echo "::endgroup::"
-
-          echo "::group::my-react-ts/vite.config.ts (post-migrate, pre-fmt or unformatted on failure)"
-          cat my-react-ts/vite.config.ts
-          echo "::endgroup::"
-
-          echo "::group::pnpm layout for vite-plus-core"
-          # Find any .pnpm dirs that house vite-plus-core (truncated names included).
-          find my-react-ts/node_modules/.pnpm -maxdepth 1 -type d \
-            \( -name '*vite-plus-cor*' -o -name '*vite-plus-core*' \) 2>/dev/null \
-            | tee /tmp/vite-plus-core-pnpm-dirs.txt
-          echo "::endgroup::"
-
-          echo "::group::vite-plus-core package.json (#module-sync-enabled imports check)"
-          while IFS= read -r d; do
-            # Build absolute path so node -e and require() both work cleanly.
-            pkg_rel="$d/node_modules/@voidzero-dev/vite-plus-core/package.json"
-            pkg_abs="$repro_dir_abs/$pkg_rel"
-            if [ -f "$pkg_abs" ]; then
-              echo "--- $pkg_rel ---"
-              echo "(imports field via node, absolute path: $pkg_abs):"
-              node -e "const p = require(process.argv[1]); console.log(JSON.stringify(p.imports || null, null, 2));" "$pkg_abs"
-            fi
-          done < /tmp/vite-plus-core-pnpm-dirs.txt
-          echo "::endgroup::"
-
-          echo "::group::Locate the file that imports #module-sync-enabled"
-          grep -rln "module-sync-enabled" my-react-ts/node_modules/.pnpm 2>/dev/null | head -20
-          echo "::endgroup::"
-
-          echo "::group::Print 5 lines around the #module-sync-enabled import in chunks/node.js"
-          chunk_rel=$(grep -rln "module-sync-enabled" my-react-ts/node_modules/.pnpm 2>/dev/null | grep "vite-plus-core/dist/vite/node/chunks/node.js" | head -1)
-          echo "chunk_rel=$chunk_rel"
-          if [ -n "$chunk_rel" ]; then
-            grep -n "module-sync-enabled\|#module" "$chunk_rel" || true
-          fi
-          echo "::endgroup::"
-
-          echo "::group::Resolve 'vite-plus' from inside my-react-ts (what Node sees as importer chain)"
-          # Walk Node's resolution from my-react-ts, then chase down to the
-          # vite-plus-core chunks/node.js to see the actual realpath/import.meta.url.
-          node -e "
-            const path=require('path');
-            const Module=require('module');
-            const cwd=process.argv[1];
-            const m=Module.createRequire(path.join(cwd, 'package.json'));
-            try {
-              const p=m.resolve('vite-plus');
-              console.log('vite-plus resolved to:', p);
-              console.log('realpath:', require('fs').realpathSync(p));
-            } catch (e) { console.error('resolve error:', e); }
-          " "$my_react_ts_abs"
-          echo "::endgroup::"
-
-          echo "::group::Manual vp fmt --write reproduction with verbose Node logging"
-          (
-            cd my-react-ts
-            NODE_OPTIONS='--trace-warnings --enable-source-maps' RUST_BACKTRACE=full \
-              vp fmt --write 2>&1 | tee /tmp/vp-fmt-output.txt
-            echo "vp fmt exit: ${PIPESTATUS[0]}"
-          )
-          echo "::endgroup::"
-
-          echo "::group::Direct Node ESM import of chunks/node.js (bypass vp.exe — surfaces raw stack)"
-          # Try the same import that the resolver does, with the absolute path,
-          # so we see Node's raw stack trace and which package.json it walks up to.
-          if [ -n "$chunk_rel" ]; then
-            absfile="$repro_dir_abs/$chunk_rel"
-            echo "Absolute path: $absfile"
-            # Build a file:// URL that Node accepts on Windows. On bash-on-Windows
-            # the path may begin with /c/... — convert to C:/...
-            url=$(node -e "console.log(require('url').pathToFileURL(process.argv[1]).href)" "$absfile")
-            echo "file URL: $url"
-            NODE_OPTIONS='--trace-warnings --enable-source-maps' \
-              node --input-type=module -e "import(process.argv[1]).then(() => console.log('IMPORT OK')).catch(e => { console.error('IMPORT FAILED:', e); process.exit(1); })" "$url"
-          else
-            echo "(no chunks/node.js found — skip)"
-          fi
-          echo "::endgroup::"
-
-          echo "::group::Try the same import with both pnpm symlink path AND realpath"
-          # The pnpm layout uses a symlink/junction at <my-react-ts>/node_modules/vite-plus-core
-          # → real path under .pnpm/<truncated>/node_modules/<scope>/<pkg>. Some Node
-          # versions resolve subpath imports using one or the other; print both.
-          if [ -d my-react-ts/node_modules/@voidzero-dev/vite-plus-core ]; then
-            echo "symlink path:"
-            ls -la my-react-ts/node_modules/@voidzero-dev/vite-plus-core 2>&1 | head -5
-            echo "realpath:"
-            node -e "console.log(require('fs').realpathSync(process.argv[1]))" \
-              "$my_react_ts_abs/node_modules/@voidzero-dev/vite-plus-core"
-          fi
-          echo "::endgroup::"
-
-          # Always exit non-zero so we surface the failure in CI.
-          exit 1
+          RUST_BACKTRACE=1 pnpm -F ./packages/cli snap-test-local --shard=${{ matrix.shard }}/${{ matrix.shardTotal }}
+          RUST_BACKTRACE=1 pnpm -F ./packages/cli snap-test-global --shard=${{ matrix.shard }}/${{ matrix.shardTotal }}
+          bash .github/scripts/retry-failed-snap-tests.sh
         env:
           RUST_MIN_STACK: 8388608
 
