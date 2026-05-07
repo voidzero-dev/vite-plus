@@ -46,7 +46,7 @@ import {
   updatePackageJsonWithDeps,
   updateWorkspaceConfig,
 } from '../utils/workspace.ts';
-import type { ExecutionResult } from './command.ts';
+import type { ExecutionWithProjectDir } from './command.ts';
 import { discoverTemplate, inferGitHubRepoName, inferParentDir, isGitHubUrl } from './discovery.ts';
 import { getInitialTemplateOptions } from './initial-template-options.ts';
 import {
@@ -917,6 +917,8 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     updateCreateProgress('Installing dependencies');
     const installSummary = await runViteInstall(fullPath, options.interactive, installArgs, {
       silent: compactOutput,
+      packageManager: workspaceInfo.packageManager,
+      packageManagerVersion: workspaceInfo.downloadPackageManager.version,
     });
     updateCreateProgress('Formatting code');
     await runViteFmt(fullPath, options.interactive, undefined, { silent: compactOutput });
@@ -935,7 +937,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
 
   // #region Handle single project template
 
-  let result: ExecutionResult;
+  let result: ExecutionWithProjectDir;
   if (templateInfo.type === TemplateType.bundled) {
     pauseCreateProgress();
     await checkProjectDirExists(path.join(workspaceInfo.rootDir, targetDir), options.interactive);
@@ -1038,6 +1040,8 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     updateCreateProgress('Installing dependencies');
     installSummary = await runViteInstall(installCwd, options.interactive, installArgs, {
       silent: compactOutput,
+      packageManager: workspaceInfo.packageManager,
+      packageManagerVersion: workspaceInfo.downloadPackageManager.version,
     });
     if (installSummary.status !== 'installed') {
       return;
@@ -1126,6 +1130,8 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     updateCreateProgress('Installing dependencies');
     installSummary = await runViteInstall(workspaceInfo.rootDir, options.interactive, installArgs, {
       silent: compactOutput,
+      packageManager: workspaceInfo.packageManager,
+      packageManagerVersion: workspaceInfo.downloadPackageManager.version,
     });
     updateCreateProgress('Formatting code');
     await runViteFmt(workspaceInfo.rootDir, options.interactive, [projectDir], {
@@ -1148,6 +1154,8 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     updateCreateProgress('Installing dependencies');
     installSummary = await runViteInstall(fullPath, options.interactive, installArgs, {
       silent: compactOutput,
+      packageManager: workspaceInfo.packageManager,
+      packageManagerVersion: workspaceInfo.downloadPackageManager.version,
     });
     updateCreateProgress('Formatting code');
     await runViteFmt(fullPath, options.interactive, undefined, { silent: compactOutput });

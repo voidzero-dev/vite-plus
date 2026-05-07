@@ -8,7 +8,7 @@ import { rewriteMonorepoProject } from '../../migration/migrator.ts';
 import { PackageManager, type WorkspaceInfo } from '../../types/index.ts';
 import { editJsonFile } from '../../utils/json.ts';
 import { templatesDir } from '../../utils/path.ts';
-import type { ExecutionResult } from '../command.ts';
+import type { ExecutionWithProjectDir } from '../command.ts';
 import { discoverTemplate } from '../discovery.ts';
 import { copyDir, formatDisplayTargetDir, setPackageName } from '../utils.ts';
 import { runRemoteTemplateCommand } from './remote.ts';
@@ -21,7 +21,7 @@ export async function executeMonorepoTemplate(
   workspaceInfo: WorkspaceInfo,
   templateInfo: BuiltinTemplateInfo,
   options?: { silent?: boolean },
-): Promise<ExecutionResult> {
+): Promise<ExecutionWithProjectDir> {
   assert(templateInfo.packageName, 'packageName is required');
   assert(templateInfo.targetDir, 'targetDir is required');
 

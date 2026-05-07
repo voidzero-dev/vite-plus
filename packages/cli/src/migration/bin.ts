@@ -649,6 +649,8 @@ async function executeMigrationPlan(
     undefined,
     {
       silent: true,
+      packageManager: workspaceInfo.packageManager,
+      packageManagerVersion: workspaceInfo.downloadPackageManager.version,
     },
   );
 
@@ -778,7 +780,11 @@ async function executeMigrationPlan(
     workspaceInfo.rootDir,
     interactive,
     installArgs,
-    { silent: true },
+    {
+      silent: true,
+      packageManager: workspaceInfo.packageManager,
+      packageManagerVersion: workspaceInfo.downloadPackageManager.version,
+    },
   );
 
   clearMigrationProgress();
@@ -868,12 +874,30 @@ async function main() {
       updateMigrationProgress('Rewriting configs');
       mergeViteConfigFiles(workspaceInfoOptional.rootDir, true, report);
       updateMigrationProgress('Installing dependencies');
+      // Resolve the actual pnpm version that `vp install` will use so the
+      // auto-install can opt into `--ignore-scripts` on pnpm v11 (which fails
+      // unapproved build scripts with `ERR_PNPM_IGNORED_BUILDS`).
+      let resolvedVersion = workspaceInfoOptional.packageManagerVersion;
+      if (
+        workspaceInfoOptional.packageManager &&
+        !semver.valid(semver.coerce(resolvedVersion) ?? '')
+      ) {
+        const resolved = await downloadPackageManager(
+          workspaceInfoOptional.packageManager,
+          resolvedVersion,
+          options.interactive,
+          true,
+        );
+        resolvedVersion = resolved.version;
+      }
       const installSummary = await runViteInstall(
         workspaceInfoOptional.rootDir,
         options.interactive,
         undefined,
         {
           silent: true,
+          packageManager: workspaceInfoOptional.packageManager,
+          packageManagerVersion: resolvedVersion,
         },
       );
       installDurationMs += installSummary.durationMs;

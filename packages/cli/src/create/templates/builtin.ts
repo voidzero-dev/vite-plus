@@ -5,7 +5,7 @@ import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import colors from 'picocolors';
 
 import type { WorkspaceInfo } from '../../types/index.ts';
-import type { ExecutionResult } from '../command.ts';
+import type { ExecutionWithProjectDir } from '../command.ts';
 import { discoverTemplate } from '../discovery.ts';
 import { setPackageName } from '../utils.ts';
 import { executeGeneratorScaffold } from './generator.ts';
@@ -16,7 +16,7 @@ export async function executeBuiltinTemplate(
   workspaceInfo: WorkspaceInfo,
   templateInfo: BuiltinTemplateInfo,
   options?: { silent?: boolean },
-): Promise<ExecutionResult> {
+): Promise<ExecutionWithProjectDir> {
   assert(templateInfo.targetDir, 'targetDir is required');
   assert(templateInfo.packageName, 'packageName is required');
 

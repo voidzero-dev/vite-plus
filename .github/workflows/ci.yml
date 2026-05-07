@@ -663,9 +663,29 @@ jobs:
         with:
           drive-size: 12GB
           drive-format: ReFS
+          # Route TEMP/TMP onto the Dev Drive (ReFS) so `tmpdir()` from
+          # `packages/tools/src/snap-test.ts` lives on a filesystem that
+          # cleanly resolves pnpm's junction reparse points. NTFS-on-C:
+          # preserves the junction-target backslashes during resolution,
+          # which produces mixed `\` / `/` paths that break Node's ESM
+          # subpath-import walk-up (`#module-sync-enabled` inside
+          # `@voidzero-dev/vite-plus-core` → `ERR_PACKAGE_IMPORT_NOT_DEFINED`
+          # during `vp fmt --write` in the
+          # `new-create-vite-migrates-eslint-prettier` snap test).
           env-mapping: |
             CARGO_HOME,{{ DEV_DRIVE }}/.cargo
             RUSTUP_HOME,{{ DEV_DRIVE }}/.rustup
+            TEMP,{{ DEV_DRIVE }}/Temp
+            TMP,{{ DEV_DRIVE }}/Temp
+
+      - name: Create TEMP/TMP on Dev Drive
+        if: runner.os == 'Windows'
+        # `setup-dev-drive` only mounts the drive; it doesn't create the
+        # dir we point TEMP/TMP at. Anything that calls `os.tmpdir()` /
+        # `lstat($TEMP)` before this dir exists fails (e.g. the bootstrap
+        # CLI installer's `lstat 'E:\Temp'` ENOENT).
+        shell: bash
+        run: mkdir -p "$TEMP" "$TMP"
 
       - uses: oxc-project/setup-rust@23f38cfb0c04af97a055f76acee94d5be71c7c82 # v1.0.16
         with:
