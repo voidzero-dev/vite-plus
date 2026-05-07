@@ -615,39 +615,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # TEMP: matrix trimmed to only the failing combo
+        # (windows-latest × shard 3/3) to speed up debug iteration on
+        # `new-create-vite-migrates-eslint-prettier`. Revert this block to
+        # the full 3-OS × 3-shard grid before merging.
         include:
-          - os: namespace-profile-linux-x64-default
-            target: x86_64-unknown-linux-gnu
-            shard: 1
-            shardTotal: 3
-          - os: namespace-profile-linux-x64-default
-            target: x86_64-unknown-linux-gnu
-            shard: 2
-            shardTotal: 3
-          - os: namespace-profile-linux-x64-default
-            target: x86_64-unknown-linux-gnu
-            shard: 3
-            shardTotal: 3
-          - os: macos-latest
-            target: aarch64-apple-darwin
-            shard: 1
-            shardTotal: 3
-          - os: macos-latest
-            target: aarch64-apple-darwin
-            shard: 2
-            shardTotal: 3
-          - os: macos-latest
-            target: aarch64-apple-darwin
-            shard: 3
-            shardTotal: 3
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            shard: 1
-            shardTotal: 3
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            shard: 2
-            shardTotal: 3
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             shard: 3
@@ -698,11 +670,133 @@ jobs:
             echo "$HOME/.vite-plus/bin" >> $GITHUB_PATH
           fi
 
-      - name: Run CLI snapshot tests (shard ${{ matrix.shard }}/${{ matrix.shardTotal }})
+      # TEMP: replaced full snap-test run with a single targeted test for
+      # debugging `new-create-vite-migrates-eslint-prettier` failure on
+      # Windows. Revert before merging.
+      - name: Toolchain versions
+        shell: bash
         run: |
-          RUST_BACKTRACE=1 pnpm -F ./packages/cli snap-test-local --shard=${{ matrix.shard }}/${{ matrix.shardTotal }}
-          RUST_BACKTRACE=1 pnpm -F ./packages/cli snap-test-global --shard=${{ matrix.shard }}/${{ matrix.shardTotal }}
-          bash .github/scripts/retry-failed-snap-tests.sh
+          echo "::group::Versions"
+          node --version
+          pnpm --version
+          which node && which pnpm
+          vp --version || true
+          vp env doctor || true
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            powershell -NoProfile -Command "[Environment]::OSVersion.VersionString"
+          fi
+          echo "::endgroup::"
+
+      - name: Run targeted snap test (new-create-vite-migrates-eslint-prettier)
+        shell: bash
+        run: |
+          set +e
+          RUST_BACKTRACE=full pnpm -F ./packages/cli snap-test-global new-create-vite-migrates-eslint-prettier
+          status=$?
+          echo "::group::snap.txt diff (if any)"
+          git diff -- 'packages/cli/snap-tests-global/new-create-vite-migrates-eslint-prettier/snap.txt' || true
+          echo "::endgroup::"
+          # Exit non-zero if either the snap-test process failed OR the
+          # snap.txt diverged from the committed snapshot.
+          if [ $status -ne 0 ] || ! git diff --quiet -- 'packages/cli/snap-tests-global/new-create-vite-migrates-eslint-prettier/snap.txt'; then
+            echo "::warning::Snap test failed; running debug reproduction below."
+            exit 0
+          fi
+          # Test passed cleanly — skip the manual repro below.
+          touch /tmp/snap-test-passed
+        env:
+          RUST_MIN_STACK: 8388608
+
+      - name: Debug reproduction (manual vp create + vp fmt)
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          # Skip if the targeted snap test already passed.
+          if [ -f /tmp/snap-test-passed ]; then
+            echo "Snap test passed; skipping debug repro."
+            exit 0
+          fi
+          set -x
+          repro_dir="${RUNNER_TEMP}/vp-debug-repro"
+          rm -rf "$repro_dir"
+          mkdir -p "$repro_dir"
+          cd "$repro_dir"
+
+          # Reproduce the exact failing flow.
+          cat > package.json <<'JSON'
+          { "name": "new-create-vite-migrates-eslint-prettier", "private": true }
+          JSON
+
+          set +e
+          vp create vite@9.0.5 --no-interactive -- my-react-ts --template react-ts
+          create_status=$?
+          set -e
+          echo "vp create exit: $create_status"
+
+          if [ ! -d my-react-ts ]; then
+            echo "::error::my-react-ts not created — vp create itself failed"
+            exit 1
+          fi
+
+          echo "::group::my-react-ts/package.json"
+          cat my-react-ts/package.json
+          echo "::endgroup::"
+
+          echo "::group::my-react-ts/vite.config.ts (post-migrate, pre-fmt or unformatted on failure)"
+          cat my-react-ts/vite.config.ts || true
+          echo "::endgroup::"
+
+          echo "::group::pnpm layout for vite-plus-core"
+          # Find any .pnpm dirs that house vite-plus-core (truncated names included).
+          find my-react-ts/node_modules/.pnpm -maxdepth 1 -type d \
+            \( -name '*vite-plus-cor*' -o -name '*vite-plus-core*' \) 2>/dev/null \
+            | tee /tmp/vite-plus-core-pnpm-dirs.txt
+          echo "::endgroup::"
+
+          echo "::group::vite-plus-core package.json (#module-sync-enabled imports check)"
+          while IFS= read -r d; do
+            pkg="$d/node_modules/@voidzero-dev/vite-plus-core/package.json"
+            if [ -f "$pkg" ]; then
+              echo "--- $pkg ---"
+              cat "$pkg"
+              echo ""
+              echo "(imports field via node):"
+              node -e "const p = require('$pkg'); console.log(JSON.stringify(p.imports || null, null, 2));"
+            fi
+          done < /tmp/vite-plus-core-pnpm-dirs.txt
+          echo "::endgroup::"
+
+          echo "::group::Locate the file that imports #module-sync-enabled"
+          grep -rln "module-sync-enabled" my-react-ts/node_modules/.pnpm 2>/dev/null | head -10 || true
+          echo "::endgroup::"
+
+          echo "::group::Manual vp fmt --write reproduction with verbose Node logging"
+          cd my-react-ts
+          set +e
+          NODE_OPTIONS='--trace-warnings --enable-source-maps' RUST_BACKTRACE=full \
+            vp fmt --write 2>&1 | tee /tmp/vp-fmt-output.txt
+          fmt_status=$?
+          set -e
+          echo "vp fmt exit: $fmt_status"
+          echo "::endgroup::"
+
+          echo "::group::Direct Node import attempt (bypass vp.exe)"
+          # Try the same import that the resolver does, with full path normalization,
+          # to see Node's raw stack trace and which package.json it walks up to.
+          set +e
+          file=$(grep -rln "module-sync-enabled" node_modules/.pnpm 2>/dev/null | grep "vite-plus-core/dist/vite/node/chunks/node.js" | head -1)
+          echo "Importer file: $file"
+          if [ -n "$file" ]; then
+            absfile=$(cd "$(dirname "$file")" && pwd -W 2>/dev/null || cd "$(dirname "$file")" && pwd)/$(basename "$file")
+            echo "Absolute path (mixed-sep test): $absfile"
+            NODE_OPTIONS='--trace-warnings --enable-source-maps' \
+              node --input-type=module -e "import('file://$absfile').then(() => console.log('OK')).catch(e => { console.error(e); process.exit(1); })"
+          fi
+          set -e
+          echo "::endgroup::"
+
+          # Always exit non-zero so we surface the failure in CI.
+          exit 1
         env:
           RUST_MIN_STACK: 8388608
 
