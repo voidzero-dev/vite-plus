@@ -1243,7 +1243,7 @@ importers:
         specifier: ^4.0.4
         version: 4.0.4
       postcss:
-        specifier: ^8.5.12
+        specifier: ^8.5.10
         version: 8.5.14
       rolldown:
         specifier: workspace:rolldown@*
@@ -1295,16 +1295,16 @@ importers:
         specifier: ^1.2.3
         version: 1.2.3
       '@vitejs/devtools':
-        specifier: ^0.1.15
+        specifier: ^0.1.14
         version: 0.1.18(@pnpm/logger@1001.0.1)(typescript@6.0.2)(vite@packages+core)
       '@vitest/utils':
-        specifier: 4.1.5
+        specifier: 4.1.4
         version: 4.1.5
       artichokie:
         specifier: ^0.4.3
         version: 0.4.3
       baseline-browser-mapping:
-        specifier: ^2.10.23
+        specifier: ^2.10.20
         version: 2.10.27
       cac:
         specifier: ^7.0.0
@@ -1376,7 +1376,7 @@ importers:
         specifier: ^2.0.3
         version: 2.0.3
       periscopic:
-        specifier: ^4.0.3
+        specifier: ^4.0.2
         version: 4.0.3
       picocolors:
         specifier: ^1.1.1
@@ -1418,7 +1418,7 @@ importers:
         specifier: ^3.1.0
         version: 3.1.0
       terser:
-        specifier: ^5.46.2
+        specifier: ^5.46.1
         version: 5.46.2
       ufo:
         specifier: ^1.6.3
