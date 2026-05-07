@@ -47,8 +47,8 @@ use vite_powershell::{POWERSHELL_PREFIX, find_ps1_sibling, powershell_host};
 pub fn rewrite_cmd_to_powershell(
     resolved: &AbsolutePath,
 ) -> Option<(AbsolutePathBuf, Vec<OsString>)> {
-    let vp_home = vp_home()?;
     let host = powershell_host()?;
+    let vp_home = vp_home()?;
     rewrite_in_scope(resolved, vp_home, host)
 }
 
