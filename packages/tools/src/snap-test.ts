@@ -586,6 +586,13 @@ async function runTestCase(
     VP_SKIP_INSTALL: '1',
     // make sure npm install global packages to the temporary directory
     NPM_CONFIG_PREFIX: path.join(tempTmpDir, NPM_GLOBAL_PREFIX_DIR),
+    // Pre-approve build scripts for non-interactive snap-test runs.
+    // pnpm v11 otherwise inserts a `set this to true or false` placeholder
+    // into pnpm-workspace.yaml and exits 1 with ERR_PNPM_IGNORED_BUILDS when
+    // fixtures install templates that pull in native packages (e.g.
+    // esbuild/sharp from the astro template).
+    npm_config_dangerously_allow_all_builds: 'true',
+    PNPM_CONFIG_DANGEROUSLY_ALLOW_ALL_BUILDS: 'true',
     // Absolute path to the source casesDir, so fixtures can reference
     // shared helper scripts under `<casesDir>/.shared/` without
     // duplicating them into every fixture directory.
