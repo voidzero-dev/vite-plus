@@ -20,6 +20,7 @@ pub mod prune;
 pub mod publish;
 pub mod rebuild;
 pub mod remove;
+pub mod script;
 pub mod search;
 pub mod token;
 pub mod unlink;

@@ -183,6 +183,7 @@ pub async fn execute_pm_subcommand(
                 tag: tag.as_deref(),
                 access: access.as_deref(),
                 otp: otp.as_deref(),
+                provenance: None,
                 no_git_checks,
                 publish_branch: publish_branch.as_deref(),
                 report_summary,
