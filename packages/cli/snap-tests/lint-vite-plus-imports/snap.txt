@@ -1,28 +1,5 @@
 [1]> vp lint src/index.ts src/types.ts # should fail before fix
 
-  × vite-plus(prefer-vite-plus-imports): Use 'vite-plus' instead of 'vite' in Vite+ projects.
-   ╭─[src/index.ts:1:30]
- 1 │ import { defineConfig } from 'vite';
-   ·                              ──────
- 2 │ 
-   ╰────
-
-  × vite-plus(prefer-vite-plus-imports): Use 'vite-plus' instead of 'vitest/config' in Vite+ projects.
-   ╭─[src/index.ts:3:30]
- 2 │ 
- 3 │ const configPromise = import('vitest/config');
-   ·                              ───────────────
- 4 │ 
-   ╰────
-
-  × vite-plus(prefer-vite-plus-imports): Use 'vite-plus/test' instead of 'vitest' in Vite+ projects.
-   ╭─[src/index.ts:5:24]
- 4 │ 
- 5 │ export { expect } from 'vitest';
-   ·                        ────────
- 6 │ 
-   ╰────
-
   × vite-plus(prefer-vite-plus-imports): Use 'vite-plus/test' instead of 'vitest' in Vite+ projects.
    ╭─[src/types.ts:1:30]
  1 │ type TestFn = (typeof import('vitest'))['test'];
@@ -77,6 +54,29 @@
     ·                         ─────────────
  10 │ 
     ╰────
+
+  × vite-plus(prefer-vite-plus-imports): Use 'vite-plus' instead of 'vite' in Vite+ projects.
+   ╭─[src/index.ts:1:30]
+ 1 │ import { defineConfig } from 'vite';
+   ·                              ──────
+ 2 │ 
+   ╰────
+
+  × vite-plus(prefer-vite-plus-imports): Use 'vite-plus' instead of 'vitest/config' in Vite+ projects.
+   ╭─[src/index.ts:3:30]
+ 2 │ 
+ 3 │ const configPromise = import('vitest/config');
+   ·                              ───────────────
+ 4 │ 
+   ╰────
+
+  × vite-plus(prefer-vite-plus-imports): Use 'vite-plus/test' instead of 'vitest' in Vite+ projects.
+   ╭─[src/index.ts:5:24]
+ 4 │ 
+ 5 │ export { expect } from 'vitest';
+   ·                        ────────
+ 6 │ 
+   ╰────
 
 Found 0 warnings and 10 errors.
 Finished in <variable>ms on 2 files with <variable> rules using <variable> threads.
