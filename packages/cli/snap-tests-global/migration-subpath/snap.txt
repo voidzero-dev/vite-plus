@@ -2,7 +2,7 @@
 > vp migrate foo --no-interactive # migration work with subpath
 
 ⚠ Subdirectory project detected — skipping git hooks setup. Configure hooks at the repository root.
-◇ Migrated foo to Vite+<repeat>
+◇ Migrated foo to Vite+
 • Node <semver>  pnpm <semver>
 • 1 config update applied
 

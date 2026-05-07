@@ -34,7 +34,7 @@ For more information, try '--help'.
 
 > vp add testnpm2 && vp add -D test-vite-plus-install && vp add -O test-vite-plus-package-optional && cat package.json # should add packages to dependencies
 Packages: +<variable>
-+<repeat>
++
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 
 dependencies:
@@ -42,7 +42,7 @@ dependencies:
 
 Done in <variable>ms using pnpm v<semver>
 Packages: +<variable>
-+<repeat>
++
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 
 devDependencies:
@@ -50,7 +50,7 @@ devDependencies:
 
 Done in <variable>ms using pnpm v<semver>
 Packages: +<variable>
-+<repeat>
++
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 
 optionalDependencies:

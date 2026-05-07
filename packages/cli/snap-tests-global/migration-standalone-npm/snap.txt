@@ -1,5 +1,5 @@
 > vp migrate --no-interactive --no-hooks # migration should work with npm, add overrides, and update lockfile
-◇ Migrated . to Vite+<repeat>
+◇ Migrated . to Vite+
 • Node <semver>  npm <semver>
 ✓ Dependencies installed in <variable>ms
 • 1 config update applied

@@ -2,7 +2,7 @@
 > vp migrate --no-interactive # should warn about uncoercible husky version
 
 ⚠ Could not determine husky version from "latest" — please specify a semver-compatible version (e.g., "^9.0.0") and re-run migration.
-◇ Migrated . to Vite+<repeat>
+◇ Migrated . to Vite+
 • Node <semver>  pnpm <semver>
 • 1 config update applied
 

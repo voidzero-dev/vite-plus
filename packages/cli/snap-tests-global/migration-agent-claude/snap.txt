@@ -1,5 +1,5 @@
 > vp migrate --agent claude --no-interactive # migration with --agent claude should write CLAUDE.md
-◇ Migrated . to Vite+<repeat>
+◇ Migrated . to Vite+
 • Node <semver>  pnpm <semver>
 • 2 config updates applied
 
