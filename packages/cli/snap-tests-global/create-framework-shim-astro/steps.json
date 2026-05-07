@@ -7,7 +7,7 @@
     },
     "cat my-astro-app/src/env.d.ts # check Astro shim",
     {
-      "command": "cd my-astro-app && vp install -- --no-frozen-lockfile # install dependencies",
+      "command": "cd my-astro-app && vp install --ignore-scripts -- --no-frozen-lockfile # install dependencies",
       "ignoreOutput": true
     },
     "cd my-astro-app && vp check --fix # fix generated formatting and ensure no errors"
