@@ -1979,13 +1979,16 @@ export function injectLintTypeCheckDefaults(
   silent = false,
   report?: MigrationReport,
 ): void {
+  if (hasBaseUrlInTsconfig(projectPath)) {
+    return;
+  }
   injectConfigDefaults(
     projectPath,
     'lint',
     '.vite-plus-lint-init.oxlintrc.json',
     JSON.stringify(
       createDefaultVitePlusLintConfig({
-        includeTypeAwareDefaults: !hasBaseUrlInTsconfig(projectPath),
+        includeTypeAwareDefaults: true,
       }),
     ),
     silent,
