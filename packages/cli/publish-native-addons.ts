@@ -21,6 +21,50 @@ const cli = new NapiCli();
 const currentDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(currentDir, '..', '..');
 
+const args = process.argv.slice(2);
+const modeIdx = args.indexOf('--mode');
+const mode = modeIdx >= 0 ? args[modeIdx + 1] : null;
+if (mode !== 'npm' && mode !== 'pkg-pr-new') {
+  console.error(`Usage: publish-native-addons.ts --mode <npm|pkg-pr-new>`);
+  process.exit(1);
+}
+const skipNpmPublish = mode === 'pkg-pr-new';
+
+const VERSION = process.env.VERSION;
+if (!VERSION) {
+  console.error('VERSION env var must be set');
+  process.exit(1);
+}
+
+// Move downloaded Rust CLI binaries into target/<triple>/release/ where the
+// rest of this script (and napi-cli) expects them.
+const rustCliArtifactsDir = join(repoRoot, 'rust-cli-artifacts');
+if (existsSync(rustCliArtifactsDir)) {
+  for (const dir of await readdir(rustCliArtifactsDir)) {
+    if (!dir.startsWith('vite-global-cli-')) continue;
+    const target = dir.slice('vite-global-cli-'.length);
+    const releaseDir = join(repoRoot, 'target', target, 'release');
+    mkdirSync(releaseDir, { recursive: true });
+    for (const file of await readdir(join(rustCliArtifactsDir, dir))) {
+      copyFileSync(join(rustCliArtifactsDir, dir, file), join(releaseDir, file));
+    }
+  }
+}
+
+// Stamp VERSION into the publishable package.json files. napi prePublish and
+// the cli-binary packages below both read packages/cli/package.json#version.
+for (const p of ['core', 'test', 'cli']) {
+  const pkgPath = join(repoRoot, 'packages', p, 'package.json');
+  const content = readFileSync(pkgPath, 'utf-8');
+  writeFileSync(pkgPath, content.replace('"version": "0.0.0"', `"version": "${VERSION}"`));
+}
+
+// Build test package against the just-stamped versions.
+execSync('pnpm --filter=@voidzero-dev/vite-plus-test build', {
+  cwd: repoRoot,
+  stdio: 'inherit',
+});
+
 // Create npm directories for NAPI bindings
 await cli.createNpmDirs({
   cwd: currentDir,
@@ -44,10 +88,6 @@ await cli.prePublish({
 
 const npmDir = join(currentDir, 'npm');
 const platformDirs = await readdir(npmDir);
-
-// Skip the actual `npm publish` calls (and the cli-npm cleanup below) so a
-// caller like the pkg.pr.new workflow can pick up the prepared directories.
-const skipNpmPublish = process.env.SKIP_NPM_PUBLISH === 'true';
 
 // Publish each NAPI platform package (without vp binary)
 const npmTag = process.env.NPM_TAG || 'latest';

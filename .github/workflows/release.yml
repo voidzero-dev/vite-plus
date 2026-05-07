@@ -133,30 +133,6 @@ jobs:
           path: installer-artifacts
           pattern: vp-setup-*
 
-      - name: Move Rust CLI binaries to target directories
-        run: |
-          # Move each artifact's binary to the correct target directory
-          for artifact_dir in rust-cli-artifacts/vite-global-cli-*/; do
-            if [ -d "$artifact_dir" ]; then
-              # Extract target name from directory (e.g., vite-global-cli-x86_64-unknown-linux-gnu -> x86_64-unknown-linux-gnu)
-              dir_name=$(basename "$artifact_dir")
-              target_name=${dir_name#vite-global-cli-}
-              # Create target directory and copy binary
-              mkdir -p "target/${target_name}/release"
-              cp -r "$artifact_dir"* "target/${target_name}/release/"
-            fi
-          done
-          # Show what we have (fail if no binaries found)
-          vp_files=$(find target -name "vp*" -type f 2>/dev/null || echo "")
-          if [ -z "$vp_files" ]; then
-            echo "Error: No vp binaries found in target directory"
-            echo "Artifact contents:"
-            find rust-cli-artifacts -type f || true
-            exit 1
-          fi
-          echo "Found binaries:"
-          echo "$vp_files"
-
       - name: Prepare installer binaries for release
         run: |
           mkdir -p installer-release
@@ -170,22 +146,11 @@ jobs:
           echo "Installer binaries:"
           ls -la installer-release/ || echo "No installer binaries found"
 
-      - name: Set npm packages version
-        run: |
-          sed -i 's/"version": "0.0.0"/"version": "${{ env.VERSION }}"/' packages/core/package.json
-          sed -i 's/"version": "0.0.0"/"version": "${{ env.VERSION }}"/' packages/test/package.json
-          sed -i 's/"version": "0.0.0"/"version": "${{ env.VERSION }}"/' packages/cli/package.json
-
-      - name: Build test
-        run: pnpm --filter=@voidzero-dev/vite-plus-test build
-
       - name: 'Setup npm'
-        run: |
-          npm install -g npm@latest
+        run: npm install -g npm@latest
 
-      - name: Publish native addons
-        run: |
-          node ./packages/cli/publish-native-addons.ts
+      - name: Prepare and publish native addons
+        run: node ./packages/cli/publish-native-addons.ts --mode npm
 
       - name: Publish
         run: |

@@ -121,46 +121,10 @@ jobs:
           path: rust-cli-artifacts
           pattern: vite-global-cli-*
 
-      - name: Move Rust CLI binaries to target directories
-        run: |
-          for artifact_dir in rust-cli-artifacts/vite-global-cli-*/; do
-            if [ -d "$artifact_dir" ]; then
-              dir_name=$(basename "$artifact_dir")
-              target_name=${dir_name#vite-global-cli-}
-              mkdir -p "target/${target_name}/release"
-              cp -r "$artifact_dir"* "target/${target_name}/release/"
-            fi
-          done
-          vp_files=$(find target -name "vp*" -type f 2>/dev/null || echo "")
-          if [ -z "$vp_files" ]; then
-            echo "Error: No vp binaries found in target directory"
-            find rust-cli-artifacts -type f || true
-            exit 1
-          fi
-          echo "Found binaries:"
-          echo "$vp_files"
-
-      - name: Set npm packages version
-        run: |
-          sed -i "s/\"version\": \"0.0.0\"/\"version\": \"${VERSION}\"/" packages/core/package.json
-          sed -i "s/\"version\": \"0.0.0\"/\"version\": \"${VERSION}\"/" packages/test/package.json
-          sed -i "s/\"version\": \"0.0.0\"/\"version\": \"${VERSION}\"/" packages/cli/package.json
-
-      - name: Build test package
-        run: pnpm --filter=@voidzero-dev/vite-plus-test build
-
-      # Reuses the release script with SKIP_NPM_PUBLISH=true so it stops short
-      # of `npm publish` and leaves packages/cli/{npm,cli-npm}/* on disk for
-      # pkg-pr-new to upload.
+      # Stops short of `npm publish` and leaves packages/cli/{npm,cli-npm}/*
+      # on disk for pkg-pr-new to upload.
       - name: Prepare native addon and CLI binary packages
-        run: node ./packages/cli/publish-native-addons.ts
-        env:
-          SKIP_NPM_PUBLISH: 'true'
-
-      - name: List prepared packages
-        run: |
-          ls -R ./packages/cli/npm
-          ls -R ./packages/cli/cli-npm
+        run: node ./packages/cli/publish-native-addons.ts --mode pkg-pr-new
 
       - name: Publish to pkg.pr.new
         run: |
