@@ -110,8 +110,14 @@ export async function snapTest() {
   // On macOS, `tmpdir()` is a symlink. Resolve it so that we can replace the resolved cwd in outputs.
   // Remove hyphens from UUID to avoid npm's @npmcli/redact treating the path as containing
   // secrets (it matches UUID patterns like `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`).
+  // Use `path.join` (not string concat with `/`) so the result has uniform
+  // separators on Windows. With concat, `tmpdir()` returns a backslash-style
+  // path (`C:\Users\…\Temp`) and appending `/vite-plus-test-…` produces a
+  // mixed-separator path that propagates downstream and confuses Node's ESM
+  // package walk-up — `#module-sync-enabled` subpath imports inside
+  // pnpm-nested deps then fail with `ERR_PACKAGE_IMPORT_NOT_DEFINED`.
   const systemTmpDir = fs.realpathSync(tmpdir());
-  const tempTmpDir = `${systemTmpDir}/vite-plus-test-${randomUUID().replaceAll('-', '')}`;
+  const tempTmpDir = path.join(systemTmpDir, `vite-plus-test-${randomUUID().replaceAll('-', '')}`);
   fs.mkdirSync(tempTmpDir, { recursive: true });
   // Pre-create the npm global prefix directory so tests using npm global
   // operations (link, outdated -g, etc.) don't fail with ENOENT.
