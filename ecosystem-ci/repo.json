@@ -123,7 +123,7 @@
   "vite-plus-monorepo-overrides": {
     "repository": "https://github.com/why-reproductions-are-required/vite-plus-monorepo-overrides.git",
     "branch": "main",
-    "hash": "fe830ccb9ed6442f48005e4985f8d66f7f980d3c",
+    "hash": "d89fe8f6479679e32e7a105fad85a2139beb2802",
     "forceFreshMigration": true
   },
   "varlet": {
