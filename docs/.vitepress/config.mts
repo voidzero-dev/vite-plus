@@ -29,6 +29,7 @@ const guideSidebar = [
       { text: 'Creating a Project', link: '/guide/create' },
       { text: 'Migrate to Vite+', link: '/guide/migrate' },
       { text: 'Installing Dependencies', link: '/guide/install' },
+      { text: 'Monorepo', link: '/guide/monorepo' },
       { text: 'Environment', link: '/guide/env' },
       { text: 'Why Vite+', link: '/guide/why' },
     ],
