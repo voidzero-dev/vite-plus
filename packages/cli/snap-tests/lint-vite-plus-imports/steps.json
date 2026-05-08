@@ -1,5 +1,4 @@
 {
-  "ignoredPlatforms": [{ "os": "linux", "libc": "musl" }],
   "commands": [
     "vp lint src/index.ts # should fail before fix (index.ts)",
     "vp lint src/types.ts # should fail before fix (types.ts)",
