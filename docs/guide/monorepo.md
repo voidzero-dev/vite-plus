@@ -1,6 +1,6 @@
-# Monorepos
+# Monorepo
 
-Vite+ works well in monorepos when the shared tool configuration lives in the workspace root. Put the root defaults in `vite.config.ts`, then use `overrides` to apply package-specific lint and format settings.
+Vite+ works well in a monorepo when the shared tool configuration lives in the workspace root. Put the root defaults in `vite.config.ts`, then use `overrides` to apply package-specific lint and format settings.
 
 This is the recommended pattern for shared quality tooling because the root config stays type-safe and composable, while each app or package can still keep its own Vite, Vitest, framework, or runtime files when that is useful.
 
