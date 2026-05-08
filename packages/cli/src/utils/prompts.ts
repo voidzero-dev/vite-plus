@@ -1,4 +1,5 @@
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
+import semver from 'semver';
 
 import { downloadPackageManager as downloadPackageManagerBinding } from '../../binding/index.js';
 import { PackageManager } from '../types/index.ts';
@@ -9,6 +10,28 @@ export interface CommandRunSummary {
   durationMs: number;
   exitCode?: number;
   status: 'installed' | 'formatted' | 'failed' | 'skipped';
+}
+
+/**
+ * pnpm v11 promoted `ERR_PNPM_IGNORED_BUILDS` from a warning to a hard
+ * exit-1. Auto-installs run by `vp migrate` / `vp create` happen before the
+ * user has a chance to approve build scripts via `pnpm.onlyBuiltDependencies`,
+ * so transitive deps like `esbuild` would fail the install. Pass
+ * `--ignore-scripts` in that window so the orchestration succeeds; the user's
+ * own subsequent `vp install` keeps default pnpm behavior.
+ */
+export function shouldIgnoreScriptsForAutoInstall(
+  packageManager: PackageManager | undefined,
+  packageManagerVersion: string | undefined,
+): boolean {
+  if (packageManager !== PackageManager.pnpm) {
+    return false;
+  }
+  const coerced = packageManagerVersion ? semver.coerce(packageManagerVersion)?.version : undefined;
+  if (!coerced) {
+    return false;
+  }
+  return semver.gte(coerced, '11.0.0');
 }
 
 export function cancelAndExit(message = 'Operation cancelled', exitCode = 0): never {
@@ -63,11 +86,23 @@ export async function runViteInstall(
   cwd: string,
   interactive?: boolean,
   extraArgs?: string[],
-  options?: { silent?: boolean },
+  options?: {
+    silent?: boolean;
+    packageManager?: PackageManager;
+    packageManagerVersion?: string;
+  },
 ) {
   // install dependencies on non-CI environment
   if (process.env.VP_SKIP_INSTALL) {
     return { durationMs: 0, status: 'skipped' } satisfies CommandRunSummary;
+  }
+
+  const installArgs = [...(extraArgs ?? [])];
+  if (
+    shouldIgnoreScriptsForAutoInstall(options?.packageManager, options?.packageManagerVersion) &&
+    !installArgs.includes('--ignore-scripts')
+  ) {
+    installArgs.push('--ignore-scripts');
   }
 
   const spinner = options?.silent ? getSilentSpinner() : getSpinner(interactive);
@@ -75,7 +110,7 @@ export async function runViteInstall(
   spinner.start(`Installing dependencies...`);
   const { exitCode, stderr, stdout } = await runCommandSilently({
     command: process.env.VP_CLI_BIN ?? 'vp',
-    args: ['install', ...(extraArgs ?? [])],
+    args: ['install', ...installArgs],
     cwd,
     envs: process.env,
   });

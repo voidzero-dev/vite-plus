@@ -917,6 +917,8 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     updateCreateProgress('Installing dependencies');
     const installSummary = await runViteInstall(fullPath, options.interactive, installArgs, {
       silent: compactOutput,
+      packageManager: workspaceInfo.packageManager,
+      packageManagerVersion: workspaceInfo.downloadPackageManager.version,
     });
     updateCreateProgress('Formatting code');
     await runViteFmt(fullPath, options.interactive, undefined, { silent: compactOutput });
@@ -1038,6 +1040,8 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     updateCreateProgress('Installing dependencies');
     installSummary = await runViteInstall(installCwd, options.interactive, installArgs, {
       silent: compactOutput,
+      packageManager: workspaceInfo.packageManager,
+      packageManagerVersion: workspaceInfo.downloadPackageManager.version,
     });
     if (installSummary.status !== 'installed') {
       return;
@@ -1126,6 +1130,8 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     updateCreateProgress('Installing dependencies');
     installSummary = await runViteInstall(workspaceInfo.rootDir, options.interactive, installArgs, {
       silent: compactOutput,
+      packageManager: workspaceInfo.packageManager,
+      packageManagerVersion: workspaceInfo.downloadPackageManager.version,
     });
     updateCreateProgress('Formatting code');
     await runViteFmt(workspaceInfo.rootDir, options.interactive, [projectDir], {
@@ -1148,6 +1154,8 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     updateCreateProgress('Installing dependencies');
     installSummary = await runViteInstall(fullPath, options.interactive, installArgs, {
       silent: compactOutput,
+      packageManager: workspaceInfo.packageManager,
+      packageManagerVersion: workspaceInfo.downloadPackageManager.version,
     });
     updateCreateProgress('Formatting code');
     await runViteFmt(fullPath, options.interactive, undefined, { silent: compactOutput });
