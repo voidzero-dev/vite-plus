@@ -37,7 +37,7 @@ For more info, run any command with the `--help` flag:
   $ vp pack --help
 
 Options:
-  --config-loader <loader>      Config loader to use: auto, native, unrun (default: auto)
+  --config-loader <loader>      Config loader to use: auto, native, tsx, unrun (default: auto)
   --no-config                   Disable config file (default: true)
   -f, --format <format>         Bundle format: esm, cjs, iife, umd (default: esm)
   --clean                       Clean output directory, --no-clean to disable 

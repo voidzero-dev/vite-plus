@@ -105,7 +105,7 @@ catalog:
   terser: ^5.44.1
   tinybench: ^6.0.0
   tinyexec: ^1.0.1
-  tsdown: ^0.21.10
+  tsdown: ^0.22.0
   tsx: ^4.20.6
   typescript: ^6.0.0
   unified: ^11.0.5
@@ -153,6 +153,7 @@ minimumReleaseAgeExclude:
   - lightningcss
   - lightningcss-*
   - baseline-browser-mapping
+  - devframe
   - import-without-cache
   - logs-sdk
   - rolldown
@@ -163,7 +164,6 @@ minimumReleaseAgeExclude:
   - vitepress
   - vitest
   - vue-virtual-scroller
-  # Renovate security update: lodash-es@4.18.1
   - lodash-es@4.18.1
 overrides:
   '@rolldown/pluginutils': workspace:@rolldown/pluginutils@*
