@@ -21,7 +21,7 @@ describe('shouldIgnoreScriptsForAutoInstall', () => {
     expect(shouldIgnoreScriptsForAutoInstall(PackageManager.bun, '11.0.0')).toBe(false);
   });
 
-  it('returns false when version is unknown or unparseable', () => {
+  it('returns false when version is unknown or unparsable', () => {
     expect(shouldIgnoreScriptsForAutoInstall(PackageManager.pnpm, undefined)).toBe(false);
     expect(shouldIgnoreScriptsForAutoInstall(PackageManager.pnpm, 'latest')).toBe(false);
     expect(shouldIgnoreScriptsForAutoInstall(PackageManager.pnpm, '')).toBe(false);
