@@ -1,5 +1,5 @@
 {
-  "ignoredPlatforms": ["win32"],
+  "ignoredPlatforms": ["win32", { "os": "linux", "libc": "musl" }],
   "linkCheckoutPackages": true,
   "commands": [
     {
