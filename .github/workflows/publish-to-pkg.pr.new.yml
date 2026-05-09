@@ -1,0 +1,150 @@
+name: Publish to pkg.pr.new
+
+# https://pkg.pr.new/~/voidzero-dev/vite-plus
+
+permissions: {}
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - ci/pkg-pr-new
+  pull_request:
+    types: [labeled]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  prepare:
+    if: >-
+      github.repository == 'voidzero-dev/vite-plus' &&
+      (github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'push' ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'pkg.pr.new')))
+    name: Compute snapshot version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      # pkg-pr-new rewrites the published version anyway, but we still need a
+      # unique snapshot version so `napi pre-publish` writes consistent
+      # optionalDependencies entries across the platform packages.
+      - name: Compute version
+        id: version
+        run: |
+          short_sha=$(git rev-parse --short=7 HEAD)
+          echo "version=0.0.0-pkg-pr-new.${short_sha}" >> "$GITHUB_OUTPUT"
+
+  build-rust:
+    name: Build bindings and binaries
+    if: >-
+      github.repository == 'voidzero-dev/vite-plus' &&
+      (github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'push' ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'pkg.pr.new')))
+    needs: prepare
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-release-build.yml
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+      cache-key: pkg-pr-new
+
+  publish:
+    if: >-
+      github.repository == 'voidzero-dev/vite-plus' &&
+      (github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'push' ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'pkg.pr.new')))
+    name: Pkg Preview
+    runs-on: ubuntu-latest
+    needs:
+      - prepare
+      - build-rust
+    permissions:
+      # pkg-pr-new comments on PRs and posts run statuses with this token.
+      contents: read
+      pull-requests: write
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - uses: ./.github/actions/clone
+
+      - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4.2.0
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Download cli dist
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: packages/cli/dist
+          pattern: cli
+          merge-multiple: true
+
+      - name: Download cli docs
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: packages/cli/docs
+          pattern: cli-docs
+          merge-multiple: true
+
+      - name: Download cli binding
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: packages/cli/artifacts
+          pattern: vite-plus-native-*
+
+      - name: Download core dist
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: packages/core/dist
+          pattern: core
+          merge-multiple: true
+
+      - name: Download prompts dist
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: packages/prompts/dist
+          pattern: prompts
+          merge-multiple: true
+
+      - uses: ./.github/actions/download-rolldown-binaries
+        with:
+          github-token: ${{ github.token }}
+          target: x86_64-unknown-linux-gnu
+          upload: 'false'
+
+      - name: Download Rust CLI binaries
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: rust-cli-artifacts
+          pattern: vite-global-cli-*
+
+      # Stops short of `npm publish` and leaves packages/cli/{npm,cli-npm}/*
+      # on disk for pkg-pr-new to upload.
+      - name: Prepare native addon and CLI binary packages
+        run: node ./packages/cli/publish-native-addons.ts --mode pkg-pr-new
+
+      - name: Publish to pkg.pr.new
+        run: |
+          pnpm dlx pkg-pr-new publish --compact --pnpm \
+            './packages/cli/npm/*' \
+            './packages/cli/cli-npm/*' \
+            './packages/cli' \
+            './packages/core' \
+            './packages/prompts' \
+            './packages/test'

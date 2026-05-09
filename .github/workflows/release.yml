@@ -36,6 +36,7 @@ jobs:
         with:
           fetch-depth: 0
           fetch-tags: true
+          persist-credentials: false
       - uses: ./.github/actions/set-snapshot-version
         if: ${{ inputs.version == '' }}
         id: computed
@@ -44,138 +45,20 @@ jobs:
 
       - name: Set final version
         id: version
-        run: echo "version=${{ inputs.version || steps.computed.outputs.version }}" >> $GITHUB_OUTPUT
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          COMPUTED_VERSION: ${{ steps.computed.outputs.version }}
+        run: echo "version=${INPUT_VERSION:-$COMPUTED_VERSION}" >> "$GITHUB_OUTPUT"
 
   build-rust:
-    runs-on: ${{ matrix.settings.os }}
+    name: Build bindings and binaries
     needs: prepare
     permissions:
       contents: read
-    env:
-      VERSION: ${{ needs.prepare.outputs.version }}
-    strategy:
-      fail-fast: false
-      matrix:
-        settings:
-          - target: aarch64-apple-darwin
-            os: macos-latest
-          - target: x86_64-apple-darwin
-            os: macos-latest
-          - target: aarch64-unknown-linux-gnu
-            os: ubuntu-latest
-          - target: aarch64-unknown-linux-musl
-            os: ubuntu-latest
-          - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
-          - target: x86_64-unknown-linux-musl
-            os: ubuntu-latest
-          - target: x86_64-pc-windows-msvc
-            os: windows-latest
-          - target: aarch64-pc-windows-msvc
-            os: windows-latest
-    steps:
-      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
-      - uses: ./.github/actions/clone
-      - uses: oxc-project/setup-rust@23f38cfb0c04af97a055f76acee94d5be71c7c82 # v1.0.16
-        with:
-          save-cache: ${{ github.ref_name == 'main' }}
-          cache-key: release
-
-      - name: Rustup Adds Target
-        run: rustup target add ${{ matrix.settings.target }}
-
-      - uses: oxc-project/setup-node@4c26e7cb3605b6bdef5450dacd02c434b10fd8ba # v1.2.0
-
-      - name: Set binding version
-        shell: bash
-        run: |
-          pnpm exec tool replace-file-content packages/cli/binding/Cargo.toml 'version = "0.0.0"' 'version = "${{ env.VERSION }}"'
-          pnpm exec tool replace-file-content crates/vite_global_cli/Cargo.toml 'version = "0.0.0"' 'version = "${{ env.VERSION }}"'
-          cat crates/vite_global_cli/Cargo.toml
-
-      - name: Verify version replacement
-        shell: bash
-        run: |
-          if grep -q 'version = "0.0.0"' crates/vite_global_cli/Cargo.toml; then
-            echo "ERROR: Version replacement failed for crates/vite_global_cli/Cargo.toml"
-            head -5 crates/vite_global_cli/Cargo.toml
-            exit 1
-          fi
-          if grep -q 'version = "0.0.0"' packages/cli/binding/Cargo.toml; then
-            echo "ERROR: Version replacement failed for packages/cli/binding/Cargo.toml"
-            head -5 packages/cli/binding/Cargo.toml
-            exit 1
-          fi
-          echo "Version replacement verified successfully"
-
-      - name: Build
-        uses: ./.github/actions/build-upstream
-        with:
-          target: ${{ matrix.settings.target }}
-
-      - name: Upload Vite+ native artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: vite-plus-native-${{ matrix.settings.target }}
-          path: ./packages/cli/binding/*.node
-          if-no-files-found: error
-
-      - name: Upload Rust CLI binary artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: vite-global-cli-${{ matrix.settings.target }}
-          path: |
-            ./target/${{ matrix.settings.target }}/release/vp
-            ./target/${{ matrix.settings.target }}/release/vp.exe
-            ./target/${{ matrix.settings.target }}/release/vp-shim.exe
-          if-no-files-found: error
-
-      - name: Upload installer binary artifact (Windows only)
-        if: contains(matrix.settings.target, 'windows')
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: vp-setup-${{ matrix.settings.target }}
-          path: ./target/${{ matrix.settings.target }}/release/vp-setup.exe
-          if-no-files-found: error
-
-      - name: Remove .node files before upload dist
-        if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
-        run: |
-          rm ./packages/core/dist/**/*.node
-
-      - name: Upload core dist
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
-        with:
-          name: core
-          path: ./packages/core/dist
-          if-no-files-found: error
-
-      - name: Upload cli dist
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
-        with:
-          name: cli
-          path: ./packages/cli/dist
-          if-no-files-found: error
-
-      - name: Upload cli docs
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
-        with:
-          name: cli-docs
-          path: ./packages/cli/docs
-          if-no-files-found: error
-
-      - name: Upload LICENSE files
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
-        with:
-          name: licenses
-          path: |
-            ./packages/core/LICENSE
-            ./packages/cli/LICENSE
-          if-no-files-found: error
+    uses: ./.github/workflows/reusable-release-build.yml
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+      cache-key: release
 
   Release:
     runs-on: ubuntu-latest
@@ -254,30 +137,6 @@ jobs:
           path: installer-artifacts
           pattern: vp-setup-*
 
-      - name: Move Rust CLI binaries to target directories
-        run: |
-          # Move each artifact's binary to the correct target directory
-          for artifact_dir in rust-cli-artifacts/vite-global-cli-*/; do
-            if [ -d "$artifact_dir" ]; then
-              # Extract target name from directory (e.g., vite-global-cli-x86_64-unknown-linux-gnu -> x86_64-unknown-linux-gnu)
-              dir_name=$(basename "$artifact_dir")
-              target_name=${dir_name#vite-global-cli-}
-              # Create target directory and copy binary
-              mkdir -p "target/${target_name}/release"
-              cp -r "$artifact_dir"* "target/${target_name}/release/"
-            fi
-          done
-          # Show what we have (fail if no binaries found)
-          vp_files=$(find target -name "vp*" -type f 2>/dev/null || echo "")
-          if [ -z "$vp_files" ]; then
-            echo "Error: No vp binaries found in target directory"
-            echo "Artifact contents:"
-            find rust-cli-artifacts -type f || true
-            exit 1
-          fi
-          echo "Found binaries:"
-          echo "$vp_files"
-
       - name: Prepare installer binaries for release
         run: |
           mkdir -p installer-release
@@ -291,46 +150,38 @@ jobs:
           echo "Installer binaries:"
           ls -la installer-release/ || echo "No installer binaries found"
 
-      - name: Set npm packages version
-        run: |
-          sed -i 's/"version": "0.0.0"/"version": "${{ env.VERSION }}"/' packages/core/package.json
-          sed -i 's/"version": "0.0.0"/"version": "${{ env.VERSION }}"/' packages/test/package.json
-          sed -i 's/"version": "0.0.0"/"version": "${{ env.VERSION }}"/' packages/cli/package.json
-
-      - name: Build test
-        run: pnpm --filter=@voidzero-dev/vite-plus-test build
-
       - name: 'Setup npm'
-        run: |
-          npm install -g npm@latest
+        run: npm install -g npm@latest
 
-      - name: Publish native addons
-        run: |
-          node ./packages/cli/publish-native-addons.ts
+      - name: Prepare and publish native addons
+        run: node ./packages/cli/publish-native-addons.ts --mode npm
 
       - name: Publish
         run: |
-          pnpm publish --filter=./packages/core --tag ${{ inputs.npm_tag }} --access public --no-git-checks
-          pnpm publish --filter=./packages/test --tag ${{ inputs.npm_tag }} --access public --no-git-checks
-          pnpm publish --filter=./packages/cli --tag ${{ inputs.npm_tag }} --access public --no-git-checks
+          pnpm publish --filter=./packages/core --tag "${NPM_TAG}" --access public --no-git-checks
+          pnpm publish --filter=./packages/test --tag "${NPM_TAG}" --access public --no-git-checks
+          pnpm publish --filter=./packages/cli --tag "${NPM_TAG}" --access public --no-git-checks
 
       - name: Create release body
+        env:
+          REPOSITORY: ${{ github.repository }}
+          COMMIT_SHA: ${{ github.sha }}
         run: |
-          if [[ "${{ inputs.npm_tag }}" == "latest" ]]; then
+          if [[ "${NPM_TAG}" == "latest" ]]; then
             INSTALL_BASH="curl -fsSL https://vite.plus | bash"
             INSTALL_PS1="irm https://vite.plus/ps1 | iex"
           else
-            INSTALL_BASH="curl -fsSL https://vite.plus | VP_VERSION=${{ env.VERSION }} bash"
-            INSTALL_PS1="\\\$env:VP_VERSION=\\\"${{ env.VERSION }}\\\"; irm https://vite.plus/ps1 | iex"
+            INSTALL_BASH="curl -fsSL https://vite.plus | VP_VERSION=${VERSION} bash"
+            INSTALL_PS1="\\\$env:VP_VERSION=\\\"${VERSION}\\\"; irm https://vite.plus/ps1 | iex"
           fi
           cat > ./RELEASE_BODY.md <<EOF
-          ## vite-plus v${{ env.VERSION }}
+          ## vite-plus v${VERSION}
 
           ### Published Packages
 
-          - \`@voidzero-dev/vite-plus-core@${{ env.VERSION }}\`
-          - \`@voidzero-dev/vite-plus-test@${{ env.VERSION }}\`
-          - \`vite-plus@${{ env.VERSION }}\`
+          - \`@voidzero-dev/vite-plus-core@${VERSION}\`
+          - \`@voidzero-dev/vite-plus-test@${VERSION}\`
+          - \`vite-plus@${VERSION}\`
 
           ### Installation
 
@@ -346,7 +197,7 @@ jobs:
 
           Or download and run \`vp-setup.exe\` from the assets below.
 
-          View the full commit: https://github.com/${{ github.repository }}/commit/${{ github.sha }}
+          View the full commit: https://github.com/${REPOSITORY}/commit/${COMMIT_SHA}
           EOF
 
       - name: Create GitHub Release
