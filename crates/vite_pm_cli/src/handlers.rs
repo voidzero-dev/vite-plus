@@ -25,6 +25,7 @@ use vite_install::{
         owner::OwnerSubcommand,
         pack::PackCommandOptions,
         ping::PingCommandOptions,
+        plugin::{PluginCommandOptions, PluginSubcommand},
         prune::PruneCommandOptions,
         publish::PublishCommandOptions,
         rebuild::RebuildCommandOptions,
@@ -41,7 +42,9 @@ use vite_install::{
 use vite_path::AbsolutePath;
 
 use crate::{
-    cli::{ConfigCommands, DistTagCommands, OwnerCommands, PmCommands, TokenCommands},
+    cli::{
+        ConfigCommands, DistTagCommands, OwnerCommands, PluginCommands, PmCommands, TokenCommands,
+    },
     error::Error,
     helpers::{build_package_manager, build_package_manager_or_npm_default, ensure_package_json},
 };
@@ -464,6 +467,32 @@ pub async fn run_pm_subcommand(
                 pass_through_args: pass_through_args.as_deref(),
             };
             Ok(pm.run_ping_command(&options, cwd).await?)
+        }
+
+        PmCommands::Plugin(plugin_command) => {
+            let (subcommand, pass_through_args) = match &plugin_command {
+                PluginCommands::Import { spec, pass_through_args } => {
+                    (PluginSubcommand::Import { spec: spec.as_str() }, pass_through_args.as_deref())
+                }
+                PluginCommands::ImportFromSources { name, pass_through_args } => (
+                    PluginSubcommand::ImportFromSources { name: name.as_deref() },
+                    pass_through_args.as_deref(),
+                ),
+                PluginCommands::List { pass_through_args } => {
+                    (PluginSubcommand::List, pass_through_args.as_deref())
+                }
+                PluginCommands::Runtime { pass_through_args } => {
+                    (PluginSubcommand::Runtime, pass_through_args.as_deref())
+                }
+                PluginCommands::Remove { name, pass_through_args } => {
+                    (PluginSubcommand::Remove { name: name.as_str() }, pass_through_args.as_deref())
+                }
+                PluginCommands::Check { pass_through_args } => {
+                    (PluginSubcommand::Check, pass_through_args.as_deref())
+                }
+            };
+            let options = PluginCommandOptions { subcommand, pass_through_args };
+            Ok(pm.run_plugin_command(&options, cwd).await?)
         }
     }
 }
