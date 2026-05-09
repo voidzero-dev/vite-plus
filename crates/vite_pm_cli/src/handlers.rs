@@ -475,7 +475,7 @@ pub async fn run_pm_subcommand(
                     (PluginSubcommand::Import { spec: spec.as_str() }, pass_through_args.as_deref())
                 }
                 PluginCommands::ImportFromSources { name, pass_through_args } => (
-                    PluginSubcommand::ImportFromSources { name: name.as_deref() },
+                    PluginSubcommand::ImportFromSources { name: name.as_str() },
                     pass_through_args.as_deref(),
                 ),
                 PluginCommands::List { pass_through_args } => {

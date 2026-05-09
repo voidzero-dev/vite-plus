@@ -923,7 +923,8 @@ pub enum PluginCommands {
     #[command(name = "import-from-sources")]
     ImportFromSources {
         /// Plugin name to compile (yarn's positional `<name>`, not a repository URL)
-        name: Option<String>,
+        #[arg(required = true)]
+        name: String,
 
         /// Additional arguments
         #[arg(last = true, allow_hyphen_values = true)]

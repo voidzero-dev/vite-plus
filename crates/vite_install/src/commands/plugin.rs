@@ -17,7 +17,7 @@ pub enum PluginSubcommand<'a> {
     /// `name` is yarn's positional plugin identifier, not a repository URL.
     /// Repository/branch/path go through `pass_through_args`.
     ImportFromSources {
-        name: Option<&'a str>,
+        name: &'a str,
     },
     List,
     Runtime,
@@ -81,9 +81,7 @@ impl PackageManager {
                 args.push("import".into());
                 args.push("from".into());
                 args.push("sources".into());
-                if let Some(name) = name {
-                    args.push((*name).to_string());
-                }
+                args.push((*name).to_string());
             }
             PluginSubcommand::List => {
                 args.push("list".into());
@@ -188,21 +186,11 @@ mod tests {
     }
 
     #[test]
-    fn yarn4_import_from_sources_no_name() {
-        let pm = create_mock_package_manager(PackageManagerType::Yarn, "4.10.3");
-        let result = pm
-            .resolve_plugin_command(&opts(PluginSubcommand::ImportFromSources { name: None }, None))
-            .expect("expected resolved command");
-        assert_eq!(result.bin_path, "yarn");
-        assert_eq!(result.args, vec!["plugin", "import", "from", "sources"]);
-    }
-
-    #[test]
-    fn yarn4_import_from_sources_with_name() {
+    fn yarn4_import_from_sources() {
         let pm = create_mock_package_manager(PackageManagerType::Yarn, "4.10.3");
         let result = pm
             .resolve_plugin_command(&opts(
-                PluginSubcommand::ImportFromSources { name: Some("typescript") },
+                PluginSubcommand::ImportFromSources { name: "typescript" },
                 None,
             ))
             .expect("expected resolved command");
