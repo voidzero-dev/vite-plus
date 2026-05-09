@@ -56,7 +56,7 @@ export default defineConfig({
 Globs are resolved from the root `vite.config.ts`, so use workspace paths such as `apps/web/**`, `apps/api/**`, and `packages/ui/**`.
 
 ::: tip
-When a `lint.overrides` entry sets `plugins`, include the plugins needed for that file group. If you omit `plugins`, the override uses the base `lint.plugins` value.
+When a `lint.overrides` entry sets `plugins`, that list replaces the base `lint.plugins` list for matched files. Include every plugin needed by that file group, such as `['typescript', 'react']`. Omit `plugins` only when the override should inherit the base list unchanged.
 :::
 
 ## Format Overrides
