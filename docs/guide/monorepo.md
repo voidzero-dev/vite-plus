@@ -4,8 +4,6 @@ Vite+ works well in a monorepo when the shared tool configuration lives in the w
 
 This is the recommended pattern for shared quality tooling because the root config stays type-safe and composable, while each app or package can still keep its own Vite, Vitest, framework, or runtime files when that is useful.
 
-The examples below come from the runnable [`vite-plus-monorepo-overrides`](https://github.com/why-reproductions-are-required/vite-plus-monorepo-overrides) fixture.
-
 ## Root Config With Overrides
 
 Use `lint.overrides` for Oxlint rules that only apply to some packages:
