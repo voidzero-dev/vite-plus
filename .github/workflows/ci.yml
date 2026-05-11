@@ -30,6 +30,8 @@ jobs:
     steps:
       - name: Optimize CI
         id: check_skip
+        # v0.0.9 still declares `using: node20`; emits a Node 20 deprecation warning until upstream ships a node24 release.
+        # https://github.com/withgraphite/graphite-ci-action
         uses: withgraphite/graphite-ci-action@9bc969adfd43bb790da3b64b543c78c75cef9689 # v0.0.9
         with:
           graphite_token: ${{ secrets.GRAPHITE_CI_OPTIMIZER_TOKEN }}
