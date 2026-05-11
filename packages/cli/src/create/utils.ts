@@ -112,6 +112,29 @@ export function setPackageName(projectDir: string, packageName: string) {
   });
 }
 
+/**
+ * Make sure the scaffolded project's `.gitignore` excludes `node_modules`.
+ *
+ * Called right after `git init` so even bundled `@org` templates (which
+ * may ship without a `.gitignore`) don't end up tracking installed
+ * dependencies on the user's first commit. No-op when an existing
+ * `.gitignore` already lists `node_modules`.
+ */
+export function ensureGitignoreNodeModules(projectDir: string): void {
+  const gitignorePath = path.join(projectDir, '.gitignore');
+  let content = '';
+  try {
+    content = fs.readFileSync(gitignorePath, 'utf-8');
+  } catch {
+    // No existing .gitignore — we'll write a fresh one below.
+  }
+  if (/^\s*node_modules\/?\s*$/m.test(content)) {
+    return;
+  }
+  const prefix = content === '' || content.endsWith('\n') ? '' : '\n';
+  fs.appendFileSync(gitignorePath, `${prefix}node_modules\n`);
+}
+
 export function formatDisplayTargetDir(targetDir: string) {
   const normalized = targetDir.split(path.sep).join('/');
   if (normalized === '' || normalized === '.') {

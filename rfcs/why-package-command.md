@@ -986,6 +986,7 @@ vp why react --json  # On yarn
 
 - pnpm@9.x
 - pnpm@10.x
+- pnpm@11.x
 - yarn@1.x
 - yarn@4.x
 - npm@10.x

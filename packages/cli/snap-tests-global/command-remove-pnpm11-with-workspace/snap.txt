@@ -1,0 +1,156 @@
+> vp add testnpm2 -D -w --filter=* && vp add test-vite-plus-install -w --filter=* && vp add test-vite-plus-package-optional -O --filter=* && cat package.json packages/app/package.json packages/utils/package.json # prepare packages
+.                                        |   +1 +
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+Done in <variable>ms using pnpm v<semver>
+.                                        |   +1 +
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+Done in <variable>ms using pnpm v<semver>
+.                                        |   +1 +
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+Done in <variable>ms using pnpm v<semver>
+{
+  "name": "command-remove-pnpm11-with-workspace",
+  "version": "1.0.0",
+  "packageManager": "pnpm@<semver>",
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  }
+}
+{
+  "name": "app",
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  }
+}
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "private": true,
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  }
+}
+
+> vp remove testnpm2 -r && cat package.json packages/app/package.json packages/utils/package.json # should remove package from all workspaces and root
+Scope: all <variable> workspace projects
+.                                        |   -1 -
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+Done in <variable>ms using pnpm v<semver>
+{
+  "name": "command-remove-pnpm11-with-workspace",
+  "version": "1.0.0",
+  "packageManager": "pnpm@<semver>",
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  }
+}
+{
+  "name": "app",
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  }
+}
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  }
+}
+
+> vp remove -O test-vite-plus-package-optional -r && cat package.json packages/app/package.json packages/utils/package.json # should remove optional package from all workspaces
+Scope: all <variable> workspace projects
+.                                        |   -1 -
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+Done in <variable>ms using pnpm v<semver>
+{
+  "name": "command-remove-pnpm11-with-workspace",
+  "version": "1.0.0",
+  "packageManager": "pnpm@<semver>",
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  }
+}
+{
+  "name": "app",
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  }
+}
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  }
+}
+
+> vp remove test-vite-plus-install --filter=app && cat package.json packages/app/package.json packages/utils/package.json # should remove package by filter=app
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+Done in <variable>ms using pnpm v<semver>
+{
+  "name": "command-remove-pnpm11-with-workspace",
+  "version": "1.0.0",
+  "packageManager": "pnpm@<semver>",
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  }
+}
+{
+  "name": "app"
+}
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  }
+}
+
+> vp remove test-vite-plus-install --filter=* && cat package.json packages/app/package.json packages/utils/package.json # should remove package by filter=*
+Scope: all <variable> workspace projects
+.                                        |   -1 -
+Done in <variable>ms using pnpm v<semver>
+{
+  "name": "command-remove-pnpm11-with-workspace",
+  "version": "1.0.0",
+  "packageManager": "pnpm@<semver>"
+}
+{
+  "name": "app"
+}
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "private": true
+}

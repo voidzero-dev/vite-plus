@@ -66,10 +66,12 @@ export const spinner = ({
   let loop: NodeJS.Timeout;
   let isSpinnerActive = false;
   let isCancelled = false;
+  /* oxlint-disable no-underscore-dangle */
   let _message = '';
   let _prevMessage: string | undefined;
   let _origin: number = performance.now();
   let _elapsedMs = 0;
+  /* oxlint-enable no-underscore-dangle */
   const columns = getColumns(output);
   const styleFn = opts?.styleFrame ?? defaultStyleFn;
 
@@ -192,6 +194,7 @@ export const spinner = ({
     startLoop();
   };
 
+  // oxlint-disable-next-line no-underscore-dangle
   const _stop = (msg = '', code = 0, silent: boolean = false, preserveElapsed = false): void => {
     if (!isSpinnerActive) {
       return;

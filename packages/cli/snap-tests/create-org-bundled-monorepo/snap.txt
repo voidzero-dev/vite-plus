@@ -1,0 +1,42 @@
+> node $SNAP_CASES_DIR/.shared/mock-npm-registry.mjs -- vp create @your-org:workspace --no-interactive --directory my-mono # bundled monorepo: extract tarball, scaffold, inject create.defaultTemplate
+◇ Scaffolded my-mono
+• Node <semver>  pnpm <semver>
+→ Next: cd my-mono && vp run
+
+> cat my-mono/vite.config.ts # create.defaultTemplate auto-set to @your-org
+import { defineConfig } from "vite-plus";
+
+export default defineConfig({
+  staged: {
+    "*": "vp check --fix",
+  },
+  create: { defaultTemplate: "@your-org" },
+  fmt: {},
+  lint: { options: { typeAware: true, typeCheck: true } },
+  run: { cache: true },
+});
+
+> cat my-mono/pnpm-workspace.yaml # workspace markers preserved
+packages:
+  - apps/*
+  - packages/*
+catalog:
+  vite: npm:@voidzero-dev/vite-plus-core@latest
+  vitest: npm:@voidzero-dev/vite-plus-test@latest
+  vite-plus: latest
+overrides:
+  vite: "catalog:"
+  vitest: "catalog:"
+peerDependencyRules:
+  allowAny:
+    - vite
+    - vitest
+  allowedVersions:
+    vite: "*"
+    vitest: "*"
+
+> test -d my-mono/.git && echo 'Git initialized' || echo 'No git' # git-init prompt covers bundled monorepo path
+Git initialized
+
+> cat my-mono/.gitignore # node_modules excluded even though tarball shipped no .gitignore
+node_modules

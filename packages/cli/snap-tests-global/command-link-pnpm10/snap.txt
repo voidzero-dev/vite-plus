@@ -15,7 +15,7 @@ Documentation: https://viteplus.dev/guide/install
 
 > vp install # install initial dependencies
 Packages: +<variable>
-+<repeat>
++
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 
 dependencies:

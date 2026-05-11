@@ -34,7 +34,7 @@ export function findViteConfigUp(startDir: string, stopDir: string): string | un
   return undefined;
 }
 
-function hasViteConfig(dir: string): boolean {
+export function hasViteConfig(dir: string): boolean {
   return VITE_CONFIG_FILES.some((f) => fs.existsSync(path.join(dir, f)));
 }
 
@@ -42,7 +42,7 @@ function hasViteConfig(dir: string): boolean {
  * Find the workspace root by walking up from `startDir` looking for
  * monorepo indicators (pnpm-workspace.yaml, workspaces in package.json, lerna.json).
  */
-function findWorkspaceRoot(startDir: string): string | undefined {
+export function findWorkspaceRoot(startDir: string): string | undefined {
   let dir = path.resolve(startDir);
   while (true) {
     if (fs.existsSync(path.join(dir, 'pnpm-workspace.yaml'))) {

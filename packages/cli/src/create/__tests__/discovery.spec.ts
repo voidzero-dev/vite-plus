@@ -108,4 +108,36 @@ describe('GitHub template helpers', () => {
     expect(template.command).toBe('degit');
     expect(template.args).toEqual(['nkzw-tech/fate-template', 'my-app']);
   });
+
+  it('should keep manifest-resolved specifiers literal when skipShorthand=true', () => {
+    const workspace = {
+      rootDir: '/tmp/workspace',
+      isMonorepo: false,
+      monorepoScope: '',
+      workspacePatterns: [],
+      parentDirs: [],
+      packageManager: 'pnpm',
+      packageManagerVersion: 'latest',
+      downloadPackageManager: { binPrefix: '/tmp/bin', version: '10.0.0' } as never,
+      packages: [],
+    } as never;
+
+    // A manifest entry like `{ template: '@your-org/template-web' }` must
+    // NOT be rewritten into `@your-org/create-template-web` by the create
+    // shorthand expander — the manifest author already gave the exact
+    // npm package name they want.
+    const fromManifest = discoverTemplate(
+      '@your-org/template-web',
+      [],
+      workspace,
+      false,
+      undefined,
+      true,
+    );
+    expect(fromManifest.command).toBe('@your-org/template-web');
+
+    // But without the flag, the existing shorthand rules still apply.
+    const withoutFlag = discoverTemplate('@your-org/template-web', [], workspace);
+    expect(withoutFlag.command).toBe('@your-org/create-template-web');
+  });
 });

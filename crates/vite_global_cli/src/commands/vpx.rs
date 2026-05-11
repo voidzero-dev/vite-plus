@@ -10,7 +10,6 @@
 use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_shared::{PrependOptions, output, prepend_to_path_env};
 
-use super::DlxCommand;
 use crate::{commands::env::config, shim::dispatch};
 
 /// Parsed vpx flags.
@@ -110,11 +109,17 @@ pub async fn execute_vpx(args: &[String], cwd: &AbsolutePath) -> i32 {
     }
 
     // 4. Fall back to dlx (remote download)
-    let cwd_buf = cwd.to_absolute_path_buf();
-    match DlxCommand::new(cwd_buf)
-        .execute(flags.packages, flags.shell_mode, flags.silent, positional)
-        .await
-    {
+    if let Err(e) = super::prepend_js_runtime_to_path_env(cwd).await {
+        output::error(&format!("vpx: {e}"));
+        return 1;
+    }
+    let dlx = vite_pm_cli::PackageManagerCommand::Dlx {
+        package: flags.packages,
+        shell_mode: flags.shell_mode,
+        silent: flags.silent,
+        args: positional,
+    };
+    match vite_pm_cli::dispatch(cwd, dlx).await {
         Ok(status) => status.code().unwrap_or(1),
         Err(e) => {
             output::error(&format!("vpx: {e}"));

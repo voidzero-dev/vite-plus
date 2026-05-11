@@ -110,8 +110,16 @@ export async function snapTest() {
   // On macOS, `tmpdir()` is a symlink. Resolve it so that we can replace the resolved cwd in outputs.
   // Remove hyphens from UUID to avoid npm's @npmcli/redact treating the path as containing
   // secrets (it matches UUID patterns like `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`).
-  const systemTmpDir = fs.realpathSync(tmpdir());
-  const tempTmpDir = `${systemTmpDir}/vite-plus-test-${randomUUID().replaceAll('-', '')}`;
+  // Use `realpathSync.native` (libuv `uv_fs_realpath`) instead of the JS
+  // legacy form: on Windows the JS form can return paths with mixed
+  // separators (`C:\Users/.../Temp`) while the native form returns the
+  // canonical backslash path. The mixed form propagates downstream and
+  // confuses Node's ESM package walk-up — `#module-sync-enabled` subpath
+  // imports inside pnpm-nested deps then fail with
+  // `ERR_PACKAGE_IMPORT_NOT_DEFINED`. Also use `path.join` (not string
+  // concat with `/`) so the suffix matches.
+  const systemTmpDir = fs.realpathSync.native(tmpdir());
+  const tempTmpDir = path.join(systemTmpDir, `vite-plus-test-${randomUUID().replaceAll('-', '')}`);
   fs.mkdirSync(tempTmpDir, { recursive: true });
   // Pre-create the npm global prefix directory so tests using npm global
   // operations (link, outdated -g, etc.) don't fail with ENOENT.
@@ -168,7 +176,13 @@ export async function snapTest() {
   );
 
   // Clean up the temporary directory on exit
-  process.on('exit', () => fs.rmSync(tempTmpDir, { recursive: true, force: true }));
+  process.on('exit', () => {
+    try {
+      fs.rmSync(tempTmpDir, { recursive: true, force: true });
+    } catch (error) {
+      console.error('Error cleaning up temporary directory: %s, %s', tempTmpDir, error);
+    }
+  });
 
   const casesDir = path.resolve(values.dir || 'snap-tests');
 
@@ -271,6 +285,7 @@ interface Steps {
   serial?: boolean;
 }
 
+// oxlint-disable-next-line no-underscore-dangle
 let _isMusl: boolean | null = null;
 
 function isMusl(): boolean {
@@ -332,8 +347,8 @@ async function runTestCase(name: string, tempTmpDir: string, casesDir: string, b
   }
 
   console.log('%s started', name);
-  const caseTmpDir = `${tempTmpDir}/${name}`;
-  await fsPromises.cp(`${casesDir}/${name}`, caseTmpDir, {
+  const caseTmpDir = path.join(tempTmpDir, name);
+  await fsPromises.cp(path.join(casesDir, name), caseTmpDir, {
     recursive: true,
     errorOnExist: true,
   });
@@ -362,6 +377,10 @@ async function runTestCase(name: string, tempTmpDir: string, casesDir: string, b
     VP_SKIP_INSTALL: '1',
     // make sure npm install global packages to the temporary directory
     NPM_CONFIG_PREFIX: path.join(tempTmpDir, NPM_GLOBAL_PREFIX_DIR),
+    // Absolute path to the source casesDir, so fixtures can reference
+    // shared helper scripts under `<casesDir>/.shared/` without
+    // duplicating them into every fixture directory.
+    SNAP_CASES_DIR: casesDir,
 
     // A test case can override/unset environment variables above.
     // For example, VP_CLI_TEST/CI can be unset to test the real-world outputs.

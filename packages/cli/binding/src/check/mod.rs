@@ -4,7 +4,7 @@ use std::{ffi::OsStr, sync::Arc, time::Instant};
 
 use rustc_hash::FxHashMap;
 use vite_error::Error;
-use vite_path::{AbsolutePath, AbsolutePathBuf};
+use vite_path::AbsolutePathBuf;
 use vite_shared::output;
 use vite_task::ExitStatus;
 
@@ -27,7 +27,6 @@ pub(crate) async fn execute_check(
     paths: Vec<String>,
     envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
     cwd: &AbsolutePathBuf,
-    cwd_arc: &Arc<AbsolutePath>,
 ) -> Result<ExitStatus, Error> {
     let mut status = ExitStatus::SUCCESS;
     let has_paths = !paths.is_empty();
@@ -69,7 +68,6 @@ pub(crate) async fn execute_check(
             Some(&resolved_vite_config),
             envs,
             cwd,
-            cwd_arc,
             false,
         )
         .await?;
@@ -161,7 +159,6 @@ pub(crate) async fn execute_check(
             Some(&resolved_vite_config),
             envs,
             cwd,
-            cwd_arc,
             true,
         )
         .await?;
@@ -240,7 +237,6 @@ pub(crate) async fn execute_check(
             Some(&resolved_vite_config),
             envs,
             cwd,
-            cwd_arc,
             false,
         )
         .await?;

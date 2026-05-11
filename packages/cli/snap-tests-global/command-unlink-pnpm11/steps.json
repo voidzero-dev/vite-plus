@@ -1,0 +1,11 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "commands": [
+    "vp unlink -h # should show help message",
+    "mkdir -p ../unlink-test-lib && echo '{\"name\": \"unlink-test-lib\", \"version\": \"1.0.0\"}' > ../unlink-test-lib/package.json # create test library",
+    "vp link ../unlink-test-lib && cat package.json # link the library first",
+    "vp unlink unlink-test-lib -- --no-frozen-lockfile && cat package.json # should unlink the package (pnpm v11 requires --no-frozen-lockfile under CI=true)",
+    "vp link ../unlink-test-lib # link again",
+    "vp unlink -- --no-frozen-lockfile && cat package.json # should unlink all packages"
+  ]
+}

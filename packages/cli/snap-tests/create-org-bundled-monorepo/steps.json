@@ -1,0 +1,9 @@
+{
+  "commands": [
+    "node $SNAP_CASES_DIR/.shared/mock-npm-registry.mjs -- vp create @your-org:workspace --no-interactive --directory my-mono # bundled monorepo: extract tarball, scaffold, inject create.defaultTemplate",
+    "cat my-mono/vite.config.ts # create.defaultTemplate auto-set to @your-org",
+    "cat my-mono/pnpm-workspace.yaml # workspace markers preserved",
+    "test -d my-mono/.git && echo 'Git initialized' || echo 'No git' # git-init prompt covers bundled monorepo path",
+    "cat my-mono/.gitignore # node_modules excluded even though tarball shipped no .gitignore"
+  ]
+}

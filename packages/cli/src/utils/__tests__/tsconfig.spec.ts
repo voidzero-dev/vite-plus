@@ -4,7 +4,11 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { findTsconfigFiles, removeDeprecatedTsconfigFalseOption } from '../tsconfig.js';
+import {
+  findTsconfigFiles,
+  removeDeprecatedTsconfigFalseOption,
+  rewriteTypesInTsconfig,
+} from '../tsconfig.js';
 
 describe('findTsconfigFiles', () => {
   let tmpDir: string;
@@ -203,6 +207,99 @@ describe.each(['esModuleInterop', 'allowSyntheticDefaultImports'])(
     });
   },
 );
+
+describe('rewriteTypesInTsconfig', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tsconfig-test-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('rewrites tsdown/client to vite-plus/pack/client', () => {
+    const filePath = path.join(tmpDir, 'tsconfig.json');
+    fs.writeFileSync(
+      filePath,
+      `{
+  "compilerOptions": {
+    "types": ["tsdown/client"]
+  }
+}`,
+    );
+
+    expect(rewriteTypesInTsconfig(filePath)).toBe(true);
+    expect(fs.readFileSync(filePath, 'utf-8')).toMatchInlineSnapshot(`
+      "{
+        "compilerOptions": {
+          "types": ["vite-plus/pack/client"]
+        }
+      }"
+    `);
+  });
+
+  it('rewrites vite/client to vite-plus/client', () => {
+    const filePath = path.join(tmpDir, 'tsconfig.json');
+    fs.writeFileSync(
+      filePath,
+      `{
+  "compilerOptions": {
+    "types": ["vite/client"]
+  }
+}`,
+    );
+
+    expect(rewriteTypesInTsconfig(filePath)).toBe(true);
+    expect(fs.readFileSync(filePath, 'utf-8')).toMatchInlineSnapshot(`
+      "{
+        "compilerOptions": {
+          "types": ["vite-plus/client"]
+        }
+      }"
+    `);
+  });
+
+  it('rewrites both in the same array', () => {
+    const filePath = path.join(tmpDir, 'tsconfig.json');
+    fs.writeFileSync(
+      filePath,
+      `{
+  "compilerOptions": {
+    "types": ["tsdown/client", "vite/client"]
+  }
+}`,
+    );
+
+    expect(rewriteTypesInTsconfig(filePath)).toBe(true);
+    expect(fs.readFileSync(filePath, 'utf-8')).toMatchInlineSnapshot(`
+      "{
+        "compilerOptions": {
+          "types": ["vite-plus/pack/client", "vite-plus/client"]
+        }
+      }"
+    `);
+  });
+
+  it('returns false when no target types exist', () => {
+    const filePath = path.join(tmpDir, 'tsconfig.json');
+    fs.writeFileSync(
+      filePath,
+      `{
+  "compilerOptions": {
+    "types": ["some/other/type"]
+  }
+}`,
+    );
+
+    expect(rewriteTypesInTsconfig(filePath)).toBe(false);
+  });
+
+  it('returns false for non-existent file', () => {
+    expect(rewriteTypesInTsconfig('/non-existent-file.json')).toBe(false);
+  });
+});
 
 describe('removeDeprecatedTsconfigFalseOption — combined removal', () => {
   let tmpDir: string;

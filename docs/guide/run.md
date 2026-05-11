@@ -104,7 +104,7 @@ See [Run Config](/config/run) for the full `run` block reference.
 
 Use [`dependsOn`](#depends-on) to run tasks in the right order. Running `vp run deploy` with the config above runs `build` and `test` first. Dependencies can also target other packages in the same project with the `package#task` notation:
 
-```ts
+```ts [vite.config.ts]
 dependsOn: ['@my/core#build', '@my/utils#lint'];
 ```
 

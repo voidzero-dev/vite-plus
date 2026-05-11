@@ -1,0 +1,18 @@
+> vp pm plugin --help # should list 6 plugin subcommands; clap output is deterministic
+Usage: vp pm plugin <COMMAND>
+
+Manage Yarn plugins (Yarn 2+ only — other package managers will print a warning and exit successfully)
+
+Commands:
+  import               Import a plugin from a known source
+  import-from-sources  Build and import a plugin from sources
+  list                 List plugins available on the registry
+  runtime              List the currently installed plugins
+  remove               Remove a plugin
+  check                Find all third-party plugins that differ from their own spec
+
+Options:
+  -h, --help  Print help
+
+Documentation: https://viteplus.dev/guide/install
+

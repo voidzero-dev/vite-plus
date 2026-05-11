@@ -71,13 +71,13 @@ impl CommandHandler for VitePlusCommandHandler {
                 )))
             }
             CLIArgs::Synthesizable(subcmd) => {
-                let resolved =
-                    self.resolver.resolve(subcmd, None, &command.envs, &command.cwd).await?;
+                let resolved = self.resolver.resolve(subcmd, None, &command.envs).await?;
                 Ok(HandledCommand::Synthesized(resolved.into_synthetic_plan_request()))
             }
             CLIArgs::ViteTask(cmd) => Ok(HandledCommand::ViteTaskCommand(cmd)),
-            CLIArgs::Exec(_) => {
-                // exec in task scripts should run as a subprocess
+            CLIArgs::PackageManager(_) | CLIArgs::Exec(_) => {
+                // PM commands and exec in task scripts run as subprocesses
+                // — no caching, no synthesis through the resolver.
                 Ok(HandledCommand::Synthesized(
                     command.to_synthetic_plan_request(UserCacheConfig::disabled()),
                 ))

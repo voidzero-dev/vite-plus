@@ -2,6 +2,8 @@
 Usage: vp <COMMAND>
 
 Core Commands:
+  create         Create a new project from a template
+  migrate        Migrate an existing project to Vite+
   dev            Run the development server
   build          Build for production
   test           Run tests
@@ -35,7 +37,7 @@ For more info, run any command with the `--help` flag:
   $ vp pack --help
 
 Options:
-  --config-loader <loader>      Config loader to use: auto, native, unrun (default: auto)
+  --config-loader <loader>      Config loader to use: auto, native, tsx, unrun (default: auto)
   --no-config                   Disable config file (default: true)
   -f, --format <format>         Bundle format: esm, cjs, iife, umd (default: esm)
   --clean                       Clean output directory, --no-clean to disable 
@@ -188,7 +190,8 @@ Handle Warnings
 
 Output
     -f, --format=ARG          Use a specific output format. Possible values: `checkstyle`,
-                              `default`, `github`, `gitlab`, `json`, `junit`, `stylish`, `unix`
+                              `default`, `agent`, `github`, `gitlab`, `json`, `junit`, `sarif`,
+                              `stylish`, `unix`
 
 Miscellaneous
         --silent              Do not display any diagnostics

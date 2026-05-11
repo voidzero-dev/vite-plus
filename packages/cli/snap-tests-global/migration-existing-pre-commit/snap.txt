@@ -6,7 +6,7 @@ npm test
 secret-scan
 
 > vp migrate --no-interactive # migration should preserve existing pre-commit contents
-◇ Migrated . to Vite+<repeat>
+◇ Migrated . to Vite+
 • Node <semver>  pnpm <semver>
 • 2 config updates applied
 • Git hooks configured

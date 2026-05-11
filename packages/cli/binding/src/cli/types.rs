@@ -76,12 +76,6 @@ pub enum SynthesizableSubcommand {
         #[clap(allow_hyphen_values = true, trailing_var_arg = true)]
         args: Vec<String>,
     },
-    /// Install command.
-    #[command(disable_help_flag = true, alias = "i")]
-    Install {
-        #[clap(allow_hyphen_values = true, trailing_var_arg = true)]
-        args: Vec<String>,
-    },
     /// Run format, lint, and type checks
     Check {
         /// Auto-fix format and lint issues
@@ -114,7 +108,6 @@ impl SynthesizableSubcommand {
             Self::Dev { .. } => "dev",
             Self::Preview { .. } => "preview",
             Self::Doc { .. } => "doc",
-            Self::Install { .. } => "install",
             Self::Check { .. } => "check",
         }
     }
@@ -131,6 +124,10 @@ pub(super) enum CLIArgs {
     /// Built-in subcommands (lint, build, test, etc.)
     #[command(flatten)]
     Synthesizable(SynthesizableSubcommand),
+
+    /// Package manager commands (install, add, remove, update, dedupe, …)
+    #[command(flatten)]
+    PackageManager(vite_pm_cli::PackageManagerCommand),
 
     /// Execute a command from local node_modules/.bin
     Exec(crate::exec::ExecArgs),

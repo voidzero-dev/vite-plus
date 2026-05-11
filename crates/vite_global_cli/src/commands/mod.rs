@@ -2,18 +2,11 @@
 //!
 //! Commands are organized by category:
 //!
-//! Category A - Package manager commands:
-//! - `add`: Add packages to dependencies
-//! - `install`: Install all dependencies
-//! - `remove`: Remove packages from dependencies
-//! - `update`: Update packages to their latest versions
-//! - `dedupe`: Deduplicate dependencies
-//! - `outdated`: Check for outdated packages
-//! - `why`: Show why a package is installed
-//! - `link`: Link packages for local development
-//! - `unlink`: Unlink packages
-//! - `dlx`: Execute a package binary without installing it
-//! - `pm`: Forward commands to the package manager
+//! Category A - Package manager commands (clap defs and dispatch live in
+//! the shared `vite_pm_cli` crate; the global CLI's `cli.rs` only adds
+//! the `--global` interception layer for vite-plus-managed installs):
+//! - `add`, `install`, `remove`, `update`, `dedupe`, `outdated`, `why`,
+//!   `info`, `link`, `unlink`, `dlx`, `pm <subcommand>`
 //!
 //! Category B - JS Script Commands:
 //! - `create`: Project scaffolding
@@ -25,7 +18,6 @@
 
 use std::{collections::HashMap, io::BufReader};
 
-use vite_install::package_manager::{PackageManager, PackageManagerType};
 use vite_path::AbsolutePath;
 use vite_shared::{PrependOptions, prepend_to_path_env};
 
@@ -67,20 +59,6 @@ pub fn has_vite_plus_dependency(cwd: &AbsolutePath) -> bool {
     }
 }
 
-/// Ensure a package.json exists in the given directory.
-/// If it doesn't exist, create a minimal one with `{ "type": "module" }`.
-pub async fn ensure_package_json(project_path: &AbsolutePath) -> Result<(), Error> {
-    let package_json_path = project_path.join("package.json");
-    if !package_json_path.as_path().exists() {
-        let content = serde_json::to_string_pretty(&serde_json::json!({
-            "type": "module"
-        }))?;
-        tokio::fs::write(&package_json_path, format!("{content}\n")).await?;
-        tracing::info!("Created package.json in {:?}", project_path);
-    }
-    Ok(())
-}
-
 /// Ensure the JS runtime is downloaded and prepend its bin directory to PATH.
 /// This should be called before executing any package manager command.
 ///
@@ -107,61 +85,6 @@ pub async fn prepend_js_runtime_to_path_env(project_path: &AbsolutePath) -> Resu
     Ok(())
 }
 
-/// Build a PackageManager, converting PackageJsonNotFound into a friendly error message.
-pub async fn build_package_manager(cwd: &AbsolutePath) -> Result<PackageManager, Error> {
-    match PackageManager::builder(cwd).build_with_default().await {
-        Ok(pm) => Ok(pm),
-        Err(vite_error::Error::WorkspaceError(vite_workspace::Error::PackageJsonNotFound(_))) => {
-            Err(Error::UserMessage("No package.json found.".into()))
-        }
-        Err(e) => Err(e.into()),
-    }
-}
-
-/// Build a PackageManager, falling back to a default npm instance when no
-/// package.json is found. Uses `build()` instead of `build_with_default()`
-/// to skip the interactive package manager selection prompt on the fallback path.
-///
-/// Requires `prepend_js_runtime_to_path_env` to be called first so npm is on PATH.
-pub async fn build_package_manager_or_npm_default(
-    cwd: &AbsolutePath,
-) -> Result<PackageManager, Error> {
-    match PackageManager::builder(cwd).build().await {
-        Ok(pm) => Ok(pm),
-        Err(vite_error::Error::WorkspaceError(vite_workspace::Error::PackageJsonNotFound(_)))
-        | Err(vite_error::Error::UnrecognizedPackageManager) => {
-            Ok(default_npm_package_manager(cwd))
-        }
-        Err(e) => Err(e.into()),
-    }
-}
-
-fn default_npm_package_manager(cwd: &AbsolutePath) -> PackageManager {
-    PackageManager {
-        client: PackageManagerType::Npm,
-        package_name: "npm".into(),
-        version: "latest".into(),
-        hash: None,
-        bin_name: "npm".into(),
-        workspace_root: cwd.to_absolute_path_buf(),
-        is_monorepo: false,
-        install_dir: cwd.to_absolute_path_buf(),
-    }
-}
-
-// Category A: Package manager commands
-pub mod add;
-pub mod dedupe;
-pub mod dlx;
-pub mod install;
-pub mod link;
-pub mod outdated;
-pub mod pm;
-pub mod remove;
-pub mod unlink;
-pub mod update;
-pub mod why;
-
 // Category B: JS Script Commands
 pub mod config;
 pub mod create;
@@ -182,18 +105,6 @@ pub mod upgrade;
 
 // Category C: Local CLI Delegation
 pub mod delegate;
-
-// Re-export command structs for convenient access
-pub use add::AddCommand;
-pub use dedupe::DedupeCommand;
-pub use dlx::DlxCommand;
-pub use install::InstallCommand;
-pub use link::LinkCommand;
-pub use outdated::OutdatedCommand;
-pub use remove::RemoveCommand;
-pub use unlink::UnlinkCommand;
-pub use update::UpdateCommand;
-pub use why::WhyCommand;
 
 #[cfg(test)]
 mod tests {

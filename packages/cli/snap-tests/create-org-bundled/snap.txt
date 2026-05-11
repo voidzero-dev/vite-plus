@@ -1,0 +1,24 @@
+> node $SNAP_CASES_DIR/.shared/mock-npm-registry.mjs -- vp create @your-org:demo --no-interactive --directory my-demo-app # bundled template: extract tarball, copy subdir
+◇ Scaffolded my-demo-app
+• Node <semver>  pnpm <semver>
+→ Next: cd my-demo-app && vp run
+
+> cat my-demo-app/package.json # verify package.json name was rewritten
+{
+  "name": "my-demo-app",
+  "version": "0.0.0",
+  "scripts": {
+    "dev": "vp dev",
+    "prepare": "vp config"
+  },
+  "devDependencies": {
+    "vite-plus": "catalog:"
+  },
+  "packageManager": "pnpm@<semver>"
+}
+
+> cat my-demo-app/src/index.ts # verify bundled source copied
+export const name = "demo";
+
+> ls my-demo-app/README.md # verify README copied
+my-demo-app/README.md

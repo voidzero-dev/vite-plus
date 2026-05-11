@@ -1,6 +1,6 @@
 > git init
 > vp migrate --no-interactive # should handle merge failure gracefully
-◇ Migrated . to Vite+<repeat>
+◇ Migrated . to Vite+
 • Node <semver>  pnpm <semver>
 ! Warnings:
   - Failed to merge staged config into vite.config.ts

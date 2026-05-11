@@ -1,0 +1,30 @@
+> vpx --help # should show vpx help message
+Execute a command from a local or remote npm package
+
+Usage: vpx [OPTIONS] <pkg[@version]> [args...]
+
+Arguments:
+  <pkg[@version]>  Package binary to execute
+  [args...]        Arguments to pass to the command
+
+Options:
+  -p, --package <NAME>  Package(s) to install if not found locally
+  -c, --shell-mode      Execute the command within a shell environment
+  -s, --silent          Suppress all output except the command's output
+  -h, --help            Print help
+
+Examples:
+  vpx eslint .                                           # Run local eslint (or download)
+  vpx create-vue my-app                                  # Download and run create-vue
+  vpx typescript@<semver> tsc --version                     # Run specific version
+  vpx -p cowsay -c 'echo "hi" | cowsay'                  # Shell mode with package
+
+> vpx -s cowsay hello # should run cowsay via dlx fallback
+ _______
+< hello >
+ -------
+        \   ^__^
+         \  (oo)\_______
+            (__)\       )\/\
+                ||----w |
+                ||     ||

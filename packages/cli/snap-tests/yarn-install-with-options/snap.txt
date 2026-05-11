@@ -1,71 +1,40 @@
 > vp install --help # print help message
+Install all dependencies, or add packages if package names are provided
 
-  Usage: yarn install [flags]
+Usage: vp install [OPTIONS] [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
 
-  Yarn install is used to install all dependencies for a project.
+Arguments:
+  [PACKAGES]...           Packages to add (if provided, acts as `vp add`)
+  [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
 
-  Options:
-
-    -v, --version                       output the version number
-    --no-default-rc                     prevent Yarn from automatically detecting yarnrc and npmrc files
-    --use-yarnrc <path>                 specifies a yarnrc file that Yarn should use (.yarnrc only, not .npmrc) (default: )
-    --verbose                           output verbose messages on internal operations
-    --offline                           trigger an error if any required dependencies are not available in local cache
-    --prefer-offline                    use network only if dependencies are not available in local cache
-    --enable-pnp, --pnp                 enable the Plug'n'Play installation
-    --disable-pnp                       disable the Plug'n'Play installation
-    --strict-semver                     
-    --json                              format Yarn log messages as lines of JSON (see jsonlines.org)
-    --ignore-scripts                    don't run lifecycle scripts
-    --har                               save HAR output of network traffic
-    --ignore-platform                   ignore platform checks
-    --ignore-engines                    ignore engines check
-    --ignore-optional                   ignore optional dependencies
-    --force                             install and build packages even if they were built before, overwrite lockfile
-    --skip-integrity-check              run install without checking if node_modules is installed
-    --check-files                       install will verify file tree of packages for consistency
-    --no-bin-links                      don't generate bin links when setting up packages
-    --flat                              only allow one version of a package
-    --prod, --production [prod]         
-    --no-lockfile                       don't read or generate a lockfile
-    --pure-lockfile                     don't generate a lockfile
-    --frozen-lockfile                   don't generate a lockfile and fail if an update is needed
-    --update-checksums                  update package checksums from current repository
-    --link-duplicates                   create hardlinks to the repeated modules in node_modules
-    --link-folder <path>                specify a custom folder to store global links
-    --global-folder <path>              specify a custom folder to store global packages
-    --modules-folder <path>             rather than installing modules into the node_modules folder relative to the cwd, output them here
-    --preferred-cache-folder <path>     specify a custom folder to store the yarn cache if possible
-    --cache-folder <path>               specify a custom folder that must be used to store the yarn cache
-    --mutex <type>[:specifier]          use a mutex to ensure only one yarn instance is executing
-    --emoji [bool]                      enable emoji in output (default: true)
-    -s, --silent                        skip Yarn console logs, other types of logs (script output) will be printed
-    --cwd <cwd>                         working directory to use (default: <cwd>)
-    --proxy <host>                      
-    --https-proxy <host>                
-    --registry <url>                    override configuration registry
-    --no-progress                       disable progress bar
-    --network-concurrency <number>      maximum number of concurrent network requests
-    --network-timeout <milliseconds>    TCP timeout for network requests
-    --non-interactive                   do not show interactive prompts
-    --scripts-prepend-node-path [bool]  prepend the node executable dir to the PATH in scripts
-    --no-node-version-check             do not warn when using a potentially unsupported Node version
-    --focus                             Focus on a single workspace by installing remote copies of its sibling workspaces.
-    --otp <otpcode>                     one-time password for two factor authentication
-    -A, --audit                         Run vulnerability audit on installed packages
-    -g, --global                        DEPRECATED
-    -S, --save                          DEPRECATED - save package to your `dependencies`
-    -D, --save-dev                      DEPRECATED - save package to your `devDependencies`
-    -P, --save-peer                     DEPRECATED - save package to your `peerDependencies`
-    -O, --save-optional                 DEPRECATED - save package to your `optionalDependencies`
-    -E, --save-exact                    DEPRECATED
-    -T, --save-tilde                    DEPRECATED
-    -h, --help                          output usage information
-  Visit https://yarnpkg.com/en/docs/cli/install for documentation about this command.
-
+Options:
+  -P, --prod                Do not install devDependencies
+  -D, --dev                 Only install devDependencies (install) / Save to devDependencies (add)
+      --no-optional         Do not install optionalDependencies
+      --frozen-lockfile     Fail if lockfile needs to be updated (CI mode)
+      --no-frozen-lockfile  Allow lockfile updates (opposite of --frozen-lockfile)
+      --lockfile-only       Only update lockfile, don't install
+      --prefer-offline      Use cached packages when available
+      --offline             Only use packages already in cache
+  -f, --force               Force reinstall all dependencies
+      --ignore-scripts      Do not run lifecycle scripts
+      --no-lockfile         Don't read or generate lockfile
+      --fix-lockfile        Fix broken lockfile entries (pnpm and yarn@2+ only)
+      --shamefully-hoist    Create flat `node_modules` (pnpm only)
+      --resolution-only     Re-run resolution for peer dependency analysis (pnpm only)
+      --silent              Suppress output (silent mode)
+      --filter <PATTERN>    Filter packages in monorepo (can be used multiple times)
+  -w, --workspace-root      Install in workspace root only
+  -E, --save-exact          Save exact version (only when adding packages)
+      --save-peer           Save to peerDependencies (only when adding packages)
+  -O, --save-optional       Save to optionalDependencies (only when adding packages)
+      --save-catalog        Save the new dependency to the default catalog (only when adding packages)
+  -g, --global              Install globally (requires package names)
+      --node <NODE>         Node.js version to use for global installation (only with -g)
+  -h, --help                Print help
 
 > vp run install
-$ vp install --prod
+$ vp install --prod ⊘ cache disabled
 yarn install v<semver>
 info No lockfile found.
 [1/4] Resolving packages...
@@ -75,14 +44,12 @@ info No lockfile found.
 success Saved lockfile.
 Done in <variable>ms.
 
----
-vp run: yarn-install-with-options#install not cached because it modified its input. (Run `vp run --last-details` for full details)
 
 > ls node_modules
 tslib
 
 > vp run install # install again hit cache
-$ vp install --prod
+$ vp install --prod ⊘ cache disabled
 yarn install v<semver>
 [1/4] Resolving packages...
 success Already up-to-date.

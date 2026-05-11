@@ -1,0 +1,175 @@
+> vp update --help # should show help
+Update packages to their latest versions
+
+Usage: vp update [OPTIONS] [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
+
+Arguments:
+  [PACKAGES]...           Packages to update (optional - updates all if omitted)
+  [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
+
+Options:
+  -L, --latest            Update to latest version (ignore semver range)
+  -g, --global            Update global packages
+  -r, --recursive         Update recursively in all workspace packages
+      --filter <PATTERN>  Filter packages in monorepo (can be used multiple times)
+  -w, --workspace-root    Include workspace root
+  -D, --dev               Update only devDependencies
+  -P, --prod              Update only dependencies (production)
+  -i, --interactive       Interactive mode
+      --no-optional       Don't update optionalDependencies
+      --no-save           Update lockfile only, don't modify package.json
+      --workspace         Only update if package exists in workspace (pnpm-specific)
+  -h, --help              Print help
+
+> vp update testnpm2 && cat package.json # should update package within semver range
+Packages: +<variable>
++<repeat>
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+
+dependencies:
++ testnpm2 <semver>
+
+optionalDependencies:
++ test-vite-plus-package-optional <semver>
+
+devDependencies:
++ test-vite-plus-package <semver>
+
+Done in <variable>ms using pnpm v<semver>
+{
+  "name": "command-update-pnpm10",
+  "version": "1.0.0",
+  "dependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "devDependencies": {
+    "test-vite-plus-package": "*"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "*"
+  },
+  "packageManager": "pnpm@<semver>"
+}
+
+> vp up testnpm2 --latest && cat package.json # should to absolute latest version
+Already up to date
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+
+Done in <variable>ms using pnpm v<semver>
+{
+  "name": "command-update-pnpm10",
+  "version": "1.0.0",
+  "dependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "devDependencies": {
+    "test-vite-plus-package": "*"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "*"
+  },
+  "packageManager": "pnpm@<semver>"
+}
+
+> vp update -D && cat package.json # should update only dev dependencies
+Already up to date
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+
+dependencies: skipped
+
+optionalDependencies: skipped
+
+Done in <variable>ms using pnpm v<semver>
+{
+  "name": "command-update-pnpm10",
+  "version": "1.0.0",
+  "dependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "devDependencies": {
+    "test-vite-plus-package": "^1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "*"
+  },
+  "packageManager": "pnpm@<semver>"
+}
+
+> vp update -P --no-save && cat package.json # should update only dependencies and optionalDependencies without saving
+Already up to date
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+
+devDependencies: skipped
+
+Done in <variable>ms using pnpm v<semver>
+{
+  "name": "command-update-pnpm10",
+  "version": "1.0.0",
+  "dependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "devDependencies": {
+    "test-vite-plus-package": "^1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "*"
+  },
+  "packageManager": "pnpm@<semver>"
+}
+
+> vp rm testnpm2 # should remove package from dependencies for the next test
+> vp add testnpm2@1.0.0 -O && vp update --no-optional --latest && cat package.json # should skip optional dependencies
+Packages: +<variable>
++
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+
+optionalDependencies:
++ testnpm2 <semver> (1.0.1 is available)
+
+Done in <variable>ms using pnpm v<semver>
+Packages: -2
+--
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+
+optionalDependencies:
+- test-vite-plus-package-optional <semver>
+- testnpm2 <semver>
+
+Done in <variable>ms using pnpm v<semver>
+{
+  "name": "command-update-pnpm10",
+  "version": "1.0.0",
+  "devDependencies": {
+    "test-vite-plus-package": "^1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0",
+    "testnpm2": "1.0.1"
+  },
+  "packageManager": "pnpm@<semver>"
+}
+
+> vp update && vp update --recursive && cat package.json # should update all packages and change the package.json
+Packages: +<variable>
++<repeat>
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+
+optionalDependencies:
++ test-vite-plus-package-optional <semver>
++ testnpm2 <semver>
+
+Done in <variable>ms using pnpm v<semver>
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+Done in <variable>ms using pnpm v<semver>
+{
+  "name": "command-update-pnpm10",
+  "version": "1.0.0",
+  "devDependencies": {
+    "test-vite-plus-package": "^1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0",
+    "testnpm2": "1.0.1"
+  },
+  "packageManager": "pnpm@<semver>"
+}

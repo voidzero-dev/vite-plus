@@ -4,7 +4,7 @@ Usage: vp [COMMAND]
 
 Start:
   create      Create a new project from a template
-  migrate     Migrate an existing project to Vite+<repeat>
+  migrate     Migrate an existing project to Vite+
   config      Configure hooks and agent integration
   staged      Run linters on staged files
   install, i  Install all dependencies, or add packages if package names are provided
@@ -329,6 +329,7 @@ Commands:
   rebuild    Rebuild native modules [aliases: rb]
   fund       Show funding information for installed packages
   ping       Ping the registry
+  plugin     Manage Yarn plugins (Yarn 2+ only — other package managers will print a warning and exit successfully)
 
 Options:
   -h, --help  Print help

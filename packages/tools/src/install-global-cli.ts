@@ -26,6 +26,7 @@ function localDevVersion(): string {
 }
 
 // Get repo root from script location (packages/tools/src/install-global-cli.ts -> repo root)
+// oxlint-disable-next-line no-underscore-dangle
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '../../..');
 

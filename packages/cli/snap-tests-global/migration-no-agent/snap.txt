@@ -1,5 +1,5 @@
 > vp migrate --no-agent --no-interactive # migration with --no-agent should skip agent instructions
-◇ Migrated . to Vite+<repeat>
+◇ Migrated . to Vite+
 • Node <semver>  pnpm <semver>
 • 2 config updates applied
 

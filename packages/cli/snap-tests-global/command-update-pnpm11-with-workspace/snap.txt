@@ -1,0 +1,107 @@
+> vp update testnpm2 --latest -w && cat package.json # should update in workspace root
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+
+Packages: +<variable>
++
+Done in <variable>ms using pnpm v<semver>
+{
+  "name": "command-update-pnpm11-with-workspace",
+  "version": "1.0.0",
+  "dependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "packageManager": "pnpm@<semver>"
+}
+
+> vp update testnpm2 --latest --filter app && cat packages/app/package.json # should update in specific package
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+.                                        |   +2 +
+Done in <variable>ms using pnpm v<semver>
+{
+  "name": "app",
+  "dependencies": {
+    "@vite-plus-test/utils": "workspace:*",
+    "test-vite-plus-install": "*",
+    "testnpm2": "^1.0.1"
+  },
+  "devDependencies": {
+    "test-vite-plus-package": "*"
+  }
+}
+
+> vp up -D --filter app && cat packages/app/package.json # should update dev dependencies in app
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+Done in <variable>ms using pnpm v<semver>
+{
+  "name": "app",
+  "dependencies": {
+    "@vite-plus-test/utils": "workspace:*",
+    "test-vite-plus-install": "*",
+    "testnpm2": "^1.0.1"
+  },
+  "devDependencies": {
+    "test-vite-plus-package": "^1.0.0"
+  }
+}
+
+> vp update --latest --filter "*" && cat packages/app/package.json packages/utils/package.json # should update in all packages
+Scope: all <variable> workspace projects
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+Done in <variable>ms using pnpm v<semver>
+{
+  "name": "app",
+  "dependencies": {
+    "@vite-plus-test/utils": "workspace:*",
+    "test-vite-plus-install": "^1.0.0",
+    "testnpm2": "^1.0.1"
+  },
+  "devDependencies": {
+    "test-vite-plus-package": "^1.0.0"
+  }
+}
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "dependencies": {
+    "testnpm2": "^1.0.1"
+  }
+}
+
+> vp update -r --no-save && cat package.json packages/app/package.json # should update recursively without saving
+Scope: all <variable> workspace projects
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+Done in <variable>ms using pnpm v<semver>
+{
+  "name": "command-update-pnpm11-with-workspace",
+  "version": "1.0.0",
+  "dependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "packageManager": "pnpm@<semver>"
+}
+{
+  "name": "app",
+  "dependencies": {
+    "@vite-plus-test/utils": "workspace:*",
+    "test-vite-plus-install": "^1.0.0",
+    "testnpm2": "^1.0.1"
+  },
+  "devDependencies": {
+    "test-vite-plus-package": "^1.0.0"
+  }
+}
+
+> vp update --workspace --filter app @vite-plus-test/utils && cat packages/app/package.json # should update workspace dependency
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+Done in <variable>ms using pnpm v<semver>
+{
+  "name": "app",
+  "dependencies": {
+    "@vite-plus-test/utils": "workspace:*",
+    "test-vite-plus-install": "^1.0.0",
+    "testnpm2": "^1.0.1"
+  },
+  "devDependencies": {
+    "test-vite-plus-package": "^1.0.0"
+  }
+}

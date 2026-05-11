@@ -542,7 +542,7 @@ function vp
             command vp $argv; return
         end
         set -lx VP_ENV_USE_EVAL_ENABLE 1
-        set -l __vp_out (env FISH_VERSION=$FISH_VERSION command vp $argv); or return $status
+        set -l __vp_out (env FISH_VERSION=$FISH_VERSION __VP_BIN__/vp $argv); or return $status
         eval (string join ';' $__vp_out)
     else
         command vp $argv
@@ -1015,8 +1015,8 @@ mod tests {
             "env.fish should check for 'use' subcommand"
         );
         assert!(
-            fish_content.contains("command vp $argv"),
-            "env.fish should use 'command vp' for passthrough"
+            fish_content.contains("/vp $argv"),
+            "env.fish should use absolute path to vp for passthrough"
         );
     }
 

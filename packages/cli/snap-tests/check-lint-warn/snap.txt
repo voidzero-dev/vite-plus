@@ -10,4 +10,4 @@ warn: Lint warnings found
    ╰────
   help: Delete this console statement.
 
-Found 0 errors and 1 warning in 1 file (<variable>ms, <variable> threads)
+Found 0 errors and 1 warning in 2 files (<variable>ms, <variable> threads)

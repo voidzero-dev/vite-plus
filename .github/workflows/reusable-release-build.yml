@@ -1,0 +1,158 @@
+name: Reusable Release Build
+
+permissions: {}
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: 'Version to stamp into Cargo.toml and produced binaries.'
+        type: string
+        required: true
+      cache-key:
+        description: 'setup-rust cache-key prefix; pass a distinct value per caller (e.g. "release", "pkg-pr-new") to avoid cross-workflow cache pollution.'
+        type: string
+        required: false
+        default: 'release'
+
+jobs:
+  build-rust:
+    name: Build (${{ matrix.settings.target }})
+    runs-on: ${{ matrix.settings.os }}
+    permissions:
+      contents: read
+    env:
+      RELEASE_BUILD: 'true'
+      DEBUG: 'napi:*'
+      VERSION: ${{ inputs.version }}
+    strategy:
+      fail-fast: false
+      matrix:
+        settings:
+          - target: aarch64-apple-darwin
+            os: macos-latest
+          - target: x86_64-apple-darwin
+            os: macos-latest
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-latest
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+          - target: aarch64-pc-windows-msvc
+            os: windows-latest
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - uses: ./.github/actions/clone
+      - uses: oxc-project/setup-rust@23f38cfb0c04af97a055f76acee94d5be71c7c82 # v1.0.16
+        with:
+          save-cache: ${{ github.ref_name == 'main' }}
+          cache-key: ${{ inputs.cache-key }}
+
+      - name: Rustup Adds Target
+        run: rustup target add ${{ matrix.settings.target }}
+
+      - uses: oxc-project/setup-node@4c26e7cb3605b6bdef5450dacd02c434b10fd8ba # v1.2.0
+
+      - name: Set binding version
+        shell: bash
+        run: |
+          pnpm exec tool replace-file-content packages/cli/binding/Cargo.toml 'version = "0.0.0"' "version = \"${VERSION}\""
+          pnpm exec tool replace-file-content crates/vite_global_cli/Cargo.toml 'version = "0.0.0"' "version = \"${VERSION}\""
+          cat crates/vite_global_cli/Cargo.toml
+
+      - name: Verify version replacement
+        shell: bash
+        run: |
+          if grep -q 'version = "0.0.0"' crates/vite_global_cli/Cargo.toml; then
+            echo "ERROR: Version replacement failed for crates/vite_global_cli/Cargo.toml"
+            head -5 crates/vite_global_cli/Cargo.toml
+            exit 1
+          fi
+          if grep -q 'version = "0.0.0"' packages/cli/binding/Cargo.toml; then
+            echo "ERROR: Version replacement failed for packages/cli/binding/Cargo.toml"
+            head -5 packages/cli/binding/Cargo.toml
+            exit 1
+          fi
+          echo "Version replacement verified successfully"
+
+      - name: Build
+        uses: ./.github/actions/build-upstream
+        with:
+          target: ${{ matrix.settings.target }}
+
+      - name: Upload Vite+ native artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: vite-plus-native-${{ matrix.settings.target }}
+          path: ./packages/cli/binding/*.node
+          if-no-files-found: error
+
+      - name: Upload Rust CLI binary artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: vite-global-cli-${{ matrix.settings.target }}
+          path: |
+            ./target/${{ matrix.settings.target }}/release/vp
+            ./target/${{ matrix.settings.target }}/release/vp.exe
+            ./target/${{ matrix.settings.target }}/release/vp-shim.exe
+          if-no-files-found: error
+
+      - name: Upload installer binary artifact (Windows only)
+        if: contains(matrix.settings.target, 'windows')
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: vp-setup-${{ matrix.settings.target }}
+          path: ./target/${{ matrix.settings.target }}/release/vp-setup.exe
+          if-no-files-found: error
+
+      - name: Remove .node files before upload dist
+        if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
+        run: |
+          rm ./packages/core/dist/**/*.node
+
+      - name: Upload core dist
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
+        with:
+          name: core
+          path: ./packages/core/dist
+          if-no-files-found: error
+
+      - name: Upload prompts dist
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
+        with:
+          name: prompts
+          path: ./packages/prompts/dist
+          if-no-files-found: error
+
+      - name: Upload cli dist
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
+        with:
+          name: cli
+          path: ./packages/cli/dist
+          if-no-files-found: error
+
+      - name: Upload cli docs
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
+        with:
+          name: cli-docs
+          path: ./packages/cli/docs
+          if-no-files-found: error
+
+      - name: Upload LICENSE files
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
+        with:
+          name: licenses
+          path: |
+            ./packages/core/LICENSE
+            ./packages/cli/LICENSE
+          if-no-files-found: error

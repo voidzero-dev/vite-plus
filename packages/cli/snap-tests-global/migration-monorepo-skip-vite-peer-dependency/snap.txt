@@ -1,9 +1,9 @@
-> vp migrate --no-interactive # migration should check each package's peerDependencies
-◇ Migrated . to Vite+<repeat>
+> vp migrate --no-interactive # migration should preserve vite peer contracts in workspace packages
+◇ Migrated . to Vite+
 • Node <semver>  pnpm <semver>
 • 2 config updates applied, 1 file had imports rewritten
 
-> cat packages/vite-plugin/src/index.ts # vite-plugin has vite in peerDeps: vite NOT rewritten, vitest rewritten
+> cat packages/vite-plugin/src/index.ts # vite-plugin has vite in peerDeps: vite imports stay public, vitest rewrites
 import { defineConfig, type Plugin } from 'vite';
 import { describe, it, expect } from 'vite-plus/test';
 
@@ -38,10 +38,13 @@ export default defineConfig({
   }
 }
 
-> cat packages/vite-plugin/package.json # has vite in peerDependencies
+> cat packages/vite-plugin/package.json # vite peer range is preserved
 {
   "name": "my-vite-plugin",
   "peerDependencies": {
     "vite": "^6.0.0"
+  },
+  "devDependencies": {
+    "vite-plus": "catalog:"
   }
 }

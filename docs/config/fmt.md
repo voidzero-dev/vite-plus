@@ -4,7 +4,7 @@
 
 ## Example
 
-```ts
+```ts [vite.config.ts]
 import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
@@ -16,3 +16,5 @@ export default defineConfig({
   },
 });
 ```
+
+For package-specific formatting settings in a workspace, use [`fmt.overrides`](/guide/monorepo#format-overrides) from the root `vite.config.ts`.
