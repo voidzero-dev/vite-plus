@@ -65,7 +65,7 @@ jobs:
       - name: Check upgrade dependencies
         id: check-upgrade-dependencies
         timeout-minutes: 180
-        uses: anthropics/claude-code-action@c3d45e8e941e1b2ad7b278c57482d9c5bf1f35b3 # Claude Code to 2.1.112
+        uses: anthropics/claude-code-action@11a9dadd198803a0cea6bd53da3e0e8a762fc6ea # v1.0.108
         env:
           RELEASE_BUILD: 'true'
         with:
@@ -176,7 +176,7 @@ jobs:
       - name: Enhance PR description with Claude
         id: enhance-pr-description
         continue-on-error: true
-        uses: anthropics/claude-code-action@c3d45e8e941e1b2ad7b278c57482d9c5bf1f35b3 # Claude Code to 2.1.112
+        uses: anthropics/claude-code-action@11a9dadd198803a0cea6bd53da3e0e8a762fc6ea # v1.0.108
         with:
           claude_code_oauth_token: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -294,7 +294,7 @@ jobs:
           fi
 
       - name: Create/Update PR
-        uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7.0.11
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
         with:
           base: main
           branch: deps/upstream-update
