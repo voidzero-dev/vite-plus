@@ -320,6 +320,11 @@ jobs:
             node-version: 24
             command: |
               vp check --fix
+          - name: vite-plus-monorepo-overrides
+            node-version: 24
+            command: |
+              vp check --fix
+              vp run verify
           - name: varlet
             node-version: 22
             command: |

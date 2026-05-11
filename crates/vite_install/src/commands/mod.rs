@@ -16,6 +16,7 @@ pub mod outdated;
 pub mod owner;
 pub mod pack;
 pub mod ping;
+pub mod plugin;
 pub mod prune;
 pub mod publish;
 pub mod rebuild;

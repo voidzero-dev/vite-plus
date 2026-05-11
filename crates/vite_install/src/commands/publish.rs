@@ -20,6 +20,7 @@ pub struct PublishCommandOptions<'a> {
     pub no_git_checks: bool,
     pub publish_branch: Option<&'a str>,
     pub report_summary: bool,
+    pub provenance: bool,
     pub force: bool,
     pub json: bool,
     pub recursive: bool,
@@ -99,6 +100,10 @@ impl PackageManager {
                     args.push("--report-summary".into());
                 }
 
+                if options.provenance {
+                    args.push("--provenance".into());
+                }
+
                 if options.force {
                     args.push("--force".into());
                 }
@@ -150,6 +155,10 @@ impl PackageManager {
                 if let Some(otp) = options.otp {
                     args.push("--otp".into());
                     args.push(otp.to_string());
+                }
+
+                if options.provenance {
+                    args.push("--provenance".into());
                 }
 
                 if options.force {
@@ -206,6 +215,10 @@ impl PackageManager {
 
                 if options.report_summary {
                     output::warn("--report-summary not supported by bun, ignoring flag");
+                }
+
+                if options.provenance {
+                    output::warn("--provenance not supported by bun publish, ignoring flag");
                 }
 
                 if options.force {
@@ -426,6 +439,50 @@ mod tests {
             ..Default::default()
         });
         assert_eq!(result.bin_path, "npm");
+        assert_eq!(result.args, vec!["publish"]);
+    }
+
+    #[test]
+    fn test_pnpm_publish_provenance() {
+        let pm = create_mock_package_manager(PackageManagerType::Pnpm, "10.0.0");
+        let result = pm.resolve_publish_command(&PublishCommandOptions {
+            provenance: true,
+            ..Default::default()
+        });
+        assert_eq!(result.bin_path, "pnpm");
+        assert_eq!(result.args, vec!["publish", "--provenance"]);
+    }
+
+    #[test]
+    fn test_npm_publish_provenance() {
+        let pm = create_mock_package_manager(PackageManagerType::Npm, "11.0.0");
+        let result = pm.resolve_publish_command(&PublishCommandOptions {
+            provenance: true,
+            ..Default::default()
+        });
+        assert_eq!(result.bin_path, "npm");
+        assert_eq!(result.args, vec!["publish", "--provenance"]);
+    }
+
+    #[test]
+    fn test_yarn_publish_provenance() {
+        let pm = create_mock_package_manager(PackageManagerType::Yarn, "4.0.0");
+        let result = pm.resolve_publish_command(&PublishCommandOptions {
+            provenance: true,
+            ..Default::default()
+        });
+        assert_eq!(result.bin_path, "npm");
+        assert_eq!(result.args, vec!["publish", "--provenance"]);
+    }
+
+    #[test]
+    fn test_bun_publish_provenance_ignored() {
+        let pm = create_mock_package_manager(PackageManagerType::Bun, "1.2.0");
+        let result = pm.resolve_publish_command(&PublishCommandOptions {
+            provenance: true,
+            ..Default::default()
+        });
+        assert_eq!(result.bin_path, "bun");
         assert_eq!(result.args, vec!["publish"]);
     }
 

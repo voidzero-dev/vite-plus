@@ -13,7 +13,7 @@ That means you usually do not need separate `setup-node`, package-manager setup,
 ```yaml [.github/workflows/ci.yml]
 - uses: voidzero-dev/setup-vp@v1
   with:
-    node-version: '22'
+    node-version: '24'
     cache: true
 - run: vp install
 - run: vp check
@@ -30,23 +30,17 @@ If you are migrating an existing GitHub Actions workflow, you can often replace 
 #### Before:
 
 ```yaml [.github/workflows/ci.yml]
-- uses: actions/setup-node@v4
+- uses: pnpm/action-setup@v6
+  with:
+    version: 11
+
+- uses: actions/setup-node@v6
   with:
     node-version: '24'
+    cache: pnpm
 
-- uses: pnpm/action-setup@v4
-  with:
-    version: 10
-
-- name: Get pnpm store path
-  run: pnpm store path
-
-- uses: actions/cache@v4
-  with:
-    path: ~/.pnpm-store
-    key: ${{ runner.os }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
-
-- run: pnpm install && pnpm dev:setup
+- run: pnpm ci && pnpm dev:setup
+- run: pnpm check
 - run: pnpm test
 ```
 

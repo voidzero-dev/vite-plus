@@ -3,8 +3,8 @@ import { resolve } from 'node:path';
 import type { VoidZeroThemeConfig } from '@voidzero-dev/vitepress-theme';
 import { extendConfig } from '@voidzero-dev/vitepress-theme/config';
 import { defineConfig, type HeadConfig } from 'vitepress';
+import { groupIconMdPlugin, groupIconVitePlugin } from 'vitepress-plugin-group-icons';
 import { withMermaid } from 'vitepress-plugin-mermaid';
-import { groupIconMdPlugin, groupIconVitePlugin } from 'vitepress-plugin-group-icons'
 
 const taskRunnerGuideItems = [
   {
@@ -72,6 +72,7 @@ const guideSidebar = [
       { text: 'IDE Integration', link: '/guide/ide-integration' },
       { text: 'CI', link: '/guide/ci' },
       { text: 'Commit Hooks', link: '/guide/commit-hooks' },
+      { text: 'Monorepo Guide', link: '/guide/monorepo' },
       { text: 'Troubleshooting', link: '/guide/troubleshooting' },
     ],
   },
@@ -126,9 +127,9 @@ export default extendConfig(
         plugins: [
           groupIconVitePlugin({
             customIcon: {
-              tsdown: 'https://tsdown.dev/tsdown.svg'
-            }
-          })
+              tsdown: 'https://tsdown.dev/tsdown.svg',
+            },
+          }),
         ],
       },
       themeConfig: {
@@ -196,24 +197,24 @@ export default extendConfig(
         footer: {
           copyright: `© ${new Date().getFullYear()} VoidZero Inc. and Vite+ contributors.`,
           nav: [
-             {
-              title: "Company",
+            {
+              title: 'Company',
               items: [
-                { text: "VoidZero", link: "https://voidzero.dev" },
-                { text: "Vite", link: "https://vite.dev" },
-                { text: "Vitest", link: "https://vitest.dev" },
-                { text: "Rolldown", link: "https://rolldown.rs" },
-                { text: "Oxc", link: "https://oxc.rs" },
+                { text: 'VoidZero', link: 'https://voidzero.dev' },
+                { text: 'Vite', link: 'https://vite.dev' },
+                { text: 'Vitest', link: 'https://vitest.dev' },
+                { text: 'Rolldown', link: 'https://rolldown.rs' },
+                { text: 'Oxc', link: 'https://oxc.rs' },
               ],
             },
           ],
-            social: [
-              { icon: "github", link: "https://github.com/voidzero-dev/vite-plus" },
-              { icon: "x", link: "https://x.com/voidzerodev" },
-              { icon: "discord", link: "https://discord.gg/cC6TEVFKSx" },
-              { icon: "bluesky", link: "https://bsky.app/profile/voidzero.dev" },
-            ],
-        }
+          social: [
+            { icon: 'github', link: 'https://github.com/voidzero-dev/vite-plus' },
+            { icon: 'x', link: 'https://x.com/voidzerodev' },
+            { icon: 'discord', link: 'https://discord.gg/cC6TEVFKSx' },
+            { icon: 'bluesky', link: 'https://bsky.app/profile/voidzero.dev' },
+          ],
+        },
       },
       transformHead({ page, pageData }) {
         const url = 'https://viteplus.dev/' + page.replace(/\.md$/, '').replace(/index$/, '');
@@ -249,7 +250,7 @@ export default extendConfig(
       },
       markdown: {
         config(md) {
-          md.use(groupIconMdPlugin)
+          md.use(groupIconMdPlugin);
         },
       },
     }),

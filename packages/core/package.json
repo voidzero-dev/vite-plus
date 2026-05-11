@@ -46,6 +46,9 @@
       "default": "./dist/tsdown/index.js",
       "types": "./dist/tsdown/index-types.d.ts"
     },
+    "./pack/client": {
+      "types": "./dist/tsdown/client.d.ts"
+    },
     "./package.json": "./package.json",
     "./rolldown": {
       "default": "./dist/rolldown/index.mjs",
