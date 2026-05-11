@@ -696,6 +696,10 @@ pub enum PmCommands {
         #[arg(long)]
         report_summary: bool,
 
+        /// Publish with provenance
+        #[arg(long)]
+        provenance: bool,
+
         /// Force publish
         #[arg(long)]
         force: bool,
