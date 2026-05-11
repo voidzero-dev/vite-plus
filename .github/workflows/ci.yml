@@ -30,7 +30,7 @@ jobs:
     steps:
       - name: Optimize CI
         id: check_skip
-        uses: withgraphite/graphite-ci-action@ee395f3a78254c006d11339669c6cabddf196f72
+        uses: withgraphite/graphite-ci-action@9bc969adfd43bb790da3b64b543c78c75cef9689 # v0.0.9
         with:
           graphite_token: ${{ secrets.GRAPHITE_CI_OPTIMIZER_TOKEN }}
 
@@ -45,7 +45,7 @@ jobs:
       code-changed: ${{ steps.filter.outputs.code }}
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
-      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
+      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
         id: filter
         with:
           filters: |
