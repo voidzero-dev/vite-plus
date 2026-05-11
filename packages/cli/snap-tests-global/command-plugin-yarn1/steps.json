@@ -1,0 +1,5 @@
+{
+  "commands": [
+    "vp pm plugin runtime # yarn classic does not support plugin commands; should warn and exit 0"
+  ]
+}
