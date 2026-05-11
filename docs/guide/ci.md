@@ -30,7 +30,7 @@ If you are migrating an existing GitHub Actions workflow, you can often replace 
 #### Before:
 
 ```yaml [.github/workflows/ci.yml]
-- uses: pnpm/action-setup@v4
+- uses: pnpm/action-setup@v6
   with:
     version: 11
 
