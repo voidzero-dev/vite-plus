@@ -1,0 +1,2 @@
+> vp pm plugin runtime # pnpm does not support plugin commands; should warn and exit 0
+warn: pnpm does not support plugin commands

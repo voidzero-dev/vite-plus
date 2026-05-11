@@ -329,6 +329,7 @@ Commands:
   rebuild    Rebuild native modules [aliases: rb]
   fund       Show funding information for installed packages
   ping       Ping the registry
+  plugin     Manage Yarn plugins (Yarn 2+ only — other package managers will print a warning and exit successfully)
 
 Options:
   -h, --help  Print help
