@@ -5,10 +5,6 @@ name: Publish to pkg.pr.new
 permissions: {}
 
 on:
-  workflow_dispatch:
-  push:
-    branches:
-      - ci/pkg-pr-new
   pull_request:
     types: [labeled]
 
@@ -20,9 +16,7 @@ jobs:
   prepare:
     if: >-
       github.repository == 'voidzero-dev/vite-plus' &&
-      (github.event_name == 'workflow_dispatch' ||
-      github.event_name == 'push' ||
-      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'pkg.pr.new')))
+      contains(github.event.pull_request.labels.*.name, 'pkg.pr.new')
     name: Compute snapshot version
     runs-on: ubuntu-latest
     permissions:
@@ -45,9 +39,7 @@ jobs:
     name: Build bindings and binaries
     if: >-
       github.repository == 'voidzero-dev/vite-plus' &&
-      (github.event_name == 'workflow_dispatch' ||
-      github.event_name == 'push' ||
-      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'pkg.pr.new')))
+      contains(github.event.pull_request.labels.*.name, 'pkg.pr.new')
     needs: prepare
     permissions:
       contents: read
@@ -59,9 +51,7 @@ jobs:
   publish:
     if: >-
       github.repository == 'voidzero-dev/vite-plus' &&
-      (github.event_name == 'workflow_dispatch' ||
-      github.event_name == 'push' ||
-      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'pkg.pr.new')))
+      contains(github.event.pull_request.labels.*.name, 'pkg.pr.new')
     name: Pkg Preview
     runs-on: ubuntu-latest
     needs:
