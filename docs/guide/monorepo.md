@@ -1,8 +1,8 @@
 # Monorepo
 
-Vite+ works well in a monorepo when the shared tool configuration lives in the workspace root. Put the root defaults in `vite.config.ts`, then use `overrides` to apply package-specific lint and format settings.
+Vite+ supports monorepos with `vite.config.ts` at the root. You can define the defaults for `lint`, `fmt`, etc. at the root, and use `overrides` to apply package-specific lint and format settings.
 
-This is the recommended pattern for shared quality tooling because the root config stays type-safe and composable, while each app or package can still keep its own Vite, Vitest, framework, or runtime files when that is useful.
+Because `vite.config.ts` is just JavaScript, you can choose to put your entire config into this file or compose it using regular JavaScript imports. You can still have separate `vite.config.ts` files in each package for the Vite, Vitest, framework or runtime configuration.
 
 ## Root Config With Overrides
 
@@ -86,9 +86,9 @@ export default defineConfig({
 });
 ```
 
-## Splitting Config Files
+## Composing Configuration Files
 
-You can still split configuration across your repository. Export normal JavaScript objects from nearby files, import them in the root config, and merge them into the matching override.
+You can split configuration across your repository and compose them using JavaScript imports. Export JavaScript objects from nearby files or packages, import them in the root config, and merge them into the matching override.
 
 ```ts [tooling/lint/react.ts]
 import type { OxlintOverride } from 'vite-plus/lint';
