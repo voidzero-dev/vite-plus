@@ -181,8 +181,11 @@ pub struct ShellProfile {
 
 #[derive(Clone, Copy)]
 pub enum ShellProfileRoot {
+    #[cfg_attr(windows, allow(dead_code))]
     Home,
+    #[cfg_attr(windows, allow(dead_code))]
     Zsh,
+    #[cfg_attr(windows, allow(dead_code))]
     Fish,
     NushellConfig,
     NushellData,
