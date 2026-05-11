@@ -71,6 +71,7 @@ export default defineConfig({
       'packages/cli/snap-tests/fmt-ignore-patterns/src/ignored',
       'packages/cli/snap-tests-global/migration-lint-staged-ts-config',
       'docs/**',
+      '!docs/.vitepress/**',
       'ecosystem-ci/*/**',
       'packages/test/**.cjs',
       'packages/test/**.cts',

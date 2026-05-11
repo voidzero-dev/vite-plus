@@ -436,6 +436,10 @@ async function bundleTsdown() {
   // tsdown resolves this file via path.resolve(import.meta.dirname, '..', 'esm-shims.js'),
   // which means it expects the file at dist/esm-shims.js (one level up from dist/tsdown/).
   await copyFile(join(tsdownSourceDir, 'esm-shims.js'), join(projectDir, 'dist/esm-shims.js'));
+
+  // Copy client.d.ts to dist/tsdown/ to expose it as the vite-plus/pack/client entry point,
+  // equivalent to tsdown/client for registering bundler type features with TypeScript.
+  await copyFile(join(tsdownSourceDir, 'client.d.ts'), join(projectDir, 'dist/tsdown/client.d.ts'));
 }
 
 async function brandTsdown() {

@@ -336,6 +336,11 @@ static RE_REF_TSDOWN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"^(\s*///\s*<reference\s+types\s*=\s*["'])tsdown(["']\s*/>)"#).unwrap()
 });
 
+/// `tsdown/client` → `vite-plus/pack/client`
+static RE_REF_TSDOWN_CLIENT: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"^(\s*///\s*<reference\s+types\s*=\s*["'])tsdown/client(["']\s*/>)"#).unwrap()
+});
+
 /// Apply a single regex replacement, updating `content` in place if matched.
 /// Uses `Cow::Owned` variant check to avoid O(n) string comparison on no-match.
 /// Uses `replace` (not `replace_all`) since each line contains at most one reference directive.
@@ -495,10 +500,14 @@ fn rewrite_reference_types(content: &mut String, skip_packages: &SkipPackages) -
                 continue;
             }
         }
-        if !skip_packages.skip_tsdown
-            && apply_regex_replace(line, &RE_REF_TSDOWN, "${1}vite-plus/pack${2}")
-        {
-            changed = true;
+        if !skip_packages.skip_tsdown {
+            if apply_regex_replace(line, &RE_REF_TSDOWN_CLIENT, "${1}vite-plus/pack/client${2}") {
+                changed = true;
+                continue;
+            }
+            if apply_regex_replace(line, &RE_REF_TSDOWN, "${1}vite-plus/pack${2}") {
+                changed = true;
+            }
         }
     }
 
@@ -2463,12 +2472,12 @@ export default defineConfig({});"#
     }
 
     #[test]
-    fn test_rewrite_reference_types_tsdown_subpath_not_rewritten() {
-        // tsdown subpaths should NOT be rewritten because vite-plus only exports ./pack (no subpaths)
+    fn test_rewrite_reference_types_tsdown_client_rewritten() {
+        // tsdown/client should be rewritten to vite-plus/pack/client
         let content = r#"/// <reference types="tsdown/client" />"#;
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(!result.updated);
-        assert_eq!(result.content, content);
+        assert!(result.updated);
+        assert_eq!(result.content, r#"/// <reference types="vite-plus/pack/client" />"#);
     }
 
     #[test]

@@ -22,3 +22,5 @@ export default defineConfig({
 ```
 
 We recommend enabling both `options.typeAware` and `options.typeCheck` so `vp lint` and `vp check` can use the full type-aware path.
+
+For package-specific lint rules in a workspace, use [`lint.overrides`](/guide/monorepo#root-config-with-overrides) from the root `vite.config.ts`.
