@@ -115,7 +115,6 @@ export default extendConfig(
           include: ['mermaid > @braintree/sanitize-url'],
         },
         resolve: {
-          tsconfigPaths: true,
           alias: [
             { find: '@local-assets', replacement: resolve(__dirname, 'theme/assets') },
             { find: '@layouts', replacement: resolve(__dirname, 'theme/layouts') },

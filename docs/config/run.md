@@ -214,6 +214,7 @@ tasks: {
 ```
 
 The `base` field is required and controls how the glob pattern is resolved:
+
 - `"package"`: relative to the package directory
 - `"workspace"`: relative to the workspace root
 
