@@ -80,7 +80,7 @@ runs:
 
     - name: Install cargo-zigbuild (musl)
       if: steps.cache-restore.outputs.cache-hit != 'true' && contains(inputs.target, 'musl')
-      uses: taiki-e/install-action@1f2425cdb59f8fffb99ee16a5968edf6f57a2b93  # v2.75.24
+      uses: taiki-e/install-action@1f2425cdb59f8fffb99ee16a5968edf6f57a2b93 # v2.75.24
       with:
         tool: cargo-zigbuild
 
