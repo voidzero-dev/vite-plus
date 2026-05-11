@@ -33,6 +33,7 @@ import {
   findTsconfigFiles,
   hasBaseUrlInTsconfig,
   removeDeprecatedTsconfigFalseOption,
+  rewriteTypesInTsconfig,
 } from '../utils/tsconfig.ts';
 import type { NpmWorkspaces } from '../utils/workspace.ts';
 import { editYamlFile, readYamlFile, scalarString, type YamlDocument } from '../utils/yaml.ts';
@@ -700,6 +701,20 @@ function cleanupDeprecatedTsconfigOptions(
   }
 }
 
+function rewriteTsconfigTypes(projectPath: string, silent = false, report?: MigrationReport): void {
+  const files = findTsconfigFiles(projectPath);
+  for (const filePath of files) {
+    if (rewriteTypesInTsconfig(filePath)) {
+      if (report) {
+        report.removedConfigCount++;
+      }
+      if (!silent) {
+        prompts.log.success(`✔ Rewrote types in ${displayRelative(filePath)}`);
+      }
+    }
+  }
+}
+
 // .svelte files are handled by @sveltejs/vite-plugin-svelte (transpilation)
 // and svelte-check / Svelte Language Server (type checking).
 // Module resolution for `.svelte` imports is typically set up by the
@@ -948,6 +963,7 @@ export function rewriteStandaloneProject(
     rewriteLintStagedConfigFile(projectPath, report);
   }
   cleanupDeprecatedTsconfigOptions(projectPath, silent, report);
+  rewriteTsconfigTypes(projectPath, silent, report);
   mergeViteConfigFiles(projectPath, silent, report);
   injectLintTypeCheckDefaults(projectPath, silent, report);
   injectFmtDefaults(projectPath, silent, report);
@@ -1003,6 +1019,7 @@ export function rewriteMonorepo(
     rewriteLintStagedConfigFile(workspaceInfo.rootDir, report);
   }
   cleanupDeprecatedTsconfigOptions(workspaceInfo.rootDir, silent, report);
+  rewriteTsconfigTypes(workspaceInfo.rootDir, silent, report);
   mergeViteConfigFiles(workspaceInfo.rootDir, silent, report);
   injectLintTypeCheckDefaults(workspaceInfo.rootDir, silent, report);
   injectFmtDefaults(workspaceInfo.rootDir, silent, report);
@@ -1026,6 +1043,7 @@ export function rewriteMonorepoProject(
   catalogDependencyResolver?: CatalogDependencyResolver,
 ): void {
   cleanupDeprecatedTsconfigOptions(projectPath, silent, report);
+  rewriteTsconfigTypes(projectPath, silent, report);
   mergeViteConfigFiles(projectPath, silent, report);
   mergeTsdownConfigFile(projectPath, silent, report);
 

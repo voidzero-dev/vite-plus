@@ -277,6 +277,38 @@ transform:
       replace: tsdown
       by: "vite-plus/pack"
 fix: $NEW_IMPORT
+---
+id: rewrite-tsdown-client-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]tsdown/client['"]$
+  inside:
+    kind: import_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: tsdown/client
+      by: "vite-plus/pack/client"
+fix: $NEW_IMPORT
+---
+id: rewrite-declare-module-tsdown-client
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]tsdown/client['"]$
+  inside:
+    kind: module
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: tsdown/client
+      by: "vite-plus/pack/client"
+fix: $NEW_IMPORT
 "#;
 
 static PARSED_VITE_RULES: LazyLock<Vec<RuleConfig<SupportLang>>> = LazyLock::new(|| {
@@ -1925,6 +1957,64 @@ export default defineConfig({
             result.content,
             r#"declare module "vite-plus/pack" {
   interface BuildConfig {
+    custom?: boolean;
+  }
+}"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_import_content_tsdown_client() {
+        let content = r#"import 'tsdown/client';"#;
+
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"import 'vite-plus/pack/client';"#);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_tsdown_client_double_quotes() {
+        let content = r#"import "tsdown/client";"#;
+
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"import "vite-plus/pack/client";"#);
+    }
+
+    #[test]
+    fn test_rewrite_declare_module_tsdown_client() {
+        let content = r#"declare module 'tsdown/client' {
+  interface ClientConfig {
+    custom?: boolean;
+  }
+}"#;
+
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"declare module 'vite-plus/pack/client' {
+  interface ClientConfig {
+    custom?: boolean;
+  }
+}"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_declare_module_tsdown_client_double_quotes() {
+        let content = r#"declare module "tsdown/client" {
+  interface ClientConfig {
+    custom?: boolean;
+  }
+}"#;
+
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"declare module "vite-plus/pack/client" {
+  interface ClientConfig {
     custom?: boolean;
   }
 }"#
