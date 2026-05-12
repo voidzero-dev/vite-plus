@@ -66,6 +66,27 @@ describe('build artifacts', () => {
   });
 
   /**
+   * `convertTabsToSpaces()` in build.ts must not touch tabs inside string
+   * literals. Upstream `@vitest/snapshot` decides multi-line snapshot
+   * indentation via `indent.includes("\t")` — where `"\t"` is a literal
+   * tab byte in the bundled source. A blanket tab→spaces rewrite turned
+   * this into `indent.includes("  ")`, so every 2-space indent matched
+   * and the tab-appending branch always ran, producing tab-indented
+   * snapshots in 2-space files.
+   *
+   * See: https://github.com/voidzero-dev/vite-plus/issues/1553
+   */
+  describe('snapshot indent check (regression test for #1553)', () => {
+    const snapshotIndexPath = path.join(distDir, '@vitest/snapshot/index.js');
+
+    it('preserves the literal tab byte inside the indent.includes string', () => {
+      const content = fs.readFileSync(snapshotIndexPath, 'utf-8');
+      expect(content).toContain('indent.includes("\t")');
+      expect(content).not.toMatch(/indent\.includes\("  "\)/);
+    });
+  });
+
+  /**
    * Third-party packages that call `expect.extend()` internally
    * (e.g., @testing-library/jest-dom) break under npm override because
    * the vitest module instance is split, causing matchers to be registered

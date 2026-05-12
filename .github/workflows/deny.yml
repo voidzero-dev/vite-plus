@@ -41,7 +41,7 @@ jobs:
           path: rolldown
           ref: ${{ steps.upstream-versions.outputs.ROLLDOWN_HASH }}
 
-      - uses: oxc-project/setup-rust@23f38cfb0c04af97a055f76acee94d5be71c7c82 # v1.0.16
+      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
         with:
           restore-cache: false
           # Pinned to 0.18.6+ for CVSS 4.0 support (EmbarkStudios/cargo-deny#805)
