@@ -6,15 +6,15 @@
  *   `pnpm -C docs update-trusted-stack-stats`
  * or: `node docs/.vitepress/theme/data/fetch-trusted-stack-stats.ts`
  */
-import { writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
 import type {
   TrustedStackProjectId,
   TrustedStackStatProject,
   TrustedStackStatsFile,
-} from './trusted-stack-stats.types.ts';
+} from './trusted-stack-stats.types';
+
+import { writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const OUT = join(__dirname, 'trusted-stack-stats.json');

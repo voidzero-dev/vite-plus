@@ -1,6 +1,6 @@
-import raw from './trusted-stack-stats.json';
-
 import type { TrustedStackProjectId, TrustedStackStatProject, TrustedStackStatsFile } from './trusted-stack-stats.types';
+
+import raw from './trusted-stack-stats.json';
 
 export type { TrustedStackProjectId, TrustedStackStatProject, TrustedStackStatsFile } from './trusted-stack-stats.types';
 
