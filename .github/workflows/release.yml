@@ -205,7 +205,7 @@ jobs:
         id: release
         with:
           body_path: ./RELEASE_BODY.md
-          draft: false
+          draft: true
           make_latest: ${{ inputs.npm_tag == 'latest' }}
           prerelease: ${{ inputs.npm_tag == 'alpha' }}
           name: vite-plus v${{ env.VERSION }}
@@ -213,6 +213,11 @@ jobs:
           target_commitish: ${{ github.sha }}
           files: |
             installer-release/vp-setup-*.exe
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "v${VERSION}" --draft=false --repo "${{ github.repository }}"
 
       - name: Send Discord notification
         if: ${{ inputs.npm_tag == 'latest' }}
