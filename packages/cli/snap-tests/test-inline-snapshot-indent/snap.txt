@@ -1,0 +1,23 @@
+> vp test run -u src/inline-snapshot.test.ts # write inline snapshot via --update (regression test for #1553)
+ RUN  <cwd>
+
+ ✓ src/inline-snapshot.test.ts (1 test) <variable>ms
+
+  Snapshots  1 written
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  <date>
+   Duration  <variable>ms (transform <variable>ms, setup <variable>ms, import <variable>ms, tests <variable>ms, environment <variable>ms)
+
+
+> cat src/inline-snapshot.test.ts # snapshot must use 2-space indentation, not tabs
+import { describe, expect, it } from 'vite-plus/test';
+
+describe('inline snapshot indentation', () => {
+  it('writes multiline snapshots using the surrounding file indentation style', () => {
+    expect('alpha\nbeta').toMatchInlineSnapshot(`
+      "alpha
+      beta"
+    `);
+  });
+});
