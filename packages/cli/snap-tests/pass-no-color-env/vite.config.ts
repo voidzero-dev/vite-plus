@@ -3,7 +3,7 @@ export default {
     cache: true,
     tasks: {
       check: {
-        command: 'node check.js',
+        command: 'node --no-warnings check.js',
         untrackedEnv: ['NO_COLOR'],
       },
     },
