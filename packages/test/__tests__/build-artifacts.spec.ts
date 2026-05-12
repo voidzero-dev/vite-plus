@@ -81,9 +81,6 @@ describe('build artifacts', () => {
 
     it('preserves the literal tab byte inside the indent.includes string', () => {
       const content = fs.readFileSync(snapshotIndexPath, 'utf-8');
-      // The bundled snapshot logic must still test for a tab character.
-      // If the string argument is "  " instead of "\t", every 2-space
-      // indent matches and snapshots get tab-indented.
       expect(content).toContain('indent.includes("\t")');
       expect(content).not.toMatch(/indent\.includes\("  "\)/);
     });

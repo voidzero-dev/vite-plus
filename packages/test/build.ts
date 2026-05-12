@@ -1383,9 +1383,6 @@ async function convertTabsToSpaces() {
 
   for await (const file of fsGlob(resolve(distDir, '**/*.js'))) {
     const content = await readFile(file, 'utf-8');
-    if (!/^\t/m.test(content)) {
-      continue;
-    }
     const converted = content.replace(/^\t+/gm, (match) => '  '.repeat(match.length));
     if (converted !== content) {
       await writeFile(file, converted);
