@@ -235,15 +235,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_detect_shell_posix_even_with_psmodulepath() {
+    fn test_detect_shell_pwsh() {
         let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig {
-            ps_module_path: Some("/some/path".into()),
+            vp_shell_pwsh: true,
             ..vite_shared::EnvConfig::for_test()
         });
         let shell = detect_shell();
-        #[cfg(not(windows))]
-        assert!(matches!(shell, Shell::Posix));
-        #[cfg(windows)]
         assert!(matches!(shell, Shell::PowerShell));
     }
 
