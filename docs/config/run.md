@@ -167,7 +167,7 @@ A set of common environment variables are automatically passed through to all ta
 - **System:** `HOME`, `USER`, `PATH`, `SHELL`, `LANG`, `TZ`
 - **Node.js:** `NODE_OPTIONS`, `COREPACK_HOME`, `PNPM_HOME`
 - **CI/CD:** `CI`, `VERCEL_*`, `NEXT_*`
-- **Terminal:** `TERM`, `COLORTERM`, `FORCE_COLOR`, `NO_COLOR`
+- **Terminal:** `FORCE_COLOR` (auto-injected with value `1` so cached task output is always colored; colors are stripped at display time when the terminal does not support them). Other color-related variables (`NO_COLOR`, `COLORTERM`, `TERM`, `TERM_PROGRAM`) are not passed through by default — opt in via `env`/`untrackedEnv`.
 
 ### `input`
 
@@ -232,6 +232,36 @@ tasks: {
 ::: tip
 String glob patterns are resolved relative to the package directory by default. Use the object form with `base: "workspace"` to resolve relative to the workspace root.
 :::
+
+### `output`
+
+- **Type:** `Array<string | { pattern: string, base: "workspace" | "package" }>`
+- **Default:** `[]` (no output archiving)
+
+Files to archive after a successful task run and restore from the cache on a cache hit. When omitted or empty, no output archiving is performed.
+
+```ts [vite.config.ts]
+tasks: {
+  build: {
+    command: 'vp build',
+    output: ['dist/**', '!dist/cache/**'],
+  },
+}
+```
+
+Use the object form with `base: "workspace"` to capture files outside the package directory:
+
+```ts [vite.config.ts]
+tasks: {
+  build: {
+    command: 'vp build',
+    output: [
+      'dist/**',
+      { pattern: 'shared-artifacts/**', base: 'workspace' },
+    ],
+  },
+}
+```
 
 ### `cwd`
 

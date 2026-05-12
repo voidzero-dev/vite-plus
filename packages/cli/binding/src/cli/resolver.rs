@@ -116,6 +116,7 @@ impl SubcommandResolver {
                         env: Some(Box::new([Str::from("OXLINT_TSGOLINT_PATH")])),
                         untracked_env: None,
                         input: None,
+                        output: None,
                     }),
                     envs: merge_resolved_envs_with_version(envs, resolved.envs),
                 })
@@ -151,6 +152,7 @@ impl SubcommandResolver {
                         env: None,
                         untracked_env: None,
                         input: None,
+                        output: None,
                     }),
                     envs: merge_resolved_envs_with_version(envs, resolved.envs),
                 })
@@ -173,6 +175,7 @@ impl SubcommandResolver {
                         env: Some(Box::new([Str::from("VITE_*")])),
                         untracked_env: None,
                         input: Some(build_pack_cache_inputs()),
+                        output: None,
                     }),
                     envs: merge_resolved_envs_with_version(envs, resolved.envs),
                 })
@@ -205,6 +208,7 @@ impl SubcommandResolver {
                                 InputBase::Package,
                             ),
                         ]),
+                        output: None,
                     }),
                     envs: merge_resolved_envs_with_version(envs, resolved.envs),
                 })
@@ -226,6 +230,7 @@ impl SubcommandResolver {
                         env: None,
                         untracked_env: None,
                         input: Some(build_pack_cache_inputs()),
+                        output: None,
                     }),
                     envs: merge_resolved_envs(envs, resolved.envs),
                 })
@@ -283,6 +288,7 @@ impl SubcommandResolver {
                         env: None,
                         untracked_env: None,
                         input: None,
+                        output: None,
                     }),
                     envs: merge_resolved_envs(envs, resolved.envs),
                 })

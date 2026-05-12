@@ -53,7 +53,16 @@ untrackedEnv?: Array<string>,
  * - `{auto: true}` enables automatic file tracking
  * - Negative patterns (e.g. `"!dist/**"`) exclude matched files
  */
-input?: Array<string | GlobWithBase | AutoInput>, } | { 
+input?: Array<string | GlobWithBase | AutoInput>, 
+/**
+ * Output files to archive after a successful run and restore on cache hit.
+ *
+ * - Omitted or `[]` (empty): no output archiving (default)
+ * - Glob patterns (e.g. `"dist/**"`) select specific output files, relative to the package directory
+ * - `{pattern: "...", base: "workspace" | "package"}` specifies a glob with an explicit base directory
+ * - Negative patterns (e.g. `"!dist/cache/**"`) exclude matched files
+ */
+output?: Array<string | GlobWithBase>, } | { 
 /**
  * Whether to cache the task
  */
@@ -91,7 +100,7 @@ cache?: UserGlobalCacheConfig,
 /**
  * Task definitions
  */
-tasks?: { [key in string]?: Task }, 
+tasks?: { [key in string]: Task }, 
 /**
  * Whether to automatically run `preX`/`postX` package.json scripts as
  * lifecycle hooks when script `X` is executed.
