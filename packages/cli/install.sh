@@ -18,9 +18,11 @@ VP_VERSION="${VP_VERSION:-latest}"
 INSTALL_DIR="${VP_HOME:-$HOME/.vite-plus}"
 # Use $HOME-relative path for shell config references (portable across sessions)
 if case "$INSTALL_DIR" in "$HOME"/*) true;; *) false;; esac; then
-  INSTALL_DIR_REF="\$HOME${INSTALL_DIR#"$HOME"}"
+  INSTALL_DIR_REF_POSIX="\$HOME${INSTALL_DIR#"$HOME"}"
+  INSTALL_DIR_REF_NU="~${INSTALL_DIR#"$HOME"}"
 else
-  INSTALL_DIR_REF="$INSTALL_DIR"
+  INSTALL_DIR_REF_POSIX="$INSTALL_DIR"
+  INSTALL_DIR_REF_NU="$INSTALL_DIR"
 fi
 # npm registry URL (strip trailing slash if present)
 NPM_REGISTRY="${NPM_CONFIG_REGISTRY:-https://registry.npmjs.org}"
@@ -393,107 +395,319 @@ download_and_extract() {
   rm -f "$temp_file"
 }
 
-# Add bin to shell profile by sourcing the env file
-# Returns: 0 = path added, 1 = file not found, 2 = path already exists
-add_bin_to_path() {
-  local shell_config="$1"
-  local env_file="$INSTALL_DIR_REF/env"
-  # Escape both absolute and $HOME-relative forms for grep (backward compat)
-  local abs_pattern ref_pattern
-  abs_pattern=$(printf '%s' "$INSTALL_DIR" | sed 's/[.[\*^$()+?{|]/\\&/g')
-  ref_pattern=$(printf '%s' "$INSTALL_DIR_REF" | sed 's/[.[\*^$()+?{|]/\\&/g')
+join_by() {
+  local separator="$1"
+  shift
+  local result=""
+  local item
 
-  if [ -f "$shell_config" ]; then
-    if [ ! -w "$shell_config" ]; then
-      warn "Cannot write to $shell_config (permission denied), skipping."
-      return 1
+  for item in "$@"; do
+    if [ -z "$result" ]; then
+      result="$item"
+    else
+      result="${result}${separator}${item}"
     fi
-    if grep -q "${abs_pattern}/env" "$shell_config" 2>/dev/null || \
-       grep -q "${ref_pattern}/env" "$shell_config" 2>/dev/null; then
+  done
+
+  printf '%s\n' "$result"
+}
+
+abbreviate_path() {
+  local path="$1"
+  if [ "${path#"$HOME"}" != "$path" ]; then
+    printf '~%s\n' "${path#"$HOME"}"
+  else
+    printf '%s\n' "$path"
+  fi
+}
+
+record_shell_summary() {
+  local shell_name="$1"
+  local status="$2"
+  SHELL_CONFIG_SUMMARY+=("    - ${shell_name}: ${status}")
+}
+
+# Add a sourcing line to an existing shell config file.
+# Returns: 0 = line added, 1 = file missing, 2 = already configured, 3 = failed
+append_source_to_file() {
+  local shell_config="$1"
+  local source_line="$2"
+  shift 2
+  local search_patterns=("$@")
+  local pattern
+
+  if [ ! -f "$shell_config" ]; then
+    return 1
+  fi
+
+  if [ ! -w "$shell_config" ]; then
+    warn "Cannot write to $shell_config (permission denied), skipping."
+    return 3
+  fi
+
+  for pattern in "${search_patterns[@]}"; do
+    if grep -Fq "$pattern" "$shell_config" 2>/dev/null; then
       return 2
     fi
-    echo "" >> "$shell_config"
-    echo "# Vite+ bin (https://viteplus.dev)" >> "$shell_config"
-    echo ". \"$env_file\"" >> "$shell_config"
-    return 0
+  done
+
+  echo "" >> "$shell_config"
+  echo "# Vite+ bin (https://viteplus.dev)" >> "$shell_config"
+  echo "$source_line" >> "$shell_config"
+  return 0
+}
+
+# Create or update an installer-managed snippet file.
+# Returns: 0 = written, 2 = already configured, 3 = failed
+write_managed_snippet() {
+  local snippet_file="$1"
+  local snippet_content="$2"
+  local snippet_dir
+
+  snippet_dir=$(dirname "$snippet_file")
+  if ! mkdir -p "$snippet_dir" 2>/dev/null; then
+    warn "Cannot create $snippet_dir, skipping."
+    return 3
   fi
+
+  if [ -f "$snippet_file" ] && [ ! -w "$snippet_file" ]; then
+    warn "Cannot write to $snippet_file (permission denied), skipping."
+    return 3
+  fi
+
+  if [ -f "$snippet_file" ] && printf '%s' "$snippet_content" | cmp -s - "$snippet_file"; then
+    return 2
+  fi
+
+  if ! printf '%s' "$snippet_content" > "$snippet_file"; then
+    warn "Cannot write to $snippet_file, skipping."
+    return 3
+  fi
+  return 0
+}
+
+# Discover Nushell's preferred user-local vendor autoload directory.
+# Nushell puts the user-local directory at the end of the list.
+discover_nushell_vendor_autoload_dir() {
+  command -v nu > /dev/null 2>&1 || return 1
+
+  local nu_dirs_output
+  nu_dirs_output=$(nu -c '$nu.vendor-autoload-dirs | reverse | each {|dir| $dir } | str join (char nl)' 2>/dev/null) || return 1
+
+  while IFS= read -r dir; do
+    [ -n "$dir" ] || continue
+    printf '%s\n' "$dir"
+    return 0
+  done <<EOF
+$nu_dirs_output
+EOF
+
   return 1
 }
 
-# Configure shell PATH for ~/.vite-plus/bin
-# Sets PATH_CONFIGURED and SHELL_CONFIG_UPDATED globals
-configure_shell_path() {
-  local bin_path="$INSTALL_DIR/bin"
-  PATH_CONFIGURED="false"
-  SHELL_CONFIG_UPDATED=""
+configure_zsh_path() {
+  local zsh_dir="${ZDOTDIR:-$HOME}"
+  local zshenv="$zsh_dir/.zshenv"
+  local zshrc="$zsh_dir/.zshrc"
+  local updated=()
+  local already=()
+  local failed=()
+  local result
 
-  local result=1  # Default to failure - must explicitly set success
-  case "$SHELL" in
-    */zsh)
-      # Add to both .zshenv (for all shells including IDE) and .zshrc (to ensure PATH is at front)
-      # Create .zshenv if missing — it's the canonical place for PATH in zsh
-      # and is sourced by all session types (interactive, non-interactive, IDE)
-      local zsh_dir="${ZDOTDIR:-$HOME}"
-      mkdir -p "$zsh_dir"
-      [ -f "$zsh_dir/.zshenv" ] || touch "$zsh_dir/.zshenv"
-      local zshenv_result=0 zshrc_result=0
-      add_bin_to_path "$zsh_dir/.zshenv" || zshenv_result=$?
-      add_bin_to_path "$zsh_dir/.zshrc" || zshrc_result=$?
-      # Prioritize .zshrc for user notification (easier to source)
-      if [ $zshrc_result -eq 0 ]; then
-        result=0
-        SHELL_CONFIG_UPDATED="$zsh_dir/.zshrc"
-      elif [ $zshenv_result -eq 0 ]; then
-        result=0
-        SHELL_CONFIG_UPDATED="$zsh_dir/.zshenv"
-      elif [ $zshenv_result -eq 2 ] || [ $zshrc_result -eq 2 ]; then
-        result=2  # already configured in at least one file
-      fi
-      ;;
-    */bash)
-      # Add to .bash_profile, .bashrc, AND .profile for maximum compatibility
-      # - .bash_profile: login shells (macOS default)
-      # - .bashrc: interactive non-login shells (Linux default)
-      # - .profile: fallback for systems without .bash_profile (Ubuntu minimal, etc.)
-      local bash_profile_result=0 bashrc_result=0 profile_result=0
-      add_bin_to_path "$HOME/.bash_profile" || bash_profile_result=$?
-      add_bin_to_path "$HOME/.bashrc" || bashrc_result=$?
-      add_bin_to_path "$HOME/.profile" || profile_result=$?
-      # Prioritize .bashrc for user notification (most commonly edited)
-      if [ $bashrc_result -eq 0 ]; then
-        result=0
-        SHELL_CONFIG_UPDATED="$HOME/.bashrc"
-      elif [ $bash_profile_result -eq 0 ]; then
-        result=0
-        SHELL_CONFIG_UPDATED="$HOME/.bash_profile"
-      elif [ $profile_result -eq 0 ]; then
-        result=0
-        SHELL_CONFIG_UPDATED="$HOME/.profile"
-      elif [ $bash_profile_result -eq 2 ] || [ $bashrc_result -eq 2 ] || [ $profile_result -eq 2 ]; then
-        result=2  # already configured in at least one file
-      fi
-      ;;
-    */fish)
-      local fish_dir="${XDG_CONFIG_HOME:-$HOME/.config}/fish/conf.d"
-      local fish_config="$fish_dir/vite-plus.fish"
-      if [ -f "$fish_config" ]; then
-        result=2
-      else
-        mkdir -p "$fish_dir"
-        echo "# Vite+ bin (https://viteplus.dev)" >> "$fish_config"
-        echo "source \"$INSTALL_DIR_REF/env.fish\"" >> "$fish_config"
-        result=0
-        SHELL_CONFIG_UPDATED="$fish_config"
-      fi
-      ;;
+  if ! mkdir -p "$zsh_dir" 2>/dev/null; then
+    warn "Cannot create $zsh_dir, skipping zsh."
+    SHELL_CONFIG_HAS_FAILURE="true"
+    SHELL_CONFIG_FAILED_SHELLS+=("zsh")
+    record_shell_summary "zsh" "failed (could not create $(abbreviate_path "$zsh_dir"))"
+    return
+  fi
+
+  if [ ! -f "$zshenv" ] && ! touch "$zshenv" 2>/dev/null; then
+    warn "Cannot create $zshenv, skipping zsh."
+    SHELL_CONFIG_HAS_FAILURE="true"
+    SHELL_CONFIG_FAILED_SHELLS+=("zsh")
+    record_shell_summary "zsh" "failed (could not create $(abbreviate_path "$zshenv"))"
+    return
+  fi
+
+  result=0
+  append_source_to_file "$zshenv" ". \"$INSTALL_DIR_REF_POSIX/env\"" "$INSTALL_DIR/env" "$INSTALL_DIR_REF_POSIX/env" || result=$?
+  case "$result" in
+    0) updated+=("$(abbreviate_path "$zshenv")") ;;
+    2) already+=("$(abbreviate_path "$zshenv")") ;;
+    3) failed+=("$(abbreviate_path "$zshenv")") ;;
   esac
 
-  if [ $result -eq 0 ]; then
-    PATH_CONFIGURED="true"
-  elif [ $result -eq 2 ]; then
-    PATH_CONFIGURED="already"
+  if [ -f "$zshrc" ]; then
+    result=0
+    append_source_to_file "$zshrc" ". \"$INSTALL_DIR_REF_POSIX/env\"" "$INSTALL_DIR/env" "$INSTALL_DIR_REF_POSIX/env" || result=$?
+    case "$result" in
+      0) updated+=("$(abbreviate_path "$zshrc")") ;;
+      2) already+=("$(abbreviate_path "$zshrc")") ;;
+      3) failed+=("$(abbreviate_path "$zshrc")") ;;
+    esac
   fi
-  # If result is still 1, PATH_CONFIGURED remains "false" (set at function start)
+
+  local details=()
+  if [ ${#updated[@]} -gt 0 ]; then
+    SHELL_CONFIG_HAS_UPDATED="true"
+    SHELL_CONFIG_HAS_CONFIGURED="true"
+    details+=("updated $(join_by ', ' "${updated[@]}")")
+  fi
+  if [ ${#already[@]} -gt 0 ]; then
+    SHELL_CONFIG_HAS_CONFIGURED="true"
+    details+=("already configured $(join_by ', ' "${already[@]}")")
+  fi
+  if [ ${#failed[@]} -gt 0 ]; then
+    SHELL_CONFIG_HAS_FAILURE="true"
+    SHELL_CONFIG_FAILED_SHELLS+=("zsh")
+    details+=("failed $(join_by ', ' "${failed[@]}")")
+  fi
+
+  if [ ${#details[@]} -eq 0 ]; then
+    record_shell_summary "zsh" "skipped"
+  else
+    record_shell_summary "zsh" "$(join_by '; ' "${details[@]}")"
+  fi
+}
+
+configure_bash_path() {
+  local updated=()
+  local already=()
+  local failed=()
+  local existing=0
+  local file result
+
+  for file in "$HOME/.bash_profile" "$HOME/.bashrc" "$HOME/.profile"; do
+    if [ ! -f "$file" ]; then
+      continue
+    fi
+    existing=1
+    result=0
+    append_source_to_file "$file" ". \"$INSTALL_DIR_REF_POSIX/env\"" "$INSTALL_DIR/env" "$INSTALL_DIR_REF_POSIX/env" || result=$?
+    case "$result" in
+      0) updated+=("$(abbreviate_path "$file")") ;;
+      2) already+=("$(abbreviate_path "$file")") ;;
+      3) failed+=("$(abbreviate_path "$file")") ;;
+    esac
+  done
+
+  if [ "$existing" -eq 0 ]; then
+    record_shell_summary "bash" "skipped (no existing rc files)"
+    return
+  fi
+
+  local details=()
+  if [ ${#updated[@]} -gt 0 ]; then
+    SHELL_CONFIG_HAS_UPDATED="true"
+    SHELL_CONFIG_HAS_CONFIGURED="true"
+    details+=("updated $(join_by ', ' "${updated[@]}")")
+  fi
+  if [ ${#already[@]} -gt 0 ]; then
+    SHELL_CONFIG_HAS_CONFIGURED="true"
+    details+=("already configured $(join_by ', ' "${already[@]}")")
+  fi
+  if [ ${#failed[@]} -gt 0 ]; then
+    SHELL_CONFIG_HAS_FAILURE="true"
+    SHELL_CONFIG_FAILED_SHELLS+=("bash")
+    details+=("failed $(join_by ', ' "${failed[@]}")")
+  fi
+
+  record_shell_summary "bash" "$(join_by '; ' "${details[@]}")"
+}
+
+configure_fish_path() {
+  local fish_config="${XDG_CONFIG_HOME:-$HOME/.config}/fish/conf.d/vite-plus.fish"
+  local fish_content="# Vite+ bin (https://viteplus.dev)
+source \"$INSTALL_DIR_REF_POSIX/env.fish\"
+"
+
+  local result=0
+  write_managed_snippet "$fish_config" "$fish_content" || result=$?
+  case "$result" in
+    0)
+      SHELL_CONFIG_HAS_UPDATED="true"
+      SHELL_CONFIG_HAS_CONFIGURED="true"
+      record_shell_summary "fish" "updated $(abbreviate_path "$fish_config")"
+      ;;
+    2)
+      SHELL_CONFIG_HAS_CONFIGURED="true"
+      record_shell_summary "fish" "already configured $(abbreviate_path "$fish_config")"
+      ;;
+    *)
+      SHELL_CONFIG_HAS_FAILURE="true"
+      SHELL_CONFIG_FAILED_SHELLS+=("fish")
+      record_shell_summary "fish" "failed $(abbreviate_path "$fish_config")"
+      ;;
+  esac
+}
+
+configure_nushell_path() {
+  local nushell_dir
+  nushell_dir=$(discover_nushell_vendor_autoload_dir 2>/dev/null) || true
+  if [ -z "$nushell_dir" ]; then
+    SHELL_CONFIG_HAS_FAILURE="true"
+    SHELL_CONFIG_FAILED_SHELLS+=("nushell")
+    record_shell_summary "nushell" "failed (could not determine vendor autoload dir)"
+    return
+  fi
+
+  local nushell_autoload="$nushell_dir/vite-plus.nu"
+  local nushell_content="# Vite+ bin (https://viteplus.dev)
+source '$INSTALL_DIR_REF_NU/env.nu'
+"
+
+  local result=0
+  write_managed_snippet "$nushell_autoload" "$nushell_content" || result=$?
+  case "$result" in
+    0)
+      SHELL_CONFIG_HAS_UPDATED="true"
+      SHELL_CONFIG_HAS_CONFIGURED="true"
+      record_shell_summary "nushell" "updated $(abbreviate_path "$nushell_autoload")"
+      ;;
+    2)
+      SHELL_CONFIG_HAS_CONFIGURED="true"
+      record_shell_summary "nushell" "already configured $(abbreviate_path "$nushell_autoload")"
+      ;;
+    *)
+      SHELL_CONFIG_HAS_FAILURE="true"
+      SHELL_CONFIG_FAILED_SHELLS+=("nushell")
+      record_shell_summary "nushell" "failed $(abbreviate_path "$nushell_autoload")"
+      ;;
+  esac
+}
+
+# Configure supported shell PATH integrations for all installed shells.
+configure_shell_path() {
+  SHELL_CONFIG_SUMMARY=()
+  SHELL_CONFIG_FAILED_SHELLS=()
+  SHELL_CONFIG_HAS_UPDATED="false"
+  SHELL_CONFIG_HAS_CONFIGURED="false"
+  SHELL_CONFIG_HAS_FAILURE="false"
+
+  if command -v zsh > /dev/null 2>&1; then
+    configure_zsh_path
+  else
+    record_shell_summary "zsh" "skipped (not installed)"
+  fi
+
+  if command -v bash > /dev/null 2>&1; then
+    configure_bash_path
+  else
+    record_shell_summary "bash" "skipped (not installed)"
+  fi
+
+  if command -v fish > /dev/null 2>&1; then
+    configure_fish_path
+  else
+    record_shell_summary "fish" "skipped (not installed)"
+  fi
+
+  if command -v nu > /dev/null 2>&1; then
+    configure_nushell_path
+  else
+    record_shell_summary "nushell" "skipped (not installed)"
+  fi
 }
 
 # Run vp env setup --refresh, showing output only on failure
@@ -808,37 +1022,33 @@ WRAPPER_EOF
   echo ""
   echo -e "  Run ${BRIGHT_BLUE}vp help${NC} to see available commands."
 
-  # Show restart note if PATH was added to shell config
-  if [ "$PATH_CONFIGURED" = "true" ] && [ -n "$SHELL_CONFIG_UPDATED" ]; then
-    local display_config
-    if [ "${SHELL_CONFIG_UPDATED#"$HOME"}" != "$SHELL_CONFIG_UPDATED" ]; then
-      display_config="~${SHELL_CONFIG_UPDATED#"$HOME"}"
-    else
-      display_config="$SHELL_CONFIG_UPDATED"
-    fi
+  echo ""
+  echo "  Shell configuration:"
+  local summary_line
+  for summary_line in "${SHELL_CONFIG_SUMMARY[@]}"; do
+    echo "$summary_line"
+  done
+
+  # Show restart note if any shell config was updated
+  if [ "$SHELL_CONFIG_HAS_UPDATED" = "true" ]; then
     echo ""
-    if [ "${display_config#"~"}" != "$display_config" ]; then
-      echo "  Note: Run \`source $display_config\` or restart your terminal."
-    else
-      echo "  Note: Run \`source \"$display_config\"\` or restart your terminal."
-    fi
+    echo "  Note: Restart your terminal to load updated shell configuration."
   fi
 
-  # Show warning if PATH could not be automatically configured
-  if [ "$PATH_CONFIGURED" = "false" ]; then
+  # Show manual PATH instructions if no shell was configured or any shell failed
+  if [ "$SHELL_CONFIG_HAS_CONFIGURED" = "false" ] || [ "$SHELL_CONFIG_HAS_FAILURE" = "true" ]; then
     echo ""
-    echo -e "  ${YELLOW}note${NC}: Could not automatically add vp to your PATH."
+    echo -e "  ${YELLOW}note${NC}: Some shells still need manual setup."
     echo ""
     echo -e "  vp was installed to: ${BOLD}${display_location}${NC}"
     echo ""
-    echo "  To use vp, add this line to your shell config file:"
-    echo ""
-    echo "    . \"$INSTALL_DIR_REF/env\""
-    echo ""
-    echo "  Common config files:"
-    echo "    - Bash: ~/.bashrc or ~/.bash_profile"
-    echo "    - Zsh:  ~/.zshrc"
-    echo "    - Fish: source \"$INSTALL_DIR_REF/env.fish\" in ~/.config/fish/config.fish"
+    echo "  Manual setup instructions:"
+    echo "    - Bash/Zsh: add the following to your shell config (~/.bashrc, ~/.zshrc, etc.):"
+    echo "        . \"$INSTALL_DIR_REF_POSIX/env\""
+    echo "    - Fish: create ${XDG_CONFIG_HOME:-$HOME/.config}/fish/conf.d/vite-plus.fish with:"
+    echo "        source \"$INSTALL_DIR_REF_POSIX/env.fish\""
+    echo "    - Nushell: create a vendor autoload file with:"
+    echo "        source '$INSTALL_DIR_REF_NU/env.nu'"
     echo ""
     echo "  Or run vp directly:"
     echo ""

@@ -13,37 +13,10 @@ use std::process::ExitStatus;
 use vite_path::AbsolutePathBuf;
 
 use super::config::{self, VERSION_ENV_VAR};
-use crate::error::Error;
-
-/// Detected shell type for output formatting.
-enum Shell {
-    /// POSIX shell (bash, zsh, sh)
-    Posix,
-    /// Fish shell
-    Fish,
-    /// PowerShell
-    PowerShell,
-    /// Windows cmd.exe
-    Cmd,
-    /// Nushell
-    NuShell,
-}
-
-/// Detect the current shell from environment variables.
-fn detect_shell() -> Shell {
-    let config = vite_shared::EnvConfig::get();
-    if config.fish_version.is_some() {
-        Shell::Fish
-    } else if config.vp_shell_nu {
-        Shell::NuShell
-    } else if config.vp_shell_pwsh {
-        Shell::PowerShell
-    } else if cfg!(windows) {
-        Shell::Cmd
-    } else {
-        Shell::Posix
-    }
-}
+use crate::{
+    commands::shell::{Shell, detect_shell},
+    error::Error,
+};
 
 /// Format a shell export command for the detected shell.
 fn format_export(shell: &Shell, value: &str) -> String {
