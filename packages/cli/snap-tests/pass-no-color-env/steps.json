@@ -1,6 +1,0 @@
-{
-  "commands": [
-    "vp run check -- --foo # get NO_COLOR=true from default env",
-    "NO_COLOR=false vp run check -- --bar # get NO_COLOR=false from custom env"
-  ]
-}

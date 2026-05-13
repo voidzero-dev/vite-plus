@@ -67,6 +67,7 @@ impl CommandHandler for VitePlusCommandHandler {
                         env: Some(Box::new([Str::from("OXLINT_TSGOLINT_PATH")])),
                         untracked_env: None,
                         input: Some(check_cache_inputs()),
+                        output: None,
                     }),
                 )))
             }
