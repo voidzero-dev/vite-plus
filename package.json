@@ -15,7 +15,7 @@
     "test:unit": "vp test run",
     "docs:dev": "pnpm -C docs dev",
     "docs:build": "pnpm -C docs build",
-    "prepare": "husky"
+    "prepare": "vp config"
   },
   "devDependencies": {
     "@napi-rs/cli": "catalog:",
@@ -25,8 +25,6 @@
     "@typescript/native-preview": "catalog:",
     "@voidzero-dev/vite-plus-tools": "workspace:*",
     "bingo": "catalog:",
-    "husky": "catalog:",
-    "lint-staged": "catalog:",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
     "playwright": "catalog:",
@@ -35,10 +33,6 @@
     "vite-plus": "workspace:*",
     "vitest": "catalog:",
     "zod": "catalog:"
-  },
-  "lint-staged": {
-    "*.@(js|ts|tsx|md|yaml|yml)": "vp check --fix",
-    "*.rs": "cargo fmt --"
   },
   "engines": {
     "node": ">=22.18.0"
