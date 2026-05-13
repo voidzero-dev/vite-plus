@@ -48,12 +48,10 @@ impl PackageManager {
             PackageManagerType::Npm => {
                 bin_name = "npm".into();
                 args.push("rebuild".into());
-                args.extend_from_slice(options.packages);
             }
             PackageManagerType::Pnpm => {
                 bin_name = "pnpm".into();
                 args.push("rebuild".into());
-                args.extend_from_slice(options.packages);
             }
             PackageManagerType::Yarn => {
                 let is_yarn1 = self.version.starts_with("1.");
@@ -72,10 +70,10 @@ impl PackageManager {
             }
         }
 
-        // Add pass-through args
         if let Some(pass_through_args) = options.pass_through_args {
             args.extend_from_slice(pass_through_args);
         }
+        args.extend_from_slice(options.packages);
 
         Some(ResolveCommandResult { bin_path: bin_name, args, envs })
     }
@@ -181,6 +179,6 @@ mod tests {
         });
         let result = result.unwrap();
         assert_eq!(result.bin_path, "pnpm");
-        assert_eq!(result.args, vec!["rebuild", "better-sqlite3", "--recursive"]);
+        assert_eq!(result.args, vec!["rebuild", "--recursive", "better-sqlite3"]);
     }
 }

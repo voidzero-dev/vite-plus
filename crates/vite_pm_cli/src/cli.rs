@@ -860,7 +860,7 @@ pub enum PmCommands {
     /// Rebuild native modules
     #[command(visible_alias = "rb")]
     Rebuild {
-        /// Packages to rebuild (rebuilds all if omitted; with pnpm v10+, bare rebuild only acts on packages whose build scripts are approved)
+        /// Packages to rebuild (rebuilds all if omitted)
         packages: Vec<String>,
 
         /// Additional arguments
