@@ -17,8 +17,8 @@ catalog:
   '@nkzw/safe-word-list': ^3.1.0
   '@oxc-node/cli': ^0.1.0
   '@oxc-node/core': ^0.1.0
-  '@oxc-project/runtime': =0.129.0
-  '@oxc-project/types': =0.129.0
+  '@oxc-project/runtime': =0.130.0
+  '@oxc-project/types': =0.130.0
   '@pnpm/find-workspace-packages': ^6.0.9
   '@rollup/plugin-commonjs': ^29.0.0
   '@rollup/plugin-json': ^6.1.0
@@ -80,11 +80,11 @@ catalog:
   mri: ^1.2.0
   nanotar: ^0.3.0
   next: ^15.4.3
-  oxc-minify: =0.129.0
-  oxc-parser: =0.129.0
-  oxc-transform: =0.129.0
-  oxfmt: =0.48.0
-  oxlint: =1.63.0
+  oxc-minify: =0.130.0
+  oxc-parser: =0.130.0
+  oxc-transform: =0.130.0
+  oxfmt: =0.49.0
+  oxlint: =1.64.0
   oxlint-tsgolint: =0.22.1
   pathe: ^2.0.3
   picocolors: ^1.1.1
@@ -170,7 +170,7 @@ overrides:
   rolldown: workspace:rolldown@*
   vite: workspace:@voidzero-dev/vite-plus-core@*
   vitest: workspace:@voidzero-dev/vite-plus-test@*
-  vitest-dev: npm:vitest@^4.1.5
+  vitest-dev: npm:vitest@^4.1.6
 packageExtensions:
   sass-embedded:
     peerDependencies:

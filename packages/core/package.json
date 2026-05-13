@@ -118,7 +118,7 @@
     "@babel/types": "^7.28.5",
     "@oxc-node/cli": "catalog:",
     "@oxc-node/core": "catalog:",
-    "@vitejs/devtools": "^0.1.21",
+    "@vitejs/devtools": "^0.1.22",
     "es-module-lexer": "^1.7.0",
     "hookable": "^6.0.1",
     "magic-string": "^0.30.21",
@@ -224,7 +224,7 @@
     "node": "^20.19.0 || >=22.12.0"
   },
   "bundledVersions": {
-    "vite": "8.0.11",
+    "vite": "8.0.12",
     "rolldown": "1.0.0",
     "tsdown": "0.22.0"
   }
