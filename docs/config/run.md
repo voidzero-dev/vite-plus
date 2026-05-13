@@ -167,7 +167,7 @@ A set of common environment variables are automatically passed through to all ta
 - **System:** `HOME`, `USER`, `PATH`, `SHELL`, `LANG`, `TZ`
 - **Node.js:** `NODE_OPTIONS`, `COREPACK_HOME`, `PNPM_HOME`
 - **CI/CD:** `CI`, `VERCEL_*`, `NEXT_*`
-- **Terminal:** `FORCE_COLOR` is set to `1` so cached output keeps its colors. If the terminal can't show them, they're stripped at display time. The other color variables (`NO_COLOR`, `COLORTERM`, `TERM`, `TERM_PROGRAM`) don't come along by default. If your task needs them, add them under `env` or `untrackedEnv`.
+- **Terminal:** `FORCE_COLOR` falls back to `1` so cached output stays colored. If the terminal can't show colors, they're stripped at display time. You can override `FORCE_COLOR` in your own env, and you can opt other color variables (`NO_COLOR`, `COLORTERM`, `TERM`, `TERM_PROGRAM`) in via `env` or `untrackedEnv` if your task needs them.
 
 ### `input`
 
