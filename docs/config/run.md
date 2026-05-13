@@ -167,7 +167,7 @@ A set of common environment variables are automatically passed through to all ta
 - **System:** `HOME`, `USER`, `PATH`, `SHELL`, `LANG`, `TZ`
 - **Node.js:** `NODE_OPTIONS`, `COREPACK_HOME`, `PNPM_HOME`
 - **CI/CD:** `CI`, `VERCEL_*`, `NEXT_*`
-- **Terminal:** Color variables don't reach your task on their own. To pass `FORCE_COLOR`, `NO_COLOR`, `COLORTERM`, `TERM`, or `TERM_PROGRAM`, add it to `env` (the value gets fingerprinted, so changing it invalidates the cache) or `untrackedEnv` (passed without fingerprinting). If `FORCE_COLOR` isn't in either list, the child gets `FORCE_COLOR=1` so cached output stays colored. Colors get stripped on display when the terminal can't render them.
+- **Terminal:** Color variables (`FORCE_COLOR`, `NO_COLOR`, `COLORTERM`, `TERM`, `TERM_PROGRAM`) aren't passed to tasks unless you list them under `env` (the value gets fingerprinted, so changing it invalidates the cache) or `untrackedEnv` (passed without fingerprinting). If `FORCE_COLOR` isn't in either list, the child gets `FORCE_COLOR=1` so cached logs stay colored. Colors get stripped on display when the terminal can't render them.
 
 ### `input`
 
@@ -238,7 +238,7 @@ String glob patterns are resolved relative to the package directory by default. 
 - **Type:** `Array<string | { pattern: string, base: "workspace" | "package" }>`
 - **Default:** `[]` (nothing is archived)
 
-Files the task produces. Once a run finishes successfully, they're stashed in the cache. On the next cache hit they're put back, so you don't have to rebuild them. Leave it empty (or omit it) and nothing is stashed.
+Files the task produces. They get archived after a successful run and restored on a cache hit, so you don't have to rebuild them. Leave it empty (or omit it) and nothing is archived.
 
 ```ts [vite.config.ts]
 tasks: {
@@ -249,7 +249,7 @@ tasks: {
 }
 ```
 
-If the task writes somewhere outside its own package, reach for the object form with `base: "workspace"`:
+If a task writes outside its own package, use the object form with `base: "workspace"`:
 
 ```ts [vite.config.ts]
 tasks: {
