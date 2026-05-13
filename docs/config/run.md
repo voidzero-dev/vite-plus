@@ -167,7 +167,7 @@ A set of common environment variables are automatically passed through to all ta
 - **System:** `HOME`, `USER`, `PATH`, `SHELL`, `LANG`, `TZ`
 - **Node.js:** `NODE_OPTIONS`, `COREPACK_HOME`, `PNPM_HOME`
 - **CI/CD:** `CI`, `VERCEL_*`, `NEXT_*`
-- **Terminal:** `FORCE_COLOR` is set to `1` so cached output keeps its colors. When the terminal doesn't render them, colors get stripped on display. Other color variables (`NO_COLOR`, `COLORTERM`, `TERM`, `TERM_PROGRAM`) aren't passed through. If you need them, list them in `env` or `untrackedEnv`.
+- **Terminal:** `FORCE_COLOR` is set to `1` so cached output keeps its colors. If the terminal can't show them, they're stripped at display time. The other color variables (`NO_COLOR`, `COLORTERM`, `TERM`, `TERM_PROGRAM`) don't come along by default. If your task needs them, add them under `env` or `untrackedEnv`.
 
 ### `input`
 
@@ -238,7 +238,7 @@ String glob patterns are resolved relative to the package directory by default. 
 - **Type:** `Array<string | { pattern: string, base: "workspace" | "package" }>`
 - **Default:** `[]` (nothing is archived)
 
-Files the task produces. They get archived after a successful run and restored on a cache hit, so you don't have to rebuild them. Leave it empty (or omit it) and nothing is archived.
+Files the task produces. Once a run finishes successfully, they're stashed in the cache. On the next cache hit they're put back, so you don't have to rebuild them. Leave it empty (or omit it) and nothing is stashed.
 
 ```ts [vite.config.ts]
 tasks: {
@@ -249,7 +249,7 @@ tasks: {
 }
 ```
 
-If a task writes outside its own package, use the object form with `base: "workspace"`:
+If the task writes somewhere outside its own package, reach for the object form with `base: "workspace"`:
 
 ```ts [vite.config.ts]
 tasks: {
