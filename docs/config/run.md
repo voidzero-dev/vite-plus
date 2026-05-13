@@ -167,7 +167,7 @@ A set of common environment variables are automatically passed through to all ta
 - **System:** `HOME`, `USER`, `PATH`, `SHELL`, `LANG`, `TZ`
 - **Node.js:** `NODE_OPTIONS`, `COREPACK_HOME`, `PNPM_HOME`
 - **CI/CD:** `CI`, `VERCEL_*`, `NEXT_*`
-- **Terminal:** Color variables aren't passed through automatically. To pass any of `FORCE_COLOR`, `NO_COLOR`, `COLORTERM`, `TERM`, or `TERM_PROGRAM` to a task, list it under `env` (the value is fingerprinted, so a change invalidates the cache) or `untrackedEnv` (passed through without fingerprinting). If neither the parent env nor the task sets `FORCE_COLOR`, it's set to `1` on the child so cached output stays colored. The reporter strips colors on display when the terminal can't render them.
+- **Terminal:** Color variables aren't passed through automatically. To pass any of `FORCE_COLOR`, `NO_COLOR`, `COLORTERM`, `TERM`, or `TERM_PROGRAM` to a task, list it under `env` (the value is fingerprinted, so a change invalidates the cache) or `untrackedEnv` (passed through without fingerprinting). When no `FORCE_COLOR` value comes through `env` or `untrackedEnv`, the child gets `FORCE_COLOR=1` so cached output stays colored. The reporter strips colors on display when the terminal can't render them.
 
 ### `input`
 
