@@ -10,8 +10,9 @@ use crate::package_manager::{
 };
 
 /// Options for the rebuild command.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct RebuildCommandOptions<'a> {
+    pub packages: &'a [String],
     pub pass_through_args: Option<&'a [String]>,
 }
 
@@ -47,10 +48,12 @@ impl PackageManager {
             PackageManagerType::Npm => {
                 bin_name = "npm".into();
                 args.push("rebuild".into());
+                args.extend_from_slice(options.packages);
             }
             PackageManagerType::Pnpm => {
                 bin_name = "pnpm".into();
                 args.push("rebuild".into());
+                args.extend_from_slice(options.packages);
             }
             PackageManagerType::Yarn => {
                 let is_yarn1 = self.version.starts_with("1.");
@@ -110,7 +113,7 @@ mod tests {
     #[test]
     fn test_npm_rebuild() {
         let pm = create_mock_package_manager(PackageManagerType::Npm, "11.0.0");
-        let result = pm.resolve_rebuild_command(&RebuildCommandOptions { pass_through_args: None });
+        let result = pm.resolve_rebuild_command(&RebuildCommandOptions::default());
         assert!(result.is_some());
         let result = result.unwrap();
         assert_eq!(result.bin_path, "npm");
@@ -120,7 +123,7 @@ mod tests {
     #[test]
     fn test_pnpm_rebuild() {
         let pm = create_mock_package_manager(PackageManagerType::Pnpm, "10.0.0");
-        let result = pm.resolve_rebuild_command(&RebuildCommandOptions { pass_through_args: None });
+        let result = pm.resolve_rebuild_command(&RebuildCommandOptions::default());
         assert!(result.is_some());
         let result = result.unwrap();
         assert_eq!(result.bin_path, "pnpm");
@@ -130,14 +133,54 @@ mod tests {
     #[test]
     fn test_yarn1_rebuild_not_supported() {
         let pm = create_mock_package_manager(PackageManagerType::Yarn, "1.22.0");
-        let result = pm.resolve_rebuild_command(&RebuildCommandOptions { pass_through_args: None });
+        let result = pm.resolve_rebuild_command(&RebuildCommandOptions::default());
         assert!(result.is_none());
     }
 
     #[test]
     fn test_yarn2_rebuild_not_supported() {
         let pm = create_mock_package_manager(PackageManagerType::Yarn, "4.0.0");
-        let result = pm.resolve_rebuild_command(&RebuildCommandOptions { pass_through_args: None });
+        let result = pm.resolve_rebuild_command(&RebuildCommandOptions::default());
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_npm_rebuild_with_packages() {
+        let pm = create_mock_package_manager(PackageManagerType::Npm, "11.0.0");
+        let packages = vec!["better-sqlite3".to_string(), "sharp".to_string()];
+        let result = pm.resolve_rebuild_command(&RebuildCommandOptions {
+            packages: &packages,
+            ..Default::default()
+        });
+        let result = result.unwrap();
+        assert_eq!(result.bin_path, "npm");
+        assert_eq!(result.args, vec!["rebuild", "better-sqlite3", "sharp"]);
+    }
+
+    #[test]
+    fn test_pnpm_rebuild_with_packages() {
+        let pm = create_mock_package_manager(PackageManagerType::Pnpm, "10.0.0");
+        let packages = vec!["better-sqlite3".to_string()];
+        let result = pm.resolve_rebuild_command(&RebuildCommandOptions {
+            packages: &packages,
+            ..Default::default()
+        });
+        let result = result.unwrap();
+        assert_eq!(result.bin_path, "pnpm");
+        assert_eq!(result.args, vec!["rebuild", "better-sqlite3"]);
+    }
+
+    #[test]
+    fn test_pnpm_rebuild_with_packages_and_pass_through() {
+        let pm = create_mock_package_manager(PackageManagerType::Pnpm, "11.0.6");
+        let packages = vec!["better-sqlite3".to_string()];
+        let pass_through = vec!["--recursive".to_string()];
+        let result = pm.resolve_rebuild_command(&RebuildCommandOptions {
+            packages: &packages,
+            pass_through_args: Some(&pass_through),
+        });
+        let result = result.unwrap();
+        assert_eq!(result.bin_path, "pnpm");
+        assert_eq!(result.args, vec!["rebuild", "better-sqlite3", "--recursive"]);
     }
 }
