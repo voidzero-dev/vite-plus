@@ -16,9 +16,10 @@ const VITE_PLUS_HOME_DIR: &str = ".vite-plus";
 pub fn get_vp_home() -> std::io::Result<AbsolutePathBuf> {
     let config = EnvConfig::get();
     if let Some(ref home) = config.vite_plus_home
-        && let Some(path) = AbsolutePathBuf::new(home.clone()) {
-            return Ok(path);
-        }
+        && let Some(path) = AbsolutePathBuf::new(home.clone())
+    {
+        return Ok(path);
+    }
 
     // Get from `node` executable file's grandparent directory (~/.vite-plus/bin/node)
     // For the case where `$HOME` is overridden

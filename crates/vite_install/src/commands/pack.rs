@@ -32,14 +32,15 @@ impl PackageManager {
     ) -> Result<ExitStatus, Error> {
         // Special handling for npm: create pack-destination directory if it doesn't exist
         if matches!(self.client, PackageManagerType::Npm)
-            && let Some(pack_destination) = options.pack_destination {
-                let dest_path = cwd.as_ref().join(pack_destination);
-                if !dest_path.as_path().exists() {
-                    create_dir_all(&dest_path)
-                        .await
-                        .map_err(|e| Error::IoWithPath { path: dest_path.into(), err: e })?;
-                }
+            && let Some(pack_destination) = options.pack_destination
+        {
+            let dest_path = cwd.as_ref().join(pack_destination);
+            if !dest_path.as_path().exists() {
+                create_dir_all(&dest_path)
+                    .await
+                    .map_err(|e| Error::IoWithPath { path: dest_path.into(), err: e })?;
             }
+        }
 
         let resolve_command = self.resolve_pack_command(options);
         run_command(&resolve_command.bin_path, &resolve_command.args, &resolve_command.envs, cwd)
@@ -181,9 +182,10 @@ impl PackageManager {
                 }
 
                 if let Some(filters) = options.filters
-                    && !filters.is_empty() {
-                        output::warn("--filter not supported by bun pm pack, ignoring flag");
-                    }
+                    && !filters.is_empty()
+                {
+                    output::warn("--filter not supported by bun pm pack, ignoring flag");
+                }
 
                 if let Some(out) = options.out {
                     args.push("--filename".into());

@@ -188,7 +188,7 @@ impl EnvConfig {
     /// Priority: thread-local test override > global > `from_env()`.
     ///
     /// This is the primary way to access configuration throughout the codebase.
-    #[must_use] 
+    #[must_use]
     pub fn get() -> Self {
         TEST_CONFIG.with(|c| {
             c.borrow()
@@ -239,7 +239,7 @@ impl EnvConfig {
     ///     ..EnvConfig::for_test()
     /// };
     /// ```
-    #[must_use] 
+    #[must_use]
     pub fn for_test() -> Self {
         Self {
             vite_plus_home: None,
@@ -269,7 +269,7 @@ impl EnvConfig {
 
     /// Set a test config override and return a guard that restores the previous on drop.
     /// Works with async tests since it uses RAII instead of closures.
-    #[must_use] 
+    #[must_use]
     pub fn test_guard(config: Self) -> TestEnvGuard {
         let prev = TEST_CONFIG.with(|c| c.borrow_mut().replace(config));
         TestEnvGuard { prev }

@@ -220,9 +220,10 @@ impl PackageManager {
                     args.push("--exact".into());
                 }
                 if let Some(filters) = options.filters
-                    && !filters.is_empty() {
-                        output::warn("bun add does not support --filter");
-                    }
+                    && !filters.is_empty()
+                {
+                    output::warn("bun add does not support --filter");
+                }
                 if options.workspace_root {
                     output::warn("bun add does not support --workspace-root");
                 }

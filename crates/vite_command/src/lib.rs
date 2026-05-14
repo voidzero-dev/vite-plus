@@ -40,7 +40,9 @@ pub fn resolve_bin(
     cwd: impl AsRef<AbsolutePath>,
 ) -> Result<AbsolutePathBuf, Error> {
     let current_path;
-    let path_env = if let Some(p) = path_env { p } else {
+    let path_env = if let Some(p) = path_env {
+        p
+    } else {
         current_path = std::env::var_os("PATH").unwrap_or_default();
         &current_path
     };
@@ -68,7 +70,7 @@ fn resolve_program(
 /// Build a `tokio::process::Command` for a pre-resolved binary path.
 /// Sets inherited stdio and `fix_stdio_streams` (Unix `pre_exec`).
 /// Callers can further customize (add args, envs, override stdio, etc.).
-#[must_use] 
+#[must_use]
 pub fn build_command(bin_path: &AbsolutePath, cwd: &AbsolutePath) -> Command {
     let mut cmd = Command::new(bin_path.as_path());
     cmd.current_dir(cwd).stdin(Stdio::inherit()).stdout(Stdio::inherit()).stderr(Stdio::inherit());
@@ -113,7 +115,7 @@ pub async fn execute_with_terminal_guard(mut cmd: Command) -> Result<ExitStatus,
 
 /// Build a `tokio::process::Command` for shell execution.
 /// Uses `/bin/sh -c` on Unix, `cmd.exe /C` on Windows.
-#[must_use] 
+#[must_use]
 pub fn build_shell_command(shell_cmd: &str, cwd: &AbsolutePath) -> Command {
     #[cfg(unix)]
     let mut cmd = {

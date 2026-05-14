@@ -173,7 +173,8 @@ pub async fn fetch_with_cache_headers(
     }
 
     // Extract headers before consuming response
-    let etag = response.headers().get("etag").and_then(|v| v.to_str().ok()).map(std::convert::Into::into);
+    let etag =
+        response.headers().get("etag").and_then(|v| v.to_str().ok()).map(std::convert::Into::into);
 
     let max_age = response
         .headers()

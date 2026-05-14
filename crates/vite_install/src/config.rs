@@ -1,13 +1,13 @@
 use vite_shared::EnvConfig;
 
 /// Get the configured NPM registry URL.
-#[must_use] 
+#[must_use]
 pub fn npm_registry() -> String {
     EnvConfig::get().npm_registry
 }
 
 /// Get the tgz url of a npm package
-#[must_use] 
+#[must_use]
 pub fn get_npm_package_tgz_url(name: &str, version: &str) -> String {
     let registry = npm_registry();
     // convert `@scope/name` to `name`
@@ -15,7 +15,7 @@ pub fn get_npm_package_tgz_url(name: &str, version: &str) -> String {
     format!("{registry}/{name}/-/{filename}-{version}.tgz")
 }
 
-#[must_use] 
+#[must_use]
 pub fn get_npm_package_version_url(name: &str, version_or_tag: &str) -> String {
     let registry = npm_registry();
     format!("{registry}/{name}/{version_or_tag}")

@@ -26,13 +26,8 @@ fn rewrite_script(script: &str, rules: &[RuleConfig<SupportLang>]) -> String {
     let result = ast_grep::apply_loaded_rules(&preprocessed, rules);
 
     // Step 3: Replace cross-env marker back with "cross-env " (only if we replaced it)
-    
 
-    if has_cross_env {
-        result.replace(CROSS_ENV_MARKER, CROSS_ENV_REPLACEMENT)
-    } else {
-        result
-    }
+    if has_cross_env { result.replace(CROSS_ENV_MARKER, CROSS_ENV_REPLACEMENT) } else { result }
 }
 
 /// Transform all script strings in a JSON object using the provided function.
@@ -63,13 +58,14 @@ fn transform_scripts_json(
                 }
             }
         } else if value.is_string()
-            && let Some(raw_script) = value.as_str() {
-                let new_script = transform_fn(raw_script);
-                if new_script != raw_script {
-                    updated = true;
-                    *value = Value::String(new_script);
-                }
+            && let Some(raw_script) = value.as_str()
+        {
+            let new_script = transform_fn(raw_script);
+            if new_script != raw_script {
+                updated = true;
+                *value = Value::String(new_script);
             }
+        }
     }
 
     if updated {

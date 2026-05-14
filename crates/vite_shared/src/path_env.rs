@@ -50,9 +50,10 @@ pub fn format_path_with_prepend(dir: impl AsRef<Path>, options: PrependOptions) 
             return PrependResult::AlreadyPresent;
         }
     } else if let Some(first) = paths.first()
-        && first == dir {
-            return PrependResult::AlreadyPresent;
-        }
+        && first == dir
+    {
+        return PrependResult::AlreadyPresent;
+    }
 
     // Prepend the directory
     let mut new_paths = vec![dir.to_path_buf()];
@@ -80,7 +81,7 @@ pub fn format_path_with_prepend(dir: impl AsRef<Path>, options: PrependOptions) 
 /// # Returns
 /// * `true` if PATH was modified
 /// * `false` if the directory was already present or join failed
-#[must_use] 
+#[must_use]
 pub fn prepend_to_path_env(dir: &AbsolutePath, options: PrependOptions) -> bool {
     match format_path_with_prepend(dir.as_path(), options) {
         PrependResult::Prepended(new_path) => {

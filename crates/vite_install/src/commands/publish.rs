@@ -234,9 +234,10 @@ impl PackageManager {
                 }
 
                 if let Some(filters) = options.filters
-                    && !filters.is_empty() {
-                        output::warn("--filter not supported by bun publish, ignoring flag");
-                    }
+                    && !filters.is_empty()
+                {
+                    output::warn("--filter not supported by bun publish, ignoring flag");
+                }
             }
         }
 

@@ -73,7 +73,8 @@ impl JsRuntime {
     #[must_use]
     pub fn from_system(runtime_type: JsRuntimeType, binary_path: AbsolutePathBuf) -> Self {
         let install_dir = binary_path
-            .parent().map_or_else(|| binary_path.clone(), vite_path::AbsolutePath::to_absolute_path_buf);
+            .parent()
+            .map_or_else(|| binary_path.clone(), vite_path::AbsolutePath::to_absolute_path_buf);
         let binary_filename: Str = Str::from(
             binary_path.as_path().file_name().unwrap_or_default().to_string_lossy().as_ref(),
         );
@@ -291,27 +292,29 @@ pub async fn resolve_node_version(
                 // Check engines.node first
                 if let Some(engines) = &pkg.engines
                     && let Some(node) = &engines.node
-                        && !node.is_empty() {
-                            return Ok(Some(VersionResolution {
-                                version: node.clone(),
-                                source: VersionSource::EnginesNode,
-                                source_path: Some(package_json_path),
-                                project_root: Some(current.to_absolute_path_buf()),
-                            }));
-                        }
+                    && !node.is_empty()
+                {
+                    return Ok(Some(VersionResolution {
+                        version: node.clone(),
+                        source: VersionSource::EnginesNode,
+                        source_path: Some(package_json_path),
+                        project_root: Some(current.to_absolute_path_buf()),
+                    }));
+                }
 
                 // Check devEngines.runtime
                 if let Some(dev_engines) = &pkg.dev_engines
                     && let Some(runtime) = &dev_engines.runtime
-                        && let Some(node_rt) = runtime.find_by_name("node")
-                            && !node_rt.version.is_empty() {
-                                return Ok(Some(VersionResolution {
-                                    version: node_rt.version.clone(),
-                                    source: VersionSource::DevEnginesRuntime,
-                                    source_path: Some(package_json_path),
-                                    project_root: Some(current.to_absolute_path_buf()),
-                                }));
-                            }
+                    && let Some(node_rt) = runtime.find_by_name("node")
+                    && !node_rt.version.is_empty()
+                {
+                    return Ok(Some(VersionResolution {
+                        version: node_rt.version.clone(),
+                        source: VersionSource::DevEnginesRuntime,
+                        source_path: Some(package_json_path),
+                        project_root: Some(current.to_absolute_path_buf()),
+                    }));
+                }
             }
         }
 
@@ -471,15 +474,17 @@ fn check_version_compatibility(
 
     // Check engines.node if it's a lower priority source
     if source != Some(VersionSource::EnginesNode)
-        && let Some(req) = engines_node {
-            check_constraint(&parsed, req, "engines.node", resolved_version, source);
-        }
+        && let Some(req) = engines_node
+    {
+        check_constraint(&parsed, req, "engines.node", resolved_version, source);
+    }
 
     // Check devEngines.runtime if it's a lower priority source
     if source != Some(VersionSource::DevEnginesRuntime)
-        && let Some(req) = dev_engines_runtime {
-            check_constraint(&parsed, req, "devEngines.runtime", resolved_version, source);
-        }
+        && let Some(req) = dev_engines_runtime
+    {
+        check_constraint(&parsed, req, "devEngines.runtime", resolved_version, source);
+    }
 }
 
 /// Check if a version satisfies a constraint and warn if not.
@@ -533,7 +538,7 @@ pub fn is_valid_version(version: &str) -> bool {
 
 /// Normalize and validate a version string as semver (exact version or range) or LTS alias.
 /// Trims whitespace and returns the normalized version, or None with a warning if invalid.
-#[must_use] 
+#[must_use]
 pub fn normalize_version(version: &Str, source: &str) -> Option<Str> {
     let trimmed: Str = version.trim().into();
 

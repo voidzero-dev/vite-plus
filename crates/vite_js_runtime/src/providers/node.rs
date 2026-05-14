@@ -132,9 +132,10 @@ impl NodeProvider {
                 // Check if binary exists (valid installation)
                 let binary_path = node_cache.join(&name).join(self.binary_relative_path(platform));
                 if tokio::fs::try_exists(&binary_path).await.unwrap_or(false)
-                    && range.satisfies(&version) {
-                        matching_versions.push(version);
-                    }
+                    && range.satisfies(&version)
+                {
+                    matching_versions.push(version);
+                }
             }
         }
 
@@ -375,9 +376,10 @@ impl NodeProvider {
         // lts/-n - nth-highest LTS (e.g., lts/-1 = second highest)
         if suffix.starts_with('-')
             && let Ok(n) = suffix.parse::<i32>()
-                && n < 0 {
-                    return self.resolve_lts_by_offset(n).await;
-                }
+            && n < 0
+        {
+            return self.resolve_lts_by_offset(n).await;
+        }
 
         // lts/<codename> - specific LTS line
         self.resolve_lts_by_codename(suffix).await

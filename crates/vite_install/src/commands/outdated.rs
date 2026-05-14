@@ -22,7 +22,7 @@ pub enum Format {
 
 impl Format {
     /// Convert format to string representation
-    #[must_use] 
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Table => "table",
@@ -199,9 +199,10 @@ impl PackageManager {
                         output::warn("--recursive not supported by yarn");
                     }
                     if let Some(filters) = options.filters
-                        && !filters.is_empty() {
-                            output::warn("--filter not supported by yarn");
-                        }
+                        && !filters.is_empty()
+                    {
+                        output::warn("--filter not supported by yarn");
+                    }
                     if options.prod || options.dev {
                         output::warn("--prod/--dev not supported by yarn");
                     }
@@ -238,9 +239,10 @@ impl PackageManager {
                     args.extend_from_slice(options.packages);
 
                     if let Some(format) = options.format
-                        && format == Format::Json {
-                            output::warn("bun outdated does not support --format json");
-                        }
+                        && format == Format::Json
+                    {
+                        output::warn("bun outdated does not support --format json");
+                    }
 
                     if options.long {
                         output::warn("bun outdated does not support --long");

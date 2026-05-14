@@ -193,9 +193,10 @@ impl PackageManager {
 
                 // Check for filters (not supported by yarn@1)
                 if let Some(filters) = options.filters
-                    && !filters.is_empty() {
-                        output::warn("yarn@1 does not support --filter, ignoring --filter flag");
-                    }
+                    && !filters.is_empty()
+                {
+                    output::warn("yarn@1 does not support --filter, ignoring --filter flag");
+                }
             }
             PackageManagerType::Bun => {
                 args.push("pm".into());
@@ -250,9 +251,10 @@ impl PackageManager {
                 }
 
                 if let Some(filters) = options.filters
-                    && !filters.is_empty() {
-                        output::warn("--filter not supported by bun pm ls, ignoring flag");
-                    }
+                    && !filters.is_empty()
+                {
+                    output::warn("--filter not supported by bun pm ls, ignoring flag");
+                }
             }
         }
 

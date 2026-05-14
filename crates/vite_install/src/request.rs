@@ -26,7 +26,7 @@ impl Default for HttpClient {
 
 impl HttpClient {
     /// Create a new HTTP client with default settings (3 retries, 500ms min delay)
-    #[must_use] 
+    #[must_use]
     pub const fn new() -> Self {
         Self::with_config(3, 500)
     }
@@ -37,7 +37,7 @@ impl HttpClient {
     ///
     /// * `max_times` - Maximum number of retry attempts
     /// * `min_delay` - Minimum delay in milliseconds for exponential backoff
-    #[must_use] 
+    #[must_use]
     pub const fn with_config(max_times: usize, min_delay: u64) -> Self {
         Self { max_times, min_delay }
     }
