@@ -34,7 +34,7 @@ This switches to system-first mode, where the shims prefer your system Node.js a
 - `vp env off` enables system-first mode so shims prefer system Node.js first
 - `vp env print` prints the shell snippet for the current session
 
-PowerShell needs to evaluate the setup code in the current shell before `vp env use` can affect only that shell session. This is the same pattern used by tools such as fnm:
+PowerShell needs to evaluate the setup code in the current shell before `vp env use` can affect only that shell session:
 
 ```powershell
 vp env --use-no-cd --shell powershell | Out-String | Invoke-Expression
@@ -74,7 +74,7 @@ In CI, `vp env use` can still run without shell initialization. It writes a temp
 ```bash
 # Setup
 vp env setup                  # Create shims for node, npm, npx
-vp env --shell powershell     # Print PowerShell setup code
+vp env --use-no-cd --shell powershell  # Print PowerShell setup code
 vp env on                     # Use Vite+ managed Node.js
 vp env print                  # Print shell snippet for this session
 

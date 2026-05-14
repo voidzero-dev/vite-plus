@@ -50,6 +50,9 @@ vp env default
 # Control shim mode
 vp env on             # Enable managed mode (shims always use vite-plus Node.js)
 vp env off            # Enable system-first mode (shims prefer system Node.js)
+
+# Print shell setup code for the current session
+vp env --use-no-cd --shell powershell
 ```
 
 ### Diagnostic Commands
@@ -122,12 +125,18 @@ vp env use --silent-if-unchanged  # Suppress output if version already active
 1. `~/.vite-plus/env` includes a `vp()` shell function that intercepts `vp env use` calls
 2. The wrapper sets `VITE_PLUS_ENV_USE_EVAL_ENABLE=1` before calling `command vp env use ...`
 3. When the env var is present (wrapper active), `vp env use` outputs shell commands to stdout for eval
-4. When the env var is absent (CI, direct invocation), `vp env use` writes a session file (`~/.vite-plus/.session-node-version`) instead
+4. When the env var is absent in CI, `vp env use` writes a session file (`~/.vite-plus/.session-node-version`) instead
 5. The shim dispatch checks `VITE_PLUS_NODE_VERSION` env var first, then the session file, in the resolution chain
 
-**Automatic session file (for CI / wrapper-less environments):**
+On Windows interactive shells, `vp env use` requires the PowerShell setup to be evaluated in the current shell so the selected version stays session-scoped:
 
-When `vp env use` detects that the shell eval wrapper is not active (i.e., `VITE_PLUS_ENV_USE_EVAL_ENABLE` is not set), it automatically writes the resolved version to `~/.vite-plus/.session-node-version`. Shims read this file directly from disk, so `vp env use` works without the shell wrapper — no extra flags needed. The env var still takes priority when set, so the shell wrapper experience is unchanged.
+```powershell
+vp env --use-no-cd --shell powershell | Out-String | Invoke-Expression
+```
+
+**Automatic session file (for CI):**
+
+When `vp env use` detects a CI environment and the shell eval wrapper is not active (i.e., `VITE_PLUS_ENV_USE_EVAL_ENABLE` is not set), it automatically writes the resolved version to `~/.vite-plus/.session-node-version`. Shims read this file directly from disk, so CI jobs can keep using `vp env use` without shell setup. The env var still takes priority when set, so the shell wrapper experience is unchanged.
 
 ```bash
 # GitHub Actions example (no shell wrapper, session file written automatically)
@@ -519,8 +528,8 @@ When resolving which Node.js version to use, vite-plus checks the following sour
    - Overrides all file-based resolution
 
 1. **`.session-node-version`** file (session override)
-   - Written by `vp env use` to `~/.vite-plus/.session-node-version`
-   - Works without shell eval wrapper (CI environments)
+   - Written by `vp env use` to `~/.vite-plus/.session-node-version` in CI
+   - Preserves wrapper-less CI behavior without making Windows interactive shells global
    - Deleted by `vp env use --unset`
 
 2. **`.node-version`** file
