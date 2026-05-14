@@ -243,6 +243,16 @@ jobs:
         with:
           target: ${{ matrix.target }}
 
+      - name: Ensure no unexpected file changes after build
+        if: ${{ matrix.target == 'x86_64-unknown-linux-gnu' }}
+        run: |
+          if [[ -n "$(git status --porcelain)" ]]; then
+            echo "::error::Unexpected file changes detected after build"
+            git status
+            git diff
+            exit 1
+          fi
+
       - name: Check TypeScript types
         if: ${{ matrix.target == 'x86_64-unknown-linux-gnu' }}
         run: pnpm tsgo

@@ -1,0 +1,10 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "commands": [
+    "vp rebuild --help # should show help with [PACKAGES]... positional",
+    "vp install # set up node_modules",
+    "vp rebuild # bare rebuild, no args",
+    "vp rebuild testnpm2 # should accept positional package name",
+    "vp rebuild testnpm2 -- --recursive # package name + pass-through args"
+  ]
+}

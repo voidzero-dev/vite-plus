@@ -860,6 +860,9 @@ pub enum PmCommands {
     /// Rebuild native modules
     #[command(visible_alias = "rb")]
     Rebuild {
+        /// Packages to rebuild (rebuilds all if omitted)
+        packages: Vec<String>,
+
         /// Additional arguments
         #[arg(last = true, allow_hyphen_values = true)]
         pass_through_args: Option<Vec<String>>,
