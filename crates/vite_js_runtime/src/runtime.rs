@@ -74,8 +74,7 @@ impl JsRuntime {
     pub fn from_system(runtime_type: JsRuntimeType, binary_path: AbsolutePathBuf) -> Self {
         let install_dir = binary_path
             .parent()
-            .map(vite_path::AbsolutePath::to_absolute_path_buf)
-            .unwrap_or_else(|| binary_path.clone());
+            .map_or_else(|| binary_path.clone(), vite_path::AbsolutePath::to_absolute_path_buf);
         let binary_filename: Str = Str::from(
             binary_path.as_path().file_name().unwrap_or_default().to_string_lossy().as_ref(),
         );
@@ -275,7 +274,7 @@ pub async fn resolve_node_version(
         // before moving to parent directory
 
         // 1. Check .node-version file
-        if let Some(version) = read_node_version_file(&current).await {
+        if let Some(version) = read_node_version_file(current).await {
             let node_version_path = current.join(".node-version");
             return Ok(Some(VersionResolution {
                 version,
@@ -291,33 +290,30 @@ pub async fn resolve_node_version(
             let content = tokio::fs::read_to_string(&package_json_path).await?;
             if let Ok(pkg) = serde_json::from_str::<PackageJson>(&content) {
                 // Check engines.node first
-                if let Some(engines) = &pkg.engines {
-                    if let Some(node) = &engines.node {
-                        if !node.is_empty() {
-                            return Ok(Some(VersionResolution {
-                                version: node.clone(),
-                                source: VersionSource::EnginesNode,
-                                source_path: Some(package_json_path),
-                                project_root: Some(current.to_absolute_path_buf()),
-                            }));
-                        }
-                    }
+                if let Some(engines) = &pkg.engines
+                    && let Some(node) = &engines.node
+                    && !node.is_empty()
+                {
+                    return Ok(Some(VersionResolution {
+                        version: node.clone(),
+                        source: VersionSource::EnginesNode,
+                        source_path: Some(package_json_path),
+                        project_root: Some(current.to_absolute_path_buf()),
+                    }));
                 }
 
                 // Check devEngines.runtime
-                if let Some(dev_engines) = &pkg.dev_engines {
-                    if let Some(runtime) = &dev_engines.runtime {
-                        if let Some(node_rt) = runtime.find_by_name("node") {
-                            if !node_rt.version.is_empty() {
-                                return Ok(Some(VersionResolution {
-                                    version: node_rt.version.clone(),
-                                    source: VersionSource::DevEnginesRuntime,
-                                    source_path: Some(package_json_path),
-                                    project_root: Some(current.to_absolute_path_buf()),
-                                }));
-                            }
-                        }
-                    }
+                if let Some(dev_engines) = &pkg.dev_engines
+                    && let Some(runtime) = &dev_engines.runtime
+                    && let Some(node_rt) = runtime.find_by_name("node")
+                    && !node_rt.version.is_empty()
+                {
+                    return Ok(Some(VersionResolution {
+                        version: node_rt.version.clone(),
+                        source: VersionSource::DevEnginesRuntime,
+                        source_path: Some(package_json_path),
+                        project_root: Some(current.to_absolute_path_buf()),
+                    }));
                 }
             }
         }
@@ -477,17 +473,17 @@ fn check_version_compatibility(
     };
 
     // Check engines.node if it's a lower priority source
-    if source != Some(VersionSource::EnginesNode) {
-        if let Some(req) = engines_node {
-            check_constraint(&parsed, req, "engines.node", resolved_version, source);
-        }
+    if source != Some(VersionSource::EnginesNode)
+        && let Some(req) = engines_node
+    {
+        check_constraint(&parsed, req, "engines.node", resolved_version, source);
     }
 
     // Check devEngines.runtime if it's a lower priority source
-    if source != Some(VersionSource::DevEnginesRuntime) {
-        if let Some(req) = dev_engines_runtime {
-            check_constraint(&parsed, req, "devEngines.runtime", resolved_version, source);
-        }
+    if source != Some(VersionSource::DevEnginesRuntime)
+        && let Some(req) = dev_engines_runtime
+    {
+        check_constraint(&parsed, req, "devEngines.runtime", resolved_version, source);
     }
 }
 
@@ -542,6 +538,7 @@ pub fn is_valid_version(version: &str) -> bool {
 
 /// Normalize and validate a version string as semver (exact version or range) or LTS alias.
 /// Trims whitespace and returns the normalized version, or None with a warning if invalid.
+#[must_use]
 pub fn normalize_version(version: &Str, source: &str) -> Option<Str> {
     let trimmed: Str = version.trim().into();
 

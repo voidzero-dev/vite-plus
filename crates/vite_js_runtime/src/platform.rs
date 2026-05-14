@@ -82,7 +82,7 @@ impl Arch {
     /// Detect the current CPU architecture.
     ///
     /// # Supported architectures
-    /// - x86_64 (`target_arch = "x86_64"`)
+    /// - `x86_64` (`target_arch = "x86_64"`)
     /// - ARM64/AArch64 (`target_arch = "aarch64"`)
     ///
     /// Compilation will fail on unsupported architectures.

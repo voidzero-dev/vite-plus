@@ -171,7 +171,7 @@ async fn execute_global_binary(bin: GlobalBinary, args: &[String], cwd: &Absolut
 
     // Prepend Node.js bin dir to PATH
     let node_bin_dir = node_path.parent().expect("Node has no parent directory");
-    prepend_to_path_env(node_bin_dir, PrependOptions::default());
+    let _ = prepend_to_path_env(node_bin_dir, PrependOptions::default());
 
     // Prepend local node_modules/.bin dirs to PATH
     prepend_node_modules_bin_to_path(cwd);
@@ -231,7 +231,7 @@ fn prepend_node_modules_bin_to_path(cwd: &AbsolutePath) {
 
     // Prepend in reverse order so the nearest (deepest) directory ends up first
     for dir in bin_dirs.iter().rev() {
-        prepend_to_path_env(dir, PrependOptions { dedupe_anywhere: true });
+        let _ = prepend_to_path_env(dir, PrependOptions { dedupe_anywhere: true });
     }
 }
 

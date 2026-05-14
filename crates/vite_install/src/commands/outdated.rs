@@ -22,11 +22,12 @@ pub enum Format {
 
 impl Format {
     /// Convert format to string representation
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
-            Format::Table => "table",
-            Format::List => "list",
-            Format::Json => "json",
+            Self::Table => "table",
+            Self::List => "list",
+            Self::Json => "json",
         }
     }
 }
@@ -36,10 +37,10 @@ impl FromStr for Format {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
-            "table" => Ok(Format::Table),
-            "list" => Ok(Format::List),
-            "json" => Ok(Format::Json),
-            _ => Err(format!("Invalid format '{}'. Valid formats: table, list, json", s)),
+            "table" => Ok(Self::Table),
+            "list" => Ok(Self::List),
+            "json" => Ok(Self::Json),
+            _ => Err(format!("Invalid format '{s}'. Valid formats: table, list, json")),
         }
     }
 }
@@ -158,17 +159,7 @@ impl PackageManager {
                     bin_name = "yarn".into();
 
                     // Check if yarn@2+ (uses upgrade-interactive)
-                    if !self.version.starts_with("1.") {
-                        output::note(
-                            "yarn@2+ uses 'yarn upgrade-interactive' for checking outdated packages",
-                        );
-                        args.push("upgrade-interactive".into());
-
-                        // Warn about unsupported flags
-                        if options.format.is_some() {
-                            output::warn("--format not supported by yarn@2+");
-                        }
-                    } else {
+                    if self.version.starts_with("1.") {
                         // yarn@1
                         args.push("outdated".into());
 
@@ -185,6 +176,16 @@ impl PackageManager {
                                 Format::Table => {} // Default, no flag needed
                             }
                         }
+                    } else {
+                        output::note(
+                            "yarn@2+ uses 'yarn upgrade-interactive' for checking outdated packages",
+                        );
+                        args.push("upgrade-interactive".into());
+
+                        // Warn about unsupported flags
+                        if options.format.is_some() {
+                            output::warn("--format not supported by yarn@2+");
+                        }
                     }
 
                     // Common warnings
@@ -197,10 +198,10 @@ impl PackageManager {
                     if options.recursive {
                         output::warn("--recursive not supported by yarn");
                     }
-                    if let Some(filters) = options.filters {
-                        if !filters.is_empty() {
-                            output::warn("--filter not supported by yarn");
-                        }
+                    if let Some(filters) = options.filters
+                        && !filters.is_empty()
+                    {
+                        output::warn("--filter not supported by yarn");
                     }
                     if options.prod || options.dev {
                         output::warn("--prod/--dev not supported by yarn");
@@ -237,10 +238,10 @@ impl PackageManager {
                     // Add packages
                     args.extend_from_slice(options.packages);
 
-                    if let Some(format) = options.format {
-                        if format == Format::Json {
-                            output::warn("bun outdated does not support --format json");
-                        }
+                    if let Some(format) = options.format
+                        && format == Format::Json
+                    {
+                        output::warn("bun outdated does not support --format json");
                     }
 
                     if options.long {

@@ -1,3 +1,5 @@
+#![allow(clippy::allow_attributes, clippy::disallowed_types)]
+
 use std::{ffi::OsString, path::Path, sync::Arc};
 
 use thiserror::Error;

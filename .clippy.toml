@@ -1,3 +1,7 @@
+too-many-lines-threshold = 200
+
+# We don't have any downstream users, we don't care about external API changes,
+# and this makes the codebase cleaner
 avoid-breaking-exported-api = false
 
 disallowed-methods = [
@@ -25,3 +29,42 @@ disallowed-macros = [
   { path = "std::eprintln", reason = "Use `vite_shared::output` functions (`warn`, `error`) instead." },
   { path = "std::eprint", reason = "Use `vite_shared::output` functions (`warn`, `error`) instead." },
 ]
+
+### await-holding-invalid-types
+## we can remove these if https://github.com/xacrimon/dashmap/issues/348 lands
+
+[[await-holding-invalid-types]]
+path = "dashmap::mapref::one::Ref"
+reason = "holding dashmap references will cause deadlocks, if the same thread tries to acquire a reference"
+
+[[await-holding-invalid-types]]
+path = "dashmap::mapref::one::RefMut"
+reason = "holding dashmap references will cause deadlocks, if the same thread tries to acquire a reference"
+
+[[await-holding-invalid-types]]
+path = "dashmap::mapref::one::MappedRef"
+reason = "holding dashmap references will cause deadlocks, if the same thread tries to acquire a reference"
+
+[[await-holding-invalid-types]]
+path = "dashmap::mapref::entry::Entry"
+reason = "holding dashmap references will cause deadlocks, if the same thread tries to acquire a reference"
+
+[[await-holding-invalid-types]]
+path = "dashmap::mapref::multiple::RefMulti"
+reason = "holding dashmap references will cause deadlocks, if the same thread tries to acquire a reference"
+
+[[await-holding-invalid-types]]
+path = "dashmap::mapref::multiple::RefMutMulti"
+reason = "holding dashmap references will cause deadlocks, if the same thread tries to acquire a reference"
+
+[[await-holding-invalid-types]]
+path = "dashmap::iter::Iter"
+reason = "holding dashmap references will cause deadlocks, if the same thread tries to acquire a reference"
+
+[[await-holding-invalid-types]]
+path = "dashmap::iter::IterMut"
+reason = "holding dashmap references will cause deadlocks, if the same thread tries to acquire a reference"
+
+[[await-holding-invalid-types]]
+path = "dashmap::iter::OwningIter"
+reason = "holding dashmap references will cause deadlocks, if the same thread tries to acquire a reference"

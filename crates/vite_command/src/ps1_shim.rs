@@ -34,7 +34,7 @@ use std::ffi::OsString;
 use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_powershell::{POWERSHELL_PREFIX, find_ps1_sibling, powershell_host};
 
-/// Rewrite a vp-managed `.cmd` invocation to go through PowerShell.
+/// Rewrite a vp-managed `.cmd` invocation to go through `PowerShell`.
 ///
 /// Returns `Some((powershell_host, prefix_args))` when the rewrite applies.
 /// `prefix_args` is `["-NoProfile", "-NoLogo", "-ExecutionPolicy", "Bypass",
@@ -43,7 +43,7 @@ use vite_powershell::{POWERSHELL_PREFIX, find_ps1_sibling, powershell_host};
 ///
 /// Returns `None` when:
 /// - not on Windows,
-/// - no PowerShell host (`pwsh.exe` or `powershell.exe`) is on PATH,
+/// - no `PowerShell` host (`pwsh.exe` or `powershell.exe`) is on PATH,
 /// - stdin is not a terminal (the `.ps1` wrappers hang on piped/null
 ///   stdin and the Ctrl+C concern doesn't apply without a TTY),
 /// - the resolved path is outside `$VP_HOME` (or `$VP_HOME` is

@@ -488,12 +488,13 @@ fn rewrite_reference_types(content: &mut String, skip_packages: &SkipPackages) -
     let line_ending = if preamble.contains("\r\n") { "\r\n" } else { "\n" };
 
     let mut changed = false;
-    let mut preamble_lines: Vec<String> = preamble.lines().map(|l| l.to_string()).collect();
+    let mut preamble_lines: Vec<String> =
+        preamble.lines().map(std::string::ToString::to_string).collect();
     // Strip UTF-8 BOM from the first preamble line so the regex `^(\s*///` can match.
-    if let Some(first) = preamble_lines.first_mut() {
-        if first.starts_with('\u{feff}') {
-            *first = first.trim_start_matches('\u{feff}').to_string();
-        }
+    if let Some(first) = preamble_lines.first_mut()
+        && first.starts_with('\u{feff}')
+    {
+        *first = first.trim_start_matches('\u{feff}').to_string();
     }
 
     for line in &mut preamble_lines {
@@ -570,7 +571,7 @@ struct SkipPackages {
 
 impl SkipPackages {
     /// Check if all packages should be skipped (file can be skipped entirely)
-    fn all_skipped(&self) -> bool {
+    const fn all_skipped(&self) -> bool {
         self.skip_vite && self.skip_vitest && self.skip_tsdown
     }
 }
@@ -615,8 +616,7 @@ fn get_skip_packages_from_package_json(package_json_path: &Path) -> SkipPackages
     let has_package = |deps_key: &str, package_name: &str| -> bool {
         pkg.get(deps_key)
             .and_then(|v| v.as_object())
-            .map(|deps| deps.contains_key(package_name))
-            .unwrap_or(false)
+            .is_some_and(|deps| deps.contains_key(package_name))
     };
 
     // Check both peerDependencies and dependencies
@@ -775,10 +775,8 @@ fn rewrite_import(file_path: &Path, skip_packages: &SkipPackages) -> Result<Rewr
 /// Fast pre-filter to skip expensive AST parsing for files with no relevant imports.
 fn content_may_need_rewriting(content: &str, skip_packages: &SkipPackages) -> bool {
     // "vite" also matches "vitest" as a substring, covering both packages
-    if !skip_packages.skip_vite || !skip_packages.skip_vitest {
-        if content.contains("vite") {
-            return true;
-        }
+    if (!skip_packages.skip_vite || !skip_packages.skip_vitest) && content.contains("vite") {
+        return true;
     }
     // When only skip_vite is set, we still need to catch @vitest/ scoped packages
     if !skip_packages.skip_vitest && content.contains("@vitest/") {

@@ -233,10 +233,10 @@ impl PackageManager {
                     output::warn("--recursive not supported by bun publish, ignoring flag");
                 }
 
-                if let Some(filters) = options.filters {
-                    if !filters.is_empty() {
-                        output::warn("--filter not supported by bun publish, ignoring flag");
-                    }
+                if let Some(filters) = options.filters
+                    && !filters.is_empty()
+                {
+                    output::warn("--filter not supported by bun publish, ignoring flag");
                 }
             }
         }

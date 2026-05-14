@@ -68,6 +68,12 @@ peerDependencyRules:
     vite: "*"
     vitest: "*"
 
+> test -f vite-plus-monorepo/.gitignore && echo '.gitignore exists' || echo 'ERROR: .gitignore missing' # verify gitignore renamed from _gitignore
+.gitignore exists
+
+> test ! -f vite-plus-monorepo/.yarnrc.yml && echo 'No .yarnrc.yml' || echo 'ERROR: .yarnrc.yml exists' # verify no yarn config for pnpm
+No .yarnrc.yml
+
 > test -d vite-plus-monorepo/.git && echo 'Git initialized' || echo 'No git' # check git init
 Git initialized
 

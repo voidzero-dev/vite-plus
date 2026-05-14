@@ -132,10 +132,10 @@ impl PackageManager {
                 bin_name = "bun".into();
                 args.push("remove".into());
 
-                if let Some(filters) = options.filters {
-                    if !filters.is_empty() {
-                        output::warn("bun remove does not support --filter");
-                    }
+                if let Some(filters) = options.filters
+                    && !filters.is_empty()
+                {
+                    output::warn("bun remove does not support --filter");
                 }
                 if options.workspace_root {
                     output::warn("bun remove does not support --workspace-root");

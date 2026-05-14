@@ -34,3 +34,6 @@ reqwest = { workspace = true, features = ["stream", "rustls-no-provider", "json"
 [lib]
 test = false
 doctest = false
+
+[lints]
+workspace = true

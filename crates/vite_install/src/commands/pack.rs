@@ -31,14 +31,14 @@ impl PackageManager {
         cwd: impl AsRef<AbsolutePath>,
     ) -> Result<ExitStatus, Error> {
         // Special handling for npm: create pack-destination directory if it doesn't exist
-        if matches!(self.client, PackageManagerType::Npm) {
-            if let Some(pack_destination) = options.pack_destination {
-                let dest_path = cwd.as_ref().join(pack_destination);
-                if !dest_path.as_path().exists() {
-                    create_dir_all(&dest_path)
-                        .await
-                        .map_err(|e| Error::IoWithPath { path: dest_path.into(), err: e })?;
-                }
+        if matches!(self.client, PackageManagerType::Npm)
+            && let Some(pack_destination) = options.pack_destination
+        {
+            let dest_path = cwd.as_ref().join(pack_destination);
+            if !dest_path.as_path().exists() {
+                create_dir_all(&dest_path)
+                    .await
+                    .map_err(|e| Error::IoWithPath { path: dest_path.into(), err: e })?;
             }
         }
 
@@ -181,10 +181,10 @@ impl PackageManager {
                     output::warn("--recursive not supported by bun pm pack, ignoring flag");
                 }
 
-                if let Some(filters) = options.filters {
-                    if !filters.is_empty() {
-                        output::warn("--filter not supported by bun pm pack, ignoring flag");
-                    }
+                if let Some(filters) = options.filters
+                    && !filters.is_empty()
+                {
+                    output::warn("--filter not supported by bun pm pack, ignoring flag");
                 }
 
                 if let Some(out) = options.out {

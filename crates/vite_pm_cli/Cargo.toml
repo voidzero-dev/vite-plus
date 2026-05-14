@@ -20,5 +20,9 @@ vite_path = { workspace = true }
 vite_str = { workspace = true }
 vite_workspace = { workspace = true }
 
+[lib]
+test = false
+doctest = false
+
 [lints]
 workspace = true

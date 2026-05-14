@@ -8,6 +8,8 @@
 //! the global CLI; PM operations always go through whichever package
 //! manager (pnpm/npm/yarn/bun) is detected for the project.
 
+#![allow(clippy::allow_attributes, clippy::disallowed_types)]
+
 pub mod cli;
 pub mod dispatch;
 pub mod error;

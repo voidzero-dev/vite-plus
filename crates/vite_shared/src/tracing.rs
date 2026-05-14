@@ -9,7 +9,7 @@ use tracing_subscriber::{
 
 use crate::env_vars;
 
-/// Initialize tracing with VITE_LOG environment variable.
+/// Initialize tracing with `VITE_LOG` environment variable.
 ///
 /// Uses `OnceLock` to ensure tracing is only initialized once,
 /// even if called multiple times.
@@ -19,7 +19,7 @@ use crate::env_vars;
 /// subscribers (e.g., rolldown devtools) can claim it without panicking.
 ///
 /// # Environment Variables
-/// - `VITE_LOG`: Controls log filtering (e.g., "debug", "vite_task=trace")
+/// - `VITE_LOG`: Controls log filtering (e.g., "debug", "`vite_task=trace`")
 pub fn init_tracing() {
     static TRACING: OnceLock<()> = OnceLock::new();
     TRACING.get_or_init(|| {
