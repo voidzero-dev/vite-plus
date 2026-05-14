@@ -323,14 +323,39 @@ fn check_session_override() {
         }
     }
 
-    // Also check session version file
-    if let Some(version) = config::read_session_version_sync() {
-        print_check(
-            &output::WARN_SIGN.yellow().to_string(),
-            "Session override (file)",
-            &format!("{}={version}", config::SESSION_VERSION_FILE).yellow().to_string(),
-        );
-        print_hint("Written by 'vp env use'. Run 'vp env use --unset' to remove.");
+    #[cfg(not(windows))]
+    {
+        if let Some(version) = config::read_session_version_sync() {
+            print_check(
+                &output::WARN_SIGN.yellow().to_string(),
+                "Session override (file)",
+                &format!("{}={version}", config::SESSION_VERSION_FILE).yellow().to_string(),
+            );
+            print_hint("Written by 'vp env use'. Run 'vp env use --unset' to remove.");
+        }
+    }
+
+    #[cfg(windows)]
+    {
+        if let Some(version) = config::read_session_version_sync() {
+            if vite_shared::EnvConfig::get().is_ci {
+                print_check(
+                    &output::WARN_SIGN.yellow().to_string(),
+                    "Session override (file)",
+                    &format!("{}={version}", config::SESSION_VERSION_FILE).yellow().to_string(),
+                );
+                print_hint("Written by 'vp env use'. Run 'vp env use --unset' to remove.");
+            } else {
+                print_check(
+                    &output::WARN_SIGN.yellow().to_string(),
+                    "Legacy override file",
+                    &format!("{} ignored on Windows", config::SESSION_VERSION_FILE)
+                        .yellow()
+                        .to_string(),
+                );
+                print_hint("Run 'vp env use --unset' to remove it.");
+            }
+        }
     }
 }
 

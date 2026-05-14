@@ -198,7 +198,7 @@ pub async fn delete_session_version() -> Result<(), Error> {
 ///
 /// Resolution order:
 /// 0. `VP_NODE_VERSION` env var (session override from `vp env use`)
-/// 1. `.session-node-version` file (session override written by `vp env use` for shell-wrapper-less environments)
+/// 1. `.session-node-version` file (non-Windows fallback for shell-wrapper-less environments)
 /// 2. `.node-version` file in current or parent directories
 /// 3. `package.json#engines.node` in current or parent directories
 /// 4. `package.json#devEngines.runtime` in current or parent directories
@@ -219,15 +219,18 @@ pub async fn resolve_version(cwd: &AbsolutePath) -> Result<VersionResolution, Er
         }
     }
 
-    // Session override via file (written by `vp env use` for shell-wrapper-less environments)
-    if let Some(session_version) = read_session_version().await {
-        return Ok(VersionResolution {
-            version: session_version,
-            source: SESSION_VERSION_FILE.into(),
-            source_path: get_session_version_path().ok(),
-            project_root: None,
-            is_range: false,
-        });
+    // Session override via file. On Windows this is only enabled in CI:
+    // interactive shells share VP_HOME, so the file would leak across windows.
+    if cfg!(not(windows)) || vite_shared::EnvConfig::get().is_ci {
+        if let Some(session_version) = read_session_version().await {
+            return Ok(VersionResolution {
+                version: session_version,
+                source: SESSION_VERSION_FILE.into(),
+                source_path: get_session_version_path().ok(),
+                project_root: None,
+                is_range: false,
+            });
+        }
     }
 
     resolve_version_from_files(cwd).await
@@ -955,6 +958,7 @@ mod tests {
         assert!(result.is_ok());
     }
 
+    #[cfg(not(windows))]
     #[tokio::test]
     async fn test_resolve_version_session_file_takes_priority_over_node_version() {
         let temp_dir = TempDir::new().unwrap();
@@ -1004,6 +1008,47 @@ mod tests {
         delete_session_version().await.unwrap();
     }
 
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn test_resolve_version_ignores_session_file_on_windows() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let _guard = vite_shared::EnvConfig::test_guard(
+            vite_shared::EnvConfig::for_test_with_home(temp_dir.path()),
+        );
+
+        tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
+        write_session_version("22.0.0").await.unwrap();
+
+        let resolution = resolve_version(&temp_path).await.unwrap();
+
+        assert_eq!(resolution.version, "20.18.0");
+        assert_eq!(resolution.source, ".node-version");
+
+        delete_session_version().await.unwrap();
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn test_resolve_version_reads_session_file_on_windows_ci() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig {
+            is_ci: true,
+            ..vite_shared::EnvConfig::for_test_with_home(temp_dir.path())
+        });
+
+        tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
+        write_session_version("22.0.0").await.unwrap();
+
+        let resolution = resolve_version(&temp_path).await.unwrap();
+
+        assert_eq!(resolution.version, "22.0.0");
+        assert_eq!(resolution.source, SESSION_VERSION_FILE);
+
+        delete_session_version().await.unwrap();
+    }
+
     #[tokio::test]
     async fn test_resolve_version_falls_through_when_no_session_file() {
         let temp_dir = TempDir::new().unwrap();
@@ -1025,6 +1070,7 @@ mod tests {
     /// Verify that the session file source is accepted by `vp env install` (no-arg) source validation.
     /// This is a regression test ensuring `vp env use 24` followed by `vp env install`
     /// works when the session file is the resolution source.
+    #[cfg(not(windows))]
     #[tokio::test]
     async fn test_session_file_source_accepted_by_install_validation() {
         let temp_dir = TempDir::new().unwrap();

@@ -451,7 +451,9 @@ async fn cleanup_legacy_completion_dir(vite_plus_home: &vite_path::AbsolutePath)
 /// - `~/.vite-plus/env.nu` (Nushell) with `vp env use` wrapper function
 /// - `~/.vite-plus/env.ps1` (PowerShell) with PATH setup + `vp` function
 /// - `~/.vite-plus/bin/vp-use.cmd` (cmd.exe wrapper for `vp env use`)
-async fn create_env_files(vite_plus_home: &vite_path::AbsolutePath) -> Result<(), Error> {
+pub(crate) async fn create_env_files(
+    vite_plus_home: &vite_path::AbsolutePath,
+) -> Result<(), Error> {
     let bin_path = vite_plus_home.join("bin");
 
     // Use $HOME-relative path if install dir is under HOME (like rustup's ~/.cargo/env)
@@ -741,7 +743,7 @@ fn print_path_instructions(bin_dir: &vite_path::AbsolutePath) {
     println!();
     println!("  For PowerShell, add to your $PROFILE:");
     println!();
-    println!("  . \"{home_path}/env.ps1\"");
+    println!("  vp env --use-no-cd --shell powershell | Out-String | Invoke-Expression");
     println!();
     println!("  For IDE support (VS Code, Cursor), ensure bin directory is in system PATH:");
 

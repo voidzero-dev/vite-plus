@@ -5,7 +5,7 @@
 
 use std::{ffi::OsStr, process::ExitStatus};
 
-use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
+use clap::{CommandFactory, FromArgMatches, Parser, Subcommand, ValueEnum};
 use clap_complete::ArgValueCompleter;
 use tokio::runtime::Runtime;
 use vite_path::AbsolutePathBuf;
@@ -243,6 +243,7 @@ impl Commands {
 Examples:
   Setup:
     vp env setup                  # Create shims for node, npm, npx
+    vp env --shell powershell     # Print PowerShell setup code
     vp env on                     # Use vite-plus managed Node.js
     vp env print                  # Print shell snippet for this session
 
@@ -269,9 +270,33 @@ Related Commands:
   vp update -g [package]        # Update global packages
   vp list -g [package]          # List global packages")]
 pub struct EnvArgs {
+    /// Shell syntax to print when no subcommand is provided
+    #[arg(long, value_enum)]
+    pub shell: Option<EnvShell>,
+
+    /// Print setup without directory-change hooks
+    #[arg(long)]
+    pub use_no_cd: bool,
+
     /// Subcommand (e.g., 'default', 'setup', 'doctor', 'which')
     #[command(subcommand)]
     pub command: Option<EnvSubcommands>,
+}
+
+/// Shell syntax for `vp env` output.
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub enum EnvShell {
+    /// POSIX shell (bash, zsh, sh)
+    #[value(alias = "bash", alias = "zsh", alias = "sh")]
+    Posix,
+    /// Fish shell
+    Fish,
+    /// Nushell
+    #[value(alias = "nushell")]
+    Nu,
+    /// PowerShell
+    #[value(alias = "pwsh", alias = "power-shell")]
+    Powershell,
 }
 
 /// Subcommands for the `env` command

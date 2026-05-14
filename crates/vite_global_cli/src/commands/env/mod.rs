@@ -27,7 +27,7 @@ use std::process::ExitStatus;
 use vite_path::AbsolutePathBuf;
 
 use crate::{
-    cli::{EnvArgs, EnvSubcommands},
+    cli::{EnvArgs, EnvShell, EnvSubcommands},
     commands::shell::{Shell, detect_shell},
     error::Error,
 };
@@ -136,6 +136,10 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
         };
     }
 
+    if args.shell.is_some() || args.use_no_cd {
+        return print_shell_env(args.shell).await;
+    }
+
     // No flags provided - show unified help to match `vp env --help`.
     if !crate::help::print_unified_clap_help_for_path(&["env"]) {
         // Fallback to clap's built-in help printer if unified rendering fails.
@@ -149,6 +153,30 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
             .print_help()
             .ok();
     }
+    Ok(ExitStatus::default())
+}
+
+async fn print_shell_env(shell: Option<EnvShell>) -> Result<ExitStatus, Error> {
+    let vite_plus_home = config::get_vp_home()?;
+    setup::create_env_files(&vite_plus_home).await?;
+
+    let shell = shell.unwrap_or_else(|| match detect_shell() {
+        Shell::Fish => EnvShell::Fish,
+        Shell::NuShell => EnvShell::Nu,
+        Shell::PowerShell => EnvShell::Powershell,
+        Shell::Posix | Shell::Cmd => EnvShell::Posix,
+    });
+
+    let env_file = match shell {
+        EnvShell::Posix => "env",
+        EnvShell::Fish => "env.fish",
+        EnvShell::Nu => "env.nu",
+        EnvShell::Powershell => "env.ps1",
+    };
+
+    let content = tokio::fs::read_to_string(vite_plus_home.join(env_file)).await?;
+    print!("{content}");
+
     Ok(ExitStatus::default())
 }
 

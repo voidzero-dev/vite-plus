@@ -367,6 +367,7 @@ Inspect:
 Examples:
   Setup:
     vp env setup                  # Create shims for node, npm, npx
+    vp env --shell powershell     # Print PowerShell setup code
     vp env on                     # Use vite-plus managed Node.js
     vp env print                  # Print shell snippet for this session
 
@@ -414,4 +415,3 @@ Options:
   -h, --help             Print help
 
 Documentation: https://viteplus.dev/guide/upgrade
-

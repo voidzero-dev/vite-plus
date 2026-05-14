@@ -188,15 +188,18 @@ impl JsExecutor {
                 self.check_runtime_compatibility(&session_version, Some(VP_NODE_VERSION), false)
                     .await?;
                 Some(session_version)
-            } else if let Some(session_version) = config::read_session_version().await {
-                // Read from file
-                self.check_runtime_compatibility(
-                    &session_version,
-                    Some(SESSION_VERSION_FILE),
-                    false,
-                )
-                .await?;
-                Some(session_version)
+            } else if cfg!(not(windows)) || vite_shared::EnvConfig::get().is_ci {
+                if let Some(session_version) = config::read_session_version().await {
+                    self.check_runtime_compatibility(
+                        &session_version,
+                        Some(SESSION_VERSION_FILE),
+                        false,
+                    )
+                    .await?;
+                    Some(session_version)
+                } else {
+                    None
+                }
             } else {
                 None
             };
