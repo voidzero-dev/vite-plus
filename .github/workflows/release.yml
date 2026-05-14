@@ -1,84 +1,72 @@
 name: Release
 
 on:
-  workflow_dispatch:
-    inputs:
-      npm_tag:
-        description: 'npm tag for publish'
-        required: true
-        default: 'latest'
-        type: choice
-        options:
-          - latest
-          - alpha
-      version:
-        description: 'Override version (leave empty to auto-compute). Use when retrying a failed publish.'
-        required: false
-        default: ''
-        type: string
+  push:
+    branches: [main]
+    paths:
+      - 'packages/cli/package.json'
 
 permissions: {}
 
 env:
   RELEASE_BUILD: 'true'
   DEBUG: 'napi:*'
-  NPM_TAG: ${{ inputs.npm_tag }}
 
 jobs:
-  prepare:
+  check:
+    if: github.repository == 'voidzero-dev/vite-plus'
+    name: Check version
     runs-on: ubuntu-latest
     permissions:
       contents: read
     outputs:
+      version_changed: ${{ steps.version.outputs.changed }}
       version: ${{ steps.version.outputs.version }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          fetch-depth: 0
-          fetch-tags: true
-          persist-credentials: false
-      - uses: ./.github/actions/set-snapshot-version
-        if: ${{ inputs.version == '' }}
-        id: computed
-        with:
-          npm_tag: ${{ inputs.npm_tag }}
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
-      - name: Set final version
+      - uses: oxc-project/setup-node@ab97f03642370d79a7e96dd286bd02a1be40e0ba # v1.3.0
+
+      - name: Check version changes
+        uses: EndBug/version-check@095362f3cd50f690c8fa0e6afeea81834bd8d320 # v3.0.0
         id: version
-        env:
-          INPUT_VERSION: ${{ inputs.version }}
-          COMPUTED_VERSION: ${{ steps.computed.outputs.version }}
-        run: echo "version=${INPUT_VERSION:-$COMPUTED_VERSION}" >> "$GITHUB_OUTPUT"
+        with:
+          static-checking: localIsNew
+          file-url: https://unpkg.com/vite-plus@latest/package.json
+          file-name: packages/cli/package.json
 
   build-rust:
     name: Build bindings and binaries
-    needs: prepare
+    needs: check
+    if: needs.check.outputs.version_changed == 'true'
     permissions:
       contents: read
     uses: ./.github/workflows/reusable-release-build.yml
     with:
-      version: ${{ needs.prepare.outputs.version }}
+      version: ${{ needs.check.outputs.version }}
       cache-key: release
 
   request-approval:
     runs-on: ubuntu-latest
-    needs: [prepare, build-rust]
+    needs: [check, build-rust]
+    if: needs.check.outputs.version_changed == 'true'
     steps:
       - uses: tsickert/discord-webhook@b217a69502f52803de774ded2b1ab7c282e99645 # v7.0.0
         with:
           webhook-url: ${{ secrets.DISCORD_RELEASES_WEBHOOK_URL }}
-          content: 'Requesting approval: ${{ github.server_url }}/${{ github.repository }}/actions/workflows/release.yml'
+          content: 'Requesting approval for vite-plus v${{ needs.check.outputs.version }}: ${{ github.server_url }}/${{ github.repository }}/actions/workflows/release.yml'
 
   Release:
     runs-on: ubuntu-latest
     environment: release
-    needs: [prepare, build-rust, request-approval]
+    needs: [check, build-rust, request-approval]
+    if: needs.check.outputs.version_changed == 'true'
     permissions:
       contents: write
       packages: write
       id-token: write # Required for OIDC
     env:
-      VERSION: ${{ needs.prepare.outputs.version }}
+      VERSION: ${{ needs.check.outputs.version }}
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
@@ -168,22 +156,17 @@ jobs:
 
       - name: Publish
         run: |
-          pnpm publish --filter=./packages/core --tag "${NPM_TAG}" --access public --no-git-checks
-          pnpm publish --filter=./packages/test --tag "${NPM_TAG}" --access public --no-git-checks
-          pnpm publish --filter=./packages/cli --tag "${NPM_TAG}" --access public --no-git-checks
+          pnpm publish --filter=./packages/core --tag latest --access public --no-git-checks
+          pnpm publish --filter=./packages/test --tag latest --access public --no-git-checks
+          pnpm publish --filter=./packages/cli --tag latest --access public --no-git-checks
 
       - name: Create release body
         env:
           REPOSITORY: ${{ github.repository }}
           COMMIT_SHA: ${{ github.sha }}
         run: |
-          if [[ "${NPM_TAG}" == "latest" ]]; then
-            INSTALL_BASH="curl -fsSL https://vite.plus | bash"
-            INSTALL_PS1="irm https://vite.plus/ps1 | iex"
-          else
-            INSTALL_BASH="curl -fsSL https://vite.plus | VP_VERSION=${VERSION} bash"
-            INSTALL_PS1="\\\$env:VP_VERSION=\\\"${VERSION}\\\"; irm https://vite.plus/ps1 | iex"
-          fi
+          INSTALL_BASH="curl -fsSL https://vite.plus | bash"
+          INSTALL_PS1="irm https://vite.plus/ps1 | iex"
           cat > ./RELEASE_BODY.md <<EOF
           ## vite-plus v${VERSION}
 
@@ -216,8 +199,8 @@ jobs:
         with:
           body_path: ./RELEASE_BODY.md
           draft: true
-          make_latest: ${{ inputs.npm_tag == 'latest' }}
-          prerelease: ${{ inputs.npm_tag == 'alpha' }}
+          make_latest: true
+          prerelease: false
           name: vite-plus v${{ env.VERSION }}
           tag_name: v${{ env.VERSION }}
           target_commitish: ${{ github.sha }}
@@ -230,7 +213,6 @@ jobs:
         run: gh release edit "v${VERSION}" --draft=false --repo "${{ github.repository }}"
 
       - name: Send Discord notification
-        if: ${{ inputs.npm_tag == 'latest' }}
         uses: tsickert/discord-webhook@b217a69502f52803de774ded2b1ab7c282e99645 # v7.0.0
         with:
           webhook-url: ${{ secrets.DISCORD_RELEASES_WEBHOOK_URL }}
