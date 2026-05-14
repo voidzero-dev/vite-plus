@@ -546,9 +546,11 @@ fn env_help_doc() -> HelpDoc {
                 vec![
                     "  Setup:",
                     "    vp env setup                  # Create shims for node, npm, npx",
-                    "    vp env --shell powershell | Out-String | Invoke-Expression  # PowerShell session setup",
                     "    vp env on                     # Use vite-plus managed Node.js",
                     "    vp env print                  # Print shell snippet for this session",
+                    "",
+                    "  PowerShell (add to $PROFILE):",
+                    "    vp env --shell powershell | Out-String | Invoke-Expression",
                     "",
                     "  Manage:",
                     "    vp env pin lts                # Pin to latest LTS version",
