@@ -293,6 +293,18 @@ pub enum EnvShell {
     Powershell,
 }
 
+impl EnvShell {
+    /// File name written under `~/.vite-plus/` for this shell's setup script.
+    pub(crate) const fn env_file_name(self) -> &'static str {
+        match self {
+            EnvShell::Posix => "env",
+            EnvShell::Fish => "env.fish",
+            EnvShell::Nu => "env.nu",
+            EnvShell::Powershell => "env.ps1",
+        }
+    }
+}
+
 /// Subcommands for the `env` command
 #[derive(clap::Subcommand, Debug)]
 pub enum EnvSubcommands {
@@ -303,7 +315,7 @@ pub enum EnvSubcommands {
         json: bool,
     },
 
-    /// Print shell snippet to set environment for current session
+    /// Print PATH snippet for the current session (use `profile` for `$PROFILE`-style setup)
     Print,
 
     /// Print the full shell setup script for `$PROFILE`/rc-file evaluation

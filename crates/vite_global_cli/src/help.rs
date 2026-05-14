@@ -507,7 +507,10 @@ fn env_help_doc() -> HelpDoc {
                         "off",
                         "Enable system-first mode - shims prefer system Node.js, fallback to managed",
                     ),
-                    row("print", "Print shell snippet to set environment for current session"),
+                    row(
+                        "print",
+                        "Print PATH snippet for the current session (use `profile` for `$PROFILE`-style setup)",
+                    ),
                     row(
                         "profile",
                         "Print the full shell setup script for `$PROFILE`/rc-file evaluation",

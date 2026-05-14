@@ -701,14 +701,9 @@ pub(crate) fn render_env_content(
 /// - `~/.vite-plus/env.ps1` (PowerShell) with PATH setup + `vp` function
 /// - `~/.vite-plus/bin/vp-use.cmd` (cmd.exe wrapper for `vp env use`)
 async fn create_env_files(vite_plus_home: &vite_path::AbsolutePath) -> Result<(), Error> {
-    for (shell, file_name) in [
-        (EnvShell::Posix, "env"),
-        (EnvShell::Fish, "env.fish"),
-        (EnvShell::Nu, "env.nu"),
-        (EnvShell::Powershell, "env.ps1"),
-    ] {
+    for shell in [EnvShell::Posix, EnvShell::Fish, EnvShell::Nu, EnvShell::Powershell] {
         let content = render_env_content(shell, vite_plus_home);
-        tokio::fs::write(vite_plus_home.join(file_name), content).await?;
+        tokio::fs::write(vite_plus_home.join(shell.env_file_name()), content).await?;
     }
 
     // Only write the cmd wrapper if bin directory exists (it may not during --env-only)
