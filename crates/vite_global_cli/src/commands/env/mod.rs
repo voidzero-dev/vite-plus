@@ -58,6 +58,7 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
         return match subcommand {
             crate::cli::EnvSubcommands::Current { json } => current::execute(cwd, json).await,
             crate::cli::EnvSubcommands::Print => print_env(cwd).await,
+            crate::cli::EnvSubcommands::Profile { shell } => print_profile(shell),
             crate::cli::EnvSubcommands::Default { version } => default::execute(cwd, version).await,
             crate::cli::EnvSubcommands::On => on::execute().await,
             crate::cli::EnvSubcommands::Off => off::execute().await,
@@ -136,11 +137,7 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
         };
     }
 
-    if args.shell.is_some() {
-        return print_shell_env(args.shell).await;
-    }
-
-    // No flags provided - show unified help to match `vp env --help`.
+    // No subcommand provided - show unified help to match `vp env --help`.
     if !crate::help::print_unified_clap_help_for_path(&["env"]) {
         // Fallback to clap's built-in help printer if unified rendering fails.
         use clap::CommandFactory;
@@ -156,27 +153,19 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
     Ok(ExitStatus::default())
 }
 
-async fn print_shell_env(shell: Option<EnvShell>) -> Result<ExitStatus, Error> {
+/// Print the full shell setup script (`vp env profile`).
+///
+/// Pure: no disk I/O, safe to run on every shell startup via
+/// `vp env profile --shell powershell | Out-String | Invoke-Expression` in `$PROFILE`.
+fn print_profile(shell: Option<EnvShell>) -> Result<ExitStatus, Error> {
     let vite_plus_home = config::get_vp_home()?;
-    setup::create_env_files(&vite_plus_home).await?;
-
     let shell = shell.unwrap_or_else(|| match detect_shell() {
         Shell::Fish => EnvShell::Fish,
         Shell::NuShell => EnvShell::Nu,
         Shell::PowerShell => EnvShell::Powershell,
         Shell::Posix | Shell::Cmd => EnvShell::Posix,
     });
-
-    let env_file = match shell {
-        EnvShell::Posix => "env",
-        EnvShell::Fish => "env.fish",
-        EnvShell::Nu => "env.nu",
-        EnvShell::Powershell => "env.ps1",
-    };
-
-    let content = tokio::fs::read_to_string(vite_plus_home.join(env_file)).await?;
-    print!("{content}");
-
+    print!("{}", setup::render_env_content(shell, &vite_plus_home));
     Ok(ExitStatus::default())
 }
 

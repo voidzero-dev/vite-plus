@@ -29,7 +29,7 @@ This switches to system-first mode, where the shims prefer your system Node.js a
 ### Setup
 
 - `vp env setup` creates or updates shims in `VP_HOME/bin`
-- `vp env --shell <shell>` prints shell setup code for the current session
+- `vp env profile [--shell <shell>]` prints the full shell setup script (intended for `$PROFILE`/rc-file evaluation)
 - `vp env on` enables managed mode so shims always use Vite+-managed Node.js
 - `vp env off` enables system-first mode so shims prefer system Node.js first
 - `vp env print` prints the shell snippet for the current session
@@ -37,7 +37,7 @@ This switches to system-first mode, where the shims prefer your system Node.js a
 PowerShell needs to evaluate the setup code in the current shell before `vp env use` can affect only that shell session:
 
 ```powershell
-vp env --shell powershell | Out-String | Invoke-Expression
+vp env profile --shell powershell | Out-String | Invoke-Expression
 ```
 
 Add that line to the end of your PowerShell `$PROFILE` to apply it automatically in new shells. It does not require elevated privileges.

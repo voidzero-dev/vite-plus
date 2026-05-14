@@ -247,7 +247,7 @@ Examples:
     vp env print                  # Print shell snippet for this session
 
   PowerShell (add to $PROFILE):
-    vp env --shell powershell | Out-String | Invoke-Expression
+    vp env profile --shell powershell | Out-String | Invoke-Expression
 
   Manage:
     vp env pin lts                # Pin to latest LTS version
@@ -272,16 +272,12 @@ Related Commands:
   vp update -g [package]        # Update global packages
   vp list -g [package]          # List global packages")]
 pub struct EnvArgs {
-    /// Shell syntax to print when no subcommand is provided
-    #[arg(long, value_enum)]
-    pub shell: Option<EnvShell>,
-
     /// Subcommand (e.g., 'default', 'setup', 'doctor', 'which')
     #[command(subcommand)]
     pub command: Option<EnvSubcommands>,
 }
 
-/// Shell syntax for `vp env` output.
+/// Shell syntax for `vp env profile` output.
 #[derive(Clone, Copy, Debug, ValueEnum)]
 pub enum EnvShell {
     /// POSIX shell (bash, zsh, sh)
@@ -309,6 +305,13 @@ pub enum EnvSubcommands {
 
     /// Print shell snippet to set environment for current session
     Print,
+
+    /// Print the full shell setup script for `$PROFILE`/rc-file evaluation
+    Profile {
+        /// Target shell syntax (defaults to the auto-detected current shell)
+        #[arg(long, value_enum)]
+        shell: Option<EnvShell>,
+    },
 
     /// Set or show the global default Node.js version
     Default {
