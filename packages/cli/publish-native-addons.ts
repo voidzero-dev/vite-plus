@@ -53,15 +53,7 @@ if (existsSync(rustCliArtifactsDir)) {
   }
 }
 
-// Stamp VERSION into the publishable package.json files. napi prePublish and
-// the cli-binary packages below both read packages/cli/package.json#version.
-for (const p of ['core', 'test', 'cli']) {
-  const pkgPath = join(repoRoot, 'packages', p, 'package.json');
-  const content = readFileSync(pkgPath, 'utf-8');
-  writeFileSync(pkgPath, content.replace('"version": "0.0.0"', `"version": "${VERSION}"`));
-}
-
-// Build test package against the just-stamped versions.
+// Build test package — versions are already bumped on main by prepare_release.yml.
 execSync('pnpm --filter=@voidzero-dev/vite-plus-test build', {
   cwd: repoRoot,
   stdio: 'inherit',
