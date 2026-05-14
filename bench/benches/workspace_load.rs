@@ -1,3 +1,5 @@
+#![allow(clippy::allow_attributes, clippy::disallowed_types)]
+
 use std::{ffi::OsStr, hint::black_box, path::PathBuf, sync::Arc};
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};

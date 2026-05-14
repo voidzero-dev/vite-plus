@@ -1,3 +1,11 @@
+#![allow(
+    clippy::allow_attributes,
+    clippy::disallowed_macros,
+    clippy::disallowed_methods,
+    clippy::disallowed_types,
+    clippy::print_stdout
+)]
+
 pub mod commands;
 pub mod config;
 pub mod package_manager;

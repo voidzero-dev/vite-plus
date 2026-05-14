@@ -46,3 +46,6 @@ pretty_assertions = { workspace = true }
 
 [lib]
 crate-type = ["cdylib"]
+
+[lints]
+workspace = true

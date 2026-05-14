@@ -1,5 +1,12 @@
 //! Shared utilities for vite-plus crates
 
+#![allow(
+    clippy::allow_attributes,
+    clippy::disallowed_macros,
+    clippy::disallowed_types,
+    clippy::print_stdout
+)]
+
 mod env_config;
 pub mod env_vars;
 pub mod header;

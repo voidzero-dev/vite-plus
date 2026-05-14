@@ -4,6 +4,15 @@
 //! It uses NAPI-RS to create native Node.js bindings that allow JavaScript functions
 //! to be called from Rust code.
 
+#![allow(
+    clippy::allow_attributes,
+    clippy::disallowed_macros,
+    clippy::disallowed_methods,
+    clippy::disallowed_types,
+    clippy::print_stderr,
+    clippy::print_stdout
+)]
+
 #[cfg(feature = "rolldown")]
 pub extern crate rolldown_binding;
 

@@ -142,7 +142,7 @@ impl PackageManagerBuilder {
             Err(Error::UnrecognizedPackageManager) => {
                 // Prompt user to select a package manager
                 let selected_type = prompt_package_manager_selection()?;
-                PackageManagerBuilder::new(&self.cwd)
+                Self::new(&self.cwd)
                     .package_manager_type(selected_type)
                     .build()
                     .await?
@@ -848,11 +848,10 @@ fn interactive_package_manager_menu() -> Result<PackageManagerType, Error> {
 
         // Read keyboard input, skipping non-Press events (e.g. Release on Windows)
         let (code, modifiers) = loop {
-            if let Event::Key(KeyEvent { code, modifiers, kind, .. }) = event::read()? {
-                if kind == KeyEventKind::Press {
+            if let Event::Key(KeyEvent { code, modifiers, kind, .. }) = event::read()?
+                && kind == KeyEventKind::Press {
                     break (code, modifiers);
                 }
-            }
         };
 
         match code {

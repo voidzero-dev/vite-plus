@@ -24,7 +24,7 @@ const ESLINT_CONFIG: ScriptRewriteConfig = ScriptRewriteConfig {
 };
 
 /// Rewrite a single script: rename `eslint` → `vp lint` and strip ESLint-only flags.
-pub(crate) fn rewrite_eslint_script(script: &str) -> String {
+pub fn rewrite_eslint_script(script: &str) -> String {
     rewrite_script(script, &ESLINT_CONFIG)
 }
 

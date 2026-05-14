@@ -131,7 +131,7 @@ fn strip_schema_property(config: &str) -> Cow<'_, str> {
 /// Check if the vite config uses a function callback pattern
 fn check_function_callback(vite_config_content: &str) -> Result<bool, Error> {
     // Match both sync and async arrow functions
-    let check_rule = r#"
+    let check_rule = r"
 ---
 id: check-function-callback
 language: TypeScript
@@ -139,7 +139,7 @@ rule:
   any:
     - pattern: defineConfig(($PARAMS) => $BODY)
     - pattern: defineConfig(async ($PARAMS) => $BODY)
-"#;
+";
 
     let globals = GlobalRules::default();
     let rules: Vec<RuleConfig<SupportLang>> =
@@ -177,7 +177,7 @@ fn generate_merge_rule(ts_config: &str, config_key: &str) -> String {
     // Indent the config to match the YAML structure
     let indented_config = indent_multiline(ts_config, 4);
 
-    let template = r#"---
+    let template = r"---
 id: merge-json-config-object
 language: TypeScript
 rule:
@@ -261,7 +261,7 @@ fix: |-
     __CONFIG_KEY__: __JSON_CONFIG__,
     $$$CONFIG
   } satisfies $TYPE
-"#;
+";
 
     template.replace("__CONFIG_KEY__", config_key).replace("__JSON_CONFIG__", &indented_config)
 }

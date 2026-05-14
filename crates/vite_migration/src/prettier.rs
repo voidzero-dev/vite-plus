@@ -60,7 +60,7 @@ const PRETTIER_CONFIG: ScriptRewriteConfig = ScriptRewriteConfig {
 
 /// Rewrite a single script: rename `prettier` → `vp fmt`, strip Prettier-only flags,
 /// and convert `--list-different`/`-l` → `--check`.
-pub(crate) fn rewrite_prettier_script(script: &str) -> String {
+pub fn rewrite_prettier_script(script: &str) -> String {
     rewrite_script(script, &PRETTIER_CONFIG)
 }
 

@@ -12,7 +12,7 @@ on:
     branches:
       - main
     paths-ignore:
-      - '**/*.md'
+      - "**/*.md"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
@@ -103,7 +103,7 @@ jobs:
 
       - run: cargo check --all-targets --all-features
         env:
-          RUSTFLAGS: '-D warnings --cfg tokio_unstable' # also update .cargo/config.toml
+          RUSTFLAGS: "-D warnings --cfg tokio_unstable" # also update .cargo/config.toml
 
       # Test all crates/* packages. New crates are automatically included.
       # Also test vite-plus-cli (lives outside crates/) to catch type sync issues.
@@ -174,7 +174,7 @@ jobs:
       - run: |
           cargo shear
           cargo fmt --check
-          # cargo clippy --all-targets --all-features -- -D warnings
+          cargo clippy --all-targets --all-features -- -D warnings
           # RUSTDOCFLAGS='-D warnings' cargo doc --no-deps --document-private-items
 
       - uses: crate-ci/typos@5374cbf686e897b15713110e233094e2874de7ef # v1.46.1

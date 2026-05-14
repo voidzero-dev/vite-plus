@@ -774,7 +774,7 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
     // Prepend real node bin dir to PATH so child processes use the correct version
     let node_bin_dir = tool_path.parent().expect("Tool has no parent directory");
     // Use dedupe_anywhere=false to only check if it's first in PATH (original behavior)
-    prepend_to_path_env(node_bin_dir, PrependOptions::default());
+    let _ = prepend_to_path_env(node_bin_dir, PrependOptions::default());
 
     // Optional debug env vars
     if std::env::var(env_vars::VP_DEBUG_SHIM).is_ok() {
@@ -905,7 +905,7 @@ async fn dispatch_package_binary(tool: &str, args: &[String]) -> i32 {
 
     // Prepare environment for recursive invocations
     let node_bin_dir = node_path.parent().expect("Node has no parent directory");
-    prepend_to_path_env(node_bin_dir, PrependOptions::default());
+    let _ = prepend_to_path_env(node_bin_dir, PrependOptions::default());
 
     // Check if the binary is a JavaScript file that needs Node.js
     // This info was determined at install time and stored in metadata
