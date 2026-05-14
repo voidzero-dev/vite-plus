@@ -6,6 +6,12 @@ import productivitySecurityImage from '@local-assets/productivity-security.png';
 import tileOxc from '@local-assets/tiles/oxc.png';
 import tileVite from '@local-assets/tiles/vite.png';
 import tileVitest from '@local-assets/tiles/vitest.png';
+
+import { trustedStackById } from '../../data/trusted-stack-stats';
+
+const viteStack = trustedStackById('vite');
+const vitestStack = trustedStackById('vitest');
+const oxcStack = trustedStackById('oxc');
 </script>
 
 <template>
@@ -31,13 +37,17 @@ import tileVitest from '@local-assets/tiles/vitest.png';
             <div
               class="relative flex flex-col flex-1 sm:pl-6 before:content-none sm:before:content-[''] before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-full before:w-px before:bg-stroke"
             >
-              <p class="text-primary font-medium text-base sm:text-xl">69m+</p>
+              <p class="text-primary font-medium text-base sm:text-xl">
+                {{ viteStack.npmWeeklyDownloadsDisplay }}
+              </p>
               <p class="leading-tight text-base">Weekly npm downloads</p>
             </div>
             <div
               class="relative flex flex-col flex-shrink-0 pl-6 before:content-[''] before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-full before:w-px before:bg-stroke"
             >
-              <p class="text-primary font-medium text-base sm:text-xl">78.7k</p>
+              <p class="text-primary font-medium text-base sm:text-xl">
+                {{ viteStack.githubStarsDisplay }}
+              </p>
               <p class="leading-tight text-base">GitHub stars</p>
             </div>
           </div>
@@ -54,13 +64,17 @@ import tileVitest from '@local-assets/tiles/vitest.png';
             <div
               class="relative flex flex-col flex-1 sm:pl-6 before:content-none sm:before:content-[''] before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-full before:w-px before:bg-stroke"
             >
-              <p class="text-primary font-medium text-base sm:text-xl">35m+</p>
+              <p class="text-primary font-medium text-base sm:text-xl">
+                {{ vitestStack.npmWeeklyDownloadsDisplay }}
+              </p>
               <p class="leading-tight text-base">Weekly npm downloads</p>
             </div>
             <div
               class="relative flex flex-col flex-shrink-0 pl-6 before:content-[''] before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-full before:w-px before:bg-stroke"
             >
-              <p class="text-primary font-medium text-base sm:text-xl">16.1k</p>
+              <p class="text-primary font-medium text-base sm:text-xl">
+                {{ vitestStack.githubStarsDisplay }}
+              </p>
               <p class="leading-tight text-base">GitHub stars</p>
             </div>
           </div>
@@ -77,13 +91,17 @@ import tileVitest from '@local-assets/tiles/vitest.png';
             <div
               class="relative flex flex-col flex-1 sm:pl-6 before:content-none sm:before:content-[''] before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-full before:w-px before:bg-stroke"
             >
-              <p class="text-primary font-medium text-base sm:text-xl">5m+</p>
+              <p class="text-primary font-medium text-base sm:text-xl">
+                {{ oxcStack.npmWeeklyDownloadsDisplay }}
+              </p>
               <p class="leading-tight text-base">Weekly npm downloads</p>
             </div>
             <div
               class="relative flex flex-col flex-shrink-0 pl-6 before:content-[''] before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-full before:w-px before:bg-stroke"
             >
-              <p class="text-primary font-medium text-base sm:text-xl">19.8k</p>
+              <p class="text-primary font-medium text-base sm:text-xl">
+                {{ oxcStack.githubStarsDisplay }}
+              </p>
               <p class="leading-tight text-base">GitHub stars</p>
             </div>
           </div>

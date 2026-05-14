@@ -10,32 +10,32 @@ importers:
     dependencies:
       '@iconify/vue':
         specifier: ^5.0.0
-        version: 5.0.0(vue@3.5.30)
+        version: 5.0.0(vue@3.5.30(typescript@6.0.3))
       mermaid:
         specifier: ^11.13.0
         version: 11.13.0
       reka-ui:
         specifier: ^2.7.0
-        version: 2.9.2(vue@3.5.30)
+        version: 2.9.2(vue@3.5.30(typescript@6.0.3))
       typewriter-effect:
         specifier: ^2.22.0
         version: 2.22.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       vitepress-plugin-group-icons:
         specifier: ^1.7.5
-        version: 1.7.5(vite@7.3.1(jiti@2.6.1)(lightningcss@1.31.1))
+        version: 1.7.5(vite@7.3.1(@types/node@24.10.3)(jiti@2.6.1)(lightningcss@1.31.1))
       vitepress-plugin-mermaid:
         specifier: ^2.0.17
-        version: 2.0.17(mermaid@11.13.0)(vitepress@2.0.0-alpha.15(jiti@2.6.1)(lightningcss@1.31.1)(oxc-minify@0.120.0)(postcss@8.5.8))
+        version: 2.0.17(mermaid@11.13.0)(vitepress@2.0.0-alpha.15(@types/node@24.10.3)(jiti@2.6.1)(lightningcss@1.31.1)(oxc-minify@0.120.0)(postcss@8.5.8)(typescript@6.0.3))
       vue:
         specifier: ^3.5.27
-        version: 3.5.30
+        version: 3.5.30(typescript@6.0.3)
       vue3-carousel:
         specifier: ^0.16.0
-        version: 0.16.0(vue@3.5.30)
+        version: 0.16.0(vue@3.5.30(typescript@6.0.3))
     devDependencies:
       '@voidzero-dev/vitepress-theme':
         specifier: 4.8.3
-        version: 4.8.3(focus-trap@7.8.0)(vite@7.3.1(jiti@2.6.1)(lightningcss@1.31.1))(vitepress@2.0.0-alpha.15(jiti@2.6.1)(lightningcss@1.31.1)(oxc-minify@0.120.0)(postcss@8.5.8))(vue@3.5.30)
+        version: 4.8.3(focus-trap@7.8.0)(vite@7.3.1(@types/node@24.10.3)(jiti@2.6.1)(lightningcss@1.31.1))(vitepress@2.0.0-alpha.15(@types/node@24.10.3)(jiti@2.6.1)(lightningcss@1.31.1)(oxc-minify@0.120.0)(postcss@8.5.8)(typescript@6.0.3))(vue@3.5.30(typescript@6.0.3))
       oxc-minify:
         specifier: ^0.120.0
         version: 0.120.0
@@ -44,7 +44,7 @@ importers:
         version: 4.2.1
       vitepress:
         specifier: 2.0.0-alpha.15
-        version: 2.0.0-alpha.15(jiti@2.6.1)(lightningcss@1.31.1)(oxc-minify@0.120.0)(postcss@8.5.8)
+        version: 2.0.0-alpha.15(@types/node@24.10.3)(jiti@2.6.1)(lightningcss@1.31.1)(oxc-minify@0.120.0)(postcss@8.5.8)(typescript@6.0.3)
 
 packages:
 
@@ -848,6 +848,9 @@ packages:
   '@types/mdurl@2.0.0':
     resolution: {integrity: sha512-RGdgjQUZba5p6QEFAVx2OGb8rQDL/cPRG7GiedRzMcJ1tYnUANBncjbSB1NRGwbvjcPeikRABz2nshyPk1bhWg==}
 
+  '@types/node@24.10.3':
+    resolution: {integrity: sha512-gqkrWUsS8hcm0r44yn7/xZeV1ERva/nLgrLxFRUGb7aoNMIJfZJ3AC261zDQuOAKC7MiXai1WCpYc48jAHoShQ==}
+
   '@types/trusted-types@2.0.7':
     resolution: {integrity: sha512-ScaPdn1dQczgbl0QFTeTOmVHFULt394XJgOQNoyVhZ6r2vLnMLJfBPd53SB52T/3G36VI1/g2MZaX0cwDuXsfw==}
 
@@ -1574,6 +1577,11 @@ packages:
   tslib@2.8.1:
     resolution: {integrity: sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==}
 
+  typescript@6.0.3:
+    resolution: {integrity: sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw==}
+    engines: {node: '>=14.17'}
+    hasBin: true
+
   typewriter-effect@2.22.0:
     resolution: {integrity: sha512-01HCRYY462wT8Fxps/epwGCioZd/GMXY0aLKhFKrfJ5Xhgf54/SiDx7Oq7PoES5kGqOEAdW8FS8HYVM2WSvfhQ==}
     peerDependencies:
@@ -1582,6 +1590,9 @@ packages:
 
   ufo@1.6.3:
     resolution: {integrity: sha512-yDJTmhydvl5lJzBmy/hyOAA0d+aqCBuwl818haVdYCRrWV84o7YyeVm4QlVHStqNrrJSTb6jKuFAVqAFsr+K3Q==}
+
+  undici-types@7.16.0:
+    resolution: {integrity: sha512-Zz+aZWSj8LE6zoxD+xrjh4VfkIG8Ya6LvYkZqtUQGJPZjYl53ypCaUwWqo7eI0x66KBGeRo+mlBEkMSeSZ38Nw==}
 
   unist-util-is@6.0.1:
     resolution: {integrity: sha512-LsiILbtBETkDz8I9p1dQ0uyRUWuaQzd/cuEeS1hoRSyW5E5XGmTzlwY1OrNzzakGowI9Dr/I8HVaw4hTtnxy8g==}
@@ -1880,11 +1891,11 @@ snapshots:
 
   '@floating-ui/utils@0.2.11': {}
 
-  '@floating-ui/vue@1.1.11(vue@3.5.30)':
+  '@floating-ui/vue@1.1.11(vue@3.5.30(typescript@6.0.3))':
     dependencies:
       '@floating-ui/dom': 1.7.6
       '@floating-ui/utils': 0.2.11
-      vue-demi: 0.14.10(vue@3.5.30)
+      vue-demi: 0.14.10(vue@3.5.30(typescript@6.0.3))
     transitivePeerDependencies:
       - '@vue/composition-api'
       - vue
@@ -1909,10 +1920,10 @@ snapshots:
       '@iconify/types': 2.0.0
       mlly: 1.8.1
 
-  '@iconify/vue@5.0.0(vue@3.5.30)':
+  '@iconify/vue@5.0.0(vue@3.5.30(typescript@6.0.3))':
     dependencies:
       '@iconify/types': 2.0.0
-      vue: 3.5.30
+      vue: 3.5.30(typescript@6.0.3)
 
   '@internationalized/date@3.12.0':
     dependencies:
@@ -2212,19 +2223,19 @@ snapshots:
       postcss-selector-parser: 6.0.10
       tailwindcss: 4.2.1
 
-  '@tailwindcss/vite@4.2.1(vite@7.3.1(jiti@2.6.1)(lightningcss@1.31.1))':
+  '@tailwindcss/vite@4.2.1(vite@7.3.1(@types/node@24.10.3)(jiti@2.6.1)(lightningcss@1.31.1))':
     dependencies:
       '@tailwindcss/node': 4.2.1
       '@tailwindcss/oxide': 4.2.1
       tailwindcss: 4.2.1
-      vite: 7.3.1(jiti@2.6.1)(lightningcss@1.31.1)
+      vite: 7.3.1(@types/node@24.10.3)(jiti@2.6.1)(lightningcss@1.31.1)
 
   '@tanstack/virtual-core@3.13.22': {}
 
-  '@tanstack/vue-virtual@3.13.22(vue@3.5.30)':
+  '@tanstack/vue-virtual@3.13.22(vue@3.5.30(typescript@6.0.3))':
     dependencies:
       '@tanstack/virtual-core': 3.13.22
-      vue: 3.5.30
+      vue: 3.5.30(typescript@6.0.3)
 
   '@tybys/wasm-util@0.10.1':
     dependencies:
@@ -2369,6 +2380,11 @@ snapshots:
 
   '@types/mdurl@2.0.0': {}
 
+  '@types/node@24.10.3':
+    dependencies:
+      undici-types: 7.16.0
+    optional: true
+
   '@types/trusted-types@2.0.7':
     optional: true
 
@@ -2383,31 +2399,31 @@ snapshots:
       d3-selection: 3.0.0
       d3-transition: 3.0.1(d3-selection@3.0.0)
 
-  '@vitejs/plugin-vue@6.0.5(vite@7.3.1(jiti@2.6.1)(lightningcss@1.31.1))(vue@3.5.30)':
+  '@vitejs/plugin-vue@6.0.5(vite@7.3.1(@types/node@24.10.3)(jiti@2.6.1)(lightningcss@1.31.1))(vue@3.5.30(typescript@6.0.3))':
     dependencies:
       '@rolldown/pluginutils': 1.0.0-rc.2
-      vite: 7.3.1(jiti@2.6.1)(lightningcss@1.31.1)
-      vue: 3.5.30
+      vite: 7.3.1(@types/node@24.10.3)(jiti@2.6.1)(lightningcss@1.31.1)
+      vue: 3.5.30(typescript@6.0.3)
 
-  '@voidzero-dev/vitepress-theme@4.8.3(focus-trap@7.8.0)(vite@7.3.1(jiti@2.6.1)(lightningcss@1.31.1))(vitepress@2.0.0-alpha.15(jiti@2.6.1)(lightningcss@1.31.1)(oxc-minify@0.120.0)(postcss@8.5.8))(vue@3.5.30)':
+  '@voidzero-dev/vitepress-theme@4.8.3(focus-trap@7.8.0)(vite@7.3.1(@types/node@24.10.3)(jiti@2.6.1)(lightningcss@1.31.1))(vitepress@2.0.0-alpha.15(@types/node@24.10.3)(jiti@2.6.1)(lightningcss@1.31.1)(oxc-minify@0.120.0)(postcss@8.5.8)(typescript@6.0.3))(vue@3.5.30(typescript@6.0.3))':
     dependencies:
       '@docsearch/css': 4.6.0
       '@docsearch/js': 4.6.0
       '@docsearch/sidepanel-js': 4.6.0
-      '@iconify/vue': 5.0.0(vue@3.5.30)
+      '@iconify/vue': 5.0.0(vue@3.5.30(typescript@6.0.3))
       '@rive-app/canvas-lite': 2.35.2
       '@tailwindcss/typography': 0.5.19(tailwindcss@4.2.1)
-      '@tailwindcss/vite': 4.2.1(vite@7.3.1(jiti@2.6.1)(lightningcss@1.31.1))
+      '@tailwindcss/vite': 4.2.1(vite@7.3.1(@types/node@24.10.3)(jiti@2.6.1)(lightningcss@1.31.1))
       '@vue/shared': 3.5.30
-      '@vueuse/core': 14.2.1(vue@3.5.30)
-      '@vueuse/integrations': 14.2.1(focus-trap@7.8.0)(vue@3.5.30)
-      '@vueuse/shared': 14.2.1(vue@3.5.30)
+      '@vueuse/core': 14.2.1(vue@3.5.30(typescript@6.0.3))
+      '@vueuse/integrations': 14.2.1(focus-trap@7.8.0)(vue@3.5.30(typescript@6.0.3))
+      '@vueuse/shared': 14.2.1(vue@3.5.30(typescript@6.0.3))
       mark.js: 8.11.1
       minisearch: 7.2.0
-      reka-ui: 2.9.2(vue@3.5.30)
+      reka-ui: 2.9.2(vue@3.5.30(typescript@6.0.3))
       tailwindcss: 4.2.1
-      vitepress: 2.0.0-alpha.15(jiti@2.6.1)(lightningcss@1.31.1)(oxc-minify@0.120.0)(postcss@8.5.8)
-      vue: 3.5.30
+      vitepress: 2.0.0-alpha.15(@types/node@24.10.3)(jiti@2.6.1)(lightningcss@1.31.1)(oxc-minify@0.120.0)(postcss@8.5.8)(typescript@6.0.3)
+      vue: 3.5.30(typescript@6.0.3)
     transitivePeerDependencies:
       - '@vue/composition-api'
       - async-validator
@@ -2483,34 +2499,34 @@ snapshots:
       '@vue/shared': 3.5.30
       csstype: 3.2.3
 
-  '@vue/server-renderer@3.5.30(vue@3.5.30)':
+  '@vue/server-renderer@3.5.30(vue@3.5.30(typescript@6.0.3))':
     dependencies:
       '@vue/compiler-ssr': 3.5.30
       '@vue/shared': 3.5.30
-      vue: 3.5.30
+      vue: 3.5.30(typescript@6.0.3)
 
   '@vue/shared@3.5.30': {}
 
-  '@vueuse/core@14.2.1(vue@3.5.30)':
+  '@vueuse/core@14.2.1(vue@3.5.30(typescript@6.0.3))':
     dependencies:
       '@types/web-bluetooth': 0.0.21
       '@vueuse/metadata': 14.2.1
-      '@vueuse/shared': 14.2.1(vue@3.5.30)
-      vue: 3.5.30
+      '@vueuse/shared': 14.2.1(vue@3.5.30(typescript@6.0.3))
+      vue: 3.5.30(typescript@6.0.3)
 
-  '@vueuse/integrations@14.2.1(focus-trap@7.8.0)(vue@3.5.30)':
+  '@vueuse/integrations@14.2.1(focus-trap@7.8.0)(vue@3.5.30(typescript@6.0.3))':
     dependencies:
-      '@vueuse/core': 14.2.1(vue@3.5.30)
-      '@vueuse/shared': 14.2.1(vue@3.5.30)
-      vue: 3.5.30
+      '@vueuse/core': 14.2.1(vue@3.5.30(typescript@6.0.3))
+      '@vueuse/shared': 14.2.1(vue@3.5.30(typescript@6.0.3))
+      vue: 3.5.30(typescript@6.0.3)
     optionalDependencies:
       focus-trap: 7.8.0
 
   '@vueuse/metadata@14.2.1': {}
 
-  '@vueuse/shared@14.2.1(vue@3.5.30)':
+  '@vueuse/shared@14.2.1(vue@3.5.30(typescript@6.0.3))':
     dependencies:
-      vue: 3.5.30
+      vue: 3.5.30(typescript@6.0.3)
 
   acorn@8.16.0: {}
 
@@ -3103,19 +3119,19 @@ snapshots:
     dependencies:
       regex-utilities: 2.3.0
 
-  reka-ui@2.9.2(vue@3.5.30):
+  reka-ui@2.9.2(vue@3.5.30(typescript@6.0.3)):
     dependencies:
       '@floating-ui/dom': 1.7.6
-      '@floating-ui/vue': 1.1.11(vue@3.5.30)
+      '@floating-ui/vue': 1.1.11(vue@3.5.30(typescript@6.0.3))
       '@internationalized/date': 3.12.0
       '@internationalized/number': 3.6.5
-      '@tanstack/vue-virtual': 3.13.22(vue@3.5.30)
-      '@vueuse/core': 14.2.1(vue@3.5.30)
-      '@vueuse/shared': 14.2.1(vue@3.5.30)
+      '@tanstack/vue-virtual': 3.13.22(vue@3.5.30(typescript@6.0.3))
+      '@vueuse/core': 14.2.1(vue@3.5.30(typescript@6.0.3))
+      '@vueuse/shared': 14.2.1(vue@3.5.30(typescript@6.0.3))
       aria-hidden: 1.2.6
       defu: 6.1.4
       ohash: 2.0.11
-      vue: 3.5.30
+      vue: 3.5.30(typescript@6.0.3)
     transitivePeerDependencies:
       - '@vue/composition-api'
 
@@ -3206,6 +3222,9 @@ snapshots:
 
   tslib@2.8.1: {}
 
+  typescript@6.0.3:
+    optional: true
+
   typewriter-effect@2.22.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
     dependencies:
       prop-types: 15.8.1
@@ -3214,6 +3233,9 @@ snapshots:
       react-dom: 19.2.4(react@19.2.4)
 
   ufo@1.6.3: {}
+
+  undici-types@7.16.0:
+    optional: true
 
   unist-util-is@6.0.1:
     dependencies:
@@ -3252,7 +3274,7 @@ snapshots:
       '@types/unist': 3.0.3
       vfile-message: 4.0.3
 
-  vite@7.3.1(jiti@2.6.1)(lightningcss@1.31.1):
+  vite@7.3.1(@types/node@24.10.3)(jiti@2.6.1)(lightningcss@1.31.1):
     dependencies:
       esbuild: 0.27.4
       fdir: 6.5.0(picomatch@4.0.3)
@@ -3261,26 +3283,27 @@ snapshots:
       rollup: 4.59.0
       tinyglobby: 0.2.15
     optionalDependencies:
+      '@types/node': 24.10.3
       fsevents: 2.3.3
       jiti: 2.6.1
       lightningcss: 1.31.1
 
-  vitepress-plugin-group-icons@1.7.5(vite@7.3.1(jiti@2.6.1)(lightningcss@1.31.1)):
+  vitepress-plugin-group-icons@1.7.5(vite@7.3.1(@types/node@24.10.3)(jiti@2.6.1)(lightningcss@1.31.1)):
     dependencies:
       '@iconify-json/logos': 1.2.11
       '@iconify-json/vscode-icons': 1.2.46
       '@iconify/utils': 3.1.0
     optionalDependencies:
-      vite: 7.3.1(jiti@2.6.1)(lightningcss@1.31.1)
+      vite: 7.3.1(@types/node@24.10.3)(jiti@2.6.1)(lightningcss@1.31.1)
 
-  vitepress-plugin-mermaid@2.0.17(mermaid@11.13.0)(vitepress@2.0.0-alpha.15(jiti@2.6.1)(lightningcss@1.31.1)(oxc-minify@0.120.0)(postcss@8.5.8)):
+  vitepress-plugin-mermaid@2.0.17(mermaid@11.13.0)(vitepress@2.0.0-alpha.15(@types/node@24.10.3)(jiti@2.6.1)(lightningcss@1.31.1)(oxc-minify@0.120.0)(postcss@8.5.8)(typescript@6.0.3)):
     dependencies:
       mermaid: 11.13.0
-      vitepress: 2.0.0-alpha.15(jiti@2.6.1)(lightningcss@1.31.1)(oxc-minify@0.120.0)(postcss@8.5.8)
+      vitepress: 2.0.0-alpha.15(@types/node@24.10.3)(jiti@2.6.1)(lightningcss@1.31.1)(oxc-minify@0.120.0)(postcss@8.5.8)(typescript@6.0.3)
     optionalDependencies:
       '@mermaid-js/mermaid-mindmap': 9.3.0
 
-  vitepress@2.0.0-alpha.15(jiti@2.6.1)(lightningcss@1.31.1)(oxc-minify@0.120.0)(postcss@8.5.8):
+  vitepress@2.0.0-alpha.15(@types/node@24.10.3)(jiti@2.6.1)(lightningcss@1.31.1)(oxc-minify@0.120.0)(postcss@8.5.8)(typescript@6.0.3):
     dependencies:
       '@docsearch/css': 4.6.0
       '@docsearch/js': 4.6.0
@@ -3289,17 +3312,17 @@ snapshots:
       '@shikijs/transformers': 3.23.0
       '@shikijs/types': 3.23.0
       '@types/markdown-it': 14.1.2
-      '@vitejs/plugin-vue': 6.0.5(vite@7.3.1(jiti@2.6.1)(lightningcss@1.31.1))(vue@3.5.30)
+      '@vitejs/plugin-vue': 6.0.5(vite@7.3.1(@types/node@24.10.3)(jiti@2.6.1)(lightningcss@1.31.1))(vue@3.5.30(typescript@6.0.3))
       '@vue/devtools-api': 8.1.0
       '@vue/shared': 3.5.30
-      '@vueuse/core': 14.2.1(vue@3.5.30)
-      '@vueuse/integrations': 14.2.1(focus-trap@7.8.0)(vue@3.5.30)
+      '@vueuse/core': 14.2.1(vue@3.5.30(typescript@6.0.3))
+      '@vueuse/integrations': 14.2.1(focus-trap@7.8.0)(vue@3.5.30(typescript@6.0.3))
       focus-trap: 7.8.0
       mark.js: 8.11.1
       minisearch: 7.2.0
       shiki: 3.23.0
-      vite: 7.3.1(jiti@2.6.1)(lightningcss@1.31.1)
-      vue: 3.5.30
+      vite: 7.3.1(@types/node@24.10.3)(jiti@2.6.1)(lightningcss@1.31.1)
+      vue: 3.5.30(typescript@6.0.3)
     optionalDependencies:
       oxc-minify: 0.120.0
       postcss: 8.5.8
@@ -3345,20 +3368,22 @@ snapshots:
 
   vscode-uri@3.1.0: {}
 
-  vue-demi@0.14.10(vue@3.5.30):
+  vue-demi@0.14.10(vue@3.5.30(typescript@6.0.3)):
     dependencies:
-      vue: 3.5.30
+      vue: 3.5.30(typescript@6.0.3)
 
-  vue3-carousel@0.16.0(vue@3.5.30):
+  vue3-carousel@0.16.0(vue@3.5.30(typescript@6.0.3)):
     dependencies:
-      vue: 3.5.30
+      vue: 3.5.30(typescript@6.0.3)
 
-  vue@3.5.30:
+  vue@3.5.30(typescript@6.0.3):
     dependencies:
       '@vue/compiler-dom': 3.5.30
       '@vue/compiler-sfc': 3.5.30
       '@vue/runtime-dom': 3.5.30
-      '@vue/server-renderer': 3.5.30(vue@3.5.30)
+      '@vue/server-renderer': 3.5.30(vue@3.5.30(typescript@6.0.3))
       '@vue/shared': 3.5.30
+    optionalDependencies:
+      typescript: 6.0.3
 
   zwitch@2.0.4: {}

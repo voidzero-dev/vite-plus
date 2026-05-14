@@ -1,0 +1,28 @@
+> vp rebuild --help # should show help with [PACKAGES]... positional
+Usage: vp pm rebuild [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
+
+Rebuild native modules
+
+Arguments:
+  [PACKAGES]...           Packages to rebuild (rebuilds all if omitted)
+  [PASS_THROUGH_ARGS]...  Additional arguments
+
+Options:
+  -h, --help  Print help
+
+Documentation: https://viteplus.dev/guide/install
+
+
+> vp install # set up node_modules
+Packages: +<variable>
++
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+
+dependencies:
++ testnpm2 <semver> (1.0.1 is available)
+
+Done in <variable>ms using pnpm v<semver>
+
+> vp rebuild # bare rebuild, no args
+> vp rebuild testnpm2 # should accept positional package name
+> vp rebuild testnpm2 -- --recursive # package name + pass-through args

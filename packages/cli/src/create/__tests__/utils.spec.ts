@@ -9,6 +9,7 @@ import {
   ensureGitignoreNodeModules,
   formatTargetDir,
   getProjectDirFromPackageName,
+  renameFiles,
 } from '../utils.js';
 
 describe('getProjectDirFromPackageName', () => {
@@ -156,5 +157,57 @@ describe('ensureGitignoreNodeModules', () => {
     fs.writeFileSync(path.join(projectDir, '.gitignore'), '!node_modules\n');
     ensureGitignoreNodeModules(projectDir);
     expect(gitignore()).toBe('!node_modules\nnode_modules\n');
+  });
+});
+
+describe('renameFiles', () => {
+  let projectDir: string;
+
+  beforeEach(() => {
+    projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-rename-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(projectDir, { recursive: true, force: true });
+  });
+
+  function write(name: string, content: string): void {
+    fs.writeFileSync(path.join(projectDir, name), content);
+  }
+
+  function read(name: string): string {
+    return fs.readFileSync(path.join(projectDir, name), 'utf-8');
+  }
+
+  function exists(name: string): boolean {
+    return fs.existsSync(path.join(projectDir, name));
+  }
+
+  it('renames `_gitignore` to `.gitignore`', () => {
+    write('_gitignore', 'node_modules\n');
+    renameFiles(projectDir);
+    expect(exists('_gitignore')).toBe(false);
+    expect(read('.gitignore')).toBe('node_modules\n');
+  });
+
+  it('renames `_npmrc` and `_yarnrc.yml`', () => {
+    write('_npmrc', 'auto-install-peers=true\n');
+    write('_yarnrc.yml', 'nodeLinker: node-modules\n');
+    renameFiles(projectDir);
+    expect(exists('_npmrc')).toBe(false);
+    expect(exists('_yarnrc.yml')).toBe(false);
+    expect(read('.npmrc')).toBe('auto-install-peers=true\n');
+    expect(read('.yarnrc.yml')).toBe('nodeLinker: node-modules\n');
+  });
+
+  it('is a no-op when no source files exist', () => {
+    expect(() => renameFiles(projectDir)).not.toThrow();
+    expect(fs.readdirSync(projectDir)).toEqual([]);
+  });
+
+  it('leaves unmapped underscore files untouched', () => {
+    write('_foo', 'bar\n');
+    renameFiles(projectDir);
+    expect(read('_foo')).toBe('bar\n');
   });
 });

@@ -159,8 +159,17 @@ where
 {
     let cwd = cwd.as_ref();
     let (program, prefix_args) = resolve_program(bin_name, envs, cwd)?;
+    let args: Vec<OsString> = args.into_iter().map(|s| s.as_ref().to_owned()).collect();
+    tracing::debug!(
+        target: "vite_command::spawn",
+        program = %program.as_path().display(),
+        prefix_args = ?prefix_args,
+        args = ?args,
+        cwd = %cwd.as_path().display(),
+        "spawn",
+    );
     let mut cmd = build_command(&program, cwd);
-    cmd.args(&prefix_args).args(args).envs(envs);
+    cmd.args(&prefix_args).args(&args).envs(envs);
     let status = cmd.status().await?;
     Ok(status)
 }
@@ -188,8 +197,16 @@ where
     S: AsRef<OsStr>,
 {
     let cwd = cwd.as_ref();
+    let args: Vec<OsString> = args.into_iter().map(|s| s.as_ref().to_owned()).collect();
+    tracing::debug!(
+        target: "vite_command::spawn",
+        bin_name,
+        args = ?args,
+        cwd = %cwd.as_path().display(),
+        "spawn (fspy)",
+    );
     let mut cmd = fspy::Command::new(bin_name);
-    cmd.args(args)
+    cmd.args(&args)
         // set system environment variables first
         .envs(std::env::vars_os())
         // then set custom environment variables

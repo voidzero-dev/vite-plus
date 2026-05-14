@@ -112,6 +112,22 @@ export function setPackageName(projectDir: string, packageName: string) {
   });
 }
 
+const RENAME_FILES = {
+  _gitignore: '.gitignore',
+  _npmrc: '.npmrc',
+  '_yarnrc.yml': '.yarnrc.yml',
+} as const;
+
+/** Rename underscore-prefixed scaffold files to their dotfile names in `projectDir`. */
+export function renameFiles(projectDir: string): void {
+  for (const [from, to] of Object.entries(RENAME_FILES)) {
+    const fromPath = path.join(projectDir, from);
+    if (fs.existsSync(fromPath)) {
+      fs.renameSync(fromPath, path.join(projectDir, to));
+    }
+  }
+}
+
 /**
  * Make sure the scaffolded project's `.gitignore` excludes `node_modules`.
  *

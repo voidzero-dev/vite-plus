@@ -18,7 +18,7 @@ import oxcIcon from '@assets/icons/oxc-light.svg';
             formatting
           </li>
           <li>
-            600+ <code class="mx-1 outline-none bg-nickel/50 text-aqua">ESLint</code> compatible
+            750+ <code class="mx-1 outline-none bg-nickel/50 text-aqua">ESLint</code> compatible
             rules
           </li>
           <li>

@@ -3,7 +3,7 @@ import path from 'node:path';
 
 import type { WorkspaceInfo } from '../../types/index.ts';
 import type { ExecutionWithProjectDir } from '../command.ts';
-import { copyDir, setPackageName } from '../utils.ts';
+import { copyDir, renameFiles, setPackageName } from '../utils.ts';
 import type { BuiltinTemplateInfo } from './types.ts';
 
 /**
@@ -29,6 +29,8 @@ export async function executeBundledTemplate(
     }
     throw error;
   }
+
+  renameFiles(destDir);
 
   try {
     setPackageName(destDir, templateInfo.packageName);

@@ -185,7 +185,7 @@ An invalid manifest is a hard error, not a silent fall-through — a maintainer 
 
 ### Bundled subdirectory templates
 
-Relative `./...` paths resolve against the enclosing `@org/create` package root — **not** the user's cwd. The referenced directory is copied verbatim into the target project (no template-engine processing). Paths that escape the package root are rejected.
+Relative `./...` paths resolve against the enclosing `@org/create` package root — **not** the user's cwd. The referenced directory is copied into the target project as-is (no template-engine processing); the only exception is that a small set of underscore-prefixed scaffold files (`_gitignore`, `_npmrc`, `_yarnrc.yml`) are renamed to their dotfile equivalents. Paths that escape the package root are rejected.
 
 ### Make the org the default in a repo
 

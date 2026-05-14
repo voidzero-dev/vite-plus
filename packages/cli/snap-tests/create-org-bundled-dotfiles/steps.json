@@ -1,0 +1,8 @@
+{
+  "commands": [
+    "node $SNAP_CASES_DIR/.shared/mock-npm-registry.mjs -- vp create @your-org:demo --no-interactive --directory my-demo-app # bundled template with _gitignore/_npmrc",
+    "ls -A my-demo-app # verify _gitignore/_npmrc were renamed and no underscore variants remain",
+    "cat my-demo-app/.gitignore # verify _gitignore content was preserved",
+    "cat my-demo-app/.npmrc # verify _npmrc content was preserved"
+  ]
+}

@@ -452,8 +452,11 @@ pub async fn run_pm_subcommand(
             Ok(pm.run_search_command(&options, cwd).await?)
         }
 
-        PmCommands::Rebuild { pass_through_args } => {
-            let options = RebuildCommandOptions { pass_through_args: pass_through_args.as_deref() };
+        PmCommands::Rebuild { packages, pass_through_args } => {
+            let options = RebuildCommandOptions {
+                packages: &packages,
+                pass_through_args: pass_through_args.as_deref(),
+            };
             Ok(pm.run_rebuild_command(&options, cwd).await?)
         }
 

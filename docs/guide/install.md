@@ -121,14 +121,18 @@ Use these when you need to understand the current state of dependencies.
 Use `vp rebuild` when native modules need to be recompiled, for example after switching Node.js versions or when a C/C++ addon fails to load.
 
 - `vp rebuild` rebuilds all native modules
+- `vp rebuild <package...>` rebuilds the listed packages only
 - `vp rebuild -- <args>` passes extra arguments to the underlying package manager
 
 ```bash
 vp rebuild
+vp rebuild better-sqlite3 sharp
 vp rebuild -- --update-binary
 ```
 
 `vp rebuild` is a shorthand for `vp pm rebuild`.
+
+With pnpm v10+, bare `vp rebuild` only rebuilds packages whose build scripts are listed in `onlyBuiltDependencies` (or approved via `pnpm approve-builds`); name the package explicitly to force a rebuild that bypasses the approval gate.
 
 #### Advanced
 
