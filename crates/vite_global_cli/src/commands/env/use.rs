@@ -61,7 +61,7 @@ fn print_windows_eval_wrapper_required() {
         "vp env use on Windows requires the Vite+ PowerShell wrapper to affect only the current shell session."
     );
     eprintln!("Run this in PowerShell first:");
-    eprintln!("  vp env --use-no-cd --shell powershell | Out-String | Invoke-Expression");
+    eprintln!("  vp env --shell powershell | Out-String | Invoke-Expression");
     eprintln!("Or add that line to your PowerShell $PROFILE.");
 }
 
@@ -75,19 +75,15 @@ pub async fn execute(
 ) -> Result<ExitStatus, Error> {
     let shell = detect_shell();
 
-    // Handle --unset: remove session override
+    // Handle --unset: remove session override.
+    // Always delete the session file: on Windows it lives under VP_HOME and can
+    // leak across shell windows, so even eval mode must clean it up.
     if unset {
-        // Clean up legacy file state even when eval mode is active. On Windows,
-        // this file is shared through VP_HOME and can leak across shell windows.
         config::delete_session_version().await?;
         if has_eval_wrapper() {
             println!("{}", format_unset(&shell));
-        } else if can_use_session_file() {
-            config::delete_session_version().await?;
-        } else {
-            eprintln!("Removed file-based Node.js version override if it existed.");
+        } else if !can_use_session_file() {
             print_windows_eval_wrapper_required();
-            return Ok(ExitStatus::default());
         }
         eprintln!("Reverted to file-based Node.js version resolution");
         return Ok(ExitStatus::default());
@@ -105,9 +101,7 @@ pub async fn execute(
         config::delete_session_version().await?;
         if has_eval_wrapper() {
             println!("{}", format_unset(&shell));
-        } else if can_use_session_file() {
-            config::delete_session_version().await?;
-        } else {
+        } else if !can_use_session_file() {
             eprintln!("Reverted to file-based Node.js version resolution");
             print_windows_eval_wrapper_required();
             return Ok(ExitStatus::default());
@@ -131,11 +125,10 @@ pub async fn execute(
             if has_eval_wrapper() {
                 config::delete_session_version().await?;
                 println!("{}", format_export(&shell, &resolved_version));
+            } else if !can_use_session_file() {
+                print_windows_eval_wrapper_required();
+                return Ok(exit_status(1));
             } else {
-                if !can_use_session_file() {
-                    print_windows_eval_wrapper_required();
-                    return Ok(exit_status(1));
-                }
                 config::write_session_version(&resolved_version).await?;
             }
             return Ok(ExitStatus::default());
@@ -169,12 +162,11 @@ pub async fn execute(
         config::delete_session_version().await?;
         // Output the shell command to stdout (consumed by shell wrapper's eval)
         println!("{}", format_export(&shell, &resolved_version));
+    } else if !can_use_session_file() {
+        print_windows_eval_wrapper_required();
+        return Ok(exit_status(1));
     } else {
         // No eval wrapper (CI or direct invocation) — write session file so shims can read it
-        if !can_use_session_file() {
-            print_windows_eval_wrapper_required();
-            return Ok(exit_status(1));
-        }
         config::write_session_version(&resolved_version).await?;
     }
 

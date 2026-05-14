@@ -52,7 +52,7 @@ vp env on             # Enable managed mode (shims always use vite-plus Node.js)
 vp env off            # Enable system-first mode (shims prefer system Node.js)
 
 # Print shell setup code for the current session
-vp env --use-no-cd --shell powershell
+vp env --shell powershell
 ```
 
 ### Diagnostic Commands
@@ -131,7 +131,7 @@ vp env use --silent-if-unchanged  # Suppress output if version already active
 On Windows interactive shells, `vp env use` requires the PowerShell setup to be evaluated in the current shell so the selected version stays session-scoped:
 
 ```powershell
-vp env --use-no-cd --shell powershell | Out-String | Invoke-Expression
+vp env --shell powershell | Out-String | Invoke-Expression
 ```
 
 Add that line to the end of the PowerShell `$PROFILE` to apply it automatically in new shells:

@@ -243,7 +243,7 @@ impl Commands {
 Examples:
   Setup:
     vp env setup                  # Create shims for node, npm, npx
-    vp env --shell powershell     # Print PowerShell setup code
+    vp env --shell powershell | Out-String | Invoke-Expression  # PowerShell session setup
     vp env on                     # Use vite-plus managed Node.js
     vp env print                  # Print shell snippet for this session
 
@@ -273,10 +273,6 @@ pub struct EnvArgs {
     /// Shell syntax to print when no subcommand is provided
     #[arg(long, value_enum)]
     pub shell: Option<EnvShell>,
-
-    /// Print setup without directory-change hooks
-    #[arg(long)]
-    pub use_no_cd: bool,
 
     /// Subcommand (e.g., 'default', 'setup', 'doctor', 'which')
     #[command(subcommand)]

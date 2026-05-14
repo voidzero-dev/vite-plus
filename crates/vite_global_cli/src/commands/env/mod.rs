@@ -136,7 +136,7 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
         };
     }
 
-    if args.shell.is_some() || args.use_no_cd {
+    if args.shell.is_some() {
         return print_shell_env(args.shell).await;
     }
 

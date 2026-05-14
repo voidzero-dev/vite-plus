@@ -743,7 +743,7 @@ fn print_path_instructions(bin_dir: &vite_path::AbsolutePath) {
     println!();
     println!("  For PowerShell, add to your $PROFILE:");
     println!();
-    println!("  vp env --use-no-cd --shell powershell | Out-String | Invoke-Expression");
+    println!("  vp env --shell powershell | Out-String | Invoke-Expression");
     println!();
     println!("  For IDE support (VS Code, Cursor), ensure bin directory is in system PATH:");
 
