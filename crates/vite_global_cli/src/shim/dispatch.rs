@@ -1038,21 +1038,17 @@ async fn resolve_with_cache(cwd: &AbsolutePathBuf) -> Result<ResolveCacheEntry, 
         }
     }
 
-    // Fast-path: session version file written by `vp env use`.
-    // On Windows this is only enabled in CI because interactive shells share
-    // VP_HOME, so the file would leak across PowerShell windows.
-    if cfg!(not(windows)) || vite_shared::EnvConfig::get().is_ci {
-        if let Some(session_version) = config::read_session_version().await {
-            return Ok(ResolveCacheEntry {
-                version: session_version,
-                source: config::SESSION_VERSION_FILE.to_string(),
-                project_root: None,
-                resolved_at: cache::now_timestamp(),
-                version_file_mtime: 0,
-                source_path: None,
-                is_range: false,
-            });
-        }
+    // Fast-path: session version file written by `vp env use`
+    if let Some(session_version) = config::read_session_version().await {
+        return Ok(ResolveCacheEntry {
+            version: session_version,
+            source: config::SESSION_VERSION_FILE.to_string(),
+            project_root: None,
+            resolved_at: cache::now_timestamp(),
+            version_file_mtime: 0,
+            source_path: None,
+            is_range: false,
+        });
     }
 
     // Load cache
