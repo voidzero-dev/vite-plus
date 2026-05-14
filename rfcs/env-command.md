@@ -134,6 +134,13 @@ On Windows interactive shells, `vp env use` requires the PowerShell setup to be 
 vp env --use-no-cd --shell powershell | Out-String | Invoke-Expression
 ```
 
+Add that line to the end of the PowerShell `$PROFILE` to apply it automatically in new shells:
+
+```powershell
+if (-not (Test-Path $PROFILE)) { New-Item $PROFILE -Force }
+Invoke-Item $PROFILE
+```
+
 **Automatic session file (for CI):**
 
 When `vp env use` detects a CI environment and the shell eval wrapper is not active (i.e., `VITE_PLUS_ENV_USE_EVAL_ENABLE` is not set), it automatically writes the resolved version to `~/.vite-plus/.session-node-version`. Shims read this file directly from disk, so CI jobs can keep using `vp env use` without shell setup. The env var still takes priority when set, so the shell wrapper experience is unchanged.

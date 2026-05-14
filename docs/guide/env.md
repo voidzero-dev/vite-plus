@@ -40,7 +40,19 @@ PowerShell needs to evaluate the setup code in the current shell before `vp env 
 vp env --use-no-cd --shell powershell | Out-String | Invoke-Expression
 ```
 
-Add that line to your PowerShell `$PROFILE` to apply it automatically in new shells. It does not require elevated privileges.
+Add that line to the end of your PowerShell `$PROFILE` to apply it automatically in new shells. It does not require elevated privileges.
+
+Create the profile file if it does not already exist:
+
+```powershell
+if (-not (Test-Path $PROFILE)) { New-Item $PROFILE -Force }
+```
+
+Open the profile file for editing:
+
+```powershell
+Invoke-Item $PROFILE
+```
 
 In CI, `vp env use` can still run without shell initialization. It writes a temporary session file under `VP_HOME` so later shim calls in the same job can resolve the selected Node.js version.
 
