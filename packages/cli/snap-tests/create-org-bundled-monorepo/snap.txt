@@ -1,4 +1,4 @@
-> node $SNAP_CASES_DIR/.shared/mock-npm-registry.mjs -- vp create @your-org:workspace --no-interactive --directory my-mono # bundled monorepo: extract tarball, scaffold, inject create.defaultTemplate
+> node $SNAP_CASES_DIR/.shared/mock-npm-registry.mjs -- vp create @your-org:workspace --no-interactive --directory my-mono --git # bundled monorepo: extract tarball, scaffold, inject create.defaultTemplate
 ◇ Scaffolded my-mono
 • Node <semver>  pnpm <semver>
 → Next: cd my-mono && vp run
@@ -35,7 +35,7 @@ peerDependencyRules:
     vite: "*"
     vitest: "*"
 
-> test -d my-mono/.git && echo 'Git initialized' || echo 'No git' # git-init prompt covers bundled monorepo path
+> test -d my-mono/.git && echo 'Git initialized' # git-init prompt covers bundled monorepo path
 Git initialized
 
 > cat my-mono/.gitignore # node_modules excluded even though tarball shipped no .gitignore

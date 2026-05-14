@@ -2,7 +2,7 @@
   "ignoredPlatforms": ["win32"],
   "commands": [
     {
-      "command": "vp create vite:monorepo --no-interactive # create monorepo with default values",
+      "command": "vp create vite:monorepo --no-interactive --git # create monorepo with default values",
       "ignoreOutput": true
     },
     "ls vite-plus-monorepo | LC_ALL=C sort # check files created",
@@ -11,7 +11,7 @@
     "cat vite-plus-monorepo/pnpm-workspace.yaml # check workspace config",
     "test -f vite-plus-monorepo/.gitignore && echo '.gitignore exists' || echo 'ERROR: .gitignore missing' # verify gitignore renamed from _gitignore",
     "test ! -f vite-plus-monorepo/.yarnrc.yml && echo 'No .yarnrc.yml' || echo 'ERROR: .yarnrc.yml exists' # verify no yarn config for pnpm",
-    "test -d vite-plus-monorepo/.git && echo 'Git initialized' || echo 'No git' # check git init",
+    "test -d vite-plus-monorepo/.git && echo 'Git initialized' # check git init",
     "ls vite-plus-monorepo/apps # check apps directory created",
     "ls vite-plus-monorepo/apps/website/package.json # check website package.json",
     {

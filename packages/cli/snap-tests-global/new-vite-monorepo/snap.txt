@@ -1,4 +1,4 @@
-> vp create vite:monorepo --no-interactive # create monorepo with default values
+> vp create vite:monorepo --no-interactive --git # create monorepo with default values
 > ls vite-plus-monorepo | LC_ALL=C sort # check files created
 AGENTS.md
 README.md
@@ -74,7 +74,7 @@ peerDependencyRules:
 > test ! -f vite-plus-monorepo/.yarnrc.yml && echo 'No .yarnrc.yml' || echo 'ERROR: .yarnrc.yml exists' # verify no yarn config for pnpm
 No .yarnrc.yml
 
-> test -d vite-plus-monorepo/.git && echo 'Git initialized' || echo 'No git' # check git init
+> test -d vite-plus-monorepo/.git && echo 'Git initialized' # check git init
 Git initialized
 
 > ls vite-plus-monorepo/apps # check apps directory created

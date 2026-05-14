@@ -834,7 +834,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   // #region Handle monorepo template
   if (templateInfo.command === BuiltinTemplate.monorepo || isBundledMonorepo) {
     // Ask up-front so the prompt isn't buried under scaffold output.
-    let shouldInitGit = true;
+    let shouldInitGit = shouldSetupGit;
     if (options.interactive && !compactOutput) {
       pauseCreateProgress();
       const selected = await prompts.confirm({
@@ -848,7 +848,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       } else {
         shouldInitGit = selected;
       }
-    } else if (!compactOutput) {
+    } else if (shouldInitGit && !compactOutput) {
       prompts.log.info('Initializing git repository (default: yes)');
     }
 
