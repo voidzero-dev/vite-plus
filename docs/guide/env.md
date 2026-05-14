@@ -86,7 +86,6 @@ In CI, `vp env use` can still run without shell initialization. It writes a temp
 ```bash
 # Setup
 vp env setup                  # Create shims for node, npm, npx
-vp env --use-no-cd --shell powershell  # Print PowerShell setup code
 vp env on                     # Use Vite+ managed Node.js
 vp env print                  # Print shell snippet for this session
 

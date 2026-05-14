@@ -198,7 +198,7 @@ pub async fn delete_session_version() -> Result<(), Error> {
 ///
 /// Resolution order:
 /// 0. `VP_NODE_VERSION` env var (session override from `vp env use`)
-/// 1. `.session-node-version` file (non-Windows fallback for shell-wrapper-less environments)
+/// 1. `.session-node-version` file (session override written by `vp env use` for shell-wrapper-less environments)
 /// 2. `.node-version` file in current or parent directories
 /// 3. `package.json#engines.node` in current or parent directories
 /// 4. `package.json#devEngines.runtime` in current or parent directories
@@ -958,14 +958,14 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    #[cfg(not(windows))]
     #[tokio::test]
     async fn test_resolve_version_session_file_takes_priority_over_node_version() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _guard = vite_shared::EnvConfig::test_guard(
-            vite_shared::EnvConfig::for_test_with_home(temp_dir.path()),
-        );
+        let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig {
+            is_ci: cfg!(windows),
+            ..vite_shared::EnvConfig::for_test_with_home(temp_dir.path())
+        });
 
         // Create .node-version file
         tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
@@ -1070,14 +1070,14 @@ mod tests {
     /// Verify that the session file source is accepted by `vp env install` (no-arg) source validation.
     /// This is a regression test ensuring `vp env use 24` followed by `vp env install`
     /// works when the session file is the resolution source.
-    #[cfg(not(windows))]
     #[tokio::test]
     async fn test_session_file_source_accepted_by_install_validation() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _guard = vite_shared::EnvConfig::test_guard(
-            vite_shared::EnvConfig::for_test_with_home(temp_dir.path()),
-        );
+        let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig {
+            is_ci: cfg!(windows),
+            ..vite_shared::EnvConfig::for_test_with_home(temp_dir.path())
+        });
 
         // Write session version file
         write_session_version("22.0.0").await.unwrap();
