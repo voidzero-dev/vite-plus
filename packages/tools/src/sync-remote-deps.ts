@@ -735,10 +735,16 @@ export async function syncRemote() {
   const corePackagePath = join(rootDir, CORE_PACKAGE_PATH, 'package.json');
   const rolldownPackagePath = join(rootDir, ROLLDOWN_DIR, 'packages', 'rolldown', 'package.json');
   const rolldownVitePackagePath = join(rootDir, VITE_DIR, 'packages', 'vite', 'package.json');
+  // `@rolldown/pluginutils` was moved out of the rolldown monorepo into a
+  // standalone package on npm (rolldown/plugins). Resolve the installed copy
+  // via pnpm's hoisted node_modules under the rolldown package.
   const pluginutilsPackagePath = join(
     rootDir,
     ROLLDOWN_DIR,
     'packages',
+    'rolldown',
+    'node_modules',
+    '@rolldown',
     'pluginutils',
     'package.json',
   );
