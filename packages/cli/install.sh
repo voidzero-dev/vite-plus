@@ -39,11 +39,6 @@ PR_VERSION="${VP_PR_VERSION:-}"
 # pkg.pr.new base URL for fetching tarballs and constructing dependency URLs
 PKG_PR_NEW_BASE="https://pkg.pr.new/voidzero-dev/vite-plus"
 
-if [ -n "$PR_VERSION" ] && [ -n "$LOCAL_TGZ" ]; then
-  echo "error: VP_PR_VERSION and VP_LOCAL_TGZ cannot be used together" >&2
-  exit 1
-fi
-
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -854,6 +849,10 @@ main() {
   echo ""
   echo -e "Setting up VITE+..."
 
+  if [ -n "$PR_VERSION" ] && [ -n "$LOCAL_TGZ" ]; then
+    error "VP_PR_VERSION and VP_LOCAL_TGZ cannot be used together"
+  fi
+
   check_requirements
 
   local platform
@@ -944,8 +943,8 @@ main() {
   # pnpm will install vite-plus and all transitive deps via `vp install`.
   # The packageManager field pins pnpm to a known-good version, ensuring
   # consistent behavior regardless of the user's global pnpm version.
-  # In pkg.pr.new mode, the dependency spec is a URL; the published tarball
-  # already rewrites scoped workspace deps to matching pkg.pr.new URLs.
+  # pkg.pr.new tarballs pre-rewrite scoped workspace deps to matching URLs by
+  # commit SHA, so pointing vite-plus at one URL pulls in a coherent PR build.
   local vite_plus_spec="$VP_VERSION"
   if [ -n "$PR_VERSION" ]; then
     vite_plus_spec="${PKG_PR_NEW_BASE}@${PR_VERSION}"

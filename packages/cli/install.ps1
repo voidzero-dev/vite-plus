@@ -28,11 +28,6 @@ $PrVersion = $env:VP_PR_VERSION
 # pkg.pr.new base URL for fetching tarballs and constructing dependency URLs
 $PkgPrNewBase = "https://pkg.pr.new/voidzero-dev/vite-plus"
 
-if ($PrVersion -and $LocalTgz) {
-    Write-Host "error: VP_PR_VERSION and VP_LOCAL_TGZ cannot be used together" -ForegroundColor Red
-    exit 1
-}
-
 function Write-Info {
     param([string]$Message)
     Write-Host "info: " -ForegroundColor Blue -NoNewline
@@ -430,6 +425,10 @@ function Main {
     Write-Host "VITE+" -ForegroundColor Blue -NoNewline
     Write-Host "..."
 
+    if ($PrVersion -and $LocalTgz) {
+        Write-Error-Exit "VP_PR_VERSION and VP_LOCAL_TGZ cannot be used together"
+    }
+
     # Suppress progress bars for cleaner output
     $ProgressPreference = 'SilentlyContinue'
 
@@ -529,8 +528,8 @@ function Main {
     # Generate wrapper package.json that declares vite-plus as a dependency.
     # pnpm will install vite-plus and all transitive deps via `vp install`.
     # The packageManager field pins pnpm to a known-good version.
-    # In pkg.pr.new mode, the dependency spec is a URL; the published tarball
-    # already rewrites scoped workspace deps to matching pkg.pr.new URLs.
+    # pkg.pr.new tarballs pre-rewrite scoped workspace deps to matching URLs by
+    # commit SHA, so pointing vite-plus at one URL pulls in a coherent PR build.
     $vitePlusSpec = if ($PrVersion) { "$PkgPrNewBase@$PrVersion" } else { $ViteVersion }
     $wrapperJson = @{
         name = "vp-global"
