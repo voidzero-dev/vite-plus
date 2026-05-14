@@ -1,0 +1,82 @@
+name: Prepare Release
+
+permissions: {}
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (without v prefix, e.g. 0.1.0 or 0.1.0-alpha.0)'
+        required: true
+        type: string
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  prepare:
+    if: github.repository == 'voidzero-dev/vite-plus'
+    name: Prepare Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/clone
+
+      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+        with:
+          save-cache: false
+          cache-key: lint
+
+      - uses: oxc-project/setup-node@ab97f03642370d79a7e96dd286bd02a1be40e0ba # v1.3.0
+
+      - name: Bump versions
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          update_json() {
+            local file=$1
+            sed -i -E "s/^(\s*\"version\":\s*)\"[^\"]+\"/\1\"$VERSION\"/" "$file"
+            grep -qF "\"version\": \"$VERSION\"" "$file" || { echo "::error::Failed to update $file"; exit 1; }
+            echo "Updated $file"
+          }
+          update_toml() {
+            local file=$1
+            sed -i -E "s/^version\s*=\s*\"[^\"]+\"/version = \"$VERSION\"/" "$file"
+            grep -qF "version = \"$VERSION\"" "$file" || { echo "::error::Failed to update $file"; exit 1; }
+            echo "Updated $file"
+          }
+          update_json packages/cli/package.json
+          update_json packages/core/package.json
+          update_json packages/test/package.json
+          update_toml packages/cli/binding/Cargo.toml
+          update_toml crates/vite_global_cli/Cargo.toml
+
+      - name: Refresh Cargo.lock
+        run: cargo check
+
+      - uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
+        id: app-token
+        with:
+          client-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          commit-message: 'release: v${{ inputs.version }}'
+          title: 'release: v${{ inputs.version }}'
+          branch: release/v${{ inputs.version }}
+          base: main
+          sign-commits: true
+          body: |
+            Release vite-plus v${{ inputs.version }}.
+
+            Merging this PR will trigger the release workflow.
+          assignees: fengmk2
