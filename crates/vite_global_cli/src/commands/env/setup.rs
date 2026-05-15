@@ -764,7 +764,7 @@ fn print_path_instructions(bin_dir: &vite_path::AbsolutePath) {
     println!();
     println!("  For PowerShell, add to your $PROFILE:");
     println!();
-    println!("  . \"$env:USERPROFILE\\.vite-plus\\env.ps1\"");
+    println!("  . \"{home_path}/env.ps1\"");
     println!();
     println!("  For IDE support (VS Code, Cursor), ensure bin directory is in system PATH:");
 
