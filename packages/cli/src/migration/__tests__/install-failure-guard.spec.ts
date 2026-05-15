@@ -4,8 +4,8 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const binPath = path.resolve(__dirname, '..', 'bin.ts');
+const here = path.dirname(fileURLToPath(import.meta.url));
+const binPath = path.resolve(here, '..', 'bin.ts');
 
 /**
  * `runViteInstall` returns `{ status: 'failed', exitCode }` (it does not throw)

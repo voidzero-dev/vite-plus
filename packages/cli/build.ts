@@ -364,7 +364,10 @@ async function syncTestPackageExports() {
       //   ./test/browser/providers/<short> → e.g. ./test/browser/providers/playwright
       const pkgShortName = pkg.startsWith('@vitest/') ? pkg.slice('@vitest/'.length) : pkg;
       const surfaces = [
-        { cliPath: `./test/${pkgShortName}${providerSubPath}`, baseName: `${pkgShortName}${providerSubPath}` },
+        {
+          cliPath: `./test/${pkgShortName}${providerSubPath}`,
+          baseName: `${pkgShortName}${providerSubPath}`,
+        },
         {
           cliPath: `./test/browser/providers/${short}${providerSubPath}`,
           baseName: `browser/providers/${short}${providerSubPath}`,
