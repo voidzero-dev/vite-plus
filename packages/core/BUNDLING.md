@@ -6,13 +6,13 @@ This document explains how `@voidzero-dev/vite-plus-core` bundles multiple upstr
 
 The core package uses a **multi-project bundling strategy** that combines 5 upstream projects:
 
-| Project                 | Source Location                 | Purpose                   |
-| ----------------------- | ------------------------------- | ------------------------- |
-| `@rolldown/pluginutils` | `rolldown/packages/pluginutils` | Rolldown plugin utilities |
-| `rolldown`              | `rolldown/packages/rolldown`    | Rolldown bundler          |
-| `vite`                  | `vite/packages/vite`            | Vite v8 beta              |
-| `tsdown`                | `node_modules/tsdown`           | TypeScript build tool     |
-| `vitepress`             | `node_modules/vitepress`        | Documentation tool        |
+| Project                 | Source Location                                                 | Purpose                                                                                  |
+| ----------------------- | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `@rolldown/pluginutils` | `rolldown/packages/rolldown/node_modules/@rolldown/pluginutils` | Rolldown plugin utilities (standalone npm package, hoisted under the rolldown workspace) |
+| `rolldown`              | `rolldown/packages/rolldown`                                    | Rolldown bundler                                                                         |
+| `vite`                  | `vite/packages/vite`                                            | Vite v8 beta                                                                             |
+| `tsdown`                | `node_modules/tsdown`                                           | TypeScript build tool                                                                    |
+| `vitepress`             | `node_modules/vitepress`                                        | Documentation tool                                                                       |
 
 This approach enables users to access Vite, Rolldown, and related tools through a single package with consistent module specifier rewrites.
 
@@ -32,7 +32,7 @@ await cp(join(rolldownPluginUtilsDir, 'dist'), join(projectDir, 'dist', 'pluginu
 });
 ```
 
-**Input**: `rolldown/packages/pluginutils/dist/`
+**Input**: `rolldown/packages/rolldown/node_modules/@rolldown/pluginutils/dist/`
 **Output**: `dist/pluginutils/`
 
 ### Step 2: Bundle Rolldown (`bundleRolldown`)
@@ -221,8 +221,8 @@ The original `require("some-cjs-package")` calls are rewritten to `require("./np
 ```
 dist/
 ├── pluginutils/           # @rolldown/pluginutils
-│   ├── index.js
-│   ├── index.d.ts
+│   ├── index.mjs
+│   ├── index.d.mts
 │   └── filter/
 ├── rolldown/              # Rolldown bundler
 │   ├── index.mjs
@@ -279,21 +279,21 @@ dist/
 | `./rolldown/parallelPlugin`     | `./dist/rolldown/parallel-plugin.mjs`    | Parallel plugin support |
 | `./rolldown/parseAst`           | `./dist/rolldown/parse-ast-index.mjs`    | AST parsing             |
 | `./rolldown/plugins`            | `./dist/rolldown/plugins-index.mjs`      | Built-in plugins        |
-| `./rolldown/pluginutils`        | `./dist/pluginutils/index.js`            | Plugin utilities        |
-| `./rolldown/pluginutils/filter` | `./dist/pluginutils/filter/index.js`     | Filter utilities        |
+| `./rolldown/pluginutils`        | `./dist/pluginutils/index.mjs`           | Plugin utilities        |
+| `./rolldown/pluginutils/filter` | `./dist/pluginutils/filter/index.mjs`    | Filter utilities        |
 | `./types/*`                     | `./dist/vite/types/*`                    | Type definitions        |
 
 ---
 
 ## Source Directories
 
-| Upstream Project        | Source Location                       | Relation       |
-| ----------------------- | ------------------------------------- | -------------- |
-| `@rolldown/pluginutils` | `../../rolldown/packages/pluginutils` | Git submodule  |
-| `rolldown`              | `../../rolldown/packages/rolldown`    | Git submodule  |
-| `vite`                  | `../../vite/packages/vite`            | Git submodule  |
-| `tsdown`                | `node_modules/tsdown`                 | npm dependency |
-| `vitepress`             | `node_modules/vitepress`              | npm dependency |
+| Upstream Project        | Source Location                                                       | Relation                                                                                            |
+| ----------------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `@rolldown/pluginutils` | `../../rolldown/packages/rolldown/node_modules/@rolldown/pluginutils` | Hoisted under the rolldown workspace's `node_modules` (standalone npm package since rolldown 1.0.1) |
+| `rolldown`              | `../../rolldown/packages/rolldown`                                    | Git submodule                                                                                       |
+| `vite`                  | `../../vite/packages/vite`                                            | Git submodule                                                                                       |
+| `tsdown`                | `node_modules/tsdown`                                                 | npm dependency                                                                                      |
+| `vitepress`             | `node_modules/vitepress`                                              | npm dependency                                                                                      |
 
 ---
 
@@ -386,6 +386,9 @@ const rolldownPluginUtilsDir = resolve(
   '..',
   'rolldown',
   'packages',
+  'rolldown',
+  'node_modules',
+  '@rolldown',
   'pluginutils',
 );
 const rolldownSourceDir = resolve(projectDir, '..', '..', 'rolldown', 'packages', 'rolldown');
