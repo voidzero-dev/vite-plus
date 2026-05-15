@@ -436,6 +436,10 @@ async function mergePackageJson(pluginExports: Array<{ exportPath: string; shimF
 async function bundleVitest() {
   const vitestDestDir = projectDir;
 
+  // Clean dist/ so chunks from a previous vitest version don't linger.
+  // Stale hashed chunks (e.g. cac.<old-hash>.js) trip later patch steps
+  // when the new build only emits cac.<new-hash>.js.
+  await rm(distDir, { recursive: true, force: true });
   await mkdir(vitestDestDir, { recursive: true });
 
   // Get all vitest files excluding node_modules and package.json
