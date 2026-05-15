@@ -75,8 +75,8 @@ Migrate this project to Vite+. Vite+ replaces the current split tooling around r
 After the migration:
 
 - Confirm `vite` imports were rewritten to `vite-plus` where needed
-- Confirm `vitest` imports were rewritten to `vite-plus/test` where needed
-- Remove old `vite` and `vitest` dependencies only after those rewrites are confirmed
+- Confirm `vitest/config` imports were rewritten to `vite-plus` (other `vitest` and `@vitest/browser*` imports are intentionally left as-is)
+- Remove the old `vite` dependency only after those rewrites are confirmed; keep `vitest` and any `@vitest/browser*` providers
 - Move remaining tool-specific config into the appropriate blocks in `vite.config.ts`
 
 Command mapping to keep in mind:
@@ -96,19 +96,27 @@ Summarize the migration at the end and report any manual follow-up still require
 
 ### Vitest
 
-Vitest is automatically migrated through `vp migrate`. If you are migrating manually, you have to update all the imports to `vite-plus/test` instead:
+`vp migrate` is the recommended path. It only rewrites `vitest/config` imports to `vite-plus`; all other Vitest imports are left untouched and resolve through the upstream `vitest` package as usual (`vite` is aliased to `@voidzero-dev/vite-plus-core` via overrides, so Vitest picks up the Vite+ core transparently).
+
+If you are migrating manually, update only the config entry point:
 
 ```ts
 // before
+import { defineConfig } from 'vitest/config';
+
+// after
+import { defineConfig } from 'vite-plus';
+```
+
+Runtime imports stay as-is:
+
+```ts
 import { describe, expect, it, vi } from 'vitest';
 
 const { page } = await import('@vitest/browser/context');
-
-// after
-import { describe, expect, it, vi } from 'vite-plus/test';
-
-const { page } = await import('vite-plus/test/browser/context');
 ```
+
+Do not rewrite bare `vitest`, `vitest/*` subpaths, or `@vitest/browser*` — Vitest's mock hoister requires the literal string `'vitest'`, and the browser/provider subpaths are not re-exported by `vite-plus`.
 
 ### tsdown
 

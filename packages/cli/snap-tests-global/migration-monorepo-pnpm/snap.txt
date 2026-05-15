@@ -69,6 +69,7 @@ export default defineConfig({
     "vite-plus": "catalog:"
   },
   "resolutions": {
+    "vitest": "catalog:",
     "vue": "3.5.25"
   },
   "packageManager": "pnpm@<semver>"
@@ -82,20 +83,17 @@ catalog:
   testnpm2: ^1.0.0
   # test comment here to check if the comment is preserved
   vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: npm:@voidzero-dev/vite-plus-test@latest
+  vitest: ^4.0.0
   vite-plus: latest
 
 minimumReleaseAge: 1440
 overrides:
   vite: 'catalog:'
-  vitest: 'catalog:'
 peerDependencyRules:
   allowAny:
     - vite
-    - vitest
   allowedVersions:
     vite: '*'
-    vitest: '*'
 minimumReleaseAgeExclude:
   - vite-plus
   - '@voidzero-dev/*'

@@ -28,8 +28,7 @@ vite.config.ts
     "vite-plus": "catalog:"
   },
   "overrides": {
-    "vite": "catalog:",
-    "vitest": "catalog:"
+    "vite": "catalog:"
   },
   "engines": {
     "node": ">=22.12.0"
@@ -37,7 +36,6 @@ vite.config.ts
   "packageManager": "bun@<semver>",
   "catalog": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vitest": "npm:@voidzero-dev/vite-plus-test@latest",
     "vite-plus": "latest"
   }
 }

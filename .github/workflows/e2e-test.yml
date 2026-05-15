@@ -109,7 +109,6 @@ jobs:
         run: |
           mkdir -p tmp/tgz
           cd packages/core && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
-          cd packages/test && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
           cd packages/cli && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
           # Copy vp binary for e2e-test job (findVpBinary expects it in target/)
           cp target/${{ matrix.target }}/release/vp tmp/tgz/vp 2>/dev/null || cp target/${{ matrix.target }}/release/vp.exe tmp/tgz/vp.exe 2>/dev/null || true

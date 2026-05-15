@@ -53,12 +53,6 @@ if (existsSync(rustCliArtifactsDir)) {
   }
 }
 
-// Build test package — versions are already bumped on main by prepare_release.yml.
-execSync('pnpm --filter=@voidzero-dev/vite-plus-test build', {
-  cwd: repoRoot,
-  stdio: 'inherit',
-});
-
 // Create npm directories for NAPI bindings
 await cli.createNpmDirs({
   cwd: currentDir,

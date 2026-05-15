@@ -38,22 +38,18 @@ packages:
 
 catalog:
   vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: npm:@voidzero-dev/vite-plus-test@latest
   vite-plus: latest
 
 overrides:
   '@vitejs/plugin-react>vite': 'npm:vite@<semver>'
   'supertest>superagent': <semver>
   vite: 'catalog:'
-  vitest: 'catalog:'
   react-click-away-listener>react: <semver>
 peerDependencyRules:
   allowAny:
     - vite
-    - vitest
   allowedVersions:
     vite: '*'
-    vitest: '*'
 
 > cat packages/app/package.json # check app package.json
 {

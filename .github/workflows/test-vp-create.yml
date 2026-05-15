@@ -94,7 +94,6 @@ jobs:
         run: |
           mkdir -p tmp/tgz
           cd packages/core && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
-          cd packages/test && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
           cd packages/cli && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
           # Copy vp binary for test jobs
           cp target/x86_64-unknown-linux-gnu/release/vp tmp/tgz/vp
@@ -152,7 +151,7 @@ jobs:
           - yarn
           - bun
     env:
-      VP_OVERRIDE_PACKAGES: '{"vite":"file:${{ github.workspace }}/tmp/tgz/voidzero-dev-vite-plus-core-0.0.0.tgz","vitest":"file:${{ github.workspace }}/tmp/tgz/voidzero-dev-vite-plus-test-0.0.0.tgz","@voidzero-dev/vite-plus-core":"file:${{ github.workspace }}/tmp/tgz/voidzero-dev-vite-plus-core-0.0.0.tgz","@voidzero-dev/vite-plus-test":"file:${{ github.workspace }}/tmp/tgz/voidzero-dev-vite-plus-test-0.0.0.tgz"}'
+      VP_OVERRIDE_PACKAGES: '{"vite":"file:${{ github.workspace }}/tmp/tgz/voidzero-dev-vite-plus-core-0.0.0.tgz","@voidzero-dev/vite-plus-core":"file:${{ github.workspace }}/tmp/tgz/voidzero-dev-vite-plus-core-0.0.0.tgz"}'
       VP_VERSION: 'file:${{ github.workspace }}/tmp/tgz/vite-plus-0.0.0.tgz'
       # Force full dependency rewriting so the library template's existing
       # vite-plus dep gets overridden with the local tgz

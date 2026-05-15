@@ -1,10 +1,7 @@
 import type { PluginOption, UserConfig } from '@voidzero-dev/vite-plus-core';
-import {
-  defineConfig as viteDefineConfig,
-  type ConfigEnv,
-} from '@voidzero-dev/vite-plus-test/config';
 import type { OxfmtConfig } from 'oxfmt';
 import type { OxlintConfig } from 'oxlint';
+import { defineConfig as viteDefineConfig, type ConfigEnv } from 'vitest/config';
 
 import type { PackUserConfig } from './pack.ts';
 import type { RunConfig } from './run-config.ts';

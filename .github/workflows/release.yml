@@ -157,7 +157,6 @@ jobs:
       - name: Publish
         run: |
           pnpm publish --filter=./packages/core --tag latest --access public --no-git-checks
-          pnpm publish --filter=./packages/test --tag latest --access public --no-git-checks
           pnpm publish --filter=./packages/cli --tag latest --access public --no-git-checks
 
       - name: Create release body
@@ -173,7 +172,6 @@ jobs:
           ### Published Packages
 
           - \`@voidzero-dev/vite-plus-core@${VERSION}\`
-          - \`@voidzero-dev/vite-plus-test@${VERSION}\`
           - \`vite-plus@${VERSION}\`
 
           ### Installation
@@ -222,7 +220,6 @@ jobs:
 
             **Published Packages:**
             • @voidzero-dev/vite-plus-core@${{ env.VERSION }}
-            • @voidzero-dev/vite-plus-test@${{ env.VERSION }}
             • vite-plus@${{ env.VERSION }}
 
             **Install:**

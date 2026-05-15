@@ -47,11 +47,7 @@ const TOOL_SPECS: [ToolSpec; 7] = [
         package_name: "@voidzero-dev/vite-plus-core",
         bundled_version_key: Some("rolldown"),
     },
-    ToolSpec {
-        display_name: "vitest",
-        package_name: "@voidzero-dev/vite-plus-test",
-        bundled_version_key: Some("vitest"),
-    },
+    ToolSpec { display_name: "vitest", package_name: "vitest", bundled_version_key: None },
     ToolSpec { display_name: "oxfmt", package_name: "oxfmt", bundled_version_key: None },
     ToolSpec { display_name: "oxlint", package_name: "oxlint", bundled_version_key: None },
     ToolSpec {

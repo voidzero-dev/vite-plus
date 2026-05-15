@@ -55,9 +55,7 @@ execSync(`${cli} migrate --no-agent --no-interactive`, {
     ...(forceFreshMigration ? { VP_FORCE_MIGRATE: '1' } : {}),
     VP_OVERRIDE_PACKAGES: JSON.stringify({
       vite: `file:${tgzDir}/voidzero-dev-vite-plus-core-0.0.0.tgz`,
-      vitest: `file:${tgzDir}/voidzero-dev-vite-plus-test-0.0.0.tgz`,
       '@voidzero-dev/vite-plus-core': `file:${tgzDir}/voidzero-dev-vite-plus-core-0.0.0.tgz`,
-      '@voidzero-dev/vite-plus-test': `file:${tgzDir}/voidzero-dev-vite-plus-test-0.0.0.tgz`,
     }),
     VP_VERSION: `file:${tgzDir}/vite-plus-0.0.0.tgz`,
   },

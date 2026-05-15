@@ -1,6 +1,6 @@
 const vite = require('@voidzero-dev/vite-plus-core');
 
-const vitest = require('@voidzero-dev/vite-plus-test/config');
+const vitest = require('vitest/config');
 
 const { defineConfig, lazyPlugins } = require('./define-config');
 
