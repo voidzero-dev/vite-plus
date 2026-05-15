@@ -42,13 +42,7 @@ _fix_symlinks:
 
 build:
   pnpm install
-  pnpm --filter rolldown build-binding:release
-  pnpm --filter rolldown build-node
-  pnpm --filter vite build-types
-  pnpm --filter=@voidzero-dev/vite-plus-core build
-  pnpm --filter=@voidzero-dev/vite-plus-test build
-  pnpm --filter=@voidzero-dev/vite-plus-prompts build
-  pnpm --filter=vite-plus build
+  pnpm build
 
 ready:
   git diff --exit-code --quiet
