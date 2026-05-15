@@ -130,7 +130,9 @@ function isLegacyWrapperSpec(value: string | undefined): boolean {
  * is dropped entirely. Returns true iff any entry was changed.
  */
 function pruneLegacyWrapperAliases(record: Record<string, string> | undefined): boolean {
-  if (!record) return false;
+  if (!record) {
+    return false;
+  }
   let mutated = false;
   for (const key of Object.keys(record)) {
     if (isLegacyWrapperSpec(record[key])) {
@@ -1482,7 +1484,9 @@ function getYamlMapScalarStringValue(map: unknown, key: string): string | undefi
 }
 
 function pruneYamlMapLegacyWrapperAliases(map: unknown): void {
-  if (!(map instanceof YAMLMap)) return;
+  if (!(map instanceof YAMLMap)) {
+    return;
+  }
   const stale: Array<{ key: Scalar<string>; fallback: string | undefined }> = [];
   for (const item of map.items) {
     const value = item.value instanceof Scalar ? item.value.value : undefined;
@@ -1840,6 +1844,19 @@ export function rewritePackageJson(
       }
     }
   }
+  // Force-override mode (ecosystem CI / `vp create` E2E) must re-pin any
+  // pre-existing `vite-plus` range to the local tgz. Otherwise pnpm reads the
+  // published vite-plus metadata for transitive dep resolution (e.g.
+  // `@voidzero-dev/vite-plus-test`) even though the override replaces the
+  // vite-plus package itself, dragging the stale wrapper into node_modules.
+  if (isForceOverrideMode()) {
+    for (const { dependencies } of dependencyGroups) {
+      if (dependencies?.[VITE_PLUS_NAME]) {
+        dependencies[VITE_PLUS_NAME] = VITE_PLUS_VERSION;
+        needVitePlus = true;
+      }
+    }
+  }
   // remove packages that are replaced with vite-plus
   for (const name of REMOVE_PACKAGES) {
     let wasRemoved = false;
@@ -1894,7 +1911,7 @@ export function rewritePackageJson(
     // Add vitest to devDependencies when a remaining dependency likely
     // peer-depends on vitest (e.g., vitest-browser-svelte). Vite-plus already
     // bundles upstream vitest 4.1.5 as a direct dep, so the runtime resolution
-    // works without this — but strict pnpm / yarn-PnP refuse to expose a
+    // works without this — but strict pnpm / yarn Plug'n'Play refuse to expose a
     // transitive `vitest` to satisfy a peer dep declared by a different
     // direct dep. Adding `vitest` to the user's devDependencies pins the
     // peer-dep target to the same upstream version vite-plus ships with.
