@@ -62,7 +62,7 @@ fn print_windows_eval_wrapper_required() {
     );
     eprintln!("Add this line to your PowerShell $PROFILE:");
     eprintln!("  . \"$env:USERPROFILE\\.vite-plus\\env.ps1\"");
-    eprintln!("Then start a new PowerShell session.");
+    eprintln!("Then dot-source it now (or open a new PowerShell session) to load the wrapper.");
 }
 
 /// Execute the `vp env use` command.

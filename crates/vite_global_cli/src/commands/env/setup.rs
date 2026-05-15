@@ -20,7 +20,28 @@ use std::process::ExitStatus;
 use owo_colors::OwoColorize;
 
 use super::config::{get_bin_dir, get_vp_home};
-use crate::{cli::EnvShell, error::Error, help};
+use crate::{error::Error, help};
+
+/// Shells that get a generated `~/.vite-plus/env.*` setup script.
+#[derive(Clone, Copy, Debug)]
+enum EnvShell {
+    Posix,
+    Fish,
+    Nu,
+    Powershell,
+}
+
+impl EnvShell {
+    /// File name written under `~/.vite-plus/` for this shell's setup script.
+    const fn env_file_name(self) -> &'static str {
+        match self {
+            EnvShell::Posix => "env",
+            EnvShell::Fish => "env.fish",
+            EnvShell::Nu => "env.nu",
+            EnvShell::Powershell => "env.ps1",
+        }
+    }
+}
 
 /// Tools to create shims for (node, npm, npx, vpx, vpr)
 pub(crate) const SHIM_TOOLS: &[&str] = &["node", "npm", "npx", "vpx", "vpr"];

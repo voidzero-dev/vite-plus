@@ -277,31 +277,6 @@ pub struct EnvArgs {
     pub command: Option<EnvSubcommands>,
 }
 
-/// Shells that get a generated `~/.vite-plus/env.*` setup script.
-#[derive(Clone, Copy, Debug)]
-pub enum EnvShell {
-    /// POSIX shell (bash, zsh, sh)
-    Posix,
-    /// Fish shell
-    Fish,
-    /// Nushell
-    Nu,
-    /// PowerShell
-    Powershell,
-}
-
-impl EnvShell {
-    /// File name written under `~/.vite-plus/` for this shell's setup script.
-    pub(crate) const fn env_file_name(self) -> &'static str {
-        match self {
-            EnvShell::Posix => "env",
-            EnvShell::Fish => "env.fish",
-            EnvShell::Nu => "env.nu",
-            EnvShell::Powershell => "env.ps1",
-        }
-    }
-}
-
 /// Subcommands for the `env` command
 #[derive(clap::Subcommand, Debug)]
 pub enum EnvSubcommands {
