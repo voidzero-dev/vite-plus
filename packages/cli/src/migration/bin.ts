@@ -798,12 +798,14 @@ async function executeMigrationPlan(
   }
 
   // 12. Reinstall after migration
-  // npm needs --force to re-resolve packages with newly added overrides,
-  // otherwise the stale lockfile prevents override resolution.
+  // The migration intentionally rewrites overrides/catalogs/deps, so the
+  // existing lockfile is guaranteed to be stale. Tell each package manager to
+  // re-resolve instead of refusing the install (pnpm/yarn default to
+  // frozen-lockfile under CI, npm/bun need an explicit --force).
   const installArgs =
     plan.packageManager === PackageManager.npm || plan.packageManager === PackageManager.bun
       ? ['--force']
-      : undefined;
+      : ['--no-frozen-lockfile'];
   updateMigrationProgress('Installing dependencies');
   const finalInstallSummary = await runViteInstall(
     workspaceInfo.rootDir,
@@ -926,10 +928,17 @@ async function main() {
         );
         resolvedVersion = resolved.version;
       }
+      // ESLint/Prettier migration touched package.json; the lockfile is now
+      // stale, so disable frozen-lockfile mode (pnpm/yarn) or --force (npm/bun).
+      const eslintPrettierInstallArgs =
+        workspaceInfoOptional.packageManager === PackageManager.npm ||
+        workspaceInfoOptional.packageManager === PackageManager.bun
+          ? ['--force']
+          : ['--no-frozen-lockfile'];
       const installSummary = await runViteInstall(
         workspaceInfoOptional.rootDir,
         options.interactive,
-        undefined,
+        eslintPrettierInstallArgs,
         {
           silent: true,
           packageManager: workspaceInfoOptional.packageManager,
