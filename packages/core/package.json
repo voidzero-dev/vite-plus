@@ -85,14 +85,8 @@
       "default": "./dist/rolldown/plugins-index.mjs",
       "types": "./dist/rolldown/plugins-index.d.mts"
     },
-    "./rolldown/pluginutils": {
-      "default": "./dist/pluginutils/index.mjs",
-      "types": "./dist/pluginutils/index.d.mts"
-    },
-    "./rolldown/pluginutils/filter": {
-      "default": "./dist/pluginutils/filter/index.mjs",
-      "types": "./dist/pluginutils/filter/index.d.mts"
-    },
+    "./rolldown/pluginutils": "./dist/pluginutils/index.mjs",
+    "./rolldown/pluginutils/filter": "./dist/pluginutils/filter/index.mjs",
     "./rolldown/utils": {
       "default": "./dist/rolldown/utils-index.mjs",
       "types": "./dist/rolldown/utils-index.d.mts"

@@ -277,15 +277,6 @@ function transformPluginutilsExport(
         },
       ];
     }
-    if (newValue.endsWith('.mjs')) {
-      return [
-        newExportPath,
-        {
-          default: newValue,
-          types: newValue.replace(/\.mjs$/, '.d.mts'),
-        },
-      ];
-    }
     return [newExportPath, newValue];
   }
 
@@ -296,8 +287,6 @@ function transformPluginutilsExport(
     if (importPath && !('types' in newValue)) {
       if (importPath.endsWith('.js')) {
         newValue.types = importPath.replace(/\.js$/, '.d.ts');
-      } else if (importPath.endsWith('.mjs')) {
-        newValue.types = importPath.replace(/\.mjs$/, '.d.mts');
       }
     }
   }
