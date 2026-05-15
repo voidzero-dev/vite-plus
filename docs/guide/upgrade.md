@@ -40,21 +40,20 @@ You can also use `vp add vite-plus@latest` if you want to move the dependency ex
 
 ### Updating Aliased Packages
 
-Vite+ sets up npm aliases for its core packages during installation:
+Vite+ sets up an npm alias for its core package during installation:
 
 - `vite` is aliased to `npm:@voidzero-dev/vite-plus-core@latest`
-- `vitest` is aliased to `npm:@voidzero-dev/vite-plus-test@latest`
 
-`vp update vite-plus` does not re-resolve these aliases in the lockfile. To fully upgrade, update them separately:
+`vp update vite-plus` does not re-resolve this alias in the lockfile. To fully upgrade, update it separately:
 
 ```bash
-vp update @voidzero-dev/vite-plus-core @voidzero-dev/vite-plus-test
+vp update @voidzero-dev/vite-plus-core
 ```
 
 Or update everything at once:
 
 ```bash
-vp update vite-plus @voidzero-dev/vite-plus-core @voidzero-dev/vite-plus-test
+vp update vite-plus @voidzero-dev/vite-plus-core
 ```
 
 You can verify with `vp outdated` that no Vite+ packages remain outdated.

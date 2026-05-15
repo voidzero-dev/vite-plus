@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { describe, expect, test } from '@voidzero-dev/vite-plus-test';
+import { describe, expect, test } from 'vitest';
 
 import { isPassThroughEnv, replaceUnstableOutput } from '../utils.ts';
 

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test, vi } from '@voidzero-dev/vite-plus-test';
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 
 import {
   configDefaults,

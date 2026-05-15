@@ -9,7 +9,7 @@
   "name": "migration-standalone-pnpm",
   "devDependencies": {
     "vite": "catalog:",
-    "vitest": "catalog:",
+    "vitest": "^4.0.0",
     "vite-plus": "catalog:"
   },
   "packageManager": "pnpm@<semver>"
@@ -18,15 +18,11 @@
 > cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides, peerDependencyRules, and catalog
 catalog:
   vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: npm:@voidzero-dev/vite-plus-test@latest
   vite-plus: latest
 overrides:
   vite: 'catalog:'
-  vitest: 'catalog:'
 peerDependencyRules:
   allowAny:
     - vite
-    - vitest
   allowedVersions:
     vite: '*'
-    vitest: '*'
