@@ -93,7 +93,22 @@ jobs:
       - name: Pack packages into tgz
         run: |
           mkdir -p tmp/tgz
+          # Bun strictly validates override-target versions against transitive
+          # peer constraints (vitest 4.1.5 declares peer `vite ^6 || ^7 || ^8`).
+          # pnpm/npm/yarn don't, but bun aborts with "vite@^6.0.0 || ^7.0.0 ||
+          # ^8.0.0 failed to resolve" when the override points at a 0.0.0 tgz.
+          # See https://github.com/oven-sh/bun/issues/8406. Bump core's pack-time
+          # version into the satisfied range; the file is restored after pack so
+          # the in-repo source stays at 0.0.0.
+          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('packages/core/package.json','utf8'));p.version='7.99.0';fs.writeFileSync('packages/core/package.json',JSON.stringify(p,null,2)+'\n')"
           cd packages/core && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
+          # Restore version before packing CLI so the CLI tgz keeps the 0.0.0
+          # workspace dep (the file: override in VP_OVERRIDE_PACKAGES still
+          # redirects @voidzero-dev/vite-plus-core to the bumped tgz regardless).
+          git checkout -- packages/core/package.json
+          # Rename core tgz back to the stable 0.0.0 filename that
+          # VP_OVERRIDE_PACKAGES references.
+          mv tmp/tgz/voidzero-dev-vite-plus-core-7.99.0.tgz tmp/tgz/voidzero-dev-vite-plus-core-0.0.0.tgz
           cd packages/cli && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
           # Copy vp binary for test jobs
           cp target/x86_64-unknown-linux-gnu/release/vp tmp/tgz/vp
