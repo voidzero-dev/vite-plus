@@ -96,7 +96,6 @@ jobs:
         run: |
           mkdir -p tmp/tgz
           cd packages/core && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
-          cd packages/test && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
           cd packages/cli && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
           # Copy vp binary for test jobs
           cp target/x86_64-unknown-linux-gnu/release/vp tmp/tgz/vp

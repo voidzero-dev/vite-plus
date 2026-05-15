@@ -136,5 +136,4 @@ jobs:
             './packages/cli/cli-npm/*' \
             './packages/cli' \
             './packages/core' \
-            './packages/prompts' \
-            './packages/test'
+            './packages/prompts'

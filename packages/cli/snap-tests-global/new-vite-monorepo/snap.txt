@@ -65,18 +65,14 @@ catalog:
   "@types/node": ^24
   typescript: ^5
   vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: npm:@voidzero-dev/vite-plus-test@latest
   vite-plus: latest
 overrides:
   vite: "catalog:"
-  vitest: "catalog:"
 peerDependencyRules:
   allowAny:
     - vite
-    - vitest
   allowedVersions:
     vite: "*"
-    vitest: "*"
 
 > test -f vite-plus-monorepo/.gitignore && echo '.gitignore exists' || echo 'ERROR: .gitignore missing' # verify gitignore renamed from _gitignore
 .gitignore exists

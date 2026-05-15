@@ -29,6 +29,7 @@ import { hasVitePlusDependency, readNearestPackageJson } from '../utils/package.
 import { displayRelative } from '../utils/path.ts';
 import {
   cancelAndExit,
+  type CommandRunSummary,
   defaultInteractive,
   downloadPackageManager,
   promptGitHooks,
@@ -36,7 +37,7 @@ import {
   selectPackageManager,
   upgradeYarn,
 } from '../utils/prompts.ts';
-import { accent, log, muted, printHeader } from '../utils/terminal.ts';
+import { accent, log, muted, printHeader, warnMsg } from '../utils/terminal.ts';
 import {
   confirmBaseUrlFix,
   fixBaseUrlInTsconfig,
@@ -548,6 +549,34 @@ function formatDuration(durationMs: number) {
   return `${Math.round(durationSeconds)}s`;
 }
 
+/**
+ * Reconcile a CommandRunSummary from `runViteInstall` with the migration's
+ * duration counter and exit-code state. `runViteInstall` returns
+ * `{ status: 'failed', exitCode }` without throwing; treating that as a success
+ * (incrementing duration unconditionally) would let the migration claim
+ * "Dependencies installed" while node_modules is desynced from the just-mutated
+ * package.json. This helper centralizes the right handling: credit duration on
+ * success, warn + flip exitCode on failure, stay silent on skip.
+ */
+function handleInstallResult(
+  installSummary: CommandRunSummary,
+  rootDir: string,
+  report: MigrationReport,
+): number {
+  if (installSummary.status === 'installed') {
+    return installSummary.durationMs;
+  }
+  if (installSummary.status === 'failed') {
+    const exitCode = installSummary.exitCode ?? 1;
+    const message = `Dependency installation failed (exit code ${exitCode}). Run \`vp install\` manually in ${rootDir} to resync node_modules.`;
+    warnMsg(message);
+    report.warnings.push(message);
+    process.exitCode = exitCode;
+    return 0;
+  }
+  return 0;
+}
+
 function showMigrationSummary(options: {
   projectRoot: string;
   packageManager: string;
@@ -885,8 +914,15 @@ async function executeMigrationPlan(
   );
 
   clearMigrationProgress();
+  const finalInstallDurationMs = handleInstallResult(
+    finalInstallSummary,
+    workspaceInfo.rootDir,
+    report,
+  );
   return {
-    installDurationMs: initialInstallSummary.durationMs + finalInstallSummary.durationMs,
+    installDurationMs:
+      handleInstallResult(initialInstallSummary, workspaceInfo.rootDir, report) +
+      finalInstallDurationMs,
     packageManagerVersion: downloadResult.version,
     report,
   };
@@ -1021,7 +1057,11 @@ async function main() {
           packageManagerVersion: resolvedVersion,
         },
       );
-      installDurationMs += installSummary.durationMs;
+      installDurationMs += handleInstallResult(
+        installSummary,
+        workspaceInfoOptional.rootDir,
+        report,
+      );
       didMigrate = true;
       report.eslintMigrated = eslintMigrated;
       report.prettierMigrated = prettierMigrated;

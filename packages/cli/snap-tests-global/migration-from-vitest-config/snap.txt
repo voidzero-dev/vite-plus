@@ -41,7 +41,7 @@ export default defineConfig({
   },
   "devDependencies": {
     "vite": "catalog:",
-    "vitest": "catalog:",
+    "vitest": "^4.0.0",
     "playwright": "*",
     "vite-plus": "catalog:"
   },
@@ -57,15 +57,11 @@ export default defineConfig({
 > cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog
 catalog:
   vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: npm:@voidzero-dev/vite-plus-test@latest
   vite-plus: latest
 overrides:
   vite: 'catalog:'
-  vitest: 'catalog:'
 peerDependencyRules:
   allowAny:
     - vite
-    - vitest
   allowedVersions:
     vite: '*'
-    vitest: '*'

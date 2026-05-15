@@ -5,15 +5,16 @@
  * that syncVersionsExport() produces correct artifacts.
  */
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import url from 'node:url';
 
-import { describe, expect, it } from '@voidzero-dev/vite-plus-test';
+import { describe, expect, it } from 'vitest';
 
 const cliPkgDir = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), '../..');
 const distDir = path.join(cliPkgDir, 'dist');
 const corePkgPath = path.join(cliPkgDir, '../core/package.json');
-const testPkgPath = path.join(cliPkgDir, '../test/package.json');
+const vitestPkgPath = createRequire(import.meta.url).resolve('vitest/package.json');
 
 describe('versions export', () => {
   describe('build artifacts', () => {
@@ -48,15 +49,13 @@ describe('versions export', () => {
       }
     });
 
-    it('should contain all test bundledVersions', async () => {
-      const testPkg = JSON.parse(fs.readFileSync(testPkgPath, 'utf-8'));
+    it('should contain vitest version matching installed package', async () => {
+      const vitestPkg = JSON.parse(fs.readFileSync(vitestPkgPath, 'utf-8'));
       const mod = await import('../../dist/versions.js');
       const versions = mod.versions as Record<string, string>;
-      for (const [key, value] of Object.entries(
-        testPkg.bundledVersions as Record<string, string>,
-      )) {
-        expect(versions[key], `versions.${key} should match test bundledVersions`).toBe(value);
-      }
+      expect(versions.vitest, 'versions.vitest should match installed vitest version').toBe(
+        vitestPkg.version,
+      );
     });
   });
 

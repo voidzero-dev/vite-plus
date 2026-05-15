@@ -5,7 +5,7 @@
  * 1. buildWithTsdown() - Bundles all CLI entry points via tsdown
  * 2. buildNapiBinding() - Builds the native Rust binding via NAPI
  * 3. syncCorePackageExports() - Creates shim files to re-export from @voidzero-dev/vite-plus-core
- * 4. syncTestPackageExports() - Creates shim files to re-export from @voidzero-dev/vite-plus-test
+ * 4. syncTestPackageExports() - Creates shim files to re-export from vitest
  * 5. syncVersionsExport() - Generates ./versions module with bundled tool versions
  * 6. copyBundledDocs() - Copies docs into docs/ for bundled package access
  * 7. syncReadmeFromRoot() - Keeps package README in sync
@@ -21,6 +21,7 @@
 import { execSync } from 'node:child_process';
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { copyFile, cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
@@ -30,11 +31,20 @@ import { format } from 'oxfmt';
 
 import { generateLicenseFile } from '../../scripts/generate-license.js';
 import corePkg from '../core/package.json' with { type: 'json' };
-import testPkg from '../test/package.json' with { type: 'json' };
 
 const projectDir = dirname(fileURLToPath(import.meta.url));
-const TEST_PACKAGE_NAME = '@voidzero-dev/vite-plus-test';
+const TEST_PACKAGE_NAME = 'vitest';
 const CORE_PACKAGE_NAME = '@voidzero-dev/vite-plus-core';
+
+// Browser providers projected under ./test/* and ./test/browser/providers/* so the
+// public surface matches what the deleted `@voidzero-dev/vite-plus-test` wrapper exposed.
+// Each entry maps the upstream package name to the short provider name used in the
+// `./test/browser/providers/<short>` alias path.
+const BROWSER_PROVIDER_PACKAGES: ReadonlyArray<{ pkg: string; short: string }> = [
+  { pkg: '@vitest/browser-playwright', short: 'playwright' },
+  { pkg: '@vitest/browser-preview', short: 'preview' },
+  { pkg: '@vitest/browser-webdriverio', short: 'webdriverio' },
+];
 
 const {
   values: { ['skip-native']: skipNative, ['skip-ts']: skipTs },
@@ -275,16 +285,21 @@ async function syncTypesDir(srcDir: string, destDir: string, relativePath: strin
 }
 
 /**
- * Sync exports from @voidzero-dev/vite-plus-test to vite-plus
+ * Sync exports from vitest to vite-plus
  *
- * This function reads the test package's exports and creates shim files that
+ * This function reads vitest's package.json exports and creates shim files that
  * re-export everything under the ./test/* subpath. This allows users to import
- * from vite-plus/test/* instead of @voidzero-dev/vite-plus-test/*.
+ * from vite-plus/test/* instead of vitest/*.
  */
 async function syncTestPackageExports() {
   console.log('\nSyncing test package exports...');
 
-  const testPkgPath = join(projectDir, '../test/package.json');
+  // Resolve vitest's package.json via Node's resolver so we always read the
+  // currently installed copy — packages/test/ no longer exists.
+  const require = createRequire(import.meta.url);
+  const testPkgPath = require.resolve(`${TEST_PACKAGE_NAME}/package.json`, {
+    paths: [projectDir],
+  });
   const cliPkgPath = join(projectDir, 'package.json');
   const testDistDir = join(projectDir, 'dist/test');
 
@@ -306,12 +321,71 @@ async function syncTestPackageExports() {
 
     // Convert ./foo to ./test/foo, . to ./test
     const cliExportPath = exportPath === '.' ? './test' : `./test${exportPath.slice(1)}`;
+    const shimBaseName = exportPath === '.' ? 'index' : exportPath.slice(2);
+    const importSpecifier =
+      exportPath === '.' ? TEST_PACKAGE_NAME : `${TEST_PACKAGE_NAME}${exportPath.slice(1)}`;
 
     // Create shim files and build export entry
-    const shimExport = await createShimForExport(exportPath, exportValue, testDistDir);
+    const shimExport = await createShimForExport(
+      shimBaseName,
+      exportValue,
+      importSpecifier,
+      testDistDir,
+    );
     if (shimExport) {
       generatedExports[cliExportPath] = shimExport;
       console.log(`  Created ${cliExportPath}`);
+    }
+  }
+
+  // Mirror upstream @vitest/browser-* provider packages under ./test/<provider> and
+  // ./test/browser/providers/<short>. Existing vite-plus user code imports from these
+  // paths (e.g., `vite-plus/test/browser-playwright`) and must keep resolving after
+  // the bundled `@voidzero-dev/vite-plus-test` wrapper was removed.
+  for (const { pkg, short } of BROWSER_PROVIDER_PACKAGES) {
+    let providerPkgPath: string;
+    try {
+      providerPkgPath = require.resolve(`${pkg}/package.json`, { paths: [projectDir] });
+    } catch (err) {
+      console.warn(`  Skipping ${pkg} — not installed: ${(err as Error).message}`);
+      continue;
+    }
+    const providerPkg = JSON.parse(await readFile(providerPkgPath, 'utf-8'));
+    const providerExports = (providerPkg.exports ?? {}) as Record<string, unknown>;
+
+    for (const [providerExportPath, providerExportValue] of Object.entries(providerExports)) {
+      if (providerExportPath === './package.json' || providerExportPath.includes('*')) {
+        continue;
+      }
+
+      const providerSubPath = providerExportPath === '.' ? '' : providerExportPath.slice(1);
+      // Two CLI surfaces that map to the same provider shim:
+      //   ./test/<pkgShortName>           → e.g. ./test/browser-playwright
+      //   ./test/browser/providers/<short> → e.g. ./test/browser/providers/playwright
+      const pkgShortName = pkg.startsWith('@vitest/') ? pkg.slice('@vitest/'.length) : pkg;
+      const surfaces = [
+        { cliPath: `./test/${pkgShortName}${providerSubPath}`, baseName: `${pkgShortName}${providerSubPath}` },
+        {
+          cliPath: `./test/browser/providers/${short}${providerSubPath}`,
+          baseName: `browser/providers/${short}${providerSubPath}`,
+        },
+      ];
+      const importSpecifier =
+        providerExportPath === '.' ? pkg : `${pkg}${providerExportPath.slice(1)}`;
+
+      for (const { cliPath, baseName } of surfaces) {
+        const shimBaseName = baseName.replace(/^\//, '');
+        const shimExport = await createShimForExport(
+          shimBaseName,
+          providerExportValue,
+          importSpecifier,
+          testDistDir,
+        );
+        if (shimExport) {
+          generatedExports[cliPath] = shimExport;
+          console.log(`  Created ${cliPath}`);
+        }
+      }
     }
   }
 
@@ -347,8 +421,8 @@ async function readDepVersion(packageName: string): Promise<string | null> {
  * Generate ./versions export module with bundled tool versions.
  *
  * Collects versions from:
- * - core/test package.json bundledVersions (vite, rolldown, tsdown, vitest)
- * - CLI dependency package.json (oxlint, oxfmt, oxlint-tsgolint)
+ * - core package.json bundledVersions (vite, rolldown, tsdown)
+ * - CLI dependency package.json (oxlint, oxfmt, oxlint-tsgolint, vitest)
  *
  * Generates dist/versions.js and dist/versions.d.ts with inlined constants.
  */
@@ -356,15 +430,14 @@ async function syncVersionsExport() {
   console.log('\nSyncing versions export...');
   const distDir = join(projectDir, 'dist');
 
-  // Collect versions from bundledVersions (core + test)
+  // Collect bundled versions from the core package
   const versions: Record<string, string> = {
     ...(corePkg as Record<string, any>).bundledVersions,
-    ...(testPkg as Record<string, any>).bundledVersions,
   };
 
-  // Collect versions from CLI dependencies (oxlint, oxfmt, oxlint-tsgolint)
-  // These don't export ./package.json, so we read from node_modules directly
-  const depTools = ['oxlint', 'oxfmt', 'oxlint-tsgolint'] as const;
+  // Read versions from CLI dependencies' installed package.json files
+  // (these packages don't export ./package.json, so node_modules is the source of truth)
+  const depTools = ['oxlint', 'oxfmt', 'oxlint-tsgolint', 'vitest'] as const;
   for (const name of depTools) {
     const version = await readDepVersion(name);
     if (version) {
@@ -465,19 +538,20 @@ type ExportValue =
     };
 
 /**
- * Create shim file(s) for a single export and return the export entry for package.json
+ * Create shim file(s) for a single export and return the export entry for package.json.
+ *
+ * @param shimBaseName Path under dist/test/ (e.g. 'index', 'config', 'browser-playwright/context').
+ * @param exportValue  The upstream package's export value for this entry.
+ * @param testImportSpecifier The bare import specifier the shim should re-export from
+ *   (e.g. 'vitest', 'vitest/node', '@vitest/browser-playwright').
+ * @param distDir      Output dist/test directory.
  */
 async function createShimForExport(
-  exportPath: string,
+  shimBaseName: string,
   exportValue: unknown,
+  testImportSpecifier: string,
   distDir: string,
 ): Promise<ExportValue | null> {
-  // Determine the import specifier for the test package
-  const testImportSpecifier =
-    exportPath === '.' ? TEST_PACKAGE_NAME : `${TEST_PACKAGE_NAME}${exportPath.slice(1)}`;
-
-  // Convert export path to file path: ./foo/bar -> foo/bar, . -> index
-  const shimBaseName = exportPath === '.' ? 'index' : exportPath.slice(2);
   const shimDir = join(distDir, dirname(shimBaseName));
   await mkdir(shimDir, { recursive: true });
 
@@ -549,6 +623,11 @@ async function createShimForExport(
  *   { import: { types, node, default }, require: { types, default } }
  * And flat structures like:
  *   { types, require, default }
+ *
+ * Insertion order matters: Node.js package-exports conditions are order-sensitive.
+ * For dual-condition entries, `require` MUST come before `default` so that
+ * `require('vite-plus/test/config')` resolves to the `.cjs` shim instead of
+ * matching the catch-all `default` (which would point at the ESM file).
  */
 async function createConditionalShim(
   value: Record<string, unknown>,
@@ -557,7 +636,11 @@ async function createConditionalShim(
   baseFileName: string,
   shimBaseName: string,
 ): Promise<ExportValue> {
-  const result: ExportValue = {};
+  // Build entries as an array of tuples so we control insertion order explicitly.
+  // Final order for flat entries: types, import (if present), require, default.
+  // `require` MUST come before `default` — `default` matches everything, so
+  // putting it first makes the `require` branch unreachable for CJS consumers.
+  const entries: Array<[string, ExportValue]> = [];
 
   // Handle top-level types (flat structure like { types, require, default })
   if (value.types && typeof value.types === 'string' && !value.import) {
@@ -567,14 +650,7 @@ async function createConditionalShim(
       dtsPath,
       `import '${testImportSpecifier}';\nexport * from '${testImportSpecifier}';\n`,
     );
-    (result as Record<string, string>).types = `./dist/test/${shimBaseName}.d.ts`;
-  }
-
-  // Handle top-level default (flat structure, only when no import condition)
-  if (value.default && typeof value.default === 'string' && !value.import) {
-    const jsPath = join(shimDir, `${baseFileName}.js`);
-    await writeFile(jsPath, `export * from '${testImportSpecifier}';\n`);
-    (result as Record<string, string>).default = `./dist/test/${shimBaseName}.js`;
+    entries.push(['types', `./dist/test/${shimBaseName}.d.ts`]);
   }
 
   // Handle import condition
@@ -584,7 +660,7 @@ async function createConditionalShim(
     if (typeof importValue === 'string') {
       const jsPath = join(shimDir, `${baseFileName}.js`);
       await writeFile(jsPath, `export * from '${testImportSpecifier}';\n`);
-      (result as Record<string, unknown>).import = `./dist/test/${shimBaseName}.js`;
+      entries.push(['import', `./dist/test/${shimBaseName}.js`]);
     } else if (typeof importValue === 'object' && importValue !== null) {
       const importResult: Record<string, string> = {};
 
@@ -609,18 +685,19 @@ async function createConditionalShim(
         importResult.default = `./dist/test/${shimBaseName}.js`;
       }
 
-      result.import = importResult;
+      entries.push(['import', importResult]);
     }
   }
 
-  // Handle require condition
+  // Handle require condition — emitted BEFORE `default` so CJS resolution
+  // picks the `.cjs` shim instead of the catch-all `default` entry.
   if (value.require) {
     const requireValue = value.require as Record<string, unknown>;
 
     if (typeof requireValue === 'string') {
       const cjsPath = join(shimDir, `${baseFileName}.cjs`);
       await writeFile(cjsPath, `module.exports = require('${testImportSpecifier}');\n`);
-      result.require = `./dist/test/${shimBaseName}.cjs`;
+      entries.push(['require', `./dist/test/${shimBaseName}.cjs`]);
     } else if (typeof requireValue === 'object' && requireValue !== null) {
       const requireResult: Record<string, string> = {};
 
@@ -640,11 +717,20 @@ async function createConditionalShim(
         requireResult.default = `./dist/test/${shimBaseName}.cjs`;
       }
 
-      result.require = requireResult;
+      entries.push(['require', requireResult]);
     }
   }
 
-  return result;
+  // Handle top-level default (flat structure, only when no import condition).
+  // Emitted LAST among siblings so `require` (and any specific condition)
+  // wins resolution against the catch-all `default`.
+  if (value.default && typeof value.default === 'string' && !value.import) {
+    const jsPath = join(shimDir, `${baseFileName}.js`);
+    await writeFile(jsPath, `export * from '${testImportSpecifier}';\n`);
+    entries.push(['default', `./dist/test/${shimBaseName}.js`]);
+  }
+
+  return Object.fromEntries(entries) as ExportValue;
 }
 
 /**

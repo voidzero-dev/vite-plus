@@ -14,9 +14,7 @@ vi.mock('../../utils/constants.js', async (importOriginal) => {
     VITE_PLUS_VERSION: 'file:/tmp/tgz/vite-plus-0.0.0.tgz',
     VITE_PLUS_OVERRIDE_PACKAGES: {
       vite: 'file:/tmp/tgz/voidzero-dev-vite-plus-core-0.0.0.tgz',
-      vitest: 'file:/tmp/tgz/voidzero-dev-vite-plus-test-0.0.0.tgz',
       '@voidzero-dev/vite-plus-core': 'file:/tmp/tgz/voidzero-dev-vite-plus-core-0.0.0.tgz',
-      '@voidzero-dev/vite-plus-test': 'file:/tmp/tgz/voidzero-dev-vite-plus-test-0.0.0.tgz',
     },
   };
 });
@@ -78,13 +76,11 @@ describe('rewriteMonorepo bun catalog with file: protocol', () => {
     // overrides should use file: paths directly, not catalog:
     const overrides = pkg.overrides as Record<string, string>;
     expect(overrides.vite).toBe('file:/tmp/tgz/voidzero-dev-vite-plus-core-0.0.0.tgz');
-    expect(overrides.vitest).toBe('file:/tmp/tgz/voidzero-dev-vite-plus-test-0.0.0.tgz');
+    expect(overrides.vitest).toBeUndefined();
     expect(overrides['@voidzero-dev/vite-plus-core']).toBe(
       'file:/tmp/tgz/voidzero-dev-vite-plus-core-0.0.0.tgz',
     );
-    expect(overrides['@voidzero-dev/vite-plus-test']).toBe(
-      'file:/tmp/tgz/voidzero-dev-vite-plus-test-0.0.0.tgz',
-    );
+    expect(overrides['@voidzero-dev/vite-plus-test']).toBeUndefined();
   });
 
   it('does not write file: paths into named catalogs', () => {
@@ -141,7 +137,7 @@ describe('rewriteMonorepo bun catalog with file: protocol', () => {
     rewritePackageJson(pkg, PackageManager.pnpm, true);
 
     expect(pkg.peerDependencies.vite).toBe('^7.0.0');
-    expect(pkg.peerDependencies.vitest).toBe('*');
+    expect(pkg.peerDependencies.vitest).toBe('catalog:test');
     expect(pkg.optionalDependencies.vite).toBe(
       'file:/tmp/tgz/voidzero-dev-vite-plus-core-0.0.0.tgz',
     );

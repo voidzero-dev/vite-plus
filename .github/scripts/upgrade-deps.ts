@@ -155,8 +155,13 @@ async function updatePnpmWorkspace(versions: PnpmWorkspaceVersions): Promise<voi
   const entries: PnpmWorkspaceEntry[] = [
     {
       name: 'vitest',
-      pattern: /vitest-dev: npm:vitest@\^([\d.]+(?:-[\w.]+)?)/,
-      replacement: `vitest-dev: npm:vitest@^${versions.vitest}`,
+      // The `@voidzero-dev/vite-plus-test` wrapper (which used to be aliased
+      // here via `vitest-dev: npm:vitest@^…`) has been removed. Vitest is now
+      // a plain catalog entry pinned to an exact version (`vitest: x.y.z`),
+      // so match that shape directly. The leading newline anchor disambiguates
+      // from neighbouring keys like `vitepress-*` and `@vitest/browser`.
+      pattern: /\n {2}vitest: ([\d.]+(?:-[\w.]+)?)\n/,
+      replacement: `\n  vitest: ${versions.vitest}\n`,
       newVersion: versions.vitest,
     },
     {
@@ -244,36 +249,6 @@ async function updatePnpmWorkspace(versions: PnpmWorkspaceVersions): Promise<voi
 
   fs.writeFileSync(filePath, content);
   console.log('Updated pnpm-workspace.yaml');
-}
-
-// ============ Update packages/test/package.json ============
-async function updateTestPackage(vitestVersion: string): Promise<void> {
-  const filePath = path.join(ROOT, 'packages/test/package.json');
-  const pkg: PackageJson = readJsonFile(filePath);
-  const devDependencies = pkg.devDependencies;
-  if (!devDependencies) {
-    throw new Error('packages/test/package.json is missing devDependencies');
-  }
-
-  // Update all @vitest/* devDependencies
-  for (const dep of Object.keys(devDependencies)) {
-    if (dep.startsWith('@vitest/')) {
-      devDependencies[dep] = vitestVersion;
-    }
-  }
-
-  // Update vitest-dev devDependency
-  if (devDependencies['vitest-dev']) {
-    devDependencies['vitest-dev'] = `^${vitestVersion}`;
-  }
-
-  // Update @vitest/ui peerDependency if present
-  if (pkg.peerDependencies?.['@vitest/ui']) {
-    pkg.peerDependencies['@vitest/ui'] = vitestVersion;
-  }
-
-  fs.writeFileSync(filePath, JSON.stringify(pkg, null, 2) + '\n');
-  console.log('Updated packages/test/package.json');
 }
 
 // ============ Update packages/core/package.json ============
@@ -430,7 +405,6 @@ await updatePnpmWorkspace({
   oxcParser: oxcParserVersion,
   oxcTransform: oxcTransformVersion,
 });
-await updateTestPackage(vitestVersion);
 await updateCorePackage(devtoolsVersion);
 
 writeMetaFiles();

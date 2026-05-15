@@ -187,12 +187,11 @@ If you are manually migrating a project to Vite+, install these dev dependencies
 npm install -D vite-plus @voidzero-dev/vite-plus-core@latest
 ```
 
-You need to add overrides to your package manager for `vite` and `vitest` so that other packages depending on Vite and Vitest will use the Vite+ versions:
+You need to add overrides to your package manager for `vite` so that other packages depending on Vite (including Vitest) will use the Vite+ version:
 
 ```json
 "overrides": {
-  "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-  "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+  "vite": "npm:@voidzero-dev/vite-plus-core@latest"
 }
 ```
 
@@ -201,15 +200,13 @@ If you are using `pnpm`, add this to your `pnpm-workspace.yaml`:
 ```yaml
 overrides:
   vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: npm:@voidzero-dev/vite-plus-test@latest
 ```
 
 Or, if you are using Yarn:
 
 ```json
 "resolutions": {
-  "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-  "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+  "vite": "npm:@voidzero-dev/vite-plus-core@latest"
 }
 ```
 

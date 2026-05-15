@@ -34,18 +34,14 @@ Prettier configuration detected. Auto-migrating to Oxfmt...
 > cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog
 catalog:
   vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: npm:@voidzero-dev/vite-plus-test@latest
   vite-plus: latest
 overrides:
   vite: 'catalog:'
-  vitest: 'catalog:'
 peerDependencyRules:
   allowAny:
     - vite
-    - vitest
   allowedVersions:
     vite: '*'
-    vitest: '*'
 
 > test ! -f eslint.config.mjs # check eslint config is removed
 > test ! -f .prettierrc.json # check prettier config is removed

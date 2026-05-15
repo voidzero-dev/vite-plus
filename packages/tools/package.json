@@ -18,9 +18,9 @@
     "@oxc-node/cli": "catalog:",
     "@oxc-node/core": "catalog:",
     "@types/semver": "catalog:",
-    "@voidzero-dev/vite-plus-test": "workspace:*",
     "minimatch": "catalog:",
     "semver": "catalog:",
+    "vitest": "catalog:",
     "yaml": "catalog:"
   }
 }

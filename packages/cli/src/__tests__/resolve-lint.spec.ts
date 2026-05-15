@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 
-import { describe, expect, it } from '@voidzero-dev/vite-plus-test';
+import { describe, expect, it } from 'vitest';
 
 import { lint, resolveWindowsTsgolintExecutable } from '../resolve-lint.js';
 

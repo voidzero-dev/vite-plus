@@ -7,7 +7,6 @@ export const VITE_PLUS_OVERRIDE_PACKAGES: Record<string, string> = process.env.V
   ? JSON.parse(process.env.VP_OVERRIDE_PACKAGES)
   : {
       vite: 'npm:@voidzero-dev/vite-plus-core@latest',
-      vitest: 'npm:@voidzero-dev/vite-plus-test@latest',
     };
 
 /**
