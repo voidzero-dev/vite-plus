@@ -28,10 +28,32 @@ This switches to system-first mode, where the shims prefer your system Node.js a
 
 ### Setup
 
-- `vp env setup` creates or updates shims in `VP_HOME/bin`
+- `vp env setup` creates or updates shims in `VP_HOME/bin` (and writes the per-shell setup scripts under `~/.vite-plus/`)
 - `vp env on` enables managed mode so shims always use Vite+-managed Node.js
 - `vp env off` enables system-first mode so shims prefer system Node.js first
 - `vp env print` prints the shell snippet for the current session
+
+PowerShell needs to dot-source the generated setup script in the current shell before `vp env use` can affect only that shell session:
+
+```powershell
+. "$env:USERPROFILE\.vite-plus\env.ps1"
+```
+
+Add that line to the end of your PowerShell `$PROFILE` to apply it automatically in new shells. It does not require elevated privileges.
+
+Create the profile file if it does not already exist:
+
+```powershell
+if (-not (Test-Path $PROFILE)) { New-Item $PROFILE -Force }
+```
+
+Open the profile file for editing:
+
+```powershell
+Invoke-Item $PROFILE
+```
+
+In CI, `vp env use` can still run without shell initialization. It writes a temporary session file under `VP_HOME` so later shim calls in the same job can resolve the selected Node.js version.
 
 ### Manage
 

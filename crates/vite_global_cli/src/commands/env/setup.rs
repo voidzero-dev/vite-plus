@@ -22,6 +22,27 @@ use owo_colors::OwoColorize;
 use super::config::{get_bin_dir, get_vp_home};
 use crate::{error::Error, help};
 
+/// Shells that get a generated `~/.vite-plus/env.*` setup script.
+#[derive(Clone, Copy, Debug)]
+enum EnvShell {
+    Posix,
+    Fish,
+    Nu,
+    Powershell,
+}
+
+impl EnvShell {
+    /// File name written under `~/.vite-plus/` for this shell's setup script.
+    const fn env_file_name(self) -> &'static str {
+        match self {
+            EnvShell::Posix => "env",
+            EnvShell::Fish => "env.fish",
+            EnvShell::Nu => "env.nu",
+            EnvShell::Powershell => "env.ps1",
+        }
+    }
+}
+
 /// Tools to create shims for (node, npm, npx, vpx, vpr)
 pub(crate) const SHIM_TOOLS: &[&str] = &["node", "npm", "npx", "vpx", "vpr"];
 
@@ -443,41 +464,12 @@ async fn cleanup_legacy_completion_dir(vite_plus_home: &vite_path::AbsolutePath)
     }
 }
 
-/// Create env files with PATH guard (prevents duplicate PATH entries).
-///
-/// Creates:
-/// - `~/.vite-plus/env` (POSIX shell — bash/zsh) with `vp()` wrapper function
-/// - `~/.vite-plus/env.fish` (fish shell) with `vp` wrapper function
-/// - `~/.vite-plus/env.nu` (Nushell) with `vp env use` wrapper function
-/// - `~/.vite-plus/env.ps1` (PowerShell) with PATH setup + `vp` function
-/// - `~/.vite-plus/bin/vp-use.cmd` (cmd.exe wrapper for `vp env use`)
-async fn create_env_files(vite_plus_home: &vite_path::AbsolutePath) -> Result<(), Error> {
-    let bin_path = vite_plus_home.join("bin");
-
-    // Use $HOME-relative path if install dir is under HOME (like rustup's ~/.cargo/env)
-    // This makes the env file portable across sessions where HOME may differ
-    let home_dir = vite_shared::EnvConfig::get().user_home;
-    let to_ref = |path: &vite_path::AbsolutePath| -> String {
-        home_dir
-            .as_ref()
-            .and_then(|h| path.as_path().strip_prefix(h).ok())
-            .map(|s| {
-                // Normalize to forward slashes for $HOME/... paths (POSIX-style)
-                format!("$HOME/{}", s.display().to_string().replace('\\', "/"))
-            })
-            .unwrap_or_else(|| path.as_path().display().to_string())
-    };
-    let bin_path_ref = to_ref(&bin_path);
-    // Nushell requires `~` instead of `$HOME` in string literals — `$HOME` is not expanded
-    // at parse time, so PATH entries would contain a literal "$HOME/..." segment.
-    let bin_path_ref_nu = bin_path_ref.replace("$HOME/", "~/");
-
-    // POSIX env file (bash/zsh)
-    // When sourced multiple times, removes existing entry and re-prepends to front
-    // Uses parameter expansion to split PATH around the bin entry in O(1) operations
-    // Includes vp() shell function wrapper for `vp env use` (evals stdout)
-    // Includes shell completion support
-    let env_content = r#"#!/bin/sh
+// POSIX env file (bash/zsh)
+// When sourced multiple times, removes existing entry and re-prepends to front
+// Uses parameter expansion to split PATH around the bin entry in O(1) operations
+// Includes vp() shell function wrapper for `vp env use` (evals stdout)
+// Includes shell completion support
+const ENV_TEMPLATE_POSIX: &str = r#"#!/bin/sh
 # Vite+ environment setup (https://viteplus.dev)
 __vp_bin="__VP_BIN__"
 case ":${PATH}:" in
@@ -523,13 +515,9 @@ elif [ -n "$ZSH_VERSION" ] && type compdef >/dev/null 2>&1; then
     compdef _vpr_complete vpr
     '
 fi
-"#
-    .replace("__VP_BIN__", &bin_path_ref);
-    let env_file = vite_plus_home.join("env");
-    tokio::fs::write(&env_file, env_content).await?;
+"#;
 
-    // Fish env file with vp wrapper function
-    let env_fish_content = r#"# Vite+ environment setup (https://viteplus.dev)
+const ENV_TEMPLATE_FISH: &str = r#"# Vite+ environment setup (https://viteplus.dev)
 set -l __vp_idx (contains -i -- __VP_BIN__ $PATH)
 and set -e PATH[$__vp_idx]
 set -gx PATH __VP_BIN__ $PATH
@@ -558,15 +546,12 @@ function __vpr_complete
     VP_COMPLETE=fish command vp -- vp run $tokens[2..] $current
 end
 complete -c vpr --keep-order --exclusive --arguments "(__vpr_complete)"
-"#
-    .replace("__VP_BIN__", &bin_path_ref);
-    let env_fish_file = vite_plus_home.join("env.fish");
-    tokio::fs::write(&env_fish_file, env_fish_content).await?;
+"#;
 
-    // Nushell env file with vp wrapper function.
-    // Completions delegate to Fish dynamically (VP_COMPLETE=fish) because clap_complete_nushell
-    // generates multiple rest params (e.g. for `vp install`), which Nushell does not support.
-    let env_nu_content = r#"# Vite+ environment setup (https://viteplus.dev)
+// Nushell env file with vp wrapper function.
+// Completions delegate to Fish dynamically (VP_COMPLETE=fish) because clap_complete_nushell
+// generates multiple rest params (e.g. for `vp install`), which Nushell does not support.
+const ENV_TEMPLATE_NU: &str = r#"# Vite+ environment setup (https://viteplus.dev)
 $env.PATH = ($env.PATH | where { $in != "__VP_BIN__" } | prepend "__VP_BIN__")
 
 # Shell function wrapper: intercepts `vp env use` to parse its stdout,
@@ -624,13 +609,9 @@ def "nu-complete vpr" [context: string] {
     }
 }
 export extern "vpr" [...args: string@"nu-complete vpr"]
-"#
-    .replace("__VP_BIN__", &bin_path_ref_nu);
-    let env_nu_file = vite_plus_home.join("env.nu");
-    tokio::fs::write(&env_nu_file, env_nu_content).await?;
+"#;
 
-    // PowerShell env file
-    let env_ps1_content = r#"# Vite+ environment setup (https://viteplus.dev)
+const ENV_TEMPLATE_PS1: &str = r#"# Vite+ environment setup (https://viteplus.dev)
 $__vp_bin = "__VP_BIN_WIN__"
 if ($env:Path -split ';' -notcontains $__vp_bin) {
     $env:Path = "$__vp_bin;$env:Path"
@@ -689,19 +670,61 @@ $__vpr_comp = {
 Register-ArgumentCompleter -Native -CommandName vpr -ScriptBlock $__vpr_comp
 "#;
 
-    // For PowerShell, use the actual absolute path (not $HOME-relative)
-    let bin_path_win = bin_path.as_path().display().to_string();
-    let env_ps1_content = env_ps1_content.replace("__VP_BIN_WIN__", &bin_path_win);
-    let env_ps1_file = vite_plus_home.join("env.ps1");
-    tokio::fs::write(&env_ps1_file, env_ps1_content).await?;
+// cmd.exe wrapper for `vp env use` (cmd.exe cannot define shell functions).
+// Users run `vp-use 24` in cmd.exe instead of `vp env use 24`.
+const VP_USE_CMD_CONTENT: &str = "@echo off\r\nset VP_ENV_USE_EVAL_ENABLE=1\r\nfor /f \"delims=\" %%i in ('%~dp0..\\current\\bin\\vp.exe env use %*') do %%i\r\nset VP_ENV_USE_EVAL_ENABLE=\r\n";
 
-    // cmd.exe wrapper for `vp env use` (cmd.exe cannot define shell functions)
-    // Users run `vp-use 24` in cmd.exe instead of `vp env use 24`
-    let vp_use_cmd_content = "@echo off\r\nset VP_ENV_USE_EVAL_ENABLE=1\r\nfor /f \"delims=\" %%i in ('%~dp0..\\current\\bin\\vp.exe env use %*') do %%i\r\nset VP_ENV_USE_EVAL_ENABLE=\r\n";
-    // Only write if bin directory exists (it may not during --env-only)
+/// Render the env-file content for `shell` against `vite_plus_home`.
+fn render_env_content(shell: EnvShell, vite_plus_home: &vite_path::AbsolutePath) -> String {
+    let bin_path = vite_plus_home.join("bin");
+
+    // Use $HOME-relative path if install dir is under HOME (like rustup's ~/.cargo/env).
+    // This makes the env file portable across sessions where HOME may differ.
+    let home_dir = vite_shared::EnvConfig::get().user_home;
+    let bin_path_ref = home_dir
+        .as_ref()
+        .and_then(|h| bin_path.as_path().strip_prefix(h).ok())
+        .map(|s| {
+            // Normalize to forward slashes for $HOME/... paths (POSIX-style)
+            format!("$HOME/{}", s.display().to_string().replace('\\', "/"))
+        })
+        .unwrap_or_else(|| bin_path.as_path().display().to_string());
+
+    match shell {
+        EnvShell::Posix => ENV_TEMPLATE_POSIX.replace("__VP_BIN__", &bin_path_ref),
+        EnvShell::Fish => ENV_TEMPLATE_FISH.replace("__VP_BIN__", &bin_path_ref),
+        EnvShell::Nu => {
+            // Nushell requires `~` instead of `$HOME` in string literals — `$HOME` is not
+            // expanded at parse time, so PATH entries would contain a literal "$HOME/...".
+            let bin_path_ref_nu = bin_path_ref.replace("$HOME/", "~/");
+            ENV_TEMPLATE_NU.replace("__VP_BIN__", &bin_path_ref_nu)
+        }
+        EnvShell::Powershell => {
+            // PowerShell uses the actual absolute path (not $HOME-relative)
+            let bin_path_win = bin_path.as_path().display().to_string();
+            ENV_TEMPLATE_PS1.replace("__VP_BIN_WIN__", &bin_path_win)
+        }
+    }
+}
+
+/// Create env files with PATH guard (prevents duplicate PATH entries).
+///
+/// Creates:
+/// - `~/.vite-plus/env` (POSIX shell — bash/zsh) with `vp()` wrapper function
+/// - `~/.vite-plus/env.fish` (fish shell) with `vp` wrapper function
+/// - `~/.vite-plus/env.nu` (Nushell) with `vp env use` wrapper function
+/// - `~/.vite-plus/env.ps1` (PowerShell) with PATH setup + `vp` function
+/// - `~/.vite-plus/bin/vp-use.cmd` (cmd.exe wrapper for `vp env use`)
+async fn create_env_files(vite_plus_home: &vite_path::AbsolutePath) -> Result<(), Error> {
+    for shell in [EnvShell::Posix, EnvShell::Fish, EnvShell::Nu, EnvShell::Powershell] {
+        let content = render_env_content(shell, vite_plus_home);
+        tokio::fs::write(vite_plus_home.join(shell.env_file_name()), content).await?;
+    }
+
+    // Only write the cmd wrapper if bin directory exists (it may not during --env-only)
+    let bin_path = vite_plus_home.join("bin");
     if tokio::fs::try_exists(&bin_path).await.unwrap_or(false) {
-        let vp_use_cmd_file = bin_path.join("vp-use.cmd");
-        tokio::fs::write(&vp_use_cmd_file, vp_use_cmd_content).await?;
+        tokio::fs::write(bin_path.join("vp-use.cmd"), VP_USE_CMD_CONTENT).await?;
     }
 
     Ok(())

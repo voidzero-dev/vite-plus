@@ -959,9 +959,10 @@ mod tests {
     async fn test_resolve_version_session_file_takes_priority_over_node_version() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _guard = vite_shared::EnvConfig::test_guard(
-            vite_shared::EnvConfig::for_test_with_home(temp_dir.path()),
-        );
+        let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig {
+            is_ci: cfg!(windows),
+            ..vite_shared::EnvConfig::for_test_with_home(temp_dir.path())
+        });
 
         // Create .node-version file
         tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
@@ -1029,9 +1030,10 @@ mod tests {
     async fn test_session_file_source_accepted_by_install_validation() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-        let _guard = vite_shared::EnvConfig::test_guard(
-            vite_shared::EnvConfig::for_test_with_home(temp_dir.path()),
-        );
+        let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig {
+            is_ci: cfg!(windows),
+            ..vite_shared::EnvConfig::for_test_with_home(temp_dir.path())
+        });
 
         // Write session version file
         write_session_version("22.0.0").await.unwrap();

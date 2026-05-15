@@ -136,7 +136,7 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
         };
     }
 
-    // No flags provided - show unified help to match `vp env --help`.
+    // No subcommand provided - show unified help to match `vp env --help`.
     if !crate::help::print_unified_clap_help_for_path(&["env"]) {
         // Fallback to clap's built-in help printer if unified rendering fails.
         use clap::CommandFactory;

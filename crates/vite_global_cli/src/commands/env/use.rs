@@ -12,7 +12,10 @@ use std::process::ExitStatus;
 
 use vite_path::AbsolutePathBuf;
 
-use super::config::{self, VERSION_ENV_VAR};
+use super::{
+    config::{self, VERSION_ENV_VAR},
+    exit_status,
+};
 use crate::{
     commands::shell::{Shell, detect_shell},
     error::Error,
@@ -49,6 +52,19 @@ fn has_eval_wrapper() -> bool {
     vite_shared::EnvConfig::get().env_use_eval_enable
 }
 
+fn can_use_session_file() -> bool {
+    cfg!(not(windows)) || vite_shared::EnvConfig::get().is_ci
+}
+
+fn print_windows_eval_wrapper_required() {
+    eprintln!(
+        "vp env use on Windows requires the Vite+ PowerShell wrapper to affect only the current shell session."
+    );
+    eprintln!("Add this line to your PowerShell $PROFILE:");
+    eprintln!("  . \"$env:USERPROFILE\\.vite-plus\\env.ps1\"");
+    eprintln!("Then dot-source it now (or open a new PowerShell session) to load the wrapper.");
+}
+
 /// Execute the `vp env use` command.
 pub async fn execute(
     cwd: AbsolutePathBuf,
@@ -59,12 +75,15 @@ pub async fn execute(
 ) -> Result<ExitStatus, Error> {
     let shell = detect_shell();
 
-    // Handle --unset: remove session override
+    // Handle --unset: remove session override.
+    // Always delete the session file: on Windows it lives under VP_HOME and can
+    // leak across shell windows, so even eval mode must clean it up.
     if unset {
+        config::delete_session_version().await?;
         if has_eval_wrapper() {
             println!("{}", format_unset(&shell));
-        } else {
-            config::delete_session_version().await?;
+        } else if !can_use_session_file() {
+            print_windows_eval_wrapper_required();
         }
         eprintln!("Reverted to file-based Node.js version resolution");
         return Ok(ExitStatus::default());
@@ -79,10 +98,13 @@ pub async fn execute(
         (resolved, format!("{ver}"))
     } else {
         // No version argument - unset session override first
+        config::delete_session_version().await?;
         if has_eval_wrapper() {
             println!("{}", format_unset(&shell));
-        } else {
-            config::delete_session_version().await?;
+        } else if !can_use_session_file() {
+            eprintln!("Reverted to file-based Node.js version resolution");
+            print_windows_eval_wrapper_required();
+            return Ok(ExitStatus::default());
         }
         // Now resolve from project files (not from session override)
         let resolution = config::resolve_version_from_files(&cwd).await?;
@@ -101,7 +123,11 @@ pub async fn execute(
         if current.as_deref() == Some(&resolved_version) {
             // Already active — idempotent, skip stderr status message
             if has_eval_wrapper() {
+                config::delete_session_version().await?;
                 println!("{}", format_export(&shell, &resolved_version));
+            } else if !can_use_session_file() {
+                print_windows_eval_wrapper_required();
+                return Ok(exit_status(1));
             } else {
                 config::write_session_version(&resolved_version).await?;
             }
@@ -133,8 +159,12 @@ pub async fn execute(
     }
 
     if has_eval_wrapper() {
+        config::delete_session_version().await?;
         // Output the shell command to stdout (consumed by shell wrapper's eval)
         println!("{}", format_export(&shell, &resolved_version));
+    } else if !can_use_session_file() {
+        print_windows_eval_wrapper_required();
+        return Ok(exit_status(1));
     } else {
         // No eval wrapper (CI or direct invocation) — write session file so shims can read it
         config::write_session_version(&resolved_version).await?;
@@ -276,5 +306,55 @@ mod tests {
     fn test_format_unset_nushell() {
         let result = format_unset(&Shell::NuShell);
         assert_eq!(result, "hide-env VP_NODE_VERSION");
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn test_windows_direct_use_without_eval_wrapper_does_not_write_session_file() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let cwd = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let _guard = vite_shared::EnvConfig::test_guard(
+            vite_shared::EnvConfig::for_test_with_home(temp_dir.path()),
+        );
+
+        let status = execute(cwd, Some("20.18.0".into()), false, true, false).await.unwrap();
+
+        assert_eq!(status.code(), Some(1));
+        assert!(config::read_session_version().await.is_none());
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn test_windows_ci_direct_use_writes_session_file() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let cwd = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig {
+            is_ci: true,
+            ..vite_shared::EnvConfig::for_test_with_home(temp_dir.path())
+        });
+
+        let status = execute(cwd, Some("20.18.0".into()), false, true, false).await.unwrap();
+
+        assert!(status.success());
+        assert_eq!(config::read_session_version().await.as_deref(), Some("20.18.0"));
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn test_windows_eval_wrapper_cleans_legacy_session_file() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let cwd = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig {
+            env_use_eval_enable: true,
+            vp_shell_pwsh: true,
+            ..vite_shared::EnvConfig::for_test_with_home(temp_dir.path())
+        });
+
+        config::write_session_version("22.0.0").await.unwrap();
+
+        let status = execute(cwd, Some("20.18.0".into()), false, true, false).await.unwrap();
+
+        assert!(status.success());
+        assert!(config::read_session_version().await.is_none());
     }
 }
