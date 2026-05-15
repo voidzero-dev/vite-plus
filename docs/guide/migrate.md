@@ -75,8 +75,8 @@ Migrate this project to Vite+. Vite+ replaces the current split tooling around r
 After the migration:
 
 - Confirm `vite` imports were rewritten to `vite-plus` where needed
-- Confirm `vitest/config` imports were rewritten to `vite-plus` (other `vitest` and `@vitest/browser*` imports are intentionally left as-is)
-- Remove the old `vite` dependency only after those rewrites are confirmed; keep `vitest` and any `@vitest/browser*` providers
+- Confirm `vitest` imports were rewritten to `vite-plus/test` (and `@vitest/browser*` to `vite-plus/test/browser*`) where needed
+- Remove old `vite`, `vitest`, and `@vitest/browser*` dependencies only after those rewrites are confirmed — `vite-plus` ships them as direct deps
 - Move remaining tool-specific config into the appropriate blocks in `vite.config.ts`
 
 Command mapping to keep in mind:
@@ -96,27 +96,25 @@ Summarize the migration at the end and report any manual follow-up still require
 
 ### Vitest
 
-`vp migrate` is the recommended path. It only rewrites `vitest/config` imports to `vite-plus`; all other Vitest imports are left untouched and resolve through the upstream `vitest` package as usual (`vite` is aliased to `@voidzero-dev/vite-plus-core` via overrides, so Vitest picks up the Vite+ core transparently).
-
-If you are migrating manually, update only the config entry point:
+Vitest is automatically migrated through `vp migrate`. `vite-plus` re-exports upstream `vitest@4.x` under `vite-plus/test*` (including the browser-provider subpaths), so a single `vite-plus` install is enough — you no longer need to install `vitest` or any `@vitest/browser*` provider directly. If you are migrating manually, update all the imports to `vite-plus/test*` instead:
 
 ```ts
 // before
 import { defineConfig } from 'vitest/config';
+import { describe, expect, it, vi } from 'vitest';
+import { playwright } from '@vitest/browser-playwright';
+
+const { page } = await import('@vitest/browser/context');
 
 // after
 import { defineConfig } from 'vite-plus';
+import { describe, expect, it, vi } from 'vite-plus/test';
+import { playwright } from 'vite-plus/test/browser-playwright';
+
+const { page } = await import('vite-plus/test/browser/context');
 ```
 
-Runtime imports stay as-is:
-
-```ts
-import { describe, expect, it, vi } from 'vitest';
-
-const { page } = await import('@vitest/browser/context');
-```
-
-Do not rewrite bare `vitest`, `vitest/*` subpaths, or `@vitest/browser*` — Vitest's mock hoister requires the literal string `'vitest'`, and the browser/provider subpaths are not re-exported by `vite-plus`.
+`declare module 'vitest'` / `declare module '@vitest/browser*'` augmentations are intentionally **not** rewritten — `vite-plus/test*` is a thin re-export of upstream `vitest*`, so type augmentations have to target the upstream module identity to merge correctly. Leave those `declare module` statements pointing at `'vitest'` / `'@vitest/browser*'`.
 
 ### tsdown
 

@@ -90,15 +90,22 @@ export type * from '@voidzero-dev/vite-plus-core/types/importMeta.d.ts';
 
 ### Step 4: Test Package Export Sync (`syncTestPackageExports`)
 
-Reads vitest's exports and creates shim files that re-export everything under `./test/*`:
+Reads vitest's exports plus the three `@vitest/browser-*` provider packages and creates shim files that re-export everything under `./test/*`:
 
 ```typescript
-// For each vitest export like "./browser-playwright"
-// Creates a shim file: dist/test/browser-playwright.js
-export * from 'vitest/browser-playwright';
+// For each vitest export like "./node"
+// Creates a shim file: dist/test/node.js
+export * from 'vitest/node';
+
+// For each @vitest/browser-* provider, two shim surfaces are projected:
+//   dist/test/browser-playwright.js          (matches old wrapper path)
+//   dist/test/browser/providers/playwright.js (alias path)
+export * from '@vitest/browser-playwright';
 ```
 
-**Input**: resolved `vitest/package.json` exports (resolved via `createRequire`)
+Provider `.d.ts` shims are NOT bare re-exports — see the [Provider Type Identity](#why-provider-dts-shims-are-inlined) note below.
+
+**Input**: resolved `vitest/package.json` exports plus each `@vitest/browser-*` package's exports (all resolved via `createRequire`)
 **Output**: `dist/test/*.js`, `dist/test/*.d.ts`, updated `package.json` exports
 
 ---
@@ -354,7 +361,23 @@ Every entry under vitest's own `exports` is shimmed under `./test/*` (wildcard e
 | `vitest/config`    | `vite-plus/test/config`    |
 | `vitest/reporters` | `vite-plus/test/reporters` |
 
-The full set is regenerated on every build from the upstream vitest `package.json`, so the exact list tracks vitest itself. Browser provider packages (`@vitest/browser-playwright`, `@vitest/browser-preview`, `@vitest/browser-webdriverio`) and `@vitest/browser/context` are **not** re-exported — consume those directly from their original specifiers.
+The full set is regenerated on every build from the upstream vitest `package.json`, so the exact list tracks vitest itself.
+
+In addition to vitest's own exports, the three `@vitest/browser-*` provider packages are projected under two parallel surfaces so existing user code keeps resolving after the deleted `@voidzero-dev/vite-plus-test` wrapper:
+
+| Provider Package              | CLI Package Exports                                                         |
+| ----------------------------- | --------------------------------------------------------------------------- |
+| `@vitest/browser-playwright`  | `vite-plus/test/browser-playwright`, `vite-plus/test/browser/providers/playwright`   |
+| `@vitest/browser-preview`     | `vite-plus/test/browser-preview`, `vite-plus/test/browser/providers/preview`         |
+| `@vitest/browser-webdriverio` | `vite-plus/test/browser-webdriverio`, `vite-plus/test/browser/providers/webdriverio` |
+
+Each provider's own subpaths (e.g. `./context`) are mirrored under both alias prefixes.
+
+#### Why provider d.ts shims are inlined
+
+Provider `.d.ts` shims are NOT plain `export * from '@vitest/browser-playwright'` re-exports — they inline the upstream `.d.ts` content with `vitest/node` / `vitest/browser` / `@vitest/browser*` bare specifiers rewritten to relative paths inside `dist/test/`. The two private shims `dist/test/_at-vitest-browser.d.ts` and `dist/test/_at-vitest-browser/context.d.ts` re-export `@vitest/browser`/`@vitest/browser/context` and are referenced from those rewrites.
+
+This avoids a pnpm-edge type-identity split: when the upstream `.d.ts` is loaded by reference (`export * from '@vitest/browser-playwright'`), TypeScript resolves its internal `import { BrowserProvider } from 'vitest/node'` through the provider package's own pnpm-edge, which can be a different vitest copy than the one a user's `vite.config.ts` sees through `vite-plus`. The mismatch produces two structurally identical but nominally distinct `BrowserProvider` types, so `provider: playwright()` fails the user's typecheck. Rewriting the specifiers routes every type import through vite-plus's own subpath shims, guaranteeing a single vitest identity across the user's whole config.
 
 ### Conditional Export Handling
 
