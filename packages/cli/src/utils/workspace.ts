@@ -185,14 +185,9 @@ export function updateWorkspaceConfig(projectPath: string, workspaceInfo: Worksp
   }
 
   // Derive pattern from project path (e.g., "packages/my-app" -> "packages/*", "website" -> "website", "foo/bar/app" -> "foo/bar/*")
-  let pattern = path.dirname(projectPath);
-  if (!pattern) {
-    // "website" -> "website"
-    pattern = projectPath;
-  } else {
-    // "foo/bar/app" -> "foo/bar/*"
-    pattern = `${pattern}/*`;
-  }
+  const parentDir = path.dirname(projectPath);
+  // path.dirname returns '.' for single-segment paths, treat that as no parent
+  const pattern = parentDir === '.' ? projectPath : `${parentDir}/*`;
 
   if (workspaceInfo.packageManager === PackageManager.pnpm) {
     editYamlFile(path.join(workspaceInfo.rootDir, 'pnpm-workspace.yaml'), (doc) => {
