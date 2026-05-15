@@ -5,7 +5,7 @@
 
 use std::{ffi::OsStr, process::ExitStatus};
 
-use clap::{CommandFactory, FromArgMatches, Parser, Subcommand, ValueEnum};
+use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
 use clap_complete::ArgValueCompleter;
 use tokio::runtime::Runtime;
 use vite_path::AbsolutePathBuf;
@@ -247,7 +247,7 @@ Examples:
     vp env print                  # Print shell snippet for this session
 
   PowerShell (add to $PROFILE):
-    vp env profile --shell powershell | Out-String | Invoke-Expression
+    . \"$env:USERPROFILE\\.vite-plus\\env.ps1\"
 
   Manage:
     vp env pin lts                # Pin to latest LTS version
@@ -277,19 +277,16 @@ pub struct EnvArgs {
     pub command: Option<EnvSubcommands>,
 }
 
-/// Shell syntax for `vp env profile` output.
-#[derive(Clone, Copy, Debug, ValueEnum)]
+/// Shells that get a generated `~/.vite-plus/env.*` setup script.
+#[derive(Clone, Copy, Debug)]
 pub enum EnvShell {
     /// POSIX shell (bash, zsh, sh)
-    #[value(alias = "bash", alias = "zsh", alias = "sh")]
     Posix,
     /// Fish shell
     Fish,
     /// Nushell
-    #[value(alias = "nushell")]
     Nu,
     /// PowerShell
-    #[value(alias = "pwsh", alias = "power-shell")]
     Powershell,
 }
 
@@ -315,15 +312,8 @@ pub enum EnvSubcommands {
         json: bool,
     },
 
-    /// Print PATH snippet for the current session (use `profile` for `$PROFILE`-style setup)
+    /// Print shell snippet to set environment for current session
     Print,
-
-    /// Print the full shell setup script for `$PROFILE`/rc-file evaluation
-    Profile {
-        /// Target shell syntax (defaults to the auto-detected current shell)
-        #[arg(long, value_enum)]
-        shell: Option<EnvShell>,
-    },
 
     /// Set or show the global default Node.js version
     Default {

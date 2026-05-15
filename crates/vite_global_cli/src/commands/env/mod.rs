@@ -27,7 +27,7 @@ use std::process::ExitStatus;
 use vite_path::AbsolutePathBuf;
 
 use crate::{
-    cli::{EnvArgs, EnvShell, EnvSubcommands},
+    cli::{EnvArgs, EnvSubcommands},
     commands::shell::{Shell, detect_shell},
     error::Error,
 };
@@ -58,7 +58,6 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
         return match subcommand {
             crate::cli::EnvSubcommands::Current { json } => current::execute(cwd, json).await,
             crate::cli::EnvSubcommands::Print => print_env(cwd).await,
-            crate::cli::EnvSubcommands::Profile { shell } => print_profile(shell),
             crate::cli::EnvSubcommands::Default { version } => default::execute(cwd, version).await,
             crate::cli::EnvSubcommands::On => on::execute().await,
             crate::cli::EnvSubcommands::Off => off::execute().await,
@@ -150,22 +149,6 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
             .print_help()
             .ok();
     }
-    Ok(ExitStatus::default())
-}
-
-/// Print the full shell setup script (`vp env profile`).
-///
-/// Pure: no disk I/O, safe to run on every shell startup via
-/// `vp env profile --shell powershell | Out-String | Invoke-Expression` in `$PROFILE`.
-fn print_profile(shell: Option<EnvShell>) -> Result<ExitStatus, Error> {
-    let vite_plus_home = config::get_vp_home()?;
-    let shell = shell.unwrap_or_else(|| match detect_shell() {
-        Shell::Fish => EnvShell::Fish,
-        Shell::NuShell => EnvShell::Nu,
-        Shell::PowerShell => EnvShell::Powershell,
-        Shell::Posix | Shell::Cmd => EnvShell::Posix,
-    });
-    print!("{}", setup::render_env_content(shell, &vite_plus_home));
     Ok(ExitStatus::default())
 }
 

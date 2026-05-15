@@ -60,9 +60,9 @@ fn print_windows_eval_wrapper_required() {
     eprintln!(
         "vp env use on Windows requires the Vite+ PowerShell wrapper to affect only the current shell session."
     );
-    eprintln!("Run this in PowerShell first:");
-    eprintln!("  vp env profile --shell powershell | Out-String | Invoke-Expression");
-    eprintln!("Or add that line to your PowerShell $PROFILE.");
+    eprintln!("Add this line to your PowerShell $PROFILE:");
+    eprintln!("  . \"$env:USERPROFILE\\.vite-plus\\env.ps1\"");
+    eprintln!("Then start a new PowerShell session.");
 }
 
 /// Execute the `vp env use` command.

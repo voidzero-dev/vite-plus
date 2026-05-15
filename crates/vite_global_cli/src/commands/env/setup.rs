@@ -654,13 +654,7 @@ Register-ArgumentCompleter -Native -CommandName vpr -ScriptBlock $__vpr_comp
 const VP_USE_CMD_CONTENT: &str = "@echo off\r\nset VP_ENV_USE_EVAL_ENABLE=1\r\nfor /f \"delims=\" %%i in ('%~dp0..\\current\\bin\\vp.exe env use %*') do %%i\r\nset VP_ENV_USE_EVAL_ENABLE=\r\n";
 
 /// Render the env-file content for `shell` against `vite_plus_home`.
-///
-/// Pure: no disk I/O. Used by both `create_env_files` (writes the result
-/// to ~/.vite-plus/env.*) and `vp env profile` (prints to stdout).
-pub(crate) fn render_env_content(
-    shell: EnvShell,
-    vite_plus_home: &vite_path::AbsolutePath,
-) -> String {
+fn render_env_content(shell: EnvShell, vite_plus_home: &vite_path::AbsolutePath) -> String {
     let bin_path = vite_plus_home.join("bin");
 
     // Use $HOME-relative path if install dir is under HOME (like rustup's ~/.cargo/env).
@@ -749,7 +743,7 @@ fn print_path_instructions(bin_dir: &vite_path::AbsolutePath) {
     println!();
     println!("  For PowerShell, add to your $PROFILE:");
     println!();
-    println!("  vp env profile --shell powershell | Out-String | Invoke-Expression");
+    println!("  . \"$env:USERPROFILE\\.vite-plus\\env.ps1\"");
     println!();
     println!("  For IDE support (VS Code, Cursor), ensure bin directory is in system PATH:");
 

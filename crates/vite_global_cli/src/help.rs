@@ -507,14 +507,7 @@ fn env_help_doc() -> HelpDoc {
                         "off",
                         "Enable system-first mode - shims prefer system Node.js, fallback to managed",
                     ),
-                    row(
-                        "print",
-                        "Print PATH snippet for the current session (use `profile` for `$PROFILE`-style setup)",
-                    ),
-                    row(
-                        "profile",
-                        "Print the full shell setup script for `$PROFILE`/rc-file evaluation",
-                    ),
+                    row("print", "Print shell snippet to set environment for current session"),
                 ],
             ),
             section_rows(
@@ -557,7 +550,7 @@ fn env_help_doc() -> HelpDoc {
                     "    vp env print                  # Print shell snippet for this session",
                     "",
                     "  PowerShell (add to $PROFILE):",
-                    "    vp env profile --shell powershell | Out-String | Invoke-Expression",
+                    "    . \"$env:USERPROFILE\\.vite-plus\\env.ps1\"",
                     "",
                     "  Manage:",
                     "    vp env pin lts                # Pin to latest LTS version",

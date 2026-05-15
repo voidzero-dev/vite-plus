@@ -343,11 +343,10 @@ Usage: vp env [COMMAND]
 Manage Node.js versions
 
 Setup:
-  setup    Create or update shims in VP_HOME/bin
-  on       Enable managed mode - shims always use vite-plus managed Node.js
-  off      Enable system-first mode - shims prefer system Node.js, fallback to managed
-  print    Print PATH snippet for the current session (use `profile` for `$PROFILE`-style setup)
-  profile  Print the full shell setup script for `$PROFILE`/rc-file evaluation
+  setup  Create or update shims in VP_HOME/bin
+  on     Enable managed mode - shims always use vite-plus managed Node.js
+  off    Enable system-first mode - shims prefer system Node.js, fallback to managed
+  print  Print shell snippet to set environment for current session
 
 Manage:
   default    Set or show the global default Node.js version
@@ -372,7 +371,7 @@ Examples:
     vp env print                  # Print shell snippet for this session
 
   PowerShell (add to $PROFILE):
-    vp env profile --shell powershell | Out-String | Invoke-Expression
+    . "$env:USERPROFILE\.vite-plus\env.ps1"
 
   Manage:
     vp env pin lts                # Pin to latest LTS version
