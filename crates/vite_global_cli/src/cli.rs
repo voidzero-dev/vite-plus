@@ -246,9 +246,6 @@ Examples:
     vp env on                     # Use vite-plus managed Node.js
     vp env print                  # Print shell snippet for this session
 
-  PowerShell (add to $PROFILE):
-    . \"$env:USERPROFILE\\.vite-plus\\env.ps1\"
-
   Manage:
     vp env pin lts                # Pin to latest LTS version
     vp env install                # Install version from .node-version / package.json
