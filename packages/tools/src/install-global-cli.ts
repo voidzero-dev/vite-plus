@@ -217,9 +217,7 @@ function pathsEqual(a: string, b: string | undefined): boolean {
 
   const resolvedA = path.resolve(a);
   const resolvedB = path.resolve(b);
-  return isWindows
-    ? resolvedA.toLowerCase() === resolvedB.toLowerCase()
-    : resolvedA === resolvedB;
+  return isWindows ? resolvedA.toLowerCase() === resolvedB.toLowerCase() : resolvedA === resolvedB;
 }
 
 function isWindowsLockedExecutableError(err: unknown): boolean {
