@@ -1,3 +1,20 @@
+> vp pm config --help # should show help
+Usage: vp pm config <COMMAND>
+
+Manage package manager configuration
+
+Commands:
+  list    List all configuration
+  get     Get configuration value
+  set     Set configuration value
+  delete  Delete configuration key
+
+Options:
+  -h, --help  Print help
+
+Documentation: https://viteplus.dev/guide/install
+
+
 > # vp pm config set vite-plus-pm-config-test-key test-value --location project # npm set will check valid keys start from npm v9, see https://github.com/npm/cli/issues/5852
 > vp pm config get vite-plus-pm-config-test-key --location project # should get config value from project scope
 test-value
