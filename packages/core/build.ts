@@ -36,6 +36,9 @@ const rolldownPluginUtilsDir = resolve(
   '..',
   'rolldown',
   'packages',
+  'rolldown',
+  'node_modules',
+  '@rolldown',
   'pluginutils',
 );
 
