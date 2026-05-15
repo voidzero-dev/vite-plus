@@ -3,6 +3,7 @@
 AGENTS.md
 README.md
 apps
+bunfig.toml
 package.json
 packages
 tsconfig.json
