@@ -935,7 +935,10 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     await runViteFmt(fullPath, options.interactive, undefined, { silent: compactOutput });
     if (shouldSetupGit) {
       updateCreateProgress('Creating initial commit');
-      await createInitialCommit(fullPath);
+      const committed = await createInitialCommit(fullPath);
+      if (!committed) {
+        prompts.log.warn('Initial commit failed. Check your git user.name/user.email config');
+      }
     }
     clearCreateProgress();
     showCreateSummary({
@@ -1185,7 +1188,10 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     await runViteFmt(fullPath, options.interactive, undefined, { silent: compactOutput });
     if (shouldSetupGit) {
       updateCreateProgress('Creating initial commit');
-      await createInitialCommit(fullPath);
+      const committed = await createInitialCommit(fullPath);
+      if (!committed) {
+        prompts.log.warn('Initial commit failed. Check your git user.name/user.email config');
+      }
     }
   }
 
