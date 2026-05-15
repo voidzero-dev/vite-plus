@@ -26,7 +26,7 @@ import {
   type ReplacementRule,
 } from './build-support/rewrite-module-specifiers.js';
 import pkgJson from './package.json' with { type: 'json' };
-import viteRolldownConfig from './vite-rolldown.config.js';
+import viteRolldownConfig from '../../vite/packages/vite/rolldown.config.js';
 
 const projectDir = join(fileURLToPath(import.meta.url), '..');
 
