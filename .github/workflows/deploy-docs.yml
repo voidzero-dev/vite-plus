@@ -1,5 +1,7 @@
 name: Deploy Docs
 
+permissions: {}
+
 on:
   push:
     branches: [main]
@@ -10,11 +12,8 @@ on:
       - '.github/workflows/deploy-docs.yml'
   workflow_dispatch:
 
-permissions:
-  contents: read
-
 concurrency:
-  group: deploy-docs-${{ github.ref }}
+  group: deploy-docs
   cancel-in-progress: false
 
 defaults:
@@ -25,6 +24,10 @@ jobs:
   deploy:
     if: github.repository == 'voidzero-dev/vite-plus'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      VOID_PROJECT: viteplus
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
@@ -32,6 +35,7 @@ jobs:
         with:
           cache: true
           working-directory: docs
+          cache-dependency-path: docs/pnpm-lock.yaml
 
       - run: vp run build
         working-directory: docs
@@ -39,4 +43,3 @@ jobs:
       - run: vpx void deploy --dir docs/.vitepress/dist
         env:
           VOID_TOKEN: ${{ secrets.VOID_TOKEN }}
-          VOID_PROJECT: viteplus
