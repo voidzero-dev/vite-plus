@@ -42,15 +42,6 @@ runs:
           export VERSION=$(npm view --json rolldown | jq -r '.version')
           echo "Warning: rolldown source not found, using npm latest: ${VERSION}"
         fi
-        # Workaround: the published rolldown@1.0.1 binding enables mimalloc v3,
-        # which panics with "blocking task ran twice" (tokio) when tsdown drives
-        # rolldown via vp pack. Downgrade the binding to 1.0.1's predecessor
-        # until rolldown ships a fix. The 1.0.0 binding is ABI-compatible with
-        # the 1.0.1 JS sources for the surface vite-plus uses.
-        if [ "${VERSION}" = "1.0.1" ]; then
-          echo "Workaround: forcing binding version 1.0.0 (see download-rolldown-binaries comment)"
-          export VERSION="1.0.0"
-        fi
         npm pack "@rolldown/binding-${TARGET}@${VERSION}"
         tar -xzf "rolldown-binding-${TARGET}-${VERSION}.tgz"
         if [ -d "./rolldown/packages/rolldown/src" ]; then
