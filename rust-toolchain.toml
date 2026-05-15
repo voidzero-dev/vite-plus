@@ -2,5 +2,13 @@
 # Needed nightly features:
 # - cargo `Z-bindeps` to build and embed preload shared libraries as dependencies of fspy
 # - `windows_process_extensions_main_thread_handle` to get the main thread handle for Detours injection
+#
+# Why this date in particular:
+# - oxc_transformer (>=0.130) uses `if let` guards inside match arms (`if_let_guard`,
+#   rust-lang/rust#51114). That feature stabilized in rustc 1.94 (released 2026-01-29),
+#   so any nightly from late January 2026 onward compiles it. Earlier pins (e.g.
+#   nightly-2025-12-11) hit E0658 during `cargo clippy --all-features`.
+# Bump in lockstep with upstream oxc/rolldown updates; pick any nightly past the
+# stabilization date for the features the new versions use.
 channel = "nightly-2026-03-15"
 profile = "default"
