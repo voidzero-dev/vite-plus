@@ -46,6 +46,20 @@ const BROWSER_PROVIDER_PACKAGES: ReadonlyArray<{ pkg: string; short: string }> =
   { pkg: '@vitest/browser-webdriverio', short: 'webdriverio' },
 ];
 
+/**
+ * Vitest-related bare specifiers that appear in `@vitest/browser-*` d.ts files
+ * and the sub-path under `dist/test/` whose shim re-exports the same module.
+ * Longer prefixes are listed first so substring matches don't shadow them
+ * (e.g. `vitest/internal/browser` before `vitest/browser`).
+ */
+const VITEST_TYPE_SPECIFIER_REWRITES: ReadonlyArray<readonly [string, string]> = [
+  ['@vitest/browser/context', '_at-vitest-browser/context'],
+  ['@vitest/browser', '_at-vitest-browser'],
+  ['vitest/internal/browser', 'internal/browser'],
+  ['vitest/browser', 'browser'],
+  ['vitest/node', 'node'],
+];
+
 const {
   values: { ['skip-native']: skipNative, ['skip-ts']: skipTs },
 } = parseArgs({
@@ -341,6 +355,13 @@ async function syncTestPackageExports() {
     }
   }
 
+  // Private shims for `@vitest/browser` and `@vitest/browser/context`. These
+  // are referenced as relative paths from the inlined browser-provider d.ts
+  // shims so that `@vitest/browser` resolves through vite-plus's own pnpm-edge
+  // (same one that owns the `vitest` direct dep) — preventing the two-vitest
+  // type-identity split that breaks user `provider: playwright()` typechecks.
+  await writePrivateAtVitestBrowserShims(testDistDir);
+
   // Mirror upstream @vitest/browser-* provider packages under ./test/<provider> and
   // ./test/browser/providers/<short>. Existing vite-plus user code imports from these
   // paths (e.g., `vite-plus/test/browser-playwright`) and must keep resolving after
@@ -354,6 +375,7 @@ async function syncTestPackageExports() {
       continue;
     }
     const providerPkg = JSON.parse(await readFile(providerPkgPath, 'utf-8'));
+    const providerPkgRoot = dirname(providerPkgPath);
     const providerExports = (providerPkg.exports ?? {}) as Record<string, unknown>;
 
     for (const [providerExportPath, providerExportValue] of Object.entries(providerExports)) {
@@ -386,6 +408,7 @@ async function syncTestPackageExports() {
           providerExportValue,
           importSpecifier,
           testDistDir,
+          { providerPkgRoot },
         );
         if (shimExport) {
           generatedExports[cliPath] = shimExport;
@@ -544,6 +567,113 @@ type ExportValue =
     };
 
 /**
+ * Write private shims at `dist/test/_at-vitest-browser{.d.ts,/context.d.ts}`
+ * that re-export the `@vitest/browser` package. These are referenced by the
+ * inlined browser-provider d.ts shims via relative paths so all of
+ * `@vitest/browser`, `vitest/node`, etc. resolve through vite-plus's own
+ * pnpm-edge — the same edge that owns vite-plus's `vitest` direct dep.
+ * The underscore prefix marks them as private; they are not surfaced in the
+ * package.json `exports` map (TS resolves the relative paths directly).
+ */
+async function writePrivateAtVitestBrowserShims(testDistDir: string): Promise<void> {
+  await mkdir(join(testDistDir, '_at-vitest-browser'), { recursive: true });
+  await writeFile(
+    join(testDistDir, '_at-vitest-browser.d.ts'),
+    `import '@vitest/browser';\nexport * from '@vitest/browser';\n`,
+  );
+  await writeFile(
+    join(testDistDir, '_at-vitest-browser/context.d.ts'),
+    `import '@vitest/browser/context';\nexport * from '@vitest/browser/context';\n`,
+  );
+}
+
+/**
+ * Inline-copy a browser-provider's upstream `.d.ts` file into `outDtsPath` and
+ * rewrite vitest-related bare specifiers to relative paths inside the
+ * vite-plus test shim tree. See `VITEST_TYPE_SPECIFIER_REWRITES` and
+ * `writePrivateAtVitestBrowserShims` for the rationale.
+ *
+ * Specifiers that are user peer dependencies (`playwright`, `webdriverio`,
+ * `tinyrainbow`, etc.) and the `@vitest/browser-*` self-import are left bare.
+ */
+async function writeInlinedProviderDts(
+  outDtsPath: string,
+  upstreamDtsPath: string,
+  testDistDir: string,
+): Promise<void> {
+  const upstream = await readFile(upstreamDtsPath, 'utf-8');
+  const outDir = dirname(outDtsPath);
+  // Resolve to the file basename appended to the relative dir, never to the
+  // bare directory. `relative('dist/test/x/', 'dist/test/y')` returns `'../y'`
+  // but `relative('dist/test/x/', 'dist/test/y/')` returns `'..'` — TS would
+  // then look for `dist/test/y/index.d.ts` instead of `dist/test/y.d.ts`. We
+  // always emit `<relDir>/<basename>` so the basename lookup hits the file.
+  const relToShim = (sub: string): string => {
+    const r = relative(outDir, testDistDir).replaceAll('\\', '/');
+    const prefix = r === '' ? '.' : r.startsWith('.') ? r : `./${r}`;
+    return `${prefix}/${sub}`;
+  };
+  let result = upstream;
+  for (const [bare, sub] of VITEST_TYPE_SPECIFIER_REWRITES) {
+    const escaped = bare.replaceAll('/', '\\/');
+    const pattern = new RegExp(`(['"])${escaped}\\1`, 'g');
+    result = result.replaceAll(pattern, `'${relToShim(sub)}'`);
+  }
+  await mkdir(outDir, { recursive: true });
+  await writeFile(outDtsPath, result);
+}
+
+/**
+ * Resolve the upstream `.d.ts` path for a given export value. Returns null
+ * when the export does not declare a types file (runtime-only exports).
+ */
+function resolveUpstreamDtsPath(
+  providerPkgRoot: string,
+  exportValue: unknown,
+  condition: 'types' | 'require-types' = 'types',
+): string | null {
+  if (typeof exportValue === 'string') {
+    return exportValue.endsWith('.d.ts') || exportValue.endsWith('.d.cts')
+      ? join(providerPkgRoot, exportValue)
+      : null;
+  }
+  if (typeof exportValue !== 'object' || exportValue === null) {
+    return null;
+  }
+  const value = exportValue as Record<string, unknown>;
+  if (condition === 'types') {
+    if (typeof value.types === 'string') return join(providerPkgRoot, value.types);
+    if (typeof value.import === 'object' && value.import !== null) {
+      const types = (value.import as Record<string, unknown>).types;
+      if (typeof types === 'string') return join(providerPkgRoot, types);
+    }
+  } else {
+    if (typeof value.require === 'object' && value.require !== null) {
+      const types = (value.require as Record<string, unknown>).types;
+      if (typeof types === 'string') return join(providerPkgRoot, types);
+    }
+  }
+  return null;
+}
+
+async function writeShimDts(
+  outDtsPath: string,
+  importSpecifier: string,
+  upstreamDtsPath: string | null,
+  testDistDir: string,
+): Promise<void> {
+  if (upstreamDtsPath) {
+    await writeInlinedProviderDts(outDtsPath, upstreamDtsPath, testDistDir);
+    return;
+  }
+  // Include side-effect import to preserve module augmentations (e.g., toMatchSnapshot on Assertion)
+  await writeFile(
+    outDtsPath,
+    `import '${importSpecifier}';\nexport * from '${importSpecifier}';\n`,
+  );
+}
+
+/**
  * Create shim file(s) for a single export and return the export entry for package.json.
  *
  * @param shimBaseName Path under dist/test/ (e.g. 'index', 'config', 'browser-playwright/context').
@@ -551,12 +681,15 @@ type ExportValue =
  * @param testImportSpecifier The bare import specifier the shim should re-export from
  *   (e.g. 'vitest', 'vitest/node', '@vitest/browser-playwright').
  * @param distDir      Output dist/test directory.
+ * @param opts         Optional shim context. Pass `providerPkgRoot` for browser-provider
+ *                     packages to inline-copy their upstream d.ts content with specifier rewrites.
  */
 async function createShimForExport(
   shimBaseName: string,
   exportValue: unknown,
   testImportSpecifier: string,
   distDir: string,
+  opts: { providerPkgRoot?: string } = {},
 ): Promise<ExportValue | null> {
   const shimDir = join(distDir, dirname(shimBaseName));
   await mkdir(shimDir, { recursive: true });
@@ -570,11 +703,10 @@ async function createShimForExport(
     // Check if it's a type-only export
     if (exportValue.endsWith('.d.ts')) {
       const dtsPath = join(shimDirForFile, `${baseFileName}.d.ts`);
-      // Include side-effect import to preserve module augmentations (e.g., toMatchSnapshot on Assertion)
-      await writeFile(
-        dtsPath,
-        `import '${testImportSpecifier}';\nexport * from '${testImportSpecifier}';\n`,
-      );
+      const upstream = opts.providerPkgRoot
+        ? resolveUpstreamDtsPath(opts.providerPkgRoot, exportValue, 'types')
+        : null;
+      await writeShimDts(dtsPath, testImportSpecifier, upstream, distDir);
       return { types: `./dist/test/${shimBaseName}.d.ts` };
     }
 
@@ -594,6 +726,8 @@ async function createShimForExport(
         shimDirForFile,
         baseFileName,
         shimBaseName,
+        distDir,
+        opts,
       );
     }
 
@@ -602,11 +736,10 @@ async function createShimForExport(
 
     if (value.types && typeof value.types === 'string') {
       const dtsPath = join(shimDirForFile, `${baseFileName}.d.ts`);
-      // Include side-effect import to preserve module augmentations (e.g., toMatchSnapshot on Assertion)
-      await writeFile(
-        dtsPath,
-        `import '${testImportSpecifier}';\nexport * from '${testImportSpecifier}';\n`,
-      );
+      const upstream = opts.providerPkgRoot
+        ? resolveUpstreamDtsPath(opts.providerPkgRoot, value, 'types')
+        : null;
+      await writeShimDts(dtsPath, testImportSpecifier, upstream, distDir);
       (result as Record<string, string>).types = `./dist/test/${shimBaseName}.d.ts`;
     }
 
@@ -641,6 +774,8 @@ async function createConditionalShim(
   shimDir: string,
   baseFileName: string,
   shimBaseName: string,
+  distDir: string,
+  opts: { providerPkgRoot?: string } = {},
 ): Promise<ExportValue> {
   // Build entries as an array of tuples so we control insertion order explicitly.
   // Final order for flat entries: types, import (if present), require, default.
@@ -651,11 +786,10 @@ async function createConditionalShim(
   // Handle top-level types (flat structure like { types, require, default })
   if (value.types && typeof value.types === 'string' && !value.import) {
     const dtsPath = join(shimDir, `${baseFileName}.d.ts`);
-    // Include side-effect import to preserve module augmentations (e.g., toMatchSnapshot on Assertion)
-    await writeFile(
-      dtsPath,
-      `import '${testImportSpecifier}';\nexport * from '${testImportSpecifier}';\n`,
-    );
+    const upstream = opts.providerPkgRoot
+      ? resolveUpstreamDtsPath(opts.providerPkgRoot, value, 'types')
+      : null;
+    await writeShimDts(dtsPath, testImportSpecifier, upstream, distDir);
     entries.push(['types', `./dist/test/${shimBaseName}.d.ts`]);
   }
 
@@ -672,11 +806,10 @@ async function createConditionalShim(
 
       if (importValue.types && typeof importValue.types === 'string') {
         const dtsPath = join(shimDir, `${baseFileName}.d.ts`);
-        // Include side-effect import to preserve module augmentations (e.g., toMatchSnapshot on Assertion)
-        await writeFile(
-          dtsPath,
-          `import '${testImportSpecifier}';\nexport * from '${testImportSpecifier}';\n`,
-        );
+        const upstream = opts.providerPkgRoot
+          ? resolveUpstreamDtsPath(opts.providerPkgRoot, value, 'types')
+          : null;
+        await writeShimDts(dtsPath, testImportSpecifier, upstream, distDir);
         importResult.types = `./dist/test/${shimBaseName}.d.ts`;
       }
 
@@ -709,11 +842,10 @@ async function createConditionalShim(
 
       if (requireValue.types && typeof requireValue.types === 'string') {
         const dctsPath = join(shimDir, `${baseFileName}.d.cts`);
-        // Include side-effect import to preserve module augmentations (e.g., toMatchSnapshot on Assertion)
-        await writeFile(
-          dctsPath,
-          `import '${testImportSpecifier}';\nexport * from '${testImportSpecifier}';\n`,
-        );
+        const upstream = opts.providerPkgRoot
+          ? resolveUpstreamDtsPath(opts.providerPkgRoot, value, 'require-types')
+          : null;
+        await writeShimDts(dctsPath, testImportSpecifier, upstream, distDir);
         requireResult.types = `./dist/test/${shimBaseName}.d.cts`;
       }
 
