@@ -123,6 +123,64 @@ describe('rewriteMonorepo bun catalog with file: protocol', () => {
     expect(pkg.devDependencies.vite).toBe('file:/tmp/tgz/voidzero-dev-vite-plus-core-0.0.0.tgz');
   });
 
+  it('writes bunfig.toml with `peer = false` so vitest peer-dep on vite does not break install', () => {
+    // vitest@4.1.5 declares peer vite^6/^7/^8. With overrides.vite pointing at
+    // file:vite-plus-core@0.0.0 (whose package.json version does not match),
+    // bun aborts the install. pnpm/yarn/npm tolerate this; bun has no equivalent
+    // to pnpm's peerDependencyRules and only respects the `[install] peer = false`
+    // setting in bunfig.toml. The migrator must emit that file or every bun
+    // user hits `error: vite@^6.0.0 || ^7.0.0 || ^8.0.0 failed to resolve`.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'bun-monorepo',
+        workspaces: ['packages/*'],
+        packageManager: 'bun@1.3.11',
+      }),
+    );
+    rewriteMonorepo(makeWorkspaceInfo(tmpDir, PackageManager.bun), true);
+
+    const bunfigPath = path.join(tmpDir, 'bunfig.toml');
+    expect(fs.existsSync(bunfigPath)).toBe(true);
+    expect(fs.readFileSync(bunfigPath, 'utf8')).toMatch(/^\[install\][\s\S]*peer\s*=\s*false/m);
+  });
+
+  it('preserves an existing bunfig.toml `peer` setting (does not overwrite user intent)', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'bun-monorepo',
+        workspaces: ['packages/*'],
+        packageManager: 'bun@1.3.11',
+      }),
+    );
+    fs.writeFileSync(path.join(tmpDir, 'bunfig.toml'), '[install]\npeer = true\n');
+    rewriteMonorepo(makeWorkspaceInfo(tmpDir, PackageManager.bun), true);
+
+    // User's explicit `peer = true` should remain — we don't silently flip it.
+    expect(fs.readFileSync(path.join(tmpDir, 'bunfig.toml'), 'utf8')).toMatch(/peer\s*=\s*true/);
+  });
+
+  it('appends `peer = false` under an existing [install] section without `peer` setting', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'bun-monorepo',
+        workspaces: ['packages/*'],
+        packageManager: 'bun@1.3.11',
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'bunfig.toml'),
+      '[install]\nregistry = "https://registry.npmjs.org/"\n',
+    );
+    rewriteMonorepo(makeWorkspaceInfo(tmpDir, PackageManager.bun), true);
+
+    const bunfig = fs.readFileSync(path.join(tmpDir, 'bunfig.toml'), 'utf8');
+    expect(bunfig).toMatch(/registry\s*=\s*"https:\/\/registry\.npmjs\.org\/"/);
+    expect(bunfig).toMatch(/peer\s*=\s*false/);
+  });
+
   it('does not write file: paths into peer dependencies', () => {
     const pkg = {
       peerDependencies: {

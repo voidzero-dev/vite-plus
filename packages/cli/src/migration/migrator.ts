@@ -1195,6 +1195,8 @@ export function rewriteStandaloneProject(
 
   if (packageManager === PackageManager.yarn) {
     rewriteYarnrcYml(projectPath);
+  } else if (packageManager === PackageManager.bun) {
+    ensureBunfigPeerSuppression(projectPath);
   }
 
   // Merge extracted staged config into vite.config.ts, then remove lint-staged from package.json
@@ -1795,6 +1797,42 @@ function rewriteCatalogsObject(catalogs: Record<string, Record<string, string>>)
 }
 
 /**
+ * Bun rejects vitest@4.1.5's `vite^6/^7/^8` peer-dep when the user's project
+ * overrides `vite` to `@voidzero-dev/vite-plus-core` (whose package.json version
+ * does not match those ranges). pnpm/yarn/npm all tolerate this redirect; bun
+ * does not, and there is no `peerDependencyRules`-style escape hatch — only the
+ * `[install] peer = false` setting in `bunfig.toml`.
+ *
+ * `vite-plus`/`@voidzero-dev/vite-plus-core` already provide the vite surface
+ * the user needs, so disabling bun's auto-install of *missing* peers is safe in
+ * this configuration: any vitest peer that's not already pulled in transitively
+ * (jsdom, happy-dom, etc.) is marked optional upstream anyway.
+ *
+ * Writes/merges `bunfig.toml` at `projectPath` so the suppression applies on
+ * the migration's reinstall AND every subsequent `bun install` the user runs.
+ */
+function ensureBunfigPeerSuppression(projectPath: string): void {
+  const bunfigPath = path.join(projectPath, 'bunfig.toml');
+  const block = '[install]\npeer = false\n';
+  if (!fs.existsSync(bunfigPath)) {
+    fs.writeFileSync(bunfigPath, block);
+    return;
+  }
+  const existing = fs.readFileSync(bunfigPath, 'utf8');
+  // Already configured? Leave the user's setting alone — they may have set
+  // `peer = true` deliberately for some other reason and we shouldn't override.
+  if (/^\s*peer\s*=\s*(true|false)\s*$/m.test(existing)) {
+    return;
+  }
+  // Append under existing [install] section, or add a new section.
+  const installSectionRe = /^\[install\][^[]*/m;
+  const next = installSectionRe.test(existing)
+    ? existing.replace(installSectionRe, (section) => `${section.trimEnd()}\npeer = false\n`)
+    : `${existing.trimEnd()}\n\n${block}`;
+  fs.writeFileSync(bunfigPath, next);
+}
+
+/**
  * Write catalog entries to root package.json for bun.
  * Bun stores catalogs in package.json under the `catalog` key,
  * unlike pnpm which uses pnpm-workspace.yaml.
@@ -1861,6 +1899,8 @@ function rewriteBunCatalog(projectPath: string): void {
 
     return pkg;
   });
+
+  ensureBunfigPeerSuppression(projectPath);
 }
 
 /**
