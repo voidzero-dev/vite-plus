@@ -73,8 +73,8 @@ execSync(`${cli} migrate --no-agent --no-interactive`, {
     ...process.env,
     ...(forceFreshMigration ? { VP_FORCE_MIGRATE: '1' } : {}),
     VP_OVERRIDE_PACKAGES: JSON.stringify({
-      vite: `file:${tgzDir}/voidzero-dev-vite-plus-core-${vpVersion}.tgz`,
-      '@voidzero-dev/vite-plus-core': `file:${tgzDir}/voidzero-dev-vite-plus-core-${vpVersion}.tgz`,
+      vite: `file:${tgzDir}/voidzero-dev-vite-plus-core-bumped.tgz`,
+      '@voidzero-dev/vite-plus-core': `file:${tgzDir}/voidzero-dev-vite-plus-core-bumped.tgz`,
     }),
     VP_VERSION: vitePlusTgz,
   },

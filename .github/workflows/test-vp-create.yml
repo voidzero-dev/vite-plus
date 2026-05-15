@@ -95,23 +95,23 @@ jobs:
       - name: Pack packages into tgz
         run: |
           mkdir -p tmp/tgz
+          cd packages/core && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
+          cd packages/cli && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
           # Bun strictly validates override-target versions against transitive
           # peer constraints (vitest 4.1.5 declares peer `vite ^6 || ^7 || ^8`).
           # pnpm/npm/yarn don't, but bun aborts with "vite@^6.0.0 || ^7.0.0 ||
           # ^8.0.0 failed to resolve" when the override points at a 0.0.0 tgz.
-          # See https://github.com/oven-sh/bun/issues/8406. Bump core's pack-time
-          # version into the satisfied range; the file is restored after pack so
-          # the in-repo source stays at 0.0.0.
-          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('packages/core/package.json','utf8'));p.version='7.99.0';fs.writeFileSync('packages/core/package.json',JSON.stringify(p,null,2)+'\n')"
-          cd packages/core && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
-          # Restore version before packing CLI so the CLI tgz keeps the 0.0.0
-          # workspace dep (the file: override in VP_OVERRIDE_PACKAGES still
-          # redirects @voidzero-dev/vite-plus-core to the bumped tgz regardless).
-          git checkout -- packages/core/package.json
-          # Rename core tgz back to the stable 0.0.0 filename that
-          # VP_OVERRIDE_PACKAGES references.
-          mv tmp/tgz/voidzero-dev-vite-plus-core-7.99.0.tgz tmp/tgz/voidzero-dev-vite-plus-core-0.0.0.tgz
-          cd packages/cli && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
+          # See https://github.com/oven-sh/bun/issues/8406. Build a separate
+          # tgz with the same contents but an internal version that satisfies
+          # the peer range; VP_OVERRIDE_PACKAGES points the migrator at this
+          # variant. The original core-0.0.0.tgz is still needed verbatim so
+          # install-global-cli can resolve the CLI's transitive @voidzero-dev/
+          # vite-plus-core@0.0.0 dep.
+          mkdir -p tmp/core-bumped
+          tar xzf tmp/tgz/voidzero-dev-vite-plus-core-0.0.0.tgz -C tmp/core-bumped
+          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('tmp/core-bumped/package/package.json','utf8'));p.version='7.99.0';fs.writeFileSync('tmp/core-bumped/package/package.json',JSON.stringify(p,null,2)+'\n')"
+          (cd tmp/core-bumped && tar czf "$GITHUB_WORKSPACE/tmp/tgz/voidzero-dev-vite-plus-core-bumped.tgz" package)
+          rm -rf tmp/core-bumped
           # Copy vp binary for test jobs
           cp target/x86_64-unknown-linux-gnu/release/vp tmp/tgz/vp
           ls -la tmp/tgz
@@ -168,6 +168,8 @@ jobs:
           - yarn
           - bun
     env:
+      VP_OVERRIDE_PACKAGES: '{"vite":"file:${{ github.workspace }}/tmp/tgz/voidzero-dev-vite-plus-core-bumped.tgz","@voidzero-dev/vite-plus-core":"file:${{ github.workspace }}/tmp/tgz/voidzero-dev-vite-plus-core-bumped.tgz"}'
+      VP_VERSION: 'file:${{ github.workspace }}/tmp/tgz/vite-plus-0.0.0.tgz'
       # Force full dependency rewriting so the library template's existing
       # vite-plus dep gets overridden with the local tgz
       VP_FORCE_MIGRATE: '1'
@@ -184,22 +186,12 @@ jobs:
           name: vite-plus-packages
           path: tmp/tgz
 
-      - name: Resolve tgz paths
-        run: |
-          CLI_TGZ=$(ls "$GITHUB_WORKSPACE"/tmp/tgz/vite-plus-[0-9]*.tgz | head -n1)
-          CORE_TGZ=$(ls "$GITHUB_WORKSPACE"/tmp/tgz/voidzero-dev-vite-plus-core-[0-9]*.tgz | head -n1)
-          TEST_TGZ=$(ls "$GITHUB_WORKSPACE"/tmp/tgz/voidzero-dev-vite-plus-test-[0-9]*.tgz | head -n1)
-          echo "CLI_TGZ=$CLI_TGZ" >> $GITHUB_ENV
-          echo "VP_VERSION=file:$CLI_TGZ" >> $GITHUB_ENV
-          printf 'VP_OVERRIDE_PACKAGES={"vite":"file:%s","vitest":"file:%s","@voidzero-dev/vite-plus-core":"file:%s","@voidzero-dev/vite-plus-test":"file:%s"}\n' \
-            "$CORE_TGZ" "$TEST_TGZ" "$CORE_TGZ" "$TEST_TGZ" >> $GITHUB_ENV
-
       - name: Install vp CLI
         run: |
           mkdir -p target/release
           cp tmp/tgz/vp target/release/vp
           chmod +x target/release/vp
-          node $GITHUB_WORKSPACE/packages/tools/src/install-global-cli.ts --tgz "$CLI_TGZ"
+          node $GITHUB_WORKSPACE/packages/tools/src/install-global-cli.ts --tgz $GITHUB_WORKSPACE/tmp/tgz/vite-plus-0.0.0.tgz
           echo "$HOME/.vite-plus/bin" >> $GITHUB_PATH
 
       - name: Verify vp installation
@@ -282,10 +274,9 @@ jobs:
         run: |
           node -e "
             const path = require('path');
-            const expected = require('$GITHUB_WORKSPACE/packages/cli/package.json').version;
             const pkg = require(path.resolve('node_modules/vite-plus/package.json'));
-            if (pkg.version !== expected) {
-              console.error('Expected vite-plus@' + expected + ', got ' + pkg.version);
+            if (pkg.version !== '0.0.0') {
+              console.error('Expected vite-plus@0.0.0, got ' + pkg.version);
               process.exit(1);
             }
             console.log('✓ vite-plus@' + pkg.version + ' installed correctly');
