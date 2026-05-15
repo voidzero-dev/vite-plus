@@ -11,6 +11,9 @@
 #   NPM_CONFIG_REGISTRY - Custom npm registry URL (default: https://registry.npmjs.org)
 #   VP_NODE_MANAGER - Set to "yes" or "no" to skip interactive prompt (for CI/devcontainers)
 #   VP_LOCAL_TGZ - Path to local vite-plus.tgz (for development/testing)
+#   VP_PR_VERSION - PR number or commit SHA to install from pkg.pr.new
+#                   (for temporary testing of unreleased builds, e.g. VP_PR_VERSION=1569).
+#                   When set, overrides VP_VERSION and bypasses the npm registry.
 
 set -e
 
@@ -31,6 +34,10 @@ NPM_REGISTRY="${NPM_REGISTRY%/}"
 LOCAL_TGZ="${VP_LOCAL_TGZ:-}"
 # Local binary path (set by install-global-cli.ts for local dev)
 LOCAL_BINARY="${VP_LOCAL_BINARY:-}"
+# pkg.pr.new PR number or commit SHA (for temporary testing of unreleased builds)
+PR_VERSION="${VP_PR_VERSION:-}"
+# pkg.pr.new base URL for fetching tarballs and constructing dependency URLs
+PKG_PR_NEW_BASE="https://pkg.pr.new/voidzero-dev/vite-plus"
 
 # Colors for output
 RED='\033[0;31m'
@@ -842,6 +849,10 @@ main() {
   echo ""
   echo -e "Setting up VITE+..."
 
+  if [ -n "$PR_VERSION" ] && [ -n "$LOCAL_TGZ" ]; then
+    error "VP_PR_VERSION and VP_LOCAL_TGZ cannot be used together"
+  fi
+
   check_requirements
 
   local platform
@@ -857,6 +868,12 @@ main() {
     if [ "$VP_VERSION" = "latest" ] || [ "$VP_VERSION" = "test" ]; then
       VP_VERSION="local-dev"
     fi
+  elif [ -n "$PR_VERSION" ]; then
+    # pkg.pr.new mode: skip npm metadata, use a synthetic version label.
+    # Non-semver label keeps the directory out of cleanup_old_versions and
+    # makes it obvious in `~/.vite-plus/` which install is the PR build.
+    VP_VERSION="pkg-pr-new-${PR_VERSION}"
+    info "Using pkg.pr.new version: ${PR_VERSION}"
   else
     # Fetch package metadata and resolve version from npm
     get_version_from_metadata
@@ -896,10 +913,16 @@ main() {
     fi
     chmod +x "$BIN_DIR/$binary_name"
   else
-    # Download from npm registry — extract only the vp binary from CLI platform package
+    # Download CLI platform tarball — npm registry or pkg.pr.new (when PR_VERSION is set)
     get_platform_suffix "$platform"
-    local package_name="@voidzero-dev/vite-plus-cli-${PLATFORM_SUFFIX}"
-    local platform_url="${NPM_REGISTRY}/${package_name}/-/vite-plus-cli-${PLATFORM_SUFFIX}-${VP_VERSION}.tgz"
+    local platform_url
+    if [ -n "$PR_VERSION" ]; then
+      # pkg.pr.new redirects this URL to the platform tarball for the matching PR/commit
+      platform_url="${PKG_PR_NEW_BASE}/@voidzero-dev/vite-plus-cli-${PLATFORM_SUFFIX}@${PR_VERSION}"
+    else
+      local package_name="@voidzero-dev/vite-plus-cli-${PLATFORM_SUFFIX}"
+      platform_url="${NPM_REGISTRY}/${package_name}/-/vite-plus-cli-${PLATFORM_SUFFIX}-${VP_VERSION}.tgz"
+    fi
 
     # Create temp directory for extraction
     local platform_temp_dir
@@ -920,6 +943,12 @@ main() {
   # pnpm will install vite-plus and all transitive deps via `vp install`.
   # The packageManager field pins pnpm to a known-good version, ensuring
   # consistent behavior regardless of the user's global pnpm version.
+  # pkg.pr.new tarballs pre-rewrite scoped workspace deps to matching URLs by
+  # commit SHA, so pointing vite-plus at one URL pulls in a coherent PR build.
+  local vite_plus_spec="$VP_VERSION"
+  if [ -n "$PR_VERSION" ]; then
+    vite_plus_spec="${PKG_PR_NEW_BASE}@${PR_VERSION}"
+  fi
   cat > "$VERSION_DIR/package.json" <<WRAPPER_EOF
 {
   "name": "vp-global",
@@ -927,7 +956,7 @@ main() {
   "private": true,
   "packageManager": "pnpm@10.33.0",
   "dependencies": {
-    "vite-plus": "$VP_VERSION"
+    "vite-plus": "$vite_plus_spec"
   }
 }
 WRAPPER_EOF

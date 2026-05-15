@@ -9,6 +9,9 @@
 #   VP_HOME - Installation directory (default: $env:USERPROFILE\.vite-plus)
 #   NPM_CONFIG_REGISTRY - Custom npm registry URL (default: https://registry.npmjs.org)
 #   VP_LOCAL_TGZ - Path to local vite-plus.tgz (for development/testing)
+#   VP_PR_VERSION - PR number or commit SHA to install from pkg.pr.new
+#                   (for temporary testing of unreleased builds, e.g. VP_PR_VERSION=1569).
+#                   When set, overrides VP_VERSION and bypasses the npm registry.
 
 $ErrorActionPreference = "Stop"
 
@@ -20,6 +23,10 @@ $NpmRegistry = if ($env:NPM_CONFIG_REGISTRY) { $env:NPM_CONFIG_REGISTRY.TrimEnd(
 $LocalTgz = $env:VP_LOCAL_TGZ
 # Local binary path (set by install-global-cli.ts for local dev)
 $LocalBinary = $env:VP_LOCAL_BINARY
+# pkg.pr.new PR number or commit SHA (for temporary testing of unreleased builds)
+$PrVersion = $env:VP_PR_VERSION
+# pkg.pr.new base URL for fetching tarballs and constructing dependency URLs
+$PkgPrNewBase = "https://pkg.pr.new/voidzero-dev/vite-plus"
 
 function Write-Info {
     param([string]$Message)
@@ -418,6 +425,10 @@ function Main {
     Write-Host "VITE+" -ForegroundColor Blue -NoNewline
     Write-Host "..."
 
+    if ($PrVersion -and $LocalTgz) {
+        Write-Error-Exit "VP_PR_VERSION and VP_LOCAL_TGZ cannot be used together"
+    }
+
     # Suppress progress bars for cleaner output
     $ProgressPreference = 'SilentlyContinue'
 
@@ -434,6 +445,12 @@ function Main {
         if ($ViteVersion -eq "latest" -or $ViteVersion -eq "test") {
             $ViteVersion = "local-dev"
         }
+    } elseif ($PrVersion) {
+        # pkg.pr.new mode: skip npm metadata, use a synthetic version label.
+        # Non-semver label keeps the directory out of Cleanup-OldVersions and
+        # makes it obvious in ~/.vite-plus which install is the PR build.
+        $ViteVersion = "pkg-pr-new-$PrVersion"
+        Write-Info "Using pkg.pr.new version: $PrVersion"
     } else {
         # Fetch package metadata and resolve version from npm
         $ViteVersion = Get-VersionFromMetadata
@@ -465,10 +482,15 @@ function Main {
             Write-Error-Exit "VP_LOCAL_BINARY must be set when using VP_LOCAL_TGZ"
         }
     } else {
-        # Download from npm registry — extract only the vp binary from CLI platform package
+        # Download CLI platform tarball — npm registry or pkg.pr.new (when PrVersion is set)
         $platformSuffix = Get-PlatformSuffix -Platform $platform
-        $packageName = "@voidzero-dev/vite-plus-cli-$platformSuffix"
-        $platformUrl = "$NpmRegistry/$packageName/-/vite-plus-cli-$platformSuffix-$ViteVersion.tgz"
+        if ($PrVersion) {
+            # pkg.pr.new redirects this URL to the platform tarball for the matching PR/commit
+            $platformUrl = "$PkgPrNewBase/@voidzero-dev/vite-plus-cli-$platformSuffix@$PrVersion"
+        } else {
+            $packageName = "@voidzero-dev/vite-plus-cli-$platformSuffix"
+            $platformUrl = "$NpmRegistry/$packageName/-/vite-plus-cli-$platformSuffix-$ViteVersion.tgz"
+        }
 
         $platformTempFile = New-TemporaryFile
         try {
@@ -506,13 +528,16 @@ function Main {
     # Generate wrapper package.json that declares vite-plus as a dependency.
     # pnpm will install vite-plus and all transitive deps via `vp install`.
     # The packageManager field pins pnpm to a known-good version.
+    # pkg.pr.new tarballs pre-rewrite scoped workspace deps to matching URLs by
+    # commit SHA, so pointing vite-plus at one URL pulls in a coherent PR build.
+    $vitePlusSpec = if ($PrVersion) { "$PkgPrNewBase@$PrVersion" } else { $ViteVersion }
     $wrapperJson = @{
         name = "vp-global"
         version = $ViteVersion
         private = $true
         packageManager = "pnpm@10.33.0"
         dependencies = @{
-            "vite-plus" = $ViteVersion
+            "vite-plus" = $vitePlusSpec
         }
     } | ConvertTo-Json -Depth 10
     Set-Content -Path (Join-Path $VersionDir "package.json") -Value $wrapperJson
