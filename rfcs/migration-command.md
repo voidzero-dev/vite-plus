@@ -274,8 +274,14 @@ Projects that already have a `pnpm` field in `package.json` (e.g., with `overrid
 - For pnpm with existing `pnpm` config in `package.json`, the existing location is respected
 - rewrite `import from 'vite'` to `import from 'vite-plus'`
 - rewrite `import from 'vite/{name}'` to `import from 'vite-plus/{name}'`, e.g.: `import from 'vite/module-runner'` to `import from 'vite-plus/module-runner'`
+- rewrite `import from 'vitest'` to `import from 'vite-plus/test'`
 - rewrite `import from 'vitest/config'` to `import from 'vite-plus'`
-- bare `vitest`, other `vitest/{name}` subpaths, and all `@vitest/browser*` imports are intentionally **not** rewritten — vite-plus consumes upstream `vitest@4.x` directly (via overrides on `vite`), Vitest's mock hoister requires the literal string `'vitest'`, and the browser/provider subpaths are not re-exported by vite-plus
+- rewrite `import from 'vitest/{name}'` to `import from 'vite-plus/test/{name}'`, e.g.: `import from 'vitest/node'` to `import from 'vite-plus/test/node'`
+- rewrite `import from '@vitest/browser'` to `import from 'vite-plus/test/browser'`
+- rewrite `import from '@vitest/browser/{name}'` to `import from 'vite-plus/test/browser/{name}'`, e.g.: `import from '@vitest/browser/context'` to `import from 'vite-plus/test/browser/context'`
+- rewrite `import from '@vitest/browser-playwright'` to `import from 'vite-plus/test/browser-playwright'`
+- rewrite `import from '@vitest/browser-playwright/{name}'` to `import from 'vite-plus/test/browser-playwright/{name}'`
+- `declare module 'vitest'`, `declare module 'vitest/{name}'`, and `declare module '@vitest/browser*'` are intentionally **not** rewritten — `vite-plus/test*` is a thin re-export of upstream `vitest*`, so type augmentations have to target the upstream module identity to merge correctly
 
 **Note**: For Yarn, use `resolutions` instead of `overrides`.
 
