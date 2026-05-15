@@ -85,7 +85,7 @@ transform:
 fix: $NEW_IMPORT
 "#;
 
-/// ast-grep rules for rewriting vitest imports and declare module statements
+/// ast-grep rules for rewriting vitest imports.
 ///
 /// This rewrites:
 /// - `import { ... } from 'vitest'` → `import { ... } from 'vite-plus/test'`
@@ -99,17 +99,15 @@ fix: $NEW_IMPORT
 /// - `import { ... } from '@vitest/browser-preview/{name}'` → `import { ... } from 'vite-plus/test/browser-preview/{name}'`
 /// - `import { ... } from '@vitest/browser-webdriverio'` → `import { ... } from 'vite-plus/test/browser-webdriverio'`
 /// - `import { ... } from '@vitest/browser-webdriverio/{name}'` → `import { ... } from 'vite-plus/test/browser-webdriverio/{name}'`
-/// - `declare module 'vitest' { ... }` → `declare module 'vite-plus/test' { ... }`
-/// - `declare module 'vitest/config' { ... }` → `declare module 'vite-plus' { ... }`
-/// - `declare module 'vitest/{name}' { ... }` → `declare module 'vite-plus/test/{name}' { ... }`
-/// - `declare module '@vitest/browser' { ... }` → `declare module 'vite-plus/test/browser' { ... }`
-/// - `declare module '@vitest/browser/{name}' { ... }` → `declare module 'vite-plus/test/browser/{name}' { ... }`
-/// - `declare module '@vitest/browser-playwright' { ... }` → `declare module 'vite-plus/test/browser-playwright' { ... }`
-/// - `declare module '@vitest/browser-playwright/{name}' { ... }` → `declare module 'vite-plus/test/browser-playwright/{name}' { ... }`
-/// - `declare module '@vitest/browser-preview' { ... }` → `declare module 'vite-plus/test/browser-preview' { ... }`
-/// - `declare module '@vitest/browser-preview/{name}' { ... }` → `declare module 'vite-plus/test/browser-preview/{name}' { ... }`
-/// - `declare module '@vitest/browser-webdriverio' { ... }` → `declare module 'vite-plus/test/browser-webdriverio' { ... }`
-/// - `declare module '@vitest/browser-webdriverio/{name}' { ... }` → `declare module 'vite-plus/test/browser-webdriverio/{name}' { ... }`
+///
+/// `declare module 'vitest' { ... }` (and the subpath/`@vitest/*` variants) are
+/// intentionally NOT rewritten — the `vite-plus/test*` subpaths are thin shims
+/// that `export * from 'vitest'` (and the browser provider packages), so the
+/// underlying type identity is upstream. Augmenting `'vite-plus/test'` would
+/// only augment the shim module and would not merge into the upstream types
+/// the user actually sees through their `import { expect } from 'vite-plus/test'`
+/// statements. Leaving the `declare module 'vitest' { ... }` alone keeps
+/// augmentations targeting the real upstream module identity.
 const REWRITE_VITEST_RULES: &str = r#"---
 id: rewrite-vitest-config-import
 language: TypeScript
@@ -167,70 +165,6 @@ rule:
   regex: ^['"]vitest/.+['"]$
   inside:
     kind: import_statement
-transform:
-  NEW_IMPORT:
-    replace:
-      source: $STR
-      replace: vitest/
-      by: "vite-plus/test/"
-fix: $NEW_IMPORT
----
-id: rewrite-declare-module-vitest-config
-language: TypeScript
-rule:
-  pattern: $STR
-  kind: string
-  regex: ^['\"]vitest/config['\"]$
-  inside:
-    kind: module
-transform:
-  NEW_IMPORT:
-    replace:
-      source: $STR
-      replace: vitest/config
-      by: "vite-plus"
-fix: $NEW_IMPORT
----
-id: rewrite-declare-module-vitest
-language: TypeScript
-rule:
-  pattern: $STR
-  kind: string
-  regex: ^['\"]vitest['\"]$
-  inside:
-    kind: module
-transform:
-  NEW_IMPORT:
-    replace:
-      source: $STR
-      replace: vitest
-      by: "vite-plus/test"
-fix: $NEW_IMPORT
----
-id: rewrite-declare-module-vitest-scoped
-language: TypeScript
-rule:
-  pattern: $STR
-  kind: string
-  regex: ^['\"]@vitest/(browser-playwright|browser-preview|browser-webdriverio|browser)(/.*)?['\"]$
-  inside:
-    kind: module
-transform:
-  NEW_IMPORT:
-    replace:
-      source: $STR
-      replace: "@vitest/"
-      by: "vite-plus/test/"
-fix: $NEW_IMPORT
----
-id: rewrite-declare-module-vitest-subpath
-language: TypeScript
-rule:
-  pattern: $STR
-  kind: string
-  regex: ^['\"]vitest/.+['\"]$
-  inside:
-    kind: module
 transform:
   NEW_IMPORT:
     replace:
@@ -1468,6 +1402,9 @@ describe('app', () => {
 
     #[test]
     fn test_rewrite_declare_module_vitest() {
+        // `declare module 'vitest'` is intentionally NOT rewritten — the
+        // `vite-plus/test` subpath is a thin shim that re-exports vitest's
+        // types, so augmentations must target the upstream module identity.
         let content = r#"declare module 'vitest' {
   interface JestAssertion<T = any> {
     toBeCustom(): void;
@@ -1475,19 +1412,15 @@ describe('app', () => {
 }"#;
 
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(
-            result.content,
-            r#"declare module 'vite-plus/test' {
-  interface JestAssertion<T = any> {
-    toBeCustom(): void;
-  }
-}"#
-        );
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
     }
 
     #[test]
     fn test_rewrite_declare_module_vitest_config() {
+        // `declare module 'vitest/config'` is intentionally NOT rewritten —
+        // `vite-plus` re-exports `vitest/config`, so augmentations must target
+        // the upstream module identity to merge correctly.
         let content = r#"declare module 'vitest/config' {
   interface UserConfig {
     test?: TestConfig;
@@ -1495,15 +1428,8 @@ describe('app', () => {
 }"#;
 
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(
-            result.content,
-            r#"declare module 'vite-plus' {
-  interface UserConfig {
-    test?: TestConfig;
-  }
-}"#
-        );
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
     }
 
     #[test]
@@ -1528,6 +1454,9 @@ describe('app', () => {
 
     #[test]
     fn test_rewrite_declare_module_vitest_subpath() {
+        // `declare module 'vitest/node'` stays — the `vite-plus/test/node`
+        // shim re-exports from upstream, so augmentations must target the
+        // upstream module identity.
         let content = r#"declare module 'vitest/node' {
   export interface VitestOptions {
     custom?: boolean;
@@ -1535,19 +1464,14 @@ describe('app', () => {
 }"#;
 
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(
-            result.content,
-            r#"declare module 'vite-plus/test/node' {
-  export interface VitestOptions {
-    custom?: boolean;
-  }
-}"#
-        );
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
     }
 
     #[test]
     fn test_rewrite_declare_module_vitest_browser() {
+        // `declare module '@vitest/browser'` stays — the
+        // `vite-plus/test/browser` shim re-exports from upstream.
         let content = r#"declare module '@vitest/browser' {
   interface BrowserContext {
     custom?: boolean;
@@ -1555,19 +1479,13 @@ describe('app', () => {
 }"#;
 
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(
-            result.content,
-            r#"declare module 'vite-plus/test/browser' {
-  interface BrowserContext {
-    custom?: boolean;
-  }
-}"#
-        );
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
     }
 
     #[test]
     fn test_rewrite_declare_module_vitest_browser_subpath() {
+        // `declare module '@vitest/browser/context'` stays — shim re-exports.
         let content = r#"declare module '@vitest/browser/context' {
   export interface Context {
     custom?: boolean;
@@ -1575,19 +1493,13 @@ describe('app', () => {
 }"#;
 
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(
-            result.content,
-            r#"declare module 'vite-plus/test/browser/context' {
-  export interface Context {
-    custom?: boolean;
-  }
-}"#
-        );
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
     }
 
     #[test]
     fn test_rewrite_declare_module_vitest_browser_playwright() {
+        // `declare module '@vitest/browser-playwright'` stays — shim re-exports.
         let content = r#"declare module '@vitest/browser-playwright' {
   interface PlaywrightContext {
     custom?: boolean;
@@ -1595,19 +1507,13 @@ describe('app', () => {
 }"#;
 
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(
-            result.content,
-            r#"declare module 'vite-plus/test/browser-playwright' {
-  interface PlaywrightContext {
-    custom?: boolean;
-  }
-}"#
-        );
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
     }
 
     #[test]
     fn test_rewrite_declare_module_vitest_browser_preview() {
+        // `declare module '@vitest/browser-preview'` stays — shim re-exports.
         let content = r#"declare module '@vitest/browser-preview' {
   interface PreviewContext {
     custom?: boolean;
@@ -1615,19 +1521,13 @@ describe('app', () => {
 }"#;
 
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(
-            result.content,
-            r#"declare module 'vite-plus/test/browser-preview' {
-  interface PreviewContext {
-    custom?: boolean;
-  }
-}"#
-        );
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
     }
 
     #[test]
     fn test_rewrite_declare_module_vitest_browser_webdriverio() {
+        // `declare module '@vitest/browser-webdriverio'` stays — shim re-exports.
         let content = r#"declare module '@vitest/browser-webdriverio' {
   interface WebDriverContext {
     custom?: boolean;
@@ -1635,19 +1535,16 @@ describe('app', () => {
 }"#;
 
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(
-            result.content,
-            r#"declare module 'vite-plus/test/browser-webdriverio' {
-  interface WebDriverContext {
-    custom?: boolean;
-  }
-}"#
-        );
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
     }
 
     #[test]
     fn test_rewrite_mixed_imports_and_declare_modules() {
+        // Imports are rewritten; `declare module 'vite' { ... }` is rewritten
+        // (vite-plus bundles vite, owning the type identity), but
+        // `declare module 'vitest' { ... }` stays put — the shim re-exports
+        // upstream and augmentations must target the upstream identity.
         let content = r#"import { defineConfig } from 'vite';
 import { describe } from 'vitest';
 
@@ -1678,7 +1575,7 @@ declare module 'vite-plus' {
   }
 }
 
-declare module 'vite-plus/test' {
+declare module 'vitest' {
   interface JestAssertion<T = any> {
     toBeCustom(): void;
   }
@@ -1703,6 +1600,10 @@ export default defineConfig({});"#
 
     #[test]
     fn test_rewrite_multiple_declare_modules() {
+        // `declare module 'vite'` / `'vite/<sub>'` get rewritten (vite-plus
+        // bundles vite, owning the type identity), but `declare module 'vitest'`
+        // and `declare module '@vitest/browser'` are preserved — vite-plus
+        // shims re-export upstream and augmentations must target upstream.
         let content = r#"declare module 'vite' {
   interface UserConfig {
     custom?: boolean;
@@ -1743,13 +1644,13 @@ declare module 'vite-plus/module-runner' {
   }
 }
 
-declare module 'vite-plus/test' {
+declare module 'vitest' {
   interface JestAssertion<T = any> {
     toBeCustom(): void;
   }
 }
 
-declare module 'vite-plus/test/browser' {
+declare module '@vitest/browser' {
   interface BrowserContext {
     custom?: boolean;
   }
@@ -1759,6 +1660,8 @@ declare module 'vite-plus/test/browser' {
 
     #[test]
     fn test_rewrite_declare_module_vitest_double_quotes() {
+        // Double-quoted `declare module "vitest"` is preserved for the same
+        // reason as the single-quoted variant — shim re-exports.
         let content = r#"declare module "vitest" {
   interface JestAssertion<T = any> {
     toBeCustom(): void;
@@ -1766,15 +1669,8 @@ declare module 'vite-plus/test/browser' {
 }"#;
 
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(
-            result.content,
-            r#"declare module "vite-plus/test" {
-  interface JestAssertion<T = any> {
-    toBeCustom(): void;
-  }
-}"#
-        );
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
     }
 
     #[test]
@@ -1786,15 +1682,8 @@ declare module 'vite-plus/test/browser' {
 }"#;
 
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(
-            result.content,
-            r#"declare module 'vite-plus/test/browser-playwright/context' {
-  export interface Context {
-    custom?: boolean;
-  }
-}"#
-        );
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
     }
 
     #[test]
@@ -1806,15 +1695,8 @@ declare module 'vite-plus/test/browser' {
 }"#;
 
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(
-            result.content,
-            r#"declare module 'vite-plus/test/browser-preview/context' {
-  export interface Context {
-    custom?: boolean;
-  }
-}"#
-        );
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
     }
 
     #[test]
@@ -1826,15 +1708,8 @@ declare module 'vite-plus/test/browser' {
 }"#;
 
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(
-            result.content,
-            r#"declare module 'vite-plus/test/browser-webdriverio/context' {
-  export interface Context {
-    custom?: boolean;
-  }
-}"#
-        );
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
     }
 
     #[test]

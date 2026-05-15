@@ -1898,6 +1898,11 @@ function rewriteRootWorkspacePackageJson(
       };
     };
   }>(packageJsonPath, (pkg) => {
+    // Strip stale `vite-plus-test` wrapper aliases before injecting new overrides
+    // so the deleted wrapper doesn't survive migration in any sink.
+    pruneLegacyWrapperAliases(pkg.resolutions);
+    pruneLegacyWrapperAliases(pkg.overrides);
+    pruneLegacyWrapperAliases(pkg.pnpm?.overrides);
     if (packageManager === PackageManager.yarn) {
       pkg.resolutions = {
         ...pkg.resolutions,
