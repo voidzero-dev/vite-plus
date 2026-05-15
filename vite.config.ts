@@ -70,6 +70,8 @@ export default defineConfig({
       'packages/cli/snap-tests/fmt-ignore-patterns/src/ignored',
       'packages/cli/snap-tests-global/migration-lint-staged-ts-config',
       'ecosystem-ci/*/**',
+      'packages/core/rollupLicensePlugin.ts',
+      'packages/core/vite-rolldown.config.ts',
       'packages/test/**.cjs',
       'packages/test/**.cts',
       'packages/test/**.d.mjs',
