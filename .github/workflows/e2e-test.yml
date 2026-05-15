@@ -110,6 +110,21 @@ jobs:
           mkdir -p tmp/tgz
           cd packages/core && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
           cd packages/cli && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
+          # Bun strictly validates override-target versions against transitive
+          # peer constraints (vitest 4.1.5 declares peer `vite ^6 || ^7 || ^8`).
+          # pnpm/npm/yarn don't, but bun aborts with "vite@^6.0.0 || ^7.0.0 ||
+          # ^8.0.0 failed to resolve" when the override points at a 0.0.0 tgz.
+          # See https://github.com/oven-sh/bun/issues/8406. Build a separate
+          # tgz with the same contents but an internal version that satisfies
+          # the peer range; VP_OVERRIDE_PACKAGES points the migrator at this
+          # variant. The original core-0.0.0.tgz is still needed verbatim so
+          # install-global-cli can resolve the CLI's transitive @voidzero-dev/
+          # vite-plus-core@0.0.0 dep.
+          mkdir -p tmp/core-bumped
+          tar xzf tmp/tgz/voidzero-dev-vite-plus-core-0.0.0.tgz -C tmp/core-bumped
+          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('tmp/core-bumped/package/package.json','utf8'));p.version='7.99.0';fs.writeFileSync('tmp/core-bumped/package/package.json',JSON.stringify(p,null,2)+'\n')"
+          (cd tmp/core-bumped && tar czf "$GITHUB_WORKSPACE/tmp/tgz/voidzero-dev-vite-plus-core-bumped.tgz" package)
+          rm -rf tmp/core-bumped
           # Copy vp binary for e2e-test job (findVpBinary expects it in target/)
           cp target/${{ matrix.target }}/release/vp tmp/tgz/vp 2>/dev/null || cp target/${{ matrix.target }}/release/vp.exe tmp/tgz/vp.exe 2>/dev/null || true
           cp target/${{ matrix.target }}/release/vp-shim.exe tmp/tgz/vp-shim.exe 2>/dev/null || true
