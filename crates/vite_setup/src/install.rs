@@ -475,7 +475,7 @@ pub async fn cleanup_old_versions(
     }
 
     // Sort newest first (by creation time, matching install.sh)
-    versions.sort_by(|a, b| b.0.cmp(&a.0));
+    versions.sort_by_key(|b| std::cmp::Reverse(b.0));
 
     // Remove versions beyond the keep limit, but never remove protected versions
     for (_time, path) in versions.into_iter().skip(max_keep) {
