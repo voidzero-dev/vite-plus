@@ -642,15 +642,21 @@ function resolveUpstreamDtsPath(
   }
   const value = exportValue as Record<string, unknown>;
   if (condition === 'types') {
-    if (typeof value.types === 'string') return join(providerPkgRoot, value.types);
+    if (typeof value.types === 'string') {
+      return join(providerPkgRoot, value.types);
+    }
     if (typeof value.import === 'object' && value.import !== null) {
       const types = (value.import as Record<string, unknown>).types;
-      if (typeof types === 'string') return join(providerPkgRoot, types);
+      if (typeof types === 'string') {
+        return join(providerPkgRoot, types);
+      }
     }
   } else {
     if (typeof value.require === 'object' && value.require !== null) {
       const types = (value.require as Record<string, unknown>).types;
-      if (typeof types === 'string') return join(providerPkgRoot, types);
+      if (typeof types === 'string') {
+        return join(providerPkgRoot, types);
+      }
     }
   }
   return null;

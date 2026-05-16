@@ -19,7 +19,9 @@ function stripVitePlusCoreSelfRefs(pkg: PackageJson, newName: string): void {
     'optionalDependencies',
   ] as const) {
     const group = pkg[field];
-    if (!group) continue;
+    if (!group) {
+      continue;
+    }
     for (const [key, value] of Object.entries(group)) {
       if (
         (key === newName || key === '@voidzero-dev/vite-plus-core') &&
@@ -36,9 +38,7 @@ export async function repackViteTgz() {
   const [inputPath, outputPath, newName, newVersion] = process.argv.slice(3);
 
   if (!inputPath || !outputPath || !newName) {
-    console.error(
-      'Usage: tool repack-vite-tgz <input.tgz> <output.tgz> <new-name> [new-version]',
-    );
+    console.error('Usage: tool repack-vite-tgz <input.tgz> <output.tgz> <new-name> [new-version]');
     process.exit(1);
   }
 

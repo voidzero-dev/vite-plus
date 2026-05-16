@@ -55,9 +55,7 @@ const forceFreshMigration = 'forceFreshMigration' in repoConfig && repoConfig.fo
 // they trip a registry lookup for "vite@<version>" when a workspace
 // sub-package and the override both reference the same vite-named alias.
 const isBunProject = project === 'bun-vite-template';
-const viteOverrideTgz = isBunProject
-  ? `vite-7.99.0.tgz`
-  : `voidzero-dev-vite-plus-core-0.0.0.tgz`;
+const viteOverrideTgz = isBunProject ? `vite-7.99.0.tgz` : `voidzero-dev-vite-plus-core-0.0.0.tgz`;
 
 execSync(`${cli} migrate --no-agent --no-interactive`, {
   cwd,
