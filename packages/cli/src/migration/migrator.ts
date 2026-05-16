@@ -9,6 +9,7 @@ import semver from 'semver';
 import { Scalar, YAMLMap, YAMLSeq } from 'yaml';
 
 import {
+  hasConfigKey,
   mergeJsonConfig,
   mergeTsdownConfig,
   rewriteEslint,
@@ -2101,8 +2102,9 @@ function mergeAndRemoveJsonConfig(
   // merge step always prepends, so without this guard a template that ships
   // both an inline `${configKey}:` block and a standalone JSON file (e.g.
   // create-fate's vite.config.ts + .oxfmtrc.jsonc) ends up with two of them.
-  const viteConfigContent = fs.readFileSync(fullViteConfigPath, 'utf8');
-  if (new RegExp(`\\b${configKey}\\s*:`).test(viteConfigContent)) {
+  // AST-based check ignores comments, string-literal occurrences, and nested
+  // keys (e.g. `plugins: [{ fmt: ... }]`).
+  if (hasConfigKey(fullViteConfigPath, configKey)) {
     fs.unlinkSync(fullJsonConfigPath);
     if (!silent) {
       prompts.log.info(

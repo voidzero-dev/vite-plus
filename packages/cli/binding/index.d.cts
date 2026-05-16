@@ -116,6 +116,16 @@ export interface DownloadPackageManagerResult {
   version: string;
 }
 
+/**
+ * Whether `config_key` is already declared as a top-level property in the
+ * vite config's `defineConfig({...})` (or equivalent) object literal.
+ *
+ * AST-based check covering the six shapes the merger understands; ignores
+ * comments, string literal occurrences, and nested keys. Returns `false`
+ * for unrecognized shapes (e.g. `return $VAR` from a callback).
+ */
+export declare function hasConfigKey(viteConfigPath: string, configKey: string): boolean;
+
 /** Result returned by JavaScript resolver functions. */
 export interface JsCommandResolvedResult {
   binPath: string;

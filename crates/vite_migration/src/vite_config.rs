@@ -1,6 +1,7 @@
 use std::{borrow::Cow, path::Path, sync::LazyLock};
 
 use ast_grep_config::{GlobalRules, RuleConfig, from_yaml_string};
+use ast_grep_core::{Doc, Node};
 use ast_grep_language::{LanguageExt, SupportLang};
 use regex::Regex;
 use vite_error::Error;
@@ -126,6 +127,115 @@ static RE_SCHEMA: LazyLock<Regex> =
 /// `OxlintConfig` / `OxfmtConfig`.
 fn strip_schema_property(config: &str) -> Cow<'_, str> {
     RE_SCHEMA.replace_all(config, "")
+}
+
+/// Check whether `config_key` is already declared as a top-level property in
+/// the vite config's `defineConfig({...})` (or equivalent) object literal.
+///
+/// Mirrors the six shapes the merger understands (see `generate_merge_rule`):
+/// `defineConfig({...})`, `defineConfig((p) => ({...}))`, `return {...}`
+/// inside a `defineConfig` callback, `export default {...}`, and the
+/// `satisfies` export variant. The `return $VAR` variant cannot be inspected
+/// statically — for that shape we conservatively report `false`, which is
+/// safe because the merger uses object spread (`{ key: ..., ...$VAR }`) so
+/// duplicate keys are resolved at runtime by JS spread semantics.
+///
+/// Returns `true` only when the key appears as a **direct** member of one of
+/// those recognized object literals. Comments, string occurrences, nested
+/// keys (e.g. `plugins: [{ fmt: ... }]`), and unrelated objects are all
+/// ignored correctly.
+pub fn has_config_key(vite_config_content: &str, config_key: &str) -> Result<bool, Error> {
+    let grep = SupportLang::TypeScript.ast_grep(vite_config_content);
+    let root = grep.root();
+
+    for node in root.dfs() {
+        if node.kind() != "pair" {
+            continue;
+        }
+        let Some(key_node) = node.field("key") else { continue };
+        if !pair_key_matches(&key_node, config_key) {
+            continue;
+        }
+        let Some(parent_object) = node.parent() else { continue };
+        if parent_object.kind() != "object" {
+            continue;
+        }
+        if is_recognized_config_object(&parent_object) {
+            return Ok(true);
+        }
+    }
+
+    Ok(false)
+}
+
+/// Whether a `pair`'s key node matches `config_key` (handles bare-identifier
+/// keys like `fmt:` and string keys like `'fmt':` / `"fmt":`).
+fn pair_key_matches<D: Doc>(key_node: &Node<'_, D>, config_key: &str) -> bool {
+    let text = key_node.text();
+    match key_node.kind().as_ref() {
+        "property_identifier" => text == config_key,
+        "string" => {
+            // string node text includes the surrounding quotes
+            let stripped = text.trim_matches(|c| c == '"' || c == '\'' || c == '`');
+            stripped == config_key
+        }
+        _ => false,
+    }
+}
+
+/// Whether an `object` literal sits in one of the merger-recognized positions.
+fn is_recognized_config_object<D: Doc>(object_node: &Node<'_, D>) -> bool {
+    let Some(parent) = object_node.parent() else { return false };
+    match parent.kind().as_ref() {
+        // export default { ... }
+        "export_statement" => true,
+        // export default { ... } satisfies T
+        "satisfies_expression" => {
+            parent.parent().map(|p| p.kind() == "export_statement").unwrap_or(false)
+        }
+        // defineConfig({ ... }) — object is a direct argument
+        "arguments" => parent.parent().map(|c| is_define_config_call(&c)).unwrap_or(false),
+        // defineConfig((p) => ({ ... })) — body of an arrow function with
+        // parenthesized object expression
+        "parenthesized_expression" => is_define_config_arrow_body(&parent),
+        // return { ... } inside a defineConfig callback
+        "return_statement" => is_inside_define_config_callback(&parent),
+        _ => false,
+    }
+}
+
+/// Is `call_node` a call to `defineConfig(...)`?
+fn is_define_config_call<D: Doc>(call_node: &Node<'_, D>) -> bool {
+    if call_node.kind() != "call_expression" {
+        return false;
+    }
+    call_node.field("function").map(|f| f.text() == "defineConfig").unwrap_or(false)
+}
+
+/// Is `paren_node` the body of an arrow function passed directly to
+/// `defineConfig(...)` (e.g. `defineConfig((p) => ({...}))`)?
+fn is_define_config_arrow_body<D: Doc>(paren_node: &Node<'_, D>) -> bool {
+    let Some(arrow) = paren_node.parent() else { return false };
+    if arrow.kind() != "arrow_function" {
+        return false;
+    }
+    let Some(args) = arrow.parent() else { return false };
+    if args.kind() != "arguments" {
+        return false;
+    }
+    args.parent().map(|c| is_define_config_call(&c)).unwrap_or(false)
+}
+
+/// Is `node` nested inside the body of a `defineConfig(...)` callback?
+fn is_inside_define_config_callback<D: Doc>(node: &Node<'_, D>) -> bool {
+    let mut current = node.parent();
+    while let Some(n) = current {
+        if n.kind() == "call_expression" && is_define_config_call(&n) {
+            return true;
+        }
+        current = n.parent();
+    }
+    false
 }
 
 /// Check if the vite config uses a function callback pattern
@@ -357,6 +467,197 @@ mod tests {
     use tempfile::tempdir;
 
     use super::*;
+
+    // ── has_config_key ────────────────────────────────────────────────────
+
+    #[test]
+    fn test_has_config_key_top_level_in_defineconfig() {
+        let cfg = r#"import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  fmt: { singleQuote: true },
+  lint: { rules: {} },
+});
+"#;
+        assert!(has_config_key(cfg, "fmt").unwrap());
+        assert!(has_config_key(cfg, "lint").unwrap());
+        assert!(!has_config_key(cfg, "pack").unwrap());
+        assert!(!has_config_key(cfg, "staged").unwrap());
+    }
+
+    #[test]
+    fn test_has_config_key_quoted_key() {
+        let cfg = r#"import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  'fmt': { singleQuote: true },
+  "lint": {},
+});
+"#;
+        assert!(has_config_key(cfg, "fmt").unwrap());
+        assert!(has_config_key(cfg, "lint").unwrap());
+    }
+
+    #[test]
+    fn test_has_config_key_ignores_comment_mentions() {
+        // The regex check was a false positive on these — AST check ignores them.
+        let cfg = r#"import { defineConfig } from 'vite-plus';
+
+// fmt: configure formatter here
+/* lint: TODO wire this up */
+export default defineConfig({
+  plugins: [],
+});
+"#;
+        assert!(!has_config_key(cfg, "fmt").unwrap());
+        assert!(!has_config_key(cfg, "lint").unwrap());
+    }
+
+    #[test]
+    fn test_has_config_key_ignores_string_literal_mentions() {
+        let cfg = r#"import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  plugins: [],
+  description: 'has fmt: foo and lint: bar inside',
+});
+"#;
+        assert!(!has_config_key(cfg, "fmt").unwrap());
+        assert!(!has_config_key(cfg, "lint").unwrap());
+    }
+
+    #[test]
+    fn test_has_config_key_ignores_nested_keys() {
+        // `fmt:` is a nested property inside `plugins[0].options`, not top-level.
+        let cfg = r#"import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  plugins: [
+    somePlugin({
+      fmt: 'auto',
+      lint: { enabled: true },
+    }),
+  ],
+});
+"#;
+        assert!(!has_config_key(cfg, "fmt").unwrap());
+        assert!(!has_config_key(cfg, "lint").unwrap());
+    }
+
+    #[test]
+    fn test_has_config_key_arrow_callback() {
+        let cfg = r#"import { defineConfig } from 'vite-plus';
+
+export default defineConfig((env) => ({
+  fmt: { singleQuote: env.mode === 'production' },
+}));
+"#;
+        assert!(has_config_key(cfg, "fmt").unwrap());
+        assert!(!has_config_key(cfg, "lint").unwrap());
+    }
+
+    #[test]
+    fn test_has_config_key_return_block_callback() {
+        let cfg = r#"import { defineConfig } from 'vite-plus';
+
+export default defineConfig(({ mode }) => {
+  return {
+    fmt: { singleQuote: true },
+  };
+});
+"#;
+        assert!(has_config_key(cfg, "fmt").unwrap());
+        assert!(!has_config_key(cfg, "lint").unwrap());
+    }
+
+    #[test]
+    fn test_has_config_key_async_return_block_callback() {
+        let cfg = r#"
+export default defineConfig(async ({ command, mode }) => {
+  const data = await asyncFunction();
+  return {
+    lint: { rules: {} },
+  };
+});
+"#;
+        assert!(has_config_key(cfg, "lint").unwrap());
+        assert!(!has_config_key(cfg, "fmt").unwrap());
+    }
+
+    #[test]
+    fn test_has_config_key_plain_export() {
+        let cfg = r#"export default {
+  fmt: { singleQuote: true },
+};
+"#;
+        assert!(has_config_key(cfg, "fmt").unwrap());
+        assert!(!has_config_key(cfg, "lint").unwrap());
+    }
+
+    #[test]
+    fn test_has_config_key_satisfies_export() {
+        let cfg = r#"import type { UserConfig } from 'vite-plus';
+
+export default {
+  lint: { rules: {} },
+} satisfies UserConfig;
+"#;
+        assert!(has_config_key(cfg, "lint").unwrap());
+        assert!(!has_config_key(cfg, "fmt").unwrap());
+    }
+
+    #[test]
+    fn test_has_config_key_return_variable_is_unknown() {
+        // The merger handles this via object spread, so duplication is benign.
+        // We conservatively report `false`.
+        let cfg = r#"import { defineConfig } from 'vite-plus';
+
+export default defineConfig(({ mode }) => {
+  const configObject = { fmt: { singleQuote: true } };
+  return configObject;
+});
+"#;
+        assert!(!has_config_key(cfg, "fmt").unwrap());
+    }
+
+    #[test]
+    fn test_has_config_key_arrow_wrapper_around_defineconfig() {
+        // export default () => defineConfig({ ... }) — the wrapper is irrelevant;
+        // detection follows the defineConfig argument object.
+        let cfg = r#"import { defineConfig } from 'vite-plus';
+
+export default () =>
+  defineConfig({
+    fmt: { singleQuote: true },
+  });
+"#;
+        assert!(has_config_key(cfg, "fmt").unwrap());
+    }
+
+    #[test]
+    fn test_has_config_key_fate_template_shape() {
+        // Mirrors create-fate's drizzle template — the bug that motivated this fix.
+        let cfg = r#"import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  fmt: {
+    experimentalSortImports: { newlinesBetween: false },
+    ignorePatterns: ['coverage/', 'dist/'],
+    singleQuote: true,
+  },
+  lint: {
+    extends: [nkzw],
+    options: { typeAware: true, typeCheck: true },
+    rules: { '@typescript-eslint/no-explicit-any': 'off' },
+  },
+  staged: { '*': 'vp check --fix' },
+});
+"#;
+        assert!(has_config_key(cfg, "fmt").unwrap());
+        assert!(has_config_key(cfg, "lint").unwrap());
+        assert!(has_config_key(cfg, "staged").unwrap());
+        assert!(!has_config_key(cfg, "pack").unwrap());
+    }
 
     #[test]
     fn test_check_function_callback() {
