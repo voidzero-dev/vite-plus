@@ -8,6 +8,7 @@ use std::{
 };
 
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
+use owo_colors::OwoColorize;
 use tokio::{process::Command, task::JoinSet};
 use vite_js_runtime::NodeProvider;
 use vite_path::{AbsolutePath, AbsolutePathBuf, current_dir};
@@ -33,59 +34,48 @@ pub async fn install(
     node_version: Option<&str>,
     force: bool,
     concurrency: usize,
-) -> Result<(), Error> {
-    install_many(package_specs, node_version, force, concurrency, InstallOperation::Install).await
-}
-
-pub async fn update(
-    package_specs: &[String],
-    node_version: Option<&str>,
-    force: bool,
-    concurrency: usize,
-) -> Result<(), Error> {
-    install_many(package_specs, node_version, force, concurrency, InstallOperation::Update).await
-}
-
-async fn install_many(
-    package_specs: &[String],
-    node_version: Option<&str>,
-    force: bool,
-    concurrency: usize,
-    operation: InstallOperation,
+    update: bool,
 ) -> Result<(), Error> {
     if package_specs.is_empty() {
         return Ok(());
     }
 
+    let operation = if update { "update" } else { "install" };
+    let operation_progress = if update { "Updating" } else { "Installing" };
+    let operation_past = if update { "Updated" } else { "Installed" };
+
+    // 1. Resolve Node.js version
     let version = if let Some(v) = node_version {
         let provider = NodeProvider::new();
         match resolve_version_alias(v, &provider).await {
             Ok(version) => version,
             Err(error) => {
-                render_preflight_error(operation, &error);
+                output::error(&format!("Failed to {} global package: {error}", operation));
                 return Err(error);
             }
         }
     } else {
+        // Resolve from current directory
         let cwd = match current_dir() {
             Ok(cwd) => cwd,
             Err(error) => {
                 let error =
                     Error::ConfigError(format!("Cannot get current directory: {}", error).into());
-                render_preflight_error(operation, &error);
+                output::error(&format!("Failed to {} global package: {error}", operation));
                 return Err(error);
             }
         };
         let resolution = match resolve_version(&cwd).await {
             Ok(resolution) => resolution,
             Err(error) => {
-                render_preflight_error(operation, &error);
+                output::error(&format!("Failed to {} global package: {error}", operation));
                 return Err(error);
             }
         };
         resolution.version
     };
 
+    // 2. Ensure Node.js is installed
     let runtime =
         match vite_js_runtime::download_runtime(vite_js_runtime::JsRuntimeType::Node, &version)
             .await
@@ -93,7 +83,7 @@ async fn install_many(
             Ok(runtime) => runtime,
             Err(error) => {
                 let error = Error::RuntimeDownload(error);
-                render_preflight_error(operation, &error);
+                output::error(&format!("Failed to {} global package: {error}", operation));
                 return Err(error);
             }
         };
@@ -102,20 +92,30 @@ async fn install_many(
     let npm_path =
         if cfg!(windows) { node_bin_dir.join("npm.cmd") } else { node_bin_dir.join("npm") };
 
+    // 3. Install packages in parallel
     let concurrency = concurrency.max(1);
-    let active_concurrency = concurrency.min(package_specs.len());
     output::info(&format!(
-        "{} {} global {} with Node.js {} (concurrency {})",
-        operation.present_participle(),
+        "{} {} global {} with Node.js {}",
+        operation_progress,
         package_specs.len(),
         if package_specs.len() == 1 { "package" } else { "packages" },
-        version,
-        active_concurrency
+        version
     ));
 
-    let progress = InstallProgress::new(operation, package_specs.len());
+    let progress = ProgressBar::new(package_specs.len() as u64);
+    if std::io::stderr().is_terminal() && std::env::var_os("CI").is_none() {
+        let style = ProgressStyle::with_template("{spinner:.cyan} {msg} ({pos}/{len})")
+            .unwrap_or_else(|_| ProgressStyle::default_spinner())
+            .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]);
+        progress.set_style(style);
+        progress.set_message(format!("{} global packages", operation_progress));
+        progress.enable_steady_tick(Duration::from_millis(80));
+    } else {
+        progress.set_draw_target(ProgressDrawTarget::hidden());
+    }
+
     let mut next_index = 0;
-    let mut outcomes: Vec<Option<InstallOutcome>> = vec![None; package_specs.len()];
+    let mut outcomes: Vec<Option<(String, String, Vec<String>)>> = vec![None; package_specs.len()];
     let mut installs = JoinSet::new();
 
     loop {
@@ -142,22 +142,51 @@ async fn install_many(
 
         match installs.join_next().await {
             Some(Ok((package_index, Ok(outcome)))) => {
-                progress.inc();
+                progress.inc(1);
                 outcomes[package_index] = Some(outcome);
             }
             Some(Ok((_, Err(error)))) => {
                 let cancelled = installs.len() + package_specs.len().saturating_sub(next_index);
                 installs.abort_all();
                 progress.finish_and_clear();
-                render_install_error(operation, &error, cancelled);
+                match &error {
+                    Error::GlobalNpmInstallFailed { package_spec, exit_code, stdout, stderr } => {
+                        output::error(&format!("Failed to {} {package_spec}", operation));
+                        match exit_code {
+                            Some(code) => {
+                                output::raw_stderr(&format!("  npm exited with code {code}"))
+                            }
+                            None => output::raw_stderr("  npm exited without an exit code"),
+                        }
+                        if !stdout.is_empty() {
+                            let _ = std::io::stdout().write_all(stdout);
+                        }
+                        if !stderr.is_empty() {
+                            let _ = std::io::stderr().write_all(stderr);
+                        }
+                    }
+                    Error::BinaryConflict { .. } => {
+                        output::error(&format!("{error}"));
+                    }
+                    _ => {
+                        output::error(&format!("Failed to {} global package: {error}", operation));
+                    }
+                }
+                if cancelled > 0 {
+                    output::raw_stderr(&format!(
+                        "  {} remaining {} cancelled",
+                        cancelled,
+                        if cancelled == 1 { "install was" } else { "installs were" }
+                    ));
+                }
                 return Err(error);
             }
             Some(Err(error)) => {
                 let cancelled = installs.len() + package_specs.len().saturating_sub(next_index);
                 installs.abort_all();
                 progress.finish_and_clear();
-                output::error(&format!("failed to {} global package", operation.verb()));
-                output::raw_stderr(&format!("  worker task failed: {}", error));
+                output::error(&format!("Failed to {} global package", operation));
+                output::raw_stderr(&format!("  Worker task failed: {}", error));
                 if cancelled > 0 {
                     output::raw_stderr(&format!(
                         "  {} remaining {} cancelled",
@@ -173,17 +202,24 @@ async fn install_many(
 
     progress.finish_and_clear();
 
-    for (index, outcome) in outcomes.into_iter().flatten().enumerate() {
+    // 4. Print success messages
+    for (index, (package_name, installed_version, bin_names)) in
+        outcomes.into_iter().flatten().enumerate()
+    {
         output::success(&format!(
-            "{} {} {} ({}/{})",
-            operation.past_tense(),
-            outcome.package_name,
-            outcome.installed_version,
-            index + 1,
-            package_specs.len()
+            "{} {} {}{}",
+            operation_past,
+            package_name.bold(),
+            if update { "to " } else { "" },
+            installed_version.bold()
         ));
-        if !outcome.bin_names.is_empty() {
-            output::raw(&format!("  bins: {}", outcome.bin_names.join(", ")));
+        if !bin_names.is_empty() {
+            let bins = bin_names
+                .iter()
+                .map(|bin_name| bin_name.bold().to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+            output::raw(&format!("  Bins: {}", bins));
         }
         if index + 1 < package_specs.len() {
             output::raw("");
@@ -199,17 +235,22 @@ async fn install_one(
     npm_path: AbsolutePathBuf,
     node_bin_dir: AbsolutePathBuf,
     force: bool,
-) -> Result<InstallOutcome, Error> {
+) -> Result<(String, String, Vec<String>), Error> {
+    // Parse package spec (e.g., "typescript", "typescript@5.0.0", "@scope/pkg")
     let (package_name, _version_spec) = parse_package_spec(&package_spec);
 
+    // 3. Create staging directory
     let tmp_dir = get_tmp_dir()?;
     let staging_dir = tmp_dir.join("packages").join(&package_name);
 
+    // Clean up any previous failed install
     if tokio::fs::try_exists(&staging_dir).await.unwrap_or(false) {
         tokio::fs::remove_dir_all(&staging_dir).await?;
     }
     tokio::fs::create_dir_all(&staging_dir).await?;
 
+    // 4. Run npm install with prefix set to staging directory
+    //    Pipe stdout/stderr so npm output is hidden on success, shown on failure
     let output = Command::new(npm_path.as_path())
         .args(["install", "-g", "--no-fund", &package_spec])
         .env("npm_config_prefix", staging_dir.as_path())
@@ -229,6 +270,7 @@ async fn install_one(
         });
     }
 
+    // 5. Find installed package and extract metadata
     let node_modules_dir = get_node_modules_dir(&staging_dir, &package_name);
     let package_json_path = node_modules_dir.join("package.json");
 
@@ -244,6 +286,7 @@ async fn install_one(
         ));
     }
 
+    // Read package.json to get version and binaries
     let package_json_content = tokio::fs::read_to_string(&package_json_path).await?;
     let package_json: serde_json::Value = match serde_json::from_str(&package_json_content) {
         Ok(package_json) => package_json,
@@ -259,6 +302,7 @@ async fn install_one(
 
     let binary_infos = extract_binaries(&package_json);
 
+    // Detect which binaries are JavaScript files
     let mut bin_names = Vec::new();
     let mut js_bins = HashSet::new();
     for info in &binary_infos {
@@ -269,10 +313,12 @@ async fn install_one(
         }
     }
 
+    // 5b. Check for binary conflicts (before moving staging to final location)
     let mut conflicts: Vec<(String, String)> = Vec::new(); // (bin_name, existing_package)
 
     for bin_name in &bin_names {
         if let Some(config) = BinConfig::load(bin_name).await? {
+            // Only conflict if owned by a different package
             if config.package != package_name {
                 conflicts.push((bin_name.clone(), config.package.clone()));
             }
@@ -290,6 +336,8 @@ async fn install_one(
                 Box::pin(uninstall(&pkg, false)).await?;
             }
         } else {
+            // Hard fail with clear error
+            // Clean up staging directory
             let _ = tokio::fs::remove_dir_all(&staging_dir).await;
             return Err(Error::BinaryConflict {
                 bin_name: conflicts[0].0.clone(),
@@ -299,18 +347,22 @@ async fn install_one(
         }
     }
 
+    // 6. Move staging to final location
     let packages_dir = get_packages_dir()?;
     let final_dir = packages_dir.join(&package_name);
 
+    // Remove existing installation if present
     if tokio::fs::try_exists(&final_dir).await.unwrap_or(false) {
         tokio::fs::remove_dir_all(&final_dir).await?;
     }
 
+    // Create parent directory (handles scoped packages like @scope/pkg)
     if let Some(parent) = final_dir.parent() {
         tokio::fs::create_dir_all(parent).await?;
     }
     tokio::fs::rename(&staging_dir, &final_dir).await?;
 
+    // 7. Save package metadata
     let metadata = PackageMetadata::new(
         package_name.clone(),
         installed_version.clone(),
@@ -322,6 +374,7 @@ async fn install_one(
     );
     metadata.save().await?;
 
+    // 8. Create shims for binaries and save per-binary configs
     let bin_dir = get_bin_dir()?;
     for bin_name in &bin_names {
         create_package_shim(&bin_dir, bin_name, &package_name).await?;
@@ -336,112 +389,7 @@ async fn install_one(
         bin_config.save().await?;
     }
 
-    Ok(InstallOutcome { package_name, installed_version, bin_names })
-}
-
-#[derive(Clone, Copy)]
-enum InstallOperation {
-    Install,
-    Update,
-}
-
-impl InstallOperation {
-    fn verb(self) -> &'static str {
-        match self {
-            Self::Install => "install",
-            Self::Update => "update",
-        }
-    }
-
-    fn present_participle(self) -> &'static str {
-        match self {
-            Self::Install => "installing",
-            Self::Update => "updating",
-        }
-    }
-
-    fn past_tense(self) -> &'static str {
-        match self {
-            Self::Install => "installed",
-            Self::Update => "updated",
-        }
-    }
-}
-
-#[derive(Clone)]
-struct InstallOutcome {
-    package_name: String,
-    installed_version: String,
-    bin_names: Vec<String>,
-}
-
-struct InstallProgress {
-    bar: ProgressBar,
-}
-
-impl InstallProgress {
-    fn new(operation: InstallOperation, total: usize) -> Self {
-        let bar = ProgressBar::new(total as u64);
-        if spinner_enabled() {
-            let style = ProgressStyle::with_template("{spinner:.cyan} {msg} ({pos}/{len})")
-                .unwrap_or_else(|_| ProgressStyle::default_spinner())
-                .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]);
-            bar.set_style(style);
-            bar.set_message(format!("{} global packages", operation.present_participle()));
-            bar.enable_steady_tick(Duration::from_millis(80));
-        } else {
-            bar.set_draw_target(ProgressDrawTarget::hidden());
-        }
-        Self { bar }
-    }
-
-    fn inc(&self) {
-        self.bar.inc(1);
-    }
-
-    fn finish_and_clear(&self) {
-        self.bar.finish_and_clear();
-    }
-}
-
-fn spinner_enabled() -> bool {
-    std::io::stderr().is_terminal() && std::env::var_os("CI").is_none()
-}
-
-fn render_install_error(operation: InstallOperation, error: &Error, cancelled: usize) {
-    match error {
-        Error::GlobalNpmInstallFailed { package_spec, exit_code, stdout, stderr } => {
-            output::error(&format!("failed to {} {package_spec}", operation.verb()));
-            match exit_code {
-                Some(code) => output::raw_stderr(&format!("  npm exited with code {code}")),
-                None => output::raw_stderr("  npm exited without an exit code"),
-            }
-            if !stdout.is_empty() {
-                let _ = std::io::stdout().write_all(stdout);
-            }
-            if !stderr.is_empty() {
-                let _ = std::io::stderr().write_all(stderr);
-            }
-        }
-        Error::BinaryConflict { .. } => {
-            output::error(&format!("{error}"));
-        }
-        _ => {
-            output::error(&format!("failed to {} global package: {error}", operation.verb()));
-        }
-    }
-
-    if cancelled > 0 {
-        output::raw_stderr(&format!(
-            "  {} remaining {} cancelled",
-            cancelled,
-            if cancelled == 1 { "install was" } else { "installs were" }
-        ));
-    }
-}
-
-fn render_preflight_error(operation: InstallOperation, error: &Error) {
-    output::error(&format!("failed to {} global package: {error}", operation.verb()));
+    Ok((package_name, installed_version, bin_names))
 }
 
 /// Uninstall a global package.

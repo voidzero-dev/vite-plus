@@ -1,6 +1,6 @@
 [1]> vp install -g voidzero-nonexistent-pkg-xyz-12345 # Install non-existent package
-info: installing 1 global package with Node.js <semver> (concurrency 1)
-error: failed to install voidzero-nonexistent-pkg-xyz-12345
+info: Installing 1 global package with Node.js <semver>
+error: Failed to install voidzero-nonexistent-pkg-xyz-12345
   npm exited with code 1
 npm error code E404
 npm error 404 Not Found - GET https://registry.<domain>/voidzero-nonexistent-pkg-xyz-12345 - Not found

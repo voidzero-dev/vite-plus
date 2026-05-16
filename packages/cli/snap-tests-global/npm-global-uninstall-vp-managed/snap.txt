@@ -1,7 +1,7 @@
 > vp install -g ./npm-global-vp-managed-pkg # Install via vp (creates managed shim)
-info: installing 1 global package with Node.js <semver> (concurrency 1)
-✓ installed ./npm-global-vp-managed-pkg <semver> (1/1)
-  bins: npm-global-vp-managed-cli
+info: Installing 1 global package with Node.js <semver>
+✓ Installed ./npm-global-vp-managed-pkg <semver>
+  Bins: npm-global-vp-managed-cli
 
 > npm install -g ./npm-global-vp-managed-pkg # npm install (should warn about conflict)
 

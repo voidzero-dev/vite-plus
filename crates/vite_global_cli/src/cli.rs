@@ -551,7 +551,8 @@ async fn managed_install(
     node: Option<&str>,
     force: bool,
 ) -> Result<ExitStatus, Error> {
-    if crate::commands::env::global_install::install(packages, node, force, 5).await.is_err() {
+    if crate::commands::env::global_install::install(packages, node, force, 5, false).await.is_err()
+    {
         return Ok(exit_status(1));
     }
 
@@ -582,7 +583,10 @@ async fn managed_update(packages: &[String]) -> Result<ExitStatus, Error> {
         packages.to_vec()
     };
 
-    if crate::commands::env::global_install::update(&to_update, None, false, 5).await.is_err() {
+    if crate::commands::env::global_install::install(&to_update, None, false, 5, true)
+        .await
+        .is_err()
+    {
         return Ok(exit_status(1));
     }
     Ok(ExitStatus::default())
