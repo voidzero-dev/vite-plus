@@ -109,7 +109,7 @@ const LEGACY_WRAPPER_PACKAGE_NAMES = ['@voidzero-dev/vite-plus-test'] as const;
 // rewritten. For `vitest`, we substitute the vitest version vite-plus
 // bundles so any `catalog:` reference the user still has resolves cleanly.
 const LEGACY_WRAPPER_FALLBACK_VERSIONS: Record<string, string> = {
-  vitest: `^${VITEST_VERSION}`,
+  vitest: VITEST_VERSION,
 };
 
 function isLegacyWrapperSpec(value: string | undefined): boolean {
