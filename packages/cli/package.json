@@ -241,6 +241,7 @@
     "@vitest/browser-preview": "catalog:",
     "@vitest/browser-webdriverio": "catalog:",
     "@voidzero-dev/vite-plus-core": "workspace:*",
+    "es-module-lexer": "^1.7.0",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
     "oxlint-tsgolint": "catalog:",
