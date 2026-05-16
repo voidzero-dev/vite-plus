@@ -211,7 +211,7 @@ jobs:
       - name: Run vp create ${{ matrix.template.name }} with ${{ matrix.package-manager }}
         working-directory: ${{ runner.temp }}
         env:
-          VP_OVERRIDE_PACKAGES: '{"vite":"file:${{ github.workspace }}/tmp/tgz/${{ env.VITE_OVERRIDE_TGZ }}","@voidzero-dev/vite-plus-core":"file:${{ github.workspace }}/tmp/tgz/voidzero-dev-vite-plus-core-0.0.0.tgz"}'
+          VP_OVERRIDE_PACKAGES: '{"vite":"file:${{ github.workspace }}/tmp/tgz/${{ env.VITE_OVERRIDE_TGZ }}","@voidzero-dev/vite-plus-core":"file:${{ github.workspace }}/tmp/tgz/voidzero-dev-vite-plus-core-0.0.0.tgz","vitest":"4.1.5","@vitest/expect":"4.1.5","@vitest/runner":"4.1.5","@vitest/snapshot":"4.1.5","@vitest/spy":"4.1.5","@vitest/utils":"4.1.5","@vitest/mocker":"4.1.5","@vitest/pretty-format":"4.1.5","@vitest/coverage-v8":"4.1.5","@vitest/coverage-istanbul":"4.1.5"}'
         run: |
           vp create ${{ matrix.template.create-args }} \
             --no-interactive \
