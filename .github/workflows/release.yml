@@ -5,6 +5,10 @@ on:
     branches: [main]
     paths:
       - 'packages/cli/package.json'
+  # TEMP: remove before merge — validate the check job from PR #1600
+  pull_request:
+    paths:
+      - '.github/workflows/release.yml'
 
 permissions: {}
 
