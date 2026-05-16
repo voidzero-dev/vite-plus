@@ -1,7 +1,13 @@
 import type { PluginOption, UserConfig } from '@voidzero-dev/vite-plus-core';
 import type { OxfmtConfig } from 'oxfmt';
 import type { OxlintConfig } from 'oxlint';
-import { defineConfig as viteDefineConfig, type ConfigEnv } from 'vitest/config';
+import {
+  defineConfig as viteDefineConfig,
+  type ConfigEnv,
+  type TestProjectConfiguration,
+  type TestProjectInlineConfiguration,
+  type UserProjectConfigFn,
+} from 'vitest/config';
 import type { InlineConfig as VitestInlineConfig } from 'vitest/node';
 
 import type { PackUserConfig } from './pack.ts';
@@ -98,10 +104,70 @@ function vitePlusTestSpecifierRewritePlugin(): PluginOption {
   };
 }
 
-function injectPlugin(config: UserConfig): UserConfig {
+/**
+ * Inject the rewrite plugin into a single inline project config. Used both
+ * for root configs and for object-shaped entries inside `test.projects`.
+ *
+ * The shapes overlap (both have an optional top-level `plugins` array), so a
+ * shared helper keeps the wiring consistent.
+ */
+function injectPluginIntoInlineConfig<T extends { plugins?: UserConfig['plugins'] }>(
+  config: T,
+): T {
   return {
     ...config,
     plugins: [vitePlusTestSpecifierRewritePlugin(), ...(config.plugins ?? [])],
+  };
+}
+
+/**
+ * Walk `config.test?.projects` and inject the rewrite plugin into each
+ * project entry. Vitest spins up an independent Vite pipeline per project, so
+ * root-level plugins do NOT propagate — without this, files matched by a
+ * project's `include` glob never get the `vite-plus/test` → `vitest` rewrite.
+ *
+ * Entry shapes (from `TestProjectConfiguration`):
+ *   - string  (glob path like `'./packages/*'`)  → passed through unchanged.
+ *   - object  (inline config with `test: {...}`) → clone and prepend plugin.
+ *   - function (sync or async)                   → wrap so its result is injected.
+ *   - Promise (resolves to inline config)        → chain `.then(injectPlugin)`.
+ */
+function injectPluginIntoProject(project: TestProjectConfiguration): TestProjectConfiguration {
+  if (typeof project === 'string') {
+    return project;
+  }
+  if (typeof project === 'function') {
+    const fn = project as UserProjectConfigFn;
+    const wrapped: UserProjectConfigFn = (env: ConfigEnv) => {
+      const result = fn(env);
+      if (result instanceof Promise) {
+        return result.then(injectPluginIntoInlineConfig);
+      }
+      return injectPluginIntoInlineConfig(result);
+    };
+    return wrapped;
+  }
+  if (project instanceof Promise) {
+    return project.then(injectPluginIntoInlineConfig);
+  }
+  if (typeof project === 'object' && project !== null) {
+    return injectPluginIntoInlineConfig(project as TestProjectInlineConfiguration);
+  }
+  return project;
+}
+
+function injectPlugin(config: UserConfig): UserConfig {
+  const injected = injectPluginIntoInlineConfig(config);
+  const projects = injected.test?.projects;
+  if (!projects || projects.length === 0) {
+    return injected;
+  }
+  return {
+    ...injected,
+    test: {
+      ...injected.test,
+      projects: projects.map(injectPluginIntoProject),
+    },
   };
 }
 
