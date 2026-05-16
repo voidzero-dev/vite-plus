@@ -330,6 +330,20 @@ fn parse_npm_view_version(stdout: &[u8]) -> Result<String, Error> {
     }
 }
 
+/// Return true for package specs that refer to local filesystem content.
+pub(crate) fn is_local_package_spec(spec: &str) -> bool {
+    spec == "."
+        || spec == ".."
+        || spec.starts_with("./")
+        || spec.starts_with("../")
+        || spec.starts_with('/')
+        || spec.starts_with("file:")
+        || (cfg!(windows)
+            && spec.len() >= 3
+            && spec.as_bytes()[1] == b':'
+            && (spec.as_bytes()[2] == b'\\' || spec.as_bytes()[2] == b'/'))
+}
+
 /// Parse package spec into name and optional version.
 pub(crate) fn parse_package_spec(spec: &str) -> (String, Option<String>) {
     // Handle scoped packages: @scope/name@version
@@ -784,6 +798,23 @@ mod tests {
     fn test_parse_npm_view_version_rejects_empty_output() {
         let err = parse_npm_view_version(b"\n").unwrap_err();
         assert!(err.to_string().contains("empty version"));
+    }
+
+    #[test]
+    fn test_is_local_package_spec_relative_paths() {
+        assert!(is_local_package_spec("."));
+        assert!(is_local_package_spec(".."));
+        assert!(is_local_package_spec("./pkg"));
+        assert!(is_local_package_spec("../pkg"));
+        assert!(is_local_package_spec("file:../pkg"));
+    }
+
+    #[test]
+    fn test_is_local_package_spec_registry_packages() {
+        assert!(!is_local_package_spec("typescript"));
+        assert!(!is_local_package_spec("typescript@5.9.3"));
+        assert!(!is_local_package_spec("@scope/pkg"));
+        assert!(!is_local_package_spec("@scope/pkg@1.0.0"));
     }
 
     #[test]
