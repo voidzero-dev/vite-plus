@@ -90,6 +90,17 @@ test('lazyPlugins wraps sync function returning a Promise into array', () => {
   expect(result).not.toBeInstanceOf(Promise);
 });
 
+// defineConfig auto-injects a `vite-plus:vitest-specifier-rewrite` plugin at
+// index 0 so user-supplied plugins start at index 1. The helpers below let the
+// tests assert on user-supplied plugins regardless of the injection.
+const REWRITE_PLUGIN_NAME = 'vite-plus:vitest-specifier-rewrite';
+const userPlugins = (plugins: unknown): unknown[] => {
+  expect(Array.isArray(plugins)).toBe(true);
+  const arr = plugins as unknown[];
+  expect((arr[0] as { name?: string })?.name).toBe(REWRITE_PLUGIN_NAME);
+  return arr.slice(1);
+};
+
 // lazyPlugins type compatibility tests — these verify at compile time that
 // lazyPlugins return types satisfy Vite's plugins?: PluginOption[] field.
 
@@ -99,7 +110,7 @@ test('lazyPlugins sync return type satisfies plugins field', () => {
   const config = defineConfig({
     plugins: lazyPlugins(() => [{ name: 'sync-type-test' }]),
   });
-  expect(config.plugins?.length).toBe(1);
+  expect(userPlugins(config.plugins).length).toBe(1);
 });
 
 test('lazyPlugins async return type satisfies plugins field', () => {
@@ -119,7 +130,8 @@ test('lazyPlugins undefined return satisfies plugins field', () => {
   const config = defineConfig({
     plugins: lazyPlugins(() => [{ name: 'skipped' }]),
   });
-  expect(config.plugins).toBeUndefined();
+  // lazyPlugins returns undefined, but defineConfig still injects its rewrite plugin.
+  expect(userPlugins(config.plugins).length).toBe(0);
 });
 
 test('lazyPlugins with vitest configureVitest plugin satisfies plugins field', () => {
@@ -132,7 +144,7 @@ test('lazyPlugins with vitest configureVitest plugin satisfies plugins field', (
       },
     ]),
   });
-  expect(config.plugins?.length).toBe(1);
+  expect(userPlugins(config.plugins).length).toBe(1);
 });
 
 // defineConfig compatibility tests
@@ -141,35 +153,35 @@ test('defineConfig passes through plain plugins array', () => {
   const config = defineConfig({
     plugins: [{ name: 'test-plugin' }],
   });
-  expect(config.plugins?.length).toBe(1);
+  expect(userPlugins(config.plugins).length).toBe(1);
 });
 
 test('defineConfig supports Plugin objects in plugins array', () => {
   const config = defineConfig({
     plugins: [{ name: 'plugin-a' }, { name: 'plugin-b' }],
   });
-  expect(config.plugins?.length).toBe(2);
+  expect(userPlugins(config.plugins).length).toBe(2);
 });
 
 test('defineConfig supports falsy values in plugins array', () => {
   const config = defineConfig({
     plugins: [{ name: 'real-plugin' }, false, null, undefined],
   });
-  expect(config.plugins?.length).toBe(4);
+  expect(userPlugins(config.plugins).length).toBe(4);
 });
 
 test('defineConfig supports nested plugin arrays', () => {
   const config = defineConfig({
     plugins: [[{ name: 'nested-a' }, { name: 'nested-b' }], { name: 'top-level' }],
   });
-  expect(config.plugins?.length).toBe(2);
+  expect(userPlugins(config.plugins).length).toBe(2);
 });
 
 test('defineConfig supports Promise<Plugin> in plugins array', () => {
   const config = defineConfig({
     plugins: [Promise.resolve({ name: 'async-plugin' })],
   });
-  expect(config.plugins?.length).toBe(1);
+  expect(userPlugins(config.plugins).length).toBe(1);
 });
 
 test('defineConfig supports mixed PluginOption types in array', () => {
@@ -183,19 +195,20 @@ test('defineConfig supports mixed PluginOption types in array', () => {
       undefined,
     ],
   });
-  expect(config.plugins?.length).toBe(6);
+  expect(userPlugins(config.plugins).length).toBe(6);
 });
 
 test('defineConfig supports empty plugins array', () => {
   const config = defineConfig({
     plugins: [],
   });
-  expect(config.plugins?.length).toBe(0);
+  expect(userPlugins(config.plugins).length).toBe(0);
 });
 
 test('defineConfig supports config without plugins', () => {
   const config = defineConfig({});
-  expect(config.plugins).toBeUndefined();
+  // defineConfig always injects its rewrite plugin even when user omits `plugins`.
+  expect(userPlugins(config.plugins).length).toBe(0);
 });
 
 test('defineConfig supports function config with plain plugins array', () => {
@@ -203,7 +216,7 @@ test('defineConfig supports function config with plain plugins array', () => {
     plugins: [{ name: 'fn-plugin' }],
   }));
   const config = configFn({ command: 'build', mode: 'production' });
-  expect(config.plugins?.length).toBe(1);
+  expect(userPlugins(config.plugins).length).toBe(1);
 });
 
 test('defineConfig supports async function config with plain plugins array', async () => {
@@ -211,7 +224,7 @@ test('defineConfig supports async function config with plain plugins array', asy
     plugins: [{ name: 'async-fn-plugin' }],
   }));
   const config = await configFn({ command: 'build', mode: 'production' });
-  expect(config.plugins?.length).toBe(1);
+  expect(userPlugins(config.plugins).length).toBe(1);
 });
 
 test('defineConfig supports vitest plugin with configureVitest hook', () => {
@@ -225,6 +238,7 @@ test('defineConfig supports vitest plugin with configureVitest hook', () => {
       },
     ],
   });
-  expect(config.plugins?.length).toBe(1);
-  expect((config.plugins?.[0] as { name: string })?.name).toBe('vitest-plugin');
+  const userOnly = userPlugins(config.plugins);
+  expect(userOnly.length).toBe(1);
+  expect((userOnly[0] as { name: string })?.name).toBe('vitest-plugin');
 });
