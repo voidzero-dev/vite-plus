@@ -5,7 +5,11 @@ Added 'lint' to 'vite.config.ts'.
 import { defineConfig } from "vite-plus";
 
 export default defineConfig({
-  lint: { options: { typeAware: true, typeCheck: true } },
+  lint: {
+    jsPlugins: [{ name: "vite-plus", specifier: "vite-plus/oxlint-plugin" }],
+    rules: { "vite-plus/prefer-vite-plus-imports": "error" },
+    options: { typeAware: true, typeCheck: true },
+  },
 });
 
 > test ! -f .oxlintrc.json # check .oxlintrc.json is removed

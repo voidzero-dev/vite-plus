@@ -1,0 +1,11 @@
+{
+  "ignoredPlatforms": [{ "os": "linux", "libc": "musl" }],
+  "commands": [
+    "vp lint src/index.ts # should fail before fix (index.ts)",
+    "vp lint src/types.ts # should fail before fix (types.ts)",
+    "vp lint --fix src/index.ts src/types.ts # rewrite vite and vitest imports via the vite-plus oxlint plugin",
+    "cat src/index.ts",
+    "cat src/types.ts",
+    "vp lint src/index.ts src/types.ts # confirm the rewritten files are clean"
+  ]
+}

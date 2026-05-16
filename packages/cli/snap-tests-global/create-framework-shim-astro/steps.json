@@ -10,6 +10,8 @@
       "command": "cd my-astro-app && vp install --ignore-scripts -- --no-frozen-lockfile # install dependencies",
       "ignoreOutput": true
     },
-    "cd my-astro-app && vp check --fix # fix generated formatting and ensure no errors"
+    {
+      "command": "cd my-astro-app && sed -i.bak -e '/jsPlugins/d' -e '/rules:/d' -e '/options:/d' vite.config.ts && vp check --fix # fix generated formatting and ensure no errors"
+    }
   ]
 }

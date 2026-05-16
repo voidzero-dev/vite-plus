@@ -16,14 +16,21 @@ export default defineConfig({
       "correctness": "error"
     },
     "rules": {
-      "no-console": "error"
+      "no-console": "error",
+      "vite-plus/prefer-vite-plus-imports": "error"
     },
     "globals": {},
     "ignorePatterns": [],
     "options": {
       "typeAware": true,
       "typeCheck": true
-    }
+    },
+    "jsPlugins": [
+      {
+        "name": "vite-plus",
+        "specifier": "vite-plus/oxlint-plugin"
+      }
+    ]
   },
 });
 

@@ -772,6 +772,7 @@ jobs:
         run: |
           docker run --rm \
             -e CI=true \
+            -e GITHUB_ACTIONS=true \
             -v "${{ github.workspace }}:/workspace" \
             -w /workspace \
             node:22-alpine3.21 sh -c "

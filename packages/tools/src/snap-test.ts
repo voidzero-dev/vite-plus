@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import fs, { readFileSync } from 'node:fs';
+import fs from 'node:fs';
 import fsPromises from 'node:fs/promises';
-import { open } from 'node:fs/promises';
 import { cpus, homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import { setTimeout } from 'node:timers/promises';
@@ -91,6 +90,214 @@ function selectShard<T>(items: T[], index: number, total: number): T[] {
 }
 
 const NPM_GLOBAL_PREFIX_DIR = 'npm-global-lib-for-snap-tests';
+
+function resolveGlobalCliScriptsDir(casesDir: string): string {
+  const candidates = [
+    // `packages/cli/snap-tests-global` -> `packages/cli/dist`
+    path.join(path.dirname(casesDir), 'dist'),
+    // Fallback for the common `pnpm -F vite-plus snap-test-global` cwd.
+    path.resolve('dist'),
+  ];
+
+  const scriptsDir = candidates.find((dir) => fs.existsSync(path.join(dir, 'bin.js')));
+  if (!scriptsDir) {
+    throw new Error(
+      `Unable to find built Vite+ CLI scripts for global snap tests. Tried:\n${candidates
+        .map((dir) => `- ${dir}`)
+        .join('\n')}`,
+    );
+  }
+
+  return scriptsDir;
+}
+
+function resolveRepoRoot(casesDir: string): string {
+  return path.resolve(path.dirname(casesDir), '..', '..');
+}
+
+function resolveGlobalCliBinary(binDir: string): string {
+  const binaryName = process.platform === 'win32' ? 'vp.exe' : 'vp';
+  const binaryPath = path.join(path.resolve(expandHome(binDir)), binaryName);
+  if (!fs.existsSync(binaryPath)) {
+    throw new Error(`Unable to find global snap test vp binary at ${binaryPath}`);
+  }
+
+  return fs.realpathSync(binaryPath);
+}
+
+function resolveInstalledGlobalCliTargetBinary(binDir: string): string {
+  const binaryName = process.platform === 'win32' ? 'vp.exe' : 'vp';
+  const binaryPath = path.join(
+    path.resolve(expandHome(binDir)),
+    '..',
+    'current',
+    'bin',
+    binaryName,
+  );
+  if (!fs.existsSync(binaryPath)) {
+    throw new Error(`Unable to find installed global snap test vp binary at ${binaryPath}`);
+  }
+
+  return fs.realpathSync(binaryPath);
+}
+
+function resolveBuiltGlobalCliArtifact(
+  casesDir: string,
+  binaryName: string,
+  packageName: string,
+): string {
+  const repoRoot = resolveRepoRoot(casesDir);
+  const targetDirs = [path.join(repoRoot, 'target')];
+  if (process.env.CARGO_TARGET_DIR) {
+    targetDirs.unshift(process.env.CARGO_TARGET_DIR);
+  }
+  const candidates: string[] = [];
+  for (const targetDir of targetDirs) {
+    candidates.push(
+      path.join(targetDir, 'release', binaryName),
+      path.join(targetDir, 'debug', binaryName),
+    );
+    if (!fs.existsSync(targetDir)) {
+      continue;
+    }
+
+    for (const entry of fs.readdirSync(targetDir, { withFileTypes: true })) {
+      if (entry.isDirectory()) {
+        candidates.push(
+          path.join(targetDir, entry.name, 'release', binaryName),
+          path.join(targetDir, entry.name, 'debug', binaryName),
+        );
+      }
+    }
+  }
+  const binaryPath = candidates.find((candidate) => fs.existsSync(candidate));
+  if (!binaryPath) {
+    throw new Error(
+      `Unable to find built Vite+ global CLI ${binaryName} for global snap tests. Tried:\n${candidates
+        .map((candidate) => `- ${candidate}`)
+        .join('\n')}\nRun \`cargo build -p ${packageName} --release\` before snap-test-global.`,
+    );
+  }
+
+  return fs.realpathSync(binaryPath);
+}
+
+function resolveBuiltGlobalCliBinary(casesDir: string): string {
+  const binaryName = process.platform === 'win32' ? 'vp.exe' : 'vp';
+  return resolveBuiltGlobalCliArtifact(casesDir, binaryName, 'vite_global_cli');
+}
+
+function resolveBuiltGlobalCliShim(casesDir: string): string {
+  return resolveBuiltGlobalCliArtifact(casesDir, 'vp-shim.exe', 'vite_trampoline');
+}
+
+function newestMtimeMs(filePath: string): number {
+  const stats = fs.statSync(filePath);
+  if (!stats.isDirectory()) {
+    return stats.mtimeMs;
+  }
+
+  return fs
+    .readdirSync(filePath)
+    .reduce(
+      (newest, entry) => Math.max(newest, newestMtimeMs(path.join(filePath, entry))),
+      stats.mtimeMs,
+    );
+}
+
+function fileContentsEqual(a: string, b: string): boolean {
+  return fs.readFileSync(a).equals(fs.readFileSync(b));
+}
+
+function assertGlobalCliBinaryMatchesCheckout(binDir: string, casesDir: string): void {
+  const repoRoot = resolveRepoRoot(casesDir);
+  const builtBinary = resolveBuiltGlobalCliBinary(casesDir);
+  const sourcePaths = [
+    path.join(repoRoot, 'Cargo.toml'),
+    path.join(repoRoot, 'Cargo.lock'),
+    path.join(repoRoot, 'crates', 'vite_global_cli', 'src'),
+    path.join(repoRoot, 'crates', 'vite_shared', 'src'),
+  ];
+  const shouldCheckMtime = process.env.GITHUB_ACTIONS !== 'true';
+  const newestSourceMtime = shouldCheckMtime ? Math.max(...sourcePaths.map(newestMtimeMs)) : 0;
+  if (shouldCheckMtime && fs.statSync(builtBinary).mtimeMs + 1000 < newestSourceMtime) {
+    throw new Error(
+      `Built Vite+ global CLI binary is older than the current checkout: ${builtBinary}\n` +
+        'Run `cargo build -p vite_global_cli --release` before snap-test-global.',
+    );
+  }
+
+  const globalBinary = resolveGlobalCliBinary(binDir);
+  if (process.platform !== 'win32' && fileContentsEqual(globalBinary, builtBinary)) {
+    return;
+  }
+
+  if (process.platform === 'win32') {
+    const builtShim = resolveBuiltGlobalCliShim(casesDir);
+    const installedTargetBinary = resolveInstalledGlobalCliTargetBinary(binDir);
+    if (
+      fileContentsEqual(globalBinary, builtShim) &&
+      fileContentsEqual(installedTargetBinary, builtBinary)
+    ) {
+      return;
+    }
+
+    throw new Error(
+      `Global snap tests would use stale Windows vp binaries.\n` +
+        `Entrypoint: ${globalBinary}\n` +
+        `Expected entrypoint to match the current checkout shim at ${builtShim}.\n` +
+        `Installed target: ${installedTargetBinary}\n` +
+        `Expected target to match the current checkout build at ${builtBinary}.\n` +
+        'Run `pnpm bootstrap-cli` or `pnpm bootstrap-cli:ci` before snap-test-global.',
+    );
+  }
+
+  throw new Error(
+    `Global snap tests would use a stale vp binary from ${globalBinary}.\n` +
+      `Expected it to match the current checkout build at ${builtBinary}.\n` +
+      'Run `pnpm bootstrap-cli` or `pnpm bootstrap-cli:ci` before snap-test-global.',
+  );
+}
+
+function replaceInstalledCheckoutPackages(rootDir: string, repoRoot: string): void {
+  const stack = [rootDir];
+  const symlinkType = process.platform === 'win32' ? 'junction' : 'dir';
+  const replacements = new Map([
+    ['node_modules/vite-plus', path.join(repoRoot, 'packages', 'cli')],
+    ['node_modules/vite', path.join(repoRoot, 'packages', 'core')],
+    ['node_modules/vitest', path.join(repoRoot, 'packages', 'test')],
+    ['node_modules/@voidzero-dev/vite-plus-core', path.join(repoRoot, 'packages', 'core')],
+    ['node_modules/@voidzero-dev/vite-plus-test', path.join(repoRoot, 'packages', 'test')],
+  ]);
+
+  while (stack.length > 0) {
+    const dir = stack.pop()!;
+    for (const [relativePackagePath, checkoutPackageDir] of replacements) {
+      const candidate = path.join(dir, relativePackagePath);
+      if (fs.existsSync(candidate) && fs.realpathSync(candidate) !== checkoutPackageDir) {
+        fs.rmSync(candidate, { recursive: true, force: true });
+        fs.symlinkSync(checkoutPackageDir, candidate, symlinkType);
+      }
+    }
+
+    const isNodeModulesPath = dir.split(path.sep).includes('node_modules');
+    const isPnpmStorePath = dir.split(path.sep).includes('.pnpm');
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (!entry.isDirectory() || entry.name === '.git' || entry.name === '.bin') {
+        continue;
+      }
+      if (
+        isNodeModulesPath &&
+        !isPnpmStorePath &&
+        entry.name !== '.pnpm' &&
+        entry.name !== '@voidzero-dev'
+      ) {
+        continue;
+      }
+      stack.push(path.join(dir, entry.name));
+    }
+  }
+}
 
 export async function snapTest() {
   const { positionals, values } = parseArgs({
@@ -217,13 +424,18 @@ export async function snapTest() {
   const selectedCases = shard
     ? selectShard(validCaseNames, shard.index, shard.total)
     : validCaseNames;
+  const globalCliScriptsDir = values['bin-dir'] ? resolveGlobalCliScriptsDir(casesDir) : undefined;
+  if (values['bin-dir']) {
+    assertGlobalCliBinaryMatchesCheckout(values['bin-dir'], casesDir);
+  }
 
   const serialTasks: (() => Promise<void>)[] = [];
   const parallelTasks: (() => Promise<void>)[] = [];
   for (const caseName of selectedCases) {
     const stepsPath = path.join(casesDir, caseName, 'steps.json');
-    const steps: Steps = JSON.parse(readFileSync(stepsPath, 'utf-8'));
-    const task = () => runTestCase(caseName, tempTmpDir, casesDir, values['bin-dir']);
+    const steps: Steps = JSON.parse(fs.readFileSync(stepsPath, 'utf-8'));
+    const task = () =>
+      runTestCase(caseName, tempTmpDir, casesDir, values['bin-dir'], globalCliScriptsDir);
     if (steps.serial) {
       serialTasks.push(task);
     } else {
@@ -272,6 +484,11 @@ interface Steps {
   ignoredPlatforms?: (string | PlatformFilter)[];
   env: Record<string, string>;
   commands: (string | Command)[];
+  /**
+   * If true, installed Vite+ packages in the test project are relinked to the
+   * current checkout after each successful command.
+   */
+  linkCheckoutPackages?: boolean;
   /**
    * Commands to run after the test completes, regardless of success or failure.
    * Useful for cleanup tasks like killing background processes.
@@ -337,7 +554,13 @@ function shouldSkipPlatform(ignoredPlatforms: (string | PlatformFilter)[]): bool
   return false;
 }
 
-async function runTestCase(name: string, tempTmpDir: string, casesDir: string, binDir?: string) {
+async function runTestCase(
+  name: string,
+  tempTmpDir: string,
+  casesDir: string,
+  binDir?: string,
+  globalCliScriptsDir?: string,
+) {
   const steps: Steps = JSON.parse(
     await fsPromises.readFile(`${casesDir}/${name}/steps.json`, 'utf-8'),
   );
@@ -381,6 +604,9 @@ async function runTestCase(name: string, tempTmpDir: string, casesDir: string, b
     // shared helper scripts under `<casesDir>/.shared/` without
     // duplicating them into every fixture directory.
     SNAP_CASES_DIR: casesDir,
+    // Global CLI snap tests execute the Rust binary from --bin-dir, but the JS
+    // entry should come from this checkout instead of a stale ~/.vite-plus install.
+    ...(globalCliScriptsDir ? { VITE_GLOBAL_CLI_JS_SCRIPTS_DIR: globalCliScriptsDir } : {}),
 
     // A test case can override/unset environment variables above.
     // For example, VP_CLI_TEST/CI can be unset to test the real-world outputs.
@@ -428,7 +654,7 @@ async function runTestCase(name: string, tempTmpDir: string, casesDir: string, b
       // it seems not to have stable ordering of stdout/stderr chunks.
       // To ensure stable ordering, we redirect outputs to a file instead.
       const outputStreamPath = path.join(caseTmpDir, 'output.log');
-      const outputStream = await open(outputStreamPath, 'w');
+      const outputStream = await fsPromises.open(outputStreamPath, 'w');
 
       const exitCode = await Promise.race([
         execute(stripComments(cmd.command), [], {
@@ -450,8 +676,11 @@ async function runTestCase(name: string, tempTmpDir: string, casesDir: string, b
       ]);
 
       await outputStream.close();
+      if (exitCode === 0 && globalCliScriptsDir && steps.linkCheckoutPackages) {
+        replaceInstalledCheckoutPackages(caseTmpDir, resolveRepoRoot(casesDir));
+      }
 
-      let output = readFileSync(outputStreamPath, 'utf-8');
+      let output = fs.readFileSync(outputStreamPath, 'utf-8');
 
       let commandLine = `> ${cmd.command}`;
       if (exitCode !== 0) {
