@@ -150,10 +150,10 @@ impl PackageManager {
                 if options.parseable {
                     output::warn("--parseable not supported by yarn");
                 }
-                if let Some(filters) = options.filters {
-                    if !filters.is_empty() {
-                        output::warn("--filter not supported by yarn");
-                    }
+                if let Some(filters) = options.filters
+                    && !filters.is_empty()
+                {
+                    output::warn("--filter not supported by yarn");
                 }
                 if options.prod || options.dev {
                     output::warn("--prod/--dev not supported by yarn");
@@ -222,10 +222,10 @@ impl PackageManager {
                 if options.recursive {
                     output::warn("--recursive not supported by bun why");
                 }
-                if let Some(filters) = options.filters {
-                    if !filters.is_empty() {
-                        output::warn("--filter not supported by bun why");
-                    }
+                if let Some(filters) = options.filters
+                    && !filters.is_empty()
+                {
+                    output::warn("--filter not supported by bun why");
                 }
                 if options.workspace_root {
                     output::warn("--workspace-root not supported by bun why");

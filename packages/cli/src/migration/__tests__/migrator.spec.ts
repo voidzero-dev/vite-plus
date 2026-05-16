@@ -1383,3 +1383,61 @@ describe('framework shim', () => {
     });
   });
 });
+
+describe('rewriteStandaloneProject — tsconfig types rewriting', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-tsconfig-'));
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'test', devDependencies: { vite: '^7.0.0' } }),
+    );
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('rewrites tsdown/client to vite-plus/pack/client in tsconfig.json', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'tsconfig.json'),
+      JSON.stringify({ compilerOptions: { types: ['tsdown/client'] } }, null, 2),
+    );
+
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+    const tsconfig = readJson(path.join(tmpDir, 'tsconfig.json'));
+    expect((tsconfig.compilerOptions as { types: string[] }).types).toContain(
+      'vite-plus/pack/client',
+    );
+    expect((tsconfig.compilerOptions as { types: string[] }).types).not.toContain('tsdown/client');
+  });
+
+  it('rewrites vite/client to vite-plus/client in tsconfig.json', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'tsconfig.json'),
+      JSON.stringify({ compilerOptions: { types: ['vite/client'] } }, null, 2),
+    );
+
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+    const tsconfig = readJson(path.join(tmpDir, 'tsconfig.json'));
+    expect((tsconfig.compilerOptions as { types: string[] }).types).toContain('vite-plus/client');
+    expect((tsconfig.compilerOptions as { types: string[] }).types).not.toContain('vite/client');
+  });
+
+  it('rewrites types in tsconfig.node.json as well', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'tsconfig.node.json'),
+      JSON.stringify({ compilerOptions: { types: ['tsdown/client'] } }, null, 2),
+    );
+
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+    const tsconfig = readJson(path.join(tmpDir, 'tsconfig.node.json'));
+    expect((tsconfig.compilerOptions as { types: string[] }).types).toContain(
+      'vite-plus/pack/client',
+    );
+  });
+});

@@ -1,5 +1,0 @@
-{
-  "scripts": {
-    "check": "node check.js"
-  }
-}

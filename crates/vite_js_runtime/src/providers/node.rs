@@ -41,7 +41,7 @@ pub struct NodeVersionEntry {
 impl NodeVersionEntry {
     /// Check if this version is an LTS release.
     #[must_use]
-    pub fn is_lts(&self) -> bool {
+    pub const fn is_lts(&self) -> bool {
         matches!(self.lts, LtsInfo::Codename(_))
     }
 }
@@ -64,7 +64,7 @@ pub enum LtsInfo {
 struct VersionIndexCache {
     /// Unix timestamp when cache expires
     expires_at: u64,
-    /// ETag from HTTP response (for conditional requests)
+    /// `ETag` from HTTP response (for conditional requests)
     #[serde(default)]
     etag: Option<Str>,
     /// Cached version entries
@@ -131,10 +131,10 @@ impl NodeProvider {
             if let Ok(version) = Version::parse(&name) {
                 // Check if binary exists (valid installation)
                 let binary_path = node_cache.join(&name).join(self.binary_relative_path(platform));
-                if tokio::fs::try_exists(&binary_path).await.unwrap_or(false) {
-                    if range.satisfies(&version) {
-                        matching_versions.push(version);
-                    }
+                if tokio::fs::try_exists(&binary_path).await.unwrap_or(false)
+                    && range.satisfies(&version)
+                {
+                    matching_versions.push(version);
                 }
             }
         }
@@ -224,7 +224,7 @@ impl NodeProvider {
         }
     }
 
-    /// Try conditional fetch with ETag, returns cached versions if 304
+    /// Try conditional fetch with `ETag`, returns cached versions if 304
     async fn fetch_with_etag(
         &self,
         etag: &str,
@@ -339,7 +339,7 @@ impl NodeProvider {
     /// Returns `true` for:
     /// - `latest` - The absolute latest Node.js version (including non-LTS)
     #[must_use]
-    pub fn is_latest_alias(version: &str) -> bool {
+    pub const fn is_latest_alias(version: &str) -> bool {
         version.eq_ignore_ascii_case("latest")
     }
 
@@ -374,12 +374,11 @@ impl NodeProvider {
         }
 
         // lts/-n - nth-highest LTS (e.g., lts/-1 = second highest)
-        if suffix.starts_with('-') {
-            if let Ok(n) = suffix.parse::<i32>() {
-                if n < 0 {
-                    return self.resolve_lts_by_offset(n).await;
-                }
-            }
+        if suffix.starts_with('-')
+            && let Ok(n) = suffix.parse::<i32>()
+            && n < 0
+        {
+            return self.resolve_lts_by_offset(n).await;
         }
 
         // lts/<codename> - specific LTS line
@@ -550,7 +549,7 @@ async fn save_cache(cache_path: &AbsolutePathBuf, cache: &VersionIndexCache) {
     }
 }
 
-/// Calculate expiration timestamp from max_age or default TTL.
+/// Calculate expiration timestamp from `max_age` or default TTL.
 fn calculate_expires_at(max_age: Option<u64>) -> u64 {
     let ttl = max_age.unwrap_or(DEFAULT_CACHE_TTL_SECS);
     SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() + ttl

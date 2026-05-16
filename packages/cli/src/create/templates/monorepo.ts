@@ -10,7 +10,7 @@ import { editJsonFile } from '../../utils/json.ts';
 import { templatesDir } from '../../utils/path.ts';
 import type { ExecutionWithProjectDir } from '../command.ts';
 import { discoverTemplate } from '../discovery.ts';
-import { copyDir, formatDisplayTargetDir, setPackageName } from '../utils.ts';
+import { copyDir, formatDisplayTargetDir, renameFiles, setPackageName } from '../utils.ts';
 import { runRemoteTemplateCommand } from './remote.ts';
 import { type BuiltinTemplateInfo, LibraryTemplateRepo } from './types.ts';
 
@@ -156,21 +156,6 @@ export async function executeMonorepoTemplate(
   );
 
   return { exitCode: 0, projectDir: templateInfo.targetDir };
-}
-
-const RENAME_FILES: Record<string, string> = {
-  _gitignore: '.gitignore',
-  _npmrc: '.npmrc',
-  '_yarnrc.yml': '.yarnrc.yml',
-};
-
-function renameFiles(projectDir: string) {
-  for (const [from, to] of Object.entries(RENAME_FILES)) {
-    const fromPath = path.join(projectDir, from);
-    if (fs.existsSync(fromPath)) {
-      fs.renameSync(fromPath, path.join(projectDir, to));
-    }
-  }
 }
 
 function getScopeFromPackageName(packageName: string) {

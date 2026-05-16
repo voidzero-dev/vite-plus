@@ -1,0 +1,21 @@
+> node $SNAP_CASES_DIR/.shared/mock-npm-registry.mjs -- vp create @your-org:demo --no-interactive --directory my-demo-app # bundled template with _gitignore/_npmrc
+◇ Scaffolded my-demo-app
+• Node <semver>  pnpm <semver>
+→ Next: cd my-demo-app && vp run
+
+> ls -A my-demo-app # verify _gitignore/_npmrc were renamed and no underscore variants remain
+.gitignore
+.npmrc
+.vite-hooks
+AGENTS.md
+package.json
+pnpm-workspace.yaml
+src
+vite.config.ts
+
+> cat my-demo-app/.gitignore # verify _gitignore content was preserved
+node_modules
+dist
+
+> cat my-demo-app/.npmrc # verify _npmrc content was preserved
+auto-install-peers=true

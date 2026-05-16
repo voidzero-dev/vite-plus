@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "vitepress dev",
     "build": "cp ../packages/cli/install.sh ../packages/cli/install.ps1 public/ && vitepress build",
-    "preview": "vitepress preview"
+    "preview": "vitepress preview",
+    "update-trusted-stack-stats": "node .vitepress/theme/data/fetch-trusted-stack-stats.ts"
   },
   "dependencies": {
     "@iconify/vue": "^5.0.0",

@@ -1,3 +1,20 @@
+> vp pm config --help # should show help
+Usage: vp pm config <COMMAND>
+
+Manage package manager configuration
+
+Commands:
+  list    List all configuration
+  get     Get configuration value
+  set     Set configuration value
+  delete  Delete configuration key
+
+Options:
+  -h, --help  Print help
+
+Documentation: https://viteplus.dev/guide/install
+
+
 > vp pm config set vite-plus-pm-config-test-key test-value --location project # should set config value in project scope (shows warning for yarn@1)
 warn: yarn@1 does not support --location, ignoring flag
 yarn config v<semver>

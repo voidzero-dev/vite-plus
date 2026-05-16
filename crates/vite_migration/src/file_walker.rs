@@ -66,10 +66,10 @@ pub fn find_ts_files(root: &Path) -> Result<WalkResult, Error> {
         }
 
         // Check extension
-        if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-            if TS_JS_EXTENSIONS.contains(&ext) {
-                files.push(path.to_path_buf());
-            }
+        if let Some(ext) = path.extension().and_then(|e| e.to_str())
+            && TS_JS_EXTENSIONS.contains(&ext)
+        {
+            files.push(path.to_path_buf());
         }
     }
 

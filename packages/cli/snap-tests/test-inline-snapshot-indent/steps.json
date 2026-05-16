@@ -1,0 +1,7 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "commands": [
+    "vp test run -u src/inline-snapshot.test.ts # write inline snapshot via --update (regression test for #1553)",
+    "cat src/inline-snapshot.test.ts # snapshot must use 2-space indentation, not tabs"
+  ]
+}

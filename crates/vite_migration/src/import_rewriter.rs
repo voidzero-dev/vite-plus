@@ -277,6 +277,38 @@ transform:
       replace: tsdown
       by: "vite-plus/pack"
 fix: $NEW_IMPORT
+---
+id: rewrite-tsdown-client-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]tsdown/client['"]$
+  inside:
+    kind: import_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: tsdown/client
+      by: "vite-plus/pack/client"
+fix: $NEW_IMPORT
+---
+id: rewrite-declare-module-tsdown-client
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]tsdown/client['"]$
+  inside:
+    kind: module
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: tsdown/client
+      by: "vite-plus/pack/client"
+fix: $NEW_IMPORT
 "#;
 
 static PARSED_VITE_RULES: LazyLock<Vec<RuleConfig<SupportLang>>> = LazyLock::new(|| {
@@ -334,6 +366,11 @@ static RE_REF_VITE_SUBPATH: LazyLock<Regex> = LazyLock::new(|| {
 /// bare `tsdown` → `vite-plus/pack`
 static RE_REF_TSDOWN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"^(\s*///\s*<reference\s+types\s*=\s*["'])tsdown(["']\s*/>)"#).unwrap()
+});
+
+/// `tsdown/client` → `vite-plus/pack/client`
+static RE_REF_TSDOWN_CLIENT: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"^(\s*///\s*<reference\s+types\s*=\s*["'])tsdown/client(["']\s*/>)"#).unwrap()
 });
 
 /// Apply a single regex replacement, updating `content` in place if matched.
@@ -451,12 +488,13 @@ fn rewrite_reference_types(content: &mut String, skip_packages: &SkipPackages) -
     let line_ending = if preamble.contains("\r\n") { "\r\n" } else { "\n" };
 
     let mut changed = false;
-    let mut preamble_lines: Vec<String> = preamble.lines().map(|l| l.to_string()).collect();
+    let mut preamble_lines: Vec<String> =
+        preamble.lines().map(std::string::ToString::to_string).collect();
     // Strip UTF-8 BOM from the first preamble line so the regex `^(\s*///` can match.
-    if let Some(first) = preamble_lines.first_mut() {
-        if first.starts_with('\u{feff}') {
-            *first = first.trim_start_matches('\u{feff}').to_string();
-        }
+    if let Some(first) = preamble_lines.first_mut()
+        && first.starts_with('\u{feff}')
+    {
+        *first = first.trim_start_matches('\u{feff}').to_string();
     }
 
     for line in &mut preamble_lines {
@@ -495,10 +533,14 @@ fn rewrite_reference_types(content: &mut String, skip_packages: &SkipPackages) -
                 continue;
             }
         }
-        if !skip_packages.skip_tsdown
-            && apply_regex_replace(line, &RE_REF_TSDOWN, "${1}vite-plus/pack${2}")
-        {
-            changed = true;
+        if !skip_packages.skip_tsdown {
+            if apply_regex_replace(line, &RE_REF_TSDOWN_CLIENT, "${1}vite-plus/pack/client${2}") {
+                changed = true;
+                continue;
+            }
+            if apply_regex_replace(line, &RE_REF_TSDOWN, "${1}vite-plus/pack${2}") {
+                changed = true;
+            }
         }
     }
 
@@ -529,7 +571,7 @@ struct SkipPackages {
 
 impl SkipPackages {
     /// Check if all packages should be skipped (file can be skipped entirely)
-    fn all_skipped(&self) -> bool {
+    const fn all_skipped(&self) -> bool {
         self.skip_vite && self.skip_vitest && self.skip_tsdown
     }
 }
@@ -574,8 +616,7 @@ fn get_skip_packages_from_package_json(package_json_path: &Path) -> SkipPackages
     let has_package = |deps_key: &str, package_name: &str| -> bool {
         pkg.get(deps_key)
             .and_then(|v| v.as_object())
-            .map(|deps| deps.contains_key(package_name))
-            .unwrap_or(false)
+            .is_some_and(|deps| deps.contains_key(package_name))
     };
 
     // Check both peerDependencies and dependencies
@@ -734,10 +775,8 @@ fn rewrite_import(file_path: &Path, skip_packages: &SkipPackages) -> Result<Rewr
 /// Fast pre-filter to skip expensive AST parsing for files with no relevant imports.
 fn content_may_need_rewriting(content: &str, skip_packages: &SkipPackages) -> bool {
     // "vite" also matches "vitest" as a substring, covering both packages
-    if !skip_packages.skip_vite || !skip_packages.skip_vitest {
-        if content.contains("vite") {
-            return true;
-        }
+    if (!skip_packages.skip_vite || !skip_packages.skip_vitest) && content.contains("vite") {
+        return true;
     }
     // When only skip_vite is set, we still need to catch @vitest/ scoped packages
     if !skip_packages.skip_vitest && content.contains("@vitest/") {
@@ -1922,6 +1961,64 @@ export default defineConfig({
         );
     }
 
+    #[test]
+    fn test_rewrite_import_content_tsdown_client() {
+        let content = r#"import 'tsdown/client';"#;
+
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"import 'vite-plus/pack/client';"#);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_tsdown_client_double_quotes() {
+        let content = r#"import "tsdown/client";"#;
+
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"import "vite-plus/pack/client";"#);
+    }
+
+    #[test]
+    fn test_rewrite_declare_module_tsdown_client() {
+        let content = r#"declare module 'tsdown/client' {
+  interface ClientConfig {
+    custom?: boolean;
+  }
+}"#;
+
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"declare module 'vite-plus/pack/client' {
+  interface ClientConfig {
+    custom?: boolean;
+  }
+}"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_declare_module_tsdown_client_double_quotes() {
+        let content = r#"declare module "tsdown/client" {
+  interface ClientConfig {
+    custom?: boolean;
+  }
+}"#;
+
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"declare module "vite-plus/pack/client" {
+  interface ClientConfig {
+    custom?: boolean;
+  }
+}"#
+        );
+    }
+
     // ========================
     // PeerDependencies Tests
     // ========================
@@ -2463,12 +2560,12 @@ export default defineConfig({});"#
     }
 
     #[test]
-    fn test_rewrite_reference_types_tsdown_subpath_not_rewritten() {
-        // tsdown subpaths should NOT be rewritten because vite-plus only exports ./pack (no subpaths)
+    fn test_rewrite_reference_types_tsdown_client_rewritten() {
+        // tsdown/client should be rewritten to vite-plus/pack/client
         let content = r#"/// <reference types="tsdown/client" />"#;
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(!result.updated);
-        assert_eq!(result.content, content);
+        assert!(result.updated);
+        assert_eq!(result.content, r#"/// <reference types="vite-plus/pack/client" />"#);
     }
 
     #[test]

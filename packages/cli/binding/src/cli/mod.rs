@@ -143,7 +143,7 @@ async fn execute_vite_task_command(
     // Update PATH to include package manager bin directory BEFORE session init
     if let Ok(pm) = vite_install::PackageManager::builder(&cwd).build().await {
         let bin_prefix = pm.get_bin_prefix();
-        prepend_to_path_env(&bin_prefix, PrependOptions::default());
+        let _ = prepend_to_path_env(&bin_prefix, PrependOptions::default());
     }
 
     let session = Session::init(SessionConfig {

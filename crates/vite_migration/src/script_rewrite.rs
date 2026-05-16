@@ -2,7 +2,7 @@ use brush_parser::ast;
 
 /// Configuration for converting one flag (or set of aliases) into a different flag.
 /// Example: Prettier's `--list-different`/`-l` → `--check`.
-pub(crate) struct FlagConversion {
+pub struct FlagConversion {
     /// Source flags that should be converted (e.g. `["--list-different", "-l"]`).
     pub(crate) source_flags: &'static [&'static str],
     /// The target flag to emit instead (e.g. `"--check"`).
@@ -13,7 +13,7 @@ pub(crate) struct FlagConversion {
 }
 
 /// Tool-specific configuration for script rewriting.
-pub(crate) struct ScriptRewriteConfig {
+pub struct ScriptRewriteConfig {
     /// The source command name to match (e.g. `"prettier"`, `"eslint"`).
     pub(crate) source_command: &'static str,
     /// The `vp` subcommand to emit (e.g. `"fmt"`, `"lint"`).
@@ -31,7 +31,7 @@ const SHELL_CONTINUATION_KEYWORDS: &[&str] = &["then", "do", "else", "elif", "in
 
 /// Rewrite a shell script: find `source_command`, rename to `vp <subcommand>`,
 /// strip tool-specific flags, and normalize the output.
-pub(crate) fn rewrite_script(script: &str, config: &ScriptRewriteConfig) -> String {
+pub fn rewrite_script(script: &str, config: &ScriptRewriteConfig) -> String {
     let mut parser = brush_parser::Parser::new(
         script.as_bytes(),
         &brush_parser::ParserOptions::default(),

@@ -94,6 +94,7 @@ pub mod version;
 
 // Category D: Environment Management
 pub mod env;
+pub mod shell;
 
 // Standalone binary commands
 pub mod vpr;

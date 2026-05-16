@@ -99,7 +99,7 @@ impl PackageManager {
 
         // Add package flags for additional packages
         for pkg in options.packages {
-            args.push(format!("--package={}", pkg));
+            args.push(format!("--package={pkg}"));
         }
 
         // When using additional packages or version specifiers, npm exec requires explicit
@@ -224,6 +224,7 @@ impl PackageManager {
 ///
 /// Used both by the yarn@1 fallback (in `resolve_npx_fallback`) and by the
 /// no-package.json fallback in `vite_global_cli`.
+#[must_use]
 pub fn build_npx_args(options: &DlxCommandOptions<'_>) -> Vec<String> {
     let mut args = Vec::new();
 

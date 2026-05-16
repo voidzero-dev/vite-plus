@@ -20,3 +20,6 @@ vite_task = { workspace = true }
 [[bench]]
 name = "workspace_load"
 harness = false
+
+[lints]
+workspace = true

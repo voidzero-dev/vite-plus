@@ -174,18 +174,18 @@ The manifest lives at `createConfig.templates` in `@org/create`'s `package.json`
 
 Each entry supports:
 
-| Field         | Required | Notes                                                                                                                                                                                                                                        |
-| ------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `name`        | yes      | Kebab-case identifier. Used by `vp create @org:<name>` for direct selection. Must be unique within the array.                                                                                                                                |
-| `description` | yes      | One-line description shown in the picker.                                                                                                                                                                                                    |
+| Field         | Required | Notes                                                                                                                                                                                                                                      |
+| ------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `name`        | yes      | Kebab-case identifier. Used by `vp create @org:<name>` for direct selection. Must be unique within the array.                                                                                                                              |
+| `description` | yes      | One-line description shown in the picker.                                                                                                                                                                                                  |
 | `template`    | yes      | An npm specifier (`@org/template-foo`, optionally `@version`), a GitHub URL (`github:user/repo`), a `vite:*` builtin, a local workspace package name, or a relative path (`./templates/foo`) that resolves against the `@org/create` root. |
-| `monorepo`    | no       | If `true`, marks this entry as a monorepo-creating template. Hidden from the picker when `vp create` runs inside an existing monorepo, mirroring the built-in `vite:monorepo` filter.                                                        |
+| `monorepo`    | no       | If `true`, marks this entry as a monorepo-creating template. Hidden from the picker when `vp create` runs inside an existing monorepo, mirroring the built-in `vite:monorepo` filter.                                                      |
 
 An invalid manifest is a hard error, not a silent fall-through — a maintainer who shipped a manifest should hear about the offending field, e.g. `@your-org/create: createConfig.templates[2].template must be a non-empty string`.
 
 ### Bundled subdirectory templates
 
-Relative `./...` paths resolve against the enclosing `@org/create` package root — **not** the user's cwd. The referenced directory is copied verbatim into the target project (no template-engine processing). Paths that escape the package root are rejected.
+Relative `./...` paths resolve against the enclosing `@org/create` package root — **not** the user's cwd. The referenced directory is copied into the target project as-is (no template-engine processing); the only exception is that a small set of underscore-prefixed scaffold files (`_gitignore`, `_npmrc`, `_yarnrc.yml`) are renamed to their dotfile equivalents. Paths that escape the package root are rejected.
 
 ### Make the org the default in a repo
 

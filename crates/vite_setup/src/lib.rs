@@ -7,6 +7,14 @@
 //! - Tarball extraction
 //! - Directory structure management (symlinks, junctions, cleanup)
 
+#![allow(
+    clippy::allow_attributes,
+    clippy::disallowed_macros,
+    clippy::disallowed_methods,
+    clippy::disallowed_types,
+    clippy::print_stderr
+)]
+
 pub mod error;
 pub mod install;
 pub mod integrity;

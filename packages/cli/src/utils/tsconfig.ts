@@ -60,3 +60,49 @@ export function removeDeprecatedTsconfigFalseOption(filePath: string, optionName
   fs.writeFileSync(filePath, newText);
   return true;
 }
+
+export function rewriteTypesInTsconfig(filePath: string): boolean {
+  let text: string;
+  try {
+    text = fs.readFileSync(filePath, 'utf-8');
+  } catch {
+    return false;
+  }
+
+  const parsed = parseJsonc(text) as {
+    compilerOptions?: { types?: unknown[] };
+  } | null;
+
+  const types = parsed?.compilerOptions?.types;
+  if (!Array.isArray(types)) {
+    return false;
+  }
+
+  const REPLACEMENTS: Record<string, string> = {
+    'tsdown/client': 'vite-plus/pack/client',
+    'vite/client': 'vite-plus/client',
+  };
+
+  const toReplace = types
+    .map((t, i) =>
+      typeof t === 'string' && t in REPLACEMENTS ? { i, newVal: REPLACEMENTS[t] } : null,
+    )
+    .filter((x): x is { i: number; newVal: string } => x !== null);
+
+  if (toReplace.length === 0) {
+    return false;
+  }
+
+  // Apply edits right-to-left so earlier element offsets stay valid after each replacement.
+  let currentText = text;
+  for (let j = toReplace.length - 1; j >= 0; j--) {
+    const { i, newVal } = toReplace[j];
+    const edits = modify(currentText, ['compilerOptions', 'types', i], newVal, {});
+    if (edits.length > 0) {
+      currentText = applyEdits(currentText, edits);
+    }
+  }
+
+  fs.writeFileSync(filePath, currentText);
+  return true;
+}

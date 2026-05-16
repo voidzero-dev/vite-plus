@@ -26,13 +26,8 @@ fn rewrite_script(script: &str, rules: &[RuleConfig<SupportLang>]) -> String {
     let result = ast_grep::apply_loaded_rules(&preprocessed, rules);
 
     // Step 3: Replace cross-env marker back with "cross-env " (only if we replaced it)
-    let result = if has_cross_env {
-        result.replace(CROSS_ENV_MARKER, CROSS_ENV_REPLACEMENT)
-    } else {
-        result
-    };
 
-    result
+    if has_cross_env { result.replace(CROSS_ENV_MARKER, CROSS_ENV_REPLACEMENT) } else { result }
 }
 
 /// Transform all script strings in a JSON object using the provided function.
@@ -62,13 +57,13 @@ fn transform_scripts_json(
                     }
                 }
             }
-        } else if value.is_string() {
-            if let Some(raw_script) = value.as_str() {
-                let new_script = transform_fn(raw_script);
-                if new_script != raw_script {
-                    updated = true;
-                    *value = Value::String(new_script);
-                }
+        } else if value.is_string()
+            && let Some(raw_script) = value.as_str()
+        {
+            let new_script = transform_fn(raw_script);
+            if new_script != raw_script {
+                updated = true;
+                *value = Value::String(new_script);
             }
         }
     }
@@ -81,7 +76,7 @@ fn transform_scripts_json(
     }
 }
 
-/// Rewrite ESLint scripts in JSON content: rename `eslint` → `vp lint` and strip ESLint-only flags.
+/// Rewrite `ESLint` scripts in JSON content: rename `eslint` → `vp lint` and strip ESLint-only flags.
 ///
 /// Uses brush-parser to parse shell commands, so it correctly handles env var prefixes,
 /// compound commands (`&&`, `||`, `|`), and quoted arguments.
@@ -97,7 +92,7 @@ pub fn rewrite_prettier(scripts_json: &str) -> Result<Option<String>, Error> {
     transform_scripts_json(scripts_json, rewrite_prettier_script)
 }
 
-/// rewrite scripts json content using rules from rules_yaml
+/// rewrite scripts json content using rules from `rules_yaml`
 pub fn rewrite_scripts(scripts_json: &str, rules_yaml: &str) -> Result<Option<String>, Error> {
     let rules = ast_grep::load_rules(rules_yaml)?;
     transform_scripts_json(scripts_json, |raw_script| rewrite_script(raw_script, &rules))

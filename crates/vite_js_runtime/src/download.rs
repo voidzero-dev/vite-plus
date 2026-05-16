@@ -20,7 +20,7 @@ pub struct CachedFetchResponse {
     /// Response body (None if 304 Not Modified)
     #[expect(clippy::disallowed_types, reason = "HTTP response body is a String")]
     pub body: Option<String>,
-    /// ETag header value
+    /// `ETag` header value
     pub etag: Option<Str>,
     /// Cache max-age in seconds (from Cache-Control header)
     pub max_age: Option<u64>,
@@ -57,32 +57,29 @@ pub async fn download_file(
     // Create progress bar (only in TTY and not in CI)
     let is_ci = vite_shared::EnvConfig::get().is_ci;
     let progress = if std::io::stderr().is_terminal() && !is_ci {
-        let pb = match total_size {
-            Some(size) => {
-                let pb = ProgressBar::new(size);
-                pb.set_style(
-                    ProgressStyle::default_bar()
-                        .template(
-                            "{msg}\n{spinner:.green} [{elapsed_precise}] [{bar:40.blue/white}] \
-                             {bytes}/{total_bytes} ({bytes_per_sec}, {eta})",
-                        )
-                        .expect("valid progress bar template")
-                        .progress_chars("#>-"),
-                );
-                pb
-            }
-            None => {
-                let pb = ProgressBar::new_spinner();
-                pb.set_style(
-                    ProgressStyle::default_spinner()
-                        .template(
-                            "{msg}\n{spinner:.green} [{elapsed_precise}] {bytes} ({bytes_per_sec})",
-                        )
-                        .expect("valid spinner template"),
-                );
-                pb.enable_steady_tick(Duration::from_millis(100));
-                pb
-            }
+        let pb = if let Some(size) = total_size {
+            let pb = ProgressBar::new(size);
+            pb.set_style(
+                ProgressStyle::default_bar()
+                    .template(
+                        "{msg}\n{spinner:.green} [{elapsed_precise}] [{bar:40.blue/white}] \
+                         {bytes}/{total_bytes} ({bytes_per_sec}, {eta})",
+                    )
+                    .expect("valid progress bar template")
+                    .progress_chars("#>-"),
+            );
+            pb
+        } else {
+            let pb = ProgressBar::new_spinner();
+            pb.set_style(
+                ProgressStyle::default_spinner()
+                    .template(
+                        "{msg}\n{spinner:.green} [{elapsed_precise}] {bytes} ({bytes_per_sec})",
+                    )
+                    .expect("valid spinner template"),
+            );
+            pb.enable_steady_tick(Duration::from_millis(100));
+            pb
         };
         pb.set_message(message.to_string());
         Some(pb)
@@ -136,7 +133,7 @@ pub async fn download_text(url: &str) -> Result<String, Error> {
 /// Fetch text with conditional request support
 ///
 /// If `if_none_match` is provided, sends `If-None-Match` header for conditional request.
-/// Returns response with cache headers and not_modified flag.
+/// Returns response with cache headers and `not_modified` flag.
 pub async fn fetch_with_cache_headers(
     url: &str,
     if_none_match: Option<&str>,
@@ -176,7 +173,8 @@ pub async fn fetch_with_cache_headers(
     }
 
     // Extract headers before consuming response
-    let etag = response.headers().get("etag").and_then(|v| v.to_str().ok()).map(|s| s.into());
+    let etag =
+        response.headers().get("etag").and_then(|v| v.to_str().ok()).map(std::convert::Into::into);
 
     let max_age = response
         .headers()

@@ -22,7 +22,6 @@ If you are migrating an existing project and it still depends on older Vite or V
 
 The Oxlint type checker path powered by `tsgolint` does not support `baseUrl`, so Vite+ skips `typeAware` and `typeCheck` when that setting is present.
 
-
 ## `vp lint` / `vp fmt` may fail to read `vite.config.ts`
 
 `vp lint`, `vp fmt`, and the Oxc VS Code extension all read the `lint` / `fmt` blocks from `vite.config.ts`. Today that support has important limitations.

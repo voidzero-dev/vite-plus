@@ -4,8 +4,14 @@
 //! pre-installed Node.js. Uses managed Node.js from `vite_js_runtime` for
 //! package manager commands and JS script execution.
 
-// Allow printing to stderr for CLI error messages
-#![allow(clippy::print_stderr)]
+#![allow(
+    clippy::allow_attributes,
+    clippy::disallowed_macros,
+    clippy::disallowed_methods,
+    clippy::disallowed_types,
+    clippy::print_stderr,
+    clippy::print_stdout
+)]
 
 mod cli;
 mod command_picker;

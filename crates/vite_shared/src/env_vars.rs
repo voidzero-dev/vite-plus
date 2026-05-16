@@ -43,7 +43,7 @@ pub const VP_ENV_USE_EVAL_ENABLE: &str = "VP_ENV_USE_EVAL_ENABLE";
 /// bash/zsh is launched from a Nushell session.
 pub const VP_SHELL_NU: &str = "VP_SHELL_NU";
 
-/// Explicit signal set by the PowerShell wrapper to indicate PowerShell eval context.
+/// Explicit signal set by the `PowerShell` wrapper to indicate `PowerShell` eval context.
 pub const VP_SHELL_PWSH: &str = "VP_SHELL_PWSH";
 
 /// Filter for update task types.
