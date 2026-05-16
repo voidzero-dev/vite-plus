@@ -42,8 +42,11 @@ vp create vite -- --template react-ts
 # Create from a built-in Vite+ template without prompts
 vp create vite:application --directory apps/web --no-interactive
 
-# Inspect templates when an organization manifest is available
-vp create @your-org --no-interactive
+# List built-in and common shorthand templates
+vp create --list
+
+# Use a specific entry from a known organization manifest
+vp create @your-org:web --no-interactive
 ```
 
 Common mistakes:
@@ -54,6 +57,12 @@ vp create vite --template react-ts
 
 # Right: forward --template to create-vite
 vp create vite -- --template react-ts
+
+# Wrong: @org without an entry is an interactive picker and exits non-zero in --no-interactive mode
+vp create @your-org --no-interactive
+
+# Right: pass a concrete manifest entry when automating org templates
+vp create @your-org:web --no-interactive
 ```
 
 ## Migrating Projects
