@@ -73,6 +73,7 @@ const guideSidebar = [
       { text: 'CI', link: '/guide/ci' },
       { text: 'Commit Hooks', link: '/guide/commit-hooks' },
       { text: 'Monorepo Guide', link: '/guide/monorepo' },
+      { text: 'Coding Agents', link: '/guide/coding-agents' },
       { text: 'Troubleshooting', link: '/guide/troubleshooting' },
     ],
   },

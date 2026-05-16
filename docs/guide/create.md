@@ -63,6 +63,8 @@ This matters when the template itself accepts flags. For example, you can forwar
 vp create vite -- --template react-ts
 ```
 
+When automating scaffolding, see the [Coding Agents guide](/guide/coding-agents) for argument-forwarding conventions and common mistakes.
+
 ## Examples
 
 ```bash
