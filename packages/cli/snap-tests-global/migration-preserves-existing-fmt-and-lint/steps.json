@@ -1,0 +1,8 @@
+{
+  "commands": [
+    "vp migrate --no-interactive 2>&1 # should NOT duplicate fmt/lint blocks already in vite.config.ts (regression for vp create fate)",
+    "cat vite.config.ts # exactly one fmt: and one lint: block, preserving template values",
+    "test ! -f .oxfmtrc.jsonc && echo '.oxfmtrc.jsonc removed' # redundant standalone file removed",
+    "test ! -f .oxlintrc.json && echo '.oxlintrc.json removed' # redundant standalone file removed"
+  ]
+}

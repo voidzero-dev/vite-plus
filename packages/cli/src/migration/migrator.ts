@@ -2097,6 +2097,20 @@ function mergeAndRemoveJsonConfig(
 ): void {
   const fullViteConfigPath = path.join(projectPath, viteConfigPath);
   const fullJsonConfigPath = path.join(projectPath, jsonConfigPath);
+  // Skip merge when the key is already present in vite.config.ts — the Rust
+  // merge step always prepends, so without this guard a template that ships
+  // both an inline `${configKey}:` block and a standalone JSON file (e.g.
+  // create-fate's vite.config.ts + .oxfmtrc.jsonc) ends up with two of them.
+  const viteConfigContent = fs.readFileSync(fullViteConfigPath, 'utf8');
+  if (new RegExp(`\\b${configKey}\\s*:`).test(viteConfigContent)) {
+    fs.unlinkSync(fullJsonConfigPath);
+    if (!silent) {
+      prompts.log.info(
+        `${configKey} config already present in ${displayRelative(fullViteConfigPath)} — removed redundant ${displayRelative(fullJsonConfigPath)}`,
+      );
+    }
+    return;
+  }
   const result = mergeJsonConfig(fullViteConfigPath, fullJsonConfigPath, configKey);
   if (result.updated) {
     fs.writeFileSync(fullViteConfigPath, result.content);
