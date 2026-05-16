@@ -93,7 +93,6 @@ Done in <variable>ms using pnpm v<semver>
 }
 
 > vp add -E testnpm2 test-vite-plus-install --filter "*" && cat package.json packages/app/package.json packages/utils/package.json # should add testnpm2 test-vite-plus-install to all packages except workspace root
-[WARN] GET https://registry.<domain>/testnpm2 error (ECONNRESET). Will retry in 10 seconds. 2 retries left.
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 Done in <variable>ms using pnpm v<semver>
 {
