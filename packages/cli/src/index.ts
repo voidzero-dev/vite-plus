@@ -11,4 +11,20 @@ export {
   defineProject,
 } from 'vitest/config';
 
+export type {
+  TestProjectConfiguration,
+  TestProjectInlineConfiguration,
+  TestTagDefinition,
+  TestUserConfig,
+  UserProjectConfigExport,
+  UserProjectConfigFn,
+  UserWorkspaceConfig,
+  ViteUserConfig,
+  ViteUserConfigExport,
+  ViteUserConfigFn,
+  ViteUserConfigFnObject,
+  ViteUserConfigFnPromise,
+  WatcherTriggerPattern,
+} from 'vitest/config';
+
 export { defineConfig, lazyPlugins };
