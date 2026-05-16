@@ -152,6 +152,18 @@ async function updatePnpmWorkspace(versions: PnpmWorkspaceVersions): Promise<voi
   let content = fs.readFileSync(filePath, 'utf8');
 
   // oxlint's trailing \n in the pattern disambiguates from oxlint-tsgolint.
+  const vitestBrowserPackages = [
+    '@vitest/browser',
+    '@vitest/browser-playwright',
+    '@vitest/browser-preview',
+    '@vitest/browser-webdriverio',
+  ];
+  const vitestBrowserEntries: PnpmWorkspaceEntry[] = vitestBrowserPackages.map((pkg) => ({
+    name: pkg,
+    pattern: new RegExp(`'${pkg.replace('/', '\\/')}': ([\\d.]+(?:-[\\w.]+)?)`),
+    replacement: `'${pkg}': ${versions.vitest}`,
+    newVersion: versions.vitest,
+  }));
   const entries: PnpmWorkspaceEntry[] = [
     {
       name: 'vitest',
@@ -164,6 +176,7 @@ async function updatePnpmWorkspace(versions: PnpmWorkspaceVersions): Promise<voi
       replacement: `\n  vitest: ${versions.vitest}\n`,
       newVersion: versions.vitest,
     },
+    ...vitestBrowserEntries,
     {
       name: 'tsdown',
       pattern: /tsdown: \^([\d.]+(?:-[\w.]+)?)/,
@@ -249,6 +262,31 @@ async function updatePnpmWorkspace(versions: PnpmWorkspaceVersions): Promise<voi
 
   fs.writeFileSync(filePath, content);
   console.log('Updated pnpm-workspace.yaml');
+}
+
+// ============ Update VITEST_VERSION constant ============
+// Keeps the TypeScript source-of-truth (`packages/cli/src/utils/constants.ts`)
+// in sync with the `vitest:` catalog entry in pnpm-workspace.yaml. The
+// constant is consumed by both `packages/cli` and `ecosystem-ci/patch-project.ts`
+// (which re-imports it), so daily upstream bumps must update it here too.
+async function updateVitestVersionConstant(vitestVersion: string): Promise<void> {
+  const filePath = path.join(ROOT, 'packages/cli/src/utils/constants.ts');
+  const content = fs.readFileSync(filePath, 'utf8');
+  const pattern = /export const VITEST_VERSION = '([\d.]+(?:-[\w.]+)?)';/;
+  let oldVersion: string | undefined;
+  const updated = content.replace(pattern, (_match: string, captured: string) => {
+    oldVersion = captured;
+    return `export const VITEST_VERSION = '${vitestVersion}';`;
+  });
+  if (oldVersion === undefined) {
+    throw new Error(
+      `Failed to match VITEST_VERSION in ${filePath} — the pattern ${pattern} is stale, ` +
+        `please update it in .github/scripts/upgrade-deps.ts`,
+    );
+  }
+  fs.writeFileSync(filePath, updated);
+  recordChange('VITEST_VERSION constant', oldVersion, vitestVersion);
+  console.log('Updated packages/cli/src/utils/constants.ts');
 }
 
 // ============ Update packages/core/package.json ============
@@ -405,6 +443,7 @@ await updatePnpmWorkspace({
   oxcParser: oxcParserVersion,
   oxcTransform: oxcTransformVersion,
 });
+await updateVitestVersionConstant(vitestVersion);
 await updateCorePackage(devtoolsVersion);
 
 writeMetaFiles();

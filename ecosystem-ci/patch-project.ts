@@ -2,6 +2,7 @@ import { execSync } from 'node:child_process';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
+import { VITEST_VERSION } from '../packages/cli/src/utils/constants.ts';
 import { ecosystemCiDir, tgzDir } from './paths.ts';
 import repos from './repo.json' with { type: 'json' };
 
@@ -57,8 +58,6 @@ const forceFreshMigration = 'forceFreshMigration' in repoConfig && repoConfig.fo
 const isBunProject = project === 'bun-vite-template';
 const viteOverrideTgz = isBunProject ? `vite-7.99.0.tgz` : `voidzero-dev-vite-plus-core-0.0.0.tgz`;
 
-// Keep in sync with VITEST_VERSION in packages/cli/src/utils/constants.ts.
-const VITEST_VERSION = '4.1.5';
 const vitestOverrides = {
   vitest: VITEST_VERSION,
   '@vitest/expect': VITEST_VERSION,
