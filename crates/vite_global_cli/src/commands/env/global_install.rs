@@ -6,9 +6,9 @@ use std::{
     process::Stdio,
 };
 
-use tokio::process::Command;
+use tokio::{process::Command, task::JoinSet};
 use vite_js_runtime::NodeProvider;
-use vite_path::{AbsolutePath, current_dir};
+use vite_path::{AbsolutePath, AbsolutePathBuf, current_dir};
 use vite_shared::{format_path_prepended, output};
 
 use super::{
@@ -21,19 +21,20 @@ use super::{
 };
 use crate::error::Error;
 
-/// Install a global package.
+/// Install global packages parallelly.
 ///
 /// If `node_version` is provided, uses that version. Otherwise, resolves from current directory.
 /// If `force` is true, auto-uninstalls conflicting packages.
+/// Use `concurrency` to control the number of packages to install in parallel.
 pub async fn install(
-    package_spec: &str,
+    package_specs: &[String],
     node_version: Option<&str>,
     force: bool,
+    concurrency: usize,
 ) -> Result<(), Error> {
-    // Parse package spec (e.g., "typescript", "typescript@5.0.0", "@scope/pkg")
-    let (package_name, _version_spec) = parse_package_spec(package_spec);
-
-    output::raw(&format!("Installing {} globally...", package_spec));
+    if package_specs.is_empty() {
+        return Ok(());
+    }
 
     // 1. Resolve Node.js version
     let version = if let Some(v) = node_version {
@@ -56,6 +57,55 @@ pub async fn install(
     let npm_path =
         if cfg!(windows) { node_bin_dir.join("npm.cmd") } else { node_bin_dir.join("npm") };
 
+    let concurrency = concurrency.max(1);
+    let mut pending = package_specs.iter().cloned();
+    let mut installs = JoinSet::new();
+
+    loop {
+        while installs.len() < concurrency {
+            let Some(package_spec) = pending.next() else { break };
+
+            let npm_path = npm_path.clone();
+            let node_bin_dir = node_bin_dir.clone();
+            let version = version.clone();
+
+            installs.spawn(async move {
+                install_one(package_spec, version, npm_path, node_bin_dir, force).await
+            });
+        }
+
+        if installs.is_empty() {
+            break;
+        }
+
+        match installs.join_next().await {
+            Some(Ok(Ok(()))) => {}
+            Some(Ok(Err(error))) => {
+                installs.abort_all();
+                return Err(error);
+            }
+            Some(Err(error)) => {
+                installs.abort_all();
+                return Err(Error::ConfigError(format!("Install task failed: {}", error).into()));
+            }
+            None => break,
+        }
+    }
+
+    Ok(())
+}
+
+async fn install_one(
+    package_spec: String,
+    version: String,
+    npm_path: AbsolutePathBuf,
+    node_bin_dir: AbsolutePathBuf,
+    force: bool,
+) -> Result<(), Error> {
+    let (package_name, _version_spec) = parse_package_spec(&package_spec);
+
+    output::raw(&format!("Installing {} globally...", package_spec));
+
     // 3. Create staging directory
     let tmp_dir = get_tmp_dir()?;
     let staging_dir = tmp_dir.join("packages").join(&package_name);
@@ -69,7 +119,7 @@ pub async fn install(
     // 4. Run npm install with prefix set to staging directory
     //    Pipe stdout/stderr so npm output is hidden on success, shown on failure
     let output = Command::new(npm_path.as_path())
-        .args(["install", "-g", "--no-fund", package_spec])
+        .args(["install", "-g", "--no-fund", &package_spec])
         .env("npm_config_prefix", staging_dir.as_path())
         .env("PATH", format_path_prepended(node_bin_dir.as_path()))
         .stdout(Stdio::piped())
@@ -84,7 +134,12 @@ pub async fn install(
         let _ = std::io::stdout().write_all(&output.stdout);
         let _ = std::io::stderr().write_all(&output.stderr);
         return Err(Error::ConfigError(
-            format!("npm install failed with exit code: {:?}", output.status.code()).into(),
+            format!(
+                "npm install failed for {} with exit code: {:?}",
+                package_spec,
+                output.status.code()
+            )
+            .into(),
         ));
     }
 
@@ -106,8 +161,15 @@ pub async fn install(
 
     // Read package.json to get version and binaries
     let package_json_content = tokio::fs::read_to_string(&package_json_path).await?;
-    let package_json: serde_json::Value = serde_json::from_str(&package_json_content)
-        .map_err(|e| Error::ConfigError(format!("Failed to parse package.json: {}", e).into()))?;
+    let package_json: serde_json::Value = match serde_json::from_str(&package_json_content) {
+        Ok(package_json) => package_json,
+        Err(error) => {
+            let _ = tokio::fs::remove_dir_all(&staging_dir).await;
+            return Err(Error::ConfigError(
+                format!("Failed to parse package.json: {}", error).into(),
+            ));
+        }
+    };
 
     let installed_version = package_json["version"].as_str().unwrap_or("unknown").to_string();
 
