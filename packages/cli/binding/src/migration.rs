@@ -129,9 +129,7 @@ pub fn merge_json_config(
 #[napi]
 pub fn has_config_key(vite_config_path: String, config_key: String) -> Result<bool> {
     let content = std::fs::read_to_string(&vite_config_path).map_err(anyhow::Error::from)?;
-    let present =
-        vite_migration::has_config_key(&content, &config_key).map_err(anyhow::Error::from)?;
-    Ok(present)
+    Ok(vite_migration::has_config_key(&content, &config_key).map_err(anyhow::Error::from)?)
 }
 
 /// Error from batch import rewriting

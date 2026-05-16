@@ -2066,11 +2066,8 @@ function injectConfigDefaults(
   report?: MigrationReport,
 ): void {
   const configs = detectConfigs(projectPath);
-  if (configs.viteConfig) {
-    const content = fs.readFileSync(path.join(projectPath, configs.viteConfig), 'utf8');
-    if (new RegExp(`\\b${configKey}\\s*:`).test(content)) {
-      return;
-    }
+  if (configs.viteConfig && hasConfigKey(path.join(projectPath, configs.viteConfig), configKey)) {
+    return;
   }
 
   const viteConfig = ensureViteConfig(projectPath, configs, silent, report);

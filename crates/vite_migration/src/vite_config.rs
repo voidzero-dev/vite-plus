@@ -168,69 +168,47 @@ pub fn has_config_key(vite_config_content: &str, config_key: &str) -> Result<boo
     Ok(false)
 }
 
-/// Whether a `pair`'s key node matches `config_key` (handles bare-identifier
-/// keys like `fmt:` and string keys like `'fmt':` / `"fmt":`).
 fn pair_key_matches<D: Doc>(key_node: &Node<'_, D>, config_key: &str) -> bool {
     let text = key_node.text();
     match key_node.kind().as_ref() {
         "property_identifier" => text == config_key,
-        "string" => {
-            // string node text includes the surrounding quotes
-            let stripped = text.trim_matches(|c| c == '"' || c == '\'' || c == '`');
-            stripped == config_key
-        }
+        "string" => text.trim_matches(|c| c == '"' || c == '\'' || c == '`') == config_key,
         _ => false,
     }
 }
 
-/// Whether an `object` literal sits in one of the merger-recognized positions.
 fn is_recognized_config_object<D: Doc>(object_node: &Node<'_, D>) -> bool {
     let Some(parent) = object_node.parent() else { return false };
     match parent.kind().as_ref() {
-        // export default { ... }
         "export_statement" => true,
-        // export default { ... } satisfies T
-        "satisfies_expression" => {
-            parent.parent().map(|p| p.kind() == "export_statement").unwrap_or(false)
-        }
-        // defineConfig({ ... }) — object is a direct argument
-        "arguments" => parent.parent().map(|c| is_define_config_call(&c)).unwrap_or(false),
-        // defineConfig((p) => ({ ... })) — body of an arrow function with
-        // parenthesized object expression
+        // `export default { ... } satisfies T` — hop past the satisfies wrapper.
+        "satisfies_expression" => parent.parent().is_some_and(|p| p.kind() == "export_statement"),
+        "arguments" => parent.parent().is_some_and(|c| is_define_config_call(&c)),
         "parenthesized_expression" => is_define_config_arrow_body(&parent),
-        // return { ... } inside a defineConfig callback
         "return_statement" => is_inside_define_config_callback(&parent),
         _ => false,
     }
 }
 
-/// Is `call_node` a call to `defineConfig(...)`?
 fn is_define_config_call<D: Doc>(call_node: &Node<'_, D>) -> bool {
-    if call_node.kind() != "call_expression" {
-        return false;
-    }
-    call_node.field("function").map(|f| f.text() == "defineConfig").unwrap_or(false)
+    call_node.kind() == "call_expression"
+        && call_node.field("function").is_some_and(|f| f.text() == "defineConfig")
 }
 
-/// Is `paren_node` the body of an arrow function passed directly to
-/// `defineConfig(...)` (e.g. `defineConfig((p) => ({...}))`)?
 fn is_define_config_arrow_body<D: Doc>(paren_node: &Node<'_, D>) -> bool {
-    let Some(arrow) = paren_node.parent() else { return false };
-    if arrow.kind() != "arrow_function" {
-        return false;
-    }
-    let Some(args) = arrow.parent() else { return false };
-    if args.kind() != "arguments" {
-        return false;
-    }
-    args.parent().map(|c| is_define_config_call(&c)).unwrap_or(false)
+    paren_node
+        .parent()
+        .filter(|n| n.kind() == "arrow_function")
+        .and_then(|n| n.parent())
+        .filter(|n| n.kind() == "arguments")
+        .and_then(|n| n.parent())
+        .is_some_and(|c| is_define_config_call(&c))
 }
 
-/// Is `node` nested inside the body of a `defineConfig(...)` callback?
 fn is_inside_define_config_callback<D: Doc>(node: &Node<'_, D>) -> bool {
     let mut current = node.parent();
     while let Some(n) = current {
-        if n.kind() == "call_expression" && is_define_config_call(&n) {
+        if is_define_config_call(&n) {
             return true;
         }
         current = n.parent();
