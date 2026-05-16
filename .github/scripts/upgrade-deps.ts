@@ -289,6 +289,45 @@ async function updateVitestVersionConstant(vitestVersion: string): Promise<void>
   console.log('Updated packages/cli/src/utils/constants.ts');
 }
 
+// ============ Update .github/workflows/test-vp-create.yml ============
+// The `vp create` smoke-test workflow pins every vitest-family package via the
+// `VP_OVERRIDE_PACKAGES` env var so that template installs use the bundled
+// version. Daily upstream bumps must rewrite those pins so the workflow does
+// not drift behind the rest of the repo.
+async function updateTestVpCreateWorkflow(vitestVersion: string): Promise<void> {
+  const filePath = path.join(ROOT, '.github/workflows/test-vp-create.yml');
+  const content = fs.readFileSync(filePath, 'utf8');
+  const vitestKeys = [
+    'vitest',
+    '@vitest/expect',
+    '@vitest/runner',
+    '@vitest/snapshot',
+    '@vitest/spy',
+    '@vitest/utils',
+    '@vitest/mocker',
+    '@vitest/pretty-format',
+    '@vitest/coverage-v8',
+    '@vitest/coverage-istanbul',
+  ];
+  let updated = content;
+  for (const key of vitestKeys) {
+    const pattern = new RegExp(`"${key.replace('/', '\\/')}":"([\\d.]+(?:-[\\w.]+)?)"`);
+    let matched = false;
+    updated = updated.replace(pattern, (_match: string, _captured: string) => {
+      matched = true;
+      return `"${key}":"${vitestVersion}"`;
+    });
+    if (!matched) {
+      throw new Error(
+        `Failed to match "${key}" in ${filePath} — the pattern ${pattern} is stale, ` +
+          `please update it in .github/scripts/upgrade-deps.ts`,
+      );
+    }
+  }
+  fs.writeFileSync(filePath, updated);
+  console.log('Updated .github/workflows/test-vp-create.yml');
+}
+
 // ============ Update packages/core/package.json ============
 async function updateCorePackage(devtoolsVersion: string): Promise<void> {
   const filePath = path.join(ROOT, 'packages/core/package.json');
@@ -444,6 +483,7 @@ await updatePnpmWorkspace({
   oxcTransform: oxcTransformVersion,
 });
 await updateVitestVersionConstant(vitestVersion);
+await updateTestVpCreateWorkflow(vitestVersion);
 await updateCorePackage(devtoolsVersion);
 
 writeMetaFiles();
