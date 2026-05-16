@@ -93,23 +93,21 @@ jobs:
       - name: Pack packages into tgz
         run: |
           mkdir -p tmp/tgz
+          # Bun strictly validates the resolved package version against
+          # transitive peer constraints; vitest 4.1.5 declares peer
+          # `vite ^6 || ^7 || ^8` and bun aborts with "vite@^6.0.0 || ^7.0.0
+          # || ^8.0.0 failed to resolve" when the override target's version
+          # is 0.0.0. pnpm/npm/yarn don't enforce this. See
+          # https://github.com/oven-sh/bun/issues/8406. Pack core with a
+          # synthetic version inside the satisfied range, then pack the CLI
+          # so its workspace:* dep on core resolves to that same version
+          # (otherwise install-global-cli can't find the right tgz). Restore
+          # the source package.json afterwards so the working tree stays at
+          # 0.0.0 for downstream steps.
+          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('packages/core/package.json','utf8'));p.version='7.99.0';fs.writeFileSync('packages/core/package.json',JSON.stringify(p,null,2)+'\n')"
           cd packages/core && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
           cd packages/cli && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
-          # Bun strictly validates override-target versions against transitive
-          # peer constraints (vitest 4.1.5 declares peer `vite ^6 || ^7 || ^8`).
-          # pnpm/npm/yarn don't, but bun aborts with "vite@^6.0.0 || ^7.0.0 ||
-          # ^8.0.0 failed to resolve" when the override points at a 0.0.0 tgz.
-          # See https://github.com/oven-sh/bun/issues/8406. Build a separate
-          # tgz with the same contents but an internal version that satisfies
-          # the peer range; VP_OVERRIDE_PACKAGES points the migrator at this
-          # variant. The original core-0.0.0.tgz is still needed verbatim so
-          # install-global-cli can resolve the CLI's transitive @voidzero-dev/
-          # vite-plus-core@0.0.0 dep.
-          mkdir -p tmp/core-bumped
-          tar xzf tmp/tgz/voidzero-dev-vite-plus-core-0.0.0.tgz -C tmp/core-bumped
-          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('tmp/core-bumped/package/package.json','utf8'));p.version='7.99.0';fs.writeFileSync('tmp/core-bumped/package/package.json',JSON.stringify(p,null,2)+'\n')"
-          (cd tmp/core-bumped && tar czf "$GITHUB_WORKSPACE/tmp/tgz/voidzero-dev-vite-plus-core-bumped.tgz" package)
-          rm -rf tmp/core-bumped
+          git checkout -- packages/core/package.json
           # Copy vp binary for test jobs
           cp target/x86_64-unknown-linux-gnu/release/vp tmp/tgz/vp
           ls -la tmp/tgz
@@ -166,7 +164,7 @@ jobs:
           - yarn
           - bun
     env:
-      VP_OVERRIDE_PACKAGES: '{"vite":"file:${{ github.workspace }}/tmp/tgz/voidzero-dev-vite-plus-core-bumped.tgz","@voidzero-dev/vite-plus-core":"file:${{ github.workspace }}/tmp/tgz/voidzero-dev-vite-plus-core-bumped.tgz"}'
+      VP_OVERRIDE_PACKAGES: '{"vite":"file:${{ github.workspace }}/tmp/tgz/voidzero-dev-vite-plus-core-7.99.0.tgz","@voidzero-dev/vite-plus-core":"file:${{ github.workspace }}/tmp/tgz/voidzero-dev-vite-plus-core-7.99.0.tgz"}'
       VP_VERSION: 'file:${{ github.workspace }}/tmp/tgz/vite-plus-0.0.0.tgz'
       # Force full dependency rewriting so the library template's existing
       # vite-plus dep gets overridden with the local tgz
