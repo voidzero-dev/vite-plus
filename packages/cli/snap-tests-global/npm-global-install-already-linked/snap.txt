@@ -2,9 +2,9 @@
 <cwd>/../npm-global-lib-for-snap-tests
 
 > vp install -g ./npm-global-linked-pkg # First install via vp (creates managed shim)
-Installing ./npm-global-linked-pkg globally...
-Installed ./npm-global-linked-pkg v<semver>
-Binaries: npm-global-linked-cli
+info: installing 1 global package with Node.js <semver> (concurrency 1)
+✓ installed ./npm-global-linked-pkg <semver> (1/1)
+  bins: npm-global-linked-cli
 
 > npm-global-linked-cli # Should be callable via the link
 npm-global-linked-cli works

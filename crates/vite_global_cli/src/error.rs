@@ -37,6 +37,14 @@ pub enum Error {
     #[error("JSON error: {0}")]
     JsonError(#[from] serde_json::Error),
 
+    #[error("npm install failed for {package_spec}")]
+    GlobalNpmInstallFailed {
+        package_spec: String,
+        exit_code: Option<i32>,
+        stdout: Vec<u8>,
+        stderr: Vec<u8>,
+    },
+
     #[error("{0}")]
     Other(Str),
 

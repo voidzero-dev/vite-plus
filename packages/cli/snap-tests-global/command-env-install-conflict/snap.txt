@@ -1,17 +1,17 @@
 > vp install -g ./conflict-pkg # Install package with conflicting binary name (uses cwd version)
-Installing ./conflict-pkg globally...
+info: installing 1 global package with Node.js <semver> (concurrency 1)
 warn: Package './conflict-pkg' provides 'node' binary, but it conflicts with a core shim. Skipping.
-Installed ./conflict-pkg v<semver>
-Binaries: conflict-cli, node
+✓ installed ./conflict-pkg <semver> (1/1)
+  bins: conflict-cli, node
 
 > vp remove -g conflict-pkg # Cleanup
 Uninstalled conflict-pkg
 
 > vp install -g --node 20 ./conflict-pkg # Install with specific Node.js version
-Installing ./conflict-pkg globally...
+info: installing 1 global package with Node.js <semver> (concurrency 1)
 warn: Package './conflict-pkg' provides 'node' binary, but it conflicts with a core shim. Skipping.
-Installed ./conflict-pkg v<semver>
-Binaries: conflict-cli, node
+✓ installed ./conflict-pkg <semver> (1/1)
+  bins: conflict-cli, node
 
 > vp remove -g conflict-pkg # Cleanup
 Uninstalled conflict-pkg

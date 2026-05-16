@@ -546,16 +546,12 @@ async fn run_package_manager_command(
     }
 }
 
-// snap-test fixtures expect bare lines (no "error:"/"info:" prefix), so
-// these helpers use `output::raw_stderr`/`output::raw` rather than the
-// prefixed `output::error`/`output::info`.
 async fn managed_install(
     packages: &[String],
     node: Option<&str>,
     force: bool,
 ) -> Result<ExitStatus, Error> {
-    if let Err(e) = crate::commands::env::global_install::install(packages, node, force, 5).await {
-        vite_shared::output::raw_stderr(&format!("Failed to install: {e}"));
+    if crate::commands::env::global_install::install(packages, node, force, 5).await.is_err() {
         return Ok(exit_status(1));
     }
 
@@ -586,9 +582,7 @@ async fn managed_update(packages: &[String]) -> Result<ExitStatus, Error> {
         packages.to_vec()
     };
 
-    if let Err(e) = crate::commands::env::global_install::install(&to_update, None, false, 5).await
-    {
-        vite_shared::output::raw_stderr(&format!("Failed to update: {e}"));
+    if crate::commands::env::global_install::update(&to_update, None, false, 5).await.is_err() {
         return Ok(exit_status(1));
     }
     Ok(ExitStatus::default())
