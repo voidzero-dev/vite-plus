@@ -30,7 +30,15 @@ vite.config.ts
     "vite-plus": "catalog:"
   },
   "overrides": {
-    "vite": "catalog:"
+    "@vitest/expect": "catalog:",
+    "@vitest/mocker": "catalog:",
+    "@vitest/pretty-format": "catalog:",
+    "@vitest/runner": "catalog:",
+    "@vitest/snapshot": "catalog:",
+    "@vitest/spy": "catalog:",
+    "@vitest/utils": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
   },
   "engines": {
     "node": ">=22.12.0"
@@ -38,6 +46,14 @@ vite.config.ts
   "packageManager": "bun@<semver>",
   "catalog": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vitest": "4.1.5",
+    "@vitest/expect": "4.1.5",
+    "@vitest/runner": "4.1.5",
+    "@vitest/snapshot": "4.1.5",
+    "@vitest/spy": "4.1.5",
+    "@vitest/utils": "4.1.5",
+    "@vitest/mocker": "4.1.5",
+    "@vitest/pretty-format": "4.1.5",
     "vite-plus": "latest"
   }
 }

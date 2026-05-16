@@ -46,14 +46,46 @@ export default defineConfig({
 > cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog
 catalog:
   vite: npm:@voidzero-dev/vite-plus-core@latest
+  vitest: <semver>
+  '@vitest/expect': <semver>
+  '@vitest/runner': <semver>
+  '@vitest/snapshot': <semver>
+  '@vitest/spy': <semver>
+  '@vitest/utils': <semver>
+  '@vitest/mocker': <semver>
+  '@vitest/pretty-format': <semver>
   vite-plus: latest
 overrides:
   vite: 'catalog:'
+  vitest: 'catalog:'
+  '@vitest/expect': 'catalog:'
+  '@vitest/runner': 'catalog:'
+  '@vitest/snapshot': 'catalog:'
+  '@vitest/spy': 'catalog:'
+  '@vitest/utils': 'catalog:'
+  '@vitest/mocker': 'catalog:'
+  '@vitest/pretty-format': 'catalog:'
 peerDependencyRules:
   allowAny:
     - vite
+    - vitest
+    - '@vitest/expect'
+    - '@vitest/runner'
+    - '@vitest/snapshot'
+    - '@vitest/spy'
+    - '@vitest/utils'
+    - '@vitest/mocker'
+    - '@vitest/pretty-format'
   allowedVersions:
     vite: '*'
+    vitest: '*'
+    '@vitest/expect': '*'
+    '@vitest/runner': '*'
+    '@vitest/snapshot': '*'
+    '@vitest/spy': '*'
+    '@vitest/utils': '*'
+    '@vitest/mocker': '*'
+    '@vitest/pretty-format': '*'
 
 > vp migrate --no-interactive # run migration again to check if it is idempotent
 This project is already using Vite+! Happy coding!

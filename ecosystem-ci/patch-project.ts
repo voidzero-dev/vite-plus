@@ -57,6 +57,19 @@ const forceFreshMigration = 'forceFreshMigration' in repoConfig && repoConfig.fo
 const isBunProject = project === 'bun-vite-template';
 const viteOverrideTgz = isBunProject ? `vite-7.99.0.tgz` : `voidzero-dev-vite-plus-core-0.0.0.tgz`;
 
+// Keep in sync with VITEST_VERSION in packages/cli/src/utils/constants.ts.
+const VITEST_VERSION = '4.1.5';
+const vitestOverrides = {
+  vitest: VITEST_VERSION,
+  '@vitest/expect': VITEST_VERSION,
+  '@vitest/runner': VITEST_VERSION,
+  '@vitest/snapshot': VITEST_VERSION,
+  '@vitest/spy': VITEST_VERSION,
+  '@vitest/utils': VITEST_VERSION,
+  '@vitest/mocker': VITEST_VERSION,
+  '@vitest/pretty-format': VITEST_VERSION,
+};
+
 execSync(`${cli} migrate --no-agent --no-interactive`, {
   cwd,
   stdio: 'inherit',
@@ -66,6 +79,7 @@ execSync(`${cli} migrate --no-agent --no-interactive`, {
     VP_OVERRIDE_PACKAGES: JSON.stringify({
       vite: `file:${tgzDir}/${viteOverrideTgz}`,
       '@voidzero-dev/vite-plus-core': `file:${tgzDir}/voidzero-dev-vite-plus-core-0.0.0.tgz`,
+      ...vitestOverrides,
     }),
     VP_VERSION: `file:${tgzDir}/vite-plus-0.0.0.tgz`,
   },
