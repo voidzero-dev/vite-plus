@@ -6,12 +6,6 @@ import {
   VITE_PLUS_OXLINT_PLUGIN_NAME,
 } from './oxlint-plugin-config.ts';
 
-function isStringLiteralLike(
-  value: ESTree.Expression | ESTree.TSModuleDeclaration['id'],
-): value is ESTree.StringLiteral {
-  return value.type === 'Literal';
-}
-
 function rewriteVitePlusImportSpecifier(specifier: string): string | null {
   if (specifier === 'vite') {
     return 'vite-plus';
@@ -72,8 +66,11 @@ function quoteSpecifier(literal: ESTree.StringLiteral, replacement: string): str
   return `${quote}${replacement}${quote}`;
 }
 
-function maybeReportLiteral(context: Context, literal: ESTree.StringLiteral | null | undefined) {
-  if (!literal || typeof literal.value !== 'string') {
+function maybeReportLiteral(
+  context: Context,
+  literal: ESTree.Expression | ESTree.TSModuleDeclaration['id'] | null | undefined,
+) {
+  if (!literal || literal.type !== 'Literal' || typeof literal.value !== 'string') {
     return;
   }
 
@@ -120,9 +117,6 @@ export const preferVitePlusImportsRule = defineRule({
         maybeReportLiteral(context, node.source);
       },
       ImportExpression(node) {
-        if (!isStringLiteralLike(node.source)) {
-          return;
-        }
         maybeReportLiteral(context, node.source);
       },
       TSImportType(node) {
@@ -132,7 +126,7 @@ export const preferVitePlusImportsRule = defineRule({
         maybeReportLiteral(context, node.expression);
       },
       TSModuleDeclaration(node) {
-        if (node.global || !isStringLiteralLike(node.id)) {
+        if (node.global) {
           return;
         }
         maybeReportLiteral(context, node.id);
