@@ -554,12 +554,11 @@ async fn managed_install(
     node: Option<&str>,
     force: bool,
 ) -> Result<ExitStatus, Error> {
-    for package in packages {
-        if let Err(e) = crate::commands::env::global_install::install(package, node, force).await {
-            vite_shared::output::raw_stderr(&format!("Failed to install {package}: {e}"));
-            return Ok(exit_status(1));
-        }
+    if let Err(e) = crate::commands::env::global_install::install(packages, node, force, 5).await {
+        vite_shared::output::raw_stderr(&format!("Failed to install: {e}"));
+        return Ok(exit_status(1));
     }
+
     Ok(ExitStatus::default())
 }
 
@@ -586,11 +585,11 @@ async fn managed_update(packages: &[String]) -> Result<ExitStatus, Error> {
     } else {
         packages.to_vec()
     };
-    for package in &to_update {
-        if let Err(e) = crate::commands::env::global_install::install(package, None, false).await {
-            vite_shared::output::raw_stderr(&format!("Failed to update {package}: {e}"));
-            return Ok(exit_status(1));
-        }
+
+    if let Err(e) = crate::commands::env::global_install::install(&to_update, None, false, 5).await
+    {
+        vite_shared::output::raw_stderr(&format!("Failed to update: {e}"));
+        return Ok(exit_status(1));
     }
     Ok(ExitStatus::default())
 }

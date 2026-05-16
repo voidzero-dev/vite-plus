@@ -57,6 +57,7 @@ pub async fn install(
     let npm_path =
         if cfg!(windows) { node_bin_dir.join("npm.cmd") } else { node_bin_dir.join("npm") };
 
+    // 3. Install packages parallelly
     let concurrency = concurrency.max(1);
     let mut pending = package_specs.iter().cloned();
     let mut installs = JoinSet::new();
@@ -65,6 +66,7 @@ pub async fn install(
         while installs.len() < concurrency {
             let Some(package_spec) = pending.next() else { break };
 
+            // Clone data as spawned tasks need owned values or `'static` lifetime.
             let npm_path = npm_path.clone();
             let node_bin_dir = node_bin_dir.clone();
             let version = version.clone();
@@ -86,7 +88,7 @@ pub async fn install(
             }
             Some(Err(error)) => {
                 installs.abort_all();
-                return Err(Error::ConfigError(format!("Install task failed: {}", error).into()));
+                return Err(Error::ConfigError(format!("Failed to install: {}", error).into()));
             }
             None => break,
         }
@@ -106,7 +108,7 @@ async fn install_one(
 
     output::raw(&format!("Installing {} globally...", package_spec));
 
-    // 3. Create staging directory
+    // 1. Create staging directory
     let tmp_dir = get_tmp_dir()?;
     let staging_dir = tmp_dir.join("packages").join(&package_name);
 
@@ -116,7 +118,7 @@ async fn install_one(
     }
     tokio::fs::create_dir_all(&staging_dir).await?;
 
-    // 4. Run npm install with prefix set to staging directory
+    // 2. Run npm install with prefix set to staging directory
     //    Pipe stdout/stderr so npm output is hidden on success, shown on failure
     let output = Command::new(npm_path.as_path())
         .args(["install", "-g", "--no-fund", &package_spec])
@@ -143,7 +145,7 @@ async fn install_one(
         ));
     }
 
-    // 5. Find installed package and extract metadata
+    // 3. Find installed package and extract metadata
     let node_modules_dir = get_node_modules_dir(&staging_dir, &package_name);
     let package_json_path = node_modules_dir.join("package.json");
 
@@ -186,7 +188,7 @@ async fn install_one(
         }
     }
 
-    // 5b. Check for binary conflicts (before moving staging to final location)
+    // 3b. Check for binary conflicts (before moving staging to final location)
     let mut conflicts: Vec<(String, String)> = Vec::new(); // (bin_name, existing_package)
 
     for bin_name in &bin_names {
@@ -220,7 +222,7 @@ async fn install_one(
         }
     }
 
-    // 6. Move staging to final location
+    // 4. Move staging to final location
     let packages_dir = get_packages_dir()?;
     let final_dir = packages_dir.join(&package_name);
 
@@ -235,7 +237,7 @@ async fn install_one(
     }
     tokio::fs::rename(&staging_dir, &final_dir).await?;
 
-    // 7. Save package metadata
+    // 5. Save package metadata
     let metadata = PackageMetadata::new(
         package_name.clone(),
         installed_version.clone(),
@@ -247,7 +249,7 @@ async fn install_one(
     );
     metadata.save().await?;
 
-    // 8. Create shims for binaries and save per-binary configs
+    // 6. Create shims for binaries and save per-binary configs
     let bin_dir = get_bin_dir()?;
     for bin_name in &bin_names {
         create_package_shim(&bin_dir, bin_name, &package_name).await?;
