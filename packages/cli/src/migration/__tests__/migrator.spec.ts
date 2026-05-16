@@ -235,9 +235,9 @@ describe('rewritePackageJson', () => {
     rewritePackageJson(pkg, PackageManager.yarn, true);
 
     expect(pkg.devDependencies.vite).toBe('catalog:');
-    // vitest is no longer aliased to @voidzero-dev/vite-plus-test; it's left
-    // untouched so users can keep upstream vitest pinned independently.
-    expect(pkg.dependencies.vitest).toBe('^4.0.0');
+    // vitest is a managed override key — non-catalog specs are rewritten to
+    // `catalog:` so the override is resolved through the catalog.
+    expect(pkg.dependencies.vitest).toBe('catalog:');
     expect((pkg.devDependencies as Record<string, string>)['vite-plus']).toBe('catalog:');
   });
 
@@ -256,8 +256,10 @@ describe('rewritePackageJson', () => {
 
     expect(pkg.devDependencies.vite).toBe('catalog:');
     expect(pkg.optionalDependencies.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
-    // vitest is no longer aliased — the catalog: spec is preserved as-is.
-    expect(pkg.optionalDependencies.vitest).toBe('catalog:test');
+    // vitest is now a managed override key — yarn optional deps receive the
+    // literal override version so the resolution doesn't depend on catalog
+    // lookup at the optionalDependency site.
+    expect(pkg.optionalDependencies.vitest).toBe('4.1.5');
     expect((pkg.devDependencies as Record<string, string>)['vite-plus']).toBe('catalog:');
   });
 
@@ -1073,9 +1075,9 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     const overrides = pnpm.overrides as Record<string, string>;
     expect(overrides['some-pkg']).toBe('1.0.0');
     expect(overrides.vite).toBeDefined();
-    // vitest is no longer injected into overrides — upstream vitest is consumed
-    // transitively via vite-plus.
-    expect(overrides.vitest).toBeUndefined();
+    // vitest is pinned via overrides so downstream projects resolve a single
+    // vitest copy (the one vp-cli ships).
+    expect(overrides.vitest).toBe('4.1.5');
 
     // peerDependencyRules should be present
     expect(pnpm.peerDependencyRules).toBeDefined();
@@ -1121,8 +1123,9 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
 
     const yaml = readYaml(path.join(tmpDir, 'pnpm-workspace.yaml'));
     expect(yaml).toContain("vite: 'catalog:'");
-    // vitest is no longer added to overrides — only `vite` is the managed key.
-    expect(yaml).not.toContain('vitest:');
+    // vitest is now a managed override key — it resolves through the catalog
+    // like vite does.
+    expect(yaml).toContain("vitest: 'catalog:'");
   });
 
   it('rewrites named catalogs in pnpm-workspace.yaml without adding new entries', () => {
@@ -1165,14 +1168,16 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
       catalogs: Record<string, Record<string, string>>;
     };
     expect(yaml.overrides.vite).toBe('catalog:vite7');
-    // vitest is no longer a managed override / aliased catalog entry — pre-existing
-    // user-defined catalog entries are preserved verbatim.
-    expect(yaml.overrides.vitest).toBeUndefined();
-    expect(yaml.catalog.vitest).toBe('^4.0.0');
+    // vitest is now a managed override key — it is added to overrides as a
+    // `catalog:` reference, and its catalog entry is rewritten to the pinned
+    // vitest version vp-cli ships.
+    expect(yaml.overrides.vitest).toBe('catalog:');
+    expect(yaml.catalog.vitest).toBe('4.1.5');
     expect(yaml.catalogs.vite7.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
     expect(yaml.catalogs.vite7.react).toBe('^18.0.0');
     expect(yaml.catalogs.vite7['vite-plus']).toBe('latest');
-    expect(yaml.catalogs.test.vitest).toBe('^4.0.0');
+    // Named catalog vitest entries are also pinned to the managed override version.
+    expect(yaml.catalogs.test.vitest).toBe('4.1.5');
     expect(yaml.catalogs.test.tsdown).toBeUndefined();
     expect(yaml.catalogs.test['vite-plus']).toBeUndefined();
 
@@ -1183,8 +1188,11 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(pkg.devDependencies.vite).toBe('catalog:vite7');
     expect(pkg.devDependencies['vite-plus']).toBe('catalog:');
     expect(pkg.peerDependencies.vite).toBe('^7.0.0');
-    // vitest peer dep is left untouched (no override → no resolution from catalog).
-    expect(pkg.peerDependencies.vitest).toBe('catalog:');
+    // vitest peer `catalog:` is resolved against the pre-rewrite catalog
+    // (which still holds the user's `^4.0.0`); only the catalog file itself
+    // is later rewritten to the pinned vp-cli version. The peer range stays
+    // as the user wrote it.
+    expect(pkg.peerDependencies.vitest).toBe('^4.0.0');
     expect(pkg.peerDependencies).not.toHaveProperty('tsdown');
   });
 
@@ -1215,8 +1223,8 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
       catalogs: Record<string, Record<string, string>>;
     };
     expect(yaml.overrides.vite).toBe('catalog:vite7');
-    // vitest is no longer injected into overrides.
-    expect(yaml.overrides.vitest).toBeUndefined();
+    // vitest is now injected into overrides as a managed override key.
+    expect(yaml.overrides.vitest).toBe('catalog:');
     expect(yaml.overrides.react).toBe('^18.0.0');
     expect(yaml.catalogs.vite7.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
 
@@ -1260,8 +1268,8 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
       overrides: Record<string, string>;
     };
     expect(yaml.overrides.vite).toBe('catalog:');
-    // vitest is no longer added to overrides.
-    expect(yaml.overrides.vitest).toBeUndefined();
+    // vitest is now a managed override key — added to overrides as catalog: ref.
+    expect(yaml.overrides.vitest).toBe('catalog:');
   });
 
   it('does not resolve peer dependency catalog specs to migrated aliases', () => {
@@ -1293,8 +1301,9 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
       peerDependencies: Record<string, string>;
     };
     expect(pkg.peerDependencies.vite).toBe('*');
-    // vitest peer dep is no longer coerced to '*' — vitest isn't a managed key.
-    expect(pkg.peerDependencies.vitest).toBe('catalog:');
+    // vitest is now a managed override key — peer dep catalog refs that
+    // resolve to the override target are coerced to '*'.
+    expect(pkg.peerDependencies.vitest).toBe('*');
   });
 });
 
@@ -1343,8 +1352,9 @@ describe('rewriteMonorepo yarn catalog', () => {
     expect(yarnrc.nodeLinker).toBe('node-modules');
     expect(yarnrc.catalogs.vite7.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
     expect(yarnrc.catalogs.vite7.react).toBe('^18.0.0');
-    // vitest is no longer aliased — its catalog entry is left as the user wrote it.
-    expect(yarnrc.catalogs.test.vitest).toBe('^4.0.0');
+    // vitest is now a managed override key — existing catalog entries are
+    // rewritten to the pinned vp-cli vitest version.
+    expect(yarnrc.catalogs.test.vitest).toBe('4.1.5');
     expect(yarnrc.catalogs.test.oxlint).toBeUndefined();
 
     const pkg = readJson(path.join(tmpDir, 'package.json')) as {
@@ -1353,8 +1363,10 @@ describe('rewriteMonorepo yarn catalog', () => {
     };
     expect(pkg.devDependencies.vite).toBe('catalog:vite7');
     expect(pkg.peerDependencies.vite).toBe('^7.0.0');
-    // vitest peer catalog: ref is preserved as-is (no longer treated as a managed override).
-    expect(pkg.peerDependencies.vitest).toBe('catalog:test');
+    // vitest peer `catalog:test` is resolved against the pre-rewrite catalog
+    // (which still holds the user's `^4.0.0`). The peer range stays as the
+    // user wrote it; only the catalog file itself is later rewritten.
+    expect(pkg.peerDependencies.vitest).toBe('^4.0.0');
   });
 });
 
@@ -1447,8 +1459,9 @@ describe('rewriteMonorepo bun catalog', () => {
     expect(pkg.workspaces.catalog.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
     expect(pkg.workspaces.catalog['vite-plus']).toBe('latest');
     expect(pkg.catalog.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
-    // vitest is no longer aliased — pre-existing catalog entries are kept as-is.
-    expect(pkg.catalog.vitest).toBe('^3.0.0');
+    // vitest is now a managed override key — pre-existing catalog entries are
+    // rewritten to the pinned vp-cli vitest version.
+    expect(pkg.catalog.vitest).toBe('4.1.5');
     expect(pkg.catalog.tsdown).toBeUndefined();
     expect(pkg.catalog.react).toBe('^19.0.0');
     expect(pkg.catalog['vite-plus']).toBeUndefined();
@@ -1508,14 +1521,17 @@ describe('rewriteMonorepo bun catalog', () => {
     expect(pkg.catalogs.build.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
     expect(pkg.catalogs.build.react).toBe('^19.0.0');
     expect(pkg.catalogs.build.tsdown).toBeUndefined();
-    // vitest catalog entries and overrides are not synthesized anymore.
-    expect(pkg.catalogs.test.vitest).toBe('^4.0.0');
+    // vitest is now a managed override key — existing catalog entries are
+    // rewritten to the pinned version and `overrides.vitest` is injected
+    // as a `catalog:` ref so bun resolves it through the catalog.
+    expect(pkg.catalogs.test.vitest).toBe('4.1.5');
     expect(pkg.overrides.vite).toBe('catalog:build');
-    expect(pkg.overrides.vitest).toBeUndefined();
+    expect(pkg.overrides.vitest).toBe('catalog:');
     expect(pkg.devDependencies.vite).toBe('catalog:build');
     expect(pkg.peerDependencies.vite).toBe('^7.0.0');
-    // vitest peer catalog: ref is preserved as-is.
-    expect(pkg.peerDependencies.vitest).toBe('catalog:test');
+    // vitest peer `catalog:test` is resolved against the pre-rewrite catalog
+    // (which still holds the user's `^4.0.0`). Peer range stays as-is.
+    expect(pkg.peerDependencies.vitest).toBe('^4.0.0');
   });
 
   it('rewrites workspaces named catalogs and writes default catalog beside them', () => {
@@ -1550,8 +1566,9 @@ describe('rewriteMonorepo bun catalog', () => {
     expect(pkg.workspaces.catalog['vite-plus']).toBe('latest');
     expect(pkg.workspaces.catalogs.build.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
     expect(pkg.workspaces.catalogs.build.oxlint).toBeUndefined();
-    // vitest catalog entries are preserved verbatim, not aliased.
-    expect(pkg.workspaces.catalogs.test.vitest).toBe('^4.0.0');
+    // vitest is a managed override key — existing catalog entries are
+    // rewritten to the pinned vp-cli vitest version.
+    expect(pkg.workspaces.catalogs.test.vitest).toBe('4.1.5');
     expect(pkg.workspaces.catalogs.test.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
     expect(pkg.overrides.vite).toBe('catalog:');
   });
