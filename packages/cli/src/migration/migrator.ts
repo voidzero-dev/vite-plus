@@ -921,6 +921,19 @@ export function rewriteStandaloneProject(
         ...pkg.overrides,
         ...VITE_PLUS_OVERRIDE_PACKAGES,
       };
+      if (packageManager === PackageManager.bun) {
+        // Bun walks transitive peer-deps before resolving overrides; vitest
+        // 4.1.5 declares peer `vite ^6 || ^7 || ^8` and aborts with
+        // "vite@... failed to resolve" if `vite` isn't a direct dep somewhere
+        // in the tree, even when the override would redirect it. Mirror the
+        // override as a devDep so bun's resolver sees `vite` immediately;
+        // the override above still points it at vite-plus-core.
+        // See https://github.com/oven-sh/bun/issues/8406.
+        pkg.devDependencies = {
+          ...pkg.devDependencies,
+          vite: VITE_PLUS_OVERRIDE_PACKAGES.vite,
+        };
+      }
     } else if (packageManager === PackageManager.pnpm) {
       // If package.json already has a "pnpm" field, keep using it;
       // otherwise use pnpm-workspace.yaml.
@@ -1736,6 +1749,19 @@ function rewriteRootWorkspacePackageJson(
       };
     } else if (packageManager === PackageManager.bun) {
       // bun overrides are handled in rewriteBunCatalog() with catalog: references
+      // Bun walks transitive peer-deps before resolving overrides; vitest 4.1.5
+      // declares peer `vite ^6 || ^7 || ^8` and aborts unless `vite` is a direct
+      // dep at the workspace root. Mirror the override as a devDep; the override
+      // configured in rewriteBunCatalog still redirects it to vite-plus-core.
+      // See https://github.com/oven-sh/bun/issues/8406.
+      pkg.devDependencies = {
+        ...pkg.devDependencies,
+        vite: getCatalogDependencySpec(
+          pkg.devDependencies?.vite,
+          VITE_PLUS_OVERRIDE_PACKAGES.vite,
+          true,
+        ),
+      };
     } else if (packageManager === PackageManager.pnpm) {
       const overrideKeys = Object.keys(VITE_PLUS_OVERRIDE_PACKAGES);
       if (isForceOverrideMode()) {
