@@ -179,10 +179,12 @@
       "default": "./dist/test/browser/providers/playwright.js"
     },
     "./test/browser-playwright/context": {
-      "types": "./dist/test/browser-playwright/context.d.ts"
+      "types": "./dist/test/browser-playwright/context.d.ts",
+      "default": "./dist/test/browser-playwright/context.js"
     },
     "./test/browser/providers/playwright/context": {
-      "types": "./dist/test/browser/providers/playwright/context.d.ts"
+      "types": "./dist/test/browser/providers/playwright/context.d.ts",
+      "default": "./dist/test/browser/providers/playwright/context.js"
     },
     "./test/browser-preview": {
       "types": "./dist/test/browser-preview.d.ts",
@@ -193,10 +195,12 @@
       "default": "./dist/test/browser/providers/preview.js"
     },
     "./test/browser-preview/context": {
-      "types": "./dist/test/browser-preview/context.d.ts"
+      "types": "./dist/test/browser-preview/context.d.ts",
+      "default": "./dist/test/browser-preview/context.js"
     },
     "./test/browser/providers/preview/context": {
-      "types": "./dist/test/browser/providers/preview/context.d.ts"
+      "types": "./dist/test/browser/providers/preview/context.d.ts",
+      "default": "./dist/test/browser/providers/preview/context.js"
     },
     "./test/browser-webdriverio": {
       "types": "./dist/test/browser-webdriverio.d.ts",
@@ -207,10 +211,16 @@
       "default": "./dist/test/browser/providers/webdriverio.js"
     },
     "./test/browser-webdriverio/context": {
-      "types": "./dist/test/browser-webdriverio/context.d.ts"
+      "types": "./dist/test/browser-webdriverio/context.d.ts",
+      "default": "./dist/test/browser-webdriverio/context.js"
     },
     "./test/browser/providers/webdriverio/context": {
-      "types": "./dist/test/browser/providers/webdriverio/context.d.ts"
+      "types": "./dist/test/browser/providers/webdriverio/context.d.ts",
+      "default": "./dist/test/browser/providers/webdriverio/context.js"
+    },
+    "./test/browser/context": {
+      "types": "./dist/test/browser/context.d.ts",
+      "default": "./dist/test/browser/context.js"
     }
   },
   "scripts": {
