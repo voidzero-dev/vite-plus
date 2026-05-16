@@ -3,7 +3,7 @@
 failed to load config from <cwd>/vite.config.ts
 Failed to load vite.config: Build failed with 1 error:
 
-[PARSE_ERROR] Error: Unexpected token
+[PARSE_ERROR] Unexpected token
    ╭─[ vite.config.ts:5:42 ]
    │
  5 │   // syntax error: missing closing brace

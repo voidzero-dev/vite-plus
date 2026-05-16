@@ -267,9 +267,13 @@ async function updateTestPackage(vitestVersion: string): Promise<void> {
     devDependencies['vitest-dev'] = `^${vitestVersion}`;
   }
 
-  // Update @vitest/ui peerDependency if present
-  if (pkg.peerDependencies?.['@vitest/ui']) {
-    pkg.peerDependencies['@vitest/ui'] = vitestVersion;
+  // Update @vitest/* peerDependencies if present
+  if (pkg.peerDependencies) {
+    for (const dep of Object.keys(pkg.peerDependencies)) {
+      if (dep.startsWith('@vitest/')) {
+        pkg.peerDependencies[dep] = vitestVersion;
+      }
+    }
   }
 
   fs.writeFileSync(filePath, JSON.stringify(pkg, null, 2) + '\n');

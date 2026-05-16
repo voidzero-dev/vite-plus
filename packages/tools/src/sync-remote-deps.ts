@@ -268,6 +268,15 @@ function transformPluginutilsExport(
   // Handle string values or add types if missing
   if (typeof newValue === 'string') {
     // Convert string to object with default and types
+    if (newValue.endsWith('.mjs')) {
+      return [
+        newExportPath,
+        {
+          default: newValue,
+          types: newValue.replace(/\.mjs$/, '.d.mts'),
+        },
+      ];
+    }
     if (newValue.endsWith('.js')) {
       return [
         newExportPath,
@@ -285,7 +294,9 @@ function transformPluginutilsExport(
       | string
       | undefined;
     if (importPath && !('types' in newValue)) {
-      if (importPath.endsWith('.js')) {
+      if (importPath.endsWith('.mjs')) {
+        newValue.types = importPath.replace(/\.mjs$/, '.d.mts');
+      } else if (importPath.endsWith('.js')) {
         newValue.types = importPath.replace(/\.js$/, '.d.ts');
       }
     }
@@ -737,8 +748,9 @@ export async function syncRemote() {
   const rolldownVitePackagePath = join(rootDir, VITE_DIR, 'packages', 'vite', 'package.json');
   const pluginutilsPackagePath = join(
     rootDir,
-    ROLLDOWN_DIR,
-    'packages',
+    CORE_PACKAGE_PATH,
+    'node_modules',
+    '@rolldown',
     'pluginutils',
     'package.json',
   );

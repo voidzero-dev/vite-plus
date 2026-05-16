@@ -19,6 +19,7 @@ export default defineConfig({
       'typescript/no-unnecessary-boolean-literal-compare': 'off',
       'typescript/no-unnecessary-type-arguments': 'off',
       'typescript/no-unsafe-type-assertion': 'off',
+      'unicorn/consistent-function-scoping': 'off',
       curly: 'error',
     },
     overrides: [
@@ -106,7 +107,6 @@ export default defineConfig({
     tasks: {
       'build:src': {
         command: [
-          'vp run @rolldown/pluginutils#build',
           'vp run rolldown#build-binding:release',
           'vp run rolldown#build-node',
           'vp run vite#build-types',
