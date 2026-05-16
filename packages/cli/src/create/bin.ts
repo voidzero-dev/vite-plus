@@ -29,6 +29,7 @@ import {
   writeAgentInstructions,
 } from '../utils/agent.ts';
 import { detectExistingEditors, selectEditors, writeEditorConfigs } from '../utils/editor.ts';
+import { createInitialCommit, initGitRepository } from '../utils/git.ts';
 import { renderCliDoc } from '../utils/help.ts';
 import { displayRelative } from '../utils/path.ts';
 import {
@@ -36,6 +37,7 @@ import {
   defaultInteractive,
   downloadPackageManager,
   promptGitHooks,
+  promptGitInit,
   runViteFmt,
   runViteInstall,
   selectPackageManager,
@@ -106,6 +108,8 @@ const helpMessage = renderCliDoc({
           label: '--editor NAME',
           description: 'Write editor config files for the specified editor.',
         },
+        { label: '--git', description: 'Initialize a git repository with an initial commit' },
+        { label: '--no-git', description: 'Skip git repository initialization' },
         {
           label: '--hooks',
           description: 'Set up pre-commit hooks (default in non-interactive mode)',
@@ -235,11 +239,12 @@ function parseArgs() {
     verbose?: boolean;
     agent?: string | string[] | false;
     editor?: string;
+    git?: boolean;
     hooks?: boolean;
     'package-manager'?: string;
   }>(viteArgs, {
     alias: { h: 'help' },
-    boolean: ['help', 'list', 'all', 'interactive', 'hooks', 'verbose'],
+    boolean: ['help', 'list', 'all', 'interactive', 'hooks', 'verbose', 'git'],
     string: ['directory', 'agent', 'editor', 'package-manager'],
     default: { interactive: defaultInteractive() },
   });
@@ -256,6 +261,7 @@ function parseArgs() {
       verbose: parsed.verbose || false,
       agent: parsed.agent,
       editor: parsed.editor,
+      git: parsed.git,
       hooks: parsed.hooks,
       packageManager: parsed['package-manager'],
     } as Options,
@@ -747,6 +753,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       onCancel: () => cancelAndExit(),
     }));
 
+  const shouldSetupGit = await promptGitInit(options);
   if (!isMonorepo) {
     shouldSetupHooks = await promptGitHooks(options);
   }
@@ -827,7 +834,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   // #region Handle monorepo template
   if (templateInfo.command === BuiltinTemplate.monorepo || isBundledMonorepo) {
     // Ask up-front so the prompt isn't buried under scaffold output.
-    let shouldInitGit = true;
+    let shouldInitGit = shouldSetupGit;
     if (options.interactive && !compactOutput) {
       pauseCreateProgress();
       const selected = await prompts.confirm({
@@ -841,7 +848,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       } else {
         shouldInitGit = selected;
       }
-    } else if (!compactOutput) {
+    } else if (shouldInitGit && !compactOutput) {
       prompts.log.info('Initializing git repository (default: yes)');
     }
 
@@ -902,6 +909,10 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     workspaceInfo.rootDir = fullPath;
     updateCreateProgress('Integrating monorepo');
     rewriteMonorepo(workspaceInfo, undefined, compactOutput);
+    if (shouldSetupGit) {
+      updateCreateProgress('Initializing git repository');
+      await initGitRepository(fullPath);
+    }
     if (bundled?.monorepo) {
       // Wire `create.defaultTemplate: '<scope>'` into the new workspace's
       // vite.config.ts so a bare `vp create` from inside it opens the
@@ -922,6 +933,13 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     });
     updateCreateProgress('Formatting code');
     await runViteFmt(fullPath, options.interactive, undefined, { silent: compactOutput });
+    if (shouldSetupGit) {
+      updateCreateProgress('Creating initial commit');
+      const committed = await createInitialCommit(fullPath);
+      if (!committed) {
+        prompts.log.warn('Initial commit failed. Check your git user.name/user.email config');
+      }
+    }
     clearCreateProgress();
     showCreateSummary({
       description: describeScaffold(selectedTemplateName, selectedTemplateArgs),
@@ -1137,6 +1155,11 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     await runViteFmt(workspaceInfo.rootDir, options.interactive, [projectDir], {
       silent: compactOutput,
     });
+    if (shouldSetupGit) {
+      updateCreateProgress('Creating initial commit');
+      await initGitRepository(workspaceInfo.rootDir);
+      await createInitialCommit(workspaceInfo.rootDir);
+    }
   } else {
     if (shouldMigrateLintFmtTools) {
       await installAndMigrate(fullPath);
@@ -1147,6 +1170,10 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       if (!hasFrameworkShim(fullPath, framework)) {
         addFrameworkShim(fullPath, framework);
       }
+    }
+    if (shouldSetupGit) {
+      updateCreateProgress('Initializing git repository');
+      await initGitRepository(fullPath);
     }
     if (shouldSetupHooks) {
       installGitHooks(fullPath, compactOutput);
@@ -1159,6 +1186,13 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     });
     updateCreateProgress('Formatting code');
     await runViteFmt(fullPath, options.interactive, undefined, { silent: compactOutput });
+    if (shouldSetupGit) {
+      updateCreateProgress('Creating initial commit');
+      const committed = await createInitialCommit(fullPath);
+      if (!committed) {
+        prompts.log.warn('Initial commit failed. Check your git user.name/user.email config');
+      }
+    }
   }
 
   clearCreateProgress();

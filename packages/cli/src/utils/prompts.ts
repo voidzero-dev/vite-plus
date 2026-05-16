@@ -215,6 +215,30 @@ export async function promptGitHooks(options: {
   return true; // non-interactive default
 }
 
+export async function promptGitInit(options: {
+  git?: boolean;
+  interactive: boolean;
+}): Promise<boolean> {
+  if (options.git === false) {
+    return false;
+  }
+  if (options.git === true) {
+    return true;
+  }
+  if (options.interactive) {
+    const selected = await prompts.confirm({
+      message: 'Initialize a git repository with an initial commit?',
+      initialValue: false,
+    });
+    if (prompts.isCancel(selected)) {
+      cancelAndExit();
+      return false;
+    }
+    return selected;
+  }
+  return false; // non-interactive default
+}
+
 export function defaultInteractive() {
   // If CI environment, use non-interactive mode by default
   return !process.env.CI && process.stdin.isTTY;

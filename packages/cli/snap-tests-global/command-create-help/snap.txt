@@ -17,6 +17,8 @@ Options:
   --directory DIR         Target directory for the generated project.
   --agent NAME            Write coding agent instructions to AGENTS.md, CLAUDE.md, etc.
   --editor NAME           Write editor config files for the specified editor.
+  --git                   Initialize a git repository with an initial commit
+  --no-git                Skip git repository initialization
   --hooks                 Set up pre-commit hooks (default in non-interactive mode)
   --no-hooks              Skip pre-commit hooks setup
   --package-manager NAME  Use specified package manager (pnpm, npm, yarn, bun)
@@ -78,6 +80,8 @@ Options:
   --directory DIR         Target directory for the generated project.
   --agent NAME            Write coding agent instructions to AGENTS.md, CLAUDE.md, etc.
   --editor NAME           Write editor config files for the specified editor.
+  --git                   Initialize a git repository with an initial commit
+  --no-git                Skip git repository initialization
   --hooks                 Set up pre-commit hooks (default in non-interactive mode)
   --no-hooks              Skip pre-commit hooks setup
   --package-manager NAME  Use specified package manager (pnpm, npm, yarn, bun)
@@ -139,6 +143,8 @@ Options:
   --directory DIR         Target directory for the generated project.
   --agent NAME            Write coding agent instructions to AGENTS.md, CLAUDE.md, etc.
   --editor NAME           Write editor config files for the specified editor.
+  --git                   Initialize a git repository with an initial commit
+  --no-git                Skip git repository initialization
   --hooks                 Set up pre-commit hooks (default in non-interactive mode)
   --no-hooks              Skip pre-commit hooks setup
   --package-manager NAME  Use specified package manager (pnpm, npm, yarn, bun)
