@@ -68,6 +68,8 @@ const vitestOverrides = {
   '@vitest/utils': VITEST_VERSION,
   '@vitest/mocker': VITEST_VERSION,
   '@vitest/pretty-format': VITEST_VERSION,
+  '@vitest/coverage-v8': VITEST_VERSION,
+  '@vitest/coverage-istanbul': VITEST_VERSION,
 };
 
 execSync(`${cli} migrate --no-agent --no-interactive`, {

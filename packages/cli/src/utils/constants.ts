@@ -17,6 +17,8 @@ export const VITE_PLUS_OVERRIDE_PACKAGES: Record<string, string> = process.env.V
       '@vitest/utils': VITEST_VERSION,
       '@vitest/mocker': VITEST_VERSION,
       '@vitest/pretty-format': VITEST_VERSION,
+      '@vitest/coverage-v8': VITEST_VERSION,
+      '@vitest/coverage-istanbul': VITEST_VERSION,
     };
 
 /**
