@@ -36,6 +36,9 @@ const rolldownPluginUtilsDir = resolve(
   '..',
   'rolldown',
   'packages',
+  'rolldown',
+  'node_modules',
+  '@rolldown',
   'pluginutils',
 );
 
@@ -662,7 +665,7 @@ async function mergePackageJson() {
   destPkg.bundledVersions = {
     ...destPkg.bundledVersions,
     vite: vitePkg.version,
-    rolldown: rolldownPkg.version,
+    rolldown: 'https://pkg.pr.new/rolldown/rolldown@9413',
     tsdown: tsdownPkg.version,
   };
 

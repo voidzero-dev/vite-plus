@@ -871,10 +871,8 @@ fn interactive_package_manager_menu() -> Result<PackageManagerType, Error> {
             KeyCode::Up => {
                 selected_index = selected_index.saturating_sub(1);
             }
-            KeyCode::Down => {
-                if selected_index < options.len() - 1 {
-                    selected_index += 1;
-                }
+            KeyCode::Down if selected_index < options.len() - 1 => {
+                selected_index += 1;
             }
             KeyCode::Enter | KeyCode::Char(' ') => {
                 break Ok(options[selected_index].1);
