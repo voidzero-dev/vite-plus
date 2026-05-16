@@ -6,7 +6,12 @@ import { defineConfig, rewriteVitePlusTestSpecifier } from '../define-config.ts'
 const REWRITE_PLUGIN_NAME = 'vite-plus:vitest-specifier-rewrite';
 
 function pluginName(p: unknown): string | undefined {
-  if (p && typeof p === 'object' && 'name' in p && typeof (p as { name: unknown }).name === 'string') {
+  if (
+    p &&
+    typeof p === 'object' &&
+    'name' in p &&
+    typeof (p as { name: unknown }).name === 'string'
+  ) {
     return (p as { name: string }).name;
   }
   return undefined;
