@@ -1,11 +1,11 @@
 > vp migrate --no-interactive # migration should preserve vite peer contracts
 ◇ Migrated . to Vite+
 • Node <semver>  pnpm <semver>
-• 2 config updates applied
+• 2 config updates applied, 1 file had imports rewritten
 
 > cat src/index.ts # vite imports stay public, vitest imports rewrite
 import { defineConfig, type Plugin } from 'vite';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vite-plus/test';
 
 export function myVitePlugin(): Plugin {
   return {
