@@ -473,6 +473,13 @@ function handleInstallResult(
   installSummary: CommandRunSummary,
   rootDir: string,
   report: MigrationReport,
+  // The pre-migration "initial" install is best-effort: the migration proceeds
+  // regardless of its outcome, and a post-migration "final" install runs with
+  // `--force` / `--no-frozen-lockfile` as the authoritative recovery. Only that
+  // final install's failure should flip `process.exitCode` so a successful
+  // recovery yields exit 0; the initial failure is still surfaced via
+  // `report.warnings` + the warn message.
+  options?: { propagateExitCode?: boolean },
 ): number {
   if (installSummary.status === 'installed') {
     return installSummary.durationMs;
@@ -482,7 +489,9 @@ function handleInstallResult(
     const message = `Dependency installation failed (exit code ${exitCode}). Run \`vp install\` manually in ${rootDir} to resync node_modules.`;
     warnMsg(message);
     report.warnings.push(message);
-    process.exitCode = exitCode;
+    if (options?.propagateExitCode !== false) {
+      process.exitCode = exitCode;
+    }
     return 0;
   }
   return 0;
@@ -819,15 +828,23 @@ async function executeMigrationPlan(
   );
 
   clearMigrationProgress();
+  // Process the initial install first so the final install's exit code "wins":
+  // if the initial install failed but the final install succeeded, the
+  // migration should still report success (exit 0). The initial call opts out
+  // of exitCode propagation; only the final call may flip process.exitCode.
+  const initialInstallDurationMs = handleInstallResult(
+    initialInstallSummary,
+    workspaceInfo.rootDir,
+    report,
+    { propagateExitCode: false },
+  );
   const finalInstallDurationMs = handleInstallResult(
     finalInstallSummary,
     workspaceInfo.rootDir,
     report,
   );
   return {
-    installDurationMs:
-      handleInstallResult(initialInstallSummary, workspaceInfo.rootDir, report) +
-      finalInstallDurationMs,
+    installDurationMs: initialInstallDurationMs + finalInstallDurationMs,
     packageManagerVersion: downloadResult.version,
     report,
   };
