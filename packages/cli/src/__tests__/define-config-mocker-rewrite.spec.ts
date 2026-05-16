@@ -80,6 +80,61 @@ describe('rewriteVitePlusTestSpecifier', () => {
     ].join('\n');
     expect(rewriteVitePlusTestSpecifier(input)).toBe(expected);
   });
+
+  it("does NOT rewrite `from 'vite-plus/test'` inside a template literal", () => {
+    const input = [
+      "import { it } from 'vite-plus/test';",
+      "const fixture = `import { vi } from 'vite-plus/test'`;",
+      'it("snapshots fixture", () => { console.log(fixture); });',
+      '',
+    ].join('\n');
+    const expected = [
+      "import { it } from 'vitest';",
+      "const fixture = `import { vi } from 'vite-plus/test'`;",
+      'it("snapshots fixture", () => { console.log(fixture); });',
+      '',
+    ].join('\n');
+    expect(rewriteVitePlusTestSpecifier(input)).toBe(expected);
+  });
+
+  it('does NOT rewrite the pattern inside a plain string-literal error message', () => {
+    const input = [
+      "import { expect, it } from 'vite-plus/test';",
+      "it('reports the bad specifier', () => {",
+      '  const message = "Cannot resolve \'vite-plus/test\'";',
+      "  expect(message).toContain('vite-plus/test');",
+      '});',
+      '',
+    ].join('\n');
+    const expected = [
+      "import { expect, it } from 'vitest';",
+      "it('reports the bad specifier', () => {",
+      '  const message = "Cannot resolve \'vite-plus/test\'";',
+      "  expect(message).toContain('vite-plus/test');",
+      '});',
+      '',
+    ].join('\n');
+    expect(rewriteVitePlusTestSpecifier(input)).toBe(expected);
+  });
+
+  it('does NOT rewrite the pattern inside a line/block comment or string concat', () => {
+    const input = [
+      "// Reads 'vite-plus/test' off the import map and rewrites it",
+      "/* require('vite-plus/test') is the CJS form */",
+      "const composed = 'vite-' + 'plus/test';",
+      'const literal = \'require("vite-plus/test")\';',
+      'console.log(composed, literal);',
+      '',
+    ].join('\n');
+    // None of these are real imports — output should be byte-identical.
+    expect(rewriteVitePlusTestSpecifier(input)).toBe(input);
+  });
+
+  it("rewrites a real `import { vi } from 'vite-plus/test'` statement", () => {
+    const input = ["import { vi } from 'vite-plus/test';", "vi.mock('./foo');", ''].join('\n');
+    const expected = ["import { vi } from 'vitest';", "vi.mock('./foo');", ''].join('\n');
+    expect(rewriteVitePlusTestSpecifier(input)).toBe(expected);
+  });
 });
 
 describe('defineConfig project plugin injection', () => {
