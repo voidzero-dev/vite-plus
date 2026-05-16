@@ -573,21 +573,68 @@ async fn managed_uninstall(packages: &[String], dry_run: bool) -> Result<ExitSta
     Ok(ExitStatus::default())
 }
 
-async fn managed_update(packages: &[String]) -> Result<ExitStatus, Error> {
-    use crate::commands::env::package_metadata::PackageMetadata;
+fn is_global_package_up_to_date(installed_version: &str, registry_version: &str) -> bool {
+    installed_version.trim() == registry_version.trim()
+}
 
-    let to_update: Vec<String> = if packages.is_empty() {
+async fn managed_update(packages: &[String]) -> Result<ExitStatus, Error> {
+    use crate::commands::env::{global_install, package_metadata::PackageMetadata};
+
+    let mut to_update: Vec<String> = Vec::new();
+    let mut skipped = 0usize;
+
+    if packages.is_empty() {
         let all = PackageMetadata::list_all().await?;
         if all.is_empty() {
             vite_shared::output::raw("No global packages installed.");
             return Ok(ExitStatus::default());
         }
-        all.iter().map(|p| p.name.clone()).collect()
+
+        for metadata in all {
+            let latest_version = global_install::latest_package_version(
+                &metadata.name,
+                Some(&metadata.platform.node),
+            )
+            .await?;
+            if is_global_package_up_to_date(&metadata.version, &latest_version) {
+                vite_shared::output::raw(&format!(
+                    "{} is already up to date (v{}).",
+                    metadata.name, metadata.version
+                ));
+                skipped += 1;
+            } else {
+                to_update.push(metadata.name.clone());
+            }
+        }
     } else {
-        packages.to_vec()
-    };
+        for package in packages {
+            let (package_name, _) = global_install::parse_package_spec(package);
+            if let Some(metadata) = PackageMetadata::load(&package_name).await? {
+                let latest_version =
+                    global_install::latest_package_version(package, Some(&metadata.platform.node))
+                        .await?;
+                if is_global_package_up_to_date(&metadata.version, &latest_version) {
+                    vite_shared::output::raw(&format!(
+                        "{} is already up to date (v{}).",
+                        package_name, metadata.version
+                    ));
+                    skipped += 1;
+                    continue;
+                }
+            }
+            to_update.push(package.clone());
+        }
+    }
+
+    if to_update.is_empty() {
+        if skipped > 0 {
+            vite_shared::output::raw("All global packages are up to date.");
+        }
+        return Ok(ExitStatus::default());
+    }
+
     for package in &to_update {
-        if let Err(e) = crate::commands::env::global_install::install(package, None, false).await {
+        if let Err(e) = global_install::install(package, None, false).await {
             vite_shared::output::raw_stderr(&format!("Failed to update {package}: {e}"));
             return Ok(exit_status(1));
         }
@@ -829,7 +876,19 @@ pub fn try_parse_args_from_with_options(
 
 #[cfg(test)]
 mod tests {
-    use super::{has_flag_before_terminator, should_force_global_delegate};
+    use super::{
+        has_flag_before_terminator, is_global_package_up_to_date, should_force_global_delegate,
+    };
+
+    #[test]
+    fn skips_global_update_when_registry_version_matches_installed_version() {
+        assert!(is_global_package_up_to_date("5.9.3", "5.9.3"));
+    }
+
+    #[test]
+    fn updates_global_package_when_registry_version_differs_from_installed_version() {
+        assert!(!is_global_package_up_to_date("5.9.2", "5.9.3"));
+    }
 
     #[test]
     fn detects_flag_before_option_terminator() {
