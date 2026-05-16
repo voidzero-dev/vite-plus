@@ -13,6 +13,8 @@ use vite_pm_cli::PackageManagerCommand;
 
 use crate::{commands, error::Error, help};
 
+const DEFAULT_GLOBAL_INSTALL_CONCURRENCY: usize = 5;
+
 #[derive(Clone, Copy, Debug)]
 pub struct RenderOptions {
     pub show_header: bool,
@@ -516,19 +518,24 @@ async fn run_package_manager_command(
 ) -> Result<ExitStatus, Error> {
     match command {
         PackageManagerCommand::Install {
-            global: true, packages: Some(pkgs), node, force, ..
-        } if !pkgs.is_empty() => managed_install(&pkgs, node.as_deref(), force).await,
+            global: true,
+            packages: Some(pkgs),
+            node,
+            force,
+            concurrency,
+            ..
+        } if !pkgs.is_empty() => managed_install(&pkgs, node.as_deref(), force, concurrency).await,
 
-        PackageManagerCommand::Add { global: true, ref packages, ref node, .. } => {
-            managed_install(packages, node.as_deref(), false).await
-        }
+        PackageManagerCommand::Add {
+            global: true, ref packages, ref node, concurrency, ..
+        } => managed_install(packages, node.as_deref(), false, concurrency).await,
 
         PackageManagerCommand::Remove { global: true, ref packages, dry_run, .. } => {
             managed_uninstall(packages, dry_run).await
         }
 
-        PackageManagerCommand::Update { global: true, ref packages, .. } => {
-            managed_update(packages).await
+        PackageManagerCommand::Update { global: true, ref packages, concurrency, .. } => {
+            managed_update(packages, concurrency).await
         }
 
         // `pm list -g` lists vite-plus-managed globals, not the underlying PM's.
@@ -550,8 +557,17 @@ async fn managed_install(
     packages: &[String],
     node: Option<&str>,
     force: bool,
+    concurrency: Option<usize>,
 ) -> Result<ExitStatus, Error> {
-    if crate::commands::env::global_install::install(packages, node, force, 5, false).await.is_err()
+    if crate::commands::env::global_install::install(
+        packages,
+        node,
+        force,
+        concurrency.unwrap_or(DEFAULT_GLOBAL_INSTALL_CONCURRENCY),
+        false,
+    )
+    .await
+    .is_err()
     {
         return Ok(exit_status(1));
     }
@@ -569,7 +585,10 @@ async fn managed_uninstall(packages: &[String], dry_run: bool) -> Result<ExitSta
     Ok(ExitStatus::default())
 }
 
-async fn managed_update(packages: &[String]) -> Result<ExitStatus, Error> {
+async fn managed_update(
+    packages: &[String],
+    concurrency: Option<usize>,
+) -> Result<ExitStatus, Error> {
     use crate::commands::env::package_metadata::PackageMetadata;
 
     let to_update: Vec<String> = if packages.is_empty() {
@@ -583,9 +602,15 @@ async fn managed_update(packages: &[String]) -> Result<ExitStatus, Error> {
         packages.to_vec()
     };
 
-    if crate::commands::env::global_install::install(&to_update, None, false, 5, true)
-        .await
-        .is_err()
+    if crate::commands::env::global_install::install(
+        &to_update,
+        None,
+        false,
+        concurrency.unwrap_or(DEFAULT_GLOBAL_INSTALL_CONCURRENCY),
+        true,
+    )
+    .await
+    .is_err()
     {
         return Ok(exit_status(1));
     }
