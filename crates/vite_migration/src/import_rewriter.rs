@@ -2518,8 +2518,7 @@ const x = 1;
     fn test_rewrite_reference_types_after_multiline_block_comment() {
         // Multi-line block comments should be skipped entirely. Use `vite-plus/test`
         // so the reverse-migration rule fires and we still observe a rewrite.
-        let content =
-            "/*\n * License header\n * Copyright 2024\n */\n/// <reference types=\"vite-plus/test\" />\n";
+        let content = "/*\n * License header\n * Copyright 2024\n */\n/// <reference types=\"vite-plus/test\" />\n";
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(
@@ -2619,8 +2618,7 @@ const x = 1;
     fn test_rewrite_reference_types_crlf() {
         // CRLF line endings should be preserved. Use a `vite-plus/test` reference
         // so the reverse-migration rule fires on the second line.
-        let content =
-            "/// <reference types=\"vite/client\" />\r\n/// <reference types=\"vite-plus/test\" />\r\n";
+        let content = "/// <reference types=\"vite/client\" />\r\n/// <reference types=\"vite-plus/test\" />\r\n";
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(
