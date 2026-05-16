@@ -60,6 +60,67 @@ type ViteUserConfigExport =
   | ViteUserConfigFnPromise
   | ViteUserConfigFn;
 
+/**
+ * Rewrite bare-root `vite-plus/test` import specifiers to `vitest` so that
+ * `@vitest/mocker`'s static hoister (which hardcodes `hoistedModule = "vitest"`)
+ * recognizes calls like `vi.mock(...)`. Subpaths such as
+ * `vite-plus/test/browser` are intentionally left unchanged.
+ *
+ * Task #50 pins `vitest` and the `@vitest/*` family so both specifiers resolve
+ * to the same physical module, making this rewrite runtime-safe.
+ *
+ * Exported for unit testing.
+ */
+export function rewriteVitePlusTestSpecifier(code: string): string {
+  if (!code.includes('vite-plus/test')) {
+    return code;
+  }
+  return code
+    .replace(/(from\s+['"])vite-plus\/test(?=['"])/g, '$1vitest')
+    .replace(/(import\s*\(\s*['"])vite-plus\/test(?=['"])/g, '$1vitest')
+    .replace(/(require\s*\(\s*['"])vite-plus\/test(?=['"])/g, '$1vitest');
+}
+
+function vitePlusTestSpecifierRewritePlugin(): PluginOption {
+  return {
+    name: 'vite-plus:vitest-specifier-rewrite',
+    enforce: 'pre',
+    transform(code, id) {
+      if (id.includes('/node_modules/')) {
+        return null;
+      }
+      const newCode = rewriteVitePlusTestSpecifier(code);
+      if (newCode === code) {
+        return null;
+      }
+      return { code: newCode, map: null };
+    },
+  };
+}
+
+function injectPlugin(config: UserConfig): UserConfig {
+  return {
+    ...config,
+    plugins: [vitePlusTestSpecifierRewritePlugin(), ...(config.plugins ?? [])],
+  };
+}
+
+function injectPluginIntoConfig(config: ViteUserConfigExport): ViteUserConfigExport {
+  if (typeof config === 'function') {
+    return (env: ConfigEnv) => {
+      const result = config(env);
+      if (result instanceof Promise) {
+        return result.then(injectPlugin);
+      }
+      return injectPlugin(result);
+    };
+  }
+  if (config instanceof Promise) {
+    return config.then(injectPlugin);
+  }
+  return injectPlugin(config);
+}
+
 export function defineConfig(config: UserConfig): UserConfig;
 export function defineConfig(config: Promise<UserConfig>): Promise<UserConfig>;
 export function defineConfig(config: ViteUserConfigFnObject): ViteUserConfigFnObject;
@@ -67,7 +128,7 @@ export function defineConfig(config: ViteUserConfigFnPromise): ViteUserConfigFnP
 export function defineConfig(config: ViteUserConfigExport): ViteUserConfigExport;
 
 export function defineConfig(config: ViteUserConfigExport): ViteUserConfigExport {
-  return viteDefineConfig(config);
+  return viteDefineConfig(injectPluginIntoConfig(config));
 }
 
 const VITE_COMMANDS = new Set(['dev', 'build', 'test', 'preview']);
