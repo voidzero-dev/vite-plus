@@ -111,9 +111,7 @@ function vitePlusTestSpecifierRewritePlugin(): PluginOption {
  * The shapes overlap (both have an optional top-level `plugins` array), so a
  * shared helper keeps the wiring consistent.
  */
-function injectPluginIntoInlineConfig<T extends { plugins?: UserConfig['plugins'] }>(
-  config: T,
-): T {
+function injectPluginIntoInlineConfig<T extends { plugins?: UserConfig['plugins'] }>(config: T): T {
   return {
     ...config,
     plugins: [vitePlusTestSpecifierRewritePlugin(), ...(config.plugins ?? [])],
