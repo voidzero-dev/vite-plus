@@ -93,36 +93,29 @@ jobs:
       - name: Pack packages into tgz
         run: |
           mkdir -p tmp/tgz
+          # Pack core and CLI normally (version stays at 0.0.0).
+          cd packages/core && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
+          cd packages/cli && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
           # Bun is uniquely strict about peer-dep resolution:
           #   1. It checks the *resolved target's* package name and version
           #      against the peer range (vitest 4.1.5 declares peer
           #      `vite ^6 || ^7 || ^8`).
           #   2. A file: override pointing at the vite-plus-core tgz fails
-          #      both the name check (target is `@voidzero-dev/vite-plus-core`
+          #      both the name check (target is `@voidzero-dev/vite-plus-core`,
           #      not `vite`) and the version check (0.0.0 is outside `^6|^7|^8`).
-          # pnpm/npm/yarn don't enforce either. See
+          # pnpm/npm/yarn don't enforce either, and using the same core tgz as
+          # the file: target for both `vite` and `@voidzero-dev/vite-plus-core`
+          # is the only configuration they install cleanly. See
           # https://github.com/oven-sh/bun/issues/8406.
           #
-          # Produce three tgz files:
-          #   - voidzero-dev-vite-plus-core-7.99.0.tgz: real core package with
-          #     version=7.99.0. Used as the file: override target for the
-          #     scoped name + resolved by install-global-cli from the CLI's
-          #     transitive @voidzero-dev/vite-plus-core@7.99.0 dep.
-          #   - vite-7.99.0.tgz: post-processed copy of the core tgz with
-          #     `package.json#name` rewritten to "vite". Used as the file:
-          #     override target for `vite` so bun's name+version check passes.
-          #   - vite-plus-0.0.0.tgz: CLI; its workspace:* dep on core resolves
-          #     to 7.99.0 because core/package.json was bumped before packing.
-          # We post-process the core tgz instead of name-swapping
-          # packages/core/package.json before pnpm pack: a temporary
-          # `name: "vite"` in the workspace pollutes catalog/workspace
-          # resolution when packing the CLI (pnpm rewrites `vite: catalog:`
-          # to literal `7.99.0`, which then fails to resolve at install time).
-          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('packages/core/package.json','utf8'));p.version='7.99.0';fs.writeFileSync('packages/core/package.json',JSON.stringify(p,null,2)+'\n')"
-          cd packages/core && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
-          cd packages/cli && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
-          git checkout -- packages/core/package.json
-          pnpm exec tool repack-vite-tgz tmp/tgz/voidzero-dev-vite-plus-core-7.99.0.tgz tmp/tgz/vite-7.99.0.tgz vite
+          # Generate a sibling vite-7.99.0.tgz: a copy of the core tgz with
+          # `package.json#name` rewritten to "vite" and `version` to 7.99.0.
+          # Only the bun matrix entry below points its vite override at this
+          # alias tgz; pnpm/npm/yarn keep pointing at the real core tgz so
+          # pnpm's workspace resolver doesn't trip on a "vite@<version>"
+          # registry lookup (the renamed tgz makes pnpm register the dep as
+          # vite@7.99.0 and then probe npmjs.org to validate the version).
+          pnpm exec tool repack-vite-tgz tmp/tgz/voidzero-dev-vite-plus-core-0.0.0.tgz tmp/tgz/vite-7.99.0.tgz vite 7.99.0
           # Copy vp binary for test jobs
           cp target/x86_64-unknown-linux-gnu/release/vp tmp/tgz/vp
           ls -la tmp/tgz
@@ -179,7 +172,12 @@ jobs:
           - yarn
           - bun
     env:
-      VP_OVERRIDE_PACKAGES: '{"vite":"file:${{ github.workspace }}/tmp/tgz/vite-7.99.0.tgz","@voidzero-dev/vite-plus-core":"file:${{ github.workspace }}/tmp/tgz/voidzero-dev-vite-plus-core-7.99.0.tgz"}'
+      # Bun's strict peer check requires the `vite` override target's tgz to be
+      # named "vite" with a version satisfying vitest's `peer vite ^6 || ^7 || ^8`.
+      # The bun matrix entry uses the masquerade tgz (vite-7.99.0.tgz). pnpm/npm/yarn
+      # point at the real core tgz — anything else trips a registry lookup for
+      # vite@<version> when sub-package and override targets are both file: tgz aliases.
+      VITE_OVERRIDE_TGZ: ${{ matrix.package-manager == 'bun' && 'vite-7.99.0.tgz' || 'voidzero-dev-vite-plus-core-0.0.0.tgz' }}
       VP_VERSION: 'file:${{ github.workspace }}/tmp/tgz/vite-plus-0.0.0.tgz'
       # Force full dependency rewriting so the library template's existing
       # vite-plus dep gets overridden with the local tgz
@@ -212,6 +210,8 @@ jobs:
 
       - name: Run vp create ${{ matrix.template.name }} with ${{ matrix.package-manager }}
         working-directory: ${{ runner.temp }}
+        env:
+          VP_OVERRIDE_PACKAGES: '{"vite":"file:${{ github.workspace }}/tmp/tgz/${{ env.VITE_OVERRIDE_TGZ }}","@voidzero-dev/vite-plus-core":"file:${{ github.workspace }}/tmp/tgz/voidzero-dev-vite-plus-core-0.0.0.tgz"}'
         run: |
           vp create ${{ matrix.template.create-args }} \
             --no-interactive \
