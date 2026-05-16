@@ -52,7 +52,9 @@ export default defineConfig({
       "@vitest/spy": "4.1.5",
       "@vitest/utils": "4.1.5",
       "@vitest/mocker": "4.1.5",
-      "@vitest/pretty-format": "4.1.5"
+      "@vitest/pretty-format": "4.1.5",
+      "@vitest/coverage-v8": "4.1.5",
+      "@vitest/coverage-istanbul": "4.1.5"
     }
   },
   "scripts": {
@@ -82,7 +84,9 @@ export default defineConfig({
     "@vitest/spy": "catalog:",
     "@vitest/utils": "catalog:",
     "@vitest/mocker": "catalog:",
-    "@vitest/pretty-format": "catalog:"
+    "@vitest/pretty-format": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
+    "@vitest/coverage-istanbul": "catalog:"
   }
 }
 

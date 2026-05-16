@@ -88,7 +88,6 @@ fix: $NEW_IMPORT
 /// ast-grep rules for rewriting vitest imports.
 ///
 /// This rewrites:
-/// - `import { ... } from 'vitest'` → `import { ... } from 'vite-plus/test'`
 /// - `import { ... } from 'vitest/config'` → `import { ... } from 'vite-plus'`
 /// - `import { ... } from 'vitest/{name}'` → `import { ... } from 'vite-plus/test/{name}'`
 /// - `import { ... } from '@vitest/browser'` → `import { ... } from 'vite-plus/test/browser'`
@@ -99,6 +98,14 @@ fix: $NEW_IMPORT
 /// - `import { ... } from '@vitest/browser-preview/{name}'` → `import { ... } from 'vite-plus/test/browser-preview/{name}'`
 /// - `import { ... } from '@vitest/browser-webdriverio'` → `import { ... } from 'vite-plus/test/browser-webdriverio'`
 /// - `import { ... } from '@vitest/browser-webdriverio/{name}'` → `import { ... } from 'vite-plus/test/browser-webdriverio/{name}'`
+/// - `import { ... } from 'vite-plus/test'` → `import { ... } from 'vitest'` (reverse migration for the
+///   bare-root specifier; required because `@vitest/mocker`'s static hoister hardcodes the
+///   `vitest` specifier and runs before user plugins. Subpaths are intentionally preserved.)
+///
+/// Note: the bare-root `'vitest'` specifier is intentionally NOT rewritten to `'vite-plus/test'`
+/// any more. Migrated source must reach the upstream `vitest` module identity so that
+/// `@vitest/mocker`'s hoister (which hardcodes `hoistedModule = "vitest"` and runs as part of
+/// vitest's own plugin pipeline before user plugins) can intercept `vi.mock` calls.
 ///
 /// `declare module 'vitest' { ... }` (and the subpath/`@vitest/*` variants) are
 /// intentionally NOT rewritten — the `vite-plus/test*` subpaths are thin shims
@@ -123,22 +130,6 @@ transform:
       source: $STR
       replace: vitest/config
       by: "vite-plus"
-fix: $NEW_IMPORT
----
-id: rewrite-vitest-import
-language: TypeScript
-rule:
-  pattern: $STR
-  kind: string
-  regex: ^['"]vitest['"]$
-  inside:
-    kind: import_statement
-transform:
-  NEW_IMPORT:
-    replace:
-      source: $STR
-      replace: vitest
-      by: "vite-plus/test"
 fix: $NEW_IMPORT
 ---
 id: rewrite-vitest-scoped-import
@@ -171,6 +162,22 @@ transform:
       source: $STR
       replace: vitest/
       by: "vite-plus/test/"
+fix: $NEW_IMPORT
+---
+id: rewrite-vite-plus-test-to-vitest
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]vite-plus/test['"]$
+  inside:
+    kind: import_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: vite-plus/test
+      by: "vitest"
 fix: $NEW_IMPORT
 "#;
 
@@ -265,14 +272,16 @@ static RE_REF_VITEST_CONFIG: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"^(\s*///\s*<reference\s+types\s*=\s*["'])vitest/config(["']\s*/>)"#).unwrap()
 });
 
-/// bare `vitest` → `vite-plus/test`
-static RE_REF_VITEST: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"^(\s*///\s*<reference\s+types\s*=\s*["'])vitest(["']\s*/>)"#).unwrap()
-});
-
 /// `vitest/{subpath}` → `vite-plus/test/{subpath}`
 static RE_REF_VITEST_SUBPATH: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"^(\s*///\s*<reference\s+types\s*=\s*["'])vitest/(.+?)(["']\s*/>)"#).unwrap()
+});
+
+/// bare `vite-plus/test` → `vitest` (reverse migration for already-migrated sources).
+/// Anchored so that only the exact root specifier matches — subpaths like
+/// `vite-plus/test/browser` are intentionally preserved.
+static RE_REF_VITE_PLUS_TEST: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"^(\s*///\s*<reference\s+types\s*=\s*["'])vite-plus/test(["']\s*/>)"#).unwrap()
 });
 
 /// `@vitest/{pkg}[/{subpath}]` → `vite-plus/test/{pkg}[/{subpath}]`
@@ -440,6 +449,12 @@ fn rewrite_reference_types(content: &mut String, skip_packages: &SkipPackages) -
         }
         // Each line matches at most one pattern; use early exit to skip remaining regexes.
         if !skip_packages.skip_vitest {
+            // Reverse migration: bare `vite-plus/test` → `vitest`. Anchored so that
+            // subpaths like `vite-plus/test/browser` are preserved.
+            if apply_regex_replace(line, &RE_REF_VITE_PLUS_TEST, "${1}vitest${2}") {
+                changed = true;
+                continue;
+            }
             if apply_regex_replace(line, &RE_REF_VITEST_CONFIG, "${1}vite-plus${2}") {
                 changed = true;
                 continue;
@@ -452,10 +467,8 @@ fn rewrite_reference_types(content: &mut String, skip_packages: &SkipPackages) -
                 changed = true;
                 continue;
             }
-            if apply_regex_replace(line, &RE_REF_VITEST, "${1}vite-plus/test${2}") {
-                changed = true;
-                continue;
-            }
+            // The bare `vitest` triple-slash reference is intentionally left alone — see
+            // the note on `REWRITE_VITEST_RULES` above.
         }
         if !skip_packages.skip_vite {
             if apply_regex_replace(line, &RE_REF_VITE_SUBPATH, "${1}vite-plus/${2}${3}") {
@@ -914,6 +927,9 @@ export default defineConfig({
 
     #[test]
     fn test_rewrite_import_content_vitest() {
+        // Bare `vitest` is intentionally left untouched: vite-plus's runtime
+        // canonical specifier is `vitest`, and `@vitest/mocker`'s static hoister
+        // hardcodes that specifier and must see it unchanged.
         let vite_config = r#"import { describe, it, expect } from 'vitest';
 
 describe('test', () => {
@@ -923,33 +939,20 @@ describe('test', () => {
 });"#;
 
         let result = rewrite_import_content(vite_config, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(
-            result.content,
-            r#"import { describe, it, expect } from 'vite-plus/test';
-
-describe('test', () => {
-  it('should work', () => {
-    expect(true).toBe(true);
-  });
-});"#
-        );
+        assert!(!result.updated);
+        assert_eq!(result.content, vite_config);
     }
 
     #[test]
     fn test_rewrite_import_content_vitest_double_quotes() {
+        // See note on `test_rewrite_import_content_vitest`: bare `vitest` is preserved.
         let vite_config = r#"import { describe, it, expect } from "vitest";
 
 describe('test', () => {});"#;
 
         let result = rewrite_import_content(vite_config, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(
-            result.content,
-            r#"import { describe, it, expect } from "vite-plus/test";
-
-describe('test', () => {});"#
-        );
+        assert!(!result.updated);
+        assert_eq!(result.content, vite_config);
     }
 
     #[test]
@@ -1212,7 +1215,7 @@ export default defineConfig({
             result.content,
             r#"import { defineConfig } from 'vite-plus';
 import { ModuleRunner } from 'vite-plus/module-runner';
-import { describe, it, expect } from 'vite-plus/test';
+import { describe, it, expect } from 'vitest';
 import { startVitest } from 'vite-plus/test/node';
 import { page } from 'vite-plus/test/browser';
 import { playwright } from 'vite-plus/test/browser-playwright';
@@ -1241,9 +1244,11 @@ export default defineConfig({});"#,
         )
         .unwrap();
 
+        // A previously-migrated source file with `vite-plus/test` — the migrator
+        // should reverse it back to `vitest`.
         fs::write(
             temp.path().join("src/test.ts"),
-            r#"import { describe, it } from 'vitest';
+            r#"import { describe, it } from 'vite-plus/test';
 describe('test', () => {});"#,
         )
         .unwrap();
@@ -1283,7 +1288,8 @@ describe('test', () => {});"#,
         assert!(config_content.contains("vite-plus"));
 
         let test_content = fs::read_to_string(temp.path().join("src/test.ts")).unwrap();
-        assert!(test_content.contains("vite-plus/test"));
+        assert!(test_content.contains("from 'vitest'"));
+        assert!(!test_content.contains("vite-plus/test"));
 
         // Verify utils.ts was not modified
         let utils_content = fs::read_to_string(temp.path().join("src/utils.ts")).unwrap();
@@ -1567,7 +1573,7 @@ export default defineConfig({});"#;
         assert_eq!(
             result.content,
             r#"import { defineConfig } from 'vite-plus';
-import { describe } from 'vite-plus/test';
+import { describe } from 'vitest';
 
 declare module 'vite-plus' {
   interface UserConfig {
@@ -1900,9 +1906,12 @@ export default defineConfig({
 
     #[test]
     fn test_skip_vite_when_peer_dependency() {
-        // When vite is a peerDependency, vite imports should NOT be rewritten
+        // When vite is a peerDependency, vite imports should NOT be rewritten.
+        // The vitest import is the canonical specifier and is also preserved as-is —
+        // exercise the reverse-migration path by including a `vite-plus/test` import.
         let content = r#"import { defineConfig } from 'vite';
 import { describe } from 'vitest';
+import { vi } from 'vite-plus/test';
 
 export default defineConfig({});"#;
 
@@ -1911,11 +1920,13 @@ export default defineConfig({});"#;
 
         let result = rewrite_import_content(content, &skip_packages).unwrap();
         assert!(result.updated);
-        // vite import should NOT be rewritten, vitest import SHOULD be rewritten
+        // vite import should NOT be rewritten; vitest import already canonical;
+        // vite-plus/test should be reverse-migrated to vitest.
         assert_eq!(
             result.content,
             r#"import { defineConfig } from 'vite';
-import { describe } from 'vite-plus/test';
+import { describe } from 'vitest';
+import { vi } from 'vitest';
 
 export default defineConfig({});"#
         );
@@ -2114,9 +2125,10 @@ export default defineConfig({});"#;
         // Create src directory
         fs::create_dir(temp.path().join("src")).unwrap();
 
-        // Create source file with vite and vitest imports
+        // Create source file with vite import (preserved because vite is a dep)
+        // and a previously-migrated `vite-plus/test` import (must be reverse-migrated).
         let original_content = r#"import { defineConfig } from 'vite';
-import { describe } from 'vitest';
+import { vi } from 'vite-plus/test';
 
 export default defineConfig({});"#;
         fs::write(temp.path().join("src/index.ts"), original_content).unwrap();
@@ -2124,16 +2136,16 @@ export default defineConfig({});"#;
         // Run the batch rewrite
         let result = rewrite_imports_in_directory(temp.path()).unwrap();
 
-        // File should be modified (vitest was rewritten)
+        // File should be modified (vite-plus/test was reverse-migrated)
         assert_eq!(result.modified_files.len(), 1);
         assert!(result.errors.is_empty());
 
-        // Verify vite import NOT rewritten (in dependencies), vitest IS rewritten
+        // Verify vite import NOT rewritten (in dependencies), vite-plus/test IS reverse-rewritten
         let content = fs::read_to_string(temp.path().join("src/index.ts")).unwrap();
         assert_eq!(
             content,
             r#"import { defineConfig } from 'vite';
-import { describe } from 'vite-plus/test';
+import { vi } from 'vitest';
 
 export default defineConfig({});"#
         );
@@ -2157,9 +2169,10 @@ export default defineConfig({});"#
         // Create src directory
         fs::create_dir(temp.path().join("src")).unwrap();
 
-        // Create source file with vite and vitest imports
+        // Create source file with vite import (preserved because vite is peerDep)
+        // and a previously-migrated `vite-plus/test` import (must be reverse-migrated).
         let original_content = r#"import { defineConfig } from 'vite';
-import { describe } from 'vitest';
+import { vi } from 'vite-plus/test';
 
 export default defineConfig({});"#;
         fs::write(temp.path().join("src/index.ts"), original_content).unwrap();
@@ -2167,16 +2180,16 @@ export default defineConfig({});"#;
         // Run the batch rewrite
         let result = rewrite_imports_in_directory(temp.path()).unwrap();
 
-        // File should be modified (vitest was rewritten)
+        // File should be modified (vite-plus/test was reverse-migrated)
         assert_eq!(result.modified_files.len(), 1);
         assert!(result.errors.is_empty());
 
-        // Verify vite import NOT rewritten, vitest IS rewritten
+        // Verify vite import NOT rewritten, vite-plus/test IS reverse-rewritten
         let content = fs::read_to_string(temp.path().join("src/index.ts")).unwrap();
         assert_eq!(
             content,
             r#"import { defineConfig } from 'vite';
-import { describe } from 'vite-plus/test';
+import { vi } from 'vitest';
 
 export default defineConfig({});"#
         );
@@ -2279,20 +2292,22 @@ import { build } from 'tsdown';"#;
         // app package.json (no peerDeps)
         fs::write(temp.path().join("packages/app/package.json"), r#"{"name": "app"}"#).unwrap();
 
-        // vite-plugin source file with vite and vitest imports
+        // vite-plugin source file: vite import preserved (peerDep) and a
+        // previously-migrated `vite-plus/test` import that needs reverse-migration.
         fs::write(
             temp.path().join("packages/vite-plugin/src/index.ts"),
             r#"import { defineConfig } from 'vite';
-import { describe } from 'vitest';
+import { vi } from 'vite-plus/test';
 export default defineConfig({});"#,
         )
         .unwrap();
 
-        // app source file with vite and vitest imports
+        // app source file: vite import (will be rewritten) and a previously-migrated
+        // `vite-plus/test` import (must be reverse-migrated).
         fs::write(
             temp.path().join("packages/app/src/index.ts"),
             r#"import { defineConfig } from 'vite';
-import { describe } from 'vitest';
+import { vi } from 'vite-plus/test';
 export default defineConfig({});"#,
         )
         .unwrap();
@@ -2303,23 +2318,23 @@ export default defineConfig({});"#,
         // Both files should be modified
         assert_eq!(result.modified_files.len(), 2);
 
-        // vite-plugin: vite NOT rewritten (has peerDep), vitest IS rewritten
+        // vite-plugin: vite NOT rewritten (has peerDep), vite-plus/test reverse-migrated
         let vite_plugin_content =
             fs::read_to_string(temp.path().join("packages/vite-plugin/src/index.ts")).unwrap();
         assert_eq!(
             vite_plugin_content,
             r#"import { defineConfig } from 'vite';
-import { describe } from 'vite-plus/test';
+import { vi } from 'vitest';
 export default defineConfig({});"#
         );
 
-        // app: vite IS rewritten (no peerDep), vitest IS rewritten
+        // app: vite IS rewritten (no peerDep), vite-plus/test reverse-migrated
         let app_content =
             fs::read_to_string(temp.path().join("packages/app/src/index.ts")).unwrap();
         assert_eq!(
             app_content,
             r#"import { defineConfig } from 'vite-plus';
-import { describe } from 'vite-plus/test';
+import { vi } from 'vitest';
 export default defineConfig({});"#
         );
     }
@@ -2354,10 +2369,12 @@ export default defineConfig({});"#
 
     #[test]
     fn test_rewrite_reference_types_bare_vitest() {
+        // Bare `vitest` triple-slash reference is intentionally preserved: see
+        // the `REWRITE_VITEST_RULES` note. The canonical specifier is `vitest`.
         let content = r#"/// <reference types="vitest" />"#;
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(result.updated);
-        assert_eq!(result.content, r#"/// <reference types="vite-plus/test" />"#);
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
     }
 
     #[test]
@@ -2499,14 +2516,15 @@ const x = 1;
 
     #[test]
     fn test_rewrite_reference_types_after_multiline_block_comment() {
-        // Multi-line block comments should be skipped entirely
+        // Multi-line block comments should be skipped entirely. Use `vite-plus/test`
+        // so the reverse-migration rule fires and we still observe a rewrite.
         let content =
-            "/*\n * License header\n * Copyright 2024\n */\n/// <reference types=\"vitest\" />\n";
+            "/*\n * License header\n * Copyright 2024\n */\n/// <reference types=\"vite-plus/test\" />\n";
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(
             result.content,
-            "/*\n * License header\n * Copyright 2024\n */\n/// <reference types=\"vite-plus/test\" />\n"
+            "/*\n * License header\n * Copyright 2024\n */\n/// <reference types=\"vitest\" />\n"
         );
     }
 
@@ -2599,14 +2617,15 @@ const x = 1;
 
     #[test]
     fn test_rewrite_reference_types_crlf() {
-        // CRLF line endings should be preserved
+        // CRLF line endings should be preserved. Use a `vite-plus/test` reference
+        // so the reverse-migration rule fires on the second line.
         let content =
-            "/// <reference types=\"vite/client\" />\r\n/// <reference types=\"vitest\" />\r\n";
+            "/// <reference types=\"vite/client\" />\r\n/// <reference types=\"vite-plus/test\" />\r\n";
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(
             result.content,
-            "/// <reference types=\"vite-plus/client\" />\r\n/// <reference types=\"vite-plus/test\" />\r\n"
+            "/// <reference types=\"vite-plus/client\" />\r\n/// <reference types=\"vitest\" />\r\n"
         );
     }
 
@@ -2698,8 +2717,10 @@ const x = 1;
 
     #[test]
     fn test_rewrite_reference_types_env_d_ts_style() {
+        // Bare `vitest` is intentionally preserved (canonical specifier).
+        // Use `vite-plus/test` instead to exercise the reverse-migration rule.
         let content = r#"/// <reference types="vite/client" />
-/// <reference types="vitest" />
+/// <reference types="vite-plus/test" />
 /// <reference types="vitest/globals" />
 /// <reference types="vitest/config" />
 /// <reference types="@vitest/browser/context" />"#;
@@ -2709,7 +2730,7 @@ const x = 1;
         assert_eq!(
             result.content,
             r#"/// <reference types="vite-plus/client" />
-/// <reference types="vite-plus/test" />
+/// <reference types="vitest" />
 /// <reference types="vite-plus/test/globals" />
 /// <reference types="vite-plus" />
 /// <reference types="vite-plus/test/browser/context" />"#
@@ -2736,8 +2757,11 @@ export default defineConfig({});"#
 
     #[test]
     fn test_rewrite_reference_types_skip_vite() {
+        // With vite skipped, only the vitest reference is processed. Use `vite-plus/test`
+        // (the deprecated specifier) so the reverse-migration rule fires; bare `vitest`
+        // is preserved as the canonical specifier.
         let content = r#"/// <reference types="vite/client" />
-/// <reference types="vitest" />"#;
+/// <reference types="vite-plus/test" />"#;
 
         let skip_packages =
             SkipPackages { skip_vite: true, skip_vitest: false, skip_tsdown: false };
@@ -2746,7 +2770,7 @@ export default defineConfig({});"#
         assert_eq!(
             result.content,
             r#"/// <reference types="vite/client" />
-/// <reference types="vite-plus/test" />"#
+/// <reference types="vitest" />"#
         );
     }
 
@@ -2794,5 +2818,89 @@ export default defineConfig({});"#
         let result = rewrite_import_content(content, &skip_packages).unwrap();
         assert!(!result.updated);
         assert_eq!(result.content, content);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vite_plus_test_to_vitest() {
+        // Reverse migration: a previously-migrated source that still has
+        // `from 'vite-plus/test'` must be rewritten back to `from 'vitest'`,
+        // because `@vitest/mocker`'s static hoister hardcodes the `vitest`
+        // specifier and runs before user plugins.
+        let source = r#"import { vi, describe, it } from 'vite-plus/test';
+
+describe('mock', () => {
+  vi.mock('./dep');
+});"#;
+
+        let result = rewrite_import_content(source, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { vi, describe, it } from 'vitest';
+
+describe('mock', () => {
+  vi.mock('./dep');
+});"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vite_plus_test_double_quotes_to_vitest() {
+        let source = r#"import { vi } from "vite-plus/test";
+
+vi.mock("./dep");"#;
+
+        let result = rewrite_import_content(source, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { vi } from "vitest";
+
+vi.mock("./dep");"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vite_plus_test_subpath_preserved() {
+        // Subpaths under `vite-plus/test` are vite-plus exports (shims for the
+        // browser provider packages) and MUST NOT be reverse-rewritten.
+        let source = r#"import { playwright } from 'vite-plus/test/browser-playwright';
+import { page } from 'vite-plus/test/browser';
+
+export { playwright, page };"#;
+
+        let result = rewrite_import_content(source, &SkipPackages::default()).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, source);
+    }
+
+    #[test]
+    fn test_rewrite_reference_types_vite_plus_test_to_vitest() {
+        // Reverse-direction triple-slash reference rewrite: bare root only.
+        let content = r#"/// <reference types="vite-plus/test" />"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"/// <reference types="vitest" />"#);
+    }
+
+    #[test]
+    fn test_rewrite_reference_types_vite_plus_test_subpath_preserved() {
+        // Subpaths under `vite-plus/test` map to dedicated vite-plus exports
+        // and must not be rewritten back to `@vitest/*`.
+        let content = r#"/// <reference types="vite-plus/test/browser" />"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vite_plus_test_skipped_when_vitest_skipped() {
+        // When the package declares `vitest` as a dep/peerDep, no vitest-family
+        // rewrites should fire — including the reverse one.
+        let source = r#"import { vi } from 'vite-plus/test';"#;
+        let skip = SkipPackages { skip_vite: false, skip_vitest: true, skip_tsdown: false };
+        let result = rewrite_import_content(source, &skip).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, source);
     }
 }

@@ -33,6 +33,8 @@ catalog:
   '@vitest/utils': <semver>
   '@vitest/mocker': <semver>
   '@vitest/pretty-format': <semver>
+  '@vitest/coverage-v8': <semver>
+  '@vitest/coverage-istanbul': <semver>
   vite-plus: latest
 overrides:
   vite: 'catalog:'
@@ -44,6 +46,8 @@ overrides:
   '@vitest/utils': 'catalog:'
   '@vitest/mocker': 'catalog:'
   '@vitest/pretty-format': 'catalog:'
+  '@vitest/coverage-v8': 'catalog:'
+  '@vitest/coverage-istanbul': 'catalog:'
 peerDependencyRules:
   allowAny:
     - vite
@@ -55,6 +59,8 @@ peerDependencyRules:
     - '@vitest/utils'
     - '@vitest/mocker'
     - '@vitest/pretty-format'
+    - '@vitest/coverage-v8'
+    - '@vitest/coverage-istanbul'
   allowedVersions:
     vite: '*'
     vitest: '*'
@@ -65,6 +71,8 @@ peerDependencyRules:
     '@vitest/utils': '*'
     '@vitest/mocker': '*'
     '@vitest/pretty-format': '*'
+    '@vitest/coverage-v8': '*'
+    '@vitest/coverage-istanbul': '*'
 
 > cat lint-staged.config.ts # check TS config is not modified
 export default {
