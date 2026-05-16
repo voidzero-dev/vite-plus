@@ -1,4 +1,5 @@
 import type { PluginOption, UserConfig } from '@voidzero-dev/vite-plus-core';
+import { initSync, parse, type ImportSpecifier } from 'es-module-lexer';
 import type { OxfmtConfig } from 'oxfmt';
 import type { OxlintConfig } from 'oxlint';
 import {
@@ -74,16 +75,65 @@ type ViteUserConfigExport =
  * Task #50 pins `vitest` and the `@vitest/*` family so both specifiers resolve
  * to the same physical module, making this rewrite runtime-safe.
  *
+ * Uses `es-module-lexer` so only real ESM `import`/`export ... from` and
+ * dynamic `import()` specifiers are touched — string literals, template
+ * literals, and error messages that happen to contain `vite-plus/test` are
+ * left alone. CommonJS `require(...)` calls are handled separately by a
+ * tightened regex (es-module-lexer is ESM-only).
+ *
  * Exported for unit testing.
  */
+const TARGET_SPECIFIER = 'vite-plus/test';
+const TARGET_REPLACEMENT = 'vitest';
+
+// Tightened CJS require regex. The lookbehind `(?<=[\s;{}(\[,=])` ensures the
+// `require` keyword sits at a statement-ish boundary, which keeps it from
+// matching `.require(...)` member calls or `'require(' + path + ')'`-style
+// string content. Note: this still can match inside multi-line template
+// literals or strings that contain raw newlines + boundary chars, but those
+// cases were not covered by the original regex either; the ESM lexer pass
+// above already eliminates the common false positives that motivated this fix.
+const REQUIRE_PATTERN = /(?<=^|[\s;{}([,=])(require\s*\(\s*['"])vite-plus\/test(?=['"])/g;
+
+let esLexerInitialized = false;
+function ensureLexerInit(): void {
+  if (esLexerInitialized) {
+    return;
+  }
+  initSync();
+  esLexerInitialized = true;
+}
+
 export function rewriteVitePlusTestSpecifier(code: string): string {
-  if (!code.includes('vite-plus/test')) {
+  if (!code.includes(TARGET_SPECIFIER)) {
     return code;
   }
-  return code
-    .replace(/(from\s+['"])vite-plus\/test(?=['"])/g, '$1vitest')
-    .replace(/(import\s*\(\s*['"])vite-plus\/test(?=['"])/g, '$1vitest')
-    .replace(/(require\s*\(\s*['"])vite-plus\/test(?=['"])/g, '$1vitest');
+
+  // Step 1: rewrite ESM static/dynamic imports via es-module-lexer.
+  let result = code;
+  let imports: ReadonlyArray<ImportSpecifier> | undefined;
+  try {
+    ensureLexerInit();
+    [imports] = parse(code);
+  } catch {
+    // Parse failure (non-JS file, syntax error before transformation, etc.):
+    // skip the ESM-aware pass and let the CJS regex still run below.
+    imports = undefined;
+  }
+
+  if (imports && imports.length > 0) {
+    // Walk in reverse so earlier offsets stay valid as we splice.
+    const matches = imports.filter((i) => i.n === TARGET_SPECIFIER);
+    for (let i = matches.length - 1; i >= 0; i--) {
+      const { s, e } = matches[i];
+      result = result.slice(0, s) + TARGET_REPLACEMENT + result.slice(e);
+    }
+  }
+
+  // Step 2: rewrite CJS require() calls (not seen by es-module-lexer).
+  result = result.replace(REQUIRE_PATTERN, `$1${TARGET_REPLACEMENT}`);
+
+  return result;
 }
 
 function vitePlusTestSpecifierRewritePlugin(): PluginOption {

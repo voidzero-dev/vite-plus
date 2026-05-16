@@ -369,6 +369,9 @@ importers:
       '@voidzero-dev/vite-plus-core':
         specifier: workspace:*
         version: link:../core
+      es-module-lexer:
+        specifier: ^1.7.0
+        version: 1.7.0
       oxfmt:
         specifier: 'catalog:'
         version: 0.48.0
