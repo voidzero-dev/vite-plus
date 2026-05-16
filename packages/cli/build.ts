@@ -411,12 +411,28 @@ async function syncTestPackageExports() {
           { providerPkgRoot },
         );
         if (shimExport) {
+          // Upstream `@vitest/browser-<provider>/context` is types-only and just
+          // re-exports from `@vitest/browser/context`. To make the migrated
+          // `vite-plus/test/browser-<provider>/context` import resolvable at
+          // runtime (Node ESM resolution requires `default`/`import`), emit a
+          // JS shim that re-exports from `@vitest/browser/context` and amend
+          // the export entry.
+          if (providerExportPath === './context') {
+            await ensureContextRuntimeShim(shimBaseName, testDistDir, shimExport);
+          }
           generatedExports[cliPath] = shimExport;
           console.log(`  Created ${cliPath}`);
         }
       }
     }
   }
+
+  // Emit `./test/browser/context` — vitest's exports map only covers `./browser`
+  // (which becomes `vite-plus/test/browser`), but the migration rewrites
+  // `@vitest/browser/context` → `vite-plus/test/browser/context`. Without this
+  // entry Node throws ERR_PACKAGE_PATH_NOT_EXPORTED at runtime.
+  generatedExports['./test/browser/context'] = await createBrowserContextExport(testDistDir);
+  console.log('  Created ./test/browser/context');
 
   // Update CLI package.json
   await updateCliPackageJson(cliPkgPath, generatedExports);
@@ -585,6 +601,59 @@ async function writePrivateAtVitestBrowserShims(testDistDir: string): Promise<vo
     join(testDistDir, '_at-vitest-browser/context.d.ts'),
     `import '@vitest/browser/context';\nexport * from '@vitest/browser/context';\n`,
   );
+}
+
+/**
+ * Write a JS shim for a provider-`/context` export and amend the export entry
+ * with a runtime target.
+ *
+ * Upstream `@vitest/browser-<provider>/context` is declared types-only (its
+ * `context.d.ts` simply re-exports from `@vitest/browser/context`). After the
+ * migration rewrites `@vitest/browser-<provider>/context` →
+ * `vite-plus/test/browser-<provider>/context`, Node ESM resolution fails with
+ * ERR_PACKAGE_PATH_NOT_EXPORTED unless the export entry has a `default`/`import`
+ * target. We re-export from `@vitest/browser/context` so the bundled
+ * `@vitest/browser` (vite-plus's own pnpm-edge) is reached at runtime.
+ */
+async function ensureContextRuntimeShim(
+  shimBaseName: string,
+  testDistDir: string,
+  shimExport: ExportValue,
+): Promise<void> {
+  if (typeof shimExport !== 'object' || shimExport === null) {
+    return;
+  }
+  const entry = shimExport as Record<string, unknown>;
+  if (entry.default || entry.import) {
+    return;
+  }
+  const jsRelPath = `./dist/test/${shimBaseName}.js`;
+  const jsAbsPath = join(testDistDir, `${shimBaseName}.js`);
+  await mkdir(dirname(jsAbsPath), { recursive: true });
+  await writeFile(jsAbsPath, `export * from '@vitest/browser/context';\n`);
+  entry.default = jsRelPath;
+}
+
+/**
+ * Build the `./test/browser/context` export entry and write its JS/d.ts shims.
+ *
+ * Vitest's package.json only exposes `./browser` (mapped to `./test/browser`).
+ * The migration rewrites `@vitest/browser/context` →
+ * `vite-plus/test/browser/context`, so we add this path with both runtime and
+ * type targets that re-export from `@vitest/browser/context`.
+ */
+async function createBrowserContextExport(testDistDir: string): Promise<ExportValue> {
+  const dir = join(testDistDir, 'browser');
+  await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, 'context.js'), `export * from '@vitest/browser/context';\n`);
+  await writeFile(
+    join(dir, 'context.d.ts'),
+    `import '@vitest/browser/context';\nexport * from '@vitest/browser/context';\n`,
+  );
+  return {
+    types: './dist/test/browser/context.d.ts',
+    default: './dist/test/browser/context.js',
+  };
 }
 
 /**
