@@ -365,8 +365,8 @@ The full set is regenerated on every build from the upstream vitest `package.jso
 
 In addition to vitest's own exports, the three `@vitest/browser-*` provider packages are projected under two parallel surfaces so existing user code keeps resolving after the deleted `@voidzero-dev/vite-plus-test` wrapper:
 
-| Provider Package              | CLI Package Exports                                                         |
-| ----------------------------- | --------------------------------------------------------------------------- |
+| Provider Package              | CLI Package Exports                                                                  |
+| ----------------------------- | ------------------------------------------------------------------------------------ |
 | `@vitest/browser-playwright`  | `vite-plus/test/browser-playwright`, `vite-plus/test/browser/providers/playwright`   |
 | `@vitest/browser-preview`     | `vite-plus/test/browser-preview`, `vite-plus/test/browser/providers/preview`         |
 | `@vitest/browser-webdriverio` | `vite-plus/test/browser-webdriverio`, `vite-plus/test/browser/providers/webdriverio` |
