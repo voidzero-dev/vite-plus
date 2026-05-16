@@ -30,6 +30,7 @@ import {
   VITE_PLUS_NAME,
   VITE_PLUS_OVERRIDE_PACKAGES,
   VITE_PLUS_VERSION,
+  VITEST_VERSION,
   isForceOverrideMode,
 } from '../utils/constants.ts';
 import { editJsonFile, isJsonFile, readJsonFile } from '../utils/json.ts';
@@ -135,7 +136,7 @@ const LEGACY_WRAPPER_PACKAGE_NAMES = ['@voidzero-dev/vite-plus-test'] as const;
 // rewritten. For `vitest`, we substitute the vitest version vite-plus
 // bundles so any `catalog:` reference the user still has resolves cleanly.
 const LEGACY_WRAPPER_FALLBACK_VERSIONS: Record<string, string> = {
-  vitest: '^4.1.5',
+  vitest: `^${VITEST_VERSION}`,
 };
 
 function isLegacyWrapperSpec(value: string | undefined): boolean {
@@ -2808,7 +2809,11 @@ export function rewritePackageJson(
       Object.keys(installableDeps).some((name) => name.includes('vitest'))
     ) {
       pkg.devDependencies ??= {};
-      pkg.devDependencies.vitest = getCatalogDependencySpec(undefined, '4.1.5', supportCatalog);
+      pkg.devDependencies.vitest = getCatalogDependencySpec(
+        undefined,
+        VITEST_VERSION,
+        supportCatalog,
+      );
     }
   }
   return extractedStagedConfig;
