@@ -2,6 +2,7 @@ import type { PluginOption, UserConfig } from '@voidzero-dev/vite-plus-core';
 import type { OxfmtConfig } from 'oxfmt';
 import type { OxlintConfig } from 'oxlint';
 import { defineConfig as viteDefineConfig, type ConfigEnv } from 'vitest/config';
+import type { InlineConfig as VitestInlineConfig } from 'vitest/node';
 
 import type { PackUserConfig } from './pack.ts';
 import type { RunConfig } from './run-config.ts';
@@ -36,6 +37,16 @@ declare module '@voidzero-dev/vite-plus-core' {
        */
       defaultTemplate?: string;
     };
+
+    /**
+     * Vitest test configuration.
+     *
+     * Vitest augments vite's `UserConfig` with a `test` field via
+     * `declare module 'vite'`, but vite-plus-core is a fork of vite so that
+     * augmentation does not apply here. Re-declare it locally so user
+     * configs like `defineConfig({ test: { globals: true } })` typecheck.
+     */
+    test?: VitestInlineConfig;
   }
 }
 
