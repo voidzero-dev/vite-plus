@@ -2,7 +2,7 @@
   "rolldown": {
     "repo": "https://github.com/rolldown/rolldown.git",
     "branch": "05-16-chore_update_mimalloc-safe",
-    "hash": "c5b0918e79ca1600622b5127cfb2b94f752361da"
+    "hash": "725edbea94a619152e118068568eccbc851765b8"
   },
   "vite": {
     "repo": "https://github.com/vitejs/vite.git",

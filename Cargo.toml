@@ -205,7 +205,7 @@ json-strip-comments = "3"
 jsonschema = { version = "0.46.0", default-features = false }
 junction = "1.4.1"
 memchr = "2.7.4"
-mimalloc-safe = "0.1.60"
+mimalloc-safe = { git = "https://github.com/shulaoda/mimalloc-safe.git", branch = "05-16-fix_sys_route_windows_msvc_build_to_v3_source_when_v3_feature_is_on" }
 mime = "0.3.17"
 napi = { version = "3.0.0", default-features = false, features = [
   "async",
