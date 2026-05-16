@@ -93,18 +93,29 @@ jobs:
       - name: Pack packages into tgz
         run: |
           mkdir -p tmp/tgz
-          # Bun strictly validates the resolved package version against
-          # transitive peer constraints; vitest 4.1.5 declares peer
-          # `vite ^6 || ^7 || ^8` and bun aborts with "vite@^6.0.0 || ^7.0.0
-          # || ^8.0.0 failed to resolve" when the override target's version
-          # is 0.0.0. pnpm/npm/yarn don't enforce this. See
-          # https://github.com/oven-sh/bun/issues/8406. Pack core with a
-          # synthetic version inside the satisfied range, then pack the CLI
-          # so its workspace:* dep on core resolves to that same version
-          # (otherwise install-global-cli can't find the right tgz). Restore
-          # the source package.json afterwards so the working tree stays at
-          # 0.0.0 for downstream steps.
-          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('packages/core/package.json','utf8'));p.version='7.99.0';fs.writeFileSync('packages/core/package.json',JSON.stringify(p,null,2)+'\n')"
+          # Bun is uniquely strict about peer-dep resolution:
+          #   1. It checks the *resolved target's* package name and version
+          #      against the peer range (vitest 4.1.5 declares peer
+          #      `vite ^6 || ^7 || ^8`).
+          #   2. A file: override pointing at the vite-plus-core tgz fails
+          #      both the name check (target is `@voidzero-dev/vite-plus-core`
+          #      not `vite`) and the version check (0.0.0 is outside `^6|^7|^8`).
+          # pnpm/npm/yarn don't enforce either. See
+          # https://github.com/oven-sh/bun/issues/8406.
+          #
+          # Pack three tgz files:
+          #   - vite-7.99.0.tgz: same code as core, but with name=vite,
+          #     version=7.99.0. Used as the file: override target for `vite`.
+          #   - voidzero-dev-vite-plus-core-7.99.0.tgz: real core package with
+          #     version=7.99.0. Used as the file: override target for the
+          #     scoped name + resolved by install-global-cli from the CLI's
+          #     transitive @voidzero-dev/vite-plus-core@7.99.0 dep.
+          #   - vite-plus-0.0.0.tgz: CLI; its workspace:* dep on core resolves
+          #     to 7.99.0 because core/package.json was bumped before packing.
+          # Restore packages/core/package.json afterwards.
+          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('packages/core/package.json','utf8'));p.name='vite';p.version='7.99.0';fs.writeFileSync('packages/core/package.json',JSON.stringify(p,null,2)+'\n')"
+          cd packages/core && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
+          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('packages/core/package.json','utf8'));p.name='@voidzero-dev/vite-plus-core';fs.writeFileSync('packages/core/package.json',JSON.stringify(p,null,2)+'\n')"
           cd packages/core && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
           cd packages/cli && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
           git checkout -- packages/core/package.json
@@ -164,7 +175,7 @@ jobs:
           - yarn
           - bun
     env:
-      VP_OVERRIDE_PACKAGES: '{"vite":"file:${{ github.workspace }}/tmp/tgz/voidzero-dev-vite-plus-core-7.99.0.tgz","@voidzero-dev/vite-plus-core":"file:${{ github.workspace }}/tmp/tgz/voidzero-dev-vite-plus-core-7.99.0.tgz"}'
+      VP_OVERRIDE_PACKAGES: '{"vite":"file:${{ github.workspace }}/tmp/tgz/vite-7.99.0.tgz","@voidzero-dev/vite-plus-core":"file:${{ github.workspace }}/tmp/tgz/voidzero-dev-vite-plus-core-7.99.0.tgz"}'
       VP_VERSION: 'file:${{ github.workspace }}/tmp/tgz/vite-plus-0.0.0.tgz'
       # Force full dependency rewriting so the library template's existing
       # vite-plus dep gets overridden with the local tgz
