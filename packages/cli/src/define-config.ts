@@ -5,7 +5,6 @@ import {
   defineConfig as viteDefineConfig,
   type ConfigEnv,
   type TestProjectConfiguration,
-  type TestProjectInlineConfiguration,
   type UserProjectConfigFn,
 } from 'vitest/config';
 import type { InlineConfig as VitestInlineConfig } from 'vitest/node';
@@ -135,9 +134,8 @@ function injectPluginIntoProject(project: TestProjectConfiguration): TestProject
     return project;
   }
   if (typeof project === 'function') {
-    const fn = project as UserProjectConfigFn;
     const wrapped: UserProjectConfigFn = (env: ConfigEnv) => {
-      const result = fn(env);
+      const result = project(env);
       if (result instanceof Promise) {
         return result.then(injectPluginIntoInlineConfig);
       }
@@ -149,7 +147,7 @@ function injectPluginIntoProject(project: TestProjectConfiguration): TestProject
     return project.then(injectPluginIntoInlineConfig);
   }
   if (typeof project === 'object' && project !== null) {
-    return injectPluginIntoInlineConfig(project as TestProjectInlineConfiguration);
+    return injectPluginIntoInlineConfig(project);
   }
   return project;
 }
