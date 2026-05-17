@@ -1,4 +1,4 @@
-# RFC: Standardized "Is this a Vite+ project?" detection for editor extensions
+# RFC: Vite+ Project Detection for Editor Extensions
 
 > Tracking issue: [#1557](https://github.com/voidzero-dev/vite-plus/issues/1557)
 > Status: **Draft for discussion** — not yet a final design.
