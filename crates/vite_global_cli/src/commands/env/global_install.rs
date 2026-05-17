@@ -124,6 +124,7 @@ pub async fn install(
             let package_index = next_index;
             next_index += 1;
 
+            // We have to clone it as tokio request 'static lifetime
             let npm_path = npm_path.clone();
             let node_bin_dir = node_bin_dir.clone();
             let version = version.clone();
@@ -154,9 +155,9 @@ pub async fn install(
                         output::error(&format!("Failed to {} {package_spec}", operation));
                         match exit_code {
                             Some(code) => {
-                                output::raw_stderr(&format!("  npm exited with code {code}"))
+                                output::raw_stderr(&format!("npm exited with code {code}"))
                             }
-                            None => output::raw_stderr("  npm exited without an exit code"),
+                            None => output::raw_stderr("npm exited without an exit code"),
                         }
                         if !stdout.is_empty() {
                             let _ = std::io::stdout().write_all(stdout);
@@ -174,7 +175,7 @@ pub async fn install(
                 }
                 if cancelled > 0 {
                     output::raw_stderr(&format!(
-                        "  {} remaining {} cancelled",
+                        "\n{} remaining {} cancelled",
                         cancelled,
                         if cancelled == 1 { "install was" } else { "installs were" }
                     ));
