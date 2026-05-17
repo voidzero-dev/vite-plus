@@ -108,9 +108,27 @@ jobs:
       - name: Pack packages into tgz
         run: |
           mkdir -p tmp/tgz
+          # Pack core and CLI normally (version stays at 0.0.0).
           cd packages/core && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
-          cd packages/test && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
           cd packages/cli && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
+          # Bun is uniquely strict about peer-dep resolution:
+          #   1. It checks the *resolved target's* package name and version
+          #      against the peer range (vitest 4.1.5 declares peer
+          #      `vite ^6 || ^7 || ^8`).
+          #   2. A file: override pointing at the vite-plus-core tgz fails
+          #      both the name check (target is `@voidzero-dev/vite-plus-core`,
+          #      not `vite`) and the version check (0.0.0 is outside `^6|^7|^8`).
+          # pnpm/npm/yarn don't enforce either, and using the same core tgz as
+          # the file: target for both `vite` and `@voidzero-dev/vite-plus-core`
+          # is the only configuration they install cleanly. See
+          # https://github.com/oven-sh/bun/issues/8406.
+          #
+          # Generate a sibling vite-7.99.0.tgz: a copy of the core tgz with
+          # `package.json#name` rewritten to "vite" and `version` to 7.99.0.
+          # ecosystem-ci/patch-project.ts points its vite override at this
+          # tgz only for bun-based projects (e.g. bun-vite-template); pnpm-,
+          # npm- and yarn-based ecosystem projects use the real core tgz.
+          pnpm exec tool repack-vite-tgz tmp/tgz/voidzero-dev-vite-plus-core-0.0.0.tgz tmp/tgz/vite-7.99.0.tgz vite 7.99.0
           # Copy vp binary for e2e-test job (findVpBinary expects it in target/)
           cp target/${{ matrix.target }}/release/vp tmp/tgz/vp 2>/dev/null || cp target/${{ matrix.target }}/release/vp.exe tmp/tgz/vp.exe 2>/dev/null || true
           cp target/${{ matrix.target }}/release/vp-shim.exe tmp/tgz/vp-shim.exe 2>/dev/null || true

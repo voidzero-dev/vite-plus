@@ -1,5 +1,6 @@
 > vp test # async plugins factory should load vitest plugin with configureVitest hook
- RUN  <cwd>
+
+ RUN  v<semver> <cwd>
 
  ✓ src/index.test.ts (1 test) <variable>ms
 

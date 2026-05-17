@@ -96,7 +96,6 @@
     "./test": {
       "import": {
         "types": "./dist/test/index.d.ts",
-        "node": "./dist/test/index.js",
         "default": "./dist/test/index.js"
       },
       "require": {
@@ -148,8 +147,8 @@
     },
     "./test/config": {
       "types": "./dist/test/config.d.ts",
-      "default": "./dist/test/config.js",
-      "require": "./dist/test/config.cjs"
+      "require": "./dist/test/config.cjs",
+      "default": "./dist/test/config.js"
     },
     "./test/coverage": {
       "types": "./dist/test/coverage.d.ts",
@@ -171,160 +170,57 @@
       "types": "./dist/test/worker.d.ts",
       "default": "./dist/test/worker.js"
     },
-    "./test/browser-compat": {
-      "default": "./dist/test/browser-compat.js"
-    },
-    "./test/client": {
-      "default": "./dist/test/client.js"
-    },
-    "./test/context": {
-      "types": "./dist/test/context.d.ts",
-      "default": "./dist/test/context.js"
-    },
-    "./test/browser/context": {
-      "types": "./dist/test/browser/context.d.ts",
-      "default": "./dist/test/browser/context.js"
-    },
-    "./test/locators": {
-      "default": "./dist/test/locators.js"
-    },
-    "./test/matchers": {
-      "default": "./dist/test/matchers.js"
-    },
-    "./test/utils": {
-      "default": "./dist/test/utils.js"
-    },
     "./test/browser-playwright": {
       "types": "./dist/test/browser-playwright.d.ts",
       "default": "./dist/test/browser-playwright.js"
-    },
-    "./test/browser-webdriverio": {
-      "types": "./dist/test/browser-webdriverio.d.ts",
-      "default": "./dist/test/browser-webdriverio.js"
-    },
-    "./test/browser-preview": {
-      "types": "./dist/test/browser-preview.d.ts",
-      "default": "./dist/test/browser-preview.js"
     },
     "./test/browser/providers/playwright": {
       "types": "./dist/test/browser/providers/playwright.d.ts",
       "default": "./dist/test/browser/providers/playwright.js"
     },
-    "./test/browser/providers/webdriverio": {
-      "types": "./dist/test/browser/providers/webdriverio.d.ts",
-      "default": "./dist/test/browser/providers/webdriverio.js"
+    "./test/browser-playwright/context": {
+      "types": "./dist/test/browser-playwright/context.d.ts",
+      "default": "./dist/test/browser-playwright/context.js"
+    },
+    "./test/browser/providers/playwright/context": {
+      "types": "./dist/test/browser/providers/playwright/context.d.ts",
+      "default": "./dist/test/browser/providers/playwright/context.js"
+    },
+    "./test/browser-preview": {
+      "types": "./dist/test/browser-preview.d.ts",
+      "default": "./dist/test/browser-preview.js"
     },
     "./test/browser/providers/preview": {
       "types": "./dist/test/browser/providers/preview.d.ts",
       "default": "./dist/test/browser/providers/preview.js"
     },
-    "./test/plugins/runner": {
-      "default": "./dist/test/plugins/runner.js"
+    "./test/browser-preview/context": {
+      "types": "./dist/test/browser-preview/context.d.ts",
+      "default": "./dist/test/browser-preview/context.js"
     },
-    "./test/plugins/runner-utils": {
-      "default": "./dist/test/plugins/runner-utils.js"
+    "./test/browser/providers/preview/context": {
+      "types": "./dist/test/browser/providers/preview/context.d.ts",
+      "default": "./dist/test/browser/providers/preview/context.js"
     },
-    "./test/plugins/runner-types": {
-      "default": "./dist/test/plugins/runner-types.js"
+    "./test/browser-webdriverio": {
+      "types": "./dist/test/browser-webdriverio.d.ts",
+      "default": "./dist/test/browser-webdriverio.js"
     },
-    "./test/plugins/utils": {
-      "default": "./dist/test/plugins/utils.js"
+    "./test/browser/providers/webdriverio": {
+      "types": "./dist/test/browser/providers/webdriverio.d.ts",
+      "default": "./dist/test/browser/providers/webdriverio.js"
     },
-    "./test/plugins/utils-source-map": {
-      "default": "./dist/test/plugins/utils-source-map.js"
+    "./test/browser-webdriverio/context": {
+      "types": "./dist/test/browser-webdriverio/context.d.ts",
+      "default": "./dist/test/browser-webdriverio/context.js"
     },
-    "./test/plugins/utils-source-map-node": {
-      "default": "./dist/test/plugins/utils-source-map-node.js"
+    "./test/browser/providers/webdriverio/context": {
+      "types": "./dist/test/browser/providers/webdriverio/context.d.ts",
+      "default": "./dist/test/browser/providers/webdriverio/context.js"
     },
-    "./test/plugins/utils-error": {
-      "default": "./dist/test/plugins/utils-error.js"
-    },
-    "./test/plugins/utils-helpers": {
-      "default": "./dist/test/plugins/utils-helpers.js"
-    },
-    "./test/plugins/utils-display": {
-      "default": "./dist/test/plugins/utils-display.js"
-    },
-    "./test/plugins/utils-timers": {
-      "default": "./dist/test/plugins/utils-timers.js"
-    },
-    "./test/plugins/utils-highlight": {
-      "default": "./dist/test/plugins/utils-highlight.js"
-    },
-    "./test/plugins/utils-offset": {
-      "default": "./dist/test/plugins/utils-offset.js"
-    },
-    "./test/plugins/utils-resolver": {
-      "default": "./dist/test/plugins/utils-resolver.js"
-    },
-    "./test/plugins/utils-serialize": {
-      "default": "./dist/test/plugins/utils-serialize.js"
-    },
-    "./test/plugins/utils-constants": {
-      "default": "./dist/test/plugins/utils-constants.js"
-    },
-    "./test/plugins/utils-diff": {
-      "default": "./dist/test/plugins/utils-diff.js"
-    },
-    "./test/plugins/spy": {
-      "default": "./dist/test/plugins/spy.js"
-    },
-    "./test/plugins/expect": {
-      "default": "./dist/test/plugins/expect.js"
-    },
-    "./test/plugins/snapshot": {
-      "default": "./dist/test/plugins/snapshot.js"
-    },
-    "./test/plugins/snapshot-environment": {
-      "default": "./dist/test/plugins/snapshot-environment.js"
-    },
-    "./test/plugins/snapshot-manager": {
-      "default": "./dist/test/plugins/snapshot-manager.js"
-    },
-    "./test/plugins/mocker": {
-      "default": "./dist/test/plugins/mocker.js"
-    },
-    "./test/plugins/mocker-node": {
-      "default": "./dist/test/plugins/mocker-node.js"
-    },
-    "./test/plugins/mocker-browser": {
-      "default": "./dist/test/plugins/mocker-browser.js"
-    },
-    "./test/plugins/mocker-redirect": {
-      "default": "./dist/test/plugins/mocker-redirect.js"
-    },
-    "./test/plugins/mocker-transforms": {
-      "default": "./dist/test/plugins/mocker-transforms.js"
-    },
-    "./test/plugins/mocker-automock": {
-      "default": "./dist/test/plugins/mocker-automock.js"
-    },
-    "./test/plugins/mocker-register": {
-      "default": "./dist/test/plugins/mocker-register.js"
-    },
-    "./test/plugins/pretty-format": {
-      "default": "./dist/test/plugins/pretty-format.js"
-    },
-    "./test/plugins/browser": {
-      "default": "./dist/test/plugins/browser.js"
-    },
-    "./test/plugins/browser-context": {
-      "default": "./dist/test/plugins/browser-context.js"
-    },
-    "./test/plugins/browser-client": {
-      "default": "./dist/test/plugins/browser-client.js"
-    },
-    "./test/plugins/browser-locators": {
-      "default": "./dist/test/plugins/browser-locators.js"
-    },
-    "./test/plugins/browser-playwright": {
-      "default": "./dist/test/plugins/browser-playwright.js"
-    },
-    "./test/plugins/browser-webdriverio": {
-      "default": "./dist/test/plugins/browser-webdriverio.js"
-    },
-    "./test/plugins/browser-preview": {
-      "default": "./dist/test/plugins/browser-preview.js"
+    "./test/browser/context": {
+      "types": "./dist/test/browser/context.d.ts",
+      "default": "./dist/test/browser/context.js"
     }
   },
   "scripts": {
@@ -340,11 +236,16 @@
   "dependencies": {
     "@oxc-project/types": "catalog:",
     "@oxlint/plugins": "catalog:",
+    "@vitest/browser": "catalog:",
+    "@vitest/browser-playwright": "catalog:",
+    "@vitest/browser-preview": "catalog:",
+    "@vitest/browser-webdriverio": "catalog:",
     "@voidzero-dev/vite-plus-core": "workspace:*",
-    "@voidzero-dev/vite-plus-test": "workspace:*",
+    "es-module-lexer": "^1.7.0",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
-    "oxlint-tsgolint": "catalog:"
+    "oxlint-tsgolint": "catalog:",
+    "vitest": "catalog:"
   },
   "devDependencies": {
     "@napi-rs/cli": "catalog:",

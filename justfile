@@ -47,7 +47,6 @@ build:
   pnpm --filter rolldown build-node
   pnpm --filter vite build-types
   pnpm --filter=@voidzero-dev/vite-plus-core build
-  pnpm --filter=@voidzero-dev/vite-plus-test build
   pnpm --filter=@voidzero-dev/vite-plus-prompts build
   pnpm --filter=vite-plus build
 

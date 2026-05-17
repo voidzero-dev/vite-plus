@@ -12,15 +12,16 @@
   },
   "dependencies": {
     "@yarnpkg/fslib": "catalog:",
-    "@yarnpkg/shell": "catalog:"
+    "@yarnpkg/shell": "catalog:",
+    "nanotar": "catalog:"
   },
   "devDependencies": {
     "@oxc-node/cli": "catalog:",
     "@oxc-node/core": "catalog:",
     "@types/semver": "catalog:",
-    "@voidzero-dev/vite-plus-test": "workspace:*",
     "minimatch": "catalog:",
     "semver": "catalog:",
+    "vitest": "catalog:",
     "yaml": "catalog:"
   }
 }

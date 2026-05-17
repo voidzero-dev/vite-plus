@@ -203,12 +203,10 @@ Wrote agent instructions to AGENTS.md
   },
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vitest": "npm:@voidzero-dev/vite-plus-test@latest",
     "@vitejs/plugin-react": "^4.2.0"
   },
   "overrides": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest"
   }
 }
 ```
@@ -223,7 +221,6 @@ Wrote agent instructions to AGENTS.md
   },
   "devDependencies": {
     "vite": "catalog:",
-    "vitest": "catalog:",
     "@vitejs/plugin-react": "^4.2.0",
     "vite-plus": "catalog:"
   },
@@ -236,15 +233,12 @@ Wrote agent instructions to AGENTS.md
 ```yaml
 catalog:
   vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: npm:@voidzero-dev/vite-plus-test@latest
   vite-plus: latest
 overrides:
   vite: 'catalog:'
-  vitest: 'catalog:'
 peerDependencyRules:
   allowAny:
     - vite
-    - vitest
   allowedVersions:
     vite: '*'
     vitest: '*'
@@ -259,16 +253,14 @@ Projects that already have a `pnpm` field in `package.json` (e.g., with `overrid
   "name": "my-package",
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vitest": "npm:@voidzero-dev/vite-plus-test@latest",
     "vite-plus": "latest"
   },
   "pnpm": {
     "overrides": {
-      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-      "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+      "vite": "npm:@voidzero-dev/vite-plus-core@latest"
     },
     "peerDependencyRules": {
-      "allowAny": ["vite", "vitest"],
+      "allowAny": ["vite"],
       "allowedVersions": { "vite": "*", "vitest": "*" }
     }
   }
@@ -289,6 +281,7 @@ Projects that already have a `pnpm` field in `package.json` (e.g., with `overrid
 - rewrite `import from '@vitest/browser/{name}'` to `import from 'vite-plus/test/browser/{name}'`, e.g.: `import from '@vitest/browser/context'` to `import from 'vite-plus/test/browser/context'`
 - rewrite `import from '@vitest/browser-playwright'` to `import from 'vite-plus/test/browser-playwright'`
 - rewrite `import from '@vitest/browser-playwright/{name}'` to `import from 'vite-plus/test/browser-playwright/{name}'`
+- `declare module 'vitest'`, `declare module 'vitest/{name}'`, and `declare module '@vitest/browser*'` are intentionally **not** rewritten — `vite-plus/test*` is a thin re-export of upstream `vitest*`, so type augmentations have to target the upstream module identity to merge correctly
 
 **Note**: For Yarn, use `resolutions` instead of `overrides`.
 
@@ -503,15 +496,12 @@ For monorepo projects and standalone projects without existing `pnpm` config in 
 ```yaml
 catalog:
   vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: npm:@voidzero-dev/vite-plus-test@latest
   vite-plus: latest
 overrides:
   vite: 'catalog:'
-  vitest: 'catalog:'
 peerDependencyRules:
   allowAny:
     - vite
-    - vitest
   allowedVersions:
     vite: '*'
     vitest: '*'
@@ -524,12 +514,10 @@ peerDependencyRules:
 ```json
 {
   "devDependencies": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest"
   },
   "overrides": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest"
   }
 }
 ```
@@ -541,7 +529,6 @@ peerDependencyRules:
 ```yaml
 catalog:
   vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: npm:@voidzero-dev/vite-plus-test@latest
 ```
 
 `package.json`
@@ -549,8 +536,7 @@ catalog:
 ```json
 {
   "resolutions": {
-    "vite": "catalog:",
-    "vitest": "catalog:"
+    "vite": "catalog:"
   }
 }
 ```

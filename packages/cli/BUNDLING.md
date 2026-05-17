@@ -1,6 +1,6 @@
 # CLI Package Build Architecture
 
-This document explains how `vite-plus` is built and how it re-exports from both the core and test packages to serve as a drop-in replacement for `vite`.
+This document explains how `vite-plus` is built and how it re-exports from `@voidzero-dev/vite-plus-core` (bundled vite/rolldown/tsdown) and from upstream `vitest` to serve as a drop-in replacement for `vite`.
 
 ## Overview
 
@@ -9,9 +9,9 @@ The CLI package uses a **4-step build process**:
 1. **tsdown Build** - Bundle all CLI entry points via tsdown
 2. **NAPI Binding Build** - Compile Rust code to native Node.js bindings
 3. **Core Package Export Sync** - Re-export `@voidzero-dev/vite-plus-core` under `./client`, `./types/*`, etc.
-4. **Test Package Export Sync** - Re-export `@voidzero-dev/vite-plus-test` under `./test/*`
+4. **Test Package Export Sync** - Re-export upstream `vitest` under `./test/*`
 
-This architecture allows users to import everything from a single package (`vite-plus`) as a drop-in replacement for `vite`, without needing to know about the separate core and test packages.
+This architecture allows users to import everything from a single package (`vite-plus`) as a drop-in replacement for `vite`, without needing to know about the separate `@voidzero-dev/vite-plus-core` bundle or `vitest`.
 
 ## Build Steps
 
@@ -24,7 +24,7 @@ Bundles all CLI entry points using tsdown (configured in `tsdown.config.ts`). Th
 - Public API entries: `bin`, `index`, `define-config`, `fmt`, `lint`, `pack`, `pack-bin`
 - Global command entries: `create`, `migrate`, `version`, `config`, `mcp`, `staged`
 - All third-party dependencies are inlined at build time
-- Only packages that must be resolved at runtime stay external (NAPI binding, `@voidzero-dev/vite-plus-core`, `@voidzero-dev/vite-plus-test`, `oxfmt`, `oxlint`)
+- Only packages that must be resolved at runtime stay external (NAPI binding, `@voidzero-dev/vite-plus-core`, `vitest`, `oxfmt`, `oxlint`)
 - Code splitting creates shared chunks for code used by multiple entries
 - DTS (`.d.ts`) files are generated for all entries
 
@@ -90,15 +90,22 @@ export type * from '@voidzero-dev/vite-plus-core/types/importMeta.d.ts';
 
 ### Step 4: Test Package Export Sync (`syncTestPackageExports`)
 
-Reads the test package's exports and creates shim files that re-export everything under `./test/*`:
+Reads vitest's exports plus the three `@vitest/browser-*` provider packages and creates shim files that re-export everything under `./test/*`:
 
 ```typescript
-// For each test package export like "./browser-playwright"
-// Creates a shim file: dist/test/browser-playwright.js
-export * from '@voidzero-dev/vite-plus-test/browser-playwright';
+// For each vitest export like "./node"
+// Creates a shim file: dist/test/node.js
+export * from 'vitest/node';
+
+// For each @vitest/browser-* provider, two shim surfaces are projected:
+//   dist/test/browser-playwright.js          (matches old wrapper path)
+//   dist/test/browser/providers/playwright.js (alias path)
+export * from '@vitest/browser-playwright';
 ```
 
-**Input**: `../test/package.json` exports
+Provider `.d.ts` shims are NOT bare re-exports — see the [Provider Type Identity](#why-provider-dts-shims-are-inlined) note below.
+
+**Input**: resolved `vitest/package.json` exports plus each `@vitest/browser-*` package's exports (all resolved via `createRequire`)
 **Output**: `dist/test/*.js`, `dist/test/*.d.ts`, updated `package.json` exports
 
 ---
@@ -336,28 +343,47 @@ This allows TypeScript to pick up types like `import.meta.hot`, CSS module types
 
 ### Why Shim Files?
 
-Instead of copying the actual dist files from the test package, we create thin shim files that re-export from `@voidzero-dev/vite-plus-test`. This approach:
+Instead of copying vitest's dist files, we create thin shim files that re-export from `vitest`. This approach:
 
-1. **Keeps packages in sync** - No need to rebuild CLI when test package changes
+1. **Keeps packages in sync** - No need to rebuild CLI when vitest is upgraded
 2. **Reduces duplication** - No file copying, just re-exports
-3. **Preserves module resolution** - Node.js resolves to the actual test package
+3. **Preserves module resolution** - Node.js resolves to the actual installed vitest
 
 ### Export Mapping (Test)
 
-All test package exports are mapped under `./test/*`:
+Every entry under vitest's own `exports` is shimmed under `./test/*` (wildcard exports and `./package.json` are skipped). The shim is purely a re-export — `vite-plus/test` and friends are aliases for the matching subpath of upstream `vitest`. Examples:
 
-| Test Package Export                               | CLI Package Export                  |
-| ------------------------------------------------- | ----------------------------------- |
-| `@voidzero-dev/vite-plus-test`                    | `vite-plus/test`                    |
-| `@voidzero-dev/vite-plus-test/browser`            | `vite-plus/test/browser`            |
-| `@voidzero-dev/vite-plus-test/browser-playwright` | `vite-plus/test/browser-playwright` |
-| `@voidzero-dev/vite-plus-test/plugins/runner`     | `vite-plus/test/plugins/runner`     |
+| Vitest Export      | CLI Package Export         |
+| ------------------ | -------------------------- |
+| `vitest`           | `vite-plus/test`           |
+| `vitest/browser`   | `vite-plus/test/browser`   |
+| `vitest/node`      | `vite-plus/test/node`      |
+| `vitest/config`    | `vite-plus/test/config`    |
+| `vitest/reporters` | `vite-plus/test/reporters` |
+
+The full set is regenerated on every build from the upstream vitest `package.json`, so the exact list tracks vitest itself.
+
+In addition to vitest's own exports, the three `@vitest/browser-*` provider packages are projected under two parallel surfaces so existing user code keeps resolving after the deleted `@voidzero-dev/vite-plus-test` wrapper:
+
+| Provider Package              | CLI Package Exports                                                                  |
+| ----------------------------- | ------------------------------------------------------------------------------------ |
+| `@vitest/browser-playwright`  | `vite-plus/test/browser-playwright`, `vite-plus/test/browser/providers/playwright`   |
+| `@vitest/browser-preview`     | `vite-plus/test/browser-preview`, `vite-plus/test/browser/providers/preview`         |
+| `@vitest/browser-webdriverio` | `vite-plus/test/browser-webdriverio`, `vite-plus/test/browser/providers/webdriverio` |
+
+Each provider's own subpaths (e.g. `./context`) are mirrored under both alias prefixes.
+
+#### Why provider d.ts shims are inlined
+
+Provider `.d.ts` shims are NOT plain `export * from '@vitest/browser-playwright'` re-exports — they inline the upstream `.d.ts` content with `vitest/node` / `vitest/browser` / `@vitest/browser*` bare specifiers rewritten to relative paths inside `dist/test/`. The two private shims `dist/test/_at-vitest-browser.d.ts` and `dist/test/_at-vitest-browser/context.d.ts` re-export `@vitest/browser`/`@vitest/browser/context` and are referenced from those rewrites.
+
+This avoids a pnpm-edge type-identity split: when the upstream `.d.ts` is loaded by reference (`export * from '@vitest/browser-playwright'`), TypeScript resolves its internal `import { BrowserProvider } from 'vitest/node'` through the provider package's own pnpm-edge, which can be a different vitest copy than the one a user's `vite.config.ts` sees through `vite-plus`. The mismatch produces two structurally identical but nominally distinct `BrowserProvider` types, so `provider: playwright()` fails the user's typecheck. Rewriting the specifiers routes every type import through vite-plus's own subpath shims, guaranteeing a single vitest identity across the user's whole config.
 
 ### Conditional Export Handling
 
 The sync handles complex conditional exports with `import`/`require`/`node`/`types` conditions.
 
-**Test package's main export** (`"."`):
+**Vitest's main export** (`"."`):
 
 ```json
 ".": {
@@ -390,23 +416,23 @@ For each condition, appropriate shim files are created:
 
 ### Shim File Contents
 
-**ESM shim** (`dist/test/browser-playwright.js`):
+**ESM shim** (`dist/test/browser.js`):
 
 ```javascript
-export * from '@voidzero-dev/vite-plus-test/browser-playwright';
+export * from 'vitest/browser';
 ```
 
 **CJS shim** (`dist/test/index.cjs`):
 
 ```javascript
-module.exports = require('@voidzero-dev/vite-plus-test');
+module.exports = require('vitest');
 ```
 
-**Type shim** (`dist/test/browser-playwright.d.ts`):
+**Type shim** (`dist/test/browser.d.ts`):
 
 ```typescript
-import '@voidzero-dev/vite-plus-test/browser-playwright';
-export * from '@voidzero-dev/vite-plus-test/browser-playwright';
+import 'vitest/browser';
+export * from 'vitest/browser';
 ```
 
 Note: Type shims include a side-effect import to preserve module augmentations (e.g., `toMatchSnapshot` on the `Assertion` interface).
@@ -499,8 +525,8 @@ See `package.json` for the complete list of exports.
 // Core package name for Vite compatibility exports
 const CORE_PACKAGE_NAME = '@voidzero-dev/vite-plus-core';
 
-// Test package name for re-exports
-const TEST_PACKAGE_NAME = '@voidzero-dev/vite-plus-test';
+// Test package name for re-exports (vitest itself, not a bundled wrapper)
+const TEST_PACKAGE_NAME = 'vitest';
 ```
 
 ### Package.json Exports Management
@@ -539,7 +565,7 @@ All non-`./test*` exports are manually maintained in `package.json`. These fall 
 
 All `./test*` exports are fully managed by `syncTestPackageExports()`. The build script:
 
-1. Reads `packages/test/package.json` exports
+1. Reads vitest's `package.json` exports (resolved via `createRequire`)
 2. Creates shim files in `dist/test/`
 3. Removes old `./test*` exports from `package.json`
 4. Merges in newly generated test exports

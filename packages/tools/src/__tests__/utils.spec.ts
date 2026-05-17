@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { describe, expect, test } from '@voidzero-dev/vite-plus-test';
+import { describe, expect, test } from 'vitest';
 
 import { isPassThroughEnv, replaceUnstableOutput } from '../utils.ts';
 
@@ -73,8 +73,8 @@ Packages: +312
 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 Progress: resolved 1, reused 0, downloaded 0, added 0
 Progress: resolved 316, reused 316, downloaded 0, added 315
-WARN  Skip adding vite to the default catalog because it already exists as npm:vite-plus. Please use \`pnpm update\` to update the catalogs.
-WARN  Skip adding vitest to the default catalog because it already exists as beta. Please use \`pnpm update\` to update the catalogs.
+WARN  Skip adding vite to the default catalog because it already exists as npm:vite-plus. Please use \`pnpm update\` to update the catalogs.
+WARN  Skip adding vitest to the default catalog because it already exists as beta. Please use \`pnpm update\` to update the catalogs.
 Progress: resolved 316, reused 316, downloaded 0, added 316, done
 
 devDependencies:
@@ -185,7 +185,7 @@ Done in 171ms using pnpm v10.16.1
   test('replace ignore pnpm request warning log', () => {
     const output = `
 Foo bar
- WARN  Request took <variable>ms: https://registry.npmjs.org/testnpm2
+ WARN  Request took <variable>ms: https://registry.npmjs.org/testnpm2
 Packages:
     `;
     expect(replaceUnstableOutput(output.trim())).toMatchSnapshot();
@@ -217,18 +217,29 @@ https://registry.yarnpkg.com/testnpm2/-/testnpm2-1.0.0.tgz
 
   test('replace pnpm registry request error warning log', () => {
     const output = `
- WARN  GET https://registry.npmjs.org/test-vite-plus-install error (ECONNRESET). Will retry in 10 seconds. 2 retries left.
+ WARN  GET https://registry.npmjs.org/test-vite-plus-install error (ECONNRESET). Will retry in 10 seconds. 2 retries left.
+Progress: resolved
+`;
+    expect(replaceUnstableOutput(output.trim())).toMatchSnapshot();
+  });
+
+  test('replace bracketed pnpm registry request error warning log', () => {
+    // pnpm v11 prints transient network errors with a bracketed `[WARN]` prefix
+    // and an ASCII space. Make sure the redactor drops these so single-run
+    // ECONNRESET/ENOTFOUND flakes don't get baked into snap.txt.
+    const output = `
+[WARN] GET https://registry.npmjs.org/testnpm2 error (ECONNRESET). Will retry in 10 seconds. 2 retries left.
+[WARN] GET https://registry.npmjs.org/testnpm2 error (ETIMEDOUT). Will retry in 10 seconds. 1 retries left.
 Progress: resolved
 `;
     expect(replaceUnstableOutput(output.trim())).toMatchSnapshot();
   });
 
   test('replace ignore tarball download average speed warning log', () => {
-    const output = `
- WARN  Tarball download average speed 29 KiB/s (size 56 KiB) is below 50 KiB/s: https://registry.npmjs.org/qs/-/qs-6.14.0.tgz (GET)
- WARN  Tarball download average speed 34 KiB/s (size 347 KiB) is below 50 KiB/s: https://registry.npmjs.org/undici/-/undici-7.16.0.tgz (GET)
+    const output = ` WARN  Tarball download average speed 29 KiB/s (size 56 KiB) is below 50 KiB/s: https://registry.npmjs.org/qs/-/qs-6.14.0.tgz (GET)
+ WARN  Tarball download average speed 34 KiB/s (size 347 KiB) is below 50 KiB/s: https://registry.npmjs.org/undici/-/undici-7.16.0.tgz (GET)
 `;
-    expect(replaceUnstableOutput(output.trim())).toMatchSnapshot();
+    expect(replaceUnstableOutput(output)).toMatchSnapshot();
   });
 
   test('replace hash values', () => {

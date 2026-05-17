@@ -298,7 +298,9 @@ The `vite_install` crate also has `Warning:` and `Note:` messages across multipl
 
 ### Phase 3: Rebrand vitest Output
 
-Vitest is bundled (not cloned source) via `@voidzero-dev/vite-plus-test`. Its build script (`packages/test/build.ts`) copies and rewrites vitest's dist files. We patch the bundled cac chunk during the build to rebrand CLI output.
+> **Note:** This phase has been reverted. The `@voidzero-dev/vite-plus-test` bundled wrapper was removed in favor of consuming upstream `vitest` directly, since the `vite` → `@voidzero-dev/vite-plus-core` package manager override already handles the dependency redirection. Vitest output is no longer rebranded.
+
+Historical context (no longer applies): Vitest was bundled (not cloned source) via `@voidzero-dev/vite-plus-test`. Its build script (`packages/test/build.ts`) copied and rewrote vitest's dist files. We patched the bundled cac chunk during the build to rebrand CLI output.
 
 #### 3.1 Approach: Build-time patching of bundled cac chunk
 

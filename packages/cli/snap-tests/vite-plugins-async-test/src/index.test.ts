@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { expect, onTestFinished, test } from '@voidzero-dev/vite-plus-test';
+import { expect, onTestFinished, test } from 'vitest';
 
 test('async plugin factory should load vitest plugin with configureVitest hook', () => {
   const markerPath = path.join(import.meta.dirname, '..', '.vitest-plugin-loaded');

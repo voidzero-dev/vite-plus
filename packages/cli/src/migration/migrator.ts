@@ -28,6 +28,7 @@ import {
   VITE_PLUS_NAME,
   VITE_PLUS_OVERRIDE_PACKAGES,
   VITE_PLUS_VERSION,
+  VITEST_VERSION,
   isForceOverrideMode,
 } from '../utils/constants.ts';
 import { editJsonFile, isJsonFile, readJsonFile } from '../utils/json.ts';
@@ -97,6 +98,56 @@ const PUBLIC_PEER_DEPENDENCY_FALLBACKS: Record<string, string> = {
   vite: '*',
   vitest: '*',
 };
+
+// Legacy wrapper package names that may appear as the target of override
+// aliases left over from earlier vite-plus migrations. `@voidzero-dev/vite-plus-test`
+// was deleted; any catalog/override entry still pointing at it is stale.
+const LEGACY_WRAPPER_PACKAGE_NAMES = ['@voidzero-dev/vite-plus-test'] as const;
+
+// Fallback specs used when normalizing a stale wrapper alias. Real user
+// ranges (e.g. `vitest: ^3.0.0`) are preserved — only the wrapper alias is
+// rewritten. For `vitest`, we substitute the vitest version vite-plus
+// bundles so any `catalog:` reference the user still has resolves cleanly.
+const LEGACY_WRAPPER_FALLBACK_VERSIONS: Record<string, string> = {
+  vitest: VITEST_VERSION,
+};
+
+function isLegacyWrapperSpec(value: string | undefined): boolean {
+  if (!value) {
+    return false;
+  }
+  for (const name of LEGACY_WRAPPER_PACKAGE_NAMES) {
+    if (value === `npm:${name}` || value.startsWith(`npm:${name}@`)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Rewrite or remove keys whose value points at a deleted vite-plus wrapper.
+ * When a fallback exists for the key (e.g. `vitest`), the value is replaced
+ * so existing `catalog:` references continue to resolve. Otherwise the key
+ * is dropped entirely. Returns true iff any entry was changed.
+ */
+function pruneLegacyWrapperAliases(record: Record<string, string> | undefined): boolean {
+  if (!record) {
+    return false;
+  }
+  let mutated = false;
+  for (const key of Object.keys(record)) {
+    if (isLegacyWrapperSpec(record[key])) {
+      const fallback = LEGACY_WRAPPER_FALLBACK_VERSIONS[key];
+      if (fallback !== undefined) {
+        record[key] = fallback;
+      } else {
+        delete record[key];
+      }
+      mutated = true;
+    }
+  }
+  return mutated;
+}
 
 type PackageJsonDependencyField =
   | 'devDependencies'
@@ -856,6 +907,11 @@ export function rewriteStandaloneProject(
       };
     };
   }>(packageJsonPath, (pkg) => {
+    // Strip stale `vite-plus-test` wrapper aliases before injecting new overrides
+    // so the deleted wrapper doesn't survive migration in any sink.
+    pruneLegacyWrapperAliases(pkg.resolutions);
+    pruneLegacyWrapperAliases(pkg.overrides);
+    pruneLegacyWrapperAliases(pkg.pnpm?.overrides);
     if (packageManager === PackageManager.yarn) {
       pkg.resolutions = {
         ...pkg.resolutions,
@@ -866,6 +922,19 @@ export function rewriteStandaloneProject(
         ...pkg.overrides,
         ...VITE_PLUS_OVERRIDE_PACKAGES,
       };
+      if (packageManager === PackageManager.bun) {
+        // Bun walks transitive peer-deps before resolving overrides; vitest
+        // 4.1.5 declares peer `vite ^6 || ^7 || ^8` and aborts with
+        // "vite@... failed to resolve" if `vite` isn't a direct dep somewhere
+        // in the tree, even when the override would redirect it. Mirror the
+        // override as a devDep so bun's resolver sees `vite` immediately;
+        // the override above still points it at vite-plus-core.
+        // See https://github.com/oven-sh/bun/issues/8406.
+        pkg.devDependencies = {
+          ...pkg.devDependencies,
+          vite: VITE_PLUS_OVERRIDE_PACKAGES.vite,
+        };
+      }
     } else if (packageManager === PackageManager.pnpm) {
       // If package.json already has a "pnpm" field, keep using it;
       // otherwise use pnpm-workspace.yaml.
@@ -955,6 +1024,8 @@ export function rewriteStandaloneProject(
 
   if (packageManager === PackageManager.yarn) {
     rewriteYarnrcYml(projectPath);
+  } else if (packageManager === PackageManager.bun) {
+    ensureBunfigPeerSuppression(projectPath);
   }
 
   // Merge extracted staged config into vite.config.ts, then remove lint-staged from package.json
@@ -1100,6 +1171,7 @@ function rewritePnpmWorkspaceYaml(projectPath: string): void {
 
     // overrides
     const overrides = doc.getIn(['overrides']);
+    pruneYamlMapLegacyWrapperAliases(overrides);
     for (const key of Object.keys(VITE_PLUS_OVERRIDE_PACKAGES)) {
       const currentVersion = getYamlMapScalarStringValue(overrides, key);
       const version = getCatalogDependencySpec(
@@ -1427,6 +1499,29 @@ function getYamlMapScalarStringValue(map: unknown, key: string): string | undefi
   return undefined;
 }
 
+function pruneYamlMapLegacyWrapperAliases(map: unknown): void {
+  if (!(map instanceof YAMLMap)) {
+    return;
+  }
+  const stale: Array<{ key: Scalar<string>; fallback: string | undefined }> = [];
+  for (const item of map.items) {
+    const value = item.value instanceof Scalar ? item.value.value : undefined;
+    if (typeof value === 'string' && isLegacyWrapperSpec(value) && item.key instanceof Scalar) {
+      stale.push({
+        key: item.key,
+        fallback: LEGACY_WRAPPER_FALLBACK_VERSIONS[item.key.value],
+      });
+    }
+  }
+  for (const { key, fallback } of stale) {
+    if (fallback !== undefined) {
+      map.set(key, scalarString(fallback));
+    } else {
+      map.delete(key);
+    }
+  }
+}
+
 function rewriteCatalog(doc: YamlDocument): void {
   for (const [key, value] of Object.entries(VITE_PLUS_OVERRIDE_PACKAGES)) {
     // ERR_PNPM_CATALOG_IN_OVERRIDES  Could not resolve a catalog in the overrides: The entry for 'vite' in catalog 'default' declares a dependency using the 'file' protocol
@@ -1445,6 +1540,8 @@ function rewriteCatalog(doc: YamlDocument): void {
       doc.deleteIn(path);
     }
   }
+  // Drop any entry still pointing at the deleted `vite-plus-test` wrapper.
+  pruneYamlMapLegacyWrapperAliases(doc.getIn(['catalog']));
 
   const catalogs = doc.getIn(['catalogs']);
   if (!(catalogs instanceof YAMLMap)) {
@@ -1471,6 +1568,7 @@ function rewriteCatalog(doc: YamlDocument): void {
         doc.deleteIn(catalogPath);
       }
     }
+    pruneYamlMapLegacyWrapperAliases(item.value);
   }
 }
 
@@ -1493,6 +1591,42 @@ function rewriteCatalogsObject(catalogs: Record<string, Record<string, string>>)
   for (const catalog of Object.values(catalogs)) {
     rewriteCatalogObject(catalog, false);
   }
+}
+
+/**
+ * Bun rejects vitest@4.1.5's `vite^6/^7/^8` peer-dep when the user's project
+ * overrides `vite` to `@voidzero-dev/vite-plus-core` (whose package.json version
+ * does not match those ranges). pnpm/yarn/npm all tolerate this redirect; bun
+ * does not, and there is no `peerDependencyRules`-style escape hatch — only the
+ * `[install] peer = false` setting in `bunfig.toml`.
+ *
+ * `vite-plus`/`@voidzero-dev/vite-plus-core` already provide the vite surface
+ * the user needs, so disabling bun's auto-install of *missing* peers is safe in
+ * this configuration: any vitest peer that's not already pulled in transitively
+ * (jsdom, happy-dom, etc.) is marked optional upstream anyway.
+ *
+ * Writes/merges `bunfig.toml` at `projectPath` so the suppression applies on
+ * the migration's reinstall AND every subsequent `bun install` the user runs.
+ */
+function ensureBunfigPeerSuppression(projectPath: string): void {
+  const bunfigPath = path.join(projectPath, 'bunfig.toml');
+  const block = '[install]\npeer = false\n';
+  if (!fs.existsSync(bunfigPath)) {
+    fs.writeFileSync(bunfigPath, block);
+    return;
+  }
+  const existing = fs.readFileSync(bunfigPath, 'utf8');
+  // Already configured? Leave the user's setting alone — they may have set
+  // `peer = true` deliberately for some other reason and we shouldn't override.
+  if (/^\s*peer\s*=\s*(true|false)\s*$/m.test(existing)) {
+    return;
+  }
+  // Append under existing [install] section, or add a new section.
+  const installSectionRe = /^\[install\][^[]*/m;
+  const next = installSectionRe.test(existing)
+    ? existing.replace(installSectionRe, (section) => `${section.trimEnd()}\npeer = false\n`)
+    : `${existing.trimEnd()}\n\n${block}`;
+  fs.writeFileSync(bunfigPath, next);
 }
 
 /**
@@ -1524,27 +1658,37 @@ function rewriteBunCatalog(projectPath: string): void {
     };
 
     rewriteCatalogObject(catalog, true);
+    pruneLegacyWrapperAliases(catalog);
 
     if (useWorkspacesCatalog) {
       workspacesObj.catalog = catalog;
       if (pkg.catalog) {
         rewriteCatalogObject(pkg.catalog, false);
+        pruneLegacyWrapperAliases(pkg.catalog);
       }
     } else {
       pkg.catalog = catalog;
       if (workspacesObj?.catalog) {
         rewriteCatalogObject(workspacesObj.catalog, false);
+        pruneLegacyWrapperAliases(workspacesObj.catalog);
       }
     }
     if (workspacesObj?.catalogs) {
       rewriteCatalogsObject(workspacesObj.catalogs);
+      for (const named of Object.values(workspacesObj.catalogs)) {
+        pruneLegacyWrapperAliases(named);
+      }
     }
     if (pkg.catalogs) {
       rewriteCatalogsObject(pkg.catalogs);
+      for (const named of Object.values(pkg.catalogs)) {
+        pruneLegacyWrapperAliases(named);
+      }
     }
 
     // bun overrides support catalog: references
     const overrides: Record<string, string> = { ...pkg.overrides };
+    pruneLegacyWrapperAliases(overrides);
     for (const [key, value] of Object.entries(VITE_PLUS_OVERRIDE_PACKAGES)) {
       overrides[key] = getCatalogDependencySpec(overrides[key], value, true);
     }
@@ -1552,6 +1696,8 @@ function rewriteBunCatalog(projectPath: string): void {
 
     return pkg;
   });
+
+  ensureBunfigPeerSuppression(projectPath);
 }
 
 /**
@@ -1585,6 +1731,11 @@ function rewriteRootWorkspacePackageJson(
       };
     };
   }>(packageJsonPath, (pkg) => {
+    // Strip stale `vite-plus-test` wrapper aliases before injecting new overrides
+    // so the deleted wrapper doesn't survive migration in any sink.
+    pruneLegacyWrapperAliases(pkg.resolutions);
+    pruneLegacyWrapperAliases(pkg.overrides);
+    pruneLegacyWrapperAliases(pkg.pnpm?.overrides);
     if (packageManager === PackageManager.yarn) {
       pkg.resolutions = {
         ...pkg.resolutions,
@@ -1599,6 +1750,19 @@ function rewriteRootWorkspacePackageJson(
       };
     } else if (packageManager === PackageManager.bun) {
       // bun overrides are handled in rewriteBunCatalog() with catalog: references
+      // Bun walks transitive peer-deps before resolving overrides; vitest 4.1.5
+      // declares peer `vite ^6 || ^7 || ^8` and aborts unless `vite` is a direct
+      // dep at the workspace root. Mirror the override as a devDep; the override
+      // configured in rewriteBunCatalog still redirects it to vite-plus-core.
+      // See https://github.com/oven-sh/bun/issues/8406.
+      pkg.devDependencies = {
+        ...pkg.devDependencies,
+        vite: getCatalogDependencySpec(
+          pkg.devDependencies?.vite,
+          VITE_PLUS_OVERRIDE_PACKAGES.vite,
+          true,
+        ),
+      };
     } else if (packageManager === PackageManager.pnpm) {
       const overrideKeys = Object.keys(VITE_PLUS_OVERRIDE_PACKAGES);
       if (isForceOverrideMode()) {
@@ -1731,6 +1895,14 @@ export function rewritePackageJson(
     { dependencyField: 'peerDependencies', dependencies: pkg.peerDependencies },
     { dependencyField: 'optionalDependencies', dependencies: pkg.optionalDependencies },
   ];
+  // Scrub stale `npm:@voidzero-dev/vite-plus-test@...` aliases left over from
+  // earlier vite-plus migrations — the wrapper package no longer exists, so
+  // these entries would break `pnpm install`. Real user ranges are preserved.
+  for (const { dependencies } of dependencyGroups) {
+    if (pruneLegacyWrapperAliases(dependencies)) {
+      needVitePlus = true;
+    }
+  }
   for (const [key, version] of Object.entries(VITE_PLUS_OVERRIDE_PACKAGES)) {
     for (const { dependencyField, dependencies } of dependencyGroups) {
       if (dependencies?.[key]) {
@@ -1740,6 +1912,19 @@ export function rewritePackageJson(
           packageManager,
           catalogDependencyResolver,
         });
+        needVitePlus = true;
+      }
+    }
+  }
+  // Force-override mode (ecosystem CI / `vp create` E2E) must re-pin any
+  // pre-existing `vite-plus` range to the local tgz. Otherwise pnpm reads the
+  // published vite-plus metadata for transitive dep resolution (e.g.
+  // `@voidzero-dev/vite-plus-test`) even though the override replaces the
+  // vite-plus package itself, dragging the stale wrapper into node_modules.
+  if (isForceOverrideMode()) {
+    for (const { dependencies } of dependencyGroups) {
+      if (dependencies?.[VITE_PLUS_NAME]) {
+        dependencies[VITE_PLUS_NAME] = VITE_PLUS_VERSION;
         needVitePlus = true;
       }
     }
@@ -1770,6 +1955,23 @@ export function rewritePackageJson(
       pkg.devDependencies[peerDep] = '*';
     }
   }
+  // Trigger vite-plus install when a project has a vitest-adjacent package
+  // (e.g. `vitest-browser-svelte`) that declares vitest as a peer dep — even
+  // if the project has no vite/oxlint/tsdown dep to migrate. The peer dep is
+  // satisfied by the upstream vitest that vite-plus bundles as a direct dep.
+  // Note: peerDependencies count as "adjacent signal" but NOT as installed.
+  const installableNames = [
+    ...Object.keys(pkg.dependencies ?? {}),
+    ...Object.keys(pkg.devDependencies ?? {}),
+    ...Object.keys(pkg.optionalDependencies ?? {}),
+  ];
+  const adjacentSignals = [...installableNames, ...Object.keys(pkg.peerDependencies ?? {})];
+  const isVitestAdjacent =
+    !installableNames.includes('vitest') &&
+    adjacentSignals.some((name) => name !== 'vitest' && name.includes('vitest'));
+  if (isVitestAdjacent) {
+    needVitePlus = true;
+  }
   if (needVitePlus) {
     // add vite-plus to devDependencies
     const version =
@@ -1778,10 +1980,13 @@ export function rewritePackageJson(
       ...pkg.devDependencies,
       [VITE_PLUS_NAME]: version,
     };
-    // Add vitest to devDependencies when a remaining dependency likely peer-depends
-    // on vitest (e.g., vitest-browser-svelte). Without this, pnpm resolves the real
-    // vitest for peer deps instead of @voidzero-dev/vite-plus-test, causing
-    // third-party type augmentations to target the wrong module.
+    // Add vitest to devDependencies when a remaining dependency likely
+    // peer-depends on vitest (e.g., vitest-browser-svelte). Vite-plus already
+    // bundles upstream vitest 4.1.5 as a direct dep, so the runtime resolution
+    // works without this — but strict pnpm / yarn Plug'n'Play refuse to expose a
+    // transitive `vitest` to satisfy a peer dep declared by a different
+    // direct dep. Adding `vitest` to the user's devDependencies pins the
+    // peer-dep target to the same upstream version vite-plus ships with.
     const installableDeps = {
       ...pkg.dependencies,
       ...pkg.devDependencies,
@@ -1791,8 +1996,11 @@ export function rewritePackageJson(
       !installableDeps.vitest &&
       Object.keys(installableDeps).some((name) => name.includes('vitest'))
     ) {
-      const ver = VITE_PLUS_OVERRIDE_PACKAGES.vitest;
-      pkg.devDependencies.vitest = getCatalogDependencySpec(undefined, ver, supportCatalog);
+      pkg.devDependencies.vitest = getCatalogDependencySpec(
+        undefined,
+        VITEST_VERSION,
+        supportCatalog,
+      );
     }
   }
   return extractedStagedConfig;

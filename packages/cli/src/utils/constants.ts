@@ -3,11 +3,22 @@ import { createRequire } from 'node:module';
 export const VITE_PLUS_NAME = 'vite-plus';
 export const VITE_PLUS_VERSION = process.env.VP_VERSION || 'latest';
 
+export const VITEST_VERSION = '4.1.5';
+
 export const VITE_PLUS_OVERRIDE_PACKAGES: Record<string, string> = process.env.VP_OVERRIDE_PACKAGES
   ? JSON.parse(process.env.VP_OVERRIDE_PACKAGES)
   : {
       vite: 'npm:@voidzero-dev/vite-plus-core@latest',
-      vitest: 'npm:@voidzero-dev/vite-plus-test@latest',
+      vitest: VITEST_VERSION,
+      '@vitest/expect': VITEST_VERSION,
+      '@vitest/runner': VITEST_VERSION,
+      '@vitest/snapshot': VITEST_VERSION,
+      '@vitest/spy': VITEST_VERSION,
+      '@vitest/utils': VITEST_VERSION,
+      '@vitest/mocker': VITEST_VERSION,
+      '@vitest/pretty-format': VITEST_VERSION,
+      '@vitest/coverage-v8': VITEST_VERSION,
+      '@vitest/coverage-istanbul': VITEST_VERSION,
     };
 
 /**

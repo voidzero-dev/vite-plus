@@ -22,18 +22,54 @@
 > cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog
 catalog:
   vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: npm:@voidzero-dev/vite-plus-test@latest
+  vitest: <semver>
+  '@vitest/expect': <semver>
+  '@vitest/runner': <semver>
+  '@vitest/snapshot': <semver>
+  '@vitest/spy': <semver>
+  '@vitest/utils': <semver>
+  '@vitest/mocker': <semver>
+  '@vitest/pretty-format': <semver>
+  '@vitest/coverage-v8': <semver>
+  '@vitest/coverage-istanbul': <semver>
   vite-plus: latest
 overrides:
   vite: 'catalog:'
   vitest: 'catalog:'
+  '@vitest/expect': 'catalog:'
+  '@vitest/runner': 'catalog:'
+  '@vitest/snapshot': 'catalog:'
+  '@vitest/spy': 'catalog:'
+  '@vitest/utils': 'catalog:'
+  '@vitest/mocker': 'catalog:'
+  '@vitest/pretty-format': 'catalog:'
+  '@vitest/coverage-v8': 'catalog:'
+  '@vitest/coverage-istanbul': 'catalog:'
 peerDependencyRules:
   allowAny:
     - vite
     - vitest
+    - '@vitest/expect'
+    - '@vitest/runner'
+    - '@vitest/snapshot'
+    - '@vitest/spy'
+    - '@vitest/utils'
+    - '@vitest/mocker'
+    - '@vitest/pretty-format'
+    - '@vitest/coverage-v8'
+    - '@vitest/coverage-istanbul'
   allowedVersions:
     vite: '*'
     vitest: '*'
+    '@vitest/expect': '*'
+    '@vitest/runner': '*'
+    '@vitest/snapshot': '*'
+    '@vitest/spy': '*'
+    '@vitest/utils': '*'
+    '@vitest/mocker': '*'
+    '@vitest/pretty-format': '*'
+    '@vitest/coverage-v8': '*'
+    '@vitest/coverage-istanbul': '*'
 
 > cat vite.config.ts # check staged config migrated to vite.config.ts
 import { defineConfig } from 'vite-plus';

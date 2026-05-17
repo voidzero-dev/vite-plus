@@ -80,12 +80,16 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
       // ignore pnpm progress
       .replaceAll(/Progress: resolved \d+, reused \d+, downloaded \d+, added \d+\n/g, '')
       // ignore pnpm warn
-      .replaceAll(/ ?WARN\s+Skip\s+adding .+?\n/g, '')
-      .replaceAll(/ ?WARN\s+Request\s+took .+?\n/g, '')
+      .replaceAll(/ ?WARN\s+Skip\s+adding .+?\n/g, '')
+      .replaceAll(/ ?WARN\s+Request\s+took .+?\n/g, '')
       .replaceAll(/Scope: all \d+ workspace projects/g, 'Scope: all <variable> workspace projects')
       .replaceAll(/\+{2,}\n/g, '+<repeat>\n')
       // ignore pnpm registry request error warning log
-      .replaceAll(/ ?WARN\s+GET\s+https:\/\/registry\..+?\n/g, '')
+      // Matches both `WARN` (older pnpm) and `[WARN]` (newer pnpm) prefixes.
+      // Also drops transient network warnings like
+      //   `[WARN] GET https://registry.<domain>/pkg error (ECONNRESET). Will retry in 10 seconds. 2 retries left.`
+      // so single-run flakes don't get baked into snapshots.
+      .replaceAll(/ ?\[?WARN\]?\s+GET\s+https:\/\/registry\..+?\n/g, '')
       // ignore bun resolution progress (appears intermittently depending on cache state)
       .replaceAll(/Resolving dependencies\n/g, '')
       .replaceAll(/Resolved, downloaded and extracted \[\d+\]\n/g, '')
@@ -138,7 +142,7 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
       // ignore npm registry domain
       .replaceAll(/(https?:\/\/registry\.)[^/\s]+(\/?)/g, '$1<domain>$2')
       // ignore pnpm tarball download average speed warning log
-      .replaceAll(/ WARN  Tarball download average speed .+?\n/g, '')
+      .replaceAll(/ ?\[?WARN\]?\s+Tarball download average speed .+?\n/g, '')
       // ignore npm hash values
       .replaceAll(/shasum: .+?\n/g, 'shasum: <hash>\n')
       .replaceAll(/integrity: ([\w-]+)-.+?\n/g, 'integrity: $1-<hash>\n')

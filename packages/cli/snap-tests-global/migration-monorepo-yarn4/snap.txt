@@ -65,7 +65,16 @@ export default defineConfig({
   "packageManager": "yarn@<semver>",
   "resolutions": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+    "vitest": "4.1.5",
+    "@vitest/expect": "4.1.5",
+    "@vitest/runner": "4.1.5",
+    "@vitest/snapshot": "4.1.5",
+    "@vitest/spy": "4.1.5",
+    "@vitest/utils": "4.1.5",
+    "@vitest/mocker": "4.1.5",
+    "@vitest/pretty-format": "4.1.5",
+    "@vitest/coverage-v8": "4.1.5",
+    "@vitest/coverage-istanbul": "4.1.5"
   }
 }
 
@@ -73,7 +82,16 @@ export default defineConfig({
 nodeLinker: node-modules
 catalog:
   vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: npm:@voidzero-dev/vite-plus-test@latest
+  vitest: <semver>
+  '@vitest/expect': <semver>
+  '@vitest/runner': <semver>
+  '@vitest/snapshot': <semver>
+  '@vitest/spy': <semver>
+  '@vitest/utils': <semver>
+  '@vitest/mocker': <semver>
+  '@vitest/pretty-format': <semver>
+  '@vitest/coverage-v8': <semver>
+  '@vitest/coverage-istanbul': <semver>
   vite-plus: latest
 
 > cat packages/app/package.json # check app package.json

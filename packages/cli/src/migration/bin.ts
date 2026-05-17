@@ -29,6 +29,7 @@ import { hasVitePlusDependency, readNearestPackageJson } from '../utils/package.
 import { displayRelative } from '../utils/path.ts';
 import {
   cancelAndExit,
+  type CommandRunSummary,
   defaultInteractive,
   downloadPackageManager,
   promptGitHooks,
@@ -36,7 +37,7 @@ import {
   selectPackageManager,
   upgradeYarn,
 } from '../utils/prompts.ts';
-import { accent, log, muted, printHeader } from '../utils/terminal.ts';
+import { accent, log, muted, printHeader, warnMsg } from '../utils/terminal.ts';
 import type { PackageDependencies } from '../utils/types.ts';
 import { detectWorkspace } from '../utils/workspace.ts';
 import {
@@ -459,6 +460,43 @@ function formatDuration(durationMs: number) {
   return `${Math.round(durationSeconds)}s`;
 }
 
+/**
+ * Reconcile a CommandRunSummary from `runViteInstall` with the migration's
+ * duration counter and exit-code state. `runViteInstall` returns
+ * `{ status: 'failed', exitCode }` without throwing; treating that as a success
+ * (incrementing duration unconditionally) would let the migration claim
+ * "Dependencies installed" while node_modules is desynced from the just-mutated
+ * package.json. This helper centralizes the right handling: credit duration on
+ * success, warn + flip exitCode on failure, stay silent on skip.
+ */
+function handleInstallResult(
+  installSummary: CommandRunSummary,
+  rootDir: string,
+  report: MigrationReport,
+  // The pre-migration "initial" install is best-effort: the migration proceeds
+  // regardless of its outcome, and a post-migration "final" install runs with
+  // `--force` / `--no-frozen-lockfile` as the authoritative recovery. Only that
+  // final install's failure should flip `process.exitCode` so a successful
+  // recovery yields exit 0; the initial failure is still surfaced via
+  // `report.warnings` + the warn message.
+  options?: { propagateExitCode?: boolean },
+): number {
+  if (installSummary.status === 'installed') {
+    return installSummary.durationMs;
+  }
+  if (installSummary.status === 'failed') {
+    const exitCode = installSummary.exitCode ?? 1;
+    const message = `Dependency installation failed (exit code ${exitCode}). Run \`vp install\` manually in ${rootDir} to resync node_modules.`;
+    warnMsg(message);
+    report.warnings.push(message);
+    if (options?.propagateExitCode !== false) {
+      process.exitCode = exitCode;
+    }
+    return 0;
+  }
+  return 0;
+}
+
 function showMigrationSummary(options: {
   projectRoot: string;
   packageManager: string;
@@ -769,12 +807,14 @@ async function executeMigrationPlan(
   }
 
   // 12. Reinstall after migration
-  // npm needs --force to re-resolve packages with newly added overrides,
-  // otherwise the stale lockfile prevents override resolution.
+  // The migration intentionally rewrites overrides/catalogs/deps, so the
+  // existing lockfile is guaranteed to be stale. Tell each package manager to
+  // re-resolve instead of refusing the install (pnpm/yarn default to
+  // frozen-lockfile under CI, npm/bun need an explicit --force).
   const installArgs =
     plan.packageManager === PackageManager.npm || plan.packageManager === PackageManager.bun
       ? ['--force']
-      : undefined;
+      : ['--no-frozen-lockfile'];
   updateMigrationProgress('Installing dependencies');
   const finalInstallSummary = await runViteInstall(
     workspaceInfo.rootDir,
@@ -788,8 +828,23 @@ async function executeMigrationPlan(
   );
 
   clearMigrationProgress();
+  // Process the initial install first so the final install's exit code "wins":
+  // if the initial install failed but the final install succeeded, the
+  // migration should still report success (exit 0). The initial call opts out
+  // of exitCode propagation; only the final call may flip process.exitCode.
+  const initialInstallDurationMs = handleInstallResult(
+    initialInstallSummary,
+    workspaceInfo.rootDir,
+    report,
+    { propagateExitCode: false },
+  );
+  const finalInstallDurationMs = handleInstallResult(
+    finalInstallSummary,
+    workspaceInfo.rootDir,
+    report,
+  );
   return {
-    installDurationMs: initialInstallSummary.durationMs + finalInstallSummary.durationMs,
+    installDurationMs: initialInstallDurationMs + finalInstallDurationMs,
     packageManagerVersion: downloadResult.version,
     report,
   };
@@ -890,17 +945,28 @@ async function main() {
         );
         resolvedVersion = resolved.version;
       }
+      // ESLint/Prettier migration touched package.json; the lockfile is now
+      // stale, so disable frozen-lockfile mode (pnpm/yarn) or --force (npm/bun).
+      const eslintPrettierInstallArgs =
+        workspaceInfoOptional.packageManager === PackageManager.npm ||
+        workspaceInfoOptional.packageManager === PackageManager.bun
+          ? ['--force']
+          : ['--no-frozen-lockfile'];
       const installSummary = await runViteInstall(
         workspaceInfoOptional.rootDir,
         options.interactive,
-        undefined,
+        eslintPrettierInstallArgs,
         {
           silent: true,
           packageManager: workspaceInfoOptional.packageManager,
           packageManagerVersion: resolvedVersion,
         },
       );
-      installDurationMs += installSummary.durationMs;
+      installDurationMs += handleInstallResult(
+        installSummary,
+        workspaceInfoOptional.rootDir,
+        report,
+      );
       didMigrate = true;
       report.eslintMigrated = eslintMigrated;
       report.prettierMigrated = prettierMigrated;

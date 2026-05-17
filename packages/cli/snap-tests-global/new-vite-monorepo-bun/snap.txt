@@ -3,6 +3,7 @@
 AGENTS.md
 README.md
 apps
+bunfig.toml
 package.json
 packages
 tsconfig.json
@@ -25,9 +26,19 @@ vite.config.ts
     "prepare": "vp config"
   },
   "devDependencies": {
+    "vite": "catalog:",
     "vite-plus": "catalog:"
   },
   "overrides": {
+    "@vitest/coverage-istanbul": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
+    "@vitest/expect": "catalog:",
+    "@vitest/mocker": "catalog:",
+    "@vitest/pretty-format": "catalog:",
+    "@vitest/runner": "catalog:",
+    "@vitest/snapshot": "catalog:",
+    "@vitest/spy": "catalog:",
+    "@vitest/utils": "catalog:",
     "vite": "catalog:",
     "vitest": "catalog:"
   },
@@ -37,7 +48,16 @@ vite.config.ts
   "packageManager": "bun@<semver>",
   "catalog": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vitest": "npm:@voidzero-dev/vite-plus-test@latest",
+    "vitest": "4.1.5",
+    "@vitest/expect": "4.1.5",
+    "@vitest/runner": "4.1.5",
+    "@vitest/snapshot": "4.1.5",
+    "@vitest/spy": "4.1.5",
+    "@vitest/utils": "4.1.5",
+    "@vitest/mocker": "4.1.5",
+    "@vitest/pretty-format": "4.1.5",
+    "@vitest/coverage-v8": "4.1.5",
+    "@vitest/coverage-istanbul": "4.1.5",
     "vite-plus": "latest"
   }
 }
