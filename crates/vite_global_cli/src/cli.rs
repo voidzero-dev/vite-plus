@@ -10,6 +10,7 @@ use clap_complete::ArgValueCompleter;
 use tokio::runtime::Runtime;
 use vite_path::AbsolutePathBuf;
 use vite_pm_cli::PackageManagerCommand;
+use vite_shared::output;
 
 use crate::{commands, error::Error, help};
 
@@ -559,7 +560,7 @@ async fn managed_install(
     force: bool,
     concurrency: Option<usize>,
 ) -> Result<ExitStatus, Error> {
-    if crate::commands::env::global_install::install(
+    if let Err((package_name, error)) = crate::commands::env::global_install::install(
         packages,
         node,
         force,
@@ -567,8 +568,11 @@ async fn managed_install(
         false,
     )
     .await
-    .is_err()
     {
+        output::error(&format!(
+            "Failed to install {}: {error}",
+            package_name.as_deref().unwrap_or("global packages")
+        ));
         return Ok(exit_status(1));
     }
 
@@ -602,7 +606,7 @@ async fn managed_update(
         packages.to_vec()
     };
 
-    if crate::commands::env::global_install::install(
+    if let Err((package_name, error)) = crate::commands::env::global_install::install(
         &to_update,
         None,
         false,
@@ -610,8 +614,11 @@ async fn managed_update(
         true,
     )
     .await
-    .is_err()
     {
+        output::error(&format!(
+            "Failed to update {}: {error}",
+            package_name.as_deref().unwrap_or("global packages")
+        ));
         return Ok(exit_status(1));
     }
     Ok(ExitStatus::default())
