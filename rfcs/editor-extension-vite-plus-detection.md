@@ -270,30 +270,24 @@ export interface DetectResult {
   reason: 'vp-binary-found' | 'declared-in-package-json';
 }
 
-function isWorkspaceRoot(dir: string): boolean {
-  if (existsSync(join(dir, 'pnpm-workspace.yaml'))) return true;
-  if (existsSync(join(dir, 'lerna.json'))) return true;
+function readPackageJson(dir: string): any | null {
   try {
-    const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
-    if (pkg.workspaces) return true;
-  } catch {}
-  return false;
-}
-
-function readDeps(pkgPath: string): Record<string, string> | null {
-  try {
-    const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
-    return { ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}) };
+    return JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
   } catch {
     return null;
   }
 }
 
+function isWorkspaceRoot(dir: string, pkg: any | null): boolean {
+  if (existsSync(join(dir, 'pnpm-workspace.yaml'))) return true;
+  if (existsSync(join(dir, 'lerna.json'))) return true;
+  return Boolean(pkg?.workspaces);
+}
+
 /**
- * Signal #1 acceptance check: `bin/vp` must exist AND
- * `node_modules/vite-plus/package.json` must parse and identify itself
- * as the `vite-plus` package. Rejects orphan directories left behind
- * by partial uninstalls or hand-crafted trees.
+ * `bin/vp` must exist AND `node_modules/vite-plus/package.json` must
+ * parse and identify itself as the `vite-plus` package. Rejects orphan
+ * directories left behind by partial uninstalls or hand-crafted trees.
  */
 function isValidVitePlusInstall(dir: string): string | null {
   const vpPath = join(dir, 'node_modules', 'vite-plus', 'bin', 'vp');
@@ -310,22 +304,17 @@ function isValidVitePlusInstall(dir: string): string | null {
 }
 
 export function detectVitePlusProjectSync(start: string): DetectResult | null {
-  // Walk up; check both signals at each ancestor. Stop AT the workspace
-  // root — do not cross into its parent.
   let dir = start;
   while (true) {
-    // Signal #1: real, validated binary.
     const vpPath = isValidVitePlusInstall(dir);
     if (vpPath) {
       return { root: dir, vpPath, reason: 'vp-binary-found' };
     }
-    // Signal #2: declared in package.json.
-    const deps = readDeps(join(dir, 'package.json'));
-    if (deps && deps['vite-plus']) {
+    const pkg = readPackageJson(dir);
+    if (pkg?.dependencies?.['vite-plus'] || pkg?.devDependencies?.['vite-plus']) {
       return { root: dir, reason: 'declared-in-package-json' };
     }
-    // Stop AT the workspace root, not after.
-    if (isWorkspaceRoot(dir)) return null;
+    if (isWorkspaceRoot(dir, pkg)) return null;
     const parent = dirname(dir);
     if (parent === dir) return null;
     dir = parent;
