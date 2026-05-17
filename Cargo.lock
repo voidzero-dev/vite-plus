@@ -7546,6 +7546,7 @@ dependencies = [
  "crossterm",
  "directories",
  "futures",
+ "indexmap",
  "indicatif",
  "node-semver",
  "owo-colors",

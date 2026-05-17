@@ -1,13 +1,14 @@
 //! Global package installation handling.
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     io::{IsTerminal, Read, Write},
     process::Stdio,
     time::Duration,
 };
 
 use futures::{StreamExt, stream::FuturesUnordered};
+use indexmap::IndexMap;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use owo_colors::OwoColorize;
 use tokio::process::Command;
@@ -96,7 +97,7 @@ pub async fn install(
         if cfg!(windows) { node_bin_dir.join("npm.cmd") } else { node_bin_dir.join("npm") };
 
     // 3. Install packages in parallel
-    let mut packages = HashMap::<String, Package>::new();
+    let mut packages = IndexMap::<String, Package>::new();
     for package_spec in package_specs {
         // Parse package spec (e.g., "typescript", "typescript@5.0.0", "@scope/pkg")
         let (package_name, _version_spec) = parse_package_spec(package_spec);
@@ -156,34 +157,39 @@ pub async fn install(
                 // Cancel all tasks
                 installs.clear();
                 progress.finish_and_clear();
+
+                // Clear the installed packages
+                packages.iter().for_each(|(_, package)| {
+                    if let Some(staging_dir) = package.staging_dir.as_ref() {
+                        let _ = std::fs::remove_dir_all(staging_dir);
+                    }
+                });
+
                 return Err((Some(package_name), error));
             }
             None => break,
         }
     }
-
     progress.finish_and_clear();
+
+    // 4. Check the installed packages, move to final location and create shims.
+    let mut result = Ok(());
     for (index, (package_name, Package { spec: _, staging_dir })) in
         packages.into_iter().enumerate()
     {
-        let staging_dir = match staging_dir {
-            Some(staging_dir) => staging_dir,
-            None => {
-                return Err((
-                    Some(package_name.clone()),
-                    Error::ConfigError(
-                        "Package install did not produce a staging directory".into(),
-                    ),
-                ));
-            }
-        };
+        // Packages must have staging dir
+        let staging_dir = staging_dir.unwrap();
+
+        if result.is_err() {
+            let _ = std::fs::remove_dir_all(&staging_dir);
+        }
 
         let node_modules_dir = get_node_modules_dir(&staging_dir, &package_name);
         let package_json_path = node_modules_dir.join("package.json");
 
         if !tokio::fs::try_exists(&package_json_path).await.unwrap_or(false) {
             let _ = tokio::fs::remove_dir_all(&staging_dir).await;
-            return Err((
+            result = Err((
                 Some(package_name.clone()),
                 Error::ConfigError(
                     format!(
@@ -193,6 +199,7 @@ pub async fn install(
                     .into(),
                 ),
             ));
+            continue;
         }
 
         let package_json_content = tokio::fs::read_to_string(&package_json_path)
@@ -202,10 +209,11 @@ pub async fn install(
             Ok(package_json) => package_json,
             Err(error) => {
                 let _ = tokio::fs::remove_dir_all(&staging_dir).await;
-                return Err((
+                result = Err((
                     Some(package_name.clone()),
                     Error::ConfigError(format!("Failed to parse package.json: {}", error).into()),
                 ));
+                continue;
             }
         };
 
@@ -250,7 +258,7 @@ pub async fn install(
                 }
             } else {
                 let _ = tokio::fs::remove_dir_all(&staging_dir).await;
-                return Err((
+                result = Err((
                     Some(package_name.clone()),
                     Error::BinaryConflict {
                         bin_name: conflicts[0].0.clone(),
@@ -258,6 +266,7 @@ pub async fn install(
                         new_package: package_name.clone(),
                     },
                 ));
+                continue;
             }
         }
 
@@ -326,7 +335,7 @@ pub async fn install(
         }
     }
 
-    Ok(())
+    result
 }
 
 /// Install one package on the stage directory

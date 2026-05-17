@@ -26,6 +26,7 @@ tracing = { workspace = true }
 owo-colors = { workspace = true }
 oxc_resolver = { workspace = true }
 crossterm = { workspace = true }
+indexmap = { workspace = true }
 indicatif = { workspace = true }
 vite_error = { workspace = true }
 vite_install = { workspace = true }
