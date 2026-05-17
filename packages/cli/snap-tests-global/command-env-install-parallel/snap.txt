@@ -1,10 +1,10 @@
 > vp install -g --concurrency 1 ./parallel-pkg-a ./parallel-pkg-b # Install multiple global packages
 info: Installing 2 global packages with Node.js <semver>
-✓ Installed ./parallel-pkg-a <semver>
-  Bins: parallel-a
-
 ✓ Installed ./parallel-pkg-b <semver>
   Bins: parallel-b
+
+✓ Installed ./parallel-pkg-a <semver>
+  Bins: parallel-a
 
 > parallel-a && parallel-b # Both binaries should be callable
 parallel-a ok

@@ -13,7 +13,7 @@ info: Installing 1 global package with Node.js <semver>
 }
 [1]> vp install -g ./env-binary-conflict-pkg-b # Try to install pkg-b without force - should fail
 info: Installing 1 global package with Node.js <semver>
-error: Executable 'env-binary-conflict-cli' is already installed by ./env-binary-conflict-pkg-a
+error: Failed to install ./env-binary-conflict-pkg-b: Executable 'env-binary-conflict-cli' is already installed by ./env-binary-conflict-pkg-a
 
 Please remove ./env-binary-conflict-pkg-a before installing ./env-binary-conflict-pkg-b, or use --force to auto-replace
 
