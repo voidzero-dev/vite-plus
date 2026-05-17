@@ -1,4 +1,5 @@
 {
+  "ignoredPlatforms": [{ "os": "linux", "libc": "musl" }],
   "commands": [
     "node $SNAP_CASES_DIR/.shared/mock-npm-registry.mjs -- vp create @your-org:workspace --no-interactive --directory my-mono --git # bundled monorepo: extract tarball, scaffold, inject create.defaultTemplate",
     "cat my-mono/vite.config.ts # create.defaultTemplate auto-set to @your-org",
