@@ -7545,6 +7545,7 @@ dependencies = [
  "clap_complete",
  "crossterm",
  "directories",
+ "futures",
  "indicatif",
  "node-semver",
  "owo-colors",

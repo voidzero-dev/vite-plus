@@ -7,6 +7,7 @@ use std::{
     time::Duration,
 };
 
+use futures::{StreamExt, stream::FuturesUnordered};
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use owo_colors::OwoColorize;
 use tokio::{process::Command, task::JoinSet};
@@ -129,23 +130,20 @@ pub async fn install(
         progress.set_draw_target(ProgressDrawTarget::hidden());
     }
 
-    let mut installs = JoinSet::new();
     // We have to clone it because we will modify `packages` to storage package names
-    let mut package_names = packages.keys().cloned().collect::<Vec<_>>().into_iter();
+    let package_names = packages.keys().cloned().collect::<Vec<_>>();
+    let mut package_names = package_names.iter();
+
+    let mut installs = FuturesUnordered::new();
     loop {
         while installs.len() < concurrency {
             let Some(package_name) = package_names.next() else { break };
-            let package = packages.get(&package_name).unwrap();
+            let package = packages.get(package_name).unwrap();
 
-            // We have to clone them as tokio request 'static lifetime or owned data
-            let npm_path = npm_path.clone();
-            let node_bin_dir = node_bin_dir.clone();
-            let package_spec = package.spec.to_owned();
-
-            installs.spawn(async move {
+            installs.push(async {
                 (
                     package_name.clone(),
-                    install_one(package_name, package_spec, npm_path, node_bin_dir).await,
+                    install_one(package_name, package.spec, &npm_path, &node_bin_dir).await,
                 )
             });
         }
@@ -154,14 +152,14 @@ pub async fn install(
             break;
         }
 
-        match installs.join_next().await {
-            Some(Ok((package_name, Ok(staging_dir)))) => {
+        match installs.next().await {
+            Some((package_name, Ok(staging_dir))) => {
                 progress.inc(1);
                 packages.get_mut(&package_name).unwrap().staging_dir = Some(staging_dir)
             }
-            Some(Ok((_, Err(error)))) => {
+            Some((_, Err(error))) => {
                 // Cancel all tasks
-                installs.abort_all();
+                installs.clear();
                 progress.finish_and_clear();
                 let cancelled = packages_count.saturating_sub(progress.position() as usize);
 
@@ -196,23 +194,6 @@ pub async fn install(
                     ));
                 }
                 return Err(error);
-            }
-            Some(Err(error)) => {
-                // Cancel all tasks
-                installs.abort_all();
-                progress.finish_and_clear();
-                let cancelled = packages_count.saturating_sub(progress.position() as usize);
-
-                output::error(&format!("Failed to {} global package", operation));
-                output::raw_stderr(&format!("Worker task failed: {}", error));
-                if cancelled > 0 {
-                    output::raw_stderr(&format!(
-                        "\n{} remaining {} cancelled",
-                        cancelled,
-                        if cancelled == 1 { "install was" } else { "installs were" }
-                    ));
-                }
-                return Err(Error::ConfigError(format!("Failed to install: {}", error).into()));
             }
             None => break,
         }
@@ -374,10 +355,10 @@ pub async fn install(
 /// Install one package on the stage directory
 /// Return (package_name, installed_version, bin_names)
 async fn install_one(
-    package_name: String,
-    package_spec: String,
-    npm_path: AbsolutePathBuf,
-    node_bin_dir: AbsolutePathBuf,
+    package_name: &str,
+    package_spec: &str,
+    npm_path: &AbsolutePathBuf,
+    node_bin_dir: &AbsolutePathBuf,
 ) -> Result<AbsolutePathBuf, Error> {
     // 1. Create staging directory
     let tmp_dir = get_tmp_dir()?;
@@ -404,7 +385,7 @@ async fn install_one(
     if !output.status.success() {
         let _ = tokio::fs::remove_dir_all(&staging_dir).await;
         return Err(Error::GlobalNpmInstallFailed {
-            package_spec,
+            package_spec: package_spec.to_string(),
             exit_code: output.status.code(),
             stdout: output.stdout,
             stderr: output.stderr,
