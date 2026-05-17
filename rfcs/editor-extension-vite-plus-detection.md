@@ -187,16 +187,40 @@ fn detect_vite_plus_project(workspace_root: AbsolutePath) -> Option<DetectResult
 
 Where:
 
-- `find_binary("vp", root)` means **the extension's existing
-  `findBinary("oxlint", root)` code path, called with `"vp"` as the
-  target.** The extension keeps its own search order, its own PnP
-  support, its own user-setting handling — we standardize the target
-  name, nothing else.
+- `find_binary("vp", root)` is **the project-scoped subset** of the
+  extension's existing `findBinary` chain — only entries anchored to
+  the workspace count:
+  - workspace `node_modules/vite-plus/bin/vp` (walk-up to the workspace
+    root);
+  - workspace `node_modules/.bin/vp`;
+  - `require.resolve("vite-plus")` anchored at a workspace folder;
+  - Yarn PnP API loaded from `.pnp.cjs` / `.pnp.js` inside the
+    workspace.
+
+  Explicitly excluded from Signal #1, even when the extension's
+  general chain consults them: **user-configured override paths**,
+  **global `node_modules`**, and **`$PATH`**. A user with `vp` on
+  `$PATH` or a globally installed `vite-plus` does not turn an
+  unrelated workspace into a Vite+ project. The same exclusion applies
+  to user settings like `oxc.<tool>.binPath` — those settings target
+  `oxlint`/`oxfmt`, not `vp`, and reusing them with `"vp"` as the
+  target is meaningless.
+
+- Additionally, the install must be a real `vite-plus` package: at the
+  ancestor where `bin/vp` is found, `node_modules/vite-plus/package.json`
+  must parse and have `name === "vite-plus"`. This rules out orphan
+  files left behind by a partial uninstall or by hand-crafted
+  directories.
+
 - `walk_up_finds_vite_plus_in_deps` walks from `root` up to (and
   including) the nearest workspace root (`pnpm-workspace.yaml`,
   `package.json#workspaces`, or `lerna.json`), checking each
   `package.json` for `vite-plus` in `dependencies` or
-  `devDependencies`.
+  `devDependencies`. **The walk stops at the workspace root** — it
+  does not cross into the parent of the workspace, even when no
+  ancestor declares `vite-plus`. A workspace whose grandparent
+  directory happens to have a `vite-plus` install is not itself a
+  Vite+ project.
 
 ### Why this rule
 
@@ -219,22 +243,27 @@ Where:
 - `vite.config.ts` / `vite-task.json` — exist in plain-Vite projects.
 - `.oxlintrc.json` / `.oxfmtrc.json` — exist in plain-oxlint projects.
 - `node_modules/.bin/oxlint` being the wrapper bin — #1557 deletes those.
-- A globally-installed `vp` on `$PATH` alone — globally available `vp`
-  does not mean the workspace uses it. Whether to count `$PATH` as
-  positive detection is a per-extension call (see "Open questions").
+- A globally-installed `vp` on `$PATH`, a `vp` in the user's global
+  `node_modules`, or a user-configured `oxc.<tool>.binPath`. None of
+  these tell us anything about whether _this workspace_ uses Vite+.
+- A `node_modules/vite-plus/` directory that doesn't actually contain
+  a valid `vite-plus` package (parseable `package.json` with
+  `name === "vite-plus"`). Orphan trees from partial uninstalls do not
+  count.
+- Any ancestor above the workspace root. The walk stops there.
 
 ## Reference TypeScript implementation
 
 `oxc-vscode` and `coc-oxc` can copy this directly into their codebase
-and adapt it to their existing `findBinary` chains. ~50 lines, zero
-non-stdlib dependencies.
+and adapt it to their existing `findBinary` chains. Pure stdlib, no
+runtime dependencies.
 
 ```ts
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
 export interface DetectResult {
-  /** Absolute path of the ancestor that owns vite-plus. */
+  /** Absolute path of the workspace ancestor that owns vite-plus. */
   root: string;
   /** Absolute path to the resolved `vp` executable, if Signal #1 fired. */
   vpPath?: string;
@@ -260,15 +289,34 @@ function readDeps(pkgPath: string): Record<string, string> | null {
   }
 }
 
+/**
+ * Signal #1 acceptance check: `bin/vp` must exist AND
+ * `node_modules/vite-plus/package.json` must parse and identify itself
+ * as the `vite-plus` package. Rejects orphan directories left behind
+ * by partial uninstalls or hand-crafted trees.
+ */
+function isValidVitePlusInstall(dir: string): string | null {
+  const vpPath = join(dir, 'node_modules', 'vite-plus', 'bin', 'vp');
+  if (!existsSync(vpPath)) return null;
+  try {
+    const pkg = JSON.parse(
+      readFileSync(join(dir, 'node_modules', 'vite-plus', 'package.json'), 'utf8'),
+    );
+    if (pkg?.name !== 'vite-plus') return null;
+  } catch {
+    return null;
+  }
+  return vpPath;
+}
+
 export function detectVitePlusProjectSync(start: string): DetectResult | null {
-  // Walk up once; check both signals at each ancestor.
-  // Stop walking after the first workspace root we encounter.
+  // Walk up; check both signals at each ancestor. Stop AT the workspace
+  // root — do not cross into its parent.
   let dir = start;
-  let stopAfterThis = false;
   while (true) {
-    // Signal #1: real binary.
-    const vpPath = join(dir, 'node_modules', 'vite-plus', 'bin', 'vp');
-    if (existsSync(vpPath)) {
+    // Signal #1: real, validated binary.
+    const vpPath = isValidVitePlusInstall(dir);
+    if (vpPath) {
       return { root: dir, vpPath, reason: 'vp-binary-found' };
     }
     // Signal #2: declared in package.json.
@@ -276,8 +324,8 @@ export function detectVitePlusProjectSync(start: string): DetectResult | null {
     if (deps && deps['vite-plus']) {
       return { root: dir, reason: 'declared-in-package-json' };
     }
-    if (stopAfterThis) return null;
-    if (isWorkspaceRoot(dir)) stopAfterThis = true;
+    // Stop AT the workspace root, not after.
+    if (isWorkspaceRoot(dir)) return null;
     const parent = dirname(dir);
     if (parent === dir) return null;
     dir = parent;
@@ -295,42 +343,59 @@ Each extension keeps its existing bin-resolution code and adds a thin
 
 ### `oxc-vscode`
 
-```ts
-// Before each tool's startup:
-//   call findBinary("vp", workspaceFolders) through the existing chain.
-//   If found, launch `<vp> lint --lsp` (oxlint case) / `<vp> fmt --lsp` (oxfmt case).
-//   If not found, fall back to package.json deps check, then to the existing oxlint/oxfmt chain.
-```
+Add a Vite+ detection pass that runs **before** the existing
+oxlint/oxfmt `findBinary` chain. Detection must reuse only the
+**project-scoped** parts of that chain — steps 2 through 5 in the
+existing chain (workspace `node_modules/.bin`, monorepo
+`node_modules/.bin`, workspace-anchored `require.resolve`, and Yarn
+PnP loaded from a workspace `.pnp.cjs`). It must **not** consult
+`searchSettingsBin`, `searchGlobalNodeModulesBin`, or `searchEnvPath`
+when the target is `"vp"`.
 
-The new logic is roughly: one extra call to the existing `findBinary`
-with `"vp"` as the target, plus a small `package.json` deps walk-up
-for the pre-install fallback. ~30 lines total.
+```ts
+// On tool startup, for each workspaceFolder:
+//   1. Run the project-scoped subset of findBinary with target "vp".
+//      Validate node_modules/vite-plus/package.json before accepting.
+//   2. If not found, walk up from workspaceFolder to the workspace root
+//      checking package.json deps for "vite-plus".
+//   3. If either signal fires, launch `<vp> lint --lsp` (or `fmt --lsp`).
+//      Otherwise, fall through to the existing oxlint/oxfmt chain.
+```
 
 ### `coc-oxc`
 
+Add a check before the existing `node_modules/.bin` lookup. Reuse the
+reference algorithm directly; **do not** consult `oxc.<tool>.binPath`
+when looking for `vp` (that setting targets oxlint/oxfmt).
+
 ```ts
 // In findBinary(), before the node_modules/.bin lookup:
-// 1. Check workspace.root/node_modules/.bin/vp → exists? launch vp <subcmd> --lsp
-// 2. Else, parse workspace.root/package.json → vite-plus declared? same.
+// 1. From workspace.root, run the reference detector:
+//    - check node_modules/vite-plus/bin/vp + validate package.json
+//    - walk up to the workspace root checking package.json deps
+// 2. If positive, launch vp <subcmd> --lsp.
 // 3. Else, fall through to existing logic.
 ```
 
-~15 lines added.
-
 ### `oxc-zed`
 
-Zed cannot use Node packages anyway. The existing
-`get_workspace_exe_path` loop already iterates
+Zed's existing `get_workspace_exe_path` loop already iterates
 `[package_name, "vite-plus"]`. Change the `package_dir == "vite-plus"`
 branch to return `<root>/node_modules/vite-plus/bin/vp` and invoke it
-with `["lint", "--lsp"]` (or `["fmt", "--lsp"]`). The detection class
-doesn't need to be rewritten — just its target path and launch args.
+with `["lint", "--lsp"]` (or `["fmt", "--lsp"]`). Add the package.json
+parse check (`name === "vite-plus"`) to reject orphan trees. Zed is
+already project-scoped (it only reads the worktree root), so no
+exclusion of `$PATH` is needed.
 
 ### `oxc-intellij-plugin`
 
-The existing `VitePlusPackage.kt` already resolves the `vite-plus`
-package and returns `vite-plus/bin/oxlint`. After this RFC, it returns
-`vite-plus/bin/vp` and is invoked with `lint --lsp` / `fmt --lsp`.
+The existing `VitePlusPackage.kt` resolves `vite-plus` through
+IntelliJ's `NodePackageDescriptor`, which is naturally project-scoped
+(it consults the project's interpreter and dependency graph). Change
+`findOxlintExecutable` / `findOxfmtExecutable` to return
+`vite-plus/bin/vp` and update the launch args to `lint --lsp` /
+`fmt --lsp`. Continue using the IDE's package resolution rather than
+walking the filesystem.
 
 ## Decisions
 
@@ -375,7 +440,33 @@ Berry with PnP has no `node_modules`. Signal #1 in the simple
 walk-up fails; PnP users still detect correctly via Signal #2 (deps
 check). Explicit `.pnp.cjs` lookup is deferred. **Note:** oxc-vscode
 has its own PnP support in `searchYarnPnpBin` — when oxc-vscode calls
-`findBinary("vp")` through its own chain it will get PnP for free.
+the project-scoped subset of `findBinary("vp")` through its own
+chain, the workspace-anchored PnP lookup is included.
+
+### Signal #1 is strictly project-scoped
+
+User-configured override paths (`oxc.<tool>.binPath`), global
+`node_modules` (`npm root -g`, `pnpm root -g`, bun global), and `$PATH`
+are explicitly **excluded** from Signal #1. None of them say anything
+about whether _this workspace_ uses Vite+. A globally installed `vp`
+or a `vp` shim on `$PATH` does not turn an unrelated workspace into a
+Vite+ project.
+
+### Signal #1 requires a valid `vite-plus` package, not just `bin/vp`
+
+At the ancestor where `bin/vp` is found,
+`node_modules/vite-plus/package.json` must parse and have
+`name === "vite-plus"`. Orphan `bin/vp` files (partial uninstall, hand
+crafted directories, stale caches) do not count.
+
+### Walk stops at the workspace root
+
+Once the walk-up evaluates a directory that is itself a workspace root
+(`pnpm-workspace.yaml`, `package.json#workspaces`, or `lerna.json`),
+the walk terminates. We do not check the parent. Otherwise a nested
+checkout placed under a parent that happens to have its own
+`vite-plus` install would inherit Vite+ behaviour from a completely
+unrelated workspace.
 
 ## Downstream coordination
 
@@ -395,22 +486,18 @@ Each extension's own repo owns its PR and its own test fixtures.
 
 ## Open questions
 
-1. **`$PATH` as positive evidence.** Some chains (oxc-vscode) fall back
-   to `$PATH`. If the only place `vp` exists is `$PATH` (i.e. globally
-   installed, not in the project), should that count as positive
-   detection? Proposal: **no** — defer to the package.json fallback.
-2. **Caching policy** in editor extensions — documented best-practice
+1. **Caching policy** in editor extensions — documented best-practice
    only, or also illustrated in the reference snippet (an opt-in
    memoizing variant with a watcher-invalidation hook)?
-3. **Zed launch args plumbing.** The `--lsp` switch is already there
+2. **Zed launch args plumbing.** The `--lsp` switch is already there
    for oxlint/oxfmt; for `vp` we need to pass `["lint", "--lsp"]` /
    `["fmt", "--lsp"]`. The Zed extension API accepts this via
    `Command { command, args, env }` — confirmed in `oxlint.rs:29-34`.
-4. **Transitive-install false positives.** Someone could pull
+3. **Transitive-install false positives.** Someone could pull
    `vite-plus` in transitively. Signal #1 still fires. Proposal:
    accept it — `vp lint --lsp` degrades to plain oxlint behaviour
    when no `vite.config.ts` is present.
-5. **"Installed but not configured."** Should we additionally require
+4. **"Installed but not configured."** Should we additionally require
    `vite.config.ts` to exist? Proposal: **no**. Presence of `vp` is
    intent enough.
 
@@ -419,17 +506,21 @@ Each extension's own repo owns its PR and its own test fixtures.
 Every implementation must produce identical answers on the following
 fixtures. Each extension replicates the set inside its own test suite.
 
-| Fixture                         | Tree                                                                                                                                                             | Expected `detectVitePlusProject` result                                                                                                                                      |
-| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm-root-installed`           | `pnpm-workspace.yaml` + root `package.json` + `node_modules/vite-plus/bin/vp` + `node_modules/vite-plus/package.json` + a `packages/app/package.json` subpackage | `{ root: "<repo>", vpPath: "<repo>/node_modules/vite-plus/bin/vp", reason: "vp-binary-found" }` regardless of whether detection starts from the root or from `packages/app/` |
-| `pnpm-root-declared-no-install` | `pnpm-workspace.yaml` + root `package.json` declaring `vite-plus`, no `node_modules`                                                                             | `{ root: "<repo>", reason: "declared-in-package-json" }`                                                                                                                     |
-| `npm-package-installed`         | Root `package.json` with `workspaces`, `node_modules/vite-plus/...` inside `packages/app/` (un-hoisted)                                                          | Detection from inside `packages/app/` returns `vp-binary-found` rooted at `packages/app`                                                                                     |
-| `yarn1-workspaces`              | yarn1-style hoisting, `node_modules/vite-plus/` at root                                                                                                          | `vp-binary-found` rooted at the workspace root                                                                                                                               |
-| `yarn4-pnp`                     | Berry/PnP, no `node_modules`, `vite-plus` declared in root `package.json`                                                                                        | `declared-in-package-json` rooted at the workspace root (Signal #2 fallback)                                                                                                 |
-| `plain-non-vite-plus`           | A normal Node project, no Vite+ anywhere                                                                                                                         | `null`                                                                                                                                                                       |
-| `plain-vite-no-vp`              | Uses Vite but not Vite+ (`vite` in deps, `vite.config.ts` present, no `vite-plus`)                                                                               | `null`                                                                                                                                                                       |
-| `transitive-install`            | `vite-plus` only present as a transitive dep (in `node_modules` but not declared in any walked-up `package.json`)                                                | `vp-binary-found` — documents v1 behaviour; accepted as a false-positive trade                                                                                               |
-| `bin-vp-without-package-json`   | `node_modules/vite-plus/bin/vp` exists but `package.json` is missing or malformed                                                                                | `null`                                                                                                                                                                       |
+| Fixture                         | Tree                                                                                                                                                                                      | Expected `detectVitePlusProject` result                                                                                                                                      |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm-root-installed`           | `pnpm-workspace.yaml` + root `package.json` + `node_modules/vite-plus/bin/vp` + `node_modules/vite-plus/package.json` + a `packages/app/package.json` subpackage                          | `{ root: "<repo>", vpPath: "<repo>/node_modules/vite-plus/bin/vp", reason: "vp-binary-found" }` regardless of whether detection starts from the root or from `packages/app/` |
+| `pnpm-root-declared-no-install` | `pnpm-workspace.yaml` + root `package.json` declaring `vite-plus`, no `node_modules`                                                                                                      | `{ root: "<repo>", reason: "declared-in-package-json" }`                                                                                                                     |
+| `npm-package-installed`         | Root `package.json` with `workspaces`, `node_modules/vite-plus/...` inside `packages/app/` (un-hoisted)                                                                                   | Detection from inside `packages/app/` returns `vp-binary-found` rooted at `packages/app`                                                                                     |
+| `yarn1-workspaces`              | yarn1-style hoisting, `node_modules/vite-plus/` at root                                                                                                                                   | `vp-binary-found` rooted at the workspace root                                                                                                                               |
+| `yarn4-pnp`                     | Berry/PnP, no `node_modules`, `vite-plus` declared in root `package.json`                                                                                                                 | `declared-in-package-json` rooted at the workspace root (Signal #2 fallback)                                                                                                 |
+| `plain-non-vite-plus`           | A normal Node project, no Vite+ anywhere                                                                                                                                                  | `null`                                                                                                                                                                       |
+| `plain-vite-no-vp`              | Uses Vite but not Vite+ (`vite` in deps, `vite.config.ts` present, no `vite-plus`)                                                                                                        | `null`                                                                                                                                                                       |
+| `transitive-install`            | `vite-plus` only present as a transitive dep (in `node_modules` but not declared in any walked-up `package.json`)                                                                         | `vp-binary-found` — documents v1 behaviour; accepted as a false-positive trade                                                                                               |
+| `bin-vp-without-package-json`   | `node_modules/vite-plus/bin/vp` exists but `node_modules/vite-plus/package.json` is missing                                                                                               | `null`                                                                                                                                                                       |
+| `bin-vp-with-malformed-package` | `bin/vp` + `package.json` exists but `package.json` is unparseable or has `name !== "vite-plus"`                                                                                          | `null`                                                                                                                                                                       |
+| `parent-vite-plus-nested-repo`  | Outer dir has `node_modules/vite-plus/...` + declares `vite-plus`; inner subdirectory is its own workspace root (own `pnpm-workspace.yaml`/`package.json#workspaces`) without `vite-plus` | Detection from inside the nested workspace returns `null` — the walk stops at the inner workspace root and does not see the outer install                                    |
+| `global-vp-on-path`             | A plain Node project; `vp` is installed globally (on `$PATH` and/or in the user's global `node_modules`); no workspace-local `node_modules/vite-plus`                                     | `null` — Signal #1 ignores `$PATH` and global installs                                                                                                                       |
+| `user-binpath-override`         | A plain Node project; `oxc.oxlint.binPath` is configured to point at a `vp` binary; no workspace-local `vite-plus`                                                                        | `null` — Signal #1 ignores user-configured override paths                                                                                                                    |
 
 ## Verification plan
 
