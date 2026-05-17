@@ -30,14 +30,7 @@ import viteRolldownConfig from './vite-rolldown.config.js';
 
 const projectDir = join(fileURLToPath(import.meta.url), '..');
 
-const rolldownPluginUtilsDir = resolve(
-  projectDir,
-  '..',
-  '..',
-  'rolldown',
-  'packages',
-  'pluginutils',
-);
+const rolldownPluginUtilsDir = resolve(projectDir, 'node_modules', '@rolldown', 'pluginutils');
 
 const rolldownSourceDir = resolve(projectDir, '..', '..', 'rolldown', 'packages', 'rolldown');
 
@@ -71,7 +64,7 @@ generateLicenseFile({
     },
     {
       packageDir: rolldownPluginUtilsDir,
-      licensePath: join(projectDir, '..', '..', 'rolldown', 'LICENSE'),
+      licensePath: join(rolldownPluginUtilsDir, 'LICENSE'),
     },
     {
       packageDir: rolldownViteSourceDir,

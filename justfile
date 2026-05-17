@@ -42,7 +42,6 @@ _fix_symlinks:
 
 build:
   pnpm install
-  pnpm --filter @rolldown/pluginutils build
   pnpm --filter rolldown build-binding:release
   pnpm --filter rolldown build-node
   pnpm --filter vite build-types
