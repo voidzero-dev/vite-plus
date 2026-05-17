@@ -1,7 +1,7 @@
 //! Global package installation handling.
 
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     io::{IsTerminal, Read, Write},
     process::Stdio,
     time::Duration,
@@ -23,6 +23,12 @@ use super::{
     package_metadata::PackageMetadata,
 };
 use crate::error::Error;
+
+struct InstalledPackage {
+    name: String,
+    version: String,
+    bin_names: Vec<String>,
+}
 
 /// Install global packages parallelly.
 ///
@@ -93,16 +99,23 @@ pub async fn install(
         if cfg!(windows) { node_bin_dir.join("npm.cmd") } else { node_bin_dir.join("npm") };
 
     // 3. Install packages in parallel
+    let mut packages = HashMap::<String, (&str, Option<InstalledPackage>)>::new();
+    for package_spec in package_specs {
+        // Parse package spec (e.g., "typescript", "typescript@5.0.0", "@scope/pkg")
+        let (package_name, _version_spec) = parse_package_spec(package_spec);
+        packages.insert(package_name, (package_spec, None));
+    }
+
     let concurrency = concurrency.max(1);
     output::info(&format!(
         "{} {} global {} with Node.js {}",
         operation_progress,
-        package_specs.len(),
-        if package_specs.len() == 1 { "package" } else { "packages" },
+        packages.len(),
+        if packages.len() == 1 { "package" } else { "packages" },
         version
     ));
 
-    let progress = ProgressBar::new(package_specs.len() as u64);
+    let progress = ProgressBar::new(packages.len() as u64);
     if std::io::stderr().is_terminal() && std::env::var_os("CI").is_none() {
         let style = ProgressStyle::with_template("{spinner:.cyan} {msg} ({pos}/{len})")
             .unwrap_or_else(|_| ProgressStyle::default_spinner())
@@ -114,15 +127,12 @@ pub async fn install(
         progress.set_draw_target(ProgressDrawTarget::hidden());
     }
 
-    let mut next_index = 0;
-    let mut outcomes: Vec<Option<(String, String, Vec<String>)>> = vec![None; package_specs.len()];
     let mut installs = JoinSet::new();
-
+    let mut package_names = packages.keys();
     loop {
         while installs.len() < concurrency {
-            let Some(package_spec) = package_specs.get(next_index).cloned() else { break };
-            let package_index = next_index;
-            next_index += 1;
+            let Some(package_name) = package_names.next() else { break };
+            let (package_spec, _installed) = packages.get(package_name).unwrap();
 
             // We have to clone it as tokio request 'static lifetime
             let npm_path = npm_path.clone();
@@ -131,8 +141,16 @@ pub async fn install(
 
             installs.spawn(async move {
                 (
-                    package_index,
-                    install_one(package_spec, version, npm_path, node_bin_dir, force).await,
+                    package_name,
+                    install_one(
+                        package_name.to_owned(),
+                        (*package_spec).to_owned(),
+                        version,
+                        npm_path,
+                        node_bin_dir,
+                        force,
+                    )
+                    .await,
                 )
             });
         }
@@ -142,14 +160,16 @@ pub async fn install(
         }
 
         match installs.join_next().await {
-            Some(Ok((package_index, Ok(outcome)))) => {
+            Some(Ok((package_name, Ok(outcome)))) => {
                 progress.inc(1);
-                outcomes[package_index] = Some(outcome);
+                packages.get_mut(package_name).unwrap().1 = Some(outcome)
             }
             Some(Ok((_, Err(error)))) => {
-                let cancelled = installs.len() + package_specs.len().saturating_sub(next_index);
+                // Cancel all tasks
                 installs.abort_all();
                 progress.finish_and_clear();
+                let cancelled = packages.len().saturating_sub(progress.position() as usize);
+
                 match &error {
                     Error::GlobalNpmInstallFailed { package_spec, exit_code, stdout, stderr } => {
                         output::error(&format!("Failed to {} {package_spec}", operation));
@@ -183,14 +203,16 @@ pub async fn install(
                 return Err(error);
             }
             Some(Err(error)) => {
-                let cancelled = installs.len() + package_specs.len().saturating_sub(next_index);
+                // Cancel all tasks
                 installs.abort_all();
                 progress.finish_and_clear();
+                let cancelled = packages.len().saturating_sub(progress.position() as usize);
+
                 output::error(&format!("Failed to {} global package", operation));
-                output::raw_stderr(&format!("  Worker task failed: {}", error));
+                output::raw_stderr(&format!("Worker task failed: {}", error));
                 if cancelled > 0 {
                     output::raw_stderr(&format!(
-                        "  {} remaining {} cancelled",
+                        "\n{} remaining {} cancelled",
                         cancelled,
                         if cancelled == 1 { "install was" } else { "installs were" }
                     ));
@@ -201,9 +223,8 @@ pub async fn install(
         }
     }
 
+    // 5. Print success messages
     progress.finish_and_clear();
-
-    // 4. Print success messages
     for (index, (package_name, installed_version, bin_names)) in
         outcomes.into_iter().flatten().enumerate()
     {
@@ -230,16 +251,16 @@ pub async fn install(
     Ok(())
 }
 
+/// Install one package on the stage directory
+/// Return (package_name, installed_version, bin_names)
 async fn install_one(
+    package_name: String,
     package_spec: String,
     version: String,
     npm_path: AbsolutePathBuf,
     node_bin_dir: AbsolutePathBuf,
     force: bool,
-) -> Result<(String, String, Vec<String>), Error> {
-    // Parse package spec (e.g., "typescript", "typescript@5.0.0", "@scope/pkg")
-    let (package_name, _version_spec) = parse_package_spec(&package_spec);
-
+) -> Result<InstalledPackage, Error> {
     // 3. Create staging directory
     let tmp_dir = get_tmp_dir()?;
     let staging_dir = tmp_dir.join("packages").join(&package_name);
@@ -391,7 +412,7 @@ async fn install_one(
         bin_config.save().await?;
     }
 
-    Ok((package_name, installed_version, bin_names))
+    Ok(InstalledPackage { name: package_json_content, version: installed_version, bin_names })
 }
 
 /// Uninstall a global package.
