@@ -6,6 +6,12 @@ Vite+ ships in two parts: `vp`, the global command-line tool, and `vite-plus`, t
 
 ## Install `vp`
 
+### macOS (Homebrew)
+
+```bash
+brew install vite-plus
+```
+
 ### macOS / Linux
 
 ```bash
