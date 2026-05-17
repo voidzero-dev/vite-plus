@@ -10,8 +10,11 @@ use clap_complete::ArgValueCompleter;
 use tokio::runtime::Runtime;
 use vite_path::AbsolutePathBuf;
 use vite_pm_cli::PackageManagerCommand;
+use vite_shared::output;
 
 use crate::{commands, error::Error, help};
+
+const DEFAULT_GLOBAL_INSTALL_CONCURRENCY: usize = 5;
 
 #[derive(Clone, Copy, Debug)]
 pub struct RenderOptions {
@@ -516,19 +519,24 @@ async fn run_package_manager_command(
 ) -> Result<ExitStatus, Error> {
     match command {
         PackageManagerCommand::Install {
-            global: true, packages: Some(pkgs), node, force, ..
-        } if !pkgs.is_empty() => managed_install(&pkgs, node.as_deref(), force).await,
+            global: true,
+            packages: Some(pkgs),
+            node,
+            force,
+            concurrency,
+            ..
+        } if !pkgs.is_empty() => managed_install(&pkgs, node.as_deref(), force, concurrency).await,
 
-        PackageManagerCommand::Add { global: true, ref packages, ref node, .. } => {
-            managed_install(packages, node.as_deref(), false).await
-        }
+        PackageManagerCommand::Add {
+            global: true, ref packages, ref node, concurrency, ..
+        } => managed_install(packages, node.as_deref(), false, concurrency).await,
 
         PackageManagerCommand::Remove { global: true, ref packages, dry_run, .. } => {
             managed_uninstall(packages, dry_run).await
         }
 
-        PackageManagerCommand::Update { global: true, ref packages, .. } => {
-            managed_update(packages).await
+        PackageManagerCommand::Update { global: true, ref packages, concurrency, .. } => {
+            managed_update(packages, concurrency).await
         }
 
         // `pm list -g` lists vite-plus-managed globals, not the underlying PM's.
@@ -546,20 +554,28 @@ async fn run_package_manager_command(
     }
 }
 
-// snap-test fixtures expect bare lines (no "error:"/"info:" prefix), so
-// these helpers use `output::raw_stderr`/`output::raw` rather than the
-// prefixed `output::error`/`output::info`.
 async fn managed_install(
     packages: &[String],
     node: Option<&str>,
     force: bool,
+    concurrency: Option<usize>,
 ) -> Result<ExitStatus, Error> {
-    for package in packages {
-        if let Err(e) = crate::commands::env::global_install::install(package, node, force).await {
-            vite_shared::output::raw_stderr(&format!("Failed to install {package}: {e}"));
-            return Ok(exit_status(1));
-        }
+    if let Err((package_name, error)) = crate::commands::env::global_install::install(
+        packages,
+        node,
+        force,
+        concurrency.unwrap_or(DEFAULT_GLOBAL_INSTALL_CONCURRENCY),
+        false,
+    )
+    .await
+    {
+        output::error(&format!(
+            "Failed to install {}: {error}",
+            package_name.as_deref().unwrap_or("global packages")
+        ));
+        return Ok(exit_status(1));
     }
+
     Ok(ExitStatus::default())
 }
 
@@ -573,7 +589,10 @@ async fn managed_uninstall(packages: &[String], dry_run: bool) -> Result<ExitSta
     Ok(ExitStatus::default())
 }
 
-async fn managed_update(packages: &[String]) -> Result<ExitStatus, Error> {
+async fn managed_update(
+    packages: &[String],
+    concurrency: Option<usize>,
+) -> Result<ExitStatus, Error> {
     use crate::commands::env::package_metadata::PackageMetadata;
 
     let to_update: Vec<String> = if packages.is_empty() {
@@ -586,11 +605,21 @@ async fn managed_update(packages: &[String]) -> Result<ExitStatus, Error> {
     } else {
         packages.to_vec()
     };
-    for package in &to_update {
-        if let Err(e) = crate::commands::env::global_install::install(package, None, false).await {
-            vite_shared::output::raw_stderr(&format!("Failed to update {package}: {e}"));
-            return Ok(exit_status(1));
-        }
+
+    if let Err((package_name, error)) = crate::commands::env::global_install::install(
+        &to_update,
+        None,
+        false,
+        concurrency.unwrap_or(DEFAULT_GLOBAL_INSTALL_CONCURRENCY),
+        true,
+    )
+    .await
+    {
+        output::error(&format!(
+            "Failed to update {}: {error}",
+            package_name.as_deref().unwrap_or("global packages")
+        ));
+        return Ok(exit_status(1));
     }
     Ok(ExitStatus::default())
 }

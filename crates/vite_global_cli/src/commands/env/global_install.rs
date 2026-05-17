@@ -2,13 +2,18 @@
 
 use std::{
     collections::HashSet,
-    io::{Read, Write},
+    io::{IsTerminal, Read, Write},
     process::Stdio,
+    time::Duration,
 };
 
+use futures::{StreamExt, stream::FuturesUnordered};
+use indexmap::IndexMap;
+use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
+use owo_colors::OwoColorize;
 use tokio::process::Command;
 use vite_js_runtime::NodeProvider;
-use vite_path::{AbsolutePath, current_dir};
+use vite_path::{AbsolutePath, AbsolutePathBuf, current_dir};
 use vite_shared::{format_path_prepended, output};
 
 use super::{
@@ -21,44 +26,329 @@ use super::{
 };
 use crate::error::Error;
 
-/// Install a global package.
+struct Package<'a> {
+    spec: &'a str,
+    staging_dir: Option<AbsolutePathBuf>,
+}
+
+fn package_error(package_name: &str, error: impl Into<Error>) -> (Option<String>, Error) {
+    (Some(package_name.to_string()), error.into())
+}
+
+/// Install global packages parallelly.
 ///
 /// If `node_version` is provided, uses that version. Otherwise, resolves from current directory.
 /// If `force` is true, auto-uninstalls conflicting packages.
+/// Use `concurrency` to control the number of packages to install in parallel.
 pub async fn install(
-    package_spec: &str,
+    package_specs: &[String],
     node_version: Option<&str>,
     force: bool,
-) -> Result<(), Error> {
-    // Parse package spec (e.g., "typescript", "typescript@5.0.0", "@scope/pkg")
-    let (package_name, _version_spec) = parse_package_spec(package_spec);
+    concurrency: usize,
+    update: bool,
+) -> Result<(), (Option<String>, Error)> {
+    if package_specs.is_empty() {
+        return Ok(());
+    }
 
-    output::raw(&format!("Installing {} globally...", package_spec));
+    let operation_progress = if update { "Updating" } else { "Installing" };
+    let operation_past = if update { "Updated" } else { "Installed" };
 
     // 1. Resolve Node.js version
-    let version = if let Some(v) = node_version {
+    let node_version = if let Some(v) = node_version {
         let provider = NodeProvider::new();
-        resolve_version_alias(v, &provider).await?
+        match resolve_version_alias(v, &provider).await {
+            Ok(version) => version,
+            Err(error) => return Err((None, error)),
+        }
     } else {
         // Resolve from current directory
-        let cwd = current_dir().map_err(|e| {
-            Error::ConfigError(format!("Cannot get current directory: {}", e).into())
-        })?;
-        let resolution = resolve_version(&cwd).await?;
+        let cwd = match current_dir() {
+            Ok(cwd) => cwd,
+            Err(error) => {
+                let error =
+                    Error::ConfigError(format!("Cannot get current directory: {}", error).into());
+                return Err((None, error));
+            }
+        };
+        let resolution = match resolve_version(&cwd).await {
+            Ok(resolution) => resolution,
+            Err(error) => return Err((None, error)),
+        };
         resolution.version
     };
 
     // 2. Ensure Node.js is installed
-    let runtime =
-        vite_js_runtime::download_runtime(vite_js_runtime::JsRuntimeType::Node, &version).await?;
+    let runtime = match vite_js_runtime::download_runtime(
+        vite_js_runtime::JsRuntimeType::Node,
+        &node_version,
+    )
+    .await
+    {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            let error = Error::RuntimeDownload(error);
+            return Err((None, error));
+        }
+    };
 
     let node_bin_dir = runtime.get_bin_prefix();
     let npm_path =
         if cfg!(windows) { node_bin_dir.join("npm.cmd") } else { node_bin_dir.join("npm") };
 
-    // 3. Create staging directory
+    // 3. Install packages in parallel
+    let mut packages = IndexMap::<String, Package>::new();
+    for package_spec in package_specs {
+        // Parse package spec (e.g., "typescript", "typescript@5.0.0", "@scope/pkg")
+        let (package_name, _version_spec) = parse_package_spec(package_spec);
+        packages.insert(package_name, Package { spec: package_spec, staging_dir: None });
+    }
+    let packages_count = packages.len();
+
+    let concurrency = concurrency.max(1);
+    output::info(&format!(
+        "{} {} global {} with Node.js {}",
+        operation_progress,
+        packages_count,
+        if packages_count == 1 { "package" } else { "packages" },
+        node_version
+    ));
+
+    let progress = ProgressBar::new(packages_count as u64);
+    if std::io::stderr().is_terminal() && std::env::var_os("CI").is_none() {
+        let style = ProgressStyle::with_template("{spinner:.cyan} {msg} ({pos}/{len})")
+            .unwrap_or_else(|_| ProgressStyle::default_spinner())
+            .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]);
+        progress.set_style(style);
+        progress.set_message(format!("{} global packages", operation_progress));
+        progress.enable_steady_tick(Duration::from_millis(80));
+    } else {
+        progress.set_draw_target(ProgressDrawTarget::hidden());
+    }
+
+    // We have to clone it because we will modify `packages` to storage package names
+    let package_names = packages.keys().cloned().collect::<Vec<_>>();
+    let mut package_names = package_names.iter();
+
+    let mut installs = FuturesUnordered::new();
+    loop {
+        while installs.len() < concurrency {
+            let Some(package_name) = package_names.next() else { break };
+            let package = packages.get(package_name).unwrap();
+
+            installs.push(async {
+                (
+                    package_name.clone(),
+                    install_one(package_name, package.spec, &npm_path, &node_bin_dir).await,
+                )
+            });
+        }
+
+        if installs.is_empty() {
+            break;
+        }
+
+        match installs.next().await {
+            Some((package_name, Ok(staging_dir))) => {
+                progress.inc(1);
+                packages.get_mut(&package_name).unwrap().staging_dir = Some(staging_dir)
+            }
+            Some((package_name, Err(error))) => {
+                // Cancel all tasks
+                installs.clear();
+                progress.finish_and_clear();
+
+                // Clear the installed packages
+                packages.iter().for_each(|(_, package)| {
+                    if let Some(staging_dir) = package.staging_dir.as_ref() {
+                        let _ = std::fs::remove_dir_all(staging_dir);
+                    }
+                });
+
+                return Err((Some(package_name), error));
+            }
+            None => break,
+        }
+    }
+    progress.finish_and_clear();
+
+    // 4. Check the installed packages, move to final location and create shims.
+    let mut result = Ok(());
+    for (index, (package_name, Package { spec: _, staging_dir })) in
+        packages.into_iter().enumerate()
+    {
+        // Packages must have staging dir
+        let staging_dir = staging_dir.unwrap();
+
+        if result.is_err() {
+            let _ = std::fs::remove_dir_all(&staging_dir);
+        }
+
+        let node_modules_dir = get_node_modules_dir(&staging_dir, &package_name);
+        let package_json_path = node_modules_dir.join("package.json");
+
+        if !tokio::fs::try_exists(&package_json_path).await.unwrap_or(false) {
+            let _ = tokio::fs::remove_dir_all(&staging_dir).await;
+            result = Err((
+                Some(package_name.clone()),
+                Error::ConfigError(
+                    format!(
+                        "Package was not installed correctly, package.json not found at {}",
+                        package_json_path.as_path().display()
+                    )
+                    .into(),
+                ),
+            ));
+            continue;
+        }
+
+        let package_json_content = tokio::fs::read_to_string(&package_json_path)
+            .await
+            .map_err(|error| package_error(&package_name, error))?;
+        let package_json: serde_json::Value = match serde_json::from_str(&package_json_content) {
+            Ok(package_json) => package_json,
+            Err(error) => {
+                let _ = tokio::fs::remove_dir_all(&staging_dir).await;
+                result = Err((
+                    Some(package_name.clone()),
+                    Error::ConfigError(format!("Failed to parse package.json: {}", error).into()),
+                ));
+                continue;
+            }
+        };
+
+        let installed_version = package_json["version"].as_str().unwrap_or("unknown").to_string();
+        let binary_infos = extract_binaries(&package_json);
+
+        let mut bin_names = Vec::new();
+        let mut js_bins = HashSet::new();
+        for info in &binary_infos {
+            bin_names.push(info.name.clone());
+            let binary_path = node_modules_dir.join(&info.path);
+            if is_javascript_binary(&binary_path) {
+                js_bins.insert(info.name.clone());
+            }
+        }
+
+        let mut conflicts = Vec::<(String, String)>::new();
+
+        for bin_name in &bin_names {
+            if let Some(config) = BinConfig::load(bin_name)
+                .await
+                .map_err(|error| package_error(&package_name, error))?
+            {
+                if config.package != package_name {
+                    conflicts.push((bin_name.clone(), config.package.clone()));
+                }
+            }
+        }
+
+        if !conflicts.is_empty() {
+            if force {
+                let packages_to_remove: HashSet<_> =
+                    conflicts.iter().map(|(_, pkg)| pkg.clone()).collect();
+                for pkg in packages_to_remove {
+                    output::raw(&format!(
+                        "Uninstalling {} (conflicts with {})...",
+                        pkg, package_name
+                    ));
+                    Box::pin(uninstall(&pkg, false))
+                        .await
+                        .map_err(|error| package_error(&package_name, error))?;
+                }
+            } else {
+                let _ = tokio::fs::remove_dir_all(&staging_dir).await;
+                result = Err((
+                    Some(package_name.clone()),
+                    Error::BinaryConflict {
+                        bin_name: conflicts[0].0.clone(),
+                        existing_package: conflicts[0].1.clone(),
+                        new_package: package_name.clone(),
+                    },
+                ));
+                continue;
+            }
+        }
+
+        let packages_dir =
+            get_packages_dir().map_err(|error| package_error(&package_name, error))?;
+        let final_dir = packages_dir.join(&package_name);
+
+        if tokio::fs::try_exists(&final_dir).await.unwrap_or(false) {
+            tokio::fs::remove_dir_all(&final_dir)
+                .await
+                .map_err(|error| package_error(&package_name, error))?;
+        }
+
+        if let Some(parent) = final_dir.parent() {
+            tokio::fs::create_dir_all(parent)
+                .await
+                .map_err(|error| package_error(&package_name, error))?;
+        }
+        tokio::fs::rename(&staging_dir, &final_dir)
+            .await
+            .map_err(|error| package_error(&package_name, error))?;
+
+        let metadata = PackageMetadata::new(
+            package_name.clone(),
+            installed_version.clone(),
+            node_version.clone(),
+            None,
+            bin_names.clone(),
+            js_bins,
+            "npm".to_string(),
+        );
+        metadata.save().await.map_err(|error| package_error(&package_name, error))?;
+
+        let bin_dir = get_bin_dir().map_err(|error| package_error(&package_name, error))?;
+        for bin_name in &bin_names {
+            create_package_shim(&bin_dir, bin_name, &package_name)
+                .await
+                .map_err(|error| package_error(&package_name, error))?;
+
+            let bin_config = BinConfig::new(
+                bin_name.clone(),
+                package_name.clone(),
+                installed_version.clone(),
+                node_version.clone(),
+            );
+            bin_config.save().await.map_err(|error| package_error(&package_name, error))?;
+        }
+
+        output::success(&format!(
+            "{} {} {}{}",
+            operation_past,
+            package_name.bold(),
+            if update { "to " } else { "" },
+            installed_version.bold()
+        ));
+        if !bin_names.is_empty() {
+            let bins = bin_names
+                .iter()
+                .map(|bin_name| bin_name.bold().to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+            output::raw(&format!("  Bins: {}", bins));
+        }
+        if index + 1 < packages_count {
+            output::raw("");
+        }
+    }
+
+    result
+}
+
+/// Install one package on the stage directory
+/// Return (package_name, installed_version, bin_names)
+async fn install_one(
+    package_name: &str,
+    package_spec: &str,
+    npm_path: &AbsolutePathBuf,
+    node_bin_dir: &AbsolutePathBuf,
+) -> Result<AbsolutePathBuf, Error> {
+    // 1. Create staging directory
     let tmp_dir = get_tmp_dir()?;
-    let staging_dir = tmp_dir.join("packages").join(&package_name);
+    let staging_dir = tmp_dir.join("packages").join(package_name);
 
     // Clean up any previous failed install
     if tokio::fs::try_exists(&staging_dir).await.unwrap_or(false) {
@@ -69,17 +359,19 @@ pub async fn install(
     // 4. Run npm install with prefix set to staging directory
     //    Pipe stdout/stderr so npm output is hidden on success, shown on failure
     let output = Command::new(npm_path.as_path())
-        .args(["install", "-g", "--no-fund", package_spec])
+        .args(["install", "-g", "--no-fund", &package_spec])
         .env("npm_config_prefix", staging_dir.as_path())
         .env("PATH", format_path_prepended(node_bin_dir.as_path()))
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
+        .kill_on_drop(true)
         .output()
         .await?;
 
     if !output.status.success() {
         // Clean up staging directory
         let _ = tokio::fs::remove_dir_all(&staging_dir).await;
+
         // Show captured output to help debug the failure
         let _ = std::io::stdout().write_all(&output.stdout);
         let _ = std::io::stderr().write_all(&output.stderr);
@@ -88,124 +380,7 @@ pub async fn install(
         ));
     }
 
-    // 5. Find installed package and extract metadata
-    let node_modules_dir = get_node_modules_dir(&staging_dir, &package_name);
-    let package_json_path = node_modules_dir.join("package.json");
-
-    if !tokio::fs::try_exists(&package_json_path).await.unwrap_or(false) {
-        let _ = tokio::fs::remove_dir_all(&staging_dir).await;
-        return Err(Error::ConfigError(
-            format!(
-                "Package {} was not installed correctly, package.json not found at {}",
-                package_name,
-                package_json_path.as_path().display()
-            )
-            .into(),
-        ));
-    }
-
-    // Read package.json to get version and binaries
-    let package_json_content = tokio::fs::read_to_string(&package_json_path).await?;
-    let package_json: serde_json::Value = serde_json::from_str(&package_json_content)
-        .map_err(|e| Error::ConfigError(format!("Failed to parse package.json: {}", e).into()))?;
-
-    let installed_version = package_json["version"].as_str().unwrap_or("unknown").to_string();
-
-    let binary_infos = extract_binaries(&package_json);
-
-    // Detect which binaries are JavaScript files
-    let mut bin_names = Vec::new();
-    let mut js_bins = HashSet::new();
-    for info in &binary_infos {
-        bin_names.push(info.name.clone());
-        let binary_path = node_modules_dir.join(&info.path);
-        if is_javascript_binary(&binary_path) {
-            js_bins.insert(info.name.clone());
-        }
-    }
-
-    // 5b. Check for binary conflicts (before moving staging to final location)
-    let mut conflicts: Vec<(String, String)> = Vec::new(); // (bin_name, existing_package)
-
-    for bin_name in &bin_names {
-        if let Some(config) = BinConfig::load(bin_name).await? {
-            // Only conflict if owned by a different package
-            if config.package != package_name {
-                conflicts.push((bin_name.clone(), config.package.clone()));
-            }
-        }
-    }
-
-    if !conflicts.is_empty() {
-        if force {
-            // Auto-uninstall conflicting packages
-            let packages_to_remove: HashSet<_> =
-                conflicts.iter().map(|(_, pkg)| pkg.clone()).collect();
-            for pkg in packages_to_remove {
-                output::raw(&format!("Uninstalling {} (conflicts with {})...", pkg, package_name));
-                // Use Box::pin to avoid recursive async type issues
-                Box::pin(uninstall(&pkg, false)).await?;
-            }
-        } else {
-            // Hard fail with clear error
-            // Clean up staging directory
-            let _ = tokio::fs::remove_dir_all(&staging_dir).await;
-            return Err(Error::BinaryConflict {
-                bin_name: conflicts[0].0.clone(),
-                existing_package: conflicts[0].1.clone(),
-                new_package: package_name.clone(),
-            });
-        }
-    }
-
-    // 6. Move staging to final location
-    let packages_dir = get_packages_dir()?;
-    let final_dir = packages_dir.join(&package_name);
-
-    // Remove existing installation if present
-    if tokio::fs::try_exists(&final_dir).await.unwrap_or(false) {
-        tokio::fs::remove_dir_all(&final_dir).await?;
-    }
-
-    // Create parent directory (handles scoped packages like @scope/pkg)
-    if let Some(parent) = final_dir.parent() {
-        tokio::fs::create_dir_all(parent).await?;
-    }
-    tokio::fs::rename(&staging_dir, &final_dir).await?;
-
-    // 7. Save package metadata
-    let metadata = PackageMetadata::new(
-        package_name.clone(),
-        installed_version.clone(),
-        version.clone(),
-        None, // npm version - could extract from runtime
-        bin_names.clone(),
-        js_bins,
-        "npm".to_string(),
-    );
-    metadata.save().await?;
-
-    // 8. Create shims for binaries and save per-binary configs
-    let bin_dir = get_bin_dir()?;
-    for bin_name in &bin_names {
-        create_package_shim(&bin_dir, bin_name, &package_name).await?;
-
-        // Write per-binary config
-        let bin_config = BinConfig::new(
-            bin_name.clone(),
-            package_name.clone(),
-            installed_version.clone(),
-            version.clone(),
-        );
-        bin_config.save().await?;
-    }
-
-    output::raw(&format!("Installed {} v{}", package_name, installed_version));
-    if !bin_names.is_empty() {
-        output::raw(&format!("Binaries: {}", bin_names.join(", ")));
-    }
-
-    Ok(())
+    Ok(staging_dir)
 }
 
 /// Uninstall a global package.

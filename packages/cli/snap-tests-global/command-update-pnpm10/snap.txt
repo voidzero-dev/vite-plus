@@ -8,18 +8,19 @@ Arguments:
   [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
 
 Options:
-  -L, --latest          Update to latest version (ignore semver range)
-  -g, --global          Update global packages
-  -r, --recursive       Update recursively in all workspace packages
-  --filter <PATTERN>    Filter packages in monorepo (can be used multiple times)
-  -w, --workspace-root  Include workspace root
-  -D, --dev             Update only devDependencies
-  -P, --prod            Update only dependencies (production)
-  -i, --interactive     Interactive mode
-  --no-optional         Don't update optionalDependencies
-  --no-save             Update lockfile only, don't modify package.json
-  --workspace           Only update if package exists in workspace (pnpm-specific)
-  -h, --help            Print help
+  -L, --latest                 Update to latest version (ignore semver range)
+  -g, --global                 Update global packages
+  --concurrency <CONCURRENCY>  Number of global package updates to run in parallel (only with -g)
+  -r, --recursive              Update recursively in all workspace packages
+  --filter <PATTERN>           Filter packages in monorepo (can be used multiple times)
+  -w, --workspace-root         Include workspace root
+  -D, --dev                    Update only devDependencies
+  -P, --prod                   Update only dependencies (production)
+  -i, --interactive            Interactive mode
+  --no-optional                Don't update optionalDependencies
+  --no-save                    Update lockfile only, don't modify package.json
+  --workspace                  Only update if package exists in workspace (pnpm-specific)
+  -h, --help                   Print help
 
 Documentation: https://viteplus.dev/guide/install
 

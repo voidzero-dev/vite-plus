@@ -7,6 +7,14 @@
 use clap::Subcommand;
 use vite_install::commands::{add::SaveDependencyType, outdated::Format};
 
+fn parse_positive_usize(value: &str) -> Result<usize, String> {
+    match value.parse::<usize>() {
+        Ok(value) if value > 0 => Ok(value),
+        Ok(_) => Err("value must be at least 1".to_string()),
+        Err(error) => Err(error.to_string()),
+    }
+}
+
 /// All package-manager subcommands.
 ///
 /// Variants intentionally mirror the original definitions in
@@ -110,6 +118,10 @@ pub enum PackageManagerCommand {
         #[arg(long, requires = "global")]
         node: Option<String>,
 
+        /// Number of global package installs to run in parallel (only with -g)
+        #[arg(long, requires = "global", value_parser = parse_positive_usize)]
+        concurrency: Option<usize>,
+
         /// Packages to add (if provided, acts as `vp add`)
         #[arg(required = false)]
         packages: Option<Vec<String>>,
@@ -172,6 +184,10 @@ pub enum PackageManagerCommand {
         /// Node.js version to use for global installation (only with -g)
         #[arg(long, requires = "global")]
         node: Option<String>,
+
+        /// Number of global package installs to run in parallel (only with -g)
+        #[arg(long, requires = "global", value_parser = parse_positive_usize)]
+        concurrency: Option<usize>,
 
         /// Packages to add
         #[arg(required = true)]
@@ -236,6 +252,10 @@ pub enum PackageManagerCommand {
         /// Update global packages
         #[arg(short = 'g', long)]
         global: bool,
+
+        /// Number of global package updates to run in parallel (only with -g)
+        #[arg(long, requires = "global", value_parser = parse_positive_usize)]
+        concurrency: Option<usize>,
 
         /// Update recursively in all workspace packages
         #[arg(short = 'r', long)]
@@ -1184,4 +1204,45 @@ pub enum DistTagCommands {
         /// Tag name
         tag: String,
     },
+}
+
+#[cfg(test)]
+mod tests {
+    use clap::FromArgMatches;
+
+    use super::*;
+
+    fn parse_pm_command(args: &[&str]) -> Result<PackageManagerCommand, clap::Error> {
+        let mut command = PackageManagerCommand::augment_subcommands(clap::Command::new("vp"));
+        let matches = command.try_get_matches_from_mut(args)?;
+        PackageManagerCommand::from_arg_matches(&matches)
+    }
+
+    #[test]
+    fn global_install_accepts_concurrency() {
+        let command =
+            parse_pm_command(&["vp", "install", "-g", "--concurrency", "2", "typescript"])
+                .expect("expected command to parse");
+
+        assert!(matches!(
+            command,
+            PackageManagerCommand::Install { global: true, concurrency: Some(2), .. }
+        ));
+    }
+
+    #[test]
+    fn concurrency_requires_global() {
+        let error = parse_pm_command(&["vp", "install", "--concurrency", "2", "typescript"])
+            .expect_err("expected --concurrency without --global to fail");
+
+        assert_eq!(error.kind(), clap::error::ErrorKind::MissingRequiredArgument);
+    }
+
+    #[test]
+    fn concurrency_rejects_zero() {
+        let error = parse_pm_command(&["vp", "update", "-g", "--concurrency", "0"])
+            .expect_err("expected zero concurrency to fail");
+
+        assert_eq!(error.kind(), clap::error::ErrorKind::ValueValidation);
+    }
 }
