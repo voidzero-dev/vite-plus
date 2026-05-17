@@ -59,3 +59,13 @@ export default defineConfig({
 ```
 
 See the official [tsdown executable docs](https://tsdown.dev/options/exe#executable) for details about configuring custom file names, embedded assets, and cross-platform targets.
+
+### Executable dependencies
+
+The `exe` option loads `@tsdown/exe` at build time. Install it together with a matching top-level `tsdown` package; Vite+'s bundled tsdown is not exposed as a `tsdown` package that `@tsdown/exe` can resolve.
+
+```bash
+vp install -D @tsdown/exe@0.22.0 tsdown@0.22.0
+```
+
+Use the tsdown version shown by `vp env current` when installing these dependencies for newer Vite+ releases. Installing only `@tsdown/exe` can surface as `Failed to import module "@tsdown/exe"` because the underlying peer import `tsdown/internal` is unresolved.
