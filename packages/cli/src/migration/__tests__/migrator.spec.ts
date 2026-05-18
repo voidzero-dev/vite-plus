@@ -1441,3 +1441,50 @@ describe('rewriteStandaloneProject — tsconfig types rewriting', () => {
     );
   });
 });
+
+// Regression: templates such as `create-fate` ship a populated vite.config.ts
+// alongside a standalone `.oxfmtrc.jsonc` / `.oxlintrc.json`. The merge step
+// must not insert a second `fmt:` / `lint:` block when one is already present.
+describe('rewriteStandaloneProject — preserves existing fmt/lint blocks', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-merge-existing-'));
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'test', devDependencies: { vite: '^7.0.0' } }),
+    );
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('does not duplicate fmt block when vite.config.ts already has one and .oxfmtrc.jsonc exists', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'vite.config.ts'),
+      `import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  fmt: {
+    singleQuote: true,
+  },
+});
+`,
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, '.oxfmtrc.jsonc'),
+      JSON.stringify({ singleQuote: false }, null, 2),
+    );
+
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+    const viteConfig = fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8');
+    expect(viteConfig.match(/\bfmt\s*:/g)?.length).toBe(1);
+    // Template-authored value wins (singleQuote: true) — standalone config dropped.
+    expect(viteConfig).toContain('singleQuote: true');
+    expect(viteConfig).not.toContain('singleQuote: false');
+    // Redundant standalone file removed.
+    expect(fs.existsSync(path.join(tmpDir, '.oxfmtrc.jsonc'))).toBe(false);
+  });
+});
