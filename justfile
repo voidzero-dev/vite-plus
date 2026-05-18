@@ -74,8 +74,13 @@ check:
 watch-check:
   just watch "'cargo check; cargo clippy'"
 
+[unix]
 test:
-  cargo test
+  cargo test $(for d in crates/*/; do echo -n "-p $(basename $d) "; done) -p vite-plus-cli
+
+[windows]
+test:
+  $packages = Get-ChildItem -Path crates -Directory | ForEach-Object { '-p'; $_.Name }; $Env:__COMPAT_LAYER='RunAsInvoker'; cargo test @packages -p vite-plus-cli
 
 lint:
   cargo clippy --workspace --all-targets --all-features -- --deny warnings

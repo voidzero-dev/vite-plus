@@ -1,11 +1,14 @@
-import { execSync } from 'node:child_process';
+import { execFileSync, execSync } from 'node:child_process';
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
+  realpathSync,
   rmSync,
+  rmdirSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
@@ -105,11 +108,20 @@ export function installGlobalCli() {
 
     // Clean up old local-dev directories to avoid accumulation
     if (existsSync(installDir)) {
+      const currentInstallPath = getCurrentInstallPath(installDir);
       for (const entry of readdirSync(installDir)) {
         if (entry.startsWith(LOCAL_DEV_PREFIX)) {
+          const entryPath = path.join(installDir, entry);
+          if (pathsEqual(entryPath, currentInstallPath)) {
+            continue;
+          }
           try {
-            rmSync(path.join(installDir, entry), { recursive: true, force: true });
+            removeInstallPath(entryPath);
           } catch (err) {
+            if (isWindowsLockedExecutableError(err)) {
+              console.log(`Skipping old ${entry} because its vp.exe is still running.`);
+              continue;
+            }
             console.warn(`Warning: failed to remove old ${entry}: ${(err as Error).message}`);
           }
         }
@@ -132,12 +144,17 @@ export function installGlobalCli() {
     // Run platform-specific install script (use absolute paths)
     const installScriptDir = path.join(repoRoot, 'packages/cli');
     if (isWindows) {
-      // Use pwsh (PowerShell Core) for better UTF-8 handling
+      // Prefer PowerShell Core for better UTF-8 handling, but fall back to
+      // Windows PowerShell because pwsh is not available on every Windows host.
       const ps1Path = path.join(installScriptDir, 'install.ps1');
-      execSync(`pwsh -ExecutionPolicy Bypass -File "${ps1Path}"`, {
-        stdio: 'inherit',
-        env,
-      });
+      execFileSync(
+        getWindowsPowerShellCommand(),
+        ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ps1Path],
+        {
+          stdio: 'inherit',
+          env,
+        },
+      );
     } else {
       const shPath = path.join(installScriptDir, 'install.sh');
       execSync(`bash "${shPath}"`, {
@@ -171,6 +188,68 @@ function getTargetDirs(): string[] {
   return dirs;
 }
 
+function removeInstallPath(targetPath: string) {
+  if (!isWindows) {
+    rmSync(targetPath, { recursive: true, force: true });
+    return;
+  }
+
+  removeWindowsPath(targetPath);
+}
+
+function getCurrentInstallPath(installDir: string): string | undefined {
+  const currentPath = path.join(installDir, 'current');
+  if (!existsSync(currentPath)) {
+    return undefined;
+  }
+
+  try {
+    return realpathSync(currentPath);
+  } catch {
+    return undefined;
+  }
+}
+
+function pathsEqual(a: string, b: string | undefined): boolean {
+  if (!b) {
+    return false;
+  }
+
+  const resolvedA = path.resolve(a);
+  const resolvedB = path.resolve(b);
+  return isWindows ? resolvedA.toLowerCase() === resolvedB.toLowerCase() : resolvedA === resolvedB;
+}
+
+function isWindowsLockedExecutableError(err: unknown): boolean {
+  if (!isWindows || !(err instanceof Error)) {
+    return false;
+  }
+
+  const code = (err as NodeJS.ErrnoException).code;
+  return (
+    (code === 'EPERM' || code === 'EBUSY') &&
+    err.message.includes(`${path.sep}bin${path.sep}vp.exe`)
+  );
+}
+
+function removeWindowsPath(targetPath: string) {
+  if (!existsSync(targetPath)) {
+    return;
+  }
+
+  const stat = lstatSync(targetPath);
+  if (!stat.isDirectory() || stat.isSymbolicLink()) {
+    rmSync(targetPath, { force: true });
+    return;
+  }
+
+  for (const entry of readdirSync(targetPath)) {
+    removeWindowsPath(path.join(targetPath, entry));
+  }
+
+  rmdirSync(targetPath);
+}
+
 // Find the vp binary in the target directory.
 // Checks target/release/ first (local builds), then target/<triple>/release/ (cross-compiled CI builds).
 function findVpBinary(binaryName: string) {
@@ -193,6 +272,26 @@ function findVpBinary(binaryName: string) {
   }
 
   return null;
+}
+
+function getWindowsPowerShellCommand(): string {
+  for (const command of ['pwsh', 'powershell.exe', 'powershell']) {
+    try {
+      const resolved = execFileSync('where.exe', [command], {
+        encoding: 'utf-8',
+        stdio: 'pipe',
+      })
+        .split(/\r?\n/)
+        .find(Boolean);
+      if (resolved) {
+        return resolved;
+      }
+    } catch {
+      // Try the next candidate.
+    }
+  }
+
+  return 'powershell.exe';
 }
 
 /**
