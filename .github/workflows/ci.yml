@@ -117,7 +117,7 @@ jobs:
     name: Test (Linux x64 musl)
     runs-on: namespace-profile-linux-x64-default
     container:
-      image: node:25-alpine3.21
+      image: node:22-alpine3.21
     env:
       # GitHub Actions sets HOME=/github/home in containers, but the euid home is /root.
       # Pin Rust tooling paths to avoid $HOME mismatch issues.
