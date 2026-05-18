@@ -38,6 +38,7 @@ export async function runCommandAndDetectProjectDir(
   // Detect project directory from path accesses
   // Find the closest directory containing package.json relative to cwd
   let projectDir: string | undefined;
+  let currentDirPackageJsonWritten = false;
   let minDepth = Infinity;
 
   for (const [filePath, pathAccess] of Object.entries(result.pathAccesses)) {
@@ -50,8 +51,9 @@ export async function runCommandAndDetectProjectDir(
       // Extract directory from package.json path
       const dir = path.dirname(filePath);
 
-      // Skip if it's the current directory
+      // Defer current directory until after checking for a generated child directory.
       if (dir === '.' || dir === '') {
+        currentDirPackageJsonWritten = true;
         continue;
       }
       // Skip if this is an existing directory (created before the command ran)
@@ -68,6 +70,10 @@ export async function runCommandAndDetectProjectDir(
         projectDir = dir;
       }
     }
+  }
+
+  if (!projectDir && currentDirPackageJsonWritten) {
+    projectDir = '.';
   }
 
   // If parentDir is provided, join it with the project directory
