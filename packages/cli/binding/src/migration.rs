@@ -120,6 +120,18 @@ pub fn merge_json_config(
     })
 }
 
+/// Whether `config_key` is already declared as a top-level property in the
+/// vite config's `defineConfig({...})` (or equivalent) object literal.
+///
+/// AST-based check covering the six shapes the merger understands; ignores
+/// comments, string literal occurrences, and nested keys. Returns `false`
+/// for unrecognized shapes (e.g. `return $VAR` from a callback).
+#[napi]
+pub fn has_config_key(vite_config_path: String, config_key: String) -> Result<bool> {
+    let content = std::fs::read_to_string(&vite_config_path).map_err(anyhow::Error::from)?;
+    Ok(vite_migration::has_config_key(&content, &config_key).map_err(anyhow::Error::from)?)
+}
+
 /// Error from batch import rewriting
 #[napi(object)]
 pub struct BatchRewriteError {

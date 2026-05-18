@@ -8,3 +8,4 @@ rolldown
 rolldown-vite
 vite
 /crates/vite_global_cli/vp
+.void/

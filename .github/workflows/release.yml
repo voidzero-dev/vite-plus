@@ -25,8 +25,6 @@ jobs:
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
-      - uses: oxc-project/setup-node@ab97f03642370d79a7e96dd286bd02a1be40e0ba # v1.3.0
-
       - name: Check version changes
         uses: EndBug/version-check@095362f3cd50f690c8fa0e6afeea81834bd8d320 # v3.0.0
         id: version
