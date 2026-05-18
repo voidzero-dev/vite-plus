@@ -233,11 +233,16 @@ function isWindowsLockedExecutableError(err: unknown): boolean {
 }
 
 function removeWindowsPath(targetPath: string) {
-  if (!existsSync(targetPath)) {
-    return;
+  let stat;
+  try {
+    stat = lstatSync(targetPath);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+      return;
+    }
+    throw err;
   }
 
-  const stat = lstatSync(targetPath);
   if (!stat.isDirectory() || stat.isSymbolicLink()) {
     rmSync(targetPath, { force: true });
     return;
