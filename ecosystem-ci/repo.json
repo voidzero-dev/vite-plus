@@ -71,7 +71,7 @@
   "vinext": {
     "repository": "https://github.com/cloudflare/vinext.git",
     "branch": "main",
-    "hash": "a1d2b6103469cb181e3d097cb16c272004f2d6b1",
+    "hash": "d558923fde85fab11b8cf9329c9d6eea367758ce",
     "forceFreshMigration": true
   },
   "reactive-resume": {
