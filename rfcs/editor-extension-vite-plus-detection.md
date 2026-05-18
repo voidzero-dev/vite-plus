@@ -15,9 +15,12 @@ path to spawn.
 **The rule, in one sentence:**
 A workspace is a **Vite+ project** iff some walked-up `package.json`
 declares `vite-plus` directly in `dependencies` or `devDependencies`,
-up to the workspace root. The binary path to spawn (`vp`) is then
-resolved separately by walking up looking for a real
-`node_modules/vite-plus/bin/vp` install inside the workspace.
+up to the workspace root. The binary path to spawn (`vp`) and the
+installed `vite-plus` version are then resolved separately by walking
+up looking for a real, validated `node_modules/vite-plus/` install
+inside the workspace; the version lets editors gate `vp lint --lsp`
+behind a minimum release and keep the legacy `bin/oxlint` wrapper
+path working for users still on older `vite-plus`.
 
 **Distribution.** For the two Node-capable consumers (`oxc-vscode` and
 `coc-oxc`), the detector ships as a published npm package
@@ -292,31 +295,81 @@ Reading the diagram:
 ### Result shape
 
 ```
-DetectResult { root: AbsolutePath, vp_path: Option<AbsolutePath> }
+DetectResult {
+    root:       AbsolutePath,
+    vp_path:    Option<AbsolutePath>,
+    vp_version: Option<String>,        // set iff vp_path is set
+}
 ```
 
 Three outcomes:
 
 - **`None`** — no walked-up `package.json` declares `vite-plus`. Not a
   Vite+ project. Editor uses plain `oxlint` / `oxfmt`.
-- **`Some({ root, vp_path: Some(...) })`** — Vite+ project, runnable.
-  Editor launches `<vp_path> lint --lsp` / `<vp_path> fmt --lsp`.
-- **`Some({ root, vp_path: None })`** — Vite+ project declared but
-  not installed (fresh clone, pre-`pnpm install`, Berry PnP without
-  `node_modules`, or a broken install). Editor should **not** launch
-  `vp` — there is no project-scoped binary to spawn, and falling back
-  to a bare `vp` from `$PATH` would re-introduce the global-leakage
-  hole. Recommended UX: fall back to plain `oxlint` / `oxfmt`,
-  optionally surface a hint like "Vite+ detected — run `pnpm install`
-  to enable Vite+ LSP."
+- **`Some({ root, vp_path: Some(...), vp_version: Some(...) })`** —
+  Vite+ project, installed. The editor compares `vp_version` against
+  a minimum known to support `vp lint --lsp` (see "Version-gated LSP
+  support" below) and either launches `<vp_path> lint --lsp` /
+  `<vp_path> fmt --lsp` or falls back to the legacy
+  `bin/oxlint`/`bin/oxfmt` wrapper path.
+- **`Some({ root, vp_path: None, vp_version: None })`** — Vite+
+  project declared but not installed (fresh clone, pre-`pnpm install`,
+  Berry PnP without `node_modules`, or a broken install). Editor
+  should **not** launch `vp` — there is no project-scoped binary to
+  spawn, and falling back to a bare `vp` from `$PATH` would
+  re-introduce the global-leakage hole. Recommended UX: fall back to
+  plain `oxlint` / `oxfmt`, optionally surface a hint like "Vite+
+  detected — run `pnpm install` to enable Vite+ LSP."
 
 ### Validity check on the install
 
 When Phase 2 finds a `bin/vp`, it also requires
-`node_modules/vite-plus/package.json` to parse and have
-`name === "vite-plus"`. This rejects orphan trees left by partial
-uninstalls. A directory with a half-corrupt `package.json` is treated
-as "not installed" — Phase 2 keeps walking up.
+`node_modules/vite-plus/package.json` to parse, have
+`name === "vite-plus"`, and carry a string `version`. The version
+string is returned in the result; orphan trees (missing
+`package.json`, wrong name, missing or non-string version) are
+treated as "not installed" and Phase 2 keeps walking up.
+
+### Version-gated LSP support
+
+`vp lint --lsp` and `vp fmt --lsp` only exist on `vite-plus` versions
+that ship after the `bin/oxlint` / `bin/oxfmt` wrappers are
+deprecated (#1557). Older installed versions still rely on the
+wrappers. The detector returns `vp_version` so each consumer can
+decide which mode to use:
+
+```
+if vp_version is None:
+    use plain oxlint/oxfmt (declared-but-not-installed case)
+elif vp_version >= MIN_VP_VERSION_FOR_LSP:
+    launch vp lint --lsp / vp fmt --lsp
+else:
+    fall through to the existing findBinary(oxlint/oxfmt) chain,
+    which picks up the legacy bin/oxlint wrapper.
+    Optionally surface a "Vite+ detected — upgrade vite-plus to
+    enable native LSP" hint.
+```
+
+`MIN_VP_VERSION_FOR_LSP` is the first `vite-plus` release that ships
+`vp lint --lsp` / `vp fmt --lsp` and drops the `bin/oxlint` /
+`bin/oxfmt` wrappers. The exact value is **TBD** — it gets filled in
+when #1557 lands. The shared TypeScript package exports it as a
+constant plus a `supportsLsp(version)` helper so both consumers
+agree.
+
+This rollout is robust in both directions:
+
+- **Old vite-plus + new editor extension** → detector reports an old
+  version → editor falls through → `findBinary("oxlint")` resolves
+  the legacy wrapper bin → user gets Vite-config-aware linting via
+  the wrapper, as today.
+- **New vite-plus + new editor extension** → detector reports a
+  supported version → editor launches `vp lint --lsp` directly.
+- **New vite-plus + old editor extension (no detector yet)** → the
+  old extension keeps probing `bin/oxlint`; if the new vite-plus has
+  removed the wrappers, the extension falls back to whatever its
+  global oxlint path resolves to. Not ideal, but the upgrade hint
+  drives users to upgrade their extension.
 
 ### Why this rule
 
@@ -388,9 +441,17 @@ of two implementations subtly diverging.
 export interface DetectResult {
   root: string;
   vpPath?: string;
+  vpVersion?: string;
 }
 export function detectVitePlusProject(start: string): Promise<DetectResult | null>;
 export function detectVitePlusProjectSync(start: string): DetectResult | null;
+
+/**
+ * First vite-plus version that ships `vp lint --lsp` and drops the
+ * legacy `bin/oxlint` / `bin/oxfmt` wrappers. Updated when #1557 lands.
+ */
+export const MIN_VP_VERSION_FOR_LSP: string;
+export function supportsLsp(version: string | undefined): boolean;
 ```
 
 `oxc-vscode` prefers the async variant to avoid extension-host
@@ -421,6 +482,13 @@ export interface DetectResult {
    * `vp` when this is undefined.
    */
   vpPath?: string;
+  /**
+   * The installed vite-plus's `package.json#version`. Set whenever
+   * vpPath is set. Compare against MIN_VP_VERSION_FOR_LSP (or use
+   * `supportsLsp`) to decide between `vp lint --lsp` and the legacy
+   * bin/oxlint wrapper path.
+   */
+  vpVersion?: string;
 }
 
 function readPackageJson(dir: string): any | null {
@@ -443,21 +511,21 @@ function declaresVitePlus(pkg: any | null): boolean {
 
 /**
  * `bin/vp` must exist AND `node_modules/vite-plus/package.json` must
- * parse and identify itself as the `vite-plus` package. Rejects orphan
- * trees left behind by partial uninstalls.
+ * parse, identify itself as `vite-plus`, and carry a string version.
+ * Rejects orphan trees left behind by partial uninstalls.
  */
-function resolveVpAt(dir: string): string | null {
+function resolveVpAt(dir: string): { vpPath: string; vpVersion: string } | null {
   const vpPath = join(dir, 'node_modules', 'vite-plus', 'bin', 'vp');
   if (!existsSync(vpPath)) return null;
   try {
     const pkg = JSON.parse(
       readFileSync(join(dir, 'node_modules', 'vite-plus', 'package.json'), 'utf8'),
     );
-    if (pkg?.name !== 'vite-plus') return null;
+    if (pkg?.name !== 'vite-plus' || typeof pkg?.version !== 'string') return null;
+    return { vpPath, vpVersion: pkg.version };
   } catch {
     return null;
   }
-  return vpPath;
 }
 
 export function detectVitePlusProjectSync(start: string): DetectResult | null {
@@ -485,8 +553,8 @@ export function detectVitePlusProjectSync(start: string): DetectResult | null {
   let probe: string | null = root;
   let pkg = rootPkg;
   while (probe) {
-    const vpPath = resolveVpAt(probe);
-    if (vpPath) return { root, vpPath };
+    const installed = resolveVpAt(probe);
+    if (installed) return { root, ...installed };
     if (isWorkspaceRoot(probe, pkg)) break;
     const parent = dirname(probe);
     if (parent === probe) break;
@@ -505,7 +573,12 @@ oxlint/oxfmt lookup. The detector replaces, rather than extends, any
 generic bin-resolution chain when the target is `"vp"`:
 
 - `null` → fall through to the existing oxlint/oxfmt chain.
-- `{ root, vpPath }` → launch `<vpPath> lint --lsp` (or `fmt --lsp`).
+- `{ root, vpPath, vpVersion }` with `supportsLsp(vpVersion)` →
+  launch `<vpPath> lint --lsp` (or `fmt --lsp`).
+- `{ root, vpPath, vpVersion }` with version too old → fall through
+  to the existing chain (which resolves the legacy
+  `bin/oxlint`/`bin/oxfmt` wrapper still shipped by that vite-plus
+  version). Optionally surface an upgrade hint.
 - `{ root, vpPath: undefined }` → fall through to the existing
   oxlint/oxfmt chain; optionally surface a "Vite+ detected — run
   install to enable LSP" hint. Do **not** launch a bare `vp`.
@@ -613,10 +686,23 @@ would have to find on `$PATH`.
 
 ### Valid `vite-plus` install required before accepting `bin/vp`
 
-Locked. `node_modules/vite-plus/package.json` must parse and have
-`name === "vite-plus"`. Orphan `bin/vp` files (partial uninstall,
-hand-crafted directories, stale caches) are treated as "not
-installed" and Phase 2 keeps walking up.
+Locked. `node_modules/vite-plus/package.json` must parse, have
+`name === "vite-plus"`, and carry a string `version`. Orphan `bin/vp`
+files (partial uninstall, hand-crafted directories, stale caches) are
+treated as "not installed" and Phase 2 keeps walking up.
+
+### Report the installed vite-plus version
+
+Locked. The detector returns `vpVersion` from the installed
+`node_modules/vite-plus/package.json` so consumers can gate
+`vp lint --lsp` behind a minimum supported version. This keeps the
+rollout backwards-compatible: editors upgraded to use this detector
+correctly handle workspaces still pinned to older `vite-plus`
+versions that ship the `bin/oxlint` wrapper, and can surface an
+"upgrade `vite-plus` to enable native LSP" hint when appropriate.
+The threshold (`MIN_VP_VERSION_FOR_LSP`) lives in the shared
+detector package and is updated when #1557's removal of the
+wrappers lands.
 
 ### Workspace-wide granularity
 
@@ -681,18 +767,25 @@ fixtures):
 
 ## Open questions
 
-1. **Caching policy** in editor extensions — documented best-practice
+1. **`MIN_VP_VERSION_FOR_LSP`**. The concrete version of `vite-plus`
+   at which the wrappers go away and `vp lint --lsp` becomes the
+   supported entry point is TBD — it gets set when the corresponding
+   `vite-plus` release ships. The detector package exports this as a
+   constant; both consumers depend on the package picking up the
+   value, so a version bump of the detector is what enables LSP for
+   new users.
+2. **Caching policy** in editor extensions — documented best-practice
    only, or also illustrated in the reference snippet (an opt-in
    memoizing variant with a watcher-invalidation hook)?
-2. **Zed launch args plumbing.** The `--lsp` switch is already there
+3. **Zed launch args plumbing.** The `--lsp` switch is already there
    for oxlint/oxfmt; for `vp` we need to pass `["lint", "--lsp"]` /
    `["fmt", "--lsp"]`. The Zed extension API accepts this via
    `Command { command, args, env }` — confirmed in `oxlint.rs:29-34`.
-3. **"Declared but not installed" UX.** Should editors silently fall
+4. **"Declared but not installed" UX.** Should editors silently fall
    back to plain oxlint/oxfmt, or surface a notification prompting
    `pnpm install`? Proposal: silent fallback in v1, leave the UX
    decision to each extension.
-4. **"Installed but not configured."** Should we additionally require
+5. **"Installed but not configured."** Should we additionally require
    `vite.config.ts` to exist? Proposal: **no**. A direct dep
    declaration is intent enough.
 
@@ -701,24 +794,28 @@ fixtures):
 Every implementation must produce identical answers on the following
 fixtures. Each extension replicates the set inside its own test suite.
 
-`DetectResult` shape: `{ root: string, vpPath?: string }`; `null`
-means not a Vite+ project.
+`DetectResult` shape: `{ root: string, vpPath?: string, vpVersion?: string }`;
+`null` means not a Vite+ project. Every fixture below also has an
+implicit assertion: when `vpPath` is set, `vpVersion` must equal the
+fixture's installed `node_modules/vite-plus/package.json#version`.
 
-| Fixture                                 | Tree                                                                                                                                                                                     | Expected result                                                                                                             |
-| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `root-declared-and-installed`           | Root `package.json` declares `vite-plus` + `node_modules/vite-plus/bin/vp` + valid `node_modules/vite-plus/package.json`                                                                 | `{ root: "<repo>", vpPath: "<repo>/node_modules/vite-plus/bin/vp" }`                                                        |
-| `pnpm-subpackage-declared-root-hoisted` | `pnpm-workspace.yaml` at `<repo>`, root `package.json` does **not** declare `vite-plus`, `packages/app/package.json` declares it, install is hoisted to `<repo>/node_modules/vite-plus/` | From inside `packages/app/`: `{ root: "<repo>/packages/app", vpPath: "<repo>/node_modules/vite-plus/bin/vp" }`              |
-| `root-declared-no-install`              | Root `package.json` declares `vite-plus`, no `node_modules` (fresh clone)                                                                                                                | `{ root: "<repo>" }` — vpPath absent                                                                                        |
-| `npm-package-installed-direct-dep`      | Root `package.json` with `workspaces`, `packages/app/package.json` declares `vite-plus`, install inside `packages/app/node_modules/vite-plus/` (un-hoisted)                              | From inside `packages/app/`: `{ root: "<repo>/packages/app", vpPath: "<repo>/packages/app/node_modules/vite-plus/bin/vp" }` |
-| `plain-non-vite-plus`                   | Normal Node project, no `vite-plus` anywhere                                                                                                                                             | `null`                                                                                                                      |
-| `plain-vite-no-vp`                      | Uses Vite (`vite` declared, `vite.config.ts` present) but does not declare `vite-plus`                                                                                                   | `null`                                                                                                                      |
-| `transitive-install`                    | No walked-up `package.json` declares `vite-plus`, but `node_modules/vite-plus/` exists as a transitive dep (pulled in by some other package)                                             | `null` — Phase 1 fails: no direct declaration                                                                               |
-| `bin-vp-orphan-no-package-json`         | Declared in root `package.json`, but `node_modules/vite-plus/bin/vp` exists with no sibling `package.json`                                                                               | `{ root: "<repo>" }` — install rejected as orphan, vpPath absent                                                            |
-| `bin-vp-orphan-wrong-name`              | Declared in root `package.json`, `bin/vp` + `package.json` exist but `package.json` has `name !== "vite-plus"` or is unparseable                                                         | `{ root: "<repo>" }` — install rejected, vpPath absent                                                                      |
-| `parent-vite-plus-nested-repo`          | Outer dir declares `vite-plus` and has the install; inner subdirectory is its own workspace root (own `pnpm-workspace.yaml`/`package.json#workspaces`) and does not declare `vite-plus`  | From inside the nested workspace: `null` — Phase 1 stops at the inner workspace root                                        |
-| `global-vp-on-path`                     | Plain Node project, no declaration; `vp` is on `$PATH` and/or in the user's global `node_modules`                                                                                        | `null`                                                                                                                      |
-| `user-binpath-override`                 | Plain Node project, no declaration; `oxc.oxlint.binPath` configured to a `vp` binary                                                                                                     | `null`                                                                                                                      |
-| `yarn4-pnp`                             | Berry/PnP, no `node_modules`, root `package.json` declares `vite-plus`                                                                                                                   | `{ root: "<repo>" }` — declared, install not resolvable via plain filesystem walk                                           |
+| Fixture                                 | Tree                                                                                                                                                                                     | Expected result                                                                                                                                 |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `root-declared-and-installed`           | Root `package.json` declares `vite-plus` + `node_modules/vite-plus/bin/vp` + valid `node_modules/vite-plus/package.json` (`version: "<new>"`)                                            | `{ root: "<repo>", vpPath: "<repo>/node_modules/vite-plus/bin/vp", vpVersion: "<new>" }`; `supportsLsp(vpVersion) === true`                     |
+| `installed-but-version-too-old`         | Same tree as `root-declared-and-installed` but with an older `vite-plus` version that pre-dates `vp lint --lsp`                                                                          | `{ root, vpPath, vpVersion: "<old>" }`; `supportsLsp(vpVersion) === false` — editor must fall through to legacy `bin/oxlint` chain              |
+| `installed-no-version-field`            | Declared + `bin/vp` exists; `node_modules/vite-plus/package.json` is missing `version` or has it as a non-string                                                                         | `{ root: "<repo>" }` — install rejected, vpPath absent                                                                                          |
+| `pnpm-subpackage-declared-root-hoisted` | `pnpm-workspace.yaml` at `<repo>`, root `package.json` does **not** declare `vite-plus`, `packages/app/package.json` declares it, install is hoisted to `<repo>/node_modules/vite-plus/` | From inside `packages/app/`: `{ root: "<repo>/packages/app", vpPath: "<repo>/node_modules/vite-plus/bin/vp", vpVersion: "<new>" }`              |
+| `root-declared-no-install`              | Root `package.json` declares `vite-plus`, no `node_modules` (fresh clone)                                                                                                                | `{ root: "<repo>" }` — vpPath and vpVersion absent                                                                                              |
+| `npm-package-installed-direct-dep`      | Root `package.json` with `workspaces`, `packages/app/package.json` declares `vite-plus`, install inside `packages/app/node_modules/vite-plus/` (un-hoisted)                              | From inside `packages/app/`: `{ root: "<repo>/packages/app", vpPath: "<repo>/packages/app/node_modules/vite-plus/bin/vp", vpVersion: "<new>" }` |
+| `plain-non-vite-plus`                   | Normal Node project, no `vite-plus` anywhere                                                                                                                                             | `null`                                                                                                                                          |
+| `plain-vite-no-vp`                      | Uses Vite (`vite` declared, `vite.config.ts` present) but does not declare `vite-plus`                                                                                                   | `null`                                                                                                                                          |
+| `transitive-install`                    | No walked-up `package.json` declares `vite-plus`, but `node_modules/vite-plus/` exists as a transitive dep (pulled in by some other package)                                             | `null` — Phase 1 fails: no direct declaration                                                                                                   |
+| `bin-vp-orphan-no-package-json`         | Declared in root `package.json`, but `node_modules/vite-plus/bin/vp` exists with no sibling `package.json`                                                                               | `{ root: "<repo>" }` — install rejected as orphan                                                                                               |
+| `bin-vp-orphan-wrong-name`              | Declared in root `package.json`, `bin/vp` + `package.json` exist but `package.json` has `name !== "vite-plus"` or is unparseable                                                         | `{ root: "<repo>" }` — install rejected                                                                                                         |
+| `parent-vite-plus-nested-repo`          | Outer dir declares `vite-plus` and has the install; inner subdirectory is its own workspace root (own `pnpm-workspace.yaml`/`package.json#workspaces`) and does not declare `vite-plus`  | From inside the nested workspace: `null` — Phase 1 stops at the inner workspace root                                                            |
+| `global-vp-on-path`                     | Plain Node project, no declaration; `vp` is on `$PATH` and/or in the user's global `node_modules`                                                                                        | `null`                                                                                                                                          |
+| `user-binpath-override`                 | Plain Node project, no declaration; `oxc.oxlint.binPath` configured to a `vp` binary                                                                                                     | `null`                                                                                                                                          |
+| `yarn4-pnp`                             | Berry/PnP, no `node_modules`, root `package.json` declares `vite-plus`                                                                                                                   | `{ root: "<repo>" }` — declared, install not resolvable via plain filesystem walk                                                               |
 
 ## Verification plan
 
