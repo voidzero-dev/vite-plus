@@ -105,6 +105,13 @@ const TARGET_REPLACEMENT = 'vitest';
 // above already eliminates the common false positives that motivated this fix.
 const REQUIRE_PATTERN = /(?<=^|[\s;{}([,=])(require\s*\(\s*['"])vite-plus\/test(?=['"])/g;
 
+// Fallback ESM patterns used when `es-module-lexer` throws (e.g. on JSX/TSX).
+// These are tight enough that they only match real `from`/`import(...)` import
+// contexts — string literals or template content containing `vite-plus/test`
+// as a substring are not touched.
+const FROM_PATTERN = /(\bfrom\s*)(['"])vite-plus\/test\2/g;
+const DYNAMIC_IMPORT_PATTERN = /(\bimport\s*\(\s*)(['"])vite-plus\/test\2/g;
+
 let esLexerInitialized = false;
 function ensureLexerInit(): void {
   if (esLexerInitialized) {
@@ -122,13 +129,15 @@ export function rewriteVitePlusTestSpecifier(code: string): string {
   // Step 1: rewrite ESM static/dynamic imports via es-module-lexer.
   let result = code;
   let imports: ReadonlyArray<ImportSpecifier> | undefined;
+  let lexerThrew = false;
   try {
     ensureLexerInit();
     [imports] = parse(code);
   } catch {
-    // Parse failure (non-JS file, syntax error before transformation, etc.):
-    // skip the ESM-aware pass and let the CJS regex still run below.
+    // Parse failure (JSX/TSX, non-JS file, syntax error before transformation,
+    // etc.). Fall back to the conservative regex pass below.
     imports = undefined;
+    lexerThrew = true;
   }
 
   if (imports && imports.length > 0) {
@@ -142,6 +151,16 @@ export function rewriteVitePlusTestSpecifier(code: string): string {
       const replacement = d === -1 ? TARGET_REPLACEMENT : `'${TARGET_REPLACEMENT}'`;
       result = result.slice(0, s) + replacement + result.slice(e);
     }
+  } else if (lexerThrew) {
+    // The lexer cannot parse JSX/TSX, so .tsx test files with `vi.mock(...)`
+    // were silently left with the original `vite-plus/test` specifier. That
+    // causes `@vitest/mocker` to refuse to hoist the mock and crash at
+    // runtime with `Cannot access '__vi_import_0__' before initialization`.
+    // The regex matches `from 'vite-plus/test'` and `import('vite-plus/test')`
+    // only — both contexts can never appear inside legal JS string content
+    // because `from` and bare `import(` require statement positions.
+    result = result.replace(FROM_PATTERN, `$1$2${TARGET_REPLACEMENT}$2`);
+    result = result.replace(DYNAMIC_IMPORT_PATTERN, `$1$2${TARGET_REPLACEMENT}$2`);
   }
 
   // Step 2: rewrite CJS require() calls (not seen by es-module-lexer).
