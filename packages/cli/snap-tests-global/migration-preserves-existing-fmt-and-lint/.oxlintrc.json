@@ -1,0 +1,8 @@
+{
+  "rules": {
+    "no-unused-vars": "error"
+  },
+  "options": {
+    "typeAware": false
+  }
+}

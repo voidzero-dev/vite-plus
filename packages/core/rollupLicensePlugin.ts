@@ -1,1 +1,0 @@
-../../vite/packages/vite/rollupLicensePlugin.ts
