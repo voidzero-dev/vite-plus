@@ -8,7 +8,7 @@ use std::{ffi::OsStr, process::ExitStatus};
 use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
 use clap_complete::ArgValueCompleter;
 use tokio::runtime::Runtime;
-use vite_path::{AbsolutePath, AbsolutePathBuf};
+use vite_path::AbsolutePathBuf;
 use vite_pm_cli::PackageManagerCommand;
 use vite_shared::output;
 

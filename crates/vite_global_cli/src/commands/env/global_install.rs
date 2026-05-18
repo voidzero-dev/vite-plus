@@ -182,6 +182,7 @@ pub async fn install(
 
         if result.is_err() {
             let _ = std::fs::remove_dir_all(&staging_dir);
+            continue;
         }
 
         let node_modules_dir = get_node_modules_dir(&staging_dir, &package_name);
