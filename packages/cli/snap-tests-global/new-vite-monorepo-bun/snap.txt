@@ -1,4 +1,4 @@
-> vp create vite:monorepo --no-interactive --package-manager bun # create monorepo with bun
+> vp create vite:monorepo --no-interactive --package-manager bun --git # create monorepo with bun
 > ls vite-plus-monorepo | LC_ALL=C sort # check files created
 AGENTS.md
 README.md
@@ -48,7 +48,7 @@ No pnpm-workspace.yaml
 > test ! -f vite-plus-monorepo/.yarnrc.yml && echo 'No .yarnrc.yml' || echo 'ERROR: .yarnrc.yml exists' # verify no yarn config
 No .yarnrc.yml
 
-> test -d vite-plus-monorepo/.git && echo 'Git initialized' || echo 'No git' # check git init
+> test -d vite-plus-monorepo/.git && echo 'Git initialized' # check git init
 Git initialized
 
 > ls vite-plus-monorepo/apps # check apps directory
