@@ -95,7 +95,11 @@ pub async fn run_outdated(
     cwd: &AbsolutePath,
     options: &OutdatedCommandOptions<'_>,
 ) -> Result<ExitStatus, Error> {
-    let pm = build_package_manager(cwd).await?;
+    let pm = if options.global {
+        build_package_manager_or_npm_default(cwd).await?
+    } else {
+        build_package_manager(cwd).await?
+    };
     Ok(pm.run_outdated_command(options, cwd).await?)
 }
 
@@ -103,7 +107,11 @@ pub async fn run_why(
     cwd: &AbsolutePath,
     options: &WhyCommandOptions<'_>,
 ) -> Result<ExitStatus, Error> {
-    let pm = build_package_manager(cwd).await?;
+    let pm = if options.global {
+        build_package_manager_or_npm_default(cwd).await?
+    } else {
+        build_package_manager(cwd).await?
+    };
     Ok(pm.run_why_command(options, cwd).await?)
 }
 
