@@ -215,9 +215,7 @@ function mergeAutoInlineDeps<T extends { test?: { server?: { deps?: { inline?: u
   const existing = Array.isArray(existingInline) ? existingInline : [];
   const merged = [...existing];
   for (const pkg of AUTO_INLINE_DEPS) {
-    if (
-      !merged.some((entry) => entry === pkg || (entry instanceof RegExp && entry.test(pkg)))
-    ) {
+    if (!merged.some((entry) => entry === pkg || (entry instanceof RegExp && entry.test(pkg)))) {
       merged.push(pkg);
     }
   }
