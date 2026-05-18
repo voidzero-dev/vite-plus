@@ -479,7 +479,9 @@ async function createBareBrowserShims(
   try {
     browserPkgPath = require.resolve('@vitest/browser/package.json', { paths: [projectDir] });
   } catch (err) {
-    console.warn(`  Skipping bare browser shims — @vitest/browser not installed: ${(err as Error).message}`);
+    console.warn(
+      `  Skipping bare browser shims — @vitest/browser not installed: ${(err as Error).message}`,
+    );
     return result;
   }
   const browserPkg = JSON.parse(await readFile(browserPkgPath, 'utf-8'));
