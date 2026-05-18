@@ -23,30 +23,31 @@ export interface GroupMultiSelectOptions<Value> extends CommonOptions {
   selectableGroups?: boolean;
   groupSpacing?: number;
 }
+const withMarkerAndPrefix = (
+  marker: string,
+  prefix: string,
+  prefixWidth: number,
+  label: string,
+  format: (text: string) => string,
+  firstLineSuffix = '',
+  spacingPrefix = '',
+) => {
+  const lines = label.split('\n');
+  const continuationPrefix = `${S_POINTER_INACTIVE} ${' '.repeat(prefixWidth)}`;
+  if (lines.length === 1) {
+    return `${spacingPrefix}${marker} ${prefix}${format(lines[0])}${firstLineSuffix}`;
+  }
+  const [firstLine, ...rest] = lines;
+  return [
+    `${spacingPrefix}${marker} ${prefix}${format(firstLine)}${firstLineSuffix}`,
+    ...rest.map((line) => `${continuationPrefix}${format(line)}`),
+  ].join('\n');
+};
+
 export const groupMultiselect = <Value>(opts: GroupMultiSelectOptions<Value>) => {
   const { selectableGroups = true, groupSpacing = 0 } = opts;
   const hasGuide = opts.withGuide ?? false;
   const nestedPrefix = '  ';
-  const withMarkerAndPrefix = (
-    marker: string,
-    prefix: string,
-    prefixWidth: number,
-    label: string,
-    format: (text: string) => string,
-    firstLineSuffix = '',
-    spacingPrefix = '',
-  ) => {
-    const lines = label.split('\n');
-    const continuationPrefix = `${S_POINTER_INACTIVE} ${' '.repeat(prefixWidth)}`;
-    if (lines.length === 1) {
-      return `${spacingPrefix}${marker} ${prefix}${format(lines[0])}${firstLineSuffix}`;
-    }
-    const [firstLine, ...rest] = lines;
-    return [
-      `${spacingPrefix}${marker} ${prefix}${format(firstLine)}${firstLineSuffix}`,
-      ...rest.map((line) => `${continuationPrefix}${format(line)}`),
-    ].join('\n');
-  };
 
   const opt = (
     option: Option<Value> & { group: string | boolean },
