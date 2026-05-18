@@ -135,8 +135,12 @@ export function rewriteVitePlusTestSpecifier(code: string): string {
     // Walk in reverse so earlier offsets stay valid as we splice.
     const matches = imports.filter((i) => i.n === TARGET_SPECIFIER);
     for (let i = matches.length - 1; i >= 0; i--) {
-      const { s, e } = matches[i];
-      result = result.slice(0, s) + TARGET_REPLACEMENT + result.slice(e);
+      const { s, e, d } = matches[i];
+      // For static imports, `s`/`e` bound the specifier name without quotes.
+      // For dynamic imports (`d !== -1`), they bound the full string literal
+      // expression including its quotes, so wrap the replacement to preserve them.
+      const replacement = d === -1 ? TARGET_REPLACEMENT : `'${TARGET_REPLACEMENT}'`;
+      result = result.slice(0, s) + replacement + result.slice(e);
     }
   }
 
