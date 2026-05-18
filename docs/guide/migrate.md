@@ -67,7 +67,7 @@ After running the migration:
 
 ## Migration Prompt
 
-If you want to hand this work to a coding agent (or the reader is a coding agent!), use this migration prompt:
+If you want to hand this work to a coding agent (or the reader is a coding agent!), use this migration prompt. For a compact command reference covering argument forwarding and validation loops, see the [Coding Agents guide](/guide/coding-agents).
 
 ```md
 Migrate this project to Vite+. Vite+ replaces the current split tooling around runtime management, package management, dev/build/test commands, linting, formatting, and packaging. Run `vp help` to understand Vite+ capabilities and `vp help migrate` before making changes. Use `vp migrate --no-interactive` in the workspace root. Make sure the project is using Vite 8+ and Vitest 4.1+ before migrating.
