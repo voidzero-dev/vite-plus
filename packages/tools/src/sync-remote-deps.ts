@@ -277,6 +277,15 @@ function transformPluginutilsExport(
         },
       ];
     }
+    if (newValue.endsWith('.mjs')) {
+      return [
+        newExportPath,
+        {
+          default: newValue,
+          types: newValue.replace(/\.mjs$/, '.d.mts'),
+        },
+      ];
+    }
     return [newExportPath, newValue];
   }
 
@@ -287,6 +296,8 @@ function transformPluginutilsExport(
     if (importPath && !('types' in newValue)) {
       if (importPath.endsWith('.js')) {
         newValue.types = importPath.replace(/\.js$/, '.d.ts');
+      } else if (importPath.endsWith('.mjs')) {
+        newValue.types = importPath.replace(/\.mjs$/, '.d.mts');
       }
     }
   }
@@ -737,8 +748,9 @@ export async function syncRemote() {
   const rolldownVitePackagePath = join(rootDir, VITE_DIR, 'packages', 'vite', 'package.json');
   const pluginutilsPackagePath = join(
     rootDir,
-    ROLLDOWN_DIR,
-    'packages',
+    CORE_PACKAGE_PATH,
+    'node_modules',
+    '@rolldown',
     'pluginutils',
     'package.json',
   );
