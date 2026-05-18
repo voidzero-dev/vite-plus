@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { mergeJsonConfig } from '../binding/index.js';
+import { hasConfigKey, mergeJsonConfig } from '../binding/index.js';
 import { createDefaultVitePlusLintConfig } from './oxlint-plugin-config.ts';
 import { fmt as resolveFmt } from './resolve-fmt.ts';
 import { runCommandSilently } from './utils/command.ts';
@@ -132,11 +132,6 @@ export default defineConfig({});
 `,
   );
   return viteConfigPath;
-}
-
-function hasConfigKey(viteConfigPath: string, configKey: string): boolean {
-  const viteConfig = fs.readFileSync(viteConfigPath, 'utf8');
-  return new RegExp(`\\b${configKey}\\s*:`).test(viteConfig);
 }
 
 async function vpFmt(cwd: string, filePath: string): Promise<void> {

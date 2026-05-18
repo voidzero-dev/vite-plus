@@ -767,6 +767,7 @@ if (!nativeBinding) {
 module.exports = nativeBinding;
 module.exports.detectWorkspace = nativeBinding.detectWorkspace;
 module.exports.downloadPackageManager = nativeBinding.downloadPackageManager;
+module.exports.hasConfigKey = nativeBinding.hasConfigKey;
 module.exports.mergeJsonConfig = nativeBinding.mergeJsonConfig;
 module.exports.mergeTsdownConfig = nativeBinding.mergeTsdownConfig;
 module.exports.rewriteEslint = nativeBinding.rewriteEslint;
