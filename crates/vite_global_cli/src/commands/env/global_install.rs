@@ -447,23 +447,38 @@ pub async fn uninstall(package_name: &str, dry_run: bool) -> Result<(), Error> {
 /// `package_spec` may be a bare package name (`typescript`) or include a
 /// version/tag (`typescript@beta`, `@scope/pkg@1.0.0`). The command returns the
 /// version that npm resolves for that spec.
-pub(crate) async fn latest_package_version(
-    package_spec: &str,
-    node_version: Option<&str>,
-) -> Result<String, Error> {
-    let version = if let Some(v) = node_version {
-        let provider = NodeProvider::new();
-        resolve_version_alias(v, &provider).await?
-    } else {
-        let cwd = current_dir().map_err(|e| {
-            Error::ConfigError(format!("Cannot get current directory: {}", e).into())
-        })?;
-        let resolution = resolve_version(&cwd).await?;
+pub(crate) async fn latest_package_version(package_spec: &str) -> Result<String, Error> {
+    // Resolve from current directory
+    let node_version = {
+        let cwd = match current_dir() {
+            Ok(cwd) => cwd,
+            Err(error) => {
+                let error =
+                    Error::ConfigError(format!("Cannot get current directory: {}", error).into());
+                return Err(error);
+            }
+        };
+        let resolution = match resolve_version(&cwd).await {
+            Ok(resolution) => resolution,
+            Err(error) => return Err(error),
+        };
         resolution.version
     };
 
-    let runtime =
-        vite_js_runtime::download_runtime(vite_js_runtime::JsRuntimeType::Node, &version).await?;
+    // Ensure Node.js is installed
+    let runtime = match vite_js_runtime::download_runtime(
+        vite_js_runtime::JsRuntimeType::Node,
+        &node_version,
+    )
+    .await
+    {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            let error = Error::RuntimeDownload(error);
+            return Err(error);
+        }
+    };
+
     let node_bin_dir = runtime.get_bin_prefix();
     let npm_path =
         if cfg!(windows) { node_bin_dir.join("npm.cmd") } else { node_bin_dir.join("npm") };
