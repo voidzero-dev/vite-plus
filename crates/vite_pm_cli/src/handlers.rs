@@ -46,7 +46,10 @@ use crate::{
         ConfigCommands, DistTagCommands, OwnerCommands, PluginCommands, PmCommands, TokenCommands,
     },
     error::Error,
-    helpers::{build_package_manager, build_package_manager_or_npm_default, ensure_package_json},
+    helpers::{
+        build_package_manager, build_package_manager_or_npm_default, default_npm_package_manager,
+        ensure_package_json,
+    },
 };
 
 pub async fn run_add(
@@ -96,7 +99,7 @@ pub async fn run_outdated(
     options: &OutdatedCommandOptions<'_>,
 ) -> Result<ExitStatus, Error> {
     let pm = if options.global {
-        build_package_manager_or_npm_default(cwd).await?
+        default_npm_package_manager(cwd)
     } else {
         build_package_manager(cwd).await?
     };
@@ -108,7 +111,7 @@ pub async fn run_why(
     options: &WhyCommandOptions<'_>,
 ) -> Result<ExitStatus, Error> {
     let pm = if options.global {
-        build_package_manager_or_npm_default(cwd).await?
+        default_npm_package_manager(cwd)
     } else {
         build_package_manager(cwd).await?
     };
