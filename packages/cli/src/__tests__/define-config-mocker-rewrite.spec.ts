@@ -135,6 +135,74 @@ describe('rewriteVitePlusTestSpecifier', () => {
     const expected = ["import { vi } from 'vitest';", "vi.mock('./foo');", ''].join('\n');
     expect(rewriteVitePlusTestSpecifier(input)).toBe(expected);
   });
+
+  it('rewrites imports in a JSX/TSX source where the ESM lexer cannot parse', () => {
+    const input = [
+      "import { describe, it, expect, vi } from 'vite-plus/test';",
+      "import { render } from 'vitest-browser-react';",
+      "import { Suspense } from 'react';",
+      '',
+      "vi.mock('./router');",
+      "import { Route } from './route';",
+      '',
+      "describe('App', () => {",
+      "  it('renders', () => {",
+      '    render(<Suspense fallback={<div>Loading...</div>}><Route /></Suspense>);',
+      '  });',
+      '});',
+      '',
+    ].join('\n');
+    const expected = [
+      "import { describe, it, expect, vi } from 'vitest';",
+      "import { render } from 'vitest-browser-react';",
+      "import { Suspense } from 'react';",
+      '',
+      "vi.mock('./router');",
+      "import { Route } from './route';",
+      '',
+      "describe('App', () => {",
+      "  it('renders', () => {",
+      '    render(<Suspense fallback={<div>Loading...</div>}><Route /></Suspense>);',
+      '  });',
+      '});',
+      '',
+    ].join('\n');
+    expect(rewriteVitePlusTestSpecifier(input)).toBe(expected);
+  });
+
+  it('rewrites dynamic imports in a JSX/TSX source too', () => {
+    const input = [
+      'function App() {',
+      "  const promise = import('vite-plus/test');",
+      '  return <div>{promise.toString()}</div>;',
+      '}',
+      '',
+    ].join('\n');
+    const expected = [
+      'function App() {',
+      "  const promise = import('vitest');",
+      '  return <div>{promise.toString()}</div>;',
+      '}',
+      '',
+    ].join('\n');
+    expect(rewriteVitePlusTestSpecifier(input)).toBe(expected);
+  });
+
+  it('does NOT rewrite vite-plus/test subpaths in JSX/TSX fallback either', () => {
+    const input = [
+      "import { describe } from 'vite-plus/test';",
+      "import { ctx } from 'vite-plus/test/browser';",
+      'function App() { return <div />; }',
+      '',
+    ].join('\n');
+    const expected = [
+      "import { describe } from 'vitest';",
+      "import { ctx } from 'vite-plus/test/browser';",
+      'function App() { return <div />; }',
+      '',
+    ].join('\n');
+    expect(rewriteVitePlusTestSpecifier(input)).toBe(expected);
+  });
 });
 
 describe('defineConfig project plugin injection', () => {
