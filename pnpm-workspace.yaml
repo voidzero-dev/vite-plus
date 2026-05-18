@@ -179,19 +179,20 @@ overrides:
   vite: workspace:@voidzero-dev/vite-plus-core@*
   vite-plus: workspace:vite-plus@*
 packageExtensions:
+  '@rollup/plugin-dynamic-import-vars':
+    dependencies:
+      '@types/estree': ^1.0.0
   sass-embedded:
     peerDependencies:
       source-map-js: '*'
     peerDependenciesMeta:
       source-map-js:
         optional: true
-  '@rollup/plugin-dynamic-import-vars':
-    dependencies:
-      '@types/estree': ^1.0.0
 patchedDependencies:
-  sirv@3.0.2: vite/patches/sirv@3.0.2.patch
+  '@vitest/mocker@4.1.5': patches/@vitest__mocker@4.1.5.patch
   chokidar@3.6.0: vite/patches/chokidar@3.6.0.patch
   dotenv-expand@13.0.0: vite/patches/dotenv-expand@13.0.0.patch
+  sirv@3.0.2: vite/patches/sirv@3.0.2.patch
 peerDependencyRules:
   allowAny:
     - vite
