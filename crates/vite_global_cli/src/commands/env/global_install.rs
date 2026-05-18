@@ -267,8 +267,85 @@ pub async fn uninstall(package_name: &str, dry_run: bool) -> Result<(), Error> {
     Ok(())
 }
 
+/// Resolve the version currently published for a package spec.
+///
+/// `package_spec` may be a bare package name (`typescript`) or include a
+/// version/tag (`typescript@beta`, `@scope/pkg@1.0.0`). The command returns the
+/// version that npm resolves for that spec.
+pub(crate) async fn latest_package_version(
+    package_spec: &str,
+    node_version: Option<&str>,
+) -> Result<String, Error> {
+    let version = if let Some(v) = node_version {
+        let provider = NodeProvider::new();
+        resolve_version_alias(v, &provider).await?
+    } else {
+        let cwd = current_dir().map_err(|e| {
+            Error::ConfigError(format!("Cannot get current directory: {}", e).into())
+        })?;
+        let resolution = resolve_version(&cwd).await?;
+        resolution.version
+    };
+
+    let runtime =
+        vite_js_runtime::download_runtime(vite_js_runtime::JsRuntimeType::Node, &version).await?;
+    let node_bin_dir = runtime.get_bin_prefix();
+    let npm_path =
+        if cfg!(windows) { node_bin_dir.join("npm.cmd") } else { node_bin_dir.join("npm") };
+
+    let output = Command::new(npm_path.as_path())
+        .args(["view", package_spec, "version", "--json"])
+        .env("PATH", format_path_prepended(node_bin_dir.as_path()))
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .await?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(Error::ConfigError(
+            format!("npm view failed for {package_spec}: {stderr}").into(),
+        ));
+    }
+
+    parse_npm_view_version(&output.stdout)
+}
+
+fn parse_npm_view_version(stdout: &[u8]) -> Result<String, Error> {
+    let raw = String::from_utf8_lossy(stdout);
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Err(Error::ConfigError("npm view returned an empty version".into()));
+    }
+
+    match serde_json::from_str::<serde_json::Value>(trimmed) {
+        Ok(serde_json::Value::String(version)) => Ok(version),
+        Ok(serde_json::Value::Array(versions)) => versions
+            .iter()
+            .rev()
+            .find_map(|version| version.as_str())
+            .map(str::to_string)
+            .ok_or_else(|| Error::ConfigError("npm view returned an empty version list".into())),
+        _ => Ok(trimmed.to_string()),
+    }
+}
+
+/// Return true for package specs that refer to local filesystem content.
+pub(crate) fn is_local_package_spec(spec: &str) -> bool {
+    spec == "."
+        || spec == ".."
+        || spec.starts_with("./")
+        || spec.starts_with("../")
+        || spec.starts_with('/')
+        || spec.starts_with("file:")
+        || (cfg!(windows)
+            && spec.len() >= 3
+            && spec.as_bytes()[1] == b':'
+            && (spec.as_bytes()[2] == b'\\' || spec.as_bytes()[2] == b'/'))
+}
+
 /// Parse package spec into name and optional version.
-fn parse_package_spec(spec: &str) -> (String, Option<String>) {
+pub(crate) fn parse_package_spec(spec: &str) -> (String, Option<String>) {
     // Handle scoped packages: @scope/name@version
     if spec.starts_with('@') {
         // Find the second @ for version
@@ -697,6 +774,47 @@ mod tests {
                 "tsserver.exe shim should be removed"
             );
         }
+    }
+
+    #[test]
+    fn test_parse_npm_view_version_json_string() {
+        let version = parse_npm_view_version(b"\"5.9.3\"\n").unwrap();
+        assert_eq!(version, "5.9.3");
+    }
+
+    #[test]
+    fn test_parse_npm_view_version_plain_string() {
+        let version = parse_npm_view_version(b"5.9.3\n").unwrap();
+        assert_eq!(version, "5.9.3");
+    }
+
+    #[test]
+    fn test_parse_npm_view_version_json_array_uses_latest_entry() {
+        let version = parse_npm_view_version(b"[\"5.9.2\", \"5.9.3\"]\n").unwrap();
+        assert_eq!(version, "5.9.3");
+    }
+
+    #[test]
+    fn test_parse_npm_view_version_rejects_empty_output() {
+        let err = parse_npm_view_version(b"\n").unwrap_err();
+        assert!(err.to_string().contains("empty version"));
+    }
+
+    #[test]
+    fn test_is_local_package_spec_relative_paths() {
+        assert!(is_local_package_spec("."));
+        assert!(is_local_package_spec(".."));
+        assert!(is_local_package_spec("./pkg"));
+        assert!(is_local_package_spec("../pkg"));
+        assert!(is_local_package_spec("file:../pkg"));
+    }
+
+    #[test]
+    fn test_is_local_package_spec_registry_packages() {
+        assert!(!is_local_package_spec("typescript"));
+        assert!(!is_local_package_spec("typescript@5.9.3"));
+        assert!(!is_local_package_spec("@scope/pkg"));
+        assert!(!is_local_package_spec("@scope/pkg@1.0.0"));
     }
 
     #[test]
