@@ -1,7 +1,5 @@
 > git init
 > vp migrate --no-interactive # should still migrate husky/lint-staged even though vite-plus exists
-VITE+ - The Unified Toolchain for the Web
-
 ◇ Updated .
 • Node <semver>  unknown latest
 • 2 config updates applied

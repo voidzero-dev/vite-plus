@@ -1,28 +1,20 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import spawn from 'cross-spawn';
-
 import { runCommand as runCommandWithFspy } from '../../binding/index.js';
 import type { WorkspaceInfo } from '../types/index.ts';
+import type { ExecutionResult, RunCommandOptions } from '../utils/command.ts';
 
-export interface ExecutionResult {
-  exitCode: number;
+/** Set by `runCommandAndDetectProjectDir` and the template executors
+ * that call it; plain `runCommand` / `runCommandSilently` don't. */
+export interface ExecutionWithProjectDir extends ExecutionResult {
   projectDir?: string;
 }
 
-export interface RunCommandOptions {
-  command: string;
-  args: string[];
-  cwd: string;
-  envs: NodeJS.ProcessEnv;
-}
-
-// Run a command and detect the project directory
 export async function runCommandAndDetectProjectDir(
   options: RunCommandOptions,
   parentDir?: string,
-): Promise<ExecutionResult> {
+): Promise<ExecutionWithProjectDir> {
   const cwd = parentDir ? path.join(options.cwd, parentDir) : options.cwd;
   const existingDirs = new Set<string>();
   if (parentDir) {
@@ -46,6 +38,7 @@ export async function runCommandAndDetectProjectDir(
   // Detect project directory from path accesses
   // Find the closest directory containing package.json relative to cwd
   let projectDir: string | undefined;
+  let currentDirPackageJsonWritten = false;
   let minDepth = Infinity;
 
   for (const [filePath, pathAccess] of Object.entries(result.pathAccesses)) {
@@ -58,8 +51,9 @@ export async function runCommandAndDetectProjectDir(
       // Extract directory from package.json path
       const dir = path.dirname(filePath);
 
-      // Skip if it's the current directory
+      // Defer current directory until after checking for a generated child directory.
       if (dir === '.' || dir === '') {
+        currentDirPackageJsonWritten = true;
         continue;
       }
       // Skip if this is an existing directory (created before the command ran)
@@ -78,6 +72,10 @@ export async function runCommandAndDetectProjectDir(
     }
   }
 
+  if (!projectDir && currentDirPackageJsonWritten) {
+    projectDir = '.';
+  }
+
   // If parentDir is provided, join it with the project directory
   if (parentDir && projectDir) {
     projectDir = path.join(parentDir, projectDir);
@@ -87,57 +85,6 @@ export async function runCommandAndDetectProjectDir(
     exitCode: result.exitCode,
     projectDir,
   };
-}
-
-export interface RunCommandResult extends ExecutionResult {
-  stdout: Buffer;
-  stderr: Buffer;
-}
-
-export async function runCommandSilently(options: RunCommandOptions): Promise<RunCommandResult> {
-  const child = spawn(options.command, options.args, {
-    stdio: 'pipe',
-    cwd: options.cwd,
-    env: options.envs,
-  });
-  const promise = new Promise<RunCommandResult>((resolve, reject) => {
-    const stdout: Buffer[] = [];
-    const stderr: Buffer[] = [];
-    child.stdout?.on('data', (data) => {
-      stdout.push(data);
-    });
-    child.stderr?.on('data', (data) => {
-      stderr.push(data);
-    });
-    child.on('close', (code) => {
-      resolve({
-        exitCode: code ?? 0,
-        stdout: Buffer.concat(stdout),
-        stderr: Buffer.concat(stderr),
-      });
-    });
-    child.on('error', (err) => {
-      reject(err);
-    });
-  });
-  return await promise;
-}
-
-export async function runCommand(options: RunCommandOptions): Promise<ExecutionResult> {
-  const child = spawn(options.command, options.args, {
-    stdio: 'inherit',
-    cwd: options.cwd,
-    env: options.envs,
-  });
-  const promise = new Promise<ExecutionResult>((resolve, reject) => {
-    child.on('close', (code) => {
-      resolve({ exitCode: code ?? 0 });
-    });
-    child.on('error', (err) => {
-      reject(err);
-    });
-  });
-  return await promise;
 }
 
 // Get the package runner command for each package manager
@@ -168,10 +115,9 @@ export function formatDlxCommand(
   workspaceInfo: WorkspaceInfo,
 ) {
   const runner = getPackageRunner(workspaceInfo);
-  const dlxArgs = runner.command === 'npx' ? ['--', ...args] : args;
   return {
     command: runner.command,
-    args: [...runner.args, packageName, ...dlxArgs],
+    args: [...runner.args, packageName, ...args],
   };
 }
 

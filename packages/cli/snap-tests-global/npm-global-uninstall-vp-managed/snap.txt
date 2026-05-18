@@ -1,6 +1,4 @@
 > vp install -g ./npm-global-vp-managed-pkg # Install via vp (creates managed shim)
-VITE+ - The Unified Toolchain for the Web
-
 Installing ./npm-global-vp-managed-pkg globally...
 Installed ./npm-global-vp-managed-pkg v<semver>
 Binaries: npm-global-vp-managed-cli

@@ -28,6 +28,7 @@ crossterm = { workspace = true }
 vite_error = { workspace = true }
 vite_install = { workspace = true }
 vite_js_runtime = { workspace = true }
+vite_pm_cli = { workspace = true }
 vite_path = { workspace = true }
 vite_command = { workspace = true }
 vite_setup = { workspace = true }

@@ -112,17 +112,17 @@ impl PackageManager {
 
                 // Handle --location parameter
                 if let Some(location) = options.location {
-                    if !is_yarn1 {
-                        // yarn@2+: map 'global' to --home
-                        if location == "global" {
-                            args.push("--home".into());
-                        }
-                    } else {
+                    if is_yarn1 {
                         // yarn@1: use --global for global location
                         if location == "global" {
                             args.push("--global".into());
                         } else {
                             output::warn("yarn@1 does not support --location, ignoring flag");
+                        }
+                    } else {
+                        // yarn@2+: map 'global' to --home
+                        if location == "global" {
+                            args.push("--home".into());
                         }
                     }
                 }

@@ -1,0 +1,10 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "commands": [
+    "vp add testnpm2 -D -w --filter=* && vp add test-vite-plus-install -w --filter=* && vp add test-vite-plus-package-optional -O --filter=* && cat package.json packages/app/package.json packages/utils/package.json # prepare packages",
+    "vp remove testnpm2 -r && cat package.json packages/app/package.json packages/utils/package.json # should remove package from all workspaces and root",
+    "vp remove -O test-vite-plus-package-optional -r && cat package.json packages/app/package.json packages/utils/package.json # should remove optional package from all workspaces",
+    "vp remove test-vite-plus-install --filter=app && cat package.json packages/app/package.json packages/utils/package.json # should remove package by filter=app",
+    "vp remove test-vite-plus-install --filter=* && cat package.json packages/app/package.json packages/utils/package.json # should remove package by filter=*"
+  ]
+}

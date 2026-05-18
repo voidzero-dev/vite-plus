@@ -1,3 +1,5 @@
+#![allow(clippy::allow_attributes, clippy::disallowed_macros, clippy::print_stdout)]
+
 use vite_error::Error;
 use vite_install::PackageManager;
 use vite_path::current_dir;

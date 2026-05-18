@@ -1,6 +1,4 @@
 > vp pm publish --help # should show help
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp pm publish [OPTIONS] [TARBALL|FOLDER] [-- <PASS_THROUGH_ARGS>...]
 
 Publish package to registry
@@ -17,6 +15,7 @@ Options:
   --no-git-checks            Skip git checks
   --publish-branch <BRANCH>  Set the branch name to publish from
   --report-summary           Save publish summary
+  --provenance               Publish with provenance
   --force                    Force publish
   --json                     Output in JSON format
   -r, --recursive            Publish all workspace packages

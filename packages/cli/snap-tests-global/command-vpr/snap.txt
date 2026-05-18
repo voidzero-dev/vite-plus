@@ -1,6 +1,4 @@
 > vpr -h # should show vp run help
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp run [OPTIONS] [TASK_SPECIFIER] [ADDITIONAL_ARGS]...
 
 Run tasks.

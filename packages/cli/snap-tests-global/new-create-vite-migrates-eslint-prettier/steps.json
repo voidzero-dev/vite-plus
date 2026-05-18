@@ -1,0 +1,16 @@
+{
+  "env": {
+    "VP_SKIP_INSTALL": "",
+    "CI": ""
+  },
+  "commands": [
+    {
+      "command": "vp create vite@9.0.5 --no-interactive -- my-react-ts --template react-ts # create vite app with pinned version + react-ts template, should auto-migrate ESLint -> Oxlint and merge lint config into vite.config.ts",
+      "ignoreOutput": true
+    },
+    "test ! -f my-react-ts/eslint.config.js && echo 'eslint.config.js removed' # eslint config deleted",
+    "test ! -f my-react-ts/.oxlintrc.json && echo '.oxlintrc.json merged into vite.config.ts' # migration output merged by rewrite step (matches vp migrate)",
+    "cat my-react-ts/vite.config.ts # merged vite config should contain lint and fmt sections",
+    "node -e \"const p=require('./my-react-ts/package.json');console.log('lint:', p.scripts && p.scripts.lint);console.log('eslint dep:', !!(p.devDependencies && p.devDependencies.eslint));console.log('vite-plus dep:', !!(p.devDependencies && p.devDependencies['vite-plus']));\" # scripts rewritten, eslint dep removed, vite-plus added"
+  ]
+}

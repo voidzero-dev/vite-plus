@@ -1,6 +1,4 @@
 > vp env use --help # should show help
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp env use [OPTIONS] [VERSION]
 
 Use a specific Node.js version for this shell session

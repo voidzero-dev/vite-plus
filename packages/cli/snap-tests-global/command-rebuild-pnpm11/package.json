@@ -1,0 +1,9 @@
+{
+  "name": "command-rebuild-pnpm11",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "testnpm2": "1.0.0"
+  },
+  "packageManager": "pnpm@11.0.6"
+}

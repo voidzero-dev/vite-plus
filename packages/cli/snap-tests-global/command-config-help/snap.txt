@@ -1,6 +1,4 @@
 > vp config -h
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp config [OPTIONS]
 
 Configure Vite+ for the current project (hooks + agent integration).
@@ -16,8 +14,6 @@ Documentation: https://viteplus.dev/guide/commit-hooks
 
 
 > vp config --help
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp config [OPTIONS]
 
 Configure Vite+ for the current project (hooks + agent integration).
@@ -33,8 +29,6 @@ Documentation: https://viteplus.dev/guide/commit-hooks
 
 
 > vp help config
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp config [OPTIONS]
 
 Configure Vite+ for the current project (hooks + agent integration).

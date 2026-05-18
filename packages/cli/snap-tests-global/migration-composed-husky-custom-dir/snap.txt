@@ -1,8 +1,6 @@
 > git init
 > vp migrate --no-interactive # migration should preserve custom husky dir in composed prepare
-VITE+ - The Unified Toolchain for the Web
-
-◇ Migrated . to Vite+<repeat>
+◇ Migrated . to Vite+
 • Node <semver>  pnpm <semver>
 • 2 config updates applied
 • Git hooks configured

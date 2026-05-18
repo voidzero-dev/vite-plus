@@ -1,6 +1,4 @@
 > vp install -g --node 22 ./command-env-install-node-version-pkg # Install with Node.js 22
-VITE+ - The Unified Toolchain for the Web
-
 Installing ./command-env-install-node-version-pkg globally...
 Installed ./command-env-install-node-version-pkg v<semver>
 Binaries: command-env-install-node-version-pkg-cli
@@ -12,8 +10,6 @@ Node major: 22
 Uninstalled command-env-install-node-version-pkg
 
 > vp install -g --node 20 ./command-env-install-node-version-pkg # Install with Node.js 20
-VITE+ - The Unified Toolchain for the Web
-
 Installing ./command-env-install-node-version-pkg globally...
 Installed ./command-env-install-node-version-pkg v<semver>
 Binaries: command-env-install-node-version-pkg-cli

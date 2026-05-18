@@ -1,0 +1,18 @@
+[1]> node $SNAP_CASES_DIR/.shared/mock-npm-registry.mjs -- vp create @your-org --no-interactive # inside monorepo, hides monorepo:true entries + shows omitted footer
+
+A template name is required when running `vp create @your-org` in non-interactive mode.
+
+Available templates in @your-org/create:
+
+  NAME     DESCRIPTION                      TEMPLATE
+  web      Web app template (Vite + React)  @your-org/template-web
+  library  TypeScript library template      @your-org/template-library
+
+(omitted 1 monorepo-only entry because this workspace is already a monorepo)
+
+Examples:
+  # Scaffold a specific template from the org
+  vp create @your-org:web --no-interactive
+
+  # Or use a Vite+ built-in template
+  vp create vite:application --no-interactive

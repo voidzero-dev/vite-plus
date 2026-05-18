@@ -2,8 +2,6 @@
 <cwd>/../npm-global-lib-for-snap-tests
 
 > vp install -g ./npm-global-linked-pkg # First install via vp (creates managed shim)
-VITE+ - The Unified Toolchain for the Web
-
 Installing ./npm-global-linked-pkg globally...
 Installed ./npm-global-linked-pkg v<semver>
 Binaries: npm-global-linked-cli

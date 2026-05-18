@@ -1,6 +1,4 @@
 > vp install # should install packages first
-VITE+ - The Unified Toolchain for the Web
-
 yarn install v<semver>
 info No lockfile found.
 [1/4] Resolving packages...

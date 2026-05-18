@@ -1,6 +1,4 @@
 > vp add --help # should show help
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp add [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
 
 Add packages to dependencies
@@ -71,8 +69,6 @@ installed test-vite-plus-install@<semver>
 }
 
 > vp install test-vite-plus-package@1.0.0 --save-peer && cat package.json # should install package alias for add
-VITE+ - The Unified Toolchain for the Web
-
 bun add v<semver> (af24e281)
 
 installed test-vite-plus-package@<semver>

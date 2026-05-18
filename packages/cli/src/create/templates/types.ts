@@ -12,6 +12,7 @@ export const TemplateType = {
   builtin: 'builtin',
   bingo: 'bingo',
   remote: 'remote',
+  bundled: 'bundled',
 } as const;
 export type TemplateType = (typeof TemplateType)[keyof typeof TemplateType];
 
@@ -24,6 +25,9 @@ export interface TemplateInfo {
   // For example, "packages"
   parentDir?: string;
   interactive?: boolean;
+  // Absolute path to an extracted template directory. Only set for
+  // `TemplateType.bundled` entries sourced from a manifest's relative path.
+  localPath?: string;
 }
 
 export interface BuiltinTemplateInfo extends Omit<TemplateInfo, 'parentDir'> {

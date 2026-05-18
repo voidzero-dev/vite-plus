@@ -28,8 +28,6 @@ export default defineConfig({
           'bench/**/*.ts',
           'ecosystem-ci/**/*',
           'packages/*/build.ts',
-          'packages/core/rollupLicensePlugin.ts',
-          'packages/core/vite-rolldown.config.ts',
           'packages/tools/**/*.ts',
         ],
         rules: {
@@ -47,10 +45,7 @@ export default defineConfig({
       '**/snap-tests/**',
       '**/snap-tests-global/**',
       '**/snap-tests-todo/**',
-      'docs/**',
       'packages/*/binding/**',
-      'packages/core/rollupLicensePlugin.ts',
-      'packages/core/vite-rolldown.config.ts',
     ],
   },
   test: {
@@ -70,7 +65,6 @@ export default defineConfig({
       'packages/cli/snap-tests/check-*/**',
       'packages/cli/snap-tests/fmt-ignore-patterns/src/ignored',
       'packages/cli/snap-tests-global/migration-lint-staged-ts-config',
-      'docs/**',
       'ecosystem-ci/*/**',
       'packages/test/**.cjs',
       'packages/test/**.cts',

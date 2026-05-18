@@ -1,9 +1,7 @@
 > vp migrate --no-interactive # migration should detect both eslint and prettier and auto-migrate
-VITE+ - The Unified Toolchain for the Web
-
 
 Prettier configuration detected. Auto-migrating to Oxfmt...
-◇ Migrated . to Vite+<repeat>
+◇ Migrated . to Vite+
 • Node <semver>  pnpm <semver>
 • 4 config updates applied
 • ESLint rules migrated to Oxlint
@@ -66,12 +64,19 @@ export default defineConfig({
       "builtin": true
     },
     "rules": {
-      "no-unused-vars": "error"
+      "no-unused-vars": "error",
+      "vite-plus/prefer-vite-plus-imports": "error"
     },
     "options": {
       "typeAware": true,
       "typeCheck": true
-    }
+    },
+    "jsPlugins": [
+      {
+        "name": "vite-plus",
+        "specifier": "vite-plus/oxlint-plugin"
+      }
+    ]
   },
   fmt: {
     semi: true,

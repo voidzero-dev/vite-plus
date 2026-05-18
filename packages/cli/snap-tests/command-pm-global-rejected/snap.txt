@@ -1,0 +1,26 @@
+[1]> vp install -g testnpm2 # rejected: managed install
+error: Global package operations (`-g`/`--global`) are only supported by the globally-installed `vp` CLI. See https://viteplus.dev/guide/ to install it, then run the same command via the global `vp` binary.
+
+[1]> vp install -g testnpm2 --node 20 # rejected: --node implicitly covered
+error: Global package operations (`-g`/`--global`) are only supported by the globally-installed `vp` CLI. See https://viteplus.dev/guide/ to install it, then run the same command via the global `vp` binary.
+
+[1]> vp add -g testnpm2 # rejected: managed add
+error: Global package operations (`-g`/`--global`) are only supported by the globally-installed `vp` CLI. See https://viteplus.dev/guide/ to install it, then run the same command via the global `vp` binary.
+
+[1]> vp add -g testnpm2 --node 20 # rejected: --node implicitly covered
+error: Global package operations (`-g`/`--global`) are only supported by the globally-installed `vp` CLI. See https://viteplus.dev/guide/ to install it, then run the same command via the global `vp` binary.
+
+[1]> vp remove -g testnpm2 # rejected: managed uninstall
+error: Global package operations (`-g`/`--global`) are only supported by the globally-installed `vp` CLI. See https://viteplus.dev/guide/ to install it, then run the same command via the global `vp` binary.
+
+[1]> vp remove -g --dry-run testnpm2 # rejected: --dry-run implicitly covered
+error: Global package operations (`-g`/`--global`) are only supported by the globally-installed `vp` CLI. See https://viteplus.dev/guide/ to install it, then run the same command via the global `vp` binary.
+
+[1]> vp update -g # rejected: managed update
+error: Global package operations (`-g`/`--global`) are only supported by the globally-installed `vp` CLI. See https://viteplus.dev/guide/ to install it, then run the same command via the global `vp` binary.
+
+[1]> vp update -g testnpm2 # rejected: managed update with package
+error: Global package operations (`-g`/`--global`) are only supported by the globally-installed `vp` CLI. See https://viteplus.dev/guide/ to install it, then run the same command via the global `vp` binary.
+
+[1]> vp pm ls -g # rejected: managed packages listing
+error: Global package operations (`-g`/`--global`) are only supported by the globally-installed `vp` CLI. See https://viteplus.dev/guide/ to install it, then run the same command via the global `vp` binary.

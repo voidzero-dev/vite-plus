@@ -11,39 +11,13 @@
   ],
   "packageRules": [
     {
-      "description": "Ignore selected npm package updates",
+      "description": "Disable all npm updates (lockfile updates fail because vite/patches/* is gitignored)",
       "matchManagers": ["npm"],
-      "matchPackageNames": [
-        "rolldown",
-        "/^oxc-.*/",
-        "@oxc-node/*",
-        "@oxc-project/*",
-        "@vitejs/devtools",
-        "oxfmt",
-        "oxlint",
-        "oxlint-tsgolint",
-        "tsdown",
-        "vite",
-        "vitest",
-        "vitest-dev"
-      ],
       "enabled": false
     },
     {
-      "description": "Ignore oxc crate updates",
+      "description": "Disable all cargo updates (lockfile updates fail because rolldown/ is gitignored)",
       "matchManagers": ["cargo"],
-      "matchPackageNames": ["/^oxc([_-].*)?$/"],
-      "enabled": false
-    },
-    {
-      "matchDepNames": [
-        "fspy",
-        "vite_glob",
-        "vite_path",
-        "vite_str",
-        "vite_task",
-        "vite_workspace"
-      ],
       "enabled": false
     }
   ]

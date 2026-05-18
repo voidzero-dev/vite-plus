@@ -3,11 +3,11 @@
 //! This module provides utilities for working with `.node-version` files,
 //! which are used to specify Node.js versions for projects.
 //!
-//! For PackageJson types (devEngines, engines), see `vite_shared::package_json`.
+//! For `PackageJson` types (devEngines, engines), see `vite_shared::package_json`.
 
 use vite_path::AbsolutePath;
 // Re-export shared types for internal use
-pub(crate) use vite_shared::PackageJson;
+pub use vite_shared::PackageJson;
 use vite_str::Str;
 
 use crate::Error;

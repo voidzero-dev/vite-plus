@@ -114,12 +114,12 @@ impl PackageManager {
                     if save_catalog_name.is_empty() {
                         args.push("--save-catalog".into());
                     } else {
-                        args.push(format!("--save-catalog-name={}", save_catalog_name));
+                        args.push(format!("--save-catalog-name={save_catalog_name}"));
                     }
                 }
 
                 if let Some(allow_build) = options.allow_build {
-                    args.push(format!("--allow-build={}", allow_build));
+                    args.push(format!("--allow-build={allow_build}"));
                 }
             }
             PackageManagerType::Yarn => {
@@ -219,10 +219,10 @@ impl PackageManager {
                 if options.save_exact {
                     args.push("--exact".into());
                 }
-                if let Some(filters) = options.filters {
-                    if !filters.is_empty() {
-                        output::warn("bun add does not support --filter");
-                    }
+                if let Some(filters) = options.filters
+                    && !filters.is_empty()
+                {
+                    output::warn("bun add does not support --filter");
                 }
                 if options.workspace_root {
                     output::warn("bun add does not support --workspace-root");

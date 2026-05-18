@@ -1,6 +1,4 @@
 > vp install -g ./env-binary-conflict-pkg-a # Install pkg-a which provides env-binary-conflict-cli binary
-VITE+ - The Unified Toolchain for the Web
-
 Installing ./env-binary-conflict-pkg-a globally...
 Installed ./env-binary-conflict-pkg-a v<semver>
 Binaries: env-binary-conflict-cli
@@ -14,8 +12,6 @@ Binaries: env-binary-conflict-cli
   "source": "vp"
 }
 [1]> vp install -g ./env-binary-conflict-pkg-b # Try to install pkg-b without force - should fail
-VITE+ - The Unified Toolchain for the Web
-
 Installing ./env-binary-conflict-pkg-b globally...
 Failed to install ./env-binary-conflict-pkg-b: Executable 'env-binary-conflict-cli' is already installed by ./env-binary-conflict-pkg-a
 
@@ -30,8 +26,6 @@ Please remove ./env-binary-conflict-pkg-a before installing ./env-binary-conflic
   "source": "vp"
 }
 > vp install -g --force ./env-binary-conflict-pkg-b # Force install pkg-b - should auto-uninstall pkg-a
-VITE+ - The Unified Toolchain for the Web
-
 Installing ./env-binary-conflict-pkg-b globally...
 Uninstalling ./env-binary-conflict-pkg-a (conflicts with ./env-binary-conflict-pkg-b)...
 Uninstalled ./env-binary-conflict-pkg-a

@@ -1,0 +1,12 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "env": {
+    "VITE_DISABLE_AUTO_INSTALL": "1",
+    "CI": "",
+    "VP_SKIP_INSTALL": ""
+  },
+  "commands": [
+    "vp migrate --no-interactive --no-hooks # migration should add Astro shim when astro dependency is detected",
+    "cat src/env.d.ts # check Astro shim was written"
+  ]
+}

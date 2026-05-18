@@ -1,12 +1,8 @@
 > vp install # should install packages first
-VITE+ - The Unified Toolchain for the Web
-
 
 added 3 packages in <variable>ms
 
 > vp pm prune --help # should show help
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp pm prune [OPTIONS] [-- <PASS_THROUGH_ARGS>...]
 
 Remove unnecessary packages

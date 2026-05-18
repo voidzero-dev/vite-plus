@@ -1,6 +1,4 @@
 > vp migrate --help # show help
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp migrate [PATH] [OPTIONS]
 
 Migrate standalone Vite, Vitest, Oxlint, Oxfmt, and Prettier projects to unified Vite+.

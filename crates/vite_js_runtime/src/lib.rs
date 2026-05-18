@@ -33,6 +33,14 @@
 //! 2. Add the runtime type to `JsRuntimeType` enum
 //! 3. Add a match arm in `download_runtime()` to use the new provider
 
+#![allow(
+    clippy::allow_attributes,
+    clippy::disallowed_macros,
+    clippy::disallowed_methods,
+    clippy::disallowed_types,
+    clippy::print_stdout
+)]
+
 mod cache;
 mod dev_engines;
 mod download;

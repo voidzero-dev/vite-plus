@@ -1,32 +1,20 @@
 > node setup-bin.js
 > vp exec hello-test # exec binary from node_modules/.bin
-VITE+ - The Unified Toolchain for the Web
-
 hello from test-bin
 
 > vp exec echo hello # basic exec
-VITE+ - The Unified Toolchain for the Web
-
 hello
 
 > vp exec -- echo with-separator # explicit -- separator
-VITE+ - The Unified Toolchain for the Web
-
 with-separator
 
 > vp exec node -e "console.log('hi')" # exec with args passthrough
-VITE+ - The Unified Toolchain for the Web
-
 hi
 
 > vp exec -c 'echo hello from shell' # shell mode
-VITE+ - The Unified Toolchain for the Web
-
 hello from shell
 
 > vp exec --help # should show help message
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp exec [OPTIONS] [COMMAND]...
 
 Execute a command from local node_modules/.bin.
@@ -66,8 +54,6 @@ Documentation: https://viteplus.dev/guide/vpx
 
 
 [1]> vp exec # missing command should error
-VITE+ - The Unified Toolchain for the Web
-
 error: 'vp exec' requires a command to run
 
 Usage: vp exec [--] <command> [args...]
@@ -77,8 +63,6 @@ Examples:
   vp exec tsc --noEmit
 
 [1]> vp exec nonexistent-cmd-12345 # command not found error
-VITE+ - The Unified Toolchain for the Web
-
 error: Command 'nonexistent-cmd-12345' not found in node_modules/.bin
 
 Run `vp install` to install dependencies, or use `vpx` for invoking remote commands.

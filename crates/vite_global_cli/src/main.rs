@@ -4,8 +4,14 @@
 //! pre-installed Node.js. Uses managed Node.js from `vite_js_runtime` for
 //! package manager commands and JS script execution.
 
-// Allow printing to stderr for CLI error messages
-#![allow(clippy::print_stderr)]
+#![allow(
+    clippy::allow_attributes,
+    clippy::disallowed_macros,
+    clippy::disallowed_methods,
+    clippy::disallowed_types,
+    clippy::print_stderr,
+    clippy::print_stdout
+)]
 
 mod cli;
 mod command_picker;
@@ -116,8 +122,7 @@ fn extract_invalid_subcommand_details(error: &clap::Error) -> Option<InvalidSubc
 }
 
 fn print_invalid_subcommand_error(details: &InvalidSubcommandDetails) {
-    println!("{}", vite_shared::header::vite_plus_header());
-    println!();
+    vite_shared::header::print_header();
 
     let highlighted_subcommand = details.invalid_subcommand.bright_blue().to_string();
     output::error(&format!("Command '{highlighted_subcommand}' not found"));
@@ -197,8 +202,8 @@ async fn run_corrected_args(cwd: &vite_path::AbsolutePathBuf, raw_args: &[String
     match run_command_with_options(cwd.clone(), parsed, render_options).await {
         Ok(exit_status) => exit_status_to_exit_code(exit_status),
         Err(e) => {
-            if matches!(&e, error::Error::UserMessage(_)) {
-                eprintln!("{e}");
+            if e.is_user_message() {
+                output::raw_stderr(&format!("{e}"));
             } else {
                 output::error(&format!("{e}"));
             }
@@ -237,8 +242,7 @@ fn print_unknown_argument_error(error: &clap::Error) -> bool {
         return false;
     };
 
-    println!("{}", vite_shared::header::vite_plus_header());
-    println!();
+    vite_shared::header::print_header();
 
     let highlighted_argument = invalid_argument.bright_blue().to_string();
     output::error(&format!("Unexpected argument '{highlighted_argument}'"));
@@ -397,8 +401,8 @@ async fn main() -> ExitCode {
         Ok(args) => match run_command(cwd.clone(), args).await {
             Ok(exit_status) => exit_status_to_exit_code(exit_status),
             Err(e) => {
-                if matches!(&e, error::Error::UserMessage(_)) {
-                    eprintln!("{e}");
+                if e.is_user_message() {
+                    output::raw_stderr(&format!("{e}"));
                 } else {
                     output::error(&format!("{e}"));
                 }

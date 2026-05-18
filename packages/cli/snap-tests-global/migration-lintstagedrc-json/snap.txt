@@ -1,6 +1,4 @@
 > vp migrate -h # migration help message
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp migrate [PATH] [OPTIONS]
 
 Migrate standalone Vite, Vitest, Oxlint, Oxfmt, and Prettier projects to unified Vite+.
@@ -69,9 +67,7 @@ Documentation: https://viteplus.dev/guide/migrate
 
 
 > vp migrate --no-interactive # migration work with lintstagedrc.json
-VITE+ - The Unified Toolchain for the Web
-
-◇ Migrated . to Vite+<repeat>
+◇ Migrated . to Vite+
 • Node <semver>  pnpm <semver>
 • 2 config updates applied
 ! Warnings:
@@ -115,7 +111,7 @@ import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   fmt: {},
-  lint: {"options":{"typeAware":true,"typeCheck":true}},
+  lint: {"jsPlugins":[{"name":"vite-plus","specifier":"vite-plus/oxlint-plugin"}],"rules":{"vite-plus/prefer-vite-plus-imports":"error"},"options":{"typeAware":true,"typeCheck":true}},
   staged: {
     "*.@(js|ts|tsx|yml|yaml|md|json|html|toml)": [
       "vp fmt --staged",

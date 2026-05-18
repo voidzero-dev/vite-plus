@@ -28,8 +28,8 @@
     "binding/index.d.ts",
     "binding/index.js",
     "dist/test",
+    "docs",
     "rules",
-    "skills",
     "templates"
   ],
   "type": "module",
@@ -74,10 +74,20 @@
       "types": "./dist/lint.d.ts",
       "import": "./dist/lint.js"
     },
+    "./oxlint-plugin": {
+      "module-sync": "./dist/oxlint-plugin.js",
+      "node": "./dist/oxlint-plugin.js",
+      "import": "./dist/oxlint-plugin.js",
+      "default": "./dist/oxlint-plugin.js",
+      "types": "./dist/oxlint-plugin.d.ts"
+    },
     "./package.json": "./package.json",
     "./pack": {
       "types": "./dist/pack.d.ts",
       "import": "./dist/pack.js"
+    },
+    "./pack/client": {
+      "types": "./dist/pack-client.d.ts"
     },
     "./versions": {
       "types": "./dist/versions.d.ts",
@@ -329,6 +339,7 @@
   },
   "dependencies": {
     "@oxc-project/types": "catalog:",
+    "@oxlint/plugins": "catalog:",
     "@voidzero-dev/vite-plus-core": "workspace:*",
     "@voidzero-dev/vite-plus-test": "workspace:*",
     "oxfmt": "catalog:",
@@ -338,7 +349,7 @@
   "devDependencies": {
     "@napi-rs/cli": "catalog:",
     "@nkzw/safe-word-list": "catalog:",
-    "@oxc-node/core": "^0.0.32",
+    "@oxc-node/core": "catalog:",
     "@types/cross-spawn": "catalog:",
     "@types/semver": "catalog:",
     "@types/validate-npm-package-name": "catalog:",
@@ -353,6 +364,7 @@
     "lint-staged": "catalog:",
     "minimatch": "catalog:",
     "mri": "catalog:",
+    "nanotar": "catalog:",
     "picocolors": "catalog:",
     "rolldown-plugin-dts": "catalog:",
     "semver": "catalog:",

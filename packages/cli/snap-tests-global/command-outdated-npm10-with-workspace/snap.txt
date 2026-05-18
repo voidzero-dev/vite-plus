@@ -1,6 +1,4 @@
 > vp install
-VITE+ - The Unified Toolchain for the Web
-
 
 added 6 packages in <variable>ms
 

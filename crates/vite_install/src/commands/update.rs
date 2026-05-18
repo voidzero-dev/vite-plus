@@ -14,7 +14,6 @@ use crate::package_manager::{
 pub struct UpdateCommandOptions<'a> {
     pub packages: &'a [String],
     pub latest: bool,
-    pub global: bool,
     pub recursive: bool,
     pub filters: Option<&'a [String]>,
     pub workspace_root: bool,
@@ -47,19 +46,6 @@ impl PackageManager {
         let bin_name: String;
         let envs = HashMap::from([("PATH".to_string(), format_path_env(self.get_bin_prefix()))]);
         let mut args: Vec<String> = Vec::new();
-
-        // global packages should use npm cli only
-        if options.global {
-            bin_name = "npm".into();
-            args.push("update".into());
-            args.push("--global".into());
-            if let Some(pass_through_args) = options.pass_through_args {
-                args.extend_from_slice(pass_through_args);
-            }
-            args.extend_from_slice(options.packages);
-
-            return ResolveCommandResult { bin_path: bin_name, args, envs };
-        }
 
         match self.client {
             PackageManagerType::Pnpm => {
@@ -249,7 +235,6 @@ mod tests {
         let result = pm.resolve_update_command(&UpdateCommandOptions {
             packages: &["react".to_string()],
             latest: false,
-            global: false,
             recursive: false,
             filters: None,
             workspace_root: false,
@@ -536,18 +521,6 @@ mod tests {
             ..Default::default()
         });
         assert_eq!(result.args, vec!["update", "--no-save", "react"]);
-        assert_eq!(result.bin_path, "npm");
-    }
-
-    #[test]
-    fn test_global_update() {
-        let pm = create_mock_package_manager(PackageManagerType::Pnpm, "10.0.0");
-        let result = pm.resolve_update_command(&UpdateCommandOptions {
-            packages: &["typescript".to_string()],
-            global: true,
-            ..Default::default()
-        });
-        assert_eq!(result.args, vec!["update", "--global", "typescript"]);
         assert_eq!(result.bin_path, "npm");
     }
 

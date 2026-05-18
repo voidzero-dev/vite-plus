@@ -21,7 +21,7 @@ pub struct AuditCommandOptions<'a> {
 
 impl PackageManager {
     /// Run the audit command with the package manager.
-    /// Returns ExitStatus with success (0) if the command is not supported.
+    /// Returns `ExitStatus` with success (0) if the command is not supported.
     #[must_use]
     pub async fn run_audit_command(
         &self,

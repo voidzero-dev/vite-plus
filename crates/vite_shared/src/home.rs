@@ -4,7 +4,7 @@ use which::which;
 
 use crate::EnvConfig;
 
-/// Default VP_HOME directory name
+/// Default `VP_HOME` directory name
 const VITE_PLUS_HOME_DIR: &str = ".vite-plus";
 
 /// Get the vite-plus home directory.
@@ -15,10 +15,10 @@ const VITE_PLUS_HOME_DIR: &str = ".vite-plus";
 /// Falls back to `$CWD/.vite-plus` if the home directory cannot be determined.
 pub fn get_vp_home() -> std::io::Result<AbsolutePathBuf> {
     let config = EnvConfig::get();
-    if let Some(ref home) = config.vite_plus_home {
-        if let Some(path) = AbsolutePathBuf::new(home.clone()) {
-            return Ok(path);
-        }
+    if let Some(ref home) = config.vite_plus_home
+        && let Some(path) = AbsolutePathBuf::new(home.clone())
+    {
+        return Ok(path);
     }
 
     // Get from `node` executable file's grandparent directory (~/.vite-plus/bin/node)

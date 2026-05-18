@@ -1,6 +1,4 @@
 > vp install -g --node lts ./command-env-install-version-alias-pkg # Install with LTS alias
-VITE+ - The Unified Toolchain for the Web
-
 Installing ./command-env-install-version-alias-pkg globally...
 Installed ./command-env-install-version-alias-pkg v<semver>
 Binaries: command-env-install-version-alias-pkg-cli
@@ -12,8 +10,6 @@ LTS major >= 20: true
 Uninstalled command-env-install-version-alias-pkg
 
 > vp install -g --node latest ./command-env-install-version-alias-pkg # Install with latest alias
-VITE+ - The Unified Toolchain for the Web
-
 Installing ./command-env-install-version-alias-pkg globally...
 Installed ./command-env-install-version-alias-pkg v<semver>
 Binaries: command-env-install-version-alias-pkg-cli

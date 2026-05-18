@@ -1,7 +1,7 @@
 > vp run install # install shortcut
-$ vp install
+$ vp install ⊘ cache disabled
 Packages: +<variable>
-+<repeat>
++
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 
 dependencies:
@@ -9,15 +9,11 @@ dependencies:
 
 Done in <variable>ms using pnpm v<semver>
 
----
-vp run: command-install-shortcut#install not cached because it modified its input. (Run `vp run --last-details` for full details)
 
 > vp run install # install shortcut hit cache
-$ vp install
+$ vp install ⊘ cache disabled
 Lockfile is up to date, resolution step is skipped
 Already up to date
 
 Done in <variable>ms using pnpm v<semver>
 
----
-vp run: command-install-shortcut#install not cached because it modified its input. (Run `vp run --last-details` for full details)

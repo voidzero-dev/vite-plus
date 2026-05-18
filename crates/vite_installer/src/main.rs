@@ -9,6 +9,14 @@
 //! - Silent mode via `-y` for CI
 //! - Works from cmd.exe, PowerShell, Git Bash, or double-click
 
+#![allow(
+    clippy::allow_attributes,
+    clippy::disallowed_macros,
+    clippy::disallowed_methods,
+    clippy::disallowed_types,
+    clippy::print_stdout
+)]
+
 mod cli;
 
 #[cfg(windows)]

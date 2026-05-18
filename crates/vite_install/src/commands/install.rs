@@ -36,7 +36,7 @@ pub struct InstallCommandOptions<'a> {
     pub no_lockfile: bool,
     /// Fix broken lockfile entries (pnpm and yarn@2+ only)
     pub fix_lockfile: bool,
-    /// Create flat node_modules (pnpm only)
+    /// Create flat `node_modules` (pnpm only)
     pub shamefully_hoist: bool,
     /// Re-run resolution for peer dependency analysis (pnpm only)
     pub resolution_only: bool,

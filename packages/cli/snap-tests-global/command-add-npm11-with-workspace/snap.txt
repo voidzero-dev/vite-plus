@@ -180,8 +180,6 @@ up to date in <variable>ms
 }
 
 > vp install test-vite-plus-package@1.0.0 --filter "*" --workspace-root -- --no-audit && cat package.json packages/app/package.json packages/utils/package.json # should install packages alias for add command
-VITE+ - The Unified Toolchain for the Web
-
 
 added 1 package in <variable>ms
 {

@@ -1,6 +1,4 @@
 > vp dlx --help # should show help message
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp dlx [OPTIONS] <ARGS>...
 
 Execute a package binary without installing it

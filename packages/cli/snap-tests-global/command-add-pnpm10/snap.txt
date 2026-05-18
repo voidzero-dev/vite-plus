@@ -1,6 +1,4 @@
 > vp add --help # should show help
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp add [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
 
 Add packages to dependencies
@@ -38,7 +36,7 @@ For more information, try '--help'.
 
 > vp add testnpm2 -D -- --loglevel=verbose --verbose && cat package.json # should add package as dev dependencies
 Packages: +<variable>
-+<repeat>
++
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 
 devDependencies:
@@ -56,7 +54,7 @@ Done in <variable>ms using pnpm v<semver>
 
 > vp add testnpm2 test-vite-plus-install --allow-build=test-vite-plus-install && cat package.json # should add packages to dependencies
 Packages: +<variable>
-+<repeat>
++
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 
 dependencies:
@@ -76,10 +74,8 @@ Done in <variable>ms using pnpm v<semver>
 }
 
 > vp install test-vite-plus-package@1.0.0 --save-peer && cat package.json # should install package alias for add
-VITE+ - The Unified Toolchain for the Web
-
 Packages: +<variable>
-+<repeat>
++
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 
 peerDependencies:
@@ -107,7 +103,7 @@ Done in <variable>ms using pnpm v<semver>
 
 > vp add test-vite-plus-package-optional -O && cat package.json # should add package as optional dependencies
 Packages: +<variable>
-+<repeat>
++
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 
 optionalDependencies:

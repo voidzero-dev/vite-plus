@@ -1,6 +1,4 @@
 > vp lint -h
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp lint [PATH]... [OPTIONS]
 
 Lint code.
@@ -23,8 +21,6 @@ Documentation: https://viteplus.dev/guide/lint
 
 
 > vp lint --help
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp lint [PATH]... [OPTIONS]
 
 Lint code.
@@ -47,8 +43,6 @@ Documentation: https://viteplus.dev/guide/lint
 
 
 > vp help lint
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp lint [PATH]... [OPTIONS]
 
 Lint code.

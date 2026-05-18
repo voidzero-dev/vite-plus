@@ -67,10 +67,9 @@ impl SubcommandResolver {
         subcommand: SynthesizableSubcommand,
         resolved_vite_config: Option<&ResolvedUniversalViteConfig>,
         envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
-        cwd: &Arc<AbsolutePath>,
     ) -> anyhow::Result<ResolvedSubcommand> {
         let command_name = subcommand.command_name();
-        let mut resolved = self.resolve_inner(subcommand, resolved_vite_config, envs, cwd).await?;
+        let mut resolved = self.resolve_inner(subcommand, resolved_vite_config, envs).await?;
         // Inject VP_COMMAND so that defineConfig's plugin factory knows which command is running,
         // even when the subcommand is synthesized inside `vp run`.
         let envs = Arc::make_mut(&mut resolved.envs);
@@ -83,7 +82,6 @@ impl SubcommandResolver {
         subcommand: SynthesizableSubcommand,
         resolved_vite_config: Option<&ResolvedUniversalViteConfig>,
         envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
-        cwd: &Arc<AbsolutePath>,
     ) -> anyhow::Result<ResolvedSubcommand> {
         match subcommand {
             SynthesizableSubcommand::Lint { mut args } => {
@@ -118,6 +116,7 @@ impl SubcommandResolver {
                         env: Some(Box::new([Str::from("OXLINT_TSGOLINT_PATH")])),
                         untracked_env: None,
                         input: None,
+                        output: None,
                     }),
                     envs: merge_resolved_envs_with_version(envs, resolved.envs),
                 })
@@ -153,6 +152,7 @@ impl SubcommandResolver {
                         env: None,
                         untracked_env: None,
                         input: None,
+                        output: None,
                     }),
                     envs: merge_resolved_envs_with_version(envs, resolved.envs),
                 })
@@ -175,6 +175,7 @@ impl SubcommandResolver {
                         env: Some(Box::new([Str::from("VITE_*")])),
                         untracked_env: None,
                         input: Some(build_pack_cache_inputs()),
+                        output: None,
                     }),
                     envs: merge_resolved_envs_with_version(envs, resolved.envs),
                 })
@@ -207,6 +208,7 @@ impl SubcommandResolver {
                                 InputBase::Package,
                             ),
                         ]),
+                        output: None,
                     }),
                     envs: merge_resolved_envs_with_version(envs, resolved.envs),
                 })
@@ -228,6 +230,7 @@ impl SubcommandResolver {
                         env: None,
                         untracked_env: None,
                         input: Some(build_pack_cache_inputs()),
+                        output: None,
                     }),
                     envs: merge_resolved_envs(envs, resolved.envs),
                 })
@@ -285,6 +288,7 @@ impl SubcommandResolver {
                         env: None,
                         untracked_env: None,
                         input: None,
+                        output: None,
                     }),
                     envs: merge_resolved_envs(envs, resolved.envs),
                 })
@@ -293,32 +297,6 @@ impl SubcommandResolver {
                 anyhow::bail!(
                     "Check is a composite command and cannot be resolved to a single subcommand"
                 );
-            }
-            SynthesizableSubcommand::Install { args } => {
-                let package_manager =
-                    vite_install::PackageManager::builder(cwd).build_with_default().await?;
-                let resolve_command = package_manager.resolve_install_command(&args);
-
-                let merged_envs = {
-                    let mut env_map = FxHashMap::clone(envs);
-                    for (k, v) in resolve_command.envs {
-                        env_map.insert(Arc::from(OsStr::new(&k)), Arc::from(OsStr::new(&v)));
-                    }
-                    Arc::new(env_map)
-                };
-
-                Ok(ResolvedSubcommand {
-                    program: Arc::<OsStr>::from(
-                        OsStr::new(&resolve_command.bin_path).to_os_string(),
-                    ),
-                    args: resolve_command.args.into_iter().map(Str::from).collect(),
-                    cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
-                        env: None,
-                        untracked_env: None,
-                        input: None,
-                    }),
-                    envs: merged_envs,
-                })
             }
         }
     }

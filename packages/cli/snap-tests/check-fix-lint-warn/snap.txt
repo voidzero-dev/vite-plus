@@ -9,7 +9,7 @@ warn: Lint warnings found
    ╰────
   help: Delete this console statement.
 
-Found 0 errors and 1 warning in 1 file (<variable>ms, <variable> threads)
+Found 0 errors and 1 warning in 2 files (<variable>ms, <variable> threads)
 pass: Formatting completed for checked files (<variable>ms)
 
 > vp check
@@ -24,4 +24,4 @@ warn: Lint warnings found
    ╰────
   help: Delete this console statement.
 
-Found 0 errors and 1 warning in 1 file (<variable>ms, <variable> threads)
+Found 0 errors and 1 warning in 2 files (<variable>ms, <variable> threads)

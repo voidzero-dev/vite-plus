@@ -2,9 +2,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import * as prompts from '@voidzero-dev/vite-plus-prompts';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { writeEditorConfigs } from '../editor.js';
+import { detectExistingEditors, selectEditors, writeEditorConfigs } from '../editor.js';
 
 const tempDirs: string[] = [];
 
@@ -15,9 +16,80 @@ function createTempDir() {
 }
 
 afterEach(() => {
+  vi.restoreAllMocks();
   for (const dir of tempDirs.splice(0, tempDirs.length)) {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+describe('selectEditors', () => {
+  it('prompts with editor config targets and supports multiple selections', async () => {
+    const multiselectSpy = vi.spyOn(prompts, 'multiselect').mockResolvedValue(['vscode', 'zed']);
+
+    await expect(
+      selectEditors({
+        interactive: true,
+        onCancel: vi.fn(),
+      }),
+    ).resolves.toEqual(['vscode', 'zed']);
+
+    expect(multiselectSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.stringContaining('Which editors are you using?'),
+        initialValues: ['vscode'],
+        required: false,
+        options: expect.arrayContaining([
+          expect.objectContaining({
+            label: 'VSCode',
+            value: 'vscode',
+            hint: '.vscode',
+          }),
+          expect.objectContaining({
+            label: 'Zed',
+            value: 'zed',
+            hint: '.zed',
+          }),
+        ]),
+      }),
+    );
+  });
+
+  it('skips editor config selection when no editors are selected', async () => {
+    vi.spyOn(prompts, 'multiselect').mockResolvedValue([]);
+
+    await expect(
+      selectEditors({
+        interactive: true,
+        onCancel: vi.fn(),
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  it('keeps explicit --editor selection as a single editor', async () => {
+    await expect(
+      selectEditors({
+        interactive: false,
+        editor: 'zed',
+        onCancel: vi.fn(),
+      }),
+    ).resolves.toEqual(['zed']);
+  });
+});
+
+describe('detectExistingEditors', () => {
+  it('detects multiple existing editor config directories', () => {
+    const projectRoot = createTempDir();
+    fs.mkdirSync(path.join(projectRoot, '.vscode'), { recursive: true });
+    fs.mkdirSync(path.join(projectRoot, '.zed'), { recursive: true });
+    fs.writeFileSync(path.join(projectRoot, '.vscode', 'settings.json'), '{}');
+    fs.writeFileSync(path.join(projectRoot, '.zed', 'settings.json'), '{}');
+
+    expect(detectExistingEditors(projectRoot)).toEqual(['vscode', 'zed']);
+  });
+
+  it('returns undefined when no editor config files exist', () => {
+    expect(detectExistingEditors(createTempDir())).toBeUndefined();
+  });
 });
 
 describe('writeEditorConfigs', () => {
@@ -39,6 +111,9 @@ describe('writeEditorConfigs', () => {
     expect(settings['oxc.fmt.configPath']).toBe('./vite.config.ts');
     expect(settings['editor.formatOnSave']).toBe(true);
     expect(settings['npm.scriptRunner']).toBeUndefined();
+    for (const lang of ['[javascript]', '[javascriptreact]', '[typescript]', '[typescriptreact]']) {
+      expect(settings[lang]).toEqual({ 'editor.defaultFormatter': 'oxc.oxc-vscode' });
+    }
   });
 
   it('includes additionalSettings in vscode settings.json when provided', async () => {
@@ -70,6 +145,9 @@ describe('writeEditorConfigs', () => {
       `{
   // JSONC comment
   "editor.formatOnSave": false,
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+  },
   "editor.codeActionsOnSave": {
     // preserve existing key
     "source.organizeImports": "explicit",
@@ -93,11 +171,17 @@ describe('writeEditorConfigs', () => {
 
     // Existing key is preserved (merge never overwrites)
     expect(settings['editor.formatOnSave']).toBe(false);
+    expect(settings['[typescript]']).toEqual({
+      'editor.defaultFormatter': 'esbenp.prettier-vscode',
+    });
 
     // New keys are added
     expect(settings['editor.defaultFormatter']).toBe('oxc.oxc-vscode');
     expect(settings['oxc.fmt.configPath']).toBe('./vite.config.ts');
     expect(settings['npm.scriptRunner']).toBe('vp');
+    for (const lang of ['[javascript]', '[javascriptreact]', '[typescriptreact]']) {
+      expect(settings[lang]).toEqual({ 'editor.defaultFormatter': 'oxc.oxc-vscode' });
+    }
 
     const codeActions = settings['editor.codeActionsOnSave'] as Record<string, unknown>;
     expect(codeActions['source.organizeImports']).toBe('explicit');
@@ -176,5 +260,32 @@ describe('writeEditorConfigs', () => {
     expect(settings.lsp?.oxfmt?.initialization_options?.settings?.configPath).toBe(
       './vite.config.ts',
     );
+  });
+
+  it('writes multiple editor configs in one call', async () => {
+    const projectRoot = createTempDir();
+
+    await writeEditorConfigs({
+      projectRoot,
+      editorId: ['vscode', 'zed'],
+      interactive: false,
+      silent: true,
+      extraVsCodeSettings: { 'npm.scriptRunner': 'vp' },
+    });
+
+    const vscodeSettings = JSON.parse(
+      fs.readFileSync(path.join(projectRoot, '.vscode', 'settings.json'), 'utf8'),
+    ) as Record<string, unknown>;
+    const vscodeExtensions = JSON.parse(
+      fs.readFileSync(path.join(projectRoot, '.vscode', 'extensions.json'), 'utf8'),
+    ) as Record<string, unknown>;
+    const zedSettings = JSON.parse(
+      fs.readFileSync(path.join(projectRoot, '.zed', 'settings.json'), 'utf8'),
+    ) as Record<string, unknown>;
+
+    expect(vscodeSettings['npm.scriptRunner']).toBe('vp');
+    expect(vscodeExtensions.recommendations).toContain('VoidZero.vite-plus-extension-pack');
+    expect(zedSettings['npm.scriptRunner']).toBeUndefined();
+    expect(zedSettings.lsp).toBeDefined();
   });
 });

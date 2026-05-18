@@ -1,7 +1,5 @@
 > vp migrate --no-interactive # migration rewrites reference types
-VITE+ - The Unified Toolchain for the Web
-
-◇ Migrated . to Vite+<repeat>
+◇ Migrated . to Vite+
 • Node <semver>  pnpm <semver>
 • 2 config updates applied, 1 file had imports rewritten
 
@@ -12,3 +10,4 @@ VITE+ - The Unified Toolchain for the Web
 /// <reference types="vite-plus/test/globals" />
 /// <reference types="vite-plus" />
 /// <reference types="vite-plus/test/browser/context" />
+/// <reference types="vite-plus/pack/client" />

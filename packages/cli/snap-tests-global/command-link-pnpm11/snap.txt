@@ -1,0 +1,127 @@
+> vp link -h # should show help message
+Usage: vp link [PACKAGE|DIR] [ARGS]...
+
+Link packages for local development
+
+Arguments:
+  [PACKAGE|DIR]  Package name or directory to link
+  [ARGS]...      Arguments to pass to package manager
+
+Options:
+  -h, --help  Print help
+
+Documentation: https://viteplus.dev/guide/install
+
+
+> vp install # install initial dependencies
+Packages: +<variable>
++
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+
+dependencies:
++ testnpm2 <semver>
+
+Done in <variable>ms using pnpm v<semver>
+
+> mkdir -p ../test-lib-pnpm && echo '{"name": "testnpm2", "version": "1.0.0"}' > ../test-lib-pnpm/package.json # create test library
+> vp link ../test-lib-pnpm && cat package.json pnpm-lock.yaml # should link local directory
+Packages: -1
+-
+
+dependencies:
+- testnpm2 <semver>
++ testnpm2 <semver> <- ../test-lib-pnpm
+
+{
+  "name": "command-link-pnpm11",
+  "version": "1.0.0",
+  "dependencies": {
+    "testnpm2": "*"
+  },
+  "packageManager": "pnpm@<semver>"
+}
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+overrides:
+  testnpm2: link:../test-lib-pnpm
+
+importers:
+
+  .:
+    dependencies:
+      testnpm2:
+        specifier: link:../test-lib-pnpm
+        version: link:../test-lib-pnpm
+
+> vp ln ../test-lib-pnpm && cat package.json pnpm-lock.yaml # should work with ln alias
+Lockfile is up to date, resolution step is skipped
+
+{
+  "name": "command-link-pnpm11",
+  "version": "1.0.0",
+  "dependencies": {
+    "testnpm2": "*"
+  },
+  "packageManager": "pnpm@<semver>"
+}
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+overrides:
+  testnpm2: link:../test-lib-pnpm
+
+importers:
+
+  .:
+    dependencies:
+      testnpm2:
+        specifier: link:../test-lib-pnpm
+        version: link:../test-lib-pnpm
+
+> vp unlink ../test-lib-pnpm -- --no-frozen-lockfile && vp unlink testnpm2 -- --no-frozen-lockfile && cat package.json pnpm-lock.yaml # should unlink the package (pnpm v11 requires --no-frozen-lockfile under CI=true to avoid ERR_PNPM_LOCKFILE_CONFIG_MISMATCH)
+Already up to date
+testnpm2 is linked to <cwd>/node_modules from <cwd>/../test-lib-pnpm
+Already up to date
+Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
+
+dependencies:
+- testnpm2 <semver>
++ testnpm2 <semver>
+
+{
+  "name": "command-link-pnpm11",
+  "version": "1.0.0",
+  "dependencies": {
+    "testnpm2": "*"
+  },
+  "packageManager": "pnpm@<semver>"
+}
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    dependencies:
+      testnpm2:
+        specifier: '*'
+        version: <semver>
+
+packages:
+
+  testnpm2@<semver>:
+    resolution: {integrity: sha512-<hash>
+
+snapshots:
+
+  testnpm2@<semver>: {}

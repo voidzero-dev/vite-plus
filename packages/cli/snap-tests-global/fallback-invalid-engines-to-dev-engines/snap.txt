@@ -1,13 +1,9 @@
 > vp exec node -e "console.log(process.version)" # Should use devEngines.runtime 22.12.0, not LTS
-VITE+ - The Unified Toolchain for the Web
-
 warning: invalid version 'invalid' in engines.node, ignoring
 warning: invalid version 'invalid' in engines.node, ignoring
 v<semver>
 
 > vp env which node # Should show devEngines.runtime source
-VITE+ - The Unified Toolchain for the Web
-
 warning: invalid version 'invalid' in engines.node, ignoring
 <vite-plus-home>/js_runtime/node/<semver>/bin/node
   Version:    <semver>

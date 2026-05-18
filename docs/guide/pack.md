@@ -29,7 +29,7 @@ Use it for:
 - [watch mode](https://tsdown.dev/options/watch-mode)
 - [standalone executables](https://tsdown.dev/options/exe#executable)
 
-```ts
+```ts [vite.config.ts]
 import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
@@ -47,7 +47,7 @@ export default defineConfig({
 
 Use this when you want to ship a CLI or other Node-based tool as a native executable that runs without requiring Node.js to be installed separately.
 
-```ts
+```ts [vite.config.ts]
 import { defineConfig } from 'vite-plus';
 
 export default defineConfig({

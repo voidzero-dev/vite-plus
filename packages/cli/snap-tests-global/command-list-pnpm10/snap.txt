@@ -1,6 +1,4 @@
 > vp install # should install packages first
-VITE+ - The Unified Toolchain for the Web
-
 Packages: +<variable>
 +<repeat>
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
@@ -15,8 +13,6 @@ devDependencies:
 Done in <variable>ms using pnpm v<semver>
 
 > vp pm list --help # should show help
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp pm list [OPTIONS] [PATTERN] [-- <PASS_THROUGH_ARGS>...]
 
 List installed packages

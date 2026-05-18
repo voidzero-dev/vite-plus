@@ -2,6 +2,7 @@
   "commands": [
     "node ../node_modules/vite-plus/bin/oxfmt # should reject non-LSP usage",
     "node ../node_modules/vite-plus/bin/oxfmt --help # should reject non-LSP usage",
-    "node ../node_modules/vite-plus/bin/oxfmt --lsp --help # should exercise import path"
+    "node ../node_modules/vite-plus/bin/oxfmt --lsp --help # should allow LSP mode",
+    "node ../node_modules/vite-plus/bin/oxfmt --stdin-filepath=a.ts --help # should allow Stdin mode"
   ]
 }

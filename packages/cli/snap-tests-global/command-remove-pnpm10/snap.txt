@@ -1,6 +1,4 @@
 > vp remove --help # should show help
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp remove [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
 
 Remove packages from dependencies
@@ -36,7 +34,7 @@ For more information, try '--help'.
 
 > vp add testnpm2 && vp add -D test-vite-plus-install && vp add -O test-vite-plus-package-optional && cat package.json # should add packages to dependencies
 Packages: +<variable>
-+<repeat>
++
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 
 dependencies:
@@ -44,7 +42,7 @@ dependencies:
 
 Done in <variable>ms using pnpm v<semver>
 Packages: +<variable>
-+<repeat>
++
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 
 devDependencies:
@@ -52,7 +50,7 @@ devDependencies:
 
 Done in <variable>ms using pnpm v<semver>
 Packages: +<variable>
-+<repeat>
++
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
 
 optionalDependencies:
@@ -106,8 +104,6 @@ Done in <variable>ms using pnpm v<semver>
 Failed to uninstall testnpm2: Configuration error: Package testnpm2 is not installed
 
 [2]> vp rm --stream foo && should show tips to use pass through arguments when options are not supported
-VITE+ - The Unified Toolchain for the Web
-
 error: Unexpected argument '--stream'
 
 Use `-- --stream` to pass the argument as a value

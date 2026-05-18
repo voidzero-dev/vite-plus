@@ -1,0 +1,17 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "commands": [
+    {
+      "command": "vp create astro --no-interactive -- my-astro-app --yes --skip-houston --template basics # create Astro app",
+      "ignoreOutput": true
+    },
+    "cat my-astro-app/src/env.d.ts # check Astro shim",
+    {
+      "command": "cd my-astro-app && vp install --ignore-scripts -- --no-frozen-lockfile # install dependencies",
+      "ignoreOutput": true
+    },
+    {
+      "command": "cd my-astro-app && sed -i.bak -e '/jsPlugins/d' -e '/rules:/d' -e '/options:/d' vite.config.ts && vp check --fix # fix generated formatting and ensure no errors"
+    }
+  ]
+}

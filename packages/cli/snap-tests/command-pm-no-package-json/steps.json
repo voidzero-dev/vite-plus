@@ -1,0 +1,8 @@
+{
+  "commands": [
+    "vp pm ls # should show friendly error",
+    "vp pm prune # should show friendly error",
+    "vp outdated # should show friendly error",
+    "vp why lodash # should show friendly error"
+  ]
+}

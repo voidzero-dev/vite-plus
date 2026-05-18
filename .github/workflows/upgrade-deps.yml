@@ -12,24 +12,24 @@ jobs:
     if: github.event.repository.fork == false
     runs-on: ubuntu-latest
     permissions:
-      contents: write
-      pull-requests: write
       actions: read
       id-token: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/clone
 
       - name: Set up metadata directory
         run: echo "UPGRADE_DEPS_META_DIR=${RUNNER_TEMP}/upgrade-deps-meta" >> "$GITHUB_ENV"
 
-      - uses: oxc-project/setup-rust@23f38cfb0c04af97a055f76acee94d5be71c7c82 # v1.0.16
+      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
         with:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: upgrade-deps
           tools: just,cargo-shear
 
-      - uses: oxc-project/setup-node@4c26e7cb3605b6bdef5450dacd02c434b10fd8ba # v1.2.0
+      - uses: oxc-project/setup-node@ab97f03642370d79a7e96dd286bd02a1be40e0ba # v1.3.0
 
       - name: Rustup Adds Target
         run: rustup target add x86_64-unknown-linux-gnu
@@ -42,7 +42,7 @@ jobs:
         id: upgrade
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: node .github/scripts/upgrade-deps.mjs
+        run: node .github/scripts/upgrade-deps.ts
 
       - name: Sync remote and build
         id: build
@@ -65,7 +65,7 @@ jobs:
       - name: Check upgrade dependencies
         id: check-upgrade-dependencies
         timeout-minutes: 180
-        uses: anthropics/claude-code-action@c3d45e8e941e1b2ad7b278c57482d9c5bf1f35b3 # Claude Code to 2.1.112
+        uses: anthropics/claude-code-action@51ea8ea73a139f2a74ff649e3092c25a904aed7e # v1.0.123
         env:
           RELEASE_BUILD: 'true'
         with:
@@ -74,30 +74,51 @@ jobs:
           show_full_output: 'true'
           prompt: |
             Your goal: after the daily upstream-dependency upgrade, bring the project back
-            to a fully green state. The upgrade script has already bumped every dep to the
-            latest version and the `build-upstream` action has attempted a build — your job
-            is to diagnose and fix every error that surfaced, then prove the fix is complete
-            by running a final validation pass.
+            to a fully green state. The upgrade script has bumped every dep to the latest
+            version, the `Sync remote and build` step has attempted to merge the rolldown
+            and vite catalogs into the workspace, and the `build-upstream` action has
+            attempted a build — your job is to diagnose and fix every error that surfaced,
+            then prove the fix is complete by running a final validation pass.
 
             ### Background
-            - Upgrade script: `./.github/scripts/upgrade-deps.mjs`
+            - Upgrade script: `./.github/scripts/upgrade-deps.ts`
+            - Sync-remote tool: `pnpm tool sync-remote` (source in
+              `packages/tools/src/sync-remote-deps.ts`) — clones rolldown/vite into the
+              working tree and merges their pnpm-workspace catalogs into the root
+              `pnpm-workspace.yaml`.
             - Build-upstream action: `./.github/actions/build-upstream/action.yml`
             - Package manager: `pnpm`. Do NOT downgrade any dep — we want the latest.
 
+            ### Outcomes from earlier steps (both ran with continue-on-error)
+            - Sync remote and build: ${{ steps.build.outcome }}
+            - build-upstream action: ${{ steps.build-upstream.outcome }}
+
             ### Fixups to perform (in order)
-            1. Re-run the steps in `./.github/actions/build-upstream/action.yml`; fix any
+            1. If the `Sync remote and build` outcome above is `failure`, fix it FIRST —
+               nothing else will work until the merged workspace is correct. Re-run
+               `pnpm tool sync-remote` and read the error. The most common cause is a
+               cross-major semver conflict in the merged catalog, e.g.
+               `Incompatible semver ranges for <pkg>: ^X vs ^Y`. The merger refuses to
+               auto-resolve cross-major conflicts for packages outside its synced list
+               (oxc-*, vitest deps). For passthrough deps that vp does NOT import
+               directly (e.g. `diff`, `acorn`, `astring`, anything only present in
+               `rolldown/scripts/package.json` or vite's internals), bump vp's
+               `pnpm-workspace.yaml` catalog entry to match the rolldown/vite version,
+               then re-run `pnpm tool sync-remote` until it exits 0. Finish with
+               `pnpm install --no-frozen-lockfile`.
+            2. Re-run the steps in `./.github/actions/build-upstream/action.yml`; fix any
                non-zero exits.
-            2. If the rolldown hash changed, follow `.claude/agents/cargo-workspace-merger.md`
+            3. If the rolldown hash changed, follow `.claude/agents/cargo-workspace-merger.md`
                to resync the workspace.
-            3. Compare tsdown CLI options with `vp pack` and sync new/removed options per
+            4. Compare tsdown CLI options with `vp pack` and sync new/removed options per
                `.claude/skills/sync-tsdown-cli/SKILL.md`.
-            4. Install the global CLI:
+            5. Install the global CLI:
                - `pnpm bootstrap-cli:ci`
                - `echo "$HOME/.vite-plus/bin" >> $GITHUB_PATH`
-            5. If any Rust code or `Cargo.toml` was modified, run `cargo check
+            6. If any Rust code or `Cargo.toml` was modified, run `cargo check
                --all-targets --all-features` and `cargo shear`; fix anything they report.
-            6. Run `pnpm run lint` (requires a prior `just build`); fix any errors.
-            7. Smoke-test the CLI: `vp -h`, `vp run -h`, `vp lint -h`, `vp test -h`,
+            7. Run `pnpm run lint` (requires a prior `just build`); fix any errors.
+            8. Smoke-test the CLI: `vp -h`, `vp run -h`, `vp lint -h`, `vp test -h`,
                `vp build -h`, `vp fmt -h`, `vp pack -h`.
 
             ### Final validation (this step is complete ONLY when all pass)
@@ -135,7 +156,7 @@ jobs:
             Do NOT run `git commit` or `git push`. A later workflow step commits every
             modified file for you.
           claude_args: |
-            --model opus --max-turns 200 --allowedTools "Bash,Edit,Replace,NotebookEditCell"
+            --model opus --max-turns 400 --allowedTools "Bash,Edit,Replace,NotebookEditCell"
           additional_permissions: |
             actions: read
 
@@ -155,7 +176,7 @@ jobs:
       - name: Enhance PR description with Claude
         id: enhance-pr-description
         continue-on-error: true
-        uses: anthropics/claude-code-action@c3d45e8e941e1b2ad7b278c57482d9c5bf1f35b3 # Claude Code to 2.1.112
+        uses: anthropics/claude-code-action@51ea8ea73a139f2a74ff649e3092c25a904aed7e # v1.0.123
         with:
           claude_code_oauth_token: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -252,9 +273,15 @@ jobs:
             echo 'UPGRADE_DEPS_BODY_EOF'
           } >> "${GITHUB_OUTPUT}"
 
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        id: app-token
+        with:
+          client-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
       - name: Close and delete previous PR
         env:
-          GH_TOKEN: ${{ secrets.AUTO_UPDATE_BRANCH_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           # Find PR with the deps/upstream-update branch
           PR_NUMBER=$(gh pr list --head deps/upstream-update --json number --jq '.[0].number')
@@ -267,13 +294,12 @@ jobs:
           fi
 
       - name: Create/Update PR
-        uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7.0.11
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
         with:
           base: main
           branch: deps/upstream-update
           title: 'feat(deps): upgrade upstream dependencies'
           sign-commits: true
-          token: ${{ secrets.AUTO_UPDATE_BRANCH_TOKEN }}
-          branch-token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
           body: ${{ steps.pr-content.outputs.body }}
           commit-message: ${{ steps.pr-content.outputs.commit-message }}

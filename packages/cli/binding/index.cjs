@@ -767,6 +767,7 @@ if (!nativeBinding) {
 module.exports = nativeBinding;
 module.exports.detectWorkspace = nativeBinding.detectWorkspace;
 module.exports.downloadPackageManager = nativeBinding.downloadPackageManager;
+module.exports.hasConfigKey = nativeBinding.hasConfigKey;
 module.exports.mergeJsonConfig = nativeBinding.mergeJsonConfig;
 module.exports.mergeTsdownConfig = nativeBinding.mergeTsdownConfig;
 module.exports.rewriteEslint = nativeBinding.rewriteEslint;
@@ -775,4 +776,5 @@ module.exports.rewritePrettier = nativeBinding.rewritePrettier;
 module.exports.rewriteScripts = nativeBinding.rewriteScripts;
 module.exports.run = nativeBinding.run;
 module.exports.runCommand = nativeBinding.runCommand;
+module.exports.shouldPrintVitePlusHeader = nativeBinding.shouldPrintVitePlusHeader;
 module.exports.vitePlusHeader = nativeBinding.vitePlusHeader;

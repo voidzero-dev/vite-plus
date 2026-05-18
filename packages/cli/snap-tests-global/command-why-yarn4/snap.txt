@@ -1,6 +1,4 @@
 > vp install -- --mode=update-lockfile # should install packages first
-VITE+ - The Unified Toolchain for the Web
-
 ➤ YN0000: · Yarn <semver>
 ➤ YN0000: ┌ Resolution step
 ➤ YN0085: │ + test-vite-plus-package-optional@npm:1.0.0, test-vite-plus-package@npm:1.0.0, testnpm2@npm:1.0.1

@@ -1,7 +1,5 @@
 > vp env use 20.0.0
 [1]> vp exec node --version
-VITE+ - The Unified Toolchain for the Web
-
 error: Node.js <semver> is incompatible with Vite+ CLI.
 Required by Vite+: ^20.19.0 || >=22.12.0
 Resolved from: .session-node-version

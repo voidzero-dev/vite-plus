@@ -1365,18 +1365,26 @@ async function patchVitestCoreResolver() {
 }
 
 /**
- * Convert tabs to spaces in all JS files in dist/ for consistent formatting.
- * This allows our patching code to use space-based patterns instead of tabs.
+ * Convert leading tabs to spaces in all JS files in dist/ for consistent
+ * formatting. This allows our patching code to use space-based patterns
+ * instead of tabs.
+ *
+ * Only leading whitespace is rewritten — tabs inside string or template
+ * literals are semantically meaningful (e.g. `indent.includes("\t")` in
+ * @vitest/snapshot picks the snapshot indent style by checking for a
+ * literal tab byte) and must be preserved.
+ *
+ * See: https://github.com/voidzero-dev/vite-plus/issues/1553
  */
 async function convertTabsToSpaces() {
-  console.log('\nConverting tabs to spaces in dist/...');
+  console.log('\nConverting leading tabs to spaces in dist/...');
 
   let convertedCount = 0;
 
   for await (const file of fsGlob(resolve(distDir, '**/*.js'))) {
     const content = await readFile(file, 'utf-8');
-    if (content.includes('\t')) {
-      const converted = content.replace(/\t/g, '  ');
+    const converted = content.replace(/^\t+/gm, (match) => '  '.repeat(match.length));
+    if (converted !== content) {
       await writeFile(file, converted);
       convertedCount++;
     }

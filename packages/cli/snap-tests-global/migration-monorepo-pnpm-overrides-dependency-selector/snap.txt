@@ -1,7 +1,5 @@
 > vp migrate --no-interactive # migration should merge pnpm overrides with dependency selector
-VITE+ - The Unified Toolchain for the Web
-
-◇ Migrated . to Vite+<repeat>
+◇ Migrated . to Vite+
 • Node <semver>  pnpm <semver>
 • 1 config update applied, 1 file had imports rewritten
 
@@ -14,7 +12,7 @@ export default defineConfig({
     "*": "vp check --fix"
   },
   fmt: {},
-  lint: {"options":{"typeAware":true,"typeCheck":true}},
+  lint: {"jsPlugins":[{"name":"vite-plus","specifier":"vite-plus/oxlint-plugin"}],"rules":{"vite-plus/prefer-vite-plus-imports":"error"},"options":{"typeAware":true,"typeCheck":true}},
   plugins: [react()],
 });
 

@@ -28,6 +28,7 @@ export default defineConfig([
       'define-config': './src/define-config.ts',
       fmt: './src/fmt.ts',
       lint: './src/lint.ts',
+      'oxlint-plugin': './src/oxlint-plugin.ts',
       pack: './src/pack.ts',
       'pack-bin': './src/pack-bin.ts',
       // Global commands — explicit entries ensure lazy loading via dynamic import in bin.ts.
@@ -36,7 +37,6 @@ export default defineConfig([
       'migration/bin': './src/migration/bin.ts',
       version: './src/version.ts',
       'config/bin': './src/config/bin.ts',
-      'mcp/bin': './src/mcp/bin.ts',
       'staged/bin': './src/staged/bin.ts',
     },
     outDir: 'dist',

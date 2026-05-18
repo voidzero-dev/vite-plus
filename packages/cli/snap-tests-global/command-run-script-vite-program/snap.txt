@@ -1,35 +1,25 @@
 > node setup-bin.js
 > vp run dev # should run vite binary, not parse as vp subcommand
-VITE+ - The Unified Toolchain for the Web
-
 $ vite ⊘ cache disabled
 vite
 
 
 > vp run dev-help # should run vite -h, not parse as vp subcommand
-VITE+ - The Unified Toolchain for the Web
-
 $ vite -h ⊘ cache disabled
 vite -h
 
 
 > vp run dev-version # should run vite --version, not parse as vp subcommand
-VITE+ - The Unified Toolchain for the Web
-
 $ vite --version ⊘ cache disabled
 vite --version
 
 
 > vp run hello-vpr # vpr in script should be synthesized in-session
-VITE+ - The Unified Toolchain for the Web
-
 $ echo hello from script ⊘ cache disabled
 hello from script
 
 
 > vp run ready # chained vpr commands should both be synthesized
-VITE+ - The Unified Toolchain for the Web
-
 $ echo hello from script ⊘ cache disabled
 hello from script
 

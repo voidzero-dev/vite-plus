@@ -1,11 +1,10 @@
 > vp -h # show help message
-VITE+ - The Unified Toolchain for the Web
 
 Usage: vp [COMMAND]
 
 Start:
   create      Create a new project from a template
-  migrate     Migrate an existing project to Vite+<repeat>
+  migrate     Migrate an existing project to Vite+
   config      Configure hooks and agent integration
   staged      Run linters on staged files
   install, i  Install all dependencies, or add packages if package names are provided
@@ -55,8 +54,6 @@ Options:
   -h, --help     Print help
 
 > vp -V # show version
-VITE+ - The Unified Toolchain for the Web
-
 vp v<semver>
 
 Local vite-plus:
@@ -76,8 +73,6 @@ Environment:
   Node.js          v<semver>
 
 > vp install -h # show install help message
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp install [OPTIONS] [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
 
 Install all dependencies, or add packages if package names are provided
@@ -108,7 +103,7 @@ Options:
   --save-peer           Save to peerDependencies (only when adding packages)
   -O, --save-optional   Save to optionalDependencies (only when adding packages)
   --save-catalog        Save the new dependency to the default catalog (only when adding packages)
-  -g, --global          Install globally (only when adding packages)
+  -g, --global          Install globally (requires package names)
   --node <NODE>         Node.js version to use for global installation (only with -g)
   -h, --help            Print help
 
@@ -116,8 +111,6 @@ Documentation: https://viteplus.dev/guide/install
 
 
 > vp add -h # show add help message
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp add [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
 
 Add packages to dependencies
@@ -146,8 +139,6 @@ Documentation: https://viteplus.dev/guide/install
 
 
 > vp remove -h # show remove help message
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp remove [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
 
 Remove packages from dependencies
@@ -171,8 +162,6 @@ Documentation: https://viteplus.dev/guide/install
 
 
 > vp update -h # show update help message
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp update [OPTIONS] [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
 
 Update packages to their latest versions
@@ -199,8 +188,6 @@ Documentation: https://viteplus.dev/guide/install
 
 
 > vp link -h # show link help message
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp link [PACKAGE|DIR] [ARGS]...
 
 Link packages for local development
@@ -216,8 +203,6 @@ Documentation: https://viteplus.dev/guide/install
 
 
 > vp unlink -h # show unlink help message
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp unlink [OPTIONS] [PACKAGE|DIR] [ARGS]...
 
 Unlink packages
@@ -234,8 +219,6 @@ Documentation: https://viteplus.dev/guide/install
 
 
 > vp dedupe -h # show dedupe help message
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp dedupe [OPTIONS] [-- <PASS_THROUGH_ARGS>...]
 
 Deduplicate dependencies
@@ -251,8 +234,6 @@ Documentation: https://viteplus.dev/guide/install
 
 
 > vp outdated -h # show outdated help message
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp outdated [OPTIONS] [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
 
 Check for outdated packages
@@ -279,8 +260,6 @@ Documentation: https://viteplus.dev/guide/install
 
 
 > vp why -h # show why help message
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp why [OPTIONS] <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
 
 Show why a package is installed
@@ -309,8 +288,6 @@ Documentation: https://viteplus.dev/guide/install
 
 
 > vp info -h # show info help message
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp info [OPTIONS] <PACKAGE> [FIELD] [-- <PASS_THROUGH_ARGS>...]
 
 View package information from the registry
@@ -328,8 +305,6 @@ Documentation: https://viteplus.dev/guide/install
 
 
 > vp pm -h # show pm help message
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp pm <COMMAND>
 
 Forward a command to the package manager
@@ -354,6 +329,7 @@ Commands:
   rebuild    Rebuild native modules [aliases: rb]
   fund       Show funding information for installed packages
   ping       Ping the registry
+  plugin     Manage Yarn plugins (Yarn 2+ only — other package managers will print a warning and exit successfully)
 
 Options:
   -h, --help  Print help
@@ -362,8 +338,6 @@ Documentation: https://viteplus.dev/guide/install
 
 
 > vp env # show env help message
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp env [COMMAND]
 
 Manage Node.js versions
@@ -423,8 +397,6 @@ Documentation: https://viteplus.dev/guide/env
 
 
 > vp upgrade -h # show upgrade help message
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp upgrade [OPTIONS] [VERSION]
 
 Update vp itself to the latest version

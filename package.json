@@ -15,6 +15,7 @@
     "test:unit": "vp test run",
     "docs:dev": "pnpm -C docs dev",
     "docs:build": "pnpm -C docs build",
+    "docs:update-trusted-stack-stats": "pnpm -C docs update-trusted-stack-stats",
     "prepare": "husky"
   },
   "devDependencies": {
@@ -43,5 +44,5 @@
   "engines": {
     "node": ">=22.18.0"
   },
-  "packageManager": "pnpm@10.33.0"
+  "packageManager": "pnpm@10.33.2"
 }

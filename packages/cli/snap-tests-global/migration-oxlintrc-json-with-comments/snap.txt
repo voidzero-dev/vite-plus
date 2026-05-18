@@ -1,7 +1,5 @@
 > vp migrate --no-interactive 2>&1 # migration should handle .oxlintrc.json with JSONC comments
-VITE+ - The Unified Toolchain for the Web
-
-◇ Migrated . to Vite+<repeat>
+◇ Migrated . to Vite+
 • Node <semver>  pnpm <semver>
 • 3 config updates applied
 
@@ -18,14 +16,21 @@ export default defineConfig({
       "correctness": "error"
     },
     "rules": {
-      "no-console": "error"
+      "no-console": "error",
+      "vite-plus/prefer-vite-plus-imports": "error"
     },
     "globals": {},
     "ignorePatterns": [],
     "options": {
       "typeAware": true,
       "typeCheck": true
-    }
+    },
+    "jsPlugins": [
+      {
+        "name": "vite-plus",
+        "specifier": "vite-plus/oxlint-plugin"
+      }
+    ]
   },
 });
 

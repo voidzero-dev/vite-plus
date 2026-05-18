@@ -87,12 +87,16 @@ ANY template (bingo or universal)
   ↓
 Template generates code
   ↓
-Vite+ auto-detects vite-related tools:
+Vite+ auto-detects vite-related tools + lint/format tools:
   • Standalone vite, vitest, oxlint, oxfmt
+  • ESLint (flat config) and Prettier
   ↓
 Auto-migrate to unified vite-plus:
+  • ESLint → oxlint (via @oxlint/migrate) — generates .oxlintrc.json
+  • Prettier → oxfmt — generates .oxfmtrc.json
   • Dependencies: vite + vitest + oxlint + oxfmt → vite-plus
   • Configs: Merge vitest.config.ts, .oxlintrc, .oxfmtrc → vite.config.ts
+  • Rewrite lint-staged entries to vp lint / vp fmt
   ↓
 Monorepo integration:
   • Prompt for workspace dependencies
@@ -103,7 +107,8 @@ Monorepo integration:
 
 - ✅ Consolidate vite/vitest/oxlint/oxfmt dependencies → vite-plus
 - ✅ Merge tool configurations into vite.config.ts
-- ❌ Does NOT migrate ESLint → oxlint (if template uses ESLint, it stays)
+- ✅ Migrate ESLint → oxlint (via `@oxlint/migrate`) when the template ships with ESLint flat config
+- ✅ Migrate Prettier → oxfmt when the template ships with Prettier
 - ❌ Does NOT create vite-task.json (optional, separate feature)
 - ❌ Does NOT change TypeScript config (remains as generated)
 
@@ -143,8 +148,10 @@ Monorepo integration:
              │
       ┌──────▼─────────────┐
       │ Auto-Migrate       │
-      │ vite-tools         │
-      │ → vite-plus        │
+      │ • vite-tools       │
+      │   → vite-plus      │
+      │ • ESLint → oxlint  │
+      │ • Prettier → oxfmt │
       └──────┬─────────────┘
              │
       ┌──────▼─────────────┐
@@ -159,11 +166,11 @@ Monorepo integration:
 
 After any template runs, Vite+ adds monorepo-specific features:
 
-### 1. Auto-Migration to vite-plus Unified Toolchain (for ALL templates)
+### 1. Auto-Migration to vite-plus Unified Toolchain + oxlint/oxfmt (for ALL templates)
 
-**After any template runs** (bingo or universal), Vite+ automatically detects standalone vite-related tools and offers to consolidate them into the unified vite-plus dependency.
+**After any template runs** (bingo or universal), Vite+ automatically detects standalone vite-related tools _and_ ESLint/Prettier, and migrates them to the unified Vite+ toolchain (vite-plus + oxlint + oxfmt).
 
-**Purpose**: Simplify dependency management by consolidating vite, vitest, oxlint, and oxfmt into a single vite-plus package.
+**Purpose**: Land the scaffolded project on the same toolchain `vp migrate` produces — so the user doesn't have to run `vp migrate` as a second step.
 
 ```bash
 $ vp create create-vite --template react-ts
@@ -201,12 +208,20 @@ Scaffolding project in ./packages/my-app...
 │  ✓ Merged vitest.config.ts → vite.config.ts
 │  ✓ Removed vitest.config.ts
 │
+# Then Vite+ migrates ESLint → oxlint (template ships with eslint.config.js)
+# No prompt — Vite+ is opinionated about oxlint, so migration runs automatically.
+◇  Migrating ESLint → Oxlint...
+│  ✓ Generated .oxlintrc.json from eslint.config.js
+│  ✓ Rewrote `eslint-disable` comments to `oxlint-disable`
+│  ✓ Removed eslint.config.js and eslint devDependency
+│  ✓ Rewrote `"lint": "eslint ."` → `"lint": "vp lint"`
+│
 └  Migration completed!
 ```
 
 **Scope of Auto-Migration**:
 
-This is a **dependency consolidation** feature, not a tool replacement feature.
+Combines **dependency consolidation** with **lint/format tool migration** — the same work `vp migrate` does on existing projects, applied automatically after scaffolding.
 
 ✅ **What it does**:
 
@@ -215,20 +230,23 @@ This is a **dependency consolidation** feature, not a tool replacement feature.
 - Merge .oxlintrc → vite.config.ts (oxlint section)
 - Merge .oxfmtrc → vite.config.ts (oxfmt section)
 - Remove redundant standalone config files
+- Migrate ESLint configs + dependency + scripts → oxlint (delegates to `@oxlint/migrate`)
+- Migrate Prettier configs + dependency + scripts → oxfmt
+- Rewrite lint-staged entries to `vp lint` / `vp fmt`
 
 ❌ **What it does NOT do**:
 
-- Does NOT migrate ESLint → oxlint (different tools, not consolidation)
-- Does NOT migrate Prettier → oxfmt (different tools, not consolidation)
 - Does NOT create vite-task.json (separate feature, not required)
 - Does NOT change TypeScript configuration (remains as generated)
 - Does NOT modify build tools (webpack/rollup → vite)
+- Does NOT migrate legacy ESLint (`.eslintrc.*`) — prints a warning asking the user to upgrade to ESLint v9 flat config first, same as `vp migrate`
 
 **Why this design**:
 
-- Templates that use vite/vitest/oxlint/oxfmt can be simplified to use vite-plus
-- Templates that use other tools (ESLint, Prettier, Jest) remain unchanged
-- Users keep their chosen tools, just with optimized vite-related dependencies
+- Vite+ is opinionated about linting and formatting: oxlint + oxfmt are the default toolchain. A freshly scaffolded project should already be on that toolchain — making the user run `vp migrate` as a second step defeats the point.
+- ESLint/Prettier migration runs **without a confirmation prompt** inside `vp create`, even in interactive mode. This differs from `vp migrate` (which prompts because the user has an existing project with their own preferences) — for a brand-new app the choice is already made by scaffolding onto Vite+.
+- Reusing the `vp migrate` helpers keeps the spec and implementation in one place and guarantees parity with the migration command.
+- Templates that use unrelated tools (Jest, webpack, rollup) stay untouched.
 
 **Migration Engine powered by [ast-grep](https://ast-grep.github.io/)**:
 
@@ -977,13 +995,23 @@ Vite+ acts as an intelligent wrapper that:
     ↓
 14. Vite+ post-processes in detected project directory (same for ALL templates):
 
+   AUTO-MIGRATE LINT/FORMAT TOOLS (shared with vp migrate, runs first
+   so .oxlintrc.json / .oxfmtrc.json exist before the merge step below):
+   ├─ Detect ESLint flat config + dependency
+   ├─ Migrate to oxlint via @oxlint/migrate (generates .oxlintrc.json,
+   │  rewrites scripts, rewrites lint-staged)
+   ├─ Detect Prettier config + dependency
+   └─ Migrate to oxfmt (generates .oxfmtrc.json, rewrites scripts,
+      rewrites lint-staged)
+
    AUTO-MIGRATE TO VITE-PLUS:
    ├─ Detect standalone vite/vitest/oxlint/oxfmt
    ├─ Prompt to upgrade to vite-plus unified toolchain
    └─ If yes, apply migration with ast-grep:
        ├─ Dependencies: vite + vitest + oxlint + oxfmt → vite-plus
        ├─ Merge vitest.config.ts → vite.config.ts
-       ├─ Merge .oxlintrc → vite.config.ts
+       ├─ Merge .oxlintrc → vite.config.ts (picks up the file
+       │   generated by the lint migration above)
        ├─ Merge .oxfmtrc → vite.config.ts
        └─ Remove standalone config files
 
@@ -2097,6 +2125,9 @@ A successful implementation should:
 13. ✅ Provide clear before/after explanations
 14. ✅ Be safe and reversible
 15. ⏳ Merge configurations (vitest.config.ts, .oxlintrc, .oxfmtrc → vite.config.ts) - Future enhancement with ast-grep
+16. ✅ Migrate ESLint configs / dependency / scripts to oxlint via `@oxlint/migrate` (shares helpers with `vp migrate`)
+17. ✅ Migrate Prettier configs / dependency / scripts to oxfmt
+18. ✅ Warn on legacy `.eslintrc.*` and skip migration (asks the user to upgrade to ESLint v9 flat config first)
 
 ### Monorepo Integration
 
@@ -2161,6 +2192,7 @@ A successful implementation should:
   - Shares the same migration engine and rules
   - `vp create` runs migrations after template generation
   - `vp migrate` runs migrations on existing projects
+  - ESLint → oxlint and Prettier → oxfmt migration helpers live in `packages/cli/src/migration/` and are invoked by both commands, so a freshly scaffolded project and an upgraded existing project end up in the same state
 
 ## References
 

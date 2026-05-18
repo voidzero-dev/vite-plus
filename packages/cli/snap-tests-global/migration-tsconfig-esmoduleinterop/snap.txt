@@ -1,7 +1,5 @@
 > vp migrate --no-interactive # should remove esModuleInterop: false from tsconfig.json
-VITE+ - The Unified Toolchain for the Web
-
-◇ Migrated . to Vite+<repeat>
+◇ Migrated . to Vite+
 • Node <semver>  pnpm <semver>
 • 4 config updates applied
 ! Warnings:
@@ -25,7 +23,7 @@ export default defineConfig({
     "*": "vp check --fix"
   },
   fmt: {},
-  lint: {"options":{"typeAware":true,"typeCheck":true}},
+  lint: {"jsPlugins":[{"name":"vite-plus","specifier":"vite-plus/oxlint-plugin"}],"rules":{"vite-plus/prefer-vite-plus-imports":"error"},"options":{"typeAware":true,"typeCheck":true}},
 });
 
 > cat package.json # check package.json

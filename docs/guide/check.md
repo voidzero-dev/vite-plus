@@ -14,7 +14,10 @@ We recommend turning `typeCheck` on so `vp check` becomes the single command for
 
 ```bash
 vp check
-vp check --fix # Format and run autofixers.
+vp check --fix             # Format and run autofixers.
+vp check --no-fmt          # Skip format; run lint (and type-check if enabled).
+vp check --no-lint         # Skip lint rules; keep type-check when enabled.
+vp check --no-fmt --no-lint # Type-check only (requires `typeCheck` enabled).
 ```
 
 ## Configuration
@@ -27,7 +30,7 @@ vp check --fix # Format and run autofixers.
 
 Recommended base `lint` config:
 
-```ts
+```ts [vite.config.ts]
 import { defineConfig } from 'vite-plus';
 
 export default defineConfig({

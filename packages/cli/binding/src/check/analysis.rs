@@ -39,23 +39,26 @@ pub(super) struct LintFailure {
 pub(super) enum LintMessageKind {
     LintOnly,
     LintAndTypeCheck,
+    TypeCheckOnly,
 }
 
 impl LintMessageKind {
-    pub(super) fn from_lint_config(lint_config: Option<&serde_json::Value>) -> Self {
-        let type_check_enabled = lint_config
-            .and_then(|config| config.get("options"))
-            .and_then(|options| options.get("typeCheck"))
-            .and_then(serde_json::Value::as_bool)
-            .unwrap_or(false);
-
-        if type_check_enabled { Self::LintAndTypeCheck } else { Self::LintOnly }
+    pub(super) fn from_flags(lint_enabled: bool, type_check_enabled: bool) -> Self {
+        match (lint_enabled, type_check_enabled) {
+            (true, true) => Self::LintAndTypeCheck,
+            (true, false) => Self::LintOnly,
+            (false, true) => Self::TypeCheckOnly,
+            (false, false) => unreachable!(
+                "from_flags called with (false, false); caller must guard on run_lint_phase"
+            ),
+        }
     }
 
     pub(super) fn success_label(self) -> &'static str {
         match self {
             Self::LintOnly => "Found no warnings or lint errors",
             Self::LintAndTypeCheck => "Found no warnings, lint errors, or type errors",
+            Self::TypeCheckOnly => "Found no type errors",
         }
     }
 
@@ -63,6 +66,7 @@ impl LintMessageKind {
         match self {
             Self::LintOnly => "Lint warnings found",
             Self::LintAndTypeCheck => "Lint or type warnings found",
+            Self::TypeCheckOnly => "Type warnings found",
         }
     }
 
@@ -70,8 +74,24 @@ impl LintMessageKind {
         match self {
             Self::LintOnly => "Lint issues found",
             Self::LintAndTypeCheck => "Lint or type issues found",
+            Self::TypeCheckOnly => "Type errors found",
         }
     }
+}
+
+/// `typeCheck` requires `typeAware` as a prerequisite — oxlint's type-aware
+/// analysis must be on for TypeScript diagnostics to surface.
+pub(super) fn lint_config_type_check_enabled(lint_config: Option<&serde_json::Value>) -> bool {
+    let options = lint_config.and_then(|config| config.get("options"));
+    let type_aware = options
+        .and_then(|options| options.get("typeAware"))
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false);
+    let type_check = options
+        .and_then(|options| options.get("typeCheck"))
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false);
+    type_aware && type_check
 }
 
 fn parse_check_summary(line: &str) -> Option<CheckSummary> {
@@ -227,29 +247,65 @@ pub(super) fn analyze_lint_output(output: &str) -> Option<Result<LintSuccess, Li
 mod tests {
     use serde_json::json;
 
-    use super::LintMessageKind;
+    use super::{LintMessageKind, lint_config_type_check_enabled};
 
     #[test]
     fn lint_message_kind_defaults_to_lint_only_without_typecheck() {
-        assert_eq!(LintMessageKind::from_lint_config(None), LintMessageKind::LintOnly);
-        assert_eq!(
-            LintMessageKind::from_lint_config(Some(&json!({ "options": {} }))),
-            LintMessageKind::LintOnly
-        );
+        assert!(!lint_config_type_check_enabled(None));
+        assert!(!lint_config_type_check_enabled(Some(&json!({ "options": {} }))));
+        assert_eq!(LintMessageKind::from_flags(true, false), LintMessageKind::LintOnly);
     }
 
     #[test]
     fn lint_message_kind_detects_typecheck_from_vite_config() {
-        let kind = LintMessageKind::from_lint_config(Some(&json!({
+        let config = json!({
             "options": {
                 "typeAware": true,
                 "typeCheck": true
             }
-        })));
+        });
 
+        assert!(lint_config_type_check_enabled(Some(&config)));
+
+        let kind = LintMessageKind::from_flags(true, true);
         assert_eq!(kind, LintMessageKind::LintAndTypeCheck);
         assert_eq!(kind.success_label(), "Found no warnings, lint errors, or type errors");
         assert_eq!(kind.warning_heading(), "Lint or type warnings found");
         assert_eq!(kind.issue_heading(), "Lint or type issues found");
+    }
+
+    #[test]
+    fn lint_message_kind_type_check_only_labels() {
+        let kind = LintMessageKind::from_flags(false, true);
+        assert_eq!(kind, LintMessageKind::TypeCheckOnly);
+        assert_eq!(kind.success_label(), "Found no type errors");
+        assert_eq!(kind.warning_heading(), "Type warnings found");
+        assert_eq!(kind.issue_heading(), "Type errors found");
+    }
+
+    #[test]
+    fn lint_config_type_check_enabled_rejects_non_bool_values() {
+        assert!(!lint_config_type_check_enabled(Some(&json!({
+            "options": { "typeAware": true, "typeCheck": "true" }
+        }))));
+        assert!(!lint_config_type_check_enabled(Some(&json!({
+            "options": { "typeAware": true, "typeCheck": 1 }
+        }))));
+        assert!(!lint_config_type_check_enabled(Some(&json!({
+            "options": { "typeAware": true, "typeCheck": null }
+        }))));
+    }
+
+    #[test]
+    fn lint_config_type_check_requires_type_aware_prerequisite() {
+        assert!(!lint_config_type_check_enabled(Some(&json!({
+            "options": { "typeCheck": true }
+        }))));
+        assert!(!lint_config_type_check_enabled(Some(&json!({
+            "options": { "typeAware": false, "typeCheck": true }
+        }))));
+        assert!(!lint_config_type_check_enabled(Some(&json!({
+            "options": { "typeAware": true, "typeCheck": false }
+        }))));
     }
 }

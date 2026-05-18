@@ -1,6 +1,4 @@
 > vp pm config --help # should show help
-VITE+ - The Unified Toolchain for the Web
-
 Usage: vp pm config <COMMAND>
 
 Manage package manager configuration

@@ -1,23 +1,15 @@
 > vp env default 22.12.0 # Set global default to 22.12.0
-VITE+ - The Unified Toolchain for the Web
-
 ✓ Default Node.js version set to <semver>
 
 > vp run check-node # Should also use 22.12.0
-VITE+ - The Unified Toolchain for the Web
-
 $ node -e "console.log(process.version)" ⊘ cache disabled
 v<semver>
 
 
 > vp exec node -e "console.log(process.version)" # Should also use 22.12.0
-VITE+ - The Unified Toolchain for the Web
-
-v<semver>
+v22.12.0
 
 > vp env which node # Should show 22.12.0 from 'default' source
-VITE+ - The Unified Toolchain for the Web
-
 <vite-plus-home>/js_runtime/node/<semver>/bin/node
   Version:    <semver>
   Source:     <vite-plus-home>/config.json

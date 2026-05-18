@@ -1,0 +1,8 @@
+{
+  "commands": [
+    "node $SNAP_CASES_DIR/.shared/mock-npm-registry.mjs -- vp create @your-org:demo --no-interactive --directory my-demo-app # bundled template: extract tarball, copy subdir",
+    "cat my-demo-app/package.json # verify package.json name was rewritten",
+    "cat my-demo-app/src/index.ts # verify bundled source copied",
+    "ls my-demo-app/README.md # verify README copied"
+  ]
+}

@@ -1,11 +1,9 @@
 > vp migrate --no-interactive # migration should merge vite.config.ts and remove oxlintrc and oxfmtrc
-VITE+ - The Unified Toolchain for the Web
-
 
 ✔ Merged .oxlintrc.json into vite.config.ts
 
 ✔ Merged .oxfmtrc.json into vite.config.ts
-◇ Migrated . to Vite+<repeat>
+◇ Migrated . to Vite+
 • Node <semver>  pnpm <semver>
 • 3 config updates applied, 1 file had imports rewritten
 
@@ -26,12 +24,19 @@ export default defineConfig({
   },
   lint: {
     "rules": {
-      "no-unused-vars": "error"
+      "no-unused-vars": "error",
+      "vite-plus/prefer-vite-plus-imports": "error"
     },
     "options": {
       "typeAware": true,
       "typeCheck": true
-    }
+    },
+    "jsPlugins": [
+      {
+        "name": "vite-plus",
+        "specifier": "vite-plus/oxlint-plugin"
+      }
+    ]
   },
   plugins: [react()],
 });
@@ -160,12 +165,19 @@ import { defineConfig } from 'vite-plus';
 export default defineConfig({
   lint: {
     "rules": {
-      "no-unused-vars": "warn"
+      "no-unused-vars": "warn",
+      "vite-plus/prefer-vite-plus-imports": "error"
     },
     "options": {
       "typeAware": true,
       "typeCheck": true
-    }
+    },
+    "jsPlugins": [
+      {
+        "name": "vite-plus",
+        "specifier": "vite-plus/oxlint-plugin"
+      }
+    ]
   },
   
 });

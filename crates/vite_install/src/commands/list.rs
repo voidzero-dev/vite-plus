@@ -31,7 +31,7 @@ pub struct ListCommandOptions<'a> {
 
 impl PackageManager {
     /// Run the list command with the package manager.
-    /// Returns ExitStatus with success (0) if the command is not supported.
+    /// Returns `ExitStatus` with success (0) if the command is not supported.
     #[must_use]
     pub async fn run_list_command(
         &self,
@@ -192,10 +192,10 @@ impl PackageManager {
                 }
 
                 // Check for filters (not supported by yarn@1)
-                if let Some(filters) = options.filters {
-                    if !filters.is_empty() {
-                        output::warn("yarn@1 does not support --filter, ignoring --filter flag");
-                    }
+                if let Some(filters) = options.filters
+                    && !filters.is_empty()
+                {
+                    output::warn("yarn@1 does not support --filter, ignoring --filter flag");
                 }
             }
             PackageManagerType::Bun => {
@@ -250,10 +250,10 @@ impl PackageManager {
                     output::warn("--recursive not supported by bun pm ls, ignoring flag");
                 }
 
-                if let Some(filters) = options.filters {
-                    if !filters.is_empty() {
-                        output::warn("--filter not supported by bun pm ls, ignoring flag");
-                    }
+                if let Some(filters) = options.filters
+                    && !filters.is_empty()
+                {
+                    output::warn("--filter not supported by bun pm ls, ignoring flag");
                 }
             }
         }

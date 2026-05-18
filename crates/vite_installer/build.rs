@@ -1,3 +1,5 @@
+#![allow(clippy::allow_attributes, clippy::disallowed_macros)]
+
 fn main() {
     // On Windows, set DEPENDENTLOADFLAG to only search system32 for DLLs at load time.
     // This prevents DLL hijacking when the installer is downloaded to a folder

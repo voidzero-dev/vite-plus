@@ -13,10 +13,9 @@ import lintStaged from 'lint-staged';
 import type { Options } from 'lint-staged';
 import mri from 'mri';
 
-import { vitePlusHeader } from '../../binding/index.js';
 import { resolveViteConfig } from '../resolve-vite-config.ts';
 import { renderCliDoc } from '../utils/help.ts';
-import { errorMsg, log } from '../utils/terminal.ts';
+import { errorMsg, log, printHeader } from '../utils/terminal.ts';
 
 const args = mri(process.argv.slice(3), {
   alias: {
@@ -97,7 +96,7 @@ if (args.help) {
       },
     ],
   });
-  log(vitePlusHeader() + '\n');
+  printHeader();
   log(helpMessage);
 } else {
   const options: Options = {};
@@ -152,7 +151,7 @@ if (args.help) {
   if (stagedConfig) {
     options.config = stagedConfig;
   } else {
-    log(vitePlusHeader() + '\n');
+    printHeader();
     errorMsg('No "staged" config found in vite.config.ts. Please add a staged config:');
     log('');
     log('  // vite.config.ts');

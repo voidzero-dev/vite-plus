@@ -1,9 +1,7 @@
 > vp migrate --no-interactive # migration should detect prettier in package.json and auto-migrate
-VITE+ - The Unified Toolchain for the Web
-
 
 Prettier configuration detected. Auto-migrating to Oxfmt...
-◇ Migrated . to Vite+<repeat>
+◇ Migrated . to Vite+
 • Node <semver>  pnpm <semver>
 • 1 config update applied
 • Prettier migrated to Oxfmt
@@ -46,7 +44,7 @@ export default defineConfig({
   staged: {
     "*": "vp check --fix"
   },
-  lint: {"options":{"typeAware":true,"typeCheck":true}},
+  lint: {"jsPlugins":[{"name":"vite-plus","specifier":"vite-plus/oxlint-plugin"}],"rules":{"vite-plus/prefer-vite-plus-imports":"error"},"options":{"typeAware":true,"typeCheck":true}},
   fmt: {
     semi: true,
     singleQuote: true,

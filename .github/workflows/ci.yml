@@ -30,7 +30,9 @@ jobs:
     steps:
       - name: Optimize CI
         id: check_skip
-        uses: withgraphite/graphite-ci-action@ee395f3a78254c006d11339669c6cabddf196f72
+        # v0.0.9 still declares `using: node20`; emits a Node 20 deprecation warning until upstream ships a node24 release.
+        # https://github.com/withgraphite/graphite-ci-action
+        uses: withgraphite/graphite-ci-action@9bc969adfd43bb790da3b64b543c78c75cef9689 # v0.0.9
         with:
           graphite_token: ${{ secrets.GRAPHITE_CI_OPTIMIZER_TOKEN }}
 
@@ -44,8 +46,8 @@ jobs:
     outputs:
       code-changed: ${{ steps.filter.outputs.code }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
         id: filter
         with:
           filters: |
@@ -60,7 +62,7 @@ jobs:
       contents: read
       packages: read
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/download-rolldown-binaries
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -76,11 +78,11 @@ jobs:
             target: x86_64-unknown-linux-gnu
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-          - os: namespace-profile-mac-default
+          - os: macos-latest
             target: aarch64-apple-darwin
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
       - name: Setup Dev Drive
@@ -93,7 +95,7 @@ jobs:
             CARGO_HOME,{{ DEV_DRIVE }}/.cargo
             RUSTUP_HOME,{{ DEV_DRIVE }}/.rustup
 
-      - uses: oxc-project/setup-rust@23f38cfb0c04af97a055f76acee94d5be71c7c82 # v1.0.16
+      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
         with:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: test
@@ -121,12 +123,19 @@ jobs:
       # Pin Rust tooling paths to avoid $HOME mismatch issues.
       CARGO_HOME: /root/.cargo
       RUSTUP_HOME: /root/.rustup
+      # `-crt-static`: vite-task's `fspy_preload_unix` cdylib (unconditional
+      # build-dep since voidzero-dev/vite-task#344) can't link against a
+      # static musl libc. vite+ ships as a NAPI module that links musl libc
+      # dynamically anyway, so matching here is correct.
+      # Must mirror `.cargo/config.toml` rustflags — RUSTFLAGS env overrides
+      # both [build] and [target.*] levels.
+      RUSTFLAGS: --cfg tokio_unstable -C link-args=-Wl,--warn-unresolved-symbols -C target-feature=-crt-static
     steps:
       - name: Install Alpine dependencies
         shell: sh {0}
         run: apk add --no-cache bash curl git musl-dev gcc g++ python3 cmake make
 
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
       - name: Install rustup
@@ -152,10 +161,10 @@ jobs:
     name: Lint
     runs-on: namespace-profile-linux-x64-default
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
-      - uses: oxc-project/setup-rust@23f38cfb0c04af97a055f76acee94d5be71c7c82 # v1.0.16
+      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
         with:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: lint
@@ -165,14 +174,14 @@ jobs:
       - run: |
           cargo shear
           cargo fmt --check
-          # cargo clippy --all-targets --all-features -- -D warnings
+          cargo clippy --all-targets --all-features -- -D warnings
           # RUSTDOCFLAGS='-D warnings' cargo doc --no-deps --document-private-items
 
-      - uses: crate-ci/typos@cf5f1c29a8ac336af8568821ec41919923b05a83 # v1.45.1
+      - uses: crate-ci/typos@5374cbf686e897b15713110e233094e2874de7ef # v1.46.1
         with:
           files: .
 
-      - uses: oxc-project/setup-node@4c26e7cb3605b6bdef5450dacd02c434b10fd8ba # v1.2.0
+      - uses: oxc-project/setup-node@ab97f03642370d79a7e96dd286bd02a1be40e0ba # v1.3.0
 
       - name: Install docs dependencies
         run: pnpm -C docs install --frozen-lockfile
@@ -193,13 +202,13 @@ jobs:
         include:
           - os: namespace-profile-linux-x64-default
             target: x86_64-unknown-linux-gnu
-          - os: namespace-profile-mac-default
+          - os: macos-latest
             target: aarch64-apple-darwin
           - os: windows-latest
             target: x86_64-pc-windows-msvc
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
       - name: Setup Dev Drive
@@ -212,18 +221,18 @@ jobs:
             CARGO_HOME,{{ DEV_DRIVE }}/.cargo
             RUSTUP_HOME,{{ DEV_DRIVE }}/.rustup
 
-      - uses: oxc-project/setup-rust@23f38cfb0c04af97a055f76acee94d5be71c7c82 # v1.0.16
+      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
         with:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: cli-e2e-test-${{ matrix.target }}
           target-dir: ${{ runner.os == 'Windows' && format('{0}/target', env.DEV_DRIVE) || '' }}
 
-      - uses: oxc-project/setup-node@4c26e7cb3605b6bdef5450dacd02c434b10fd8ba # v1.2.0
+      - uses: oxc-project/setup-node@ab97f03642370d79a7e96dd286bd02a1be40e0ba # v1.3.0
 
       - name: Install docs dependencies
         run: pnpm -C docs install --frozen-lockfile
 
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: rolldown-binaries
           path: ./rolldown/packages/rolldown/src
@@ -233,6 +242,16 @@ jobs:
         uses: ./.github/actions/build-upstream
         with:
           target: ${{ matrix.target }}
+
+      - name: Ensure no unexpected file changes after build
+        if: ${{ matrix.target == 'x86_64-unknown-linux-gnu' }}
+        run: |
+          if [[ -n "$(git status --porcelain)" ]]; then
+            echo "::error::Unexpected file changes detected after build"
+            git status
+            git diff
+            exit 1
+          fi
 
       - name: Check TypeScript types
         if: ${{ matrix.target == 'x86_64-unknown-linux-gnu' }}
@@ -262,32 +281,36 @@ jobs:
           RUST_MIN_STACK: 8388608
 
       - name: Test global package install (powershell)
-        if: ${{ matrix.os == 'windows-latest' }}
+        if: ${{ matrix.os != 'namespace-profile-linux-x64-default' }}
         shell: pwsh
         run: |
-          echo "PATH: $env:Path"
-          where.exe node
-          where.exe npm
-          where.exe npx
-          where.exe vp
+          $vpHome = Join-Path $HOME ".vite-plus"
+          $vpBin = Join-Path $vpHome "bin"
+          . (Join-Path $vpHome 'env.ps1')
+
+          Write-Host "PATH: $env:Path"
+          Get-Command node
+          Get-Command npm
+          Get-Command npx
+          Get-Command vp
           vp env doctor
 
           # Test 1: Install a JS-based CLI (typescript)
           vp install -g typescript
           tsc --version
-          where.exe tsc
+          Get-Command tsc
 
           # Test 2: Verify the package was installed correctly
-          Get-ChildItem "$env:USERPROFILE\.vite-plus\packages\typescript\"
-          Get-ChildItem "$env:USERPROFILE\.vite-plus\bin\"
+          Get-ChildItem (Join-Path $vpHome "packages/typescript")
+          Get-ChildItem $vpBin
 
           # Test 3: Uninstall
           vp uninstall -g typescript
 
           # Test 4: Verify uninstall removed shim
           Write-Host "Checking bin dir after uninstall:"
-          Get-ChildItem "$env:USERPROFILE\.vite-plus\bin\"
-          $shimPath = "$env:USERPROFILE\.vite-plus\bin\tsc.cmd"
+          Get-ChildItem $vpBin
+          $shimPath = if ($IsWindows) { Join-Path $vpBin "tsc.cmd" } else { Join-Path $vpBin "tsc" }
           if (Test-Path $shimPath) {
             Write-Error "tsc shim file still exists at $shimPath"
             exit 1
@@ -437,14 +460,16 @@ jobs:
           fi
 
       - name: Test upgrade (powershell)
-        if: ${{ matrix.os == 'windows-latest' }}
+        if: ${{ matrix.os != 'namespace-profile-linux-x64-default' }}
         shell: pwsh
         run: |
-          Get-ChildItem "$env:USERPROFILE\.vite-plus\"
+          $vpHome = Join-Path $HOME ".vite-plus"
+          . (Join-Path $vpHome 'env.ps1')
+          Get-ChildItem $vpHome
 
           # Helper to read the installed CLI version from package.json
           function Get-CliVersion {
-            node -p "require(require('path').resolve(process.env.USERPROFILE, '.vite-plus', 'current', 'node_modules', 'vite-plus', 'package.json')).version"
+            node -p "require(require('path').resolve(process.env.USERPROFILE || process.env.HOME, '.vite-plus', 'current', 'node_modules', 'vite-plus', 'package.json')).version"
           }
 
           # Save initial (dev build) version
@@ -459,7 +484,7 @@ jobs:
           vp --version
           vp env doctor
 
-          Get-ChildItem "$env:USERPROFILE\.vite-plus\"
+          Get-ChildItem $vpHome
 
           # Verify version changed after update
           $updatedVersion = Get-CliVersion
@@ -545,20 +570,28 @@ jobs:
           vp --version
 
       - name: Test implode (powershell)
-        if: ${{ matrix.os == 'windows-latest' }}
+        if: ${{ matrix.os != 'namespace-profile-linux-x64-default' }}
         shell: pwsh
         run: |
-          # Retry — Windows file locks can cause transient "Access is denied" errors
-          foreach ($i in 1..3) {
-            vp implode --yes
-            if ($LASTEXITCODE -eq 0) { break }
-            Write-Host "Retry $i`: vp implode failed, waiting 5s..."
+          $vpHome = Join-Path $HOME ".vite-plus"
+          . (Join-Path $vpHome 'env.ps1')
+
+          if ($IsWindows) {
+            # Retry — Windows file locks can cause transient "Access is denied" errors
+            foreach ($i in 1..3) {
+              vp implode --yes
+              if ($LASTEXITCODE -eq 0) { break }
+              Write-Host "Retry $i`: vp implode failed, waiting 5s..."
+              Start-Sleep -Seconds 5
+            }
             Start-Sleep -Seconds 5
+          } else {
+            vp implode --yes
           }
-          Start-Sleep -Seconds 5
-          dir "$env:USERPROFILE\"
-          if (Test-Path "$env:USERPROFILE\.vite-plus") {
-            Write-Error "~/.vite-plus still exists after implode"
+
+          Get-ChildItem $HOME
+          if (Test-Path $vpHome) {
+            Write-Error "$vpHome still exists after implode"
             exit 1
           }
           pnpm bootstrap-cli:ci
@@ -607,15 +640,15 @@ jobs:
             target: x86_64-unknown-linux-gnu
             shard: 3
             shardTotal: 3
-          - os: namespace-profile-mac-default
+          - os: macos-latest
             target: aarch64-apple-darwin
             shard: 1
             shardTotal: 3
-          - os: namespace-profile-mac-default
+          - os: macos-latest
             target: aarch64-apple-darwin
             shard: 2
             shardTotal: 3
-          - os: namespace-profile-mac-default
+          - os: macos-latest
             target: aarch64-apple-darwin
             shard: 3
             shardTotal: 3
@@ -633,7 +666,7 @@ jobs:
             shardTotal: 3
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
       - name: Setup Dev Drive
@@ -642,22 +675,42 @@ jobs:
         with:
           drive-size: 12GB
           drive-format: ReFS
+          # Route TEMP/TMP onto the Dev Drive (ReFS) so `tmpdir()` from
+          # `packages/tools/src/snap-test.ts` lives on a filesystem that
+          # cleanly resolves pnpm's junction reparse points. NTFS-on-C:
+          # preserves the junction-target backslashes during resolution,
+          # which produces mixed `\` / `/` paths that break Node's ESM
+          # subpath-import walk-up (`#module-sync-enabled` inside
+          # `@voidzero-dev/vite-plus-core` → `ERR_PACKAGE_IMPORT_NOT_DEFINED`
+          # during `vp fmt --write` in the
+          # `new-create-vite-migrates-eslint-prettier` snap test).
           env-mapping: |
             CARGO_HOME,{{ DEV_DRIVE }}/.cargo
             RUSTUP_HOME,{{ DEV_DRIVE }}/.rustup
+            TEMP,{{ DEV_DRIVE }}/Temp
+            TMP,{{ DEV_DRIVE }}/Temp
 
-      - uses: oxc-project/setup-rust@23f38cfb0c04af97a055f76acee94d5be71c7c82 # v1.0.16
+      - name: Create TEMP/TMP on Dev Drive
+        if: runner.os == 'Windows'
+        # `setup-dev-drive` only mounts the drive; it doesn't create the
+        # dir we point TEMP/TMP at. Anything that calls `os.tmpdir()` /
+        # `lstat($TEMP)` before this dir exists fails (e.g. the bootstrap
+        # CLI installer's `lstat 'E:\Temp'` ENOENT).
+        shell: bash
+        run: mkdir -p "$TEMP" "$TMP"
+
+      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
         with:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: cli-snap-test-${{ matrix.target }}
           target-dir: ${{ runner.os == 'Windows' && format('{0}/target', env.DEV_DRIVE) || '' }}
 
-      - uses: oxc-project/setup-node@4c26e7cb3605b6bdef5450dacd02c434b10fd8ba # v1.2.0
+      - uses: oxc-project/setup-node@ab97f03642370d79a7e96dd286bd02a1be40e0ba # v1.3.0
 
       - name: Install docs dependencies
         run: pnpm -C docs install --frozen-lockfile
 
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: rolldown-binaries
           path: ./rolldown/packages/rolldown/src
@@ -691,17 +744,17 @@ jobs:
       - download-previous-rolldown-binaries
     runs-on: namespace-profile-linux-x64-default
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
-      - uses: oxc-project/setup-rust@23f38cfb0c04af97a055f76acee94d5be71c7c82 # v1.0.16
+      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
         with:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: cli-e2e-test-musl
 
-      - uses: oxc-project/setup-node@4c26e7cb3605b6bdef5450dacd02c434b10fd8ba # v1.2.0
+      - uses: oxc-project/setup-node@ab97f03642370d79a7e96dd286bd02a1be40e0ba # v1.3.0
 
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: rolldown-binaries
           path: ./rolldown/packages/rolldown/src
@@ -719,6 +772,7 @@ jobs:
         run: |
           docker run --rm \
             -e CI=true \
+            -e GITHUB_ACTIONS=true \
             -v "${{ github.workspace }}:/workspace" \
             -w /workspace \
             node:22-alpine3.21 sh -c "
@@ -770,17 +824,17 @@ jobs:
       github.event_name != 'pull_request' ||
       contains(github.event.pull_request.labels.*.name, 'test: install-e2e')
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
-      - uses: oxc-project/setup-rust@23f38cfb0c04af97a055f76acee94d5be71c7c82 # v1.0.16
+      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
         with:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: install-e2e-test
 
-      - uses: oxc-project/setup-node@4c26e7cb3605b6bdef5450dacd02c434b10fd8ba # v1.2.0
+      - uses: oxc-project/setup-node@ab97f03642370d79a7e96dd286bd02a1be40e0ba # v1.3.0
 
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: rolldown-binaries
           path: ./rolldown/packages/rolldown/src

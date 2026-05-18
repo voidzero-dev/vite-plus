@@ -4,6 +4,15 @@
 //! It uses NAPI-RS to create native Node.js bindings that allow JavaScript functions
 //! to be called from Rust code.
 
+#![allow(
+    clippy::allow_attributes,
+    clippy::disallowed_macros,
+    clippy::disallowed_methods,
+    clippy::disallowed_types,
+    clippy::print_stderr,
+    clippy::print_stdout
+)]
+
 #[cfg(feature = "rolldown")]
 pub extern crate rolldown_binding;
 
@@ -214,4 +223,13 @@ pub async fn run(options: CliOptions) -> Result<i32> {
 #[napi]
 pub fn vite_plus_header() -> String {
     vite_shared::header::vite_plus_header()
+}
+
+/// Whether the Vite+ banner should be emitted in the current environment.
+///
+/// Mirrors `vite_shared::header::should_print_header` so both CLIs apply
+/// the same TTY + git-hook gating without duplicating the rules in JS.
+#[napi]
+pub fn should_print_vite_plus_header() -> bool {
+    vite_shared::header::should_print_header()
 }

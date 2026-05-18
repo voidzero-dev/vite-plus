@@ -72,7 +72,7 @@ fn supports_true_color() -> bool {
 }
 
 fn lerp(a: f64, b: f64, t: f64) -> f64 {
-    a + (b - a) * t
+    (b - a).mul_add(t, a)
 }
 
 fn gradient_eased(count: usize, start: Rgb, end: Rgb, gamma: f64) -> Vec<Rgb> {
@@ -83,9 +83,9 @@ fn gradient_eased(count: usize, start: Rgb, end: Rgb, gamma: f64) -> Vec<Rgb> {
         .map(|i| {
             let t = (i as f64 / denom).powf(gamma);
             Rgb(
-                lerp(start.0 as f64, end.0 as f64, t).round() as u8,
-                lerp(start.1 as f64, end.1 as f64, t).round() as u8,
-                lerp(start.2 as f64, end.2 as f64, t).round() as u8,
+                lerp(f64::from(start.0), f64::from(end.0), t).round() as u8,
+                lerp(f64::from(start.1), f64::from(end.1), t).round() as u8,
+                lerp(f64::from(start.2), f64::from(end.2), t).round() as u8,
             )
         })
         .collect()
@@ -101,16 +101,16 @@ fn gradient_three_stop(count: usize, start: Rgb, middle: Rgb, end: Rgb, gamma: f
             if t <= 0.5 {
                 let local_t = (t / 0.5).powf(gamma);
                 Rgb(
-                    lerp(start.0 as f64, middle.0 as f64, local_t).round() as u8,
-                    lerp(start.1 as f64, middle.1 as f64, local_t).round() as u8,
-                    lerp(start.2 as f64, middle.2 as f64, local_t).round() as u8,
+                    lerp(f64::from(start.0), f64::from(middle.0), local_t).round() as u8,
+                    lerp(f64::from(start.1), f64::from(middle.1), local_t).round() as u8,
+                    lerp(f64::from(start.2), f64::from(middle.2), local_t).round() as u8,
                 )
             } else {
                 let local_t = ((t - 0.5) / 0.5).powf(gamma);
                 Rgb(
-                    lerp(middle.0 as f64, end.0 as f64, local_t).round() as u8,
-                    lerp(middle.1 as f64, end.1 as f64, local_t).round() as u8,
-                    lerp(middle.2 as f64, end.2 as f64, local_t).round() as u8,
+                    lerp(f64::from(middle.0), f64::from(end.0), local_t).round() as u8,
+                    lerp(f64::from(middle.1), f64::from(end.1), local_t).round() as u8,
+                    lerp(f64::from(middle.2), f64::from(end.2), local_t).round() as u8,
                 )
             }
         })
@@ -159,7 +159,7 @@ fn parse_rgb_triplet(input: &str) -> Option<Rgb> {
     let r_hex = parts.next()?;
     let g_hex = parts.next()?;
     let b_raw = parts.next()?;
-    let b_hex = b_raw.chars().take_while(|c| c.is_ascii_hexdigit()).collect::<String>();
+    let b_hex = b_raw.chars().take_while(char::is_ascii_hexdigit).collect::<String>();
 
     Some(Rgb(to_8bit(r_hex)?, to_8bit(g_hex)?, to_8bit(&b_hex)?))
 }
@@ -534,6 +534,36 @@ pub fn vite_plus_header() -> String {
 
     let header_colors = get_header_colors();
     render_header_variant(header_colors.blue, &header_colors.suffix_gradient, true, true)
+}
+
+/// Whether the Vite+ banner should be emitted in the current environment.
+///
+/// The banner is cosmetic and assumes an interactive terminal; it's
+/// suppressed when:
+/// - stdout is piped or redirected (lefthook/husky, `execSync`, CI, pagers).
+/// - a git commit-flow hook is running. Direct shell hooks inherit the
+///   terminal for stdout, so the TTY check alone doesn't catch them; git
+///   sets `GIT_INDEX_FILE` for pre-commit / commit-msg / prepare-commit-msg,
+///   which is where `vp check --fix` typically runs.
+#[must_use]
+pub fn should_print_header() -> bool {
+    if !std::io::stdout().is_terminal() {
+        return false;
+    }
+    if std::env::var_os("GIT_INDEX_FILE").is_some() {
+        return false;
+    }
+    true
+}
+
+/// Emit the Vite+ banner (header line + trailing blank line) to stdout, but
+/// only when the environment is interactive. No-op otherwise.
+pub fn print_header() {
+    if !should_print_header() {
+        return;
+    }
+    println!("{}", vite_plus_header());
+    println!();
 }
 
 #[cfg(all(test, unix))]

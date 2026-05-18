@@ -18,7 +18,7 @@ pub struct WhoamiCommandOptions<'a> {
 
 impl PackageManager {
     /// Run the whoami command with the package manager.
-    /// Returns ExitStatus with success (0) if the command is not supported.
+    /// Returns `ExitStatus` with success (0) if the command is not supported.
     #[must_use]
     pub async fn run_whoami_command(
         &self,

@@ -22,7 +22,7 @@ Unlike Vitest on its own, `vp test` does not stay in watch mode by default. Use 
 
 Put test configuration directly in the `test` block in `vite.config.ts` so all your configuration stays in one place. We do not recommend using `vitest.config.ts` with Vite+.
 
-```ts
+```ts [vite.config.ts]
 import { defineConfig } from 'vite-plus';
 
 export default defineConfig({

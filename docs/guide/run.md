@@ -71,7 +71,7 @@ $ node compile-legacy-app.js ✗ cache miss: 'legacy/index.js' modified, executi
 
 Vite Task automatically tracks which files your command uses. You can define tasks directly in `vite.config.ts` to enable caching by default or control which files and environment variables affect cache behavior.
 
-```ts
+```ts [vite.config.ts]
 import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
@@ -104,7 +104,7 @@ See [Run Config](/config/run) for the full `run` block reference.
 
 Use [`dependsOn`](#depends-on) to run tasks in the right order. Running `vp run deploy` with the config above runs `build` and `test` first. Dependencies can also target other packages in the same project with the `package#task` notation:
 
-```ts
+```ts [vite.config.ts]
 dependsOn: ['@my/core#build', '@my/utils#lint'];
 ```
 
@@ -239,7 +239,7 @@ Flags also work inside nested scripts. For example, `vp run -r build` inside a s
 ::: info
 A common monorepo pattern is a root script that runs a task recursively:
 
-```json [package.json (root)]
+```json [package.json (root) ~vscode-icons:file-type-node~]
 {
   "scripts": {
     "build": "vp run -r build"

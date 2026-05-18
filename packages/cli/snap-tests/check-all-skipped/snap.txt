@@ -1,4 +1,4 @@
 [1]> vp check --no-fmt --no-lint
 error: No checks enabled
 
-`vp check` did not run because both `--no-fmt` and `--no-lint` were set
+Enable `lint.options.typeCheck` in vite.config.ts to use `vp check --no-fmt --no-lint` for type-check only, or drop a flag to re-enable fmt/lint.

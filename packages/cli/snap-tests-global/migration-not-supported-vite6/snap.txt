@@ -1,7 +1,5 @@
 > vp install # install dependencies first
 [1]> vp migrate --no-interactive # migration should fail because vite version is not supported
-VITE+ - The Unified Toolchain for the Web
-
 
 ✘ vite@<semver> in package.json is not supported by auto migration
 

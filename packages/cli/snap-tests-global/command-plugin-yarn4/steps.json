@@ -1,0 +1,6 @@
+{
+  "ignoredPlatforms": ["win32", "darwin"],
+  "commands": [
+    "vp pm plugin --help # should list 6 plugin subcommands; clap output is deterministic"
+  ]
+}

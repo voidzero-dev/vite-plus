@@ -1,12 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { vitePlusHeader } from '../binding/index.js';
 import cliPkg from '../package.json' with { type: 'json' };
 import { VITE_PLUS_NAME } from './utils/constants.ts';
 import { renderCliDoc } from './utils/help.ts';
 import { detectPackageMetadata, hasVitePlusDependency } from './utils/package.ts';
-import { accent, log } from './utils/terminal.ts';
+import { accent, log, printHeader } from './utils/terminal.ts';
 
 /** Tool display names in the order shown by `vp --version`. */
 const TOOL_DISPLAY_ORDER = [
@@ -87,8 +86,7 @@ export async function printVersion(cwd: string) {
   const localVersion = localMetadata?.version ?? null;
   const vpVersion = globalVersion ?? cliVersion ?? localVersion ?? 'unknown';
 
-  log(vitePlusHeader());
-  log('');
+  printHeader();
   log(`vp v${vpVersion}\n`);
 
   const sections = [
