@@ -283,3 +283,78 @@ describe('defineConfig project plugin injection', () => {
     expect(pluginName(project.plugins[0])).toBe(REWRITE_PLUGIN_NAME);
   });
 });
+
+describe('defineConfig auto-inline deps', () => {
+  const AUTO_INLINE = ['@testing-library/jest-dom', '@storybook/test', 'jest-extended'];
+
+  it('injects the auto-inline packages when no inline list is set', () => {
+    const result = defineConfig({}) as {
+      test?: { server?: { deps?: { inline?: unknown } } };
+    };
+    expect(result.test?.server?.deps?.inline).toEqual(AUTO_INLINE);
+  });
+
+  it('merges with an existing user inline array, preserving order and dedupe', () => {
+    const result = defineConfig({
+      test: { server: { deps: { inline: ['my-pkg', '@testing-library/jest-dom'] } } },
+    }) as { test: { server: { deps: { inline: unknown[] } } } };
+    expect(result.test.server.deps.inline).toEqual([
+      'my-pkg',
+      '@testing-library/jest-dom',
+      '@storybook/test',
+      'jest-extended',
+    ]);
+  });
+
+  it("does not override `inline: true` (user opted into 'inline everything')", () => {
+    const result = defineConfig({
+      test: { server: { deps: { inline: true } } },
+    }) as { test: { server: { deps: { inline: unknown } } } };
+    expect(result.test.server.deps.inline).toBe(true);
+  });
+
+  it('treats a regexp entry that matches an auto-inline pkg as already covered', () => {
+    const result = defineConfig({
+      test: { server: { deps: { inline: [/^@testing-library\//, /^@storybook\//] } } },
+    }) as { test: { server: { deps: { inline: unknown[] } } } };
+    // Both '@testing-library/jest-dom' and '@storybook/test' match the regexps;
+    // only 'jest-extended' should be appended.
+    const inline = result.test.server.deps.inline;
+    expect(inline).toHaveLength(3);
+    expect(inline[0]).toBeInstanceOf(RegExp);
+    expect(inline[1]).toBeInstanceOf(RegExp);
+    expect(inline[2]).toBe('jest-extended');
+  });
+
+  it('injects auto-inline into each test.projects entry', () => {
+    const result = defineConfig({
+      test: {
+        projects: [
+          { test: { name: 'unit', environment: 'node' } },
+          {
+            test: {
+              name: 'browser',
+              environment: 'jsdom',
+              server: { deps: { inline: ['custom'] } },
+            },
+          },
+        ],
+      },
+    }) as { test: { projects: unknown[] } };
+
+    const [p0, p1] = result.test.projects as Array<{
+      test: { name: string; server?: { deps?: { inline?: unknown } } };
+    }>;
+    expect(p0.test.name).toBe('unit');
+    expect(p0.test.server?.deps?.inline).toEqual(AUTO_INLINE);
+    expect(p1.test.name).toBe('browser');
+    expect(p1.test.server?.deps?.inline).toEqual(['custom', ...AUTO_INLINE]);
+  });
+
+  it('does not re-add an entry that already exists', () => {
+    const result = defineConfig({
+      test: { server: { deps: { inline: AUTO_INLINE.slice() } } },
+    }) as { test: { server: { deps: { inline: unknown[] } } } };
+    expect(result.test.server.deps.inline).toEqual(AUTO_INLINE);
+  });
+});

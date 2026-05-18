@@ -187,17 +187,78 @@ function vitePlusTestSpecifierRewritePlugin(): PluginOption {
 }
 
 /**
- * Inject the rewrite plugin into a single inline project config. Used both
- * for root configs and for object-shaped entries inside `test.projects`.
+ * Packages that register Vitest `expect` matchers via `expect.extend()` from
+ * a side-effect import. When Vite serves these from a separate module graph
+ * than the test runtime, the matchers register on a different `expect`
+ * instance and `expect(...).<matcher>` is undefined at call time (vitest
+ * issue #897). Inlining them into the test server's module graph forces
+ * registration on the same instance.
  *
- * The shapes overlap (both have an optional top-level `plugins` array), so a
- * shared helper keeps the wiring consistent.
+ * The previous bundled `@voidzero-dev/vite-plus-test` wrapper did this via a
+ * build-time patch of vitest's CLI chunk; the wrapper-free architecture re-
+ * applies it at config-merge time so the public behavior is preserved.
  */
-function injectPluginIntoInlineConfig<T extends { plugins?: UserConfig['plugins'] }>(config: T): T {
+const AUTO_INLINE_DEPS: ReadonlyArray<string> = [
+  '@testing-library/jest-dom',
+  '@storybook/test',
+  'jest-extended',
+];
+
+function mergeAutoInlineDeps<T extends { test?: { server?: { deps?: { inline?: unknown } } } }>(
+  config: T,
+): T {
+  const existingInline = config.test?.server?.deps?.inline;
+  // User opted into "inline everything" — don't override.
+  if (existingInline === true) {
+    return config;
+  }
+  const existing = Array.isArray(existingInline) ? existingInline : [];
+  const merged = [...existing];
+  for (const pkg of AUTO_INLINE_DEPS) {
+    if (
+      !merged.some((entry) => entry === pkg || (entry instanceof RegExp && entry.test(pkg)))
+    ) {
+      merged.push(pkg);
+    }
+  }
+  if (merged.length === existing.length) {
+    return config;
+  }
   return {
     ...config,
+    test: {
+      ...(config.test ?? {}),
+      server: {
+        ...(config.test?.server ?? {}),
+        deps: {
+          ...(config.test?.server?.deps ?? {}),
+          inline: merged,
+        },
+      },
+    },
+  } as T;
+}
+
+/**
+ * Inject the rewrite plugin AND the auto-inline deps defaults into a single
+ * inline project config. Used both for root configs and for object-shaped
+ * entries inside `test.projects`.
+ *
+ * The shapes overlap (both have an optional top-level `plugins` array and
+ * an optional `test.server.deps.inline`), so a shared helper keeps the
+ * wiring consistent.
+ */
+function injectPluginIntoInlineConfig<
+  T extends {
+    plugins?: UserConfig['plugins'];
+    test?: { server?: { deps?: { inline?: unknown } } };
+  },
+>(config: T): T {
+  const withPlugin = {
+    ...config,
     plugins: [vitePlusTestSpecifierRewritePlugin(), ...(config.plugins ?? [])],
-  };
+  } as T;
+  return mergeAutoInlineDeps(withPlugin);
 }
 
 /**

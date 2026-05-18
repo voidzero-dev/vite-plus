@@ -431,10 +431,110 @@ async function syncTestPackageExports() {
   generatedExports['./test/browser/context'] = await createBrowserContextExport(testDistDir);
   console.log('  Created ./test/browser/context');
 
+  // Bare `./test/<subpath>` shims for the bundled `@vitest/browser` surfaces
+  // the old `@voidzero-dev/vite-plus-test` wrapper used to expose:
+  //   ./test/client, ./test/context, ./test/locators, ./test/matchers, ./test/utils
+  // `oxlint-plugin.ts` autofixes `@vitest/browser/client` →
+  // `vite-plus/test/client` and `@vitest/browser/locators` →
+  // `vite-plus/test/locators`, so the runtime targets MUST resolve.
+  const bareBrowserShims = await createBareBrowserShims(require, testDistDir);
+  for (const [cliPath, exportValue] of Object.entries(bareBrowserShims)) {
+    generatedExports[cliPath] = exportValue;
+    console.log(`  Created ${cliPath}`);
+  }
+
+  // Emit `./test/browser-compat` — used when downstream consumers point
+  // `@vitest/browser` at vite-plus via a pnpm/yarn override. The shim
+  // re-exports the four symbols vitest's browser plugin checks for to
+  // identify a compatible browser provider package.
+  generatedExports['./test/browser-compat'] = await createBrowserCompatExport(testDistDir);
+  console.log('  Created ./test/browser-compat');
+
   // Update CLI package.json
   await updateCliPackageJson(cliPkgPath, generatedExports);
 
   console.log(`\nSynced ${Object.keys(generatedExports).length} exports from test package`);
+}
+
+/**
+ * `@vitest/browser` exports a handful of subpaths (`./client`, `./context`,
+ * `./locators`, `./matchers`, `./utils`) that the deleted vite-plus-test
+ * wrapper surfaced as bare `./test/<subpath>` entries. Without these, code
+ * that imports `vite-plus/test/client` (and friends) — including code
+ * produced by `vp lint --fix` via the autofix rule in
+ * `packages/cli/src/oxlint-plugin.ts` — fails with
+ * `ERR_PACKAGE_PATH_NOT_EXPORTED`.
+ *
+ * `./matchers` and `./utils` resolve to a `dummy.js` upstream (types-only
+ * entrypoints) and we mirror that — `createShimForExport` is happy with the
+ * empty default file because it still creates a valid shim that just
+ * re-exports nothing at runtime; type imports continue to resolve.
+ */
+async function createBareBrowserShims(
+  require: NodeRequire,
+  testDistDir: string,
+): Promise<Record<string, ExportValue>> {
+  const result: Record<string, ExportValue> = {};
+  let browserPkgPath: string;
+  try {
+    browserPkgPath = require.resolve('@vitest/browser/package.json', { paths: [projectDir] });
+  } catch (err) {
+    console.warn(`  Skipping bare browser shims — @vitest/browser not installed: ${(err as Error).message}`);
+    return result;
+  }
+  const browserPkg = JSON.parse(await readFile(browserPkgPath, 'utf-8'));
+  const browserPkgRoot = dirname(browserPkgPath);
+  const browserExports = (browserPkg.exports ?? {}) as Record<string, unknown>;
+
+  const bareSubpaths = ['./client', './context', './locators', './matchers', './utils'] as const;
+  for (const sub of bareSubpaths) {
+    const exportValue = browserExports[sub];
+    if (!exportValue) continue;
+    const subName = sub.slice(2);
+    const cliPath = `./test/${subName}`;
+    const shimBaseName = subName;
+    const importSpecifier = `@vitest/browser${sub.slice(1)}`;
+    const shimExport = await createShimForExport(
+      shimBaseName,
+      exportValue,
+      importSpecifier,
+      testDistDir,
+      { providerPkgRoot: browserPkgRoot },
+    );
+    if (shimExport) {
+      result[cliPath] = shimExport;
+    }
+  }
+  return result;
+}
+
+/**
+ * Browser-compat shim — preserves the `./test/browser-compat` surface from
+ * the deleted wrapper. Re-exports the four symbols vitest's own browser
+ * plugin spotchecks for when treating a package as a browser provider
+ * override target.
+ */
+async function createBrowserCompatExport(testDistDir: string): Promise<ExportValue> {
+  const dir = testDistDir;
+  await mkdir(dir, { recursive: true });
+  const symbols = [
+    'asLocator',
+    'defineBrowserCommand',
+    'defineBrowserProvider',
+    'parseKeyDef',
+    'resolveScreenshotPath',
+  ];
+  const jsPath = join(dir, 'browser-compat.js');
+  const dtsPath = join(dir, 'browser-compat.d.ts');
+  await writeFile(jsPath, `export { ${symbols.join(', ')} } from '@vitest/browser';\n`);
+  await writeFile(
+    dtsPath,
+    `import '@vitest/browser';\nexport { ${symbols.join(', ')} } from '@vitest/browser';\n`,
+  );
+  return {
+    types: './dist/test/browser-compat.d.ts',
+    default: './dist/test/browser-compat.js',
+  };
 }
 
 /**

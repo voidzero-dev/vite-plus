@@ -221,6 +221,28 @@
     "./test/browser/context": {
       "types": "./dist/test/browser/context.d.ts",
       "default": "./dist/test/browser/context.js"
+    },
+    "./test/client": {
+      "default": "./dist/test/client.js"
+    },
+    "./test/context": {
+      "types": "./dist/test/context.d.ts",
+      "default": "./dist/test/context.js"
+    },
+    "./test/locators": {
+      "types": "./dist/test/locators.d.ts",
+      "default": "./dist/test/locators.js"
+    },
+    "./test/matchers": {
+      "types": "./dist/test/matchers.d.ts",
+      "default": "./dist/test/matchers.js"
+    },
+    "./test/utils": {
+      "default": "./dist/test/utils.js"
+    },
+    "./test/browser-compat": {
+      "types": "./dist/test/browser-compat.d.ts",
+      "default": "./dist/test/browser-compat.js"
     }
   },
   "scripts": {
