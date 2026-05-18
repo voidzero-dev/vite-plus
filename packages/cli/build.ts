@@ -491,7 +491,9 @@ async function createBareBrowserShims(
   const bareSubpaths = ['./client', './context', './locators', './matchers', './utils'] as const;
   for (const sub of bareSubpaths) {
     const exportValue = browserExports[sub];
-    if (!exportValue) continue;
+    if (!exportValue) {
+      continue;
+    }
     const subName = sub.slice(2);
     const cliPath = `./test/${subName}`;
     const shimBaseName = subName;
