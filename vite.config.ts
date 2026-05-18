@@ -28,8 +28,6 @@ export default defineConfig({
           'bench/**/*.ts',
           'ecosystem-ci/**/*',
           'packages/*/build.ts',
-          'packages/core/rollupLicensePlugin.ts',
-          'packages/core/vite-rolldown.config.ts',
           'packages/tools/**/*.ts',
         ],
         rules: {
@@ -48,8 +46,6 @@ export default defineConfig({
       '**/snap-tests-global/**',
       '**/snap-tests-todo/**',
       'packages/*/binding/**',
-      'packages/core/rollupLicensePlugin.ts',
-      'packages/core/vite-rolldown.config.ts',
     ],
   },
   test: {
