@@ -226,7 +226,10 @@ function isWindowsLockedExecutableError(err: unknown): boolean {
   }
 
   const code = (err as NodeJS.ErrnoException).code;
-  return code === 'EPERM' && err.message.includes(`${path.sep}bin${path.sep}vp.exe`);
+  return (
+    (code === 'EPERM' || code === 'EBUSY') &&
+    err.message.includes(`${path.sep}bin${path.sep}vp.exe`)
+  );
 }
 
 function removeWindowsPath(targetPath: string) {
