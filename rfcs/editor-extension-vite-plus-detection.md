@@ -242,8 +242,11 @@ user-visible regression is introduced by the editor extensions
 adopting the broader set.
 
 **Deliberately not in v1**: `deno.json` workspaces, `.git` directory,
-ad-hoc `.vp-root` marker files. If a future deliverable needs them,
-update this list and the conformance fixtures together.
+and incidental vite-plus artifacts such as the `.vite-hooks` directory
+(`packages/cli/src/config/hooks.ts:67`) — these are not workspace
+roots and the walk must continue past them. If a future deliverable
+adds a new marker, update this list and the conformance fixtures
+together.
 
 ### Algorithm diagram
 
