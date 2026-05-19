@@ -1,17 +1,11 @@
 import { execSync } from 'node:child_process';
 import { readFile, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 
+import cliPkg from '../packages/cli/package.json' with { type: 'json' };
 import { ecosystemCiDir, tgzDir } from './paths.ts';
 import repos from './repo.json' with { type: 'json' };
 
-const cliPkg = JSON.parse(
-  await readFile(
-    join(dirname(fileURLToPath(import.meta.url)), '..', 'packages', 'cli', 'package.json'),
-    'utf-8',
-  ),
-) as { version: string };
 const vpVersion = cliPkg.version;
 
 const projects = Object.keys(repos);

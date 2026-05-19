@@ -1,12 +1,9 @@
 import { createRequire } from 'node:module';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+
+import cliPkg from '../packages/cli/package.json' with { type: 'json' };
 
 const require = createRequire(`${process.cwd()}/`);
 
-const cliPkg = require(
-  join(dirname(fileURLToPath(import.meta.url)), '..', 'packages', 'cli', 'package.json'),
-) as { version: string };
 const expectedVersion = cliPkg.version;
 
 try {
