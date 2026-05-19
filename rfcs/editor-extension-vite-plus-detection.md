@@ -187,12 +187,7 @@ function declaresVitePlus(pkg: any | null): boolean {
   return Boolean(pkg?.dependencies?.['vite-plus'] || pkg?.devDependencies?.['vite-plus']);
 }
 
-/**
- * Validate that `node_modules/vite-plus` at `dir` is a real vite-plus
- * install, then return the package manager's `.bin/vp` shim path.
- * The shim is the conventional entry point that extensions already
- * use for oxlint/oxfmt.
- */
+/** Return the .bin/vp shim path iff a valid vite-plus install lives at `dir`. */
 function resolveVpAt(dir: string): string | null {
   try {
     const pkg = JSON.parse(
@@ -247,12 +242,8 @@ The async variant is the same algorithm with `fs.promises`.
 
 ## Per-extension migration
 
-All four extensions run the detector first, then:
-
-- `null` → fall through to the existing oxlint/oxfmt resolution.
-- `{ root, vpPath }` → launch `<vpPath> lint --lsp` / `fmt --lsp`. On
-  launch failure, surface an upgrade hint.
-- `{ root }` → surface an install hint; do not launch anything Vite+.
+Every extension runs the detector first and dispatches on its result
+as defined in § Result above.
 
 **On the launch path.** Validation (parsing
 `node_modules/vite-plus/package.json` and checking `name`) is the
@@ -308,13 +299,13 @@ IntelliJ — substitute their own equivalent. The fixture just asserts
 ## Open questions
 
 1. **Publish the detector as a shared npm package?** The current
-   proposal is `@voidzero-dev/detect-vite-plus` at
-   `packages/detect-vite-plus/`, consumed as a bundled devDependency
-   by `oxc-vscode` and `coc-oxc`. The alternative is to let each
-   Node-capable extension copy the ~50-line snippet directly.
-   Decision deferred to the maintainers.
-2. **Final package name** if published.
-3. **"Declared but not installed" UX** — silent fallback to plain
+   proposal is to publish it at `packages/detect-vite-plus/`,
+   consumed as a bundled devDependency by `oxc-vscode` and `coc-oxc`;
+   proposed name `@voidzero-dev/detect-vite-plus` (open to
+   bikeshedding). The alternative is to let each Node-capable
+   extension copy the ~50-line snippet directly. Decision deferred to
+   the maintainers.
+2. **"Declared but not installed" UX** — silent fallback to plain
    oxlint vs. install notification. This RFC proposes a notification
    (silent fallback loses Vite+-aware behaviour anyway because the
    wrapper's `VP_VERSION` env var isn't set), but the specific
