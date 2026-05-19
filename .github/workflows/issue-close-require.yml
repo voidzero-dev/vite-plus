@@ -7,15 +7,24 @@ on:
 jobs:
   close-issues:
     if: github.repository == 'voidzero-dev/vite-plus'
-    runs-on: ubuntu-slim
+    runs-on: ubuntu-latest
     permissions:
-      issues: write # for actions-cool/issues-helper to update issues
-      pull-requests: write # for actions-cool/issues-helper to update PRs
+      issues: write
     steps:
-      - name: needs reproduction
-        uses: actions-cool/issues-helper@200c78641dbf33838311e5a1e0c31bbdb92d7cf0 # v3.8.0
-        with:
-          actions: 'close-issues'
-          token: ${{ secrets.GITHUB_TOKEN }}
-          labels: 'needs reproduction'
-          inactive-day: 3
+      - name: Close inactive "needs reproduction" issues
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          cutoff=$(date -u -d '3 days ago' +%Y-%m-%dT%H:%M:%SZ)
+          gh issue list \
+            --state open \
+            --label "needs reproduction" \
+            --limit 200 \
+            --json number,updatedAt \
+            --jq ".[] | select(.updatedAt < \"$cutoff\") | .number" |
+          while read -r number; do
+            [ -z "$number" ] && continue
+            gh issue close "$number"
+          done
