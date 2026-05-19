@@ -20,6 +20,21 @@ export interface ProgressResult extends SpinnerResult {
   advance(step?: number, msg?: string): void;
 }
 
+const activeStyle = (state: State) => {
+  switch (state) {
+    case 'initial':
+    case 'active':
+      return color.magenta;
+    case 'error':
+    case 'cancel':
+      return color.red;
+    case 'submit':
+      return completeColor;
+    default:
+      return color.magenta;
+  }
+};
+
 export function progress({
   style = 'heavy',
   max: userMax = 100,
@@ -33,20 +48,6 @@ export function progress({
   const max = Math.max(1, userMax);
   const size = Math.max(1, userSize);
 
-  const activeStyle = (state: State) => {
-    switch (state) {
-      case 'initial':
-      case 'active':
-        return color.magenta;
-      case 'error':
-      case 'cancel':
-        return color.red;
-      case 'submit':
-        return completeColor;
-      default:
-        return color.magenta;
-    }
-  };
   const drawProgress = (state: State, msg: string) => {
     const active = Math.floor((value / max) * size);
     return `${activeStyle(state)(S_PROGRESS_CHAR[style].repeat(active))}${color.dim(S_PROGRESS_CHAR[style].repeat(size - active))} ${msg}`;
