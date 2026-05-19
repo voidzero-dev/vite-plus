@@ -101,10 +101,6 @@ impl PackageManager {
                     args.push("--no-optional".into());
                 }
 
-                if options.global {
-                    args.push("--global".into());
-                }
-
                 if options.exclude_peers {
                     args.push("--exclude-peers".into());
                 }
@@ -356,19 +352,6 @@ mod tests {
         });
         assert_eq!(result.bin_path, "npm");
         assert_eq!(result.args, vec!["explain", "--workspace", "app", "react"]);
-    }
-
-    #[test]
-    fn test_npm_explain_global() {
-        let pm = create_mock_package_manager(PackageManagerType::Npm, "11.0.0");
-        let packages = vec!["react".to_string()];
-        let result = pm.resolve_why_command(&WhyCommandOptions {
-            packages: &packages,
-            global: true,
-            ..Default::default()
-        });
-        assert_eq!(result.bin_path, "npm");
-        assert_eq!(result.args, vec!["explain", "--global", "react"]);
     }
 
     #[test]
