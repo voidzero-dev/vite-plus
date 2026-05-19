@@ -82,30 +82,31 @@ Arguments:
   [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
 
 Options:
-  -P, --prod            Do not install devDependencies
-  -D, --dev             Only install devDependencies (install) / Save to devDependencies (add)
-  --no-optional         Do not install optionalDependencies
-  --frozen-lockfile     Fail if lockfile needs to be updated (CI mode)
-  --no-frozen-lockfile  Allow lockfile updates (opposite of --frozen-lockfile)
-  --lockfile-only       Only update lockfile, don't install
-  --prefer-offline      Use cached packages when available
-  --offline             Only use packages already in cache
-  -f, --force           Force reinstall all dependencies
-  --ignore-scripts      Do not run lifecycle scripts
-  --no-lockfile         Don't read or generate lockfile
-  --fix-lockfile        Fix broken lockfile entries (pnpm and yarn@2+ only)
-  --shamefully-hoist    Create flat `node_modules` (pnpm only)
-  --resolution-only     Re-run resolution for peer dependency analysis (pnpm only)
-  --silent              Suppress output (silent mode)
-  --filter <PATTERN>    Filter packages in monorepo (can be used multiple times)
-  -w, --workspace-root  Install in workspace root only
-  -E, --save-exact      Save exact version (only when adding packages)
-  --save-peer           Save to peerDependencies (only when adding packages)
-  -O, --save-optional   Save to optionalDependencies (only when adding packages)
-  --save-catalog        Save the new dependency to the default catalog (only when adding packages)
-  -g, --global          Install globally (requires package names)
-  --node <NODE>         Node.js version to use for global installation (only with -g)
-  -h, --help            Print help
+  -P, --prod                   Do not install devDependencies
+  -D, --dev                    Only install devDependencies (install) / Save to devDependencies (add)
+  --no-optional                Do not install optionalDependencies
+  --frozen-lockfile            Fail if lockfile needs to be updated (CI mode)
+  --no-frozen-lockfile         Allow lockfile updates (opposite of --frozen-lockfile)
+  --lockfile-only              Only update lockfile, don't install
+  --prefer-offline             Use cached packages when available
+  --offline                    Only use packages already in cache
+  -f, --force                  Force reinstall all dependencies
+  --ignore-scripts             Do not run lifecycle scripts
+  --no-lockfile                Don't read or generate lockfile
+  --fix-lockfile               Fix broken lockfile entries (pnpm and yarn@2+ only)
+  --shamefully-hoist           Create flat `node_modules` (pnpm only)
+  --resolution-only            Re-run resolution for peer dependency analysis (pnpm only)
+  --silent                     Suppress output (silent mode)
+  --filter <PATTERN>           Filter packages in monorepo (can be used multiple times)
+  -w, --workspace-root         Install in workspace root only
+  -E, --save-exact             Save exact version (only when adding packages)
+  --save-peer                  Save to peerDependencies (only when adding packages)
+  -O, --save-optional          Save to optionalDependencies (only when adding packages)
+  --save-catalog               Save the new dependency to the default catalog (only when adding packages)
+  -g, --global                 Install globally (requires package names)
+  --node <NODE>                Node.js version to use for global installation (only with -g)
+  --concurrency <CONCURRENCY>  Number of global package installs to run in parallel (only with -g)
+  -h, --help                   Print help
 
 Documentation: https://viteplus.dev/guide/install
 
@@ -133,6 +134,7 @@ Options:
   --workspace                         Only add if package exists in workspace (pnpm-specific)
   -g, --global                        Install globally
   --node <NODE>                       Node.js version to use for global installation (only with -g)
+  --concurrency <CONCURRENCY>         Number of global package installs to run in parallel (only with -g)
   -h, --help                          Print help
 
 Documentation: https://viteplus.dev/guide/install
@@ -171,18 +173,19 @@ Arguments:
   [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
 
 Options:
-  -L, --latest          Update to latest version (ignore semver range)
-  -g, --global          Update global packages
-  -r, --recursive       Update recursively in all workspace packages
-  --filter <PATTERN>    Filter packages in monorepo (can be used multiple times)
-  -w, --workspace-root  Include workspace root
-  -D, --dev             Update only devDependencies
-  -P, --prod            Update only dependencies (production)
-  -i, --interactive     Interactive mode
-  --no-optional         Don't update optionalDependencies
-  --no-save             Update lockfile only, don't modify package.json
-  --workspace           Only update if package exists in workspace (pnpm-specific)
-  -h, --help            Print help
+  -L, --latest                 Update to latest version (ignore semver range)
+  -g, --global                 Update global packages
+  --concurrency <CONCURRENCY>  Number of global package updates to run in parallel (only with -g)
+  -r, --recursive              Update recursively in all workspace packages
+  --filter <PATTERN>           Filter packages in monorepo (can be used multiple times)
+  -w, --workspace-root         Include workspace root
+  -D, --dev                    Update only devDependencies
+  -P, --prod                   Update only dependencies (production)
+  -i, --interactive            Interactive mode
+  --no-optional                Don't update optionalDependencies
+  --no-save                    Update lockfile only, don't modify package.json
+  --workspace                  Only update if package exists in workspace (pnpm-specific)
+  -h, --help                   Print help
 
 Documentation: https://viteplus.dev/guide/install
 
@@ -329,7 +332,6 @@ Commands:
   rebuild    Rebuild native modules [aliases: rb]
   fund       Show funding information for installed packages
   ping       Ping the registry
-  plugin     Manage Yarn plugins (Yarn 2+ only — other package managers will print a warning and exit successfully)
 
 Options:
   -h, --help  Print help
