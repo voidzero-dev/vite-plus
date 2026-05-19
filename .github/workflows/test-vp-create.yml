@@ -170,9 +170,9 @@ jobs:
 
       - name: Resolve tgz paths
         run: |
-          CLI_TGZ=$(ls $GITHUB_WORKSPACE/tmp/tgz/vite-plus-*.tgz | head -n1)
-          CORE_TGZ=$(ls $GITHUB_WORKSPACE/tmp/tgz/voidzero-dev-vite-plus-core-*.tgz | head -n1)
-          TEST_TGZ=$(ls $GITHUB_WORKSPACE/tmp/tgz/voidzero-dev-vite-plus-test-*.tgz | head -n1)
+          CLI_TGZ=$(ls "$GITHUB_WORKSPACE"/tmp/tgz/vite-plus-[0-9]*.tgz | head -n1)
+          CORE_TGZ=$(ls "$GITHUB_WORKSPACE"/tmp/tgz/voidzero-dev-vite-plus-core-[0-9]*.tgz | head -n1)
+          TEST_TGZ=$(ls "$GITHUB_WORKSPACE"/tmp/tgz/voidzero-dev-vite-plus-test-[0-9]*.tgz | head -n1)
           echo "CLI_TGZ=$CLI_TGZ" >> $GITHUB_ENV
           echo "VP_VERSION=file:$CLI_TGZ" >> $GITHUB_ENV
           printf 'VP_OVERRIDE_PACKAGES={"vite":"file:%s","vitest":"file:%s","@voidzero-dev/vite-plus-core":"file:%s","@voidzero-dev/vite-plus-test":"file:%s"}\n' \
@@ -264,10 +264,9 @@ jobs:
       - name: Verify local tgz packages installed
         working-directory: ${{ runner.temp }}/test-project
         run: |
-          EXPECTED_VERSION=$(node -p "require('$GITHUB_WORKSPACE/packages/cli/package.json').version")
-          EXPECTED_VERSION="$EXPECTED_VERSION" node -e "
+          node -e "
             const path = require('path');
-            const expected = process.env.EXPECTED_VERSION;
+            const expected = require('$GITHUB_WORKSPACE/packages/cli/package.json').version;
             const pkg = require(path.resolve('node_modules/vite-plus/package.json'));
             if (pkg.version !== expected) {
               console.error('Expected vite-plus@' + expected + ', got ' + pkg.version);
