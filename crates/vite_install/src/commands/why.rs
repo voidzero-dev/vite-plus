@@ -101,6 +101,10 @@ impl PackageManager {
                     args.push("--no-optional".into());
                 }
 
+                if options.global {
+                    args.push("--global".into());
+                }
+
                 if options.exclude_peers {
                     args.push("--exclude-peers".into());
                 }
@@ -174,10 +178,6 @@ impl PackageManager {
 
                 if options.json {
                     args.push("--json".into());
-                }
-
-                if options.global {
-                    args.push("--global".into());
                 }
 
                 // Add packages (npm supports multiple packages)
