@@ -27,9 +27,7 @@ jobs:
     name: Cargo Deny
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          persist-credentials: false
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
       - name: Output rolldown hash
         id: upstream-versions
@@ -40,6 +38,7 @@ jobs:
           repository: rolldown/rolldown
           path: rolldown
           ref: ${{ steps.upstream-versions.outputs.ROLLDOWN_HASH }}
+          persist-credentials: false
 
       - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
         with:
