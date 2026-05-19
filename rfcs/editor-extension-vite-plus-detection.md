@@ -30,21 +30,28 @@ detection. The goal of this RFC is one rule, four implementations.
 
 ## The rule
 
-A workspace is **Vite+** iff some `package.json` between the start
-path and the workspace root declares `vite-plus` directly in
+A project is **Vite+** iff some `package.json` between the start
+path and the root workspace declares `vite-plus` directly in
 `dependencies` or `devDependencies`. A `node_modules/vite-plus/`
 directory on its own does not qualify — that could be a transitive
 install hoisted from an unrelated dependency tree.
 
+> _"Root workspace"_ in this RFC means the **monorepo root** — the
+> directory containing `pnpm-workspace.yaml`,
+> `package.json#workspaces`, or `lerna.json`. It is **not** the
+> editor's "workspace folder" (the folder a user opens in VS Code,
+> Zed, etc.). The two concepts are distinct: a single editor
+> workspace folder may sit at, inside, or alongside a root workspace.
+
 The runnable `vp` binary is resolved separately: walk up from the
 declaring ancestor for `node_modules/vite-plus/bin/vp` with a sibling
 `package.json` that parses and has `name === "vite-plus"`, bounded by
-the workspace root.
+the root workspace.
 
 ```
 fn detect_vite_plus_project(start: AbsolutePath) -> Option<Result>:
     # Phase 1: find the package.json that DIRECTLY declares vite-plus.
-    root = walk_up_to_workspace_root(start, |dir, pkg|:
+    root = walk_up_to_root_workspace(start, |dir, pkg|:
         if "vite-plus" in pkg.dependencies | pkg.devDependencies:
             return Some(dir)
         else:
@@ -54,14 +61,14 @@ fn detect_vite_plus_project(start: AbsolutePath) -> Option<Result>:
         return None  # not a Vite+ project
 
     # Phase 2: resolve the runnable binary, scoped to the workspace.
-    vp_path = walk_up_to_workspace_root(root, |dir, _|:
+    vp_path = walk_up_to_root_workspace(root, |dir, _|:
         return valid_vite_plus_install_at(dir)  # bin/vp + sibling package.json with correct name
     )
 
     return Some({ root, vp_path })  # vp_path may be None
 ```
 
-Both phases stop AT the workspace root and never cross into its
+Both phases stop AT the root workspace and never cross into its
 parent. The walk-up bound is what prevents a nested checkout from
 inheriting an unrelated parent's Vite+ install.
 
@@ -96,7 +103,7 @@ flowchart TD
     P1Begin --> P1Read["read package.json at dir"]
     P1Read --> P1Q{"vite-plus in<br/>dependencies or<br/>devDependencies?"}
     P1Q -- yes --> P1Found["root = dir"]
-    P1Q -- no --> P1Bound{"dir is workspace root<br/>or filesystem root?"}
+    P1Q -- no --> P1Bound{"dir is root workspace<br/>or filesystem root?"}
     P1Bound -- no --> P1Up["dir = parent(dir)"]
     P1Up --> P1Read
     P1Bound -- yes --> ResultNull(["return null"])
@@ -107,15 +114,15 @@ flowchart TD
     P2Exists -- yes --> P2Valid{"node_modules/vite-plus/package.json<br/>parses with name = 'vite-plus'?"}
     P2Valid -- yes --> ResultRunnable(["return { root, vpPath }"])
     P2Valid -- no, orphan --> P2Bound
-    P2Exists -- no --> P2Bound{"probe is workspace root<br/>or filesystem root?"}
+    P2Exists -- no --> P2Bound{"probe is root workspace<br/>or filesystem root?"}
     P2Bound -- no --> P2Up["probe = parent(probe)"]
     P2Up --> P2Check
     P2Bound -- yes --> ResultDeclared(["return { root }"])
 ```
 
-### Workspace root markers
+### Root workspace markers
 
-A directory is a workspace root if any of the following is true:
+A directory is a root workspace if any of the following is true:
 
 - it contains a `pnpm-workspace.yaml`;
 - it contains a `package.json` with a top-level `workspaces` field
@@ -138,7 +145,7 @@ follow-up that does not block this RFC.
   `oxc.<tool>.binPath` settings (the last is for oxlint/oxfmt, not
   `vp`).
 - `require.resolve("vite-plus")` — Node's resolution algorithm can
-  escape the workspace root.
+  escape the root workspace.
 - A `node_modules/vite-plus/` without a direct dep declaration (a
   transitive install).
 - A `node_modules/vite-plus/` whose `package.json` is missing,
@@ -169,7 +176,7 @@ function readPackageJson(dir: string): any | null {
   }
 }
 
-function isWorkspaceRoot(dir: string, pkg: any | null): boolean {
+function isRootWorkspace(dir: string, pkg: any | null): boolean {
   if (existsSync(join(dir, 'pnpm-workspace.yaml'))) return true;
   if (existsSync(join(dir, 'lerna.json'))) return true;
   return Boolean(pkg?.workspaces);
@@ -206,7 +213,7 @@ export function detectVitePlusProjectSync(start: string): DetectResult | null {
       rootPkg = pkg;
       break;
     }
-    if (isWorkspaceRoot(dir, pkg)) break;
+    if (isRootWorkspace(dir, pkg)) break;
     const parent = dirname(dir);
     if (parent === dir) break;
     dir = parent;
@@ -214,13 +221,13 @@ export function detectVitePlusProjectSync(start: string): DetectResult | null {
   if (!root) return null;
 
   // Phase 2: walk up from root looking for a real install, bounded by
-  // the workspace root. Reuses Phase 1's package.json read at `root`.
+  // the root workspace. Reuses Phase 1's package.json read at `root`.
   let probe: string | null = root;
   let pkg = rootPkg;
   while (probe) {
     const vpPath = resolveVpAt(probe);
     if (vpPath) return { root, vpPath };
-    if (isWorkspaceRoot(probe, pkg)) break;
+    if (isRootWorkspace(probe, pkg)) break;
     const parent = dirname(probe);
     if (parent === probe) break;
     probe = parent;
@@ -275,7 +282,7 @@ fixtures. Each extension replicates the set in its own test suite.
 | `root-declared-no-install`              | Root `package.json` declares `vite-plus`, no `node_modules` (fresh clone)                                                                      | `{ root: "<repo>" }` — install hint                                                                                  |
 | `transitive-install`                    | No walked-up `package.json` declares `vite-plus`, but `node_modules/vite-plus/` exists as a transitive dep                                     | `null` — no direct declaration                                                                                       |
 | `bin-vp-orphan`                         | Declared in root `package.json`, but `node_modules/vite-plus/` is broken (missing `package.json`, wrong `name`, or unparseable)                | `{ root: "<repo>" }` — install rejected as orphan                                                                    |
-| `parent-vite-plus-nested-repo`          | Outer dir declares + installs `vite-plus`; inner subdir is its own workspace root and does not                                                 | From inside the nested workspace: `null`                                                                             |
+| `parent-vite-plus-nested-repo`          | Outer dir declares + installs `vite-plus`; inner subdir is its own root workspace and does not                                                 | From inside the nested workspace: `null`                                                                             |
 | `plain-non-vite-plus`                   | A normal Node project, no `vite-plus` anywhere                                                                                                 | `null`                                                                                                               |
 | `yarn4-pnp`                             | Berry/PnP, no `node_modules`, root `package.json` declares `vite-plus`                                                                         | `{ root: "<repo>" }` — install hint                                                                                  |
 
