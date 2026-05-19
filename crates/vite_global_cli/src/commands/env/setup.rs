@@ -5,8 +5,8 @@
 //! - ~/.vite-plus/current/ - Contains the actual vp CLI binary
 //!
 //! On Unix:
-//! - bin/vp is a symlink to ../current/bin/vp
-//! - bin/node, bin/npm, bin/npx are symlinks to ../current/bin/vp
+//! - bin/vp is a symlink to the active vp binary
+//! - bin/node, bin/npm, bin/npx are symlinks to the active vp binary
 //! - Symlinks preserve argv[0], allowing tool detection via the symlink name
 //!
 //! On Windows:
@@ -88,7 +88,7 @@ pub async fn execute(refresh: bool, env_only: bool) -> Result<ExitStatus, Error>
         .map_err(|e| Error::ConfigError(format!("Cannot find current executable: {e}").into()))?;
 
     // Create wrapper script in bin/
-    setup_vp_wrapper(&bin_dir, refresh).await?;
+    setup_vp_wrapper(&current_exe, &bin_dir, refresh).await?;
 
     // Create shims for node, npm, npx
     let mut created = Vec::new();
@@ -144,30 +144,44 @@ pub async fn execute(refresh: bool, env_only: bool) -> Result<ExitStatus, Error>
     Ok(ExitStatus::default())
 }
 
-/// Create symlink in bin/ that points to current/bin/vp.
-async fn setup_vp_wrapper(bin_dir: &vite_path::AbsolutePath, refresh: bool) -> Result<(), Error> {
+/// Create symlink in bin/ that points to the active vp binary.
+async fn setup_vp_wrapper(
+    current_exe: &std::path::Path,
+    bin_dir: &vite_path::AbsolutePath,
+    refresh: bool,
+) -> Result<(), Error> {
     #[cfg(unix)]
     {
         let bin_vp = bin_dir.join("vp");
+        let target = resolve_unix_vp_shim_target(current_exe, bin_dir).await?;
+        let existing = tokio::fs::symlink_metadata(&bin_vp).await.ok();
 
-        // Create symlink bin/vp -> ../current/bin/vp
-        let should_create_symlink = refresh
-            || !tokio::fs::try_exists(&bin_vp).await.unwrap_or(false)
-            || !is_symlink(&bin_vp).await; // Replace non-symlink with symlink
+        let should_create_symlink = match existing.as_ref() {
+            Some(metadata) if refresh || !metadata.file_type().is_symlink() => true,
+            Some(_) => {
+                let broken_symlink = !std::fs::exists(bin_vp.as_path()).unwrap_or(false);
+                let wrong_target = tokio::fs::read_link(&bin_vp)
+                    .await
+                    .map(|existing_target| existing_target != target)
+                    .unwrap_or(true);
+                broken_symlink || wrong_target
+            }
+            None => true,
+        };
 
         if should_create_symlink {
             // Remove existing if present (could be old wrapper script or file)
-            if tokio::fs::try_exists(&bin_vp).await.unwrap_or(false) {
+            if existing.is_some() {
                 tokio::fs::remove_file(&bin_vp).await?;
             }
-            // Create relative symlink
-            tokio::fs::symlink("../current/bin/vp", &bin_vp).await?;
-            tracing::debug!("Created symlink {:?} -> ../current/bin/vp", bin_vp);
+            tokio::fs::symlink(&target, &bin_vp).await?;
+            tracing::debug!("Created symlink {:?} -> {:?}", bin_vp, target);
         }
     }
 
     #[cfg(windows)]
     {
+        let _ = current_exe;
         let bin_vp_exe = bin_dir.join("vp.exe");
 
         // Create trampoline bin/vp.exe that forwards to current\bin\vp.exe
@@ -195,13 +209,23 @@ async fn setup_vp_wrapper(bin_dir: &vite_path::AbsolutePath, refresh: bool) -> R
     Ok(())
 }
 
-/// Check if a path is a symlink.
 #[cfg(unix)]
-async fn is_symlink(path: &vite_path::AbsolutePath) -> bool {
-    match tokio::fs::symlink_metadata(path).await {
-        Ok(m) => m.file_type().is_symlink(),
-        Err(_) => false,
+pub(crate) async fn resolve_unix_vp_shim_target(
+    current_exe: &std::path::Path,
+    bin_dir: &vite_path::AbsolutePath,
+) -> Result<std::path::PathBuf, Error> {
+    if let Some(vite_plus_home) = bin_dir.parent() {
+        let standalone_vp = vite_plus_home.join("current").join("bin").join("vp");
+        if tokio::fs::try_exists(&standalone_vp).await.unwrap_or(false) {
+            let standalone_vp = tokio::fs::canonicalize(&standalone_vp).await.ok();
+            let current_exe = tokio::fs::canonicalize(current_exe).await.ok();
+            if standalone_vp.is_some() && standalone_vp == current_exe {
+                return Ok(std::path::PathBuf::from("../current/bin/vp"));
+            }
+        }
     }
+
+    Ok(current_exe.to_path_buf())
 }
 
 /// Create a single shim for node/npm/npx.
@@ -215,9 +239,31 @@ async fn create_shim(
 ) -> Result<bool, Error> {
     let shim_path = bin_dir.join(shim_filename(tool));
 
-    // Check if shim already exists
-    if tokio::fs::try_exists(&shim_path).await.unwrap_or(false) {
-        if !refresh {
+    #[cfg(unix)]
+    let desired_target = resolve_unix_vp_shim_target(source, bin_dir).await?;
+
+    let existing = tokio::fs::symlink_metadata(&shim_path).await.ok();
+    if existing.is_some() {
+        let should_replace = if refresh {
+            true
+        } else {
+            #[cfg(unix)]
+            {
+                existing.as_ref().is_some_and(|metadata| metadata.file_type().is_symlink())
+                    && (!std::fs::exists(shim_path.as_path()).unwrap_or(false)
+                        || tokio::fs::read_link(&shim_path)
+                            .await
+                            .map(|existing_target| existing_target != desired_target)
+                            .unwrap_or(true))
+            }
+
+            #[cfg(windows)]
+            {
+                false
+            }
+        };
+
+        if !should_replace {
             return Ok(false);
         }
         #[cfg(windows)]
@@ -255,19 +301,22 @@ fn shim_filename(tool: &str) -> String {
     }
 }
 
-/// Create a Unix shim using symlink to ../current/bin/vp.
+/// Create a Unix shim using symlink to the active vp binary.
 ///
 /// Symlinks preserve argv[0], allowing the vp binary to detect which tool
 /// was invoked. This is the same pattern used by Volta.
 #[cfg(unix)]
 async fn create_unix_shim(
-    _source: &std::path::Path,
+    source: &std::path::Path,
     shim_path: &vite_path::AbsolutePath,
-    _tool: &str,
+    tool: &str,
 ) -> Result<(), Error> {
-    // Create symlink to ../current/bin/vp (relative path)
-    tokio::fs::symlink("../current/bin/vp", shim_path).await?;
-    tracing::debug!("Created symlink shim at {:?} -> ../current/bin/vp", shim_path);
+    let bin_dir = shim_path.parent().ok_or_else(|| {
+        Error::ConfigError(format!("Cannot find parent directory for {tool} shim").into())
+    })?;
+    let target = resolve_unix_vp_shim_target(source, bin_dir).await?;
+    tokio::fs::symlink(&target, shim_path).await?;
+    tracing::debug!("Created symlink shim at {:?} -> {:?}", shim_path, target);
 
     Ok(())
 }
@@ -1084,6 +1133,142 @@ mod tests {
         assert!(fresh_home.join("env").exists(), "env file should be created");
         assert!(fresh_home.join("env.fish").exists(), "env.fish file should be created");
         assert!(fresh_home.join("env.ps1").exists(), "env.ps1 file should be created");
+    }
+
+    #[tokio::test]
+    #[cfg(unix)]
+    async fn test_unix_vp_shim_target_prefers_standalone_layout_for_current_exe() {
+        let temp_dir = TempDir::new().unwrap();
+        let home = AbsolutePathBuf::new(temp_dir.path().join(".vite-plus")).unwrap();
+        let bin_dir = home.join("bin");
+        let standalone_vp = home.join("current").join("bin").join("vp");
+
+        tokio::fs::create_dir_all(standalone_vp.parent().unwrap()).await.unwrap();
+        tokio::fs::create_dir_all(&bin_dir).await.unwrap();
+        tokio::fs::write(&standalone_vp, b"vp").await.unwrap();
+
+        let target = resolve_unix_vp_shim_target(standalone_vp.as_path(), &bin_dir).await.unwrap();
+
+        assert_eq!(target, std::path::Path::new("../current/bin/vp"));
+    }
+
+    #[tokio::test]
+    #[cfg(unix)]
+    async fn test_unix_vp_shim_target_uses_current_exe_when_standalone_is_stale() {
+        let temp_dir = TempDir::new().unwrap();
+        let home = AbsolutePathBuf::new(temp_dir.path().join(".vite-plus")).unwrap();
+        let bin_dir = home.join("bin");
+        let standalone_vp = home.join("current").join("bin").join("vp");
+        let external_vp = temp_dir.path().join("external-vp");
+
+        tokio::fs::create_dir_all(standalone_vp.parent().unwrap()).await.unwrap();
+        tokio::fs::create_dir_all(&bin_dir).await.unwrap();
+        tokio::fs::write(&standalone_vp, b"stale-vp").await.unwrap();
+        tokio::fs::write(&external_vp, b"active-vp").await.unwrap();
+
+        let target = resolve_unix_vp_shim_target(&external_vp, &bin_dir).await.unwrap();
+
+        assert_eq!(target, external_vp);
+    }
+
+    #[tokio::test]
+    #[cfg(unix)]
+    async fn test_unix_vp_shim_target_uses_current_exe_without_standalone_layout() {
+        let temp_dir = TempDir::new().unwrap();
+        let home = AbsolutePathBuf::new(temp_dir.path().join(".vite-plus")).unwrap();
+        let bin_dir = home.join("bin");
+        let external_vp = temp_dir.path().join("external-vp");
+
+        tokio::fs::create_dir_all(&bin_dir).await.unwrap();
+        tokio::fs::write(&external_vp, b"vp").await.unwrap();
+
+        let target = resolve_unix_vp_shim_target(&external_vp, &bin_dir).await.unwrap();
+
+        assert_eq!(target, external_vp);
+    }
+
+    #[tokio::test]
+    #[cfg(unix)]
+    async fn test_create_shim_replaces_stale_unix_symlink_without_refresh() {
+        let temp_dir = TempDir::new().unwrap();
+        let home = AbsolutePathBuf::new(temp_dir.path().join(".vite-plus")).unwrap();
+        let bin_dir = home.join("bin");
+        let standalone_vp = home.join("current").join("bin").join("vp");
+        let external_vp = temp_dir.path().join("external-vp");
+        let node_shim = bin_dir.join("node");
+
+        tokio::fs::create_dir_all(standalone_vp.parent().unwrap()).await.unwrap();
+        tokio::fs::create_dir_all(&bin_dir).await.unwrap();
+        tokio::fs::write(&standalone_vp, b"stale-vp").await.unwrap();
+        tokio::fs::write(&external_vp, b"active-vp").await.unwrap();
+        tokio::fs::symlink("../current/bin/vp", &node_shim).await.unwrap();
+
+        let created = create_shim(&external_vp, &bin_dir, "node", false).await.unwrap();
+        let target = tokio::fs::read_link(&node_shim).await.unwrap();
+
+        assert!(created, "stale shims should be recreated");
+        assert_eq!(target, external_vp);
+    }
+
+    #[tokio::test]
+    #[cfg(unix)]
+    async fn test_create_shim_replaces_broken_unix_symlink_without_refresh() {
+        let temp_dir = TempDir::new().unwrap();
+        let home = AbsolutePathBuf::new(temp_dir.path().join(".vite-plus")).unwrap();
+        let bin_dir = home.join("bin");
+        let external_vp = temp_dir.path().join("external-vp");
+        let node_shim = bin_dir.join("node");
+
+        tokio::fs::create_dir_all(&bin_dir).await.unwrap();
+        tokio::fs::write(&external_vp, b"vp").await.unwrap();
+        tokio::fs::symlink("../current/bin/vp", &node_shim).await.unwrap();
+
+        let created = create_shim(&external_vp, &bin_dir, "node", false).await.unwrap();
+        let target = tokio::fs::read_link(&node_shim).await.unwrap();
+
+        assert!(created, "broken shims should be recreated");
+        assert_eq!(target, external_vp);
+    }
+
+    #[tokio::test]
+    #[cfg(unix)]
+    async fn test_setup_vp_wrapper_replaces_stale_unix_symlink_without_refresh() {
+        let temp_dir = TempDir::new().unwrap();
+        let home = AbsolutePathBuf::new(temp_dir.path().join(".vite-plus")).unwrap();
+        let bin_dir = home.join("bin");
+        let standalone_vp = home.join("current").join("bin").join("vp");
+        let external_vp = temp_dir.path().join("external-vp");
+        let vp_shim = bin_dir.join("vp");
+
+        tokio::fs::create_dir_all(standalone_vp.parent().unwrap()).await.unwrap();
+        tokio::fs::create_dir_all(&bin_dir).await.unwrap();
+        tokio::fs::write(&standalone_vp, b"stale-vp").await.unwrap();
+        tokio::fs::write(&external_vp, b"active-vp").await.unwrap();
+        tokio::fs::symlink("../current/bin/vp", &vp_shim).await.unwrap();
+
+        setup_vp_wrapper(&external_vp, &bin_dir, false).await.unwrap();
+        let target = tokio::fs::read_link(&vp_shim).await.unwrap();
+
+        assert_eq!(target, external_vp);
+    }
+
+    #[tokio::test]
+    #[cfg(unix)]
+    async fn test_setup_vp_wrapper_replaces_broken_unix_symlink_without_refresh() {
+        let temp_dir = TempDir::new().unwrap();
+        let home = AbsolutePathBuf::new(temp_dir.path().join(".vite-plus")).unwrap();
+        let bin_dir = home.join("bin");
+        let external_vp = temp_dir.path().join("external-vp");
+        let vp_shim = bin_dir.join("vp");
+
+        tokio::fs::create_dir_all(&bin_dir).await.unwrap();
+        tokio::fs::write(&external_vp, b"vp").await.unwrap();
+        tokio::fs::symlink("../current/bin/vp", &vp_shim).await.unwrap();
+
+        setup_vp_wrapper(&external_vp, &bin_dir, false).await.unwrap();
+        let target = tokio::fs::read_link(&vp_shim).await.unwrap();
+
+        assert_eq!(target, external_vp);
     }
 
     #[tokio::test]

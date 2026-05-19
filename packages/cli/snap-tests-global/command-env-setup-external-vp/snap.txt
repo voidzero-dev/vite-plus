@@ -1,0 +1,45 @@
+> mkdir -p external home # Prepare isolated external install and VP_HOME
+> cp "$(command -v vp)" external/vp && chmod +x external/vp # Simulate a Homebrew-style vp outside VP_HOME
+> printf '22.18.0\n' > .node-version # Project Node.js version
+> mkdir -p home/js_runtime/node/22.18.0/bin && printf '#!/bin/sh\necho v22.18.0\n' > home/js_runtime/node/22.18.0/bin/node && chmod +x home/js_runtime/node/22.18.0/bin/node # Preinstall managed Node runtime
+> VP_HOME="$(pwd)/home" ./external/vp env setup # Setup shims from external vp
+Setup:
+  Preparing vite-plus environment.
+
+Created Shims:
+  <cwd>/home/bin/node
+  <cwd>/home/bin/npm
+  <cwd>/home/bin/npx
+  <cwd>/home/bin/vpx
+  <cwd>/home/bin/vpr
+
+Next Steps:
+  Add to your shell profile (~/.zshrc, ~/.bashrc, etc.):
+
+  . "<cwd>/home/env"
+
+  For fish shell, add to ~/.config/fish/config.fish:
+
+  source "<cwd>/home/env.fish"
+
+  For Nushell, add to ~/.config/nushell/config.nu:
+
+  source '<cwd>/home/env.nu'
+
+  For PowerShell, add to your $PROFILE:
+
+  . "<cwd>/home/env.ps1"
+
+  For IDE support (VS Code, Cursor), ensure bin directory is in system PATH:
+  - macOS: Add to ~/.profile or use launchd
+
+  Restart your terminal and IDE, then run `vp env doctor` to verify.
+
+> node assert-shims.mjs # Shims should point to external vp, not VP_HOME/current/bin/vp
+all shims point to external vp
+
+> VP_HOME="$(pwd)/home" PATH="$(pwd)/home/bin:$PATH" command -v node # node resolves to the new shim
+<cwd>/home/bin/node
+
+> VP_HOME="$(pwd)/home" PATH="$(pwd)/home/bin:$PATH" node -v # node shim uses the project version
+v22.18.0
