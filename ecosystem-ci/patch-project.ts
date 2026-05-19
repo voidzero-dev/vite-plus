@@ -1,9 +1,18 @@
 import { execSync } from 'node:child_process';
 import { readFile, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { ecosystemCiDir, tgzDir } from './paths.ts';
 import repos from './repo.json' with { type: 'json' };
+
+const cliPkg = JSON.parse(
+  await readFile(
+    join(dirname(fileURLToPath(import.meta.url)), '..', 'packages', 'cli', 'package.json'),
+    'utf-8',
+  ),
+) as { version: string };
+const vpVersion = cliPkg.version;
 
 const projects = Object.keys(repos);
 
@@ -54,11 +63,11 @@ execSync(`${cli} migrate --no-agent --no-interactive`, {
     ...process.env,
     ...(forceFreshMigration ? { VP_FORCE_MIGRATE: '1' } : {}),
     VP_OVERRIDE_PACKAGES: JSON.stringify({
-      vite: `file:${tgzDir}/voidzero-dev-vite-plus-core-0.0.0.tgz`,
-      vitest: `file:${tgzDir}/voidzero-dev-vite-plus-test-0.0.0.tgz`,
-      '@voidzero-dev/vite-plus-core': `file:${tgzDir}/voidzero-dev-vite-plus-core-0.0.0.tgz`,
-      '@voidzero-dev/vite-plus-test': `file:${tgzDir}/voidzero-dev-vite-plus-test-0.0.0.tgz`,
+      vite: `file:${tgzDir}/voidzero-dev-vite-plus-core-${vpVersion}.tgz`,
+      vitest: `file:${tgzDir}/voidzero-dev-vite-plus-test-${vpVersion}.tgz`,
+      '@voidzero-dev/vite-plus-core': `file:${tgzDir}/voidzero-dev-vite-plus-core-${vpVersion}.tgz`,
+      '@voidzero-dev/vite-plus-test': `file:${tgzDir}/voidzero-dev-vite-plus-test-${vpVersion}.tgz`,
     }),
-    VP_VERSION: `file:${tgzDir}/vite-plus-0.0.0.tgz`,
+    VP_VERSION: `file:${tgzDir}/vite-plus-${vpVersion}.tgz`,
   },
 });

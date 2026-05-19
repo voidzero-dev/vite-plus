@@ -1,8 +1,13 @@
 import { createRequire } from 'node:module';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const require = createRequire(`${process.cwd()}/`);
 
-const expectedVersion = '0.0.0';
+const cliPkg = require(
+  join(dirname(fileURLToPath(import.meta.url)), '..', 'packages', 'cli', 'package.json'),
+) as { version: string };
+const expectedVersion = cliPkg.version;
 
 try {
   const pkg = require('vite-plus/package.json') as { version: string; name: string };
