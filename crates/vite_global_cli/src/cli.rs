@@ -8,10 +8,20 @@ use std::{ffi::OsStr, process::ExitStatus};
 use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
 use clap_complete::ArgValueCompleter;
 use tokio::runtime::Runtime;
-use vite_path::{AbsolutePath, AbsolutePathBuf};
+use vite_path::AbsolutePathBuf;
 use vite_pm_cli::PackageManagerCommand;
+use vite_shared::output;
 
-use crate::{commands, error::Error, help};
+use crate::{
+    commands::{
+        self,
+        env::{global_install, package_metadata::PackageMetadata},
+    },
+    error::Error,
+    help,
+};
+
+const DEFAULT_GLOBAL_INSTALL_CONCURRENCY: usize = 5;
 
 #[derive(Clone, Copy, Debug)]
 pub struct RenderOptions {
@@ -532,19 +542,24 @@ async fn run_package_manager_command(
 ) -> Result<ExitStatus, Error> {
     match command {
         PackageManagerCommand::Install {
-            global: true, packages: Some(pkgs), node, force, ..
-        } if !pkgs.is_empty() => managed_install(&pkgs, node.as_deref(), force).await,
+            global: true,
+            packages: Some(pkgs),
+            node,
+            force,
+            concurrency,
+            ..
+        } if !pkgs.is_empty() => managed_install(&pkgs, node.as_deref(), force, concurrency).await,
 
-        PackageManagerCommand::Add { global: true, ref packages, ref node, .. } => {
-            managed_install(packages, node.as_deref(), false).await
-        }
+        PackageManagerCommand::Add {
+            global: true, ref packages, ref node, concurrency, ..
+        } => managed_install(packages, node.as_deref(), false, concurrency).await,
 
         PackageManagerCommand::Remove { global: true, ref packages, dry_run, .. } => {
             managed_uninstall(packages, dry_run).await
         }
 
-        PackageManagerCommand::Update { global: true, ref packages, .. } => {
-            managed_update(&cwd, packages).await
+        PackageManagerCommand::Update { global: true, ref packages, concurrency, .. } => {
+            managed_update(packages, concurrency).await
         }
 
         // `pm list -g` lists vite-plus-managed globals, not the underlying PM's.
@@ -562,20 +577,28 @@ async fn run_package_manager_command(
     }
 }
 
-// snap-test fixtures expect bare lines (no "error:"/"info:" prefix), so
-// these helpers use `output::raw_stderr`/`output::raw` rather than the
-// prefixed `output::error`/`output::info`.
 async fn managed_install(
     packages: &[String],
     node: Option<&str>,
     force: bool,
+    concurrency: Option<usize>,
 ) -> Result<ExitStatus, Error> {
-    for package in packages {
-        if let Err(e) = crate::commands::env::global_install::install(package, node, force).await {
-            vite_shared::output::raw_stderr(&format!("Failed to install {package}: {e}"));
-            return Ok(exit_status(1));
-        }
+    if let Err((package_name, error)) = crate::commands::env::global_install::install(
+        packages,
+        node,
+        force,
+        concurrency.unwrap_or(DEFAULT_GLOBAL_INSTALL_CONCURRENCY),
+        false,
+    )
+    .await
+    {
+        output::error(&format!(
+            "Failed to install {}: {error}",
+            package_name.as_deref().unwrap_or("global packages")
+        ));
+        return Ok(exit_status(1));
     }
+
     Ok(ExitStatus::default())
 }
 
@@ -589,21 +612,14 @@ async fn managed_uninstall(packages: &[String], dry_run: bool) -> Result<ExitSta
     Ok(ExitStatus::default())
 }
 
-fn is_global_package_up_to_date(
-    installed_version: &str,
-    registry_version: &str,
-    installed_node_version: &str,
-    target_node_version: &str,
-) -> bool {
+fn is_global_package_up_to_date(installed_version: &str, registry_version: &str) -> bool {
     installed_version.trim() == registry_version.trim()
-        && installed_node_version.trim() == target_node_version.trim()
 }
 
-async fn managed_update(cwd: &AbsolutePath, packages: &[String]) -> Result<ExitStatus, Error> {
-    use crate::commands::env::{
-        config::resolve_version, global_install, package_metadata::PackageMetadata,
-    };
-
+async fn managed_update(
+    packages: &[String],
+    concurrency: Option<usize>,
+) -> Result<ExitStatus, Error> {
     let all_packages = if packages.is_empty() {
         let all = PackageMetadata::list_all().await?;
         if all.is_empty() {
@@ -615,27 +631,14 @@ async fn managed_update(cwd: &AbsolutePath, packages: &[String]) -> Result<ExitS
         None
     };
 
-    let target_node_version = resolve_version(cwd).await?.version;
     let mut to_update: Vec<String> = Vec::new();
     let mut skipped = 0usize;
 
     if let Some(all) = all_packages {
         for metadata in all {
-            if metadata.platform.node.trim() != target_node_version.trim() {
-                to_update.push(metadata.name.clone());
-                continue;
-            }
-
-            match global_install::latest_package_version(&metadata.name, Some(&target_node_version))
-                .await
-            {
+            match global_install::latest_package_version(&metadata.name).await {
                 Ok(latest_version)
-                    if is_global_package_up_to_date(
-                        &metadata.version,
-                        &latest_version,
-                        &metadata.platform.node,
-                        &target_node_version,
-                    ) =>
+                    if is_global_package_up_to_date(&metadata.version, &latest_version) =>
                 {
                     vite_shared::output::raw(&format!(
                         "{} is already up to date (v{}).",
@@ -662,21 +665,9 @@ async fn managed_update(cwd: &AbsolutePath, packages: &[String]) -> Result<ExitS
 
             let (package_name, _) = global_install::parse_package_spec(package);
             if let Some(metadata) = PackageMetadata::load(&package_name).await? {
-                if metadata.platform.node.trim() != target_node_version.trim() {
-                    to_update.push(package.clone());
-                    continue;
-                }
-
-                match global_install::latest_package_version(package, Some(&target_node_version))
-                    .await
-                {
+                match global_install::latest_package_version(package).await {
                     Ok(latest_version)
-                        if is_global_package_up_to_date(
-                            &metadata.version,
-                            &latest_version,
-                            &metadata.platform.node,
-                            &target_node_version,
-                        ) =>
+                        if is_global_package_up_to_date(&metadata.version, &latest_version) =>
                     {
                         vite_shared::output::raw(&format!(
                             "{} is already up to date (v{}).",
@@ -704,11 +695,21 @@ async fn managed_update(cwd: &AbsolutePath, packages: &[String]) -> Result<ExitS
         return Ok(ExitStatus::default());
     }
 
-    for package in &to_update {
-        if let Err(e) = global_install::install(package, Some(&target_node_version), false).await {
-            vite_shared::output::raw_stderr(&format!("Failed to update {package}: {e}"));
-            return Ok(exit_status(1));
-        }
+    // Call reinstall logic
+    if let Err((package_name, error)) = global_install::install(
+        &to_update,
+        None,
+        false,
+        concurrency.unwrap_or(DEFAULT_GLOBAL_INSTALL_CONCURRENCY),
+        true,
+    )
+    .await
+    {
+        output::error(&format!(
+            "Failed to update {}: {error}",
+            package_name.as_deref().unwrap_or("global packages")
+        ));
+        return Ok(exit_status(1));
     }
     Ok(ExitStatus::default())
 }
@@ -961,17 +962,12 @@ mod tests {
 
     #[test]
     fn skips_global_update_when_registry_and_node_versions_match() {
-        assert!(is_global_package_up_to_date("5.9.3", "5.9.3", "20.18.0", "20.18.0"));
+        assert!(is_global_package_up_to_date("5.9.3", "5.9.3"));
     }
 
     #[test]
     fn updates_global_package_when_registry_version_differs_from_installed_version() {
-        assert!(!is_global_package_up_to_date("5.9.2", "5.9.3", "20.18.0", "20.18.0"));
-    }
-
-    #[test]
-    fn updates_global_package_when_node_version_differs_from_target_version() {
-        assert!(!is_global_package_up_to_date("5.9.3", "5.9.3", "20.18.0", "24.15.0"));
+        assert!(!is_global_package_up_to_date("5.9.2", "5.9.3"));
     }
 
     #[test]
