@@ -1,0 +1,7 @@
+{
+  "name": "parallel-pkg-b",
+  "version": "2.0.0",
+  "bin": {
+    "parallel-b": "./cli.js"
+  }
+}

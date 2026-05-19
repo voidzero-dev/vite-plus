@@ -4,7 +4,7 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "build": "pnpm -F @voidzero-dev/* -F vite-plus build",
+    "build": "pnpm -F @rolldown/pluginutils build && pnpm -F rolldown build-binding:release && pnpm -F rolldown build-node && pnpm -F vite build-types && pnpm -F @voidzero-dev/* -F vite-plus build",
     "bootstrap-cli": "pnpm build && cargo build -p vite_global_cli -p vite_trampoline --release && pnpm install-global-cli",
     "bootstrap-cli:ci": "pnpm install-global-cli",
     "install-global-cli": "tool install-global-cli",

@@ -152,10 +152,11 @@ async fn execute_vite_task_command(
         program_name: Str::from("vp"),
     })?;
 
-    // Main execution (consumes session)
-    let result = session.main(command).await.map_err(|e| Error::Anyhow(e));
+    // Main execution (consumes session). vite-task prints any errors itself
+    // and returns only an exit status.
+    let status = session.main(command).await;
 
-    result
+    Ok(status)
 }
 
 /// Main entry point for vite-plus CLI.
