@@ -203,6 +203,124 @@ describe('rewriteVitePlusTestSpecifier', () => {
     ].join('\n');
     expect(rewriteVitePlusTestSpecifier(input)).toBe(expected);
   });
+
+  it('does NOT rewrite the pattern inside a string literal in TSX (oxc-parser fallback)', () => {
+    // No real import — there's nothing to rewrite. The substring lives inside
+    // a double-quoted string literal, and the file contains JSX which forces
+    // the oxc-parser fallback path.
+    const input = [
+      'function App() {',
+      '  const msg = "from \'vite-plus/test\'";',
+      '  return <div>{msg}</div>;',
+      '}',
+      '',
+    ].join('\n');
+    expect(rewriteVitePlusTestSpecifier(input)).toBe(input);
+  });
+
+  it('does NOT rewrite the pattern inside JSX text (oxc-parser fallback)', () => {
+    const input = ['function App() {', "  return <p>from 'vite-plus/test'</p>;", '}', ''].join(
+      '\n',
+    );
+    expect(rewriteVitePlusTestSpecifier(input)).toBe(input);
+  });
+
+  it("rewrites a real import but preserves a string literal containing 'vite-plus/test' in TSX", () => {
+    const input = [
+      "import { vi } from 'vite-plus/test';",
+      'function App() {',
+      '  const fixture = "import { vi } from \'vite-plus/test\'";',
+      '  return <p>{fixture}</p>;',
+      '}',
+      '',
+    ].join('\n');
+    const expected = [
+      "import { vi } from 'vitest';",
+      'function App() {',
+      '  const fixture = "import { vi } from \'vite-plus/test\'";',
+      '  return <p>{fixture}</p>;',
+      '}',
+      '',
+    ].join('\n');
+    expect(rewriteVitePlusTestSpecifier(input)).toBe(expected);
+  });
+
+  it('rewrites a real dynamic import but preserves a string literal in TSX', () => {
+    const input = [
+      'function App() {',
+      "  const mod = import('vite-plus/test');",
+      '  const fixture = "import(\'vite-plus/test\')";',
+      '  return <p>{fixture}</p>;',
+      '}',
+      '',
+    ].join('\n');
+    const expected = [
+      'function App() {',
+      "  const mod = import('vitest');",
+      '  const fixture = "import(\'vite-plus/test\')";',
+      '  return <p>{fixture}</p>;',
+      '}',
+      '',
+    ].join('\n');
+    expect(rewriteVitePlusTestSpecifier(input)).toBe(expected);
+  });
+
+  it("rewrites `export * from 'vite-plus/test'` in TSX (oxc-parser fallback)", () => {
+    const input = [
+      "export * from 'vite-plus/test';",
+      'function App() { return <div />; }',
+      '',
+    ].join('\n');
+    const expected = ["export * from 'vitest';", 'function App() { return <div />; }', ''].join(
+      '\n',
+    );
+    expect(rewriteVitePlusTestSpecifier(input)).toBe(expected);
+  });
+
+  it("rewrites `export { vi } from 'vite-plus/test'` in TSX (oxc-parser fallback)", () => {
+    const input = [
+      "export { vi } from 'vite-plus/test';",
+      'function App() { return <div />; }',
+      '',
+    ].join('\n');
+    const expected = [
+      "export { vi } from 'vitest';",
+      'function App() { return <div />; }',
+      '',
+    ].join('\n');
+    expect(rewriteVitePlusTestSpecifier(input)).toBe(expected);
+  });
+
+  it('rewrites a real re-export but preserves a string literal containing the same text in TSX', () => {
+    const input = [
+      "export * from 'vite-plus/test';",
+      'function App() {',
+      '  const fixture = "export * from \'vite-plus/test\'";',
+      '  return <p>{fixture}</p>;',
+      '}',
+      '',
+    ].join('\n');
+    const expected = [
+      "export * from 'vitest';",
+      'function App() {',
+      '  const fixture = "export * from \'vite-plus/test\'";',
+      '  return <p>{fixture}</p>;',
+      '}',
+      '',
+    ].join('\n');
+    expect(rewriteVitePlusTestSpecifier(input)).toBe(expected);
+  });
+
+  it('does NOT rewrite a local `export { vi }` (no `from` clause) in TSX', () => {
+    const input = [
+      'const vi = 1;',
+      'export { vi };',
+      "const note = 'vite-plus/test';",
+      'function App() { return <div>{note}</div>; }',
+      '',
+    ].join('\n');
+    expect(rewriteVitePlusTestSpecifier(input)).toBe(input);
+  });
 });
 
 describe('defineConfig project plugin injection', () => {

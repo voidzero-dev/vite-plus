@@ -1,5 +1,6 @@
 import type { PluginOption, UserConfig } from '@voidzero-dev/vite-plus-core';
 import { initSync, parse, type ImportSpecifier } from 'es-module-lexer';
+import { parseSync as oxcParseSync } from 'oxc-parser';
 import type { OxfmtConfig } from 'oxfmt';
 import type { OxlintConfig } from 'oxlint';
 import {
@@ -85,11 +86,15 @@ type ViteUserConfigExport =
  * Task #50 pins `vitest` and the `@vitest/*` family so both specifiers resolve
  * to the same physical module, making this rewrite runtime-safe.
  *
- * Uses `es-module-lexer` so only real ESM `import`/`export ... from` and
- * dynamic `import()` specifiers are touched — string literals, template
- * literals, and error messages that happen to contain `vite-plus/test` are
- * left alone. CommonJS `require(...)` calls are handled separately by a
- * tightened regex (es-module-lexer is ESM-only).
+ * Uses `es-module-lexer` for the fast path on plain JS/TS so only real ESM
+ * `import`/`export ... from` and dynamic `import()` specifiers are touched —
+ * string literals, template literals, and error messages that happen to
+ * contain `vite-plus/test` are left alone. When `es-module-lexer` cannot
+ * parse the source (typically JSX/TSX), we fall back to `oxc-parser`, which
+ * understands TSX and exposes precise import-specifier offsets so JSX text
+ * and string-literal occurrences of `vite-plus/test` stay untouched.
+ * CommonJS `require(...)` calls are handled separately by a tightened regex
+ * (es-module-lexer / oxc-parser only describe ESM imports).
  *
  * Exported for unit testing.
  */
@@ -105,12 +110,18 @@ const TARGET_REPLACEMENT = 'vitest';
 // above already eliminates the common false positives that motivated this fix.
 const REQUIRE_PATTERN = /(?<=^|[\s;{}([,=])(require\s*\(\s*['"])vite-plus\/test(?=['"])/g;
 
-// Fallback ESM patterns used when `es-module-lexer` throws (e.g. on JSX/TSX).
-// These are tight enough that they only match real `from`/`import(...)` import
-// contexts — string literals or template content containing `vite-plus/test`
-// as a substring are not touched.
-const FROM_PATTERN = /(\bfrom\s*)(['"])vite-plus\/test\2/g;
-const DYNAMIC_IMPORT_PATTERN = /(\bimport\s*\(\s*)(['"])vite-plus\/test\2/g;
+// Filename passed to `oxc-parser` for the JSX/TSX fallback. The extension is
+// what selects TSX-mode parsing — the file does not need to exist on disk.
+const OXC_FALLBACK_FILENAME = 'rewrite.tsx';
+
+// Quoted forms of the target specifier that oxc-parser's `dynamicImports`
+// entries can yield when the argument is a plain string literal. `moduleRequest`
+// for a dynamic import does not expose `.value`, so we slice the source and
+// compare against these literal forms.
+const QUOTED_TARGETS: ReadonlySet<string> = new Set([
+  `'${TARGET_SPECIFIER}'`,
+  `"${TARGET_SPECIFIER}"`,
+]);
 
 let esLexerInitialized = false;
 function ensureLexerInit(): void {
@@ -121,12 +132,111 @@ function ensureLexerInit(): void {
   esLexerInitialized = true;
 }
 
+/**
+ * Fallback rewrite for sources that `es-module-lexer` cannot parse — most
+ * commonly JSX/TSX. Uses `oxc-parser` to locate real static and dynamic
+ * import specifiers so JSX text and string literals containing
+ * `vite-plus/test` are left alone.
+ *
+ * Returns the original `code` unchanged if `oxc-parser` itself throws —
+ * we never fall back to a regex on raw TSX, because that re-introduces the
+ * exact bug this function exists to fix.
+ */
+function rewriteWithOxcParser(code: string): string {
+  let staticImports: ReadonlyArray<{
+    moduleRequest: { value: string; start: number; end: number };
+  }>;
+  let dynamicImports: ReadonlyArray<{ moduleRequest: { start: number; end: number } }>;
+  let staticExports: ReadonlyArray<{
+    entries: ReadonlyArray<{
+      moduleRequest: { value: string; start: number; end: number } | null;
+    }>;
+  }>;
+  try {
+    const parsed = oxcParseSync(OXC_FALLBACK_FILENAME, code);
+    staticImports = parsed.module.staticImports;
+    dynamicImports = parsed.module.dynamicImports;
+    staticExports = parsed.module.staticExports;
+  } catch {
+    // Extremely malformed input that oxc-parser cannot recover from. Leave
+    // the source untouched rather than risk a regex-based rewrite that would
+    // again clobber JSX text / string literals.
+    return code;
+  }
+
+  // Collect every rewrite as a (start, end, replacement) triple, then apply
+  // them in reverse offset order so earlier splices don't shift later ones.
+  // For both static and dynamic imports, `moduleRequest.start/end` bound the
+  // specifier INCLUDING its surrounding quotes, so we preserve the original
+  // quote character in the replacement.
+  type Edit = { start: number; end: number; replacement: string };
+  const edits: Edit[] = [];
+
+  for (const si of staticImports) {
+    const mr = si.moduleRequest;
+    if (mr.value !== TARGET_SPECIFIER) {
+      continue;
+    }
+    const quote = code[mr.start];
+    if (quote !== '"' && quote !== "'") {
+      continue;
+    }
+    edits.push({
+      start: mr.start,
+      end: mr.end,
+      replacement: `${quote}${TARGET_REPLACEMENT}${quote}`,
+    });
+  }
+
+  for (const di of dynamicImports) {
+    const mr = di.moduleRequest;
+    const slice = code.slice(mr.start, mr.end);
+    if (!QUOTED_TARGETS.has(slice)) {
+      continue;
+    }
+    const quote = slice[0];
+    edits.push({
+      start: mr.start,
+      end: mr.end,
+      replacement: `${quote}${TARGET_REPLACEMENT}${quote}`,
+    });
+  }
+
+  for (const entry of staticExports.flatMap((e) => e.entries)) {
+    const mr = entry.moduleRequest;
+    if (mr === null || mr.value !== TARGET_SPECIFIER) {
+      continue;
+    }
+    const quote = code[mr.start];
+    if (quote !== '"' && quote !== "'") {
+      continue;
+    }
+    edits.push({
+      start: mr.start,
+      end: mr.end,
+      replacement: `${quote}${TARGET_REPLACEMENT}${quote}`,
+    });
+  }
+
+  if (edits.length === 0) {
+    return code;
+  }
+
+  edits.sort((a, b) => a.start - b.start);
+  let result = code;
+  for (let i = edits.length - 1; i >= 0; i--) {
+    const { start, end, replacement } = edits[i];
+    result = result.slice(0, start) + replacement + result.slice(end);
+  }
+  return result;
+}
+
 export function rewriteVitePlusTestSpecifier(code: string): string {
   if (!code.includes(TARGET_SPECIFIER)) {
     return code;
   }
 
-  // Step 1: rewrite ESM static/dynamic imports via es-module-lexer.
+  // Step 1: rewrite ESM static/dynamic imports via es-module-lexer (fast path).
   let result = code;
   let imports: ReadonlyArray<ImportSpecifier> | undefined;
   let lexerThrew = false;
@@ -135,7 +245,7 @@ export function rewriteVitePlusTestSpecifier(code: string): string {
     [imports] = parse(code);
   } catch {
     // Parse failure (JSX/TSX, non-JS file, syntax error before transformation,
-    // etc.). Fall back to the conservative regex pass below.
+    // etc.). Fall back to the oxc-parser pass below.
     imports = undefined;
     lexerThrew = true;
   }
@@ -152,18 +262,16 @@ export function rewriteVitePlusTestSpecifier(code: string): string {
       result = result.slice(0, s) + replacement + result.slice(e);
     }
   } else if (lexerThrew) {
-    // The lexer cannot parse JSX/TSX, so .tsx test files with `vi.mock(...)`
-    // were silently left with the original `vite-plus/test` specifier. That
-    // causes `@vitest/mocker` to refuse to hoist the mock and crash at
-    // runtime with `Cannot access '__vi_import_0__' before initialization`.
-    // The regex matches `from 'vite-plus/test'` and `import('vite-plus/test')`
-    // only — both contexts can never appear inside legal JS string content
-    // because `from` and bare `import(` require statement positions.
-    result = result.replace(FROM_PATTERN, `$1$2${TARGET_REPLACEMENT}$2`);
-    result = result.replace(DYNAMIC_IMPORT_PATTERN, `$1$2${TARGET_REPLACEMENT}$2`);
+    // `es-module-lexer` can't parse JSX/TSX, so .tsx test files with
+    // `vi.mock(...)` were silently left with the original `vite-plus/test`
+    // specifier. That causes `@vitest/mocker` to refuse to hoist the mock
+    // and crash at runtime with `Cannot access '__vi_import_0__' before
+    // initialization`. Fall back to `oxc-parser`, which handles TSX and
+    // distinguishes real imports from JSX text / string literals.
+    result = rewriteWithOxcParser(code);
   }
 
-  // Step 2: rewrite CJS require() calls (not seen by es-module-lexer).
+  // Step 2: rewrite CJS require() calls (not seen by es-module-lexer / oxc-parser).
   result = result.replace(REQUIRE_PATTERN, `$1${TARGET_REPLACEMENT}`);
 
   return result;
