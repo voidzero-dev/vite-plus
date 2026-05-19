@@ -4,6 +4,7 @@ import type { VoidZeroThemeConfig } from '@voidzero-dev/vitepress-theme';
 import { extendConfig } from '@voidzero-dev/vitepress-theme/config';
 import { defineConfig, type HeadConfig } from 'vitepress';
 import { groupIconMdPlugin, groupIconVitePlugin } from 'vitepress-plugin-group-icons';
+import llmstxt from 'vitepress-plugin-llms';
 import { withMermaid } from 'vitepress-plugin-mermaid';
 
 const taskRunnerGuideItems = [
@@ -128,6 +129,11 @@ export default extendConfig(
             customIcon: {
               tsdown: 'https://tsdown.dev/tsdown.svg',
             },
+          }),
+          llmstxt({
+            ignoreFiles: ['team.md'],
+            description: 'The Unified Toolchain for the Web',
+            details: '',
           }),
         ],
       },

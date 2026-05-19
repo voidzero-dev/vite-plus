@@ -478,6 +478,22 @@ fn should_force_global_delegate(command: &str, args: &[String]) -> bool {
     }
 }
 
+/// Whether the Vite+ banner should be suppressed for a lint/fmt invocation.
+///
+/// IDE extensions invoke `vp lint --lsp`, `vp fmt --lsp`, and
+/// `vp fmt --stdin-filepath` and parse the subprocess's stdout as the LSP
+/// protocol / formatted source; the cosmetic banner would corrupt that stream.
+fn should_suppress_header_for_subcommand(command: &str, args: &[String]) -> bool {
+    match command {
+        "lint" => has_flag_before_terminator(args, "--lsp"),
+        "fmt" => {
+            has_flag_before_terminator(args, "--lsp")
+                || has_flag_before_terminator(args, "--stdin-filepath")
+        }
+        _ => false,
+    }
+}
+
 /// Get available tasks for shell completion.
 ///
 /// Delegates to the local vite-plus CLI to run `vp run` without arguments,
@@ -778,7 +794,7 @@ pub async fn run_command_with_options(
             if help::maybe_print_unified_delegate_help("lint", &args, render_options.show_header) {
                 return Ok(ExitStatus::default());
             }
-            print_runtime_header(render_options.show_header);
+            maybe_print_runtime_header("lint", &args, render_options.show_header);
             if should_force_global_delegate("lint", &args) {
                 commands::delegate::execute_global(cwd, "lint", &args).await
             } else {
@@ -790,7 +806,7 @@ pub async fn run_command_with_options(
             if help::maybe_print_unified_delegate_help("fmt", &args, render_options.show_header) {
                 return Ok(ExitStatus::default());
             }
-            print_runtime_header(render_options.show_header);
+            maybe_print_runtime_header("fmt", &args, render_options.show_header);
             if should_force_global_delegate("fmt", &args) {
                 commands::delegate::execute_global(cwd, "fmt", &args).await
             } else {
@@ -887,6 +903,13 @@ fn print_runtime_header(show_header: bool) {
     vite_shared::header::print_header();
 }
 
+fn maybe_print_runtime_header(command: &str, args: &[String], show_header: bool) {
+    if should_suppress_header_for_subcommand(command, args) {
+        return;
+    }
+    print_runtime_header(show_header);
+}
+
 /// Build a clap Command with custom help formatting matching the JS CLI output.
 pub fn command_with_help() -> clap::Command {
     command_with_help_with_options(RenderOptions::default())
@@ -934,6 +957,7 @@ pub fn try_parse_args_from_with_options(
 mod tests {
     use super::{
         has_flag_before_terminator, is_global_package_up_to_date, should_force_global_delegate,
+        should_suppress_header_for_subcommand,
     };
 
     #[test]
@@ -976,5 +1000,54 @@ mod tests {
     fn non_init_does_not_force_global_delegate() {
         assert!(!should_force_global_delegate("lint", &["src/index.ts".to_string()]));
         assert!(!should_force_global_delegate("fmt", &["--check".to_string()]));
+    }
+
+    #[test]
+    fn lint_lsp_suppresses_header() {
+        assert!(should_suppress_header_for_subcommand("lint", &["--lsp".to_string()]));
+        assert!(should_suppress_header_for_subcommand(
+            "lint",
+            &["--fix".to_string(), "--lsp".to_string()]
+        ));
+    }
+
+    #[test]
+    fn lint_without_lsp_does_not_suppress_header() {
+        assert!(!should_suppress_header_for_subcommand("lint", &[]));
+        assert!(!should_suppress_header_for_subcommand("lint", &["src".to_string()]));
+        assert!(!should_suppress_header_for_subcommand("lint", &["--fix".to_string()]));
+    }
+
+    #[test]
+    fn lint_lsp_after_terminator_does_not_suppress_header() {
+        assert!(!should_suppress_header_for_subcommand(
+            "lint",
+            &["--".to_string(), "--lsp".to_string()]
+        ));
+    }
+
+    #[test]
+    fn fmt_lsp_or_stdin_filepath_suppresses_header() {
+        assert!(should_suppress_header_for_subcommand("fmt", &["--lsp".to_string()]));
+        assert!(should_suppress_header_for_subcommand(
+            "fmt",
+            &["--stdin-filepath".to_string(), "foo.ts".to_string()]
+        ));
+        assert!(should_suppress_header_for_subcommand(
+            "fmt",
+            &["--stdin-filepath=foo.ts".to_string()]
+        ));
+    }
+
+    #[test]
+    fn fmt_without_lsp_or_stdin_does_not_suppress_header() {
+        assert!(!should_suppress_header_for_subcommand("fmt", &[]));
+        assert!(!should_suppress_header_for_subcommand("fmt", &["src".to_string()]));
+        assert!(!should_suppress_header_for_subcommand("fmt", &["--check".to_string()]));
+    }
+
+    #[test]
+    fn unknown_subcommand_does_not_suppress_header() {
+        assert!(!should_suppress_header_for_subcommand("test", &["--lsp".to_string()]));
     }
 }

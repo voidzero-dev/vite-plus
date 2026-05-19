@@ -909,10 +909,6 @@ pub enum PmCommands {
         #[arg(last = true, allow_hyphen_values = true)]
         pass_through_args: Option<Vec<String>>,
     },
-
-    /// Manage Yarn plugins (Yarn 2+ only — other package managers will print a warning and exit successfully)
-    #[command(subcommand)]
-    Plugin(PluginCommands),
 }
 
 impl PmCommands {
@@ -930,65 +926,6 @@ impl PmCommands {
             _ => false,
         }
     }
-}
-
-/// Plugin subcommands (Yarn 2+ only).
-#[derive(Subcommand, Debug, Clone)]
-pub enum PluginCommands {
-    /// Import a plugin from a known source
-    Import {
-        /// Plugin name or URL to import
-        #[arg(required = true)]
-        spec: String,
-
-        /// Additional arguments
-        #[arg(last = true, allow_hyphen_values = true)]
-        pass_through_args: Option<Vec<String>>,
-    },
-
-    /// Build and import a plugin from sources
-    #[command(name = "import-from-sources")]
-    ImportFromSources {
-        /// Plugin name to compile (yarn's positional `<name>`, not a repository URL)
-        #[arg(required = true)]
-        name: String,
-
-        /// Additional arguments
-        #[arg(last = true, allow_hyphen_values = true)]
-        pass_through_args: Option<Vec<String>>,
-    },
-
-    /// List plugins available on the registry
-    List {
-        /// Additional arguments
-        #[arg(last = true, allow_hyphen_values = true)]
-        pass_through_args: Option<Vec<String>>,
-    },
-
-    /// List the currently installed plugins
-    Runtime {
-        /// Additional arguments
-        #[arg(last = true, allow_hyphen_values = true)]
-        pass_through_args: Option<Vec<String>>,
-    },
-
-    /// Remove a plugin
-    Remove {
-        /// Plugin name to remove
-        #[arg(required = true)]
-        name: String,
-
-        /// Additional arguments
-        #[arg(last = true, allow_hyphen_values = true)]
-        pass_through_args: Option<Vec<String>>,
-    },
-
-    /// Find all third-party plugins that differ from their own spec
-    Check {
-        /// Additional arguments
-        #[arg(last = true, allow_hyphen_values = true)]
-        pass_through_args: Option<Vec<String>>,
-    },
 }
 
 /// Configuration subcommands.
