@@ -27,21 +27,25 @@ runs:
       id: ecosystem-ci-project-hash
       if: ${{ inputs.ecosystem-ci-project != '' }}
       run: |
-        node -e "console.log('ECOSYSTEM_CI_PROJECT_HASH=' + require('./ecosystem-ci/repo.json')['${{ inputs.ecosystem-ci-project }}'].hash)" >> $GITHUB_OUTPUT
-        node -e "console.log('ECOSYSTEM_CI_PROJECT_REPOSITORY=' + require('./ecosystem-ci/repo.json')['${{ inputs.ecosystem-ci-project }}'].repository.replace('https://github.com/', '').replace('.git', ''))" >> $GITHUB_OUTPUT
-        echo "ECOSYSTEM_CI_PROJECT_PATH=${{ runner.temp }}/vite-plus-ecosystem-ci/${{ inputs.ecosystem-ci-project }}" >> $GITHUB_OUTPUT
+        node -e "console.log('ECOSYSTEM_CI_PROJECT_HASH=' + require('./ecosystem-ci/repo.json')['${INPUTS_ECOSYSTEM_CI_PROJECT}'].hash)" >> $GITHUB_OUTPUT
+        node -e "console.log('ECOSYSTEM_CI_PROJECT_REPOSITORY=' + require('./ecosystem-ci/repo.json')['${INPUTS_ECOSYSTEM_CI_PROJECT}'].repository.replace('https://github.com/', '').replace('.git', ''))" >> $GITHUB_OUTPUT
+        echo "ECOSYSTEM_CI_PROJECT_PATH=${{ runner.temp }}/vite-plus-ecosystem-ci/${INPUTS_ECOSYSTEM_CI_PROJECT}" >> $GITHUB_OUTPUT
+      env:
+        INPUTS_ECOSYSTEM_CI_PROJECT: ${{ inputs.ecosystem-ci-project }}
 
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
         repository: rolldown/rolldown
         path: rolldown
         ref: ${{ steps.upstream-versions.outputs.ROLLDOWN_HASH }}
+        persist-credentials: false
 
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
         repository: vitejs/vite
         path: vite
         ref: ${{ steps.upstream-versions.outputs.ROLLDOWN_VITE_HASH }}
+        persist-credentials: false
 
     # Disable autocrlf to preserve LF line endings on Windows
     # This prevents prettier/eslint from failing with "Delete ␍" errors
@@ -53,4 +57,6 @@ runs:
     - name: Clone ecosystem ci project
       if: ${{ inputs.ecosystem-ci-project != '' }}
       shell: bash
-      run: npx tsx ecosystem-ci/clone.ts ${{ inputs.ecosystem-ci-project }}
+      run: npx tsx ecosystem-ci/clone.ts ${INPUTS_ECOSYSTEM_CI_PROJECT}
+      env:
+        INPUTS_ECOSYSTEM_CI_PROJECT: ${{ inputs.ecosystem-ci-project }}
