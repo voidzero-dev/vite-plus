@@ -202,15 +202,8 @@ function resolveVpAt(dir: string): string | null {
   } catch {
     return null;
   }
-  const binDir = join(dir, 'node_modules', '.bin');
-  const candidates =
-    process.platform === 'win32'
-      ? [join(binDir, 'vp.cmd'), join(binDir, 'vp.exe'), join(binDir, 'vp')]
-      : [join(binDir, 'vp')];
-  for (const candidate of candidates) {
-    if (existsSync(candidate)) return candidate;
-  }
-  return null;
+  const shim = join(dir, 'node_modules', '.bin', process.platform === 'win32' ? 'vp.cmd' : 'vp');
+  return existsSync(shim) ? shim : null;
 }
 
 export function detectVitePlusProjectSync(start: string): DetectResult | null {
@@ -267,9 +260,9 @@ same everywhere. The path returned for spawning differs by extension,
 mirroring whatever pattern that extension already uses for
 `oxlint`/`oxfmt`:
 
-- **`oxc-vscode`, `coc-oxc`** — target `node_modules/.bin/vp` (with
-  `.cmd`/`.exe` Windows variants), the same shim path they already
-  use for `oxlint`. Call the detector before the existing
+- **`oxc-vscode`, `coc-oxc`** — target `node_modules/.bin/vp`
+  (`vp.cmd` on Windows), the same shim path they already use for
+  `oxlint`. Call the detector before the existing
   `findBinary("oxlint" | "oxfmt", ...)` chain. Do **not** parameterize
   the existing chain with `"vp"` as a target — its
   `searchSettingsBin`, `searchGlobalNodeModulesBin`, `searchEnvPath`,
