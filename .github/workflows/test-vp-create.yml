@@ -152,8 +152,6 @@ jobs:
           - yarn
           - bun
     env:
-      VP_OVERRIDE_PACKAGES: '{"vite":"file:${{ github.workspace }}/tmp/tgz/voidzero-dev-vite-plus-core-0.0.0.tgz","vitest":"file:${{ github.workspace }}/tmp/tgz/voidzero-dev-vite-plus-test-0.0.0.tgz","@voidzero-dev/vite-plus-core":"file:${{ github.workspace }}/tmp/tgz/voidzero-dev-vite-plus-core-0.0.0.tgz","@voidzero-dev/vite-plus-test":"file:${{ github.workspace }}/tmp/tgz/voidzero-dev-vite-plus-test-0.0.0.tgz"}'
-      VP_VERSION: 'file:${{ github.workspace }}/tmp/tgz/vite-plus-0.0.0.tgz'
       # Force full dependency rewriting so the library template's existing
       # vite-plus dep gets overridden with the local tgz
       VP_FORCE_MIGRATE: '1'
@@ -170,12 +168,22 @@ jobs:
           name: vite-plus-packages
           path: tmp/tgz
 
+      - name: Resolve tgz paths
+        run: |
+          CLI_TGZ=$(ls $GITHUB_WORKSPACE/tmp/tgz/vite-plus-*.tgz | head -n1)
+          CORE_TGZ=$(ls $GITHUB_WORKSPACE/tmp/tgz/voidzero-dev-vite-plus-core-*.tgz | head -n1)
+          TEST_TGZ=$(ls $GITHUB_WORKSPACE/tmp/tgz/voidzero-dev-vite-plus-test-*.tgz | head -n1)
+          echo "CLI_TGZ=$CLI_TGZ" >> $GITHUB_ENV
+          echo "VP_VERSION=file:$CLI_TGZ" >> $GITHUB_ENV
+          printf 'VP_OVERRIDE_PACKAGES={"vite":"file:%s","vitest":"file:%s","@voidzero-dev/vite-plus-core":"file:%s","@voidzero-dev/vite-plus-test":"file:%s"}\n' \
+            "$CORE_TGZ" "$TEST_TGZ" "$CORE_TGZ" "$TEST_TGZ" >> $GITHUB_ENV
+
       - name: Install vp CLI
         run: |
           mkdir -p target/release
           cp tmp/tgz/vp target/release/vp
           chmod +x target/release/vp
-          node $GITHUB_WORKSPACE/packages/tools/src/install-global-cli.ts --tgz $GITHUB_WORKSPACE/tmp/tgz/vite-plus-0.0.0.tgz
+          node $GITHUB_WORKSPACE/packages/tools/src/install-global-cli.ts --tgz "$CLI_TGZ"
           echo "$HOME/.vite-plus/bin" >> $GITHUB_PATH
 
       - name: Verify vp installation
@@ -256,11 +264,13 @@ jobs:
       - name: Verify local tgz packages installed
         working-directory: ${{ runner.temp }}/test-project
         run: |
-          node -e "
+          EXPECTED_VERSION=$(node -p "require('$GITHUB_WORKSPACE/packages/cli/package.json').version")
+          EXPECTED_VERSION="$EXPECTED_VERSION" node -e "
             const path = require('path');
+            const expected = process.env.EXPECTED_VERSION;
             const pkg = require(path.resolve('node_modules/vite-plus/package.json'));
-            if (pkg.version !== '0.0.0') {
-              console.error('Expected vite-plus@0.0.0, got ' + pkg.version);
+            if (pkg.version !== expected) {
+              console.error('Expected vite-plus@' + expected + ', got ' + pkg.version);
               process.exit(1);
             }
             console.log('✓ vite-plus@' + pkg.version + ' installed correctly');
