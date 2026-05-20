@@ -207,11 +207,6 @@ jobs:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
     runs-on: ${{ matrix.os }}
-    env:
-      # Any released version older than the current package.json version.
-      # Used by upgrade tests to create a guaranteed version delta against npm
-      # latest (otherwise `vp upgrade --force` is a no-op on release-day mains).
-      UPGRADE_TEST_PIN_VERSION: '0.1.21'
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
@@ -424,23 +419,21 @@ jobs:
       - name: Test upgrade (bash)
         shell: bash
         run: |
-          # Helper to read the installed CLI version from package.json
-          get_cli_version() {
-            node -p "require(require('path').resolve(process.env.USERPROFILE || process.env.HOME, '.vite-plus', 'current', 'node_modules', 'vite-plus', 'package.json')).version"
+          # Resolve `current` (symlink on Unix, junction on Windows) and return
+          # the install dir basename — "local-dev-<timestamp>" for the dev
+          # build, "<version>" for a downloaded release. Node's realpathSync
+          # handles symlinks and junctions uniformly.
+          get_current_dirname() {
+            node -p "require('path').basename(require('fs').realpathSync(require('path').resolve(process.env.USERPROFILE || process.env.HOME, '.vite-plus', 'current')))"
           }
 
-          # Pin to a known older version first so the upgrade-to-latest below
-          # has a version delta to assert against. Right after a release commit
-          # on main, the dev build's package.json version equals npm latest, so
-          # `vp upgrade --force` would be a no-op and the assertion would fail.
-          vp upgrade "$UPGRADE_TEST_PIN_VERSION" --force
-
-          INITIAL_VERSION=$(get_cli_version)
-          echo "Initial version: $INITIAL_VERSION"
-          if [ "$INITIAL_VERSION" != "$UPGRADE_TEST_PIN_VERSION" ]; then
-            echo "Error: failed to pin to $UPGRADE_TEST_PIN_VERSION (got $INITIAL_VERSION)"
-            exit 1
-          fi
+          # Assert on the `current` target dir, not the version: right after a
+          # release commit on main, the dev build's version equals npm latest,
+          # so `vp upgrade --force` succeeds but the version is unchanged.
+          # The dir flip (dev → release → dev) is the real signal that the
+          # download/extract/swap and rollback flows ran end-to-end.
+          INITIAL_DIR=$(get_current_dirname)
+          echo "Initial install dir: $INITIAL_DIR"
 
           # --check queries npm registry and prints update status
           vp upgrade --check
@@ -452,24 +445,22 @@ jobs:
 
           ls -la ~/.vite-plus/
 
-          # Verify version changed after update
-          UPDATED_VERSION=$(get_cli_version)
-          echo "Updated version: $UPDATED_VERSION"
-          if [ "$UPDATED_VERSION" == "$INITIAL_VERSION" ]; then
-            echo "Error: version should have changed after upgrade (still $INITIAL_VERSION)"
+          UPDATED_DIR=$(get_current_dirname)
+          echo "Updated install dir: $UPDATED_DIR"
+          if [ "$UPDATED_DIR" == "$INITIAL_DIR" ]; then
+            echo "Error: current install dir should have changed after upgrade (still $INITIAL_DIR)"
             exit 1
           fi
 
-          # rollback to the previous version
+          # rollback to the previous install
           vp upgrade --rollback
           vp --version
           vp env doctor
 
-          # Verify version restored after rollback
-          ROLLBACK_VERSION=$(get_cli_version)
-          echo "Rollback version: $ROLLBACK_VERSION"
-          if [ "$ROLLBACK_VERSION" != "$INITIAL_VERSION" ]; then
-            echo "Error: version should have been restored after rollback (expected $INITIAL_VERSION, got $ROLLBACK_VERSION)"
+          ROLLBACK_DIR=$(get_current_dirname)
+          echo "Rollback install dir: $ROLLBACK_DIR"
+          if [ "$ROLLBACK_DIR" != "$INITIAL_DIR" ]; then
+            echo "Error: current install dir should have been restored after rollback (expected $INITIAL_DIR, got $ROLLBACK_DIR)"
             exit 1
           fi
 
@@ -481,20 +472,13 @@ jobs:
           . (Join-Path $vpHome 'env.ps1')
           Get-ChildItem $vpHome
 
-          # Helper to read the installed CLI version from package.json
-          function Get-CliVersion {
-            node -p "require(require('path').resolve(process.env.USERPROFILE || process.env.HOME, '.vite-plus', 'current', 'node_modules', 'vite-plus', 'package.json')).version"
+          # See bash block above for why we assert on the install dir basename.
+          function Get-CurrentDirname {
+            node -p "require('path').basename(require('fs').realpathSync(require('path').resolve(process.env.USERPROFILE || process.env.HOME, '.vite-plus', 'current')))"
           }
 
-          # See bash block above for why we pin to an older version first.
-          vp upgrade $env:UPGRADE_TEST_PIN_VERSION --force
-
-          $initialVersion = Get-CliVersion
-          Write-Host "Initial version: $initialVersion"
-          if ($initialVersion -ne $env:UPGRADE_TEST_PIN_VERSION) {
-            Write-Error "Error: failed to pin to $env:UPGRADE_TEST_PIN_VERSION (got $initialVersion)"
-            exit 1
-          }
+          $initialDir = Get-CurrentDirname
+          Write-Host "Initial install dir: $initialDir"
 
           # --check queries npm registry and prints update status
           vp upgrade --check
@@ -506,24 +490,22 @@ jobs:
 
           Get-ChildItem $vpHome
 
-          # Verify version changed after update
-          $updatedVersion = Get-CliVersion
-          Write-Host "Updated version: $updatedVersion"
-          if ($updatedVersion -eq $initialVersion) {
-            Write-Error "Error: version should have changed after upgrade (still $initialVersion)"
+          $updatedDir = Get-CurrentDirname
+          Write-Host "Updated install dir: $updatedDir"
+          if ($updatedDir -eq $initialDir) {
+            Write-Error "Error: current install dir should have changed after upgrade (still $initialDir)"
             exit 1
           }
 
-          # rollback to the previous version
+          # rollback to the previous install
           vp upgrade --rollback
           vp --version
           vp env doctor
 
-          # Verify version restored after rollback
-          $rollbackVersion = Get-CliVersion
-          Write-Host "Rollback version: $rollbackVersion"
-          if ($rollbackVersion -ne $initialVersion) {
-            Write-Error "Error: version should have been restored after rollback (expected $initialVersion, got $rollbackVersion)"
+          $rollbackDir = Get-CurrentDirname
+          Write-Host "Rollback install dir: $rollbackDir"
+          if ($rollbackDir -ne $initialDir) {
+            Write-Error "Error: current install dir should have been restored after rollback (expected $initialDir, got $rollbackDir)"
             exit 1
           }
 
@@ -531,15 +513,9 @@ jobs:
         if: ${{ matrix.os == 'windows-latest' }}
         shell: cmd
         run: |
-          REM See bash block above for why we pin to an older version first.
-          vp upgrade %UPGRADE_TEST_PIN_VERSION% --force
-
-          for /f "usebackq delims=" %%v in (`node -p "require(require('path').resolve(process.env.USERPROFILE, '.vite-plus', 'current', 'node_modules', 'vite-plus', 'package.json')).version"`) do set INITIAL_VERSION=%%v
-          echo Initial version: %INITIAL_VERSION%
-          if not "%INITIAL_VERSION%"=="%UPGRADE_TEST_PIN_VERSION%" (
-            echo Error: failed to pin to %UPGRADE_TEST_PIN_VERSION%, got %INITIAL_VERSION%
-            exit /b 1
-          )
+          REM See bash block above for why we assert on the install dir basename.
+          for /f "usebackq delims=" %%v in (`node -p "require('path').basename(require('fs').realpathSync(require('path').resolve(process.env.USERPROFILE, '.vite-plus', 'current')))"`) do set INITIAL_DIR=%%v
+          echo Initial install dir: %INITIAL_DIR%
 
           REM --check queries npm registry and prints update status
           vp upgrade --check
@@ -551,24 +527,22 @@ jobs:
 
           dir "%USERPROFILE%\.vite-plus\"
 
-          REM Verify version changed after update
-          for /f "usebackq delims=" %%v in (`node -p "require(require('path').resolve(process.env.USERPROFILE, '.vite-plus', 'current', 'node_modules', 'vite-plus', 'package.json')).version"`) do set UPDATED_VERSION=%%v
-          echo Updated version: %UPDATED_VERSION%
-          if "%UPDATED_VERSION%"=="%INITIAL_VERSION%" (
-            echo Error: version should have changed after upgrade, still %INITIAL_VERSION%
+          for /f "usebackq delims=" %%v in (`node -p "require('path').basename(require('fs').realpathSync(require('path').resolve(process.env.USERPROFILE, '.vite-plus', 'current')))"`) do set UPDATED_DIR=%%v
+          echo Updated install dir: %UPDATED_DIR%
+          if "%UPDATED_DIR%"=="%INITIAL_DIR%" (
+            echo Error: current install dir should have changed after upgrade, still %INITIAL_DIR%
             exit /b 1
           )
 
-          REM rollback to the previous version
+          REM rollback to the previous install
           vp upgrade --rollback
           vp --version
           vp env doctor
 
-          REM Verify version restored after rollback
-          for /f "usebackq delims=" %%v in (`node -p "require(require('path').resolve(process.env.USERPROFILE, '.vite-plus', 'current', 'node_modules', 'vite-plus', 'package.json')).version"`) do set ROLLBACK_VERSION=%%v
-          echo Rollback version: %ROLLBACK_VERSION%
-          if not "%ROLLBACK_VERSION%"=="%INITIAL_VERSION%" (
-            echo Error: version should have been restored after rollback, expected %INITIAL_VERSION%, got %ROLLBACK_VERSION%
+          for /f "usebackq delims=" %%v in (`node -p "require('path').basename(require('fs').realpathSync(require('path').resolve(process.env.USERPROFILE, '.vite-plus', 'current')))"`) do set ROLLBACK_DIR=%%v
+          echo Rollback install dir: %ROLLBACK_DIR%
+          if not "%ROLLBACK_DIR%"=="%INITIAL_DIR%" (
+            echo Error: current install dir should have been restored after rollback, expected %INITIAL_DIR%, got %ROLLBACK_DIR%
             exit /b 1
           )
 
