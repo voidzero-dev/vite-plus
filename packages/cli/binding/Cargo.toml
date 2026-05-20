@@ -1,6 +1,6 @@
 [package]
 name = "vite-plus-cli"
-version = "0.0.0"
+version = "0.1.22"
 authors.workspace = true
 edition.workspace = true
 license.workspace = true

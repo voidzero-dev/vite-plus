@@ -44,6 +44,7 @@ pub async fn dispatch(
             save_catalog,
             global,
             node: _,
+            concurrency: _,
             packages,
             pass_through_args,
         } => {
@@ -109,6 +110,7 @@ pub async fn dispatch(
             workspace,
             global,
             node: _,
+            concurrency: _,
             packages,
             pass_through_args,
         } => {
@@ -166,6 +168,7 @@ pub async fn dispatch(
         PackageManagerCommand::Update {
             latest,
             global: _,
+            concurrency: _,
             recursive,
             filter,
             workspace_root,

@@ -8,10 +8,20 @@ use std::{ffi::OsStr, process::ExitStatus};
 use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
 use clap_complete::ArgValueCompleter;
 use tokio::runtime::Runtime;
-use vite_path::{AbsolutePath, AbsolutePathBuf};
+use vite_path::AbsolutePathBuf;
 use vite_pm_cli::PackageManagerCommand;
+use vite_shared::output;
 
-use crate::{commands, error::Error, help};
+use crate::{
+    commands::{
+        self,
+        env::{global_install, package_metadata::PackageMetadata},
+    },
+    error::Error,
+    help,
+};
+
+const DEFAULT_GLOBAL_INSTALL_CONCURRENCY: usize = 5;
 
 #[derive(Clone, Copy, Debug)]
 pub struct RenderOptions {
@@ -468,6 +478,22 @@ fn should_force_global_delegate(command: &str, args: &[String]) -> bool {
     }
 }
 
+/// Whether the Vite+ banner should be suppressed for a lint/fmt invocation.
+///
+/// IDE extensions invoke `vp lint --lsp`, `vp fmt --lsp`, and
+/// `vp fmt --stdin-filepath` and parse the subprocess's stdout as the LSP
+/// protocol / formatted source; the cosmetic banner would corrupt that stream.
+fn should_suppress_header_for_subcommand(command: &str, args: &[String]) -> bool {
+    match command {
+        "lint" => has_flag_before_terminator(args, "--lsp"),
+        "fmt" => {
+            has_flag_before_terminator(args, "--lsp")
+                || has_flag_before_terminator(args, "--stdin-filepath")
+        }
+        _ => false,
+    }
+}
+
 /// Get available tasks for shell completion.
 ///
 /// Delegates to the local vite-plus CLI to run `vp run` without arguments,
@@ -516,19 +542,24 @@ async fn run_package_manager_command(
 ) -> Result<ExitStatus, Error> {
     match command {
         PackageManagerCommand::Install {
-            global: true, packages: Some(pkgs), node, force, ..
-        } if !pkgs.is_empty() => managed_install(&pkgs, node.as_deref(), force).await,
+            global: true,
+            packages: Some(pkgs),
+            node,
+            force,
+            concurrency,
+            ..
+        } if !pkgs.is_empty() => managed_install(&pkgs, node.as_deref(), force, concurrency).await,
 
-        PackageManagerCommand::Add { global: true, ref packages, ref node, .. } => {
-            managed_install(packages, node.as_deref(), false).await
-        }
+        PackageManagerCommand::Add {
+            global: true, ref packages, ref node, concurrency, ..
+        } => managed_install(packages, node.as_deref(), false, concurrency).await,
 
         PackageManagerCommand::Remove { global: true, ref packages, dry_run, .. } => {
             managed_uninstall(packages, dry_run).await
         }
 
-        PackageManagerCommand::Update { global: true, ref packages, .. } => {
-            managed_update(&cwd, packages).await
+        PackageManagerCommand::Update { global: true, ref packages, concurrency, .. } => {
+            managed_update(packages, concurrency).await
         }
 
         // `pm list -g` lists vite-plus-managed globals, not the underlying PM's.
@@ -546,20 +577,28 @@ async fn run_package_manager_command(
     }
 }
 
-// snap-test fixtures expect bare lines (no "error:"/"info:" prefix), so
-// these helpers use `output::raw_stderr`/`output::raw` rather than the
-// prefixed `output::error`/`output::info`.
 async fn managed_install(
     packages: &[String],
     node: Option<&str>,
     force: bool,
+    concurrency: Option<usize>,
 ) -> Result<ExitStatus, Error> {
-    for package in packages {
-        if let Err(e) = crate::commands::env::global_install::install(package, node, force).await {
-            vite_shared::output::raw_stderr(&format!("Failed to install {package}: {e}"));
-            return Ok(exit_status(1));
-        }
+    if let Err((package_name, error)) = crate::commands::env::global_install::install(
+        packages,
+        node,
+        force,
+        concurrency.unwrap_or(DEFAULT_GLOBAL_INSTALL_CONCURRENCY),
+        false,
+    )
+    .await
+    {
+        output::error(&format!(
+            "Failed to install {}: {error}",
+            package_name.as_deref().unwrap_or("global packages")
+        ));
+        return Ok(exit_status(1));
     }
+
     Ok(ExitStatus::default())
 }
 
@@ -573,21 +612,14 @@ async fn managed_uninstall(packages: &[String], dry_run: bool) -> Result<ExitSta
     Ok(ExitStatus::default())
 }
 
-fn is_global_package_up_to_date(
-    installed_version: &str,
-    registry_version: &str,
-    installed_node_version: &str,
-    target_node_version: &str,
-) -> bool {
+fn is_global_package_up_to_date(installed_version: &str, registry_version: &str) -> bool {
     installed_version.trim() == registry_version.trim()
-        && installed_node_version.trim() == target_node_version.trim()
 }
 
-async fn managed_update(cwd: &AbsolutePath, packages: &[String]) -> Result<ExitStatus, Error> {
-    use crate::commands::env::{
-        config::resolve_version, global_install, package_metadata::PackageMetadata,
-    };
-
+async fn managed_update(
+    packages: &[String],
+    concurrency: Option<usize>,
+) -> Result<ExitStatus, Error> {
     let all_packages = if packages.is_empty() {
         let all = PackageMetadata::list_all().await?;
         if all.is_empty() {
@@ -599,27 +631,14 @@ async fn managed_update(cwd: &AbsolutePath, packages: &[String]) -> Result<ExitS
         None
     };
 
-    let target_node_version = resolve_version(cwd).await?.version;
     let mut to_update: Vec<String> = Vec::new();
     let mut skipped = 0usize;
 
     if let Some(all) = all_packages {
         for metadata in all {
-            if metadata.platform.node.trim() != target_node_version.trim() {
-                to_update.push(metadata.name.clone());
-                continue;
-            }
-
-            match global_install::latest_package_version(&metadata.name, Some(&target_node_version))
-                .await
-            {
+            match global_install::latest_package_version(&metadata.name).await {
                 Ok(latest_version)
-                    if is_global_package_up_to_date(
-                        &metadata.version,
-                        &latest_version,
-                        &metadata.platform.node,
-                        &target_node_version,
-                    ) =>
+                    if is_global_package_up_to_date(&metadata.version, &latest_version) =>
                 {
                     vite_shared::output::raw(&format!(
                         "{} is already up to date (v{}).",
@@ -646,21 +665,9 @@ async fn managed_update(cwd: &AbsolutePath, packages: &[String]) -> Result<ExitS
 
             let (package_name, _) = global_install::parse_package_spec(package);
             if let Some(metadata) = PackageMetadata::load(&package_name).await? {
-                if metadata.platform.node.trim() != target_node_version.trim() {
-                    to_update.push(package.clone());
-                    continue;
-                }
-
-                match global_install::latest_package_version(package, Some(&target_node_version))
-                    .await
-                {
+                match global_install::latest_package_version(package).await {
                     Ok(latest_version)
-                        if is_global_package_up_to_date(
-                            &metadata.version,
-                            &latest_version,
-                            &metadata.platform.node,
-                            &target_node_version,
-                        ) =>
+                        if is_global_package_up_to_date(&metadata.version, &latest_version) =>
                     {
                         vite_shared::output::raw(&format!(
                             "{} is already up to date (v{}).",
@@ -688,11 +695,21 @@ async fn managed_update(cwd: &AbsolutePath, packages: &[String]) -> Result<ExitS
         return Ok(ExitStatus::default());
     }
 
-    for package in &to_update {
-        if let Err(e) = global_install::install(package, Some(&target_node_version), false).await {
-            vite_shared::output::raw_stderr(&format!("Failed to update {package}: {e}"));
-            return Ok(exit_status(1));
-        }
+    // Call reinstall logic
+    if let Err((package_name, error)) = global_install::install(
+        &to_update,
+        None,
+        false,
+        concurrency.unwrap_or(DEFAULT_GLOBAL_INSTALL_CONCURRENCY),
+        true,
+    )
+    .await
+    {
+        output::error(&format!(
+            "Failed to update {}: {error}",
+            package_name.as_deref().unwrap_or("global packages")
+        ));
+        return Ok(exit_status(1));
     }
     Ok(ExitStatus::default())
 }
@@ -777,7 +794,7 @@ pub async fn run_command_with_options(
             if help::maybe_print_unified_delegate_help("lint", &args, render_options.show_header) {
                 return Ok(ExitStatus::default());
             }
-            print_runtime_header(render_options.show_header);
+            maybe_print_runtime_header("lint", &args, render_options.show_header);
             if should_force_global_delegate("lint", &args) {
                 commands::delegate::execute_global(cwd, "lint", &args).await
             } else {
@@ -789,7 +806,7 @@ pub async fn run_command_with_options(
             if help::maybe_print_unified_delegate_help("fmt", &args, render_options.show_header) {
                 return Ok(ExitStatus::default());
             }
-            print_runtime_header(render_options.show_header);
+            maybe_print_runtime_header("fmt", &args, render_options.show_header);
             if should_force_global_delegate("fmt", &args) {
                 commands::delegate::execute_global(cwd, "fmt", &args).await
             } else {
@@ -886,6 +903,13 @@ fn print_runtime_header(show_header: bool) {
     vite_shared::header::print_header();
 }
 
+fn maybe_print_runtime_header(command: &str, args: &[String], show_header: bool) {
+    if should_suppress_header_for_subcommand(command, args) {
+        return;
+    }
+    print_runtime_header(show_header);
+}
+
 /// Build a clap Command with custom help formatting matching the JS CLI output.
 pub fn command_with_help() -> clap::Command {
     command_with_help_with_options(RenderOptions::default())
@@ -933,21 +957,17 @@ pub fn try_parse_args_from_with_options(
 mod tests {
     use super::{
         has_flag_before_terminator, is_global_package_up_to_date, should_force_global_delegate,
+        should_suppress_header_for_subcommand,
     };
 
     #[test]
     fn skips_global_update_when_registry_and_node_versions_match() {
-        assert!(is_global_package_up_to_date("5.9.3", "5.9.3", "20.18.0", "20.18.0"));
+        assert!(is_global_package_up_to_date("5.9.3", "5.9.3"));
     }
 
     #[test]
     fn updates_global_package_when_registry_version_differs_from_installed_version() {
-        assert!(!is_global_package_up_to_date("5.9.2", "5.9.3", "20.18.0", "20.18.0"));
-    }
-
-    #[test]
-    fn updates_global_package_when_node_version_differs_from_target_version() {
-        assert!(!is_global_package_up_to_date("5.9.3", "5.9.3", "20.18.0", "24.15.0"));
+        assert!(!is_global_package_up_to_date("5.9.2", "5.9.3"));
     }
 
     #[test]
@@ -980,5 +1000,54 @@ mod tests {
     fn non_init_does_not_force_global_delegate() {
         assert!(!should_force_global_delegate("lint", &["src/index.ts".to_string()]));
         assert!(!should_force_global_delegate("fmt", &["--check".to_string()]));
+    }
+
+    #[test]
+    fn lint_lsp_suppresses_header() {
+        assert!(should_suppress_header_for_subcommand("lint", &["--lsp".to_string()]));
+        assert!(should_suppress_header_for_subcommand(
+            "lint",
+            &["--fix".to_string(), "--lsp".to_string()]
+        ));
+    }
+
+    #[test]
+    fn lint_without_lsp_does_not_suppress_header() {
+        assert!(!should_suppress_header_for_subcommand("lint", &[]));
+        assert!(!should_suppress_header_for_subcommand("lint", &["src".to_string()]));
+        assert!(!should_suppress_header_for_subcommand("lint", &["--fix".to_string()]));
+    }
+
+    #[test]
+    fn lint_lsp_after_terminator_does_not_suppress_header() {
+        assert!(!should_suppress_header_for_subcommand(
+            "lint",
+            &["--".to_string(), "--lsp".to_string()]
+        ));
+    }
+
+    #[test]
+    fn fmt_lsp_or_stdin_filepath_suppresses_header() {
+        assert!(should_suppress_header_for_subcommand("fmt", &["--lsp".to_string()]));
+        assert!(should_suppress_header_for_subcommand(
+            "fmt",
+            &["--stdin-filepath".to_string(), "foo.ts".to_string()]
+        ));
+        assert!(should_suppress_header_for_subcommand(
+            "fmt",
+            &["--stdin-filepath=foo.ts".to_string()]
+        ));
+    }
+
+    #[test]
+    fn fmt_without_lsp_or_stdin_does_not_suppress_header() {
+        assert!(!should_suppress_header_for_subcommand("fmt", &[]));
+        assert!(!should_suppress_header_for_subcommand("fmt", &["src".to_string()]));
+        assert!(!should_suppress_header_for_subcommand("fmt", &["--check".to_string()]));
+    }
+
+    #[test]
+    fn unknown_subcommand_does_not_suppress_header() {
+        assert!(!should_suppress_header_for_subcommand("test", &["--lsp".to_string()]));
     }
 }
