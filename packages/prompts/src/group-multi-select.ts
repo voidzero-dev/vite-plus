@@ -27,6 +27,7 @@ export const groupMultiselect = <Value>(opts: GroupMultiSelectOptions<Value>) =>
   const { selectableGroups = true, groupSpacing = 0 } = opts;
   const hasGuide = opts.withGuide ?? false;
   const nestedPrefix = '  ';
+  // eslint-disable-next-line unicorn/consistent-function-scoping -- kept inline for readability
   const withMarkerAndPrefix = (
     marker: string,
     prefix: string,

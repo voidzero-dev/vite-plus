@@ -33,6 +33,7 @@ export function progress({
   const max = Math.max(1, userMax);
   const size = Math.max(1, userSize);
 
+  // eslint-disable-next-line unicorn/consistent-function-scoping -- kept inline for readability
   const activeStyle = (state: State) => {
     switch (state) {
       case 'initial':
