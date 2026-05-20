@@ -37,7 +37,7 @@ pub async fn build_package_manager_or_npm_default(
     }
 }
 
-fn default_npm_package_manager(cwd: &AbsolutePath) -> PackageManager {
+pub(crate) fn default_npm_package_manager(cwd: &AbsolutePath) -> PackageManager {
     PackageManager {
         client: PackageManagerType::Npm,
         package_name: "npm".into(),
