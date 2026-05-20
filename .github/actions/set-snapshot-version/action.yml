@@ -21,6 +21,8 @@ runs:
       run: |
         git fetch --tags --quiet
         npm install --prefix ${{ github.action_path }} semver > /dev/null 2>&1
-        VERSION_OUTPUT=$(node ${{ github.action_path }}/compute-version.mjs "${{ inputs.npm_tag }}")
+        VERSION_OUTPUT=$(node ${{ github.action_path }}/compute-version.mjs "${INPUTS_NPM_TAG}")
         echo "$VERSION_OUTPUT"
         echo "$VERSION_OUTPUT" | tail -n 1 >> $GITHUB_OUTPUT
+      env:
+        INPUTS_NPM_TAG: ${{ inputs.npm_tag }}

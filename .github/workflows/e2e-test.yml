@@ -392,7 +392,8 @@ jobs:
           cp tmp/tgz/vp target/release/vp 2>/dev/null || cp tmp/tgz/vp.exe target/release/vp.exe 2>/dev/null || true
           cp tmp/tgz/vp-shim.exe target/release/vp-shim.exe 2>/dev/null || true
           chmod +x target/release/vp 2>/dev/null || true
-          node $GITHUB_WORKSPACE/packages/tools/src/install-global-cli.ts --tgz $GITHUB_WORKSPACE/tmp/tgz/vite-plus-0.0.0.tgz
+          VP_TGZ=$(ls "$GITHUB_WORKSPACE"/tmp/tgz/vite-plus-[0-9]*.tgz | head -n1)
+          node "$GITHUB_WORKSPACE"/packages/tools/src/install-global-cli.ts --tgz "$VP_TGZ"
           # Use USERPROFILE (native Windows path) instead of HOME (Git Bash path /c/Users/...)
           # so cmd.exe and Node.js execSync can resolve binaries in PATH
           echo "${USERPROFILE:-$HOME}/.vite-plus/bin" >> $GITHUB_PATH
