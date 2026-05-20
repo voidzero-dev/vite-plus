@@ -1,3 +1,5 @@
+import { createRequire } from 'node:module';
+
 import type { PluginOption, UserConfig } from '@voidzero-dev/vite-plus-core';
 import { initSync, parse, type ImportSpecifier } from 'es-module-lexer';
 import { parseSync as oxcParseSync } from 'oxc-parser';
@@ -295,6 +297,119 @@ function vitePlusTestSpecifierRewritePlugin(): PluginOption {
 }
 
 /**
+ * `require` anchored at THIS module's location so `require.resolve` reaches
+ * the `vitest` / `@vitest/*` family that the `vite-plus` package directly
+ * depends on — even from a consumer project where they are only transitive.
+ *
+ * `define-config.ts` is bundled by tsdown in BOTH formats: ESM (`shims: true`,
+ * which defines a module-scoped `__dirname`) and CJS (where `__dirname` is the
+ * Node global). The guard picks `__dirname` whenever it exists and otherwise
+ * falls back to `import.meta.url`; tsdown rewrites the latter to
+ * `pathToFileURL(__filename).href` in the CJS bundle, so it is safe in both.
+ */
+const vitePlusRequire = createRequire(
+  typeof __dirname !== 'undefined' ? __dirname : import.meta.url,
+);
+
+/**
+ * `require` anchored at the resolved `vitest` package. The `@vitest/*` family
+ * (`@vitest/expect`, `@vitest/runner`, `@vitest/snapshot`, …) are dependencies
+ * of `vitest` itself — not direct deps of `vite-plus` — so they are reachable
+ * from `vitest`'s location but not from [[vitePlusRequire]]. Created lazily and
+ * cached; `null` once a creation attempt has failed so we never retry.
+ */
+let vitestRequire: NodeRequire | null | undefined;
+function getVitestRequire(): NodeRequire | null {
+  if (vitestRequire !== undefined) {
+    return vitestRequire;
+  }
+  try {
+    vitestRequire = createRequire(vitePlusRequire.resolve('vitest'));
+  } catch {
+    vitestRequire = null;
+  }
+  return vitestRequire;
+}
+
+/**
+ * Match the `vitest` / `@vitest/*` family of bare specifiers — the imports a
+ * browser-mode Vite dev server must resolve. Any query string is stripped
+ * first; relative (`./`), absolute (`/`), and virtual (`\0`) ids never match.
+ *
+ * Exported for unit testing.
+ */
+export function isVitestFamilySpecifier(id: string): boolean {
+  const bare = id.split('?')[0];
+  if (bare.startsWith('.') || bare.startsWith('/') || bare.startsWith('\0')) {
+    return false;
+  }
+  return (
+    bare === 'vitest' ||
+    bare.startsWith('vitest/') ||
+    bare === '@vitest/browser' ||
+    bare.startsWith('@vitest/')
+  );
+}
+
+/**
+ * Rescue `vitest` / `@vitest/*` resolution for browser-mode tests.
+ *
+ * In an established project that depends only on `vite-plus`, both `vitest`
+ * and `@vitest/browser` are transitive deps. pnpm's isolated layout only
+ * exposes a package's *direct* deps, so the browser-mode Vite dev server
+ * (rooted at the consumer project) cannot resolve `vitest/internal/browser`,
+ * `@vitest/expect`, etc. Non-browser tests are unaffected — vitest's own
+ * module runner handles resolution there.
+ *
+ * This plugin is a pure fallback: it FIRST defers to the default resolver
+ * (`this.resolve(..., { skipSelf: true })`), so projects that already resolve
+ * fine see zero behavior change. Only when default resolution returns `null`
+ * does it fall back to resolving from `vite-plus`'s own dependency tree:
+ * `vitest` / `vitest/*` / `@vitest/browser*` via [[vitePlusRequire]], and the
+ * nested `@vitest/*` family (deps of `vitest`) via [[getVitestRequire]].
+ */
+function vitePlusVitestResolverPlugin(): PluginOption {
+  return {
+    name: 'vite-plus:vitest-resolver',
+    enforce: 'pre',
+    async resolveId(id, importer, options) {
+      if (!isVitestFamilySpecifier(id)) {
+        return null;
+      }
+      // The failing imports are all clean bare specifiers; a queried id is
+      // outside the scope of this fallback — let the default resolver handle it.
+      if (id.includes('?')) {
+        return null;
+      }
+      // Prefer the project's own resolution. `skipSelf` avoids infinite
+      // recursion back into this plugin.
+      const resolved = await this.resolve(id, importer, { ...options, skipSelf: true });
+      if (resolved) {
+        return resolved;
+      }
+      // Fallback: resolve from vite-plus's own dependency tree. `require.resolve`
+      // throws on failure — never let that escape the resolver.
+      try {
+        return vitePlusRequire.resolve(id);
+      } catch {
+        // `vitest` and `@vitest/browser*` are direct deps of vite-plus, but the
+        // nested `@vitest/*` family lives under `vitest` — resolve those from
+        // vitest's own location.
+        const fromVitest = getVitestRequire();
+        if (fromVitest) {
+          try {
+            return fromVitest.resolve(id);
+          } catch {
+            return null;
+          }
+        }
+        return null;
+      }
+    },
+  };
+}
+
+/**
  * Packages that register Vitest `expect` matchers via `expect.extend()` from
  * a side-effect import. When Vite serves these from a separate module graph
  * than the test runtime, the matchers register on a different `expect`
@@ -362,7 +477,11 @@ function injectPluginIntoInlineConfig<
 >(config: T): T {
   const withPlugin = {
     ...config,
-    plugins: [vitePlusTestSpecifierRewritePlugin(), ...(config.plugins ?? [])],
+    plugins: [
+      vitePlusTestSpecifierRewritePlugin(),
+      vitePlusVitestResolverPlugin(),
+      ...(config.plugins ?? []),
+    ],
   } as T;
   return mergeAutoInlineDeps(withPlugin);
 }

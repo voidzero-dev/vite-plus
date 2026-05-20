@@ -91,14 +91,17 @@ test('lazyPlugins wraps sync function returning a Promise into array', () => {
 });
 
 // defineConfig auto-injects a `vite-plus:vitest-specifier-rewrite` plugin at
-// index 0 so user-supplied plugins start at index 1. The helpers below let the
-// tests assert on user-supplied plugins regardless of the injection.
+// index 0 and a `vite-plus:vitest-resolver` plugin at index 1, so user-supplied
+// plugins start at index 2. The helpers below let the tests assert on
+// user-supplied plugins regardless of the injection.
 const REWRITE_PLUGIN_NAME = 'vite-plus:vitest-specifier-rewrite';
+const RESOLVER_PLUGIN_NAME = 'vite-plus:vitest-resolver';
 const userPlugins = (plugins: unknown): unknown[] => {
   expect(Array.isArray(plugins)).toBe(true);
   const arr = plugins as unknown[];
   expect((arr[0] as { name?: string })?.name).toBe(REWRITE_PLUGIN_NAME);
-  return arr.slice(1);
+  expect((arr[1] as { name?: string })?.name).toBe(RESOLVER_PLUGIN_NAME);
+  return arr.slice(2);
 };
 
 // lazyPlugins type compatibility tests — these verify at compile time that
