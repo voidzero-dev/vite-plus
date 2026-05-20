@@ -207,6 +207,11 @@ jobs:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
     runs-on: ${{ matrix.os }}
+    env:
+      # Any released version older than the current package.json version.
+      # Used by upgrade tests to create a guaranteed version delta against npm
+      # latest (otherwise `vp upgrade --force` is a no-op on release-day mains).
+      UPGRADE_TEST_PIN_VERSION: '0.1.21'
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
@@ -424,9 +429,18 @@ jobs:
             node -p "require(require('path').resolve(process.env.USERPROFILE || process.env.HOME, '.vite-plus', 'current', 'node_modules', 'vite-plus', 'package.json')).version"
           }
 
-          # Save initial (dev build) version
+          # Pin to a known older version first so the upgrade-to-latest below
+          # has a version delta to assert against. Right after a release commit
+          # on main, the dev build's package.json version equals npm latest, so
+          # `vp upgrade --force` would be a no-op and the assertion would fail.
+          vp upgrade "$UPGRADE_TEST_PIN_VERSION" --force
+
           INITIAL_VERSION=$(get_cli_version)
           echo "Initial version: $INITIAL_VERSION"
+          if [ "$INITIAL_VERSION" != "$UPGRADE_TEST_PIN_VERSION" ]; then
+            echo "Error: failed to pin to $UPGRADE_TEST_PIN_VERSION (got $INITIAL_VERSION)"
+            exit 1
+          fi
 
           # --check queries npm registry and prints update status
           vp upgrade --check
@@ -472,9 +486,15 @@ jobs:
             node -p "require(require('path').resolve(process.env.USERPROFILE || process.env.HOME, '.vite-plus', 'current', 'node_modules', 'vite-plus', 'package.json')).version"
           }
 
-          # Save initial (dev build) version
+          # See bash block above for why we pin to an older version first.
+          vp upgrade $env:UPGRADE_TEST_PIN_VERSION --force
+
           $initialVersion = Get-CliVersion
           Write-Host "Initial version: $initialVersion"
+          if ($initialVersion -ne $env:UPGRADE_TEST_PIN_VERSION) {
+            Write-Error "Error: failed to pin to $env:UPGRADE_TEST_PIN_VERSION (got $initialVersion)"
+            exit 1
+          }
 
           # --check queries npm registry and prints update status
           vp upgrade --check
@@ -511,9 +531,15 @@ jobs:
         if: ${{ matrix.os == 'windows-latest' }}
         shell: cmd
         run: |
-          REM Save initial (dev build) version
+          REM See bash block above for why we pin to an older version first.
+          vp upgrade %UPGRADE_TEST_PIN_VERSION% --force
+
           for /f "usebackq delims=" %%v in (`node -p "require(require('path').resolve(process.env.USERPROFILE, '.vite-plus', 'current', 'node_modules', 'vite-plus', 'package.json')).version"`) do set INITIAL_VERSION=%%v
           echo Initial version: %INITIAL_VERSION%
+          if not "%INITIAL_VERSION%"=="%UPGRADE_TEST_PIN_VERSION%" (
+            echo Error: failed to pin to %UPGRADE_TEST_PIN_VERSION%, got %INITIAL_VERSION%
+            exit /b 1
+          )
 
           REM --check queries npm registry and prints update status
           vp upgrade --check
