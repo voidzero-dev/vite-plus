@@ -1,4 +1,4 @@
-> vp upgrade --check # check for updates without installing
+> vp upgrade --check --tag alpha # alpha tag avoids release-day flake (dev version equals npm latest right after a release, hiding the Update-available branch)
 info: checking for updates...
 info: found vite-plus@<semver> (current: <semver>)
 Update available: <semver> → <semver>
