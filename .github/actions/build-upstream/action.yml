@@ -59,10 +59,11 @@ runs:
       run: pnpm exec tool brand-vite
 
     # Build upstream TypeScript packages first (don't depend on native bindings)
+    # @rolldown/pluginutils was migrated out of the rolldown monorepo and is
+    # consumed as a prebuilt npm package, so it no longer needs a workspace build.
     - name: Build upstream TypeScript packages
       shell: bash
       run: |
-        pnpm --filter @rolldown/pluginutils build
         pnpm --filter rolldown build-node
         pnpm --filter vite build-types
         pnpm --filter "@voidzero-dev/*" build

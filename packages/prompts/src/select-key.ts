@@ -18,18 +18,18 @@ export interface SelectKeyOptions<Value extends string> extends CommonOptions {
   caseSensitive?: boolean;
 }
 
-export const selectKey = <Value extends string>(opts: SelectKeyOptions<Value>) => {
-  const withMarker = (marker: string, value: string) => {
-    const lines = value.split('\n');
-    if (lines.length === 1) {
-      return `${marker} ${lines[0]}`;
-    }
-    const [firstLine, ...rest] = lines;
-    return [`${marker} ${firstLine}`, ...rest.map((line) => `${S_POINTER_INACTIVE} ${line}`)].join(
-      '\n',
-    );
-  };
+const withMarker = (marker: string, value: string) => {
+  const lines = value.split('\n');
+  if (lines.length === 1) {
+    return `${marker} ${lines[0]}`;
+  }
+  const [firstLine, ...rest] = lines;
+  return [`${marker} ${firstLine}`, ...rest.map((line) => `${S_POINTER_INACTIVE} ${line}`)].join(
+    '\n',
+  );
+};
 
+export const selectKey = <Value extends string>(opts: SelectKeyOptions<Value>) => {
   const opt = (
     option: Option<Value>,
     state: 'inactive' | 'active' | 'selected' | 'cancelled' = 'inactive',

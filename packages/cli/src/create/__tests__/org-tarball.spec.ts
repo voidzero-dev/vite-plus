@@ -121,6 +121,16 @@ describe('parseEntryMode', () => {
   });
 });
 
+function makeStaging(parent: string, base: string, ageMs: number): string {
+  const name = `${base}.tmp-${process.pid}-${Date.now() - ageMs}`;
+  const dir = path.join(parent, name);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'marker'), '');
+  const then = new Date(Date.now() - ageMs);
+  fs.utimesSync(dir, then, then);
+  return dir;
+}
+
 describe('cleanupStaleStagingDirs', () => {
   const scratchDirs: string[] = [];
 
@@ -135,16 +145,6 @@ describe('cleanupStaleStagingDirs', () => {
     scratchDirs.push(parent);
     const base = 'create-1.0.0';
     return { destDir: path.join(parent, base), parent, base };
-  }
-
-  function makeStaging(parent: string, base: string, ageMs: number): string {
-    const name = `${base}.tmp-${process.pid}-${Date.now() - ageMs}`;
-    const dir = path.join(parent, name);
-    fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, 'marker'), '');
-    const then = new Date(Date.now() - ageMs);
-    fs.utimesSync(dir, then, then);
-    return dir;
   }
 
   it('deletes siblings older than 24h', async () => {

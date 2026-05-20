@@ -1,5 +1,6 @@
 import { execSync, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 
@@ -268,7 +269,15 @@ function transformPluginutilsExport(
   // Handle string values or add types if missing
   if (typeof newValue === 'string') {
     // Convert string to object with default and types
-    if (newValue.endsWith('.js')) {
+    if (newValue.endsWith('.mjs')) {
+      return [
+        newExportPath,
+        {
+          default: newValue,
+          types: newValue.replace(/\.mjs$/, '.d.mts'),
+        },
+      ];
+    } else if (newValue.endsWith('.js')) {
       return [
         newExportPath,
         {
@@ -285,7 +294,9 @@ function transformPluginutilsExport(
       | string
       | undefined;
     if (importPath && !('types' in newValue)) {
-      if (importPath.endsWith('.js')) {
+      if (importPath.endsWith('.mjs')) {
+        newValue.types = importPath.replace(/\.mjs$/, '.d.mts');
+      } else if (importPath.endsWith('.js')) {
         newValue.types = importPath.replace(/\.js$/, '.d.ts');
       }
     }
@@ -735,13 +746,12 @@ export async function syncRemote() {
   const corePackagePath = join(rootDir, CORE_PACKAGE_PATH, 'package.json');
   const rolldownPackagePath = join(rootDir, ROLLDOWN_DIR, 'packages', 'rolldown', 'package.json');
   const rolldownVitePackagePath = join(rootDir, VITE_DIR, 'packages', 'vite', 'package.json');
-  const pluginutilsPackagePath = join(
-    rootDir,
-    ROLLDOWN_DIR,
-    'packages',
-    'pluginutils',
-    'package.json',
+  // @rolldown/pluginutils is now an external npm package (migrated out of rolldown
+  // monorepo). Resolve it via the rolldown package, which depends on it.
+  const requireFromRolldown = createRequire(
+    join(rootDir, ROLLDOWN_DIR, 'packages', 'rolldown') + '/',
   );
+  const pluginutilsPackagePath = requireFromRolldown.resolve('@rolldown/pluginutils/package.json');
 
   const corePackage = JSON.parse(readFileSync(corePackagePath, 'utf-8')) as PackageJson;
   const rolldownPackage = JSON.parse(readFileSync(rolldownPackagePath, 'utf-8')) as PackageJson;

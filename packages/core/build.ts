@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import { copyFile, cp, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { dirname, join, parse, resolve, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -30,13 +31,11 @@ import pkgJson from './package.json' with { type: 'json' };
 
 const projectDir = join(fileURLToPath(import.meta.url), '..');
 
-const rolldownPluginUtilsDir = resolve(
-  projectDir,
-  '..',
-  '..',
-  'rolldown',
-  'packages',
-  'pluginutils',
+// @rolldown/pluginutils is now an external npm package (migrated out of the
+// rolldown monorepo); resolve it from node_modules instead of a local path.
+const requireFromProject = createRequire(import.meta.url);
+const rolldownPluginUtilsDir = dirname(
+  requireFromProject.resolve('@rolldown/pluginutils/package.json'),
 );
 
 const rolldownSourceDir = resolve(projectDir, '..', '..', 'rolldown', 'packages', 'rolldown');
@@ -71,7 +70,7 @@ generateLicenseFile({
     },
     {
       packageDir: rolldownPluginUtilsDir,
-      licensePath: join(projectDir, '..', '..', 'rolldown', 'LICENSE'),
+      licensePath: join(rolldownPluginUtilsDir, 'LICENSE'),
     },
     {
       packageDir: rolldownViteSourceDir,
