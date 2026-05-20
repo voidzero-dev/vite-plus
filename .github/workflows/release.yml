@@ -76,7 +76,6 @@ jobs:
           node-version-file: .node-version
           package-manager-cache: false
           registry-url: 'https://registry.npmjs.org'
-          cache: 'pnpm'
 
       - name: Install dependencies
         run: pnpm install

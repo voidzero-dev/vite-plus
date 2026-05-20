@@ -7,38 +7,42 @@ on:
 jobs:
   reply-labeled:
     if: github.repository == 'voidzero-dev/vite-plus'
-    runs-on: ubuntu-slim
+    runs-on: ubuntu-latest
     permissions:
-      issues: write # for actions-cool/issues-helper to update issues
-      pull-requests: write # for actions-cool/issues-helper to update PRs
+      issues: write
     steps:
-      - name: contribution welcome
+      - name: Remove triage labels (contribution welcome / help wanted)
         if: github.event.label.name == 'contribution welcome' || github.event.label.name == 'help wanted'
-        uses: actions-cool/issues-helper@200c78641dbf33838311e5a1e0c31bbdb92d7cf0 # v3.8.0
-        with:
-          actions: 'remove-labels'
-          token: ${{ secrets.GITHUB_TOKEN }}
-          issue-number: ${{ github.event.issue.number }}
-          labels: 'pending triage, needs reproduction'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        shell: bash
+        run: |
+          gh issue edit "$ISSUE_NUMBER" \
+            --remove-label "pending triage" \
+            --remove-label "needs reproduction" || true
 
-      - name: needs reproduction
+      - name: Comment and remove triage on "needs reproduction"
         if: github.event.label.name == 'needs reproduction'
-        uses: actions-cool/issues-helper@200c78641dbf33838311e5a1e0c31bbdb92d7cf0 # v3.8.0
-        with:
-          actions: 'create-comment, remove-labels'
-          token: ${{ secrets.GITHUB_TOKEN }}
-          issue-number: ${{ github.event.issue.number }}
-          labels: 'pending triage'
-          body: |
-            Hello @${{ github.event.issue.user.login }} 👋
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_USER: ${{ github.event.issue.user.login }}
+        shell: bash
+        run: |
+          gh issue comment "$ISSUE_NUMBER" --body "Hello @${ISSUE_USER} 👋
 
-            Please provide a [minimal reproduction](https://stackoverflow.com/help/minimal-reproducible-example) using a GitHub repository. This helps us understand and resolve your issue much faster.
+          Please provide a [minimal reproduction](https://stackoverflow.com/help/minimal-reproducible-example) using a GitHub repository. This helps us understand and resolve your issue much faster.
 
-            **A good reproduction should be:**
-            - **Minimal** – include only the code necessary to demonstrate the issue
-            - **Complete** – contain everything needed to run and observe the problem
-            - **Reproducible** – consistently show the issue with clear steps
+          **A good reproduction should be:**
+          - **Minimal** – include only the code necessary to demonstrate the issue
+          - **Complete** – contain everything needed to run and observe the problem
+          - **Reproducible** – consistently show the issue with clear steps
 
-            If no reproduction is provided, issues labeled `needs reproduction` will be closed after 3 days of inactivity.
+          If no reproduction is provided, issues labeled \`needs reproduction\` will be closed after 3 days of inactivity.
 
-            For more context on why this is required, please read: https://antfu.me/posts/why-reproductions-are-required
+          For more context on why this is required, please read: https://antfu.me/posts/why-reproductions-are-required"
+
+          gh issue edit "$ISSUE_NUMBER" --remove-label "pending triage" || true
