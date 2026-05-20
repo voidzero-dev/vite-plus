@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 export const VITE_PLUS_NAME = 'vite-plus';
 export const VITE_PLUS_VERSION = process.env.VP_VERSION || 'latest';
 
-export const VITEST_VERSION = '4.1.5';
+export const VITEST_VERSION = '4.1.7';
 
 export const VITE_PLUS_OVERRIDE_PACKAGES: Record<string, string> = process.env.VP_OVERRIDE_PACKAGES
   ? JSON.parse(process.env.VP_OVERRIDE_PACKAGES)

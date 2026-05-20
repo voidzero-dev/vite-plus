@@ -264,7 +264,7 @@ describe('rewritePackageJson', () => {
     // vitest is now a managed override key — yarn optional deps receive the
     // literal override version so the resolution doesn't depend on catalog
     // lookup at the optionalDependency site.
-    expect(pkg.optionalDependencies.vitest).toBe('4.1.5');
+    expect(pkg.optionalDependencies.vitest).toBe('4.1.7');
     expect((pkg.devDependencies as Record<string, string>)['vite-plus']).toBe('catalog:');
   });
 
@@ -1473,7 +1473,7 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(overrides.vite).toBeDefined();
     // vitest is pinned via overrides so downstream projects resolve a single
     // vitest copy (the one vp-cli ships).
-    expect(overrides.vitest).toBe('4.1.5');
+    expect(overrides.vitest).toBe('4.1.7');
 
     // peerDependencyRules should be present
     expect(pnpm.peerDependencyRules).toBeDefined();
@@ -1568,12 +1568,12 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     // `catalog:` reference, and its catalog entry is rewritten to the pinned
     // vitest version vp-cli ships.
     expect(yaml.overrides.vitest).toBe('catalog:');
-    expect(yaml.catalog.vitest).toBe('4.1.5');
+    expect(yaml.catalog.vitest).toBe('4.1.7');
     expect(yaml.catalogs.vite7.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
     expect(yaml.catalogs.vite7.react).toBe('^18.0.0');
     expect(yaml.catalogs.vite7['vite-plus']).toBe('latest');
     // Named catalog vitest entries are also pinned to the managed override version.
-    expect(yaml.catalogs.test.vitest).toBe('4.1.5');
+    expect(yaml.catalogs.test.vitest).toBe('4.1.7');
     expect(yaml.catalogs.test.tsdown).toBeUndefined();
     expect(yaml.catalogs.test['vite-plus']).toBeUndefined();
 
@@ -1750,7 +1750,7 @@ describe('rewriteMonorepo yarn catalog', () => {
     expect(yarnrc.catalogs.vite7.react).toBe('^18.0.0');
     // vitest is now a managed override key — existing catalog entries are
     // rewritten to the pinned vp-cli vitest version.
-    expect(yarnrc.catalogs.test.vitest).toBe('4.1.5');
+    expect(yarnrc.catalogs.test.vitest).toBe('4.1.7');
     expect(yarnrc.catalogs.test.oxlint).toBeUndefined();
 
     const pkg = readJson(path.join(tmpDir, 'package.json')) as {
@@ -1857,7 +1857,7 @@ describe('rewriteMonorepo bun catalog', () => {
     expect(pkg.catalog.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
     // vitest is now a managed override key — pre-existing catalog entries are
     // rewritten to the pinned vp-cli vitest version.
-    expect(pkg.catalog.vitest).toBe('4.1.5');
+    expect(pkg.catalog.vitest).toBe('4.1.7');
     expect(pkg.catalog.tsdown).toBeUndefined();
     expect(pkg.catalog.react).toBe('^19.0.0');
     expect(pkg.catalog['vite-plus']).toBeUndefined();
@@ -1920,7 +1920,7 @@ describe('rewriteMonorepo bun catalog', () => {
     // vitest is now a managed override key — existing catalog entries are
     // rewritten to the pinned version and `overrides.vitest` is injected
     // as a `catalog:` ref so bun resolves it through the catalog.
-    expect(pkg.catalogs.test.vitest).toBe('4.1.5');
+    expect(pkg.catalogs.test.vitest).toBe('4.1.7');
     expect(pkg.overrides.vite).toBe('catalog:build');
     expect(pkg.overrides.vitest).toBe('catalog:');
     expect(pkg.devDependencies.vite).toBe('catalog:build');
@@ -1964,7 +1964,7 @@ describe('rewriteMonorepo bun catalog', () => {
     expect(pkg.workspaces.catalogs.build.oxlint).toBeUndefined();
     // vitest is a managed override key — existing catalog entries are
     // rewritten to the pinned vp-cli vitest version.
-    expect(pkg.workspaces.catalogs.test.vitest).toBe('4.1.5');
+    expect(pkg.workspaces.catalogs.test.vitest).toBe('4.1.7');
     expect(pkg.workspaces.catalogs.test.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
     expect(pkg.overrides.vite).toBe('catalog:');
   });
