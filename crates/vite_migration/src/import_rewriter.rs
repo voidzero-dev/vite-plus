@@ -87,18 +87,32 @@ fix: $NEW_IMPORT
 
 /// ast-grep rules for rewriting vitest imports.
 ///
-/// This rewrites:
+/// This rewrites (the canonical mapping shared with the `oxlint-plugin.ts`
+/// `rewriteVitePlusImportSpecifier` autofix — both implementations MUST stay
+/// in sync and only produce targets that exist in the `vite-plus` package
+/// `exports` map, otherwise Node fails with `ERR_PACKAGE_PATH_NOT_EXPORTED`):
 /// - `import { ... } from 'vitest'` → `import { ... } from 'vite-plus/test'`
 /// - `import { ... } from 'vitest/config'` → `import { ... } from 'vite-plus'`
 /// - `import { ... } from 'vitest/{name}'` → `import { ... } from 'vite-plus/test/{name}'`
 /// - `import { ... } from '@vitest/browser'` → `import { ... } from 'vite-plus/test/browser'`
-/// - `import { ... } from '@vitest/browser/{name}'` → `import { ... } from 'vite-plus/test/browser/{name}'`
+/// - `import { ... } from '@vitest/browser/context'` → `import { ... } from 'vite-plus/test/browser/context'`
+/// - `import { ... } from '@vitest/browser/client'` → `import { ... } from 'vite-plus/test/client'`
+/// - `import { ... } from '@vitest/browser/locators'` → `import { ... } from 'vite-plus/test/locators'`
+/// - `import { ... } from '@vitest/browser/matchers'` → `import { ... } from 'vite-plus/test/matchers'`
+/// - `import { ... } from '@vitest/browser/utils'` → `import { ... } from 'vite-plus/test/utils'`
+///
+///   Note: `vite-plus` only exports `./test/browser/context` under the nested
+///   `browser/` path; `client`, `locators`, `matchers` and `utils` are exposed
+///   at the bare `./test/{name}` surface, so the `/browser/` segment is stripped.
 /// - `import { ... } from '@vitest/browser-playwright'` → `import { ... } from 'vite-plus/test/browser-playwright'`
-/// - `import { ... } from '@vitest/browser-playwright/{name}'` → `import { ... } from 'vite-plus/test/browser-playwright/{name}'`
+/// - `import { ... } from '@vitest/browser-playwright/context'` → `import { ... } from 'vite-plus/test/browser/context'`
+/// - `import { ... } from '@vitest/browser-playwright/provider'` → `import { ... } from 'vite-plus/test/browser/providers/playwright'`
 /// - `import { ... } from '@vitest/browser-preview'` → `import { ... } from 'vite-plus/test/browser-preview'`
-/// - `import { ... } from '@vitest/browser-preview/{name}'` → `import { ... } from 'vite-plus/test/browser-preview/{name}'`
+/// - `import { ... } from '@vitest/browser-preview/context'` → `import { ... } from 'vite-plus/test/browser/context'`
+/// - `import { ... } from '@vitest/browser-preview/provider'` → `import { ... } from 'vite-plus/test/browser/providers/preview'`
 /// - `import { ... } from '@vitest/browser-webdriverio'` → `import { ... } from 'vite-plus/test/browser-webdriverio'`
-/// - `import { ... } from '@vitest/browser-webdriverio/{name}'` → `import { ... } from 'vite-plus/test/browser-webdriverio/{name}'`
+/// - `import { ... } from '@vitest/browser-webdriverio/context'` → `import { ... } from 'vite-plus/test/browser/context'`
+/// - `import { ... } from '@vitest/browser-webdriverio/provider'` → `import { ... } from 'vite-plus/test/browser/providers/webdriverio'`
 ///
 /// `declare module 'vitest' { ... }` (and the subpath/`@vitest/*` variants) are
 /// intentionally NOT rewritten — the `vite-plus/test*` subpaths are thin shims
@@ -141,20 +155,196 @@ transform:
       by: "vite-plus/test"
 fix: $NEW_IMPORT
 ---
-id: rewrite-vitest-scoped-import
+id: rewrite-vitest-browser-import
 language: TypeScript
 rule:
   pattern: $STR
   kind: string
-  regex: ^['"]@vitest/(browser-playwright|browser-preview|browser-webdriverio|browser)(/.*)?['"]$
+  regex: ^['"]@vitest/browser['"]$
   inside:
     kind: import_statement
 transform:
   NEW_IMPORT:
     replace:
       source: $STR
-      replace: "@vitest/"
+      replace: "@vitest/browser"
+      by: "vite-plus/test/browser"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-context-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser/context['"]$
+  inside:
+    kind: import_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser/context"
+      by: "vite-plus/test/browser/context"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-flat-subpath-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser/(client|locators|matchers|utils)['"]$
+  inside:
+    kind: import_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser/"
       by: "vite-plus/test/"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-playwright-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser-playwright['"]$
+  inside:
+    kind: import_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser-playwright"
+      by: "vite-plus/test/browser-playwright"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-playwright-context-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser-playwright/context['"]$
+  inside:
+    kind: import_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser-playwright/context"
+      by: "vite-plus/test/browser/context"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-playwright-provider-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser-playwright/provider['"]$
+  inside:
+    kind: import_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser-playwright/provider"
+      by: "vite-plus/test/browser/providers/playwright"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-preview-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser-preview['"]$
+  inside:
+    kind: import_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser-preview"
+      by: "vite-plus/test/browser-preview"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-preview-context-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser-preview/context['"]$
+  inside:
+    kind: import_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser-preview/context"
+      by: "vite-plus/test/browser/context"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-preview-provider-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser-preview/provider['"]$
+  inside:
+    kind: import_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser-preview/provider"
+      by: "vite-plus/test/browser/providers/preview"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-webdriverio-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser-webdriverio['"]$
+  inside:
+    kind: import_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser-webdriverio"
+      by: "vite-plus/test/browser-webdriverio"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-webdriverio-context-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser-webdriverio/context['"]$
+  inside:
+    kind: import_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser-webdriverio/context"
+      by: "vite-plus/test/browser/context"
+fix: $NEW_IMPORT
+---
+id: rewrite-vitest-browser-webdriverio-provider-import
+language: TypeScript
+rule:
+  pattern: $STR
+  kind: string
+  regex: ^['"]@vitest/browser-webdriverio/provider['"]$
+  inside:
+    kind: import_statement
+transform:
+  NEW_IMPORT:
+    replace:
+      source: $STR
+      replace: "@vitest/browser-webdriverio/provider"
+      by: "vite-plus/test/browser/providers/webdriverio"
 fix: $NEW_IMPORT
 ---
 id: rewrite-vitest-subpath-import
@@ -275,16 +465,56 @@ static RE_REF_VITEST_SUBPATH: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"^(\s*///\s*<reference\s+types\s*=\s*["'])vitest/(.+?)(["']\s*/>)"#).unwrap()
 });
 
-/// `@vitest/{pkg}[/{subpath}]` → `vite-plus/test/{pkg}[/{subpath}]`
-/// Only matches packages and subpaths that vite-plus actually exports:
+/// `@vitest/browser[/{subpath}]` references that map onto the *nested*
+/// `vite-plus/test/browser[/{subpath}]` surface (a plain `@vitest/` → `vite-plus/test/`
+/// swap is correct here):
 ///   - `@vitest/browser` → `vite-plus/test/browser`
 ///   - `@vitest/browser/context` → `vite-plus/test/browser/context`
 ///   - `@vitest/browser/providers/{name}` → `vite-plus/test/browser/providers/{name}`
-///   - `@vitest/browser-playwright[/{subpath}]` → `vite-plus/test/browser-playwright[/{subpath}]`
-///   - `@vitest/browser-preview[/{subpath}]` → `vite-plus/test/browser-preview[/{subpath}]`
-///   - `@vitest/browser-webdriverio[/{subpath}]` → `vite-plus/test/browser-webdriverio[/{subpath}]`
-static RE_REF_VITEST_SCOPED: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"^(\s*///\s*<reference\s+types\s*=\s*["'])@vitest/((?:browser-playwright|browser-preview|browser-webdriverio)(?:/.+?)?|browser(?:/(?:context|providers/.+?))?)(["']\s*/>)"#).unwrap()
+static RE_REF_VITEST_SCOPED_BROWSER: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r#"^(\s*///\s*<reference\s+types\s*=\s*["'])@vitest/(browser(?:/(?:context|providers/.+?))?)(["']\s*/>)"#,
+    )
+    .unwrap()
+});
+
+/// `@vitest/browser/{client,locators,matchers,utils}` references. `vite-plus` only
+/// exposes these four at the *bare* `./test/{name}` surface (NOT under `./test/browser/`),
+/// so the `/browser/` segment is stripped: `@vitest/browser/{name}` → `vite-plus/test/{name}`.
+static RE_REF_VITEST_SCOPED_BROWSER_FLAT: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r#"^(\s*///\s*<reference\s+types\s*=\s*["'])@vitest/browser/(client|locators|matchers|utils)(["']\s*/>)"#,
+    )
+    .unwrap()
+});
+
+/// `@vitest/browser-{provider}` (exact, no subpath) →
+/// `vite-plus/test/browser-{provider}` — a plain `@vitest/` → `vite-plus/test/` swap.
+static RE_REF_VITEST_SCOPED_PROVIDER: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r#"^(\s*///\s*<reference\s+types\s*=\s*["'])@vitest/(browser-playwright|browser-preview|browser-webdriverio)(["']\s*/>)"#,
+    )
+    .unwrap()
+});
+
+/// `@vitest/browser-{provider}/context` references. `vite-plus` projects every
+/// provider's `context` onto the shared `./test/browser/context` export, so the
+/// provider segment is dropped: → `vite-plus/test/browser/context`.
+static RE_REF_VITEST_SCOPED_PROVIDER_CONTEXT: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r#"^(\s*///\s*<reference\s+types\s*=\s*["'])@vitest/browser-(playwright|preview|webdriverio)/context(["']\s*/>)"#,
+    )
+    .unwrap()
+});
+
+/// `@vitest/browser-{provider}/provider` references. `vite-plus` exposes provider
+/// entry points at `./test/browser/providers/{provider}`, so the subpath is
+/// rewritten accordingly: → `vite-plus/test/browser/providers/{provider}`.
+static RE_REF_VITEST_SCOPED_PROVIDER_ENTRY: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r#"^(\s*///\s*<reference\s+types\s*=\s*["'])@vitest/browser-(playwright|preview|webdriverio)/provider(["']\s*/>)"#,
+    )
+    .unwrap()
 });
 
 /// bare `vite` → `vite-plus`
@@ -444,7 +674,47 @@ fn rewrite_reference_types(content: &mut String, skip_packages: &SkipPackages) -
                 changed = true;
                 continue;
             }
-            if apply_regex_replace(line, &RE_REF_VITEST_SCOPED, "${1}vite-plus/test/${2}${3}") {
+            // `@vitest/browser-{provider}/{context,provider}` must be matched before the
+            // bare provider regex so the more specific subpath rewrite wins.
+            if apply_regex_replace(
+                line,
+                &RE_REF_VITEST_SCOPED_PROVIDER_CONTEXT,
+                "${1}vite-plus/test/browser/context${3}",
+            ) {
+                changed = true;
+                continue;
+            }
+            if apply_regex_replace(
+                line,
+                &RE_REF_VITEST_SCOPED_PROVIDER_ENTRY,
+                "${1}vite-plus/test/browser/providers/${2}${3}",
+            ) {
+                changed = true;
+                continue;
+            }
+            if apply_regex_replace(
+                line,
+                &RE_REF_VITEST_SCOPED_PROVIDER,
+                "${1}vite-plus/test/${2}${3}",
+            ) {
+                changed = true;
+                continue;
+            }
+            // `@vitest/browser/{client,locators,matchers,utils}` strips the `/browser/`
+            // segment; the generic `@vitest/browser[/...]` rule keeps it.
+            if apply_regex_replace(
+                line,
+                &RE_REF_VITEST_SCOPED_BROWSER_FLAT,
+                "${1}vite-plus/test/${2}${3}",
+            ) {
+                changed = true;
+                continue;
+            }
+            if apply_regex_replace(
+                line,
+                &RE_REF_VITEST_SCOPED_BROWSER,
+                "${1}vite-plus/test/${2}${3}",
+            ) {
                 changed = true;
                 continue;
             }
@@ -1034,6 +1304,8 @@ export default context;"#
 
     #[test]
     fn test_rewrite_import_content_vitest_browser_playwright_subpath() {
+        // `@vitest/browser-{provider}/context` maps onto the shared
+        // `vite-plus/test/browser/context` export (the provider segment is dropped).
         let vite_config = r#"import { something } from "@vitest/browser-playwright/context";
 
 export default something;"#;
@@ -1042,9 +1314,27 @@ export default something;"#;
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"import { something } from "vite-plus/test/browser-playwright/context";
+            r#"import { something } from "vite-plus/test/browser/context";
 
 export default something;"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vitest_browser_playwright_provider() {
+        // `@vitest/browser-{provider}/provider` maps to the provider entry point
+        // under `vite-plus/test/browser/providers/{provider}`.
+        let vite_config = r#"import { playwright } from '@vitest/browser-playwright/provider';
+
+export default playwright;"#;
+
+        let result = rewrite_import_content(vite_config, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { playwright } from 'vite-plus/test/browser/providers/playwright';
+
+export default playwright;"#
         );
     }
 
@@ -1074,9 +1364,25 @@ export default something;"#;
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"import { something } from "vite-plus/test/browser-preview/context";
+            r#"import { something } from "vite-plus/test/browser/context";
 
 export default something;"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vitest_browser_preview_provider() {
+        let vite_config = r#"import { preview } from '@vitest/browser-preview/provider';
+
+export default preview;"#;
+
+        let result = rewrite_import_content(vite_config, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { preview } from 'vite-plus/test/browser/providers/preview';
+
+export default preview;"#
         );
     }
 
@@ -1106,10 +1412,60 @@ export default something;"#;
         assert!(result.updated);
         assert_eq!(
             result.content,
-            r#"import { something } from "vite-plus/test/browser-webdriverio/context";
+            r#"import { something } from "vite-plus/test/browser/context";
 
 export default something;"#
         );
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vitest_browser_webdriverio_provider() {
+        let vite_config = r#"import { webdriverio } from '@vitest/browser-webdriverio/provider';
+
+export default webdriverio;"#;
+
+        let result = rewrite_import_content(vite_config, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { webdriverio } from 'vite-plus/test/browser/providers/webdriverio';
+
+export default webdriverio;"#
+        );
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vitest_browser_flat_subpaths() {
+        // `@vitest/browser/{client,locators,matchers,utils}` are exposed by
+        // vite-plus at the *bare* `./test/{name}` surface, so the `/browser/`
+        // segment must be stripped (the nested `./test/browser/{name}` keys
+        // do NOT exist in the exports map → ERR_PACKAGE_PATH_NOT_EXPORTED).
+        for (sub, expected) in [
+            ("client", "vite-plus/test/client"),
+            ("locators", "vite-plus/test/locators"),
+            ("matchers", "vite-plus/test/matchers"),
+            ("utils", "vite-plus/test/utils"),
+        ] {
+            let single = format!("import x from '@vitest/browser/{sub}';");
+            let result = rewrite_import_content(&single, &SkipPackages::default()).unwrap();
+            assert!(result.updated, "single-quoted @vitest/browser/{sub} should be rewritten");
+            assert_eq!(result.content, format!("import x from '{expected}';"));
+
+            let double = format!("import x from \"@vitest/browser/{sub}\";");
+            let result = rewrite_import_content(&double, &SkipPackages::default()).unwrap();
+            assert!(result.updated, "double-quoted @vitest/browser/{sub} should be rewritten");
+            assert_eq!(result.content, format!("import x from \"{expected}\";"));
+        }
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vitest_browser_context_kept_nested() {
+        // `@vitest/browser/context` keeps the nested path — `./test/browser/context`
+        // IS exported.
+        let vite_config = r#"import { context } from '@vitest/browser/context';"#;
+        let result = rewrite_import_content(vite_config, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"import { context } from 'vite-plus/test/browser/context';"#);
     }
 
     #[test]
@@ -2385,12 +2741,20 @@ export default defineConfig({});"#
     }
 
     #[test]
-    fn test_rewrite_reference_types_vitest_scoped_browser_matchers_not_rewritten() {
-        // @vitest/browser/matchers is NOT exported by vite-plus — should not be rewritten
-        let content = r#"/// <reference types="@vitest/browser/matchers" />"#;
-        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
-        assert!(!result.updated);
-        assert_eq!(result.content, content);
+    fn test_rewrite_reference_types_vitest_scoped_browser_flat_subpaths() {
+        // `@vitest/browser/{client,locators,matchers,utils}` are exposed at the
+        // *bare* `vite-plus/test/{name}` surface — the `/browser/` segment is stripped.
+        for (sub, expected) in [
+            ("client", "vite-plus/test/client"),
+            ("locators", "vite-plus/test/locators"),
+            ("matchers", "vite-plus/test/matchers"),
+            ("utils", "vite-plus/test/utils"),
+        ] {
+            let content = format!(r#"/// <reference types="@vitest/browser/{sub}" />"#);
+            let result = rewrite_import_content(&content, &SkipPackages::default()).unwrap();
+            assert!(result.updated, "@vitest/browser/{sub} reference should be rewritten");
+            assert_eq!(result.content, format!(r#"/// <reference types="{expected}" />"#));
+        }
     }
 
     #[test]
@@ -2432,6 +2796,38 @@ export default defineConfig({});"#
             result.content,
             r#"/// <reference types="vite-plus/test/browser/providers/webdriverio" />"#
         );
+    }
+
+    #[test]
+    fn test_rewrite_reference_types_vitest_scoped_provider_context() {
+        // `@vitest/browser-{provider}/context` references map onto the shared
+        // `vite-plus/test/browser/context` export (the provider segment is dropped).
+        for provider in ["playwright", "preview", "webdriverio"] {
+            let content =
+                format!(r#"/// <reference types="@vitest/browser-{provider}/context" />"#);
+            let result = rewrite_import_content(&content, &SkipPackages::default()).unwrap();
+            assert!(result.updated, "@vitest/browser-{provider}/context should be rewritten");
+            assert_eq!(
+                result.content,
+                r#"/// <reference types="vite-plus/test/browser/context" />"#
+            );
+        }
+    }
+
+    #[test]
+    fn test_rewrite_reference_types_vitest_scoped_provider_entry() {
+        // `@vitest/browser-{provider}/provider` references map to the provider
+        // entry point under `vite-plus/test/browser/providers/{provider}`.
+        for provider in ["playwright", "preview", "webdriverio"] {
+            let content =
+                format!(r#"/// <reference types="@vitest/browser-{provider}/provider" />"#);
+            let result = rewrite_import_content(&content, &SkipPackages::default()).unwrap();
+            assert!(result.updated, "@vitest/browser-{provider}/provider should be rewritten");
+            assert_eq!(
+                result.content,
+                format!(r#"/// <reference types="vite-plus/test/browser/providers/{provider}" />"#)
+            );
+        }
     }
 
     #[test]

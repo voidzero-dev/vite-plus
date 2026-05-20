@@ -82,7 +82,7 @@ peerDependencyRules:
     '@vitest/coverage-istanbul': '*'
 
 > cat test/hello.ts # check test/hello.ts
-import { server } from 'vite-plus/test/browser-playwright/context';
+import { server } from 'vite-plus/test/browser/context';
 import { test, describe, expect, it } from 'vite-plus/test';
 
 const { readFile } = server.commands;

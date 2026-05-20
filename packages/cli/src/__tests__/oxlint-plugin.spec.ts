@@ -66,6 +66,10 @@ describe('rewriteVitePlusImportSpecifier', () => {
     expect(rewriteVitePlusImportSpecifier('@vitest/browser/locators')).toBe(
       'vite-plus/test/locators',
     );
+    expect(rewriteVitePlusImportSpecifier('@vitest/browser/matchers')).toBe(
+      'vite-plus/test/matchers',
+    );
+    expect(rewriteVitePlusImportSpecifier('@vitest/browser/utils')).toBe('vite-plus/test/utils');
     expect(rewriteVitePlusImportSpecifier('@vitest/browser-playwright/context')).toBe(
       'vite-plus/test/browser/context',
     );
@@ -147,6 +151,16 @@ new RuleTester({
       errors: 1,
       filename: 'types.ts',
       output: `type BrowserClient = typeof import('vite-plus/test/client')`,
+    },
+    {
+      code: `import { expect } from '@vitest/browser/matchers'`,
+      errors: 1,
+      output: `import { expect } from 'vite-plus/test/matchers'`,
+    },
+    {
+      code: `import { getElementError } from '@vitest/browser/utils'`,
+      errors: 1,
+      output: `import { getElementError } from 'vite-plus/test/utils'`,
     },
     {
       code: `type PlaywrightProvider = typeof import('@vitest/browser-playwright/provider')`,
