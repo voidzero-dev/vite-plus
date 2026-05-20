@@ -15,12 +15,13 @@ import { resolveViteConfig } from './resolve-vite-config.ts';
 
 // Matches a `.d.ts` / `.d.mts` / `.d.cts` importer.
 const RE_DTS = /\.d\.[cm]?ts$/;
-// Bare specifier for postcss / lightningcss (root or any subpath).
-const EXTERNAL_DTS_PKG_RE = /^(?:postcss|lightningcss)(?:\/|$)/;
+// Bare specifier for postcss / lightningcss / vitest / `@vitest/*`
+// (root or any subpath).
+const EXTERNAL_DTS_PKG_RE = /^(?:postcss|lightningcss|vitest|@vitest\/[^/]+)(?:\/|$)/;
 
 /**
- * Rolldown plugin that keeps `postcss` / `lightningcss` external to the DTS
- * bundle.
+ * Rolldown plugin that keeps `postcss` / `lightningcss` / `vitest` / `@vitest/*`
+ * external to the DTS bundle.
  *
  * The DTS bundler resolves these packages and tries to inline their `.d.ts`
  * files. postcss ships its public types as a CJS `export = postcss` over a
@@ -30,6 +31,16 @@ const EXTERNAL_DTS_PKG_RE = /^(?:postcss|lightningcss)(?:\/|$)/;
  * cannot map named imports onto an `export =`'d namespace's members, so every
  * consumer `import type { AtRule } from 'postcss'` becomes a MISSING_EXPORT
  * error.
+ *
+ * vitest fails for a different reason: `vitest@4.1.7`'s `dist/index.d.ts`
+ * re-exports `ExpectPollOptions` from `@vitest/expect`, but `@vitest/expect`
+ * does not actually export that name. `tsc` tolerates the dangling re-export
+ * because it only resolves re-exports lazily on use, but the DTS bundler
+ * eagerly resolves every re-export while inlining and so hits the missing
+ * export. `@vitest/browser/matchers.d.ts` then re-imports the same name from
+ * `vitest`, propagating the failure. Established vite-plus projects reach
+ * these files through the `vite-plus/test*` shims, which re-export `vitest` /
+ * `@vitest/*` from declaration files.
  *
  * Marking these packages external for `.d.ts` importers leaves the import
  * untouched in the emitted declarations (`import type { AtRule } from 'postcss'`),
