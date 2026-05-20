@@ -114,7 +114,7 @@ jobs:
           cd packages/cli && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
           # Bun is uniquely strict about peer-dep resolution:
           #   1. It checks the *resolved target's* package name and version
-          #      against the peer range (vitest 4.1.5 declares peer
+          #      against the peer range (vitest 4.1.7 declares peer
           #      `vite ^6 || ^7 || ^8`).
           #   2. A file: override pointing at the vite-plus-core tgz fails
           #      both the name check (target is `@voidzero-dev/vite-plus-core`,
