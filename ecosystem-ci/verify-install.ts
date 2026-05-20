@@ -2,11 +2,13 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 
-import cliPkg from '../packages/cli/package.json' with { type: 'json' };
-
 const require = createRequire(`${process.cwd()}/`);
 
-const expectedVersion = cliPkg.version;
+// The ecosystem-ci pack step pins packages/cli to 0.0.0 before `pnpm pack`, so
+// a correctly installed local build always reports 0.0.0 — never the published
+// registry version (which `patch-project.ts` likewise references as a fixed
+// `vite-plus-0.0.0.tgz`).
+const expectedVersion = '0.0.0';
 
 try {
   const pkgPath = require.resolve('vite-plus/package.json');
