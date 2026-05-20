@@ -31,10 +31,15 @@ function rewriteVitePlusImportSpecifier(specifier: string): string | null {
     return 'vite-plus/test/browser';
   }
 
+  // `@vitest/browser/context` keeps the nested path (vite-plus exports
+  // `./test/browser/context`); the remaining subpaths are exposed only at the
+  // bare `./test/<name>` surface, so the `/browser/` segment is dropped.
   const browserSubpathRewrites: Record<string, string> = {
     '@vitest/browser/context': 'vite-plus/test/browser/context',
     '@vitest/browser/client': 'vite-plus/test/client',
     '@vitest/browser/locators': 'vite-plus/test/locators',
+    '@vitest/browser/matchers': 'vite-plus/test/matchers',
+    '@vitest/browser/utils': 'vite-plus/test/utils',
   };
   if (specifier in browserSubpathRewrites) {
     return browserSubpathRewrites[specifier];
