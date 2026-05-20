@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { defineConfig, rewriteVitePlusTestSpecifier } from '../define-config.ts';
 
 const REWRITE_PLUGIN_NAME = 'vite-plus:vitest-specifier-rewrite';
+const RESOLVER_PLUGIN_NAME = 'vite-plus:vitest-resolver';
 
 function pluginName(p: unknown): string | undefined {
   if (
@@ -324,12 +325,13 @@ describe('rewriteVitePlusTestSpecifier', () => {
 });
 
 describe('defineConfig project plugin injection', () => {
-  it('injects rewrite plugin at the root plugins array', () => {
+  it('injects rewrite + resolver plugins at the root plugins array', () => {
     const existing: Plugin = { name: 'user-existing-root-plugin' };
     const result = defineConfig({ plugins: [existing] }) as { plugins: unknown[] };
 
     expect(pluginName(result.plugins[0])).toBe(REWRITE_PLUGIN_NAME);
-    expect(pluginName(result.plugins[1])).toBe('user-existing-root-plugin');
+    expect(pluginName(result.plugins[1])).toBe(RESOLVER_PLUGIN_NAME);
+    expect(pluginName(result.plugins[2])).toBe('user-existing-root-plugin');
   });
 
   it('injects rewrite plugin into an inline-object project entry, preserving existing plugins', () => {
@@ -348,9 +350,10 @@ describe('defineConfig project plugin injection', () => {
     const project = result.test.projects[0] as { plugins: unknown[]; test: { name: string } };
     expect(project.test.name).toBe('unit');
     expect(pluginName(project.plugins[0])).toBe(REWRITE_PLUGIN_NAME);
-    expect(pluginName(project.plugins[1])).toBe('user-unit-project-plugin');
+    expect(pluginName(project.plugins[1])).toBe(RESOLVER_PLUGIN_NAME);
+    expect(pluginName(project.plugins[2])).toBe('user-unit-project-plugin');
     // Sanity: the existing plugin reference is preserved (clone shallow-copies the array).
-    expect(project.plugins[1]).toBe(existing);
+    expect(project.plugins[2]).toBe(existing);
   });
 
   it('injects rewrite plugin into the return value of a function-shaped project entry', () => {
@@ -371,7 +374,8 @@ describe('defineConfig project plugin injection', () => {
     const fakeEnv = { mode: 'test', command: 'serve' as const };
     const resolved = (wrapped as (env: typeof fakeEnv) => { plugins: unknown[] })(fakeEnv);
     expect(pluginName(resolved.plugins[0])).toBe(REWRITE_PLUGIN_NAME);
-    expect(pluginName(resolved.plugins[1])).toBe('user-fn-project-plugin');
+    expect(pluginName(resolved.plugins[1])).toBe(RESOLVER_PLUGIN_NAME);
+    expect(pluginName(resolved.plugins[2])).toBe('user-fn-project-plugin');
   });
 
   it('passes string-glob project entries through unchanged', () => {
@@ -397,8 +401,9 @@ describe('defineConfig project plugin injection', () => {
 
     const project = result.test.projects[0] as { plugins: unknown[]; test: { name: string } };
     expect(project.test.name).toBe('no-plugins');
-    expect(project.plugins).toHaveLength(1);
+    expect(project.plugins).toHaveLength(2);
     expect(pluginName(project.plugins[0])).toBe(REWRITE_PLUGIN_NAME);
+    expect(pluginName(project.plugins[1])).toBe(RESOLVER_PLUGIN_NAME);
   });
 });
 
