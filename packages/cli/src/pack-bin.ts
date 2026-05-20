@@ -42,14 +42,24 @@ function externalDtsTypeOnlyPlugin() {
         const id = rawId.replaceAll('\\', '/');
         if (EXTERNAL_DTS_INTERNAL_RE.test(id)) {
           // postcss/lightningcss internal files: transform imports only
-          // (exports may include value re-exports like `export const Features`)
-          return code.replace(/^(import\s+)(?!type\s)/gm, 'import type ');
+          // (exports may include value re-exports like `export const Features`).
+          // A type-only import statement cannot mix a default binding with named
+          // bindings, so fold `import D, { N } from 'x'` into a single named
+          // clause (`{ default as D, N }`) before the generic prepend runs.
+          return code
+            .replace(/^import\s+(\w+)\s*,\s*\{/gm, 'import type { default as $1,')
+            .replace(/^(import\s+)(?!type\s)/gm, 'import type ');
         }
         // Consumer files: only transform imports from postcss/lightningcss
-        return code.replace(
-          /^(import\s+)(?!type\s)(.+from\s+['"](?:postcss|lightningcss)['"])/gm,
-          'import type $2',
-        );
+        return code
+          .replace(
+            /^import\s+(\w+)\s*,\s*\{([^}]*)\}\s*from\s+(['"](?:postcss|lightningcss)['"])/gm,
+            'import type { default as $1,$2} from $3',
+          )
+          .replace(
+            /^(import\s+)(?!type\s)(.+from\s+['"](?:postcss|lightningcss)['"])/gm,
+            'import type $2',
+          );
       },
     },
   };
