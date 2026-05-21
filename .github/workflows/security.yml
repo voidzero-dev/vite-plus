@@ -10,8 +10,7 @@ on:
     paths:
       - '.github/workflows/**'
 
-permissions:
-  contents: read
+permissions: {}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
@@ -21,6 +20,8 @@ jobs:
   security:
     name: Security Analysis
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       # Checkout self and clone upstream rolldown/vite so the bundled cargo-deny
       # check inside security-action can resolve workspace members that reference
