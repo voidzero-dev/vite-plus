@@ -75,7 +75,7 @@ describe('hookScript', () => {
   });
 
   it.skipIf(process.platform === 'win32')(
-    'should add Vite+ managed bin to PATH before running user hook',
+    'should add Vite+ managed bin to PATH as a fallback before running user hook',
     () => {
       const tmp = mkdtempSync(join(tmpdir(), 'hooks-path-test-'));
       try {
@@ -108,6 +108,16 @@ describe('hookScript', () => {
           '#!/bin/sh\necho "fake-node $*" > "$VP_HOME/node-used"\n',
           { mode: 0o755 },
         );
+        writeFileSync(
+          join(vpHomeBin, 'dirname'),
+          '#!/bin/sh\necho "wrong dirname" > "$VP_HOME/dirname-used"\nexit 1\n',
+          { mode: 0o755 },
+        );
+        writeFileSync(
+          join(vpHomeBin, 'sh'),
+          '#!/bin/sh\necho "wrong sh" > "$VP_HOME/sh-used"\nexit 1\n',
+          { mode: 0o755 },
+        );
 
         writeFileSync(join(systemBin, 'sh'), '#!/bin/sh\nexec /bin/sh "$@"\n', {
           mode: 0o755,
@@ -129,9 +139,20 @@ describe('hookScript', () => {
         });
 
         expect(existsSync(join(tmp, 'vp-home', 'node-used'))).toBe(true);
+        expect(existsSync(join(tmp, 'vp-home', 'dirname-used'))).toBe(false);
+        expect(existsSync(join(tmp, 'vp-home', 'sh-used'))).toBe(false);
       } finally {
         rmSync(tmp, { recursive: true, force: true });
       }
     },
   );
+
+  it('should compute root and shell before appending Vite+ managed bin', () => {
+    const script = hookScript('.vite-hooks');
+    expect(script.indexOf('d=')).toBeLessThan(script.indexOf('export PATH="$PATH:$__vp_bin"'));
+    expect(script.indexOf('__vp_shell=')).toBeLessThan(
+      script.indexOf('export PATH="$PATH:$__vp_bin"'),
+    );
+    expect(script).toContain('"$__vp_shell" -e "$s" "$@"');
+  });
 });

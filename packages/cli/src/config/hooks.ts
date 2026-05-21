@@ -49,6 +49,10 @@ i="\${XDG_CONFIG_HOME:-$HOME/.config}/vite-plus/hooks-init.sh"
 
 { [ "\${HUSKY-}" = "0" ] || [ "\${VITE_GIT_HOOKS-}" = "0" ]; } && exit 0
 
+d=${rootExpr}
+__vp_shell=/bin/sh
+[ -x "$__vp_shell" ] || __vp_shell=$(command -v sh)
+
 if [ -n "\${VP_HOME-}" ]; then
   __vp_bin="$VP_HOME/bin"
 elif [ -n "\${HOME-}" ]; then
@@ -56,11 +60,10 @@ elif [ -n "\${HOME-}" ]; then
 else
   __vp_bin=""
 fi
-[ -n "$__vp_bin" ] && [ -d "$__vp_bin" ] && export PATH="$__vp_bin:$PATH"
+[ -n "$__vp_bin" ] && [ -d "$__vp_bin" ] && export PATH="$PATH:$__vp_bin"
 
-d=${rootExpr}
 export PATH="$d/node_modules/.bin:$PATH"
-sh -e "$s" "$@"
+"$__vp_shell" -e "$s" "$@"
 c=$?
 
 [ $c != 0 ] && echo "VITE+ - $n script failed (code $c)"
