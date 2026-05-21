@@ -437,7 +437,6 @@ mod tests {
         assert_eq!(shell, Shell::PowerShell);
     }
 
-
     #[test]
     fn test_detect_shell_vp_shell_fish() {
         let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig {
@@ -447,6 +446,4 @@ mod tests {
         let shell = detect_shell();
         assert_eq!(shell, Shell::Fish);
     }
-
-
 }
