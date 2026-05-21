@@ -37,6 +37,9 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage)', 'cfg(coverage_
 unsafe_op_in_unsafe_fn = "warn"
 unused_unsafe = "warn"
 unused_must_use = "allow"
+# Rolldown crates use `#![expect(clippy::print_stderr)]` but our workspace sets
+# `print_stderr = "allow"`, so those expects are unfulfilled when built here.
+unfulfilled_lint_expectations = "allow"
 
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
