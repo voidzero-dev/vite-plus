@@ -225,7 +225,7 @@ mod tests {
         // accepted as task arguments instead of producing a parse error.
         let args = CLIArgs::try_parse_from(["vp", "run", "--yolo"]).unwrap();
         let debug = vite_str::format!("{args:?}");
-        assert!(debug.contains("\"--yolo\""), "Expected --yolo in task args, got: {debug}",);
+        assert!(debug.contains("\"--yolo\""), "Expected --yolo in task args, got: {debug}");
         assert!(matches!(args, CLIArgs::ViteTask(Command::Run(_))));
     }
 
