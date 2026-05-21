@@ -13,8 +13,17 @@ When a task runs successfully (exit code 0), its terminal output (stdout/stderr)
 If everything matches, the cached output is replayed instantly, and the command does not run.
 
 ::: info
-Currently, only terminal output is cached and replayed. Output files such as `dist/` are not cached. If you delete them, use `--no-cache` to force a re-run. Output file caching is planned for a future release.
+By default, only terminal output is cached and replayed. To cache files produced by a task, configure [`output`](/config/run#output) globs. Matching files are archived after a successful run and restored on a cache hit.
 :::
+
+```ts [vite.config.ts]
+tasks: {
+  build: {
+    command: 'vp build',
+    output: ['dist/**'],
+  },
+}
+```
 
 When a cache miss occurs, Vite Task tells you exactly why:
 
