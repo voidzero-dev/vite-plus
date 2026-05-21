@@ -10,7 +10,8 @@ on:
     paths:
       - '.github/workflows/**'
 
-permissions: {}
+permissions:
+  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
@@ -21,4 +22,13 @@ jobs:
     name: Security Analysis
     runs-on: ubuntu-latest
     steps:
+      # Checkout self and clone upstream rolldown/vite so the bundled cargo-deny
+      # check inside security-action can resolve workspace members that reference
+      # `rolldown/crates/*`. Then clear origin so security-action's nested
+      # taiki-e/checkout-action can re-add it without conflict.
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - uses: ./.github/actions/clone
+      - name: Clear git origin for nested checkout
+        shell: bash
+        run: git remote remove origin
       - uses: oxc-project/security-action@77e230508eccbb400b23746dab6c573a8ea7483e # v1.0.5
