@@ -228,7 +228,7 @@ export async function promptGitInit(options: {
   if (options.interactive) {
     const selected = await prompts.confirm({
       message: 'Initialize a git repository with an initial commit?',
-      initialValue: false,
+      initialValue: true,
     });
     if (prompts.isCancel(selected)) {
       cancelAndExit();
