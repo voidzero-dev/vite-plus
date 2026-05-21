@@ -131,5 +131,11 @@
     "branch": "dev",
     "hash": "83f6c6a418ab9319e07d719d86d4fa952f99e266",
     "forceFreshMigration": true
+  },
+  "codiff": {
+    "repository": "https://github.com/nkzw-tech/codiff.git",
+    "branch": "main",
+    "hash": "613f822eed07ee16b07875f635a9bbaf8eab4181",
+    "forceFreshMigration": true
   }
 }
