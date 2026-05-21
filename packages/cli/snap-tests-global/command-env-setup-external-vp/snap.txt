@@ -3,38 +3,6 @@
 > printf '22.18.0\n' > .node-version # Project Node.js version
 > mkdir -p home/js_runtime/node/22.18.0/bin && printf '#!/bin/sh\necho vp-managed-node-22.18.0\n' > home/js_runtime/node/22.18.0/bin/node && chmod +x home/js_runtime/node/22.18.0/bin/node # Preinstall managed Node runtime
 > VP_HOME="$(pwd)/home" ./external/vp env setup # Setup shims from external vp
-Setup:
-  Preparing vite-plus environment.
-
-Created Shims:
-  <cwd>/home/bin/node
-  <cwd>/home/bin/npm
-  <cwd>/home/bin/npx
-  <cwd>/home/bin/vpx
-  <cwd>/home/bin/vpr
-
-Next Steps:
-  Add to your shell profile (~/.zshrc, ~/.bashrc, etc.):
-
-  . "<cwd>/home/env"
-
-  For fish shell, add to ~/.config/fish/config.fish:
-
-  source "<cwd>/home/env.fish"
-
-  For Nushell, add to ~/.config/nushell/config.nu:
-
-  source '<cwd>/home/env.nu'
-
-  For PowerShell, add to your $PROFILE:
-
-  . "<cwd>/home/env.ps1"
-
-  For IDE support (VS Code, Cursor), ensure bin directory is in system PATH:
-  - macOS: Add to ~/.profile or use launchd
-
-  Restart your terminal and IDE, then run `vp env doctor` to verify.
-
 > VP_BYPASS="$VP_HOME/bin" node assert-shims.mjs # Shims should point to external vp, not VP_HOME/current/bin/vp
 all shims point to external vp
 
