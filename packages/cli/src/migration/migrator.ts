@@ -1189,6 +1189,7 @@ export function rewriteStandaloneProject(
       usePnpmWorkspaceYaml,
       skipStagedMigration,
       catalogDependencyResolver,
+      usesVitestBrowserMode(projectPath),
     );
 
     // ensure vite-plus is in devDependencies
@@ -1370,6 +1371,7 @@ export function rewriteMonorepoProject(
       true,
       skipStagedMigration,
       catalogDependencyResolver,
+      usesVitestBrowserMode(projectPath),
     );
     return pkg;
   });
@@ -2649,6 +2651,105 @@ export function ensureVitePlusBootstrap(
   return result;
 }
 
+// Specifier fragments that signal vitest browser mode. `@vitest/browser`
+// (upstream, pre-migration) and `vite-plus/test/browser` (post-migration, e.g.
+// re-migrating an already-migrated project) both indicate the package drives
+// vitest's browser runner.
+const VITEST_BROWSER_SPECIFIER_HINTS = ['@vitest/browser', 'vite-plus/test/browser'] as const;
+
+// TypeScript/JavaScript source extensions scanned for browser-mode hints.
+const VITEST_SCAN_EXTENSIONS = new Set([
+  '.ts',
+  '.mts',
+  '.cts',
+  '.tsx',
+  '.js',
+  '.mjs',
+  '.cjs',
+  '.jsx',
+]);
+
+// Directories never worth scanning for browser-mode hints — generated output,
+// installed deps, VCS metadata. Skipped at every recursion level.
+const VITEST_SCAN_SKIP_DIRS = new Set([
+  'node_modules',
+  'dist',
+  'build',
+  'out',
+  'coverage',
+  '.git',
+  '.next',
+  '.nuxt',
+  '.svelte-kit',
+  '.vite',
+  '.cache',
+]);
+
+/**
+ * Detect whether a package uses vitest's browser mode.
+ *
+ * Upstream `@vitest/browser` injects `optimizeDeps.include` entries of the form
+ * `vitest > expect-type` (and `vitest > @vitest/snapshot > magic-string`,
+ * `vitest > @vitest/expect > chai`). Vite resolves the leading `vitest` segment
+ * from the Vite config root, so `vitest` MUST be resolvable as a package from
+ * the consuming package's directory. In a pnpm strict (non-hoisted) layout,
+ * `vitest` pulled in only transitively via `vite-plus` is NOT reachable from the
+ * package root — the optimizer then fails with `Failed to resolve dependency`
+ * and the browser test page hangs forever.
+ *
+ * When this returns true the migration adds `vitest` as a direct
+ * devDependency so it is hoisted next to the package and the optimizer chain
+ * resolves. The signal is any of the package's TS/JS files (config, workspace
+ * config under any name, or test file) referencing `@vitest/browser*` or
+ * `vite-plus/test/browser*`. The scan recurses through the package directory
+ * (skipping `node_modules`, build output, VCS metadata) so browser config in a
+ * non-standard filename or browser imports in test files are all caught.
+ *
+ * Recursion stops at nested `package.json` boundaries: a workspace sub-package
+ * is a separate package that the migration scans on its own pass, so the root
+ * package must not inherit a browser-mode signal from a sub-package.
+ */
+function usesVitestBrowserMode(projectPath: string): boolean {
+  const matchesBrowserHint = (content: string): boolean =>
+    VITEST_BROWSER_SPECIFIER_HINTS.some((hint) => content.includes(hint));
+
+  const scanDir = (dir: string, isRoot: boolean): boolean => {
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return false;
+    }
+    // A nested package.json marks a separate workspace package — it is migrated
+    // (and scanned) on its own pass, so don't let its files leak into this one.
+    if (!isRoot && entries.some((e) => e.isFile() && e.name === 'package.json')) {
+      return false;
+    }
+    for (const entry of entries) {
+      const entryPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (VITEST_SCAN_SKIP_DIRS.has(entry.name)) {
+          continue;
+        }
+        if (scanDir(entryPath, false)) {
+          return true;
+        }
+      } else if (entry.isFile() && VITEST_SCAN_EXTENSIONS.has(path.extname(entry.name))) {
+        try {
+          if (matchesBrowserHint(fs.readFileSync(entryPath, 'utf8'))) {
+            return true;
+          }
+        } catch {
+          // Unreadable file — ignore and keep scanning.
+        }
+      }
+    }
+    return false;
+  };
+
+  return scanDir(projectPath, true);
+}
+
 export function rewritePackageJson(
   pkg: {
     scripts?: Record<string, string>;
@@ -2662,6 +2763,7 @@ export function rewritePackageJson(
   isMonorepo?: boolean,
   skipStagedMigration?: boolean,
   catalogDependencyResolver?: CatalogDependencyResolver,
+  vitestBrowserMode?: boolean,
 ): Record<string, string | string[]> | null {
   if (pkg.scripts) {
     const updated = rewriteScripts(
@@ -2769,6 +2871,15 @@ export function rewritePackageJson(
   if (isVitestAdjacent) {
     needVitePlus = true;
   }
+  // A package running vitest browser mode must have `vitest` directly
+  // resolvable from its own directory — `@vitest/browser` injects
+  // `optimizeDeps.include` entries (`vitest > expect-type`, etc.) that Vite
+  // resolves from the config root. A `vitest` pulled in only transitively via
+  // `vite-plus` is invisible in a pnpm strict layout, so the optimizer fails
+  // and the browser test page hangs. See `usesVitestBrowserMode`.
+  if (vitestBrowserMode && !installableNames.includes('vitest')) {
+    needVitePlus = true;
+  }
   // Normalize a pre-existing pinned vite-plus so sub-packages don't drift
   // from siblings: in catalog-supporting monorepos that's `catalog:`, under
   // force-override (file:) it's the tgz path. Preserve protocol-prefixed
@@ -2789,15 +2900,17 @@ export function rewritePackageJson(
       [VITE_PLUS_NAME]: canonicalVitePlusSpec,
     };
   }
-  // Add vitest to devDependencies when a remaining dependency likely
-  // peer-depends on vitest (e.g., vitest-browser-svelte). Vite-plus already
-  // bundles upstream vitest as a direct dep, so the runtime resolution works
-  // without this — but strict pnpm / yarn Plug'n'Play refuse to expose a
-  // transitive `vitest` to satisfy a peer dep declared by a different direct
-  // dep. Adding `vitest` to the user's devDependencies pins the peer-dep
-  // target to the same upstream version vite-plus ships with. Gated by
-  // needVitePlus (something actually changed) — a pure normalize pass must
-  // not mutate the project beyond the vite-plus spec.
+  // Add `vitest` as a direct devDependency when:
+  //  - a remaining dependency likely peer-depends on vitest (e.g.
+  //    vitest-browser-svelte), OR
+  //  - the package runs vitest browser mode (`@vitest/browser` needs
+  //    `vitest` resolvable from the package root — see usesVitestBrowserMode).
+  // Vite-plus already bundles upstream vitest as a direct dep, but a strict
+  // pnpm / yarn Plug'n'Play layout will not expose that transitive `vitest`
+  // to the package. Pinning it here points the dep at the same upstream
+  // version vite-plus ships with. Gated by needVitePlus (something actually
+  // changed) — a pure normalize pass must not mutate the project beyond the
+  // vite-plus spec.
   if (needVitePlus) {
     const installableDeps = {
       ...pkg.dependencies,
@@ -2806,7 +2919,7 @@ export function rewritePackageJson(
     };
     if (
       !installableDeps.vitest &&
-      Object.keys(installableDeps).some((name) => name.includes('vitest'))
+      (vitestBrowserMode || Object.keys(installableDeps).some((name) => name.includes('vitest')))
     ) {
       pkg.devDependencies ??= {};
       pkg.devDependencies.vitest = getCatalogDependencySpec(
