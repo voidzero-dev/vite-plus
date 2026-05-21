@@ -5,7 +5,7 @@ transforming...✓ <variable> modules transformed.
 rendering chunks...
 computing gzip size...
 dist/index.html                <variable> kB │ gzip: <variable> kB
-dist/assets/index-BnIqjoTZ.js  <variable> kB │ gzip: <variable> kB
+dist/assets/index-Dra_-aT4.js  <variable> kB │ gzip: <variable> kB
 
 ✓ built in <variable>ms
 
@@ -17,7 +17,7 @@ transforming...✓ <variable> modules transformed.
 rendering chunks...
 computing gzip size...
 dist/index.html                <variable> kB │ gzip: <variable> kB
-dist/assets/index-BnIqjoTZ.js  <variable> kB │ gzip: <variable> kB
+dist/assets/index-Dra_-aT4.js  <variable> kB │ gzip: <variable> kB
 
 ✓ built in <variable>ms
 
@@ -31,7 +31,7 @@ transforming...✓ <variable> modules transformed.
 rendering chunks...
 computing gzip size...
 dist/index.html                <variable> kB │ gzip: <variable> kB
-dist/assets/index-BnIqjoTZ.js  <variable> kB │ gzip: <variable> kB
+dist/assets/index-Dra_-aT4.js  <variable> kB │ gzip: <variable> kB
 
 ✓ built in <variable>ms
 

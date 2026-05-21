@@ -36,6 +36,9 @@ const rolldownPluginUtilsDir = resolve(
   '..',
   'rolldown',
   'packages',
+  'rolldown',
+  'node_modules',
+  '@rolldown',
   'pluginutils',
 );
 
@@ -71,7 +74,7 @@ generateLicenseFile({
     },
     {
       packageDir: rolldownPluginUtilsDir,
-      licensePath: join(projectDir, '..', '..', 'rolldown', 'LICENSE'),
+      licensePath: join(rolldownPluginUtilsDir, 'LICENSE'),
     },
     {
       packageDir: rolldownViteSourceDir,
