@@ -243,13 +243,15 @@ pub fn find_local_binary(cwd: &AbsolutePath, cmd: &str) -> Option<AbsolutePathBu
     let mut current = cwd;
     loop {
         let bin_dir = current.join("node_modules").join(".bin");
-        let bin_path = bin_dir.join(cmd);
 
-        if bin_path.as_path().exists() {
-            return Some(bin_path);
+        #[cfg(not(windows))]
+        {
+            let bin_path = bin_dir.join(cmd);
+            if bin_path.as_path().exists() {
+                return Some(bin_path);
+            }
         }
 
-        // On Windows, check for .cmd extension
         #[cfg(windows)]
         {
             let cmd_path = bin_dir.join(format!("{cmd}.cmd"));
@@ -599,6 +601,36 @@ mod tests {
         // Should find the nested one first
         let found = result.unwrap();
         assert_eq!(found.as_path(), nested_bin.join("eslint").as_path());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn test_find_local_binary_windows_prefers_cmd_over_extensionless() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        let bin_dir = temp_path.join("node_modules").join(".bin");
+        std::fs::create_dir_all(&bin_dir).unwrap();
+        std::fs::write(bin_dir.join("playwright"), "#!/bin/sh\n").unwrap();
+        std::fs::write(bin_dir.join("playwright.cmd"), "@playwright %*\r\n").unwrap();
+
+        let result = find_local_binary(&temp_path, "playwright");
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().as_path(), bin_dir.join("playwright.cmd").as_path());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn test_find_local_binary_windows_ignores_extensionless_only() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        let bin_dir = temp_path.join("node_modules").join(".bin");
+        std::fs::create_dir_all(&bin_dir).unwrap();
+        std::fs::write(bin_dir.join("playwright"), "#!/bin/sh\n").unwrap();
+
+        let result = find_local_binary(&temp_path, "playwright");
+        assert!(result.is_none());
     }
 
     // =========================================================================
