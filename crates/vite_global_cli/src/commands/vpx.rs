@@ -243,13 +243,15 @@ pub fn find_local_binary(cwd: &AbsolutePath, cmd: &str) -> Option<AbsolutePathBu
     let mut current = cwd;
     loop {
         let bin_dir = current.join("node_modules").join(".bin");
-        let bin_path = bin_dir.join(cmd);
 
-        if bin_path.as_path().exists() {
-            return Some(bin_path);
+        #[cfg(not(windows))]
+        {
+            let bin_path = bin_dir.join(cmd);
+            if bin_path.as_path().exists() {
+                return Some(bin_path);
+            }
         }
 
-        // On Windows, check for .cmd extension
         #[cfg(windows)]
         {
             let cmd_path = bin_dir.join(format!("{cmd}.cmd"));
@@ -536,11 +538,18 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
 
-        // Create node_modules/.bin/eslint
+        // Create node_modules/.bin/eslint and eslint.cmd
         let bin_dir = temp_path.join("node_modules").join(".bin");
         std::fs::create_dir_all(&bin_dir).unwrap();
+        // Unix script
+        std::fs::write(bin_dir.join("eslint"), "#!/bin/sh\n").unwrap();
+        #[cfg(windows)]
+        std::fs::write(bin_dir.join("eslint.cmd"), "@eslint %*\r\n").unwrap();
+
+        #[cfg(not(windows))]
         let eslint_path = bin_dir.join("eslint");
-        std::fs::write(&eslint_path, "#!/bin/sh\n").unwrap();
+        #[cfg(windows)]
+        let eslint_path = bin_dir.join("eslint.cmd");
 
         let result = find_local_binary(&temp_path, "eslint");
         assert!(result.is_some());
@@ -552,11 +561,17 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
 
-        // Create node_modules/.bin/eslint at root
+        // Create node_modules/.bin/eslint and eslint.cmd at root
         let bin_dir = temp_path.join("node_modules").join(".bin");
         std::fs::create_dir_all(&bin_dir).unwrap();
+        std::fs::write(bin_dir.join("eslint"), "#!/bin/sh\n").unwrap();
+        #[cfg(windows)]
+        std::fs::write(bin_dir.join("eslint.cmd"), "@eslint %*\r\n").unwrap();
+
+        #[cfg(not(windows))]
         let eslint_path = bin_dir.join("eslint");
-        std::fs::write(&eslint_path, "#!/bin/sh\n").unwrap();
+        #[cfg(windows)]
+        let eslint_path = bin_dir.join("eslint.cmd");
 
         // Create nested directory
         let nested_dir = temp_path.join("packages").join("app");
@@ -586,19 +601,58 @@ mod tests {
         let root_bin = temp_path.join("node_modules").join(".bin");
         std::fs::create_dir_all(&root_bin).unwrap();
         std::fs::write(root_bin.join("eslint"), "root").unwrap();
+        #[cfg(windows)]
+        std::fs::write(root_bin.join("eslint.cmd"), "@eslint %*\r\n").unwrap();
 
         // Create eslint in nested package
         let nested = temp_path.join("packages").join("app");
         let nested_bin = nested.join("node_modules").join(".bin");
         std::fs::create_dir_all(&nested_bin).unwrap();
         std::fs::write(nested_bin.join("eslint"), "nested").unwrap();
+        #[cfg(windows)]
+        std::fs::write(nested_bin.join("eslint.cmd"), "@eslint %*\r\n").unwrap();
+
+        #[cfg(not(windows))]
+        let nested_bin = nested_bin.join("eslint");
+        #[cfg(windows)]
+        let nested_bin = nested_bin.join("eslint.cmd");
 
         let nested_abs = AbsolutePathBuf::new(nested.as_path().to_path_buf()).unwrap();
         let result = find_local_binary(&nested_abs, "eslint");
         assert!(result.is_some());
         // Should find the nested one first
         let found = result.unwrap();
-        assert_eq!(found.as_path(), nested_bin.join("eslint").as_path());
+        assert_eq!(found.as_path(), nested_bin.as_path());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn test_find_local_binary_windows_prefers_cmd_over_extensionless() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        let bin_dir = temp_path.join("node_modules").join(".bin");
+        std::fs::create_dir_all(&bin_dir).unwrap();
+        std::fs::write(bin_dir.join("playwright"), "#!/bin/sh\n").unwrap();
+        std::fs::write(bin_dir.join("playwright.cmd"), "@playwright %*\r\n").unwrap();
+
+        let result = find_local_binary(&temp_path, "playwright");
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().as_path(), bin_dir.join("playwright.cmd").as_path());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn test_find_local_binary_windows_ignores_extensionless_only() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        let bin_dir = temp_path.join("node_modules").join(".bin");
+        std::fs::create_dir_all(&bin_dir).unwrap();
+        std::fs::write(bin_dir.join("playwright"), "#!/bin/sh\n").unwrap();
+
+        let result = find_local_binary(&temp_path, "playwright");
+        assert!(result.is_none());
     }
 
     // =========================================================================

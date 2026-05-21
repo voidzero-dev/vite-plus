@@ -1,5 +1,5 @@
 import { execSync } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -72,5 +72,87 @@ describe('hookScript', () => {
     const withoutDot = hookScript('custom-hooks');
     expect(countDirnameCalls(withDot)).toBe(countDirnameCalls(withoutDot));
     expect(countDirnameCalls(withDot)).toBe(3);
+  });
+
+  it.skipIf(process.platform === 'win32')(
+    'should add Vite+ managed bin to PATH as a fallback before running user hook',
+    () => {
+      const tmp = mkdtempSync(join(tmpdir(), 'hooks-path-test-'));
+      try {
+        const hooksDir = join(tmp, '.vite-hooks');
+        const internalHooksDir = join(hooksDir, '_');
+        const nodeModulesBin = join(tmp, 'node_modules', '.bin');
+        const vpHomeBin = join(tmp, 'vp-home', 'bin');
+        const systemBin = join(tmp, 'system-bin');
+
+        mkdirSync(internalHooksDir, { recursive: true });
+        mkdirSync(nodeModulesBin, { recursive: true });
+        mkdirSync(vpHomeBin, { recursive: true });
+        mkdirSync(systemBin, { recursive: true });
+
+        writeFileSync(join(internalHooksDir, 'h'), hookScript('.vite-hooks'), { mode: 0o755 });
+        writeFileSync(
+          join(internalHooksDir, 'pre-commit'),
+          '#!/usr/bin/env sh\n. "$(dirname "$0")/h"',
+          { mode: 0o755 },
+        );
+        writeFileSync(join(hooksDir, 'pre-commit'), 'vp staged\n');
+
+        writeFileSync(
+          join(nodeModulesBin, 'vp'),
+          '#!/bin/sh\nbasedir=$(dirname "$0")\nexec node "$basedir/../vite-plus/bin/vp" "$@"\n',
+          { mode: 0o755 },
+        );
+        writeFileSync(
+          join(vpHomeBin, 'node'),
+          '#!/bin/sh\necho "fake-node $*" > "$VP_HOME/node-used"\n',
+          { mode: 0o755 },
+        );
+        writeFileSync(
+          join(vpHomeBin, 'dirname'),
+          '#!/bin/sh\necho "wrong dirname" > "$VP_HOME/dirname-used"\nexit 1\n',
+          { mode: 0o755 },
+        );
+        writeFileSync(
+          join(vpHomeBin, 'sh'),
+          '#!/bin/sh\necho "wrong sh" > "$VP_HOME/sh-used"\nexit 1\n',
+          { mode: 0o755 },
+        );
+
+        writeFileSync(join(systemBin, 'sh'), '#!/bin/sh\nexec /bin/sh "$@"\n', {
+          mode: 0o755,
+        });
+        writeFileSync(join(systemBin, 'dirname'), '#!/bin/sh\nexec /usr/bin/dirname "$@"\n', {
+          mode: 0o755,
+        });
+        writeFileSync(join(systemBin, 'basename'), '#!/bin/sh\nexec /usr/bin/basename "$@"\n', {
+          mode: 0o755,
+        });
+
+        execSync('sh .vite-hooks/_/pre-commit', {
+          cwd: tmp,
+          env: {
+            HOME: join(tmp, 'home'),
+            PATH: systemBin,
+            VP_HOME: join(tmp, 'vp-home'),
+          },
+        });
+
+        expect(existsSync(join(tmp, 'vp-home', 'node-used'))).toBe(true);
+        expect(existsSync(join(tmp, 'vp-home', 'dirname-used'))).toBe(false);
+        expect(existsSync(join(tmp, 'vp-home', 'sh-used'))).toBe(false);
+      } finally {
+        rmSync(tmp, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it('should compute root and shell before appending Vite+ managed bin', () => {
+    const script = hookScript('.vite-hooks');
+    expect(script.indexOf('d=')).toBeLessThan(script.indexOf('export PATH="$PATH:$__vp_bin"'));
+    expect(script.indexOf('__vp_shell=')).toBeLessThan(
+      script.indexOf('export PATH="$PATH:$__vp_bin"'),
+    );
+    expect(script).toContain('"$__vp_shell" -e "$s" "$@"');
   });
 });
