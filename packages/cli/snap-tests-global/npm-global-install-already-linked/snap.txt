@@ -3,7 +3,7 @@
 
 > vp install -g ./npm-global-linked-pkg # First install via vp (creates managed shim)
 info: Installing 1 global package with Node.js <semver>
-✓ Installed ./npm-global-linked-pkg <semver>
+✓ Installed npm-global-linked-pkg <semver>
   Bins: npm-global-linked-cli
 
 > npm-global-linked-cli # Should be callable via the link

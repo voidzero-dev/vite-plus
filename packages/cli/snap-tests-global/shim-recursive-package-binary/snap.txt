@@ -1,6 +1,6 @@
 > vp install -g ./recursive-cli-pkg # Install test package
 info: Installing 1 global package with Node.js <semver>
-✓ Installed ./recursive-cli-pkg <semver>
+✓ Installed recursive-cli-pkg <semver>
   Bins: recursive-cli
 
 > recursive-cli # Outer call triggers recursive inner call through shim
