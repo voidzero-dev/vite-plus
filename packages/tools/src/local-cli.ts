@@ -370,20 +370,9 @@ export function runBuildLocalCli(args: string[]) {
   runPnpmCommand('Build rolldown JS glue', ['--filter', 'rolldown', 'build-node'], {
     hint: 'If this fails with a missing rolldown native binding, rerun "pnpm install:dev". If the error mentions "cmake", install cmake to build rolldown from source.',
   });
-  runPnpmCommand(
-    'Build vite rolled-up types',
-    ['-C', 'vite', '--filter', 'vite', 'build-types-roll'],
-    {
-      hint: 'If this fails because vite dependencies are missing, rerun "pnpm install" from the repo root.',
-    },
-  );
-  runPnpmCommand(
-    'Type-check vite declarations',
-    ['-C', 'vite', '--filter', 'vite', 'build-types-check'],
-    {
-      hint: 'If this fails because vite dependencies are missing, rerun "pnpm install" from the repo root.',
-    },
-  );
+  runPnpmCommand('Build vite types', ['-C', 'vite', '--filter', 'vite', 'build-types'], {
+    hint: 'If this fails because vite dependencies are missing, rerun "pnpm install" from the repo root.',
+  });
   runPnpmCommand('Build vite-plus core', ['--filter', '@voidzero-dev/vite-plus-core', 'build']);
   runPnpmCommand('Build vite-plus test', ['--filter', '@voidzero-dev/vite-plus-test', 'build']);
   runPnpmCommand('Build vite-plus prompts', [
