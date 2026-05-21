@@ -40,7 +40,6 @@ reqwest = { workspace = true, features = ["stream", "native-tls-vendored", "json
 reqwest = { workspace = true, features = ["stream", "rustls-no-provider", "json"] }
 
 [dev-dependencies]
-httpmock = { workspace = true }
 tempfile = { workspace = true }
 test-log = { workspace = true }
 

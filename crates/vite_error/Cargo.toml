@@ -10,14 +10,12 @@ rust-version.workspace = true
 [dependencies]
 anyhow = { workspace = true }
 ast-grep-config = { workspace = true }
-bincode = { workspace = true }
 bstr = { workspace = true }
 ignore = { workspace = true }
 nix = { workspace = true }
 rusqlite = { workspace = true }
 semver = { workspace = true }
 serde_json = { workspace = true }
-serde_yml = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 vite_path = { workspace = true }

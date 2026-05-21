@@ -265,12 +265,123 @@ pub async fn verify_file_hash(
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
+    use std::{
+        fs,
+        io::{Read, Write},
+        net::{SocketAddr, TcpListener, TcpStream},
+        sync::{
+            Arc,
+            atomic::{AtomicBool, AtomicUsize, Ordering},
+        },
+        thread::{self, JoinHandle},
+    };
 
-    use httpmock::prelude::*;
     use tempfile::TempDir;
 
     use super::*;
+
+    #[derive(Clone)]
+    struct MockResponse {
+        status: u16,
+        content_type: &'static str,
+        body: Vec<u8>,
+    }
+
+    struct TestServer {
+        addr: SocketAddr,
+        hits: Arc<AtomicUsize>,
+        shutdown: Arc<AtomicBool>,
+        handle: Option<JoinHandle<()>>,
+    }
+
+    impl TestServer {
+        fn new(path: &str, response: MockResponse) -> Self {
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            let addr = listener.local_addr().unwrap();
+            let path = path.to_string();
+            let hits = Arc::new(AtomicUsize::new(0));
+            let shutdown = Arc::new(AtomicBool::new(false));
+            let server_hits = Arc::clone(&hits);
+            let server_shutdown = Arc::clone(&shutdown);
+
+            let handle = thread::spawn(move || {
+                while !server_shutdown.load(Ordering::SeqCst) {
+                    let Ok((stream, _)) = listener.accept() else {
+                        break;
+                    };
+
+                    if server_shutdown.load(Ordering::SeqCst) {
+                        break;
+                    }
+
+                    serve_connection(stream, &path, &response, &server_hits);
+                }
+            });
+
+            Self { addr, hits, shutdown, handle: Some(handle) }
+        }
+
+        fn url(&self, path: &str) -> String {
+            format!("http://{}{}", self.addr, path)
+        }
+
+        fn hits(&self) -> usize {
+            self.hits.load(Ordering::SeqCst)
+        }
+    }
+
+    impl Drop for TestServer {
+        fn drop(&mut self) {
+            self.shutdown.store(true, Ordering::SeqCst);
+            let _ = TcpStream::connect(self.addr);
+            if let Some(handle) = self.handle.take() {
+                let _ = handle.join();
+            }
+        }
+    }
+
+    fn serve_connection(
+        mut stream: TcpStream,
+        expected_path: &str,
+        response: &MockResponse,
+        hits: &AtomicUsize,
+    ) {
+        let mut buffer = [0; 4096];
+        let Ok(read) = stream.read(&mut buffer) else {
+            return;
+        };
+
+        let request = String::from_utf8_lossy(&buffer[..read]);
+        let expected_prefix = format!("GET {expected_path} ");
+        let matched = request.lines().next().is_some_and(|line| line.starts_with(&expected_prefix));
+
+        let (status, content_type, body) = if matched {
+            hits.fetch_add(1, Ordering::SeqCst);
+            (response.status, response.content_type, response.body.as_slice())
+        } else {
+            (404, "text/plain", b"Not Found".as_slice())
+        };
+
+        let header = format!(
+            "HTTP/1.1 {} {}\r\ncontent-type: {}\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
+            status,
+            reason_phrase(status),
+            content_type,
+            body.len()
+        );
+
+        let _ = stream.write_all(header.as_bytes());
+        let _ = stream.write_all(body);
+    }
+
+    const fn reason_phrase(status: u16) -> &'static str {
+        match status {
+            200 => "OK",
+            404 => "Not Found",
+            500 => "Internal Server Error",
+            _ => "OK",
+        }
+    }
 
     /// Helper function to create a mock package tar.gz that mimics npm package structure
     fn create_mock_package_tgz() -> Vec<u8> {
@@ -442,24 +553,23 @@ mod tests {
             description: String,
         }
 
-        let server = MockServer::start();
-
         // Create mock JSON response
         let mock_json = serde_json::json!({
             "name": "test-package",
             "version": "1.0.0",
             "description": "A test package"
         });
-
-        server.mock(|when, then| {
-            when.method(GET).path("/api/package.json");
-            then.status(200)
-                .header("content-type", "application/json")
-                .json_body(mock_json.clone());
-        });
+        let server = TestServer::new(
+            "/api/package.json",
+            MockResponse {
+                status: 200,
+                content_type: "application/json",
+                body: serde_json::to_vec(&mock_json).unwrap(),
+            },
+        );
 
         let client = HttpClient::new();
-        let url = format!("{}/api/package.json", server.base_url());
+        let url = server.url("/api/package.json");
 
         let result: Result<PackageInfo, _> = client.get_json(&url).await;
         assert!(result.is_ok());
@@ -472,19 +582,17 @@ mod tests {
 
     #[tokio::test]
     async fn test_http_client_download_file() {
-        let server = MockServer::start();
         let temp_dir = TempDir::new().unwrap();
         let target_file = temp_dir.path().join("downloaded.txt");
 
         let mock_content = b"Hello, World! This is test content.";
-
-        server.mock(|when, then| {
-            when.method(GET).path("/file.txt");
-            then.status(200).header("content-type", "text/plain").body(mock_content);
-        });
+        let server = TestServer::new(
+            "/file.txt",
+            MockResponse { status: 200, content_type: "text/plain", body: mock_content.to_vec() },
+        );
 
         let client = HttpClient::new();
-        let url = format!("{}/file.txt", server.base_url());
+        let url = server.url("/file.txt");
 
         let result = client.download_file(&url, &target_file).await;
         assert!(result.is_ok(), "Failed to download file: {result:?}");
@@ -498,17 +606,19 @@ mod tests {
     #[tokio::test]
     async fn test_http_client_retry_on_server_error() {
         // Test that the client correctly retries on server errors
-        let server = MockServer::start();
         let temp_dir = TempDir::new().unwrap();
         let target_file = temp_dir.path().join("test.txt");
-
-        server.mock(|when, then| {
-            when.method(GET).path("/server_error");
-            then.status(500).body("Internal Server Error");
-        });
+        let server = TestServer::new(
+            "/server_error",
+            MockResponse {
+                status: 500,
+                content_type: "text/plain",
+                body: b"Internal Server Error".to_vec(),
+            },
+        );
 
         let client = HttpClient::with_config(2, 50); // 2 retries with 50ms base interval
-        let url = format!("{}/server_error", server.base_url());
+        let url = server.url("/server_error");
 
         // Should fail after retries
         let result = client.download_file(&url, &target_file).await;
@@ -518,19 +628,17 @@ mod tests {
 
     #[tokio::test]
     async fn test_download_and_extract_tgz() {
-        // Start a mock server
-        let server = MockServer::start();
         let temp_dir = TempDir::new().unwrap();
         let target_dir = temp_dir.path().join("extracted");
 
         // Create mock response with package tar.gz
         let mock_tgz = create_mock_package_tgz();
-        server.mock(|when, then| {
-            when.method(GET).path("/test-package.tgz");
-            then.status(200).header("content-type", "application/octet-stream").body(mock_tgz);
-        });
+        let server = TestServer::new(
+            "/test-package.tgz",
+            MockResponse { status: 200, content_type: "application/octet-stream", body: mock_tgz },
+        );
 
-        let url = format!("{}/test-package.tgz", server.base_url());
+        let url = server.url("/test-package.tgz");
         let result = download_and_extract_tgz_with_hash(&url, &target_dir, None).await;
         assert!(result.is_ok(), "Failed to download and extract: {result:?}");
 
@@ -601,25 +709,24 @@ mod tests {
 
     #[tokio::test]
     async fn test_http_client_download_with_404_error() {
-        let server = MockServer::start();
         let temp_dir = TempDir::new().unwrap();
         let target_file = temp_dir.path().join("test.txt");
 
         // Mock a 404 response
-        let mock = server.mock(|when, then| {
-            when.method(GET).path("/nonexistent");
-            then.status(404).body("Not Found");
-        });
+        let server = TestServer::new(
+            "/nonexistent",
+            MockResponse { status: 404, content_type: "text/plain", body: b"Not Found".to_vec() },
+        );
 
         let client = HttpClient::new();
-        let url = format!("{}/nonexistent", server.base_url());
+        let url = server.url("/nonexistent");
 
         // Should fail with 404
         let result = client.download_file(&url, &target_file).await;
         assert!(result.is_err(), "Expected download to fail with 404");
 
         // Should try 4 times, 1 for first request, 3 for retries
-        mock.assert_hits(4);
+        assert_eq!(server.hits(), 4);
     }
 
     #[tokio::test]
@@ -629,16 +736,18 @@ mod tests {
             _field: String,
         }
 
-        let server = MockServer::start();
-
         // Mock response with invalid JSON
-        server.mock(|when, then| {
-            when.method(GET).path("/invalid.json");
-            then.status(200).header("content-type", "application/json").body("not valid json");
-        });
+        let server = TestServer::new(
+            "/invalid.json",
+            MockResponse {
+                status: 200,
+                content_type: "application/json",
+                body: b"not valid json".to_vec(),
+            },
+        );
 
         let client = HttpClient::new();
-        let url = format!("{}/invalid.json", server.base_url());
+        let url = server.url("/invalid.json");
 
         let result: Result<TestData, _> = client.get_json(&url).await;
         assert!(result.is_err(), "Expected JSON parsing to fail");
