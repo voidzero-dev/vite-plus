@@ -322,10 +322,24 @@ jobs:
         if: matrix.template.name == 'monorepo'
         working-directory: ${{ runner.temp }}/test-project
         run: |
+          # Under npm, `vp run ready` reaches 100% cache hit only on the
+          # third invocation (#1638): vite-task's directory-listing
+          # fingerprint and fspy read/write tracking surface false-positive
+          # misses on run #2 because `packages/utils/node_modules/` is born
+          # during run #1. pnpm/yarn/bun pre-create per-package
+          # `node_modules/` at install time and reach 100% on run #2.
+          # The preceding `Verify project builds` step already invoked
+          # `vp run ready` once (verify-command for monorepo), so one
+          # extra warm-up here is enough under npm.
+          if [ "${{ matrix.package-manager }}" = "npm" ]; then
+            vp run ready >/dev/null 2>&1
+          fi
           output=$(vp run ready 2>&1)
           echo "$output"
           if ! echo "$output" | grep -q 'cache hit (100%)'; then
-            echo "✗ Expected 100% cache hit on second run"
+            echo "✗ Expected 100% cache hit"
+            echo "--- vp run --last-details (cache-miss diagnostics) ---"
+            vp run --last-details || true
             exit 1
           fi
           echo "✓ 100% cache hit verified"
