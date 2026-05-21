@@ -62,7 +62,6 @@ runs:
     - name: Build upstream TypeScript packages
       shell: bash
       run: |
-        pnpm --filter @rolldown/pluginutils build
         pnpm --filter rolldown build-node
         pnpm --filter vite build-types
         pnpm --filter "@voidzero-dev/*" build

@@ -739,6 +739,9 @@ export async function syncRemote() {
     rootDir,
     ROLLDOWN_DIR,
     'packages',
+    'rolldown',
+    'node_modules',
+    '@rolldown',
     'pluginutils',
     'package.json',
   );

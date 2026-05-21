@@ -437,7 +437,7 @@ impl NodeProvider {
         }
 
         // Sort by major version descending (highest first)
-        lts_lines.sort_by(|a, b| b.1.cmp(&a.1));
+        lts_lines.sort_by_key(|b| std::cmp::Reverse(b.1));
 
         // offset is negative, so lts/-1 = index 1 (second highest)
         let index = (-offset) as usize;

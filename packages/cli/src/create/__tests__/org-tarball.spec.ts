@@ -137,6 +137,7 @@ describe('cleanupStaleStagingDirs', () => {
     return { destDir: path.join(parent, base), parent, base };
   }
 
+  // eslint-disable-next-line unicorn/consistent-function-scoping -- co-located with describe for readability
   function makeStaging(parent: string, base: string, ageMs: number): string {
     const name = `${base}.tmp-${process.pid}-${Date.now() - ageMs}`;
     const dir = path.join(parent, name);
