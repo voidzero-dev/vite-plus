@@ -359,8 +359,14 @@ async fn install_one(
 
     // 4. Run npm install with prefix set to staging directory
     //    Pipe stdout/stderr so npm output is hidden on success, shown on failure
+    let mut install_args = vec!["install", "-g", "--no-fund"];
+    if is_local_package_spec(package_spec) {
+        install_args.push("--install-links");
+    }
+    install_args.push(package_spec);
+
     let output = Command::new(npm_path.as_path())
-        .args(["install", "-g", "--no-fund", &package_spec])
+        .args(install_args)
         .env("npm_config_prefix", staging_dir.as_path())
         .env("PATH", format_path_prepended(node_bin_dir.as_path()))
         .stdout(Stdio::piped())
