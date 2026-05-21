@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parse as parseYaml } from 'yaml';
 
 import { PackageManager } from '../../types/index.js';
+import { VITEST_VERSION } from '../../utils/constants.js';
 import { createMigrationReport } from '../report.js';
 
 // Mock VITE_PLUS_VERSION to a stable value for snapshot tests.
@@ -394,6 +395,54 @@ describe('rewritePackageJson', () => {
     rewritePackageJson(pkg, PackageManager.pnpm);
     expect(pkg.dependencies).toHaveProperty('playwright', '^1.40.0');
     expect(pkg.devDependencies).not.toHaveProperty('playwright');
+  });
+
+  it('adds a direct vitest devDependency when the package uses browser mode', async () => {
+    // A package that drives vitest browser mode but has no direct vitest dep
+    // (e.g. it only imports `vite-plus/test/browser-playwright`). `@vitest/browser`
+    // needs `vitest` resolvable from the package root, so the migration must
+    // pin it as a direct devDependency.
+    const pkg = {
+      devDependencies: {
+        playwright: '^1.58.0',
+      },
+    };
+    rewritePackageJson(pkg, PackageManager.pnpm, true, undefined, undefined, true);
+    expect(pkg.devDependencies).toHaveProperty('vitest', 'catalog:');
+    expect(pkg.devDependencies).toHaveProperty('vite-plus', 'catalog:');
+  });
+
+  it('uses a concrete vitest version for browser mode in non-catalog package managers', async () => {
+    const pkg = {
+      devDependencies: {
+        playwright: '^1.58.0',
+      },
+    };
+    rewritePackageJson(pkg, PackageManager.npm, false, undefined, undefined, true);
+    expect((pkg as { devDependencies?: Record<string, string> }).devDependencies?.vitest).toBe(
+      VITEST_VERSION,
+    );
+  });
+
+  it('does not overwrite an existing direct vitest dep in browser mode', async () => {
+    const pkg = {
+      devDependencies: {
+        vitest: '^4.0.0',
+      },
+    };
+    rewritePackageJson(pkg, PackageManager.pnpm, true, undefined, undefined, true);
+    // existing direct dep is normalized through the override path, not replaced
+    expect(pkg.devDependencies.vitest).toBe('catalog:');
+  });
+
+  it('does not add vitest when browser mode is not detected', async () => {
+    const pkg = {
+      devDependencies: {
+        vite: '^7.0.0',
+      },
+    };
+    rewritePackageJson(pkg, PackageManager.pnpm, true, undefined, undefined, false);
+    expect(pkg.devDependencies).not.toHaveProperty('vitest');
   });
 });
 
@@ -1196,6 +1245,72 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(pkg.peerDependencies).not.toHaveProperty('tsdown');
   });
 
+  it('adds a direct vitest dep when a vite config enables browser mode', () => {
+    // A package whose vite config imports a browser provider but has no direct
+    // vitest dep — `@vitest/browser` needs `vitest` resolvable from the package
+    // root, so the migration must pin it. Mirrors the vibe-dashboard regression.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'test', devDependencies: { playwright: '^1.58.0' } }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'vite.config.ts'),
+      [
+        "import { playwright } from 'vite-plus/test/browser-playwright';",
+        "import { defineConfig } from 'vite-plus';",
+        'export default defineConfig({',
+        '  test: { browser: { enabled: true, provider: playwright() } },',
+        '});',
+        '',
+      ].join('\n'),
+    );
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json'));
+    const devDeps = pkg.devDependencies as Record<string, string>;
+    expect(devDeps.vitest).toBe('catalog:');
+    expect(devDeps['vite-plus']).toBe('catalog:');
+  });
+
+  it('detects browser mode from a test file when the config has no hint', () => {
+    // Browser config can live in a workspace-referenced config under any name;
+    // the source scan also catches `@vitest/browser*` imports in test files.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'test', devDependencies: { vite: '^7.0.0' } }),
+    );
+    fs.mkdirSync(path.join(tmpDir, 'src', '__tests__'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, 'src', '__tests__', 'app.test.ts'),
+      "import { page } from '@vitest/browser/context';\n",
+    );
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+    const devDeps = readJson(path.join(tmpDir, 'package.json')).devDependencies as Record<
+      string,
+      string
+    >;
+    expect(devDeps.vitest).toBe('catalog:');
+  });
+
+  it('does not add vitest for a package without browser mode', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'test', devDependencies: { vite: '^7.0.0' } }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'vite.config.ts'),
+      "import { defineConfig } from 'vite';\nexport default defineConfig({});\n",
+    );
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+    const devDeps = readJson(path.join(tmpDir, 'package.json')).devDependencies as Record<
+      string,
+      string
+    >;
+    expect(devDeps).not.toHaveProperty('vitest');
+  });
+
   it('preserves named pnpm overrides when moving root overrides to pnpm-workspace.yaml', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
@@ -1304,6 +1419,51 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     // vitest is now a managed override key — peer dep catalog refs that
     // resolve to the override target are coerced to '*'.
     expect(pkg.peerDependencies.vitest).toBe('*');
+  });
+
+  it('adds vitest only to the monorepo package that uses browser mode', () => {
+    // Root has no browser config; only `apps/dashboard` does. The browser-mode
+    // scan must stop at the nested package.json boundary so the root package
+    // does not inherit the sub-package's signal.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'root', devDependencies: {} }),
+    );
+    fs.writeFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'packages:\n  - apps/*\n');
+    const appDir = path.join(tmpDir, 'apps', 'dashboard');
+    fs.mkdirSync(appDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(appDir, 'package.json'),
+      JSON.stringify({ name: '@vibe/dashboard', devDependencies: { playwright: '^1.58.0' } }),
+    );
+    fs.writeFileSync(
+      path.join(appDir, 'vite.config.ts'),
+      [
+        "import { playwright } from 'vite-plus/test/browser-playwright';",
+        "import { defineConfig } from 'vite-plus';",
+        'export default defineConfig({ test: { browser: { provider: playwright() } } });',
+        '',
+      ].join('\n'),
+    );
+
+    const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.pnpm);
+    workspaceInfo.isMonorepo = true;
+    workspaceInfo.packages = [
+      { name: '@vibe/dashboard', path: 'apps/dashboard', isTemplatePackage: false },
+    ];
+    rewriteMonorepo(workspaceInfo, true);
+
+    const rootDeps = (readJson(path.join(tmpDir, 'package.json')).devDependencies ?? {}) as Record<
+      string,
+      string
+    >;
+    expect(rootDeps).not.toHaveProperty('vitest');
+
+    const appDeps = readJson(path.join(appDir, 'package.json')).devDependencies as Record<
+      string,
+      string
+    >;
+    expect(appDeps.vitest).toBe('catalog:');
   });
 });
 
