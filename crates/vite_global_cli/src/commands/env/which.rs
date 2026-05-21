@@ -10,6 +10,10 @@ use std::process::ExitStatus;
 
 use chrono::Local;
 use owo_colors::OwoColorize;
+use vite_install::package_manager::{
+    PackageManagerType, package_manager_bin_path, package_manager_install_dir,
+    resolve_package_manager_from_package_json,
+};
 use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_shared::output;
 
@@ -27,6 +31,10 @@ const LABEL_WIDTH: usize = 10;
 
 /// Execute the which command.
 pub async fn execute(cwd: AbsolutePathBuf, tool: &str) -> Result<ExitStatus, Error> {
+    if let Some(status) = execute_package_manager_tool(&cwd, tool)? {
+        return Ok(status);
+    }
+
     // Check if this is a core tool
     if CORE_TOOLS.contains(&tool) {
         return execute_core_tool(cwd, tool).await;
@@ -42,6 +50,67 @@ pub async fn execute(cwd: AbsolutePathBuf, tool: &str) -> Result<ExitStatus, Err
     eprintln!("Not a core tool (node, npm, npx) or installed global package.");
     eprintln!("Run 'vp list -g' to see installed packages.");
     Ok(exit_status(1))
+}
+
+fn execute_package_manager_tool(
+    cwd: &AbsolutePath,
+    tool: &str,
+) -> Result<Option<ExitStatus>, Error> {
+    let Some(expected_type) = package_manager_type_for_tool(tool) else {
+        return Ok(None);
+    };
+    let Some(resolution) = resolve_package_manager_from_package_json(cwd)? else {
+        return Ok(None);
+    };
+    if resolution.package_manager_type != expected_type {
+        return Ok(None);
+    }
+
+    let Some(install_dir) =
+        package_manager_install_dir(resolution.package_manager_type, &resolution.version)
+    else {
+        return Ok(None);
+    };
+    let name = resolution.package_manager_type.to_string();
+    let bin_name = package_manager_bin_name(tool, resolution.package_manager_type);
+    let tool_path = package_manager_bin_path(&install_dir, bin_name);
+
+    println!("{}", tool_path.as_path().display());
+    println!(
+        "  {:<LABEL_WIDTH$}  {}",
+        "Package:".dimmed(),
+        format!("{}@{}", name, resolution.version).bright_blue()
+    );
+    println!(
+        "  {:<LABEL_WIDTH$}  {}",
+        "Source:".dimmed(),
+        resolution.source_path.as_path().display().to_string().dimmed()
+    );
+
+    Ok(Some(ExitStatus::default()))
+}
+
+fn package_manager_type_for_tool(tool: &str) -> Option<PackageManagerType> {
+    match tool {
+        "npm" | "npx" => Some(PackageManagerType::Npm),
+        "pnpm" | "pnpx" => Some(PackageManagerType::Pnpm),
+        "yarn" | "yarnpkg" => Some(PackageManagerType::Yarn),
+        "bun" | "bunx" => Some(PackageManagerType::Bun),
+        _ => None,
+    }
+}
+
+fn package_manager_bin_name(tool: &str, package_manager_type: PackageManagerType) -> &str {
+    match (tool, package_manager_type) {
+        ("npx", PackageManagerType::Npm) => "npx",
+        ("pnpx", PackageManagerType::Pnpm) => "pnpx",
+        ("yarnpkg", PackageManagerType::Yarn) => "yarnpkg",
+        ("bunx", PackageManagerType::Bun) => "bunx",
+        (_, PackageManagerType::Npm) => "npm",
+        (_, PackageManagerType::Pnpm) => "pnpm",
+        (_, PackageManagerType::Yarn) => "yarn",
+        (_, PackageManagerType::Bun) => "bun",
+    }
 }
 
 /// Execute which for a core tool (node, npm, npx).

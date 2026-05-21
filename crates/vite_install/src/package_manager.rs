@@ -58,6 +58,17 @@ impl fmt::Display for PackageManagerType {
     }
 }
 
+/// Package-manager resolution from an explicit project `packageManager` field.
+#[derive(Debug, Clone)]
+pub struct PackageManagerResolution {
+    pub package_manager_type: PackageManagerType,
+    pub version: Str,
+    pub hash: Option<Str>,
+    pub source: Str,
+    pub source_path: AbsolutePathBuf,
+    pub project_root: AbsolutePathBuf,
+}
+
 // TODO(@fengmk2): should move ResolveCommandResult to vite-common crate
 #[derive(Debug)]
 pub struct ResolveCommandResult {
@@ -239,34 +250,8 @@ pub fn get_package_manager_type_and_version(
     default: Option<PackageManagerType>,
 ) -> Result<(PackageManagerType, Str, Option<Str>), Error> {
     // check packageManager field in package.json
-    let package_json_path = workspace_root.path.join("package.json");
-    if let Some(file) = open_exists_file(&package_json_path)? {
-        let package_json: PackageJson = serde_json::from_reader(BufReader::new(&file))?;
-        if !package_json.package_manager.is_empty()
-            && let Some((name, version_with_hash)) = package_json.package_manager.split_once('@')
-        {
-            // Parse version and optional hash (format: version+sha512.hash)
-            let (version, hash) = if let Some((ver, hash_part)) = version_with_hash.split_once('+')
-            {
-                (ver, Some(hash_part.into()))
-            } else {
-                (version_with_hash, None)
-            };
-
-            // check if the version is a valid semver
-            semver::Version::parse(version).map_err(|_| Error::PackageManagerVersionInvalid {
-                name: name.into(),
-                version: version.into(),
-                package_json_path: package_json_path.to_absolute_path_buf(),
-            })?;
-            match name {
-                "pnpm" => return Ok((PackageManagerType::Pnpm, version.into(), hash)),
-                "yarn" => return Ok((PackageManagerType::Yarn, version.into(), hash)),
-                "npm" => return Ok((PackageManagerType::Npm, version.into(), hash)),
-                "bun" => return Ok((PackageManagerType::Bun, version.into(), hash)),
-                _ => return Err(Error::UnsupportedPackageManager(name.into())),
-            }
-        }
+    if let Some(resolution) = get_package_manager_from_package_json(workspace_root)? {
+        return Ok((resolution.package_manager_type, resolution.version, resolution.hash));
     }
 
     // TODO(@fengmk2): check devEngines.packageManager field in package.json
@@ -337,6 +322,100 @@ pub fn get_package_manager_type_and_version(
 
     // unrecognized package manager, let user specify the package manager
     Err(Error::UnrecognizedPackageManager)
+}
+
+/// Resolve only the explicit `packageManager` field for the current workspace.
+///
+/// This is intentionally non-mutating: it does not prompt, download a package manager, or write the
+/// resolved version back to `package.json`.
+pub fn resolve_package_manager_from_package_json(
+    cwd: impl AsRef<AbsolutePath>,
+) -> Result<Option<PackageManagerResolution>, Error> {
+    let (workspace_root, _) = match find_workspace_root(cwd.as_ref()) {
+        Ok(result) => result,
+        Err(vite_workspace::Error::PackageJsonNotFound(_)) => return Ok(None),
+        Err(error) => return Err(error.into()),
+    };
+    get_package_manager_from_package_json(&workspace_root)
+}
+
+/// Return the managed install directory for a package manager version.
+#[must_use]
+pub fn package_manager_install_dir(
+    package_manager_type: PackageManagerType,
+    version: &str,
+) -> Option<AbsolutePathBuf> {
+    let home_dir = vite_shared::get_vp_home().ok()?;
+    let bin_name = package_manager_type.to_string();
+    Some(home_dir.join("package_manager").join(&bin_name).join(version).join(&bin_name))
+}
+
+/// Return the executable shim path for a package manager binary inside an install directory.
+#[must_use]
+pub fn package_manager_bin_path(install_dir: &AbsolutePath, bin_name: &str) -> AbsolutePathBuf {
+    let bin_path = install_dir.join("bin").join(bin_name);
+    if cfg!(windows) { bin_path.with_extension("cmd") } else { bin_path }
+}
+
+fn get_package_manager_from_package_json(
+    workspace_root: &WorkspaceRoot,
+) -> Result<Option<PackageManagerResolution>, Error> {
+    let package_json_path = workspace_root.path.join("package.json");
+    let Some(file) = open_exists_file(&package_json_path)? else {
+        return Ok(None);
+    };
+
+    let package_json: PackageJson = serde_json::from_reader(BufReader::new(&file))?;
+    if package_json.package_manager.is_empty() {
+        return Ok(None);
+    }
+
+    let Some((package_manager_type, version, hash)) =
+        parse_package_manager_field(&package_json.package_manager, &package_json_path)?
+    else {
+        return Ok(None);
+    };
+
+    Ok(Some(PackageManagerResolution {
+        package_manager_type,
+        version,
+        hash,
+        source: "packageManager".into(),
+        source_path: package_json_path.to_absolute_path_buf(),
+        project_root: workspace_root.path.to_absolute_path_buf(),
+    }))
+}
+
+fn parse_package_manager_field(
+    package_manager: &str,
+    package_json_path: &AbsolutePath,
+) -> Result<Option<(PackageManagerType, Str, Option<Str>)>, Error> {
+    let Some((name, version_with_hash)) = package_manager.split_once('@') else {
+        return Ok(None);
+    };
+
+    // Parse version and optional hash (format: version+sha512.hash)
+    let (version, hash) = if let Some((ver, hash_part)) = version_with_hash.split_once('+') {
+        (ver, Some(hash_part.into()))
+    } else {
+        (version_with_hash, None)
+    };
+
+    // check if the version is a valid semver
+    semver::Version::parse(version).map_err(|_| Error::PackageManagerVersionInvalid {
+        name: name.into(),
+        version: version.into(),
+        package_json_path: package_json_path.to_absolute_path_buf(),
+    })?;
+    let package_manager_type = match name {
+        "pnpm" => PackageManagerType::Pnpm,
+        "yarn" => PackageManagerType::Yarn,
+        "npm" => PackageManagerType::Npm,
+        "bun" => PackageManagerType::Bun,
+        _ => return Err(Error::UnsupportedPackageManager(name.into())),
+    };
+
+    Ok(Some((package_manager_type, version.into(), hash)))
 }
 
 /// Open the file if it exists, otherwise return None.
@@ -1014,6 +1093,67 @@ mod tests {
     fn create_pnpm_workspace_yaml(dir: &AbsolutePath, content: &str) {
         fs::write(dir.join("pnpm-workspace.yaml"), content)
             .expect("Failed to write pnpm-workspace.yaml");
+    }
+
+    #[test]
+    fn test_resolve_package_manager_from_package_json_npm() {
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        create_package_json(
+            &temp_dir_path,
+            r#"{"name": "test-package", "packageManager": "npm@11.14.0"}"#,
+        );
+
+        let resolution = resolve_package_manager_from_package_json(&temp_dir_path)
+            .expect("Should resolve packageManager")
+            .expect("Should find packageManager field");
+
+        assert_eq!(resolution.package_manager_type, PackageManagerType::Npm);
+        assert_eq!(resolution.version.as_str(), "11.14.0");
+        assert!(resolution.hash.is_none());
+        assert_eq!(resolution.source.as_str(), "packageManager");
+        assert_eq!(resolution.project_root, temp_dir_path);
+    }
+
+    #[test]
+    fn test_resolve_package_manager_from_package_json_hash() {
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        create_package_json(
+            &temp_dir_path,
+            r#"{"name": "test-package", "packageManager": "pnpm@10.19.0+sha512.abc123"}"#,
+        );
+
+        let resolution = resolve_package_manager_from_package_json(&temp_dir_path)
+            .expect("Should resolve packageManager")
+            .expect("Should find packageManager field");
+
+        assert_eq!(resolution.package_manager_type, PackageManagerType::Pnpm);
+        assert_eq!(resolution.version.as_str(), "10.19.0");
+        assert_eq!(resolution.hash.unwrap().as_str(), "sha512.abc123");
+    }
+
+    #[test]
+    fn test_resolve_package_manager_from_package_json_missing() {
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        create_package_json(&temp_dir_path, r#"{"name": "test-package"}"#);
+
+        let resolution = resolve_package_manager_from_package_json(&temp_dir_path)
+            .expect("Missing packageManager should not error");
+
+        assert!(resolution.is_none());
+    }
+
+    #[test]
+    fn test_resolve_package_manager_from_package_json_without_package_json() {
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        let resolution = resolve_package_manager_from_package_json(&temp_dir_path)
+            .expect("Missing package.json should not error");
+
+        assert!(resolution.is_none());
     }
 
     #[test]
