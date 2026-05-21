@@ -102,7 +102,6 @@ export default defineConfig({
     tasks: {
       'build:src': {
         command: [
-          'vp run @rolldown/pluginutils#build',
           'vp run rolldown#build-binding:release',
           'vp run rolldown#build-node',
           'vp run vite#build-types',
