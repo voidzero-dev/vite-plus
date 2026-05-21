@@ -210,7 +210,6 @@ mod tests {
         assert_eq!(shell, Shell::NuShell);
     }
 
-
     #[test]
     fn test_format_export_posix() {
         let result = format_export(&Shell::Posix, "20.18.0");
