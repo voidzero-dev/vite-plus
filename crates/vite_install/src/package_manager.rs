@@ -58,6 +58,37 @@ impl fmt::Display for PackageManagerType {
     }
 }
 
+impl PackageManagerType {
+    /// Map an invoked shim tool name (including aliases like `npx`, `pnpx`,
+    /// `yarnpkg`, `bunx`) to the package-manager family that provides it.
+    #[must_use]
+    pub fn from_tool(tool: &str) -> Option<Self> {
+        match tool {
+            "npm" | "npx" => Some(Self::Npm),
+            "pnpm" | "pnpx" => Some(Self::Pnpm),
+            "yarn" | "yarnpkg" => Some(Self::Yarn),
+            "bun" | "bunx" => Some(Self::Bun),
+            _ => None,
+        }
+    }
+
+    /// Resolve the bin file name for an invoked tool, preserving alias names
+    /// that the managed PM installs alongside its primary binary.
+    #[must_use]
+    pub fn bin_name_for_tool(self, tool: &str) -> &'static str {
+        match (tool, self) {
+            ("npx", Self::Npm) => "npx",
+            ("pnpx", Self::Pnpm) => "pnpx",
+            ("yarnpkg", Self::Yarn) => "yarnpkg",
+            ("bunx", Self::Bun) => "bunx",
+            (_, Self::Npm) => "npm",
+            (_, Self::Pnpm) => "pnpm",
+            (_, Self::Yarn) => "yarn",
+            (_, Self::Bun) => "bun",
+        }
+    }
+}
+
 /// Package-manager resolution from an explicit project `packageManager` field.
 #[derive(Debug, Clone)]
 pub struct PackageManagerResolution {
@@ -1093,6 +1124,32 @@ mod tests {
     fn create_pnpm_workspace_yaml(dir: &AbsolutePath, content: &str) {
         fs::write(dir.join("pnpm-workspace.yaml"), content)
             .expect("Failed to write pnpm-workspace.yaml");
+    }
+
+    #[test]
+    fn test_package_manager_type_from_tool_includes_aliases() {
+        assert_eq!(PackageManagerType::from_tool("npm"), Some(PackageManagerType::Npm));
+        assert_eq!(PackageManagerType::from_tool("npx"), Some(PackageManagerType::Npm));
+        assert_eq!(PackageManagerType::from_tool("pnpm"), Some(PackageManagerType::Pnpm));
+        assert_eq!(PackageManagerType::from_tool("pnpx"), Some(PackageManagerType::Pnpm));
+        assert_eq!(PackageManagerType::from_tool("yarn"), Some(PackageManagerType::Yarn));
+        assert_eq!(PackageManagerType::from_tool("yarnpkg"), Some(PackageManagerType::Yarn));
+        assert_eq!(PackageManagerType::from_tool("bun"), Some(PackageManagerType::Bun));
+        assert_eq!(PackageManagerType::from_tool("bunx"), Some(PackageManagerType::Bun));
+        assert_eq!(PackageManagerType::from_tool("node"), None);
+        assert_eq!(PackageManagerType::from_tool("tsc"), None);
+    }
+
+    #[test]
+    fn test_bin_name_for_tool_preserves_aliases() {
+        assert_eq!(PackageManagerType::Npm.bin_name_for_tool("npm"), "npm");
+        assert_eq!(PackageManagerType::Npm.bin_name_for_tool("npx"), "npx");
+        assert_eq!(PackageManagerType::Pnpm.bin_name_for_tool("pnpm"), "pnpm");
+        assert_eq!(PackageManagerType::Pnpm.bin_name_for_tool("pnpx"), "pnpx");
+        assert_eq!(PackageManagerType::Yarn.bin_name_for_tool("yarn"), "yarn");
+        assert_eq!(PackageManagerType::Yarn.bin_name_for_tool("yarnpkg"), "yarnpkg");
+        assert_eq!(PackageManagerType::Bun.bin_name_for_tool("bun"), "bun");
+        assert_eq!(PackageManagerType::Bun.bin_name_for_tool("bunx"), "bunx");
     }
 
     #[test]

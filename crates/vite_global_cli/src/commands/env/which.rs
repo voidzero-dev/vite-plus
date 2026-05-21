@@ -31,7 +31,7 @@ const LABEL_WIDTH: usize = 10;
 
 /// Execute the which command.
 pub async fn execute(cwd: AbsolutePathBuf, tool: &str) -> Result<ExitStatus, Error> {
-    if let Some(status) = execute_package_manager_tool(&cwd, tool)? {
+    if let Some(status) = execute_package_manager_tool(&cwd, tool).await? {
         return Ok(status);
     }
 
@@ -52,11 +52,11 @@ pub async fn execute(cwd: AbsolutePathBuf, tool: &str) -> Result<ExitStatus, Err
     Ok(exit_status(1))
 }
 
-fn execute_package_manager_tool(
+async fn execute_package_manager_tool(
     cwd: &AbsolutePath,
     tool: &str,
 ) -> Result<Option<ExitStatus>, Error> {
-    let Some(expected_type) = package_manager_type_for_tool(tool) else {
+    let Some(expected_type) = PackageManagerType::from_tool(tool) else {
         return Ok(None);
     };
     let Some(resolution) = resolve_package_manager_from_package_json(cwd)? else {
@@ -66,20 +66,24 @@ fn execute_package_manager_tool(
         return Ok(None);
     }
 
-    let Some(install_dir) =
-        package_manager_install_dir(resolution.package_manager_type, &resolution.version)
-    else {
+    let Some(install_dir) = package_manager_install_dir(expected_type, &resolution.version) else {
         return Ok(None);
     };
-    let name = resolution.package_manager_type.to_string();
-    let bin_name = package_manager_bin_name(tool, resolution.package_manager_type);
+    let bin_name = expected_type.bin_name_for_tool(tool);
     let tool_path = package_manager_bin_path(&install_dir, bin_name);
+
+    if !tokio::fs::try_exists(&tool_path).await.unwrap_or(false) {
+        output::error(&format!("{} not found", tool.bold()));
+        eprintln!("{expected_type} {} is not installed.", resolution.version);
+        eprintln!("Run 'vp install' inside the project to download it.");
+        return Ok(Some(exit_status(1)));
+    }
 
     println!("{}", tool_path.as_path().display());
     println!(
         "  {:<LABEL_WIDTH$}  {}",
         "Package:".dimmed(),
-        format!("{}@{}", name, resolution.version).bright_blue()
+        format!("{}@{}", expected_type, resolution.version).bright_blue()
     );
     println!(
         "  {:<LABEL_WIDTH$}  {}",
@@ -88,29 +92,6 @@ fn execute_package_manager_tool(
     );
 
     Ok(Some(ExitStatus::default()))
-}
-
-fn package_manager_type_for_tool(tool: &str) -> Option<PackageManagerType> {
-    match tool {
-        "npm" | "npx" => Some(PackageManagerType::Npm),
-        "pnpm" | "pnpx" => Some(PackageManagerType::Pnpm),
-        "yarn" | "yarnpkg" => Some(PackageManagerType::Yarn),
-        "bun" | "bunx" => Some(PackageManagerType::Bun),
-        _ => None,
-    }
-}
-
-fn package_manager_bin_name(tool: &str, package_manager_type: PackageManagerType) -> &str {
-    match (tool, package_manager_type) {
-        ("npx", PackageManagerType::Npm) => "npx",
-        ("pnpx", PackageManagerType::Pnpm) => "pnpx",
-        ("yarnpkg", PackageManagerType::Yarn) => "yarnpkg",
-        ("bunx", PackageManagerType::Bun) => "bunx",
-        (_, PackageManagerType::Npm) => "npm",
-        (_, PackageManagerType::Pnpm) => "pnpm",
-        (_, PackageManagerType::Yarn) => "yarn",
-        (_, PackageManagerType::Bun) => "bun",
-    }
 }
 
 /// Execute which for a core tool (node, npm, npx).

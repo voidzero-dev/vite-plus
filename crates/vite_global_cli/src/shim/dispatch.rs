@@ -7,7 +7,7 @@
 
 use vite_install::package_manager::{
     PackageManagerType, download_package_manager, package_manager_bin_path,
-    resolve_package_manager_from_package_json,
+    package_manager_install_dir, resolve_package_manager_from_package_json,
 };
 use vite_path::{AbsolutePath, AbsolutePathBuf, current_dir};
 use vite_shared::{PrependOptions, env_vars, output, prepend_to_path_env};
@@ -32,35 +32,14 @@ use crate::{
 /// directly using the current PATH (passthrough mode).
 const RECURSION_ENV_VAR: &str = env_vars::VP_TOOL_RECURSION;
 
-/// Package manager tools that should resolve Node.js version from the project context
-/// rather than using the install-time version.
-const PACKAGE_MANAGER_TOOLS: &[&str] = &["pnpm", "pnpx", "yarn", "yarnpkg", "bun", "bunx"];
-
+/// Package-manager tools whose Node.js runtime should be resolved from the
+/// project context rather than the install-time version.
+///
+/// Intentionally excludes `npm`/`npx`: those are core shims (see
+/// `is_core_shim_tool`) and never reach `dispatch_package_binary`, so they are
+/// handled by the main `dispatch` path instead.
 fn is_package_manager_tool(tool: &str) -> bool {
-    PACKAGE_MANAGER_TOOLS.contains(&tool)
-}
-
-fn package_manager_type_for_tool(tool: &str) -> Option<PackageManagerType> {
-    match tool {
-        "npm" | "npx" => Some(PackageManagerType::Npm),
-        "pnpm" | "pnpx" => Some(PackageManagerType::Pnpm),
-        "yarn" | "yarnpkg" => Some(PackageManagerType::Yarn),
-        "bun" | "bunx" => Some(PackageManagerType::Bun),
-        _ => None,
-    }
-}
-
-fn package_manager_bin_name(tool: &str, package_manager_type: PackageManagerType) -> &str {
-    match (tool, package_manager_type) {
-        ("npx", PackageManagerType::Npm) => "npx",
-        ("pnpx", PackageManagerType::Pnpm) => "pnpx",
-        ("yarnpkg", PackageManagerType::Yarn) => "yarnpkg",
-        ("bunx", PackageManagerType::Bun) => "bunx",
-        (_, PackageManagerType::Npm) => "npm",
-        (_, PackageManagerType::Pnpm) => "pnpm",
-        (_, PackageManagerType::Yarn) => "yarn",
-        (_, PackageManagerType::Bun) => "bun",
-    }
+    matches!(PackageManagerType::from_tool(tool), Some(t) if t != PackageManagerType::Npm)
 }
 
 /// Parsed npm global command (install or uninstall).
@@ -693,7 +672,7 @@ async fn resolve_matching_package_manager_tool(
     cwd: &AbsolutePath,
     tool: &str,
 ) -> Result<Option<AbsolutePathBuf>, Error> {
-    let Some(expected_type) = package_manager_type_for_tool(tool) else {
+    let Some(expected_type) = PackageManagerType::from_tool(tool) else {
         return Ok(None);
     };
 
@@ -705,13 +684,24 @@ async fn resolve_matching_package_manager_tool(
         return Ok(None);
     }
 
+    let bin_name = expected_type.bin_name_for_tool(tool);
+
+    // Fast path: if the managed install already exists, skip download_package_manager
+    // entirely. The slow path stats three files (`bin`, `.cmd`, `.ps1`) on every
+    // invocation, which adds up on the shim hot path.
+    if let Some(install_dir) = package_manager_install_dir(expected_type, &resolution.version) {
+        let bin_path = package_manager_bin_path(&install_dir, bin_name);
+        if bin_path.as_path().exists() {
+            return Ok(Some(bin_path));
+        }
+    }
+
     let (install_dir, _, _) = download_package_manager(
         resolution.package_manager_type,
         &resolution.version,
         resolution.hash.as_deref(),
     )
     .await?;
-    let bin_name = package_manager_bin_name(tool, resolution.package_manager_type);
     Ok(Some(package_manager_bin_path(&install_dir, bin_name)))
 }
 
@@ -850,11 +840,6 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
         },
     };
 
-    if !tool_path.as_path().exists() {
-        eprintln!("vp: Tool '{tool}' not found: {}", tool_path.as_path().display());
-        return 1;
-    }
-
     // Save original PATH before we modify it - needed for npm global install check.
     // Only captured for npm to avoid unnecessary work on node/npx hot path.
     let original_path = if tool == "npm" { std::env::var_os("PATH") } else { None };
@@ -937,7 +922,7 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
 /// Finds the package that provides this binary and executes it with the
 /// Node.js version that was used to install the package.
 async fn dispatch_package_binary(tool: &str, args: &[String]) -> i32 {
-    if package_manager_type_for_tool(tool).is_some() {
+    if let Some(pm_family) = PackageManagerType::from_tool(tool) {
         let cwd = match current_dir() {
             Ok(path) => path,
             Err(e) => {
@@ -948,23 +933,27 @@ async fn dispatch_package_binary(tool: &str, args: &[String]) -> i32 {
 
         match resolve_matching_package_manager_tool(&cwd, tool).await {
             Ok(Some(tool_path)) => {
-                let node_version = match resolve_with_cache(&cwd).await {
-                    Ok(resolution) => resolution.version,
-                    Err(_) => match find_package_for_binary(tool).await {
-                        Ok(Some(metadata)) => metadata.platform.node,
-                        _ => String::new(),
-                    },
-                };
+                // Bun is a native binary and does not need a Node.js runtime on PATH;
+                // JS-based PMs (npm/pnpm/yarn) do.
+                if pm_family != PackageManagerType::Bun {
+                    let node_version = match resolve_with_cache(&cwd).await {
+                        Ok(resolution) => resolution.version,
+                        Err(_) => match find_package_for_binary(tool).await {
+                            Ok(Some(metadata)) => metadata.platform.node,
+                            _ => String::new(),
+                        },
+                    };
 
-                if !node_version.is_empty() {
-                    if let Err(e) = ensure_installed(&node_version).await {
-                        eprintln!("vp: Failed to install Node {}: {e}", node_version);
-                        return 1;
-                    }
-                    if let Ok(node_path) = locate_tool(&node_version, "node")
-                        && let Some(node_bin_dir) = node_path.parent()
-                    {
-                        let _ = prepend_to_path_env(node_bin_dir, PrependOptions::default());
+                    if !node_version.is_empty() {
+                        if let Err(e) = ensure_installed(&node_version).await {
+                            eprintln!("vp: Failed to install Node {}: {e}", node_version);
+                            return 1;
+                        }
+                        if let Ok(node_path) = locate_tool(&node_version, "node")
+                            && let Some(node_bin_dir) = node_path.parent()
+                        {
+                            let _ = prepend_to_path_env(node_bin_dir, PrependOptions::default());
+                        }
                     }
                 }
 
@@ -1386,30 +1375,6 @@ mod tests {
                 }
             }
         }
-    }
-
-    #[test]
-    fn test_package_manager_type_for_tool_includes_aliases() {
-        assert_eq!(package_manager_type_for_tool("npm"), Some(PackageManagerType::Npm));
-        assert_eq!(package_manager_type_for_tool("npx"), Some(PackageManagerType::Npm));
-        assert_eq!(package_manager_type_for_tool("pnpm"), Some(PackageManagerType::Pnpm));
-        assert_eq!(package_manager_type_for_tool("pnpx"), Some(PackageManagerType::Pnpm));
-        assert_eq!(package_manager_type_for_tool("yarn"), Some(PackageManagerType::Yarn));
-        assert_eq!(package_manager_type_for_tool("yarnpkg"), Some(PackageManagerType::Yarn));
-        assert_eq!(package_manager_type_for_tool("bun"), Some(PackageManagerType::Bun));
-        assert_eq!(package_manager_type_for_tool("bunx"), Some(PackageManagerType::Bun));
-    }
-
-    #[test]
-    fn test_package_manager_bin_name_preserves_aliases() {
-        assert_eq!(package_manager_bin_name("npm", PackageManagerType::Npm), "npm");
-        assert_eq!(package_manager_bin_name("npx", PackageManagerType::Npm), "npx");
-        assert_eq!(package_manager_bin_name("pnpm", PackageManagerType::Pnpm), "pnpm");
-        assert_eq!(package_manager_bin_name("pnpx", PackageManagerType::Pnpm), "pnpx");
-        assert_eq!(package_manager_bin_name("yarn", PackageManagerType::Yarn), "yarn");
-        assert_eq!(package_manager_bin_name("yarnpkg", PackageManagerType::Yarn), "yarnpkg");
-        assert_eq!(package_manager_bin_name("bun", PackageManagerType::Bun), "bun");
-        assert_eq!(package_manager_bin_name("bunx", PackageManagerType::Bun), "bunx");
     }
 
     #[test]

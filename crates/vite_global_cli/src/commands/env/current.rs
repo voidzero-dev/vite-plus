@@ -7,7 +7,7 @@ use std::process::ExitStatus;
 use owo_colors::OwoColorize;
 use serde::Serialize;
 use vite_install::package_manager::{
-    package_manager_bin_path, package_manager_install_dir,
+    PackageManagerResolution, package_manager_bin_path, package_manager_install_dir,
     resolve_package_manager_from_package_json,
 };
 use vite_path::AbsolutePathBuf;
@@ -43,6 +43,23 @@ struct PackageManagerInfo {
     source_path: String,
     project_root: String,
     bin_path: String,
+}
+
+impl PackageManagerInfo {
+    fn from_resolution(resolution: PackageManagerResolution) -> Option<Self> {
+        let install_dir =
+            package_manager_install_dir(resolution.package_manager_type, &resolution.version)?;
+        let name = resolution.package_manager_type.to_string();
+        let bin_path = package_manager_bin_path(&install_dir, &name);
+        Some(Self {
+            name,
+            version: resolution.version.to_string(),
+            source: resolution.source.to_string(),
+            source_path: resolution.source_path.as_path().display().to_string(),
+            project_root: resolution.project_root.as_path().display().to_string(),
+            bin_path: bin_path.as_path().display().to_string(),
+        })
+    }
 }
 
 fn accent(text: &str) -> String {
@@ -139,17 +156,5 @@ pub async fn execute(cwd: AbsolutePathBuf, json: bool) -> Result<ExitStatus, Err
 }
 
 fn resolve_package_manager_info(cwd: &AbsolutePathBuf) -> Option<PackageManagerInfo> {
-    let resolution = resolve_package_manager_from_package_json(cwd).ok()??;
-    let install_dir =
-        package_manager_install_dir(resolution.package_manager_type, &resolution.version)?;
-    let name = resolution.package_manager_type.to_string();
-    let bin_path = package_manager_bin_path(&install_dir, &name);
-    Some(PackageManagerInfo {
-        name,
-        version: resolution.version.to_string(),
-        source: resolution.source.to_string(),
-        source_path: resolution.source_path.as_path().display().to_string(),
-        project_root: resolution.project_root.as_path().display().to_string(),
-        bin_path: bin_path.as_path().display().to_string(),
-    })
+    PackageManagerInfo::from_resolution(resolve_package_manager_from_package_json(cwd).ok()??)
 }
