@@ -2,7 +2,7 @@
 
 ## Summary
 
-Document how Vite+ determines which package manager (pnpm/yarn/npm/bun) a project uses. This detection runs automatically before any package management command (`vp install`, `vp add`, `vp remove`, etc.) and drives all PM-specific behavior including command translation, lockfile handling, and workspace configuration.
+Document how Vite+ determines which package manager (pnpm/yarn/npm/bun) a project uses. This detection runs automatically before package management commands (`vp install`, `vp add`, `vp remove`, etc.) and drives PM-specific behavior including command translation, lockfile handling, workspace configuration, and matching package-manager shims.
 
 ## Detection Algorithm
 
@@ -30,6 +30,8 @@ The highest-priority signal. If the root `package.json` contains a `packageManag
 - Unknown name → `UnsupportedPackageManager` error
 
 **Reference**: [Node.js Corepack packageManager field](https://nodejs.org/api/packages.html#packagemanager)
+
+The explicit field also controls matching package-manager shims, including aliases generated for that manager. If a project declares `packageManager: "npm@11.14.0"`, the `npm` and `npx` shims run npm 11.14.0. Other aliases follow the same rule: `pnpm`/`pnpx`, `yarn`/`yarnpkg`, and `bun`/`bunx`. If the project declares `pnpm`, `yarn`, or `bun`, invoking `npm` still runs npm; Vite+ never translates one package-manager shim command into another.
 
 ### Priority 2: Lockfiles
 
