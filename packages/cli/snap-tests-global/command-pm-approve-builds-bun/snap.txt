@@ -1,0 +1,25 @@
+> vp pm approve-builds --help # should show help with --all caveat
+Usage: vp pm approve-builds [OPTIONS] [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
+
+Approve dependency lifecycle scripts (install/postinstall) to run
+
+Arguments:
+  [PACKAGES]...           Packages to approve. Prefix with `!` to deny (pnpm >= <semver> only). Omit to launch interactive mode (pnpm only)
+  [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
+
+Options:
+  --all       Approve every package currently pending approval (pnpm >= <semver>). Mutually exclusive with positional packages
+  -h, --help  Print help
+
+Documentation: https://viteplus.dev/guide/install
+
+
+> vp pm approve-builds # bun no-args: prints contextual note, exit 0
+note: bun pm trust requires package names. Run `bun pm untrusted` to see which packages are pending, then pass them explicitly: `vp pm approve-builds <pkg> [<pkg>...]` or `vp pm approve-builds --all`.
+
+> vp pm approve-builds '!core-js' # deny-only: prints deny warn, no redundant note
+warn: bun does not support denylisting build scripts. Packages outside `trustedDependencies` in package.json are already denied by default. Skipping: core-js
+
+[1]> vp pm approve-builds --all # forwards bun pm trust --all (nothing to trust in this empty project)
+bun pm trust v<semver> (af24e281)
+error: Lockfile not found
