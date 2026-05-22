@@ -298,9 +298,14 @@ pub enum EnvSubcommands {
     Print,
 
     /// Set or show the global default Node.js version
+    #[command(after_help = "\
+Examples:
+  vp env default              # Show the current default
+  vp env default lts          # Set the default to latest LTS
+  vp env default 20.18.0      # Set a specific version")]
     Default {
-        /// Version to set as default (e.g., "20.18.0", "lts", "latest")
-        /// If not provided, shows the current default
+        /// Version to set as default (e.g., "20.18.0", "lts", "latest").
+        /// If omitted, prints the current default.
         version: Option<String>,
     },
 
@@ -330,9 +335,16 @@ pub enum EnvSubcommands {
     },
 
     /// Pin a Node.js version in the current directory (creates .node-version)
+    #[command(after_help = "\
+Examples:
+  vp env pin                    # Show the currently pinned version
+  vp env pin lts                # Pin to latest LTS
+  vp env pin 20.18.0            # Pin a specific version
+  vp env pin \"^20.0.0\" --force  # Pin a range, overwriting existing file
+  vp env pin --unpin            # Remove .node-version")]
     Pin {
-        /// Version to pin (e.g., "20.18.0", "lts", "latest", "^20.0.0")
-        /// If not provided, shows the current pinned version
+        /// Version to pin (e.g., "20.18.0", "lts", "latest", "^20.0.0").
+        /// If omitted, prints the currently pinned version.
         version: Option<String>,
 
         /// Remove the .node-version file from current directory
@@ -383,11 +395,15 @@ pub enum EnvSubcommands {
     },
 
     /// Execute a command with a specific Node.js version
-    #[command(visible_alias = "run")]
+    #[command(visible_alias = "run", after_help = "\
+Examples:
+  vp env exec --node lts npm install        # Run npm install with latest LTS
+  vp env exec --node 20.18.0 node script.js # Run with a specific version
+  vp env exec node -v                       # Shim mode: version auto-resolved")]
     Exec {
-        /// Node.js version to use (e.g., "20.18.0", "lts", "^20.0.0")
-        /// If not provided and command is node/npm/npx or a global package binary,
-        /// version is resolved automatically (same as shim behavior)
+        /// Node.js version to use (e.g., "20.18.0", "lts", "^20.0.0").
+        /// If omitted and command is node/npm/npx or a global package binary,
+        /// version is resolved automatically (same as shim behavior).
         #[arg(long)]
         node: Option<String>,
 
@@ -417,9 +433,15 @@ pub enum EnvSubcommands {
     },
 
     /// Use a specific Node.js version for this shell session
+    #[command(after_help = "\
+Examples:
+  vp env use            # Use the version from .node-version / package.json
+  vp env use 20         # Override the session with Node 20
+  vp env use lts        # Use latest LTS for this session
+  vp env use --unset    # Clear the session override")]
     Use {
-        /// Version to use (e.g., "20", "20.18.0", "lts", "latest")
-        /// If not provided, reads from .node-version or package.json
+        /// Version to use (e.g., "20", "20.18.0", "lts", "latest").
+        /// If omitted, reads from .node-version or package.json.
         version: Option<String>,
 
         /// Remove session override (revert to file-based resolution)
