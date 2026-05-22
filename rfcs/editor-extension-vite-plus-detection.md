@@ -30,11 +30,15 @@ detection. The goal of this RFC is one rule, four implementations.
 
 ## The rule
 
-A project is **Vite+** iff some `package.json` between the start
-path and the root workspace declares `vite-plus` directly in
+A project is **Vite+** iff some `package.json` between the **start
+path** and the root workspace declares `vite-plus` directly in
 `dependencies` or `devDependencies`. A `node_modules/vite-plus/`
 directory on its own does not qualify — that could be a transitive
 install hoisted from an unrelated dependency tree.
+
+> "Start path" is the absolute filesystem path the extension hands
+> the detector. Each editor surfaces a slightly different concept —
+> see § Start path per extension below for the exact mapping.
 
 > _"Root workspace"_ in this RFC means the **monorepo root** — the
 > directory containing `pnpm-workspace.yaml`,
@@ -73,6 +77,33 @@ fn detect_vite_plus_project(start: AbsolutePath) -> Option<Result>:
 Both phases stop AT the root workspace and never cross into its
 parent. The walk-up bound is what prevents a nested checkout from
 inheriting an unrelated parent's Vite+ install.
+
+### Start path per extension
+
+`start` is editor-specific. What each extension passes mirrors how it
+already resolves `oxlint`/`oxfmt` binaries today:
+
+| Extension             | What to pass for `start`                                                                                                                                      | Call frequency                                                                                                                                                                           |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `oxc-vscode`          | the active document's path (`window.activeTextEditor?.document.uri.fsPath`); fall back to `workspace.workspaceFolders[i].uri.fsPath` when no document is open | once at LSP startup; re-detect on active-document change to handle cross-folder navigation                                                                                               |
+| `coc-oxc`             | `workspace.root`                                                                                                                                              | once per editor session                                                                                                                                                                  |
+| `oxc-zed`             | `worktree.root_path()`                                                                                                                                        | once per worktree (Zed's WASM API only exposes the worktree root)                                                                                                                        |
+| `oxc-intellij-plugin` | the opened `VirtualFile`'s path                                                                                                                               | once per opened file, via `OxfmtLspServerSupportProvider.fileOpened(project, file, ...)`; threaded through `NodePackageDescriptor.listAvailable(project, interpreter, virtualFile, ...)` |
+
+The granularity differs because the underlying editor APIs differ:
+
+- **IntelliJ** has per-file resolution built in (`fileOpened(project,
+file, ...)`); the file's actual path is the most precise input and
+  finds Vite+ even when only a deeply nested subpackage declares it.
+- **VS Code** can match that precision by passing the active
+  document's path; the workspace-folder path is the fallback for the
+  window before any document is open. Today `oxc-vscode` resolves at
+  workspace-folder granularity (`client/findBinary.ts:92-124`); this
+  RFC recommends moving to document-anchored detection so a workspace
+  folder rooted **above** a subpackage that declares `vite-plus`
+  still finds it.
+- **coc-oxc** and **Zed** expose a single editor root and have no
+  per-file resolution path available in their existing APIs.
 
 ### Result
 
