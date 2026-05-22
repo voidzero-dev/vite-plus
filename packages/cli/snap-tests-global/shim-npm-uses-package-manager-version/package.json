@@ -1,0 +1,6 @@
+{
+  "name": "shim-npm-uses-package-manager-version",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "npm@10.9.4"
+}
