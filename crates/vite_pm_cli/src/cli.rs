@@ -524,6 +524,7 @@ impl PackageManagerCommand {
             Self::Install { global, .. }
             | Self::Add { global, .. }
             | Self::Remove { global, .. }
+            | Self::Outdated { global, .. }
             | Self::Update { global, .. } => *global,
             Self::Pm(PmCommands::List { global, .. }) => *global,
             _ => false,

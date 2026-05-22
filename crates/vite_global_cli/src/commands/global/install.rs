@@ -564,21 +564,25 @@ async fn create_package_shim(
 
     #[cfg(windows)]
     {
+        use crate::commands::env::{
+            cleanup_legacy_windows_shim, get_trampoline_path, remove_or_rename_to_old,
+        };
+
         let shim_path = bin_dir.join(format!("{}.exe", bin_name));
 
         // Delete before overwrite; falls back to rename if the exe is locked.
-        super::setup::remove_or_rename_to_old(&shim_path).await;
+        remove_or_rename_to_old(&shim_path).await;
 
         // Copy the trampoline binary as <bin_name>.exe.
         // The trampoline detects the tool name from its own filename and sets
         // VP_SHIM_TOOL env var before spawning vp.exe.
-        let trampoline_src = super::setup::get_trampoline_path()?;
+        let trampoline_src = get_trampoline_path()?;
         tokio::fs::copy(trampoline_src.as_path(), &shim_path).await?;
 
         // Remove legacy .cmd and shell script wrappers from previous versions.
         // In Git Bash/MSYS, the extensionless script takes precedence over .exe,
         // so leftover wrappers would bypass the trampoline.
-        super::setup::cleanup_legacy_windows_shim(bin_dir, bin_name).await;
+        cleanup_legacy_windows_shim(bin_dir, bin_name).await;
 
         tracing::debug!("Created package trampoline shim {:?}", shim_path);
     }
