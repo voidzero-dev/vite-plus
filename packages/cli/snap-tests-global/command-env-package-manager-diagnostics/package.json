@@ -1,0 +1,6 @@
+{
+  "name": "command-env-package-manager-diagnostics",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "npm@10.9.4"
+}
