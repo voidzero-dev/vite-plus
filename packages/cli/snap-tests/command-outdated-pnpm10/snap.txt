@@ -168,6 +168,3 @@ testnpm2
 ├──────────────────────────────────────────┼─────────┼────────┤
 │ testnpm2                                 │ <semver>   │ <semver>  │
 └──────────────────────────────────────────┴─────────┴────────┘
-
-> vp outdated testnpm2 -g --format json # should support global output
-{}

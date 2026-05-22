@@ -1,4 +1,7 @@
 > vp install -g testnpm2@1.0.0 # should prepare global outdated package
+[1]> vp outdated definitely-not-installed-vite-plus-snap-pkg -g --format json # should support empty global json output
+{}
+
 [1]> vp outdated testnpm2 -g --format json # should support global json output
 {
   "testnpm2": {

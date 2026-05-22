@@ -10,9 +10,6 @@ error: No package.json found.
 [1]> vp why lodash # should show friendly error
 error: No package.json found.
 
-> vp outdated definitely-not-installed-vite-plus-snap-pkg -g --format json # should not require package.json for global outdated
-{}
-
 [1]> vp why definitely-not-installed-vite-plus-snap-pkg -g --json # should not require package.json for global why
 npm error No dependencies found matching definitely-not-installed-vite-plus-snap-pkg
 {
