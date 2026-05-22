@@ -1,0 +1,18 @@
+{
+  "serial": true,
+  "ignoredPlatforms": ["win32"],
+  "env": {},
+  "commands": [
+    "rm -rf $VP_HOME/js_runtime/node/22.11.0 # Ensure pinned Node.js is not cached",
+    "rm -rf $VP_HOME/package_manager/npm/10.5.0 $VP_HOME/package_manager/npm/10.5.0.lock # Ensure pinned npm is not cached",
+    "test ! -d $VP_HOME/js_runtime/node/22.11.0 && echo 'pinned Node.js@22.11.0 is uncached'",
+    "test ! -d $VP_HOME/package_manager/npm/10.5.0 && echo 'pinned npm@10.5.0 is uncached'",
+    {
+      "command": "test \"$(npm --version)\" = \"10.5.0\" && echo 'npm shim auto-downloaded Node.js and packageManager on first invocation'",
+      "timeout": 240000
+    },
+    "test -x $VP_HOME/js_runtime/node/22.11.0/bin/node && echo 'pinned Node.js@22.11.0 is now cached'",
+    "test -x $VP_HOME/package_manager/npm/10.5.0/npm/bin/npm && echo 'pinned npm@10.5.0 is now cached'",
+    "test \"$(npm --version)\" = \"10.5.0\" && echo 'subsequent invocations reuse the cached version'"
+  ]
+}
