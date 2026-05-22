@@ -89,7 +89,7 @@ pub async fn execute(
     }
 
     if outdated.is_empty() {
-        print_empty(format, "All global packages are up to date.");
+        print_empty(format, empty_outdated_message(failed));
         return Ok(if failed { exit_status(1) } else { ExitStatus::default() });
     }
 
@@ -121,6 +121,14 @@ fn print_empty(format: Option<Format>, message: &str) {
     match format {
         Some(Format::Json) => println!("{{}}"),
         _ => println!("{message}"),
+    }
+}
+
+fn empty_outdated_message(failed: bool) -> &'static str {
+    if failed {
+        "Could not check all global packages for updates."
+    } else {
+        "All global packages are up to date."
     }
 }
 
@@ -242,5 +250,23 @@ fn exit_status(code: i32) -> ExitStatus {
     {
         use std::os::windows::process::ExitStatusExt;
         ExitStatus::from_raw(code as u32)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::empty_outdated_message;
+
+    #[test]
+    fn reports_lookup_failures_when_no_outdated_packages_are_found() {
+        assert_eq!(
+            empty_outdated_message(true),
+            "Could not check all global packages for updates."
+        );
+    }
+
+    #[test]
+    fn reports_up_to_date_only_when_all_lookups_succeed() {
+        assert_eq!(empty_outdated_message(false), "All global packages are up to date.");
     }
 }
