@@ -10,6 +10,10 @@ use std::process::ExitStatus;
 
 use chrono::Local;
 use owo_colors::OwoColorize;
+use vite_install::package_manager::{
+    PackageManagerType, package_manager_bin_path, package_manager_install_dir,
+    resolve_package_manager_from_package_json,
+};
 use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_shared::output;
 
@@ -27,6 +31,10 @@ const LABEL_WIDTH: usize = 10;
 
 /// Execute the which command.
 pub async fn execute(cwd: AbsolutePathBuf, tool: &str) -> Result<ExitStatus, Error> {
+    if let Some(status) = execute_package_manager_tool(&cwd, tool).await? {
+        return Ok(status);
+    }
+
     // Check if this is a core tool
     if CORE_TOOLS.contains(&tool) {
         return execute_core_tool(cwd, tool).await;
@@ -42,6 +50,48 @@ pub async fn execute(cwd: AbsolutePathBuf, tool: &str) -> Result<ExitStatus, Err
     eprintln!("Not a core tool (node, npm, npx) or installed global package.");
     eprintln!("Run 'vp list -g' to see installed packages.");
     Ok(exit_status(1))
+}
+
+async fn execute_package_manager_tool(
+    cwd: &AbsolutePath,
+    tool: &str,
+) -> Result<Option<ExitStatus>, Error> {
+    let Some(expected_type) = PackageManagerType::from_tool(tool) else {
+        return Ok(None);
+    };
+    let Some(resolution) = resolve_package_manager_from_package_json(cwd)? else {
+        return Ok(None);
+    };
+    if resolution.package_manager_type != expected_type {
+        return Ok(None);
+    }
+
+    let Some(install_dir) = package_manager_install_dir(expected_type, &resolution.version) else {
+        return Ok(None);
+    };
+    let bin_name = expected_type.bin_name_for_tool(tool);
+    let tool_path = package_manager_bin_path(&install_dir, bin_name);
+
+    if !tokio::fs::try_exists(&tool_path).await.unwrap_or(false) {
+        output::error(&format!("{} not found", tool.bold()));
+        eprintln!("{expected_type} {} is not installed.", resolution.version);
+        eprintln!("Run 'vp install' inside the project to download it.");
+        return Ok(Some(exit_status(1)));
+    }
+
+    println!("{}", tool_path.as_path().display());
+    println!(
+        "  {:<LABEL_WIDTH$}  {}",
+        "Package:".dimmed(),
+        format!("{}@{}", expected_type, resolution.version).bright_blue()
+    );
+    println!(
+        "  {:<LABEL_WIDTH$}  {}",
+        "Source:".dimmed(),
+        resolution.source_path.as_path().display().to_string().dimmed()
+    );
+
+    Ok(Some(ExitStatus::default()))
 }
 
 /// Execute which for a core tool (node, npm, npx).
