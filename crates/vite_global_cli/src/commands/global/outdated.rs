@@ -150,18 +150,19 @@ fn print_json(packages: &[OutdatedPackage]) -> Result<(), Error> {
 }
 
 fn print_list(packages: &[OutdatedPackage], long: bool) {
-    for package in packages {
+    for (index, package) in packages.iter().enumerate() {
+        if index > 0 {
+            println!();
+        }
+
+        println!("{} {}", package.name.bold(), "(global)".dimmed());
+        println!("{} {} {}", package.current.dimmed(), "=>".dimmed(), package.latest.bold());
+
         if long {
-            println!(
-                "{}@{} -> {} (node {}, bins: {})",
-                package.name,
-                package.current,
-                package.latest,
-                package.node,
-                package.bins.join(", ")
-            );
-        } else {
-            println!("{}@{} -> {}", package.name, package.current, package.latest);
+            println!("{} {}", "node".dimmed(), package.node);
+            if !package.bins.is_empty() {
+                println!("{} {}", "bins".dimmed(), package.bins.join(", "));
+            }
         }
     }
 }

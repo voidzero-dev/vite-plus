@@ -5,7 +5,8 @@
       "command": "vp install -g testnpm2@1.0.0 # should prepare global outdated package",
       "ignoreOutput": true
     },
-    "vp outdated testnpm2 -g --format json # should support global json output"
+    "vp outdated testnpm2 -g --format json # should support global json output",
+    "vp outdated testnpm2 -g --format list # should support global list output"
   ],
   "after": ["vp remove -g testnpm2"]
 }

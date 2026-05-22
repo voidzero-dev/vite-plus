@@ -9,3 +9,7 @@
     "location": "<vite-plus-home>/packages/testnpm2/lib/node_modules/testnpm2"
   }
 }
+
+[1]> vp outdated testnpm2 -g --format list # should support global list output
+testnpm2 (global)
+<semver> => <semver>
