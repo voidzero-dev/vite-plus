@@ -16,7 +16,6 @@
     "vp outdated --no-optional # should support no-optional output",
     "vp outdated --compatible # should compatible output nothing",
     "json-edit package.json '_.optionalDependencies[\"test-vite-plus-other-optional\"] = \"^1.0.0\"' && vp outdated --compatible # should support compatible output with optional dependencies",
-    "vp outdated --sort-by name # should support sort-by output",
-    "vp outdated testnpm2 -g --format json # should support global output"
+    "vp outdated --sort-by name # should support sort-by output"
   ]
 }

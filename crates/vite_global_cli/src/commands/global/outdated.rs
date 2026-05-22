@@ -1,13 +1,19 @@
 //! Check managed global packages for newer registry versions.
 
-use std::process::ExitStatus;
+use std::{collections::BTreeMap, process::ExitStatus};
 
 use owo_colors::OwoColorize;
 use serde::Serialize;
 use vite_install::commands::outdated::Format;
 
 use super::{latest_versions_by_spec, parse_package_spec};
-use crate::{commands::env::package_metadata::PackageMetadata, error::Error};
+use crate::{
+    commands::env::{
+        config::{get_node_modules_dir, get_packages_dir},
+        package_metadata::PackageMetadata,
+    },
+    error::Error,
+};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -17,6 +23,16 @@ struct OutdatedPackage {
     latest: String,
     node: String,
     bins: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct OutdatedPackageJson {
+    current: String,
+    wanted: String,
+    latest: String,
+    dependent: &'static str,
+    location: String,
 }
 
 pub async fn execute(
@@ -103,13 +119,32 @@ async fn matching_packages(packages: &[String]) -> Result<Vec<PackageMetadata>, 
 
 fn print_empty(format: Option<Format>, message: &str) {
     match format {
-        Some(Format::Json) => println!("[]"),
+        Some(Format::Json) => println!("{{}}"),
         _ => println!("{message}"),
     }
 }
 
 fn print_json(packages: &[OutdatedPackage]) -> Result<(), Error> {
-    let json = serde_json::to_string_pretty(packages)?;
+    let packages_dir = get_packages_dir()?;
+    let mut output = BTreeMap::new();
+
+    for package in packages {
+        let package_dir = packages_dir.join(&package.name);
+        let location = get_node_modules_dir(&package_dir, &package.name);
+
+        output.insert(
+            package.name.clone(),
+            OutdatedPackageJson {
+                current: package.current.clone(),
+                wanted: package.latest.clone(),
+                latest: package.latest.clone(),
+                dependent: "global",
+                location: location.as_path().display().to_string(),
+            },
+        );
+    }
+
+    let json = serde_json::to_string_pretty(&output)?;
     println!("{json}");
     Ok(())
 }
