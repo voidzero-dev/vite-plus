@@ -13,6 +13,6 @@
   }
 }
 
-[1]> vp outdated testnpm2 -g --format list # should support global list output
+[1]> vp outdated testnpm2 -g --format list --concurrency 5 # should support global list output
 testnpm2 (global)
 <semver> => <semver>

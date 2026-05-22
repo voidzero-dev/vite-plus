@@ -7,7 +7,7 @@
     },
     "vp outdated definitely-not-installed-vite-plus-snap-pkg -g --format json # should support empty global json output",
     "vp outdated testnpm2 -g --format json # should support global json output",
-    "vp outdated testnpm2 -g --format list # should support global list output"
+    "vp outdated testnpm2 -g --format list --concurrency 5 # should support global list output"
   ],
   "after": ["vp remove -g testnpm2"]
 }

@@ -19,6 +19,7 @@ use crate::{
 };
 
 const DEFAULT_GLOBAL_INSTALL_CONCURRENCY: usize = 5;
+const DEFAULT_GLOBAL_VIEW_CONCURRENCY: usize = 3 * DEFAULT_GLOBAL_INSTALL_CONCURRENCY;
 
 #[derive(Clone, Copy, Debug)]
 pub struct RenderOptions {
@@ -559,9 +560,21 @@ async fn run_package_manager_command(
             managed_update(packages, concurrency).await
         }
 
-        PackageManagerCommand::Outdated { global: true, ref packages, long, format, .. } => {
-            global::outdated::execute(packages, long, format, DEFAULT_GLOBAL_INSTALL_CONCURRENCY)
-                .await
+        PackageManagerCommand::Outdated {
+            global: true,
+            ref packages,
+            long,
+            format,
+            concurrency,
+            ..
+        } => {
+            global::outdated::execute(
+                packages,
+                long,
+                format,
+                concurrency.unwrap_or(DEFAULT_GLOBAL_VIEW_CONCURRENCY),
+            )
+            .await
         }
 
         // `pm list -g` lists vite-plus-managed globals, not the underlying PM's.
@@ -688,7 +701,7 @@ async fn managed_update(
             }
         }
 
-        let latest_versions = global::latest_versions_by_spec(&specs, concurrency).await?;
+        let latest_versions = global::latest_versions_by_spec(&specs, concurrency * 3).await?;
 
         for (package, package_name, installed_version) in installed_packages {
             match latest_versions.get(&package) {
