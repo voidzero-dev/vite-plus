@@ -20,6 +20,8 @@ Vite+ detects the package manager from the workspace root in this order:
 
 If none of those files are present, `vp` falls back to `pnpm` by default. Vite+ automatically downloads the matching package manager and uses it for the command you ran.
 
+The explicit `packageManager` field also affects matching package-manager shims. If a project has `packageManager: "npm@10.9.4"`, `npm` and `npx` use npm 10.9.4. Other generated alias pairs behave the same way: `pnpm`/`pnpx`, `yarn`/`yarnpkg`, and `bun`/`bunx`. Mismatched tools are not translated; `npm` in a `pnpm` project still resolves as npm.
+
 ## Usage
 
 ```bash
