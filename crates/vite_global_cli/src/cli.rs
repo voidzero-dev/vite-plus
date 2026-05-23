@@ -298,11 +298,10 @@ pub enum EnvSubcommands {
     Print,
 
     /// Set or show the global default Node.js version
-    #[command(after_help = "\
+    #[command(after_long_help = "\
 Examples:
-  vp env default              # Show the current default
-  vp env default lts          # Set the default to latest LTS
-  vp env default 20.18.0      # Set a specific version")]
+  vp env default          # Show the current default
+  vp env default lts      # Set the default")]
     Default {
         /// Version to set as default (e.g., "20.18.0", "lts", "latest").
         /// If omitted, prints the current default.
@@ -335,13 +334,11 @@ Examples:
     },
 
     /// Pin a Node.js version in the current directory (creates .node-version)
-    #[command(after_help = "\
+    #[command(after_long_help = "\
 Examples:
-  vp env pin                    # Show the currently pinned version
-  vp env pin lts                # Pin to latest LTS
-  vp env pin 20.18.0            # Pin a specific version
-  vp env pin \"^20.0.0\" --force  # Pin a range, overwriting existing file
-  vp env pin --unpin            # Remove .node-version")]
+  vp env pin lts                  # Pin to latest LTS
+  vp env pin --unpin              # Remove .node-version
+  vp env pin \"^20.0.0\" --force    # Overwrite existing pin")]
     Pin {
         /// Version to pin (e.g., "20.18.0", "lts", "latest", "^20.0.0").
         /// If omitted, prints the currently pinned version.
@@ -397,11 +394,10 @@ Examples:
     /// Execute a command with a specific Node.js version
     #[command(
         visible_alias = "run",
-        after_help = "\
+        after_long_help = "\
 Examples:
-  vp env exec --node lts npm install        # Run npm install with latest LTS
-  vp env exec --node 20.18.0 node script.js # Run with a specific version
-  vp env exec node -v                       # Shim mode: version auto-resolved"
+  vp env exec --node lts npm install  # Pin version for this invocation
+  vp env exec node -v                 # Shim mode: version auto-resolved"
     )]
     Exec {
         /// Node.js version to use (e.g., "20.18.0", "lts", "^20.0.0").
@@ -436,11 +432,9 @@ Examples:
     },
 
     /// Use a specific Node.js version for this shell session
-    #[command(after_help = "\
+    #[command(after_long_help = "\
 Examples:
-  vp env use            # Use the version from .node-version / package.json
-  vp env use 20         # Override the session with Node 20
-  vp env use lts        # Use latest LTS for this session
+  vp env use lts        # Override session with latest LTS
   vp env use --unset    # Clear the session override")]
     Use {
         /// Version to use (e.g., "20", "20.18.0", "lts", "latest").

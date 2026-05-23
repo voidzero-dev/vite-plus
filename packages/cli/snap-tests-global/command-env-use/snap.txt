@@ -13,9 +13,7 @@ Options:
   -h, --help             Print help
 
 Examples:
-  vp env use            # Use the version from .node-version / package.json
-  vp env use 20         # Override the session with Node 20
-  vp env use lts        # Use latest LTS for this session
+  vp env use lts        # Override session with latest LTS
   vp env use --unset    # Clear the session override
 
 Documentation: https://viteplus.dev/guide/env
