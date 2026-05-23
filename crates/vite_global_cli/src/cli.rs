@@ -395,11 +395,14 @@ Examples:
     },
 
     /// Execute a command with a specific Node.js version
-    #[command(visible_alias = "run", after_help = "\
+    #[command(
+        visible_alias = "run",
+        after_help = "\
 Examples:
   vp env exec --node lts npm install        # Run npm install with latest LTS
   vp env exec --node 20.18.0 node script.js # Run with a specific version
-  vp env exec node -v                       # Shim mode: version auto-resolved")]
+  vp env exec node -v                       # Shim mode: version auto-resolved"
+    )]
     Exec {
         /// Node.js version to use (e.g., "20.18.0", "lts", "^20.0.0").
         /// If omitted and command is node/npm/npx or a global package binary,
