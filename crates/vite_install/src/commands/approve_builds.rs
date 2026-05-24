@@ -119,7 +119,7 @@ impl PackageManager {
                 if self.version.starts_with("1.") {
                     output::warn(
                         "yarn (v1) runs lifecycle scripts by default. To restrict them, set \
-                         `ignore-scripts true` in .npmrc and rebuild approved packages with \
+                         `ignore-scripts=true` in .npmrc and rebuild approved packages with \
                          `vp pm rebuild <package>`.",
                     );
                 } else {

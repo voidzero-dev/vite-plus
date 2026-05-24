@@ -12,10 +12,10 @@ Options:
   -h, --help  Print help
 
 > vp pm approve-builds # warn and exit 0 (no-op on yarn)
-warn: yarn (v1) runs lifecycle scripts by default. To restrict them, set `ignore-scripts true` in .npmrc and rebuild approved packages with `vp pm rebuild <package>`.
+warn: yarn (v1) runs lifecycle scripts by default. To restrict them, set `ignore-scripts=true` in .npmrc and rebuild approved packages with `vp pm rebuild <package>`.
 
 > vp pm approve-builds esbuild # warn and exit 0 (no-op on yarn)
-warn: yarn (v1) runs lifecycle scripts by default. To restrict them, set `ignore-scripts true` in .npmrc and rebuild approved packages with `vp pm rebuild <package>`.
+warn: yarn (v1) runs lifecycle scripts by default. To restrict them, set `ignore-scripts=true` in .npmrc and rebuild approved packages with `vp pm rebuild <package>`.
 
 > vp pm approve-builds --all # warn and exit 0 (no-op on yarn)
-warn: yarn (v1) runs lifecycle scripts by default. To restrict them, set `ignore-scripts true` in .npmrc and rebuild approved packages with `vp pm rebuild <package>`.
+warn: yarn (v1) runs lifecycle scripts by default. To restrict them, set `ignore-scripts=true` in .npmrc and rebuild approved packages with `vp pm rebuild <package>`.
