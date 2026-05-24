@@ -103,15 +103,15 @@ Use `pnpm bootstrap-cli` when you need to validate the installed global CLI at `
 
 Choose checks by change type:
 
-| Change type | Useful validation |
-| --- | --- |
-| Docs-only / agent-guide edits | Check referenced paths and commands; run `git diff --check -- <files>` |
+| Change type                   | Useful validation                                                       |
+| ----------------------------- | ----------------------------------------------------------------------- |
+| Docs-only / agent-guide edits | Check referenced paths and commands; run `git diff --check -- <files>`  |
 | TypeScript or JS CLI behavior | `vp check`, `pnpm test:unit`, plus focused package tests when available |
-| Rust CLI/crate behavior | `just check`, `just test`, `just lint` |
-| CLI output or command UX | Relevant snap tests, then inspect `git diff` for `snap.txt` changes |
-| Global CLI behavior | `pnpm bootstrap-cli`, `vp --version`, then relevant global snap tests |
-| Release/build behavior | `just build` |
-| Pre-merge/full validation | `pnpm bootstrap-cli && pnpm test && git status` |
+| Rust CLI/crate behavior       | `just check`, `just test`, `just lint`                                  |
+| CLI output or command UX      | Relevant snap tests, then inspect `git diff` for `snap.txt` changes     |
+| Global CLI behavior           | `pnpm bootstrap-cli`, `vp --version`, then relevant global snap tests   |
+| Release/build behavior        | `just build`                                                            |
+| Pre-merge/full validation     | `pnpm bootstrap-cli && pnpm test && git status`                         |
 
 Use `vp check --fix` only when you intentionally want formatting or lint fixes applied.
 
