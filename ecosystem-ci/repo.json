@@ -40,7 +40,7 @@
   "vitepress": {
     "repository": "https://github.com/fengmk2/vitepress.git",
     "branch": "feat/vite-8-and-fix-playwright-chromium",
-    "hash": "9330f228861623c71f2598271d4e79c9c53f2c08",
+    "hash": "ff11029b8853b2f2dd8e32f7ed4581b28c020ccb",
     "playwright": true
   },
   "tanstack-start-helloworld": {
