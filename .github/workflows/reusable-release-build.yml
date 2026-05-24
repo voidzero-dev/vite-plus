@@ -102,6 +102,25 @@ jobs:
             ./target/${{ matrix.settings.target }}/release/vp-shim.exe
           if-no-files-found: error
 
+      - name: Package release archive
+        shell: bash
+        working-directory: ./target/${{ matrix.settings.target }}/release
+        run: |
+          if [ -f vp.exe ]; then
+            7z a "vp-${{ matrix.settings.target }}.zip" vp.exe vp-shim.exe
+          else
+            tar -czf "vp-${{ matrix.settings.target }}.tar.gz" vp
+          fi
+
+      - name: Upload release archive
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: vp-release-archive-${{ matrix.settings.target }}
+          path: |
+            ./target/${{ matrix.settings.target }}/release/vp-*.tar.gz
+            ./target/${{ matrix.settings.target }}/release/vp-*.zip
+          if-no-files-found: error
+
       - name: Upload installer binary artifact (Windows only)
         if: contains(matrix.settings.target, 'windows')
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
