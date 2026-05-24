@@ -1,0 +1,15 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "commands": [
+    "mkdir -p external home # Prepare isolated external install and VP_HOME",
+    "cp \"$VP_HOME/bin/vp\" external/vp && chmod +x external/vp # Simulate a Homebrew-style vp outside VP_HOME",
+    "printf '22.18.0\\n' > .node-version # Project Node.js version",
+    "mkdir -p home/js_runtime/node/22.18.0/bin && printf '#!/bin/sh\\necho vp-managed-node-22.18.0\\n' > home/js_runtime/node/22.18.0/bin/node && chmod +x home/js_runtime/node/22.18.0/bin/node # Preinstall managed Node runtime",
+    {
+      "command": "VP_HOME=\"$(pwd)/home\" ./external/vp env setup # Setup shims from external vp",
+      "ignoreOutput": true
+    },
+    "VP_BYPASS=\"$VP_HOME/bin\" node assert-shims.mjs # Shims should point to external vp, not VP_HOME/current/bin/vp",
+    "VP_HOME=\"$(pwd)/home\" PATH=\"$(pwd)/home/bin:$PATH\" node -v # node shim uses the project version"
+  ]
+}
