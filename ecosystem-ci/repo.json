@@ -46,7 +46,7 @@
   "tanstack-start-helloworld": {
     "repository": "https://github.com/fengmk2/tanstack-start-helloworld.git",
     "branch": "main",
-    "hash": "09bafe177bbcd1e3108c441a67601ae6380ad352",
+    "hash": "ae2cfafa384da35c57912b7e776414c1837487c2",
     "playwright": true
   },
   "oxlint-plugin-complexity": {
