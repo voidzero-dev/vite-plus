@@ -25,7 +25,7 @@ Documentation: https://viteplus.dev/guide/install
 
 
 > vp install # should install packages first
-bun install v<semver> (af24e281)
+bun install v<semver> (<hash>)
 
 + test-vite-plus-top-package@<semver>
 + test-vite-plus-other-optional@<semver>
@@ -34,7 +34,7 @@ bun install v<semver> (af24e281)
 4 packages installed [<variable>ms]
 
 > vp outdated testnpm2 # should show outdated package
-bun outdated v<semver> (af24e281)
+bun outdated v<semver> (<hash>)
 |--------------------------------------|
 | Package  | Current | Update | Latest |
 |----------|---------|--------|--------|
@@ -42,7 +42,7 @@ bun outdated v<semver> (af24e281)
 |--------------------------------------|
 
 > vp outdated -r # should support recursive output
-bun outdated v<semver> (af24e281)
+bun outdated v<semver> (<hash>)
 |---------------------------------------------------------------------------------------------|
 | Package                                  | Current | Update | Latest | Workspace            |
 |------------------------------------------|---------|--------|--------|----------------------|
