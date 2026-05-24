@@ -147,7 +147,7 @@ fn pnpm_supports_approve_builds_all(version: &str) -> bool {
     // Compare against the lowest prerelease of 10.32.0 (`10.32.0-0`) so that
     // prereleases of 10.32.0 (e.g. `10.32.0-rc.0`, `10.32.0-beta.1`) also
     // satisfy the gate per semver ordering rules.
-    // Unparseable versions are treated as not-supported (strict), since the
+    // Unparsable versions are treated as not-supported (strict), since the
     // production path always populates `version` from a validated semver.
     let floor = Version::parse("10.32.0-0").expect("static semver");
     Version::parse(version).is_ok_and(|v| v >= floor)
@@ -335,15 +335,15 @@ mod tests {
     }
 
     #[test]
-    fn pnpm_unparseable_version_rejects_all() {
-        // Strict gate: unparseable versions (a corruption/edge case) fail the check.
+    fn pnpm_unparsable_version_rejects_all() {
+        // Strict gate: unparsable versions (a corruption/edge case) fail the check.
         let pm = create_mock_package_manager(PackageManagerType::Pnpm, "latest");
         let err = pm
             .resolve_approve_builds_command(&ApproveBuildsCommandOptions {
                 all: true,
                 ..Default::default()
             })
-            .expect_err("unparseable version should fail the gate");
+            .expect_err("unparsable version should fail the gate");
         assert!(matches!(err, Error::InvalidArgument(_)));
     }
 
