@@ -1,6 +1,6 @@
 use std::{collections::HashMap, process::ExitStatus};
 
-use semver::Version;
+use node_semver::{Range, Version};
 use vite_command::run_command;
 use vite_error::Error;
 use vite_path::AbsolutePath;
@@ -160,20 +160,25 @@ impl PackageManager {
 
 fn pnpm_supports_approve_builds_all(version: &str) -> bool {
     // `pnpm approve-builds --all` was added in pnpm v10.32.0.
-    // Compare against the lowest prerelease of 10.32.0 (`10.32.0-0`) so that
-    // prereleases of 10.32.0 (e.g. `10.32.0-rc.0`, `10.32.0-beta.1`) also
-    // satisfy the gate per semver ordering rules.
-    // Unparsable versions are treated as not-supported (strict), since the
-    // production path always populates `version` from a validated semver.
-    let floor = Version::parse("10.32.0-0").expect("static semver");
-    Version::parse(version).is_ok_and(|v| v >= floor)
+    // Uses npm-flavored range semantics (per node-semver): prereleases of
+    // any version do NOT satisfy `>=10.32.0` by default. Users on a pnpm
+    // prerelease should bump to the corresponding release before relying
+    // on `--all`.
+    version_satisfies(version, ">=10.32.0")
 }
 
 fn pnpm_supports_deny_syntax(version: &str) -> bool {
     // `!<pkg>` deny syntax shipped in pnpm v11.0.0 (PR #11030).
-    // Compare against `11.0.0-0` so prereleases of v11 also satisfy.
-    let floor = Version::parse("11.0.0-0").expect("static semver");
-    Version::parse(version).is_ok_and(|v| v >= floor)
+    // Same npm prerelease semantics as above.
+    version_satisfies(version, ">=11.0.0")
+}
+
+fn version_satisfies(version: &str, range: &'static str) -> bool {
+    // Static range strings always parse; unparsable user-supplied versions
+    // are treated as not-satisfying (strict), since the production path
+    // populates `version` from a validated semver.
+    let range = range.parse::<Range>().expect("static range");
+    version.parse::<Version>().is_ok_and(|v| v.satisfies(&range))
 }
 
 fn is_positional_arg(token: &String) -> bool {
@@ -275,17 +280,18 @@ mod tests {
     }
 
     #[test]
-    fn pnpm_deny_accepts_v11_prerelease() {
+    fn pnpm_deny_rejects_v11_prerelease() {
+        // npm semver convention: prereleases don't satisfy `>=11.0.0`. Users
+        // on `11.0.0-rc.0` must bump to a release before relying on `!pkg`.
         let pm = create_mock_package_manager(PackageManagerType::Pnpm, "11.0.0-rc.0");
         let packages = vec!["!core-js".to_string()];
-        let result = pm
+        let err = pm
             .resolve_approve_builds_command(&ApproveBuildsCommandOptions {
                 packages: &packages,
                 ..Default::default()
             })
-            .expect("resolves")
-            .expect("supported");
-        assert_eq!(result.args, vec!["approve-builds", "!core-js"]);
+            .expect_err("11.0.0-rc.0 should be rejected by deny gate (npm prerelease rule)");
+        assert!(matches!(err, Error::InvalidArgument(_)));
     }
 
     #[test]
@@ -327,31 +333,33 @@ mod tests {
     }
 
     #[test]
-    fn pnpm_all_accepts_v10_32_prerelease() {
+    fn pnpm_all_rejects_v10_32_prerelease() {
+        // npm semver convention: prereleases of any version do NOT satisfy
+        // `>=10.32.0`. Users on a 10.32.0-* tag must bump to 10.32.0 release.
         for version in &["10.32.0-0", "10.32.0-rc.0", "10.32.0-beta.1"] {
             let pm = create_mock_package_manager(PackageManagerType::Pnpm, version);
-            let result = pm
-                .resolve_approve_builds_command(&ApproveBuildsCommandOptions {
-                    all: true,
-                    ..Default::default()
-                })
-                .unwrap_or_else(|_| panic!("{version} should accept --all"))
-                .unwrap_or_else(|| panic!("{version} should resolve"));
-            assert_eq!(result.args, vec!["approve-builds", "--all"]);
+            let result = pm.resolve_approve_builds_command(&ApproveBuildsCommandOptions {
+                all: true,
+                ..Default::default()
+            });
+            assert!(
+                matches!(result, Err(Error::InvalidArgument(_))),
+                "{version}: expected rejection (npm prerelease rule), got {result:?}"
+            );
         }
     }
 
     #[test]
-    fn pnpm_all_accepts_v11_prerelease() {
+    fn pnpm_all_rejects_v11_prerelease() {
+        // Same npm prerelease rule: 11.0.0-rc.0 does not satisfy `>=10.32.0`.
         let pm = create_mock_package_manager(PackageManagerType::Pnpm, "11.0.0-rc.0");
-        let result = pm
+        let err = pm
             .resolve_approve_builds_command(&ApproveBuildsCommandOptions {
                 all: true,
                 ..Default::default()
             })
-            .expect("v11 prerelease should accept --all")
-            .expect("should resolve");
-        assert_eq!(result.args, vec!["approve-builds", "--all"]);
+            .expect_err("11.0.0-rc.0 should be rejected (npm prerelease rule)");
+        assert!(matches!(err, Error::InvalidArgument(_)));
     }
 
     #[test]
