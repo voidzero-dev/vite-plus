@@ -145,7 +145,6 @@ jobs:
           - name: vibe-dashboard
             node-version: 24
             command: |
-              npx playwright install chromium
               # FIXME: Failed to load JS plugin: ./plugins/debugger.js
               # vp run ready
               vp fmt
@@ -216,7 +215,6 @@ jobs:
           - name: vitepress
             node-version: 24
             command: |
-              npx playwright install chromium
               vp run format
               vp run build
               vp test run -r __tests__/unit
@@ -226,7 +224,6 @@ jobs:
           - name: tanstack-start-helloworld
             node-version: 24
             command: |
-              npx playwright install chromium
               vp run test
               vp run build
           - name: oxlint-plugin-complexity
@@ -241,7 +238,6 @@ jobs:
           - name: vite-vue-vercel
             node-version: 24
             command: |
-              npx playwright install chromium
               vp run test
               vp run build
           - name: dify
@@ -314,7 +310,6 @@ jobs:
           - name: vitest-playwright-repro
             node-version: 24
             command: |
-              npx playwright install chromium
               vp test
           - name: vite-plus-vitest-type-aug
             node-version: 24
@@ -409,6 +404,19 @@ jobs:
         working-directory: ${{ runner.temp }}/vite-plus-ecosystem-ci/${{ matrix.project.name }}${{ matrix.project.directory && format('/{0}', matrix.project.directory) || '' }}
         shell: bash
         run: node $GITHUB_WORKSPACE/ecosystem-ci/verify-install.ts
+
+      - name: Determine playwright requirement
+        id: pw
+        shell: bash
+        run: |
+          needs=$(jq -r --arg p '${{ matrix.project.name }}' '.[$p].playwright // false' "$GITHUB_WORKSPACE/ecosystem-ci/repo.json")
+          echo "needs=$needs" >> "$GITHUB_OUTPUT"
+
+      - name: Install Playwright chromium
+        if: steps.pw.outputs.needs == 'true'
+        working-directory: ${{ runner.temp }}/vite-plus-ecosystem-ci/${{ matrix.project.name }}${{ matrix.project.directory && format('/{0}', matrix.project.directory) || '' }}
+        shell: bash
+        run: npx playwright install chromium
 
       - name: Run vite-plus commands in ${{ matrix.project.name }}
         working-directory: ${{ runner.temp }}/vite-plus-ecosystem-ci/${{ matrix.project.name }}${{ matrix.project.directory && format('/{0}', matrix.project.directory) || '' }}
