@@ -24,6 +24,22 @@ const cwd = directory ? join(repoRoot, directory) : repoRoot;
 // run vp migrate
 const cli = process.env.VP_CLI_BIN ?? 'vp';
 
+// Projects that need Playwright (declared via `playwright: true` in repo.json)
+// must use Playwright >= 1.60.0, otherwise `npx playwright install chromium`
+// wedges after the download bar reaches 100% under Node 24.16.0+
+// (microsoft/playwright#40724, fixed in 1.60.0 via microsoft/playwright#40747).
+// Force the version uniformly via pnpm overrides so it covers direct deps,
+// catalog entries, and transitive-only (e.g. @vitest/browser-playwright) cases.
+const needsPlaywright = 'playwright' in repoConfig && repoConfig.playwright;
+if (needsPlaywright) {
+  const pkgPath = join(cwd, 'package.json');
+  const pkg = JSON.parse(await readFile(pkgPath, 'utf-8'));
+  pkg.pnpm ??= {};
+  pkg.pnpm.overrides ??= {};
+  pkg.pnpm.overrides.playwright = '^1.60.0';
+  await writeFile(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`, 'utf-8');
+}
+
 if (project === 'rollipop') {
   const oxfmtrc = await readFile(join(repoRoot, '.oxfmtrc.json'), 'utf-8');
   await writeFile(
