@@ -45,6 +45,19 @@ impl PackageManager {
         &self,
         options: &ApproveBuildsCommandOptions,
     ) -> Result<Option<ResolveCommandResult>, Error> {
+        // Up-front guard: `--all` is incompatible with positional package names
+        // on both pnpm (ERR_PNPM_APPROVE_BUILDS_ALL_WITH_ARGS) and bun. clap's
+        // `conflicts_with` catches direct positionals, but tokens passed via
+        // `--` end up in `pass_through_args` and slip past — catch them here.
+        if options.all
+            && options.pass_through_args.is_some_and(|extras| extras.iter().any(is_positional_arg))
+        {
+            return Err(Error::InvalidArgument(
+                "`--all` cannot be combined with positional package names (including via `--`)."
+                    .into(),
+            ));
+        }
+
         let bin_name: String;
         let mut args: Vec<String> = Vec::new();
 
@@ -95,6 +108,7 @@ impl PackageManager {
                              `vp pm approve-builds <pkg> [<pkg>...]` or `vp pm approve-builds --all`.",
                         );
                     }
+                    warn_dropped_pass_through(options.pass_through_args);
                     return Ok(None);
                 }
 
@@ -112,6 +126,7 @@ impl PackageManager {
                      `ignore-scripts=true` in .npmrc and rebuild approved packages with \
                      `vp pm rebuild <package>`.",
                 );
+                warn_dropped_pass_through(options.pass_through_args);
                 return Ok(None);
             }
             PackageManagerType::Yarn => {
@@ -128,6 +143,7 @@ impl PackageManager {
                          package, set `dependenciesMeta[\"<package>\"].built: true` in package.json.",
                     );
                 }
+                warn_dropped_pass_through(options.pass_through_args);
                 return Ok(None);
             }
         }
@@ -158,6 +174,22 @@ fn pnpm_supports_deny_syntax(version: &str) -> bool {
     // Compare against `11.0.0-0` so prereleases of v11 also satisfy.
     let floor = Version::parse("11.0.0-0").expect("static semver");
     Version::parse(version).is_ok_and(|v| v >= floor)
+}
+
+fn is_positional_arg(token: &String) -> bool {
+    !token.starts_with('-')
+}
+
+fn warn_dropped_pass_through(extras: Option<&[String]>) {
+    if let Some(extras) = extras
+        && !extras.is_empty()
+    {
+        output::warn(&format!(
+            "Ignoring pass-through args ({}): this package manager has no \
+             native approve-builds command to forward them to.",
+            extras.join(" ")
+        ));
+    }
 }
 
 #[cfg(test)]
@@ -500,5 +532,81 @@ mod tests {
             })
             .expect("resolves");
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn yarn1_prerelease_still_v1() {
+        // A yarn 1.x prerelease (e.g. "1.22.22-canary") must still take the v1
+        // branch, not the Berry branch. Guards against a future refactor that
+        // strips prereleases via Version::parse + major-check.
+        let pm = create_mock_package_manager(PackageManagerType::Yarn, "1.22.22-canary");
+        let result = pm
+            .resolve_approve_builds_command(&ApproveBuildsCommandOptions::default())
+            .expect("resolves");
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn pnpm_deny_unparsable_version_rejects() {
+        // Strict gate: the deny-syntax helper rejects unparsable versions for
+        // the same reason as the `--all` gate (no semver, no support claim).
+        let pm = create_mock_package_manager(PackageManagerType::Pnpm, "latest");
+        let packages = vec!["!core-js".to_string()];
+        let err = pm
+            .resolve_approve_builds_command(&ApproveBuildsCommandOptions {
+                packages: &packages,
+                ..Default::default()
+            })
+            .expect_err("unparsable version should fail the deny gate");
+        assert!(matches!(err, Error::InvalidArgument(_)));
+    }
+
+    #[test]
+    fn all_rejects_pass_through_positional() {
+        // `--all` + a positional token slipped via `--` should be rejected
+        // up-front (clap's conflicts_with can't catch the bypass).
+        let pm = create_mock_package_manager(PackageManagerType::Pnpm, "10.32.0");
+        let extras = vec!["esbuild".to_string()];
+        let err = pm
+            .resolve_approve_builds_command(&ApproveBuildsCommandOptions {
+                all: true,
+                pass_through_args: Some(&extras),
+                ..Default::default()
+            })
+            .expect_err("--all + positional via -- should be rejected");
+        assert!(matches!(err, Error::InvalidArgument(_)));
+    }
+
+    #[test]
+    fn all_accepts_pass_through_flags() {
+        // `--all` + flag-only pass-through (`--silent`, `--loglevel=warn`) is
+        // legitimate — they're PM-level flags, not positionals.
+        let pm = create_mock_package_manager(PackageManagerType::Pnpm, "10.32.0");
+        let extras = vec!["--silent".to_string(), "--loglevel=warn".to_string()];
+        let result = pm
+            .resolve_approve_builds_command(&ApproveBuildsCommandOptions {
+                all: true,
+                pass_through_args: Some(&extras),
+                ..Default::default()
+            })
+            .expect("flag-only extras allowed with --all")
+            .expect("supported");
+        assert_eq!(result.args, vec!["approve-builds", "--all", "--silent", "--loglevel=warn"]);
+    }
+
+    #[test]
+    fn npm_warns_about_dropped_pass_through() {
+        // No-op paths should not silently swallow user-supplied pass-through
+        // args; they should at least surface a warning.
+        let pm = create_mock_package_manager(PackageManagerType::Npm, "11.0.0");
+        let extras = vec!["--silent".to_string()];
+        let result = pm
+            .resolve_approve_builds_command(&ApproveBuildsCommandOptions {
+                pass_through_args: Some(&extras),
+                ..Default::default()
+            })
+            .expect("resolves");
+        assert!(result.is_none()); // still a no-op
+        // Visual inspection of the warn text is captured in snap-tests.
     }
 }

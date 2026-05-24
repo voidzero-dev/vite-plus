@@ -1,8 +1,9 @@
 {
+  "ignoredPlatforms": ["win32"],
   "commands": [
     "vp pm approve-builds --help # should show help with --all caveat",
     "vp pm approve-builds # bun no-args: prints contextual note, exit 0",
     "vp pm approve-builds '!core-js' # deny-only: prints deny warn, no redundant note",
-    "vp pm approve-builds --all # forwards bun pm trust --all (nothing to trust in this empty project)"
+    "vp pm approve-builds --all # forwards bun pm trust --all (errors on empty project — no lockfile)"
   ]
 }

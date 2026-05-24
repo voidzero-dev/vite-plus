@@ -20,6 +20,6 @@ note: bun pm trust requires package names. Run `bun pm untrusted` to see which p
 > vp pm approve-builds '!core-js' # deny-only: prints deny warn, no redundant note
 warn: bun does not support denylisting build scripts. Packages outside `trustedDependencies` in package.json are already denied by default. Skipping: core-js
 
-[1]> vp pm approve-builds --all # forwards bun pm trust --all (nothing to trust in this empty project)
-bun pm trust v<semver> (af24e281)
+[1]> vp pm approve-builds --all # forwards bun pm trust --all (errors on empty project — no lockfile)
+bun pm trust v<semver> (<hash>)
 error: Lockfile not found

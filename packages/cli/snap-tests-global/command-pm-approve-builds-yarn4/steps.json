@@ -1,0 +1,8 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "commands": [
+    "vp pm approve-builds # yarn Berry warn — points at dependenciesMeta[\"<pkg>\"].built",
+    "vp pm approve-builds esbuild # same warn (no native command on yarn)",
+    "vp pm approve-builds esbuild -- --silent # extras trigger the dropped-pass-through warn"
+  ]
+}

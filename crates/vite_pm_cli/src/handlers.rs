@@ -179,7 +179,8 @@ pub async fn run_pm_subcommand(
 ) -> Result<ExitStatus, Error> {
     let needs_project = matches!(
         command,
-        PmCommands::Prune { .. }
+        PmCommands::ApproveBuilds { .. }
+            | PmCommands::Prune { .. }
             | PmCommands::Pack { .. }
             | PmCommands::List { .. }
             | PmCommands::Publish { .. }
