@@ -2,6 +2,7 @@
 
 use std::io;
 
+use vite_shared::{GitError, PackageJsonError};
 use vite_str::Str;
 
 /// Error type for the global CLI.
@@ -74,5 +75,24 @@ impl Error {
     /// (a friendly user-facing message, not a stack trace).
     pub fn is_user_message(&self) -> bool {
         matches!(self, Self::UserMessage(_) | Self::PmCli(vite_pm_cli::Error::UserMessage(_)))
+    }
+}
+
+impl From<GitError> for Error {
+    fn from(value: GitError) -> Self {
+        match value {
+            GitError::Io(err) => Self::CommandExecution(err),
+            GitError::Command(message) => Self::UserMessage(message.into()),
+        }
+    }
+}
+
+impl From<PackageJsonError> for Error {
+    fn from(value: PackageJsonError) -> Self {
+        match value {
+            PackageJsonError::Io(err) => Self::CommandExecution(err),
+            PackageJsonError::Json(err) => Self::JsonError(err),
+            PackageJsonError::Message(message) => Self::UserMessage(message.into()),
+        }
     }
 }

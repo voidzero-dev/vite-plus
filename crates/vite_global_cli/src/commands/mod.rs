@@ -18,6 +18,7 @@
 
 use std::{collections::HashMap, io::BufReader};
 
+use vite_install::package_manager::PackageManager;
 use vite_path::AbsolutePath;
 use vite_shared::{PrependOptions, prepend_to_path_env};
 
@@ -84,6 +85,19 @@ pub async fn prepend_js_runtime_to_path_env(project_path: &AbsolutePath) -> Resu
 
     Ok(())
 }
+
+/// Build a PackageManager, converting PackageJsonNotFound into a friendly error message.
+pub async fn build_package_manager(cwd: &AbsolutePath) -> Result<PackageManager, Error> {
+    match PackageManager::builder(cwd).build_with_default().await {
+        Ok(pm) => Ok(pm),
+        Err(vite_error::Error::WorkspaceError(vite_workspace::Error::PackageJsonNotFound(_))) => {
+            Err(Error::UserMessage("No package.json found.".into()))
+        }
+        Err(e) => Err(e.into()),
+    }
+}
+
+pub mod release;
 
 // Category B: JS Script Commands
 pub mod config;

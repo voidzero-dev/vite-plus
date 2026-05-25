@@ -11,12 +11,6 @@ pub enum Error {
     #[error(transparent)]
     Sqlite(#[from] rusqlite::Error),
 
-    #[error(transparent)]
-    BincodeEncode(#[from] bincode::error::EncodeError),
-
-    #[error(transparent)]
-    BincodeDecode(#[from] bincode::error::DecodeError),
-
     #[error("Unrecognized db version: {0}")]
     UnrecognizedDbVersion(u32),
 
@@ -58,9 +52,6 @@ pub enum Error {
 
     #[error(transparent)]
     IgnoreError(#[from] ignore::Error),
-
-    #[error(transparent)]
-    SerdeYml(#[from] serde_yml::Error),
 
     #[error(transparent)]
     WorkspaceError(#[from] vite_workspace::Error),
