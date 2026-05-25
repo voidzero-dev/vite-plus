@@ -36,7 +36,7 @@ Usage: vp add <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
 For more information, try '--help'.
 
 > vp add testnpm2 -D && cat package.json # should add package as dev dependencies
-bun add v<semver> (af24e281)
+bun add v<semver> (<hash>)
 
 installed testnpm2@<semver>
 
@@ -51,7 +51,7 @@ installed testnpm2@<semver>
 }
 
 > vp add testnpm2 test-vite-plus-install && cat package.json # should add packages to dependencies
-bun add v<semver> (af24e281)
+bun add v<semver> (<hash>)
 
 installed testnpm2@<semver>
 installed test-vite-plus-install@<semver>
@@ -70,7 +70,7 @@ installed test-vite-plus-install@<semver>
 }
 
 > vp install test-vite-plus-package@1.0.0 --save-peer && cat package.json # should install package alias for add
-bun add v<semver> (af24e281)
+bun add v<semver> (<hash>)
 
 installed test-vite-plus-package@<semver>
 
@@ -91,7 +91,7 @@ installed test-vite-plus-package@<semver>
 }
 
 > vp add test-vite-plus-package-optional -O && cat package.json # should add package as optional dependencies
-bun add v<semver> (af24e281)
+bun add v<semver> (<hash>)
 
 installed test-vite-plus-package-optional@<semver>
 

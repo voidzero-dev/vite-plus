@@ -1,4 +1,5 @@
 pub mod add;
+pub mod approve_builds;
 pub mod audit;
 pub mod cache;
 pub mod config;

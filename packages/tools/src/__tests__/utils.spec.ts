@@ -295,6 +295,52 @@ Progress: resolved 316, reused 316, downloaded 0, added 316, done
     const output = 'Migrate an existing project to Vite+';
     expect(replaceUnstableOutput(output)).toBe('Migrate an existing project to Vite+');
   });
+
+  test('replace bun build hash after the v<semver> banner', () => {
+    // bun prints lines like `bun pm trust v1.3.11 (af24e281)` where the
+    // parenthesized hex is a build-commit hash that drifts per release.
+    // After the leading semver is normalized to `v<semver>`, the trailing
+    // hash should also be normalized to `(<hash>)` so snaps stay stable.
+    const output = [
+      'bun pm trust v1.3.11 (af24e281)',
+      'bun add v1.3.11 (af24e281)',
+      'bun install v1.3.0 (deadbeef)',
+      'bun outdated v1.2.21 (0123abcd)',
+    ].join('\n');
+    expect(replaceUnstableOutput(output)).toBe(
+      [
+        'bun pm trust v<semver> (<hash>)',
+        'bun add v<semver> (<hash>)',
+        'bun install v<semver> (<hash>)',
+        'bun outdated v<semver> (<hash>)',
+      ].join('\n'),
+    );
+  });
+
+  test('only redact hash that follows the v<semver> placeholder', () => {
+    // The redaction is intentionally anchored to the `v<semver>` placeholder
+    // produced by the prior semver normalization step. Unrelated parenthesized
+    // hex (e.g. SHA fragments in log lines) must not be touched.
+    const output = [
+      'commit (af24e281) was deployed',
+      'changeset id: (cafebabe)',
+      'foo v1.0.0 (notahex!)',
+    ].join('\n');
+    expect(replaceUnstableOutput(output)).toBe(
+      [
+        'commit (af24e281) was deployed',
+        'changeset id: (cafebabe)',
+        'foo v<semver> (notahex!)',
+      ].join('\n'),
+    );
+  });
+
+  test('do not redact uppercase hex (bun emits lowercase)', () => {
+    // Bun's build hashes are lowercase. The regex is case-sensitive to avoid
+    // accidentally redacting unrelated uppercase parenthesized text.
+    const output = 'bun pm trust v1.3.11 (AF24E281)';
+    expect(replaceUnstableOutput(output)).toBe('bun pm trust v<semver> (AF24E281)');
+  });
 });
 
 describe('isPassThroughEnv()', () => {
