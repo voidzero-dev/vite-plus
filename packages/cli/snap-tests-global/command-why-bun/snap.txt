@@ -27,7 +27,7 @@ Documentation: https://viteplus.dev/guide/install
 
 
 > vp install # should install packages first
-bun install v<semver> (af24e281)
+bun install v<semver> (<hash>)
 
 + test-vite-plus-package@<semver>
 + test-vite-plus-package-optional@<semver>

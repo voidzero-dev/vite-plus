@@ -8,6 +8,7 @@ use vite_install::{
     PackageManager,
     commands::{
         add::AddCommandOptions,
+        approve_builds::ApproveBuildsCommandOptions,
         audit::AuditCommandOptions,
         cache::CacheCommandOptions,
         config::ConfigCommandOptions,
@@ -178,7 +179,8 @@ pub async fn run_pm_subcommand(
 ) -> Result<ExitStatus, Error> {
     let needs_project = matches!(
         command,
-        PmCommands::Prune { .. }
+        PmCommands::ApproveBuilds { .. }
+            | PmCommands::Prune { .. }
             | PmCommands::Pack { .. }
             | PmCommands::List { .. }
             | PmCommands::Publish { .. }
@@ -194,6 +196,21 @@ pub async fn run_pm_subcommand(
     };
 
     match command {
+        PmCommands::ApproveBuilds { packages, all, pass_through_args } => {
+            let options = ApproveBuildsCommandOptions {
+                packages: &packages,
+                all,
+                pass_through_args: pass_through_args.as_deref(),
+            };
+            // Map `Error::InvalidArgument` from the resolver to `UserMessage`
+            // so the version-gate failure renders without the harsh `error:` prefix.
+            match pm.run_approve_builds_command(&options, cwd).await {
+                Ok(status) => Ok(status),
+                Err(vite_error::Error::InvalidArgument(msg)) => Err(Error::UserMessage(msg)),
+                Err(other) => Err(Error::Install(other)),
+            }
+        }
+
         PmCommands::Prune { prod, no_optional, pass_through_args } => {
             let options = PruneCommandOptions {
                 prod,

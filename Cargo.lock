@@ -7571,6 +7571,7 @@ dependencies = [
  "hex",
  "httpmock",
  "indoc",
+ "node-semver",
  "pathdiff",
  "reqwest",
  "semver 1.0.27",
