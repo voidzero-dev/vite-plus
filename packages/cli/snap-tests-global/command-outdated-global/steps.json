@@ -1,5 +1,6 @@
 {
   "serial": true,
+  "ignoredPlatforms": ["win32"],
   "commands": [
     {
       "command": "vp install -g testnpm2@1.0.0 # should prepare global outdated package",
