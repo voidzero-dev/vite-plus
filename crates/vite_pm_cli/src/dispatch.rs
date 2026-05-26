@@ -169,6 +169,8 @@ pub async fn dispatch(
             latest,
             global: _,
             concurrency: _,
+            reinstall_node_mismatch: _,
+            ignore_node_mismatch: _,
             recursive,
             filter,
             workspace_root,
