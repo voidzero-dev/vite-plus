@@ -8,11 +8,6 @@ export interface MigrationReport {
   rewrittenImportFileCount: number;
   rewrittenImportErrors: Array<{ path: string; message: string }>;
   eslintMigrated: boolean;
-  /** True when the original ESLint config used type-aware rules
-   * (typescript-eslint with parserOptions.project / projectService, or
-   * the `recommendedTypeChecked` config). Used to preserve type-aware
-   * coverage when emitting the Oxlint config. */
-  hadTypeAwareEslint: boolean;
   prettierMigrated: boolean;
   nodeVersionFileMigrated: boolean;
   gitHooksConfigured: boolean;
@@ -32,7 +27,6 @@ export function createMigrationReport(): MigrationReport {
     rewrittenImportFileCount: 0,
     rewrittenImportErrors: [],
     eslintMigrated: false,
-    hadTypeAwareEslint: false,
     prettierMigrated: false,
     nodeVersionFileMigrated: false,
     gitHooksConfigured: false,

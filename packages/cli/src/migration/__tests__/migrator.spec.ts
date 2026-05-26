@@ -28,7 +28,6 @@ const {
   addFrameworkShim,
   injectCreateDefaultTemplate,
   rewriteEslintPackageJson,
-  hasTypeAwareEslintConfig,
 } = await import('../migrator.js');
 
 describe('rewritePackageJson', () => {
@@ -417,78 +416,6 @@ describe('rewriteEslintPackageJson', () => {
     rewriteEslintPackageJson(pkgPath);
     const after = fs.readFileSync(pkgPath, 'utf8');
     expect(after).toBe(before);
-  });
-});
-
-describe('hasTypeAwareEslintConfig', () => {
-  let tmpDir: string;
-
-  beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-type-aware-'));
-  });
-
-  afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
-
-  it('detects flat config using tseslint.configs.recommendedTypeChecked', () => {
-    const file = 'eslint.config.js';
-    fs.writeFileSync(
-      path.join(tmpDir, file),
-      `import tseslint from 'typescript-eslint';\nexport default tseslint.config(tseslint.configs.recommendedTypeChecked);\n`,
-    );
-    expect(hasTypeAwareEslintConfig(tmpDir, file)).toBe(true);
-  });
-
-  it('detects flat config using strictTypeChecked', () => {
-    const file = 'eslint.config.ts';
-    fs.writeFileSync(
-      path.join(tmpDir, file),
-      `export default [tseslint.configs.strictTypeChecked];\n`,
-    );
-    expect(hasTypeAwareEslintConfig(tmpDir, file)).toBe(true);
-  });
-
-  it('detects parserOptions.projectService', () => {
-    const file = 'eslint.config.js';
-    fs.writeFileSync(
-      path.join(tmpDir, file),
-      `export default [{ languageOptions: { parserOptions: { projectService: true } } }];\n`,
-    );
-    expect(hasTypeAwareEslintConfig(tmpDir, file)).toBe(true);
-  });
-
-  it('detects legacy .eslintrc.json with parserOptions.project', () => {
-    const file = '.eslintrc.json';
-    fs.writeFileSync(
-      path.join(tmpDir, file),
-      JSON.stringify({ parserOptions: { project: './tsconfig.json' } }),
-    );
-    expect(hasTypeAwareEslintConfig(tmpDir, undefined, file)).toBe(true);
-  });
-
-  it('detects eslintConfig in package.json', () => {
-    fs.writeFileSync(
-      path.join(tmpDir, 'package.json'),
-      JSON.stringify({
-        name: 't',
-        eslintConfig: { parserOptions: { project: './tsconfig.json' } },
-      }),
-    );
-    expect(hasTypeAwareEslintConfig(tmpDir)).toBe(true);
-  });
-
-  it('returns false when no type-aware indicators are present', () => {
-    const file = 'eslint.config.js';
-    fs.writeFileSync(
-      path.join(tmpDir, file),
-      `export default [{ rules: { 'no-unused-vars': 'error' } }];\n`,
-    );
-    expect(hasTypeAwareEslintConfig(tmpDir, file)).toBe(false);
-  });
-
-  it('returns false when neither config file nor package.json exists', () => {
-    expect(hasTypeAwareEslintConfig(tmpDir)).toBe(false);
   });
 });
 

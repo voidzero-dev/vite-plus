@@ -198,75 +198,6 @@ export function detectEslintProject(
 }
 
 /**
- * Heuristic check for type-aware ESLint usage. Looks at flat / legacy /
- * package.json#eslintConfig sources for either the typescript-eslint
- * preset names (`recommendedTypeChecked` etc.) or the
- * `parserOptions.project` / `projectService` keys that switch on
- * type-aware linting.
- *
- * Used to record `report.hadTypeAwareEslint` so the user knows the
- * Oxlint config preserves their prior type-aware coverage.
- */
-export function hasTypeAwareEslintConfig(
-  projectPath: string,
-  configFile?: string,
-  legacyConfigFile?: string,
-): boolean {
-  const candidates: string[] = [];
-  if (configFile) {
-    candidates.push(path.join(projectPath, configFile));
-  }
-  if (legacyConfigFile) {
-    candidates.push(path.join(projectPath, legacyConfigFile));
-  }
-  const packageJsonPath = path.join(projectPath, 'package.json');
-  if (fs.existsSync(packageJsonPath)) {
-    try {
-      const pkg = readJsonFile(packageJsonPath) as { eslintConfig?: unknown };
-      if (pkg.eslintConfig) {
-        if (containsTypeAwareIndicator(JSON.stringify(pkg.eslintConfig))) {
-          return true;
-        }
-      }
-    } catch {
-      // ignore
-    }
-  }
-  for (const filePath of candidates) {
-    let content: string;
-    try {
-      content = fs.readFileSync(filePath, 'utf8');
-    } catch {
-      continue;
-    }
-    if (containsTypeAwareIndicator(content)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-function containsTypeAwareIndicator(text: string): boolean {
-  // typescript-eslint preset names that enable type-aware rules.
-  if (/recommendedTypeChecked|strictTypeChecked|stylisticTypeChecked/.test(text)) {
-    return true;
-  }
-  // New parserOptions.projectService API (typescript-eslint v8+).
-  if (/projectService/.test(text)) {
-    return true;
-  }
-  // Classic parserOptions.project pattern, both JSON and JS literal forms.
-  // We require both keys to be present and reasonably close together to
-  // avoid false positives from comments or unrelated keys. The `["']?`
-  // after `project` lets the regex match the JSON form `"project":` as
-  // well as the JS literal form `project:`.
-  if (/parserOptions[\s\S]{0,400}?\bproject["']?\s*:/.test(text)) {
-    return true;
-  }
-  return false;
-}
-
-/**
  * Run a `vp dlx @oxlint/migrate` step with graceful error handling.
  * Returns true on success, false on failure (spawn error or non-zero exit).
  */
@@ -324,16 +255,6 @@ export async function migrateEslintToOxlint(
         isCancelled: false,
       }
     : getSpinner(interactive);
-
-  // Record type-aware usage BEFORE we delete the config files, so we can
-  // preserve type-aware coverage in the resulting Oxlint config and tell
-  // the user we did so.
-  if (options?.report) {
-    const legacyConfigs = detectConfigs(projectPath);
-    if (hasTypeAwareEslintConfig(projectPath, eslintConfigFile, legacyConfigs.eslintLegacyConfig)) {
-      options.report.hadTypeAwareEslint = true;
-    }
-  }
 
   // Steps 1-2: Only run @oxlint/migrate if there's an eslint config at root
   if (eslintConfigFile) {
