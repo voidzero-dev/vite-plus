@@ -106,11 +106,10 @@ pub async fn install(
     for package_spec in package_specs {
         // Parse package spec (e.g., "typescript", "typescript@5.0.0", "@scope/pkg")
 
-        let (package_name, _version_spec) =
-            match parse_package_spec(package_spec, Some(&npm_path), Some(&node_bin_dir)).await {
-                Ok(result) => result,
-                Err(error) => return Err((Some(package_spec.clone()), error)),
-            };
+        let (package_name, _version_spec) = match parse_package_spec(package_spec) {
+            Ok(result) => result,
+            Err(error) => return Err((Some(package_spec.clone()), error)),
+        };
         packages.insert(package_name, Package { spec: package_spec, staging_dir: None });
     }
     let packages_count = packages.len();
@@ -411,7 +410,7 @@ pub async fn uninstall(package_name: &str, dry_run: bool) -> Result<(), Error> {
         ));
     }
 
-    let (package_name, _) = parse_package_spec(package_name, None, None).await.unwrap();
+    let (package_name, _) = parse_package_spec(package_name).unwrap();
 
     // Phase 1: Try to use PackageMetadata for binary list
     let bins = if let Some(metadata) = PackageMetadata::load(&package_name).await? {
@@ -895,30 +894,30 @@ mod tests {
         assert!(!is_local_package_spec("@scope/pkg@1.0.0"));
     }
 
-    #[tokio::test]
-    async fn test_parse_package_spec_simple() {
-        let (name, version) = parse_package_spec("typescript", None, None).await.unwrap();
+    #[test]
+    fn test_parse_package_spec_simple() {
+        let (name, version) = parse_package_spec("typescript").unwrap();
         assert_eq!(name, "typescript");
         assert_eq!(version, None);
     }
 
-    #[tokio::test]
-    async fn test_parse_package_spec_with_version() {
-        let (name, version) = parse_package_spec("typescript@5.0.0", None, None).await.unwrap();
+    #[test]
+    fn test_parse_package_spec_with_version() {
+        let (name, version) = parse_package_spec("typescript@5.0.0").unwrap();
         assert_eq!(name, "typescript");
         assert_eq!(version, Some("5.0.0".to_string()));
     }
 
-    #[tokio::test]
-    async fn test_parse_package_spec_scoped() {
-        let (name, version) = parse_package_spec("@types/node", None, None).await.unwrap();
+    #[test]
+    fn test_parse_package_spec_scoped() {
+        let (name, version) = parse_package_spec("@types/node").unwrap();
         assert_eq!(name, "@types/node");
         assert_eq!(version, None);
     }
 
-    #[tokio::test]
-    async fn test_parse_package_spec_scoped_with_version() {
-        let (name, version) = parse_package_spec("@types/node@20.0.0", None, None).await.unwrap();
+    #[test]
+    fn test_parse_package_spec_scoped_with_version() {
+        let (name, version) = parse_package_spec("@types/node@20.0.0").unwrap();
         assert_eq!(name, "@types/node");
         assert_eq!(version, Some("20.0.0".to_string()));
     }
