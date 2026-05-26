@@ -6,15 +6,27 @@
     "lint": "eslint ."
   },
   "devDependencies": {
+    "@angular-eslint/template-parser": "^18.0.0",
+    "@eslint-community/eslint-utils": "^4.0.0",
+    "@eslint/js": "^9.0.0",
+    "@nuxt/eslint": "^0.5.0",
+    "@nuxt/kit": "^3.13.0",
+    "@types/eslint": "^9.0.0",
+    "@types/node": "^22.0.0",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
+    "@typescript-eslint/utils": "^8.0.0",
     "@vitejs/plugin-vue": "^6.0.0",
     "@vue/eslint-config-typescript": "^14.0.0",
     "eslint": "^9.0.0",
     "eslint-config-airbnb": "^19.0.0",
+    "eslint-formatter-pretty": "^6.0.0",
     "eslint-plugin-vue": "^10.0.0",
     "typescript-eslint": "^8.0.0",
     "vite": "^7.0.0",
     "vue": "^3.5.0"
+  },
+  "peerDependencies": {
+    "eslint": ">=9"
   }
 }

@@ -309,13 +309,16 @@ export async function migrateEslintToOxlint(
   // Step 3: Delete all eslint config files at root
   deleteEslintConfigFiles(projectPath, options?.report, options?.silent);
 
-  // Step 4: Remove eslint dependency and rewrite eslint scripts (root only)
-  rewriteEslintPackageJson(path.join(projectPath, 'package.json'));
+  // Step 4: Remove eslint and all ESLint-ecosystem dependencies at the root,
+  // and rewrite eslint scripts.
+  rewriteEslintPackageJson(path.join(projectPath, 'package.json'), 'root');
 
-  // Step 4b: Rewrite eslint scripts in workspace packages
+  // Step 4b: Workspace packages get a conservative cleanup — only `eslint`
+  // itself is removed; plugins and configs they declare may be part of a
+  // shared lint-preset API consumed outside Vite+, so we leave them alone.
   if (packages) {
     for (const pkg of packages) {
-      rewriteEslintPackageJson(path.join(projectPath, pkg.path, 'package.json'));
+      rewriteEslintPackageJson(path.join(projectPath, pkg.path, 'package.json'), 'workspace');
     }
   }
 
@@ -343,51 +346,109 @@ function deleteEslintConfigFiles(basePath: string, report?: MigrationReport, sil
   }
 }
 
+// Bare names of packages whose sole purpose is to support ESLint. Removed
+// at root cleanup. Reusable AST libraries published under
+// `@typescript-eslint/*` (`utils`, `typescript-estree`, `scope-manager`,
+// `types`) are deliberately absent so codemods and doc generators that
+// import them directly keep working after migration.
+const ESLINT_ECOSYSTEM_NAMES = new Set<string>([
+  'eslint',
+  'typescript-eslint',
+  'eslintrc',
+  'eslint-utils',
+  'eslint-visitor-keys',
+  'eslint-scope',
+  'eslint-define-config',
+  'eslint-doc-generator',
+  // ESLint-only typescript-eslint entry points:
+  '@typescript-eslint/eslint-plugin',
+  '@typescript-eslint/parser',
+  '@typescript-eslint/rule-tester',
+  // Framework runtime modules that wire ESLint and break without it:
+  '@nuxt/eslint',
+]);
+
+// Flat name prefixes that mark an ESLint-only package.
+const ESLINT_ECOSYSTEM_PREFIXES = ['eslint-plugin-', 'eslint-config-', 'eslint-formatter-'];
+
+// Scopes whose every package is part of the ESLint ecosystem.
+//   @eslint/*           — official ESLint scope (e.g. @eslint/js, @eslint/eslintrc)
+//   @eslint-community/* — community-maintained ESLint dependencies
+//   @angular-eslint/*   — Angular's ESLint integration family
+const ESLINT_ECOSYSTEM_SCOPES = ['@eslint/', '@eslint-community/', '@angular-eslint/'];
+
 /**
  * Decide whether a dependency entry should be removed alongside `eslint`
- * itself. The set is conservative: only packages whose sole purpose is to
- * configure or extend ESLint. Anything else is preserved.
+ * itself. The set is intentionally broad: anything whose only purpose is
+ * to extend, configure, format, or wire ESLint becomes dead weight after
+ * migration. `@types/<X>` packages are checked symmetrically with `<X>`
+ * so type-only counterparts of removed runtime packages also go.
  */
 function isEslintEcosystemDep(name: string): boolean {
-  if (name === 'eslint') {
+  const stripped = name.startsWith('@types/') ? name.slice('@types/'.length) : name;
+  if (ESLINT_ECOSYSTEM_NAMES.has(stripped)) {
     return true;
   }
-  if (name.startsWith('eslint-plugin-') || name.startsWith('eslint-config-')) {
+  if (ESLINT_ECOSYSTEM_PREFIXES.some((p) => stripped.startsWith(p))) {
     return true;
   }
-  if (name === 'typescript-eslint') {
+  if (ESLINT_ECOSYSTEM_SCOPES.some((s) => stripped.startsWith(s))) {
     return true;
   }
-  if (name.startsWith('@typescript-eslint/')) {
-    return true;
-  }
-  // Scoped plugins/configs, e.g. `@vue/eslint-config-typescript`,
-  // `@nuxt/eslint-config`, `@stylistic/eslint-plugin`. These are all
-  // ESLint-only and have no other consumers.
-  if (/^@[^/]+\/eslint-(plugin|config)(-.+)?$/.test(name)) {
+  // Scoped plugins/configs/formatters, e.g.:
+  //   @vue/eslint-config-typescript
+  //   @stylistic/eslint-plugin-ts
+  //   @vitest/eslint-plugin
+  if (/^@[^/]+\/eslint-(plugin|config|formatter)(-.+)?$/.test(stripped)) {
     return true;
   }
   return false;
 }
 
-export function rewriteEslintPackageJson(packageJsonPath: string): void {
+/**
+ * Rewrite a project's `package.json` after ESLint has been migrated to
+ * Oxlint. Root cleanup is aggressive — every ESLint-ecosystem dependency
+ * is removed (see `isEslintEcosystemDep`). Workspace cleanup is
+ * conservative — only `eslint` itself is removed, because workspace
+ * sub-packages may intentionally publish ESLint plugins / configs as
+ * part of a shared lint-preset API consumed outside Vite+.
+ */
+export function rewriteEslintPackageJson(
+  packageJsonPath: string,
+  mode: 'root' | 'workspace' = 'root',
+): void {
   editJsonFile<{
     devDependencies?: Record<string, string>;
     dependencies?: Record<string, string>;
+    peerDependencies?: Record<string, string>;
+    optionalDependencies?: Record<string, string>;
     scripts?: Record<string, string>;
     'lint-staged'?: Record<string, string | string[]>;
   }>(packageJsonPath, (pkg) => {
     let changed = false;
-    for (const field of ['devDependencies', 'dependencies'] as const) {
+    const isRemovable = mode === 'root' ? isEslintEcosystemDep : (n: string) => n === 'eslint';
+    for (const field of [
+      'devDependencies',
+      'dependencies',
+      'peerDependencies',
+      'optionalDependencies',
+    ] as const) {
       const deps = pkg[field];
       if (!deps) {
         continue;
       }
+      let removedAny = false;
       for (const name of Object.keys(deps)) {
-        if (isEslintEcosystemDep(name)) {
+        if (isRemovable(name)) {
           delete deps[name];
           changed = true;
+          removedAny = true;
         }
+      }
+      // Drop the field entirely if our cleanup emptied it — avoid
+      // leaving `"devDependencies": {}` noise in the output.
+      if (removedAny && Object.keys(deps).length === 0) {
+        delete pkg[field];
       }
     }
     if (pkg.scripts) {

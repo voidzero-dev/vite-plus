@@ -384,14 +384,128 @@ describe('rewriteEslintPackageJson', () => {
     expect(pkg.devDependencies).toEqual({ keepme: '^1.0.0' });
   });
 
-  it('preserves unrelated dependencies (e.g. @vitejs/plugin-vue, vue, vite)', () => {
+  it('removes @eslint/*, @eslint-community/*, and @angular-eslint/* scope packages', () => {
+    const pkgPath = writePkg({
+      devDependencies: {
+        eslint: '^9.0.0',
+        '@eslint/js': '^9.0.0',
+        '@eslint/eslintrc': '^3.0.0',
+        '@eslint/compat': '^1.0.0',
+        '@eslint-community/eslint-utils': '^4.0.0',
+        '@eslint-community/regexpp': '^4.0.0',
+        '@angular-eslint/template-parser': '^18.0.0',
+        '@angular-eslint/builder': '^18.0.0',
+        keepme: '^1.0.0',
+      },
+    });
+    rewriteEslintPackageJson(pkgPath);
+    const pkg = readJson(pkgPath);
+    expect(pkg.devDependencies).toEqual({ keepme: '^1.0.0' });
+  });
+
+  it('removes ESLint formatter, helper, and runtime-integration packages', () => {
+    const pkgPath = writePkg({
+      devDependencies: {
+        eslint: '^9.0.0',
+        'eslint-formatter-pretty': '^6.0.0',
+        'eslint-formatter-gitlab': '^5.0.0',
+        eslintrc: '^2.0.0',
+        'eslint-utils': '^3.0.0',
+        'eslint-visitor-keys': '^4.0.0',
+        'eslint-scope': '^8.0.0',
+        'eslint-define-config': '^2.0.0',
+        'eslint-doc-generator': '^2.0.0',
+        '@nuxt/eslint': '^0.5.0',
+        keepme: '^1.0.0',
+      },
+    });
+    rewriteEslintPackageJson(pkgPath);
+    const pkg = readJson(pkgPath);
+    expect(pkg.devDependencies).toEqual({ keepme: '^1.0.0' });
+  });
+
+  it('preserves reusable @typescript-eslint/* AST libraries (utils, typescript-estree, etc.)', () => {
+    const pkgPath = writePkg({
+      devDependencies: {
+        eslint: '^9.0.0',
+        '@typescript-eslint/parser': '^8.0.0',
+        '@typescript-eslint/eslint-plugin': '^8.0.0',
+        '@typescript-eslint/rule-tester': '^8.0.0',
+        '@typescript-eslint/utils': '^8.0.0',
+        '@typescript-eslint/typescript-estree': '^8.0.0',
+        '@typescript-eslint/scope-manager': '^8.0.0',
+        '@typescript-eslint/types': '^8.0.0',
+        vite: '^7.0.0',
+      },
+    });
+    rewriteEslintPackageJson(pkgPath);
+    const pkg = readJson(pkgPath);
+    expect(pkg.devDependencies).toEqual({
+      '@typescript-eslint/utils': '^8.0.0',
+      '@typescript-eslint/typescript-estree': '^8.0.0',
+      '@typescript-eslint/scope-manager': '^8.0.0',
+      '@typescript-eslint/types': '^8.0.0',
+      vite: '^7.0.0',
+    });
+  });
+
+  it('removes @types/<X> packages symmetrically with their runtime counterparts', () => {
+    const pkgPath = writePkg({
+      devDependencies: {
+        eslint: '^9.0.0',
+        '@types/eslint': '^9.0.0',
+        '@types/eslint-plugin-foo': '^1.0.0',
+        '@types/eslint-config-bar': '^1.0.0',
+        // Type-only counterpart of an ESLint plugin should also go.
+        '@types/eslint-scope': '^3.0.0',
+        // Unrelated @types should stay.
+        '@types/node': '^22.0.0',
+      },
+    });
+    rewriteEslintPackageJson(pkgPath);
+    const pkg = readJson(pkgPath);
+    expect(pkg.devDependencies).toEqual({ '@types/node': '^22.0.0' });
+  });
+
+  it('scrubs peerDependencies and optionalDependencies', () => {
+    const pkgPath = writePkg({
+      peerDependencies: {
+        eslint: '>=9',
+        'eslint-plugin-vue': '^10.0.0',
+      },
+      optionalDependencies: {
+        '@typescript-eslint/parser': '^8.0.0',
+      },
+      devDependencies: { vite: '^7.0.0' },
+    });
+    rewriteEslintPackageJson(pkgPath);
+    const pkg = readJson(pkgPath);
+    expect(pkg.peerDependencies).toBeUndefined();
+    expect(pkg.optionalDependencies).toBeUndefined();
+    expect(pkg.devDependencies).toEqual({ vite: '^7.0.0' });
+  });
+
+  it('deletes the dependency field entirely when our cleanup emptied it', () => {
+    const pkgPath = writePkg({
+      devDependencies: {
+        eslint: '^9.0.0',
+        'eslint-plugin-import': '^2.0.0',
+      },
+      dependencies: { 'eslint-config-airbnb': '^19.0.0' },
+    });
+    rewriteEslintPackageJson(pkgPath);
+    const pkg = readJson(pkgPath);
+    expect(pkg.devDependencies).toBeUndefined();
+    expect(pkg.dependencies).toBeUndefined();
+  });
+
+  it('preserves unrelated dependencies (e.g. @vitejs/plugin-vue, vue, vite, @nuxt/kit)', () => {
     const pkgPath = writePkg({
       devDependencies: {
         eslint: '^9.0.0',
         '@vitejs/plugin-vue': '^6.0.0',
         '@vue/runtime-core': '^3.5.0',
         '@nuxt/kit': '^3.13.0',
-        '@nuxt/eslint': '^0.5.0',
         vite: '^7.0.0',
       },
     });
@@ -401,9 +515,28 @@ describe('rewriteEslintPackageJson', () => {
       '@vitejs/plugin-vue': '^6.0.0',
       '@vue/runtime-core': '^3.5.0',
       '@nuxt/kit': '^3.13.0',
-      // `@nuxt/eslint` is the runtime package, not a config — preserved.
-      // (Only `@nuxt/eslint-config` matches the scoped-config pattern.)
-      '@nuxt/eslint': '^0.5.0',
+      vite: '^7.0.0',
+    });
+  });
+
+  it('workspace mode removes only `eslint` itself, not plugins or configs', () => {
+    const pkgPath = writePkg({
+      devDependencies: {
+        eslint: '^9.0.0',
+        'eslint-plugin-import': '^2.0.0',
+        'eslint-config-airbnb': '^19.0.0',
+        '@typescript-eslint/parser': '^8.0.0',
+        vite: '^7.0.0',
+      },
+    });
+    rewriteEslintPackageJson(pkgPath, 'workspace');
+    const pkg = readJson(pkgPath);
+    // Plugins/configs that the workspace package may publish as a shared
+    // lint-preset API are preserved; only `eslint` itself goes.
+    expect(pkg.devDependencies).toEqual({
+      'eslint-plugin-import': '^2.0.0',
+      'eslint-config-airbnb': '^19.0.0',
+      '@typescript-eslint/parser': '^8.0.0',
       vite: '^7.0.0',
     });
   });

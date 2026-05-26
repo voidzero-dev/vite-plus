@@ -1,7 +1,7 @@
 {
   "commands": [
-    "vp migrate --no-interactive # migration should remove ESLint and its plugins/configs",
-    "cat package.json # check eslint, eslint-plugin-*, eslint-config-*, typescript-eslint and @typescript-eslint/* are removed",
+    "vp migrate --no-interactive # migration should remove ESLint, plugins, configs, scopes, formatters, and peer eslint",
+    "cat package.json # verify the comprehensive ESLint ecosystem cleanup",
     "test ! -f eslint.config.mjs # check eslint config is removed"
   ]
 }

@@ -5,6 +5,5 @@
     "moduleResolution": "Bundler",
     "strict": true,
     "skipLibCheck": true
-  },
-  "include": ["src/**/*"]
+  }
 }
