@@ -105,7 +105,11 @@ pub async fn install(
     let mut packages = IndexMap::<String, Package>::new();
     for package_spec in package_specs {
         // Parse package spec (e.g., "typescript", "typescript@5.0.0", "@scope/pkg")
-        let (package_name, _version_spec) = parse_package_spec(package_spec);
+
+        let (package_name, _version_spec) = match parse_package_spec(package_spec) {
+            Ok(result) => result,
+            Err(error) => return Err((Some(package_spec.clone()), error)),
+        };
         packages.insert(package_name, Package { spec: package_spec, staging_dir: None });
     }
     let packages_count = packages.len();
@@ -395,7 +399,7 @@ async fn install_one(
 /// 1. Try to use PackageMetadata for binary list
 /// 2. Fallback to scanning BinConfig files for orphaned binaries
 pub async fn uninstall(package_name: &str, dry_run: bool) -> Result<(), Error> {
-    let (package_name, _) = parse_package_spec(package_name);
+    let (package_name, _) = parse_package_spec(package_name)?;
 
     // Phase 1: Try to use PackageMetadata for binary list
     let bins = if let Some(metadata) = PackageMetadata::load(&package_name).await? {
@@ -881,28 +885,35 @@ mod tests {
 
     #[test]
     fn test_parse_package_spec_simple() {
-        let (name, version) = parse_package_spec("typescript");
+        let (name, version) = parse_package_spec("typescript").unwrap();
         assert_eq!(name, "typescript");
         assert_eq!(version, None);
     }
 
     #[test]
     fn test_parse_package_spec_with_version() {
-        let (name, version) = parse_package_spec("typescript@5.0.0");
+        let (name, version) = parse_package_spec("typescript@5.0.0").unwrap();
         assert_eq!(name, "typescript");
         assert_eq!(version, Some("5.0.0".to_string()));
     }
 
     #[test]
     fn test_parse_package_spec_scoped() {
-        let (name, version) = parse_package_spec("@types/node");
+        let (name, version) = parse_package_spec("@types/node").unwrap();
         assert_eq!(name, "@types/node");
         assert_eq!(version, None);
     }
 
     #[test]
     fn test_parse_package_spec_scoped_with_version() {
-        let (name, version) = parse_package_spec("@types/node@20.0.0");
+        let (name, version) = parse_package_spec("@types/node@20.0.0").unwrap();
+        assert_eq!(name, "@types/node");
+        assert_eq!(version, Some("20.0.0".to_string()));
+    }
+
+    #[test]
+    fn test_parse_package_spec_local() {
+        let (name, version) = parse_package_spec("./packages/cli").unwrap();
         assert_eq!(name, "@types/node");
         assert_eq!(version, Some("20.0.0".to_string()));
     }

@@ -133,20 +133,63 @@ pub(crate) fn is_local_package_spec(spec: &str) -> bool {
 }
 
 /// Parse package spec into name and optional version.
-pub(crate) fn parse_package_spec(spec: &str) -> (String, Option<String>) {
-    if spec.starts_with('@') {
-        if let Some(idx) = spec[1..].find('@') {
-            let idx = idx + 1;
-            return (spec[..idx].to_string(), Some(spec[idx + 1..].to_string()));
+/// For local packages, it will read the package.json and return the real package name
+///
+/// It will never return an `Err()` if it is not a local package
+pub(crate) fn parse_package_spec(spec: &str) -> Result<(String, Option<String>), Error> {
+    if is_local_package_spec(spec) {
+        let path_spec = spec.strip_prefix("file:").unwrap_or(spec);
+        let path = std::path::Path::new(path_spec);
+        let package_dir = if path.is_absolute() {
+            AbsolutePathBuf::new(path.to_path_buf()).ok_or_else(|| {
+                Error::ConfigError(format!("Invalid local package path {spec}").into())
+            })?
+        } else {
+            current_dir()
+                .map_err(|error| {
+                    Error::ConfigError(format!("Cannot get current directory: {error}").into())
+                })?
+                .join(path)
+        };
+        let package_json_path = package_dir.join("package.json");
+        let package_json_content =
+            std::fs::read_to_string(package_json_path.as_path()).map_err(|error| {
+                Error::ConfigError(
+                    format!(
+                        "Failed to read package.json for local package {spec} at {}: {error}",
+                        package_json_path.as_path().display()
+                    )
+                    .into(),
+                )
+            })?;
+        let package_json: serde_json::Value =
+            serde_json::from_str(&package_json_content).map_err(Error::JsonError)?;
+        let Some(package_name) = package_json.get("name").and_then(|name| name.as_str()) else {
+            return Err(Error::ConfigError(
+                format!(
+                    "Local package {spec} must have a string name in {}",
+                    package_json_path.as_path().display()
+                )
+                .into(),
+            ));
+        };
+
+        Ok((package_name.to_string(), None))
+    } else {
+        if spec.starts_with('@') {
+            if let Some(idx) = spec[1..].find('@') {
+                let idx = idx + 1;
+                return Ok((spec[..idx].to_string(), Some(spec[idx + 1..].to_string())));
+            }
+            return Ok((spec.to_string(), None));
         }
-        return (spec.to_string(), None);
-    }
 
-    if let Some(idx) = spec.find('@') {
-        return (spec[..idx].to_string(), Some(spec[idx + 1..].to_string()));
-    }
+        if let Some(idx) = spec.find('@') {
+            return Ok((spec[..idx].to_string(), Some(spec[idx + 1..].to_string())));
+        }
 
-    (spec.to_string(), None)
+        Ok((spec.to_string(), None))
+    }
 }
 
 fn parse_npm_view_version(stdout: &[u8]) -> Result<String, Error> {
