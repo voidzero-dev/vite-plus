@@ -28,6 +28,7 @@ const {
   addFrameworkShim,
   injectCreateDefaultTemplate,
   rewriteEslintPackageJson,
+  detectIncompatibleEslintIntegration,
 } = await import('../migrator.js');
 
 describe('rewritePackageJson', () => {
@@ -549,6 +550,57 @@ describe('rewriteEslintPackageJson', () => {
     rewriteEslintPackageJson(pkgPath);
     const after = fs.readFileSync(pkgPath, 'utf8');
     expect(after).toBe(before);
+  });
+});
+
+function writePkgAt(dir: string, pkg: object): void {
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify(pkg));
+}
+
+describe('detectIncompatibleEslintIntegration', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-incompat-eslint-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('returns "@nuxt/eslint" when listed in devDependencies', () => {
+    writePkgAt(tmpDir, { devDependencies: { '@nuxt/eslint': '^1.0.0' } });
+    expect(detectIncompatibleEslintIntegration(tmpDir)).toBe('@nuxt/eslint');
+  });
+
+  it('returns "@nuxt/eslint" when listed in dependencies', () => {
+    writePkgAt(tmpDir, { dependencies: { '@nuxt/eslint': '^1.0.0' } });
+    expect(detectIncompatibleEslintIntegration(tmpDir)).toBe('@nuxt/eslint');
+  });
+
+  it('detects when @nuxt/eslint lives in a workspace package, not the root', () => {
+    writePkgAt(tmpDir, { name: 'root' });
+    writePkgAt(path.join(tmpDir, 'packages/app'), {
+      name: 'app',
+      devDependencies: { '@nuxt/eslint': '^1.0.0' },
+    });
+    expect(
+      detectIncompatibleEslintIntegration(tmpDir, [
+        { name: 'app', path: 'packages/app', isTemplatePackage: false },
+      ]),
+    ).toBe('@nuxt/eslint');
+  });
+
+  it('returns undefined when @nuxt/eslint is absent', () => {
+    writePkgAt(tmpDir, {
+      devDependencies: { eslint: '^9.0.0', '@nuxt/kit': '^3.0.0' },
+    });
+    expect(detectIncompatibleEslintIntegration(tmpDir)).toBeUndefined();
+  });
+
+  it('returns undefined when package.json is missing', () => {
+    expect(detectIncompatibleEslintIntegration(tmpDir)).toBeUndefined();
   });
 });
 

@@ -2958,6 +2958,59 @@ export function warnPackageLevelEslint() {
   );
 }
 
+// Framework-ESLint integration packages we can't migrate cleanly today.
+// When any of these is present, the ESLint migration is skipped entirely
+// — the user's ESLint setup stays intact and they get told how to proceed
+// manually.
+//
+// `@nuxt/eslint` is a Nuxt module that loads ESLint at runtime via the
+// dev server and writes a generated config to `.nuxt/eslint.config.mjs`,
+// which the user's `eslint.config.mjs` re-exports. Migrating it
+// produces a broken state: `vite.config.ts` references `@nuxt/eslint-plugin`
+// (no longer installed) and `nuxt.config.ts` still tries to load the
+// removed module. Track at https://github.com/voidzero-dev/vite-plus/issues
+// once an issue exists.
+const INCOMPATIBLE_ESLINT_INTEGRATIONS = ['@nuxt/eslint'] as const;
+
+/**
+ * Detect framework-ESLint integration packages whose ESLint migration is
+ * known to be incompatible. Returns the offending package name, or
+ * `undefined` if none is present.
+ */
+export function detectIncompatibleEslintIntegration(
+  projectPath: string,
+  packages?: WorkspacePackage[],
+): string | undefined {
+  const candidates = [projectPath, ...(packages ?? []).map((p) => path.join(projectPath, p.path))];
+  for (const candidate of candidates) {
+    const pkgJsonPath = path.join(candidate, 'package.json');
+    if (!fs.existsSync(pkgJsonPath)) {
+      continue;
+    }
+    let pkg: { devDependencies?: Record<string, string>; dependencies?: Record<string, string> };
+    try {
+      pkg = readJsonFile(pkgJsonPath) as typeof pkg;
+    } catch {
+      continue;
+    }
+    for (const name of INCOMPATIBLE_ESLINT_INTEGRATIONS) {
+      if (pkg.devDependencies?.[name] || pkg.dependencies?.[name]) {
+        return name;
+      }
+    }
+  }
+  return undefined;
+}
+
+export function warnIncompatibleEslintIntegration(name: string): void {
+  prompts.log.warn(
+    `${name} detected — automatic ESLint migration is skipped. ` +
+      `${name} wires ESLint into a framework-specific flow that Vite+ cannot migrate cleanly yet. ` +
+      'Your ESLint setup is preserved. ' +
+      `To migrate manually, remove ${name} from package.json and re-run \`vp migrate\`.`,
+  );
+}
+
 export function warnLegacyEslintConfig(legacyConfigFile: string) {
   prompts.log.warn(
     `Legacy ESLint configuration detected (${legacyConfigFile}). ` +
@@ -2990,6 +3043,11 @@ export async function promptEslintMigration(
   interactive: boolean,
   packages?: WorkspacePackage[],
 ): Promise<boolean> {
+  const incompatible = detectIncompatibleEslintIntegration(projectPath, packages);
+  if (incompatible) {
+    warnIncompatibleEslintIntegration(incompatible);
+    return false;
+  }
   const eslintProject = detectEslintProject(projectPath, packages);
   if (eslintProject.hasDependency && !eslintProject.configFile && eslintProject.legacyConfigFile) {
     warnLegacyEslintConfig(eslintProject.legacyConfigFile);
