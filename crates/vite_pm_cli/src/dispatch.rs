@@ -217,6 +217,7 @@ pub async fn dispatch(
             compatible,
             sort_by,
             global,
+            concurrency: _,
             pass_through_args,
         } => {
             let options = OutdatedCommandOptions {

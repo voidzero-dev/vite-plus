@@ -17,11 +17,13 @@ use super::{
     exec, is_core_shim_tool,
 };
 use crate::{
-    commands::env::{
-        bin_config::{BinConfig, BinSource},
-        config::{self, ShimMode},
-        global_install::CORE_SHIMS,
-        package_metadata::PackageMetadata,
+    commands::{
+        env::{
+            bin_config::{BinConfig, BinSource},
+            config::{self, ShimMode},
+            package_metadata::PackageMetadata,
+        },
+        global::CORE_SHIMS,
     },
     error::Error,
 };

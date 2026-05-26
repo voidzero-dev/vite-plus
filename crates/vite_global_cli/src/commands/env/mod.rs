@@ -9,13 +9,11 @@ mod current;
 mod default;
 mod doctor;
 mod exec;
-pub mod global_install;
 mod list;
 mod list_remote;
 mod off;
 mod on;
 pub mod package_metadata;
-pub mod packages;
 mod pin;
 mod setup;
 mod unpin;
@@ -24,6 +22,8 @@ mod which;
 
 use std::process::ExitStatus;
 
+#[cfg(windows)]
+pub(crate) use setup::{cleanup_legacy_windows_shim, get_trampoline_path, remove_or_rename_to_old};
 use vite_path::AbsolutePathBuf;
 
 use crate::{

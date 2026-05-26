@@ -361,6 +361,10 @@ pub enum PackageManagerCommand {
         #[arg(short = 'g', long)]
         global: bool,
 
+        /// Number of global package checks to run in parallel (only with -g)
+        #[arg(long, requires = "global", value_parser = parse_positive_usize)]
+        concurrency: Option<usize>,
+
         /// Additional arguments to pass through to the package manager
         #[arg(last = true, allow_hyphen_values = true)]
         pass_through_args: Option<Vec<String>>,
@@ -524,6 +528,7 @@ impl PackageManagerCommand {
             Self::Install { global, .. }
             | Self::Add { global, .. }
             | Self::Remove { global, .. }
+            | Self::Outdated { global, .. }
             | Self::Update { global, .. } => *global,
             Self::Pm(PmCommands::List { global, .. }) => *global,
             _ => false,

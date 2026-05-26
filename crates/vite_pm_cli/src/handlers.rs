@@ -96,11 +96,7 @@ pub async fn run_outdated(
     cwd: &AbsolutePath,
     options: &OutdatedCommandOptions<'_>,
 ) -> Result<ExitStatus, Error> {
-    let pm = if options.global {
-        default_npm_package_manager(cwd)
-    } else {
-        build_package_manager(cwd).await?
-    };
+    let pm = build_package_manager(cwd).await?;
     Ok(pm.run_outdated_command(options, cwd).await?)
 }
 
