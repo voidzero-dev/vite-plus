@@ -137,9 +137,9 @@
     "hash": "83f6c6a418ab9319e07d719d86d4fa952f99e266",
     "forceFreshMigration": true
   },
-  "zustand": {
-    "repository": "https://github.com/pmndrs/zustand.git",
+  "vite-plugin-vue": {
+    "repository": "https://github.com/vitejs/vite-plugin-vue.git",
     "branch": "main",
-    "hash": "d690ec29a923977d7a9091554445d1026dfe4611"
+    "hash": "5153e339c1ce78c76b2c5ee2fbba1eb1d86c9697"
   }
 }
