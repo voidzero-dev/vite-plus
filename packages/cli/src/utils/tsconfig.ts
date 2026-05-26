@@ -44,11 +44,15 @@ export function findTsconfigFiles(projectPath: string): string[] {
 }
 
 export function hasBaseUrlInTsconfig(projectPath: string): boolean {
-  return findTsconfigFiles(projectPath).some((filePath) => hasBaseUrlInTsconfigFile(filePath));
+  return findTsconfigFiles(projectPath).some((filePath) =>
+    hasBaseUrlInTsconfigFile(filePath),
+  );
 }
 
 export function findTsconfigFilesWithBaseUrl(projectPath: string): string[] {
-  return findTsconfigFiles(projectPath).filter((filePath) => hasBaseUrlInTsconfigFile(filePath));
+  return findTsconfigFiles(projectPath).filter((filePath) =>
+    hasBaseUrlInTsconfigFile(filePath),
+  );
 }
 
 export async function confirmBaseUrlFix(interactive: boolean): Promise<boolean> {
