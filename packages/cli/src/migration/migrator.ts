@@ -2099,17 +2099,24 @@ function mergeTsdownConfigFile(
 /**
  * Best-effort: derive the Oxlint rule-namespace a JS plugin package
  * contributes. Mirrors the conventions @oxlint/migrate uses when
- * translating ESLint configs:
+ * translating ESLint configs, and the conventions Oxlint-native plugin
+ * authors use (`oxlint-plugin-<name>` — see posva/pinia-colada in the
+ * wild):
  *   `eslint-plugin-unocss`         → `unocss`        (rules: `unocss/order`)
+ *   `oxlint-plugin-posva`          → `posva`         (rules: `posva/foo`)
  *   `@stylistic/eslint-plugin`     → `@stylistic`    (rules: `@stylistic/indent`)
  *   `@stylistic/eslint-plugin-ts`  → `@stylistic/ts` (rules: `@stylistic/ts/indent`)
+ *   `@scope/oxlint-plugin-x`       → `@scope/x`
  *   anything else                  → the package name verbatim
  */
 function deriveJsPluginNamespace(packageName: string): string {
-  if (packageName.startsWith('eslint-plugin-')) {
-    return packageName.slice('eslint-plugin-'.length);
+  for (const prefix of ['eslint-plugin-', 'oxlint-plugin-']) {
+    if (packageName.startsWith(prefix)) {
+      const suffix = packageName.slice(prefix.length);
+      return suffix || packageName;
+    }
   }
-  const scoped = packageName.match(/^(@[^/]+)\/eslint-plugin(?:-(.+))?$/);
+  const scoped = packageName.match(/^(@[^/]+)\/(?:eslint|oxlint)-plugin(?:-(.+))?$/);
   if (scoped) {
     return scoped[2] ? `${scoped[1]}/${scoped[2]}` : scoped[1];
   }
@@ -2156,22 +2163,6 @@ function collectInstalledPackageNames(
   return names;
 }
 
-/**
- * Sanitize the `.oxlintrc.json` produced by `@oxlint/migrate` before it
- * gets merged into `vite.config.ts`.
- *
- * `@oxlint/migrate` can emit references that won't resolve at lint time:
- *   - `lint.jsPlugins[]` entries naming packages the user never installed
- *     (e.g. translating `@unocss/eslint-config` into
- *     `eslint-plugin-unocss`).
- *   - `lint.plugins[]` entries naming plugins that aren't part of Oxlint's
- *     native set (e.g. `unocss`).
- *   - `lint.rules` entries under namespaces no plugin contributes.
- *
- * Without this, `vp lint` aborts with "Failed to load JS plugin" /
- * "Plugin not found" before running any rule. We strip those references
- * and warn the user, leaving a degraded-but-functional config.
- */
 /**
  * Test whether a rule key (e.g. `@stylistic/ts/indent`) belongs to any
  * namespace in `namespaces`. We can't just split on the first `/` —
@@ -2260,6 +2251,24 @@ function jsPluginsToNamespaces(entries: NonNullable<OxlintConfig['jsPlugins']>):
   return ns;
 }
 
+/**
+ * Sanitize the `.oxlintrc.json` produced by `@oxlint/migrate` (in-place)
+ * before it gets merged into `vite.config.ts`. Drop references that
+ * won't resolve at lint time and warn the user.
+ *
+ * Why: `@oxlint/migrate` can emit `jsPlugins[]` / `plugins[]` / `rules`
+ * entries referring to packages the user never installed (e.g.
+ * translating `@unocss/eslint-config` into `eslint-plugin-unocss`),
+ * to plugins outside Oxlint's native set, or under namespaces no
+ * surviving plugin contributes. Without sanitization, `vp lint` aborts
+ * with "Failed to load JS plugin" / "Plugin not found" before running
+ * any rule. This produces a degraded-but-functional config instead.
+ *
+ * Per-override entries (`overrides[].jsPlugins`, `.plugins`, `.rules`)
+ * are sanitized independently — an override can introduce its own
+ * jsPlugin, so namespace availability is computed per-override (base
+ * namespaces ∪ the override's own surviving jsPlugins' namespaces).
+ */
 function sanitizeMigratedOxlintConfig(
   config: OxlintConfig,
   availablePackages: Set<string>,
