@@ -496,8 +496,8 @@ mod tests {
 
     #[test]
     fn unknown_argument_detected_without_pass_as_value_hint() {
-        let error = try_parse_args_from_test(s(&["vp", "--cache"]))
-            .expect_err("Expected parse error");
+        let error =
+            try_parse_args_from_test(s(&["vp", "--cache"])).expect_err("Expected parse error");
         assert_eq!(error.kind(), ErrorKind::UnknownArgument);
         assert_eq!(extract_unknown_argument(&error).as_deref(), Some("--cache"));
         assert!(!has_pass_as_value_suggestion(&error));

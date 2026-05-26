@@ -459,6 +459,7 @@ pub async fn uninstall(package_name: &str, dry_run: bool) -> Result<(), Error> {
 /// `package_spec` may be a bare package name (`typescript`) or include a
 /// version/tag (`typescript@beta`, `@scope/pkg@1.0.0`). The command returns the
 /// version that npm resolves for that spec.
+#[expect(dead_code)]
 pub(crate) async fn latest_package_version(package_spec: &str) -> Result<String, Error> {
     // Resolve from current directory
     let node_version = {
@@ -513,6 +514,7 @@ pub(crate) async fn latest_package_version(package_spec: &str) -> Result<String,
     parse_npm_view_version(&output.stdout)
 }
 
+#[expect(dead_code)]
 fn parse_npm_view_version(stdout: &[u8]) -> Result<String, Error> {
     let raw = String::from_utf8_lossy(stdout);
     let trimmed = raw.trim();
