@@ -37,6 +37,11 @@ import {
   upgradeYarn,
 } from '../utils/prompts.ts';
 import { accent, log, muted, printHeader } from '../utils/terminal.ts';
+import {
+  confirmBaseUrlFix,
+  fixBaseUrlInTsconfig,
+  hasBaseUrlInTsconfig,
+} from '../utils/tsconfig.ts';
 import type { PackageDependencies } from '../utils/types.ts';
 import { detectWorkspace } from '../utils/workspace.ts';
 import {
@@ -50,6 +55,7 @@ import {
   detectNodeVersionManagerFile,
   detectPrettierProject,
   hasFrameworkShim,
+  injectLintTypeCheckDefaults,
   installGitHooks,
   mergeViteConfigFiles,
   migrateEslintToOxlint,
@@ -66,7 +72,7 @@ import {
   type Framework,
   type NodeVersionManagerDetection,
 } from './migrator.ts';
-import { createMigrationReport, type MigrationReport } from './report.ts';
+import { addMigrationWarning, createMigrationReport, type MigrationReport } from './report.ts';
 
 async function confirmNodeVersionFileMigration(
   interactive: boolean,
@@ -110,6 +116,70 @@ async function confirmFrameworkShim(framework: Framework, interactive: boolean):
     return confirmed;
   }
   return true;
+}
+
+async function fixBaseUrlForWorkspace(
+  workspaceInfo: { rootDir: string; packages?: WorkspacePackage[] },
+  fixBaseUrl: boolean,
+  updateProgress?: (message: string) => void,
+  report?: MigrationReport,
+): Promise<string[]> {
+  if (!fixBaseUrl) {
+    return [];
+  }
+
+  const fixedProjectPaths: string[] = [];
+  for (const projectPath of getWorkspaceProjectPaths(workspaceInfo)) {
+    if (!hasBaseUrlInTsconfig(projectPath)) {
+      continue;
+    }
+    updateProgress?.(
+      `Fixing tsconfig baseUrl${
+        projectPath === workspaceInfo.rootDir
+          ? ''
+          : ` in ${displayRelative(projectPath, workspaceInfo.rootDir)}`
+      }`,
+    );
+    const status = await fixBaseUrlInTsconfig(projectPath, {
+      confirmed: true,
+      silent: true,
+    });
+    if (status === 'failed') {
+      const projectLabel = displayRelative(projectPath, workspaceInfo.rootDir) || '.';
+      addMigrationWarning(
+        report,
+        `Failed to remove tsconfig baseUrl in ${projectLabel}. ` +
+          'Run `npx @andrewbranch/ts5to6 --fixBaseUrl <tsconfig path>` manually and re-run the migration.',
+      );
+    }
+    if (status === 'fixed') {
+      fixedProjectPaths.push(projectPath);
+    }
+  }
+  return fixedProjectPaths;
+}
+
+function getWorkspaceProjectPaths(workspaceInfo: {
+  rootDir: string;
+  packages?: WorkspacePackage[];
+}): string[] {
+  return [
+    workspaceInfo.rootDir,
+    ...(workspaceInfo.packages ?? []).map((pkg) => path.join(workspaceInfo.rootDir, pkg.path)),
+  ];
+}
+
+function hasBaseUrlInWorkspace(workspaceInfo: {
+  rootDir: string;
+  packages?: WorkspacePackage[];
+}): boolean {
+  for (const projectPath of getWorkspaceProjectPaths(workspaceInfo)) {
+    if (!hasBaseUrlInTsconfig(projectPath)) {
+      continue;
+    }
+    return true;
+  }
+  return false;
 }
 
 const helpMessage = renderCliDoc({
@@ -262,6 +332,7 @@ interface MigrationPlan {
   eslintConfigFile?: string;
   migratePrettier: boolean;
   prettierConfigFile?: string;
+  fixBaseUrl: boolean;
   migrateNodeVersionFile: boolean;
   nodeVersionDetection?: NodeVersionManagerDetection;
   frameworkShimFrameworks?: Framework[];
@@ -383,7 +454,7 @@ async function collectMigrationPlan(
     warnPackageLevelEslint();
   }
 
-  // 9. Prettier detection + prompt
+  // 8. Prettier detection + prompt
   const prettierProject = detectPrettierProject(rootDir, packages);
   let migratePrettier = false;
   if (prettierProject.hasDependency && prettierProject.configFile) {
@@ -391,6 +462,11 @@ async function collectMigrationPlan(
   } else if (prettierProject.hasDependency) {
     warnPackageLevelPrettier();
   }
+
+  // 9. tsconfig baseUrl prompt
+  const fixBaseUrl = hasBaseUrlInWorkspace({ rootDir, packages })
+    ? await confirmBaseUrlFix(options.interactive)
+    : false;
 
   // 10. Node version manager file detection + prompt
   const nodeVersionDetection = detectNodeVersionManagerFile(rootDir);
@@ -439,6 +515,7 @@ async function collectMigrationPlan(
     eslintConfigFile: eslintProject.configFile,
     migratePrettier,
     prettierConfigFile: prettierProject.configFile,
+    fixBaseUrl,
     migrateNodeVersionFile,
     nodeVersionDetection,
     frameworkShimFrameworks:
@@ -672,6 +749,8 @@ async function executeMigrationPlan(
     }
   }
 
+  await fixBaseUrlForWorkspace(workspaceInfo, plan.fixBaseUrl, updateMigrationProgress, report);
+
   // 6. ESLint → Oxlint migration (before main rewrite so .oxlintrc.json gets picked up)
   if (plan.migrateEslint) {
     updateMigrationProgress('Migrating ESLint');
@@ -840,7 +919,26 @@ async function main() {
       }
     };
 
-    // Check if ESLint migration is needed
+    const fixBaseUrl = hasBaseUrlInWorkspace(workspaceInfoOptional)
+      ? await confirmBaseUrlFix(options.interactive)
+      : false;
+
+    // Check if tsconfig baseUrl migration is needed
+    const fixedBaseUrlProjectPaths = await fixBaseUrlForWorkspace(
+      workspaceInfoOptional,
+      fixBaseUrl,
+      updateMigrationProgress,
+      report,
+    );
+    if (fixedBaseUrlProjectPaths.length > 0) {
+      updateMigrationProgress('Updating lint defaults');
+      for (const projectPath of fixedBaseUrlProjectPaths) {
+        injectLintTypeCheckDefaults(projectPath, true, report);
+      }
+      didMigrate = true;
+    }
+    clearMigrationProgress();
+
     const eslintMigrated = await promptEslintMigration(
       workspaceInfoOptional.rootDir,
       options.interactive,
