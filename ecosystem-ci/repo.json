@@ -134,7 +134,7 @@
   "varlet": {
     "repository": "https://github.com/varletjs/varlet.git",
     "branch": "dev",
-    "hash": "83f6c6a418ab9319e07d719d86d4fa952f99e266",
+    "hash": "175f02cc0e4978d211a57b13d9438b1ac44b50d6",
     "forceFreshMigration": true
   }
 }
