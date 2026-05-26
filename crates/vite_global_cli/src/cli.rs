@@ -8,6 +8,7 @@ use std::{collections::HashSet, ffi::OsStr, io::IsTerminal, process::ExitStatus}
 use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
 use clap_complete::ArgValueCompleter;
 use dialoguer::{Confirm, theme::ColorfulTheme};
+use owo_colors::OwoColorize;
 use tokio::runtime::Runtime;
 use vite_path::AbsolutePathBuf;
 use vite_pm_cli::PackageManagerCommand;
@@ -690,7 +691,7 @@ async fn managed_update(
     let concurrency = concurrency.unwrap_or(DEFAULT_GLOBAL_INSTALL_CONCURRENCY);
     let mut to_update: Vec<String> = Vec::new();
     let mut node_mismatches: Vec<NodeMismatchPackage> = Vec::new();
-    let current_node_version = current_node_version().await?;
+    let current_node_version;
 
     let packages = if packages.is_empty() {
         let all = PackageMetadata::list_all().await?;
@@ -698,6 +699,7 @@ async fn managed_update(
             vite_shared::output::raw("No global packages installed.");
             return Ok(ExitStatus::default());
         }
+        current_node_version = get_current_node_version().await?;
 
         for metadata in &all {
             if !is_same_node_version(&metadata.platform.node, &current_node_version) {
@@ -712,6 +714,7 @@ async fn managed_update(
         None
     } else {
         let mut managed_specs = Vec::new();
+        current_node_version = get_current_node_version().await?;
 
         for package in packages {
             // Always update local packages
@@ -776,7 +779,7 @@ async fn managed_update(
     Ok(ExitStatus::default())
 }
 
-async fn current_node_version() -> Result<String, Error> {
+async fn get_current_node_version() -> Result<String, Error> {
     let cwd = vite_path::current_dir().map_err(|error| {
         Error::ConfigError(format!("Cannot get current directory: {error}").into())
     })?;
@@ -813,16 +816,16 @@ fn prompt_reinstall_node_mismatches(
     packages: &[NodeMismatchPackage],
     current_node_version: &str,
 ) -> bool {
-    output::raw("Some global packages were installed with a different Node.js version.");
+    output::info("Some global packages were installed with a different Node.js version.");
     output::raw("");
-    output::raw(&format!("Current Node.js: {}", display_node_version(current_node_version)));
+    output::raw(&format!("Current Node.js: {}", display_node_version(current_node_version).bold()));
     output::raw("");
     output::raw("Affected packages:");
     for package in packages {
         output::raw(&format!(
             "- {} (installed with {})",
-            package.name,
-            display_node_version(&package.installed_node)
+            package.name.bold(),
+            display_node_version(&package.installed_node).bold()
         ));
     }
     output::raw("");
