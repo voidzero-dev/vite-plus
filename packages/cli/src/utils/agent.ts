@@ -66,9 +66,14 @@ export const AGENTS = [
   },
 ] as const;
 
+export type AgentOption = (typeof AGENTS)[number];
+export type AgentId = AgentOption['id'];
+
 type AgentSelection = string | string[] | false;
-const AGENT_DEFAULT_ID = 'agents';
+const AGENT_DEFAULT_ID = 'agents' satisfies AgentId;
 const AGENT_STANDARD_PATH = 'AGENTS.md';
+export const COPILOT_AGENT_ID = 'copilot' satisfies AgentId;
+export const COPILOT_SETUP_WORKFLOW_PATH = '.github/workflows/copilot-setup-steps.yml';
 const AGENT_INSTRUCTIONS_START_MARKER = '<!--VITE PLUS START-->';
 const AGENT_INSTRUCTIONS_END_MARKER = '<!--VITE PLUS END-->';
 
@@ -78,7 +83,38 @@ const AGENT_ALIASES = Object.fromEntries(
   ),
 ) as Record<string, string>;
 
-export async function selectAgentTargetPaths({
+const COPILOT_SETUP_WORKFLOW_CONTENT = `name: "Copilot Setup Steps"
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/copilot-setup-steps.yml
+  pull_request:
+    paths:
+      - .github/workflows/copilot-setup-steps.yml
+
+jobs:
+  copilot-setup-steps:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Set up Vite+
+        uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version: "24"
+          cache: true
+          run-install: true
+      - name: Verify Vite+
+        run: vp --version
+`;
+
+export async function selectAgentTargets({
   interactive,
   agent,
   onCancel,
@@ -89,11 +125,11 @@ export async function selectAgentTargetPaths({
 }) {
   // Skip entirely if --no-agent is passed
   if (agent === false) {
-    return undefined;
+    return { targetPaths: undefined, selectedAgents: [] };
   }
 
   if (interactive && !agent) {
-    const selectedAgents = await prompts.multiselect({
+    const selectedAgentIds = await prompts.multiselect({
       message: 'Which coding agent instruction files should Vite+ create?',
       options: AGENTS.map((option) => ({
         label: option.label,
@@ -104,18 +140,39 @@ export async function selectAgentTargetPaths({
       required: false,
     });
 
-    if (prompts.isCancel(selectedAgents)) {
+    if (prompts.isCancel(selectedAgentIds)) {
       onCancel();
-      return undefined;
+      return { targetPaths: undefined, selectedAgents: [] };
     }
 
-    if (selectedAgents.length === 0) {
-      return undefined;
+    if (selectedAgentIds.length === 0) {
+      return { targetPaths: undefined, selectedAgents: [] };
     }
-    return resolveAgentTargetPaths(selectedAgents);
+    const selectedAgents = resolveAgentOptions(selectedAgentIds);
+    return {
+      targetPaths: getAgentTargetPaths(selectedAgents),
+      selectedAgents,
+    };
   }
 
-  return resolveAgentTargetPaths(agent ?? AGENT_DEFAULT_ID);
+  const selectedAgents = resolveAgentOptions(agent ?? AGENT_DEFAULT_ID);
+  return {
+    targetPaths: getAgentTargetPaths(selectedAgents),
+    selectedAgents,
+  };
+}
+
+export async function selectAgentTargetPaths({
+  interactive,
+  agent,
+  onCancel,
+}: {
+  interactive: boolean;
+  agent?: AgentSelection;
+  onCancel: () => void;
+}) {
+  const selection = await selectAgentTargets({ interactive, agent, onCancel });
+  return selection.targetPaths;
 }
 
 export async function selectAgentTargetPath({
@@ -200,23 +257,40 @@ export function updateExistingAgentInstructions(projectRoot: string): void {
 }
 
 export function resolveAgentTargetPaths(agent?: string | string[]) {
-  const agentNames = parseAgentNames(agent);
-  const resolvedAgentNames = agentNames.length > 0 ? agentNames : ['other'];
-  const dedupedTargetPaths: string[] = [];
-  const seenTargetPaths = new Set<string>();
-  for (const name of resolvedAgentNames) {
-    const targetPath = resolveSingleAgentTargetPath(name);
-    if (seenTargetPaths.has(targetPath)) {
-      continue;
-    }
-    seenTargetPaths.add(targetPath);
-    dedupedTargetPaths.push(targetPath);
-  }
-  return dedupedTargetPaths;
+  return getAgentTargetPaths(resolveAgentOptions(agent));
 }
 
 export function resolveAgentTargetPath(agent?: string) {
   return resolveAgentTargetPaths(agent)[0] ?? 'AGENTS.md';
+}
+
+export function resolveAgentOptions(agent?: string | string[]) {
+  const agentNames = parseAgentNames(agent);
+  const resolvedAgentNames = agentNames.length > 0 ? agentNames : [AGENT_DEFAULT_ID];
+  const dedupedAgents: AgentOption[] = [];
+  const seenAgentIds = new Set<string>();
+  for (const name of resolvedAgentNames) {
+    const option = resolveSingleAgentOption(name);
+    if (seenAgentIds.has(option.id)) {
+      continue;
+    }
+    seenAgentIds.add(option.id);
+    dedupedAgents.push(option);
+  }
+  return dedupedAgents;
+}
+
+function getAgentTargetPaths(agents: AgentOption[]) {
+  const dedupedTargetPaths: string[] = [];
+  const seenTargetPaths = new Set<string>();
+  for (const agent of agents) {
+    if (seenTargetPaths.has(agent.targetPath)) {
+      continue;
+    }
+    seenTargetPaths.add(agent.targetPath);
+    dedupedTargetPaths.push(agent.targetPath);
+  }
+  return dedupedTargetPaths;
 }
 
 function parseAgentNames(agent?: string | string[]) {
@@ -231,7 +305,7 @@ function parseAgentNames(agent?: string | string[]) {
     .filter((value) => value.length > 0);
 }
 
-function resolveSingleAgentTargetPath(agent: string) {
+function resolveSingleAgentOption(agent: string): AgentOption {
   const normalized = normalizeAgentName(agent);
   const alias = AGENT_ALIASES[normalized];
   const resolved = alias ? normalizeAgentName(alias) : normalized;
@@ -242,7 +316,7 @@ function resolveSingleAgentTargetPath(agent: string) {
       normalizeAgentName(option.targetPath) === resolved ||
       option.aliases?.some((candidate) => normalizeAgentName(candidate) === resolved),
   );
-  return match?.targetPath ?? AGENT_STANDARD_PATH;
+  return match ?? AGENTS.find((option) => option.id === AGENT_DEFAULT_ID)!;
 }
 
 export interface AgentConflictInfo {
@@ -463,6 +537,29 @@ export async function writeAgentInstructions({
       prompts.log.success(`Wrote agent instructions to ${targetPathToWrite}`);
     }
     seenRealPaths.add(await fsPromises.realpath(destinationPath));
+  }
+}
+
+export async function writeCopilotSetupWorkflow({
+  projectRoot,
+  silent = false,
+}: {
+  projectRoot: string;
+  silent?: boolean;
+}) {
+  const destinationPath = path.join(projectRoot, COPILOT_SETUP_WORKFLOW_PATH);
+  await fsPromises.mkdir(path.dirname(destinationPath), { recursive: true });
+
+  if (fs.existsSync(destinationPath)) {
+    if (!silent) {
+      prompts.log.info(`Skipped writing ${COPILOT_SETUP_WORKFLOW_PATH} (already exists)`);
+    }
+    return;
+  }
+
+  await fsPromises.writeFile(destinationPath, COPILOT_SETUP_WORKFLOW_CONTENT);
+  if (!silent) {
+    prompts.log.success(`Wrote Copilot setup workflow to ${COPILOT_SETUP_WORKFLOW_PATH}`);
   }
 }
 

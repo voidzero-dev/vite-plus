@@ -2,6 +2,43 @@
 > ls vite-plus-application/package.json # check package.json
 vite-plus-application/package.json
 
+> test ! -f vite-plus-application/.github/workflows/copilot-setup-steps.yml # default create should not add Copilot setup workflow
+> vp create vite:application --no-interactive --directory claude-app --agent claude # create vite app with non-Copilot agent
+> test ! -f claude-app/.github/workflows/copilot-setup-steps.yml # non-Copilot agent should not add Copilot setup workflow
+> vp create vite:application --no-interactive --directory no-agent-app --no-agent # create vite app without agent setup
+> test ! -f no-agent-app/.github/workflows/copilot-setup-steps.yml # --no-agent should not add Copilot setup workflow
+> vp create vite:application --no-interactive --directory copilot-app --agent copilot # create vite app with Copilot agent setup
+> cat copilot-app/.github/workflows/copilot-setup-steps.yml # check Copilot setup workflow
+name: "Copilot Setup Steps"
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/copilot-setup-steps.yml
+  pull_request:
+    paths:
+      - .github/workflows/copilot-setup-steps.yml
+
+jobs:
+  copilot-setup-steps:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Set up Vite+
+        uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version: "24"
+          cache: true
+          run-install: true
+      - name: Verify Vite+
+        run: vp --version
+
 > vp create vite:application --no-interactive --directory my-react-ts -- --template react-ts # create vite app with react-ts template
 > ls my-react-ts/package.json # check package.json
 my-react-ts/package.json
