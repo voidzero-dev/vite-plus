@@ -912,13 +912,6 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_package_spec_local() {
-        let (name, version) = parse_package_spec("./packages/cli").unwrap();
-        assert_eq!(name, "@types/node");
-        assert_eq!(version, Some("20.0.0".to_string()));
-    }
-
-    #[test]
     fn test_is_javascript_binary_with_js_extension() {
         use tempfile::TempDir;
         use vite_path::AbsolutePathBuf;
