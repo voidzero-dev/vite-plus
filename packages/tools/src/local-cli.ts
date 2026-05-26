@@ -295,9 +295,30 @@ function runCommand(step: string, command: string, args: string[], options: Comm
   process.exit(result.status ?? 1);
 }
 
+export function getPnpmInvocation(execPath: string | undefined) {
+  if (!execPath) {
+    return {
+      command: pnpmBin,
+      args: [] as string[],
+    };
+  }
+
+  const ext = path.extname(execPath);
+  if (ext === '.js' || ext === '.cjs' || ext === '.mjs') {
+    return {
+      command: process.execPath,
+      args: [execPath],
+    };
+  }
+
+  return {
+    command: execPath,
+    args: [] as string[],
+  };
+}
+
 function runPnpmCommand(step: string, args: string[], options: CommandOptions = {}) {
-  const baseArgs = pnpmExecPath ? [pnpmExecPath] : [];
-  const command = pnpmExecPath ? process.execPath : pnpmBin;
+  const { command, args: baseArgs } = getPnpmInvocation(pnpmExecPath);
 
   runCommand(step, command, [...baseArgs, ...args], options);
 }
