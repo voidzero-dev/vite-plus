@@ -768,7 +768,8 @@ async fn managed_update(
 
     // Call reinstall logic
     if let Err((package_name, error)) =
-        global::install::install(&to_update, None, false, concurrency, true).await
+        global::install::install(&to_update, Some(&current_node_version), false, concurrency, true)
+            .await
     {
         output::error(&format!(
             "Failed to update {}: {error}",
