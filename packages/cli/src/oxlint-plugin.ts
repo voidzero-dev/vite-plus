@@ -6,6 +6,22 @@ import {
   VITE_PLUS_OXLINT_PLUGIN_NAME,
 } from './oxlint-plugin-config.ts';
 
+// `declare module 'vitest…'` and `declare module '@vitest/browser…'` are
+// intentionally preserved by `vp migrate` (see migration's import_rewriter and
+// docs/guide/migrate.md) — `vite-plus/test*` is a thin re-export of upstream
+// `vitest*`, so type augmentations have to target the upstream module identity
+// to merge correctly. Autofixing those module declarations here would split the
+// augmentation away from what imports actually resolve through.
+function isVitestFamilyDeclareModuleSpecifier(specifier: string): boolean {
+  return (
+    specifier === 'vitest' ||
+    specifier.startsWith('vitest/') ||
+    specifier === '@vitest/browser' ||
+    specifier.startsWith('@vitest/browser/') ||
+    specifier.startsWith('@vitest/browser-')
+  );
+}
+
 function rewriteVitePlusImportSpecifier(specifier: string): string | null {
   if (specifier === 'vite') {
     return 'vite-plus';
@@ -134,7 +150,15 @@ export const preferVitePlusImportsRule = defineRule({
         if (node.global) {
           return;
         }
-        maybeReportLiteral(context, node.id);
+        const id = node.id;
+        if (
+          id?.type === 'Literal' &&
+          typeof id.value === 'string' &&
+          isVitestFamilyDeclareModuleSpecifier(id.value)
+        ) {
+          return;
+        }
+        maybeReportLiteral(context, id);
       },
     };
   },
