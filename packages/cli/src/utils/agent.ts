@@ -107,7 +107,6 @@ jobs:
       - name: Set up Vite+
         uses: voidzero-dev/setup-vp@v1
         with:
-          node-version: "24"
           cache: true
           run-install: true
       - name: Verify Vite+
