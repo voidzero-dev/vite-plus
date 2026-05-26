@@ -10,7 +10,7 @@ Options:
   --unset                Remove session override (revert to file-based resolution)
   --no-install           Skip auto-installation if version not present
   --silent-if-unchanged  Suppress output if version is already active
-  -h, --help             Print help
+  -h, --help             Print help (see a summary with '-h')
 
 Examples:
   vp env use lts        # Override session with latest LTS
