@@ -18,9 +18,12 @@ If you are migrating an existing project and it still depends on older Vite or V
 ## `vp check` does not run type-aware lint rules or type checks
 
 - Confirm that `lint.options.typeAware` and `lint.options.typeCheck` are enabled in `vite.config.ts`
-- Check whether your `tsconfig.json` uses `compilerOptions.baseUrl`
+- Check whether your `tsconfig.json` still uses `compilerOptions.baseUrl`
 
-The Oxlint type checker path powered by `tsgolint` does not support `baseUrl`, so Vite+ skips `typeAware` and `typeCheck` when that setting is present.
+The Oxlint type checker path powered by `tsgolint` does not support `baseUrl`.
+`vp migrate` and `vp lint --init` try to run the `@andrewbranch/ts5to6 --fixBaseUrl .`
+fix before enabling type-aware linting. If that fix fails or is declined, Vite+
+skips `typeAware` and `typeCheck`.
 
 ## `vp lint` / `vp fmt` may fail to read `vite.config.ts`
 
