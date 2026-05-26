@@ -306,7 +306,7 @@ function main() {
     : null;
   log('Installing workspace dependencies...');
   try {
-    run(pnpmBin, ['install']);
+    run(pnpmBin, ['install', '--config.allow-unused-patches=true']);
   } finally {
     if (originalLockfile !== null) {
       writeFileSync(pnpmLockfilePath, originalLockfile, 'utf-8');

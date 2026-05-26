@@ -108,7 +108,17 @@ pub fn tip_context_from_command(command: &str) -> TipContext {
     // Split simulates what the OS does with command line args
     let args: Vec<String> = command.split_whitespace().map(String::from).collect();
 
-    let (exit_code, clap_error) = match crate::try_parse_args_from(args.iter().cloned()) {
+    let parse_args = args.clone();
+    let handle = std::thread::Builder::new()
+        .stack_size(32 * 1024 * 1024)
+        .spawn(move || crate::try_parse_args_from(parse_args))
+        .expect("Expected parser test thread to spawn");
+    let parse_result = match handle.join() {
+        Ok(result) => result,
+        Err(payload) => std::panic::resume_unwind(payload),
+    };
+
+    let (exit_code, clap_error) = match parse_result {
         Ok(_) => (0, None),
         Err(e) => (e.exit_code(), Some(e)),
     };
