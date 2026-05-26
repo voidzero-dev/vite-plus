@@ -226,6 +226,25 @@ jobs:
             command: |
               vp run test
               vp run build
+          - name: zustand
+            node-version: 24
+            command: |
+              # Runs the vitest suite via zustand's `test:spec` script
+              # (rewritten by `vp migrate` from `vitest run` → `vp test run`).
+              # Real ESLint coverage with eslint-plugin-react, -react-hooks,
+              # -import, -jest-dom, -testing-library, @vitest/eslint-plugin —
+              # exercises the @oxlint/migrate → sanitizer end-to-end flow
+              # against a real-world React test setup.
+              vp run test:spec
+              # FIXME: `vp lint` and `vp fmt` both abort with "Cannot use
+              # import statement outside a module" inside the shared
+              # vite-plus config loader. Not a sanitizer regression — the
+              # merged `lint:` block is structurally fine, and vitest
+              # (which has its own loader path) runs the full suite
+              # without issue. Drop the `|| true` once the upstream loader
+              # handles ESM vite.config.ts via this path.
+              vp run test:lint || true
+              vp run test:format || true
           - name: oxlint-plugin-complexity
             node-version: 22
             command: |

@@ -136,5 +136,10 @@
     "branch": "dev",
     "hash": "83f6c6a418ab9319e07d719d86d4fa952f99e266",
     "forceFreshMigration": true
+  },
+  "zustand": {
+    "repository": "https://github.com/pmndrs/zustand.git",
+    "branch": "main",
+    "hash": "d690ec29a923977d7a9091554445d1026dfe4611"
   }
 }
