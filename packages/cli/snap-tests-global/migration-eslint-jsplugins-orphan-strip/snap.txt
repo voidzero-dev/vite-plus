@@ -1,0 +1,44 @@
+> vp migrate --no-interactive # orphan jsPlugin / unknown plugin / dangling rule should be stripped, with warnings
+◇ Migrated . to Vite+
+• Node <semver>  pnpm <semver>
+• 4 config updates applied
+• ESLint rules migrated to Oxlint
+! Warnings:
+  - Stripped unresolvable JS plugin reference(s) from the generated lint config: eslint-plugin-fictional. @oxlint/migrate produced these from your ESLint config but the underlying package(s) aren't installed. Install them manually if you want their lint coverage back.
+
+> cat vite.config.ts # lint block should NOT contain `fictional` in plugins / jsPlugins / rules
+import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  staged: {
+    "*": "vp check --fix"
+  },
+  fmt: {},
+  lint: {
+    "plugins": [
+      "oxc",
+      "typescript",
+      "unicorn",
+      "react"
+    ],
+    "jsPlugins": [
+      {
+        "name": "vite-plus",
+        "specifier": "vite-plus/oxlint-plugin"
+      }
+    ],
+    "categories": {
+      "correctness": "warn"
+    },
+    "env": {
+      "builtin": true
+    },
+    "rules": {
+      "vite-plus/prefer-vite-plus-imports": "error"
+    },
+    "options": {
+      "typeAware": true,
+      "typeCheck": true
+    }
+  },
+});
