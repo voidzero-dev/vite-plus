@@ -67,6 +67,8 @@ const vendorDir = resolve(distDir, 'vendor');
 const CORE_PACKAGE_NAME = '@voidzero-dev/vite-plus-core';
 const TEST_PACKAGE_NAME = '@voidzero-dev/vite-plus-test';
 
+await rm(distDir, { recursive: true, force: true });
+
 // @vitest/* packages to copy (not bundle) to preserve browser/Node.js separation
 // These are copied from node_modules to dist/@vitest/ to avoid shared chunks
 // that mix Node.js-only code with browser code

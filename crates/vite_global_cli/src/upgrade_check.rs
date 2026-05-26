@@ -354,7 +354,14 @@ mod tests {
     fn parse_args(args: &[&str]) -> crate::cli::Args {
         let full: Vec<String> =
             std::iter::once("vp").chain(args.iter().copied()).map(String::from).collect();
-        crate::try_parse_args_from(full).unwrap()
+        let handle = std::thread::Builder::new()
+            .stack_size(32 * 1024 * 1024)
+            .spawn(move || crate::try_parse_args_from(full))
+            .expect("Expected parser test thread to spawn");
+        match handle.join() {
+            Ok(result) => result.unwrap(),
+            Err(payload) => std::panic::resume_unwind(payload),
+        }
     }
 
     #[test]
