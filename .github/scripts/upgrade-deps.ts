@@ -160,7 +160,7 @@ async function updatePnpmWorkspace(versions: PnpmWorkspaceVersions): Promise<voi
   ];
   const vitestBrowserEntries: PnpmWorkspaceEntry[] = vitestBrowserPackages.map((pkg) => ({
     name: pkg,
-    pattern: new RegExp(`'${pkg.replace('/', '\\/')}': ([\\d.]+(?:-[\\w.]+)?)`),
+    pattern: new RegExp(`'${pkg.replaceAll('/', '\\/')}': ([\\d.]+(?:-[\\w.]+)?)`),
     replacement: `'${pkg}': ${versions.vitest}`,
     newVersion: versions.vitest,
   }));
@@ -311,7 +311,7 @@ async function updateTestVpCreateWorkflow(vitestVersion: string): Promise<void> 
   ];
   let updated = content;
   for (const key of vitestKeys) {
-    const pattern = new RegExp(`"${key.replace('/', '\\/')}":"([\\d.]+(?:-[\\w.]+)?)"`);
+    const pattern = new RegExp(`"${key.replaceAll('/', '\\/')}":"([\\d.]+(?:-[\\w.]+)?)"`);
     let matched = false;
     updated = updated.replace(pattern, (_match: string, _captured: string) => {
       matched = true;
@@ -365,8 +365,14 @@ async function updateVitestMockerPatch(vitestVersion: string): Promise<void> {
       );
     }
     fs.renameSync(oldPatch, newPatch);
-    fs.writeFileSync(filePath, updated);
     console.log(`Renamed @vitest/mocker patch ${oldVersion} -> ${vitestVersion}`);
+  }
+  // Also covers the case where the key version already matches `vitestVersion`
+  // but the value's patch-file suffix had drifted — `content.replace` repaired
+  // the line in memory and we must persist it, otherwise pnpm install can hit
+  // ERR_PNPM_PATCHED_PKG_DOES_NOT_MATCH.
+  if (updated !== content) {
+    fs.writeFileSync(filePath, updated);
   }
   recordChange('@vitest/mocker patch', oldVersion, vitestVersion);
 }
