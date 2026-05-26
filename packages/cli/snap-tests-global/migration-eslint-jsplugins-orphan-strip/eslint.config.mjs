@@ -1,8 +1,11 @@
-// Configures a `fictional/*` rule via a plugin namespace that resolves
-// to neither a native Oxlint plugin nor an installed JS plugin package.
-// Mirrors the WeakAuras-style failure where `@oxlint/migrate` emits
-// `jsPlugins: ["eslint-plugin-fictional"]` and rules under `fictional/*`,
-// even though `eslint-plugin-fictional` is not in node_modules.
+// Exercises the sanitizer:
+//   1. base-level `fictional/*` rule via an inline plugin namespace that
+//      doesn't resolve to a native Oxlint plugin nor an installed
+//      package — translates into `jsPlugins: ['eslint-plugin-fictional']`
+//      + rule under `fictional/*` (the WeakAuras-style failure shape).
+//   2. an OVERRIDE that introduces a second unresolvable plugin
+//      (`./*.test.js` files only) — verifies the per-override sanitize
+//      path strips both the override's `jsPlugins` entry and its rules.
 export default [
   {
     plugins: {
@@ -19,6 +22,24 @@ export default [
     },
     rules: {
       'fictional/no-fiction': 'warn',
+    },
+  },
+  {
+    files: ['**/*.test.js'],
+    plugins: {
+      'override-only': {
+        rules: {
+          'no-skip': {
+            meta: { type: 'problem' },
+            create() {
+              return {};
+            },
+          },
+        },
+      },
+    },
+    rules: {
+      'override-only/no-skip': 'error',
     },
   },
 ];

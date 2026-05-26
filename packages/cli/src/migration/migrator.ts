@@ -1128,11 +1128,18 @@ export function rewriteMonorepo(
     workspaceInfo.packageManager,
     skipStagedMigration,
     catalogDependencyResolver,
+    workspaceInfo.packages,
   );
   // (mergeViteConfigFiles below will sanitize the merged lint config
   // against this workspace's full package set.)
 
-  // rewrite packages
+  // rewrite packages — pass workspace context so the per-package
+  // sanitizer can see hoisted deps that live elsewhere in the
+  // workspace, not just this sub-package's own `package.json`.
+  const workspaceContext = {
+    rootDir: workspaceInfo.rootDir,
+    packages: workspaceInfo.packages,
+  };
   for (const pkg of workspaceInfo.packages) {
     rewriteMonorepoProject(
       path.join(workspaceInfo.rootDir, pkg.path),
@@ -1141,6 +1148,7 @@ export function rewriteMonorepo(
       silent,
       report,
       catalogDependencyResolver,
+      workspaceContext,
     );
   }
 
@@ -1162,6 +1170,11 @@ export function rewriteMonorepo(
 /**
  * Rewrite monorepo project to add vite-plus dependencies
  * @param projectPath - The path to the project
+ * @param workspaceContext - Full workspace info, used so the lint-config
+ *   sanitizer can see hoisted deps living elsewhere in the workspace,
+ *   not just this sub-package's own `package.json`. `rootDir` is the
+ *   workspace root (paths in `packages` are relative to it); `packages`
+ *   is the workspace package list.
  */
 export function rewriteMonorepoProject(
   projectPath: string,
@@ -1170,10 +1183,17 @@ export function rewriteMonorepoProject(
   silent = false,
   report?: MigrationReport,
   catalogDependencyResolver?: CatalogDependencyResolver,
+  workspaceContext?: { rootDir: string; packages: WorkspacePackage[] },
 ): void {
   cleanupDeprecatedTsconfigOptions(projectPath, silent, report);
   rewriteTsconfigTypes(projectPath, silent, report);
-  mergeViteConfigFiles(projectPath, silent, report);
+  mergeViteConfigFiles(
+    projectPath,
+    silent,
+    report,
+    workspaceContext?.packages,
+    workspaceContext?.rootDir,
+  );
   mergeTsdownConfigFile(projectPath, silent, report);
 
   const packageJsonPath = path.join(projectPath, 'package.json');
@@ -1687,6 +1707,10 @@ function rewriteRootWorkspacePackageJson(
   packageManager: PackageManager,
   skipStagedMigration?: boolean,
   catalogDependencyResolver?: CatalogDependencyResolver,
+  // Forwarded to `rewriteMonorepoProject` so the per-root lint-config
+  // sanitizer can see hoisted deps in sibling workspace packages, not
+  // just the root's own `package.json`.
+  packages?: WorkspacePackage[],
 ): void {
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
@@ -1774,7 +1798,9 @@ function rewriteRootWorkspacePackageJson(
     migratePnpmOverridesToWorkspaceYaml(projectPath, remainingPnpmOverrides);
   }
 
-  // rewrite package.json
+  // rewrite package.json — `projectPath` IS the workspace root here, so
+  // `workspaceContext.rootDir` matches it; sanitizer resolves
+  // sibling-package paths against `projectPath`.
   rewriteMonorepoProject(
     projectPath,
     packageManager,
@@ -1782,6 +1808,7 @@ function rewriteRootWorkspacePackageJson(
     undefined,
     undefined,
     catalogDependencyResolver,
+    packages ? { rootDir: projectPath, packages } : undefined,
   );
 }
 
@@ -2145,82 +2172,189 @@ function collectInstalledPackageNames(
  * "Plugin not found" before running any rule. We strip those references
  * and warn the user, leaving a degraded-but-functional config.
  */
+/**
+ * Test whether a rule key (e.g. `@stylistic/ts/indent`) belongs to any
+ * namespace in `namespaces`. We can't just split on the first `/` —
+ * `@stylistic/eslint-plugin-ts` contributes the multi-segment namespace
+ * `@stylistic/ts`, so the lookup has to try progressively longer
+ * prefixes until one matches or we run out of slashes.
+ */
+function ruleKeyMatchesNamespace(key: string, namespaces: Set<string>): boolean {
+  if (!key.includes('/')) {
+    return true;
+  }
+  let idx = key.indexOf('/');
+  while (idx !== -1) {
+    if (namespaces.has(key.slice(0, idx))) {
+      return true;
+    }
+    idx = key.indexOf('/', idx + 1);
+  }
+  return false;
+}
+
+/** Filter a rules object to only entries whose namespace is recognized. */
+function filterRulesAgainstNamespaces(
+  rules: Record<string, unknown>,
+  namespaces: Set<string>,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(rules)) {
+    if (ruleKeyMatchesNamespace(key, namespaces)) {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
+/**
+ * Sort a jsPlugins array into installed entries (kept) and string
+ * entries for packages that aren't present in the workspace. Object-form
+ * entries (`{ name, specifier }`) and string entries that look like
+ * local paths (`./X`, `/X`, `../X`) are passed through — Oxlint resolves
+ * them itself.
+ */
+function partitionJsPlugins(
+  entries: NonNullable<OxlintConfig['jsPlugins']>,
+  availablePackages: Set<string>,
+): {
+  kept: NonNullable<OxlintConfig['jsPlugins']>;
+  dropped: string[];
+} {
+  const kept: NonNullable<OxlintConfig['jsPlugins']> = [];
+  const dropped: string[] = [];
+  for (const entry of entries) {
+    if (typeof entry !== 'string') {
+      kept.push(entry);
+      continue;
+    }
+    // Local-path specifiers don't go through `package.json`; preserve
+    // them so users with hand-authored local plugin imports survive
+    // a `vp migrate` re-run.
+    if (entry.startsWith('./') || entry.startsWith('../') || entry.startsWith('/')) {
+      kept.push(entry);
+      continue;
+    }
+    if (availablePackages.has(entry)) {
+      kept.push(entry);
+    } else {
+      dropped.push(entry);
+    }
+  }
+  return { kept, dropped };
+}
+
+/** Build the set of rule-key namespaces backed by a given jsPlugins set. */
+function jsPluginsToNamespaces(entries: NonNullable<OxlintConfig['jsPlugins']>): Set<string> {
+  const ns = new Set<string>();
+  for (const entry of entries) {
+    if (typeof entry === 'string') {
+      ns.add(deriveJsPluginNamespace(entry));
+    } else if (entry && typeof entry === 'object' && 'name' in entry && entry.name) {
+      ns.add(entry.name);
+    }
+  }
+  // Empty-string namespace (e.g. from `eslint-plugin-` with no suffix)
+  // would smuggle slash-prefixed rules through; drop it defensively.
+  ns.delete('');
+  return ns;
+}
+
 function sanitizeMigratedOxlintConfig(
   config: OxlintConfig,
   availablePackages: Set<string>,
   report?: MigrationReport,
 ): void {
-  // 1. Drop jsPlugins string entries whose package isn't installed.
-  const droppedJsPlugins: string[] = [];
-  const keptJsPlugins: NonNullable<OxlintConfig['jsPlugins']> = [];
-  for (const entry of config.jsPlugins ?? []) {
-    if (typeof entry !== 'string') {
-      keptJsPlugins.push(entry);
-      continue;
-    }
-    if (availablePackages.has(entry)) {
-      keptJsPlugins.push(entry);
-    } else {
-      droppedJsPlugins.push(entry);
-    }
+  // Track everything we strip so we can warn the user.
+  const allDroppedJsPlugins = new Set<string>();
+  const allDroppedPlugins = new Set<string>();
+
+  // 1. Sanitize base-level jsPlugins.
+  const baseSplit = partitionJsPlugins(config.jsPlugins ?? [], availablePackages);
+  for (const n of baseSplit.dropped) {
+    allDroppedJsPlugins.add(n);
   }
-  if (config.jsPlugins && droppedJsPlugins.length > 0) {
-    config.jsPlugins = keptJsPlugins;
+  if (config.jsPlugins && baseSplit.dropped.length > 0) {
+    config.jsPlugins = baseSplit.kept;
   }
 
-  // 2. Compute the set of rule namespaces that any surviving plugin
-  // (native or JS) actually contributes.
-  const availableNamespaces = new Set<string>(OXLINT_NATIVE_PLUGINS);
-  for (const entry of keptJsPlugins) {
-    if (typeof entry === 'string') {
-      availableNamespaces.add(deriveJsPluginNamespace(entry));
-    } else if (entry && typeof entry === 'object' && 'name' in entry && entry.name) {
-      availableNamespaces.add(entry.name);
-    }
+  // 2. Base namespaces = native plugins + surviving jsPlugins' namespaces.
+  const baseNamespaces = new Set<string>(OXLINT_NATIVE_PLUGINS);
+  for (const ns of jsPluginsToNamespaces(baseSplit.kept)) {
+    baseNamespaces.add(ns);
   }
 
-  // 3. Drop plugins[] entries that aren't natively recognized AND aren't
-  // provided by a surviving JS plugin.
-  const droppedPlugins: string[] = [];
+  // 3. Sanitize base-level plugins[] against base namespaces.
   if (config.plugins) {
-    const keptPlugins = config.plugins.filter((p) => {
-      if (availableNamespaces.has(p)) {
-        return true;
+    type PluginEntry = NonNullable<OxlintConfig['plugins']>[number];
+    const keptPlugins: PluginEntry[] = [];
+    for (const p of config.plugins) {
+      if (baseNamespaces.has(p)) {
+        keptPlugins.push(p);
+      } else {
+        allDroppedPlugins.add(p);
       }
-      droppedPlugins.push(p);
-      return false;
-    });
+    }
     if (keptPlugins.length !== config.plugins.length) {
       config.plugins = keptPlugins;
     }
   }
 
-  // 4. Drop rules whose namespace isn't backed by any surviving plugin.
-  // Only reassign when the key was already present and the filter actually
-  // dropped something — otherwise we'd add a `rules: undefined` property,
-  // which JS object iteration treats as ordering-significant and shifts
-  // downstream key emission (notably, pushing `jsPlugins` after `rules`
-  // in the merged vite.config.ts).
-  const filterRules = (rules: Record<string, unknown>): Record<string, unknown> => {
-    const out: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(rules)) {
-      const slash = key.indexOf('/');
-      if (slash === -1 || availableNamespaces.has(key.slice(0, slash))) {
-        out[key] = value;
-      }
-    }
-    return out;
-  };
+  // 4. Sanitize base rules. Guard the reassignment to avoid adding a
+  // `rules: undefined` property that would shift downstream key
+  // emission in the merged vite.config.ts.
   if (config.rules) {
-    const filtered = filterRules(config.rules);
+    const filtered = filterRulesAgainstNamespaces(config.rules, baseNamespaces);
     if (Object.keys(filtered).length !== Object.keys(config.rules).length) {
       config.rules = filtered as typeof config.rules;
     }
   }
+
+  // 5. Sanitize each override INDEPENDENTLY. An override can declare
+  // its own `jsPlugins` / `plugins`, so we compute a per-override
+  // namespace set: base namespaces ∪ the override's own surviving
+  // jsPlugins' namespaces. If `override.plugins` is present it
+  // replaces base.plugins per Oxlint's schema, but for namespace
+  // resolution we still include the base set (rules under a base
+  // namespace are still valid inside the override).
   if (Array.isArray(config.overrides)) {
     for (const override of config.overrides) {
+      // Override jsPlugins.
+      let overrideSurvivors: NonNullable<OxlintConfig['jsPlugins']> = [];
+      if (override.jsPlugins) {
+        const split = partitionJsPlugins(override.jsPlugins, availablePackages);
+        for (const n of split.dropped) {
+          allDroppedJsPlugins.add(n);
+        }
+        if (split.dropped.length > 0) {
+          override.jsPlugins = split.kept;
+        }
+        overrideSurvivors = split.kept;
+      }
+      const overrideNamespaces = new Set<string>(baseNamespaces);
+      for (const ns of jsPluginsToNamespaces(overrideSurvivors)) {
+        overrideNamespaces.add(ns);
+      }
+
+      // Override plugins[].
+      if (override.plugins) {
+        type OverridePluginEntry = NonNullable<typeof override.plugins>[number];
+        const keptOverridePlugins: OverridePluginEntry[] = [];
+        for (const p of override.plugins) {
+          if (overrideNamespaces.has(p)) {
+            keptOverridePlugins.push(p);
+          } else {
+            allDroppedPlugins.add(p);
+          }
+        }
+        if (keptOverridePlugins.length !== override.plugins.length) {
+          override.plugins = keptOverridePlugins;
+        }
+      }
+
+      // Override rules.
       if (override.rules) {
-        const filtered = filterRules(override.rules);
+        const filtered = filterRulesAgainstNamespaces(override.rules, overrideNamespaces);
         if (Object.keys(filtered).length !== Object.keys(override.rules).length) {
           override.rules = filtered as typeof override.rules;
         }
@@ -2228,18 +2362,27 @@ function sanitizeMigratedOxlintConfig(
     }
   }
 
-  // 5. Warn the user about each class of stripped reference.
-  if (droppedJsPlugins.length > 0) {
+  // 6. Warn.
+  //
+  // We deliberately don't try to distinguish "we just removed this
+  // package as part of the ESLint-ecosystem cleanup" from "the user
+  // never had it installed" — the only honest signal we have is "not
+  // in any package.json after cleanup", and a name-based heuristic
+  // (matches `eslint-plugin-*`?) misclassifies the @oxlint/migrate
+  // phantom-reference case (e.g. `@unocss/eslint-config` translating
+  // into `eslint-plugin-unocss` even though the user never had it).
+  // A single accurate message covers both paths.
+  if (allDroppedJsPlugins.size > 0) {
     warnMigration(
-      `Stripped unresolvable JS plugin reference(s) from the generated lint config: ${droppedJsPlugins.join(', ')}. ` +
-        `@oxlint/migrate produced these from your ESLint config but the underlying package(s) aren't installed. ` +
-        'Install them manually if you want their lint coverage back.',
+      `Stripped JS plugin reference(s) from the generated lint config: ${[...allDroppedJsPlugins].join(', ')}. ` +
+        'No matching package is present in this workspace, so loading them at lint time would fail. ' +
+        'If you want their Oxlint coverage back, install each package (e.g. `vp install <name>`) and add its name back to `lint.jsPlugins` in vite.config.ts.',
       report,
     );
   }
-  if (droppedPlugins.length > 0) {
+  if (allDroppedPlugins.size > 0) {
     warnMigration(
-      `Stripped unknown plugin reference(s) from the generated lint config: ${droppedPlugins.join(', ')}. ` +
+      `Stripped unknown plugin reference(s) from the generated lint config: ${[...allDroppedPlugins].join(', ')}. ` +
         "These aren't native Oxlint plugins and no surviving JS plugin contributes them.",
       report,
     );
@@ -2254,6 +2397,11 @@ export function mergeViteConfigFiles(
   silent = false,
   report?: MigrationReport,
   packages?: WorkspacePackage[],
+  // For per-sub-package callers: the workspace root that `packages[].path`
+  // is relative to. When undefined we resolve relative to `projectPath`
+  // (correct for the top-level standalone/monorepo callers, where
+  // projectPath IS the workspace root).
+  workspaceRoot?: string,
 ): void {
   const configs = detectConfigs(projectPath);
   if (!configs.oxfmtConfig && !configs.oxlintConfig) {
@@ -2281,9 +2429,13 @@ export function mergeViteConfigFiles(
     // Drop references to plugins / jsPlugins / rules that won't resolve
     // at lint time (e.g. `@oxlint/migrate` translating `@unocss/eslint-config`
     // → `eslint-plugin-unocss` even when that package isn't installed).
+    // Resolve workspace package paths against `workspaceRoot` when the
+    // caller is processing a sub-package — otherwise the sanitizer would
+    // mistakenly look for `subPath/<sibling-pkg-path>` and miss the
+    // hoisted deps it's supposed to see.
     sanitizeMigratedOxlintConfig(
       oxlintJson,
-      collectInstalledPackageNames(projectPath, packages),
+      collectInstalledPackageNames(workspaceRoot ?? projectPath, packages),
       report,
     );
     const normalizedOxlintConfig = ensureVitePlusImportRuleDefaults(oxlintJson);
