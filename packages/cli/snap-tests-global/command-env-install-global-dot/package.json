@@ -1,0 +1,7 @@
+{
+  "name": "just-a-normal-package",
+  "version": "0.0.0",
+  "bin": {
+    "just-a-normal-package": "./bin.js"
+  }
+}

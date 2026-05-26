@@ -1,0 +1,9 @@
+> vp install -g .
+info: Installing 1 global package with Node.js <semver>
+✓ Installed just-a-normal-package <semver>
+  Bins: just-a-normal-package
+
+> vp list -g just-a-normal-package
+Package                       Node version   Binaries
+---                           ---            ---
+just-a-normal-package@<semver>   <semver>         just-a-normal-package
