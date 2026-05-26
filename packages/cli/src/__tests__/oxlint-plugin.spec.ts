@@ -111,8 +111,43 @@ new RuleTester({
       code: `type TestFn = typeof import('vite-plus/test')['test']`,
       filename: 'types.ts',
     },
+    // `declare module 'vitest…'` / `declare module '@vitest/browser…'` are
+    // intentionally NOT autofixed — they target the upstream module identity
+    // so type augmentations merge with what `vite-plus/test*` re-exports.
+    {
+      code: `declare module 'vitest' {}`,
+      filename: 'types.ts',
+    },
+    {
+      code: `declare module 'vitest/node' {}`,
+      filename: 'types.ts',
+    },
+    {
+      code: `declare module '@vitest/browser' {}`,
+      filename: 'types.ts',
+    },
+    {
+      code: `declare module '@vitest/browser/context' {}`,
+      filename: 'types.ts',
+    },
+    {
+      code: `declare module '@vitest/browser-playwright' {}`,
+      filename: 'types.ts',
+    },
+    {
+      code: `declare module '@vitest/browser-playwright/context' {}`,
+      filename: 'types.ts',
+    },
   ],
   invalid: [
+    {
+      // `declare module 'vite'` IS rewritten — the vite family doesn't
+      // re-export upstream vite types so augmentation works against either id.
+      code: `declare module 'vite' {}`,
+      errors: 1,
+      filename: 'types.ts',
+      output: `declare module 'vite-plus' {}`,
+    },
     {
       code: `import { defineConfig } from 'vite'`,
       errors: 1,
@@ -133,18 +168,6 @@ new RuleTester({
       errors: 1,
       filename: 'types.ts',
       output: `type TestFn = typeof import('vite-plus/test')['test']`,
-    },
-    {
-      code: `declare module '@vitest/browser-playwright' {}`,
-      errors: 1,
-      filename: 'types.ts',
-      output: `declare module 'vite-plus/test/browser-playwright' {}`,
-    },
-    {
-      code: `declare module '@vitest/browser-playwright/context' {}`,
-      errors: 1,
-      filename: 'types.ts',
-      output: `declare module 'vite-plus/test/browser/context' {}`,
     },
     {
       code: `type BrowserClient = typeof import('@vitest/browser/client')`,
