@@ -3,6 +3,7 @@ ratatui = "ratatui"
 PUNICODE = "PUNICODE"
 Jod = "Jod" # Node.js v22 LTS codename
 flate = "flate" # flate2 crate name (gzip/deflate compression)
+PnP = "PnP" # Yarn Plug'n'Play
 
 [files]
 extend-exclude = [
