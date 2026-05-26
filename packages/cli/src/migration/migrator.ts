@@ -389,8 +389,11 @@ const ESLINT_ECOSYSTEM_NAMES = new Set<string>([
   '@typescript-eslint/eslint-plugin',
   '@typescript-eslint/parser',
   '@typescript-eslint/rule-tester',
-  // Framework runtime modules that wire ESLint and break without it:
-  '@nuxt/eslint',
+  // Note: framework-ESLint integration modules (e.g. `@nuxt/eslint`)
+  // are NOT listed here. They short-circuit the entire ESLint
+  // migration via `INCOMPATIBLE_ESLINT_INTEGRATIONS`, so this list is
+  // never consulted for them. Keeping them out avoids duplicating the
+  // "what to do about Nuxt" decision in two places.
 ]);
 
 // Flat name prefixes that mark an ESLint-only package.

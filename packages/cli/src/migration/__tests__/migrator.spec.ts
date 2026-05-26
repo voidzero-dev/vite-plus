@@ -404,7 +404,7 @@ describe('rewriteEslintPackageJson', () => {
     expect(pkg.devDependencies).toEqual({ keepme: '^1.0.0' });
   });
 
-  it('removes ESLint formatter, helper, and runtime-integration packages', () => {
+  it('removes ESLint formatter and helper packages', () => {
     const pkgPath = writePkg({
       devDependencies: {
         eslint: '^9.0.0',
@@ -416,13 +416,27 @@ describe('rewriteEslintPackageJson', () => {
         'eslint-scope': '^8.0.0',
         'eslint-define-config': '^2.0.0',
         'eslint-doc-generator': '^2.0.0',
-        '@nuxt/eslint': '^0.5.0',
         keepme: '^1.0.0',
       },
     });
     rewriteEslintPackageJson(pkgPath);
     const pkg = readJson(pkgPath);
     expect(pkg.devDependencies).toEqual({ keepme: '^1.0.0' });
+  });
+
+  it('does NOT remove framework-ESLint integrations (e.g. @nuxt/eslint) — those short-circuit migration upstream', () => {
+    // The skip path in `bin.ts` prevents `rewriteEslintPackageJson` from
+    // being called when `@nuxt/eslint` is present, so this function
+    // doesn't need to (and shouldn't) know about it.
+    const pkgPath = writePkg({
+      devDependencies: {
+        eslint: '^9.0.0',
+        '@nuxt/eslint': '^1.0.0',
+      },
+    });
+    rewriteEslintPackageJson(pkgPath);
+    const pkg = readJson(pkgPath);
+    expect(pkg.devDependencies).toEqual({ '@nuxt/eslint': '^1.0.0' });
   });
 
   it('preserves reusable @typescript-eslint/* AST libraries (utils, typescript-estree, etc.)', () => {
