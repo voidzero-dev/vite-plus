@@ -198,6 +198,75 @@ export function detectEslintProject(
 }
 
 /**
+ * Heuristic check for type-aware ESLint usage. Looks at flat / legacy /
+ * package.json#eslintConfig sources for either the typescript-eslint
+ * preset names (`recommendedTypeChecked` etc.) or the
+ * `parserOptions.project` / `projectService` keys that switch on
+ * type-aware linting.
+ *
+ * Used to record `report.hadTypeAwareEslint` so the user knows the
+ * Oxlint config preserves their prior type-aware coverage.
+ */
+export function hasTypeAwareEslintConfig(
+  projectPath: string,
+  configFile?: string,
+  legacyConfigFile?: string,
+): boolean {
+  const candidates: string[] = [];
+  if (configFile) {
+    candidates.push(path.join(projectPath, configFile));
+  }
+  if (legacyConfigFile) {
+    candidates.push(path.join(projectPath, legacyConfigFile));
+  }
+  const packageJsonPath = path.join(projectPath, 'package.json');
+  if (fs.existsSync(packageJsonPath)) {
+    try {
+      const pkg = readJsonFile(packageJsonPath) as { eslintConfig?: unknown };
+      if (pkg.eslintConfig) {
+        if (containsTypeAwareIndicator(JSON.stringify(pkg.eslintConfig))) {
+          return true;
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+  for (const filePath of candidates) {
+    let content: string;
+    try {
+      content = fs.readFileSync(filePath, 'utf8');
+    } catch {
+      continue;
+    }
+    if (containsTypeAwareIndicator(content)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function containsTypeAwareIndicator(text: string): boolean {
+  // typescript-eslint preset names that enable type-aware rules.
+  if (/recommendedTypeChecked|strictTypeChecked|stylisticTypeChecked/.test(text)) {
+    return true;
+  }
+  // New parserOptions.projectService API (typescript-eslint v8+).
+  if (/projectService/.test(text)) {
+    return true;
+  }
+  // Classic parserOptions.project pattern, both JSON and JS literal forms.
+  // We require both keys to be present and reasonably close together to
+  // avoid false positives from comments or unrelated keys. The `["']?`
+  // after `project` lets the regex match the JSON form `"project":` as
+  // well as the JS literal form `project:`.
+  if (/parserOptions[\s\S]{0,400}?\bproject["']?\s*:/.test(text)) {
+    return true;
+  }
+  return false;
+}
+
+/**
  * Run a `vp dlx @oxlint/migrate` step with graceful error handling.
  * Returns true on success, false on failure (spawn error or non-zero exit).
  */
@@ -255,6 +324,16 @@ export async function migrateEslintToOxlint(
         isCancelled: false,
       }
     : getSpinner(interactive);
+
+  // Record type-aware usage BEFORE we delete the config files, so we can
+  // preserve type-aware coverage in the resulting Oxlint config and tell
+  // the user we did so.
+  if (options?.report) {
+    const legacyConfigs = detectConfigs(projectPath);
+    if (hasTypeAwareEslintConfig(projectPath, eslintConfigFile, legacyConfigs.eslintLegacyConfig)) {
+      options.report.hadTypeAwareEslint = true;
+    }
+  }
 
   // Steps 1-2: Only run @oxlint/migrate if there's an eslint config at root
   if (eslintConfigFile) {
@@ -343,7 +422,34 @@ function deleteEslintConfigFiles(basePath: string, report?: MigrationReport, sil
   }
 }
 
-function rewriteEslintPackageJson(packageJsonPath: string): void {
+/**
+ * Decide whether a dependency entry should be removed alongside `eslint`
+ * itself. The set is conservative: only packages whose sole purpose is to
+ * configure or extend ESLint. Anything else is preserved.
+ */
+function isEslintEcosystemDep(name: string): boolean {
+  if (name === 'eslint') {
+    return true;
+  }
+  if (name.startsWith('eslint-plugin-') || name.startsWith('eslint-config-')) {
+    return true;
+  }
+  if (name === 'typescript-eslint') {
+    return true;
+  }
+  if (name.startsWith('@typescript-eslint/')) {
+    return true;
+  }
+  // Scoped plugins/configs, e.g. `@vue/eslint-config-typescript`,
+  // `@nuxt/eslint-config`, `@stylistic/eslint-plugin`. These are all
+  // ESLint-only and have no other consumers.
+  if (/^@[^/]+\/eslint-(plugin|config)(-.+)?$/.test(name)) {
+    return true;
+  }
+  return false;
+}
+
+export function rewriteEslintPackageJson(packageJsonPath: string): void {
   editJsonFile<{
     devDependencies?: Record<string, string>;
     dependencies?: Record<string, string>;
@@ -351,13 +457,17 @@ function rewriteEslintPackageJson(packageJsonPath: string): void {
     'lint-staged'?: Record<string, string | string[]>;
   }>(packageJsonPath, (pkg) => {
     let changed = false;
-    if (pkg.devDependencies?.eslint) {
-      delete pkg.devDependencies.eslint;
-      changed = true;
-    }
-    if (pkg.dependencies?.eslint) {
-      delete pkg.dependencies.eslint;
-      changed = true;
+    for (const field of ['devDependencies', 'dependencies'] as const) {
+      const deps = pkg[field];
+      if (!deps) {
+        continue;
+      }
+      for (const name of Object.keys(deps)) {
+        if (isEslintEcosystemDep(name)) {
+          delete deps[name];
+          changed = true;
+        }
+      }
     }
     if (pkg.scripts) {
       const updated = rewriteEslint(JSON.stringify(pkg.scripts));

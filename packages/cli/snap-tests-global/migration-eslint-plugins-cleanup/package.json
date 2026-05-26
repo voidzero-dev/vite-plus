@@ -1,0 +1,20 @@
+{
+  "name": "migration-eslint-plugins-cleanup",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "@vitejs/plugin-vue": "^6.0.0",
+    "@vue/eslint-config-typescript": "^14.0.0",
+    "eslint": "^9.0.0",
+    "eslint-config-airbnb": "^19.0.0",
+    "eslint-plugin-vue": "^10.0.0",
+    "typescript-eslint": "^8.0.0",
+    "vite": "^7.0.0",
+    "vue": "^3.5.0"
+  }
+}

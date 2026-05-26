@@ -1,0 +1,26 @@
+> vp migrate --no-interactive # migration should remove ESLint and its plugins/configs
+◇ Migrated . to Vite+
+• Node <semver>  pnpm <semver>
+• 4 config updates applied
+• ESLint rules migrated to Oxlint
+• TypeScript shim added for framework component files
+
+> cat package.json # check eslint, eslint-plugin-*, eslint-config-*, typescript-eslint and @typescript-eslint/* are removed
+{
+  "name": "migration-eslint-plugins-cleanup",
+  "scripts": {
+    "dev": "vp dev",
+    "build": "vp build",
+    "lint": "vp lint .",
+    "prepare": "vp config"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.0",
+    "vite": "catalog:",
+    "vue": "^3.5.0",
+    "vite-plus": "catalog:"
+  },
+  "packageManager": "pnpm@<semver>"
+}
+
+> test ! -f eslint.config.mjs # check eslint config is removed

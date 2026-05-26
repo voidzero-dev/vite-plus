@@ -27,6 +27,8 @@ const {
   hasFrameworkShim,
   addFrameworkShim,
   injectCreateDefaultTemplate,
+  rewriteEslintPackageJson,
+  hasTypeAwareEslintConfig,
 } = await import('../migrator.js');
 
 describe('rewritePackageJson', () => {
@@ -327,6 +329,169 @@ describe('rewritePackageJson', () => {
   });
 });
 
+describe('rewriteEslintPackageJson', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-eslint-cleanup-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  function writePkg(pkg: object): string {
+    const pkgPath = path.join(tmpDir, 'package.json');
+    fs.writeFileSync(pkgPath, JSON.stringify(pkg));
+    return pkgPath;
+  }
+
+  it('removes eslint, eslint-plugin-*, eslint-config-*, typescript-eslint, @typescript-eslint/*', () => {
+    const pkgPath = writePkg({
+      devDependencies: {
+        eslint: '^9.0.0',
+        'eslint-plugin-vue': '^10.0.0',
+        'eslint-plugin-react': '^7.0.0',
+        'eslint-config-airbnb': '^19.0.0',
+        'typescript-eslint': '^8.0.0',
+        '@typescript-eslint/parser': '^8.0.0',
+        '@typescript-eslint/eslint-plugin': '^8.0.0',
+        vite: '^7.0.0',
+      },
+      dependencies: {
+        'eslint-plugin-import': '^2.0.0',
+        vue: '^3.5.0',
+      },
+    });
+    rewriteEslintPackageJson(pkgPath);
+    const pkg = readJson(pkgPath);
+    expect(pkg.devDependencies).toEqual({ vite: '^7.0.0' });
+    expect(pkg.dependencies).toEqual({ vue: '^3.5.0' });
+  });
+
+  it('removes scoped ESLint plugin/config packages (e.g. @vue/eslint-config-typescript)', () => {
+    const pkgPath = writePkg({
+      devDependencies: {
+        '@vue/eslint-config-typescript': '^13.0.0',
+        '@nuxt/eslint-config': '^0.5.0',
+        '@stylistic/eslint-plugin': '^2.0.0',
+        '@stylistic/eslint-plugin-ts': '^2.0.0',
+        '@vitest/eslint-plugin': '^1.0.0',
+        keepme: '^1.0.0',
+      },
+    });
+    rewriteEslintPackageJson(pkgPath);
+    const pkg = readJson(pkgPath);
+    expect(pkg.devDependencies).toEqual({ keepme: '^1.0.0' });
+  });
+
+  it('preserves unrelated dependencies (e.g. @vitejs/plugin-vue, vue, vite)', () => {
+    const pkgPath = writePkg({
+      devDependencies: {
+        eslint: '^9.0.0',
+        '@vitejs/plugin-vue': '^6.0.0',
+        '@vue/runtime-core': '^3.5.0',
+        '@nuxt/kit': '^3.13.0',
+        '@nuxt/eslint': '^0.5.0',
+        vite: '^7.0.0',
+      },
+    });
+    rewriteEslintPackageJson(pkgPath);
+    const pkg = readJson(pkgPath);
+    expect(pkg.devDependencies).toEqual({
+      '@vitejs/plugin-vue': '^6.0.0',
+      '@vue/runtime-core': '^3.5.0',
+      '@nuxt/kit': '^3.13.0',
+      // `@nuxt/eslint` is the runtime package, not a config — preserved.
+      // (Only `@nuxt/eslint-config` matches the scoped-config pattern.)
+      '@nuxt/eslint': '^0.5.0',
+      vite: '^7.0.0',
+    });
+  });
+
+  it('no-ops when package.json has no eslint-ecosystem deps', () => {
+    const pkgPath = writePkg({
+      devDependencies: { vite: '^7.0.0' },
+    });
+    const before = fs.readFileSync(pkgPath, 'utf8');
+    rewriteEslintPackageJson(pkgPath);
+    const after = fs.readFileSync(pkgPath, 'utf8');
+    expect(after).toBe(before);
+  });
+});
+
+describe('hasTypeAwareEslintConfig', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-type-aware-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('detects flat config using tseslint.configs.recommendedTypeChecked', () => {
+    const file = 'eslint.config.js';
+    fs.writeFileSync(
+      path.join(tmpDir, file),
+      `import tseslint from 'typescript-eslint';\nexport default tseslint.config(tseslint.configs.recommendedTypeChecked);\n`,
+    );
+    expect(hasTypeAwareEslintConfig(tmpDir, file)).toBe(true);
+  });
+
+  it('detects flat config using strictTypeChecked', () => {
+    const file = 'eslint.config.ts';
+    fs.writeFileSync(
+      path.join(tmpDir, file),
+      `export default [tseslint.configs.strictTypeChecked];\n`,
+    );
+    expect(hasTypeAwareEslintConfig(tmpDir, file)).toBe(true);
+  });
+
+  it('detects parserOptions.projectService', () => {
+    const file = 'eslint.config.js';
+    fs.writeFileSync(
+      path.join(tmpDir, file),
+      `export default [{ languageOptions: { parserOptions: { projectService: true } } }];\n`,
+    );
+    expect(hasTypeAwareEslintConfig(tmpDir, file)).toBe(true);
+  });
+
+  it('detects legacy .eslintrc.json with parserOptions.project', () => {
+    const file = '.eslintrc.json';
+    fs.writeFileSync(
+      path.join(tmpDir, file),
+      JSON.stringify({ parserOptions: { project: './tsconfig.json' } }),
+    );
+    expect(hasTypeAwareEslintConfig(tmpDir, undefined, file)).toBe(true);
+  });
+
+  it('detects eslintConfig in package.json', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 't',
+        eslintConfig: { parserOptions: { project: './tsconfig.json' } },
+      }),
+    );
+    expect(hasTypeAwareEslintConfig(tmpDir)).toBe(true);
+  });
+
+  it('returns false when no type-aware indicators are present', () => {
+    const file = 'eslint.config.js';
+    fs.writeFileSync(
+      path.join(tmpDir, file),
+      `export default [{ rules: { 'no-unused-vars': 'error' } }];\n`,
+    );
+    expect(hasTypeAwareEslintConfig(tmpDir, file)).toBe(false);
+  });
+
+  it('returns false when neither config file nor package.json exists', () => {
+    expect(hasTypeAwareEslintConfig(tmpDir)).toBe(false);
+  });
+});
+
 describe('parseNvmrcVersion', () => {
   it('strips v prefix', () => {
     expect(parseNvmrcVersion('v20.5.0')).toBe('20.5.0');
@@ -431,23 +596,7 @@ describe('migrateNodeVersionManagerFile', () => {
 
   it('adds volta manual step when voltaPresent is set', () => {
     fs.writeFileSync(path.join(tmpDir, '.nvmrc'), 'v20.5.0\n');
-    const report = {
-      createdViteConfigCount: 0,
-      mergedConfigCount: 0,
-      mergedStagedConfigCount: 0,
-      inlinedLintStagedConfigCount: 0,
-      removedConfigCount: 0,
-      tsdownImportCount: 0,
-      rewrittenImportFileCount: 0,
-      rewrittenImportErrors: [],
-      eslintMigrated: false,
-      prettierMigrated: false,
-      nodeVersionFileMigrated: false,
-      gitHooksConfigured: false,
-      frameworkShimAdded: false,
-      warnings: [],
-      manualSteps: [],
-    };
+    const report = createMigrationReport();
     migrateNodeVersionManagerFile(tmpDir, { file: '.nvmrc', voltaPresent: true }, report);
     expect(report.manualSteps).toContain('Remove the "volta" field from package.json');
   });
@@ -462,23 +611,7 @@ describe('migrateNodeVersionManagerFile', () => {
 
   it('returns false and warns for unsupported alias', () => {
     fs.writeFileSync(path.join(tmpDir, '.nvmrc'), 'system\n');
-    const report = {
-      createdViteConfigCount: 0,
-      mergedConfigCount: 0,
-      mergedStagedConfigCount: 0,
-      inlinedLintStagedConfigCount: 0,
-      removedConfigCount: 0,
-      tsdownImportCount: 0,
-      rewrittenImportFileCount: 0,
-      rewrittenImportErrors: [],
-      eslintMigrated: false,
-      prettierMigrated: false,
-      nodeVersionFileMigrated: false,
-      gitHooksConfigured: false,
-      frameworkShimAdded: false,
-      warnings: [],
-      manualSteps: [],
-    };
+    const report = createMigrationReport();
     const ok = migrateNodeVersionManagerFile(tmpDir, { file: '.nvmrc' }, report);
     expect(ok).toBe(false);
     expect(report.warnings.length).toBe(1);
@@ -495,23 +628,7 @@ describe('migrateNodeVersionManagerFile', () => {
   });
 
   it('sets nodeVersionFileMigrated and manualSteps in report for volta migration', () => {
-    const report = {
-      createdViteConfigCount: 0,
-      mergedConfigCount: 0,
-      mergedStagedConfigCount: 0,
-      inlinedLintStagedConfigCount: 0,
-      removedConfigCount: 0,
-      tsdownImportCount: 0,
-      rewrittenImportFileCount: 0,
-      rewrittenImportErrors: [],
-      eslintMigrated: false,
-      prettierMigrated: false,
-      nodeVersionFileMigrated: false,
-      gitHooksConfigured: false,
-      frameworkShimAdded: false,
-      warnings: [],
-      manualSteps: [],
-    };
+    const report = createMigrationReport();
     migrateNodeVersionManagerFile(
       tmpDir,
       { file: 'package.json', voltaNodeVersion: '20.5.0' },
@@ -531,23 +648,7 @@ describe('migrateNodeVersionManagerFile', () => {
   });
 
   it('returns false and warns when volta.node is a partial version', () => {
-    const report = {
-      createdViteConfigCount: 0,
-      mergedConfigCount: 0,
-      mergedStagedConfigCount: 0,
-      inlinedLintStagedConfigCount: 0,
-      removedConfigCount: 0,
-      tsdownImportCount: 0,
-      rewrittenImportFileCount: 0,
-      rewrittenImportErrors: [],
-      eslintMigrated: false,
-      prettierMigrated: false,
-      nodeVersionFileMigrated: false,
-      gitHooksConfigured: false,
-      frameworkShimAdded: false,
-      warnings: [],
-      manualSteps: [],
-    };
+    const report = createMigrationReport();
     const ok = migrateNodeVersionManagerFile(
       tmpDir,
       { file: 'package.json', voltaNodeVersion: '20' },
