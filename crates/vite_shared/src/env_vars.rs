@@ -76,6 +76,25 @@ pub const VP_CLI_BIN: &str = "VP_CLI_BIN";
 /// Global CLI version, passed from Rust binary to JS for --version display.
 pub const VP_GLOBAL_VERSION: &str = "VP_GLOBAL_VERSION";
 
+// ── HTTP client TLS / CA configuration ──────────────────────────────────
+
+/// Path to a PEM bundle of extra CA certificates to trust for HTTPS.
+///
+/// Industry-standard env var also set by tools like Socket Firewall Free.
+pub const SSL_CERT_FILE: &str = "SSL_CERT_FILE";
+
+/// Path to a PEM bundle of extra CA certificates to trust for HTTPS.
+///
+/// Node.js convention; honored alongside `SSL_CERT_FILE` for setups that only
+/// configure the Node-flavored variable.
+pub const NODE_EXTRA_CA_CERTS: &str = "NODE_EXTRA_CA_CERTS";
+
+/// Disable HTTPS certificate verification in vp's shared HTTP client.
+///
+/// Diagnostic escape hatch only. Setting this to any value triggers a loud
+/// startup warning. Do not use in production.
+pub const VP_INSECURE_TLS: &str = "VP_INSECURE_TLS";
+
 // ── Testing / Development ───────────────────────────────────────────────
 
 /// Override the trampoline binary path for tests.

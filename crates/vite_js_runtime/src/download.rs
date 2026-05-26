@@ -37,11 +37,11 @@ pub async fn download_file(
     target_path: &AbsolutePath,
     message: &str,
 ) -> Result<(), Error> {
-    vite_shared::ensure_tls_provider();
+    let client = vite_shared::shared_http_client();
 
     tracing::debug!("Downloading {url} to {target_path:?}");
 
-    let response = (|| async { reqwest::get(url).await?.error_for_status() })
+    let response = (|| async { client.get(url).send().await?.error_for_status() })
         .retry(
             ExponentialBuilder::default()
                 .with_jitter()
@@ -113,11 +113,11 @@ pub async fn download_file(
 /// Download text content from a URL with retry logic
 #[expect(clippy::disallowed_types, reason = "HTTP response body is a String")]
 pub async fn download_text(url: &str) -> Result<String, Error> {
-    vite_shared::ensure_tls_provider();
+    let client = vite_shared::shared_http_client();
 
     tracing::debug!("Downloading text from {url}");
 
-    let content = (|| async { reqwest::get(url).await?.text().await })
+    let content = (|| async { client.get(url).send().await?.text().await })
         .retry(
             ExponentialBuilder::default()
                 .with_jitter()
@@ -138,12 +138,11 @@ pub async fn fetch_with_cache_headers(
     url: &str,
     if_none_match: Option<&str>,
 ) -> Result<CachedFetchResponse, Error> {
-    vite_shared::ensure_tls_provider();
+    let client = vite_shared::shared_http_client();
 
     tracing::debug!("Fetching with cache headers from {url}");
 
     let response = (|| async {
-        let client = reqwest::Client::new();
         let mut request = client.get(url);
 
         if let Some(etag) = if_none_match {
