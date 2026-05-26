@@ -16,15 +16,20 @@ use vite_js_runtime::NodeProvider;
 use vite_path::{AbsolutePath, AbsolutePathBuf, current_dir};
 use vite_shared::{format_path_prepended, output};
 
-use super::{
-    bin_config::BinConfig,
-    config::{
-        get_bin_dir, get_node_modules_dir, get_packages_dir, get_tmp_dir, resolve_version,
-        resolve_version_alias,
+use crate::{
+    commands::{
+        env::{
+            bin_config::BinConfig,
+            config::{
+                get_bin_dir, get_node_modules_dir, get_packages_dir, get_tmp_dir, resolve_version,
+                resolve_version_alias,
+            },
+            package_metadata::PackageMetadata,
+        },
+        global::CORE_SHIMS,
     },
-    package_metadata::PackageMetadata,
+    error::Error,
 };
-use crate::error::Error;
 
 struct Package<'a> {
     spec: &'a str,
@@ -654,9 +659,6 @@ fn is_javascript_binary(path: &AbsolutePath) -> bool {
     false
 }
 
-/// Core shims that should not be overwritten by package binaries.
-pub(crate) const CORE_SHIMS: &[&str] = &["node", "npm", "npx", "vp"];
-
 /// Create a shim for a package binary.
 ///
 /// On Unix: Creates a symlink to ../current/bin/vp
@@ -698,21 +700,25 @@ async fn create_package_shim(
 
     #[cfg(windows)]
     {
+        use crate::commands::env::{
+            cleanup_legacy_windows_shim, get_trampoline_path, remove_or_rename_to_old,
+        };
+
         let shim_path = bin_dir.join(format!("{}.exe", bin_name));
 
         // Delete before overwrite; falls back to rename if the exe is locked.
-        super::setup::remove_or_rename_to_old(&shim_path).await;
+        remove_or_rename_to_old(&shim_path).await;
 
         // Copy the trampoline binary as <bin_name>.exe.
         // The trampoline detects the tool name from its own filename and sets
         // VP_SHIM_TOOL env var before spawning vp.exe.
-        let trampoline_src = super::setup::get_trampoline_path()?;
+        let trampoline_src = get_trampoline_path()?;
         tokio::fs::copy(trampoline_src.as_path(), &shim_path).await?;
 
         // Remove legacy .cmd and shell script wrappers from previous versions.
         // In Git Bash/MSYS, the extensionless script takes precedence over .exe,
         // so leftover wrappers would bypass the trampoline.
-        super::setup::cleanup_legacy_windows_shim(bin_dir, bin_name).await;
+        cleanup_legacy_windows_shim(bin_dir, bin_name).await;
 
         tracing::debug!("Created package trampoline shim {:?}", shim_path);
     }
@@ -759,6 +765,7 @@ async fn remove_package_shim(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::commands::global::is_local_package_spec;
 
     struct CurrentDirGuard(std::path::PathBuf);
 
@@ -1005,30 +1012,6 @@ mod tests {
                 "tsserver.exe shim should be removed"
             );
         }
-    }
-
-    #[test]
-    fn test_parse_npm_view_version_json_string() {
-        let version = parse_npm_view_version(b"\"5.9.3\"\n").unwrap();
-        assert_eq!(version, "5.9.3");
-    }
-
-    #[test]
-    fn test_parse_npm_view_version_plain_string() {
-        let version = parse_npm_view_version(b"5.9.3\n").unwrap();
-        assert_eq!(version, "5.9.3");
-    }
-
-    #[test]
-    fn test_parse_npm_view_version_json_array_uses_latest_entry() {
-        let version = parse_npm_view_version(b"[\"5.9.2\", \"5.9.3\"]\n").unwrap();
-        assert_eq!(version, "5.9.3");
-    }
-
-    #[test]
-    fn test_parse_npm_view_version_rejects_empty_output() {
-        let err = parse_npm_view_version(b"\n").unwrap_err();
-        assert!(err.to_string().contains("empty version"));
     }
 
     #[test]
