@@ -21,7 +21,7 @@ If you are migrating an existing project and it still depends on older Vite or V
 - Check whether your `tsconfig.json` still uses `compilerOptions.baseUrl`
 
 The Oxlint type checker path powered by `tsgolint` does not support `baseUrl`.
-`vp migrate` and `vp lint --init` try to run the `@andrewbranch/ts5to6 --fixBaseUrl .`
+`vp migrate` and `vp lint --init` try to run the `vp dlx @andrewbranch/ts5to6 --fixBaseUrl .`
 fix before enabling type-aware linting. If that fix fails or is declined, Vite+
 skips `typeAware` and `typeCheck`.
 

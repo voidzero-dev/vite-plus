@@ -149,7 +149,7 @@ async function fixBaseUrlForWorkspace(
       addMigrationWarning(
         report,
         `Failed to remove tsconfig baseUrl in ${projectLabel}. ` +
-          'Run `npx @andrewbranch/ts5to6 --fixBaseUrl <tsconfig path>` manually and re-run the migration.',
+          'Run `vp dlx @andrewbranch/ts5to6 --fixBaseUrl <tsconfig path>` manually and re-run the migration.',
       );
     }
     if (status === 'fixed') {

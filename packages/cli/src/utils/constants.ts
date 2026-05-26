@@ -29,7 +29,7 @@ export function resolve(path: string) {
 
 export const BASEURL_TSCONFIG_WARNING =
   'Skipped typeAware/typeCheck: a tsconfig file contains baseUrl which is not yet supported by the oxlint type checker.\n' +
-  '  Run `npx @andrewbranch/ts5to6 --fixBaseUrl <tsconfig path>` to remove baseUrl from your tsconfig.';
+  '  Run `vp dlx @andrewbranch/ts5to6 --fixBaseUrl <tsconfig path>` to remove baseUrl from your tsconfig.';
 
 export const BASEURL_TSCONFIG_FIX_PACKAGE = '@andrewbranch/ts5to6';
 export const BASEURL_TSCONFIG_FIX_FLAG = '--fixBaseUrl';

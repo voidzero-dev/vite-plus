@@ -68,7 +68,7 @@ export async function confirmBaseUrlFix(interactive: boolean): Promise<boolean> 
         '`baseUrl` is deprecated in TypeScript 6.0 and removed in TypeScript 7.0.',
       ) +
       `\n  Download and run the external \`${BASEURL_TSCONFIG_FIX_PACKAGE}\` fixer now?\n  ` +
-      styleText('gray', `Equivalent command: \`npx ${command}\``),
+      styleText('gray', `Equivalent command: \`vp dlx ${command}\``),
     initialValue: true,
   });
   if (prompts.isCancel(confirmed)) {
