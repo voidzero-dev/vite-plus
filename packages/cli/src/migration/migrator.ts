@@ -2196,10 +2196,12 @@ function sanitizeMigratedOxlintConfig(
   }
 
   // 4. Drop rules whose namespace isn't backed by any surviving plugin.
-  const filterRules = <T extends Record<string, unknown> | undefined>(rules: T): T => {
-    if (!rules) {
-      return rules;
-    }
+  // Only reassign when the key was already present and the filter actually
+  // dropped something — otherwise we'd add a `rules: undefined` property,
+  // which JS object iteration treats as ordering-significant and shifts
+  // downstream key emission (notably, pushing `jsPlugins` after `rules`
+  // in the merged vite.config.ts).
+  const filterRules = (rules: Record<string, unknown>): Record<string, unknown> => {
     const out: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(rules)) {
       const slash = key.indexOf('/');
@@ -2207,12 +2209,22 @@ function sanitizeMigratedOxlintConfig(
         out[key] = value;
       }
     }
-    return out as T;
+    return out;
   };
-  config.rules = filterRules(config.rules);
+  if (config.rules) {
+    const filtered = filterRules(config.rules);
+    if (Object.keys(filtered).length !== Object.keys(config.rules).length) {
+      config.rules = filtered as typeof config.rules;
+    }
+  }
   if (Array.isArray(config.overrides)) {
     for (const override of config.overrides) {
-      override.rules = filterRules(override.rules);
+      if (override.rules) {
+        const filtered = filterRules(override.rules);
+        if (Object.keys(filtered).length !== Object.keys(override.rules).length) {
+          override.rules = filtered as typeof override.rules;
+        }
+      }
     }
   }
 
