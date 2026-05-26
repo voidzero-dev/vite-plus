@@ -28,8 +28,16 @@ export function resolve(path: string) {
 }
 
 export const BASEURL_TSCONFIG_WARNING =
-  'Skipped typeAware/typeCheck: tsconfig.json contains baseUrl which is not yet supported by the oxlint type checker.\n' +
-  '  Run `npx @andrewbranch/ts5to6 --fixBaseUrl .` to remove baseUrl from your tsconfig.';
+  'Skipped typeAware/typeCheck: a tsconfig file contains baseUrl which is not yet supported by the oxlint type checker.\n' +
+  '  Run `npx @andrewbranch/ts5to6 --fixBaseUrl <tsconfig path>` to remove baseUrl from your tsconfig.';
+
+export const BASEURL_TSCONFIG_FIX_PACKAGE = '@andrewbranch/ts5to6';
+export const BASEURL_TSCONFIG_FIX_FLAG = '--fixBaseUrl';
+export const BASEURL_TSCONFIG_FIX_DEFAULT_TARGET = '.';
+
+export function createBaseUrlTsconfigFixArgs(target = BASEURL_TSCONFIG_FIX_DEFAULT_TARGET) {
+  return [BASEURL_TSCONFIG_FIX_FLAG, target] as const;
+}
 
 export const DEFAULT_ENVS = {
   // Provide Node.js runtime information for oxfmt's telemetry/compatibility
