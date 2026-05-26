@@ -26,7 +26,7 @@ use crate::{
             },
             package_metadata::PackageMetadata,
         },
-        global::{CORE_SHIMS, parse_package_spec},
+        global::{CORE_SHIMS, is_local_package_spec, parse_package_spec},
     },
     error::Error,
 };
@@ -106,10 +106,11 @@ pub async fn install(
     for package_spec in package_specs {
         // Parse package spec (e.g., "typescript", "typescript@5.0.0", "@scope/pkg")
 
-        let (package_name, _version_spec) = match parse_package_spec(package_spec) {
-            Ok(result) => result,
-            Err(error) => return Err((Some(package_spec.clone()), error)),
-        };
+        let (package_name, _version_spec) =
+            match parse_package_spec(package_spec, Some(&npm_path), Some(&node_bin_dir)).await {
+                Ok(result) => result,
+                Err(error) => return Err((Some(package_spec.clone()), error)),
+            };
         packages.insert(package_name, Package { spec: package_spec, staging_dir: None });
     }
     let packages_count = packages.len();
@@ -399,7 +400,18 @@ async fn install_one(
 /// 1. Try to use PackageMetadata for binary list
 /// 2. Fallback to scanning BinConfig files for orphaned binaries
 pub async fn uninstall(package_name: &str, dry_run: bool) -> Result<(), Error> {
-    let (package_name, _) = parse_package_spec(package_name)?;
+    if is_local_package_spec(package_name) {
+        // We can't resolve local packages for uninstall, follow npm's behavior
+        return Err(Error::ConfigError(
+            format!(
+                "Local path {} can't be resolved, please enter a package name instead",
+                package_name
+            )
+            .into(),
+        ));
+    }
+
+    let (package_name, _) = parse_package_spec(package_name, None, None).await.unwrap();
 
     // Phase 1: Try to use PackageMetadata for binary list
     let bins = if let Some(metadata) = PackageMetadata::load(&package_name).await? {
@@ -883,30 +895,30 @@ mod tests {
         assert!(!is_local_package_spec("@scope/pkg@1.0.0"));
     }
 
-    #[test]
-    fn test_parse_package_spec_simple() {
-        let (name, version) = parse_package_spec("typescript").unwrap();
+    #[tokio::test]
+    async fn test_parse_package_spec_simple() {
+        let (name, version) = parse_package_spec("typescript", None, None).await.unwrap();
         assert_eq!(name, "typescript");
         assert_eq!(version, None);
     }
 
-    #[test]
-    fn test_parse_package_spec_with_version() {
-        let (name, version) = parse_package_spec("typescript@5.0.0").unwrap();
+    #[tokio::test]
+    async fn test_parse_package_spec_with_version() {
+        let (name, version) = parse_package_spec("typescript@5.0.0", None, None).await.unwrap();
         assert_eq!(name, "typescript");
         assert_eq!(version, Some("5.0.0".to_string()));
     }
 
-    #[test]
-    fn test_parse_package_spec_scoped() {
-        let (name, version) = parse_package_spec("@types/node").unwrap();
+    #[tokio::test]
+    async fn test_parse_package_spec_scoped() {
+        let (name, version) = parse_package_spec("@types/node", None, None).await.unwrap();
         assert_eq!(name, "@types/node");
         assert_eq!(version, None);
     }
 
-    #[test]
-    fn test_parse_package_spec_scoped_with_version() {
-        let (name, version) = parse_package_spec("@types/node@20.0.0").unwrap();
+    #[tokio::test]
+    async fn test_parse_package_spec_scoped_with_version() {
+        let (name, version) = parse_package_spec("@types/node@20.0.0", None, None).await.unwrap();
         assert_eq!(name, "@types/node");
         assert_eq!(version, Some("20.0.0".to_string()));
     }

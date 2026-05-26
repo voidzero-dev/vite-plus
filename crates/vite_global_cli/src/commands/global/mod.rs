@@ -48,23 +48,34 @@ impl NpmRegistry {
     }
 
     async fn latest_package_version(&self, package_spec: &str) -> Result<String, Error> {
-        let output = Command::new(self.npm_path.as_path())
-            .args(["view", package_spec, "version", "--json"])
-            .env("PATH", format_path_prepended(self.node_bin_dir.as_path()))
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .output()
-            .await?;
+        let output = npm_view(&self.npm_path, &self.node_bin_dir, package_spec, "version").await?;
 
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-            return Err(Error::ConfigError(
-                format!("npm view failed for {package_spec}: {stderr}").into(),
-            ));
-        }
-
-        parse_npm_view_version(&output.stdout)
+        parse_npm_view_version(&output)
     }
+}
+
+async fn npm_view(
+    npm_path: &AbsolutePathBuf,
+    node_bin_dir: &AbsolutePathBuf,
+    package_spec: &str,
+    field: &str,
+) -> Result<Vec<u8>, Error> {
+    let output = Command::new(npm_path.as_path())
+        .args(["view", package_spec, field, "--json"])
+        .env("PATH", format_path_prepended(node_bin_dir.as_path()))
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .await?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(Error::ConfigError(
+            format!("npm view failed for {package_spec}: {stderr}").into(),
+        ));
+    }
+
+    Ok(output.stdout)
 }
 
 pub(crate) async fn latest_package_versions(
@@ -133,48 +144,20 @@ pub(crate) fn is_local_package_spec(spec: &str) -> bool {
 }
 
 /// Parse package spec into name and optional version.
-/// For local packages, it will read the package.json and return the real package name
+/// For local packages, resolve the real package name with `npm view` when npm paths are available.
 ///
 /// It will never return an `Err()` if it is not a local package
-pub(crate) fn parse_package_spec(spec: &str) -> Result<(String, Option<String>), Error> {
+/// Missing `npm_path` or `node_bin_dir` may cause panic, unless you are sure it is not a local paclkage
+pub(crate) async fn parse_package_spec(
+    spec: &str,
+    npm_path: Option<&AbsolutePathBuf>,
+    node_bin_dir: Option<&AbsolutePathBuf>,
+) -> Result<(String, Option<String>), Error> {
     if is_local_package_spec(spec) {
-        let path_spec = spec.strip_prefix("file:").unwrap_or(spec);
-        let path = std::path::Path::new(path_spec);
-        let package_dir = if path.is_absolute() {
-            AbsolutePathBuf::new(path.to_path_buf()).ok_or_else(|| {
-                Error::ConfigError(format!("Invalid local package path {spec}").into())
-            })?
-        } else {
-            current_dir()
-                .map_err(|error| {
-                    Error::ConfigError(format!("Cannot get current directory: {error}").into())
-                })?
-                .join(path)
-        };
-        let package_json_path = package_dir.join("package.json");
-        let package_json_content =
-            std::fs::read_to_string(package_json_path.as_path()).map_err(|error| {
-                Error::ConfigError(
-                    format!(
-                        "Failed to read package.json for local package {spec} at {}: {error}",
-                        package_json_path.as_path().display()
-                    )
-                    .into(),
-                )
-            })?;
-        let package_json: serde_json::Value =
-            serde_json::from_str(&package_json_content).map_err(Error::JsonError)?;
-        let Some(package_name) = package_json.get("name").and_then(|name| name.as_str()) else {
-            return Err(Error::ConfigError(
-                format!(
-                    "Local package {spec} must have a string name in {}",
-                    package_json_path.as_path().display()
-                )
-                .into(),
-            ));
-        };
-
-        Ok((package_name.to_string(), None))
+        let npm_path = npm_path.unwrap();
+        let node_bin_dir = node_bin_dir.unwrap();
+        let output = npm_view(npm_path, node_bin_dir, spec, "name").await?;
+        Ok((parse_npm_view_string(&output, "name")?, None))
     } else {
         if spec.starts_with('@') {
             if let Some(idx) = spec[1..].find('@') {
@@ -189,6 +172,19 @@ pub(crate) fn parse_package_spec(spec: &str) -> Result<(String, Option<String>),
         }
 
         Ok((spec.to_string(), None))
+    }
+}
+
+fn parse_npm_view_string(stdout: &[u8], field: &str) -> Result<String, Error> {
+    let raw = String::from_utf8_lossy(stdout);
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Err(Error::ConfigError(format!("npm view returned an empty {field}").into()));
+    }
+
+    match serde_json::from_str::<serde_json::Value>(trimmed) {
+        Ok(serde_json::Value::String(value)) => Ok(value),
+        _ => Ok(trimmed.to_string()),
     }
 }
 
