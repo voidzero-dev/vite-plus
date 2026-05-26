@@ -45,4 +45,4 @@ jobs:
         shell: bash
         run: git remote remove origin
 
-      - uses: oxc-project/security-action@77e230508eccbb400b23746dab6c573a8ea7483e # v1.0.5
+      - uses: oxc-project/security-action@585c068c5601ae7fff88ff839d2cd0d2c742bf28 # v1.0.6

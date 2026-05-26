@@ -361,6 +361,10 @@ pub enum PackageManagerCommand {
         #[arg(short = 'g', long)]
         global: bool,
 
+        /// Number of global package checks to run in parallel (only with -g)
+        #[arg(long, requires = "global", value_parser = parse_positive_usize)]
+        concurrency: Option<usize>,
+
         /// Additional arguments to pass through to the package manager
         #[arg(last = true, allow_hyphen_values = true)]
         pass_through_args: Option<Vec<String>>,
@@ -524,6 +528,7 @@ impl PackageManagerCommand {
             Self::Install { global, .. }
             | Self::Add { global, .. }
             | Self::Remove { global, .. }
+            | Self::Outdated { global, .. }
             | Self::Update { global, .. } => *global,
             Self::Pm(PmCommands::List { global, .. }) => *global,
             _ => false,
@@ -554,6 +559,23 @@ impl PackageManagerCommand {
 /// Package manager subcommands (`vp pm <subcommand>`).
 #[derive(Subcommand, Debug, Clone)]
 pub enum PmCommands {
+    /// Approve dependency lifecycle scripts (install/postinstall) to run
+    #[command(name = "approve-builds")]
+    ApproveBuilds {
+        /// Packages to approve. Prefix with `!` to deny (pnpm >= 11.0.0 only).
+        /// Omit to launch interactive mode (pnpm only).
+        packages: Vec<String>,
+
+        /// Approve every package currently pending approval (pnpm >= 10.32.0).
+        /// Mutually exclusive with positional packages.
+        #[arg(long, conflicts_with = "packages")]
+        all: bool,
+
+        /// Additional arguments to pass through to the package manager
+        #[arg(last = true, allow_hyphen_values = true)]
+        pass_through_args: Option<Vec<String>>,
+    },
+
     /// Remove unnecessary packages
     Prune {
         /// Remove devDependencies
@@ -1181,5 +1203,57 @@ mod tests {
             .expect_err("expected zero concurrency to fail");
 
         assert_eq!(error.kind(), clap::error::ErrorKind::ValueValidation);
+    }
+
+    #[test]
+    fn approve_builds_all_conflicts_with_packages() {
+        let error = parse_pm_command(&["vp", "pm", "approve-builds", "--all", "esbuild"])
+            .expect_err("expected --all + positional to fail");
+
+        assert_eq!(error.kind(), clap::error::ErrorKind::ArgumentConflict);
+    }
+
+    #[test]
+    fn approve_builds_all_conflicts_with_deny_packages() {
+        let error = parse_pm_command(&["vp", "pm", "approve-builds", "--all", "!core-js"])
+            .expect_err("expected --all + !pkg to fail");
+
+        assert_eq!(error.kind(), clap::error::ErrorKind::ArgumentConflict);
+    }
+
+    #[test]
+    fn approve_builds_all_alone_parses() {
+        let command = parse_pm_command(&["vp", "pm", "approve-builds", "--all"])
+            .expect("--all alone should parse");
+
+        assert!(matches!(
+            command,
+            PackageManagerCommand::Pm(PmCommands::ApproveBuilds { all: true, .. })
+        ));
+    }
+
+    #[test]
+    fn approve_builds_packages_alone_parses() {
+        let command = parse_pm_command(&["vp", "pm", "approve-builds", "esbuild", "fsevents"])
+            .expect("positional packages should parse");
+
+        assert!(matches!(
+            command,
+            PackageManagerCommand::Pm(PmCommands::ApproveBuilds { all: false, .. })
+        ));
+    }
+
+    #[test]
+    fn approve_builds_pass_through_args_capture() {
+        let command =
+            parse_pm_command(&["vp", "pm", "approve-builds", "esbuild", "--", "--workspace-root"])
+                .expect("pass-through args should parse");
+
+        let PackageManagerCommand::Pm(PmCommands::ApproveBuilds { pass_through_args, .. }) =
+            command
+        else {
+            panic!("expected ApproveBuilds variant");
+        };
+        assert_eq!(pass_through_args, Some(vec!["--workspace-root".to_string()]));
     }
 }

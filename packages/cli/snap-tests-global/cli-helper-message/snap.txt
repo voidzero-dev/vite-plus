@@ -246,18 +246,19 @@ Arguments:
   [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
 
 Options:
-  --long                Show extended information
-  --format <FORMAT>     Output format: table (default), list, or json
-  -r, --recursive       Check recursively across all workspaces
-  --filter <PATTERN>    Filter packages in monorepo
-  -w, --workspace-root  Include workspace root
-  -P, --prod            Only production and optional dependencies
-  -D, --dev             Only dev dependencies
-  --no-optional         Exclude optional dependencies
-  --compatible          Only show compatible versions
-  --sort-by <FIELD>     Sort results by field
-  -g, --global          Check globally installed packages
-  -h, --help            Print help
+  --long                       Show extended information
+  --format <FORMAT>            Output format: table (default), list, or json
+  -r, --recursive              Check recursively across all workspaces
+  --filter <PATTERN>           Filter packages in monorepo
+  -w, --workspace-root         Include workspace root
+  -P, --prod                   Only production and optional dependencies
+  -D, --dev                    Only dev dependencies
+  --no-optional                Exclude optional dependencies
+  --compatible                 Only show compatible versions
+  --sort-by <FIELD>            Sort results by field
+  -g, --global                 Check globally installed packages
+  --concurrency <CONCURRENCY>  Number of global package checks to run in parallel (only with -g)
+  -h, --help                   Print help
 
 Documentation: https://viteplus.dev/guide/install
 
@@ -313,25 +314,26 @@ Usage: vp pm <COMMAND>
 Forward a command to the package manager
 
 Commands:
-  prune      Remove unnecessary packages
-  pack       Create a tarball of the package
-  list       List installed packages [aliases: ls]
-  view       View package information from the registry [aliases: info, show]
-  publish    Publish package to registry
-  owner      Manage package owners [aliases: author]
-  cache      Manage package cache
-  config     Manage package manager configuration [aliases: c]
-  login      Log in to a registry [aliases: adduser]
-  logout     Log out from a registry
-  whoami     Show the current logged-in user
-  token      Manage authentication tokens
-  audit      Run a security audit
-  dist-tag   Manage distribution tags
-  deprecate  Deprecate a package version
-  search     Search for packages in the registry
-  rebuild    Rebuild native modules [aliases: rb]
-  fund       Show funding information for installed packages
-  ping       Ping the registry
+  approve-builds  Approve dependency lifecycle scripts (install/postinstall) to run
+  prune           Remove unnecessary packages
+  pack            Create a tarball of the package
+  list            List installed packages [aliases: ls]
+  view            View package information from the registry [aliases: info, show]
+  publish         Publish package to registry
+  owner           Manage package owners [aliases: author]
+  cache           Manage package cache
+  config          Manage package manager configuration [aliases: c]
+  login           Log in to a registry [aliases: adduser]
+  logout          Log out from a registry
+  whoami          Show the current logged-in user
+  token           Manage authentication tokens
+  audit           Run a security audit
+  dist-tag        Manage distribution tags
+  deprecate       Deprecate a package version
+  search          Search for packages in the registry
+  rebuild         Rebuild native modules [aliases: rb]
+  fund            Show funding information for installed packages
+  ping            Ping the registry
 
 Options:
   -h, --help  Print help

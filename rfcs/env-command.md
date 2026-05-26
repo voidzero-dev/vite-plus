@@ -64,10 +64,11 @@ vp env doctor
 # Show which node binary would be executed in current directory
 vp env which node
 vp env which npm
+vp env which pnpm
 
 # Output current environment info as JSON
 vp env --current --json
-# Output: {"version":"20.18.0","source":".node-version","project_root":"/path/to/project","node_path":"/path/to/node"}
+# Output includes Node.js resolution and, when package.json#packageManager is present, package-manager resolution.
 
 # Print shell snippet for current session (fallback for special environments)
 vp env --print
@@ -218,9 +219,11 @@ vp update -g typescript   # Update specific package
 ```bash
 # These commands are intercepted by shims automatically
 node -v           # Uses project-specific version
-npm install       # Uses correct npm for the resolved Node version
-npx vitest        # Uses correct npx
+npm install       # Uses packageManager npm@<version> when explicitly configured, otherwise Node-bundled npm
+npx vitest        # Uses packageManager npm@<version> when explicitly configured, otherwise Node-bundled npx
 ```
+
+Package-manager shims use `packageManager` only when the invoked command matches the configured manager or one of its generated aliases. For example, `packageManager: "npm@11.14.0"` makes the `npm` and `npx` shims run npm 11.14.0, while `packageManager: "pnpm@10.19.0"` does not turn `npm install` into `pnpm install`; `npm` falls back to the npm available through the resolved Node.js runtime. Alias pairs follow the package-manager download layout: `npm`/`npx`, `pnpm`/`pnpx`, `yarn`/`yarnpkg`, and `bun`/`bunx`.
 
 ## Architecture Overview
 
@@ -1363,10 +1366,11 @@ $ vp env which eslint
   Installed:  2024-02-20
 ```
 
-| Tool Type       | Resolution                          | Output                                                         |
-| --------------- | ----------------------------------- | -------------------------------------------------------------- |
-| Core tools      | Node.js version from project config | Binary path + Version + Source                                 |
-| Global packages | Package metadata lookup             | Binary path + Package version + Node.js version + Install date |
+| Tool Type        | Resolution                          | Output                                                         |
+| ---------------- | ----------------------------------- | -------------------------------------------------------------- |
+| Core tools       | Node.js version from project config | Binary path + Version + Source                                 |
+| Package managers | Matching `packageManager` field     | Binary path + Package version + Source                         |
+| Global packages  | Package metadata lookup             | Binary path + Package version + Node.js version + Install date |
 
 **Error cases:**
 
@@ -1916,6 +1920,7 @@ vp env exec python --version      # Fails: --node required for non-shim tools
 When `--node` is **not provided** and the first command is a shim tool:
 
 - **Core tools (node, npm, npx)**: Version resolved from `.node-version`, `package.json#engines.node`, or default
+- **Matching package-manager tools (npm/npx, pnpm/pnpx, yarn/yarnpkg, bun/bunx)**: If `packageManager` explicitly declares the same tool family, the shim downloads/runs that package-manager version while keeping the project-resolved Node.js runtime on PATH. Mismatched tools are not translated.
 - **Global packages (tsc, eslint, etc.)**: Uses the Node.js version that was used during `vp install -g`
 
 Both use the **exact same code path** as Unix symlinks (`shim::dispatch()`), ensuring identical behavior across platforms. On Windows, trampoline `.exe` shims set `VITE_PLUS_SHIM_TOOL` to enter shim dispatch mode.
@@ -2077,6 +2082,14 @@ $ vp env --current --json
     "node": "/Users/user/.cache/vite-plus/js_runtime/node/20.18.0/bin/node",
     "npm": "/Users/user/.cache/vite-plus/js_runtime/node/20.18.0/bin/npm",
     "npx": "/Users/user/.cache/vite-plus/js_runtime/node/20.18.0/bin/npx"
+  },
+  "package_manager": {
+    "name": "npm",
+    "version": "11.14.0",
+    "source": "packageManager",
+    "source_path": "/Users/user/projects/my-app/package.json",
+    "project_root": "/Users/user/projects/my-app",
+    "bin_path": "/Users/user/.vite-plus/package_manager/npm/11.14.0/npm/bin/npm"
   }
 }
 ```

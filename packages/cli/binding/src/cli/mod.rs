@@ -208,9 +208,17 @@ async fn execute_pm_command(
             "Global package operations (`-g`/`--global`) are only supported by the globally-installed `vp` CLI. See https://viteplus.dev/guide/ to install it, then run the same command via the global `vp` binary.",
         )));
     }
-    let status = vite_pm_cli::dispatch(cwd, command)
-        .await
-        .map_err(|e| Error::Anyhow(anyhow::Error::new(e)))?;
+    let status = match vite_pm_cli::dispatch(cwd, command).await {
+        Ok(status) => status,
+        // Render `UserMessage` cleanly (no `error:` prefix) and exit non-zero —
+        // matches the global CLI's `is_user_message()` branch in main.rs so the
+        // friendly version-gate / usage errors look the same on both surfaces.
+        Err(vite_pm_cli::Error::UserMessage(msg)) => {
+            vite_shared::output::raw_stderr(&msg);
+            return Ok(ExitStatus(1));
+        }
+        Err(e) => return Err(Error::Anyhow(anyhow::Error::new(e))),
+    };
     Ok(ExitStatus(status.code().unwrap_or(1) as u8))
 }
 

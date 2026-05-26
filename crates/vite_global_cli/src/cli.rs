@@ -13,15 +13,13 @@ use vite_pm_cli::PackageManagerCommand;
 use vite_shared::output;
 
 use crate::{
-    commands::{
-        self,
-        env::{global_install, package_metadata::PackageMetadata},
-    },
+    commands::{self, env::package_metadata::PackageMetadata, global},
     error::Error,
     help,
 };
 
 const DEFAULT_GLOBAL_INSTALL_CONCURRENCY: usize = 5;
+const DEFAULT_GLOBAL_VIEW_CONCURRENCY: usize = 3 * DEFAULT_GLOBAL_INSTALL_CONCURRENCY;
 
 #[derive(Clone, Copy, Debug)]
 pub struct RenderOptions {
@@ -298,9 +296,13 @@ pub enum EnvSubcommands {
     Print,
 
     /// Set or show the global default Node.js version
+    #[command(after_long_help = "\
+Examples:
+  vp env default          # Show the current default
+  vp env default lts      # Set the default")]
     Default {
-        /// Version to set as default (e.g., "20.18.0", "lts", "latest")
-        /// If not provided, shows the current default
+        /// Version to set as default (e.g., "20.18.0", "lts", "latest").
+        /// If omitted, prints the current default.
         version: Option<String>,
     },
 
@@ -330,9 +332,14 @@ pub enum EnvSubcommands {
     },
 
     /// Pin a Node.js version in the current directory (creates .node-version)
+    #[command(after_long_help = "\
+Examples:
+  vp env pin lts                  # Pin to latest LTS
+  vp env pin --unpin              # Remove .node-version
+  vp env pin \"^20.0.0\" --force    # Overwrite existing pin")]
     Pin {
-        /// Version to pin (e.g., "20.18.0", "lts", "latest", "^20.0.0")
-        /// If not provided, shows the current pinned version
+        /// Version to pin (e.g., "20.18.0", "lts", "latest", "^20.0.0").
+        /// If omitted, prints the currently pinned version.
         version: Option<String>,
 
         /// Remove the .node-version file from current directory
@@ -383,11 +390,17 @@ pub enum EnvSubcommands {
     },
 
     /// Execute a command with a specific Node.js version
-    #[command(visible_alias = "run")]
+    #[command(
+        visible_alias = "run",
+        after_long_help = "\
+Examples:
+  vp env exec --node lts npm install  # Pin version for this invocation
+  vp env exec node -v                 # Shim mode: version auto-resolved"
+    )]
     Exec {
-        /// Node.js version to use (e.g., "20.18.0", "lts", "^20.0.0")
-        /// If not provided and command is node/npm/npx or a global package binary,
-        /// version is resolved automatically (same as shim behavior)
+        /// Node.js version to use (e.g., "20.18.0", "lts", "^20.0.0").
+        /// If omitted and command is node/npm/npx or a global package binary,
+        /// version is resolved automatically (same as shim behavior).
         #[arg(long)]
         node: Option<String>,
 
@@ -417,9 +430,13 @@ pub enum EnvSubcommands {
     },
 
     /// Use a specific Node.js version for this shell session
+    #[command(after_long_help = "\
+Examples:
+  vp env use lts        # Override session with latest LTS
+  vp env use --unset    # Clear the session override")]
     Use {
-        /// Version to use (e.g., "20", "20.18.0", "lts", "latest")
-        /// If not provided, reads from .node-version or package.json
+        /// Version to use (e.g., "20", "20.18.0", "lts", "latest").
+        /// If omitted, reads from .node-version or package.json.
         version: Option<String>,
 
         /// Remove session override (revert to file-based resolution)
@@ -533,7 +550,7 @@ fn run_tasks_completions(current: &OsStr) -> Vec<clap_complete::CompletionCandid
 /// Handle a parsed package-manager command.
 ///
 /// `Install`/`Add`/`Update`/`Remove` invoked with `-g`/`--global` are routed
-/// through the vite-plus-managed Node.js install store (`commands::env`).
+/// through the vite-plus-managed Node.js install store (`commands::global`).
 /// Everything else is forwarded to `vite_pm_cli::dispatch`, which executes
 /// the underlying package manager (pnpm/npm/yarn/bun).
 async fn run_package_manager_command(
@@ -562,13 +579,30 @@ async fn run_package_manager_command(
             managed_update(packages, concurrency).await
         }
 
+        PackageManagerCommand::Outdated {
+            global: true,
+            ref packages,
+            long,
+            format,
+            concurrency,
+            ..
+        } => {
+            global::outdated::execute(
+                packages,
+                long,
+                format,
+                concurrency.unwrap_or(DEFAULT_GLOBAL_VIEW_CONCURRENCY),
+            )
+            .await
+        }
+
         // `pm list -g` lists vite-plus-managed globals, not the underlying PM's.
         PackageManagerCommand::Pm(vite_pm_cli::cli::PmCommands::List {
             global: true,
             json,
             ref pattern,
             ..
-        }) => crate::commands::env::packages::execute(json, pattern.as_deref()).await,
+        }) => global::packages::execute(json, pattern.as_deref()).await,
 
         cmd => {
             commands::prepend_js_runtime_to_path_env(&cwd).await?;
@@ -583,7 +617,7 @@ async fn managed_install(
     force: bool,
     concurrency: Option<usize>,
 ) -> Result<ExitStatus, Error> {
-    if let Err((package_name, error)) = crate::commands::env::global_install::install(
+    if let Err((package_name, error)) = global::install::install(
         packages,
         node,
         force,
@@ -604,7 +638,7 @@ async fn managed_install(
 
 async fn managed_uninstall(packages: &[String], dry_run: bool) -> Result<ExitStatus, Error> {
     for package in packages {
-        if let Err(e) = crate::commands::env::global_install::uninstall(package, dry_run).await {
+        if let Err(e) = global::install::uninstall(package, dry_run).await {
             vite_shared::output::raw_stderr(&format!("Failed to uninstall {package}: {e}"));
             return Ok(exit_status(1));
         }
@@ -612,98 +646,60 @@ async fn managed_uninstall(packages: &[String], dry_run: bool) -> Result<ExitSta
     Ok(ExitStatus::default())
 }
 
-fn is_global_package_up_to_date(installed_version: &str, registry_version: &str) -> bool {
-    installed_version.trim() == registry_version.trim()
-}
-
 async fn managed_update(
     packages: &[String],
     concurrency: Option<usize>,
 ) -> Result<ExitStatus, Error> {
-    let all_packages = if packages.is_empty() {
+    let concurrency = concurrency.unwrap_or(DEFAULT_GLOBAL_INSTALL_CONCURRENCY);
+    let mut to_update: Vec<String> = Vec::new();
+
+    let packages = if packages.is_empty() {
         let all = PackageMetadata::list_all().await?;
         if all.is_empty() {
             vite_shared::output::raw("No global packages installed.");
             return Ok(ExitStatus::default());
         }
-        Some(all)
-    } else {
+
         None
-    };
-
-    let mut to_update: Vec<String> = Vec::new();
-    let mut skipped = 0usize;
-
-    if let Some(all) = all_packages {
-        for metadata in all {
-            match global_install::latest_package_version(&metadata.name).await {
-                Ok(latest_version)
-                    if is_global_package_up_to_date(&metadata.version, &latest_version) =>
-                {
-                    vite_shared::output::raw(&format!(
-                        "{} is already up to date (v{}).",
-                        metadata.name, metadata.version
-                    ));
-                    skipped += 1;
-                }
-                Ok(_) => to_update.push(metadata.name.clone()),
-                Err(e) => {
-                    vite_shared::output::raw_stderr(&format!(
-                        "Could not check latest version for {}: {e}; updating anyway.",
-                        metadata.name
-                    ));
-                    to_update.push(metadata.name.clone());
-                }
-            }
-        }
     } else {
+        let mut managed_specs = Vec::new();
+
         for package in packages {
-            if global_install::is_local_package_spec(package) {
+            // Always update local packages
+            if global::is_local_package_spec(package) {
                 to_update.push(package.clone());
                 continue;
             }
 
-            let (package_name, _) = global_install::parse_package_spec(package);
-            if let Some(metadata) = PackageMetadata::load(&package_name).await? {
-                match global_install::latest_package_version(package).await {
-                    Ok(latest_version)
-                        if is_global_package_up_to_date(&metadata.version, &latest_version) =>
-                    {
-                        vite_shared::output::raw(&format!(
-                            "{} is already up to date (v{}).",
-                            package_name, metadata.version
-                        ));
-                        skipped += 1;
-                        continue;
-                    }
-                    Ok(_) => {}
-                    Err(e) => {
-                        vite_shared::output::raw_stderr(&format!(
-                            "Could not check latest version for {package}: {e}; updating anyway."
-                        ));
-                    }
-                }
+            let (package_name, _) = global::parse_package_spec(package);
+            if PackageMetadata::load(&package_name).await?.is_some() {
+                managed_specs.push(package.clone());
+            } else {
+                to_update.push(package.clone());
             }
-            to_update.push(package.clone());
         }
-    }
+
+        Some(managed_specs)
+    };
+    to_update.extend(
+        global::outdated::get_outdated_packages(
+            &packages.unwrap_or(Vec::new()),
+            concurrency * 3,
+            true,
+        )
+        .await?
+        .into_iter()
+        .map(|package| package.spec.unwrap_or(package.name)),
+    );
 
     if to_update.is_empty() {
-        if skipped > 0 {
-            vite_shared::output::raw("All global packages are up to date.");
-        }
+        vite_shared::output::raw("All global packages are up to date.");
         return Ok(ExitStatus::default());
     }
 
     // Call reinstall logic
-    if let Err((package_name, error)) = global_install::install(
-        &to_update,
-        None,
-        false,
-        concurrency.unwrap_or(DEFAULT_GLOBAL_INSTALL_CONCURRENCY),
-        true,
-    )
-    .await
+    if let Err((package_name, error)) =
+        global::install::install(&to_update, None, false, concurrency, true).await
     {
         output::error(&format!(
             "Failed to update {}: {error}",
@@ -956,19 +952,9 @@ pub fn try_parse_args_from_with_options(
 #[cfg(test)]
 mod tests {
     use super::{
-        has_flag_before_terminator, is_global_package_up_to_date, should_force_global_delegate,
+        has_flag_before_terminator, should_force_global_delegate,
         should_suppress_header_for_subcommand,
     };
-
-    #[test]
-    fn skips_global_update_when_registry_and_node_versions_match() {
-        assert!(is_global_package_up_to_date("5.9.3", "5.9.3"));
-    }
-
-    #[test]
-    fn updates_global_package_when_registry_version_differs_from_installed_version() {
-        assert!(!is_global_package_up_to_date("5.9.2", "5.9.3"));
-    }
 
     #[test]
     fn detects_flag_before_option_terminator() {

@@ -1,0 +1,8 @@
+{
+  "commands": [
+    "vp pm approve-builds --help # should show help",
+    "vp pm approve-builds # warn and exit 0 (no-op on npm)",
+    "vp pm approve-builds esbuild # warn and exit 0 (no-op on npm)",
+    "vp pm approve-builds --all # warn and exit 0 (no-op on npm)"
+  ]
+}

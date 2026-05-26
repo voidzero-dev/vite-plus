@@ -1,0 +1,7 @@
+{
+  "commands": [
+    "vp pm approve-builds --all # pnpm 10.31.0 < 10.32.0 → rejected with friendly UserMessage (no `error:` prefix)",
+    "vp pm approve-builds esbuild '!core-js' # pnpm 10.31.0 < 11.0.0 → !pkg deny syntax rejected",
+    "vp pm approve-builds esbuild # plain positional still works on old pnpm"
+  ]
+}

@@ -6,6 +6,8 @@
 
 Managed mode is on by default, so `node`, `npm`, and related shims resolve through Vite+ and pick the right Node.js version for the current project.
 
+When a project declares `packageManager` in `package.json`, matching package-manager shims also use that exact package-manager version. For example, `packageManager: "npm@10.9.4"` makes both `npm` and `npx` run through npm 10.9.4. Alias pairs follow the installed package-manager shims: `npm`/`npx`, `pnpm`/`pnpx`, `yarn`/`yarnpkg`, and `bun`/`bunx`. Vite+ does not translate mismatched commands, so a project pinned to `pnpm` still lets `npm` fall back to the npm that comes with the resolved Node.js runtime.
+
 By default, Vite+ stores its managed runtime and related files in `~/.vite-plus`. If needed, you can override that location with `VP_HOME`.
 
 If you want to keep that behavior, run:
@@ -99,6 +101,7 @@ vp env use --unset            # Remove the session override
 vp env current                # Show current resolved environment
 vp env current --json         # JSON output for automation
 vp env which node             # Show which node binary will be used
+vp env which npx              # Show pinned package-manager alias when packageManager matches
 vp env list-remote --lts      # List only LTS versions
 
 # Execute

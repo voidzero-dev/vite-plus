@@ -181,72 +181,43 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_detect_shell_pwsh() {
+    fn test_detect_shell_vp_shell_powershell() {
         let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig {
-            vp_shell_pwsh: true,
+            vp_shell: Some("powershell".into()),
             ..vite_shared::EnvConfig::for_test()
         });
         let shell = detect_shell();
-        assert!(matches!(shell, Shell::PowerShell));
+        assert_eq!(shell, Shell::PowerShell);
     }
 
     #[test]
-    fn test_detect_shell_fish() {
+    fn test_detect_shell_vp_shell_fish() {
         let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig {
-            fish_version: Some("3.7.0".into()),
+            vp_shell: Some("fish".into()),
             ..vite_shared::EnvConfig::for_test()
         });
         let shell = detect_shell();
-        assert!(matches!(shell, Shell::Fish));
+        assert_eq!(shell, Shell::Fish);
     }
 
     #[test]
-    fn test_detect_shell_fish_and_nushell() {
-        // Fish takes priority over Nu shell signal
+    fn test_detect_shell_vp_shell_nu() {
         let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig {
-            fish_version: Some("3.7.0".into()),
-            vp_shell_nu: true,
+            vp_shell: Some("nu".into()),
             ..vite_shared::EnvConfig::for_test()
         });
         let shell = detect_shell();
-        assert!(matches!(shell, Shell::Fish));
+        assert_eq!(shell, Shell::NuShell);
     }
 
     #[test]
     fn test_detect_shell_posix_default() {
-        // All shell detection fields None → defaults
         let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig::for_test());
         let shell = detect_shell();
         #[cfg(not(windows))]
-        assert!(matches!(shell, Shell::Posix));
+        assert_eq!(shell, Shell::Posix);
         #[cfg(windows)]
-        assert!(matches!(shell, Shell::Cmd));
-    }
-
-    #[test]
-    fn test_detect_shell_nushell() {
-        let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig {
-            vp_shell_nu: true,
-            ..vite_shared::EnvConfig::for_test()
-        });
-        let shell = detect_shell();
-        assert!(matches!(shell, Shell::NuShell));
-    }
-
-    #[test]
-    fn test_detect_shell_inherited_nu_version_is_posix() {
-        // NU_VERSION alone (inherited from parent Nushell) must NOT trigger Nu detection.
-        // Only the explicit VP_SHELL_NU marker set by env.nu wrapper counts.
-        let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig {
-            nu_version: Some("0.111.0".into()),
-            vp_shell_nu: false,
-            ..vite_shared::EnvConfig::for_test()
-        });
-        let shell = detect_shell();
-        #[cfg(not(windows))]
-        assert!(matches!(shell, Shell::Posix));
-        #[cfg(windows)]
-        let _ = shell;
+        assert_eq!(shell, Shell::Cmd);
     }
 
     #[test]
@@ -346,7 +317,7 @@ mod tests {
         let cwd = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
         let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig {
             env_use_eval_enable: true,
-            vp_shell_pwsh: true,
+            vp_shell: Some("powershell".into()),
             ..vite_shared::EnvConfig::for_test_with_home(temp_dir.path())
         });
 

@@ -4,8 +4,7 @@ use std::process::ExitStatus;
 
 use owo_colors::OwoColorize;
 
-use super::package_metadata::PackageMetadata;
-use crate::error::Error;
+use crate::{commands::env::package_metadata::PackageMetadata, error::Error};
 
 /// Execute the packages command.
 pub async fn execute(json: bool, pattern: Option<&str>) -> Result<ExitStatus, Error> {

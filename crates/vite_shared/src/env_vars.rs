@@ -36,15 +36,8 @@ pub const VP_DEBUG_SHIM: &str = "VP_DEBUG_SHIM";
 /// Enable eval mode for `vp env use`.
 pub const VP_ENV_USE_EVAL_ENABLE: &str = "VP_ENV_USE_EVAL_ENABLE";
 
-/// Explicit signal set by the Nushell wrapper to indicate Nu shell eval context.
-///
-/// Unlike `NU_VERSION` (which is inherited by child processes), this is only set
-/// by the `with-env` block in `env.nu`, so it cannot cause false detection when
-/// bash/zsh is launched from a Nushell session.
-pub const VP_SHELL_NU: &str = "VP_SHELL_NU";
-
-/// Explicit signal set by the `PowerShell` wrapper to indicate `PowerShell` eval context.
-pub const VP_SHELL_PWSH: &str = "VP_SHELL_PWSH";
+/// Explicitly specify the current shell.
+pub const VP_SHELL: &str = "VP_SHELL";
 
 /// Filter for update task types.
 pub const VITE_UPDATE_TASK_TYPES: &str = "VITE_UPDATE_TASK_TYPES";

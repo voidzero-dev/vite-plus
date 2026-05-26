@@ -175,6 +175,9 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
       .replaceAll(/\n\s+at .+/g, '')
       // replace git stash hashes: "git stash (abc1234)" => "git stash (<hash>)"
       .replaceAll(/git stash \([0-9a-f]+\)/g, 'git stash (<hash>)')
+      // replace bun-style build hashes after the semver banner:
+      // "bun pm trust v<semver> (af24e281)" => "bun pm trust v<semver> (<hash>)"
+      .replaceAll(/(v<semver>) \([0-9a-f]+\)/g, '$1 (<hash>)')
       // normalize cat error spacing: Windows "cat:file" vs Unix "cat: file"
       .replaceAll(/\bcat:(\S)/g, 'cat: $1')
   );

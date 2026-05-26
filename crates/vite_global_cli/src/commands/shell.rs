@@ -1,5 +1,7 @@
 //! Shared shell detection and profile helpers.
 
+use std::str::FromStr;
+
 use directories::BaseDirs;
 use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_str::Str;
@@ -19,21 +21,37 @@ pub enum Shell {
     Cmd,
 }
 
-/// Detect the current shell from environment variables.
+impl FromStr for Shell {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "sh" | "bash" | "zsh" => Ok(Shell::Posix),
+            "fish" => Ok(Shell::Fish),
+            "nu" | "nushell" => Ok(Shell::NuShell),
+            "pwsh" | "powershell" => Ok(Shell::PowerShell),
+            "cmd" => Ok(Shell::Cmd),
+            _ => Err(()),
+        }
+    }
+}
+
+/// Detect the current shell:
+/// 1. `VP_SHELL` environment variable
+/// 2. Platform default
 #[must_use]
 pub fn detect_shell() -> Shell {
     let config = vite_shared::EnvConfig::get();
-    if config.fish_version.is_some() {
-        Shell::Fish
-    } else if config.vp_shell_nu {
-        Shell::NuShell
-    } else if config.vp_shell_pwsh {
-        Shell::PowerShell
-    } else if cfg!(windows) {
-        Shell::Cmd
-    } else {
-        Shell::Posix
+
+    // 1. Check VP_SHELL environment variable
+    if let Some(vp_shell) = &config.vp_shell {
+        if let Ok(shell) = Shell::from_str(vp_shell) {
+            return shell;
+        }
     }
+
+    // 2. Platform default
+    if cfg!(windows) { Shell::Cmd } else { Shell::Posix }
 }
 
 /// All shell profile files that interactive terminal sessions may source.
@@ -235,53 +253,98 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_detect_shell_pwsh() {
-        let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig {
-            vp_shell_pwsh: true,
-            ..vite_shared::EnvConfig::for_test()
-        });
-        let shell = detect_shell();
-        assert!(matches!(shell, Shell::PowerShell));
+    fn test_shell_from_str() {
+        // POSIX shells
+        assert_eq!(Shell::from_str("sh"), Ok(Shell::Posix));
+        assert_eq!(Shell::from_str("bash"), Ok(Shell::Posix));
+        assert_eq!(Shell::from_str("zsh"), Ok(Shell::Posix));
+
+        // Other shells
+        assert_eq!(Shell::from_str("fish"), Ok(Shell::Fish));
+        assert_eq!(Shell::from_str("nu"), Ok(Shell::NuShell));
+        assert_eq!(Shell::from_str("nushell"), Ok(Shell::NuShell));
+        assert_eq!(Shell::from_str("powershell"), Ok(Shell::PowerShell));
+        assert_eq!(Shell::from_str("pwsh"), Ok(Shell::PowerShell));
+        assert_eq!(Shell::from_str("cmd"), Ok(Shell::Cmd));
+
+        // Case insensitive
+        assert_eq!(Shell::from_str("SH"), Ok(Shell::Posix));
+        assert_eq!(Shell::from_str("BASH"), Ok(Shell::Posix));
+        assert_eq!(Shell::from_str("Fish"), Ok(Shell::Fish));
+        assert_eq!(Shell::from_str("POWERSHELL"), Ok(Shell::PowerShell));
+        assert_eq!(Shell::from_str("Nu"), Ok(Shell::NuShell));
+
+        // Invalid
+        assert!(Shell::from_str("posix").is_err());
+        assert!(Shell::from_str("invalid").is_err());
+        assert!(Shell::from_str("").is_err());
     }
 
     #[test]
-    fn test_detect_shell_fish() {
+    fn test_detect_shell_vp_shell_explicit() {
         let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig {
-            fish_version: Some("3.7.0".into()),
+            vp_shell: Some("nu".into()),
             ..vite_shared::EnvConfig::for_test()
         });
         let shell = detect_shell();
-        assert!(matches!(shell, Shell::Fish));
+        assert_eq!(shell, Shell::NuShell);
     }
 
     #[test]
-    fn test_detect_shell_nushell() {
+    fn test_detect_shell_vp_shell_case_insensitive() {
         let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig {
-            vp_shell_nu: true,
+            vp_shell: Some("POWERSHELL".into()),
             ..vite_shared::EnvConfig::for_test()
         });
         let shell = detect_shell();
-        assert!(matches!(shell, Shell::NuShell));
+        assert_eq!(shell, Shell::PowerShell);
     }
 
     #[test]
-    fn test_detect_shell_nushell_wins_over_powershell() {
+    fn test_detect_shell_vp_shell_pwsh_alias() {
         let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig {
-            vp_shell_nu: true,
-            ps_module_path: Some("/some/path".into()),
+            vp_shell: Some("pwsh".into()),
             ..vite_shared::EnvConfig::for_test()
         });
         let shell = detect_shell();
-        assert!(matches!(shell, Shell::NuShell));
+        assert_eq!(shell, Shell::PowerShell);
     }
 
     #[test]
-    fn test_detect_shell_posix_default() {
-        let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig::for_test());
+    fn test_detect_shell_vp_shell_fish() {
+        let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig {
+            vp_shell: Some("fish".into()),
+            ..vite_shared::EnvConfig::for_test()
+        });
         let shell = detect_shell();
-        #[cfg(not(windows))]
-        assert!(matches!(shell, Shell::Posix));
-        #[cfg(windows)]
-        assert!(matches!(shell, Shell::Cmd));
+        assert_eq!(shell, Shell::Fish);
+    }
+
+    #[test]
+    fn test_detect_shell_defaults_without_vp_shell() {
+        let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig {
+            vp_shell: None,
+            ..vite_shared::EnvConfig::for_test()
+        });
+        let shell = detect_shell();
+        if cfg!(windows) {
+            assert_eq!(shell, Shell::Cmd);
+        } else {
+            assert_eq!(shell, Shell::Posix);
+        }
+    }
+
+    #[test]
+    fn test_detect_shell_invalid_vp_shell_falls_back_to_default() {
+        let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig {
+            vp_shell: Some("invalid".into()),
+            ..vite_shared::EnvConfig::for_test()
+        });
+        let shell = detect_shell();
+        if cfg!(windows) {
+            assert_eq!(shell, Shell::Cmd);
+        } else {
+            assert_eq!(shell, Shell::Posix);
+        }
     }
 }

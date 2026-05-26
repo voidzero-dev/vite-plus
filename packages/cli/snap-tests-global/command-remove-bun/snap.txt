@@ -30,7 +30,7 @@ Usage: vp remove <PACKAGES>... [-- <PASS_THROUGH_ARGS>...]
 For more information, try '--help'.
 
 > vp remove testnpm2 -D && cat package.json # should error when remove not exists package from dev dependencies
-bun remove v<semver> (af24e281)
+bun remove v<semver> (<hash>)
 package.json doesn't have dependencies, there's nothing to remove!
 {
   "name": "command-remove-bun",
@@ -39,17 +39,17 @@ package.json doesn't have dependencies, there's nothing to remove!
 }
 
 > vp add testnpm2 && vp add -D test-vite-plus-install && vp add -O test-vite-plus-package-optional && cat package.json # should add packages to dependencies
-bun add v<semver> (af24e281)
+bun add v<semver> (<hash>)
 
 installed testnpm2@<semver>
 
 1 package installed [<variable>ms]
-bun add v<semver> (af24e281)
+bun add v<semver> (<hash>)
 
 installed test-vite-plus-install@<semver>
 
 1 package installed [<variable>ms]
-bun add v<semver> (af24e281)
+bun add v<semver> (<hash>)
 
 installed test-vite-plus-package-optional@<semver>
 
@@ -70,7 +70,7 @@ installed test-vite-plus-package-optional@<semver>
 }
 
 > vp remove testnpm2 test-vite-plus-install && cat package.json # should remove packages from dependencies
-bun remove v<semver> (af24e281)
+bun remove v<semver> (<hash>)
 
 - testnpm2
 - test-vite-plus-install
@@ -85,7 +85,7 @@ bun remove v<semver> (af24e281)
 }
 
 > vp remove -O test-vite-plus-package-optional && cat package.json # should remove package from optional dependencies
-bun remove v<semver> (af24e281)
+bun remove v<semver> (<hash>)
 
 package.json has no dependencies! Deleted empty lockfile
 

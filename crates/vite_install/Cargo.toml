@@ -14,6 +14,7 @@ flate2 = { workspace = true }
 futures-util = { workspace = true }
 hex = { workspace = true }
 indoc = { workspace = true }
+node-semver = { workspace = true }
 pathdiff = { workspace = true }
 semver = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
