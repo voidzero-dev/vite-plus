@@ -6,10 +6,7 @@ import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import { applyEdits, modify, parse as parseJsonc } from 'jsonc-parser';
 
 import { runCommandSilently } from './command.ts';
-import {
-  BASEURL_TSCONFIG_FIX_PACKAGE,
-  createBaseUrlTsconfigFixArgs,
-} from './constants.ts';
+import { BASEURL_TSCONFIG_FIX_PACKAGE, createBaseUrlTsconfigFixArgs } from './constants.ts';
 import { cancelAndExit } from './prompts.ts';
 
 export type BaseUrlFixStatus = 'not-needed' | 'fixed' | 'declined' | 'failed';
@@ -44,15 +41,11 @@ export function findTsconfigFiles(projectPath: string): string[] {
 }
 
 export function hasBaseUrlInTsconfig(projectPath: string): boolean {
-  return findTsconfigFiles(projectPath).some((filePath) =>
-    hasBaseUrlInTsconfigFile(filePath),
-  );
+  return findTsconfigFiles(projectPath).some((filePath) => hasBaseUrlInTsconfigFile(filePath));
 }
 
 export function findTsconfigFilesWithBaseUrl(projectPath: string): string[] {
-  return findTsconfigFiles(projectPath).filter((filePath) =>
-    hasBaseUrlInTsconfigFile(filePath),
-  );
+  return findTsconfigFiles(projectPath).filter((filePath) => hasBaseUrlInTsconfigFile(filePath));
 }
 
 export async function confirmBaseUrlFix(interactive: boolean): Promise<boolean> {
@@ -95,8 +88,7 @@ export async function fixBaseUrlInTsconfig(
     return 'not-needed';
   }
 
-  const confirmed =
-    options?.confirmed ?? (await confirmBaseUrlFix(options?.interactive ?? false));
+  const confirmed = options?.confirmed ?? (await confirmBaseUrlFix(options?.interactive ?? false));
   if (!confirmed) {
     options?.onStatus?.('declined', projectPath);
     return 'declined';
