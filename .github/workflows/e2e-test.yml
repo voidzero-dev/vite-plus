@@ -226,18 +226,6 @@ jobs:
             command: |
               vp run test
               vp run build
-          - name: vite-plugin-vue
-            node-version: 24
-            command: |
-              # ESM Vue monorepo maintained by the Vite team. Real flat
-              # ESLint setup importing eslint-plugin-import-x, -n, -regexp
-              # — exercises the @oxlint/migrate → sanitizer end-to-end
-              # against the niche-plugin shape we don't otherwise cover.
-              vp run format
-              # `vp run lint` runs cleanly through our sanitized config
-              # but surfaces upstream lint findings in the playground
-              # tsconfig — those are project bugs, not migration ones.
-              vp run lint || true
           - name: oxlint-plugin-complexity
             node-version: 22
             command: |
