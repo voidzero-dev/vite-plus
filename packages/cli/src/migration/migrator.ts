@@ -306,23 +306,26 @@ export async function migrateEslintToOxlint(
     options.report.eslintMigrated = true;
   }
 
-  // Step 3: Delete all eslint config files at root
-  deleteEslintConfigFiles(projectPath, options?.report, options?.silent);
-
-  // Step 4: Remove all ESLint-ecosystem dependencies and rewrite eslint
-  // scripts, at the root and at every workspace package. A monorepo
-  // running `vp migrate` is being adopted as a whole — a project that
-  // intentionally publishes a shared ESLint preset should opt out of
-  // migration for that package rather than rely on partial cleanup.
-  rewriteEslintPackageJson(path.join(projectPath, 'package.json'));
-  if (packages) {
-    for (const pkg of packages) {
-      rewriteEslintPackageJson(path.join(projectPath, pkg.path, 'package.json'));
+  // Step 3-5: Cleanup runs uniformly across the root and every workspace
+  // package — delete eslint config files, scrub ESLint-ecosystem deps from
+  // package.json, and rewrite eslint references in any local lint-staged
+  // config. A monorepo running `vp migrate` is treated as adopted as a
+  // whole; there's no per-package opt-out today. If a workspace package
+  // publishes a shared ESLint preset that you want to keep intact, exclude
+  // it from your `pnpm-workspace.yaml` / `workspaces` before running
+  // `vp migrate`, then add it back afterwards.
+  const cleanupTargets = [
+    projectPath,
+    ...(packages ?? []).map((p) => path.join(projectPath, p.path)),
+  ];
+  for (const target of cleanupTargets) {
+    if (!fs.existsSync(path.join(target, 'package.json'))) {
+      continue;
     }
+    deleteEslintConfigFiles(target, options?.report, options?.silent);
+    rewriteEslintPackageJson(path.join(target, 'package.json'));
+    rewriteEslintLintStagedConfigFiles(target, options?.report);
   }
-
-  // Step 5: Rewrite eslint references in lint-staged config files
-  rewriteEslintLintStagedConfigFiles(projectPath, options?.report);
 
   return true;
 }
