@@ -187,7 +187,7 @@ dunce = "1.0.5"
 fast-glob = "1.0.0"
 flate2 = { version = "=1.1.9", features = ["zlib-rs"] }
 form_urlencoded = "1.2.1"
-fspy = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "c945cc0c7bb5af478a68d4548db7f46e621b36b0" }
+fspy = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "d02b257dc7fa6293b4f4f6774e5f883476b8846c" }
 futures = "0.3.31"
 futures-util = "0.3.31"
 glob = "0.3.2"
@@ -292,18 +292,18 @@ vfs = "0.13.0"
 vite_command = { path = "crates/vite_command" }
 vite_error = { path = "crates/vite_error" }
 vite_js_runtime = { path = "crates/vite_js_runtime" }
-vite_glob = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "c945cc0c7bb5af478a68d4548db7f46e621b36b0" }
+vite_glob = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "d02b257dc7fa6293b4f4f6774e5f883476b8846c" }
 vite_install = { path = "crates/vite_install" }
 vite_migration = { path = "crates/vite_migration" }
 vite_pm_cli = { path = "crates/vite_pm_cli" }
 vite_setup = { path = "crates/vite_setup" }
 vite_shared = { path = "crates/vite_shared" }
 vite_static_config = { path = "crates/vite_static_config" }
-vite_path = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "c945cc0c7bb5af478a68d4548db7f46e621b36b0" }
-vite_powershell = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "c945cc0c7bb5af478a68d4548db7f46e621b36b0" }
-vite_str = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "c945cc0c7bb5af478a68d4548db7f46e621b36b0" }
-vite_task = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "c945cc0c7bb5af478a68d4548db7f46e621b36b0" }
-vite_workspace = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "c945cc0c7bb5af478a68d4548db7f46e621b36b0" }
+vite_path = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "d02b257dc7fa6293b4f4f6774e5f883476b8846c" }
+vite_powershell = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "d02b257dc7fa6293b4f4f6774e5f883476b8846c" }
+vite_str = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "d02b257dc7fa6293b4f4f6774e5f883476b8846c" }
+vite_task = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "d02b257dc7fa6293b4f4f6774e5f883476b8846c" }
+vite_workspace = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "d02b257dc7fa6293b4f4f6774e5f883476b8846c" }
 walkdir = "2.5.0"
 wax = "0.6.0"
 which = "8.0.0"

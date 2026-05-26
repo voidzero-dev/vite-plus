@@ -67,21 +67,33 @@ Defines tasks that can be run with `vp run <task>`.
 
 ### `command`
 
-- **Type:** `string`
+- **Type:** `string | string[]`
 
-Defines the shell command to run for the task.
+Defines the shell command to run for the task. An array runs each entry sequentially, equivalent to joining them with `&&`.
 
 ```ts [vite.config.ts]
 tasks: {
   build: {
     command: 'vp build',
   },
+  check: {
+    command: ['vp lint', 'vp build'],
+  },
+}
+```
+
+As a shorthand, a task value can also be a command string or array of command strings directly, without the surrounding object:
+
+```ts [vite.config.ts]
+tasks: {
+  build: 'vp build',
+  check: ['vp lint', 'vp build'],
 }
 ```
 
 Each task defined in `vite.config.ts` must include its own `command`. You cannot define a task in both `vite.config.ts` and `package.json` with the same task name.
 
-Commands joined with `&&` are automatically split into independently cached sub-tasks. See [Compound Commands](/guide/run#compound-commands).
+Commands joined with `&&` (or supplied as an array) are automatically split into independently cached sub-tasks. See [Compound Commands](/guide/run#compound-commands).
 
 ### `dependsOn`
 
