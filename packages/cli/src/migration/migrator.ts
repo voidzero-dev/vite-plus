@@ -309,16 +309,15 @@ export async function migrateEslintToOxlint(
   // Step 3: Delete all eslint config files at root
   deleteEslintConfigFiles(projectPath, options?.report, options?.silent);
 
-  // Step 4: Remove eslint and all ESLint-ecosystem dependencies at the root,
-  // and rewrite eslint scripts.
-  rewriteEslintPackageJson(path.join(projectPath, 'package.json'), 'root');
-
-  // Step 4b: Workspace packages get a conservative cleanup — only `eslint`
-  // itself is removed; plugins and configs they declare may be part of a
-  // shared lint-preset API consumed outside Vite+, so we leave them alone.
+  // Step 4: Remove all ESLint-ecosystem dependencies and rewrite eslint
+  // scripts, at the root and at every workspace package. A monorepo
+  // running `vp migrate` is being adopted as a whole — a project that
+  // intentionally publishes a shared ESLint preset should opt out of
+  // migration for that package rather than rely on partial cleanup.
+  rewriteEslintPackageJson(path.join(projectPath, 'package.json'));
   if (packages) {
     for (const pkg of packages) {
-      rewriteEslintPackageJson(path.join(projectPath, pkg.path, 'package.json'), 'workspace');
+      rewriteEslintPackageJson(path.join(projectPath, pkg.path, 'package.json'));
     }
   }
 
@@ -407,16 +406,15 @@ function isEslintEcosystemDep(name: string): boolean {
 
 /**
  * Rewrite a project's `package.json` after ESLint has been migrated to
- * Oxlint. Root cleanup is aggressive — every ESLint-ecosystem dependency
- * is removed (see `isEslintEcosystemDep`). Workspace cleanup is
- * conservative — only `eslint` itself is removed, because workspace
- * sub-packages may intentionally publish ESLint plugins / configs as
- * part of a shared lint-preset API consumed outside Vite+.
+ * Oxlint: drop every ESLint-ecosystem dependency (see
+ * `isEslintEcosystemDep`), strip empty containers, and rewrite eslint
+ * tokens in scripts / lint-staged. Applied uniformly to the root and to
+ * every workspace package — the migration treats the whole workspace as
+ * in scope for adoption, so a half-cleanup at the workspace level would
+ * be inconsistent with the rest of the flow (which already replaces
+ * vite-related overrides and adds vite-plus across all packages).
  */
-export function rewriteEslintPackageJson(
-  packageJsonPath: string,
-  mode: 'root' | 'workspace' = 'root',
-): void {
+export function rewriteEslintPackageJson(packageJsonPath: string): void {
   editJsonFile<{
     devDependencies?: Record<string, string>;
     dependencies?: Record<string, string>;
@@ -426,7 +424,6 @@ export function rewriteEslintPackageJson(
     'lint-staged'?: Record<string, string | string[]>;
   }>(packageJsonPath, (pkg) => {
     let changed = false;
-    const isRemovable = mode === 'root' ? isEslintEcosystemDep : (n: string) => n === 'eslint';
     for (const field of [
       'devDependencies',
       'dependencies',
@@ -439,7 +436,7 @@ export function rewriteEslintPackageJson(
       }
       let removedAny = false;
       for (const name of Object.keys(deps)) {
-        if (isRemovable(name)) {
+        if (isEslintEcosystemDep(name)) {
           delete deps[name];
           changed = true;
           removedAny = true;

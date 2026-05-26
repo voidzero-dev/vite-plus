@@ -520,28 +520,6 @@ describe('rewriteEslintPackageJson', () => {
     });
   });
 
-  it('workspace mode removes only `eslint` itself, not plugins or configs', () => {
-    const pkgPath = writePkg({
-      devDependencies: {
-        eslint: '^9.0.0',
-        'eslint-plugin-import': '^2.0.0',
-        'eslint-config-airbnb': '^19.0.0',
-        '@typescript-eslint/parser': '^8.0.0',
-        vite: '^7.0.0',
-      },
-    });
-    rewriteEslintPackageJson(pkgPath, 'workspace');
-    const pkg = readJson(pkgPath);
-    // Plugins/configs that the workspace package may publish as a shared
-    // lint-preset API are preserved; only `eslint` itself goes.
-    expect(pkg.devDependencies).toEqual({
-      'eslint-plugin-import': '^2.0.0',
-      'eslint-config-airbnb': '^19.0.0',
-      '@typescript-eslint/parser': '^8.0.0',
-      vite: '^7.0.0',
-    });
-  });
-
   it('no-ops when package.json has no eslint-ecosystem deps', () => {
     const pkgPath = writePkg({
       devDependencies: { vite: '^7.0.0' },
