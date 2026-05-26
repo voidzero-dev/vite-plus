@@ -1,0 +1,8 @@
+{
+  "commands": [
+    "vp install -g .",
+    "vp install -g ./another-package.tgz",
+    "vp list -g just-a-normal-package another-normal-package"
+  ],
+  "after": ["vp remove -g just-a-normal-package another-normal-package"]
+}

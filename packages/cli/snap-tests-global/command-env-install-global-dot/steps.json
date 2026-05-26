@@ -1,4 +1,0 @@
-{
-  "commands": ["vp install -g .", "vp list -g just-a-normal-package"],
-  "after": ["vp remove -g just-a-normal-package"]
-}
