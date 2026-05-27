@@ -46,6 +46,48 @@ const BROWSER_PROVIDER_PACKAGES: ReadonlyArray<{ pkg: string; short: string }> =
   { pkg: '@vitest/browser-webdriverio', short: 'webdriverio' },
 ];
 
+// Plugin shim entries: each `@vitest/*` package/subpath projected under
+// `./test/plugins/<name>` to restore the surface that the removed
+// `@voidzero-dev/vite-plus-test` wrapper previously exposed.
+const PLUGIN_SHIM_ENTRIES: ReadonlyArray<readonly [importSpecifier: string, pluginName: string]> =
+  [
+    ['@vitest/runner', 'runner'],
+    ['@vitest/runner/utils', 'runner-utils'],
+    ['@vitest/runner/types', 'runner-types'],
+    ['@vitest/utils', 'utils'],
+    ['@vitest/utils/source-map', 'utils-source-map'],
+    ['@vitest/utils/source-map/node', 'utils-source-map-node'],
+    ['@vitest/utils/error', 'utils-error'],
+    ['@vitest/utils/helpers', 'utils-helpers'],
+    ['@vitest/utils/display', 'utils-display'],
+    ['@vitest/utils/timers', 'utils-timers'],
+    ['@vitest/utils/offset', 'utils-offset'],
+    ['@vitest/utils/resolver', 'utils-resolver'],
+    ['@vitest/utils/serialize', 'utils-serialize'],
+    ['@vitest/utils/constants', 'utils-constants'],
+    ['@vitest/utils/diff', 'utils-diff'],
+    ['@vitest/spy', 'spy'],
+    ['@vitest/expect', 'expect'],
+    ['@vitest/snapshot', 'snapshot'],
+    ['@vitest/snapshot/environment', 'snapshot-environment'],
+    ['@vitest/snapshot/manager', 'snapshot-manager'],
+    ['@vitest/mocker', 'mocker'],
+    ['@vitest/mocker/node', 'mocker-node'],
+    ['@vitest/mocker/browser', 'mocker-browser'],
+    ['@vitest/mocker/redirect', 'mocker-redirect'],
+    ['@vitest/mocker/transforms', 'mocker-transforms'],
+    ['@vitest/mocker/automock', 'mocker-automock'],
+    ['@vitest/mocker/register', 'mocker-register'],
+    ['@vitest/pretty-format', 'pretty-format'],
+    ['@vitest/browser', 'browser'],
+    ['@vitest/browser/context', 'browser-context'],
+    ['@vitest/browser/client', 'browser-client'],
+    ['@vitest/browser/locators', 'browser-locators'],
+    ['@vitest/browser-playwright', 'browser-playwright'],
+    ['@vitest/browser-webdriverio', 'browser-webdriverio'],
+    ['@vitest/browser-preview', 'browser-preview'],
+  ];
+
 /**
  * Vitest-related bare specifiers that appear in `@vitest/browser-*` d.ts files
  * and the sub-path under `dist/test/` whose shim re-exports the same module.
@@ -449,6 +491,22 @@ async function syncTestPackageExports() {
   // identify a compatible browser provider package.
   generatedExports['./test/browser-compat'] = await createBrowserCompatExport(testDistDir);
   console.log('  Created ./test/browser-compat');
+
+  // Restore the `./test/plugins/<name>` surface that the removed
+  // `@voidzero-dev/vite-plus-test` wrapper previously exposed. Each entry is
+  // a one-line `export * from '@vitest/<x>'` re-export shim.
+  for (const [importSpecifier, pluginName] of PLUGIN_SHIM_ENTRIES) {
+    const shimExport = await createShimForExport(
+      `plugins/${pluginName}`,
+      `${pluginName}.js`,
+      importSpecifier,
+      testDistDir,
+    );
+    if (shimExport) {
+      generatedExports[`./test/plugins/${pluginName}`] = shimExport;
+      console.log(`  Created ./test/plugins/${pluginName}`);
+    }
+  }
 
   // Update CLI package.json
   await updateCliPackageJson(cliPkgPath, generatedExports);
