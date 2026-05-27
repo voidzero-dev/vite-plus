@@ -61,33 +61,56 @@ export default defineConfig({
 
 ## `run.tasks`
 
-- **Type:** `Record<string, TaskConfig>`
+- **Type:** `Record<string, TaskConfig | string | string[]>`
 
 Defines tasks that can be run with `vp run <task>`.
+
+As a shorthand, a task value can be a command string or an array of command strings directly:
+
+```ts [vite.config.ts]
+tasks: {
+  build: 'vp build',
+  check: ['vp lint', 'vp build'],
+}
+```
+
+These are equivalent to setting only `command` on a task config:
+
+```ts [vite.config.ts]
+tasks: {
+  build: { command: 'vp build' },
+  check: { command: ['vp lint', 'vp build'] },
+}
+```
+
+Use the object form when a task needs other fields like `cache`, `dependsOn`, `env`, or `input`.
 
 ### `command`
 
 - **Type:** `string | string[]`
 
-Defines the shell command to run for the task. An array runs each entry sequentially, equivalent to joining them with `&&`.
+Defines the shell command to run for the task. The string is interpreted by a shell, so spaces, quoting, `&&`, pipes, and redirects all work as written on the command line.
 
 ```ts [vite.config.ts]
 tasks: {
   build: {
     command: 'vp build',
   },
-  check: {
-    command: ['vp lint', 'vp build'],
-  },
 }
 ```
 
-As a shorthand, a task value can also be a command string or array of command strings directly, without the surrounding object:
+An array runs each entry as its own command, sequentially, equivalent to joining them with `&&`. It is **not** a way to split one command into argv tokens — `['vp', 'build']` would try to run a command called `vp` with no arguments, then a command called `build`, instead of `vp build`.
 
 ```ts [vite.config.ts]
 tasks: {
-  build: 'vp build',
-  check: ['vp lint', 'vp build'],
+  check: {
+    // Two commands, run in order
+    command: ['vp lint', 'vp build'],
+  },
+  bad: {
+    // Wrong: this is NOT `vp build`; it is `vp` followed by `build`
+    command: ['vp', 'build'],
+  },
 }
 ```
 
