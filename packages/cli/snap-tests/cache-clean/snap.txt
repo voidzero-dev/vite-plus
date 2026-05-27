@@ -9,15 +9,21 @@ vp run: hello not cached because it modified its input. (Run `vp run --last-deta
 $ vp fmt
 Finished in <variable>ms on 4 files using <variable> threads.
 
+---
+vp run: hello not cached because it modified its input. (Run `vp run --last-details` for full details)
 
 > vp cache clean # clean the cache
 > vp run hello # cache miss after clean
 $ vp fmt
 Finished in <variable>ms on 4 files using <variable> threads.
 
+---
+vp run: hello not cached because it modified its input. (Run `vp run --last-details` for full details)
 
 > cd subfolder && vp cache clean # cache can be located and cleaned from subfolder
 > vp run hello # cache miss after clean
 $ vp fmt
 Finished in <variable>ms on 4 files using <variable> threads.
 
+---
+vp run: hello not cached because it modified its input. (Run `vp run --last-details` for full details)

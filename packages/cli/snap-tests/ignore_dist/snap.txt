@@ -3,12 +3,14 @@ $ vp lint
 Found 0 warnings and 0 errors.
 Finished in <variable>ms on 1 file with <variable> rules using <variable> threads.
 
+---
+vp run: lint not cached because it modified its input. (Run `vp run --last-details` for full details)
 
 > mkdir dist
 > vp run lint # new dist folder should not invalidate cache
-$ vp lint ◉ cache hit, replaying
+$ vp lint
 Found 0 warnings and 0 errors.
 Finished in <variable>ms on 1 file with <variable> rules using <variable> threads.
 
 ---
-vp run: cache hit, <variable>ms saved.
+vp run: lint not cached because it modified its input. (Run `vp run --last-details` for full details)
