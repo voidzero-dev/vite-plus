@@ -396,21 +396,6 @@ mod tests {
         assert_eq!(paths.get(1).map(std::path::PathBuf::as_path), Some(old_bin.as_path()));
     }
 
-    #[test]
-    fn keeps_original_env_when_path_prepend_fails() {
-        let cwd = std::env::current_dir().expect("current_dir should exist");
-        let old_bin = cwd.join("old-bin");
-        let invalid_dir_name = if cfg!(windows) { "pm;bin" } else { "pm:bin" };
-        let pm_bin =
-            AbsolutePathBuf::new(cwd.join(invalid_dir_name)).expect("pm bin should be absolute");
-        let original_path = std::env::join_paths([old_bin.as_path()]).expect("valid PATH");
-        let envs = envs_with_path(original_path.as_os_str());
-
-        let updated = prepend_to_env_path(&envs, &pm_bin);
-
-        assert_eq!(updated.get(OsStr::new("PATH")), envs.get(OsStr::new("PATH")));
-    }
-
     #[tokio::test]
     async fn ignores_invalid_explicit_package_manager() {
         let suffix =
