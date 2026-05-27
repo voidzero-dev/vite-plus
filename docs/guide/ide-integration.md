@@ -71,7 +71,7 @@ You can also manually set up the Zed config:
     "oxfmt": {
       "initialization_options": {
         "settings": {
-          "configPath": "./vite.config.ts",
+          "fmt.configPath": "./vite.config.ts",
           "run": "onSave"
         }
       }
@@ -98,4 +98,4 @@ You can also manually set up the Zed config:
 }
 ```
 
-Setting `oxfmt.configPath` to `./vite.config.ts` keeps editor format-on-save aligned with the `fmt` block in your Vite+ config. The full generated config covers additional languages (CSS, HTML, JSON, Markdown, etc.) — run `vp create` or `vp migrate` to get the complete file written automatically.
+Setting `oxfmt.fmt.configPath` to `./vite.config.ts` keeps editor format-on-save aligned with the `fmt` block in your Vite+ config. The full generated config covers additional languages (CSS, HTML, JSON, Markdown, etc.) — run `vp create` or `vp migrate` to get the complete file written automatically.

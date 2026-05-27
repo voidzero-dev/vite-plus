@@ -262,6 +262,12 @@ export async function migrateEslintToOxlint(
     // @ts-expect-error — resolved at runtime from dist/ → dist/versions.js
     const { versions } = await import('../versions.js');
     const migratePackage = `@oxlint/migrate@${versions.oxlint}`;
+    const migrateArgs = [
+      '--merge',
+      ...(!hasBaseUrlInTsconfig(projectPath) ? ['--type-aware'] : []),
+      '--with-nursery',
+      '--details',
+    ];
 
     // Step 1: Generate .oxlintrc.json from ESLint config
     spinner.start('Migrating ESLint config to Oxlint...');
@@ -269,10 +275,10 @@ export async function migrateEslintToOxlint(
       vpBin,
       projectPath,
       migratePackage,
-      ['--merge', '--type-aware', '--with-nursery', '--details'],
+      migrateArgs,
       spinner,
       'ESLint migration failed',
-      `You can run \`vp dlx ${migratePackage} --merge --type-aware --with-nursery --details\` manually later`,
+      `You can run \`vp dlx ${migratePackage} ${migrateArgs.join(' ')}\` manually later`,
     );
     if (!migrateOk) {
       return false;
@@ -1999,6 +2005,7 @@ export function injectLintTypeCheckDefaults(
   report?: MigrationReport,
 ): void {
   if (hasBaseUrlInTsconfig(projectPath)) {
+    warnMigration(BASEURL_TSCONFIG_WARNING, report);
     return;
   }
   injectConfigDefaults(
