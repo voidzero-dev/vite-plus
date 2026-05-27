@@ -1,5 +1,5 @@
 {
-  "name": "direct-test-path-env-include-pnpm",
+  "name": "test-managed-package-manager-path",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.2.2"

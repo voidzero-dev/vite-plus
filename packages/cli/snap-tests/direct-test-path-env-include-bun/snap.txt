@@ -1,1 +1,0 @@
-> fake_bin=$(mktemp -d) && printf '#!/bin/sh\necho 0.0.0\n' > "$fake_bin/bun" && chmod +x "$fake_bin/bun" && PATH="$fake_bin:$PATH" vp test

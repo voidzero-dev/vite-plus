@@ -129,7 +129,11 @@ fn prepend_to_env_path(
         .unwrap_or_else(|| Arc::from(OsStr::new("PATH")));
     let current_path =
         envs.get(&path_key).map_or_else(Default::default, |path| path.to_os_string());
-    let paths = env::split_paths(&current_path).collect::<Vec<_>>();
+    let paths = if current_path.is_empty() {
+        Vec::new()
+    } else {
+        env::split_paths(&current_path).collect::<Vec<_>>()
+    };
 
     if paths.first().is_some_and(|path| path == bin_prefix.as_path()) {
         return Ok(Arc::clone(envs));
@@ -150,17 +154,36 @@ async fn envs_with_explicit_package_manager_path(
     envs: Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
 ) -> Result<Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>, Error> {
     let Some(resolution) =
-        vite_install::package_manager::resolve_package_manager_from_package_json(cwd)?
+        (match vite_install::package_manager::resolve_package_manager_from_package_json(cwd) {
+            Ok(resolution) => resolution,
+            Err(error) => {
+                tracing::debug!(
+                    ?error,
+                    "failed to resolve explicit packageManager for direct command PATH setup"
+                );
+                return Ok(envs);
+            }
+        })
     else {
         return Ok(envs);
     };
 
-    let (install_dir, _, _) = vite_install::download_package_manager(
+    let (install_dir, _, _) = match vite_install::download_package_manager(
         resolution.package_manager_type,
         &resolution.version,
         resolution.hash.as_deref(),
     )
-    .await?;
+    .await
+    {
+        Ok(result) => result,
+        Err(error) => {
+            tracing::debug!(
+                ?error,
+                "failed to ensure managed package manager for direct command PATH setup"
+            );
+            return Ok(envs);
+        }
+    };
 
     prepend_to_env_path(&envs, &install_dir.join("bin"))
 }
@@ -322,6 +345,62 @@ mod tests {
         let paths = std::env::split_paths(path_value).collect::<Vec<_>>();
 
         assert_eq!(paths, vec![pm_bin.as_path().to_path_buf()]);
+    }
+
+    #[test]
+    fn creates_path_when_env_map_has_no_path() {
+        let cwd = std::env::current_dir().expect("current_dir should exist");
+        let pm_bin = AbsolutePathBuf::new(cwd.join("pm-bin")).expect("pm bin should be absolute");
+        let envs = Arc::new(FxHashMap::default());
+
+        let updated = prepend_to_env_path(&envs, &pm_bin).expect("PATH should update");
+        let path_value = updated.get(OsStr::new("PATH")).expect("PATH should be created");
+        let paths = std::env::split_paths(path_value).collect::<Vec<_>>();
+
+        assert_eq!(paths, vec![pm_bin.as_path().to_path_buf()]);
+    }
+
+    #[test]
+    fn preserves_path_key_casing_on_windows() {
+        let cwd = std::env::current_dir().expect("current_dir should exist");
+        let old_bin = cwd.join("old-bin");
+        let pm_bin = AbsolutePathBuf::new(cwd.join("pm-bin")).expect("pm bin should be absolute");
+        let original_path = std::env::join_paths([old_bin.as_path()]).expect("valid PATH");
+        let key = if cfg!(windows) { "Path" } else { "PATH" };
+        let envs = Arc::new(FxHashMap::from_iter([(
+            Arc::from(OsStr::new(key)),
+            Arc::from(original_path.as_os_str()),
+        )]));
+
+        let updated = prepend_to_env_path(&envs, &pm_bin).expect("PATH should update");
+        let path_value = updated.get(OsStr::new(key)).expect("existing PATH key should be updated");
+        let paths = std::env::split_paths(path_value).collect::<Vec<_>>();
+
+        assert_eq!(paths.first().map(std::path::PathBuf::as_path), Some(pm_bin.as_path()));
+        assert_eq!(paths.get(1).map(std::path::PathBuf::as_path), Some(old_bin.as_path()));
+    }
+
+    #[tokio::test]
+    async fn ignores_invalid_explicit_package_manager() {
+        let suffix =
+            SystemTime::now().duration_since(UNIX_EPOCH).expect("time should be valid").as_nanos();
+        let temp_dir = std::env::temp_dir().join(format!("vite-plus-invalid-pm-{suffix}"));
+        fs::create_dir_all(&temp_dir).expect("temp dir should be created");
+        fs::write(
+            temp_dir.join("package.json"),
+            r#"{"name":"fixture","packageManager":"unknown@1.0.0"}"#,
+        )
+        .expect("package.json should be written");
+        let cwd = AbsolutePathBuf::new(temp_dir.clone()).expect("temp dir should be absolute");
+        let original_path = std::env::join_paths([temp_dir.join("old-bin")]).expect("valid PATH");
+        let envs = envs_with_path(original_path.as_os_str());
+
+        let updated = envs_with_explicit_package_manager_path(&cwd, Arc::clone(&envs))
+            .await
+            .expect("package manager preflight errors should not fail direct commands");
+
+        assert_eq!(updated.get(OsStr::new("PATH")), envs.get(OsStr::new("PATH")));
+        fs::remove_dir_all(temp_dir).expect("temp dir should be removed");
     }
 
     #[tokio::test]

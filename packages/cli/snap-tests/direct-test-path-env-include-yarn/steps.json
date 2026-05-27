@@ -1,9 +1,0 @@
-{
-  "ignoredPlatforms": ["win32"],
-  "commands": [
-    {
-      "command": "fake_bin=$(mktemp -d) && printf '#!/bin/sh\\necho 0.0.0\\n' > \"$fake_bin/yarn\" && chmod +x \"$fake_bin/yarn\" && PATH=\"$fake_bin:$PATH\" vp test",
-      "ignoreOutput": true
-    }
-  ]
-}

@@ -1,6 +1,0 @@
-{
-  "name": "direct-test-path-env-include-npm",
-  "private": true,
-  "type": "module",
-  "packageManager": "npm@10.9.4"
-}

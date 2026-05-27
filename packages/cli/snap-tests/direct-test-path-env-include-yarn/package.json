@@ -1,6 +1,0 @@
-{
-  "name": "direct-test-path-env-include-yarn",
-  "private": true,
-  "type": "module",
-  "packageManager": "yarn@4.10.3"
-}
