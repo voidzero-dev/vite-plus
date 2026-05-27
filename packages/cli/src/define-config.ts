@@ -2,7 +2,7 @@ import { createRequire } from 'node:module';
 
 import type { PluginOption, UserConfig } from '@voidzero-dev/vite-plus-core';
 import { initSync, parse, type ImportSpecifier } from 'es-module-lexer';
-import { parseSync as oxcParseSync } from 'oxc-parser';
+import { parseSync as oxcParseSync, Visitor } from 'oxc-parser';
 import type { OxfmtConfig } from 'oxfmt';
 import type { OxlintConfig } from 'oxlint';
 import {
@@ -95,22 +95,15 @@ type ViteUserConfigExport =
  * parse the source (typically JSX/TSX), we fall back to `oxc-parser`, which
  * understands TSX and exposes precise import-specifier offsets so JSX text
  * and string-literal occurrences of `vite-plus/test` stay untouched.
- * CommonJS `require(...)` calls are handled separately by a tightened regex
- * (es-module-lexer / oxc-parser only describe ESM imports).
+ * CommonJS `require(...)` calls are handled by a separate `oxc-parser` walk —
+ * es-module-lexer / oxc-parser's ESM API only surface real ESM imports, so
+ * the require pass needs its own AST visitor (which also ensures `require`
+ * inside template literals and string contents stays untouched).
  *
  * Exported for unit testing.
  */
 const TARGET_SPECIFIER = 'vite-plus/test';
 const TARGET_REPLACEMENT = 'vitest';
-
-// Tightened CJS require regex. The lookbehind `(?<=[\s;{}(\[,=])` ensures the
-// `require` keyword sits at a statement-ish boundary, which keeps it from
-// matching `.require(...)` member calls or `'require(' + path + ')'`-style
-// string content. Note: this still can match inside multi-line template
-// literals or strings that contain raw newlines + boundary chars, but those
-// cases were not covered by the original regex either; the ESM lexer pass
-// above already eliminates the common false positives that motivated this fix.
-const REQUIRE_PATTERN = /(?<=^|[\s;{}([,=])(require\s*\(\s*['"])vite-plus\/test(?=['"])/g;
 
 // Filename passed to `oxc-parser` for the JSX/TSX fallback. The extension is
 // what selects TSX-mode parsing — the file does not need to exist on disk.
@@ -233,6 +226,83 @@ function rewriteWithOxcParser(code: string): string {
   return result;
 }
 
+/**
+ * AST-driven rewrite for CommonJS `require('vite-plus/test')` calls.
+ *
+ * The previous implementation used a regex with a lookbehind that anchored
+ * `require` at a statement-ish boundary, but raw newline + whitespace inside
+ * a JS template literal also matches that boundary — so fixture/snapshot
+ * strings like `` `\n  require('vite-plus/test')\n` `` were mutated even
+ * though they were not real require calls.
+ *
+ * Instead, walk the source with `oxc-parser` and only edit a string-literal
+ * argument when its parent is a `CallExpression` whose callee is the plain
+ * `Identifier "require"`. Template literals, string literals, JSX text,
+ * member calls like `obj.require(...)`, and string concatenation are all
+ * distinct AST nodes and therefore left untouched.
+ *
+ * Returns the input unchanged when `oxc-parser` cannot parse the source —
+ * we never fall back to a regex on raw user code.
+ */
+function rewriteRequireCalls(code: string): string {
+  // Cheap pre-filter: skip parsing when the file has no `require` token at all.
+  if (!code.includes('require')) {
+    return code;
+  }
+
+  type Edit = { start: number; end: number; replacement: string };
+  const edits: Edit[] = [];
+
+  let parsed;
+  try {
+    parsed = oxcParseSync(OXC_FALLBACK_FILENAME, code);
+  } catch {
+    // Parser bailout — leave the source untouched. Never fall back to regex
+    // on raw user code; that re-introduces the template-literal false-positive
+    // that this function exists to fix.
+    return code;
+  }
+
+  const visitor = new Visitor({
+    CallExpression(node) {
+      const callee = node.callee;
+      if (callee.type !== 'Identifier' || callee.name !== 'require') {
+        return;
+      }
+      const first = node.arguments[0];
+      if (!first || first.type !== 'Literal' || typeof first.value !== 'string') {
+        return;
+      }
+      if (first.value !== TARGET_SPECIFIER) {
+        return;
+      }
+      // `first.start`/`first.end` bound the literal INCLUDING its quotes.
+      const quote = code[first.start];
+      if (quote !== '"' && quote !== "'") {
+        return;
+      }
+      edits.push({
+        start: first.start,
+        end: first.end,
+        replacement: `${quote}${TARGET_REPLACEMENT}${quote}`,
+      });
+    },
+  });
+  visitor.visit(parsed.program);
+
+  if (edits.length === 0) {
+    return code;
+  }
+
+  edits.sort((a, b) => a.start - b.start);
+  let result = code;
+  for (let i = edits.length - 1; i >= 0; i--) {
+    const { start, end, replacement } = edits[i];
+    result = result.slice(0, start) + replacement + result.slice(end);
+  }
+  return result;
+}
+
 export function rewriteVitePlusTestSpecifier(code: string): string {
   if (!code.includes(TARGET_SPECIFIER)) {
     return code;
@@ -273,8 +343,12 @@ export function rewriteVitePlusTestSpecifier(code: string): string {
     result = rewriteWithOxcParser(code);
   }
 
-  // Step 2: rewrite CJS require() calls (not seen by es-module-lexer / oxc-parser).
-  result = result.replace(REQUIRE_PATTERN, `$1${TARGET_REPLACEMENT}`);
+  // Step 2: rewrite CJS require() calls (not seen by es-module-lexer / the
+  // oxc-parser ESM API) via a dedicated AST walk. Template literals and
+  // string-literal contents that happen to contain
+  // `require('vite-plus/test')` are left untouched because the visitor only
+  // matches real `CallExpression` callee identifiers.
+  result = rewriteRequireCalls(result);
 
   return result;
 }

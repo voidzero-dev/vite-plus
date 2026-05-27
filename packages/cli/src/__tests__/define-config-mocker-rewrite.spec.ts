@@ -66,6 +66,60 @@ describe('rewriteVitePlusTestSpecifier', () => {
     expect(rewriteVitePlusTestSpecifier(input)).toBe(expected);
   });
 
+  it("does NOT rewrite `require('vite-plus/test')` inside a template literal", () => {
+    // Regression: previously the regex-based CJS pass anchored `require` at
+    // a `\s` boundary, so a `\n` + indentation inside a backtick template
+    // literal still matched. Snapshot/fixture strings containing example
+    // code must stay byte-identical.
+    const input = [
+      'const fixture = `',
+      "  require('vite-plus/test')",
+      '`;',
+      'console.log(fixture);',
+      '',
+    ].join('\n');
+    expect(rewriteVitePlusTestSpecifier(input)).toBe(input);
+  });
+
+  it("does NOT rewrite `require('vite-plus/test')` inside a plain string literal", () => {
+    const input = [
+      'const literal = "  require(\'vite-plus/test\')";',
+      'console.log(literal);',
+      '',
+    ].join('\n');
+    expect(rewriteVitePlusTestSpecifier(input)).toBe(input);
+  });
+
+  it('does NOT rewrite a member call like `.require(\'vite-plus/test\')`', () => {
+    // The AST walker only matches CallExpression nodes whose callee is the
+    // identifier `require`. `obj.require(...)` is a MemberExpression callee
+    // and must be left alone.
+    const input = "const m = obj.require('vite-plus/test');\n";
+    expect(rewriteVitePlusTestSpecifier(input)).toBe(input);
+  });
+
+  it('rewrites a real require call alongside a fixture template literal', () => {
+    // Mixed scenario: a real CJS require should be rewritten, but the
+    // example code embedded in a template literal must stay untouched.
+    const input = [
+      "const real = require('vite-plus/test');",
+      'const fixture = `',
+      "  require('vite-plus/test')",
+      '`;',
+      'console.log(real, fixture);',
+      '',
+    ].join('\n');
+    const expected = [
+      "const real = require('vitest');",
+      'const fixture = `',
+      "  require('vite-plus/test')",
+      '`;',
+      'console.log(real, fixture);',
+      '',
+    ].join('\n');
+    expect(rewriteVitePlusTestSpecifier(input)).toBe(expected);
+  });
+
   it('preserves all other imports in the file', () => {
     const input = [
       "import { describe, it, expect } from 'vite-plus/test';",
