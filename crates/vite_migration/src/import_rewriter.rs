@@ -4215,10 +4215,7 @@ export default defineConfig({});"#
         let content = r#"export { page } from '@vitest/browser/context';"#;
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
         assert!(result.updated);
-        assert_eq!(
-            result.content,
-            r#"export { page } from 'vite-plus/test/browser/context';"#
-        );
+        assert_eq!(result.content, r#"export { page } from 'vite-plus/test/browser/context';"#);
     }
 
     #[test]
@@ -4257,10 +4254,7 @@ export default defineConfig({});"#
         let content = r#"export { preview } from "@vitest/browser-preview";"#;
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
         assert!(result.updated);
-        assert_eq!(
-            result.content,
-            r#"export { preview } from "vite-plus/test/browser-preview";"#
-        );
+        assert_eq!(result.content, r#"export { preview } from "vite-plus/test/browser-preview";"#);
     }
 
     #[test]
@@ -4281,10 +4275,7 @@ export default defineConfig({});"#
         let content = r#"export { ModuleRunner } from 'vite/module-runner';"#;
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
         assert!(result.updated);
-        assert_eq!(
-            result.content,
-            r#"export { ModuleRunner } from 'vite-plus/module-runner';"#
-        );
+        assert_eq!(result.content, r#"export { ModuleRunner } from 'vite-plus/module-runner';"#);
     }
 
     #[test]
