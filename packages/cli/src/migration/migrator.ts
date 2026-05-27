@@ -96,6 +96,18 @@ const BROWSER_PROVIDER_PEER_DEPS: Record<string, string> = {
   '@vitest/browser-webdriverio': 'webdriverio',
 };
 
+// Browser-provider package names that, when present in the user's deps
+// before migration, signal vitest browser mode even if no source file
+// imports them. This covers config-only browser-mode setups (e.g.
+// `test.browser.provider: 'playwright'` in `vite.config.ts`) where the
+// provider package is declared in `devDependencies` but never `import`ed.
+const VITEST_BROWSER_DEP_NAMES = [
+  '@vitest/browser',
+  '@vitest/browser-preview',
+  '@vitest/browser-playwright',
+  '@vitest/browser-webdriverio',
+] as const;
+
 const PUBLIC_PEER_DEPENDENCY_FALLBACKS: Record<string, string> = {
   vite: '*',
   vitest: '*',
@@ -2256,6 +2268,16 @@ export function rewritePackageJson(
       }
     }
   }
+  // Capture browser-mode signal from the original deps BEFORE the removal loop
+  // strips them. A package can drive vitest browser mode purely through config
+  // (`test.browser.provider: 'playwright'` in `vite.config.ts`) without ever
+  // importing `@vitest/browser*` in source — the provider package is listed in
+  // devDependencies but vitest loads it by name. The source-scan signal
+  // (`usesVitestBrowserMode`) misses this case; the dep declaration is the
+  // authoritative intent signal.
+  const hasBrowserDepSignal = VITEST_BROWSER_DEP_NAMES.some((name) =>
+    dependencyGroups.some(({ dependencies }) => dependencies?.[name] !== undefined),
+  );
   // remove packages that are replaced with vite-plus
   for (const name of REMOVE_PACKAGES) {
     let wasRemoved = false;
@@ -2282,6 +2304,10 @@ export function rewritePackageJson(
       pkg.devDependencies[peerDep] = '*';
     }
   }
+  // Promote dep-derived signal to the same flag the source-scan feeds, so the
+  // downstream "add direct `vitest`" branch fires for config-only browser-mode
+  // setups too.
+  const effectiveBrowserMode = vitestBrowserMode || hasBrowserDepSignal;
   // Trigger vite-plus install when a project has a vitest-adjacent package
   // (e.g. `vitest-browser-svelte`) that declares vitest as a peer dep — even
   // if the project has no vite/oxlint/tsdown dep to migrate. The peer dep is
@@ -2305,7 +2331,7 @@ export function rewritePackageJson(
   // resolves from the config root. A `vitest` pulled in only transitively via
   // `vite-plus` is invisible in a pnpm strict layout, so the optimizer fails
   // and the browser test page hangs. See `usesVitestBrowserMode`.
-  if (vitestBrowserMode && !installableNames.includes('vitest')) {
+  if (effectiveBrowserMode && !installableNames.includes('vitest')) {
     needVitePlus = true;
   }
   // Normalize a pre-existing pinned vite-plus so sub-packages don't drift
@@ -2347,7 +2373,7 @@ export function rewritePackageJson(
     };
     if (
       !installableDeps.vitest &&
-      (vitestBrowserMode || Object.keys(installableDeps).some((name) => name.includes('vitest')))
+      (effectiveBrowserMode || Object.keys(installableDeps).some((name) => name.includes('vitest')))
     ) {
       pkg.devDependencies ??= {};
       pkg.devDependencies.vitest = getCatalogDependencySpec(
