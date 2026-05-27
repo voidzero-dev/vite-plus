@@ -30,9 +30,7 @@ try {
     projectPkg.dependencies?.['vite-plus'] ?? projectPkg.devDependencies?.['vite-plus'];
 
   const isFileSpec = vitePlusSpec?.startsWith('file:') ?? false;
-  const isPnpmFileInstall = `${path.sep}${pkgPath}`.includes(
-    `${path.sep}.pnpm${path.sep}vite-plus@file+`,
-  );
+  const isPnpmFileInstall = pkgPath.includes(`${path.sep}.pnpm${path.sep}vite-plus@file+`);
   if (!isFileSpec && !isPnpmFileInstall) {
     console.error(
       `x vite-plus: expected local file: install, got spec ${vitePlusSpec ?? '<missing>'}`,
@@ -44,8 +42,12 @@ try {
   const vitePlusRequire = createRequire(pkgPath);
   const oxlintPkgPath = vitePlusRequire.resolve('oxlint/package.json');
   const oxlintPkg = vitePlusRequire('oxlint/package.json') as { version: string };
-  const expectedOxlint = pkg.dependencies?.oxlint?.replace(/^=/, '');
-  if (expectedOxlint && oxlintPkg.version !== expectedOxlint) {
+  const expectedOxlint = pkg.dependencies?.oxlint?.replace(/^[=^~]/, '');
+  if (!expectedOxlint) {
+    console.error('x vite-plus: package.json missing oxlint dependency');
+    process.exit(1);
+  }
+  if (oxlintPkg.version !== expectedOxlint) {
     console.error(`x oxlint: expected ${expectedOxlint}, got ${oxlintPkg.version}`);
     console.error(`  resolved to ${oxlintPkgPath}`);
     process.exit(1);

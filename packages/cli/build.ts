@@ -84,14 +84,10 @@ async function buildNapiBinding() {
   const cli = new NapiCli();
 
   const bindingFeatures = ['rolldown'];
-  const dtsHeader = bindingFeatures.includes('rolldown')
-    ? (await import('../../rolldown/packages/rolldown/package.json', { with: { type: 'json' } }))
-        .default.napi.dtsHeader
-    : '';
-
-  if (dtsHeader) {
-    passedInOptions.dtsHeader = `type BindingErrorsOr<T> = T | BindingErrors;\ntype FxHashSet<T> = Set<T>;\ntype FxHashMap<K, V> = Map<K, V>;\n${dtsHeader}`;
-  }
+  const { dtsHeader } = (
+    await import('../../rolldown/packages/rolldown/package.json', { with: { type: 'json' } })
+  ).default.napi;
+  passedInOptions.dtsHeader = `type BindingErrorsOr<T> = T | BindingErrors;\ntype FxHashSet<T> = Set<T>;\ntype FxHashMap<K, V> = Map<K, V>;\n${dtsHeader}`;
 
   const { task } = await cli.build({
     ...passedInOptions,
