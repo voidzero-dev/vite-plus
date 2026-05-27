@@ -55,6 +55,7 @@ export default defineConfig({
       './rolldown/**',
       '**/node_modules/**',
       '**/snap-tests/**',
+      '**/snap-tests-global/**',
       // FIXME: Error: failed to prepare the command for injection: Invalid argument (os error 22)
       'packages/*/binding/__tests__/',
     ],

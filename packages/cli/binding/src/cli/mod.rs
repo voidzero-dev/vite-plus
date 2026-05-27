@@ -118,7 +118,7 @@ fn is_path_env_key(key: &OsStr) -> bool {
     if cfg!(windows) { key.eq_ignore_ascii_case("PATH") } else { key == "PATH" }
 }
 
-fn prepend_to_env_path(
+fn try_prepend_to_env_path(
     envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
     bin_prefix: &AbsolutePath,
 ) -> Result<Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>, Error> {
@@ -147,6 +147,22 @@ fn prepend_to_env_path(
     let mut envs = FxHashMap::clone(envs);
     envs.insert(path_key, Arc::from(new_path.as_os_str()));
     Ok(Arc::new(envs))
+}
+
+fn prepend_to_env_path(
+    envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
+    bin_prefix: &AbsolutePath,
+) -> Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>> {
+    match try_prepend_to_env_path(envs, bin_prefix) {
+        Ok(updated_envs) => updated_envs,
+        Err(error) => {
+            tracing::debug!(
+                ?error,
+                "failed to prepend managed package manager bin to direct command PATH"
+            );
+            Arc::clone(envs)
+        }
+    }
 }
 
 async fn envs_with_explicit_package_manager_path(
@@ -185,7 +201,7 @@ async fn envs_with_explicit_package_manager_path(
         }
     };
 
-    prepend_to_env_path(&envs, &install_dir.join("bin"))
+    Ok(prepend_to_env_path(&envs, &install_dir.join("bin")))
 }
 
 /// Execute a vite-task command (run, cache) through Session.
@@ -325,7 +341,7 @@ mod tests {
         let original_path = std::env::join_paths([old_bin.as_path()]).expect("valid PATH");
         let envs = envs_with_path(original_path.as_os_str());
 
-        let updated = prepend_to_env_path(&envs, &pm_bin).expect("PATH should update");
+        let updated = prepend_to_env_path(&envs, &pm_bin);
         let path_value = updated.get(OsStr::new("PATH")).expect("PATH should exist");
         let paths = std::env::split_paths(path_value).collect::<Vec<_>>();
 
@@ -340,7 +356,7 @@ mod tests {
         let original_path = std::env::join_paths([pm_bin.as_path()]).expect("valid PATH");
         let envs = envs_with_path(original_path.as_os_str());
 
-        let updated = prepend_to_env_path(&envs, &pm_bin).expect("PATH should update");
+        let updated = prepend_to_env_path(&envs, &pm_bin);
         let path_value = updated.get(OsStr::new("PATH")).expect("PATH should exist");
         let paths = std::env::split_paths(path_value).collect::<Vec<_>>();
 
@@ -353,7 +369,7 @@ mod tests {
         let pm_bin = AbsolutePathBuf::new(cwd.join("pm-bin")).expect("pm bin should be absolute");
         let envs = Arc::new(FxHashMap::default());
 
-        let updated = prepend_to_env_path(&envs, &pm_bin).expect("PATH should update");
+        let updated = prepend_to_env_path(&envs, &pm_bin);
         let path_value = updated.get(OsStr::new("PATH")).expect("PATH should be created");
         let paths = std::env::split_paths(path_value).collect::<Vec<_>>();
 
@@ -372,12 +388,27 @@ mod tests {
             Arc::from(original_path.as_os_str()),
         )]));
 
-        let updated = prepend_to_env_path(&envs, &pm_bin).expect("PATH should update");
+        let updated = prepend_to_env_path(&envs, &pm_bin);
         let path_value = updated.get(OsStr::new(key)).expect("existing PATH key should be updated");
         let paths = std::env::split_paths(path_value).collect::<Vec<_>>();
 
         assert_eq!(paths.first().map(std::path::PathBuf::as_path), Some(pm_bin.as_path()));
         assert_eq!(paths.get(1).map(std::path::PathBuf::as_path), Some(old_bin.as_path()));
+    }
+
+    #[test]
+    fn keeps_original_env_when_path_prepend_fails() {
+        let cwd = std::env::current_dir().expect("current_dir should exist");
+        let old_bin = cwd.join("old-bin");
+        let invalid_dir_name = if cfg!(windows) { "pm;bin" } else { "pm:bin" };
+        let pm_bin =
+            AbsolutePathBuf::new(cwd.join(invalid_dir_name)).expect("pm bin should be absolute");
+        let original_path = std::env::join_paths([old_bin.as_path()]).expect("valid PATH");
+        let envs = envs_with_path(original_path.as_os_str());
+
+        let updated = prepend_to_env_path(&envs, &pm_bin);
+
+        assert_eq!(updated.get(OsStr::new("PATH")), envs.get(OsStr::new("PATH")));
     }
 
     #[tokio::test]
