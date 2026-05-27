@@ -117,7 +117,7 @@ pub async fn download_text(url: &str) -> Result<String, Error> {
 
     tracing::debug!("Downloading text from {url}");
 
-    let content = (|| async { client.get(url).send().await?.text().await })
+    let content = (|| async { client.get(url).send().await?.error_for_status()?.text().await })
         .retry(
             ExponentialBuilder::default()
                 .with_jitter()

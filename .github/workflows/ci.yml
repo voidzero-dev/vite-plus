@@ -912,12 +912,6 @@ jobs:
             target: x86_64-pc-windows-msvc
             sfw_asset: sfw-free-windows-x86_64.exe
     runs-on: ${{ matrix.os }}
-    # TODO(SocketDev/sfw-free#30, SocketDev/sfw-free#43): drop `VP_INSECURE_TLS`
-    # once sfw ships the EKU fix. Until then the cert sfw issues is rejected by
-    # rustls/native-tls; the proxy + CA-injection plumbing is still exercised
-    # via HTTPS_PROXY + SSL_CERT_FILE, only certificate *validity* is skipped.
-    env:
-      VP_INSECURE_TLS: '1'
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
@@ -960,7 +954,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/sfw-bin"
-          curl --fail --location --retry 3 --retry-delay 2 \
+          # `--remove-on-error` (curl 7.83+) prevents leaving a zero-byte file
+          # on failure so the next step's `sfw --version` fails clearly rather
+          # than with "exec format error" on an empty binary.
+          curl --fail --location --remove-on-error --retry 3 --retry-delay 2 \
             --output "$RUNNER_TEMP/sfw-bin/sfw${{ runner.os == 'Windows' && '.exe' || '' }}" \
             "https://github.com/SocketDev/sfw-free/releases/latest/download/${{ matrix.sfw_asset }}"
           if [[ "${{ runner.os }}" != "Windows" ]]; then
@@ -972,6 +969,14 @@ jobs:
         run: sfw --version
 
       - name: Run `sfw vp install` against a real repo
+        # TODO(SocketDev/sfw-free#30, SocketDev/sfw-free#43): drop `VP_INSECURE_TLS`
+        # once sfw ships the EKU fix. Until then the cert sfw issues is rejected
+        # by rustls/native-tls; the proxy + CA-injection plumbing is still
+        # exercised via HTTPS_PROXY + SSL_CERT_FILE, only certificate *validity*
+        # is skipped. Scoped to this step so unrelated build/setup steps in this
+        # job never see an HTTP client with cert verification disabled.
+        env:
+          VP_INSECURE_TLS: '1'
         run: |
           set -euo pipefail
           # Force the registry-fetch path: install a pinned pnpm globally so

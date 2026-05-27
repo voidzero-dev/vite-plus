@@ -81,12 +81,19 @@ pub const VP_GLOBAL_VERSION: &str = "VP_GLOBAL_VERSION";
 /// Path to a PEM bundle of extra CA certificates to trust for HTTPS.
 ///
 /// Industry-standard env var also set by tools like Socket Firewall Free.
+///
+/// Note on semantics: vp treats this as **additive** to the system trust
+/// store (matches Node.js's `NODE_EXTRA_CA_CERTS`), not as a replacement.
+/// This differs from OpenSSL/curl/git, which use `SSL_CERT_FILE` as the
+/// *sole* trusted bundle. Users who want strict isolation should also
+/// restrict outbound traffic at the network layer.
 pub const SSL_CERT_FILE: &str = "SSL_CERT_FILE";
 
 /// Path to a PEM bundle of extra CA certificates to trust for HTTPS.
 ///
 /// Node.js convention; honored alongside `SSL_CERT_FILE` for setups that only
-/// configure the Node-flavored variable.
+/// configure the Node-flavored variable. Always additive to the system trust
+/// store.
 pub const NODE_EXTRA_CA_CERTS: &str = "NODE_EXTRA_CA_CERTS";
 
 /// Disable HTTPS certificate verification in vp's shared HTTP client.
