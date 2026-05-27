@@ -90,7 +90,7 @@ describe('rewriteVitePlusTestSpecifier', () => {
     expect(rewriteVitePlusTestSpecifier(input)).toBe(input);
   });
 
-  it('does NOT rewrite a member call like `.require(\'vite-plus/test\')`', () => {
+  it("does NOT rewrite a member call like `.require('vite-plus/test')`", () => {
     // The AST walker only matches CallExpression nodes whose callee is the
     // identifier `require`. `obj.require(...)` is a MemberExpression callee
     // and must be left alone.

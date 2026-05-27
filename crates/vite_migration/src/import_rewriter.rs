@@ -4789,10 +4789,7 @@ export default defineConfig({});"#
         let content = r#"const p = await import('@vitest/browser-playwright/context');"#;
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
         assert!(result.updated);
-        assert_eq!(
-            result.content,
-            r#"const p = await import('vite-plus/test/browser/context');"#
-        );
+        assert_eq!(result.content, r#"const p = await import('vite-plus/test/browser/context');"#);
     }
 
     #[test]
