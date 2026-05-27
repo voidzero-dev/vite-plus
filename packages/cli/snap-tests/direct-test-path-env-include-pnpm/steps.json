@@ -1,0 +1,6 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "commands": [
+    "fake_bin=$(mktemp -d) && printf '#!/bin/sh\\necho 0.0.0\\n' > \"$fake_bin/pnpm\" && chmod +x \"$fake_bin/pnpm\" && PATH=\"$fake_bin:$PATH\" vp test"
+  ]
+}

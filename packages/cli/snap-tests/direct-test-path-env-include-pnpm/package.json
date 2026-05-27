@@ -1,0 +1,6 @@
+{
+  "name": "direct-test-path-env-include-pnpm",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.2.2"
+}

@@ -1,0 +1,6 @@
+{
+  "name": "direct-test-path-env-include-bun",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.3.11"
+}
