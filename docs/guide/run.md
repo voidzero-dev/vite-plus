@@ -171,6 +171,8 @@ vp run --filter "@my/*" --filter "!@my/utils" build
 
 Multiple `--filter` flags are combined as a union. Exclusion filters are applied after all inclusions.
 
+When a `--filter` matches no packages, Vite+ prints a warning and exits successfully. Pass `--fail-if-no-match` to abort the run when any filter matches nothing instead.
+
 ### Workspace Root (`-w`)
 
 Explicitly run the task in the workspace root package:
