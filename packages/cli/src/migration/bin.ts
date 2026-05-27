@@ -52,6 +52,7 @@ import {
   confirmPrettierMigration,
   detectEslintProject,
   detectFramework,
+  detectIncompatibleEslintIntegration,
   detectNodeVersionManagerFile,
   detectPrettierProject,
   hasFrameworkShim,
@@ -66,6 +67,7 @@ import {
   promptPrettierMigration,
   rewriteMonorepo,
   rewriteStandaloneProject,
+  warnIncompatibleEslintIntegration,
   warnLegacyEslintConfig,
   warnPackageLevelEslint,
   warnPackageLevelPrettier,
@@ -445,8 +447,17 @@ async function collectMigrationPlan(
 
   // 7. ESLint detection + prompt
   const eslintProject = detectEslintProject(rootDir, packages);
+  const incompatibleEslintIntegration = detectIncompatibleEslintIntegration(rootDir, packages);
   let migrateEslint = false;
-  if (eslintProject.hasDependency && !eslintProject.configFile && eslintProject.legacyConfigFile) {
+  if (incompatibleEslintIntegration) {
+    // e.g. `@nuxt/eslint` — skip the entire ESLint migration; preserve
+    // the user's current ESLint setup and let them migrate by hand.
+    warnIncompatibleEslintIntegration(incompatibleEslintIntegration);
+  } else if (
+    eslintProject.hasDependency &&
+    !eslintProject.configFile &&
+    eslintProject.legacyConfigFile
+  ) {
     warnLegacyEslintConfig(eslintProject.legacyConfigFile);
   } else if (eslintProject.hasDependency && eslintProject.configFile) {
     migrateEslint = await confirmEslintMigration(options.interactive);
@@ -970,7 +981,12 @@ async function main() {
     // Merge configs and reinstall once if any tool migration happened
     if (eslintMigrated || prettierMigrated) {
       updateMigrationProgress('Rewriting configs');
-      mergeViteConfigFiles(workspaceInfoOptional.rootDir, true, report);
+      mergeViteConfigFiles(
+        workspaceInfoOptional.rootDir,
+        true,
+        report,
+        workspaceInfoOptional.packages,
+      );
       updateMigrationProgress('Installing dependencies');
       // Resolve the actual pnpm version that `vp install` will use so the
       // auto-install can opt into `--ignore-scripts` on pnpm v11 (which fails

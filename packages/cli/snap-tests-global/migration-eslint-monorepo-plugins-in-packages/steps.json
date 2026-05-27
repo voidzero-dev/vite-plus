@@ -1,0 +1,10 @@
+{
+  "commands": [
+    "vp migrate --no-interactive # workspace packages get the SAME aggressive cleanup as the root (deps, configs, lint-staged)",
+    "cat package.json # root: eslint + eslint-config-airbnb removed",
+    "cat packages/app/package.json # workspace: eslint, eslint-plugin-vue, @typescript-eslint/parser removed; @typescript-eslint/utils preserved (reusable AST lib)",
+    "cat packages/lint-config/package.json # workspace: all eslint-plugin-* removed; peerDeps.eslint scrubbed (field deleted when empty)",
+    "test ! -f packages/app/eslint.config.mjs # workspace eslint config is deleted",
+    "cat packages/app/.lintstagedrc.json # workspace lint-staged rewritten (eslint --fix → vp lint --fix)"
+  ]
+}
