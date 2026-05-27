@@ -548,13 +548,13 @@ describe('computeAutoInlineList', () => {
   });
 
   it('passes the project root to the require factory', () => {
-    const capturedFroms: string[] = [];
+    const capturedFromPaths: string[] = [];
     const factory = (from: string) => {
-      capturedFroms.push(from);
+      capturedFromPaths.push(from);
       return { resolve: (_id: string) => `/mock/node_modules/${_id}/index.js` };
     };
     computeAutoInlineList(undefined, '/custom/root', factory);
-    expect(capturedFroms).toEqual(['/custom/root/package.json']);
+    expect(capturedFromPaths).toEqual(['/custom/root/package.json']);
   });
 });
 
