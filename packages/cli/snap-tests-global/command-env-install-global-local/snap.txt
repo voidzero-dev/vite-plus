@@ -1,12 +1,39 @@
+[1]> vp install -g . voidzero-nonexistent-pkg-xyz-12345
+info: Installing 2 global packages with Node.js <semver>
+npm error code E404
+npm error 404 Not Found - GET https://registry.<domain>/voidzero-nonexistent-pkg-xyz-12345 - Not found
+npm error 404
+npm error 404  The requested resource 'voidzero-nonexistent-pkg-xyz-12345@*' could not be found or you do not have permission to access it.
+npm error 404
+npm error 404 Note that you can also install from a
+npm error 404 tarball, folder, http url, or git url.
+npm error A complete log of this run can be found in: <homedir>/.npm/_logs/<timestamp>-debug.log
+✓ Installed just-a-normal-package <semver>
+  Bins: just-a-normal-package
+
+error: Failed to install voidzero-nonexistent-pkg-xyz-12345: Configuration error: npm install failed with exit code: Some(1)
+
+> just-a-normal-package
+The package is installed successfully
+
+> vp remove -g just-a-normal-package
+Uninstalled just-a-normal-package
+
 > vp install -g .
 info: Installing 1 global package with Node.js <semver>
 ✓ Installed just-a-normal-package <semver>
   Bins: just-a-normal-package
 
+> just-a-normal-package
+The package is installed successfully
+
 > vp install -g ./another-package.tgz
 info: Installing 1 global package with Node.js <semver>
 ✓ Installed another-normal-package <semver>
   Bins: another-normal-package
+
+> another-normal-package
+Another package is installed successfully
 
 > vp list -g just-a-normal-package
 Package                       Node version   Binaries

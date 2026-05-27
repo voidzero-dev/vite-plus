@@ -77,11 +77,6 @@ pub fn get_packages_dir() -> Result<AbsolutePathBuf, Error> {
     Ok(get_vp_home()?.join("packages"))
 }
 
-/// Get the tmp directory path for staging (~/.vite-plus/tmp/).
-pub fn get_tmp_dir() -> Result<AbsolutePathBuf, Error> {
-    Ok(get_vp_home()?.join("tmp"))
-}
-
 /// Get the node_modules directory path for a package.
 ///
 /// npm uses different layouts on Unix vs Windows:

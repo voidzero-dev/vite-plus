@@ -1,7 +1,12 @@
 {
   "commands": [
+    "vp install -g . voidzero-nonexistent-pkg-xyz-12345",
+    "just-a-normal-package",
+    "vp remove -g just-a-normal-package",
     "vp install -g .",
+    "just-a-normal-package",
     "vp install -g ./another-package.tgz",
+    "another-normal-package",
     "vp list -g just-a-normal-package",
     "vp list -g another-normal-package"
   ],
