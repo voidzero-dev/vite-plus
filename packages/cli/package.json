@@ -243,6 +243,111 @@
     "./test/browser-compat": {
       "types": "./dist/test/browser-compat.d.ts",
       "default": "./dist/test/browser-compat.js"
+    },
+    "./test/plugins/runner": {
+      "default": "./dist/test/plugins/runner.js"
+    },
+    "./test/plugins/runner-utils": {
+      "default": "./dist/test/plugins/runner-utils.js"
+    },
+    "./test/plugins/runner-types": {
+      "default": "./dist/test/plugins/runner-types.js"
+    },
+    "./test/plugins/utils": {
+      "default": "./dist/test/plugins/utils.js"
+    },
+    "./test/plugins/utils-source-map": {
+      "default": "./dist/test/plugins/utils-source-map.js"
+    },
+    "./test/plugins/utils-source-map-node": {
+      "default": "./dist/test/plugins/utils-source-map-node.js"
+    },
+    "./test/plugins/utils-error": {
+      "default": "./dist/test/plugins/utils-error.js"
+    },
+    "./test/plugins/utils-helpers": {
+      "default": "./dist/test/plugins/utils-helpers.js"
+    },
+    "./test/plugins/utils-display": {
+      "default": "./dist/test/plugins/utils-display.js"
+    },
+    "./test/plugins/utils-timers": {
+      "default": "./dist/test/plugins/utils-timers.js"
+    },
+    "./test/plugins/utils-offset": {
+      "default": "./dist/test/plugins/utils-offset.js"
+    },
+    "./test/plugins/utils-resolver": {
+      "default": "./dist/test/plugins/utils-resolver.js"
+    },
+    "./test/plugins/utils-serialize": {
+      "default": "./dist/test/plugins/utils-serialize.js"
+    },
+    "./test/plugins/utils-constants": {
+      "default": "./dist/test/plugins/utils-constants.js"
+    },
+    "./test/plugins/utils-diff": {
+      "default": "./dist/test/plugins/utils-diff.js"
+    },
+    "./test/plugins/spy": {
+      "default": "./dist/test/plugins/spy.js"
+    },
+    "./test/plugins/expect": {
+      "default": "./dist/test/plugins/expect.js"
+    },
+    "./test/plugins/snapshot": {
+      "default": "./dist/test/plugins/snapshot.js"
+    },
+    "./test/plugins/snapshot-environment": {
+      "default": "./dist/test/plugins/snapshot-environment.js"
+    },
+    "./test/plugins/snapshot-manager": {
+      "default": "./dist/test/plugins/snapshot-manager.js"
+    },
+    "./test/plugins/mocker": {
+      "default": "./dist/test/plugins/mocker.js"
+    },
+    "./test/plugins/mocker-node": {
+      "default": "./dist/test/plugins/mocker-node.js"
+    },
+    "./test/plugins/mocker-browser": {
+      "default": "./dist/test/plugins/mocker-browser.js"
+    },
+    "./test/plugins/mocker-redirect": {
+      "default": "./dist/test/plugins/mocker-redirect.js"
+    },
+    "./test/plugins/mocker-transforms": {
+      "default": "./dist/test/plugins/mocker-transforms.js"
+    },
+    "./test/plugins/mocker-automock": {
+      "default": "./dist/test/plugins/mocker-automock.js"
+    },
+    "./test/plugins/mocker-register": {
+      "default": "./dist/test/plugins/mocker-register.js"
+    },
+    "./test/plugins/pretty-format": {
+      "default": "./dist/test/plugins/pretty-format.js"
+    },
+    "./test/plugins/browser": {
+      "default": "./dist/test/plugins/browser.js"
+    },
+    "./test/plugins/browser-context": {
+      "default": "./dist/test/plugins/browser-context.js"
+    },
+    "./test/plugins/browser-client": {
+      "default": "./dist/test/plugins/browser-client.js"
+    },
+    "./test/plugins/browser-locators": {
+      "default": "./dist/test/plugins/browser-locators.js"
+    },
+    "./test/plugins/browser-playwright": {
+      "default": "./dist/test/plugins/browser-playwright.js"
+    },
+    "./test/plugins/browser-webdriverio": {
+      "default": "./dist/test/plugins/browser-webdriverio.js"
+    },
+    "./test/plugins/browser-preview": {
+      "default": "./dist/test/plugins/browser-preview.js"
     }
   },
   "scripts": {
