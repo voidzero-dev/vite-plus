@@ -61,7 +61,7 @@ export default defineConfig({
 
 ## `run.tasks`
 
-- **Type:** `Record<string, TaskDefinition>` where `TaskDefinition = Task | string | string[]`
+- **Type:** `Record<string, Task | string | string[]>`
 
 Defines tasks that can be run with `vp run <task>`.
 
