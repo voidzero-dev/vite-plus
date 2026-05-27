@@ -913,9 +913,9 @@ jobs:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             sfw_asset: sfw-free-windows-x86_64.exe
-            # On Windows vp ships as `vp.cmd`; sfw spawns its child process
+            # On Windows vp ships as `vp.exe`; sfw spawns its child process
             # directly without applying PATHEXT, so the bare `vp` lookup fails.
-            vp_bin: vp.cmd
+            vp_bin: vp.exe
     runs-on: ${{ matrix.os }}
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
@@ -974,6 +974,14 @@ jobs:
         run: sfw --version
 
       - name: Run `sfw vp install` against a real repo
+        # TODO(SocketDev/sfw-free#30, SocketDev/sfw-free#43): drop `VP_INSECURE_TLS`
+        # once sfw ships the EKU fix. The GitHub release v1.10.0 still issues a
+        # CA cert with a present-but-empty Extended Key Usage extension that
+        # rustls (Linux/macOS) and native-tls (Windows) reject. With this var
+        # set vp still exercises the HTTPS_PROXY + SSL_CERT_FILE plumbing
+        # end-to-end; only certificate *validity* checking is bypassed.
+        env:
+          VP_INSECURE_TLS: '1'
         run: |
           set -euo pipefail
           # Force the registry-fetch path: install a pinned pnpm globally so
