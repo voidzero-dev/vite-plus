@@ -974,14 +974,6 @@ jobs:
         run: sfw --version
 
       - name: Run `sfw vp install` against a real repo
-        # TODO(SocketDev/sfw-free#30, SocketDev/sfw-free#43): drop `VP_INSECURE_TLS`
-        # once sfw ships the EKU fix. Until then the cert sfw issues is rejected
-        # by rustls/native-tls; the proxy + CA-injection plumbing is still
-        # exercised via HTTPS_PROXY + SSL_CERT_FILE, only certificate *validity*
-        # is skipped. Scoped to this step so unrelated build/setup steps in this
-        # job never see an HTTP client with cert verification disabled.
-        env:
-          VP_INSECURE_TLS: '1'
         run: |
           set -euo pipefail
           # Force the registry-fetch path: install a pinned pnpm globally so
