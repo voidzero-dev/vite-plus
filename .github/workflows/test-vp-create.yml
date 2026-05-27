@@ -291,6 +291,12 @@ jobs:
           node -e "
             const fs = require('fs');
             const pm = process.env.PACKAGE_MANAGER;
+            for (const f of ['apps/website/package.json', 'packages/utils/package.json']) {
+              if (!fs.existsSync(f)) {
+                console.error('✗ expected ' + f + ' to exist after vp create vite:monorepo');
+                process.exit(1);
+              }
+            }
             const app = JSON.parse(fs.readFileSync('apps/website/package.json', 'utf8'));
             const utils = JSON.parse(fs.readFileSync('packages/utils/package.json', 'utf8'));
             const appDev = app.devDependencies || {};

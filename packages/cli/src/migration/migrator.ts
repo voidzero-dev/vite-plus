@@ -1985,24 +1985,31 @@ export function rewritePackageJson(
   }
   // Normalize a pre-existing pinned vite-plus so sub-packages don't drift
   // from siblings: in catalog-supporting monorepos that's `catalog:`, under
-  // force-override (file:) it's the tgz path. Scoped to catalog-supporting
-  // PMs so npm/standalone keep their pinned spec under `vp migrate`.
+  // force-override (file:) it's the tgz path. Preserve protocol-prefixed
+  // specs (catalog:named, workspace:*, link:, file:, npm:, github:, git+/git:,
+  // http(s)://) so deliberate user pins survive; only vanilla version ranges
+  // (e.g. `^0.1.20`, `latest`) are rewritten.
   const canonicalVitePlusSpec =
     supportCatalog && !VITE_PLUS_VERSION.startsWith('file:') ? 'catalog:' : VITE_PLUS_VERSION;
   const existingVitePlus = pkg.devDependencies?.[VITE_PLUS_NAME];
   const shouldNormalizeExistingVitePlus =
-    !!existingVitePlus && supportCatalog && existingVitePlus !== canonicalVitePlusSpec;
+    !!existingVitePlus &&
+    supportCatalog &&
+    existingVitePlus !== canonicalVitePlusSpec &&
+    !isProtocolPinnedSpec(existingVitePlus);
   if (needVitePlus || shouldNormalizeExistingVitePlus) {
-    // add vite-plus to devDependencies
-    const version = canonicalVitePlusSpec;
     pkg.devDependencies = {
       ...pkg.devDependencies,
-      [VITE_PLUS_NAME]: version,
+      [VITE_PLUS_NAME]: canonicalVitePlusSpec,
     };
-    // Add vitest to devDependencies when a remaining dependency likely peer-depends
-    // on vitest (e.g., vitest-browser-svelte). Without this, pnpm resolves the real
-    // vitest for peer deps instead of @voidzero-dev/vite-plus-test, causing
-    // third-party type augmentations to target the wrong module.
+  }
+  // Add vitest to devDependencies when a remaining dependency likely peer-depends
+  // on vitest (e.g., vitest-browser-svelte). Without this, pnpm resolves the real
+  // vitest for peer deps instead of @voidzero-dev/vite-plus-test, causing
+  // third-party type augmentations to target the wrong module. Gated by
+  // needVitePlus (something actually changed) — a pure normalize pass must not
+  // mutate the project beyond the vite-plus spec.
+  if (needVitePlus) {
     const installableDeps = {
       ...pkg.dependencies,
       ...pkg.devDependencies,
@@ -2013,10 +2020,18 @@ export function rewritePackageJson(
       Object.keys(installableDeps).some((name) => name.includes('vitest'))
     ) {
       const ver = VITE_PLUS_OVERRIDE_PACKAGES.vitest;
+      pkg.devDependencies ??= {};
       pkg.devDependencies.vitest = getCatalogDependencySpec(undefined, ver, supportCatalog);
     }
   }
   return extractedStagedConfig;
+}
+
+// Returns true if the spec uses a known protocol prefix (catalog:, workspace:,
+// link:, file:, npm:, github:, git+/git:, http(s)://) and so represents a
+// deliberate user choice that should not be silently rewritten.
+function isProtocolPinnedSpec(spec: string): boolean {
+  return /^(catalog:|workspace:|link:|file:|npm:|github:|git[+:]|https?:\/\/)/.test(spec);
 }
 
 // Remove the "lint-staged" key from package.json after config has been
