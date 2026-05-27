@@ -44,6 +44,8 @@ Options:
           Select the workspace root package
   -F, --filter <FILTERS>
           Match packages by name, directory, or glob pattern
+      --fail-if-no-match
+          Exit with a non-zero status if a `--filter` expression matches no packages
       --ignore-depends-on
           Do not run dependencies specified in `dependsOn` fields
   -v, --verbose
