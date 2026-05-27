@@ -80,7 +80,7 @@ describe('vitePlusVitestResolverPlugin', () => {
     expect(typeof plugin?.resolveId).toBe('function');
   });
 
-  it('is injected into each `test.projects` entry', () => {
+  it('is injected into each `test.projects` entry (before user plugins)', () => {
     const existing: Plugin = { name: 'user-project-plugin' };
     const result = defineConfig({
       test: {

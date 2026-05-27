@@ -1,7 +1,12 @@
 import type { Plugin } from '@voidzero-dev/vite-plus-core';
 import { describe, expect, it } from 'vitest';
 
-import { defineConfig, rewriteVitePlusTestSpecifier } from '../define-config.ts';
+import {
+  AUTO_INLINE_DEPS,
+  computeAutoInlineList,
+  defineConfig,
+  rewriteVitePlusTestSpecifier,
+} from '../define-config.ts';
 
 const REWRITE_PLUGIN_NAME = 'vite-plus:vitest-specifier-rewrite';
 const RESOLVER_PLUGIN_NAME = 'vite-plus:vitest-resolver';
@@ -379,16 +384,17 @@ describe('rewriteVitePlusTestSpecifier', () => {
 });
 
 describe('defineConfig project plugin injection', () => {
-  it('injects rewrite + resolver plugins at the root plugins array', () => {
+  it('injects rewrite + resolver + auto-inline plugins at the root plugins array', () => {
     const existing: Plugin = { name: 'user-existing-root-plugin' };
     const result = defineConfig({ plugins: [existing] }) as { plugins: unknown[] };
 
     expect(pluginName(result.plugins[0])).toBe(REWRITE_PLUGIN_NAME);
     expect(pluginName(result.plugins[1])).toBe(RESOLVER_PLUGIN_NAME);
-    expect(pluginName(result.plugins[2])).toBe('user-existing-root-plugin');
+    expect(pluginName(result.plugins[2])).toBe(AUTO_INLINE_PLUGIN_NAME);
+    expect(pluginName(result.plugins[3])).toBe('user-existing-root-plugin');
   });
 
-  it('injects rewrite plugin into an inline-object project entry, preserving existing plugins', () => {
+  it('injects rewrite + resolver + auto-inline plugins into an inline-object project entry, preserving existing plugins', () => {
     const existing: Plugin = { name: 'user-unit-project-plugin' };
     const result = defineConfig({
       test: {
@@ -405,12 +411,13 @@ describe('defineConfig project plugin injection', () => {
     expect(project.test.name).toBe('unit');
     expect(pluginName(project.plugins[0])).toBe(REWRITE_PLUGIN_NAME);
     expect(pluginName(project.plugins[1])).toBe(RESOLVER_PLUGIN_NAME);
-    expect(pluginName(project.plugins[2])).toBe('user-unit-project-plugin');
+    expect(pluginName(project.plugins[2])).toBe(AUTO_INLINE_PLUGIN_NAME);
+    expect(pluginName(project.plugins[3])).toBe('user-unit-project-plugin');
     // Sanity: the existing plugin reference is preserved (clone shallow-copies the array).
-    expect(project.plugins[2]).toBe(existing);
+    expect(project.plugins[3]).toBe(existing);
   });
 
-  it('injects rewrite plugin into the return value of a function-shaped project entry', () => {
+  it('injects plugins into the return value of a function-shaped project entry', () => {
     const existing: Plugin = { name: 'user-fn-project-plugin' };
     const projectFn = () => ({
       plugins: [existing],
@@ -429,7 +436,8 @@ describe('defineConfig project plugin injection', () => {
     const resolved = (wrapped as (env: typeof fakeEnv) => { plugins: unknown[] })(fakeEnv);
     expect(pluginName(resolved.plugins[0])).toBe(REWRITE_PLUGIN_NAME);
     expect(pluginName(resolved.plugins[1])).toBe(RESOLVER_PLUGIN_NAME);
-    expect(pluginName(resolved.plugins[2])).toBe('user-fn-project-plugin');
+    expect(pluginName(resolved.plugins[2])).toBe(AUTO_INLINE_PLUGIN_NAME);
+    expect(pluginName(resolved.plugins[3])).toBe('user-fn-project-plugin');
   });
 
   it('passes string-glob project entries through unchanged', () => {
@@ -455,83 +463,110 @@ describe('defineConfig project plugin injection', () => {
 
     const project = result.test.projects[0] as { plugins: unknown[]; test: { name: string } };
     expect(project.test.name).toBe('no-plugins');
-    expect(project.plugins).toHaveLength(2);
+    expect(project.plugins).toHaveLength(3);
     expect(pluginName(project.plugins[0])).toBe(REWRITE_PLUGIN_NAME);
     expect(pluginName(project.plugins[1])).toBe(RESOLVER_PLUGIN_NAME);
+    expect(pluginName(project.plugins[2])).toBe(AUTO_INLINE_PLUGIN_NAME);
   });
 });
 
-describe('defineConfig auto-inline deps', () => {
-  const AUTO_INLINE = ['@testing-library/jest-dom', '@storybook/test', 'jest-extended'];
+const AUTO_INLINE_PLUGIN_NAME = 'vite-plus:auto-inline-matcher-deps';
 
-  it('injects the auto-inline packages when no inline list is set', () => {
-    const result = defineConfig({}) as {
-      test?: { server?: { deps?: { inline?: unknown } } };
-    };
-    expect(result.test?.server?.deps?.inline).toEqual(AUTO_INLINE);
+/** Builds a mock require-factory where only `installedPkgs` resolve. */
+function makeRequireFactory(
+  installedPkgs: string[],
+): (from: string) => { resolve: (id: string) => string } {
+  return (_from: string) => ({
+    resolve(id: string) {
+      if (installedPkgs.includes(id)) {
+        return `/mock/node_modules/${id}/index.js`;
+      }
+      throw new Error(`Cannot find module '${id}'`);
+    },
+  });
+}
+
+/** A mock require-factory where every package resolves. */
+const allInstalledFactory = makeRequireFactory([
+  '@testing-library/jest-dom',
+  '@storybook/test',
+  'jest-extended',
+]);
+
+/** A mock require-factory where no auto-inline package resolves. */
+const noneInstalledFactory = makeRequireFactory([]);
+
+describe('computeAutoInlineList', () => {
+  const ALL = [...AUTO_INLINE_DEPS];
+
+  it('inlines all packages when all are installed and no existing list', () => {
+    expect(computeAutoInlineList(undefined, '/project', allInstalledFactory)).toEqual(ALL);
   });
 
-  it('merges with an existing user inline array, preserving order and dedupe', () => {
-    const result = defineConfig({
-      test: { server: { deps: { inline: ['my-pkg', '@testing-library/jest-dom'] } } },
-    }) as { test: { server: { deps: { inline: unknown[] } } } };
-    expect(result.test.server.deps.inline).toEqual([
+  it('inlines only installed packages — absent ones are skipped', () => {
+    const only = makeRequireFactory(['@testing-library/jest-dom']);
+    expect(computeAutoInlineList(undefined, '/project', only)).toEqual([
+      '@testing-library/jest-dom',
+    ]);
+  });
+
+  it('returns null when no auto-inline package is installed', () => {
+    expect(computeAutoInlineList(undefined, '/project', noneInstalledFactory)).toBeNull();
+  });
+
+  it('merges with an existing user inline array, preserving order and deduplicating', () => {
+    const existing: (string | RegExp)[] = ['my-pkg', '@testing-library/jest-dom'];
+    const result = computeAutoInlineList(existing, '/project', allInstalledFactory);
+    expect(result).toEqual([
       'my-pkg',
       '@testing-library/jest-dom',
       '@storybook/test',
       'jest-extended',
     ]);
+    // Original array must not be mutated.
+    expect(existing).toEqual(['my-pkg', '@testing-library/jest-dom']);
   });
 
-  it("does not override `inline: true` (user opted into 'inline everything')", () => {
-    const result = defineConfig({
-      test: { server: { deps: { inline: true } } },
-    }) as { test: { server: { deps: { inline: unknown } } } };
-    expect(result.test.server.deps.inline).toBe(true);
+  it("returns null when `inline: true` (user opted into 'inline everything')", () => {
+    expect(computeAutoInlineList(true, '/project', allInstalledFactory)).toBeNull();
   });
 
   it('treats a regexp entry that matches an auto-inline pkg as already covered', () => {
-    const result = defineConfig({
-      test: { server: { deps: { inline: [/^@testing-library\//, /^@storybook\//] } } },
-    }) as { test: { server: { deps: { inline: unknown[] } } } };
-    // Both '@testing-library/jest-dom' and '@storybook/test' match the regexps;
+    const existing: (string | RegExp)[] = [/^@testing-library\//, /^@storybook\//];
+    const result = computeAutoInlineList(existing, '/project', allInstalledFactory);
+    // Both '@testing-library/jest-dom' and '@storybook/test' are covered;
     // only 'jest-extended' should be appended.
-    const inline = result.test.server.deps.inline;
-    expect(inline).toHaveLength(3);
-    expect(inline[0]).toBeInstanceOf(RegExp);
-    expect(inline[1]).toBeInstanceOf(RegExp);
-    expect(inline[2]).toBe('jest-extended');
+    expect(result).toHaveLength(3);
+    expect(result![0]).toBeInstanceOf(RegExp);
+    expect(result![1]).toBeInstanceOf(RegExp);
+    expect(result![2]).toBe('jest-extended');
   });
 
-  it('injects auto-inline into each test.projects entry', () => {
-    const result = defineConfig({
-      test: {
-        projects: [
-          { test: { name: 'unit', environment: 'node' } },
-          {
-            test: {
-              name: 'browser',
-              environment: 'jsdom',
-              server: { deps: { inline: ['custom'] } },
-            },
-          },
-        ],
-      },
-    }) as { test: { projects: unknown[] } };
-
-    const [p0, p1] = result.test.projects as Array<{
-      test: { name: string; server?: { deps?: { inline?: unknown } } };
-    }>;
-    expect(p0.test.name).toBe('unit');
-    expect(p0.test.server?.deps?.inline).toEqual(AUTO_INLINE);
-    expect(p1.test.name).toBe('browser');
-    expect(p1.test.server?.deps?.inline).toEqual(['custom', ...AUTO_INLINE]);
+  it('returns null when all auto-inline packages are already in the existing list', () => {
+    const existing: (string | RegExp)[] = [...AUTO_INLINE_DEPS];
+    expect(computeAutoInlineList(existing, '/project', allInstalledFactory)).toBeNull();
   });
 
-  it('does not re-add an entry that already exists', () => {
-    const result = defineConfig({
-      test: { server: { deps: { inline: AUTO_INLINE.slice() } } },
-    }) as { test: { server: { deps: { inline: unknown[] } } } };
-    expect(result.test.server.deps.inline).toEqual(AUTO_INLINE);
+  it('passes the project root to the require factory', () => {
+    const capturedFroms: string[] = [];
+    const factory = (from: string) => {
+      capturedFroms.push(from);
+      return { resolve: (_id: string) => `/mock/node_modules/${_id}/index.js` };
+    };
+    computeAutoInlineList(undefined, '/custom/root', factory);
+    expect(capturedFroms).toEqual(['/custom/root/package.json']);
+  });
+});
+
+describe('defineConfig auto-inline deps plugin registration', () => {
+  it('registers the auto-inline plugin in the root plugins array with enforce:pre and configResolved', () => {
+    const result = defineConfig({}) as { plugins: unknown[] };
+    const plugin = result.plugins.find(
+      (p): p is Record<string, unknown> =>
+        !!p && typeof p === 'object' && (p as { name?: unknown }).name === AUTO_INLINE_PLUGIN_NAME,
+    );
+    expect(plugin).toBeDefined();
+    expect(plugin?.enforce).toBe('pre');
+    expect(typeof plugin?.configResolved).toBe('function');
   });
 });
