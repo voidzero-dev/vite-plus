@@ -46,7 +46,7 @@ const ZED_SETTINGS = {
     oxfmt: {
       initialization_options: {
         settings: {
-          configPath: './vite.config.ts',
+          'fmt.configPath': './vite.config.ts',
           run: 'onSave',
         },
       },

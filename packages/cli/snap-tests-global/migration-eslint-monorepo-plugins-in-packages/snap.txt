@@ -1,0 +1,51 @@
+> vp migrate --no-interactive # workspace packages get the SAME aggressive cleanup as the root (deps, configs, lint-staged)
+
+✔ Created vite.config.ts in vite.config.ts
+
+✔ Merged .oxlintrc.json into vite.config.ts
+◇ Migrated . to Vite+
+• Node <semver>  pnpm <semver>
+• 3 config updates applied
+• ESLint rules migrated to Oxlint
+
+> cat package.json # root: eslint + eslint-config-airbnb removed
+{
+  "name": "migration-eslint-monorepo-plugins-in-packages",
+  "scripts": {
+    "lint": "vp lint .",
+    "prepare": "vp config"
+  },
+  "devDependencies": {
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
+  },
+  "packageManager": "pnpm@<semver>"
+}
+
+> cat packages/app/package.json # workspace: eslint, eslint-plugin-vue, @typescript-eslint/parser removed; @typescript-eslint/utils preserved (reusable AST lib)
+{
+  "name": "@test/app",
+  "scripts": {
+    "dev": "vp dev",
+    "lint": "vp lint ."
+  },
+  "devDependencies": {
+    "@typescript-eslint/utils": "^8.0.0",
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}
+
+> cat packages/lint-config/package.json # workspace: all eslint-plugin-* removed; peerDeps.eslint scrubbed (field deleted when empty)
+{
+  "name": "@test/lint-config",
+  "scripts": {
+    "lint": "vp lint ."
+  }
+}
+
+> test ! -f packages/app/eslint.config.mjs # workspace eslint config is deleted
+> cat packages/app/.lintstagedrc.json # workspace lint-staged rewritten (eslint --fix → vp lint --fix)
+{
+  "*.ts": "vp lint --fix"
+}
