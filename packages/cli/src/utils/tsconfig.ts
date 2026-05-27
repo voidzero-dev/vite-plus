@@ -10,9 +10,11 @@ import { applyEdits, modify, parse as parseJsonc } from 'jsonc-parser';
  */
 export function hasBaseUrlInTsconfig(projectPath: string): boolean {
   try {
-    const tsconfig = JSON.parse(
+    const tsconfig = parseJsonc(
       fs.readFileSync(path.join(projectPath, 'tsconfig.json'), 'utf-8'),
-    ) as { compilerOptions?: { baseUrl?: string } };
+    ) as {
+      compilerOptions?: { baseUrl?: string };
+    };
     return tsconfig?.compilerOptions?.baseUrl !== undefined;
   } catch {
     return false;
