@@ -491,53 +491,107 @@ function vitePlusVitestResolverPlugin(): PluginOption {
  * issue #897). Inlining them into the test server's module graph forces
  * registration on the same instance.
  *
- * The previous bundled `@voidzero-dev/vite-plus-test` wrapper did this via a
- * build-time patch of vitest's CLI chunk; the wrapper-free architecture re-
- * applies it at config-merge time so the public behavior is preserved.
+ * Only packages that are **installed** in the consumer project are inlined.
+ * Absent packages are silently skipped so the server-deps optimizer never
+ * tries to resolve a name that does not exist in the project's node_modules.
+ *
+ * The check is deferred to a `configResolved` plugin hook so that
+ * `resolvedConfig.root` points at the actual project root (the value vite has
+ * already normalised), rather than relying on `process.cwd()` at config-load
+ * time (which can differ in workspace / monorepo setups).
+ *
+ * Exported for unit testing.
  */
-const AUTO_INLINE_DEPS: ReadonlyArray<string> = [
+export const AUTO_INLINE_DEPS: ReadonlyArray<string> = [
   '@testing-library/jest-dom',
   '@storybook/test',
   'jest-extended',
 ];
 
-function mergeAutoInlineDeps<T extends { test?: { server?: { deps?: { inline?: unknown } } } }>(
-  config: T,
-): T {
-  const existingInline = config.test?.server?.deps?.inline;
-  // User opted into "inline everything" — don't override.
+/**
+ * Compute the merged `test.server.deps.inline` list for a given project root,
+ * appending only those entries from [[AUTO_INLINE_DEPS]] that are actually
+ * installed in the project.
+ *
+ * Returns `null` when nothing needs to change (either `inline: true` or an
+ * empty result), so the caller can skip the mutation step.
+ *
+ * Exported for unit testing. The `_createRequire` parameter lets tests inject
+ * a controlled resolver without needing to spy on Node's ESM module namespace.
+ */
+export function computeAutoInlineList(
+  existingInline: (string | RegExp)[] | true | undefined,
+  projectRoot: string,
+  _createRequire: (from: string) => { resolve: (id: string) => string } = createRequire,
+): (string | RegExp)[] | null {
+  // User opted into "inline everything" — don't touch.
   if (existingInline === true) {
-    return config;
+    return null;
   }
-  const existing = Array.isArray(existingInline) ? existingInline : [];
-  const merged = [...existing];
+  // Build a require resolver anchored at the project root so we only
+  // inline packages that are actually installed there.
+  const projectRequire = _createRequire(`${projectRoot}/package.json`);
+  // Start from a copy of the user-supplied array (or a fresh array when
+  // none was provided) so the originating user-config object is not mutated.
+  const merged: (string | RegExp)[] = Array.isArray(existingInline) ? [...existingInline] : [];
   for (const pkg of AUTO_INLINE_DEPS) {
-    if (!merged.some((entry) => entry === pkg || (entry instanceof RegExp && entry.test(pkg)))) {
-      merged.push(pkg);
+    // Skip if already covered by a string or regexp entry.
+    if (merged.some((entry) => entry === pkg || (entry instanceof RegExp && entry.test(pkg)))) {
+      continue;
     }
+    try {
+      projectRequire.resolve(pkg);
+    } catch {
+      // Package not installed in the project — skip silently.
+      continue;
+    }
+    merged.push(pkg);
   }
-  if (merged.length === existing.length) {
-    return config;
+  // Return null when there's nothing new to inline so callers can bail early.
+  const hadEntries = Array.isArray(existingInline) ? existingInline.length : 0;
+  if (merged.length === hadEntries) {
+    return null;
   }
+  return merged;
+}
+
+function vitePlusAutoInlineMatcherPlugin(): PluginOption {
   return {
-    ...config,
-    test: {
-      ...config.test,
-      server: {
-        ...config.test?.server,
-        deps: {
-          ...config.test?.server?.deps,
-          inline: merged,
-        },
-      },
+    name: 'vite-plus:auto-inline-matcher-deps',
+    enforce: 'pre',
+    configResolved(resolvedConfig) {
+      // Access the vitest test config via the augmented field. Vitest augments
+      // vite's `UserConfig` but not `ResolvedConfig`, so we use `any` here.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const testConfig = (resolvedConfig as any).test as
+        | { server?: { deps?: { inline?: (string | RegExp)[] | true } } }
+        | undefined;
+      const merged = computeAutoInlineList(testConfig?.server?.deps?.inline, resolvedConfig.root);
+      if (merged === null) {
+        return;
+      }
+      // Mutate the resolved config so the finalised inline list is visible
+      // to vitest when it reads test.server.deps.inline.
+      if (!testConfig) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (resolvedConfig as any).test = { server: { deps: { inline: merged } } };
+      } else {
+        if (!testConfig.server) {
+          testConfig.server = {};
+        }
+        if (!testConfig.server.deps) {
+          testConfig.server.deps = {};
+        }
+        testConfig.server.deps.inline = merged;
+      }
     },
-  } as T;
+  };
 }
 
 /**
- * Inject the rewrite plugin AND the auto-inline deps defaults into a single
- * inline project config. Used both for root configs and for object-shaped
- * entries inside `test.projects`.
+ * Inject the rewrite plugin, the vitest resolver plugin, and the auto-inline
+ * matcher plugin into a single inline project config. Used both for root
+ * configs and for object-shaped entries inside `test.projects`.
  *
  * The shapes overlap (both have an optional top-level `plugins` array and
  * an optional `test.server.deps.inline`), so a shared helper keeps the
@@ -549,15 +603,15 @@ function injectPluginIntoInlineConfig<
     test?: { server?: { deps?: { inline?: unknown } } };
   },
 >(config: T): T {
-  const withPlugin = {
+  return {
     ...config,
     plugins: [
       vitePlusTestSpecifierRewritePlugin(),
       vitePlusVitestResolverPlugin(),
+      vitePlusAutoInlineMatcherPlugin(),
       ...(config.plugins ?? []),
     ],
   } as T;
-  return mergeAutoInlineDeps(withPlugin);
 }
 
 /**
