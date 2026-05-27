@@ -168,6 +168,7 @@ minimumReleaseAgeExclude:
 overrides:
   rolldown: workspace:rolldown@*
   vite: workspace:@voidzero-dev/vite-plus-core@*
+  vite-plus: workspace:*
   vitest: workspace:@voidzero-dev/vite-plus-test@*
   vitest-dev: npm:vitest@^4.1.7
 packageExtensions:
