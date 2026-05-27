@@ -250,6 +250,16 @@ fix: $NEW_IMPORT
 /// the user actually sees through their `import { expect } from 'vite-plus/test'`
 /// statements. Leaving the `declare module 'vitest' { ... }` alone keeps
 /// augmentations targeting the real upstream module identity.
+///
+/// `vitest/package.json` is also intentionally NOT rewritten. It is a
+/// metadata-access pattern (typically used to read the vitest version) and
+/// `vite-plus`'s generated exports map deliberately does not expose
+/// `./test/package.json` (see `syncTestPackageExports()` in
+/// `packages/cli/build.ts`, which skips the upstream `./package.json`
+/// export). Rewriting it would yield `vite-plus/test/package.json`, which
+/// fails at runtime with `ERR_PACKAGE_PATH_NOT_EXPORTED`. The original
+/// specifier still resolves through the transitively-installed `vitest`
+/// dependency.
 const REWRITE_VITEST_RULES: &str = r#"---
 id: rewrite-vitest-config-import
 language: TypeScript
@@ -1293,6 +1303,8 @@ rule:
   pattern: $STR
   kind: string
   regex: ^['"]vitest/.+['"]$
+  not:
+    regex: ^['"]vitest/package\.json['"]$
   inside:
     kind: import_statement
 transform:
@@ -1309,6 +1321,8 @@ rule:
   pattern: $STR
   kind: string
   regex: ^['"]vitest/.+['"]$
+  not:
+    regex: ^['"]vitest/package\.json['"]$
   inside:
     kind: export_statement
 transform:
@@ -1325,6 +1339,8 @@ rule:
   pattern: $STR
   kind: string
   regex: ^['"]vitest/.+['"]$
+  not:
+    regex: ^['"]vitest/package\.json['"]$
   inside:
     kind: arguments
     inside:
@@ -1346,6 +1362,8 @@ rule:
   pattern: $STR
   kind: string
   regex: ^['"]vitest/.+['"]$
+  not:
+    regex: ^['"]vitest/package\.json['"]$
   inside:
     kind: arguments
     inside:
@@ -4901,5 +4919,91 @@ const browser = await import('vite-plus/test/browser');
 type C = typeof import('vite-plus/test/browser/context');
 const provider = await import('vite-plus/test/browser-playwright');"#
         );
+    }
+
+    // `vitest/package.json` is a metadata-access pattern (typically used to
+    // read the vitest version). Rewriting it to `vite-plus/test/package.json`
+    // would fail at runtime with `ERR_PACKAGE_PATH_NOT_EXPORTED` because
+    // `syncTestPackageExports()` deliberately skips the upstream
+    // `./package.json` export. The catch-all `vitest/*` subpath rules MUST
+    // leave it alone so the original specifier still resolves through the
+    // transitively-installed `vitest` dependency.
+
+    #[test]
+    fn test_rewrite_import_content_vitest_package_json_static_import() {
+        let content = r#"import pkg from 'vitest/package.json';
+
+console.log(pkg.version);"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vitest_package_json_static_import_double_quotes() {
+        let content = r#"import pkg from "vitest/package.json";
+
+console.log(pkg.version);"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vitest_package_json_require() {
+        let content = r#"const pkg = require('vitest/package.json');
+
+console.log(pkg.version);"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vitest_package_json_dynamic_import() {
+        let content = r#"const pkg = await import('vitest/package.json');
+
+console.log(pkg.version);"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vitest_package_json_typeof_import() {
+        let content = r#"type Pkg = typeof import('vitest/package.json');"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vitest_package_json_export_from() {
+        let content = r#"export { version } from 'vitest/package.json';"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, content);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vitest_config_still_rewritten() {
+        // Sanity check: the `package.json` exclusion must not interfere with
+        // the existing `vitest/config` → `vite-plus` rule (which produces a
+        // bare `vite-plus` target, NOT `vite-plus/test/config`).
+        let content = r#"import 'vitest/config';"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"import 'vite-plus';"#);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vitest_package_json_like_suffix_still_rewritten() {
+        // Sanity check: only the exact `vitest/package.json` subpath is
+        // skipped. A subpath that merely starts with `package.json` (e.g.,
+        // `package.json.js`) MUST still be rewritten by the catch-all rule.
+        let content = r#"import 'vitest/package.json.js';"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"import 'vite-plus/test/package.json.js';"#);
     }
 }
