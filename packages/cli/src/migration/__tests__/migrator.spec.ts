@@ -449,6 +449,30 @@ describe('rewritePackageJson', () => {
     rewritePackageJson(pkg, PackageManager.pnpm, true, undefined, undefined, false);
     expect(pkg.devDependencies).not.toHaveProperty('vitest');
   });
+
+  it('adds a direct vitest dep when a browser provider is declared but not source-imported', async () => {
+    // Config-only browser mode: vitest is enabled via `vite.config.ts`
+    // (e.g. `test.browser.provider: 'playwright'`) and the provider package is
+    // declared in devDependencies, but no source file `import`s it. The
+    // source-scan signal (`usesVitestBrowserMode`) is therefore false; the
+    // dep declaration in the original package.json must still drive the
+    // direct-`vitest` injection so the browser optimizer can resolve `vitest`
+    // from the package root under pnpm strict / Yarn PnP.
+    const pkg = {
+      devDependencies: {
+        '@vitest/browser': '^4.1.7',
+        '@vitest/browser-playwright': '^4.1.7',
+      },
+    };
+    rewritePackageJson(pkg, PackageManager.pnpm, true, undefined, undefined, false);
+    expect(pkg.devDependencies).toHaveProperty('vitest', 'catalog:');
+    expect(pkg.devDependencies).toHaveProperty('vite-plus', 'catalog:');
+    // The browser packages themselves are still stripped.
+    expect(pkg.devDependencies).not.toHaveProperty('@vitest/browser');
+    expect(pkg.devDependencies).not.toHaveProperty('@vitest/browser-playwright');
+    // The provider's runtime peer dep is preserved.
+    expect(pkg.devDependencies).toHaveProperty('playwright', '*');
+  });
 });
 
 describe('rewriteEslintPackageJson', () => {
@@ -1705,6 +1729,43 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
       string
     >;
     expect(devDeps).not.toHaveProperty('vitest');
+  });
+
+  it('detects browser mode from a declared provider dep with no source imports', () => {
+    // Config-only browser mode: `vite.config.ts` enables the browser runner by
+    // provider name (resolved by vitest at runtime) and the user lists
+    // `@vitest/browser-playwright` in devDependencies — but no source or config
+    // file imports `@vitest/browser*`. The source-scan signal is therefore
+    // false; the dep declaration is what tells us the package drives browser
+    // mode. After migration, `vitest` must still be pinned as a direct dep so
+    // the browser optimizer can resolve it under pnpm strict / Yarn PnP.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { '@vitest/browser-playwright': '^4.1.7' },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'vite.config.ts'),
+      [
+        "import { defineConfig } from 'vite';",
+        "export default defineConfig({ test: { browser: { provider: 'playwright' } } });",
+        '',
+      ].join('\n'),
+    );
+
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+    const devDeps = readJson(path.join(tmpDir, 'package.json')).devDependencies as Record<
+      string,
+      string
+    >;
+    expect(devDeps.vitest).toBe('catalog:');
+    expect(devDeps['vite-plus']).toBe('catalog:');
+    expect(devDeps).not.toHaveProperty('@vitest/browser-playwright');
+    // Provider's runtime peer dep is preserved.
+    expect(devDeps.playwright).toBe('*');
   });
 
   it('preserves named pnpm overrides when moving root overrides to pnpm-workspace.yaml', () => {
