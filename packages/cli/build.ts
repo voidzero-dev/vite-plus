@@ -492,9 +492,6 @@ async function syncTestPackageExports() {
   generatedExports['./test/browser-compat'] = await createBrowserCompatExport(testDistDir);
   console.log('  Created ./test/browser-compat');
 
-  // Restore the `./test/plugins/<name>` surface that the removed
-  // `@voidzero-dev/vite-plus-test` wrapper previously exposed. Each entry is
-  // a one-line `export * from '@vitest/<x>'` re-export shim.
   for (const [importSpecifier, pluginName] of PLUGIN_SHIM_ENTRIES) {
     const shimExport = await createShimForExport(
       `plugins/${pluginName}`,
