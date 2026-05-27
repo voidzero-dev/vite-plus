@@ -15,8 +15,8 @@ catalog:
   '@nkzw/safe-word-list': ^3.1.0
   '@oxc-node/cli': ^0.1.0
   '@oxc-node/core': ^0.1.0
-  '@oxc-project/runtime': =0.132.0
-  '@oxc-project/types': =0.132.0
+  '@oxc-project/runtime': =0.133.0
+  '@oxc-project/types': =0.133.0
   '@oxlint/plugins': =1.61.0
   '@pnpm/find-workspace-packages': ^6.0.9
   '@rolldown/pluginutils': ^1.0.0
@@ -80,9 +80,9 @@ catalog:
   mri: ^1.2.0
   nanotar: ^0.3.0
   next: ^15.4.3
-  oxc-minify: =0.132.0
-  oxc-parser: =0.132.0
-  oxc-transform: =0.132.0
+  oxc-minify: =0.133.0
+  oxc-parser: =0.133.0
+  oxc-transform: =0.133.0
   oxfmt: =0.51.0
   oxlint: =1.66.0
   oxlint-tsgolint: =0.23.0
@@ -166,7 +166,7 @@ minimumReleaseAgeExclude:
   - vue-virtual-scroller
   - lodash-es@4.18.1
 overrides:
-  rolldown: workspace:rolldown@*
+  rolldown: https://pkg.pr.new/rolldown/rolldown@main
   vite: workspace:@voidzero-dev/vite-plus-core@*
   vitest: workspace:@voidzero-dev/vite-plus-test@*
   vitest-dev: npm:vitest@^4.1.7

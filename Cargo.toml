@@ -208,7 +208,7 @@ json-strip-comments = "3"
 jsonschema = { version = "0.46.5", default-features = false }
 junction = "1.4.1"
 memchr = "2.7.4"
-mimalloc-safe = "0.1.61"
+mimalloc-safe = "0.1.62"
 mime = "0.3.17"
 napi = { version = "3.0.0", default-features = false, features = [
   "async",
@@ -312,7 +312,7 @@ xxhash-rust = "0.8.15"
 zip = "7.2"
 
 # oxc crates with the same version
-oxc = { version = "0.132.0", features = [
+oxc = { version = "0.133.0", features = [
   "ast_visit",
   "transformer",
   "minifier",
@@ -324,17 +324,17 @@ oxc = { version = "0.132.0", features = [
   "regular_expression",
   "cfg",
 ] }
-oxc_allocator = { version = "0.132.0", features = ["pool"] }
-oxc_ast = "0.132.0"
-oxc_ecmascript = "0.132.0"
-oxc_parser = "0.132.0"
-oxc_span = "0.132.0"
-oxc_napi = "0.132.0"
-oxc_str = "0.132.0"
-oxc_minify_napi = "0.132.0"
-oxc_parser_napi = "0.132.0"
-oxc_transform_napi = "0.132.0"
-oxc_traverse = "0.132.0"
+oxc_allocator = { version = "0.133.0", features = ["pool"] }
+oxc_ast = "0.133.0"
+oxc_ecmascript = "0.133.0"
+oxc_parser = "0.133.0"
+oxc_span = "0.133.0"
+oxc_napi = "0.133.0"
+oxc_str = "0.133.0"
+oxc_minify_napi = "0.133.0"
+oxc_parser_napi = "0.133.0"
+oxc_transform_napi = "0.133.0"
+oxc_traverse = "0.133.0"
 
 # oxc crates in their own repos
 oxc_index = { version = "4", features = ["rayon", "serde"] }
