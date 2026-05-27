@@ -46,10 +46,11 @@ jobs:
   download-previous-rolldown-binaries:
     needs: detect-changes
     runs-on: namespace-profile-linux-x64-default
-    # Run if: not a PR, OR PR has 'test: create-e2e' label, OR create-related files changed
+    # Run if: not a PR, OR PR has 'test: create-e2e' label, OR PR is from deps/upstream-update branch, OR create-related files changed
     if: >-
       github.event_name != 'pull_request' ||
       contains(github.event.pull_request.labels.*.name, 'test: create-e2e') ||
+      github.head_ref == 'deps/upstream-update' ||
       needs.detect-changes.outputs.related-files-changed == 'true'
     permissions:
       contents: read

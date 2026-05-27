@@ -2,6 +2,7 @@
   "env": {
     "VP_CLI_TEST": "0"
   },
+  "serial": true,
   "commands": [
     "FOO=1 vp run hello",
     "FOO=1 vp run hello # hit cache",
