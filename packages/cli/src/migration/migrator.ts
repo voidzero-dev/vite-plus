@@ -1983,10 +1983,18 @@ export function rewritePackageJson(
       pkg.devDependencies[peerDep] = '*';
     }
   }
-  if (needVitePlus) {
+  // Normalize a pre-existing pinned vite-plus so sub-packages don't drift
+  // from siblings: in catalog-supporting monorepos that's `catalog:`, under
+  // force-override (file:) it's the tgz path. Scoped to catalog-supporting
+  // PMs so npm/standalone keep their pinned spec under `vp migrate`.
+  const canonicalVitePlusSpec =
+    supportCatalog && !VITE_PLUS_VERSION.startsWith('file:') ? 'catalog:' : VITE_PLUS_VERSION;
+  const existingVitePlus = pkg.devDependencies?.[VITE_PLUS_NAME];
+  const shouldNormalizeExistingVitePlus =
+    !!existingVitePlus && supportCatalog && existingVitePlus !== canonicalVitePlusSpec;
+  if (needVitePlus || shouldNormalizeExistingVitePlus) {
     // add vite-plus to devDependencies
-    const version =
-      supportCatalog && !VITE_PLUS_VERSION.startsWith('file:') ? 'catalog:' : VITE_PLUS_VERSION;
+    const version = canonicalVitePlusSpec;
     pkg.devDependencies = {
       ...pkg.devDependencies,
       [VITE_PLUS_NAME]: version,

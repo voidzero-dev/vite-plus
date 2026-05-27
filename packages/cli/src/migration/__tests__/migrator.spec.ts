@@ -159,6 +159,30 @@ describe('rewritePackageJson', () => {
     expect((pkg.devDependencies as Record<string, string>)['vite-plus']).toBe('catalog:');
   });
 
+  it('normalizes a pre-existing pinned vite-plus to `catalog:` in catalog-supporting monorepos', async () => {
+    const pkg = {
+      devDependencies: {
+        'vite-plus': '^0.1.20',
+      },
+    };
+
+    rewritePackageJson(pkg, PackageManager.pnpm, true);
+
+    expect(pkg.devDependencies['vite-plus']).toBe('catalog:');
+  });
+
+  it('leaves a pre-existing pinned vite-plus alone on npm monorepo projects', async () => {
+    const pkg = {
+      devDependencies: {
+        'vite-plus': '^0.1.20',
+      },
+    };
+
+    rewritePackageJson(pkg, PackageManager.npm, true);
+
+    expect(pkg.devDependencies['vite-plus']).toBe('^0.1.20');
+  });
+
   it('uses default catalog specs for non-catalog dependency specs in monorepo projects', async () => {
     const pkg = {
       devDependencies: {
