@@ -100,7 +100,7 @@ async function buildNapiBinding() {
     jsBinding: 'index.cjs',
     dts: 'index.d.cts',
     release: process.env.VP_CLI_DEBUG !== '1',
-    features: process.env.RELEASE_BUILD ? ['rolldown'] : void 0,
+    features: ['rolldown'],
   });
 
   const outputs = await task;

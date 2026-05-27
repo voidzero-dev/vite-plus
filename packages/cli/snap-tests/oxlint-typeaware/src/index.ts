@@ -1,3 +1,4 @@
 import type { Foo } from '../types';
 
-declare const _foo: Foo;
+declare const foo: Foo;
+void foo;
