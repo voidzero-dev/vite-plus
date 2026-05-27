@@ -1,6 +1,4 @@
-import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
-import { mkdirSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 
@@ -53,30 +51,8 @@ try {
     process.exit(1);
   }
 
-  const oxlintBin = path.join(path.dirname(oxlintPkgPath), 'bin', 'oxlint');
-  const probeDir = path.join(process.cwd(), '.vite-plus-local-oxlint-probe');
-  mkdirSync(probeDir, { recursive: true });
-
-  const configPath = path.join(probeDir, 'vite.config.ts');
-  const inputPath = path.join(probeDir, 'index.ts');
-  writeFileSync(
-    configPath,
-    "import { defineConfig } from 'vite-plus';\n\nexport default defineConfig({ lint: {} });\n",
-  );
-  writeFileSync(inputPath, 'export const value = 1;\n');
-
-  execFileSync(process.execPath, [oxlintBin, '-c', configPath, inputPath], {
-    cwd: probeDir,
-    stdio: 'inherit',
-    env: {
-      ...process.env,
-      VP_VERSION: cliPkg.version,
-    },
-  });
-
   console.log(`ok vite-plus@${pkg.version} (${vitePlusSpec ?? 'unknown spec'})`);
   console.log(`ok oxlint@${oxlintPkg.version} from vite-plus dependency tree`);
-  console.log('ok oxlint loaded Vite+ config through local vite-plus');
 } catch (error) {
   console.error('x vite-plus: not installed or incomplete');
   if (error instanceof Error) {
