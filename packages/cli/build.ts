@@ -83,7 +83,8 @@ async function buildNapiBinding() {
 
   const cli = new NapiCli();
 
-  const dtsHeader = process.env.RELEASE_BUILD
+  const bindingFeatures = ['rolldown'];
+  const dtsHeader = bindingFeatures.includes('rolldown')
     ? (await import('../../rolldown/packages/rolldown/package.json', { with: { type: 'json' } }))
         .default.napi.dtsHeader
     : '';
@@ -100,7 +101,7 @@ async function buildNapiBinding() {
     jsBinding: 'index.cjs',
     dts: 'index.d.cts',
     release: process.env.VP_CLI_DEBUG !== '1',
-    features: ['rolldown'],
+    features: bindingFeatures,
   });
 
   const outputs = await task;

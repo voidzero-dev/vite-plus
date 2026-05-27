@@ -1,6 +1,6 @@
 {
   "type": "module",
   "scripts": {
-    "hello": "vp fmt"
+    "hello": "node -e \"console.log('hello')\""
   }
 }
