@@ -329,6 +329,15 @@ export async function migrateEslintToOxlint(
     options.report.eslintMigrated = true;
   }
 
+  // Read the generated `.oxlintrc.json` to find any packages it references
+  // in `lint.jsPlugins`. Those packages need to stay in `package.json` so
+  // Oxlint can actually `import()` them at lint time — without this carve-out,
+  // the next step would strip them via `isEslintEcosystemDep` and we'd
+  // immediately invalidate the config we just generated. Local-path
+  // specifiers (`./X`, `../X`, `/X`) are skipped — they're paths, not
+  // package names, and have no `package.json` entry to preserve.
+  const preserveJsPlugins = collectJsPluginPackageNames(projectPath);
+
   // Step 3-5: Cleanup runs uniformly across the root and every workspace
   // package — delete eslint config files, scrub ESLint-ecosystem deps from
   // package.json, and rewrite eslint references in any local lint-staged
@@ -346,11 +355,50 @@ export async function migrateEslintToOxlint(
       continue;
     }
     deleteEslintConfigFiles(target, options?.report, options?.silent);
-    rewriteEslintPackageJson(path.join(target, 'package.json'));
+    rewriteEslintPackageJson(path.join(target, 'package.json'), preserveJsPlugins);
     rewriteEslintLintStagedConfigFiles(target, options?.report);
   }
 
   return true;
+}
+
+/**
+ * Read `<projectPath>/.oxlintrc.json` (if any) and collect the package
+ * names referenced via `lint.jsPlugins[]` string entries. Object-form
+ * entries (`{ name, specifier }`) and local-path specifiers (`./X`,
+ * `../X`, `/X`) are excluded — neither maps to a `package.json` entry
+ * we'd accidentally strip.
+ */
+function collectJsPluginPackageNames(projectPath: string): Set<string> {
+  const out = new Set<string>();
+  const oxlintConfigPath = path.join(projectPath, '.oxlintrc.json');
+  if (!fs.existsSync(oxlintConfigPath)) {
+    return out;
+  }
+  let config: OxlintConfig;
+  try {
+    config = readJsonFile(oxlintConfigPath, true) as OxlintConfig;
+  } catch {
+    return out;
+  }
+  const collectFrom = (jsPlugins: OxlintConfig['jsPlugins']): void => {
+    for (const entry of jsPlugins ?? []) {
+      if (typeof entry !== 'string') {
+        continue;
+      }
+      if (entry.startsWith('./') || entry.startsWith('../') || entry.startsWith('/')) {
+        continue;
+      }
+      out.add(entry);
+    }
+  };
+  collectFrom(config.jsPlugins);
+  if (Array.isArray(config.overrides)) {
+    for (const override of config.overrides) {
+      collectFrom(override.jsPlugins);
+    }
+  }
+  return out;
 }
 
 function deleteEslintConfigFiles(basePath: string, report?: MigrationReport, silent = false): void {
@@ -442,8 +490,16 @@ function isEslintEcosystemDep(name: string): boolean {
  * in scope for adoption, so a half-cleanup at the workspace level would
  * be inconsistent with the rest of the flow (which already replaces
  * vite-related overrides and adds vite-plus across all packages).
+ *
+ * `preserveJsPlugins` names packages that `@oxlint/migrate` referenced
+ * via `lint.jsPlugins` and that Oxlint will need to `import()` at lint
+ * time. They override `isEslintEcosystemDep` so the generated config
+ * isn't immediately invalidated by the cleanup step.
  */
-export function rewriteEslintPackageJson(packageJsonPath: string): void {
+export function rewriteEslintPackageJson(
+  packageJsonPath: string,
+  preserveJsPlugins: ReadonlySet<string> = new Set(),
+): void {
   editJsonFile<{
     devDependencies?: Record<string, string>;
     dependencies?: Record<string, string>;
@@ -465,6 +521,9 @@ export function rewriteEslintPackageJson(packageJsonPath: string): void {
       }
       let removedAny = false;
       for (const name of Object.keys(deps)) {
+        if (preserveJsPlugins.has(name)) {
+          continue;
+        }
         if (isEslintEcosystemDep(name)) {
           delete deps[name];
           changed = true;

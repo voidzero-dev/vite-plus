@@ -543,6 +543,84 @@ describe('rewriteEslintPackageJson', () => {
     const after = fs.readFileSync(pkgPath, 'utf8');
     expect(after).toBe(before);
   });
+
+  it('preserves packages referenced in lint.jsPlugins (so the generated config still loads)', () => {
+    // When @oxlint/migrate translates a real ESLint plugin into a
+    // lint.jsPlugins reference, Oxlint will `import()` the package at
+    // lint time. If we strip it from package.json the lint config we
+    // just generated is invalidated. The preserveJsPlugins set guards
+    // against that.
+    const pkgPath = writePkg({
+      devDependencies: {
+        eslint: '^9.0.0',
+        'eslint-plugin-vue': '^10.0.0',
+        'eslint-plugin-import-x': '^4.0.0',
+        'eslint-plugin-react': '^7.37.0',
+        '@stylistic/eslint-plugin': '^2.0.0',
+        '@typescript-eslint/parser': '^8.0.0',
+        vite: '^7.0.0',
+      },
+    });
+    rewriteEslintPackageJson(
+      pkgPath,
+      new Set(['eslint-plugin-vue', 'eslint-plugin-import-x', '@stylistic/eslint-plugin']),
+    );
+    const pkg = readJson(pkgPath);
+    expect(pkg.devDependencies).toEqual({
+      // Preserved (in jsPlugins set, so Oxlint will load them):
+      'eslint-plugin-vue': '^10.0.0',
+      'eslint-plugin-import-x': '^4.0.0',
+      '@stylistic/eslint-plugin': '^2.0.0',
+      // Removed (no jsPlugins reference, normal cleanup):
+      // 'eslint': stripped
+      // 'eslint-plugin-react': stripped
+      // '@typescript-eslint/parser': stripped
+      vite: '^7.0.0',
+    });
+  });
+
+  it('preserveJsPlugins overrides every cleanup pattern (named, prefix, scope, regex)', () => {
+    // Stress-test each branch of isEslintEcosystemDep against the
+    // preserve set so a future contributor adding a new cleanup branch
+    // can't accidentally bypass the carve-out.
+    const pkgPath = writePkg({
+      devDependencies: {
+        eslint: '^9.0.0', // named match in ESLINT_ECOSYSTEM_NAMES
+        'eslint-plugin-foo': '^1.0.0', // prefix match
+        '@eslint/js': '^9.0.0', // scope match
+        '@scope/eslint-plugin-bar': '^1.0.0', // scoped regex match
+        keepme: '^1.0.0',
+      },
+    });
+    rewriteEslintPackageJson(
+      pkgPath,
+      new Set(['eslint', 'eslint-plugin-foo', '@eslint/js', '@scope/eslint-plugin-bar']),
+    );
+    const pkg = readJson(pkgPath);
+    expect(pkg.devDependencies).toEqual({
+      eslint: '^9.0.0',
+      'eslint-plugin-foo': '^1.0.0',
+      '@eslint/js': '^9.0.0',
+      '@scope/eslint-plugin-bar': '^1.0.0',
+      keepme: '^1.0.0',
+    });
+  });
+
+  it('does not invent preserveJsPlugins entries — only what the caller asked for', () => {
+    // Sanity: an empty preserve set behaves identically to the default
+    // (no carve-out), so the new parameter can't accidentally weaken
+    // the cleanup for existing callers.
+    const pkgPath = writePkg({
+      devDependencies: {
+        eslint: '^9.0.0',
+        'eslint-plugin-foo': '^1.0.0',
+        vite: '^7.0.0',
+      },
+    });
+    rewriteEslintPackageJson(pkgPath, new Set());
+    const pkg = readJson(pkgPath);
+    expect(pkg.devDependencies).toEqual({ vite: '^7.0.0' });
+  });
 });
 
 function writePkgAt(dir: string, pkg: object): void {
