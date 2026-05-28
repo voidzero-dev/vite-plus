@@ -953,7 +953,15 @@ jobs:
       - name: Build CLI
         run: |
           pnpm bootstrap-cli:ci
-          echo "$HOME/.vite-plus/bin" >> $GITHUB_PATH
+          # Mirror the per-OS path form used by the `test` job (ci.yml ~L266):
+          # GITHUB_PATH on Windows needs a Windows-style path, otherwise child
+          # processes spawned by tools like sfw (which use CreateProcess and
+          # not bash's PATH munging) can't resolve `vp.exe`.
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            echo "$USERPROFILE\.vite-plus\bin" >> $GITHUB_PATH
+          else
+            echo "$HOME/.vite-plus/bin" >> $GITHUB_PATH
+          fi
 
       - name: Download sfw
         run: |
