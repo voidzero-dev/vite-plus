@@ -97,7 +97,9 @@ const REMOVE_PACKAGES = [
 function extractOverrideTargetName(key: string): string {
   const targetSide = key.includes('>') ? key.slice(key.lastIndexOf('>') + 1) : key;
   const trimmed = targetSide.trim();
-  if (!trimmed) return trimmed;
+  if (!trimmed) {
+    return trimmed;
+  }
   const lastAt = trimmed.lastIndexOf('@');
   if (lastAt > 0) {
     return trimmed.slice(0, lastAt);
