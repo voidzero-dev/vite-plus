@@ -247,6 +247,15 @@ describe('ensureGitignoreVsCodeEditorConfigs', () => {
     expect(gitignore()).toBe('.vscode/*\n!.vscode/settings.json\n!.vscode/extensions.json\n');
   });
 
+  it('re-appends VS Code config unignores when later ignore rules override them', () => {
+    writeVsCodeSettings();
+    writeGitignore('!.vscode/settings.json\n!.vscode/extensions.json\n.vscode/*\n');
+    ensureGitignoreVsCodeEditorConfigs(projectDir);
+    expect(gitignore()).toBe(
+      '!.vscode/settings.json\n!.vscode/extensions.json\n.vscode/*\n!.vscode/settings.json\n!.vscode/extensions.json\n',
+    );
+  });
+
   it('appends VS Code config unignores even without a broad VS Code ignore', () => {
     writeVsCodeSettings();
     writeGitignore('dist\n');
