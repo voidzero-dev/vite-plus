@@ -89,6 +89,20 @@ const REMOVE_PACKAGES = [
   '@vitest/browser-webdriverio',
 ] as const;
 
+// Extract the bare package name from a pnpm override key. Handles bare
+// (`pkg`), versioned (`pkg@1`), parent-selector (`parent>pkg`), and
+// chained (`parent@1>pkg@2`) shapes. Scoped names keep their leading `@`.
+function extractOverrideTargetName(key: string): string {
+  const targetSide = key.includes('>') ? key.slice(key.lastIndexOf('>') + 1) : key;
+  const trimmed = targetSide.trim();
+  if (!trimmed) return trimmed;
+  const lastAt = trimmed.lastIndexOf('@');
+  if (lastAt > 0) {
+    return trimmed.slice(0, lastAt);
+  }
+  return trimmed;
+}
+
 // When a browser provider package is removed, its runtime peer dependency
 // must be preserved in devDependencies so browser tests continue to work.
 const BROWSER_PROVIDER_PEER_DEPS: Record<string, string> = {
@@ -1455,10 +1469,18 @@ function rewritePnpmWorkspaceYaml(
     pruneYamlMapLegacyWrapperAliases(overrides);
     // Drop overrides for packages removed by migration (e.g. @vitest/browser*)
     // so a stale workspace pin can't force an incompatible version against
-    // vite-plus's own direct dependency.
+    // vite-plus's own direct dependency. Selector-shaped keys like
+    // `parent>pkg` or `pkg@version` must also be removed since they'd
+    // re-apply against vite-plus's own direct provider dependency.
     if (overrides instanceof YAMLMap) {
-      for (const key of REMOVE_PACKAGES) {
-        overrides.delete(key);
+      const removeSet = new Set<string>(REMOVE_PACKAGES);
+      const keysSnapshot = overrides.items.map((item) => item.key);
+      for (const keyNode of keysSnapshot) {
+        const rawKey =
+          keyNode instanceof Scalar ? String(keyNode.value ?? '') : String(keyNode ?? '');
+        if (removeSet.has(extractOverrideTargetName(rawKey))) {
+          overrides.delete(keyNode);
+        }
       }
     }
     for (const key of Object.keys(VITE_PLUS_OVERRIDE_PACKAGES)) {

@@ -1286,7 +1286,10 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
         'overrides:',
         "  '@vitest/browser-playwright': 4.0.0",
         "  '@vitest/browser-webdriverio': 4.0.0",
+        "  '@vitest/browser-playwright@4': 4.0.0",
+        "  'vite-plus>@vitest/browser-playwright': 4.0.0",
         '  some-other-pkg: 1.0.0',
+        "  'unrelated>some-other-pkg': 1.0.0",
         '',
       ].join('\n'),
     );
@@ -1298,7 +1301,10 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     };
     expect(yaml.overrides).not.toHaveProperty('@vitest/browser-playwright');
     expect(yaml.overrides).not.toHaveProperty('@vitest/browser-webdriverio');
+    expect(yaml.overrides).not.toHaveProperty('@vitest/browser-playwright@4');
+    expect(yaml.overrides).not.toHaveProperty('vite-plus>@vitest/browser-playwright');
     expect(yaml.overrides['some-other-pkg']).toBe('1.0.0');
+    expect(yaml.overrides['unrelated>some-other-pkg']).toBe('1.0.0');
   });
 
   it('adds a direct vitest dep when a vite config enables browser mode', () => {
