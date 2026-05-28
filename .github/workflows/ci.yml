@@ -999,11 +999,11 @@ jobs:
           # Force the registry-fetch path: install a pinned pnpm globally so
           # vp downloads it (and therefore traverses sfw) rather than reusing
           # whatever's preinstalled on the runner.
-          sfw ${{ matrix.vp_bin }} i -g pnpm@9.15.0
+          sfw "${{ matrix.vp_bin }}" i -g pnpm@9.15.0
           # Then exercise `vp install` inside a real repo, also through sfw.
           git clone --depth 1 https://github.com/vitejs/vite.git "$RUNNER_TEMP/vite"
           cd "$RUNNER_TEMP/vite"
-          sfw ${{ matrix.vp_bin }} install --no-frozen-lockfile
+          sfw "${{ matrix.vp_bin }}" install --no-frozen-lockfile
 
   done:
     runs-on: ubuntu-latest

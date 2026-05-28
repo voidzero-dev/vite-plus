@@ -7597,6 +7597,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "vite_path",
+ "vite_shared",
  "vite_str",
  "vite_workspace",
  "wax 0.6.0",

@@ -58,8 +58,13 @@ pub enum Error {
     #[error(transparent)]
     Io(#[from] std::io::Error),
 
-    /// HTTP request error
-    #[error(transparent)]
+    /// HTTP request error.
+    ///
+    /// Surface the full `source()` chain (TLS handshake / connect / hyper
+    /// IO) rather than reqwest's top-level message only. Body-streaming
+    /// failures inside `download_file` propagate via `?` into this variant,
+    /// so the chain has to be exposed here — not at the call site.
+    #[error("{}", vite_shared::format_error_chain(.0))]
     Reqwest(#[from] reqwest::Error),
 
     /// Join error from tokio
