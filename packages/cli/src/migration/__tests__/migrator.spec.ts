@@ -1558,6 +1558,31 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(yaml.allowBuilds.geckodriver).toBe(true);
   });
 
+  it('allows edgedriver/geckodriver builds when only @vitest/browser-webdriverio is declared (pnpm v10)', () => {
+    // The migrator removes `@vitest/browser-webdriverio` and injects
+    // `webdriverio: '*'` as its peer, so the post-migration deps will need
+    // the driver postinstalls even though the pre-migration package.json
+    // never lists `webdriverio` directly.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: {
+          vite: '^7.0.0',
+          vitest: '^4.0.0',
+          '@vitest/browser-webdriverio': '^4.0.0',
+        },
+      }),
+    );
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+    const yaml = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      allowBuilds: Record<string, boolean>;
+    };
+    expect(yaml.allowBuilds.edgedriver).toBe(true);
+    expect(yaml.allowBuilds.geckodriver).toBe(true);
+  });
+
   it('preserves explicit allowBuilds entries on second run (idempotent)', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
