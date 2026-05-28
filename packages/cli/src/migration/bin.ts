@@ -591,6 +591,7 @@ function showMigrationSummary(options: {
   packageManager: string;
   packageManagerVersion: string;
   installDurationMs: number;
+  finalInstallOk: boolean;
   report: MigrationReport;
   updatedExistingVitePlus?: boolean;
 }) {
@@ -599,6 +600,7 @@ function showMigrationSummary(options: {
     packageManager,
     packageManagerVersion,
     installDurationMs,
+    finalInstallOk,
     report,
     updatedExistingVitePlus,
   } = options;
@@ -620,7 +622,11 @@ function showMigrationSummary(options: {
   log(
     `${styleText('gray', '•')} Node ${process.versions.node}  ${packageManager} ${packageManagerVersion}`,
   );
-  if (installDurationMs > 0) {
+  // Gate the green success line on the FINAL install actually succeeding.
+  // A nonzero duration could come from a successful pre-migration install
+  // followed by a failed post-migration reinstall — in that case node_modules
+  // is desynced and reporting success would mislead the user.
+  if (finalInstallOk && installDurationMs > 0) {
     log(
       `${styleText('green', '✓')} Dependencies installed in ${formatDuration(installDurationMs)}`,
     );
@@ -697,6 +703,7 @@ async function executeMigrationPlan(
   interactive: boolean,
 ): Promise<{
   installDurationMs: number;
+  finalInstallOk: boolean;
   packageManagerVersion: string;
   report: MigrationReport;
 }> {
@@ -942,6 +949,7 @@ async function executeMigrationPlan(
   );
   return {
     installDurationMs: initialInstallDurationMs + finalInstallDurationMs,
+    finalInstallOk: finalInstallSummary.status === 'installed',
     packageManagerVersion: downloadResult.version,
     report,
   };
@@ -969,6 +977,7 @@ async function main() {
   if (hasVitePlusDependency(rootPkg) && !isForceOverrideMode()) {
     let didMigrate = false;
     let installDurationMs = 0;
+    let finalInstallOk = true;
     const report = createMigrationReport();
     const migrationProgress = options.interactive
       ? prompts.spinner({ indicator: 'timer' })
@@ -1088,6 +1097,7 @@ async function main() {
         workspaceInfoOptional.rootDir,
         report,
       );
+      finalInstallOk = installSummary.status === 'installed';
       didMigrate = true;
       report.eslintMigrated = eslintMigrated;
       report.prettierMigrated = prettierMigrated;
@@ -1135,6 +1145,7 @@ async function main() {
         packageManager: resolvedPackageManager,
         packageManagerVersion: workspaceInfoOptional.packageManagerVersion,
         installDurationMs,
+        finalInstallOk,
         report,
         updatedExistingVitePlus: true,
       });
@@ -1159,6 +1170,7 @@ async function main() {
     packageManager: plan.packageManager,
     packageManagerVersion: result.packageManagerVersion,
     installDurationMs: result.installDurationMs,
+    finalInstallOk: result.finalInstallOk,
     report: result.report,
   });
 }

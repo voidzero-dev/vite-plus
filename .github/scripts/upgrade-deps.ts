@@ -320,11 +320,13 @@ async function updateTestVpCreateWorkflow(vitestVersion: string): Promise<void> 
     '@vitest/coverage-istanbul',
   ];
   let updated = content;
+  let oldVersion: string | undefined;
   for (const key of vitestKeys) {
     const pattern = new RegExp(`"${key.replaceAll('/', '\\/')}":"([\\d.]+(?:-[\\w.]+)?)"`);
     let matched = false;
-    updated = updated.replace(pattern, (_match: string, _captured: string) => {
+    updated = updated.replace(pattern, (_match: string, captured: string) => {
       matched = true;
+      oldVersion ??= captured;
       return `"${key}":"${vitestVersion}"`;
     });
     if (!matched) {
@@ -335,6 +337,7 @@ async function updateTestVpCreateWorkflow(vitestVersion: string): Promise<void> 
     }
   }
   fs.writeFileSync(filePath, updated);
+  recordChange('test-vp-create workflow', oldVersion ?? null, vitestVersion);
   console.log('Updated .github/workflows/test-vp-create.yml');
 }
 
