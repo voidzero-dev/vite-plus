@@ -1,4 +1,4 @@
-> vp create vite:monorepo --no-interactive --git # create monorepo with default values
+> vp create vite:monorepo --no-interactive --git --editor vscode # create monorepo with default values
 > ls vite-plus-monorepo | LC_ALL=C sort # check files created
 AGENTS.md
 README.md
@@ -80,6 +80,18 @@ No .yarnrc.yml
 
 > test -d vite-plus-monorepo/.git && echo 'Git initialized' # check git init
 Git initialized
+
+> test -f vite-plus-monorepo/.vscode/settings.json && echo '.vscode/settings.json exists' # check VS Code settings created
+.vscode/settings.json exists
+
+> test -f vite-plus-monorepo/.vscode/extensions.json && echo '.vscode/extensions.json exists' # check VS Code extensions created
+.vscode/extensions.json exists
+
+> node -e "const { spawnSync } = require('node:child_process'); const file = '.vscode/settings.json'; const result = spawnSync('git', ['-C', 'vite-plus-monorepo', 'check-ignore', '--no-index', file], { stdio: 'ignore' }); const status = result.status; if (status === 1) { console.log(file + ' trackable'); } else { console.log(status === 0 ? 'ERROR: ' + file + ' ignored' : 'ERROR: git check-ignore failed with status ' + status); process.exit(status || 1); }" # check VS Code settings are trackable
+.vscode/settings.json trackable
+
+> node -e "const { spawnSync } = require('node:child_process'); const file = '.vscode/extensions.json'; const result = spawnSync('git', ['-C', 'vite-plus-monorepo', 'check-ignore', '--no-index', file], { stdio: 'ignore' }); const status = result.status; if (status === 1) { console.log(file + ' trackable'); } else { console.log(status === 0 ? 'ERROR: ' + file + ' ignored' : 'ERROR: git check-ignore failed with status ' + status); process.exit(status || 1); }" # check VS Code extensions are trackable
+.vscode/extensions.json trackable
 
 > ls vite-plus-monorepo/apps # check apps directory created
 website

@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   deriveDefaultPackageName,
   ensureGitignoreNodeModules,
+  ensureGitignoreVsCodeEditorConfigs,
   formatTargetDir,
   getProjectDirFromPackageName,
   renameFiles,
@@ -157,6 +158,129 @@ describe('ensureGitignoreNodeModules', () => {
     fs.writeFileSync(path.join(projectDir, '.gitignore'), '!node_modules\n');
     ensureGitignoreNodeModules(projectDir);
     expect(gitignore()).toBe('!node_modules\nnode_modules\n');
+  });
+});
+
+describe('ensureGitignoreVsCodeEditorConfigs', () => {
+  let projectDir: string;
+
+  beforeEach(() => {
+    projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-vscode-gitignore-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(projectDir, { recursive: true, force: true });
+  });
+
+  function gitignore(): string {
+    return fs.readFileSync(path.join(projectDir, '.gitignore'), 'utf-8');
+  }
+
+  function writeGitignore(content: string): void {
+    fs.writeFileSync(path.join(projectDir, '.gitignore'), content);
+  }
+
+  function writeVsCodeSettings(): void {
+    fs.mkdirSync(path.join(projectDir, '.vscode'), { recursive: true });
+    fs.writeFileSync(path.join(projectDir, '.vscode', 'settings.json'), '{}\n');
+  }
+
+  it('unignores VS Code settings when `.vscode/*` is ignored', () => {
+    writeVsCodeSettings();
+    writeGitignore('.vscode/*\n!.vscode/extensions.json\n');
+    ensureGitignoreVsCodeEditorConfigs(projectDir);
+    expect(gitignore()).toBe('.vscode/*\n!.vscode/extensions.json\n!.vscode/settings.json\n');
+  });
+
+  it('unignores generated VS Code config files for root-anchored contents ignores', () => {
+    writeVsCodeSettings();
+    writeGitignore('/.vscode/*\n');
+    ensureGitignoreVsCodeEditorConfigs(projectDir);
+    expect(gitignore()).toBe('/.vscode/*\n!.vscode/settings.json\n!.vscode/extensions.json\n');
+  });
+
+  it('appends VS Code config unignores for directory-level VS Code ignores', () => {
+    writeVsCodeSettings();
+    writeGitignore('.vscode/\n');
+    ensureGitignoreVsCodeEditorConfigs(projectDir);
+    expect(gitignore()).toBe('.vscode/\n!.vscode/settings.json\n!.vscode/extensions.json\n');
+  });
+
+  it('appends VS Code config unignores for root-anchored directory-level VS Code ignores', () => {
+    writeVsCodeSettings();
+    writeGitignore('/.vscode\n');
+    ensureGitignoreVsCodeEditorConfigs(projectDir);
+    expect(gitignore()).toBe('/.vscode\n!.vscode/settings.json\n!.vscode/extensions.json\n');
+  });
+
+  it('appends VS Code config unignores after explicit VS Code settings ignores', () => {
+    writeVsCodeSettings();
+    writeGitignore('.vscode/*\n.vscode/settings.json\n');
+    ensureGitignoreVsCodeEditorConfigs(projectDir);
+    expect(gitignore()).toBe(
+      '.vscode/*\n.vscode/settings.json\n!.vscode/settings.json\n!.vscode/extensions.json\n',
+    );
+  });
+
+  it('appends VS Code config unignores after explicit VS Code extensions ignores', () => {
+    writeVsCodeSettings();
+    writeGitignore('.vscode/*\n/.vscode/extensions.json\n');
+    ensureGitignoreVsCodeEditorConfigs(projectDir);
+    expect(gitignore()).toBe(
+      '.vscode/*\n/.vscode/extensions.json\n!.vscode/settings.json\n!.vscode/extensions.json\n',
+    );
+  });
+
+  it('appends VS Code config unignores when all generated config files are explicitly ignored', () => {
+    writeVsCodeSettings();
+    writeGitignore('.vscode/*\n.vscode/settings.json\n.vscode/extensions.json\n');
+    ensureGitignoreVsCodeEditorConfigs(projectDir);
+    expect(gitignore()).toBe(
+      '.vscode/*\n.vscode/settings.json\n.vscode/extensions.json\n!.vscode/settings.json\n!.vscode/extensions.json\n',
+    );
+  });
+
+  it('appends extensions when settings are already unignored', () => {
+    writeVsCodeSettings();
+    writeGitignore('.vscode/*\n!.vscode/settings.json\n');
+    ensureGitignoreVsCodeEditorConfigs(projectDir);
+    expect(gitignore()).toBe('.vscode/*\n!.vscode/settings.json\n!.vscode/extensions.json\n');
+  });
+
+  it('appends VS Code config unignores even without a broad VS Code ignore', () => {
+    writeVsCodeSettings();
+    writeGitignore('dist\n');
+    ensureGitignoreVsCodeEditorConfigs(projectDir);
+    expect(gitignore()).toBe('dist\n!.vscode/settings.json\n!.vscode/extensions.json\n');
+  });
+
+  it('does not create `.gitignore` when none exists', () => {
+    writeVsCodeSettings();
+    ensureGitignoreVsCodeEditorConfigs(projectDir);
+    expect(fs.existsSync(path.join(projectDir, '.gitignore'))).toBe(false);
+  });
+
+  it('does not change `.gitignore` when VS Code settings do not exist', () => {
+    const existing = '.vscode/*\n';
+    writeGitignore(existing);
+    ensureGitignoreVsCodeEditorConfigs(projectDir);
+    expect(gitignore()).toBe(existing);
+  });
+
+  it('terminates the last line before appending VS Code config unignores', () => {
+    writeVsCodeSettings();
+    writeGitignore('.vscode/*');
+    ensureGitignoreVsCodeEditorConfigs(projectDir);
+    expect(gitignore()).toBe('.vscode/*\n!.vscode/settings.json\n!.vscode/extensions.json\n');
+  });
+
+  it('is idempotent', () => {
+    writeVsCodeSettings();
+    writeGitignore('.vscode/*\n');
+    ensureGitignoreVsCodeEditorConfigs(projectDir);
+    const afterFirstRun = gitignore();
+    ensureGitignoreVsCodeEditorConfigs(projectDir);
+    expect(gitignore()).toBe(afterFirstRun);
   });
 });
 

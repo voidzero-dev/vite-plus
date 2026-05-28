@@ -73,7 +73,12 @@ import {
   executeRemoteTemplate,
 } from './templates/index.ts';
 import { BuiltinTemplate, TemplateType } from './templates/types.ts';
-import { deriveDefaultPackageName, ensureGitignoreNodeModules, formatTargetDir } from './utils.ts';
+import {
+  deriveDefaultPackageName,
+  ensureGitignoreNodeModules,
+  ensureGitignoreVsCodeEditorConfigs,
+  formatTargetDir,
+} from './utils.ts';
 
 const helpMessage = renderCliDoc({
   usage: 'vp create [TEMPLATE] [OPTIONS] [-- TEMPLATE_OPTIONS]',
@@ -949,6 +954,9 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       silent: compactOutput,
       extraVsCodeSettings: { 'npm.scriptRunner': 'vp' },
     });
+    if (selectedEditors?.includes('vscode')) {
+      ensureGitignoreVsCodeEditorConfigs(fullPath);
+    }
     resumeCreateProgress();
     workspaceInfo.rootDir = fullPath;
     updateCreateProgress('Integrating monorepo');
@@ -1077,6 +1085,9 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     silent: compactOutput,
     extraVsCodeSettings: { 'npm.scriptRunner': 'vp' },
   });
+  if (selectedEditors?.includes('vscode')) {
+    ensureGitignoreVsCodeEditorConfigs(fullPath);
+  }
   resumeCreateProgress();
 
   // The migrate-before-rewrite reorder is only needed when the template

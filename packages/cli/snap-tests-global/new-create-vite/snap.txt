@@ -1,6 +1,18 @@
-> vp create vite:application --no-interactive # create vite app with default values
+> vp create vite:application --no-interactive --git --editor vscode # create vite app with default values
 > ls vite-plus-application/package.json # check package.json
 vite-plus-application/package.json
+
+> test -f vite-plus-application/.vscode/settings.json && echo '.vscode/settings.json exists' # check VS Code settings created
+.vscode/settings.json exists
+
+> test -f vite-plus-application/.vscode/extensions.json && echo '.vscode/extensions.json exists' # check VS Code extensions created
+.vscode/extensions.json exists
+
+> node -e "const { spawnSync } = require('node:child_process'); const file = '.vscode/settings.json'; const result = spawnSync('git', ['-C', 'vite-plus-application', 'check-ignore', '--no-index', file], { stdio: 'ignore' }); const status = result.status; if (status === 1) { console.log(file + ' trackable'); } else { console.log(status === 0 ? 'ERROR: ' + file + ' ignored' : 'ERROR: git check-ignore failed with status ' + status); process.exit(status || 1); }" # check VS Code settings are trackable
+.vscode/settings.json trackable
+
+> node -e "const { spawnSync } = require('node:child_process'); const file = '.vscode/extensions.json'; const result = spawnSync('git', ['-C', 'vite-plus-application', 'check-ignore', '--no-index', file], { stdio: 'ignore' }); const status = result.status; if (status === 1) { console.log(file + ' trackable'); } else { console.log(status === 0 ? 'ERROR: ' + file + ' ignored' : 'ERROR: git check-ignore failed with status ' + status); process.exit(status || 1); }" # check VS Code extensions are trackable
+.vscode/extensions.json trackable
 
 > test ! -f vite-plus-application/.github/workflows/copilot-setup-steps.yml # default create should not add Copilot setup workflow
 > vp create vite:application --no-interactive --directory claude-app --agent claude # create vite app with non-Copilot agent
