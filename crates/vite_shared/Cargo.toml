@@ -14,12 +14,17 @@ owo-colors = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 supports-color = "3"
+tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 vite_path = { workspace = true }
 vite_str = { workspace = true }
 which = { workspace = true }
 
+[target.'cfg(target_os = "windows")'.dependencies]
+reqwest = { workspace = true, features = ["native-tls-vendored", "stream", "json", "system-proxy"] }
+
 [target.'cfg(not(target_os = "windows"))'.dependencies]
+reqwest = { workspace = true, features = ["rustls-no-provider", "stream", "json", "system-proxy"] }
 rustls = { workspace = true }
 
 [dev-dependencies]
