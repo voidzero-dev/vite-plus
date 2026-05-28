@@ -5164,6 +5164,7 @@ dependencies = [
  "commondir",
  "cow-utils",
  "dashmap",
+ "dunce",
  "futures",
  "indexmap",
  "insta",
@@ -5636,6 +5637,7 @@ version = "0.1.0"
 dependencies = [
  "arcstr",
  "phf",
+ "rolldown_common",
  "rolldown_plugin",
  "rolldown_utils",
 ]
