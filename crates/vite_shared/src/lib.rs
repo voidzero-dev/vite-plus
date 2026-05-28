@@ -9,8 +9,10 @@
 
 mod env_config;
 pub mod env_vars;
+mod error;
 pub mod header;
 mod home;
+mod http;
 pub mod output;
 mod package_json;
 mod path_env;
@@ -19,7 +21,9 @@ mod tls;
 mod tracing;
 
 pub use env_config::{EnvConfig, TestEnvGuard};
+pub use error::format_error_chain;
 pub use home::get_vp_home;
+pub use http::shared_http_client;
 pub use package_json::{DevEngines, Engines, PackageJson, RuntimeEngine, RuntimeEngineConfig};
 pub use path_env::{
     PrependOptions, PrependResult, format_path_prepended, format_path_with_prepend,
