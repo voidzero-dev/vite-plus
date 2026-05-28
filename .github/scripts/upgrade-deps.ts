@@ -168,7 +168,7 @@ async function updatePnpmWorkspace(versions: PnpmWorkspaceVersions): Promise<voi
     '@vitest/spy',
     '@vitest/utils',
   ];
-  const vitestBrowserEntries: PnpmWorkspaceEntry[] = vitestExactVersionPackages.map((pkg) => ({
+  const vitestExactVersionEntries: PnpmWorkspaceEntry[] = vitestExactVersionPackages.map((pkg) => ({
     name: pkg,
     pattern: new RegExp(`'${pkg.replaceAll('/', '\\/')}': ([\\d.]+(?:-[\\w.]+)?)`),
     replacement: `'${pkg}': ${versions.vitest}`,
@@ -186,7 +186,7 @@ async function updatePnpmWorkspace(versions: PnpmWorkspaceVersions): Promise<voi
       replacement: `\n  vitest: ${versions.vitest}\n`,
       newVersion: versions.vitest,
     },
-    ...vitestBrowserEntries,
+    ...vitestExactVersionEntries,
     {
       name: 'tsdown',
       pattern: /tsdown: \^([\d.]+(?:-[\w.]+)?)/,
