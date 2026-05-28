@@ -151,10 +151,10 @@ export function ensureGitignoreNodeModules(projectDir: string): void {
   fs.appendFileSync(gitignorePath, `${prefix}node_modules\n`);
 }
 
-const VSCODE_DIRECTORY_UNIGNORE_LINE = '!.vscode/';
 const VSCODE_SETTINGS_PATH = '.vscode/settings.json';
 const VSCODE_EXTENSIONS_PATH = '.vscode/extensions.json';
-const VSCODE_CONFIG_UNIGNORE_LINES = [
+const VSCODE_CONFIG_UNIGNORE_BLOCK = [
+  '!.vscode/',
   `!${VSCODE_SETTINGS_PATH}`,
   `!${VSCODE_EXTENSIONS_PATH}`,
 ] as const;
@@ -175,54 +175,14 @@ export function ensureGitignoreVsCodeEditorConfigs(projectDir: string): void {
     return;
   }
 
-  const linesToAppend = [
-    ...(shouldAppendVsCodeDirectoryUnignore(content) ? [VSCODE_DIRECTORY_UNIGNORE_LINE] : []),
-    ...VSCODE_CONFIG_UNIGNORE_LINES.filter((line) => shouldAppendGitignoreUnignore(content, line)),
-  ];
-  appendGitignoreLines(gitignorePath, content, linesToAppend);
+  appendGitignoreVsCodeEditorConfigsBlock(gitignorePath, content);
 }
 
-function shouldAppendVsCodeDirectoryUnignore(content: string): boolean {
-  const lines = content.split(/\r?\n/).map((line) => line.trim());
-  const lastDirectoryUnignoreIndex = lines.findLastIndex(isVsCodeDirectoryUnignorePattern);
-  const lastDirectoryIgnoreIndex = lines.findLastIndex(isVsCodeDirectoryIgnorePattern);
-  return lastDirectoryIgnoreIndex !== -1 && lastDirectoryIgnoreIndex > lastDirectoryUnignoreIndex;
-}
-
-function shouldAppendGitignoreUnignore(content: string, pattern: string): boolean {
-  const lines = content.split(/\r?\n/).map((line) => line.trim());
-  const lastUnignoreIndex = lines.findLastIndex((line) => line === pattern);
-  if (lastUnignoreIndex === -1) {
-    return true;
+function appendGitignoreVsCodeEditorConfigsBlock(gitignorePath: string, content: string): void {
+  if (content.trimEnd().endsWith(VSCODE_CONFIG_UNIGNORE_BLOCK.join('\n'))) {
+    return;
   }
-
-  const targetPath = pattern.slice(1);
-  const lastOverrideIndex = lines.findLastIndex((line) =>
-    isVsCodeConfigIgnorePattern(line, targetPath),
-  );
-  return lastOverrideIndex > lastUnignoreIndex;
-}
-
-function isVsCodeConfigIgnorePattern(pattern: string, targetPath: string): boolean {
-  if (pattern === '' || pattern.startsWith('#') || pattern.startsWith('!')) {
-    return false;
-  }
-
-  return (
-    pattern === targetPath ||
-    pattern === `/${targetPath}` ||
-    pattern === '.vscode/*' ||
-    pattern === '/.vscode/*' ||
-    isVsCodeDirectoryIgnorePattern(pattern)
-  );
-}
-
-function isVsCodeDirectoryUnignorePattern(pattern: string): boolean {
-  return ['!.vscode', '!.vscode/', '!/.vscode', '!/.vscode/'].includes(pattern);
-}
-
-function isVsCodeDirectoryIgnorePattern(pattern: string): boolean {
-  return ['.vscode', '.vscode/', '/.vscode', '/.vscode/'].includes(pattern);
+  appendGitignoreLines(gitignorePath, content, VSCODE_CONFIG_UNIGNORE_BLOCK);
 }
 
 function appendGitignoreLines(
