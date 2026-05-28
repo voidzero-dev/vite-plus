@@ -151,6 +151,7 @@ export function ensureGitignoreNodeModules(projectDir: string): void {
   fs.appendFileSync(gitignorePath, `${prefix}node_modules\n`);
 }
 
+const VSCODE_DIRECTORY_UNIGNORE_LINE = '!.vscode/';
 const VSCODE_SETTINGS_PATH = '.vscode/settings.json';
 const VSCODE_EXTENSIONS_PATH = '.vscode/extensions.json';
 const VSCODE_CONFIG_UNIGNORE_LINES = [
@@ -174,10 +175,18 @@ export function ensureGitignoreVsCodeEditorConfigs(projectDir: string): void {
     return;
   }
 
-  const linesToAppend = VSCODE_CONFIG_UNIGNORE_LINES.filter((line) =>
-    shouldAppendGitignoreUnignore(content, line),
-  );
+  const linesToAppend = [
+    ...(shouldAppendVsCodeDirectoryUnignore(content) ? [VSCODE_DIRECTORY_UNIGNORE_LINE] : []),
+    ...VSCODE_CONFIG_UNIGNORE_LINES.filter((line) => shouldAppendGitignoreUnignore(content, line)),
+  ];
   appendGitignoreLines(gitignorePath, content, linesToAppend);
+}
+
+function shouldAppendVsCodeDirectoryUnignore(content: string): boolean {
+  const lines = content.split(/\r?\n/).map((line) => line.trim());
+  const lastDirectoryUnignoreIndex = lines.findLastIndex(isVsCodeDirectoryUnignorePattern);
+  const lastDirectoryIgnoreIndex = lines.findLastIndex(isVsCodeDirectoryIgnorePattern);
+  return lastDirectoryIgnoreIndex !== -1 && lastDirectoryIgnoreIndex > lastDirectoryUnignoreIndex;
 }
 
 function shouldAppendGitignoreUnignore(content: string, pattern: string): boolean {
@@ -203,8 +212,17 @@ function isVsCodeConfigIgnorePattern(pattern: string, targetPath: string): boole
     pattern === targetPath ||
     pattern === `/${targetPath}` ||
     pattern === '.vscode/*' ||
-    pattern === '/.vscode/*'
+    pattern === '/.vscode/*' ||
+    isVsCodeDirectoryIgnorePattern(pattern)
   );
+}
+
+function isVsCodeDirectoryUnignorePattern(pattern: string): boolean {
+  return ['!.vscode', '!.vscode/', '!/.vscode', '!/.vscode/'].includes(pattern);
+}
+
+function isVsCodeDirectoryIgnorePattern(pattern: string): boolean {
+  return ['.vscode', '.vscode/', '/.vscode', '/.vscode/'].includes(pattern);
 }
 
 function appendGitignoreLines(

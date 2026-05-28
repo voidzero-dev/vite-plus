@@ -199,18 +199,22 @@ describe('ensureGitignoreVsCodeEditorConfigs', () => {
     expect(gitignore()).toBe('/.vscode/*\n!.vscode/settings.json\n!.vscode/extensions.json\n');
   });
 
-  it('appends VS Code config unignores for directory-level VS Code ignores', () => {
+  it('appends VS Code directory and config unignores for directory-level VS Code ignores', () => {
     writeVsCodeSettings();
     writeGitignore('.vscode/\n');
     ensureGitignoreVsCodeEditorConfigs(projectDir);
-    expect(gitignore()).toBe('.vscode/\n!.vscode/settings.json\n!.vscode/extensions.json\n');
+    expect(gitignore()).toBe(
+      '.vscode/\n!.vscode/\n!.vscode/settings.json\n!.vscode/extensions.json\n',
+    );
   });
 
-  it('appends VS Code config unignores for root-anchored directory-level VS Code ignores', () => {
+  it('appends VS Code directory and config unignores for root-anchored directory-level VS Code ignores', () => {
     writeVsCodeSettings();
     writeGitignore('/.vscode\n');
     ensureGitignoreVsCodeEditorConfigs(projectDir);
-    expect(gitignore()).toBe('/.vscode\n!.vscode/settings.json\n!.vscode/extensions.json\n');
+    expect(gitignore()).toBe(
+      '/.vscode\n!.vscode/\n!.vscode/settings.json\n!.vscode/extensions.json\n',
+    );
   });
 
   it('appends VS Code config unignores after explicit VS Code settings ignores', () => {
