@@ -49,7 +49,10 @@ pub async fn download_file(
                 .with_max_times(3),
         )
         .await
-        .map_err(|e| Error::DownloadFailed { url: url.into(), reason: vite_str::format!("{e}") })?;
+        .map_err(|e| Error::DownloadFailed {
+            url: url.into(),
+            reason: vite_shared::format_error_chain(&e).into(),
+        })?;
 
     // Get Content-Length for progress bar
     let total_size = response.content_length();
@@ -125,7 +128,10 @@ pub async fn download_text(url: &str) -> Result<String, Error> {
                 .with_max_times(3),
         )
         .await
-        .map_err(|e| Error::DownloadFailed { url: url.into(), reason: vite_str::format!("{e}") })?;
+        .map_err(|e| Error::DownloadFailed {
+            url: url.into(),
+            reason: vite_shared::format_error_chain(&e).into(),
+        })?;
 
     Ok(content)
 }
@@ -158,7 +164,10 @@ pub async fn fetch_with_cache_headers(
             .with_max_times(3),
     )
     .await
-    .map_err(|e| Error::DownloadFailed { url: url.into(), reason: vite_str::format!("{e}") })?;
+    .map_err(|e| Error::DownloadFailed {
+        url: url.into(),
+        reason: vite_shared::format_error_chain(&e).into(),
+    })?;
 
     // Check for 304 Not Modified
     if response.status() == reqwest::StatusCode::NOT_MODIFIED {
@@ -181,10 +190,10 @@ pub async fn fetch_with_cache_headers(
         .and_then(|v| v.to_str().ok())
         .and_then(parse_max_age);
 
-    let body = response
-        .text()
-        .await
-        .map_err(|e| Error::DownloadFailed { url: url.into(), reason: vite_str::format!("{e}") })?;
+    let body = response.text().await.map_err(|e| Error::DownloadFailed {
+        url: url.into(),
+        reason: vite_shared::format_error_chain(&e).into(),
+    })?;
 
     Ok(CachedFetchResponse { body: Some(body), etag, max_age, not_modified: false })
 }
