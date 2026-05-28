@@ -1,9 +1,17 @@
 //! Managed global package utilities.
 
-use std::{collections::HashMap, io::IsTerminal, process::Stdio, time::Duration};
+use std::{
+    collections::HashMap,
+    fs::File,
+    io::{IsTerminal, Read},
+    process::Stdio,
+    time::Duration,
+};
 
+use flate2::read::GzDecoder;
 use futures::{StreamExt, stream::FuturesUnordered};
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
+use tar::Archive;
 use tokio::process::Command;
 use vite_path::{AbsolutePathBuf, current_dir};
 use vite_shared::format_path_prepended;
@@ -48,23 +56,34 @@ impl NpmRegistry {
     }
 
     async fn latest_package_version(&self, package_spec: &str) -> Result<String, Error> {
-        let output = Command::new(self.npm_path.as_path())
-            .args(["view", package_spec, "version", "--json"])
-            .env("PATH", format_path_prepended(self.node_bin_dir.as_path()))
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .output()
-            .await?;
+        let output = npm_view(&self.npm_path, &self.node_bin_dir, package_spec, "version").await?;
 
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-            return Err(Error::ConfigError(
-                format!("npm view failed for {package_spec}: {stderr}").into(),
-            ));
-        }
-
-        parse_npm_view_version(&output.stdout)
+        parse_npm_view_version(&output)
     }
+}
+
+async fn npm_view(
+    npm_path: &AbsolutePathBuf,
+    node_bin_dir: &AbsolutePathBuf,
+    package_spec: &str,
+    field: &str,
+) -> Result<Vec<u8>, Error> {
+    let output = Command::new(npm_path.as_path())
+        .args(["view", package_spec, field, "--json"])
+        .env("PATH", format_path_prepended(node_bin_dir.as_path()))
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .await?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(Error::ConfigError(
+            format!("npm view failed for {package_spec}: {stderr}").into(),
+        ));
+    }
+
+    Ok(output.stdout)
 }
 
 pub(crate) async fn latest_package_versions(
@@ -133,20 +152,117 @@ pub(crate) fn is_local_package_spec(spec: &str) -> bool {
 }
 
 /// Parse package spec into name and optional version.
-pub(crate) fn parse_package_spec(spec: &str) -> (String, Option<String>) {
-    if spec.starts_with('@') {
-        if let Some(idx) = spec[1..].find('@') {
-            let idx = idx + 1;
-            return (spec[..idx].to_string(), Some(spec[idx + 1..].to_string()));
+/// For local packages, read package.json from a directory or package tarball.
+///
+/// It will never return an `Err()` if it is not a local package
+pub(crate) fn parse_package_spec(spec: &str) -> Result<(String, Option<String>), Error> {
+    if is_local_package_spec(spec) {
+        let package_json = read_local_package_json(spec)?;
+        let Some(package_name) = package_json.get("name").and_then(|name| name.as_str()) else {
+            return Err(Error::ConfigError(
+                format!("Local package {spec} must have a string name in package.json").into(),
+            ));
+        };
+
+        Ok((package_name.to_string(), None))
+    } else {
+        if spec.starts_with('@') {
+            if let Some(idx) = spec[1..].find('@') {
+                let idx = idx + 1;
+                return Ok((spec[..idx].to_string(), Some(spec[idx + 1..].to_string())));
+            }
+            return Ok((spec.to_string(), None));
         }
-        return (spec.to_string(), None);
+
+        if let Some(idx) = spec.find('@') {
+            return Ok((spec[..idx].to_string(), Some(spec[idx + 1..].to_string())));
+        }
+
+        Ok((spec.to_string(), None))
+    }
+}
+
+fn resolve_local_package_path(spec: &str) -> Result<AbsolutePathBuf, Error> {
+    let path_spec = spec.strip_prefix("file:").unwrap_or(spec);
+    let path = std::path::Path::new(path_spec);
+    if path.is_absolute() {
+        AbsolutePathBuf::new(path.to_path_buf())
+            .ok_or_else(|| Error::ConfigError(format!("Invalid local package path {spec}").into()))
+    } else {
+        Ok(current_dir()
+            .map_err(|error| {
+                Error::ConfigError(format!("Cannot get current directory: {error}").into())
+            })?
+            .join(path))
+    }
+}
+
+fn read_local_package_json(spec: &str) -> Result<serde_json::Value, Error> {
+    let package_path = resolve_local_package_path(spec)?;
+    if package_path.as_path().is_file() && is_package_tarball(package_path.as_path()) {
+        return read_package_json_from_tarball(spec, &package_path);
     }
 
-    if let Some(idx) = spec.find('@') {
-        return (spec[..idx].to_string(), Some(spec[idx + 1..].to_string()));
+    let package_json_path = package_path.join("package.json");
+    let package_json_content =
+        std::fs::read_to_string(package_json_path.as_path()).map_err(|error| {
+            Error::ConfigError(
+                format!(
+                    "Failed to read package.json for local package {spec} at {}: {error}",
+                    package_json_path.as_path().display()
+                )
+                .into(),
+            )
+        })?;
+    serde_json::from_str(&package_json_content).map_err(Error::JsonError)
+}
+
+fn is_package_tarball(path: &std::path::Path) -> bool {
+    let path = path.to_string_lossy();
+    path.ends_with(".tgz") || path.ends_with(".tar.gz")
+}
+
+fn read_package_json_from_tarball(
+    spec: &str,
+    package_path: &AbsolutePathBuf,
+) -> Result<serde_json::Value, Error> {
+    let file = File::open(package_path.as_path()).map_err(|error| {
+        Error::ConfigError(
+            format!(
+                "Failed to read package tarball {spec} at {}: {error}",
+                package_path.as_path().display()
+            )
+            .into(),
+        )
+    })?;
+    let decoder = GzDecoder::new(file);
+    let mut archive = Archive::new(decoder);
+
+    for entry in archive.entries().map_err(|error| {
+        Error::ConfigError(format!("Failed to read package tarball {spec}: {error}").into())
+    })? {
+        let mut entry = entry.map_err(|error| {
+            Error::ConfigError(format!("Failed to read package tarball {spec}: {error}").into())
+        })?;
+        let path = entry.path().map_err(|error| {
+            Error::ConfigError(format!("Failed to read package tarball {spec}: {error}").into())
+        })?;
+        if path.as_ref() != std::path::Path::new("package/package.json") {
+            continue;
+        }
+
+        let mut package_json_content = String::new();
+        entry.read_to_string(&mut package_json_content).map_err(|error| {
+            Error::ConfigError(
+                format!("Failed to read package.json from package tarball {spec}: {error}").into(),
+            )
+        })?;
+        return serde_json::from_str(&package_json_content).map_err(Error::JsonError);
     }
 
-    (spec.to_string(), None)
+    Err(Error::ConfigError(
+        format!("Package tarball {spec} must contain package/package.json").into(),
+    ))
 }
 
 fn parse_npm_view_version(stdout: &[u8]) -> Result<String, Error> {
