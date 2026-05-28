@@ -1618,8 +1618,8 @@ type DependencyBag = {
 function hasOwnWebdriverioDependency(pkg: DependencyBag): boolean {
   return Boolean(
     pkg.dependencies?.[WEBDRIVERIO_PEER_DEP] ??
-      pkg.devDependencies?.[WEBDRIVERIO_PEER_DEP] ??
-      pkg.optionalDependencies?.[WEBDRIVERIO_PEER_DEP],
+    pkg.devDependencies?.[WEBDRIVERIO_PEER_DEP] ??
+    pkg.optionalDependencies?.[WEBDRIVERIO_PEER_DEP],
   );
 }
 
