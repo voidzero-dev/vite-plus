@@ -1526,6 +1526,150 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     >;
     expect(appDeps.vitest).toBe('catalog:');
   });
+
+  it('denies edgedriver/geckodriver builds in pnpm-workspace.yaml when webdriverio is unused (pnpm v10)', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'test', devDependencies: { vite: '^7.0.0' } }),
+    );
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+    const yaml = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      allowBuilds: Record<string, boolean>;
+    };
+    expect(yaml.allowBuilds.edgedriver).toBe(false);
+    expect(yaml.allowBuilds.geckodriver).toBe(false);
+  });
+
+  it('allows edgedriver/geckodriver builds when webdriverio is in devDependencies (pnpm v10)', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { vite: '^7.0.0', webdriverio: '^9.0.0' },
+      }),
+    );
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+    const yaml = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      allowBuilds: Record<string, boolean>;
+    };
+    expect(yaml.allowBuilds.edgedriver).toBe(true);
+    expect(yaml.allowBuilds.geckodriver).toBe(true);
+  });
+
+  it('preserves explicit allowBuilds entries on second run (idempotent)', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'test', devDependencies: { vite: '^7.0.0' } }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      ['allowBuilds:', '  edgedriver: true', ''].join('\n'),
+    );
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+    const firstPass = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      allowBuilds: Record<string, boolean>;
+    };
+    // explicit user choice survives, missing entry is added with default deny
+    expect(firstPass.allowBuilds.edgedriver).toBe(true);
+    expect(firstPass.allowBuilds.geckodriver).toBe(false);
+
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+    const secondPass = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      allowBuilds: Record<string, boolean>;
+    };
+    expect(secondPass.allowBuilds).toEqual(firstPass.allowBuilds);
+  });
+
+  it('writes pnpm.allowBuilds in package.json when pnpm config lives there (pnpm v10)', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { vite: '^7.0.0' },
+        pnpm: { overrides: {} },
+      }),
+    );
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+    const pnpm = (readJson(path.join(tmpDir, 'package.json')).pnpm ?? {}) as {
+      allowBuilds?: Record<string, boolean>;
+    };
+    expect(pnpm.allowBuilds?.edgedriver).toBe(false);
+    expect(pnpm.allowBuilds?.geckodriver).toBe(false);
+  });
+
+  it('appends edgedriver/geckodriver to onlyBuiltDependencies on pnpm v9 when webdriverio is used', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { vite: '^7.0.0', webdriverio: '^9.0.0' },
+      }),
+    );
+    const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.pnpm);
+    workspaceInfo.downloadPackageManager.version = '9.15.0';
+    rewriteStandaloneProject(tmpDir, workspaceInfo, true, true);
+
+    const yaml = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      onlyBuiltDependencies?: string[];
+      allowBuilds?: Record<string, boolean>;
+    };
+    expect(yaml.onlyBuiltDependencies).toEqual(
+      expect.arrayContaining(['edgedriver', 'geckodriver']),
+    );
+    // v10-shape key must not appear on v9 setups
+    expect(yaml.allowBuilds).toBeUndefined();
+  });
+
+  it('leaves onlyBuiltDependencies untouched on pnpm v9 when webdriverio is unused', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'test', devDependencies: { vite: '^7.0.0' } }),
+    );
+    const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.pnpm);
+    workspaceInfo.downloadPackageManager.version = '9.15.0';
+    rewriteStandaloneProject(tmpDir, workspaceInfo, true, true);
+
+    const yaml = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      onlyBuiltDependencies?: string[];
+      allowBuilds?: Record<string, boolean>;
+    };
+    expect(yaml.onlyBuiltDependencies).toBeUndefined();
+    expect(yaml.allowBuilds).toBeUndefined();
+  });
+
+  it('detects webdriverio in a monorepo sub-package and allows builds at the root', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'root', devDependencies: {} }),
+    );
+    fs.writeFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'packages:\n  - apps/*\n');
+    const appDir = path.join(tmpDir, 'apps', 'e2e');
+    fs.mkdirSync(appDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(appDir, 'package.json'),
+      JSON.stringify({
+        name: '@vibe/e2e',
+        devDependencies: { webdriverio: '^9.0.0' },
+      }),
+    );
+
+    const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.pnpm);
+    workspaceInfo.isMonorepo = true;
+    workspaceInfo.packages = [
+      { name: '@vibe/e2e', path: 'apps/e2e', isTemplatePackage: false },
+    ];
+    rewriteMonorepo(workspaceInfo, true);
+
+    const yaml = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      allowBuilds: Record<string, boolean>;
+    };
+    expect(yaml.allowBuilds.edgedriver).toBe(true);
+    expect(yaml.allowBuilds.geckodriver).toBe(true);
+  });
 });
 
 describe('rewriteMonorepo yarn catalog', () => {

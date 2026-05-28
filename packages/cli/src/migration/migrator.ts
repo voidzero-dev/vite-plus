@@ -96,6 +96,16 @@ const BROWSER_PROVIDER_PEER_DEPS: Record<string, string> = {
   '@vitest/browser-webdriverio': 'webdriverio',
 };
 
+// Transitive packages with postinstall scripts that vite-plus's deps drag in
+// via `@vitest/browser-webdriverio` → `webdriverio` → `@wdio/utils`. pnpm v10
+// refuses to run these without explicit approval, so `vp migrate` records the
+// allow/deny decision up front: deny by default (the user isn't using
+// webdriverio), allow when the user actually depends on webdriverio.
+const BROWSER_PROVIDER_POSTINSTALL_PACKAGES = ['edgedriver', 'geckodriver'] as const;
+
+// Webdriverio is the runtime peer that drags `edgedriver` / `geckodriver` in.
+const WEBDRIVERIO_PEER_DEP = 'webdriverio';
+
 // Browser-provider package names that, when present in the user's deps
 // before migration, signal vitest browser mode even if no source file
 // imports them. This covers config-only browser-mode setups (e.g.
@@ -1082,10 +1092,12 @@ export function rewriteStandaloneProject(
 
   const packageManager = workspaceInfo.packageManager;
   const catalogDependencyResolver = createCatalogDependencyResolver(projectPath, packageManager);
+  const pnpmMajorVersion = pnpmMajor(workspaceInfo.downloadPackageManager.version);
   let extractedStagedConfig: Record<string, string | string[]> | null = null;
   let remainingPnpmOverrides: Record<string, string> | undefined;
   let shouldRewritePnpmWorkspaceYaml = false;
   let shouldAddPnpmWorkspaceVitePlusOverride = false;
+  let shouldAllowBrowserProviderBuilds = false;
   // Determined inside editJsonFile callback to avoid a redundant file read
   let usePnpmWorkspaceYaml = false;
   editJsonFile<{
@@ -1102,8 +1114,11 @@ export function rewriteStandaloneProject(
         allowAny?: string[];
         allowedVersions?: Record<string, string>;
       };
+      allowBuilds?: Record<string, boolean>;
+      onlyBuiltDependencies?: string[];
     };
   }>(packageJsonPath, (pkg) => {
+    shouldAllowBrowserProviderBuilds = hasOwnWebdriverioDependency(pkg);
     // Strip stale `vite-plus-test` wrapper aliases before injecting new overrides
     // so the deleted wrapper doesn't survive migration in any sink.
     pruneLegacyWrapperAliases(pkg.resolutions);
@@ -1180,6 +1195,13 @@ export function rewriteStandaloneProject(
           delete pkg.resolutions[key];
         }
       }
+      if (!usePnpmWorkspaceYaml && pnpmMajorVersion !== undefined && pkg.pnpm) {
+        applyBuildAllowanceToPackageJsonPnpm(
+          pkg.pnpm,
+          pnpmMajorVersion,
+          shouldAllowBrowserProviderBuilds,
+        );
+      }
     }
 
     extractedStagedConfig = rewritePackageJson(
@@ -1206,7 +1228,7 @@ export function rewriteStandaloneProject(
   });
 
   if (shouldRewritePnpmWorkspaceYaml) {
-    rewritePnpmWorkspaceYaml(projectPath);
+    rewritePnpmWorkspaceYaml(projectPath, pnpmMajorVersion, shouldAllowBrowserProviderBuilds);
   }
 
   // Move remaining non-Vite pnpm.overrides to pnpm-workspace.yaml
@@ -1263,9 +1285,18 @@ export function rewriteMonorepo(
     workspaceInfo.rootDir,
     workspaceInfo.packageManager,
   );
+  const pnpmMajorVersion = pnpmMajor(workspaceInfo.downloadPackageManager.version);
+  const workspaceShouldAllowBrowserBuilds = workspaceUsesWebdriverio(
+    workspaceInfo.rootDir,
+    workspaceInfo.packages,
+  );
   // rewrite root workspace
   if (workspaceInfo.packageManager === PackageManager.pnpm) {
-    rewritePnpmWorkspaceYaml(workspaceInfo.rootDir);
+    rewritePnpmWorkspaceYaml(
+      workspaceInfo.rootDir,
+      pnpmMajorVersion,
+      workspaceShouldAllowBrowserBuilds,
+    );
   } else if (workspaceInfo.packageManager === PackageManager.yarn) {
     rewriteYarnrcYml(workspaceInfo.rootDir);
   } else if (workspaceInfo.packageManager === PackageManager.bun) {
@@ -1277,6 +1308,8 @@ export function rewriteMonorepo(
     skipStagedMigration,
     catalogDependencyResolver,
     workspaceInfo.packages,
+    pnpmMajorVersion,
+    workspaceShouldAllowBrowserBuilds,
   );
   // (mergeViteConfigFiles below will sanitize the merged lint config
   // against this workspace's full package set.)
@@ -1391,7 +1424,11 @@ export function rewriteMonorepoProject(
  * Rewrite pnpm-workspace.yaml to add vite-plus dependencies
  * @param projectPath - The path to the project
  */
-function rewritePnpmWorkspaceYaml(projectPath: string): void {
+function rewritePnpmWorkspaceYaml(
+  projectPath: string,
+  pnpmMajorVersion: number | undefined,
+  shouldAllowBrowserBuilds: boolean,
+): void {
   const pnpmWorkspaceYamlPath = path.join(projectPath, 'pnpm-workspace.yaml');
   if (!fs.existsSync(pnpmWorkspaceYamlPath)) {
     fs.writeFileSync(pnpmWorkspaceYamlPath, '');
@@ -1400,6 +1437,9 @@ function rewritePnpmWorkspaceYaml(projectPath: string): void {
   editYamlFile(pnpmWorkspaceYamlPath, (doc) => {
     // catalog
     rewriteCatalog(doc);
+    if (pnpmMajorVersion !== undefined) {
+      applyBuildAllowanceToWorkspaceYaml(doc, pnpmMajorVersion, shouldAllowBrowserBuilds);
+    }
 
     // overrides
     const overrides = doc.getIn(['overrides']);
@@ -1554,6 +1594,123 @@ function migratePnpmOverridesToWorkspaceYaml(
       doc.setIn(['overrides', scalarString(key)], scalarString(value));
     }
   });
+}
+
+type DependencyBag = {
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+  optionalDependencies?: Record<string, string>;
+};
+
+function hasOwnWebdriverioDependency(pkg: DependencyBag): boolean {
+  return Boolean(
+    pkg.dependencies?.[WEBDRIVERIO_PEER_DEP] ??
+      pkg.devDependencies?.[WEBDRIVERIO_PEER_DEP] ??
+      pkg.optionalDependencies?.[WEBDRIVERIO_PEER_DEP],
+  );
+}
+
+function workspaceUsesWebdriverio(
+  rootDir: string,
+  packages: WorkspacePackage[] | undefined,
+): boolean {
+  const rootPkg = readPackageJsonIfExists(path.join(rootDir, 'package.json'));
+  if (rootPkg && hasOwnWebdriverioDependency(rootPkg)) {
+    return true;
+  }
+  if (!packages) {
+    return false;
+  }
+  for (const pkg of packages) {
+    const subPkg = readPackageJsonIfExists(path.join(rootDir, pkg.path, 'package.json'));
+    if (subPkg && hasOwnWebdriverioDependency(subPkg)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function readPackageJsonIfExists(packageJsonPath: string): DependencyBag | undefined {
+  if (!fs.existsSync(packageJsonPath)) {
+    return undefined;
+  }
+  try {
+    return readJsonFile(packageJsonPath) as DependencyBag;
+  } catch {
+    return undefined;
+  }
+}
+
+// pnpm v10 introduced the map-shaped `allowBuilds` and removed the implicit
+// "build everything" default; v9 (>= 9.5) gates builds via the list-shaped
+// `onlyBuiltDependencies`. Both live in pnpm-workspace.yaml or in
+// `package.json`'s `pnpm` field — vp migrate writes to whichever sink the
+// rest of the migration is already touching.
+function pnpmMajor(version: string | undefined): number | undefined {
+  const coerced = version ? semver.coerce(version)?.version : undefined;
+  return coerced ? semver.major(coerced) : undefined;
+}
+
+function applyBuildAllowanceToPackageJsonPnpm(
+  pnpm: {
+    allowBuilds?: Record<string, boolean>;
+    onlyBuiltDependencies?: string[];
+  },
+  major: number,
+  shouldAllow: boolean,
+): void {
+  if (major >= 10) {
+    pnpm.allowBuilds ??= {};
+    for (const name of BROWSER_PROVIDER_POSTINSTALL_PACKAGES) {
+      if (!(name in pnpm.allowBuilds)) {
+        pnpm.allowBuilds[name] = shouldAllow;
+      }
+    }
+  } else if (shouldAllow) {
+    // v9 onlyBuiltDependencies is an allow-list — omission is denial, so we
+    // only mutate when the user actually needs these packages built.
+    const list = pnpm.onlyBuiltDependencies ?? [];
+    const existing = new Set(list);
+    for (const name of BROWSER_PROVIDER_POSTINSTALL_PACKAGES) {
+      if (!existing.has(name)) {
+        list.push(name);
+        existing.add(name);
+      }
+    }
+    pnpm.onlyBuiltDependencies = list;
+  }
+}
+
+function applyBuildAllowanceToWorkspaceYaml(
+  doc: YamlDocument,
+  major: number,
+  shouldAllow: boolean,
+): void {
+  if (major >= 10) {
+    let allowBuilds = doc.getIn(['allowBuilds']) as YAMLMap<Scalar<string>, Scalar<boolean>>;
+    if (!(allowBuilds instanceof YAMLMap)) {
+      allowBuilds = new YAMLMap<Scalar<string>, Scalar<boolean>>();
+    }
+    const existingKeys = new Set(allowBuilds.items.map((n) => n.key.value));
+    for (const name of BROWSER_PROVIDER_POSTINSTALL_PACKAGES) {
+      if (!existingKeys.has(name)) {
+        allowBuilds.set(scalarString(name), new Scalar(shouldAllow));
+      }
+    }
+    doc.setIn(['allowBuilds'], allowBuilds);
+  } else if (shouldAllow) {
+    let onlyBuiltDependencies = doc.getIn(['onlyBuiltDependencies']) as YAMLSeq<Scalar<string>>;
+    if (!(onlyBuiltDependencies instanceof YAMLSeq)) {
+      onlyBuiltDependencies = new YAMLSeq<Scalar<string>>();
+    }
+    const existing = new Set(onlyBuiltDependencies.items.map((n) => n.value));
+    for (const name of BROWSER_PROVIDER_POSTINSTALL_PACKAGES) {
+      if (!existing.has(name)) {
+        onlyBuiltDependencies.add(scalarString(name));
+      }
+    }
+    doc.setIn(['onlyBuiltDependencies'], onlyBuiltDependencies);
+  }
 }
 
 /**
@@ -1944,6 +2101,8 @@ function rewriteRootWorkspacePackageJson(
   // sanitizer can see hoisted deps in sibling workspace packages, not
   // just the root's own `package.json`.
   packages?: WorkspacePackage[],
+  pnpmMajorVersion?: number,
+  shouldAllowBrowserBuilds = false,
 ): void {
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
@@ -1964,6 +2123,8 @@ function rewriteRootWorkspacePackageJson(
         allowAny?: string[];
         allowedVersions?: Record<string, string>;
       };
+      allowBuilds?: Record<string, boolean>;
+      onlyBuiltDependencies?: string[];
     };
   }>(packageJsonPath, (pkg) => {
     // Strip stale `vite-plus-test` wrapper aliases before injecting new overrides
@@ -2028,6 +2189,9 @@ function rewriteRootWorkspacePackageJson(
             delete pkg.pnpm.overrides[key];
           }
         }
+      }
+      if (pnpmMajorVersion !== undefined && pkg.pnpm) {
+        applyBuildAllowanceToPackageJsonPnpm(pkg.pnpm, pnpmMajorVersion, shouldAllowBrowserBuilds);
       }
     }
 
