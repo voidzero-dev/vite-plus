@@ -1304,7 +1304,7 @@ rule:
   kind: string
   regex: ^['"]vitest/.+['"]$
   not:
-    regex: ^['"]vitest/package\.json['"]$
+    regex: ^['"]vitest/(package\.json|config)['"]$
   inside:
     kind: import_statement
 transform:
@@ -1322,7 +1322,7 @@ rule:
   kind: string
   regex: ^['"]vitest/.+['"]$
   not:
-    regex: ^['"]vitest/package\.json['"]$
+    regex: ^['"]vitest/(package\.json|config)['"]$
   inside:
     kind: export_statement
 transform:
@@ -1340,7 +1340,7 @@ rule:
   kind: string
   regex: ^['"]vitest/.+['"]$
   not:
-    regex: ^['"]vitest/package\.json['"]$
+    regex: ^['"]vitest/(package\.json|config)['"]$
   inside:
     kind: arguments
     inside:
@@ -1363,7 +1363,7 @@ rule:
   kind: string
   regex: ^['"]vitest/.+['"]$
   not:
-    regex: ^['"]vitest/package\.json['"]$
+    regex: ^['"]vitest/(package\.json|config)['"]$
   inside:
     kind: arguments
     inside:
@@ -5005,5 +5005,80 @@ console.log(pkg.version);"#;
         let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
         assert!(result.updated);
         assert_eq!(result.content, r#"import 'vite-plus/test/package.json.js';"#);
+    }
+
+    // The `rewrite-vitest-subpath-*` rules now explicitly exclude `vitest/config`
+    // via `not: regex: ^['"]vitest/(package\.json|config)['"]$` to make the intent
+    // robust against rule-reordering or ast-grep conflict-resolution changes.
+    // These tests verify the exclusion holds for all 4 import shapes and that
+    // a similar-but-distinct path like `vitest/config-extra` is NOT excluded.
+
+    #[test]
+    fn test_rewrite_import_content_vitest_config_export_not_subpath_rewritten() {
+        // `export ... from 'vitest/config'` must collapse to `vite-plus` (bare),
+        // NOT `vite-plus/test/config`. The subpath rule's `not` exclusion prevents
+        // the wrong fix from firing.
+        let content = r#"export type { Config } from 'vitest/config';"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"export type { Config } from 'vite-plus';"#);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vitest_config_require_not_subpath_rewritten() {
+        // `require('vitest/config')` must collapse to `vite-plus` (bare),
+        // NOT `vite-plus/test/config`.
+        let content = r#"const { defineConfig } = require('vitest/config');"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"const { defineConfig } = require('vite-plus');"#);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vitest_config_dynamic_import_not_subpath_rewritten() {
+        // `import('vitest/config')` must collapse to `vite-plus` (bare),
+        // NOT `vite-plus/test/config`.
+        let content = r#"const m = await import('vitest/config');"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"const m = await import('vite-plus');"#);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vitest_config_extra_subpath_static_import() {
+        // `vitest/config-extra` is NOT `vitest/config` — the subpath exclusion
+        // must not be too broad. It should still be rewritten by the catch-all
+        // subpath rule to `vite-plus/test/config-extra`.
+        let content = r#"import { something } from 'vitest/config-extra';"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"import { something } from 'vite-plus/test/config-extra';"#);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vitest_config_extra_subpath_export() {
+        // Same sanity check for export_statement shape.
+        let content = r#"export { something } from 'vitest/config-extra';"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"export { something } from 'vite-plus/test/config-extra';"#);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vitest_config_extra_subpath_require() {
+        // Same sanity check for require() shape.
+        let content = r#"const m = require('vitest/config-extra');"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"const m = require('vite-plus/test/config-extra');"#);
+    }
+
+    #[test]
+    fn test_rewrite_import_content_vitest_config_extra_subpath_dynamic_import() {
+        // Same sanity check for dynamic import() shape.
+        let content = r#"const m = await import('vitest/config-extra');"#;
+        let result = rewrite_import_content(content, &SkipPackages::default()).unwrap();
+        assert!(result.updated);
+        assert_eq!(result.content, r#"const m = await import('vite-plus/test/config-extra');"#);
     }
 }
