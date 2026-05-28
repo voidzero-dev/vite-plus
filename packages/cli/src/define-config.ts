@@ -1,6 +1,7 @@
 import { createRequire } from 'node:module';
 
 import type { PluginOption, UserConfig } from '@voidzero-dev/vite-plus-core';
+import { RolldownMagicString } from '@voidzero-dev/vite-plus-core/rolldown';
 import { initSync, parse, type ImportSpecifier } from 'es-module-lexer';
 import { parseSync as oxcParseSync, Visitor } from 'oxc-parser';
 import type { OxfmtConfig } from 'oxfmt';
@@ -133,11 +134,16 @@ function ensureLexerInit(): void {
  * import specifiers so JSX text and string literals containing
  * `vite-plus/test` are left alone.
  *
- * Returns the original `code` unchanged if `oxc-parser` itself throws —
- * we never fall back to a regex on raw TSX, because that re-introduces the
- * exact bug this function exists to fix.
+ * Mutates the supplied `RolldownMagicString` in place via `overwrite(...)`
+ * so the final sourcemap reflects the actual byte ranges that were
+ * replaced. Returns `true` when at least one edit was applied so the
+ * caller knows whether the orchestrator needs to emit a sourcemap.
+ *
+ * Returns `false` (no edits) when `oxc-parser` itself throws — we never
+ * fall back to a regex on raw TSX, because that re-introduces the exact
+ * bug this function exists to fix.
  */
-function rewriteWithOxcParser(code: string): string {
+function applyOxcParserEdits(code: string, ms: RolldownMagicString): boolean {
   let staticImports: ReadonlyArray<{
     moduleRequest: { value: string; start: number; end: number };
   }>;
@@ -156,16 +162,13 @@ function rewriteWithOxcParser(code: string): string {
     // Extremely malformed input that oxc-parser cannot recover from. Leave
     // the source untouched rather than risk a regex-based rewrite that would
     // again clobber JSX text / string literals.
-    return code;
+    return false;
   }
 
-  // Collect every rewrite as a (start, end, replacement) triple, then apply
-  // them in reverse offset order so earlier splices don't shift later ones.
   // For both static and dynamic imports, `moduleRequest.start/end` bound the
   // specifier INCLUDING its surrounding quotes, so we preserve the original
   // quote character in the replacement.
-  type Edit = { start: number; end: number; replacement: string };
-  const edits: Edit[] = [];
+  let changed = false;
 
   for (const si of staticImports) {
     const mr = si.moduleRequest;
@@ -176,11 +179,8 @@ function rewriteWithOxcParser(code: string): string {
     if (quote !== '"' && quote !== "'") {
       continue;
     }
-    edits.push({
-      start: mr.start,
-      end: mr.end,
-      replacement: `${quote}${TARGET_REPLACEMENT}${quote}`,
-    });
+    ms.overwrite(mr.start, mr.end, `${quote}${TARGET_REPLACEMENT}${quote}`);
+    changed = true;
   }
 
   for (const di of dynamicImports) {
@@ -190,11 +190,8 @@ function rewriteWithOxcParser(code: string): string {
       continue;
     }
     const quote = slice[0];
-    edits.push({
-      start: mr.start,
-      end: mr.end,
-      replacement: `${quote}${TARGET_REPLACEMENT}${quote}`,
-    });
+    ms.overwrite(mr.start, mr.end, `${quote}${TARGET_REPLACEMENT}${quote}`);
+    changed = true;
   }
 
   for (const entry of staticExports.flatMap((e) => e.entries)) {
@@ -206,24 +203,11 @@ function rewriteWithOxcParser(code: string): string {
     if (quote !== '"' && quote !== "'") {
       continue;
     }
-    edits.push({
-      start: mr.start,
-      end: mr.end,
-      replacement: `${quote}${TARGET_REPLACEMENT}${quote}`,
-    });
+    ms.overwrite(mr.start, mr.end, `${quote}${TARGET_REPLACEMENT}${quote}`);
+    changed = true;
   }
 
-  if (edits.length === 0) {
-    return code;
-  }
-
-  edits.sort((a, b) => a.start - b.start);
-  let result = code;
-  for (let i = edits.length - 1; i >= 0; i--) {
-    const { start, end, replacement } = edits[i];
-    result = result.slice(0, start) + replacement + result.slice(end);
-  }
-  return result;
+  return changed;
 }
 
 /**
@@ -241,17 +225,16 @@ function rewriteWithOxcParser(code: string): string {
  * member calls like `obj.require(...)`, and string concatenation are all
  * distinct AST nodes and therefore left untouched.
  *
- * Returns the input unchanged when `oxc-parser` cannot parse the source —
- * we never fall back to a regex on raw user code.
+ * Mutates the supplied `RolldownMagicString` in place via `overwrite(...)`.
+ * Returns `true` when at least one edit was applied. Returns `false` when
+ * `oxc-parser` cannot parse the source — we never fall back to a regex
+ * on raw user code.
  */
-function rewriteRequireCalls(code: string): string {
+function applyRequireEdits(code: string, ms: RolldownMagicString): boolean {
   // Cheap pre-filter: skip parsing when the file has no `require` token at all.
   if (!code.includes('require')) {
-    return code;
+    return false;
   }
-
-  type Edit = { start: number; end: number; replacement: string };
-  const edits: Edit[] = [];
 
   let parsed;
   try {
@@ -260,8 +243,10 @@ function rewriteRequireCalls(code: string): string {
     // Parser bailout — leave the source untouched. Never fall back to regex
     // on raw user code; that re-introduces the template-literal false-positive
     // that this function exists to fix.
-    return code;
+    return false;
   }
+
+  let changed = false;
 
   const visitor = new Visitor({
     CallExpression(node) {
@@ -281,35 +266,42 @@ function rewriteRequireCalls(code: string): string {
       if (quote !== '"' && quote !== "'") {
         return;
       }
-      edits.push({
-        start: first.start,
-        end: first.end,
-        replacement: `${quote}${TARGET_REPLACEMENT}${quote}`,
-      });
+      ms.overwrite(first.start, first.end, `${quote}${TARGET_REPLACEMENT}${quote}`);
+      changed = true;
     },
   });
   visitor.visit(parsed.program);
 
-  if (edits.length === 0) {
-    return code;
-  }
-
-  edits.sort((a, b) => a.start - b.start);
-  let result = code;
-  for (let i = edits.length - 1; i >= 0; i--) {
-    const { start, end, replacement } = edits[i];
-    result = result.slice(0, start) + replacement + result.slice(end);
-  }
-  return result;
+  return changed;
 }
 
-export function rewriteVitePlusTestSpecifier(code: string): string {
+/**
+ * Result of a `vite-plus/test` → `vitest` rewrite.
+ *
+ * `null` means the input was untouched (either because it does not mention
+ * the target specifier at all, or because every occurrence was inside a
+ * comment / string literal / template literal / member call). When edits
+ * were applied, `code` is the rewritten source and `map` is a JSON
+ * sourcemap string (V3) generated from the underlying `RolldownMagicString`
+ * via `generateMap({ hires: 'boundary' })`. Returning the map as a
+ * pre-serialised string lets us satisfy Vite's `SourceMapInput` shape
+ * without exposing the native `BindingSourceMap` instance to downstream
+ * transforms — which in turn would force an awkward structural cast.
+ */
+export type RewriteResult = { code: string; map: string };
+
+export function rewriteVitePlusTestSpecifier(
+  code: string,
+  filename?: string,
+): RewriteResult | null {
   if (!code.includes(TARGET_SPECIFIER)) {
-    return code;
+    return null;
   }
 
+  const ms = new RolldownMagicString(code);
+  let changed = false;
+
   // Step 1: rewrite ESM static/dynamic imports via es-module-lexer (fast path).
-  let result = code;
   let imports: ReadonlyArray<ImportSpecifier> | undefined;
   let lexerThrew = false;
   try {
@@ -323,15 +315,17 @@ export function rewriteVitePlusTestSpecifier(code: string): string {
   }
 
   if (imports && imports.length > 0) {
-    // Walk in reverse so earlier offsets stay valid as we splice.
-    const matches = imports.filter((i) => i.n === TARGET_SPECIFIER);
-    for (let i = matches.length - 1; i >= 0; i--) {
-      const { s, e, d } = matches[i];
+    for (const spec of imports) {
+      if (spec.n !== TARGET_SPECIFIER) {
+        continue;
+      }
+      const { s, e, d } = spec;
       // For static imports, `s`/`e` bound the specifier name without quotes.
       // For dynamic imports (`d !== -1`), they bound the full string literal
       // expression including its quotes, so wrap the replacement to preserve them.
       const replacement = d === -1 ? TARGET_REPLACEMENT : `'${TARGET_REPLACEMENT}'`;
-      result = result.slice(0, s) + replacement + result.slice(e);
+      ms.overwrite(s, e, replacement);
+      changed = true;
     }
   } else if (lexerThrew) {
     // `es-module-lexer` can't parse JSX/TSX, so .tsx test files with
@@ -340,7 +334,9 @@ export function rewriteVitePlusTestSpecifier(code: string): string {
     // and crash at runtime with `Cannot access '__vi_import_0__' before
     // initialization`. Fall back to `oxc-parser`, which handles TSX and
     // distinguishes real imports from JSX text / string literals.
-    result = rewriteWithOxcParser(code);
+    if (applyOxcParserEdits(code, ms)) {
+      changed = true;
+    }
   }
 
   // Step 2: rewrite CJS require() calls (not seen by es-module-lexer / the
@@ -348,9 +344,20 @@ export function rewriteVitePlusTestSpecifier(code: string): string {
   // string-literal contents that happen to contain
   // `require('vite-plus/test')` are left untouched because the visitor only
   // matches real `CallExpression` callee identifiers.
-  result = rewriteRequireCalls(result);
+  if (applyRequireEdits(code, ms)) {
+    changed = true;
+  }
 
-  return result;
+  if (!changed) {
+    return null;
+  }
+
+  const map = ms.generateMap({
+    source: filename,
+    hires: 'boundary',
+    includeContent: true,
+  });
+  return { code: ms.toString(), map: map.toString() };
 }
 
 function vitePlusTestSpecifierRewritePlugin(): PluginOption {
@@ -361,11 +368,7 @@ function vitePlusTestSpecifierRewritePlugin(): PluginOption {
       if (id.includes('/node_modules/')) {
         return null;
       }
-      const newCode = rewriteVitePlusTestSpecifier(code);
-      if (newCode === code) {
-        return null;
-      }
-      return { code: newCode, map: null };
+      return rewriteVitePlusTestSpecifier(code, id);
     },
   };
 }
