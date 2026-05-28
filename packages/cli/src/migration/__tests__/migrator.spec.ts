@@ -1665,6 +1665,37 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(pkg.peerDependencies).not.toHaveProperty('tsdown');
   });
 
+  it('drops selector-shaped REMOVE_PACKAGES overrides from package.json pnpm.overrides', () => {
+    // Project keeps its pnpm config in package.json (`pkg.pnpm.overrides`).
+    // Selector-shaped keys whose target is a removed package (e.g. the
+    // bundled provider packages) must be stripped or they would re-pin
+    // vite-plus's own provider dep to an incompatible version.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { vite: '^7.0.0' },
+        pnpm: {
+          overrides: {
+            'vite-plus>@vitest/browser-playwright': '^4.0.0',
+            '@vitest/browser-playwright@4': '4.1.7',
+            'other>foo': '1.0.0',
+          },
+        },
+      }),
+    );
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      pnpm?: { overrides?: Record<string, string> };
+    };
+    const overrides = pkg.pnpm?.overrides ?? {};
+    expect(overrides).not.toHaveProperty('vite-plus>@vitest/browser-playwright');
+    expect(overrides).not.toHaveProperty('@vitest/browser-playwright@4');
+    // Unrelated selector keys must survive.
+    expect(overrides['other>foo']).toBe('1.0.0');
+  });
+
   it('drops stale @vitest/browser* overrides from pnpm-workspace.yaml', () => {
     // The migration moves provider packages out of project manifests and adds
     // them as direct vite-plus deps. A pre-existing workspace override pinning
@@ -2154,6 +2185,82 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     };
     expect(yaml.allowBuilds.edgedriver).toBe(true);
     expect(yaml.allowBuilds.geckodriver).toBe(true);
+  });
+
+  it('skips allowBuilds.edgedriver when the user already depends on edgedriver directly (pnpm v10, no webdriverio)', () => {
+    // Non-webdriverio Selenium setup: the user already manages their own
+    // edgedriver postinstall approval, so the migration must not overwrite it
+    // with `false`. geckodriver is not a direct dep and remains denied.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { vite: '^7.0.0', edgedriver: '^6.0.0' },
+      }),
+    );
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+    const yaml = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      allowBuilds: Record<string, boolean>;
+    };
+    expect(yaml.allowBuilds).not.toHaveProperty('edgedriver');
+    expect(yaml.allowBuilds.geckodriver).toBe(false);
+  });
+
+  it('preserves user direct edgedriver dep even when webdriverio signal forces allow (pnpm v10)', () => {
+    // Webdriverio signal would normally write `allowBuilds.edgedriver = true`,
+    // but the user already depends on edgedriver directly — leave their choice
+    // alone. geckodriver still gets the allow entry.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: {
+          vite: '^7.0.0',
+          webdriverio: '^9.0.0',
+          edgedriver: '^6.0.0',
+        },
+      }),
+    );
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+    const yaml = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      allowBuilds: Record<string, boolean>;
+    };
+    expect(yaml.allowBuilds).not.toHaveProperty('edgedriver');
+    expect(yaml.allowBuilds.geckodriver).toBe(true);
+  });
+
+  it('writes both driver allowBuilds entries when no driver is a direct dep (regression guard)', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'test', devDependencies: { vite: '^7.0.0' } }),
+    );
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+    const yaml = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      allowBuilds: Record<string, boolean>;
+    };
+    expect(yaml.allowBuilds.edgedriver).toBe(false);
+    expect(yaml.allowBuilds.geckodriver).toBe(false);
+  });
+
+  it('skips pnpm.allowBuilds.edgedriver when the user already depends on edgedriver directly (package.json pnpm config)', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { vite: '^7.0.0', edgedriver: '^6.0.0' },
+        pnpm: { overrides: {} },
+      }),
+    );
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      pnpm?: { allowBuilds?: Record<string, boolean> };
+    };
+    expect(pkg.pnpm?.allowBuilds).not.toHaveProperty('edgedriver');
+    expect(pkg.pnpm?.allowBuilds?.geckodriver).toBe(false);
   });
 });
 
