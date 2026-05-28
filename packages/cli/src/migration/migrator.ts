@@ -1609,6 +1609,7 @@ type DependencyBag = {
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
   optionalDependencies?: Record<string, string>;
+  peerDependencies?: Record<string, string>;
 };
 
 function hasOwnWebdriverioDependency(pkg: DependencyBag): boolean {
@@ -1616,7 +1617,8 @@ function hasOwnWebdriverioDependency(pkg: DependencyBag): boolean {
     if (
       pkg.dependencies?.[name] ??
       pkg.devDependencies?.[name] ??
-      pkg.optionalDependencies?.[name]
+      pkg.optionalDependencies?.[name] ??
+      pkg.peerDependencies?.[name]
     ) {
       return true;
     }
