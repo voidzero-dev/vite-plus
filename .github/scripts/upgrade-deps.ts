@@ -152,13 +152,23 @@ async function updatePnpmWorkspace(versions: PnpmWorkspaceVersions): Promise<voi
   let content = fs.readFileSync(filePath, 'utf8');
 
   // oxlint's trailing \n in the pattern disambiguates from oxlint-tsgolint.
-  const vitestBrowserPackages = [
+  // All @vitest/* catalog entries (browser + core direct deps) must stay pinned
+  // to the same exact version as `vitest` itself, otherwise the catalog drifts
+  // from VITEST_VERSION and the @vitest/mocker patch key, causing a patch mismatch.
+  const vitestExactVersionPackages = [
     '@vitest/browser',
     '@vitest/browser-playwright',
     '@vitest/browser-preview',
     '@vitest/browser-webdriverio',
+    '@vitest/expect',
+    '@vitest/mocker',
+    '@vitest/pretty-format',
+    '@vitest/runner',
+    '@vitest/snapshot',
+    '@vitest/spy',
+    '@vitest/utils',
   ];
-  const vitestBrowserEntries: PnpmWorkspaceEntry[] = vitestBrowserPackages.map((pkg) => ({
+  const vitestBrowserEntries: PnpmWorkspaceEntry[] = vitestExactVersionPackages.map((pkg) => ({
     name: pkg,
     pattern: new RegExp(`'${pkg.replaceAll('/', '\\/')}': ([\\d.]+(?:-[\\w.]+)?)`),
     replacement: `'${pkg}': ${versions.vitest}`,
