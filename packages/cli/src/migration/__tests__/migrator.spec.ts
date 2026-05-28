@@ -1659,9 +1659,7 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
 
     const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.pnpm);
     workspaceInfo.isMonorepo = true;
-    workspaceInfo.packages = [
-      { name: '@vibe/e2e', path: 'apps/e2e', isTemplatePackage: false },
-    ];
+    workspaceInfo.packages = [{ name: '@vibe/e2e', path: 'apps/e2e', isTemplatePackage: false }];
     rewriteMonorepo(workspaceInfo, true);
 
     const yaml = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
