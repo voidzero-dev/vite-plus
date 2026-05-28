@@ -1665,6 +1665,38 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(pkg.peerDependencies).not.toHaveProperty('tsdown');
   });
 
+  it('drops stale @vitest/browser* overrides from pnpm-workspace.yaml', () => {
+    // The migration moves provider packages out of project manifests and adds
+    // them as direct vite-plus deps. A pre-existing workspace override pinning
+    // an old provider version would then force vite-plus's own provider dep to
+    // an incompatible version against the bundled vitest.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'test', devDependencies: { vite: '^7.0.0' } }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'packages:',
+        '  - packages/*',
+        'overrides:',
+        "  '@vitest/browser-playwright': 4.0.0",
+        "  '@vitest/browser-webdriverio': 4.0.0",
+        '  some-other-pkg: 1.0.0',
+        '',
+      ].join('\n'),
+    );
+
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+    const yaml = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      overrides: Record<string, string>;
+    };
+    expect(yaml.overrides).not.toHaveProperty('@vitest/browser-playwright');
+    expect(yaml.overrides).not.toHaveProperty('@vitest/browser-webdriverio');
+    expect(yaml.overrides['some-other-pkg']).toBe('1.0.0');
+  });
+
   it('adds a direct vitest dep when a vite config enables browser mode', () => {
     // A package whose vite config imports a browser provider but has no direct
     // vitest dep — `@vitest/browser` needs `vitest` resolvable from the package
