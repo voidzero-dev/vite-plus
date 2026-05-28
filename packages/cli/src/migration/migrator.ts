@@ -1453,6 +1453,14 @@ function rewritePnpmWorkspaceYaml(
     // overrides
     const overrides = doc.getIn(['overrides']);
     pruneYamlMapLegacyWrapperAliases(overrides);
+    // Drop overrides for packages removed by migration (e.g. @vitest/browser*)
+    // so a stale workspace pin can't force an incompatible version against
+    // vite-plus's own direct dependency.
+    if (overrides instanceof YAMLMap) {
+      for (const key of REMOVE_PACKAGES) {
+        overrides.delete(key);
+      }
+    }
     for (const key of Object.keys(VITE_PLUS_OVERRIDE_PACKAGES)) {
       const currentVersion = getYamlMapScalarStringValue(overrides, key);
       const version = getCatalogDependencySpec(
