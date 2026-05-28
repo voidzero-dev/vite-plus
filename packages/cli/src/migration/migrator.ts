@@ -108,6 +108,15 @@ const BROWSER_PROVIDER_POSTINSTALL_PACKAGES = ['edgedriver', 'geckodriver'] as c
 // Webdriverio is the runtime peer that drags `edgedriver` / `geckodriver` in.
 const WEBDRIVERIO_PEER_DEP = 'webdriverio';
 
+// Dependencies whose presence before migration signals the user will end up
+// with webdriverio after migration. `@vitest/browser-webdriverio` is removed
+// by `REMOVE_PACKAGES` and replaced with `webdriverio` via
+// `BROWSER_PROVIDER_PEER_DEPS`, so it must allow driver postinstalls too.
+const WEBDRIVERIO_ALLOW_SIGNAL_DEPS = [
+  WEBDRIVERIO_PEER_DEP,
+  '@vitest/browser-webdriverio',
+] as const;
+
 // Browser-provider package names that, when present in the user's deps
 // before migration, signal vitest browser mode even if no source file
 // imports them. This covers config-only browser-mode setups (e.g.
@@ -1616,11 +1625,16 @@ type DependencyBag = {
 };
 
 function hasOwnWebdriverioDependency(pkg: DependencyBag): boolean {
-  return Boolean(
-    pkg.dependencies?.[WEBDRIVERIO_PEER_DEP] ??
-    pkg.devDependencies?.[WEBDRIVERIO_PEER_DEP] ??
-    pkg.optionalDependencies?.[WEBDRIVERIO_PEER_DEP],
-  );
+  for (const name of WEBDRIVERIO_ALLOW_SIGNAL_DEPS) {
+    if (
+      pkg.dependencies?.[name] ??
+      pkg.devDependencies?.[name] ??
+      pkg.optionalDependencies?.[name]
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function workspaceUsesWebdriverio(
