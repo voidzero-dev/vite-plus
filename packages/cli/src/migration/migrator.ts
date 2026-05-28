@@ -2322,18 +2322,6 @@ export function rewritePackageJson(
   const isVitestAdjacent =
     !installableNames.includes('vitest') &&
     adjacentSignals.some((name) => name !== 'vitest' && name.includes('vitest'));
-  if (isVitestAdjacent) {
-    needVitePlus = true;
-  }
-  // A package running vitest browser mode must have `vitest` directly
-  // resolvable from its own directory — `@vitest/browser` injects
-  // `optimizeDeps.include` entries (`vitest > expect-type`, etc.) that Vite
-  // resolves from the config root. A `vitest` pulled in only transitively via
-  // `vite-plus` is invisible in a pnpm strict layout, so the optimizer fails
-  // and the browser test page hangs. See `usesVitestBrowserMode`.
-  if (effectiveBrowserMode && !installableNames.includes('vitest')) {
-    needVitePlus = true;
-  }
   // Normalize a pre-existing pinned vite-plus so sub-packages don't drift
   // from siblings: in catalog-supporting monorepos that's `catalog:`, under
   // force-override (file:) it's the tgz path. Preserve protocol-prefixed
@@ -2348,6 +2336,13 @@ export function rewritePackageJson(
     supportCatalog &&
     existingVitePlus !== canonicalVitePlusSpec &&
     !isProtocolPinnedSpec(existingVitePlus);
+  // vitest-adjacent / browser-mode signals only trigger a vite-plus install
+  // when the project doesn't already have vite-plus — otherwise the user has
+  // a working setup and this is just a normalize pass, which must not mutate
+  // beyond the vite-plus spec.
+  if (!existingVitePlus && (isVitestAdjacent || effectiveBrowserMode)) {
+    needVitePlus = true;
+  }
   if (needVitePlus || shouldNormalizeExistingVitePlus) {
     pkg.devDependencies = {
       ...pkg.devDependencies,
