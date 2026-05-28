@@ -329,7 +329,7 @@ export default defineConfig({
 });
 ```
 
-> **Note**: If `tsconfig.json` contains `compilerOptions.baseUrl`, `typeAware` and `typeCheck` are not injected because oxlint's TypeScript checker does not yet support `baseUrl`. Run `npx @andrewbranch/ts5to6 --fixBaseUrl .` to migrate away from `baseUrl`.
+> **Note**: If `tsconfig.json` contains `compilerOptions.baseUrl`, Vite+ runs `vp dlx @andrewbranch/ts5to6 --fixBaseUrl .` before enabling `typeAware` and `typeCheck`. If that fix fails or is declined, Vite+ skips those options because oxlint's TypeScript checker does not yet support `baseUrl`.
 
 ### Oxfmt Configuration
 

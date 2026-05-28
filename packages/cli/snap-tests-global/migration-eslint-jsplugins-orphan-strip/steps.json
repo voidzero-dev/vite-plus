@@ -1,0 +1,6 @@
+{
+  "commands": [
+    "vp migrate --no-interactive # orphan jsPlugin / unknown plugin / dangling rule should be stripped, with warnings",
+    "cat vite.config.ts # lint block should NOT contain `fictional` in plugins / jsPlugins / rules"
+  ]
+}

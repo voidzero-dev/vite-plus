@@ -24,9 +24,11 @@ import {
 } from '../migration/migrator.ts';
 import { DependencyType, PackageManager, type WorkspaceInfo } from '../types/index.ts';
 import {
+  COPILOT_AGENT_ID,
   detectExistingAgentTargetPaths,
-  selectAgentTargetPaths,
+  selectAgentTargets,
   writeAgentInstructions,
+  writeCopilotSetupWorkflow,
 } from '../utils/agent.ts';
 import { detectExistingEditors, selectEditors, writeEditorConfigs } from '../utils/editor.ts';
 import { createInitialCommit, initGitRepository } from '../utils/git.ts';
@@ -71,7 +73,12 @@ import {
   executeRemoteTemplate,
 } from './templates/index.ts';
 import { BuiltinTemplate, TemplateType } from './templates/types.ts';
-import { deriveDefaultPackageName, ensureGitignoreNodeModules, formatTargetDir } from './utils.ts';
+import {
+  deriveDefaultPackageName,
+  ensureGitignoreNodeModules,
+  ensureGitignoreVsCodeEditorConfigs,
+  formatTargetDir,
+} from './utils.ts';
 
 const helpMessage = renderCliDoc({
   usage: 'vp create [TEMPLATE] [OPTIONS] [-- TEMPLATE_OPTIONS]',
@@ -220,6 +227,18 @@ export interface Options {
   packageManager?: string;
 }
 
+type ParsedAgentOption = string | false | Array<string | false>;
+
+function normalizeAgentOption(agent: ParsedAgentOption | undefined): Options['agent'] {
+  if (!Array.isArray(agent)) {
+    return agent;
+  }
+  if (agent.includes(false)) {
+    return false;
+  }
+  return agent.filter((value): value is string => typeof value === 'string');
+}
+
 // Parse CLI arguments: split on '--' separator
 function parseArgs() {
   const args = process.argv.slice(3); // Skip 'node', 'vite'
@@ -237,7 +256,7 @@ function parseArgs() {
     list?: boolean;
     help?: boolean;
     verbose?: boolean;
-    agent?: string | string[] | false;
+    agent?: ParsedAgentOption;
     editor?: string;
     git?: boolean;
     hooks?: boolean;
@@ -259,7 +278,7 @@ function parseArgs() {
       list: parsed.list || false,
       help: parsed.help || false,
       verbose: parsed.verbose || false,
-      agent: parsed.agent,
+      agent: normalizeAgentOption(parsed.agent),
       editor: parsed.editor,
       git: parsed.git,
       hooks: parsed.hooks,
@@ -348,6 +367,27 @@ function getNextCommand(projectDir: string, command: string) {
     return command;
   }
   return `cd ${projectDir} && ${command}`;
+}
+
+function findGitRoot(startPath: string) {
+  let dir = startPath;
+  while (true) {
+    if (fs.existsSync(path.join(dir, '.git'))) {
+      return dir;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) {
+      return undefined;
+    }
+    dir = parent;
+  }
+}
+
+function getCopilotSetupRoot(projectRoot: string, isExistingMonorepo: boolean) {
+  if (!isExistingMonorepo) {
+    return projectRoot;
+  }
+  return findGitRoot(projectRoot) ?? projectRoot;
 }
 
 function showCreateSummary(options: {
@@ -448,6 +488,7 @@ async function main() {
   let selectedTemplateName = templateName as string;
   let selectedTemplateArgs = [...templateArgs];
   let selectedAgentTargetPaths: string[] | undefined;
+  let shouldWriteCopilotSetupWorkflow = false;
   let selectedEditors: Awaited<ReturnType<typeof selectEditors>>;
   let selectedParentDir: string | undefined;
   let remoteTargetDir: string | undefined;
@@ -732,14 +773,19 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     options.agent !== undefined || !options.interactive
       ? undefined
       : detectExistingAgentTargetPaths(workspaceInfoOptional.rootDir);
-  selectedAgentTargetPaths =
-    existingAgentTargetPaths !== undefined
-      ? existingAgentTargetPaths
-      : await selectAgentTargetPaths({
-          interactive: options.interactive,
-          agent: options.agent,
-          onCancel: () => cancelAndExit(),
-        });
+  if (existingAgentTargetPaths !== undefined) {
+    selectedAgentTargetPaths = existingAgentTargetPaths;
+  } else {
+    const agentSelection = await selectAgentTargets({
+      interactive: options.interactive,
+      agent: options.agent,
+      onCancel: () => cancelAndExit(),
+    });
+    selectedAgentTargetPaths = agentSelection.targetPaths;
+    shouldWriteCopilotSetupWorkflow = agentSelection.selectedAgents.some(
+      (agent) => agent.id === COPILOT_AGENT_ID,
+    );
+  }
 
   const existingEditors =
     options.editor || !options.interactive
@@ -895,6 +941,9 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       interactive: options.interactive,
       silent: compactOutput,
     });
+    if (shouldWriteCopilotSetupWorkflow) {
+      await writeCopilotSetupWorkflow({ projectRoot: fullPath, silent: compactOutput });
+    }
     resumeCreateProgress();
     updateCreateProgress('Writing editor configs');
     pauseCreateProgress();
@@ -905,6 +954,9 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       silent: compactOutput,
       extraVsCodeSettings: { 'npm.scriptRunner': 'vp' },
     });
+    if (selectedEditors?.includes('vscode')) {
+      ensureGitignoreVsCodeEditorConfigs(fullPath);
+    }
     resumeCreateProgress();
     workspaceInfo.rootDir = fullPath;
     updateCreateProgress('Integrating monorepo');
@@ -1017,6 +1069,12 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     interactive: options.interactive,
     silent: compactOutput,
   });
+  if (shouldWriteCopilotSetupWorkflow) {
+    await writeCopilotSetupWorkflow({
+      projectRoot: getCopilotSetupRoot(agentInstructionsRoot, isMonorepo),
+      silent: compactOutput,
+    });
+  }
   resumeCreateProgress();
   updateCreateProgress('Writing editor configs');
   pauseCreateProgress();
@@ -1027,6 +1085,9 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     silent: compactOutput,
     extraVsCodeSettings: { 'npm.scriptRunner': 'vp' },
   });
+  if (selectedEditors?.includes('vscode')) {
+    ensureGitignoreVsCodeEditorConfigs(fullPath);
+  }
   resumeCreateProgress();
 
   // The migrate-before-rewrite reorder is only needed when the template

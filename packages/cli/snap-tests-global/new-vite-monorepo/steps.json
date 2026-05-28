@@ -2,7 +2,7 @@
   "ignoredPlatforms": ["win32"],
   "commands": [
     {
-      "command": "vp create vite:monorepo --no-interactive --git # create monorepo with default values",
+      "command": "vp create vite:monorepo --no-interactive --git --editor vscode # create monorepo with default values",
       "ignoreOutput": true
     },
     "ls vite-plus-monorepo | LC_ALL=C sort # check files created",
@@ -12,8 +12,13 @@
     "test -f vite-plus-monorepo/.gitignore && echo '.gitignore exists' || echo 'ERROR: .gitignore missing' # verify gitignore renamed from _gitignore",
     "test ! -f vite-plus-monorepo/.yarnrc.yml && echo 'No .yarnrc.yml' || echo 'ERROR: .yarnrc.yml exists' # verify no yarn config for pnpm",
     "test -d vite-plus-monorepo/.git && echo 'Git initialized' # check git init",
+    "test -f vite-plus-monorepo/.vscode/settings.json && echo '.vscode/settings.json exists' # check VS Code settings created",
+    "test -f vite-plus-monorepo/.vscode/extensions.json && echo '.vscode/extensions.json exists' # check VS Code extensions created",
+    "node -e \"const { spawnSync } = require('node:child_process'); const file = '.vscode/settings.json'; const result = spawnSync('git', ['-C', 'vite-plus-monorepo', 'check-ignore', '--no-index', file], { stdio: 'ignore' }); const status = result.status; if (status === 1) { console.log(file + ' trackable'); } else { console.log(status === 0 ? 'ERROR: ' + file + ' ignored' : 'ERROR: git check-ignore failed with status ' + status); process.exit(status || 1); }\" # check VS Code settings are trackable",
+    "node -e \"const { spawnSync } = require('node:child_process'); const file = '.vscode/extensions.json'; const result = spawnSync('git', ['-C', 'vite-plus-monorepo', 'check-ignore', '--no-index', file], { stdio: 'ignore' }); const status = result.status; if (status === 1) { console.log(file + ' trackable'); } else { console.log(status === 0 ? 'ERROR: ' + file + ' ignored' : 'ERROR: git check-ignore failed with status ' + status); process.exit(status || 1); }\" # check VS Code extensions are trackable",
     "ls vite-plus-monorepo/apps # check apps directory created",
-    "ls vite-plus-monorepo/apps/website/package.json # check website package.json",
+    "cat vite-plus-monorepo/apps/website/package.json # check website strips aliased vite/vitest",
+    "cat vite-plus-monorepo/packages/utils/package.json # check utils normalizes vite-plus to catalog:",
     {
       "command": "cd vite-plus-monorepo && vp create --no-interactive vite:application # create application in non-interactive mode",
       "ignoreOutput": true

@@ -7,7 +7,7 @@ import { fmt as resolveFmt } from './resolve-fmt.ts';
 import { runCommandSilently } from './utils/command.ts';
 import { BASEURL_TSCONFIG_WARNING, VITE_PLUS_NAME } from './utils/constants.ts';
 import { warnMsg } from './utils/terminal.ts';
-import { hasBaseUrlInTsconfig } from './utils/tsconfig.ts';
+import { fixBaseUrlInTsconfig, hasBaseUrlInTsconfig } from './utils/tsconfig.ts';
 
 interface InitCommandSpec {
   configKey: 'lint' | 'fmt';
@@ -227,7 +227,8 @@ export async function applyToolInitConfigToViteConfig(
 
   if (spec.configKey === 'lint' && hasTriggerFlag(args, ['--init'])) {
     const lintInitConfigPath = path.join(projectPath, '.vite-plus-lint-init.oxlintrc.json');
-    // Skip typeAware/typeCheck when tsconfig.json has baseUrl (unsupported by tsgolint)
+    await fixBaseUrlInTsconfig(projectPath);
+    // Skip typeAware/typeCheck when tsconfig still has baseUrl (unsupported by tsgolint)
     const hasBaseUrl = hasBaseUrlInTsconfig(projectPath);
     const initConfig = createDefaultVitePlusLintConfig({
       includeTypeAwareDefaults: !hasBaseUrl,

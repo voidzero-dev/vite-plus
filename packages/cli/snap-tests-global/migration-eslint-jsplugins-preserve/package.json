@@ -1,0 +1,11 @@
+{
+  "name": "migration-eslint-jsplugins-preserve",
+  "scripts": {
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "eslint": "^9.0.0",
+    "eslint-plugin-survives": "^1.0.0",
+    "vite": "^7.0.0"
+  }
+}

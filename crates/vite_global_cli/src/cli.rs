@@ -723,7 +723,7 @@ async fn managed_update(
                 continue;
             }
 
-            let (package_name, _) = global::parse_package_spec(package);
+            let (package_name, _) = global::parse_package_spec(package)?;
             if let Some(metadata) = PackageMetadata::load(&package_name).await? {
                 if !is_same_node_version(&metadata.platform.node, &current_node_version) {
                     node_mismatches.push(NodeMismatchPackage {

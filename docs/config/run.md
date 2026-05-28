@@ -61,15 +61,35 @@ export default defineConfig({
 
 ## `run.tasks`
 
-- **Type:** `Record<string, TaskConfig>`
+- **Type:** `Record<string, Task | string | string[]>`
 
 Defines tasks that can be run with `vp run <task>`.
 
+As a shorthand, a task value can be a command string or an array of command strings directly:
+
+```ts [vite.config.ts]
+tasks: {
+  build: 'vp build',
+  check: ['vp lint', 'vp build'],
+}
+```
+
+These are equivalent to setting only `command` on a task config:
+
+```ts [vite.config.ts]
+tasks: {
+  build: { command: 'vp build' },
+  check: { command: ['vp lint', 'vp build'] },
+}
+```
+
+Use the object form when a task needs other fields like `cache`, `dependsOn`, `env`, or `input`.
+
 ### `command`
 
-- **Type:** `string`
+- **Type:** `string | string[]`
 
-Defines the shell command to run for the task.
+Defines the shell command to run for the task. The string is interpreted by a shell, so spaces, quoting, `&&`, pipes, and redirects all work as written on the command line.
 
 ```ts [vite.config.ts]
 tasks: {
@@ -79,9 +99,24 @@ tasks: {
 }
 ```
 
+An array runs each entry as its own command, sequentially, equivalent to joining them with `&&`. It is **not** a way to split one command into argv tokens — `['vp', 'build']` would try to run a command called `vp` with no arguments, then a command called `build`, instead of `vp build`.
+
+```ts [vite.config.ts]
+tasks: {
+  check: {
+    // Two commands, run in order
+    command: ['vp lint', 'vp build'],
+  },
+  bad: {
+    // Wrong: this is NOT `vp build`; it is `vp` followed by `build`
+    command: ['vp', 'build'],
+  },
+}
+```
+
 Each task defined in `vite.config.ts` must include its own `command`. You cannot define a task in both `vite.config.ts` and `package.json` with the same task name.
 
-Commands joined with `&&` are automatically split into independently cached sub-tasks. See [Compound Commands](/guide/run#compound-commands).
+Commands joined with `&&` (or supplied as an array) are automatically split into independently cached sub-tasks. See [Compound Commands](/guide/run#compound-commands).
 
 ### `dependsOn`
 

@@ -1,4 +1,4 @@
-> vp create vite:monorepo --no-interactive --git # create monorepo with default values
+> vp create vite:monorepo --no-interactive --git --editor vscode # create monorepo with default values
 > ls vite-plus-monorepo | LC_ALL=C sort # check files created
 AGENTS.md
 README.md
@@ -81,11 +81,79 @@ No .yarnrc.yml
 > test -d vite-plus-monorepo/.git && echo 'Git initialized' # check git init
 Git initialized
 
+> test -f vite-plus-monorepo/.vscode/settings.json && echo '.vscode/settings.json exists' # check VS Code settings created
+.vscode/settings.json exists
+
+> test -f vite-plus-monorepo/.vscode/extensions.json && echo '.vscode/extensions.json exists' # check VS Code extensions created
+.vscode/extensions.json exists
+
+> node -e "const { spawnSync } = require('node:child_process'); const file = '.vscode/settings.json'; const result = spawnSync('git', ['-C', 'vite-plus-monorepo', 'check-ignore', '--no-index', file], { stdio: 'ignore' }); const status = result.status; if (status === 1) { console.log(file + ' trackable'); } else { console.log(status === 0 ? 'ERROR: ' + file + ' ignored' : 'ERROR: git check-ignore failed with status ' + status); process.exit(status || 1); }" # check VS Code settings are trackable
+.vscode/settings.json trackable
+
+> node -e "const { spawnSync } = require('node:child_process'); const file = '.vscode/extensions.json'; const result = spawnSync('git', ['-C', 'vite-plus-monorepo', 'check-ignore', '--no-index', file], { stdio: 'ignore' }); const status = result.status; if (status === 1) { console.log(file + ' trackable'); } else { console.log(status === 0 ? 'ERROR: ' + file + ' ignored' : 'ERROR: git check-ignore failed with status ' + status); process.exit(status || 1); }" # check VS Code extensions are trackable
+.vscode/extensions.json trackable
+
 > ls vite-plus-monorepo/apps # check apps directory created
 website
 
-> ls vite-plus-monorepo/apps/website/package.json # check website package.json
-vite-plus-monorepo/apps/website/package.json
+> cat vite-plus-monorepo/apps/website/package.json # check website strips aliased vite/vitest
+{
+  "name": "website",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vp dev",
+    "build": "tsc && vp build",
+    "preview": "vp preview"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.2",
+    "vite-plus": "catalog:"
+  }
+}
+
+> cat vite-plus-monorepo/packages/utils/package.json # check utils normalizes vite-plus to catalog:
+{
+  "name": "utils",
+  "version": "0.0.0",
+  "description": "A starter for creating a TypeScript package.",
+  "homepage": "https://github.com/author/library#readme",
+  "bugs": {
+    "url": "https://github.com/author/library/issues"
+  },
+  "license": "MIT",
+  "author": "Author Name <author.name@mail.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/author/library.git"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "vp pack",
+    "dev": "vp pack --watch",
+    "test": "vp test",
+    "check": "vp check",
+    "prepublishOnly": "vp run build"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.2",
+    "@typescript/native-preview": "7.0.0-dev.20260509.2",
+    "bumpp": "^11.1.0",
+    "typescript": "^6.0.3",
+    "vite-plus": "catalog:"
+  }
+}
 
 > cd vite-plus-monorepo && vp create --no-interactive vite:application # create application in non-interactive mode
 > ls vite-plus-monorepo/apps # check apps directory created

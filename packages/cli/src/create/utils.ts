@@ -151,6 +151,52 @@ export function ensureGitignoreNodeModules(projectDir: string): void {
   fs.appendFileSync(gitignorePath, `${prefix}node_modules\n`);
 }
 
+const VSCODE_SETTINGS_PATH = '.vscode/settings.json';
+const VSCODE_EXTENSIONS_PATH = '.vscode/extensions.json';
+const VSCODE_CONFIG_UNIGNORE_BLOCK = [
+  '!.vscode/',
+  `!${VSCODE_SETTINGS_PATH}`,
+  `!${VSCODE_EXTENSIONS_PATH}`,
+] as const;
+
+/**
+ * Make generated VS Code workspace config trackable when `vp create` writes VS Code config.
+ */
+export function ensureGitignoreVsCodeEditorConfigs(projectDir: string): void {
+  if (!fs.existsSync(path.join(projectDir, VSCODE_SETTINGS_PATH))) {
+    return;
+  }
+
+  const gitignorePath = path.join(projectDir, '.gitignore');
+  let content: string;
+  try {
+    content = fs.readFileSync(gitignorePath, 'utf-8');
+  } catch {
+    return;
+  }
+
+  appendGitignoreVsCodeEditorConfigsBlock(gitignorePath, content);
+}
+
+function appendGitignoreVsCodeEditorConfigsBlock(gitignorePath: string, content: string): void {
+  if (content.trimEnd().endsWith(VSCODE_CONFIG_UNIGNORE_BLOCK.join('\n'))) {
+    return;
+  }
+  appendGitignoreLines(gitignorePath, content, VSCODE_CONFIG_UNIGNORE_BLOCK);
+}
+
+function appendGitignoreLines(
+  gitignorePath: string,
+  content: string,
+  lines: readonly string[],
+): void {
+  if (lines.length === 0) {
+    return;
+  }
+  const prefix = content === '' || content.endsWith('\n') ? '' : '\n';
+  fs.appendFileSync(gitignorePath, `${prefix}${lines.join('\n')}\n`);
+}
+
 export function formatDisplayTargetDir(targetDir: string) {
   const normalized = targetDir.split(path.sep).join('/');
   if (normalized === '' || normalized === '.') {

@@ -59,9 +59,9 @@ impl HttpClient {
     }
 
     async fn get(&self, url: &str) -> Result<Response, Error> {
-        vite_shared::ensure_tls_provider();
+        let client = vite_shared::shared_http_client();
 
-        let response = (|| async { reqwest::get(url).await?.error_for_status() })
+        let response = (|| async { client.get(url).send().await?.error_for_status() })
             .retry(
                 ExponentialBuilder::default()
                     .with_jitter()

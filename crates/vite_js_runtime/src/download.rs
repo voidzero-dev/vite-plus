@@ -37,11 +37,11 @@ pub async fn download_file(
     target_path: &AbsolutePath,
     message: &str,
 ) -> Result<(), Error> {
-    vite_shared::ensure_tls_provider();
+    let client = vite_shared::shared_http_client();
 
     tracing::debug!("Downloading {url} to {target_path:?}");
 
-    let response = (|| async { reqwest::get(url).await?.error_for_status() })
+    let response = (|| async { client.get(url).send().await?.error_for_status() })
         .retry(
             ExponentialBuilder::default()
                 .with_jitter()
@@ -49,7 +49,10 @@ pub async fn download_file(
                 .with_max_times(3),
         )
         .await
-        .map_err(|e| Error::DownloadFailed { url: url.into(), reason: vite_str::format!("{e}") })?;
+        .map_err(|e| Error::DownloadFailed {
+            url: url.into(),
+            reason: vite_shared::format_error_chain(&e).into(),
+        })?;
 
     // Get Content-Length for progress bar
     let total_size = response.content_length();
@@ -113,11 +116,11 @@ pub async fn download_file(
 /// Download text content from a URL with retry logic
 #[expect(clippy::disallowed_types, reason = "HTTP response body is a String")]
 pub async fn download_text(url: &str) -> Result<String, Error> {
-    vite_shared::ensure_tls_provider();
+    let client = vite_shared::shared_http_client();
 
     tracing::debug!("Downloading text from {url}");
 
-    let content = (|| async { reqwest::get(url).await?.text().await })
+    let content = (|| async { client.get(url).send().await?.error_for_status()?.text().await })
         .retry(
             ExponentialBuilder::default()
                 .with_jitter()
@@ -125,7 +128,10 @@ pub async fn download_text(url: &str) -> Result<String, Error> {
                 .with_max_times(3),
         )
         .await
-        .map_err(|e| Error::DownloadFailed { url: url.into(), reason: vite_str::format!("{e}") })?;
+        .map_err(|e| Error::DownloadFailed {
+            url: url.into(),
+            reason: vite_shared::format_error_chain(&e).into(),
+        })?;
 
     Ok(content)
 }
@@ -138,12 +144,11 @@ pub async fn fetch_with_cache_headers(
     url: &str,
     if_none_match: Option<&str>,
 ) -> Result<CachedFetchResponse, Error> {
-    vite_shared::ensure_tls_provider();
+    let client = vite_shared::shared_http_client();
 
     tracing::debug!("Fetching with cache headers from {url}");
 
     let response = (|| async {
-        let client = reqwest::Client::new();
         let mut request = client.get(url);
 
         if let Some(etag) = if_none_match {
@@ -159,7 +164,10 @@ pub async fn fetch_with_cache_headers(
             .with_max_times(3),
     )
     .await
-    .map_err(|e| Error::DownloadFailed { url: url.into(), reason: vite_str::format!("{e}") })?;
+    .map_err(|e| Error::DownloadFailed {
+        url: url.into(),
+        reason: vite_shared::format_error_chain(&e).into(),
+    })?;
 
     // Check for 304 Not Modified
     if response.status() == reqwest::StatusCode::NOT_MODIFIED {
@@ -182,10 +190,10 @@ pub async fn fetch_with_cache_headers(
         .and_then(|v| v.to_str().ok())
         .and_then(parse_max_age);
 
-    let body = response
-        .text()
-        .await
-        .map_err(|e| Error::DownloadFailed { url: url.into(), reason: vite_str::format!("{e}") })?;
+    let body = response.text().await.map_err(|e| Error::DownloadFailed {
+        url: url.into(),
+        reason: vite_shared::format_error_chain(&e).into(),
+    })?;
 
     Ok(CachedFetchResponse { body: Some(body), etag, max_age, not_modified: false })
 }
