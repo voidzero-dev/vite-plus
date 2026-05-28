@@ -723,7 +723,8 @@ async fn managed_update(
                 continue;
             }
 
-            let (package_name, _) = global::parse_package_spec(package)?;
+            // It is not a local package, so `parse_package_spec` there won't return `Err()`
+            let (package_name, _) = global::parse_package_spec(package).unwrap();
             if let Some(metadata) = PackageMetadata::load(&package_name).await? {
                 if !is_same_node_version(&metadata.platform.node, &current_node_version) {
                     node_mismatches.push(NodeMismatchPackage {
