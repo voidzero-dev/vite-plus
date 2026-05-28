@@ -50,6 +50,11 @@ Options:
             --filter <pattern>^...    Select only the dependencies (exclude the package itself)
             --filter !<pattern>       Exclude packages matching the pattern
 
+      --fail-if-no-match
+          Exit with a non-zero status if a `--filter` expression matches no packages.
+          
+          Without this flag, an unmatched filter (a typo, an empty glob, or a traversal like `{.}^...` that collapses to zero on a leaf package) only produces a warning and the command exits successfully.
+
   -c, --shell-mode
           Execute the command within a shell environment
 

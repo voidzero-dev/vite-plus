@@ -27,6 +27,8 @@ const {
   hasFrameworkShim,
   addFrameworkShim,
   injectCreateDefaultTemplate,
+  rewriteEslintPackageJson,
+  detectIncompatibleEslintIntegration,
 } = await import('../migrator.js');
 
 describe('rewritePackageJson', () => {
@@ -155,6 +157,66 @@ describe('rewritePackageJson', () => {
     expect(pkg.devDependencies.vitest).toBe('catalog:');
     expect(pkg.dependencies.vitest).toBe('catalog:test');
     expect((pkg.devDependencies as Record<string, string>)['vite-plus']).toBe('catalog:');
+  });
+
+  it('normalizes a pre-existing pinned vite-plus to `catalog:` in catalog-supporting monorepos', async () => {
+    const pkg = {
+      devDependencies: {
+        'vite-plus': '^0.1.20',
+      },
+    };
+
+    rewritePackageJson(pkg, PackageManager.pnpm, true);
+
+    expect(pkg.devDependencies['vite-plus']).toBe('catalog:');
+  });
+
+  it('leaves a pre-existing pinned vite-plus alone on npm monorepo projects', async () => {
+    const pkg = {
+      devDependencies: {
+        'vite-plus': '^0.1.20',
+      },
+    };
+
+    rewritePackageJson(pkg, PackageManager.npm, true);
+
+    expect(pkg.devDependencies['vite-plus']).toBe('^0.1.20');
+  });
+
+  it('normalizes a pre-existing pinned vite-plus on yarn/bun monorepo projects', async () => {
+    for (const pm of [PackageManager.yarn, PackageManager.bun]) {
+      const pkg = { devDependencies: { 'vite-plus': '^0.1.20' } };
+      rewritePackageJson(pkg, pm, true);
+      expect(pkg.devDependencies['vite-plus']).toBe('catalog:');
+    }
+  });
+
+  it('preserves protocol-prefixed vite-plus specs (catalog:named, workspace:, link:, github:) in catalog-supporting monorepos', async () => {
+    for (const existing of [
+      'catalog:next',
+      'workspace:*',
+      'link:../vite-plus',
+      'github:fork/vite-plus',
+      'npm:@scope/vite-plus@^1.0.0',
+    ]) {
+      const pkg = { devDependencies: { 'vite-plus': existing } };
+      rewritePackageJson(pkg, PackageManager.pnpm, true);
+      expect(pkg.devDependencies['vite-plus']).toBe(existing);
+    }
+  });
+
+  it('does not auto-add vitest on a pure normalize pass (only on actual vite/vitest/REMOVE migrations)', async () => {
+    const pkg = {
+      devDependencies: {
+        'vite-plus': '^0.1.20',
+        'vitest-browser-svelte': '^1.0.0',
+      },
+    };
+
+    rewritePackageJson(pkg, PackageManager.pnpm, true);
+
+    expect(pkg.devDependencies['vite-plus']).toBe('catalog:');
+    expect((pkg.devDependencies as Record<string, string>).vitest).toBeUndefined();
   });
 
   it('uses default catalog specs for non-catalog dependency specs in monorepo projects', async () => {
@@ -327,6 +389,351 @@ describe('rewritePackageJson', () => {
   });
 });
 
+describe('rewriteEslintPackageJson', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-eslint-cleanup-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  function writePkg(pkg: object): string {
+    const pkgPath = path.join(tmpDir, 'package.json');
+    fs.writeFileSync(pkgPath, JSON.stringify(pkg));
+    return pkgPath;
+  }
+
+  it('removes eslint, eslint-plugin-*, eslint-config-*, typescript-eslint, @typescript-eslint/*', () => {
+    const pkgPath = writePkg({
+      devDependencies: {
+        eslint: '^9.0.0',
+        'eslint-plugin-vue': '^10.0.0',
+        'eslint-plugin-react': '^7.0.0',
+        'eslint-config-airbnb': '^19.0.0',
+        'typescript-eslint': '^8.0.0',
+        '@typescript-eslint/parser': '^8.0.0',
+        '@typescript-eslint/eslint-plugin': '^8.0.0',
+        vite: '^7.0.0',
+      },
+      dependencies: {
+        'eslint-plugin-import': '^2.0.0',
+        vue: '^3.5.0',
+      },
+    });
+    rewriteEslintPackageJson(pkgPath);
+    const pkg = readJson(pkgPath);
+    expect(pkg.devDependencies).toEqual({ vite: '^7.0.0' });
+    expect(pkg.dependencies).toEqual({ vue: '^3.5.0' });
+  });
+
+  it('removes scoped ESLint plugin/config packages (e.g. @vue/eslint-config-typescript)', () => {
+    const pkgPath = writePkg({
+      devDependencies: {
+        '@vue/eslint-config-typescript': '^13.0.0',
+        '@nuxt/eslint-config': '^0.5.0',
+        '@stylistic/eslint-plugin': '^2.0.0',
+        '@stylistic/eslint-plugin-ts': '^2.0.0',
+        '@vitest/eslint-plugin': '^1.0.0',
+        keepme: '^1.0.0',
+      },
+    });
+    rewriteEslintPackageJson(pkgPath);
+    const pkg = readJson(pkgPath);
+    expect(pkg.devDependencies).toEqual({ keepme: '^1.0.0' });
+  });
+
+  it('removes @eslint/*, @eslint-community/*, and @angular-eslint/* scope packages', () => {
+    const pkgPath = writePkg({
+      devDependencies: {
+        eslint: '^9.0.0',
+        '@eslint/js': '^9.0.0',
+        '@eslint/eslintrc': '^3.0.0',
+        '@eslint/compat': '^1.0.0',
+        '@eslint-community/eslint-utils': '^4.0.0',
+        '@eslint-community/regexpp': '^4.0.0',
+        '@angular-eslint/template-parser': '^18.0.0',
+        '@angular-eslint/builder': '^18.0.0',
+        keepme: '^1.0.0',
+      },
+    });
+    rewriteEslintPackageJson(pkgPath);
+    const pkg = readJson(pkgPath);
+    expect(pkg.devDependencies).toEqual({ keepme: '^1.0.0' });
+  });
+
+  it('removes ESLint formatter and helper packages', () => {
+    const pkgPath = writePkg({
+      devDependencies: {
+        eslint: '^9.0.0',
+        'eslint-formatter-pretty': '^6.0.0',
+        'eslint-formatter-gitlab': '^5.0.0',
+        eslintrc: '^2.0.0',
+        'eslint-utils': '^3.0.0',
+        'eslint-visitor-keys': '^4.0.0',
+        'eslint-scope': '^8.0.0',
+        'eslint-define-config': '^2.0.0',
+        'eslint-doc-generator': '^2.0.0',
+        keepme: '^1.0.0',
+      },
+    });
+    rewriteEslintPackageJson(pkgPath);
+    const pkg = readJson(pkgPath);
+    expect(pkg.devDependencies).toEqual({ keepme: '^1.0.0' });
+  });
+
+  it('does NOT remove framework-ESLint integrations (e.g. @nuxt/eslint) — those short-circuit migration upstream', () => {
+    // The skip path in `bin.ts` prevents `rewriteEslintPackageJson` from
+    // being called when `@nuxt/eslint` is present, so this function
+    // doesn't need to (and shouldn't) know about it.
+    const pkgPath = writePkg({
+      devDependencies: {
+        eslint: '^9.0.0',
+        '@nuxt/eslint': '^1.0.0',
+      },
+    });
+    rewriteEslintPackageJson(pkgPath);
+    const pkg = readJson(pkgPath);
+    expect(pkg.devDependencies).toEqual({ '@nuxt/eslint': '^1.0.0' });
+  });
+
+  it('preserves reusable @typescript-eslint/* AST libraries (utils, typescript-estree, etc.)', () => {
+    const pkgPath = writePkg({
+      devDependencies: {
+        eslint: '^9.0.0',
+        '@typescript-eslint/parser': '^8.0.0',
+        '@typescript-eslint/eslint-plugin': '^8.0.0',
+        '@typescript-eslint/rule-tester': '^8.0.0',
+        '@typescript-eslint/utils': '^8.0.0',
+        '@typescript-eslint/typescript-estree': '^8.0.0',
+        '@typescript-eslint/scope-manager': '^8.0.0',
+        '@typescript-eslint/types': '^8.0.0',
+        vite: '^7.0.0',
+      },
+    });
+    rewriteEslintPackageJson(pkgPath);
+    const pkg = readJson(pkgPath);
+    expect(pkg.devDependencies).toEqual({
+      '@typescript-eslint/utils': '^8.0.0',
+      '@typescript-eslint/typescript-estree': '^8.0.0',
+      '@typescript-eslint/scope-manager': '^8.0.0',
+      '@typescript-eslint/types': '^8.0.0',
+      vite: '^7.0.0',
+    });
+  });
+
+  it('removes @types/<X> packages symmetrically with their runtime counterparts', () => {
+    const pkgPath = writePkg({
+      devDependencies: {
+        eslint: '^9.0.0',
+        '@types/eslint': '^9.0.0',
+        '@types/eslint-plugin-foo': '^1.0.0',
+        '@types/eslint-config-bar': '^1.0.0',
+        // Type-only counterpart of an ESLint plugin should also go.
+        '@types/eslint-scope': '^3.0.0',
+        // Unrelated @types should stay.
+        '@types/node': '^22.0.0',
+      },
+    });
+    rewriteEslintPackageJson(pkgPath);
+    const pkg = readJson(pkgPath);
+    expect(pkg.devDependencies).toEqual({ '@types/node': '^22.0.0' });
+  });
+
+  it('scrubs peerDependencies and optionalDependencies', () => {
+    const pkgPath = writePkg({
+      peerDependencies: {
+        eslint: '>=9',
+        'eslint-plugin-vue': '^10.0.0',
+      },
+      optionalDependencies: {
+        '@typescript-eslint/parser': '^8.0.0',
+      },
+      devDependencies: { vite: '^7.0.0' },
+    });
+    rewriteEslintPackageJson(pkgPath);
+    const pkg = readJson(pkgPath);
+    expect(pkg.peerDependencies).toBeUndefined();
+    expect(pkg.optionalDependencies).toBeUndefined();
+    expect(pkg.devDependencies).toEqual({ vite: '^7.0.0' });
+  });
+
+  it('deletes the dependency field entirely when our cleanup emptied it', () => {
+    const pkgPath = writePkg({
+      devDependencies: {
+        eslint: '^9.0.0',
+        'eslint-plugin-import': '^2.0.0',
+      },
+      dependencies: { 'eslint-config-airbnb': '^19.0.0' },
+    });
+    rewriteEslintPackageJson(pkgPath);
+    const pkg = readJson(pkgPath);
+    expect(pkg.devDependencies).toBeUndefined();
+    expect(pkg.dependencies).toBeUndefined();
+  });
+
+  it('preserves unrelated dependencies (e.g. @vitejs/plugin-vue, vue, vite, @nuxt/kit)', () => {
+    const pkgPath = writePkg({
+      devDependencies: {
+        eslint: '^9.0.0',
+        '@vitejs/plugin-vue': '^6.0.0',
+        '@vue/runtime-core': '^3.5.0',
+        '@nuxt/kit': '^3.13.0',
+        vite: '^7.0.0',
+      },
+    });
+    rewriteEslintPackageJson(pkgPath);
+    const pkg = readJson(pkgPath);
+    expect(pkg.devDependencies).toEqual({
+      '@vitejs/plugin-vue': '^6.0.0',
+      '@vue/runtime-core': '^3.5.0',
+      '@nuxt/kit': '^3.13.0',
+      vite: '^7.0.0',
+    });
+  });
+
+  it('no-ops when package.json has no eslint-ecosystem deps', () => {
+    const pkgPath = writePkg({
+      devDependencies: { vite: '^7.0.0' },
+    });
+    const before = fs.readFileSync(pkgPath, 'utf8');
+    rewriteEslintPackageJson(pkgPath);
+    const after = fs.readFileSync(pkgPath, 'utf8');
+    expect(after).toBe(before);
+  });
+
+  it('preserves packages referenced in lint.jsPlugins (so the generated config still loads)', () => {
+    // When @oxlint/migrate translates a real ESLint plugin into a
+    // lint.jsPlugins reference, Oxlint will `import()` the package at
+    // lint time. If we strip it from package.json the lint config we
+    // just generated is invalidated. The preserveJsPlugins set guards
+    // against that.
+    const pkgPath = writePkg({
+      devDependencies: {
+        eslint: '^9.0.0',
+        'eslint-plugin-vue': '^10.0.0',
+        'eslint-plugin-import-x': '^4.0.0',
+        'eslint-plugin-react': '^7.37.0',
+        '@stylistic/eslint-plugin': '^2.0.0',
+        '@typescript-eslint/parser': '^8.0.0',
+        vite: '^7.0.0',
+      },
+    });
+    rewriteEslintPackageJson(
+      pkgPath,
+      new Set(['eslint-plugin-vue', 'eslint-plugin-import-x', '@stylistic/eslint-plugin']),
+    );
+    const pkg = readJson(pkgPath);
+    expect(pkg.devDependencies).toEqual({
+      // Preserved (in jsPlugins set, so Oxlint will load them):
+      'eslint-plugin-vue': '^10.0.0',
+      'eslint-plugin-import-x': '^4.0.0',
+      '@stylistic/eslint-plugin': '^2.0.0',
+      // Removed (no jsPlugins reference, normal cleanup):
+      // 'eslint': stripped
+      // 'eslint-plugin-react': stripped
+      // '@typescript-eslint/parser': stripped
+      vite: '^7.0.0',
+    });
+  });
+
+  it('preserveJsPlugins overrides every cleanup pattern (named, prefix, scope, regex)', () => {
+    // Stress-test each branch of isEslintEcosystemDep against the
+    // preserve set so a future contributor adding a new cleanup branch
+    // can't accidentally bypass the carve-out.
+    const pkgPath = writePkg({
+      devDependencies: {
+        eslint: '^9.0.0', // named match in ESLINT_ECOSYSTEM_NAMES
+        'eslint-plugin-foo': '^1.0.0', // prefix match
+        '@eslint/js': '^9.0.0', // scope match
+        '@scope/eslint-plugin-bar': '^1.0.0', // scoped regex match
+        keepme: '^1.0.0',
+      },
+    });
+    rewriteEslintPackageJson(
+      pkgPath,
+      new Set(['eslint', 'eslint-plugin-foo', '@eslint/js', '@scope/eslint-plugin-bar']),
+    );
+    const pkg = readJson(pkgPath);
+    expect(pkg.devDependencies).toEqual({
+      eslint: '^9.0.0',
+      'eslint-plugin-foo': '^1.0.0',
+      '@eslint/js': '^9.0.0',
+      '@scope/eslint-plugin-bar': '^1.0.0',
+      keepme: '^1.0.0',
+    });
+  });
+
+  it('does not invent preserveJsPlugins entries — only what the caller asked for', () => {
+    // Sanity: an empty preserve set behaves identically to the default
+    // (no carve-out), so the new parameter can't accidentally weaken
+    // the cleanup for existing callers.
+    const pkgPath = writePkg({
+      devDependencies: {
+        eslint: '^9.0.0',
+        'eslint-plugin-foo': '^1.0.0',
+        vite: '^7.0.0',
+      },
+    });
+    rewriteEslintPackageJson(pkgPath, new Set());
+    const pkg = readJson(pkgPath);
+    expect(pkg.devDependencies).toEqual({ vite: '^7.0.0' });
+  });
+});
+
+function writePkgAt(dir: string, pkg: object): void {
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify(pkg));
+}
+
+describe('detectIncompatibleEslintIntegration', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-incompat-eslint-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('returns "@nuxt/eslint" when listed in devDependencies', () => {
+    writePkgAt(tmpDir, { devDependencies: { '@nuxt/eslint': '^1.0.0' } });
+    expect(detectIncompatibleEslintIntegration(tmpDir)).toBe('@nuxt/eslint');
+  });
+
+  it('returns "@nuxt/eslint" when listed in dependencies', () => {
+    writePkgAt(tmpDir, { dependencies: { '@nuxt/eslint': '^1.0.0' } });
+    expect(detectIncompatibleEslintIntegration(tmpDir)).toBe('@nuxt/eslint');
+  });
+
+  it('detects when @nuxt/eslint lives in a workspace package, not the root', () => {
+    writePkgAt(tmpDir, { name: 'root' });
+    writePkgAt(path.join(tmpDir, 'packages/app'), {
+      name: 'app',
+      devDependencies: { '@nuxt/eslint': '^1.0.0' },
+    });
+    expect(
+      detectIncompatibleEslintIntegration(tmpDir, [
+        { name: 'app', path: 'packages/app', isTemplatePackage: false },
+      ]),
+    ).toBe('@nuxt/eslint');
+  });
+
+  it('returns undefined when @nuxt/eslint is absent', () => {
+    writePkgAt(tmpDir, {
+      devDependencies: { eslint: '^9.0.0', '@nuxt/kit': '^3.0.0' },
+    });
+    expect(detectIncompatibleEslintIntegration(tmpDir)).toBeUndefined();
+  });
+
+  it('returns undefined when package.json is missing', () => {
+    expect(detectIncompatibleEslintIntegration(tmpDir)).toBeUndefined();
+  });
+});
+
 describe('parseNvmrcVersion', () => {
   it('strips v prefix', () => {
     expect(parseNvmrcVersion('v20.5.0')).toBe('20.5.0');
@@ -431,23 +838,7 @@ describe('migrateNodeVersionManagerFile', () => {
 
   it('adds volta manual step when voltaPresent is set', () => {
     fs.writeFileSync(path.join(tmpDir, '.nvmrc'), 'v20.5.0\n');
-    const report = {
-      createdViteConfigCount: 0,
-      mergedConfigCount: 0,
-      mergedStagedConfigCount: 0,
-      inlinedLintStagedConfigCount: 0,
-      removedConfigCount: 0,
-      tsdownImportCount: 0,
-      rewrittenImportFileCount: 0,
-      rewrittenImportErrors: [],
-      eslintMigrated: false,
-      prettierMigrated: false,
-      nodeVersionFileMigrated: false,
-      gitHooksConfigured: false,
-      frameworkShimAdded: false,
-      warnings: [],
-      manualSteps: [],
-    };
+    const report = createMigrationReport();
     migrateNodeVersionManagerFile(tmpDir, { file: '.nvmrc', voltaPresent: true }, report);
     expect(report.manualSteps).toContain('Remove the "volta" field from package.json');
   });
@@ -462,23 +853,7 @@ describe('migrateNodeVersionManagerFile', () => {
 
   it('returns false and warns for unsupported alias', () => {
     fs.writeFileSync(path.join(tmpDir, '.nvmrc'), 'system\n');
-    const report = {
-      createdViteConfigCount: 0,
-      mergedConfigCount: 0,
-      mergedStagedConfigCount: 0,
-      inlinedLintStagedConfigCount: 0,
-      removedConfigCount: 0,
-      tsdownImportCount: 0,
-      rewrittenImportFileCount: 0,
-      rewrittenImportErrors: [],
-      eslintMigrated: false,
-      prettierMigrated: false,
-      nodeVersionFileMigrated: false,
-      gitHooksConfigured: false,
-      frameworkShimAdded: false,
-      warnings: [],
-      manualSteps: [],
-    };
+    const report = createMigrationReport();
     const ok = migrateNodeVersionManagerFile(tmpDir, { file: '.nvmrc' }, report);
     expect(ok).toBe(false);
     expect(report.warnings.length).toBe(1);
@@ -495,23 +870,7 @@ describe('migrateNodeVersionManagerFile', () => {
   });
 
   it('sets nodeVersionFileMigrated and manualSteps in report for volta migration', () => {
-    const report = {
-      createdViteConfigCount: 0,
-      mergedConfigCount: 0,
-      mergedStagedConfigCount: 0,
-      inlinedLintStagedConfigCount: 0,
-      removedConfigCount: 0,
-      tsdownImportCount: 0,
-      rewrittenImportFileCount: 0,
-      rewrittenImportErrors: [],
-      eslintMigrated: false,
-      prettierMigrated: false,
-      nodeVersionFileMigrated: false,
-      gitHooksConfigured: false,
-      frameworkShimAdded: false,
-      warnings: [],
-      manualSteps: [],
-    };
+    const report = createMigrationReport();
     migrateNodeVersionManagerFile(
       tmpDir,
       { file: 'package.json', voltaNodeVersion: '20.5.0' },
@@ -531,23 +890,7 @@ describe('migrateNodeVersionManagerFile', () => {
   });
 
   it('returns false and warns when volta.node is a partial version', () => {
-    const report = {
-      createdViteConfigCount: 0,
-      mergedConfigCount: 0,
-      mergedStagedConfigCount: 0,
-      inlinedLintStagedConfigCount: 0,
-      removedConfigCount: 0,
-      tsdownImportCount: 0,
-      rewrittenImportFileCount: 0,
-      rewrittenImportErrors: [],
-      eslintMigrated: false,
-      prettierMigrated: false,
-      nodeVersionFileMigrated: false,
-      gitHooksConfigured: false,
-      frameworkShimAdded: false,
-      warnings: [],
-      manualSteps: [],
-    };
+    const report = createMigrationReport();
     const ok = migrateNodeVersionManagerFile(
       tmpDir,
       { file: 'package.json', voltaNodeVersion: '20' },

@@ -26,7 +26,7 @@ use crate::{
             },
             package_metadata::PackageMetadata,
         },
-        global::CORE_SHIMS,
+        global::{CORE_SHIMS, is_local_package_spec, parse_package_spec},
     },
     error::Error,
 };
@@ -105,7 +105,11 @@ pub async fn install(
     let mut packages = IndexMap::<String, Package>::new();
     for package_spec in package_specs {
         // Parse package spec (e.g., "typescript", "typescript@5.0.0", "@scope/pkg")
-        let (package_name, _version_spec) = parse_package_spec(package_spec);
+
+        let (package_name, _version_spec) = match parse_package_spec(package_spec) {
+            Ok(result) => result,
+            Err(error) => return Err((Some(package_spec.clone()), error)),
+        };
         packages.insert(package_name, Package { spec: package_spec, staging_dir: None });
     }
     let packages_count = packages.len();
@@ -401,7 +405,18 @@ async fn install_one(
 /// 1. Try to use PackageMetadata for binary list
 /// 2. Fallback to scanning BinConfig files for orphaned binaries
 pub async fn uninstall(package_name: &str, dry_run: bool) -> Result<(), Error> {
-    let (package_name, _) = parse_package_spec(package_name);
+    if is_local_package_spec(package_name) {
+        // We can't resolve local packages for uninstall, follow npm's behavior
+        return Err(Error::ConfigError(
+            format!(
+                "Local path {} can't be resolved, please enter a package name instead",
+                package_name
+            )
+            .into(),
+        ));
+    }
+
+    let (package_name, _) = parse_package_spec(package_name).unwrap();
 
     // Phase 1: Try to use PackageMetadata for binary list
     let bins = if let Some(metadata) = PackageMetadata::load(&package_name).await? {
@@ -452,138 +467,6 @@ pub async fn uninstall(package_name: &str, dry_run: bool) -> Result<(), Error> {
     output::raw(&format!("Uninstalled {}", package_name));
 
     Ok(())
-}
-
-/// Resolve the version currently published for a package spec.
-///
-/// `package_spec` may be a bare package name (`typescript`) or include a
-/// version/tag (`typescript@beta`, `@scope/pkg@1.0.0`). The command returns the
-/// version that npm resolves for that spec.
-#[expect(dead_code)]
-pub(crate) async fn latest_package_version(package_spec: &str) -> Result<String, Error> {
-    // Resolve from current directory
-    let node_version = {
-        let cwd = match current_dir() {
-            Ok(cwd) => cwd,
-            Err(error) => {
-                let error =
-                    Error::ConfigError(format!("Cannot get current directory: {}", error).into());
-                return Err(error);
-            }
-        };
-        let resolution = match resolve_version(&cwd).await {
-            Ok(resolution) => resolution,
-            Err(error) => return Err(error),
-        };
-        resolution.version
-    };
-
-    // Ensure Node.js is installed
-    let runtime = match vite_js_runtime::download_runtime(
-        vite_js_runtime::JsRuntimeType::Node,
-        &node_version,
-    )
-    .await
-    {
-        Ok(runtime) => runtime,
-        Err(error) => {
-            let error = Error::RuntimeDownload(error);
-            return Err(error);
-        }
-    };
-
-    let node_bin_dir = runtime.get_bin_prefix();
-    let npm_path =
-        if cfg!(windows) { node_bin_dir.join("npm.cmd") } else { node_bin_dir.join("npm") };
-
-    let output = Command::new(npm_path.as_path())
-        .args(["view", package_spec, "version", "--json"])
-        .env("PATH", format_path_prepended(node_bin_dir.as_path()))
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .output()
-        .await?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        return Err(Error::ConfigError(
-            format!("npm view failed for {package_spec}: {stderr}").into(),
-        ));
-    }
-
-    parse_npm_view_version(&output.stdout)
-}
-
-#[expect(dead_code)]
-fn parse_npm_view_version(stdout: &[u8]) -> Result<String, Error> {
-    let raw = String::from_utf8_lossy(stdout);
-    let trimmed = raw.trim();
-    if trimmed.is_empty() {
-        return Err(Error::ConfigError("npm view returned an empty version".into()));
-    }
-
-    match serde_json::from_str::<serde_json::Value>(trimmed) {
-        Ok(serde_json::Value::String(version)) => Ok(version),
-        Ok(serde_json::Value::Array(versions)) => versions
-            .iter()
-            .rev()
-            .find_map(|version| version.as_str())
-            .map(str::to_string)
-            .ok_or_else(|| Error::ConfigError("npm view returned an empty version list".into())),
-        _ => Ok(trimmed.to_string()),
-    }
-}
-
-/// Return true for package specs that refer to local filesystem content.
-pub(crate) fn is_local_package_spec(spec: &str) -> bool {
-    spec == "."
-        || spec == ".."
-        || spec.starts_with("./")
-        || spec.starts_with("../")
-        || spec.starts_with(".\\")
-        || spec.starts_with("..\\")
-        || spec.starts_with('/')
-        || spec.starts_with("file:")
-        || (cfg!(windows)
-            && spec.len() >= 3
-            && spec.as_bytes()[1] == b':'
-            && (spec.as_bytes()[2] == b'\\' || spec.as_bytes()[2] == b'/'))
-}
-
-/// Parse package spec into name and optional version.
-pub(crate) fn parse_package_spec(spec: &str) -> (String, Option<String>) {
-    if is_local_package_spec(spec) {
-        return (resolve_local_package_name(spec).unwrap_or_else(|| spec.to_string()), None);
-    }
-
-    // Handle scoped packages: @scope/name@version
-    if spec.starts_with('@') {
-        // Find the second @ for version
-        if let Some(idx) = spec[1..].find('@') {
-            let idx = idx + 1; // Adjust for the skipped first char
-            return (spec[..idx].to_string(), Some(spec[idx + 1..].to_string()));
-        }
-        return (spec.to_string(), None);
-    }
-
-    // Handle regular packages: name@version
-    if let Some(idx) = spec.find('@') {
-        return (spec[..idx].to_string(), Some(spec[idx + 1..].to_string()));
-    }
-
-    (spec.to_string(), None)
-}
-
-fn resolve_local_package_name(spec: &str) -> Option<String> {
-    let spec = spec.strip_prefix("file:").unwrap_or(spec);
-    let package_dir = if let Some(package_dir) = AbsolutePathBuf::new(spec.into()) {
-        package_dir
-    } else {
-        current_dir().ok()?.join(spec)
-    };
-    let package_json = std::fs::read_to_string(package_dir.join("package.json").as_path()).ok()?;
-    let json: serde_json::Value = serde_json::from_str(&package_json).ok()?;
-    json.get("name").and_then(|value| value.as_str()).map(str::to_string)
 }
 
 /// Binary info extracted from package.json.
@@ -1035,28 +918,28 @@ mod tests {
 
     #[test]
     fn test_parse_package_spec_simple() {
-        let (name, version) = parse_package_spec("typescript");
+        let (name, version) = parse_package_spec("typescript").unwrap();
         assert_eq!(name, "typescript");
         assert_eq!(version, None);
     }
 
     #[test]
     fn test_parse_package_spec_with_version() {
-        let (name, version) = parse_package_spec("typescript@5.0.0");
+        let (name, version) = parse_package_spec("typescript@5.0.0").unwrap();
         assert_eq!(name, "typescript");
         assert_eq!(version, Some("5.0.0".to_string()));
     }
 
     #[test]
     fn test_parse_package_spec_scoped() {
-        let (name, version) = parse_package_spec("@types/node");
+        let (name, version) = parse_package_spec("@types/node").unwrap();
         assert_eq!(name, "@types/node");
         assert_eq!(version, None);
     }
 
     #[test]
     fn test_parse_package_spec_scoped_with_version() {
-        let (name, version) = parse_package_spec("@types/node@20.0.0");
+        let (name, version) = parse_package_spec("@types/node@20.0.0").unwrap();
         assert_eq!(name, "@types/node");
         assert_eq!(version, Some("20.0.0".to_string()));
     }
@@ -1077,7 +960,7 @@ mod tests {
         )
         .unwrap();
 
-        let (name, version) = parse_package_spec("./fixture-pkg");
+        let (name, version) = parse_package_spec("./fixture-pkg").unwrap();
         assert_eq!(name, "resolved-local-package");
         assert_eq!(version, None);
     }

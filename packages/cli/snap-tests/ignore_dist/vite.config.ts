@@ -2,7 +2,7 @@ export default {
   run: {
     tasks: {
       lint: {
-        command: 'vp lint',
+        command: 'node -e "console.log(\'lint\')"',
       },
     },
   },

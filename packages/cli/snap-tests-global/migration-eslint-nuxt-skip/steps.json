@@ -1,0 +1,7 @@
+{
+  "commands": [
+    "vp migrate --no-interactive # @nuxt/eslint detected — ESLint migration is skipped with a warning",
+    "cat package.json # eslint, @nuxt/eslint, and eslint.config.mjs are preserved",
+    "test -f eslint.config.mjs # eslint config file is NOT deleted"
+  ]
+}

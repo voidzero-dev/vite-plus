@@ -123,6 +123,22 @@ export async function executeMonorepoTemplate(
     undefined,
     options?.silent ?? false,
   );
+  // Drop the aliased vite/vitest devDeps left by the migrator: the
+  // create-vite scripts were rewritten to `vp ...`, and the fresh
+  // template has no user `import 'vite'`, so vite-plus brings them in.
+  editJsonFile<{ devDependencies?: Record<string, string> }>(
+    path.join(appProjectPath, 'package.json'),
+    (pkg) => {
+      let changed = false;
+      for (const name of ['vite', 'vitest']) {
+        if (pkg.devDependencies?.[name]) {
+          delete pkg.devDependencies[name];
+          changed = true;
+        }
+      }
+      return changed ? pkg : undefined;
+    },
+  );
 
   // Automatically create a default library in packages/utils
   if (!options?.silent) {

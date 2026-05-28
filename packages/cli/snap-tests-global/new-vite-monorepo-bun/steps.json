@@ -11,6 +11,7 @@
     "test ! -f vite-plus-monorepo/.yarnrc.yml && echo 'No .yarnrc.yml' || echo 'ERROR: .yarnrc.yml exists' # verify no yarn config",
     "test -d vite-plus-monorepo/.git && echo 'Git initialized' # check git init",
     "ls vite-plus-monorepo/apps # check apps directory",
-    "cat vite-plus-monorepo/apps/website/package.json # check website uses catalog:"
+    "cat vite-plus-monorepo/apps/website/package.json # check website uses catalog:",
+    "cat vite-plus-monorepo/packages/utils/package.json # check utils normalizes vite-plus to catalog:"
   ]
 }

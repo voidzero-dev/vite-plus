@@ -6,6 +6,8 @@ export type AutoInput = {
  */
 auto: boolean, };
 
+export type Command = string | Array<string>;
+
 export type GlobWithBase = { 
 /**
  * The glob pattern (positive or negative starting with `!`)
@@ -20,9 +22,9 @@ export type InputBase = "package" | "workspace";
 
 export type Task = { 
 /**
- * The command to run for the task.
+ * Command to run, or an array of commands to run in order.
  */
-command: string, 
+command: Command, 
 /**
  * The working directory for the task, relative to the package root (not workspace root).
  */
@@ -68,6 +70,8 @@ output?: Array<string | GlobWithBase>, } | {
  */
 cache: false, });
 
+export type TaskDefinition = Task | Command;
+
 export type UserGlobalCacheConfig = boolean | { 
 /**
  * Enable caching for package.json scripts not defined in the `tasks` map.
@@ -98,9 +102,9 @@ export type RunConfig = {
  */
 cache?: UserGlobalCacheConfig, 
 /**
- * Task definitions
+ * Task definitions: full task objects, command strings, or command string arrays.
  */
-tasks?: { [key in string]: Task }, 
+tasks?: { [key in string]: TaskDefinition }, 
 /**
  * Whether to automatically run `preX`/`postX` package.json scripts as
  * lifecycle hooks when script `X` is executed.
