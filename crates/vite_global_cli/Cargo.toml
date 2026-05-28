@@ -17,10 +17,12 @@ clap = { workspace = true, features = ["derive"] }
 clap_complete = { workspace = true, features = ["unstable-dynamic"] }
 directories = { workspace = true }
 futures = { workspace = true }
+flate2 = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 node-semver = { workspace = true }
 thiserror = { workspace = true }
+tar = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
 owo-colors = { workspace = true }

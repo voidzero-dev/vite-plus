@@ -671,7 +671,8 @@ async fn managed_update(
                 continue;
             }
 
-            let (package_name, _) = global::parse_package_spec(package);
+            // It is not a local package, so `parse_package_spec` there won't return `Err()`
+            let (package_name, _) = global::parse_package_spec(package).unwrap();
             if PackageMetadata::load(&package_name).await?.is_some() {
                 managed_specs.push(package.clone());
             } else {
