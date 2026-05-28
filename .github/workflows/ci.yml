@@ -906,7 +906,7 @@ jobs:
             target: x86_64-unknown-linux-gnu
             sfw_asset: sfw-free-linux-x86_64
             vp_bin: vp
-          - os: macos-latest
+          - os: namespace-profile-mac-default
             target: aarch64-apple-darwin
             sfw_asset: sfw-free-macos-arm64
             vp_bin: vp
