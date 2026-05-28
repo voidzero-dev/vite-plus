@@ -441,6 +441,17 @@ mod tests {
         v.iter().map(|s| s.to_string()).collect()
     }
 
+    fn try_parse_args_from_test(args: Vec<String>) -> Result<crate::cli::Args, clap::Error> {
+        let handle = std::thread::Builder::new()
+            .stack_size(32 * 1024 * 1024)
+            .spawn(move || try_parse_args_from(args))
+            .expect("Expected parser test thread to spawn");
+        match handle.join() {
+            Ok(result) => result,
+            Err(payload) => std::panic::resume_unwind(payload),
+        }
+    }
+
     #[test]
     fn normalize_args_rewrites_vp_node_to_env_exec_node() {
         let input = s(&["vp", "node", "script.js", "foo", "--flag"]);
@@ -485,8 +496,8 @@ mod tests {
 
     #[test]
     fn unknown_argument_detected_without_pass_as_value_hint() {
-        let error = try_parse_args_from(["vp".to_string(), "--cache".to_string()])
-            .expect_err("Expected parse error");
+        let error =
+            try_parse_args_from_test(s(&["vp", "--cache"])).expect_err("Expected parse error");
         assert_eq!(error.kind(), ErrorKind::UnknownArgument);
         assert_eq!(extract_unknown_argument(&error).as_deref(), Some("--cache"));
         assert!(!has_pass_as_value_suggestion(&error));
@@ -494,13 +505,8 @@ mod tests {
 
     #[test]
     fn unknown_argument_detected_with_pass_as_value_hint() {
-        let error = try_parse_args_from([
-            "vp".to_string(),
-            "remove".to_string(),
-            "--stream".to_string(),
-            "foo".to_string(),
-        ])
-        .expect_err("Expected parse error");
+        let error = try_parse_args_from_test(s(&["vp", "remove", "--stream", "foo"]))
+            .expect_err("Expected parse error");
         assert_eq!(error.kind(), ErrorKind::UnknownArgument);
         assert_eq!(extract_unknown_argument(&error).as_deref(), Some("--stream"));
         assert!(has_pass_as_value_suggestion(&error));

@@ -368,8 +368,14 @@ async fn install_one(
 
     // 4. Run npm install with prefix set to staging directory
     //    Pipe stdout/stderr so npm output is hidden on success, shown on failure
+    let mut install_args = vec!["install", "-g", "--no-fund"];
+    if is_local_package_spec(package_spec) {
+        install_args.push("--install-links");
+    }
+    install_args.push(package_spec);
+
     let output = Command::new(npm_path.as_path())
-        .args(["install", "-g", "--no-fund", &package_spec])
+        .args(install_args)
         .env("npm_config_prefix", staging_dir.as_path())
         .env("PATH", format_path_prepended(node_bin_dir.as_path()))
         .stdout(Stdio::piped())
@@ -461,6 +467,86 @@ pub async fn uninstall(package_name: &str, dry_run: bool) -> Result<(), Error> {
     output::raw(&format!("Uninstalled {}", package_name));
 
     Ok(())
+}
+
+/// Resolve the version currently published for a package spec.
+///
+/// `package_spec` may be a bare package name (`typescript`) or include a
+/// version/tag (`typescript@beta`, `@scope/pkg@1.0.0`). The command returns the
+/// version that npm resolves for that spec.
+#[expect(dead_code)]
+pub(crate) async fn latest_package_version(package_spec: &str) -> Result<String, Error> {
+    // Resolve from current directory
+    let node_version = {
+        let cwd = match current_dir() {
+            Ok(cwd) => cwd,
+            Err(error) => {
+                let error =
+                    Error::ConfigError(format!("Cannot get current directory: {}", error).into());
+                return Err(error);
+            }
+        };
+        let resolution = match resolve_version(&cwd).await {
+            Ok(resolution) => resolution,
+            Err(error) => return Err(error),
+        };
+        resolution.version
+    };
+
+    // Ensure Node.js is installed
+    let runtime = match vite_js_runtime::download_runtime(
+        vite_js_runtime::JsRuntimeType::Node,
+        &node_version,
+    )
+    .await
+    {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            let error = Error::RuntimeDownload(error);
+            return Err(error);
+        }
+    };
+
+    let node_bin_dir = runtime.get_bin_prefix();
+    let npm_path =
+        if cfg!(windows) { node_bin_dir.join("npm.cmd") } else { node_bin_dir.join("npm") };
+
+    let output = Command::new(npm_path.as_path())
+        .args(["view", package_spec, "version", "--json"])
+        .env("PATH", format_path_prepended(node_bin_dir.as_path()))
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .await?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(Error::ConfigError(
+            format!("npm view failed for {package_spec}: {stderr}").into(),
+        ));
+    }
+
+    parse_npm_view_version(&output.stdout)
+}
+
+#[expect(dead_code)]
+fn parse_npm_view_version(stdout: &[u8]) -> Result<String, Error> {
+    let raw = String::from_utf8_lossy(stdout);
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Err(Error::ConfigError("npm view returned an empty version".into()));
+    }
+
+    match serde_json::from_str::<serde_json::Value>(trimmed) {
+        Ok(serde_json::Value::String(version)) => Ok(version),
+        Ok(serde_json::Value::Array(versions)) => versions
+            .iter()
+            .rev()
+            .find_map(|version| version.as_str())
+            .map(str::to_string)
+            .ok_or_else(|| Error::ConfigError("npm view returned an empty version list".into())),
+        _ => Ok(trimmed.to_string()),
+    }
 }
 
 /// Binary info extracted from package.json.
@@ -645,6 +731,22 @@ async fn remove_package_shim(
 mod tests {
     use super::*;
     use crate::commands::global::is_local_package_spec;
+
+    struct CurrentDirGuard(std::path::PathBuf);
+
+    impl CurrentDirGuard {
+        fn change_to(path: &std::path::Path) -> Self {
+            let previous = std::env::current_dir().unwrap();
+            std::env::set_current_dir(path).unwrap();
+            Self(previous)
+        }
+    }
+
+    impl Drop for CurrentDirGuard {
+        fn drop(&mut self) {
+            std::env::set_current_dir(&self.0).unwrap();
+        }
+    }
 
     /// RAII guard that sets `VP_TRAMPOLINE_PATH` to a fake binary on creation
     /// and clears it on drop. Ensures cleanup even on test panics.
@@ -920,6 +1022,27 @@ mod tests {
         let (name, version) = parse_package_spec("@types/node@20.0.0").unwrap();
         assert_eq!(name, "@types/node");
         assert_eq!(version, Some("20.0.0".to_string()));
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_parse_package_spec_local_path_uses_package_name() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let _cwd_guard = CurrentDirGuard::change_to(temp_dir.path());
+        let package_dir = temp_dir.path().join("fixture-pkg");
+
+        std::fs::create_dir_all(&package_dir).unwrap();
+        std::fs::write(
+            package_dir.join("package.json"),
+            r#"{ "name": "resolved-local-package", "version": "1.0.0" }"#,
+        )
+        .unwrap();
+
+        let (name, version) = parse_package_spec("./fixture-pkg").unwrap();
+        assert_eq!(name, "resolved-local-package");
+        assert_eq!(version, None);
     }
 
     #[test]

@@ -143,6 +143,8 @@ pub(crate) fn is_local_package_spec(spec: &str) -> bool {
         || spec == ".."
         || spec.starts_with("./")
         || spec.starts_with("../")
+        || spec.starts_with(".\\")
+        || spec.starts_with("..\\")
         || spec.starts_with('/')
         || spec.starts_with("file:")
         || (cfg!(windows)
