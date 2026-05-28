@@ -549,58 +549,6 @@ fn parse_npm_view_version(stdout: &[u8]) -> Result<String, Error> {
     }
 }
 
-/// Return true for package specs that refer to local filesystem content.
-pub(crate) fn is_local_package_spec(spec: &str) -> bool {
-    spec == "."
-        || spec == ".."
-        || spec.starts_with("./")
-        || spec.starts_with("../")
-        || spec.starts_with(".\\")
-        || spec.starts_with("..\\")
-        || spec.starts_with('/')
-        || spec.starts_with("file:")
-        || (cfg!(windows)
-            && spec.len() >= 3
-            && spec.as_bytes()[1] == b':'
-            && (spec.as_bytes()[2] == b'\\' || spec.as_bytes()[2] == b'/'))
-}
-
-/// Parse package spec into name and optional version.
-pub(crate) fn parse_package_spec(spec: &str) -> (String, Option<String>) {
-    if is_local_package_spec(spec) {
-        return (resolve_local_package_name(spec).unwrap_or_else(|| spec.to_string()), None);
-    }
-
-    // Handle scoped packages: @scope/name@version
-    if spec.starts_with('@') {
-        // Find the second @ for version
-        if let Some(idx) = spec[1..].find('@') {
-            let idx = idx + 1; // Adjust for the skipped first char
-            return (spec[..idx].to_string(), Some(spec[idx + 1..].to_string()));
-        }
-        return (spec.to_string(), None);
-    }
-
-    // Handle regular packages: name@version
-    if let Some(idx) = spec.find('@') {
-        return (spec[..idx].to_string(), Some(spec[idx + 1..].to_string()));
-    }
-
-    (spec.to_string(), None)
-}
-
-fn resolve_local_package_name(spec: &str) -> Option<String> {
-    let spec = spec.strip_prefix("file:").unwrap_or(spec);
-    let package_dir = if let Some(package_dir) = AbsolutePathBuf::new(spec.into()) {
-        package_dir
-    } else {
-        current_dir().ok()?.join(spec)
-    };
-    let package_json = std::fs::read_to_string(package_dir.join("package.json").as_path()).ok()?;
-    let json: serde_json::Value = serde_json::from_str(&package_json).ok()?;
-    json.get("name").and_then(|value| value.as_str()).map(str::to_string)
-}
-
 /// Binary info extracted from package.json.
 struct BinaryInfo {
     /// Binary name (the command users will run)
@@ -1092,7 +1040,6 @@ mod tests {
         )
         .unwrap();
 
-        let (name, version) = parse_package_spec("./fixture-pkg");
         let (name, version) = parse_package_spec("./fixture-pkg").unwrap();
         assert_eq!(name, "resolved-local-package");
         assert_eq!(version, None);

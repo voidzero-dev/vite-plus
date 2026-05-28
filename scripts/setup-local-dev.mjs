@@ -307,6 +307,8 @@ function main() {
   log('Installing workspace dependencies...');
   try {
     run(pnpmBin, ['install', '--config.allow-unused-patches=true']);
+    log('Applying Vite+ branding patches...');
+    run(pnpmBin, ['exec', 'tool', 'brand-vite']);
   } finally {
     if (originalLockfile !== null) {
       writeFileSync(pnpmLockfilePath, originalLockfile, 'utf-8');

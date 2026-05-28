@@ -235,9 +235,7 @@ function materializeRolldownPackagedBindings() {
 
     const sourcePath = path.join(packageDir, bindingFile);
     const targetPath = path.join(rolldownSrcDir, path.basename(bindingFile));
-    if (!existsSync(targetPath)) {
-      copyFileSync(sourcePath, targetPath);
-    }
+    copyFileSync(sourcePath, targetPath);
   }
 }
 

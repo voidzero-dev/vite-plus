@@ -652,6 +652,13 @@ async function runTestCase(
     GIT_COMMITTER_NAME: 'Test',
     GIT_AUTHOR_EMAIL: 'vite-plus-test@test.com',
     GIT_COMMITTER_EMAIL: 'vite-plus-test@test.com',
+    GIT_CONFIG_COUNT: '3',
+    GIT_CONFIG_KEY_0: 'user.name',
+    GIT_CONFIG_VALUE_0: 'Test',
+    GIT_CONFIG_KEY_1: 'user.email',
+    GIT_CONFIG_VALUE_1: 'vite-plus-test@test.com',
+    GIT_CONFIG_KEY_2: 'commit.gpgsign',
+    GIT_CONFIG_VALUE_2: 'false',
     // Skip `vp install` inside `vp migrate` — snap tests don't need real installs
     VP_SKIP_INSTALL: '1',
     // make sure npm install global packages to the temporary directory
