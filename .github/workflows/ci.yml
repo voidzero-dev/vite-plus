@@ -982,14 +982,6 @@ jobs:
         run: sfw --version
 
       - name: Run `sfw vp install` against a real repo
-        # TODO(SocketDev/sfw-free#30, SocketDev/sfw-free#43): drop `VP_INSECURE_TLS`
-        # once sfw ships the EKU fix. The GitHub release v1.10.0 still issues a
-        # CA cert with a present-but-empty Extended Key Usage extension that
-        # rustls (Linux/macOS) and native-tls (Windows) reject. With this var
-        # set vp still exercises the HTTPS_PROXY + SSL_CERT_FILE plumbing
-        # end-to-end; only certificate *validity* checking is bypassed.
-        env:
-          VP_INSECURE_TLS: '1'
         run: |
           set -euo pipefail
           # Force the registry-fetch path: install a pinned pnpm globally so
