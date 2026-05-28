@@ -61,6 +61,7 @@ assigning_clones = "allow"
 bool_to_int_with_if = "allow"
 borrow_deref_ref = "allow"
 branches_sharing_code = "allow"
+byte_char_slices = "allow"
 case_sensitive_file_extension_comparisons = "allow"
 cast_possible_truncation = "allow"
 cast_precision_loss = "allow"
@@ -87,6 +88,7 @@ items_after_statements = "allow"
 iter_with_drain = "allow"
 let_and_return = "allow"
 literal_string_with_formatting_args = "allow"
+manual_assert_eq = "allow"
 manual_contains = "allow"
 manual_let_else = "allow"
 manual_string_new = "allow"
@@ -108,6 +110,7 @@ needless_lifetimes = "allow"
 needless_pass_by_value = "allow"
 needless_raw_string_hashes = "allow"
 needless_return = "allow"
+needless_return_with_question_mark = "allow"
 new_without_default = "allow"
 non_send_fields_in_send_ty = "allow"
 option_if_let_else = "allow"
@@ -143,6 +146,7 @@ unused_async = "allow"
 unused_self = "allow"
 use_self = "allow"
 used_underscore_binding = "allow"
+useless_borrows_in_formatting = "allow"
 useless_conversion = "allow"
 useless_format = "allow"
 useless_let_if_seq = "allow"
@@ -187,7 +191,7 @@ dunce = "1.0.5"
 fast-glob = "1.0.0"
 flate2 = { version = "=1.1.9", features = ["zlib-rs"] }
 form_urlencoded = "1.2.1"
-fspy = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "c945cc0c7bb5af478a68d4548db7f46e621b36b0" }
+fspy = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "5833b374c6edb05c2f2f8e133ff8c796b378472a" }
 futures = "0.3.31"
 futures-util = "0.3.31"
 glob = "0.3.2"
@@ -208,7 +212,7 @@ json-strip-comments = "3"
 jsonschema = { version = "0.46.5", default-features = false }
 junction = "1.4.1"
 memchr = "2.7.4"
-mimalloc-safe = "0.1.61"
+mimalloc-safe = "0.1.62"
 mime = "0.3.17"
 napi = { version = "3.0.0", default-features = false, features = [
   "async",
@@ -292,18 +296,18 @@ vfs = "0.13.0"
 vite_command = { path = "crates/vite_command" }
 vite_error = { path = "crates/vite_error" }
 vite_js_runtime = { path = "crates/vite_js_runtime" }
-vite_glob = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "c945cc0c7bb5af478a68d4548db7f46e621b36b0" }
+vite_glob = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "5833b374c6edb05c2f2f8e133ff8c796b378472a" }
 vite_install = { path = "crates/vite_install" }
 vite_migration = { path = "crates/vite_migration" }
 vite_pm_cli = { path = "crates/vite_pm_cli" }
 vite_setup = { path = "crates/vite_setup" }
 vite_shared = { path = "crates/vite_shared" }
 vite_static_config = { path = "crates/vite_static_config" }
-vite_path = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "c945cc0c7bb5af478a68d4548db7f46e621b36b0" }
-vite_powershell = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "c945cc0c7bb5af478a68d4548db7f46e621b36b0" }
-vite_str = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "c945cc0c7bb5af478a68d4548db7f46e621b36b0" }
-vite_task = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "c945cc0c7bb5af478a68d4548db7f46e621b36b0" }
-vite_workspace = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "c945cc0c7bb5af478a68d4548db7f46e621b36b0" }
+vite_path = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "5833b374c6edb05c2f2f8e133ff8c796b378472a" }
+vite_powershell = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "5833b374c6edb05c2f2f8e133ff8c796b378472a" }
+vite_str = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "5833b374c6edb05c2f2f8e133ff8c796b378472a" }
+vite_task = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "5833b374c6edb05c2f2f8e133ff8c796b378472a" }
+vite_workspace = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "5833b374c6edb05c2f2f8e133ff8c796b378472a" }
 walkdir = "2.5.0"
 wax = "0.6.0"
 which = "8.0.0"
@@ -312,7 +316,7 @@ xxhash-rust = "0.8.15"
 zip = "7.2"
 
 # oxc crates with the same version
-oxc = { version = "0.132.0", features = [
+oxc = { version = "0.133.0", features = [
   "ast_visit",
   "transformer",
   "minifier",
@@ -324,17 +328,17 @@ oxc = { version = "0.132.0", features = [
   "regular_expression",
   "cfg",
 ] }
-oxc_allocator = { version = "0.132.0", features = ["pool"] }
-oxc_ast = "0.132.0"
-oxc_ecmascript = "0.132.0"
-oxc_parser = "0.132.0"
-oxc_span = "0.132.0"
-oxc_napi = "0.132.0"
-oxc_str = "0.132.0"
-oxc_minify_napi = "0.132.0"
-oxc_parser_napi = "0.132.0"
-oxc_transform_napi = "0.132.0"
-oxc_traverse = "0.132.0"
+oxc_allocator = { version = "0.133.0", features = ["pool"] }
+oxc_ast = "0.133.0"
+oxc_ecmascript = "0.133.0"
+oxc_parser = "0.133.0"
+oxc_span = "0.133.0"
+oxc_napi = "0.133.0"
+oxc_str = "0.133.0"
+oxc_minify_napi = "0.133.0"
+oxc_parser_napi = "0.133.0"
+oxc_transform_napi = "0.133.0"
+oxc_traverse = "0.133.0"
 
 # oxc crates in their own repos
 oxc_index = { version = "4", features = ["rayon", "serde"] }

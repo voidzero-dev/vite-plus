@@ -1,0 +1,14 @@
+{
+  "name": "@test/lint-config",
+  "scripts": {
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@stylistic/eslint-plugin": "^2.0.0",
+    "eslint-plugin-import": "^2.0.0",
+    "eslint-plugin-vue": "^10.0.0"
+  },
+  "peerDependencies": {
+    "eslint": ">=9"
+  }
+}

@@ -21,6 +21,7 @@ const repoRoot = join(ecosystemCiDir, project);
 const repoConfig = repos[project as keyof typeof repos];
 const directory = 'directory' in repoConfig ? repoConfig.directory : undefined;
 const cwd = directory ? join(repoRoot, directory) : repoRoot;
+const vitePlusTgz = `file:${tgzDir}/vite-plus-${vpVersion}.tgz`;
 // run vp migrate
 const cli = process.env.VP_CLI_BIN ?? 'vp';
 
@@ -62,6 +63,21 @@ execSync(`${cli} migrate --no-agent --no-interactive`, {
       '@voidzero-dev/vite-plus-core': `file:${tgzDir}/voidzero-dev-vite-plus-core-${vpVersion}.tgz`,
       '@voidzero-dev/vite-plus-test': `file:${tgzDir}/voidzero-dev-vite-plus-test-${vpVersion}.tgz`,
     }),
-    VP_VERSION: `file:${tgzDir}/vite-plus-${vpVersion}.tgz`,
+    VP_VERSION: vitePlusTgz,
   },
 });
+
+const packageJsonPath = join(cwd, 'package.json');
+const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf-8')) as {
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+};
+
+if (packageJson.dependencies?.['vite-plus']) {
+  packageJson.dependencies['vite-plus'] = vitePlusTgz;
+} else {
+  packageJson.devDependencies ??= {};
+  packageJson.devDependencies['vite-plus'] = vitePlusTgz;
+}
+
+await writeFile(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`, 'utf-8');

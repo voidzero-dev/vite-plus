@@ -250,14 +250,14 @@ describe('writeEditorConfigs', () => {
         oxfmt?: {
           initialization_options?: {
             settings?: {
-              configPath?: string;
+              'fmt.configPath'?: string;
             };
           };
         };
       };
     };
 
-    expect(settings.lsp?.oxfmt?.initialization_options?.settings?.configPath).toBe(
+    expect(settings.lsp?.oxfmt?.initialization_options?.settings?.['fmt.configPath']).toBe(
       './vite.config.ts',
     );
   });

@@ -44,8 +44,7 @@
   "name": "@test/utils",
   "scripts": {
     "lint": "vp lint ."
-  },
-  "devDependencies": {}
+  }
 }
 
 > test ! -f eslint.config.mjs # check root eslint config is removed
