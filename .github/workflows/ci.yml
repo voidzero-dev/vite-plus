@@ -982,6 +982,18 @@ jobs:
         run: sfw --version
 
       - name: Run `sfw vp install` against a real repo
+        # TODO(SocketDev/sfw-free#30, SocketDev/sfw-free#43): drop `VP_INSECURE_TLS`
+        # once sfw ships the EKU fix. Verified against sfw v1.11.0
+        # (releases/latest as of 2026-05-28) on Linux: vp's HTTPS request to
+        # nodejs.org through sfw still fails with
+        #   "invalid peer certificate: UnknownIssuer"
+        # because sfw's CA carries a present-but-empty Extended Key Usage
+        # extension that rustls rejects. macOS happened to pass only because
+        # the runner already has Node 22.18.0 cached, so vp didn't have to
+        # traverse sfw for SHASUMS — not a fix. Keep this flag on every
+        # matrix entry until upstream ships the EKU fix.
+        env:
+          VP_INSECURE_TLS: '1'
         run: |
           set -euo pipefail
           # Force the registry-fetch path: install a pinned pnpm globally so
