@@ -44,6 +44,13 @@ catalog:
   '@vitest/browser-playwright': 4.1.7
   '@vitest/browser-preview': 4.1.7
   '@vitest/browser-webdriverio': 4.1.7
+  '@vitest/expect': 4.1.7
+  '@vitest/mocker': 4.1.7
+  '@vitest/pretty-format': 4.1.7
+  '@vitest/runner': 4.1.7
+  '@vitest/snapshot': 4.1.7
+  '@vitest/spy': 4.1.7
+  '@vitest/utils': 4.1.7
   '@voidzero-dev/vitepress-theme': 4.8.4
   '@vueuse/core': ^14.0.0
   '@yarnpkg/fslib': ^3.1.3
