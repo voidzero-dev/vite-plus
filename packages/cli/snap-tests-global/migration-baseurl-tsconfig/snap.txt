@@ -71,6 +71,9 @@ catalog:
   '@vitest/coverage-v8': <semver>
   '@vitest/coverage-istanbul': <semver>
   vite-plus: latest
+allowBuilds:
+  edgedriver: false
+  geckodriver: false
 overrides:
   vite: 'catalog:'
   vitest: 'catalog:'

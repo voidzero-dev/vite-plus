@@ -96,6 +96,9 @@ catalog:
   vite-plus: latest
 
 minimumReleaseAge: 1440
+allowBuilds:
+  edgedriver: false
+  geckodriver: false
 overrides:
   vite: 'catalog:'
   vitest: 'catalog:'
