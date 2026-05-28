@@ -159,6 +159,66 @@ describe('rewritePackageJson', () => {
     expect((pkg.devDependencies as Record<string, string>)['vite-plus']).toBe('catalog:');
   });
 
+  it('normalizes a pre-existing pinned vite-plus to `catalog:` in catalog-supporting monorepos', async () => {
+    const pkg = {
+      devDependencies: {
+        'vite-plus': '^0.1.20',
+      },
+    };
+
+    rewritePackageJson(pkg, PackageManager.pnpm, true);
+
+    expect(pkg.devDependencies['vite-plus']).toBe('catalog:');
+  });
+
+  it('leaves a pre-existing pinned vite-plus alone on npm monorepo projects', async () => {
+    const pkg = {
+      devDependencies: {
+        'vite-plus': '^0.1.20',
+      },
+    };
+
+    rewritePackageJson(pkg, PackageManager.npm, true);
+
+    expect(pkg.devDependencies['vite-plus']).toBe('^0.1.20');
+  });
+
+  it('normalizes a pre-existing pinned vite-plus on yarn/bun monorepo projects', async () => {
+    for (const pm of [PackageManager.yarn, PackageManager.bun]) {
+      const pkg = { devDependencies: { 'vite-plus': '^0.1.20' } };
+      rewritePackageJson(pkg, pm, true);
+      expect(pkg.devDependencies['vite-plus']).toBe('catalog:');
+    }
+  });
+
+  it('preserves protocol-prefixed vite-plus specs (catalog:named, workspace:, link:, github:) in catalog-supporting monorepos', async () => {
+    for (const existing of [
+      'catalog:next',
+      'workspace:*',
+      'link:../vite-plus',
+      'github:fork/vite-plus',
+      'npm:@scope/vite-plus@^1.0.0',
+    ]) {
+      const pkg = { devDependencies: { 'vite-plus': existing } };
+      rewritePackageJson(pkg, PackageManager.pnpm, true);
+      expect(pkg.devDependencies['vite-plus']).toBe(existing);
+    }
+  });
+
+  it('does not auto-add vitest on a pure normalize pass (only on actual vite/vitest/REMOVE migrations)', async () => {
+    const pkg = {
+      devDependencies: {
+        'vite-plus': '^0.1.20',
+        'vitest-browser-svelte': '^1.0.0',
+      },
+    };
+
+    rewritePackageJson(pkg, PackageManager.pnpm, true);
+
+    expect(pkg.devDependencies['vite-plus']).toBe('catalog:');
+    expect((pkg.devDependencies as Record<string, string>).vitest).toBeUndefined();
+  });
+
   it('uses default catalog specs for non-catalog dependency specs in monorepo projects', async () => {
     const pkg = {
       devDependencies: {

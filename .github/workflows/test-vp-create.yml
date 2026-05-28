@@ -276,6 +276,57 @@ jobs:
             console.log('✓ vite-plus@' + pkg.version + ' installed correctly');
           "
 
+      - name: Verify monorepo sub-package deps
+        if: matrix.template.name == 'monorepo'
+        working-directory: ${{ runner.temp }}/test-project
+        env:
+          PACKAGE_MANAGER: ${{ matrix.package-manager }}
+        run: |
+          # Issue 1: packages/utils inherits `vite-plus: ^x.y.z` from the
+          # library template. In catalog-supporting monorepos (pnpm/yarn/bun)
+          # the migrator must normalize it so siblings don't drift.
+          # Issue 2: apps/website is scaffolded by create-vite which ships
+          # `vite` (and sometimes `vitest`) in devDependencies. After
+          # migration the scripts are rewritten to `vp ...` and `vite-plus`
+          # brings the runtime in transitively, so those keys must be gone.
+          node -e "
+            const fs = require('fs');
+            const pm = process.env.PACKAGE_MANAGER;
+            for (const f of ['apps/website/package.json', 'packages/utils/package.json']) {
+              if (!fs.existsSync(f)) {
+                console.error('✗ expected ' + f + ' to exist after vp create vite:monorepo');
+                process.exit(1);
+              }
+            }
+            const app = JSON.parse(fs.readFileSync('apps/website/package.json', 'utf8'));
+            const utils = JSON.parse(fs.readFileSync('packages/utils/package.json', 'utf8'));
+            const appDev = app.devDependencies || {};
+            const utilsDev = utils.devDependencies || {};
+
+            for (const name of ['vite', 'vitest']) {
+              if (appDev[name]) {
+                console.error('✗ apps/website devDependencies still has ' + name + ': ' + appDev[name]);
+                process.exit(1);
+              }
+            }
+            console.log('✓ apps/website devDependencies has no vite/vitest');
+
+            if (!appDev['vite-plus']) {
+              console.error('✗ apps/website missing vite-plus devDependency');
+              process.exit(1);
+            }
+            if (!utilsDev['vite-plus']) {
+              console.error('✗ packages/utils missing vite-plus devDependency');
+              process.exit(1);
+            }
+
+            if (pm !== 'npm' && appDev['vite-plus'] !== utilsDev['vite-plus']) {
+              console.error('✗ vite-plus spec drift: apps/website=' + appDev['vite-plus'] + ' packages/utils=' + utilsDev['vite-plus']);
+              process.exit(1);
+            }
+            console.log('✓ vite-plus consistent across sub-packages: app=' + appDev['vite-plus'] + ' utils=' + utilsDev['vite-plus']);
+          "
+
       - name: Verify ESLint/Prettier auto-migration
         if: matrix.template.verify-migration == 'true'
         working-directory: ${{ runner.temp }}/test-project

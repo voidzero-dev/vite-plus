@@ -96,8 +96,64 @@ Git initialized
 > ls vite-plus-monorepo/apps # check apps directory created
 website
 
-> ls vite-plus-monorepo/apps/website/package.json # check website package.json
-vite-plus-monorepo/apps/website/package.json
+> cat vite-plus-monorepo/apps/website/package.json # check website strips aliased vite/vitest
+{
+  "name": "website",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vp dev",
+    "build": "tsc && vp build",
+    "preview": "vp preview"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.2",
+    "vite-plus": "catalog:"
+  }
+}
+
+> cat vite-plus-monorepo/packages/utils/package.json # check utils normalizes vite-plus to catalog:
+{
+  "name": "utils",
+  "version": "0.0.0",
+  "description": "A starter for creating a TypeScript package.",
+  "homepage": "https://github.com/author/library#readme",
+  "bugs": {
+    "url": "https://github.com/author/library/issues"
+  },
+  "license": "MIT",
+  "author": "Author Name <author.name@mail.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/author/library.git"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "vp pack",
+    "dev": "vp pack --watch",
+    "test": "vp test",
+    "check": "vp check",
+    "prepublishOnly": "vp run build"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.2",
+    "@typescript/native-preview": "7.0.0-dev.20260509.2",
+    "bumpp": "^11.1.0",
+    "typescript": "^6.0.3",
+    "vite-plus": "catalog:"
+  }
+}
 
 > cd vite-plus-monorepo && vp create --no-interactive vite:application # create application in non-interactive mode
 > ls vite-plus-monorepo/apps # check apps directory created
