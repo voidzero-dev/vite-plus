@@ -105,6 +105,27 @@ function extractOverrideTargetName(key: string): string {
   return trimmed;
 }
 
+// True iff a pnpm.overrides key's target (after stripping selector and
+// version suffixes) is a REMOVE_PACKAGES entry. Shared by the JSON-object
+// and YAMLMap variants below.
+function isRemovePackageOverrideKey(key: string): boolean {
+  return (REMOVE_PACKAGES as readonly string[]).includes(extractOverrideTargetName(key));
+}
+
+// Drop pnpm.overrides keys whose target is a REMOVE_PACKAGES entry. Covers
+// bare, versioned, parent-selector and chained selector shapes that exact-key
+// matching against REMOVE_PACKAGES would miss.
+function dropRemovePackageOverrideKeys(overrides: Record<string, unknown> | undefined): void {
+  if (!overrides) {
+    return;
+  }
+  for (const key of Object.keys(overrides)) {
+    if (isRemovePackageOverrideKey(key)) {
+      delete overrides[key];
+    }
+  }
+}
+
 // When a browser provider package is removed, its runtime peer dependency
 // must be preserved in devDependencies so browser tests continue to work.
 const BROWSER_PROVIDER_PEER_DEPS: Record<string, string> = {
@@ -1123,6 +1144,7 @@ export function rewriteStandaloneProject(
   let shouldRewritePnpmWorkspaceYaml = false;
   let shouldAddPnpmWorkspaceVitePlusOverride = false;
   let shouldAllowBrowserProviderBuilds = false;
+  let directDriverDeps: Set<string> = new Set();
   // Determined inside editJsonFile callback to avoid a redundant file read
   let usePnpmWorkspaceYaml = false;
   editJsonFile<{
@@ -1144,6 +1166,7 @@ export function rewriteStandaloneProject(
     };
   }>(packageJsonPath, (pkg) => {
     shouldAllowBrowserProviderBuilds = hasOwnWebdriverioDependency(pkg);
+    directDriverDeps = collectDirectDriverDeps(pkg);
     // Strip stale `vite-plus-test` wrapper aliases before injecting new overrides
     // so the deleted wrapper doesn't survive migration in any sink.
     pruneLegacyWrapperAliases(pkg.resolutions);
@@ -1182,6 +1205,10 @@ export function rewriteStandaloneProject(
       }
       const overrideKeys = Object.keys(VITE_PLUS_OVERRIDE_PACKAGES);
       if (!usePnpmWorkspaceYaml) {
+        // Strip selector-shaped overrides (e.g. `parent>@vitest/browser-playwright`)
+        // whose target is a removed package, before re-merging the user's
+        // overrides into the new pnpm config.
+        dropRemovePackageOverrideKeys(pkg.pnpm?.overrides);
         // Project already has pnpm config in package.json -- keep using it.
         pkg.pnpm = {
           ...pkg.pnpm,
@@ -1225,6 +1252,7 @@ export function rewriteStandaloneProject(
           pkg.pnpm,
           pnpmMajorVersion,
           shouldAllowBrowserProviderBuilds,
+          directDriverDeps,
         );
       }
     }
@@ -1253,7 +1281,12 @@ export function rewriteStandaloneProject(
   });
 
   if (shouldRewritePnpmWorkspaceYaml) {
-    rewritePnpmWorkspaceYaml(projectPath, pnpmMajorVersion, shouldAllowBrowserProviderBuilds);
+    rewritePnpmWorkspaceYaml(
+      projectPath,
+      pnpmMajorVersion,
+      shouldAllowBrowserProviderBuilds,
+      directDriverDeps,
+    );
   }
 
   // Move remaining non-Vite pnpm.overrides to pnpm-workspace.yaml
@@ -1453,6 +1486,7 @@ function rewritePnpmWorkspaceYaml(
   projectPath: string,
   pnpmMajorVersion: number | undefined,
   shouldAllowBrowserBuilds: boolean,
+  directDriverDeps: Set<string> = new Set(),
 ): void {
   const pnpmWorkspaceYamlPath = path.join(projectPath, 'pnpm-workspace.yaml');
   if (!fs.existsSync(pnpmWorkspaceYamlPath)) {
@@ -1463,7 +1497,12 @@ function rewritePnpmWorkspaceYaml(
     // catalog
     rewriteCatalog(doc);
     if (pnpmMajorVersion !== undefined) {
-      applyBuildAllowanceToWorkspaceYaml(doc, pnpmMajorVersion, shouldAllowBrowserBuilds);
+      applyBuildAllowanceToWorkspaceYaml(
+        doc,
+        pnpmMajorVersion,
+        shouldAllowBrowserBuilds,
+        directDriverDeps,
+      );
     }
 
     // overrides
@@ -1475,12 +1514,11 @@ function rewritePnpmWorkspaceYaml(
     // `parent>pkg` or `pkg@version` must also be removed since they'd
     // re-apply against vite-plus's own direct provider dependency.
     if (overrides instanceof YAMLMap) {
-      const removeSet = new Set<string>(REMOVE_PACKAGES);
       const keysSnapshot = overrides.items.map((item) => item.key);
       for (const keyNode of keysSnapshot) {
         const rawKey =
           keyNode instanceof Scalar ? String(keyNode.value ?? '') : String(keyNode ?? '');
-        if (removeSet.has(extractOverrideTargetName(rawKey))) {
+        if (isRemovePackageOverrideKey(rawKey)) {
           overrides.delete(keyNode);
         }
       }
@@ -1576,6 +1614,9 @@ function cleanupPnpmOverridesForWorkspaceYaml(
   },
   overrideKeys: string[],
 ): Record<string, string> | undefined {
+  // Strip selector-shaped overrides (e.g. `parent>@vitest/browser-playwright`)
+  // whose target is a removed package, before the exact-key sweep below.
+  dropRemovePackageOverrideKeys(pkg.pnpm?.overrides);
   // Remove Vite-managed keys from pnpm.overrides
   const catalogOverrides: Record<string, string> = {};
   const overrides = pkg.pnpm?.overrides;
@@ -1658,6 +1699,35 @@ function hasOwnWebdriverioDependency(pkg: DependencyBag): boolean {
   return false;
 }
 
+// True iff `driverName` appears directly in any of the user's dependency
+// fields. Used to skip writing `allowBuilds[driverName] = false` so we don't
+// override a user-managed postinstall approval for a driver they depend on
+// directly (e.g. a non-webdriverio Selenium setup).
+function hasOwnDriverPostinstallDependency(pkg: DependencyBag, driverName: string): boolean {
+  return Boolean(
+    pkg.dependencies?.[driverName] ??
+    pkg.devDependencies?.[driverName] ??
+    pkg.optionalDependencies?.[driverName] ??
+    pkg.peerDependencies?.[driverName],
+  );
+}
+
+// Collect drivers that already appear as direct dependencies of `pkg` so the
+// allowBuilds writers can skip them. Returning a Set keeps the worker
+// functions ignorant of the package.json shape.
+function collectDirectDriverDeps(pkg: DependencyBag | undefined): Set<string> {
+  const result = new Set<string>();
+  if (!pkg) {
+    return result;
+  }
+  for (const driver of BROWSER_PROVIDER_POSTINSTALL_PACKAGES) {
+    if (hasOwnDriverPostinstallDependency(pkg, driver)) {
+      result.add(driver);
+    }
+  }
+  return result;
+}
+
 function workspaceUsesWebdriverio(
   rootDir: string,
   packages: WorkspacePackage[] | undefined,
@@ -1706,10 +1776,16 @@ function applyBuildAllowanceToPackageJsonPnpm(
   },
   major: number,
   shouldAllow: boolean,
+  directDriverDeps: Set<string> = new Set(),
 ): void {
   if (major >= 10) {
     pnpm.allowBuilds ??= {};
     for (const name of BROWSER_PROVIDER_POSTINSTALL_PACKAGES) {
+      if (directDriverDeps.has(name)) {
+        // Preserve the user's pre-existing postinstall approval for a driver
+        // they depend on directly — pnpm will prompt them on first install.
+        continue;
+      }
       if (!(name in pnpm.allowBuilds)) {
         pnpm.allowBuilds[name] = shouldAllow;
       }
@@ -1733,6 +1809,7 @@ function applyBuildAllowanceToWorkspaceYaml(
   doc: YamlDocument,
   major: number,
   shouldAllow: boolean,
+  directDriverDeps: Set<string> = new Set(),
 ): void {
   if (major >= 10) {
     let allowBuilds = doc.getIn(['allowBuilds']) as YAMLMap<Scalar<string>, Scalar<boolean>>;
@@ -1741,6 +1818,11 @@ function applyBuildAllowanceToWorkspaceYaml(
     }
     const existingKeys = new Set(allowBuilds.items.map((n) => n.key.value));
     for (const name of BROWSER_PROVIDER_POSTINSTALL_PACKAGES) {
+      if (directDriverDeps.has(name)) {
+        // Preserve the user's pre-existing postinstall approval for a driver
+        // they depend on directly — pnpm will prompt them on first install.
+        continue;
+      }
       if (!existingKeys.has(name)) {
         allowBuilds.set(scalarString(name), new Scalar(shouldAllow));
       }
@@ -2210,6 +2292,10 @@ function rewriteRootWorkspacePackageJson(
     } else if (packageManager === PackageManager.pnpm) {
       const overrideKeys = Object.keys(VITE_PLUS_OVERRIDE_PACKAGES);
       if (isForceOverrideMode()) {
+        // Strip selector-shaped overrides (e.g. `parent>@vitest/browser-playwright`)
+        // whose target is a removed package, before re-merging the user's
+        // overrides into the new pnpm config.
+        dropRemovePackageOverrideKeys(pkg.pnpm?.overrides);
         // In force-override mode, keep overrides in package.json pnpm.overrides
         // because pnpm ignores pnpm-workspace.yaml overrides when pnpm.overrides
         // exists in package.json (even with unrelated entries like rollup).
