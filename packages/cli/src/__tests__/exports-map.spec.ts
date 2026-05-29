@@ -86,3 +86,54 @@ describe('package.json exports map', () => {
     expect(typeof cfg.defineConfig).toBe('function');
   });
 });
+
+/**
+ * Migration rewrites the `vitest/config` specifier to bare `vite-plus` (see the
+ * Rust `import_rewriter.rs` rule and the `prefer-vite-plus-imports` oxlint rule
+ * in `oxlint-plugin.ts`). After that rewrite a user's
+ * `import { x } from 'vitest/config'` (and the `require(...)` form) becomes
+ * `from 'vite-plus'`, so the `vite-plus` root MUST stay a superset of
+ * `vitest/config`'s runtime exports. The named re-export lists in `index.ts`
+ * (ESM) and `index.cts` (CJS) are SEPARATE manual lists, and both deliberately
+ * omit `defineConfig` (local `./define-config.ts` wrapper) and `mergeConfig`
+ * (`@voidzero-dev/vite-plus-core`), which are supplied by other paths. These
+ * guards assert the *aggregate* surface stays complete on BOTH module systems so
+ * a future vitest bump that adds a config export can't silently leave migrated
+ * imports `undefined` — and can't be fixed in one entry while the other regresses.
+ *
+ * Note: these cover the runtime (value) surface only. `vitest/config`'s
+ * type-only exports flow through a separate `export type { … }` list in
+ * `index.ts`; removal-drift there is already caught by the repo typecheck (a
+ * re-export of a deleted type fails to compile).
+ */
+describe('vite-plus root re-exports the full vitest/config surface', () => {
+  // `default` is a module-shape artifact, not a named export migration cares
+  // about; only the named bindings need to survive the `vitest/config` rewrite.
+  function namedValueExports(mod: Record<string, unknown>): string[] {
+    return Object.keys(mod).filter((key) => key !== 'default');
+  }
+
+  it('exposes every vitest/config value export on the ESM vite-plus root', async () => {
+    const [vitePlus, vitestConfig] = await Promise.all([
+      import('vite-plus'),
+      import('vitest/config'),
+    ]);
+    const expected = namedValueExports(vitestConfig);
+    expect(expected.length, 'sanity: vitest/config should expose value exports').toBeGreaterThan(0);
+    const missing = expected.filter(
+      (key) => !(key in vitePlus) || (vitePlus as Record<string, unknown>)[key] === undefined,
+    );
+    expect(missing, 'vitest/config value exports missing from the ESM vite-plus root').toEqual([]);
+  });
+
+  it('exposes every vitest/config value export on the CJS vite-plus root', () => {
+    // `require('vitest/config')` -> `require('vite-plus')` resolves the package
+    // root's `require` condition (the index.cts build), a separate manual list.
+    const vitePlus = requireFromHere('vite-plus') as Record<string, unknown>;
+    const vitestConfig = requireFromHere('vitest/config') as Record<string, unknown>;
+    const expected = namedValueExports(vitestConfig);
+    expect(expected.length, 'sanity: vitest/config should expose value exports').toBeGreaterThan(0);
+    const missing = expected.filter((key) => !(key in vitePlus) || vitePlus[key] === undefined);
+    expect(missing, 'vitest/config value exports missing from the CJS vite-plus root').toEqual([]);
+  });
+});
