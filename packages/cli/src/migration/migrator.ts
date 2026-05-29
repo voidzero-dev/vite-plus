@@ -1348,12 +1348,17 @@ export function rewriteMonorepo(
     workspaceInfo.rootDir,
     workspaceInfo.packages,
   );
+  const workspaceDirectDriverDeps = collectWorkspaceDirectDriverDeps(
+    workspaceInfo.rootDir,
+    workspaceInfo.packages,
+  );
   // rewrite root workspace
   if (workspaceInfo.packageManager === PackageManager.pnpm) {
     rewritePnpmWorkspaceYaml(
       workspaceInfo.rootDir,
       pnpmMajorVersion,
       workspaceShouldAllowBrowserBuilds,
+      workspaceDirectDriverDeps,
     );
   } else if (workspaceInfo.packageManager === PackageManager.yarn) {
     rewriteYarnrcYml(workspaceInfo.rootDir);
@@ -1368,6 +1373,7 @@ export function rewriteMonorepo(
     workspaceInfo.packages,
     pnpmMajorVersion,
     workspaceShouldAllowBrowserBuilds,
+    workspaceDirectDriverDeps,
   );
   // (mergeViteConfigFiles below will sanitize the merged lint config
   // against this workspace's full package set.)
@@ -1746,6 +1752,29 @@ function workspaceUsesWebdriverio(
     }
   }
   return false;
+}
+
+// Union of drivers directly depended on anywhere in the workspace (root + every
+// sub-package). Mirrors `workspaceUsesWebdriverio`'s traversal so the monorepo
+// allowBuilds writers skip user-owned drivers exactly like the standalone path.
+function collectWorkspaceDirectDriverDeps(
+  rootDir: string,
+  packages: WorkspacePackage[] | undefined,
+): Set<string> {
+  const result = new Set<string>();
+  const rootPkg = readPackageJsonIfExists(path.join(rootDir, 'package.json'));
+  for (const driver of collectDirectDriverDeps(rootPkg)) {
+    result.add(driver);
+  }
+  if (packages) {
+    for (const pkg of packages) {
+      const subPkg = readPackageJsonIfExists(path.join(rootDir, pkg.path, 'package.json'));
+      for (const driver of collectDirectDriverDeps(subPkg)) {
+        result.add(driver);
+      }
+    }
+  }
+  return result;
 }
 
 function readPackageJsonIfExists(packageJsonPath: string): DependencyBag | undefined {
@@ -2233,6 +2262,7 @@ function rewriteRootWorkspacePackageJson(
   packages?: WorkspacePackage[],
   pnpmMajorVersion?: number,
   shouldAllowBrowserBuilds = false,
+  directDriverDeps: Set<string> = new Set(),
 ): void {
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
@@ -2325,7 +2355,12 @@ function rewriteRootWorkspacePackageJson(
         }
       }
       if (pnpmMajorVersion !== undefined && pkg.pnpm) {
-        applyBuildAllowanceToPackageJsonPnpm(pkg.pnpm, pnpmMajorVersion, shouldAllowBrowserBuilds);
+        applyBuildAllowanceToPackageJsonPnpm(
+          pkg.pnpm,
+          pnpmMajorVersion,
+          shouldAllowBrowserBuilds,
+          directDriverDeps,
+        );
       }
     }
 
