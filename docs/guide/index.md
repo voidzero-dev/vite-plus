@@ -4,6 +4,10 @@ Vite+ is the unified toolchain and entry point for web development. It manages y
 
 Vite+ ships in two parts: `vp`, the global command-line tool, and `vite-plus`, the local package installed in each project. If you already have a Vite project, use [`vp migrate`](/guide/migrate) to migrate it to Vite+, or paste our [migration prompt](/guide/migrate#migration-prompt) into your coding agent.
 
+Building with an AI assistant? Copy a ready-made setup prompt:
+
+<CopyPrompt />
+
 ## Install `vp`
 
 ### macOS / Linux
