@@ -83,6 +83,12 @@ describe('rewriteVitePlusImportSpecifier', () => {
       'vite-plus/test/browser/providers/webdriverio',
     );
     expect(rewriteVitePlusImportSpecifier('@vitest/browser-playwright/locators')).toBeNull();
+    // `vitest/package.json` must NOT be rewritten — `vite-plus` does not export
+    // `./test/package.json`, so rewriting would break resolution. Mirrors the
+    // migrate rewriter's exclusion.
+    expect(rewriteVitePlusImportSpecifier('vitest/package.json')).toBeNull();
+    // ...but other `vitest/<sub>` specifiers still rewrite normally.
+    expect(rewriteVitePlusImportSpecifier('vitest/node')).toBe('vite-plus/test/node');
     expect(rewriteVitePlusImportSpecifier('tsx')).toBeNull();
   });
 });
@@ -95,6 +101,9 @@ new RuleTester({
   valid: [
     `import { defineConfig } from 'vite-plus'`,
     `export { expect } from 'vite-plus/test'`,
+    // `vitest/package.json` must NOT be autofixed — `vite-plus` has no
+    // `./test/package.json` export, so a rewrite would break resolution.
+    `import pkg from 'vitest/package.json'`,
     {
       code: `declare module 'vite-plus/test/browser' {}`,
       filename: 'types.ts',

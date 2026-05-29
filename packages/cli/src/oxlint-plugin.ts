@@ -39,6 +39,17 @@ function rewriteVitePlusImportSpecifier(specifier: string): string | null {
     return 'vite-plus/test';
   }
 
+  // `vitest/package.json` is a metadata-access pattern (reading the vitest
+  // version) and `vite-plus`'s generated exports map deliberately omits
+  // `./test/package.json` (see `syncTestPackageExports()` in build.ts, which
+  // skips upstream's `./package.json`). Rewriting it would yield
+  // `vite-plus/test/package.json`, which fails with ERR_PACKAGE_PATH_NOT_EXPORTED.
+  // The original specifier still resolves through the installed `vitest`. This
+  // mirrors the migrate rewriter's exclusion in import_rewriter.rs.
+  if (specifier === 'vitest/package.json') {
+    return null;
+  }
+
   if (specifier.startsWith('vitest/')) {
     return `vite-plus/test/${specifier.slice('vitest/'.length)}`;
   }
