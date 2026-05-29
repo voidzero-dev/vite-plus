@@ -105,7 +105,7 @@ catalog:
   terser: ^5.44.1
   tinybench: ^6.0.0
   tinyexec: ^1.0.1
-  tsdown: ^0.22.0
+  tsdown: ^0.22.1
   tsx: ^4.22.0
   typescript: ^6.0.0
   unified: ^11.0.5
@@ -127,6 +127,7 @@ catalogMode: prefer
 ignoreScripts: true
 minimumReleaseAge: 1440
 minimumReleaseAgeExclude:
+  - '@devframes/*'
   - '@napi-rs/*'
   - '@nkzw/*'
   - '@oxc-node/*'
