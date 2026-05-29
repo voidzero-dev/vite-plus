@@ -2262,6 +2262,72 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(pkg.pnpm?.allowBuilds).not.toHaveProperty('edgedriver');
     expect(pkg.pnpm?.allowBuilds?.geckodriver).toBe(false);
   });
+
+  it('skips workspace-yaml allowBuilds for a driver a sub-package depends on directly (monorepo, pnpm v10, no webdriverio)', () => {
+    // A sub-package has its own edgedriver postinstall approval but nothing in
+    // the workspace uses webdriverio. The monorepo path must not overwrite the
+    // user-owned edgedriver with `false`; geckodriver is not a direct dep and
+    // remains denied.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'root', devDependencies: {} }),
+    );
+    fs.writeFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'packages:\n  - apps/*\n');
+    const appDir = path.join(tmpDir, 'apps', 'e2e');
+    fs.mkdirSync(appDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(appDir, 'package.json'),
+      JSON.stringify({
+        name: '@vibe/e2e',
+        devDependencies: { edgedriver: '^6.0.0' },
+      }),
+    );
+
+    const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.pnpm);
+    workspaceInfo.isMonorepo = true;
+    workspaceInfo.packages = [{ name: '@vibe/e2e', path: 'apps/e2e', isTemplatePackage: false }];
+    rewriteMonorepo(workspaceInfo, true);
+
+    const yaml = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      allowBuilds: Record<string, boolean>;
+    };
+    expect(yaml.allowBuilds).not.toHaveProperty('edgedriver');
+    expect(yaml.allowBuilds.geckodriver).toBe(false);
+  });
+
+  it('skips allowBuilds for a driver the workspace ROOT depends on directly (monorepo, pnpm v10, no webdriverio)', () => {
+    // The workspace root has its own geckodriver postinstall approval but
+    // nothing uses webdriverio. The monorepo root contribution to
+    // `collectWorkspaceDirectDriverDeps` must keep geckodriver out of the
+    // force-denied set; edgedriver is not a direct dep and remains denied.
+    // In non-force mode the root pnpm config is normalized into
+    // pnpm-workspace.yaml, so that is the operative allowBuilds sink here.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'root',
+        devDependencies: { geckodriver: '^5.0.0' },
+      }),
+    );
+    fs.writeFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'packages:\n  - apps/*\n');
+    const appDir = path.join(tmpDir, 'apps', 'e2e');
+    fs.mkdirSync(appDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(appDir, 'package.json'),
+      JSON.stringify({ name: '@vibe/e2e', devDependencies: {} }),
+    );
+
+    const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.pnpm);
+    workspaceInfo.isMonorepo = true;
+    workspaceInfo.packages = [{ name: '@vibe/e2e', path: 'apps/e2e', isTemplatePackage: false }];
+    rewriteMonorepo(workspaceInfo, true);
+
+    const yaml = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      allowBuilds: Record<string, boolean>;
+    };
+    expect(yaml.allowBuilds).not.toHaveProperty('geckodriver');
+    expect(yaml.allowBuilds.edgedriver).toBe(false);
+  });
 });
 
 describe('rewriteMonorepo yarn catalog', () => {
