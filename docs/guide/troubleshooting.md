@@ -25,37 +25,11 @@ The Oxlint type checker path powered by `tsgolint` does not support `baseUrl`.
 fix before enabling type-aware linting. If that fix fails or is declined, Vite+
 skips `typeAware` and `typeCheck`.
 
-## `vp lint` / `vp fmt` may fail to read `vite.config.ts`
-
-`vp lint`, `vp fmt`, and the Oxc VS Code extension all read the `lint` / `fmt` blocks from `vite.config.ts`. Today that support has important limitations.
-
-### What is currently supported
-
-- Static object export:
-  - `export default { ... }`
-  - `export default defineConfig({ ... })`
-
-### What can fail in current integrations
-
-- Functional or async config:
-  - `defineConfig((env) => ({ ... }))`
-  - `defineConfig(async (env) => ({ ... }))`
-- Config files that rely on Vite transform/bundling behavior to execute.
-
-In scenarios reported in issue #930, Oxc-side integrations that read `vite.config.ts` can behave closer to native ESM loading (similar to Vite `--configLoader native`) than Vite's bundled default loader. That means configs depending on bundling/transforms can fail to load for lint/fmt/editor paths. See: https://github.com/voidzero-dev/vite-plus/issues/930
-
-### Workarounds
-
-- Prefer a static `defineConfig({ ... })` export when you need `lint` / `fmt` in `vite.config.ts`.
-- Avoid Node-specific globals (`__dirname` in ESM), unresolved TS-only imports, or JSON imports without import attributes in config code used by lint/fmt.
-- If needed, keep `.oxlintrc.*` / `.oxfmtrc.*` as temporary fallback, [although we do not recommend doing this normally](/guide/lint##configuration), while this integration behavior is being improved.
-
-### VS Code multi-root workspace note
+## VS Code extension does not read `vite.config.ts`
 
 If VS Code has multiple folders open, the shared Oxc language server may pick a different workspace than expected. That can make it look like `vite.config.ts` support is missing.
 
 - Confirm the extension is using the intended workspace.
-- Confirm the workspace resolves to a recent Oxc/Oxlint/Oxfmt toolchain.
 
 ## `vp build` does not run my build script
 

@@ -10,11 +10,11 @@ export const core: DefaultTheme.TeamMember[] = [
     ],
   },
   {
-    avatar: 'https://github.com/branchseer.png',
+    avatar: 'https://github.com/wan9chi.png',
     name: 'Wang Chi',
     links: [
-      { icon: 'github', link: 'https://github.com/branchseer' },
-      { icon: 'x', link: 'https://x.com/branchseer' },
+      { icon: 'github', link: 'https://github.com/wan9chi' },
+      { icon: 'x', link: 'https://x.com/wan9chi' },
     ],
   },
   {
