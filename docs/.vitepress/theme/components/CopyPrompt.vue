@@ -78,11 +78,7 @@ onBeforeUnmount(() => {
   >
     <Icon
       :icon="
-        state === 'copied'
-          ? 'lucide:check'
-          : state === 'error'
-            ? 'lucide:x'
-            : 'lucide:clipboard'
+        state === 'copied' ? 'lucide:check' : state === 'error' ? 'lucide:x' : 'lucide:clipboard'
       "
       class="size-4"
       aria-hidden="true"
