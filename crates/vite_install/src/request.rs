@@ -110,31 +110,65 @@ impl HttpClient {
         let target_path = target_path.as_ref();
         tracing::debug!("Downloading {} to {:?}", url, target_path);
 
-        let response = self.get(url).await?;
+        let client = vite_shared::shared_http_client();
 
-        self.write_response_to_file(response, target_path).await?;
+        // Make the request *and* the body stream a single retried unit. Doing
+        // the request inline (instead of calling `self.get`) avoids a double
+        // retry layer. A truncated download (bytes written != advertised
+        // Content-Length) returns an error so the retry re-downloads.
+        (|| async {
+            let response = client.get(url).send().await?.error_for_status()?;
+            Self::write_response_to_file(response, target_path).await
+        })
+        .retry(
+            ExponentialBuilder::default()
+                .with_jitter()
+                .with_min_delay(Duration::from_millis(self.min_delay))
+                .with_max_times(self.max_times),
+        )
+        .await?;
 
         tracing::debug!("Download completed: {:?}", target_path);
         Ok(())
     }
 
-    /// Internal helper to write response body to file
-    async fn write_response_to_file(
-        &self,
-        response: Response,
-        target_path: &Path,
-    ) -> Result<(), Error> {
+    /// Internal helper to write response body to file.
+    ///
+    /// Captures the advertised `Content-Length` before streaming and verifies
+    /// the number of bytes written matches it, so a truncated/short read
+    /// surfaces as an error that the caller's retry can re-download.
+    async fn write_response_to_file(response: Response, target_path: &Path) -> Result<(), Error> {
+        let content_length = response.content_length();
+
         // Create the target file
         let mut file = fs::File::create(target_path).await?;
 
         // Stream the response body to the file
+        let mut bytes_written: u64 = 0;
         let mut stream = response.bytes_stream();
         while let Some(chunk_result) = stream.next().await {
             let chunk = chunk_result?;
+            bytes_written += chunk.len() as u64;
             file.write_all(&chunk).await?;
         }
 
         file.flush().await?;
+
+        // Detect truncation: if a Content-Length was advertised and the bytes
+        // written don't match, the download is incomplete — error out so the
+        // retry re-downloads from scratch.
+        if let Some(expected_len) = content_length
+            && bytes_written != expected_len
+        {
+            return Err(Error::Io(std::io::Error::new(
+                std::io::ErrorKind::UnexpectedEof,
+                vite_str::format!(
+                    "incomplete download: expected {expected_len} bytes, got {bytes_written}"
+                )
+                .to_string(),
+            )));
+        }
+
         Ok(())
     }
 }
@@ -177,10 +211,39 @@ pub async fn download_and_extract_tgz_with_hash(
         expected_hash
     );
 
-    // Create target directory
-    fs::create_dir_all(&target_dir).await?;
+    // Wrap the download → verify → extract sequence in a content-integrity
+    // retry. Network errors are already retried inside `download_file`, so the
+    // predicate below only retries IO / hash-mismatch / extraction failures
+    // (the symptoms of a transient corrupt or truncated download). A 404 maps
+    // to a `Reqwest` error that must propagate unchanged so the caller in
+    // `package_manager.rs` can turn it into `PackageManagerVersionNotFound`.
+    (|| async { download_and_extract_tgz_with_hash_once(url, &target_dir, expected_hash).await })
+        .retry(
+            ExponentialBuilder::default()
+                .with_jitter()
+                .with_min_delay(Duration::from_millis(200))
+                .with_max_times(3),
+        )
+        .when(is_retryable_extract_error)
+        .await
+}
 
-    // Download the tgz file with retry logic using HttpClient
+/// A single download → verify → extract attempt.
+///
+/// Starts from clean state by removing and recreating `target_dir`, so a
+/// partially-extracted or corrupt prior attempt cannot interfere with a retry.
+async fn download_and_extract_tgz_with_hash_once(
+    url: &str,
+    target_dir: &Path,
+    expected_hash: Option<&str>,
+) -> Result<(), Error> {
+    // Reset target directory so a partial prior attempt can't interfere.
+    if fs::try_exists(target_dir).await.unwrap_or(false) {
+        fs::remove_dir_all(target_dir).await?;
+    }
+    fs::create_dir_all(target_dir).await?;
+
+    // Download the tgz file. `download_file` retries the network layer itself.
     let tgz_file = target_dir.join("package.tgz");
     let client = HttpClient::new();
     client.download_file(url, &tgz_file).await?;
@@ -192,7 +255,7 @@ pub async fn download_and_extract_tgz_with_hash(
 
     // Extract the tgz file to the target directory
     let tgz_file_for_extract = tgz_file.clone();
-    let target_dir_for_extract = target_dir.clone();
+    let target_dir_for_extract = target_dir.to_path_buf();
     tokio::task::spawn_blocking(move || {
         extract_tgz(&tgz_file_for_extract, &target_dir_for_extract)
     })
@@ -202,6 +265,22 @@ pub async fn download_and_extract_tgz_with_hash(
     fs::remove_file(&tgz_file).await?;
     tracing::debug!("Download and extract finished");
     Ok(())
+}
+
+/// Predicate for the content-integrity retry in
+/// [`download_and_extract_tgz_with_hash`].
+///
+/// Retries only transient content-integrity / IO failures that a fresh
+/// re-download can fix. Everything else falls through to `false`:
+/// - `Reqwest` network errors are deliberately excluded — `download_file`
+///   already retries the request + body stream, and not re-retrying them here
+///   keeps the caller's 404 → `PackageManagerVersionNotFound` mapping intact.
+/// - Permanent config errors (bad hash format, unsupported algorithm,
+///   version-not-found) can never succeed on retry.
+/// - A `JoinError` (a `spawn_blocking` panic during extraction) is a bug, not a
+///   transient fault, so it fails fast rather than re-downloading.
+fn is_retryable_extract_error(err: &Error) -> bool {
+    matches!(err, Error::Io(_) | Error::IoWithPath { .. } | Error::HashMismatch { .. })
 }
 
 /// Computes the hash of the given content using the specified digest algorithm.
@@ -538,6 +617,65 @@ mod tests {
         assert!(target_dir.join("package/bin/yarn.cmd").exists());
 
         // TempDir automatically cleans up when it goes out of scope
+    }
+
+    /// Regression test for flaky package-manager / node downloads.
+    ///
+    /// The retry logic used to wrap only the HTTP request setup
+    /// (`send().await?.error_for_status()`), which returns as soon as the
+    /// response *headers* arrive. The body stream and tar extraction happened
+    /// *after* the retry closure returned, so a corrupt or truncated download
+    /// surfaced immediately as an `UnexpectedEof` extraction error without ever
+    /// being retried. A corrupt archive served with a 200 status must instead
+    /// be retried by the full download+extract pipeline.
+    #[tokio::test]
+    async fn test_download_and_extract_retries_on_corrupt_archive() {
+        let server = MockServer::start();
+        let mock = server.mock(|when, then| {
+            when.method(GET).path("/corrupt.tgz");
+            then.status(200)
+                .header("content-type", "application/octet-stream")
+                .body("this is not a valid gzip archive");
+        });
+
+        let temp_dir = TempDir::new().unwrap();
+        let target_dir = temp_dir.path().join("extracted");
+        let url = format!("{}/corrupt.tgz", server.base_url());
+
+        let result = download_and_extract_tgz_with_hash(&url, &target_dir, None).await;
+        assert!(result.is_err(), "corrupt archive should fail to extract: {result:?}");
+        assert!(
+            mock.hits() > 1,
+            "a corrupt download must be retried by the full pipeline, but it was only attempted {} time(s)",
+            mock.hits()
+        );
+    }
+
+    /// A complete-but-wrong download (hash mismatch) must also be retried,
+    /// since a transient corrupt/truncated download is the most likely cause of
+    /// an integrity mismatch for an immutable npm tarball.
+    #[tokio::test]
+    async fn test_download_and_extract_retries_on_hash_mismatch() {
+        let server = MockServer::start();
+        let mock_tgz = create_mock_package_tgz();
+        let mock = server.mock(|when, then| {
+            when.method(GET).path("/mismatch.tgz");
+            then.status(200).header("content-type", "application/octet-stream").body(mock_tgz);
+        });
+
+        let temp_dir = TempDir::new().unwrap();
+        let target_dir = temp_dir.path().join("extracted");
+        let url = format!("{}/mismatch.tgz", server.base_url());
+        let wrong_hash = "sha512.0000000000000000000000000000000000000000000000000000000000000000\
+             0000000000000000000000000000000000000000000000000000000000000000";
+
+        let result = download_and_extract_tgz_with_hash(&url, &target_dir, Some(wrong_hash)).await;
+        assert!(result.is_err(), "hash mismatch should fail: {result:?}");
+        assert!(
+            mock.hits() > 1,
+            "a hash mismatch must be retried, but it was only attempted {} time(s)",
+            mock.hits()
+        );
     }
 
     #[tokio::test]
