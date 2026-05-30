@@ -1810,9 +1810,12 @@ function applyBuildAllowanceToPackageJsonPnpm(
   if (major >= 10) {
     pnpm.allowBuilds ??= {};
     for (const name of BROWSER_PROVIDER_POSTINSTALL_PACKAGES) {
-      if (directDriverDeps.has(name)) {
-        // Preserve the user's pre-existing postinstall approval for a driver
-        // they depend on directly — pnpm will prompt them on first install.
+      if (!shouldAllow && directDriverDeps.has(name)) {
+        // Don't force-DENY a driver the user depends on directly — leave the
+        // key absent so pnpm preserves their pre-existing postinstall approval
+        // (or prompts on first install). When builds should be allowed
+        // (webdriverio present), still write `true`: a user-owned driver that
+        // webdriverio also needs built must not be left to a prompt.
         continue;
       }
       if (!(name in pnpm.allowBuilds)) {
@@ -1847,9 +1850,12 @@ function applyBuildAllowanceToWorkspaceYaml(
     }
     const existingKeys = new Set(allowBuilds.items.map((n) => n.key.value));
     for (const name of BROWSER_PROVIDER_POSTINSTALL_PACKAGES) {
-      if (directDriverDeps.has(name)) {
-        // Preserve the user's pre-existing postinstall approval for a driver
-        // they depend on directly — pnpm will prompt them on first install.
+      if (!shouldAllow && directDriverDeps.has(name)) {
+        // Don't force-DENY a driver the user depends on directly — leave the
+        // key absent so pnpm preserves their pre-existing postinstall approval
+        // (or prompts on first install). When builds should be allowed
+        // (webdriverio present), still write `true`: a user-owned driver that
+        // webdriverio also needs built must not be left to a prompt.
         continue;
       }
       if (!existingKeys.has(name)) {
