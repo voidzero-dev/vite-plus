@@ -1982,9 +1982,9 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     // A `name@range` override key may use a semver comparator (`@>=4`, `@>4`,
     // `@<5`). The `>` MUST NOT be mistaken for a pnpm `parent>child` selector
     // (pnpm's own delimiter rule excludes a `>` preceded by `@`), or the key's
-    // target mis-parses and the stale pin survives, forcing the provider off the
-    // migrated 4.1.7 dep. A comparator-range key for an unrelated package must
-    // still be preserved.
+    // target is parsed incorrectly and the stale pin survives, forcing the
+    // provider off the migrated 4.1.7 dep. A comparator-range key for an
+    // unrelated package must still be preserved.
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
