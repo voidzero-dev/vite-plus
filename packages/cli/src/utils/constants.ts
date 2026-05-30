@@ -38,6 +38,26 @@ export function resolve(path: string) {
   });
 }
 
+/**
+ * Like {@link resolve}, but prefers the copy shipped with the CLI
+ * (`import.meta.dirname`) over the project's (`process.cwd()`).
+ *
+ * Use this for runtime modules that MUST match what `vite-plus/test*`
+ * imports resolve to — chiefly the Vitest runner binary. The `vite-plus/test`
+ * shims `export * from 'vitest'`, which Node resolves to vite-plus's own
+ * bundled (pinned) Vitest. If `vp test` instead spawned a project-local
+ * Vitest (a different physical copy/version), the runner and the imported
+ * `vi`/`expect`/runner internals would come from two distinct Vitest
+ * modules — a classic source of Vitest internal-state and mock-hoisting
+ * mismatches. `process.cwd()` stays as a fallback for layouts where the
+ * bundled copy is somehow unreachable, so this is never worse than {@link resolve}.
+ */
+export function resolveBundled(path: string) {
+  return require.resolve(path, {
+    paths: [import.meta.dirname, process.cwd()],
+  });
+}
+
 export const BASEURL_TSCONFIG_WARNING =
   'Skipped typeAware/typeCheck: a tsconfig file contains baseUrl which is not yet supported by the oxlint type checker.\n' +
   '  Run `vp dlx @andrewbranch/ts5to6 --fixBaseUrl <tsconfig path>` to remove baseUrl from your tsconfig.';

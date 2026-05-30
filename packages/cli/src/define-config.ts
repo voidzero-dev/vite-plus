@@ -1,4 +1,5 @@
 import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 
 import type { PluginOption, UserConfig } from '@voidzero-dev/vite-plus-core';
 import { RolldownMagicString } from '@voidzero-dev/vite-plus-core/rolldown';
@@ -377,6 +378,12 @@ function vitePlusTestSpecifierRewritePlugin(): PluginOption {
  * `require` anchored at THIS module's location so `require.resolve` reaches
  * the `vitest` / `@vitest/*` family that the `vite-plus` package directly
  * depends on — even from a consumer project where they are only transitive.
+ * Used to locate the bundled `vitest` package (its `package.json`), NOT to
+ * resolve module ENTRIES: `require.resolve` applies the `require` export
+ * condition, which for `vitest` / `vitest/config` selects a CJS throw-stub
+ * (`index.cjs` / `config.cjs` — "Vitest cannot be imported … using require()").
+ * Module entries are resolved through Vite's own resolver instead (see
+ * [[vitePlusVitestResolverPlugin]]), which honours ESM conditions.
  *
  * `define-config.ts` is bundled by tsdown in BOTH formats: ESM (`shims: true`,
  * which defines a module-scoped `__dirname`) and CJS (where `__dirname` is the
@@ -389,23 +396,37 @@ const vitePlusRequire = createRequire(
 );
 
 /**
- * `require` anchored at the resolved `vitest` package. The `@vitest/*` family
- * (`@vitest/expect`, `@vitest/runner`, `@vitest/snapshot`, …) are dependencies
- * of `vitest` itself — not direct deps of `vite-plus` — so they are reachable
- * from `vitest`'s location but not from [[vitePlusRequire]]. Created lazily and
- * cached; `null` once a creation attempt has failed so we never retry.
+ * Absolute path to THIS module, used as a `this.resolve` importer so Vite's
+ * resolver roots the `vitest` / `@vitest/*` family at `vite-plus`'s own
+ * location — reaching its direct deps (`vitest`, `vitest/*`, `@vitest/browser*`)
+ * even from a consumer project where they are only transitive.
+ *
+ * `import.meta.url` is native in the ESM bundle and rewritten by tsdown to
+ * `pathToFileURL(__filename).href` in the CJS bundle, so it is a valid file URL
+ * in both.
  */
-let vitestRequire: NodeRequire | null | undefined;
-function getVitestRequire(): NodeRequire | null {
-  if (vitestRequire !== undefined) {
-    return vitestRequire;
+const vitePlusModuleFile = fileURLToPath(import.meta.url);
+
+/**
+ * Absolute path to the bundled `vitest` package's `package.json`, used as a
+ * second `this.resolve` importer. The nested `@vitest/*` family (`@vitest/expect`,
+ * `@vitest/runner`, `@vitest/snapshot`, …) are dependencies of `vitest` itself —
+ * not direct deps of `vite-plus` — so under pnpm's isolated layout they are
+ * reachable from `vitest`'s location but not from [[vitePlusModuleFile]].
+ * Resolving `package.json` is condition-agnostic, so this is safe with
+ * `require.resolve`. Cached; `null` once an attempt has failed so we never retry.
+ */
+let vitestAnchor: string | null | undefined;
+function getVitestAnchor(): string | null {
+  if (vitestAnchor !== undefined) {
+    return vitestAnchor;
   }
   try {
-    vitestRequire = createRequire(vitePlusRequire.resolve('vitest'));
+    vitestAnchor = vitePlusRequire.resolve('vitest/package.json');
   } catch {
-    vitestRequire = null;
+    vitestAnchor = null;
   }
-  return vitestRequire;
+  return vitestAnchor;
 }
 
 /**
@@ -438,12 +459,42 @@ export function isVitestFamilySpecifier(id: string): boolean {
  * `@vitest/expect`, etc. Non-browser tests are unaffected — vitest's own
  * module runner handles resolution there.
  *
- * This plugin is a pure fallback: it FIRST defers to the default resolver
- * (`this.resolve(..., { skipSelf: true })`), so projects that already resolve
- * fine see zero behavior change. Only when default resolution returns `null`
- * does it fall back to resolving from `vite-plus`'s own dependency tree:
- * `vitest` / `vitest/*` / `@vitest/browser*` via [[vitePlusRequire]], and the
- * nested `@vitest/*` family (deps of `vitest`) via [[getVitestRequire]].
+ * This plugin re-resolves the `vitest` / `@vitest/*` family through Vite's OWN
+ * resolver, but ROOTED at `vite-plus`'s location ([[vitePlusModuleFile]]) and
+ * then the bundled `vitest`'s location ([[getVitestAnchor]]) BEFORE the
+ * project. So every such import binds to the same physical (pinned) Vitest that
+ * `vp test` spawns as the runner (see `resolveBundled` in `resolve-test.ts`)
+ * and that the `vite-plus/test*` shims re-export. Were a project-local Vitest
+ * preferred instead, a project that keeps its own `vitest` dependency would
+ * split the run across two physical Vitest module instances — the runner
+ * (bundled) vs. the test files' `vi`/`expect`/runner internals (project) — a
+ * classic source of internal-state and mock-hoisting mismatches. For the common
+ * migrated layout (a project depending only on `vite-plus`) nothing in this
+ * family is resolvable from the project root under pnpm's isolated layout
+ * anyway, so default resolution would return `null` there regardless;
+ * bundle-first only changes the project-keeps-its-own-`vitest` case, which is
+ * exactly the case we want pinned.
+ *
+ * Resolution goes through `this.resolve` (NOT [[vitePlusRequire]].resolve) so
+ * Vite's ESM export conditions are honoured: a raw `require.resolve` would pick
+ * Vitest's `require`-condition entry, a CJS throw-stub for `vitest` /
+ * `vitest/config`. Two bundled anchors are tried because `@vitest/browser*` are
+ * direct deps of `vite-plus` (reachable from [[vitePlusModuleFile]]) while the
+ * nested `@vitest/*` family are deps of `vitest` (reachable only from the
+ * `vitest` anchor). The project root remains the last resort for any family id
+ * the bundled tree cannot resolve, so this is never worse than deferring first.
+ *
+ * Two intentional limits of routing through `this.resolve`:
+ *   - An EXPLICIT project `resolve.alias` / `resolve.dedupe` on the vitest
+ *     family takes precedence (Vite's pipeline applies it even from a bundled
+ *     anchor). Neither is set by default in Vitest 4.x, so this only affects
+ *     projects that deliberately re-point the family — treated as an opt-out of
+ *     pinning, not defeated silently.
+ *   - Coverage providers (`@vitest/coverage-v8` / `-istanbul`) are NOT shipped
+ *     with `vite-plus`, so they hit the project fallback below. Under
+ *     `--coverage`, a project-installed provider of a different version pairs
+ *     with the bundled runner; Vitest validates provider/runner versions and
+ *     errors on a mismatch.
  */
 function vitePlusVitestResolverPlugin(): PluginOption {
   return {
@@ -453,35 +504,28 @@ function vitePlusVitestResolverPlugin(): PluginOption {
       if (!isVitestFamilySpecifier(id)) {
         return null;
       }
-      // The failing imports are all clean bare specifiers; a queried id is
-      // outside the scope of this fallback — let the default resolver handle it.
+      // The redirected imports are all clean bare specifiers; a queried id is
+      // outside the scope of this resolver — let the default resolver handle it.
       if (id.includes('?')) {
         return null;
       }
-      // Prefer the project's own resolution. `skipSelf` avoids infinite
-      // recursion back into this plugin.
-      const resolved = await this.resolve(id, importer, { ...options, skipSelf: true });
-      if (resolved) {
-        return resolved;
-      }
-      // Fallback: resolve from vite-plus's own dependency tree. `require.resolve`
-      // throws on failure — never let that escape the resolver.
-      try {
-        return vitePlusRequire.resolve(id);
-      } catch {
-        // `vitest` and `@vitest/browser*` are direct deps of vite-plus, but the
-        // nested `@vitest/*` family lives under `vitest` — resolve those from
-        // vitest's own location.
-        const fromVitest = getVitestRequire();
-        if (fromVitest) {
-          try {
-            return fromVitest.resolve(id);
-          } catch {
-            return null;
-          }
+      // Re-resolve from vite-plus's own (pinned) tree via Vite's resolver so the
+      // runner and every imported Vitest module are a single physical instance.
+      // `skipSelf` avoids infinite recursion back into this plugin.
+      const vitestAnchorPath = getVitestAnchor();
+      const bundledAnchors = vitestAnchorPath
+        ? [vitePlusModuleFile, vitestAnchorPath]
+        : [vitePlusModuleFile];
+      for (const anchor of bundledAnchors) {
+        const resolved = await this.resolve(id, anchor, { ...options, skipSelf: true });
+        if (resolved) {
+          return resolved;
         }
-        return null;
       }
+      // Last resort: default project-rooted resolution for any family id the
+      // bundled tree cannot resolve (e.g. coverage providers not shipped with
+      // vite-plus).
+      return this.resolve(id, importer, { ...options, skipSelf: true });
     },
   };
 }
