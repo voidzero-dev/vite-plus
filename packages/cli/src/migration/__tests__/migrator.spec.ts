@@ -2207,10 +2207,12 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(yaml.allowBuilds.geckodriver).toBe(false);
   });
 
-  it('preserves user direct edgedriver dep even when webdriverio signal forces allow (pnpm v10)', () => {
-    // Webdriverio signal would normally write `allowBuilds.edgedriver = true`,
-    // but the user already depends on edgedriver directly — leave their choice
-    // alone. geckodriver still gets the allow entry.
+  it('auto-allows a user direct driver dep when webdriverio is present (pnpm v10)', () => {
+    // The user depends on edgedriver directly AND uses webdriverio (which also
+    // needs the driver built). The webdriverio signal makes builds allowed, so
+    // write `allowBuilds.edgedriver = true` rather than leaving the key absent —
+    // a driver webdriverio needs built must not be left to a pnpm prompt. The
+    // direct-dep skip only suppresses the `false` deny path (no webdriverio).
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
@@ -2227,7 +2229,7 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     const yaml = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
       allowBuilds: Record<string, boolean>;
     };
-    expect(yaml.allowBuilds).not.toHaveProperty('edgedriver');
+    expect(yaml.allowBuilds.edgedriver).toBe(true);
     expect(yaml.allowBuilds.geckodriver).toBe(true);
   });
 
@@ -2327,6 +2329,46 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     };
     expect(yaml.allowBuilds).not.toHaveProperty('geckodriver');
     expect(yaml.allowBuilds.edgedriver).toBe(false);
+  });
+
+  it('auto-allows a direct driver dep when another workspace package uses webdriverio (monorepo, pnpm v10)', () => {
+    // Mixed workspace: package A depends on edgedriver directly while package B
+    // uses webdriverio (which also needs edgedriver/geckodriver built). The
+    // allowBuilds sink is workspace-global, so the webdriverio signal must write
+    // `true` for BOTH drivers — including the one a package depends on directly.
+    // Leaving edgedriver absent would force a pnpm prompt for a build webdriverio
+    // needs. (The direct-dep skip only applies on the no-webdriverio deny path.)
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'root', devDependencies: {} }),
+    );
+    fs.writeFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'packages:\n  - apps/*\n');
+    const driverApp = path.join(tmpDir, 'apps', 'selenium');
+    fs.mkdirSync(driverApp, { recursive: true });
+    fs.writeFileSync(
+      path.join(driverApp, 'package.json'),
+      JSON.stringify({ name: '@vibe/selenium', devDependencies: { edgedriver: '^6.0.0' } }),
+    );
+    const wdioApp = path.join(tmpDir, 'apps', 'wdio');
+    fs.mkdirSync(wdioApp, { recursive: true });
+    fs.writeFileSync(
+      path.join(wdioApp, 'package.json'),
+      JSON.stringify({ name: '@vibe/wdio', devDependencies: { webdriverio: '^9.0.0' } }),
+    );
+
+    const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.pnpm);
+    workspaceInfo.isMonorepo = true;
+    workspaceInfo.packages = [
+      { name: '@vibe/selenium', path: 'apps/selenium', isTemplatePackage: false },
+      { name: '@vibe/wdio', path: 'apps/wdio', isTemplatePackage: false },
+    ];
+    rewriteMonorepo(workspaceInfo, true);
+
+    const yaml = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      allowBuilds: Record<string, boolean>;
+    };
+    expect(yaml.allowBuilds.edgedriver).toBe(true);
+    expect(yaml.allowBuilds.geckodriver).toBe(true);
   });
 });
 
