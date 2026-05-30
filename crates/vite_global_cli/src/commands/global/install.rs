@@ -39,6 +39,7 @@ struct Package<'a> {
 struct InstalledPackage {
     installed_version: String,
     bin_names: Vec<String>,
+    js_bins: HashSet<String>,
 }
 
 fn package_error(package_name: &str, error: impl Into<Error>) -> (Option<String>, Error) {
@@ -155,14 +156,7 @@ pub async fn install(
             installs.push(async {
                 (
                     package_name.clone(),
-                    install_one(
-                        package_name,
-                        package.spec,
-                        &npm_path,
-                        &node_bin_dir,
-                        &node_version,
-                    )
-                    .await,
+                    install_one(package_name, package.spec, &npm_path, &node_bin_dir).await,
                 )
             });
         }
@@ -190,7 +184,7 @@ pub async fn install(
     // 4. Check the installed packages and create shims.
     let mut bin_owners = HashMap::<String, String>::new();
     for (index, (package_name, Package { spec: _, install })) in packages.into_iter().enumerate() {
-        let Some(InstalledPackage { installed_version, bin_names }) = install else {
+        let Some(InstalledPackage { installed_version, bin_names, js_bins }) = install else {
             continue;
         };
 
@@ -267,13 +261,33 @@ pub async fn install(
         let bin_dir = match get_bin_dir().map_err(|error| package_error(&package_name, error)) {
             Ok(bin_dir) => bin_dir,
             Err(error) => {
-                let _ = cleanup_installed_package(&package_name).await;
+                let _ = cleanup_package_dir(&package_name).await;
                 if first_error.is_none() {
                     first_error = Some(error);
                 }
                 continue;
             }
         };
+
+        let metadata = PackageMetadata::new(
+            package_name.clone(),
+            installed_version.clone(),
+            node_version.clone(),
+            None,
+            bin_names.clone(),
+            js_bins,
+            "npm".to_string(),
+        );
+        if let Err(error) =
+            metadata.save().await.map_err(|error| package_error(&package_name, error))
+        {
+            let _ = cleanup_package_dir(&package_name).await;
+            if first_error.is_none() {
+                first_error = Some(error);
+            }
+            continue;
+        }
+
         let mut finalized = true;
         for bin_name in &bin_names {
             if let Err(error) = create_package_shim(&bin_dir, bin_name, &package_name)
@@ -339,7 +353,6 @@ async fn install_one(
     package_spec: &str,
     npm_path: &AbsolutePathBuf,
     node_bin_dir: &AbsolutePathBuf,
-    node_version: &str,
 ) -> Result<InstalledPackage, Error> {
     // 1. Prepare final package directory
     remove_existing_package(package_name).await?;
@@ -408,34 +421,49 @@ async fn install_one(
         }
     }
 
-    let metadata = PackageMetadata::new(
-        package_name.to_string(),
-        installed_version.clone(),
-        node_version.to_string(),
-        None,
-        bin_names.clone(),
-        js_bins,
-        "npm".to_string(),
-    );
-    metadata.save().await?;
-
-    Ok(InstalledPackage { installed_version, bin_names })
+    Ok(InstalledPackage { installed_version, bin_names, js_bins })
 }
 
 async fn cleanup_installed_package(package_name: &str) -> Result<(), Error> {
     let bin_dir = get_bin_dir()?;
     if let Some(metadata) = PackageMetadata::load(package_name).await? {
         for bin_name in metadata.bins {
-            remove_package_shim(&bin_dir, &bin_name).await?;
-            BinConfig::delete(&bin_name).await?;
+            remove_package_bin_if_owned(&bin_dir, &bin_name, package_name).await?;
         }
     }
 
     for bin_name in BinConfig::find_by_package(package_name).await? {
-        remove_package_shim(&bin_dir, &bin_name).await?;
-        BinConfig::delete(&bin_name).await?;
+        remove_package_bin_if_owned(&bin_dir, &bin_name, package_name).await?;
     }
 
+    let packages_dir = get_packages_dir()?;
+    let package_dir = packages_dir.join(package_name);
+    if tokio::fs::try_exists(&package_dir).await.unwrap_or(false) {
+        tokio::fs::remove_dir_all(&package_dir).await?;
+    }
+    PackageMetadata::delete(package_name).await?;
+
+    Ok(())
+}
+
+async fn remove_package_bin_if_owned(
+    bin_dir: &vite_path::AbsolutePath,
+    bin_name: &str,
+    package_name: &str,
+) -> Result<(), Error> {
+    if let Some(config) = BinConfig::load(bin_name).await?
+        && config.package != package_name
+    {
+        return Ok(());
+    }
+
+    remove_package_shim(bin_dir, bin_name).await?;
+    BinConfig::delete(bin_name).await?;
+
+    Ok(())
+}
+
+async fn cleanup_package_dir(package_name: &str) -> Result<(), Error> {
     let packages_dir = get_packages_dir()?;
     let package_dir = packages_dir.join(package_name);
     if tokio::fs::try_exists(&package_dir).await.unwrap_or(false) {
