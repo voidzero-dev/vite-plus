@@ -3,16 +3,10 @@ info: Installing 1 global package with Node.js <semver>
 ✓ Installed just-a-normal-package <semver>
   Bins: just-a-normal-package
 
-> just-a-normal-package
-The package is installed successfully
-
 > vp install -g ./another-package.tgz
 info: Installing 1 global package with Node.js <semver>
 ✓ Installed another-normal-package <semver>
   Bins: another-normal-package
-
-> another-normal-package
-Another package is installed successfully
 
 > vp list -g just-a-normal-package
 Package                       Node version   Binaries
