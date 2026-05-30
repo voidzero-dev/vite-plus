@@ -18,7 +18,6 @@ Options:
   -D, --dev                Only dev dependencies
   --depth <DEPTH>          Limit tree depth
   --no-optional            Exclude optional dependencies
-  -g, --global             Check globally installed packages
   --exclude-peers          Exclude peer dependencies
   --find-by <FINDER_NAME>  Use a finder function defined in .pnpmfile.cjs
   -h, --help               Print help
@@ -38,4 +37,3 @@ bun install v<semver> (<hash>)
 > vp why testnpm2 # should show why package is installed
 testnpm2@<semver>
   └─ command-why-bun (requires <semver>)
-
