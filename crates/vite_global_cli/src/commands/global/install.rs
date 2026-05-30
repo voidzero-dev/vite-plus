@@ -187,7 +187,7 @@ pub async fn install(
     }
     progress.finish_and_clear();
 
-    // 4. Check the installed packages and create shims.
+    // 4. Finalize installed packages.
     let mut bin_owners = HashMap::<String, String>::new();
     for (index, (package_name, Package { spec: _, install })) in packages.into_iter().enumerate() {
         let Some(InstalledPackage { installed_version, bin_names, js_bins, backup }) = install
@@ -199,6 +199,7 @@ pub async fn install(
         let mut conflicts = Vec::<(String, String)>::new();
         let mut finalize_blocked = false;
 
+        // 4.1 Detect binary ownership conflicts before writing metadata.
         for bin_name in &bin_names {
             if let Some(owner) = bin_owners.get(bin_name)
                 && owner != &package_name
@@ -228,6 +229,7 @@ pub async fn install(
             continue;
         }
 
+        // 4.2 Resolve conflicts, either by force-uninstalling owners or rolling back this install.
         if !conflicts.is_empty() {
             if force {
                 let packages_to_remove: HashSet<_> =
@@ -266,6 +268,7 @@ pub async fn install(
             }
         }
 
+        // 4.3 Persist package-level metadata for uninstall, list, and dispatch.
         let bin_dir = match get_bin_dir().map_err(|error| package_error(&package_name, error)) {
             Ok(bin_dir) => bin_dir,
             Err(error) => {
@@ -296,6 +299,7 @@ pub async fn install(
             continue;
         }
 
+        // 4.4 Expose each binary by creating shims and per-binary ownership config.
         let mut finalized = true;
         for bin_name in &bin_names {
             if let Err(error) = create_package_shim(&bin_dir, bin_name, &package_name)
@@ -332,6 +336,7 @@ pub async fn install(
             continue;
         }
 
+        // 4.5 Commit the install by discarding the backup and reporting the installed bins.
         if let Some(backup) = backup {
             if let Err(error) = backup.discard().await {
                 if first_error.is_none() {
@@ -341,6 +346,7 @@ pub async fn install(
             }
         }
 
+        // 4.6 Print success message
         output::success(&format!(
             "{} {} {}{}",
             operation_past,
