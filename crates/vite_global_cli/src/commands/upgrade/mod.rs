@@ -3,10 +3,7 @@
 //! Downloads and installs a new version of the CLI from the npm registry
 //! with SHA-512 integrity verification.
 
-use std::{
-    process::ExitStatus,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::process::ExitStatus;
 
 use owo_colors::OwoColorize;
 use vite_install::request::HttpClient;
@@ -117,8 +114,11 @@ pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
     // Install into a unique semver build-metadata directory instead, then
     // repoint `current` after the install has completed.
     let active_install_dir = install::read_current_version(&install_dir).await;
-    let install_dir_name =
-        target_install_dir_name(&resolved.version, active_install_dir.as_deref(), options.force);
+    let install_dir_name = install::target_install_dir_name(
+        &resolved.version,
+        active_install_dir.as_deref(),
+        options.force,
+    );
     let version_dir = install_dir.join(&install_dir_name);
     tokio::fs::create_dir_all(&version_dir).await?;
 
@@ -213,24 +213,6 @@ async fn install_platform_and_main(
     Ok(ExitStatus::default())
 }
 
-fn target_install_dir_name(version: &str, active_install_dir: Option<&str>, force: bool) -> String {
-    if force && active_install_dir.is_some_and(|active| is_install_dir_for_version(active, version))
-    {
-        return forced_reinstall_dir_name(version);
-    }
-
-    version.to_string()
-}
-
-fn is_install_dir_for_version(install_dir_name: &str, version: &str) -> bool {
-    install_dir_name == version || install_dir_name.starts_with(&format!("{version}+force."))
-}
-
-fn forced_reinstall_dir_name(version: &str) -> String {
-    let nanos = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos();
-    format!("{version}+force.{}.{}", std::process::id(), nanos)
-}
-
 /// Execute rollback to the previous version.
 #[allow(clippy::print_stdout, clippy::print_stderr)]
 async fn execute_rollback(
@@ -270,42 +252,4 @@ async fn execute_rollback(
     }
 
     Ok(ExitStatus::default())
-}
-
-#[cfg(test)]
-mod tests {
-    use node_semver::Version;
-
-    use super::{is_install_dir_for_version, target_install_dir_name};
-
-    #[test]
-    fn forced_active_version_installs_to_unique_semver_dir() {
-        let dir = target_install_dir_name("0.1.23", Some("0.1.23"), true);
-
-        assert!(dir.starts_with("0.1.23+force."));
-        assert!(Version::parse(&dir).is_ok(), "{dir} should remain semver-compatible");
-    }
-
-    #[test]
-    fn forced_active_reinstall_dir_installs_to_new_unique_dir() {
-        let dir = target_install_dir_name("0.1.23", Some("0.1.23+force.1.2"), true);
-
-        assert!(dir.starts_with("0.1.23+force."));
-        assert_ne!(dir, "0.1.23+force.1.2");
-    }
-
-    #[test]
-    fn non_active_or_non_forced_version_uses_plain_version_dir() {
-        assert_eq!(target_install_dir_name("0.1.24", Some("0.1.23"), true), "0.1.24");
-        assert_eq!(target_install_dir_name("0.1.23", Some("0.1.23"), false), "0.1.23");
-        assert_eq!(target_install_dir_name("0.1.23", None, true), "0.1.23");
-    }
-
-    #[test]
-    fn active_version_detection_matches_plain_and_forced_dirs() {
-        assert!(is_install_dir_for_version("0.1.23", "0.1.23"));
-        assert!(is_install_dir_for_version("0.1.23+force.1.2", "0.1.23"));
-        assert!(!is_install_dir_for_version("0.1.230", "0.1.23"));
-        assert!(!is_install_dir_for_version("0.1.24", "0.1.23"));
-    }
 }

@@ -6,7 +6,8 @@
 use std::{
     io::{Cursor, IsTerminal, Read as _, Write as _},
     path::Path,
-    process::Output,
+    process::{self, Output},
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 use flate2::read::GzDecoder;
@@ -443,6 +444,46 @@ pub async fn refresh_shims(install_dir: &AbsolutePath) -> Result<(), Error> {
     Ok(())
 }
 
+/// Resolve the directory name to install a target `version` into.
+///
+/// A forced reinstall of the **currently active** version cannot overwrite the
+/// active version directory on Windows, because the running `vp.exe` is locked.
+/// In that one case we install into a unique build-metadata directory and
+/// repoint `current` only after the install completes; every other case (a
+/// normal upgrade, or a forced reinstall of a non-active version) uses the
+/// plain `version` directory.
+///
+/// The forced directory name is deliberately a valid semver build-metadata
+/// string (`{version}+force.{pid}.{nanos}`) so [`cleanup_old_versions`] — which
+/// only considers entries that parse as semver — still garbage-collects it like
+/// any other version directory.
+pub fn target_install_dir_name(
+    version: &str,
+    active_install_dir: Option<&str>,
+    force: bool,
+) -> String {
+    if force && active_install_dir.is_some_and(|active| is_install_dir_for_version(active, version))
+    {
+        return forced_reinstall_dir_name(version);
+    }
+
+    version.to_string()
+}
+
+/// Whether `install_dir_name` is an install directory for `version` — either the
+/// plain `version` directory or a `{version}+force.*` forced-reinstall directory.
+///
+/// Both `vp upgrade` and `vp-setup` use this so a forced reinstall of the active
+/// version is still recognized as that version on subsequent runs.
+pub fn is_install_dir_for_version(install_dir_name: &str, version: &str) -> bool {
+    install_dir_name == version || install_dir_name.starts_with(&format!("{version}+force."))
+}
+
+fn forced_reinstall_dir_name(version: &str) -> String {
+    let nanos = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos();
+    format!("{version}+force.{}.{}", process::id(), nanos)
+}
+
 /// Clean up old version directories, keeping at most `max_keep` versions.
 ///
 /// Sorts by creation time (newest first, matching install.sh behavior) and removes
@@ -460,7 +501,9 @@ pub async fn cleanup_old_versions(
         let name = entry.file_name();
         let name_str = name.to_string_lossy();
 
-        // Only consider entries that parse as semver
+        // Only consider entries that parse as semver. Forced-reinstall dirs use
+        // semver build metadata (see `forced_reinstall_dir_name`), so they pass
+        // this filter and get garbage-collected like any other version dir.
         if node_semver::Version::parse(&name_str).is_ok() {
             let metadata = entry.metadata().await?;
             // Use creation time (birth time), fallback to modified time
@@ -547,6 +590,37 @@ pub async fn create_env_files(install_dir: &AbsolutePath) -> Result<(), Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn forced_active_version_installs_to_unique_semver_dir() {
+        let dir = target_install_dir_name("0.1.23", Some("0.1.23"), true);
+
+        assert!(dir.starts_with("0.1.23+force."));
+        assert!(node_semver::Version::parse(&dir).is_ok(), "{dir} should remain semver-compatible");
+    }
+
+    #[test]
+    fn forced_active_reinstall_dir_installs_to_new_unique_dir() {
+        let dir = target_install_dir_name("0.1.23", Some("0.1.23+force.1.2"), true);
+
+        assert!(dir.starts_with("0.1.23+force."));
+        assert_ne!(dir, "0.1.23+force.1.2");
+    }
+
+    #[test]
+    fn non_active_or_non_forced_version_uses_plain_version_dir() {
+        assert_eq!(target_install_dir_name("0.1.24", Some("0.1.23"), true), "0.1.24");
+        assert_eq!(target_install_dir_name("0.1.23", Some("0.1.23"), false), "0.1.23");
+        assert_eq!(target_install_dir_name("0.1.23", None, true), "0.1.23");
+    }
+
+    #[test]
+    fn active_version_detection_matches_plain_and_forced_dirs() {
+        assert!(is_install_dir_for_version("0.1.23", "0.1.23"));
+        assert!(is_install_dir_for_version("0.1.23+force.1.2", "0.1.23"));
+        assert!(!is_install_dir_for_version("0.1.230", "0.1.23"));
+        assert!(!is_install_dir_for_version("0.1.24", "0.1.23"));
+    }
 
     #[test]
     fn test_is_safe_tar_path_normal() {

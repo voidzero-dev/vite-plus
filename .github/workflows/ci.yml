@@ -556,15 +556,17 @@ jobs:
         if: ${{ matrix.os == 'windows-latest' }}
         shell: pwsh
         run: |
-          $realVpHome = Join-Path $HOME ".vite-plus"
-          $currentVp = Join-Path $realVpHome "current/bin/vp.exe"
-          $versionOutput = & $currentVp --version
-          $versionMatch = $versionOutput | Select-String -Pattern '^vp v(.+)$' | Select-Object -First 1
-          if (-not $versionMatch) {
-            Write-Error "Failed to parse vp version from: $versionOutput"
+          # Force-reinstall the published `latest` version rather than the local
+          # build's version: mid-release-cycle the build can be ahead of the
+          # registry, and `vp upgrade <version>` must download <version> from npm.
+          $version = "$(npm view vite-plus version)".Trim()
+          if (-not $version) {
+            Write-Error "Failed to resolve latest published vite-plus version"
             exit 1
           }
-          $version = $versionMatch.Matches[0].Groups[1].Value
+
+          $realVpHome = Join-Path $HOME ".vite-plus"
+          $currentVp = Join-Path $realVpHome "current/bin/vp.exe"
 
           $tempVpHome = Join-Path $env:RUNNER_TEMP "vp-same-version-force"
           if (Test-Path $tempVpHome) {
@@ -612,15 +614,19 @@ jobs:
           # the on-disk layout on every platform (current must repoint at a
           # `<version>+force.*` dir, the original version tree must survive, and
           # `.previous-version` must be recorded), so we assert that here too.
-          real_vp_home="$HOME/.vite-plus"
-          current_vp="$real_vp_home/current/bin/vp"
-          version=$("$current_vp" --version | sed -n 's/^vp v\(.*\)/\1/p' | head -n1)
+          #
+          # Force-reinstall the published `latest` version rather than the local
+          # build's version: mid-release-cycle the build can be ahead of the
+          # registry, and `vp upgrade <version>` must download <version> from npm.
+          version=$(npm view vite-plus version)
           if [ -z "$version" ]; then
-            echo "Failed to parse vp version from: $("$current_vp" --version)"
+            echo "Failed to resolve latest published vite-plus version"
             exit 1
           fi
 
-          temp_vp_home="$RUNNER_TEMP/vp-same-version-force"
+          real_vp_home="$HOME/.vite-plus"
+          current_vp="$real_vp_home/current/bin/vp"
+          temp_vp_home="${RUNNER_TEMP:?RUNNER_TEMP must be set}/vp-same-version-force"
           rm -rf "$temp_vp_home"
 
           initial_bin_dir="$temp_vp_home/$version/bin"
