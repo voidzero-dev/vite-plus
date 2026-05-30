@@ -366,7 +366,6 @@
     "@vitest/browser": "catalog:",
     "@vitest/browser-playwright": "catalog:",
     "@vitest/browser-preview": "catalog:",
-    "@vitest/browser-webdriverio": "catalog:",
     "@vitest/expect": "catalog:",
     "@vitest/mocker": "catalog:",
     "@vitest/pretty-format": "catalog:",
@@ -389,6 +388,7 @@
     "@types/cross-spawn": "catalog:",
     "@types/semver": "catalog:",
     "@types/validate-npm-package-name": "catalog:",
+    "@vitest/browser-webdriverio": "catalog:",
     "@voidzero-dev/vite-plus-prompts": "workspace:*",
     "@voidzero-dev/vite-plus-tools": "workspace:*",
     "bingo": "catalog:",
@@ -410,6 +410,14 @@
     "vite": "workspace:*",
     "yaml": "catalog:",
     "zod": "catalog:"
+  },
+  "peerDependencies": {
+    "@vitest/browser-webdriverio": "catalog:"
+  },
+  "peerDependenciesMeta": {
+    "@vitest/browser-webdriverio": {
+      "optional": true
+    }
   },
   "napi": {
     "binaryName": "vite-plus",

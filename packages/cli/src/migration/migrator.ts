@@ -88,35 +88,87 @@ const REMOVE_PACKAGES = [
   '@vitest/browser',
   '@vitest/browser-preview',
   '@vitest/browser-playwright',
-  '@vitest/browser-webdriverio',
 ] as const;
 
-// Extract the bare package name from a pnpm override key. Handles bare
-// (`pkg`), versioned (`pkg@1`), parent-selector (`parent>pkg`), and
-// chained (`parent@1>pkg@2`) shapes. Scoped names keep their leading `@`.
+// The opt-in webdriverio provider. Unlike playwright/preview it is NOT bundled
+// by vite-plus or stripped from users (so it stays out of REMOVE_PACKAGES); the
+// migration keeps it in the user's own deps, pinned to the bundled vitest
+// version.
+const WEBDRIVERIO_PROVIDER = '@vitest/browser-webdriverio';
+
+// Provider names whose stale pnpm overrides / resolutions are dropped during
+// migration: everything vite-plus owns (REMOVE_PACKAGES) plus the user-owned
+// webdriverio provider. The webdriverio DEP is preserved, but a leftover
+// override/resolution pin to another version would WIN over the direct dep and
+// misalign the provider against the bundled vitest — so the stale forcing pin is
+// dropped while the dependency itself stays installed. NOTE: catalog deletion
+// uses REMOVE_PACKAGES (not this set) on purpose — a catalog entry is only a
+// version *definition*, and deleting it could dangle a surviving `catalog:`
+// reference (e.g. in peerDependencies) and break install.
+const PROVIDER_OVERRIDE_DROP_NAMES = [...REMOVE_PACKAGES, WEBDRIVERIO_PROVIDER] as const;
+
+// Extract the package name an override/resolution key *targets* — i.e. the
+// package whose version would be forced. This mirrors the grammar of the real
+// package-manager parsers (verified against `@yarnpkg/parsers` parseResolution):
+//   - bare (`pkg`, `@scope/pkg`)
+//   - versioned (`pkg@1`, `@scope/pkg@1`)
+//   - pnpm parent selectors (`parent>pkg`, chained `a@1>b>@scope/pkg`)
+//   - yarn `from/target` selectors (`parent/pkg`, `parent/@scope/pkg`,
+//     `parent@1/pkg`, glob `**/pkg`)
+// For a yarn `from/target` selector the forced package is the TRAILING
+// descriptor, not the parent: `@scope/pkg@4/child` targets `child`, and an
+// npm-alias key like `@scope/pkg@npm:@other/fork@1` is parsed by yarn as
+// `from=@scope/pkg@npm:@other`, `descriptor=fork@1` — so the target is `fork`,
+// NOT `@scope/pkg`. Taking the trailing descriptor is exactly that. (Yarn
+// *rejects* keys whose range embeds a slash, e.g. `pkg@patch:…/…` or git/URL
+// ranges, so those never reach us as valid keys and need no special handling.)
+// Scoped names keep their leading `@` and internal `/`.
 function extractOverrideTargetName(key: string): string {
-  const targetSide = key.includes('>') ? key.slice(key.lastIndexOf('>') + 1) : key;
-  const trimmed = targetSide.trim();
-  if (!trimmed) {
-    return trimmed;
+  // pnpm parent selector `parent>child` (incl. chains `a>b>child`): the forced
+  // package is the deepest child. pnpm splits at a `>` whose preceding char is
+  // NOT space, `|`, or `@` — this is pnpm's own delimiter rule (DELIMITER_REGEX
+  // = /[^ |@]>/ in @pnpm/parse-overrides) — so a semver comparator range such as
+  // `pkg@>=4`, `pkg@>4`, or `>1 || >2` is NOT mistaken for a parent selector.
+  // Peel parent levels until none remain, keeping the trailing child.
+  let target = key.trim();
+  for (let delim = target.search(/[^ |@]>/); delim !== -1; delim = target.search(/[^ |@]>/)) {
+    target = target.slice(delim + 2).trim();
   }
-  const lastAt = trimmed.lastIndexOf('@');
-  if (lastAt > 0) {
-    return trimmed.slice(0, lastAt);
+  if (!target) {
+    return target;
   }
-  return trimmed;
+  // yarn `from/target` selector: drop leading parent/glob segments, keeping the
+  // trailing package descriptor (and a scoped name's own `/`).
+  if (target.includes('/')) {
+    const segments = target.split('/');
+    const last = segments[segments.length - 1];
+    const scope = segments[segments.length - 2];
+    target = scope?.startsWith('@') ? `${scope}/${last}` : last;
+  }
+  // Strip a trailing version/range suffix. The version `@` follows the name
+  // (after the `/` for a scoped name); the leading scope `@` is never a version
+  // separator.
+  const nameStart = target.startsWith('@') ? target.indexOf('/') + 1 : 0;
+  const versionAt = target.indexOf('@', nameStart);
+  if (versionAt > 0) {
+    target = target.slice(0, versionAt);
+  }
+  return target;
 }
 
 // True iff a pnpm.overrides key's target (after stripping selector and
-// version suffixes) is a REMOVE_PACKAGES entry. Shared by the JSON-object
-// and YAMLMap variants below.
+// version suffixes) is a provider whose stale pin must be dropped (see
+// PROVIDER_OVERRIDE_DROP_NAMES). Shared by the JSON-object and YAMLMap
+// variants below.
 function isRemovePackageOverrideKey(key: string): boolean {
-  return (REMOVE_PACKAGES as readonly string[]).includes(extractOverrideTargetName(key));
+  return (PROVIDER_OVERRIDE_DROP_NAMES as readonly string[]).includes(
+    extractOverrideTargetName(key),
+  );
 }
 
-// Drop pnpm.overrides keys whose target is a REMOVE_PACKAGES entry. Covers
+// Drop pnpm.overrides keys whose target is a drop-listed provider. Covers
 // bare, versioned, parent-selector and chained selector shapes that exact-key
-// matching against REMOVE_PACKAGES would miss.
+// matching would miss.
 function dropRemovePackageOverrideKeys(overrides: Record<string, unknown> | undefined): void {
   if (!overrides) {
     return;
@@ -146,13 +198,11 @@ const BROWSER_PROVIDER_POSTINSTALL_PACKAGES = ['edgedriver', 'geckodriver'] as c
 const WEBDRIVERIO_PEER_DEP = 'webdriverio';
 
 // Dependencies whose presence before migration signals the user will end up
-// with webdriverio after migration. `@vitest/browser-webdriverio` is removed
-// by `REMOVE_PACKAGES` and replaced with `webdriverio` via
-// `BROWSER_PROVIDER_PEER_DEPS`, so it must allow driver postinstalls too.
-const WEBDRIVERIO_ALLOW_SIGNAL_DEPS = [
-  WEBDRIVERIO_PEER_DEP,
-  '@vitest/browser-webdriverio',
-] as const;
+// with webdriverio after migration. `@vitest/browser-webdriverio` is the opt-in
+// provider vite-plus keeps in the user's deps (pinned to the bundled vitest)
+// and `webdriverio` is its runtime peer (added via `BROWSER_PROVIDER_PEER_DEPS`);
+// either one means the edgedriver/geckodriver postinstalls must be allowed.
+const WEBDRIVERIO_ALLOW_SIGNAL_DEPS = [WEBDRIVERIO_PEER_DEP, WEBDRIVERIO_PROVIDER] as const;
 
 // Browser-provider package names that, when present in the user's deps
 // before migration, signal vitest browser mode even if no source file
@@ -1178,13 +1228,22 @@ export function rewriteStandaloneProject(
       onlyBuiltDependencies?: string[];
     };
   }>(packageJsonPath, (pkg) => {
-    shouldAllowBrowserProviderBuilds = hasOwnWebdriverioDependency(pkg);
+    shouldAllowBrowserProviderBuilds =
+      hasOwnWebdriverioDependency(pkg) || usesWebdriverioProvider(projectPath);
     directDriverDeps = collectDirectDriverDeps(pkg);
     // Strip stale `vite-plus-test` wrapper aliases before injecting new overrides
     // so the deleted wrapper doesn't survive migration in any sink.
     pruneLegacyWrapperAliases(pkg.resolutions);
     pruneLegacyWrapperAliases(pkg.overrides);
     pruneLegacyWrapperAliases(pkg.pnpm?.overrides);
+    // Drop stale provider overrides/resolutions (REMOVE_PACKAGES + the now
+    // user-owned webdriverio provider) from the npm/bun `overrides` and yarn
+    // `resolutions` sinks before re-merging managed overrides. A leftover pin
+    // would conflict with the migrated direct `@vitest/browser-webdriverio` dep
+    // — npm hard-fails with EOVERRIDE, and yarn/bun would force the stale version
+    // over the bundled-vitest-aligned 4.1.7. (The pnpm sinks are pruned below.)
+    dropRemovePackageOverrideKeys(pkg.resolutions);
+    dropRemovePackageOverrideKeys(pkg.overrides);
     if (packageManager === PackageManager.yarn) {
       pkg.resolutions = {
         ...pkg.resolutions,
@@ -1255,7 +1314,7 @@ export function rewriteStandaloneProject(
       }
       // remove packages from `resolutions` field if they exist
       // https://pnpm.io/9.x/package_json#resolutions
-      for (const key of [...overrideKeys, ...REMOVE_PACKAGES]) {
+      for (const key of [...overrideKeys, ...PROVIDER_OVERRIDE_DROP_NAMES]) {
         if (pkg.resolutions?.[key]) {
           delete pkg.resolutions[key];
         }
@@ -1277,6 +1336,7 @@ export function rewriteStandaloneProject(
       skipStagedMigration,
       catalogDependencyResolver,
       usesVitestBrowserMode(projectPath),
+      usesWebdriverioProvider(projectPath),
     );
 
     // ensure vite-plus is in devDependencies
@@ -1481,6 +1541,7 @@ export function rewriteMonorepoProject(
       skipStagedMigration,
       catalogDependencyResolver,
       usesVitestBrowserMode(projectPath),
+      usesWebdriverioProvider(projectPath),
     );
     return pkg;
   });
@@ -1639,7 +1700,7 @@ function cleanupPnpmOverridesForWorkspaceYaml(
   // Remove Vite-managed keys from pnpm.overrides
   const catalogOverrides: Record<string, string> = {};
   const overrides = pkg.pnpm?.overrides;
-  for (const key of [...overrideKeys, ...REMOVE_PACKAGES]) {
+  for (const key of [...overrideKeys, ...PROVIDER_OVERRIDE_DROP_NAMES]) {
     const value = overrides?.[key];
     if (value) {
       if (overrideKeys.includes(key) && value.startsWith('catalog:')) {
@@ -1755,12 +1816,23 @@ function workspaceUsesWebdriverio(
   if (rootPkg && hasOwnWebdriverioDependency(rootPkg)) {
     return true;
   }
+  // Source-only signal: a package may target the webdriverio provider purely
+  // through imports (e.g. `vite-plus/test/browser-webdriverio`) without a
+  // declared dep yet. The migration injects the provider for those, so the
+  // driver postinstalls must be allowed too.
+  if (usesWebdriverioProvider(rootDir)) {
+    return true;
+  }
   if (!packages) {
     return false;
   }
   for (const pkg of packages) {
-    const subPkg = readPackageJsonIfExists(path.join(rootDir, pkg.path, 'package.json'));
+    const packageDir = path.join(rootDir, pkg.path);
+    const subPkg = readPackageJsonIfExists(path.join(packageDir, 'package.json'));
     if (subPkg && hasOwnWebdriverioDependency(subPkg)) {
+      return true;
+    }
+    if (usesWebdriverioProvider(packageDir)) {
       return true;
     }
   }
@@ -2311,6 +2383,14 @@ function rewriteRootWorkspacePackageJson(
     pruneLegacyWrapperAliases(pkg.resolutions);
     pruneLegacyWrapperAliases(pkg.overrides);
     pruneLegacyWrapperAliases(pkg.pnpm?.overrides);
+    // Drop stale provider overrides/resolutions (REMOVE_PACKAGES + the now
+    // user-owned webdriverio provider) from the npm/bun `overrides` and yarn
+    // `resolutions` sinks before re-merging managed overrides. A leftover pin
+    // would conflict with the migrated direct `@vitest/browser-webdriverio` dep
+    // — npm hard-fails with EOVERRIDE, and yarn/bun would force the stale version
+    // over the bundled-vitest-aligned 4.1.7. (The pnpm sinks are pruned below.)
+    dropRemovePackageOverrideKeys(pkg.resolutions);
+    dropRemovePackageOverrideKeys(pkg.overrides);
     if (packageManager === PackageManager.yarn) {
       pkg.resolutions = {
         ...pkg.resolutions,
@@ -2357,7 +2437,7 @@ function rewriteRootWorkspacePackageJson(
           },
         };
       } else {
-        for (const key of [...overrideKeys, ...REMOVE_PACKAGES]) {
+        for (const key of [...overrideKeys, ...PROVIDER_OVERRIDE_DROP_NAMES]) {
           if (pkg.resolutions?.[key]) {
             delete pkg.resolutions[key];
           }
@@ -3008,6 +3088,35 @@ export function ensureVitePlusBootstrap(
 // vitest's browser runner.
 const VITEST_BROWSER_SPECIFIER_HINTS = ['@vitest/browser', 'vite-plus/test/browser'] as const;
 
+// Specifier fragments that signal the WEBDRIVERIO provider specifically. Each
+// is a prefix, matched as a substring, so subpath imports (`/context`,
+// `/provider`, …) are covered too:
+//   - `@vitest/browser-webdriverio`            pre-migration (incl. `/provider`,
+//                                              `/context` subpaths)
+//   - `vite-plus/test/browser-webdriverio`     migrated (re-run); covers
+//                                              `…/context`
+//   - `vite-plus/test/browser/providers/webdriverio`  migrated provider-subpath
+//                                              form — the import rewriter maps
+//                                              `@vitest/browser-webdriverio/provider`
+//                                              here, so an already-migrated
+//                                              project can contain it. Without
+//                                              this hint a re-run would skip the
+//                                              provider injection and the import
+//                                              would break under pnpm strict /
+//                                              Yarn PnP once the provider is no
+//                                              longer a vite-plus runtime dep.
+//   - `vite-plus/test/plugins/browser-webdriverio`  generated plugin shim that
+//                                              re-exports `@vitest/browser-
+//                                              webdriverio` wholesale; importing
+//                                              it pulls in the (now opt-in)
+//                                              provider, so it signals usage too.
+const WEBDRIVERIO_PROVIDER_SPECIFIER_HINTS = [
+  '@vitest/browser-webdriverio',
+  'vite-plus/test/browser-webdriverio',
+  'vite-plus/test/browser/providers/webdriverio',
+  'vite-plus/test/plugins/browser-webdriverio',
+] as const;
+
 // TypeScript/JavaScript source extensions scanned for browser-mode hints.
 const VITEST_SCAN_EXTENSIONS = new Set([
   '.ts',
@@ -3060,9 +3169,8 @@ const VITEST_SCAN_SKIP_DIRS = new Set([
  * is a separate package that the migration scans on its own pass, so the root
  * package must not inherit a browser-mode signal from a sub-package.
  */
-function usesVitestBrowserMode(projectPath: string): boolean {
-  const matchesBrowserHint = (content: string): boolean =>
-    VITEST_BROWSER_SPECIFIER_HINTS.some((hint) => content.includes(hint));
+function sourceTreeReferencesAny(projectPath: string, hints: readonly string[]): boolean {
+  const matchesHint = (content: string): boolean => hints.some((hint) => content.includes(hint));
 
   const scanDir = (dir: string, isRoot: boolean): boolean => {
     let entries: fs.Dirent[];
@@ -3087,7 +3195,7 @@ function usesVitestBrowserMode(projectPath: string): boolean {
         }
       } else if (entry.isFile() && VITEST_SCAN_EXTENSIONS.has(path.extname(entry.name))) {
         try {
-          if (matchesBrowserHint(fs.readFileSync(entryPath, 'utf8'))) {
+          if (matchesHint(fs.readFileSync(entryPath, 'utf8'))) {
             return true;
           }
         } catch {
@@ -3099,6 +3207,19 @@ function usesVitestBrowserMode(projectPath: string): boolean {
   };
 
   return scanDir(projectPath, true);
+}
+
+function usesVitestBrowserMode(projectPath: string): boolean {
+  return sourceTreeReferencesAny(projectPath, VITEST_BROWSER_SPECIFIER_HINTS);
+}
+
+// Source-only signal that a package targets the WEBDRIVERIO provider — used to
+// inject the (opt-in, no-longer-bundled) `@vitest/browser-webdriverio` provider
+// and its `webdriverio` peer, plus to allow the edgedriver/geckodriver builds,
+// even when no dep is declared yet. See `usesVitestBrowserMode` for the shared
+// traversal semantics (extensions, skip dirs, nested-package boundary).
+function usesWebdriverioProvider(projectPath: string): boolean {
+  return sourceTreeReferencesAny(projectPath, WEBDRIVERIO_PROVIDER_SPECIFIER_HINTS);
 }
 
 export function rewritePackageJson(
@@ -3115,6 +3236,7 @@ export function rewritePackageJson(
   skipStagedMigration?: boolean,
   catalogDependencyResolver?: CatalogDependencyResolver,
   vitestBrowserMode?: boolean,
+  webdriverioProviderMode?: boolean,
 ): Record<string, string | string[]> | null {
   if (pkg.scripts) {
     const updated = rewriteScripts(
@@ -3214,6 +3336,46 @@ export function rewritePackageJson(
       pkg.devDependencies ??= {};
       pkg.devDependencies[peerDep] = '*';
     }
+  }
+  // Webdriverio is opt-in: vite-plus no longer bundles the provider, so a
+  // webdriverio user must own `@vitest/browser-webdriverio` themselves for the
+  // rewritten `vite-plus/test/browser-webdriverio` import to resolve. Unlike the
+  // rest of the `@vitest/*` family it is deliberately NOT in
+  // VITE_PLUS_OVERRIDE_PACKAGES (so non-webdriverio projects stay untouched),
+  // which means the normalization loop above does not pin it. We pin it here, to
+  // a CONCRETE version (no catalog entry is written for the opt-in provider) so
+  // it self-resolves and stays aligned with the bundled vitest, and we ensure
+  // its runtime framework peer `webdriverio`. (Playwright/preview stay bundled +
+  // stripped, handled in the REMOVE_PACKAGES loop above.)
+  const usesWebdriverio =
+    webdriverioProviderMode ||
+    dependencyGroups.some(({ dependencies }) => dependencies?.[WEBDRIVERIO_PROVIDER] !== undefined);
+  if (usesWebdriverio) {
+    // The provider must be INSTALLED (in deps/devDeps/optionalDeps, not merely a
+    // peer) for the rewritten `vite-plus/test/browser-webdriverio` import to
+    // resolve. Normalize an existing install-group declaration to the bundled
+    // vitest version in place (the override loop above no longer pins it);
+    // otherwise — a source-only or peer-only user — inject it into devDeps.
+    const installGroup = [pkg.dependencies, pkg.devDependencies, pkg.optionalDependencies].find(
+      (deps) => deps?.[WEBDRIVERIO_PROVIDER] !== undefined,
+    );
+    if (installGroup) {
+      installGroup[WEBDRIVERIO_PROVIDER] = VITEST_VERSION;
+    } else {
+      pkg.devDependencies ??= {};
+      pkg.devDependencies[WEBDRIVERIO_PROVIDER] = VITEST_VERSION;
+    }
+    const peer = BROWSER_PROVIDER_PEER_DEPS[WEBDRIVERIO_PROVIDER]; // 'webdriverio'
+    const peerPresent =
+      pkg.dependencies?.[peer] ??
+      pkg.devDependencies?.[peer] ??
+      pkg.peerDependencies?.[peer] ??
+      pkg.optionalDependencies?.[peer];
+    if (peer && !peerPresent) {
+      pkg.devDependencies ??= {};
+      pkg.devDependencies[peer] = '*';
+    }
+    needVitePlus = true;
   }
   // Promote dep-derived signal to the same flag the source-scan feeds, so the
   // downstream "add direct `vitest`" branch fires for config-only browser-mode
