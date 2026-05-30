@@ -43,6 +43,8 @@ export default defineConfig({
     "vite": "catalog:",
     "vitest": "catalog:",
     "playwright": "*",
+    "@vitest/browser-webdriverio": "4.1.7",
+    "webdriverio": "*",
     "vite-plus": "catalog:"
   },
   "devEngines": {
@@ -69,8 +71,8 @@ catalog:
   '@vitest/coverage-istanbul': <semver>
   vite-plus: latest
 allowBuilds:
-  edgedriver: false
-  geckodriver: false
+  edgedriver: true
+  geckodriver: true
 overrides:
   vite: 'catalog:'
   vitest: 'catalog:'

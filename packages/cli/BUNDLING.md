@@ -373,6 +373,8 @@ In addition to vitest's own exports, the three `@vitest/browser-*` provider pack
 
 Each provider's own subpaths (e.g. `./context`) are mirrored under both alias prefixes.
 
+> **Note — webdriverio is opt-in.** `@vitest/browser-playwright` and `@vitest/browser-preview` stay bundled **runtime dependencies** of `vite-plus` (and are stripped from users' manifests during migration). `@vitest/browser-webdriverio` is now a vite-plus **devDependency only** — it is kept so build-time shim generation can still emit the `./test/browser-webdriverio*` exports (the export/shim surfaces above are unchanged), but it is no longer a bundled runtime dep. Webdriverio users instead receive the provider in their **own** dependencies via `vp migrate` (pinned to the bundled vitest version), so their rewritten `vite-plus/test/browser-webdriverio` imports resolve.
+
 #### Why provider d.ts shims are inlined
 
 Provider `.d.ts` shims are NOT plain `export * from '@vitest/browser-playwright'` re-exports — they inline the upstream `.d.ts` content with `vitest/node` / `vitest/browser` / `@vitest/browser*` bare specifiers rewritten to relative paths inside `dist/test/`. The two private shims `dist/test/_at-vitest-browser.d.ts` and `dist/test/_at-vitest-browser/context.d.ts` re-export `@vitest/browser`/`@vitest/browser/context` and are referenced from those rewrites.
