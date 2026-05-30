@@ -3,7 +3,7 @@ use std::{path::Path, time::Duration};
 use backon::{ExponentialBuilder, Retryable};
 use flate2::read::GzDecoder;
 use futures_util::stream::StreamExt;
-use reqwest::Response;
+use reqwest::{Response, StatusCode};
 use serde::de::DeserializeOwned;
 use sha1::Sha1;
 use sha2::{Digest, Sha224, Sha256, Sha512};
@@ -211,20 +211,21 @@ pub async fn download_and_extract_tgz_with_hash(
         expected_hash
     );
 
-    // Wrap the download → verify → extract sequence in a content-integrity
-    // retry. Network errors are already retried inside `download_file`, so the
-    // predicate below only retries IO / hash-mismatch / extraction failures
-    // (the symptoms of a transient corrupt or truncated download). A 404 maps
-    // to a `Reqwest` error that must propagate unchanged so the caller in
-    // `package_manager.rs` can turn it into `PackageManagerVersionNotFound`.
+    // This is the single retry layer for the whole download → verify → extract
+    // pipeline: each attempt does one download (no nested retry — see
+    // `_once`), so a transient network error, a truncated download, a corrupt
+    // archive, or a hash mismatch all re-download from scratch exactly once per
+    // attempt. A 404 (version not found) and permanent config errors fail fast
+    // and propagate unchanged so the caller in `package_manager.rs` can map a
+    // 404 to `PackageManagerVersionNotFound`.
     (|| async { download_and_extract_tgz_with_hash_once(url, &target_dir, expected_hash).await })
         .retry(
             ExponentialBuilder::default()
                 .with_jitter()
-                .with_min_delay(Duration::from_millis(200))
+                .with_min_delay(Duration::from_millis(500))
                 .with_max_times(3),
         )
-        .when(is_retryable_extract_error)
+        .when(is_retryable_download_error)
         .await
 }
 
@@ -243,9 +244,12 @@ async fn download_and_extract_tgz_with_hash_once(
     }
     fs::create_dir_all(target_dir).await?;
 
-    // Download the tgz file. `download_file` retries the network layer itself.
+    // Download the tgz file with a single attempt (no internal retry). The
+    // pipeline retry in `download_and_extract_tgz_with_hash` owns all retries;
+    // letting `download_file` retry here too would nest two retry layers and
+    // multiply attempts (up to N×M downloads) for a persistent failure.
     let tgz_file = target_dir.join("package.tgz");
-    let client = HttpClient::new();
+    let client = HttpClient::with_config(0, 0);
     client.download_file(url, &tgz_file).await?;
 
     // Verify hash if provided
@@ -267,20 +271,25 @@ async fn download_and_extract_tgz_with_hash_once(
     Ok(())
 }
 
-/// Predicate for the content-integrity retry in
+/// Predicate for the single download → verify → extract retry in
 /// [`download_and_extract_tgz_with_hash`].
 ///
-/// Retries only transient content-integrity / IO failures that a fresh
-/// re-download can fix. Everything else falls through to `false`:
-/// - `Reqwest` network errors are deliberately excluded — `download_file`
-///   already retries the request + body stream, and not re-retrying them here
-///   keeps the caller's 404 → `PackageManagerVersionNotFound` mapping intact.
-/// - Permanent config errors (bad hash format, unsupported algorithm,
-///   version-not-found) can never succeed on retry.
-/// - A `JoinError` (a `spawn_blocking` panic during extraction) is a bug, not a
-///   transient fault, so it fails fast rather than re-downloading.
-fn is_retryable_extract_error(err: &Error) -> bool {
-    matches!(err, Error::Io(_) | Error::IoWithPath { .. } | Error::HashMismatch { .. })
+/// Retries transient failures that a fresh re-download can fix; everything else
+/// fails fast:
+/// - `Reqwest`: retry transient network/HTTP errors, but NOT a 404 — that means
+///   the version doesn't exist, so it must propagate unchanged for the caller's
+///   `PackageManagerVersionNotFound` mapping (and there's no point retrying it).
+/// - `Io` / `IoWithPath`: truncated download or corrupt-archive extraction
+///   (e.g. tar `UnexpectedEof`).
+/// - `HashMismatch`: integrity failure, most likely a corrupt/truncated download.
+/// - Everything else (bad hash format, unsupported algorithm, a `JoinError`
+///   from a `spawn_blocking` panic, …) is permanent and is not retried.
+fn is_retryable_download_error(err: &Error) -> bool {
+    match err {
+        Error::Reqwest(e) => e.status() != Some(StatusCode::NOT_FOUND),
+        Error::Io(_) | Error::IoWithPath { .. } | Error::HashMismatch { .. } => true,
+        _ => false,
+    }
 }
 
 /// Computes the hash of the given content using the specified digest algorithm.
