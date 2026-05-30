@@ -257,6 +257,14 @@ pub enum PackageManagerCommand {
         #[arg(long, requires = "global", value_parser = parse_positive_usize)]
         concurrency: Option<usize>,
 
+        /// Reinstall up-to-date global packages installed with a different Node.js version
+        #[arg(long, requires = "global")]
+        reinstall_node_mismatch: bool,
+
+        /// Skip up-to-date global packages installed with a different Node.js version
+        #[arg(long, requires = "global")]
+        ignore_node_mismatch: bool,
+
         /// Update recursively in all workspace packages
         #[arg(short = 'r', long)]
         recursive: bool,

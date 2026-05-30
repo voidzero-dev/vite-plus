@@ -16,6 +16,7 @@ chrono = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 clap_complete = { workspace = true, features = ["unstable-dynamic"] }
 directories = { workspace = true }
+dialoguer = { workspace = true }
 futures = { workspace = true }
 flate2 = { workspace = true }
 serde = { workspace = true }
