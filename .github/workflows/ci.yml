@@ -602,6 +602,57 @@ jobs:
             exit 1
           }
 
+      - name: Test same-version forced upgrade (Unix)
+        if: ${{ matrix.os != 'windows-latest' }}
+        shell: bash
+        run: |
+          # Unix mirror of the Windows same-version forced-upgrade test above.
+          # Overwriting the running binary in place does not fail on macOS or
+          # modern Linux the way it does on Windows, but the fix still changes
+          # the on-disk layout on every platform (current must repoint at a
+          # `<version>+force.*` dir, the original version tree must survive, and
+          # `.previous-version` must be recorded), so we assert that here too.
+          real_vp_home="$HOME/.vite-plus"
+          current_vp="$real_vp_home/current/bin/vp"
+          version=$("$current_vp" --version | sed -n 's/^vp v\(.*\)/\1/p' | head -n1)
+          if [ -z "$version" ]; then
+            echo "Failed to parse vp version from: $("$current_vp" --version)"
+            exit 1
+          fi
+
+          temp_vp_home="$RUNNER_TEMP/vp-same-version-force"
+          rm -rf "$temp_vp_home"
+
+          initial_bin_dir="$temp_vp_home/$version/bin"
+          mkdir -p "$initial_bin_dir"
+          cp "$current_vp" "$initial_bin_dir/vp"
+          chmod +x "$initial_bin_dir/vp"
+          # Relative symlink, matching swap_current_link's `current -> <version>`.
+          ln -s "$version" "$temp_vp_home/current"
+
+          VP_HOME="$temp_vp_home" "$temp_vp_home/current/bin/vp" upgrade "$version" --force
+
+          updated_dir=$(basename "$(readlink "$temp_vp_home/current")")
+          echo "Updated install dir: $updated_dir"
+          case "$updated_dir" in
+            "$version+force."*) ;;
+            *)
+              echo "Expected current to point at a forced reinstall dir for $version, got $updated_dir"
+              exit 1
+              ;;
+          esac
+
+          if [ ! -f "$temp_vp_home/$version/bin/vp" ]; then
+            echo "Original same-version install directory was unexpectedly removed"
+            exit 1
+          fi
+
+          previous_version=$(tr -d '[:space:]' < "$temp_vp_home/.previous-version")
+          if [ "$previous_version" != "$version" ]; then
+            echo "Expected .previous-version to be $version, got $previous_version"
+            exit 1
+          fi
+
       - name: Test implode (bash)
         shell: bash
         run: |
