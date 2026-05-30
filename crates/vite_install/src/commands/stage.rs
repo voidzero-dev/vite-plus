@@ -81,7 +81,9 @@ impl PackageManager {
             PackageManagerType::Pnpm => {
                 bin_name = "pnpm".into();
 
-                // pnpm: --filter must come before the command.
+                // pnpm: --filter must come before the command. `--filter` and
+                // `--recursive` are pnpm-publish-only workspace flags, so both
+                // live here rather than in the shared subcommand builder.
                 if let StageSubcommand::Publish { filters: Some(filters), .. } = &options.subcommand
                 {
                     for filter in filters {
@@ -91,20 +93,18 @@ impl PackageManager {
                 }
 
                 args.push("stage".into());
-                append_stage_subcommand(&mut args, &options.subcommand, true);
+                append_stage_subcommand(&mut args, &options.subcommand);
+
+                if let StageSubcommand::Publish { recursive: true, .. } = &options.subcommand {
+                    args.push("--recursive".into());
+                }
             }
             PackageManagerType::Npm => {
                 bin_name = "npm".into();
                 append_npm_stage(&mut args, &options.subcommand);
             }
             PackageManagerType::Yarn => {
-                if self.version.starts_with("1.") {
-                    output::warn(
-                        "yarn 1 does not support staged publishing, falling back to npm stage",
-                    );
-                    bin_name = "npm".into();
-                    append_npm_stage(&mut args, &options.subcommand);
-                } else {
+                if self.is_yarn_berry() {
                     match &options.subcommand {
                         StageSubcommand::Publish { target: Some(_), .. } => {
                             // `yarn npm publish` has no target argument; it always
@@ -129,7 +129,7 @@ impl PackageManager {
                             bin_name = "yarn".into();
                             args.push("npm".into());
                             args.push("stage".into());
-                            append_stage_subcommand(&mut args, &options.subcommand, false);
+                            append_stage_subcommand(&mut args, &options.subcommand);
                         }
                         StageSubcommand::View { .. } | StageSubcommand::Download { .. } => {
                             output::warn(
@@ -139,6 +139,12 @@ impl PackageManager {
                             append_npm_stage(&mut args, &options.subcommand);
                         }
                     }
+                } else {
+                    output::warn(
+                        "yarn 1 does not support staged publishing, falling back to npm stage",
+                    );
+                    bin_name = "npm".into();
+                    append_npm_stage(&mut args, &options.subcommand);
                 }
             }
             PackageManagerType::Bun => {
@@ -175,20 +181,15 @@ impl PackageManager {
 /// Build the `npm stage …` argument list (also used as the fallback path for
 /// yarn 1, bun, and yarn berry's unsupported `view`/`download`).
 fn append_npm_stage(args: &mut Vec<String>, subcommand: &StageSubcommand) {
-    warn_workspace_unsupported(subcommand, "npm staged publishing");
+    warn_npm_workspace_unsupported(subcommand);
     args.push("stage".into());
-    append_stage_subcommand(args, subcommand, false);
+    append_stage_subcommand(args, subcommand);
 }
 
-/// Append the `<subcommand> [args]` portion in npm/pnpm style.
-///
-/// `support_workspace` controls whether pnpm's `--recursive` flag is emitted;
-/// `--filter` is handled by the caller as a pnpm prefix.
-fn append_stage_subcommand(
-    args: &mut Vec<String>,
-    subcommand: &StageSubcommand,
-    support_workspace: bool,
-) {
+/// Append the `<subcommand> [args]` portion shared by the npm/pnpm `stage` and
+/// yarn `npm stage` paths. The pnpm-publish-only workspace flags
+/// (`--filter`/`--recursive`) are emitted by the pnpm caller, not here.
+fn append_stage_subcommand(args: &mut Vec<String>, subcommand: &StageSubcommand) {
     match subcommand {
         StageSubcommand::Publish {
             target,
@@ -197,38 +198,15 @@ fn append_stage_subcommand(
             otp,
             dry_run,
             json,
-            recursive,
             provenance,
+            recursive: _,
             filters: _,
         } => {
             args.push("publish".into());
             if let Some(target) = target {
                 args.push(target.clone());
             }
-            if let Some(tag) = tag {
-                args.push("--tag".into());
-                args.push(tag.clone());
-            }
-            if let Some(access) = access {
-                args.push("--access".into());
-                args.push(access.clone());
-            }
-            if let Some(otp) = otp {
-                args.push("--otp".into());
-                args.push(otp.clone());
-            }
-            if *dry_run {
-                args.push("--dry-run".into());
-            }
-            if *json {
-                args.push("--json".into());
-            }
-            if support_workspace && *recursive {
-                args.push("--recursive".into());
-            }
-            if *provenance {
-                args.push("--provenance".into());
-            }
+            push_publish_flags(args, tag, access, otp, *dry_run, *json, *provenance);
         }
         StageSubcommand::List { package, json } => {
             args.push("list".into());
@@ -276,7 +254,6 @@ fn append_stage_subcommand(
 /// have no `yarn npm publish` equivalent so they are warned and dropped.
 fn append_yarn_publish_staged(args: &mut Vec<String>, subcommand: &StageSubcommand) {
     let StageSubcommand::Publish {
-        target: _,
         tag,
         access,
         otp,
@@ -284,6 +261,7 @@ fn append_yarn_publish_staged(args: &mut Vec<String>, subcommand: &StageSubcomma
         json,
         recursive,
         filters,
+        target: _,
         provenance,
     } = subcommand
     else {
@@ -293,7 +271,28 @@ fn append_yarn_publish_staged(args: &mut Vec<String>, subcommand: &StageSubcomma
     args.push("npm".into());
     args.push("publish".into());
     args.push("--staged".into());
+    push_publish_flags(args, tag, access, otp, *dry_run, *json, *provenance);
 
+    if *recursive {
+        output::warn("--recursive is not supported by yarn npm publish, ignoring flag");
+    }
+    if filters.as_ref().is_some_and(|filters| !filters.is_empty()) {
+        output::warn("--filter is not supported by yarn npm publish, ignoring flag");
+    }
+}
+
+/// Forward the publish flags common to the npm/pnpm `stage publish` path and the
+/// yarn `npm publish --staged` path. Flag order is not significant to any of the
+/// package managers, so a single canonical order is used.
+fn push_publish_flags(
+    args: &mut Vec<String>,
+    tag: &Option<String>,
+    access: &Option<String>,
+    otp: &Option<String>,
+    dry_run: bool,
+    json: bool,
+    provenance: bool,
+) {
     if let Some(tag) = tag {
         args.push("--tag".into());
         args.push(tag.clone());
@@ -306,32 +305,26 @@ fn append_yarn_publish_staged(args: &mut Vec<String>, subcommand: &StageSubcomma
         args.push("--otp".into());
         args.push(otp.clone());
     }
-    if *provenance {
-        args.push("--provenance".into());
-    }
-    if *dry_run {
+    if dry_run {
         args.push("--dry-run".into());
     }
-    if *json {
+    if json {
         args.push("--json".into());
     }
-    if *recursive {
-        output::warn("--recursive is not supported by yarn npm publish, ignoring flag");
-    }
-    if filters.as_ref().is_some_and(|filters| !filters.is_empty()) {
-        output::warn("--filter is not supported by yarn npm publish, ignoring flag");
+    if provenance {
+        args.push("--provenance".into());
     }
 }
 
-/// Warn about workspace flags that the given client cannot honor for staged
-/// publishing (only `publish` carries them).
-fn warn_workspace_unsupported(subcommand: &StageSubcommand, client: &str) {
+/// Warn about the workspace flags (`--recursive`/`--filter`) that npm staged
+/// publishing cannot honor (only `publish` carries them).
+fn warn_npm_workspace_unsupported(subcommand: &StageSubcommand) {
     if let StageSubcommand::Publish { recursive, filters, .. } = subcommand {
         if *recursive {
-            output::warn(&format!("--recursive is not supported by {client}, ignoring flag"));
+            output::warn("--recursive is not supported by npm staged publishing, ignoring flag");
         }
         if filters.as_ref().is_some_and(|filters| !filters.is_empty()) {
-            output::warn(&format!("--filter is not supported by {client}, ignoring flag"));
+            output::warn("--filter is not supported by npm staged publishing, ignoring flag");
         }
     }
 }
@@ -538,7 +531,7 @@ mod tests {
         assert_eq!(result.bin_path, "yarn");
         assert_eq!(
             result.args,
-            vec!["npm", "publish", "--staged", "--provenance", "--dry-run", "--json"]
+            vec!["npm", "publish", "--staged", "--dry-run", "--json", "--provenance"]
         );
     }
 
