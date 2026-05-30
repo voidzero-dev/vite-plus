@@ -21,7 +21,7 @@ use crate::{
         env::{
             bin_config::BinConfig,
             config::{
-                get_bin_dir, get_node_modules_dir, get_packages_dir, resolve_version,
+                get_bin_dir, get_node_modules_dir, get_packages_dir, get_tmp_dir, resolve_version,
                 resolve_version_alias,
             },
             package_metadata::PackageMetadata,
@@ -40,6 +40,12 @@ struct InstalledPackage {
     installed_version: String,
     bin_names: Vec<String>,
     js_bins: HashSet<String>,
+    backup: Option<PackageBackup>,
+}
+
+struct PackageBackup {
+    package_dir: AbsolutePathBuf,
+    backup_dir: AbsolutePathBuf,
 }
 
 fn package_error(package_name: &str, error: impl Into<Error>) -> (Option<String>, Error) {
@@ -184,9 +190,11 @@ pub async fn install(
     // 4. Check the installed packages and create shims.
     let mut bin_owners = HashMap::<String, String>::new();
     for (index, (package_name, Package { spec: _, install })) in packages.into_iter().enumerate() {
-        let Some(InstalledPackage { installed_version, bin_names, js_bins }) = install else {
+        let Some(InstalledPackage { installed_version, bin_names, js_bins, backup }) = install
+        else {
             continue;
         };
+        let mut backup = backup;
 
         let mut conflicts = Vec::<(String, String)>::new();
         let mut finalize_blocked = false;
@@ -207,7 +215,7 @@ pub async fn install(
                 }
                 Ok(None) => {}
                 Err(error) => {
-                    let _ = cleanup_installed_package(&package_name).await;
+                    let _ = cleanup_failed_install(&package_name, backup.take()).await;
                     if first_error.is_none() {
                         first_error = Some(package_error(&package_name, error));
                     }
@@ -231,7 +239,7 @@ pub async fn install(
                         pkg, package_name
                     ));
                     if let Err(error) = Box::pin(uninstall(&pkg, false)).await {
-                        let _ = cleanup_installed_package(&package_name).await;
+                        let _ = cleanup_failed_install(&package_name, backup.take()).await;
                         if first_error.is_none() {
                             first_error = Some(package_error(&package_name, error));
                         }
@@ -243,7 +251,7 @@ pub async fn install(
                     continue;
                 }
             } else {
-                let _ = cleanup_installed_package(&package_name).await;
+                let _ = cleanup_failed_install(&package_name, backup.take()).await;
                 if first_error.is_none() {
                     first_error = Some((
                         Some(package_name.clone()),
@@ -261,7 +269,7 @@ pub async fn install(
         let bin_dir = match get_bin_dir().map_err(|error| package_error(&package_name, error)) {
             Ok(bin_dir) => bin_dir,
             Err(error) => {
-                let _ = cleanup_installed_package(&package_name).await;
+                let _ = cleanup_failed_install(&package_name, backup.take()).await;
                 if first_error.is_none() {
                     first_error = Some(error);
                 }
@@ -281,7 +289,7 @@ pub async fn install(
         if let Err(error) =
             metadata.save().await.map_err(|error| package_error(&package_name, error))
         {
-            let _ = cleanup_installed_package(&package_name).await;
+            let _ = cleanup_failed_install(&package_name, backup.take()).await;
             if first_error.is_none() {
                 first_error = Some(error);
             }
@@ -320,8 +328,17 @@ pub async fn install(
         }
 
         if !finalized {
-            let _ = cleanup_installed_package(&package_name).await;
+            let _ = cleanup_failed_install(&package_name, backup.take()).await;
             continue;
+        }
+
+        if let Some(backup) = backup {
+            if let Err(error) = backup.discard().await {
+                if first_error.is_none() {
+                    first_error = Some(package_error(&package_name, error));
+                }
+                continue;
+            }
         }
 
         output::success(&format!(
@@ -347,18 +364,17 @@ pub async fn install(
     if let Some(error) = first_error { Err(error) } else { Ok(()) }
 }
 
-/// Install one package into its final prefix and write package metadata.
+/// Install one package into its final prefix.
 async fn install_one(
     package_name: &str,
     package_spec: &str,
     npm_path: &AbsolutePathBuf,
     node_bin_dir: &AbsolutePathBuf,
 ) -> Result<InstalledPackage, Error> {
+    // 1. Backup a installed package, create directories
     let packages_dir = get_packages_dir()?;
     let package_dir = packages_dir.join(package_name);
-    if let Some(parent) = package_dir.parent() {
-        tokio::fs::create_dir_all(parent).await?;
-    }
+    let backup = PackageBackup::create(package_name, &package_dir).await?;
     tokio::fs::create_dir_all(&package_dir).await?;
 
     // 2. Run npm install with prefix set to the final package directory
@@ -377,6 +393,7 @@ async fn install_one(
         // Show captured output to help debug the failure
         let _ = std::io::stdout().write_all(&output.stdout);
         let _ = std::io::stderr().write_all(&output.stderr);
+        cleanup_failed_install(package_name, backup).await?;
         return Err(Error::ConfigError(
             format!("npm install failed with exit code: {:?}", output.status.code()).into(),
         ));
@@ -386,7 +403,7 @@ async fn install_one(
     let package_json_path = node_modules_dir.join("package.json");
 
     if !tokio::fs::try_exists(&package_json_path).await.unwrap_or(false) {
-        let _ = cleanup_installed_package(package_name).await;
+        cleanup_failed_install(package_name, backup).await?;
         return Err(Error::ConfigError(
             format!(
                 "Package was not installed correctly, package.json not found at {}",
@@ -399,14 +416,14 @@ async fn install_one(
     let package_json_content = match tokio::fs::read_to_string(&package_json_path).await {
         Ok(content) => content,
         Err(error) => {
-            let _ = cleanup_installed_package(package_name).await;
+            cleanup_failed_install(package_name, backup).await?;
             return Err(error.into());
         }
     };
     let package_json: serde_json::Value = match serde_json::from_str(&package_json_content) {
         Ok(package_json) => package_json,
         Err(error) => {
-            let _ = cleanup_installed_package(package_name).await;
+            cleanup_failed_install(package_name, backup).await?;
             return Err(Error::ConfigError(
                 format!("Failed to parse package.json: {error}").into(),
             ));
@@ -426,7 +443,69 @@ async fn install_one(
         }
     }
 
-    Ok(InstalledPackage { installed_version, bin_names, js_bins })
+    Ok(InstalledPackage { installed_version, bin_names, js_bins, backup })
+}
+
+impl PackageBackup {
+    async fn create(
+        package_name: &str,
+        package_dir: &AbsolutePathBuf,
+    ) -> Result<Option<Self>, Error> {
+        if !tokio::fs::try_exists(package_dir).await.unwrap_or(false) {
+            return Ok(None);
+        }
+
+        let backup_dir = get_tmp_dir()?.join("packages").join(package_name);
+        remove_dir_all_if_exists(&backup_dir).await?;
+        if let Some(parent) = backup_dir.parent() {
+            tokio::fs::create_dir_all(parent).await?;
+        }
+        if let Some(parent) = package_dir.parent() {
+            tokio::fs::create_dir_all(parent).await?;
+        }
+
+        tokio::fs::rename(package_dir, &backup_dir).await?;
+
+        Ok(Some(Self { package_dir: package_dir.clone(), backup_dir }))
+    }
+
+    async fn restore(self) -> Result<(), Error> {
+        remove_dir_all_if_exists(&self.package_dir).await?;
+        if tokio::fs::try_exists(&self.backup_dir).await.unwrap_or(false) {
+            if let Some(parent) = self.package_dir.parent() {
+                tokio::fs::create_dir_all(parent).await?;
+            }
+            tokio::fs::rename(&self.backup_dir, &self.package_dir).await?;
+        }
+
+        Ok(())
+    }
+
+    async fn discard(self) -> Result<(), Error> {
+        remove_dir_all_if_exists(&self.backup_dir).await
+    }
+}
+
+async fn cleanup_failed_install(
+    package_name: &str,
+    backup: Option<PackageBackup>,
+) -> Result<(), Error> {
+    match backup {
+        Some(backup) => {
+            remove_dir_all_if_exists(&backup.package_dir).await?;
+            backup.restore().await?;
+        }
+        None => cleanup_installed_package(package_name).await?,
+    }
+    Ok(())
+}
+
+async fn remove_dir_all_if_exists(path: &AbsolutePathBuf) -> Result<(), Error> {
+    match tokio::fs::remove_dir_all(path).await {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error.into()),
+    }
 }
 
 async fn cleanup_installed_package(package_name: &str) -> Result<(), Error> {
