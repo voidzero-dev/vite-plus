@@ -14,8 +14,21 @@ You can upgrade both of them independently.
 ## Global `vp`
 
 ```bash
-vp upgrade
+vp upgrade              # upgrade to the latest version
+vp upgrade 0.2.0        # install a specific version
+vp upgrade --tag alpha  # install the latest pre-release
+vp upgrade --check      # check for updates without installing
 ```
+
+### Rollback
+
+Vite+ keeps the **3 most recent** versions installed so you can revert quickly:
+
+```bash
+vp upgrade --rollback
+```
+
+Older versions are pruned automatically after each upgrade. The active version and the previous version are always kept, so a rollback target is never removed.
 
 ## Local `vite-plus`
 

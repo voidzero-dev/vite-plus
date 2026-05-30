@@ -240,7 +240,7 @@ function Download-AndExtract {
 function Cleanup-OldVersions {
     param([string]$InstallDir)
 
-    $maxVersions = 5
+    $maxVersions = 3
     # Only cleanup semver format directories (0.1.0, 1.2.3-beta.1, etc.)
     # This excludes 'current' symlink and non-semver directories like 'local-dev'
     $semverPattern = '^\d+\.\d+\.\d+(-[a-zA-Z0-9.-]+)?$'
