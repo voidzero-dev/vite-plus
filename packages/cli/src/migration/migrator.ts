@@ -3082,11 +3082,61 @@ export function ensureVitePlusBootstrap(
   return result;
 }
 
-// Specifier fragments that signal vitest browser mode. `@vitest/browser`
-// (upstream, pre-migration) and `vite-plus/test/browser` (post-migration, e.g.
-// re-migrating an already-migrated project) both indicate the package drives
-// vitest's browser runner.
-const VITEST_BROWSER_SPECIFIER_HINTS = ['@vitest/browser', 'vite-plus/test/browser'] as const;
+// Specifier fragments that signal vitest browser mode. Matched as substrings
+// against source (see `sourceTreeReferencesAny`), so subpath imports are
+// covered too. Each indicates the package drives vitest's browser runner:
+//   - `@vitest/browser`         upstream, pre-migration (incl. `/context`,
+//                               `/client`, … subpaths)
+//   - `vite-plus/test/browser`  migrated (re-run on an already-migrated
+//                               project); also covers `…/browser/context` and
+//                               the `…/browser/providers/*` provider forms
+//   - `vite-plus/test/{client,context,locators,matchers,utils}`  the published
+//                               bare browser shims (`build.ts`
+//                               `createBareBrowserShims`): each re-exports
+//                               `@vitest/browser/<sub>` but DROPS the `browser`
+//                               segment, so they carry no `browser` substring.
+//                               The import rewriter flattens
+//                               `@vitest/browser/{client,locators,matchers,
+//                               utils}` to four of these in already-migrated
+//                               source; `vite-plus/test/context` is reachable
+//                               as the published bare export (the rewriter
+//                               instead routes `@vitest/browser/context` to
+//                               `vite-plus/test/browser/context`, already
+//                               covered above). All five are browser-only
+//                               re-exports, so they never collide with a
+//                               non-browser vitest export.
+//   - `vite-plus/test/plugins/browser`  prefix for the generated plugin shims
+//                               (`build.ts` `PLUGIN_SHIM_ENTRIES`:
+//                               `plugins/browser`, `plugins/browser-context`,
+//                               `plugins/browser-client`, `plugins/browser-
+//                               locators`, `plugins/browser-playwright`,
+//                               `plugins/browser-preview`, `plugins/browser-
+//                               webdriverio`), which re-export `@vitest/browser*`
+//                               under a `/plugins/` segment that the
+//                               `vite-plus/test/browser` hint does not match.
+//                               One prefix covers the whole family.
+//   - `vite-plus/test/internal/browser`  the published internal browser shim
+//                               (`./test/internal/browser`, re-exports
+//                               `vitest/internal/browser`) — also a `/browser`
+//                               surface with no `vite-plus/test/browser`
+//                               substring.
+// Without a matching hint a package importing only one of these published
+// browser surfaces (with no `@vitest/browser*` dep) would miss browser mode and
+// skip pinning the direct `vitest` the browser optimizer needs resolvable from
+// the package root under pnpm strict / Yarn PnP. This set is verified complete
+// against every browser-surface `./test/*` export in package.json (those that
+// re-export `@vitest/browser*` or `vitest/internal/browser`).
+const VITEST_BROWSER_SPECIFIER_HINTS = [
+  '@vitest/browser',
+  'vite-plus/test/browser',
+  'vite-plus/test/plugins/browser',
+  'vite-plus/test/internal/browser',
+  'vite-plus/test/client',
+  'vite-plus/test/context',
+  'vite-plus/test/locators',
+  'vite-plus/test/matchers',
+  'vite-plus/test/utils',
+] as const;
 
 // Specifier fragments that signal the WEBDRIVERIO provider specifically. Each
 // is a prefix, matched as a substring, so subpath imports (`/context`,

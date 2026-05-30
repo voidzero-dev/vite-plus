@@ -1796,6 +1796,54 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(devDeps.vitest).toBe('catalog:');
   });
 
+  // Published browser surfaces whose specifier carries NO `vite-plus/test/browser`
+  // substring must still be detected as browser mode, so migration pins the
+  // direct `vitest` the optimizer needs resolvable from the package root under
+  // pnpm strict / Yarn PnP. Two families:
+  //   - the bare browser shims `vite-plus/test/{client,context,locators,matchers,
+  //     utils}` (build.ts createBareBrowserShims; the rewriter flattens four of
+  //     them, `context` is the published bare export), and
+  //   - the generated plugin shims `vite-plus/test/plugins/browser*` (build.ts
+  //     PLUGIN_SHIM_ENTRIES) sitting under a `/plugins/` segment, and
+  //   - the published internal shim `vite-plus/test/internal/browser`
+  //     (re-exports `vitest/internal/browser`).
+  // Each is a browser surface yet a package importing only one of them with no
+  // `@vitest/browser*` dep must get a direct `vitest` (and must NOT gain an
+  // injected `@vitest/browser`).
+  for (const subpath of [
+    'client',
+    'context',
+    'locators',
+    'matchers',
+    'utils',
+    'plugins/browser',
+    'plugins/browser-context',
+    'plugins/browser-playwright',
+    'internal/browser',
+  ] as const) {
+    it(`detects browser mode from the published \`vite-plus/test/${subpath}\` shim`, () => {
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify({ name: 'test', devDependencies: { vite: '^7.0.0' } }),
+      );
+      fs.mkdirSync(path.join(tmpDir, 'src', '__tests__'), { recursive: true });
+      fs.writeFileSync(
+        path.join(tmpDir, 'src', '__tests__', 'app.test.ts'),
+        `import { thing } from 'vite-plus/test/${subpath}';\n`,
+      );
+      rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+      const devDeps = readJson(path.join(tmpDir, 'package.json')).devDependencies as Record<
+        string,
+        string
+      >;
+      // Browser mode pins a direct `vitest`…
+      expect(devDeps.vitest).toBe('catalog:');
+      // …but must NOT inject any browser/provider dep the source never asked for.
+      expect(devDeps).not.toHaveProperty('@vitest/browser');
+    });
+  }
+
   it('injects the webdriverio provider + peer from a source-only vitest config and allows driver builds', () => {
     // Opt-in provider: vite-plus no longer bundles `@vitest/browser-webdriverio`.
     // A project that imports it in source with NO declared dep must have the
