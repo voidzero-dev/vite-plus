@@ -552,6 +552,56 @@ jobs:
             exit /b 1
           )
 
+      - name: Test same-version forced upgrade (Windows)
+        if: ${{ matrix.os == 'windows-latest' }}
+        shell: pwsh
+        run: |
+          $realVpHome = Join-Path $HOME ".vite-plus"
+          $currentVp = Join-Path $realVpHome "current/bin/vp.exe"
+          $versionOutput = & $currentVp --version
+          $versionMatch = $versionOutput | Select-String -Pattern '^vp v(.+)$' | Select-Object -First 1
+          if (-not $versionMatch) {
+            Write-Error "Failed to parse vp version from: $versionOutput"
+            exit 1
+          }
+          $version = $versionMatch.Matches[0].Groups[1].Value
+
+          $tempVpHome = Join-Path $env:RUNNER_TEMP "vp-same-version-force"
+          if (Test-Path $tempVpHome) {
+            Remove-Item $tempVpHome -Recurse -Force
+          }
+
+          $initialVersionDir = Join-Path $tempVpHome $version
+          $initialBinDir = Join-Path $initialVersionDir "bin"
+          New-Item -ItemType Directory -Path $initialBinDir | Out-Null
+          Copy-Item $currentVp (Join-Path $initialBinDir "vp.exe")
+          New-Item -ItemType Junction -Path (Join-Path $tempVpHome "current") -Target $initialVersionDir | Out-Null
+
+          $env:VP_HOME = $tempVpHome
+          & (Join-Path $tempVpHome "current/bin/vp.exe") upgrade $version --force
+
+          $currentTarget = (Get-Item (Join-Path $tempVpHome "current")).Target
+          if ($currentTarget -is [array]) {
+            $currentTarget = $currentTarget[0]
+          }
+          $updatedDir = Split-Path -Leaf $currentTarget
+          Write-Host "Updated install dir: $updatedDir"
+          if (-not $updatedDir.StartsWith("$version+force.")) {
+            Write-Error "Expected current to point at a forced reinstall dir for $version, got $updatedDir"
+            exit 1
+          }
+
+          if (-not (Test-Path (Join-Path $tempVpHome "$version/bin/vp.exe"))) {
+            Write-Error "Original same-version install directory was unexpectedly removed"
+            exit 1
+          }
+
+          $previousVersion = Get-Content (Join-Path $tempVpHome ".previous-version") -Raw
+          if ($previousVersion.Trim() -ne $version) {
+            Write-Error "Expected .previous-version to be $version, got $previousVersion"
+            exit 1
+          }
+
       - name: Test implode (bash)
         shell: bash
         run: |

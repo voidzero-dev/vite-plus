@@ -630,6 +630,46 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_cleanup_removes_old_forced_reinstall_dir() {
+        let temp = tempfile::tempdir().unwrap();
+        let install_dir = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+
+        // Forced reinstall directories use semver build metadata. They should
+        // still be eligible for normal old-version cleanup.
+        let old_forced = "0.1.23+force.123.456";
+        for v in [old_forced, "0.1.24", "0.1.25", "0.1.26", "0.1.27", "0.1.28"] {
+            tokio::fs::create_dir(install_dir.join(v)).await.unwrap();
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+
+        cleanup_old_versions(&install_dir, 5, &[]).await.unwrap();
+
+        assert!(
+            !tokio::fs::try_exists(install_dir.join(old_forced)).await.unwrap(),
+            "old forced reinstall directory should be removed by cleanup"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_cleanup_preserves_protected_forced_reinstall_dir() {
+        let temp = tempfile::tempdir().unwrap();
+        let install_dir = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+
+        let protected_forced = "0.1.23+force.123.456";
+        for v in [protected_forced, "0.1.24", "0.1.25", "0.1.26", "0.1.27", "0.1.28"] {
+            tokio::fs::create_dir(install_dir.join(v)).await.unwrap();
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+
+        cleanup_old_versions(&install_dir, 5, &[protected_forced]).await.unwrap();
+
+        assert!(
+            tokio::fs::try_exists(install_dir.join(protected_forced)).await.unwrap(),
+            "active forced reinstall directory should be preserved when protected"
+        );
+    }
+
+    #[tokio::test]
     async fn test_cleanup_old_versions_with_nonexistent_dir() {
         // Verifies that cleanup_old_versions propagates errors on non-existent dir.
         // In the real flow, such errors from post-swap operations should be non-fatal.
