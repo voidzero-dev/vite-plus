@@ -15,7 +15,6 @@ You can upgrade both of them independently.
 
 ```bash
 vp upgrade              # upgrade to the latest version
-vp upgrade 0.2.0        # install a specific version
 vp upgrade --check      # check for updates without installing
 ```
 
