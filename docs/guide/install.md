@@ -151,3 +151,23 @@ vp pm config get registry
 vp pm cache clean --force
 vp pm exec tsc --version
 ```
+
+#### Staged publishing
+
+`vp pm stage` exposes [npm's staged publishing](https://docs.npmjs.com/staged-publishing) workflow: a build is uploaded to a staging area (no 2FA, CI-friendly), then a maintainer approves or rejects it from a trusted device (2FA). It adapts to the detected package manager.
+
+```bash
+vp pm stage publish              # upload the package to staging (no 2FA)
+vp pm stage list                 # list staged versions
+vp pm stage view <stage-id>      # inspect a staged version
+vp pm stage download <stage-id>  # download the staged tarball
+vp pm stage approve <stage-id>   # promote to the live registry (2FA)
+vp pm stage reject <stage-id>    # discard a staged version (2FA)
+```
+
+- pnpm (`pnpm stage`, requires pnpm ≥ 11.3) and npm (`npm stage`, requires npm ≥ 11.15 and Node ≥ 22.14) pass through directly.
+- yarn (Berry) uses its npm plugin (`yarn npm publish --staged`, `yarn npm stage …`); `view`/`download` fall back to npm.
+- yarn Classic and bun have no staged-publishing support and fall back to `npm stage`.
+
+> [!NOTE]
+> `vp pm stage` is npm staged publishing — it is unrelated to Yarn's own `yarn stage` command, which stages files for a version-control commit.
