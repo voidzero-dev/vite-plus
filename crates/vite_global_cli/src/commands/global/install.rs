@@ -207,7 +207,7 @@ pub async fn install(
                 }
                 Ok(None) => {}
                 Err(error) => {
-                    let _ = cleanup_package_dir(&package_name).await;
+                    let _ = cleanup_installed_package(&package_name).await;
                     if first_error.is_none() {
                         first_error = Some(package_error(&package_name, error));
                     }
@@ -231,7 +231,7 @@ pub async fn install(
                         pkg, package_name
                     ));
                     if let Err(error) = Box::pin(uninstall(&pkg, false)).await {
-                        let _ = cleanup_package_dir(&package_name).await;
+                        let _ = cleanup_installed_package(&package_name).await;
                         if first_error.is_none() {
                             first_error = Some(package_error(&package_name, error));
                         }
@@ -243,7 +243,7 @@ pub async fn install(
                     continue;
                 }
             } else {
-                let _ = cleanup_package_dir(&package_name).await;
+                let _ = cleanup_installed_package(&package_name).await;
                 if first_error.is_none() {
                     first_error = Some((
                         Some(package_name.clone()),
@@ -261,7 +261,7 @@ pub async fn install(
         let bin_dir = match get_bin_dir().map_err(|error| package_error(&package_name, error)) {
             Ok(bin_dir) => bin_dir,
             Err(error) => {
-                let _ = cleanup_package_dir(&package_name).await;
+                let _ = cleanup_installed_package(&package_name).await;
                 if first_error.is_none() {
                     first_error = Some(error);
                 }
@@ -281,7 +281,7 @@ pub async fn install(
         if let Err(error) =
             metadata.save().await.map_err(|error| package_error(&package_name, error))
         {
-            let _ = cleanup_package_dir(&package_name).await;
+            let _ = cleanup_installed_package(&package_name).await;
             if first_error.is_none() {
                 first_error = Some(error);
             }
@@ -354,9 +354,6 @@ async fn install_one(
     npm_path: &AbsolutePathBuf,
     node_bin_dir: &AbsolutePathBuf,
 ) -> Result<InstalledPackage, Error> {
-    // 1. Prepare final package directory
-    cleanup_installed_package(package_name).await?;
-
     let packages_dir = get_packages_dir()?;
     let package_dir = packages_dir.join(package_name);
     if let Some(parent) = package_dir.parent() {
@@ -377,9 +374,6 @@ async fn install_one(
         .await?;
 
     if !output.status.success() {
-        // Clean up package directory
-        let _ = tokio::fs::remove_dir_all(&package_dir).await;
-
         // Show captured output to help debug the failure
         let _ = std::io::stdout().write_all(&output.stdout);
         let _ = std::io::stderr().write_all(&output.stderr);
@@ -392,7 +386,7 @@ async fn install_one(
     let package_json_path = node_modules_dir.join("package.json");
 
     if !tokio::fs::try_exists(&package_json_path).await.unwrap_or(false) {
-        let _ = tokio::fs::remove_dir_all(&package_dir).await;
+        let _ = cleanup_installed_package(package_name).await;
         return Err(Error::ConfigError(
             format!(
                 "Package was not installed correctly, package.json not found at {}",
@@ -402,11 +396,22 @@ async fn install_one(
         ));
     }
 
-    let package_json_content = tokio::fs::read_to_string(&package_json_path).await?;
-    let package_json: serde_json::Value =
-        serde_json::from_str(&package_json_content).map_err(|error| {
-            Error::ConfigError(format!("Failed to parse package.json: {error}").into())
-        })?;
+    let package_json_content = match tokio::fs::read_to_string(&package_json_path).await {
+        Ok(content) => content,
+        Err(error) => {
+            let _ = cleanup_installed_package(package_name).await;
+            return Err(error.into());
+        }
+    };
+    let package_json: serde_json::Value = match serde_json::from_str(&package_json_content) {
+        Ok(package_json) => package_json,
+        Err(error) => {
+            let _ = cleanup_installed_package(package_name).await;
+            return Err(Error::ConfigError(
+                format!("Failed to parse package.json: {error}").into(),
+            ));
+        }
+    };
 
     let installed_version = package_json["version"].as_str().unwrap_or("unknown").to_string();
     let binary_infos = extract_binaries(&package_json);
@@ -438,17 +443,6 @@ async fn cleanup_installed_package(package_name: &str) -> Result<(), Error> {
         BinConfig::delete(&bin_name).await?;
     }
 
-    let packages_dir = get_packages_dir()?;
-    let package_dir = packages_dir.join(package_name);
-    if tokio::fs::try_exists(&package_dir).await.unwrap_or(false) {
-        tokio::fs::remove_dir_all(&package_dir).await?;
-    }
-    PackageMetadata::delete(package_name).await?;
-
-    Ok(())
-}
-
-async fn cleanup_package_dir(package_name: &str) -> Result<(), Error> {
     let packages_dir = get_packages_dir()?;
     let package_dir = packages_dir.join(package_name);
     if tokio::fs::try_exists(&package_dir).await.unwrap_or(false) {
