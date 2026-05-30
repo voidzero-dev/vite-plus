@@ -106,8 +106,20 @@ impl PackageManager {
                     append_npm_stage(&mut args, &options.subcommand);
                 } else {
                     match &options.subcommand {
+                        StageSubcommand::Publish { target: Some(_), .. } => {
+                            // `yarn npm publish` has no target argument; it always
+                            // stages the active workspace. To honor an explicit
+                            // tarball/folder, stage it through npm instead (npm
+                            // staged publishing accepts a target), matching how
+                            // `vp pm publish` delegates yarn -> npm.
+                            output::warn(
+                                "yarn cannot stage a prebuilt tarball or folder; using npm stage publish for the given target",
+                            );
+                            bin_name = "npm".into();
+                            append_npm_stage(&mut args, &options.subcommand);
+                        }
                         StageSubcommand::Publish { .. } => {
-                            // yarn berry stages via `yarn npm publish --staged`.
+                            // yarn berry stages the workspace via `yarn npm publish --staged`.
                             bin_name = "yarn".into();
                             append_yarn_publish_staged(&mut args, &options.subcommand);
                         }
@@ -136,10 +148,19 @@ impl PackageManager {
             }
         }
 
-        // `--registry` applies to every variant and is forwarded as-is.
+        // `--registry` is forwarded to npm/pnpm, which accept it. yarn's npm
+        // plugin (`yarn npm publish`/`yarn npm stage`) does not take a
+        // `--registry` flag — it resolves the registry from `.yarnrc.yml` — so
+        // forwarding it would make yarn abort with an unknown-option error.
         if let Some(registry) = options.registry {
-            args.push("--registry".into());
-            args.push(registry.to_string());
+            if bin_name == "yarn" {
+                output::warn(
+                    "--registry is not supported by yarn's npm plugin (set the registry in .yarnrc.yml), ignoring flag",
+                );
+            } else {
+                args.push("--registry".into());
+                args.push(registry.to_string());
+            }
         }
 
         // Add pass-through args.
@@ -249,10 +270,13 @@ fn append_stage_subcommand(
 }
 
 /// Build `yarn npm publish --staged …`. yarn berry's npm plugin stages via the
-/// publish command; only the flags yarn supports are forwarded.
+/// publish command; `--tag`/`--access`/`--otp`/`--provenance`/`--dry-run`/`--json`
+/// are all forwarded (yarn supports them). The `target` positional is handled by
+/// the caller (routed to npm) and never reaches here, and `--recursive`/`--filter`
+/// have no `yarn npm publish` equivalent so they are warned and dropped.
 fn append_yarn_publish_staged(args: &mut Vec<String>, subcommand: &StageSubcommand) {
     let StageSubcommand::Publish {
-        target,
+        target: _,
         tag,
         access,
         otp,
@@ -270,9 +294,6 @@ fn append_yarn_publish_staged(args: &mut Vec<String>, subcommand: &StageSubcomma
     args.push("publish".into());
     args.push("--staged".into());
 
-    if target.is_some() {
-        output::warn("yarn npm publish does not accept a target path, ignoring it");
-    }
     if let Some(tag) = tag {
         args.push("--tag".into());
         args.push(tag.clone());
@@ -289,10 +310,10 @@ fn append_yarn_publish_staged(args: &mut Vec<String>, subcommand: &StageSubcomma
         args.push("--provenance".into());
     }
     if *dry_run {
-        output::warn("--dry-run is not supported by yarn npm publish, ignoring flag");
+        args.push("--dry-run".into());
     }
     if *json {
-        output::warn("--json is not supported by yarn npm publish, ignoring flag");
+        args.push("--json".into());
     }
     if *recursive {
         output::warn("--recursive is not supported by yarn npm publish, ignoring flag");
@@ -496,6 +517,63 @@ mod tests {
         )));
         assert_eq!(result.bin_path, "yarn");
         assert_eq!(result.args, vec!["npm", "publish", "--staged", "--tag", "next"]);
+    }
+
+    #[test]
+    fn test_yarn_berry_stage_publish_forwards_dry_run_json_provenance() {
+        // `yarn npm publish` supports --dry-run, --json, and --provenance, so
+        // they must be forwarded (not warned-and-dropped).
+        let pm = create_mock_package_manager(PackageManagerType::Yarn, "4.0.0");
+        let result = pm.resolve_stage_command(&opts(StageSubcommand::Publish {
+            target: None,
+            tag: None,
+            access: None,
+            otp: None,
+            dry_run: true,
+            json: true,
+            recursive: false,
+            filters: None,
+            provenance: true,
+        }));
+        assert_eq!(result.bin_path, "yarn");
+        assert_eq!(
+            result.args,
+            vec!["npm", "publish", "--staged", "--provenance", "--dry-run", "--json"]
+        );
+    }
+
+    #[test]
+    fn test_yarn_berry_stage_publish_with_target_falls_back_to_npm() {
+        // `yarn npm publish` has no target argument; honor the explicit tarball
+        // via npm instead of silently staging the workspace package.
+        let pm = create_mock_package_manager(PackageManagerType::Yarn, "4.0.0");
+        let result = pm.resolve_stage_command(&opts(StageSubcommand::Publish {
+            target: Some("./pkg.tgz".into()),
+            tag: None,
+            access: None,
+            otp: None,
+            dry_run: false,
+            json: false,
+            recursive: false,
+            filters: None,
+            provenance: false,
+        }));
+        assert_eq!(result.bin_path, "npm");
+        assert_eq!(result.args, vec!["stage", "publish", "./pkg.tgz"]);
+    }
+
+    #[test]
+    fn test_yarn_berry_stage_registry_dropped() {
+        // yarn's npm plugin does not accept --registry; it must be dropped (the
+        // resolver warns) rather than forwarded into a yarn command that errors.
+        let pm = create_mock_package_manager(PackageManagerType::Yarn, "4.0.0");
+        let result = pm.resolve_stage_command(&StageCommandOptions {
+            subcommand: StageSubcommand::List { package: None, json: false },
+            registry: Some("https://registry.example.com"),
+            pass_through_args: None,
+        });
+        assert_eq!(result.bin_path, "yarn");
+        assert_eq!(result.args, vec!["npm", "stage", "list"]);
     }
 
     #[test]
