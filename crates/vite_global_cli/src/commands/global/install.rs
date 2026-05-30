@@ -207,7 +207,7 @@ pub async fn install(
                 }
                 Ok(None) => {}
                 Err(error) => {
-                    let _ = cleanup_installed_package(&package_name).await;
+                    let _ = cleanup_package_dir(&package_name).await;
                     if first_error.is_none() {
                         first_error = Some(package_error(&package_name, error));
                     }
@@ -231,7 +231,7 @@ pub async fn install(
                         pkg, package_name
                     ));
                     if let Err(error) = Box::pin(uninstall(&pkg, false)).await {
-                        let _ = cleanup_installed_package(&package_name).await;
+                        let _ = cleanup_package_dir(&package_name).await;
                         if first_error.is_none() {
                             first_error = Some(package_error(&package_name, error));
                         }
@@ -243,7 +243,7 @@ pub async fn install(
                     continue;
                 }
             } else {
-                let _ = cleanup_installed_package(&package_name).await;
+                let _ = cleanup_package_dir(&package_name).await;
                 if first_error.is_none() {
                     first_error = Some((
                         Some(package_name.clone()),
@@ -355,7 +355,7 @@ async fn install_one(
     node_bin_dir: &AbsolutePathBuf,
 ) -> Result<InstalledPackage, Error> {
     // 1. Prepare final package directory
-    remove_existing_package(package_name).await?;
+    cleanup_installed_package(package_name).await?;
 
     let packages_dir = get_packages_dir()?;
     let package_dir = packages_dir.join(package_name);
@@ -428,12 +428,14 @@ async fn cleanup_installed_package(package_name: &str) -> Result<(), Error> {
     let bin_dir = get_bin_dir()?;
     if let Some(metadata) = PackageMetadata::load(package_name).await? {
         for bin_name in metadata.bins {
-            remove_package_bin_if_owned(&bin_dir, &bin_name, package_name).await?;
+            remove_package_shim(&bin_dir, &bin_name).await?;
+            BinConfig::delete(&bin_name).await?;
         }
     }
 
     for bin_name in BinConfig::find_by_package(package_name).await? {
-        remove_package_bin_if_owned(&bin_dir, &bin_name, package_name).await?;
+        remove_package_shim(&bin_dir, &bin_name).await?;
+        BinConfig::delete(&bin_name).await?;
     }
 
     let packages_dir = get_packages_dir()?;
@@ -442,23 +444,6 @@ async fn cleanup_installed_package(package_name: &str) -> Result<(), Error> {
         tokio::fs::remove_dir_all(&package_dir).await?;
     }
     PackageMetadata::delete(package_name).await?;
-
-    Ok(())
-}
-
-async fn remove_package_bin_if_owned(
-    bin_dir: &vite_path::AbsolutePath,
-    bin_name: &str,
-    package_name: &str,
-) -> Result<(), Error> {
-    if let Some(config) = BinConfig::load(bin_name).await?
-        && config.package != package_name
-    {
-        return Ok(());
-    }
-
-    remove_package_shim(bin_dir, bin_name).await?;
-    BinConfig::delete(bin_name).await?;
 
     Ok(())
 }
@@ -472,10 +457,6 @@ async fn cleanup_package_dir(package_name: &str) -> Result<(), Error> {
     PackageMetadata::delete(package_name).await?;
 
     Ok(())
-}
-
-async fn remove_existing_package(package_name: &str) -> Result<(), Error> {
-    cleanup_installed_package(package_name).await
 }
 
 /// Uninstall a global package.
