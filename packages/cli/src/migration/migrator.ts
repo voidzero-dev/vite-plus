@@ -166,18 +166,77 @@ function isRemovePackageOverrideKey(key: string): boolean {
   );
 }
 
-// Drop pnpm.overrides keys whose target is a drop-listed provider. Covers
-// bare, versioned, parent-selector and chained selector shapes that exact-key
+// Drop override keys whose target is a drop-listed provider. Covers bare,
+// versioned, parent-selector and chained selector shapes that exact-key
 // matching would miss.
-function dropRemovePackageOverrideKeys(overrides: Record<string, unknown> | undefined): void {
+//
+// npm/bun `overrides` also nest object-valued entries to arbitrary depth, and
+// the nesting is SCOPED: `{ "some-pkg": { "@vitest/browser-playwright": "x" } }`
+// forces the provider only within some-pkg's subtree, NOT vite-plus's own
+// provider dep. So a provider pin is dropped only where it actually affects
+// vite-plus's (now direct-dep) provider ownership: at the TOP level (a global
+// pin reaches vite-plus's bundled copy) and inside a `vite-plus` subtree. Under
+// any OTHER parent the pin is the user's scoped override and is preserved — we
+// still descend there only to reach a nested `vite-plus`. A long-form provider
+// override (`{ "@vitest/browser-playwright": { ".": "x", "other": "y" } }`) has
+// its own version pin (`.`) dropped while unrelated children (`other`) are kept.
+// A parent we EMPTY by dropping its last pin is pruned so no meaningless `{}` is
+// left; user-authored empties and untouched maps are kept. (pnpm/yarn override
+// values are flat strings, so the recursion is inert for those sinks.)
+// `dropProviderPins` is true at the top level and within a `vite-plus` subtree.
+// Returns whether any key/pin was removed.
+function dropRemovePackageOverrideKeys(
+  overrides: Record<string, unknown> | undefined,
+  dropProviderPins = true,
+): boolean {
   if (!overrides) {
-    return;
+    return false;
   }
+  let removed = false;
   for (const key of Object.keys(overrides)) {
-    if (isRemovePackageOverrideKey(key)) {
-      delete overrides[key];
+    const value = overrides[key];
+    const child =
+      value !== null && typeof value === 'object' && !Array.isArray(value)
+        ? (value as Record<string, unknown>)
+        : undefined;
+    if (dropProviderPins && isRemovePackageOverrideKey(key)) {
+      if (child) {
+        // Long-form provider override: drop the provider's own version pin (`.`)
+        // but keep any unrelated child overrides scoped under it.
+        let changed = false;
+        if ('.' in child) {
+          delete child['.'];
+          changed = true;
+        }
+        if (dropRemovePackageOverrideKeys(child, false)) {
+          changed = true;
+        }
+        if (Object.keys(child).length === 0) {
+          delete overrides[key];
+          changed = true;
+        }
+        if (changed) {
+          removed = true;
+        }
+      } else {
+        delete overrides[key];
+        removed = true;
+      }
+      continue;
+    }
+    if (child) {
+      // Drop provider pins only inside a `vite-plus` subtree; under any other
+      // parent, descend solely to reach a nested `vite-plus`.
+      const childDropsProviderPins = extractOverrideTargetName(key) === VITE_PLUS_NAME;
+      if (dropRemovePackageOverrideKeys(child, childDropsProviderPins)) {
+        removed = true;
+        if (Object.keys(child).length === 0) {
+          delete overrides[key];
+        }
+      }
     }
   }
+  return removed;
 }
 
 // When a browser provider package is removed, its runtime peer dependency
@@ -257,8 +316,10 @@ const LEGACY_WRAPPER_FALLBACK_VERSIONS: Record<string, string> = {
   vitest: VITEST_VERSION,
 };
 
-function isLegacyWrapperSpec(value: string | undefined): boolean {
-  if (!value) {
+function isLegacyWrapperSpec(value: unknown): boolean {
+  // A wrapper spec is always a flat string range; npm/bun `overrides` may hold
+  // nested object values, which can never be a wrapper alias.
+  if (typeof value !== 'string' || !value) {
     return false;
   }
   for (const name of LEGACY_WRAPPER_PACKAGE_NAMES) {
@@ -2328,7 +2389,14 @@ function rewriteBunCatalog(projectPath: string): void {
     const overrides: Record<string, string> = { ...pkg.overrides };
     pruneLegacyWrapperAliases(overrides);
     for (const [key, value] of Object.entries(VITE_PLUS_OVERRIDE_PACKAGES)) {
-      overrides[key] = getCatalogDependencySpec(overrides[key], value, true);
+      const current = overrides[key] as unknown;
+      // A nested object value is a user override scoped under this managed key,
+      // not a version pin — leave it intact (getCatalogDependencySpec expects a
+      // string and would otherwise clobber it / throw on `.startsWith`).
+      if (current !== undefined && typeof current !== 'string') {
+        continue;
+      }
+      overrides[key] = getCatalogDependencySpec(current, value, true);
     }
     pkg.overrides = overrides;
 
