@@ -28,6 +28,12 @@ function isConditionObject(value: unknown): value is ExportConditions {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+// `default` is a module-shape artifact, not a named export migration cares
+// about; only the named bindings need to survive the `vitest/config` rewrite.
+function namedValueExports(mod: Record<string, unknown>): string[] {
+  return Object.keys(mod).filter((key) => key !== 'default');
+}
+
 describe('package.json exports map', () => {
   it('every dual-condition entry emits `require` before `default`', () => {
     const pkg = JSON.parse(fs.readFileSync(cliPkgJsonPath, 'utf-8'));
@@ -107,12 +113,6 @@ describe('package.json exports map', () => {
  * re-export of a deleted type fails to compile).
  */
 describe('vite-plus root re-exports the full vitest/config surface', () => {
-  // `default` is a module-shape artifact, not a named export migration cares
-  // about; only the named bindings need to survive the `vitest/config` rewrite.
-  function namedValueExports(mod: Record<string, unknown>): string[] {
-    return Object.keys(mod).filter((key) => key !== 'default');
-  }
-
   it('exposes every vitest/config value export on the ESM vite-plus root', async () => {
     const [vitePlus, vitestConfig] = await Promise.all([
       import('vite-plus'),
