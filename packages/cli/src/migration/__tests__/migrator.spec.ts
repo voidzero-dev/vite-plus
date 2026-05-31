@@ -1826,9 +1826,13 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     );
     fs.writeFileSync(
       path.join(tmpDir, 'pnpm-workspace.yaml'),
-      ['packages:', '  - packages/*', 'catalog:', "  '@vitest/browser-webdriverio': 4.0.0", ''].join(
-        '\n',
-      ),
+      [
+        'packages:',
+        '  - packages/*',
+        'catalog:',
+        "  '@vitest/browser-webdriverio': 4.0.0",
+        '',
+      ].join('\n'),
     );
     rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
 

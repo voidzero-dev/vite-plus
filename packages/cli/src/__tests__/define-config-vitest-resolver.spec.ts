@@ -141,9 +141,10 @@ function getResolveId(): ResolveId {
 // (bundled) anchors BEFORE the project importer. A `this.resolve` whose
 // `importer` is NOT the project importer is therefore a bundled-anchor probe;
 // `importer === PROJECT_IMPORTER` is the last-resort project fallback.
-function makeCtx(
-  resolveFor: (call: ResolveCall) => ResolveResult,
-): { ctx: ResolveIdCtx; calls: ResolveCall[] } {
+function makeCtx(resolveFor: (call: ResolveCall) => ResolveResult): {
+  ctx: ResolveIdCtx;
+  calls: ResolveCall[];
+} {
   const calls: ResolveCall[] = [];
   const ctx: ResolveIdCtx = {
     resolve: async (id, importer) => {

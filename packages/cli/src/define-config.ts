@@ -380,9 +380,11 @@ function vitePlusTestSpecifierRewritePlugin(): PluginOption {
  * depends on — even from a consumer project where they are only transitive.
  * Used to locate the bundled `vitest` package (its `package.json`), NOT to
  * resolve module ENTRIES: `require.resolve` applies the `require` export
- * condition, which for `vitest` / `vitest/config` selects a CJS throw-stub
- * (`index.cjs` / `config.cjs` — "Vitest cannot be imported … using require()").
- * Module entries are resolved through Vite's own resolver instead (see
+ * condition, which selects Vitest's CJS entries — for the bare `vitest` root
+ * a throw-stub (`index.cjs` — "Vitest cannot be imported … using require()"),
+ * and for subpaths the CJS build (e.g. `vitest/config` → `config.cjs`) rather
+ * than the ESM entry the test server's module graph needs. Module entries are
+ * resolved through Vite's own resolver instead (see
  * [[vitePlusVitestResolverPlugin]]), which honours ESM conditions.
  *
  * `define-config.ts` is bundled by tsdown in BOTH formats: ESM (`shims: true`,
@@ -477,8 +479,9 @@ export function isVitestFamilySpecifier(id: string): boolean {
  *
  * Resolution goes through `this.resolve` (NOT [[vitePlusRequire]].resolve) so
  * Vite's ESM export conditions are honoured: a raw `require.resolve` would pick
- * Vitest's `require`-condition entry, a CJS throw-stub for `vitest` /
- * `vitest/config`. Two bundled anchors are tried because `@vitest/browser*` are
+ * Vitest's CJS `require`-condition entry — a throw-stub for the bare `vitest`
+ * root (`index.cjs`), and the CJS build for subpaths (e.g. `vitest/config` →
+ * `config.cjs`) instead of the ESM entry. Two bundled anchors are tried because `@vitest/browser*` are
  * direct deps of `vite-plus` (reachable from [[vitePlusModuleFile]]) while the
  * nested `@vitest/*` family are deps of `vitest` (reachable only from the
  * `vitest` anchor). The project root remains the last resort for any family id
