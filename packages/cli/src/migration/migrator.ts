@@ -2794,66 +2794,27 @@ function rewriteAllImports(projectPath: string, silent = false, report?: Migrati
 
 /**
  * Resolve a `catalog:` / `catalog:<name>` specifier for a dependency by
- * reading the workspace catalog sources (pnpm-workspace.yaml, .yarnrc.yml,
- * or package.json `catalog`/`catalogs`, including Bun's `workspaces` form).
- * Returns the resolved version specifier, or undefined when no catalog
- * entry matches.
+ * trying each package manager's catalog source (pnpm-workspace.yaml,
+ * .yarnrc.yml, or package.json `catalog`/`catalogs`). Returns the resolved
+ * version specifier, or undefined when no catalog entry matches.
  *
- * Read-only and package-manager agnostic, so it is safe to call from the
- * deterministic git-hooks preflight check.
+ * Delegates to `createCatalogDependencyResolver` so catalog resolution stays
+ * in sync across the codebase. Read-only and package-manager agnostic, so it
+ * is safe to call from the deterministic git-hooks preflight check.
  */
 function resolveCatalogSpecFromProject(
   projectPath: string,
   catalogSpec: string,
   dependencyName: string,
 ): string | undefined {
-  const pnpmWorkspaceYamlPath = path.join(projectPath, 'pnpm-workspace.yaml');
-  if (fs.existsSync(pnpmWorkspaceYamlPath)) {
-    const doc = readYamlFile(pnpmWorkspaceYamlPath) as {
-      catalog?: Record<string, string>;
-      catalogs?: Record<string, Record<string, string>>;
-    } | null;
-    const resolved = createCatalogDependencyResolverFromCatalogs(doc?.catalog, doc?.catalogs)(
+  for (const packageManager of Object.values(PackageManager)) {
+    const resolved = createCatalogDependencyResolver(projectPath, packageManager)?.(
       catalogSpec,
       dependencyName,
     );
     if (resolved) {
       return resolved;
     }
-  }
-  const yarnrcYmlPath = path.join(projectPath, '.yarnrc.yml');
-  if (fs.existsSync(yarnrcYmlPath)) {
-    const doc = readYamlFile(yarnrcYmlPath) as {
-      catalog?: Record<string, string>;
-      catalogs?: Record<string, Record<string, string>>;
-    } | null;
-    const resolved = createCatalogDependencyResolverFromCatalogs(doc?.catalog, doc?.catalogs)(
-      catalogSpec,
-      dependencyName,
-    );
-    if (resolved) {
-      return resolved;
-    }
-  }
-  const packageJsonPath = path.join(projectPath, 'package.json');
-  if (fs.existsSync(packageJsonPath)) {
-    const pkg = readJsonFile(packageJsonPath) as {
-      workspaces?: NpmWorkspaces;
-      catalog?: Record<string, string>;
-      catalogs?: Record<string, Record<string, string>>;
-    };
-    const workspacesObj =
-      pkg.workspaces && !Array.isArray(pkg.workspaces) ? pkg.workspaces : undefined;
-    return (
-      createCatalogDependencyResolverFromCatalogs(workspacesObj?.catalog, workspacesObj?.catalogs)(
-        catalogSpec,
-        dependencyName,
-      ) ??
-      createCatalogDependencyResolverFromCatalogs(pkg.catalog, pkg.catalogs)(
-        catalogSpec,
-        dependencyName,
-      )
-    );
   }
   return undefined;
 }
