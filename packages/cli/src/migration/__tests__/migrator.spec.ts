@@ -1307,6 +1307,254 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(overrides['other>foo']).toBe('1.0.0');
   });
 
+  it('drops a vite-plus-scoped provider pin and prunes the emptied vite-plus parent', () => {
+    // A provider pin nested under a `vite-plus` parent forces vite-plus's own
+    // (now direct-dep) provider, so it must be dropped. Removing the sole pin
+    // empties the `vite-plus` parent, which is then pruned.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { vite: '^7.0.0' },
+        overrides: {
+          'vite-plus': { '@vitest/browser-playwright': '4.0.0' },
+        },
+      }),
+    );
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.npm), true, true);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      overrides?: Record<string, unknown>;
+    };
+    const overrides = pkg.overrides ?? {};
+    expect(overrides).not.toHaveProperty('vite-plus');
+  });
+
+  it('preserves a provider override scoped under an unrelated parent', () => {
+    // npm/bun nested overrides are SCOPED: a provider pin under `some-pkg`
+    // forces the provider only within some-pkg's subtree, NOT vite-plus's own
+    // provider dep. Deleting it would be silent loss of the user's unrelated
+    // override, so it (and its parent) must survive untouched.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { vite: '^7.0.0' },
+        overrides: {
+          'some-pkg': { '@vitest/browser-playwright': '4.0.0' },
+        },
+      }),
+    );
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.npm), true, true);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      overrides?: Record<string, Record<string, string>>;
+    };
+    const overrides = pkg.overrides ?? {};
+    expect(overrides).toHaveProperty('some-pkg');
+    expect(overrides['some-pkg']['@vitest/browser-playwright']).toBe('4.0.0');
+  });
+
+  it('drops a vite-plus-scoped provider pin while keeping non-provider siblings', () => {
+    // Inside a `vite-plus` subtree only the provider pin is dropped; an
+    // unrelated sibling (`lodash`) keeps the `vite-plus` parent alive.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { vite: '^7.0.0' },
+        overrides: {
+          'vite-plus': { '@vitest/browser-playwright': '4.0.0', lodash: '4.17.0' },
+        },
+      }),
+    );
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.npm), true, true);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      overrides?: Record<string, Record<string, string>>;
+    };
+    const overrides = pkg.overrides ?? {};
+    expect(overrides).toHaveProperty('vite-plus');
+    expect(overrides['vite-plus']).not.toHaveProperty('@vitest/browser-playwright');
+    expect(overrides['vite-plus'].lodash).toBe('4.17.0');
+  });
+
+  it('drops a top-level global provider pin', () => {
+    // A TOP-LEVEL provider pin is a global override that reaches vite-plus's
+    // bundled copy, so it must be dropped (regression guard).
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { vite: '^7.0.0' },
+        overrides: {
+          '@vitest/browser-playwright': '4.0.0',
+        },
+      }),
+    );
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.npm), true, true);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      overrides?: Record<string, unknown>;
+    };
+    const overrides = pkg.overrides ?? {};
+    expect(overrides).not.toHaveProperty('@vitest/browser-playwright');
+  });
+
+  it('drops a long-form top-level provider self-pin but keeps unrelated children', () => {
+    // A long-form provider override pins the provider's own version via the `.`
+    // self-key; that pin is dropped (it reaches vite-plus's bundled copy) while
+    // unrelated scoped children (`bar`) are preserved.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { vite: '^7.0.0' },
+        overrides: {
+          '@vitest/browser-playwright': { '.': '4.0.0', bar: '1.0.0' },
+        },
+      }),
+    );
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.npm), true, true);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      overrides?: Record<string, Record<string, string>>;
+    };
+    const overrides = pkg.overrides ?? {};
+    expect(overrides).toHaveProperty('@vitest/browser-playwright');
+    const provider = overrides['@vitest/browser-playwright'];
+    // The provider's own version pin (`.`) is dropped; the `.` self-key must
+    // be asserted via `in` (Jest's `toHaveProperty('.')` treats `.` as a path
+    // separator and would not match the literal key).
+    expect('.' in provider).toBe(false);
+    expect(provider.bar).toBe('1.0.0');
+  });
+
+  it('drops a deep vite-plus-scoped provider pin and prunes all emptied ancestors', () => {
+    // A provider pin reachable through a `... > vite-plus > provider` chain
+    // forces vite-plus's own provider dep, so it is dropped; the recursion then
+    // prunes every ancestor it emptied (the whole `a` chain).
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { vite: '^7.0.0' },
+        overrides: {
+          a: { 'vite-plus': { '@vitest/browser-playwright': '4.0.0' } },
+        },
+      }),
+    );
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.npm), true, true);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      overrides?: Record<string, unknown>;
+    };
+    const overrides = pkg.overrides ?? {};
+    expect(overrides).not.toHaveProperty('a');
+  });
+
+  it('preserves a deep provider override under unrelated parents', () => {
+    // No `vite-plus` parent anywhere on the path: the provider pin is the
+    // user's scoped override (`a > b > provider`) and must survive fully.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { vite: '^7.0.0' },
+        overrides: {
+          a: { b: { '@vitest/browser-playwright': '4.0.0' } },
+        },
+      }),
+    );
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.npm), true, true);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      overrides?: Record<string, Record<string, Record<string, string>>>;
+    };
+    const overrides = pkg.overrides ?? {};
+    expect(overrides).toHaveProperty('a');
+    expect(overrides.a).toHaveProperty('b');
+    expect(overrides.a.b['@vitest/browser-playwright']).toBe('4.0.0');
+  });
+
+  it('does not over-delete a non-provider override scoped under vite-plus', () => {
+    // A non-provider pin (`lodash`) under `vite-plus` is a legitimate user
+    // override; descending into the `vite-plus` subtree must leave it untouched.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { vite: '^7.0.0' },
+        overrides: {
+          'vite-plus': { lodash: '4.17.0' },
+        },
+      }),
+    );
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.npm), true, true);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      overrides?: Record<string, Record<string, string>>;
+    };
+    const overrides = pkg.overrides ?? {};
+    expect(overrides).toHaveProperty('vite-plus');
+    expect(overrides['vite-plus'].lodash).toBe('4.17.0');
+  });
+
+  it('leaves a user-authored pre-existing empty override object untouched', () => {
+    // We only prune parents WE empty by dropping provider pins. A parent the
+    // user authored as already-empty must be preserved as-is even when an
+    // unrelated top-level provider key is dropped in the same pass.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { vite: '^7.0.0' },
+        overrides: {
+          'some-pkg': {},
+          '@vitest/browser-playwright': '4.0.0',
+        },
+      }),
+    );
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.npm), true, true);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      overrides?: Record<string, unknown>;
+    };
+    const overrides = pkg.overrides ?? {};
+    expect(overrides).not.toHaveProperty('@vitest/browser-playwright');
+    expect(overrides).toHaveProperty('some-pkg');
+    expect(overrides['some-pkg']).toEqual({});
+  });
+
+  it('does not crash on a nested object value under a managed bun catalog override key', () => {
+    // Bun monorepo: a nested object value under a MANAGED override key (e.g.
+    // `vitest`) is a user override scoped under that key, not a version pin.
+    // The bun catalog rewrite must not pass it to getCatalogDependencySpec
+    // (which calls `.startsWith` and would crash / clobber it to a string).
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'bun-monorepo',
+        workspaces: ['packages/*'],
+        devDependencies: { vite: '^7.0.0' },
+        overrides: {
+          vitest: { '@vitest/runner': '4.0.0' },
+        },
+      }),
+    );
+
+    expect(() =>
+      rewriteMonorepo(makeWorkspaceInfo(tmpDir, PackageManager.bun), true),
+    ).not.toThrow();
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      overrides?: Record<string, unknown>;
+    };
+    const overrides = pkg.overrides ?? {};
+    // The nested override object is left intact, not clobbered to a string.
+    expect(overrides.vitest).toEqual({ '@vitest/runner': '4.0.0' });
+  });
+
   it('drops stale @vitest/browser* overrides from pnpm-workspace.yaml', () => {
     // The migration moves provider packages out of project manifests and adds
     // them as direct vite-plus deps. A pre-existing workspace override pinning
