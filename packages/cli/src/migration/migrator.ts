@@ -1589,16 +1589,13 @@ function createCatalogDependencyResolver(
     };
     const workspacesObj =
       pkg.workspaces && !Array.isArray(pkg.workspaces) ? pkg.workspaces : undefined;
-    return (catalogSpec, dependencyName) => {
-      const catalogName = catalogSpec.slice('catalog:'.length);
-      if (catalogName) {
-        return (
-          workspacesObj?.catalogs?.[catalogName]?.[dependencyName] ??
-          pkg.catalogs?.[catalogName]?.[dependencyName]
-        );
-      }
-      return workspacesObj?.catalog?.[dependencyName] ?? pkg.catalog?.[dependencyName];
-    };
+    const fromWorkspaces = createCatalogDependencyResolverFromCatalogs(
+      workspacesObj?.catalog,
+      workspacesObj?.catalogs,
+    );
+    const fromPkg = createCatalogDependencyResolverFromCatalogs(pkg.catalog, pkg.catalogs);
+    return (catalogSpec, dependencyName) =>
+      fromWorkspaces(catalogSpec, dependencyName) ?? fromPkg(catalogSpec, dependencyName);
   }
   return undefined;
 }
@@ -1609,7 +1606,9 @@ function createCatalogDependencyResolverFromCatalogs(
 ): CatalogDependencyResolver {
   return (catalogSpec, dependencyName) => {
     const catalogName = catalogSpec.slice('catalog:'.length);
-    if (catalogName) {
+    // pnpm/bun reserve `default` as the name of the top-level `catalog:` map,
+    // so `catalog:default` resolves there, not a named `catalogs` entry.
+    if (catalogName && catalogName !== 'default') {
       return catalogs?.[catalogName]?.[dependencyName];
     }
     return catalog?.[dependencyName];

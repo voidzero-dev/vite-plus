@@ -1856,6 +1856,21 @@ describe('preflightGitHooksSetup husky catalog resolution', () => {
     expect(preflightGitHooksSetup(tmpDir, PackageManager.pnpm)).toBeNull();
   });
 
+  it('resolves the explicit `catalog:default` alias from the top-level catalog', () => {
+    // pnpm reserves `default` for the top-level `catalog:` map, so `catalog:default`
+    // must resolve there rather than a named `catalogs.default` entry.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        scripts: { prepare: 'husky' },
+        devDependencies: { husky: 'catalog:default' },
+      }),
+    );
+    fs.writeFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'catalog:\n  husky: ^9.1.7\n');
+
+    expect(preflightGitHooksSetup(tmpDir, PackageManager.pnpm)).toBeNull();
+  });
+
   it('flags a `catalog:` husky version that resolves to <9 in the pnpm catalog', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
@@ -1880,5 +1895,20 @@ describe('preflightGitHooksSetup husky catalog resolution', () => {
     expect(preflightGitHooksSetup(tmpDir, PackageManager.yarn)).toContain(
       'Could not determine husky version from "catalog:"',
     );
+  });
+
+  it('uses the active package manager catalog over a foreign one', () => {
+    // Discriminating case: yarn's own catalog pins a compatible husky while a
+    // leftover pnpm-workspace.yaml pins an incompatible one. Reading yarn's
+    // catalog returns null (allowed); wrongly reading pnpm's would warn about
+    // husky <9, and broken resolution would warn "Could not determine".
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ scripts: { prepare: 'husky' }, devDependencies: { husky: 'catalog:' } }),
+    );
+    fs.writeFileSync(path.join(tmpDir, '.yarnrc.yml'), 'catalog:\n  husky: ^9.1.7\n');
+    fs.writeFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'catalog:\n  husky: ^8.0.0\n');
+
+    expect(preflightGitHooksSetup(tmpDir, PackageManager.yarn)).toBeNull();
   });
 });
