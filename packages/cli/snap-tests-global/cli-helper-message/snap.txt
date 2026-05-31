@@ -285,7 +285,6 @@ Options:
   -D, --dev                Only dev dependencies
   --depth <DEPTH>          Limit tree depth
   --no-optional            Exclude optional dependencies
-  -g, --global             Check globally installed packages
   --exclude-peers          Exclude peer dependencies
   --find-by <FINDER_NAME>  Use a finder function defined in .pnpmfile.cjs
   -h, --help               Print help

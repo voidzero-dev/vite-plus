@@ -44,10 +44,7 @@ use vite_path::AbsolutePath;
 use crate::{
     cli::{ConfigCommands, DistTagCommands, OwnerCommands, PmCommands, TokenCommands},
     error::Error,
-    helpers::{
-        build_package_manager, build_package_manager_or_npm_default, default_npm_package_manager,
-        ensure_package_json,
-    },
+    helpers::{build_package_manager, build_package_manager_or_npm_default, ensure_package_json},
 };
 
 pub async fn run_add(
@@ -104,11 +101,7 @@ pub async fn run_why(
     cwd: &AbsolutePath,
     options: &WhyCommandOptions<'_>,
 ) -> Result<ExitStatus, Error> {
-    let pm = if options.global {
-        default_npm_package_manager(cwd)
-    } else {
-        build_package_manager(cwd).await?
-    };
+    let pm = build_package_manager(cwd).await?;
     Ok(pm.run_why_command(options, cwd).await?)
 }
 
