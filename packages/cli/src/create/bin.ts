@@ -975,7 +975,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       injectCreateDefaultTemplate(fullPath, bundled.scope, compactOutput);
     }
     if (shouldSetupHooks) {
-      installGitHooks(fullPath, compactOutput);
+      installGitHooks(fullPath, compactOutput, undefined, workspaceInfo.packageManager);
     }
     updateCreateProgress('Installing dependencies');
     const installSummary = await runViteInstall(fullPath, options.interactive, installArgs, {
@@ -1237,7 +1237,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       await initGitRepository(fullPath);
     }
     if (shouldSetupHooks) {
-      installGitHooks(fullPath, compactOutput);
+      installGitHooks(fullPath, compactOutput, undefined, workspaceInfo.packageManager);
     }
     updateCreateProgress('Installing dependencies');
     installSummary = await runViteInstall(fullPath, options.interactive, installArgs, {
