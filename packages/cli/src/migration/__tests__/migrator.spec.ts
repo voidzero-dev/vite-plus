@@ -1276,11 +1276,13 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(pkg.peerDependencies).not.toHaveProperty('tsdown');
   });
 
-  it('drops selector-shaped REMOVE_PACKAGES overrides from package.json pnpm.overrides', () => {
+  it('drops only global/vite-plus-parent selector-shaped REMOVE_PACKAGES overrides from package.json pnpm.overrides', () => {
     // Project keeps its pnpm config in package.json (`pkg.pnpm.overrides`).
-    // Selector-shaped keys whose target is a removed package (e.g. the
-    // bundled provider packages) must be stripped or they would re-pin
-    // vite-plus's own provider dep to an incompatible version.
+    // A selector-shaped provider key is stripped only when it would re-pin
+    // vite-plus's OWN provider dep — a versioned global pin or a `vite-plus`
+    // parent. A provider selector scoped under a SPECIFIC non-vite-plus parent
+    // (`some-app>@vitest/browser-playwright`) only constrains that parent's
+    // subtree and is preserved.
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
@@ -1289,6 +1291,8 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
         pnpm: {
           overrides: {
             'vite-plus>@vitest/browser-playwright': '^4.0.0',
+            'some-app>@vitest/browser-playwright': '^4.0.0',
+            'a>vite-plus>@vitest/browser-playwright': '^4.0.0',
             '@vitest/browser-playwright@4': '4.1.7',
             'other>foo': '1.0.0',
           },
@@ -1301,8 +1305,15 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
       pnpm?: { overrides?: Record<string, string> };
     };
     const overrides = pkg.pnpm?.overrides ?? {};
+    // vite-plus parent and versioned global pin reach vite-plus's own dep — dropped.
     expect(overrides).not.toHaveProperty('vite-plus>@vitest/browser-playwright');
     expect(overrides).not.toHaveProperty('@vitest/browser-playwright@4');
+    // Provider selector scoped under a SPECIFIC non-vite-plus parent — PRESERVED.
+    expect(overrides['some-app>@vitest/browser-playwright']).toBe('^4.0.0');
+    // A chain with an outer non-vite-plus ancestor (`a>vite-plus>…`) requires
+    // vite-plus to sit UNDER `a`, so it never matches the root vite-plus edge —
+    // PRESERVED.
+    expect(overrides['a>vite-plus>@vitest/browser-playwright']).toBe('^4.0.0');
     // Unrelated selector keys must survive.
     expect(overrides['other>foo']).toBe('1.0.0');
   });
@@ -1430,10 +1441,11 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(provider.bar).toBe('1.0.0');
   });
 
-  it('drops a deep vite-plus-scoped provider pin and prunes all emptied ancestors', () => {
-    // A provider pin reachable through a `... > vite-plus > provider` chain
-    // forces vite-plus's own provider dep, so it is dropped; the recursion then
-    // prunes every ancestor it emptied (the whole `a` chain).
+  it('preserves a provider pin nested under an outer non-vite-plus ancestor', () => {
+    // `{ a: { vite-plus: { provider } } }` forces the provider only for the
+    // vite-plus instance that sits UNDER `a` — NOT the project's own (root)
+    // vite-plus direct dep. It is the npm/bun nested equivalent of the flat pnpm
+    // `a>vite-plus>provider` chain, so (like that chain) it must be PRESERVED.
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
@@ -1447,10 +1459,35 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.npm), true, true);
 
     const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      overrides?: Record<string, Record<string, Record<string, string>>>;
+    };
+    const overrides = pkg.overrides ?? {};
+    expect(overrides).toHaveProperty('a');
+    expect(overrides.a['vite-plus']['@vitest/browser-playwright']).toBe('4.0.0');
+  });
+
+  it('drops a root vite-plus provider pin nested one level deep and prunes the parent', () => {
+    // `{ vite-plus: { provider } }` forces the provider as a direct dep of the
+    // root vite-plus, so it IS dropped; the emptied `vite-plus` parent is pruned.
+    // Contrast the outer-ancestor case above — only a single-segment `vite-plus`
+    // chain reaches the protected edge.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { vite: '^7.0.0' },
+        overrides: {
+          'vite-plus': { '@vitest/browser-playwright': { '.': '4.0.0' } },
+        },
+      }),
+    );
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.npm), true, true);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
       overrides?: Record<string, unknown>;
     };
     const overrides = pkg.overrides ?? {};
-    expect(overrides).not.toHaveProperty('a');
+    expect(overrides).not.toHaveProperty('vite-plus');
   });
 
   it('preserves a deep provider override under unrelated parents', () => {
@@ -1574,6 +1611,7 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
         "  '@vitest/browser-webdriverio': 4.0.0",
         "  '@vitest/browser-playwright@4': 4.0.0",
         "  'vite-plus>@vitest/browser-playwright': 4.0.0",
+        "  'some-app>@vitest/browser-playwright': 4.0.0",
         '  some-other-pkg: 1.0.0',
         "  'unrelated>some-other-pkg': 1.0.0",
         '',
@@ -1585,16 +1623,20 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     const yaml = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
       overrides: Record<string, string>;
     };
-    // Playwright stays in REMOVE_PACKAGES, so its bare/selector/versioned
-    // overrides are all stripped (vite-plus owns the provider dep directly).
+    // Playwright stays in REMOVE_PACKAGES, so its bare/versioned/global overrides
+    // and `vite-plus`-parented selector are stripped (vite-plus owns the provider
+    // dep directly).
     expect(yaml.overrides).not.toHaveProperty('@vitest/browser-playwright');
     expect(yaml.overrides).not.toHaveProperty('@vitest/browser-playwright@4');
     expect(yaml.overrides).not.toHaveProperty('vite-plus>@vitest/browser-playwright');
+    // A provider selector scoped under a SPECIFIC non-vite-plus parent only
+    // constrains that parent's subtree, so it is PRESERVED.
+    expect(yaml.overrides['some-app>@vitest/browser-playwright']).toBe('4.0.0');
     // Webdriverio is opt-in: vite-plus keeps it in the user's deps pinned to the
     // bundled vitest version, but a stale override pinning an old version would
     // win over that direct dep and misalign the provider against bundled vitest —
     // so the stale override is dropped too (the dep stays installed, the pin
-    // does not). Selector-shaped webdriverio overrides are dropped the same way.
+    // does not).
     expect(yaml.overrides).not.toHaveProperty('@vitest/browser-webdriverio');
     expect(yaml.overrides['some-other-pkg']).toBe('1.0.0');
     expect(yaml.overrides['unrelated>some-other-pkg']).toBe('1.0.0');
@@ -1934,10 +1976,16 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(devDeps.webdriverio).toBe('*');
   });
 
-  it('drops stale yarn SELECTOR-shaped @vitest/browser-webdriverio resolutions (**/ and parent/)', () => {
+  it('drops only global/glob/vite-plus-parent yarn SELECTOR-shaped @vitest/browser-webdriverio resolutions', () => {
     // Yarn resolutions commonly use selector shapes (glob `**/pkg`, nested
-    // `parent/pkg`). These must also be pruned, or they would force the stale
-    // provider over the migrated 4.1.7 dep. Bare-key pruning alone is not enough.
+    // `parent/pkg`). A pin is pruned only when it would reach vite-plus's OWN
+    // direct provider dep — i.e. a versioned global pin, a NAME glob that matches
+    // vite-plus (`**`, `vite-*`), or a parent that is literally `vite-plus`. A
+    // selector scoped under a SPECIFIC non-vite-plus parent — including a
+    // wildcard RANGE on that parent (`parent@*`, `parent@workspace:*`) or a name
+    // glob that does NOT match vite-plus (`react-*`) — only constrains that
+    // parent's subtree and is preserved (over-reaching would silently change
+    // that parent's resolved transitive provider).
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
@@ -1945,7 +1993,15 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
         devDependencies: { vite: '^7.0.0', '@vitest/browser-webdriverio': '^4.0.0' },
         resolutions: {
           '**/@vitest/browser-webdriverio': '4.0.0',
+          'vite-*/@vitest/browser-webdriverio': '4.0.0',
+          'vite-plus/@vitest/browser-webdriverio': '4.0.0',
+          '**/vite-plus/@vitest/browser-webdriverio': '4.0.0',
           'some-parent/@vitest/browser-webdriverio': '4.0.0',
+          'react-*/@vitest/browser-webdriverio': '4.0.0',
+          'parent@*/@vitest/browser-webdriverio': '4.0.0',
+          'parent@workspace:*/@vitest/browser-webdriverio': '4.0.0',
+          'some-parent/**/@vitest/browser-webdriverio': '4.0.0',
+          'some-parent/vite-*/@vitest/browser-webdriverio': '4.0.0',
           '@vitest/browser-webdriverio@4': '4.0.0',
           '**/some-other-pkg': '1.0.0',
         },
@@ -1955,9 +2011,28 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
 
     const pkg = readJson(path.join(tmpDir, 'package.json'));
     const resolutions = pkg.resolutions as Record<string, string>;
+    // Glob parent matches all parents (incl. vite-plus) — dropped.
     expect(resolutions).not.toHaveProperty('**/@vitest/browser-webdriverio');
-    expect(resolutions).not.toHaveProperty('some-parent/@vitest/browser-webdriverio');
+    // Name glob that matches vite-plus — dropped.
+    expect(resolutions).not.toHaveProperty('vite-*/@vitest/browser-webdriverio');
+    // Parent is literally vite-plus — dropped.
+    expect(resolutions).not.toHaveProperty('vite-plus/@vitest/browser-webdriverio');
+    // `**`-padded vite-plus reaches the root vite-plus edge — dropped.
+    expect(resolutions).not.toHaveProperty('**/vite-plus/@vitest/browser-webdriverio');
+    // Versioned global pin — dropped.
     expect(resolutions).not.toHaveProperty('@vitest/browser-webdriverio@4');
+    // Scoped under a SPECIFIC non-vite-plus parent — PRESERVED (does not affect
+    // vite-plus's own provider dep).
+    expect(resolutions['some-parent/@vitest/browser-webdriverio']).toBe('4.0.0');
+    // A name glob that does NOT match vite-plus — PRESERVED.
+    expect(resolutions['react-*/@vitest/browser-webdriverio']).toBe('4.0.0');
+    // A wildcard RANGE on a specific parent is not a glob parent — PRESERVED.
+    expect(resolutions['parent@*/@vitest/browser-webdriverio']).toBe('4.0.0');
+    expect(resolutions['parent@workspace:*/@vitest/browser-webdriverio']).toBe('4.0.0');
+    // A nested glob gated by a SPECIFIC non-vite-plus ancestor only constrains
+    // that ancestor's subtree, NOT the root vite-plus edge — PRESERVED.
+    expect(resolutions['some-parent/**/@vitest/browser-webdriverio']).toBe('4.0.0');
+    expect(resolutions['some-parent/vite-*/@vitest/browser-webdriverio']).toBe('4.0.0');
     // Unrelated selector resolutions survive.
     expect(resolutions['**/some-other-pkg']).toBe('1.0.0');
     const devDeps = pkg.devDependencies as Record<string, string>;

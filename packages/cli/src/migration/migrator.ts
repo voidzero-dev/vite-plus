@@ -164,28 +164,185 @@ function isRemovePackageOverrideKey(key: string): boolean {
   );
 }
 
-// Drop override keys whose target is a drop-listed provider. Covers bare,
-// versioned, parent-selector and chained selector shapes that exact-key
-// matching would miss.
+// Strip a trailing `@version`/range from a selector segment and keep its scope.
+// Mirrors the version-suffix peeling in `extractOverrideTargetName`: the version
+// `@` follows the name (after the `/` of a scoped name); the leading scope `@`
+// is never a version separator.
+function stripSegmentVersion(segment: string): string {
+  const nameStart = segment.startsWith('@') ? segment.indexOf('/') + 1 : 0;
+  const versionAt = segment.indexOf('@', nameStart);
+  return versionAt > 0 ? segment.slice(0, versionAt) : segment;
+}
+
+// True iff a single parent-NAME glob segment matches the literal `vite-plus`
+// package name. `*` matches any run of characters; all other glob/regex
+// metacharacters are escaped. Used for the lone concrete ancestor of a selector.
+function parentGlobMatchesVitePlus(glob: string): boolean {
+  const pattern = glob
+    .split('*')
+    .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&'))
+    .join('.*');
+  return new RegExp(`^${pattern}$`).test(VITE_PLUS_NAME);
+}
+
+// True iff a selector's PARENT chain reaches vite-plus's OWN direct provider dep.
+// The edge migration protects is `<root> → vite-plus → @vitest/provider`; since
+// vite-plus is a direct dependency of the project, the provider's ancestor chain
+// at that edge is the single segment `vite-plus`. A parent chain reaches it iff
+// it glob-matches that single-segment path:
+//   - `**` segments match zero-or-more ancestors, so they are ignored here;
+//   - what remains must be AT MOST ONE concrete ancestor, and that ancestor must
+//     glob-match `vite-plus` (`vite-plus`, `vite-*`, `*`).
+// Any chain carrying a SPECIFIC non-vite-plus ancestor (`some-parent>vite-plus`,
+// `some-parent/**`, `some-parent/vite-*`) constrains a different subtree and does
+// NOT touch the root vite-plus provider, so it is preserved. A chain of only `**`
+// (`**`, `**/**`) is global and matches.
+function parentChainReachesVitePlus(segments: string[]): boolean {
+  const concrete = segments.filter((segment) => segment !== '**');
+  if (concrete.length === 0) {
+    return true;
+  }
+  if (concrete.length > 1) {
+    return false;
+  }
+  const ancestor = concrete[0];
+  return ancestor.includes('*') ? parentGlobMatchesVitePlus(ancestor) : ancestor === VITE_PLUS_NAME;
+}
+
+// Extract the ordered PARENT chain of an override/resolution key — the ancestor
+// segments above the forced TARGET — or `null` when the key has no parent
+// selector (a bare/versioned global pin). Each segment's own `@version`/range is
+// stripped and scoped names (`@scope/name`) are kept whole; glob segments (`**`,
+// `vite-*`) are preserved verbatim for `parentChainReachesVitePlus`.
 //
-// npm/bun `overrides` also nest object-valued entries to arbitrary depth, and
-// the nesting is SCOPED: `{ "some-pkg": { "@vitest/browser-playwright": "x" } }`
-// forces the provider only within some-pkg's subtree, NOT vite-plus's own
-// provider dep. So a provider pin is dropped only where it actually affects
-// vite-plus's (now direct-dep) provider ownership: at the TOP level (a global
-// pin reaches vite-plus's bundled copy) and inside a `vite-plus` subtree. Under
-// any OTHER parent the pin is the user's scoped override and is preserved — we
-// still descend there only to reach a nested `vite-plus`. A long-form provider
-// override (`{ "@vitest/browser-playwright": { ".": "x", "other": "y" } }`) has
-// its own version pin (`.`) dropped while unrelated children (`other`) are kept.
-// A parent we EMPTY by dropping its last pin is pruned so no meaningless `{}` is
-// left; user-authored empties and untouched maps are kept. (pnpm/yarn override
-// values are flat strings, so the recursion is inert for those sinks.)
-// `dropProviderPins` is true at the top level and within a `vite-plus` subtree.
-// Returns whether any key/pin was removed.
+// Mirrors `extractOverrideTargetName`'s grammar so target and parent stay
+// consistent (see that function for the full delimiter rationale):
+//   - pnpm `a>b>child`: every `>`-separated prefix is a parent level (`a`, `b`);
+//     pnpm has no globs, so a chain of length > 1 always carries a specific
+//     ancestor.
+//   - yarn `from/descriptor`: the descriptor is the trailing 1 (unscoped) or 2
+//     (scoped) segments; the remaining leading `/`-segments are the `from` chain,
+//     with scoped ancestors (`@scope/name`) rejoined.
+//   - bare/versioned names (`pkg`, `@scope/pkg`, `pkg@4`) have NO parent → `null`.
+function extractOverrideParentSegments(key: string): string[] | null {
+  let rest = key.trim();
+  // Peel every pnpm `>` parent level. pnpm splits at a `>` whose preceding char
+  // is NOT space, `|`, or `@` (its DELIMITER_REGEX), so semver comparators like
+  // `pkg@>=4` are not mistaken for a parent selector.
+  const pnpmParents: string[] = [];
+  for (let delim = rest.search(/[^ |@]>/); delim !== -1; delim = rest.search(/[^ |@]>/)) {
+    pnpmParents.push(stripSegmentVersion(rest.slice(0, delim + 1).trim()));
+    rest = rest.slice(delim + 2).trim();
+  }
+  if (pnpmParents.length > 0) {
+    return pnpmParents;
+  }
+  // No pnpm parent — check for a yarn `from/descriptor` selector. `rest` is the
+  // child (target) descriptor; only a `/` beyond a single scoped name leaves a
+  // leading `from` (parent) chain.
+  if (!rest.includes('/')) {
+    return null;
+  }
+  const segments = rest.split('/');
+  // The trailing descriptor occupies the last 2 segments when it is a scoped
+  // name (second-to-last segment starts with `@`), else the last 1.
+  const descriptorIsScoped = segments[segments.length - 2]?.startsWith('@') ?? false;
+  const descriptorSegmentCount = descriptorIsScoped ? 2 : 1;
+  const rawParents = segments.slice(0, segments.length - descriptorSegmentCount);
+  if (rawParents.length === 0) {
+    // The whole key was a bare scoped name (`@scope/pkg`) — no parent selector.
+    return null;
+  }
+  // Rejoin scoped ancestors (`@scope` + `name`) and strip each segment's version.
+  const parents: string[] = [];
+  for (let i = 0; i < rawParents.length; i += 1) {
+    const segment = rawParents[i];
+    if (segment.startsWith('@') && i + 1 < rawParents.length) {
+      parents.push(stripSegmentVersion(`${segment}/${rawParents[i + 1]}`));
+      i += 1;
+    } else {
+      parents.push(stripSegmentVersion(segment));
+    }
+  }
+  return parents;
+}
+
+// True iff a provider override/resolution key (target ∈
+// PROVIDER_OVERRIDE_DROP_NAMES) should be dropped because the pin would affect
+// vite-plus's OWN direct provider dep. The pin reaches that dep iff its parent
+// selector is:
+//   1. ABSENT — bare/versioned global pin (`@vitest/browser-playwright`,
+//      `@vitest/browser-playwright@4`).
+//   2. a chain that glob-matches the single-segment `vite-plus` ancestor path: a
+//      pure glob (`**/...`, `*/...`), a name glob matching vite-plus
+//      (`vite-*/...`), the literal `vite-plus` (`vite-plus>...`, `vite-plus/...`),
+//      or `**`-padded variants (`**/vite-plus/...`). See
+//      `parentChainReachesVitePlus`.
+// A selector carrying a SPECIFIC non-vite-plus ancestor anywhere in its chain
+// (`some-app>@vitest/...`, `some-parent/@vitest/...`, `a>vite-plus>@vitest/...`,
+// `some-parent/**/@vitest/...`, `some-parent/vite-*/@vitest/...`) or a mere
+// wildcard RANGE on a specific parent (`parent@*/...`) only constrains that
+// parent's subtree and is preserved. The parent chain comes from the KEY STRING
+// for flat pnpm/yarn selectors; for npm/bun NESTED objects it is accumulated from
+// the enclosing keys by `dropRemovePackageOverrideKeys` and passed in via
+// `ancestorChain`, so a nested `{ a: { vite-plus: { provider } } }` is treated
+// exactly like the flat `a>vite-plus>provider` (both preserved).
+//
+// ACCEPTED EDGE: reachability is judged from `vite-plus` only. A pnpm selector
+// whose parent is the project's OWN (root/workspace) package name — which keeps
+// `@vitest/browser-webdriverio` as a direct dep after migration, e.g.
+// `my-app>@vitest/browser-webdriverio` — is therefore preserved even though it
+// could re-pin that direct dep. Dropping it would require threading importer
+// names through this pass; per PR #1588 this is left as a known, visible (the pin
+// stays in the manifest) limitation rather than risk over-deleting genuinely
+// unrelated transitive selectors (the behavior the posted P2 review asked us to
+// keep).
+function providerKeyReachesVitePlus(key: string, ancestorChain: string[]): boolean {
+  if (!isRemovePackageOverrideKey(key)) {
+    return false;
+  }
+  const keyParents = extractOverrideParentSegments(key) ?? [];
+  return parentChainReachesVitePlus([...ancestorChain, ...keyParents]);
+}
+
+// Flat-selector entry point (no enclosing object nesting): used by the
+// pnpm-workspace YAML sweep, where each key carries its whole parent chain.
+function shouldDropProviderOverrideKey(key: string): boolean {
+  return providerKeyReachesVitePlus(key, []);
+}
+
+// The ancestor segments a key contributes when the recursion descends into its
+// object value: the key's own embedded selector parents followed by its target
+// package name (version-stripped). For a plain npm/bun nested key (`a`) this is
+// just `[a]`, so the accumulated chain mirrors a flat pnpm/yarn parent chain.
+function childChainContribution(key: string): string[] {
+  const parents = extractOverrideParentSegments(key) ?? [];
+  return [...parents, extractOverrideTargetName(key)];
+}
+
+// Drop override keys whose target is a drop-listed provider AND whose pin would
+// reach vite-plus's OWN direct provider dep — the edge `<root> → vite-plus →
+// @vitest/provider`. Covers bare, versioned, global-glob and `vite-plus`-parent
+// shapes that exact-key matching would miss. A pin scoped under a SPECIFIC
+// non-vite-plus parent (pnpm `some-app>@vitest/...`, yarn `some-parent/@vitest/...`,
+// or the npm/bun nested `{ "some-pkg": { "@vitest/...": "x" } }`) only constrains
+// that parent's subtree and is PRESERVED.
+//
+// The decision is uniform across sinks: a provider pin is dropped iff its FULL
+// ancestor chain reaches the root vite-plus edge (see `parentChainReachesVitePlus`).
+// For flat pnpm/yarn selectors the whole chain lives in the KEY STRING; for npm/bun
+// nested objects it is accumulated here from the enclosing object keys
+// (`ancestorChain`) — so `{ "a": { "vite-plus": { provider } } }` is treated like
+// the flat `a>vite-plus>provider` (both PRESERVED: vite-plus sits under `a`, not at
+// the root). A long-form provider override (`{ "@vitest/browser-playwright": { ".":
+// "x", "other": "y" } }`) has its own version pin (`.`) dropped while unrelated
+// children (`other`) are kept. A parent we EMPTY by dropping its last pin is pruned
+// so no meaningless `{}` is left; user-authored empties and untouched maps are kept.
+// (pnpm/yarn override values are flat strings, so the recursion is inert for those
+// sinks.) Returns whether any key/pin was removed.
 function dropRemovePackageOverrideKeys(
   overrides: Record<string, unknown> | undefined,
-  dropProviderPins = true,
+  ancestorChain: string[] = [],
 ): boolean {
   if (!overrides) {
     return false;
@@ -197,16 +354,19 @@ function dropRemovePackageOverrideKeys(
       value !== null && typeof value === 'object' && !Array.isArray(value)
         ? (value as Record<string, unknown>)
         : undefined;
-    if (dropProviderPins && isRemovePackageOverrideKey(key)) {
+    if (providerKeyReachesVitePlus(key, ancestorChain)) {
       if (child) {
         // Long-form provider override: drop the provider's own version pin (`.`)
-        // but keep any unrelated child overrides scoped under it.
+        // but keep any unrelated child overrides scoped under it; still descend
+        // (with the provider appended to the chain) for any deeper root pin.
         let changed = false;
         if ('.' in child) {
           delete child['.'];
           changed = true;
         }
-        if (dropRemovePackageOverrideKeys(child, false)) {
+        if (
+          dropRemovePackageOverrideKeys(child, [...ancestorChain, ...childChainContribution(key)])
+        ) {
           changed = true;
         }
         if (Object.keys(child).length === 0) {
@@ -223,10 +383,12 @@ function dropRemovePackageOverrideKeys(
       continue;
     }
     if (child) {
-      // Drop provider pins only inside a `vite-plus` subtree; under any other
-      // parent, descend solely to reach a nested `vite-plus`.
-      const childDropsProviderPins = extractOverrideTargetName(key) === VITE_PLUS_NAME;
-      if (dropRemovePackageOverrideKeys(child, childDropsProviderPins)) {
+      // Not a root-vite-plus provider pin here: descend with the chain extended by
+      // this key so a deeper pin sees its full ancestor path; prune the parent only
+      // if the descent emptied it.
+      if (
+        dropRemovePackageOverrideKeys(child, [...ancestorChain, ...childChainContribution(key)])
+      ) {
         removed = true;
         if (Object.keys(child).length === 0) {
           delete overrides[key];
@@ -1638,15 +1800,19 @@ function rewritePnpmWorkspaceYaml(
     pruneYamlMapLegacyWrapperAliases(overrides);
     // Drop overrides for packages removed by migration (e.g. @vitest/browser*)
     // so a stale workspace pin can't force an incompatible version against
-    // vite-plus's own direct dependency. Selector-shaped keys like
-    // `parent>pkg` or `pkg@version` must also be removed since they'd
-    // re-apply against vite-plus's own direct provider dependency.
+    // vite-plus's own direct dependency. Bare/versioned global pins
+    // (`pkg`, `pkg@version`), global-glob selectors (`**/pkg`), and
+    // `vite-plus`-parented selectors (`vite-plus>pkg`) all reach vite-plus's own
+    // provider dep and are removed. A selector scoped under a SPECIFIC
+    // non-vite-plus parent (e.g. `some-app>@vitest/browser-playwright`) only
+    // constrains that parent's subtree, so it is preserved — see
+    // `shouldDropProviderOverrideKey`.
     if (overrides instanceof YAMLMap) {
       const keysSnapshot = overrides.items.map((item) => item.key);
       for (const keyNode of keysSnapshot) {
         const rawKey =
           keyNode instanceof Scalar ? String(keyNode.value ?? '') : String(keyNode ?? '');
-        if (isRemovePackageOverrideKey(rawKey)) {
+        if (shouldDropProviderOverrideKey(rawKey)) {
           overrides.delete(keyNode);
         }
       }
