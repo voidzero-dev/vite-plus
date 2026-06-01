@@ -1,3 +1,6 @@
+use std::time::Duration;
+
+use backon::{ExponentialBuilder, Retryable};
 use node_semver::{Range, Version};
 use tempfile::TempDir;
 use vite_path::{AbsolutePath, AbsolutePathBuf};
@@ -172,31 +175,49 @@ pub async fn download_runtime_with_provider<P: JsRuntimeProvider>(
     let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
     let archive_path = temp_path.join(&download_info.archive_filename);
 
-    // Verify hash if verification method is provided
-    match &download_info.hash_verification {
+    // Resolve the expected hash once. The SHASUMS fetch/parse is deterministic
+    // (parse failures are permanent and the fetch already retries internally),
+    // so it stays outside the content-integrity retry below.
+    let expected_hash: Option<Str> = match &download_info.hash_verification {
         HashVerification::ShasumsFile { url } => {
             let shasums_content = download_text(url).await?;
-            let expected_hash =
-                provider.parse_shasums(&shasums_content, &download_info.archive_filename)?;
-
-            // Download archive
-            download_file(&download_info.archive_url, &archive_path, &download_message).await?;
-
-            // Verify hash
-            verify_file_hash(&archive_path, &expected_hash, &download_info.archive_filename)
-                .await?;
+            Some(provider.parse_shasums(&shasums_content, &download_info.archive_filename)?)
         }
-        HashVerification::None => {
-            // Download archive without verification
-            download_file(&download_info.archive_url, &archive_path, &download_message).await?;
-        }
-    }
+        HashVerification::None => None,
+    };
 
-    // Extract archive
-    extract_archive(&archive_path, &temp_path, download_info.archive_format).await?;
+    let extracted_path = temp_path.join(&download_info.extracted_dir_name);
+
+    // Retry the download → verify → extract pipeline on transient corruption.
+    // `download_file` already retries the network layer (and surfaces an
+    // exhausted download as `DownloadFailed`, which `is_retryable_runtime_error`
+    // excludes), so this layer only re-downloads when a complete-but-corrupt
+    // archive fails hash verification or extraction. Each attempt starts from a
+    // clean extraction target so a partial prior attempt can't interfere.
+    (|| async {
+        download_file(&download_info.archive_url, &archive_path, &download_message).await?;
+
+        if let Some(expected_hash) = &expected_hash {
+            verify_file_hash(&archive_path, expected_hash, &download_info.archive_filename).await?;
+        }
+
+        if tokio::fs::try_exists(&extracted_path).await.unwrap_or(false) {
+            tokio::fs::remove_dir_all(&extracted_path).await?;
+        }
+        extract_archive(&archive_path, &temp_path, download_info.archive_format).await?;
+
+        Ok::<(), Error>(())
+    })
+    .retry(
+        ExponentialBuilder::default()
+            .with_jitter()
+            .with_min_delay(Duration::from_millis(200))
+            .with_max_times(3),
+    )
+    .when(is_retryable_runtime_error)
+    .await?;
 
     // Move extracted directory to cache location
-    let extracted_path = temp_path.join(&download_info.extracted_dir_name);
     move_to_cache(&extracted_path, &install_dir, version).await?;
 
     tracing::info!("{} {version} installed at {install_dir:?}", provider.name());
@@ -208,6 +229,18 @@ pub async fn download_runtime_with_provider<P: JsRuntimeProvider>(
         binary_relative_path,
         bin_dir_relative_path,
     })
+}
+
+/// Predicate for the content-integrity retry in
+/// [`download_runtime_with_provider`].
+///
+/// Retries only a complete-but-corrupt download: a hash mismatch, or an
+/// extraction failure (`ExtractionFailed` from zip, `Io`/`UnexpectedEof` from
+/// tar.gz). Everything else fails fast — `DownloadFailed`/`Reqwest` are already
+/// retried inside `download_file`, and permanent errors (version-not-found,
+/// SHASUMS parse failures, `JoinError` panics) can never succeed on retry.
+fn is_retryable_runtime_error(err: &Error) -> bool {
+    matches!(err, Error::HashMismatch { .. } | Error::ExtractionFailed { .. } | Error::Io(_))
 }
 
 /// Represents the source from which a Node.js version was read.

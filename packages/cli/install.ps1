@@ -240,7 +240,7 @@ function Download-AndExtract {
 function Cleanup-OldVersions {
     param([string]$InstallDir)
 
-    $maxVersions = 5
+    $maxVersions = 3
     # Only cleanup semver format directories (0.1.0, 1.2.3-beta.1, etc.)
     # This excludes 'current' symlink and non-semver directories like 'local-dev'
     $semverPattern = '^\d+\.\d+\.\d+(-[a-zA-Z0-9.-]+)?$'
@@ -259,6 +259,33 @@ function Cleanup-OldVersions {
     foreach ($old in $toDelete) {
         # Remove silently
         Remove-Item -Path $old.FullName -Recurse -Force
+    }
+}
+
+function Remove-CurrentLink {
+    param([string]$Path)
+
+    try {
+        $item = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+    } catch [System.Management.Automation.ItemNotFoundException] {
+        return
+    }
+
+    $isReparsePoint = ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0
+
+    try {
+        if ($isReparsePoint) {
+            if ($item.PSIsContainer) {
+                [System.IO.Directory]::Delete($item.FullName)
+            } else {
+                [System.IO.File]::Delete($item.FullName)
+            }
+            return
+        }
+
+        Remove-Item -LiteralPath $item.FullName -Recurse -Force -ErrorAction Stop
+    } catch {
+        Write-Error-Exit "Failed to remove existing current link at ${Path}: $_"
     }
 }
 
@@ -584,11 +611,7 @@ function Main {
     }
 
     # Create/update current junction (symlink)
-    if (Test-Path $CurrentLink) {
-        # Remove existing junction
-        cmd /c rmdir "$CurrentLink" 2>$null
-        Remove-Item -Path $CurrentLink -Force -ErrorAction SilentlyContinue
-    }
+    Remove-CurrentLink $CurrentLink
     # Create new junction pointing to the version directory
     cmd /c mklink /J "$CurrentLink" "$VersionDir" | Out-Null
 

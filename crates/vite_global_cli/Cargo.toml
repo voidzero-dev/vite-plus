@@ -1,6 +1,6 @@
 [package]
 name = "vite_global_cli"
-version = "0.1.22"
+version = "0.1.23"
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -16,6 +16,7 @@ chrono = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 clap_complete = { workspace = true, features = ["unstable-dynamic"] }
 directories = { workspace = true }
+dialoguer = { workspace = true }
 futures = { workspace = true }
 flate2 = { workspace = true }
 serde = { workspace = true }

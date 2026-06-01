@@ -25,11 +25,24 @@
     },
     "ls vite-plus-monorepo/apps # check apps directory created",
     "ls vite-plus-monorepo/apps/vite-plus-application/package.json # check vite-plus-application package.json",
+    "test ! -e vite-plus-monorepo/apps/vite-plus-application/.vscode && echo 'No app editor config' || (echo 'ERROR: app editor config exists' && exit 1) # monorepo package create without --editor should not write VS Code config",
+    {
+      "command": "cd vite-plus-monorepo && vp create --no-interactive vite:application --directory apps/no-editor --no-editor # create application with explicit editor opt-out inside monorepo",
+      "ignoreOutput": true
+    },
+    "test ! -e vite-plus-monorepo/apps/no-editor/.vscode && echo 'No opt-out app editor config' || (echo 'ERROR: opt-out app editor config exists' && exit 1) # --no-editor should not write VS Code config",
+    {
+      "command": "cd vite-plus-monorepo && vp create --no-interactive vite:application --directory apps/editor-opt-in --editor vscode # create application with explicit editor opt-in inside monorepo",
+      "ignoreOutput": true
+    },
+    "test -f vite-plus-monorepo/apps/editor-opt-in/.vscode/settings.json && echo 'Opt-in app VS Code settings exist' # explicit --editor should write VS Code settings",
+    "test -f vite-plus-monorepo/apps/editor-opt-in/.vscode/extensions.json && echo 'Opt-in app VS Code extensions exist' # explicit --editor should write VS Code extensions",
     {
       "command": "cd vite-plus-monorepo && vp create --no-interactive vite:library # create library in non-interactive mode",
       "ignoreOutput": true
     },
     "ls vite-plus-monorepo/packages/vite-plus-library/package.json # check vite-plus-library package.json",
+    "test ! -e vite-plus-monorepo/packages/vite-plus-library/.vscode && echo 'No library editor config' || (echo 'ERROR: library editor config exists' && exit 1) # monorepo package create without --editor should not write VS Code config",
     {
       "command": "cd vite-plus-monorepo && vp create --no-interactive vite:generator # create generator in non-interactive mode",
       "ignoreOutput": true
