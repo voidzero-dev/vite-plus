@@ -565,11 +565,11 @@ pub enum PmCommands {
     /// Approve dependency lifecycle scripts (install/postinstall) to run
     #[command(name = "approve-builds")]
     ApproveBuilds {
-        /// Packages to approve. Prefix with `!` to deny (pnpm >= 11.0.0 only).
-        /// Omit to launch interactive mode (pnpm only).
+        /// Packages to approve. Prefix with `!` to deny (pnpm >= 11.0.0, npm >= 11.16.0).
+        /// Omit to launch interactive mode (pnpm) or list pending packages (npm >= 11.16.0).
         packages: Vec<String>,
 
-        /// Approve every package currently pending approval (pnpm >= 10.32.0).
+        /// Approve every package currently pending approval (pnpm >= 10.32.0, npm >= 11.16.0).
         /// Mutually exclusive with positional packages.
         #[arg(long, conflicts_with = "packages")]
         all: bool,

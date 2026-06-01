@@ -10,6 +10,12 @@ use crate::package_manager::{
     PackageManager, PackageManagerType, ResolveCommandResult, format_path_env,
 };
 
+/// Note shown after an npm `approve-scripts`/`deny-scripts` write, so users
+/// aren't misled into thinking lifecycle scripts are now blocked.
+const NPM_ADVISORY_NOTE: &str = "npm's allowScripts policy is advisory in npm 11.x: install scripts still run; npm only \
+     warns about unreviewed packages at install time. Enforcement is planned for a future \
+     npm release.";
+
 /// Options for the approve-builds command.
 #[derive(Debug, Default)]
 pub struct ApproveBuildsCommandOptions<'a> {
@@ -24,7 +30,7 @@ pub struct ApproveBuildsCommandOptions<'a> {
 impl PackageManager {
     /// Run the approve-builds command with the package manager.
     /// Returns `ExitStatus` with success (0) when the command is a no-op
-    /// (npm, yarn, or bun with only deny tokens / no positionals).
+    /// (npm < 11.16.0, yarn, or bun with only deny tokens / no positionals).
     pub async fn run_approve_builds_command(
         &self,
         options: &ApproveBuildsCommandOptions<'_>,
@@ -38,9 +44,10 @@ impl PackageManager {
 
     /// Resolve the approve-builds command.
     /// Returns `None` when the command is a no-op for the detected PM
-    /// (npm/yarn warn; bun with no approve-tokens prints a contextual hint).
-    /// Returns `Err(Error::InvalidArgument)` when `--all` or `!pkg` is requested
-    /// on a pnpm version that does not support it.
+    /// (npm < 11.16.0 / yarn warn; bun with no approve-tokens prints a contextual hint).
+    /// npm >= 11.16.0 forwards to `npm approve-scripts` / `deny-scripts`.
+    /// Returns `Err(Error::InvalidArgument)` when `--all` or `!pkg` is requested on a
+    /// pnpm version that does not support it, or when approves and denies are mixed on npm.
     pub fn resolve_approve_builds_command(
         &self,
         options: &ApproveBuildsCommandOptions,
@@ -121,13 +128,60 @@ impl PackageManager {
                 args.extend(approves.into_iter().cloned());
             }
             PackageManagerType::Npm => {
-                output::warn(
-                    "npm runs lifecycle scripts by default. To restrict them, set \
-                     `ignore-scripts=true` in .npmrc and rebuild approved packages with \
-                     `vp pm rebuild <package>`.",
-                );
-                warn_dropped_pass_through(options.pass_through_args);
-                return Ok(None);
+                // npm < 11.16.0 has no approve-scripts/deny-scripts: keep the legacy warn
+                // no-op (scripts run by default; advise restricting via .npmrc), enhanced to
+                // point at the upgrade. `vp pm approve-builds` always runs in a project
+                // context, so npm's global-only EGLOBAL error is never hit.
+                if !npm_supports_allow_scripts(&self.version) {
+                    output::warn(
+                        "npm runs lifecycle scripts by default. Upgrade to npm >= 11.16.0 for \
+                         `npm approve-scripts`/`deny-scripts`, or set `ignore-scripts=true` in \
+                         .npmrc and rebuild approved packages with `vp pm rebuild <package>`.",
+                    );
+                    warn_dropped_pass_through(options.pass_through_args);
+                    return Ok(None);
+                }
+
+                // npm splits approve vs. deny into two separate subcommands. vp accepts both
+                // in one invocation (pnpm runs them as one command); reject the mixed case
+                // rather than widen the single-command return type. Mirror the bun branch's
+                // partition idiom.
+                let (denies, approves): (Vec<&String>, Vec<&String>) =
+                    options.packages.iter().partition(|p| p.starts_with('!'));
+                let has_denies = !denies.is_empty();
+                let has_approves = !approves.is_empty();
+
+                if has_approves && has_denies {
+                    return Err(Error::InvalidArgument(
+                        "npm manages approvals and denials separately. Run them as two \
+                         invocations, e.g. `vp pm approve-builds <approve-pkg>...` then \
+                         `vp pm approve-builds !<deny-pkg>...`."
+                            .into(),
+                    ));
+                }
+
+                bin_name = "npm".into();
+                if has_denies {
+                    // `deny-scripts <pkg...>` — strip the leading `!`, like the bun branch.
+                    args.push("deny-scripts".into());
+                    args.extend(
+                        denies.into_iter().map(|p| p.strip_prefix('!').unwrap_or(p).to_string()),
+                    );
+                    output::note(NPM_ADVISORY_NOTE);
+                } else {
+                    args.push("approve-scripts".into());
+                    if options.all {
+                        args.push("--all".into());
+                        output::note(NPM_ADVISORY_NOTE);
+                    } else if has_approves {
+                        args.extend(approves.into_iter().cloned());
+                        output::note(NPM_ADVISORY_NOTE);
+                    } else {
+                        // No args, no --all: npm has no interactive picker — list pending
+                        // (read-only). No advisory note: nothing is written.
+                        args.push("--allow-scripts-pending".into());
+                    }
+                }
             }
             PackageManagerType::Yarn => {
                 // Yarn 1 (Classic) runs lifecycle scripts by default; Berry (2+) blocks them.
@@ -171,6 +225,13 @@ fn pnpm_supports_deny_syntax(version: &str) -> bool {
     // `!<pkg>` deny syntax shipped in pnpm v11.0.0 (PR #11030).
     // Same npm prerelease semantics as above.
     version_satisfies(version, ">=11.0.0")
+}
+
+fn npm_supports_allow_scripts(version: &str) -> bool {
+    // `npm approve-scripts` / `deny-scripts` / `--allow-scripts-pending` shipped in npm
+    // v11.16.0 (npm/cli #9360, Phase 1). Same npm prerelease semantics as the pnpm gates:
+    // an `11.16.0-rc.x` tag does NOT satisfy `>=11.16.0`.
+    version_satisfies(version, ">=11.16.0")
 }
 
 fn version_satisfies(version: &str, range: &'static str) -> bool {
@@ -505,6 +566,7 @@ mod tests {
 
     #[test]
     fn npm_warns_and_noop() {
+        // npm < 11.16.0 has no approve-scripts/deny-scripts: legacy warn no-op.
         let pm = create_mock_package_manager(PackageManagerType::Npm, "11.0.0");
         let packages = vec!["esbuild".to_string()];
         let result = pm
@@ -514,6 +576,132 @@ mod tests {
             })
             .expect("resolves");
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn npm_below_11_16_warns_noop() {
+        // The release immediately before approve-scripts/deny-scripts shipped.
+        let pm = create_mock_package_manager(PackageManagerType::Npm, "11.15.0");
+        let packages = vec!["esbuild".to_string()];
+        let result = pm
+            .resolve_approve_builds_command(&ApproveBuildsCommandOptions {
+                packages: &packages,
+                ..Default::default()
+            })
+            .expect("resolves");
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn npm_11_16_prerelease_noop() {
+        // npm semver convention: `11.16.0-rc.0` does not satisfy `>=11.16.0`, so it
+        // falls back to the legacy no-op (mirrors pnpm_all_rejects_v11_prerelease).
+        let pm = create_mock_package_manager(PackageManagerType::Npm, "11.16.0-rc.0");
+        let packages = vec!["esbuild".to_string()];
+        let result = pm
+            .resolve_approve_builds_command(&ApproveBuildsCommandOptions {
+                packages: &packages,
+                ..Default::default()
+            })
+            .expect("resolves");
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn npm_v11_16_approve_by_name() {
+        let pm = create_mock_package_manager(PackageManagerType::Npm, "11.16.0");
+        let packages = vec!["esbuild".to_string(), "fsevents".to_string()];
+        let result = pm
+            .resolve_approve_builds_command(&ApproveBuildsCommandOptions {
+                packages: &packages,
+                ..Default::default()
+            })
+            .expect("resolves")
+            .expect("supported");
+        assert_eq!(result.bin_path, "npm");
+        assert_eq!(result.args, vec!["approve-scripts", "esbuild", "fsevents"]);
+    }
+
+    #[test]
+    fn npm_v11_16_all() {
+        let pm = create_mock_package_manager(PackageManagerType::Npm, "11.16.0");
+        let result = pm
+            .resolve_approve_builds_command(&ApproveBuildsCommandOptions {
+                all: true,
+                ..Default::default()
+            })
+            .expect("resolves")
+            .expect("supported");
+        assert_eq!(result.args, vec!["approve-scripts", "--all"]);
+    }
+
+    #[test]
+    fn npm_v11_16_no_args_lists_pending() {
+        let pm = create_mock_package_manager(PackageManagerType::Npm, "11.16.0");
+        let result = pm
+            .resolve_approve_builds_command(&ApproveBuildsCommandOptions::default())
+            .expect("resolves")
+            .expect("supported");
+        assert_eq!(result.args, vec!["approve-scripts", "--allow-scripts-pending"]);
+    }
+
+    #[test]
+    fn npm_v11_16_deny_only() {
+        let pm = create_mock_package_manager(PackageManagerType::Npm, "11.16.0");
+        let packages = vec!["!core-js".to_string()];
+        let result = pm
+            .resolve_approve_builds_command(&ApproveBuildsCommandOptions {
+                packages: &packages,
+                ..Default::default()
+            })
+            .expect("resolves")
+            .expect("supported");
+        // The leading `!` is stripped for npm deny-scripts.
+        assert_eq!(result.args, vec!["deny-scripts", "core-js"]);
+    }
+
+    #[test]
+    fn npm_v11_16_multiple_denies() {
+        let pm = create_mock_package_manager(PackageManagerType::Npm, "11.16.0");
+        let packages = vec!["!core-js".to_string(), "!esbuild".to_string()];
+        let result = pm
+            .resolve_approve_builds_command(&ApproveBuildsCommandOptions {
+                packages: &packages,
+                ..Default::default()
+            })
+            .expect("resolves")
+            .expect("supported");
+        assert_eq!(result.args, vec!["deny-scripts", "core-js", "esbuild"]);
+    }
+
+    #[test]
+    fn npm_v11_16_mixed_rejected() {
+        // npm splits approve vs deny into two commands; vp rejects a mixed invocation.
+        let pm = create_mock_package_manager(PackageManagerType::Npm, "11.16.0");
+        let packages = vec!["esbuild".to_string(), "!core-js".to_string()];
+        let err = pm
+            .resolve_approve_builds_command(&ApproveBuildsCommandOptions {
+                packages: &packages,
+                ..Default::default()
+            })
+            .expect_err("mixed approve+deny should be rejected on npm");
+        assert!(matches!(err, Error::InvalidArgument(_)));
+    }
+
+    #[test]
+    fn npm_v11_16_appends_pass_through() {
+        let pm = create_mock_package_manager(PackageManagerType::Npm, "11.16.0");
+        let packages = vec!["esbuild".to_string()];
+        let extra = vec!["--silent".to_string()];
+        let result = pm
+            .resolve_approve_builds_command(&ApproveBuildsCommandOptions {
+                packages: &packages,
+                pass_through_args: Some(&extra),
+                ..Default::default()
+            })
+            .expect("resolves")
+            .expect("supported");
+        assert_eq!(result.args, vec!["approve-scripts", "esbuild", "--silent"]);
     }
 
     #[test]
