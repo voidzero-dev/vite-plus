@@ -96,7 +96,7 @@ Git initialized
 > ls vite-plus-monorepo/apps # check apps directory created
 website
 
-> cat vite-plus-monorepo/apps/website/package.json # check website strips aliased vite/vitest
+> cat vite-plus-monorepo/apps/website/package.json # check website keeps aliased vite for pnpm (workspace override stays effective)
 {
   "name": "website",
   "version": "0.0.0",
@@ -109,6 +109,7 @@ website
   },
   "devDependencies": {
     "typescript": "~6.0.2",
+    "vite": "catalog:",
     "vite-plus": "catalog:"
   }
 }
