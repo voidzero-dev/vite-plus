@@ -103,21 +103,9 @@ function findRequireCalls(ast: ParseResult, requireVarName: string): RequireCall
         return;
       }
 
-      // Extract the first argument (module specifier)
-      if (node.arguments.length === 0) {
-        return;
-      }
-      const arg = node.arguments[0];
-      if (arg.type !== 'Literal') {
-        return;
-      }
-      const value = (arg as { value: unknown; start: number; end: number }).value;
-      if (typeof value === 'string') {
-        calls.push({
-          module: value,
-          start: arg.start,
-          end: arg.end,
-        });
+      const call = getLiteralRequireArgument(node);
+      if (call) {
+        calls.push(call);
       }
     },
   });
