@@ -28,6 +28,10 @@ const INIT_COMMAND_SPECS: Record<string, InitCommandSpec> = {
   },
 };
 
+function normalizeInitCommand(command: string | undefined): string | undefined {
+  return command === 'format' ? 'fmt' : command;
+}
+
 const VITE_CONFIG_FILES = [
   'vite.config.ts',
   'vite.config.mts',
@@ -153,10 +157,11 @@ async function vpFmt(cwd: string, filePath: string): Promise<void> {
 }
 
 function resolveInitSpec(command: string | undefined, args: string[]): InitCommandSpec | null {
-  if (!command) {
+  const normalizedCommand = normalizeInitCommand(command);
+  if (!normalizedCommand) {
     return null;
   }
-  const spec = INIT_COMMAND_SPECS[command];
+  const spec = INIT_COMMAND_SPECS[normalizedCommand];
   if (!spec || !hasTriggerFlag(args, spec.triggerFlags)) {
     return null;
   }
@@ -205,7 +210,7 @@ export async function applyToolInitConfigToViteConfig(
   if (!inspection.handled || !inspection.configKey) {
     return { handled: false };
   }
-  const spec = INIT_COMMAND_SPECS[command as keyof typeof INIT_COMMAND_SPECS];
+  const spec = INIT_COMMAND_SPECS[normalizeInitCommand(command) as keyof typeof INIT_COMMAND_SPECS];
   const viteConfigPath = ensureViteConfigPath(projectPath);
   const generatedConfigPath = resolveGeneratedConfigPath(
     projectPath,

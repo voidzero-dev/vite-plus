@@ -442,7 +442,7 @@ pub fn top_level_help_doc() -> HelpDoc {
                     row("dev", "Run the development server"),
                     row("check", "Run format, lint, and type checks"),
                     row("lint", "Lint code"),
-                    row("fmt", "Format code"),
+                    row("fmt, format", "Format code"),
                     row("test", "Run tests"),
                 ],
             ),

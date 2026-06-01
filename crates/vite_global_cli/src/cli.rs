@@ -136,7 +136,7 @@ pub enum Commands {
     },
 
     /// Format code
-    #[command(disable_help_flag = true)]
+    #[command(disable_help_flag = true, visible_alias = "format")]
     Fmt {
         /// Additional arguments
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
