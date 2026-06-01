@@ -6,6 +6,39 @@ import validateNpmPackageName from 'validate-npm-package-name';
 import { editJsonFile } from '../utils/json.ts';
 import { getRandomProjectName } from './random-name.ts';
 
+export type CreateEditorOption = string | false | undefined;
+type ParsedCreateEditorOption = CreateEditorOption | CreateEditorOption[];
+
+function hasExplicitEditorOptIn(editor: CreateEditorOption): boolean {
+  return typeof editor === 'string' && editor.trim() !== '';
+}
+
+export function normalizeEditorOption(editor: ParsedCreateEditorOption): CreateEditorOption {
+  if (!Array.isArray(editor)) {
+    return editor;
+  }
+  if (editor.includes(false)) {
+    return false;
+  }
+  return editor.findLast((value): value is string => typeof value === 'string');
+}
+
+export function shouldConfigureEditorsForCreate({
+  editor,
+  isMonorepo,
+}: {
+  editor: CreateEditorOption;
+  isMonorepo: boolean;
+}): boolean {
+  if (editor === false) {
+    return false;
+  }
+  if (!isMonorepo) {
+    return true;
+  }
+  return hasExplicitEditorOptIn(editor);
+}
+
 // Helper functions for file operations
 export function copy(src: string, dest: string) {
   const stat = fs.statSync(src);
