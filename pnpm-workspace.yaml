@@ -72,7 +72,7 @@ catalog:
   glob: ^13.0.0
   husky: ^9.1.7
   jsonc-parser: ^3.3.1
-  lint-staged: ^17.0.7
+  lint-staged: ^16.2.6
   lodash-es: ^4.17.21
   micromatch: ^4.0.9
   minimatch: ^10.0.3
@@ -155,13 +155,10 @@ minimumReleaseAgeExclude:
   - baseline-browser-mapping
   - devframe
   - import-without-cache
-  - lint-staged
   - logs-sdk
   - rolldown
   - rolldown-plugin-dts
-  - tinyexec
   - tsdown
-  - tsx
   - unrun
   - vite
   - vitepress
