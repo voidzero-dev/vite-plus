@@ -1,7 +1,7 @@
 # RFC: Vite+ `vp pm stage` Command
 
 - Issue: [#1674](https://github.com/voidzero-dev/vite-plus/issues/1674)
-- Status: Draft (awaiting review before implementation)
+- Status: Implemented in [#1715](https://github.com/voidzero-dev/vite-plus/pull/1715)
 
 ## Summary
 
