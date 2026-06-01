@@ -155,10 +155,13 @@ minimumReleaseAgeExclude:
   - baseline-browser-mapping
   - devframe
   - import-without-cache
+  - lint-staged
   - logs-sdk
   - rolldown
   - rolldown-plugin-dts
+  - tinyexec
   - tsdown
+  - tsx
   - unrun
   - vite
   - vitepress
