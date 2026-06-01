@@ -288,7 +288,13 @@ jobs:
           # Issue 2: apps/website is scaffolded by create-vite which ships
           # `vite` (and sometimes `vitest`) in devDependencies. After
           # migration the scripts are rewritten to `vp ...` and `vite-plus`
-          # brings the runtime in transitively, so those keys must be gone.
+          # brings the runtime in transitively. For npm/yarn/bun those keys
+          # are dropped (the root overrides/resolutions redirect the
+          # transitive/peer vite to @voidzero-dev/vite-plus-core regardless).
+          # For pnpm the aliased `vite` is kept on purpose: pnpm only surfaces
+          # the pnpm-workspace.yaml `overrides.vite: catalog:` entry through a
+          # package that directly depends on `vite`, so dropping it would make
+          # `vp why vite` report upstream vite and the override look ineffective.
           node -e "
             const fs = require('fs');
             const pm = process.env.PACKAGE_MANAGER;
@@ -303,13 +309,21 @@ jobs:
             const appDev = app.devDependencies || {};
             const utilsDev = utils.devDependencies || {};
 
-            for (const name of ['vite', 'vitest']) {
-              if (appDev[name]) {
-                console.error('✗ apps/website devDependencies still has ' + name + ': ' + appDev[name]);
+            if (pm === 'pnpm') {
+              if (!appDev['vite']) {
+                console.error('✗ pnpm apps/website should keep aliased vite so the workspace override stays effective');
                 process.exit(1);
               }
+              console.log('✓ pnpm apps/website keeps aliased vite');
+            } else {
+              for (const name of ['vite', 'vitest']) {
+                if (appDev[name]) {
+                  console.error('✗ apps/website devDependencies still has ' + name + ': ' + appDev[name]);
+                  process.exit(1);
+                }
+              }
+              console.log('✓ apps/website devDependencies has no vite/vitest');
             }
-            console.log('✓ apps/website devDependencies has no vite/vitest');
 
             if (!appDev['vite-plus']) {
               console.error('✗ apps/website missing vite-plus devDependency');
