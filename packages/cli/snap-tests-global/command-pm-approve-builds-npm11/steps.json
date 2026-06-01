@@ -6,6 +6,7 @@
     "vp pm approve-builds esbuild # -> npm approve-scripts esbuild (advisory note)",
     "vp pm approve-builds '!core-js' # deny-only -> npm deny-scripts core-js (advisory note)",
     "vp pm approve-builds esbuild '!core-js' # mixed approve+deny -> rejected, exit non-zero",
+    "vp pm approve-builds -- esbuild # positional via -- on the pending path -> rejected, exit non-zero",
     "vp pm approve-builds --all # -> npm approve-scripts --all (advisory note)"
   ]
 }

@@ -161,26 +161,45 @@ impl PackageManager {
                 }
 
                 bin_name = "npm".into();
+                // Every branch except the read-only pending listing writes the
+                // allowScripts policy and warrants the advisory note.
+                let writes_policy;
                 if has_denies {
                     // `deny-scripts <pkg...>` — strip the leading `!`, like the bun branch.
                     args.push("deny-scripts".into());
                     args.extend(
                         denies.into_iter().map(|p| p.strip_prefix('!').unwrap_or(p).to_string()),
                     );
-                    output::note(NPM_ADVISORY_NOTE);
+                    writes_policy = true;
                 } else {
                     args.push("approve-scripts".into());
                     if options.all {
                         args.push("--all".into());
-                        output::note(NPM_ADVISORY_NOTE);
+                        writes_policy = true;
                     } else if has_approves {
                         args.extend(approves.into_iter().cloned());
-                        output::note(NPM_ADVISORY_NOTE);
+                        writes_policy = true;
+                    } else if options
+                        .pass_through_args
+                        .is_some_and(|extras| extras.iter().any(is_positional_arg))
+                    {
+                        // npm's read-only `--allow-scripts-pending` listing rejects
+                        // positionals; a package name passed via `--` was almost
+                        // certainly meant to be approved.
+                        return Err(Error::InvalidArgument(
+                            "Pass package names as positionals \
+                             (`vp pm approve-builds <pkg>...`), not after `--`."
+                                .into(),
+                        ));
                     } else {
-                        // No args, no --all: npm has no interactive picker — list pending
-                        // (read-only). No advisory note: nothing is written.
+                        // No args, no --all: npm has no interactive picker — list
+                        // pending (read-only). Nothing is written.
                         args.push("--allow-scripts-pending".into());
+                        writes_policy = false;
                     }
+                }
+                if writes_policy {
+                    output::note(NPM_ADVISORY_NOTE);
                 }
             }
             PackageManagerType::Yarn => {
@@ -202,7 +221,8 @@ impl PackageManager {
             }
         }
 
-        // Append pass-through args to the underlying PM (pnpm/bun branches only).
+        // Append pass-through args to the underlying PM (pnpm, npm, and bun reach here;
+        // yarn and npm < 11.16.0 returned early above).
         if let Some(extra) = options.pass_through_args {
             args.extend_from_slice(extra);
         }
@@ -643,6 +663,37 @@ mod tests {
             .expect("resolves")
             .expect("supported");
         assert_eq!(result.args, vec!["approve-scripts", "--allow-scripts-pending"]);
+    }
+
+    #[test]
+    fn npm_v11_16_pending_forwards_flags() {
+        // Flags passed via `--` are still forwarded to the read-only listing.
+        let pm = create_mock_package_manager(PackageManagerType::Npm, "11.16.0");
+        let extra = vec!["--json".to_string()];
+        let result = pm
+            .resolve_approve_builds_command(&ApproveBuildsCommandOptions {
+                pass_through_args: Some(&extra),
+                ..Default::default()
+            })
+            .expect("resolves")
+            .expect("supported");
+        assert_eq!(result.args, vec!["approve-scripts", "--allow-scripts-pending", "--json"]);
+    }
+
+    #[test]
+    fn npm_v11_16_pending_rejects_positional_pass_through() {
+        // npm's `--allow-scripts-pending` listing rejects positionals; a package name
+        // slipped in via `--` (with no leading positionals) is rejected up-front with a
+        // clean message instead of building an invalid `npm approve-scripts` command.
+        let pm = create_mock_package_manager(PackageManagerType::Npm, "11.16.0");
+        let extra = vec!["esbuild".to_string()];
+        let err = pm
+            .resolve_approve_builds_command(&ApproveBuildsCommandOptions {
+                pass_through_args: Some(&extra),
+                ..Default::default()
+            })
+            .expect_err("a positional via `--` on the pending path should be rejected");
+        assert!(matches!(err, Error::InvalidArgument(_)));
     }
 
     #[test]

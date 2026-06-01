@@ -422,17 +422,19 @@ impl ApproveBuildsCommand {
 - Erroring out would break `vp pm approve-builds esbuild !core-js` for a developer who copied the command from a pnpm tutorial but happens to be on bun for one repo.
 - The warning names the dropped packages so the divergence is auditable.
 
-### 4. npm / yarn: warn + exit 0
+### 4. npm < 11.16.0 / yarn: warn + exit 0
 
-**Decision**: Print a `warn` and return exit code 0 on npm and yarn.
+**Decision**: Print a `warn` and return exit code 0 when the package manager has no native approval command to forward to: yarn (all versions) and npm < 11.16.0.
+
+> **Update (npm ≥ 11.16.0):** npm shipped `approve-scripts` / `deny-scripts` ([npm/cli#9360](https://github.com/npm/cli/pull/9360)). Vite+ now forwards to them (see [Command Mapping](#command-mapping)). As with pnpm and bun, that means a real command runs and can exit non-zero, and a mixed approve+deny invocation is rejected (`Error::InvalidArgument`). The warn + exit-0 fallback below applies only to npm < 11.16.0.
 
 **Rationale**:
 
-- **npm** runs lifecycle scripts by default — the warn points at how to _restrict_ them (`ignore-scripts=true`).
+- **npm < 11.16.0** runs lifecycle scripts by default and has no approval command — the warn points at upgrading to npm ≥ 11.16.0 or at how to _restrict_ scripts (`ignore-scripts=true`).
 - **yarn (Berry)** blocks third-party build scripts by default; the per-package opt-in lives in `package.json` (`dependenciesMeta.<pkg>.built: true`). We `warn` pointing at that field rather than performing the edit ourselves — staying within the RFC's intentionally-tight scope.
-- Both surfaces use `warn` (not `note`) for consistency: the user invoked `approve-builds` and the requested action could not be completed on this PM, so they need a visible signal and a manual workaround.
-- Exit 0 lets CI scripts that conditionally run `vp pm approve-builds --all` work across heterogeneous repos.
-- Exit non-zero (the alternative) would break monorepo orchestration scripts and demand per-PM conditionals.
+- Both fallback surfaces use `warn` (not `note`) for consistency: the user invoked `approve-builds` and the requested action could not be completed on this PM, so they need a visible signal and a manual workaround.
+- Exit 0 on the fallback lets CI scripts that conditionally run `vp pm approve-builds --all` work across heterogeneous repos where the PM has no approval command.
+- Exit non-zero on the fallback (the alternative) would break monorepo orchestration scripts and demand per-PM conditionals. (Once a PM _does_ have a command — pnpm, bun, npm ≥ 11.16.0 — Vite+ runs it and surfaces its real exit code, same as any forwarded command.)
 
 ### 5. No-args on bun: note + exit 0
 

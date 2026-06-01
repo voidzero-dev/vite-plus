@@ -32,6 +32,9 @@ npm error A complete log of this run can be found in: <homedir>/.npm/_logs/<time
 [1]> vp pm approve-builds esbuild '!core-js' # mixed approve+deny -> rejected, exit non-zero
 npm manages approvals and denials separately. Run them as two invocations, e.g. `vp pm approve-builds <approve-pkg>...` then `vp pm approve-builds !<deny-pkg>...`.
 
+[1]> vp pm approve-builds -- esbuild # positional via -- on the pending path -> rejected, exit non-zero
+Pass package names as positionals (`vp pm approve-builds <pkg>...`), not after `--`.
+
 > vp pm approve-builds --all # -> npm approve-scripts --all (advisory note)
 note: npm's allowScripts policy is advisory in npm 11.x: install scripts still run; npm only warns about unreviewed packages at install time. Enforcement is planned for a future npm release.
 No packages with unreviewed install scripts.
