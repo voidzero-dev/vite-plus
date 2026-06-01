@@ -155,6 +155,8 @@ minimumReleaseAgeExclude:
   - baseline-browser-mapping
   - devframe
   - import-without-cache
+  - launch-editor
+  - launch-editor-middleware
   - lint-staged
   - logs-sdk
   - rolldown
@@ -173,7 +175,7 @@ overrides:
   vite: workspace:@voidzero-dev/vite-plus-core@*
   vite-plus: workspace:*
   vitest: workspace:@voidzero-dev/vite-plus-test@*
-  vitest-dev: npm:vitest@^4.1.7
+  vitest-dev: npm:vitest@^4.1.8
 packageExtensions:
   sass-embedded:
     peerDependencies:

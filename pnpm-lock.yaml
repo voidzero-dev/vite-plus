@@ -258,7 +258,7 @@ overrides:
   vite: workspace:@voidzero-dev/vite-plus-core@*
   vite-plus: workspace:*
   vitest: workspace:@voidzero-dev/vite-plus-test@*
-  vitest-dev: npm:vitest@^4.1.7
+  vitest-dev: npm:vitest@^4.1.8
 
 packageExtensionsChecksum: sha256-Tldxs3DhJEw/FFBonUidqhCBqApA0zxQnop3Y+BTO3U=
 
@@ -618,14 +618,14 @@ importers:
         specifier: ^20.0.0 || ^22.0.0 || >=24.0.0
         version: 24.12.4
       '@vitest/coverage-istanbul':
-        specifier: 4.1.7
-        version: 4.1.7(vitest@4.1.7)
+        specifier: 4.1.8
+        version: 4.1.8(vitest@4.1.8)
       '@vitest/coverage-v8':
-        specifier: 4.1.7
-        version: 4.1.7(@vitest/browser@4.1.7)(vitest@4.1.7)
+        specifier: 4.1.8
+        version: 4.1.8(@vitest/browser@4.1.8)(vitest@4.1.8)
       '@vitest/ui':
-        specifier: 4.1.7
-        version: 4.1.7(vitest@4.1.7)
+        specifier: 4.1.8
+        version: 4.1.8(vitest@4.1.8)
       '@voidzero-dev/vite-plus-core':
         specifier: workspace:*
         version: link:../core
@@ -679,38 +679,38 @@ importers:
         specifier: 'catalog:'
         version: 0.1.0
       '@vitest/browser':
-        specifier: 4.1.7
-        version: 4.1.7(vite@packages+core)(vitest@4.1.7)
+        specifier: 4.1.8
+        version: 4.1.8(vite@packages+core)(vitest@4.1.8)
       '@vitest/browser-playwright':
-        specifier: 4.1.7
-        version: 4.1.7(playwright@1.57.0)(vite@packages+core)(vitest@4.1.7)
+        specifier: 4.1.8
+        version: 4.1.8(playwright@1.57.0)(vite@packages+core)(vitest@4.1.8)
       '@vitest/browser-preview':
-        specifier: 4.1.7
-        version: 4.1.7(vite@packages+core)(vitest@4.1.7)
+        specifier: 4.1.8
+        version: 4.1.8(vite@packages+core)(vitest@4.1.8)
       '@vitest/browser-webdriverio':
-        specifier: 4.1.7
-        version: 4.1.7(vite@packages+core)(vitest@4.1.7)(webdriverio@9.20.1)
+        specifier: 4.1.8
+        version: 4.1.8(vite@packages+core)(vitest@4.1.8)(webdriverio@9.20.1)
       '@vitest/expect':
-        specifier: 4.1.7
-        version: 4.1.7
+        specifier: 4.1.8
+        version: 4.1.8
       '@vitest/mocker':
-        specifier: 4.1.7
-        version: 4.1.7(vite@packages+core)
+        specifier: 4.1.8
+        version: 4.1.8(vite@packages+core)
       '@vitest/pretty-format':
-        specifier: 4.1.7
-        version: 4.1.7
+        specifier: 4.1.8
+        version: 4.1.8
       '@vitest/runner':
-        specifier: 4.1.7
-        version: 4.1.7
+        specifier: 4.1.8
+        version: 4.1.8
       '@vitest/snapshot':
-        specifier: 4.1.7
-        version: 4.1.7
+        specifier: 4.1.8
+        version: 4.1.8
       '@vitest/spy':
-        specifier: 4.1.7
-        version: 4.1.7
+        specifier: 4.1.8
+        version: 4.1.8
       '@vitest/utils':
-        specifier: 4.1.7
-        version: 4.1.7
+        specifier: 4.1.8
+        version: 4.1.8
       chai:
         specifier: ^6.2.1
         version: 6.2.2
@@ -748,8 +748,8 @@ importers:
         specifier: ^3.1.0
         version: 3.1.0
       vitest-dev:
-        specifier: npm:vitest@^4.1.7
-        version: vitest@4.1.7(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/browser-playwright@4.1.7(playwright@1.57.0)(vite@packages+core)(vitest@4.1.7))(@vitest/browser-preview@4.1.7(vite@packages+core)(vitest@4.1.7))(@vitest/browser-webdriverio@4.1.7(vite@packages+core)(vitest@4.1.7)(webdriverio@9.20.1))(@vitest/coverage-istanbul@4.1.7(vitest@4.1.7))(@vitest/coverage-v8@4.1.7(@vitest/browser@4.1.7)(vitest@4.1.7))(@vitest/ui@4.1.7(vitest@4.1.7))(happy-dom@20.0.10)(jsdom@27.2.0)(vite@packages+core)
+        specifier: npm:vitest@^4.1.8
+        version: vitest@4.1.8(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/browser-playwright@4.1.8(playwright@1.57.0)(vite@packages+core)(vitest@4.1.8))(@vitest/browser-preview@4.1.8(vite@packages+core)(vitest@4.1.8))(@vitest/browser-webdriverio@4.1.8(vite@packages+core)(vitest@4.1.8)(webdriverio@9.20.1))(@vitest/coverage-istanbul@4.1.8(vitest@4.1.8))(@vitest/coverage-v8@4.1.8(@vitest/browser@4.1.8)(vitest@4.1.8))(@vitest/ui@4.1.8(vitest@4.1.8))(happy-dom@20.0.10)(jsdom@27.2.0)(vite@packages+core)
       why-is-node-running:
         specifier: ^2.3.0
         version: 2.3.0
@@ -1340,8 +1340,8 @@ importers:
         specifier: ^1.23.2
         version: 1.23.2
       launch-editor-middleware:
-        specifier: ^2.14.0
-        version: 2.14.0
+        specifier: ^2.14.1
+        version: 2.14.1
       magic-string:
         specifier: ^0.30.21
         version: 0.30.21
@@ -4784,47 +4784,47 @@ packages:
   '@vitejs/release-scripts@1.7.1':
     resolution: {integrity: sha512-8YpovUu73Yb+ZnXIsR9VoF/yhbd2wTMhvJKDOjlB0bbOdm+ATl1l7Z7rskdX4CGzN7UfdvLcE6vGaHDCsirdpw==}
 
-  '@vitest/browser-playwright@4.1.7':
-    resolution: {integrity: sha512-OlTlJej7YN6VwV7zJJoNeaCsctF+JXpzpZ4oBHUbrQFfIq+0KW2f07rprCLh9N/zRIZ0v4Mchn1QDDmWMUhPKw==}
+  '@vitest/browser-playwright@4.1.8':
+    resolution: {integrity: sha512-SR7FqgegaexEg73xvf3ArtygXegagMdXnL0EZMpxrWvvhQxvicD/E8p0ib0J91riPRtQUViyh67Xjw3NqvyhVg==}
     peerDependencies:
       playwright: '*'
       vitest: workspace:@voidzero-dev/vite-plus-test@*
 
-  '@vitest/browser-preview@4.1.7':
-    resolution: {integrity: sha512-zwxt6Nu9naWZnWFK5ZBeevQ6yh4r92cRuP3Bm1rF/u4CaBevpVCaKygWaKKhvf6kupnbARQtPMWkqmU2yvUEuw==}
+  '@vitest/browser-preview@4.1.8':
+    resolution: {integrity: sha512-TZ529W8dFLv4Mywn+PCFJt/iwY/l9iQtKXat2nHS1ZUFuc6GtPGPZor2JMceEppoyNUHHyO2uJeiuWll2WQCRA==}
     peerDependencies:
       vitest: workspace:@voidzero-dev/vite-plus-test@*
 
-  '@vitest/browser-webdriverio@4.1.7':
-    resolution: {integrity: sha512-3CeH4+nO9RBwGPV+hiSnaqUYJM18wtPu52CzIU6TjVELQXyEiouBugjqZI/4l16wbQbd4HzEcyI+YKH48x+SpA==}
+  '@vitest/browser-webdriverio@4.1.8':
+    resolution: {integrity: sha512-F5DyLfiwnnkqFifo3pZ0xXkI0Mpkro/sGmJY6redwzMARACKqYjNZCOaOVn28SljFKnGrG/LqNf096WExBqgfA==}
     peerDependencies:
       vitest: workspace:@voidzero-dev/vite-plus-test@*
       webdriverio: '*'
 
-  '@vitest/browser@4.1.7':
-    resolution: {integrity: sha512-N2JFGfXoEGVAut+kHeru9dD4BUMq/q5xDvBARNl0tUsly3m5KglLOu8VO/6MkDfOlgxXTycojkt6gBKsuyR+IQ==}
+  '@vitest/browser@4.1.8':
+    resolution: {integrity: sha512-u21VzX07HzlJYpFgkxmjEXar/tG2UqWGgyGG/46SrrPc7rSdCTPw5vuowopO9CIqF8UCUQzDFdbVnNpw6N0BfQ==}
     peerDependencies:
       vitest: workspace:@voidzero-dev/vite-plus-test@*
 
-  '@vitest/coverage-istanbul@4.1.7':
-    resolution: {integrity: sha512-EbruXy+E9MJk+y7sFzriYfoI4JP2Ow+SyWDkewFOWFjzrbQBHlEgi6dGE7pxge8Z+W+7oJOxAVVb6mQHKCCZlw==}
+  '@vitest/coverage-istanbul@4.1.8':
+    resolution: {integrity: sha512-/h514nMZMKI6foh21mVgO1zlCH6pdDamwKMbla1uLU2GMxTlfp0PQMxovWozmzQdCIQYZ2XXEzg2zNZom2zAOg==}
     peerDependencies:
       vitest: workspace:@voidzero-dev/vite-plus-test@*
 
-  '@vitest/coverage-v8@4.1.7':
-    resolution: {integrity: sha512-qsYPeXc5Q9dFLd1i8Ap+Bx8sQgcp+rFVQo4R0dDsWNBzl26ldVF1qOO+RL24K7FDrR6pA+50XedRLSoSG24bVQ==}
+  '@vitest/coverage-v8@4.1.8':
+    resolution: {integrity: sha512-lt3kovsyHwYe00wq4D1ti0Z974fWj4NLp6siqiyEufUpyFwK9Yhi7rBhac9JL5aA0zoMrJqc4vYPZRUnI7l7nw==}
     peerDependencies:
-      '@vitest/browser': 4.1.7
+      '@vitest/browser': 4.1.8
       vitest: workspace:@voidzero-dev/vite-plus-test@*
     peerDependenciesMeta:
       '@vitest/browser':
         optional: true
 
-  '@vitest/expect@4.1.7':
-    resolution: {integrity: sha512-1R+tw0ortHEbZDGMymm+pN7/AFQ/RkFFdtd7EN+VBpynKmLbP8A3rpEXdshBJ7+8hQ9zBJh/i1s0yKNtxAnU7w==}
+  '@vitest/expect@4.1.8':
+    resolution: {integrity: sha512-h3nDO677RDLEGlBxyQ5CW8RlMThSKSRLUePLOx09gNIWRL40edgA1GCZSZgf1W55MFAG6/Sw14KeaAnqv0NKdQ==}
 
-  '@vitest/mocker@4.1.7':
-    resolution: {integrity: sha512-vY7nuamKgfvpA1Koa3oYIw/k7D6kZnpGyNMZW8loow2bsBYla1TFdqTaXncWdRn4pgwNs+90RhnXhJScDwQeJA==}
+  '@vitest/mocker@4.1.8':
+    resolution: {integrity: sha512-LEiN/xe4OSIbKe9HQIp5OC24agGD9J5CnmMgsLohVVoOPWL9a2sBoR6VBx43jQZb7Kr1l4RCuyCJzcAa0+dojw==}
     peerDependencies:
       msw: ^2.4.9
       vite: workspace:@voidzero-dev/vite-plus-core@*
@@ -4837,22 +4837,28 @@ packages:
   '@vitest/pretty-format@4.1.7':
     resolution: {integrity: sha512-umgCarTOYQWIaDMvGDRZij+6b9oVeLIyJzfN+AS88e0ZOU3QTgNNSTtjQOpcvWr3np1N0j4WgZj+sb3oYBDscw==}
 
-  '@vitest/runner@4.1.7':
-    resolution: {integrity: sha512-BapjmAQ2aI78WdMEfeUWivnfVzB+VPGwWRQcJE0OUq7qEeEcBsCSf+0T5iREBNE5nBb4wA5Ya0W6IA+sghdEFw==}
+  '@vitest/pretty-format@4.1.8':
+    resolution: {integrity: sha512-9GasEBxpZ1VYIpqHf/0+YGg121uSNwCKOJqIrTwWP/TB7DmFCiaBpNl3aPZzoLWfWkuqhbH8vJIVobZkvdo2cA==}
 
-  '@vitest/snapshot@4.1.7':
-    resolution: {integrity: sha512-ZacLzja+TmJeZ1h14xW2FB/WpeimUD3haBXQPyJqxvo8jQTmfeA8zv58mtjN2C7EHXZDYVcVYdYmAxjkWVvKCw==}
+  '@vitest/runner@4.1.8':
+    resolution: {integrity: sha512-EmVxeBAfMJvycdjd6Hm+RbFBbA9fKvo0Kx37hNpBYoYeavH3RNsBXWDooR1mgD52dCrxIIuP7UotpfiwOikvcg==}
 
-  '@vitest/spy@4.1.7':
-    resolution: {integrity: sha512-kbkI5LMWakyuTIvs6fUJ5qdIVb1XVKsYJAT4OJ938cHMROYMSfmoQdZy0aaAnjbbc8F61vkoTqz/Az+/HiIu5Q==}
+  '@vitest/snapshot@4.1.8':
+    resolution: {integrity: sha512-acfZboRmAIf05DEKcBQy33VXojFJjtUdLyo7oOmV9kebb2xdU01UknNiPuPZoJZQyO7DF0gZdTGTpeAzET9QPQ==}
 
-  '@vitest/ui@4.1.7':
-    resolution: {integrity: sha512-TP6utB2yX6rsJNVRo2qAlsi48i1YwFTrLV2tnTtWqJaYX7m4lRCCLirZBjU6xC5m0RsPHr+L2+N+eIPhgEzFfw==}
+  '@vitest/spy@4.1.8':
+    resolution: {integrity: sha512-6EevtBp6OZOPF7bmz36HrGMeP3txgVSrgebWxHOafDXGkhIzfXK14f8KF6MuFfgXXUeHxmpD3BQxkV00/3s5mA==}
+
+  '@vitest/ui@4.1.8':
+    resolution: {integrity: sha512-RUS2ZU2TsduVrI+9c12uTNaKrNUTsm6yFt3fueEUB9iKvyC2UP83F+sqIz00HQIah4UOL1TMoDAki8K0NjGvsA==}
     peerDependencies:
       vitest: workspace:@voidzero-dev/vite-plus-test@*
 
   '@vitest/utils@4.1.7':
     resolution: {integrity: sha512-T532WBu791cBxJlCl6SO+J14l81DQx6uQHm1bQbmCDY7nqlEIgkza/UFnSBNaUtSf41unldDFjdOBYEQC4b5Hw==}
+
+  '@vitest/utils@4.1.8':
+    resolution: {integrity: sha512-uOJamYALNhfJ6iolExyQM40yIQwDqYnkKtQ5VCiSe17E33H0aQ/u+1GlRuz4LZBk6Mm3sg90G9hEbmEt37C1Zg==}
 
   '@vue-macros/common@3.1.2':
     resolution: {integrity: sha512-h9t4ArDdniO9ekYHAD95t9AZcAbb19lEGK+26iAjUODOIJKmObDNBSe4+6ELQAA3vtYiFPPBtHh7+cQCKi3Dng==}
@@ -6555,11 +6561,11 @@ packages:
     engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
 
-  launch-editor-middleware@2.14.0:
-    resolution: {integrity: sha512-uoiQum17RpaGQprvEmI9SoJq1SCEXDOwFAPG1VmsmLtH/cMvv8Mh0T97OgFfuPfcxxz12WYobiJqSUZdU6N+4w==}
+  launch-editor-middleware@2.14.1:
+    resolution: {integrity: sha512-Y8rM8ujxag67bXKCML5RLK5neOwj9rcgYlhgPAG0roa3sM6gjBjq7Bl/mE63XcdAmjMMsPtJhd1ry8+wstwQew==}
 
-  launch-editor@2.14.0:
-    resolution: {integrity: sha512-Pj3ZOx9dD1BClS7YcSQx0An1PCF9wz4JpvbEmKvDxQtm0jxlkk5NhW8x0SBAKA/acHBKZaqdd5FFOWlXo500JA==}
+  launch-editor@2.14.1:
+    resolution: {integrity: sha512-QWBrQsMpH7gPr965dsKD/3cKWiNoTjpATQf++Xq63N6sKRGMwlVXz41O1IZTMfZQgBctD/K5Zt06+/I6pP6+HA==}
 
   lazystream@1.0.1:
     resolution: {integrity: sha512-b94GiNHQNy6JNTrt5w6zNyffMrNkXZb3KTkCZJb2V1xaEGCk093vkZ2jk3tpaeP33/OiXC+WvK9AxUebnf5nbw==}
@@ -8379,20 +8385,20 @@ packages:
     resolution: {integrity: sha512-BNGbWLfd0eUPabhkXUVm0j8uuvREyTh5ovRa/dyow/BqAbZJyC+5fU+IzQOzmAKzYqYRAISoRhdQr3eIZ/PXqg==}
     engines: {node: '>= 0.8'}
 
-  vitest@4.1.7:
-    resolution: {integrity: sha512-flYyaFd2CgoCoU+0UKt3pxksgC+S02iTDN0n3LtqaMeXsI9SBcdNujc2k0DeFLzUn/0k538yNjOSdwgCqcrwJA==}
+  vitest@4.1.8:
+    resolution: {integrity: sha512-flY6ScbCIt9HThs+C5HS7jvGOB560DJtk/Z15IQROTA6zEy49Nh8T/dofWTQL+n3vswqn87sbJNiuqw1SDp5Ig==}
     engines: {node: ^20.0.0 || ^22.0.0 || >=24.0.0}
     hasBin: true
     peerDependencies:
       '@edge-runtime/vm': '*'
       '@opentelemetry/api': ^1.9.0
       '@types/node': ^20.0.0 || ^22.0.0 || >=24.0.0
-      '@vitest/browser-playwright': 4.1.7
-      '@vitest/browser-preview': 4.1.7
-      '@vitest/browser-webdriverio': 4.1.7
-      '@vitest/coverage-istanbul': 4.1.7
-      '@vitest/coverage-v8': 4.1.7
-      '@vitest/ui': 4.1.7
+      '@vitest/browser-playwright': 4.1.8
+      '@vitest/browser-preview': 4.1.8
+      '@vitest/browser-webdriverio': 4.1.8
+      '@vitest/coverage-istanbul': 4.1.8
+      '@vitest/coverage-v8': 4.1.8
+      '@vitest/ui': 4.1.8
       happy-dom: '*'
       jsdom: '*'
       vite: workspace:@voidzero-dev/vite-plus-core@*
@@ -11722,35 +11728,35 @@ snapshots:
     transitivePeerDependencies:
       - conventional-commits-filter
 
-  '@vitest/browser-playwright@4.1.7(playwright@1.57.0)(vite@packages+core)(vitest@4.1.7)':
+  '@vitest/browser-playwright@4.1.8(playwright@1.57.0)(vite@packages+core)(vitest@4.1.8)':
     dependencies:
-      '@vitest/browser': 4.1.7(vite@packages+core)(vitest@4.1.7)
-      '@vitest/mocker': 4.1.7(vite@packages+core)
+      '@vitest/browser': 4.1.8(vite@packages+core)(vitest@4.1.8)
+      '@vitest/mocker': 4.1.8(vite@packages+core)
       playwright: 1.57.0
       tinyrainbow: 3.1.0
-      vitest: 4.1.7(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/browser-playwright@4.1.7(playwright@1.57.0)(vite@packages+core)(vitest@4.1.7))(@vitest/browser-preview@4.1.7(vite@packages+core)(vitest@4.1.7))(@vitest/browser-webdriverio@4.1.7(vite@packages+core)(vitest@4.1.7)(webdriverio@9.20.1))(@vitest/coverage-istanbul@4.1.7(vitest@4.1.7))(@vitest/coverage-v8@4.1.7(@vitest/browser@4.1.7)(vitest@4.1.7))(@vitest/ui@4.1.7(vitest@4.1.7))(happy-dom@20.0.10)(jsdom@27.2.0)(vite@packages+core)
+      vitest: 4.1.8(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/browser-playwright@4.1.8(playwright@1.57.0)(vite@packages+core)(vitest@4.1.8))(@vitest/browser-preview@4.1.8(vite@packages+core)(vitest@4.1.8))(@vitest/browser-webdriverio@4.1.8(vite@packages+core)(vitest@4.1.8)(webdriverio@9.20.1))(@vitest/coverage-istanbul@4.1.8(vitest@4.1.8))(@vitest/coverage-v8@4.1.8(@vitest/browser@4.1.8)(vitest@4.1.8))(@vitest/ui@4.1.8(vitest@4.1.8))(happy-dom@20.0.10)(jsdom@27.2.0)(vite@packages+core)
     transitivePeerDependencies:
       - bufferutil
       - msw
       - utf-8-validate
       - vite
 
-  '@vitest/browser-preview@4.1.7(vite@packages+core)(vitest@4.1.7)':
+  '@vitest/browser-preview@4.1.8(vite@packages+core)(vitest@4.1.8)':
     dependencies:
       '@testing-library/dom': 10.4.1
       '@testing-library/user-event': 14.6.1(@testing-library/dom@10.4.1)
-      '@vitest/browser': 4.1.7(vite@packages+core)(vitest@4.1.7)
-      vitest: 4.1.7(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/browser-playwright@4.1.7(playwright@1.57.0)(vite@packages+core)(vitest@4.1.7))(@vitest/browser-preview@4.1.7(vite@packages+core)(vitest@4.1.7))(@vitest/browser-webdriverio@4.1.7(vite@packages+core)(vitest@4.1.7)(webdriverio@9.20.1))(@vitest/coverage-istanbul@4.1.7(vitest@4.1.7))(@vitest/coverage-v8@4.1.7(@vitest/browser@4.1.7)(vitest@4.1.7))(@vitest/ui@4.1.7(vitest@4.1.7))(happy-dom@20.0.10)(jsdom@27.2.0)(vite@packages+core)
+      '@vitest/browser': 4.1.8(vite@packages+core)(vitest@4.1.8)
+      vitest: 4.1.8(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/browser-playwright@4.1.8(playwright@1.57.0)(vite@packages+core)(vitest@4.1.8))(@vitest/browser-preview@4.1.8(vite@packages+core)(vitest@4.1.8))(@vitest/browser-webdriverio@4.1.8(vite@packages+core)(vitest@4.1.8)(webdriverio@9.20.1))(@vitest/coverage-istanbul@4.1.8(vitest@4.1.8))(@vitest/coverage-v8@4.1.8(@vitest/browser@4.1.8)(vitest@4.1.8))(@vitest/ui@4.1.8(vitest@4.1.8))(happy-dom@20.0.10)(jsdom@27.2.0)(vite@packages+core)
     transitivePeerDependencies:
       - bufferutil
       - msw
       - utf-8-validate
       - vite
 
-  '@vitest/browser-webdriverio@4.1.7(vite@packages+core)(vitest@4.1.7)(webdriverio@9.20.1)':
+  '@vitest/browser-webdriverio@4.1.8(vite@packages+core)(vitest@4.1.8)(webdriverio@9.20.1)':
     dependencies:
-      '@vitest/browser': 4.1.7(vite@packages+core)(vitest@4.1.7)
-      vitest: 4.1.7(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/browser-playwright@4.1.7(playwright@1.57.0)(vite@packages+core)(vitest@4.1.7))(@vitest/browser-preview@4.1.7(vite@packages+core)(vitest@4.1.7))(@vitest/browser-webdriverio@4.1.7(vite@packages+core)(vitest@4.1.7)(webdriverio@9.20.1))(@vitest/coverage-istanbul@4.1.7(vitest@4.1.7))(@vitest/coverage-v8@4.1.7(@vitest/browser@4.1.7)(vitest@4.1.7))(@vitest/ui@4.1.7(vitest@4.1.7))(happy-dom@20.0.10)(jsdom@27.2.0)(vite@packages+core)
+      '@vitest/browser': 4.1.8(vite@packages+core)(vitest@4.1.8)
+      vitest: 4.1.8(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/browser-playwright@4.1.8(playwright@1.57.0)(vite@packages+core)(vitest@4.1.8))(@vitest/browser-preview@4.1.8(vite@packages+core)(vitest@4.1.8))(@vitest/browser-webdriverio@4.1.8(vite@packages+core)(vitest@4.1.8)(webdriverio@9.20.1))(@vitest/coverage-istanbul@4.1.8(vitest@4.1.8))(@vitest/coverage-v8@4.1.8(@vitest/browser@4.1.8)(vitest@4.1.8))(@vitest/ui@4.1.8(vitest@4.1.8))(happy-dom@20.0.10)(jsdom@27.2.0)(vite@packages+core)
       webdriverio: 9.20.1
     transitivePeerDependencies:
       - bufferutil
@@ -11758,16 +11764,16 @@ snapshots:
       - utf-8-validate
       - vite
 
-  '@vitest/browser@4.1.7(vite@packages+core)(vitest@4.1.7)':
+  '@vitest/browser@4.1.8(vite@packages+core)(vitest@4.1.8)':
     dependencies:
       '@blazediff/core': 1.9.1
-      '@vitest/mocker': 4.1.7(vite@packages+core)
-      '@vitest/utils': 4.1.7
+      '@vitest/mocker': 4.1.8(vite@packages+core)
+      '@vitest/utils': 4.1.8
       magic-string: 0.30.21
       pngjs: 7.0.0
       sirv: 3.0.2(patch_hash=c07c56eb72faea34341d465cde2314e89db472106ed378181e3447893af6bf95)
       tinyrainbow: 3.1.0
-      vitest: 4.1.7(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/browser-playwright@4.1.7(playwright@1.57.0)(vite@packages+core)(vitest@4.1.7))(@vitest/browser-preview@4.1.7(vite@packages+core)(vitest@4.1.7))(@vitest/browser-webdriverio@4.1.7(vite@packages+core)(vitest@4.1.7)(webdriverio@9.20.1))(@vitest/coverage-istanbul@4.1.7(vitest@4.1.7))(@vitest/coverage-v8@4.1.7(@vitest/browser@4.1.7)(vitest@4.1.7))(@vitest/ui@4.1.7(vitest@4.1.7))(happy-dom@20.0.10)(jsdom@27.2.0)(vite@packages+core)
+      vitest: 4.1.8(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/browser-playwright@4.1.8(playwright@1.57.0)(vite@packages+core)(vitest@4.1.8))(@vitest/browser-preview@4.1.8(vite@packages+core)(vitest@4.1.8))(@vitest/browser-webdriverio@4.1.8(vite@packages+core)(vitest@4.1.8)(webdriverio@9.20.1))(@vitest/coverage-istanbul@4.1.8(vitest@4.1.8))(@vitest/coverage-v8@4.1.8(@vitest/browser@4.1.8)(vitest@4.1.8))(@vitest/ui@4.1.8(vitest@4.1.8))(happy-dom@20.0.10)(jsdom@27.2.0)(vite@packages+core)
       ws: 8.21.0
     transitivePeerDependencies:
       - bufferutil
@@ -11775,7 +11781,7 @@ snapshots:
       - utf-8-validate
       - vite
 
-  '@vitest/coverage-istanbul@4.1.7(vitest@4.1.7)':
+  '@vitest/coverage-istanbul@4.1.8(vitest@4.1.8)':
     dependencies:
       '@babel/core': 7.29.7
       '@istanbuljs/schema': 0.1.3
@@ -11787,14 +11793,14 @@ snapshots:
       magicast: 0.5.2
       obug: 2.1.1
       tinyrainbow: 3.1.0
-      vitest: 4.1.7(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/browser-playwright@4.1.7(playwright@1.57.0)(vite@packages+core)(vitest@4.1.7))(@vitest/browser-preview@4.1.7(vite@packages+core)(vitest@4.1.7))(@vitest/browser-webdriverio@4.1.7(vite@packages+core)(vitest@4.1.7)(webdriverio@9.20.1))(@vitest/coverage-istanbul@4.1.7(vitest@4.1.7))(@vitest/coverage-v8@4.1.7(@vitest/browser@4.1.7)(vitest@4.1.7))(@vitest/ui@4.1.7(vitest@4.1.7))(happy-dom@20.0.10)(jsdom@27.2.0)(vite@packages+core)
+      vitest: 4.1.8(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/browser-playwright@4.1.8(playwright@1.57.0)(vite@packages+core)(vitest@4.1.8))(@vitest/browser-preview@4.1.8(vite@packages+core)(vitest@4.1.8))(@vitest/browser-webdriverio@4.1.8(vite@packages+core)(vitest@4.1.8)(webdriverio@9.20.1))(@vitest/coverage-istanbul@4.1.8(vitest@4.1.8))(@vitest/coverage-v8@4.1.8(@vitest/browser@4.1.8)(vitest@4.1.8))(@vitest/ui@4.1.8(vitest@4.1.8))(happy-dom@20.0.10)(jsdom@27.2.0)(vite@packages+core)
     transitivePeerDependencies:
       - supports-color
 
-  '@vitest/coverage-v8@4.1.7(@vitest/browser@4.1.7)(vitest@4.1.7)':
+  '@vitest/coverage-v8@4.1.8(@vitest/browser@4.1.8)(vitest@4.1.8)':
     dependencies:
       '@bcoe/v8-coverage': 1.0.2
-      '@vitest/utils': 4.1.7
+      '@vitest/utils': 4.1.8
       ast-v8-to-istanbul: 1.0.0
       istanbul-lib-coverage: 3.2.2
       istanbul-lib-report: 3.0.1
@@ -11803,22 +11809,22 @@ snapshots:
       obug: 2.1.1
       std-env: 4.0.0
       tinyrainbow: 3.1.0
-      vitest: 4.1.7(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/browser-playwright@4.1.7(playwright@1.57.0)(vite@packages+core)(vitest@4.1.7))(@vitest/browser-preview@4.1.7(vite@packages+core)(vitest@4.1.7))(@vitest/browser-webdriverio@4.1.7(vite@packages+core)(vitest@4.1.7)(webdriverio@9.20.1))(@vitest/coverage-istanbul@4.1.7(vitest@4.1.7))(@vitest/coverage-v8@4.1.7(@vitest/browser@4.1.7)(vitest@4.1.7))(@vitest/ui@4.1.7(vitest@4.1.7))(happy-dom@20.0.10)(jsdom@27.2.0)(vite@packages+core)
+      vitest: 4.1.8(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/browser-playwright@4.1.8(playwright@1.57.0)(vite@packages+core)(vitest@4.1.8))(@vitest/browser-preview@4.1.8(vite@packages+core)(vitest@4.1.8))(@vitest/browser-webdriverio@4.1.8(vite@packages+core)(vitest@4.1.8)(webdriverio@9.20.1))(@vitest/coverage-istanbul@4.1.8(vitest@4.1.8))(@vitest/coverage-v8@4.1.8(@vitest/browser@4.1.8)(vitest@4.1.8))(@vitest/ui@4.1.8(vitest@4.1.8))(happy-dom@20.0.10)(jsdom@27.2.0)(vite@packages+core)
     optionalDependencies:
-      '@vitest/browser': 4.1.7(vite@packages+core)(vitest@4.1.7)
+      '@vitest/browser': 4.1.8(vite@packages+core)(vitest@4.1.8)
 
-  '@vitest/expect@4.1.7':
+  '@vitest/expect@4.1.8':
     dependencies:
       '@standard-schema/spec': 1.1.0
       '@types/chai': 5.2.3
-      '@vitest/spy': 4.1.7
-      '@vitest/utils': 4.1.7
+      '@vitest/spy': 4.1.8
+      '@vitest/utils': 4.1.8
       chai: 6.2.2
       tinyrainbow: 3.1.0
 
-  '@vitest/mocker@4.1.7(vite@packages+core)':
+  '@vitest/mocker@4.1.8(vite@packages+core)':
     dependencies:
-      '@vitest/spy': 4.1.7
+      '@vitest/spy': 4.1.8
       estree-walker: 3.0.3
       magic-string: 0.30.21
     optionalDependencies:
@@ -11828,34 +11834,44 @@ snapshots:
     dependencies:
       tinyrainbow: 3.1.0
 
-  '@vitest/runner@4.1.7':
+  '@vitest/pretty-format@4.1.8':
     dependencies:
-      '@vitest/utils': 4.1.7
+      tinyrainbow: 3.1.0
+
+  '@vitest/runner@4.1.8':
+    dependencies:
+      '@vitest/utils': 4.1.8
       pathe: 2.0.3
 
-  '@vitest/snapshot@4.1.7':
+  '@vitest/snapshot@4.1.8':
     dependencies:
-      '@vitest/pretty-format': 4.1.7
-      '@vitest/utils': 4.1.7
+      '@vitest/pretty-format': 4.1.8
+      '@vitest/utils': 4.1.8
       magic-string: 0.30.21
       pathe: 2.0.3
 
-  '@vitest/spy@4.1.7': {}
+  '@vitest/spy@4.1.8': {}
 
-  '@vitest/ui@4.1.7(vitest@4.1.7)':
+  '@vitest/ui@4.1.8(vitest@4.1.8)':
     dependencies:
-      '@vitest/utils': 4.1.7
+      '@vitest/utils': 4.1.8
       fflate: 0.8.2
       flatted: 3.4.2
       pathe: 2.0.3
       sirv: 3.0.2(patch_hash=c07c56eb72faea34341d465cde2314e89db472106ed378181e3447893af6bf95)
       tinyglobby: 0.2.17
       tinyrainbow: 3.1.0
-      vitest: 4.1.7(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/browser-playwright@4.1.7(playwright@1.57.0)(vite@packages+core)(vitest@4.1.7))(@vitest/browser-preview@4.1.7(vite@packages+core)(vitest@4.1.7))(@vitest/browser-webdriverio@4.1.7(vite@packages+core)(vitest@4.1.7)(webdriverio@9.20.1))(@vitest/coverage-istanbul@4.1.7(vitest@4.1.7))(@vitest/coverage-v8@4.1.7(@vitest/browser@4.1.7)(vitest@4.1.7))(@vitest/ui@4.1.7(vitest@4.1.7))(happy-dom@20.0.10)(jsdom@27.2.0)(vite@packages+core)
+      vitest: 4.1.8(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/browser-playwright@4.1.8(playwright@1.57.0)(vite@packages+core)(vitest@4.1.8))(@vitest/browser-preview@4.1.8(vite@packages+core)(vitest@4.1.8))(@vitest/browser-webdriverio@4.1.8(vite@packages+core)(vitest@4.1.8)(webdriverio@9.20.1))(@vitest/coverage-istanbul@4.1.8(vitest@4.1.8))(@vitest/coverage-v8@4.1.8(@vitest/browser@4.1.8)(vitest@4.1.8))(@vitest/ui@4.1.8(vitest@4.1.8))(happy-dom@20.0.10)(jsdom@27.2.0)(vite@packages+core)
 
   '@vitest/utils@4.1.7':
     dependencies:
       '@vitest/pretty-format': 4.1.7
+      convert-source-map: 2.0.0
+      tinyrainbow: 3.1.0
+
+  '@vitest/utils@4.1.8':
+    dependencies:
+      '@vitest/pretty-format': 4.1.8
       convert-source-map: 2.0.0
       tinyrainbow: 3.1.0
 
@@ -13642,11 +13658,11 @@ snapshots:
       - '@emnapi/core'
       - '@emnapi/runtime'
 
-  launch-editor-middleware@2.14.0:
+  launch-editor-middleware@2.14.1:
     dependencies:
-      launch-editor: 2.14.0
+      launch-editor: 2.14.1
 
-  launch-editor@2.14.0:
+  launch-editor@2.14.1:
     dependencies:
       picocolors: 1.1.1
       shell-quote: 1.8.4
@@ -15505,15 +15521,15 @@ snapshots:
 
   vary@1.1.2: {}
 
-  vitest@4.1.7(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/browser-playwright@4.1.7(playwright@1.57.0)(vite@packages+core)(vitest@4.1.7))(@vitest/browser-preview@4.1.7(vite@packages+core)(vitest@4.1.7))(@vitest/browser-webdriverio@4.1.7(vite@packages+core)(vitest@4.1.7)(webdriverio@9.20.1))(@vitest/coverage-istanbul@4.1.7(vitest@4.1.7))(@vitest/coverage-v8@4.1.7(@vitest/browser@4.1.7)(vitest@4.1.7))(@vitest/ui@4.1.7(vitest@4.1.7))(happy-dom@20.0.10)(jsdom@27.2.0)(vite@packages+core):
+  vitest@4.1.8(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/browser-playwright@4.1.8(playwright@1.57.0)(vite@packages+core)(vitest@4.1.8))(@vitest/browser-preview@4.1.8(vite@packages+core)(vitest@4.1.8))(@vitest/browser-webdriverio@4.1.8(vite@packages+core)(vitest@4.1.8)(webdriverio@9.20.1))(@vitest/coverage-istanbul@4.1.8(vitest@4.1.8))(@vitest/coverage-v8@4.1.8(@vitest/browser@4.1.8)(vitest@4.1.8))(@vitest/ui@4.1.8(vitest@4.1.8))(happy-dom@20.0.10)(jsdom@27.2.0)(vite@packages+core):
     dependencies:
-      '@vitest/expect': 4.1.7
-      '@vitest/mocker': 4.1.7(vite@packages+core)
-      '@vitest/pretty-format': 4.1.7
-      '@vitest/runner': 4.1.7
-      '@vitest/snapshot': 4.1.7
-      '@vitest/spy': 4.1.7
-      '@vitest/utils': 4.1.7
+      '@vitest/expect': 4.1.8
+      '@vitest/mocker': 4.1.8(vite@packages+core)
+      '@vitest/pretty-format': 4.1.8
+      '@vitest/runner': 4.1.8
+      '@vitest/snapshot': 4.1.8
+      '@vitest/spy': 4.1.8
+      '@vitest/utils': 4.1.8
       es-module-lexer: 2.0.0
       expect-type: 1.3.0
       magic-string: 0.30.21
@@ -15531,12 +15547,12 @@ snapshots:
       '@edge-runtime/vm': 5.0.0
       '@opentelemetry/api': 1.9.0
       '@types/node': 24.12.4
-      '@vitest/browser-playwright': 4.1.7(playwright@1.57.0)(vite@packages+core)(vitest@4.1.7)
-      '@vitest/browser-preview': 4.1.7(vite@packages+core)(vitest@4.1.7)
-      '@vitest/browser-webdriverio': 4.1.7(vite@packages+core)(vitest@4.1.7)(webdriverio@9.20.1)
-      '@vitest/coverage-istanbul': 4.1.7(vitest@4.1.7)
-      '@vitest/coverage-v8': 4.1.7(@vitest/browser@4.1.7)(vitest@4.1.7)
-      '@vitest/ui': 4.1.7(vitest@4.1.7)
+      '@vitest/browser-playwright': 4.1.8(playwright@1.57.0)(vite@packages+core)(vitest@4.1.8)
+      '@vitest/browser-preview': 4.1.8(vite@packages+core)(vitest@4.1.8)
+      '@vitest/browser-webdriverio': 4.1.8(vite@packages+core)(vitest@4.1.8)(webdriverio@9.20.1)
+      '@vitest/coverage-istanbul': 4.1.8(vitest@4.1.8)
+      '@vitest/coverage-v8': 4.1.8(@vitest/browser@4.1.8)(vitest@4.1.8)
+      '@vitest/ui': 4.1.8(vitest@4.1.8)
       happy-dom: 20.0.10
       jsdom: 27.2.0
     transitivePeerDependencies:

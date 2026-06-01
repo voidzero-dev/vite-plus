@@ -7,6 +7,6 @@
   "vite": {
     "repo": "https://github.com/vitejs/vite.git",
     "branch": "main",
-    "hash": "8d1b0195fd186d0b3297d7cd17acff6c96797420"
+    "hash": "f94df87ff03b40b65e29bacdc04cc18c7bccaa4a"
   }
 }
