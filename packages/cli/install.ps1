@@ -262,6 +262,33 @@ function Cleanup-OldVersions {
     }
 }
 
+function Remove-CurrentLink {
+    param([string]$Path)
+
+    try {
+        $item = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+    } catch [System.Management.Automation.ItemNotFoundException] {
+        return
+    }
+
+    $isReparsePoint = ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0
+
+    try {
+        if ($isReparsePoint) {
+            if ($item.PSIsContainer) {
+                [System.IO.Directory]::Delete($item.FullName)
+            } else {
+                [System.IO.File]::Delete($item.FullName)
+            }
+            return
+        }
+
+        Remove-Item -LiteralPath $item.FullName -Recurse -Force -ErrorAction Stop
+    } catch {
+        Write-Error-Exit "Failed to remove existing current link at ${Path}: $_"
+    }
+}
+
 # Configure user PATH for ~/.vite-plus/bin
 # Returns: "true" = added, "already" = already configured
 function Configure-UserPath {
@@ -584,11 +611,7 @@ function Main {
     }
 
     # Create/update current junction (symlink)
-    if (Test-Path $CurrentLink) {
-        # Remove existing junction
-        cmd /c rmdir "$CurrentLink" 2>$null
-        Remove-Item -Path $CurrentLink -Force -ErrorAction SilentlyContinue
-    }
+    Remove-CurrentLink $CurrentLink
     # Create new junction pointing to the version directory
     cmd /c mklink /J "$CurrentLink" "$VersionDir" | Out-Null
 
