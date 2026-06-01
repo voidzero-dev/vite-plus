@@ -68,8 +68,8 @@ impl PackageManager {
     /// falling back to npm for `view`/`download` which yarn does not expose.
     /// yarn 1 and bun have no staged-publishing support and fall back to npm.
     ///
-    /// Note: `yarn stage` is git/VCS staging, not publishing — it is never used
-    /// here.
+    /// Note: `yarn stage` is git/VCS staging, not publishing, so it is never
+    /// used here.
     #[must_use]
     pub fn resolve_stage_command(&self, options: &StageCommandOptions) -> ResolveCommandResult {
         let envs = HashMap::from([("PATH".to_string(), format_path_env(self.get_bin_prefix()))]);
@@ -156,7 +156,7 @@ impl PackageManager {
 
         // `--registry` is forwarded to npm/pnpm, which accept it. yarn's npm
         // plugin (`yarn npm publish`/`yarn npm stage`) does not take a
-        // `--registry` flag — it resolves the registry from `.yarnrc.yml` — so
+        // `--registry` flag (it resolves the registry from `.yarnrc.yml`), so
         // forwarding it would make yarn abort with an unknown-option error.
         if let Some(registry) = options.registry {
             if bin_name == "yarn" {
