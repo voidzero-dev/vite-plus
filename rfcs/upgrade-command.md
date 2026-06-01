@@ -38,7 +38,7 @@ Key invariant: `~/.vite-plus/bin/vp` is a symlink to `../current/bin/vp` (Unix) 
 1. Provide a fast, reliable `vp upgrade` command that upgrades the CLI to the latest (or specified) version
 2. Reuse the same npm-based distribution channel (no new infrastructure)
 3. Support atomic upgrades with automatic rollback on failure
-4. Keep the last 5 versions for manual rollback
+4. Keep the last 3 versions for manual rollback
 5. Support version pinning and channel selection (latest, test)
 
 ## Non-Goals
@@ -161,7 +161,7 @@ The upgrade command is implemented entirely in Rust within the `vite_global_cli`
 │  6. Install production dependencies             │
 │  7. Atomic swap: current → {version}            │
 │  8. Refresh shims (non-fatal)                   │
-│  9. Cleanup old versions (non-fatal, keep 5)    │
+│  9. Cleanup old versions (non-fatal, keep 3)    │
 └─────────────────────────────────────────────────┘
 ```
 
@@ -303,7 +303,7 @@ Key differences on Windows:
 After the symlink swap (the **point of no return**), post-update operations are treated as non-fatal. Errors are printed to stderr as warnings but do not trigger the outer error handler (which would delete the now-active version directory).
 
 1. **Refresh shims**: Run the equivalent of `vp env setup --refresh` to ensure node/npm/npx shims point to the new version. This also refreshes trampoline `.exe` files for globally installed package shims (e.g., `corepack.exe`, `tsc.exe`) by scanning `BinConfig` entries. If this fails, the user can run it manually.
-2. **Cleanup old versions**: Remove old version directories, keeping the 5 most recent by **creation time** (matching `install.sh` behavior). The new version and the previous version are always protected from cleanup, even if they fall outside the top 5 (e.g., after a downgrade via `--rollback`).
+2. **Cleanup old versions**: Remove old version directories, keeping the 3 most recent by **creation time** (matching `install.sh` behavior). The new version and the previous version are always protected from cleanup, even if they fall outside the top 3 (e.g., after a downgrade via `--rollback`).
 
 #### Step 7: Running Binary Consideration
 
@@ -501,15 +501,15 @@ Upgrade {
 - Users can opt into periodic checks via their own cron/launchd if desired
 - This can be revisited as a future enhancement with proper opt-in
 
-### 5. Keep 5 Versions for Rollback
+### 5. Keep 3 Versions for Rollback
 
-**Decision**: Maintain the same cleanup policy as `install.sh` (keep 5 most recent versions by creation time, with protected versions).
+**Decision**: Maintain the same cleanup policy as `install.sh` (keep 3 most recent versions by creation time, with protected versions).
 
 **Rationale**:
 
 - Consistent with existing `install.sh` behavior (sorts by creation time, not semver)
 - Provides rollback safety net without unbounded disk usage
-- Each version is ~20-30MB, so 5 versions is ~100-150MB total
+- Each version is ~20-30MB, so 3 versions is ~60-90MB total
 - The active version and previous version are always protected from cleanup, preventing accidental deletion after a downgrade
 
 ## Implementation Phases
@@ -522,7 +522,7 @@ Upgrade {
 - `vp upgrade <version>` — installs a specific version
 - `--tag`, `--force`, `--silent` flags
 - Platform detection, npm registry query, download, extract, symlink swap
-- Version cleanup (keep 5)
+- Version cleanup (keep 3)
 - Error handling with clean rollback
 
 **Files to create/modify:**
@@ -542,7 +542,7 @@ Upgrade {
 - [ ] Downloaded tarballs are verified against npm registry `integrity` (SHA-512)
 - [ ] Running binary is not affected during update
 - [ ] Failed update leaves the current installation untouched
-- [ ] Old versions are cleaned up (max 5 retained)
+- [ ] Old versions are cleaned up (max 3 retained)
 - [ ] Works on macOS, Linux, and Windows
 
 ### Phase 1 (P1): Rollback and Check
