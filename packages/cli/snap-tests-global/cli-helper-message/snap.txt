@@ -11,11 +11,11 @@ Start:
   env         Manage Node.js versions
 
 Develop:
-  dev    Run the development server
-  check  Run format, lint, and type checks
-  lint   Lint code
-  fmt    Format code
-  test   Run tests
+  dev          Run the development server
+  check        Run format, lint, and type checks
+  lint         Lint code
+  fmt, format  Format code
+  test         Run tests
 
 Execute:
   run    Run tasks (also available as standalone `vpr`)
