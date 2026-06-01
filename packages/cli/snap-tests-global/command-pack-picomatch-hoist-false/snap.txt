@@ -1,4 +1,4 @@
-> pnpm install --ignore-scripts
+> vp install --ignore-scripts
 > vp pack src/index.ts 2>&1
 ℹ entry: src/index.ts
 ℹ Build start

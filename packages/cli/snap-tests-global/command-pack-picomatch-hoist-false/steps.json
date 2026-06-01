@@ -2,7 +2,7 @@
   "linkCheckoutPackages": true,
   "commands": [
     {
-      "command": "pnpm install --ignore-scripts",
+      "command": "vp install --ignore-scripts",
       "ignoreOutput": true,
       "timeout": 120000
     },
