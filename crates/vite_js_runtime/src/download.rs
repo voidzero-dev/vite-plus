@@ -41,72 +41,100 @@ pub async fn download_file(
 
     tracing::debug!("Downloading {url} to {target_path:?}");
 
-    let response = (|| async { client.get(url).send().await?.error_for_status() })
-        .retry(
-            ExponentialBuilder::default()
-                .with_jitter()
-                .with_min_delay(Duration::from_millis(500))
-                .with_max_times(3),
-        )
-        .await
-        .map_err(|e| Error::DownloadFailed {
-            url: url.into(),
-            reason: vite_shared::format_error_chain(&e).into(),
-        })?;
-
-    // Get Content-Length for progress bar
-    let total_size = response.content_length();
-
-    // Create progress bar (only in TTY and not in CI)
+    // Create progress bar (only in TTY and not in CI). Built once and reused
+    // across retry attempts; its position is reset at the start of every
+    // attempt so a retried download doesn't double-count bytes.
     let is_ci = vite_shared::EnvConfig::get().is_ci;
     let progress = if std::io::stderr().is_terminal() && !is_ci {
-        let pb = if let Some(size) = total_size {
-            let pb = ProgressBar::new(size);
-            pb.set_style(
-                ProgressStyle::default_bar()
-                    .template(
-                        "{msg}\n{spinner:.green} [{elapsed_precise}] [{bar:40.blue/white}] \
-                         {bytes}/{total_bytes} ({bytes_per_sec}, {eta})",
-                    )
-                    .expect("valid progress bar template")
-                    .progress_chars("#>-"),
-            );
-            pb
-        } else {
-            let pb = ProgressBar::new_spinner();
-            pb.set_style(
-                ProgressStyle::default_spinner()
-                    .template(
-                        "{msg}\n{spinner:.green} [{elapsed_precise}] {bytes} ({bytes_per_sec})",
-                    )
-                    .expect("valid spinner template"),
-            );
-            pb.enable_steady_tick(Duration::from_millis(100));
-            pb
-        };
+        let pb = ProgressBar::new_spinner();
+        pb.set_style(
+            ProgressStyle::default_spinner()
+                .template("{msg}\n{spinner:.green} [{elapsed_precise}] {bytes} ({bytes_per_sec})")
+                .expect("valid spinner template"),
+        );
+        pb.enable_steady_tick(Duration::from_millis(100));
         pb.set_message(message.to_string());
         Some(pb)
     } else {
         None
     };
 
-    // Stream to file with progress updates
-    let mut file = fs::File::create(target_path).await?;
-    let mut stream = response.bytes_stream();
+    // Make the request *and* the body stream a single retried unit, so a
+    // truncated download (bytes written != advertised Content-Length) triggers
+    // a re-download instead of surfacing as a corrupt archive later.
+    let result = (|| async {
+        let response = client.get(url).send().await?.error_for_status()?;
 
-    while let Some(chunk_result) = stream.next().await {
-        let chunk = chunk_result?;
+        // Advertised length, used both for the progress bar and the
+        // truncation check below.
+        let total_size = response.content_length();
+
         if let Some(ref pb) = progress {
-            pb.inc(chunk.len() as u64);
+            // Reset for this attempt.
+            pb.set_position(0);
+            if let Some(size) = total_size {
+                pb.set_length(size);
+                pb.set_style(
+                    ProgressStyle::default_bar()
+                        .template(
+                            "{msg}\n{spinner:.green} [{elapsed_precise}] [{bar:40.blue/white}] \
+                             {bytes}/{total_bytes} ({bytes_per_sec}, {eta})",
+                        )
+                        .expect("valid progress bar template")
+                        .progress_chars("#>-"),
+                );
+            }
         }
-        file.write_all(&chunk).await?;
-    }
 
-    file.flush().await?;
+        // Stream to file with progress updates.
+        let mut file = fs::File::create(target_path).await?;
+        let mut stream = response.bytes_stream();
+        let mut bytes_written: u64 = 0;
+
+        while let Some(chunk_result) = stream.next().await {
+            let chunk = chunk_result?;
+            bytes_written += chunk.len() as u64;
+            if let Some(ref pb) = progress {
+                pb.inc(chunk.len() as u64);
+            }
+            file.write_all(&chunk).await?;
+        }
+
+        file.flush().await?;
+
+        // Detect truncation: a short read against an advertised Content-Length
+        // is an incomplete download — error out so the retry re-downloads.
+        if let Some(expected_len) = total_size
+            && bytes_written != expected_len
+        {
+            return Err(Error::Io(std::io::Error::new(
+                std::io::ErrorKind::UnexpectedEof,
+                vite_str::format!(
+                    "incomplete download: expected {expected_len} bytes, got {bytes_written}"
+                )
+                .to_string(),
+            )));
+        }
+
+        Ok(())
+    })
+    .retry(
+        ExponentialBuilder::default()
+            .with_jitter()
+            .with_min_delay(Duration::from_millis(500))
+            .with_max_times(3),
+    )
+    .await
+    .map_err(|e| Error::DownloadFailed {
+        url: url.into(),
+        reason: vite_shared::format_error_chain(&e).into(),
+    });
 
     if let Some(pb) = progress {
         pb.finish_and_clear();
     }
+
+    result?;
 
     tracing::debug!("Download completed: {target_path:?}");
 
