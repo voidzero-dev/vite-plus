@@ -63,7 +63,7 @@ the Node.js version), which is a key input to the version-gating decision below.
 References:
 
 - npm: <https://docs.npmjs.com/staged-publishing>
-- pnpm: <https://pnpm.io/cli/stage> (added in pnpm 11.3 — <https://pnpm.io/blog/releases/11.3>)
+- pnpm: <https://pnpm.io/cli/stage> (added in pnpm 11.3, see <https://pnpm.io/blog/releases/11.3>)
 - yarn (berry): <https://yarnpkg.com/cli/npm/publish> (`--staged` flag) and `yarn npm stage …`
 - bun: no staged-publishing support today (`bun publish` only)
 
@@ -151,7 +151,7 @@ for registry-only features).
 ### ⚠️ Critical: `yarn stage` is NOT staged publishing
 
 Yarn berry has a built-in command literally called **`yarn stage`** (from
-`plugin-stage`), but it is **completely unrelated** to npm staged publishing —
+`plugin-stage`), but it is **completely unrelated** to npm staged publishing:
 it stages Yarn-related files (`package.json`, `.yarnrc.yml`, linker output) into
 your **git/mercurial** staging area and can auto-create a release commit
 (<https://yarnpkg.com/cli/stage>).
@@ -207,7 +207,7 @@ The current code lives in `crates/vite_pm_cli/` (clap surface + dispatch) and
 the local NAPI binding via `#[command(flatten)]`, so adding a variant surfaces
 in both CLIs automatically.
 
-### 1. Clap surface — `crates/vite_pm_cli/src/cli.rs`
+### 1. Clap surface: `crates/vite_pm_cli/src/cli.rs`
 
 Add a `Stage` variant to `PmCommands` and a `StageCommands` subcommand enum
 (modeled on the existing `DistTagCommands`):
@@ -286,7 +286,7 @@ Self::Stage(sub) => sub.is_quiet_or_machine_readable(),
 
 with a matching `impl StageCommands` returning `*json` for `Publish`/`List`/`View`.
 
-### 2. Resolver — `crates/vite_install/src/commands/stage.rs` (new)
+### 2. Resolver: `crates/vite_install/src/commands/stage.rs` (new)
 
 Mirror `dist_tag.rs`: an owned `StageSubcommand` enum, a `StageCommandOptions`
 struct, and `resolve_stage_command` / `run_stage_command`:
@@ -332,7 +332,7 @@ Register the module in `crates/vite_install/src/commands/mod.rs`:
 pub mod stage;
 ```
 
-### 3. Handler — `crates/vite_pm_cli/src/handlers.rs`
+### 3. Handler: `crates/vite_pm_cli/src/handlers.rs`
 
 Import `stage::{StageCommandOptions, StageSubcommand}` and add a `PmCommands::Stage`
 arm to `run_pm_subcommand`, converting the clap `StageCommands` into the owned
@@ -351,7 +351,7 @@ let needs_project = matches!(command,
 );
 ```
 
-No changes are needed in `dispatch.rs` — `PackageManagerCommand::Pm` already
+No changes are needed in `dispatch.rs`; `PackageManagerCommand::Pm` already
 forwards to `handlers::run_pm_subcommand`.
 
 ### 4. Wiring summary
@@ -385,9 +385,9 @@ vp pm stage <sub>
    `search`, `ping`) through npm. Falling back keeps the workflow usable instead
    of hard-failing.
 
-4. **No version gating in vp.** The floors differ per tool — npm needs CLI
+4. **No version gating in vp.** The floors differ per tool: npm needs CLI
    ≥ 11.15.0 **and** Node ≥ 22.14.0, pnpm needs ≥ 11.3.0, yarn routes through its
-   npm plugin — and npm uniquely also gates on Node. Rather than tracking and
+   npm plugin, and npm uniquely also gates on Node. Rather than tracking and
    chasing these across four package managers as the feature stabilizes, pass
    through and let the underlying tool emit its own authoritative,
    version-specific error. (`approve-builds` does gate, but that gate guards a
@@ -399,14 +399,14 @@ vp pm stage <sub>
 
 ## Open Questions (please weigh in during review)
 
-1. **yarn strategy — native plugin vs. npm delegation.**
+1. **yarn strategy: native plugin vs. npm delegation.**
    - **(A) Recommended:** map to `yarn npm publish --staged` + `yarn npm stage …`
      (uses yarn's own auth/registry; most correct for yarn projects).
    - **(B) Simpler/consistent:** delegate all yarn `stage` to `npm stage …`,
      matching the existing `publish.rs` (yarn → npm). Lower complexity, but
      `npm` may not be authenticated in a yarn-managed project.
 
-2. **Version gating.** Recommended: none (pass through, let the PM error) —
+2. **Version gating.** Recommended: none (pass through, let the PM error),
    especially since the floors differ (npm ≥ 11.15.0 + Node ≥ 22.14.0; pnpm
    ≥ 11.3.0). Do you want a friendly pre-check instead?
 
@@ -466,7 +466,7 @@ Add fixtures alongside the existing `command-publish-*` / `command-pm-*` ones:
 - Global: `packages/cli/snap-tests-global/command-pm-stage-pnpm10`,
   `…-npm11`, `…-yarn4`, `…-bun` (assert the resolved command line per PM).
 - Local: `packages/cli/snap-tests/command-pm-stage-pnpm10`.
-- `vp pm stage --help` / `vp pm --help` snapshots will change — regenerate and
+- `vp pm stage --help` / `vp pm --help` snapshots will change, so regenerate and
   inspect the diff (snap tests can pass even when output changes).
 
 Run: `pnpm -F vite-plus snap-test-local command-pm-stage` and
@@ -474,7 +474,7 @@ Run: `pnpm -F vite-plus snap-test-local command-pm-stage` and
 
 ## Documentation
 
-- `docs/guide/install.md` — the `vp pm <command>` "Advanced" section lists
+- `docs/guide/install.md`: the `vp pm <command>` "Advanced" section lists
   forwarded commands; add `vp pm stage` with a short staged-publishing blurb and
   a pointer to npm's docs.
 - Note the yarn caveat (`vp pm stage` ≠ `yarn stage`) where relevant.
@@ -513,5 +513,5 @@ Run: `pnpm -F vite-plus snap-test-local command-pm-stage` and
 
 ## Backward Compatibility
 
-Additive only — a new `vp pm` subcommand. No existing command, config, or
+Additive only: a new `vp pm` subcommand. No existing command, config, or
 caching behavior changes.
