@@ -321,6 +321,7 @@ Commands:
   list            List installed packages [aliases: ls]
   view            View package information from the registry [aliases: info, show]
   publish         Publish package to registry
+  stage           Stage a package for publishing (npm staged publishing workflow)
   owner           Manage package owners [aliases: author]
   cache           Manage package cache
   config          Manage package manager configuration [aliases: c]
