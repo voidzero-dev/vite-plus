@@ -1589,16 +1589,13 @@ function createCatalogDependencyResolver(
     };
     const workspacesObj =
       pkg.workspaces && !Array.isArray(pkg.workspaces) ? pkg.workspaces : undefined;
-    return (catalogSpec, dependencyName) => {
-      const catalogName = catalogSpec.slice('catalog:'.length);
-      if (catalogName) {
-        return (
-          workspacesObj?.catalogs?.[catalogName]?.[dependencyName] ??
-          pkg.catalogs?.[catalogName]?.[dependencyName]
-        );
-      }
-      return workspacesObj?.catalog?.[dependencyName] ?? pkg.catalog?.[dependencyName];
-    };
+    const fromWorkspaces = createCatalogDependencyResolverFromCatalogs(
+      workspacesObj?.catalog,
+      workspacesObj?.catalogs,
+    );
+    const fromPkg = createCatalogDependencyResolverFromCatalogs(pkg.catalog, pkg.catalogs);
+    return (catalogSpec, dependencyName) =>
+      fromWorkspaces(catalogSpec, dependencyName) ?? fromPkg(catalogSpec, dependencyName);
   }
   return undefined;
 }
@@ -1609,7 +1606,9 @@ function createCatalogDependencyResolverFromCatalogs(
 ): CatalogDependencyResolver {
   return (catalogSpec, dependencyName) => {
     const catalogName = catalogSpec.slice('catalog:'.length);
-    if (catalogName) {
+    // pnpm/bun reserve `default` as the name of the top-level `catalog:` map,
+    // so `catalog:default` resolves there, not a named `catalogs` entry.
+    if (catalogName && catalogName !== 'default') {
       return catalogs?.[catalogName]?.[dependencyName];
     }
     return catalog?.[dependencyName];
@@ -2795,8 +2794,12 @@ function rewriteAllImports(projectPath: string, silent = false, report?: Migrati
 /**
  * Check if the project has an unsupported husky version (<9.0.0).
  * Uses `semver.coerce` to handle ranges like `^8.0.0` → `8.0.0`.
- * When the specifier is not coercible (e.g. `"latest"`), falls back to
- * the installed version in node_modules via `detectPackageMetadata`.
+ * When the specifier is a catalog reference (e.g. `"catalog:"`), resolves
+ * it from the active package manager's catalog first — a `catalog:` spec is
+ * only meaningful to the manager that owns the workspace, so we never read a
+ * leftover/foreign catalog file. When it is still not coercible (e.g.
+ * `"latest"`), falls back to the installed version in node_modules via
+ * `detectPackageMetadata`.
  * Returns a reason string if hooks migration should be skipped, or null
  * if husky is absent or compatible.
  */
@@ -2804,12 +2807,22 @@ function checkUnsupportedHuskyVersion(
   projectPath: string,
   deps: Record<string, string> | undefined,
   prodDeps: Record<string, string> | undefined,
+  packageManager: PackageManager | undefined,
 ): string | null {
   const huskyVersion = deps?.husky ?? prodDeps?.husky;
   if (!huskyVersion) {
     return null;
   }
   let coerced = semver.coerce(huskyVersion);
+  if (coerced == null && packageManager != null && huskyVersion.startsWith('catalog:')) {
+    const resolved = createCatalogDependencyResolver(projectPath, packageManager)?.(
+      huskyVersion,
+      'husky',
+    );
+    if (resolved) {
+      coerced = semver.coerce(resolved);
+    }
+  }
   if (coerced == null) {
     const installed = detectPackageMetadata(projectPath, 'husky');
     if (installed) {
@@ -2881,9 +2894,10 @@ export function installGitHooks(
   projectPath: string,
   silent = false,
   report?: MigrationReport,
+  packageManager?: PackageManager,
 ): boolean {
   const oldHooksDir = getOldHooksDir(projectPath);
-  if (setupGitHooks(projectPath, oldHooksDir, silent, report)) {
+  if (setupGitHooks(projectPath, oldHooksDir, silent, report, packageManager)) {
     rewritePrepareScript(projectPath);
     return true;
   }
@@ -2918,8 +2932,14 @@ export function getOldHooksDir(rootDir: string): string | undefined {
  *
  * These checks are deterministic and read-only — they do not modify
  * the project in any way, making them safe to call before migration.
+ *
+ * `packageManager` is the project's detected manager; it scopes `catalog:`
+ * resolution to that manager's catalog so a foreign catalog file is ignored.
  */
-export function preflightGitHooksSetup(projectPath: string): string | null {
+export function preflightGitHooksSetup(
+  projectPath: string,
+  packageManager?: PackageManager,
+): string | null {
   const gitRoot = findGitRoot(projectPath);
   if (gitRoot && path.resolve(projectPath) !== path.resolve(gitRoot)) {
     return 'Subdirectory project detected — skipping git hooks setup. Configure hooks at the repository root.';
@@ -2936,7 +2956,7 @@ export function preflightGitHooksSetup(projectPath: string): string | null {
       return `Detected ${tool} — skipping git hooks setup. Please configure git hooks manually.`;
     }
   }
-  const huskyReason = checkUnsupportedHuskyVersion(projectPath, deps, prodDeps);
+  const huskyReason = checkUnsupportedHuskyVersion(projectPath, deps, prodDeps, packageManager);
   if (huskyReason) {
     return huskyReason;
   }
@@ -2956,8 +2976,9 @@ export function setupGitHooks(
   oldHooksDir?: string,
   silent = false,
   report?: MigrationReport,
+  packageManager?: PackageManager,
 ): boolean {
-  const reason = preflightGitHooksSetup(projectPath);
+  const reason = preflightGitHooksSetup(projectPath, packageManager);
   if (reason) {
     warnMigration(reason, report);
     return false;

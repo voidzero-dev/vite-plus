@@ -1,0 +1,57 @@
+> git init
+> vp migrate --no-interactive # should resolve husky version from catalog and configure hooks without warning
+
+✔ Created vite.config.ts in vite.config.ts
+
+✔ Merged staged config into vite.config.ts
+◇ Migrated . to Vite+
+• Node <semver>  pnpm <semver>
+• Git hooks configured
+
+> cat package.json # husky and lint-staged should be removed, prepare rewritten to vp config
+{
+  "name": "migration-husky-catalog-version",
+  "scripts": {
+    "prepare": "vp config"
+  },
+  "devDependencies": {
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
+  },
+  "packageManager": "pnpm@<semver>"
+}
+
+> cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog
+packages:
+  - .
+
+catalog:
+  husky: ^9.1.7
+  lint-staged: ^16.2.6
+  vite: npm:@voidzero-dev/vite-plus-core@latest
+  vitest: npm:@voidzero-dev/vite-plus-test@latest
+  vite-plus: latest
+overrides:
+  vite: 'catalog:'
+  vitest: 'catalog:'
+peerDependencyRules:
+  allowAny:
+    - vite
+    - vitest
+  allowedVersions:
+    vite: '*'
+    vitest: '*'
+
+> cat vite.config.ts # check staged config migrated to vite.config.ts
+import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  fmt: {},
+  lint: {"jsPlugins":[{"name":"vite-plus","specifier":"vite-plus/oxlint-plugin"}],"rules":{"vite-plus/prefer-vite-plus-imports":"error"},"options":{"typeAware":true,"typeCheck":true}},
+  staged: {
+    "*.js": "vp lint --fix"
+  },
+});
+
+> cat .vite-hooks/pre-commit # check pre-commit hook rewritten
+vp staged

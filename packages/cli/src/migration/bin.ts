@@ -354,7 +354,7 @@ async function collectMigrationPlan(
   // 2. Git hooks (including preflight check)
   let shouldSetupHooks = await promptGitHooks(options);
   if (shouldSetupHooks) {
-    const reason = preflightGitHooksSetup(rootDir);
+    const reason = preflightGitHooksSetup(rootDir, packageManager);
     if (reason) {
       prompts.log.warn(`⚠ ${reason}`);
       shouldSetupHooks = false;
@@ -817,7 +817,7 @@ async function executeMigrationPlan(
   // 8. Install git hooks
   if (plan.shouldSetupHooks) {
     updateMigrationProgress('Configuring git hooks');
-    installGitHooks(workspaceInfo.rootDir, true, report);
+    installGitHooks(workspaceInfo.rootDir, true, report, plan.packageManager);
   }
 
   // 9. Write agent instructions (using pre-resolved decisions)
@@ -1032,7 +1032,15 @@ async function main() {
       if (shouldSetupHooks) {
         updateMigrationProgress('Configuring git hooks');
       }
-      if (shouldSetupHooks && installGitHooks(workspaceInfoOptional.rootDir, true, report)) {
+      if (
+        shouldSetupHooks &&
+        installGitHooks(
+          workspaceInfoOptional.rootDir,
+          true,
+          report,
+          workspaceInfoOptional.packageManager,
+        )
+      ) {
         didMigrate = true;
       }
     }
