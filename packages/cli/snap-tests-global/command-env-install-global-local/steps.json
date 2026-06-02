@@ -3,7 +3,8 @@
     "vp install -g .",
     "vp install -g ./another-package.tgz",
     "vp list -g just-a-normal-package",
-    "vp list -g another-normal-package"
+    "vp list -g another-normal-package",
+    "vp list -g normal-package"
   ],
   "after": ["vp remove -g just-a-normal-package another-normal-package"]
 }
