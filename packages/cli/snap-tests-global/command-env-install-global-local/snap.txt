@@ -17,9 +17,3 @@ just-a-normal-package@<semver>   <semver>        just-a-normal-package
 Package                        Node version   Binaries
 ---                            ---            ---
 another-normal-package@<semver>   <semver>        another-normal-package
-
-> vp list -g normal-package
-Package                        Node version   Binaries
----                            ---            ---
-another-normal-package@<semver>   <semver>        another-normal-package
-just-a-normal-package@<semver>    <semver>        just-a-normal-package
