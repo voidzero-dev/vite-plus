@@ -11,13 +11,41 @@
   ],
   "packageRules": [
     {
-      "description": "Disable all npm updates (lockfile updates fail because vite/patches/* is gitignored)",
+      "description": "Ignore upstream toolchain npm packages (vendored via sync-remote or bumped by the proactive catalog workflow); everything else stays enabled so security alerts get fixed. Lockfile refresh fails because vite/ and rolldown/ are gitignored, so Renovate raises these PRs with an artifact-update warning and the lockfile is regenerated manually.",
       "matchManagers": ["npm"],
+      "matchPackageNames": [
+        "rolldown",
+        "/^oxc-.*/",
+        "@oxc-node/*",
+        "@oxc-project/*",
+        "@vitejs/devtools",
+        "oxfmt",
+        "oxlint",
+        "oxlint-tsgolint",
+        "tsdown",
+        "vite",
+        "vitest",
+        "vitest-dev"
+      ],
       "enabled": false
     },
     {
-      "description": "Disable all cargo updates (lockfile updates fail because rolldown/ is gitignored)",
+      "description": "Ignore oxc crate updates (bumped by the proactive catalog workflow); other cargo crates stay enabled.",
       "matchManagers": ["cargo"],
+      "matchPackageNames": ["/^oxc([_-].*)?$/"],
+      "enabled": false
+    },
+    {
+      "description": "Ignore vite-task git dependency digest updates (bumped via the bump-vite-task workflow).",
+      "matchDepNames": [
+        "fspy",
+        "vite_glob",
+        "vite_path",
+        "vite_powershell",
+        "vite_str",
+        "vite_task",
+        "vite_workspace"
+      ],
       "enabled": false
     }
   ]
