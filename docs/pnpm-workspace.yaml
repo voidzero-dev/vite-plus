@@ -2,10 +2,8 @@ packages:
   - .
 
 overrides:
-  # Security override: chevrotain (via mermaid) pins lodash-es to exactly 4.17.23,
-  # so the patched 4.18.x cannot be reached without forcing it. The other docs
-  # advisory fixes (vite, defu, picomatch) are patched directly in the lockfile
-  # since they fall within the ranges their parents already declare.
+  # chevrotain (via mermaid) pins lodash-es to exactly 4.17.23, so the patched
+  # 4.18.x can only be reached by forcing it.
   lodash-es: ^4.18.1 # GHSA-r5fr-rjxr-66jc
 
 peerDependencyRules:
