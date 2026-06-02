@@ -2,11 +2,11 @@ packages:
   - .
 
 overrides:
-  # Security overrides for vulnerable transitive dependencies (dependabot)
-  vite: ^7.3.5 # GHSA-v2wj-q39q-566r, GHSA-p9ff-h696-f583
-  defu: ^6.1.5 # GHSA-737v-mqg7-c878
+  # Security override: chevrotain (via mermaid) pins lodash-es to exactly 4.17.23,
+  # so the patched 4.18.x cannot be reached without forcing it. The other docs
+  # advisory fixes (vite, defu, picomatch) are patched directly in the lockfile
+  # since they fall within the ranges their parents already declare.
   lodash-es: ^4.18.0 # GHSA-r5fr-rjxr-66jc
-  picomatch: ^4.0.4 # GHSA-c2c7-rcm5-vvqj
 
 peerDependencyRules:
   allowAny:
