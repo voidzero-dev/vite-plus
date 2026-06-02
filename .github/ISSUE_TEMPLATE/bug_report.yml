@@ -53,6 +53,7 @@ body:
         - npm
         - yarn
         - pnpm
+        - aube
         - bun
     validations:
       required: true

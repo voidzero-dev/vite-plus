@@ -80,7 +80,7 @@ impl PackageManager {
         bin_name = self.client.to_string();
 
         match self.client {
-            PackageManagerType::Pnpm => {
+            PackageManagerType::Pnpm | PackageManagerType::Aube => {
                 // pnpm: --filter must come before command
                 if let Some(filters) = options.filters {
                     for filter in filters {

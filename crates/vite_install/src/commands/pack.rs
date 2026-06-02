@@ -55,7 +55,7 @@ impl PackageManager {
         let mut args: Vec<String> = Vec::new();
 
         match self.client {
-            PackageManagerType::Pnpm => {
+            PackageManagerType::Pnpm | PackageManagerType::Aube => {
                 // pnpm: --filter must come before command
                 if let Some(filters) = options.filters {
                     for filter in filters {

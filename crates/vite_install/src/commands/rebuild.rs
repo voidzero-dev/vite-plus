@@ -49,8 +49,8 @@ impl PackageManager {
                 bin_name = "npm".into();
                 args.push("rebuild".into());
             }
-            PackageManagerType::Pnpm => {
-                bin_name = "pnpm".into();
+            PackageManagerType::Pnpm | PackageManagerType::Aube => {
+                bin_name = self.client.to_string();
                 args.push("rebuild".into());
             }
             PackageManagerType::Yarn => {

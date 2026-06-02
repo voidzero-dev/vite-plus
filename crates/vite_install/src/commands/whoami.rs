@@ -45,7 +45,7 @@ impl PackageManager {
         let bin_name: String;
 
         match self.client {
-            PackageManagerType::Pnpm | PackageManagerType::Npm => {
+            PackageManagerType::Pnpm | PackageManagerType::Aube | PackageManagerType::Npm => {
                 // pnpm delegates whoami to npm
                 bin_name = "npm".into();
                 args.push("whoami".into());

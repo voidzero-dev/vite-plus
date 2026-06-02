@@ -42,6 +42,7 @@ struct PackageJson {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PackageManagerType {
     Pnpm,
+    Aube,
     Yarn,
     Npm,
     Bun,
@@ -51,6 +52,7 @@ impl fmt::Display for PackageManagerType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Pnpm => write!(f, "pnpm"),
+            Self::Aube => write!(f, "aube"),
             Self::Yarn => write!(f, "yarn"),
             Self::Npm => write!(f, "npm"),
             Self::Bun => write!(f, "bun"),
@@ -60,12 +62,13 @@ impl fmt::Display for PackageManagerType {
 
 impl PackageManagerType {
     /// Map an invoked shim tool name (including aliases like `npx`, `pnpx`,
-    /// `yarnpkg`, `bunx`) to the package-manager family that provides it.
+    /// `aubr`, `aubx`, `yarnpkg`, `bunx`) to the package-manager family that provides it.
     #[must_use]
     pub fn from_tool(tool: &str) -> Option<Self> {
         match tool {
             "npm" | "npx" => Some(Self::Npm),
             "pnpm" | "pnpx" => Some(Self::Pnpm),
+            "aube" | "aubr" | "aubx" => Some(Self::Aube),
             "yarn" | "yarnpkg" => Some(Self::Yarn),
             "bun" | "bunx" => Some(Self::Bun),
             _ => None,
@@ -79,10 +82,13 @@ impl PackageManagerType {
         match (tool, self) {
             ("npx", Self::Npm) => "npx",
             ("pnpx", Self::Pnpm) => "pnpx",
+            ("aubr", Self::Aube) => "aubr",
+            ("aubx", Self::Aube) => "aubx",
             ("yarnpkg", Self::Yarn) => "yarnpkg",
             ("bunx", Self::Bun) => "bunx",
             (_, Self::Npm) => "npm",
             (_, Self::Pnpm) => "pnpm",
+            (_, Self::Aube) => "aube",
             (_, Self::Yarn) => "yarn",
             (_, Self::Bun) => "bun",
         }
@@ -221,6 +227,16 @@ impl PackageManager {
                 // pnpm support Plug'n'Play https://pnpm.io/blog/2020/10/17/node-modules-configuration-options-with-pnpm#plugnplay-the-strictest-configuration
                 ignores.push("!**/.pnp.cjs".into());
             }
+            PackageManagerType::Aube => {
+                ignores.push("!**/aube-workspace.yaml".into());
+                ignores.push("!**/aube-lock.yaml".into());
+                // aube can keep reading/writing existing pnpm projects in place.
+                ignores.push("!**/pnpm-workspace.yaml".into());
+                ignores.push("!**/pnpm-lock.yaml".into());
+                ignores.push("!**/.pnpmfile.cjs".into());
+                ignores.push("!**/pnpmfile.cjs".into());
+                ignores.push("!**/.npmrc".into());
+            }
             PackageManagerType::Yarn => {
                 ignores.push("!**/.yarnrc".into()); // yarn 1.x
                 ignores.push("!**/.yarnrc.yml".into()); // yarn 2.x
@@ -288,6 +304,20 @@ pub fn get_package_manager_type_and_version(
     // TODO(@fengmk2): check devEngines.packageManager field in package.json
 
     let version = Str::from("latest");
+    // if aube-workspace.yaml exists at the detected root, use aube@latest.
+    // Note: vite_workspace does not currently discover aube-workspace.yaml from nested
+    // packages, so packageManager: "aube@..." is still the strongest signal.
+    let aube_workspace_yaml_path = workspace_root.path.join("aube-workspace.yaml");
+    if is_exists_file(&aube_workspace_yaml_path)? {
+        return Ok((PackageManagerType::Aube, version, None));
+    }
+
+    // if aube-lock.yaml exists, use aube@latest
+    let aube_lock_yaml_path = workspace_root.path.join("aube-lock.yaml");
+    if is_exists_file(&aube_lock_yaml_path)? {
+        return Ok((PackageManagerType::Aube, version, None));
+    }
+
     // if pnpm-workspace.yaml exists, use pnpm@latest
     if matches!(workspace_root.workspace_file, WorkspaceFile::PnpmWorkspaceYaml(_)) {
         return Ok((PackageManagerType::Pnpm, version, None));
@@ -440,6 +470,7 @@ fn parse_package_manager_field(
     })?;
     let package_manager_type = match name {
         "pnpm" => PackageManagerType::Pnpm,
+        "aube" => PackageManagerType::Aube,
         "yarn" => PackageManagerType::Yarn,
         "npm" => PackageManagerType::Npm,
         "bun" => PackageManagerType::Bun,
@@ -469,11 +500,10 @@ fn is_exists_file(path: impl AsRef<Path>) -> Result<bool, Error> {
 }
 
 async fn get_latest_version(package_manager_type: PackageManagerType) -> Result<Str, Error> {
-    let package_name = if matches!(package_manager_type, PackageManagerType::Yarn) {
-        // yarn latest version should use `@yarnpkg/cli-dist` as package name
-        "@yarnpkg/cli-dist".to_string()
-    } else {
-        package_manager_type.to_string()
+    let package_name = match package_manager_type {
+        PackageManagerType::Yarn => "@yarnpkg/cli-dist".to_string(),
+        PackageManagerType::Aube => "@endevco/aube".to_string(),
+        _ => package_manager_type.to_string(),
     };
     let url = get_npm_package_version_url(&package_name, "latest");
     let package_json: PackageJson = HttpClient::new().get_json(&url).await?;
@@ -514,6 +544,8 @@ pub async fn download_package_manager(
         && VersionReq::parse(">=2.0.0")?.matches(&parsed_version)
     {
         package_name = "@yarnpkg/cli-dist".into();
+    } else if matches!(package_manager_type, PackageManagerType::Aube) {
+        package_name = "@endevco/aube".into();
     }
 
     let home_dir = vite_shared::get_vp_home()?;
@@ -524,6 +556,13 @@ pub async fn download_package_manager(
     // not the platform-specific binary, so we don't pass it through.
     if matches!(package_manager_type, PackageManagerType::Bun) {
         return download_bun_package_manager(&version, &home_dir).await;
+    }
+
+    // For aube, download the top-level npm wrapper and run its native-binary
+    // installer explicitly. The package's `bin` files are produced by that
+    // installer, not present in the tarball before it runs.
+    if matches!(package_manager_type, PackageManagerType::Aube) {
+        return download_aube_package_manager(&version, expected_hash, &home_dir).await;
     }
 
     let tgz_url = get_npm_package_tgz_url(&package_name, &version);
@@ -630,6 +669,157 @@ fn get_bun_platform_package_name() -> Result<&'static str, Error> {
         }
     };
     Ok(name)
+}
+
+fn aube_shims_exist(bin_prefix: impl AsRef<Path>) -> Result<bool, Error> {
+    let bin_prefix = bin_prefix.as_ref();
+    for bin_name in ["aube", "aubr", "aubx"] {
+        let bin_file = bin_prefix.join(bin_name);
+        if !is_exists_file(&bin_file)?
+            || !is_exists_file(bin_file.with_extension("cmd"))?
+            || !is_exists_file(bin_file.with_extension("ps1"))?
+        {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+async fn run_aube_native_installer(package_dir: &Path) -> Result<(), Error> {
+    let install_script = package_dir.join("installArchSpecificPackage.js");
+    if !is_exists_file(&install_script)? {
+        return Err(Error::CannotFindBinaryPath(
+            "aube installArchSpecificPackage.js not found".into(),
+        ));
+    }
+
+    let output = tokio::process::Command::new("node")
+        .arg(&install_script)
+        .current_dir(package_dir)
+        .output()
+        .await?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        return Err(Error::InvalidArgument(
+            format!(
+                "failed to install aube native binary: status={} stdout={} stderr={}",
+                output.status,
+                stdout.trim(),
+                stderr.trim()
+            )
+            .into(),
+        ));
+    }
+
+    Ok(())
+}
+
+fn find_aube_installed_bin(bin_prefix: &Path, bin_name: &str) -> Result<std::path::PathBuf, Error> {
+    let exe = if cfg!(windows) { ".exe" } else { "" };
+    for candidate in [bin_prefix.join(format!("{bin_name}{exe}")), bin_prefix.join(bin_name)] {
+        if is_exists_file(&candidate)? {
+            return Ok(candidate);
+        }
+    }
+
+    Err(Error::CannotFindBinaryPath(
+        format!("aube native binary not found after install: {bin_name}").into(),
+    ))
+}
+
+async fn prepare_aube_native_shims(bin_prefix: impl AsRef<Path>) -> Result<(), Error> {
+    let bin_prefix = bin_prefix.as_ref();
+    for bin_name in ["aube", "aubr", "aubx"] {
+        let native_bin_src = find_aube_installed_bin(bin_prefix, bin_name)?;
+        let native_bin_dest = if cfg!(windows) {
+            bin_prefix.join(format!("{bin_name}.native.exe"))
+        } else {
+            bin_prefix.join(format!("{bin_name}.native"))
+        };
+
+        // Move the native binary out of the final shim path before writing the
+        // cross-platform shell/cmd/PowerShell wrappers at `bin/{aube,aubr,aubx}`.
+        tokio::fs::rename(&native_bin_src, &native_bin_dest).await?;
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            tokio::fs::set_permissions(&native_bin_dest, fs::Permissions::from_mode(0o755)).await?;
+        }
+    }
+
+    create_aube_shim_files(bin_prefix).await
+}
+
+/// Download aube package manager from npm and run its native-binary installer.
+///
+/// The top-level `@endevco/aube` package intentionally does not ship working
+/// `bin/` entries directly in the tarball. It uses `preinstall` to fetch the
+/// platform-specific binary package and wire up `aube`, `aubr`, and `aubx`.
+/// Vite+ does not run npm lifecycle scripts during tarball extraction, so it
+/// invokes that installer explicitly, then replaces the installed native bins
+/// with Vite+ native shims.
+async fn download_aube_package_manager(
+    version: &Str,
+    expected_hash: Option<&str>,
+    home_dir: &AbsolutePath,
+) -> Result<(AbsolutePathBuf, Str, Str), Error> {
+    let package_name: Str = "@endevco/aube".into();
+    let target_dir = home_dir.join("package_manager").join("aube").join(version.as_str());
+    let install_dir = target_dir.join("aube");
+    let bin_prefix = install_dir.join("bin");
+
+    if aube_shims_exist(&bin_prefix)? {
+        return Ok((install_dir, package_name, version.clone()));
+    }
+
+    let parent_dir = target_dir.parent().unwrap();
+    tokio::fs::create_dir_all(parent_dir).await?;
+
+    let tgz_url = get_npm_package_tgz_url(&package_name, version);
+    let target_dir_tmp_guard = tempfile::tempdir_in(parent_dir)?;
+    let target_dir_tmp = target_dir_tmp_guard.path().to_path_buf();
+
+    download_and_extract_tgz_with_hash(&tgz_url, &target_dir_tmp, expected_hash).await.map_err(
+        |err| {
+            if let Error::Reqwest(e) = &err
+                && let Some(status) = e.status()
+                && status == reqwest::StatusCode::NOT_FOUND
+            {
+                Error::PackageManagerVersionNotFound {
+                    name: "aube".into(),
+                    version: version.clone(),
+                    url: tgz_url.into(),
+                }
+            } else {
+                err
+            }
+        },
+    )?;
+
+    let tmp_aube_dir = target_dir_tmp.join("aube");
+    tokio::fs::rename(&target_dir_tmp.join("package"), &tmp_aube_dir).await?;
+    run_aube_native_installer(&tmp_aube_dir).await?;
+    prepare_aube_native_shims(&tmp_aube_dir.join("bin")).await?;
+
+    let lock_path = parent_dir.join(format!("{version}.lock"));
+    tracing::debug!("Acquire lock file: {:?}", lock_path);
+    let lock_file = open_lock_file(lock_path.as_path())?;
+    lock_file.lock()?;
+    tracing::debug!("Lock acquired: {:?}", lock_path);
+
+    if aube_shims_exist(&bin_prefix)? {
+        tracing::debug!("aube shims already exist after lock acquisition, skip rename");
+        return Ok((install_dir, package_name, version.clone()));
+    }
+
+    tracing::debug!("Rename {:?} to {:?}", target_dir_tmp, target_dir);
+    remove_dir_all_force(&target_dir).await?;
+    tokio::fs::rename(&target_dir_tmp, &target_dir).await?;
+
+    Ok((install_dir, package_name, version.clone()))
 }
 
 /// Download bun package manager (native binary) from npm.
@@ -772,6 +962,11 @@ async fn create_shim_files(
             bin_names.push(("pnpm", "pnpm"));
             bin_names.push(("pnpx", "pnpx"));
         }
+        PackageManagerType::Aube => {
+            bin_names.push(("aube", "aube"));
+            bin_names.push(("aubr", "aubr"));
+            bin_names.push(("aubx", "aubx"));
+        }
         PackageManagerType::Yarn => {
             // yarn don't have the `npx` like cli, so we don't need to create shim files for it
             bin_names.push(("yarn", "yarn"));
@@ -806,6 +1001,30 @@ async fn create_shim_files(
         let source_file = bin_prefix.join(js_bin_name);
         let to_bin = bin_prefix.join(bin_name);
         shim::write_shims(&source_file, &to_bin).await?;
+    }
+    Ok(())
+}
+
+/// Create shim files for aube's native binaries.
+///
+/// Aube ships native `aube`, `aubr`, and `aubx` binaries. They are moved to
+/// `*.native` paths before we create cross-platform shim wrappers.
+async fn create_aube_shim_files(bin_prefix: impl AsRef<Path>) -> Result<(), Error> {
+    let bin_prefix = bin_prefix.as_ref();
+    for bin_name in ["aube", "aubr", "aubx"] {
+        let native_bin = if cfg!(windows) {
+            bin_prefix.join(format!("{bin_name}.native.exe"))
+        } else {
+            bin_prefix.join(format!("{bin_name}.native"))
+        };
+        if !is_exists_file(&native_bin)? {
+            return Err(Error::CannotFindBinaryPath(
+                format!("aube native binary not found. Expected bin/{bin_name}.native").into(),
+            ));
+        }
+
+        let shim_path = bin_prefix.join(bin_name);
+        shim::write_native_shims(&native_bin, &shim_path).await?;
     }
     Ok(())
 }
@@ -894,6 +1113,7 @@ fn is_ci_environment() -> bool {
 fn interactive_package_manager_menu() -> Result<PackageManagerType, Error> {
     let options = [
         ("pnpm (recommended)", PackageManagerType::Pnpm),
+        ("aube", PackageManagerType::Aube),
         ("npm", PackageManagerType::Npm),
         ("yarn", PackageManagerType::Yarn),
         ("bun", PackageManagerType::Bun),
@@ -1025,6 +1245,7 @@ fn interactive_package_manager_menu() -> Result<PackageManagerType, Error> {
     if let Ok(pm) = &result {
         let name = match pm {
             PackageManagerType::Pnpm => "pnpm",
+            PackageManagerType::Aube => "aube",
             PackageManagerType::Npm => "npm",
             PackageManagerType::Yarn => "yarn",
             PackageManagerType::Bun => "bun",
@@ -1066,6 +1287,7 @@ fn prompt_package_manager_selection() -> Result<PackageManagerType, Error> {
 fn simple_text_prompt() -> Result<PackageManagerType, Error> {
     let managers = [
         ("pnpm", PackageManagerType::Pnpm),
+        ("aube", PackageManagerType::Aube),
         ("npm", PackageManagerType::Npm),
         ("yarn", PackageManagerType::Yarn),
         ("bun", PackageManagerType::Bun),
@@ -1132,6 +1354,9 @@ mod tests {
         assert_eq!(PackageManagerType::from_tool("npx"), Some(PackageManagerType::Npm));
         assert_eq!(PackageManagerType::from_tool("pnpm"), Some(PackageManagerType::Pnpm));
         assert_eq!(PackageManagerType::from_tool("pnpx"), Some(PackageManagerType::Pnpm));
+        assert_eq!(PackageManagerType::from_tool("aube"), Some(PackageManagerType::Aube));
+        assert_eq!(PackageManagerType::from_tool("aubr"), Some(PackageManagerType::Aube));
+        assert_eq!(PackageManagerType::from_tool("aubx"), Some(PackageManagerType::Aube));
         assert_eq!(PackageManagerType::from_tool("yarn"), Some(PackageManagerType::Yarn));
         assert_eq!(PackageManagerType::from_tool("yarnpkg"), Some(PackageManagerType::Yarn));
         assert_eq!(PackageManagerType::from_tool("bun"), Some(PackageManagerType::Bun));
@@ -1146,6 +1371,9 @@ mod tests {
         assert_eq!(PackageManagerType::Npm.bin_name_for_tool("npx"), "npx");
         assert_eq!(PackageManagerType::Pnpm.bin_name_for_tool("pnpm"), "pnpm");
         assert_eq!(PackageManagerType::Pnpm.bin_name_for_tool("pnpx"), "pnpx");
+        assert_eq!(PackageManagerType::Aube.bin_name_for_tool("aube"), "aube");
+        assert_eq!(PackageManagerType::Aube.bin_name_for_tool("aubr"), "aubr");
+        assert_eq!(PackageManagerType::Aube.bin_name_for_tool("aubx"), "aubx");
         assert_eq!(PackageManagerType::Yarn.bin_name_for_tool("yarn"), "yarn");
         assert_eq!(PackageManagerType::Yarn.bin_name_for_tool("yarnpkg"), "yarnpkg");
         assert_eq!(PackageManagerType::Bun.bin_name_for_tool("bun"), "bun");
@@ -1170,6 +1398,24 @@ mod tests {
         assert!(resolution.hash.is_none());
         assert_eq!(resolution.source.as_str(), "packageManager");
         assert_eq!(resolution.project_root, temp_dir_path);
+    }
+
+    #[test]
+    fn test_resolve_package_manager_from_package_json_aube() {
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        create_package_json(
+            &temp_dir_path,
+            r#"{"name": "test-package", "packageManager": "aube@1.17.1"}"#,
+        );
+
+        let resolution = resolve_package_manager_from_package_json(&temp_dir_path)
+            .expect("Should resolve packageManager")
+            .expect("Should find packageManager field");
+
+        assert_eq!(resolution.package_manager_type, PackageManagerType::Aube);
+        assert_eq!(resolution.version.as_str(), "1.17.1");
+        assert!(resolution.hash.is_none());
     }
 
     #[test]

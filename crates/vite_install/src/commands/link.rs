@@ -37,8 +37,8 @@ impl PackageManager {
         let mut args: Vec<String> = Vec::new();
 
         match self.client {
-            PackageManagerType::Pnpm => {
-                bin_name = "pnpm".into();
+            PackageManagerType::Pnpm | PackageManagerType::Aube => {
+                bin_name = self.client.to_string();
                 args.push("link".into());
             }
             PackageManagerType::Yarn => {

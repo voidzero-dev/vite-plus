@@ -60,6 +60,7 @@ pub async fn download_package_manager(
 ) -> Result<DownloadPackageManagerResult> {
     let package_manager_type = match options.name.as_str() {
         "pnpm" => PackageManagerType::Pnpm,
+        "aube" => PackageManagerType::Aube,
         "yarn" => PackageManagerType::Yarn,
         "npm" => PackageManagerType::Npm,
         "bun" => PackageManagerType::Bun,

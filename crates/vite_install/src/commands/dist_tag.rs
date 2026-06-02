@@ -50,7 +50,7 @@ impl PackageManager {
         let bin_name: String;
 
         match self.client {
-            PackageManagerType::Npm | PackageManagerType::Pnpm => {
+            PackageManagerType::Npm | PackageManagerType::Pnpm | PackageManagerType::Aube => {
                 bin_name = "npm".into();
                 args.push("dist-tag".into());
             }

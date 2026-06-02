@@ -189,7 +189,7 @@ export function updateWorkspaceConfig(projectPath: string, workspaceInfo: Worksp
   // path.dirname returns '.' for single-segment paths, treat that as no parent
   const pattern = parentDir === '.' ? projectPath : `${parentDir}/*`;
 
-  if (workspaceInfo.packageManager === PackageManager.pnpm) {
+  if ((workspaceInfo.packageManager === PackageManager.pnpm || workspaceInfo.packageManager === PackageManager.aube)) {
     editYamlFile(path.join(workspaceInfo.rootDir, 'pnpm-workspace.yaml'), (doc) => {
       let packages = doc.getIn(['packages']) as YAMLSeq<Scalar<string>>;
       if (!packages) {

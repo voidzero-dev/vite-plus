@@ -1051,7 +1051,7 @@ export function rewriteStandaloneProject(
         ...pkg.overrides,
         ...VITE_PLUS_OVERRIDE_PACKAGES,
       };
-    } else if (packageManager === PackageManager.pnpm) {
+    } else if (packageManager === PackageManager.pnpm || packageManager === PackageManager.aube) {
       // If package.json already has a "pnpm" field, keep using it;
       // otherwise use pnpm-workspace.yaml.
       usePnpmWorkspaceYaml = !pkg.pnpm;
@@ -1180,7 +1180,7 @@ export function rewriteMonorepo(
     workspaceInfo.packageManager,
   );
   // rewrite root workspace
-  if (workspaceInfo.packageManager === PackageManager.pnpm) {
+  if ((workspaceInfo.packageManager === PackageManager.pnpm || workspaceInfo.packageManager === PackageManager.aube)) {
     rewritePnpmWorkspaceYaml(workspaceInfo.rootDir);
   } else if (workspaceInfo.packageManager === PackageManager.yarn) {
     rewriteYarnrcYml(workspaceInfo.rootDir);
@@ -1567,7 +1567,7 @@ function createCatalogDependencyResolver(
   projectPath: string,
   packageManager: PackageManager,
 ): CatalogDependencyResolver | undefined {
-  if (packageManager === PackageManager.pnpm) {
+  if (packageManager === PackageManager.pnpm || packageManager === PackageManager.aube) {
     const pnpmWorkspaceYamlPath = path.join(projectPath, 'pnpm-workspace.yaml');
     if (!fs.existsSync(pnpmWorkspaceYamlPath)) {
       return undefined;
@@ -1820,7 +1820,7 @@ function rewriteRootWorkspacePackageJson(
       };
     } else if (packageManager === PackageManager.bun) {
       // bun overrides are handled in rewriteBunCatalog() with catalog: references
-    } else if (packageManager === PackageManager.pnpm) {
+    } else if (packageManager === PackageManager.pnpm || packageManager === PackageManager.aube) {
       const overrideKeys = Object.keys(VITE_PLUS_OVERRIDE_PACKAGES);
       if (isForceOverrideMode()) {
         // In force-override mode, keep overrides in package.json pnpm.overrides
@@ -3200,7 +3200,7 @@ function hasUnsupportedLintStagedConfig(projectPath: string): boolean {
 // The optional prefix group captures env var assignments like `NODE_OPTIONS=... `.
 // We still detect old lint-staged patterns to migrate existing hooks.
 const STALE_LINT_STAGED_PATTERNS = [
-  /^((?:[A-Z_][A-Z0-9_]*(?:=\S*)?\s+)*)(pnpm|pnpm exec|npx|yarn|yarn run|npm exec|npm run|bunx|bun run|bun x)\s+lint-staged\b/,
+  /^((?:[A-Z_][A-Z0-9_]*(?:=\S*)?\s+)*)(pnpm|pnpm exec|npx|yarn|yarn run|npm exec|npm run|bunx|bun run|bun x|aubr|aube run|aubx|aube x)\s+lint-staged\b/,
   /^((?:[A-Z_][A-Z0-9_]*(?:=\S*)?\s+)*)lint-staged\b/,
 ];
 

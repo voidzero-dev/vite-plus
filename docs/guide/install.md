@@ -4,23 +4,25 @@
 
 ## Overview
 
-Use Vite+ to manage dependencies across pnpm, npm, Yarn, and Bun. Instead of switching between `pnpm install`, `npm install`, `yarn install`, and `bun install`, you can keep using `vp install`, `vp add`, `vp remove`, and the rest of the Vite+ package-management commands.
+Use Vite+ to manage dependencies across pnpm, aube, npm, Yarn, and Bun. Instead of switching between `pnpm install`, `aube install`, `npm install`, `yarn install`, and `bun install`, you can keep using `vp install`, `vp add`, `vp remove`, and the rest of the Vite+ package-management commands.
 
 Vite+ detects the package manager from the workspace root in this order:
 
 1. `packageManager` in `package.json`
-2. `pnpm-workspace.yaml`
-3. `pnpm-lock.yaml`
-4. `yarn.lock` or `.yarnrc.yml`
-5. `package-lock.json`
-6. `bun.lock` or `bun.lockb`
-7. `.pnpmfile.cjs` or `pnpmfile.cjs`
-8. `bunfig.toml`
-9. `yarn.config.cjs`
+2. `aube-workspace.yaml`
+3. `aube-lock.yaml`
+4. `pnpm-workspace.yaml`
+5. `pnpm-lock.yaml`
+6. `yarn.lock` or `.yarnrc.yml`
+7. `package-lock.json`
+8. `bun.lock` or `bun.lockb`
+9. `.pnpmfile.cjs` or `pnpmfile.cjs`
+10. `bunfig.toml`
+11. `yarn.config.cjs`
 
 If none of those files are present, `vp` falls back to `pnpm` by default. Vite+ automatically downloads the matching package manager and uses it for the command you ran.
 
-The explicit `packageManager` field also affects matching package-manager shims. If a project has `packageManager: "npm@10.9.4"`, `npm` and `npx` use npm 10.9.4. Other generated alias pairs behave the same way: `pnpm`/`pnpx`, `yarn`/`yarnpkg`, and `bun`/`bunx`. Mismatched tools are not translated; `npm` in a `pnpm` project still resolves as npm.
+The explicit `packageManager` field also affects matching package-manager shims. If a project has `packageManager: "npm@10.9.4"`, `npm` and `npx` use npm 10.9.4. Other generated alias pairs behave the same way: `pnpm`/`pnpx`, `aube`/`aubr`/`aubx`, `yarn`/`yarnpkg`, and `bun`/`bunx`. Mismatched tools are not translated; `npm` in a `pnpm` project still resolves as npm.
 
 ## Usage
 
@@ -38,7 +40,7 @@ vp install --filter web
 vp install -w
 ```
 
-`vp install` maps to the correct underlying install behavior for the detected package manager, including the right lockfile flags for pnpm, npm, Yarn, and Bun.
+`vp install` maps to the correct underlying install behavior for the detected package manager, including the right lockfile flags for pnpm, aube, npm, Yarn, and Bun.
 
 ## Global Packages
 
@@ -134,7 +136,7 @@ vp rebuild -- --update-binary
 
 `vp rebuild` is a shorthand for `vp pm rebuild`.
 
-With pnpm v10+, bare `vp rebuild` only rebuilds packages whose build scripts are listed in `onlyBuiltDependencies` (or approved via `pnpm approve-builds`); name the package explicitly to force a rebuild that bypasses the approval gate.
+With pnpm v10+ and aube, bare `vp rebuild` only rebuilds packages whose build scripts are listed in `onlyBuiltDependencies` (or approved via `pnpm approve-builds`); name the package explicitly to force a rebuild that bypasses the approval gate.
 
 #### Advanced
 
@@ -165,6 +167,6 @@ vp pm stage approve <stage-id>   # promote to the live registry (2FA)
 vp pm stage reject <stage-id>    # discard a staged version (2FA)
 ```
 
-- pnpm (`pnpm stage`, requires pnpm ≥ 11.3) and npm (`npm stage`, requires npm ≥ 11.15 and Node ≥ 22.14) pass through directly.
+- pnpm (`pnpm stage`, requires pnpm ≥ 11.3), aube (`aube stage`), and npm (`npm stage`, requires npm ≥ 11.15 and Node ≥ 22.14) pass through directly.
 - yarn (Berry) uses its npm plugin (`yarn npm publish --staged`, `yarn npm stage …`); `view`/`download` fall back to npm.
 - yarn Classic and bun have no staged-publishing support and fall back to `npm stage`.

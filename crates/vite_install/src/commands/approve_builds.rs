@@ -89,6 +89,14 @@ impl PackageManager {
                 }
                 args.extend(options.packages.iter().cloned());
             }
+            PackageManagerType::Aube => {
+                bin_name = "aube".into();
+                args.push("approve-builds".into());
+                if options.all {
+                    args.push("--all".into());
+                }
+                args.extend(options.packages.iter().cloned());
+            }
             PackageManagerType::Bun => {
                 // bun has no allow/deny model — filter `!pkg` with a warning.
                 let (denies, approves): (Vec<&String>, Vec<&String>) =

@@ -41,7 +41,7 @@ impl PackageManager {
         let mut args: Vec<String> = Vec::new();
 
         match self.client {
-            PackageManagerType::Pnpm => {
+            PackageManagerType::Pnpm | PackageManagerType::Aube => {
                 args.push("config".into());
                 args.push(options.subcommand.to_string());
 

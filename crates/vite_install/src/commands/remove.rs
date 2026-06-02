@@ -59,8 +59,8 @@ impl PackageManager {
         }
 
         match self.client {
-            PackageManagerType::Pnpm => {
-                bin_name = "pnpm".into();
+            PackageManagerType::Pnpm | PackageManagerType::Aube => {
+                bin_name = self.client.to_string();
                 // pnpm: --filter must come before command
                 if let Some(filters) = options.filters {
                     for filter in filters {

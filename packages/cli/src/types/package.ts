@@ -1,5 +1,6 @@
 export const PackageManager = {
   pnpm: 'pnpm',
+  aube: 'aube',
   npm: 'npm',
   yarn: 'yarn',
   bun: 'bun',

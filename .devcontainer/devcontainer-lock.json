@@ -1,0 +1,14 @@
+{
+  "features": {
+    "ghcr.io/devcontainers-extra/features/fish-apt-get:1": {
+      "version": "1.0.5",
+      "resolved": "ghcr.io/devcontainers-extra/features/fish-apt-get@sha256:d3c21bb6aec6e0f9d5348adee443c70c31d5f4372b8ad5f56a0ab925b2725108",
+      "integrity": "sha256:d3c21bb6aec6e0f9d5348adee443c70c31d5f4372b8ad5f56a0ab925b2725108"
+    },
+    "ghcr.io/devcontainers/features/rust:1": {
+      "version": "1.5.0",
+      "resolved": "ghcr.io/devcontainers/features/rust@sha256:0c55e65f2e3df736e478f26ee4d5ed41bae6b54dac1318c443e31444c8ed283c",
+      "integrity": "sha256:0c55e65f2e3df736e478f26ee4d5ed41bae6b54dac1318c443e31444c8ed283c"
+    }
+  }
+}

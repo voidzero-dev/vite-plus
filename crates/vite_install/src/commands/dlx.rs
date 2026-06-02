@@ -42,7 +42,9 @@ impl PackageManager {
         let envs = HashMap::from([("PATH".to_string(), format_path_env(self.get_bin_prefix()))]);
 
         match self.client {
-            PackageManagerType::Pnpm => self.resolve_pnpm_dlx(options, envs),
+            PackageManagerType::Pnpm | PackageManagerType::Aube => {
+                self.resolve_pnpm_dlx(options, envs)
+            }
             PackageManagerType::Npm => self.resolve_npm_dlx(options, envs),
             PackageManagerType::Yarn => {
                 if self.version.starts_with("1.") {
@@ -87,7 +89,7 @@ impl PackageManager {
         // Add command arguments
         args.extend(options.args.iter().cloned());
 
-        ResolveCommandResult { bin_path: "pnpm".into(), args, envs }
+        ResolveCommandResult { bin_path: self.client.to_string(), args, envs }
     }
 
     fn resolve_npm_dlx(

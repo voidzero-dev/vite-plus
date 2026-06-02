@@ -71,8 +71,8 @@ impl PackageManager {
                     args.push("--json".into());
                 }
             }
-            PackageManagerType::Pnpm => {
-                bin_name = "pnpm".into();
+            PackageManagerType::Pnpm | PackageManagerType::Aube => {
+                bin_name = self.client.to_string();
                 args.push("audit".into());
 
                 if options.fix {

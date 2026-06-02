@@ -126,7 +126,7 @@ const helpMessage = renderCliDoc({
         { label: '--no-hooks', description: 'Skip pre-commit hooks setup' },
         {
           label: '--package-manager NAME',
-          description: 'Use specified package manager (pnpm, npm, yarn, bun)',
+          description: 'Use specified package manager (pnpm, aube, npm, yarn, bun)',
         },
         { label: '--verbose', description: 'Show detailed scaffolding output' },
         { label: '--no-interactive', description: 'Run in non-interactive mode' },

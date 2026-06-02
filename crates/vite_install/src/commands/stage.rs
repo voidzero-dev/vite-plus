@@ -78,8 +78,8 @@ impl PackageManager {
         let bin_name: String;
 
         match self.client {
-            PackageManagerType::Pnpm => {
-                bin_name = "pnpm".into();
+            PackageManagerType::Pnpm | PackageManagerType::Aube => {
+                bin_name = self.client.to_string();
 
                 // pnpm: --filter must come before the command. `--filter` and
                 // `--recursive` are pnpm-publish-only workspace flags, so both

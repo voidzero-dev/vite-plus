@@ -24,7 +24,7 @@ export function shouldIgnoreScriptsForAutoInstall(
   packageManager: PackageManager | undefined,
   packageManagerVersion: string | undefined,
 ): boolean {
-  if (packageManager !== PackageManager.pnpm) {
+  if (packageManager !== PackageManager.pnpm && packageManager !== PackageManager.aube) {
     return false;
   }
   const coerced = packageManagerVersion ? semver.coerce(packageManagerVersion)?.version : undefined;
@@ -45,6 +45,7 @@ export async function selectPackageManager(interactive?: boolean, silent = false
       message: 'Which package manager would you like to use?',
       options: [
         { value: PackageManager.pnpm, hint: 'recommended' },
+        { value: PackageManager.aube },
         { value: PackageManager.yarn },
         { value: PackageManager.npm },
         { value: PackageManager.bun },
