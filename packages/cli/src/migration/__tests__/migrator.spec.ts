@@ -29,6 +29,7 @@ const {
   injectCreateDefaultTemplate,
   rewriteEslintPackageJson,
   detectIncompatibleEslintIntegration,
+  preflightGitHooksSetup,
 } = await import('../migrator.js');
 
 describe('rewritePackageJson', () => {
@@ -1829,5 +1830,85 @@ export default defineConfig({
     expect(viteConfig).not.toContain('singleQuote: false');
     // Redundant standalone file removed.
     expect(fs.existsSync(path.join(tmpDir, '.oxfmtrc.jsonc'))).toBe(false);
+  });
+});
+
+describe('preflightGitHooksSetup husky catalog resolution', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-husky-catalog-'));
+    // A `.git` dir at the project root so the subdirectory check passes.
+    fs.mkdirSync(path.join(tmpDir, '.git'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('resolves a `catalog:` husky version from the pnpm catalog and allows hooks', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ scripts: { prepare: 'husky' }, devDependencies: { husky: 'catalog:' } }),
+    );
+    fs.writeFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'catalog:\n  husky: ^9.1.7\n');
+
+    expect(preflightGitHooksSetup(tmpDir, PackageManager.pnpm)).toBeNull();
+  });
+
+  it('resolves the explicit `catalog:default` alias from the top-level catalog', () => {
+    // pnpm reserves `default` for the top-level `catalog:` map, so `catalog:default`
+    // must resolve there rather than a named `catalogs.default` entry.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        scripts: { prepare: 'husky' },
+        devDependencies: { husky: 'catalog:default' },
+      }),
+    );
+    fs.writeFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'catalog:\n  husky: ^9.1.7\n');
+
+    expect(preflightGitHooksSetup(tmpDir, PackageManager.pnpm)).toBeNull();
+  });
+
+  it('flags a `catalog:` husky version that resolves to <9 in the pnpm catalog', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ scripts: { prepare: 'husky' }, devDependencies: { husky: 'catalog:' } }),
+    );
+    fs.writeFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'catalog:\n  husky: ^8.0.0\n');
+
+    expect(preflightGitHooksSetup(tmpDir, PackageManager.pnpm)).toContain('husky <9.0.0');
+  });
+
+  it('does not read a foreign catalog: a yarn project ignores a leftover pnpm-workspace.yaml', () => {
+    // A `catalog:` spec is only meaningful to the active package manager, so a
+    // stray pnpm-workspace.yaml in a yarn repo must not satisfy husky's version.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ scripts: { prepare: 'husky' }, devDependencies: { husky: 'catalog:' } }),
+    );
+    fs.writeFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'catalog:\n  husky: ^9.1.7\n');
+
+    // Yarn's catalog source (.yarnrc.yml) is absent, so husky stays unresolved
+    // and the preflight warns instead of trusting the pnpm catalog.
+    expect(preflightGitHooksSetup(tmpDir, PackageManager.yarn)).toContain(
+      'Could not determine husky version from "catalog:"',
+    );
+  });
+
+  it('uses the active package manager catalog over a foreign one', () => {
+    // Discriminating case: yarn's own catalog pins a compatible husky while a
+    // leftover pnpm-workspace.yaml pins an incompatible one. Reading yarn's
+    // catalog returns null (allowed); wrongly reading pnpm's would warn about
+    // husky <9, and broken resolution would warn "Could not determine".
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ scripts: { prepare: 'husky' }, devDependencies: { husky: 'catalog:' } }),
+    );
+    fs.writeFileSync(path.join(tmpDir, '.yarnrc.yml'), 'catalog:\n  husky: ^9.1.7\n');
+    fs.writeFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'catalog:\n  husky: ^8.0.0\n');
+
+    expect(preflightGitHooksSetup(tmpDir, PackageManager.yarn)).toBeNull();
   });
 });

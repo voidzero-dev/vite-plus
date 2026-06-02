@@ -1,6 +1,6 @@
 {
   "name": "@voidzero-dev/vite-plus-test",
-  "version": "0.1.23",
+  "version": "0.1.24",
   "description": "The Unified Toolchain for the Web",
   "homepage": "https://viteplus.dev/guide",
   "bugs": {
@@ -293,17 +293,17 @@
     "@blazediff/core": "1.9.1",
     "@oxc-node/cli": "catalog:",
     "@oxc-node/core": "catalog:",
-    "@vitest/browser": "4.1.7",
-    "@vitest/browser-playwright": "4.1.7",
-    "@vitest/browser-preview": "4.1.7",
-    "@vitest/browser-webdriverio": "4.1.7",
-    "@vitest/expect": "4.1.7",
-    "@vitest/mocker": "4.1.7",
-    "@vitest/pretty-format": "4.1.7",
-    "@vitest/runner": "4.1.7",
-    "@vitest/snapshot": "4.1.7",
-    "@vitest/spy": "4.1.7",
-    "@vitest/utils": "4.1.7",
+    "@vitest/browser": "4.1.8",
+    "@vitest/browser-playwright": "4.1.8",
+    "@vitest/browser-preview": "4.1.8",
+    "@vitest/browser-webdriverio": "4.1.8",
+    "@vitest/expect": "4.1.8",
+    "@vitest/mocker": "4.1.8",
+    "@vitest/pretty-format": "4.1.8",
+    "@vitest/runner": "4.1.8",
+    "@vitest/snapshot": "4.1.8",
+    "@vitest/spy": "4.1.8",
+    "@vitest/utils": "4.1.8",
     "chai": "^6.2.1",
     "convert-source-map": "^2.0.0",
     "estree-walker": "^3.0.3",
@@ -316,16 +316,16 @@
     "rolldown": "workspace:*",
     "rolldown-plugin-dts": "catalog:",
     "tinyrainbow": "^3.1.0",
-    "vitest-dev": "^4.1.7",
+    "vitest-dev": "^4.1.8",
     "why-is-node-running": "^2.3.0"
   },
   "peerDependencies": {
     "@edge-runtime/vm": "*",
     "@opentelemetry/api": "^1.9.0",
     "@types/node": "^20.0.0 || ^22.0.0 || >=24.0.0",
-    "@vitest/coverage-istanbul": "4.1.7",
-    "@vitest/coverage-v8": "4.1.7",
-    "@vitest/ui": "4.1.7",
+    "@vitest/coverage-istanbul": "4.1.8",
+    "@vitest/coverage-v8": "4.1.8",
+    "@vitest/ui": "4.1.8",
     "happy-dom": "*",
     "jsdom": "*",
     "vite": "^6.0.0 || ^7.0.0 || ^8.0.0"
@@ -363,6 +363,6 @@
     "node": "^20.0.0 || ^22.0.0 || >=24.0.0"
   },
   "bundledVersions": {
-    "vitest": "4.1.7"
+    "vitest": "4.1.8"
   }
 }

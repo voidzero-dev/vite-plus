@@ -366,7 +366,7 @@ impl PackageManager {
     }
 
     /// Check if yarn version is Berry (v2+)
-    fn is_yarn_berry(&self) -> bool {
+    pub(crate) fn is_yarn_berry(&self) -> bool {
         !self.version.starts_with("1.")
     }
 }
