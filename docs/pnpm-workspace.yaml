@@ -6,7 +6,7 @@ overrides:
   # so the patched 4.18.x cannot be reached without forcing it. The other docs
   # advisory fixes (vite, defu, picomatch) are patched directly in the lockfile
   # since they fall within the ranges their parents already declare.
-  lodash-es: ^4.18.0 # GHSA-r5fr-rjxr-66jc
+  lodash-es: ^4.18.1 # GHSA-r5fr-rjxr-66jc
 
 peerDependencyRules:
   allowAny:
