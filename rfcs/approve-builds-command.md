@@ -177,23 +177,26 @@ Running: bun pm trust --all
 
 **npm references:**
 
-- No equivalent command. Closest configuration: [`ignore-scripts`](https://docs.npmjs.com/cli/v11/using-npm/config#ignore-scripts) and [`npm rebuild`](https://docs.npmjs.com/cli/v11/commands/npm-rebuild).
+- `npm approve-scripts` / `npm deny-scripts` (npm ≥ 11.16.0, npm/cli #9360) manage an advisory `allowScripts` field in `package.json`. In npm 11.x this is advisory only: install scripts still run; npm just warns about unreviewed packages.
+- For npm < 11.16.0: no equivalent command. Closest configuration: [`ignore-scripts`](https://docs.npmjs.com/cli/v11/using-npm/config#ignore-scripts) and [`npm rebuild`](https://docs.npmjs.com/cli/v11/commands/npm-rebuild).
 
 **yarn references:**
 
 - No equivalent command. yarn@2+ already blocks third-party build scripts by default ([`enableScripts`](https://yarnpkg.com/configuration/yarnrc#enableScripts) defaults to `false`); per-package opt-in is via [`dependenciesMeta.<pkg>.built`](https://yarnpkg.com/configuration/manifest#dependenciesMeta) in `package.json`.
 
-| Vite+ Flag                    | pnpm                                     | npm        | yarn@1     | yarn@2+    | bun                         | Description                     |
-| ----------------------------- | ---------------------------------------- | ---------- | ---------- | ---------- | --------------------------- | ------------------------------- |
-| `vp pm approve-builds`        | `pnpm approve-builds`                    | N/A (warn) | N/A (warn) | N/A (warn) | N/A (note)                  | Interactive prompt (pnpm only)  |
-| `vp pm approve-builds <pkg>`  | `pnpm approve-builds <pkg>`              | N/A (warn) | N/A (warn) | N/A (warn) | `bun pm trust <pkg>`        | Approve named packages          |
-| `vp pm approve-builds !<pkg>` | `pnpm approve-builds !<pkg>`             | N/A (warn) | N/A (warn) | N/A (warn) | N/A (warn — model mismatch) | Deny named packages (pnpm only) |
-| `--all`                       | `pnpm approve-builds --all` (≥ v10.32.0) | N/A (warn) | N/A (warn) | N/A (warn) | `bun pm trust --all`        | Approve every pending package   |
+| Vite+ Flag                    | pnpm                                     | npm (≥ 11.16.0)                               | yarn@1     | yarn@2+    | bun                         | Description                                 |
+| ----------------------------- | ---------------------------------------- | --------------------------------------------- | ---------- | ---------- | --------------------------- | ------------------------------------------- |
+| `vp pm approve-builds`        | `pnpm approve-builds`                    | `npm approve-scripts --allow-scripts-pending` | N/A (warn) | N/A (warn) | N/A (note)                  | pnpm: interactive prompt; npm: list pending |
+| `vp pm approve-builds <pkg>`  | `pnpm approve-builds <pkg>`              | `npm approve-scripts <pkg>`                   | N/A (warn) | N/A (warn) | `bun pm trust <pkg>`        | Approve named packages                      |
+| `vp pm approve-builds !<pkg>` | `pnpm approve-builds !<pkg>`             | `npm deny-scripts <pkg>`                      | N/A (warn) | N/A (warn) | N/A (warn — model mismatch) | Deny named packages (pnpm, npm)             |
+| `--all`                       | `pnpm approve-builds --all` (≥ v10.32.0) | `npm approve-scripts --all`                   | N/A (warn) | N/A (warn) | `bun pm trust --all`        | Approve every pending package               |
 
 **Notes:**
 
-- **`!pkg` deny syntax is pnpm-only.** For bun the deny syntax is rejected with a warning that names the affected positionals (so users notice rather than silently get a partial approval).
-- **npm and yarn never have an `approve-builds` command.** Vite+ prints a one-line `warn` and exits 0. For npm (which runs scripts by default) the warn points at `ignore-scripts`. For yarn (which blocks third-party scripts by default) the warn points at `dependenciesMeta.<pkg>.built`. We intentionally exit 0 (not non-zero) so monorepo scripts that run `vp pm approve-builds` opportunistically don't break on heterogeneous environments.
+- **`!pkg` deny syntax is supported on pnpm and npm.** pnpm forwards `!core-js` verbatim; npm strips the `!` and routes it to `npm deny-scripts core-js`. For bun the deny syntax is rejected with a warning that names the affected positionals (so users notice rather than silently get a partial approval).
+- **npm splits approve vs. deny into two separate commands** (`approve-scripts` / `deny-scripts`). Because `vp pm approve-builds` accepts both in one invocation, a mixed call (`vp pm approve-builds esbuild !core-js`) is **rejected** on npm with an actionable message asking the user to run the two operations separately. pnpm handles the mixed case in a single command.
+- **npm < 11.16.0 and yarn never have an `approve-builds` command.** Vite+ prints a one-line `warn` and exits 0. For npm the warn points at upgrading to npm ≥ 11.16.0 (or `ignore-scripts`). For yarn (which blocks third-party scripts by default) the warn points at `dependenciesMeta.<pkg>.built`. We intentionally exit 0 (not non-zero) so monorepo scripts that run `vp pm approve-builds` opportunistically don't break on heterogeneous environments.
+- **npm's `allowScripts` is advisory in npm 11.x.** Even after approving, install scripts still run; npm only warns about unreviewed packages at install time. Vite+ surfaces a one-line `note` after an npm approve/deny write to make this clear. Enforcement is planned for a future npm release.
 - **No-args mode on bun** also exits 0 with a `note` (bun's `bun pm trust` requires package names; there's no interactive picker to forward to).
 - **Configuration storage differs:** pnpm writes to `pnpm-workspace.yaml` under `allowBuilds:`. bun writes to `package.json` under `trustedDependencies: []`. Vite+ does not normalize the storage location — each PM owns its own state. (See [Design Decision §2](#2-do-not-normalize-storage).)
 
@@ -419,17 +422,19 @@ impl ApproveBuildsCommand {
 - Erroring out would break `vp pm approve-builds esbuild !core-js` for a developer who copied the command from a pnpm tutorial but happens to be on bun for one repo.
 - The warning names the dropped packages so the divergence is auditable.
 
-### 4. npm / yarn: warn + exit 0
+### 4. npm < 11.16.0 / yarn: warn + exit 0
 
-**Decision**: Print a `warn` and return exit code 0 on npm and yarn.
+**Decision**: Print a `warn` and return exit code 0 when the package manager has no native approval command to forward to: yarn (all versions) and npm < 11.16.0.
+
+> **Update (npm ≥ 11.16.0):** npm shipped `approve-scripts` / `deny-scripts` ([npm/cli#9360](https://github.com/npm/cli/pull/9360)). Vite+ now forwards to them (see [Command Mapping](#command-mapping)). As with pnpm and bun, that means a real command runs and can exit non-zero, and a mixed approve+deny invocation is rejected (`Error::InvalidArgument`). The warn + exit-0 fallback below applies only to npm < 11.16.0.
 
 **Rationale**:
 
-- **npm** runs lifecycle scripts by default — the warn points at how to _restrict_ them (`ignore-scripts=true`).
+- **npm < 11.16.0** runs lifecycle scripts by default and has no approval command — the warn points at upgrading to npm ≥ 11.16.0 or at how to _restrict_ scripts (`ignore-scripts=true`).
 - **yarn (Berry)** blocks third-party build scripts by default; the per-package opt-in lives in `package.json` (`dependenciesMeta.<pkg>.built: true`). We `warn` pointing at that field rather than performing the edit ourselves — staying within the RFC's intentionally-tight scope.
-- Both surfaces use `warn` (not `note`) for consistency: the user invoked `approve-builds` and the requested action could not be completed on this PM, so they need a visible signal and a manual workaround.
-- Exit 0 lets CI scripts that conditionally run `vp pm approve-builds --all` work across heterogeneous repos.
-- Exit non-zero (the alternative) would break monorepo orchestration scripts and demand per-PM conditionals.
+- Both fallback surfaces use `warn` (not `note`) for consistency: the user invoked `approve-builds` and the requested action could not be completed on this PM, so they need a visible signal and a manual workaround.
+- Exit 0 on the fallback lets CI scripts that conditionally run `vp pm approve-builds --all` work across heterogeneous repos where the PM has no approval command.
+- Exit non-zero on the fallback (the alternative) would break monorepo orchestration scripts and demand per-PM conditionals. (Once a PM _does_ have a command — pnpm, bun, npm ≥ 11.16.0 — Vite+ runs it and surfaces its real exit code, same as any forwarded command.)
 
 ### 5. No-args on bun: note + exit 0
 
