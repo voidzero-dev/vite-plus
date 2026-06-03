@@ -1,0 +1,8 @@
+{
+  "commands": [
+    "vp migrate --no-interactive --no-hooks # migration should wrap awaited inline plugins with async lazyPlugins",
+    "cat vite.config.ts # check awaited plugins use async lazyPlugins",
+    "cat package.json # check package.json",
+    "cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog"
+  ]
+}
