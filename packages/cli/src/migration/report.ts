@@ -5,6 +5,7 @@ export interface MigrationReport {
   inlinedLintStagedConfigCount: number;
   removedConfigCount: number;
   tsdownImportCount: number;
+  wrappedPluginConfigCount: number;
   rewrittenImportFileCount: number;
   rewrittenImportErrors: Array<{ path: string; message: string }>;
   eslintMigrated: boolean;
@@ -24,6 +25,7 @@ export function createMigrationReport(): MigrationReport {
     inlinedLintStagedConfigCount: 0,
     removedConfigCount: 0,
     tsdownImportCount: 0,
+    wrappedPluginConfigCount: 0,
     rewrittenImportFileCount: 0,
     rewrittenImportErrors: [],
     eslintMigrated: false,

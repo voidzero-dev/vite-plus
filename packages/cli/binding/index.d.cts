@@ -3609,3 +3609,10 @@ export declare function shouldPrintVitePlusHeader(): boolean;
 
 /** Render the Vite+ header using the Rust implementation. */
 export declare function vitePlusHeader(): string;
+
+/**
+ * Wrap safe inline `plugins: [...]` arrays in recognized Vite config objects
+ * with `lazyPlugins(() => [...])` and add a `lazyPlugins` import from
+ * `vite-plus` when needed.
+ */
+export declare function wrapLazyPlugins(viteConfigPath: string): MergeJsonConfigResult;
