@@ -195,6 +195,16 @@ pub async fn install(
             continue;
         };
         let mut backup = backup;
+        let stale_bin_names = match stale_bin_names_for_package(&package_name, &bin_names).await {
+            Ok(bin_names) => bin_names,
+            Err(error) => {
+                let _ = cleanup_failed_install(&package_name, backup.take()).await;
+                if first_error.is_none() {
+                    first_error = Some(package_error(&package_name, error));
+                }
+                continue;
+            }
+        };
 
         let mut conflicts = Vec::<(String, String)>::new();
         let mut finalize_blocked = false;
@@ -336,12 +346,35 @@ pub async fn install(
             continue;
         }
 
-        // 4.5 Commit the install by discarding the backup and reporting the installed bins.
+        // 4.5 Remove shims for binaries the package used to expose but no longer declares.
+        for bin_name in stale_bin_names {
+            let result = async {
+                remove_package_shim(&bin_dir, &bin_name).await?;
+                BinConfig::delete(&bin_name).await?;
+                Ok::<(), Error>(())
+            }
+            .await;
+
+            if let Err(error) = result.map_err(|error| package_error(&package_name, error)) {
+                let _ = cleanup_failed_install(&package_name, backup.take()).await;
+                if first_error.is_none() {
+                    first_error = Some(error);
+                }
+                finalized = false;
+                break;
+            }
+        }
+
+        if !finalized {
+            continue;
+        }
+
+        // 4.6 Commit the install by discarding the backup and reporting the installed bins.
         if let Some(backup) = backup {
             backup.discard().await;
         }
 
-        // 4.6 Print success message
+        // 4.7 Print success message
         output::success(&format!(
             "{} {} {}{}",
             operation_past,
@@ -550,6 +583,23 @@ async fn cleanup_installed_package(package_name: &str) -> Result<(), Error> {
     PackageMetadata::delete(package_name).await?;
 
     Ok(())
+}
+
+async fn stale_bin_names_for_package(
+    package_name: &str,
+    current_bin_names: &[String],
+) -> Result<Vec<String>, Error> {
+    let current_bin_names: HashSet<_> = current_bin_names.iter().cloned().collect();
+    let mut previous_bin_names = HashSet::new();
+
+    if let Some(metadata) = PackageMetadata::load(package_name).await? {
+        previous_bin_names.extend(metadata.bins);
+    }
+
+    previous_bin_names.extend(BinConfig::find_by_package(package_name).await?);
+    previous_bin_names.retain(|bin_name| !current_bin_names.contains(bin_name));
+
+    Ok(previous_bin_names.into_iter().collect())
 }
 
 /// Uninstall a global package.
