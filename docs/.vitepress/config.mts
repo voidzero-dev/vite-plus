@@ -178,6 +178,7 @@ export default extendConfig(
                 { text: 'Run', link: '/config/run' },
                 { text: 'Format', link: '/config/fmt' },
                 { text: 'Lint', link: '/config/lint' },
+                { text: 'Lint Rules', link: '/config/lint-rules' },
                 { text: 'Test', link: '/config/test' },
                 { text: 'Build', link: '/config/build' },
                 { text: 'Pack', link: '/config/pack' },

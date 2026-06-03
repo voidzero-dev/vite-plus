@@ -17,7 +17,8 @@ export default defineConfig({
     },
     "rules": {
       "no-console": "error",
-      "vite-plus/prefer-vite-plus-imports": "error"
+      "vite-plus/prefer-vite-plus-imports": "error",
+      "vite-plus/require-pnpm-vite-alias": "error"
     },
     "globals": {},
     "ignorePatterns": [],

@@ -1,3 +1,7 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
 import { RuleTester } from 'oxlint/plugins-dev';
 import { describe, expect, it } from 'vitest';
 
@@ -6,9 +10,16 @@ import {
   ensureVitePlusImportRuleDefaults,
   PREFER_VITE_PLUS_IMPORTS_RULE,
   PREFER_VITE_PLUS_IMPORTS_RULE_NAME,
+  REQUIRE_PNPM_VITE_ALIAS_RULE,
+  REQUIRE_PNPM_VITE_ALIAS_RULE_NAME,
   VITE_PLUS_OXLINT_PLUGIN_SPECIFIER,
 } from '../oxlint-plugin-config.js';
-import { preferVitePlusImportsRule, rewriteVitePlusImportSpecifier } from '../oxlint-plugin.js';
+import {
+  pnpmWorkspaceAliasesViteToVitePlusCore,
+  preferVitePlusImportsRule,
+  requirePnpmViteAliasRule,
+  rewriteVitePlusImportSpecifier,
+} from '../oxlint-plugin.js';
 
 describe('oxlint plugin config defaults', () => {
   it('adds vite-plus js plugin and lint rule defaults', () => {
@@ -29,6 +40,7 @@ describe('oxlint plugin config defaults', () => {
       },
       rules: {
         [PREFER_VITE_PLUS_IMPORTS_RULE]: 'error',
+        [REQUIRE_PNPM_VITE_ALIAS_RULE]: 'error',
       },
     });
   });
@@ -39,6 +51,7 @@ describe('oxlint plugin config defaults', () => {
         jsPlugins: [VITE_PLUS_OXLINT_PLUGIN_SPECIFIER],
         rules: {
           [PREFER_VITE_PLUS_IMPORTS_RULE]: 'off',
+          [REQUIRE_PNPM_VITE_ALIAS_RULE]: 'warn',
           eqeqeq: 'warn',
         },
       }),
@@ -46,9 +59,34 @@ describe('oxlint plugin config defaults', () => {
       jsPlugins: [VITE_PLUS_OXLINT_PLUGIN_SPECIFIER],
       rules: {
         [PREFER_VITE_PLUS_IMPORTS_RULE]: 'off',
+        [REQUIRE_PNPM_VITE_ALIAS_RULE]: 'warn',
         eqeqeq: 'warn',
       },
     });
+  });
+});
+
+describe('pnpmWorkspaceAliasesViteToVitePlusCore', () => {
+  it('detects pnpm workspace overrides that redirect vite through a catalog alias', () => {
+    expect(
+      pnpmWorkspaceAliasesViteToVitePlusCore(`
+catalog:
+  vite: npm:@voidzero-dev/vite-plus-core@latest
+overrides:
+  vite: "catalog:"
+`),
+    ).toBe(true);
+  });
+
+  it('ignores workspaces without a Vite+ vite override', () => {
+    expect(
+      pnpmWorkspaceAliasesViteToVitePlusCore(`
+catalog:
+  vite: ^7.0.0
+overrides:
+  react: catalog:
+`),
+    ).toBe(false);
   });
 });
 
@@ -164,6 +202,103 @@ new RuleTester({
       code: `export * from 'vitest';\nimport { defineConfig } from 'vite';`,
       errors: 2,
       output: `export * from 'vite-plus/test';\nimport { defineConfig } from 'vite-plus';`,
+    },
+  ],
+});
+
+function createPnpmWorkspacePackage(options: { hasViteDependency: boolean; packageDir?: string }) {
+  const workspaceDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-oxlint-pnpm-alias-'));
+  const packageDir = path.join(workspaceDir, options.packageDir ?? 'apps/website');
+  const configFile = path.join(packageDir, 'vite.config.ts');
+
+  fs.mkdirSync(packageDir, { recursive: true });
+  fs.writeFileSync(
+    configFile,
+    `import { defineConfig } from 'vite-plus';\n\nexport default defineConfig({});\n`,
+  );
+  fs.writeFileSync(
+    path.join(workspaceDir, 'pnpm-workspace.yaml'),
+    [
+      'packages:',
+      '  - apps/*',
+      'catalog:',
+      '  vite: npm:@voidzero-dev/vite-plus-core@latest',
+      '  vite-plus: latest',
+      'overrides:',
+      '  vite: "catalog:"',
+      '',
+    ].join('\n'),
+  );
+  fs.writeFileSync(
+    path.join(packageDir, 'package.json'),
+    JSON.stringify(
+      {
+        name: 'website',
+        scripts: {
+          dev: 'vp dev',
+          build: 'tsc && vp build',
+          preview: 'vp preview',
+        },
+        devDependencies: {
+          ...(options.hasViteDependency ? { vite: 'catalog:' } : {}),
+          'vite-plus': 'catalog:',
+        },
+      },
+      null,
+      2,
+    ),
+  );
+  return { configFile, workspaceDir };
+}
+
+const validPnpmApp = createPnpmWorkspacePackage({ hasViteDependency: true });
+const invalidPnpmApp = createPnpmWorkspacePackage({ hasViteDependency: false });
+const validPnpmLibrary = createPnpmWorkspacePackage({
+  hasViteDependency: false,
+  packageDir: 'packages/utils',
+});
+fs.writeFileSync(
+  path.join(validPnpmLibrary.workspaceDir, 'packages/utils/package.json'),
+  JSON.stringify(
+    {
+      name: 'utils',
+      scripts: {
+        dev: 'vp pack --watch',
+        build: 'vp pack',
+      },
+      devDependencies: {
+        'vite-plus': 'catalog:',
+      },
+    },
+    null,
+    2,
+  ),
+);
+
+new RuleTester({
+  languageOptions: {
+    sourceType: 'module',
+  },
+}).run(REQUIRE_PNPM_VITE_ALIAS_RULE_NAME, requirePnpmViteAliasRule, {
+  valid: [
+    {
+      code: `import { defineConfig } from 'vite-plus';\n\nexport default defineConfig({});`,
+      filename: validPnpmApp.configFile,
+    },
+    {
+      code: `import { defineConfig } from 'vite-plus';\n\nexport default defineConfig({});`,
+      filename: validPnpmLibrary.configFile,
+    },
+    {
+      code: `export const app = true;`,
+      filename: path.join(path.dirname(invalidPnpmApp.configFile), 'src/main.ts'),
+    },
+  ],
+  invalid: [
+    {
+      code: `import { defineConfig } from 'vite-plus';\n\nexport default defineConfig({});`,
+      errors: [{ messageId: 'requirePnpmViteAlias' }],
+      filename: invalidPnpmApp.configFile,
     },
   ],
 });

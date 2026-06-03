@@ -34,7 +34,8 @@ export default defineConfig({
       "builtin": true
     },
     "rules": {
-      "vite-plus/prefer-vite-plus-imports": "error"
+      "vite-plus/prefer-vite-plus-imports": "error",
+      "vite-plus/require-pnpm-vite-alias": "error"
     },
     "overrides": [
       {

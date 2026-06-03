@@ -1,0 +1,8 @@
+[1]> vp lint --fix apps/website/vite.config.ts # should fail when a pnpm Vite+ app is missing the direct vite alias
+apps/website/vite.config.ts:1:1: error vite-plus(require-pnpm-vite-alias): pnpm Vite+ application packages must keep a direct 'vite' dependency so the workspace override resolves to @voidzero-dev/vite-plus-core.
+
+> vp lint --fix apps/website-with-vite/vite.config.ts && echo 'website-with-vite passed' # should pass when the pnpm Vite+ app keeps the direct vite alias
+website-with-vite passed
+
+> vp lint --fix packages/utils/vite.config.ts && echo 'utils passed' # should ignore non-application packages
+utils passed

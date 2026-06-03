@@ -1,0 +1,14 @@
+{
+  "name": "utils",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "build": "vp pack",
+    "dev": "vp pack --watch",
+    "test": "vp test",
+    "check": "vp check"
+  },
+  "devDependencies": {
+    "vite-plus": "catalog:"
+  }
+}

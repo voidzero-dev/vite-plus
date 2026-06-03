@@ -133,6 +133,7 @@ export default defineConfig({
     ],
     rules: {
       "vite-plus/prefer-vite-plus-imports": "error",
+      "vite-plus/require-pnpm-vite-alias": "error",
     },
   },
   plugins: [react()],

@@ -6,6 +6,8 @@ export const VITE_PLUS_OXLINT_PLUGIN_NAME = VITE_PLUS_NAME;
 export const VITE_PLUS_OXLINT_PLUGIN_SPECIFIER = `${VITE_PLUS_NAME}/oxlint-plugin`;
 export const PREFER_VITE_PLUS_IMPORTS_RULE_NAME = 'prefer-vite-plus-imports';
 export const PREFER_VITE_PLUS_IMPORTS_RULE = `${VITE_PLUS_OXLINT_PLUGIN_NAME}/${PREFER_VITE_PLUS_IMPORTS_RULE_NAME}`;
+export const REQUIRE_PNPM_VITE_ALIAS_RULE_NAME = 'require-pnpm-vite-alias';
+export const REQUIRE_PNPM_VITE_ALIAS_RULE = `${VITE_PLUS_OXLINT_PLUGIN_NAME}/${REQUIRE_PNPM_VITE_ALIAS_RULE_NAME}`;
 
 type JsPluginEntry = NonNullable<OxlintConfig['jsPlugins']>[number];
 
@@ -35,8 +37,10 @@ export function ensureVitePlusImportRuleDefaults<
   }
 
   const rules = isRuleRecord(config.rules) ? { ...config.rules } : {};
-  if (!(PREFER_VITE_PLUS_IMPORTS_RULE in rules)) {
-    rules[PREFER_VITE_PLUS_IMPORTS_RULE] = 'error';
+  for (const rule of [PREFER_VITE_PLUS_IMPORTS_RULE, REQUIRE_PNPM_VITE_ALIAS_RULE]) {
+    if (!(rule in rules)) {
+      rules[rule] = 'error';
+    }
   }
 
   return {

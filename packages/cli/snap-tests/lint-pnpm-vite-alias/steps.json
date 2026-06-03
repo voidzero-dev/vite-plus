@@ -1,0 +1,7 @@
+{
+  "commands": [
+    "vp lint --fix apps/website/vite.config.ts # should fail when a pnpm Vite+ app is missing the direct vite alias",
+    "vp lint --fix apps/website-with-vite/vite.config.ts && echo 'website-with-vite passed' # should pass when the pnpm Vite+ app keeps the direct vite alias",
+    "vp lint --fix packages/utils/vite.config.ts && echo 'utils passed' # should ignore non-application packages"
+  ]
+}

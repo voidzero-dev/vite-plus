@@ -14,7 +14,8 @@ export default {
   lint: {
     "rules": {
       "no-unused-vars": "error",
-      "vite-plus/prefer-vite-plus-imports": "error"
+      "vite-plus/prefer-vite-plus-imports": "error",
+      "vite-plus/require-pnpm-vite-alias": "error"
     },
     "options": {
       "typeAware": true,

@@ -2,6 +2,8 @@
 
 `vp lint` and `vp check` read Oxlint settings from the `lint` block in `vite.config.ts`. See [Oxlint's configuration](https://oxc.rs/docs/guide/usage/linter/config.html) for details.
 
+Vite+ also enables a small set of [Vite+ Oxlint rules](/config/lint-rules) for project conventions that are specific to the Vite+ toolchain.
+
 ## Example
 
 ```ts [vite.config.ts]

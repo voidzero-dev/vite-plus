@@ -49,7 +49,8 @@ export default defineConfig({
     },
     "rules": {
       "survives/no-fiction": "warn",
-      "vite-plus/prefer-vite-plus-imports": "error"
+      "vite-plus/prefer-vite-plus-imports": "error",
+      "vite-plus/require-pnpm-vite-alias": "error"
     },
     "options": {
       "typeAware": true,
