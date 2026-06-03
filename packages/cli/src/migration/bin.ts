@@ -571,7 +571,8 @@ function showMigrationSummary(options: {
     report.mergedStagedConfigCount +
     report.inlinedLintStagedConfigCount +
     report.removedConfigCount +
-    report.tsdownImportCount;
+    report.tsdownImportCount +
+    report.wrappedPluginConfigCount;
 
   log(
     `${styleText('magenta', '◇')} ${updatedExistingVitePlus ? 'Updated' : 'Migrated'} ${accent(projectLabel)}${
@@ -610,6 +611,11 @@ function showMigrationSummary(options: {
   }
   if (report.nodeVersionFileMigrated) {
     log(`${styleText('gray', '•')} Node version manager file migrated to .node-version`);
+  }
+  if (report.wrappedPluginConfigCount > 0) {
+    log(
+      `${styleText('gray', '•')} Inline Vite plugins wrapped with lazyPlugins for check/lint/fmt`,
+    );
   }
   if (report.gitHooksConfigured) {
     log(`${styleText('gray', '•')} Git hooks configured`);

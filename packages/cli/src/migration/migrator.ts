@@ -16,6 +16,7 @@ import {
   rewritePrettier,
   rewriteScripts,
   rewriteImportsInDirectory,
+  wrapLazyPlugins,
   type DownloadPackageManagerResult,
 } from '../../binding/index.js';
 import {
@@ -1157,8 +1158,9 @@ export function rewriteStandaloneProject(
   injectLintTypeCheckDefaults(projectPath, silent, report);
   injectFmtDefaults(projectPath, silent, report);
   mergeTsdownConfigFile(projectPath, silent, report);
-  // rewrite imports in all TypeScript/JavaScript files
+  // rewrite imports in all TypeScript/JavaScript files before lazy plugin import merging
   rewriteAllImports(projectPath, silent, report);
+  wrapLazyPluginsInViteConfig(projectPath, silent, report);
   // set package manager
   setPackageManager(projectPath, workspaceInfo.downloadPackageManager);
 }
@@ -1211,6 +1213,7 @@ export function rewriteMonorepo(
       report,
       catalogDependencyResolver,
       workspaceContext,
+      true,
     );
   }
 
@@ -1223,8 +1226,12 @@ export function rewriteMonorepo(
   injectLintTypeCheckDefaults(workspaceInfo.rootDir, silent, report);
   injectFmtDefaults(workspaceInfo.rootDir, silent, report);
   mergeTsdownConfigFile(workspaceInfo.rootDir, silent, report);
-  // rewrite imports in all TypeScript/JavaScript files
+  // rewrite imports in all TypeScript/JavaScript files before lazy plugin import merging
   rewriteAllImports(workspaceInfo.rootDir, silent, report);
+  wrapLazyPluginsInViteConfig(workspaceInfo.rootDir, silent, report);
+  for (const pkg of workspaceInfo.packages) {
+    wrapLazyPluginsInViteConfig(path.join(workspaceInfo.rootDir, pkg.path), silent, report);
+  }
   // set package manager
   setPackageManager(workspaceInfo.rootDir, workspaceInfo.downloadPackageManager);
 }
@@ -1246,6 +1253,7 @@ export function rewriteMonorepoProject(
   report?: MigrationReport,
   catalogDependencyResolver?: CatalogDependencyResolver,
   workspaceContext?: { rootDir: string; packages: WorkspacePackage[] },
+  deferLazyPluginWrapping = false,
 ): void {
   cleanupDeprecatedTsconfigOptions(projectPath, silent, report);
   rewriteTsconfigTypes(projectPath, silent, report);
@@ -1287,6 +1295,10 @@ export function rewriteMonorepoProject(
     if (mergeStagedConfigToViteConfig(projectPath, extractedStagedConfig, silent, report)) {
       removeLintStagedFromPackageJson(packageJsonPath);
     }
+  }
+
+  if (!deferLazyPluginWrapping) {
+    wrapLazyPluginsInViteConfig(projectPath, silent, report);
   }
 }
 
@@ -1870,6 +1882,7 @@ function rewriteRootWorkspacePackageJson(
     undefined,
     catalogDependencyResolver,
     packages ? { rootDir: projectPath, packages } : undefined,
+    true,
   );
 }
 
@@ -2747,6 +2760,37 @@ export function hasStagedConfigInViteConfig(projectPath: string): boolean {
   const viteConfigPath = path.join(projectPath, configs.viteConfig);
   const content = fs.readFileSync(viteConfigPath, 'utf8');
   return /\bstaged\s*:/.test(content);
+}
+
+/**
+ * Wrap safe inline Vite plugin arrays with lazyPlugins so check/lint/fmt do not
+ * eagerly execute plugin factories while loading vite.config.ts.
+ */
+function wrapLazyPluginsInViteConfig(
+  projectPath: string,
+  silent = false,
+  report?: MigrationReport,
+): void {
+  const configs = detectConfigs(projectPath);
+  if (!configs.viteConfig) {
+    return;
+  }
+
+  const viteConfigPath = path.join(projectPath, configs.viteConfig);
+  const result = wrapLazyPlugins(viteConfigPath);
+  if (!result.updated) {
+    return;
+  }
+
+  fs.writeFileSync(viteConfigPath, result.content);
+  if (report) {
+    report.wrappedPluginConfigCount++;
+  }
+  if (!silent) {
+    prompts.log.success(
+      `✔ Wrapped inline Vite plugins with lazyPlugins in ${displayRelative(viteConfigPath)}`,
+    );
+  }
 }
 
 /**
