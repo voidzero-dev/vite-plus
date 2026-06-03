@@ -271,7 +271,10 @@ static RE_REQUIRE_CALL: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r#"\brequire\s*\("#).unwrap());
 
 static RE_LOCAL_LAZY_PLUGINS_BINDING: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"(?m)^\s*(?:const|let|var|function|class)\s+lazyPlugins\b"#).unwrap()
+    Regex::new(
+        r#"(?m)^\s*(?:export\s+(?:default\s+)?)?(?:(?:const|let|var|class)\s+lazyPlugins\b|(?:async\s+)?function\s+lazyPlugins\b)"#,
+    )
+    .unwrap()
 });
 
 fn has_conflicting_lazy_plugins_binding(content: &str) -> bool {
@@ -1634,6 +1637,40 @@ export default defineConfig({
         let vite_config = r#"import { defineConfig } from 'vite-plus';
 
 const lazyPlugins = [react()];
+
+export default defineConfig({
+  plugins: [react()],
+});"#;
+
+        let result = wrap_lazy_plugins_content(vite_config, None).unwrap();
+
+        assert!(!result.updated);
+        assert_eq!(result.content, vite_config);
+    }
+
+    #[test]
+    fn test_wrap_lazy_plugins_skips_conflicting_exported_local_binding() {
+        let vite_config = r#"import { defineConfig } from 'vite-plus';
+
+export const lazyPlugins = [react()];
+
+export default defineConfig({
+  plugins: [react()],
+});"#;
+
+        let result = wrap_lazy_plugins_content(vite_config, None).unwrap();
+
+        assert!(!result.updated);
+        assert_eq!(result.content, vite_config);
+    }
+
+    #[test]
+    fn test_wrap_lazy_plugins_skips_conflicting_exported_function_binding() {
+        let vite_config = r#"import { defineConfig } from 'vite-plus';
+
+export async function lazyPlugins() {
+  return [react()];
+}
 
 export default defineConfig({
   plugins: [react()],
