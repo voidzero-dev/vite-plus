@@ -1,14 +1,15 @@
 > vp migrate --no-interactive # migration should merge vite.config.ts and remove oxlintrc and oxfmtrc
 ◇ Migrated . to Vite+
 • Node <semver>  pnpm <semver>
-• 3 config updates applied, 1 file had imports rewritten
+• 4 config updates applied, 1 file had imports rewritten
+• Inline Vite plugins wrapped with lazyPlugins for check/lint/fmt
 
 > cat vite.config.ts # check vite.config.ts
 import { join } from 'node:path';
 
 import react from '@vitejs/plugin-react';
 import { playwright } from 'vite-plus/test/browser-playwright';
-import { defineConfig } from 'vite-plus';
+import { defineConfig, lazyPlugins } from 'vite-plus';
 
 export default defineConfig({
   staged: {
@@ -37,7 +38,7 @@ export default defineConfig({
       }
     ]
   },
-  plugins: [react()],
+  plugins: lazyPlugins(() => [react()]),
   test: {
     dir: join(import.meta.dirname, 'test'),
     browser: {

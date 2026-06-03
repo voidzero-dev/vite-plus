@@ -53,7 +53,7 @@ test.each(['dev', 'build', 'test', 'preview'])(
   },
 );
 
-test.each(['lint', 'fmt', 'check', 'pack', 'install', 'run'])(
+test.each(['lint', 'fmt', 'check', 'staged', 'pack', 'install', 'run'])(
   'lazyPlugins returns undefined when VP_COMMAND is %s',
   (cmd) => {
     process.env.VP_COMMAND = cmd;

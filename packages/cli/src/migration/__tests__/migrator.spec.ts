@@ -20,6 +20,7 @@ const {
   rewritePackageJson,
   rewriteStandaloneProject,
   rewriteMonorepo,
+  rewriteMonorepoProject,
   parseNvmrcVersion,
   detectNodeVersionManagerFile,
   migrateNodeVersionManagerFile,
@@ -1725,6 +1726,135 @@ describe('framework shim', () => {
       expect(content).toContain("'@other'");
       expect(content).not.toContain('@your-org');
     });
+  });
+});
+
+describe('rewriteStandaloneProject — lazy plugin wrapping', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-lazy-plugins-'));
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'test', devDependencies: { vite: '^7.0.0' } }),
+    );
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('wraps standalone inline plugin arrays after import rewriting', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'vite.config.ts'),
+      `import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+
+export default defineConfig({
+  plugins: [react(), nitro({ rollupConfig: { external: [/^@sentry\\//] } })],
+});
+`,
+    );
+    const report = createMigrationReport();
+
+    rewriteStandaloneProject(
+      tmpDir,
+      makeWorkspaceInfo(tmpDir, PackageManager.pnpm),
+      true,
+      true,
+      report,
+    );
+
+    const viteConfig = fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8');
+    expect(viteConfig).toContain("import { defineConfig, lazyPlugins } from 'vite-plus'");
+    expect(viteConfig).toContain(
+      'plugins: lazyPlugins(() => [react(), nitro({ rollupConfig: { external: [/^@sentry\\//] } })])',
+    );
+    expect(viteConfig).not.toContain('plugins: [react(), nitro(');
+    expect(report.wrappedPluginConfigCount).toBe(1);
+  });
+
+  it('leaves unsupported plugin expressions unchanged', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'vite.config.ts'),
+      `import { defineConfig } from 'vite-plus';
+
+const plugins = [react()];
+
+export default defineConfig({
+  plugins,
+});
+`,
+    );
+    const report = createMigrationReport();
+
+    rewriteStandaloneProject(
+      tmpDir,
+      makeWorkspaceInfo(tmpDir, PackageManager.pnpm),
+      true,
+      true,
+      report,
+    );
+
+    const viteConfig = fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8');
+    expect(viteConfig).toContain('plugins,');
+    expect(viteConfig).not.toContain('lazyPlugins');
+    expect(report.wrappedPluginConfigCount).toBe(0);
+  });
+
+  it('wraps direct monorepo project rewrites used by create-monorepo flows', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'vite.config.ts'),
+      `import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  plugins: [react()],
+});
+`,
+    );
+    const report = createMigrationReport();
+
+    rewriteMonorepoProject(tmpDir, PackageManager.pnpm, true, true, report);
+
+    const viteConfig = fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8');
+    expect(viteConfig).toContain("import { defineConfig, lazyPlugins } from 'vite-plus'");
+    expect(viteConfig).toContain('plugins: lazyPlugins(() => [react()])');
+    expect(report.wrappedPluginConfigCount).toBe(1);
+  });
+
+  it('wraps package-level inline plugin arrays in monorepos', () => {
+    const appDir = path.join(tmpDir, 'apps', 'web');
+    fs.mkdirSync(appDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'root', workspaces: ['apps/*'], devDependencies: { vite: '^7.0.0' } }),
+    );
+    fs.writeFileSync(
+      path.join(appDir, 'package.json'),
+      JSON.stringify({ name: 'web', devDependencies: { vite: '^7.0.0' } }),
+    );
+    fs.writeFileSync(
+      path.join(appDir, 'vite.config.ts'),
+      `import { defineConfig } from 'vite';
+
+export default defineConfig({
+  plugins: [react()],
+});
+`,
+    );
+    const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.pnpm);
+    workspaceInfo.isMonorepo = true;
+    workspaceInfo.workspacePatterns = ['apps/*'];
+    workspaceInfo.parentDirs = ['apps'];
+    workspaceInfo.packages = [{ name: 'web', path: 'apps/web', isTemplatePackage: false }];
+    const report = createMigrationReport();
+
+    rewriteMonorepo(workspaceInfo, true, true, report);
+
+    const viteConfig = fs.readFileSync(path.join(appDir, 'vite.config.ts'), 'utf8');
+    expect(viteConfig).toContain("import { defineConfig, lazyPlugins } from 'vite-plus'");
+    expect(viteConfig).toContain('plugins: lazyPlugins(() => [react()])');
+    expect(report.wrappedPluginConfigCount).toBe(1);
   });
 });
 
