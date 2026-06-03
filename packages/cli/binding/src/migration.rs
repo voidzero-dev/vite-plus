@@ -191,6 +191,21 @@ pub fn merge_tsdown_config(
     })
 }
 
+/// Wrap safe inline `plugins: [...]` arrays in recognized Vite config objects
+/// with `lazyPlugins(() => [...])` and add a `lazyPlugins` import from
+/// `vite-plus` when needed.
+#[napi]
+pub fn wrap_lazy_plugins(vite_config_path: String) -> Result<MergeJsonConfigResult> {
+    let result = vite_migration::wrap_lazy_plugins(Path::new(&vite_config_path))
+        .map_err(anyhow::Error::from)?;
+
+    Ok(MergeJsonConfigResult {
+        content: result.content,
+        updated: result.updated,
+        uses_function_callback: result.uses_function_callback,
+    })
+}
+
 /// Rewrite imports in all TypeScript/JavaScript files under a directory
 ///
 /// This function finds all TypeScript and JavaScript files in the specified directory
