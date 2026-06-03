@@ -323,7 +323,11 @@ fn is_recognized_config_object_for_lazy_plugins<D: Doc>(object_node: &Node<'_, D
     let Some(parent) = object_node.parent() else { return false };
     match parent.kind().as_ref() {
         "export_statement" => true,
-        "satisfies_expression" => parent.parent().is_some_and(|p| p.kind() == "export_statement"),
+        "satisfies_expression" => parent.parent().is_some_and(|p| {
+            p.kind() == "export_statement"
+                || (p.kind() == "arguments"
+                    && p.parent().is_some_and(|c| is_define_config_call(&c)))
+        }),
         "arguments" => parent.parent().is_some_and(|c| is_define_config_call(&c)),
         "parenthesized_expression" => is_define_config_arrow_body(&parent),
         "return_statement" => is_direct_return_in_define_config_callback(&parent),
@@ -1695,6 +1699,27 @@ export default defineConfig({
 
         assert!(!result.updated);
         assert_eq!(result.content, vite_config);
+    }
+
+    #[test]
+    fn test_wrap_lazy_plugins_handles_satisfies_inside_define_config() {
+        let vite_config = r#"import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  plugins: [react()],
+} satisfies UserConfig);"#;
+
+        let result = wrap_lazy_plugins_content(vite_config, None).unwrap();
+
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { defineConfig, lazyPlugins } from 'vite-plus';
+
+export default defineConfig({
+  plugins: lazyPlugins(() => [react()]),
+} satisfies UserConfig);"#
+        );
     }
 
     #[test]
