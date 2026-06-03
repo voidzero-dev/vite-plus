@@ -284,6 +284,10 @@ static RE_DESTRUCTURED_LAZY_PLUGINS_BINDING: LazyLock<Regex> = LazyLock::new(|| 
     .unwrap()
 });
 
+static RE_MULTI_DECLARATOR_LAZY_PLUGINS_BINDING: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"(?ms)^\s*(?:export\s+)?(?:const|let|var)\s+[^;]*,\s*lazyPlugins\b"#).unwrap()
+});
+
 fn has_conflicting_lazy_plugins_binding(content: &str) -> bool {
     let grep = SupportLang::TypeScript.ast_grep(content);
     let root = grep.root();
@@ -303,6 +307,7 @@ fn has_conflicting_lazy_plugins_binding(content: &str) -> bool {
 
     RE_LOCAL_LAZY_PLUGINS_BINDING.is_match(content)
         || RE_DESTRUCTURED_LAZY_PLUGINS_BINDING.is_match(content)
+        || RE_MULTI_DECLARATOR_LAZY_PLUGINS_BINDING.is_match(content)
 }
 
 fn import_binds_lazy_plugins(import_statement: &str) -> bool {
@@ -1649,6 +1654,39 @@ export default defineConfig({
         let vite_config = r#"import { defineConfig } from 'vite-plus';
 
 const lazyPlugins = [react()];
+
+export default defineConfig({
+  plugins: [react()],
+});"#;
+
+        let result = wrap_lazy_plugins_content(vite_config, None).unwrap();
+
+        assert!(!result.updated);
+        assert_eq!(result.content, vite_config);
+    }
+
+    #[test]
+    fn test_wrap_lazy_plugins_skips_conflicting_multi_declarator_binding() {
+        let vite_config = r#"import { defineConfig } from 'vite-plus';
+
+const other = 0, lazyPlugins = makeHelper();
+
+export default defineConfig({
+  plugins: [react()],
+});"#;
+
+        let result = wrap_lazy_plugins_content(vite_config, None).unwrap();
+
+        assert!(!result.updated);
+        assert_eq!(result.content, vite_config);
+    }
+
+    #[test]
+    fn test_wrap_lazy_plugins_skips_conflicting_multiline_multi_declarator_binding() {
+        let vite_config = r#"import { defineConfig } from 'vite-plus';
+
+const other = 0,
+  lazyPlugins = makeHelper();
 
 export default defineConfig({
   plugins: [react()],
