@@ -3,8 +3,8 @@
 use std::{
     collections::{HashMap, HashSet},
     io::{IsTerminal, Read, Write},
-    process::Stdio,
-    time::Duration,
+    process::{self, Stdio},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use futures::{StreamExt, stream::FuturesUnordered};
@@ -338,12 +338,7 @@ pub async fn install(
 
         // 4.5 Commit the install by discarding the backup and reporting the installed bins.
         if let Some(backup) = backup {
-            if let Err(error) = backup.discard().await {
-                if first_error.is_none() {
-                    first_error = Some(package_error(&package_name, error));
-                }
-                continue;
-            }
+            backup.discard().await;
         }
 
         // 4.6 Print success message
@@ -461,8 +456,7 @@ impl PackageBackup {
             return Ok(None);
         }
 
-        let backup_dir = get_tmp_dir()?.join("packages").join(package_name);
-        remove_dir_all_if_exists(&backup_dir).await?;
+        let backup_dir = unique_backup_dir(package_name)?;
         if let Some(parent) = backup_dir.parent() {
             tokio::fs::create_dir_all(parent).await?;
         }
@@ -487,9 +481,29 @@ impl PackageBackup {
         Ok(())
     }
 
-    async fn discard(self) -> Result<(), Error> {
-        remove_dir_all_if_exists(&self.backup_dir).await
+    async fn discard(self) {
+        if let Err(error) = remove_dir_all_if_exists(&self.backup_dir).await {
+            tracing::warn!(
+                "Failed to remove old global package backup at {}: {}",
+                self.backup_dir.as_path().display(),
+                error
+            );
+        }
     }
+}
+
+fn unique_backup_dir(package_name: &str) -> Result<AbsolutePathBuf, Error> {
+    let base = get_tmp_dir()?.join("packages").join(package_name);
+    let package_dir_name =
+        base.as_path().file_name().and_then(|name| name.to_str()).unwrap_or("package");
+    let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos();
+    let backup_name = format!("{package_dir_name}.{}.{}.old", process::id(), timestamp);
+
+    let mut backup_path = base.as_path().to_path_buf();
+    backup_path.set_file_name(backup_name);
+
+    AbsolutePathBuf::new(backup_path)
+        .ok_or_else(|| Error::ConfigError("Invalid global package backup path".into()))
 }
 
 async fn cleanup_failed_install(
@@ -1020,6 +1034,48 @@ mod tests {
                 "tsserver.exe shim should be removed"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn test_package_backup_uses_unique_tmp_dir_for_scoped_package() {
+        use tempfile::TempDir;
+        use vite_path::AbsolutePathBuf;
+
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = temp_dir.path().to_path_buf();
+        let _env_guard = vite_shared::EnvConfig::test_guard(
+            vite_shared::EnvConfig::for_test_with_home(&temp_path),
+        );
+
+        let package_dir =
+            AbsolutePathBuf::new(temp_path.join("packages").join("@scope").join("pkg")).unwrap();
+        tokio::fs::create_dir_all(&package_dir).await.unwrap();
+        tokio::fs::write(package_dir.join("marker").as_path(), "current").await.unwrap();
+
+        let stale_backup =
+            AbsolutePathBuf::new(temp_path.join("tmp").join("packages").join("@scope").join("pkg"))
+                .unwrap();
+        tokio::fs::create_dir_all(&stale_backup).await.unwrap();
+        tokio::fs::write(stale_backup.join("stale").as_path(), "locked").await.unwrap();
+
+        let backup = PackageBackup::create("@scope/pkg", &package_dir)
+            .await
+            .unwrap()
+            .expect("existing package should be backed up");
+
+        assert_ne!(backup.backup_dir.as_path(), stale_backup.as_path());
+        assert!(
+            stale_backup.join("stale").as_path().exists(),
+            "stale fixed backup should be left untouched"
+        );
+        assert!(
+            backup.backup_dir.join("marker").as_path().exists(),
+            "current package should be moved into the unique backup"
+        );
+        assert!(
+            !package_dir.as_path().exists(),
+            "original package directory should be moved out before reinstall"
+        );
     }
 
     #[test]
