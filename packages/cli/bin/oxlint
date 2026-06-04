@@ -19,7 +19,10 @@ const require = createRequire(import.meta.url);
 const oxlintMainPath = require.resolve('oxlint');
 const oxlintBin = join(dirname(dirname(oxlintMainPath)), 'bin', 'oxlint');
 
-// This allows oxlint to load vite.config.ts
-// For `vp check` and `vp lint`, it is injected by `merge_resolved_envs_with_version()` in `cli.rs`
+// This allows oxlint to load vite.config.ts.
+// For `vp check` and `vp lint`, VP_VERSION is injected by
+// `merge_resolved_envs_with_version()` in `cli.rs`, and VP_COMMAND is injected
+// by `SubcommandResolver::resolve()`.
 process.env.VP_VERSION = pkg.version;
+process.env.VP_COMMAND ??= 'lint';
 await import(pathToFileURL(oxlintBin).href);
