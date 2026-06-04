@@ -27,8 +27,7 @@ export function resolveWindowsTsgolintExecutable(
   let oxlintTsgolintPath = pathCandidates.find((p) => options.exists(p)) ?? '';
   if (!oxlintTsgolintPath && options.getRealpathCandidates) {
     try {
-      oxlintTsgolintPath =
-        options.getRealpathCandidates().find((p) => options.exists(p)) ?? '';
+      oxlintTsgolintPath = options.getRealpathCandidates().find((p) => options.exists(p)) ?? '';
     } catch {
       // realpath failed, fall through to default
     }
