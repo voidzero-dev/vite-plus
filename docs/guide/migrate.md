@@ -76,12 +76,12 @@ After the migration:
 
 - Confirm `vite` imports were rewritten to `vite-plus` where needed
 - Confirm `vitest` imports were rewritten to `vite-plus/test` where needed
-- On pnpm, keep the `vite` / `vitest` entries that `vp migrate` aliased to the Vite+ packages so the workspace override stays effective; with other package managers you can remove them once those rewrites are confirmed
+- On pnpm/aube, keep the `vite` / `vitest` entries that `vp migrate` aliased to the Vite+ packages so the workspace override stays effective; with other package managers you can remove them once those rewrites are confirmed
 - Move remaining tool-specific config into the appropriate blocks in `vite.config.ts`
 
 Command mapping to keep in mind:
 
-- `vp run <script>` is the equivalent of `pnpm run <script>`
+- `vp run <script>` is the equivalent of `pnpm run <script>` / `aube run <script>`
 - `vp test` runs the built-in test command, while `vp run test` runs the `test` script from `package.json`
 - `vp install`, `vp add`, and `vp remove` delegate through the package manager declared by `packageManager`
 - `vp dev`, `vp build`, `vp preview`, `vp lint`, `vp fmt`, `vp check`, and `vp pack` replace the corresponding standalone tools

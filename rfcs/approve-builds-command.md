@@ -44,9 +44,9 @@ A single Vite+ subcommand routes to the underlying package manager's idiomatic c
 
 ```bash
 # Works for all package managers
-vp pm approve-builds                          # interactive prompt (pnpm) / warn (bun, npm, yarn)
+vp pm approve-builds                          # interactive prompt (pnpm/aube) / warn (bun, npm, yarn)
 vp pm approve-builds esbuild fsevents         # approve listed packages
-vp pm approve-builds esbuild !core-js         # approve esbuild, deny core-js (pnpm only)
+vp pm approve-builds esbuild !core-js         # approve esbuild, deny core-js (pnpm/aube only)
 vp pm approve-builds --all                    # approve every pending package
 ```
 
@@ -61,8 +61,8 @@ vp pm approve-builds [PACKAGES...] [OPTIONS]
 **Positional arguments:**
 
 - `PACKAGES...`: One or more package names to approve.
-  - Prefix with `!` to deny (`!core-js`) — pnpm only; for bun this prints a warning explaining the model doesn't support denylisting and skips the denied entries.
-  - Omitting all positionals (and `--all`) launches **interactive mode** on pnpm; bun has no interactive picker so we print a `note` asking the user to pass package names explicitly.
+    - Prefix with `!` to deny (`!core-js`) — pnpm/aube only; for bun this prints a warning explaining the model doesn't support denylisting and skips the denied entries.
+    - Omitting all positionals (and `--all`) launches **interactive mode** on pnpm/aube; bun has no interactive picker so we print a `note` asking the user to pass package names explicitly.
 
 **Options:**
 
@@ -215,8 +215,8 @@ pub enum PmCommands {
 
     /// Approve dependency lifecycle scripts (install/postinstall) to run
     ApproveBuilds {
-        /// Packages to approve. Prefix with `!` to deny (pnpm only).
-        /// Omit to launch interactive mode (pnpm only).
+        /// Packages to approve. Prefix with `!` to deny (pnpm/aube only).
+        /// Omit to launch interactive mode (pnpm/aube only).
         packages: Vec<String>,
 
         /// Approve every package that is currently pending
@@ -410,9 +410,9 @@ impl ApproveBuildsCommand {
 - The two formats encode different semantics (`allowBuilds: { core-js: false }` has no bun analog).
 - Round-tripping between them on every command would mutate files the user doesn't expect.
 - Migrations between package managers are rare; on-demand conversion (e.g., a future `vp migrate` step) is the right place for that translation, not the day-to-day `approve-builds` command.
-- The pnpm-only `!pkg` deny syntax stays meaningful and isn't silently lost.
+- The pnpm/aube-only `!pkg` deny syntax stays meaningful and isn't silently lost.
 
-### 3. `!pkg` deny syntax: pnpm-only, surface a warning
+### 3. `!pkg` deny syntax: pnpm/aube-only, surface a warning
 
 **Decision**: Accept `!pkg` in positional args; for bun, print a `warn` naming the affected packages and continue with the approved ones.
 
@@ -744,17 +744,17 @@ Approve dependency lifecycle scripts (install/postinstall) to run
 Usage: vp pm approve-builds [OPTIONS] [PACKAGES]...
 
 Arguments:
-  [PACKAGES]...  Packages to approve. Prefix with `!` to deny (pnpm only).
-                 Omit all positionals to launch interactive mode (pnpm only).
+    [PACKAGES]...  Packages to approve. Prefix with `!` to deny (pnpm/aube only).
+                                 Omit all positionals to launch interactive mode (pnpm/aube only).
 
 Options:
       --all   Approve every package currently pending approval
   -h, --help  Print help
 
 Examples:
-  vp pm approve-builds                       # interactive prompt (pnpm)
+    vp pm approve-builds                       # interactive prompt (pnpm/aube)
   vp pm approve-builds esbuild fsevents      # approve specific packages
-  vp pm approve-builds esbuild !core-js      # approve esbuild, deny core-js (pnpm only)
+    vp pm approve-builds esbuild !core-js      # approve esbuild, deny core-js (pnpm/aube only)
   vp pm approve-builds --all                 # approve every pending package
 ```
 

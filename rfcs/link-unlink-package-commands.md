@@ -114,7 +114,7 @@ vp unlink
 vp unlink react
 vp unlink @types/node
 
-# Unlink in every workspace package (pnpm only)
+# Unlink in every workspace package (pnpm/aube only)
 vp unlink --recursive
 vp unlink -r
 ```
@@ -266,7 +266,7 @@ pub enum Commands {
         /// If empty, unlinks current package globally
         package: Option<String>,
 
-        /// Unlink in every workspace package (pnpm only)
+        /// Unlink in every workspace package (pnpm/aube only)
         #[arg(short = 'r', long)]
         recursive: bool,
 
@@ -729,9 +729,9 @@ $ vp link
 ### Phase 2: Advanced Features
 
 1. Support local directory linking
-2. Implement pnpm-specific `--dir` flag
+2. Implement pnpm/aube-specific `--dir` flag
 3. Add npm save flags support
-4. Handle workspace filtering (pnpm only)
+4. Handle workspace filtering (pnpm/aube only)
 
 ### Phase 3: Testing
 
@@ -859,7 +859,7 @@ Test cases:
 3. Link local directory
 4. Unlink current package
 5. Unlink specific package
-6. Unlink with --recursive (pnpm only)
+6. Unlink with --recursive (pnpm/aube only)
 7. Warning for unsupported --recursive on yarn/npm
 
 ## CLI Help Output
@@ -986,7 +986,7 @@ vp link ~/projects/my-monorepo/packages/shared-utils
 ### Monorepo Development
 
 ```bash
-# Unlink in all workspace packages (pnpm only)
+# Unlink in all workspace packages (pnpm/aube only)
 vp unlink --recursive             # Unlink current package from all workspaces
 vp unlink -r                      # Same as above (short form)
 ```

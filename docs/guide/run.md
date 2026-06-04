@@ -1,6 +1,6 @@
 # Run
 
-`vp run` runs `package.json` scripts and tasks defined in `vite.config.ts`. It works like `pnpm run`, with caching, dependency ordering, and workspace-aware execution built in.
+`vp run` runs `package.json` scripts and tasks defined in `vite.config.ts`. It works like `pnpm run` / `aube run`, with caching, dependency ordering, and workspace-aware execution built in.
 
 ::: tip
 `vpr` is available as a standalone shorthand for `vp run`. All examples below work with both `vp run` and `vpr`.
@@ -147,7 +147,7 @@ If `@my/app` depends on `@my/utils`, which depends on `@my/core`, this runs all 
 
 ### Filter (`--filter`)
 
-Select packages by name, directory, or glob pattern. The syntax matches pnpm's `--filter`:
+Select packages by name, directory, or glob pattern. The syntax matches pnpm/aube's `--filter`:
 
 ```bash
 # By name

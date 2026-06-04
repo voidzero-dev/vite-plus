@@ -24,6 +24,7 @@ import StackedBlock from './StackedBlock.vue';
         <StackedBlock :src="nodeIcon" alt="node" href="https://nodejs.org" />
         <div class="flex flex-wrap gap-2">
           <code>pnpm</code>
+          <code>aube</code>
           <code>npm</code>
           <code>yarn</code>
           <code>bun</code>

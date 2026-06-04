@@ -136,7 +136,7 @@ vp rebuild -- --update-binary
 
 `vp rebuild` is a shorthand for `vp pm rebuild`.
 
-With pnpm v10+ and aube, bare `vp rebuild` only rebuilds packages whose build scripts are listed in `onlyBuiltDependencies` (or approved via `pnpm approve-builds`); name the package explicitly to force a rebuild that bypasses the approval gate.
+With pnpm v10+ and aube, bare `vp rebuild` only rebuilds packages whose build scripts are listed in `onlyBuiltDependencies` (or approved via `vp pm approve-builds`); name the package explicitly to force a rebuild that bypasses the approval gate.
 
 #### Advanced
 

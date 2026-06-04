@@ -91,7 +91,7 @@ vp why react --parseable        # Parseable output
 
 # Workspace operations
 vp why react -r                 # Recursive across all workspaces
-vp why react --filter app       # Check in specific workspace (pnpm)
+vp why react --filter app       # Check in specific workspace (pnpm/aube/npm)
 
 # Dependency type filtering
 vp why react --prod             # Only production dependencies
@@ -101,7 +101,7 @@ vp why react --no-optional      # Exclude optional dependencies
 # Depth control
 vp why react --depth 3          # Limit tree depth to 3 levels
 
-# Custom finder (pnpm only)
+# Custom finder (pnpm/aube only)
 vp why react --find-by myFinder # Use finder function from .pnpmfile.cjs
 ```
 
@@ -131,24 +131,24 @@ We do not provide `why` feature for global packages managed by Vite+.
 | ------------------------- | ------------------------- | ----------------------- | ------------------- | ------------------------ | --------------- | --------------------------------------------------------------- |
 | `vp why <pkg>`            | `pnpm why <pkg>`          | `npm explain <pkg>`     | `yarn why <pkg>`    | `yarn why <pkg> --peers` | `bun why <pkg>` | Show why package is installed                                   |
 | `--json`                  | `--json`                  | `--json`                | `--json`            | `--json`                 | N/A             | JSON output format                                              |
-| `--long`                  | `--long`                  | N/A                     | N/A                 | N/A                      | N/A             | Verbose output (pnpm only)                                      |
-| `--parseable`             | `--parseable`             | N/A                     | N/A                 | N/A                      | N/A             | Parseable format (pnpm only)                                    |
+| `--long`                  | `--long`                  | N/A                     | N/A                 | N/A                      | N/A             | Verbose output (pnpm/aube only)                                 |
+| `--parseable`             | `--parseable`             | N/A                     | N/A                 | N/A                      | N/A             | Parseable format (pnpm/aube only)                               |
 | `-r, --recursive`         | `-r, --recursive`         | N/A                     | N/A                 | `--recursive`            | N/A             | Check across all workspaces                                     |
-| `--filter <pattern>`      | `--filter <pattern>`      | `--workspace <pattern>` | N/A                 | N/A                      | N/A             | Target specific workspace (pnpm/npm)                            |
-| `-w, --workspace-root`    | `-w`                      | N/A                     | N/A                 | N/A                      | N/A             | Check in workspace root (pnpm-specific)                         |
-| `-P, --prod`              | `-P, --prod`              | N/A                     | N/A                 | N/A                      | N/A             | Only production dependencies (pnpm only)                        |
-| `-D, --dev`               | `-D, --dev`               | N/A                     | N/A                 | N/A                      | N/A             | Only dev dependencies (pnpm only)                               |
-| `--depth <number>`        | `--depth <number>`        | N/A                     | N/A                 | N/A                      | `--depth`       | Limit tree depth (pnpm/bun)                                     |
-| `--no-optional`           | `--no-optional`           | N/A                     | `--ignore-optional` | N/A                      | N/A             | Exclude optional dependencies (pnpm only)                       |
+| `--filter <pattern>`      | `--filter <pattern>`      | `--workspace <pattern>` | N/A                 | N/A                      | N/A             | Target specific workspace (pnpm/aube/npm)                       |
+| `-w, --workspace-root`    | `-w`                      | N/A                     | N/A                 | N/A                      | N/A             | Check in workspace root (pnpm/aube-specific)                    |
+| `-P, --prod`              | `-P, --prod`              | N/A                     | N/A                 | N/A                      | N/A             | Only production dependencies (pnpm/aube only)                   |
+| `-D, --dev`               | `-D, --dev`               | N/A                     | N/A                 | N/A                      | N/A             | Only dev dependencies (pnpm/aube only)                          |
+| `--depth <number>`        | `--depth <number>`        | N/A                     | N/A                 | N/A                      | `--depth`       | Limit tree depth (pnpm/aube/bun)                                |
+| `--no-optional`           | `--no-optional`           | N/A                     | `--ignore-optional` | N/A                      | N/A             | Exclude optional dependencies (pnpm/aube only)                  |
 | `--exclude-peers`         | `--exclude-peers`         | N/A                     | N/A                 | Removes `--peers` flag   | N/A             | Exclude peer dependencies (yarn@2+ defaults to including peers) |
 | `--find-by <finder_name>` | `--find-by <finder_name>` | N/A                     | N/A                 | N/A                      | N/A             | Use finder function from .pnpmfile.cjs                          |
 
 **Note:**
 
 - npm uses `explain` as the primary command, `why` as alias, supports multiple packages
-- pnpm uses `why` as the primary command, supports multiple packages and glob patterns
+- pnpm/aube uses `why` as the primary command, supports multiple packages and glob patterns
 - yarn has `why` command in both v1 and v2+, but different output formats, only supports single package
-- pnpm has the most comprehensive filtering and output options
+- pnpm/aube has the most comprehensive filtering and output options
 - npm has simpler output focused on the dependency path
 - bun uses `bun why <pkg>` as a direct subcommand (not `bun pm why`); it provides a tree visualization of dependency relationships
 
@@ -297,11 +297,11 @@ pub enum Commands {
         #[arg(long)]
         json: bool,
 
-        /// Show extended information (pnpm only)
+        /// Show extended information (pnpm/aube only)
         #[arg(long)]
         long: bool,
 
-        /// Show parseable output (pnpm only)
+        /// Show parseable output (pnpm/aube only)
         #[arg(long)]
         parseable: bool,
 
@@ -309,39 +309,39 @@ pub enum Commands {
         #[arg(short = 'r', long)]
         recursive: bool,
 
-        /// Filter packages in monorepo (pnpm only)
+        /// Filter packages in monorepo (pnpm/aube only)
         #[arg(long, value_name = "PATTERN")]
         filter: Vec<String>,
 
-        /// Check in workspace root (pnpm only)
+        /// Check in workspace root (pnpm/aube only)
         #[arg(short = 'w', long)]
         workspace_root: bool,
 
-        /// Only production dependencies (pnpm only)
+        /// Only production dependencies (pnpm/aube only)
         #[arg(short = 'P', long)]
         prod: bool,
 
-        /// Only dev dependencies (pnpm only)
+        /// Only dev dependencies (pnpm/aube only)
         #[arg(short = 'D', long)]
         dev: bool,
 
-        /// Limit tree depth (pnpm only)
+        /// Limit tree depth (pnpm/aube only)
         #[arg(long)]
         depth: Option<u32>,
 
-        /// Exclude optional dependencies (pnpm only)
+        /// Exclude optional dependencies (pnpm/aube only)
         #[arg(long)]
         no_optional: bool,
 
-        /// Check globally installed packages (pnpm only)
+        /// Check globally installed packages (pnpm/aube only)
         #[arg(short = 'g', long)]
         global: bool,
 
-        /// Exclude peer dependencies (pnpm only)
+        /// Exclude peer dependencies (pnpm/aube only)
         #[arg(long)]
         exclude_peers: bool,
 
-        /// Use a finder function defined in .pnpmfile.cjs (pnpm only)
+        /// Use a finder function defined in .pnpmfile.cjs (pnpm/aube only)
         #[arg(long)]
         find_by: Option<String>,
 
@@ -532,7 +532,7 @@ impl PackageManager {
                 // Add packages (npm supports multiple packages)
                 args.extend_from_slice(options.packages);
 
-                // Warn about pnpm-specific flags
+                // Warn about pnpm/aube-specific flags
                 if options.long {
                     eprintln!("Warning: --long not supported by npm");
                 }
@@ -1072,7 +1072,7 @@ fixtures/why-test/
 Test cases:
 
 1. Basic why for single package
-2. Multiple packages (pnpm only)
+2. Multiple packages (pnpm/aube/npm/bun)
 3. JSON output
 4. Workspace-specific why
 5. Recursive workspace checking
@@ -1092,25 +1092,25 @@ Usage: vp why [OPTIONS] <PACKAGE>... [-- <PASS_THROUGH_ARGS>...]
 Aliases: explain
 
 Arguments:
-  <PACKAGE>...           Package(s) to check (required, pnpm/npm support multiple, yarn uses first)
+    <PACKAGE>...           Package(s) to check (required, pnpm/aube/npm support multiple, yarn uses first)
 
 Options:
   --json                 Output in JSON format
-  --long                 Show extended information (pnpm-specific)
-  --parseable            Show parseable output (pnpm-specific)
+    --long                 Show extended information (pnpm/aube-specific)
+    --parseable            Show parseable output (pnpm/aube-specific)
   -r, --recursive        Check recursively across all workspaces
-  --filter <PATTERN>     Filter packages in monorepo (pnpm-specific, can be used multiple times)
-  -w, --workspace-root   Check in workspace root (pnpm-specific)
-  -P, --prod             Only production dependencies (pnpm-specific)
-  -D, --dev              Only dev dependencies (pnpm-specific)
-  --depth <NUMBER>       Limit tree depth (pnpm-specific)
-  --no-optional          Exclude optional dependencies (pnpm-specific)
-  --exclude-peers        Exclude peer dependencies (pnpm/yarn@2+-specific)
-  --find-by <FINDER_NAME> Use a finder function defined in .pnpmfile.cjs (pnpm-specific)
+    --filter <PATTERN>     Filter packages in monorepo (pnpm/aube/npm-specific, can be used multiple times)
+    -w, --workspace-root   Check in workspace root (pnpm/aube-specific)
+    -P, --prod             Only production dependencies (pnpm/aube-specific)
+    -D, --dev              Only dev dependencies (pnpm/aube-specific)
+    --depth <NUMBER>       Limit tree depth (pnpm/aube/bun-specific)
+    --no-optional          Exclude optional dependencies (pnpm/aube-specific)
+    --exclude-peers        Exclude peer dependencies (pnpm/aube/yarn@2+-specific)
+    --find-by <FINDER_NAME> Use a finder function defined in .pnpmfile.cjs (pnpm/aube-specific)
   -h, --help             Print help
 
 Package Manager Behavior:
-  pnpm:    Shows complete dependency tree with all dependents
+    pnpm/aube: Shows complete dependency tree with all dependents
   npm:     Shows dependency path explaining installation
   yarn@1:  Shows why package exists with disk size info
   yarn@2+: Shows dependency tree in streamlined format
@@ -1118,14 +1118,14 @@ Package Manager Behavior:
 Examples:
   vp why react                       # Show why react is installed
   vp explain lodash                  # Same as above (alias)
-  vp why react react-dom             # Check multiple packages (pnpm/npm)
+    vp why react react-dom             # Check multiple packages (pnpm/aube/npm)
   vp why react --json                # JSON output
-  vp why react --long                # Verbose output (pnpm)
+    vp why react --long                # Verbose output (pnpm/aube)
   vp why react -r                    # Recursive across workspaces
-  vp why react --filter app          # Check in specific workspace (pnpm)
-  vp why react --prod                # Only production deps (pnpm)
-  vp why react --depth 3             # Limit tree depth (pnpm)
-  vp why react --find-by myFinder    # Use custom finder (pnpm)
+    vp why react --filter app          # Check in specific workspace (pnpm/aube/npm)
+    vp why react --prod                # Only production deps (pnpm/aube)
+    vp why react --depth 3             # Limit tree depth (pnpm/aube/bun)
+    vp why react --find-by myFinder    # Use custom finder (pnpm/aube)
 ```
 
 ## Performance Considerations
@@ -1237,18 +1237,18 @@ vp why package --prod --json
 
 ## Package Manager Compatibility
 
-| Feature          | pnpm              | npm              | yarn@1           | yarn@2+          | bun              | Notes                   |
+| Feature          | pnpm/aube         | npm              | yarn@1           | yarn@2+          | bun              | Notes                   |
 | ---------------- | ----------------- | ---------------- | ---------------- | ---------------- | ---------------- | ----------------------- |
 | Basic command    | `why`             | `explain`        | `why`            | `why`            | `why`            | npm uses different name |
-| Multiple pkgs    | ✅ Supported      | ✅ Supported     | ❌ Single only   | ❌ Single only   | ❌ Single only   | pnpm and npm            |
-| Glob patterns    | ✅ Supported      | ❌ Not supported | ❌ Not supported | ❌ Not supported | ❌ Not supported | pnpm only               |
-| JSON output      | ✅ `--json`       | ✅ `--json`      | ❌ Not supported | ❌ Not supported | ❌ Not supported | pnpm and npm only       |
-| Long output      | ✅ `--long`       | ❌ Not supported | ❌ Not supported | ❌ Not supported | ❌ Not supported | pnpm only               |
-| Parseable        | ✅ `--parseable`  | ❌ Not supported | ❌ Not supported | ❌ Not supported | ❌ Not supported | pnpm only               |
-| Recursive        | ✅ `-r`           | ❌ Not supported | ❌ Not supported | ✅ `--recursive` | ❌ Not supported | pnpm and yarn@2+        |
-| Workspace filter | ✅ `--filter`     | ✅ `--workspace` | ❌ Not supported | ❌ Not supported | ❌ Not supported | pnpm and npm            |
-| Dep type filter  | ✅ `--prod/--dev` | ❌ Not supported | ❌ Not supported | ❌ Not supported | ❌ Not supported | pnpm only               |
-| Depth limit      | ✅ `--depth`      | ❌ Not supported | ❌ Not supported | ❌ Not supported | ✅ `--depth`     | pnpm and bun            |
+| Multiple pkgs    | ✅ Supported      | ✅ Supported     | ❌ Single only   | ❌ Single only   | ❌ Single only   | pnpm/aube and npm       |
+| Glob patterns    | ✅ Supported      | ❌ Not supported | ❌ Not supported | ❌ Not supported | ❌ Not supported | pnpm/aube only          |
+| JSON output      | ✅ `--json`       | ✅ `--json`      | ❌ Not supported | ❌ Not supported | ❌ Not supported | pnpm/aube and npm only  |
+| Long output      | ✅ `--long`       | ❌ Not supported | ❌ Not supported | ❌ Not supported | ❌ Not supported | pnpm/aube only          |
+| Parseable        | ✅ `--parseable`  | ❌ Not supported | ❌ Not supported | ❌ Not supported | ❌ Not supported | pnpm/aube only          |
+| Recursive        | ✅ `-r`           | ❌ Not supported | ❌ Not supported | ✅ `--recursive` | ❌ Not supported | pnpm/aube and yarn@2+   |
+| Workspace filter | ✅ `--filter`     | ✅ `--workspace` | ❌ Not supported | ❌ Not supported | ❌ Not supported | pnpm/aube and npm       |
+| Dep type filter  | ✅ `--prod/--dev` | ❌ Not supported | ❌ Not supported | ❌ Not supported | ❌ Not supported | pnpm/aube only          |
+| Depth limit      | ✅ `--depth`      | ❌ Not supported | ❌ Not supported | ❌ Not supported | ✅ `--depth`     | pnpm/aube and bun       |
 | Tree view        | ❌ Not supported  | ❌ Not supported | ❌ Not supported | ❌ Not supported | ✅ Built-in      | bun shows tree view     |
 
 ## Future Enhancements

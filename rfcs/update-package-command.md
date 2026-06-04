@@ -2,7 +2,7 @@
 
 ## Summary
 
-Add `vp update` (alias: `vp up`) command that automatically adapts to the detected package manager (pnpm/yarn/npm/bun) for updating packages to their latest versions within the specified semver range, with support for updating to absolute latest versions, workspace-aware operations, and interactive mode.
+Add `vp update` (alias: `vp up`) command that automatically adapts to the detected package manager (pnpm/aube/yarn/npm/bun) for updating packages to their latest versions within the specified semver range, with support for updating to absolute latest versions, workspace-aware operations, and interactive mode.
 
 ## Motivation
 
@@ -88,7 +88,7 @@ vp update react --latest --filter "app*"  # Update in multiple packages
 vp update -r                              # Update in all workspace packages
 vp update -g typescript                   # Update global package
 
-# Interactive mode (pnpm only)
+# Interactive mode (pnpm/aube only)
 vp update --interactive
 vp up -i
 
@@ -108,24 +108,24 @@ vp update react --latest --no-save        # Test latest version without saving
 - https://docs.npmjs.com/cli/v11/commands/npm-update
 - https://bun.sh/docs/cli/update
 
-| Vite+ Flag             | pnpm                        | yarn@1               | yarn@2+                                     | npm                            | bun                    | Description                                                |
-| ---------------------- | --------------------------- | -------------------- | ------------------------------------------- | ------------------------------ | ---------------------- | ---------------------------------------------------------- |
-| `[packages]`           | `update [packages]`         | `upgrade [packages]` | `up [packages]`                             | `update [packages]`            | `update [packages]`    | Update specific packages (or all if omitted)               |
-| `-L, --latest`         | `--latest` / `-L`           | `--latest`           | N/A (default behavior)                      | N/A                            | `--latest`             | Update to latest version (ignore semver range)             |
-| `-g, --global`         | N/A                         | N/A                  | N/A                                         | `--global` / `-g`              | N/A                    | Update global packages                                     |
-| `-r, --recursive`      | `-r, --recursive`           | N/A                  | `--recursive` / `-R`                        | `--workspaces`                 | `--recursive` / `-r`   | Update recursively in all workspace packages               |
-| `--filter <pattern>`   | `--filter <pattern> update` | N/A                  | `workspaces foreach --include <pattern> up` | `update --workspace <pattern>` | N/A                    | Target specific workspace package(s)                       |
-| `-w, --workspace-root` | `-w`                        | N/A                  | N/A                                         | `--include-workspace-root`     | N/A                    | Include workspace root                                     |
-| `-D, --dev`            | `--dev` / `-D`              | N/A                  | N/A                                         | `--include=dev`                | N/A                    | Update only devDependencies                                |
-| `-P, --prod`           | `--prod` / `-P`             | N/A                  | N/A                                         | `--include=prod`               | `--production`         | Update only dependencies and optionalDependencies          |
-| `-i, --interactive`    | `--interactive` / `-i`      | N/A                  | `--interactive` / `-i`                      | N/A                            | `--interactive` / `-i` | Show outdated packages and choose which to update          |
-| `--no-optional`        | `--no-optional`             | N/A                  | N/A                                         | `--no-optional`                | `--omit optional`      | Don't update optionalDependencies                          |
-| `--no-save`            | `--no-save`                 | N/A                  | N/A                                         | `--no-save`                    | `--no-save`            | Update lockfile only, don't modify package.json            |
-| `--workspace`          | `--workspace`               | N/A                  | N/A                                         | N/A                            | N/A                    | Only update if package exists in workspace (pnpm-specific) |
+| Vite+ Flag             | pnpm                        | aube                       | yarn@1               | yarn@2+                                     | npm                            | bun                    | Description                                                |
+| ---------------------- | --------------------------- | -------------------------- | -------------------- | ------------------------------------------- | ------------------------------ | ---------------------- | ---------------------------------------------------------- |
+| `[packages]`           | `update [packages]`         | `update [packages]`        | `upgrade [packages]` | `up [packages]`                             | `update [packages]`            | `update [packages]`    | Update specific packages (or all if omitted)               |
+| `-L, --latest`         | `--latest` / `-L`           | `--latest`                 | `--latest`           | N/A (default behavior)                      | N/A                            | `--latest`             | Update to latest version (ignore semver range)             |
+| `-g, --global`         | N/A                         | N/A                        | N/A                  | N/A                                         | `--global` / `-g`              | N/A                    | Update global packages                                     |
+| `-r, --recursive`      | `-r, --recursive`           | `--recursive`              | N/A                  | `--recursive` / `-R`                        | `--workspaces`                 | `--recursive` / `-r`   | Update recursively in all workspace packages               |
+| `--filter <pattern>`   | `--filter <pattern> update` | `--filter <pattern> update`| N/A                  | `workspaces foreach --include <pattern> up` | `update --workspace <pattern>` | N/A                    | Target specific workspace package(s)                       |
+| `-w, --workspace-root` | `-w`                        | `--workspace-root`         | N/A                  | N/A                                         | `--include-workspace-root`     | N/A                    | Include workspace root                                     |
+| `-D, --dev`            | `--dev` / `-D`              | `--dev` / `-D`             | N/A                  | N/A                                         | `--include=dev`                | N/A                    | Update only devDependencies                                |
+| `-P, --prod`           | `--prod` / `-P`             | `--prod` / `-P`            | N/A                  | N/A                                         | `--include=prod`               | `--production`         | Update only dependencies and optionalDependencies          |
+| `-i, --interactive`    | `--interactive` / `-i`      | `--interactive` / `-i`     | N/A                  | `--interactive` / `-i`                      | N/A                            | `--interactive` / `-i` | Show outdated packages and choose which to update          |
+| `--no-optional`        | `--no-optional`             | `--no-optional`            | N/A                  | N/A                                         | `--no-optional`                | `--omit optional`      | Don't update optionalDependencies                          |
+| `--no-save`            | `--no-save`                 | `--no-save`                | N/A                  | N/A                                         | `--no-save`                    | `--no-save`            | Update lockfile only, don't modify package.json            |
+| `--workspace`          | `--workspace`               | N/A                        | N/A                  | N/A                                         | N/A                            | N/A                    | Only update if package exists in workspace (pnpm-specific)  |
 
 **Note**:
 
-- For pnpm, `--filter` must come before the command (e.g., `pnpm --filter app update react`)
+- For pnpm/aube, `--filter` must come before the command (e.g., `pnpm --filter app update react`)
 - Yarn@2+ uses `up` or `upgrade` command, and updates to latest by default
 - Yarn@1 uses `upgrade` command
 - npm doesn't support `--latest` flag, it always updates within semver range
@@ -788,7 +788,7 @@ vp update --no-optional
 | Interactive      | `--interactive`    | ❌ Not supported | `--interactive`  | ❌ Not supported | `--interactive` / `-i` | Limited support            |
 | Workspace filter | `--filter`         | ⚠️ Limited       | ⚠️ Limited       | `--workspace`    | N/A                    | pnpm most flexible         |
 | Recursive        | `--recursive`      | ❌ Not supported | `--recursive`    | `--workspaces`   | `--recursive` / `-r`   | bun supports --recursive   |
-| Dev/Prod filter  | `--dev` / `--prod` | ❌ Not supported | ❌ Not supported | ❌ Not supported | ❌ Not supported       | pnpm only                  |
+| Dev/Prod filter  | `--dev` / `--prod` | ❌ Not supported | ❌ Not supported | ❌ Not supported | ❌ Not supported       | pnpm/aube only             |
 | Global           | `-g`               | `global upgrade` | ❌ Not supported | `-g`             | ❌ Not supported       | Use npm for global         |
 | No optional      | `--no-optional`    | ❌ Not supported | ❌ Not supported | `--no-optional`  | `--omit optional`      | Skip optional dependencies |
 | No save          | `--no-save`        | ❌ Not supported | ❌ Not supported | `--no-save`      | `--no-save`            | Lockfile only updates      |
@@ -842,7 +842,7 @@ Continue? (Y/n)
 
 ## Conclusion
 
-This RFC proposes adding `vp update` command to provide a unified interface for updating packages across pnpm/yarn/npm/bun. The design:
+This RFC proposes adding `vp update` command to provide a unified interface for updating packages across pnpm/aube/yarn/npm/bun. The design:
 
 - ✅ Automatically adapts to detected package manager
 - ✅ Supports updating specific packages or all packages

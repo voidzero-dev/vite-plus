@@ -138,8 +138,8 @@ vp install --filter app              # Install for specific package
 | `--ignore-scripts`     | `--ignore-scripts`     | `--ignore-scripts`     | `--mode skip-build`                         | `--ignore-scripts`          | `--ignore-scripts`       | Skip lifecycle scripts               |
 | `--no-lockfile`        | `--no-lockfile`        | `--no-lockfile`        | N/A                                         | `--no-package-lock`         | N/A                      | Skip lockfile                        |
 | `--fix-lockfile`       | `--fix-lockfile`       | N/A                    | `--refresh-lockfile`                        | N/A                         | N/A                      | Fix broken lockfile entries          |
-| `--shamefully-hoist`   | `--shamefully-hoist`   | N/A                    | N/A                                         | N/A                         | N/A (hoisted by default) | Flat node_modules (pnpm)             |
-| `--resolution-only`    | `--resolution-only`    | N/A                    | N/A                                         | N/A                         | N/A                      | Re-run resolution only (pnpm)        |
+| `--shamefully-hoist`   | `--shamefully-hoist`   | N/A                    | N/A                                         | N/A                         | N/A (hoisted by default) | Flat node_modules (pnpm/aube)        |
+| `--resolution-only`    | `--resolution-only`    | N/A                    | N/A                                         | N/A                         | N/A                      | Re-run resolution only (pnpm/aube)   |
 | `--silent`             | `--silent`             | `--silent`             | N/A (use env var)                           | `--loglevel silent`         | `--silent`               | Suppress output                      |
 | `--filter <pattern>`   | `--filter <pattern>`   | N/A                    | `workspaces foreach -A --include <pattern>` | `--workspace <pattern>`     | `--filter <pattern>`     | Target specific workspace package(s) |
 | `-w, --workspace-root` | `-w`                   | `-W`                   | N/A                                         | `--include-workspace-root`  | N/A                      | Install in root only                 |
@@ -150,9 +150,9 @@ vp install --filter app              # Install for specific package
 - `--no-frozen-lockfile`: Takes higher priority over `--frozen-lockfile` when both are specified. Passed through to the actual package manager (pnpm: `--no-frozen-lockfile`, yarn@1: `--no-frozen-lockfile`, yarn@2+: `--no-immutable`, npm: uses `npm install` instead of `npm ci`)
 - `--prod`: yarn@2+ requires configuration in `.yarnrc.yml` instead of CLI flag
 - `--ignore-scripts`: For yarn@2+, this maps to `--mode skip-build`
-- `--fix-lockfile`: Automatically fixes broken lockfile entries (pnpm and yarn@2+ only, npm does not support)
-- `--resolution-only`: Re-runs dependency resolution without installing packages. Useful for peer dependency analysis (pnpm only)
-- `--shamefully-hoist`: pnpm-specific, creates flat node_modules like npm/yarn
+- `--fix-lockfile`: Automatically fixes broken lockfile entries (pnpm/aube and yarn@2+ only, npm does not support)
+- `--resolution-only`: Re-runs dependency resolution without installing packages. Useful for peer dependency analysis (pnpm/aube only)
+- `--shamefully-hoist`: pnpm/aube-specific, creates flat node_modules like npm/yarn
 - `--ignore-scripts`: For bun, use `--ignore-scripts` to skip lifecycle scripts.
 - `--silent`: Suppresses output. For yarn@2+, use `YARN_ENABLE_PROGRESS=false` environment variable instead. For npm, maps to `--loglevel silent`
 
@@ -163,12 +163,12 @@ When packages are provided as arguments (e.g., `vp install react`), the command 
 - `--save-exact, -E`: Save exact version rather than semver range
 - `--save-peer`: Save to peerDependencies (and devDependencies)
 - `--save-optional, -O`: Save to optionalDependencies
-- `--save-catalog`: Save to the default catalog (pnpm only)
+- `--save-catalog`: Save to the default catalog (pnpm/aube only)
 - `--global, -g`: Install globally
 
 #### Workspace Filter Patterns
 
-Based on pnpm's filter syntax:
+Based on pnpm/aube's filter syntax:
 
 | Pattern      | Description              | Example                                    |
 | ------------ | ------------------------ | ------------------------------------------ |
@@ -186,7 +186,7 @@ vp install --filter app --filter web  # Install for both app and web
 vp install --filter "app*" --filter "!app-test"  # app* except app-test
 ```
 
-**Note**: For pnpm, `--filter` must come before the command (e.g., `pnpm --filter app install`). For yarn/npm, it's integrated into the command structure.
+**Note**: For pnpm/aube, `--filter` must come before the command (e.g., `pnpm --filter app install`). For yarn/npm, it's integrated into the command structure.
 
 #### Pass-Through Arguments
 
@@ -262,7 +262,7 @@ pub enum Commands {
         #[arg(long)]
         fix_lockfile: bool,
 
-        /// Create flat node_modules (pnpm only)
+        /// Create flat node_modules (pnpm/aube only)
         #[arg(long)]
         shamefully_hoist: bool,
 
@@ -958,7 +958,7 @@ Options:
       --ignore-scripts     Do not run lifecycle scripts
       --no-lockfile        Don't read or generate lockfile
       --fix-lockfile       Fix broken lockfile entries
-      --shamefully-hoist   Create flat node_modules (pnpm only)
+    --shamefully-hoist   Create flat node_modules (pnpm/aube only)
       --resolution-only    Re-run resolution for peer dependency analysis
       --silent             Suppress output (silent mode)
       --filter <PATTERN>   Filter packages in monorepo (can be used multiple times)
@@ -1007,7 +1007,7 @@ This is a new feature with no breaking changes:
 
 ## Package Manager Compatibility Matrix
 
-| Feature                | pnpm | yarn@1 | yarn@2+                 | npm             | bun                     | Notes                      |
+| Feature                | pnpm/aube | yarn@1 | yarn@2+                 | npm             | bun                     | Notes                      |
 | ---------------------- | ---- | ------ | ----------------------- | --------------- | ----------------------- | -------------------------- |
 | Basic install          | ✅   | ✅     | ✅                      | ✅              | ✅                      | All supported              |
 | `--prod`               | ✅   | ✅     | ⚠️                      | ✅              | ✅                      | yarn@2+ needs .yarnrc.yml  |
@@ -1021,9 +1021,9 @@ This is a new feature with no breaking changes:
 | `--force`              | ✅   | ✅     | ❌                      | ✅              | ✅                      | yarn@2+ not supported      |
 | `--ignore-scripts`     | ✅   | ✅     | ✅ `--mode skip-build`  | ✅              | ✅                      |                            |
 | `--no-lockfile`        | ✅   | ✅     | ❌                      | ✅              | ❌                      | yarn@2+, bun not supported |
-| `--fix-lockfile`       | ✅   | ❌     | ✅ `--refresh-lockfile` | ❌              | ❌                      | pnpm and yarn@2+ only      |
-| `--shamefully-hoist`   | ✅   | ❌     | ❌                      | ❌              | ❌ (hoisted by default) | pnpm only                  |
-| `--resolution-only`    | ✅   | ❌     | ❌                      | ❌              | ❌                      | pnpm only                  |
+| `--fix-lockfile`       | ✅   | ❌     | ✅ `--refresh-lockfile` | ❌              | ❌                      | pnpm/aube and yarn@2+ only |
+| `--shamefully-hoist`   | ✅   | ❌     | ❌                      | ❌              | ❌ (hoisted by default) | pnpm/aube only             |
+| `--resolution-only`    | ✅   | ❌     | ❌                      | ❌              | ❌                      | pnpm/aube only             |
 | `--silent`             | ✅   | ✅     | ⚠️ (use env var)        | ✅ `--loglevel` | ✅                      | yarn@2+ use env var        |
 | `--filter`             | ✅   | ❌     | ✅ `workspaces foreach` | ✅              | ✅                      | yarn@1 not supported       |
 

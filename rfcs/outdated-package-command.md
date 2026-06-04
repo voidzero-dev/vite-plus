@@ -31,6 +31,7 @@ yarn outdated                         # yarn project
 
 # Different output formats
 pnpm outdated --format json           # pnpm - JSON output
+aube outdated --json                  # aube - JSON output
 npm outdated --json                   # npm - JSON output
 yarn outdated                         # yarn - table format (no JSON in v1)
 
@@ -53,7 +54,7 @@ vite outdated                         # Check all packages
 vite outdated <package>               # Check specific packages
 
 # Output formats
-vite outdated --format json           # JSON output (maps to pnpm --format json, npm --json, yarn --json)
+vite outdated --format json           # JSON output (maps to pnpm --format json, aube --json, npm --json, yarn --json)
 vite outdated --format list           # List output (maps to pnpm --format list, npm --parseable)
 vite outdated --format table          # Table format (default)
 vite outdated --long                  # Verbose output
@@ -154,23 +155,26 @@ vite outdated -g                      # Check globally installed packages
 
 | Vite+ Flag             | pnpm                   | npm                                 | yarn@1          | yarn@2+                    | bun                  | Description                                   |
 | ---------------------- | ---------------------- | ----------------------------------- | --------------- | -------------------------- | -------------------- | --------------------------------------------- |
-| `vite outdated`        | `pnpm outdated`        | `npm outdated`                      | `yarn outdated` | `yarn upgrade-interactive` | `bun outdated`       | Check for outdated packages                   |
-| `<pattern>...`         | `<pattern>...`         | `[[@scope/]<pkg>]`                  | `[<package>]`   | N/A                        | N/A                  | Package patterns to check                     |
-| `--long`               | `--long`               | `--long`                            | N/A             | N/A                        | N/A                  | Extended output format                        |
-| `--format <format>`    | `--format <format>`    | json: `--json`/ list: `--parseable` | `--json`        | N/A                        | N/A                  | Output format (table/list/json)               |
-| `-r, --recursive`      | `-r, --recursive`      | `--all`                             | N/A             | N/A                        | `-r` / `--recursive` | Check across all workspaces                   |
-| `--filter <pattern>`   | `--filter <pattern>`   | `--workspace <pattern>`             | N/A             | N/A                        | `--filter` / `-F`    | Target specific workspace                     |
-| `-w, --workspace-root` | `-w, --workspace-root` | `--include-workspace-root`          | N/A             | N/A                        | N/A                  | Include workspace root                        |
-| `-P, --prod`           | `-P, --prod`           | N/A                                 | N/A             | N/A                        | `--production`       | Only production dependencies                  |
-| `-D, --dev`            | `-D, --dev`            | N/A                                 | N/A             | N/A                        | N/A                  | Only dev dependencies (pnpm-specific)         |
-| `--no-optional`        | `--no-optional`        | N/A                                 | N/A             | N/A                        | `--omit optional`    | Exclude optional dependencies                 |
-| `--compatible`         | `--compatible`         | N/A                                 | N/A             | N/A                        | N/A                  | Only show compatible versions (pnpm-specific) |
-| `--sort-by <field>`    | `--sort-by <field>`    | N/A                                 | N/A             | N/A                        | N/A                  | Sort results by field (pnpm-specific)         |
-| `-g, --global`         | `-g, --global`         | `-g, --global`                      | N/A             | N/A                        | N/A                  | Check globally installed packages             |
+| Vite+ Flag             | pnpm                   | aube                                | npm                                 | yarn@1          | yarn@2+                    | bun                  | Description                                   |
+| ---------------------- | ---------------------- | ----------------------------------- | ----------------------------------- | --------------- | -------------------------- | -------------------- | --------------------------------------------- |
+| `vite outdated`        | `pnpm outdated`        | `aube outdated`                     | `npm outdated`                      | `yarn outdated` | `yarn upgrade-interactive` | `bun outdated`       | Check for outdated packages                   |
+| `<pattern>...`         | `<pattern>...`         | `[pattern]` (prefix match)          | `[[@scope/]<pkg>]`                  | `[<package>]`   | N/A                        | N/A                  | Package patterns to check                     |
+| `--long`               | `--long`               | `--long`                            | `--long`                            | N/A             | N/A                        | N/A                  | Extended output format                        |
+| `--format <format>`    | `--format <format>`    | json: `--json` (no list flag)       | json: `--json`/ list: `--parseable` | `--json`        | N/A                        | N/A                  | Output format (table/list/json)               |
+| `-r, --recursive`      | `-r, --recursive`      | `-r, --recursive`                   | `--all`                             | N/A             | N/A                        | `-r` / `--recursive` | Check across all workspaces                   |
+| `--filter <pattern>`   | `--filter <pattern>`   | `--filter <pattern>`                | `--workspace <pattern>`             | N/A             | N/A                        | `--filter` / `-F`    | Target specific workspace                     |
+| `-w, --workspace-root` | `-w, --workspace-root` | `-w, --workspace-root, --workspace` | `--include-workspace-root`          | N/A             | N/A                        | N/A                  | Include workspace root                        |
+| `-P, --prod`           | `-P, --prod`           | `-P, --prod, --production`          | N/A                                 | N/A             | N/A                        | `--production`       | Only production dependencies                  |
+| `-D, --dev`            | `-D, --dev`            | `-D, --dev`                         | N/A                                 | N/A             | N/A                        | N/A                  | Only dev dependencies                         |
+| `--no-optional`        | `--no-optional`        | N/A                                 | N/A                                 | N/A             | N/A                        | `--omit optional`    | Exclude optional dependencies                 |
+| `--compatible`         | `--compatible`         | N/A                                 | N/A                                 | N/A             | N/A                        | N/A                  | Only show compatible versions                 |
+| `--sort-by <field>`    | `--sort-by <field>`    | N/A                                 | N/A                                 | N/A             | N/A                        | N/A                  | Sort results by field                         |
+| `-g, --global`         | `-g, --global`         | N/A                                 | `-g, --global`                      | N/A             | N/A                        | N/A                  | Check globally installed packages             |
 
 **Note:**
 
-- pnpm supports pattern matching for selective package checking
+- pnpm supports glob patterns for selective package checking
+- aube supports a single optional package pattern (prefix match)
 - npm accepts package names but not glob patterns
 - yarn@1 accepts package names but limited filtering options
 - yarn@2+ uses interactive mode (`upgrade-interactive`) instead of traditional `outdated`
@@ -331,23 +335,23 @@ pub enum Commands {
         #[arg(short = 'w', long)]
         workspace_root: bool,
 
-        /// Only production and optional dependencies (pnpm-specific)
+        /// Only production and optional dependencies (pnpm/aube-specific)
         #[arg(short = 'P', long)]
         prod: bool,
 
-        /// Only dev dependencies (pnpm-specific)
+        /// Only dev dependencies (pnpm/aube-specific)
         #[arg(short = 'D', long)]
         dev: bool,
 
-        /// Exclude optional dependencies (pnpm-specific)
+        /// Exclude optional dependencies (pnpm/aube-specific)
         #[arg(long)]
         no_optional: bool,
 
-        /// Only show compatible versions (pnpm-specific)
+        /// Only show compatible versions (pnpm/aube-specific)
         #[arg(long)]
         compatible: bool,
 
-        /// Sort results by field (pnpm-specific)
+        /// Sort results by field (pnpm/aube-specific)
         #[arg(long, value_name = "FIELD")]
         sort_by: Option<String>,
 
@@ -482,7 +486,7 @@ impl PackageManager {
                     args.push("--global".into());
                 }
 
-                // Add packages (pnpm supports glob patterns)
+                // Add packages (pnpm/aube supports glob patterns)
                 args.extend_from_slice(options.packages);
             }
             PackageManagerType::Yarn => {
@@ -585,7 +589,7 @@ impl PackageManager {
                 // Add packages (npm supports package names)
                 args.extend_from_slice(options.packages);
 
-                // Warn about pnpm-specific flags
+                // Warn about pnpm/aube-specific flags
                 if options.prod || options.dev {
                     println!("Warning: --prod/--dev not supported by npm");
                 }
@@ -726,7 +730,7 @@ impl OutdatedCommand {
 
 **Rationale**:
 
-- pnpm supports glob patterns: `pnpm outdated "*gulp-*" @babel/core`
+- pnpm/aube supports glob patterns: `pnpm outdated "*gulp-*" @babel/core`
 - npm and yarn accept package names but not glob patterns
 - Warn users about limited pattern support
 - Better UX than erroring
@@ -1113,7 +1117,7 @@ fixtures/outdated-test/
 Test cases:
 
 1. Basic outdated check
-2. Pattern matching (pnpm only)
+2. Pattern matching (pnpm/aube only)
 3. JSON output
 4. Workspace-specific outdated
 5. Recursive workspace checking
@@ -1132,7 +1136,7 @@ Check for outdated packages
 Usage: vite outdated [PACKAGE]... [OPTIONS]
 
 Arguments:
-  [PACKAGE]...           Package name(s) to check (pnpm supports glob patterns)
+  [PACKAGE]...           Package name(s) to check (pnpm/aube supports glob patterns)
 
 Options:
   --long                 Show extended information
@@ -1144,11 +1148,11 @@ Options:
                          Maps to: pnpm: --filter <pattern>, npm: --workspace <pattern>
   -w, --workspace-root   Include workspace root
                          Maps to: pnpm: -w/--workspace-root, npm: --include-workspace-root
-  -P, --prod             Only production and optional dependencies (pnpm only)
-  -D, --dev              Only dev dependencies (pnpm only)
-  --no-optional          Exclude optional dependencies (pnpm only)
-  --compatible           Only show compatible versions (pnpm only)
-  --sort-by <FIELD>      Sort results by field (pnpm only, supports 'name')
+  -P, --prod             Only production and optional dependencies (pnpm/aube only)
+  -D, --dev              Only dev dependencies (pnpm/aube only)
+  --no-optional          Exclude optional dependencies (pnpm/aube only)
+  --compatible           Only show compatible versions (pnpm/aube only)
+  --sort-by <FIELD>      Sort results by field (pnpm/aube only, supports 'name')
   -g, --global           Check globally installed packages
   -h, --help             Print help
 
@@ -1298,17 +1302,17 @@ vite outdated -g typescript
 | Feature             | pnpm               | npm                           | yarn@1           | yarn@2+             | bun                  | Notes                    |
 | ------------------- | ------------------ | ----------------------------- | ---------------- | ------------------- | -------------------- | ------------------------ |
 | Basic command       | ✅ `outdated`      | ✅ `outdated`                 | ✅ `outdated`    | ⚠️ `upgrade-int...` | ✅ `outdated`        | yarn@2+ uses interactive |
-| Pattern matching    | ✅ Glob patterns   | ⚠️ Package names              | ⚠️ Package names | ❌ Not supported    | ❌ Not supported     | pnpm supports globs      |
+| Pattern matching    | ✅ Glob patterns   | ⚠️ Package names              | ⚠️ Package names | ❌ Not supported    | ❌ Not supported     | pnpm/aube supports globs |
 | JSON output         | ✅ `--format json` | ✅ `--json`                   | ❌ Not supported | ❌ Not supported    | ❌ Not supported     | Different flags          |
-| Long output         | ✅ `--long`        | ✅ `--long`                   | ❌ Not supported | ❌ Not supported    | ❌ Not supported     | pnpm and npm only        |
+| Long output         | ✅ `--long`        | ✅ `--long`                   | ❌ Not supported | ❌ Not supported    | ❌ Not supported     | pnpm/aube and npm only   |
 | Parseable           | ❌ Not supported   | ✅ `--parseable`              | ❌ Not supported | ❌ Not supported    | ❌ Not supported     | npm only                 |
-| Recursive           | ✅ `-r`            | ❌ Not supported              | ❌ Not supported | ❌ Not supported    | ✅ `-r`              | pnpm and bun             |
+| Recursive           | ✅ `-r`            | ❌ Not supported              | ❌ Not supported | ❌ Not supported    | ✅ `-r`              | pnpm/aube and bun        |
 | Workspace filter    | ✅ `--filter`      | ✅ `--workspace`              | ❌ Not supported | ❌ Not supported    | ✅ `--filter` / `-F` | Different flags          |
 | Workspace root      | ✅ `-w`            | ✅ `--include-workspace-root` | ❌ Not supported | ❌ Not supported    | ❌ Not supported     | Different flags          |
-| Dep type filter     | ✅ `--prod/--dev`  | ❌ Not supported              | ❌ Not supported | ❌ Not supported    | ❌ Not supported     | pnpm only                |
-| Compatible only     | ✅ `--compatible`  | ❌ Not supported              | ❌ Not supported | ❌ Not supported    | ❌ Not supported     | pnpm only                |
-| Sort results        | ✅ `--sort-by`     | ❌ Not supported              | ❌ Not supported | ❌ Not supported    | ❌ Not supported     | pnpm only                |
-| Global check        | ✅ `-g`            | ✅ `-g`                       | ❌ Not supported | ❌ Not supported    | ❌ Not supported     | pnpm and npm             |
+| Dep type filter     | ✅ `--prod/--dev`  | ❌ Not supported              | ❌ Not supported | ❌ Not supported    | ❌ Not supported     | pnpm/aube only           |
+| Compatible only     | ✅ `--compatible`  | ❌ Not supported              | ❌ Not supported | ❌ Not supported    | ❌ Not supported     | pnpm/aube only           |
+| Sort results        | ✅ `--sort-by`     | ❌ Not supported              | ❌ Not supported | ❌ Not supported    | ❌ Not supported     | pnpm/aube only           |
+| Global check        | ✅ `-g`            | ✅ `-g`                       | ❌ Not supported | ❌ Not supported    | ❌ Not supported     | pnpm/aube and npm        |
 | Show all transitive | ⚠️ Use `-r`        | ✅ `--all`                    | ❌ Not supported | ❌ Not supported    | ❌ Not supported     | Different approaches     |
 
 ## Future Enhancements

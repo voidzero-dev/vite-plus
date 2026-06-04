@@ -173,7 +173,7 @@ vp pm pack --filter app --filter web
 - `--filter <pattern>`: Filter packages to pack (can be used multiple times)
 - `--out <path>`: Customizes the output path for the tarball. Use `%s` and `%v` to include the package name and version (pnpm and yarn@2+ only), e.g., `%s.tgz` or `some-dir/%s-%v.tgz`. By default, the tarball is saved in the current working directory with the name `<package-name>-<version>.tgz`
 - `--pack-destination <dir>`: Directory where the tarball will be saved (pnpm and npm only)
-- `--pack-gzip-level <level>`: Gzip compression level 0-9 (pnpm only)
+- `--pack-gzip-level <level>`: Gzip compression level 0-9 (pnpm/aube only)
 - `--json`: Output in JSON format
 
 #### 3. vp pm list / vp pm ls
@@ -896,7 +896,7 @@ Bun provides several `bun pm` subcommands that may not have direct equivalents i
   - yarn@1 does not support (prints warning and ignores)
   - yarn@2+ does not support list command at all
 - `--find-by <finder_name>`: Use a finder function defined in .pnpmfile.cjs to match dependencies by properties other than name
-  - Only supported by pnpm (pnpm-specific feature)
+    - Only supported by pnpm/aube (pnpm/aube-specific feature)
   - npm does not support (prints warning and ignores)
   - yarn@1 does not support (prints warning and ignores)
   - yarn@2+ does not support list command at all
@@ -973,22 +973,22 @@ Bun provides several `bun pm` subcommands that may not have direct equivalents i
   - npm uses `--workspace <pattern>` (comes after `publish` command)
   - yarn does not support (delegates to npm, can use --workspace)
 - `--no-git-checks`: Skip git checks before publishing
-  - Only supported by pnpm (pnpm-specific feature)
+    - Only supported by pnpm/aube (pnpm/aube-specific feature)
   - npm does not support (prints warning and ignores)
   - yarn does not support (delegates to npm which doesn't support it)
 - `--publish-branch <branch>`: Set the branch name to publish from
-  - Only supported by pnpm (pnpm-specific feature)
+    - Only supported by pnpm/aube (pnpm/aube-specific feature)
   - npm does not support (prints warning and ignores)
   - yarn does not support (delegates to npm which doesn't support it)
 - `--report-summary`: Save publish summary to pnpm-publish-summary.json
-  - Only supported by pnpm (pnpm-specific feature)
+    - Only supported by pnpm/aube (pnpm/aube-specific feature)
   - npm does not support (prints warning and ignores)
   - yarn does not support (delegates to npm which doesn't support it)
 - `--json`: JSON output
-  - Only supported by pnpm (pnpm-specific feature)
+    - Only supported by pnpm/aube (pnpm/aube-specific feature)
   - npm does not support (prints warning and ignores)
   - yarn does not support (delegates to npm which doesn't support it)
-- pnpm-specific features: `--no-git-checks`, `--publish-branch`, `--report-summary`, `--json`
+- pnpm/aube-specific features: `--no-git-checks`, `--publish-branch`, `--report-summary`, `--json`
 
 #### Owner Command
 
@@ -2179,7 +2179,7 @@ Subcommands:
   clean    Clean cache (alias: clear)
   clear    Alias for clean
   verify   Verify cache integrity (npm only)
-  list     List cached packages (pnpm only)
+    list     List cached packages (pnpm/aube only)
 
 Options:
   --force              Force cache clean (npm only)
@@ -2190,7 +2190,7 @@ Examples:
   vp pm cache clean            # Clean cache
   vp pm cache clean --force    # Force clean (npm)
   vp pm cache verify           # Verify cache (npm)
-  vp pm cache list             # List cached packages (pnpm)
+    vp pm cache list             # List cached packages (pnpm/aube)
 ```
 
 ## Package Manager Compatibility

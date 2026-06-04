@@ -150,23 +150,23 @@ vp remove -g typescript                # Remove global package
 - https://docs.npmjs.com/cli/v11/commands/npm-install#description
 - https://bun.sh/docs/cli/add
 
-| Vite+ Flag                           | pnpm                     | yarn                                            | npm                             | bun               | Description                                             |
-| ------------------------------------ | ------------------------ | ----------------------------------------------- | ------------------------------- | ----------------- | ------------------------------------------------------- |
-| `<packages>`                         | `add <packages>`         | `add <packages>`                                | `install <packages>`            | `add <packages>`  | Add packages                                            |
-| `--filter <pattern>`                 | `--filter <pattern> add` | `workspaces foreach -A --include <pattern> add` | `install --workspace <pattern>` | N/A               | Target specific workspace package(s)                    |
-| `-w, --workspace-root`               | `-w`                     | `-W` for v1, v2+ N/A                            | `--include-workspace-root`      | N/A               | Add to workspace root (ignore-workspace-root-check)     |
-| `--workspace`                        | `--workspace`            | N/A                                             | N/A                             | N/A               | Only add if package exists in workspace (pnpm-specific) |
-| `-P, --save-prod`                    | `--save-prod` / `-P`     | N/A                                             | `--save-prod` / `-P`            | N/A               | Save to `dependencies`. The default behavior            |
-| `-D, --save-dev`                     | `-D`                     | `--dev` / `-D`                                  | `--save-dev` / `-D`             | `--dev` / `-d`    | Save to `devDependencies`                               |
-| `--save-peer`                        | `--save-peer`            | `--peer` / `-P`                                 | `--save-peer`                   | `--peer`          | Save to `peerDependencies` and `devDependencies`        |
-| `-O, --save-optional`                | `-O`                     | `--optional` / `-O`                             | `--save-optional` / `-O`        | `--optional`      | Save to `optionalDependencies`                          |
-| `-E, --save-exact`                   | `-E`                     | `--exact` / `-E`                                | `--save-exact` / `-E`           | `--exact` / `-E`  | Save exact version                                      |
-| `-g, --global`                       | `-g`                     | `global add`                                    | `--global` / `-g`               | `--global` / `-g` | Install globally                                        |
-| `--save-catalog`                     | pnpm@10+ only            | N/A                                             | N/A                             | N/A               | Save the new dependency to the default catalog          |
-| `--save-catalog-name <catalog_name>` | pnpm@10+ only            | N/A                                             | N/A                             | N/A               | Save the new dependency to the specified catalog        |
-| `--allow-build <names>`              | pnpm@10+ only            | N/A                                             | N/A                             | N/A               | A list of package names allowed to run postinstall      |
+| Vite+ Flag                           | pnpm                     | aube                      | yarn                                            | npm                             | bun               | Description                                             |
+| ------------------------------------ | ------------------------ | ------------------------- | ----------------------------------------------- | ------------------------------- | ----------------- | ------------------------------------------------------- |
+| `<packages>`                         | `add <packages>`         | `add <packages>`          | `add <packages>`                                | `install <packages>`            | `add <packages>`  | Add packages                                            |
+| `--filter <pattern>`                 | `--filter <pattern> add` | `--filter <pattern> add`  | `workspaces foreach -A --include <pattern> add` | `install --workspace <pattern>` | N/A               | Target specific workspace package(s)                    |
+| `-w, --workspace-root`               | `-w`                     | `-w, --workspace`         | `-W` for v1, v2+ N/A                            | `--include-workspace-root`      | N/A               | Add to workspace root (ignore-workspace-root-check)     |
+| `--workspace`                        | `--workspace`            | N/A                       | N/A                                             | N/A                             | N/A               | Only add if package exists in workspace (pnpm-specific)  |
+| `-P, --save-prod`                    | `--save-prod` / `-P`     | N/A (default)             | N/A                                             | `--save-prod` / `-P`            | N/A               | Save to `dependencies`. The default behavior            |
+| `-D, --save-dev`                     | `-D`                     | `-D, --save-dev`          | `--dev` / `-D`                                  | `--save-dev` / `-D`             | `--dev` / `-d`    | Save to `devDependencies`                               |
+| `--save-peer`                        | `--save-peer`            | `--save-peer`             | `--peer` / `-P`                                 | `--save-peer`                   | `--peer`          | Save to `peerDependencies` and `devDependencies`        |
+| `-O, --save-optional`                | `-O`                     | `-O, --save-optional`     | `--optional` / `-O`                             | `--save-optional` / `-O`        | `--optional`      | Save to `optionalDependencies`                          |
+| `-E, --save-exact`                   | `-E`                     | `-E, --save-exact`        | `--exact` / `-E`                                | `--save-exact` / `-E`           | `--exact` / `-E`  | Save exact version                                      |
+| `-g, --global`                       | `-g`                     | `-g`                      | `global add`                                    | `--global` / `-g`               | `--global` / `-g` | Install globally                                        |
+| `--save-catalog`                     | pnpm@10+ only            | `--save-catalog`          | N/A                                             | N/A                             | N/A               | Save the new dependency to the default catalog          |
+| `--save-catalog-name <catalog_name>` | pnpm@10+ only            | `--save-catalog-name=...` | N/A                                             | N/A                             | N/A               | Save the new dependency to the specified catalog        |
+| `--allow-build <names>`              | pnpm@10+ only            | `--allow-build=...`       | N/A                                             | N/A                             | N/A               | A list of package names allowed to run postinstall      |
 
-**Note**: For pnpm, `--filter` must come before the command (e.g., `pnpm --filter app add react`). For yarn/npm, it's integrated into the command structure.
+**Note**: For pnpm/aube, `--filter` must come before the command (e.g., `pnpm --filter app add react`). For yarn/npm, it's integrated into the command structure.
 
 #### Remove Command Mapping
 
@@ -175,18 +175,18 @@ vp remove -g typescript                # Remove global package
 - https://docs.npmjs.com/cli/v11/commands/npm-uninstall#description
 - https://bun.sh/docs/cli/remove
 
-| Vite+ Flag             | pnpm                        | yarn                                               | npm                               | bun                 | Description                                    |
-| ---------------------- | --------------------------- | -------------------------------------------------- | --------------------------------- | ------------------- | ---------------------------------------------- |
-| `<packages>`           | `remove <packages>`         | `remove <packages>`                                | `uninstall <packages>`            | `remove <packages>` | Remove packages                                |
-| `-D, --save-dev`       | `-D`                        | N/A                                                | `--save-dev` / `-D`               | N/A                 | Only remove from `devDependencies`             |
-| `-O, --save-optional`  | `-O`                        | N/A                                                | `--save-optional` / `-O`          | N/A                 | Only remove from `optionalDependencies`        |
-| `-P, --save-prod`      | `-P`                        | N/A                                                | `--save-prod` / `-P`              | N/A                 | Only remove from `dependencies`                |
-| `--filter <pattern>`   | `--filter <pattern> remove` | `workspaces foreach -A --include <pattern> remove` | `uninstall --workspace <pattern>` | N/A                 | Target specific workspace package(s)           |
-| `-w, --workspace-root` | `-w`                        | N/A                                                | `--include-workspace-root`        | N/A                 | Remove from workspace root                     |
-| `-r, --recursive`      | `-r, --recursive`           | `-A, --all`                                        | `--workspaces`                    | N/A                 | Remove recursively from all workspace packages |
-| `-g, --global`         | `-g`                        | N/A                                                | `--global` / `-g`                 | `--global` / `-g`   | Remove global packages                         |
+| Vite+ Flag             | pnpm                        | aube                       | yarn                                               | npm                               | bun                 | Description                                    |
+| ---------------------- | --------------------------- | -------------------------- | -------------------------------------------------- | --------------------------------- | ------------------- | ---------------------------------------------- |
+| `<packages>`           | `remove <packages>`         | `remove <packages>`        | `remove <packages>`                                | `uninstall <packages>`            | `remove <packages>` | Remove packages                                |
+| `-D, --save-dev`       | `-D`                        | `-D, --save-dev`           | N/A                                                | `--save-dev` / `-D`               | N/A                 | Only remove from `devDependencies`             |
+| `-O, --save-optional`  | `-O`                        | N/A                        | N/A                                                | `--save-optional` / `-O`          | N/A                 | Only remove from `optionalDependencies`        |
+| `-P, --save-prod`      | `-P`                        | N/A                        | N/A                                                | `--save-prod` / `-P`              | N/A                 | Only remove from `dependencies`                |
+| `--filter <pattern>`   | `--filter <pattern> remove` | `--filter <pattern> remove` | `workspaces foreach -A --include <pattern> remove` | `uninstall --workspace <pattern>` | N/A                 | Target specific workspace package(s)           |
+| `-w, --workspace-root` | `-w`                        | `-w, --workspace`          | N/A                                                | `--include-workspace-root`        | N/A                 | Remove from workspace root                     |
+| `-r, --recursive`      | `-r, --recursive`           | `--recursive`              | `-A, --all`                                        | `--workspaces`                    | N/A                 | Remove recursively from all workspace packages |
+| `-g, --global`         | `-g`                        | `-g`                       | N/A                                                | `--global` / `-g`                 | `--global` / `-g`   | Remove global packages                         |
 
-**Note**: Similar to add, `--filter` must precede the command for pnpm.
+**Note**: Similar to add, `--filter` must precede the command for pnpm/aube.
 
 **Aliases:**
 
@@ -196,7 +196,7 @@ vp remove -g typescript                # Remove global package
 
 #### Workspace Filter Patterns
 
-Based on pnpm's filter syntax:
+Based on pnpm/aube's filter syntax:
 
 | Pattern      | Description              | Example                                    |
 | ------------ | ------------------------ | ------------------------------------------ |
@@ -1009,11 +1009,11 @@ Options:
 
 Filter Patterns:
   <name>           Exact package name match
-  <pattern>*       Wildcard match (pnpm only)
-  @<scope>/*       Scope match (pnpm only)
-  !<pattern>       Exclude pattern (pnpm only)
-  <pkg>...         Package and dependencies (pnpm only)
-  ...<pkg>         Package and dependents (pnpm only)
+    <pattern>*       Wildcard match (pnpm/aube only)
+    @<scope>/*       Scope match (pnpm/aube only)
+    !<pattern>       Exclude pattern (pnpm/aube only)
+    <pkg>...         Package and dependencies (pnpm/aube only)
+    ...<pkg>         Package and dependents (pnpm/aube only)
 
 Examples:
   vp add react react-dom
@@ -1045,9 +1045,9 @@ Options:
 
 Filter Patterns:
   <name>           Exact package name match
-  <pattern>*       Wildcard match (pnpm only)
-  @<scope>/*       Scope match (pnpm only)
-  !<pattern>       Exclude pattern (pnpm only)
+    <pattern>*       Wildcard match (pnpm/aube only)
+    @<scope>/*       Scope match (pnpm/aube only)
+    !<pattern>       Exclude pattern (pnpm/aube only)
 
 Examples:
   vp remove lodash
@@ -1275,16 +1275,16 @@ vp add "@myorg/utils@workspace:^" --filter app
 | Feature                    | pnpm               | yarn                  | npm                     | bun              | Notes                    |
 | -------------------------- | ------------------ | --------------------- | ----------------------- | ---------------- | ------------------------ |
 | `--filter <pattern>`       | ✅ Native          | ⚠️ `workspace <name>` | ⚠️ `--workspace <name>` | ❌ Not supported | Syntax differs           |
-| Multiple filters           | ✅ Repeatable flag | ❌ Single only        | ⚠️ Limited              | ❌ Not supported | pnpm most flexible       |
-| Wildcard patterns          | ✅ Full support    | ⚠️ Limited            | ❌ No wildcards         | ❌ Not supported | pnpm best                |
-| Exclusion `!`              | ✅ Supported       | ❌ Not supported      | ❌ Not supported        | ❌ Not supported | pnpm only                |
-| Dependency selectors `...` | ✅ Supported       | ❌ Not supported      | ❌ Not supported        | ❌ Not supported | pnpm only                |
+| Multiple filters           | ✅ Repeatable flag | ❌ Single only        | ⚠️ Limited              | ❌ Not supported | pnpm/aube most flexible  |
+| Wildcard patterns          | ✅ Full support    | ⚠️ Limited            | ❌ No wildcards         | ❌ Not supported | pnpm/aube best           |
+| Exclusion `!`              | ✅ Supported       | ❌ Not supported      | ❌ Not supported        | ❌ Not supported | pnpm/aube only           |
+| Dependency selectors `...` | ✅ Supported       | ❌ Not supported      | ❌ Not supported        | ❌ Not supported | pnpm/aube only           |
 | `-w` (root)                | ✅ `-w`            | ✅ `-W`               | ✅ `-w`                 | ❌ Not supported | Slightly different flags |
-| `--workspace` protocol     | ✅ Supported       | ❌ Manual             | ❌ Manual               | ❌ Not supported | pnpm feature             |
+| `--workspace` protocol     | ✅ Supported       | ❌ Manual             | ❌ Manual               | ❌ Not supported | pnpm/aube feature        |
 
 **Graceful Degradation**:
 
-- Advanced pnpm features (wildcard, exclusion, selectors) will error on yarn/npm/bun with helpful message
+- Advanced pnpm/aube features (wildcard, exclusion, selectors) will error on yarn/npm/bun with helpful message
 - Basic `--filter <exact-name>` works across all package managers
 
 ## Future Enhancements
@@ -1377,14 +1377,14 @@ Proceed? (Y/n)
    - Proposed: No validation, trust package manager
    - Package managers handle this well already
 
-5. **How to handle pnpm-specific filter features on yarn/npm?**
+5. **How to handle pnpm/aube-specific filter features on yarn/npm?**
    - Proposed: For wildcards/exclusions on yarn/npm:
-     - Option A: Error with clear message explaining pnpm-only feature
+         - Option A: Error with clear message explaining pnpm/aube-only feature
      - Option B: Resolve wildcard ourselves and run command for each package
    - Recommendation: Start with Option A, add Option B later
 
 6. **Should we support workspace protocol configuration?**
-   - Proposed: Pass through to pnpm, document in .npmrc for users
+    - Proposed: Pass through to pnpm/aube, document in .npmrc for users
    - Example: `save-workspace-protocol=rolling` in .npmrc
    - Vite+ doesn't need to handle this explicitly
 
@@ -1434,18 +1434,18 @@ None required - leverages existing:
 - ✅ Auto package manager detection
 - ✅ Common flags (-D, -E, -P, -O)
 
-### Phase 2: Workspace Support (pnpm-focused)
+### Phase 2: Workspace Support (pnpm/aube-focused)
 
 - ✅ `--filter <exact-name>` for all package managers
 - ✅ `-w` flag for workspace root
-- ✅ `--workspace` flag for workspace dependencies (pnpm)
-- ✅ Wildcard patterns `*` (pnpm only, error on others)
-- ✅ Scope patterns `@scope/*` (pnpm only)
+- ✅ `--workspace` flag for workspace dependencies (pnpm/aube)
+- ✅ Wildcard patterns `*` (pnpm/aube only, error on others)
+- ✅ Scope patterns `@scope/*` (pnpm/aube only)
 
-### Phase 3: Advanced Filters (pnpm-focused)
+### Phase 3: Advanced Filters (pnpm/aube-focused)
 
-- Exclusion patterns `!<pattern>` (pnpm only)
-- Dependency selectors `...` (pnpm only)
+- Exclusion patterns `!<pattern>` (pnpm/aube only)
+- Dependency selectors `...` (pnpm/aube only)
 - Multiple filter support
 - Graceful degradation for yarn/npm
 

@@ -122,7 +122,7 @@ Use `vp migrate` to migrate to Vite+. It merges tool-specific config files such 
 
 #### Manage Dependencies
 
-Vite+ automatically wraps your package manager (pnpm, npm, or Yarn) based on `packageManager` and lockfiles:
+Vite+ automatically wraps your package manager (pnpm, aube, npm, Yarn, or Bun) based on `packageManager` and lockfiles:
 
 - **add** - Add packages to dependencies
 - **remove** (`rm`, `un`, `uninstall`) - Remove packages from dependencies
@@ -196,7 +196,7 @@ You need to add overrides to your package manager for `vite` and `vitest` so tha
 }
 ```
 
-If you are using `pnpm`, add this to your `pnpm-workspace.yaml`:
+If you are using `pnpm` or `aube`, add this to your workspace YAML (`pnpm-workspace.yaml` or `aube-workspace.yaml`):
 
 ```yaml
 overrides:
