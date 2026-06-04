@@ -5,7 +5,6 @@
     "env-install-stale-keep && env-install-stale-drop # Both binaries should be callable",
     "vp install -g ./env-install-stale-bin-pkg-v2 # Reinstall package version that removed one binary",
     "env-install-stale-keep # Remaining binary should still be callable",
-    "env-install-stale-drop # It should not be called anymore",
     "node check-stale-binary.js"
   ],
   "after": ["vp remove -g env-install-stale-bin-pkg"]

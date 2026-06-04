@@ -15,9 +15,6 @@ info: Installing 1 global package with Node.js <semver>
 > env-install-stale-keep # Remaining binary should still be callable
 env-install-stale-keep ok
 
-[127]> env-install-stale-drop # It should not be called anymore
-command not found: env-install-stale-drop
-
 > node check-stale-binary.js
 stale shim removed
 stale config removed
