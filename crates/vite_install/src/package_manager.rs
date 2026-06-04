@@ -18,13 +18,14 @@ use serde::{Deserialize, Serialize};
 use tokio::fs::remove_dir_all;
 use vite_error::Error;
 use vite_path::{AbsolutePath, AbsolutePathBuf};
+use vite_shared::OnFail;
 use vite_str::Str;
 #[cfg(test)]
 use vite_workspace::find_package_root;
 use vite_workspace::{WorkspaceFile, WorkspaceRoot, find_workspace_root};
 
 use crate::{
-    config::{get_npm_package_tgz_url, get_npm_package_version_url},
+    config::{get_npm_package_metadata_url, get_npm_package_tgz_url, get_npm_package_version_url},
     request::{HttpClient, download_and_extract_tgz_with_hash},
     shim,
 };
@@ -100,6 +101,30 @@ pub struct PackageManagerResolution {
     pub project_root: AbsolutePathBuf,
 }
 
+/// Where the package manager selection came from (see rfcs/dev-engines.md).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PackageManagerSource {
+    /// Top-level `packageManager` field in package.json
+    PackageManagerField,
+    /// `devEngines.packageManager` field in package.json
+    DevEnginesPackageManager,
+    /// Lockfiles or package-manager config files
+    LockfileOrConfig,
+    /// Caller-provided default
+    Default,
+}
+
+impl fmt::Display for PackageManagerSource {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::PackageManagerField => write!(f, "packageManager"),
+            Self::DevEnginesPackageManager => write!(f, "devEngines.packageManager"),
+            Self::LockfileOrConfig => write!(f, "lockfile"),
+            Self::Default => write!(f, "default"),
+        }
+    }
+}
+
 // TODO(@fengmk2): should move ResolveCommandResult to vite-common crate
 #[derive(Debug)]
 pub struct ResolveCommandResult {
@@ -145,18 +170,28 @@ impl PackageManagerBuilder {
     /// Detect the package manager from the current working directory.
     pub async fn build(&self) -> Result<PackageManager, Error> {
         let (workspace_root, _cwd) = find_workspace_root(&self.cwd)?;
-        let (package_manager_type, version_or_latest, hash) =
+        let (package_manager_type, version_or_req, hash, source) =
             get_package_manager_type_and_version(&workspace_root, self.client_override)?;
 
         // only download the package manager if it's not already downloaded
         let (install_dir, package_name, version) =
-            download_package_manager(package_manager_type, &version_or_latest, hash.as_deref())
+            download_package_manager(package_manager_type, &version_or_req, hash.as_deref())
                 .await?;
 
-        if version_or_latest != version {
-            // auto set `packageManager` field in package.json
+        // Auto-pin the resolved version when detection had no explicit field
+        // (lockfiles, config files, or caller default). A devEngines range is
+        // the user's source of truth and is never frozen into an exact pin.
+        // See rfcs/dev-engines.md.
+        if matches!(source, PackageManagerSource::LockfileOrConfig | PackageManagerSource::Default)
+            && version_or_req != version
+        {
             let package_json_path = workspace_root.path.join("package.json");
-            set_package_manager_field(&package_json_path, package_manager_type, &version).await?;
+            set_dev_engines_package_manager_field(
+                &package_json_path,
+                package_manager_type,
+                &version,
+            )
+            .await?;
         }
 
         let is_monorepo = matches!(
@@ -203,90 +238,119 @@ impl PackageManager {
     }
 }
 
-/// Get the package manager name, version and optional hash from the workspace root.
+/// Get the package manager name, version, optional hash, and detection source
+/// from the workspace root.
+///
+/// The returned version is exact when detected from the `packageManager` field,
+/// `"latest"` when detected from lockfiles/config files/default, and may be a
+/// semver range (or `"*"` for an absent version) when detected from
+/// `devEngines.packageManager` (see rfcs/dev-engines.md).
 pub fn get_package_manager_type_and_version(
     workspace_root: &WorkspaceRoot,
     default: Option<PackageManagerType>,
-) -> Result<(PackageManagerType, Str, Option<Str>), Error> {
+) -> Result<(PackageManagerType, Str, Option<Str>, PackageManagerSource), Error> {
     // check packageManager field in package.json
     if let Some(resolution) = get_package_manager_from_package_json(workspace_root)? {
-        return Ok((resolution.package_manager_type, resolution.version, resolution.hash));
+        warn_on_dev_engines_package_manager_conflict(workspace_root, &resolution);
+        return Ok((
+            resolution.package_manager_type,
+            resolution.version,
+            resolution.hash,
+            PackageManagerSource::PackageManagerField,
+        ));
     }
 
-    // TODO(@fengmk2): check devEngines.packageManager field in package.json
+    // check devEngines.packageManager field in package.json (see rfcs/dev-engines.md)
+    if let Some((package_manager_type, version_req)) =
+        get_package_manager_from_dev_engines(workspace_root)?
+    {
+        // an absent version means any version satisfies (devEngines spec)
+        let version_req = version_req.unwrap_or_else(|| "*".into());
+        return Ok((
+            package_manager_type,
+            version_req,
+            None,
+            PackageManagerSource::DevEnginesPackageManager,
+        ));
+    }
 
     let version = Str::from("latest");
+    let source = PackageManagerSource::LockfileOrConfig;
     // if pnpm-workspace.yaml exists, use pnpm@latest
     if matches!(workspace_root.workspace_file, WorkspaceFile::PnpmWorkspaceYaml(_)) {
-        return Ok((PackageManagerType::Pnpm, version, None));
+        return Ok((PackageManagerType::Pnpm, version, None, source));
     }
 
     // if pnpm-lock.yaml exists, use pnpm@latest
     let pnpm_lock_yaml_path = workspace_root.path.join("pnpm-lock.yaml");
     if is_exists_file(&pnpm_lock_yaml_path)? {
-        return Ok((PackageManagerType::Pnpm, version, None));
+        return Ok((PackageManagerType::Pnpm, version, None, source));
     }
 
     // if yarn.lock or .yarnrc.yml exists, use yarn@latest
     let yarn_lock_path = workspace_root.path.join("yarn.lock");
     let yarnrc_yml_path = workspace_root.path.join(".yarnrc.yml");
     if is_exists_file(&yarn_lock_path)? || is_exists_file(&yarnrc_yml_path)? {
-        return Ok((PackageManagerType::Yarn, version, None));
+        return Ok((PackageManagerType::Yarn, version, None, source));
     }
 
     // if package-lock.json exists, use npm@latest
     let package_lock_json_path = workspace_root.path.join("package-lock.json");
     if is_exists_file(&package_lock_json_path)? {
-        return Ok((PackageManagerType::Npm, version, None));
+        return Ok((PackageManagerType::Npm, version, None, source));
     }
 
     // if bun.lock (text format) or bun.lockb (binary format) exists, use bun@latest
     let bun_lock_path = workspace_root.path.join("bun.lock");
     if is_exists_file(&bun_lock_path)? {
-        return Ok((PackageManagerType::Bun, version, None));
+        return Ok((PackageManagerType::Bun, version, None, source));
     }
     let bun_lockb_path = workspace_root.path.join("bun.lockb");
     if is_exists_file(&bun_lockb_path)? {
-        return Ok((PackageManagerType::Bun, version, None));
+        return Ok((PackageManagerType::Bun, version, None, source));
     }
 
     // if .pnpmfile.cjs exists, use pnpm@latest
     let pnpmfile_cjs_path = workspace_root.path.join(".pnpmfile.cjs");
     if is_exists_file(&pnpmfile_cjs_path)? {
-        return Ok((PackageManagerType::Pnpm, version, None));
+        return Ok((PackageManagerType::Pnpm, version, None, source));
     }
     // if legacy pnpmfile.cjs exists, use pnpm@latest
     // https://newreleases.io/project/npm/pnpm/release/6.0.0
     let legacy_pnpmfile_cjs_path = workspace_root.path.join("pnpmfile.cjs");
     if is_exists_file(&legacy_pnpmfile_cjs_path)? {
-        return Ok((PackageManagerType::Pnpm, version, None));
+        return Ok((PackageManagerType::Pnpm, version, None, source));
     }
 
     // if bunfig.toml exists, use bun@latest
     let bunfig_toml_path = workspace_root.path.join("bunfig.toml");
     if is_exists_file(&bunfig_toml_path)? {
-        return Ok((PackageManagerType::Bun, version, None));
+        return Ok((PackageManagerType::Bun, version, None, source));
     }
 
     // if yarn.config.cjs exists, use yarn@latest (yarn 2.0+)
     let yarn_config_cjs_path = workspace_root.path.join("yarn.config.cjs");
     if is_exists_file(&yarn_config_cjs_path)? {
-        return Ok((PackageManagerType::Yarn, version, None));
+        return Ok((PackageManagerType::Yarn, version, None, source));
     }
 
     // if default is specified, use it
     if let Some(default) = default {
-        return Ok((default, version, None));
+        return Ok((default, version, None, PackageManagerSource::Default));
     }
 
     // unrecognized package manager, let user specify the package manager
     Err(Error::UnrecognizedPackageManager)
 }
 
-/// Resolve only the explicit `packageManager` field for the current workspace.
+/// Resolve the project-declared package manager for the current workspace:
+/// the explicit `packageManager` field first, then `devEngines.packageManager`
+/// (rfcs/dev-engines.md).
 ///
 /// This is intentionally non-mutating: it does not prompt, download a package manager, or write the
-/// resolved version back to `package.json`.
+/// resolved version back to `package.json`. A `devEngines.packageManager` range resolves
+/// against already-downloaded versions when possible; otherwise the raw requirement is
+/// kept in `version` and resolved at download time.
 pub fn resolve_package_manager_from_package_json(
     cwd: impl AsRef<AbsolutePath>,
 ) -> Result<Option<PackageManagerResolution>, Error> {
@@ -295,7 +359,37 @@ pub fn resolve_package_manager_from_package_json(
         Err(vite_workspace::Error::PackageJsonNotFound(_)) => return Ok(None),
         Err(error) => return Err(error.into()),
     };
-    get_package_manager_from_package_json(&workspace_root)
+    if let Some(resolution) = get_package_manager_from_package_json(&workspace_root)? {
+        return Ok(Some(resolution));
+    }
+
+    // Fall back to devEngines.packageManager (see rfcs/dev-engines.md)
+    let Some((package_manager_type, version_req)) =
+        get_package_manager_from_dev_engines(&workspace_root)?
+    else {
+        return Ok(None);
+    };
+    // An absent version means any version satisfies (devEngines spec)
+    let version_req = version_req.unwrap_or_else(|| "*".into());
+    let version = if Version::parse(&version_req).is_ok() {
+        version_req
+    } else if let Ok(range) = node_semver::Range::parse(version_req.as_str())
+        && let Some(cached) = find_cached_package_manager_version(package_manager_type, &range)?
+    {
+        cached
+    } else {
+        version_req
+    };
+
+    let package_json_path = workspace_root.path.join("package.json");
+    Ok(Some(PackageManagerResolution {
+        package_manager_type,
+        version,
+        hash: None,
+        source: "devEngines.packageManager".into(),
+        source_path: package_json_path.to_absolute_path_buf(),
+        project_root: workspace_root.path.to_absolute_path_buf(),
+    }))
 }
 
 /// Return the managed install directory for a package manager version.
@@ -345,6 +439,125 @@ fn get_package_manager_from_package_json(
     }))
 }
 
+/// Read the `devEngines.packageManager` field from the workspace root package.json.
+fn read_dev_engines_package_manager(
+    workspace_root: &WorkspaceRoot,
+) -> Option<vite_shared::DevEngineField> {
+    let package_json_path = workspace_root.path.join("package.json");
+    let file = open_exists_file(&package_json_path).ok()??;
+    // Lenient: a package.json we cannot parse here is reported by other paths
+    let pkg: vite_shared::PackageJson = serde_json::from_reader(BufReader::new(&file)).ok()?;
+    pkg.dev_engines.and_then(|dev_engines| dev_engines.package_manager)
+}
+
+/// Resolve the package manager from `devEngines.packageManager` in package.json.
+///
+/// Entries are evaluated in order and the first supported entry wins (devEngines
+/// spec: "the first acceptable option would be used"). When no entry names a
+/// supported package manager, the effective `onFail` of the last entry decides:
+/// `ignore`/`warn` fall through to lockfile detection, `error` (the default) and
+/// `download` fail with a clear message. See rfcs/dev-engines.md.
+///
+/// Returns the package manager type and the raw version requirement
+/// (`None` means any version satisfies).
+fn get_package_manager_from_dev_engines(
+    workspace_root: &WorkspaceRoot,
+) -> Result<Option<(PackageManagerType, Option<Str>)>, Error> {
+    let Some(field) = read_dev_engines_package_manager(workspace_root) else {
+        return Ok(None);
+    };
+    let entries = field.entries();
+    if entries.is_empty() {
+        return Ok(None);
+    }
+
+    for entry in entries {
+        let Some(package_manager_type) = parse_package_manager_name(&entry.name) else {
+            continue;
+        };
+        // Lenient read: an invalid version range is treated as any version,
+        // surfaced as a warning here and by `vp env doctor`
+        let version_req = entry.version.clone().filter(|version| {
+            let valid = Version::parse(version).is_ok()
+                || node_semver::Range::parse(version.as_str()).is_ok();
+            if !valid {
+                vite_shared::output::warn(&format!(
+                    "invalid devEngines.packageManager version {version:?} for \
+                     {package_manager_type}, treating as any version"
+                ));
+            }
+            valid
+        });
+        return Ok(Some((package_manager_type, version_req)));
+    }
+
+    // No supported entry: the effective onFail of the last entry decides
+    let names: Str = entries.iter().map(|e| e.name.as_str()).collect::<Vec<_>>().join(", ").into();
+    match field.effective_on_fail(entries.len() - 1) {
+        OnFail::Ignore => Ok(None),
+        OnFail::Warn => {
+            vite_shared::output::warn(&format!(
+                "devEngines.packageManager {names:?} is not supported \
+                 (supported: pnpm, yarn, npm, bun)"
+            ));
+            Ok(None)
+        }
+        OnFail::Error | OnFail::Download => Err(Error::UnsupportedDevEnginesPackageManager(names)),
+    }
+}
+
+/// Warn when the explicit `packageManager` field does not satisfy the
+/// `devEngines.packageManager` constraint.
+///
+/// Per rfcs/dev-engines.md this is a warning for now and becomes a hard error
+/// in a future release; npm already errors in this situation.
+fn warn_on_dev_engines_package_manager_conflict(
+    workspace_root: &WorkspaceRoot,
+    resolution: &PackageManagerResolution,
+) {
+    let Some(field) = read_dev_engines_package_manager(workspace_root) else {
+        return;
+    };
+    let entries = field.entries();
+    if entries.is_empty() {
+        return;
+    }
+
+    let name = resolution.package_manager_type.to_string();
+    let Some(entry) = field.find_by_name(&name) else {
+        let names = entries.iter().map(|e| e.name.as_str()).collect::<Vec<_>>().join(", ");
+        vite_shared::output::warn(&format!(
+            "packageManager is {name}@{version} but devEngines.packageManager \
+             requires {names:?}. This will become an error in a future release.",
+            version = resolution.version
+        ));
+        return;
+    };
+    if let Some(required) = &entry.version
+        && let Ok(range) = node_semver::Range::parse(required.as_str())
+        && let Ok(version) = node_semver::Version::parse(resolution.version.as_str())
+        && !range.satisfies(&version)
+    {
+        vite_shared::output::warn(&format!(
+            "packageManager {name}@{version} does not satisfy \
+             devEngines.packageManager {required:?}. This will become an error in a future \
+             release.",
+            version = resolution.version
+        ));
+    }
+}
+
+/// Parse a package manager name into a supported [`PackageManagerType`].
+fn parse_package_manager_name(name: &str) -> Option<PackageManagerType> {
+    match name {
+        "pnpm" => Some(PackageManagerType::Pnpm),
+        "yarn" => Some(PackageManagerType::Yarn),
+        "npm" => Some(PackageManagerType::Npm),
+        "bun" => Some(PackageManagerType::Bun),
+        _ => None,
+    }
+}
+
 fn parse_package_manager_field(
     package_manager: &str,
     package_json_path: &AbsolutePath,
@@ -366,13 +579,8 @@ fn parse_package_manager_field(
         version: version.into(),
         package_json_path: package_json_path.to_absolute_path_buf(),
     })?;
-    let package_manager_type = match name {
-        "pnpm" => PackageManagerType::Pnpm,
-        "yarn" => PackageManagerType::Yarn,
-        "npm" => PackageManagerType::Npm,
-        "bun" => PackageManagerType::Bun,
-        _ => return Err(Error::UnsupportedPackageManager(name.into())),
-    };
+    let package_manager_type = parse_package_manager_name(name)
+        .ok_or_else(|| Error::UnsupportedPackageManager(name.into()))?;
 
     Ok(Some((package_manager_type, version.into(), hash)))
 }
@@ -408,6 +616,117 @@ async fn get_latest_version(package_manager_type: PackageManagerType) -> Result<
     Ok(package_json.version)
 }
 
+/// Abbreviated registry metadata: only the version list is needed.
+#[derive(Deserialize)]
+struct RegistryPackument {
+    // a map with ignored values is the idiomatic serde way to read only the keys
+    #[allow(clippy::zero_sized_map_values)]
+    #[serde(default)]
+    versions: HashMap<String, serde::de::IgnoredAny>,
+}
+
+/// Fetch all published versions of a package from the npm registry.
+async fn fetch_registry_versions(package_name: &str) -> Result<Vec<node_semver::Version>, Error> {
+    let url = get_npm_package_metadata_url(package_name);
+    let packument: RegistryPackument = HttpClient::new().get_json(&url).await?;
+    Ok(packument
+        .versions
+        .keys()
+        .filter_map(|version| node_semver::Version::parse(version).ok())
+        .collect())
+}
+
+/// Resolve the latest registry version satisfying `range` (prereleases excluded).
+async fn resolve_latest_satisfying_version(
+    package_manager_type: PackageManagerType,
+    range: &node_semver::Range,
+    version_req: &str,
+) -> Result<Str, Error> {
+    let package_name = package_manager_type.to_string();
+    let mut versions = fetch_registry_versions(&package_name).await?;
+    // yarn >= 2.0.0 is published as `@yarnpkg/cli-dist`; merge both version lists
+    if matches!(package_manager_type, PackageManagerType::Yarn) {
+        versions.extend(fetch_registry_versions("@yarnpkg/cli-dist").await?);
+    }
+
+    versions
+        .into_iter()
+        .filter(|version| !version.is_prerelease() && range.satisfies(version))
+        .max()
+        .map(|version| Str::from(version.to_string()))
+        .ok_or_else(|| Error::PackageManagerVersionNotFound {
+            name: package_name.clone().into(),
+            version: version_req.into(),
+            url: get_npm_package_metadata_url(&package_name).into(),
+        })
+}
+
+/// Find the highest already-downloaded package manager version satisfying `range`
+/// under `$VP_HOME/package_manager/<name>/`.
+fn find_cached_package_manager_version(
+    package_manager_type: PackageManagerType,
+    range: &node_semver::Range,
+) -> Result<Option<Str>, Error> {
+    let home_dir = vite_shared::get_vp_home()?;
+    let bin_name = package_manager_type.to_string();
+    let versions_dir = home_dir.join("package_manager").join(&bin_name);
+    let entries = match fs::read_dir(&versions_dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(e.into()),
+    };
+
+    let mut best: Option<node_semver::Version> = None;
+    for entry in entries.flatten() {
+        let file_name = entry.file_name();
+        let Some(name) = file_name.to_str() else { continue };
+        let Ok(version) = node_semver::Version::parse(name) else { continue };
+        if !range.satisfies(&version) {
+            continue;
+        }
+        // Only consider completed installs (the bin shim exists)
+        let bin_file = versions_dir.join(name).join(&bin_name).join("bin").join(&bin_name);
+        if !is_exists_file(&bin_file)? {
+            continue;
+        }
+        if best.as_ref().is_none_or(|b| version > *b) {
+            best = Some(version);
+        }
+    }
+    Ok(best.map(|version| Str::from(version.to_string())))
+}
+
+/// Resolve a semver range (e.g. from `devEngines.packageManager`) to an exact
+/// version: prefer the highest already-downloaded satisfying version, falling
+/// back to the latest satisfying version from the npm registry.
+/// See rfcs/dev-engines.md.
+async fn resolve_package_manager_range(
+    package_manager_type: PackageManagerType,
+    version_req: &str,
+) -> Result<Str, Error> {
+    let range = node_semver::Range::parse(version_req).map_err(|_| {
+        Error::InvalidArgument(
+            format!(
+                "invalid {package_manager_type} version {version_req:?}: expected semver \
+                 'major.minor.patch' or a semver range"
+            )
+            .into(),
+        )
+    })?;
+
+    if let Some(cached) = find_cached_package_manager_version(package_manager_type, &range)? {
+        tracing::debug!("Found cached {package_manager_type} {cached} satisfying {version_req}");
+        return Ok(cached);
+    }
+
+    // `*` (any version) resolves to the registry's latest stable
+    if version_req == "*" {
+        return get_latest_version(package_manager_type).await;
+    }
+
+    resolve_latest_satisfying_version(package_manager_type, &range, version_req).await
+}
+
 /// Download the package manager and extract it to the vite-plus home directory.
 /// Return the install directory, e.g. `$VP_HOME/package_manager/pnpm/10.0.0/pnpm`
 pub async fn download_package_manager(
@@ -417,8 +736,12 @@ pub async fn download_package_manager(
 ) -> Result<(AbsolutePathBuf, Str, Str), Error> {
     let version: Str = if version_or_latest == "latest" {
         get_latest_version(package_manager_type).await?
-    } else {
+    } else if Version::parse(version_or_latest).is_ok() {
         version_or_latest.into()
+    } else {
+        // semver range (e.g. from devEngines.packageManager): prefer an already
+        // downloaded satisfying version, otherwise resolve from the registry
+        resolve_package_manager_range(package_manager_type, version_or_latest).await?
     };
 
     // Reject anything that is not strict semver `major.minor.patch[-prerelease][+build]`.
@@ -769,29 +1092,46 @@ async fn create_bun_shim_files(bin_prefix: &AbsolutePath) -> Result<(), Error> {
     Ok(())
 }
 
-async fn set_package_manager_field(
+/// Write the resolved package manager into `devEngines.packageManager`.
+///
+/// Used by auto-pin when detection had no explicit field (rfcs/dev-engines.md):
+/// the exact resolved version is recorded with `onFail: "download"` so future
+/// runs are deterministic. Preserves the file's key order and formatting style,
+/// placing `devEngines` next to `engines` when present.
+async fn set_dev_engines_package_manager_field(
     package_json_path: impl AsRef<AbsolutePath>,
     package_manager_type: PackageManagerType,
     version: &str,
 ) -> Result<(), Error> {
     let package_json_path = package_json_path.as_ref();
-    let package_manager_value = format!("{package_manager_type}@{version}");
-    let mut package_json = if is_exists_file(package_json_path)? {
-        let content = tokio::fs::read(&package_json_path).await?;
-        serde_json::from_slice(&content)?
+    let content = if is_exists_file(package_json_path)? {
+        tokio::fs::read_to_string(&package_json_path).await?
     } else {
-        serde_json::json!({})
+        "{}\n".to_string()
     };
-    // use IndexMap to preserve the order of the fields
-    if let Some(package_json) = package_json.as_object_mut() {
-        package_json.insert("packageManager".into(), serde_json::json!(package_manager_value));
-    }
-    let json_string = serde_json::to_string_pretty(&package_json)?;
-    tokio::fs::write(&package_json_path, json_string).await?;
+    let entry = serde_json::json!({
+        "name": package_manager_type.to_string(),
+        "version": version,
+        "onFail": "download",
+    });
+    let updated = vite_shared::edit_json_object(&content, |obj| {
+        if let Some(dev_engines) = obj.get_mut("devEngines").and_then(|v| v.as_object_mut()) {
+            dev_engines.insert("packageManager".into(), entry);
+        } else {
+            vite_shared::insert_after(
+                obj,
+                "engines",
+                "devEngines",
+                serde_json::json!({ "packageManager": entry }),
+            );
+        }
+    })?;
+    tokio::fs::write(&package_json_path, updated).await?;
     tracing::debug!(
-        "set_package_manager_field: {:?} to {:?}",
+        "set_dev_engines_package_manager_field: {:?} to {}@{}",
         package_json_path,
-        package_manager_value
+        package_manager_type,
+        version
     );
     Ok(())
 }
@@ -1443,12 +1783,17 @@ mod tests {
             PackageManager::builder(temp_dir_path).build().await.expect("Should detect pnpm");
         assert_eq!(result.bin_name, "pnpm");
 
-        // check if the package.json file has the `packageManager` field
+        // auto-pin writes devEngines.packageManager (see rfcs/dev-engines.md)
         let package_json_path = temp_dir.path().join("package.json");
         let package_json: serde_json::Value =
             serde_json::from_slice(&fs::read(&package_json_path).unwrap()).unwrap();
         println!("package_json: {package_json:?}");
-        assert!(package_json["packageManager"].as_str().unwrap().starts_with("pnpm@"));
+        let entry = &package_json["devEngines"]["packageManager"];
+        assert_eq!(entry["name"].as_str().unwrap(), "pnpm");
+        assert!(Version::parse(entry["version"].as_str().unwrap()).is_ok());
+        assert_eq!(entry["onFail"].as_str().unwrap(), "download");
+        // the legacy field is not written
+        assert!(package_json.get("packageManager").is_none());
         // keep other fields
         assert_eq!(package_json["version"].as_str().unwrap(), "1.0.0");
         assert_eq!(package_json["name"].as_str().unwrap(), "test-package");
@@ -1476,12 +1821,14 @@ mod tests {
             "bin_prefix should end with yarn/bin, but got {:?}",
             result.get_bin_prefix()
         );
-        // package.json should have the `packageManager` field
+        // auto-pin writes devEngines.packageManager (see rfcs/dev-engines.md)
         let package_json_path = temp_dir_path.join("package.json");
         let package_json: serde_json::Value =
             serde_json::from_slice(&fs::read(&package_json_path).unwrap()).unwrap();
         println!("package_json: {package_json:?}");
-        assert!(package_json["packageManager"].as_str().unwrap().starts_with("yarn@"));
+        let entry = &package_json["devEngines"]["packageManager"];
+        assert_eq!(entry["name"].as_str().unwrap(), "yarn");
+        assert_eq!(entry["onFail"].as_str().unwrap(), "download");
         // keep other fields
         assert_eq!(package_json["name"].as_str().unwrap(), "test-package");
     }
@@ -1583,7 +1930,7 @@ mod tests {
         create_package_json(&temp_dir_path, package_content);
 
         let (workspace_root, _) = find_workspace_root(&temp_dir_path).unwrap();
-        let (pm_type, version, hash) =
+        let (pm_type, version, hash, _) =
             get_package_manager_type_and_version(&workspace_root, None).unwrap();
 
         assert_eq!(pm_type, PackageManagerType::Yarn);
@@ -1596,6 +1943,294 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_resolve_package_manager_from_dev_engines_exact() {
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let package_content = r#"{
+            "name": "test-package",
+            "devEngines": {"packageManager": {"name": "pnpm", "version": "9.15.0"}}
+        }"#;
+        create_package_json(&temp_dir_path, package_content);
+
+        let resolution =
+            resolve_package_manager_from_package_json(&temp_dir_path).unwrap().unwrap();
+        assert_eq!(resolution.package_manager_type, PackageManagerType::Pnpm);
+        assert_eq!(resolution.version, "9.15.0");
+        assert!(resolution.hash.is_none());
+        assert_eq!(resolution.source, "devEngines.packageManager");
+    }
+
+    #[tokio::test]
+    async fn test_resolve_package_manager_from_dev_engines_uncached_range_kept() {
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        // a range no downloaded version can satisfy: the raw requirement is kept
+        // and resolved at download time
+        let package_content = r#"{
+            "name": "test-package",
+            "devEngines": {"packageManager": {"name": "pnpm", "version": ">=999.0.0"}}
+        }"#;
+        create_package_json(&temp_dir_path, package_content);
+
+        let resolution =
+            resolve_package_manager_from_package_json(&temp_dir_path).unwrap().unwrap();
+        assert_eq!(resolution.package_manager_type, PackageManagerType::Pnpm);
+        assert_eq!(resolution.version, ">=999.0.0");
+        assert_eq!(resolution.source, "devEngines.packageManager");
+    }
+
+    #[tokio::test]
+    async fn test_resolve_package_manager_field_wins_over_dev_engines() {
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let package_content = r#"{
+            "name": "test-package",
+            "packageManager": "npm@10.5.0",
+            "devEngines": {"packageManager": {"name": "pnpm", "version": "^9.0.0"}}
+        }"#;
+        create_package_json(&temp_dir_path, package_content);
+
+        let resolution =
+            resolve_package_manager_from_package_json(&temp_dir_path).unwrap().unwrap();
+        assert_eq!(resolution.package_manager_type, PackageManagerType::Npm);
+        assert_eq!(resolution.version, "10.5.0");
+        assert_eq!(resolution.source, "packageManager");
+    }
+
+    #[tokio::test]
+    async fn test_detect_dev_engines_package_manager_exact_version() {
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let package_content = r#"{
+            "name": "test-package",
+            "devEngines": {
+                "packageManager": {"name": "pnpm", "version": "9.15.0", "onFail": "download"}
+            }
+        }"#;
+        create_package_json(&temp_dir_path, package_content);
+        // a lockfile that would otherwise win: devEngines has higher priority
+        fs::write(temp_dir_path.join("package-lock.json"), "{}").unwrap();
+
+        let (workspace_root, _) = find_workspace_root(&temp_dir_path).unwrap();
+        let (pm_type, version, hash, source) =
+            get_package_manager_type_and_version(&workspace_root, None).unwrap();
+
+        assert_eq!(pm_type, PackageManagerType::Pnpm);
+        assert_eq!(version, "9.15.0");
+        assert!(hash.is_none());
+        assert_eq!(source, PackageManagerSource::DevEnginesPackageManager);
+    }
+
+    #[tokio::test]
+    async fn test_detect_dev_engines_package_manager_range_preserved() {
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let package_content = r#"{
+            "name": "test-package",
+            "devEngines": {
+                "packageManager": {"name": "pnpm", "version": "^9.0.0"}
+            }
+        }"#;
+        create_package_json(&temp_dir_path, package_content);
+
+        let (workspace_root, _) = find_workspace_root(&temp_dir_path).unwrap();
+        let (pm_type, version, _, source) =
+            get_package_manager_type_and_version(&workspace_root, None).unwrap();
+
+        assert_eq!(pm_type, PackageManagerType::Pnpm);
+        // the range is preserved here; download resolves it to an exact version
+        assert_eq!(version, "^9.0.0");
+        assert_eq!(source, PackageManagerSource::DevEnginesPackageManager);
+    }
+
+    #[tokio::test]
+    async fn test_detect_dev_engines_package_manager_absent_version_is_any() {
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let package_content = r#"{
+            "name": "test-package",
+            "devEngines": {"packageManager": {"name": "bun"}}
+        }"#;
+        create_package_json(&temp_dir_path, package_content);
+
+        let (workspace_root, _) = find_workspace_root(&temp_dir_path).unwrap();
+        let (pm_type, version, _, source) =
+            get_package_manager_type_and_version(&workspace_root, None).unwrap();
+
+        assert_eq!(pm_type, PackageManagerType::Bun);
+        assert_eq!(version, "*");
+        assert_eq!(source, PackageManagerSource::DevEnginesPackageManager);
+    }
+
+    #[tokio::test]
+    async fn test_detect_dev_engines_package_manager_invalid_version_is_any() {
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let package_content = r#"{
+            "name": "test-package",
+            "devEngines": {"packageManager": {"name": "pnpm", "version": "not-a-version"}}
+        }"#;
+        create_package_json(&temp_dir_path, package_content);
+
+        let (workspace_root, _) = find_workspace_root(&temp_dir_path).unwrap();
+        let (pm_type, version, _, source) =
+            get_package_manager_type_and_version(&workspace_root, None).unwrap();
+
+        assert_eq!(pm_type, PackageManagerType::Pnpm);
+        // lenient read: an invalid range is treated as any version
+        assert_eq!(version, "*");
+        assert_eq!(source, PackageManagerSource::DevEnginesPackageManager);
+    }
+
+    #[tokio::test]
+    async fn test_detect_dev_engines_package_manager_array_first_supported_wins() {
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let package_content = r#"{
+            "name": "test-package",
+            "devEngines": {
+                "packageManager": [
+                    {"name": "vlt", "version": "^1.0.0"},
+                    {"name": "yarn", "version": "4.9.2"},
+                    {"name": "npm", "version": ">=10"}
+                ]
+            }
+        }"#;
+        create_package_json(&temp_dir_path, package_content);
+
+        let (workspace_root, _) = find_workspace_root(&temp_dir_path).unwrap();
+        let (pm_type, version, _, source) =
+            get_package_manager_type_and_version(&workspace_root, None).unwrap();
+
+        assert_eq!(pm_type, PackageManagerType::Yarn);
+        assert_eq!(version, "4.9.2");
+        assert_eq!(source, PackageManagerSource::DevEnginesPackageManager);
+    }
+
+    #[tokio::test]
+    async fn test_detect_dev_engines_package_manager_unsupported_single_errors() {
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        // single entry defaults to onFail: error (devEngines spec)
+        let package_content = r#"{
+            "name": "test-package",
+            "devEngines": {"packageManager": {"name": "vlt", "version": "^1.0.0"}}
+        }"#;
+        create_package_json(&temp_dir_path, package_content);
+        fs::write(temp_dir_path.join("pnpm-lock.yaml"), "lockfileVersion: '6.0'").unwrap();
+
+        let (workspace_root, _) = find_workspace_root(&temp_dir_path).unwrap();
+        let result = get_package_manager_type_and_version(&workspace_root, None);
+        assert!(matches!(result, Err(Error::UnsupportedDevEnginesPackageManager(_))));
+    }
+
+    #[tokio::test]
+    async fn test_detect_dev_engines_package_manager_unsupported_ignore_falls_through() {
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let package_content = r#"{
+            "name": "test-package",
+            "devEngines": {
+                "packageManager": {"name": "vlt", "version": "^1.0.0", "onFail": "ignore"}
+            }
+        }"#;
+        create_package_json(&temp_dir_path, package_content);
+        fs::write(temp_dir_path.join("pnpm-lock.yaml"), "lockfileVersion: '6.0'").unwrap();
+
+        let (workspace_root, _) = find_workspace_root(&temp_dir_path).unwrap();
+        let (pm_type, version, _, source) =
+            get_package_manager_type_and_version(&workspace_root, None).unwrap();
+
+        // onFail: ignore continues down the detection chain to the lockfile
+        assert_eq!(pm_type, PackageManagerType::Pnpm);
+        assert_eq!(version, "latest");
+        assert_eq!(source, PackageManagerSource::LockfileOrConfig);
+    }
+
+    #[tokio::test]
+    async fn test_detect_package_manager_field_priority_over_dev_engines() {
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let package_content = r#"{
+            "name": "test-package",
+            "packageManager": "npm@10.5.0",
+            "devEngines": {
+                "packageManager": {"name": "pnpm", "version": "^9.0.0"}
+            }
+        }"#;
+        create_package_json(&temp_dir_path, package_content);
+
+        let (workspace_root, _) = find_workspace_root(&temp_dir_path).unwrap();
+        let (pm_type, version, _, source) =
+            get_package_manager_type_and_version(&workspace_root, None).unwrap();
+
+        // packageManager field drives selection; a conflict warning is printed
+        assert_eq!(pm_type, PackageManagerType::Npm);
+        assert_eq!(version, "10.5.0");
+        assert_eq!(source, PackageManagerSource::PackageManagerField);
+    }
+
+    #[tokio::test]
+    async fn test_set_dev_engines_package_manager_field_preserves_format_and_engines() {
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let package_json_path = temp_dir_path.join("package.json");
+        // 4-space indentation and an existing engines.node that must stay unchanged
+        let package_content = "{\n    \"name\": \"test-package\",\n    \"engines\": {\n        \"node\": \">=20.0.0\"\n    },\n    \"scripts\": {}\n}\n";
+        fs::write(&package_json_path, package_content).unwrap();
+
+        set_dev_engines_package_manager_field(
+            &package_json_path,
+            PackageManagerType::Pnpm,
+            "9.15.0",
+        )
+        .await
+        .unwrap();
+
+        let updated = fs::read_to_string(&package_json_path).unwrap();
+        // engines.node is kept unchanged and devEngines is placed right after it
+        assert_eq!(
+            updated,
+            "{\n    \"name\": \"test-package\",\n    \"engines\": {\n        \"node\": \">=20.0.0\"\n    },\n    \"devEngines\": {\n        \"packageManager\": {\n            \"name\": \"pnpm\",\n            \"version\": \"9.15.0\",\n            \"onFail\": \"download\"\n        }\n    },\n    \"scripts\": {}\n}\n"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_set_dev_engines_package_manager_field_keeps_existing_runtime() {
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let package_json_path = temp_dir_path.join("package.json");
+        let package_content = r#"{
+  "name": "test-package",
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": "^24.0.0"
+    }
+  }
+}
+"#;
+        fs::write(&package_json_path, package_content).unwrap();
+
+        set_dev_engines_package_manager_field(
+            &package_json_path,
+            PackageManagerType::Npm,
+            "11.4.0",
+        )
+        .await
+        .unwrap();
+
+        let updated = fs::read_to_string(&package_json_path).unwrap();
+        let package_json: serde_json::Value = serde_json::from_str(&updated).unwrap();
+        // the existing runtime entry is preserved
+        assert_eq!(package_json["devEngines"]["runtime"]["version"].as_str().unwrap(), "^24.0.0");
+        let entry = &package_json["devEngines"]["packageManager"];
+        assert_eq!(entry["name"].as_str().unwrap(), "npm");
+        assert_eq!(entry["version"].as_str().unwrap(), "11.4.0");
+        assert_eq!(entry["onFail"].as_str().unwrap(), "download");
+    }
+
+    #[tokio::test]
     async fn test_parse_package_manager_with_sha1_hash() {
         let temp_dir = create_temp_dir();
         let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
@@ -1605,7 +2240,7 @@ mod tests {
         create_package_json(&temp_dir_path, package_content);
 
         let (workspace_root, _) = find_workspace_root(&temp_dir_path).unwrap();
-        let (pm_type, version, hash) =
+        let (pm_type, version, hash, _) =
             get_package_manager_type_and_version(&workspace_root, None).unwrap();
 
         assert_eq!(pm_type, PackageManagerType::Npm);
@@ -1624,7 +2259,7 @@ mod tests {
         create_package_json(&temp_dir_path, package_content);
 
         let (workspace_root, _) = find_workspace_root(&temp_dir_path).unwrap();
-        let (pm_type, version, hash) =
+        let (pm_type, version, hash, _) =
             get_package_manager_type_and_version(&workspace_root, None).unwrap();
 
         assert_eq!(pm_type, PackageManagerType::Pnpm);
@@ -1646,7 +2281,7 @@ mod tests {
         create_package_json(&temp_dir_path, package_content);
 
         let (workspace_root, _) = find_workspace_root(&temp_dir_path).unwrap();
-        let (pm_type, version, hash) =
+        let (pm_type, version, hash, _) =
             get_package_manager_type_and_version(&workspace_root, None).unwrap();
 
         assert_eq!(pm_type, PackageManagerType::Yarn);
@@ -1668,7 +2303,7 @@ mod tests {
         create_package_json(&temp_dir_path, package_content);
 
         let (workspace_root, _) = find_workspace_root(&temp_dir_path).unwrap();
-        let (pm_type, version, hash) =
+        let (pm_type, version, hash, _) =
             get_package_manager_type_and_version(&workspace_root, None).unwrap();
 
         assert_eq!(pm_type, PackageManagerType::Pnpm);
@@ -1895,12 +2530,13 @@ mod tests {
             .await
             .expect("Should use default");
         assert_eq!(result.bin_name, "yarn");
-        // package.json should have the `packageManager` field
+        // auto-pin writes devEngines.packageManager (see rfcs/dev-engines.md)
         let package_json_path = temp_dir_path.join("package.json");
         let package_json: serde_json::Value =
             serde_json::from_slice(&fs::read(&package_json_path).unwrap()).unwrap();
-        // println!("package_json: {:?}", package_json);
-        assert!(package_json["packageManager"].as_str().unwrap().starts_with("yarn@"));
+        let entry = &package_json["devEngines"]["packageManager"];
+        assert_eq!(entry["name"].as_str().unwrap(), "yarn");
+        assert_eq!(entry["onFail"].as_str().unwrap(), "download");
         // keep other fields
         assert_eq!(package_json["name"].as_str().unwrap(), "test-package");
     }
@@ -2059,11 +2695,13 @@ mod tests {
             "bin_prefix should end with yarn/bin, but got {:?}",
             result.get_bin_prefix()
         );
-        // package.json should have the `packageManager` field
+        // auto-pin writes devEngines.packageManager (see rfcs/dev-engines.md)
         let package_json_path = temp_dir.path().join("package.json");
         let package_json: serde_json::Value =
             serde_json::from_slice(&fs::read(&package_json_path).unwrap()).unwrap();
-        assert!(package_json["packageManager"].as_str().unwrap().starts_with("yarn@"));
+        let entry = &package_json["devEngines"]["packageManager"];
+        assert_eq!(entry["name"].as_str().unwrap(), "yarn");
+        assert_eq!(entry["onFail"].as_str().unwrap(), "download");
         // keep other fields
         assert_eq!(package_json["name"].as_str().unwrap(), "test-package");
     }
@@ -2090,11 +2728,13 @@ mod tests {
             "bin_prefix should end with pnpm/bin, but got {:?}",
             result.get_bin_prefix()
         );
-        // package.json should have the `packageManager` field
+        // auto-pin writes devEngines.packageManager (see rfcs/dev-engines.md)
         let package_json_path = temp_dir_path.join("package.json");
         let package_json: serde_json::Value =
             serde_json::from_slice(&fs::read(&package_json_path).unwrap()).unwrap();
-        assert!(package_json["packageManager"].as_str().unwrap().starts_with("pnpm@"));
+        let entry = &package_json["devEngines"]["packageManager"];
+        assert_eq!(entry["name"].as_str().unwrap(), "pnpm");
+        assert_eq!(entry["onFail"].as_str().unwrap(), "download");
         // keep other fields
         assert_eq!(package_json["name"].as_str().unwrap(), "test-package");
     }
@@ -2124,11 +2764,13 @@ mod tests {
             "bin_prefix should end with yarn/bin, but got {:?}",
             result.get_bin_prefix()
         );
-        // package.json should have the `packageManager` field
+        // auto-pin writes devEngines.packageManager (see rfcs/dev-engines.md)
         let package_json_path = temp_dir_path.join("package.json");
         let package_json: serde_json::Value =
             serde_json::from_slice(&fs::read(&package_json_path).unwrap()).unwrap();
-        assert!(package_json["packageManager"].as_str().unwrap().starts_with("yarn@"));
+        let entry = &package_json["devEngines"]["packageManager"];
+        assert_eq!(entry["name"].as_str().unwrap(), "yarn");
+        assert_eq!(entry["onFail"].as_str().unwrap(), "download");
         // keep other fields
         assert_eq!(package_json["name"].as_str().unwrap(), "test-package");
     }
@@ -2209,7 +2851,7 @@ mod tests {
 
         let (workspace_root, _) =
             find_workspace_root(&temp_dir_path).expect("Should find workspace root");
-        let (pm_type, version, hash) =
+        let (pm_type, version, hash, _) =
             get_package_manager_type_and_version(&workspace_root, None).expect("Should detect bun");
         assert_eq!(pm_type, PackageManagerType::Bun);
         assert_eq!(version.as_str(), "latest");
@@ -2229,7 +2871,7 @@ mod tests {
 
         let (workspace_root, _) =
             find_workspace_root(&temp_dir_path).expect("Should find workspace root");
-        let (pm_type, version, hash) =
+        let (pm_type, version, hash, _) =
             get_package_manager_type_and_version(&workspace_root, None).expect("Should detect bun");
         assert_eq!(pm_type, PackageManagerType::Bun);
         assert_eq!(version.as_str(), "latest");
@@ -2249,7 +2891,7 @@ mod tests {
 
         let (workspace_root, _) =
             find_workspace_root(&temp_dir_path).expect("Should find workspace root");
-        let (pm_type, version, hash) =
+        let (pm_type, version, hash, _) =
             get_package_manager_type_and_version(&workspace_root, None).expect("Should detect bun");
         assert_eq!(pm_type, PackageManagerType::Bun);
         assert_eq!(version.as_str(), "latest");
@@ -2265,8 +2907,9 @@ mod tests {
 
         let (workspace_root, _) =
             find_workspace_root(&temp_dir_path).expect("Should find workspace root");
-        let (pm_type, version, hash) = get_package_manager_type_and_version(&workspace_root, None)
-            .expect("Should detect bun from packageManager field");
+        let (pm_type, version, hash, _) =
+            get_package_manager_type_and_version(&workspace_root, None)
+                .expect("Should detect bun from packageManager field");
         assert_eq!(pm_type, PackageManagerType::Bun);
         assert_eq!(version.as_str(), "1.2.0");
         assert!(hash.is_none());
@@ -2282,8 +2925,9 @@ mod tests {
 
         let (workspace_root, _) =
             find_workspace_root(&temp_dir_path).expect("Should find workspace root");
-        let (pm_type, version, hash) = get_package_manager_type_and_version(&workspace_root, None)
-            .expect("Should detect bun with hash");
+        let (pm_type, version, hash, _) =
+            get_package_manager_type_and_version(&workspace_root, None)
+                .expect("Should detect bun with hash");
         assert_eq!(pm_type, PackageManagerType::Bun);
         assert_eq!(version.as_str(), "1.2.0");
         assert_eq!(hash.unwrap().as_str(), "sha512.abc123");
@@ -2304,7 +2948,7 @@ mod tests {
 
         let (workspace_root, _) =
             find_workspace_root(&temp_dir_path).expect("Should find workspace root");
-        let (pm_type, _, _) =
+        let (pm_type, _, _, _) =
             get_package_manager_type_and_version(&workspace_root, None).expect("Should detect bun");
         assert_eq!(
             pm_type,

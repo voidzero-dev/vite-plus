@@ -489,8 +489,8 @@ async fn has_valid_version_source(
             .as_ref()
             .and_then(|de| de.runtime.as_ref())
             .and_then(|rt| rt.find_by_name("node"))
-            .filter(|r| !r.version.is_empty())
-            .is_some_and(|r| is_valid_version(&r.version));
+            .and_then(|r| r.version.as_ref())
+            .is_some_and(|v| is_valid_version(v));
 
     Ok(engines_valid || dev_engines_valid)
 }

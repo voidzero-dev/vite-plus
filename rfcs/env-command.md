@@ -288,8 +288,8 @@ argv[0] = "npx"       → Shim mode: resolve version, exec npx
 │  │  (walk up directory tree)    │     │  0. VITE_PLUS_NODE_VERSION  │       │
 │  └──────────────┬───────────────┘     │  1. .session-node-version   │       │
 │                 │                     │  2. .node-version           │       │
-│                 │                     │  3. package.json#engines    │       │
-│                 │                     │  4. package.json#devEngines │       │
+│                 │                     │  3. package.json#devEngines │       │
+│                 │                     │  4. package.json#engines    │       │
 │                 │                     │  5. User default (config)   │       │
 │                 │                     │  6. Latest LTS              │       │
 │                 ▼                     └─────────────────────────────┘       │
@@ -546,13 +546,13 @@ When resolving which Node.js version to use, vite-plus checks the following sour
    - Checked in current directory, then parent directories
    - Simple format: one version per file
 
-3. **`package.json#engines.node`**
+3. **`package.json#devEngines.runtime`**
    - Checked in current directory, then parent directories
-   - Standard npm constraint field
+   - Development-environment requirement field (see [RFC: devEngines Support](./dev-engines.md))
 
-4. **`package.json#devEngines.runtime`**
+4. **`package.json#engines.node`**
    - Checked in current directory, then parent directories
-   - npm RFC-compliant development engines spec
+   - Consumer-facing npm constraint field
 
 5. **User default** (`~/.vite-plus/config.json`)
    - Set via `vp env default <version>`
@@ -811,8 +811,8 @@ The resolution order is:
 1. `VITE_PLUS_NODE_VERSION` env var (session override)
 2. `.session-node-version` file (session override)
 3. `.node-version` in current or parent directories
-4. `package.json#engines.node` in current or parent directories
-5. `package.json#devEngines.runtime` in current or parent directories
+4. `package.json#devEngines.runtime` in current or parent directories
+5. `package.json#engines.node` in current or parent directories
 6. **User Default**: Configured via `vp env default <version>` (stored in `~/.vite-plus/config.json`)
 7. **System Default**: Latest LTS version
 
@@ -1396,7 +1396,7 @@ Run 'vp install -g typescript' to reinstall.
 
 ## Pin Command
 
-The `vp env pin` command provides per-directory Node.js version pinning by managing `.node-version` files.
+The `vp env pin` command provides per-directory Node.js version pinning. The write target follows the compatibility-first rule from [RFC: devEngines Support](./dev-engines.md): an existing `.node-version` keeps being updated; otherwise the pin is written to `package.json#devEngines.runtime` (creating the node entry with `onFail: "download"` when absent); `.node-version` is only created when the directory has no `package.json`. An explicit `--target node-version` / `--target dev-engines` flag overrides the selection.
 
 ### Behavior
 
@@ -1449,24 +1449,29 @@ $ vp env unpin
 ✓ Removed .node-version from /Users/user/projects/my-app
 ```
 
+`vp env unpin` removes the pin from the same source that `vp env pin` would write: it deletes `.node-version` when present, otherwise it removes the node entry from `package.json#devEngines.runtime`.
+
 ### Version Format Support
 
-| Input     | Written to File | Behavior                         |
-| --------- | --------------- | -------------------------------- |
-| `20.18.0` | `20.18.0`       | Exact version                    |
-| `20.18`   | `20.18`         | Latest 20.18.x at runtime        |
-| `20`      | `20`            | Latest 20.x.x at runtime         |
-| `lts`     | `22.13.0`       | Resolved at pin time             |
-| `latest`  | `24.0.0`        | Resolved at pin time             |
-| `^20.0.0` | `^20.0.0`       | Semver range resolved at runtime |
+| Input     | Written to the target | Behavior                                       |
+| --------- | --------------------- | ---------------------------------------------- |
+| `20.18.0` | `20.18.0`             | Exact version (validated against the registry) |
+| `20.18`   | e.g. `20.18.3`        | Resolved to exact at pin time                  |
+| `20`      | e.g. `20.19.0`        | Resolved to exact at pin time                  |
+| `lts`     | e.g. `22.13.0`        | Resolved to exact at pin time                  |
+| `latest`  | e.g. `24.0.0`         | Resolved to exact at pin time                  |
+| `^20.0.0` | e.g. `20.19.0`        | Resolved to exact at pin time                  |
+
+Both write targets receive the same exact resolved version; the devEngines spec only allows semver range syntax in `devEngines.runtime.version`, and exact versions satisfy that. See [RFC: devEngines Support](./dev-engines.md).
 
 ### Flags
 
-| Flag           | Description                                             |
-| -------------- | ------------------------------------------------------- |
-| `--unpin`      | Remove the `.node-version` file                         |
-| `--no-install` | Skip pre-downloading the pinned version                 |
-| `--force`      | Overwrite existing `.node-version` without confirmation |
+| Flag                                   | Description                                                                      |
+| -------------------------------------- | -------------------------------------------------------------------------------- |
+| `--unpin`                              | Remove the pin from its current source (`.node-version` or `devEngines.runtime`) |
+| `--no-install`                         | Skip pre-downloading the pinned version                                          |
+| `--force`                              | Overwrite an existing pin without confirmation                                   |
+| `--target <node-version\|dev-engines>` | Explicitly choose the write target (overrides the default selection)             |
 
 ### Pre-download Behavior
 

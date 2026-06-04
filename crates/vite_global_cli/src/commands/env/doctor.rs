@@ -97,7 +97,10 @@ pub async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
 
     // Section: Version Resolution
     print_section("Version Resolution");
-    check_current_resolution(&cwd, shim_mode, system_node_path).await;
+    let resolved_version = check_current_resolution(&cwd, shim_mode, system_node_path).await;
+
+    // Section: devEngines (conditional, see rfcs/dev-engines.md)
+    check_dev_engines(&cwd, resolved_version.as_deref()).await;
 
     // Section: Conflicts (conditional)
     check_conflicts();
@@ -520,7 +523,7 @@ async fn check_current_resolution(
     cwd: &AbsolutePathBuf,
     shim_mode: ShimMode,
     system_node_path: Option<AbsolutePathBuf>,
-) {
+) -> Option<String> {
     print_check(" ", "Directory", &cwd.as_path().display().to_string());
 
     // In system-first mode, show system Node.js info instead of managed resolution
@@ -542,7 +545,7 @@ async fn check_current_resolution(
             );
             print_hint("Install Node.js or run 'vp env on' to use managed Node.js.");
         }
-        return;
+        return None;
     }
 
     match resolve_version(cwd).await {
@@ -558,7 +561,7 @@ async fn check_current_resolution(
             // Check if Node.js is installed
             let home_dir = match vite_shared::get_vp_home() {
                 Ok(d) => d.join("js_runtime").join("node").join(&resolution.version),
-                Err(_) => return,
+                Err(_) => return None,
             };
 
             #[cfg(windows)]
@@ -576,6 +579,7 @@ async fn check_current_resolution(
                 );
                 print_hint("Version will be downloaded on first use.");
             }
+            Some(resolution.version)
         }
         Err(e) => {
             print_check(
@@ -583,6 +587,7 @@ async fn check_current_resolution(
                 "Resolution",
                 &format!("failed: {e}").red().to_string(),
             );
+            None
         }
     }
 }
@@ -594,6 +599,286 @@ async fn get_node_version(node_path: &vite_path::AbsolutePath) -> String {
             String::from_utf8_lossy(&output.stdout).trim().to_string()
         }
         _ => "unknown".to_string(),
+    }
+}
+
+/// One devEngines doctor finding.
+struct DevEnginesFinding {
+    /// true for a warning, false for an informational note
+    warn: bool,
+    key: &'static str,
+    message: String,
+    hint: Option<String>,
+}
+
+impl DevEnginesFinding {
+    fn warn(key: &'static str, message: String) -> Self {
+        Self { warn: true, key, message, hint: None }
+    }
+
+    fn warn_with_hint(key: &'static str, message: String, hint: String) -> Self {
+        Self { warn: true, key, message, hint: Some(hint) }
+    }
+
+    fn note(key: &'static str, message: String) -> Self {
+        Self { warn: false, key, message, hint: None }
+    }
+}
+
+/// Find the nearest package.json walking up from `cwd`.
+async fn find_nearest_package_json(cwd: &AbsolutePathBuf) -> Option<(AbsolutePathBuf, String)> {
+    let mut current = cwd.clone();
+    loop {
+        let candidate = current.join("package.json");
+        if let Ok(content) = tokio::fs::read_to_string(&candidate).await {
+            return Some((current, content));
+        }
+        current = current.parent()?.to_absolute_path_buf();
+    }
+}
+
+/// Find the nearest `.node-version` file walking up from `cwd`.
+async fn find_nearest_node_version_file(cwd: &AbsolutePathBuf) -> Option<String> {
+    let mut current = cwd.clone();
+    loop {
+        if let Ok(content) = tokio::fs::read_to_string(current.join(".node-version")).await {
+            let version = content.lines().next().unwrap_or("").trim().to_string();
+            if !version.is_empty() {
+                return Some(version);
+            }
+        }
+        current = current.parent()?.to_absolute_path_buf();
+    }
+}
+
+/// Check devEngines declarations for conflicts and spec issues (rfcs/dev-engines.md).
+///
+/// All checks are semver-aware: an exact version satisfying a declared range is
+/// not a conflict. Findings are warnings or notes; they never fail the doctor run
+/// and are never auto-fixed.
+async fn check_dev_engines(cwd: &AbsolutePathBuf, resolved_version: Option<&str>) {
+    let Some((_pkg_dir, content)) = find_nearest_package_json(cwd).await else {
+        return;
+    };
+    let Ok(raw) = serde_json::from_str::<serde_json::Value>(&content) else {
+        return;
+    };
+    let Ok(pkg) = serde_json::from_str::<vite_shared::PackageJson>(&content) else {
+        return;
+    };
+
+    let mut findings: Vec<DevEnginesFinding> = Vec::new();
+
+    let dev_engines = pkg.dev_engines.as_ref();
+    let runtime_field = dev_engines.and_then(|de| de.runtime.as_ref());
+    let package_manager_field = dev_engines.and_then(|de| de.package_manager.as_ref());
+
+    // .node-version vs devEngines.runtime (semver-aware: only exact .node-version
+    // values can conflict with a declared range)
+    if let Some(declared) = runtime_field
+        .and_then(|rt| rt.find_by_name("node"))
+        .and_then(|entry| entry.version.as_ref())
+        && let Some(node_version) = find_nearest_node_version_file(cwd).await
+        && let Ok(version) = node_semver::Version::parse(&node_version)
+        && let Ok(range) = node_semver::Range::parse(declared.as_str())
+        && !range.satisfies(&version)
+    {
+        findings.push(DevEnginesFinding::warn(
+            "Runtime",
+            format!(
+                ".node-version ({node_version}) does not satisfy devEngines.runtime \"{declared}\""
+            ),
+        ));
+    }
+
+    // Resolved Node.js version vs engines.node
+    if let Some(resolved) = resolved_version
+        && let Some(engines_node) = pkg.engines.as_ref().and_then(|e| e.node.as_ref())
+        && let Ok(version) = node_semver::Version::parse(resolved)
+        && let Ok(range) = node_semver::Range::parse(engines_node.as_str())
+        && !range.satisfies(&version)
+    {
+        findings.push(DevEnginesFinding::warn(
+            "Runtime",
+            format!("resolved Node.js {resolved} does not satisfy engines.node \"{engines_node}\""),
+        ));
+    }
+
+    // Invalid semver ranges in devEngines entries (the spec only allows semver
+    // range syntax; aliases like lts/* are not valid there)
+    for (field_name, field) in
+        [("runtime", runtime_field), ("packageManager", package_manager_field)]
+    {
+        let Some(field) = field else { continue };
+        for entry in field.entries() {
+            if let Some(version) = &entry.version
+                && node_semver::Range::parse(version.as_str()).is_err()
+            {
+                findings.push(DevEnginesFinding::warn(
+                    "Spec",
+                    format!(
+                        "devEngines.{field_name} version \"{version}\" for \"{name}\" is not a \
+                         valid semver range (see devEngines spec)",
+                        name = entry.name
+                    ),
+                ));
+            }
+        }
+    }
+
+    // Runtimes Vite+ does not manage (informational)
+    if let Some(field) = runtime_field {
+        for entry in field.entries() {
+            if entry.name != "node" {
+                findings.push(DevEnginesFinding::note(
+                    "Runtime",
+                    format!(
+                        "devEngines.runtime declares \"{}\", which is not managed by Vite+",
+                        entry.name
+                    ),
+                ));
+            }
+        }
+    }
+
+    // packageManager field vs devEngines.packageManager consistency
+    if let Some(pm_field) = raw.get("packageManager").and_then(serde_json::Value::as_str)
+        && let Some(field) = package_manager_field
+        && !field.entries().is_empty()
+    {
+        let (pm_name, pm_rest) = pm_field.split_once('@').unwrap_or((pm_field, ""));
+        let pm_version = pm_rest.split('+').next().unwrap_or(pm_rest);
+        let future_error_hint = "This will become an error in a future release.".to_string();
+        match field.find_by_name(pm_name) {
+            None => {
+                let names =
+                    field.entries().iter().map(|e| e.name.as_str()).collect::<Vec<_>>().join(", ");
+                findings.push(DevEnginesFinding::warn_with_hint(
+                    "PackageManager",
+                    format!(
+                        "packageManager is \"{pm_name}@{pm_version}\" but \
+                         devEngines.packageManager requires \"{names}\""
+                    ),
+                    future_error_hint,
+                ));
+            }
+            Some(entry) => {
+                if let Some(required) = &entry.version
+                    && let Ok(range) = node_semver::Range::parse(required.as_str())
+                    && let Ok(version) = node_semver::Version::parse(pm_version)
+                    && !range.satisfies(&version)
+                {
+                    findings.push(DevEnginesFinding::warn_with_hint(
+                        "PackageManager",
+                        format!(
+                            "packageManager {pm_name}@{pm_version} does not satisfy \
+                             devEngines.packageManager \"{required}\""
+                        ),
+                        future_error_hint,
+                    ));
+                }
+            }
+        }
+    }
+
+    // Unsupported devEngines.packageManager names
+    if let Some(field) = package_manager_field {
+        const SUPPORTED: [&str; 4] = ["pnpm", "yarn", "npm", "bun"];
+        let has_supported = field.entries().iter().any(|e| SUPPORTED.contains(&e.name.as_str()));
+        for entry in field.entries() {
+            if SUPPORTED.contains(&entry.name.as_str()) {
+                continue;
+            }
+            if has_supported {
+                findings.push(DevEnginesFinding::note(
+                    "PackageManager",
+                    format!(
+                        "devEngines.packageManager entry \"{}\" is not supported and will be \
+                         skipped (supported: pnpm, yarn, npm, bun)",
+                        entry.name
+                    ),
+                ));
+            } else {
+                findings.push(DevEnginesFinding::warn(
+                    "PackageManager",
+                    format!(
+                        "devEngines.packageManager \"{}\" is not supported \
+                         (supported: pnpm, yarn, npm, bun)",
+                        entry.name
+                    ),
+                ));
+            }
+        }
+    }
+
+    // Malformed entries that lenient parsing skipped (raw JSON inspection)
+    if let Some(raw_dev_engines) = raw.get("devEngines").and_then(serde_json::Value::as_object) {
+        for field_name in ["runtime", "packageManager"] {
+            let Some(value) = raw_dev_engines.get(field_name) else { continue };
+            collect_malformed_entry_findings(field_name, value, &mut findings);
+        }
+    }
+
+    if findings.is_empty() {
+        return;
+    }
+
+    print_section("devEngines");
+    for finding in findings {
+        if finding.warn {
+            print_check(
+                &output::WARN_SIGN.yellow().to_string(),
+                finding.key,
+                &finding.message.yellow().to_string(),
+            );
+        } else {
+            print_check(" ", finding.key, &finding.message);
+        }
+        if let Some(hint) = finding.hint {
+            print_hint(&hint);
+        }
+    }
+}
+
+/// Collect findings for devEngines entries that lenient parsing skipped or that
+/// carry unknown `onFail` values.
+fn collect_malformed_entry_findings(
+    field_name: &str,
+    value: &serde_json::Value,
+    findings: &mut Vec<DevEnginesFinding>,
+) {
+    let entries: Vec<&serde_json::Value> = match value {
+        serde_json::Value::Array(items) => items.iter().collect(),
+        other => vec![other],
+    };
+
+    for entry in entries {
+        let Some(obj) = entry.as_object() else {
+            findings.push(DevEnginesFinding::warn(
+                "Spec",
+                format!("devEngines.{field_name} entry is not an object and was ignored"),
+            ));
+            continue;
+        };
+        let name = obj.get("name").and_then(serde_json::Value::as_str).unwrap_or("").trim();
+        if name.is_empty() {
+            findings.push(DevEnginesFinding::warn(
+                "Spec",
+                format!("devEngines.{field_name} entry is missing \"name\" and was ignored"),
+            ));
+            continue;
+        }
+        if let Some(on_fail) = obj.get("onFail").and_then(serde_json::Value::as_str)
+            && vite_shared::OnFail::parse(on_fail).is_none()
+        {
+            findings.push(DevEnginesFinding::warn(
+                "Spec",
+                format!(
+                    "devEngines.{field_name} entry \"{name}\" has unknown onFail \"{on_fail}\" \
+                     (expected: ignore, warn, error, download)"
+                ),
+            ));
+        }
     }
 }
 

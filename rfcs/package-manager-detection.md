@@ -33,9 +33,34 @@ The highest-priority signal. If the root `package.json` contains a `packageManag
 
 The explicit field also controls matching package-manager shims, including aliases generated for that manager. If a project declares `packageManager: "npm@11.14.0"`, the `npm` and `npx` shims run npm 11.14.0. Other aliases follow the same rule: `pnpm`/`pnpx`, `yarn`/`yarnpkg`, and `bun`/`bunx`. If the project declares `pnpm`, `yarn`, or `bun`, invoking `npm` still runs npm; Vite+ never translates one package-manager shim command into another.
 
-### Priority 2: Lockfiles
+When `devEngines.packageManager` is also declared, the `packageManager` field still drives selection, but Vite+ warns when the field's name or version does not satisfy the devEngines constraint (this warning becomes a hard error in a future release; npm already errors in this situation). See [RFC: devEngines Support](./dev-engines.md).
 
-If no `packageManager` field is found, Vite+ checks for lockfiles in the workspace root. Checked in this order:
+### Priority 2: `devEngines.packageManager` field in `package.json`
+
+If there is no `packageManager` field, Vite+ checks `devEngines.packageManager`, following the [devEngines spec](https://github.com/openjs-foundation/package-metadata-interoperability-working-group/blob/main/devengines-field-proposal.md):
+
+```json
+{
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "^11.0.0",
+      "onFail": "download"
+    }
+  }
+}
+```
+
+- Accepts a single object or an array of objects; entries are evaluated in order and the first usable entry wins.
+- `name` must be one of `pnpm`, `yarn`, `npm`, `bun`. Unsupported names are skipped in array form; otherwise the entry's effective `onFail` decides (`ignore`/`warn` continue down the detection chain, `error` and `download` fail with a clear message).
+- `version` may be exact, a semver range, or absent (any version satisfies). Ranges resolve to an already-downloaded satisfying version when possible, otherwise to the latest satisfying version from the npm registry (cached with a 1-hour TTL).
+- A range source is never frozen into an exact `packageManager` field; the range stays the source of truth.
+
+See [RFC: devEngines Support](./dev-engines.md) for the full semantics (`onFail` matrix, conflict handling, doctor checks).
+
+### Priority 3: Lockfiles
+
+If neither `packageManager` nor `devEngines.packageManager` is found, Vite+ checks for lockfiles in the workspace root. Checked in this order:
 
 | File                  | Detected PM | Notes                            |
 | --------------------- | ----------- | -------------------------------- |
@@ -49,7 +74,7 @@ If no `packageManager` field is found, Vite+ checks for lockfiles in the workspa
 
 When detected from lockfiles, version is set to `"latest"` (resolved during download).
 
-### Priority 3: Configuration files
+### Priority 4: Configuration files
 
 Lower-priority config files that indicate a package manager:
 
@@ -60,11 +85,11 @@ Lower-priority config files that indicate a package manager:
 | `bunfig.toml`     | bun         | [Bun configuration](https://bun.sh/docs/pm) |
 | `yarn.config.cjs` | yarn        | Yarn Berry (v2+) configuration              |
 
-### Priority 4: Explicit default
+### Priority 5: Explicit default
 
 If a caller provides a default package manager type (used internally by some code paths), that default is used with version `"latest"`.
 
-### Priority 5: Interactive selection
+### Priority 6: Interactive selection
 
 If no signals are detected and no default is provided, the behavior depends on the environment:
 
@@ -119,7 +144,7 @@ vp create vite:monorepo --no-interactive --package-manager bun
 
 **Resolution priority for `vp create`**:
 
-1. Detected workspace `packageManager` field (existing monorepo takes precedence)
+1. Detected workspace package manager (`packageManager` field or `devEngines.packageManager`; existing monorepo takes precedence)
 2. `--package-manager` CLI flag
 3. Interactive prompt / auto-default (pnpm)
 
@@ -127,19 +152,27 @@ This ensures monorepo consistency: if you run `vp create` inside an existing wor
 
 ## Auto-Update Behavior
 
-After detection and download, Vite+ automatically writes the resolved package manager version to the `packageManager` field in `package.json`. This ensures:
+After detection and download, Vite+ writes the resolved version back to `package.json` so future runs are deterministic:
 
-- Future runs use the exact version (Priority 1 match)
+- Detection from the `packageManager` field or an exact `devEngines.packageManager` version: already exact, no write needed.
+- Detection from a `devEngines.packageManager` range: no write; the range is the user's source of truth and is never frozen into an exact pin.
+- Detection from lockfiles, config files, or interactive selection: the exact resolved version is written to `devEngines.packageManager` with `onFail: "download"`.
+
+This ensures:
+
+- Future runs use a deterministic version (Priority 1 or 2 match)
 - Team members get consistent versions
 - CI environments use deterministic versions
 
 ## Version Resolution
 
-| Detection method          | Version used                                                     |
-| ------------------------- | ---------------------------------------------------------------- |
-| `packageManager` field    | Exact version from field (e.g., `10.19.0`)                       |
-| Lockfile/config detection | `"latest"` — resolved to latest stable version from npm registry |
-| Interactive selection     | `"latest"` — resolved to latest stable version from npm registry |
+| Detection method                              | Version used                                                                                                            |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `packageManager` field                        | Exact version from field (e.g., `10.19.0`)                                                                              |
+| `devEngines.packageManager` (exact version)   | Exact version from field                                                                                                |
+| `devEngines.packageManager` (range or absent) | Highest already-downloaded satisfying version, otherwise latest satisfying version from the npm registry (1-hour cache) |
+| Lockfile/config detection                     | `"latest"`: resolved to latest stable version from npm registry                                                         |
+| Interactive selection                         | `"latest"`: resolved to latest stable version from npm registry                                                         |
 
 **Special cases**:
 
@@ -163,12 +196,12 @@ The package manager type and monorepo status together drive:
 
 ### Per package manager
 
-| Package Manager | Lockfiles               | Config Files                                           | Field            |
-| --------------- | ----------------------- | ------------------------------------------------------ | ---------------- |
-| pnpm            | `pnpm-lock.yaml`        | `pnpm-workspace.yaml`, `.pnpmfile.cjs`, `pnpmfile.cjs` | `packageManager` |
-| yarn            | `yarn.lock`             | `.yarnrc.yml`, `.yarnrc`, `yarn.config.cjs`            | `packageManager` |
-| npm             | `package-lock.json`     | —                                                      | `packageManager` |
-| bun             | `bun.lock`, `bun.lockb` | `bunfig.toml`                                          | `packageManager` |
+| Package Manager | Lockfiles               | Config Files                                           | Fields                                        |
+| --------------- | ----------------------- | ------------------------------------------------------ | --------------------------------------------- |
+| pnpm            | `pnpm-lock.yaml`        | `pnpm-workspace.yaml`, `.pnpmfile.cjs`, `pnpmfile.cjs` | `packageManager`, `devEngines.packageManager` |
+| yarn            | `yarn.lock`             | `.yarnrc.yml`, `.yarnrc`, `yarn.config.cjs`            | `packageManager`, `devEngines.packageManager` |
+| npm             | `package-lock.json`     | —                                                      | `packageManager`, `devEngines.packageManager` |
+| bun             | `bun.lock`, `bun.lockb` | `bunfig.toml`                                          | `packageManager`, `devEngines.packageManager` |
 
 ### Cache invalidation (fingerprint ignores)
 
@@ -202,23 +235,6 @@ Each package manager has specific files that trigger cache invalidation when cha
 - **File**: `packages/cli/binding/src/package_manager.rs` — `detectWorkspace()` exports to JS
 
 ## Future Enhancements
-
-### `devEngines.packageManager` field
-
-Support the [Node.js `devEngines` field](https://docs.npmjs.com/cli/v11/configuring-npm/package-json#devengines) for package manager constraints:
-
-```json
-{
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": ">=10.0.0"
-    }
-  }
-}
-```
-
-This would be checked between Priority 1 (`packageManager` field) and Priority 2 (lockfiles). It specifies a constraint rather than an exact version, so it would be combined with other signals.
 
 ### Multiple lockfile conflict resolution
 
