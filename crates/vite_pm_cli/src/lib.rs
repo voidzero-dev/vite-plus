@@ -6,7 +6,7 @@
 //! [`dispatch`] to execute the parsed command. The crate does not do any
 //! managed-Node-runtime or managed-global-install handling — those stay in
 //! the global CLI; PM operations always go through whichever package
-//! manager (pnpm/npm/yarn/bun) is detected for the project.
+//! manager (pnpm/aube/npm/yarn/bun) is detected for the project.
 
 #![allow(clippy::allow_attributes, clippy::disallowed_types)]
 

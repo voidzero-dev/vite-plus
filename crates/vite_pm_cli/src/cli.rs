@@ -70,15 +70,15 @@ pub enum PackageManagerCommand {
         #[arg(long)]
         no_lockfile: bool,
 
-        /// Fix broken lockfile entries (pnpm and yarn@2+ only)
+        /// Fix broken lockfile entries (pnpm/aube and yarn@2+ only)
         #[arg(long)]
         fix_lockfile: bool,
 
-        /// Create flat `node_modules` (pnpm only)
+        /// Create flat `node_modules` (pnpm/aube only)
         #[arg(long)]
         shamefully_hoist: bool,
 
-        /// Re-run resolution for peer dependency analysis (pnpm only)
+        /// Re-run resolution for peer dependency analysis (pnpm/aube only)
         #[arg(long)]
         resolution_only: bool,
 
@@ -429,7 +429,7 @@ pub enum PackageManagerCommand {
         #[arg(long)]
         exclude_peers: bool,
 
-        /// Use a finder function defined in .pnpmfile.cjs
+        /// Use a finder function defined in .pnpmfile.cjs (pnpm/aube-specific)
         #[arg(long, value_name = "FINDER_NAME")]
         find_by: Option<String>,
 
@@ -565,11 +565,11 @@ pub enum PmCommands {
     /// Approve dependency lifecycle scripts (install/postinstall) to run
     #[command(name = "approve-builds")]
     ApproveBuilds {
-        /// Packages to approve. Prefix with `!` to deny (pnpm >= 11.0.0, npm >= 11.16.0).
-        /// Omit to launch interactive mode (pnpm) or list pending packages (npm >= 11.16.0).
+        /// Packages to approve. Prefix with `!` to deny (pnpm >= 11.0.0, aube, npm >= 11.16.0).
+        /// Omit to launch interactive mode (pnpm/aube) or list pending packages (npm >= 11.16.0).
         packages: Vec<String>,
 
-        /// Approve every package currently pending approval (pnpm >= 10.32.0, npm >= 11.16.0).
+        /// Approve every package currently pending approval (pnpm >= 10.32.0, aube, npm >= 11.16.0).
         /// Mutually exclusive with positional packages.
         #[arg(long, conflicts_with = "packages")]
         all: bool,
@@ -663,11 +663,11 @@ pub enum PmCommands {
         #[arg(long)]
         exclude_peers: bool,
 
-        /// Show only project packages
+        /// Show only project packages (pnpm/aube-specific)
         #[arg(long)]
         only_projects: bool,
 
-        /// Use a finder function
+        /// Use a finder function defined in .pnpmfile.cjs (pnpm/aube-specific)
         #[arg(long, value_name = "FINDER_NAME")]
         find_by: Option<String>,
 
@@ -1175,7 +1175,7 @@ pub enum DistTagCommands {
 
 /// Staged-publishing subcommands (`vp pm stage <subcommand>`).
 ///
-/// Maps to `npm stage`/`pnpm stage` and yarn berry's npm plugin
+/// Maps to `npm stage`/`pnpm stage`/`aube stage` and yarn berry's npm plugin
 /// (`yarn npm publish --staged`, `yarn npm stage …`). Note: this is unrelated
 /// to yarn's own `yarn stage` command, which stages files for a VCS commit.
 #[derive(Subcommand, Debug, Clone)]

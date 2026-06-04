@@ -59,7 +59,7 @@ impl PackageManager {
         }
 
         match self.client {
-            PackageManagerType::Pnpm | PackageManagerType::Aube => {
+            PackageManagerType::Pnpm => {
                 bin_name = self.client.to_string();
                 // pnpm: --filter must come before command
                 if let Some(filters) = options.filters {
@@ -84,6 +84,34 @@ impl PackageManager {
                 }
                 if options.save_prod {
                     args.push("--save-prod".into());
+                }
+            }
+            PackageManagerType::Aube => {
+                bin_name = self.client.to_string();
+                // aube: global flags must come before command
+                if let Some(filters) = options.filters {
+                    for filter in filters {
+                        args.push("--filter".into());
+                        args.push(filter.clone());
+                    }
+                }
+                if options.recursive {
+                    args.push("--recursive".into());
+                }
+
+                args.push("remove".into());
+                if options.workspace_root {
+                    // aube: `remove -w/--workspace` targets the workspace root's package.json.
+                    args.push("--workspace".into());
+                }
+                if options.save_dev {
+                    args.push("--save-dev".into());
+                }
+                if options.save_optional {
+                    output::warn("aube remove does not support --save-optional");
+                }
+                if options.save_prod {
+                    output::warn("aube remove does not support --save-prod");
                 }
             }
             PackageManagerType::Yarn => {
@@ -673,5 +701,77 @@ mod tests {
         // ignore filters in recursive mode
         assert_eq!(result.args, vec!["remove", "--all", "lodash"]);
         assert_eq!(result.bin_path, "yarn");
+    }
+
+    #[test]
+    fn test_aube_basic_remove() {
+        let pm = create_mock_package_manager(PackageManagerType::Aube);
+        let result = pm.resolve_remove_command(&RemoveCommandOptions {
+            packages: &["lodash".to_string()],
+            filters: None,
+            workspace_root: false,
+            recursive: false,
+            global: false,
+            save_dev: false,
+            save_optional: false,
+            save_prod: false,
+            pass_through_args: None,
+        });
+        assert_eq!(result.bin_path, "aube");
+        assert_eq!(result.args, vec!["remove", "lodash"]);
+    }
+
+    #[test]
+    fn test_aube_remove_workspace_root() {
+        let pm = create_mock_package_manager(PackageManagerType::Aube);
+        let result = pm.resolve_remove_command(&RemoveCommandOptions {
+            packages: &["typescript".to_string()],
+            filters: None,
+            workspace_root: true,
+            recursive: false,
+            global: false,
+            save_dev: true,
+            save_optional: false,
+            save_prod: false,
+            pass_through_args: None,
+        });
+        assert_eq!(result.bin_path, "aube");
+        assert_eq!(result.args, vec!["remove", "--workspace", "--save-dev", "typescript"]);
+    }
+
+    #[test]
+    fn test_aube_remove_with_filter_and_recursive() {
+        let pm = create_mock_package_manager(PackageManagerType::Aube);
+        let result = pm.resolve_remove_command(&RemoveCommandOptions {
+            packages: &["lodash".to_string()],
+            filters: Some(&["app".to_string()]),
+            workspace_root: false,
+            recursive: true,
+            global: false,
+            save_dev: false,
+            save_optional: false,
+            save_prod: false,
+            pass_through_args: None,
+        });
+        assert_eq!(result.bin_path, "aube");
+        assert_eq!(result.args, vec!["--filter", "app", "--recursive", "remove", "lodash"]);
+    }
+
+    #[test]
+    fn test_aube_remove_save_optional_is_not_forwarded() {
+        let pm = create_mock_package_manager(PackageManagerType::Aube);
+        let result = pm.resolve_remove_command(&RemoveCommandOptions {
+            packages: &["sharp".to_string()],
+            filters: None,
+            workspace_root: false,
+            recursive: false,
+            global: false,
+            save_dev: false,
+            save_optional: true,
+            save_prod: false,
+            pass_through_args: None,
+        });
+        assert_eq!(result.bin_path, "aube");
+        assert_eq!(result.args, vec!["remove", "sharp"]);
     }
 }

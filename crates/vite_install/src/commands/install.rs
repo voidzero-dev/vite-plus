@@ -34,11 +34,11 @@ pub struct InstallCommandOptions<'a> {
     pub ignore_scripts: bool,
     /// Don't read or generate lockfile
     pub no_lockfile: bool,
-    /// Fix broken lockfile entries (pnpm and yarn@2+ only)
+    /// Fix broken lockfile entries (pnpm/aube and yarn@2+ only)
     pub fix_lockfile: bool,
-    /// Create flat `node_modules` (pnpm only)
+    /// Create flat `node_modules` (pnpm/aube only)
     pub shamefully_hoist: bool,
-    /// Re-run resolution for peer dependency analysis (pnpm only)
+    /// Re-run resolution for peer dependency analysis (pnpm/aube only)
     pub resolution_only: bool,
     /// Suppress output (silent mode)
     pub silent: bool,
@@ -77,7 +77,7 @@ impl PackageManager {
         match self.client {
             PackageManagerType::Pnpm | PackageManagerType::Aube => {
                 bin_name = self.client.to_string();
-                // pnpm: --filter must come before command
+                // pnpm/aube: --filter must come before command
                 if let Some(filters) = options.filters {
                     for filter in filters {
                         args.push("--filter".into());

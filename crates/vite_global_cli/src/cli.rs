@@ -558,7 +558,7 @@ fn run_tasks_completions(current: &OsStr) -> Vec<clap_complete::CompletionCandid
 /// `Install`/`Add`/`Update`/`Remove` invoked with `-g`/`--global` are routed
 /// through the vite-plus-managed Node.js install store (`commands::global`).
 /// Everything else is forwarded to `vite_pm_cli::dispatch`, which executes
-/// the underlying package manager (pnpm/npm/yarn/bun).
+/// the underlying package manager (pnpm/aube/npm/yarn/bun).
 async fn run_package_manager_command(
     cwd: AbsolutePathBuf,
     command: PackageManagerCommand,

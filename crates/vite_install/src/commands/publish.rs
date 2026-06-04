@@ -54,7 +54,7 @@ impl PackageManager {
             PackageManagerType::Pnpm | PackageManagerType::Aube => {
                 bin_name = self.client.to_string();
 
-                // pnpm: --filter must come before command
+                // pnpm/aube: --filter must come before command
                 if let Some(filters) = options.filters {
                     for filter in filters {
                         args.push("--filter".into());

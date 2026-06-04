@@ -167,7 +167,9 @@ impl PackageManagerBuilder {
 
         let is_monorepo = matches!(
             workspace_root.workspace_file,
-            WorkspaceFile::PnpmWorkspaceYaml(_) | WorkspaceFile::NpmWorkspaceJson(_)
+            WorkspaceFile::PnpmWorkspaceYaml(_)
+                | WorkspaceFile::AubeWorkspaceYaml(_)
+                | WorkspaceFile::NpmWorkspaceJson(_)
         );
 
         Ok(PackageManager {
@@ -230,12 +232,20 @@ impl PackageManager {
             PackageManagerType::Aube => {
                 ignores.push("!**/aube-workspace.yaml".into());
                 ignores.push("!**/aube-lock.yaml".into());
+                ignores.push("!**/aube-lock.*.yaml".into());
                 // aube can keep reading/writing existing pnpm projects in place.
                 ignores.push("!**/pnpm-workspace.yaml".into());
                 ignores.push("!**/pnpm-lock.yaml".into());
                 ignores.push("!**/.pnpmfile.cjs".into());
                 ignores.push("!**/pnpmfile.cjs".into());
                 ignores.push("!**/.npmrc".into());
+
+                // Compatibility lockfiles that aube may read/write depending on project mode.
+                ignores.push("!**/yarn.lock".into());
+                ignores.push("!**/package-lock.json".into());
+                ignores.push("!**/npm-shrinkwrap.json".into());
+                ignores.push("!**/bun.lock".into());
+                ignores.push("!**/bun.lockb".into());
             }
             PackageManagerType::Yarn => {
                 ignores.push("!**/.yarnrc".into()); // yarn 1.x
@@ -304,11 +314,8 @@ pub fn get_package_manager_type_and_version(
     // TODO(@fengmk2): check devEngines.packageManager field in package.json
 
     let version = Str::from("latest");
-    // if aube-workspace.yaml exists at the detected root, use aube@latest.
-    // Note: vite_workspace does not currently discover aube-workspace.yaml from nested
-    // packages, so packageManager: "aube@..." is still the strongest signal.
-    let aube_workspace_yaml_path = workspace_root.path.join("aube-workspace.yaml");
-    if is_exists_file(&aube_workspace_yaml_path)? {
+    // If the detected workspace manifest is `aube-workspace.yaml`, prefer aube@latest.
+    if matches!(workspace_root.workspace_file, WorkspaceFile::AubeWorkspaceYaml(_)) {
         return Ok((PackageManagerType::Aube, version, None));
     }
 
@@ -316,6 +323,25 @@ pub fn get_package_manager_type_and_version(
     let aube_lock_yaml_path = workspace_root.path.join("aube-lock.yaml");
     if is_exists_file(&aube_lock_yaml_path)? {
         return Ok((PackageManagerType::Aube, version, None));
+    }
+
+    // if aube-lock.<branch>.yaml exists, use aube@latest
+    // aube supports branch-specific lockfiles.
+    if let Ok(entries) = fs::read_dir(workspace_root.path.as_path()) {
+        for entry in entries {
+            let entry = entry?;
+            let file_type = entry.file_type()?;
+            if !file_type.is_file() {
+                continue;
+            }
+            let file_name = entry.file_name();
+            let Some(file_name) = file_name.to_str() else {
+                continue;
+            };
+            if file_name.starts_with("aube-lock.") && file_name.ends_with(".yaml") {
+                return Ok((PackageManagerType::Aube, version, None));
+            }
+        }
     }
 
     // if pnpm-workspace.yaml exists, use pnpm@latest
@@ -395,7 +421,7 @@ pub fn resolve_package_manager_from_package_json(
     let (workspace_root, _) = match find_workspace_root(cwd.as_ref()) {
         Ok(result) => result,
         Err(vite_workspace::Error::PackageJsonNotFound(_)) => return Ok(None),
-        Err(error) => return Err(error.into()),
+        Err(error) => return Err(Error::WorkspaceError(error)),
     };
     get_package_manager_from_package_json(&workspace_root)
 }
@@ -1348,6 +1374,11 @@ mod tests {
             .expect("Failed to write pnpm-workspace.yaml");
     }
 
+    fn create_aube_workspace_yaml(dir: &AbsolutePath, content: &str) {
+        fs::write(dir.join("aube-workspace.yaml"), content)
+            .expect("Failed to write aube-workspace.yaml");
+    }
+
     #[test]
     fn test_package_manager_type_from_tool_includes_aliases() {
         assert_eq!(PackageManagerType::from_tool("npm"), Some(PackageManagerType::Npm));
@@ -1503,6 +1534,35 @@ mod tests {
         let (found, _) = find_workspace_root(&nested_dir).unwrap();
         assert_eq!(&*found.path, &*temp_dir_path);
         assert!(matches!(found.workspace_file, WorkspaceFile::PnpmWorkspaceYaml(_)));
+    }
+
+    #[test]
+    fn test_find_workspace_root_with_aube_workspace_yaml() {
+        let temp_dir = create_temp_dir();
+
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        // Root package.json without npm workspaces; the aube workspace yaml is the workspace signal.
+        create_package_json(&temp_dir_path, r#"{"name": "root"}"#);
+        create_aube_workspace_yaml(&temp_dir_path, "packages:\n  - 'packages/*'");
+
+        let nested_pkg_dir = temp_dir_path.join("packages").join("app");
+        fs::create_dir_all(&nested_pkg_dir).unwrap();
+        create_package_json(&nested_pkg_dir, r#"{"name": "app"}"#);
+
+        let (found, _) = find_workspace_root(&nested_pkg_dir).unwrap();
+        assert_eq!(&*found.path, &*temp_dir_path);
+
+        assert!(matches!(found.workspace_file, WorkspaceFile::AubeWorkspaceYaml(_)));
+        let package_graph = load_package_graph(&found).unwrap();
+        assert_eq!(package_graph.node_count(), 2);
+
+        let is_monorepo = matches!(
+            found.workspace_file,
+            WorkspaceFile::PnpmWorkspaceYaml(_)
+                | WorkspaceFile::AubeWorkspaceYaml(_)
+                | WorkspaceFile::NpmWorkspaceJson(_)
+        );
+        assert!(is_monorepo);
     }
 
     #[test]
@@ -2818,6 +2878,50 @@ mod tests {
             assert!(matcher.is_match("README.md"), "Should ignore docs");
             assert!(matcher.is_match("src/app.ts"), "Should ignore source files");
         }
+
+        #[test]
+        fn test_aube_fingerprint_ignores() {
+            let temp_dir: TempDir = create_temp_dir();
+            let pm = create_mock_package_manager(temp_dir, PackageManagerType::Aube, false);
+            let ignores = pm.get_fingerprint_ignores().expect("Should get fingerprint ignores");
+            let matcher = GlobPatternSet::new(&ignores).expect("Should compile patterns");
+
+            // Aube-specific files should NOT be ignored
+            assert!(
+                !matcher.is_match("aube-workspace.yaml"),
+                "Should NOT ignore aube-workspace.yaml"
+            );
+            assert!(!matcher.is_match("aube-lock.yaml"), "Should NOT ignore aube-lock.yaml");
+            assert!(
+                !matcher.is_match("aube-lock.feature.yaml"),
+                "Should NOT ignore branch aube lockfile"
+            );
+
+            // Legacy pnpm compatibility should NOT be ignored
+            assert!(
+                !matcher.is_match("pnpm-workspace.yaml"),
+                "Should NOT ignore pnpm-workspace.yaml"
+            );
+            assert!(!matcher.is_match("pnpm-lock.yaml"), "Should NOT ignore pnpm-lock.yaml");
+            assert!(!matcher.is_match(".pnpmfile.cjs"), "Should NOT ignore .pnpmfile.cjs");
+            assert!(!matcher.is_match("pnpmfile.cjs"), "Should NOT ignore pnpmfile.cjs");
+
+            // Compatibility lockfiles should NOT be ignored
+            assert!(!matcher.is_match("yarn.lock"), "Should NOT ignore yarn.lock");
+            assert!(
+                !matcher.is_match("package-lock.json"),
+                "Should NOT ignore package-lock.json"
+            );
+            assert!(
+                !matcher.is_match("npm-shrinkwrap.json"),
+                "Should NOT ignore npm-shrinkwrap.json"
+            );
+            assert!(!matcher.is_match("bun.lock"), "Should NOT ignore bun.lock");
+            assert!(!matcher.is_match("bun.lockb"), "Should NOT ignore bun.lockb");
+
+            // Regular source files should be ignored
+            assert!(matcher.is_match("src/index.js"), "Should ignore source files");
+        }
     }
 
     // Tests for bun package manager detection
@@ -2857,6 +2961,29 @@ mod tests {
         let (pm_type, version, hash) =
             get_package_manager_type_and_version(&workspace_root, None).expect("Should detect bun");
         assert_eq!(pm_type, PackageManagerType::Bun);
+        assert_eq!(version.as_str(), "latest");
+        assert!(hash.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_detect_package_manager_with_aube_branch_lock_yaml() {
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let package_content = r#"{"name": "test-package"}"#;
+        create_package_json(&temp_dir_path, package_content);
+
+        // Create branch lockfile variant
+        fs::write(
+            temp_dir_path.join("aube-lock.feature.yaml"),
+            "lockfileVersion: '1.0'\n",
+        )
+        .expect("Failed to write aube-lock.feature.yaml");
+
+        let (workspace_root, _) =
+            find_workspace_root(&temp_dir_path).expect("Should find workspace root");
+        let (pm_type, version, hash) = get_package_manager_type_and_version(&workspace_root, None)
+            .expect("Should detect aube from branch lockfile");
+        assert_eq!(pm_type, PackageManagerType::Aube);
         assert_eq!(version.as_str(), "latest");
         assert!(hash.is_none());
     }

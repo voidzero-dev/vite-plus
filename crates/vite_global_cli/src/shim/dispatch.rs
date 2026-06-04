@@ -669,7 +669,7 @@ fn resolve_npm_prefix(
 /// `packageManager` field.
 ///
 /// The match is intentionally strict to avoid translating commands: `npm` only uses
-/// `npm@...`, `pnpm` only uses `pnpm@...`, etc.
+/// `npm@...`, `pnpm` only uses `pnpm@...`, `aube` only uses `aube@...`, etc.
 async fn resolve_matching_package_manager_tool(
     cwd: &AbsolutePath,
     tool: &str,
@@ -936,7 +936,7 @@ async fn dispatch_package_binary(tool: &str, args: &[String]) -> i32 {
         match resolve_matching_package_manager_tool(&cwd, tool).await {
             Ok(Some(tool_path)) => {
                 // Bun is a native binary and does not need a Node.js runtime on PATH;
-                // JS-based PMs (npm/pnpm/yarn) do.
+                // JS-based PMs (npm/pnpm/aube/yarn) do.
                 if pm_family != PackageManagerType::Bun {
                     let node_version = match resolve_with_cache(&cwd).await {
                         Ok(resolution) => resolution.version,
@@ -992,8 +992,8 @@ async fn dispatch_package_binary(tool: &str, args: &[String]) -> i32 {
     };
 
     // Determine Node.js version to use:
-    // - Package managers (pnpm, yarn): resolve from project context so they respect
-    //   the project's engines.node / .node-version, falling back to install-time version
+    // - Package managers (pnpm/aube/yarn/bun): resolve from project context when possible,
+    //   falling back to install-time version
     // - Other package binaries: use the install-time version (original behavior)
     let node_version = if is_package_manager_tool(tool) {
         let cwd = match current_dir() {

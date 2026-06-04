@@ -42,7 +42,7 @@ impl PackageManager {
                 bin_name = self.client.to_string();
                 args.push("dedupe".into());
 
-                // pnpm uses --check for dry-run
+                // pnpm/aube use --check for dry-run
                 if options.check {
                     args.push("--check".into());
                 }

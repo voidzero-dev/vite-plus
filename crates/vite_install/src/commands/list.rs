@@ -81,7 +81,7 @@ impl PackageManager {
 
         match self.client {
             PackageManagerType::Pnpm | PackageManagerType::Aube => {
-                // pnpm: --filter must come before command
+                // pnpm/aube: --filter must come before command
                 if let Some(filters) = options.filters {
                     for filter in filters {
                         args.push("--filter".into());

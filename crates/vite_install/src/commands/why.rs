@@ -53,7 +53,7 @@ impl PackageManager {
             PackageManagerType::Pnpm | PackageManagerType::Aube => {
                 bin_name = self.client.to_string();
 
-                // pnpm: --filter must come before command
+                // pnpm/aube: --filter must come before command
                 if let Some(filters) = options.filters {
                     for filter in filters {
                         args.push("--filter".into());
@@ -178,7 +178,7 @@ impl PackageManager {
                 // Add packages (npm supports multiple packages)
                 args.extend_from_slice(options.packages);
 
-                // Warn about pnpm-specific flags
+                // Warn about unsupported flags
                 if options.long {
                     output::warn("--long not supported by npm");
                 }

@@ -59,7 +59,8 @@ impl PackageManager {
                     }
                     _ => {
                         output::warn(&format!(
-                            "pnpm cache subcommand '{}' not supported",
+                            "{} cache subcommand '{}' not supported",
+                            self.client,
                             options.subcommand
                         ));
                         return None;

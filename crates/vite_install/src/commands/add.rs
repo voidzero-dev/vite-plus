@@ -72,7 +72,7 @@ impl PackageManager {
         }
 
         match self.client {
-            PackageManagerType::Pnpm | PackageManagerType::Aube => {
+            PackageManagerType::Pnpm => {
                 bin_name = self.client.to_string();
                 // pnpm: --filter must come before command
                 if let Some(filters) = options.filters {
@@ -94,6 +94,59 @@ impl PackageManager {
                     match save_dependency_type {
                         SaveDependencyType::Production => {
                             args.push("--save-prod".into());
+                        }
+                        SaveDependencyType::Dev => {
+                            args.push("--save-dev".into());
+                        }
+                        SaveDependencyType::Peer => {
+                            args.push("--save-peer".into());
+                        }
+                        SaveDependencyType::Optional => {
+                            args.push("--save-optional".into());
+                        }
+                    }
+                }
+                if options.save_exact {
+                    args.push("--save-exact".into());
+                }
+
+                if let Some(save_catalog_name) = options.save_catalog_name {
+                    if save_catalog_name.is_empty() {
+                        args.push("--save-catalog".into());
+                    } else {
+                        args.push(format!("--save-catalog-name={save_catalog_name}"));
+                    }
+                }
+
+                if let Some(allow_build) = options.allow_build {
+                    args.push(format!("--allow-build={allow_build}"));
+                }
+            }
+            PackageManagerType::Aube => {
+                bin_name = self.client.to_string();
+                // aube: --filter must come before command
+                if let Some(filters) = options.filters {
+                    for filter in filters {
+                        args.push("--filter".into());
+                        args.push(filter.clone());
+                    }
+                }
+                args.push("add".into());
+
+                // aube: `add -w/--workspace` targets the workspace root's package.json.
+                if options.workspace_root {
+                    args.push("--workspace".into());
+                }
+                // aube does not support pnpm's `add --workspace` semantics ("only add if the
+                // named package exists in the workspace").
+                if options.workspace_only {
+                    output::warn("aube add does not support --workspace (only add if package exists in workspace)");
+                }
+
+                if let Some(save_dependency_type) = options.save_dependency_type {
+                    match save_dependency_type {
+                        SaveDependencyType::Production => {
+                            // Default for aube.
                         }
                         SaveDependencyType::Dev => {
                             args.push("--save-dev".into());
@@ -599,5 +652,43 @@ mod tests {
         });
         assert_eq!(result.args, vec!["add", "--allow-build=react,napi", "react"]);
         assert_eq!(result.bin_path, "pnpm");
+    }
+
+    #[test]
+    fn test_aube_add_workspace_root() {
+        let pm = create_mock_package_manager(PackageManagerType::Aube);
+        let result = pm.resolve_add_command(&AddCommandOptions {
+            packages: &["typescript".to_string()],
+            save_dependency_type: Some(SaveDependencyType::Dev),
+            save_exact: false,
+            filters: None,
+            workspace_root: true,
+            workspace_only: false,
+            global: false,
+            save_catalog_name: None,
+            allow_build: None,
+            pass_through_args: None,
+        });
+        assert_eq!(result.args, vec!["add", "--workspace", "--save-dev", "typescript"]);
+        assert_eq!(result.bin_path, "aube");
+    }
+
+    #[test]
+    fn test_aube_add_does_not_pass_pnpm_workspace_only_flag() {
+        let pm = create_mock_package_manager(PackageManagerType::Aube);
+        let result = pm.resolve_add_command(&AddCommandOptions {
+            packages: &["@myorg/utils".to_string()],
+            save_dependency_type: None,
+            save_exact: false,
+            filters: Some(&["app".to_string()]),
+            workspace_root: false,
+            workspace_only: true,
+            global: false,
+            save_catalog_name: None,
+            allow_build: None,
+            pass_through_args: None,
+        });
+        assert_eq!(result.args, vec!["--filter", "app", "add", "@myorg/utils"]);
+        assert_eq!(result.bin_path, "aube");
     }
 }

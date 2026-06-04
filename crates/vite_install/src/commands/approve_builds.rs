@@ -19,7 +19,7 @@ const NPM_ADVISORY_NOTE: &str = "npm's allowScripts policy is advisory in npm 11
 /// Options for the approve-builds command.
 #[derive(Debug, Default)]
 pub struct ApproveBuildsCommandOptions<'a> {
-    /// Packages to approve. Prefix with `!` to deny (pnpm only).
+    /// Packages to approve. Prefix with `!` to deny (pnpm & aube only).
     pub packages: &'a [String],
     /// Approve every package that is currently pending approval.
     pub all: bool,
@@ -229,7 +229,7 @@ impl PackageManager {
             }
         }
 
-        // Append pass-through args to the underlying PM (pnpm, npm, and bun reach here;
+        // Append pass-through args to the underlying PM (pnpm, aube, npm, and bun reach here;
         // yarn and npm < 11.16.0 returned early above).
         if let Some(extra) = options.pass_through_args {
             args.extend_from_slice(extra);

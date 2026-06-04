@@ -48,7 +48,7 @@ impl PackageManager {
         let mut args: Vec<String> = Vec::new();
 
         match self.client {
-            PackageManagerType::Pnpm | PackageManagerType::Aube => {
+            PackageManagerType::Pnpm => {
                 bin_name = self.client.to_string();
                 // pnpm: --filter must come before command
                 if let Some(filters) = options.filters {
@@ -85,6 +85,47 @@ impl PackageManager {
                 }
                 if options.workspace_only {
                     args.push("--workspace".into());
+                }
+            }
+            PackageManagerType::Aube => {
+                bin_name = self.client.to_string();
+                // aube: --filter must come before command
+                if let Some(filters) = options.filters {
+                    for filter in filters {
+                        args.push("--filter".into());
+                        args.push(filter.clone());
+                    }
+                }
+                args.push("update".into());
+
+                if options.latest {
+                    args.push("--latest".into());
+                }
+                if options.workspace_root {
+                    args.push("--workspace-root".into());
+                }
+                if options.recursive {
+                    args.push("--recursive".into());
+                }
+                if options.dev {
+                    args.push("--dev".into());
+                }
+                if options.prod {
+                    args.push("--prod".into());
+                }
+                if options.interactive {
+                    args.push("--interactive".into());
+                }
+                if options.no_optional {
+                    args.push("--no-optional".into());
+                }
+                if options.no_save {
+                    args.push("--no-save".into());
+                }
+                if options.workspace_only {
+                    output::warn(
+                        "aube update does not support --workspace (only update if package exists in workspace)",
+                    );
                 }
             }
             PackageManagerType::Yarn => {
@@ -248,6 +289,48 @@ mod tests {
         });
         assert_eq!(result.bin_path, "pnpm");
         assert_eq!(result.args, vec!["update", "react"]);
+    }
+
+    #[test]
+    fn test_aube_update_workspace_root() {
+        let pm = create_mock_package_manager(PackageManagerType::Aube, "0.0.0");
+        let result = pm.resolve_update_command(&UpdateCommandOptions {
+            packages: &["react".to_string()],
+            latest: false,
+            recursive: false,
+            filters: None,
+            workspace_root: true,
+            dev: false,
+            prod: false,
+            interactive: false,
+            no_optional: false,
+            no_save: false,
+            workspace_only: false,
+            pass_through_args: None,
+        });
+        assert_eq!(result.bin_path, "aube");
+        assert_eq!(result.args, vec!["update", "--workspace-root", "react"]);
+    }
+
+    #[test]
+    fn test_aube_update_workspace_only_is_not_forwarded() {
+        let pm = create_mock_package_manager(PackageManagerType::Aube, "0.0.0");
+        let result = pm.resolve_update_command(&UpdateCommandOptions {
+            packages: &["react".to_string()],
+            latest: false,
+            recursive: false,
+            filters: Some(&["app".to_string()]),
+            workspace_root: false,
+            dev: false,
+            prod: false,
+            interactive: false,
+            no_optional: false,
+            no_save: false,
+            workspace_only: true,
+            pass_through_args: None,
+        });
+        assert_eq!(result.bin_path, "aube");
+        assert_eq!(result.args, vec!["--filter", "app", "update", "react"]);
     }
 
     #[test]

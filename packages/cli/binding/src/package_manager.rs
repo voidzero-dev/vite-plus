@@ -141,7 +141,9 @@ pub async fn detect_workspace(cwd: String) -> Result<DetectWorkspaceResult> {
 
     let is_monorepo = matches!(
         workspace_root.workspace_file,
-        WorkspaceFile::PnpmWorkspaceYaml(_) | WorkspaceFile::NpmWorkspaceJson(_)
+        WorkspaceFile::PnpmWorkspaceYaml(_)
+            | WorkspaceFile::AubeWorkspaceYaml(_)
+            | WorkspaceFile::NpmWorkspaceJson(_)
     );
     let workspace_root_path = workspace_root.path.as_path().to_string_lossy().to_string();
 

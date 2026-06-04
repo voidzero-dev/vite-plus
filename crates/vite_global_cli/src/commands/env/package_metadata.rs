@@ -24,7 +24,7 @@ pub struct PackageMetadata {
     /// Binary names that are JavaScript files (need Node.js to run).
     #[serde(default)]
     pub js_bins: HashSet<String>,
-    /// Package manager used for installation (npm, yarn, pnpm)
+    /// Package manager used for installation (npm, pnpm, aube, yarn, bun)
     pub manager: String,
     /// Installation timestamp
     pub installed_at: DateTime<Utc>,

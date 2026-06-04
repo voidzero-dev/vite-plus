@@ -91,7 +91,7 @@ pub(super) async fn execute_exec_workspace(
 
     // When no package-selection flags were set (is_cwd_only), execute from the
     // caller's exact working directory — not the package root.  This matches
-    // `pnpm exec` behaviour.
+    // `pnpm exec` / `aube exec` behaviour.
     let use_caller_cwd = is_cwd_only;
 
     // Build base PATH: <pm_bin>:<workspace_root/node_modules/.bin>:<original_PATH>

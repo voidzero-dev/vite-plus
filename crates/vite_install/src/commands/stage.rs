@@ -63,7 +63,7 @@ impl PackageManager {
 
     /// Resolve the stage command.
     ///
-    /// pnpm and npm pass through directly. yarn berry uses its npm plugin
+    /// pnpm/aube and npm pass through directly. yarn berry uses its npm plugin
     /// (`yarn npm publish --staged` to stage, `yarn npm stage …` to manage),
     /// falling back to npm for `view`/`download` which yarn does not expose.
     /// yarn 1 and bun have no staged-publishing support and fall back to npm.
@@ -81,8 +81,8 @@ impl PackageManager {
             PackageManagerType::Pnpm | PackageManagerType::Aube => {
                 bin_name = self.client.to_string();
 
-                // pnpm: --filter must come before the command. `--filter` and
-                // `--recursive` are pnpm-publish-only workspace flags, so both
+                // pnpm/aube: --filter must come before the command. `--filter` and
+                // `--recursive` are pnpm/aube publish-only workspace flags, so both
                 // live here rather than in the shared subcommand builder.
                 if let StageSubcommand::Publish { filters: Some(filters), .. } = &options.subcommand
                 {
@@ -186,9 +186,9 @@ fn append_npm_stage(args: &mut Vec<String>, subcommand: &StageSubcommand) {
     append_stage_subcommand(args, subcommand);
 }
 
-/// Append the `<subcommand> [args]` portion shared by the npm/pnpm `stage` and
-/// yarn `npm stage` paths. The pnpm-publish-only workspace flags
-/// (`--filter`/`--recursive`) are emitted by the pnpm caller, not here.
+/// Append the `<subcommand> [args]` portion shared by the npm/pnpm/aube `stage` and
+/// yarn `npm stage` paths. The pnpm/aube publish-only workspace flags
+/// (`--filter`/`--recursive`) are emitted by the pnpm/aube caller, not here.
 fn append_stage_subcommand(args: &mut Vec<String>, subcommand: &StageSubcommand) {
     match subcommand {
         StageSubcommand::Publish {

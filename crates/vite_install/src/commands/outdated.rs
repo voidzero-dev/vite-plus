@@ -100,7 +100,7 @@ impl PackageManager {
             args.push("-g".into());
         } else {
             match self.client {
-                PackageManagerType::Pnpm | PackageManagerType::Aube => {
+                PackageManagerType::Pnpm => {
                     bin_name = self.client.to_string();
 
                     // pnpm: --filter must come before command
@@ -154,6 +154,72 @@ impl PackageManager {
 
                     // Add packages (pnpm supports glob patterns)
                     args.extend_from_slice(options.packages);
+                }
+                PackageManagerType::Aube => {
+                    bin_name = self.client.to_string();
+
+                    // aube: we keep --filter before the command for parity with pnpm
+                    // (aube accepts it as a global flag).
+                    if let Some(filters) = options.filters {
+                        for filter in filters {
+                            args.push("--filter".into());
+                            args.push(filter.clone());
+                        }
+                    }
+
+                    args.push("outdated".into());
+
+                    // aube does not support `--format`; it has `--json`.
+                    if let Some(format) = options.format {
+                        match format {
+                            Format::Json => args.push("--json".into()),
+                            Format::List => {
+                                output::warn("aube outdated does not support list format");
+                            }
+                            Format::Table => {} // Default
+                        }
+                    }
+
+                    if options.long {
+                        args.push("--long".into());
+                    }
+
+                    if options.workspace_root {
+                        // aube supports `-w/--workspace-root/--workspace`.
+                        args.push("--workspace-root".into());
+                    }
+
+                    if options.recursive {
+                        args.push("--recursive".into());
+                    }
+
+                    if options.prod {
+                        args.push("--prod".into());
+                    }
+
+                    if options.dev {
+                        args.push("--dev".into());
+                    }
+
+                    if options.no_optional {
+                        output::warn("aube outdated does not support --no-optional");
+                    }
+
+                    if options.compatible {
+                        output::warn("aube outdated does not support --compatible");
+                    }
+
+                    if options.sort_by.is_some() {
+                        output::warn("aube outdated does not support --sort-by");
+                    }
+
+                    // aube takes at most one optional pattern argument (prefix match).
+                    if options.packages.len() > 1 {
+                        output::warn("aube outdated only accepts a single pattern; extra patterns will be ignored");
+                    }
+                    if let Some(pattern) = options.packages.first() {
+                        args.push(pattern.clone());
+                    }
                 }
                 PackageManagerType::Yarn => {
                     bin_name = "yarn".into();
@@ -315,7 +381,7 @@ impl PackageManager {
         // Add packages (npm supports package names)
         args.extend_from_slice(options.packages);
 
-        // Warn about pnpm-specific flags
+        // Warn about unsupported flags
         if options.prod || options.dev {
             output::warn("--prod/--dev not supported by npm");
         }
@@ -369,6 +435,14 @@ mod tests {
     }
 
     #[test]
+    fn test_aube_outdated_basic() {
+        let pm = create_mock_package_manager(PackageManagerType::Aube, "1.17.1");
+        let result = pm.resolve_outdated_command(&OutdatedCommandOptions { ..Default::default() });
+        assert_eq!(result.bin_path, "aube");
+        assert_eq!(result.args, vec!["outdated"]);
+    }
+
+    #[test]
     fn test_pnpm_outdated_with_packages() {
         let pm = create_mock_package_manager(PackageManagerType::Pnpm, "10.0.0");
         let packages = vec!["*babel*".to_string(), "eslint-*".to_string()];
@@ -389,6 +463,17 @@ mod tests {
         });
         assert_eq!(result.bin_path, "pnpm");
         assert_eq!(result.args, vec!["outdated", "--format", "json"]);
+    }
+
+    #[test]
+    fn test_aube_outdated_json() {
+        let pm = create_mock_package_manager(PackageManagerType::Aube, "1.17.1");
+        let result = pm.resolve_outdated_command(&OutdatedCommandOptions {
+            format: Some(Format::Json),
+            ..Default::default()
+        });
+        assert_eq!(result.bin_path, "aube");
+        assert_eq!(result.args, vec!["outdated", "--json"]);
     }
 
     #[test]
@@ -429,6 +514,31 @@ mod tests {
         });
         assert_eq!(result.bin_path, "pnpm");
         assert_eq!(result.args, vec!["--filter", "app", "outdated", "--recursive"]);
+    }
+
+    #[test]
+    fn test_aube_outdated_with_filter() {
+        let pm = create_mock_package_manager(PackageManagerType::Aube, "1.17.1");
+        let filters = vec!["app".to_string()];
+        let result = pm.resolve_outdated_command(&OutdatedCommandOptions {
+            filters: Some(&filters),
+            recursive: true,
+            ..Default::default()
+        });
+        assert_eq!(result.bin_path, "aube");
+        assert_eq!(result.args, vec!["--filter", "app", "outdated", "--recursive"]);
+    }
+
+    #[test]
+    fn test_aube_outdated_ignores_extra_patterns() {
+        let pm = create_mock_package_manager(PackageManagerType::Aube, "1.17.1");
+        let packages = vec!["react".to_string(), "lodash".to_string()];
+        let result = pm.resolve_outdated_command(&OutdatedCommandOptions {
+            packages: &packages,
+            ..Default::default()
+        });
+        assert_eq!(result.bin_path, "aube");
+        assert_eq!(result.args, vec!["outdated", "react"]);
     }
 
     #[test]
