@@ -15,9 +15,9 @@ info: Installing 1 global package with Node.js <semver>
 > env-install-stale-keep # Remaining binary should still be callable
 env-install-stale-keep ok
 
-> node -e "const fs = require('fs'); const path = require('path'); const shimSuffix = process.platform === 'win32' ? '.exe' : ''; const shim = path.join(process.env.VP_HOME, 'bin', 'env-install-stale-drop' + shimSuffix); const config = path.join(process.env.VP_HOME, 'bins/env-install-stale-drop.json'); console.log(fs.existsSync(shim) ? 'stale shim exists' : 'stale shim removed'); console.log(fs.existsSync(config) ? 'stale config exists' : 'stale config removed');" # Removed binary should not leave shim or config
+[127]> env-install-stale-drop # It should not be called anymore
+command not found: env-install-stale-drop
+
+> node check-stale-binary.js
 stale shim removed
 stale config removed
-
-> vp remove -g env-install-stale-bin-pkg # Cleanup
-Uninstalled env-install-stale-bin-pkg
