@@ -28,7 +28,6 @@ tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
 vite_command = { workspace = true }
 vite_error = { workspace = true }
-vite_glob = { workspace = true }
 vite_path = { workspace = true }
 vite_shared = { workspace = true }
 vite_str = { workspace = true }
