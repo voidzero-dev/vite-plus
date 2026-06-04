@@ -25,8 +25,8 @@ Options:
   -D, --dev                Only dev dependencies
   --no-optional            Exclude optional dependencies
   --exclude-peers          Exclude peer dependencies
-  --only-projects          Show only project packages
-  --find-by <FINDER_NAME>  Use a finder function
+  --only-projects          Show only project packages (pnpm/aube-specific)
+  --find-by <FINDER_NAME>  Use a finder function defined in .pnpmfile.cjs (pnpm/aube-specific)
   -r, --recursive          List across all workspaces
   --filter <PATTERN>       Filter packages in monorepo
   -g, --global             List global packages

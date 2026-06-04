@@ -1,0 +1,238 @@
+> vp add testnpm2 -D -w && cat package.json # should add package to workspace root
+Resolving testnpm2@latest...
+  + testnpm2@<semver> (specifier: ^1.0.1)
+Updated package.json
+devDependencies:
++ testnpm2@<semver>
+
+{
+  "name": "command-add-aube-with-workspace",
+  "version": "1.0.0",
+  "packageManager": "aube@<semver>",
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  }
+}
+
+[1]> vp add @vite-plus-test/utils --workspace && cat package.json # aube warns: add --workspace(workspace-only) unsupported
+warn: aube add does not support --workspace (only add if package exists in workspace)
+  × refusing to add dependencies to the workspace root. If this is
+  │ intentional, pass --ignore-workspace-root-check (-W).
+
+
+> vp add testnpm2 test-vite-plus-install@1.0.0 --filter app && cat package.json packages/app/package.json packages/utils/package.json # should add packages to packages/app
+Resolving testnpm2@latest...
+  + testnpm2@<semver> (specifier: ^1.0.1)
+Resolving test-vite-plus-install@<semver>...
+  + test-vite-plus-install@<semver> (specifier: <semver>)
+Updated package.json
+command-add-aube-with-workspace:
+devDependencies:
++ testnpm2@<semver>
+
+app:
+dependencies:
++ test-vite-plus-install@<semver>
++ testnpm2@<semver>
+
+{
+  "name": "command-add-aube-with-workspace",
+  "version": "1.0.0",
+  "packageManager": "aube@<semver>",
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  }
+}
+{
+  "name": "app",
+  "dependencies": {
+    "test-vite-plus-install": "1.0.0",
+    "testnpm2": "^1.0.1"
+  }
+}
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "private": true
+}
+
+[1]> vp add @vite-plus-test/utils --workspace --filter app && cat package.json packages/app/package.json packages/utils/package.json # should add @vite-plus-test/utils to packages/app (and warn about --workspace)
+warn: aube add does not support --workspace (only add if package exists in workspace)
+  × failed to fetch @vite-plus-test/utils: package not found: @vite-plus-test/
+  │ utils
+
+
+> vp add -E testnpm2 test-vite-plus-install --filter "*" && cat package.json packages/app/package.json packages/utils/package.json # should add testnpm2 test-vite-plus-install to all packages except workspace root
+Resolving testnpm2@latest...
+  + testnpm2@<semver> (specifier: <semver>)
+Resolving test-vite-plus-install@latest...
+  + test-vite-plus-install@<semver> (specifier: <semver>)
+Updated package.json
+Resolving testnpm2@latest...
+  + testnpm2@<semver> (specifier: <semver>)
+Resolving test-vite-plus-install@latest...
+  + test-vite-plus-install@<semver> (specifier: <semver>)
+Updated package.json
+command-add-aube-with-workspace:
+devDependencies:
++ testnpm2@<semver>
+
+app:
+dependencies:
++ test-vite-plus-install@<semver>
++ testnpm2@<semver>
+
+@vite-plus-test/utils:
+dependencies:
++ test-vite-plus-install@<semver>
++ testnpm2@<semver>
+
+{
+  "name": "command-add-aube-with-workspace",
+  "version": "1.0.0",
+  "packageManager": "aube@<semver>",
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  }
+}
+{
+  "name": "app",
+  "dependencies": {
+    "test-vite-plus-install": "1.0.0",
+    "testnpm2": "1.0.1"
+  }
+}
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "test-vite-plus-install": "1.0.0",
+    "testnpm2": "1.0.1"
+  }
+}
+
+> vp install test-vite-plus-package@1.0.0 --filter "*" --workspace-root --save-catalog && cat package.json packages/app/package.json packages/utils/package.json pnpm-workspace.yaml # should install packages alias for add command
+Resolving test-vite-plus-package@<semver>...
+  + test-vite-plus-package@<semver> (specifier: catalog:)
+Updated package.json
+command-add-aube-with-workspace:
+dependencies:
++ test-vite-plus-package@<semver>
+devDependencies:
++ testnpm2@<semver>
+
+app:
+dependencies:
++ test-vite-plus-install@<semver>
++ testnpm2@<semver>
+
+@vite-plus-test/utils:
+dependencies:
++ test-vite-plus-install@<semver>
++ testnpm2@<semver>
+
+aube <semver> by en.dev · ✓ installed 3 packages in <variable>ms
+{
+  "name": "command-add-aube-with-workspace",
+  "version": "1.0.0",
+  "packageManager": "aube@<semver>",
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "dependencies": {
+    "test-vite-plus-package": "catalog:"
+  }
+}
+{
+  "name": "app",
+  "dependencies": {
+    "test-vite-plus-install": "1.0.0",
+    "testnpm2": "1.0.1"
+  }
+}
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "test-vite-plus-install": "1.0.0",
+    "testnpm2": "1.0.1"
+  }
+}
+packages:
+  - packages/*
+catalog:
+  test-vite-plus-package: <semver>
+
+> vp add --filter app test-vite-plus-package-optional --save-catalog-name v1 && cat packages/app/package.json pnpm-workspace.yaml # should add with save-catalog-name
+Resolving test-vite-plus-package-optional@latest...
+  + test-vite-plus-package-optional@<semver> (specifier: catalog:v1)
+Updated package.json
+command-add-aube-with-workspace:
+dependencies:
++ test-vite-plus-package@<semver>
+devDependencies:
++ testnpm2@<semver>
+
+app:
+dependencies:
++ test-vite-plus-install@<semver>
++ test-vite-plus-package-optional@<semver>
++ testnpm2@<semver>
+
+{
+  "name": "app",
+  "dependencies": {
+    "test-vite-plus-install": "1.0.0",
+    "test-vite-plus-package-optional": "catalog:v1",
+    "testnpm2": "1.0.1"
+  }
+}
+packages:
+  - packages/*
+catalog:
+  test-vite-plus-package: <semver>
+catalogs:
+  v1:
+    test-vite-plus-package-optional: ^1.0.0
+
+> vp add --filter=./packages/utils test-vite-plus-package-optional -O --save-catalog-name v2 && cat packages/utils/package.json pnpm-workspace.yaml # should add other with save-catalog-name
+Resolving test-vite-plus-package-optional@latest...
+  + test-vite-plus-package-optional@<semver> (specifier: catalog:v2)
+Updated package.json
+command-add-aube-with-workspace:
+dependencies:
++ test-vite-plus-package@<semver>
+devDependencies:
++ testnpm2@<semver>
+
+@vite-plus-test/utils:
+dependencies:
++ test-vite-plus-install@<semver>
++ testnpm2@<semver>
+optionalDependencies:
++ test-vite-plus-package-optional@<semver>
+
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "test-vite-plus-install": "1.0.0",
+    "testnpm2": "1.0.1"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "catalog:v2"
+  }
+}
+packages:
+  - packages/*
+catalog:
+  test-vite-plus-package: <semver>
+catalogs:
+  v1:
+    test-vite-plus-package-optional: ^1.0.0
+  v2:
+    test-vite-plus-package-optional: ^1.0.0
+

@@ -1,0 +1,80 @@
+> vp install
+command-why-aube-with-workspace:
+dependencies:
++ testnpm2@<semver>  latest <semver>
+
+app:
+dependencies:
++ testnpm2@<semver>  latest <semver>
+devDependencies:
++ test-vite-plus-package@<semver>
+
+@vite-plus-test/utils:
+dependencies:
++ testnpm2@<semver>  latest <semver>
+
+
+> vp why testnpm2 -w # should check why in workspace root
+command-why-aube-with-workspace@<semver> <cwd>
+
+dependencies:
+testnpm2 <semver>
+
+packages/app: dependencies:
+testnpm2 <semver>
+
+packages/utils: dependencies:
+testnpm2 <semver>
+
+> vp why testnpm2 --filter app # should check why in specific package
+command-why-aube-with-workspace@<semver> <cwd>
+
+packages/app: dependencies:
+testnpm2 <semver>
+
+> vp why test-vite-plus-package -D --filter app # should check why dev dependencies in app
+command-why-aube-with-workspace@<semver> <cwd>
+
+packages/app: devDependencies:
+test-vite-plus-package <semver>
+
+> vp why testnpm2 --filter "*" # should check why in all packages
+command-why-aube-with-workspace@<semver> <cwd>
+
+packages/app: dependencies:
+testnpm2 <semver>
+
+packages/utils: dependencies:
+testnpm2 <semver>
+
+> vp why testnpm2 -r # should check why recursively
+command-why-aube-with-workspace@<semver> <cwd>
+
+packages/app: dependencies:
+testnpm2 <semver>
+
+packages/utils: dependencies:
+testnpm2 <semver>
+
+> vp why testnpm2 --filter app --json # should support json output with filter
+[
+  {
+    "importer": "packages/app",
+    "depType": "dependencies",
+    "chain": [
+      {
+        "name": "testnpm2",
+        "version": "1.0.0"
+      }
+    ]
+  }
+]
+
+[2]> vp why test-vite-plus-install --filter app --depth 1 # should support depth limiting with filter
+error: unexpected argument '--depth' found
+
+  tip: to pass '--depth' as a value, use '-- --depth'
+
+Usage: aube.native why [OPTIONS] <PACKAGE>
+
+For more information, try '--help'.

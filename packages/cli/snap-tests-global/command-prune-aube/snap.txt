@@ -1,0 +1,58 @@
+> vp install # should install packages first
+aube <semver> by en.dev · ✓ Already up to date
+
+> vp pm prune --help # should show help
+Usage: vp pm prune [OPTIONS] [-- <PASS_THROUGH_ARGS>...]
+
+Remove unnecessary packages
+
+Arguments:
+  [PASS_THROUGH_ARGS]...  Additional arguments
+
+Options:
+  --prod         Remove devDependencies
+  --no-optional  Remove optional dependencies
+  -h, --help     Print help
+
+Documentation: https://viteplus.dev/guide/install
+
+
+> vp pm prune && cat package.json # should prune extraneous dependencies
+Nothing to prune
+{
+  "name": "command-prune-aube",
+  "version": "1.0.0",
+  "packageManager": "aube@<semver>"
+}
+
+> vp pm prune --prod && cat package.json # should prune dev dependencies
+Nothing to prune
+{
+  "name": "command-prune-aube",
+  "version": "1.0.0",
+  "packageManager": "aube@<semver>"
+}
+
+> vp pm prune --no-optional && cat package.json # should prune optional dependencies
+Nothing to prune
+{
+  "name": "command-prune-aube",
+  "version": "1.0.0",
+  "packageManager": "aube@<semver>"
+}
+
+> vp pm prune --prod --no-optional && cat package.json # should prune both dev and optional dependencies
+Nothing to prune
+{
+  "name": "command-prune-aube",
+  "version": "1.0.0",
+  "packageManager": "aube@<semver>"
+}
+
+> vp pm prune -- --loglevel=warn && cat package.json # should support pass through arguments
+Nothing to prune
+{
+  "name": "command-prune-aube",
+  "version": "1.0.0",
+  "packageManager": "aube@<semver>"
+}

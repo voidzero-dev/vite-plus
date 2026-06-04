@@ -1,0 +1,104 @@
+> vp install # should install packages first
+app:
+dependencies:
++ @vite-plus-test/utils@?
+
+@vite-plus-test/utils:
+dependencies:
++ testnpm2@<semver>
+
+
+> vp pm list # should list current workspace root dependencies
+command-list-aube-with-workspace@<semver> <cwd>
+
+(no dependencies)
+
+> vp pm list --recursive # should list all packages in workspace recursively
+app@<semver> <cwd>/packages/app
+
+dependencies:
+└── @vite-plus-test/utils ?
+
+@vite-plus-test/utils@<semver> <cwd>/packages/utils
+
+dependencies:
+└── testnpm2 <semver>
+
+> vp pm list --filter app # should list specific workspace package (uses --filter app list)
+app@<semver> <cwd>/packages/app
+
+dependencies:
+└── @vite-plus-test/utils ?
+
+> vp pm list --filter app --filter @vite-plus-test/utils # should list multiple workspace packages
+app@<semver> <cwd>/packages/app
+
+dependencies:
+└── @vite-plus-test/utils ?
+
+@vite-plus-test/utils@<semver> <cwd>/packages/utils
+
+dependencies:
+└── testnpm2 <semver>
+
+> vp pm list --recursive --json # should list all workspace packages in JSON format
+[
+  {
+    "name": "app",
+    "version": "1.0.0",
+    "path": "<cwd>/packages/app",
+    "dependencies": {
+      "@vite-plus-test/utils": {}
+    }
+  },
+  {
+    "name": "@vite-plus-test/utils",
+    "version": "1.0.0",
+    "path": "<cwd>/packages/utils",
+    "dependencies": {
+      "testnpm2": {
+        "version": "1.0.1"
+      }
+    }
+  }
+]
+
+> vp pm list --recursive --depth 0 # should list workspace packages with depth limit
+app@<semver> <cwd>/packages/app
+
+dependencies:
+└── @vite-plus-test/utils ?
+
+@vite-plus-test/utils@<semver> <cwd>/packages/utils
+
+dependencies:
+└── testnpm2 <semver>
+
+[2]> vp pm list --recursive --only-projects # should list only workspace projects (pnpm/aube-specific)
+error: unexpected argument '--only-projects' found
+
+  tip: to pass '--only-projects' as a value, use '-- --only-projects'
+
+Usage: aube.native list [OPTIONS] [PATTERN]
+
+For more information, try '--help'.
+
+[2]> vp pm list --recursive --exclude-peers # should exclude peer dependencies in workspace
+error: unexpected argument '--exclude-peers' found
+
+  tip: a similar argument exists: '--cd'
+
+Usage: aube.native list --dir <DIR> [PATTERN]
+
+For more information, try '--help'.
+
+> vp pm list --recursive --prod # should list production dependencies in workspace
+app@<semver> <cwd>/packages/app
+
+dependencies:
+└── @vite-plus-test/utils ?
+
+@vite-plus-test/utils@<semver> <cwd>/packages/utils
+
+dependencies:
+└── testnpm2 <semver>

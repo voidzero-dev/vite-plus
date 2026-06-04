@@ -21,7 +21,7 @@ Options:
   --no-git                Skip git repository initialization
   --hooks                 Set up pre-commit hooks (default in non-interactive mode)
   --no-hooks              Skip pre-commit hooks setup
-  --package-manager NAME  Use specified package manager (pnpm, npm, yarn, bun)
+  --package-manager NAME  Use specified package manager (pnpm, aube, npm, yarn, bun)
   --verbose               Show detailed scaffolding output
   --no-interactive        Run in non-interactive mode
   --list                  List all available templates

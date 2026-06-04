@@ -19,7 +19,7 @@ Options:
   --depth <DEPTH>          Limit tree depth
   --no-optional            Exclude optional dependencies
   --exclude-peers          Exclude peer dependencies
-  --find-by <FINDER_NAME>  Use a finder function defined in .pnpmfile.cjs
+  --find-by <FINDER_NAME>  Use a finder function defined in .pnpmfile.cjs (pnpm/aube-specific)
   -h, --help               Print help
 
 Documentation: https://viteplus.dev/guide/install
@@ -132,7 +132,7 @@ dependencies:
 testnpm2 <semver>
 
 > vp why test-vite-plus-package-optional --no-optional # should exclude optional dependencies
-[1]> vp why testnpm2 --find-by customFinder # should support find-by option (pnpm-specific)
+[1]> vp why testnpm2 --find-by customFinder # should support find-by option (pnpm/aube-specific)
  ERR_PNPM_FINDER_NOT_FOUND  No finder with name customFinder is found
 
 > vp why testnpm2 -- --reporter=silent # should support pass through arguments

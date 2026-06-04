@@ -14,7 +14,7 @@
     "vp why test-vite-plus-package -D # should support dev dependencies only",
     "vp why testnpm2 --depth 1 # should support depth limiting",
     "vp why test-vite-plus-package-optional --no-optional # should exclude optional dependencies",
-    "vp why testnpm2 --find-by customFinder # should support find-by option (pnpm-specific)",
+    "vp why testnpm2 --find-by customFinder # should support find-by option (pnpm/aube-specific)",
     "vp why testnpm2 -- --reporter=silent # should support pass through arguments"
   ]
 }

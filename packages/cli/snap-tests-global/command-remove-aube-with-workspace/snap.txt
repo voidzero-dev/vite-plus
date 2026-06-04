@@ -1,0 +1,177 @@
+> vp add testnpm2 -D -w --filter=* && vp add test-vite-plus-install -w --filter=* && vp add test-vite-plus-package-optional -O --filter=* && cat package.json packages/app/package.json packages/utils/package.json # prepare packages
+Resolving testnpm2@latest...
+  + testnpm2@<semver> (specifier: ^1.0.1)
+Updated package.json
+devDependencies:
++ testnpm2@<semver>
+
+Resolving test-vite-plus-install@latest...
+  + test-vite-plus-install@<semver> (specifier: ^1.0.0)
+Updated package.json
+dependencies:
++ test-vite-plus-install@<semver>
+devDependencies:
++ testnpm2@<semver>
+
+aube <semver> by en.dev · ✓ installed 2 packages in <variable>ms
+Resolving test-vite-plus-package-optional@latest...
+  + test-vite-plus-package-optional@<semver> (specifier: ^1.0.0)
+Updated package.json
+Resolving test-vite-plus-package-optional@latest...
+  + test-vite-plus-package-optional@<semver> (specifier: ^1.0.0)
+Updated package.json
+command-remove-aube-with-workspace:
+dependencies:
++ test-vite-plus-install@<semver>
+devDependencies:
++ testnpm2@<semver>
+
+app:
+optionalDependencies:
++ test-vite-plus-package-optional@<semver>
+
+@vite-plus-test/utils:
+optionalDependencies:
++ test-vite-plus-package-optional@<semver>
+
+{
+  "name": "command-remove-aube-with-workspace",
+  "version": "1.0.0",
+  "packageManager": "aube@<semver>",
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  }
+}
+{
+  "name": "app",
+  "version": "1.0.0",
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  }
+}
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "private": true,
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  }
+}
+
+> vp remove testnpm2 -r && cat package.json packages/app/package.json packages/utils/package.json # should remove package from all workspaces and root
+{
+  "name": "command-remove-aube-with-workspace",
+  "version": "1.0.0",
+  "packageManager": "aube@<semver>",
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  }
+}
+{
+  "name": "app",
+  "version": "1.0.0",
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  }
+}
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "private": true,
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "^1.0.0"
+  }
+}
+
+> vp remove -O test-vite-plus-package-optional -r && cat package.json packages/app/package.json packages/utils/package.json # aube warns for -O; should attempt removal
+warn: aube remove does not support --save-optional
+  - test-vite-plus-package-optional
+Updated package.json
+Resolved 0 packages
+Wrote aube-lock.yaml
+command-remove-aube-with-workspace:
+dependencies:
++ test-vite-plus-install@<semver>
+devDependencies:
++ testnpm2@<semver>
+
+@vite-plus-test/utils:
+optionalDependencies:
++ test-vite-plus-package-optional@<semver>
+
+aube <semver> by en.dev · ✓ installed 2 packages in <variable>ms
+  - test-vite-plus-package-optional
+Updated package.json
+Resolved 0 packages
+Wrote aube-lock.yaml
+aube <semver> by en.dev · ✓ Already up to date (2 packages)
+{
+  "name": "command-remove-aube-with-workspace",
+  "version": "1.0.0",
+  "packageManager": "aube@<semver>",
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  }
+}
+{
+  "name": "app",
+  "version": "1.0.0"
+}
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "private": true
+}
+
+> vp remove test-vite-plus-install --filter=app && cat package.json packages/app/package.json packages/utils/package.json # should remove package by filter=app
+{
+  "name": "command-remove-aube-with-workspace",
+  "version": "1.0.0",
+  "packageManager": "aube@<semver>",
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  }
+}
+{
+  "name": "app",
+  "version": "1.0.0"
+}
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "private": true
+}
+
+> vp remove test-vite-plus-install --filter=* && cat package.json packages/app/package.json packages/utils/package.json # should remove package by filter=*
+{
+  "name": "command-remove-aube-with-workspace",
+  "version": "1.0.0",
+  "packageManager": "aube@<semver>",
+  "devDependencies": {
+    "testnpm2": "^1.0.1"
+  },
+  "dependencies": {
+    "test-vite-plus-install": "^1.0.0"
+  }
+}
+{
+  "name": "app",
+  "version": "1.0.0"
+}
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "private": true
+}

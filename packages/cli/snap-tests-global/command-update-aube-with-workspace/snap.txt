@@ -1,0 +1,250 @@
+> vp update testnpm2 --latest -w && cat package.json # should update in workspace root
+Updating: testnpm2
+  testnpm2: (new) <semver>
+Resolved 1 packages
+Updated package.json
+Wrote aube-lock.yaml
+command-update-aube-with-workspace:
+dependencies:
++ testnpm2@<semver>
+
+app:
+dependencies:
++ @vite-plus-test/utils@?
++ testnpm2@<semver>
+devDependencies:
++ test-vite-plus-package@<semver>
+
+@vite-plus-test/utils:
+dependencies:
++ testnpm2@<semver>
+
+{
+  "name": "command-update-aube-with-workspace",
+  "version": "1.0.0",
+  "packageManager": "aube@<semver>",
+  "dependencies": {
+    "testnpm2": "^1.0.1"
+  }
+}
+
+> vp update testnpm2 --latest --filter app && cat packages/app/package.json # should update in specific package
+Updating: testnpm2
+  testnpm2: <semver> (already latest)
+Resolved 2 packages
+Updated package.json
+Wrote aube-lock.yaml
+command-update-aube-with-workspace:
+dependencies:
++ testnpm2@<semver>
+
+app:
+dependencies:
++ @vite-plus-test/utils@?
++ testnpm2@<semver>
+devDependencies:
++ test-vite-plus-package@<semver>
+
+@vite-plus-test/utils:
+dependencies:
++ testnpm2@<semver>
+
+aube <semver> by en.dev · ✓ installed 1 package in <variable>ms
+Updating: testnpm2
+  testnpm2: <semver> (already latest)
+Resolved 1 packages
+Wrote aube-lock.yaml
+command-update-aube-with-workspace:
+dependencies:
++ testnpm2@<semver>
+
+app:
+dependencies:
++ @vite-plus-test/utils@?
++ testnpm2@<semver>
+devDependencies:
++ test-vite-plus-package@<semver>
+
+@vite-plus-test/utils:
+dependencies:
++ testnpm2@<semver>
+
+aube <semver> by en.dev · ✓ installed 1 package in <variable>ms
+Wrote aube-lock.yaml
+{
+  "name": "app",
+  "version": "1.0.0",
+  "dependencies": {
+    "@vite-plus-test/utils": "workspace:*",
+    "testnpm2": "^1.0.1"
+  },
+  "devDependencies": {
+    "test-vite-plus-package": "^1.0.0"
+  }
+}
+
+> vp up -D --filter app && cat packages/app/package.json # should update dev dependencies in app
+Updating all dependencies...
+  test-vite-plus-package: <semver> (already latest)
+Resolved 2 packages
+Wrote aube-lock.yaml
+aube <semver> by en.dev · ✓ Already up to date
+Updating all dependencies...
+Resolved 1 packages
+Wrote aube-lock.yaml
+aube <semver> by en.dev · ✓ Already up to date (1 package)
+Wrote aube-lock.yaml
+{
+  "name": "app",
+  "version": "1.0.0",
+  "dependencies": {
+    "@vite-plus-test/utils": "workspace:*",
+    "testnpm2": "^1.0.1"
+  },
+  "devDependencies": {
+    "test-vite-plus-package": "^1.0.0"
+  }
+}
+
+> vp update --latest --filter "*" && cat packages/app/package.json packages/utils/package.json # should update in all packages
+Updating all dependencies...
+  test-vite-plus-package: <semver> (already latest)
+  testnpm2: <semver> (already latest)
+Resolved 2 packages
+Wrote aube-lock.yaml
+command-update-aube-with-workspace:
+dependencies:
++ testnpm2@<semver>
+
+app:
+dependencies:
++ @vite-plus-test/utils@?
++ testnpm2@<semver>
+devDependencies:
++ test-vite-plus-package@<semver>
+
+@vite-plus-test/utils:
+dependencies:
++ testnpm2@<semver>
+
+aube <semver> by en.dev · ✓ installed 1 package in <variable>ms
+Updating all dependencies...
+  testnpm2: <semver> (already latest)
+Resolved 1 packages
+Updated package.json
+Wrote aube-lock.yaml
+aube <semver> by en.dev · ✓ Already up to date (2 packages)
+Updating all dependencies...
+  testnpm2: <semver> (already latest)
+Resolved 1 packages
+Wrote aube-lock.yaml
+command-update-aube-with-workspace:
+dependencies:
++ testnpm2@<semver>
+
+app:
+dependencies:
++ @vite-plus-test/utils@?
++ testnpm2@<semver>
+devDependencies:
++ test-vite-plus-package@<semver>
+
+@vite-plus-test/utils:
+dependencies:
++ testnpm2@<semver>
+
+aube <semver> by en.dev · ✓ installed 1 package in <variable>ms
+Wrote aube-lock.yaml
+{
+  "name": "app",
+  "version": "1.0.0",
+  "dependencies": {
+    "@vite-plus-test/utils": "workspace:*",
+    "testnpm2": "^1.0.1"
+  },
+  "devDependencies": {
+    "test-vite-plus-package": "^1.0.0"
+  }
+}
+{
+  "name": "@vite-plus-test/utils",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "testnpm2": "^1.0.1"
+  }
+}
+
+> vp update -r --no-save && cat package.json packages/app/package.json # should update recursively without saving
+Updating all dependencies...
+  test-vite-plus-package: <semver> (already latest)
+  testnpm2: <semver> (already latest)
+Resolved 2 packages
+Skipping package.json update (--no-save)
+Wrote aube-lock.yaml
+aube <semver> by en.dev · ✓ Already up to date
+Updating all dependencies...
+  testnpm2: <semver> (already latest)
+Resolved 1 packages
+Skipping package.json update (--no-save)
+Wrote aube-lock.yaml
+aube <semver> by en.dev · ✓ Already up to date
+Updating all dependencies...
+  testnpm2: <semver> (already latest)
+Resolved 1 packages
+Skipping package.json update (--no-save)
+Wrote aube-lock.yaml
+aube <semver> by en.dev · ✓ Already up to date (1 package)
+Wrote aube-lock.yaml
+{
+  "name": "command-update-aube-with-workspace",
+  "version": "1.0.0",
+  "packageManager": "aube@<semver>",
+  "dependencies": {
+    "testnpm2": "^1.0.1"
+  }
+}
+{
+  "name": "app",
+  "version": "1.0.0",
+  "dependencies": {
+    "@vite-plus-test/utils": "workspace:*",
+    "testnpm2": "^1.0.1"
+  },
+  "devDependencies": {
+    "test-vite-plus-package": "^1.0.0"
+  }
+}
+
+> vp update --workspace --filter app @vite-plus-test/utils && cat packages/app/package.json # aube warns for --workspace(workspace-only); should still update
+warn: aube update does not support --workspace (only update if package exists in workspace)
+Updating: @vite-plus-test/utils
+Resolved 2 packages
+Wrote aube-lock.yaml
+command-update-aube-with-workspace:
+dependencies:
++ testnpm2@<semver>
+
+app:
+dependencies:
++ @vite-plus-test/utils@?
++ testnpm2@<semver>
+devDependencies:
++ test-vite-plus-package@<semver>
+
+@vite-plus-test/utils:
+dependencies:
++ testnpm2@<semver>
+
+aube <semver> by en.dev · ✓ installed 1 package in <variable>ms
+{
+  "name": "app",
+  "version": "1.0.0",
+  "dependencies": {
+    "@vite-plus-test/utils": "workspace:*",
+    "testnpm2": "^1.0.1"
+  },
+  "devDependencies": {
+    "test-vite-plus-package": "^1.0.0"
+  }
+}

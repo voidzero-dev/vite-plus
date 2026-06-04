@@ -1,0 +1,11 @@
+{
+  "name": "app",
+  "version": "1.0.0",
+  "dependencies": {
+    "testnpm2": "^1.0.0",
+    "@vite-plus-test/utils": "workspace:*"
+  },
+  "devDependencies": {
+    "test-vite-plus-package": "^1.0.0"
+  }
+}

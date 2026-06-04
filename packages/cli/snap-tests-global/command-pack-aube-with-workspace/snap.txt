@@ -1,0 +1,131 @@
+> vp pm pack && rm -rf *.tgz # should pack current workspace root
+package: command-pack-aube-with-workspace@<semver>
+Tarball Contents
+  aube-workspace.yaml
+  output.log
+  package.json
+  packages/app/package.json
+  packages/utils/package.json
+  snap.txt
+  steps.json
+Tarball Details
+  command-pack-aube-with-workspace-1.0.0.tgz
+
+> vp pm pack --recursive --json > out.json && tool json-sort out.json '_.name' && cat out.json && rm -rf *.tgz # should pack all packages in workspace
+[
+  {
+    "name": "command-pack-aube-with-workspace",
+    "version": "1.0.0",
+    "filename": "command-pack-aube-with-workspace-1.0.0.tgz",
+    "files": [
+      {
+        "path": "aube-workspace.yaml"
+      },
+      {
+        "path": "out.json"
+      },
+      {
+        "path": "output.log"
+      },
+      {
+        "path": "package.json"
+      },
+      {
+        "path": "packages/app/package.json"
+      },
+      {
+        "path": "packages/utils/package.json"
+      },
+      {
+        "path": "snap.txt"
+      },
+      {
+        "path": "steps.json"
+      }
+    ]
+  }
+]
+
+> vp pm pack --filter app && rm -rf *.tgz # should pack specific package (uses --filter app pack)
+package: command-pack-aube-with-workspace@<semver>
+Tarball Contents
+  aube-workspace.yaml
+  out.json
+  output.log
+  package.json
+  packages/app/package.json
+  packages/utils/package.json
+  snap.txt
+  steps.json
+Tarball Details
+  command-pack-aube-with-workspace-1.0.0.tgz
+
+> vp pm pack --filter app --filter @vite-plus-test/utils --json > out.json && tool json-sort out.json '_.name' && cat out.json && rm -rf *.tgz # should pack multiple packages
+[
+  {
+    "name": "command-pack-aube-with-workspace",
+    "version": "1.0.0",
+    "filename": "command-pack-aube-with-workspace-1.0.0.tgz",
+    "files": [
+      {
+        "path": "aube-workspace.yaml"
+      },
+      {
+        "path": "out.json"
+      },
+      {
+        "path": "output.log"
+      },
+      {
+        "path": "package.json"
+      },
+      {
+        "path": "packages/app/package.json"
+      },
+      {
+        "path": "packages/utils/package.json"
+      },
+      {
+        "path": "snap.txt"
+      },
+      {
+        "path": "steps.json"
+      }
+    ]
+  }
+]
+
+[2]> vp pm pack --out ./dist/package.tgz && rm -rf ./dist # should pack with output file
+error: unexpected argument '--out' found
+
+Usage: aube.native pack [OPTIONS]
+
+For more information, try '--help'.
+
+> vp pm pack --pack-destination ./dist && rm -rf ./dist # should pack with destination
+package: command-pack-aube-with-workspace@<semver>
+Tarball Contents
+  aube-workspace.yaml
+  out.json
+  output.log
+  package.json
+  packages/app/package.json
+  packages/utils/package.json
+  snap.txt
+  steps.json
+Tarball Details
+  <cwd>/./dist/command-pack-aube-with-workspace-1.0.0.tgz
+
+[2]> vp pm pack --pack-gzip-level 9 && rm -rf *.tgz # should pack with gzip compression level
+error: unexpected argument '--pack-gzip-level' found
+
+Usage: aube.native pack [OPTIONS]
+
+For more information, try '--help'.
+
+[2]> vp pm pack --json --out 'foo-%s-%v.tgz' && rm -rf *.tgz # should pack with json output
+error: unexpected argument '--out' found
+
+Usage: aube.native pack [OPTIONS]
+
+For more information, try '--help'.

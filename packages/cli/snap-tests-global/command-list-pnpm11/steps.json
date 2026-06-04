@@ -13,8 +13,8 @@
     "vp pm list --dev # should list development dependencies only",
     "vp pm list --no-optional # should exclude optional dependencies",
     "vp pm list --exclude-peers # should exclude peer dependencies",
-    "vp pm list --only-projects # should list only workspace projects (pnpm-specific)",
-    "vp pm list --find-by customFinder # should use custom finder (pnpm-specific)",
+    "vp pm list --only-projects # should list only workspace projects (pnpm/aube-specific)",
+    "vp pm list --find-by customFinder # should use custom finder (pnpm/aube-specific)",
     "vp pm list --recursive # should list packages recursively in workspace",
     "vp pm list -- --loglevel=warn # should support pass through arguments"
   ]

@@ -1,0 +1,21 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "commands": [
+    "vp outdated --help # should show help",
+    "vp install # should install packages first",
+    "vp outdated testnpm2 # should outdated package",
+    "vp outdated test-vite* # should outdated with one glob pattern",
+    "vp outdated test-vite* '*npm*' # aube accepts a single pattern; extra patterns warn",
+    "vp outdated --format json # should support json output",
+    "vp outdated --format list # aube does not support list format (warns)",
+    "vp outdated --format table # should support table output",
+    "vp outdated testnpm2 --long --format list # should support --long (list warns)",
+    "vp outdated -r # should support recursive output",
+    "vp outdated -P # should support prod output",
+    "vp outdated -D # should support dev output",
+    "vp outdated --no-optional # aube does not support --no-optional (warns)",
+    "vp outdated --compatible # aube does not support --compatible (warns)",
+    "json-edit package.json '_.optionalDependencies[\"test-vite-plus-other-optional\"] = \"^1.0.0\"' && vp outdated --compatible # compatible w/ optional deps still warns",
+    "vp outdated --sort-by name # aube does not support --sort-by (warns)"
+  ]
+}

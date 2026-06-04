@@ -1,0 +1,15 @@
+{
+  "name": "command-why-aube",
+  "version": "1.0.0",
+  "dependencies": {
+    "testnpm2": "1.0.0",
+    "test-vite-plus-package-optional": "1.0.0"
+  },
+  "devDependencies": {
+    "test-vite-plus-package": "1.0.0"
+  },
+  "optionalDependencies": {
+    "test-vite-plus-package-optional": "1.0.0"
+  },
+  "packageManager": "aube@1.17.1"
+}

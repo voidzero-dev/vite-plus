@@ -1,0 +1,25 @@
+[1]> vp install
+ERR_AUBE_REGISTRY_ERROR
+
+  × failed to resolve dependencies
+  ╰─▶ registry error for test-vite-plus-other: package not found: test-vite-
+      plus-other
+  help: package: test-vite-plus-other
+        registry operation failed — see the message above for the underlying
+        cause
+
+
+> vp outdated testnpm2 -w # should outdated in workspace root
+No lockfile found. Run `aube install` first.
+
+> vp outdated testnpm2 --filter app # should outdated in specific package
+No lockfile found. Run `aube install` first.
+
+> vp outdated -D --filter app # should outdated dev dependencies in app
+No lockfile found. Run `aube install` first.
+
+> vp outdated --filter "*" --format json # should outdated in all packages
+No lockfile found. Run `aube install` first.
+
+> vp outdated -r # should outdated recursively
+No lockfile found. Run `aube install` first.

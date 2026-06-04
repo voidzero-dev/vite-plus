@@ -1,0 +1,57 @@
+> vp dedupe --help # should show help
+Usage: vp dedupe [OPTIONS] [-- <PASS_THROUGH_ARGS>...]
+
+Deduplicate dependencies
+
+Arguments:
+  [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
+
+Options:
+  --check     Check if deduplication would make changes
+  -h, --help  Print help
+
+Documentation: https://viteplus.dev/guide/install
+
+
+> vp dedupe && cat package.json # should dedupe dependencies
+Lockfile is already deduped (0 packages)
+{
+  "name": "command-dedupe-aube",
+  "version": "1.0.0",
+  "packageManager": "aube@<semver>"
+}
+
+> vp dedupe --check && cat package.json # should check if deduplication would make changes
+Lockfile is already deduped (0 packages)
+{
+  "name": "command-dedupe-aube",
+  "version": "1.0.0",
+  "packageManager": "aube@<semver>"
+}
+
+> vp dedupe -- --loglevel=warn && cat package.json # support pass through arguments
+Lockfile is already deduped (0 packages)
+{
+  "name": "command-dedupe-aube",
+  "version": "1.0.0",
+  "packageManager": "aube@<semver>"
+}
+
+> json-edit package.json '_.dependencies = {}' && cat package.json && vp dedupe --check # should check fails because no dependencies
+{
+  "name": "command-dedupe-aube",
+  "version": "1.0.0",
+  "packageManager": "aube@<semver>",
+  "dependencies": {}
+}
+Lockfile is already deduped (0 packages)
+
+> vp dedupe && cat package.json && vp dedupe --check # should dedupe fix the change by removing the dependencies
+Lockfile is already deduped (0 packages)
+{
+  "name": "command-dedupe-aube",
+  "version": "1.0.0",
+  "packageManager": "aube@<semver>",
+  "dependencies": {}
+}
+Lockfile is already deduped (0 packages)

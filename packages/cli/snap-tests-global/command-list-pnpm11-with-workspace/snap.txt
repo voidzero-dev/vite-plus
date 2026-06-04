@@ -124,7 +124,7 @@ app@<semver> <cwd>/packages/app
 
 3 packages in 3 projects
 
-> vp pm list --recursive --only-projects # should list only workspace projects (pnpm-specific)
+> vp pm list --recursive --only-projects # should list only workspace projects (pnpm/aube-specific)
 Legend: production dependency, optional only, dev only
 
 app@<semver> <cwd>/packages/app

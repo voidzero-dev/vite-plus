@@ -1,0 +1,117 @@
+> vp install # should install packages first
+aube <semver> by en.dev · ✓ Already up to date
+
+> vp pm list --help # should show help
+Usage: vp pm list [OPTIONS] [PATTERN] [-- <PASS_THROUGH_ARGS>...]
+
+List installed packages
+
+Arguments:
+  [PATTERN]               Package pattern to filter
+  [PASS_THROUGH_ARGS]...  Additional arguments
+
+Options:
+  --depth <DEPTH>          Maximum depth of dependency tree
+  --json                   Output in JSON format
+  --long                   Show extended information
+  --parseable              Parseable output format
+  -P, --prod               Only production dependencies
+  -D, --dev                Only dev dependencies
+  --no-optional            Exclude optional dependencies
+  --exclude-peers          Exclude peer dependencies
+  --only-projects          Show only project packages (pnpm/aube-specific)
+  --find-by <FINDER_NAME>  Use a finder function defined in .pnpmfile.cjs (pnpm/aube-specific)
+  -r, --recursive          List across all workspaces
+  --filter <PATTERN>       Filter packages in monorepo
+  -g, --global             List global packages
+  -h, --help               Print help
+
+Documentation: https://viteplus.dev/guide/install
+
+
+> vp pm list # should list installed packages
+command-list-aube@<semver> <cwd>
+
+(no dependencies)
+
+> vp pm list testnpm2 # should list specific package
+command-list-aube@<semver> <cwd>
+
+(no dependencies)
+
+> vp pm list --depth 0 # should list packages with depth limit
+command-list-aube@<semver> <cwd>
+
+(no dependencies)
+
+> vp pm list --json # should list packages in JSON format
+[
+  {
+    "name": "command-list-aube",
+    "version": "1.0.0",
+    "path": "<cwd>"
+  }
+]
+
+> vp pm list --long # should list packages with extended info
+command-list-aube@<semver> <cwd>
+
+(no dependencies)
+
+> vp pm list --parseable # should list packages in parseable format
+> vp pm list --prod # should list production dependencies only
+command-list-aube@<semver> <cwd>
+
+(no dependencies)
+
+> vp pm list --dev # should list development dependencies only
+command-list-aube@<semver> <cwd>
+
+(no dependencies)
+
+[2]> vp pm list --no-optional # should exclude optional dependencies
+error: unexpected argument '--no-optional' found
+
+  tip: to pass '--no-optional' as a value, use '-- --no-optional'
+
+Usage: aube.native list [OPTIONS] [PATTERN]
+
+For more information, try '--help'.
+
+[2]> vp pm list --exclude-peers # should exclude peer dependencies
+error: unexpected argument '--exclude-peers' found
+
+  tip: a similar argument exists: '--cd'
+
+Usage: aube.native list --dir <DIR> [PATTERN]
+
+For more information, try '--help'.
+
+[2]> vp pm list --only-projects # should list only workspace projects (pnpm/aube-specific)
+error: unexpected argument '--only-projects' found
+
+  tip: to pass '--only-projects' as a value, use '-- --only-projects'
+
+Usage: aube.native list [OPTIONS] [PATTERN]
+
+For more information, try '--help'.
+
+[2]> vp pm list --find-by customFinder # should use custom finder (pnpm/aube-specific)
+error: unexpected argument '--find-by' found
+
+  tip: to pass '--find-by' as a value, use '-- --find-by'
+
+Usage: aube.native list [OPTIONS] [PATTERN]
+
+For more information, try '--help'.
+
+[1]> vp pm list --recursive # should list packages recursively in workspace
+  × aube list: --filter requires a workspace root (aube-workspace.yaml, pnpm-
+  │ workspace.yaml, or package.json with a `workspaces` field) at or above /
+  │ tmp/vite-plus-test-3702e4d361a3405e97d53bbc279462d6/command-list-aube
+
+
+> vp pm list -- --loglevel=warn # should support pass through arguments
+command-list-aube@<semver> <cwd>
+
+(no dependencies)

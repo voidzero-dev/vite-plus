@@ -19,7 +19,7 @@ Options:
   --depth <DEPTH>          Limit tree depth
   --no-optional            Exclude optional dependencies
   --exclude-peers          Exclude peer dependencies
-  --find-by <FINDER_NAME>  Use a finder function defined in .pnpmfile.cjs
+  --find-by <FINDER_NAME>  Use a finder function defined in .pnpmfile.cjs (pnpm/aube-specific)
   -h, --help               Print help
 
 Documentation: https://viteplus.dev/guide/install

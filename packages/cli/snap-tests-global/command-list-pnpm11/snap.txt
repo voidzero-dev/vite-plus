@@ -30,8 +30,8 @@ Options:
   -D, --dev                Only dev dependencies
   --no-optional            Exclude optional dependencies
   --exclude-peers          Exclude peer dependencies
-  --only-projects          Show only project packages
-  --find-by <FINDER_NAME>  Use a finder function
+  --only-projects          Show only project packages (pnpm/aube-specific)
+  --find-by <FINDER_NAME>  Use a finder function defined in .pnpmfile.cjs (pnpm/aube-specific)
   -r, --recursive          List across all workspaces
   --filter <PATTERN>       Filter packages in monorepo
   -g, --global             List global packages
@@ -184,8 +184,8 @@ command-list-pnpm11@<semver> <cwd>
 
 3 packages
 
-> vp pm list --only-projects # should list only workspace projects (pnpm-specific)
-[1]> vp pm list --find-by customFinder # should use custom finder (pnpm-specific)
+> vp pm list --only-projects # should list only workspace projects (pnpm/aube-specific)
+[1]> vp pm list --find-by customFinder # should use custom finder (pnpm/aube-specific)
 [ERR_PNPM_FINDER_NOT_FOUND] No finder with name customFinder is found
 
 > vp pm list --recursive # should list packages recursively in workspace
