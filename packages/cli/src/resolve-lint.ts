@@ -13,10 +13,33 @@
 
 import { existsSync, realpathSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { relative } from 'node:path/win32';
 import { fileURLToPath } from 'node:url';
 
 import { DEFAULT_ENVS, resolve } from './utils/constants.ts';
+
+export function resolveWindowsTsgolintExecutable(
+  pathCandidates: string[],
+  options: {
+    exists: (path: string) => boolean;
+    getRealpathCandidates?: () => string[];
+  },
+): string {
+  let oxlintTsgolintPath = pathCandidates.find((p) => options.exists(p)) ?? '';
+  if (!oxlintTsgolintPath && options.getRealpathCandidates) {
+    try {
+      oxlintTsgolintPath = options.getRealpathCandidates().find((p) => options.exists(p)) ?? '';
+    } catch {
+      // realpath failed, fall through to default
+    }
+  }
+  if (!oxlintTsgolintPath) {
+    throw new Error(
+      'Unable to resolve oxlint-tsgolint executable, tried:\n' +
+        pathCandidates.map((path) => `- ${path}`).join('\n'),
+    );
+  }
+  return oxlintTsgolintPath;
+}
 
 /**
  * Resolves the oxlint binary path and environment variables.
@@ -53,29 +76,19 @@ export async function lint(): Promise<{
       join(projectBinDir, 'tsgolint.exe'),
       join(projectBinDir, 'tsgolint.cmd'),
     ];
-    oxlintTsgolintPath = pathCandidates.find((p) => existsSync(p)) ?? '';
-    // Bun stores packages in .bun/ cache dirs where the symlinked paths above won't match.
-    if (!oxlintTsgolintPath) {
-      try {
+    oxlintTsgolintPath = resolveWindowsTsgolintExecutable(pathCandidates, {
+      exists: existsSync,
+      // Bun stores packages in .bun/ cache dirs where the symlinked paths above won't match.
+      getRealpathCandidates: () => {
         const realPkgDir = realpathSync(join(scriptDir, '..'));
         const realBinDir = join(dirname(realPkgDir), '.bin');
-        oxlintTsgolintPath =
-          [join(realBinDir, 'tsgolint.exe'), join(realBinDir, 'tsgolint.cmd')].find((p) =>
-            existsSync(p),
-          ) ?? '';
-      } catch {
-        // realpath failed, fall through to default
-      }
-    }
-    if (!oxlintTsgolintPath) {
-      throw new Error(
-        'Unable to resolve oxlint-tsgolint executable, tried:\n' +
-          pathCandidates.map((path) => `- ${path}`).join('\n'),
-      );
-    }
-    const relativePath = relative(process.cwd(), oxlintTsgolintPath);
-    // Only prepend .\ if it's actually a relative path (not an absolute path returned by relative())
-    oxlintTsgolintPath = /^[a-zA-Z]:/.test(relativePath) ? relativePath : `.\\${relativePath}`;
+        return [join(realBinDir, 'tsgolint.exe'), join(realBinDir, 'tsgolint.cmd')];
+      },
+    });
+    // Keep the resolved absolute path. oxlint may be spawned with a different cwd than
+    // this launcher (e.g. the workspace package dir under `vp run -r`), where a path made
+    // relative to the launcher's process.cwd() would resolve against the wrong base
+    // directory and fail (e.g. pnpm's `.pnpm` only exists at the monorepo root).
   }
   const result = {
     binPath,

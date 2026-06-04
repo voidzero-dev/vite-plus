@@ -7678,7 +7678,6 @@ dependencies = [
  "tracing",
  "vite_command",
  "vite_error",
- "vite_glob",
  "vite_path",
  "vite_shared",
  "vite_str",
