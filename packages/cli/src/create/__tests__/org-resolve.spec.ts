@@ -17,8 +17,11 @@ describe('getConfiguredDefaultTemplate', () => {
     fs.rmSync(repoRoot, { recursive: true, force: true });
   });
 
-  function writeMonorepoConfig(defaultTemplate: string): void {
-    fs.writeFileSync(path.join(repoRoot, 'pnpm-workspace.yaml'), "packages:\n  - 'apps/*'\n");
+  function writeMonorepoConfig(
+    defaultTemplate: string,
+    markerFile: 'pnpm-workspace.yaml' | 'aube-workspace.yaml' = 'pnpm-workspace.yaml',
+  ): void {
+    fs.writeFileSync(path.join(repoRoot, markerFile), "packages:\n  - 'apps/*'\n");
     // Plain object export instead of `defineConfig` — the test only
     // needs the shape to be readable, and dropping the `vite-plus`
     // import avoids noisy module-not-found warnings from vite's loader.
@@ -36,6 +39,13 @@ describe('getConfiguredDefaultTemplate', () => {
 
   it('walks up from a workspace subdirectory to find the root config', async () => {
     writeMonorepoConfig('@your-org');
+    const deep = path.join(repoRoot, 'apps', 'web', 'src');
+    fs.mkdirSync(deep, { recursive: true });
+    expect(await getConfiguredDefaultTemplate(deep)).toBe('@your-org');
+  });
+
+  it('treats aube-workspace.yaml as a monorepo marker when walking up', async () => {
+    writeMonorepoConfig('@your-org', 'aube-workspace.yaml');
     const deep = path.join(repoRoot, 'apps', 'web', 'src');
     fs.mkdirSync(deep, { recursive: true });
     expect(await getConfiguredDefaultTemplate(deep)).toBe('@your-org');

@@ -1,3 +1,10 @@
+/**
+ * Supported package managers.
+ *
+ * Note: Aube is treated as pnpm-compatible for the parts of Vite+ that interact
+ * with pnpm-style workspace YAML and manifest config (e.g. `aube-workspace.yaml`,
+ * plus `package.json` `aube.*` / `pnpm.*` settings).
+ */
 export const PackageManager = {
   pnpm: 'pnpm',
   aube: 'aube',

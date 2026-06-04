@@ -201,7 +201,7 @@ export async function resolveOrgManifestForCreate(args: {
  * Read `create.defaultTemplate` from the workspace root's `vite.config.ts`.
  *
  * Walks up from `startDir` via `findWorkspaceRoot` (monorepo markers
- * only — `pnpm-workspace.yaml`, `workspaces` in `package.json`,
+ * only — `pnpm-workspace.yaml`, `aube-workspace.yaml`, `workspaces` in `package.json`,
  * `lerna.json`) so monorepo invocations from any subdirectory still
  * pick up the root config. Standalone repos without a monorepo marker
  * only see a config that sits at `startDir` itself.

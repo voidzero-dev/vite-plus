@@ -13,12 +13,15 @@ export interface CommandRunSummary {
 }
 
 /**
- * pnpm v11 promoted `ERR_PNPM_IGNORED_BUILDS` from a warning to a hard
- * exit-1. Auto-installs run by `vp migrate` / `vp create` happen before the
- * user has a chance to approve build scripts via `pnpm.onlyBuiltDependencies`,
- * so transitive deps like `esbuild` would fail the install. Pass
- * `--ignore-scripts` in that window so the orchestration succeeds; the user's
- * own subsequent `vp install` keeps default pnpm behavior.
+ * pnpm v11 promoted `ERR_PNPM_IGNORED_BUILDS` from a warning to a hard exit-1.
+ * Auto-installs run by `vp migrate` / `vp create` happen before the user has a
+ * chance to approve build scripts (e.g. via `pnpm.onlyBuiltDependencies`), so
+ * transitive deps like `esbuild` can fail the install.
+ *
+ * We pass `--ignore-scripts` in that window so orchestration succeeds; the
+ * user's own subsequent `vp install` keeps default behavior.
+ *
+ * Aube follows pnpm's install semantics here, so it opts into the same guard.
  */
 export function shouldIgnoreScriptsForAutoInstall(
   packageManager: PackageManager | undefined,

@@ -159,6 +159,60 @@ describe('updateWorkspaceConfig pattern derivation', () => {
       catalog: { react: '^19.0.0' },
     });
   });
+
+  it('prefers pnpm-workspace.yaml when present (aube)', () => {
+    fs.writeFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'packages: []\n');
+    fs.writeFileSync(path.join(tmpDir, 'aube-workspace.yaml'), "packages:\n  - 'apps/*'\n");
+    updateWorkspaceConfig(
+      'packages/foo',
+      makeWorkspaceInfo({
+        packageManager: PackageManager.aube,
+        workspacePatterns: [],
+      }),
+    );
+
+    const pnpmParsed = parseYaml(fs.readFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'utf8')) as {
+      packages: string[];
+    };
+    const aubeParsed = parseYaml(fs.readFileSync(path.join(tmpDir, 'aube-workspace.yaml'), 'utf8')) as {
+      packages: string[];
+    };
+    expect(pnpmParsed.packages).toEqual(['packages/*']);
+    expect(aubeParsed.packages).toEqual(['apps/*']);
+  });
+
+  it('updates aube-workspace.yaml when pnpm-workspace.yaml is absent (aube)', () => {
+    fs.writeFileSync(path.join(tmpDir, 'aube-workspace.yaml'), 'packages: []\n');
+    updateWorkspaceConfig(
+      'packages/foo',
+      makeWorkspaceInfo({
+        packageManager: PackageManager.aube,
+        workspacePatterns: [],
+      }),
+    );
+
+    expect(fs.existsSync(path.join(tmpDir, 'pnpm-workspace.yaml'))).toBe(false);
+    const parsed = parseYaml(fs.readFileSync(path.join(tmpDir, 'aube-workspace.yaml'), 'utf8')) as {
+      packages: string[];
+    };
+    expect(parsed.packages).toEqual(['packages/*']);
+  });
+
+  it('creates aube-workspace.yaml when none exists (aube)', () => {
+    updateWorkspaceConfig(
+      'website',
+      makeWorkspaceInfo({
+        packageManager: PackageManager.aube,
+        workspacePatterns: [],
+      }),
+    );
+
+    expect(fs.existsSync(path.join(tmpDir, 'aube-workspace.yaml'))).toBe(true);
+    const parsed = parseYaml(fs.readFileSync(path.join(tmpDir, 'aube-workspace.yaml'), 'utf8')) as {
+      packages: string[];
+    };
+    expect(parsed.packages).toEqual(['website']);
+  });
 });
 
 describe('discoverWorkspacePackages', () => {

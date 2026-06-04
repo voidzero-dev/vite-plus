@@ -33,7 +33,7 @@ describe('dropAliasedRuntimeDevDeps', () => {
   }
 
   // Regression test for "vp why vite reports the override as ineffective" in a
-  // freshly created pnpm monorepo: pnpm only surfaces the pnpm-workspace.yaml
+  // freshly created pnpm/aube monorepo: pnpm/aube only surface the workspace YAML
   // `overrides` through a package that directly depends on `vite`/`vitest`, so
   // the aliased (catalog:) devDeps must survive for the override to be
   // observable. Dropping them leaves `vite` resolving to upstream vite instead
@@ -47,6 +47,22 @@ describe('dropAliasedRuntimeDevDeps', () => {
     });
 
     dropAliasedRuntimeDevDeps(tmpDir, PackageManager.pnpm);
+
+    const devDependencies = readDevDependencies();
+    expect(devDependencies.vite).toBe('catalog:');
+    expect(devDependencies.vitest).toBe('catalog:');
+    expect(devDependencies['vite-plus']).toBe('catalog:');
+  });
+
+  it('keeps aliased vite/vitest for aube so the workspace override stays effective', () => {
+    writeWebsitePackageJson({
+      vite: 'catalog:',
+      vitest: 'catalog:',
+      'vite-plus': 'catalog:',
+      typescript: '~6.0.2',
+    });
+
+    dropAliasedRuntimeDevDeps(tmpDir, PackageManager.aube);
 
     const devDependencies = readDevDependencies();
     expect(devDependencies.vite).toBe('catalog:');

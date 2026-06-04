@@ -57,6 +57,23 @@ export async function executeMonorepoTemplate(
     if (fs.existsSync(yarnrcPath)) {
       fs.unlinkSync(yarnrcPath);
     }
+  } else if (workspaceInfo.packageManager === PackageManager.aube) {
+    // Aube uses a pnpm-compatible workspace YAML. Prefer aube-workspace.yaml in
+    // newly created templates to avoid implying pnpm.
+    editJsonFile(path.join(fullPath, 'package.json'), (pkg) => {
+      pkg.workspaces = undefined;
+      pkg.resolutions = undefined;
+      return pkg;
+    });
+    const yarnrcPath = path.join(fullPath, '.yarnrc.yml');
+    if (fs.existsSync(yarnrcPath)) {
+      fs.unlinkSync(yarnrcPath);
+    }
+    const pnpmWorkspacePath = path.join(fullPath, 'pnpm-workspace.yaml');
+    const aubeWorkspacePath = path.join(fullPath, 'aube-workspace.yaml');
+    if (fs.existsSync(pnpmWorkspacePath)) {
+      fs.renameSync(pnpmWorkspacePath, aubeWorkspacePath);
+    }
   } else if (workspaceInfo.packageManager === PackageManager.yarn) {
     // remove pnpm field
     editJsonFile(path.join(fullPath, 'package.json'), (pkg) => {
@@ -166,13 +183,13 @@ export async function executeMonorepoTemplate(
  * scaffolded sub-package. After migration its scripts already use `vp ...` and
  * nothing imports `'vite'` directly, so `vite-plus` provides them transitively.
  *
- * pnpm is the exception and keeps them: pnpm only surfaces the
- * pnpm-workspace.yaml `overrides.vite: catalog:` entry through a package that
- * directly depends on `vite`, so keeping the aliased devDep lets `vp why vite`
- * reflect the override (resolving to @voidzero-dev/vite-plus-core). npm, yarn,
- * and bun redirect the transitive/peer vite via their root
- * overrides/resolutions regardless of a direct dep, so the aliased keys are
- * dead weight and are dropped.
+ * pnpm (and Aube, which follows the same workspace-YAML override semantics) are
+ * the exception and keep them: pnpm/aube only surface the workspace YAML
+ * `overrides.vite: catalog:` entry through a package that directly depends on
+ * `vite`, so keeping the aliased devDep lets `vp why vite` reflect the override
+ * (resolving to @voidzero-dev/vite-plus-core). npm, yarn, and bun redirect the
+ * transitive/peer vite via their root overrides/resolutions regardless of a
+ * direct dep, so the aliased keys are dead weight and are dropped.
  */
 export function dropAliasedRuntimeDevDeps(
   appProjectPath: string,
@@ -180,7 +197,10 @@ export function dropAliasedRuntimeDevDeps(
 ): void {
   // pnpm keeps the aliased vite/vitest so the pnpm-workspace.yaml override has
   // a direct consumer to redirect; see the doc comment above.
-  if (packageManager === PackageManager.pnpm) {
+  if (
+    packageManager === PackageManager.pnpm ||
+    packageManager === PackageManager.aube
+  ) {
     return;
   }
   editJsonFile<{ devDependencies?: Record<string, string> }>(

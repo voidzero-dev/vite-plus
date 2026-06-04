@@ -66,9 +66,19 @@ export async function detectWorkspace(rootDir: string): Promise<WorkspaceInfoOpt
   // Extract parent directories from workspace patterns
   if (result.isMonorepo) {
     const pnpmWorkspaceFile = path.join(result.rootDir, 'pnpm-workspace.yaml');
+    const aubeWorkspaceFile = path.join(result.rootDir, 'aube-workspace.yaml');
     const packageJsonFile = path.join(result.rootDir, 'package.json');
-    if (fs.existsSync(pnpmWorkspaceFile)) {
-      const workspaceConfig = readYamlFile(pnpmWorkspaceFile) as { packages?: string[] };
+
+    // Prefer pnpm-workspace.yaml when present; otherwise treat aube-workspace.yaml
+    // as a first-class monorepo marker as well.
+    const workspaceYamlFile = fs.existsSync(pnpmWorkspaceFile)
+      ? pnpmWorkspaceFile
+      : fs.existsSync(aubeWorkspaceFile)
+        ? aubeWorkspaceFile
+        : undefined;
+
+    if (workspaceYamlFile) {
+      const workspaceConfig = readYamlFile(workspaceYamlFile) as { packages?: string[] };
       if (Array.isArray(workspaceConfig.packages)) {
         result.workspacePatterns = workspaceConfig.packages;
       }
@@ -189,8 +199,31 @@ export function updateWorkspaceConfig(projectPath: string, workspaceInfo: Worksp
   // path.dirname returns '.' for single-segment paths, treat that as no parent
   const pattern = parentDir === '.' ? projectPath : `${parentDir}/*`;
 
-  if ((workspaceInfo.packageManager === PackageManager.pnpm || workspaceInfo.packageManager === PackageManager.aube)) {
-    editYamlFile(path.join(workspaceInfo.rootDir, 'pnpm-workspace.yaml'), (doc) => {
+  if (workspaceInfo.packageManager === PackageManager.pnpm) {
+    const pnpmWorkspacePath = path.join(workspaceInfo.rootDir, 'pnpm-workspace.yaml');
+    editYamlFile(pnpmWorkspacePath, (doc) => {
+      let packages = doc.getIn(['packages']) as YAMLSeq<Scalar<string>>;
+      if (!packages) {
+        packages = new YAMLSeq<Scalar<string>>();
+      }
+      packages.add(new Scalar(pattern));
+      doc.setIn(['packages'], packages);
+    });
+  } else if (workspaceInfo.packageManager === PackageManager.aube) {
+    const pnpmWorkspacePath = path.join(workspaceInfo.rootDir, 'pnpm-workspace.yaml');
+    const aubeWorkspacePath = path.join(workspaceInfo.rootDir, 'aube-workspace.yaml');
+    // Aube can be used in repos that still have a pnpm workspace YAML during
+    // migration, so prefer `pnpm-workspace.yaml` when both markers exist.
+    //
+    // The idea being that if the project still has a pnpm workspace YAML, 
+    // it is likely in the process of migrating pnpm-specific configs that needs to be preserved, 
+    // the Aube marker can be added alongside it without disrupting that.
+    const workspaceYamlPath = fs.existsSync(pnpmWorkspacePath)
+      ? pnpmWorkspacePath
+      : fs.existsSync(aubeWorkspacePath)
+        ? aubeWorkspacePath
+        : aubeWorkspacePath;
+    editYamlFile(workspaceYamlPath, (doc) => {
       let packages = doc.getIn(['packages']) as YAMLSeq<Scalar<string>>;
       if (!packages) {
         packages = new YAMLSeq<Scalar<string>>();

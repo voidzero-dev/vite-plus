@@ -40,12 +40,15 @@ export function hasViteConfig(dir: string): boolean {
 
 /**
  * Find the workspace root by walking up from `startDir` looking for
- * monorepo indicators (pnpm-workspace.yaml, workspaces in package.json, lerna.json).
+ * monorepo indicators (pnpm-workspace.yaml, aube-workspace.yaml, workspaces in package.json, lerna.json).
  */
 export function findWorkspaceRoot(startDir: string): string | undefined {
   let dir = path.resolve(startDir);
   while (true) {
-    if (fs.existsSync(path.join(dir, 'pnpm-workspace.yaml'))) {
+    if (
+      fs.existsSync(path.join(dir, 'pnpm-workspace.yaml')) ||
+      fs.existsSync(path.join(dir, 'aube-workspace.yaml'))
+    ) {
       return dir;
     }
     const pkgPath = path.join(dir, 'package.json');
