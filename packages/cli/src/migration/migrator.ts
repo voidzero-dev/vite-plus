@@ -1020,11 +1020,11 @@ export function rewriteStandaloneProject(
   const packageManager = workspaceInfo.packageManager;
   const catalogDependencyResolver = createCatalogDependencyResolver(projectPath, packageManager);
   let extractedStagedConfig: Record<string, string | string[]> | null = null;
-  let remainingPnpmOverrides: Record<string, string> | undefined;
-  let shouldRewritePnpmWorkspaceYaml = false;
-  let shouldAddPnpmWorkspaceVitePlusOverride = false;
+  let remainingPnpmLikeOverrides: Record<string, string> | undefined;
+  let shouldRewritePnpmLikeWorkspaceYaml = false;
+  let shouldAddPnpmLikeWorkspaceVitePlusOverride = false;
   // Determined inside editJsonFile callback to avoid a redundant file read
-  let usePnpmWorkspaceYaml = false;
+  let usePnpmLikeWorkspaceYaml = false;
   editJsonFile<{
     overrides?: Record<string, string>;
     resolutions?: Record<string, string>;
@@ -1034,6 +1034,13 @@ export function rewriteStandaloneProject(
     optionalDependencies?: Record<string, string>;
     scripts?: Record<string, string>;
     pnpm?: {
+      overrides?: Record<string, string>;
+      peerDependencyRules?: {
+        allowAny?: string[];
+        allowedVersions?: Record<string, string>;
+      };
+    };
+    aube?: {
       overrides?: Record<string, string>;
       peerDependencyRules?: {
         allowAny?: string[];
@@ -1052,46 +1059,57 @@ export function rewriteStandaloneProject(
         ...VITE_PLUS_OVERRIDE_PACKAGES,
       };
     } else if (packageManager === PackageManager.pnpm || packageManager === PackageManager.aube) {
-      // If package.json already has a "pnpm" field, keep using it;
-      // otherwise use pnpm-workspace.yaml.
-      usePnpmWorkspaceYaml = !pkg.pnpm;
-      if (usePnpmWorkspaceYaml) {
-        shouldRewritePnpmWorkspaceYaml = true;
-        shouldAddPnpmWorkspaceVitePlusOverride = isForceOverrideMode();
+      // If package.json already has a pnpm/aube config field, keep using it;
+      // otherwise use a pnpm-compatible workspace YAML (pnpm-workspace.yaml for
+      // pnpm, and pnpm-workspace.yaml (if present) or aube-workspace.yaml for Aube).
+      usePnpmLikeWorkspaceYaml =
+        packageManager === PackageManager.pnpm ? !pkg.pnpm : !pkg.pnpm && !pkg.aube;
+      if (usePnpmLikeWorkspaceYaml) {
+        shouldRewritePnpmLikeWorkspaceYaml = true;
+        shouldAddPnpmLikeWorkspaceVitePlusOverride = isForceOverrideMode();
       }
       const overrideKeys = Object.keys(VITE_PLUS_OVERRIDE_PACKAGES);
-      if (!usePnpmWorkspaceYaml) {
-        // Project already has pnpm config in package.json -- keep using it.
-        pkg.pnpm = {
-          ...pkg.pnpm,
+      if (!usePnpmLikeWorkspaceYaml) {
+        // Project already has pnpm/aube config in package.json -- keep using it.
+        // For Aube, prefer the `aube` namespace when present.
+        const configNamespace: 'aube' | 'pnpm' =
+          packageManager === PackageManager.aube && pkg.aube ? 'aube' : 'pnpm';
+        const existingConfig = configNamespace === 'aube' ? pkg.aube : pkg.pnpm;
+        const updatedConfig = {
+          ...existingConfig,
           overrides: {
-            ...pkg.pnpm?.overrides,
+            ...existingConfig?.overrides,
             ...VITE_PLUS_OVERRIDE_PACKAGES,
             ...(isForceOverrideMode() ? { [VITE_PLUS_NAME]: VITE_PLUS_VERSION } : {}),
           },
           peerDependencyRules: {
-            ...pkg.pnpm?.peerDependencyRules,
+            ...existingConfig?.peerDependencyRules,
             allowAny: [
-              ...new Set([...(pkg.pnpm?.peerDependencyRules?.allowAny ?? []), ...overrideKeys]),
+              ...new Set([
+                ...(existingConfig?.peerDependencyRules?.allowAny ?? []),
+                ...overrideKeys,
+              ]),
             ],
             allowedVersions: {
-              ...pkg.pnpm?.peerDependencyRules?.allowedVersions,
+              ...existingConfig?.peerDependencyRules?.allowedVersions,
               ...Object.fromEntries(overrideKeys.map((key) => [key, '*'])),
             },
           },
         };
+        if (configNamespace === 'aube') {
+          pkg.aube = updatedConfig;
+        } else {
+          pkg.pnpm = updatedConfig;
+        }
       } else {
-        remainingPnpmOverrides = cleanupPnpmOverridesForWorkspaceYaml(pkg, overrideKeys);
+        // For Aube, prefer the `aube` namespace when present.
+        const configNamespace: 'aube' | 'pnpm' =
+          packageManager === PackageManager.aube ? 'aube' : 'pnpm';
+        remainingPnpmLikeOverrides = cleanupPnpmLikeOverridesForWorkspaceYaml(pkg, configNamespace, overrideKeys);
       }
       // remove dependency selectors targeting vite (e.g. "vite-plugin-svgr>vite")
-      for (const key in pkg.pnpm?.overrides) {
-        if (key.includes('>')) {
-          const splits = key.split('>');
-          if (splits[splits.length - 1].trim() === 'vite') {
-            delete pkg.pnpm.overrides[key];
-          }
-        }
-      }
+      removeViteDependencySelectors(pkg.pnpm?.overrides);
+      removeViteDependencySelectors(pkg.aube?.overrides);
       // remove packages from `resolutions` field if they exist
       // https://pnpm.io/9.x/package_json#resolutions
       for (const key of [...overrideKeys, ...REMOVE_PACKAGES]) {
@@ -1104,7 +1122,7 @@ export function rewriteStandaloneProject(
     extractedStagedConfig = rewritePackageJson(
       pkg,
       packageManager,
-      usePnpmWorkspaceYaml,
+      usePnpmLikeWorkspaceYaml,
       skipStagedMigration,
       catalogDependencyResolver,
     );
@@ -1112,7 +1130,7 @@ export function rewriteStandaloneProject(
     // ensure vite-plus is in devDependencies
     if (!pkg.devDependencies?.[VITE_PLUS_NAME] || isForceOverrideMode()) {
       const version =
-        usePnpmWorkspaceYaml && !VITE_PLUS_VERSION.startsWith('file:')
+        usePnpmLikeWorkspaceYaml && !VITE_PLUS_VERSION.startsWith('file:')
           ? 'catalog:'
           : VITE_PLUS_VERSION;
       pkg.devDependencies = {
@@ -1123,19 +1141,21 @@ export function rewriteStandaloneProject(
     return pkg;
   });
 
-  if (shouldRewritePnpmWorkspaceYaml) {
-    rewritePnpmWorkspaceYaml(projectPath);
+  if (shouldRewritePnpmLikeWorkspaceYaml) {
+    rewritePnpmLikeWorkspaceYaml(projectPath, packageManager);
   }
 
   // Move remaining non-Vite pnpm.overrides to pnpm-workspace.yaml
-  if (remainingPnpmOverrides) {
-    migratePnpmOverridesToWorkspaceYaml(projectPath, remainingPnpmOverrides);
+  if (remainingPnpmLikeOverrides) {
+    migratePnpmLikeOverridesToWorkspaceYaml(projectPath, remainingPnpmLikeOverrides, packageManager);
   }
 
-  if (shouldAddPnpmWorkspaceVitePlusOverride) {
-    migratePnpmOverridesToWorkspaceYaml(projectPath, {
-      [VITE_PLUS_NAME]: VITE_PLUS_VERSION,
-    });
+  if (shouldAddPnpmLikeWorkspaceVitePlusOverride) {
+    migratePnpmLikeOverridesToWorkspaceYaml(
+      projectPath,
+      { [VITE_PLUS_NAME]: VITE_PLUS_VERSION },
+      packageManager,
+    );
   }
 
   if (packageManager === PackageManager.yarn) {
@@ -1180,8 +1200,11 @@ export function rewriteMonorepo(
     workspaceInfo.packageManager,
   );
   // rewrite root workspace
-  if ((workspaceInfo.packageManager === PackageManager.pnpm || workspaceInfo.packageManager === PackageManager.aube)) {
-    rewritePnpmWorkspaceYaml(workspaceInfo.rootDir);
+  if (
+    workspaceInfo.packageManager === PackageManager.pnpm ||
+    workspaceInfo.packageManager === PackageManager.aube
+  ) {
+    rewritePnpmLikeWorkspaceYaml(workspaceInfo.rootDir, workspaceInfo.packageManager);
   } else if (workspaceInfo.packageManager === PackageManager.yarn) {
     rewriteYarnrcYml(workspaceInfo.rootDir);
   } else if (workspaceInfo.packageManager === PackageManager.bun) {
@@ -1303,16 +1326,38 @@ export function rewriteMonorepoProject(
 }
 
 /**
- * Rewrite pnpm-workspace.yaml to add vite-plus dependencies
- * @param projectPath - The path to the project
+ * Resolve the pnpm-compatible workspace YAML path for the current project.
+ *
+ * - pnpm always uses `pnpm-workspace.yaml`.
+ * - aube primarily uses `aube-workspace.yaml`, but may temporarily coexist
+ *   with `pnpm-workspace.yaml` during migration; when both exist we prefer
+ *   `pnpm-workspace.yaml` to match aube's own workspace-marker precedence.
  */
-function rewritePnpmWorkspaceYaml(projectPath: string): void {
-  const pnpmWorkspaceYamlPath = path.join(projectPath, 'pnpm-workspace.yaml');
-  if (!fs.existsSync(pnpmWorkspaceYamlPath)) {
-    fs.writeFileSync(pnpmWorkspaceYamlPath, '');
+function resolvePnpmCompatibleWorkspaceYamlPath(
+  projectPath: string,
+  packageManager: PackageManager,
+): string | undefined {
+  if (packageManager === PackageManager.pnpm) {
+    return path.join(projectPath, 'pnpm-workspace.yaml');
   }
+  if (packageManager === PackageManager.aube) {
+    const pnpmWorkspaceYamlPath = path.join(projectPath, 'pnpm-workspace.yaml');
+    if (fs.existsSync(pnpmWorkspaceYamlPath))
+      return pnpmWorkspaceYamlPath;
+    
+    return path.join(projectPath, 'aube-workspace.yaml');
+  }
+  return undefined;
+}
 
-  editYamlFile(pnpmWorkspaceYamlPath, (doc) => {
+/**
+ * Rewrite the pnpm-compatible workspace YAML (pnpm-workspace.yaml or
+ * aube-workspace.yaml) to add vite-plus dependencies.
+ */
+function rewritePnpmLikeWorkspaceYaml(projectPath: string, packageManager: PackageManager): void {
+  const workspaceYamlPath = resolvePnpmCompatibleWorkspaceYamlPath(projectPath, packageManager);
+  if (!workspaceYamlPath) return;
+  editYamlFile(workspaceYamlPath, (doc) => {
     // catalog
     rewriteCatalog(doc);
 
@@ -1395,58 +1440,82 @@ function rewritePnpmWorkspaceYaml(projectPath: string): void {
   });
 }
 
+function removeViteDependencySelectors(overrides: Record<string, string> | undefined): void {
+  if (!overrides) return;
+  for (const key of Object.keys(overrides)) {
+    if (!key.includes('>')) continue;
+    const splits = key.split('>');
+    if (splits[splits.length - 1].trim() === 'vite') {
+      delete overrides[key];
+    }
+  }
+}
+
 /**
- * Clean up pnpm.overrides and peerDependencyRules from package.json when migrating
- * to pnpm-workspace.yaml. Returns any remaining non-Vite overrides that need to be
- * moved to pnpm-workspace.yaml.
+ * Cleanup helper for pnpm-like namespaces (`pnpm` / `aube`) when migrating
+ * overrides into a pnpm-compatible workspace YAML.
+ *
+ * Intent:
+ * - Remove only Vite-managed entries (plus known selectors) from
+ *   `*.overrides` / `*.peerDependencyRules`.
+ * - Preserve user customizations by leaving unknown keys untouched.
+ *
+ * This is used for Aube because it can read config from both `pnpm.*` and
+ * `aube.*` in `package.json`.
  */
-function cleanupPnpmOverridesForWorkspaceYaml(
+function cleanupPnpmLikeOverridesForWorkspaceYaml(
   pkg: {
     pnpm?: {
       overrides?: Record<string, string>;
       peerDependencyRules?: { allowAny?: string[]; allowedVersions?: Record<string, string> };
     };
+    aube?: {
+      overrides?: Record<string, string>;
+      peerDependencyRules?: { allowAny?: string[]; allowedVersions?: Record<string, string> };
+    };
   },
+  namespace: 'pnpm' | 'aube',
   overrideKeys: string[],
 ): Record<string, string> | undefined {
+  const config = pkg[namespace];
+  if (!config) return undefined;
+
   // Remove Vite-managed keys from pnpm.overrides
   const catalogOverrides: Record<string, string> = {};
-  const overrides = pkg.pnpm?.overrides;
+  const overrides = config.overrides;
   for (const key of [...overrideKeys, ...REMOVE_PACKAGES]) {
     const value = overrides?.[key];
     if (value) {
       if (overrideKeys.includes(key) && value.startsWith('catalog:')) {
         catalogOverrides[key] = value;
       }
-      delete overrides[key];
-    }
-  }
-  // Remove dependency selectors targeting vite
-  for (const key in pkg.pnpm?.overrides) {
-    if (key.includes('>')) {
-      const splits = key.split('>');
-      if (splits[splits.length - 1].trim() === 'vite') {
-        delete pkg.pnpm.overrides[key];
+      if (overrides) {
+        delete overrides[key];
       }
     }
   }
+
+  // Remove dependency selectors targeting vite
+  removeViteDependencySelectors(config.overrides);
+
   // Collect remaining overrides to move to pnpm-workspace.yaml then delete all
   // (pnpm ignores workspace-level overrides when pnpm.overrides exists in package.json)
   let remaining: Record<string, string> | undefined;
   if (Object.keys(catalogOverrides).length > 0) {
     remaining = { ...catalogOverrides };
   }
-  if (pkg.pnpm?.overrides && Object.keys(pkg.pnpm.overrides).length > 0) {
-    remaining = { ...remaining, ...pkg.pnpm.overrides };
+  if (config.overrides && Object.keys(config.overrides).length > 0) {
+    remaining = { ...remaining, ...config.overrides };
   }
-  delete pkg.pnpm?.overrides;
+  delete config.overrides;
+
   // Only remove Vite-managed peerDependencyRules entries, preserve custom ones
-  cleanupPeerDependencyRules(pkg.pnpm?.peerDependencyRules, overrideKeys);
-  if (pkg.pnpm?.peerDependencyRules && Object.keys(pkg.pnpm.peerDependencyRules).length === 0) {
-    delete pkg.pnpm.peerDependencyRules;
+  cleanupPeerDependencyRules(config.peerDependencyRules, overrideKeys);
+  if (config.peerDependencyRules && Object.keys(config.peerDependencyRules).length === 0) {
+    delete config.peerDependencyRules;
   }
-  if (pkg.pnpm && Object.keys(pkg.pnpm).length === 0) {
-    delete pkg.pnpm;
+  if (Object.keys(config).length === 0) {
+    delete pkg[namespace];
   }
   return remaining;
 }
@@ -1456,12 +1525,14 @@ function cleanupPnpmOverridesForWorkspaceYaml(
  * pnpm ignores workspace-level overrides when pnpm.overrides exists in package.json,
  * so all overrides must live in pnpm-workspace.yaml.
  */
-function migratePnpmOverridesToWorkspaceYaml(
+function migratePnpmLikeOverridesToWorkspaceYaml(
   projectPath: string,
   overrides: Record<string, string>,
+  packageManager: PackageManager,
 ): void {
-  const pnpmWorkspaceYamlPath = path.join(projectPath, 'pnpm-workspace.yaml');
-  editYamlFile(pnpmWorkspaceYamlPath, (doc) => {
+  const workspaceYamlPath = resolvePnpmCompatibleWorkspaceYamlPath(projectPath, packageManager);
+  if (!workspaceYamlPath) return;
+  editYamlFile(workspaceYamlPath, (doc) => {
     for (const [key, value] of Object.entries(overrides)) {
       // Always overwrite: package.json value was the effective one before migration
       // (pnpm ignores workspace overrides when pnpm.overrides exists in package.json)
@@ -1563,20 +1634,70 @@ function isVitePlusOverrideSpec(value: string): boolean {
   );
 }
 
+/**
+ * Create a resolver for `catalog:` dependency specs.
+ *
+ * Some package managers allow dependencies to be declared as `catalog:` or
+ * `catalog:<name>` and resolved from a shared catalog map.
+ *
+ * Precedence is intentionally:
+ * 1) The package-manager-native catalog source for the repo (workspace YAML for
+ *    pnpm/aube, `.yarnrc.yml` for Yarn, `workspaces`/top-level fields for Bun).
+ * 2) For Aube only: fall back to `package.json` `aube.*` / `pnpm.*` catalogs,
+ *    with `aube.*` overriding `pnpm.*` per-key.
+ *
+ * This keeps migrations deterministic while matching Aube's namespace-merge rules.
+ */
 function createCatalogDependencyResolver(
   projectPath: string,
   packageManager: PackageManager,
 ): CatalogDependencyResolver | undefined {
   if (packageManager === PackageManager.pnpm || packageManager === PackageManager.aube) {
-    const pnpmWorkspaceYamlPath = path.join(projectPath, 'pnpm-workspace.yaml');
-    if (!fs.existsSync(pnpmWorkspaceYamlPath)) {
-      return undefined;
+    const workspaceYamlPath = resolvePnpmCompatibleWorkspaceYamlPath(projectPath, packageManager);
+    const fromWorkspace = (() => {
+      if (!workspaceYamlPath || !fs.existsSync(workspaceYamlPath))
+        return undefined;
+
+      const doc = readYamlFile(workspaceYamlPath) as {
+        catalog?: Record<string, string>;
+        catalogs?: Record<string, Record<string, string>>;
+      } | null;
+      return createCatalogDependencyResolverFromCatalogs(doc?.catalog, doc?.catalogs);
+    })();
+
+    if (packageManager !== PackageManager.aube) {
+      return fromWorkspace;
     }
-    const doc = readYamlFile(pnpmWorkspaceYamlPath) as {
-      catalog?: Record<string, string>;
-      catalogs?: Record<string, Record<string, string>>;
-    } | null;
-    return createCatalogDependencyResolverFromCatalogs(doc?.catalog, doc?.catalogs);
+
+    // Aube also supports `catalog` / `catalogs` from `package.json` under both
+    // the `pnpm` and `aube` namespaces.
+    const packageJsonPath = path.join(projectPath, 'package.json');
+    if (!fs.existsSync(packageJsonPath)) {
+      return fromWorkspace;
+    }
+    const pkg = readJsonFile(packageJsonPath) as {
+      pnpm?: {
+        catalog?: Record<string, string>;
+        catalogs?: Record<string, Record<string, string>>;
+      };
+      aube?: {
+        catalog?: Record<string, string>;
+        catalogs?: Record<string, Record<string, string>>;
+      };
+    };
+    const fromPnpm = createCatalogDependencyResolverFromCatalogs(
+      pkg.pnpm?.catalog,
+      pkg.pnpm?.catalogs,
+    );
+    const fromAube = createCatalogDependencyResolverFromCatalogs(
+      pkg.aube?.catalog,
+      pkg.aube?.catalogs,
+    );
+    const fromPackageJson: CatalogDependencyResolver = (catalogSpec, dependencyName) =>
+      fromAube(catalogSpec, dependencyName) ?? fromPnpm(catalogSpec, dependencyName);
+
+    return (catalogSpec, dependencyName) =>
+      fromWorkspace?.(catalogSpec, dependencyName) ?? fromPackageJson(catalogSpec, dependencyName);
   }
   if (packageManager === PackageManager.yarn) {
     const yarnrcYmlPath = path.join(projectPath, '.yarnrc.yml');
@@ -1805,6 +1926,13 @@ function rewriteRootWorkspacePackageJson(
         allowedVersions?: Record<string, string>;
       };
     };
+    aube?: {
+      overrides?: Record<string, string>;
+      peerDependencyRules?: {
+        allowAny?: string[];
+        allowedVersions?: Record<string, string>;
+      };
+    };
   }>(packageJsonPath, (pkg) => {
     if (packageManager === PackageManager.yarn) {
       pkg.resolutions = {
@@ -1823,34 +1951,53 @@ function rewriteRootWorkspacePackageJson(
     } else if (packageManager === PackageManager.pnpm || packageManager === PackageManager.aube) {
       const overrideKeys = Object.keys(VITE_PLUS_OVERRIDE_PACKAGES);
       if (isForceOverrideMode()) {
-        // In force-override mode, keep overrides in package.json pnpm.overrides
-        // because pnpm ignores pnpm-workspace.yaml overrides when pnpm.overrides
+        // In force-override mode, keep overrides in package.json.
+        // pnpm ignores pnpm-workspace.yaml overrides when `pnpm.overrides`
         // exists in package.json (even with unrelated entries like rollup).
-        pkg.pnpm = {
-          ...pkg.pnpm,
+        // For Aube, use the same logic but prefer the `aube` namespace when available.
+        const configNamespace: 'aube' | 'pnpm' =
+          packageManager === PackageManager.aube
+            ? pkg.aube
+              ? 'aube'
+              : pkg.pnpm
+                ? 'pnpm'
+                : 'aube'
+            : 'pnpm';
+        const existingConfig = configNamespace === 'aube' ? pkg.aube : pkg.pnpm;
+        const updatedConfig = {
+          ...existingConfig,
           overrides: {
-            ...pkg.pnpm?.overrides,
+            ...existingConfig?.overrides,
             ...VITE_PLUS_OVERRIDE_PACKAGES,
             [VITE_PLUS_NAME]: VITE_PLUS_VERSION,
           },
         };
+        if (configNamespace === 'aube') {
+          pkg.aube = updatedConfig;
+        } else {
+          pkg.pnpm = updatedConfig;
+        }
       } else {
         for (const key of [...overrideKeys, ...REMOVE_PACKAGES]) {
           if (pkg.resolutions?.[key]) {
             delete pkg.resolutions[key];
           }
         }
-        remainingPnpmOverrides = cleanupPnpmOverridesForWorkspaceYaml(pkg, overrideKeys);
-      }
-      // remove dependency selectors targeting vite (e.g. "vite-plugin-svgr>vite")
-      for (const key in pkg.pnpm?.overrides) {
-        if (key.includes('>')) {
-          const splits = key.split('>');
-          if (splits[splits.length - 1].trim() === 'vite') {
-            delete pkg.pnpm.overrides[key];
-          }
+
+        if (packageManager === PackageManager.aube) {
+          // Aube reads both `pnpm` and `aube` namespaces; remove both so the
+          // workspace YAML becomes the single source of truth after migration.
+          const fromPnpm = cleanupPnpmLikeOverridesForWorkspaceYaml(pkg, 'pnpm', overrideKeys);
+          const fromAube = cleanupPnpmLikeOverridesForWorkspaceYaml(pkg, 'aube', overrideKeys);
+          // `aube.*` has higher precedence than `pnpm.*` when both define the same key.
+          remainingPnpmOverrides = { ...fromPnpm, ...fromAube };
+        } else {
+          remainingPnpmOverrides = cleanupPnpmLikeOverridesForWorkspaceYaml(pkg, 'pnpm', overrideKeys);
         }
       }
+      // remove dependency selectors targeting vite (e.g. "vite-plugin-svgr>vite")
+      removeViteDependencySelectors(pkg.pnpm?.overrides);
+      removeViteDependencySelectors(pkg.aube?.overrides);
     }
 
     // ensure vite-plus is in devDependencies
@@ -1868,7 +2015,7 @@ function rewriteRootWorkspacePackageJson(
 
   // Move remaining non-Vite pnpm.overrides to pnpm-workspace.yaml
   if (remainingPnpmOverrides) {
-    migratePnpmOverridesToWorkspaceYaml(projectPath, remainingPnpmOverrides);
+    migratePnpmLikeOverridesToWorkspaceYaml(projectPath, remainingPnpmOverrides, packageManager);
   }
 
   // rewrite package.json — `projectPath` IS the workspace root here, so

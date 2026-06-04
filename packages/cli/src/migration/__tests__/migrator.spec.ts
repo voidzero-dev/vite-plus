@@ -1213,6 +1213,103 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
   });
 });
 
+describe('rewriteStandaloneProject aube workspace yaml', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-aube-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('creates aube-workspace.yaml when no existing pnpm config or workspace yaml exists', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'test', devDependencies: { vite: '^7.0.0' } }),
+    );
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.aube), true, true);
+
+    expect(fs.existsSync(path.join(tmpDir, 'aube-workspace.yaml'))).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, 'pnpm-workspace.yaml'))).toBe(false);
+
+    const yaml = readYaml(path.join(tmpDir, 'aube-workspace.yaml'));
+    expect(yaml).toContain('overrides:');
+    expect(yaml).toContain('peerDependencyRules:');
+    expect(yaml).toContain('catalog:');
+
+    const pkg = readJson(path.join(tmpDir, 'package.json'));
+    expect(pkg.pnpm).toBeUndefined();
+
+    const devDeps = pkg.devDependencies as Record<string, string>;
+    expect(devDeps.vite).toBe('catalog:');
+    expect(devDeps['vite-plus']).toBe('catalog:');
+  });
+
+  it('keeps using package.json `aube` config when present (no workspace yaml)', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        aube: { overrides: { react: '^18.0.0' } },
+        devDependencies: { vite: '^7.0.0' },
+      }),
+    );
+
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.aube), true, true);
+
+    expect(fs.existsSync(path.join(tmpDir, 'aube-workspace.yaml'))).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, 'pnpm-workspace.yaml'))).toBe(false);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      aube?: { overrides?: Record<string, string>; peerDependencyRules?: unknown };
+      pnpm?: unknown;
+    };
+    expect(pkg.pnpm).toBeUndefined();
+    expect(pkg.aube).toBeDefined();
+    expect(pkg.aube?.overrides?.vite).toBeDefined();
+    expect(pkg.aube?.overrides?.vitest).toBeDefined();
+    expect(pkg.aube?.peerDependencyRules).toBeDefined();
+  });
+
+  it('prefers pnpm-workspace.yaml when present (aube)', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'test', devDependencies: { vite: '^7.0.0' } }),
+    );
+    fs.writeFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'packages: []\n');
+
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.aube), true, true);
+
+    expect(fs.existsSync(path.join(tmpDir, 'pnpm-workspace.yaml'))).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, 'aube-workspace.yaml'))).toBe(false);
+
+    const yaml = readYaml(path.join(tmpDir, 'pnpm-workspace.yaml'));
+    expect(yaml).toContain('overrides:');
+    expect(yaml).toContain('peerDependencyRules:');
+    expect(yaml).toContain('catalog:');
+  });
+
+  it('rewrites aube-workspace.yaml when pnpm-workspace.yaml is absent (aube)', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'test', devDependencies: { vite: '^7.0.0' } }),
+    );
+    fs.writeFileSync(path.join(tmpDir, 'aube-workspace.yaml'), 'packages: []\n');
+
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.aube), true, true);
+
+    expect(fs.existsSync(path.join(tmpDir, 'aube-workspace.yaml'))).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, 'pnpm-workspace.yaml'))).toBe(false);
+
+    const yaml = readYaml(path.join(tmpDir, 'aube-workspace.yaml'));
+    expect(yaml).toContain('overrides:');
+    expect(yaml).toContain('peerDependencyRules:');
+    expect(yaml).toContain('catalog:');
+  });
+});
+
 describe('rewriteMonorepo yarn catalog', () => {
   let tmpDir: string;
 
@@ -1984,6 +2081,40 @@ describe('preflightGitHooksSetup husky catalog resolution', () => {
     fs.writeFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'catalog:\n  husky: ^9.1.7\n');
 
     expect(preflightGitHooksSetup(tmpDir, PackageManager.pnpm)).toBeNull();
+  });
+
+  it('resolves a `catalog:` husky version from the aube catalog and allows hooks', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ scripts: { prepare: 'husky' }, devDependencies: { husky: 'catalog:' } }),
+    );
+    fs.writeFileSync(path.join(tmpDir, 'aube-workspace.yaml'), 'catalog:\n  husky: ^9.1.7\n');
+
+    expect(preflightGitHooksSetup(tmpDir, PackageManager.aube)).toBeNull();
+  });
+
+  it('resolves a `catalog:` husky version from the aube package.json catalog and allows hooks', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        scripts: { prepare: 'husky' },
+        devDependencies: { husky: 'catalog:' },
+        aube: { catalog: { husky: '^9.1.7' } },
+      }),
+    );
+
+    expect(preflightGitHooksSetup(tmpDir, PackageManager.aube)).toBeNull();
+  });
+
+  it('prefers pnpm-workspace.yaml over aube-workspace.yaml when both exist (aube)', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ scripts: { prepare: 'husky' }, devDependencies: { husky: 'catalog:' } }),
+    );
+    fs.writeFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'catalog:\n  husky: ^8.0.0\n');
+    fs.writeFileSync(path.join(tmpDir, 'aube-workspace.yaml'), 'catalog:\n  husky: ^9.1.7\n');
+
+    expect(preflightGitHooksSetup(tmpDir, PackageManager.aube)).toContain('husky <9.0.0');
   });
 
   it('resolves the explicit `catalog:default` alias from the top-level catalog', () => {
