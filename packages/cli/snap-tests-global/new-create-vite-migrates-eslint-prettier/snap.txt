@@ -6,7 +6,7 @@ eslint.config.js removed
 .oxlintrc.json merged into vite.config.ts
 
 > cat my-react-ts/vite.config.ts # merged vite config should contain lint and fmt sections
-import { defineConfig } from "vite-plus";
+import { defineConfig, lazyPlugins } from "vite-plus";
 import react from "@vitejs/plugin-react";
 
 // https://vite.dev/config/
@@ -135,7 +135,7 @@ export default defineConfig({
       "vite-plus/prefer-vite-plus-imports": "error",
     },
   },
-  plugins: [react()],
+  plugins: lazyPlugins(() => [react()]),
 });
 
 > node -e "const p=require('./my-react-ts/package.json');console.log('lint:', p.scripts && p.scripts.lint);console.log('eslint dep:', !!(p.devDependencies && p.devDependencies.eslint));console.log('vite-plus dep:', !!(p.devDependencies && p.devDependencies['vite-plus']));" # scripts rewritten, eslint dep removed, vite-plus added

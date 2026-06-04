@@ -1,10 +1,12 @@
 > vp migrate --no-interactive # migration should merge vite.config.js and remove oxlintrc
 ◇ Migrated . to Vite+
 • Node <semver>  pnpm <semver>
-• 2 config updates applied
+• 3 config updates applied
+• Inline Vite plugins wrapped with lazyPlugins for check/lint/fmt
 
 > cat vite.config.js # check vite.config.js
 import react from '@vitejs/plugin-react';
+import { lazyPlugins } from 'vite-plus';
 
 export default {
   staged: {
@@ -27,7 +29,7 @@ export default {
       }
     ]
   },
-  plugins: [react()],
+  plugins: lazyPlugins(() => [react()]),
 }
 
 > test ! -f .oxlintrc.json # check .oxlintrc.json is removed

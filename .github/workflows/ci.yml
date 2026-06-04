@@ -183,7 +183,7 @@ jobs:
             -A clippy::useless_borrows_in_formatting
           # RUSTDOCFLAGS='-D warnings' cargo doc --no-deps --document-private-items
 
-      - uses: crate-ci/typos@7b04f660f4ee4f048d18fd341887cf28dfbedfe2 # v1.46.3
+      - uses: crate-ci/typos@f8a58b6b53f2279f71eb605f03a4ae4d10608f45 # v1.47.0
         with:
           files: .
 
@@ -551,6 +551,113 @@ jobs:
             echo Error: current install dir should have been restored after rollback, expected %INITIAL_DIR%, got %ROLLBACK_DIR%
             exit /b 1
           )
+
+      - name: Test same-version forced upgrade (Windows)
+        if: ${{ matrix.os == 'windows-latest' }}
+        shell: pwsh
+        run: |
+          # Force-reinstall the published `latest` version rather than the local
+          # build's version: mid-release-cycle the build can be ahead of the
+          # registry, and `vp upgrade <version>` must download <version> from npm.
+          $version = "$(npm view vite-plus version)".Trim()
+          if (-not $version) {
+            Write-Error "Failed to resolve latest published vite-plus version"
+            exit 1
+          }
+
+          $realVpHome = Join-Path $HOME ".vite-plus"
+          $currentVp = Join-Path $realVpHome "current/bin/vp.exe"
+
+          $tempVpHome = Join-Path $env:RUNNER_TEMP "vp-same-version-force"
+          if (Test-Path $tempVpHome) {
+            Remove-Item $tempVpHome -Recurse -Force
+          }
+
+          $initialVersionDir = Join-Path $tempVpHome $version
+          $initialBinDir = Join-Path $initialVersionDir "bin"
+          New-Item -ItemType Directory -Path $initialBinDir | Out-Null
+          Copy-Item $currentVp (Join-Path $initialBinDir "vp.exe")
+          New-Item -ItemType Junction -Path (Join-Path $tempVpHome "current") -Target $initialVersionDir | Out-Null
+
+          $env:VP_HOME = $tempVpHome
+          & (Join-Path $tempVpHome "current/bin/vp.exe") upgrade $version --force
+
+          $currentTarget = (Get-Item (Join-Path $tempVpHome "current")).Target
+          if ($currentTarget -is [array]) {
+            $currentTarget = $currentTarget[0]
+          }
+          $updatedDir = Split-Path -Leaf $currentTarget
+          Write-Host "Updated install dir: $updatedDir"
+          if (-not $updatedDir.StartsWith("$version+force.")) {
+            Write-Error "Expected current to point at a forced reinstall dir for $version, got $updatedDir"
+            exit 1
+          }
+
+          if (-not (Test-Path (Join-Path $tempVpHome "$version/bin/vp.exe"))) {
+            Write-Error "Original same-version install directory was unexpectedly removed"
+            exit 1
+          }
+
+          $previousVersion = Get-Content (Join-Path $tempVpHome ".previous-version") -Raw
+          if ($previousVersion.Trim() -ne $version) {
+            Write-Error "Expected .previous-version to be $version, got $previousVersion"
+            exit 1
+          }
+
+      - name: Test same-version forced upgrade (Unix)
+        if: ${{ matrix.os != 'windows-latest' }}
+        shell: bash
+        run: |
+          # Unix mirror of the Windows same-version forced-upgrade test above.
+          # Overwriting the running binary in place does not fail on macOS or
+          # modern Linux the way it does on Windows, but the fix still changes
+          # the on-disk layout on every platform (current must repoint at a
+          # `<version>+force.*` dir, the original version tree must survive, and
+          # `.previous-version` must be recorded), so we assert that here too.
+          #
+          # Force-reinstall the published `latest` version rather than the local
+          # build's version: mid-release-cycle the build can be ahead of the
+          # registry, and `vp upgrade <version>` must download <version> from npm.
+          version=$(npm view vite-plus version)
+          if [ -z "$version" ]; then
+            echo "Failed to resolve latest published vite-plus version"
+            exit 1
+          fi
+
+          real_vp_home="$HOME/.vite-plus"
+          current_vp="$real_vp_home/current/bin/vp"
+          temp_vp_home="${RUNNER_TEMP:?RUNNER_TEMP must be set}/vp-same-version-force"
+          rm -rf "$temp_vp_home"
+
+          initial_bin_dir="$temp_vp_home/$version/bin"
+          mkdir -p "$initial_bin_dir"
+          cp "$current_vp" "$initial_bin_dir/vp"
+          chmod +x "$initial_bin_dir/vp"
+          # Relative symlink, matching swap_current_link's `current -> <version>`.
+          ln -s "$version" "$temp_vp_home/current"
+
+          VP_HOME="$temp_vp_home" "$temp_vp_home/current/bin/vp" upgrade "$version" --force
+
+          updated_dir=$(basename "$(readlink "$temp_vp_home/current")")
+          echo "Updated install dir: $updated_dir"
+          case "$updated_dir" in
+            "$version+force."*) ;;
+            *)
+              echo "Expected current to point at a forced reinstall dir for $version, got $updated_dir"
+              exit 1
+              ;;
+          esac
+
+          if [ ! -f "$temp_vp_home/$version/bin/vp" ]; then
+            echo "Original same-version install directory was unexpectedly removed"
+            exit 1
+          fi
+
+          previous_version=$(tr -d '[:space:]' < "$temp_vp_home/.previous-version")
+          if [ "$previous_version" != "$version" ]; then
+            echo "Expected .previous-version to be $version, got $previous_version"
+            exit 1
+          fi
 
       - name: Test implode (bash)
         shell: bash

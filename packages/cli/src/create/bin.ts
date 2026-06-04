@@ -78,6 +78,8 @@ import {
   ensureGitignoreNodeModules,
   ensureGitignoreVsCodeEditorConfigs,
   formatTargetDir,
+  normalizeEditorOption,
+  shouldConfigureEditorsForCreate,
 } from './utils.ts';
 
 const helpMessage = renderCliDoc({
@@ -222,7 +224,7 @@ export interface Options {
   help: boolean;
   verbose: boolean;
   agent?: string | string[] | false;
-  editor?: string;
+  editor?: string | false;
   hooks?: boolean;
   packageManager?: string;
 }
@@ -257,7 +259,7 @@ function parseArgs() {
     help?: boolean;
     verbose?: boolean;
     agent?: ParsedAgentOption;
-    editor?: string;
+    editor?: string | false | Array<string | false>;
     git?: boolean;
     hooks?: boolean;
     'package-manager'?: string;
@@ -279,7 +281,7 @@ function parseArgs() {
       help: parsed.help || false,
       verbose: parsed.verbose || false,
       agent: normalizeAgentOption(parsed.agent),
-      editor: parsed.editor,
+      editor: normalizeEditorOption(parsed.editor),
       git: parsed.git,
       hooks: parsed.hooks,
       packageManager: parsed['package-manager'],
@@ -787,17 +789,23 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     );
   }
 
-  const existingEditors =
-    options.editor || !options.interactive
-      ? undefined
-      : detectExistingEditors(workspaceInfoOptional.rootDir);
-  selectedEditors =
-    existingEditors ??
-    (await selectEditors({
-      interactive: options.interactive,
-      editor: options.editor,
-      onCancel: () => cancelAndExit(),
-    }));
+  const shouldConfigureEditors = shouldConfigureEditorsForCreate({
+    editor: options.editor,
+    isMonorepo,
+  });
+  if (shouldConfigureEditors) {
+    const existingEditors =
+      options.editor || !options.interactive
+        ? undefined
+        : detectExistingEditors(workspaceInfoOptional.rootDir);
+    selectedEditors =
+      existingEditors ??
+      (await selectEditors({
+        interactive: options.interactive,
+        editor: options.editor,
+        onCancel: () => cancelAndExit(),
+      }));
+  }
 
   const shouldSetupGit = await promptGitInit(options);
   if (!isMonorepo) {
@@ -975,7 +983,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       injectCreateDefaultTemplate(fullPath, bundled.scope, compactOutput);
     }
     if (shouldSetupHooks) {
-      installGitHooks(fullPath, compactOutput);
+      installGitHooks(fullPath, compactOutput, undefined, workspaceInfo.packageManager);
     }
     updateCreateProgress('Installing dependencies');
     const installSummary = await runViteInstall(fullPath, options.interactive, installArgs, {
@@ -1076,19 +1084,21 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     });
   }
   resumeCreateProgress();
-  updateCreateProgress('Writing editor configs');
-  pauseCreateProgress();
-  await writeEditorConfigs({
-    projectRoot: fullPath,
-    editorId: selectedEditors,
-    interactive: options.interactive,
-    silent: compactOutput,
-    extraVsCodeSettings: { 'npm.scriptRunner': 'vp' },
-  });
-  if (selectedEditors?.includes('vscode')) {
-    ensureGitignoreVsCodeEditorConfigs(fullPath);
+  if (shouldConfigureEditors) {
+    updateCreateProgress('Writing editor configs');
+    pauseCreateProgress();
+    await writeEditorConfigs({
+      projectRoot: fullPath,
+      editorId: selectedEditors,
+      interactive: options.interactive,
+      silent: compactOutput,
+      extraVsCodeSettings: { 'npm.scriptRunner': 'vp' },
+    });
+    if (selectedEditors?.includes('vscode')) {
+      ensureGitignoreVsCodeEditorConfigs(fullPath);
+    }
+    resumeCreateProgress();
   }
-  resumeCreateProgress();
 
   // The migrate-before-rewrite reorder is only needed when the template
   // actually ships ESLint or Prettier (e.g. `create-vite --template
@@ -1237,7 +1247,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       await initGitRepository(fullPath);
     }
     if (shouldSetupHooks) {
-      installGitHooks(fullPath, compactOutput);
+      installGitHooks(fullPath, compactOutput, undefined, workspaceInfo.packageManager);
     }
     updateCreateProgress('Installing dependencies');
     installSummary = await runViteInstall(fullPath, options.interactive, installArgs, {

@@ -801,7 +801,7 @@ setup_node_manager() {
 
 # Cleanup old versions, keeping only the most recent ones
 cleanup_old_versions() {
-  local max_versions=5
+  local max_versions=3
   local versions=()
 
   # List version directories (semver format like 0.1.0, 1.2.3-beta.1, 0.0.0-f48af939.20260205-0533)

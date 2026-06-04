@@ -168,11 +168,182 @@ pub fn has_config_key(vite_config_content: &str, config_key: &str) -> Result<boo
     Ok(false)
 }
 
+/// Wrap safe inline Vite plugin arrays with `lazyPlugins(() => [...])`.
+///
+/// This transform is intentionally conservative: it only touches direct
+/// `plugins: [...]` pairs inside recognized Vite config objects and skips
+/// CommonJS configs rather than injecting ESM imports into them.
+pub fn wrap_lazy_plugins(vite_config_path: &Path) -> Result<MergeResult, Error> {
+    let vite_config_content = std::fs::read_to_string(vite_config_path)?;
+    wrap_lazy_plugins_content(&vite_config_content, Some(vite_config_path))
+}
+
+fn wrap_lazy_plugins_content(
+    vite_config_content: &str,
+    vite_config_path: Option<&Path>,
+) -> Result<MergeResult, Error> {
+    let uses_function_callback = check_function_callback(vite_config_content)?;
+
+    if is_commonjs_config(vite_config_content, vite_config_path)
+        || has_conflicting_lazy_plugins_binding(vite_config_content)
+    {
+        return Ok(MergeResult {
+            content: vite_config_content.to_owned(),
+            updated: false,
+            uses_function_callback,
+        });
+    }
+
+    let grep = SupportLang::TypeScript.ast_grep(vite_config_content);
+    let root = grep.root();
+    let mut replacements = Vec::new();
+
+    for node in root.dfs() {
+        if node.kind() != "pair" {
+            continue;
+        }
+        let Some(key_node) = node.field("key") else { continue };
+        if !pair_key_matches(&key_node, "plugins") {
+            continue;
+        }
+        let Some(parent_object) = node.parent() else { continue };
+        if parent_object.kind() != "object" {
+            continue;
+        }
+        if !is_recognized_config_object_for_lazy_plugins(&parent_object) {
+            continue;
+        }
+        let Some(value_node) = node.field("value") else { continue };
+        if value_node.kind() != "array" {
+            continue;
+        }
+
+        let callback = if node_has_descendant_kind(&value_node, "await_expression") {
+            "async () =>"
+        } else {
+            "() =>"
+        };
+        let range = value_node.range();
+        replacements.push((
+            range.start,
+            range.end,
+            format!("lazyPlugins({callback} {})", value_node.text()),
+        ));
+    }
+
+    if replacements.is_empty() {
+        return Ok(MergeResult {
+            content: vite_config_content.to_owned(),
+            updated: false,
+            uses_function_callback,
+        });
+    }
+
+    replacements.sort_by_key(|(start, _, _)| std::cmp::Reverse(*start));
+    let mut content = vite_config_content.to_owned();
+    for (start, end, replacement) in replacements {
+        content.replace_range(start..end, &replacement);
+    }
+    content = ensure_lazy_plugins_import(&content);
+
+    Ok(MergeResult { content, updated: true, uses_function_callback })
+}
+
 fn pair_key_matches<D: Doc>(key_node: &Node<'_, D>, config_key: &str) -> bool {
     let text = key_node.text();
     match key_node.kind().as_ref() {
         "property_identifier" => text == config_key,
         "string" => text.trim_matches(|c| c == '"' || c == '\'' || c == '`') == config_key,
+        _ => false,
+    }
+}
+
+fn is_commonjs_config(content: &str, path: Option<&Path>) -> bool {
+    if path.is_some_and(|p| {
+        p.extension().and_then(|ext| ext.to_str()).is_some_and(|ext| matches!(ext, "cjs" | "cts"))
+    }) {
+        return true;
+    }
+    content.contains("module.exports") || RE_REQUIRE_CALL.is_match(content)
+}
+
+static RE_REQUIRE_CALL: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"\brequire\s*\("#).unwrap());
+
+static RE_LOCAL_LAZY_PLUGINS_BINDING: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r#"(?m)^\s*(?:export\s+(?:default\s+)?)?(?:(?:const|let|var|class)\s+lazyPlugins\b|(?:async\s+)?function\s+lazyPlugins\b)"#,
+    )
+    .unwrap()
+});
+
+static RE_DESTRUCTURED_LAZY_PLUGINS_BINDING: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r#"(?ms)^\s*(?:export\s+)?(?:const|let|var)\s+[\{\[][^;]*\blazyPlugins\b[^;]*[\}\]]\s*="#,
+    )
+    .unwrap()
+});
+
+static RE_MULTI_DECLARATOR_LAZY_PLUGINS_BINDING: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"(?ms)^\s*(?:export\s+)?(?:const|let|var)\s+[^;]*,\s*lazyPlugins\b"#).unwrap()
+});
+
+fn has_conflicting_lazy_plugins_binding(content: &str) -> bool {
+    let grep = SupportLang::TypeScript.ast_grep(content);
+    let root = grep.root();
+
+    for node in root.dfs() {
+        if node.kind() != "import_statement" {
+            continue;
+        }
+        let text = node.text();
+        if imports_from_vite_plus(&text) {
+            continue;
+        }
+        if import_binds_lazy_plugins(&text) {
+            return true;
+        }
+    }
+
+    RE_LOCAL_LAZY_PLUGINS_BINDING.is_match(content)
+        || RE_DESTRUCTURED_LAZY_PLUGINS_BINDING.is_match(content)
+        || RE_MULTI_DECLARATOR_LAZY_PLUGINS_BINDING.is_match(content)
+}
+
+fn import_binds_lazy_plugins(import_statement: &str) -> bool {
+    let statement = strip_import_comments(import_statement);
+    if RE_DEFAULT_LAZY_PLUGINS_IMPORT.is_match(&statement)
+        || RE_NAMESPACE_LAZY_PLUGINS_IMPORT.is_match(&statement)
+    {
+        return true;
+    }
+
+    let Some(open_brace) = statement.find('{') else { return false };
+    let Some(close_brace) = statement.rfind('}') else { return false };
+    statement[open_brace + 1..close_brace].split(',').any(|specifier| {
+        let specifier = specifier.trim();
+        specifier == "lazyPlugins" || specifier.ends_with(" as lazyPlugins")
+    })
+}
+
+static RE_DEFAULT_LAZY_PLUGINS_IMPORT: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"^\s*import\s+lazyPlugins\b"#).unwrap());
+
+static RE_NAMESPACE_LAZY_PLUGINS_IMPORT: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"^\s*import\s+\*\s+as\s+lazyPlugins\b"#).unwrap());
+
+fn is_recognized_config_object_for_lazy_plugins<D: Doc>(object_node: &Node<'_, D>) -> bool {
+    let Some(parent) = object_node.parent() else { return false };
+    match parent.kind().as_ref() {
+        "export_statement" => true,
+        "satisfies_expression" => parent.parent().is_some_and(|p| {
+            p.kind() == "export_statement"
+                || (p.kind() == "arguments"
+                    && p.parent().is_some_and(|c| is_define_config_call(&c)))
+        }),
+        "arguments" => parent.parent().is_some_and(|c| is_define_config_call(&c)),
+        "parenthesized_expression" => is_define_config_arrow_body(&parent),
+        "return_statement" => is_direct_return_in_define_config_callback(&parent),
         _ => false,
     }
 }
@@ -214,6 +385,128 @@ fn is_inside_define_config_callback<D: Doc>(node: &Node<'_, D>) -> bool {
         current = n.parent();
     }
     false
+}
+
+fn is_direct_return_in_define_config_callback<D: Doc>(return_node: &Node<'_, D>) -> bool {
+    let mut current = return_node.parent();
+    while let Some(node) = current {
+        match node.kind().as_ref() {
+            "arrow_function" | "function_expression" => {
+                return node
+                    .parent()
+                    .filter(|parent| parent.kind() == "arguments")
+                    .and_then(|parent| parent.parent())
+                    .is_some_and(|call| is_define_config_call(&call));
+            }
+            "function_declaration" | "method_definition" => return false,
+            _ => current = node.parent(),
+        }
+    }
+    false
+}
+
+fn node_has_descendant_kind<D: Doc>(node: &Node<'_, D>, kind: &str) -> bool {
+    node.dfs().any(|child| child.kind() == kind)
+}
+
+fn ensure_lazy_plugins_import(content: &str) -> String {
+    let grep = SupportLang::TypeScript.ast_grep(content);
+    let root = grep.root();
+    let mut import_insert_at = None;
+    let mut value_import_replacement = None;
+
+    for node in root.dfs() {
+        if node.kind() != "import_statement" {
+            continue;
+        }
+        import_insert_at =
+            Some(import_insert_at.map_or(node.range().end, |end: usize| end.max(node.range().end)));
+
+        let text = node.text();
+        if !imports_from_vite_plus(&text) || text.trim_start().starts_with("import type") {
+            continue;
+        }
+        let Some(open_brace) = text.find('{') else { continue };
+        let Some(close_brace) = text.rfind('}') else { continue };
+        let specifiers = &text[open_brace + 1..close_brace];
+        if has_lazy_plugins_specifier(specifiers) {
+            return content.to_owned();
+        }
+        if value_import_replacement.is_some() || import_specifiers_contain_comments(specifiers) {
+            continue;
+        }
+
+        let replacement = if specifiers.contains('\n') {
+            let specifiers = specifiers.trim_end();
+            let comma = if specifiers.ends_with(',') { "" } else { "," };
+            format!(
+                "{}{specifiers}{comma}\n  lazyPlugins,\n{}",
+                &text[..=open_brace],
+                &text[close_brace..]
+            )
+        } else if specifiers.trim().is_empty() {
+            format!("{} lazyPlugins {}", &text[..=open_brace], &text[close_brace..])
+        } else {
+            let specifiers = specifiers.trim().trim_end_matches(',').trim_end();
+            format!("{} {}, lazyPlugins {}", &text[..=open_brace], specifiers, &text[close_brace..])
+        };
+        let range = node.range();
+        value_import_replacement = Some((range.start, range.end, replacement));
+    }
+
+    if let Some((start, end, replacement)) = value_import_replacement {
+        let mut updated = content.to_owned();
+        updated.replace_range(start..end, &replacement);
+        return updated;
+    }
+
+    let import_stmt = "import { lazyPlugins } from 'vite-plus';";
+    if let Some(insert_at) = import_insert_at {
+        let mut updated = content.to_owned();
+        updated.insert_str(insert_at, &format!("\n{import_stmt}"));
+        updated
+    } else {
+        format!("{import_stmt}\n\n{content}")
+    }
+}
+
+fn imports_from_vite_plus(import_statement: &str) -> bool {
+    import_statement.contains("from 'vite-plus'") || import_statement.contains("from \"vite-plus\"")
+}
+
+fn has_lazy_plugins_specifier(specifiers: &str) -> bool {
+    strip_import_comments(specifiers).split(',').any(|specifier| specifier.trim() == "lazyPlugins")
+}
+
+fn import_specifiers_contain_comments(specifiers: &str) -> bool {
+    specifiers.contains("//") || specifiers.contains("/*")
+}
+
+fn strip_import_comments(input: &str) -> String {
+    let chars: Vec<char> = input.chars().collect();
+    let mut output = String::with_capacity(input.len());
+    let mut i = 0;
+    while i < chars.len() {
+        if chars[i] == '/' && chars.get(i + 1) == Some(&'/') {
+            i += 2;
+            while i < chars.len() && chars[i] != '\n' {
+                i += 1;
+            }
+            if i < chars.len() {
+                output.push('\n');
+            }
+        } else if chars[i] == '/' && chars.get(i + 1) == Some(&'*') {
+            i += 2;
+            while i + 1 < chars.len() && !(chars[i] == '*' && chars[i + 1] == '/') {
+                i += 1;
+            }
+            i = (i + 2).min(chars.len());
+        } else {
+            output.push(chars[i]);
+            i += 1;
+        }
+    }
+    output
 }
 
 /// Check if the vite config uses a function callback pattern
@@ -1310,6 +1603,386 @@ export default defineConfig({
   lint: { options: { typeAware: true, typeCheck: true } },
 });"#
         );
+    }
+
+    #[test]
+    fn test_wrap_lazy_plugins_simple_adds_import() {
+        let vite_config = r#"import { defineConfig } from 'vite-plus';
+import react from '@vitejs/plugin-react';
+
+export default defineConfig({
+  plugins: [react(), nitro()],
+});"#;
+
+        let result = wrap_lazy_plugins_content(vite_config, None).unwrap();
+
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { defineConfig, lazyPlugins } from 'vite-plus';
+import react from '@vitejs/plugin-react';
+
+export default defineConfig({
+  plugins: lazyPlugins(() => [react(), nitro()]),
+});"#
+        );
+    }
+
+    #[test]
+    fn test_wrap_lazy_plugins_handles_single_line_trailing_import_comma() {
+        let vite_config = r#"import { defineConfig, } from 'vite-plus';
+
+export default defineConfig({
+  plugins: [react()],
+});"#;
+
+        let result = wrap_lazy_plugins_content(vite_config, None).unwrap();
+
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { defineConfig, lazyPlugins } from 'vite-plus';
+
+export default defineConfig({
+  plugins: lazyPlugins(() => [react()]),
+});"#
+        );
+    }
+
+    #[test]
+    fn test_wrap_lazy_plugins_skips_conflicting_local_binding() {
+        let vite_config = r#"import { defineConfig } from 'vite-plus';
+
+const lazyPlugins = [react()];
+
+export default defineConfig({
+  plugins: [react()],
+});"#;
+
+        let result = wrap_lazy_plugins_content(vite_config, None).unwrap();
+
+        assert!(!result.updated);
+        assert_eq!(result.content, vite_config);
+    }
+
+    #[test]
+    fn test_wrap_lazy_plugins_skips_conflicting_multi_declarator_binding() {
+        let vite_config = r#"import { defineConfig } from 'vite-plus';
+
+const other = 0, lazyPlugins = makeHelper();
+
+export default defineConfig({
+  plugins: [react()],
+});"#;
+
+        let result = wrap_lazy_plugins_content(vite_config, None).unwrap();
+
+        assert!(!result.updated);
+        assert_eq!(result.content, vite_config);
+    }
+
+    #[test]
+    fn test_wrap_lazy_plugins_skips_conflicting_multiline_multi_declarator_binding() {
+        let vite_config = r#"import { defineConfig } from 'vite-plus';
+
+const other = 0,
+  lazyPlugins = makeHelper();
+
+export default defineConfig({
+  plugins: [react()],
+});"#;
+
+        let result = wrap_lazy_plugins_content(vite_config, None).unwrap();
+
+        assert!(!result.updated);
+        assert_eq!(result.content, vite_config);
+    }
+
+    #[test]
+    fn test_wrap_lazy_plugins_skips_conflicting_destructured_binding() {
+        let vite_config = r#"import { defineConfig } from 'vite-plus';
+
+const { lazyPlugins } = helpers;
+
+export default defineConfig({
+  plugins: [react()],
+});"#;
+
+        let result = wrap_lazy_plugins_content(vite_config, None).unwrap();
+
+        assert!(!result.updated);
+        assert_eq!(result.content, vite_config);
+    }
+
+    #[test]
+    fn test_wrap_lazy_plugins_skips_conflicting_destructured_alias_binding() {
+        let vite_config = r#"import { defineConfig } from 'vite-plus';
+
+const { pluginFactory: lazyPlugins } = helpers;
+
+export default defineConfig({
+  plugins: [react()],
+});"#;
+
+        let result = wrap_lazy_plugins_content(vite_config, None).unwrap();
+
+        assert!(!result.updated);
+        assert_eq!(result.content, vite_config);
+    }
+
+    #[test]
+    fn test_wrap_lazy_plugins_skips_conflicting_exported_local_binding() {
+        let vite_config = r#"import { defineConfig } from 'vite-plus';
+
+export const lazyPlugins = [react()];
+
+export default defineConfig({
+  plugins: [react()],
+});"#;
+
+        let result = wrap_lazy_plugins_content(vite_config, None).unwrap();
+
+        assert!(!result.updated);
+        assert_eq!(result.content, vite_config);
+    }
+
+    #[test]
+    fn test_wrap_lazy_plugins_skips_conflicting_exported_function_binding() {
+        let vite_config = r#"import { defineConfig } from 'vite-plus';
+
+export async function lazyPlugins() {
+  return [react()];
+}
+
+export default defineConfig({
+  plugins: [react()],
+});"#;
+
+        let result = wrap_lazy_plugins_content(vite_config, None).unwrap();
+
+        assert!(!result.updated);
+        assert_eq!(result.content, vite_config);
+    }
+
+    #[test]
+    fn test_wrap_lazy_plugins_skips_conflicting_import_binding() {
+        let vite_config = r#"import { lazyPlugins } from './helpers';
+import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  plugins: [react()],
+});"#;
+
+        let result = wrap_lazy_plugins_content(vite_config, None).unwrap();
+
+        assert!(!result.updated);
+        assert_eq!(result.content, vite_config);
+    }
+
+    #[test]
+    fn test_wrap_lazy_plugins_handles_satisfies_inside_define_config() {
+        let vite_config = r#"import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  plugins: [react()],
+} satisfies UserConfig);"#;
+
+        let result = wrap_lazy_plugins_content(vite_config, None).unwrap();
+
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { defineConfig, lazyPlugins } from 'vite-plus';
+
+export default defineConfig({
+  plugins: lazyPlugins(() => [react()]),
+} satisfies UserConfig);"#
+        );
+    }
+
+    #[test]
+    fn test_wrap_lazy_plugins_adds_separate_value_import_for_type_import() {
+        let vite_config = r#"import type { UserConfig } from 'vite-plus';
+
+export default {
+  plugins: [react()],
+} satisfies UserConfig;"#;
+
+        let result = wrap_lazy_plugins_content(vite_config, None).unwrap();
+
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import type { UserConfig } from 'vite-plus';
+import { lazyPlugins } from 'vite-plus';
+
+export default {
+  plugins: lazyPlugins(() => [react()]),
+} satisfies UserConfig;"#
+        );
+    }
+
+    #[test]
+    fn test_wrap_lazy_plugins_handles_multiline_imports() {
+        let vite_config = r#"import {
+  defineConfig
+} from 'vite-plus';
+
+export default defineConfig({
+  plugins: [react()],
+});"#;
+
+        let result = wrap_lazy_plugins_content(vite_config, None).unwrap();
+
+        assert!(result.updated);
+        assert!(
+            result
+                .content
+                .contains("import {\n  defineConfig,\n  lazyPlugins,\n} from 'vite-plus';")
+        );
+    }
+
+    #[test]
+    fn test_wrap_lazy_plugins_adds_separate_import_for_commented_imports() {
+        let vite_config = r#"import {
+  defineConfig // keep this comment
+} from 'vite-plus';
+
+export default defineConfig({
+  plugins: [react()],
+});"#;
+
+        let result = wrap_lazy_plugins_content(vite_config, None).unwrap();
+
+        assert!(result.updated);
+        assert!(result.content.contains("import {\n  defineConfig // keep this comment\n} from 'vite-plus';\nimport { lazyPlugins } from 'vite-plus';"));
+        assert!(result.content.contains("plugins: lazyPlugins(() => [react()])"));
+    }
+
+    #[test]
+    fn test_wrap_lazy_plugins_detects_commented_existing_lazy_plugins_import() {
+        let vite_config = r#"import {
+  lazyPlugins, // keep this comment
+} from 'vite-plus';
+
+export default defineConfig({
+  plugins: [react()],
+});"#;
+
+        let result = wrap_lazy_plugins_content(vite_config, None).unwrap();
+
+        assert!(result.updated);
+        assert_eq!(result.content.matches("from 'vite-plus'").count(), 1);
+        assert!(result.content.contains("plugins: lazyPlugins(() => [react()])"));
+    }
+
+    #[test]
+    fn test_wrap_lazy_plugins_reuses_later_lazy_plugins_import() {
+        let vite_config = r#"import { defineConfig } from 'vite-plus';
+import { lazyPlugins } from 'vite-plus';
+
+export default defineConfig({
+  plugins: [react()],
+});"#;
+
+        let result = wrap_lazy_plugins_content(vite_config, None).unwrap();
+
+        assert!(result.updated);
+        assert_eq!(result.content.matches("lazyPlugins } from 'vite-plus'").count(), 1);
+        assert_eq!(result.content.matches("lazyPlugins").count(), 2);
+    }
+
+    #[test]
+    fn test_wrap_lazy_plugins_callback_returns() {
+        let vite_config = r#"import { defineConfig, loadEnv } from 'vite-plus';
+
+export default defineConfig(({ mode }) => {
+  function helper() {
+    return { plugins: [helperPlugin()] };
+  }
+  return {
+    plugins: [react()],
+    nested: { plugins: [nestedPlugin()] },
+  };
+});"#;
+
+        let result = wrap_lazy_plugins_content(vite_config, None).unwrap();
+
+        assert!(result.updated);
+        assert_eq!(result.content.matches("lazyPlugins(() =>").count(), 1);
+        assert!(result.content.contains("import { defineConfig, loadEnv, lazyPlugins }"));
+        assert!(result.content.contains("plugins: lazyPlugins(() => [react()])"));
+        assert!(result.content.contains("return { plugins: [helperPlugin()] };"));
+        assert!(result.content.contains("nested: { plugins: [nestedPlugin()] }"));
+    }
+
+    #[test]
+    fn test_wrap_lazy_plugins_uses_async_callback_for_await() {
+        let vite_config = r#"import { defineConfig } from 'vite-plus';
+
+export default defineConfig(async () => ({
+  plugins: [await makePlugin()],
+}));"#;
+
+        let result = wrap_lazy_plugins_content(vite_config, None).unwrap();
+
+        assert!(result.updated);
+        assert!(result.content.contains("plugins: lazyPlugins(async () => [await makePlugin()])"));
+    }
+
+    #[test]
+    fn test_wrap_lazy_plugins_skips_unsupported_and_is_idempotent() {
+        let vite_config = r#"import { defineConfig, lazyPlugins } from 'vite-plus';
+
+const plugins = [react()];
+
+export default defineConfig({
+  plugins,
+  a: { plugins: [nested()] },
+});"#;
+
+        let result = wrap_lazy_plugins_content(vite_config, None).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, vite_config);
+
+        let already_wrapped = r#"import { defineConfig, lazyPlugins } from 'vite-plus';
+
+export default defineConfig({
+  plugins: lazyPlugins(() => [react()]),
+});"#;
+        let result = wrap_lazy_plugins_content(already_wrapped, None).unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, already_wrapped);
+    }
+
+    #[test]
+    fn test_wrap_lazy_plugins_skips_commonjs() {
+        let vite_config = r#"const { defineConfig } = require('vite');
+
+module.exports = defineConfig({
+  plugins: [react()],
+});"#;
+
+        let result =
+            wrap_lazy_plugins_content(vite_config, Some(Path::new("vite.config.cjs"))).unwrap();
+
+        assert!(!result.updated);
+        assert_eq!(result.content, vite_config);
+    }
+
+    #[test]
+    fn test_wrap_lazy_plugins_idempotent_after_transform() {
+        let vite_config = r#"import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  plugins: [react()],
+});"#;
+
+        let first = wrap_lazy_plugins_content(vite_config, None).unwrap();
+        assert!(first.updated);
+        let second = wrap_lazy_plugins_content(&first.content, None).unwrap();
+        assert!(!second.updated);
+        assert_eq!(second.content, first.content);
     }
 
     #[test]

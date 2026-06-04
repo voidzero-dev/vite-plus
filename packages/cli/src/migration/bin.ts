@@ -252,8 +252,9 @@ const helpMessage = renderCliDoc({
         '  After the migration:',
         '  - Confirm `vite` imports were rewritten to `vite-plus` where needed',
         '  - Confirm `vitest` imports were rewritten to `vite-plus/test` where needed',
-        '  - Remove old `vite` and `vitest` dependencies only after those rewrites',
-        '    are confirmed',
+        '  - On pnpm, keep the `vite` / `vitest` entries that `vp migrate` aliased to',
+        '    the Vite+ packages so the workspace override stays effective; with other',
+        '    package managers you can remove them once those rewrites are confirmed',
         '  - Move remaining tool-specific config into the appropriate blocks in',
         '    `vite.config.ts`',
         '',
@@ -353,7 +354,7 @@ async function collectMigrationPlan(
   // 2. Git hooks (including preflight check)
   let shouldSetupHooks = await promptGitHooks(options);
   if (shouldSetupHooks) {
-    const reason = preflightGitHooksSetup(rootDir);
+    const reason = preflightGitHooksSetup(rootDir, packageManager);
     if (reason) {
       prompts.log.warn(`⚠ ${reason}`);
       shouldSetupHooks = false;
@@ -570,7 +571,8 @@ function showMigrationSummary(options: {
     report.mergedStagedConfigCount +
     report.inlinedLintStagedConfigCount +
     report.removedConfigCount +
-    report.tsdownImportCount;
+    report.tsdownImportCount +
+    report.wrappedPluginConfigCount;
 
   log(
     `${styleText('magenta', '◇')} ${updatedExistingVitePlus ? 'Updated' : 'Migrated'} ${accent(projectLabel)}${
@@ -609,6 +611,11 @@ function showMigrationSummary(options: {
   }
   if (report.nodeVersionFileMigrated) {
     log(`${styleText('gray', '•')} Node version manager file migrated to .node-version`);
+  }
+  if (report.wrappedPluginConfigCount > 0) {
+    log(
+      `${styleText('gray', '•')} Inline Vite plugins wrapped with lazyPlugins for check/lint/fmt`,
+    );
   }
   if (report.gitHooksConfigured) {
     log(`${styleText('gray', '•')} Git hooks configured`);
@@ -816,7 +823,7 @@ async function executeMigrationPlan(
   // 8. Install git hooks
   if (plan.shouldSetupHooks) {
     updateMigrationProgress('Configuring git hooks');
-    installGitHooks(workspaceInfo.rootDir, true, report);
+    installGitHooks(workspaceInfo.rootDir, true, report, plan.packageManager);
   }
 
   // 9. Write agent instructions (using pre-resolved decisions)
@@ -1031,7 +1038,15 @@ async function main() {
       if (shouldSetupHooks) {
         updateMigrationProgress('Configuring git hooks');
       }
-      if (shouldSetupHooks && installGitHooks(workspaceInfoOptional.rootDir, true, report)) {
+      if (
+        shouldSetupHooks &&
+        installGitHooks(
+          workspaceInfoOptional.rootDir,
+          true,
+          report,
+          workspaceInfoOptional.packageManager,
+        )
+      ) {
         didMigrate = true;
       }
     }

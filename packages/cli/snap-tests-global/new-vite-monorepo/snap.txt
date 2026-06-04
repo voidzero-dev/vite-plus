@@ -96,7 +96,7 @@ Git initialized
 > ls vite-plus-monorepo/apps # check apps directory created
 website
 
-> cat vite-plus-monorepo/apps/website/package.json # check website strips aliased vite/vitest
+> cat vite-plus-monorepo/apps/website/package.json # check website keeps aliased vite for pnpm (workspace override stays effective)
 {
   "name": "website",
   "version": "0.0.0",
@@ -109,6 +109,7 @@ website
   },
   "devDependencies": {
     "typescript": "~6.0.2",
+    "vite": "catalog:",
     "vite-plus": "catalog:"
   }
 }
@@ -163,9 +164,26 @@ website
 > ls vite-plus-monorepo/apps/vite-plus-application/package.json # check vite-plus-application package.json
 vite-plus-monorepo/apps/vite-plus-application/package.json
 
+> test ! -e vite-plus-monorepo/apps/vite-plus-application/.vscode && echo 'No app editor config' || (echo 'ERROR: app editor config exists' && exit 1) # monorepo package create without --editor should not write VS Code config
+No app editor config
+
+> cd vite-plus-monorepo && vp create --no-interactive vite:application --directory apps/no-editor --no-editor # create application with explicit editor opt-out inside monorepo
+> test ! -e vite-plus-monorepo/apps/no-editor/.vscode && echo 'No opt-out app editor config' || (echo 'ERROR: opt-out app editor config exists' && exit 1) # --no-editor should not write VS Code config
+No opt-out app editor config
+
+> cd vite-plus-monorepo && vp create --no-interactive vite:application --directory apps/editor-opt-in --editor vscode # create application with explicit editor opt-in inside monorepo
+> test -f vite-plus-monorepo/apps/editor-opt-in/.vscode/settings.json && echo 'Opt-in app VS Code settings exist' # explicit --editor should write VS Code settings
+Opt-in app VS Code settings exist
+
+> test -f vite-plus-monorepo/apps/editor-opt-in/.vscode/extensions.json && echo 'Opt-in app VS Code extensions exist' # explicit --editor should write VS Code extensions
+Opt-in app VS Code extensions exist
+
 > cd vite-plus-monorepo && vp create --no-interactive vite:library # create library in non-interactive mode
 > ls vite-plus-monorepo/packages/vite-plus-library/package.json # check vite-plus-library package.json
 vite-plus-monorepo/packages/vite-plus-library/package.json
+
+> test ! -e vite-plus-monorepo/packages/vite-plus-library/.vscode && echo 'No library editor config' || (echo 'ERROR: library editor config exists' && exit 1) # monorepo package create without --editor should not write VS Code config
+No library editor config
 
 > cd vite-plus-monorepo && vp create --no-interactive vite:generator # create generator in non-interactive mode
 > ls vite-plus-monorepo/tools # check tools directory created

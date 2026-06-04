@@ -17,7 +17,7 @@
     "node -e \"const { spawnSync } = require('node:child_process'); const file = '.vscode/settings.json'; const result = spawnSync('git', ['-C', 'vite-plus-monorepo', 'check-ignore', '--no-index', file], { stdio: 'ignore' }); const status = result.status; if (status === 1) { console.log(file + ' trackable'); } else { console.log(status === 0 ? 'ERROR: ' + file + ' ignored' : 'ERROR: git check-ignore failed with status ' + status); process.exit(status || 1); }\" # check VS Code settings are trackable",
     "node -e \"const { spawnSync } = require('node:child_process'); const file = '.vscode/extensions.json'; const result = spawnSync('git', ['-C', 'vite-plus-monorepo', 'check-ignore', '--no-index', file], { stdio: 'ignore' }); const status = result.status; if (status === 1) { console.log(file + ' trackable'); } else { console.log(status === 0 ? 'ERROR: ' + file + ' ignored' : 'ERROR: git check-ignore failed with status ' + status); process.exit(status || 1); }\" # check VS Code extensions are trackable",
     "ls vite-plus-monorepo/apps # check apps directory created",
-    "cat vite-plus-monorepo/apps/website/package.json # check website strips aliased vite/vitest",
+    "cat vite-plus-monorepo/apps/website/package.json # check website keeps aliased vite for pnpm (workspace override stays effective)",
     "cat vite-plus-monorepo/packages/utils/package.json # check utils normalizes vite-plus to catalog:",
     {
       "command": "cd vite-plus-monorepo && vp create --no-interactive vite:application # create application in non-interactive mode",
@@ -25,11 +25,24 @@
     },
     "ls vite-plus-monorepo/apps # check apps directory created",
     "ls vite-plus-monorepo/apps/vite-plus-application/package.json # check vite-plus-application package.json",
+    "test ! -e vite-plus-monorepo/apps/vite-plus-application/.vscode && echo 'No app editor config' || (echo 'ERROR: app editor config exists' && exit 1) # monorepo package create without --editor should not write VS Code config",
+    {
+      "command": "cd vite-plus-monorepo && vp create --no-interactive vite:application --directory apps/no-editor --no-editor # create application with explicit editor opt-out inside monorepo",
+      "ignoreOutput": true
+    },
+    "test ! -e vite-plus-monorepo/apps/no-editor/.vscode && echo 'No opt-out app editor config' || (echo 'ERROR: opt-out app editor config exists' && exit 1) # --no-editor should not write VS Code config",
+    {
+      "command": "cd vite-plus-monorepo && vp create --no-interactive vite:application --directory apps/editor-opt-in --editor vscode # create application with explicit editor opt-in inside monorepo",
+      "ignoreOutput": true
+    },
+    "test -f vite-plus-monorepo/apps/editor-opt-in/.vscode/settings.json && echo 'Opt-in app VS Code settings exist' # explicit --editor should write VS Code settings",
+    "test -f vite-plus-monorepo/apps/editor-opt-in/.vscode/extensions.json && echo 'Opt-in app VS Code extensions exist' # explicit --editor should write VS Code extensions",
     {
       "command": "cd vite-plus-monorepo && vp create --no-interactive vite:library # create library in non-interactive mode",
       "ignoreOutput": true
     },
     "ls vite-plus-monorepo/packages/vite-plus-library/package.json # check vite-plus-library package.json",
+    "test ! -e vite-plus-monorepo/packages/vite-plus-library/.vscode && echo 'No library editor config' || (echo 'ERROR: library editor config exists' && exit 1) # monorepo package create without --editor should not write VS Code config",
     {
       "command": "cd vite-plus-monorepo && vp create --no-interactive vite:generator # create generator in non-interactive mode",
       "ignoreOutput": true

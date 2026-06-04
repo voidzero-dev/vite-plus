@@ -69,7 +69,7 @@ watch-check:
 
 [unix]
 test:
-  cargo test $(for d in crates/*/; do echo -n "-p $(basename $d) "; done) -p vite-plus-cli
+  RUST_MIN_STACK=8388608 cargo test $(for d in crates/*/; do echo -n "-p $(basename $d) "; done) -p vite-plus-cli
 
 [windows]
 test:

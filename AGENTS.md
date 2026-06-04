@@ -50,7 +50,7 @@ vite-plus/
 - **Static `vite.config.ts` extraction**: start at `crates/vite_static_config/README.md` and `packages/cli/src/resolve-vite-config.ts`.
 - **Bundled toolchain surfaces**: start with `packages/core/BUNDLING.md`, `packages/cli/BUNDLING.md`, and `packages/test/BUNDLING.md`.
 - **Generated project agent guidance**: `packages/cli/AGENTS.md` and `packages/cli/src/utils/agent.ts`; do not edit these when the task is only to improve root repo guidance.
-- **Product/repo docs**: root contributor docs live at the repo root and `docs/`; CLI package docs live under `packages/cli/docs/`; generated agent guidance is separate.
+- **Product/repo docs**: root contributor docs live at the repo root and the VitePress site under `docs/` (`docs/guide/`, `docs/config/`); generated agent guidance is separate.
 - **CLI output behavior**: inspect the relevant code plus `packages/cli/snap-tests/` or `packages/cli/snap-tests-global/`.
 
 ## Command and Config Model
@@ -79,7 +79,7 @@ Important distinctions:
 - Do not introduce `vite-task.json`; current Vite+ task configuration lives under `run` in `vite.config.ts`.
 - Do not run `cargo test -p vite_task` in this repo; Vite Task crates are git dependencies, not local workspace members.
 
-Reference: `packages/cli/docs/guide/run.md` and `packages/cli/docs/config/run.md`.
+Reference: `docs/guide/run.md` and `docs/config/run.md`.
 
 ## Development Workflow
 
@@ -184,8 +184,8 @@ Use the validation matrix above as the source of truth. For behavior-bearing cha
 - Root scripts: `package.json`
 - Repo config: `vite.config.ts`
 - Vite+ guide: `docs/guide/index.md`
-- Run guide: `packages/cli/docs/guide/run.md`
-- Run config: `packages/cli/docs/config/run.md`
+- Run guide: `docs/guide/run.md`
+- Run config: `docs/config/run.md`
 - CLI package architecture: `packages/cli/BUNDLING.md`
 - Core package architecture: `packages/core/BUNDLING.md`
 - Test package architecture: `packages/test/BUNDLING.md`

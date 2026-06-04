@@ -3,11 +3,12 @@
 ✔ Merged .oxlintrc.json into vite.config.ts
 ◇ Migrated . to Vite+
 • Node <semver>  bun <semver>
-• 1 config update applied, 1 file had imports rewritten
+• 2 config updates applied, 1 file had imports rewritten
+• Inline Vite plugins wrapped with lazyPlugins for check/lint/fmt
 
 > cat vite.config.ts # check vite.config.ts
 import react from '@vitejs/plugin-react';
-import { defineConfig } from 'vite-plus';
+import { defineConfig, lazyPlugins } from 'vite-plus';
 
 export default defineConfig({
   staged: {
@@ -30,7 +31,7 @@ export default defineConfig({
       }
     ]
   },
-  plugins: [react()],
+  plugins: lazyPlugins(() => [react()]),
 });
 
 > test ! -f .oxlintrc.json # check .oxlintrc.json is removed
