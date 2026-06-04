@@ -518,33 +518,55 @@ fn warn_on_dev_engines_package_manager_conflict(
     let Some(field) = read_dev_engines_package_manager(workspace_root) else {
         return;
     };
+    if let Some(message) = dev_engines_package_manager_conflict_message(&field, resolution) {
+        vite_shared::output::warn(&message);
+    }
+}
+
+/// Build the conflict message for an explicit `packageManager` field that does
+/// not satisfy the `devEngines.packageManager` constraint.
+///
+/// Returns `None` when the field is consistent with the constraint (semver-aware:
+/// an exact version satisfying a declared range is not a conflict), when the
+/// constraint is empty, or when the declared range is not valid semver
+/// (`vp env doctor` reports that case).
+fn dev_engines_package_manager_conflict_message(
+    field: &vite_shared::DevEngineField,
+    resolution: &PackageManagerResolution,
+) -> Option<Str> {
     let entries = field.entries();
     if entries.is_empty() {
-        return;
+        return None;
     }
 
     let name = resolution.package_manager_type.to_string();
     let Some(entry) = field.find_by_name(&name) else {
         let names = entries.iter().map(|e| e.name.as_str()).collect::<Vec<_>>().join(", ");
-        vite_shared::output::warn(&format!(
-            "packageManager is {name}@{version} but devEngines.packageManager \
-             requires {names:?}. This will become an error in a future release.",
-            version = resolution.version
-        ));
-        return;
+        return Some(
+            format!(
+                "packageManager is {name}@{version} but devEngines.packageManager \
+                 requires {names:?}. This will become an error in a future release.",
+                version = resolution.version
+            )
+            .into(),
+        );
     };
     if let Some(required) = &entry.version
         && let Ok(range) = node_semver::Range::parse(required.as_str())
         && let Ok(version) = node_semver::Version::parse(resolution.version.as_str())
         && !range.satisfies(&version)
     {
-        vite_shared::output::warn(&format!(
-            "packageManager {name}@{version} does not satisfy \
-             devEngines.packageManager {required:?}. This will become an error in a future \
-             release.",
-            version = resolution.version
-        ));
+        return Some(
+            format!(
+                "packageManager {name}@{version} does not satisfy \
+                 devEngines.packageManager {required:?}. This will become an error in a \
+                 future release.",
+                version = resolution.version
+            )
+            .into(),
+        );
     }
+    None
 }
 
 /// Parse a package manager name into a supported [`PackageManagerType`].
@@ -2145,6 +2167,185 @@ mod tests {
         assert_eq!(pm_type, PackageManagerType::Pnpm);
         assert_eq!(version, "latest");
         assert_eq!(source, PackageManagerSource::LockfileOrConfig);
+    }
+
+    // npm-install-checks: "noop options" / "empty array along side error"
+    #[tokio::test]
+    async fn test_detect_dev_engines_package_manager_empty_array_falls_through() {
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let package_content = r#"{
+            "name": "test-package",
+            "devEngines": {"packageManager": []}
+        }"#;
+        create_package_json(&temp_dir_path, package_content);
+        fs::write(temp_dir_path.join("pnpm-lock.yaml"), "lockfileVersion: '6.0'").unwrap();
+
+        let (workspace_root, _) = find_workspace_root(&temp_dir_path).unwrap();
+        let (pm_type, version, _, source) =
+            get_package_manager_type_and_version(&workspace_root, None).unwrap();
+
+        // an empty array imposes nothing: detection falls through to the lockfile
+        assert_eq!(pm_type, PackageManagerType::Pnpm);
+        assert_eq!(version, "latest");
+        assert_eq!(source, PackageManagerSource::LockfileOrConfig);
+    }
+
+    // npm-install-checks: "returns the last failure" (array with no acceptable
+    // entry applies the effective onFail of the last entry, which defaults to error)
+    #[tokio::test]
+    async fn test_detect_dev_engines_package_manager_all_unsupported_array_errors() {
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let package_content = r#"{
+            "name": "test-package",
+            "devEngines": {
+                "packageManager": [
+                    {"name": "vlt", "version": "^1.0.0"},
+                    {"name": "deno", "version": "^2.0.0"}
+                ]
+            }
+        }"#;
+        create_package_json(&temp_dir_path, package_content);
+        fs::write(temp_dir_path.join("pnpm-lock.yaml"), "lockfileVersion: '6.0'").unwrap();
+
+        let (workspace_root, _) = find_workspace_root(&temp_dir_path).unwrap();
+        let result = get_package_manager_type_and_version(&workspace_root, None);
+        assert!(matches!(result, Err(Error::UnsupportedDevEnginesPackageManager(_))));
+    }
+
+    #[tokio::test]
+    async fn test_detect_dev_engines_package_manager_array_last_warn_falls_through() {
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let package_content = r#"{
+            "name": "test-package",
+            "devEngines": {
+                "packageManager": [
+                    {"name": "vlt", "version": "^1.0.0", "onFail": "ignore"},
+                    {"name": "deno", "version": "^2.0.0", "onFail": "warn"}
+                ]
+            }
+        }"#;
+        create_package_json(&temp_dir_path, package_content);
+        fs::write(temp_dir_path.join("pnpm-lock.yaml"), "lockfileVersion: '6.0'").unwrap();
+
+        let (workspace_root, _) = find_workspace_root(&temp_dir_path).unwrap();
+        let (pm_type, version, _, source) =
+            get_package_manager_type_and_version(&workspace_root, None).unwrap();
+
+        // onFail: warn on the last entry warns and continues down the chain
+        assert_eq!(pm_type, PackageManagerType::Pnpm);
+        assert_eq!(version, "latest");
+        assert_eq!(source, PackageManagerSource::LockfileOrConfig);
+    }
+
+    // npm-install-checks: "spec 2" uses [bun, yarn] where npm matches the current
+    // environment. Vite+ provisions the environment instead of validating it, so
+    // the first supported entry wins (rfcs/dev-engines.md).
+    #[tokio::test]
+    async fn test_detect_dev_engines_package_manager_first_supported_entry_wins() {
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let package_content = r#"{
+            "name": "test-package",
+            "devEngines": {
+                "packageManager": [
+                    {"name": "bun", "version": ">= 1.0.0", "onFail": "ignore"},
+                    {"name": "yarn", "version": "3.2.3", "onFail": "download"}
+                ]
+            }
+        }"#;
+        create_package_json(&temp_dir_path, package_content);
+
+        let (workspace_root, _) = find_workspace_root(&temp_dir_path).unwrap();
+        let (pm_type, version, _, source) =
+            get_package_manager_type_and_version(&workspace_root, None).unwrap();
+
+        assert_eq!(pm_type, PackageManagerType::Bun);
+        assert_eq!(version, ">= 1.0.0");
+        assert_eq!(source, PackageManagerSource::DevEnginesPackageManager);
+    }
+
+    /// Test helper: parse a `devEngines.packageManager` field from JSON.
+    fn parse_dev_engines_pm_field(json: &str) -> vite_shared::DevEngineField {
+        let pkg: vite_shared::PackageJson = serde_json::from_str(json).unwrap();
+        pkg.dev_engines.unwrap().package_manager.unwrap()
+    }
+
+    /// Test helper: build a `PackageManagerResolution` for conflict-message tests.
+    fn resolution_for_conflict_test(
+        package_manager_type: PackageManagerType,
+        version: &str,
+    ) -> PackageManagerResolution {
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        PackageManagerResolution {
+            package_manager_type,
+            version: version.into(),
+            hash: None,
+            source: "packageManager".into(),
+            source_path: temp_dir_path.join("package.json"),
+            project_root: temp_dir_path,
+        }
+    }
+
+    // npm-install-checks: "invalid name"
+    #[test]
+    fn test_dev_engines_conflict_message_name_mismatch() {
+        let field = parse_dev_engines_pm_field(
+            r#"{"devEngines": {"packageManager": {"name": "pnpm", "version": "^11.0.0"}}}"#,
+        );
+        let resolution = resolution_for_conflict_test(PackageManagerType::Npm, "10.5.0");
+
+        let message = dev_engines_package_manager_conflict_message(&field, &resolution).unwrap();
+        assert!(message.contains("packageManager is npm@10.5.0"), "got: {message}");
+        assert!(message.contains("requires \"pnpm\""), "got: {message}");
+        assert!(message.contains("error in a future release"), "got: {message}");
+    }
+
+    // npm-install-checks: "semver version is not in range"
+    #[test]
+    fn test_dev_engines_conflict_message_version_not_satisfying() {
+        let field = parse_dev_engines_pm_field(
+            r#"{"devEngines": {"packageManager": {"name": "pnpm", "version": "^11.0.0"}}}"#,
+        );
+        let resolution = resolution_for_conflict_test(PackageManagerType::Pnpm, "10.9.0");
+
+        let message = dev_engines_package_manager_conflict_message(&field, &resolution).unwrap();
+        assert!(
+            message.contains("pnpm@10.9.0 does not satisfy devEngines.packageManager"),
+            "got: {message}"
+        );
+        assert!(message.contains("error in a future release"), "got: {message}");
+    }
+
+    // npm-install-checks: "semver version is in range" / "name only" /
+    // non-semver wanted versions (doctor reports those, no conflict warning here)
+    #[test]
+    fn test_dev_engines_conflict_message_none_when_consistent() {
+        let resolution = resolution_for_conflict_test(PackageManagerType::Pnpm, "11.5.1");
+
+        // exact version satisfying the declared range is not a conflict
+        let field = parse_dev_engines_pm_field(
+            r#"{"devEngines": {"packageManager": {"name": "pnpm", "version": "^11.0.0"}}}"#,
+        );
+        assert!(dev_engines_package_manager_conflict_message(&field, &resolution).is_none());
+
+        // name only: any version satisfies
+        let field =
+            parse_dev_engines_pm_field(r#"{"devEngines": {"packageManager": {"name": "pnpm"}}}"#);
+        assert!(dev_engines_package_manager_conflict_message(&field, &resolution).is_none());
+
+        // a non-semver wanted version is not range-checked here
+        let field = parse_dev_engines_pm_field(
+            r#"{"devEngines": {"packageManager": {"name": "pnpm", "version": "test-version"}}}"#,
+        );
+        assert!(dev_engines_package_manager_conflict_message(&field, &resolution).is_none());
+
+        // empty array imposes nothing
+        let field = parse_dev_engines_pm_field(r#"{"devEngines": {"packageManager": []}}"#);
+        assert!(dev_engines_package_manager_conflict_message(&field, &resolution).is_none());
     }
 
     #[tokio::test]

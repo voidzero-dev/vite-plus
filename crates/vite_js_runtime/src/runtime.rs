@@ -1507,6 +1507,65 @@ mod tests {
         assert_eq!(resolution.source, VersionSource::NodeVersionFile);
     }
 
+    // npm-install-checks: "spec 2" (runtime array [bun, node]: the node entry is used)
+    #[tokio::test]
+    async fn test_resolve_node_version_dev_engines_array_form() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        let package_json = r#"{
+            "devEngines": {
+                "runtime": [
+                    {"name": "bun", "version": ">= 1.0.0", "onFail": "ignore"},
+                    {"name": "node", "version": "^22.0.0", "onFail": "error"}
+                ]
+            }
+        }"#;
+        tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
+
+        let resolution = resolve_node_version(&temp_path, false).await.unwrap().unwrap();
+        assert_eq!(&*resolution.version, "^22.0.0");
+        assert_eq!(resolution.source, VersionSource::DevEnginesRuntime);
+    }
+
+    // npm-install-checks: "invalid name"; runtimes Vite+ does not manage are
+    // skipped and resolution falls through to engines.node
+    #[tokio::test]
+    async fn test_resolve_node_version_dev_engines_without_node_entry_falls_through() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        let package_json = r#"{
+            "engines": {"node": ">=20.0.0"},
+            "devEngines": {
+                "runtime": [{"name": "deno", "version": "^2.0.0"}]
+            }
+        }"#;
+        tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
+
+        let resolution = resolve_node_version(&temp_path, false).await.unwrap().unwrap();
+        assert_eq!(&*resolution.version, ">=20.0.0");
+        assert_eq!(resolution.source, VersionSource::EnginesNode);
+    }
+
+    // npm-install-checks: "name only" (no version means any version satisfies);
+    // the entry imposes no constraint, so resolution falls through to engines.node
+    #[tokio::test]
+    async fn test_resolve_node_version_dev_engines_name_only_falls_through() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        let package_json = r#"{
+            "engines": {"node": ">=20.0.0"},
+            "devEngines": {"runtime": {"name": "node"}}
+        }"#;
+        tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
+
+        let resolution = resolve_node_version(&temp_path, false).await.unwrap().unwrap();
+        assert_eq!(&*resolution.version, ">=20.0.0");
+        assert_eq!(resolution.source, VersionSource::EnginesNode);
+    }
+
     #[tokio::test]
     async fn test_resolve_node_version_none_when_no_sources() {
         let temp_dir = TempDir::new().unwrap();

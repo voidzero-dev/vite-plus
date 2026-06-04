@@ -500,4 +500,156 @@ mod tests {
         let node = runtime.find_by_name("node").unwrap();
         assert_eq!(node.version.as_deref(), Some("^24.4.0"));
     }
+
+    // npm-install-checks: "noop options" / "empty array along side error"
+    #[test]
+    fn test_parse_empty_array_field() {
+        let json = r#"{
+            "devEngines": {"runtime": [], "packageManager": []}
+        }"#;
+
+        let pkg: PackageJson = serde_json::from_str(json).unwrap();
+        let dev_engines = pkg.dev_engines.unwrap();
+        let runtime = dev_engines.runtime.unwrap();
+        let pm = dev_engines.package_manager.unwrap();
+        // an empty array imposes no constraint
+        assert!(runtime.entries().is_empty());
+        assert!(runtime.find_by_name("node").is_none());
+        assert!(pm.entries().is_empty());
+    }
+
+    // npm-install-checks: "tests non-object" (invalid devEngines); npm throws,
+    // Vite+ is lenient on read (rfcs/dev-engines.md) and parses as empty
+    #[test]
+    fn test_parse_dev_engines_non_object_values() {
+        for value in ["1", "true", "false", "null", "[]", "[[]]", "[1]", "\"text\""] {
+            let json = format!(r#"{{"engines": {{"node": ">=20.0.0"}}, "devEngines": {value}}}"#);
+            let pkg: PackageJson = serde_json::from_str(&json)
+                .unwrap_or_else(|e| panic!("devEngines {value} should parse leniently: {e}"));
+            if value == "null" {
+                assert!(pkg.dev_engines.is_none(), "devEngines {value}");
+            } else {
+                let dev_engines = pkg.dev_engines.unwrap();
+                assert!(dev_engines.runtime.is_none(), "devEngines {value}");
+                assert!(dev_engines.package_manager.is_none(), "devEngines {value}");
+            }
+            // other fields keep parsing
+            assert_eq!(pkg.engines.unwrap().node, Some(">=20.0.0".into()), "devEngines {value}");
+        }
+    }
+
+    // npm-install-checks: "tests non-object" (invalid engine property); npm throws,
+    // Vite+ skips the unusable value
+    #[test]
+    fn test_parse_field_non_object_values() {
+        // single non-object value parses as absent
+        for value in ["1", "true", "false", "null", "\"node@24\""] {
+            let json = format!(r#"{{"devEngines": {{"runtime": {value}}}}}"#);
+            let pkg: PackageJson = serde_json::from_str(&json)
+                .unwrap_or_else(|e| panic!("runtime {value} should parse leniently: {e}"));
+            assert!(pkg.dev_engines.unwrap().runtime.is_none(), "runtime {value}");
+        }
+
+        // array elements that are not objects are skipped individually
+        let json = r#"{
+            "devEngines": {
+                "runtime": [1, true, false, null, [], [[]], {"name": "node", "version": "^24.0.0"}]
+            }
+        }"#;
+        let pkg: PackageJson = serde_json::from_str(json).unwrap();
+        let runtime = pkg.dev_engines.unwrap().runtime.unwrap();
+        assert_eq!(runtime.entries().len(), 1);
+        assert_eq!(runtime.entries()[0].name, "node");
+    }
+
+    // npm-install-checks: "invalid name value" (non-string); npm throws,
+    // Vite+ skips the entry (a usable string name is required)
+    #[test]
+    fn test_parse_non_string_name_skipped() {
+        for value in ["1", "true", "false", "null", "{}", "[]"] {
+            let json = format!(
+                r#"{{"devEngines": {{"runtime": {{"name": {value}, "version": "^24.0.0"}}}}}}"#
+            );
+            let pkg: PackageJson = serde_json::from_str(&json)
+                .unwrap_or_else(|e| panic!("name {value} should parse leniently: {e}"));
+            assert!(pkg.dev_engines.unwrap().runtime.is_none(), "name {value}");
+        }
+    }
+
+    // npm-install-checks: "invalid version value" (non-string); npm throws,
+    // Vite+ treats it as any version satisfies. `"version": 22` (a number) is a
+    // real-world typo worth pinning down.
+    #[test]
+    fn test_parse_non_string_version_treated_as_any() {
+        for value in ["22", "true", "false", "null", "{}", "[]"] {
+            let json = format!(
+                r#"{{"devEngines": {{"runtime": {{"name": "node", "version": {value}}}}}}}"#
+            );
+            let pkg: PackageJson = serde_json::from_str(&json)
+                .unwrap_or_else(|e| panic!("version {value} should parse leniently: {e}"));
+            let runtime = pkg.dev_engines.unwrap().runtime.unwrap();
+            let node = runtime.find_by_name("node").unwrap();
+            assert!(node.version.is_none(), "version {value}");
+        }
+    }
+
+    // npm-install-checks: "invalid onFail value" (non-string); npm throws,
+    // Vite+ falls back to the positional default
+    #[test]
+    fn test_parse_non_string_on_fail_treated_as_positional_default() {
+        for value in ["1", "true", "false", "null", "{}", "[]"] {
+            let json = format!(
+                r#"{{"devEngines": {{"runtime": {{"name": "node", "onFail": {value}}}}}}}"#
+            );
+            let pkg: PackageJson = serde_json::from_str(&json)
+                .unwrap_or_else(|e| panic!("onFail {value} should parse leniently: {e}"));
+            let runtime = pkg.dev_engines.unwrap().runtime.unwrap();
+            assert!(runtime.find_by_name("node").unwrap().on_fail.is_none(), "onFail {value}");
+            assert_eq!(runtime.effective_on_fail(0), OnFail::Error, "onFail {value}");
+        }
+    }
+
+    // npm-install-checks: "current name does not match, wanted has extra attribute";
+    // npm throws on unknown entry properties, Vite+ ignores them
+    #[test]
+    fn test_parse_extra_properties_ignored() {
+        let json = r#"{
+            "devEngines": {
+                "runtime": {
+                    "name": "node",
+                    "version": "^24.0.0",
+                    "extra": "test-extra",
+                    "another": {"nested": true}
+                }
+            }
+        }"#;
+
+        let pkg: PackageJson = serde_json::from_str(json).unwrap();
+        let runtime = pkg.dev_engines.unwrap().runtime.unwrap();
+        let node = runtime.find_by_name("node").unwrap();
+        assert_eq!(node.version.as_deref(), Some("^24.0.0"));
+    }
+
+    // npm-install-checks: "unrecognized property"; npm throws, Vite+ ignores
+    // sub-fields it does not act on (os/cpu/libc are out of scope per the RFC)
+    #[test]
+    fn test_parse_unknown_sub_fields_ignored() {
+        let json = r#"{
+            "devEngines": {
+                "os": {"name": "darwin"},
+                "cpu": [{"name": "arm"}, {"name": "x86"}],
+                "libc": {"name": "glibc"},
+                "unrecognized": {"name": "alpha", "version": "1"},
+                "runtime": {"name": "node", "version": "^24.0.0"},
+                "packageManager": {"name": "pnpm", "version": "^11.0.0"}
+            }
+        }"#;
+
+        let pkg: PackageJson = serde_json::from_str(json).unwrap();
+        let dev_engines = pkg.dev_engines.unwrap();
+        let runtime = dev_engines.runtime.unwrap();
+        assert_eq!(runtime.find_by_name("node").unwrap().version.as_deref(), Some("^24.0.0"));
+        let pm = dev_engines.package_manager.unwrap();
+        assert_eq!(pm.find_by_name("pnpm").unwrap().version.as_deref(), Some("^11.0.0"));
+    }
 }
