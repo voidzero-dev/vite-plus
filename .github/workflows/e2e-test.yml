@@ -134,7 +134,7 @@ jobs:
     needs:
       - build
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 10
+    timeout-minutes: ${{ matrix.project.timeout || 10 }}
     strategy:
       fail-fast: false
       matrix:
@@ -259,6 +259,9 @@ jobs:
               vp test
           - name: vinext
             node-version: 24
+            # The vinext suite is ~7000 tests and needs well over the default
+            # 10-minute job budget on 4-core runners.
+            timeout: 25
             command: |
               vp run build
               # Report-only: oxlint 1.63 drops the `eslint-` prefix from plugin names
