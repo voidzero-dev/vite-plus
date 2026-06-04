@@ -109,7 +109,7 @@ catalog:
   tsx: ^4.22.0
   typescript: ^6.0.0
   unified: ^11.0.5
-  valibot: 1.4.0
+  valibot: 1.4.1
   validate-npm-package-name: ^7.0.2
   vitepress: ^2.0.0-alpha.15
   vitepress-plugin-graphviz: ^0.1.0
@@ -170,6 +170,71 @@ minimumReleaseAgeExclude:
   - vitest
   - vue-virtual-scroller
   - lodash-es@4.18.1
+  - '@oxc-minify/binding-android-arm-eabi@0.134.0'
+  - '@oxc-minify/binding-android-arm64@0.134.0'
+  - '@oxc-minify/binding-darwin-arm64@0.134.0'
+  - '@oxc-minify/binding-darwin-x64@0.134.0'
+  - '@oxc-minify/binding-freebsd-x64@0.134.0'
+  - '@oxc-minify/binding-linux-arm-gnueabihf@0.134.0'
+  - '@oxc-minify/binding-linux-arm-musleabihf@0.134.0'
+  - '@oxc-minify/binding-linux-arm64-gnu@0.134.0'
+  - '@oxc-minify/binding-linux-arm64-musl@0.134.0'
+  - '@oxc-minify/binding-linux-ppc64-gnu@0.134.0'
+  - '@oxc-minify/binding-linux-riscv64-gnu@0.134.0'
+  - '@oxc-minify/binding-linux-riscv64-musl@0.134.0'
+  - '@oxc-minify/binding-linux-s390x-gnu@0.134.0'
+  - '@oxc-minify/binding-linux-x64-gnu@0.134.0'
+  - '@oxc-minify/binding-linux-x64-musl@0.134.0'
+  - '@oxc-minify/binding-openharmony-arm64@0.134.0'
+  - '@oxc-minify/binding-wasm32-wasi@0.134.0'
+  - '@oxc-minify/binding-win32-arm64-msvc@0.134.0'
+  - '@oxc-minify/binding-win32-ia32-msvc@0.134.0'
+  - '@oxc-minify/binding-win32-x64-msvc@0.134.0'
+  - '@oxc-parser/binding-android-arm-eabi@0.134.0'
+  - '@oxc-parser/binding-android-arm64@0.134.0'
+  - '@oxc-parser/binding-darwin-arm64@0.134.0'
+  - '@oxc-parser/binding-darwin-x64@0.134.0'
+  - '@oxc-parser/binding-freebsd-x64@0.134.0'
+  - '@oxc-parser/binding-linux-arm-gnueabihf@0.134.0'
+  - '@oxc-parser/binding-linux-arm-musleabihf@0.134.0'
+  - '@oxc-parser/binding-linux-arm64-gnu@0.134.0'
+  - '@oxc-parser/binding-linux-arm64-musl@0.134.0'
+  - '@oxc-parser/binding-linux-ppc64-gnu@0.134.0'
+  - '@oxc-parser/binding-linux-riscv64-gnu@0.134.0'
+  - '@oxc-parser/binding-linux-riscv64-musl@0.134.0'
+  - '@oxc-parser/binding-linux-s390x-gnu@0.134.0'
+  - '@oxc-parser/binding-linux-x64-gnu@0.134.0'
+  - '@oxc-parser/binding-linux-x64-musl@0.134.0'
+  - '@oxc-parser/binding-openharmony-arm64@0.134.0'
+  - '@oxc-parser/binding-wasm32-wasi@0.134.0'
+  - '@oxc-parser/binding-win32-arm64-msvc@0.134.0'
+  - '@oxc-parser/binding-win32-ia32-msvc@0.134.0'
+  - '@oxc-parser/binding-win32-x64-msvc@0.134.0'
+  - '@oxc-project/runtime@0.134.0'
+  - '@oxc-project/types@0.134.0'
+  - '@oxc-transform/binding-android-arm-eabi@0.134.0'
+  - '@oxc-transform/binding-android-arm64@0.134.0'
+  - '@oxc-transform/binding-darwin-arm64@0.134.0'
+  - '@oxc-transform/binding-darwin-x64@0.134.0'
+  - '@oxc-transform/binding-freebsd-x64@0.134.0'
+  - '@oxc-transform/binding-linux-arm-gnueabihf@0.134.0'
+  - '@oxc-transform/binding-linux-arm-musleabihf@0.134.0'
+  - '@oxc-transform/binding-linux-arm64-gnu@0.134.0'
+  - '@oxc-transform/binding-linux-arm64-musl@0.134.0'
+  - '@oxc-transform/binding-linux-ppc64-gnu@0.134.0'
+  - '@oxc-transform/binding-linux-riscv64-gnu@0.134.0'
+  - '@oxc-transform/binding-linux-riscv64-musl@0.134.0'
+  - '@oxc-transform/binding-linux-s390x-gnu@0.134.0'
+  - '@oxc-transform/binding-linux-x64-gnu@0.134.0'
+  - '@oxc-transform/binding-linux-x64-musl@0.134.0'
+  - '@oxc-transform/binding-openharmony-arm64@0.134.0'
+  - '@oxc-transform/binding-wasm32-wasi@0.134.0'
+  - '@oxc-transform/binding-win32-arm64-msvc@0.134.0'
+  - '@oxc-transform/binding-win32-ia32-msvc@0.134.0'
+  - '@oxc-transform/binding-win32-x64-msvc@0.134.0'
+  - oxc-minify@0.134.0
+  - oxc-parser@0.134.0
+  - oxc-transform@0.134.0
 overrides:
   rolldown: workspace:rolldown@*
   vite: workspace:@voidzero-dev/vite-plus-core@*

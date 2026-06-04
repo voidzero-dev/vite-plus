@@ -235,8 +235,8 @@ catalogs:
       specifier: ^6.0.0
       version: 6.0.2
     valibot:
-      specifier: 1.4.0
-      version: 1.4.0
+      specifier: 1.4.1
+      version: 1.4.1
     validate-npm-package-name:
       specifier: ^7.0.2
       version: 7.0.2
@@ -962,7 +962,7 @@ importers:
         version: 6.0.2
       valibot:
         specifier: 'catalog:'
-        version: 1.4.0(typescript@6.0.2)
+        version: 1.4.1(typescript@6.0.2)
 
   rolldown/packages/rollup-tests:
     dependencies:
@@ -8486,14 +8486,6 @@ packages:
     resolution: {integrity: sha512-pMZTvIkT1d+TFGvDOqodOclx0QWkkgi6Tdoa8gC8ffGAAqz9pzPTZWAybbsHHoED/ztMtkv/VoYTYyShUn81hA==}
     engines: {node: '>= 0.4.0'}
 
-  valibot@1.4.0:
-    resolution: {integrity: sha512-iC/x7fVcSyOwlm/VSt7RlHnzNGLGvR9GnxdifUeWoCJo0q4ZZvrVkIHC6faTlkxG47I2Y4UrFquPuVHCrOnrLg==}
-    peerDependencies:
-      typescript: '>=5'
-    peerDependenciesMeta:
-      typescript:
-        optional: true
-
   valibot@1.4.1:
     resolution: {integrity: sha512-klCmFTz2jeDluy9RwX+F884TCiogtdBJ/YaxSx1EOBYXa3NXNWj8kR1jjN8rzluwojJVWWaHJ4r1U5LfICnM3g==}
     peerDependencies:
@@ -15716,10 +15708,6 @@ snapshots:
   util-deprecate@1.0.2: {}
 
   utils-merge@1.0.1: {}
-
-  valibot@1.4.0(typescript@6.0.2):
-    optionalDependencies:
-      typescript: 6.0.2
 
   valibot@1.4.1(typescript@6.0.2):
     optionalDependencies:
