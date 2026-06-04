@@ -1,7 +1,7 @@
 > vp install -g ./env-install-stale-bin-pkg-v1 # Install package with two binaries
 info: Installing 1 global package with Node.js <semver>
 ✓ Installed env-install-stale-bin-pkg <semver>
-  Bins: env-install-stale-keep, env-install-stale-drop
+  Bins: env-install-stale-drop, env-install-stale-keep
 
 > env-install-stale-keep && env-install-stale-drop # Both binaries should be callable
 env-install-stale-keep ok
