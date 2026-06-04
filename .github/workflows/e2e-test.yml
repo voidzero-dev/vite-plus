@@ -263,6 +263,11 @@ jobs:
             # 10-minute job budget on 4-core runners.
             timeout: 25
             command: |
+              # vp migrate's auto-install passes --ignore-scripts on pnpm v11
+              # (vinext pins pnpm 11), which skips vinext's approved
+              # better-sqlite3 build, and the follow-up `vp install` never
+              # re-runs it. Rebuild it so the better-auth fixture works.
+              vp rebuild -- -r better-sqlite3
               vp run build
               # Report-only: oxlint 1.63 drops the `eslint-` prefix from plugin names
               # (https://github.com/oxc-project/oxc/pull/21806), invalidating vinext's existing
