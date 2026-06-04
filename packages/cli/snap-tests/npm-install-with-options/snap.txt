@@ -19,9 +19,9 @@ Options:
   -f, --force                      Force reinstall all dependencies
       --ignore-scripts             Do not run lifecycle scripts
       --no-lockfile                Don't read or generate lockfile
-      --fix-lockfile               Fix broken lockfile entries (pnpm and yarn@2+ only)
-      --shamefully-hoist           Create flat `node_modules` (pnpm only)
-      --resolution-only            Re-run resolution for peer dependency analysis (pnpm only)
+      --fix-lockfile               Fix broken lockfile entries (pnpm/aube and yarn@2+ only)
+      --shamefully-hoist           Create flat `node_modules` (pnpm/aube only)
+      --resolution-only            Re-run resolution for peer dependency analysis (pnpm/aube only)
       --silent                     Suppress output (silent mode)
       --filter <PATTERN>           Filter packages in monorepo (can be used multiple times)
   -w, --workspace-root             Install in workspace root only

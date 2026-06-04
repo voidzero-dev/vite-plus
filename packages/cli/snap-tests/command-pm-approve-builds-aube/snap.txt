@@ -11,8 +11,8 @@ Options:
       --all   Approve every package currently pending approval (pnpm >= <semver>, aube, npm >= <semver>). Mutually exclusive with positional packages
   -h, --help  Print help
 
-> vp pm approve-builds --all # forwards to pnpm approve-builds --all (nothing to approve)
-There are no packages awaiting approval
+> vp pm approve-builds --all # forwards to aube approve-builds --all (nothing to approve)
+No ignored builds to approve.
 
-> vp pm approve-builds esbuild fsevents # forwards positional packages to pnpm
-There are no packages awaiting approval
+> vp pm approve-builds esbuild fsevents # forwards positional packages to aube
+No ignored builds to approve.

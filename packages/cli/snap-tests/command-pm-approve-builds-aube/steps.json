@@ -1,0 +1,7 @@
+{
+  "commands": [
+    "vp pm approve-builds --help # should show help",
+    "vp pm approve-builds --all # forwards to aube approve-builds --all (nothing to approve)",
+    "vp pm approve-builds esbuild fsevents # forwards positional packages to aube"
+  ]
+}

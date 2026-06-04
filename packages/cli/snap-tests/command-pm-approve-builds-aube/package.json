@@ -1,0 +1,5 @@
+{
+  "name": "command-pm-approve-builds-aube",
+  "version": "1.0.0",
+  "packageManager": "aube@1.17.1"
+}

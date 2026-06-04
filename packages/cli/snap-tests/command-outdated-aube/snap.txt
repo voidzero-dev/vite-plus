@@ -1,0 +1,87 @@
+> vp outdated --help # should show help
+Check for outdated packages
+
+Usage: vp outdated [OPTIONS] [PACKAGES]... [-- <PASS_THROUGH_ARGS>...]
+
+Arguments:
+  [PACKAGES]...           Package name(s) to check
+  [PASS_THROUGH_ARGS]...  Additional arguments to pass through to the package manager
+
+Options:
+      --long                       Show extended information
+      --format <FORMAT>            Output format: table (default), list, or json
+  -r, --recursive                  Check recursively across all workspaces
+      --filter <PATTERN>           Filter packages in monorepo
+  -w, --workspace-root             Include workspace root
+  -P, --prod                       Only production and optional dependencies
+  -D, --dev                        Only dev dependencies
+      --no-optional                Exclude optional dependencies
+      --compatible                 Only show compatible versions
+      --sort-by <FIELD>            Sort results by field
+  -g, --global                     Check globally installed packages
+      --concurrency <CONCURRENCY>  Number of global package checks to run in parallel (only with -g)
+  -h, --help                       Print help
+
+[1]> vp install # should install packages first
+ERR_AUBE_REGISTRY_ERROR
+
+  × failed to resolve dependencies
+  ╰─▶ registry error for test-vite-plus-other: package not found: test-vite-
+      plus-other
+  help: package: test-vite-plus-other
+        registry operation failed — see the message above for the underlying
+        cause
+
+
+> vp outdated testnpm2 # should outdated package
+No lockfile found. Run `aube install` first.
+
+> vp outdated test-vite* # should outdated with one glob pattern
+No lockfile found. Run `aube install` first.
+
+> vp outdated test-vite* '*npm*' # aube accepts a single pattern; extra patterns warn
+warn: aube outdated only accepts a single pattern; extra patterns will be ignored
+No lockfile found. Run `aube install` first.
+
+> vp outdated --format json # should support json output
+No lockfile found. Run `aube install` first.
+
+> vp outdated --format list # aube does not support list format (warns)
+warn: aube outdated does not support list format
+No lockfile found. Run `aube install` first.
+
+> vp outdated --format table # should support table output
+No lockfile found. Run `aube install` first.
+
+> vp outdated testnpm2 --long --format list # should support --long (list warns)
+warn: aube outdated does not support list format
+No lockfile found. Run `aube install` first.
+
+[1]> vp outdated -r # should support recursive output
+  × aube outdated: --filter requires a workspace root (aube-workspace.yaml,
+  │ pnpm-workspace.yaml, or package.json with a `workspaces` field) at or
+  │ above <cwd>/../command-
+  │ outdated-aube
+
+
+> vp outdated -P # should support prod output
+No lockfile found. Run `aube install` first.
+
+> vp outdated -D # should support dev output
+No lockfile found. Run `aube install` first.
+
+> vp outdated --no-optional # aube does not support --no-optional (warns)
+warn: aube outdated does not support --no-optional
+No lockfile found. Run `aube install` first.
+
+> vp outdated --compatible # aube does not support --compatible (warns)
+warn: aube outdated does not support --compatible
+No lockfile found. Run `aube install` first.
+
+> json-edit package.json '_.optionalDependencies["test-vite-plus-other-optional"] = "^1.0.0"' && vp outdated --compatible # compatible w/ optional deps still warns
+warn: aube outdated does not support --compatible
+No lockfile found. Run `aube install` first.
+
+> vp outdated --sort-by name # aube does not support --sort-by (warns)
+warn: aube outdated does not support --sort-by
+No lockfile found. Run `aube install` first.

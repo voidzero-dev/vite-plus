@@ -1,0 +1,5 @@
+{
+  "name": "command-remove-aube",
+  "version": "1.0.0",
+  "packageManager": "aube@1.17.1"
+}
