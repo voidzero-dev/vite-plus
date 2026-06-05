@@ -1599,12 +1599,12 @@ export declare class BindingDevEngine {
   run(): Promise<void>;
   ensureCurrentBuildFinish(): Promise<void>;
   getBundleState(): Promise<BindingBundleState>;
-  ensureLatestBuildOutput(): Promise<void>;
+  ensureLatestBuildOutput(): Promise<BindingResult<undefined>>;
   triggerFullBuild(): void;
   invalidate(
     caller: string,
     firstInvalidatedBy?: string | undefined | null,
-  ): Promise<Array<BindingClientHmrUpdate>>;
+  ): Promise<BindingResult<Array<BindingClientHmrUpdate>>>;
   registerModules(clientId: string, modules: Array<string>): Promise<void>;
   removeClient(clientId: string): Promise<void>;
   close(): Promise<void>;
@@ -2023,6 +2023,7 @@ export interface BindingChecksOptions {
   unsupportedTsconfigOption?: boolean;
   ineffectiveDynamicImport?: boolean;
   largeBarrelModules?: boolean;
+  sourcemapBroken?: boolean;
 }
 
 export interface BindingChunkImportMap {
@@ -2352,7 +2353,11 @@ export interface BindingHookLoadOutput {
 
 export interface BindingHookRenderChunkOutput {
   code: string;
-  map?: BindingSourcemap;
+  /**
+   * A sourcemap, or `null` to explicitly signal "no sourcemap" (distinct from
+   * omitting the field, which mirrors Rollup's "possibly broken" semantics).
+   */
+  map?: BindingSourcemap | null;
 }
 
 export interface BindingHookResolveIdExtraArgs {
@@ -2543,6 +2548,7 @@ export interface BindingMatchGroup {
   entriesAware?: boolean;
   entriesAwareMergeThreshold?: number;
   tags?: Array<string>;
+  includeDependenciesRecursively?: boolean;
 }
 
 export interface BindingModulePreloadOptions {
