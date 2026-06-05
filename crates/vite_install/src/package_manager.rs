@@ -1137,15 +1137,35 @@ async fn set_dev_engines_package_manager_field(
         "onFail": "download",
     });
     let updated = vite_shared::edit_json_object(&content, |obj| {
-        if let Some(dev_engines) = obj.get_mut("devEngines").and_then(|v| v.as_object_mut()) {
-            dev_engines.insert("packageManager".into(), entry);
-        } else {
+        let Some(dev_engines) = obj.get_mut("devEngines").and_then(|v| v.as_object_mut()) else {
             vite_shared::insert_after(
                 obj,
                 "engines",
                 "devEngines",
                 serde_json::json!({ "packageManager": entry }),
             );
+            return;
+        };
+        // Auto-pin only fires when detection found no usable entry, but the field
+        // may still declare entries Vite+ does not act on (e.g. other package
+        // managers with onFail: ignore). Those are preserved, never replaced.
+        match dev_engines.get_mut("packageManager") {
+            // existing single entry: convert to array form, keeping it first
+            Some(existing @ serde_json::Value::Object(_)) => {
+                let existing = std::mem::take(existing);
+                dev_engines.insert(
+                    "packageManager".into(),
+                    serde_json::Value::Array(vec![existing, entry]),
+                );
+            }
+            // existing array: append the resolved entry
+            Some(serde_json::Value::Array(entries)) => {
+                entries.push(entry);
+            }
+            // absent or malformed (spec-invalid) value: write a single entry
+            _ => {
+                dev_engines.insert("packageManager".into(), entry);
+            }
         }
     })?;
     tokio::fs::write(&package_json_path, updated).await?;
@@ -2394,6 +2414,83 @@ mod tests {
             updated,
             "{\n    \"name\": \"test-package\",\n    \"engines\": {\n        \"node\": \">=20.0.0\"\n    },\n    \"devEngines\": {\n        \"packageManager\": {\n            \"name\": \"pnpm\",\n            \"version\": \"9.15.0\",\n            \"onFail\": \"download\"\n        }\n    },\n    \"scripts\": {}\n}\n"
         );
+    }
+
+    #[tokio::test]
+    async fn test_set_dev_engines_package_manager_field_appends_to_existing_array() {
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let package_json_path = temp_dir_path.join("package.json");
+        // entries Vite+ does not act on (detection fell through to a lockfile)
+        // must be preserved, never replaced
+        let package_content = r#"{
+  "name": "test-package",
+  "devEngines": {
+    "packageManager": [
+      {
+        "name": "vlt",
+        "version": "^1.0.0",
+        "onFail": "ignore"
+      }
+    ]
+  }
+}
+"#;
+        fs::write(&package_json_path, package_content).unwrap();
+
+        set_dev_engines_package_manager_field(
+            &package_json_path,
+            PackageManagerType::Pnpm,
+            "9.15.0",
+        )
+        .await
+        .unwrap();
+
+        let updated = fs::read_to_string(&package_json_path).unwrap();
+        let package_json: serde_json::Value = serde_json::from_str(&updated).unwrap();
+        let entries = package_json["devEngines"]["packageManager"].as_array().unwrap();
+        assert_eq!(entries.len(), 2);
+        // the existing entry stays first with its onFail intact
+        assert_eq!(entries[0]["name"].as_str().unwrap(), "vlt");
+        assert_eq!(entries[0]["onFail"].as_str().unwrap(), "ignore");
+        assert_eq!(entries[1]["name"].as_str().unwrap(), "pnpm");
+        assert_eq!(entries[1]["version"].as_str().unwrap(), "9.15.0");
+        assert_eq!(entries[1]["onFail"].as_str().unwrap(), "download");
+    }
+
+    #[tokio::test]
+    async fn test_set_dev_engines_package_manager_field_converts_single_entry_to_array() {
+        let temp_dir = create_temp_dir();
+        let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let package_json_path = temp_dir_path.join("package.json");
+        let package_content = r#"{
+  "devEngines": {
+    "packageManager": {
+      "name": "vlt",
+      "version": "^1.0.0",
+      "onFail": "warn"
+    }
+  }
+}
+"#;
+        fs::write(&package_json_path, package_content).unwrap();
+
+        set_dev_engines_package_manager_field(
+            &package_json_path,
+            PackageManagerType::Npm,
+            "11.4.0",
+        )
+        .await
+        .unwrap();
+
+        let updated = fs::read_to_string(&package_json_path).unwrap();
+        let package_json: serde_json::Value = serde_json::from_str(&updated).unwrap();
+        let entries = package_json["devEngines"]["packageManager"].as_array().unwrap();
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0]["name"].as_str().unwrap(), "vlt");
+        assert_eq!(entries[0]["onFail"].as_str().unwrap(), "warn");
+        assert_eq!(entries[1]["name"].as_str().unwrap(), "npm");
+        assert_eq!(entries[1]["version"].as_str().unwrap(), "11.4.0");
     }
 
     #[tokio::test]
