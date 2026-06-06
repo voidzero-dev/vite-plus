@@ -619,6 +619,24 @@ fn is_exists_file(path: impl AsRef<Path>) -> Result<bool, Error> {
     }
 }
 
+/// Whether a managed package manager install is complete.
+///
+/// An install is complete only when all three shims exist under
+/// `<install_dir>/bin/`: the plain `<bin_name>`, plus the Windows `.cmd` and
+/// `.ps1` wrappers. This is the single source of truth shared by the download
+/// fast-path (which skips re-downloading a complete install) and cached-range
+/// resolution (which must not select a partially written install that the
+/// download path would re-do). See rfcs/dev-engines.md.
+fn is_package_manager_install_complete(
+    install_dir: &AbsolutePath,
+    bin_name: &str,
+) -> Result<bool, Error> {
+    let bin_file = install_dir.join("bin").join(bin_name);
+    Ok(is_exists_file(&bin_file)?
+        && is_exists_file(bin_file.with_extension("cmd"))?
+        && is_exists_file(bin_file.with_extension("ps1"))?)
+}
+
 async fn get_latest_version(package_manager_type: PackageManagerType) -> Result<Str, Error> {
     let package_name = if matches!(package_manager_type, PackageManagerType::Yarn) {
         // yarn latest version should use `@yarnpkg/cli-dist` as package name
@@ -718,9 +736,11 @@ fn find_cached_package_manager_version(
         if !range.satisfies(&version) {
             continue;
         }
-        // Only consider completed installs (the bin shim exists)
-        let bin_file = versions_dir.join(name).join(&bin_name).join("bin").join(&bin_name);
-        if !is_exists_file(&bin_file)? {
+        // Only consider completed installs, using the same completeness check as
+        // the download fast-path so range resolution never selects a partially
+        // written install (e.g. plain bin present but `.cmd`/`.ps1` missing).
+        let install_dir = versions_dir.join(name).join(&bin_name);
+        if !is_package_manager_install_complete(&install_dir, &bin_name)? {
             continue;
         }
         if best.as_ref().is_none_or(|b| version > *b) {
@@ -820,10 +840,7 @@ pub async fn download_package_manager(
     // $VP_HOME/package_manager/pnpm/10.0.0/pnpm/bin/(pnpm|pnpm.cmd|pnpm.ps1)
     let bin_prefix = install_dir.join("bin");
     let bin_file = bin_prefix.join(&bin_name);
-    if is_exists_file(&bin_file)?
-        && is_exists_file(bin_file.with_extension("cmd"))?
-        && is_exists_file(bin_file.with_extension("ps1"))?
-    {
+    if is_package_manager_install_complete(&install_dir, &bin_name)? {
         return Ok((install_dir, package_name, version));
     }
 
@@ -936,11 +953,9 @@ async fn download_bun_package_manager(
     let bin_prefix = install_dir.join("bin");
     let bin_file = bin_prefix.join("bun");
 
-    // If shims already exist, return early
-    if is_exists_file(&bin_file)?
-        && is_exists_file(bin_file.with_extension("cmd"))?
-        && is_exists_file(bin_file.with_extension("ps1"))?
-    {
+    // If shims already exist, return early (same completeness check as the cache
+    // and the tgz download path)
+    if is_package_manager_install_complete(&install_dir, "bun")? {
         return Ok((install_dir, package_name, version.clone()));
     }
 
@@ -1428,6 +1443,7 @@ mod tests {
     use std::fs;
 
     use tempfile::{TempDir, tempdir};
+    use vite_shared::EnvConfig;
 
     use super::*;
 
@@ -1456,6 +1472,86 @@ mod tests {
         assert_eq!(PackageManagerType::from_tool("bunx"), Some(PackageManagerType::Bun));
         assert_eq!(PackageManagerType::from_tool("node"), None);
         assert_eq!(PackageManagerType::from_tool("tsc"), None);
+    }
+
+    /// Create the shim files for a managed package manager install under
+    /// `<vp_home>/package_manager/<name>/<version>/<name>/bin/`. When `complete`
+    /// is false, only the plain bin is written (a partially-written install).
+    fn write_pm_install(vp_home: &AbsolutePath, name: &str, version: &str, complete: bool) {
+        let bin_dir =
+            vp_home.join("package_manager").join(name).join(version).join(name).join("bin");
+        fs::create_dir_all(&bin_dir).unwrap();
+        let bin_file = bin_dir.join(name);
+        fs::write(&bin_file, "shim").unwrap();
+        if complete {
+            fs::write(bin_file.with_extension("cmd"), "shim").unwrap();
+            fs::write(bin_file.with_extension("ps1"), "shim").unwrap();
+        }
+    }
+
+    #[test]
+    fn test_find_cached_package_manager_version_skips_partial_install() {
+        let temp_dir = create_temp_dir();
+        let vp_home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // 11.5.1 is complete; the higher 11.6.0 is only partially written (the
+        // `.cmd`/`.ps1` shims the download path requires are missing)
+        write_pm_install(&vp_home, "pnpm", "11.5.1", true);
+        write_pm_install(&vp_home, "pnpm", "11.6.0", false);
+
+        let range = node_semver::Range::parse("^11.0.0").unwrap();
+        let cached =
+            EnvConfig::test_scope(EnvConfig::for_test_with_home(vp_home.as_path()), || {
+                find_cached_package_manager_version(PackageManagerType::Pnpm, &range)
+            })
+            .unwrap();
+
+        // the partial 11.6.0 is ignored even though it satisfies the range and is
+        // higher; the complete 11.5.1 wins, matching the download fast-path
+        assert_eq!(cached.as_deref(), Some("11.5.1"));
+    }
+
+    #[test]
+    fn test_find_cached_package_manager_version_none_when_only_partial() {
+        let temp_dir = create_temp_dir();
+        let vp_home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        write_pm_install(&vp_home, "pnpm", "11.6.0", false);
+
+        let range = node_semver::Range::parse("^11.0.0").unwrap();
+        let cached =
+            EnvConfig::test_scope(EnvConfig::for_test_with_home(vp_home.as_path()), || {
+                find_cached_package_manager_version(PackageManagerType::Pnpm, &range)
+            })
+            .unwrap();
+
+        // a partially written install must not be selected; resolution falls
+        // through to the registry instead
+        assert_eq!(cached, None);
+    }
+
+    #[test]
+    fn test_is_package_manager_install_complete() {
+        let temp_dir = create_temp_dir();
+        let install_dir = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let bin_dir = install_dir.join("bin");
+        fs::create_dir_all(&bin_dir).unwrap();
+        let bin_file = bin_dir.join("pnpm");
+
+        // missing entirely
+        assert!(!is_package_manager_install_complete(&install_dir, "pnpm").unwrap());
+
+        // plain bin only (the weaker check find_cached used to use)
+        fs::write(&bin_file, "shim").unwrap();
+        assert!(!is_package_manager_install_complete(&install_dir, "pnpm").unwrap());
+
+        // plain + .cmd but no .ps1
+        fs::write(bin_file.with_extension("cmd"), "shim").unwrap();
+        assert!(!is_package_manager_install_complete(&install_dir, "pnpm").unwrap());
+
+        // all three shims present
+        fs::write(bin_file.with_extension("ps1"), "shim").unwrap();
+        assert!(is_package_manager_install_complete(&install_dir, "pnpm").unwrap());
     }
 
     #[test]
