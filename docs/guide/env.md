@@ -87,7 +87,7 @@ In CI, `vp env use` can still run without shell initialization. It writes a temp
 
 ## Project Setup
 
-- Pin a project version with `vp env pin` (writes `devEngines.runtime` for new projects, or keeps updating an existing `.node-version`)
+- Pin a project version with `vp env pin`
 - Use `vp install`, `vp dev`, and `vp build` normally
 - Let Vite+ pick the right runtime for the project
 

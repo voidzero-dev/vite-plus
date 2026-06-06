@@ -37,7 +37,7 @@ The [`devEngines.packageManager`](https://docs.npmjs.com/cli/v11/configuring-npm
 
 A range resolves to an already-downloaded satisfying version when possible, otherwise to the latest satisfying version from the npm registry. The range itself stays the source of truth; Vite+ never freezes it into an exact `packageManager` pin. When both `packageManager` and `devEngines.packageManager` are declared, the `packageManager` field drives selection and Vite+ warns when it does not satisfy the devEngines constraint (`vp env doctor` shows details).
 
-Vite+ currently downloads the declared package manager (the `onFail: "download"` behavior). The `ignore` / `warn` / `error` values are parsed and preserved but not yet differentiated, except that an array whose entries name no supported package manager (`pnpm`, `yarn`, `npm`, `bun`) follows the last entry's `onFail`.
+Vite+ currently downloads the declared package manager (the `onFail: "download"` behavior); the other `onFail` values are accepted but not yet differentiated.
 
 The explicit `packageManager` field (or the `devEngines.packageManager` declaration) also affects matching package-manager shims. If a project has `packageManager: "npm@10.9.4"`, `npm` and `npx` use npm 10.9.4. Other generated alias pairs behave the same way: `pnpm`/`pnpx`, `yarn`/`yarnpkg`, and `bun`/`bunx`. Mismatched tools are not translated; `npm` in a `pnpm` project still resolves as npm.
 
