@@ -578,9 +578,8 @@ fn copy_dir_all_sync(from: &AbsolutePathBuf, to: &AbsolutePathBuf) -> Result<(),
         let file_type = entry.file_type()?;
 
         if file_type.is_symlink() {
-            continue;
-        }
-        if file_type.is_dir() {
+            copy_symlink(&source, &target)?;
+        } else if file_type.is_dir() {
             let source = AbsolutePathBuf::new(source)
                 .ok_or_else(|| Error::ConfigError("Invalid global package backup source".into()))?;
             let target = AbsolutePathBuf::new(target)
@@ -591,6 +590,25 @@ fn copy_dir_all_sync(from: &AbsolutePathBuf, to: &AbsolutePathBuf) -> Result<(),
         }
     }
 
+    Ok(())
+}
+
+#[cfg(unix)]
+fn copy_symlink(source: &std::path::Path, target: &std::path::Path) -> Result<(), Error> {
+    let link_target = std::fs::read_link(source)?;
+    std::os::unix::fs::symlink(link_target, target)?;
+    Ok(())
+}
+
+#[cfg(windows)]
+fn copy_symlink(source: &std::path::Path, target: &std::path::Path) -> Result<(), Error> {
+    let link_target = std::fs::read_link(source)?;
+    let metadata = std::fs::metadata(source)?;
+    if metadata.is_dir() {
+        std::os::windows::fs::symlink_dir(link_target, target)?;
+    } else {
+        std::os::windows::fs::symlink_file(link_target, target)?;
+    }
     Ok(())
 }
 
