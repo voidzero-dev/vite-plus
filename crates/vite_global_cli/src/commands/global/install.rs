@@ -111,7 +111,7 @@ pub async fn install(
     let npm_path =
         if cfg!(windows) { node_bin_dir.join("npm.cmd") } else { node_bin_dir.join("npm") };
 
-    // 3. Install packages in parallel
+    // 3. Parse package spec, get package bins
     let mut packages = IndexMap::<String, Package>::new();
     for package_spec in package_specs {
         // Parse package spec (e.g., "typescript", "typescript@5.0.0", "@scope/pkg")
@@ -129,8 +129,68 @@ pub async fn install(
     }
     let packages_count = packages.len();
 
-    resolve_preinstall_conflicts(&packages, force).await?;
+    // 4. Resolve bin conflict
+    let mut bin_owners = HashMap::<String, String>::new();
+    let mut conflicts = Vec::<(String, String, String)>::new();
 
+    for (package_name, package) in &packages {
+        for bin_name in &package.bin_names {
+            if let Some(owner) = bin_owners.get(bin_name)
+                && owner != package_name
+            {
+                conflicts.push((bin_name.clone(), owner.clone(), package_name.clone()));
+                continue;
+            }
+            bin_owners.insert(bin_name.clone(), package_name.clone());
+
+            match BinConfig::load(bin_name).await {
+                Ok(Some(config)) if config.package != *package_name => {
+                    conflicts.push((bin_name.clone(), config.package, package_name.clone()));
+                }
+                Ok(_) => {}
+                Err(error) => return Err(package_error(package_name, error)),
+            }
+        }
+    }
+
+    if let Some((bin_name, existing_package, new_package)) = conflicts.first()
+        && !force
+    {
+        return Err((
+            Some(new_package.clone()),
+            Error::BinaryConflict {
+                bin_name: bin_name.clone(),
+                existing_package: existing_package.clone(),
+                new_package: new_package.clone(),
+            },
+        ));
+    }
+
+    if force {
+        let requested_packages = packages.keys().cloned().collect::<HashSet<_>>();
+        let packages_to_remove = conflicts
+            .into_iter()
+            .filter_map(|(_, existing_package, new_package)| {
+                if requested_packages.contains(&existing_package) {
+                    None
+                } else {
+                    Some((existing_package, new_package))
+                }
+            })
+            .collect::<HashSet<_>>();
+
+        for (existing_package, new_package) in packages_to_remove {
+            output::raw(&format!(
+                "Uninstalling {} (conflicts with {})...",
+                existing_package, new_package
+            ));
+            if let Err(error) = Box::pin(uninstall(&existing_package, false)).await {
+                return Err(package_error(&new_package, error));
+            }
+        }
+    }
+
+    // 5. Install packages in parallel
     let concurrency = concurrency.max(1);
     output::info(&format!(
         "{} {} global {} with Node.js {}",
@@ -197,7 +257,7 @@ pub async fn install(
     }
     progress.finish_and_clear();
 
-    // 4. Finalize installed packages.
+    // 6. Finalize installed packages.
     for (index, (package_name, Package { spec: _, bin_names: _, install })) in
         packages.into_iter().enumerate()
     {
@@ -214,7 +274,7 @@ pub async fn install(
             }
         };
 
-        // 4.1 Persist package-level metadata for uninstall, list, and dispatch.
+        // 6.1 Persist package-level metadata for uninstall, list, and dispatch.
         let bin_dir = match get_bin_dir().map_err(|error| package_error(&package_name, error)) {
             Ok(bin_dir) => bin_dir,
             Err(error) => {
@@ -243,7 +303,7 @@ pub async fn install(
             continue;
         }
 
-        // 4.2 Expose each binary by creating shims and per-binary ownership config.
+        // 6.2 Expose each binary by creating shims and per-binary ownership config.
         let mut finalized = true;
         for bin_name in &bin_names {
             if let Err(error) = create_package_shim(&bin_dir, bin_name, &package_name)
@@ -278,7 +338,7 @@ pub async fn install(
             continue;
         }
 
-        // 4.3 Remove shims for binaries the package used to expose but no longer declares.
+        // 6.3 Remove shims for binaries the package used to expose but no longer declares.
         for bin_name in stale_bin_names {
             let result = async {
                 remove_package_shim(&bin_dir, &bin_name).await?;
@@ -300,7 +360,7 @@ pub async fn install(
             continue;
         }
 
-        // 4.4 Print success message
+        // 6.4 Print success message
         output::success(&format!(
             "{} {} {}{}",
             operation_past,
@@ -452,74 +512,6 @@ fn parse_npm_view_bin(package_name: &str, stdout: &[u8]) -> Result<Vec<String>, 
             .unwrap_or_default(),
         _ => Vec::new(),
     })
-}
-
-async fn resolve_preinstall_conflicts(
-    packages: &IndexMap<String, Package<'_>>,
-    force: bool,
-) -> Result<(), (Option<String>, Error)> {
-    let mut bin_owners = HashMap::<String, String>::new();
-    let mut conflicts = Vec::<(String, String, String)>::new();
-
-    for (package_name, package) in packages {
-        for bin_name in &package.bin_names {
-            if let Some(owner) = bin_owners.get(bin_name)
-                && owner != package_name
-            {
-                conflicts.push((bin_name.clone(), owner.clone(), package_name.clone()));
-                continue;
-            }
-            bin_owners.insert(bin_name.clone(), package_name.clone());
-
-            match BinConfig::load(bin_name).await {
-                Ok(Some(config)) if config.package != *package_name => {
-                    conflicts.push((bin_name.clone(), config.package, package_name.clone()));
-                }
-                Ok(_) => {}
-                Err(error) => return Err(package_error(package_name, error)),
-            }
-        }
-    }
-
-    if conflicts.is_empty() {
-        return Ok(());
-    }
-
-    if !force {
-        let (bin_name, existing_package, new_package) = &conflicts[0];
-        return Err((
-            Some(new_package.clone()),
-            Error::BinaryConflict {
-                bin_name: bin_name.clone(),
-                existing_package: existing_package.clone(),
-                new_package: new_package.clone(),
-            },
-        ));
-    }
-
-    let requested_packages = packages.keys().cloned().collect::<HashSet<_>>();
-    let packages_to_remove = conflicts
-        .into_iter()
-        .filter_map(|(_, existing_package, new_package)| {
-            if requested_packages.contains(&existing_package) {
-                None
-            } else {
-                Some((existing_package, new_package))
-            }
-        })
-        .collect::<HashSet<_>>();
-
-    for (existing_package, new_package) in packages_to_remove {
-        output::raw(&format!(
-            "Uninstalling {} (conflicts with {})...",
-            existing_package, new_package
-        ));
-        if let Err(error) = Box::pin(uninstall(&existing_package, false)).await {
-            return Err(package_error(&new_package, error));
-        }
-    }
-
-    Ok(())
 }
 
 async fn stale_bin_names_for_package(
