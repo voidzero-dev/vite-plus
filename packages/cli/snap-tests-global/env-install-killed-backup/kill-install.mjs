@@ -5,7 +5,8 @@ import { join } from 'node:path';
 const marker = join(process.cwd(), 'postinstall-started');
 const packageJsonPath = join(process.cwd(), 'slow-install-backup-pkg', 'package.json');
 const tarball = join(process.cwd(), 'slow-install-backup-pkg-1.0.1.tgz');
-const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
+const originalPackageJson = readFileSync(packageJsonPath, 'utf8');
+const packageJson = JSON.parse(originalPackageJson);
 packageJson.version = '1.0.1';
 writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
 rmSync(marker, { force: true });
@@ -14,6 +15,7 @@ rmSync(tarball, { force: true });
 const pack = spawnSync('npm', ['pack', './slow-install-backup-pkg', '--pack-destination', '.'], {
   stdio: 'ignore',
 });
+writeFileSync(packageJsonPath, originalPackageJson);
 if (pack.status !== 0) {
   console.log('npm pack failed');
   process.exit(pack.status ?? 1);
@@ -40,10 +42,16 @@ if (!existsSync(marker)) {
   process.exit(1);
 }
 
-process.kill(-child.pid, 'SIGKILL');
-
-await new Promise((resolve) => {
+const exit = new Promise((resolve) => {
   child.on('exit', resolve);
 });
+
+if (process.platform === 'win32') {
+  spawnSync('taskkill', ['/pid', String(child.pid), '/t', '/f'], { stdio: 'ignore' });
+} else {
+  process.kill(-child.pid, 'SIGKILL');
+}
+
+await exit;
 
 console.log('killed install');
