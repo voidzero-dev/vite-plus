@@ -684,10 +684,22 @@ async fn fetch_registry_versions(package_name: &str) -> Result<Vec<node_semver::
         .collect())
 }
 
+/// Whether a version requirement explicitly asks for prereleases.
+///
+/// A prerelease marker attaches the hyphen directly to a version
+/// (e.g. `^1.0.0-rc`, `>=12.0.0-0`), whereas an npm hyphen range surrounds the
+/// hyphen with spaces (`1.0.0 - 2.0.0`) and is a stable range, not a prerelease
+/// request. Splitting on whitespace isolates the lone `-` separator (length 1),
+/// so only a hyphen embedded in a comparator token counts.
+fn requirement_requests_prerelease(version_req: &str) -> bool {
+    version_req.split_whitespace().any(|token| token.len() > 1 && token.contains('-'))
+}
+
 /// Resolve the latest registry version satisfying `range`.
 ///
 /// Prereleases are excluded, except when the requirement itself asks for them
-/// (contains a prerelease marker) and no stable version satisfies the range.
+/// (a prerelease marker, not an npm hyphen range) and no stable version
+/// satisfies the range.
 async fn resolve_latest_satisfying_version(
     package_manager_type: PackageManagerType,
     range: &node_semver::Range,
@@ -707,7 +719,7 @@ async fn resolve_latest_satisfying_version(
         .or_else(|| {
             // a range only prereleases can satisfy (e.g. "^12.0.0-0" before a
             // stable 12.0.0 exists): allow them when explicitly requested
-            if version_req.contains('-') {
+            if requirement_requests_prerelease(version_req) {
                 versions.iter().filter(|version| range.satisfies(version)).max()
             } else {
                 None
@@ -1469,6 +1481,21 @@ mod tests {
     fn create_pnpm_workspace_yaml(dir: &AbsolutePath, content: &str) {
         fs::write(dir.join("pnpm-workspace.yaml"), content)
             .expect("Failed to write pnpm-workspace.yaml");
+    }
+
+    #[test]
+    fn test_requirement_requests_prerelease() {
+        // prerelease markers attached to a version
+        assert!(requirement_requests_prerelease("^1.0.0-rc"));
+        assert!(requirement_requests_prerelease(">=12.0.0-0"));
+        assert!(requirement_requests_prerelease(">1.0.0-alpha <2.0.0"));
+        // stable ranges, including the npm hyphen range whose ` - ` separator
+        // must NOT be read as a prerelease request
+        assert!(!requirement_requests_prerelease("1.0.0 - 2.0.0"));
+        assert!(!requirement_requests_prerelease("^11.0.0"));
+        assert!(!requirement_requests_prerelease(">=10 <12"));
+        assert!(!requirement_requests_prerelease("*"));
+        assert!(!requirement_requests_prerelease("11.5.1"));
     }
 
     #[test]
