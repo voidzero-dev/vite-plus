@@ -50,11 +50,11 @@ pub async fn get_outdated_packages(
     let installed = if !packages.is_empty() {
         let mut installed = Vec::new();
         for package in packages {
-            let Ok((package_name, _)) = parse_package_spec(package) else {
+            let Ok(package_spec) = parse_package_spec(package) else {
                 // Silently skip, follow npm's behavior
                 continue;
             };
-            if let Some(metadata) = PackageMetadata::load(&package_name).await? {
+            if let Some(metadata) = PackageMetadata::load(&package_spec.name).await? {
                 installed.push((metadata, Some(package.clone())));
             }
         }

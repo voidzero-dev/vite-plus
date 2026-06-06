@@ -3,7 +3,12 @@
 //! This module defines the CLI structure using clap and routes commands
 //! to their appropriate handlers.
 
-use std::{collections::HashSet, ffi::OsStr, io::IsTerminal, process::ExitStatus};
+use std::{
+    collections::{HashMap, HashSet},
+    ffi::OsStr,
+    io::IsTerminal,
+    process::ExitStatus,
+};
 
 use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
 use clap_complete::ArgValueCompleter;
@@ -642,7 +647,7 @@ async fn managed_install(
         node,
         force,
         concurrency.unwrap_or(DEFAULT_GLOBAL_INSTALL_CONCURRENCY),
-        false,
+        global::install::InstallMode::Install,
     )
     .await
     {
@@ -690,6 +695,7 @@ async fn managed_update(
 ) -> Result<ExitStatus, Error> {
     let concurrency = concurrency.unwrap_or(DEFAULT_GLOBAL_INSTALL_CONCURRENCY);
     let mut to_update: Vec<String> = Vec::new();
+    let mut known_bins = HashMap::<String, Vec<String>>::new();
     let mut node_mismatches: Vec<NodeMismatchPackage> = Vec::new();
     let current_node_version;
 
@@ -702,6 +708,7 @@ async fn managed_update(
         current_node_version = get_current_node_version().await?;
 
         for metadata in &all {
+            known_bins.insert(metadata.name.clone(), metadata.bins.clone());
             if !is_same_node_version(&metadata.platform.node, &current_node_version) {
                 node_mismatches.push(NodeMismatchPackage {
                     name: metadata.name.clone(),
@@ -724,15 +731,16 @@ async fn managed_update(
             }
 
             // It is not a local package, so `parse_package_spec` there won't return `Err()`
-            let (package_name, _) = global::parse_package_spec(package).unwrap();
+            let package_name = global::parse_package_spec(package).unwrap().name;
             if let Some(metadata) = PackageMetadata::load(&package_name).await? {
                 if !is_same_node_version(&metadata.platform.node, &current_node_version) {
                     node_mismatches.push(NodeMismatchPackage {
-                        name: package_name,
+                        name: package_name.clone(),
                         spec: package.clone(),
-                        installed_node: metadata.platform.node,
+                        installed_node: metadata.platform.node.clone(),
                     });
                 }
+                known_bins.insert(package_name, metadata.bins);
                 managed_specs.push(package.clone());
             } else {
                 to_update.push(package.clone());
@@ -768,9 +776,14 @@ async fn managed_update(
     }
 
     // Call reinstall logic
-    if let Err((package_name, error)) =
-        global::install::install(&to_update, Some(&current_node_version), false, concurrency, true)
-            .await
+    if let Err((package_name, error)) = global::install::install(
+        &to_update,
+        Some(&current_node_version),
+        false,
+        concurrency,
+        global::install::InstallMode::Update { known_bins: &known_bins },
+    )
+    .await
     {
         output::error(&format!(
             "Failed to update {}: {error}",
