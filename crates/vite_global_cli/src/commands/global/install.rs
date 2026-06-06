@@ -199,7 +199,6 @@ pub async fn install(
     progress.finish_and_clear();
 
     // 4. Finalize installed packages.
-    let mut bin_owners = HashMap::<String, String>::new();
     for (index, (package_name, Package { spec: _, bin_names: _, install })) in
         packages.into_iter().enumerate()
     {
@@ -219,62 +218,7 @@ pub async fn install(
             }
         };
 
-        let mut finalize_blocked = false;
-
-        // 4.1 Recheck binary ownership in case another process changed metadata after preflight.
-        for bin_name in &bin_names {
-            if let Some(owner) = bin_owners.get(bin_name)
-                && owner != &package_name
-            {
-                if first_error.is_none() {
-                    first_error = Some((
-                        Some(package_name.clone()),
-                        Error::BinaryConflict {
-                            bin_name: bin_name.clone(),
-                            existing_package: owner.clone(),
-                            new_package: package_name.clone(),
-                        },
-                    ));
-                }
-                let _ = cleanup_failed_install(&package_name, !had_existing_install).await;
-                finalize_blocked = true;
-                continue;
-            }
-
-            match BinConfig::load(bin_name).await {
-                Ok(Some(config)) => {
-                    if config.package != package_name {
-                        if first_error.is_none() {
-                            first_error = Some((
-                                Some(package_name.clone()),
-                                Error::BinaryConflict {
-                                    bin_name: bin_name.clone(),
-                                    existing_package: config.package.clone(),
-                                    new_package: package_name.clone(),
-                                },
-                            ));
-                        }
-                        let _ = cleanup_failed_install(&package_name, !had_existing_install).await;
-                        finalize_blocked = true;
-                        break;
-                    }
-                }
-                Ok(None) => {}
-                Err(error) => {
-                    let _ = cleanup_failed_install(&package_name, !had_existing_install).await;
-                    if first_error.is_none() {
-                        first_error = Some(package_error(&package_name, error));
-                    }
-                    finalize_blocked = true;
-                    break;
-                }
-            }
-        }
-        if finalize_blocked {
-            continue;
-        }
-
-        // 4.2 Persist package-level metadata for uninstall, list, and dispatch.
+        // 4.1 Persist package-level metadata for uninstall, list, and dispatch.
         let bin_dir = match get_bin_dir().map_err(|error| package_error(&package_name, error)) {
             Ok(bin_dir) => bin_dir,
             Err(error) => {
@@ -305,7 +249,7 @@ pub async fn install(
             continue;
         }
 
-        // 4.3 Expose each binary by creating shims and per-binary ownership config.
+        // 4.2 Expose each binary by creating shims and per-binary ownership config.
         let mut finalized = true;
         for bin_name in &bin_names {
             if let Err(error) = create_package_shim(&bin_dir, bin_name, &package_name)
@@ -334,7 +278,6 @@ pub async fn install(
                 }
                 break;
             }
-            bin_owners.insert(bin_name.clone(), package_name.clone());
         }
 
         if !finalized {
@@ -342,7 +285,7 @@ pub async fn install(
             continue;
         }
 
-        // 4.4 Remove shims for binaries the package used to expose but no longer declares.
+        // 4.3 Remove shims for binaries the package used to expose but no longer declares.
         for bin_name in stale_bin_names {
             let result = async {
                 remove_package_shim(&bin_dir, &bin_name).await?;
@@ -365,7 +308,7 @@ pub async fn install(
             continue;
         }
 
-        // 4.5 Print success message
+        // 4.4 Print success message
         output::success(&format!(
             "{} {} {}{}",
             operation_past,
