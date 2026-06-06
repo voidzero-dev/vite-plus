@@ -55,7 +55,7 @@ fn package_error(package_name: &str, error: impl Into<Error>) -> (Option<String>
 /// Install global packages parallelly.
 ///
 /// If `node_version` is provided, uses that version. Otherwise, resolves from current directory.
-/// If `force` is true, auto-uninstalls conflicting packages.
+/// If `force` is true, auto-uninstalls conflicting packages after replacements install.
 /// Use `concurrency` to control the number of packages to install in parallel.
 pub async fn install(
     package_specs: &[String],
@@ -177,28 +177,10 @@ pub async fn install(
         ));
     }
 
+    let mut to_uninstall = Vec::new();
     if force {
         let requested_packages = packages.keys().cloned().collect::<HashSet<_>>();
-        let packages_to_remove = conflicts
-            .into_iter()
-            .filter_map(|(_, existing_package, new_package)| {
-                if requested_packages.contains(&existing_package) {
-                    None
-                } else {
-                    Some((existing_package, new_package))
-                }
-            })
-            .collect::<HashSet<_>>();
-
-        for (existing_package, new_package) in packages_to_remove {
-            output::raw(&format!(
-                "Uninstalling {} (conflicts with {})...",
-                existing_package, new_package
-            ));
-            if let Err(error) = Box::pin(uninstall(&existing_package, false)).await {
-                return Err(package_error(&new_package, error));
-            }
-        }
+        to_uninstall = forced_conflict_uninstalls(conflicts, &requested_packages);
     }
 
     // 5. Install packages in parallel
@@ -273,6 +255,28 @@ pub async fn install(
         let Some(InstalledPackage { installed_version, bin_names, js_bins }) = install else {
             continue;
         };
+
+        let mut uninstall_conflicts = true;
+        for (existing_package, new_package) in
+            to_uninstall.iter().filter(|(_, new_package)| new_package == &package_name)
+        {
+            output::raw(&format!(
+                "Uninstalling {} (conflicts with {})...",
+                existing_package, new_package
+            ));
+            if let Err(error) = Box::pin(uninstall(existing_package, false)).await {
+                uninstall_conflicts = false;
+                if first_error.is_none() {
+                    first_error = Some(package_error(new_package, error));
+                }
+                break;
+            }
+        }
+
+        if !uninstall_conflicts {
+            continue;
+        }
+
         let stale_bin_names = match stale_bin_names_for_package(&package_name, &bin_names).await {
             Ok(bin_names) => bin_names,
             Err(error) => {
@@ -391,6 +395,24 @@ pub async fn install(
     }
 
     if let Some(error) = first_error { Err(error) } else { Ok(()) }
+}
+
+fn forced_conflict_uninstalls(
+    conflicts: Vec<(String, String, String)>,
+    requested_packages: &HashSet<String>,
+) -> Vec<(String, String)> {
+    conflicts
+        .into_iter()
+        .filter_map(|(_, existing_package, new_package)| {
+            if requested_packages.contains(&existing_package) {
+                None
+            } else {
+                Some((existing_package, new_package))
+            }
+        })
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect()
 }
 
 /// Install one package into its final prefix.
@@ -1019,6 +1041,22 @@ mod tests {
                 "tsserver.exe shim should be removed"
             );
         }
+    }
+
+    #[test]
+    fn test_forced_conflict_uninstalls_skips_requested_packages() {
+        let conflicts = vec![
+            ("shared".to_string(), "old-package".to_string(), "new-package".to_string()),
+            ("alias".to_string(), "new-package".to_string(), "other-package".to_string()),
+            ("shared".to_string(), "old-package".to_string(), "new-package".to_string()),
+        ];
+        let requested_packages =
+            HashSet::from(["new-package".to_string(), "other-package".to_string()]);
+
+        let to_uninstall = forced_conflict_uninstalls(conflicts, &requested_packages);
+
+        assert_eq!(to_uninstall.len(), 1);
+        assert_eq!(to_uninstall[0], ("old-package".to_string(), "new-package".to_string()));
     }
 
     #[test]
