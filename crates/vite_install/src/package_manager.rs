@@ -619,22 +619,32 @@ fn is_exists_file(path: impl AsRef<Path>) -> Result<bool, Error> {
     }
 }
 
-/// Whether a managed package manager install is complete.
+/// Whether a managed package manager install is complete (usable on the current
+/// platform).
 ///
-/// An install is complete only when all three shims exist under
-/// `<install_dir>/bin/`: the plain `<bin_name>`, plus the Windows `.cmd` and
-/// `.ps1` wrappers. This is the single source of truth shared by the download
-/// fast-path (which skips re-downloading a complete install) and cached-range
-/// resolution (which must not select a partially written install that the
-/// download path would re-do). See rfcs/dev-engines.md.
+/// Always requires the plain `<bin_name>` shim under `<install_dir>/bin/`. On
+/// Windows it additionally requires the `.cmd` and `.ps1` wrappers, since those
+/// are the files actually invoked there; on other platforms they are never
+/// executed, so checking them would only waste two stat calls per cache entry.
+///
+/// This is the single source of truth shared by the download fast-path (which
+/// skips re-downloading a complete install) and cached-range resolution (which
+/// must not select an install the download path would consider incomplete). The
+/// two therefore agree on every platform. See rfcs/dev-engines.md.
 fn is_package_manager_install_complete(
     install_dir: &AbsolutePath,
     bin_name: &str,
 ) -> Result<bool, Error> {
     let bin_file = install_dir.join("bin").join(bin_name);
-    Ok(is_exists_file(&bin_file)?
-        && is_exists_file(bin_file.with_extension("cmd"))?
-        && is_exists_file(bin_file.with_extension("ps1"))?)
+    if !is_exists_file(&bin_file)? {
+        return Ok(false);
+    }
+    if cfg!(windows) {
+        Ok(is_exists_file(bin_file.with_extension("cmd"))?
+            && is_exists_file(bin_file.with_extension("ps1"))?)
+    } else {
+        Ok(true)
+    }
 }
 
 async fn get_latest_version(package_manager_type: PackageManagerType) -> Result<Str, Error> {
@@ -1474,60 +1484,90 @@ mod tests {
         assert_eq!(PackageManagerType::from_tool("tsc"), None);
     }
 
-    /// Create the shim files for a managed package manager install under
-    /// `<vp_home>/package_manager/<name>/<version>/<name>/bin/`. When `complete`
-    /// is false, only the plain bin is written (a partially-written install).
-    fn write_pm_install(vp_home: &AbsolutePath, name: &str, version: &str, complete: bool) {
+    /// How fully a fake package manager install is written.
+    enum InstallState {
+        /// No shim files at all (`bin/` exists but is empty).
+        NoBin,
+        /// Plain bin only, no `.cmd`/`.ps1` (a download interrupted mid-write).
+        BinOnly,
+        /// Plain bin plus the `.cmd` and `.ps1` wrappers.
+        Complete,
+    }
+
+    /// Create a fake managed package manager install under
+    /// `<vp_home>/package_manager/<name>/<version>/<name>/bin/`.
+    fn write_pm_install(vp_home: &AbsolutePath, name: &str, version: &str, state: InstallState) {
         let bin_dir =
             vp_home.join("package_manager").join(name).join(version).join(name).join("bin");
         fs::create_dir_all(&bin_dir).unwrap();
         let bin_file = bin_dir.join(name);
-        fs::write(&bin_file, "shim").unwrap();
-        if complete {
+        if matches!(state, InstallState::BinOnly | InstallState::Complete) {
+            fs::write(&bin_file, "shim").unwrap();
+        }
+        if matches!(state, InstallState::Complete) {
             fs::write(bin_file.with_extension("cmd"), "shim").unwrap();
             fs::write(bin_file.with_extension("ps1"), "shim").unwrap();
         }
     }
 
-    #[test]
-    fn test_find_cached_package_manager_version_skips_partial_install() {
-        let temp_dir = create_temp_dir();
-        let vp_home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-
-        // 11.5.1 is complete; the higher 11.6.0 is only partially written (the
-        // `.cmd`/`.ps1` shims the download path requires are missing)
-        write_pm_install(&vp_home, "pnpm", "11.5.1", true);
-        write_pm_install(&vp_home, "pnpm", "11.6.0", false);
-
+    fn find_cached_pnpm(vp_home: &AbsolutePath) -> Option<Str> {
         let range = node_semver::Range::parse("^11.0.0").unwrap();
-        let cached =
-            EnvConfig::test_scope(EnvConfig::for_test_with_home(vp_home.as_path()), || {
-                find_cached_package_manager_version(PackageManagerType::Pnpm, &range)
-            })
-            .unwrap();
-
-        // the partial 11.6.0 is ignored even though it satisfies the range and is
-        // higher; the complete 11.5.1 wins, matching the download fast-path
-        assert_eq!(cached.as_deref(), Some("11.5.1"));
+        EnvConfig::test_scope(EnvConfig::for_test_with_home(vp_home.as_path()), || {
+            find_cached_package_manager_version(PackageManagerType::Pnpm, &range)
+        })
+        .unwrap()
     }
 
     #[test]
-    fn test_find_cached_package_manager_version_none_when_only_partial() {
+    fn test_find_cached_package_manager_version_skips_install_without_bin() {
         let temp_dir = create_temp_dir();
         let vp_home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
 
-        write_pm_install(&vp_home, "pnpm", "11.6.0", false);
+        // 11.6.0 has no bin shim at all: incomplete on every platform, so the
+        // complete 11.5.1 wins even though 11.6.0 is higher and satisfies the range
+        write_pm_install(&vp_home, "pnpm", "11.5.1", InstallState::Complete);
+        write_pm_install(&vp_home, "pnpm", "11.6.0", InstallState::NoBin);
 
-        let range = node_semver::Range::parse("^11.0.0").unwrap();
-        let cached =
-            EnvConfig::test_scope(EnvConfig::for_test_with_home(vp_home.as_path()), || {
-                find_cached_package_manager_version(PackageManagerType::Pnpm, &range)
-            })
-            .unwrap();
+        assert_eq!(find_cached_pnpm(&vp_home).as_deref(), Some("11.5.1"));
+    }
 
-        // a partially written install must not be selected; resolution falls
-        // through to the registry instead
-        assert_eq!(cached, None);
+    #[test]
+    fn test_find_cached_package_manager_version_none_when_no_complete_install() {
+        let temp_dir = create_temp_dir();
+        let vp_home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        write_pm_install(&vp_home, "pnpm", "11.6.0", InstallState::NoBin);
+
+        // nothing usable is cached; resolution falls through to the registry
+        assert_eq!(find_cached_pnpm(&vp_home), None);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn test_find_cached_package_manager_version_skips_missing_windows_shims() {
+        let temp_dir = create_temp_dir();
+        let vp_home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // On Windows the `.cmd`/`.ps1` wrappers are the files actually invoked, so
+        // a bin-only 11.6.0 is incomplete and the complete 11.5.1 wins
+        write_pm_install(&vp_home, "pnpm", "11.5.1", InstallState::Complete);
+        write_pm_install(&vp_home, "pnpm", "11.6.0", InstallState::BinOnly);
+
+        assert_eq!(find_cached_pnpm(&vp_home).as_deref(), Some("11.5.1"));
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn test_find_cached_package_manager_version_accepts_bin_only_off_windows() {
+        let temp_dir = create_temp_dir();
+        let vp_home = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Off Windows only the plain bin is invoked, so a bin-only 11.6.0 is a
+        // usable install and the highest satisfying version wins
+        write_pm_install(&vp_home, "pnpm", "11.5.1", InstallState::Complete);
+        write_pm_install(&vp_home, "pnpm", "11.6.0", InstallState::BinOnly);
+
+        assert_eq!(find_cached_pnpm(&vp_home).as_deref(), Some("11.6.0"));
     }
 
     #[test]
@@ -1538,20 +1578,22 @@ mod tests {
         fs::create_dir_all(&bin_dir).unwrap();
         let bin_file = bin_dir.join("pnpm");
 
-        // missing entirely
+        // missing plain bin: incomplete on every platform
         assert!(!is_package_manager_install_complete(&install_dir, "pnpm").unwrap());
 
-        // plain bin only (the weaker check find_cached used to use)
         fs::write(&bin_file, "shim").unwrap();
-        assert!(!is_package_manager_install_complete(&install_dir, "pnpm").unwrap());
-
-        // plain + .cmd but no .ps1
-        fs::write(bin_file.with_extension("cmd"), "shim").unwrap();
-        assert!(!is_package_manager_install_complete(&install_dir, "pnpm").unwrap());
-
-        // all three shims present
-        fs::write(bin_file.with_extension("ps1"), "shim").unwrap();
-        assert!(is_package_manager_install_complete(&install_dir, "pnpm").unwrap());
+        if cfg!(windows) {
+            // the Windows wrappers are still required
+            assert!(!is_package_manager_install_complete(&install_dir, "pnpm").unwrap());
+            fs::write(bin_file.with_extension("cmd"), "shim").unwrap();
+            // .cmd present but .ps1 missing
+            assert!(!is_package_manager_install_complete(&install_dir, "pnpm").unwrap());
+            fs::write(bin_file.with_extension("ps1"), "shim").unwrap();
+            assert!(is_package_manager_install_complete(&install_dir, "pnpm").unwrap());
+        } else {
+            // the plain bin is the only file invoked off Windows
+            assert!(is_package_manager_install_complete(&install_dir, "pnpm").unwrap());
+        }
     }
 
     #[test]
