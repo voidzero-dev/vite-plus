@@ -51,8 +51,9 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
       .replaceAll(/([@/\s]v?)\d+\.\d+\.\d+(?:-.*)?/g, '$1<semver>')
       // devEngines.packageManager auto-pin writes the exact resolved version
       // e.g.: `"name": "pnpm",\n  "version": "11.5.1"` -> `"version": "<semver>"`
+      // (the optional suffix covers prerelease and build metadata: -rc-1, +sha.abc)
       .replaceAll(
-        /("name": "(?:pnpm|npm|yarn|bun)",\s*\n\s*"version": ")\d+\.\d+\.\d+(?:-[\w.]+)?(")/g,
+        /("name": "(?:pnpm|npm|yarn|bun)",\s*\n\s*"version": ")\d+\.\d+\.\d+(?:[-+][\w.+-]+)?(")/g,
         '$1<semver>$2',
       )
       // vite build banner can appear on some environments/runtimes:

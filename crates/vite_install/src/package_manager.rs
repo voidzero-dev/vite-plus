@@ -648,9 +648,14 @@ struct RegistryPackument {
 }
 
 /// Fetch all published versions of a package from the npm registry.
+/// The npm abbreviated metadata format: only install-relevant fields, much
+/// smaller than the full packument (KBs instead of MBs for popular packages).
+const NPM_ABBREVIATED_METADATA_ACCEPT: &str = "application/vnd.npm.install-v1+json";
+
 async fn fetch_registry_versions(package_name: &str) -> Result<Vec<node_semver::Version>, Error> {
     let url = get_npm_package_metadata_url(package_name);
-    let packument: RegistryPackument = HttpClient::new().get_json(&url).await?;
+    let packument: RegistryPackument =
+        HttpClient::new().get_json_with_accept(&url, NPM_ABBREVIATED_METADATA_ACCEPT).await?;
     Ok(packument
         .versions
         .keys()
@@ -658,7 +663,10 @@ async fn fetch_registry_versions(package_name: &str) -> Result<Vec<node_semver::
         .collect())
 }
 
-/// Resolve the latest registry version satisfying `range` (prereleases excluded).
+/// Resolve the latest registry version satisfying `range`.
+///
+/// Prereleases are excluded, except when the requirement itself asks for them
+/// (contains a prerelease marker) and no stable version satisfies the range.
 async fn resolve_latest_satisfying_version(
     package_manager_type: PackageManagerType,
     range: &node_semver::Range,
@@ -671,16 +679,27 @@ async fn resolve_latest_satisfying_version(
         versions.extend(fetch_registry_versions("@yarnpkg/cli-dist").await?);
     }
 
-    versions
-        .into_iter()
+    let best = versions
+        .iter()
         .filter(|version| !version.is_prerelease() && range.satisfies(version))
         .max()
-        .map(|version| Str::from(version.to_string()))
-        .ok_or_else(|| Error::PackageManagerVersionNotFound {
+        .or_else(|| {
+            // a range only prereleases can satisfy (e.g. "^12.0.0-0" before a
+            // stable 12.0.0 exists): allow them when explicitly requested
+            if version_req.contains('-') {
+                versions.iter().filter(|version| range.satisfies(version)).max()
+            } else {
+                None
+            }
+        });
+
+    best.map(|version| Str::from(version.to_string())).ok_or_else(|| {
+        Error::PackageManagerVersionNotFound {
             name: package_name.clone().into(),
             version: version_req.into(),
             url: get_npm_package_metadata_url(&package_name).into(),
-        })
+        }
+    })
 }
 
 /// Find the highest already-downloaded package manager version satisfying `range`

@@ -3328,8 +3328,16 @@ export function setPackageManager(
     devEngines?: { packageManager?: unknown; [key: string]: unknown };
   }>(path.join(projectDir, 'package.json'), (pkg) => {
     if (!pkg.packageManager && !pkg.devEngines?.packageManager) {
+      // Only spread a well-formed object: spreading a malformed devEngines value
+      // (string/array) would corrupt the field with numeric index keys
+      const devEngines =
+        typeof pkg.devEngines === 'object' &&
+        pkg.devEngines !== null &&
+        !Array.isArray(pkg.devEngines)
+          ? pkg.devEngines
+          : undefined;
       pkg.devEngines = {
-        ...pkg.devEngines,
+        ...devEngines,
         packageManager: {
           name: downloadPackageManager.name,
           version: downloadPackageManager.version,

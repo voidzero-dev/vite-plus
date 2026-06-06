@@ -188,6 +188,51 @@ async fn do_pin(
     Ok(ExitStatus::default())
 }
 
+/// Confirm overwriting an existing pin with a different version.
+///
+/// Returns `false` when the pin is already at `resolved_version` or when the
+/// user declines the overwrite prompt (`force` skips the prompt only).
+fn confirm_overwrite_pin(
+    source_label: &str,
+    existing_version: &str,
+    resolved_version: &str,
+    force: bool,
+) -> Result<bool, Error> {
+    if existing_version == resolved_version {
+        println!("Already pinned to {resolved_version}");
+        return Ok(false);
+    }
+    if force {
+        return Ok(true);
+    }
+
+    // Prompt for confirmation
+    print!("{source_label} {existing_version}");
+    println!();
+    print!("Overwrite with {resolved_version}? (y/n): ");
+    std::io::stdout().flush()?;
+
+    let mut input = String::new();
+    std::io::stdin().read_line(&mut input)?;
+
+    if !input.trim().eq_ignore_ascii_case("y") {
+        println!("Cancelled.");
+        return Ok(false);
+    }
+    Ok(true)
+}
+
+/// Print the pin success message.
+fn print_pin_success(input_version: &str, resolved_version: &str, was_alias: bool) {
+    if was_alias {
+        output::success(&format!(
+            "Pinned Node.js version to {resolved_version} (resolved from {input_version})"
+        ));
+    } else {
+        output::success(&format!("Pinned Node.js version to {resolved_version}"));
+    }
+}
+
 /// Pin by writing the `.node-version` file.
 ///
 /// Returns `true` when the pin was written, `false` when nothing changed
@@ -202,26 +247,15 @@ async fn pin_node_version_file(
     let node_version_path = cwd.join(NODE_VERSION_FILE);
 
     // Check if .node-version already exists
-    if !force && tokio::fs::try_exists(&node_version_path).await.unwrap_or(false) {
+    if tokio::fs::try_exists(&node_version_path).await.unwrap_or(false) {
         let existing_content = tokio::fs::read_to_string(&node_version_path).await?;
         let existing_version = existing_content.trim();
-
-        if existing_version == resolved_version {
-            println!("Already pinned to {resolved_version}");
-            return Ok(false);
-        }
-
-        // Prompt for confirmation
-        print!(".node-version already exists with version {existing_version}");
-        println!();
-        print!("Overwrite with {resolved_version}? (y/n): ");
-        std::io::stdout().flush()?;
-
-        let mut input = String::new();
-        std::io::stdin().read_line(&mut input)?;
-
-        if !input.trim().eq_ignore_ascii_case("y") {
-            println!("Cancelled.");
+        if !confirm_overwrite_pin(
+            ".node-version already exists with version",
+            existing_version,
+            resolved_version,
+            force,
+        )? {
             return Ok(false);
         }
     }
@@ -229,14 +263,7 @@ async fn pin_node_version_file(
     // Write the version to .node-version
     tokio::fs::write(&node_version_path, format!("{resolved_version}\n")).await?;
 
-    // Print success message
-    if was_alias {
-        output::success(&format!(
-            "Pinned Node.js version to {resolved_version} (resolved from {input_version})"
-        ));
-    } else {
-        output::success(&format!("Pinned Node.js version to {resolved_version}"));
-    }
+    print_pin_success(input_version, resolved_version, was_alias);
     println!("  Created {} in {}", NODE_VERSION_FILE, cwd.as_path().display());
 
     // If a devEngines.runtime range is declared and no longer satisfied, offer to
@@ -260,39 +287,20 @@ async fn pin_dev_engines(
 ) -> Result<bool, Error> {
     let package_json_path = cwd.join(PACKAGE_JSON_FILE);
 
-    if let Some(existing_version) = read_dev_engines_node_version(cwd).await {
-        if existing_version == resolved_version {
-            println!("Already pinned to {resolved_version}");
-            return Ok(false);
-        }
-
-        if !force {
-            // Prompt for confirmation
-            print!("devEngines.runtime already set to {existing_version}");
-            println!();
-            print!("Overwrite with {resolved_version}? (y/n): ");
-            std::io::stdout().flush()?;
-
-            let mut input = String::new();
-            std::io::stdin().read_line(&mut input)?;
-
-            if !input.trim().eq_ignore_ascii_case("y") {
-                println!("Cancelled.");
-                return Ok(false);
-            }
-        }
+    if let Some(existing_version) = read_dev_engines_node_version(cwd).await
+        && !confirm_overwrite_pin(
+            "devEngines.runtime already set to",
+            &existing_version,
+            resolved_version,
+            force,
+        )?
+    {
+        return Ok(false);
     }
 
     write_dev_engines_node_version(cwd, resolved_version).await?;
 
-    // Print success message
-    if was_alias {
-        output::success(&format!(
-            "Pinned Node.js version to {resolved_version} (resolved from {input_version})"
-        ));
-    } else {
-        output::success(&format!("Pinned Node.js version to {resolved_version}"));
-    }
+    print_pin_success(input_version, resolved_version, was_alias);
     println!("  Updated devEngines.runtime in {}", package_json_path.as_path().display());
 
     if node_version_exists {

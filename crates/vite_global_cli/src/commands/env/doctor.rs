@@ -684,7 +684,7 @@ async fn collect_dev_engines_findings(
     cwd: &AbsolutePathBuf,
     resolved_version: Option<&str>,
 ) -> Vec<DevEnginesFinding> {
-    let Some((_pkg_dir, content)) = find_nearest_package_json(cwd).await else {
+    let Some((pkg_dir, content)) = find_nearest_package_json(cwd).await else {
         return Vec::new();
     };
     let Ok(raw) = serde_json::from_str::<serde_json::Value>(&content) else {
@@ -694,11 +694,42 @@ async fn collect_dev_engines_findings(
         return Vec::new();
     };
 
+    // Package-manager checks examine the WORKSPACE ROOT package.json: that is the
+    // file vp install reads for packageManager / devEngines.packageManager. In a
+    // monorepo it can be a different (higher) file than the nearest package.json
+    // used by the Node.js runtime checks above.
+    let nearest_pkg_path = pkg_dir.join("package.json");
+    let root_doc: Option<(serde_json::Value, vite_shared::PackageJson)> =
+        match vite_workspace::find_workspace_root(cwd) {
+            Ok((workspace_root, _)) => {
+                let root_pkg_path = workspace_root.path.join("package.json");
+                if root_pkg_path == nearest_pkg_path {
+                    None
+                } else {
+                    match tokio::fs::read_to_string(&root_pkg_path).await {
+                        Ok(root_content) => match (
+                            serde_json::from_str(&root_content),
+                            serde_json::from_str(&root_content),
+                        ) {
+                            (Ok(root_raw), Ok(root_pkg)) => Some((root_raw, root_pkg)),
+                            _ => None,
+                        },
+                        Err(_) => None,
+                    }
+                }
+            }
+            Err(_) => None,
+        };
+    let (pm_raw, pm_pkg): (&serde_json::Value, &vite_shared::PackageJson) = match &root_doc {
+        Some((root_raw, root_pkg)) => (root_raw, root_pkg),
+        None => (&raw, &pkg),
+    };
+
     let mut findings: Vec<DevEnginesFinding> = Vec::new();
 
-    let dev_engines = pkg.dev_engines.as_ref();
-    let runtime_field = dev_engines.and_then(|de| de.runtime.as_ref());
-    let package_manager_field = dev_engines.and_then(|de| de.package_manager.as_ref());
+    let runtime_field = pkg.dev_engines.as_ref().and_then(|de| de.runtime.as_ref());
+    let package_manager_field =
+        pm_pkg.dev_engines.as_ref().and_then(|de| de.package_manager.as_ref());
 
     // .node-version vs devEngines.runtime (semver-aware: only exact .node-version
     // values can conflict with a declared range)
@@ -769,7 +800,7 @@ async fn collect_dev_engines_findings(
     }
 
     // packageManager field vs devEngines.packageManager consistency
-    if let Some(pm_field) = raw.get("packageManager").and_then(serde_json::Value::as_str)
+    if let Some(pm_field) = pm_raw.get("packageManager").and_then(serde_json::Value::as_str)
         && let Some(field) = package_manager_field
         && !field.entries().is_empty()
     {
@@ -838,12 +869,18 @@ async fn collect_dev_engines_findings(
         }
     }
 
-    // Malformed entries that lenient parsing skipped (raw JSON inspection)
-    if let Some(raw_dev_engines) = raw.get("devEngines").and_then(serde_json::Value::as_object) {
-        for field_name in ["runtime", "packageManager"] {
-            let Some(value) = raw_dev_engines.get(field_name) else { continue };
-            collect_malformed_entry_findings(field_name, value, &mut findings);
-        }
+    // Malformed entries that lenient parsing skipped (raw JSON inspection):
+    // runtime entries come from the nearest package.json, packageManager entries
+    // from the workspace root package.json
+    if let Some(raw_dev_engines) = raw.get("devEngines").and_then(serde_json::Value::as_object)
+        && let Some(value) = raw_dev_engines.get("runtime")
+    {
+        collect_malformed_entry_findings("runtime", value, &mut findings);
+    }
+    if let Some(raw_dev_engines) = pm_raw.get("devEngines").and_then(serde_json::Value::as_object)
+        && let Some(value) = raw_dev_engines.get("packageManager")
+    {
+        collect_malformed_entry_findings("packageManager", value, &mut findings);
     }
 
     findings
@@ -1198,6 +1235,45 @@ mod tests {
         assert!(!findings[0].warn);
         assert!(
             findings[0].message.contains("\"vlt\" is not supported and will be skipped"),
+            "got: {}",
+            findings[0].message
+        );
+    }
+
+    #[tokio::test]
+    async fn test_dev_engines_findings_package_manager_checks_use_workspace_root() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // monorepo root: the package.json vp install reads, with a PM conflict
+        tokio::fs::write(temp_path.join("pnpm-workspace.yaml"), "packages:\n  - 'packages/*'\n")
+            .await
+            .unwrap();
+        tokio::fs::write(
+            temp_path.join("package.json"),
+            r#"{
+  "name": "root",
+  "packageManager": "npm@10.5.0",
+  "devEngines": {"packageManager": {"name": "pnpm", "version": "^11.0.0"}}
+}
+"#,
+        )
+        .await
+        .unwrap();
+
+        // nested package without any package-manager fields
+        let app_dir = temp_path.join("packages").join("app");
+        tokio::fs::create_dir_all(&app_dir).await.unwrap();
+        tokio::fs::write(app_dir.join("package.json"), r#"{"name": "app"}"#).await.unwrap();
+
+        // running from the nested package still diagnoses the workspace root's
+        // packageManager vs devEngines.packageManager conflict
+        let findings = collect_dev_engines_findings(&app_dir, None).await;
+        assert_eq!(findings.len(), 1, "findings: {:?}", messages(&findings));
+        assert!(findings[0].warn);
+        assert_eq!(findings[0].key, "PackageManager");
+        assert!(
+            findings[0].message.contains("but devEngines.packageManager requires \"pnpm\""),
             "got: {}",
             findings[0].message
         );
