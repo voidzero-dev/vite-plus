@@ -130,9 +130,7 @@ pub async fn install(
     }
     let packages_count = packages.len();
 
-    if let Err(error) = resolve_preinstall_conflicts(&packages, force).await {
-        return Err(error);
-    }
+    resolve_preinstall_conflicts(&packages, force).await?;
 
     let concurrency = concurrency.max(1);
     output::info(&format!(
