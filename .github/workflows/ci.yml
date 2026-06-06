@@ -183,7 +183,7 @@ jobs:
             -A clippy::useless_borrows_in_formatting
           # RUSTDOCFLAGS='-D warnings' cargo doc --no-deps --document-private-items
 
-      - uses: crate-ci/typos@f8a58b6b53f2279f71eb605f03a4ae4d10608f45 # v1.47.0
+      - uses: crate-ci/typos@44e2070e6017f834bf069503acb35ca0ca0b75f2 # v1.47.1
         with:
           files: .
 
