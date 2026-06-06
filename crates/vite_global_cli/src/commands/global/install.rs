@@ -26,7 +26,7 @@ use crate::{
             },
             package_metadata::PackageMetadata,
         },
-        global::{CORE_SHIMS, PackageSpec, is_local_package_spec, npm_view, parse_package_spec},
+        global::{CORE_SHIMS, is_local_package_spec, npm_view, parse_package_spec},
     },
     error::Error,
 };
@@ -119,13 +119,14 @@ pub async fn install(
     for package_spec in package_specs {
         // Parse package spec (e.g., "typescript", "typescript@5.0.0", "@scope/pkg")
 
-        let package = match parse_package_spec(package_spec) {
+        let (package_name, _version, parsed_bins) = match parse_package_spec(package_spec) {
             Ok(result) => result,
             Err(error) => return Err((Some(package_spec.clone()), error)),
         };
         let bin_names = match resolve_package_bin_names(
             package_spec,
-            &package,
+            &package_name,
+            parsed_bins,
             &mode,
             &npm_path,
             &node_bin_dir,
@@ -133,9 +134,9 @@ pub async fn install(
         .await
         {
             Ok(bin_names) => bin_names,
-            Err(error) => return Err((Some(package.name), error)),
+            Err(error) => return Err((Some(package_name), error)),
         };
-        packages.insert(package.name, Package { spec: package_spec, bin_names, install: None });
+        packages.insert(package_name, Package { spec: package_spec, bin_names, install: None });
     }
     let packages_count = packages.len();
 
@@ -478,28 +479,27 @@ async fn install_one(
 
 async fn resolve_package_bin_names(
     package_spec: &str,
-    package: &PackageSpec,
+    package_name: &str,
+    parsed_bins: Option<Vec<String>>,
     mode: &InstallMode<'_>,
     npm_path: &AbsolutePathBuf,
     node_bin_dir: &AbsolutePathBuf,
 ) -> Result<Vec<String>, Error> {
-    match &package.local_package_json {
-        Some(package_json) => {
-            Ok(extract_binaries(&package_json).into_iter().map(|bin| bin.name).collect())
-        }
+    match parsed_bins {
+        Some(bin_names) => Ok(bin_names),
         None if matches!(mode, InstallMode::Update { .. }) => {
             if let InstallMode::Update { known_bins } = mode
-                && let Some(bin_names) = known_bins.get(&package.name)
+                && let Some(bin_names) = known_bins.get(package_name)
             {
                 return Ok(bin_names.clone());
             }
             parse_npm_view_bin(
-                &package.name,
+                package_name,
                 &npm_view(npm_path, node_bin_dir, package_spec, "bin").await?,
             )
         }
         None => parse_npm_view_bin(
-            &package.name,
+            package_name,
             &npm_view(npm_path, node_bin_dir, package_spec, "bin").await?,
         ),
     }
@@ -564,7 +564,7 @@ pub async fn uninstall(package_name: &str, dry_run: bool) -> Result<(), Error> {
         ));
     }
 
-    let package_name = parse_package_spec(package_name).unwrap().name;
+    let (package_name, _, _) = parse_package_spec(package_name).unwrap();
 
     // Phase 1: Try to use PackageMetadata for binary list
     let bins = if let Some(metadata) = PackageMetadata::load(&package_name).await? {
@@ -1050,30 +1050,34 @@ mod tests {
 
     #[test]
     fn test_parse_package_spec_simple() {
-        let spec = parse_package_spec("typescript").unwrap();
-        assert_eq!(spec.name, "typescript");
-        assert!(spec.local_package_json.is_none());
+        let (name, version, bins) = parse_package_spec("typescript").unwrap();
+        assert_eq!(name, "typescript");
+        assert_eq!(version, None);
+        assert_eq!(bins, None);
     }
 
     #[test]
     fn test_parse_package_spec_with_version() {
-        let spec = parse_package_spec("typescript@5.0.0").unwrap();
-        assert_eq!(spec.name, "typescript");
-        assert!(spec.local_package_json.is_none());
+        let (name, version, bins) = parse_package_spec("typescript@5.0.0").unwrap();
+        assert_eq!(name, "typescript");
+        assert_eq!(version, Some("5.0.0".to_string()));
+        assert_eq!(bins, None);
     }
 
     #[test]
     fn test_parse_package_spec_scoped() {
-        let spec = parse_package_spec("@types/node").unwrap();
-        assert_eq!(spec.name, "@types/node");
-        assert!(spec.local_package_json.is_none());
+        let (name, version, bins) = parse_package_spec("@types/node").unwrap();
+        assert_eq!(name, "@types/node");
+        assert_eq!(version, None);
+        assert_eq!(bins, None);
     }
 
     #[test]
     fn test_parse_package_spec_scoped_with_version() {
-        let spec = parse_package_spec("@types/node@20.0.0").unwrap();
-        assert_eq!(spec.name, "@types/node");
-        assert!(spec.local_package_json.is_none());
+        let (name, version, bins) = parse_package_spec("@types/node@20.0.0").unwrap();
+        assert_eq!(name, "@types/node");
+        assert_eq!(version, Some("20.0.0".to_string()));
+        assert_eq!(bins, None);
     }
 
     #[test]

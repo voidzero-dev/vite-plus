@@ -151,17 +151,13 @@ pub(crate) fn is_local_package_spec(spec: &str) -> bool {
             && (spec.as_bytes()[2] == b'\\' || spec.as_bytes()[2] == b'/'))
 }
 
-#[derive(Debug)]
-pub(crate) struct PackageSpec {
-    pub name: String,
-    pub local_package_json: Option<serde_json::Value>,
-}
-
-/// Parse package spec into package name and local package.json if available.
+/// Parse package spec into package name, version, and bin names if available.
 /// For local packages, read package.json from a directory or package tarball.
 ///
 /// It will never return an `Err()` if it is not a local package
-pub(crate) fn parse_package_spec(spec: &str) -> Result<PackageSpec, Error> {
+pub(crate) fn parse_package_spec(
+    spec: &str,
+) -> Result<(String, Option<String>, Option<Vec<String>>), Error> {
     if is_local_package_spec(spec) {
         let package_json = read_local_package_json(spec)?;
         let Some(package_name) = package_json.get("name").and_then(|name| name.as_str()) else {
@@ -170,22 +166,42 @@ pub(crate) fn parse_package_spec(spec: &str) -> Result<PackageSpec, Error> {
             ));
         };
 
-        Ok(PackageSpec { name: package_name.to_string(), local_package_json: Some(package_json) })
+        Ok((package_name.to_string(), None, Some(extract_bin_names(&package_json))))
     } else {
         if spec.starts_with('@') {
             if let Some(idx) = spec[1..].find('@') {
                 let idx = idx + 1;
-                return Ok(PackageSpec { name: spec[..idx].to_string(), local_package_json: None });
+                return Ok((spec[..idx].to_string(), Some(spec[idx + 1..].to_string()), None));
             }
-            return Ok(PackageSpec { name: spec.to_string(), local_package_json: None });
+            return Ok((spec.to_string(), None, None));
         }
 
         if let Some(idx) = spec.find('@') {
-            return Ok(PackageSpec { name: spec[..idx].to_string(), local_package_json: None });
+            return Ok((spec[..idx].to_string(), Some(spec[idx + 1..].to_string()), None));
         }
 
-        Ok(PackageSpec { name: spec.to_string(), local_package_json: None })
+        Ok((spec.to_string(), None, None))
     }
+}
+
+fn extract_bin_names(package_json: &serde_json::Value) -> Vec<String> {
+    let mut bins = Vec::new();
+
+    if let Some(bin) = package_json.get("bin") {
+        match bin {
+            serde_json::Value::String(_) => {
+                if let Some(name) = package_json["name"].as_str() {
+                    bins.push(name.split('/').last().unwrap_or(name).to_string());
+                }
+            }
+            serde_json::Value::Object(map) => {
+                bins.extend(map.keys().cloned());
+            }
+            _ => {}
+        }
+    }
+
+    bins
 }
 
 fn resolve_local_package_path(spec: &str) -> Result<AbsolutePathBuf, Error> {
