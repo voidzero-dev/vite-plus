@@ -190,8 +190,15 @@ pub async fn install(
             if let Some(owner) = bin_owners.get(bin_name)
                 && owner != package_name
             {
-                conflicts.push((bin_name.clone(), owner.clone(), package_name.clone()));
-                continue;
+                // It means that there are multiple packages requiring the same bin name but they are all to install
+                // It should not be treat as normal bin conflict, as `--force` doesn't work for this case
+                return Err((
+                    Some(package_name.clone()),
+                    Error::Other(format!(
+                        "Bin conflict: Both {} and {} provide {}, please consider removing one of them.",
+                        owner, package_name, bin_name
+                    ).into()),
+                ));
             }
             bin_owners.insert(bin_name.clone(), package_name.clone());
 
