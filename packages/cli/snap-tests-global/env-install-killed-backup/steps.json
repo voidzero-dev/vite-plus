@@ -1,0 +1,10 @@
+{
+  "env": {},
+  "commands": [
+    "vp install -g ./slow-install-backup-pkg # Install generated-bin package globally",
+    "slow-install-backup-cli # Verify installed binary works before interrupted reinstall",
+    "node kill-install.mjs # Kill reinstall while postinstall is running",
+    "slow-install-backup-cli # Existing binary should still work after killed reinstall"
+  ],
+  "after": ["vp remove -g slow-install-backup-pkg"]
+}

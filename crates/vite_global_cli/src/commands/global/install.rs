@@ -497,7 +497,7 @@ impl PackageBackup {
             tokio::fs::create_dir_all(parent).await?;
         }
 
-        tokio::fs::rename(package_dir, &backup_dir).await?;
+        copy_dir_all(package_dir, &backup_dir).await?;
 
         Ok(Some(Self { package_dir: package_dir.clone(), backup_dir }))
     }
@@ -559,6 +559,39 @@ async fn remove_dir_all_if_exists(path: &AbsolutePathBuf) -> Result<(), Error> {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(error) => Err(error.into()),
     }
+}
+
+async fn copy_dir_all(from: &AbsolutePathBuf, to: &AbsolutePathBuf) -> Result<(), Error> {
+    let from = from.clone();
+    let to = to.clone();
+    tokio::task::spawn_blocking(move || copy_dir_all_sync(&from, &to)).await.map_err(|error| {
+        Error::ConfigError(format!("Failed to copy package backup: {error}").into())
+    })?
+}
+
+fn copy_dir_all_sync(from: &AbsolutePathBuf, to: &AbsolutePathBuf) -> Result<(), Error> {
+    std::fs::create_dir_all(to.as_path())?;
+    for entry in std::fs::read_dir(from.as_path())? {
+        let entry = entry?;
+        let source = entry.path();
+        let target = to.as_path().join(entry.file_name());
+        let file_type = entry.file_type()?;
+
+        if file_type.is_symlink() {
+            continue;
+        }
+        if file_type.is_dir() {
+            let source = AbsolutePathBuf::new(source)
+                .ok_or_else(|| Error::ConfigError("Invalid global package backup source".into()))?;
+            let target = AbsolutePathBuf::new(target)
+                .ok_or_else(|| Error::ConfigError("Invalid global package backup target".into()))?;
+            copy_dir_all_sync(&source, &target)?;
+        } else {
+            std::fs::copy(&source, &target)?;
+        }
+    }
+
+    Ok(())
 }
 
 async fn cleanup_installed_package(package_name: &str) -> Result<(), Error> {
@@ -1120,12 +1153,19 @@ mod tests {
         );
         assert!(
             backup.backup_dir.join("marker").as_path().exists(),
-            "current package should be moved into the unique backup"
+            "current package should be copied into the unique backup"
         );
         assert!(
-            !package_dir.as_path().exists(),
-            "original package directory should be moved out before reinstall"
+            package_dir.join("marker").as_path().exists(),
+            "original package directory should remain available during reinstall"
         );
+
+        tokio::fs::write(package_dir.join("marker").as_path(), "partial install").await.unwrap();
+        cleanup_failed_install("@scope/pkg", Some(backup)).await.unwrap();
+
+        let restored =
+            tokio::fs::read_to_string(package_dir.join("marker").as_path()).await.unwrap();
+        assert_eq!(restored, "current");
     }
 
     #[test]

@@ -1,0 +1,10 @@
+{
+  "name": "slow-install-backup-pkg",
+  "version": "1.0.0",
+  "bin": {
+    "slow-install-backup-cli": "./cli.js"
+  },
+  "scripts": {
+    "postinstall": "node postinstall.js"
+  }
+}

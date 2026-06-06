@@ -1,0 +1,13 @@
+> vp install -g ./slow-install-backup-pkg # Install generated-bin package globally
+info: Installing 1 global package with Node.js <semver>
+✓ Installed slow-install-backup-pkg <semver>
+  Bins: slow-install-backup-cli
+
+> slow-install-backup-cli # Verify installed binary works before interrupted reinstall
+slow install backup cli
+
+> node kill-install.mjs # Kill reinstall while postinstall is running
+killed install
+
+> slow-install-backup-cli # Existing binary should still work after killed reinstall
+slow install backup cli
