@@ -44,17 +44,6 @@ impl OnFail {
     }
 }
 
-impl std::fmt::Display for OnFail {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Ignore => write!(f, "ignore"),
-            Self::Warn => write!(f, "warn"),
-            Self::Error => write!(f, "error"),
-            Self::Download => write!(f, "download"),
-        }
-    }
-}
-
 /// One devEngines dependency entry (spec: `DevEngineDependency`).
 #[derive(Debug, Clone)]
 pub struct DevEngineDependency {
@@ -193,6 +182,25 @@ pub struct PackageJson {
     /// The engines configuration
     #[serde(default)]
     pub engines: Option<Engines>,
+}
+
+impl PackageJson {
+    /// The `devEngines.runtime` entry for the given runtime name (e.g. `"node"`).
+    ///
+    /// This is the single accessor for the spec-defined `devEngines.runtime`
+    /// shape; callers read `.version` / `.on_fail` from the returned entry.
+    #[must_use]
+    pub fn dev_engines_runtime(&self, name: &str) -> Option<&DevEngineDependency> {
+        self.dev_engines.as_ref()?.runtime.as_ref()?.find_by_name(name)
+    }
+}
+
+/// Build a `devEngines` dependency entry (`{ name, version, onFail: "download" }`)
+/// as a JSON value, the canonical shape Vite+ writes when pinning a runtime or
+/// package manager (see rfcs/dev-engines.md).
+#[must_use]
+pub fn dev_engine_entry(name: &str, version: &str) -> serde_json::Value {
+    serde_json::json!({ "name": name, "version": version, "onFail": "download" })
 }
 
 #[cfg(test)]

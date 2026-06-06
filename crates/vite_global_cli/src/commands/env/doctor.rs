@@ -644,12 +644,7 @@ async fn find_nearest_dev_engines_node_version(cwd: &AbsolutePathBuf) -> Option<
     loop {
         if let Ok(content) = tokio::fs::read_to_string(current.join("package.json")).await
             && let Ok(pkg) = serde_json::from_str::<vite_shared::PackageJson>(&content)
-            && let Some(declared) = pkg
-                .dev_engines
-                .as_ref()
-                .and_then(|de| de.runtime.as_ref())
-                .and_then(|rt| rt.find_by_name("node"))
-                .and_then(|entry| entry.version.clone())
+            && let Some(declared) = pkg.dev_engines_runtime("node").and_then(|d| d.version.clone())
         {
             return Some(declared);
         }
@@ -685,6 +680,22 @@ async fn check_dev_engines(cwd: &AbsolutePathBuf, resolved_version: Option<&str>
     }
 }
 
+/// Read the workspace-root package.json (raw + typed) when it differs from the
+/// nearest one; `None` means "use the nearest package.json". See the call site
+/// for why package-manager checks need the workspace root.
+async fn read_workspace_root_doc(
+    cwd: &AbsolutePathBuf,
+    nearest_pkg_path: &AbsolutePathBuf,
+) -> Option<(serde_json::Value, vite_shared::PackageJson)> {
+    let (workspace_root, _) = vite_workspace::find_workspace_root(cwd).ok()?;
+    let root_pkg_path = workspace_root.path.join("package.json");
+    if &root_pkg_path == nearest_pkg_path {
+        return None;
+    }
+    let content = tokio::fs::read_to_string(&root_pkg_path).await.ok()?;
+    Some((serde_json::from_str(&content).ok()?, serde_json::from_str(&content).ok()?))
+}
+
 /// Collect the devEngines findings for the nearest package.json.
 async fn collect_dev_engines_findings(
     cwd: &AbsolutePathBuf,
@@ -705,27 +716,7 @@ async fn collect_dev_engines_findings(
     // monorepo it can be a different (higher) file than the nearest package.json
     // used by the Node.js runtime checks above.
     let nearest_pkg_path = pkg_dir.join("package.json");
-    let root_doc: Option<(serde_json::Value, vite_shared::PackageJson)> =
-        match vite_workspace::find_workspace_root(cwd) {
-            Ok((workspace_root, _)) => {
-                let root_pkg_path = workspace_root.path.join("package.json");
-                if root_pkg_path == nearest_pkg_path {
-                    None
-                } else {
-                    match tokio::fs::read_to_string(&root_pkg_path).await {
-                        Ok(root_content) => match (
-                            serde_json::from_str(&root_content),
-                            serde_json::from_str(&root_content),
-                        ) {
-                            (Ok(root_raw), Ok(root_pkg)) => Some((root_raw, root_pkg)),
-                            _ => None,
-                        },
-                        Err(_) => None,
-                    }
-                }
-            }
-            Err(_) => None,
-        };
+    let root_doc = read_workspace_root_doc(cwd, &nearest_pkg_path).await;
     let (pm_raw, pm_pkg): (&serde_json::Value, &vite_shared::PackageJson) = match &root_doc {
         Some((root_raw, root_pkg)) => (root_raw, root_pkg),
         None => (&raw, &pkg),
@@ -848,33 +839,24 @@ async fn collect_dev_engines_findings(
         }
     }
 
-    // Unsupported devEngines.packageManager names
+    // Unsupported devEngines.packageManager names. When a supported entry exists
+    // too, the unsupported one is skipped by design (an info note); otherwise it
+    // is the only declaration and warrants a warning.
     if let Some(field) = package_manager_field {
-        const SUPPORTED: [&str; 4] = ["pnpm", "yarn", "npm", "bun"];
-        let has_supported = field.entries().iter().any(|e| SUPPORTED.contains(&e.name.as_str()));
-        for entry in field.entries() {
-            if SUPPORTED.contains(&entry.name.as_str()) {
-                continue;
-            }
-            if has_supported {
-                findings.push(DevEnginesFinding::note(
-                    "PackageManager",
-                    format!(
-                        "devEngines.packageManager entry \"{}\" is not supported and will be \
-                         skipped (supported: pnpm, yarn, npm, bun)",
-                        entry.name
-                    ),
-                ));
+        let is_supported = |name: &str| vite_install::PackageManagerType::from_name(name).is_some();
+        let has_supported = field.entries().iter().any(|e| is_supported(&e.name));
+        for entry in field.entries().iter().filter(|e| !is_supported(&e.name)) {
+            let skipped = if has_supported { " and will be skipped" } else { "" };
+            let message = format!(
+                "devEngines.packageManager \"{}\" is not supported{skipped} \
+                 (supported: pnpm, yarn, npm, bun)",
+                entry.name
+            );
+            findings.push(if has_supported {
+                DevEnginesFinding::note("PackageManager", message)
             } else {
-                findings.push(DevEnginesFinding::warn(
-                    "PackageManager",
-                    format!(
-                        "devEngines.packageManager \"{}\" is not supported \
-                         (supported: pnpm, yarn, npm, bun)",
-                        entry.name
-                    ),
-                ));
-            }
+                DevEnginesFinding::warn("PackageManager", message)
+            });
         }
     }
 

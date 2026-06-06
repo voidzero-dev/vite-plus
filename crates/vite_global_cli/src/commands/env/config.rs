@@ -279,10 +279,7 @@ pub async fn resolve_version_from_files(cwd: &AbsolutePath) -> Result<VersionRes
                     // Try devEngines.runtime (only when falling back from .node-version)
                     if matches!(resolution.source, VersionSource::NodeVersionFile) {
                         if let Some(dev_engines) = pkg
-                            .dev_engines
-                            .as_ref()
-                            .and_then(|de| de.runtime.as_ref())
-                            .and_then(|rt| rt.find_by_name("node"))
+                            .dev_engines_runtime("node")
                             .and_then(|r| r.version.clone())
                             .and_then(|v| normalize_version(&v, "devEngines.runtime"))
                         {

@@ -73,6 +73,21 @@ impl PackageManagerType {
         }
     }
 
+    /// Parse a package manager name (no aliases) into a supported type.
+    ///
+    /// Unlike [`Self::from_tool`], this only accepts the canonical package
+    /// manager names (`pnpm`, `yarn`, `npm`, `bun`), not invocation aliases.
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "pnpm" => Some(Self::Pnpm),
+            "yarn" => Some(Self::Yarn),
+            "npm" => Some(Self::Npm),
+            "bun" => Some(Self::Bun),
+            _ => None,
+        }
+    }
+
     /// Resolve the bin file name for an invoked tool, preserving alias names
     /// that the managed PM installs alongside its primary binary.
     #[must_use]
@@ -112,17 +127,6 @@ pub enum PackageManagerSource {
     LockfileOrConfig,
     /// Caller-provided default
     Default,
-}
-
-impl fmt::Display for PackageManagerSource {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::PackageManagerField => write!(f, "packageManager"),
-            Self::DevEnginesPackageManager => write!(f, "devEngines.packageManager"),
-            Self::LockfileOrConfig => write!(f, "lockfile"),
-            Self::Default => write!(f, "default"),
-        }
-    }
 }
 
 // TODO(@fengmk2): should move ResolveCommandResult to vite-common crate
@@ -472,7 +476,7 @@ fn get_package_manager_from_dev_engines(
     }
 
     for entry in entries {
-        let Some(package_manager_type) = parse_package_manager_name(&entry.name) else {
+        let Some(package_manager_type) = PackageManagerType::from_name(&entry.name) else {
             continue;
         };
         // Lenient read: an invalid version range is treated as any version,
@@ -569,17 +573,6 @@ fn dev_engines_package_manager_conflict_message(
     None
 }
 
-/// Parse a package manager name into a supported [`PackageManagerType`].
-fn parse_package_manager_name(name: &str) -> Option<PackageManagerType> {
-    match name {
-        "pnpm" => Some(PackageManagerType::Pnpm),
-        "yarn" => Some(PackageManagerType::Yarn),
-        "npm" => Some(PackageManagerType::Npm),
-        "bun" => Some(PackageManagerType::Bun),
-        _ => None,
-    }
-}
-
 fn parse_package_manager_field(
     package_manager: &str,
     package_json_path: &AbsolutePath,
@@ -601,7 +594,7 @@ fn parse_package_manager_field(
         version: version.into(),
         package_json_path: package_json_path.to_absolute_path_buf(),
     })?;
-    let package_manager_type = parse_package_manager_name(name)
+    let package_manager_type = PackageManagerType::from_name(name)
         .ok_or_else(|| Error::UnsupportedPackageManager(name.into()))?;
 
     Ok(Some((package_manager_type, version.into(), hash)))
@@ -1150,11 +1143,7 @@ async fn set_dev_engines_package_manager_field(
     } else {
         "{}\n".to_string()
     };
-    let entry = serde_json::json!({
-        "name": package_manager_type.to_string(),
-        "version": version,
-        "onFail": "download",
-    });
+    let entry = vite_shared::dev_engine_entry(&package_manager_type.to_string(), version);
     let updated = vite_shared::edit_json_object(&content, |obj| {
         let Some(dev_engines) = obj.get_mut("devEngines").and_then(|v| v.as_object_mut()) else {
             vite_shared::insert_after(

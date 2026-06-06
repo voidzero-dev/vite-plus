@@ -417,9 +417,7 @@ pub async fn download_runtime_for_project(
 
     let dev_engines_runtime = pkg
         .as_ref()
-        .and_then(|p| p.dev_engines.as_ref())
-        .and_then(|de| de.runtime.as_ref())
-        .and_then(|rt| rt.find_by_name("node"))
+        .and_then(|p| p.dev_engines_runtime("node"))
         .and_then(|r| r.version.clone())
         .and_then(|v| normalize_version(&v, "devEngines.runtime"));
 

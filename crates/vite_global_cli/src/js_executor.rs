@@ -485,10 +485,7 @@ async fn has_valid_version_source(
 
     let dev_engines_valid = !engines_valid
         && pkg
-            .dev_engines
-            .as_ref()
-            .and_then(|de| de.runtime.as_ref())
-            .and_then(|rt| rt.find_by_name("node"))
+            .dev_engines_runtime("node")
             .and_then(|r| r.version.as_ref())
             .is_some_and(|v| is_valid_version(v));
 

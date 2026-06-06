@@ -164,8 +164,16 @@ async fn do_pin(
                     .into(),
                 ));
             }
-            pin_dev_engines(cwd, version, &resolved_version, was_alias, force, node_version_exists)
-                .await?
+            let pinned = pin_dev_engines(cwd, version, &resolved_version, was_alias, force).await?;
+            // .node-version still wins resolution, so warn that the devEngines pin
+            // is shadowed until it is removed
+            if pinned && node_version_exists {
+                output::warn(&format!(
+                    "{NODE_VERSION_FILE} still takes precedence over devEngines.runtime. Remove \
+                     it with 'vp env unpin --target node-version' if devEngines should win."
+                ));
+            }
+            pinned
         }
     };
 
@@ -295,7 +303,6 @@ async fn pin_dev_engines(
     resolved_version: &str,
     was_alias: bool,
     force: bool,
-    node_version_exists: bool,
 ) -> Result<bool, Error> {
     let package_json_path = cwd.join(PACKAGE_JSON_FILE);
 
@@ -315,13 +322,6 @@ async fn pin_dev_engines(
     print_pin_success(input_version, resolved_version, was_alias);
     println!("  Updated devEngines.runtime in {}", package_json_path.as_path().display());
 
-    if node_version_exists {
-        output::warn(&format!(
-            "{NODE_VERSION_FILE} still takes precedence over devEngines.runtime. Remove it \
-             with 'vp env unpin --target node-version' if devEngines should win."
-        ));
-    }
-
     Ok(true)
 }
 
@@ -330,9 +330,7 @@ async fn pin_dev_engines(
 async fn read_dev_engines_node_version(cwd: &AbsolutePathBuf) -> Option<String> {
     let content = tokio::fs::read_to_string(cwd.join(PACKAGE_JSON_FILE)).await.ok()?;
     let pkg: vite_shared::PackageJson = serde_json::from_str(&content).ok()?;
-    let version =
-        pkg.dev_engines.as_ref()?.runtime.as_ref()?.find_by_name("node")?.version.clone()?;
-    Some(version.to_string())
+    Some(pkg.dev_engines_runtime("node")?.version.clone()?.to_string())
 }
 
 /// After updating `.node-version`, check the declared devEngines.runtime range:
@@ -383,7 +381,7 @@ async fn check_dev_engines_sync(
 
 /// Create a new devEngines.runtime node entry.
 fn new_node_entry(version: &str) -> serde_json::Value {
-    serde_json::json!({ "name": "node", "version": version, "onFail": "download" })
+    vite_shared::dev_engine_entry("node", version)
 }
 
 /// Write the node entry version into `package.json#devEngines.runtime`,
