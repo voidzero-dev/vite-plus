@@ -1427,12 +1427,22 @@ $ vp env pin
 Pinned version: 20.18.0
   Source: /Users/user/projects/my-app/.node-version
 
-# If no .node-version in current directory but found in parent
+# Pinned via devEngines.runtime in the current directory's package.json
+$ vp env pin
+Pinned version: 24.1.0
+  Source: /Users/user/projects/my-app/package.json (devEngines.runtime)
+
+# If no pin in current directory but found in a parent (.node-version or
+# devEngines.runtime, checked in resolution order per directory)
 $ vp env pin
 No version pinned in current directory.
   Inherited: 22.13.0 from /Users/user/projects/.node-version
 
-# If no .node-version anywhere
+$ vp env pin
+No version pinned in current directory.
+  Inherited: ^24.0.0 from /Users/user/projects/package.json (devEngines.runtime)
+
+# If no pin anywhere
 $ vp env pin
 No version pinned.
   Using default: 20.18.0 (from ~/.vite-plus/config.json)
@@ -1500,6 +1510,13 @@ Use `--force` to skip confirmation:
 ```bash
 $ vp env pin 22.13.0 --force
 ✓ Pinned Node.js version to 22.13.0
+```
+
+When the target is already pinned to the same version, the command no-ops (with or without `--force`):
+
+```bash
+$ vp env pin 22.13.0
+Already pinned to 22.13.0
 ```
 
 ### Error Handling

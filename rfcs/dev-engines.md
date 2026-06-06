@@ -204,7 +204,7 @@ When `.node-version` is the write target and a `devEngines.runtime` node entry a
 
 #### 2.5 `vp env pin` (show) and `vp env unpin`
 
-- `vp env pin` with no argument reports the active pin and its source, now including `devEngines.runtime` as a possible source (the `VersionSource::DevEnginesRuntime` display string already exists).
+- `vp env pin` with no argument reports the active pin and its source, now including `devEngines.runtime` as a possible source (the `VersionSource::DevEnginesRuntime` display string already exists). Inherited pins from parent directories are reported for both sources, checking `.node-version` first and then the `devEngines.runtime` node entry per directory (matching the resolution order).
 - `vp env unpin` / `vp env pin --unpin` removes the pin from the same target that `vp env pin` would write: delete `.node-version` if present, otherwise remove the node entry from `devEngines.runtime` (removing the `devEngines.runtime` key entirely if it becomes empty, and `devEngines` if it becomes empty).
 
 ### 3. Package manager
@@ -231,8 +231,9 @@ When **both** `packageManager` and `devEngines.packageManager` exist:
   - Exact (`11.5.1`): used directly (same as the `packageManager` field path, minus hash).
   - Range (`^11.0.0`) or absent (= any):
     1. If an already-downloaded version under `$VP_HOME/package_manager/<name>/` satisfies the range, use the highest satisfying one (offline-friendly, no network).
-    2. Otherwise query the npm registry for the latest version satisfying the range, download it, and cache the resolution.
-  - Range resolutions are cached with a 1-hour TTL (mirroring Node range resolution caching), keyed by `(name, range)` and invalidated when the source `package.json` mtime changes.
+    2. Otherwise resolve the latest satisfying version from the npm registry, fetching the abbreviated metadata document (`Accept: application/vnd.npm.install-v1+json`, KBs instead of the multi-MB full packument) and download it.
+  - Once a satisfying version is downloaded, step 1 short-circuits every later resolution, so the registry is only consulted while no satisfying version is cached (no separate TTL cache needed).
+  - Prereleases are excluded from range resolution, except when the requirement itself contains a prerelease marker (e.g. `^12.0.0-0`) and no stable version satisfies it.
 - `onFail` follows the same matrix as section 2.3, applied to package managers (system-first mode does not exist for package managers, so effectively: `ignore` skips the entry, `warn`/`error` control what happens when the range cannot be satisfied, `download` is the default Vite+ behavior).
 
 #### 3.3 Auto-pin behavior changes
@@ -264,6 +265,8 @@ Auto-written shape:
 }
 ```
 
+Auto-pin never replaces entries it did not write: when `devEngines.packageManager` already declares entries Vite+ does not act on (e.g. another package manager with `onFail: "ignore"` whose detection fell through to a lockfile), the resolved entry is appended to an existing array, and an existing single entry is converted to array form with the original entry kept first. A single entry is only written when the field is absent or malformed.
+
 #### 3.4 Surfacing the source
 
 - `vp env --current --json` gains `"source": "devEngines.packageManager"` as a possible value in the `package_manager` block (alongside the existing `"packageManager"`).
@@ -272,6 +275,11 @@ Auto-written shape:
 ### 4. `vp env doctor` conflict detection
 
 All checks are **semver-aware**: an exact version satisfying a declared range is not a conflict (`.node-version: 24.11.1` is compatible with `devEngines.runtime.version: ^24.0.0`; #864 review note).
+
+Which package.json each check examines mirrors the consumer it diagnoses:
+
+- **Runtime checks** use nearest-first walk-up semantics, like Node.js resolution. The `.node-version` vs `devEngines.runtime` conflict check follows the resolution walk on both sides: it fires only when a `.node-version` actually wins resolution, and the `devEngines.runtime` declaration is found in ancestor manifests too (a parent `.node-version` shadowed by a nearer winning `devEngines.runtime` is not a conflict).
+- **Package-manager checks** examine the **workspace root** package.json: that is the file `vp install` reads for `packageManager` / `devEngines.packageManager`, which in a monorepo can be a different (higher) file than the nearest package.json.
 
 New checks:
 
@@ -385,7 +393,7 @@ A small shared Rust helper (in `vite_shared`) will own "edit one field in packag
 ### Phase 2: Package manager detection
 
 1. Insert `devEngines.packageManager` into `get_package_manager_type_and_version()` (replacing the TODO at `crates/vite_install/src/package_manager.rs:288`); name validation; array handling; `onFail` handling.
-2. Range resolution against downloaded versions, registry fallback, 1-hour TTL cache.
+2. Range resolution against downloaded versions, with registry fallback via the npm abbreviated metadata document.
 3. Suppress auto-write when the source is `devEngines.packageManager`; retarget auto-pin to `devEngines.packageManager` when neither field exists.
 4. Consistency warning when `packageManager` and `devEngines.packageManager` disagree (warn-now, error-later transition messaging).
 5. Expose the new source through the NAPI binding and `vp env --current --json`.

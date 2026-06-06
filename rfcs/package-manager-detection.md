@@ -53,7 +53,7 @@ If there is no `packageManager` field, Vite+ checks `devEngines.packageManager`,
 
 - Accepts a single object or an array of objects; entries are evaluated in order and the first usable entry wins.
 - `name` must be one of `pnpm`, `yarn`, `npm`, `bun`. Unsupported names are skipped in array form; otherwise the entry's effective `onFail` decides (`ignore`/`warn` continue down the detection chain, `error` and `download` fail with a clear message).
-- `version` may be exact, a semver range, or absent (any version satisfies). Ranges resolve to an already-downloaded satisfying version when possible, otherwise to the latest satisfying version from the npm registry (cached with a 1-hour TTL).
+- `version` may be exact, a semver range, or absent (any version satisfies). Ranges resolve to an already-downloaded satisfying version when possible, otherwise to the latest satisfying version from the npm registry (fetched as the abbreviated metadata document). Prereleases are excluded unless the range itself contains a prerelease marker and no stable version satisfies it.
 - A range source is never frozen into an exact `packageManager` field; the range stays the source of truth.
 
 See [RFC: devEngines Support](./dev-engines.md) for the full semantics (`onFail` matrix, conflict handling, doctor checks).
@@ -158,6 +158,8 @@ After detection and download, Vite+ writes the resolved version back to `package
 - Detection from a `devEngines.packageManager` range: no write; the range is the user's source of truth and is never frozen into an exact pin.
 - Detection from lockfiles, config files, or interactive selection: the exact resolved version is written to `devEngines.packageManager` with `onFail: "download"`.
 
+The write preserves existing entries Vite+ does not act on (e.g. another package manager declared with `onFail: "ignore"`): the resolved entry is appended to an existing array, an existing single entry is converted to array form with the original kept first, and a single entry is only written when the field is absent or malformed.
+
 This ensures:
 
 - Future runs use a deterministic version (Priority 1 or 2 match)
@@ -166,13 +168,13 @@ This ensures:
 
 ## Version Resolution
 
-| Detection method                              | Version used                                                                                                            |
-| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `packageManager` field                        | Exact version from field (e.g., `10.19.0`)                                                                              |
-| `devEngines.packageManager` (exact version)   | Exact version from field                                                                                                |
-| `devEngines.packageManager` (range or absent) | Highest already-downloaded satisfying version, otherwise latest satisfying version from the npm registry (1-hour cache) |
-| Lockfile/config detection                     | `"latest"`: resolved to latest stable version from npm registry                                                         |
-| Interactive selection                         | `"latest"`: resolved to latest stable version from npm registry                                                         |
+| Detection method                              | Version used                                                                                             |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `packageManager` field                        | Exact version from field (e.g., `10.19.0`)                                                               |
+| `devEngines.packageManager` (exact version)   | Exact version from field                                                                                 |
+| `devEngines.packageManager` (range or absent) | Highest already-downloaded satisfying version, otherwise latest satisfying version from the npm registry |
+| Lockfile/config detection                     | `"latest"`: resolved to latest stable version from npm registry                                          |
+| Interactive selection                         | `"latest"`: resolved to latest stable version from npm registry                                          |
 
 **Special cases**:
 
