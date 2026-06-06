@@ -746,6 +746,11 @@ fn find_cached_package_manager_version(
         if !range.satisfies(&version) {
             continue;
         }
+        // Skip the filesystem check for versions that cannot beat the current
+        // best; only a higher candidate is worth stat'ing.
+        if best.as_ref().is_some_and(|b| version <= *b) {
+            continue;
+        }
         // Only consider completed installs, using the same completeness check as
         // the download fast-path so range resolution never selects a partially
         // written install (e.g. plain bin present but `.cmd`/`.ps1` missing).
@@ -753,9 +758,7 @@ fn find_cached_package_manager_version(
         if !is_package_manager_install_complete(&install_dir, &bin_name)? {
             continue;
         }
-        if best.as_ref().is_none_or(|b| version > *b) {
-            best = Some(version);
-        }
+        best = Some(version);
     }
     Ok(best.map(|version| Str::from(version.to_string())))
 }
@@ -848,8 +851,6 @@ pub async fn download_package_manager(
 
     // If all shims already exist, return the target directory
     // $VP_HOME/package_manager/pnpm/10.0.0/pnpm/bin/(pnpm|pnpm.cmd|pnpm.ps1)
-    let bin_prefix = install_dir.join("bin");
-    let bin_file = bin_prefix.join(&bin_name);
     if is_package_manager_install_complete(&install_dir, &bin_name)? {
         return Ok((install_dir, package_name, version));
     }
@@ -894,9 +895,11 @@ pub async fn download_package_manager(
     tracing::debug!("Lock acquired: {:?}", lock_path);
 
     // Check again after acquiring the lock, in case another thread completed
-    // the installation while we were downloading
-    if is_exists_file(&bin_file)? {
-        tracing::debug!("bin_file already exists after lock acquisition, skip rename");
+    // the installation while we were downloading (same completeness check as the
+    // fast-path above; create_shim_files below runs under this lock, so post-lock
+    // the install is all-or-nothing)
+    if is_package_manager_install_complete(&install_dir, &bin_name)? {
+        tracing::debug!("install already complete after lock acquisition, skip rename");
         return Ok((install_dir, package_name, version));
     }
 
@@ -907,7 +910,7 @@ pub async fn download_package_manager(
 
     // create shim file
     tracing::debug!("Create shim files for {}", bin_name);
-    create_shim_files(package_manager_type, &bin_prefix).await?;
+    create_shim_files(package_manager_type, &install_dir.join("bin")).await?;
 
     Ok((install_dir, package_name, version))
 }
@@ -960,8 +963,6 @@ async fn download_bun_package_manager(
     // $VP_HOME/package_manager/bun/{version}
     let target_dir = home_dir.join("package_manager").join("bun").join(version.as_str());
     let install_dir = target_dir.join("bun");
-    let bin_prefix = install_dir.join("bin");
-    let bin_file = bin_prefix.join("bun");
 
     // If shims already exist, return early (same completeness check as the cache
     // and the tgz download path)
@@ -1030,8 +1031,8 @@ async fn download_bun_package_manager(
     lock_file.lock()?;
     tracing::debug!("Lock acquired: {:?}", lock_path);
 
-    if is_exists_file(&bin_file)? {
-        tracing::debug!("bun bin_file already exists after lock acquisition, skip rename");
+    if is_package_manager_install_complete(&install_dir, "bun")? {
+        tracing::debug!("bun install already complete after lock acquisition, skip rename");
         return Ok((install_dir, package_name, version.clone()));
     }
 
@@ -1042,7 +1043,7 @@ async fn download_bun_package_manager(
 
     // Create native binary shims
     tracing::debug!("Create shim files for bun");
-    create_shim_files(PackageManagerType::Bun, &bin_prefix).await?;
+    create_shim_files(PackageManagerType::Bun, &install_dir.join("bin")).await?;
 
     Ok((install_dir, package_name, version.clone()))
 }
