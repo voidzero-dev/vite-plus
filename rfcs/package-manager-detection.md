@@ -51,12 +51,13 @@ If there is no `packageManager` field, Vite+ checks `devEngines.packageManager`,
 }
 ```
 
-- Accepts a single object or an array of objects; entries are evaluated in order and the first usable entry wins.
-- `name` must be one of `pnpm`, `yarn`, `npm`, `bun`. Unsupported names are skipped in array form; otherwise the entry's effective `onFail` decides (`ignore`/`warn` continue down the detection chain, `error` and `download` fail with a clear message).
+- Accepts a single object or an array of objects; entries are evaluated in order and the first entry with a supported `name` wins.
+- `name` must be one of `pnpm`, `yarn`, `npm`, `bun`. Unsupported names are skipped in array form. When no entry names a supported package manager, the effective `onFail` of the last entry decides: `ignore`/`warn` continue down the detection chain, `error`/`download` fail with a clear message.
 - `version` may be exact, a semver range, or absent (any version satisfies). Ranges resolve to an already-downloaded satisfying version when possible, otherwise to the latest satisfying version from the npm registry (fetched as the abbreviated metadata document). Prereleases are excluded unless the range itself contains a prerelease marker and no stable version satisfies it.
 - A range source is never frozen into an exact `packageManager` field; the range stays the source of truth.
+- `onFail` is otherwise parsed and preserved but not yet acted on: a selected (supported) entry whose version cannot be resolved or downloaded surfaces an error rather than falling back. See the RFC's [Deferred / Future Work](./dev-engines.md#deferred--future-work).
 
-See [RFC: devEngines Support](./dev-engines.md) for the full semantics (`onFail` matrix, conflict handling, doctor checks).
+See [RFC: devEngines Support](./dev-engines.md) for the full semantics (conflict handling, doctor checks, and the deferred `onFail` matrix).
 
 ### Priority 3: Lockfiles
 

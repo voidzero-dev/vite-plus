@@ -149,7 +149,9 @@ The walk-up algorithm is unchanged: at each directory, sources are checked in th
 
 #### 2.3 `onFail` semantics
 
-Vite+'s managed mode already implements the strongest remediation (`download`), so `onFail` mainly matters when remediation is impossible or when system-first mode (`vp env off`) is active:
+> **Status:** As of this PR, `runtime.onFail` is **parsed and preserved but not yet acted on**. Managed mode always resolves and downloads the requested version (equivalent to `onFail: "download"`), and a resolution/download failure surfaces as an error regardless of the declared `onFail`. The matrix below is the intended future behavior, tracked under [Deferred / Future Work](#deferred--future-work).
+
+The intended semantics, once implemented: managed mode already implements the strongest remediation (`download`), so `onFail` mainly matters when remediation is impossible or when system-first mode (`vp env off`) is active:
 
 | `onFail`          | Managed mode (`vp env on`, default)                                       | System-first mode (`vp env off`)                                             |
 | ----------------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
@@ -161,7 +163,7 @@ Vite+'s managed mode already implements the strongest remediation (`download`), 
 Notes:
 
 - "If that fails" covers: the version/range does not exist upstream, or the download fails (network, platform).
-- This gives `onFail` real meaning in Vite+ without changing the default managed-mode UX: a plain `{ "name": "node", "version": "^24.0.0" }` behaves exactly like today.
+- The current default managed-mode UX is unchanged: a plain `{ "name": "node", "version": "^24.0.0" }` behaves exactly like today (resolve and download).
 
 #### 2.4 `vp env pin` write target
 
@@ -234,7 +236,7 @@ When **both** `packageManager` and `devEngines.packageManager` exist:
     2. Otherwise resolve the latest satisfying version from the npm registry, fetching the abbreviated metadata document (`Accept: application/vnd.npm.install-v1+json`, KBs instead of the multi-MB full packument) and download it.
   - Once a satisfying version is downloaded, step 1 short-circuits every later resolution, so the registry is only consulted while no satisfying version is cached (no separate TTL cache needed).
   - Prereleases are excluded from range resolution, except when the requirement itself contains a prerelease marker (e.g. `^12.0.0-0`) and no stable version satisfies it.
-- `onFail` follows the same matrix as section 2.3, applied to package managers (system-first mode does not exist for package managers, so effectively: `ignore` skips the entry, `warn`/`error` control what happens when the range cannot be satisfied, `download` is the default Vite+ behavior).
+- `onFail` (current PR): acted on **only when no array entry names a supported package manager** (the bullet above) - `ignore`/`warn` continue down the detection chain, `error`/`download` fail. Once a supported entry is selected, its `onFail` is **not yet** consulted: a later unresolved range or download/install failure surfaces as an error rather than falling back to the next entry. Per-entry fallback (try each supported entry in order, applying its effective `onFail` on failure) is tracked under [Deferred / Future Work](#deferred--future-work).
 
 #### 3.3 Auto-pin behavior changes
 
@@ -354,15 +356,15 @@ A small shared Rust helper (in `vite_shared`) will own "edit one field in packag
 
 ## Spec Compliance Matrix
 
-| Spec feature                                           | Vite+ support after this RFC                                            |
-| ------------------------------------------------------ | ----------------------------------------------------------------------- |
-| `runtime` (single + array)                             | Yes, for `name: "node"`; other runtimes surfaced by doctor, not managed |
-| `packageManager` (single + array)                      | Yes, for pnpm / yarn / npm / bun                                        |
-| `version` optional, semver range syntax                | Yes (lenient read, strict write)                                        |
-| `onFail` (`ignore` / `warn` / `error` / `download`)    | Yes, per the matrix in section 2.3                                      |
-| Array `onFail` defaults (prior `ignore`, last `error`) | Yes                                                                     |
-| `os` / `cpu` / `libc`                                  | Out of scope (possible future doctor checks)                            |
-| Integrity hash                                         | Not part of the spec; the `packageManager` field hash remains supported |
+| Spec feature                                           | Vite+ support after this RFC                                                                                                                                                               |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `runtime` (single + array)                             | Yes, for `name: "node"`; other runtimes surfaced by doctor, not managed                                                                                                                    |
+| `packageManager` (single + array)                      | Yes, for pnpm / yarn / npm / bun                                                                                                                                                           |
+| `version` optional, semver range syntax                | Yes (lenient read, strict write)                                                                                                                                                           |
+| `onFail` (`ignore` / `warn` / `error` / `download`)    | Partial: drives the unsupported-name fallthrough for `packageManager`; otherwise parsed/preserved, not yet acted on (see section 2.3 and [Deferred / Future Work](#deferred--future-work)) |
+| Array `onFail` defaults (prior `ignore`, last `error`) | Yes                                                                                                                                                                                        |
+| `os` / `cpu` / `libc`                                  | Out of scope (possible future doctor checks)                                                                                                                                               |
+| Integrity hash                                         | Not part of the spec; the `packageManager` field hash remains supported                                                                                                                    |
 
 ## Non-Goals
 
@@ -370,6 +372,22 @@ A small shared Rust helper (in `vite_shared`) will own "edit one field in packag
 - Validating `devEngines.os` / `cpu` / `libc`.
 - Acting as a general enforcement layer for arbitrary package manager names beyond pnpm / yarn / npm / bun.
 - Changing session-override behavior (`vp env use`, `VITE_PLUS_NODE_VERSION`).
+
+## Deferred / Future Work
+
+`onFail` is parsed, preserved, and validated (`vp env doctor` flags unknown values), but the full behavioral matrix is **not yet implemented** in this PR. What is and isn't acted on today:
+
+| Field            | `onFail` behavior today                                                                                                                                                                                                                   |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `runtime`        | Not acted on. Managed mode always resolves and downloads (equivalent to `download`); failures error out regardless of `onFail`. The section 2.3 matrix is future work.                                                                    |
+| `packageManager` | Acted on only when no array entry names a supported package manager: `ignore`/`warn` continue the detection chain, `error`/`download` fail. A selected (supported) entry's `onFail` is not consulted on a later resolve/download failure. |
+
+The deferred behavior, in priority order:
+
+1. **Per-entry `packageManager` fallback.** Try each supported array entry in order; when an entry's range cannot be resolved or its version fails to download/install, apply that entry's effective `onFail` (`ignore`/`warn` advance to the next entry or fall through the detection chain; `error` fails). A supported entry is always tried before its `onFail` is consulted (i.e. `onFail` never skips an entry pre-emptively).
+2. **Runtime `onFail` matrix** (section 2.3): differentiate `ignore`/`warn`/`error`/`download` in managed and system-first modes for `devEngines.runtime`, in shim dispatch and `vp env use`.
+
+Both are intentionally separated from this PR: the per-entry fallback threads `onFail` through the async download path, and the runtime matrix touches version resolution and the shim dispatch hot path. Until they land, the doc surfaces above describe only the implemented subset.
 
 ## Compatibility Impact Summary
 
@@ -402,7 +420,7 @@ A small shared Rust helper (in `vite_shared`) will own "edit one field in packag
 
 1. `vp env pin` target selection, `--target` flag, value rules, sync prompt (TTY) / warning (non-interactive); `vp env unpin` symmetric removal.
 2. Runtime read-priority reorder.
-3. `onFail` matrix in shim dispatch and `vp env use` / system-first paths.
+3. ~~`onFail` matrix in shim dispatch and `vp env use` / system-first paths.~~ Deferred: runtime `onFail` is parsed but not yet acted on (see [Deferred / Future Work](#deferred--future-work)).
 4. All new `vp env doctor` checks.
 
 ### Phase 4: create / migrate
