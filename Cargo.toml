@@ -421,6 +421,21 @@ string_wizard = { path = "./rolldown/crates/string_wizard", features = ["serde"]
 # vite_task = { path = "../vite-task/crates/vite_task" }
 # vite_workspace = { path = "../vite-task/crates/vite_workspace" }
 
+# OHOS: use vite-task fork with OHOS compatibility fixes.
+# Remove once voidzero-dev/vite-task#426 is merged.
+[patch."https://github.com/voidzero-dev/vite-task.git"]
+fspy = { git = "https://github.com/social4hyq/vite-task", branch = "ohos-port" }
+vite_path = { git = "https://github.com/social4hyq/vite-task", branch = "ohos-port" }
+vite_powershell = { git = "https://github.com/social4hyq/vite-task", branch = "ohos-port" }
+vite_str = { git = "https://github.com/social4hyq/vite-task", branch = "ohos-port" }
+vite_task = { git = "https://github.com/social4hyq/vite-task", branch = "ohos-port" }
+vite_workspace = { git = "https://github.com/social4hyq/vite-task", branch = "ohos-port" }
+
+# OHOS: shared_memory 0.12 pulls nix 0.23 which breaks under target_env="ohos".
+# Use fork with nix 0.30 upgrade. Remove once elast0ny/shared_memory#118 lands.
+[patch.crates-io]
+shared_memory = { git = "https://github.com/social4hyq/shared_memory", branch = "nix-030-ohos" }
+
 [profile.dev]
 # Disabling debug info speeds up local and CI builds,
 # and we don't rely on it for debugging that much.

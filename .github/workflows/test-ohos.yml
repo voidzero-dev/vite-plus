@@ -1,0 +1,88 @@
+name: test-ohos
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-ohos:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-unknown-linux-ohos
+            os: ubuntu-latest
+
+    name: build-${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: ./.github/actions/clone
+
+      - name: Install Node.JS
+        uses: actions/setup-node@v3
+        with:
+          node-version: 22
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Update Cargo.lock for OHOS patches
+        run: cargo update -p fspy -p fspy_seccomp_unotify -p fspy_preload_unix -p shared_memory 2>/dev/null; true
+
+      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b
+
+      - name: Setup OpenHarmony SDK
+        uses: Boshen/setup-ohos-sdk@edb865a89a712f1f15dbad932dfa9cfce849d95c
+
+      - name: Configure OHOS linker
+        run: |
+          echo "${OHOS_SDK_NATIVE}/llvm/bin" >> $GITHUB_PATH
+          cat > /tmp/aarch64-linux-ohos-clang <<'WRAPPER'
+          #!/bin/sh
+          exec ${OHOS_SDK_NATIVE}/llvm/bin/clang --target=aarch64-linux-ohos "$@"
+          WRAPPER
+          chmod +x /tmp/aarch64-linux-ohos-clang
+
+      - uses: ./.github/actions/build-upstream
+        with:
+          target: ${{ matrix.target }}
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_OHOS_LINKER: /tmp/aarch64-linux-ohos-clang
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_OHOS_RUSTFLAGS: -C link-arg=-fuse-ld=lld -C link-arg=-lm
+
+      - name: Verify artifacts
+        run: |
+          ls -lh packages/cli/binding/*.node target/${{ matrix.target }}/release/vp
+          file packages/cli/binding/*.node target/${{ matrix.target }}/release/vp
+
+      - name: Upload Napi binding
+        uses: actions/upload-artifact@v4
+        with:
+          name: vite-plus-binding-${{ matrix.target }}
+          path: ./packages/cli/binding/*.node
+
+      - name: Upload CLI binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: vite-plus-cli-${{ matrix.target }}
+          path: ./target/${{ matrix.target }}/release/vp
+
+      - name: Deploy vite-plus npm package
+        run: pnpm --filter=vite-plus deploy --prod --legacy --no-optional vite-plus-deploy
+
+      - name: Package runtime bundle
+        run: |
+          cp target/${{ matrix.target }}/release/vp vite-plus-deploy/
+          tar -czf vite-plus-ohos-aarch64.tar.gz -C vite-plus-deploy .
+
+      - name: Upload runtime bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: vite-plus-ohos-aarch64-runtime
+          path: ./vite-plus-ohos-aarch64.tar.gz
