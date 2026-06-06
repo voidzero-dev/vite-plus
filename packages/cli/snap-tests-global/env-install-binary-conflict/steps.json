@@ -10,6 +10,7 @@
     "vp install -g --force ./env-binary-conflict-pkg-b # Force install pkg-b - should auto-uninstall pkg-a",
     "cat $VP_HOME/bins/env-binary-conflict-cli.json # Bin config should now point to pkg-b",
     "vp remove -g env-binary-conflict-pkg-b # Cleanup",
-    "test ! -f $VP_HOME/bins/env-binary-conflict-cli.json && echo 'bin config removed' # Bin config should be deleted"
+    "test ! -f $VP_HOME/bins/env-binary-conflict-cli.json && echo 'bin config removed' # Bin config should be deleted",
+    "vp install -g --force ./env-binary-conflict-pkg-b ./env-binary-conflict-pkg-a # It should print error even if with --force"
   ]
 }

@@ -28,9 +28,9 @@ pkg-b was not installed
   "source": "vp"
 }
 > vp install -g --force ./env-binary-conflict-pkg-b # Force install pkg-b - should auto-uninstall pkg-a
+info: Installing 1 global package with Node.js <semver>
 Uninstalling env-binary-conflict-pkg-a (conflicts with env-binary-conflict-pkg-b)...
 Uninstalled env-binary-conflict-pkg-a
-info: Installing 1 global package with Node.js <semver>
 ✓ Installed env-binary-conflict-pkg-b <semver>
   Bins: env-binary-conflict-cli
 
@@ -47,3 +47,6 @@ Uninstalled env-binary-conflict-pkg-b
 
 > test ! -f $VP_HOME/bins/env-binary-conflict-cli.json && echo 'bin config removed' # Bin config should be deleted
 bin config removed
+
+[1]> vp install -g --force ./env-binary-conflict-pkg-b ./env-binary-conflict-pkg-a # It should print error even if with --force
+error: Failed to install env-binary-conflict-pkg-a: Bin conflict: Both env-binary-conflict-pkg-b and env-binary-conflict-pkg-a provide env-binary-conflict-cli, please consider removing one of them.
