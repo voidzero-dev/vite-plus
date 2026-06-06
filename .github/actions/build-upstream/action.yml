@@ -87,11 +87,20 @@ runs:
       with:
         tool: cargo-zigbuild
 
+    # OHOS (OpenHarmony) cross-compilation
+    # @napi-rs/cli >=3.2.0 supports OHOS natively via @napi-rs/cross-toolchain
+    - name: Add OHOS Rust target
+      if: steps.cache-restore.outputs.cache-hit != 'true' && contains(inputs.target, 'ohos')
+      shell: bash
+      run: rustup target add ${INPUTS_TARGET}
+      env:
+        INPUTS_TARGET: ${{ inputs.target }}
+
     # NAPI builds - only run on cache miss (slow, especially on Windows)
     # Must run before vite-plus TypeScript builds which depend on the bindings
     - name: Build NAPI bindings (Linux gnu)
       shell: bash
-      if: steps.cache-restore.outputs.cache-hit != 'true' && contains(inputs.target, 'linux') && !contains(inputs.target, 'musl')
+      if: steps.cache-restore.outputs.cache-hit != 'true' && contains(inputs.target, 'linux') && !contains(inputs.target, 'musl') && !contains(inputs.target, 'ohos')
       run: |
         pnpm --filter=vite-plus build-native --target ${INPUTS_TARGET} --use-napi-cross
       env:
@@ -111,6 +120,15 @@ runs:
         DEBUG: napi:*
         INPUTS_TARGET: ${{ inputs.target }}
 
+    - name: Build NAPI bindings (Linux OHOS)
+      shell: bash
+      if: steps.cache-restore.outputs.cache-hit != 'true' && contains(inputs.target, 'ohos')
+      run: |
+        pnpm --filter=vite-plus build-native --target ${INPUTS_TARGET}
+      env:
+        DEBUG: napi:*
+        INPUTS_TARGET: ${{ inputs.target }}
+
     - name: Build NAPI bindings (non-Linux targets)
       shell: bash
       if: steps.cache-restore.outputs.cache-hit != 'true' && !contains(inputs.target, 'linux')
@@ -121,7 +139,7 @@ runs:
         INPUTS_TARGET: ${{ inputs.target }}
 
     - name: Build Rust CLI binary (Linux gnu)
-      if: steps.cache-restore.outputs.cache-hit != 'true' && contains(inputs.target, 'linux') && !contains(inputs.target, 'musl')
+      if: steps.cache-restore.outputs.cache-hit != 'true' && contains(inputs.target, 'linux') && !contains(inputs.target, 'musl') && !contains(inputs.target, 'ohos')
       shell: bash
       run: |
         pnpm exec napi build --use-napi-cross --target ${INPUTS_TARGET} --release -p vite_global_cli
@@ -139,6 +157,15 @@ runs:
       env:
         TARGET_CC: clang
         TARGET_CFLAGS: ${{ contains(inputs.target, 'aarch64') && '-D_BSD_SOURCE' || '' }}
+        DEBUG: napi:*
+        INPUTS_TARGET: ${{ inputs.target }}
+
+    - name: Build Rust CLI binary (Linux OHOS)
+      if: steps.cache-restore.outputs.cache-hit != 'true' && contains(inputs.target, 'ohos')
+      shell: bash
+      run: |
+        pnpm exec napi build --target ${INPUTS_TARGET} --release -p vite_global_cli
+      env:
         DEBUG: napi:*
         INPUTS_TARGET: ${{ inputs.target }}
 
