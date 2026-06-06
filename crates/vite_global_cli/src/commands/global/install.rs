@@ -44,7 +44,6 @@ struct InstalledPackage {
     installed_version: String,
     bin_names: Vec<String>,
     js_bins: HashSet<String>,
-    had_existing_install: bool,
 }
 
 fn package_error(package_name: &str, error: impl Into<Error>) -> (Option<String>, Error) {
@@ -202,15 +201,12 @@ pub async fn install(
     for (index, (package_name, Package { spec: _, bin_names: _, install })) in
         packages.into_iter().enumerate()
     {
-        let Some(InstalledPackage { installed_version, bin_names, js_bins, had_existing_install }) =
-            install
-        else {
+        let Some(InstalledPackage { installed_version, bin_names, js_bins }) = install else {
             continue;
         };
         let stale_bin_names = match stale_bin_names_for_package(&package_name, &bin_names).await {
             Ok(bin_names) => bin_names,
             Err(error) => {
-                let _ = cleanup_failed_install(&package_name, !had_existing_install).await;
                 if first_error.is_none() {
                     first_error = Some(package_error(&package_name, error));
                 }
@@ -222,7 +218,6 @@ pub async fn install(
         let bin_dir = match get_bin_dir().map_err(|error| package_error(&package_name, error)) {
             Ok(bin_dir) => bin_dir,
             Err(error) => {
-                let _ = cleanup_failed_install(&package_name, !had_existing_install).await;
                 if first_error.is_none() {
                     first_error = Some(error);
                 }
@@ -242,7 +237,6 @@ pub async fn install(
         if let Err(error) =
             metadata.save().await.map_err(|error| package_error(&package_name, error))
         {
-            let _ = cleanup_failed_install(&package_name, !had_existing_install).await;
             if first_error.is_none() {
                 first_error = Some(error);
             }
@@ -281,7 +275,6 @@ pub async fn install(
         }
 
         if !finalized {
-            let _ = cleanup_failed_install(&package_name, !had_existing_install).await;
             continue;
         }
 
@@ -295,7 +288,6 @@ pub async fn install(
             .await;
 
             if let Err(error) = result.map_err(|error| package_error(&package_name, error)) {
-                let _ = cleanup_failed_install(&package_name, !had_existing_install).await;
                 if first_error.is_none() {
                     first_error = Some(error);
                 }
@@ -343,7 +335,6 @@ async fn install_one(
     // 1. Create package directory. npm owns replacement/recovery for existing contents.
     let packages_dir = get_packages_dir()?;
     let package_dir = packages_dir.join(package_name);
-    let had_existing_install = PackageMetadata::load(package_name).await?.is_some();
     tokio::fs::create_dir_all(&package_dir).await?;
 
     // 2. Run npm install with prefix set to the final package directory
@@ -362,7 +353,6 @@ async fn install_one(
         // Show captured output to help debug the failure
         let _ = std::io::stdout().write_all(&output.stdout);
         let _ = std::io::stderr().write_all(&output.stderr);
-        cleanup_failed_install(package_name, !had_existing_install).await?;
         return Err(Error::ConfigError(
             format!("npm install failed with exit code: {:?}", output.status.code()).into(),
         ));
@@ -372,7 +362,6 @@ async fn install_one(
     let package_json_path = node_modules_dir.join("package.json");
 
     if !tokio::fs::try_exists(&package_json_path).await.unwrap_or(false) {
-        cleanup_failed_install(package_name, !had_existing_install).await?;
         return Err(Error::ConfigError(
             format!(
                 "Package was not installed correctly, package.json not found at {}",
@@ -384,15 +373,11 @@ async fn install_one(
 
     let package_json_content = match tokio::fs::read_to_string(&package_json_path).await {
         Ok(content) => content,
-        Err(error) => {
-            cleanup_failed_install(package_name, !had_existing_install).await?;
-            return Err(error.into());
-        }
+        Err(error) => return Err(error.into()),
     };
     let package_json: serde_json::Value = match serde_json::from_str(&package_json_content) {
         Ok(package_json) => package_json,
         Err(error) => {
-            cleanup_failed_install(package_name, !had_existing_install).await?;
             return Err(Error::ConfigError(
                 format!("Failed to parse package.json: {error}").into(),
             ));
@@ -418,7 +403,7 @@ async fn install_one(
         }
     }
 
-    Ok(InstalledPackage { installed_version, bin_names, js_bins, had_existing_install })
+    Ok(InstalledPackage { installed_version, bin_names, js_bins })
 }
 
 async fn resolve_package_bin_names(
@@ -533,37 +518,6 @@ async fn resolve_preinstall_conflicts(
             return Err(package_error(&new_package, error));
         }
     }
-
-    Ok(())
-}
-
-async fn cleanup_failed_install(package_name: &str, remove_package: bool) -> Result<(), Error> {
-    if remove_package {
-        cleanup_installed_package(package_name).await?;
-    }
-    Ok(())
-}
-
-async fn cleanup_installed_package(package_name: &str) -> Result<(), Error> {
-    let bin_dir = get_bin_dir()?;
-    if let Some(metadata) = PackageMetadata::load(package_name).await? {
-        for bin_name in metadata.bins {
-            remove_package_shim(&bin_dir, &bin_name).await?;
-            BinConfig::delete(&bin_name).await?;
-        }
-    }
-
-    for bin_name in BinConfig::find_by_package(package_name).await? {
-        remove_package_shim(&bin_dir, &bin_name).await?;
-        BinConfig::delete(&bin_name).await?;
-    }
-
-    let packages_dir = get_packages_dir()?;
-    let package_dir = packages_dir.join(package_name);
-    if tokio::fs::try_exists(&package_dir).await.unwrap_or(false) {
-        tokio::fs::remove_dir_all(&package_dir).await?;
-    }
-    PackageMetadata::delete(package_name).await?;
 
     Ok(())
 }
