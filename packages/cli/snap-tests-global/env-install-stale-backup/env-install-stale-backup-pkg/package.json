@@ -1,7 +1,0 @@
-{
-  "name": "@scope/env-install-stale-backup-pkg",
-  "version": "1.0.0",
-  "bin": {
-    "env-install-stale-backup-cli": "./cli.js"
-  }
-}
