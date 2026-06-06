@@ -1,0 +1,14 @@
+{
+  "serial": true,
+  "ignoredPlatforms": ["win32"],
+  "commands": [
+    "node $SNAP_CASES_DIR/../snap-tests/.shared/mock-npm-registry.mjs -- vp install -g first-alias@npm:npm-alias-string-bin-real # Install alias whose real package has a string bin",
+    "test -L $VP_HOME/bin/npm-alias-string-bin-real && echo 'real bin link exists'",
+    "test ! -e $VP_HOME/bin/first-alias && echo 'alias bin link absent'",
+    "cat $VP_HOME/bins/npm-alias-string-bin-real.json # BinConfig should use the real string-bin name",
+    "node $SNAP_CASES_DIR/../snap-tests/.shared/mock-npm-registry.mjs -- vp install -g second-alias@npm:npm-alias-string-bin-real # A second alias should conflict on the real bin before install",
+    "test ! -d $VP_HOME/packages/second-alias && echo 'second alias was not installed'",
+    "cat $VP_HOME/bins/npm-alias-string-bin-real.json # BinConfig should still point to the first alias",
+    "vp remove -g first-alias # Cleanup"
+  ]
+}

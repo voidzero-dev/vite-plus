@@ -71,14 +71,11 @@ impl NpmRegistry {
         Ok(Self::from_paths(npm_path, node_bin_dir))
     }
 
-    async fn latest_package_info(
-        &self,
-        package_spec: &str,
-        package_name: &str,
-    ) -> Result<PackageInfo, Error> {
-        let output = npm_view(&self.npm_path, &self.node_bin_dir, package_spec, "").await?;
+    async fn latest_package_info(&self, package_spec: &str) -> Result<PackageInfo, Error> {
+        let view_spec = npm_view_spec_from_package_spec(package_spec);
+        let output = npm_view(&self.npm_path, &self.node_bin_dir, view_spec, "").await?;
 
-        parse_npm_view_package_info(package_name, &output)
+        parse_npm_view_package_info(&output)
     }
 }
 
@@ -169,8 +166,7 @@ pub(crate) async fn latest_package_infos_with_registry(
             let Some(package_query) = package_queries.next() else { break };
             pending.push(async {
                 let package_spec = package_query.package_spec.clone();
-                let info =
-                    registry.latest_package_info(&package_spec, &package_query.package_name).await;
+                let info = registry.latest_package_info(&package_spec).await;
                 PackageInfoResult { package_spec, info }
             });
         }
@@ -339,7 +335,20 @@ fn read_package_json_from_tarball(
     ))
 }
 
-fn parse_npm_view_package_info(package_name: &str, stdout: &[u8]) -> Result<PackageInfo, Error> {
+fn npm_view_spec_from_package_spec(spec: &str) -> &str {
+    if let Some((_, target)) = parse_npm_alias_spec(spec) { target } else { spec }
+}
+
+fn parse_npm_alias_spec(spec: &str) -> Option<(&str, &str)> {
+    let (alias, target) = spec.split_once("@npm:")?;
+    if alias.is_empty() || target.is_empty() {
+        return None;
+    }
+
+    Some((alias, target))
+}
+
+fn parse_npm_view_package_info(stdout: &[u8]) -> Result<PackageInfo, Error> {
     let raw = String::from_utf8_lossy(stdout);
     let trimmed = raw.trim();
     if trimmed.is_empty() {
@@ -366,8 +375,17 @@ fn parse_npm_view_package_info(package_name: &str, stdout: &[u8]) -> Result<Pack
         ));
     };
     let version = version.to_string();
-    let bins =
-        package.get("bin").map(|bin| bin_names_from_value(package_name, bin)).unwrap_or_default();
+    let bins = match package.get("bin") {
+        Some(bin) => {
+            let Some(name) = package["name"].as_str() else {
+                return Err(Error::ConfigError(
+                    "npm view returned package metadata with bin but without a name".into(),
+                ));
+            };
+            bin_names_from_value(name, bin)
+        }
+        None => Vec::new(),
+    };
 
     Ok(PackageInfo { version, bins })
 }
@@ -388,8 +406,7 @@ mod tests {
     #[test]
     fn parses_package_info() {
         let info = parse_npm_view_package_info(
-            "typescript",
-            br#"{"version":"5.0.0","bin":{"tsc":"bin/tsc","tsserver":"bin/tsserver"}}"#,
+            br#"{"name":"typescript","version":"5.0.0","bin":{"tsc":"bin/tsc","tsserver":"bin/tsserver"}}"#,
         )
         .unwrap();
         assert_eq!(info.version, "5.0.0");
@@ -399,8 +416,7 @@ mod tests {
     #[test]
     fn parses_package_info_array() {
         let info = parse_npm_view_package_info(
-            "testnpm2",
-            br#"[{"version":"1.0.0","bin":{"old":"old.js"}},{"version":"2.0.0","bin":"cli.js"}]"#,
+            br#"[{"name":"testnpm2","version":"1.0.0","bin":{"old":"old.js"}},{"name":"testnpm2","version":"2.0.0","bin":"cli.js"}]"#,
         )
         .unwrap();
         assert_eq!(info.version, "2.0.0");
@@ -408,15 +424,43 @@ mod tests {
     }
 
     #[test]
+    fn parses_string_bin_with_manifest_name() {
+        let info = parse_npm_view_package_info(
+            br#"{"name":"real-package","version":"1.0.0","bin":"cli.js"}"#,
+        )
+        .unwrap();
+        assert_eq!(info.bins, vec!["real-package"]);
+    }
+
+    #[test]
     fn parses_package_info_without_bins() {
-        let info = parse_npm_view_package_info("left-pad", br#"{"version":"1.3.0"}"#).unwrap();
+        let info = parse_npm_view_package_info(br#"{"version":"1.3.0"}"#).unwrap();
         assert_eq!(info.version, "1.3.0");
         assert!(info.bins.is_empty());
     }
 
     #[test]
+    fn rejects_bin_without_name() {
+        let error =
+            parse_npm_view_package_info(br#"{"version":"1.0.0","bin":"cli.js"}"#).unwrap_err();
+        assert!(error.to_string().contains("without a name"));
+    }
+
+    #[test]
+    fn parses_npm_alias_view_target() {
+        assert_eq!(npm_view_spec_from_package_spec("alias@npm:real"), "real");
+        assert_eq!(npm_view_spec_from_package_spec("alias@npm:real@1.0.0"), "real@1.0.0");
+        assert_eq!(npm_view_spec_from_package_spec("@scope/alias@npm:real"), "real");
+        assert_eq!(
+            npm_view_spec_from_package_spec("@scope/alias@npm:@scope/real@1.0.0"),
+            "@scope/real@1.0.0"
+        );
+        assert_eq!(npm_view_spec_from_package_spec("@scope/pkg@1.0.0"), "@scope/pkg@1.0.0");
+    }
+
+    #[test]
     fn rejects_empty_output() {
-        let error = parse_npm_view_package_info("typescript", b"\n").unwrap_err();
+        let error = parse_npm_view_package_info(b"\n").unwrap_err();
         assert!(error.to_string().contains("empty package metadata"));
     }
 }

@@ -1,0 +1,37 @@
+> node $SNAP_CASES_DIR/../snap-tests/.shared/mock-npm-registry.mjs -- vp install -g first-alias@npm:npm-alias-string-bin-real # Install alias whose real package has a string bin
+info: Installing 1 global package with Node.js <semver>
+✓ Installed first-alias <semver>
+  Bins: npm-alias-string-bin-real
+
+> test -L $VP_HOME/bin/npm-alias-string-bin-real && echo 'real bin link exists'
+real bin link exists
+
+> test ! -e $VP_HOME/bin/first-alias && echo 'alias bin link absent'
+alias bin link absent
+
+> cat $VP_HOME/bins/npm-alias-string-bin-real.json # BinConfig should use the real string-bin name
+{
+  "name": "npm-alias-string-bin-real",
+  "package": "first-alias",
+  "version": "1.0.0",
+  "nodeVersion": "22.22.0",
+  "source": "vp"
+}
+[1]> node $SNAP_CASES_DIR/../snap-tests/.shared/mock-npm-registry.mjs -- vp install -g second-alias@npm:npm-alias-string-bin-real # A second alias should conflict on the real bin before install
+error: Failed to install second-alias: Executable 'npm-alias-string-bin-real' is already installed by first-alias
+
+Please remove first-alias before installing second-alias, or use --force to auto-replace
+
+> test ! -d $VP_HOME/packages/second-alias && echo 'second alias was not installed'
+second alias was not installed
+
+> cat $VP_HOME/bins/npm-alias-string-bin-real.json # BinConfig should still point to the first alias
+{
+  "name": "npm-alias-string-bin-real",
+  "package": "first-alias",
+  "version": "1.0.0",
+  "nodeVersion": "22.22.0",
+  "source": "vp"
+}
+> vp remove -g first-alias # Cleanup
+Uninstalled first-alias
