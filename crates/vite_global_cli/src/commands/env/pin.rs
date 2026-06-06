@@ -69,9 +69,9 @@ async fn show_pinned(cwd: &AbsolutePathBuf) -> Result<ExitStatus, Error> {
     }
 
     // Check for inherited version from parent directories
-    if let Some((version, source_path)) = find_inherited_version(cwd).await? {
+    if let Some((version, source)) = find_inherited_version(cwd).await? {
         println!("No version pinned in current directory.");
-        println!("  Inherited: {version} from {}", source_path.as_path().display());
+        println!("  Inherited: {version} from {source}");
         return Ok(ExitStatus::default());
     }
 
@@ -92,17 +92,29 @@ async fn show_pinned(cwd: &AbsolutePathBuf) -> Result<ExitStatus, Error> {
     Ok(ExitStatus::default())
 }
 
-/// Find .node-version in parent directories.
-async fn find_inherited_version(
-    cwd: &AbsolutePathBuf,
-) -> Result<Option<(String, AbsolutePathBuf)>, Error> {
+/// Find an inherited pin (`.node-version` or `package.json#devEngines.runtime`)
+/// in parent directories.
+///
+/// Mirrors the resolution order within each directory: `.node-version` first,
+/// then the devEngines.runtime node entry. Returns the version and a display
+/// string describing the source.
+async fn find_inherited_version(cwd: &AbsolutePathBuf) -> Result<Option<(String, String)>, Error> {
     let mut current: Option<AbsolutePathBuf> = cwd.parent().map(|p| p.to_absolute_path_buf());
 
     while let Some(dir) = current {
         let node_version_path = dir.join(NODE_VERSION_FILE);
         if tokio::fs::try_exists(&node_version_path).await.unwrap_or(false) {
             let content = tokio::fs::read_to_string(&node_version_path).await?;
-            return Ok(Some((content.trim().to_string(), node_version_path)));
+            return Ok(Some((
+                content.trim().to_string(),
+                node_version_path.as_path().display().to_string(),
+            )));
+        }
+        if let Some(version) = read_dev_engines_node_version(&dir).await {
+            return Ok(Some((
+                version,
+                format!("{} (devEngines.runtime)", dir.join(PACKAGE_JSON_FILE).as_path().display()),
+            )));
         }
         current = dir.parent().map(|p| p.to_absolute_path_buf());
     }
@@ -619,6 +631,49 @@ mod tests {
         assert!(result.is_some());
         let (version, _) = result.unwrap();
         assert_eq!(version, "20.18.0");
+    }
+
+    #[tokio::test]
+    async fn test_find_inherited_version_from_dev_engines() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Ancestor pin declared via devEngines.runtime instead of .node-version
+        tokio::fs::write(
+            temp_path.join("package.json"),
+            r#"{"devEngines":{"runtime":{"name":"node","version":"^24.0.0"}}}"#,
+        )
+        .await
+        .unwrap();
+
+        let subdir = temp_path.join("subdir");
+        tokio::fs::create_dir(&subdir).await.unwrap();
+
+        let (version, source) = find_inherited_version(&subdir).await.unwrap().unwrap();
+        assert_eq!(version, "^24.0.0");
+        assert!(source.ends_with("package.json (devEngines.runtime)"), "got: {source}");
+    }
+
+    #[tokio::test]
+    async fn test_find_inherited_version_node_version_wins_over_dev_engines() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Same directory declares both: .node-version wins (resolution order)
+        tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
+        tokio::fs::write(
+            temp_path.join("package.json"),
+            r#"{"devEngines":{"runtime":{"name":"node","version":"^24.0.0"}}}"#,
+        )
+        .await
+        .unwrap();
+
+        let subdir = temp_path.join("subdir");
+        tokio::fs::create_dir(&subdir).await.unwrap();
+
+        let (version, source) = find_inherited_version(&subdir).await.unwrap().unwrap();
+        assert_eq!(version, "20.18.0");
+        assert!(source.ends_with(".node-version"), "got: {source}");
     }
 
     #[tokio::test]

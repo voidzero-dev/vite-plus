@@ -637,15 +637,21 @@ async fn find_nearest_package_json(cwd: &AbsolutePathBuf) -> Option<(AbsolutePat
     }
 }
 
-/// Find the nearest `.node-version` file walking up from `cwd`.
-async fn find_nearest_node_version_file(cwd: &AbsolutePathBuf) -> Option<String> {
+/// Find the nearest `devEngines.runtime` node declaration walking up from `cwd`
+/// (the declaration may live in an ancestor manifest, e.g. a monorepo root).
+async fn find_nearest_dev_engines_node_version(cwd: &AbsolutePathBuf) -> Option<vite_str::Str> {
     let mut current = cwd.clone();
     loop {
-        if let Ok(content) = tokio::fs::read_to_string(current.join(".node-version")).await {
-            let version = content.lines().next().unwrap_or("").trim().to_string();
-            if !version.is_empty() {
-                return Some(version);
-            }
+        if let Ok(content) = tokio::fs::read_to_string(current.join("package.json")).await
+            && let Ok(pkg) = serde_json::from_str::<vite_shared::PackageJson>(&content)
+            && let Some(declared) = pkg
+                .dev_engines
+                .as_ref()
+                .and_then(|de| de.runtime.as_ref())
+                .and_then(|rt| rt.find_by_name("node"))
+                .and_then(|entry| entry.version.clone())
+        {
+            return Some(declared);
         }
         current = current.parent()?.to_absolute_path_buf();
     }
@@ -732,19 +738,22 @@ async fn collect_dev_engines_findings(
         pm_pkg.dev_engines.as_ref().and_then(|de| de.package_manager.as_ref());
 
     // .node-version vs devEngines.runtime (semver-aware: only exact .node-version
-    // values can conflict with a declared range)
-    if let Some(declared) = runtime_field
-        .and_then(|rt| rt.find_by_name("node"))
-        .and_then(|entry| entry.version.as_ref())
-        && let Some(node_version) = find_nearest_node_version_file(cwd).await
-        && let Ok(version) = node_semver::Version::parse(&node_version)
+    // values can conflict with a declared range). Both sides follow the resolution
+    // walk: the check fires only when a .node-version actually wins resolution, and
+    // the devEngines.runtime declaration may live in an ancestor manifest rather
+    // than the nearest package.json.
+    if let Ok(Some(resolution)) = vite_js_runtime::resolve_node_version(cwd, true).await
+        && resolution.source == vite_js_runtime::VersionSource::NodeVersionFile
+        && let Ok(version) = node_semver::Version::parse(&resolution.version)
+        && let Some(declared) = find_nearest_dev_engines_node_version(cwd).await
         && let Ok(range) = node_semver::Range::parse(declared.as_str())
         && !range.satisfies(&version)
     {
         findings.push(DevEnginesFinding::warn(
             "Runtime",
             format!(
-                ".node-version ({node_version}) does not satisfy devEngines.runtime \"{declared}\""
+                ".node-version ({node_version}) does not satisfy devEngines.runtime \"{declared}\"",
+                node_version = resolution.version
             ),
         ));
     }
@@ -1238,6 +1247,55 @@ mod tests {
             "got: {}",
             findings[0].message
         );
+    }
+
+    #[tokio::test]
+    async fn test_dev_engines_findings_node_version_conflict_with_ancestor_manifest() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // The devEngines.runtime declaration lives in an ancestor manifest, not the
+        // nearest package.json
+        tokio::fs::write(
+            temp_path.join("package.json"),
+            r#"{"devEngines":{"runtime":{"name":"node","version":"^24.0.0"}}}"#,
+        )
+        .await
+        .unwrap();
+        let app_dir = temp_path.join("app");
+        tokio::fs::create_dir_all(&app_dir).await.unwrap();
+        tokio::fs::write(app_dir.join("package.json"), r#"{"name": "app"}"#).await.unwrap();
+        tokio::fs::write(app_dir.join(".node-version"), "20.18.0\n").await.unwrap();
+
+        let findings = collect_dev_engines_findings(&app_dir, None).await;
+        assert_eq!(findings.len(), 1, "findings: {:?}", messages(&findings));
+        assert!(findings[0].warn);
+        assert!(
+            findings[0].message.contains(".node-version (20.18.0) does not satisfy"),
+            "got: {}",
+            findings[0].message
+        );
+    }
+
+    #[tokio::test]
+    async fn test_dev_engines_findings_no_conflict_when_dev_engines_wins_resolution() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // A parent .node-version that resolution never reaches: the nearer
+        // devEngines.runtime wins, so there is no effective conflict
+        tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
+        let app_dir = temp_path.join("app");
+        tokio::fs::create_dir_all(&app_dir).await.unwrap();
+        tokio::fs::write(
+            app_dir.join("package.json"),
+            r#"{"devEngines":{"runtime":{"name":"node","version":"^24.0.0"}}}"#,
+        )
+        .await
+        .unwrap();
+
+        let findings = collect_dev_engines_findings(&app_dir, None).await;
+        assert!(findings.is_empty(), "findings: {:?}", messages(&findings));
     }
 
     #[tokio::test]
