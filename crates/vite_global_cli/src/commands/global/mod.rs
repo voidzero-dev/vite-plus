@@ -26,9 +26,15 @@ pub mod packages;
 pub(crate) const CORE_SHIMS: &[&str] = &["node", "npm", "npx", "vp"];
 
 #[derive(Debug)]
-struct PackageVersion {
+struct PackageInfoResult {
     package_spec: String,
-    version: Result<String, Error>,
+    info: Result<PackageInfo, Error>,
+}
+
+#[derive(Debug)]
+pub(crate) struct PackageInfo {
+    pub version: String,
+    pub bins: Vec<String>,
 }
 
 struct NpmRegistry {
@@ -55,10 +61,14 @@ impl NpmRegistry {
         Ok(Self { npm_path, node_bin_dir })
     }
 
-    async fn latest_package_version(&self, package_spec: &str) -> Result<String, Error> {
-        let output = npm_view(&self.npm_path, &self.node_bin_dir, package_spec, "version").await?;
+    async fn latest_package_info(
+        &self,
+        package_spec: &str,
+        package_name: &str,
+    ) -> Result<PackageInfo, Error> {
+        let output = npm_view(&self.npm_path, &self.node_bin_dir, package_spec, "").await?;
 
-        parse_npm_view_version(&output)
+        parse_npm_view_package_info(package_name, &output)
     }
 }
 
@@ -68,8 +78,13 @@ async fn npm_view(
     package_spec: &str,
     field: &str,
 ) -> Result<Vec<u8>, Error> {
-    let output = Command::new(npm_path.as_path())
-        .args(["view", package_spec, field, "--json"])
+    let mut command = Command::new(npm_path.as_path());
+    command.args(["view", package_spec]);
+    if !field.is_empty() {
+        command.arg(field);
+    }
+    let output = command
+        .arg("--json")
         .env("PATH", format_path_prepended(node_bin_dir.as_path()))
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -86,10 +101,10 @@ async fn npm_view(
     Ok(output.stdout)
 }
 
-pub(crate) async fn latest_package_versions(
+pub(crate) async fn latest_package_infos(
     specs: &[String],
     concurrency: usize,
-) -> Result<HashMap<String, Result<String, Error>>, Error> {
+) -> Result<HashMap<String, Result<PackageInfo, Error>>, Error> {
     if specs.is_empty() {
         return Ok(HashMap::new());
     }
@@ -97,7 +112,7 @@ pub(crate) async fn latest_package_versions(
     let registry = NpmRegistry::resolve().await?;
     let concurrency = concurrency.max(1);
     let mut package_specs = specs.iter();
-    let mut versions = HashMap::with_capacity(specs.len());
+    let mut infos = HashMap::with_capacity(specs.len());
 
     let progress = ProgressBar::new(specs.len() as u64);
     if std::io::stderr().is_terminal() && std::env::var_os("CI").is_none() {
@@ -118,8 +133,13 @@ pub(crate) async fn latest_package_versions(
             let Some(package_spec) = package_specs.next() else { break };
             queries.push(async {
                 let package_spec = package_spec.clone();
-                let version = registry.latest_package_version(&package_spec).await;
-                PackageVersion { package_spec, version }
+                let info = match parse_package_spec(&package_spec) {
+                    Ok((package_name, _, _)) => {
+                        registry.latest_package_info(&package_spec, &package_name).await
+                    }
+                    Err(error) => Err(error),
+                };
+                PackageInfoResult { package_spec, info }
             });
         }
 
@@ -127,14 +147,14 @@ pub(crate) async fn latest_package_versions(
             break;
         }
 
-        if let Some(version) = queries.next().await {
+        if let Some(info) = queries.next().await {
             progress.inc(1);
-            versions.insert(version.package_spec, version.version);
+            infos.insert(info.package_spec, info.info);
         }
     }
     progress.finish_and_clear();
 
-    Ok(versions)
+    Ok(infos)
 }
 
 /// Return true for package specs that refer to local filesystem content.
@@ -287,22 +307,45 @@ fn read_package_json_from_tarball(
     ))
 }
 
-fn parse_npm_view_version(stdout: &[u8]) -> Result<String, Error> {
+fn parse_npm_view_package_info(package_name: &str, stdout: &[u8]) -> Result<PackageInfo, Error> {
     let raw = String::from_utf8_lossy(stdout);
     let trimmed = raw.trim();
     if trimmed.is_empty() {
-        return Err(Error::ConfigError("npm view returned an empty version".into()));
+        return Err(Error::ConfigError("npm view returned empty package metadata".into()));
     }
 
-    match serde_json::from_str::<serde_json::Value>(trimmed) {
-        Ok(serde_json::Value::String(version)) => Ok(version),
-        Ok(serde_json::Value::Array(versions)) => {
-            let Some(version) = versions.iter().rev().find_map(|version| version.as_str()) else {
-                return Err(Error::ConfigError("npm view returned an empty version list".into()));
-            };
-            Ok(version.to_string())
-        }
-        _ => Ok(trimmed.to_string()),
+    let value = serde_json::from_str::<serde_json::Value>(trimmed)?;
+    let package = match value {
+        serde_json::Value::Array(values) => values
+            .iter()
+            .rev()
+            .find(|value| value.get("version").and_then(|version| version.as_str()).is_some())
+            .cloned(),
+        value if value.get("version").and_then(|version| version.as_str()).is_some() => Some(value),
+        _ => None,
+    }
+    .ok_or_else(|| {
+        Error::ConfigError("npm view returned package metadata without a version".into())
+    })?;
+
+    let Some(version) = package["version"].as_str() else {
+        return Err(Error::ConfigError(
+            "npm view returned package metadata without a version".into(),
+        ));
+    };
+    let version = version.to_string();
+    let bins =
+        package.get("bin").map(|bin| bin_names_from_value(package_name, bin)).unwrap_or_default();
+
+    Ok(PackageInfo { version, bins })
+}
+
+fn bin_names_from_value(package_name: &str, bin: &serde_json::Value) -> Vec<String> {
+    let default_bin_name = package_name.split('/').last().unwrap_or(package_name).to_string();
+    match bin {
+        serde_json::Value::String(_) => vec![default_bin_name],
+        serde_json::Value::Object(map) => map.keys().cloned().collect(),
+        _ => Vec::new(),
     }
 }
 
@@ -311,26 +354,37 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parses_json_string_version() {
-        let version = parse_npm_view_version(br#""5.0.0""#).unwrap();
-        assert_eq!(version, "5.0.0");
+    fn parses_package_info() {
+        let info = parse_npm_view_package_info(
+            "typescript",
+            br#"{"version":"5.0.0","bin":{"tsc":"bin/tsc","tsserver":"bin/tsserver"}}"#,
+        )
+        .unwrap();
+        assert_eq!(info.version, "5.0.0");
+        assert_eq!(info.bins, vec!["tsc", "tsserver"]);
     }
 
     #[test]
-    fn parses_json_array_version() {
-        let version = parse_npm_view_version(br#"["4.9.5","5.0.0"]"#).unwrap();
-        assert_eq!(version, "5.0.0");
+    fn parses_package_info_array() {
+        let info = parse_npm_view_package_info(
+            "testnpm2",
+            br#"[{"version":"1.0.0","bin":{"old":"old.js"}},{"version":"2.0.0","bin":"cli.js"}]"#,
+        )
+        .unwrap();
+        assert_eq!(info.version, "2.0.0");
+        assert_eq!(info.bins, vec!["testnpm2"]);
     }
 
     #[test]
-    fn parses_plain_version() {
-        let version = parse_npm_view_version(b"5.0.0").unwrap();
-        assert_eq!(version, "5.0.0");
+    fn parses_package_info_without_bins() {
+        let info = parse_npm_view_package_info("left-pad", br#"{"version":"1.3.0"}"#).unwrap();
+        assert_eq!(info.version, "1.3.0");
+        assert!(info.bins.is_empty());
     }
 
     #[test]
     fn rejects_empty_output() {
-        let error = parse_npm_view_version(b"\n").unwrap_err();
-        assert!(error.to_string().contains("empty version"));
+        let error = parse_npm_view_package_info("typescript", b"\n").unwrap_err();
+        assert!(error.to_string().contains("empty package metadata"));
     }
 }

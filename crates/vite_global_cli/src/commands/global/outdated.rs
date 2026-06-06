@@ -9,7 +9,7 @@ use owo_colors::OwoColorize;
 use serde::Serialize;
 use vite_install::commands::outdated::Format;
 
-use super::{latest_package_versions, parse_package_spec};
+use super::{latest_package_infos, parse_package_spec};
 use crate::{
     commands::env::{
         config::{get_node_modules_dir, get_packages_dir},
@@ -24,8 +24,9 @@ pub struct OutdatedPackage {
     pub current: String,
     pub latest: String,
     pub spec: Option<String>,
+    current_bins: Vec<String>,
+    pub wanted_bins: Vec<String>,
     node: String,
-    bins: Vec<String>,
 }
 
 /// For json output in `vp outdated` command
@@ -75,11 +76,11 @@ pub async fn get_outdated_packages(
         .map(|(package, spec)| spec.clone().unwrap_or_else(|| package.name.clone()))
         .collect::<Vec<_>>();
 
-    let mut latest_versions_map = HashMap::new();
-    for (package_spec, version) in latest_package_versions(&specs, concurrency).await? {
-        match version {
-            Ok(version) => {
-                latest_versions_map.insert(package_spec, version);
+    let mut latest_infos_map = HashMap::new();
+    for (package_spec, info) in latest_package_infos(&specs, concurrency).await? {
+        match info {
+            Ok(info) => {
+                latest_infos_map.insert(package_spec, info);
             }
             Err(error) => {
                 if error_on_fail {
@@ -88,7 +89,7 @@ pub async fn get_outdated_packages(
             }
         }
     }
-    let mut latest_versions = latest_versions_map;
+    let mut latest_infos = latest_infos_map;
 
     // 3. Compare installed metadata with registry versions. Packages whose
     //    registry lookup failed are skipped because there is no version to compare.
@@ -96,20 +97,21 @@ pub async fn get_outdated_packages(
     for (package, spec) in installed {
         let default_key = package.name.clone();
         let key = spec.as_deref().unwrap_or(&default_key);
-        let Some(version) = latest_versions.remove(key) else {
+        let Some(info) = latest_infos.remove(key) else {
             continue;
         };
-        if package.version.trim() == version.trim() {
+        if package.version.trim() == info.version.trim() {
             continue;
         }
 
         outdated.push(OutdatedPackage {
             name: package.name,
             current: package.version,
-            latest: version,
+            latest: info.version,
             spec,
+            current_bins: package.bins,
+            wanted_bins: info.bins,
             node: package.platform.node,
-            bins: package.bins,
         });
     }
 
@@ -189,8 +191,11 @@ fn print_list(packages: &[OutdatedPackage], long: bool) {
 
         if long {
             println!("{} {}", "node".dimmed(), package.node);
-            if !package.bins.is_empty() {
-                println!("{} {}", "bins".dimmed(), package.bins.join(", "));
+            if !package.current_bins.is_empty() {
+                println!("{} {}", "current bins".dimmed(), package.current_bins.join(", "));
+            }
+            if !package.wanted_bins.is_empty() {
+                println!("{} {}", "wanted bins".dimmed(), package.wanted_bins.join(", "));
             }
         }
     }
@@ -245,7 +250,7 @@ fn print_table(packages: &[OutdatedPackage], long: bool) {
                 "",
                 package.node,
                 "",
-                package.bins.join(", ")
+                package.wanted_bins.join(", ")
             );
         } else {
             println!(

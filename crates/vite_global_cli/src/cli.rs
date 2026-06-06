@@ -708,7 +708,6 @@ async fn managed_update(
         current_node_version = get_current_node_version().await?;
 
         for metadata in &all {
-            known_bins.insert(metadata.name.clone(), metadata.bins.clone());
             if !is_same_node_version(&metadata.platform.node, &current_node_version) {
                 node_mismatches.push(NodeMismatchPackage {
                     name: metadata.name.clone(),
@@ -740,7 +739,6 @@ async fn managed_update(
                         installed_node: metadata.platform.node.clone(),
                     });
                 }
-                known_bins.insert(package_name, metadata.bins);
                 managed_specs.push(package.clone());
             } else {
                 to_update.push(package.clone());
@@ -756,7 +754,12 @@ async fn managed_update(
         true,
     )
     .await?;
-    to_update.extend(outdated.into_iter().map(|package| package.spec.unwrap_or(package.name)));
+    for package in outdated {
+        let package_name = package.name;
+        let package_spec = package.spec.unwrap_or_else(|| package_name.clone());
+        known_bins.insert(package_name, package.wanted_bins);
+        to_update.push(package_spec);
+    }
 
     let to_update_set = to_update.iter().map(String::as_str).collect::<HashSet<_>>();
     node_mismatches.retain(|package| !to_update_set.contains(package.spec.as_str()));

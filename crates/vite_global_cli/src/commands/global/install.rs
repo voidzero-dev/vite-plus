@@ -236,14 +236,12 @@ pub async fn install(
             let package = packages.get(package_name).unwrap();
             let package_name = package_name.clone();
             let package_spec = package.spec.to_string();
-            let bin_names = package.bin_names.clone();
             let npm_path = &npm_path;
             let node_bin_dir = &node_bin_dir;
 
             installs.push(async move {
                 let install =
-                    install_one(&package_name, &package_spec, &bin_names, npm_path, node_bin_dir)
-                        .await;
+                    install_one(&package_name, &package_spec, npm_path, node_bin_dir).await;
                 (package_name, install)
             });
         }
@@ -399,7 +397,6 @@ pub async fn install(
 async fn install_one(
     package_name: &str,
     package_spec: &str,
-    preflight_bin_names: &[String],
     npm_path: &AbsolutePathBuf,
     node_bin_dir: &AbsolutePathBuf,
 ) -> Result<InstalledPackage, Error> {
@@ -458,16 +455,9 @@ async fn install_one(
     let installed_version = package_json["version"].as_str().unwrap_or("unknown").to_string();
     let binary_infos = extract_binaries(&package_json);
 
-    let bin_names = if preflight_bin_names.is_empty() {
-        binary_infos.iter().map(|info| info.name.clone()).collect()
-    } else {
-        preflight_bin_names.to_vec()
-    };
+    let bin_names = binary_infos.iter().map(|info| info.name.clone()).collect::<Vec<_>>();
     let mut js_bins = HashSet::new();
     for info in binary_infos {
-        if !bin_names.contains(&info.name) {
-            continue;
-        }
         let binary_path = node_modules_dir.join(&info.path);
         if is_javascript_binary(&binary_path) {
             js_bins.insert(info.name);
