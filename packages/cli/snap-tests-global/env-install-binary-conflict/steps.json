@@ -5,6 +5,7 @@
     "vp install -g ./env-binary-conflict-pkg-a # Install pkg-a which provides env-binary-conflict-cli binary",
     "cat $VP_HOME/bins/env-binary-conflict-cli.json # Bin config should point to pkg-a",
     "vp install -g ./env-binary-conflict-pkg-b # Try to install pkg-b without force - should fail",
+    "test ! -d $VP_HOME/packages/env-binary-conflict-pkg-b && echo 'pkg-b was not installed' # Conflict should be detected before npm install",
     "cat $VP_HOME/bins/env-binary-conflict-cli.json # Bin config should still point to pkg-a",
     "vp install -g --force ./env-binary-conflict-pkg-b # Force install pkg-b - should auto-uninstall pkg-a",
     "cat $VP_HOME/bins/env-binary-conflict-cli.json # Bin config should now point to pkg-b",

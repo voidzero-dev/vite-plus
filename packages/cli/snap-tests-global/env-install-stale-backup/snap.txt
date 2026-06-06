@@ -3,14 +3,13 @@ info: Installing 1 global package with Node.js <semver>
 ✓ Installed @scope/env-install-stale-backup-pkg <semver>
   Bins: env-install-stale-backup-cli
 
-> node -e "const fs = require('fs'); const path = require('path'); const cp = require('child_process'); const dir = path.join(process.env.VP_HOME, 'tmp/packages/@scope/env-install-stale-backup-pkg'); fs.mkdirSync(dir, { recursive: true }); const exe = path.join(dir, 'locked-node.exe'); fs.copyFileSync(process.execPath, exe); fs.writeFileSync(path.join(dir, 'stale.txt'), 'stale'); const child = cp.spawn(exe, ['-e', 'setTimeout(() => {}, 60000)'], { detached: true, stdio: 'ignore' }); child.unref(); fs.writeFileSync(path.join(dir, 'pid.txt'), String(child.pid));" # Seed stale locked fixed backup path
-> vp install -g ./env-install-stale-backup-pkg # Reinstall should ignore stale backup
+> vp install -g ./env-install-stale-backup-pkg # Reinstall should let npm replace package contents directly
 info: Installing 1 global package with Node.js <semver>
 ✓ Installed @scope/env-install-stale-backup-pkg <semver>
   Bins: env-install-stale-backup-cli
 
-> node -e "const fs = require('fs'); const path = require('path'); console.log(fs.readFileSync(path.join(process.env.VP_HOME, 'tmp/packages/@scope/env-install-stale-backup-pkg/stale.txt'), 'utf8'));" # Stale backup should be untouched
-stale
+> test ! -e $VP_HOME/tmp/packages/@scope/env-install-stale-backup-pkg && echo 'no package backup created' # Reinstall should not create package backups
+no package backup created
 
 > node -e "const fs = require('fs'); const path = require('path'); console.log(fs.readFileSync(path.join(process.env.VP_HOME, 'bins/env-install-stale-backup-cli.json'), 'utf8'));" # Bin config should still point to package
 {
@@ -21,6 +20,5 @@ stale
   "source": "vp"
 }
 
-> node -e "const fs = require('fs'); const path = require('path'); const pidPath = path.join(process.env.VP_HOME, 'tmp/packages/@scope/env-install-stale-backup-pkg/pid.txt'); try { process.kill(Number(fs.readFileSync(pidPath, 'utf8')), 'SIGTERM'); } catch {}" # Stop stale backup lock process
 > vp remove -g @scope/env-install-stale-backup-pkg # Cleanup
 Uninstalled @scope/env-install-stale-backup-pkg

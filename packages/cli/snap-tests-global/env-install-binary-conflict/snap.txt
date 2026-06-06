@@ -12,10 +12,12 @@ info: Installing 1 global package with Node.js <semver>
   "source": "vp"
 }
 [1]> vp install -g ./env-binary-conflict-pkg-b # Try to install pkg-b without force - should fail
-info: Installing 1 global package with Node.js <semver>
 error: Failed to install env-binary-conflict-pkg-b: Executable 'env-binary-conflict-cli' is already installed by env-binary-conflict-pkg-a
 
 Please remove env-binary-conflict-pkg-a before installing env-binary-conflict-pkg-b, or use --force to auto-replace
+
+> test ! -d $VP_HOME/packages/env-binary-conflict-pkg-b && echo 'pkg-b was not installed' # Conflict should be detected before npm install
+pkg-b was not installed
 
 > cat $VP_HOME/bins/env-binary-conflict-cli.json # Bin config should still point to pkg-a
 {
@@ -26,9 +28,9 @@ Please remove env-binary-conflict-pkg-a before installing env-binary-conflict-pk
   "source": "vp"
 }
 > vp install -g --force ./env-binary-conflict-pkg-b # Force install pkg-b - should auto-uninstall pkg-a
-info: Installing 1 global package with Node.js <semver>
 Uninstalling env-binary-conflict-pkg-a (conflicts with env-binary-conflict-pkg-b)...
 Uninstalled env-binary-conflict-pkg-a
+info: Installing 1 global package with Node.js <semver>
 ✓ Installed env-binary-conflict-pkg-b <semver>
   Bins: env-binary-conflict-cli
 
