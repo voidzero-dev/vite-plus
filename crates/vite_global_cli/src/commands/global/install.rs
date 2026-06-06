@@ -26,7 +26,10 @@ use crate::{
             },
             package_metadata::PackageMetadata,
         },
-        global::{CORE_SHIMS, is_local_package_spec, npm_view, parse_package_spec},
+        global::{
+            CORE_SHIMS, NpmRegistry, PackageInfoQuery, is_local_package_spec,
+            latest_package_infos_with_registry, parse_package_spec,
+        },
     },
     error::Error,
 };
@@ -113,9 +116,11 @@ pub async fn install(
     let node_bin_dir = runtime.get_bin_prefix();
     let npm_path =
         if cfg!(windows) { node_bin_dir.join("npm.cmd") } else { node_bin_dir.join("npm") };
+    let registry = NpmRegistry::from_paths(npm_path.clone(), node_bin_dir.clone());
 
     // 3. Parse package spec, get package bins
     let mut packages = IndexMap::<String, Package>::new();
+    let mut bin_queries = Vec::new();
     for package_spec in package_specs {
         // Parse package spec (e.g., "typescript", "typescript@5.0.0", "@scope/pkg")
 
@@ -123,20 +128,56 @@ pub async fn install(
             Ok(result) => result,
             Err(error) => return Err((Some(package_spec.clone()), error)),
         };
-        let bin_names = match resolve_package_bin_names(
-            package_spec,
-            &package_name,
-            parsed_bins,
-            &mode,
-            &npm_path,
-            &node_bin_dir,
-        )
-        .await
-        {
-            Ok(bin_names) => bin_names,
-            Err(error) => return Err((Some(package_name), error)),
+        let bin_names = match parsed_bins {
+            Some(bin_names) => bin_names,
+            None if matches!(mode, InstallMode::Update { .. }) => {
+                if let InstallMode::Update { known_bins } = &mode
+                    && let Some(bin_names) = known_bins.get(&package_name)
+                {
+                    bin_names.clone()
+                } else {
+                    bin_queries.push(PackageInfoQuery {
+                        package_spec: package_spec.clone(),
+                        package_name: package_name.clone(),
+                    });
+                    Vec::new()
+                }
+            }
+            None => {
+                bin_queries.push(PackageInfoQuery {
+                    package_spec: package_spec.clone(),
+                    package_name: package_name.clone(),
+                });
+                Vec::new()
+            }
         };
         packages.insert(package_name, Package { spec: package_spec, bin_names, install: None });
+    }
+
+    let mut bin_infos =
+        match latest_package_infos_with_registry(&registry, &bin_queries, concurrency).await {
+            Ok(infos) => infos,
+            Err(error) => return Err((None, error)),
+        };
+    for PackageInfoQuery { package_spec, package_name } in bin_queries {
+        let Some(info) = bin_infos.remove(&package_spec) else {
+            return Err((
+                Some(package_name),
+                Error::ConfigError(
+                    format!("No package metadata returned for {package_spec}").into(),
+                ),
+            ));
+        };
+        match info {
+            Ok(info) => {
+                if let Some(package) = packages.get_mut(&package_name) {
+                    package.bin_names = info.bins.clone();
+                }
+            }
+            Err(error) => {
+                return Err((Some(package_name), error));
+            }
+        }
     }
     let packages_count = packages.len();
 
@@ -487,59 +528,6 @@ async fn install_one(
     }
 
     Ok(InstalledPackage { installed_version, bin_names, js_bins })
-}
-
-async fn resolve_package_bin_names(
-    package_spec: &str,
-    package_name: &str,
-    parsed_bins: Option<Vec<String>>,
-    mode: &InstallMode<'_>,
-    npm_path: &AbsolutePathBuf,
-    node_bin_dir: &AbsolutePathBuf,
-) -> Result<Vec<String>, Error> {
-    match parsed_bins {
-        Some(bin_names) => Ok(bin_names),
-        None if matches!(mode, InstallMode::Update { .. }) => {
-            if let InstallMode::Update { known_bins } = mode
-                && let Some(bin_names) = known_bins.get(package_name)
-            {
-                return Ok(bin_names.clone());
-            }
-            parse_npm_view_bin(
-                package_name,
-                &npm_view(npm_path, node_bin_dir, package_spec, "bin").await?,
-            )
-        }
-        None => parse_npm_view_bin(
-            package_name,
-            &npm_view(npm_path, node_bin_dir, package_spec, "bin").await?,
-        ),
-    }
-}
-
-fn parse_npm_view_bin(package_name: &str, stdout: &[u8]) -> Result<Vec<String>, Error> {
-    let raw = String::from_utf8_lossy(stdout);
-    let trimmed = raw.trim();
-    if trimmed.is_empty() {
-        return Ok(Vec::new());
-    }
-
-    let value: serde_json::Value = serde_json::from_str(trimmed)?;
-    let default_bin_name = package_name.split('/').last().unwrap_or(package_name).to_string();
-    Ok(match value {
-        serde_json::Value::String(_) => vec![default_bin_name],
-        serde_json::Value::Object(map) => map.keys().cloned().collect(),
-        serde_json::Value::Array(values) => values
-            .iter()
-            .rev()
-            .find_map(|value| match value {
-                serde_json::Value::Object(map) => Some(map.keys().cloned().collect()),
-                serde_json::Value::String(_) => Some(vec![default_bin_name.clone()]),
-                _ => None,
-            })
-            .unwrap_or_default(),
-        _ => Vec::new(),
-    })
 }
 
 async fn stale_bin_names_for_package(

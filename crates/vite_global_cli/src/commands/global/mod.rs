@@ -32,17 +32,27 @@ struct PackageInfoResult {
 }
 
 #[derive(Debug)]
+pub(crate) struct PackageInfoQuery {
+    pub package_spec: String,
+    pub package_name: String,
+}
+
+#[derive(Debug)]
 pub(crate) struct PackageInfo {
     pub version: String,
     pub bins: Vec<String>,
 }
 
-struct NpmRegistry {
+pub(crate) struct NpmRegistry {
     npm_path: AbsolutePathBuf,
     node_bin_dir: AbsolutePathBuf,
 }
 
 impl NpmRegistry {
+    pub(crate) fn from_paths(npm_path: AbsolutePathBuf, node_bin_dir: AbsolutePathBuf) -> Self {
+        Self { npm_path, node_bin_dir }
+    }
+
     async fn resolve() -> Result<Self, Error> {
         let cwd = current_dir().map_err(|error| {
             Error::ConfigError(format!("Cannot get current directory: {error}").into())
@@ -58,7 +68,7 @@ impl NpmRegistry {
         let npm_path =
             if cfg!(windows) { node_bin_dir.join("npm.cmd") } else { node_bin_dir.join("npm") };
 
-        Ok(Self { npm_path, node_bin_dir })
+        Ok(Self::from_paths(npm_path, node_bin_dir))
     }
 
     async fn latest_package_info(
@@ -110,11 +120,37 @@ pub(crate) async fn latest_package_infos(
     }
 
     let registry = NpmRegistry::resolve().await?;
-    let concurrency = concurrency.max(1);
-    let mut package_specs = specs.iter();
     let mut infos = HashMap::with_capacity(specs.len());
+    let mut queries = Vec::new();
+    for package_spec in specs {
+        match parse_package_spec(package_spec) {
+            Ok((package_name, _, _)) => {
+                queries.push(PackageInfoQuery { package_spec: package_spec.clone(), package_name });
+            }
+            Err(error) => {
+                infos.insert(package_spec.clone(), Err(error));
+            }
+        }
+    }
 
-    let progress = ProgressBar::new(specs.len() as u64);
+    infos.extend(latest_package_infos_with_registry(&registry, &queries, concurrency).await?);
+    Ok(infos)
+}
+
+pub(crate) async fn latest_package_infos_with_registry(
+    registry: &NpmRegistry,
+    queries: &[PackageInfoQuery],
+    concurrency: usize,
+) -> Result<HashMap<String, Result<PackageInfo, Error>>, Error> {
+    if queries.is_empty() {
+        return Ok(HashMap::new());
+    }
+
+    let concurrency = concurrency.max(1);
+    let mut package_queries = queries.iter();
+    let mut infos = HashMap::with_capacity(queries.len());
+
+    let progress = ProgressBar::new(queries.len() as u64);
     if std::io::stderr().is_terminal() && std::env::var_os("CI").is_none() {
         let style = ProgressStyle::with_template("{spinner:.cyan} {msg} ({pos}/{len})")
             .unwrap_or_else(|_| ProgressStyle::default_spinner())
@@ -126,28 +162,24 @@ pub(crate) async fn latest_package_infos(
         progress.set_draw_target(ProgressDrawTarget::hidden());
     }
 
-    let mut queries = FuturesUnordered::new();
+    let mut pending = FuturesUnordered::new();
 
     loop {
-        while queries.len() < concurrency {
-            let Some(package_spec) = package_specs.next() else { break };
-            queries.push(async {
-                let package_spec = package_spec.clone();
-                let info = match parse_package_spec(&package_spec) {
-                    Ok((package_name, _, _)) => {
-                        registry.latest_package_info(&package_spec, &package_name).await
-                    }
-                    Err(error) => Err(error),
-                };
+        while pending.len() < concurrency {
+            let Some(package_query) = package_queries.next() else { break };
+            pending.push(async {
+                let package_spec = package_query.package_spec.clone();
+                let info =
+                    registry.latest_package_info(&package_spec, &package_query.package_name).await;
                 PackageInfoResult { package_spec, info }
             });
         }
 
-        if queries.is_empty() {
+        if pending.is_empty() {
             break;
         }
 
-        if let Some(info) = queries.next().await {
+        if let Some(info) = pending.next().await {
             progress.inc(1);
             infos.insert(info.package_spec, info.info);
         }
