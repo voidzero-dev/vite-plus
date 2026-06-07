@@ -39,7 +39,7 @@ export function getInitialTemplateOptions(
           .map((pkg) => ({
             label: pkg.name,
             value: pkg.name,
-            hint: pkg.description ?? pkg.path ?? '',
+            hint: pkg.description ?? pkg.path,
           }))
       : []),
   ];

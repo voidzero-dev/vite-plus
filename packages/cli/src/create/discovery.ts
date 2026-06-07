@@ -2,6 +2,7 @@ import path from 'node:path';
 
 import type { WorkspaceInfo, WorkspaceInfoOptional } from '../types/index.ts';
 import { readJsonFile } from '../utils/json.ts';
+import { isBingoTemplate } from '../utils/workspace.ts';
 import { prependToPathToEnvs } from './command.ts';
 import { BuiltinTemplate, type TemplateInfo, TemplateType } from './templates/types.ts';
 
@@ -112,7 +113,7 @@ export function discoverTemplate(
     }
     const args = [binPath, ...templateArgs];
     let type: TemplateType = TemplateType.remote;
-    if (pkg.keywords?.includes('bingo-template') || !!pkg.dependencies?.bingo) {
+    if (isBingoTemplate(pkg)) {
       type = TemplateType.bingo;
       // add `--skip-requests` by default for bingo templates
       args.push('--skip-requests');

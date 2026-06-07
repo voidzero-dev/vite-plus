@@ -108,6 +108,15 @@ export async function detectWorkspace(rootDir: string): Promise<WorkspaceInfoOpt
   return result;
 }
 
+// Check if a package is a Bingo template (https://www.create.bingo/)
+// Bingo templates are executed through their bin entry with `--skip-requests`.
+export function isBingoTemplate(pkg: {
+  dependencies?: Record<string, string>;
+  keywords?: string[];
+}): boolean {
+  return pkg.keywords?.includes('bingo-template') || !!pkg.dependencies?.bingo;
+}
+
 // Discover all workspace packages
 export function discoverWorkspacePackages(
   workspacePatterns: string[],
@@ -140,10 +149,7 @@ export function discoverWorkspacePackages(
     if (!pkg.name) {
       continue;
     }
-    const isTemplatePackage =
-      pkg.keywords?.includes('vite-plus-template') ||
-      pkg.keywords?.includes('bingo-template') ||
-      !!pkg.dependencies?.bingo;
+    const isTemplatePackage = pkg.keywords?.includes('vite-plus-template') || isBingoTemplate(pkg);
     packages.push({
       name: pkg.name,
       path: path.dirname(packageJsonRelativePath),
