@@ -62,6 +62,45 @@ vp --version
 
 This builds all packages, compiles the Rust `vp` binary, and installs the CLI to `~/.vite-plus`.
 
+## Validate the local build against a real project
+
+Unit and snap tests don't cover everything. Interactive flows in particular (prompts, pickers, scaffolding) are easiest to validate by running your work-in-progress CLI inside a real Vite+ project.
+
+First, understand how `vp` picks which `vite-plus` to run: for JS-backed commands (such as `vp create`), the global `vp` binary resolves `vite-plus` from the project's `node_modules` first and only falls back to the global installation in `~/.vite-plus`. If your test project has `vite-plus` installed from npm, `pnpm bootstrap-cli` alone will not make it run your local code.
+
+Build the local CLI package after each change:
+
+```bash
+pnpm -F vite-plus build      # TypeScript + native NAPI binding
+pnpm -F vite-plus build-ts   # faster, when only TypeScript changed
+```
+
+### `pnpm link` the local package
+
+Link your checkout into the test project. The global `vp` then delegates to the project-local CLI, and re-entrant `vp` sub-commands (for example `vp create` running `vp install` and `vp fmt` after scaffolding) resolve back to the same linked checkout:
+
+```bash
+cd /path/to/test-project
+pnpm link /path/to/vite-plus/packages/cli
+
+vp create   # now runs your local checkout
+```
+
+Verify the link with `ls -l node_modules/vite-plus` (it should be a symlink into your checkout). Notes:
+
+- The link is not persisted in `package.json` or the lockfile: a later full `pnpm install` restores the registry version, so re-run `pnpm link` if that happens.
+- `pnpm link` may add a `packageManager` field to the test project's `package.json`; revert it if unwanted.
+- Undo with `pnpm unlink vite-plus` (or `pnpm install`).
+
+### Global CLI (Rust) changes
+
+`pnpm link` only swaps the JS side; the `vp` binary on `PATH` (and the Rust-backed commands it handles directly, such as package-manager commands) is still whatever is installed in `~/.vite-plus`. For changes to the Rust global CLI (`crates/`), install it from source, and combine with `pnpm link` when the change spans both layers:
+
+```bash
+pnpm bootstrap-cli
+vp --version
+```
+
 ## Workflow for build and test
 
 You can run this command to build, test and check if there are any snapshot changes:
