@@ -14,7 +14,7 @@
     "dev": "node bin/index.ts"
   },
   "dependencies": {
-    "bingo": "^0.7.0",
+    "bingo": "^0.9.3",
     "zod": "^3.25.76"
   },
   "devDependencies": {
@@ -22,6 +22,6 @@
     "typescript": "catalog:"
   },
   "engines": {
-    "node": ">=22.12.0"
+    "node": ">=22.18.0"
   }
 }

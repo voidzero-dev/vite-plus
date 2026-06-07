@@ -355,6 +355,7 @@
     "@types/validate-npm-package-name": "catalog:",
     "@voidzero-dev/vite-plus-prompts": "workspace:*",
     "@voidzero-dev/vite-plus-tools": "workspace:*",
+    "bingo": "catalog:",
     "cac": "catalog:",
     "cross-spawn": "catalog:",
     "detect-indent": "catalog:",
@@ -371,7 +372,8 @@
     "tsdown": "catalog:",
     "validate-npm-package-name": "catalog:",
     "vite": "workspace:*",
-    "yaml": "catalog:"
+    "yaml": "catalog:",
+    "zod": "catalog:"
   },
   "napi": {
     "binaryName": "vite-plus",
