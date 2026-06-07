@@ -25,7 +25,7 @@ dist/assets/index-Dra_-aT4.js  <variable> kB │ gzip: <variable> kB
 vp run: cache hit, <variable>ms saved.
 
 > VITE_MY_VAR=2 vp run build # env changed, should miss cache
-$ vp build ○ cache miss: tracked env glob 'VITE_*' changed, executing
+$ vp build ○ cache miss: envs changed, executing
 vite v<semver> building client environment for production...
 transforming...✓ <variable> modules transformed.
 rendering chunks...
