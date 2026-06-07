@@ -27,7 +27,7 @@ Vite+ ships with these built-in templates:
 - `vite:monorepo` creates a new monorepo
 - `vite:application` creates a new application
 - `vite:library` creates a new library
-- `vite:generator` creates a new generator
+- `vite:generator` creates a new code generator (monorepo only, see [Code Generators](#code-generators))
 
 ## Template Sources
 
@@ -88,6 +88,84 @@ vp create create-next-app
 vp create github:user/repo
 vp create https://github.com/user/template-repo
 ```
+
+## Code Generators
+
+Monorepos often need to scaffold their own building blocks: a UI component, a service, or an internal package that follows house conventions. Vite+ supports this through generator packages powered by [Bingo](https://www.create.bingo/) templates.
+
+### Scaffold a generator
+
+Inside a Vite+ monorepo, run:
+
+```bash
+vp create vite:generator
+```
+
+This requires a monorepo workspace. If you don't have one yet, create it first with `vp create vite:monorepo`.
+
+The scaffolded generator package contains:
+
+- `src/template.ts` defines the template using `createTemplate` from `bingo`: an options schema built with [Zod](https://zod.dev/) and a `produce()` function that returns the files to generate
+- `bin/index.ts` is the CLI entry, powered by Bingo's `runTemplateCLI`
+- `package.json` carries the `bingo-template` keyword so Vite+ recognizes the package as a generator
+
+If the monorepo has a parent directory matching `generators` or `tools`, the new package is placed there by default.
+
+### Run a generator
+
+Inside the monorepo, run `vp create` and pick the generator from the template list, or pass the generator's package name directly:
+
+```bash
+# Interactive mode lists local generators alongside the built-in templates
+vp create
+
+# Run a generator by its package name
+vp create my-generator
+
+# Pass options to the generator after --
+vp create my-generator -- --name @your-org/button
+```
+
+Vite+ treats a local workspace package as a Bingo generator when its `package.json` has the `bingo-template` keyword or a dependency on `bingo`. Matching packages are executed directly through their `bin` entry, and `--skip-requests` is appended automatically so the generator skips Bingo's outbound network requests (such as GitHub API calls).
+
+After the generator runs, the created package goes through the regular monorepo integration: workspace registration, dependency installation, and formatting.
+
+### Customize a generator
+
+Edit `src/template.ts` to define the options and the files to produce:
+
+```ts
+import { createTemplate } from 'bingo';
+import { z } from 'zod';
+
+export default createTemplate({
+  options: {
+    name: z.string().describe('Package name'),
+  },
+  async produce({ options }) {
+    return {
+      files: {
+        'package.json': JSON.stringify({ name: options.name, version: '0.0.0' }, null, 2),
+        src: {
+          'index.ts': `export const name = '${options.name}';\n`,
+        },
+      },
+    };
+  },
+});
+```
+
+- `options` defines the generator's prompts and flags using Zod schemas
+- `produce()` returns the [files](https://www.create.bingo/build/concepts/creations#files) to create, plus optional [scripts](https://www.create.bingo/build/concepts/creations#scripts) to run after generation and [suggestions](https://www.create.bingo/build/concepts/creations#suggestions) to print for the user
+
+While developing, run the generator CLI directly from its package directory:
+
+```bash
+vp run dev   # run the generator CLI
+vp run test  # run its tests
+```
+
+See the [Bingo documentation](https://www.create.bingo/) for the full template API.
 
 ## Organization Templates
 
