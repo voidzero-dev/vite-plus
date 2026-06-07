@@ -88,9 +88,9 @@ vp create   # now runs your local checkout
 
 Verify the link with `ls -l node_modules/vite-plus` (it should be a symlink into your checkout). Notes:
 
-- The link is not persisted in `package.json` or the lockfile: a later full `pnpm install` restores the registry version, so re-run `pnpm link` if that happens.
-- `pnpm link` may add a `packageManager` field to the test project's `package.json`; revert it if unwanted.
-- Undo with `pnpm unlink vite-plus` (or `pnpm install`).
+- pnpm records the link as a `vite-plus: link:...` override (in `pnpm-workspace.yaml` for workspace projects, otherwise under `pnpm.overrides` in `package.json`), so it survives later installs. Don't commit that override in the test project.
+- `pnpm link` may also add a `packageManager` field to the test project's `package.json`; revert it if unwanted.
+- Undo with `pnpm unlink vite-plus`, or remove the override and run `pnpm install`.
 
 ### Global CLI (Rust) changes
 
