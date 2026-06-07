@@ -72,6 +72,30 @@ describe('getInitialTemplateOptions', () => {
     expect(generatorOption?.hint).toBe('Generate new components for our monorepo');
   });
 
+  it('falls back to the package path when the description is missing or empty', () => {
+    const packages: WorkspacePackage[] = [
+      {
+        name: 'no-description',
+        path: 'tools/no-description',
+        isTemplatePackage: true,
+      },
+      {
+        name: 'empty-description',
+        path: 'tools/empty-description',
+        description: '',
+        isTemplatePackage: true,
+      },
+    ];
+
+    const options = getInitialTemplateOptions(true, packages);
+    expect(options.find((option) => option.value === 'no-description')?.hint).toBe(
+      'tools/no-description',
+    );
+    expect(options.find((option) => option.value === 'empty-description')?.hint).toBe(
+      'tools/empty-description',
+    );
+  });
+
   it('does not include local template packages outside a monorepo', () => {
     const packages: WorkspacePackage[] = [
       {

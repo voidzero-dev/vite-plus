@@ -2,7 +2,7 @@ import path from 'node:path';
 
 import type { WorkspaceInfo, WorkspaceInfoOptional } from '../types/index.ts';
 import { readJsonFile } from '../utils/json.ts';
-import { isBingoTemplate } from '../utils/workspace.ts';
+import { isBingoTemplate, isTemplatePackage } from '../utils/workspace.ts';
 import { prependToPathToEnvs } from './command.ts';
 import { BuiltinTemplate, type TemplateInfo, TemplateType } from './templates/types.ts';
 
@@ -127,6 +127,13 @@ export function discoverTemplate(
         parentDir,
         interactive,
       };
+    }
+    // A template package without a bin entry cannot be executed. Fail clearly
+    // instead of falling through to an unrelated `create-<name>` npm package.
+    if (isTemplatePackage(pkg)) {
+      throw new Error(
+        `Local template package "${templateName}" has no "bin" entry in its package.json, so it cannot be run as a template`,
+      );
     }
   }
 

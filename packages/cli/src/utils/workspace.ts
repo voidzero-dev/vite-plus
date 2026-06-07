@@ -117,6 +117,14 @@ export function isBingoTemplate(pkg: {
   return pkg.keywords?.includes('bingo-template') || !!pkg.dependencies?.bingo;
 }
 
+// Check if a package is offered as a `vp create` template
+export function isTemplatePackage(pkg: {
+  dependencies?: Record<string, string>;
+  keywords?: string[];
+}): boolean {
+  return !!pkg.keywords?.includes('vite-plus-template') || isBingoTemplate(pkg);
+}
+
 // Discover all workspace packages
 export function discoverWorkspacePackages(
   workspacePatterns: string[],
@@ -149,13 +157,12 @@ export function discoverWorkspacePackages(
     if (!pkg.name) {
       continue;
     }
-    const isTemplatePackage = pkg.keywords?.includes('vite-plus-template') || isBingoTemplate(pkg);
     packages.push({
       name: pkg.name,
       path: path.dirname(packageJsonRelativePath),
       description: pkg.description,
       version: pkg.version,
-      isTemplatePackage,
+      isTemplatePackage: isTemplatePackage(pkg),
     });
   }
 

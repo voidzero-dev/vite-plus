@@ -21,6 +21,8 @@ describe('replaceUnstableOutput()', () => {
   test('strip clack spinner frames', () => {
     const output = '│\n◒  Preparing local Git repository...\n◇  Prepared local Git repository\n';
     expect(replaceUnstableOutput(output)).toBe('│\n◇  Prepared local Git repository\n');
+    // a frame at end-of-output without a trailing newline is stripped too
+    expect(replaceUnstableOutput('text\n◐  Working...')).toBe('text\n');
   });
 
   test('replace unstable semver version', () => {

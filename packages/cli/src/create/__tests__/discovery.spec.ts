@@ -1,11 +1,65 @@
-import { describe, expect, it } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
+import { afterEach, describe, expect, it } from 'vitest';
+
+import type { WorkspaceInfo } from '../../types/index.js';
 import {
   discoverTemplate,
   expandCreateShorthand,
   inferGitHubRepoName,
   parseGitHubUrl,
 } from '../discovery.js';
+
+describe('discoverTemplate', () => {
+  let rootDir: string;
+
+  afterEach(() => {
+    if (rootDir) {
+      fs.rmSync(rootDir, { recursive: true, force: true });
+    }
+  });
+
+  function createWorkspaceWithPackage(packageJson: Record<string, unknown>): WorkspaceInfo {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-discovery-spec-'));
+    const packageDir = path.join(rootDir, 'tools/my-template');
+    fs.mkdirSync(packageDir, { recursive: true });
+    fs.writeFileSync(path.join(packageDir, 'package.json'), JSON.stringify(packageJson));
+    return {
+      rootDir,
+      isMonorepo: true,
+      monorepoScope: '',
+      workspacePatterns: ['tools/*'],
+      parentDirs: ['tools'],
+      downloadPackageManager: { binPrefix: '' },
+      packages: [{ name: 'my-template', path: 'tools/my-template', isTemplatePackage: true }],
+    } as unknown as WorkspaceInfo;
+  }
+
+  it('runs a local bingo template through its bin entry', () => {
+    const workspaceInfo = createWorkspaceWithPackage({
+      name: 'my-template',
+      keywords: ['bingo-template'],
+      bin: './bin/index.ts',
+    });
+
+    const templateInfo = discoverTemplate('my-template', [], workspaceInfo);
+    expect(templateInfo.command).toBe('node');
+    expect(templateInfo.type).toBe('bingo');
+    expect(templateInfo.args).toContain('--skip-requests');
+  });
+
+  it('rejects a local template package without a bin entry', () => {
+    const workspaceInfo = createWorkspaceWithPackage({
+      name: 'my-template',
+      keywords: ['vite-plus-template'],
+    });
+
+    // Must not fall through to the `create-my-template` npm package
+    expect(() => discoverTemplate('my-template', [], workspaceInfo)).toThrow(/has no "bin" entry/);
+  });
+});
 
 describe('expandCreateShorthand', () => {
   it('should expand unscoped names to create-* packages', () => {

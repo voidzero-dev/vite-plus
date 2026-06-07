@@ -88,7 +88,7 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
       .replaceAll(/ ?WARN\s+GET\s+https:\/\/registry\..+?\n/g, '')
       // ignore clack spinner frames (e.g. `◒  Preparing local Git repository...`),
       // they appear intermittently depending on timing; the final `◇`/`◆` line stays
-      .replaceAll(/^[◐◓◑◒]\s[^\n]*\n/gm, '')
+      .replaceAll(/^[◐◓◑◒]\s[^\n]*\n?/gm, '')
       // ignore bun resolution progress (appears intermittently depending on cache state)
       .replaceAll(/Resolving dependencies\n/g, '')
       .replaceAll(/Resolved, downloaded and extracted \[\d+\]\n/g, '')
