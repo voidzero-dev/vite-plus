@@ -47,7 +47,6 @@ Running: node <cwd>/tools/my-generator/bin/index.ts --name demo-pkg --directory 
 │
 ◇  Ran the my-generator template
 │
-◒  Preparing local Git repository...
 ◇  Prepared local Git repository
 │
 ●  Run npx index.ts --remote in ./demo-pkg

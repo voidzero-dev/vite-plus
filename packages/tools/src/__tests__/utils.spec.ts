@@ -18,6 +18,11 @@ describe('replaceUnstableOutput()', () => {
     expect(replaceUnstableOutput(output)).toBe('line 1\nline 2\nline 3');
   });
 
+  test('strip clack spinner frames', () => {
+    const output = '│\n◒  Preparing local Git repository...\n◇  Prepared local Git repository\n';
+    expect(replaceUnstableOutput(output)).toBe('│\n◇  Prepared local Git repository\n');
+  });
+
   test('replace unstable semver version', () => {
     const output = `
 foo v1.0.0
