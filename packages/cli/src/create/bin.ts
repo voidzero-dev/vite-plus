@@ -545,7 +545,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   if (!selectedTemplateName) {
     const template = await prompts.select({
       message: '',
-      options: getInitialTemplateOptions(isMonorepo),
+      options: getInitialTemplateOptions(isMonorepo, workspaceInfoOptional.packages),
     });
 
     if (prompts.isCancel(template)) {
