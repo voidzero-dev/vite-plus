@@ -1,4 +1,4 @@
-> VITE_MY_VAR=1 vp run build
+> VITE_GREETING=hello vp run build # first build
 $ vp build
 vite v<semver> building client environment for production...
 transforming...✓ <variable> modules transformed.
@@ -10,7 +10,7 @@ dist/assets/index-Dra_-aT4.js  <variable> kB │ gzip: <variable> kB
 ✓ built in <variable>ms
 
 
-> VITE_MY_VAR=1 vp run build # should hit cache
+> VITE_GREETING=hello vp run build # same env, cache hit
 $ vp build ◉ cache hit, replaying
 vite v<semver> building client environment for production...
 transforming...✓ <variable> modules transformed.
@@ -24,7 +24,7 @@ dist/assets/index-Dra_-aT4.js  <variable> kB │ gzip: <variable> kB
 ---
 vp run: cache hit, <variable>ms saved.
 
-> VITE_MY_VAR=2 vp run build # env changed, should miss cache
+> VITE_GREETING=world vp run build # VITE_ env changed, cache miss (tracked via vite-task-client)
 $ vp build ○ cache miss: tracked env glob 'VITE_*' changed, executing
 vite v<semver> building client environment for production...
 transforming...✓ <variable> modules transformed.

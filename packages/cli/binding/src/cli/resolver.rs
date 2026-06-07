@@ -171,10 +171,16 @@ impl SubcommandResolver {
                         .chain(iter::once(Str::from("build")))
                         .chain(args.into_iter().map(Str::from))
                         .collect(),
+                    // No synthetic cache config: vite reports its inputs/outputs/
+                    // envs to the runner via `@voidzero-dev/vite-task-client`.
+                    // All fields `None` keep caching enabled with auto input and
+                    // auto output inference (the latter drives output restoration);
+                    // vite's `ignoreInput`/`ignoreOutput`/`getEnv`/`getEnvs` refine
+                    // the fingerprint at runtime.
                     cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
-                        env: Some(Box::new([Str::from("VITE_*")])),
+                        env: None,
                         untracked_env: None,
-                        input: Some(build_pack_cache_inputs()),
+                        input: None,
                         output: None,
                     }),
                     envs: merge_resolved_envs_with_version(envs, resolved.envs),
