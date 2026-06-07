@@ -158,13 +158,6 @@ export default createTemplate({
 - `options` defines the generator's prompts and flags using Zod schemas
 - `produce()` returns the [files](https://www.create.bingo/build/concepts/creations#files) to create, plus optional [scripts](https://www.create.bingo/build/concepts/creations#scripts) to run after generation and [suggestions](https://www.create.bingo/build/concepts/creations#suggestions) to print for the user
 
-While developing, run the generator CLI directly from its package directory:
-
-```bash
-vp run dev   # run the generator CLI
-vp run test  # run its tests
-```
-
 See the [Bingo documentation](https://www.create.bingo/) for the full template API.
 
 ## Organization Templates
