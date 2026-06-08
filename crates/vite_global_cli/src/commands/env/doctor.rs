@@ -1363,20 +1363,27 @@ mod tests {
 
     #[test]
     fn test_format_version_source_distinguishes_package_json_fields() {
-        let pkg = AbsolutePathBuf::new(std::path::PathBuf::from("/proj/package.json")).unwrap();
+        // a real (cross-platform) absolute path; assert against its own display
+        // string so the test holds on Windows too
+        let temp = TempDir::new().unwrap();
+        let pkg = AbsolutePathBuf::new(temp.path().join("package.json")).unwrap();
+        let pkg_str = pkg.as_path().display().to_string();
         // both fields live in package.json, so the field name must be shown
         assert_eq!(
             format_version_source("devEngines.runtime", Some(&pkg)),
-            "/proj/package.json (devEngines.runtime)"
+            format!("{pkg_str} (devEngines.runtime)")
         );
         assert_eq!(
             format_version_source("engines.node", Some(&pkg)),
-            "/proj/package.json (engines.node)"
+            format!("{pkg_str} (engines.node)")
         );
 
-        // .node-version is already unambiguous from its path
-        let nv = AbsolutePathBuf::new(std::path::PathBuf::from("/proj/.node-version")).unwrap();
-        assert_eq!(format_version_source(".node-version", Some(&nv)), "/proj/.node-version");
+        // .node-version is already unambiguous from its path (no suffix appended)
+        let nv = AbsolutePathBuf::new(temp.path().join(".node-version")).unwrap();
+        assert_eq!(
+            format_version_source(".node-version", Some(&nv)),
+            nv.as_path().display().to_string()
+        );
 
         // pathless sources fall back to the label
         assert_eq!(format_version_source("default", None), "default");
