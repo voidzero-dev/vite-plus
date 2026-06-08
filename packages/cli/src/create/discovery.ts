@@ -277,11 +277,12 @@ export function inferParentDir(
   if (workspaceInfo.parentDirs.length === 0) {
     return undefined;
   }
-  // A local generator/template package generates output next to itself: place
-  // it in the parent directory the generator package already lives in, rather
-  // than defaulting to the `apps` rule below.
+  // Output generated from a local package belongs next to that package, in the
+  // parent directory it already lives in, rather than defaulting to the `apps`
+  // rule below. This covers any local package run as a generator, including a
+  // Bingo-dependency package that carries no marker keyword.
   const localPackage = findLocalPackage(workspaceInfo, templateName);
-  if (localPackage?.isTemplatePackage) {
+  if (localPackage) {
     const ownParentDir = path.dirname(localPackage.path);
     if (workspaceInfo.parentDirs.includes(ownParentDir)) {
       return ownParentDir;

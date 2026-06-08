@@ -114,13 +114,20 @@ describe('inferParentDir', () => {
     expect(inferParentDir('my-generator', ws)).toBe('tools');
   });
 
-  it('ignores a non-template workspace package and falls back to the app rule', () => {
+  it('co-locates a local generator detected only by its bingo dependency', () => {
+    // A bingo-dependency package without a marker keyword is not picker-visible
+    // (isTemplatePackage is false) but is still run as a generator by name. Its
+    // output must land next to it, matching how discoverTemplate runs it.
     const ws = inferParentDirWorkspace(
       ['apps', 'packages', 'tools'],
-      [{ name: 'my-lib', path: 'packages/my-lib', isTemplatePackage: false }],
+      [{ name: 'my-generator', path: 'tools/my-generator', isTemplatePackage: false }],
     );
-    // A non-template package must not steer placement to its own dir.
-    expect(inferParentDir('my-lib', ws)).toBe('apps');
+    expect(inferParentDir('my-generator', ws)).toBe('tools');
+  });
+
+  it('falls back to the app rule when the name is not a local package', () => {
+    const ws = inferParentDirWorkspace(['apps', 'packages', 'tools']);
+    expect(inferParentDir('vite', ws)).toBe('apps');
   });
 });
 
