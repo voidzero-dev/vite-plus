@@ -4,8 +4,15 @@ no package.json
 > vp install --silent && cat package.json # should auto-create package.json and install
 {
   "type": "module",
-  "packageManager": "pnpm@<semver>"
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "<semver>",
+      "onFail": "download"
+    }
+  }
 }
+
 > vp add testnpm2 -D && cat package.json # should add package to auto-created package.json
 Packages: +<variable>
 +
@@ -17,7 +24,13 @@ devDependencies:
 Done in <variable>ms using pnpm v<semver>
 {
   "type": "module",
-  "packageManager": "pnpm@<semver>",
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "<semver>",
+      "onFail": "download"
+    }
+  },
   "devDependencies": {
     "testnpm2": "^1.0.1"
   }

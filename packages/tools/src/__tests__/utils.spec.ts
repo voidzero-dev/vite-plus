@@ -42,6 +42,24 @@ bar@v1.0.0
     expect(replaceUnstableOutput(output.trim())).toMatchSnapshot();
   });
 
+  test('replace devEngines.packageManager pinned versions', () => {
+    // prerelease identifiers with hyphens and build metadata are normalized too
+    for (const version of ['11.5.1', '11.5.1-rc-1', '11.5.1+sha.abc']) {
+      const json = [
+        '{',
+        '  "devEngines": {',
+        '    "packageManager": {',
+        '      "name": "pnpm",',
+        `      "version": "${version}",`,
+        '      "onFail": "download"',
+        '    }',
+        '  }',
+        '}',
+      ].join('\n');
+      expect(replaceUnstableOutput(json)).toContain('"version": "<semver>"');
+    }
+  });
+
   test('replace date', () => {
     const output = `
 Start at  15:01:23

@@ -191,7 +191,14 @@ pub async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
         .and_then(|(root, _)| {
             get_package_manager_type_and_version(&root, None)
                 .ok()
-                .map(|(pm, v, _)| format!("{pm} v{v}"))
+                // a devEngines range (e.g. "^11.0.0") has no meaningful "v" prefix
+                .map(|(pm, v, _, _)| {
+                    if v.starts_with(|c: char| c.is_ascii_digit()) {
+                        format!("{pm} v{v}")
+                    } else {
+                        format!("{pm} {v}")
+                    }
+                })
         })
         .unwrap_or(NOT_FOUND.to_string());
 

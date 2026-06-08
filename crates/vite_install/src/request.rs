@@ -59,16 +59,26 @@ impl HttpClient {
     }
 
     async fn get(&self, url: &str) -> Result<Response, Error> {
+        self.get_with_accept(url, None).await
+    }
+
+    async fn get_with_accept(&self, url: &str, accept: Option<&str>) -> Result<Response, Error> {
         let client = vite_shared::shared_http_client();
 
-        let response = (|| async { client.get(url).send().await?.error_for_status() })
-            .retry(
-                ExponentialBuilder::default()
-                    .with_jitter()
-                    .with_min_delay(Duration::from_millis(self.min_delay))
-                    .with_max_times(self.max_times),
-            )
-            .await?;
+        let response = (|| async {
+            let mut request = client.get(url);
+            if let Some(accept) = accept {
+                request = request.header(reqwest::header::ACCEPT, accept);
+            }
+            request.send().await?.error_for_status()
+        })
+        .retry(
+            ExponentialBuilder::default()
+                .with_jitter()
+                .with_min_delay(Duration::from_millis(self.min_delay))
+                .with_max_times(self.max_times),
+        )
+        .await?;
 
         Ok(response)
     }
@@ -87,6 +97,31 @@ impl HttpClient {
         tracing::debug!("Fetching JSON from: {}", url);
 
         let response = self.get(url).await?;
+        let data = response.json::<T>().await?;
+        Ok(data)
+    }
+
+    /// Get JSON data from a URL with a custom Accept header
+    /// (e.g. the npm abbreviated metadata format, which is much smaller than the
+    /// full packument)
+    ///
+    /// # Arguments
+    ///
+    /// * `url` - The URL to fetch JSON from
+    /// * `accept` - The Accept header value
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(T)` - Deserialized JSON data
+    /// * `Err(e)` - If the request fails or JSON deserialization fails
+    pub async fn get_json_with_accept<T: DeserializeOwned>(
+        &self,
+        url: &str,
+        accept: &str,
+    ) -> Result<T, Error> {
+        tracing::debug!("Fetching JSON from: {} (accept: {})", url, accept);
+
+        let response = self.get_with_accept(url, Some(accept)).await?;
         let data = response.json::<T>().await?;
         Ok(data)
     }
