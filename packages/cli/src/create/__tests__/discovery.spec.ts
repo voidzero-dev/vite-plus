@@ -60,6 +60,40 @@ describe('discoverTemplate', () => {
     // Must not fall through to the `create-my-template` npm package
     expect(() => discoverTemplate('my-template', [], workspaceInfo)).toThrow(/has no "bin" entry/);
   });
+
+  it('uses a single-entry object bin', () => {
+    const workspaceInfo = createWorkspaceWithPackage({
+      name: 'my-template',
+      keywords: ['bingo-template'],
+      bin: { whatever: './bin/cli.ts' },
+    });
+
+    const templateInfo = discoverTemplate('my-template', [], workspaceInfo);
+    expect(templateInfo.args[0]).toMatch(/tools[/\\]my-template[/\\]bin[/\\]cli\.ts$/);
+  });
+
+  it('prefers the bin entry named after the package for multi-bin packages', () => {
+    const workspaceInfo = createWorkspaceWithPackage({
+      name: 'my-template',
+      keywords: ['bingo-template'],
+      bin: { other: './bin/other.ts', 'my-template': './bin/index.ts' },
+    });
+
+    const templateInfo = discoverTemplate('my-template', [], workspaceInfo);
+    expect(templateInfo.args[0]).toMatch(/tools[/\\]my-template[/\\]bin[/\\]index\.ts$/);
+  });
+
+  it('rejects an ambiguous multi-bin package with no entry named after it', () => {
+    const workspaceInfo = createWorkspaceWithPackage({
+      name: 'my-template',
+      keywords: ['bingo-template'],
+      bin: { one: './bin/one.ts', two: './bin/two.ts' },
+    });
+
+    expect(() => discoverTemplate('my-template', [], workspaceInfo)).toThrow(
+      /multiple "bin" entries/,
+    );
+  });
 });
 
 // inferParentDir only reads parentDirs and packages off the workspace.

@@ -49,6 +49,37 @@ function findLocalPackage(
   return workspaceInfo.packages.find((pkg) => pkg.name === templateName);
 }
 
+// Resolve the bin script a local template package should be executed through.
+// A single bin (string, or a one-entry object) is unambiguous. For multiple
+// bin entries, prefer the one named after the package (scoped or unscoped) and
+// fail clearly otherwise, since a local generator is run directly by `node`.
+function resolveLocalBinPath(
+  localPackagePath: string,
+  packageName: string,
+  bin: Record<string, string> | string | undefined,
+): string | undefined {
+  if (!bin) {
+    return undefined;
+  }
+  if (typeof bin === 'string') {
+    return path.join(localPackagePath, bin);
+  }
+  const entries = Object.entries(bin);
+  if (entries.length <= 1) {
+    return entries.length === 1 ? path.join(localPackagePath, entries[0][1]) : undefined;
+  }
+  const unscopedName = packageName.slice(packageName.lastIndexOf('/') + 1);
+  const preferred = bin[packageName] ?? bin[unscopedName];
+  if (preferred) {
+    return path.join(localPackagePath, preferred);
+  }
+  throw new Error(
+    `Local template package "${packageName}" defines multiple "bin" entries (${entries
+      .map(([name]) => name)
+      .join(', ')}); add a "bin" entry named "${packageName}" so the template entry is unambiguous`,
+  );
+}
+
 // Discover and identify a template
 export function discoverTemplate(
   templateName: string,
@@ -110,15 +141,7 @@ export function discoverTemplate(
       keywords?: string[];
       bin?: Record<string, string> | string;
     };
-    let binPath = '';
-    if (pkg.bin) {
-      if (typeof pkg.bin === 'string') {
-        binPath = path.join(localPackagePath, pkg.bin);
-      } else {
-        const binName = Object.keys(pkg.bin)[0];
-        binPath = path.join(localPackagePath, pkg.bin[binName]);
-      }
-    }
+    const binPath = resolveLocalBinPath(localPackagePath, templateName, pkg.bin) ?? '';
     const args = [binPath, ...templateArgs];
     let type: TemplateType = TemplateType.remote;
     if (isBingoTemplate(pkg)) {
