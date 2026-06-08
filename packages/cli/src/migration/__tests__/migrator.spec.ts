@@ -31,6 +31,7 @@ const {
   rewriteEslintPackageJson,
   detectIncompatibleEslintIntegration,
   preflightGitHooksSetup,
+  setPackageManager,
 } = await import('../migrator.js');
 
 describe('rewritePackageJson', () => {
@@ -768,6 +769,79 @@ describe('parseNvmrcVersion', () => {
     expect(parseNvmrcVersion('v')).toBeNull();
     expect(parseNvmrcVersion('laetst')).toBeNull();
     expect(parseNvmrcVersion('20.5.0.1')).toBeNull();
+  });
+});
+
+describe('setPackageManager', () => {
+  let tmpDir: string;
+
+  const downloadResult = {
+    name: 'pnpm',
+    installDir: '/tmp/install',
+    binPrefix: '/tmp/install/bin',
+    packageName: 'pnpm',
+    version: '11.5.1',
+  };
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  const readPkg = () =>
+    JSON.parse(fs.readFileSync(path.join(tmpDir, 'package.json'), 'utf8')) as Record<
+      string,
+      unknown
+    >;
+
+  it('writes devEngines.packageManager when neither field exists', () => {
+    fs.writeFileSync(path.join(tmpDir, 'package.json'), JSON.stringify({ name: 'x' }, null, 2));
+    setPackageManager(tmpDir, downloadResult);
+    expect(readPkg().devEngines).toEqual({
+      packageManager: { name: 'pnpm', version: '11.5.1', onFail: 'download' },
+    });
+  });
+
+  it('keeps an existing packageManager field untouched', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'x', packageManager: 'npm@10.5.0' }, null, 2),
+    );
+    setPackageManager(tmpDir, downloadResult);
+    const pkg = readPkg();
+    expect(pkg.packageManager).toBe('npm@10.5.0');
+    expect(pkg.devEngines).toBeUndefined();
+  });
+
+  it('preserves an existing devEngines.runtime entry', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify(
+        { name: 'x', devEngines: { runtime: { name: 'node', version: '^24.0.0' } } },
+        null,
+        2,
+      ),
+    );
+    setPackageManager(tmpDir, downloadResult);
+    expect(readPkg().devEngines).toEqual({
+      runtime: { name: 'node', version: '^24.0.0' },
+      packageManager: { name: 'pnpm', version: '11.5.1', onFail: 'download' },
+    });
+  });
+
+  it('replaces a malformed devEngines value instead of spreading it', () => {
+    // spreading a string would corrupt the field with numeric index keys
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'x', devEngines: 'oops' }, null, 2),
+    );
+    setPackageManager(tmpDir, downloadResult);
+    expect(readPkg().devEngines).toEqual({
+      packageManager: { name: 'pnpm', version: '11.5.1', onFail: 'download' },
+    });
   });
 });
 

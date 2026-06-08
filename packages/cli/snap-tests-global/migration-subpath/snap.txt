@@ -21,7 +21,13 @@
   "devDependencies": {
     "vite-plus": "catalog:"
   },
-  "packageManager": "pnpm@<semver>"
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "<semver>",
+      "onFail": "download"
+    }
+  }
 }
 
 > cat foo/vite.config.ts # check vite.config.ts
