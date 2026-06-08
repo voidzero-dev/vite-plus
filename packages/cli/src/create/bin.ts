@@ -225,6 +225,7 @@ export interface Options {
   verbose: boolean;
   agent?: string | string[] | false;
   editor?: string | false;
+  git?: boolean;
   hooks?: boolean;
   packageManager?: string;
 }
