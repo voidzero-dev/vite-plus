@@ -2,6 +2,14 @@
 > test -f tools/vite-plus-generator/package.json && echo 'Created at tools/vite-plus-generator' || echo 'NOT at tools/'
 Created at tools/vite-plus-generator
 
+> cd apps/website && vp create --no-interactive --git vite:generator 2>&1 || true # --git is unavailable for generator
+The --git/--no-git options are not available with vite:generator because it adds a package to an existing monorepo
+
+
+> cd apps/website && vp create --no-interactive --no-git vite:generator 2>&1 || true # --no-git is unavailable for generator
+The --git/--no-git options are not available with vite:generator because it adds a package to an existing monorepo
+
+
 > test ! -f apps/website/tools/vite-plus-generator/package.json && echo 'Not in apps/website/' || echo 'BUG: in apps/website/'
 Not in apps/website/
 
