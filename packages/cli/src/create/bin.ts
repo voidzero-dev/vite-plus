@@ -585,9 +585,9 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     );
     cancelAndExit('Cannot create a generator outside a monorepo', 1);
   }
-  if (selectedTemplateName === BuiltinTemplate.generator && options.git !== undefined) {
+  if (isMonorepo && options.git !== undefined) {
     cancelAndExit(
-      'The --git/--no-git options are not available with vite:generator because it adds a package to an existing monorepo',
+      'The --git/--no-git options are not available when adding a package to an existing monorepo',
       1,
     );
   }
