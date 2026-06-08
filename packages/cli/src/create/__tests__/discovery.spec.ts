@@ -62,18 +62,12 @@ describe('discoverTemplate', () => {
   });
 });
 
+// inferParentDir only reads parentDirs and packages off the workspace.
 function inferParentDirWorkspace(
   parentDirs: string[],
   packages: WorkspaceInfoOptional['packages'] = [],
 ): WorkspaceInfoOptional {
-  return {
-    rootDir: '/tmp/workspace',
-    isMonorepo: true,
-    monorepoScope: '',
-    workspacePatterns: parentDirs.map((dir) => `${dir}/*`),
-    parentDirs,
-    packages,
-  } as unknown as WorkspaceInfoOptional;
+  return { parentDirs, packages } as unknown as WorkspaceInfoOptional;
 }
 
 describe('inferParentDir', () => {
@@ -86,9 +80,13 @@ describe('inferParentDir', () => {
     expect(inferParentDir('my-generator', ws)).toBe('tools');
   });
 
-  it('falls back to the app rule for non-template names', () => {
-    const ws = inferParentDirWorkspace(['apps', 'packages', 'tools']);
-    expect(inferParentDir('vite', ws)).toBe('apps');
+  it('ignores a non-template workspace package and falls back to the app rule', () => {
+    const ws = inferParentDirWorkspace(
+      ['apps', 'packages', 'tools'],
+      [{ name: 'my-lib', path: 'packages/my-lib', isTemplatePackage: false }],
+    );
+    // A non-template package must not steer placement to its own dir.
+    expect(inferParentDir('my-lib', ws)).toBe('apps');
   });
 });
 

@@ -1,6 +1,6 @@
 import path from 'node:path';
 
-import type { WorkspaceInfo, WorkspaceInfoOptional } from '../types/index.ts';
+import type { WorkspaceInfo, WorkspaceInfoOptional, WorkspacePackage } from '../types/index.ts';
 import { readJsonFile } from '../utils/json.ts';
 import { isBingoTemplate, isTemplatePackage } from '../utils/workspace.ts';
 import { prependToPathToEnvs } from './command.ts';
@@ -39,6 +39,14 @@ export function inferGitHubRepoName(templateName: string): string | null {
 
   const repoName = degitPath.split('/').pop();
   return repoName || null;
+}
+
+// Find a workspace package by its name (the value used as a template specifier)
+function findLocalPackage(
+  workspaceInfo: WorkspaceInfoOptional,
+  templateName: string,
+): WorkspacePackage | undefined {
+  return workspaceInfo.packages.find((pkg) => pkg.name === templateName);
 }
 
 // Discover and identify a template
@@ -93,7 +101,7 @@ export function discoverTemplate(
   }
 
   // Check for local package
-  const localPackage = workspaceInfo.packages.find((pkg) => pkg.name === templateName);
+  const localPackage = findLocalPackage(workspaceInfo, templateName);
   if (localPackage) {
     const localPackagePath = path.join(workspaceInfo.rootDir, localPackage.path);
     const packageJsonPath = path.join(localPackagePath, 'package.json');
@@ -249,7 +257,7 @@ export function inferParentDir(
   // A local generator/template package generates output next to itself: place
   // it in the parent directory the generator package already lives in, rather
   // than defaulting to the `apps` rule below.
-  const localPackage = workspaceInfo.packages.find((pkg) => pkg.name === templateName);
+  const localPackage = findLocalPackage(workspaceInfo, templateName);
   if (localPackage?.isTemplatePackage) {
     const ownParentDir = path.dirname(localPackage.path);
     if (workspaceInfo.parentDirs.includes(ownParentDir)) {
