@@ -516,7 +516,55 @@ function mergeSemverVersions(
   return v1;
 }
 
-function mergePnpmWorkspaces(
+// Parse a minimumReleaseAgeExclude entry (`<name>` or `<name>@<version>`) into
+// its package name and optional version. The version separator is the LAST `@`
+// whose index is > 0, so a scoped name's leading `@` is never split on:
+// `@oxc-project/runtime@0.134.0` -> name `@oxc-project/runtime`, version `0.134.0`.
+function parseExcludeEntry(entry: string): { name: string; version?: string } {
+  const at = entry.lastIndexOf('@');
+  if (at > 0) {
+    return { name: entry.slice(0, at), version: entry.slice(at + 1) };
+  }
+  return { name: entry };
+}
+
+// Build a matcher for a version-less name pattern. The exclude list only ever
+// uses the `*` wildcard, so a tiny *-only glob (escape regex specials, `*` ->
+// `.*`, anchored) is enough and keeps `minimatch` out of this module: it is
+// loaded via dynamic import before the yaml/semver install fallback runs, so a
+// top-level dependency import could fail on a clean clone.
+function globToRegExp(pattern: string): RegExp {
+  const escaped = pattern.replaceAll(/[.+?^${}()|[\]\\]/g, '\\$&').replaceAll('*', '.*');
+  return new RegExp(`^${escaped}$`);
+}
+
+// Merge minimumReleaseAgeExclude entries from multiple workspaces:
+// - Preserve insertion order and dedupe exact-string duplicates.
+// - Always keep version-less patterns (the broad rules).
+// - Drop versioned entries (`name@version`) whose package name is already
+//   covered by a version-less pattern anywhere in the merged set, since pnpm
+//   excludes every version under the broader rule.
+function mergeMinimumReleaseAgeExclude(entries: string[]): string[] {
+  // Dedupe exact-string duplicates (Set preserves insertion order) and parse
+  // each entry once.
+  const parsed = [...new Set(entries)].map((entry) => {
+    const { name, version } = parseExcludeEntry(entry);
+    return { entry, name, version };
+  });
+
+  // Collect matchers for all version-less name patterns (the broad rules).
+  const versionlessMatchers = parsed
+    .filter((p) => p.version === undefined)
+    .map((p) => globToRegExp(p.name));
+
+  // Keep every version-less pattern; drop a versioned entry once a version-less
+  // pattern already covers its name, since pnpm excludes every version under it.
+  return parsed
+    .filter((p) => p.version === undefined || !versionlessMatchers.some((m) => m.test(p.name)))
+    .map((p) => p.entry);
+}
+
+export function mergePnpmWorkspaces(
   main: PnpmWorkspace,
   rolldown: PnpmWorkspace,
   rolldownVite: PnpmWorkspace,
@@ -572,11 +620,11 @@ function mergePnpmWorkspaces(
     );
 
   // Merge minimumReleaseAgeExclude
-  const excludeSet = new Set(main.minimumReleaseAgeExclude || []);
-
-  (rolldown.minimumReleaseAgeExclude || []).forEach((item) => excludeSet.add(item));
-  (rolldownVite.minimumReleaseAgeExclude || []).forEach((item) => excludeSet.add(item));
-  result.minimumReleaseAgeExclude = Array.from(excludeSet);
+  result.minimumReleaseAgeExclude = mergeMinimumReleaseAgeExclude([
+    ...(main.minimumReleaseAgeExclude || []),
+    ...(rolldown.minimumReleaseAgeExclude || []),
+    ...(rolldownVite.minimumReleaseAgeExclude || []),
+  ]);
 
   // Copy patchedDependencies from vite (with path prefix)
   if (rolldownVite.patchedDependencies) {
