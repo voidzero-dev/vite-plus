@@ -113,10 +113,12 @@ const helpMessage = renderCliDoc({
           label: '--agent NAME',
           description: 'Write coding agent instructions to AGENTS.md, CLAUDE.md, etc.',
         },
+        { label: '--no-agent', description: 'Skip writing coding agent instructions' },
         {
           label: '--editor NAME',
           description: 'Write editor config files for the specified editor.',
         },
+        { label: '--no-editor', description: 'Skip writing editor config files' },
         { label: '--git', description: 'Initialize a git repository with an initial commit' },
         { label: '--no-git', description: 'Skip git repository initialization' },
         {
