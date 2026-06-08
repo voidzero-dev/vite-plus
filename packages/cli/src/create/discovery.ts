@@ -246,6 +246,16 @@ export function inferParentDir(
   if (workspaceInfo.parentDirs.length === 0) {
     return undefined;
   }
+  // A local generator/template package generates output next to itself: place
+  // it in the parent directory the generator package already lives in, rather
+  // than defaulting to the `apps` rule below.
+  const localPackage = workspaceInfo.packages.find((pkg) => pkg.name === templateName);
+  if (localPackage?.isTemplatePackage) {
+    const ownParentDir = path.dirname(localPackage.path);
+    if (workspaceInfo.parentDirs.includes(ownParentDir)) {
+      return ownParentDir;
+    }
+  }
   // apps/applications by default
   let rule = /app/i;
   if (templateName === BuiltinTemplate.library) {

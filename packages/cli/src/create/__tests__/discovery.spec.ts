@@ -4,11 +4,12 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import type { WorkspaceInfo } from '../../types/index.js';
+import type { WorkspaceInfo, WorkspaceInfoOptional } from '../../types/index.js';
 import {
   discoverTemplate,
   expandCreateShorthand,
   inferGitHubRepoName,
+  inferParentDir,
   parseGitHubUrl,
 } from '../discovery.js';
 
@@ -58,6 +59,36 @@ describe('discoverTemplate', () => {
 
     // Must not fall through to the `create-my-template` npm package
     expect(() => discoverTemplate('my-template', [], workspaceInfo)).toThrow(/has no "bin" entry/);
+  });
+});
+
+function inferParentDirWorkspace(
+  parentDirs: string[],
+  packages: WorkspaceInfoOptional['packages'] = [],
+): WorkspaceInfoOptional {
+  return {
+    rootDir: '/tmp/workspace',
+    isMonorepo: true,
+    monorepoScope: '',
+    workspacePatterns: parentDirs.map((dir) => `${dir}/*`),
+    parentDirs,
+    packages,
+  } as unknown as WorkspaceInfoOptional;
+}
+
+describe('inferParentDir', () => {
+  it('places a local generator next to itself, not in the apps parent', () => {
+    const ws = inferParentDirWorkspace(
+      ['apps', 'packages', 'tools'],
+      [{ name: 'my-generator', path: 'tools/my-generator', isTemplatePackage: true }],
+    );
+    // Must NOT fall back to the default `apps` rule for a local generator.
+    expect(inferParentDir('my-generator', ws)).toBe('tools');
+  });
+
+  it('falls back to the app rule for non-template names', () => {
+    const ws = inferParentDirWorkspace(['apps', 'packages', 'tools']);
+    expect(inferParentDir('vite', ws)).toBe('apps');
   });
 });
 
