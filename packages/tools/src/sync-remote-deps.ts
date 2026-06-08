@@ -666,6 +666,80 @@ export function mergePnpmWorkspaces(
   return result;
 }
 
+// Read the string key of a `Pair`. Keys parsed from source are `Scalar` nodes
+// (`key.value`); keys added via `map.set(name, ...)` are plain strings.
+function pairKey(pair: import('yaml').Pair, yaml: typeof import('yaml')): unknown {
+  return yaml.isScalar(pair.key) ? pair.key.value : pair.key;
+}
+
+// Reconcile a plain `value` object back INTO an existing `YAMLMap` node so that
+// keys/values that survive the merge keep their attached comments. Updating an
+// existing scalar key via `set` keeps its `Pair` (and `commentBefore`/`comment`);
+// recursing into a child map keeps nested comments (e.g. the catalog's `zod`
+// pin rationale). The final reorder rebuilds `items` strictly from `value`'s key
+// order (the merge sorts `catalog` alphabetically), which also drops any key that
+// no longer exists in the merged value, while keeping the existing `Pair` objects
+// so comments stay attached.
+function reconcileMap(
+  mapNode: import('yaml').YAMLMap,
+  value: Record<string, unknown>,
+  yaml: typeof import('yaml'),
+): void {
+  for (const key of Object.keys(value)) {
+    const existing = mapNode.get(key, true);
+    const next = value[key];
+    if (yaml.isMap(existing) && next !== null && typeof next === 'object' && !Array.isArray(next)) {
+      // Recurse so nested comments survive instead of replacing the whole node.
+      reconcileMap(existing, next as Record<string, unknown>, yaml);
+    } else {
+      // Scalars and sequences carry no comments today; replace wholesale.
+      mapNode.set(key, next);
+    }
+  }
+
+  // Reorder existing `Pair` objects to match the merged key order; keys absent
+  // from `value` are not re-added, so this also drops them.
+  const byKey = new Map(mapNode.items.map((pair) => [pairKey(pair, yaml), pair]));
+  mapNode.items = Object.keys(value)
+    .map((key) => byKey.get(key))
+    .filter((pair) => pair !== undefined);
+}
+
+// Comment-preserving parse + merge + serialize seam used by `syncRemote`. Parses
+// the main workspace as a `Document` (which retains comments), merges the upstream
+// rolldown/vite workspaces via `mergePnpmWorkspaces` (no semantic drift), then
+// reconciles the merged data back into the main document so author comments (e.g.
+// the zod-v3 pin rationale) survive the round-trip.
+export function mergeWorkspaceYaml(
+  mainSrc: string,
+  rolldownSrc: string,
+  rolldownViteSrc: string,
+  yaml: typeof import('yaml'),
+  semver: typeof import('semver'),
+): string {
+  const mainDoc = yaml.parseDocument(mainSrc);
+  const rolldown = yaml.parse(rolldownSrc) as PnpmWorkspace | null;
+  const rolldownVite = yaml.parse(rolldownViteSrc) as PnpmWorkspace | null;
+
+  const merged = mergePnpmWorkspaces(
+    (mainDoc.toJSON() as PnpmWorkspace) ?? {},
+    rolldown ?? {},
+    rolldownVite ?? {},
+    semver,
+  );
+
+  const stringifyOptions = { lineWidth: -1, singleQuote: true } as const;
+
+  if (!yaml.isMap(mainDoc.contents)) {
+    // Empty/invalid main document: no comments to preserve, serialize merged data.
+    return yaml.stringify(merged, stringifyOptions);
+  }
+
+  reconcileMap(mainDoc.contents, merged as Record<string, unknown>, yaml);
+
+  return mainDoc.toString(stringifyOptions);
+}
+
 export async function syncRemote() {
   const { values } = parseArgs({
     options: {
@@ -719,58 +793,36 @@ export async function syncRemote() {
     upstreamVersions['vite'].hash,
   );
 
-  // Dynamically import dependencies after git clone
-  let parseYaml: typeof import('yaml').parse;
-  let stringifyYaml: typeof import('yaml').stringify;
+  // Dynamically import dependencies after git clone. Capture the whole `yaml`
+  // module (we need `yaml.parseDocument` to preserve comments).
+  let yaml: typeof import('yaml');
   let semver: typeof import('semver');
 
   try {
-    const yaml = await import('yaml');
-    parseYaml = yaml.parse;
-    stringifyYaml = yaml.stringify;
+    yaml = await import('yaml');
     semver = await import('semver');
   } catch {
     log('Dependencies not found, running pnpm install...');
     execCommand('pnpm install --no-frozen-lockfile', rootDir);
     log('Retrying imports...');
-    const yaml = await import('yaml');
-    parseYaml = yaml.parse;
-    stringifyYaml = yaml.stringify;
+    yaml = await import('yaml');
     semver = await import('semver');
   }
 
   log('Reading pnpm-workspace.yaml files...');
 
-  // Read main pnpm-workspace.yaml
   const mainWorkspacePath = join(rootDir, 'pnpm-workspace.yaml');
-  const mainWorkspace = parseYaml(readFileSync(mainWorkspacePath, 'utf-8')) as PnpmWorkspace;
-
-  // Read rolldown pnpm-workspace.yaml
   const rolldownWorkspacePath = join(rootDir, ROLLDOWN_DIR, 'pnpm-workspace.yaml');
-  const rolldownWorkspace = parseYaml(
-    readFileSync(rolldownWorkspacePath, 'utf-8'),
-  ) as PnpmWorkspace;
-
-  // Read vite pnpm-workspace.yaml
   const rolldownViteWorkspacePath = join(rootDir, VITE_DIR, 'pnpm-workspace.yaml');
-  const rolldownViteWorkspace = parseYaml(
-    readFileSync(rolldownViteWorkspacePath, 'utf-8'),
-  ) as PnpmWorkspace;
+
+  const mainSrc = readFileSync(mainWorkspacePath, 'utf-8');
+  const rolldownSrc = readFileSync(rolldownWorkspacePath, 'utf-8');
+  const rolldownViteSrc = readFileSync(rolldownViteWorkspacePath, 'utf-8');
 
   log('Merging pnpm-workspace.yaml files...');
 
-  const mergedWorkspace = mergePnpmWorkspaces(
-    mainWorkspace,
-    rolldownWorkspace,
-    rolldownViteWorkspace,
-    semver,
-  );
-
-  // Write the merged workspace back
-  const yamlContent = stringifyYaml(mergedWorkspace, {
-    lineWidth: -1,
-    singleQuote: true,
-  });
+  // Merge upstream catalogs into the main workspace while preserving its comments.
+  const yamlContent = mergeWorkspaceYaml(mainSrc, rolldownSrc, rolldownViteSrc, yaml, semver);
 
   writeFileSync(mainWorkspacePath, yamlContent, 'utf-8');
 
