@@ -18,7 +18,13 @@ Please add staged config to vite.config.ts manually, see https://viteplus.dev/gu
     "vite": "catalog:",
     "vite-plus": "catalog:"
   },
-  "packageManager": "pnpm@<semver>",
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "<semver>",
+      "onFail": "download"
+    }
+  },
   "scripts": {
     "prepare": "vp config"
   }

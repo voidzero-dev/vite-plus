@@ -6,7 +6,16 @@
 
 Managed mode is on by default, so `node`, `npm`, and related shims resolve through Vite+ and pick the right Node.js version for the current project.
 
-When a project declares `packageManager` in `package.json`, matching package-manager shims also use that exact package-manager version. For example, `packageManager: "npm@10.9.4"` makes both `npm` and `npx` run through npm 10.9.4. Alias pairs follow the installed package-manager shims: `npm`/`npx`, `pnpm`/`pnpx`, `yarn`/`yarnpkg`, and `bun`/`bunx`. Vite+ does not translate mismatched commands, so a project pinned to `pnpm` still lets `npm` fall back to the npm that comes with the resolved Node.js runtime.
+The project Node.js version is resolved from these sources, in priority order:
+
+1. `.node-version` file (current or parent directories)
+2. `devEngines.runtime` in `package.json` (the [devEngines standard](https://docs.npmjs.com/cli/v11/configuring-npm/package-json#devengines))
+3. `engines.node` in `package.json`
+4. The global default (`vp env default`), then the latest LTS
+
+`devEngines.runtime` ranks above `engines.node` because it declares the development-environment requirement, while `engines.node` is a consumer-facing support range. `vp env doctor` warns when declared sources conflict.
+
+When a project declares `packageManager` (or `devEngines.packageManager`) in `package.json`, matching package-manager shims also use that package-manager version. For example, `packageManager: "npm@10.9.4"` makes both `npm` and `npx` run through npm 10.9.4. Alias pairs follow the installed package-manager shims: `npm`/`npx`, `pnpm`/`pnpx`, `yarn`/`yarnpkg`, and `bun`/`bunx`. Vite+ does not translate mismatched commands, so a project pinned to `pnpm` still lets `npm` fall back to the npm that comes with the resolved Node.js runtime.
 
 By default, Vite+ stores its managed runtime and related files in `~/.vite-plus`. If needed, you can override that location with `VP_HOME`.
 
@@ -60,8 +69,8 @@ In CI, `vp env use` can still run without shell initialization. It writes a temp
 ### Manage
 
 - `vp env default` sets or shows the global default Node.js version
-- `vp env pin` pins a Node.js version in the current directory
-- `vp env unpin` removes `.node-version` from the current directory
+- `vp env pin` pins a Node.js version in the current directory: an existing `.node-version` keeps being updated; otherwise the pin is written to `package.json#devEngines.runtime`; `.node-version` is only created when the directory has no `package.json`. Use `--target node-version` or `--target dev-engines` to choose explicitly. An existing `engines.node` is never modified.
+- `vp env unpin` removes the pin from the same source `vp env pin` would write
 - `vp env use` sets a Node.js version for the current shell session
 - `vp env install` installs a Node.js version
 - `vp env uninstall` removes an installed Node.js version
@@ -78,7 +87,7 @@ In CI, `vp env use` can still run without shell initialization. It writes a temp
 
 ## Project Setup
 
-- Pin a project version with `.node-version`
+- Pin a project version with `vp env pin`
 - Use `vp install`, `vp dev`, and `vp build` normally
 - Let Vite+ pick the right runtime for the project
 

@@ -44,11 +44,14 @@ Run `vp create --list` to see the built-in templates and the common shorthand te
 
 - `--directory <dir>` writes the generated project into a specific target directory
 - `--agent <name>` creates agent instructions files during scaffolding
+- `--no-agent` skips agent instruction setup
 - `--editor <name>` writes editor config files
+- `--no-editor` skips editor config setup
 - `--git` initialize a git repository
 - `--no-git` skips git repository initialization
 - `--hooks` enables pre-commit hook setup
 - `--no-hooks` skips hook setup
+- `--package-manager <name>` uses a specified package manager (`pnpm`, `npm`, `yarn`, or `bun`)
 - `--no-interactive` runs without prompts
 - `--verbose` shows detailed scaffolding output
 - `--list` prints the available built-in and popular templates
