@@ -518,6 +518,21 @@ fn print_ide_setup_guidance(bin_dir: &vite_path::AbsolutePath) {
     }
 }
 
+/// Render the "Source" line for the resolved Node.js version.
+///
+/// package.json holds both `engines.node` and `devEngines.runtime`, so the path
+/// alone is ambiguous; name which field the version came from (matching
+/// `vp env pin`'s output). Other sources (`.node-version`, session, default) are
+/// already unambiguous from the path or label, so the bare path/label is shown.
+fn format_version_source(source: &str, source_path: Option<&vite_path::AbsolutePath>) -> String {
+    let names_pkg_field = matches!(source, "devEngines.runtime" | "engines.node");
+    match source_path {
+        Some(path) if names_pkg_field => format!("{} ({source})", path.as_path().display()),
+        Some(path) => path.as_path().display().to_string(),
+        None => source.to_string(),
+    }
+}
+
 /// Check current directory version resolution.
 async fn check_current_resolution(
     cwd: &AbsolutePathBuf,
@@ -550,11 +565,8 @@ async fn check_current_resolution(
 
     match resolve_version(cwd).await {
         Ok(resolution) => {
-            let source_display = resolution
-                .source_path
-                .as_ref()
-                .map(|p| p.as_path().display().to_string())
-                .unwrap_or(resolution.source);
+            let source_display =
+                format_version_source(&resolution.source, resolution.source_path.as_deref());
             print_check(" ", "Source", &source_display);
             print_check(" ", "Version", &resolution.version.bright_green().to_string());
 
@@ -1347,6 +1359,28 @@ mod tests {
     /// Test helper: extract finding messages for assertion failure output.
     fn messages(findings: &[DevEnginesFinding]) -> Vec<&str> {
         findings.iter().map(|f| f.message.as_str()).collect()
+    }
+
+    #[test]
+    fn test_format_version_source_distinguishes_package_json_fields() {
+        let pkg = AbsolutePathBuf::new(std::path::PathBuf::from("/proj/package.json")).unwrap();
+        // both fields live in package.json, so the field name must be shown
+        assert_eq!(
+            format_version_source("devEngines.runtime", Some(&pkg)),
+            "/proj/package.json (devEngines.runtime)"
+        );
+        assert_eq!(
+            format_version_source("engines.node", Some(&pkg)),
+            "/proj/package.json (engines.node)"
+        );
+
+        // .node-version is already unambiguous from its path
+        let nv = AbsolutePathBuf::new(std::path::PathBuf::from("/proj/.node-version")).unwrap();
+        assert_eq!(format_version_source(".node-version", Some(&nv)), "/proj/.node-version");
+
+        // pathless sources fall back to the label
+        assert_eq!(format_version_source("default", None), "default");
+        assert_eq!(format_version_source("lts", None), "lts");
     }
 
     #[test]
