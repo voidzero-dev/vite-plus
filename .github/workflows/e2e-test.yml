@@ -61,6 +61,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
   build:
+    environment: debug # temporary: enable ACTIONS_STEP_DEBUG for actions/setup-node#1555 (revert after capture)
     name: Build vite-plus packages (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     permissions:

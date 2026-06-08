@@ -16,6 +16,7 @@ concurrency:
 
 jobs:
   prepare:
+    environment: debug # temporary: enable ACTIONS_STEP_DEBUG for actions/setup-node#1555 (revert after capture)
     if: github.repository == 'voidzero-dev/vite-plus'
     name: Prepare Release
     runs-on: ubuntu-latest

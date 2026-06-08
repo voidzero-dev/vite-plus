@@ -156,6 +156,7 @@ jobs:
           RUST_MIN_STACK: 8388608
 
   lint:
+    environment: debug # temporary: enable ACTIONS_STEP_DEBUG for actions/setup-node#1555 (revert after capture)
     needs: detect-changes
     if: needs.detect-changes.outputs.code-changed == 'true'
     name: Lint
@@ -199,6 +200,7 @@ jobs:
         run: pnpm dedupe --check || pnpm dedupe --check
 
   cli-e2e-test:
+    environment: debug # temporary: enable ACTIONS_STEP_DEBUG for actions/setup-node#1555 (revert after capture)
     name: CLI E2E test
     needs:
       - download-previous-rolldown-binaries
@@ -735,6 +737,12 @@ jobs:
 
   cli-snap-test:
     name: CLI snap test (${{ matrix.target }}, ${{ matrix.shard }}/${{ matrix.shardTotal }})
+    # TEMPORARY (revert after capture): scope ACTIONS_STEP_DEBUG to this job to
+    # collect debug logs for actions/setup-node#1555 (sporadic silent failure
+    # right after "Attempting to download <version>..."). The `debug` GitHub
+    # Environment holds ACTIONS_STEP_DEBUG=true; this is the only job that
+    # references it, so the rest of CI keeps normal log verbosity.
+    environment: debug
     needs:
       - download-previous-rolldown-binaries
     strategy:
@@ -852,6 +860,7 @@ jobs:
           RUST_MIN_STACK: 8388608
 
   cli-e2e-test-musl:
+    environment: debug # temporary: enable ACTIONS_STEP_DEBUG for actions/setup-node#1555 (revert after capture)
     name: CLI E2E test (Linux x64 musl)
     needs:
       - download-previous-rolldown-binaries
@@ -928,6 +937,7 @@ jobs:
             "
 
   install-e2e-test:
+    environment: debug # temporary: enable ACTIONS_STEP_DEBUG for actions/setup-node#1555 (revert after capture)
     name: Local CLI `vp install` E2E test
     needs:
       - download-previous-rolldown-binaries
@@ -997,6 +1007,7 @@ jobs:
           done
 
   install-e2e-test-sfw:
+    environment: debug # temporary: enable ACTIONS_STEP_DEBUG for actions/setup-node#1555 (revert after capture)
     name: Local CLI `vp install` E2E test (Socket Firewall Free)
     needs:
       - download-previous-rolldown-binaries

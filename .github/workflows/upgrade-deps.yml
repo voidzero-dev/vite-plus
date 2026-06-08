@@ -9,6 +9,7 @@ permissions: {}
 
 jobs:
   upgrade:
+    environment: debug # temporary: enable ACTIONS_STEP_DEBUG for actions/setup-node#1555 (revert after capture)
     if: github.event.repository.fork == false
     runs-on: ubuntu-latest
     permissions:

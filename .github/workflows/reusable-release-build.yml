@@ -17,6 +17,7 @@ on:
 
 jobs:
   build-rust:
+    environment: debug # temporary: enable ACTIONS_STEP_DEBUG for actions/setup-node#1555 (revert after capture)
     name: Build (${{ matrix.settings.target }})
     runs-on: ${{ matrix.settings.os }}
     permissions:
