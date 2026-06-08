@@ -1,2 +1,5 @@
-> vp env doctor > doctor.txt 2>&1; node -e "const t = require('node:fs').readFileSync('doctor.txt', 'utf8'); const need = ['devEngines', '.node-version (20.18.0) does not satisfy devEngines.runtime', 'npm@10.5.0', 'but devEngines.packageManager requires']; for (const s of need) { if (!t.includes(s)) { console.error('missing line in doctor output: ' + s); process.exit(1); } } console.log('doctor reports devEngines conflicts');" # doctor surfaces the .node-version vs devEngines.runtime and packageManager vs devEngines.packageManager conflicts
-doctor reports devEngines conflicts
+> vp env doctor > doctor.txt 2>&1; node -e "const fs=require('node:fs');const text=fs.readFileSync('doctor.txt','utf8').replace(/\u001b\[[0-9;]*m/g,'');const lines=text.split('\n');const start=lines.findIndex(l=>l.trim()==='devEngines');if(start===-1){console.error('devEngines section not found in doctor output');process.exit(1);}const out=[];for(let i=start;i<lines.length;i++){if(i>start&&lines[i].trim()===''){break;}out.push(lines[i].trimEnd());}console.log(out.join('\n'));" # print only the deterministic devEngines section of vp env doctor (the other sections are environment-dependent)
+devEngines
+  ⚠ Runtime           .node-version (20.18.0) does not satisfy devEngines.runtime "^24.0.0"
+  ⚠ PackageManager    packageManager is "npm@<semver>" but devEngines.packageManager requires "pnpm"
+  note: This will become an error in a future release.
