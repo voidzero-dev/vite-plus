@@ -81,6 +81,10 @@ No .yarnrc.yml
 > test -d vite-plus-monorepo/.git && echo 'Git initialized' # check git init
 Git initialized
 
+> vp create vite:monorepo --interactive --verbose --no-git --no-hooks --no-agent --no-editor --package-manager pnpm --directory verbose-no-git-monorepo # explicit --no-git should skip verbose monorepo git prompt
+> test ! -d verbose-no-git-monorepo/.git && echo 'No git initialized for explicit --no-git' || (echo 'ERROR: git initialized' && exit 1) # check verbose --no-git is respected
+No git initialized for explicit --no-git
+
 > test -f vite-plus-monorepo/.vscode/settings.json && echo '.vscode/settings.json exists' # check VS Code settings created
 .vscode/settings.json exists
 
