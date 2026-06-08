@@ -278,6 +278,8 @@ Auto-pin never replaces entries it did not write: when `devEngines.packageManage
 
 All checks are **semver-aware**: an exact version satisfying a declared range is not a conflict (`.node-version: 24.11.1` is compatible with `devEngines.runtime.version: ^24.0.0`; #864 review note).
 
+Compatible coexistence of `.node-version` and `devEngines.runtime` is intentionally **not** flagged (not even as a note). The two are a legitimate interop pattern, not a redundancy to clean up: `.node-version` is read by fnm/nvm/asdf/Netlify/`actions/setup-node`, while `devEngines.runtime` is the npm/pnpm standard, so projects keep both on purpose. Doctor warns only when the two actually diverge (a real conflict), which also catches later drift when, for example, `.node-version` is bumped out of the declared range.
+
 Which package.json each check examines mirrors the consumer it diagnoses:
 
 - **Runtime checks** use nearest-first walk-up semantics, like Node.js resolution. The `.node-version` vs `devEngines.runtime` conflict check follows the resolution walk on both sides: it fires only when a `.node-version` actually wins resolution, and the `devEngines.runtime` declaration is found in ancestor manifests too (a parent `.node-version` shadowed by a nearer winning `devEngines.runtime` is not a conflict).
