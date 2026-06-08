@@ -666,6 +666,10 @@ export function mergePnpmWorkspaces(
   return result;
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 // Read the string key of a `Pair`. Keys parsed from source are `Scalar` nodes
 // (`key.value`); keys added via `map.set(name, ...)` are plain strings.
 function pairKey(pair: import('yaml').Pair, yaml: typeof import('yaml')): unknown {
@@ -685,12 +689,13 @@ function reconcileMap(
   value: Record<string, unknown>,
   yaml: typeof import('yaml'),
 ): void {
-  for (const key of Object.keys(value)) {
+  const keys = Object.keys(value);
+  for (const key of keys) {
     const existing = mapNode.get(key, true);
     const next = value[key];
-    if (yaml.isMap(existing) && next !== null && typeof next === 'object' && !Array.isArray(next)) {
+    if (yaml.isMap(existing) && isPlainObject(next)) {
       // Recurse so nested comments survive instead of replacing the whole node.
-      reconcileMap(existing, next as Record<string, unknown>, yaml);
+      reconcileMap(existing, next, yaml);
     } else {
       // Scalars and sequences carry no comments today; replace wholesale.
       mapNode.set(key, next);
@@ -700,9 +705,7 @@ function reconcileMap(
   // Reorder existing `Pair` objects to match the merged key order; keys absent
   // from `value` are not re-added, so this also drops them.
   const byKey = new Map(mapNode.items.map((pair) => [pairKey(pair, yaml), pair]));
-  mapNode.items = Object.keys(value)
-    .map((key) => byKey.get(key))
-    .filter((pair) => pair !== undefined);
+  mapNode.items = keys.map((key) => byKey.get(key)).filter((pair) => pair !== undefined);
 }
 
 // Comment-preserving parse + merge + serialize seam used by `syncRemote`. Parses
