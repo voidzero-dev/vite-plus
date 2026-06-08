@@ -97,7 +97,10 @@ pub async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
 
     // Section: Version Resolution
     print_section("Version Resolution");
-    check_current_resolution(&cwd, shim_mode, system_node_path).await;
+    let resolved_version = check_current_resolution(&cwd, shim_mode, system_node_path).await;
+
+    // Section: devEngines (conditional, see rfcs/dev-engines.md)
+    check_dev_engines(&cwd, resolved_version.as_deref()).await;
 
     // Section: Conflicts (conditional)
     check_conflicts();
@@ -515,12 +518,27 @@ fn print_ide_setup_guidance(bin_dir: &vite_path::AbsolutePath) {
     }
 }
 
+/// Render the "Source" line for the resolved Node.js version.
+///
+/// package.json holds both `engines.node` and `devEngines.runtime`, so the path
+/// alone is ambiguous; name which field the version came from (matching
+/// `vp env pin`'s output). Other sources (`.node-version`, session, default) are
+/// already unambiguous from the path or label, so the bare path/label is shown.
+fn format_version_source(source: &str, source_path: Option<&vite_path::AbsolutePath>) -> String {
+    let names_pkg_field = matches!(source, "devEngines.runtime" | "engines.node");
+    match source_path {
+        Some(path) if names_pkg_field => format!("{} ({source})", path.as_path().display()),
+        Some(path) => path.as_path().display().to_string(),
+        None => source.to_string(),
+    }
+}
+
 /// Check current directory version resolution.
 async fn check_current_resolution(
     cwd: &AbsolutePathBuf,
     shim_mode: ShimMode,
     system_node_path: Option<AbsolutePathBuf>,
-) {
+) -> Option<String> {
     print_check(" ", "Directory", &cwd.as_path().display().to_string());
 
     // In system-first mode, show system Node.js info instead of managed resolution
@@ -542,23 +560,20 @@ async fn check_current_resolution(
             );
             print_hint("Install Node.js or run 'vp env on' to use managed Node.js.");
         }
-        return;
+        return None;
     }
 
     match resolve_version(cwd).await {
         Ok(resolution) => {
-            let source_display = resolution
-                .source_path
-                .as_ref()
-                .map(|p| p.as_path().display().to_string())
-                .unwrap_or(resolution.source);
+            let source_display =
+                format_version_source(&resolution.source, resolution.source_path.as_deref());
             print_check(" ", "Source", &source_display);
             print_check(" ", "Version", &resolution.version.bright_green().to_string());
 
             // Check if Node.js is installed
             let home_dir = match vite_shared::get_vp_home() {
                 Ok(d) => d.join("js_runtime").join("node").join(&resolution.version),
-                Err(_) => return,
+                Err(_) => return None,
             };
 
             #[cfg(windows)]
@@ -576,6 +591,7 @@ async fn check_current_resolution(
                 );
                 print_hint("Version will be downloaded on first use.");
             }
+            Some(resolution.version)
         }
         Err(e) => {
             print_check(
@@ -583,6 +599,7 @@ async fn check_current_resolution(
                 "Resolution",
                 &format!("failed: {e}").red().to_string(),
             );
+            None
         }
     }
 }
@@ -594,6 +611,323 @@ async fn get_node_version(node_path: &vite_path::AbsolutePath) -> String {
             String::from_utf8_lossy(&output.stdout).trim().to_string()
         }
         _ => "unknown".to_string(),
+    }
+}
+
+/// One devEngines doctor finding.
+struct DevEnginesFinding {
+    /// true for a warning, false for an informational note
+    warn: bool,
+    key: &'static str,
+    message: String,
+    hint: Option<String>,
+}
+
+impl DevEnginesFinding {
+    fn warn(key: &'static str, message: String) -> Self {
+        Self { warn: true, key, message, hint: None }
+    }
+
+    fn warn_with_hint(key: &'static str, message: String, hint: String) -> Self {
+        Self { warn: true, key, message, hint: Some(hint) }
+    }
+
+    fn note(key: &'static str, message: String) -> Self {
+        Self { warn: false, key, message, hint: None }
+    }
+}
+
+/// Find the nearest package.json walking up from `cwd`.
+async fn find_nearest_package_json(cwd: &AbsolutePathBuf) -> Option<(AbsolutePathBuf, String)> {
+    let mut current = cwd.clone();
+    loop {
+        let candidate = current.join("package.json");
+        if let Ok(content) = tokio::fs::read_to_string(&candidate).await {
+            return Some((current, content));
+        }
+        current = current.parent()?.to_absolute_path_buf();
+    }
+}
+
+/// Find the nearest `devEngines.runtime` node declaration walking up from `cwd`
+/// (the declaration may live in an ancestor manifest, e.g. a monorepo root).
+async fn find_nearest_dev_engines_node_version(cwd: &AbsolutePathBuf) -> Option<vite_str::Str> {
+    let mut current = cwd.clone();
+    loop {
+        if let Ok(content) = tokio::fs::read_to_string(current.join("package.json")).await
+            && let Ok(pkg) = serde_json::from_str::<vite_shared::PackageJson>(&content)
+            && let Some(declared) = pkg.dev_engines_runtime("node").and_then(|d| d.version.clone())
+        {
+            return Some(declared);
+        }
+        current = current.parent()?.to_absolute_path_buf();
+    }
+}
+
+/// Check devEngines declarations for conflicts and spec issues (rfcs/dev-engines.md).
+///
+/// All checks are semver-aware: an exact version satisfying a declared range is
+/// not a conflict. Findings are warnings or notes; they never fail the doctor run
+/// and are never auto-fixed.
+async fn check_dev_engines(cwd: &AbsolutePathBuf, resolved_version: Option<&str>) {
+    let findings = collect_dev_engines_findings(cwd, resolved_version).await;
+    if findings.is_empty() {
+        return;
+    }
+
+    print_section("devEngines");
+    for finding in findings {
+        if finding.warn {
+            print_check(
+                &output::WARN_SIGN.yellow().to_string(),
+                finding.key,
+                &finding.message.yellow().to_string(),
+            );
+        } else {
+            print_check(" ", finding.key, &finding.message);
+        }
+        if let Some(hint) = finding.hint {
+            print_hint(&hint);
+        }
+    }
+}
+
+/// Read the workspace-root package.json (raw + typed) when it differs from the
+/// nearest one; `None` means "use the nearest package.json". See the call site
+/// for why package-manager checks need the workspace root.
+async fn read_workspace_root_doc(
+    cwd: &AbsolutePathBuf,
+    nearest_pkg_path: &AbsolutePathBuf,
+) -> Option<(serde_json::Value, vite_shared::PackageJson)> {
+    let (workspace_root, _) = vite_workspace::find_workspace_root(cwd).ok()?;
+    let root_pkg_path = workspace_root.path.join("package.json");
+    if &root_pkg_path == nearest_pkg_path {
+        return None;
+    }
+    let content = tokio::fs::read_to_string(&root_pkg_path).await.ok()?;
+    Some((serde_json::from_str(&content).ok()?, serde_json::from_str(&content).ok()?))
+}
+
+/// Collect the devEngines findings for the nearest package.json.
+async fn collect_dev_engines_findings(
+    cwd: &AbsolutePathBuf,
+    resolved_version: Option<&str>,
+) -> Vec<DevEnginesFinding> {
+    let Some((pkg_dir, content)) = find_nearest_package_json(cwd).await else {
+        return Vec::new();
+    };
+    let Ok(raw) = serde_json::from_str::<serde_json::Value>(&content) else {
+        return Vec::new();
+    };
+    let Ok(pkg) = serde_json::from_str::<vite_shared::PackageJson>(&content) else {
+        return Vec::new();
+    };
+
+    // Package-manager checks examine the WORKSPACE ROOT package.json: that is the
+    // file vp install reads for packageManager / devEngines.packageManager. In a
+    // monorepo it can be a different (higher) file than the nearest package.json
+    // used by the Node.js runtime checks above.
+    let nearest_pkg_path = pkg_dir.join("package.json");
+    let root_doc = read_workspace_root_doc(cwd, &nearest_pkg_path).await;
+    let (pm_raw, pm_pkg): (&serde_json::Value, &vite_shared::PackageJson) = match &root_doc {
+        Some((root_raw, root_pkg)) => (root_raw, root_pkg),
+        None => (&raw, &pkg),
+    };
+
+    let mut findings: Vec<DevEnginesFinding> = Vec::new();
+
+    let runtime_field = pkg.dev_engines.as_ref().and_then(|de| de.runtime.as_ref());
+    let package_manager_field =
+        pm_pkg.dev_engines.as_ref().and_then(|de| de.package_manager.as_ref());
+
+    // .node-version vs devEngines.runtime (semver-aware: only exact .node-version
+    // values can conflict with a declared range). Both sides follow the resolution
+    // walk: the check fires only when a .node-version actually wins resolution, and
+    // the devEngines.runtime declaration may live in an ancestor manifest rather
+    // than the nearest package.json.
+    if let Ok(Some(resolution)) = vite_js_runtime::resolve_node_version(cwd, true).await
+        && resolution.source == vite_js_runtime::VersionSource::NodeVersionFile
+        && let Ok(version) = node_semver::Version::parse(&resolution.version)
+        && let Some(declared) = find_nearest_dev_engines_node_version(cwd).await
+        && let Ok(range) = node_semver::Range::parse(declared.as_str())
+        && !range.satisfies(&version)
+    {
+        findings.push(DevEnginesFinding::warn(
+            "Runtime",
+            format!(
+                ".node-version ({node_version}) does not satisfy devEngines.runtime \"{declared}\"",
+                node_version = resolution.version
+            ),
+        ));
+    }
+
+    // Resolved Node.js version vs engines.node
+    if let Some(resolved) = resolved_version
+        && let Some(engines_node) = pkg.engines.as_ref().and_then(|e| e.node.as_ref())
+        && let Ok(version) = node_semver::Version::parse(resolved)
+        && let Ok(range) = node_semver::Range::parse(engines_node.as_str())
+        && !range.satisfies(&version)
+    {
+        findings.push(DevEnginesFinding::warn(
+            "Runtime",
+            format!("resolved Node.js {resolved} does not satisfy engines.node \"{engines_node}\""),
+        ));
+    }
+
+    // Invalid semver ranges in devEngines entries (the spec only allows semver
+    // range syntax; aliases like lts/* are not valid there)
+    for (field_name, field) in
+        [("runtime", runtime_field), ("packageManager", package_manager_field)]
+    {
+        let Some(field) = field else { continue };
+        for entry in field.entries() {
+            if let Some(version) = &entry.version
+                && node_semver::Range::parse(version.as_str()).is_err()
+            {
+                findings.push(DevEnginesFinding::warn(
+                    "Spec",
+                    format!(
+                        "devEngines.{field_name} version \"{version}\" for \"{name}\" is not a \
+                         valid semver range (see devEngines spec)",
+                        name = entry.name
+                    ),
+                ));
+            }
+        }
+    }
+
+    // Runtimes Vite+ does not manage (informational)
+    if let Some(field) = runtime_field {
+        for entry in field.entries() {
+            if entry.name != "node" {
+                findings.push(DevEnginesFinding::note(
+                    "Runtime",
+                    format!(
+                        "devEngines.runtime declares \"{}\", which is not managed by Vite+",
+                        entry.name
+                    ),
+                ));
+            }
+        }
+    }
+
+    // packageManager field vs devEngines.packageManager consistency
+    if let Some(pm_field) = pm_raw.get("packageManager").and_then(serde_json::Value::as_str)
+        && let Some(field) = package_manager_field
+        && !field.entries().is_empty()
+    {
+        let (pm_name, pm_rest) = pm_field.split_once('@').unwrap_or((pm_field, ""));
+        let pm_version = pm_rest.split('+').next().unwrap_or(pm_rest);
+        let future_error_hint = "This will become an error in a future release.".to_string();
+        match field.find_by_name(pm_name) {
+            None => {
+                let names =
+                    field.entries().iter().map(|e| e.name.as_str()).collect::<Vec<_>>().join(", ");
+                findings.push(DevEnginesFinding::warn_with_hint(
+                    "PackageManager",
+                    format!(
+                        "packageManager is \"{pm_name}@{pm_version}\" but \
+                         devEngines.packageManager requires \"{names}\""
+                    ),
+                    future_error_hint,
+                ));
+            }
+            Some(entry) => {
+                if let Some(required) = &entry.version
+                    && let Ok(range) = node_semver::Range::parse(required.as_str())
+                    && let Ok(version) = node_semver::Version::parse(pm_version)
+                    && !range.satisfies(&version)
+                {
+                    findings.push(DevEnginesFinding::warn_with_hint(
+                        "PackageManager",
+                        format!(
+                            "packageManager {pm_name}@{pm_version} does not satisfy \
+                             devEngines.packageManager \"{required}\""
+                        ),
+                        future_error_hint,
+                    ));
+                }
+            }
+        }
+    }
+
+    // Unsupported devEngines.packageManager names. When a supported entry exists
+    // too, the unsupported one is skipped by design (an info note); otherwise it
+    // is the only declaration and warrants a warning.
+    if let Some(field) = package_manager_field {
+        let is_supported = |name: &str| vite_install::PackageManagerType::from_name(name).is_some();
+        let has_supported = field.entries().iter().any(|e| is_supported(&e.name));
+        for entry in field.entries().iter().filter(|e| !is_supported(&e.name)) {
+            let skipped = if has_supported { " and will be skipped" } else { "" };
+            let message = format!(
+                "devEngines.packageManager \"{}\" is not supported{skipped} \
+                 (supported: pnpm, yarn, npm, bun)",
+                entry.name
+            );
+            findings.push(if has_supported {
+                DevEnginesFinding::note("PackageManager", message)
+            } else {
+                DevEnginesFinding::warn("PackageManager", message)
+            });
+        }
+    }
+
+    // Malformed entries that lenient parsing skipped (raw JSON inspection):
+    // runtime entries come from the nearest package.json, packageManager entries
+    // from the workspace root package.json
+    if let Some(raw_dev_engines) = raw.get("devEngines").and_then(serde_json::Value::as_object)
+        && let Some(value) = raw_dev_engines.get("runtime")
+    {
+        collect_malformed_entry_findings("runtime", value, &mut findings);
+    }
+    if let Some(raw_dev_engines) = pm_raw.get("devEngines").and_then(serde_json::Value::as_object)
+        && let Some(value) = raw_dev_engines.get("packageManager")
+    {
+        collect_malformed_entry_findings("packageManager", value, &mut findings);
+    }
+
+    findings
+}
+
+/// Collect findings for devEngines entries that lenient parsing skipped or that
+/// carry unknown `onFail` values.
+fn collect_malformed_entry_findings(
+    field_name: &str,
+    value: &serde_json::Value,
+    findings: &mut Vec<DevEnginesFinding>,
+) {
+    let entries: Vec<&serde_json::Value> = match value {
+        serde_json::Value::Array(items) => items.iter().collect(),
+        other => vec![other],
+    };
+
+    for entry in entries {
+        let Some(obj) = entry.as_object() else {
+            findings.push(DevEnginesFinding::warn(
+                "Spec",
+                format!("devEngines.{field_name} entry is not an object and was ignored"),
+            ));
+            continue;
+        };
+        let name = obj.get("name").and_then(serde_json::Value::as_str).unwrap_or("").trim();
+        if name.is_empty() {
+            findings.push(DevEnginesFinding::warn(
+                "Spec",
+                format!("devEngines.{field_name} entry is missing \"name\" and was ignored"),
+            ));
+            continue;
+        }
+        if let Some(on_fail) = obj.get("onFail").and_then(serde_json::Value::as_str)
+            && vite_shared::OnFail::parse(on_fail).is_none()
+        {
+            findings.push(DevEnginesFinding::warn(
+                "Spec",
+                format!(
+                    "devEngines.{field_name} entry \"{name}\" has unknown onFail \"{on_fail}\" \
+                     (expected: ignore, warn, error, download)"
+                ),
+            ));
+        }
     }
 }
 
@@ -656,6 +990,405 @@ mod tests {
     use super::*;
     #[cfg(not(windows))]
     use crate::commands::shell::{ShellProfileKind, ShellProfileRoot};
+
+    /// Test helper: write `files` into a temp project and collect devEngines findings.
+    async fn dev_engines_findings_for(
+        files: &[(&str, &str)],
+        resolved_version: Option<&str>,
+    ) -> Vec<DevEnginesFinding> {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        for (name, content) in files {
+            tokio::fs::write(temp_path.join(*name), content).await.unwrap();
+        }
+        collect_dev_engines_findings(&temp_path, resolved_version).await
+    }
+
+    // npm-install-checks: "semver version is not in range" (via .node-version)
+    #[tokio::test]
+    async fn test_dev_engines_findings_node_version_conflict() {
+        let findings = dev_engines_findings_for(
+            &[
+                (".node-version", "20.18.0\n"),
+                (
+                    "package.json",
+                    r#"{"devEngines":{"runtime":{"name":"node","version":"^24.0.0"}}}"#,
+                ),
+            ],
+            None,
+        )
+        .await;
+
+        assert_eq!(findings.len(), 1, "findings: {:?}", messages(&findings));
+        assert!(findings[0].warn);
+        assert_eq!(findings[0].key, "Runtime");
+        assert!(
+            findings[0].message.contains(".node-version (20.18.0) does not satisfy"),
+            "got: {}",
+            findings[0].message
+        );
+    }
+
+    // npm-install-checks: "semver version is in range" (semver-aware: an exact
+    // version satisfying the declared range is not a conflict)
+    #[tokio::test]
+    async fn test_dev_engines_findings_node_version_satisfies_range() {
+        let findings = dev_engines_findings_for(
+            &[
+                (".node-version", "24.1.0\n"),
+                (
+                    "package.json",
+                    r#"{"devEngines":{"runtime":{"name":"node","version":"^24.0.0"}}}"#,
+                ),
+            ],
+            None,
+        )
+        .await;
+
+        assert!(findings.is_empty(), "findings: {:?}", messages(&findings));
+    }
+
+    #[tokio::test]
+    async fn test_dev_engines_findings_resolved_violates_engines_node() {
+        let findings = dev_engines_findings_for(
+            &[("package.json", r#"{"engines":{"node":">=22.0.0"}}"#)],
+            Some("20.18.0"),
+        )
+        .await;
+
+        assert_eq!(findings.len(), 1, "findings: {:?}", messages(&findings));
+        assert!(findings[0].warn);
+        assert!(
+            findings[0].message.contains("resolved Node.js 20.18.0 does not satisfy engines.node"),
+            "got: {}",
+            findings[0].message
+        );
+    }
+
+    // npm-install-checks: "invalid name"
+    #[tokio::test]
+    async fn test_dev_engines_findings_package_manager_name_mismatch() {
+        let findings = dev_engines_findings_for(
+            &[(
+                "package.json",
+                r#"{
+                    "packageManager": "npm@10.5.0",
+                    "devEngines": {"packageManager": {"name": "pnpm", "version": "^11.0.0"}}
+                }"#,
+            )],
+            None,
+        )
+        .await;
+
+        assert_eq!(findings.len(), 1, "findings: {:?}", messages(&findings));
+        assert!(findings[0].warn);
+        assert_eq!(findings[0].key, "PackageManager");
+        assert!(
+            findings[0].message.contains("but devEngines.packageManager requires \"pnpm\""),
+            "got: {}",
+            findings[0].message
+        );
+        assert!(
+            findings[0].hint.as_deref().unwrap_or_default().contains("error in a future release")
+        );
+    }
+
+    // npm-install-checks: "semver version is not in range"
+    #[tokio::test]
+    async fn test_dev_engines_findings_package_manager_version_not_satisfying() {
+        let findings = dev_engines_findings_for(
+            &[(
+                "package.json",
+                r#"{
+                    "packageManager": "pnpm@10.9.0",
+                    "devEngines": {"packageManager": {"name": "pnpm", "version": "^11.0.0"}}
+                }"#,
+            )],
+            None,
+        )
+        .await;
+
+        assert_eq!(findings.len(), 1, "findings: {:?}", messages(&findings));
+        assert!(findings[0].warn);
+        assert!(
+            findings[0].message.contains("pnpm@10.9.0 does not satisfy"),
+            "got: {}",
+            findings[0].message
+        );
+        assert!(
+            findings[0].hint.as_deref().unwrap_or_default().contains("error in a future release")
+        );
+    }
+
+    // npm-install-checks: "non-semver version" (npm compares by string equality;
+    // Vite+ flags the value as spec non-compliant instead)
+    #[tokio::test]
+    async fn test_dev_engines_findings_invalid_semver_range() {
+        let findings = dev_engines_findings_for(
+            &[("package.json", r#"{"devEngines":{"runtime":{"name":"node","version":"lts/*"}}}"#)],
+            None,
+        )
+        .await;
+
+        assert_eq!(findings.len(), 1, "findings: {:?}", messages(&findings));
+        assert!(findings[0].warn);
+        assert_eq!(findings[0].key, "Spec");
+        assert!(
+            findings[0].message.contains("\"lts/*\" for \"node\" is not a valid semver range"),
+            "got: {}",
+            findings[0].message
+        );
+    }
+
+    // npm-install-checks: "unrecognized onFail"
+    #[tokio::test]
+    async fn test_dev_engines_findings_unknown_on_fail() {
+        let findings = dev_engines_findings_for(
+            &[(
+                "package.json",
+                r#"{"devEngines":{"runtime":{"name":"node","version":"^24.0.0","onFail":"unrecognized"}}}"#,
+            )],
+            None,
+        )
+        .await;
+
+        assert_eq!(findings.len(), 1, "findings: {:?}", messages(&findings));
+        assert!(findings[0].warn);
+        assert_eq!(findings[0].key, "Spec");
+        assert!(
+            findings[0].message.contains("unknown onFail \"unrecognized\""),
+            "got: {}",
+            findings[0].message
+        );
+    }
+
+    // npm-install-checks: "missing name"
+    #[tokio::test]
+    async fn test_dev_engines_findings_missing_name() {
+        let findings = dev_engines_findings_for(
+            &[("package.json", r#"{"devEngines":{"packageManager":{"version":"^1.0.0"}}}"#)],
+            None,
+        )
+        .await;
+
+        assert_eq!(findings.len(), 1, "findings: {:?}", messages(&findings));
+        assert!(findings[0].warn);
+        assert_eq!(findings[0].key, "Spec");
+        assert!(
+            findings[0].message.contains("missing \"name\" and was ignored"),
+            "got: {}",
+            findings[0].message
+        );
+    }
+
+    #[tokio::test]
+    async fn test_dev_engines_findings_non_node_runtime_note() {
+        let findings = dev_engines_findings_for(
+            &[("package.json", r#"{"devEngines":{"runtime":{"name":"deno","version":"^2.0.0"}}}"#)],
+            None,
+        )
+        .await;
+
+        assert_eq!(findings.len(), 1, "findings: {:?}", messages(&findings));
+        // informational note, not a warning
+        assert!(!findings[0].warn);
+        assert!(
+            findings[0].message.contains("\"deno\", which is not managed by Vite+"),
+            "got: {}",
+            findings[0].message
+        );
+    }
+
+    #[tokio::test]
+    async fn test_dev_engines_findings_unsupported_package_manager_warn_vs_note() {
+        // alone: a warning (nothing usable declared)
+        let findings = dev_engines_findings_for(
+            &[(
+                "package.json",
+                r#"{"devEngines":{"packageManager":{"name":"vlt","version":"^1.0.0"}}}"#,
+            )],
+            None,
+        )
+        .await;
+        assert_eq!(findings.len(), 1, "findings: {:?}", messages(&findings));
+        assert!(findings[0].warn);
+        assert!(
+            findings[0].message.contains("\"vlt\" is not supported"),
+            "got: {}",
+            findings[0].message
+        );
+
+        // alongside a supported entry: an informational note (it is skipped by design)
+        let findings = dev_engines_findings_for(
+            &[(
+                "package.json",
+                r#"{
+                    "devEngines": {
+                        "packageManager": [
+                            {"name": "vlt", "version": "^1.0.0"},
+                            {"name": "pnpm", "version": "^11.0.0"}
+                        ]
+                    }
+                }"#,
+            )],
+            None,
+        )
+        .await;
+        assert_eq!(findings.len(), 1, "findings: {:?}", messages(&findings));
+        assert!(!findings[0].warn);
+        assert!(
+            findings[0].message.contains("\"vlt\" is not supported and will be skipped"),
+            "got: {}",
+            findings[0].message
+        );
+    }
+
+    #[tokio::test]
+    async fn test_dev_engines_findings_node_version_conflict_with_ancestor_manifest() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // The devEngines.runtime declaration lives in an ancestor manifest, not the
+        // nearest package.json
+        tokio::fs::write(
+            temp_path.join("package.json"),
+            r#"{"devEngines":{"runtime":{"name":"node","version":"^24.0.0"}}}"#,
+        )
+        .await
+        .unwrap();
+        let app_dir = temp_path.join("app");
+        tokio::fs::create_dir_all(&app_dir).await.unwrap();
+        tokio::fs::write(app_dir.join("package.json"), r#"{"name": "app"}"#).await.unwrap();
+        tokio::fs::write(app_dir.join(".node-version"), "20.18.0\n").await.unwrap();
+
+        let findings = collect_dev_engines_findings(&app_dir, None).await;
+        assert_eq!(findings.len(), 1, "findings: {:?}", messages(&findings));
+        assert!(findings[0].warn);
+        assert!(
+            findings[0].message.contains(".node-version (20.18.0) does not satisfy"),
+            "got: {}",
+            findings[0].message
+        );
+    }
+
+    #[tokio::test]
+    async fn test_dev_engines_findings_no_conflict_when_dev_engines_wins_resolution() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // A parent .node-version that resolution never reaches: the nearer
+        // devEngines.runtime wins, so there is no effective conflict
+        tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
+        let app_dir = temp_path.join("app");
+        tokio::fs::create_dir_all(&app_dir).await.unwrap();
+        tokio::fs::write(
+            app_dir.join("package.json"),
+            r#"{"devEngines":{"runtime":{"name":"node","version":"^24.0.0"}}}"#,
+        )
+        .await
+        .unwrap();
+
+        let findings = collect_dev_engines_findings(&app_dir, None).await;
+        assert!(findings.is_empty(), "findings: {:?}", messages(&findings));
+    }
+
+    #[tokio::test]
+    async fn test_dev_engines_findings_package_manager_checks_use_workspace_root() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // monorepo root: the package.json vp install reads, with a PM conflict
+        tokio::fs::write(temp_path.join("pnpm-workspace.yaml"), "packages:\n  - 'packages/*'\n")
+            .await
+            .unwrap();
+        tokio::fs::write(
+            temp_path.join("package.json"),
+            r#"{
+  "name": "root",
+  "packageManager": "npm@10.5.0",
+  "devEngines": {"packageManager": {"name": "pnpm", "version": "^11.0.0"}}
+}
+"#,
+        )
+        .await
+        .unwrap();
+
+        // nested package without any package-manager fields
+        let app_dir = temp_path.join("packages").join("app");
+        tokio::fs::create_dir_all(&app_dir).await.unwrap();
+        tokio::fs::write(app_dir.join("package.json"), r#"{"name": "app"}"#).await.unwrap();
+
+        // running from the nested package still diagnoses the workspace root's
+        // packageManager vs devEngines.packageManager conflict
+        let findings = collect_dev_engines_findings(&app_dir, None).await;
+        assert_eq!(findings.len(), 1, "findings: {:?}", messages(&findings));
+        assert!(findings[0].warn);
+        assert_eq!(findings[0].key, "PackageManager");
+        assert!(
+            findings[0].message.contains("but devEngines.packageManager requires \"pnpm\""),
+            "got: {}",
+            findings[0].message
+        );
+    }
+
+    // npm-install-checks: "spec 1" (everything declared and satisfied: no findings)
+    #[tokio::test]
+    async fn test_dev_engines_findings_all_satisfied() {
+        let findings = dev_engines_findings_for(
+            &[
+                (".node-version", "24.1.0\n"),
+                (
+                    "package.json",
+                    r#"{
+                        "engines": {"node": ">=20.0.0"},
+                        "packageManager": "yarn@3.2.3",
+                        "devEngines": {
+                            "runtime": {"name": "node", "version": ">= 20.0.0", "onFail": "error"},
+                            "packageManager": {"name": "yarn", "version": "3.2.3", "onFail": "download"}
+                        }
+                    }"#,
+                ),
+            ],
+            Some("24.1.0"),
+        )
+        .await;
+
+        assert!(findings.is_empty(), "findings: {:?}", messages(&findings));
+    }
+
+    /// Test helper: extract finding messages for assertion failure output.
+    fn messages(findings: &[DevEnginesFinding]) -> Vec<&str> {
+        findings.iter().map(|f| f.message.as_str()).collect()
+    }
+
+    #[test]
+    fn test_format_version_source_distinguishes_package_json_fields() {
+        // a real (cross-platform) absolute path; assert against its own display
+        // string so the test holds on Windows too
+        let temp = TempDir::new().unwrap();
+        let pkg = AbsolutePathBuf::new(temp.path().join("package.json")).unwrap();
+        let pkg_str = pkg.as_path().display().to_string();
+        // both fields live in package.json, so the field name must be shown
+        assert_eq!(
+            format_version_source("devEngines.runtime", Some(&pkg)),
+            format!("{pkg_str} (devEngines.runtime)")
+        );
+        assert_eq!(
+            format_version_source("engines.node", Some(&pkg)),
+            format!("{pkg_str} (engines.node)")
+        );
+
+        // .node-version is already unambiguous from its path (no suffix appended)
+        let nv = AbsolutePathBuf::new(temp.path().join(".node-version")).unwrap();
+        assert_eq!(
+            format_version_source(".node-version", Some(&nv)),
+            nv.as_path().display().to_string()
+        );
+
+        // pathless sources fall back to the label
+        assert_eq!(format_version_source("default", None), "default");
+        assert_eq!(format_version_source("lts", None), "lts");
+    }
 
     #[test]
     fn test_shim_filename_consistency() {

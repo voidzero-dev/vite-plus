@@ -23,10 +23,16 @@ vite.config.ts
   "devDependencies": {
     "vite-plus": "catalog:"
   },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "<semver>",
+      "onFail": "download"
+    }
+  },
   "engines": {
     "node": ">=22.12.0"
-  },
-  "packageManager": "pnpm@<semver>"
+  }
 }
 
 > cat vite-plus-monorepo/vite.config.ts # check vite config has cache enabled
@@ -243,8 +249,14 @@ vite.config.ts
   "devDependencies": {
     "vite-plus": "catalog:"
   },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "<semver>",
+      "onFail": "download"
+    }
+  },
   "engines": {
     "node": ">=22.12.0"
-  },
-  "packageManager": "pnpm@<semver>"
+  }
 }

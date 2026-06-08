@@ -514,13 +514,10 @@ fn env_help_doc() -> HelpDoc {
                 "Manage",
                 vec![
                     row("default", "Set or show the global default Node.js version"),
-                    row(
-                        "pin",
-                        "Pin a Node.js version in the current directory (creates .node-version)",
-                    ),
+                    row("pin", "Pin a Node.js version in the current directory"),
                     row(
                         "unpin",
-                        "Remove the .node-version file from current directory (alias for `pin --unpin`)",
+                        "Remove the Node.js pin from the current directory (alias for `pin --unpin`)",
                     ),
                     row("use", "Use a specific Node.js version for this shell session"),
                     row("install", "Install a Node.js version [aliases: i]"),

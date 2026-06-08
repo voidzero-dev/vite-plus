@@ -66,10 +66,10 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
             }
             crate::cli::EnvSubcommands::Doctor => doctor::execute(cwd).await,
             crate::cli::EnvSubcommands::Which { tool } => which::execute(cwd, &tool).await,
-            crate::cli::EnvSubcommands::Pin { version, unpin, no_install, force } => {
-                pin::execute(cwd, version, unpin, no_install, force).await
+            crate::cli::EnvSubcommands::Pin { version, unpin, no_install, force, target } => {
+                pin::execute(cwd, version, unpin, no_install, force, target).await
             }
-            crate::cli::EnvSubcommands::Unpin => unpin::execute(cwd).await,
+            crate::cli::EnvSubcommands::Unpin { target } => unpin::execute(cwd, target).await,
             crate::cli::EnvSubcommands::List { json } => list::execute(cwd, json).await,
             crate::cli::EnvSubcommands::ListRemote { pattern, lts, all, json, sort } => {
                 list_remote::execute(pattern, lts, all, json, sort).await

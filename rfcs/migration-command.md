@@ -227,9 +227,17 @@ Wrote agent instructions to AGENTS.md
     "@vitejs/plugin-react": "^4.2.0",
     "vite-plus": "catalog:"
   },
-  "packageManager": "pnpm@<semver>"
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "<semver>",
+      "onFail": "download"
+    }
+  }
 }
 ```
+
+> Projects that already declare a top-level `packageManager` field keep that field updated instead (compatibility-first rule, see [RFC: devEngines Support](./dev-engines.md)).
 
 **After (pnpm, no existing `pnpm` config) -- `pnpm-workspace.yaml`:**
 

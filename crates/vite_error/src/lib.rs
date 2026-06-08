@@ -89,6 +89,9 @@ pub enum Error {
     #[error("Unsupported package manager: {0}")]
     UnsupportedPackageManager(Str),
 
+    #[error("devEngines.packageManager {0:?} is not supported (supported: pnpm, yarn, npm, bun)")]
+    UnsupportedDevEnginesPackageManager(Str),
+
     #[error("Unrecognized any package manager, please specify the package manager")]
     UnrecognizedPackageManager,
 
