@@ -226,16 +226,18 @@ fn confirm_overwrite_pin(
         return Ok(true);
     }
 
-    // Prompt for confirmation
+    // Prompt for confirmation, defaulting to yes (the user explicitly asked to
+    // pin a new version, so only an explicit "no" cancels)
     print!("{source_label} {existing_version}");
     println!();
-    print!("Overwrite with {resolved_version}? (y/n): ");
+    print!("Overwrite with {resolved_version}? (Y/n): ");
     std::io::stdout().flush()?;
 
     let mut input = String::new();
     std::io::stdin().read_line(&mut input)?;
 
-    if !input.trim().eq_ignore_ascii_case("y") {
+    let answer = input.trim();
+    if answer.eq_ignore_ascii_case("n") || answer.eq_ignore_ascii_case("no") {
         println!("Cancelled.");
         return Ok(false);
     }
