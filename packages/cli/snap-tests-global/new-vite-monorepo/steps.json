@@ -12,6 +12,11 @@
     "test -f vite-plus-monorepo/.gitignore && echo '.gitignore exists' || echo 'ERROR: .gitignore missing' # verify gitignore renamed from _gitignore",
     "test ! -f vite-plus-monorepo/.yarnrc.yml && echo 'No .yarnrc.yml' || echo 'ERROR: .yarnrc.yml exists' # verify no yarn config for pnpm",
     "test -d vite-plus-monorepo/.git && echo 'Git initialized' # check git init",
+    {
+      "command": "vp create vite:monorepo --interactive --verbose --no-git --no-hooks --no-agent --no-editor --package-manager pnpm --directory verbose-no-git-monorepo # explicit --no-git should skip verbose monorepo git prompt",
+      "ignoreOutput": true
+    },
+    "test ! -d verbose-no-git-monorepo/.git && echo 'No git initialized for explicit --no-git' || (echo 'ERROR: git initialized' && exit 1) # check verbose --no-git is respected",
     "test -f vite-plus-monorepo/.vscode/settings.json && echo '.vscode/settings.json exists' # check VS Code settings created",
     "test -f vite-plus-monorepo/.vscode/extensions.json && echo '.vscode/extensions.json exists' # check VS Code extensions created",
     "node -e \"const { spawnSync } = require('node:child_process'); const file = '.vscode/settings.json'; const result = spawnSync('git', ['-C', 'vite-plus-monorepo', 'check-ignore', '--no-index', file], { stdio: 'ignore' }); const status = result.status; if (status === 1) { console.log(file + ' trackable'); } else { console.log(status === 0 ? 'ERROR: ' + file + ' ignored' : 'ERROR: git check-ignore failed with status ' + status); process.exit(status || 1); }\" # check VS Code settings are trackable",
