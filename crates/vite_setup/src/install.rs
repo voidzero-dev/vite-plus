@@ -269,7 +269,7 @@ pub async fn install_production_deps(
         args.push(registry_url);
     }
 
-    let output = run_vp_install(version_dir, &vp_binary, &args).await?;
+    let output = run_vp_install(version_dir, &vp_binary, &args, registry).await?;
 
     if !output.status.success() {
         let log_path = write_upgrade_log(version_dir, &output.stdout, &output.stderr).await;
@@ -301,7 +301,7 @@ pub async fn install_production_deps(
         // Only create the local override after explicit consent. This preserves
         // minimumReleaseAge protection for the default and non-interactive paths.
         write_release_age_overrides(version_dir).await?;
-        let retry_output = run_vp_install(version_dir, &vp_binary, &args).await?;
+        let retry_output = run_vp_install(version_dir, &vp_binary, &args, registry).await?;
         if !retry_output.status.success() {
             let retry_log_path =
                 write_upgrade_log(version_dir, &retry_output.stdout, &retry_output.stderr).await;
@@ -323,14 +323,16 @@ async fn run_vp_install(
     version_dir: &AbsolutePath,
     vp_binary: &AbsolutePath,
     args: &[&str],
+    registry: Option<&str>,
 ) -> Result<Output, Error> {
-    let output = tokio::process::Command::new(vp_binary.as_path())
-        .args(args)
-        .current_dir(version_dir)
-        .env("CI", "true")
-        .output()
-        .await?;
+    let mut cmd = tokio::process::Command::new(vp_binary.as_path());
+    cmd.args(args).current_dir(version_dir).env("CI", "true");
 
+    if let Some(registry_url) = registry {
+        cmd.env("npm_config_registry", registry_url);
+    }
+
+    let output = cmd.output().await?;
     Ok(output)
 }
 
