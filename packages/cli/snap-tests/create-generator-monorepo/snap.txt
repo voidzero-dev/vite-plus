@@ -1,16 +1,31 @@
-> vp create vite:generator --no-interactive --directory tools/my-generator # scaffold a Bingo generator inside a monorepo
+> vp create vite:generator --no-interactive --directory tools/my-generator # scaffold a generator; auto-registers it in create.templates
 ◇ Scaffolded tools/my-generator with generator scaffold
 • Node <semver>  pnpm <semver>
 → Next: cd tools/my-generator && vp run
 
-> cat tools/my-generator/package.json # bingo-template keyword + bingo dependency mark it as a generator
+> cat vite.config.ts # create.templates entry appended, existing defaultTemplate preserved
+import { defineConfig } from "vite-plus";
+
+export default defineConfig({
+  create: {
+    defaultTemplate: "@acme",
+    templates: [
+      {
+        name: "my-generator",
+        description: "A starter for creating a Vite+ code generator.",
+        template: "my-generator",
+      },
+    ],
+  },
+});
+
+> cat tools/my-generator/package.json # generator package (bingo dependency is the run hint; no marker keyword)
 {
   "name": "my-generator",
   "version": "0.0.0",
   "private": true,
   "description": "A starter for creating a Vite+ code generator.",
   "keywords": [
-    "bingo-template",
     "vite-plus-generator"
   ],
   "bin": "./bin/index.ts",
@@ -32,7 +47,7 @@
   }
 }
 
-> vp create my-generator --no-interactive -- --name demo-pkg --directory demo-pkg --offline # run the generator through vp create (appends --skip-requests)
+> vp create my-generator --no-interactive -- --name demo-pkg --directory demo-pkg --offline # resolve via the registered create.templates entry
 
 Generating project…
 

@@ -8,7 +8,7 @@ Arguments:
             - Default: vite:monorepo, vite:application, vite:library, vite:generator
             - Remote: vite, @tanstack/start, create-next-app,
               create-nuxt, github:user/repo, https://github.com/user/template-repo, etc.
-            - Local: @company/generator-*, ./tools/create-ui-component
+            - Local: a `create.templates` entry name from vite.config.ts (monorepo)
             - Org scope: @your-org → picker from @your-org/create's createConfig.templates manifest
             - Org entry: @your-org:web → manifest entry "web" from @your-org/create
             When omitted, uses `create.defaultTemplate` from vite.config.ts if set.
