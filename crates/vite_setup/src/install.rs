@@ -329,7 +329,7 @@ async fn run_vp_install(
     cmd.args(args).current_dir(version_dir).env("CI", "true");
 
     if let Some(registry_url) = registry {
-        cmd.env("npm_config_registry", registry_url);
+        cmd.env(vite_shared::env_vars::NPM_CONFIG_REGISTRY, registry_url);
     }
 
     let output = cmd.output().await?;
