@@ -200,7 +200,8 @@ export async function resolveOrgManifestForCreate(args: {
 }
 
 /**
- * Read `create.defaultTemplate` from the workspace root's `vite.config.ts`.
+ * Read the `create` config (`defaultTemplate` + validated `templates`) from
+ * the workspace root's `vite.config.ts` in a single config evaluation.
  *
  * Walks up from `startDir` via `findWorkspaceRoot` (monorepo markers
  * only — `pnpm-workspace.yaml`, `workspaces` in `package.json`,
@@ -208,52 +209,45 @@ export async function resolveOrgManifestForCreate(args: {
  * pick up the root config. Standalone repos without a monorepo marker
  * only see a config that sits at `startDir` itself.
  *
- * Best-effort: if there's no config file or evaluation fails, return
- * `undefined` so the create flow behaves as if no default was set.
+ * Best-effort for resolution: a missing or unresolvable config reads as
+ * empty. A present-but-malformed `create.templates` still throws a
+ * {@link CreateConfigSchemaError} so the misconfiguration surfaces.
  */
-export async function getConfiguredDefaultTemplate(startDir: string): Promise<string | undefined> {
+export async function getConfiguredCreate(
+  startDir: string,
+): Promise<{ defaultTemplate?: string; templates: CreateTemplateEntry[] }> {
   const projectRoot = findWorkspaceRoot(startDir) ?? startDir;
   if (!hasViteConfig(projectRoot)) {
-    return undefined;
+    return { templates: [] };
   }
+  let create: { defaultTemplate?: unknown; templates?: unknown } | undefined;
   try {
     const config = (await resolveViteConfig(projectRoot)) as {
-      create?: { defaultTemplate?: unknown };
+      create?: { defaultTemplate?: unknown; templates?: unknown };
     };
-    const value = config.create?.defaultTemplate;
-    if (typeof value === 'string' && value.length > 0) {
-      return value;
-    }
+    create = config.create;
   } catch {
-    // Unresolvable config → treat as no default.
+    // Unresolvable config → treat as no create config.
+    return { templates: [] };
   }
-  return undefined;
+  const defaultTemplate =
+    typeof create?.defaultTemplate === 'string' && create.defaultTemplate.length > 0
+      ? create.defaultTemplate
+      : undefined;
+  // Validation errors are intentionally NOT swallowed: a malformed
+  // `create.templates` should be reported, not silently dropped.
+  const templates = validateCreateTemplates(create?.templates);
+  return { ...(defaultTemplate !== undefined ? { defaultTemplate } : {}), templates };
 }
 
 /**
- * Read and validate `create.templates` from the workspace root's
- * `vite.config.ts` (resolved the same way as {@link getConfiguredDefaultTemplate}).
- *
- * Returns `[]` when there is no config, no `create.templates`, or the config
- * cannot be evaluated. A present-but-malformed `create.templates` throws a
- * {@link CreateConfigSchemaError} so the misconfiguration surfaces.
+ * Read `create.defaultTemplate` only. Best-effort: never throws, returning
+ * `undefined` when the config is missing, unresolvable, or malformed.
  */
-export async function getConfiguredTemplates(startDir: string): Promise<CreateTemplateEntry[]> {
-  const projectRoot = findWorkspaceRoot(startDir) ?? startDir;
-  if (!hasViteConfig(projectRoot)) {
-    return [];
-  }
-  let templates: unknown;
+export async function getConfiguredDefaultTemplate(startDir: string): Promise<string | undefined> {
   try {
-    const config = (await resolveViteConfig(projectRoot)) as {
-      create?: { templates?: unknown };
-    };
-    templates = config.create?.templates;
+    return (await getConfiguredCreate(startDir)).defaultTemplate;
   } catch {
-    // Unresolvable config → treat as no local templates.
-    return [];
+    return undefined;
   }
-  // Validation errors are intentionally NOT swallowed: a malformed
-  // `create.templates` should be reported, not silently dropped.
-  return validateCreateTemplates(templates);
 }

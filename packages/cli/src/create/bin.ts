@@ -56,8 +56,8 @@ import { discoverTemplate, inferGitHubRepoName, inferParentDir, isGitHubUrl } fr
 import { getInitialTemplateOptions } from './initial-template-options.ts';
 import type { CreateTemplateEntry } from './org-manifest.ts';
 import {
+  getConfiguredCreate,
   getConfiguredDefaultTemplate,
-  getConfiguredTemplates,
   type OrgResolution,
   resolveOrgManifestForCreate,
 } from './org-resolve.ts';
@@ -508,12 +508,16 @@ async function main() {
   const installArgs = process.env.CI ? ['--no-frozen-lockfile'] : undefined;
 
   // Local templates declared in `create.templates` are only offered inside a
-  // monorepo and resolved by entry `name`.
-  const localTemplates: CreateTemplateEntry[] = isMonorepo
-    ? await getConfiguredTemplates(workspaceInfoOptional.rootDir)
-    : [];
-
-  if (!selectedTemplateName) {
+  // monorepo and resolved by entry `name`. Inside a monorepo, read the default
+  // template and the local templates in a single config evaluation.
+  let localTemplates: CreateTemplateEntry[] = [];
+  if (isMonorepo) {
+    const configuredCreate = await getConfiguredCreate(workspaceInfoOptional.rootDir);
+    localTemplates = configuredCreate.templates;
+    if (!selectedTemplateName && configuredCreate.defaultTemplate) {
+      selectedTemplateName = configuredCreate.defaultTemplate;
+    }
+  } else if (!selectedTemplateName) {
     const defaultTemplate = await getConfiguredDefaultTemplate(workspaceInfoOptional.rootDir);
     if (defaultTemplate) {
       selectedTemplateName = defaultTemplate;

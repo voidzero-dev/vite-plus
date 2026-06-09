@@ -47,6 +47,8 @@ export async function registerLocalTemplate(
   const configPath = configFile ? path.join(workspaceRoot, configFile) : undefined;
 
   // Read the current create config so we can recompute the full object.
+  // Resolve the given workspace root directly (do not walk up like
+  // getConfiguredCreate does): the caller passes the exact monorepo root.
   const existing = await readCreateConfig(workspaceRoot, configPath);
 
   // Idempotent: an entry with the same name is left untouched.
@@ -79,9 +81,9 @@ function findViteConfig(workspaceRoot: string): string | undefined {
 }
 
 /**
- * Read `create.defaultTemplate` and `create.templates` from the resolved
- * config. Best-effort: an unresolvable or absent config reads as empty.
- * A present-but-malformed `create.templates` still throws (via
+ * Read `create.defaultTemplate` and `create.templates` from `workspaceRoot`'s
+ * config. Best-effort: an unresolvable or absent config reads as empty. A
+ * present-but-malformed `create.templates` still throws (via
  * `validateCreateTemplates`) so misconfiguration is not silently dropped.
  */
 async function readCreateConfig(
@@ -98,16 +100,12 @@ async function readCreateConfig(
     };
     create = config.create;
   } catch {
-    // Unresolvable config → behave as if there were no create block. The
-    // recomputed object is written wholesale, so a transiently unreadable
-    // config does not corrupt anything beyond what mergeJsonConfig handles.
     return { templates: [] };
   }
   const defaultTemplate =
     typeof create?.defaultTemplate === 'string' && create.defaultTemplate.length > 0
       ? create.defaultTemplate
       : undefined;
-  // Not swallowed: a malformed `create.templates` should surface.
   const templates = validateCreateTemplates(create?.templates);
   return { ...(defaultTemplate !== undefined ? { defaultTemplate } : {}), templates };
 }
