@@ -160,6 +160,11 @@ describe('inferParentDir', () => {
     expect(inferParentDir('./tools/my-generator', ws)).toBe('tools');
   });
 
+  it('co-locates under a nested (multi-segment) parent directory', () => {
+    const ws = inferParentDirWorkspace(['apps', 'tools/generators']);
+    expect(inferParentDir('./tools/generators/my-gen', ws)).toBe('tools/generators');
+  });
+
   it('falls back to the app rule when the name is not a local package', () => {
     const ws = inferParentDirWorkspace(['apps', 'packages', 'tools']);
     expect(inferParentDir('vite', ws)).toBe('apps');

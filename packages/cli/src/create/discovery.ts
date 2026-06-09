@@ -51,6 +51,19 @@ function findLocalPackage(
   return workspaceInfo.packages.find((pkg) => pkg.name === templateName);
 }
 
+// Resolve a declared local template (by workspace package name or a relative
+// `./path`) to its directory, relative to the workspace root and using forward
+// slashes (so it matches `parentDirs` and joins cleanly on any platform).
+function localTemplateDir(
+  workspaceInfo: WorkspaceInfoOptional,
+  templateName: string,
+): string | undefined {
+  if (isRelativePath(templateName)) {
+    return templateName.replace(/^\.\//, '');
+  }
+  return findLocalPackage(workspaceInfo, templateName)?.path;
+}
+
 // Resolve the bin script a local template package should be executed through.
 // A single bin (string, or a one-entry object) is unambiguous. For multiple
 // bin entries, prefer the one named after the package (scoped or unscoped) and
@@ -142,18 +155,9 @@ export function discoverTemplate(
   // (resolved against the workspace root). Only when `localTemplate` is set —
   // `create.templates` is the source of truth; a bare workspace name is not a
   // template otherwise. Relative paths are escape-checked at config validation.
-  let localPackagePath: string | undefined;
-  if (localTemplate) {
-    if (isRelativePath(templateName)) {
-      localPackagePath = path.join(workspaceInfo.rootDir, templateName);
-    } else {
-      const localPackage = findLocalPackage(workspaceInfo, templateName);
-      if (localPackage) {
-        localPackagePath = path.join(workspaceInfo.rootDir, localPackage.path);
-      }
-    }
-  }
-  if (localPackagePath) {
+  const localDir = localTemplate ? localTemplateDir(workspaceInfo, templateName) : undefined;
+  if (localDir) {
+    const localPackagePath = path.join(workspaceInfo.rootDir, localDir);
     const packageJsonPath = path.join(localPackagePath, 'package.json');
     if (!fs.existsSync(packageJsonPath)) {
       throw new Error(
@@ -303,11 +307,9 @@ export function inferParentDir(
   // parent directory it already lives in, rather than defaulting to the `apps`
   // rule below. This covers any local package run as a generator (matched by
   // workspace package name or by a relative `./path` to its directory).
-  const localPackagePath = isRelativePath(templateName)
-    ? path.normalize(templateName)
-    : findLocalPackage(workspaceInfo, templateName)?.path;
-  if (localPackagePath) {
-    const ownParentDir = path.dirname(localPackagePath);
+  const localDir = localTemplateDir(workspaceInfo, templateName);
+  if (localDir) {
+    const ownParentDir = path.dirname(localDir);
     if (workspaceInfo.parentDirs.includes(ownParentDir)) {
       return ownParentDir;
     }
