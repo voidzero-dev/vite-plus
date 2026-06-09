@@ -239,6 +239,19 @@ export async function promptGitInit(options: {
   return false; // non-interactive default
 }
 
+// Git initialization only applies to a brand-new standalone project or
+// monorepo. A package added to an existing monorepo shares that monorepo's
+// repository, so git setup (and its prompt) is skipped.
+export async function resolveGitInit(
+  options: { git?: boolean; interactive: boolean },
+  isMonorepo: boolean,
+): Promise<boolean> {
+  if (isMonorepo) {
+    return false;
+  }
+  return promptGitInit(options);
+}
+
 export function defaultInteractive() {
   // If CI environment, use non-interactive mode by default
   return !process.env.CI && process.stdin.isTTY;

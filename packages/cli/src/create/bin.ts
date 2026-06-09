@@ -40,7 +40,7 @@ import {
   defaultInteractive,
   downloadPackageManager,
   promptGitHooks,
-  promptGitInit,
+  resolveGitInit,
   runViteFmt,
   runViteInstall,
   selectPackageManager,
@@ -837,9 +837,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       }));
   }
 
-  // vite:generator adds a package to an existing monorepo, not a new repository.
-  const shouldSetupGit =
-    selectedTemplateName === BuiltinTemplate.generator ? false : await promptGitInit(options);
+  const shouldSetupGit = await resolveGitInit(options, isMonorepo);
   if (!isMonorepo) {
     shouldSetupHooks = await promptGitHooks(options);
   }
