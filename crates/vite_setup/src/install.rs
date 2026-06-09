@@ -359,7 +359,7 @@ async fn run_pnpm_install(
         .env("PATH", path);
 
     if let Some(registry_url) = registry {
-        cmd.env("npm_config_registry", registry_url);
+        cmd.env(vite_shared::env_vars::NPM_CONFIG_REGISTRY, registry_url);
     }
 
     let output = cmd.output().await?;

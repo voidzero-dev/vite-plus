@@ -8557,6 +8557,7 @@ dependencies = [
  "vite_install",
  "vite_js_runtime",
  "vite_path",
+ "vite_shared",
  "vite_str",
 ]
 
