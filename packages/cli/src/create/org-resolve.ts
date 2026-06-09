@@ -201,13 +201,13 @@ export async function resolveOrgManifestForCreate(args: {
 
 /**
  * Read the `create` config (`defaultTemplate` + validated `templates`) from
- * the workspace root's `vite.config.ts` in a single config evaluation.
+ * a workspace's `vite.config.ts` in a single config evaluation.
  *
- * Walks up from `startDir` via `findWorkspaceRoot` (monorepo markers
- * only — `pnpm-workspace.yaml`, `workspaces` in `package.json`,
- * `lerna.json`) so monorepo invocations from any subdirectory still
- * pick up the root config. Standalone repos without a monorepo marker
- * only see a config that sits at `startDir` itself.
+ * By default, walks up from `startDir` via `findWorkspaceRoot` (monorepo
+ * markers only — `pnpm-workspace.yaml`, `workspaces` in `package.json`,
+ * `lerna.json`) so monorepo invocations from any subdirectory still pick up
+ * the root config. Pass `walkUp: false` to read `startDir` directly when the
+ * caller already holds the exact workspace root.
  *
  * Best-effort for resolution: a missing or unresolvable config reads as
  * empty. A present-but-malformed `create.templates` still throws a
@@ -215,8 +215,10 @@ export async function resolveOrgManifestForCreate(args: {
  */
 export async function getConfiguredCreate(
   startDir: string,
+  options?: { walkUp?: boolean },
 ): Promise<{ defaultTemplate?: string; templates: CreateTemplateEntry[] }> {
-  const projectRoot = findWorkspaceRoot(startDir) ?? startDir;
+  const projectRoot =
+    options?.walkUp === false ? startDir : (findWorkspaceRoot(startDir) ?? startDir);
   if (!hasViteConfig(projectRoot)) {
     return { templates: [] };
   }

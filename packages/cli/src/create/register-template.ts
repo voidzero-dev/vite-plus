@@ -4,11 +4,10 @@ import path from 'node:path';
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
 import { hasConfigKey, mergeJsonConfig, replaceJsonConfig } from '../../binding/index.js';
-import { resolveViteConfig } from '../resolve-vite-config.ts';
 import { VITE_PLUS_NAME } from '../utils/constants.ts';
 import { displayRelative } from '../utils/path.ts';
 import type { CreateTemplateEntry } from './org-manifest.ts';
-import { validateCreateTemplates } from './org-manifest.ts';
+import { getConfiguredCreate } from './org-resolve.ts';
 
 /**
  * Vite config filenames we know how to read and write `create.templates`
@@ -45,9 +44,9 @@ export async function registerLocalTemplate(
   const configPath = configFile ? path.join(workspaceRoot, configFile) : undefined;
 
   // Read the current create config so we can recompute the full object.
-  // Resolve the given workspace root directly (do not walk up like
-  // getConfiguredCreate does): the caller passes the exact monorepo root.
-  const existing = await readCreateConfig(workspaceRoot, configPath);
+  // `walkUp: false`: the caller passes the exact monorepo root, so read it
+  // directly rather than searching for an enclosing workspace.
+  const existing = await getConfiguredCreate(workspaceRoot, { walkUp: false });
 
   // Idempotent: an entry with the same name is left untouched.
   if (existing.templates.some((t) => t.name === entry.name)) {
@@ -67,36 +66,6 @@ export async function registerLocalTemplate(
 
 function findViteConfig(workspaceRoot: string): string | undefined {
   return VITE_CONFIG_FILES.find((name) => fs.existsSync(path.join(workspaceRoot, name)));
-}
-
-/**
- * Read `create.defaultTemplate` and `create.templates` from `workspaceRoot`'s
- * config. Best-effort: an unresolvable or absent config reads as empty. A
- * present-but-malformed `create.templates` still throws (via
- * `validateCreateTemplates`) so misconfiguration is not silently dropped.
- */
-async function readCreateConfig(
-  workspaceRoot: string,
-  configPath: string | undefined,
-): Promise<{ defaultTemplate?: string; templates: CreateTemplateEntry[] }> {
-  if (!configPath) {
-    return { templates: [] };
-  }
-  let create: { defaultTemplate?: unknown; templates?: unknown } | undefined;
-  try {
-    const config = (await resolveViteConfig(workspaceRoot)) as {
-      create?: { defaultTemplate?: unknown; templates?: unknown };
-    };
-    create = config.create;
-  } catch {
-    return { templates: [] };
-  }
-  const defaultTemplate =
-    typeof create?.defaultTemplate === 'string' && create.defaultTemplate.length > 0
-      ? create.defaultTemplate
-      : undefined;
-  const templates = validateCreateTemplates(create?.templates);
-  return { ...(defaultTemplate !== undefined ? { defaultTemplate } : {}), templates };
 }
 
 /**
