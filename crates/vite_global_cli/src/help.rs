@@ -80,6 +80,7 @@ fn documentation_url_for_command_path(command_path: &[&str]) -> Option<&'static 
         ["pack"] => Some("https://viteplus.dev/guide/pack"),
         ["env", ..] => Some("https://viteplus.dev/guide/env"),
         ["upgrade"] => Some("https://viteplus.dev/guide/upgrade"),
+        ["implode"] => Some("https://viteplus.dev/guide/implode"),
         _ => None,
     }
 }
@@ -1181,6 +1182,10 @@ Options:
         assert_eq!(
             documentation_url_for_command_path(&["config"]),
             Some("https://viteplus.dev/guide/commit-hooks")
+        );
+        assert_eq!(
+            documentation_url_for_command_path(&["implode"]),
+            Some("https://viteplus.dev/guide/implode")
         );
     }
 
