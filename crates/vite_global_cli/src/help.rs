@@ -80,6 +80,7 @@ fn documentation_url_for_command_path(command_path: &[&str]) -> Option<&'static 
         ["pack"] => Some("https://viteplus.dev/guide/pack"),
         ["env", ..] => Some("https://viteplus.dev/guide/env"),
         ["upgrade"] => Some("https://viteplus.dev/guide/upgrade"),
+        ["implode"] => Some("https://viteplus.dev/guide/implode"),
         _ => None,
     }
 }
@@ -826,10 +827,25 @@ fn delegated_help_doc(command: &str) -> Option<HelpDoc> {
                             "Match packages by name, directory, or glob pattern",
                         ),
                         row(
+                            "--fail-if-no-match",
+                            "Exit with a non-zero status if a filter matches no packages",
+                        ),
+                        row(
                             "--ignore-depends-on",
                             "Do not run dependencies specified in `dependsOn` fields",
                         ),
                         row("-v, --verbose", "Show full detailed summary after execution"),
+                        row("--cache", "Force caching on for all tasks and scripts"),
+                        row("--no-cache", "Force caching off for all tasks and scripts"),
+                        row("--log <MODE>", "Set output mode: interleaved, labeled, or grouped"),
+                        row(
+                            "--concurrency-limit <N>",
+                            "Maximum number of tasks to run concurrently (default: 4)",
+                        ),
+                        row(
+                            "--parallel",
+                            "Run tasks without dependency ordering (unlimited concurrency by default)",
+                        ),
                         row("--last-details", "Display the detailed summary of the last run"),
                         row("-h, --help", "Print help (see more with '--help')"),
                     ],
@@ -1166,6 +1182,10 @@ Options:
         assert_eq!(
             documentation_url_for_command_path(&["config"]),
             Some("https://viteplus.dev/guide/commit-hooks")
+        );
+        assert_eq!(
+            documentation_url_for_command_path(&["implode"]),
+            Some("https://viteplus.dev/guide/implode")
         );
     }
 
