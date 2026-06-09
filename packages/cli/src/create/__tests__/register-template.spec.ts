@@ -83,6 +83,23 @@ describe('registerLocalTemplate', () => {
     expect(create.templates).toEqual([ENTRY_A]);
   });
 
+  it('targets an existing vite.config.mts instead of creating a stray vite.config.ts', async () => {
+    // A monorepo whose only config is a .mts (or .cts/.cjs) file must be the
+    // registration target. Missing those extensions would create a new
+    // vite.config.ts and write to it, leaving the real config untouched.
+    fs.writeFileSync(
+      path.join(workspaceRoot, 'vite.config.mts'),
+      `import { defineConfig } from 'vite-plus';\n\nexport default defineConfig({ create: { defaultTemplate: '@your-org' } });\n`,
+    );
+
+    await registerLocalTemplate(workspaceRoot, ENTRY_A, true);
+
+    expect(fs.existsSync(path.join(workspaceRoot, 'vite.config.ts'))).toBe(false);
+    const create = await readCreate();
+    expect(create.defaultTemplate).toBe('@your-org');
+    expect(create.templates).toEqual([ENTRY_A]);
+  });
+
   it('appends templates while preserving an existing defaultTemplate', async () => {
     writeViteConfig("{ create: { defaultTemplate: '@your-org' } }");
 

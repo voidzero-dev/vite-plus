@@ -4,18 +4,11 @@ import path from 'node:path';
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
 import { hasConfigKey, mergeJsonConfig, replaceJsonConfig } from '../../binding/index.js';
+import { findViteConfig } from '../resolve-vite-config.ts';
 import { VITE_PLUS_NAME } from '../utils/constants.ts';
 import { displayRelative } from '../utils/path.ts';
 import type { CreateTemplateEntry } from './org-manifest.ts';
 import { getConfiguredCreate } from './org-resolve.ts';
-
-/**
- * Vite config filenames we know how to read and write `create.templates`
- * into, in resolution priority order. Mirrors the list in
- * `resolve-vite-config.ts` but trimmed to the extensions the create flow
- * emits and the migrator's `mergeJsonConfig` path understands.
- */
-const VITE_CONFIG_FILES = ['vite.config.ts', 'vite.config.js', 'vite.config.mjs'] as const;
 
 /**
  * Register a local template into `create.templates` in a monorepo's root
@@ -24,7 +17,7 @@ const VITE_CONFIG_FILES = ['vite.config.ts', 'vite.config.js', 'vite.config.mjs'
  * `vp create` picker.
  *
  * Behavior:
- * - Reads the existing `create` config from `<workspaceRoot>/vite.config.{ts,js,mjs}`.
+ * - Reads the existing `create` config from the workspace root's `vite.config.*`.
  * - If an entry with the same `name` already exists → no-op (idempotent).
  * - Otherwise appends `entry` to `create.templates`, preserving any sibling
  *   `create.defaultTemplate` and any existing entries, and writes back.
@@ -40,8 +33,7 @@ export async function registerLocalTemplate(
   entry: CreateTemplateEntry,
   silent = false,
 ): Promise<void> {
-  const configFile = findViteConfig(workspaceRoot);
-  const configPath = configFile ? path.join(workspaceRoot, configFile) : undefined;
+  const configPath = findViteConfig(workspaceRoot);
 
   // Read the current create config so we can recompute the full object.
   // `walkUp: false`: the caller passes the exact monorepo root, so read it
@@ -62,10 +54,6 @@ export async function registerLocalTemplate(
 
   const targetPath = configPath ?? ensureViteConfig(workspaceRoot, silent);
   writeCreateBlock(targetPath, nextCreate);
-}
-
-function findViteConfig(workspaceRoot: string): string | undefined {
-  return VITE_CONFIG_FILES.find((name) => fs.existsSync(path.join(workspaceRoot, name)));
 }
 
 /**
