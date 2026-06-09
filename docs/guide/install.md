@@ -9,18 +9,37 @@ Use Vite+ to manage dependencies across pnpm, npm, Yarn, and Bun. Instead of swi
 Vite+ detects the package manager from the workspace root in this order:
 
 1. `packageManager` in `package.json`
-2. `pnpm-workspace.yaml`
-3. `pnpm-lock.yaml`
-4. `yarn.lock` or `.yarnrc.yml`
-5. `package-lock.json`
-6. `bun.lock` or `bun.lockb`
-7. `.pnpmfile.cjs` or `pnpmfile.cjs`
-8. `bunfig.toml`
-9. `yarn.config.cjs`
+2. `devEngines.packageManager` in `package.json`
+3. `pnpm-workspace.yaml`
+4. `pnpm-lock.yaml`
+5. `yarn.lock` or `.yarnrc.yml`
+6. `package-lock.json`
+7. `bun.lock` or `bun.lockb`
+8. `.pnpmfile.cjs` or `pnpmfile.cjs`
+9. `bunfig.toml`
+10. `yarn.config.cjs`
 
-If none of those files are present, `vp` falls back to `pnpm` by default. Vite+ automatically downloads the matching package manager and uses it for the command you ran.
+If none of those files are present, `vp` falls back to `pnpm` by default. Vite+ automatically downloads the matching package manager and uses it for the command you ran. When detection comes from lockfiles or config files, the resolved version is written to `devEngines.packageManager` so future runs are deterministic; projects that already declare `packageManager` or `devEngines.packageManager` are left as-is.
 
-The explicit `packageManager` field also affects matching package-manager shims. If a project has `packageManager: "npm@10.9.4"`, `npm` and `npx` use npm 10.9.4. Other generated alias pairs behave the same way: `pnpm`/`pnpx`, `yarn`/`yarnpkg`, and `bun`/`bunx`. Mismatched tools are not translated; `npm` in a `pnpm` project still resolves as npm.
+The [`devEngines.packageManager`](https://docs.npmjs.com/cli/v11/configuring-npm/package-json#devengines) field accepts a single object or an array of objects, and its `version` may be a semver range:
+
+```json
+{
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "^11.0.0",
+      "onFail": "download"
+    }
+  }
+}
+```
+
+A range resolves to an already-downloaded satisfying version when possible, otherwise to the latest satisfying version from the npm registry. The range itself stays the source of truth; Vite+ never freezes it into an exact `packageManager` pin. When both `packageManager` and `devEngines.packageManager` are declared, the `packageManager` field drives selection and Vite+ warns when it does not satisfy the devEngines constraint (`vp env doctor` shows details).
+
+Vite+ currently downloads the declared package manager (the `onFail: "download"` behavior); the other `onFail` values are accepted but not yet differentiated.
+
+The explicit `packageManager` field (or the `devEngines.packageManager` declaration) also affects matching package-manager shims. If a project has `packageManager: "npm@10.9.4"`, `npm` and `npx` use npm 10.9.4. Other generated alias pairs behave the same way: `pnpm`/`pnpx`, `yarn`/`yarnpkg`, and `bun`/`bunx`. Mismatched tools are not translated; `npm` in a `pnpm` project still resolves as npm.
 
 ## Usage
 

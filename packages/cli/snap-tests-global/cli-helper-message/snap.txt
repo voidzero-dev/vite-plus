@@ -356,8 +356,8 @@ Setup:
 
 Manage:
   default    Set or show the global default Node.js version
-  pin        Pin a Node.js version in the current directory (creates .node-version)
-  unpin      Remove the .node-version file from current directory (alias for `pin --unpin`)
+  pin        Pin a Node.js version in the current directory
+  unpin      Remove the Node.js pin from the current directory (alias for `pin --unpin`)
   use        Use a specific Node.js version for this shell session
   install    Install a Node.js version [aliases: i]
   uninstall  Uninstall a Node.js version [aliases: uni]

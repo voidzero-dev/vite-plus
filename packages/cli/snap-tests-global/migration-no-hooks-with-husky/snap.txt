@@ -20,7 +20,13 @@
   "lint-staged": {
     "*.ts": "eslint --fix"
   },
-  "packageManager": "pnpm@<semver>"
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "<semver>",
+      "onFail": "download"
+    }
+  }
 }
 
 > cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog

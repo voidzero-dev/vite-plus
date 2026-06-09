@@ -3319,10 +3319,31 @@ export function setPackageManager(
   projectDir: string,
   downloadPackageManager: DownloadPackageManagerResult,
 ) {
-  // set package manager
-  editJsonFile<{ packageManager?: string }>(path.join(projectDir, 'package.json'), (pkg) => {
-    if (!pkg.packageManager) {
-      pkg.packageManager = `${downloadPackageManager.name}@${downloadPackageManager.version}`;
+  // Set the package manager pin. Compatibility-first rule (rfcs/dev-engines.md):
+  // an existing `packageManager` field or `devEngines.packageManager` declaration
+  // is the source of truth and is left as-is; otherwise the exact resolved version
+  // is written to `devEngines.packageManager` (the recommended standard field).
+  editJsonFile<{
+    packageManager?: string;
+    devEngines?: { packageManager?: unknown; [key: string]: unknown };
+  }>(path.join(projectDir, 'package.json'), (pkg) => {
+    if (!pkg.packageManager && !pkg.devEngines?.packageManager) {
+      // Only spread a well-formed object: spreading a malformed devEngines value
+      // (string/array) would corrupt the field with numeric index keys
+      const devEngines =
+        typeof pkg.devEngines === 'object' &&
+        pkg.devEngines !== null &&
+        !Array.isArray(pkg.devEngines)
+          ? pkg.devEngines
+          : undefined;
+      pkg.devEngines = {
+        ...devEngines,
+        packageManager: {
+          name: downloadPackageManager.name,
+          version: downloadPackageManager.version,
+          onFail: 'download',
+        },
+      };
     }
     return pkg;
   });

@@ -31,10 +31,16 @@ vite.config.ts
     "vite": "catalog:",
     "vitest": "catalog:"
   },
+  "devEngines": {
+    "packageManager": {
+      "name": "bun",
+      "version": "<semver>",
+      "onFail": "download"
+    }
+  },
   "engines": {
     "node": ">=22.12.0"
   },
-  "packageManager": "bun@<semver>",
   "catalog": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
     "vitest": "npm:@voidzero-dev/vite-plus-test@latest",

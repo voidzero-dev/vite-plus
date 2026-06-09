@@ -337,18 +337,24 @@ Examples:
         tool: String,
     },
 
-    /// Pin a Node.js version in the current directory (creates .node-version)
+    /// Pin a Node.js version in the current directory
+    /// (updates .node-version or package.json#devEngines.runtime)
     #[command(after_long_help = "\
 Examples:
   vp env pin lts                  # Pin to latest LTS
-  vp env pin --unpin              # Remove .node-version
-  vp env pin \"^20.0.0\" --force    # Overwrite existing pin")]
+  vp env pin --unpin              # Remove the pin
+  vp env pin \"^20.0.0\" --force    # Overwrite existing pin
+  vp env pin 24 --target node-version   # Force the .node-version file
+
+The write target follows the compatibility-first rule: an existing .node-version
+keeps being updated; otherwise the pin is written to package.json#devEngines.runtime;
+.node-version is only created when the directory has no package.json.")]
     Pin {
         /// Version to pin (e.g., "20.18.0", "lts", "latest", "^20.0.0").
         /// If omitted, prints the currently pinned version.
         version: Option<String>,
 
-        /// Remove the .node-version file from current directory
+        /// Remove the pin from the current directory
         #[arg(long)]
         unpin: bool,
 
@@ -356,13 +362,21 @@ Examples:
         #[arg(long)]
         no_install: bool,
 
-        /// Overwrite existing .node-version without confirmation
+        /// Overwrite an existing pin without confirmation
         #[arg(long)]
         force: bool,
+
+        /// Explicitly choose the write target (overrides the default selection)
+        #[arg(long, value_enum)]
+        target: Option<PinTarget>,
     },
 
-    /// Remove the .node-version file from current directory (alias for `pin --unpin`)
-    Unpin,
+    /// Remove the Node.js pin from current directory (alias for `pin --unpin`)
+    Unpin {
+        /// Explicitly choose which pin source to remove
+        #[arg(long, value_enum)]
+        target: Option<PinTarget>,
+    },
 
     /// List locally installed Node.js versions
     #[command(visible_alias = "ls")]
@@ -466,6 +480,15 @@ impl EnvSubcommands {
             _ => false,
         }
     }
+}
+
+/// Write target for `vp env pin` / `vp env unpin` (see rfcs/dev-engines.md)
+#[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PinTarget {
+    /// Pin via the .node-version file
+    NodeVersion,
+    /// Pin via package.json#devEngines.runtime
+    DevEngines,
 }
 
 /// Version sorting order for list-remote command
