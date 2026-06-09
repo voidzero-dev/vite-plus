@@ -1115,12 +1115,15 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     if (generatorName) {
       updateCreateProgress('Registering generator');
       pauseCreateProgress();
+      // Register by a relative `./path` to the generator's directory: it is
+      // explicit and survives a package rename, unlike resolving by name.
+      const generatorTemplatePath = `./${projectDir.split(path.sep).join('/')}`;
       await registerLocalTemplate(
         workspaceInfo.rootDir,
         {
           name: generatorName,
           description: generatorPkg.description || `Run the ${generatorName} generator`,
-          template: generatorName,
+          template: generatorTemplatePath,
         },
         compactOutput,
       );

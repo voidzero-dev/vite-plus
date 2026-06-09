@@ -13,7 +13,7 @@ export default defineConfig({
       {
         name: "my-generator",
         description: "A starter for creating a Vite+ code generator.",
-        template: "my-generator",
+        template: "./tools/my-generator",
       },
     ],
   },
