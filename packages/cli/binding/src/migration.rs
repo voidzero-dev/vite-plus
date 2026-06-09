@@ -120,6 +120,53 @@ pub fn merge_json_config(
     })
 }
 
+/// Replace the value of an existing top-level config key in vite config file
+///
+/// Unlike `mergeJsonConfig`, which prepends a new key (and duplicates it when
+/// the key already exists), this finds the existing top-level `config_key` in
+/// the recognized config object and replaces its value with the contents of the
+/// JSON config file. The splice is raw, the JS caller is expected to reformat
+/// afterwards.
+///
+/// # Arguments
+///
+/// * `vite_config_path` - Path to the vite.config.ts or vite.config.js file
+/// * `json_config_path` - Path to the JSON config file whose contents become the new value
+/// * `config_key` - The existing top-level key whose value should be replaced
+///
+/// # Returns
+///
+/// Returns a `MergeJsonConfigResult`. `updated` is `true` only when the key was
+/// found and replaced; otherwise the original content is returned unchanged.
+///
+/// # Example
+///
+/// ```javascript
+/// const result = replaceJsonConfig('vite.config.ts', 'create.json', 'create');
+/// if (result.updated) {
+///     fs.writeFileSync('vite.config.ts', result.content);
+/// }
+/// ```
+#[napi]
+pub fn replace_json_config(
+    vite_config_path: String,
+    json_config_path: String,
+    config_key: String,
+) -> Result<MergeJsonConfigResult> {
+    let result = vite_migration::replace_json_config(
+        Path::new(&vite_config_path),
+        Path::new(&json_config_path),
+        &config_key,
+    )
+    .map_err(anyhow::Error::from)?;
+
+    Ok(MergeJsonConfigResult {
+        content: result.content,
+        updated: result.updated,
+        uses_function_callback: result.uses_function_callback,
+    })
+}
+
 /// Whether `config_key` is already declared as a top-level property in the
 /// vite config's `defineConfig({...})` (or equivalent) object literal.
 ///

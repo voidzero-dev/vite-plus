@@ -19,5 +19,6 @@ pub use file_walker::{WalkResult, find_ts_files};
 pub use import_rewriter::{BatchRewriteResult, rewrite_imports_in_directory};
 pub use package::{rewrite_eslint, rewrite_prettier, rewrite_scripts};
 pub use vite_config::{
-    MergeResult, has_config_key, merge_json_config, merge_tsdown_config, wrap_lazy_plugins,
+    MergeResult, has_config_key, merge_json_config, merge_tsdown_config, replace_json_config,
+    wrap_lazy_plugins,
 };

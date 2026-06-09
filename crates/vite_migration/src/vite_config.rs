@@ -114,6 +114,96 @@ fn merge_json_config_content(
     Ok(MergeResult { content, updated, uses_function_callback })
 }
 
+/// Replace the value of an existing top-level config key in vite.config.ts/js.
+///
+/// Unlike [`merge_json_config`], which *prepends* a new key (and duplicates it
+/// when the key already exists), this function finds the existing top-level
+/// `config_key` in the recognized config object and replaces its **value** with
+/// the contents of the JSON config file.
+///
+/// This is intended for the case where the JS side wants to overwrite an
+/// existing key (e.g. regenerate `create:`) rather than add a new one.
+///
+/// # Arguments
+///
+/// * `vite_config_path` - Path to the vite.config.ts or vite.config.js file
+/// * `json_config_path` - Path to the JSON config file whose contents become the new value
+/// * `config_key` - The existing top-level key whose value should be replaced
+///
+/// # Returns
+///
+/// Returns a `MergeResult`. `updated` is `true` only when the key was found and
+/// its value replaced; otherwise the original content is returned unchanged.
+pub fn replace_json_config(
+    vite_config_path: &Path,
+    json_config_path: &Path,
+    config_key: &str,
+) -> Result<MergeResult, Error> {
+    // Read the vite config file
+    let vite_config_content = std::fs::read_to_string(vite_config_path)?;
+
+    // Read the JSON/JSONC config file directly
+    // JSON/JSONC content is valid JS (comments are valid in JS too)
+    let js_config = std::fs::read_to_string(json_config_path)?;
+
+    replace_json_config_content(&vite_config_content, &js_config, config_key)
+}
+
+/// Replace the value of an existing top-level `config_key` with `ts_config`.
+///
+/// Locates the first `pair` whose key matches `config_key` and whose parent is
+/// a recognized config object (`defineConfig({...})`, `export default {...}`,
+/// callback returns, etc.), then splices the stripped `ts_config` string into
+/// the byte range of that pair's value node. The splice is raw, the JS caller
+/// is expected to reformat afterwards, so indentation is not handled here.
+///
+/// Only the first matching pair is replaced (a top-level config object has at
+/// most one such key).
+fn replace_json_config_content(
+    vite_config_content: &str,
+    ts_config: &str,
+    config_key: &str,
+) -> Result<MergeResult, Error> {
+    // Check if the config uses a function callback (for informational purposes)
+    let uses_function_callback = check_function_callback(vite_config_content)?;
+
+    // Strip "$schema" property — it's a JSON Schema annotation not valid in the config type.
+    let ts_config = strip_schema_property(ts_config);
+
+    let grep = SupportLang::TypeScript.ast_grep(vite_config_content);
+    let root = grep.root();
+
+    for node in root.dfs() {
+        if node.kind() != "pair" {
+            continue;
+        }
+        let Some(key_node) = node.field("key") else { continue };
+        if !pair_key_matches(&key_node, config_key) {
+            continue;
+        }
+        let Some(parent_object) = node.parent() else { continue };
+        if parent_object.kind() != "object" {
+            continue;
+        }
+        if !is_recognized_config_object(&parent_object) {
+            continue;
+        }
+        let Some(value_node) = node.field("value") else { continue };
+
+        let range = value_node.range();
+        let mut content = vite_config_content.to_owned();
+        content.replace_range(range.start..range.end, &ts_config);
+
+        return Ok(MergeResult { content, updated: true, uses_function_callback });
+    }
+
+    Ok(MergeResult {
+        content: vite_config_content.to_owned(),
+        updated: false,
+        uses_function_callback,
+    })
+}
+
 /// Regex to match `"$schema": "..."` lines (with optional trailing comma).
 static RE_SCHEMA: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r#"(?m)^\s*"\$schema"\s*:\s*"[^"]*"\s*,?\s*\n"#).unwrap());
@@ -2179,5 +2269,163 @@ export default defineConfig({});"#;
 
         let result = merge_tsdown_config_content(vite_config, "./tsdown.config.cjs").unwrap();
         assert!(result.content.contains("import tsdownConfig from './tsdown.config.cjs'"));
+    }
+
+    // ── replace_json_config_content ───────────────────────────────────────
+
+    #[test]
+    fn test_replace_json_config_content_replaces_existing_value() {
+        let vite_config = r#"import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  create: { defaultTemplate: "@a" },
+  plugins: [],
+});"#;
+
+        let new_value = r#"{ defaultTemplate: "@b", generators: ["./gen"] }"#;
+
+        let result = replace_json_config_content(vite_config, new_value, "create").unwrap();
+        assert!(result.updated);
+        assert_eq!(
+            result.content,
+            r#"import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  create: { defaultTemplate: "@b", generators: ["./gen"] },
+  plugins: [],
+});"#
+        );
+        // Rest of the file is untouched.
+        assert!(result.content.contains("plugins: []"));
+        assert!(!result.content.contains(r#""@a""#));
+        assert!(!result.uses_function_callback);
+    }
+
+    #[test]
+    fn test_replace_json_config_content_missing_key_returns_unchanged() {
+        let vite_config = r#"import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  plugins: [],
+});"#;
+
+        let result = replace_json_config_content(vite_config, "{ foo: 1 }", "create").unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, vite_config);
+    }
+
+    #[test]
+    fn test_replace_json_config_content_ignores_nested_create_key() {
+        // `create:` here is nested inside a plugin call argument, NOT a direct
+        // member of the recognized defineConfig object. It must not be touched,
+        // and since no top-level `create` exists the result is unchanged.
+        let vite_config = r#"import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  plugins: [
+    somePlugin({
+      create: { defaultTemplate: "@nested" },
+    }),
+  ],
+});"#;
+
+        let result =
+            replace_json_config_content(vite_config, r#"{ defaultTemplate: "@new" }"#, "create")
+                .unwrap();
+        assert!(!result.updated);
+        assert_eq!(result.content, vite_config);
+        // The nested value is preserved verbatim.
+        assert!(result.content.contains(r#"create: { defaultTemplate: "@nested" }"#));
+    }
+
+    #[test]
+    fn test_replace_json_config_content_replaces_only_top_level_not_nested() {
+        // A top-level `create` exists AND a nested `create` exists. Only the
+        // top-level (recognized config object) value is replaced.
+        let vite_config = r#"import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  create: { defaultTemplate: "@a" },
+  plugins: [
+    somePlugin({
+      create: { defaultTemplate: "@nested" },
+    }),
+  ],
+});"#;
+
+        let result =
+            replace_json_config_content(vite_config, r#"{ defaultTemplate: "@b" }"#, "create")
+                .unwrap();
+        assert!(result.updated);
+        assert!(result.content.contains(r#"create: { defaultTemplate: "@b" }"#));
+        // Nested create is untouched.
+        assert!(result.content.contains(r#"create: { defaultTemplate: "@nested" }"#));
+        assert!(!result.content.contains(r#""@a""#));
+    }
+
+    #[test]
+    fn test_replace_json_config_content_callback_shape() {
+        // `defineConfig((env) => ({ ... }))` arrow-body object literal.
+        let vite_config = r#"import { defineConfig } from 'vite-plus';
+
+export default defineConfig((env) => ({
+  create: { defaultTemplate: "@a" },
+  plugins: [],
+}));"#;
+
+        let result =
+            replace_json_config_content(vite_config, r#"{ defaultTemplate: "@b" }"#, "create")
+                .unwrap();
+        assert!(result.updated);
+        assert!(result.uses_function_callback);
+        assert!(result.content.contains(r#"create: { defaultTemplate: "@b" }"#));
+        assert!(!result.content.contains(r#""@a""#));
+        assert!(result.content.contains("(env) =>"));
+    }
+
+    #[test]
+    fn test_replace_json_config_content_strips_schema() {
+        let vite_config = r#"import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  create: { defaultTemplate: "@a" },
+});"#;
+
+        let new_value = r#"{
+  "$schema": "https://example.com/schema.json",
+  "defaultTemplate": "@b"
+}"#;
+
+        let result = replace_json_config_content(vite_config, new_value, "create").unwrap();
+        assert!(result.updated);
+        assert!(!result.content.contains("$schema"));
+        assert!(result.content.contains(r#""defaultTemplate": "@b""#));
+    }
+
+    #[test]
+    fn test_replace_json_config_with_files() {
+        let temp_dir = tempdir().unwrap();
+
+        let vite_config_path = temp_dir.path().join("vite.config.ts");
+        let json_config_path = temp_dir.path().join("create.json");
+
+        let mut vite_file = std::fs::File::create(&vite_config_path).unwrap();
+        write!(
+            vite_file,
+            r#"import {{ defineConfig }} from 'vite-plus';
+
+export default defineConfig({{
+  create: {{ defaultTemplate: "@a" }},
+}});"#
+        )
+        .unwrap();
+
+        let mut json_file = std::fs::File::create(&json_config_path).unwrap();
+        write!(json_file, r#"{{ "defaultTemplate": "@b" }}"#).unwrap();
+
+        let result = replace_json_config(&vite_config_path, &json_config_path, "create").unwrap();
+        assert!(result.updated);
+        assert!(result.content.contains(r#"create: { "defaultTemplate": "@b" }"#));
+        assert!(!result.content.contains(r#""@a""#));
     }
 }
