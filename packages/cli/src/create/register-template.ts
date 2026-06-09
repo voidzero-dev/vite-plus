@@ -29,12 +29,16 @@ import { getConfiguredCreate } from './org-resolve.ts';
  * the complete, recomputed object is written back via the shared config merger
  * (`replaceJsonConfig` when a `create` block exists, `mergeJsonConfig` to
  * prepend one otherwise), so `defaultTemplate` and prior `templates` are kept.
+ *
+ * Returns the absolute path of the config file written, so the caller can fold
+ * it into its own formatting pass (the merge writes a JSON-style block that
+ * needs reformatting). Returns `undefined` for the idempotent no-op.
  */
 export async function registerLocalTemplate(
   workspaceRoot: string,
   entry: CreateTemplateEntry,
   silent = false,
-): Promise<void> {
+): Promise<string | undefined> {
   const configPath = findViteConfig(workspaceRoot);
 
   // Read the current create config so we can recompute the full object.
@@ -49,7 +53,7 @@ export async function registerLocalTemplate(
 
   // Idempotent: an entry with the same name is left untouched.
   if (existing.templates.some((t) => t.name === entry.name)) {
-    return;
+    return undefined;
   }
 
   const nextCreate: { defaultTemplate?: string; templates: CreateTemplateEntry[] } = {
@@ -61,6 +65,7 @@ export async function registerLocalTemplate(
 
   const targetPath = configPath ?? ensureViteConfig(workspaceRoot, silent);
   writeCreateBlock(targetPath, nextCreate);
+  return targetPath;
 }
 
 /**

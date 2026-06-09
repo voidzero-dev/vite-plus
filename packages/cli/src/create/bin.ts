@@ -505,6 +505,9 @@ async function main() {
   let bundled: Extract<OrgResolution, { kind: 'bundled' }> | undefined;
   let skipShorthandExpansion = false;
   let isLocalTemplate = false;
+  // Root config path written by generator auto-registration, formatted as part
+  // of the monorepo format pass below rather than in a separate step.
+  let registeredConfigPath: string | undefined;
   const installArgs = process.env.CI ? ['--no-frozen-lockfile'] : undefined;
 
   // Local templates declared in `create.templates` are only offered inside a
@@ -1130,7 +1133,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       // explicit and survives a package rename, unlike resolving by name.
       const generatorTemplatePath = `./${projectDir.split(path.sep).join('/')}`;
       try {
-        await registerLocalTemplate(
+        registeredConfigPath = await registerLocalTemplate(
           workspaceInfo.rootDir,
           {
             name: generatorName,
@@ -1139,11 +1142,6 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
           },
           compactOutput,
         );
-        // The merge writes a JSON-style block; format the root config so it
-        // matches the surrounding style.
-        await runViteFmt(workspaceInfo.rootDir, options.interactive, ['vite.config.ts'], {
-          silent: compactOutput,
-        });
       } catch (error) {
         // The generator is already scaffolded; a registration failure (e.g. an
         // unreadable root config) must not abort the create or clobber config.
@@ -1312,7 +1310,12 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       packageManagerVersion: workspaceInfo.downloadPackageManager.version,
     });
     updateCreateProgress('Formatting code');
-    await runViteFmt(workspaceInfo.rootDir, options.interactive, [projectDir], {
+    // Also format the root config when generator registration rewrote it (the
+    // merge writes a JSON-style block), so no separate format step is needed.
+    const fmtPaths = registeredConfigPath
+      ? [projectDir, path.relative(workspaceInfo.rootDir, registeredConfigPath)]
+      : [projectDir];
+    await runViteFmt(workspaceInfo.rootDir, options.interactive, fmtPaths, {
       silent: compactOutput,
     });
     if (shouldSetupGit) {
