@@ -109,23 +109,11 @@ export async function detectWorkspace(rootDir: string): Promise<WorkspaceInfoOpt
 }
 
 // Check if a package should run as a Bingo template (https://www.create.bingo/).
-// This is an execution hint: Bingo templates run through their bin entry with
-// `--skip-requests`. A plain `bingo` dependency is enough here because it only
-// affects HOW an already-selected template runs, not whether it is offered.
-export function isBingoTemplate(pkg: {
-  dependencies?: Record<string, string>;
-  keywords?: string[];
-}): boolean {
-  return pkg.keywords?.includes('bingo-template') || !!pkg.dependencies?.bingo;
-}
-
-// Check if a package is offered as a `vp create` template in the picker.
-// Visibility requires an explicit marker keyword so that a normal workspace
-// package is never surfaced just because it happens to depend on `bingo`.
-export function isTemplatePackage(pkg: { keywords?: string[] }): boolean {
-  return (
-    !!pkg.keywords?.includes('vite-plus-template') || !!pkg.keywords?.includes('bingo-template')
-  );
+// This is an execution hint only: a Bingo template runs through its bin entry
+// with `--skip-requests` appended. Whether a package is offered as a template
+// is governed by `create.templates` in vite.config.ts, not by this check.
+export function isBingoTemplate(pkg: { dependencies?: Record<string, string> }): boolean {
+  return !!pkg.dependencies?.bingo;
 }
 
 // Discover all workspace packages
@@ -154,8 +142,6 @@ export function discoverWorkspacePackages(
       name?: string;
       description?: string;
       version?: string;
-      dependencies?: Record<string, string>;
-      keywords?: string[];
     };
     if (!pkg.name) {
       continue;
@@ -165,7 +151,6 @@ export function discoverWorkspacePackages(
       path: path.dirname(packageJsonRelativePath),
       description: pkg.description,
       version: pkg.version,
-      isTemplatePackage: isTemplatePackage(pkg),
     });
   }
 

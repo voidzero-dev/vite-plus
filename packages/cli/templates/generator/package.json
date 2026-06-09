@@ -4,7 +4,6 @@
   "private": true,
   "description": "A starter for creating a Vite+ code generator.",
   "keywords": [
-    "bingo-template",
     "vite-plus-generator"
   ],
   "bin": "./bin/index.ts",

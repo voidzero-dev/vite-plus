@@ -6,6 +6,7 @@ import {
 import type { OxfmtConfig } from 'oxfmt';
 import type { OxlintConfig } from 'oxlint';
 
+import type { CreateTemplateEntry } from './create/org-manifest.ts';
 import type { PackUserConfig } from './pack.ts';
 import type { RunConfig } from './run-config.ts';
 import type { StagedConfig } from './staged-config.ts';
@@ -35,9 +36,18 @@ declare module '@voidzero-dev/vite-plus-core' {
        * When `vp create` is invoked with no template argument, use this
        * value as if the user had typed it — typically a scope like
        * `'@your-org'` paired with a `@your-org/create` package that exposes a
-       * `createConfig.templates` manifest.
+       * `createConfig.templates` manifest. Can also name a local
+       * `create.templates` entry.
        */
       defaultTemplate?: string;
+
+      /**
+       * Local templates available to `vp create` inside this monorepo. Each
+       * entry is shown in the `vp create` picker by `name`/`description`; its
+       * `template` resolves like any specifier (a workspace package name, a
+       * relative `./path`, a `vite:*` builtin, a GitHub URL, or an npm package).
+       */
+      templates?: CreateTemplateEntry[];
     };
   }
 }

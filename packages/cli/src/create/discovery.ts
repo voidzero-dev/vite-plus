@@ -2,7 +2,7 @@ import path from 'node:path';
 
 import type { WorkspaceInfo, WorkspaceInfoOptional, WorkspacePackage } from '../types/index.ts';
 import { readJsonFile } from '../utils/json.ts';
-import { isBingoTemplate, isTemplatePackage } from '../utils/workspace.ts';
+import { isBingoTemplate } from '../utils/workspace.ts';
 import { prependToPathToEnvs } from './command.ts';
 import { BuiltinTemplate, type TemplateInfo, TemplateType } from './templates/types.ts';
 
@@ -88,6 +88,10 @@ export function discoverTemplate(
   interactive?: boolean,
   bundledLocalPath?: string,
   skipShorthand?: boolean,
+  // True when `templateName` was resolved from a `create.templates` entry, so a
+  // matching workspace package should run as a local template (and a missing
+  // `bin` is an error rather than an npm fall-through).
+  localTemplate?: boolean,
 ): TemplateInfo {
   const envs = prependToPathToEnvs(workspaceInfo.downloadPackageManager.binPrefix, {
     ...process.env,
@@ -131,14 +135,15 @@ export function discoverTemplate(
     }
   }
 
-  // Check for local package
-  const localPackage = findLocalPackage(workspaceInfo, templateName);
+  // Check for a local workspace package, but only when resolving a declared
+  // `create.templates` entry. A bare workspace package name is not treated as a
+  // template otherwise — `create.templates` is the source of truth.
+  const localPackage = localTemplate ? findLocalPackage(workspaceInfo, templateName) : undefined;
   if (localPackage) {
     const localPackagePath = path.join(workspaceInfo.rootDir, localPackage.path);
     const packageJsonPath = path.join(localPackagePath, 'package.json');
     const pkg = readJsonFile(packageJsonPath) as {
       dependencies?: Record<string, string>;
-      keywords?: string[];
       bin?: Record<string, string> | string;
     };
     const binPath = resolveLocalBinPath(localPackagePath, templateName, pkg.bin) ?? '';
@@ -159,13 +164,11 @@ export function discoverTemplate(
         interactive,
       };
     }
-    // A template package without a bin entry cannot be executed. Fail clearly
+    // A declared template without a bin entry cannot be executed. Fail clearly
     // instead of falling through to an unrelated `create-<name>` npm package.
-    if (isTemplatePackage(pkg)) {
-      throw new Error(
-        `Local template package "${templateName}" has no "bin" entry in its package.json, so it cannot be run as a template`,
-      );
-    }
+    throw new Error(
+      `Local template "${templateName}" has no "bin" entry in its package.json, so it cannot be run as a template`,
+    );
   }
 
   // Manifest-resolved entries are already fully qualified by the author —

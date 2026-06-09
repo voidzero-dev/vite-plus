@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import type { WorkspacePackage } from '../../types/workspace.js';
 import { getInitialTemplateOptions } from '../initial-template-options.js';
+import type { CreateTemplateEntry } from '../org-manifest.js';
 
 describe('getInitialTemplateOptions', () => {
   it('shows only built-in monorepo, application, and library options outside a monorepo', () => {
@@ -39,73 +39,37 @@ describe('getInitialTemplateOptions', () => {
     ]);
   });
 
-  // https://github.com/voidzero-dev/vite-plus: local generator packages
-  // (scaffolded by `vp create vite:generator`) must be offered by the picker
-  it('includes local template packages (generators) inside a monorepo', () => {
-    const packages: WorkspacePackage[] = [
+  it('lists local create.templates entries inside a monorepo, by name', () => {
+    const templates: CreateTemplateEntry[] = [
       {
-        name: 'million-finding',
-        path: 'tools/million-finding',
-        description: 'Generate new components for our monorepo',
-        version: '0.0.0',
-        isTemplatePackage: true,
+        name: 'component',
+        description: 'Internal UI component',
+        template: './tools/create-component',
       },
-      {
-        name: 'utils',
-        path: 'packages/utils',
-        isTemplatePackage: false,
-      },
+      { name: 'service', description: 'Backend service', template: 'service-generator' },
     ];
 
-    const options = getInitialTemplateOptions(true, packages);
+    const options = getInitialTemplateOptions(true, templates);
     const values = options.map((option) => option.value);
 
     // Built-in templates are still offered
     expect(values).toContain('vite:application');
     expect(values).toContain('vite:library');
-    // The local generator is offered and selectable by its package name
-    expect(values).toContain('million-finding');
-    // Regular workspace packages are not offered as templates
-    expect(values).not.toContain('utils');
+    // Each local template is offered and selectable by its entry name
+    expect(values).toContain('component');
+    expect(values).toContain('service');
 
-    const generatorOption = options.find((option) => option.value === 'million-finding');
-    expect(generatorOption?.hint).toBe('Generate new components for our monorepo');
+    const componentOption = options.find((option) => option.value === 'component');
+    expect(componentOption?.label).toBe('component');
+    expect(componentOption?.hint).toBe('Internal UI component');
   });
 
-  it('falls back to the package path when the description is missing or empty', () => {
-    const packages: WorkspacePackage[] = [
-      {
-        name: 'no-description',
-        path: 'tools/no-description',
-        isTemplatePackage: true,
-      },
-      {
-        name: 'empty-description',
-        path: 'tools/empty-description',
-        description: '',
-        isTemplatePackage: true,
-      },
+  it('does not include local templates outside a monorepo', () => {
+    const templates: CreateTemplateEntry[] = [
+      { name: 'component', description: 'Internal UI component', template: 'component-generator' },
     ];
 
-    const options = getInitialTemplateOptions(true, packages);
-    expect(options.find((option) => option.value === 'no-description')?.hint).toBe(
-      'tools/no-description',
-    );
-    expect(options.find((option) => option.value === 'empty-description')?.hint).toBe(
-      'tools/empty-description',
-    );
-  });
-
-  it('does not include local template packages outside a monorepo', () => {
-    const packages: WorkspacePackage[] = [
-      {
-        name: 'million-finding',
-        path: 'tools/million-finding',
-        isTemplatePackage: true,
-      },
-    ];
-
-    const values = getInitialTemplateOptions(false, packages).map((option) => option.value);
-    expect(values).not.toContain('million-finding');
+    const values = getInitialTemplateOptions(false, templates).map((option) => option.value);
+    expect(values).not.toContain('component');
   });
 });

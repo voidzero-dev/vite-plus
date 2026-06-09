@@ -2,11 +2,13 @@ import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
 import { findWorkspaceRoot, hasViteConfig, resolveViteConfig } from '../resolve-vite-config.ts';
 import {
+  type CreateTemplateEntry,
   filterManifestForContext,
   isRelativePath,
   OrgManifestSchemaError,
   parseOrgScopedSpec,
   readOrgManifest,
+  validateCreateTemplates,
   type OrgManifest,
   type OrgTemplateEntry,
 } from './org-manifest.ts';
@@ -226,4 +228,32 @@ export async function getConfiguredDefaultTemplate(startDir: string): Promise<st
     // Unresolvable config → treat as no default.
   }
   return undefined;
+}
+
+/**
+ * Read and validate `create.templates` from the workspace root's
+ * `vite.config.ts` (resolved the same way as {@link getConfiguredDefaultTemplate}).
+ *
+ * Returns `[]` when there is no config, no `create.templates`, or the config
+ * cannot be evaluated. A present-but-malformed `create.templates` throws a
+ * {@link CreateConfigSchemaError} so the misconfiguration surfaces.
+ */
+export async function getConfiguredTemplates(startDir: string): Promise<CreateTemplateEntry[]> {
+  const projectRoot = findWorkspaceRoot(startDir) ?? startDir;
+  if (!hasViteConfig(projectRoot)) {
+    return [];
+  }
+  let templates: unknown;
+  try {
+    const config = (await resolveViteConfig(projectRoot)) as {
+      create?: { templates?: unknown };
+    };
+    templates = config.create?.templates;
+  } catch {
+    // Unresolvable config → treat as no local templates.
+    return [];
+  }
+  // Validation errors are intentionally NOT swallowed: a malformed
+  // `create.templates` should be reported, not silently dropped.
+  return validateCreateTemplates(templates);
 }

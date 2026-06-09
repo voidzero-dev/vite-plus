@@ -33,6 +33,7 @@ import {
 import { detectExistingEditors, selectEditors, writeEditorConfigs } from '../utils/editor.ts';
 import { createInitialCommit, initGitRepository } from '../utils/git.ts';
 import { renderCliDoc } from '../utils/help.ts';
+import { readJsonFile } from '../utils/json.ts';
 import { displayRelative } from '../utils/path.ts';
 import {
   type CommandRunSummary,
@@ -53,8 +54,10 @@ import {
 import type { ExecutionWithProjectDir } from './command.ts';
 import { discoverTemplate, inferGitHubRepoName, inferParentDir, isGitHubUrl } from './discovery.ts';
 import { getInitialTemplateOptions } from './initial-template-options.ts';
+import type { CreateTemplateEntry } from './org-manifest.ts';
 import {
   getConfiguredDefaultTemplate,
+  getConfiguredTemplates,
   type OrgResolution,
   resolveOrgManifestForCreate,
 } from './org-resolve.ts';
@@ -66,6 +69,7 @@ import {
   suggestAvailableTargetDir,
 } from './prompts.ts';
 import { getRandomProjectName } from './random-name.ts';
+import { registerLocalTemplate } from './register-template.ts';
 import {
   executeBuiltinTemplate,
   executeBundledTemplate,
@@ -97,7 +101,7 @@ const helpMessage = renderCliDoc({
             `- Default: ${accent('vite:monorepo')}, ${accent('vite:application')}, ${accent('vite:library')}, ${accent('vite:generator')}`,
             '- Remote: vite, @tanstack/start, create-next-app,',
             '  create-nuxt, github:user/repo, https://github.com/user/template-repo, etc.',
-            '- Local: @company/generator-*, ./tools/create-ui-component',
+            '- Local: a `create.templates` entry name from vite.config.ts (monorepo)',
             `- Org scope: ${accent('@your-org')} → picker from ${accent('@your-org/create')}'s ${accent('createConfig.templates')} manifest`,
             `- Org entry: ${accent('@your-org:web')} → manifest entry "web" from ${accent('@your-org/create')}`,
             `When omitted, uses \`create.defaultTemplate\` from vite.config.ts if set.`,
@@ -500,7 +504,14 @@ async function main() {
   let shouldSetupHooks = false;
   let bundled: Extract<OrgResolution, { kind: 'bundled' }> | undefined;
   let skipShorthandExpansion = false;
+  let isLocalTemplate = false;
   const installArgs = process.env.CI ? ['--no-frozen-lockfile'] : undefined;
+
+  // Local templates declared in `create.templates` are only offered inside a
+  // monorepo and resolved by entry `name`.
+  const localTemplates: CreateTemplateEntry[] = isMonorepo
+    ? await getConfiguredTemplates(workspaceInfoOptional.rootDir)
+    : [];
 
   if (!selectedTemplateName) {
     const defaultTemplate = await getConfiguredDefaultTemplate(workspaceInfoOptional.rootDir);
@@ -548,7 +559,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   if (!selectedTemplateName) {
     const template = await prompts.select({
       message: '',
-      options: getInitialTemplateOptions(isMonorepo, workspaceInfoOptional.packages),
+      options: getInitialTemplateOptions(isMonorepo, localTemplates),
     });
 
     if (prompts.isCancel(template)) {
@@ -556,6 +567,16 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     }
 
     selectedTemplateName = template;
+  }
+
+  // Resolve a `create.templates` entry: the picker value (and `vp create <name>`)
+  // is the entry `name`; run its `template` specifier instead. Entry templates
+  // are author-provided and fully qualified, so skip shorthand expansion.
+  const matchedLocalTemplate = localTemplates.find((entry) => entry.name === selectedTemplateName);
+  if (matchedLocalTemplate) {
+    selectedTemplateName = matchedLocalTemplate.template;
+    skipShorthandExpansion = true;
+    isLocalTemplate = true;
   }
 
   const isBuiltinTemplate = selectedTemplateName.startsWith('vite:');
@@ -873,6 +894,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     options.interactive,
     bundled?.bundledLocalPath,
     skipShorthandExpansion,
+    isLocalTemplate,
   );
 
   if (selectedParentDir) {
@@ -1079,6 +1101,36 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   }
 
   const fullPath = path.join(workspaceInfo.rootDir, projectDir);
+
+  // Register a scaffolded generator in `create.templates` so it appears in the
+  // `vp create` picker (and resolves by name) without a manual config edit.
+  if (selectedTemplateName === BuiltinTemplate.generator && isMonorepo) {
+    const generatorPkg = readJsonFile(path.join(fullPath, 'package.json')) as {
+      name?: string;
+      description?: string;
+    };
+    const generatorName = generatorPkg.name ?? packageName;
+    if (generatorName) {
+      updateCreateProgress('Registering generator');
+      pauseCreateProgress();
+      await registerLocalTemplate(
+        workspaceInfo.rootDir,
+        {
+          name: generatorName,
+          description: generatorPkg.description || `Run the ${generatorName} generator`,
+          template: generatorName,
+        },
+        compactOutput,
+      );
+      // The merge writes a JSON-style block; format the root config so it
+      // matches the surrounding style.
+      await runViteFmt(workspaceInfo.rootDir, options.interactive, ['vite.config.ts'], {
+        silent: compactOutput,
+      });
+      resumeCreateProgress();
+    }
+  }
+
   const agentInstructionsRoot = isMonorepo ? workspaceInfo.rootDir : fullPath;
   updateCreateProgress('Writing agent instructions');
   pauseCreateProgress();

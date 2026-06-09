@@ -3,12 +3,20 @@ import path from 'node:path';
 import { fetchNpmResource, getNpmRegistry } from '../utils/npm-config.ts';
 
 /**
- * A single entry in an org's template manifest.
+ * A single template entry shared by org manifests (`createConfig.templates`)
+ * and local monorepo config (`create.templates` in `vite.config.ts`).
  */
-export interface OrgTemplateEntry {
+export interface CreateTemplateEntry {
   name: string;
   description: string;
   template: string;
+}
+
+/**
+ * A single entry in an org's template manifest. Extends the shared
+ * {@link CreateTemplateEntry} with the org-only `monorepo` flag.
+ */
+export interface OrgTemplateEntry extends CreateTemplateEntry {
   monorepo?: boolean;
 }
 
@@ -90,48 +98,39 @@ export function isRelativePath(spec: string): boolean {
   return spec.startsWith('./') || spec.startsWith('../');
 }
 
-function validateEntry(entry: unknown, index: number, packageName: string): OrgTemplateEntry {
+/**
+ * Validate the `{ name, description, template }` fields shared by org manifest
+ * entries and local `create.templates` entries. `label` is the config path
+ * used in error messages (e.g. `createConfig.templates` or `create.templates`)
+ * and `makeError` builds the thrown error so each source uses its own type.
+ */
+export function validateTemplateEntry(
+  entry: unknown,
+  index: number,
+  label: string,
+  makeError: (message: string) => Error,
+): CreateTemplateEntry {
   if (!entry || typeof entry !== 'object') {
-    throw new OrgManifestSchemaError(
-      `createConfig.templates[${index}] must be an object`,
-      packageName,
-    );
+    throw makeError(`${label}[${index}] must be an object`);
   }
   const raw = entry as Record<string, unknown>;
   const requireString = (field: string): string => {
     const value = raw[field];
     if (typeof value !== 'string' || value.length === 0) {
-      throw new OrgManifestSchemaError(
-        `createConfig.templates[${index}].${field} must be a non-empty string`,
-        packageName,
-      );
+      throw makeError(`${label}[${index}].${field} must be a non-empty string`);
     }
     return value;
   };
   const name = requireString('name');
   // `__vp_` is reserved for internal sentinel values (e.g. the
   // org-picker's escape-hatch nonce in `org-picker.ts`). Reject the
-  // prefix at schema time so a manifest entry can never collide with
-  // those sentinels regardless of what the picker does internally.
+  // prefix at schema time so an entry can never collide with those
+  // sentinels regardless of what the picker does internally.
   if (name.startsWith('__vp_')) {
-    throw new OrgManifestSchemaError(
-      `createConfig.templates[${index}].name uses the reserved \`__vp_\` prefix`,
-      packageName,
-    );
+    throw makeError(`${label}[${index}].name uses the reserved \`__vp_\` prefix`);
   }
   const description = requireString('description');
   const template = requireString('template');
-
-  let monorepo: boolean | undefined;
-  if (raw.monorepo !== undefined) {
-    if (typeof raw.monorepo !== 'boolean') {
-      throw new OrgManifestSchemaError(
-        `createConfig.templates[${index}].monorepo must be a boolean`,
-        packageName,
-      );
-    }
-    monorepo = raw.monorepo;
-  }
 
   if (isRelativePath(template)) {
     // Defense-in-depth only: `resolveBundledPath` enforces the authoritative
@@ -139,19 +138,50 @@ function validateEntry(entry: unknown, index: number, packageName: string): OrgT
     // errors surface before any tarball download happens.
     const resolved = path.posix.resolve('/root', template.replaceAll('\\', '/'));
     if (resolved !== '/root' && !resolved.startsWith('/root/')) {
-      throw new OrgManifestSchemaError(
-        `createConfig.templates[${index}].template escapes the package root: ${template}`,
-        packageName,
-      );
+      throw makeError(`${label}[${index}].template escapes the package root: ${template}`);
     }
   }
 
-  return {
-    name,
-    description,
-    template,
-    ...(monorepo !== undefined ? { monorepo } : {}),
-  };
+  return { name, description, template };
+}
+
+/**
+ * Validate a list of entries, rejecting duplicate `name`s. Shared by org
+ * manifests and local `create.templates`.
+ */
+export function validateTemplateEntries<T extends CreateTemplateEntry>(
+  templates: readonly unknown[],
+  label: string,
+  makeError: (message: string) => Error,
+  validateOne: (entry: unknown, index: number) => T,
+): T[] {
+  const entries: T[] = [];
+  const seen = new Set<string>();
+  for (let index = 0; index < templates.length; index += 1) {
+    const entry = validateOne(templates[index], index);
+    if (seen.has(entry.name)) {
+      throw makeError(`${label}[${index}].name duplicates an earlier entry: "${entry.name}"`);
+    }
+    seen.add(entry.name);
+    entries.push(entry);
+  }
+  return entries;
+}
+
+function validateEntry(entry: unknown, index: number, packageName: string): OrgTemplateEntry {
+  const makeError = (message: string) => new OrgManifestSchemaError(message, packageName);
+  const base = validateTemplateEntry(entry, index, 'createConfig.templates', makeError);
+
+  let monorepo: boolean | undefined;
+  const raw = entry as Record<string, unknown>;
+  if (raw.monorepo !== undefined) {
+    if (typeof raw.monorepo !== 'boolean') {
+      throw makeError(`createConfig.templates[${index}].monorepo must be a boolean`);
+    }
+    monorepo = raw.monorepo;
+  }
+
+  return { ...base, ...(monorepo !== undefined ? { monorepo } : {}) };
 }
 
 function validateManifest(raw: unknown, packageName: string): OrgTemplateEntry[] | null {
@@ -173,20 +203,41 @@ function validateManifest(raw: unknown, packageName: string): OrgTemplateEntry[]
     // Treat empty array as "no manifest" — fall through to normal @org/create behavior.
     return null;
   }
-  const entries: OrgTemplateEntry[] = [];
-  const seen = new Set<string>();
-  for (let index = 0; index < templates.length; index += 1) {
-    const entry = validateEntry(templates[index], index, packageName);
-    if (seen.has(entry.name)) {
-      throw new OrgManifestSchemaError(
-        `createConfig.templates[${index}].name duplicates an earlier entry: "${entry.name}"`,
-        packageName,
-      );
-    }
-    seen.add(entry.name);
-    entries.push(entry);
+  return validateTemplateEntries(
+    templates,
+    'createConfig.templates',
+    (message) => new OrgManifestSchemaError(message, packageName),
+    (entry, index) => validateEntry(entry, index, packageName),
+  );
+}
+
+/**
+ * Schema-level failure for `create.templates` in `vite.config.ts`. A misconfigured
+ * local template should surface clearly rather than silently disappear.
+ */
+export class CreateConfigSchemaError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'CreateConfigSchemaError';
   }
-  return entries;
+}
+
+/**
+ * Validate `create.templates` from `vite.config.ts`. Returns `[]` when the field
+ * is absent or an empty array; throws {@link CreateConfigSchemaError} when present
+ * but malformed.
+ */
+export function validateCreateTemplates(templates: unknown): CreateTemplateEntry[] {
+  if (templates === undefined) {
+    return [];
+  }
+  if (!Array.isArray(templates)) {
+    throw new CreateConfigSchemaError('create.templates must be an array');
+  }
+  const makeError = (message: string) => new CreateConfigSchemaError(message);
+  return validateTemplateEntries(templates, 'create.templates', makeError, (entry, index) =>
+    validateTemplateEntry(entry, index, 'create.templates', makeError),
+  );
 }
 
 interface RegistryPackument {

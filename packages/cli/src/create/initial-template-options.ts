@@ -1,4 +1,4 @@
-import type { WorkspacePackage } from '../types/workspace.ts';
+import type { CreateTemplateEntry } from './org-manifest.ts';
 import { BuiltinTemplate } from './templates/types.ts';
 
 export interface InitialTemplateOption {
@@ -9,7 +9,7 @@ export interface InitialTemplateOption {
 
 export function getInitialTemplateOptions(
   isMonorepo: boolean,
-  packages: WorkspacePackage[] = [],
+  templates: CreateTemplateEntry[] = [],
 ): InitialTemplateOption[] {
   return [
     ...(!isMonorepo
@@ -31,16 +31,15 @@ export function getInitialTemplateOptions(
       value: BuiltinTemplate.library,
       hint: 'Create vite libraries',
     },
-    // Local generator packages (scaffolded by `vp create vite:generator`) are
-    // only relevant inside the monorepo that owns them.
+    // Local templates declared in `create.templates` (vite.config.ts) are only
+    // relevant inside the monorepo that owns them. They are selected by `name`
+    // and resolved to their `template` specifier in the create flow.
     ...(isMonorepo
-      ? packages
-          .filter((pkg) => pkg.isTemplatePackage)
-          .map((pkg) => ({
-            label: pkg.name,
-            value: pkg.name,
-            hint: pkg.description || pkg.path,
-          }))
+      ? templates.map((entry) => ({
+          label: entry.name,
+          value: entry.name,
+          hint: entry.description,
+        }))
       : []),
   ];
 }

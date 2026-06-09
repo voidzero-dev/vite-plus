@@ -188,29 +188,6 @@ describe('discoverWorkspacePackages', () => {
     expect(foo.path).toBe(path.join('packages', 'foo'));
     expect(foo.description).toBe('a foo');
     expect(foo.version).toBe('1.0.0');
-    expect(foo.isTemplatePackage).toBe(false);
-  });
-
-  it('flags only packages keyworded as vite-plus-template / bingo-template', () => {
-    writeJson(path.join(tmpDir, 'pkgs/vp/package.json'), {
-      name: 'vp',
-      keywords: ['vite-plus-template'],
-    });
-    writeJson(path.join(tmpDir, 'pkgs/bg/package.json'), {
-      name: 'bg',
-      keywords: ['bingo-template'],
-    });
-    // A plain `bingo` dependency without a marker keyword must NOT surface a
-    // normal workspace package in the create picker.
-    writeJson(path.join(tmpDir, 'pkgs/bd/package.json'), {
-      name: 'bd',
-      dependencies: { bingo: '*' },
-    });
-    writeJson(path.join(tmpDir, 'pkgs/plain/package.json'), { name: 'plain' });
-
-    const packages = discoverWorkspacePackages(['pkgs/*'], tmpDir);
-    const map = Object.fromEntries(packages.map((p) => [p.name, p.isTemplatePackage]));
-    expect(map).toEqual({ vp: true, bg: true, bd: false, plain: false });
   });
 
   it('ignores node_modules during discovery', () => {
