@@ -385,6 +385,65 @@ export default defineConfig({
 });
 ```
 
+### Local templates (`create.templates`)
+
+A monorepo declares its own local templates (for example an internal
+component or service generator) in the same `create` config:
+
+```ts
+export default defineConfig({
+  create: {
+    templates: [
+      {
+        name: 'component',
+        description: 'Internal UI component',
+        template: './tools/create-component',
+      },
+      { name: 'service', description: 'Backend service', template: 'service-generator' },
+    ],
+  },
+});
+```
+
+Each entry reuses the manifest entry schema (the lean
+`CreateTemplateEntry` = `{ name, description, template }`, validated by the
+same code that validates an org manifest's `createConfig.templates`). The
+org-only `monorepo` flag is not part of the local schema. The `template`
+field accepts any specifier `vp create` already resolves: a workspace
+package name, a relative `./path`, a `vite:*` built-in, a GitHub URL, or an
+npm package.
+
+`create.templates` is the **source of truth** for local templates:
+
+- The `vp create` picker lists exactly these entries (by `name` /
+  `description`) when run inside a monorepo. Vite+ does not infer template
+  packages from package.json keywords; declaring a template is explicit.
+- Selecting an entry, or typing `vp create <name>`, resolves the entry's
+  `template` through the existing `discoverTemplate` path. A relative path
+  or workspace package name runs that package's `bin`; if it carries a
+  `bingo` dependency, `--skip-requests` is appended (execution hint only).
+- An entry whose `template` resolves to a local package without a `bin`
+  fails with a clear error instead of falling through to an unrelated
+  `create-<name>` npm package.
+
+`vp create vite:generator` registers the scaffolded generator
+automatically: it reads the existing `create` config, appends a
+`{ name, description, template }` entry to `create.templates` (idempotent
+by `name`), and writes the merged `create` object back to `vite.config.ts`
+via the same config-merge machinery used by `injectCreateDefaultTemplate`
+(`packages/cli/src/migration/migrator.ts`), preserving any existing
+`defaultTemplate`. Entries can also be added by hand.
+
+`create.defaultTemplate` may name a local entry, so bare `vp create` can
+open a local template directly.
+
+Why config rather than package.json keywords (`bingo-template` /
+`vite-plus-template`)? Keyword detection is implicit and answers "is this a
+template?" ambiguously. A single `create.templates` list next to the
+existing `create.defaultTemplate` keeps create configuration in one place
+(`vite.config.ts`) and makes the set of local templates explicit and
+reviewable.
+
 ### Precedence
 
 `CLI argument` > `vite.config.ts create.defaultTemplate` > interactive

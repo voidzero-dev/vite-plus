@@ -35,7 +35,7 @@ Vite+ ships with these built-in templates:
 
 - Use shorthand templates like `vite`, `@tanstack/start`, `svelte`, `next-app`, `nuxt`, `react-router`, and `vue`
 - Use full package names like `create-vite` or `create-next-app`
-- Use local templates such as `./tools/create-ui-component` or `@your-org/generator-*`
+- Use local monorepo templates declared in [`create.templates`](#code-generators) (for example an internal component or service generator)
 - Use remote templates such as `github:user/repo` or `https://github.com/user/template-repo`
 
 Run `vp create --list` to see the built-in templates and the common shorthand templates Vite+ recognizes.
@@ -110,26 +110,45 @@ The scaffolded generator package contains:
 
 - `src/template.ts` defines the template using `createTemplate` from `bingo`: an options schema built with [Zod](https://zod.dev/) and a `produce()` function that returns the files to generate
 - `bin/index.ts` is the CLI entry, powered by Bingo's `runTemplateCLI`
-- `package.json` carries the `bingo-template` keyword so Vite+ recognizes the package as a generator
 
 If the monorepo has a parent directory matching `generators` or `tools`, the new package is placed there by default.
 
-### Run a generator
+### Registration
 
-Inside the monorepo, run `vp create` and pick the generator from the template list, or pass the generator's package name directly:
+Local generators are declared in [`create.templates`](/config/create#create-templates) in the monorepo's `vite.config.ts`. This is the source of truth: only registered templates appear in the `vp create` picker.
 
-```bash
-# Interactive mode lists local generators alongside the built-in templates
-vp create
+`vp create vite:generator` registers the generator for you, adding an entry to `create.templates` in the root `vite.config.ts`:
 
-# Run a generator by its package name
-vp create my-generator
+```ts
+import { defineConfig } from 'vite-plus';
 
-# Pass options to the generator after --
-vp create my-generator -- --name @your-org/button
+export default defineConfig({
+  create: {
+    templates: [
+      { name: 'my-generator', description: 'Generate new components', template: 'my-generator' },
+    ],
+  },
+});
 ```
 
-Vite+ treats a local workspace package as a Bingo generator when its `package.json` has the `bingo-template` keyword or a dependency on `bingo`. Matching packages are executed directly through their `bin` entry, and `--skip-requests` is appended automatically so the generator skips Bingo's outbound network requests (such as GitHub API calls).
+Re-running is idempotent (no duplicate entries), and an existing `create.defaultTemplate` is preserved. You can also add entries by hand, for example to register a template you didn't scaffold this way. The `template` value is the generator's workspace package name (or a relative path to it).
+
+### Run a generator
+
+Inside the monorepo, run `vp create` and pick the generator from the template list, or pass its entry `name` directly:
+
+```bash
+# Interactive mode lists registered local templates alongside the built-ins
+vp create
+
+# Run a registered template by its name
+vp create component
+
+# Pass options to the generator after --
+vp create component -- --name @your-org/button
+```
+
+When the generator depends on `bingo`, Vite+ appends `--skip-requests` automatically so it skips Bingo's outbound network requests (such as GitHub API calls).
 
 After the generator runs, the created package goes through the regular monorepo integration: workspace registration, dependency installation, and formatting.
 
