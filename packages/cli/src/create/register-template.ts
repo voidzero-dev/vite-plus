@@ -1,4 +1,6 @@
+import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
@@ -38,7 +40,12 @@ export async function registerLocalTemplate(
   // Read the current create config so we can recompute the full object.
   // `walkUp: false`: the caller passes the exact monorepo root, so read it
   // directly rather than searching for an enclosing workspace.
-  const existing = await getConfiguredCreate(workspaceRoot, { walkUp: false });
+  // `throwOnReadError`: if the config exists but cannot be evaluated, abort
+  // rather than overwrite its `create` block with only the new entry.
+  const existing = await getConfiguredCreate(workspaceRoot, {
+    walkUp: false,
+    throwOnReadError: true,
+  });
 
   // Idempotent: an entry with the same name is left untouched.
   if (existing.templates.some((t) => t.name === entry.name)) {
@@ -79,7 +86,9 @@ function ensureViteConfig(workspaceRoot: string, silent: boolean): string {
  * so the JSON-style block written here is normalized to the surrounding style.
  */
 function writeCreateBlock(configPath: string, create: object): void {
-  const tempPath = path.join(path.dirname(configPath), '.vite-plus-create-register.json');
+  // A unique OS-temp path: a fixed name in the workspace could collide with a
+  // user's own file and be overwritten/deleted by the merge.
+  const tempPath = path.join(os.tmpdir(), `vite-plus-create-register-${randomUUID()}.json`);
   fs.writeFileSync(tempPath, JSON.stringify(create));
   try {
     const result = hasConfigKey(configPath, 'create')

@@ -524,6 +524,11 @@ async function main() {
     }
   }
 
+  // Set once an org manifest produces the final specifier, so the local
+  // `create.templates` match below is not re-applied to an org entry's
+  // `template` value (e.g. an org entry `{ name: 'web', template: 'component' }`
+  // must not be redirected to a local entry also named `component`).
+  let resolvedByOrg = false;
   if (selectedTemplateName) {
     const resolved = await resolveOrgManifestForCreate({
       templateName: selectedTemplateName,
@@ -536,8 +541,10 @@ async function main() {
       // `expandCreateShorthand` from rewriting `@your-org/template-web`
       // into `@your-org/create-template-web`.
       skipShorthandExpansion = true;
+      resolvedByOrg = true;
     } else if (resolved.kind === 'bundled') {
       bundled = resolved;
+      resolvedByOrg = true;
     } else if (resolved.kind === 'escape-hatch') {
       selectedTemplateName = '';
     }
@@ -575,8 +582,12 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
 
   // Resolve a `create.templates` entry: the picker value (and `vp create <name>`)
   // is the entry `name`; run its `template` specifier instead. Entry templates
-  // are author-provided and fully qualified, so skip shorthand expansion.
-  const matchedLocalTemplate = localTemplates.find((entry) => entry.name === selectedTemplateName);
+  // are author-provided and fully qualified, so skip shorthand expansion. Skip
+  // this when an org manifest already resolved the specifier — its `template`
+  // is not a local picker selection and must not be re-matched locally.
+  const matchedLocalTemplate = resolvedByOrg
+    ? undefined
+    : localTemplates.find((entry) => entry.name === selectedTemplateName);
   if (matchedLocalTemplate) {
     selectedTemplateName = matchedLocalTemplate.template;
     skipShorthandExpansion = true;
@@ -1118,20 +1129,30 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       // Register by a relative `./path` to the generator's directory: it is
       // explicit and survives a package rename, unlike resolving by name.
       const generatorTemplatePath = `./${projectDir.split(path.sep).join('/')}`;
-      await registerLocalTemplate(
-        workspaceInfo.rootDir,
-        {
-          name: generatorName,
-          description: generatorPkg.description || `Run the ${generatorName} generator`,
-          template: generatorTemplatePath,
-        },
-        compactOutput,
-      );
-      // The merge writes a JSON-style block; format the root config so it
-      // matches the surrounding style.
-      await runViteFmt(workspaceInfo.rootDir, options.interactive, ['vite.config.ts'], {
-        silent: compactOutput,
-      });
+      try {
+        await registerLocalTemplate(
+          workspaceInfo.rootDir,
+          {
+            name: generatorName,
+            description: generatorPkg.description || `Run the ${generatorName} generator`,
+            template: generatorTemplatePath,
+          },
+          compactOutput,
+        );
+        // The merge writes a JSON-style block; format the root config so it
+        // matches the surrounding style.
+        await runViteFmt(workspaceInfo.rootDir, options.interactive, ['vite.config.ts'], {
+          silent: compactOutput,
+        });
+      } catch (error) {
+        // The generator is already scaffolded; a registration failure (e.g. an
+        // unreadable root config) must not abort the create or clobber config.
+        // Warn and point the user at the manual edit instead.
+        prompts.log.warn(
+          `Could not register the generator in create.templates (${(error as Error).message}).\n` +
+            `Add it by hand: { name: '${generatorName}', template: '${generatorTemplatePath}' }`,
+        );
+      }
       resumeCreateProgress();
     }
   }

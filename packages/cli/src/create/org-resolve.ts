@@ -212,10 +212,15 @@ export async function resolveOrgManifestForCreate(args: {
  * Best-effort for resolution: a missing or unresolvable config reads as
  * empty. A present-but-malformed `create.templates` still throws a
  * {@link CreateConfigSchemaError} so the misconfiguration surfaces.
+ *
+ * Pass `throwOnReadError: true` for read-modify-write callers (registration):
+ * if a config file exists but cannot be evaluated, an empty read would let a
+ * later write clobber the real `create` block, so the eval error is rethrown
+ * instead of swallowed.
  */
 export async function getConfiguredCreate(
   startDir: string,
-  options?: { walkUp?: boolean },
+  options?: { walkUp?: boolean; throwOnReadError?: boolean },
 ): Promise<{ defaultTemplate?: string; templates: CreateTemplateEntry[] }> {
   const projectRoot =
     options?.walkUp === false ? startDir : (findWorkspaceRoot(startDir) ?? startDir);
@@ -228,7 +233,10 @@ export async function getConfiguredCreate(
       create?: { defaultTemplate?: unknown; templates?: unknown };
     };
     create = config.create;
-  } catch {
+  } catch (error) {
+    if (options?.throwOnReadError) {
+      throw error;
+    }
     // Unresolvable config → treat as no create config.
     return { templates: [] };
   }

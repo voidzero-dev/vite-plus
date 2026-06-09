@@ -146,6 +146,30 @@ describe('registerLocalTemplate', () => {
     expect(create.templates).toEqual([ENTRY_A, ENTRY_B]);
   });
 
+  it('does not clobber a pre-existing .vite-plus-create-register.json in the workspace', async () => {
+    // The temp file used for the merge must not collide with a user file of a
+    // fixed name in the workspace root.
+    const sentinel = path.join(workspaceRoot, '.vite-plus-create-register.json');
+    fs.writeFileSync(sentinel, '{"keep":true}');
+
+    await registerLocalTemplate(workspaceRoot, ENTRY_A, true);
+
+    expect(fs.existsSync(sentinel)).toBe(true);
+    expect(JSON.parse(fs.readFileSync(sentinel, 'utf8'))).toEqual({ keep: true });
+  });
+
+  it('aborts without clobbering when the existing config cannot be evaluated', async () => {
+    // The config exists with a real create block but fails to evaluate (missing
+    // import). Treating that as empty would replace the block with only the new
+    // entry, dropping defaultTemplate and prior templates. It must abort.
+    const configPath = path.join(workspaceRoot, 'vite.config.ts');
+    const original = `import { defineConfig } from 'vite-plus';\nimport 'vite-plus-nonexistent-module-xyz';\n\nexport default defineConfig({ create: { defaultTemplate: '@your-org', templates: [{ name: 'pre', description: 'p', template: './pre' }] } });\n`;
+    fs.writeFileSync(configPath, original);
+
+    await expect(registerLocalTemplate(workspaceRoot, ENTRY_A, true)).rejects.toThrow();
+    expect(fs.readFileSync(configPath, 'utf8')).toBe(original);
+  });
+
   it('preserves unrelated sibling config when adding a create block', async () => {
     writeViteConfig('{ run: { cache: true } }');
 
