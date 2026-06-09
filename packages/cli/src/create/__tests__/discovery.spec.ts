@@ -56,6 +56,34 @@ describe('discoverTemplate', () => {
     expect(templateInfo.args).toContain('--skip-requests');
   });
 
+  it('runs a local template referenced by a relative path', () => {
+    const workspaceInfo = createWorkspaceWithPackage({
+      name: 'my-template',
+      dependencies: { bingo: '^0.9.3' },
+      bin: './bin/index.ts',
+    });
+
+    const templateInfo = discoverTemplate(
+      './tools/my-template',
+      [],
+      workspaceInfo,
+      undefined,
+      undefined,
+      undefined,
+      true,
+    );
+    expect(templateInfo.command).toBe('node');
+    expect(templateInfo.type).toBe('bingo');
+    expect(templateInfo.args[0]).toMatch(/tools[/\\]my-template[/\\]bin[/\\]index\.ts$/);
+  });
+
+  it('rejects a relative-path template with no package.json', () => {
+    const workspaceInfo = createWorkspaceWithPackage({ name: 'my-template' });
+    expect(() =>
+      discoverTemplate('./tools/missing', [], workspaceInfo, undefined, undefined, undefined, true),
+    ).toThrow(/no package\.json|has no "bin" entry/);
+  });
+
   it('does not treat a bare workspace package as a template without the flag', () => {
     const workspaceInfo = createWorkspaceWithPackage({
       name: 'my-template',
@@ -125,6 +153,11 @@ describe('inferParentDir', () => {
     // Must NOT fall back to the default `apps` rule for a local generator;
     // output is co-located with the matched workspace package.
     expect(inferParentDir('my-generator', ws)).toBe('tools');
+  });
+
+  it('co-locates a relative-path template next to its directory', () => {
+    const ws = inferParentDirWorkspace(['apps', 'packages', 'tools']);
+    expect(inferParentDir('./tools/my-generator', ws)).toBe('tools');
   });
 
   it('falls back to the app rule when the name is not a local package', () => {

@@ -131,7 +131,7 @@ export default defineConfig({
 });
 ```
 
-Re-running is idempotent (no duplicate entries), and an existing `create.defaultTemplate` is preserved. You can also add entries by hand, for example to register a template you didn't scaffold this way. The `template` value is the generator's workspace package name (or a relative path to it).
+Re-running is idempotent (no duplicate entries), and an existing `create.defaultTemplate` is preserved. You can also add entries by hand, for example to register a template you didn't scaffold this way. The `template` value is the generator's workspace package name, or a relative `./path` to it.
 
 ### Run a generator
 

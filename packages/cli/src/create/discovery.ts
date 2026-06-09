@@ -1,9 +1,11 @@
+import fs from 'node:fs';
 import path from 'node:path';
 
 import type { WorkspaceInfo, WorkspaceInfoOptional, WorkspacePackage } from '../types/index.ts';
 import { readJsonFile } from '../utils/json.ts';
 import { isBingoTemplate } from '../utils/workspace.ts';
 import { prependToPathToEnvs } from './command.ts';
+import { isRelativePath } from './org-manifest.ts';
 import { BuiltinTemplate, type TemplateInfo, TemplateType } from './templates/types.ts';
 
 // Check if template name is a GitHub URL
@@ -135,18 +137,35 @@ export function discoverTemplate(
     }
   }
 
-  // Check for a local workspace package, but only when resolving a declared
-  // `create.templates` entry. A bare workspace package name is not treated as a
-  // template otherwise — `create.templates` is the source of truth.
-  const localPackage = localTemplate ? findLocalPackage(workspaceInfo, templateName) : undefined;
-  if (localPackage) {
-    const localPackagePath = path.join(workspaceInfo.rootDir, localPackage.path);
+  // Resolve a declared `create.templates` entry that points at a local package,
+  // either by workspace package name or by a relative `./path` to its directory
+  // (resolved against the workspace root). Only when `localTemplate` is set —
+  // `create.templates` is the source of truth; a bare workspace name is not a
+  // template otherwise. Relative paths are escape-checked at config validation.
+  let localPackagePath: string | undefined;
+  if (localTemplate) {
+    if (isRelativePath(templateName)) {
+      localPackagePath = path.join(workspaceInfo.rootDir, templateName);
+    } else {
+      const localPackage = findLocalPackage(workspaceInfo, templateName);
+      if (localPackage) {
+        localPackagePath = path.join(workspaceInfo.rootDir, localPackage.path);
+      }
+    }
+  }
+  if (localPackagePath) {
     const packageJsonPath = path.join(localPackagePath, 'package.json');
+    if (!fs.existsSync(packageJsonPath)) {
+      throw new Error(
+        `Local template "${templateName}" has no package.json, so it cannot be run as a template`,
+      );
+    }
     const pkg = readJsonFile(packageJsonPath) as {
+      name?: string;
       dependencies?: Record<string, string>;
       bin?: Record<string, string> | string;
     };
-    const binPath = resolveLocalBinPath(localPackagePath, templateName, pkg.bin) ?? '';
+    const binPath = resolveLocalBinPath(localPackagePath, pkg.name ?? templateName, pkg.bin) ?? '';
     const args = [binPath, ...templateArgs];
     let type: TemplateType = TemplateType.remote;
     if (isBingoTemplate(pkg)) {
@@ -282,11 +301,13 @@ export function inferParentDir(
   }
   // Output generated from a local package belongs next to that package, in the
   // parent directory it already lives in, rather than defaulting to the `apps`
-  // rule below. This covers any local package run as a generator, including a
-  // Bingo-dependency package that carries no marker keyword.
-  const localPackage = findLocalPackage(workspaceInfo, templateName);
-  if (localPackage) {
-    const ownParentDir = path.dirname(localPackage.path);
+  // rule below. This covers any local package run as a generator (matched by
+  // workspace package name or by a relative `./path` to its directory).
+  const localPackagePath = isRelativePath(templateName)
+    ? path.normalize(templateName)
+    : findLocalPackage(workspaceInfo, templateName)?.path;
+  if (localPackagePath) {
+    const ownParentDir = path.dirname(localPackagePath);
     if (workspaceInfo.parentDirs.includes(ownParentDir)) {
       return ownParentDir;
     }

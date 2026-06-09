@@ -41,11 +41,11 @@ export default defineConfig({
 
 Each entry has:
 
-| Field         | Required | Notes                                                                                                                                   |
-| ------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `name`        | yes      | Identifier shown in the picker and accepted as `vp create <name>`. Must be unique within the array.                                     |
-| `description` | yes      | One-line description shown in the picker.                                                                                               |
-| `template`    | yes      | Any specifier `vp create` accepts: a workspace package name, a relative `./path`, a `vite:*` built-in, a GitHub URL, or an npm package. |
+| Field         | Required | Notes                                                                                                                                                                                                                                            |
+| ------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `name`        | yes      | Identifier shown in the picker and accepted as `vp create <name>`. Must be unique within the array.                                                                                                                                              |
+| `description` | yes      | One-line description shown in the picker.                                                                                                                                                                                                        |
+| `template`    | yes      | A workspace package name, a relative `./path` to a local package's directory (resolved against the workspace root), a `vite:*` built-in, a GitHub URL, or a full npm package name (e.g. `create-foo`). It is run as-is (not shorthand-expanded). |
 
 `create.templates` is the source of truth for local templates: only entries listed here appear in the picker. Vite+ does not infer templates from package.json keywords. A `create.templates` entry whose `template` resolves to a local package without a `bin` is reported as an error rather than falling through to an unrelated npm package.
 

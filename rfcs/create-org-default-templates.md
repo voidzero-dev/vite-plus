@@ -409,9 +409,10 @@ Each entry reuses the manifest entry schema (the lean
 `CreateTemplateEntry` = `{ name, description, template }`, validated by the
 same code that validates an org manifest's `createConfig.templates`). The
 org-only `monorepo` flag is not part of the local schema. The `template`
-field accepts any specifier `vp create` already resolves: a workspace
-package name, a relative `./path`, a `vite:*` built-in, a GitHub URL, or an
-npm package.
+field is a workspace package name, a relative `./path` to a local package's
+directory (resolved against the workspace root), a `vite:*` built-in, a
+GitHub URL, or a full npm package name (`create-foo`). It is run as-is (not
+shorthand-expanded).
 
 `create.templates` is the **source of truth** for local templates:
 
@@ -419,9 +420,10 @@ npm package.
   `description`) when run inside a monorepo. Vite+ does not infer template
   packages from package.json keywords; declaring a template is explicit.
 - Selecting an entry, or typing `vp create <name>`, resolves the entry's
-  `template` through the existing `discoverTemplate` path. A relative path
-  or workspace package name runs that package's `bin`; if it carries a
-  `bingo` dependency, `--skip-requests` is appended (execution hint only).
+  `template` through the existing `discoverTemplate` path. A workspace
+  package name or a relative `./path` runs that package's `bin`; if it
+  carries a `bingo` dependency, `--skip-requests` is appended (execution
+  hint only).
 - An entry whose `template` resolves to a local package without a `bin`
   fails with a clear error instead of falling through to an unrelated
   `create-<name>` npm package.
