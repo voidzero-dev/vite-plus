@@ -145,8 +145,8 @@ catalogs:
       specifier: ^3.3.1
       version: 3.3.1
     lint-staged:
-      specifier: ^16.2.6
-      version: 16.4.0
+      specifier: ^17.0.0
+      version: 17.0.7
     lodash-es:
       specifier: ^4.17.21
       version: 4.17.23
@@ -238,8 +238,8 @@ catalogs:
       specifier: 1.4.1
       version: 1.4.1
     validate-npm-package-name:
-      specifier: ^7.0.2
-      version: 7.0.2
+      specifier: ^8.0.0
+      version: 8.0.0
     vue:
       specifier: ^3.5.21
       version: 3.5.35
@@ -250,8 +250,8 @@ catalogs:
       specifier: ^2.8.1
       version: 2.9.0
     zod:
-      specifier: ^3.25.76
-      version: 3.25.76
+      specifier: ^4.0.0
+      version: 4.3.5
 
 overrides:
   rolldown: workspace:rolldown@*
@@ -300,7 +300,7 @@ importers:
         version: 9.1.7
       lint-staged:
         specifier: 'catalog:'
-        version: 16.4.0
+        version: 17.0.7
       oxfmt:
         specifier: 'catalog:'
         version: 0.53.0(vite-plus@packages+cli)
@@ -394,7 +394,7 @@ importers:
         version: 3.3.1
       lint-staged:
         specifier: 'catalog:'
-        version: 16.4.0
+        version: 17.0.7
       minimatch:
         specifier: 'catalog:'
         version: 10.2.4
@@ -418,7 +418,7 @@ importers:
         version: 0.22.2(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.22.2)(@tsdown/exe@0.22.2)(@typescript/native-preview@7.0.0-dev.20260605.1)(@vitejs/devtools@0.3.1(typescript@6.0.2)(vite@packages+core))(oxc-resolver@11.19.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0))(publint@0.3.21)(tsx@4.22.4)(typescript@6.0.2)(unplugin-unused@0.5.6)(unrun@0.3.0)
       validate-npm-package-name:
         specifier: 'catalog:'
-        version: 7.0.2
+        version: 8.0.0
       vite:
         specifier: workspace:@voidzero-dev/vite-plus-core@*
         version: link:../core
@@ -427,7 +427,7 @@ importers:
         version: 2.9.0
       zod:
         specifier: 'catalog:'
-        version: 3.25.76
+        version: 4.3.5
 
   packages/core:
     dependencies:
@@ -520,8 +520,8 @@ importers:
         specifier: ^0.3.1
         version: 0.3.1(typescript@6.0.2)(vite@packages+core)
       es-module-lexer:
-        specifier: ^1.7.0
-        version: 1.7.0
+        specifier: ^2.0.0
+        version: 2.0.0
       hookable:
         specifier: ^6.0.1
         version: 6.1.1
@@ -588,14 +588,14 @@ importers:
         version: 1.0.5
     devDependencies:
       fast-string-width:
-        specifier: ^1.1.0
-        version: 1.1.0
+        specifier: ^3.0.0
+        version: 3.0.2
       fast-wrap-ansi:
         specifier: ^0.2.0
         version: 0.2.0
       is-unicode-supported:
-        specifier: ^1.3.0
-        version: 1.3.0
+        specifier: ^2.0.0
+        version: 2.1.0
       tsdown:
         specifier: 'catalog:'
         version: 0.22.2(@arethetypeswrong/core@0.18.2)(@tsdown/css@0.22.2)(@tsdown/exe@0.22.2)(@typescript/native-preview@7.0.0-dev.20260605.1)(@vitejs/devtools@0.3.1(typescript@6.0.2)(vite@packages+core))(oxc-resolver@11.19.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0))(publint@0.3.21)(tsx@4.22.4)(typescript@6.0.2)(unplugin-unused@0.5.6)(unrun@0.3.0)
@@ -630,8 +630,8 @@ importers:
         specifier: workspace:*
         version: link:../core
       es-module-lexer:
-        specifier: ^1.7.0
-        version: 1.7.0
+        specifier: ^2.0.0
+        version: 2.0.0
       happy-dom:
         specifier: '*'
         version: 20.0.10
@@ -654,8 +654,8 @@ importers:
         specifier: ^4.0.0
         version: 4.0.0
       tinybench:
-        specifier: ^2.9.0
-        version: 2.9.0
+        specifier: ^6.0.0
+        version: 6.0.0
       tinyexec:
         specifier: ^1.0.2
         version: 1.2.4
@@ -751,8 +751,8 @@ importers:
         specifier: npm:vitest@^4.1.8
         version: vitest@4.1.8(@edge-runtime/vm@5.0.0)(@opentelemetry/api@1.9.0)(@types/node@24.12.4)(@vitest/browser-playwright@4.1.8(playwright@1.57.0)(vite@packages+core)(vitest@4.1.8))(@vitest/browser-preview@4.1.8(vite@packages+core)(vitest@4.1.8))(@vitest/browser-webdriverio@4.1.8(vite@packages+core)(vitest@4.1.8)(webdriverio@9.20.1))(@vitest/coverage-istanbul@4.1.8(vitest@4.1.8))(@vitest/coverage-v8@4.1.8(@vitest/browser@4.1.8)(vitest@4.1.8))(@vitest/ui@4.1.8(vitest@4.1.8))(happy-dom@20.0.10)(jsdom@27.2.0)(vite@packages+core)
       why-is-node-running:
-        specifier: ^2.3.0
-        version: 2.3.0
+        specifier: ^3.0.0
+        version: 3.2.2
 
   packages/tools:
     dependencies:
@@ -5503,10 +5503,6 @@ packages:
   colorjs.io@0.5.2:
     resolution: {integrity: sha512-twmVoizEW7ylZSN32OgKdXRmo1qg+wT5/6C3xu5b9QsWzSFAhHLn2xd8ro0diCsKfCj1RdaTP/nrcW+vAoQPIw==}
 
-  commander@14.0.3:
-    resolution: {integrity: sha512-H+y0Jo/T1RZ9qPP4Eh1pkcQcLRglraJaSLoyOtHxu6AapkjWVCy2Sit1QQ4x3Dng8qDlSsZEet7g5Pq06MvTgw==}
-    engines: {node: '>=20'}
-
   commander@2.20.3:
     resolution: {integrity: sha512-GpVkmM8vF2vQUkj2LvZmD35JxeJOLCwJ9cUkugyk2nuhbv3+mJvpLYYt+0+USMxE+oj+ey/lJEnhZw75x/OMcQ==}
 
@@ -6097,14 +6093,8 @@ packages:
   fast-levenshtein@2.0.6:
     resolution: {integrity: sha512-DCXu6Ifhqcks7TZKY3Hxp3y6qphY5SJZmrWMDrKcERSOXWQdMhU9Ig/PYrzyw/ul9jOIyh0N4M0tbC5hodg8dw==}
 
-  fast-string-truncated-width@1.2.1:
-    resolution: {integrity: sha512-Q9acT/+Uu3GwGj+5w/zsGuQjh9O1TyywhIwAxHudtWrgF09nHOPrvTLhQevPbttcxjr/SNN7mJmfOw/B1bXgow==}
-
   fast-string-truncated-width@3.0.3:
     resolution: {integrity: sha512-0jjjIEL6+0jag3l2XWWizO64/aZVtpiGE3t0Zgqxv0DPuxiMjvB3M24fCyhZUO4KomJQPj3LTSUnDP3GpdwC0g==}
-
-  fast-string-width@1.1.0:
-    resolution: {integrity: sha512-O3fwIVIH5gKB38QNbdg+3760ZmGz0SZMgvwJbA1b2TGXceKE6A2cOlfogh1iw8lr049zPyd7YADHy+B7U4W9bQ==}
 
   fast-string-width@3.0.2:
     resolution: {integrity: sha512-gX8LrtNEI5hq8DVUfRQMbr5lpaS4nMIWV+7XEbXk2b8kiQIizgnlr12B4dA3ZEx3308ze0O4Q1R+cHts8kyUJg==}
@@ -6569,10 +6559,6 @@ packages:
     resolution: {integrity: sha512-knxG2q4UC3u8stRGyAVJCOdxFmv5DZiRcdlIaAQXAbSfJya+OhopNotLQrstBhququ4ZpuKbDc/8S6mgXgPFPw==}
     engines: {node: '>=10'}
 
-  is-unicode-supported@1.3.0:
-    resolution: {integrity: sha512-43r2mRvz+8JRIKnWJ+3j8JtjRKZ6GmjzfaE/qiBJnikNnYv/6bagRJ1kUhNk8R5EX/GkobD+r+sfxCPJsiKBLQ==}
-    engines: {node: '>=12'}
-
   is-unicode-supported@2.1.0:
     resolution: {integrity: sha512-mE00Gnza5EEB3Ds0HfMyllZzbBrmLOX3vfWoj9A9PEnTfratQ/BcaJOuMhnkhjXvb2+FkY3VuHqtAGpTPmglFQ==}
     engines: {node: '>=18'}
@@ -6791,11 +6777,6 @@ packages:
     resolution: {integrity: sha512-/vlFKAoH5Cgt3Ie+JLhRbwOsCQePABiU3tJ1egGvyQ+33R/vcwM2Zl2QR/LzjsBeItPt3oSVXapn+m4nQDvpzw==}
     engines: {node: '>=14'}
 
-  lint-staged@16.4.0:
-    resolution: {integrity: sha512-lBWt8hujh/Cjysw5GYVmZpFHXDCgZzhrOm8vbcUdobADZNOK/bRshr2kM3DfgrrtR1DQhfupW9gnIXOfiFi+bw==}
-    engines: {node: '>=20.17'}
-    hasBin: true
-
   lint-staged@17.0.7:
     resolution: {integrity: sha512-JrSobt+tW3rH8IOMi8tDZd3foorM5yPEkLD/V2NxobgHrFfHWGee4MOLVuZeScgxftEwbHrPHIFA/ZL+nUJeuA==}
     engines: {node: '>=22.22.1'}
@@ -6804,10 +6785,6 @@ packages:
   listr2@10.2.1:
     resolution: {integrity: sha512-7I5knELsJKTUjXG+A6BkKAiGkW1i25fNa/xlUl9hFtk15WbE9jndA89xu5FzQKrY5llajE1hfZZFMILXkDHk/Q==}
     engines: {node: '>=22.13.0'}
-
-  listr2@9.0.5:
-    resolution: {integrity: sha512-ME4Fb83LgEgwNw96RKNvKV4VTLuXfoKudAmm2lP8Kk87KaMK0/Xrx/aAkMWmT8mDb+3MlFDspfbCs7adjRxA2g==}
-    engines: {node: '>=20.0.0'}
 
   loader-utils@3.3.1:
     resolution: {integrity: sha512-FMJTLMXfCLMLfJxcX9PFqX5qD88Z5MRGaZCVzfuqeZSPsyiBzs+pahDQjbIWz2QIzPZz0NX9Zy4FX3lmK6YHIg==}
@@ -8509,9 +8486,9 @@ packages:
     resolution: {integrity: sha512-OljLrQ9SQdOUqTaQxqL5dEfZWrXExyyWsozYlAWFawPVNuD83igl7uJD2RTkNMbniIYgt8l81eCJGIdQF7avLQ==}
     engines: {node: ^14.17.0 || ^16.13.0 || >=18.0.0}
 
-  validate-npm-package-name@7.0.2:
-    resolution: {integrity: sha512-hVDIBwsRruT73PbK7uP5ebUt+ezEtCmzZz3F59BSr2F6OVFnJ/6h8liuvdLrQ88Xmnk6/+xGGuq+pG9WwTuy3A==}
-    engines: {node: ^20.17.0 || >=22.9.0}
+  validate-npm-package-name@8.0.0:
+    resolution: {integrity: sha512-SCv6OOV6Xj2/3cXy3dGmADluJTNcL3o7hZAglNPTe+WYuEuvxgJzxPrSDLZhF+CwyQOubqgecjMmTJGMVLWjYQ==}
+    engines: {node: ^22.22.2 || ^24.15.0 || >=26.0.0}
 
   varint@6.0.0:
     resolution: {integrity: sha512-cXEIW6cfr15lFv563k4GuVuW/fiwjknytD37jIOLSdSWuOI6WnO/oKwmP2FQTU2l01LP8/M5TSAJpzUaGe3uWg==}
@@ -8665,6 +8642,11 @@ packages:
   why-is-node-running@2.3.0:
     resolution: {integrity: sha512-hUrmaWBdVDcxvYqnyh09zunKzROWjbZTiNy8dBEjkS7ehEDQibXJ7XvlmtbwuTclUiIyN+CyXQD4Vmko8fNm8w==}
     engines: {node: '>=8'}
+    hasBin: true
+
+  why-is-node-running@3.2.2:
+    resolution: {integrity: sha512-NKUzAelcoCXhXL4dJzKIwXeR8iEVqsA0Lq6Vnd0UXvgaKbzVo4ZTHROF2Jidrv+SgxOQ03fMinnNhzZATxOD3A==}
+    engines: {node: '>=20.11'}
     hasBin: true
 
   without-undefined-properties@0.1.2:
@@ -12663,8 +12645,6 @@ snapshots:
 
   colorjs.io@0.5.2: {}
 
-  commander@14.0.3: {}
-
   commander@2.20.3: {}
 
   commander@9.5.0: {}
@@ -13265,13 +13245,7 @@ snapshots:
 
   fast-levenshtein@2.0.6: {}
 
-  fast-string-truncated-width@1.2.1: {}
-
   fast-string-truncated-width@3.0.3: {}
-
-  fast-string-width@1.1.0:
-    dependencies:
-      fast-string-truncated-width: 1.2.1
 
   fast-string-width@3.0.2:
     dependencies:
@@ -13712,8 +13686,6 @@ snapshots:
 
   is-unicode-supported@0.1.0: {}
 
-  is-unicode-supported@1.3.0: {}
-
   is-unicode-supported@2.1.0: {}
 
   is-what@3.14.1: {}
@@ -13935,15 +13907,6 @@ snapshots:
 
   lilconfig@3.1.3: {}
 
-  lint-staged@16.4.0:
-    dependencies:
-      commander: 14.0.3
-      listr2: 9.0.5
-      picomatch: 4.0.4
-      string-argv: 0.3.2
-      tinyexec: 1.2.4
-      yaml: 2.9.0
-
   lint-staged@17.0.7:
     dependencies:
       listr2: 10.2.1
@@ -13960,15 +13923,6 @@ snapshots:
       log-update: 6.1.0
       rfdc: 1.4.1
       wrap-ansi: 10.0.0
-
-  listr2@9.0.5:
-    dependencies:
-      cli-truncate: 5.2.0
-      colorette: 2.0.20
-      eventemitter3: 5.0.4
-      log-update: 6.1.0
-      rfdc: 1.4.1
-      wrap-ansi: 9.0.2
 
   loader-utils@3.3.1: {}
 
@@ -15726,7 +15680,7 @@ snapshots:
 
   validate-npm-package-name@5.0.1: {}
 
-  validate-npm-package-name@7.0.2: {}
+  validate-npm-package-name@8.0.0: {}
 
   varint@6.0.0: {}
 
@@ -15918,6 +15872,8 @@ snapshots:
     dependencies:
       siginfo: 2.0.0
       stackback: 0.0.2
+
+  why-is-node-running@3.2.2: {}
 
   without-undefined-properties@0.1.2: {}
 
