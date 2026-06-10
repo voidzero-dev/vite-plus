@@ -42,7 +42,7 @@ use crate::cli::{
 /// Normalize CLI arguments:
 /// - `vp list ...` / `vp ls ...` → `vp pm list ...`
 /// - `vp rebuild ...` → `vp pm rebuild ...`
-/// - `vp help [command]` → `vp [command] --help`
+/// - `vp help [command] [args...]` → `vp [command] [args...] --help`
 /// - `vp node [args...]` → `vp env exec node [args...]`
 fn normalize_args(args: Vec<String>) -> Vec<String> {
     let mut normalized = args;
@@ -71,13 +71,26 @@ fn normalize_args(args: Vec<String>) -> Vec<String> {
             Some("help") if normalized.len() == 2 => {
                 vec![normalized[0].clone(), "--help".to_string()]
             }
-            // `vp help [command] [args...]` -> `vp [command] --help [args...]`
+            // `vp help [command] [args...]` -> `vp [command] [args...] --help`
             Some("help") if normalized.len() > 2 => {
                 let mut next = Vec::with_capacity(normalized.len());
                 next.push(normalized[0].clone());
-                next.push(normalized[2].clone());
+                next.extend(normalized[2..].iter().cloned());
                 next.push("--help".to_string());
-                next.extend(normalized[3..].iter().cloned());
+                next
+            }
+            // `vp pm --help <command>` → `vp pm <command> --help`
+            // `vp env --help <command>` → `vp env <command> --help`
+            Some("pm" | "env")
+                if normalized.get(2).is_some_and(|arg| matches!(arg.as_str(), "-h" | "--help"))
+                    && normalized.get(3).is_some_and(|arg| !arg.starts_with('-')) =>
+            {
+                let mut next = Vec::with_capacity(normalized.len());
+                next.push(normalized[0].clone());
+                next.push(normalized[1].clone());
+                next.push(normalized[3].clone());
+                next.push(normalized[2].clone());
+                next.extend(normalized[4..].iter().cloned());
                 next
             }
             // `vp node [args...]` → `vp env exec node [args...]`
@@ -125,6 +138,26 @@ fn print_invalid_subcommand_error(details: &InvalidSubcommandDetails) {
 
     let highlighted_subcommand = details.invalid_subcommand.bright_blue().to_string();
     output::error(&format!("Command '{highlighted_subcommand}' not found"));
+}
+
+fn print_nested_suggestion(suggestion: &str) {
+    eprintln!();
+    let highlighted_suggestion = format!("`vp {suggestion}`").bright_blue().to_string();
+    eprintln!("Did you mean {highlighted_suggestion}?");
+}
+
+fn nested_suggestion_command(
+    raw_args: &[String],
+    invalid_subcommand: &str,
+    suggestion: &str,
+) -> String {
+    let Some(index) = raw_args.iter().position(|arg| arg == invalid_subcommand) else {
+        return suggestion.to_owned();
+    };
+
+    let mut corrected = raw_args[..index].to_vec();
+    corrected.push(suggestion.to_owned());
+    corrected.join(" ")
 }
 
 fn is_affirmative_response(input: &str) -> bool {
@@ -319,6 +352,7 @@ async fn main() -> ExitCode {
 
     // Normalize arguments (list/ls aliases, help rewriting)
     let normalized_args = normalize_args(args);
+    let normalized_raw_args = normalized_args.get(1..).map_or_else(Vec::new, |args| args.to_vec());
 
     // Print unified subcommand help for clap-managed commands before clap handles help output.
     if help::maybe_print_unified_clap_subcommand_help(&normalized_args) {
@@ -346,18 +380,33 @@ async fn main() -> ExitCode {
                 ExitCode::SUCCESS
             } else if matches!(e.kind(), ErrorKind::InvalidSubcommand) {
                 if let Some(details) = extract_invalid_subcommand_details(&e) {
+                    let corrected_top_level_args =
+                        details.suggestion.as_ref().and_then(|suggestion| {
+                            replace_top_level_typoed_subcommand(
+                                &raw_args,
+                                &details.invalid_subcommand,
+                                suggestion,
+                            )
+                        });
+
                     print_invalid_subcommand_error(&details);
 
-                    if let Some(suggestion) = &details.suggestion
-                        && let Some(corrected_raw_args) = replace_top_level_typoed_subcommand(
-                            &raw_args,
-                            &details.invalid_subcommand,
-                            suggestion,
-                        )
-                        && prompt_to_run_suggested_command(suggestion)
-                    {
-                        run_corrected_args(&cwd, &corrected_raw_args).await
+                    if let Some(corrected_raw_args) = corrected_top_level_args {
+                        let suggestion = details.suggestion.as_ref().expect("suggestion exists");
+                        if prompt_to_run_suggested_command(suggestion) {
+                            run_corrected_args(&cwd, &corrected_raw_args).await
+                        } else {
+                            clap_error_to_exit_code(&e)
+                        }
                     } else {
+                        if let Some(suggestion) = &details.suggestion {
+                            let suggestion = nested_suggestion_command(
+                                &normalized_raw_args,
+                                &details.invalid_subcommand,
+                                suggestion,
+                            );
+                            print_nested_suggestion(&suggestion);
+                        }
                         clap_error_to_exit_code(&e)
                     }
                 } else {
@@ -451,6 +500,20 @@ mod tests {
         let input = s(&["vp", "help", "node"]);
         let normalized = normalize_args(input);
         assert_eq!(normalized, s(&["vp", "env", "exec", "node", "--help"]));
+    }
+
+    #[test]
+    fn normalize_args_keeps_help_after_nested_path() {
+        let input = s(&["vp", "help", "pm", "apprev-build"]);
+        let normalized = normalize_args(input);
+        assert_eq!(normalized, s(&["vp", "pm", "apprev-build", "--help"]));
+    }
+
+    #[test]
+    fn normalize_args_moves_pm_help_before_child_after_child() {
+        let input = s(&["vp", "pm", "--help", "apprev-build"]);
+        let normalized = normalize_args(input);
+        assert_eq!(normalized, s(&["vp", "pm", "apprev-build", "--help"]));
     }
 
     #[test]
