@@ -223,7 +223,6 @@ fn get_npm_global_prefix(npm_path: &AbsolutePath, node_dir: &AbsolutePathBuf) ->
 ///
 /// Otherwise, in interactive mode, prompt user to create bin links.
 /// In non-interactive mode, create links automatically.
-/// Always print a tip suggesting `vp install -g`.
 #[allow(clippy::disallowed_macros, clippy::disallowed_types)]
 fn check_npm_global_install_result(
     packages: &[String],
@@ -376,13 +375,6 @@ fn check_npm_global_install_result(
             create_bin_link(&bin_dir, bin_name, source_path, package_name, node_version);
         }
     }
-
-    // Always print the tip
-    let pkg_names: Vec<&str> = packages.iter().map(String::as_str).collect();
-    let pkg_display = pkg_names.join(" ");
-    output::raw(&vite_str::format!(
-        "\ntip: Use `vp install -g {pkg_display}` for managed shims that persist across Node.js version changes."
-    ));
 }
 
 /// Extract binary names from a package.json value.

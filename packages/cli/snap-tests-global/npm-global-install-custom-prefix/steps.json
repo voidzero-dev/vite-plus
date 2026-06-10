@@ -4,7 +4,7 @@
   "ignoredPlatforms": ["win32"],
   "commands": [
     "mkdir -p custom-prefix",
-    "NPM_CONFIG_PREFIX=$(pwd)/custom-prefix npm install -g ./npm-global-custom-prefix-pkg # Should install to custom prefix and show hint",
+    "NPM_CONFIG_PREFIX=$(pwd)/custom-prefix npm install -g ./npm-global-custom-prefix-pkg # Should install to custom prefix and create link",
     "test -f custom-prefix/bin/npm-global-custom-prefix-cli && echo 'binary in custom prefix' # Verify installed to custom prefix",
     "test -L $VP_HOME/bin/npm-global-custom-prefix-cli && echo 'link created' # Link should exist",
     "npm-global-custom-prefix-cli # Should be callable via the link",

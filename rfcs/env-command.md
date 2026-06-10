@@ -1814,7 +1814,6 @@ User runs: npm install -g codex
 │  │    → warn about managed conflicts                     │  │
 │  │    → interactive? prompt to create links              │  │
 │  │      non-interactive? create links directly           │  │
-│  │    → prints tip: use `vp install -g` instead          │  │
 │  │                                                       │  │
 │  │  return exit_code (0)                                 │  │
 │  └───────────────────────────────────────────────────────┘  │
@@ -1838,12 +1837,6 @@ If the user confirms (Y or Enter):
 
 - Creates a symlink: `~/.vite-plus/bin/codex` → `~/.vite-plus/js_runtime/node/20.18.0/bin/codex`
 - Prints: `Linked 'codex' to ~/.vite-plus/bin/codex`
-
-Then always prints the tip:
-
-```
-tip: Use `vp install -g codex` for managed shims that persist across Node.js version changes.
-```
 
 **Non-interactive mode** (piped/CI):
 
