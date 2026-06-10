@@ -886,6 +886,10 @@ fn delegated_help_doc(command: &str) -> Option<HelpDoc> {
                             "-F, --filter <FILTERS>",
                             "Match packages by name, directory, or glob pattern",
                         ),
+                        row(
+                            "--fail-if-no-match",
+                            "Exit with a non-zero status if a filter matches no packages",
+                        ),
                         row("-c, --shell-mode", "Execute the command within a shell environment"),
                         row("--parallel", "Run concurrently without topological ordering"),
                         row("--reverse", "Reverse execution order"),
