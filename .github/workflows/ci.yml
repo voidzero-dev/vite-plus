@@ -168,20 +168,13 @@ jobs:
         with:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: lint
-          tools: cargo-shear
+          tools: just,cargo-shear
           components: clippy rust-docs rustfmt
 
       - run: |
           cargo shear
           cargo fmt --check
-          # Allow new clippy lints from the toolchain that fire in upstream
-          # rolldown crates without a `[lints]` table.
-          cargo clippy --all-targets --all-features -- -D warnings \
-            -A clippy::byte_char_slices \
-            -A clippy::manual_assert_eq \
-            -A clippy::needless_return_with_question_mark \
-            -A clippy::unused_async_trait_impl \
-            -A clippy::useless_borrows_in_formatting
+          just lint
           # RUSTDOCFLAGS='-D warnings' cargo doc --no-deps --document-private-items
 
       - uses: crate-ci/typos@37bb98842b0d8c4ffebdb75301a13db0267cef89 # v1.47.2

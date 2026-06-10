@@ -75,8 +75,15 @@ test:
 test:
   $packages = Get-ChildItem -Path crates -Directory | ForEach-Object { '-p'; $_.Name }; $Env:__COMPAT_LAYER='RunAsInvoker'; cargo test @packages -p vite-plus-cli
 
+# Single source of truth for clippy, used by CI too. The `-A` flags allow
+# new toolchain lints that fire in upstream rolldown crates without a `[lints]` table.
 lint:
-  cargo clippy --workspace --all-targets --all-features -- --deny warnings
+  cargo clippy --workspace --all-targets --all-features -- --deny warnings \
+    -A clippy::byte_char_slices \
+    -A clippy::manual_assert_eq \
+    -A clippy::needless_return_with_question_mark \
+    -A clippy::unused_async_trait_impl \
+    -A clippy::useless_borrows_in_formatting
 
 [unix]
 doc:
