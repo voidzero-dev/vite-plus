@@ -39,7 +39,7 @@ catalog:
   '@types/validate-npm-package-name': ^4.0.2
   '@types/ws': ^8.18.0
   '@typescript/native-preview': 7.0.0-dev.20260605.1
-  '@vitejs/plugin-react': ^5.1.2
+  '@vitejs/plugin-react': ^6.0.0
   '@vitest/browser': ^4.1.6
   '@vitest/browser-playwright': ^4.1.6
   '@voidzero-dev/vitepress-theme': 4.8.4
@@ -72,14 +72,14 @@ catalog:
   glob: ^13.0.0
   husky: ^9.1.7
   jsonc-parser: ^3.3.1
-  lint-staged: ^16.2.6
+  lint-staged: ^17.0.0
   lodash-es: ^4.17.21
   micromatch: ^4.0.9
   minimatch: ^10.0.3
   mocha: ^11.7.5
   mri: ^1.2.0
   nanotar: ^0.3.0
-  next: ^15.4.3
+  next: ^16.0.0
   oxc-minify: =0.134.0
   oxc-parser: =0.134.0
   oxc-transform: =0.134.0
@@ -110,7 +110,7 @@ catalog:
   typescript: ^6.0.0
   unified: ^11.0.5
   valibot: 1.4.1
-  validate-npm-package-name: ^7.0.2
+  validate-npm-package-name: ^8.0.0
   vitepress: ^2.0.0-alpha.15
   vitepress-plugin-graphviz: ^0.1.0
   vitepress-plugin-group-icons: ^1.7.1
@@ -123,7 +123,7 @@ catalog:
   yaml: ^2.8.1
   # bingo introspects template option schemas via zod 3 internals;
   # keep zod on v3 until bingo supports zod 4
-  zod: ^3.25.76
+  zod: ^4.0.0
   zx: ^8.1.2
 catalogMode: prefer
 ignoreScripts: true

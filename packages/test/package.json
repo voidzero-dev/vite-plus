@@ -278,13 +278,13 @@
     "@standard-schema/spec": "^1.1.0",
     "@types/chai": "^5.2.2",
     "@voidzero-dev/vite-plus-core": "workspace:*",
-    "es-module-lexer": "^1.7.0",
+    "es-module-lexer": "^2.0.0",
     "obug": "^2.1.1",
     "pixelmatch": "^7.1.0",
     "pngjs": "^7.0.0",
     "sirv": "^3.0.2",
     "std-env": "^4.0.0",
-    "tinybench": "^2.9.0",
+    "tinybench": "^6.0.0",
     "tinyexec": "^1.0.2",
     "tinyglobby": "^0.2.15",
     "ws": "^8.18.3"
@@ -317,7 +317,7 @@
     "rolldown-plugin-dts": "catalog:",
     "tinyrainbow": "^3.1.0",
     "vitest-dev": "^4.1.8",
-    "why-is-node-running": "^2.3.0"
+    "why-is-node-running": "^3.0.0"
   },
   "peerDependencies": {
     "@edge-runtime/vm": "*",
