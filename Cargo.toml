@@ -211,7 +211,7 @@ itoa = "1.0.15"
 json-escape-simd = "3"
 json-strip-comments = "3"
 jsonschema = { version = "0.46.5", default-features = false }
-junction = "1.4.1"
+junction = "2.0.0"
 memchr = "2.7.4"
 mimalloc-safe = "0.1.62"
 mime = "0.3.17"
@@ -312,7 +312,7 @@ wax = "0.6.0"
 which = "8.0.0"
 winreg = "0.56.0"
 xxhash-rust = "0.8.15"
-zip = "7.2"
+zip = "8.0"
 
 # oxc crates with the same version
 oxc = { version = "0.134.0", features = [
