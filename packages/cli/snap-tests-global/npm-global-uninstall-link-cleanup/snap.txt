@@ -3,8 +3,6 @@
 added 1 package in <variable>ms
 Linked 'npm-global-uninstall-cli' to <vite-plus-home>/bin/npm-global-uninstall-cli
 
-tip: Use `vp install -g ./npm-global-uninstall-pkg` for managed shims that persist across Node.js version changes.
-
 > test -L $VP_HOME/bin/npm-global-uninstall-cli && echo 'link exists' # Link should exist after install
 link exists
 

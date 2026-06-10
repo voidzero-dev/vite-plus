@@ -3,8 +3,6 @@
 added 1 package in <variable>ms
 Linked 'npm-global-shared-cli' to <vite-plus-home>/bin/npm-global-shared-cli
 
-tip: Use `vp install -g ./pkg-a` for managed shims that persist across Node.js version changes.
-
 > test -L $VP_HOME/bin/npm-global-shared-cli && echo 'link exists'
 link exists
 

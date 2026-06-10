@@ -3613,6 +3613,45 @@ export interface RunCommandResult {
  */
 export declare function shouldPrintVitePlusHeader(): boolean;
 
+/**
+ * Set the value of a top-level config key in a vite config file (upsert)
+ *
+ * Unlike `mergeJsonConfig`, which prepends a new key (and duplicates it when
+ * the key already exists), this targets only direct config objects
+ * (`defineConfig({...})`, `export default {...}`, direct callback returns):
+ * it replaces the value of an existing `config_key` (pair or shorthand
+ * property) or inserts the key when absent. Unrecognized shapes (e.g.
+ * `module.exports`, `return someVar`) report `updated: false` instead of
+ * being corrupted. The splice is raw, the JS caller is expected to reformat
+ * afterwards.
+ *
+ * # Arguments
+ *
+ * * `vite_config_path` - Path to the vite.config.ts or vite.config.js file
+ * * `json_config_path` - Path to the JSON config file whose contents become the new value
+ * * `config_key` - The top-level key whose value should be set
+ *
+ * # Returns
+ *
+ * Returns a `MergeJsonConfigResult`. `updated` is `true` only when at least
+ * one direct config object was updated; otherwise the original content is
+ * returned unchanged.
+ *
+ * # Example
+ *
+ * ```javascript
+ * const result = upsertJsonConfig('vite.config.ts', 'create.json', 'create');
+ * if (result.updated) {
+ *     fs.writeFileSync('vite.config.ts', result.content);
+ * }
+ * ```
+ */
+export declare function upsertJsonConfig(
+  viteConfigPath: string,
+  jsonConfigPath: string,
+  configKey: string,
+): MergeJsonConfigResult;
+
 /** Render the Vite+ header using the Rust implementation. */
 export declare function vitePlusHeader(): string;
 

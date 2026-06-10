@@ -719,9 +719,7 @@ describe('detectIncompatibleEslintIntegration', () => {
       devDependencies: { '@nuxt/eslint': '^1.0.0' },
     });
     expect(
-      detectIncompatibleEslintIntegration(tmpDir, [
-        { name: 'app', path: 'packages/app', isTemplatePackage: false },
-      ]),
+      detectIncompatibleEslintIntegration(tmpDir, [{ name: 'app', path: 'packages/app' }]),
     ).toBe('@nuxt/eslint');
   });
 
@@ -1920,7 +1918,7 @@ export default defineConfig({
     workspaceInfo.isMonorepo = true;
     workspaceInfo.workspacePatterns = ['apps/*'];
     workspaceInfo.parentDirs = ['apps'];
-    workspaceInfo.packages = [{ name: 'web', path: 'apps/web', isTemplatePackage: false }];
+    workspaceInfo.packages = [{ name: 'web', path: 'apps/web' }];
     const report = createMigrationReport();
 
     rewriteMonorepo(workspaceInfo, true, true, report);

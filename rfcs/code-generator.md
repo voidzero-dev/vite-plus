@@ -876,9 +876,12 @@ Templates can be located in multiple places:
 
 **Template Type Detection**:
 
-- **Bingo template**: Has `bingo` dependency or `bingo-template` keyword
-- **Universal template**: Has `bin` entry in package.json
-- Both types are executed the same way and get the same post-processing
+- **Registered**: Listed in `create.templates` in the monorepo's
+  `vite.config.ts` (the source of truth for local templates).
+- **Bingo template**: Has a `bingo` dependency, so `--skip-requests` is
+  appended when running it (execution hint only).
+- **Universal template**: Has a `bin` entry in package.json.
+- All templates are executed the same way and get the same post-processing.
 
 **Example Workspace Structure:**
 
@@ -1487,7 +1490,7 @@ monorepo/
   "bin": {
     "create-ui-lib": "./bin/index.js"
   },
-  "keywords": ["bingo-template", "vite-plus-generator"],
+  "keywords": ["vite-plus-generator"],
   "scripts": {
     "test": "vitest"
   },
@@ -1950,10 +1953,21 @@ vp create vite:library --name=shared-utils
 
 ### 3. Template Detection
 
-- **package.json Parsing**: Read package.json to check for bingo dependency
-- **Bin Entry**: Look for bin field to find the executable
-- **Keywords**: Check for "bingo-template" keyword as fallback
-- **Validation**: Warn if package doesn't look like a valid bingo template
+Local templates are registered in `create.templates` in the monorepo's
+`vite.config.ts` (see the [Organization Default Templates
+RFC](./create-org-default-templates.md#local-templates-createtemplates)).
+That config is the source of truth for which packages are templates; Vite+
+does not infer template packages from package.json keywords.
+`vp create vite:generator` writes the entry automatically (idempotently,
+preserving any existing `defaultTemplate`), so a freshly scaffolded
+generator shows up in the picker without a manual edit.
+
+- **Config Lookup**: Resolve `vp create <name>` against `create.templates`
+  by entry `name`, then resolve the entry's `template` specifier.
+- **Bin Entry**: Look for the `bin` field to find the executable. Throw a
+  clear error when a declared local template has no `bin`.
+- **Bingo Execution Hint**: A `bingo` dependency means the template is a
+  Bingo generator, so `--skip-requests` is appended when running it.
 
 ### 4. Monorepo Integration
 
@@ -2013,24 +2027,24 @@ import { describe, expect, it } from 'vitest';
 import { detectBingoTemplate, loadWorkspacePackages } from './discovery';
 
 describe('Template Detection', () => {
-  it('detects bingo template from package.json', async () => {
+  it('treats a package with a bingo dependency as a bingo template', async () => {
     const pkg = {
       name: 'create-typescript-app',
       dependencies: { bingo: '^0.5.0' },
       bin: { 'create-typescript-app': './bin/index.js' },
     };
 
+    // `bingo` dependency is the execution hint that appends `--skip-requests`.
     expect(detectBingoTemplate(pkg)).toBe(true);
   });
 
-  it('detects bingo template from keywords', async () => {
+  it('does not treat a package without a bingo dependency as a bingo template', async () => {
     const pkg = {
       name: 'my-template',
-      keywords: ['bingo-template'],
       bin: { 'my-template': './index.js' },
     };
 
-    expect(detectBingoTemplate(pkg)).toBe(true);
+    expect(detectBingoTemplate(pkg)).toBe(false);
   });
 });
 

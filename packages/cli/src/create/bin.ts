@@ -33,13 +33,14 @@ import {
 import { detectExistingEditors, selectEditors, writeEditorConfigs } from '../utils/editor.ts';
 import { createInitialCommit, initGitRepository } from '../utils/git.ts';
 import { renderCliDoc } from '../utils/help.ts';
+import { readJsonFile } from '../utils/json.ts';
 import { displayRelative } from '../utils/path.ts';
 import {
   type CommandRunSummary,
   defaultInteractive,
   downloadPackageManager,
   promptGitHooks,
-  promptGitInit,
+  resolveGitInit,
   runViteFmt,
   runViteInstall,
   selectPackageManager,
@@ -53,7 +54,9 @@ import {
 import type { ExecutionWithProjectDir } from './command.ts';
 import { discoverTemplate, inferGitHubRepoName, inferParentDir, isGitHubUrl } from './discovery.ts';
 import { getInitialTemplateOptions } from './initial-template-options.ts';
+import { CreateConfigSchemaError, type CreateTemplateEntry } from './org-manifest.ts';
 import {
+  getConfiguredCreate,
   getConfiguredDefaultTemplate,
   type OrgResolution,
   resolveOrgManifestForCreate,
@@ -66,6 +69,7 @@ import {
   suggestAvailableTargetDir,
 } from './prompts.ts';
 import { getRandomProjectName } from './random-name.ts';
+import { registerLocalTemplate } from './register-template.ts';
 import {
   executeBuiltinTemplate,
   executeBundledTemplate,
@@ -97,7 +101,7 @@ const helpMessage = renderCliDoc({
             `- Default: ${accent('vite:monorepo')}, ${accent('vite:application')}, ${accent('vite:library')}, ${accent('vite:generator')}`,
             '- Remote: vite, @tanstack/start, create-next-app,',
             '  create-nuxt, github:user/repo, https://github.com/user/template-repo, etc.',
-            '- Local: @company/generator-*, ./tools/create-ui-component',
+            '- Local: a `create.templates` entry name from vite.config.ts (monorepo)',
             `- Org scope: ${accent('@your-org')} → picker from ${accent('@your-org/create')}'s ${accent('createConfig.templates')} manifest`,
             `- Org entry: ${accent('@your-org:web')} → manifest entry "web" from ${accent('@your-org/create')}`,
             `When omitted, uses \`create.defaultTemplate\` from vite.config.ts if set.`,
@@ -500,15 +504,55 @@ async function main() {
   let shouldSetupHooks = false;
   let bundled: Extract<OrgResolution, { kind: 'bundled' }> | undefined;
   let skipShorthandExpansion = false;
+  // Root config path written by generator auto-registration, formatted as part
+  // of the monorepo format pass below rather than in a separate step.
+  let registeredConfigPath: string | undefined;
   const installArgs = process.env.CI ? ['--no-frozen-lockfile'] : undefined;
 
-  if (!selectedTemplateName) {
-    const defaultTemplate = await getConfiguredDefaultTemplate(workspaceInfoOptional.rootDir);
+  // Local templates declared in `create.templates` are only offered inside a
+  // monorepo and resolved by entry `name`. Inside a monorepo, read the default
+  // template and the local templates in a single config evaluation. A schema
+  // error is a real misconfiguration: exit cleanly with the message. An
+  // unevaluable config only disables local templates: warn so a registered
+  // name does not silently fall through to an npm package.
+  let localTemplates: CreateTemplateEntry[] = [];
+  if (isMonorepo) {
+    try {
+      const configuredCreate = await getConfiguredCreate(workspaceInfoOptional.rootDir, {
+        throwOnReadError: true,
+      });
+      localTemplates = configuredCreate.templates;
+      if (!selectedTemplateName && configuredCreate.defaultTemplate) {
+        selectedTemplateName = configuredCreate.defaultTemplate;
+      }
+    } catch (error) {
+      if (error instanceof CreateConfigSchemaError) {
+        cancelAndExit(error.message, 1);
+      }
+      prompts.log.warn(
+        `Could not read \`create\` config from the workspace vite.config (${(error as Error).message}); local templates are unavailable`,
+      );
+    }
+  } else if (!selectedTemplateName) {
+    let defaultTemplate: string | undefined;
+    try {
+      defaultTemplate = await getConfiguredDefaultTemplate(workspaceInfoOptional.rootDir);
+    } catch (error) {
+      if (error instanceof CreateConfigSchemaError) {
+        cancelAndExit(error.message, 1);
+      }
+      throw error;
+    }
     if (defaultTemplate) {
       selectedTemplateName = defaultTemplate;
     }
   }
 
+  // Set once an org manifest produces the final specifier, so the local
+  // `create.templates` match below is not re-applied to an org entry's
+  // `template` value (e.g. an org entry `{ name: 'web', template: 'component' }`
+  // must not be redirected to a local entry also named `component`).
+  let resolvedByOrg = false;
   if (selectedTemplateName) {
     const resolved = await resolveOrgManifestForCreate({
       templateName: selectedTemplateName,
@@ -521,8 +565,10 @@ async function main() {
       // `expandCreateShorthand` from rewriting `@your-org/template-web`
       // into `@your-org/create-template-web`.
       skipShorthandExpansion = true;
+      resolvedByOrg = true;
     } else if (resolved.kind === 'bundled') {
       bundled = resolved;
+      resolvedByOrg = true;
     } else if (resolved.kind === 'escape-hatch') {
       selectedTemplateName = '';
     }
@@ -548,7 +594,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   if (!selectedTemplateName) {
     const template = await prompts.select({
       message: '',
-      options: getInitialTemplateOptions(isMonorepo),
+      options: getInitialTemplateOptions(isMonorepo, localTemplates),
     });
 
     if (prompts.isCancel(template)) {
@@ -557,6 +603,20 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
 
     selectedTemplateName = template;
   }
+
+  // Resolve a `create.templates` entry: the picker value (and `vp create <name>`)
+  // is the entry `name`; run its `template` specifier instead. Entry templates
+  // are author-provided and fully qualified, so skip shorthand expansion. Skip
+  // this when an org manifest already resolved the specifier — its `template`
+  // is not a local picker selection and must not be re-matched locally.
+  const matchedLocalTemplate = resolvedByOrg
+    ? undefined
+    : localTemplates.find((entry) => entry.name === selectedTemplateName);
+  if (matchedLocalTemplate) {
+    selectedTemplateName = matchedLocalTemplate.template;
+    skipShorthandExpansion = true;
+  }
+  const isLocalTemplate = matchedLocalTemplate !== undefined;
 
   const isBuiltinTemplate = selectedTemplateName.startsWith('vite:');
   const isBundledTemplate = bundled !== undefined;
@@ -626,7 +686,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
 
       const defaultParentDir = shouldOfferCwdOption
         ? cwdRelativeToRoot
-        : (inferParentDir(selectedTemplateName, workspaceInfoOptional) ??
+        : (inferParentDir(selectedTemplateName, workspaceInfoOptional, isLocalTemplate) ??
           workspaceInfoOptional.parentDirs[0]);
 
       const selected = await prompts.select({
@@ -667,7 +727,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       prompts.log.info(`Use ${accent('--directory')} to specify a different target location.`);
     }
     const inferredParentDir =
-      inferParentDir(selectedTemplateName, workspaceInfoOptional) ??
+      inferParentDir(selectedTemplateName, workspaceInfoOptional, isLocalTemplate) ??
       workspaceInfoOptional.parentDirs[0];
     selectedParentDir = inferredParentDir;
   }
@@ -816,9 +876,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       }));
   }
 
-  // vite:generator adds a package to an existing monorepo, not a new repository.
-  const shouldSetupGit =
-    selectedTemplateName === BuiltinTemplate.generator ? false : await promptGitInit(options);
+  const shouldSetupGit = await resolveGitInit(options, isMonorepo);
   if (!isMonorepo) {
     shouldSetupHooks = await promptGitHooks(options);
   }
@@ -873,6 +931,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     options.interactive,
     bundled?.bundledLocalPath,
     skipShorthandExpansion,
+    isLocalTemplate,
   );
 
   if (selectedParentDir) {
@@ -1079,6 +1138,45 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   }
 
   const fullPath = path.join(workspaceInfo.rootDir, projectDir);
+
+  // Register a scaffolded generator in `create.templates` so it appears in the
+  // `vp create` picker (and resolves by name) without a manual config edit.
+  if (selectedTemplateName === BuiltinTemplate.generator && isMonorepo) {
+    updateCreateProgress('Registering generator');
+    pauseCreateProgress();
+    // Register by a relative `./path` to the generator's directory: it is
+    // explicit and survives a package rename, unlike resolving by name.
+    const generatorTemplatePath = `./${projectDir.split(path.sep).join('/')}`;
+    let generatorName = packageName;
+    try {
+      // Inside the try: the generator is already scaffolded; a registration
+      // failure (an unreadable package.json or root config) must not abort
+      // the create or clobber config. Warn and point at the manual edit.
+      const generatorPkg = readJsonFile(path.join(fullPath, 'package.json')) as {
+        name?: string;
+        description?: string;
+      };
+      generatorName = generatorPkg.name ?? packageName;
+      if (generatorName) {
+        registeredConfigPath = await registerLocalTemplate(
+          workspaceInfo.rootDir,
+          {
+            name: generatorName,
+            description: generatorPkg.description || `Run the ${generatorName} generator`,
+            template: generatorTemplatePath,
+          },
+          compactOutput,
+        );
+      }
+    } catch (error) {
+      prompts.log.warn(
+        `Could not register the generator in create.templates (${(error as Error).message}).\n` +
+          `Add it by hand: { name: '${generatorName || path.basename(projectDir)}', template: '${generatorTemplatePath}' }`,
+      );
+    }
+    resumeCreateProgress();
+  }
+
   const agentInstructionsRoot = isMonorepo ? workspaceInfo.rootDir : fullPath;
   updateCreateProgress('Writing agent instructions');
   pauseCreateProgress();
@@ -1234,14 +1332,16 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       packageManagerVersion: workspaceInfo.downloadPackageManager.version,
     });
     updateCreateProgress('Formatting code');
-    await runViteFmt(workspaceInfo.rootDir, options.interactive, [projectDir], {
+    // Also format the root config when generator registration rewrote it (the
+    // merge writes a JSON-style block), so no separate format step is needed.
+    const fmtPaths = registeredConfigPath
+      ? [projectDir, path.relative(workspaceInfo.rootDir, registeredConfigPath)]
+      : [projectDir];
+    await runViteFmt(workspaceInfo.rootDir, options.interactive, fmtPaths, {
       silent: compactOutput,
     });
-    if (shouldSetupGit) {
-      updateCreateProgress('Creating initial commit');
-      await initGitRepository(workspaceInfo.rootDir);
-      await createInitialCommit(workspaceInfo.rootDir);
-    }
+    // No git setup here: `resolveGitInit` always returns false inside an
+    // existing monorepo (the package shares the monorepo's repository).
   } else {
     if (shouldMigrateLintFmtTools) {
       await installAndMigrate(fullPath);

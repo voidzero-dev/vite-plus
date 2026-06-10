@@ -120,6 +120,57 @@ pub fn merge_json_config(
     })
 }
 
+/// Set the value of a top-level config key in a vite config file (upsert)
+///
+/// Unlike `mergeJsonConfig`, which prepends a new key (and duplicates it when
+/// the key already exists), this targets only direct config objects
+/// (`defineConfig({...})`, `export default {...}`, direct callback returns):
+/// it replaces the value of an existing `config_key` (pair or shorthand
+/// property) or inserts the key when absent. Unrecognized shapes (e.g.
+/// `module.exports`, `return someVar`) report `updated: false` instead of
+/// being corrupted. The splice is raw, the JS caller is expected to reformat
+/// afterwards.
+///
+/// # Arguments
+///
+/// * `vite_config_path` - Path to the vite.config.ts or vite.config.js file
+/// * `json_config_path` - Path to the JSON config file whose contents become the new value
+/// * `config_key` - The top-level key whose value should be set
+///
+/// # Returns
+///
+/// Returns a `MergeJsonConfigResult`. `updated` is `true` only when at least
+/// one direct config object was updated; otherwise the original content is
+/// returned unchanged.
+///
+/// # Example
+///
+/// ```javascript
+/// const result = upsertJsonConfig('vite.config.ts', 'create.json', 'create');
+/// if (result.updated) {
+///     fs.writeFileSync('vite.config.ts', result.content);
+/// }
+/// ```
+#[napi]
+pub fn upsert_json_config(
+    vite_config_path: String,
+    json_config_path: String,
+    config_key: String,
+) -> Result<MergeJsonConfigResult> {
+    let result = vite_migration::upsert_json_config(
+        Path::new(&vite_config_path),
+        Path::new(&json_config_path),
+        &config_key,
+    )
+    .map_err(anyhow::Error::from)?;
+
+    Ok(MergeJsonConfigResult {
+        content: result.content,
+        updated: result.updated,
+        uses_function_callback: result.uses_function_callback,
+    })
+}
+
 /// Whether `config_key` is already declared as a top-level property in the
 /// vite config's `defineConfig({...})` (or equivalent) object literal.
 ///

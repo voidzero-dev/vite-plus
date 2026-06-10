@@ -844,5 +844,6 @@ module.exports.rewriteScripts = nativeBinding.rewriteScripts;
 module.exports.run = nativeBinding.run;
 module.exports.runCommand = nativeBinding.runCommand;
 module.exports.shouldPrintVitePlusHeader = nativeBinding.shouldPrintVitePlusHeader;
+module.exports.upsertJsonConfig = nativeBinding.upsertJsonConfig;
 module.exports.vitePlusHeader = nativeBinding.vitePlusHeader;
 module.exports.wrapLazyPlugins = nativeBinding.wrapLazyPlugins;

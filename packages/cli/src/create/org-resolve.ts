@@ -2,11 +2,14 @@ import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
 import { findWorkspaceRoot, hasViteConfig, resolveViteConfig } from '../resolve-vite-config.ts';
 import {
+  CreateConfigSchemaError,
+  type CreateTemplateEntry,
   filterManifestForContext,
   isRelativePath,
   OrgManifestSchemaError,
   parseOrgScopedSpec,
   readOrgManifest,
+  validateCreateTemplates,
   type OrgManifest,
   type OrgTemplateEntry,
 } from './org-manifest.ts';
@@ -198,32 +201,69 @@ export async function resolveOrgManifestForCreate(args: {
 }
 
 /**
- * Read `create.defaultTemplate` from the workspace root's `vite.config.ts`.
+ * Read the `create` config (`defaultTemplate` + validated `templates`) from
+ * a workspace's `vite.config.ts` in a single config evaluation.
  *
- * Walks up from `startDir` via `findWorkspaceRoot` (monorepo markers
- * only — `pnpm-workspace.yaml`, `workspaces` in `package.json`,
- * `lerna.json`) so monorepo invocations from any subdirectory still
- * pick up the root config. Standalone repos without a monorepo marker
- * only see a config that sits at `startDir` itself.
+ * By default, walks up from `startDir` via `findWorkspaceRoot` (monorepo
+ * markers only — `pnpm-workspace.yaml`, `workspaces` in `package.json`,
+ * `lerna.json`) so monorepo invocations from any subdirectory still pick up
+ * the root config. Pass `walkUp: false` to read `startDir` directly when the
+ * caller already holds the exact workspace root.
  *
- * Best-effort: if there's no config file or evaluation fails, return
- * `undefined` so the create flow behaves as if no default was set.
+ * Best-effort for resolution: a missing or unresolvable config reads as
+ * empty. A present-but-malformed `create.templates` still throws a
+ * {@link CreateConfigSchemaError} so the misconfiguration surfaces.
+ *
+ * Pass `throwOnReadError: true` for read-modify-write callers (registration):
+ * if a config file exists but cannot be evaluated, an empty read would let a
+ * later write clobber the real `create` block, so the eval error is rethrown
+ * instead of swallowed.
  */
-export async function getConfiguredDefaultTemplate(startDir: string): Promise<string | undefined> {
-  const projectRoot = findWorkspaceRoot(startDir) ?? startDir;
+export async function getConfiguredCreate(
+  startDir: string,
+  options?: { walkUp?: boolean; throwOnReadError?: boolean },
+): Promise<{ defaultTemplate?: string; templates: CreateTemplateEntry[] }> {
+  const projectRoot =
+    options?.walkUp === false ? startDir : (findWorkspaceRoot(startDir) ?? startDir);
   if (!hasViteConfig(projectRoot)) {
-    return undefined;
+    return { templates: [] };
   }
+  let create: { defaultTemplate?: unknown; templates?: unknown } | undefined;
   try {
     const config = (await resolveViteConfig(projectRoot)) as {
-      create?: { defaultTemplate?: unknown };
+      create?: { defaultTemplate?: unknown; templates?: unknown };
     };
-    const value = config.create?.defaultTemplate;
-    if (typeof value === 'string' && value.length > 0) {
-      return value;
+    create = config.create;
+  } catch (error) {
+    if (options?.throwOnReadError) {
+      throw error;
     }
-  } catch {
-    // Unresolvable config → treat as no default.
+    // Unresolvable config → treat as no create config.
+    return { templates: [] };
   }
-  return undefined;
+  const defaultTemplate =
+    typeof create?.defaultTemplate === 'string' && create.defaultTemplate.length > 0
+      ? create.defaultTemplate
+      : undefined;
+  // Validation errors are intentionally NOT swallowed: a malformed
+  // `create.templates` should be reported, not silently dropped.
+  const templates = validateCreateTemplates(create?.templates);
+  return { ...(defaultTemplate !== undefined ? { defaultTemplate } : {}), templates };
+}
+
+/**
+ * Read `create.defaultTemplate` only. Best-effort for missing or unresolvable
+ * configs (returns `undefined`), but a malformed `create.templates` still
+ * rethrows its {@link CreateConfigSchemaError}: swallowing it here would
+ * silently drop a valid `defaultTemplate` along with the diagnostic.
+ */
+export async function getConfiguredDefaultTemplate(startDir: string): Promise<string | undefined> {
+  try {
+    return (await getConfiguredCreate(startDir)).defaultTemplate;
+  } catch (error) {
+    if (error instanceof CreateConfigSchemaError) {
+      throw error;
+    }
+    return undefined;
+  }
 }

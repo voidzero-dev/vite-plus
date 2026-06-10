@@ -1,0 +1,10 @@
+{
+  "commands": [
+    "vp create vite:generator --no-interactive --directory tools/my-generator # scaffold a generator; auto-registers it in create.templates",
+    "cat vite.config.ts # create.templates entry appended, existing defaultTemplate preserved",
+    "cat tools/my-generator/package.json # generator package (bingo dependency is the run hint; no marker keyword)",
+    "vp create my-generator --no-interactive -- --name demo-pkg --directory demo-pkg --offline # resolve via the registered create.templates entry",
+    "cat tools/demo-pkg/package.json # generated next to the generator under tools/, not the apps/ parent",
+    "cat tools/demo-pkg/src/index.ts"
+  ]
+}

@@ -206,7 +206,6 @@ vite-plus-generator
   "private": true,
   "description": "A starter for creating a Vite+ code generator.",
   "keywords": [
-    "bingo-template",
     "vite-plus-generator"
   ],
   "bin": "./bin/index.ts",
@@ -216,7 +215,7 @@ vite-plus-generator
     "dev": "node bin/index.ts"
   },
   "dependencies": {
-    "bingo": "^0.7.0",
+    "bingo": "^0.9.3",
     "zod": "^3.25.76"
   },
   "devDependencies": {
@@ -224,7 +223,7 @@ vite-plus-generator
     "typescript": "catalog:"
   },
   "engines": {
-    "node": ">=22.12.0"
+    "node": ">=22.18.0"
   }
 }
 

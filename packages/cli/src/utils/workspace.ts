@@ -108,6 +108,14 @@ export async function detectWorkspace(rootDir: string): Promise<WorkspaceInfoOpt
   return result;
 }
 
+// Check if a package should run as a Bingo template (https://www.create.bingo/).
+// This is an execution hint only: a Bingo template runs through its bin entry
+// with `--skip-requests` appended. Whether a package is offered as a template
+// is governed by `create.templates` in vite.config.ts, not by this check.
+export function isBingoTemplate(pkg: { dependencies?: Record<string, string> }): boolean {
+  return !!pkg.dependencies?.bingo;
+}
+
 // Discover all workspace packages
 export function discoverWorkspacePackages(
   workspacePatterns: string[],
@@ -134,22 +142,18 @@ export function discoverWorkspacePackages(
       name?: string;
       description?: string;
       version?: string;
-      dependencies?: Record<string, string>;
-      keywords?: string[];
     };
     if (!pkg.name) {
       continue;
     }
-    const isTemplatePackage =
-      pkg.keywords?.includes('vite-plus-template') ||
-      pkg.keywords?.includes('bingo-template') ||
-      !!pkg.dependencies?.bingo;
     packages.push({
       name: pkg.name,
-      path: path.dirname(packageJsonRelativePath),
+      // glob returns native separators; normalize to forward slashes so the
+      // path compares cleanly against workspace-pattern-derived values like
+      // `parentDirs` on Windows (path.join accepts either separator).
+      path: path.dirname(packageJsonRelativePath).split(path.sep).join('/'),
       description: pkg.description,
       version: pkg.version,
-      isTemplatePackage,
     });
   }
 
