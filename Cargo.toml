@@ -158,9 +158,9 @@ anyhow = "1.0.98"
 append-only-vec = "0.1.7"
 arcstr = { version = "1.2.0", default-features = false }
 ariadne = { package = "rolldown-ariadne", version = "0.6.0" }
-ast-grep-config = "0.40.1"
-ast-grep-core = "0.40.1"
-ast-grep-language = { version = "0.40.1", default-features = false, features = [
+ast-grep-config = "0.43.0"
+ast-grep-core = "0.43.0"
+ast-grep-language = { version = "0.43.0", default-features = false, features = [
   "tree-sitter-bash",
   "tree-sitter-typescript",
 ] }
@@ -173,17 +173,17 @@ base64-simd = "0.8.0"
 bincode = "2.0.1"
 bstr = { version = "1.12.0", default-features = false, features = ["alloc", "std"] }
 bitflags = "2.9.1"
-brush-parser = "0.3.0"
+brush-parser = "0.4.0"
 blake3 = "1.8.2"
 chrono = { version = "0.4", features = ["serde"] }
 clap = "4.5.40"
 clap_complete = "4.6.0"
 commondir = "1.0.0"
 cow-utils = "0.1.3"
-criterion = { version = "0.7", features = ["html_reports"] }
+criterion = { version = "0.8", features = ["html_reports"] }
 criterion2 = { version = "3.0.0", default-features = false }
 crossterm = { version = "0.29.0", features = ["event-stream"] }
-css-module-lexer = "0.0.15"
+css-module-lexer = "0.1.0"
 dashmap = "6.2.1"
 derive_more = { version = "2.0.1", features = ["debug"] }
 directories = "6.0.0"
@@ -199,7 +199,7 @@ glob = "0.3.2"
 heck = "0.5.0"
 hex = "0.4.3"
 html5gum = "0.8.1"
-httpmock = "0.7"
+httpmock = "0.8"
 ignore = "0.4"
 indicatif = "0.18"
 indexmap = "2.9.0"
@@ -228,7 +228,7 @@ napi-derive = { version = "3.0.0", default-features = false, features = [
   "strict",
   "tracing",
 ] }
-nix = { version = "0.30.1", features = ["dir"] }
+nix = { version = "0.31.0", features = ["dir"] }
 nodejs-built-in-modules = "1.0.0"
 nom = "8.0.0"
 num-bigint = "0.4.6"
@@ -253,7 +253,7 @@ reqwest = { version = "0.13", default-features = false }
 rolldown-notify = "10.2.0"
 rolldown-notify-debouncer-full = "0.7.5"
 ropey = "1.6.1"
-rusqlite = { version = "0.39.0", features = ["bundled"] }
+rusqlite = { version = "0.40.0", features = ["bundled"] }
 rustc-hash = "2.1.1"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 schemars = "1.0.0"
@@ -264,8 +264,8 @@ serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
 serde_yaml = "0.9.34"
 serial_test = "3.2.0"
-sha1 = "0.10.6"
-sha2 = "0.10.9"
+sha1 = "0.11.0"
+sha2 = "0.11.0"
 simdutf8 = "0.1.5"
 string_cache = "0.9.0"
 sugar_path = { version = "2.0.1", features = ["cached_current_dir"] }
@@ -308,7 +308,7 @@ vite_str = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "5833b
 vite_task = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "5833b374c6edb05c2f2f8e133ff8c796b378472a" }
 vite_workspace = { git = "https://github.com/voidzero-dev/vite-task.git", rev = "5833b374c6edb05c2f2f8e133ff8c796b378472a" }
 walkdir = "2.5.0"
-wax = "0.6.0"
+wax = "0.7.0"
 which = "8.0.0"
 winreg = "0.56.0"
 xxhash-rust = "0.8.15"
