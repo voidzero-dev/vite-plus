@@ -185,7 +185,9 @@ describe('discoverWorkspacePackages', () => {
     const names = packages.map((p) => p.name).toSorted();
     expect(names).toEqual(['bar', 'foo']);
     const foo = packages.find((p) => p.name === 'foo')!;
-    expect(foo.path).toBe(path.join('packages', 'foo'));
+    // pkg.path uses forward slashes on every platform (normalized from glob's
+    // native separators), so it compares cleanly against workspace patterns.
+    expect(foo.path).toBe('packages/foo');
     expect(foo.description).toBe('a foo');
     expect(foo.version).toBe('1.0.0');
   });
