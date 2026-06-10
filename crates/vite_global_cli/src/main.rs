@@ -20,7 +20,6 @@ mod error;
 mod help;
 mod js_executor;
 mod shim;
-mod tips;
 mod upgrade_check;
 
 use std::{
@@ -311,11 +310,8 @@ async fn main() -> ExitCode {
         }
     }
 
-    let mut tip_context = tips::TipContext {
-        // Capture user args (excluding argv0) before normalization
-        raw_args: args[1..].to_vec(),
-        ..Default::default()
-    };
+    // Capture user args (excluding argv0) before normalization.
+    let raw_args = args[1..].to_vec();
 
     // Normalize arguments (list/ls aliases, help rewriting)
     let normalized_args = normalize_args(args);
@@ -350,35 +346,30 @@ async fn main() -> ExitCode {
 
                     if let Some(suggestion) = &details.suggestion {
                         if let Some(corrected_raw_args) = replace_top_level_typoed_subcommand(
-                            &tip_context.raw_args,
+                            &raw_args,
                             &details.invalid_subcommand,
                             suggestion,
                         ) {
                             if prompt_to_run_suggested_command(suggestion) {
-                                tip_context.raw_args = corrected_raw_args.clone();
                                 run_corrected_args(&cwd, &corrected_raw_args).await
                             } else {
                                 let code = e.exit_code();
-                                tip_context.clap_error = Some(e);
                                 #[allow(clippy::cast_sign_loss)]
                                 ExitCode::from(code as u8)
                             }
                         } else {
                             let code = e.exit_code();
-                            tip_context.clap_error = Some(e);
                             #[allow(clippy::cast_sign_loss)]
                             ExitCode::from(code as u8)
                         }
                     } else {
                         let code = e.exit_code();
-                        tip_context.clap_error = Some(e);
                         #[allow(clippy::cast_sign_loss)]
                         ExitCode::from(code as u8)
                     }
                 } else {
                     e.print().ok();
                     let code = e.exit_code();
-                    tip_context.clap_error = Some(e);
                     #[allow(clippy::cast_sign_loss)]
                     ExitCode::from(code as u8)
                 }
@@ -387,13 +378,11 @@ async fn main() -> ExitCode {
                     e.print().ok();
                 }
                 let code = e.exit_code();
-                tip_context.clap_error = Some(e);
                 #[allow(clippy::cast_sign_loss)]
                 ExitCode::from(code as u8)
             } else {
                 e.print().ok();
                 let code = e.exit_code();
-                tip_context.clap_error = Some(e);
                 #[allow(clippy::cast_sign_loss)]
                 ExitCode::from(code as u8)
             }
@@ -417,12 +406,6 @@ async fn main() -> ExitCode {
             tokio::time::timeout(std::time::Duration::from_millis(500), handle).await
     {
         upgrade_check::display_upgrade_notice(&result);
-    }
-
-    tip_context.exit_code = if exit_code == ExitCode::SUCCESS { 0 } else { 1 };
-
-    if let Some(tip) = tips::get_tip(&tip_context) {
-        eprintln!("\n{} {}", "tip:".bright_black().bold(), tip.bright_black());
     }
 
     exit_code

@@ -376,13 +376,6 @@ fn check_npm_global_install_result(
             create_bin_link(&bin_dir, bin_name, source_path, package_name, node_version);
         }
     }
-
-    // Always print the tip
-    let pkg_names: Vec<&str> = packages.iter().map(String::as_str).collect();
-    let pkg_display = pkg_names.join(" ");
-    output::raw(&vite_str::format!(
-        "\ntip: Use `vp install -g {pkg_display}` for managed shims that persist across Node.js version changes."
-    ));
 }
 
 /// Extract binary names from a package.json value.
