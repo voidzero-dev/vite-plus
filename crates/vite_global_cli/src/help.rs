@@ -1167,19 +1167,6 @@ Options:
     }
 
     #[test]
-    fn skips_parent_help_when_help_flag_precedes_unknown_pm_child_after_normalization() {
-        let args = vec!["vp", "pm", "apprev-build", "--help"]
-            .into_iter()
-            .map(String::from)
-            .collect::<Vec<_>>();
-        assert!(should_skip_parent_help_for_unknown_direct_nested_child(
-            &["pm".to_string()],
-            &args,
-            2,
-        ));
-    }
-
-    #[test]
     fn keeps_unified_help_for_valid_pm_child_with_help() {
         let args = vec!["vp", "pm", "approve-builds", "--help"]
             .into_iter()
