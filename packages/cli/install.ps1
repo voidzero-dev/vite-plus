@@ -387,7 +387,7 @@ function Refresh-Shims {
     }
 }
 
-# Setup Node.js version manager (node/npm/npx shims)
+# Setup Node.js version manager (node/npm/npx/corepack shims)
 # Returns: "true" = enabled, "false" = not enabled, "already" = already configured
 function Setup-NodeManager {
     param([string]$BinDir)
@@ -433,7 +433,7 @@ function Setup-NodeManager {
     if ($isInteractive) {
         Write-Host ""
         Write-Host "Would you like Vite+ to manage your Node.js versions?"
-        Write-Host "It adds ``node``, ``npm``, and ``npx`` shims to ~/.vite-plus/bin/ and automatically uses the right version."
+        Write-Host "It adds ``node``, ``npm``, ``npx``, and ``corepack`` shims to ~/.vite-plus/bin/ and automatically uses the right version."
         Write-Host "Opt out anytime with ``vp env off``."
         $response = Read-Host "Press Enter to accept (Y/n)"
 

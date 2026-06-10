@@ -2,8 +2,8 @@
 //!
 //! Shows the path to the tool binary that would be executed.
 //!
-//! For core tools (node, npm, npx), shows the resolved Node.js binary path
-//! along with version and resolution source.
+//! For core tools (node, npm, npx, corepack), shows the resolved Node.js
+//! binary path along with version and resolution source.
 //! For global packages, shows the binary path plus package metadata.
 
 use std::process::ExitStatus;
@@ -23,8 +23,8 @@ use super::{
 };
 use crate::error::Error;
 
-/// Core tools (node, npm, npx)
-const CORE_TOOLS: &[&str] = &["node", "npm", "npx"];
+/// Core tools (node, npm, npx, corepack)
+const CORE_TOOLS: &[&str] = &["node", "npm", "npx", "corepack"];
 
 /// Column width for left-side labels in aligned metadata output
 const LABEL_WIDTH: usize = 10;
@@ -37,6 +37,13 @@ pub async fn execute(cwd: AbsolutePathBuf, tool: &str) -> Result<ExitStatus, Err
 
     // Check if this is a core tool
     if CORE_TOOLS.contains(&tool) {
+        // corepack: a vp-managed global install wins over the Node-bundled
+        // copy (mirrors the shim dispatch order).
+        if tool == "corepack"
+            && let Some(metadata) = PackageMetadata::find_by_binary(tool).await?
+        {
+            return execute_package_binary(tool, &metadata).await;
+        }
         return execute_core_tool(cwd, tool).await;
     }
 
@@ -47,7 +54,7 @@ pub async fn execute(cwd: AbsolutePathBuf, tool: &str) -> Result<ExitStatus, Err
 
     // Unknown tool
     output::error(&format!("tool '{}' not found", tool.bold()));
-    eprintln!("Not a core tool (node, npm, npx) or installed global package.");
+    eprintln!("Not a core tool (node, npm, npx, corepack) or installed global package.");
     eprintln!("Run 'vp list -g' to see installed packages.");
     Ok(exit_status(1))
 }
@@ -94,7 +101,7 @@ async fn execute_package_manager_tool(
     Ok(Some(ExitStatus::default()))
 }
 
-/// Execute which for a core tool (node, npm, npx).
+/// Execute which for a core tool (node, npm, npx, corepack).
 async fn execute_core_tool(cwd: AbsolutePathBuf, tool: &str) -> Result<ExitStatus, Error> {
     // Resolve version for current directory
     let resolution = resolve_version(&cwd).await?;
@@ -115,9 +122,23 @@ async fn execute_core_tool(cwd: AbsolutePathBuf, tool: &str) -> Result<ExitStatu
 
     // Check if the tool exists
     if !tokio::fs::try_exists(&tool_path).await.unwrap_or(false) {
+        #[cfg(windows)]
+        let node_path = home_dir.join("node.exe");
+        #[cfg(not(windows))]
+        let node_path = home_dir.join("bin").join("node");
+        let node_installed = tokio::fs::try_exists(&node_path).await.unwrap_or(false);
+
         output::error(&format!("{} not found", tool.bold()));
-        eprintln!("Node.js {} is not installed.", resolution.version);
-        eprintln!("Run 'vp env install {}' to install it.", resolution.version);
+        if tool == "corepack" && node_installed {
+            // corepack is no longer bundled starting with Node.js 25
+            eprintln!("corepack is not bundled with Node.js {}.", resolution.version);
+            eprintln!(
+                "It is installed automatically on first use, or run 'vp install -g corepack'."
+            );
+        } else {
+            eprintln!("Node.js {} is not installed.", resolution.version);
+            eprintln!("Run 'vp env install {}' to install it.", resolution.version);
+        }
         return Ok(exit_status(1));
     }
 

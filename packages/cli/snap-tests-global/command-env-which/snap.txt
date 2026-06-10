@@ -16,6 +16,11 @@ v20.18.0
   Version:    <semver>
   Source:     <cwd>/.node-version
 
+> vp env which corepack # Core tool - corepack bundled with the resolved Node.js
+<vite-plus-home>/js_runtime/node/<semver>/bin/corepack
+  Version:    <semver>
+  Source:     <cwd>/.node-version
+
 > vp install -g cowsay@1.6.0 # Install a global package via vp
 info: Installing 1 global package with Node.js <semver>
 ✓ Installed cowsay <semver>
@@ -33,5 +38,5 @@ Uninstalled cowsay
 
 [1]> vp env which unknown-tool # Unknown tool - error message
 error: tool 'unknown-tool' not found
-Not a core tool (node, npm, npx) or installed global package.
+Not a core tool (node, npm, npx, corepack) or installed global package.
 Run 'vp list -g' to see installed packages.

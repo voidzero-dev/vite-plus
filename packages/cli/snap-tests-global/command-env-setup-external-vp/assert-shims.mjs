@@ -3,7 +3,7 @@ import path from 'node:path';
 
 const expected = path.resolve('external/vp');
 
-for (const shim of ['vp', 'node', 'npm', 'npx', 'vpx', 'vpr']) {
+for (const shim of ['vp', 'node', 'npm', 'npx', 'corepack', 'vpx', 'vpr']) {
   const shimPath = path.join('home', 'bin', shim);
   const target = fs.readlinkSync(shimPath);
   if (target !== expected) {

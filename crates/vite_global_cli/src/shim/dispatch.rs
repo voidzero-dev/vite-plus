@@ -701,8 +701,8 @@ async fn resolve_matching_package_manager_tool(
 
 /// Main shim dispatch entry point.
 ///
-/// Called when the binary is invoked as node, npm, npx, or a package binary.
-/// Returns an exit code to be used with std::process::exit.
+/// Called when the binary is invoked as node, npm, npx, corepack, or a
+/// package binary. Returns an exit code to be used with std::process::exit.
 pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
     tracing::debug!("dispatch: tool: {tool}, args: {:?}", args);
 
@@ -770,6 +770,15 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
             return exec::exec_tool(&system_path, args);
         }
         // Fall through to managed if system not found
+    }
+
+    // corepack: dedicated resolution chain (vp-managed package → Node-bundled
+    // → auto-install), see shim::corepack. Intentionally placed after the
+    // bypass/system-first checks and outside the recursion passthrough so it
+    // always re-resolves (corepack may not exist on the prepended PATH at all
+    // with Node.js 25+).
+    if tool == "corepack" {
+        return super::corepack::dispatch_corepack(args).await;
     }
 
     // Check if this is a package binary (not node/npm/npx)
@@ -1147,7 +1156,7 @@ fn passthrough_to_system(tool: &str, args: &[String]) -> i32 {
 }
 
 /// Resolve version with caching.
-async fn resolve_with_cache(cwd: &AbsolutePathBuf) -> Result<ResolveCacheEntry, String> {
+pub(crate) async fn resolve_with_cache(cwd: &AbsolutePathBuf) -> Result<ResolveCacheEntry, String> {
     // Fast-path: VP_NODE_VERSION env var set by `vp env use`
     // Skip all disk I/O for cache when session override is active
     if let Ok(env_version) = std::env::var(config::VERSION_ENV_VAR) {

@@ -57,12 +57,16 @@ fn package_error(package_name: &str, error: impl Into<Error>) -> (Option<String>
 /// If `node_version` is provided, uses that version. Otherwise, resolves from current directory.
 /// If `force` is true, auto-uninstalls conflicting packages.
 /// Use `concurrency` to control the number of packages to install in parallel.
+/// If `only_bins` is provided, only those binaries are exposed as shims; other
+/// bins the package declares are ignored (used by the corepack shim
+/// auto-install, which must not link corepack's pnpm/yarn launchers).
 pub async fn install(
     package_specs: &[String],
     node_version: Option<&str>,
     force: bool,
     concurrency: usize,
     update: bool,
+    only_bins: Option<&[&str]>,
 ) -> Result<(), (Option<String>, Error)> {
     if package_specs.is_empty() {
         return Ok(());
@@ -193,6 +197,16 @@ pub async fn install(
         let Some(InstalledPackage { installed_version, bin_names, js_bins, backup }) = install
         else {
             continue;
+        };
+        // Restrict exposed binaries when requested (e.g., the corepack shim
+        // auto-install only links `corepack`, not the pnpm/yarn launchers
+        // that `corepack enable` creates on demand).
+        let (bin_names, js_bins) = match only_bins {
+            Some(only) => (
+                bin_names.into_iter().filter(|bin| only.contains(&bin.as_str())).collect(),
+                js_bins.into_iter().filter(|bin| only.contains(&bin.as_str())).collect(),
+            ),
+            None => (bin_names, js_bins),
         };
         let mut backup = backup;
         let stale_bin_names = match stale_bin_names_for_package(&package_name, &bin_names).await {
@@ -751,7 +765,7 @@ fn is_javascript_binary(path: &AbsolutePath) -> bool {
 ///
 /// On Unix: Creates a symlink to ../current/bin/vp
 /// On Windows: Creates a trampoline .exe that forwards to vp.exe
-async fn create_package_shim(
+pub(crate) async fn create_package_shim(
     bin_dir: &vite_path::AbsolutePath,
     bin_name: &str,
     package_name: &str,
@@ -819,8 +833,11 @@ async fn remove_package_shim(
     bin_dir: &vite_path::AbsolutePath,
     bin_name: &str,
 ) -> Result<(), Error> {
-    // Don't remove core shims
-    if CORE_SHIMS.contains(&bin_name) {
+    // Don't remove core shims or default env shims (e.g., `vp remove -g corepack`
+    // must keep the default corepack shim so it falls back to the Node-bundled
+    // or auto-installed corepack).
+    if CORE_SHIMS.contains(&bin_name) || crate::commands::env::setup::SHIM_TOOLS.contains(&bin_name)
+    {
         return Ok(());
     }
 

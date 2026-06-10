@@ -256,7 +256,7 @@ impl Commands {
 #[command(after_help = "\
 Examples:
   Setup:
-    vp env setup                  # Create shims for node, npm, npx
+    vp env setup                  # Create shims for node, npm, npx, corepack
     vp env on                     # Use vite-plus managed Node.js
     vp env print                  # Print shell snippet for this session
 
@@ -666,6 +666,7 @@ async fn managed_install(
         force,
         concurrency.unwrap_or(DEFAULT_GLOBAL_INSTALL_CONCURRENCY),
         false,
+        None,
     )
     .await
     {
@@ -791,9 +792,15 @@ async fn managed_update(
     }
 
     // Call reinstall logic
-    if let Err((package_name, error)) =
-        global::install::install(&to_update, Some(&current_node_version), false, concurrency, true)
-            .await
+    if let Err((package_name, error)) = global::install::install(
+        &to_update,
+        Some(&current_node_version),
+        false,
+        concurrency,
+        true,
+        None,
+    )
+    .await
     {
         output::error(&format!(
             "Failed to update {}: {error}",
