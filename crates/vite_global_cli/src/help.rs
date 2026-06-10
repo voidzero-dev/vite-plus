@@ -963,6 +963,16 @@ fn skip_clap_unified_help(command: &str) -> bool {
     )
 }
 
+fn should_skip_parent_help_for_unknown_direct_nested_child(
+    command_path: &[String],
+    argv: &[String],
+    index: usize,
+) -> bool {
+    matches!(command_path, [command] if matches!(command.as_str(), "pm" | "env"))
+        && argv.get(index).is_some_and(|arg| !arg.starts_with('-'))
+        && has_help_flag_before_terminator(&argv[index..])
+}
+
 pub fn maybe_print_unified_clap_subcommand_help(argv: &[String]) -> bool {
     if argv.len() < 3 {
         return false;
@@ -977,6 +987,10 @@ pub fn maybe_print_unified_clap_subcommand_help(argv: &[String]) -> bool {
 
     while index < argv.len() {
         let arg = &argv[index];
+        if is_help_flag(arg) {
+            index += 1;
+            continue;
+        }
         if arg.starts_with('-') {
             break;
         }
@@ -999,6 +1013,10 @@ pub fn maybe_print_unified_clap_subcommand_help(argv: &[String]) -> bool {
         return false;
     }
 
+    if should_skip_parent_help_for_unknown_direct_nested_child(&command_path, argv, index) {
+        return false;
+    }
+
     let Some(first_command_name) = first_command_name else {
         return false;
     };
@@ -1008,7 +1026,7 @@ pub fn maybe_print_unified_clap_subcommand_help(argv: &[String]) -> bool {
 
     // Respect `--` option terminator: flags after `--` belong to the wrapped
     // command and should not trigger CLI help rewriting.
-    if !has_help_flag_before_terminator(&argv[index..]) {
+    if !has_help_flag_before_terminator(&argv[1..]) {
         return false;
     }
 
@@ -1083,7 +1101,8 @@ pub fn print_unified_clap_help_for_path(command_path: &[&str]) -> bool {
 mod tests {
     use super::{
         HelpDoc, documentation_url_for_command_path, has_help_flag_before_terminator,
-        parse_clap_help_to_doc, parse_rows, render_help_doc, split_comment_suffix, strip_ansi,
+        parse_clap_help_to_doc, parse_rows, render_help_doc,
+        should_skip_parent_help_for_unknown_direct_nested_child, split_comment_suffix, strip_ansi,
     };
 
     #[test]
@@ -1132,6 +1151,42 @@ Options:
     fn help_flag_after_terminator_is_ignored() {
         let args = vec!["vpx".to_string(), "--".to_string(), "--help".to_string()];
         assert!(!has_help_flag_before_terminator(&args));
+    }
+
+    #[test]
+    fn skips_parent_help_for_unknown_pm_child_with_help() {
+        let args = vec!["vp", "pm", "apprev-build", "--help"]
+            .into_iter()
+            .map(String::from)
+            .collect::<Vec<_>>();
+        assert!(should_skip_parent_help_for_unknown_direct_nested_child(
+            &["pm".to_string()],
+            &args,
+            2,
+        ));
+    }
+
+    #[test]
+    fn keeps_unified_help_for_valid_pm_child_with_help() {
+        let args = vec!["vp", "pm", "approve-builds", "--help"]
+            .into_iter()
+            .map(String::from)
+            .collect::<Vec<_>>();
+        assert!(!should_skip_parent_help_for_unknown_direct_nested_child(
+            &["pm".to_string(), "approve-builds".to_string()],
+            &args,
+            3,
+        ));
+    }
+
+    #[test]
+    fn keeps_unified_help_for_parent_help() {
+        let args = vec!["vp", "env", "--help"].into_iter().map(String::from).collect::<Vec<_>>();
+        assert!(!should_skip_parent_help_for_unknown_direct_nested_child(
+            &["env".to_string()],
+            &args,
+            2,
+        ));
     }
 
     #[test]
