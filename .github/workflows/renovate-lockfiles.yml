@@ -14,9 +14,12 @@ on:
     branches:
       - renovate/**
 
+# Queue instead of cancel: this workflow's own lockfile push retriggers it in
+# the same group, and cancel-in-progress would cancel the effective run at its
+# final step, leaving a misleading "cancelled" conclusion.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   update-lockfiles:
