@@ -1,11 +1,9 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["github>Boshen/renovate"],
+  "description": "Skip lockfile artifact updates (npm and cargo): they fail in Renovate's clone because vite/ and rolldown/ are gitignored. The renovate-lockfiles workflow regenerates lockfiles on renovate/** pushes; gitIgnoredAuthors keeps Renovate managing branches with its commits.",
   "gitIgnoredAuthors": ["278573678+voidzero-guard[bot]@users.noreply.github.com"],
-  "npm": {
-    "description": "Skip pnpm lockfile artifact updates: they fail in Renovate's clone because vite/ and rolldown/ are gitignored. The renovate-lockfiles workflow regenerates lockfiles on renovate/** pushes; gitIgnoredAuthors above keeps Renovate managing branches with its commits.",
-    "updateLockFiles": false
-  },
+  "skipArtifactsUpdate": true,
   "ignorePaths": [
     "packages/cli/snap-tests/**",
     "packages/cli/snap-tests-global/**",
