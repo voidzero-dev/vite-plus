@@ -290,7 +290,7 @@
     "ws": "^8.18.3"
   },
   "devDependencies": {
-    "@blazediff/core": "1.9.1",
+    "@blazediff/core": "1.9.2",
     "@oxc-node/cli": "catalog:",
     "@oxc-node/core": "catalog:",
     "@vitest/browser": "4.1.8",

@@ -45,11 +45,12 @@ jobs:
   download-previous-rolldown-binaries:
     needs: detect-changes
     runs-on: ubuntu-latest
-    # Run if: not a PR, OR PR has 'test: e2e' label, OR PR is from deps/upstream-update branch, OR build.ts files changed
+    # Run if: not a PR, OR PR has 'test: e2e' label, OR PR is from the deps/upstream-update or a renovate/** dependency branch, OR build.ts files changed
     if: >-
       github.event_name != 'pull_request' ||
       contains(github.event.pull_request.labels.*.name, 'test: e2e') ||
       github.head_ref == 'deps/upstream-update' ||
+      startsWith(github.head_ref, 'renovate/') ||
       needs.detect-changes.outputs.related-files-changed == 'true'
     permissions:
       contents: read

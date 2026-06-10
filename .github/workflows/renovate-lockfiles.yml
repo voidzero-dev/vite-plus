@@ -1,0 +1,91 @@
+name: Renovate Lockfiles
+
+# Renovate cannot refresh lockfiles itself: pnpm-workspace.yaml and Cargo.toml
+# reference the gitignored vite/ and rolldown/ checkouts (patched dependencies,
+# workspace importers, path crates), so artifact updates fail in Renovate's
+# clone. This workflow checks out the vendored repos at their pinned hashes and
+# regenerates the lockfiles on every Renovate branch push instead. Renovate
+# ignores the resulting commits via gitIgnoredAuthors in .github/renovate.json.
+
+permissions: {}
+
+on:
+  push:
+    branches:
+      - renovate/**
+
+# Queue instead of cancel: this workflow's own lockfile push retriggers it in
+# the same group, and cancel-in-progress would cancel the effective run at its
+# final step, leaving a misleading "cancelled" conclusion.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  update-lockfiles:
+    # Skip the retriggered run for this workflow's own lockfile commit.
+    if: github.event.repository.fork == false && github.actor != 'voidzero-guard[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/clone
+
+      - uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .node-version
+
+      # Not oxc-project/setup-node: it runs `pnpm install --frozen-lockfile`,
+      # which fails on Renovate branches because the lockfile is stale here.
+      - name: Update pnpm lockfiles
+        env:
+          # Resolution does not need lifecycle scripts; keep dependency scripts
+          # from running in a workflow that later pushes with a write token.
+          npm_config_ignore_scripts: 'true'
+        run: |
+          pnpm install --lockfile-only --no-frozen-lockfile
+          pnpm dedupe --check || pnpm dedupe
+          pnpm -C docs install --lockfile-only --no-frozen-lockfile
+
+      # cargo metadata syncs Cargo.lock to the bumped manifests without
+      # compiling or running build scripts. rustup auto-installs the pinned
+      # toolchain from rust-toolchain.toml.
+      - name: Update Cargo.lock
+        run: cargo metadata --format-version=1 > /dev/null
+
+      - name: Detect lockfile changes
+        id: diff
+        run: |
+          git diff --stat -- pnpm-lock.yaml docs/pnpm-lock.yaml Cargo.lock
+          if git diff --quiet -- pnpm-lock.yaml docs/pnpm-lock.yaml Cargo.lock; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        if: steps.diff.outputs.changed == 'true'
+        id: app-token
+        with:
+          client-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Commit and push lockfiles
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          APP_TOKEN: ${{ steps.app-token.outputs.token }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          # Identity must stay in sync with gitIgnoredAuthors in
+          # .github/renovate.json so Renovate keeps managing the branch.
+          git config user.name "voidzero-guard[bot]"
+          git config user.email "278573678+voidzero-guard[bot]@users.noreply.github.com"
+          git add pnpm-lock.yaml docs/pnpm-lock.yaml Cargo.lock
+          git commit -m "chore: update lockfiles"
+          git push "https://x-access-token:${APP_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/${BRANCH}"
