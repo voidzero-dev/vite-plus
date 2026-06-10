@@ -99,17 +99,14 @@ jobs:
         with:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: test
+          tools: just
           target-dir: ${{ runner.os == 'Windows' && format('{0}/target', env.DEV_DRIVE) || '' }}
 
       - run: cargo check --all-targets --all-features
         env:
           RUSTFLAGS: '-D warnings --cfg tokio_unstable' # also update .cargo/config.toml
 
-      # Test all crates/* packages. New crates are automatically included.
-      # Also test vite-plus-cli (lives outside crates/) to catch type sync issues.
-      - run: cargo test $(for d in crates/*/; do echo -n "-p $(basename $d) "; done) -p vite-plus-cli
-        env:
-          RUST_MIN_STACK: 8388608
+      - run: just test
 
   test-musl:
     needs: detect-changes
@@ -133,7 +130,7 @@ jobs:
     steps:
       - name: Install Alpine dependencies
         shell: sh {0}
-        run: apk add --no-cache bash curl git musl-dev gcc g++ python3 cmake make
+        run: apk add --no-cache bash curl git just musl-dev gcc g++ python3 cmake make
 
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
@@ -148,12 +145,8 @@ jobs:
       - name: Install Rust toolchain
         run: rustup show
 
-      # Test all crates/* packages. New crates are automatically included.
-      # Also test vite-plus-cli (lives outside crates/) to catch type sync issues.
       # Skip separate cargo check — cargo test already compiles everything.
-      - run: cargo test $(for d in crates/*/; do echo -n "-p $(basename $d) "; done) -p vite-plus-cli
-        env:
-          RUST_MIN_STACK: 8388608
+      - run: just test
 
   lint:
     needs: detect-changes
