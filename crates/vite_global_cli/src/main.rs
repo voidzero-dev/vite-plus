@@ -184,6 +184,11 @@ fn exit_status_to_exit_code(exit_status: ExitStatus) -> ExitCode {
     }
 }
 
+fn clap_error_to_exit_code(e: &clap::Error) -> ExitCode {
+    #[allow(clippy::cast_sign_loss)]
+    ExitCode::from(e.exit_code() as u8)
+}
+
 async fn run_corrected_args(cwd: &vite_path::AbsolutePathBuf, raw_args: &[String]) -> ExitCode {
     let render_options = RenderOptions { show_header: false };
     let args_with_program = std::iter::once("vp".to_string()).chain(raw_args.iter().cloned());
@@ -193,8 +198,7 @@ async fn run_corrected_args(cwd: &vite_path::AbsolutePathBuf, raw_args: &[String
         Ok(args) => args,
         Err(e) => {
             e.print().ok();
-            #[allow(clippy::cast_sign_loss)]
-            return ExitCode::from(e.exit_code() as u8);
+            return clap_error_to_exit_code(&e);
         }
     };
 
@@ -344,47 +348,30 @@ async fn main() -> ExitCode {
                 if let Some(details) = extract_invalid_subcommand_details(&e) {
                     print_invalid_subcommand_error(&details);
 
-                    if let Some(suggestion) = &details.suggestion {
-                        if let Some(corrected_raw_args) = replace_top_level_typoed_subcommand(
+                    if let Some(suggestion) = &details.suggestion
+                        && let Some(corrected_raw_args) = replace_top_level_typoed_subcommand(
                             &raw_args,
                             &details.invalid_subcommand,
                             suggestion,
-                        ) {
-                            if prompt_to_run_suggested_command(suggestion) {
-                                run_corrected_args(&cwd, &corrected_raw_args).await
-                            } else {
-                                let code = e.exit_code();
-                                #[allow(clippy::cast_sign_loss)]
-                                ExitCode::from(code as u8)
-                            }
-                        } else {
-                            let code = e.exit_code();
-                            #[allow(clippy::cast_sign_loss)]
-                            ExitCode::from(code as u8)
-                        }
+                        )
+                        && prompt_to_run_suggested_command(suggestion)
+                    {
+                        run_corrected_args(&cwd, &corrected_raw_args).await
                     } else {
-                        let code = e.exit_code();
-                        #[allow(clippy::cast_sign_loss)]
-                        ExitCode::from(code as u8)
+                        clap_error_to_exit_code(&e)
                     }
                 } else {
                     e.print().ok();
-                    let code = e.exit_code();
-                    #[allow(clippy::cast_sign_loss)]
-                    ExitCode::from(code as u8)
+                    clap_error_to_exit_code(&e)
                 }
             } else if matches!(e.kind(), ErrorKind::UnknownArgument) {
                 if !print_unknown_argument_error(&e) {
                     e.print().ok();
                 }
-                let code = e.exit_code();
-                #[allow(clippy::cast_sign_loss)]
-                ExitCode::from(code as u8)
+                clap_error_to_exit_code(&e)
             } else {
                 e.print().ok();
-                let code = e.exit_code();
-                #[allow(clippy::cast_sign_loss)]
-                ExitCode::from(code as u8)
+                clap_error_to_exit_code(&e)
             }
         }
         Ok(args) => match run_command(cwd.clone(), args).await {

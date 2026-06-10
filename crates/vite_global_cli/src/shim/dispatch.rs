@@ -223,7 +223,6 @@ fn get_npm_global_prefix(npm_path: &AbsolutePath, node_dir: &AbsolutePathBuf) ->
 ///
 /// Otherwise, in interactive mode, prompt user to create bin links.
 /// In non-interactive mode, create links automatically.
-/// Always print a tip suggesting `vp install -g`.
 #[allow(clippy::disallowed_macros, clippy::disallowed_types)]
 fn check_npm_global_install_result(
     packages: &[String],
