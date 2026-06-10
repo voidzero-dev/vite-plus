@@ -148,7 +148,10 @@ export function discoverWorkspacePackages(
     }
     packages.push({
       name: pkg.name,
-      path: path.dirname(packageJsonRelativePath),
+      // glob returns native separators; normalize to forward slashes so the
+      // path compares cleanly against workspace-pattern-derived values like
+      // `parentDirs` on Windows (path.join accepts either separator).
+      path: path.dirname(packageJsonRelativePath).split(path.sep).join('/'),
       description: pkg.description,
       version: pkg.version,
     });

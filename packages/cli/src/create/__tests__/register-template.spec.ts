@@ -1,31 +1,13 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
-import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
+import * as prompts from '@voidzero-dev/vite-plus-prompts';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { resolveViteConfig } from '../../resolve-vite-config.js';
 import type { CreateTemplateEntry } from '../org-manifest.js';
 import { registerLocalTemplate } from '../register-template.js';
-
-/**
- * Walk up from this test file to the package/repo whose `node_modules`
- * contains `vite-plus`. Temp workspaces are created *inside* that
- * `node_modules` so the `import { defineConfig } from 'vite-plus'` lines
- * the helper writes (and that `resolveViteConfig` evaluates) resolve.
- * A detached `os.tmpdir()` cannot resolve `vite-plus`.
- */
-function findVitePlusRoot(): string {
-  let dir = import.meta.dirname;
-  while (dir !== path.dirname(dir)) {
-    if (fs.existsSync(path.join(dir, 'node_modules', 'vite-plus'))) {
-      return dir;
-    }
-    dir = path.dirname(dir);
-  }
-  throw new Error('could not locate a node_modules with vite-plus');
-}
-
-const TMP_PARENT = path.join(findVitePlusRoot(), 'node_modules', '.vp-register-template-tests');
 
 const ENTRY_A: CreateTemplateEntry = {
   name: 'my-generator',
@@ -43,16 +25,22 @@ describe('registerLocalTemplate', () => {
   let workspaceRoot: string;
 
   beforeEach(() => {
-    fs.mkdirSync(TMP_PARENT, { recursive: true });
-    workspaceRoot = fs.mkdtempSync(path.join(TMP_PARENT, 'ws-'));
+    // Self-contained workspace in the OS temp dir with a stubbed `vite-plus`
+    // so the `import { defineConfig } from 'vite-plus'` lines the helper
+    // writes (and that `resolveViteConfig` evaluates) resolve. Using a shared
+    // fixture dir inside the repo's real node_modules would race concurrent
+    // test runs and leave junk behind on a killed run.
+    workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-register-template-'));
+    fs.writeFileSync(path.join(workspaceRoot, 'package.json'), '{"type":"module"}');
+    const stubDir = path.join(workspaceRoot, 'node_modules', 'vite-plus');
+    fs.mkdirSync(stubDir, { recursive: true });
+    fs.writeFileSync(path.join(stubDir, 'package.json'), '{"type":"module","main":"index.js"}');
+    fs.writeFileSync(path.join(stubDir, 'index.js'), 'export const defineConfig = (c) => c;\n');
   });
 
   afterEach(() => {
     fs.rmSync(workspaceRoot, { recursive: true, force: true });
-  });
-
-  afterAll(() => {
-    fs.rmSync(TMP_PARENT, { recursive: true, force: true });
+    vi.restoreAllMocks();
   });
 
   function writeViteConfig(body: string): void {
@@ -181,5 +169,49 @@ describe('registerLocalTemplate', () => {
     };
     expect(config.run?.cache).toBe(true);
     expect(config.create?.templates).toEqual([ENTRY_A]);
+  });
+
+  it('warns when a same-name entry already points at a different template', async () => {
+    const warnSpy = vi.spyOn(prompts.log, 'warn').mockImplementation(() => {});
+    writeViteConfig(
+      `{ create: { templates: [{ name: '${ENTRY_A.name}', description: 'pre', template: './old-path' }] } }`,
+    );
+
+    const result = await registerLocalTemplate(workspaceRoot, ENTRY_A, true);
+
+    // Still a no-op, but the stale entry is called out instead of silently
+    // shadowing the new generator.
+    expect(result).toBeUndefined();
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('./old-path'));
+  });
+
+  it('throws on an unsupported config shape instead of writing nothing', async () => {
+    // `export default someVar` has no direct config object the upsert can
+    // edit. Reporting success while writing nothing would silently leave the
+    // generator unregistered.
+    const configPath = path.join(workspaceRoot, 'vite.config.ts');
+    const original = 'const config = { create: { templates: [] } };\n\nexport default config;\n';
+    fs.writeFileSync(configPath, original);
+
+    await expect(registerLocalTemplate(workspaceRoot, ENTRY_A, true)).rejects.toThrow(
+      /supported config object/,
+    );
+    expect(fs.readFileSync(configPath, 'utf8')).toBe(original);
+  });
+
+  it('replaces a shorthand `create` property with the recomputed block', async () => {
+    // `defineConfig({ create })` — a prepended duplicate key would be
+    // overridden by the shorthand at runtime; the shorthand itself must be
+    // replaced so the registered entry is live.
+    fs.writeFileSync(
+      path.join(workspaceRoot, 'vite.config.ts'),
+      `import { defineConfig } from 'vite-plus';\n\nconst create = { defaultTemplate: '@your-org' };\n\nexport default defineConfig({ create });\n`,
+    );
+
+    await registerLocalTemplate(workspaceRoot, ENTRY_A, true);
+
+    const create = await readCreate();
+    expect(create.defaultTemplate).toBe('@your-org');
+    expect(create.templates).toEqual([ENTRY_A]);
   });
 });

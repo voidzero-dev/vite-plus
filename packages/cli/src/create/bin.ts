@@ -54,7 +54,7 @@ import {
 import type { ExecutionWithProjectDir } from './command.ts';
 import { discoverTemplate, inferGitHubRepoName, inferParentDir, isGitHubUrl } from './discovery.ts';
 import { getInitialTemplateOptions } from './initial-template-options.ts';
-import type { CreateTemplateEntry } from './org-manifest.ts';
+import { CreateConfigSchemaError, type CreateTemplateEntry } from './org-manifest.ts';
 import {
   getConfiguredCreate,
   getConfiguredDefaultTemplate,
@@ -504,7 +504,6 @@ async function main() {
   let shouldSetupHooks = false;
   let bundled: Extract<OrgResolution, { kind: 'bundled' }> | undefined;
   let skipShorthandExpansion = false;
-  let isLocalTemplate = false;
   // Root config path written by generator auto-registration, formatted as part
   // of the monorepo format pass below rather than in a separate step.
   let registeredConfigPath: string | undefined;
@@ -512,16 +511,38 @@ async function main() {
 
   // Local templates declared in `create.templates` are only offered inside a
   // monorepo and resolved by entry `name`. Inside a monorepo, read the default
-  // template and the local templates in a single config evaluation.
+  // template and the local templates in a single config evaluation. A schema
+  // error is a real misconfiguration: exit cleanly with the message. An
+  // unevaluable config only disables local templates: warn so a registered
+  // name does not silently fall through to an npm package.
   let localTemplates: CreateTemplateEntry[] = [];
   if (isMonorepo) {
-    const configuredCreate = await getConfiguredCreate(workspaceInfoOptional.rootDir);
-    localTemplates = configuredCreate.templates;
-    if (!selectedTemplateName && configuredCreate.defaultTemplate) {
-      selectedTemplateName = configuredCreate.defaultTemplate;
+    try {
+      const configuredCreate = await getConfiguredCreate(workspaceInfoOptional.rootDir, {
+        throwOnReadError: true,
+      });
+      localTemplates = configuredCreate.templates;
+      if (!selectedTemplateName && configuredCreate.defaultTemplate) {
+        selectedTemplateName = configuredCreate.defaultTemplate;
+      }
+    } catch (error) {
+      if (error instanceof CreateConfigSchemaError) {
+        cancelAndExit(error.message, 1);
+      }
+      prompts.log.warn(
+        `Could not read \`create\` config from the workspace vite.config (${(error as Error).message}); local templates are unavailable`,
+      );
     }
   } else if (!selectedTemplateName) {
-    const defaultTemplate = await getConfiguredDefaultTemplate(workspaceInfoOptional.rootDir);
+    let defaultTemplate: string | undefined;
+    try {
+      defaultTemplate = await getConfiguredDefaultTemplate(workspaceInfoOptional.rootDir);
+    } catch (error) {
+      if (error instanceof CreateConfigSchemaError) {
+        cancelAndExit(error.message, 1);
+      }
+      throw error;
+    }
     if (defaultTemplate) {
       selectedTemplateName = defaultTemplate;
     }
@@ -594,8 +615,8 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   if (matchedLocalTemplate) {
     selectedTemplateName = matchedLocalTemplate.template;
     skipShorthandExpansion = true;
-    isLocalTemplate = true;
   }
+  const isLocalTemplate = matchedLocalTemplate !== undefined;
 
   const isBuiltinTemplate = selectedTemplateName.startsWith('vite:');
   const isBundledTemplate = bundled !== undefined;
@@ -665,7 +686,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
 
       const defaultParentDir = shouldOfferCwdOption
         ? cwdRelativeToRoot
-        : (inferParentDir(selectedTemplateName, workspaceInfoOptional) ??
+        : (inferParentDir(selectedTemplateName, workspaceInfoOptional, isLocalTemplate) ??
           workspaceInfoOptional.parentDirs[0]);
 
       const selected = await prompts.select({
@@ -706,7 +727,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       prompts.log.info(`Use ${accent('--directory')} to specify a different target location.`);
     }
     const inferredParentDir =
-      inferParentDir(selectedTemplateName, workspaceInfoOptional) ??
+      inferParentDir(selectedTemplateName, workspaceInfoOptional, isLocalTemplate) ??
       workspaceInfoOptional.parentDirs[0];
     selectedParentDir = inferredParentDir;
   }
@@ -1121,18 +1142,22 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   // Register a scaffolded generator in `create.templates` so it appears in the
   // `vp create` picker (and resolves by name) without a manual config edit.
   if (selectedTemplateName === BuiltinTemplate.generator && isMonorepo) {
-    const generatorPkg = readJsonFile(path.join(fullPath, 'package.json')) as {
-      name?: string;
-      description?: string;
-    };
-    const generatorName = generatorPkg.name ?? packageName;
-    if (generatorName) {
-      updateCreateProgress('Registering generator');
-      pauseCreateProgress();
-      // Register by a relative `./path` to the generator's directory: it is
-      // explicit and survives a package rename, unlike resolving by name.
-      const generatorTemplatePath = `./${projectDir.split(path.sep).join('/')}`;
-      try {
+    updateCreateProgress('Registering generator');
+    pauseCreateProgress();
+    // Register by a relative `./path` to the generator's directory: it is
+    // explicit and survives a package rename, unlike resolving by name.
+    const generatorTemplatePath = `./${projectDir.split(path.sep).join('/')}`;
+    let generatorName = packageName;
+    try {
+      // Inside the try: the generator is already scaffolded; a registration
+      // failure (an unreadable package.json or root config) must not abort
+      // the create or clobber config. Warn and point at the manual edit.
+      const generatorPkg = readJsonFile(path.join(fullPath, 'package.json')) as {
+        name?: string;
+        description?: string;
+      };
+      generatorName = generatorPkg.name ?? packageName;
+      if (generatorName) {
         registeredConfigPath = await registerLocalTemplate(
           workspaceInfo.rootDir,
           {
@@ -1142,17 +1167,14 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
           },
           compactOutput,
         );
-      } catch (error) {
-        // The generator is already scaffolded; a registration failure (e.g. an
-        // unreadable root config) must not abort the create or clobber config.
-        // Warn and point the user at the manual edit instead.
-        prompts.log.warn(
-          `Could not register the generator in create.templates (${(error as Error).message}).\n` +
-            `Add it by hand: { name: '${generatorName}', template: '${generatorTemplatePath}' }`,
-        );
       }
-      resumeCreateProgress();
+    } catch (error) {
+      prompts.log.warn(
+        `Could not register the generator in create.templates (${(error as Error).message}).\n` +
+          `Add it by hand: { name: '${generatorName || path.basename(projectDir)}', template: '${generatorTemplatePath}' }`,
+      );
     }
+    resumeCreateProgress();
   }
 
   const agentInstructionsRoot = isMonorepo ? workspaceInfo.rootDir : fullPath;
@@ -1318,11 +1340,8 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     await runViteFmt(workspaceInfo.rootDir, options.interactive, fmtPaths, {
       silent: compactOutput,
     });
-    if (shouldSetupGit) {
-      updateCreateProgress('Creating initial commit');
-      await initGitRepository(workspaceInfo.rootDir);
-      await createInitialCommit(workspaceInfo.rootDir);
-    }
+    // No git setup here: `resolveGitInit` always returns false inside an
+    // existing monorepo (the package shares the monorepo's repository).
   } else {
     if (shouldMigrateLintFmtTools) {
       await installAndMigrate(fullPath);

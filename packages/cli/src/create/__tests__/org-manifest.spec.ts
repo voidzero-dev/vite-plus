@@ -56,6 +56,13 @@ describe('validateCreateTemplates', () => {
     ).toThrow(/uses the reserved `__vp_` prefix/);
   });
 
+  it('throws on the reserved vite: name prefix', () => {
+    // A local entry named like a builtin would shadow it in `vp create`.
+    expect(() =>
+      validateCreateTemplates([{ name: 'vite:application', description: 'a', template: 'a' }]),
+    ).toThrow(/uses the reserved `vite:` prefix/);
+  });
+
   it('throws on a relative template that escapes the root', () => {
     expect(() =>
       validateCreateTemplates([{ name: 'a', description: 'a', template: '../outside' }]),

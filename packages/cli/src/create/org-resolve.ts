@@ -2,6 +2,7 @@ import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
 import { findWorkspaceRoot, hasViteConfig, resolveViteConfig } from '../resolve-vite-config.ts';
 import {
+  CreateConfigSchemaError,
   type CreateTemplateEntry,
   filterManifestForContext,
   isRelativePath,
@@ -251,13 +252,18 @@ export async function getConfiguredCreate(
 }
 
 /**
- * Read `create.defaultTemplate` only. Best-effort: never throws, returning
- * `undefined` when the config is missing, unresolvable, or malformed.
+ * Read `create.defaultTemplate` only. Best-effort for missing or unresolvable
+ * configs (returns `undefined`), but a malformed `create.templates` still
+ * rethrows its {@link CreateConfigSchemaError}: swallowing it here would
+ * silently drop a valid `defaultTemplate` along with the diagnostic.
  */
 export async function getConfiguredDefaultTemplate(startDir: string): Promise<string | undefined> {
   try {
     return (await getConfiguredCreate(startDir)).defaultTemplate;
-  } catch {
+  } catch (error) {
+    if (error instanceof CreateConfigSchemaError) {
+      throw error;
+    }
     return undefined;
   }
 }

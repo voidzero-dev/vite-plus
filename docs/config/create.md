@@ -43,11 +43,11 @@ Each entry has:
 
 | Field         | Required | Notes                                                                                                                                                                                                                                            |
 | ------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `name`        | yes      | Identifier shown in the picker and accepted as `vp create <name>`. Must be unique within the array.                                                                                                                                              |
+| `name`        | yes      | Identifier shown in the picker and accepted as `vp create <name>`. Must be unique within the array. The `vite:` prefix is reserved for built-in templates.                                                                                       |
 | `description` | yes      | One-line description shown in the picker.                                                                                                                                                                                                        |
 | `template`    | yes      | A workspace package name, a relative `./path` to a local package's directory (resolved against the workspace root), a `vite:*` built-in, a GitHub URL, or a full npm package name (e.g. `create-foo`). It is run as-is (not shorthand-expanded). |
 
-`create.templates` is the source of truth for local templates: only entries listed here appear in the picker. Vite+ does not infer templates from package.json keywords. A `create.templates` entry whose `template` resolves to a local package without a `bin` is reported as an error rather than falling through to an unrelated npm package.
+`create.templates` is the source of truth for local templates: only entries listed here appear in the picker. Vite+ does not infer templates from package.json keywords. A `create.templates` entry whose `template` does not match any workspace package, or resolves to a local package without a `bin`, is reported as an error rather than falling through to an unrelated npm package.
 
 [`vp create vite:generator`](/guide/create#code-generators) adds an entry here automatically (idempotently, preserving `defaultTemplate`); you can also edit the list by hand.
 

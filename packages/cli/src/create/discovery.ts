@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import type { WorkspaceInfo, WorkspaceInfoOptional, WorkspacePackage } from '../types/index.ts';
+import type { WorkspaceInfo, WorkspaceInfoOptional } from '../types/index.ts';
 import { readJsonFile } from '../utils/json.ts';
 import { isBingoTemplate } from '../utils/workspace.ts';
 import { prependToPathToEnvs } from './command.ts';
@@ -43,14 +43,6 @@ export function inferGitHubRepoName(templateName: string): string | null {
   return repoName || null;
 }
 
-// Find a workspace package by its name (the value used as a template specifier)
-function findLocalPackage(
-  workspaceInfo: WorkspaceInfoOptional,
-  templateName: string,
-): WorkspacePackage | undefined {
-  return workspaceInfo.packages.find((pkg) => pkg.name === templateName);
-}
-
 // Resolve a declared local template (by workspace package name or a relative
 // `./path`) to its directory, relative to the workspace root and using forward
 // slashes (so it matches `parentDirs` and joins cleanly on any platform).
@@ -61,7 +53,7 @@ function localTemplateDir(
   if (isRelativePath(templateName)) {
     return templateName.replace(/^\.\//, '');
   }
-  return findLocalPackage(workspaceInfo, templateName)?.path;
+  return workspaceInfo.packages.find((pkg) => pkg.name === templateName)?.path;
 }
 
 // Resolve the bin script a local template package should be executed through.
@@ -80,8 +72,11 @@ function resolveLocalBinPath(
     return path.join(localPackagePath, bin);
   }
   const entries = Object.entries(bin);
-  if (entries.length <= 1) {
-    return entries.length === 1 ? path.join(localPackagePath, entries[0][1]) : undefined;
+  if (entries.length === 0) {
+    return undefined;
+  }
+  if (entries.length === 1) {
+    return path.join(localPackagePath, entries[0][1]);
   }
   const unscopedName = packageName.slice(packageName.lastIndexOf('/') + 1);
   const preferred = bin[packageName] ?? bin[unscopedName];
@@ -111,7 +106,7 @@ export function discoverTemplate(
   const envs = prependToPathToEnvs(workspaceInfo.downloadPackageManager.binPrefix, {
     ...process.env,
   });
-  const parentDir = inferParentDir(templateName, workspaceInfo);
+  const parentDir = inferParentDir(templateName, workspaceInfo, localTemplate);
   if (bundledLocalPath) {
     return {
       command: '',
@@ -155,8 +150,17 @@ export function discoverTemplate(
   // (resolved against the workspace root). Only when `localTemplate` is set —
   // `create.templates` is the source of truth; a bare workspace name is not a
   // template otherwise. Relative paths are escape-checked at config validation.
-  const localDir = localTemplate ? localTemplateDir(workspaceInfo, templateName) : undefined;
-  if (localDir) {
+  if (localTemplate) {
+    const localDir = localTemplateDir(workspaceInfo, templateName);
+    // A declared local template that resolves to nothing (a renamed/removed
+    // workspace package, or a typo) must fail clearly instead of falling
+    // through to an unrelated same-named npm package.
+    if (!localDir) {
+      throw new Error(
+        `Local template "${templateName}" does not match any workspace package; ` +
+          `update the \`create.templates\` entry in vite.config.ts`,
+      );
+    }
     const localPackagePath = path.join(workspaceInfo.rootDir, localDir);
     const packageJsonPath = path.join(localPackagePath, 'package.json');
     if (!fs.existsSync(packageJsonPath)) {
@@ -169,7 +173,14 @@ export function discoverTemplate(
       dependencies?: Record<string, string>;
       bin?: Record<string, string> | string;
     };
-    const binPath = resolveLocalBinPath(localPackagePath, pkg.name ?? templateName, pkg.bin) ?? '';
+    const binPath = resolveLocalBinPath(localPackagePath, pkg.name ?? templateName, pkg.bin);
+    // A declared template without a bin entry cannot be executed. Fail clearly
+    // instead of falling through to an unrelated `create-<name>` npm package.
+    if (!binPath) {
+      throw new Error(
+        `Local template "${templateName}" has no "bin" entry in its package.json, so it cannot be run as a template`,
+      );
+    }
     const args = [binPath, ...templateArgs];
     let type: TemplateType = TemplateType.remote;
     if (isBingoTemplate(pkg)) {
@@ -177,21 +188,14 @@ export function discoverTemplate(
       // add `--skip-requests` by default for bingo templates
       args.push('--skip-requests');
     }
-    if (binPath) {
-      return {
-        command: 'node',
-        args,
-        envs,
-        type,
-        parentDir,
-        interactive,
-      };
-    }
-    // A declared template without a bin entry cannot be executed. Fail clearly
-    // instead of falling through to an unrelated `create-<name>` npm package.
-    throw new Error(
-      `Local template "${templateName}" has no "bin" entry in its package.json, so it cannot be run as a template`,
-    );
+    return {
+      command: 'node',
+      args,
+      envs,
+      type,
+      parentDir,
+      interactive,
+    };
   }
 
   // Manifest-resolved entries are already fully qualified by the author —
@@ -299,15 +303,17 @@ export function expandCreateShorthand(templateName: string): string {
 export function inferParentDir(
   templateName: string,
   workspaceInfo: WorkspaceInfoOptional,
+  localTemplate = false,
 ): string | undefined {
   if (workspaceInfo.parentDirs.length === 0) {
     return undefined;
   }
   // Output generated from a local package belongs next to that package, in the
   // parent directory it already lives in, rather than defaulting to the `apps`
-  // rule below. This covers any local package run as a generator (matched by
-  // workspace package name or by a relative `./path` to its directory).
-  const localDir = localTemplateDir(workspaceInfo, templateName);
+  // rule below. Gated like `discoverTemplate`: only a `create.templates`
+  // resolution makes the name local — an npm template that merely collides
+  // with a workspace package name must not be co-located with it.
+  const localDir = localTemplate ? localTemplateDir(workspaceInfo, templateName) : undefined;
   if (localDir) {
     const ownParentDir = path.dirname(localDir);
     if (workspaceInfo.parentDirs.includes(ownParentDir)) {

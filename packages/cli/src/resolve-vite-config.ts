@@ -1,12 +1,17 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+// Mirrors Vite's own DEFAULT_CONFIG_FILES order so finders here pick the same
+// file Vite loads when a directory contains more than one config (e.g. a
+// `vite.config.js` next to a stray `vite.config.ts`). Readers evaluate via
+// Vite's loader, so a different order would make read and write target
+// different files.
 const VITE_CONFIG_FILES = [
-  'vite.config.ts',
   'vite.config.js',
   'vite.config.mjs',
-  'vite.config.mts',
+  'vite.config.ts',
   'vite.config.cjs',
+  'vite.config.mts',
   'vite.config.cts',
 ];
 

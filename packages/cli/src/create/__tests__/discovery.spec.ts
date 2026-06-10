@@ -97,6 +97,19 @@ describe('discoverTemplate', () => {
     expect(templateInfo.command).toBe('create-my-template');
   });
 
+  it('rejects a declared by-name template that matches no workspace package', () => {
+    const workspaceInfo = createWorkspaceWithPackage({
+      name: 'my-template',
+      bin: './bin/index.ts',
+    });
+
+    // A stale/typo'd `create.templates` entry must error instead of falling
+    // through to a same-named npm package.
+    expect(() =>
+      discoverTemplate('my-renamed', [], workspaceInfo, undefined, undefined, true, true),
+    ).toThrow(/does not match any workspace package/);
+  });
+
   it('rejects a declared local template without a bin entry', () => {
     const workspaceInfo = createWorkspaceWithPackage({ name: 'my-template' });
 
@@ -152,22 +165,32 @@ describe('inferParentDir', () => {
     );
     // Must NOT fall back to the default `apps` rule for a local generator;
     // output is co-located with the matched workspace package.
-    expect(inferParentDir('my-generator', ws)).toBe('tools');
+    expect(inferParentDir('my-generator', ws, true)).toBe('tools');
   });
 
   it('co-locates a relative-path template next to its directory', () => {
     const ws = inferParentDirWorkspace(['apps', 'packages', 'tools']);
-    expect(inferParentDir('./tools/my-generator', ws)).toBe('tools');
+    expect(inferParentDir('./tools/my-generator', ws, true)).toBe('tools');
   });
 
   it('co-locates under a nested (multi-segment) parent directory', () => {
     const ws = inferParentDirWorkspace(['apps', 'tools/generators']);
-    expect(inferParentDir('./tools/generators/my-gen', ws)).toBe('tools/generators');
+    expect(inferParentDir('./tools/generators/my-gen', ws, true)).toBe('tools/generators');
   });
 
   it('falls back to the app rule when the name is not a local package', () => {
     const ws = inferParentDirWorkspace(['apps', 'packages', 'tools']);
-    expect(inferParentDir('vite', ws)).toBe('apps');
+    expect(inferParentDir('vite', ws, true)).toBe('apps');
+  });
+
+  it('ignores a colliding workspace package when the template is not local', () => {
+    // `vp create vue` running the npm `create-vue` template must use the app
+    // rule even when an unrelated workspace package is also named `vue`.
+    const ws = inferParentDirWorkspace(
+      ['apps', 'packages', 'tools'],
+      [{ name: 'vue', path: 'tools/vue' }],
+    );
+    expect(inferParentDir('vue', ws)).toBe('apps');
   });
 });
 

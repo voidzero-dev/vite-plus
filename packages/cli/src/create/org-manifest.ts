@@ -235,9 +235,16 @@ export function validateCreateTemplates(templates: unknown): CreateTemplateEntry
     throw new CreateConfigSchemaError('create.templates must be an array');
   }
   const makeError = (message: string) => new CreateConfigSchemaError(message);
-  return validateTemplateEntries(templates, 'create.templates', makeError, (entry, index) =>
-    validateTemplateEntry(entry, index, 'create.templates', makeError),
-  );
+  return validateTemplateEntries(templates, 'create.templates', makeError, (entry, index) => {
+    const validated = validateTemplateEntry(entry, index, 'create.templates', makeError);
+    // `vite:*` names are builtin templates; a local entry resolves before the
+    // builtin in `vp create <name>`, so allowing the prefix would let config
+    // silently shadow e.g. `vite:application`.
+    if (validated.name.startsWith('vite:')) {
+      throw makeError(`create.templates[${index}].name uses the reserved \`vite:\` prefix`);
+    }
+    return validated;
+  });
 }
 
 interface RegistryPackument {
