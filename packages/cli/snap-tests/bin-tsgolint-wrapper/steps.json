@@ -1,0 +1,6 @@
+{
+  "commands": [
+    "node ../node_modules/vite-plus/bin/tsgolint --help # should exercise import path",
+    "node ../node_modules/vite-plus/bin/tsgolint --tsconfig tsconfig.json --list-files | grep \"Found file\" # should allow --list-files mode"
+  ]
+}
