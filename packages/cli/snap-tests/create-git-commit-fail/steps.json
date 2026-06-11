@@ -1,0 +1,11 @@
+{
+  "env": {
+    "GIT_CONFIG_COUNT": "1",
+    "GIT_CONFIG_KEY_0": "core.hooksPath",
+    "GIT_CONFIG_VALUE_0": "../hooks"
+  },
+  "commands": [
+    "vp create vite:monorepo --no-interactive --directory my-mono --git # failing pre-commit hook (via core.hooksPath) aborts the initial commit; git output is surfaced",
+    "test -d my-mono/.git && echo 'Git initialized' # repository still created despite failed commit"
+  ]
+}
