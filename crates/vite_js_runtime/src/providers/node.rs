@@ -1182,14 +1182,17 @@ fedcba987654  node-v22.13.1-win-x64.zip";
 
         let versions = vec![
             NodeVersionEntry { version: "v25.5.0".into(), lts: LtsInfo::NotLts },
-            NodeVersionEntry { version: "v24.5.0".into(), lts: LtsInfo::Codename("Jod".into()) },
-            NodeVersionEntry { version: "v22.15.0".into(), lts: LtsInfo::Codename("Jod".into()) },
+            NodeVersionEntry {
+                version: "v24.16.0".into(),
+                lts: LtsInfo::Codename("Krypton".into()),
+            },
+            NodeVersionEntry { version: "v22.18.0".into(), lts: LtsInfo::Codename("Jod".into()) },
             NodeVersionEntry { version: "v20.19.0".into(), lts: LtsInfo::Codename("Iron".into()) },
         ];
 
-        // ^20.19.0 || >=22.12.0 should prefer v24.5.0 (highest LTS) over v25.5.0
-        let result = resolve_version_from_list("^20.19.0 || >=22.12.0", &versions).unwrap();
-        assert_eq!(result, "24.5.0");
+        // ^22.18.0 || >=24.11.0 should prefer v24.16.0 (highest LTS) over v25.5.0
+        let result = resolve_version_from_list("^22.18.0 || >=24.11.0", &versions).unwrap();
+        assert_eq!(result, "24.16.0");
     }
 
     #[test]
