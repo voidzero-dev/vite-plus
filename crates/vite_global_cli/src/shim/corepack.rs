@@ -133,14 +133,16 @@ async fn resolve_corepack_invocation() -> Result<CorepackInvocation, i32> {
         return Ok(CorepackInvocation { program: corepack_path, pre_args: Vec::new() });
     }
 
-    // 3. Node.js 25+ no longer bundles corepack: install it as a vp-managed
-    //    global package, then run that copy. Only the `corepack` bin is
-    //    linked; the pnpm/yarn launchers the package also declares stay
-    //    unexposed (that is `corepack enable`'s job) and must not conflict
-    //    with vp-managed package managers. The notice goes to stderr so the
-    //    wrapped corepack's stdout stays parseable.
+    // 3. No usable corepack in the resolved Node.js (Node.js 25+ no longer
+    //    bundles it; a bundled copy may also have been removed, e.g. by
+    //    `npm uninstall -g corepack`): install it as a vp-managed global
+    //    package, then run that copy. Only the `corepack` bin is linked; the
+    //    pnpm/yarn launchers the package also declares stay unexposed (that
+    //    is `corepack enable`'s job) and must not conflict with vp-managed
+    //    package managers. The notice goes to stderr so the wrapped
+    //    corepack's stdout stays parseable.
     eprintln!(
-        "vp: corepack is not bundled with Node.js {}; installing it as a managed global package",
+        "vp: corepack is not available for Node.js {}; installing it as a managed global package",
         resolution.version
     );
     if let Err((_, error)) = crate::commands::global::install::install(

@@ -126,12 +126,13 @@ async fn execute_core_tool(cwd: AbsolutePathBuf, tool: &str) -> Result<ExitStatu
     // Check if the tool exists
     if !tokio::fs::try_exists(&tool_path).await.unwrap_or(false) {
         output::error(&format!("{} not found", tool.bold()));
-        // corepack is no longer bundled starting with Node.js 25; only print
-        // that hint when the Node.js installation itself is present.
+        // corepack is no longer bundled starting with Node.js 25 (and a
+        // bundled copy may have been removed); only print that hint when the
+        // Node.js installation itself is present.
         if tool == "corepack"
             && crate::shim::dispatch::locate_tool(&resolution.version, "node").is_ok()
         {
-            eprintln!("corepack is not bundled with Node.js {}.", resolution.version);
+            eprintln!("corepack is not available for Node.js {}.", resolution.version);
             eprintln!(
                 "It is installed automatically on first use, or run 'vp install -g corepack'."
             );
