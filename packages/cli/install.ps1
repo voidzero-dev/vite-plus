@@ -631,7 +631,7 @@ function Main {
         # Pre-trampoline versions: fall back to legacy .cmd and shell script wrappers.
         # Remove any stale trampoline .exe shims left by a newer install — .exe wins
         # over .cmd on Windows PATH, so leftover trampolines would bypass the wrappers.
-        foreach ($stale in @("vp.exe", "node.exe", "npm.exe", "npx.exe", "vpx.exe")) {
+        foreach ($stale in @("vp.exe", "node.exe", "npm.exe", "npx.exe", "corepack.exe", "vpx.exe", "vpr.exe")) {
             $stalePath = Join-Path "$InstallDir\bin" $stale
             if (Test-Path $stalePath) {
                 Remove-Item -Path $stalePath -Force -ErrorAction SilentlyContinue

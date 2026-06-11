@@ -101,6 +101,16 @@ pub async fn execute(refresh: bool, env_only: bool) -> Result<ExitStatus, Error>
         } else {
             skipped.push(*tool);
         }
+
+        // Drop stale `npm install -g` link configs for default shim names
+        // (e.g. a pre-default-shim `npm i -g corepack`): the link itself is
+        // replaced by the shim above, and a leftover Npm-sourced BinConfig
+        // would let a later `npm uninstall -g` delete the default shim.
+        if let Ok(Some(config)) = super::bin_config::BinConfig::load(tool).await
+            && config.source == super::bin_config::BinSource::Npm
+        {
+            let _ = super::bin_config::BinConfig::delete(tool).await;
+        }
     }
 
     #[cfg(windows)]
@@ -484,6 +494,12 @@ pub(crate) async fn cleanup_legacy_windows_shim(bin_dir: &vite_path::AbsolutePat
     let cmd_path = bin_dir.join(format!("{tool}.cmd"));
     let _ = tokio::fs::remove_file(&cmd_path).await;
 
+    // Remove .ps1 launchers (corepack's cmd-shim writes them; PowerShell
+    // resolves `<tool>.ps1` ahead of `<tool>.exe`, so a leftover would shadow
+    // the trampoline). Vite+ never creates per-tool .ps1 files in bin.
+    let ps1_path = bin_dir.join(format!("{tool}.ps1"));
+    let _ = tokio::fs::remove_file(&ps1_path).await;
+
     // Remove old shell script wrapper (extensionless, for Git Bash)
     // Only remove if it starts with #!/bin/sh (not a binary or other file)
     // Read only the first 9 bytes to avoid loading large files into memory
@@ -849,9 +865,11 @@ mod tests {
 
     #[test]
     fn test_shim_tools_contains_default_shims() {
-        // corepack is a default shim (#858, #1309); node/npm/npx resolve the
-        // project Node.js version; vpx/vpr are command shorthands.
-        assert_eq!(SHIM_TOOLS, &["node", "npm", "npx", "corepack", "vpx", "vpr"]);
+        // corepack is a default shim (#858, #1309). It must NOT be a core
+        // shim: `vp install -g corepack` stays allowed (CORE_SHIMS guard) and
+        // dispatch uses a dedicated resolution path instead of the core one.
+        assert!(SHIM_TOOLS.contains(&"corepack"));
+        assert!(!crate::commands::global::CORE_SHIMS.contains(&"corepack"));
     }
 
     /// Helper: create a test_guard with user_home set to the given path.

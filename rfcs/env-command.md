@@ -1907,7 +1907,7 @@ When the `corepack` shim is invoked:
 
 1. **vp-managed global package**: if corepack was installed via `vp install -g corepack`, that installation wins. Explicit user intent takes precedence, and the managed copy provides a consistent corepack version across Node.js versions (same philosophy as `packageManager` winning over the Node-bundled npm).
 2. **Node-bundled corepack**: resolve the project Node.js version (same resolution chain as `node`/`npm`/`npx`) and use the `corepack` bundled with that installation (present in Node.js ≤ 24).
-3. **Auto-install fallback**: on Node.js 25+ where corepack is not bundled, automatically install corepack as a vp-managed global package and execute it. Unlike an explicit `vp install -g corepack` (which exposes every binary the package declares, including its pnpm/yarn launchers), the auto-install links **only the `corepack` binary**: creating package-manager launchers stays `corepack enable`'s job, and the auto-install can never conflict with vp-managed package managers like an existing `vp install -g pnpm`. A one-line notice is printed when the install happens.
+3. **Auto-install fallback**: on Node.js 25+ where corepack is not bundled, automatically install corepack as a vp-managed global package and execute it. Unlike an explicit `vp install -g corepack` (which exposes every binary the package declares, including its pnpm/yarn launchers), the auto-install links **only the `corepack` binary**: creating package-manager launchers stays `corepack enable`'s job, and the auto-install can never conflict with vp-managed package managers like an existing `vp install -g pnpm`. The restriction is recorded in the package metadata (`bins_restricted`) so `vp update -g` preserves it; an explicit `vp install -g corepack` resets it. A one-line notice is printed to stderr when the install happens.
 
 ### `corepack enable` / `corepack disable`
 
@@ -1916,7 +1916,7 @@ Corepack's `enable` command creates package-manager launchers (`pnpm`, `yarn`, .
 To fix this, the shim intercepts `corepack enable` and `corepack disable` invocations that do not pass an explicit `--install-directory` and injects `--install-directory ~/.vite-plus/bin` (the same spawn+wait pattern used for `npm install -g` interception):
 
 - `corepack enable` places `pnpm`/`yarn` launchers into `~/.vite-plus/bin`, which is on `PATH`. The launchers run via the shimmed `node`, so they still respect per-project Node.js version resolution, while corepack itself respects `package.json#packageManager`.
-- `corepack disable` removes them from the same location. Vite+-owned shims are protected: core shims (`vp`, `node`, `npm`, `npx`, `corepack`, `vpx`, `vpr`) and `vp install -g` binaries tracked by a `BinConfig` are restored after corepack exits if corepack removed them.
+- `corepack disable` removes them from the same location. Vite+-owned entries among the corepack-managed launcher names (`npm`, `npx`, `pnpm`, `pnpx`, `yarn`, `yarnpkg`) are protected: default shims, `vp install -g` binaries, and `npm install -g` links tracked by a `BinConfig` are snapshotted before corepack runs and restored afterwards if corepack removed or replaced them. Entries that were already absent or not Vite+-owned before the run are left alone.
 
 ### Interplay with `vp install -g corepack`
 

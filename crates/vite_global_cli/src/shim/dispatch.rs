@@ -23,7 +23,7 @@ use crate::{
             config::{self, ShimMode},
             package_metadata::PackageMetadata,
         },
-        global::CORE_SHIMS,
+        global::install::is_protected_shim,
     },
     error::Error,
 };
@@ -265,8 +265,8 @@ fn check_npm_global_install_result(
         let bin_names = extract_bin_names(&package_json);
 
         for bin_name in bin_names {
-            // Skip core shims
-            if CORE_SHIMS.contains(&bin_name.as_str()) {
+            // Skip protected shims (core shims and default env shims)
+            if is_protected_shim(&bin_name) {
                 continue;
             }
 
@@ -419,7 +419,7 @@ fn extract_bin_path(package_json: &serde_json::Value, bin_name: &str) -> Option<
 }
 
 /// Create a bin link for a binary and record it via BinConfig.
-fn create_bin_link(
+pub(crate) fn create_bin_link(
     bin_dir: &AbsolutePath,
     bin_name: &str,
     source_path: &AbsolutePath,
@@ -514,8 +514,10 @@ fn remove_npm_global_uninstall_links(bin_entries: &[(String, String)], npm_prefi
     let Ok(bin_dir) = config::get_bin_dir() else { return };
 
     for (bin_name, package_name) in bin_entries {
-        // Skip core shims
-        if CORE_SHIMS.contains(&bin_name.as_str()) {
+        // Skip protected shims: a stale Npm BinConfig (e.g. a pre-default-shim
+        // `npm install -g corepack`) must not let `npm uninstall -g` delete a
+        // default shim that `vp env setup` now owns.
+        if is_protected_shim(bin_name) {
             continue;
         }
 
@@ -1015,44 +1017,50 @@ async fn dispatch_package_binary(tool: &str, args: &[String]) -> i32 {
         package_metadata.platform.node.clone()
     };
 
-    // Ensure Node.js is installed
-    if let Err(e) = ensure_installed(&node_version).await {
-        eprintln!("vp: Failed to install Node {}: {e}", node_version);
-        return 1;
-    }
+    let (program, mut full_args) =
+        match package_binary_invocation(&package_metadata, tool, &node_version).await {
+            Ok(invocation) => invocation,
+            Err(e) => {
+                eprintln!("vp: {e}");
+                return 1;
+            }
+        };
+    full_args.extend(args.iter().cloned());
+    exec::exec_tool(&program, &full_args)
+}
+
+/// Resolve how to invoke a package binary installed via `vp install -g` with
+/// the given Node.js version: ensures the runtime is present, prepends its bin
+/// directory to PATH for child processes, and returns the program plus leading
+/// arguments (JS binaries run through node).
+pub(crate) async fn package_binary_invocation(
+    metadata: &PackageMetadata,
+    tool: &str,
+    node_version: &str,
+) -> Result<(AbsolutePathBuf, Vec<String>), String> {
+    ensure_installed(node_version)
+        .await
+        .map_err(|e| format!("Failed to install Node {node_version}: {e}"))?;
 
     // Locate the actual binary in the package directory
-    let binary_path = match locate_package_binary(&package_metadata.name, tool) {
-        Ok(p) => p,
-        Err(e) => {
-            eprintln!("vp: Binary '{tool}' not found: {e}");
-            return 1;
-        }
-    };
+    let binary_path = locate_package_binary(&metadata.name, tool)
+        .map_err(|e| format!("Binary '{tool}' not found: {e}"))?;
 
-    // Locate node binary for this version
-    let node_path = match locate_tool(&node_version, "node") {
-        Ok(p) => p,
-        Err(e) => {
-            eprintln!("vp: Node not found: {e}");
-            return 1;
-        }
-    };
+    let node_path =
+        locate_tool(node_version, "node").map_err(|e| format!("Node not found: {e}"))?;
 
     // Prepare environment for recursive invocations
-    let node_bin_dir = node_path.parent().expect("Node has no parent directory");
+    let node_bin_dir =
+        node_path.parent().ok_or_else(|| "Node has no parent directory".to_string())?;
     let _ = prepend_to_path_env(node_bin_dir, PrependOptions::default());
 
-    // Check if the binary is a JavaScript file that needs Node.js
-    // This info was determined at install time and stored in metadata
-    if package_metadata.is_js_binary(tool) {
-        // Execute: node <binary_path> <args>
-        let mut full_args = vec![binary_path.as_path().display().to_string()];
-        full_args.extend(args.iter().cloned());
-        exec::exec_tool(&node_path, &full_args)
+    // JS binaries (determined at install time and stored in metadata) run
+    // through node; native executables run directly.
+    if metadata.is_js_binary(tool) {
+        let pre_args = vec![binary_path.as_path().display().to_string()];
+        Ok((node_path, pre_args))
     } else {
-        // Execute the binary directly (native executable or non-Node script)
-        exec::exec_tool(&binary_path, args)
+        Ok((binary_path, Vec::new()))
     }
 }
 

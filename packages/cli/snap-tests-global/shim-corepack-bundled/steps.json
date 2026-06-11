@@ -1,6 +1,10 @@
 {
   "ignoredPlatforms": ["win32"],
   "commands": [
+    {
+      "command": "vp remove -g corepack >/dev/null 2>&1 || true # Isolate from a leftover managed corepack, which would win over the bundled one",
+      "ignoreOutput": true
+    },
     "printf '20.18.0\\n' > .node-version # Pin the project Node.js version",
     "vp env exec node --version # Ensure Node.js is installed first",
     "corepack --version # corepack shim runs the Node-bundled corepack"

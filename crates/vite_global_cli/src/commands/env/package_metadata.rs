@@ -24,6 +24,11 @@ pub struct PackageMetadata {
     /// Binary names that are JavaScript files (need Node.js to run).
     #[serde(default)]
     pub js_bins: HashSet<String>,
+    /// Whether `bins` was deliberately restricted to a subset of the bins the
+    /// package declares (e.g., the corepack shim auto-install links only
+    /// `corepack`). Updates keep the restriction; explicit installs reset it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub bins_restricted: bool,
     /// Package manager used for installation (npm, yarn, pnpm)
     pub manager: String,
     /// Installation timestamp
@@ -57,6 +62,7 @@ impl PackageMetadata {
             platform: Platform { node: node_version, npm: npm_version },
             bins,
             js_bins,
+            bins_restricted: false,
             manager,
             installed_at: Utc::now(),
         }

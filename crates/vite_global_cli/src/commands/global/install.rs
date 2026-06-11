@@ -52,6 +52,17 @@ fn package_error(package_name: &str, error: impl Into<Error>) -> (Option<String>
     (Some(package_name.to_string()), error.into())
 }
 
+/// Symlink target used for package shims on Unix (relative to the bin dir).
+#[cfg(unix)]
+pub(crate) const PACKAGE_SHIM_TARGET: &str = "../current/bin/vp";
+
+/// Check whether a binary name is a shim Vite+ owns unconditionally: core
+/// shims plus the default env shims (node, npm, npx, corepack, vpx, vpr).
+/// Protected shims are never created for or removed on behalf of packages.
+pub(crate) fn is_protected_shim(bin_name: &str) -> bool {
+    CORE_SHIMS.contains(&bin_name) || crate::commands::env::setup::SHIM_TOOLS.contains(&bin_name)
+}
+
 /// Install global packages parallelly.
 ///
 /// If `node_version` is provided, uses that version. Otherwise, resolves from current directory.
@@ -200,14 +211,27 @@ pub async fn install(
         };
         // Restrict exposed binaries when requested (e.g., the corepack shim
         // auto-install only links `corepack`, not the pnpm/yarn launchers
-        // that `corepack enable` creates on demand).
-        let (bin_names, js_bins) = match only_bins {
-            Some(only) => (
-                bin_names.into_iter().filter(|bin| only.contains(&bin.as_str())).collect(),
-                js_bins.into_iter().filter(|bin| only.contains(&bin.as_str())).collect(),
-            ),
-            None => (bin_names, js_bins),
+        // that `corepack enable` creates on demand). Updates carry a recorded
+        // restriction forward so `vp update -g` cannot re-expose the filtered
+        // bins; explicit installs (update=false) re-expose the full bin list.
+        let inherited_restriction: Option<Vec<String>> = if only_bins.is_none() && update {
+            match PackageMetadata::load(&package_name).await {
+                Ok(Some(previous)) if previous.bins_restricted => Some(previous.bins),
+                _ => None,
+            }
+        } else {
+            None
         };
+        let bins_restricted = only_bins.is_some() || inherited_restriction.is_some();
+        let mut bin_names = bin_names;
+        let mut js_bins = js_bins;
+        if let Some(only) = only_bins {
+            bin_names.retain(|bin| only.contains(&bin.as_str()));
+            js_bins.retain(|bin| only.contains(&bin.as_str()));
+        } else if let Some(only) = &inherited_restriction {
+            bin_names.retain(|bin| only.contains(bin));
+            js_bins.retain(|bin| only.contains(bin));
+        }
         let mut backup = backup;
         let stale_bin_names = match stale_bin_names_for_package(&package_name, &bin_names).await {
             Ok(bin_names) => bin_names,
@@ -304,7 +328,7 @@ pub async fn install(
             }
         };
 
-        let metadata = PackageMetadata::new(
+        let mut metadata = PackageMetadata::new(
             package_name.clone(),
             installed_version.clone(),
             node_version.clone(),
@@ -313,6 +337,7 @@ pub async fn install(
             js_bins,
             "npm".to_string(),
         );
+        metadata.bins_restricted = bins_restricted;
         if let Err(error) =
             metadata.save().await.map_err(|error| package_error(&package_name, error))
         {
@@ -657,7 +682,15 @@ pub async fn uninstall(package_name: &str, dry_run: bool) -> Result<(), Error> {
 
         output::raw(&format!("Would uninstall {}:", package_name));
         for bin_name in &bins {
-            output::raw(&format!("  - shim: {}", bin_dir.join(bin_name).as_path().display()));
+            // Protected shims survive the real uninstall; keep dry-run honest.
+            if is_protected_shim(bin_name) {
+                output::raw(&format!(
+                    "  - shim: {} (kept: default shim)",
+                    bin_dir.join(bin_name).as_path().display()
+                ));
+            } else {
+                output::raw(&format!("  - shim: {}", bin_dir.join(bin_name).as_path().display()));
+            }
         }
         output::raw(&format!("  - package dir: {}", package_dir.as_path().display()));
         output::raw(&format!("  - metadata: {}", metadata_path.as_path().display()));
@@ -788,7 +821,7 @@ pub(crate) async fn create_package_shim(
 
         // Check if already a managed shim (symlink to ../current/bin/vp)
         if let Ok(target) = tokio::fs::read_link(&shim_path).await {
-            if target == std::path::Path::new("../current/bin/vp") {
+            if target == std::path::Path::new(PACKAGE_SHIM_TARGET) {
                 return Ok(());
             }
             // Exists but points elsewhere (e.g., npm-installed direct symlink) — replace it
@@ -796,7 +829,7 @@ pub(crate) async fn create_package_shim(
         }
 
         // Create symlink to ../current/bin/vp
-        tokio::fs::symlink("../current/bin/vp", &shim_path).await?;
+        tokio::fs::symlink(PACKAGE_SHIM_TARGET, &shim_path).await?;
         tracing::debug!("Created package shim symlink {:?} -> ../current/bin/vp", shim_path);
     }
 
@@ -833,11 +866,10 @@ async fn remove_package_shim(
     bin_dir: &vite_path::AbsolutePath,
     bin_name: &str,
 ) -> Result<(), Error> {
-    // Don't remove core shims or default env shims (e.g., `vp remove -g corepack`
-    // must keep the default corepack shim so it falls back to the Node-bundled
-    // or auto-installed corepack).
-    if CORE_SHIMS.contains(&bin_name) || crate::commands::env::setup::SHIM_TOOLS.contains(&bin_name)
-    {
+    // Don't remove protected shims (e.g., `vp remove -g corepack` must keep
+    // the default corepack shim so it falls back to the Node-bundled or
+    // auto-installed corepack).
+    if is_protected_shim(bin_name) {
         return Ok(());
     }
 

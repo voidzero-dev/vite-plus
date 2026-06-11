@@ -38,9 +38,12 @@ pub async fn execute(cwd: AbsolutePathBuf, tool: &str) -> Result<ExitStatus, Err
     // Check if this is a core tool
     if CORE_TOOLS.contains(&tool) {
         // corepack: a vp-managed global install wins over the Node-bundled
-        // copy (mirrors the shim dispatch order).
+        // copy. Use the same BinConfig-based lookup as the shim dispatch so
+        // the diagnostic cannot disagree with what actually runs.
         if tool == "corepack"
-            && let Some(metadata) = PackageMetadata::find_by_binary(tool).await?
+            && let Some(metadata) = crate::shim::dispatch::find_package_for_binary(tool)
+                .await
+                .map_err(|e| Error::ConfigError(e.into()))?
         {
             return execute_package_binary(tool, &metadata).await;
         }
@@ -122,15 +125,12 @@ async fn execute_core_tool(cwd: AbsolutePathBuf, tool: &str) -> Result<ExitStatu
 
     // Check if the tool exists
     if !tokio::fs::try_exists(&tool_path).await.unwrap_or(false) {
-        #[cfg(windows)]
-        let node_path = home_dir.join("node.exe");
-        #[cfg(not(windows))]
-        let node_path = home_dir.join("bin").join("node");
-        let node_installed = tokio::fs::try_exists(&node_path).await.unwrap_or(false);
-
         output::error(&format!("{} not found", tool.bold()));
-        if tool == "corepack" && node_installed {
-            // corepack is no longer bundled starting with Node.js 25
+        // corepack is no longer bundled starting with Node.js 25; only print
+        // that hint when the Node.js installation itself is present.
+        if tool == "corepack"
+            && crate::shim::dispatch::locate_tool(&resolution.version, "node").is_ok()
+        {
             eprintln!("corepack is not bundled with Node.js {}.", resolution.version);
             eprintln!(
                 "It is installed automatically on first use, or run 'vp install -g corepack'."
