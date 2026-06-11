@@ -1,0 +1,33 @@
+name: Toolchain Build Check
+
+# Cross-compilation (zig/musl, napi-cross) only runs in the release build
+# matrix, which is label-gated on PRs. Toolchain bumps are the changes most
+# likely to break those paths (e.g. rust-toolchain.toml nightly-2026-06-10
+# added a linker arg that zig cc rejects, see #1814), so run the full build
+# matrix when a PR touches the toolchain or the build pipeline itself.
+
+permissions: {}
+
+on:
+  pull_request:
+    paths:
+      - 'rust-toolchain.toml'
+      - '.cargo/config.toml'
+      - '.github/workflows/reusable-release-build.yml'
+      - '.github/workflows/toolchain-build-check.yml'
+      - '.github/actions/build-upstream/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-rust:
+    name: Build bindings and binaries
+    if: github.repository == 'voidzero-dev/vite-plus'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-release-build.yml
+    with:
+      version: 0.0.0-toolchain-check
+      cache-key: toolchain-check
