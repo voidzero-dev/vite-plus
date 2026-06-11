@@ -82,9 +82,9 @@ packages:
 catalog:
   testnpm2: ^1.0.0
   # test comment here to check if the comment is preserved
-  vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: npm:@voidzero-dev/vite-plus-test@latest
-  vite-plus: latest
+  vite: npm:@voidzero-dev/vite-plus-core@^<semver>
+  vitest: npm:@voidzero-dev/vite-plus-test@^<semver>
+  vite-plus: ^<semver>
 
 minimumReleaseAge: 1440
 overrides:

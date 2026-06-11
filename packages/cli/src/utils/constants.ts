@@ -1,13 +1,22 @@
 import { createRequire } from 'node:module';
 
+import cliPkg from '../../package.json' with { type: 'json' };
+
 export const VITE_PLUS_NAME = 'vite-plus';
-export const VITE_PLUS_VERSION = process.env.VP_VERSION || 'latest';
+
+// Range derived from the running CLI's own version (cli/core/test are
+// published in lockstep). A real range instead of the `latest` dist-tag keeps
+// `vp update vite-plus` effective: package managers re-resolve ranges but
+// leave dist-tag specs untouched in the lockfile.
+export const VITE_PLUS_VERSION_RANGE = `^${cliPkg.version}`;
+
+export const VITE_PLUS_VERSION = process.env.VP_VERSION || VITE_PLUS_VERSION_RANGE;
 
 export const VITE_PLUS_OVERRIDE_PACKAGES: Record<string, string> = process.env.VP_OVERRIDE_PACKAGES
   ? JSON.parse(process.env.VP_OVERRIDE_PACKAGES)
   : {
-      vite: 'npm:@voidzero-dev/vite-plus-core@latest',
-      vitest: 'npm:@voidzero-dev/vite-plus-test@latest',
+      vite: `npm:@voidzero-dev/vite-plus-core@${VITE_PLUS_VERSION_RANGE}`,
+      vitest: `npm:@voidzero-dev/vite-plus-test@${VITE_PLUS_VERSION_RANGE}`,
     };
 
 /**

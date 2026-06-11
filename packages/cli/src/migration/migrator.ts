@@ -1109,8 +1109,14 @@ export function rewriteStandaloneProject(
       catalogDependencyResolver,
     );
 
-    // ensure vite-plus is in devDependencies
-    if (!pkg.devDependencies?.[VITE_PLUS_NAME] || isForceOverrideMode()) {
+    // ensure vite-plus is in devDependencies; also normalize the legacy
+    // `latest` default written by older vp versions, because package managers
+    // never re-resolve dist-tag specs on `vp update vite-plus`
+    if (
+      !pkg.devDependencies?.[VITE_PLUS_NAME] ||
+      pkg.devDependencies[VITE_PLUS_NAME] === 'latest' ||
+      isForceOverrideMode()
+    ) {
       const version =
         usePnpmWorkspaceYaml && !VITE_PLUS_VERSION.startsWith('file:')
           ? 'catalog:'
@@ -1853,8 +1859,13 @@ function rewriteRootWorkspacePackageJson(
       }
     }
 
-    // ensure vite-plus is in devDependencies
-    if (!pkg.devDependencies?.[VITE_PLUS_NAME]) {
+    // ensure vite-plus is in devDependencies; also normalize the legacy
+    // `latest` default written by older vp versions, because package managers
+    // never re-resolve dist-tag specs on `vp update vite-plus`
+    if (
+      !pkg.devDependencies?.[VITE_PLUS_NAME] ||
+      pkg.devDependencies[VITE_PLUS_NAME] === 'latest'
+    ) {
       pkg.devDependencies = {
         ...pkg.devDependencies,
         [VITE_PLUS_NAME]:
@@ -2000,15 +2011,16 @@ export function rewritePackageJson(
   // force-override (file:) it's the tgz path. Preserve protocol-prefixed
   // specs (catalog:named, workspace:*, link:, file:, npm:, github:, git+/git:,
   // http(s)://) so deliberate user pins survive; only vanilla version ranges
-  // (e.g. `^0.1.20`, `latest`) are rewritten.
+  // (e.g. `^0.1.20`, `latest`) are rewritten. Without catalog support only
+  // the legacy `latest` default is normalized (to the versioned range), so
+  // deliberate user ranges survive.
   const canonicalVitePlusSpec =
     supportCatalog && !VITE_PLUS_VERSION.startsWith('file:') ? 'catalog:' : VITE_PLUS_VERSION;
   const existingVitePlus = pkg.devDependencies?.[VITE_PLUS_NAME];
   const shouldNormalizeExistingVitePlus =
     !!existingVitePlus &&
-    supportCatalog &&
     existingVitePlus !== canonicalVitePlusSpec &&
-    !isProtocolPinnedSpec(existingVitePlus);
+    (supportCatalog ? !isProtocolPinnedSpec(existingVitePlus) : existingVitePlus === 'latest');
   if (needVitePlus || shouldNormalizeExistingVitePlus) {
     pkg.devDependencies = {
       ...pkg.devDependencies,

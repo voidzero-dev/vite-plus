@@ -38,9 +38,9 @@ packages:
   - packages/*
 
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: npm:@voidzero-dev/vite-plus-test@latest
-  vite-plus: latest
+  vite: npm:@voidzero-dev/vite-plus-core@^<semver>
+  vitest: npm:@voidzero-dev/vite-plus-test@^<semver>
+  vite-plus: ^<semver>
 
 overrides:
   '@vitejs/plugin-react>vite': 'npm:vite@<semver>'

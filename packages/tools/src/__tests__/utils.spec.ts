@@ -286,6 +286,31 @@ line 3
     expect(replaceUnstableOutput(output.trim())).toMatchSnapshot();
   });
 
+  test('replace vite-plus self-version ranges', () => {
+    const output = [
+      '"vite-plus": "^0.1.24"',
+      'vite-plus: ^0.1.24',
+      '"vite": "npm:@voidzero-dev/vite-plus-core@^0.1.24"',
+      'vitest: npm:@voidzero-dev/vite-plus-test@^0.1.24',
+      'vp add vite-plus@^0.1.25-alpha.7',
+      // the pkg.pr.new hash form keeps its dedicated `<hash>` placeholder
+      '"vite-plus": "^0.0.0-aa9f90fe23216b8ad85b0ba4fc1bccb0614afaf0"',
+      // unrelated caret ranges stay untouched
+      '"typescript": "^5.8.0"',
+    ].join('\n');
+    expect(replaceUnstableOutput(output)).toBe(
+      [
+        '"vite-plus": "^<semver>"',
+        'vite-plus: ^<semver>',
+        '"vite": "npm:@voidzero-dev/vite-plus-core@^<semver>"',
+        'vitest: npm:@voidzero-dev/vite-plus-test@^<semver>',
+        'vp add vite-plus@^<semver>',
+        '"vite-plus": "^0.0.0-<hash>"',
+        '"typescript": "^5.8.0"',
+      ].join('\n'),
+    );
+  });
+
   test.skipIf(process.platform === 'win32')('replace vite-plus home paths', () => {
     const home = homedir();
     const output = [

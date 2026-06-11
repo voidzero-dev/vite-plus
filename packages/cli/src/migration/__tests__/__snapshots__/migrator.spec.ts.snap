@@ -6,7 +6,7 @@ exports[`rewritePackageJson > should rewrite devDependencies and dependencies on
     "foo": "1.0.0",
   },
   "devDependencies": {
-    "vite-plus": "latest",
+    "vite-plus": "^0.1.0",
   },
 }
 `;
@@ -28,7 +28,7 @@ exports[`rewritePackageJson > should rewrite devDependencies and dependencies on
     "foo": "1.0.0",
   },
   "devDependencies": {
-    "vite-plus": "latest",
+    "vite-plus": "^0.1.0",
   },
 }
 `;

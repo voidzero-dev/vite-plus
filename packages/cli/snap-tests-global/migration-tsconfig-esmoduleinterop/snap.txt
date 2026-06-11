@@ -46,9 +46,9 @@ export default defineConfig({
 
 > cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: npm:@voidzero-dev/vite-plus-test@latest
-  vite-plus: latest
+  vite: npm:@voidzero-dev/vite-plus-core@^<semver>
+  vitest: npm:@voidzero-dev/vite-plus-test@^<semver>
+  vite-plus: ^<semver>
 overrides:
   vite: 'catalog:'
   vitest: 'catalog:'

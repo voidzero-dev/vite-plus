@@ -36,14 +36,20 @@ Update the project dependency with the package manager commands in Vite+:
 vp update vite-plus
 ```
 
-You can also use `vp add vite-plus@latest` if you want to move the dependency explicitly to the latest version.
+Projects created or migrated by Vite+ declare `vite-plus` with a version range (for example `^0.1.24`), so `vp update vite-plus` picks up new releases within that range. To move beyond the range, update the range explicitly:
+
+```bash
+vp update --latest vite-plus
+# or
+vp add vite-plus@latest
+```
 
 ### Updating Aliased Packages
 
 Vite+ sets up npm aliases for its core packages during installation:
 
-- `vite` is aliased to `npm:@voidzero-dev/vite-plus-core@latest`
-- `vitest` is aliased to `npm:@voidzero-dev/vite-plus-test@latest`
+- `vite` is aliased to `npm:@voidzero-dev/vite-plus-core@^x.y.z`
+- `vitest` is aliased to `npm:@voidzero-dev/vite-plus-test@^x.y.z`
 
 `vp update vite-plus` does not re-resolve these aliases in the lockfile. To fully upgrade, update them separately:
 

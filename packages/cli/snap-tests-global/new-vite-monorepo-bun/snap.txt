@@ -42,9 +42,9 @@ vite.config.ts
     "node": ">=22.12.0"
   },
   "catalog": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vitest": "npm:@voidzero-dev/vite-plus-test@latest",
-    "vite-plus": "latest"
+    "vite": "npm:@voidzero-dev/vite-plus-core@^<semver>",
+    "vitest": "npm:@voidzero-dev/vite-plus-test@^<semver>",
+    "vite-plus": "^<semver>"
   }
 }
 

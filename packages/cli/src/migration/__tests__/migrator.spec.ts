@@ -8,12 +8,20 @@ import { parse as parseYaml } from 'yaml';
 import { PackageManager } from '../../types/index.js';
 import { createMigrationReport } from '../report.js';
 
-// Mock VITE_PLUS_VERSION to a stable value for snapshot tests.
-// When tests run via `vp test`, the env var is injected with the actual version,
-// which would cause snapshot mismatches.
+// Mock the version constants to stable values for snapshot tests. The real
+// values derive from the CLI's own package.json version (e.g. `^0.1.24`),
+// which would cause snapshot mismatches on every release. When tests run via
+// `vp test`, the VP_VERSION env var is also injected with the actual version.
 vi.mock('../../utils/constants.js', async (importOriginal) => {
   const mod = await importOriginal<typeof import('../../utils/constants.js')>();
-  return { ...mod, VITE_PLUS_VERSION: 'latest' };
+  return {
+    ...mod,
+    VITE_PLUS_VERSION: '^0.1.0',
+    VITE_PLUS_OVERRIDE_PACKAGES: {
+      vite: 'npm:@voidzero-dev/vite-plus-core@^0.1.0',
+      vitest: 'npm:@voidzero-dev/vite-plus-test@^0.1.0',
+    },
+  };
 });
 
 const {
@@ -186,6 +194,18 @@ describe('rewritePackageJson', () => {
     expect(pkg.devDependencies['vite-plus']).toBe('^0.1.20');
   });
 
+  it('normalizes the legacy `latest` vite-plus spec to the versioned range on npm monorepo projects', async () => {
+    const pkg = {
+      devDependencies: {
+        'vite-plus': 'latest',
+      },
+    };
+
+    rewritePackageJson(pkg, PackageManager.npm, true);
+
+    expect(pkg.devDependencies['vite-plus']).toBe('^0.1.0');
+  });
+
   it('normalizes a pre-existing pinned vite-plus on yarn/bun monorepo projects', async () => {
     for (const pm of [PackageManager.yarn, PackageManager.bun]) {
       const pkg = { devDependencies: { 'vite-plus': '^0.1.20' } };
@@ -253,8 +273,8 @@ describe('rewritePackageJson', () => {
     rewritePackageJson(pkg, PackageManager.yarn, true);
 
     expect(pkg.devDependencies.vite).toBe('catalog:');
-    expect(pkg.optionalDependencies.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
-    expect(pkg.optionalDependencies.vitest).toBe('npm:@voidzero-dev/vite-plus-test@latest');
+    expect(pkg.optionalDependencies.vite).toBe('npm:@voidzero-dev/vite-plus-core@^0.1.0');
+    expect(pkg.optionalDependencies.vitest).toBe('npm:@voidzero-dev/vite-plus-test@^0.1.0');
     expect((pkg.devDependencies as Record<string, string>)['vite-plus']).toBe('catalog:');
   });
 
@@ -313,7 +333,7 @@ describe('rewritePackageJson', () => {
     rewritePackageJson(npmPkg, PackageManager.npm);
 
     expect(npmPkg.peerDependencies.vite).toBe('^7.0.0');
-    expect(npmPkg.optionalDependencies.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+    expect(npmPkg.optionalDependencies.vite).toBe('npm:@voidzero-dev/vite-plus-core@^0.1.0');
   });
 
   it('adds local vitest when only a peer vitest exists for vitest-adjacent packages', async () => {
@@ -1159,11 +1179,11 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     };
     expect(yaml.overrides.vite).toBe('catalog:vite7');
     expect(yaml.overrides.vitest).toBe('catalog:');
-    expect(yaml.catalog.vitest).toBe('npm:@voidzero-dev/vite-plus-test@latest');
-    expect(yaml.catalogs.vite7.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+    expect(yaml.catalog.vitest).toBe('npm:@voidzero-dev/vite-plus-test@^0.1.0');
+    expect(yaml.catalogs.vite7.vite).toBe('npm:@voidzero-dev/vite-plus-core@^0.1.0');
     expect(yaml.catalogs.vite7.react).toBe('^18.0.0');
-    expect(yaml.catalogs.vite7['vite-plus']).toBe('latest');
-    expect(yaml.catalogs.test.vitest).toBe('npm:@voidzero-dev/vite-plus-test@latest');
+    expect(yaml.catalogs.vite7['vite-plus']).toBe('^0.1.0');
+    expect(yaml.catalogs.test.vitest).toBe('npm:@voidzero-dev/vite-plus-test@^0.1.0');
     expect(yaml.catalogs.test.tsdown).toBeUndefined();
     expect(yaml.catalogs.test['vite-plus']).toBeUndefined();
 
@@ -1207,7 +1227,7 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(yaml.overrides.vite).toBe('catalog:vite7');
     expect(yaml.overrides.vitest).toBe('catalog:');
     expect(yaml.overrides.react).toBe('^18.0.0');
-    expect(yaml.catalogs.vite7.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+    expect(yaml.catalogs.vite7.vite).toBe('npm:@voidzero-dev/vite-plus-core@^0.1.0');
 
     const pkg = readJson(path.join(tmpDir, 'package.json')) as {
       pnpm?: unknown;
@@ -1285,6 +1305,62 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
   });
 });
 
+describe('rewriteStandaloneProject legacy `latest` normalization', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-latest-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('rewrites a legacy `latest` vite-plus devDependency to the versioned range on npm', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'test', devDependencies: { 'vite-plus': 'latest' } }),
+    );
+
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.npm), true, true);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json'));
+    expect((pkg.devDependencies as Record<string, string>)['vite-plus']).toBe('^0.1.0');
+  });
+
+  it('keeps a user-pinned vite-plus devDependency on npm', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'test', devDependencies: { 'vite-plus': '0.1.20' } }),
+    );
+
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.npm), true, true);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json'));
+    expect((pkg.devDependencies as Record<string, string>)['vite-plus']).toBe('0.1.20');
+  });
+
+  it('rewrites a legacy `latest` vite-plus devDependency on a pnpm monorepo root', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'pnpm-monorepo', devDependencies: { 'vite-plus': 'latest' } }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      ['packages:', '  - packages/*', ''].join('\n'),
+    );
+
+    rewriteMonorepo(makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json'));
+    expect((pkg.devDependencies as Record<string, string>)['vite-plus']).toBe('catalog:');
+    const yaml = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      catalog: Record<string, string>;
+    };
+    expect(yaml.catalog['vite-plus']).toBe('^0.1.0');
+  });
+});
+
 describe('rewriteMonorepo yarn catalog', () => {
   let tmpDir: string;
 
@@ -1328,9 +1404,9 @@ describe('rewriteMonorepo yarn catalog', () => {
       catalogs: Record<string, Record<string, string>>;
     };
     expect(yarnrc.nodeLinker).toBe('node-modules');
-    expect(yarnrc.catalogs.vite7.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+    expect(yarnrc.catalogs.vite7.vite).toBe('npm:@voidzero-dev/vite-plus-core@^0.1.0');
     expect(yarnrc.catalogs.vite7.react).toBe('^18.0.0');
-    expect(yarnrc.catalogs.test.vitest).toBe('npm:@voidzero-dev/vite-plus-test@latest');
+    expect(yarnrc.catalogs.test.vitest).toBe('npm:@voidzero-dev/vite-plus-test@^0.1.0');
     expect(yarnrc.catalogs.test.oxlint).toBeUndefined();
 
     const pkg = readJson(path.join(tmpDir, 'package.json')) as {
@@ -1370,7 +1446,7 @@ describe('rewriteMonorepo bun catalog', () => {
     // catalog should be at top level
     const catalog = pkg.catalog as Record<string, string>;
     expect(catalog.vite).toBeDefined();
-    expect(catalog['vite-plus']).toBe('latest');
+    expect(catalog['vite-plus']).toBe('^0.1.0');
     // overrides should reference catalog:
     const overrides = pkg.overrides as Record<string, string>;
     expect(overrides.vite).toBe('catalog:');
@@ -1398,7 +1474,7 @@ describe('rewriteMonorepo bun catalog', () => {
     const workspaces = pkg.workspaces as { packages: string[]; catalog: Record<string, string> };
     expect(workspaces.catalog.react).toBe('^19.0.0');
     expect(workspaces.catalog.vite).toBeDefined();
-    expect(workspaces.catalog['vite-plus']).toBe('latest');
+    expect(workspaces.catalog['vite-plus']).toBe('^0.1.0');
     // workspaces.packages should be preserved
     expect(workspaces.packages).toEqual(['packages/*']);
   });
@@ -1429,10 +1505,10 @@ describe('rewriteMonorepo bun catalog', () => {
       catalog: Record<string, string>;
       workspaces: { catalog: Record<string, string> };
     };
-    expect(pkg.workspaces.catalog.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
-    expect(pkg.workspaces.catalog['vite-plus']).toBe('latest');
-    expect(pkg.catalog.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
-    expect(pkg.catalog.vitest).toBe('npm:@voidzero-dev/vite-plus-test@latest');
+    expect(pkg.workspaces.catalog.vite).toBe('npm:@voidzero-dev/vite-plus-core@^0.1.0');
+    expect(pkg.workspaces.catalog['vite-plus']).toBe('^0.1.0');
+    expect(pkg.catalog.vite).toBe('npm:@voidzero-dev/vite-plus-core@^0.1.0');
+    expect(pkg.catalog.vitest).toBe('npm:@voidzero-dev/vite-plus-test@^0.1.0');
     expect(pkg.catalog.tsdown).toBeUndefined();
     expect(pkg.catalog.react).toBe('^19.0.0');
     expect(pkg.catalog['vite-plus']).toBeUndefined();
@@ -1456,7 +1532,7 @@ describe('rewriteMonorepo bun catalog', () => {
     // catalog should be at top level since workspaces.catalog didn't exist
     const catalog = pkg.catalog as Record<string, string>;
     expect(catalog.vite).toBeDefined();
-    expect(catalog['vite-plus']).toBe('latest');
+    expect(catalog['vite-plus']).toBe('^0.1.0');
     // workspaces object should be preserved
     const workspaces = pkg.workspaces as { packages: string[] };
     expect(workspaces.packages).toEqual(['packages/*']);
@@ -1488,11 +1564,11 @@ describe('rewriteMonorepo bun catalog', () => {
       devDependencies: Record<string, string>;
       peerDependencies: Record<string, string>;
     };
-    expect(pkg.catalog.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
-    expect(pkg.catalogs.build.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+    expect(pkg.catalog.vite).toBe('npm:@voidzero-dev/vite-plus-core@^0.1.0');
+    expect(pkg.catalogs.build.vite).toBe('npm:@voidzero-dev/vite-plus-core@^0.1.0');
     expect(pkg.catalogs.build.react).toBe('^19.0.0');
     expect(pkg.catalogs.build.tsdown).toBeUndefined();
-    expect(pkg.catalogs.test.vitest).toBe('npm:@voidzero-dev/vite-plus-test@latest');
+    expect(pkg.catalogs.test.vitest).toBe('npm:@voidzero-dev/vite-plus-test@^0.1.0');
     expect(pkg.overrides.vite).toBe('catalog:build');
     expect(pkg.overrides.vitest).toBe('catalog:');
     expect(pkg.devDependencies.vite).toBe('catalog:build');
@@ -1528,12 +1604,12 @@ describe('rewriteMonorepo bun catalog', () => {
       overrides: Record<string, string>;
     };
     expect(pkg.catalog).toBeUndefined();
-    expect(pkg.workspaces.catalog.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
-    expect(pkg.workspaces.catalog['vite-plus']).toBe('latest');
-    expect(pkg.workspaces.catalogs.build.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+    expect(pkg.workspaces.catalog.vite).toBe('npm:@voidzero-dev/vite-plus-core@^0.1.0');
+    expect(pkg.workspaces.catalog['vite-plus']).toBe('^0.1.0');
+    expect(pkg.workspaces.catalogs.build.vite).toBe('npm:@voidzero-dev/vite-plus-core@^0.1.0');
     expect(pkg.workspaces.catalogs.build.oxlint).toBeUndefined();
-    expect(pkg.workspaces.catalogs.test.vitest).toBe('npm:@voidzero-dev/vite-plus-test@latest');
-    expect(pkg.workspaces.catalogs.test.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+    expect(pkg.workspaces.catalogs.test.vitest).toBe('npm:@voidzero-dev/vite-plus-test@^0.1.0');
+    expect(pkg.workspaces.catalogs.test.vite).toBe('npm:@voidzero-dev/vite-plus-core@^0.1.0');
     expect(pkg.overrides.vite).toBe('catalog:');
   });
 
@@ -1564,9 +1640,9 @@ describe('rewriteMonorepo bun catalog', () => {
       };
     };
     expect(pkg.catalog.react).toBe('^19.0.0');
-    expect(pkg.catalog.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+    expect(pkg.catalog.vite).toBe('npm:@voidzero-dev/vite-plus-core@^0.1.0');
     expect(pkg.workspaces.catalog).toBeUndefined();
-    expect(pkg.workspaces.catalogs.build.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+    expect(pkg.workspaces.catalogs.build.vite).toBe('npm:@voidzero-dev/vite-plus-core@^0.1.0');
   });
 });
 

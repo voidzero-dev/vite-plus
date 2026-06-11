@@ -64,6 +64,15 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
       // vite-plus hash version
       // e.g.: `vite-plus": "^0.0.0-aa9f90fe23216b8ad85b0ba4fc1bccb0614afaf0"` -> `vite-plus": "^0.0.0-<hash>`
       .replaceAll(/0\.0\.0-\w{40}/g, '0.0.0-<hash>')
+      // vite-plus self-version ranges written by create/migrate
+      // e.g.: `"vite-plus": "^0.1.24"` -> `"vite-plus": "^<semver>"`
+      // e.g.: `vite-plus: ^0.1.24` (pnpm-workspace.yaml catalog) -> `vite-plus: ^<semver>`
+      // e.g.: `npm:@voidzero-dev/vite-plus-core@^0.1.24` -> `npm:@voidzero-dev/vite-plus-core@^<semver>`
+      // (the trailing lookahead keeps `^0.0.0-<hash>` from the rule above intact)
+      .replaceAll(
+        /((?:vite-plus["']?:\s*["']?|vite-plus@|@voidzero-dev\/vite-plus-\w+@)\^)\d+\.\d+\.\d+(?:-[\w.]+)?(?![-\w])/g,
+        '$1<semver>',
+      )
       // date (YYYY-MM-DD HH:MM:SS)
       .replaceAll(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/g, '<date>')
       // date only (YYYY-MM-DD)
