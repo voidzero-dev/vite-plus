@@ -16,7 +16,6 @@
   "bin": {
     "oxfmt": "./bin/oxfmt",
     "oxlint": "./bin/oxlint",
-    "tsgolint": "./bin/tsgolint",
     "vp": "./bin/vp"
   },
   "files": [
