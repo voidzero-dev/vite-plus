@@ -1,0 +1,11 @@
+> node $SNAP_CASES_DIR/.shared/mock-npm-registry.mjs -- vp create @your-org:demo --no-interactive --directory my-demo-app --git # failing pre-commit hook (via core.hooksPath) aborts the initial commit; git output is surfaced
+
+Initial commit failed
+
+Mock pre-commit hook rejecting the initial commit
+◇ Scaffolded my-demo-app
+• Node <semver>  pnpm <semver>
+→ Next: cd my-demo-app && vp run
+
+> test -d my-demo-app/.git && echo 'Git initialized' # repository still created despite failed commit
+Git initialized

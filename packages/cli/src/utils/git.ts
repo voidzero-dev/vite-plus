@@ -10,7 +10,13 @@ export async function initGitRepository(cwd: string): Promise<boolean> {
   return result.exitCode === 0;
 }
 
-export async function createInitialCommit(cwd: string): Promise<boolean> {
+export interface InitialCommitResult {
+  success: boolean;
+  /** Combined stdout/stderr from `git commit`, for diagnosing failures (e.g. a failing pre-commit hook). */
+  output: string;
+}
+
+export async function createInitialCommit(cwd: string): Promise<InitialCommitResult> {
   await runCommandSilently({
     command: 'git',
     args: ['add', '-A'],
@@ -23,5 +29,8 @@ export async function createInitialCommit(cwd: string): Promise<boolean> {
     cwd,
     envs: process.env,
   });
-  return result.exitCode === 0;
+  return {
+    success: result.exitCode === 0,
+    output: `${result.stdout.toString()}${result.stderr.toString()}`.trim(),
+  };
 }
