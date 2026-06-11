@@ -29,6 +29,7 @@ export default defineConfig([
       fmt: './src/fmt.ts',
       lint: './src/lint.ts',
       'oxlint-plugin': './src/oxlint-plugin.ts',
+      'tsgolint-path': './src/utils/tsgolint-path.ts',
       pack: './src/pack.ts',
       'pack-bin': './src/pack-bin.ts',
       // Global commands — explicit entries ensure lazy loading via dynamic import in bin.ts.

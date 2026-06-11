@@ -10,31 +10,20 @@ if (!process.argv.includes('--lsp')) {
   process.exit(1);
 }
 
-import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { pathToFileURL } from 'node:url';
+import { resolveTsgolintExecutable } from '../dist/tsgolint-path.js';
 import pkg from '../package.json' with { type: 'json' };
 
 const require = createRequire(import.meta.url);
 const oxlintMainPath = require.resolve('oxlint');
 const oxlintBin = join(dirname(dirname(oxlintMainPath)), 'bin', 'oxlint');
 const tsgolintPackageJsonPath = require.resolve('oxlint-tsgolint/package.json');
-let tsgolintBin = join(dirname(tsgolintPackageJsonPath), 'bin', 'tsgolint.js');
-
-if (process.platform === 'win32') {
-  const scriptDir = dirname(fileURLToPath(import.meta.url));
-  const localBinDir = join(scriptDir, '..', 'node_modules', '.bin');
-  const oxlintTsgolintPackagePath = dirname(tsgolintPackageJsonPath);
-  const projectBinDir = join(oxlintTsgolintPackagePath, '..', '.bin');
-  const candidates = [
-    join(localBinDir, 'tsgolint.exe'),
-    join(localBinDir, 'tsgolint.cmd'),
-    join(projectBinDir, 'tsgolint.exe'),
-    join(projectBinDir, 'tsgolint.cmd'),
-  ];
-  tsgolintBin = candidates.find((candidate) => existsSync(candidate)) ?? tsgolintBin;
-}
+const tsgolintBin = resolveTsgolintExecutable(
+  join(dirname(tsgolintPackageJsonPath), 'bin', 'tsgolint.js'),
+  import.meta.url,
+);
 
 // This allows oxlint to load vite.config.ts.
 // For `vp check` and `vp lint`, VP_VERSION is injected by
