@@ -39,7 +39,7 @@ vite.config.ts
     }
   },
   "engines": {
-    "node": ">=22.12.0"
+    "node": ">=22.18.0"
   },
   "catalog": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",

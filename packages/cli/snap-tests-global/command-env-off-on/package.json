@@ -7,6 +7,6 @@
     "assert-not-managed": "node src/assert-not-managed.mjs"
   },
   "engines": {
-    "node": "22.12.0"
+    "node": "22.18.0"
   }
 }
