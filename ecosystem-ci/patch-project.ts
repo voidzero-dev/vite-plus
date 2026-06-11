@@ -47,6 +47,21 @@ if (project === 'vinext') {
   await writeFile(workspacePath, patched, 'utf-8');
 }
 
+if (project === 'dify') {
+  // dify sets `minimumReleaseAge` (0) with `resolutionMode: time-based`, and
+  // pnpm 11.5.2 crashes with ERR_PNPM_RESOLUTION_POLICY_VIOLATIONS_UNHANDLED
+  // once the policy machinery is active and the local `file:` tgz overrides
+  // produce violations (file deps have no publish timestamp). Remove the key
+  // so the policy stays inactive for the ecosystem run.
+  const workspacePath = join(repoRoot, 'pnpm-workspace.yaml');
+  const workspace = await readFile(workspacePath, 'utf-8');
+  const patched = workspace.replace(/^minimumReleaseAge:.*\n/m, '');
+  if (patched === workspace) {
+    throw new Error(`dify patch: \`minimumReleaseAge:\` not found in ${workspacePath}`);
+  }
+  await writeFile(workspacePath, patched, 'utf-8');
+}
+
 // Projects that already use vite-plus need VP_FORCE_MIGRATE=1 so
 // vp migrate runs full dependency rewriting instead of skipping.
 const forceFreshMigration = 'forceFreshMigration' in repoConfig && repoConfig.forceFreshMigration;

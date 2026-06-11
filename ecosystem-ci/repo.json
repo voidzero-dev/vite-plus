@@ -2,8 +2,9 @@
   "dify": {
     "repository": "https://github.com/langgenius/dify.git",
     "branch": "main",
-    "hash": "356a156f365a3c762f29303176defb28cbed3710",
-    "directory": "web"
+    "hash": "49c97a3f6152d9a5ced1975e95186bd5b2d156e5",
+    "directory": "web",
+    "forceFreshMigration": true
   },
   "skeleton": {
     "repository": "https://github.com/skeletonlabs/skeleton.git",

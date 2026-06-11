@@ -245,9 +245,9 @@ jobs:
             node-version: 24
             directory: web
             command: |
-              vp run type-check:tsgo
+              vp run type-check
               vp run build
-              vp run test navigation-utils.test.ts real-browser-flicker.test.tsx workflow-parallel-limit.test.tsx
+              vp run test navigation-utils.test.ts real-browser-flicker.test.tsx workflow-onboarding-integration.test.tsx
           - name: viteplus-ws-repro
             node-version: 24
             command: |
