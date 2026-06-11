@@ -81,11 +81,15 @@ runs:
       with:
         version: 0.15.2
 
+    # Rust nightly-2026-06-10 passes --fix-cortex-a53-843419 to the linker for
+    # aarch64-linux targets, which zig cc rejects. The filter for this arg
+    # (rust-cross/cargo-zigbuild#452) is merged but unreleased, so install from
+    # the pinned git commit. TODO: revert to taiki-e/install-action once
+    # cargo-zigbuild > 0.22.3 is released.
     - name: Install cargo-zigbuild (musl)
       if: steps.cache-restore.outputs.cache-hit != 'true' && contains(inputs.target, 'musl')
-      uses: taiki-e/install-action@4bc351f7f2614e48088386e2a0ad917ca3a7e4ba # v2.81.5
-      with:
-        tool: cargo-zigbuild
+      shell: bash
+      run: cargo install --locked --git https://github.com/rust-cross/cargo-zigbuild --rev 7e791b4be71b9870e0abccedf7885486803cd923 cargo-zigbuild
 
     # NAPI builds - only run on cache miss (slow, especially on Windows)
     # Must run before vite-plus TypeScript builds which depend on the bindings
