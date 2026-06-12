@@ -7800,6 +7800,7 @@ dependencies = [
  "tracing",
  "vite_install",
  "vite_path",
+ "vite_shared",
  "vite_str",
 ]
 
