@@ -33,6 +33,7 @@ const {
   rewriteEslintPackageJson,
   detectIncompatibleEslintIntegration,
   preflightGitHooksSetup,
+  detectLegacyGitHooksMigrationCandidate,
   setPackageManager,
 } = await import('../migrator.js');
 
@@ -2138,6 +2139,44 @@ export default defineConfig({
     expect(viteConfig).not.toContain('singleQuote: false');
     // Redundant standalone file removed.
     expect(fs.existsSync(path.join(tmpDir, '.oxfmtrc.jsonc'))).toBe(false);
+  });
+});
+
+describe('detectLegacyGitHooksMigrationCandidate', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-legacy-hooks-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('detects leftover husky and lint-staged in an existing Vite+ project', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        scripts: { prepare: 'husky' },
+        devDependencies: { husky: '^9.1.7', 'lint-staged': '^16.2.7', 'vite-plus': 'latest' },
+        'lint-staged': { '*': 'vp check --fix' },
+      }),
+    );
+
+    expect(detectLegacyGitHooksMigrationCandidate(tmpDir)).toBe(true);
+  });
+
+  it('does not treat a completed Vite+ project as needing hook migration', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        scripts: { prepare: 'vp config' },
+        devDependencies: { 'vite-plus': 'latest' },
+      }),
+    );
+    fs.mkdirSync(path.join(tmpDir, '.vite-hooks'));
+
+    expect(detectLegacyGitHooksMigrationCandidate(tmpDir)).toBe(false);
   });
 });
 

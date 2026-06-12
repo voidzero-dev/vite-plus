@@ -58,6 +58,7 @@ import {
   detectPrettierProject,
   finalizeCoreMigrationForExistingVitePlus,
   hasFrameworkShim,
+  detectLegacyGitHooksMigrationCandidate,
   injectLintTypeCheckDefaults,
   installGitHooks,
   mergeViteConfigFiles,
@@ -366,6 +367,7 @@ function hasExistingVitePlusMigrationCandidates(
   const prettierProject = detectPrettierProject(workspaceInfo.rootDir, workspaceInfo.packages);
   return (
     hasExplicitExistingVitePlusSetupRequest(options) ||
+    detectLegacyGitHooksMigrationCandidate(workspaceInfo.rootDir) ||
     hasBaseUrlInWorkspace(workspaceInfo) ||
     eslintProject.hasDependency ||
     prettierProject.hasDependency ||
@@ -536,13 +538,16 @@ async function collectMigrationSetupPlan(
   };
 }
 
-function getExistingVitePlusSetupOptions(options: MigrationOptions): MigrationOptions {
+function getExistingVitePlusSetupOptions(
+  options: MigrationOptions,
+  legacyGitHooksMigrationCandidate: boolean,
+): MigrationOptions {
   if (options.interactive) {
     return options;
   }
   return {
     ...options,
-    hooks: options.hooks ?? false,
+    hooks: options.hooks ?? legacyGitHooksMigrationCandidate,
     agent: options.agent ?? false,
     editor: options.editor ?? false,
   };
@@ -1027,6 +1032,9 @@ async function main() {
     };
 
     const pendingCoreMigration = detectPendingCoreMigration(workspaceInfoOptional);
+    const legacyGitHooksMigrationCandidate = detectLegacyGitHooksMigrationCandidate(
+      workspaceInfoOptional.rootDir,
+    );
     const coreMigrationResult = finalizeCoreMigrationForExistingVitePlus(
       workspaceInfoOptional,
       true,
@@ -1046,7 +1054,7 @@ async function main() {
       return;
     }
 
-    const setupOptions = getExistingVitePlusSetupOptions(options);
+    const setupOptions = getExistingVitePlusSetupOptions(options, legacyGitHooksMigrationCandidate);
     const plan = await collectMigrationSetupPlan(
       workspaceInfoOptional.rootDir,
       workspaceInfoOptional.packageManager,

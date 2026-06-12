@@ -3015,6 +3015,30 @@ function removeReplacedHookPackages(packageJsonPath: string): void {
   });
 }
 
+export function detectLegacyGitHooksMigrationCandidate(projectPath: string): boolean {
+  const packageJsonPath = path.join(projectPath, 'package.json');
+  if (!fs.existsSync(packageJsonPath)) {
+    return false;
+  }
+  const pkg = readJsonFile(packageJsonPath) as {
+    scripts?: Record<string, string>;
+    devDependencies?: Record<string, string>;
+    dependencies?: Record<string, string>;
+    'lint-staged'?: unknown;
+  };
+  const deps = pkg.devDependencies ?? {};
+  const prodDeps = pkg.dependencies ?? {};
+  return (
+    getOldHooksDir(projectPath) !== undefined ||
+    fs.existsSync(path.join(projectPath, '.husky')) ||
+    REPLACED_HOOK_PACKAGES.some(
+      (name) => deps[name] !== undefined || prodDeps[name] !== undefined,
+    ) ||
+    pkg['lint-staged'] !== undefined ||
+    hasStandaloneLintStagedConfig(projectPath)
+  );
+}
+
 /**
  * Walk up from `startPath` looking for `.git` (directory or file — submodules
  * use a `.git` file).  Returns the directory that contains `.git`, or `null`.
