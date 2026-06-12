@@ -2028,7 +2028,6 @@ type BootstrapPackageJson = {
   resolutions?: Record<string, string>;
   devDependencies?: Record<string, string>;
   dependencies?: Record<string, string>;
-  peerDependencies?: Record<string, string>;
   optionalDependencies?: Record<string, string>;
   pnpm?: {
     overrides?: Record<string, string>;
@@ -2377,8 +2376,7 @@ export function ensureVitePlusBootstrap(
     const usePnpmWorkspaceYaml = workspaceInfo.packageManager === PackageManager.pnpm && !pkg.pnpm;
     const supportCatalog =
       !VITE_PLUS_VERSION.startsWith('file:') &&
-      (usePnpmWorkspaceYaml ||
-        (workspaceInfo.isMonorepo && workspaceInfo.packageManager !== PackageManager.npm));
+      (usePnpmWorkspaceYaml || workspaceInfo.packageManager === PackageManager.bun);
     const catalogDependencyResolver =
       workspaceInfo.packageManager === PackageManager.bun
         ? readBunCatalogDependencyResolver(pkg)

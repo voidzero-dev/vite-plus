@@ -1142,6 +1142,60 @@ describe('ensureVitePlusBootstrap', () => {
     expect(pkg.pnpm.overrides.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
   });
 
+  it('uses a concrete vite-plus version for pnpm monorepos that keep pnpm config in package.json', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        dependencies: { 'vite-plus': 'latest' },
+        pnpm: {},
+      }),
+    );
+
+    const result = ensureVitePlusBootstrap({
+      ...makeWorkspaceInfo(tmpDir, PackageManager.pnpm),
+      isMonorepo: true,
+      workspacePatterns: ['packages/*'],
+    });
+
+    expect(result.changed).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, 'pnpm-workspace.yaml'))).toBe(false);
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    expect(pkg.devDependencies['vite-plus']).toBe('latest');
+  });
+
+  it('uses concrete Vite+ specs for yarn monorepos without a catalog file', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { 'vite-plus': 'latest', vite: '^7.0.0' },
+        devEngines: {
+          packageManager: { name: 'yarn', version: '4.0.0', onFail: 'download' },
+        },
+      }),
+    );
+
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.yarn)).toBe(true);
+    const result = ensureVitePlusBootstrap({
+      ...makeWorkspaceInfo(tmpDir, PackageManager.yarn),
+      isMonorepo: true,
+      workspacePatterns: ['packages/*'],
+    });
+
+    expect(result.changed).toBe(true);
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.yarn)).toBe(false);
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+      resolutions: Record<string, string>;
+    };
+    expect(pkg.devDependencies.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+    expect(pkg.devDependencies['vite-plus']).toBe('latest');
+    expect(pkg.resolutions.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+  });
+
   it('completes missing pnpm workspace peer dependency rules', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
