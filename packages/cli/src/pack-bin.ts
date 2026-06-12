@@ -15,13 +15,13 @@ import { resolveViteConfig } from './resolve-vite-config.ts';
 
 // Matches a `.d.ts` / `.d.mts` / `.d.cts` importer.
 const RE_DTS = /\.d\.[cm]?ts$/;
-// Bare specifier for postcss / lightningcss / vitest / `@vitest/*`
-// (root or any subpath).
-const EXTERNAL_DTS_PKG_RE = /^(?:postcss|lightningcss|vitest|@vitest\/[^/]+)(?:\/|$)/;
+// Bare specifier for postcss / lightningcss / vitest / `@vitest/*` /
+// vite-plus (root or any subpath).
+const EXTERNAL_DTS_PKG_RE = /^(?:postcss|lightningcss|vitest|@vitest\/[^/]+|vite-plus)(?:\/|$)/;
 
 /**
  * Rolldown plugin that keeps `postcss` / `lightningcss` / `vitest` / `@vitest/*`
- * external to the DTS bundle.
+ * / `vite-plus` external to the DTS bundle.
  *
  * The DTS bundler resolves these packages and tries to inline their `.d.ts`
  * files. postcss ships its public types as a CJS `export = postcss` over a
@@ -41,6 +41,13 @@ const EXTERNAL_DTS_PKG_RE = /^(?:postcss|lightningcss|vitest|@vitest\/[^/]+)(?:\
  * `vitest`, propagating the failure. Established vite-plus projects reach
  * these files through the `vite-plus/test*` shims, which re-export `vitest` /
  * `@vitest/*` from declaration files.
+ *
+ * `vite-plus` itself (root and `vite-plus/test*` shims) is kept external so the
+ * PUBLIC specifier survives in the emitted declarations. If the shim were
+ * inlined instead, its private `vitest` / `@vitest/*` re-exports would be the
+ * ones externalized above and the published `.d.ts` would carry bare `vitest`
+ * specifiers — unresolvable for consumers under strict pnpm / Yarn PnP layouts,
+ * where `vitest` is a dependency of `vite-plus` and not of the packed package.
  *
  * Marking these packages external for `.d.ts` importers leaves the import
  * untouched in the emitted declarations (`import type { AtRule } from 'postcss'`),
