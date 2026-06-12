@@ -86,6 +86,10 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
       )
       // ignore pnpm progress
       .replaceAll(/Progress: resolved \d+, reused \d+, downloaded \d+, added \d+\n/g, '')
+      // ignore the pnpm supply-chain verification status line (pnpm >= 10.34.3);
+      // whether it appears and its "verified ... ago" timing depend on pnpm
+      // version and lockfile verification state, not on vp behavior
+      .replaceAll(/✓ Lockfile passes supply-chain policies \(verified [^)]*\)\n/g, '')
       // ignore pnpm warn lines; pnpm pads `WARN` with thin spaces (U+2009) in
       // TTY output and brackets it as `[WARN]` in non-interactive output
       .replaceAll(/[\u2009 ]?\[?WARN\]?\s+Skip\s+adding .+?\n/g, '')
