@@ -662,12 +662,14 @@ async fn managed_install(
 ) -> Result<ExitStatus, Error> {
     if let Err((package_name, error)) = global::install::install(
         packages,
-        node,
-        force,
-        concurrency.unwrap_or(DEFAULT_GLOBAL_INSTALL_CONCURRENCY),
-        false,
-        None,
-        false,
+        global::install::InstallOptions {
+            node_version: node,
+            force,
+            concurrency: concurrency.unwrap_or(DEFAULT_GLOBAL_INSTALL_CONCURRENCY),
+            update: false,
+            only_bins: None,
+            progress_to_stderr: false,
+        },
     )
     .await
     {
@@ -795,12 +797,14 @@ async fn managed_update(
     // Call reinstall logic
     if let Err((package_name, error)) = global::install::install(
         &to_update,
-        Some(&current_node_version),
-        false,
-        concurrency,
-        true,
-        None,
-        false,
+        global::install::InstallOptions {
+            node_version: Some(&current_node_version),
+            force: false,
+            concurrency,
+            update: true,
+            only_bins: None,
+            progress_to_stderr: false,
+        },
     )
     .await
     {

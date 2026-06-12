@@ -155,13 +155,15 @@ async fn resolve_corepack_invocation() -> Result<CorepackInvocation, i32> {
     let only_bins: Option<&[&str]> = if unrestricted { None } else { Some(&["corepack"]) };
     if let Err((_, error)) = crate::commands::global::install::install(
         &["corepack".to_string()],
-        None,
-        false,
-        1,
-        false,
-        only_bins,
-        // Keep the wrapped corepack's stdout parseable
-        true,
+        crate::commands::global::install::InstallOptions {
+            node_version: None,
+            force: false,
+            concurrency: 1,
+            update: false,
+            only_bins,
+            // Keep the wrapped corepack's stdout parseable
+            progress_to_stderr: true,
+        },
     )
     .await
     {

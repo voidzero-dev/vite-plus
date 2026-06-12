@@ -68,3 +68,16 @@ pub fn raw_inline(msg: &str) {
 pub fn raw_stderr(msg: &str) {
     eprintln!("{msg}");
 }
+
+/// Print an info message to stderr (for flows whose stdout must stay
+/// parseable, e.g. shim-wrapped tool invocations).
+#[expect(clippy::print_stderr, clippy::disallowed_macros)]
+pub fn info_stderr(msg: &str) {
+    eprintln!("{} {msg}", "info:".bright_blue().bold());
+}
+
+/// Print a success line with checkmark to stderr.
+#[expect(clippy::print_stderr, clippy::disallowed_macros)]
+pub fn success_stderr(msg: &str) {
+    eprintln!("{} {msg}", CHECK.green());
+}

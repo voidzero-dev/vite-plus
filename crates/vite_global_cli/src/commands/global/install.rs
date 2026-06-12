@@ -56,29 +56,17 @@ fn package_error(package_name: &str, error: impl Into<Error>) -> (Option<String>
 /// corepack shim auto-install, which must keep the wrapped tool's stdout
 /// parseable).
 fn emit_info(to_stderr: bool, msg: &str) {
-    if to_stderr {
-        eprintln!("{} {msg}", "info:".bright_blue().bold());
-    } else {
-        output::info(msg);
-    }
+    if to_stderr { output::info_stderr(msg) } else { output::info(msg) }
 }
 
 /// See [`emit_info`].
 fn emit_success(to_stderr: bool, msg: &str) {
-    if to_stderr {
-        eprintln!("{} {msg}", output::CHECK.green());
-    } else {
-        output::success(msg);
-    }
+    if to_stderr { output::success_stderr(msg) } else { output::success(msg) }
 }
 
 /// See [`emit_info`].
 fn emit_raw(to_stderr: bool, msg: &str) {
-    if to_stderr {
-        eprintln!("{msg}");
-    } else {
-        output::raw(msg);
-    }
+    if to_stderr { output::raw_stderr(msg) } else { output::raw(msg) }
 }
 
 /// Symlink target used for package shims on Unix (relative to the bin dir).
@@ -95,25 +83,33 @@ pub(crate) fn is_protected_shim(bin_name: &str) -> bool {
     CORE_SHIMS.contains(&bin_name) || crate::commands::env::setup::SHIM_TOOLS.contains(&bin_name)
 }
 
+/// Options for [`install`].
+pub struct InstallOptions<'a> {
+    /// Node.js version to install with; resolved from the current directory
+    /// when `None`.
+    pub node_version: Option<&'a str>,
+    /// Auto-uninstall packages whose binaries conflict.
+    pub force: bool,
+    /// Number of packages to install in parallel.
+    pub concurrency: usize,
+    /// `vp update -g` semantics: carries a recorded bin restriction forward.
+    pub update: bool,
+    /// Only expose these binaries as shims; other bins the package declares
+    /// are ignored (used by the corepack shim auto-install, which must not
+    /// link corepack's pnpm/yarn launchers).
+    pub only_bins: Option<&'a [&'a str]>,
+    /// Route progress lines to stderr so a wrapping shim's stdout stays
+    /// parseable.
+    pub progress_to_stderr: bool,
+}
+
 /// Install global packages parallelly.
-///
-/// If `node_version` is provided, uses that version. Otherwise, resolves from current directory.
-/// If `force` is true, auto-uninstalls conflicting packages.
-/// Use `concurrency` to control the number of packages to install in parallel.
-/// If `only_bins` is provided, only those binaries are exposed as shims; other
-/// bins the package declares are ignored (used by the corepack shim
-/// auto-install, which must not link corepack's pnpm/yarn launchers).
-/// `progress_to_stderr` routes the progress lines to stderr so a wrapping
-/// shim's stdout stays parseable.
 pub async fn install(
     package_specs: &[String],
-    node_version: Option<&str>,
-    force: bool,
-    concurrency: usize,
-    update: bool,
-    only_bins: Option<&[&str]>,
-    progress_to_stderr: bool,
+    options: InstallOptions<'_>,
 ) -> Result<(), (Option<String>, Error)> {
+    let InstallOptions { node_version, force, concurrency, update, only_bins, progress_to_stderr } =
+        options;
     if package_specs.is_empty() {
         return Ok(());
     }
@@ -215,7 +211,14 @@ pub async fn install(
             installs.push(async {
                 (
                     package_name.clone(),
-                    install_one(package_name, package.spec, &npm_path, &node_bin_dir).await,
+                    install_one(
+                        package_name,
+                        package.spec,
+                        &npm_path,
+                        &node_bin_dir,
+                        progress_to_stderr,
+                    )
+                    .await,
                 )
             });
         }
@@ -500,6 +503,7 @@ async fn install_one(
     package_spec: &str,
     npm_path: &AbsolutePathBuf,
     node_bin_dir: &AbsolutePathBuf,
+    progress_to_stderr: bool,
 ) -> Result<InstalledPackage, Error> {
     // 1. Backup a installed package, create directories
     let packages_dir = get_packages_dir()?;
@@ -520,8 +524,13 @@ async fn install_one(
         .await?;
 
     if !output.status.success() {
-        // Show captured output to help debug the failure
-        let _ = std::io::stdout().write_all(&output.stdout);
+        // Show captured output to help debug the failure. npm's stdout joins
+        // stderr when the caller needs its own stdout to stay parseable.
+        if progress_to_stderr {
+            let _ = std::io::stderr().write_all(&output.stdout);
+        } else {
+            let _ = std::io::stdout().write_all(&output.stdout);
+        }
         let _ = std::io::stderr().write_all(&output.stderr);
         cleanup_failed_install(package_name, backup).await?;
         return Err(Error::ConfigError(
@@ -593,9 +602,14 @@ impl PackageBackup {
             tokio::fs::create_dir_all(parent).await?;
         }
 
-        tokio::fs::rename(package_dir, &backup_dir).await?;
-
-        Ok(Some(Self { package_dir: package_dir.clone(), backup_dir }))
+        match tokio::fs::rename(package_dir, &backup_dir).await {
+            Ok(()) => Ok(Some(Self { package_dir: package_dir.clone(), backup_dir })),
+            // The package dir vanished between the existence check and the
+            // rename (a concurrent install/uninstall of the same package):
+            // treat it as no previous install.
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(e.into()),
+        }
     }
 
     async fn restore(self) -> Result<(), Error> {
