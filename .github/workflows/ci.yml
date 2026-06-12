@@ -379,9 +379,12 @@ jobs:
       - uses: oxc-project/setup-node@4c588e9266bd930b6ddc34307df0659ed511d187 # v1.3.1
         if: steps.binaries-cache.outputs.cache-hit != 'true'
 
+      # --skip-format: formatting the generated index.cjs/index.d.cts needs
+      # the repo vite config, which imports the built vite-plus dist; this
+      # job skips the TS builds on purpose.
       - name: Build NAPI binding
         if: steps.binaries-cache.outputs.cache-hit != 'true'
-        run: pnpm --filter=vite-plus build-native --target x86_64-pc-windows-msvc -x
+        run: pnpm --filter=vite-plus build-native --target x86_64-pc-windows-msvc -x --skip-format
         env:
           DEBUG: 'napi:*'
 

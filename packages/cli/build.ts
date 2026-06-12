@@ -37,11 +37,12 @@ const TEST_PACKAGE_NAME = '@voidzero-dev/vite-plus-test';
 const CORE_PACKAGE_NAME = '@voidzero-dev/vite-plus-core';
 
 const {
-  values: { ['skip-native']: skipNative, ['skip-ts']: skipTs },
+  values: { ['skip-native']: skipNative, ['skip-ts']: skipTs, ['skip-format']: skipFormat },
 } = parseArgs({
   options: {
     ['skip-native']: { type: 'boolean', default: false },
     ['skip-ts']: { type: 'boolean', default: false },
+    ['skip-format']: { type: 'boolean', default: false },
   },
   strict: false,
 });
@@ -49,7 +50,7 @@ const {
 // Filter out custom flags before passing to NAPI CLI
 const napiArgs = process.argv
   .slice(2)
-  .filter((arg) => arg !== '--skip-native' && arg !== '--skip-ts');
+  .filter((arg) => arg !== '--skip-native' && arg !== '--skip-ts' && arg !== '--skip-format');
 
 if (!skipTs) {
   buildWithTsdown();
@@ -101,6 +102,13 @@ async function buildNapiBinding() {
   });
 
   const outputs = await task;
+  // --skip-format: importing the repo vite config pulls in the built
+  // vite-plus dist, which doesn't exist in CI jobs that cross-compile only
+  // the native binding (build-windows-cli); formatting the generated
+  // bindings is cosmetic there.
+  if (skipFormat) {
+    return;
+  }
   const viteConfig = await import('../../vite.config.js');
   for (const output of outputs) {
     if (output.kind !== 'node') {
