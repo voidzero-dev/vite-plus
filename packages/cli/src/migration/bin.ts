@@ -1247,6 +1247,14 @@ async function main() {
       report.prettierMigrated = prettierMigrated;
     }
 
+    if (plan.shouldSetupHooks) {
+      updateMigrationProgress('Configuring git hooks');
+      if (installGitHooks(workspaceInfoOptional.rootDir, true, report, packageManager)) {
+        didMigrate = true;
+        needsInstall = true;
+      }
+    }
+
     if (needsInstall) {
       updateMigrationProgress('Installing dependencies');
       let resolvedVersion = packageManagerVersion;
@@ -1271,13 +1279,6 @@ async function main() {
           'Dependency installation failed. Run `vp install` manually and re-run `vp migrate`.',
           1,
         );
-      }
-    }
-
-    if (plan.shouldSetupHooks) {
-      updateMigrationProgress('Configuring git hooks');
-      if (installGitHooks(workspaceInfoOptional.rootDir, true, report, packageManager)) {
-        didMigrate = true;
       }
     }
 
