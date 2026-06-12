@@ -1293,17 +1293,19 @@ pub(crate) fn find_system_tool(tool: &str) -> Option<AbsolutePathBuf> {
 
     // Parse VP_BYPASS as a PATH-style list of additional directories to skip.
     // This prevents infinite loops when multiple vite-plus installations exist in PATH.
-    let bypass_paths: Vec<std::path::PathBuf> = std::env::var_os(env_vars::VP_BYPASS)
+    let mut bypass_paths: Vec<std::path::PathBuf> = std::env::var_os(env_vars::VP_BYPASS)
         .map(|v| std::env::split_paths(&v).collect())
         .unwrap_or_default();
-    tracing::debug!("bypass_paths: {:?}", bypass_paths);
 
     // Also skip the directory containing the running shim executable. The
     // configured bin dir can point elsewhere (e.g. VP_HOME overridden) while
     // the invoked shim still lives on PATH; without this the lookup resolves
     // back to the shim itself, which then exec's itself in an infinite loop.
     let self_exe = std::env::current_exe().ok();
-    let self_dir = self_exe.as_deref().and_then(|exe| exe.parent());
+    if let Some(self_dir) = self_exe.as_deref().and_then(|exe| exe.parent()) {
+        bypass_paths.push(self_dir.to_path_buf());
+    }
+    tracing::debug!("bypass_paths: {:?}", bypass_paths);
 
     // Filter PATH to exclude our bin directory and any bypass directories
     let filtered_paths: Vec<_> = std::env::split_paths(&path_var)
@@ -1312,9 +1314,6 @@ pub(crate) fn find_system_tool(tool: &str) -> Option<AbsolutePathBuf> {
                 if p == bin.as_path() {
                     return false;
                 }
-            }
-            if self_dir == Some(p.as_path()) {
-                return false;
             }
             !bypass_paths.iter().any(|bp| p == bp)
         })
