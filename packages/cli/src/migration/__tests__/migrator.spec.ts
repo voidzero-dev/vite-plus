@@ -1690,6 +1690,9 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
             'some-app>@vitest/browser-playwright': '^4.0.0',
             'a>vite-plus>@vitest/browser-playwright': '^4.0.0',
             '@vitest/browser-playwright@4': '4.1.7',
+            '@vitest/browser-playwright>@vitest/browser': '4.0.0',
+            'vite-plus>@vitest/browser-playwright>@vitest/browser': '4.0.0',
+            'some-app>@vitest/browser-playwright>@vitest/browser': '4.0.0',
             'other>foo': '1.0.0',
           },
         },
@@ -1704,8 +1707,14 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     // vite-plus parent and versioned global pin reach vite-plus's own dep — dropped.
     expect(overrides).not.toHaveProperty('vite-plus>@vitest/browser-playwright');
     expect(overrides).not.toHaveProperty('@vitest/browser-playwright@4');
+    // An owned-provider ancestor still constrains vite-plus's provider subtree
+    // (selectors are not root-anchored), with or without an explicit vite-plus
+    // prefix — dropped.
+    expect(overrides).not.toHaveProperty('@vitest/browser-playwright>@vitest/browser');
+    expect(overrides).not.toHaveProperty('vite-plus>@vitest/browser-playwright>@vitest/browser');
     // Provider selector scoped under a SPECIFIC non-vite-plus parent — PRESERVED.
     expect(overrides['some-app>@vitest/browser-playwright']).toBe('^4.0.0');
+    expect(overrides['some-app>@vitest/browser-playwright>@vitest/browser']).toBe('4.0.0');
     // A chain with an outer non-vite-plus ancestor (`a>vite-plus>…`) requires
     // vite-plus to sit UNDER `a`, so it never matches the root vite-plus edge —
     // PRESERVED.
@@ -1725,6 +1734,10 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
         devDependencies: { vite: '^7.0.0' },
         overrides: {
           'vite-plus': { '@vitest/browser-playwright': '4.0.0' },
+          // An owned-provider parent reaches vite-plus's provider subtree even
+          // without an explicit vite-plus level — its child pin is dropped and
+          // the emptied parent pruned with it.
+          '@vitest/browser-playwright': { '@vitest/browser': '4.0.0' },
         },
       }),
     );
@@ -1735,6 +1748,7 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     };
     const overrides = pkg.overrides ?? {};
     expect(overrides).not.toHaveProperty('vite-plus');
+    expect(overrides).not.toHaveProperty('@vitest/browser-playwright');
   });
 
   it('preserves a provider override scoped under an unrelated parent', () => {
@@ -2668,9 +2682,7 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
 
     const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.pnpm);
     workspaceInfo.isMonorepo = true;
-    workspaceInfo.packages = [
-      { name: '@vibe/dashboard', path: 'apps/dashboard' },
-    ];
+    workspaceInfo.packages = [{ name: '@vibe/dashboard', path: 'apps/dashboard' }];
     rewriteMonorepo(workspaceInfo, true);
 
     const rootDeps = (readJson(path.join(tmpDir, 'package.json')).devDependencies ?? {}) as Record<
