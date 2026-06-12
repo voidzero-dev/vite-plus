@@ -1287,6 +1287,12 @@ async fn load_shim_mode() -> ShimMode {
 ///
 /// Returns the absolute path to the tool if found, None otherwise.
 pub(crate) fn find_system_tool(tool: &str) -> Option<AbsolutePathBuf> {
+    find_system_tool_in(tool, &current_dir().ok()?)
+}
+
+/// `cwd` only resolves relative PATH entries; it is a parameter so tests can
+/// exercise them without mutating the process-wide working directory.
+fn find_system_tool_in(tool: &str, cwd: &AbsolutePath) -> Option<AbsolutePathBuf> {
     let bin_dir = config::get_bin_dir().ok();
     let path_var = std::env::var_os("PATH")?;
     tracing::debug!("path_var: {:?}", path_var);
@@ -1297,8 +1303,6 @@ pub(crate) fn find_system_tool(tool: &str) -> Option<AbsolutePathBuf> {
         .map(|v| std::env::split_paths(&v).collect())
         .unwrap_or_default();
     tracing::debug!("bypass_paths: {:?}", bypass_paths);
-
-    let cwd = current_dir().ok()?;
 
     // Filter PATH to exclude our bin directory and any bypass directories.
     // Relative entries are resolved against cwd because `which` reports
@@ -1327,7 +1331,7 @@ pub(crate) fn find_system_tool(tool: &str) -> Option<AbsolutePathBuf> {
     loop {
         // Use vite_command::resolve_bin with filtered PATH - stops at first match
         let search_path = std::env::join_paths(&filtered_paths).ok()?;
-        let resolved = vite_command::resolve_bin(tool, Some(&search_path), &cwd).ok()?;
+        let resolved = vite_command::resolve_bin(tool, Some(&search_path), cwd).ok()?;
         if self_real.is_none() || resolved.as_path().canonicalize().ok() != self_real {
             return Some(resolved);
         }
@@ -1449,6 +1453,21 @@ mod tests {
         );
     }
 
+    /// Set up `bin_a` holding a symlink to the running test binary (a
+    /// stand-in for a vp shim) and `bin_b` holding a real fake executable,
+    /// both providing `mytesttool`.
+    #[cfg(unix)]
+    fn setup_self_symlink_dirs(temp: &TempDir) -> (std::path::PathBuf, std::path::PathBuf) {
+        let dir_a = temp.path().join("bin_a");
+        let dir_b = temp.path().join("bin_b");
+        std::fs::create_dir_all(&dir_a).unwrap();
+        std::fs::create_dir_all(&dir_b).unwrap();
+        std::os::unix::fs::symlink(std::env::current_exe().unwrap(), dir_a.join("mytesttool"))
+            .unwrap();
+        create_fake_executable(&dir_b, "mytesttool");
+        (dir_a, dir_b)
+    }
+
     /// A symlink to the running executable evades the directory filters (its
     /// directory differs from `current_exe().parent()`), exercising the
     /// canonicalize backstop: the self candidate must be skipped while the
@@ -1459,13 +1478,7 @@ mod tests {
     fn test_find_system_tool_skips_self_symlink_and_keeps_searching() {
         let _guard = EnvGuard::new();
         let temp = TempDir::new().unwrap();
-        let dir_a = temp.path().join("bin_a");
-        let dir_b = temp.path().join("bin_b");
-        std::fs::create_dir_all(&dir_a).unwrap();
-        std::fs::create_dir_all(&dir_b).unwrap();
-        std::os::unix::fs::symlink(std::env::current_exe().unwrap(), dir_a.join("mytesttool"))
-            .unwrap();
-        create_fake_executable(&dir_b, "mytesttool");
+        let (dir_a, dir_b) = setup_self_symlink_dirs(&temp);
 
         let path = std::env::join_paths([dir_a.as_path(), dir_b.as_path()]).unwrap();
         // SAFETY: This test runs in isolation with serial_test
@@ -1483,24 +1496,17 @@ mod tests {
     }
 
     /// Same as above but with the self-symlink directory listed as a relative
-    /// PATH entry: dropping it requires comparing canonicalized directories,
-    /// otherwise the retry loop gives up instead of reaching dir_b.
+    /// PATH entry (resolved against the injected cwd): dropping it requires
+    /// comparing canonicalized directories, otherwise the retry loop gives up
+    /// instead of reaching dir_b.
     #[cfg(unix)]
     #[test]
     #[serial]
     fn test_find_system_tool_skips_self_symlink_in_relative_path_entry() {
         let _guard = EnvGuard::new();
         let temp = TempDir::new().unwrap();
-        let dir_a = temp.path().join("bin_a");
-        let dir_b = temp.path().join("bin_b");
-        std::fs::create_dir_all(&dir_a).unwrap();
-        std::fs::create_dir_all(&dir_b).unwrap();
-        std::os::unix::fs::symlink(std::env::current_exe().unwrap(), dir_a.join("mytesttool"))
-            .unwrap();
-        create_fake_executable(&dir_b, "mytesttool");
+        let (_dir_a, dir_b) = setup_self_symlink_dirs(&temp);
 
-        let original_cwd = current_dir().unwrap();
-        std::env::set_current_dir(temp.path()).unwrap();
         let path = std::env::join_paths([std::path::Path::new("bin_a"), dir_b.as_path()]).unwrap();
         // SAFETY: This test runs in isolation with serial_test
         unsafe {
@@ -1508,8 +1514,8 @@ mod tests {
             std::env::remove_var(env_vars::VP_BYPASS);
         }
 
-        let result = find_system_tool("mytesttool");
-        std::env::set_current_dir(original_cwd.as_path()).unwrap();
+        let cwd = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        let result = find_system_tool_in("mytesttool", &cwd);
         assert!(result.is_some(), "Should skip the relative self-symlink entry and keep searching");
         assert!(
             result.unwrap().as_path().starts_with(&dir_b),
