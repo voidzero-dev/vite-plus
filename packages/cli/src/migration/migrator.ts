@@ -174,39 +174,62 @@ function stripSegmentVersion(segment: string): string {
   return versionAt > 0 ? segment.slice(0, versionAt) : segment;
 }
 
-// True iff a single parent-NAME glob segment matches the literal `vite-plus`
-// package name. `*` matches any run of characters; all other glob/regex
-// metacharacters are escaped. Used for the lone concrete ancestor of a selector.
-function parentGlobMatchesVitePlus(glob: string): boolean {
+// True iff a single parent-NAME glob segment matches the given literal package
+// name. `*` matches any run of characters; all other glob/regex metacharacters
+// are escaped. Used for the concrete ancestor segments of a selector.
+function parentGlobMatchesName(glob: string, name: string): boolean {
   const pattern = glob
     .split('*')
     .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&'))
     .join('.*');
-  return new RegExp(`^${pattern}$`).test(VITE_PLUS_NAME);
+  return new RegExp(`^${pattern}$`).test(name);
 }
 
+// True iff an ancestor segment (literal or glob) matches the given package name.
+function ancestorSegmentMatches(segment: string, name: string): boolean {
+  return segment.includes('*') ? parentGlobMatchesName(segment, name) : segment === name;
+}
+
+// Provider names that sit on vite-plus's OWN dependency path and can therefore
+// appear as ANCESTORS of a pin that still constrains vite-plus's provider
+// subtree: pnpm/yarn parent selectors are not root-anchored, so a chain like
+// `@vitest/browser-playwright>@vitest/browser` forces the provider's child
+// everywhere that provider appears — including under vite-plus's own direct
+// provider dep. Only the vite-plus-supplied `@vitest/browser*` members of
+// REMOVE_PACKAGES qualify; the user-owned webdriverio provider subtree is
+// deliberately NOT included (see the ACCEPTED EDGE note below).
+const OWNED_PROVIDER_ANCESTOR_NAMES = (REMOVE_PACKAGES as readonly string[]).filter((name) =>
+  name.startsWith('@vitest/'),
+);
+
 // True iff a selector's PARENT chain reaches vite-plus's OWN direct provider dep.
-// The edge migration protects is `<root> → vite-plus → @vitest/provider`; since
-// vite-plus is a direct dependency of the project, the provider's ancestor chain
-// at that edge is the single segment `vite-plus`. A parent chain reaches it iff
-// it glob-matches that single-segment path:
+// The subtree migration protects is `<root> → vite-plus → @vitest/provider → …`;
+// since vite-plus is a direct dependency of the project, a parent chain reaches
+// that subtree iff it glob-matches a path along it:
 //   - `**` segments match zero-or-more ancestors, so they are ignored here;
-//   - what remains must be AT MOST ONE concrete ancestor, and that ancestor must
-//     glob-match `vite-plus` (`vite-plus`, `vite-*`, `*`).
-// Any chain carrying a SPECIFIC non-vite-plus ancestor (`some-parent>vite-plus`,
-// `some-parent/**`, `some-parent/vite-*`) constrains a different subtree and does
-// NOT touch the root vite-plus provider, so it is preserved. A chain of only `**`
-// (`**`, `**/**`) is global and matches.
+//   - the FIRST remaining concrete ancestor may glob-match `vite-plus`
+//     (`vite-plus`, `vite-*`, `*`);
+//   - every OTHER concrete ancestor must glob-match a vite-plus-owned provider
+//     (`@vitest/browser*`), because un-anchored selectors such as
+//     `@vitest/browser-playwright>@vitest/browser` still constrain the
+//     provider's children under vite-plus.
+// Any chain carrying a SPECIFIC unrelated ancestor (`some-parent>vite-plus`,
+// `some-parent/**`, `some-parent/vite-*`, `some-app>@vitest/browser-playwright`)
+// constrains a different subtree and does NOT touch the root vite-plus provider,
+// so it is preserved. A chain of only `**` (`**`, `**/**`) is global and matches.
 function parentChainReachesVitePlus(segments: string[]): boolean {
   const concrete = segments.filter((segment) => segment !== '**');
-  if (concrete.length === 0) {
-    return true;
+  let index = 0;
+  if (concrete.length > 0 && ancestorSegmentMatches(concrete[0], VITE_PLUS_NAME)) {
+    index = 1;
   }
-  if (concrete.length > 1) {
-    return false;
+  for (; index < concrete.length; index += 1) {
+    const segment = concrete[index];
+    if (!OWNED_PROVIDER_ANCESTOR_NAMES.some((name) => ancestorSegmentMatches(segment, name))) {
+      return false;
+    }
   }
-  const ancestor = concrete[0];
-  return ancestor.includes('*') ? parentGlobMatchesVitePlus(ancestor) : ancestor === VITE_PLUS_NAME;
+  return true;
 }
 
 // Extract the ordered PARENT chain of an override/resolution key — the ancestor
@@ -273,12 +296,16 @@ function extractOverrideParentSegments(key: string): string[] | null {
 // selector is:
 //   1. ABSENT — bare/versioned global pin (`@vitest/browser-playwright`,
 //      `@vitest/browser-playwright@4`).
-//   2. a chain that glob-matches the single-segment `vite-plus` ancestor path: a
+//   2. a chain that glob-matches a path along the vite-plus provider subtree: a
 //      pure glob (`**/...`, `*/...`), a name glob matching vite-plus
 //      (`vite-*/...`), the literal `vite-plus` (`vite-plus>...`, `vite-plus/...`),
-//      or `**`-padded variants (`**/vite-plus/...`). See
+//      `**`-padded variants (`**/vite-plus/...`), or a chain whose remaining
+//      ancestors are vite-plus-owned providers — un-anchored selectors such as
+//      `@vitest/browser-playwright>@vitest/browser` or nested npm
+//      `{ "@vitest/browser-playwright": { "@vitest/browser": … } }` still force
+//      the provider's children under vite-plus. See
 //      `parentChainReachesVitePlus`.
-// A selector carrying a SPECIFIC non-vite-plus ancestor anywhere in its chain
+// A selector carrying a SPECIFIC unrelated ancestor anywhere in its chain
 // (`some-app>@vitest/...`, `some-parent/@vitest/...`, `a>vite-plus>@vitest/...`,
 // `some-parent/**/@vitest/...`, `some-parent/vite-*/@vitest/...`) or a mere
 // wildcard RANGE on a specific parent (`parent@*/...`) only constrains that
