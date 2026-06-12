@@ -58,7 +58,10 @@ pub(crate) const PACKAGE_SHIM_TARGET: &str = "../current/bin/vp";
 
 /// Check whether a binary name is a shim Vite+ owns unconditionally: core
 /// shims plus the default env shims (node, npm, npx, corepack, vpx, vpr).
-/// Protected shims are never created for or removed on behalf of packages.
+/// Protected shims are never removed on behalf of packages, and are never
+/// created for packages either, with one exception: `vp install -g corepack`
+/// may take BinConfig ownership of the corepack shim (see
+/// `create_package_shim`).
 pub(crate) fn is_protected_shim(bin_name: &str) -> bool {
     CORE_SHIMS.contains(&bin_name) || crate::commands::env::setup::SHIM_TOOLS.contains(&bin_name)
 }
@@ -205,35 +208,51 @@ pub async fn install(
     // 4. Finalize installed packages.
     let mut bin_owners = HashMap::<String, String>::new();
     for (index, (package_name, Package { spec: _, install })) in packages.into_iter().enumerate() {
-        let Some(InstalledPackage { installed_version, bin_names, js_bins, backup }) = install
+        let Some(InstalledPackage { installed_version, mut bin_names, mut js_bins, mut backup }) =
+            install
         else {
             continue;
         };
+
+        // Previous metadata drives both the inherited bin restriction and
+        // stale-bin detection below; load it once.
+        let previous_metadata = match PackageMetadata::load(&package_name).await {
+            Ok(metadata) => metadata,
+            Err(error) => {
+                let _ = cleanup_failed_install(&package_name, backup.take()).await;
+                if first_error.is_none() {
+                    first_error = Some(package_error(&package_name, error));
+                }
+                continue;
+            }
+        };
+
         // Restrict exposed binaries when requested (e.g., the corepack shim
         // auto-install only links `corepack`, not the pnpm/yarn launchers
         // that `corepack enable` creates on demand). Updates carry a recorded
         // restriction forward so `vp update -g` cannot re-expose the filtered
         // bins; explicit installs (update=false) re-expose the full bin list.
-        let inherited_restriction: Option<Vec<String>> = if only_bins.is_none() && update {
-            match PackageMetadata::load(&package_name).await {
-                Ok(Some(previous)) if previous.bins_restricted => Some(previous.bins),
-                _ => None,
-            }
-        } else {
-            None
+        let restriction: Option<Vec<String>> = match only_bins {
+            Some(only) => Some(only.iter().map(ToString::to_string).collect()),
+            None if update => previous_metadata
+                .as_ref()
+                .filter(|previous| previous.bins_restricted)
+                .map(|previous| previous.bins.clone()),
+            None => None,
         };
-        let bins_restricted = only_bins.is_some() || inherited_restriction.is_some();
-        let mut bin_names = bin_names;
-        let mut js_bins = js_bins;
-        if let Some(only) = only_bins {
-            bin_names.retain(|bin| only.contains(&bin.as_str()));
-            js_bins.retain(|bin| only.contains(&bin.as_str()));
-        } else if let Some(only) = &inherited_restriction {
+        let bins_restricted = restriction.is_some();
+        if let Some(only) = &restriction {
             bin_names.retain(|bin| only.contains(bin));
             js_bins.retain(|bin| only.contains(bin));
         }
-        let mut backup = backup;
-        let stale_bin_names = match stale_bin_names_for_package(&package_name, &bin_names).await {
+
+        let stale_bin_names = match stale_bin_names_for_package(
+            previous_metadata.as_ref(),
+            &package_name,
+            &bin_names,
+        )
+        .await
+        {
             Ok(bin_names) => bin_names,
             Err(error) => {
                 let _ = cleanup_failed_install(&package_name, backup.take()).await;
@@ -625,14 +644,15 @@ async fn cleanup_installed_package(package_name: &str) -> Result<(), Error> {
 }
 
 async fn stale_bin_names_for_package(
+    previous_metadata: Option<&PackageMetadata>,
     package_name: &str,
     current_bin_names: &[String],
 ) -> Result<Vec<String>, Error> {
     let current_bin_names: HashSet<_> = current_bin_names.iter().cloned().collect();
     let mut previous_bin_names = HashSet::new();
 
-    if let Some(metadata) = PackageMetadata::load(package_name).await? {
-        previous_bin_names.extend(metadata.bins);
+    if let Some(metadata) = previous_metadata {
+        previous_bin_names.extend(metadata.bins.iter().cloned());
     }
 
     previous_bin_names.extend(BinConfig::find_by_package(package_name).await?);
@@ -803,10 +823,14 @@ pub(crate) async fn create_package_shim(
     bin_name: &str,
     package_name: &str,
 ) -> Result<(), Error> {
-    // Check for conflicts with core shims
-    if CORE_SHIMS.contains(&bin_name) {
+    // Check for conflicts with protected shims. corepack is the exception:
+    // an explicit `vp install -g corepack` must own a BinConfig so the
+    // managed copy wins in the shim's resolution order, and its default shim
+    // dispatches through vp either way. vpx/vpr never dispatch to packages,
+    // so a package binary with those names would be unreachable.
+    if is_protected_shim(bin_name) && bin_name != "corepack" {
         output::warn(&format!(
-            "Package '{}' provides '{}' binary, but it conflicts with a core shim. Skipping.",
+            "Package '{}' provides '{}' binary, but it conflicts with a built-in shim. Skipping.",
             package_name, bin_name
         ));
         return Ok(());
@@ -819,9 +843,15 @@ pub(crate) async fn create_package_shim(
     {
         let shim_path = bin_dir.join(bin_name);
 
-        // Check if already a managed shim (symlink to ../current/bin/vp)
+        // Check if already a Vite+ shim: either the standard relative target
+        // or a resolvable absolute path to the vp binary (external/dev
+        // layouts created by `vp env setup`, where replacing it with the
+        // relative target would dangle because VP_HOME/current is absent).
         if let Ok(target) = tokio::fs::read_link(&shim_path).await {
-            if target == std::path::Path::new(PACKAGE_SHIM_TARGET) {
+            let is_vp_target = target == std::path::Path::new(PACKAGE_SHIM_TARGET)
+                || (target.file_name().is_some_and(|file_name| file_name == "vp")
+                    && std::fs::exists(shim_path.as_path()).unwrap_or(false));
+            if is_vp_target {
                 return Ok(());
             }
             // Exists but points elsewhere (e.g., npm-installed direct symlink) — replace it

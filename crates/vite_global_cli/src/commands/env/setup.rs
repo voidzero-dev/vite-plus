@@ -102,6 +102,12 @@ pub async fn execute(refresh: bool, env_only: bool) -> Result<ExitStatus, Error>
             skipped.push(*tool);
         }
 
+        // Remove corepack-written .cmd/.ps1/extensionless launchers that
+        // would shadow an existing trampoline .exe in PowerShell/Git Bash
+        // (create_shim skips existing shims without cleaning siblings).
+        #[cfg(windows)]
+        cleanup_legacy_windows_shim(&bin_dir, tool).await;
+
         // Drop stale `npm install -g` link configs for default shim names
         // (e.g. a pre-default-shim `npm i -g corepack`): the link itself is
         // replaced by the shim above, and a leftover Npm-sourced BinConfig

@@ -38,12 +38,13 @@ pub async fn execute(cwd: AbsolutePathBuf, tool: &str) -> Result<ExitStatus, Err
     // Check if this is a core tool
     if CORE_TOOLS.contains(&tool) {
         // corepack: a vp-managed global install wins over the Node-bundled
-        // copy. Use the same BinConfig-based lookup as the shim dispatch so
-        // the diagnostic cannot disagree with what actually runs.
+        // copy. Mirror the shim dispatch: BinConfig-based lookup, falling
+        // back to the bundled copy when the managed state is unusable
+        // (dispatch warns and falls back the same way), so the diagnostic
+        // matches what actually runs.
         if tool == "corepack"
-            && let Some(metadata) = crate::shim::dispatch::find_package_for_binary(tool)
-                .await
-                .map_err(|e| Error::ConfigError(e.into()))?
+            && let Ok(Some(metadata)) = crate::shim::dispatch::find_package_for_binary(tool).await
+            && locate_package_binary(&metadata.name, tool).is_ok()
         {
             return execute_package_binary(tool, &metadata).await;
         }

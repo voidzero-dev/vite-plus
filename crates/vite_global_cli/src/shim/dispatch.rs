@@ -265,8 +265,21 @@ fn check_npm_global_install_result(
         let bin_names = extract_bin_names(&package_json);
 
         for bin_name in bin_names {
-            // Skip protected shims (core shims and default env shims)
+            // Skip protected shims (core shims and default env shims). Tell
+            // the user for the non-core names (e.g. `npm i -g corepack`):
+            // npm installed the package, but the binary stays unlinked.
             if is_protected_shim(&bin_name) {
+                if !crate::commands::global::CORE_SHIMS.contains(&bin_name.as_str()) {
+                    let hint = if bin_name == "corepack" {
+                        " Use `vp install -g corepack` to manage its version."
+                    } else {
+                        ""
+                    };
+                    output::note(&vite_str::format!(
+                        "'{bin_name}' is a Vite+ default shim; the npm-installed copy is not \
+                         linked.{hint}"
+                    ));
+                }
                 continue;
             }
 
@@ -1038,16 +1051,21 @@ pub(crate) async fn package_binary_invocation(
     tool: &str,
     node_version: &str,
 ) -> Result<(AbsolutePathBuf, Vec<String>), String> {
-    ensure_installed(node_version)
-        .await
-        .map_err(|e| format!("Failed to install Node {node_version}: {e}"))?;
+    // Fast path: an existing node binary means the install is complete;
+    // only fall into the download path when it is missing.
+    let node_path = match locate_tool(node_version, "node") {
+        Ok(path) => path,
+        Err(_) => {
+            ensure_installed(node_version)
+                .await
+                .map_err(|e| format!("Failed to install Node {node_version}: {e}"))?;
+            locate_tool(node_version, "node").map_err(|e| format!("Node not found: {e}"))?
+        }
+    };
 
     // Locate the actual binary in the package directory
     let binary_path = locate_package_binary(&metadata.name, tool)
         .map_err(|e| format!("Binary '{tool}' not found: {e}"))?;
-
-    let node_path =
-        locate_tool(node_version, "node").map_err(|e| format!("Node not found: {e}"))?;
 
     // Prepare environment for recursive invocations
     let node_bin_dir =
