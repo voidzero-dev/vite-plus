@@ -347,6 +347,69 @@ interface MigrationPlan extends MigrationSetupPlan {
   frameworkShimFrameworks?: Framework[];
 }
 
+function getFrameworkShimCandidates(rootDir: string, packages?: WorkspacePackage[]): Framework[] {
+  const allDetectedFrameworks = new Set<Framework>(detectFramework(rootDir));
+  for (const pkg of packages ?? []) {
+    for (const framework of detectFramework(path.join(rootDir, pkg.path))) {
+      allDetectedFrameworks.add(framework);
+    }
+  }
+
+  return [...allDetectedFrameworks].filter((framework) => {
+    if (detectFramework(rootDir).includes(framework) && !hasFrameworkShim(rootDir, framework)) {
+      return true;
+    }
+    return (packages ?? []).some((pkg) => {
+      const pkgPath = path.join(rootDir, pkg.path);
+      return detectFramework(pkgPath).includes(framework) && !hasFrameworkShim(pkgPath, framework);
+    });
+  });
+}
+
+async function collectFrameworkShimFrameworks(
+  rootDir: string,
+  options: MigrationOptions,
+  packages?: WorkspacePackage[],
+): Promise<Framework[] | undefined> {
+  const frameworkShimFrameworks: Framework[] = [];
+  for (const framework of getFrameworkShimCandidates(rootDir, packages)) {
+    const addShim = await confirmFrameworkShim(framework, options.interactive);
+    if (addShim) {
+      frameworkShimFrameworks.push(framework);
+    }
+  }
+  return frameworkShimFrameworks.length > 0 ? frameworkShimFrameworks : undefined;
+}
+
+function addFrameworkShimsForWorkspace(
+  rootDir: string,
+  frameworks: Framework[] | undefined,
+  packages: WorkspacePackage[] | undefined,
+  report: MigrationReport,
+  updateMigrationProgress: (message: string) => void,
+): boolean {
+  if (!frameworks) {
+    return false;
+  }
+
+  let changed = false;
+  updateMigrationProgress('Adding TypeScript shim');
+  for (const framework of frameworks) {
+    if (detectFramework(rootDir).includes(framework) && !hasFrameworkShim(rootDir, framework)) {
+      addFrameworkShim(rootDir, framework, report);
+      changed = true;
+    }
+    for (const pkg of packages ?? []) {
+      const pkgPath = path.join(rootDir, pkg.path);
+      if (detectFramework(pkgPath).includes(framework) && !hasFrameworkShim(pkgPath, framework)) {
+        addFrameworkShim(pkgPath, framework, report);
+        changed = true;
+      }
+    }
+  }
+  return changed;
+}
+
 function hasEnabledOption(value: string | string[] | false | undefined): boolean {
   if (Array.isArray(value)) {
     return value.some((item) => Boolean(item));
@@ -372,7 +435,8 @@ function hasExistingVitePlusMigrationCandidates(
     hasBaseUrlInWorkspace(workspaceInfo) ||
     eslintProject.hasDependency ||
     prettierProject.hasDependency ||
-    detectNodeVersionManagerFile(workspaceInfo.rootDir) !== undefined
+    detectNodeVersionManagerFile(workspaceInfo.rootDir) !== undefined ||
+    getFrameworkShimCandidates(workspaceInfo.rootDir, workspaceInfo.packages).length > 0
   );
 }
 
@@ -594,30 +658,7 @@ async function collectMigrationPlan(
   }
 
   // 11. Framework shim detection + prompt
-  // Collect unique frameworks from root and all workspace packages
-  const allDetectedFrameworks = new Set<Framework>(detectFramework(rootDir));
-  for (const pkg of packages ?? []) {
-    for (const framework of detectFramework(path.join(rootDir, pkg.path))) {
-      allDetectedFrameworks.add(framework);
-    }
-  }
-  const frameworkShimFrameworks: Framework[] = [];
-  for (const framework of allDetectedFrameworks) {
-    const anyMissingShim =
-      (detectFramework(rootDir).includes(framework) && !hasFrameworkShim(rootDir, framework)) ||
-      (packages ?? []).some((pkg) => {
-        const pkgPath = path.join(rootDir, pkg.path);
-        return (
-          detectFramework(pkgPath).includes(framework) && !hasFrameworkShim(pkgPath, framework)
-        );
-      });
-    if (anyMissingShim) {
-      const addShim = await confirmFrameworkShim(framework, options.interactive);
-      if (addShim) {
-        frameworkShimFrameworks.push(framework);
-      }
-    }
-  }
+  const frameworkShimFrameworks = await collectFrameworkShimFrameworks(rootDir, options, packages);
 
   const plan: MigrationPlan = {
     packageManager,
@@ -627,8 +668,7 @@ async function collectMigrationPlan(
     fixBaseUrl,
     migrateNodeVersionFile,
     nodeVersionDetection,
-    frameworkShimFrameworks:
-      frameworkShimFrameworks.length > 0 ? frameworkShimFrameworks : undefined,
+    frameworkShimFrameworks,
   };
 
   return plan;
@@ -975,23 +1015,13 @@ async function executeMigrationPlan(
   });
 
   // 11. Add framework shims if requested
-  if (plan.frameworkShimFrameworks) {
-    updateMigrationProgress('Adding TypeScript shim');
-    for (const framework of plan.frameworkShimFrameworks) {
-      if (
-        detectFramework(workspaceInfo.rootDir).includes(framework) &&
-        !hasFrameworkShim(workspaceInfo.rootDir, framework)
-      ) {
-        addFrameworkShim(workspaceInfo.rootDir, framework, report);
-      }
-      for (const pkg of workspaceInfo.packages) {
-        const pkgPath = path.join(workspaceInfo.rootDir, pkg.path);
-        if (detectFramework(pkgPath).includes(framework) && !hasFrameworkShim(pkgPath, framework)) {
-          addFrameworkShim(pkgPath, framework, report);
-        }
-      }
-    }
-  }
+  addFrameworkShimsForWorkspace(
+    workspaceInfo.rootDir,
+    plan.frameworkShimFrameworks,
+    workspaceInfo.packages,
+    report,
+    updateMigrationProgress,
+  );
 
   // 12. Reinstall after migration
   // npm needs --force to re-resolve packages with newly added overrides,
@@ -1131,6 +1161,11 @@ async function main() {
       setupOptions,
       workspaceInfoOptional.packages,
     );
+    const frameworkShimFrameworks = await collectFrameworkShimFrameworks(
+      workspaceInfoOptional.rootDir,
+      options,
+      workspaceInfoOptional.packages,
+    );
 
     let needsInstall = false;
     let forceInstall = false;
@@ -1230,6 +1265,18 @@ async function main() {
       ) {
         didMigrate = true;
       }
+    }
+
+    if (
+      addFrameworkShimsForWorkspace(
+        workspaceInfoOptional.rootDir,
+        frameworkShimFrameworks,
+        workspaceInfoOptional.packages,
+        report,
+        updateMigrationProgress,
+      )
+    ) {
+      didMigrate = true;
     }
 
     // Merge configs and reinstall once if any tool or bootstrap migration happened
