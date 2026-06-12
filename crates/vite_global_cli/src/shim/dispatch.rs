@@ -1298,6 +1298,13 @@ pub(crate) fn find_system_tool(tool: &str) -> Option<AbsolutePathBuf> {
         .unwrap_or_default();
     tracing::debug!("bypass_paths: {:?}", bypass_paths);
 
+    // Also skip the directory containing the running shim executable. The
+    // configured bin dir can point elsewhere (e.g. VP_HOME overridden) while
+    // the invoked shim still lives on PATH; without this the lookup resolves
+    // back to the shim itself, which then exec's itself in an infinite loop.
+    let self_exe = std::env::current_exe().ok();
+    let self_dir = self_exe.as_deref().and_then(|exe| exe.parent());
+
     // Filter PATH to exclude our bin directory and any bypass directories
     let filtered_paths: Vec<_> = std::env::split_paths(&path_var)
         .filter(|p| {
@@ -1305,6 +1312,9 @@ pub(crate) fn find_system_tool(tool: &str) -> Option<AbsolutePathBuf> {
                 if p == bin.as_path() {
                     return false;
                 }
+            }
+            if self_dir == Some(p.as_path()) {
+                return false;
             }
             !bypass_paths.iter().any(|bp| p == bp)
         })
@@ -1314,7 +1324,20 @@ pub(crate) fn find_system_tool(tool: &str) -> Option<AbsolutePathBuf> {
 
     // Use vite_command::resolve_bin with filtered PATH - stops at first match
     let cwd = current_dir().ok()?;
-    vite_command::resolve_bin(tool, Some(&filtered_path), &cwd).ok()
+    let resolved = vite_command::resolve_bin(tool, Some(&filtered_path), &cwd).ok()?;
+
+    // Backstop for symlinked shims that evade the directory filters above
+    // (`current_exe` is fully resolved on Linux): never return the running
+    // executable itself.
+    if let Some(self_exe) = &self_exe
+        && let (Ok(resolved_real), Ok(self_real)) =
+            (resolved.as_path().canonicalize(), self_exe.canonicalize())
+        && resolved_real == self_real
+    {
+        return None;
+    }
+
+    Some(resolved)
 }
 
 #[cfg(test)]
