@@ -754,6 +754,60 @@ async function checkRolldownCompatibility(rootDir: string, report: MigrationRepo
   }
 }
 
+async function downloadSupportedPackageManager(options: {
+  rootDir: string;
+  packageManager: PackageManager;
+  packageManagerVersion: string;
+  interactive: boolean;
+  updateMigrationProgress: (message: string) => void;
+  failMigrationProgress: (message: string) => void;
+}): Promise<Awaited<ReturnType<typeof downloadPackageManager>>> {
+  const {
+    rootDir,
+    packageManager,
+    packageManagerVersion,
+    interactive,
+    updateMigrationProgress,
+    failMigrationProgress,
+  } = options;
+
+  updateMigrationProgress('Preparing migration');
+  const downloadResult = await downloadPackageManager(
+    packageManager,
+    packageManagerVersion,
+    interactive,
+    true,
+  );
+
+  if (
+    packageManager === PackageManager.yarn &&
+    semver.satisfies(downloadResult.version, '>=4.0.0 <4.10.0')
+  ) {
+    updateMigrationProgress('Upgrading Yarn');
+    await upgradeYarn(rootDir, interactive, true);
+  } else if (
+    packageManager === PackageManager.pnpm &&
+    semver.satisfies(downloadResult.version, '< 9.5.0')
+  ) {
+    failMigrationProgress('Migration failed');
+    prompts.log.error(
+      `✘ pnpm@${downloadResult.version} is not supported by auto migration, please upgrade pnpm to >=9.5.0 first`,
+    );
+    cancelAndExit('Vite+ cannot automatically migrate this project yet.', 1);
+  } else if (
+    packageManager === PackageManager.npm &&
+    semver.satisfies(downloadResult.version, '< 8.3.0')
+  ) {
+    failMigrationProgress('Migration failed');
+    prompts.log.error(
+      `✘ npm@${downloadResult.version} is not supported by auto migration, please upgrade npm to >=8.3.0 first`,
+    );
+    cancelAndExit('Vite+ cannot automatically migrate this project yet.', 1);
+  }
+
+  return downloadResult;
+}
+
 async function executeMigrationPlan(
   workspaceInfoOptional: WorkspaceInfoOptional,
   plan: MigrationPlan,
@@ -791,45 +845,19 @@ async function executeMigrationPlan(
   };
 
   // 1. Download package manager + version validation
-  updateMigrationProgress('Preparing migration');
-  const downloadResult = await downloadPackageManager(
-    plan.packageManager,
-    workspaceInfoOptional.packageManagerVersion,
+  const downloadResult = await downloadSupportedPackageManager({
+    rootDir: workspaceInfoOptional.rootDir,
+    packageManager: plan.packageManager,
+    packageManagerVersion: workspaceInfoOptional.packageManagerVersion,
     interactive,
-    true,
-  );
+    updateMigrationProgress,
+    failMigrationProgress,
+  });
   const workspaceInfo: WorkspaceInfo = {
     ...workspaceInfoOptional,
     packageManager: plan.packageManager,
     downloadPackageManager: downloadResult,
   };
-
-  // 2. Upgrade yarn if needed, or validate PM version
-  if (
-    plan.packageManager === PackageManager.yarn &&
-    semver.satisfies(downloadResult.version, '>=4.0.0 <4.10.0')
-  ) {
-    updateMigrationProgress('Upgrading Yarn');
-    await upgradeYarn(workspaceInfo.rootDir, interactive, true);
-  } else if (
-    plan.packageManager === PackageManager.pnpm &&
-    semver.satisfies(downloadResult.version, '< 9.5.0')
-  ) {
-    failMigrationProgress('Migration failed');
-    prompts.log.error(
-      `✘ pnpm@${downloadResult.version} is not supported by auto migration, please upgrade pnpm to >=9.5.0 first`,
-    );
-    cancelAndExit('Vite+ cannot automatically migrate this project yet.', 1);
-  } else if (
-    plan.packageManager === PackageManager.npm &&
-    semver.satisfies(downloadResult.version, '< 8.3.0')
-  ) {
-    failMigrationProgress('Migration failed');
-    prompts.log.error(
-      `✘ npm@${downloadResult.version} is not supported by auto migration, please upgrade npm to >=8.3.0 first`,
-    );
-    cancelAndExit('Vite+ cannot automatically migrate this project yet.', 1);
-  }
 
   // 3. Migrate node version manager file → .node-version (independent of vite version)
   if (plan.migrateNodeVersionFile && plan.nodeVersionDetection) {
@@ -1037,6 +1065,12 @@ async function main() {
         migrationProgressStarted = false;
       }
     };
+    const failMigrationProgress = (message: string) => {
+      if (migrationProgress && migrationProgressStarted) {
+        migrationProgress.error(message);
+        migrationProgressStarted = false;
+      }
+    };
 
     const pendingCoreMigration = detectPendingCoreMigration(workspaceInfoOptional);
     const legacyGitHooksMigrationCandidate = detectLegacyGitHooksMigrationCandidate(
@@ -1079,12 +1113,14 @@ async function main() {
       if (!packageManager) {
         return undefined;
       }
-      downloadedPackageManager ??= await downloadPackageManager(
+      downloadedPackageManager ??= await downloadSupportedPackageManager({
+        rootDir: workspaceInfoOptional.rootDir,
         packageManager,
         packageManagerVersion,
-        options.interactive,
-        true,
-      );
+        interactive: options.interactive,
+        updateMigrationProgress,
+        failMigrationProgress,
+      });
       packageManagerVersion = downloadedPackageManager.version;
       return downloadedPackageManager;
     };
