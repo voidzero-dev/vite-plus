@@ -338,10 +338,6 @@ jobs:
         with:
           path: |
             packages/cli/binding/*.node
-            packages/cli/binding/index.js
-            packages/cli/binding/index.d.ts
-            packages/cli/binding/index.cjs
-            packages/cli/binding/index.d.cts
             target/x86_64-pc-windows-msvc/release/vp.exe
             target/x86_64-pc-windows-msvc/release/vp-shim.exe
             target/x86_64-pc-windows-msvc/release/vp-setup.exe
@@ -398,13 +394,12 @@ jobs:
           # Both path roots are workspace-relative, so the artifact preserves
           # the repo layout and a plain download into the workspace places
           # every file where bootstrap-cli:ci (tool install-global-cli)
-          # expects it.
+          # expects it. The generated binding JS (index.cjs etc.) is NOT
+          # included: those files are committed, and the unformatted copies
+          # this job produces (--skip-format) must not overwrite them in the
+          # consumer checkouts (vp check would flag them).
           path: |
             packages/cli/binding/*.node
-            packages/cli/binding/index.js
-            packages/cli/binding/index.d.ts
-            packages/cli/binding/index.cjs
-            packages/cli/binding/index.d.cts
             target/x86_64-pc-windows-msvc/release/vp.exe
             target/x86_64-pc-windows-msvc/release/vp-shim.exe
             target/x86_64-pc-windows-msvc/release/vp-setup.exe
@@ -416,10 +411,6 @@ jobs:
         with:
           path: |
             packages/cli/binding/*.node
-            packages/cli/binding/index.js
-            packages/cli/binding/index.d.ts
-            packages/cli/binding/index.cjs
-            packages/cli/binding/index.d.cts
             target/x86_64-pc-windows-msvc/release/vp.exe
             target/x86_64-pc-windows-msvc/release/vp-shim.exe
             target/x86_64-pc-windows-msvc/release/vp-setup.exe
