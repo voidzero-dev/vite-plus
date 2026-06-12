@@ -52,6 +52,35 @@ fn package_error(package_name: &str, error: impl Into<Error>) -> (Option<String>
     (Some(package_name.to_string()), error.into())
 }
 
+/// Route an install progress line to stdout (default) or stderr (used by the
+/// corepack shim auto-install, which must keep the wrapped tool's stdout
+/// parseable).
+fn emit_info(to_stderr: bool, msg: &str) {
+    if to_stderr {
+        eprintln!("{} {msg}", "info:".bright_blue().bold());
+    } else {
+        output::info(msg);
+    }
+}
+
+/// See [`emit_info`].
+fn emit_success(to_stderr: bool, msg: &str) {
+    if to_stderr {
+        eprintln!("{} {msg}", output::CHECK.green());
+    } else {
+        output::success(msg);
+    }
+}
+
+/// See [`emit_info`].
+fn emit_raw(to_stderr: bool, msg: &str) {
+    if to_stderr {
+        eprintln!("{msg}");
+    } else {
+        output::raw(msg);
+    }
+}
+
 /// Symlink target used for package shims on Unix (relative to the bin dir).
 #[cfg(unix)]
 pub(crate) const PACKAGE_SHIM_TARGET: &str = "../current/bin/vp";
@@ -74,6 +103,8 @@ pub(crate) fn is_protected_shim(bin_name: &str) -> bool {
 /// If `only_bins` is provided, only those binaries are exposed as shims; other
 /// bins the package declares are ignored (used by the corepack shim
 /// auto-install, which must not link corepack's pnpm/yarn launchers).
+/// `progress_to_stderr` routes the progress lines to stderr so a wrapping
+/// shim's stdout stays parseable.
 pub async fn install(
     package_specs: &[String],
     node_version: Option<&str>,
@@ -81,6 +112,7 @@ pub async fn install(
     concurrency: usize,
     update: bool,
     only_bins: Option<&[&str]>,
+    progress_to_stderr: bool,
 ) -> Result<(), (Option<String>, Error)> {
     if package_specs.is_empty() {
         return Ok(());
@@ -145,13 +177,16 @@ pub async fn install(
     let packages_count = packages.len();
 
     let concurrency = concurrency.max(1);
-    output::info(&format!(
-        "{} {} global {} with Node.js {}",
-        operation_progress,
-        packages_count,
-        if packages_count == 1 { "package" } else { "packages" },
-        node_version
-    ));
+    emit_info(
+        progress_to_stderr,
+        &format!(
+            "{} {} global {} with Node.js {}",
+            operation_progress,
+            packages_count,
+            if packages_count == 1 { "package" } else { "packages" },
+            node_version
+        ),
+    );
 
     let progress = ProgressBar::new(packages_count as u64);
     if std::io::stderr().is_terminal() && std::env::var_os("CI").is_none() {
@@ -303,10 +338,10 @@ pub async fn install(
                     conflicts.iter().map(|(_, pkg)| pkg.clone()).collect();
                 let mut uninstall_failed = false;
                 for pkg in packages_to_remove {
-                    output::raw(&format!(
-                        "Uninstalling {} (conflicts with {})...",
-                        pkg, package_name
-                    ));
+                    emit_raw(
+                        progress_to_stderr,
+                        &format!("Uninstalling {} (conflicts with {})...", pkg, package_name),
+                    );
                     if let Err(error) = Box::pin(uninstall(&pkg, false)).await {
                         let _ = cleanup_failed_install(&package_name, backup.take()).await;
                         if first_error.is_none() {
@@ -433,23 +468,26 @@ pub async fn install(
         }
 
         // 4.7 Print success message
-        output::success(&format!(
-            "{} {} {}{}",
-            operation_past,
-            package_name.bold(),
-            if update { "to " } else { "" },
-            installed_version.bold()
-        ));
+        emit_success(
+            progress_to_stderr,
+            &format!(
+                "{} {} {}{}",
+                operation_past,
+                package_name.bold(),
+                if update { "to " } else { "" },
+                installed_version.bold()
+            ),
+        );
         if !bin_names.is_empty() {
             let bins = bin_names
                 .iter()
                 .map(|bin_name| bin_name.bold().to_string())
                 .collect::<Vec<_>>()
                 .join(", ");
-            output::raw(&format!("  Bins: {}", bins));
+            emit_raw(progress_to_stderr, &format!("  Bins: {}", bins));
         }
         if index + 1 < packages_count {
-            output::raw("");
+            emit_raw(progress_to_stderr, "");
         }
     }
 

@@ -160,6 +160,8 @@ async fn resolve_corepack_invocation() -> Result<CorepackInvocation, i32> {
         1,
         false,
         only_bins,
+        // Keep the wrapped corepack's stdout parseable
+        true,
     )
     .await
     {
