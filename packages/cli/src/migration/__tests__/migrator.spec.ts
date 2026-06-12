@@ -1089,6 +1089,29 @@ describe('ensureVitePlusBootstrap', () => {
     expect(fs.existsSync(path.join(tmpDir, '.vite-hooks'))).toBe(false);
     expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
   });
+
+  it('preserves package.json workspace patterns when creating pnpm-workspace.yaml', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        workspaces: ['packages/*'],
+        devDependencies: { 'vite-plus': 'catalog:' },
+      }),
+    );
+
+    const result = ensureVitePlusBootstrap({
+      ...makeWorkspaceInfo(tmpDir, PackageManager.pnpm),
+      isMonorepo: true,
+      workspacePatterns: ['packages/*'],
+    });
+
+    expect(result.changed).toBe(true);
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      packages: string[];
+    };
+    expect(workspace.packages).toEqual(['packages/*']);
+  });
 });
 
 describe('rewriteStandaloneProject pnpm workspace yaml', () => {
@@ -2276,6 +2299,21 @@ describe('detectLegacyGitHooksMigrationCandidate', () => {
       }),
     );
     fs.mkdirSync(path.join(tmpDir, '.husky'));
+
+    expect(detectLegacyGitHooksMigrationCandidate(tmpDir)).toBe(false);
+  });
+
+  it('does not treat passive husky or lint-staged dependencies as active hook migration', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        devDependencies: {
+          husky: '^9.1.7',
+          'lint-staged': '^16.2.7',
+          'vite-plus': 'latest',
+        },
+      }),
+    );
 
     expect(detectLegacyGitHooksMigrationCandidate(tmpDir)).toBe(false);
   });

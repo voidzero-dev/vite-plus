@@ -2126,6 +2126,26 @@ function readPnpmWorkspaceOverrides(projectPath: string): Record<string, string>
   return doc?.overrides;
 }
 
+function ensurePnpmWorkspacePackages(projectPath: string, workspacePatterns: string[]): boolean {
+  if (workspacePatterns.length === 0) {
+    return false;
+  }
+  const pnpmWorkspaceYamlPath = path.join(projectPath, 'pnpm-workspace.yaml');
+  let changed = false;
+  editYamlFile(pnpmWorkspaceYamlPath, (doc) => {
+    if (doc.has('packages')) {
+      return;
+    }
+    const packages = new YAMLSeq<Scalar<string>>();
+    for (const pattern of workspacePatterns) {
+      packages.add(scalarString(pattern));
+    }
+    doc.set('packages', packages);
+    changed = true;
+  });
+  return changed;
+}
+
 function readBunCatalogDependencyResolver(pkg: {
   workspaces?: NpmWorkspaces;
   catalog?: Record<string, string>;
@@ -2310,6 +2330,9 @@ export function ensureVitePlusBootstrap(
         )
       ) {
         rewritePnpmWorkspaceYaml(projectPath);
+      }
+      if (fs.existsSync(pnpmWorkspaceYamlPath)) {
+        ensurePnpmWorkspacePackages(projectPath, workspaceInfo.workspacePatterns);
       }
       const after = fs.existsSync(pnpmWorkspaceYamlPath)
         ? fs.readFileSync(pnpmWorkspaceYamlPath, 'utf-8')
@@ -3333,19 +3356,9 @@ export function detectLegacyGitHooksMigrationCandidate(projectPath: string): boo
   }
   const pkg = readJsonFile(packageJsonPath) as {
     scripts?: Record<string, string>;
-    devDependencies?: Record<string, string>;
-    dependencies?: Record<string, string>;
     'lint-staged'?: unknown;
   };
-  const deps = pkg.devDependencies ?? {};
-  const prodDeps = pkg.dependencies ?? {};
-  return (
-    getOldHooksDir(projectPath) !== undefined ||
-    REPLACED_HOOK_PACKAGES.some(
-      (name) => deps[name] !== undefined || prodDeps[name] !== undefined,
-    ) ||
-    pkg['lint-staged'] !== undefined
-  );
+  return getOldHooksDir(projectPath) !== undefined || pkg['lint-staged'] !== undefined;
 }
 
 /**

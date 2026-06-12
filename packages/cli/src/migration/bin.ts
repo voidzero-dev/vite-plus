@@ -1230,6 +1230,13 @@ async function main() {
         },
       );
       installDurationMs += installSummary.durationMs;
+      if (installSummary.status === 'failed') {
+        clearMigrationProgress();
+        cancelAndExit(
+          'Dependency installation failed. Run `vp install` manually and re-run `vp migrate`.',
+          1,
+        );
+      }
     }
 
     if (plan.shouldSetupHooks) {
