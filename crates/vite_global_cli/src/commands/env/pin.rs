@@ -290,7 +290,7 @@ async fn pin_node_version_file(
 
     // If a devEngines.runtime range is declared and no longer satisfied, offer to
     // sync it in interactive terminals and warn otherwise (rfcs/dev-engines.md)
-    check_dev_engines_sync(cwd, resolved_version, force).await?;
+    check_dev_engines_sync(cwd, resolved_version, force, std::io::stdin().is_terminal()).await?;
 
     Ok(true)
 }
@@ -336,12 +336,14 @@ async fn read_dev_engines_node_version(cwd: &AbsolutePathBuf) -> Option<String> 
 }
 
 /// After updating `.node-version`, check the declared devEngines.runtime range:
-/// if the new version no longer satisfies it, offer to sync in interactive
-/// terminals and warn otherwise (rfcs/dev-engines.md). Never syncs silently.
+/// if the new version no longer satisfies it, offer to sync when `interactive`
+/// (the caller passes stdin TTY-ness) and warn otherwise (rfcs/dev-engines.md).
+/// Never syncs silently.
 async fn check_dev_engines_sync(
     cwd: &AbsolutePathBuf,
     resolved_version: &str,
     force: bool,
+    interactive: bool,
 ) -> Result<(), Error> {
     let Some(declared) = read_dev_engines_node_version(cwd).await else {
         return Ok(());
@@ -357,7 +359,7 @@ async fn check_dev_engines_sync(
         return Ok(());
     }
 
-    if std::io::stdin().is_terminal() && !force {
+    if interactive && !force {
         print!(
             "devEngines.runtime (\"{declared}\") is no longer satisfied. Update it to \
              {resolved_version}? (y/n): "
@@ -1009,7 +1011,28 @@ mod tests {
 
         // 20.18.0 does not satisfy ^24.0.0: without a TTY this warns and never
         // rewrites the declared range
-        check_dev_engines_sync(&temp_path, "20.18.0", false).await.unwrap();
+        check_dev_engines_sync(&temp_path, "20.18.0", false, false).await.unwrap();
+
+        let content = tokio::fs::read_to_string(temp_path.join("package.json")).await.unwrap();
+        let pkg: serde_json::Value = serde_json::from_str(&content).unwrap();
+        assert_eq!(pkg["devEngines"]["runtime"]["version"].as_str().unwrap(), "^24.0.0");
+    }
+
+    #[tokio::test]
+    async fn test_check_dev_engines_sync_force_skips_prompt() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        tokio::fs::write(
+            temp_path.join("package.json"),
+            r#"{"devEngines":{"runtime":{"name":"node","version":"^24.0.0"}}}"#,
+        )
+        .await
+        .unwrap();
+
+        // --force never prompts, even in an interactive terminal: it warns and
+        // leaves the declared range untouched
+        check_dev_engines_sync(&temp_path, "20.18.0", true, true).await.unwrap();
 
         let content = tokio::fs::read_to_string(temp_path.join("package.json")).await.unwrap();
         let pkg: serde_json::Value = serde_json::from_str(&content).unwrap();
@@ -1024,7 +1047,8 @@ mod tests {
         let original = r#"{"devEngines":{"runtime":{"name":"node","version":"^24.0.0"}}}"#;
         tokio::fs::write(temp_path.join("package.json"), original).await.unwrap();
 
-        check_dev_engines_sync(&temp_path, "24.2.0", false).await.unwrap();
+        // interactive=true must not prompt when the range is already satisfied
+        check_dev_engines_sync(&temp_path, "24.2.0", false, true).await.unwrap();
 
         let content = tokio::fs::read_to_string(temp_path.join("package.json")).await.unwrap();
         assert_eq!(content, original);
