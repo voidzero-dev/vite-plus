@@ -2,7 +2,7 @@
 info: Installing 1 global package with Node.js <semver>
 warn: Package 'conflict-pkg' provides 'node' binary, but it conflicts with a built-in shim. Skipping.
 ✓ Installed conflict-pkg <semver>
-  Bins: conflict-cli, node
+  Bins: conflict-cli
 
 > vp remove -g conflict-pkg # Cleanup
 Uninstalled conflict-pkg
@@ -11,7 +11,7 @@ Uninstalled conflict-pkg
 info: Installing 1 global package with Node.js <semver>
 warn: Package 'conflict-pkg' provides 'node' binary, but it conflicts with a built-in shim. Skipping.
 ✓ Installed conflict-pkg <semver>
-  Bins: conflict-cli, node
+  Bins: conflict-cli
 
 > vp remove -g conflict-pkg # Cleanup
 Uninstalled conflict-pkg

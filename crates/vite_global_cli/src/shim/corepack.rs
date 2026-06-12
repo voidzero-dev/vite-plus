@@ -382,6 +382,10 @@ async fn restore_vp_owned_shims(bin_dir: &AbsolutePath, owned_shims: &[OwnedShim
                     pkg = bin_config.package
                 ));
                 let _ = tokio::fs::remove_file(bin_dir.join(name)).await;
+                // Remove corepack's launcher files (.cmd/.ps1/extensionless)
+                // so they cannot shadow the rewritten link.
+                #[cfg(windows)]
+                setup::cleanup_legacy_windows_shim(bin_dir, name).await;
                 create_bin_link(
                     bin_dir,
                     name,
@@ -515,12 +519,28 @@ async fn npm_link_intact(bin_dir: &AbsolutePath, name: &str) -> bool {
 /// Check whether a link created by the `npm install -g` interception is
 /// still intact.
 ///
-/// On Windows npm links are `.cmd` wrappers. corepack also writes `.cmd`
-/// launchers, so an overwritten (rather than deleted) link is not detected;
-/// the deletion case (`corepack disable`) is the one that matters.
+/// On Windows npm links are `.cmd` wrappers with a fixed three-line shape
+/// (see `create_bin_link`). corepack also writes `.cmd` launchers, so the
+/// content is checked to detect an overwritten (not just deleted) link.
 #[cfg(windows)]
 async fn npm_link_intact(bin_dir: &AbsolutePath, name: &str) -> bool {
-    tokio::fs::try_exists(&bin_dir.join(format!("{name}.cmd"))).await.unwrap_or(false)
+    match tokio::fs::read_to_string(&bin_dir.join(format!("{name}.cmd"))).await {
+        Ok(content) => is_npm_link_wrapper(&content),
+        Err(_) => false,
+    }
+}
+
+/// Whether `.cmd` content matches vp's npm-link wrapper shape written by
+/// `create_bin_link`: `@echo off`, a quoted source invocation forwarding all
+/// args, and the exit-code forward. corepack's cmd-shim launchers have a
+/// different, multi-branch shape.
+#[cfg(any(windows, test))]
+fn is_npm_link_wrapper(content: &str) -> bool {
+    let mut lines = content.lines();
+    lines.next() == Some("@echo off")
+        && lines.next().is_some_and(|line| line.starts_with('"') && line.ends_with("\" %*"))
+        && lines.next() == Some("exit /b %ERRORLEVEL%")
+        && lines.next().is_none()
 }
 
 #[cfg(test)]
@@ -595,6 +615,19 @@ mod tests {
 
         let args = s(&["enable", "--install-directory=/custom/dir"]);
         assert_eq!(inject_install_directory(&args, &bin_dir), args);
+    }
+
+    #[test]
+    fn test_is_npm_link_wrapper_shape() {
+        // vp's wrapper as written by create_bin_link
+        let wrapper = "@echo off\r\n\"C:\\vp\\node\\pnpm.cmd\" %*\r\nexit /b %ERRORLEVEL%\r\n";
+        assert!(is_npm_link_wrapper(wrapper));
+
+        // corepack cmd-shim output is multi-branch and must not match
+        let corepack = "@SETLOCAL\r\n@IF EXIST \"%~dp0\\node.exe\" (\r\n  ...\r\n)\r\n";
+        assert!(!is_npm_link_wrapper(corepack));
+        assert!(!is_npm_link_wrapper(""));
+        assert!(!is_npm_link_wrapper("@echo off\r\nsomething else\r\n"));
     }
 
     #[test]
