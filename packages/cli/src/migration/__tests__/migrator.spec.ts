@@ -22,6 +22,8 @@ const {
   rewriteMonorepo,
   rewriteMonorepoProject,
   detectPendingCoreMigration,
+  detectVitePlusBootstrapPending,
+  ensureVitePlusBootstrap,
   finalizeCoreMigrationForExistingVitePlus,
   parseNvmrcVersion,
   detectNodeVersionManagerFile,
@@ -992,10 +994,10 @@ function makeWorkspaceInfo(
     packageManager,
     packageManagerVersion: '10.33.0',
     downloadPackageManager: {
-      name: 'pnpm',
+      name: packageManager,
       installDir: '/tmp',
       binPrefix: '/tmp/bin',
-      packageName: 'pnpm',
+      packageName: packageManager,
       version: '10.33.0',
     },
     packages: [],
@@ -1013,6 +1015,81 @@ function readYaml(filePath: string): string {
 function readYamlObject(filePath: string): Record<string, unknown> {
   return parseYaml(readYaml(filePath)) as Record<string, unknown>;
 }
+
+describe('ensureVitePlusBootstrap', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-bootstrap-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('adds missing npm overrides and package manager pin for existing Vite+ projects', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'test', devDependencies: { 'vite-plus': 'latest' } }),
+    );
+
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(true);
+
+    const report = createMigrationReport();
+    const result = ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.npm), report);
+
+    expect(result.changed).toBe(true);
+    expect(report.packageManagerBootstrapConfigured).toBe(true);
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(false);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      overrides: Record<string, string>;
+      devEngines: { packageManager: { name: string } };
+    };
+    expect(pkg.overrides.vite).toContain('@voidzero-dev/vite-plus-core');
+    expect(pkg.overrides.vitest).toContain('@voidzero-dev/vite-plus-test');
+    expect(pkg.devEngines.packageManager.name).toBe(PackageManager.npm);
+  });
+
+  it('does not rewrite semantic npm overrides that already point at Vite+ packages', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { 'vite-plus': 'latest' },
+        overrides: {
+          vite: 'npm:@voidzero-dev/vite-plus-core@0.1.0',
+          vitest: 'npm:@voidzero-dev/vite-plus-test@0.1.0',
+        },
+        devEngines: {
+          packageManager: { name: 'npm', version: '10.33.0', onFail: 'download' },
+        },
+      }),
+    );
+    const before = fs.readFileSync(path.join(tmpDir, 'package.json'), 'utf-8');
+
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(false);
+    const result = ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.npm));
+
+    expect(result.changed).toBe(false);
+    expect(fs.readFileSync(path.join(tmpDir, 'package.json'), 'utf-8')).toBe(before);
+  });
+
+  it('adds missing pnpm workspace overrides without writing optional setup files', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'test', devDependencies: { 'vite-plus': 'catalog:' } }),
+    );
+
+    const result = ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm));
+
+    expect(result.changed).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, 'pnpm-workspace.yaml'))).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, 'AGENTS.md'))).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, '.vite-hooks'))).toBe(false);
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
+  });
+});
 
 describe('rewriteStandaloneProject pnpm workspace yaml', () => {
   let tmpDir: string;

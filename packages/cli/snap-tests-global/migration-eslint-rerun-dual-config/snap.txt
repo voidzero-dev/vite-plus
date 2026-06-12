@@ -1,20 +1,9 @@
 > vp migrate --no-interactive # should detect vite-plus + eslint and auto-migrate eslint
-
-Migrating ESLint config to Oxlint...
-
-ESLint config migrated to .oxlintrc.json
-
-Replacing ESLint comments with Oxlint equivalents...
-
-ESLint comments replaced
-
-✔ Removed eslint.config.mjs
-
-✔ Removed .eslintrc
 ◇ Updated .
-• Node <semver>  unknown latest
-• 2 config updates applied
+• Node <semver>  pnpm <semver>
+• 4 config updates applied
 • ESLint rules migrated to Oxlint
+• Package manager settings configured
 
 > cat package.json # check eslint removed and scripts rewritten
 {

@@ -1,9 +1,10 @@
 > git init
 > vp migrate --no-interactive # should still migrate husky/lint-staged even though vite-plus exists
 ◇ Updated .
-• Node <semver>  unknown latest
+• Node <semver>  pnpm <semver>
 • 2 config updates applied
 • Git hooks configured
+• Package manager settings configured
 
 > cat package.json # husky/lint-staged should be removed, prepare should be vp config
 {
@@ -14,6 +15,13 @@
   "devDependencies": {
     "vite": "^7.0.0",
     "vite-plus": "latest"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "<semver>",
+      "onFail": "download"
+    }
   }
 }
 

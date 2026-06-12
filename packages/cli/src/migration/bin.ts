@@ -56,6 +56,8 @@ import {
   detectNodeVersionManagerFile,
   detectPendingCoreMigration,
   detectPrettierProject,
+  detectVitePlusBootstrapPending,
+  ensureVitePlusBootstrap,
   finalizeCoreMigrationForExistingVitePlus,
   hasFrameworkShim,
   detectLegacyGitHooksMigrationCandidate,
@@ -66,8 +68,6 @@ import {
   migrateNodeVersionManagerFile,
   migratePrettierToOxfmt,
   preflightGitHooksSetup,
-  promptEslintMigration,
-  promptPrettierMigration,
   rewriteMonorepo,
   rewriteStandaloneProject,
   warnIncompatibleEslintIntegration,
@@ -721,6 +721,9 @@ function showMigrationSummary(options: {
   if (report.frameworkShimAdded) {
     log(`${styleText('gray', '•')} TypeScript shim added for framework component files`);
   }
+  if (report.packageManagerBootstrapConfigured) {
+    log(`${styleText('gray', '•')} Package manager settings configured`);
+  }
   if (report.warnings.length > 0) {
     log(`${styleText('yellow', '!')} Warnings:`);
     for (const warning of report.warnings) {
@@ -1039,6 +1042,10 @@ async function main() {
     const legacyGitHooksMigrationCandidate = detectLegacyGitHooksMigrationCandidate(
       workspaceInfoOptional.rootDir,
     );
+    const vitePlusBootstrapPending = detectVitePlusBootstrapPending(
+      workspaceInfoOptional.rootDir,
+      workspaceInfoOptional.packageManager,
+    );
     const coreMigrationResult = finalizeCoreMigrationForExistingVitePlus(
       workspaceInfoOptional,
       true,
@@ -1053,19 +1060,64 @@ async function main() {
       didMigrate = true;
     }
 
-    if (!didMigrate && !hasExistingVitePlusMigrationCandidates(workspaceInfoOptional, options)) {
+    if (
+      !didMigrate &&
+      !vitePlusBootstrapPending &&
+      !hasExistingVitePlusMigrationCandidates(workspaceInfoOptional, options)
+    ) {
       prompts.outro(`This project is already using Vite+! ${accent(`Happy coding!`)}`);
       return;
     }
 
+    const packageManager = vitePlusBootstrapPending
+      ? (workspaceInfoOptional.packageManager ??
+        (await selectPackageManager(options.interactive, true)))
+      : workspaceInfoOptional.packageManager;
+    let downloadedPackageManager: Awaited<ReturnType<typeof downloadPackageManager>> | undefined;
+    let packageManagerVersion = workspaceInfoOptional.packageManagerVersion;
+    const downloadExistingPackageManager = async () => {
+      if (!packageManager) {
+        return undefined;
+      }
+      downloadedPackageManager ??= await downloadPackageManager(
+        packageManager,
+        packageManagerVersion,
+        options.interactive,
+        true,
+      );
+      packageManagerVersion = downloadedPackageManager.version;
+      return downloadedPackageManager;
+    };
+
     const setupOptions = getExistingVitePlusSetupOptions(options, legacyGitHooksMigrationCandidate);
     const plan = await collectMigrationSetupPlan(
       workspaceInfoOptional.rootDir,
-      workspaceInfoOptional.packageManager,
+      packageManager,
       setupOptions,
       workspaceInfoOptional.packages,
-      false,
     );
+
+    let needsInstall = false;
+    let forceInstall = false;
+    if (vitePlusBootstrapPending) {
+      const downloadResult = await downloadExistingPackageManager();
+      if (downloadResult && packageManager) {
+        updateMigrationProgress('Configuring package manager');
+        const bootstrapResult = ensureVitePlusBootstrap(
+          {
+            ...workspaceInfoOptional,
+            packageManager,
+            downloadPackageManager: downloadResult,
+          },
+          report,
+        );
+        didMigrate = bootstrapResult.changed || didMigrate;
+        needsInstall = bootstrapResult.changed || needsInstall;
+        forceInstall =
+          bootstrapResult.changed &&
+          (packageManager === PackageManager.npm || packageManager === PackageManager.bun);
+      }
+    }
 
     const fixBaseUrl = hasBaseUrlInWorkspace(workspaceInfoOptional)
       ? await confirmBaseUrlFix(options.interactive)
@@ -1087,18 +1139,48 @@ async function main() {
     }
     clearMigrationProgress();
 
-    const eslintMigrated = await promptEslintMigration(
-      workspaceInfoOptional.rootDir,
-      options.interactive,
-      workspaceInfoOptional.packages,
-    );
+    let eslintMigrated = false;
+    if (plan.migrateEslint) {
+      updateMigrationProgress('Migrating ESLint');
+      const eslintOk = await migrateEslintToOxlint(
+        workspaceInfoOptional.rootDir,
+        options.interactive,
+        plan.eslintConfigFile,
+        workspaceInfoOptional.packages,
+        { silent: true, report },
+      );
+      if (!eslintOk) {
+        clearMigrationProgress();
+        cancelAndExit('ESLint migration failed. Fix the issue and re-run `vp migrate`.', 1);
+      }
+      eslintMigrated = true;
+    }
 
-    // Check if Prettier migration is needed
-    const prettierMigrated = await promptPrettierMigration(
+    const prettierProject = detectPrettierProject(
       workspaceInfoOptional.rootDir,
-      options.interactive,
       workspaceInfoOptional.packages,
     );
+    let prettierMigrated = false;
+    if (prettierProject.hasDependency && prettierProject.configFile) {
+      const migratePrettier = await confirmPrettierMigration(options.interactive);
+      if (migratePrettier) {
+        updateMigrationProgress('Migrating Prettier');
+        const prettierOk = await migratePrettierToOxfmt(
+          workspaceInfoOptional.rootDir,
+          options.interactive,
+          prettierProject.configFile,
+          workspaceInfoOptional.packages,
+          { silent: true, report },
+        );
+        if (!prettierOk) {
+          clearMigrationProgress();
+          cancelAndExit('Prettier migration failed. Fix the issue and re-run `vp migrate`.', 1);
+        }
+        prettierMigrated = true;
+      }
+    } else if (prettierProject.hasDependency) {
+      warnPackageLevelPrettier();
+    }
 
     // Check if node version manager file migration is needed
     const nodeVersionDetection = detectNodeVersionManagerFile(workspaceInfoOptional.rootDir);
@@ -1115,7 +1197,7 @@ async function main() {
       }
     }
 
-    // Merge configs and reinstall once if any tool migration happened
+    // Merge configs and reinstall once if any tool or bootstrap migration happened
     if (eslintMigrated || prettierMigrated) {
       updateMigrationProgress('Rewriting configs');
       mergeViteConfigFiles(
@@ -1124,49 +1206,35 @@ async function main() {
         report,
         workspaceInfoOptional.packages,
       );
-      updateMigrationProgress('Installing dependencies');
-      // Resolve the actual pnpm version that `vp install` will use so the
-      // auto-install can opt into `--ignore-scripts` on pnpm v11 (which fails
-      // unapproved build scripts with `ERR_PNPM_IGNORED_BUILDS`).
-      let resolvedVersion = workspaceInfoOptional.packageManagerVersion;
-      if (
-        workspaceInfoOptional.packageManager &&
-        !semver.valid(semver.coerce(resolvedVersion) ?? '')
-      ) {
-        const resolved = await downloadPackageManager(
-          workspaceInfoOptional.packageManager,
-          resolvedVersion,
-          options.interactive,
-          true,
-        );
-        resolvedVersion = resolved.version;
-      }
-      const installSummary = await runViteInstall(
-        workspaceInfoOptional.rootDir,
-        options.interactive,
-        undefined,
-        {
-          silent: true,
-          packageManager: workspaceInfoOptional.packageManager,
-          packageManagerVersion: resolvedVersion,
-        },
-      );
-      installDurationMs += installSummary.durationMs;
+      needsInstall = true;
       didMigrate = true;
       report.eslintMigrated = eslintMigrated;
       report.prettierMigrated = prettierMigrated;
     }
 
+    if (needsInstall) {
+      updateMigrationProgress('Installing dependencies');
+      let resolvedVersion = packageManagerVersion;
+      if (packageManager && !semver.valid(semver.coerce(resolvedVersion) ?? '')) {
+        const resolved = downloadedPackageManager ?? (await downloadExistingPackageManager());
+        resolvedVersion = resolved?.version ?? resolvedVersion;
+      }
+      const installSummary = await runViteInstall(
+        workspaceInfoOptional.rootDir,
+        options.interactive,
+        forceInstall ? ['--force'] : undefined,
+        {
+          silent: true,
+          packageManager,
+          packageManagerVersion: resolvedVersion,
+        },
+      );
+      installDurationMs += installSummary.durationMs;
+    }
+
     if (plan.shouldSetupHooks) {
       updateMigrationProgress('Configuring git hooks');
-      if (
-        installGitHooks(
-          workspaceInfoOptional.rootDir,
-          true,
-          report,
-          workspaceInfoOptional.packageManager,
-        )
-      ) {
+      if (installGitHooks(workspaceInfoOptional.rootDir, true, report, packageManager)) {
         didMigrate = true;
       }
     }
@@ -1210,8 +1278,8 @@ async function main() {
       clearMigrationProgress();
       showMigrationSummary({
         projectRoot: workspaceInfoOptional.rootDir,
-        packageManager: resolvedPackageManager,
-        packageManagerVersion: workspaceInfoOptional.packageManagerVersion,
+        packageManager: packageManager ?? resolvedPackageManager,
+        packageManagerVersion,
         installDurationMs,
         report,
         updatedExistingVitePlus: true,

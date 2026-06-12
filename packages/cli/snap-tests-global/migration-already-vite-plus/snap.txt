@@ -4,7 +4,7 @@ This project is already using Vite+! Happy coding!
 
 > vp migrate --no-interactive --hooks --agent agents # explicit setup should still update existing vite-plus project
 ◇ Updated .
-• Node <semver>  unknown latest
+• Node <semver>  npm <semver>
 • 2 config updates applied
 
 > cat package.json # prepare script should be configured for vp config
@@ -12,6 +12,17 @@ This project is already using Vite+! Happy coding!
   "name": "migration-already-vite-plus",
   "devDependencies": {
     "vite-plus": "latest"
+  },
+  "overrides": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "npm",
+      "version": "<semver>",
+      "onFail": "download"
+    }
   },
   "scripts": {
     "prepare": "vp config"

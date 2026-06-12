@@ -2023,6 +2023,317 @@ export function finalizeCoreMigrationForExistingVitePlus(
   return result;
 }
 
+type BootstrapPackageJson = {
+  overrides?: Record<string, string>;
+  resolutions?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+  pnpm?: {
+    overrides?: Record<string, string>;
+    peerDependencyRules?: {
+      allowAny?: string[];
+      allowedVersions?: Record<string, string>;
+    };
+  };
+  packageManager?: string;
+  devEngines?: { packageManager?: unknown; [key: string]: unknown };
+};
+
+export type VitePlusBootstrapResult = {
+  changed: boolean;
+  packageJson: boolean;
+  packageManagerConfig: boolean;
+  packageManagerField: boolean;
+};
+
+function getVitePlusOverridePackageName(dependencyName: string): string | undefined {
+  if (dependencyName === 'vite') {
+    return '@voidzero-dev/vite-plus-core';
+  }
+  if (dependencyName === 'vitest') {
+    return '@voidzero-dev/vite-plus-test';
+  }
+  return undefined;
+}
+
+function isSemanticVitePlusOverrideSpec(dependencyName: string, spec: string | undefined): boolean {
+  if (!spec) {
+    return false;
+  }
+  if (spec === VITE_PLUS_OVERRIDE_PACKAGES[dependencyName]) {
+    return true;
+  }
+  const packageName = getVitePlusOverridePackageName(dependencyName);
+  return packageName !== undefined && spec.includes(packageName);
+}
+
+function overrideSpecSatisfiesVitePlus(
+  dependencyName: string,
+  spec: string | undefined,
+  catalogDependencyResolver?: CatalogDependencyResolver,
+): boolean {
+  if (!spec) {
+    return false;
+  }
+  if (isSemanticVitePlusOverrideSpec(dependencyName, spec)) {
+    return true;
+  }
+  if (!spec.startsWith('catalog:')) {
+    return false;
+  }
+  return isSemanticVitePlusOverrideSpec(
+    dependencyName,
+    catalogDependencyResolver?.(spec, dependencyName),
+  );
+}
+
+function overridesSatisfyVitePlus(
+  overrides: Record<string, string> | undefined,
+  catalogDependencyResolver?: CatalogDependencyResolver,
+): boolean {
+  return Object.keys(VITE_PLUS_OVERRIDE_PACKAGES).every((dependencyName) =>
+    overrideSpecSatisfiesVitePlus(
+      dependencyName,
+      overrides?.[dependencyName],
+      catalogDependencyResolver,
+    ),
+  );
+}
+
+function hasPackageManagerPin(pkg: BootstrapPackageJson): boolean {
+  return Boolean(pkg.packageManager || pkg.devEngines?.packageManager);
+}
+
+function readPnpmWorkspaceCatalogDependencyResolver(
+  projectPath: string,
+): CatalogDependencyResolver | undefined {
+  const pnpmWorkspaceYamlPath = path.join(projectPath, 'pnpm-workspace.yaml');
+  if (!fs.existsSync(pnpmWorkspaceYamlPath)) {
+    return undefined;
+  }
+  const doc = readYamlFile(pnpmWorkspaceYamlPath) as {
+    catalog?: Record<string, string>;
+    catalogs?: Record<string, Record<string, string>>;
+  } | null;
+  return createCatalogDependencyResolverFromCatalogs(doc?.catalog, doc?.catalogs);
+}
+
+function readPnpmWorkspaceOverrides(projectPath: string): Record<string, string> | undefined {
+  const pnpmWorkspaceYamlPath = path.join(projectPath, 'pnpm-workspace.yaml');
+  if (!fs.existsSync(pnpmWorkspaceYamlPath)) {
+    return undefined;
+  }
+  const doc = readYamlFile(pnpmWorkspaceYamlPath) as { overrides?: Record<string, string> } | null;
+  return doc?.overrides;
+}
+
+function readBunCatalogDependencyResolver(pkg: {
+  workspaces?: NpmWorkspaces;
+  catalog?: Record<string, string>;
+  catalogs?: Record<string, Record<string, string>>;
+}): CatalogDependencyResolver {
+  const workspacesObj = pkg.workspaces && !Array.isArray(pkg.workspaces) ? pkg.workspaces : {};
+  const fromWorkspaces = createCatalogDependencyResolverFromCatalogs(
+    workspacesObj.catalog,
+    workspacesObj.catalogs,
+  );
+  const fromPkg = createCatalogDependencyResolverFromCatalogs(pkg.catalog, pkg.catalogs);
+  return (catalogSpec, dependencyName) =>
+    fromWorkspaces(catalogSpec, dependencyName) ?? fromPkg(catalogSpec, dependencyName);
+}
+
+export function detectVitePlusBootstrapPending(
+  projectPath: string,
+  packageManager: PackageManager | undefined,
+): boolean {
+  const packageJsonPath = path.join(projectPath, 'package.json');
+  if (!fs.existsSync(packageJsonPath)) {
+    return false;
+  }
+  const pkg = readJsonFile(packageJsonPath) as BootstrapPackageJson & {
+    workspaces?: NpmWorkspaces;
+    catalog?: Record<string, string>;
+    catalogs?: Record<string, Record<string, string>>;
+  };
+
+  if (!pkg.devDependencies?.[VITE_PLUS_NAME] || !hasPackageManagerPin(pkg)) {
+    return true;
+  }
+
+  if (packageManager === undefined) {
+    return true;
+  }
+
+  if (packageManager === PackageManager.yarn) {
+    return !overridesSatisfyVitePlus(pkg.resolutions);
+  }
+  if (packageManager === PackageManager.npm) {
+    return !overridesSatisfyVitePlus(pkg.overrides);
+  }
+  if (packageManager === PackageManager.bun) {
+    return !overridesSatisfyVitePlus(pkg.overrides, readBunCatalogDependencyResolver(pkg));
+  }
+  if (packageManager === PackageManager.pnpm) {
+    if (pkg.pnpm) {
+      return !overridesSatisfyVitePlus(pkg.pnpm.overrides);
+    }
+    return !overridesSatisfyVitePlus(
+      readPnpmWorkspaceOverrides(projectPath),
+      readPnpmWorkspaceCatalogDependencyResolver(projectPath),
+    );
+  }
+
+  return false;
+}
+
+function ensureVitePlusDevDependency(pkg: BootstrapPackageJson, version: string): boolean {
+  if (pkg.devDependencies?.[VITE_PLUS_NAME]) {
+    return false;
+  }
+  pkg.devDependencies = {
+    ...pkg.devDependencies,
+    [VITE_PLUS_NAME]: version,
+  };
+  return true;
+}
+
+function ensureOverrideEntries(
+  overrides: Record<string, string> | undefined,
+  catalogDependencyResolver?: CatalogDependencyResolver,
+): { overrides: Record<string, string>; changed: boolean } {
+  const next = { ...overrides };
+  let changed = false;
+  for (const [dependencyName, overrideSpec] of Object.entries(VITE_PLUS_OVERRIDE_PACKAGES)) {
+    if (
+      !overrideSpecSatisfiesVitePlus(
+        dependencyName,
+        next[dependencyName],
+        catalogDependencyResolver,
+      )
+    ) {
+      next[dependencyName] = overrideSpec;
+      changed = true;
+    }
+  }
+  return { overrides: next, changed };
+}
+
+function ensurePnpmPeerDependencyRules(pkg: BootstrapPackageJson): boolean {
+  const overrideKeys = Object.keys(VITE_PLUS_OVERRIDE_PACKAGES);
+  pkg.pnpm ??= {};
+  const peerDependencyRules = {
+    ...pkg.pnpm.peerDependencyRules,
+    allowAny: [...new Set([...(pkg.pnpm.peerDependencyRules?.allowAny ?? []), ...overrideKeys])],
+    allowedVersions: {
+      ...pkg.pnpm.peerDependencyRules?.allowedVersions,
+      ...Object.fromEntries(overrideKeys.map((key) => [key, '*'])),
+    },
+  };
+  const changed =
+    JSON.stringify(pkg.pnpm.peerDependencyRules ?? {}) !== JSON.stringify(peerDependencyRules);
+  pkg.pnpm.peerDependencyRules = peerDependencyRules;
+  return changed;
+}
+
+export function ensureVitePlusBootstrap(
+  workspaceInfo: WorkspaceInfo,
+  report?: MigrationReport,
+): VitePlusBootstrapResult {
+  const projectPath = workspaceInfo.rootDir;
+  const packageJsonPath = path.join(projectPath, 'package.json');
+  const result: VitePlusBootstrapResult = {
+    changed: false,
+    packageJson: false,
+    packageManagerConfig: false,
+    packageManagerField: false,
+  };
+  if (!fs.existsSync(packageJsonPath)) {
+    return result;
+  }
+
+  editJsonFile<
+    BootstrapPackageJson & {
+      workspaces?: NpmWorkspaces;
+      catalog?: Record<string, string>;
+      catalogs?: Record<string, Record<string, string>>;
+    }
+  >(packageJsonPath, (pkg) => {
+    let packageJsonChanged = ensureVitePlusDevDependency(
+      pkg,
+      workspaceInfo.packageManager === PackageManager.pnpm && !VITE_PLUS_VERSION.startsWith('file:')
+        ? 'catalog:'
+        : VITE_PLUS_VERSION,
+    );
+
+    if (workspaceInfo.packageManager === PackageManager.yarn) {
+      const ensured = ensureOverrideEntries(pkg.resolutions);
+      if (ensured.changed) {
+        pkg.resolutions = ensured.overrides;
+        packageJsonChanged = true;
+      }
+    } else if (workspaceInfo.packageManager === PackageManager.npm) {
+      const ensured = ensureOverrideEntries(pkg.overrides);
+      if (ensured.changed) {
+        pkg.overrides = ensured.overrides;
+        packageJsonChanged = true;
+      }
+    } else if (workspaceInfo.packageManager === PackageManager.bun) {
+      const resolver = readBunCatalogDependencyResolver(pkg);
+      const ensured = ensureOverrideEntries(pkg.overrides, resolver);
+      if (ensured.changed) {
+        pkg.overrides = ensured.overrides;
+        packageJsonChanged = true;
+      }
+    } else if (workspaceInfo.packageManager === PackageManager.pnpm && pkg.pnpm) {
+      const ensured = ensureOverrideEntries(pkg.pnpm.overrides);
+      if (ensured.changed) {
+        pkg.pnpm.overrides = ensured.overrides;
+        packageJsonChanged = true;
+      }
+      packageJsonChanged = ensurePnpmPeerDependencyRules(pkg) || packageJsonChanged;
+    }
+
+    result.packageJson = packageJsonChanged;
+    return pkg;
+  });
+
+  if (workspaceInfo.packageManager === PackageManager.pnpm) {
+    const pkg = readJsonFile(packageJsonPath) as BootstrapPackageJson;
+    if (!pkg.pnpm) {
+      const pnpmWorkspaceYamlPath = path.join(projectPath, 'pnpm-workspace.yaml');
+      const before = fs.existsSync(pnpmWorkspaceYamlPath)
+        ? fs.readFileSync(pnpmWorkspaceYamlPath, 'utf-8')
+        : undefined;
+      if (
+        !overridesSatisfyVitePlus(
+          readPnpmWorkspaceOverrides(projectPath),
+          readPnpmWorkspaceCatalogDependencyResolver(projectPath),
+        )
+      ) {
+        rewritePnpmWorkspaceYaml(projectPath);
+      }
+      const after = fs.existsSync(pnpmWorkspaceYamlPath)
+        ? fs.readFileSync(pnpmWorkspaceYamlPath, 'utf-8')
+        : undefined;
+      result.packageManagerConfig = before !== after;
+    }
+  } else if (workspaceInfo.packageManager === PackageManager.bun) {
+    const before = fs.readFileSync(packageJsonPath, 'utf-8');
+    rewriteBunCatalog(projectPath);
+    const after = fs.readFileSync(packageJsonPath, 'utf-8');
+    result.packageJson = result.packageJson || before !== after;
+  }
+
+  const beforePackageManager = fs.readFileSync(packageJsonPath, 'utf-8');
+  setPackageManager(projectPath, workspaceInfo.downloadPackageManager);
+  const afterPackageManager = fs.readFileSync(packageJsonPath, 'utf-8');
+  result.packageManagerField = beforePackageManager !== afterPackageManager;
+  result.changed = result.packageJson || result.packageManagerConfig || result.packageManagerField;
+  if (result.changed && report) {
+    report.packageManagerBootstrapConfigured = true;
+  }
+  return result;
+}
+
 export function rewritePackageJson(
   pkg: {
     scripts?: Record<string, string>;

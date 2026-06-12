@@ -2,5 +2,16 @@
   "name": "migration-already-vite-plus",
   "devDependencies": {
     "vite-plus": "latest"
+  },
+  "overrides": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "npm",
+      "version": "11.16.0",
+      "onFail": "download"
+    }
   }
 }
