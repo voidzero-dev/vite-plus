@@ -253,6 +253,7 @@ Progress: resolved
     const output = `
  WARN  Tarball download average speed 29 KiB/s (size 56 KiB) is below 50 KiB/s: https://registry.npmjs.org/qs/-/qs-6.14.0.tgz (GET)
  WARN  Tarball download average speed 34 KiB/s (size 347 KiB) is below 50 KiB/s: https://registry.npmjs.org/undici/-/undici-7.16.0.tgz (GET)
+Progress: resolved
 `;
     expect(replaceUnstableOutput(output.trim())).toMatchSnapshot();
   });
