@@ -77,6 +77,11 @@ pub(crate) async fn dispatch_corepack(args: &[String]) -> i32 {
         }
     }
 
+    // The bundled corepack and native binaries have no leading args; exec
+    // with the caller's slice instead of cloning every argument.
+    if full_args.is_empty() {
+        return exec::exec_tool(&program, args);
+    }
     full_args.extend(args.iter().cloned());
     exec::exec_tool(&program, &full_args)
 }
@@ -115,11 +120,19 @@ async fn resolve_corepack_invocation() -> Result<CorepackInvocation, i32> {
             return Err(1);
         }
     };
-    if let Err(e) = ensure_installed(&resolution.version).await {
-        eprintln!("vp: Failed to install Node {}: {e}", resolution.version);
-        return Err(1);
-    }
-    if let Ok(corepack_path) = locate_tool(&resolution.version, "corepack") {
+    let corepack_path = match locate_tool(&resolution.version, "corepack") {
+        Ok(path) => Some(path),
+        Err(_) => {
+            // The runtime may not be installed yet; download it before
+            // concluding that corepack is not bundled.
+            if let Err(e) = ensure_installed(&resolution.version).await {
+                eprintln!("vp: Failed to install Node {}: {e}", resolution.version);
+                return Err(1);
+            }
+            locate_tool(&resolution.version, "corepack").ok()
+        }
+    };
+    if let Some(corepack_path) = corepack_path {
         // The bundled corepack sits in the same bin directory as node;
         // prepend it so corepack's child processes see the same runtime.
         if let Some(node_bin_dir) = corepack_path.parent() {
@@ -161,8 +174,6 @@ async fn resolve_corepack_invocation() -> Result<CorepackInvocation, i32> {
             concurrency: 1,
             update: false,
             only_bins,
-            // Keep the wrapped corepack's stdout parseable
-            progress_to_stderr: true,
         },
     )
     .await
@@ -203,20 +214,12 @@ async fn managed_corepack_invocation() -> Result<Option<CorepackInvocation>, Str
 /// Everything after a `--` separator is positional (package-manager names),
 /// so the subcommand and help flags are only looked for before it.
 fn is_corepack_link_command(args: &[String]) -> bool {
-    let mut subcommand = None;
-    for arg in args {
-        if arg == "--" {
-            break;
-        }
-        // Help output doesn't touch link files; run it as-is.
-        if arg == "-h" || arg == "--help" {
-            return false;
-        }
-        if subcommand.is_none() && !arg.starts_with('-') {
-            subcommand = Some(arg.as_str());
-        }
+    // Help output doesn't touch link files; run it as-is.
+    if crate::help::has_help_flag_before_terminator(args) {
+        return false;
     }
-    matches!(subcommand, Some("enable" | "disable"))
+    let subcommand = args.iter().take_while(|arg| *arg != "--").find(|arg| !arg.starts_with('-'));
+    matches!(subcommand.map(String::as_str), Some("enable" | "disable"))
 }
 
 /// Return the user args for an intercepted `corepack enable`/`disable` run,
@@ -466,10 +469,9 @@ async fn npm_link_source(_bin_dir: &AbsolutePath, _name: &str) -> Option<Absolut
 /// Check whether the bin entry is an intact Vite+ package shim.
 #[cfg(unix)]
 async fn is_vp_shim(bin_dir: &AbsolutePath, name: &str) -> bool {
-    match tokio::fs::read_link(bin_dir.join(name)).await {
-        Ok(target) => {
-            target == std::path::Path::new(crate::commands::global::install::PACKAGE_SHIM_TARGET)
-        }
+    let shim_path = bin_dir.join(name);
+    match tokio::fs::read_link(&shim_path).await {
+        Ok(target) => crate::commands::global::install::is_vp_shim_target(&target, &shim_path),
         Err(_) => false,
     }
 }

@@ -52,26 +52,22 @@ fn package_error(package_name: &str, error: impl Into<Error>) -> (Option<String>
     (Some(package_name.to_string()), error.into())
 }
 
-/// Route an install progress line to stdout (default) or stderr (used by the
-/// corepack shim auto-install, which must keep the wrapped tool's stdout
-/// parseable).
-fn emit_info(to_stderr: bool, msg: &str) {
-    if to_stderr { output::info_stderr(msg) } else { output::info(msg) }
-}
-
-/// See [`emit_info`].
-fn emit_success(to_stderr: bool, msg: &str) {
-    if to_stderr { output::success_stderr(msg) } else { output::success(msg) }
-}
-
-/// See [`emit_info`].
-fn emit_raw(to_stderr: bool, msg: &str) {
-    if to_stderr { output::raw_stderr(msg) } else { output::raw(msg) }
-}
-
 /// Symlink target used for package shims on Unix (relative to the bin dir).
 #[cfg(unix)]
 pub(crate) const PACKAGE_SHIM_TARGET: &str = "../current/bin/vp";
+
+/// Check whether a bin symlink target points at the vp binary: the standard
+/// relative package-shim target, or a resolvable link to a binary named `vp`
+/// (absolute paths in external/dev layouts created by `vp env setup`).
+#[cfg(unix)]
+pub(crate) fn is_vp_shim_target(
+    target: &std::path::Path,
+    shim_path: &vite_path::AbsolutePath,
+) -> bool {
+    target == std::path::Path::new(PACKAGE_SHIM_TARGET)
+        || (target.file_name().is_some_and(|file_name| file_name == "vp")
+            && std::fs::exists(shim_path.as_path()).unwrap_or(false))
+}
 
 /// Check whether a binary name is a shim Vite+ owns unconditionally: core
 /// shims plus the default env shims (node, npm, npx, corepack, vpx, vpr).
@@ -98,9 +94,6 @@ pub struct InstallOptions<'a> {
     /// are ignored (used by the corepack shim auto-install, which must not
     /// link corepack's pnpm/yarn launchers).
     pub only_bins: Option<&'a [&'a str]>,
-    /// Route progress lines to stderr so a wrapping shim's stdout stays
-    /// parseable.
-    pub progress_to_stderr: bool,
 }
 
 /// Install global packages parallelly.
@@ -108,8 +101,7 @@ pub async fn install(
     package_specs: &[String],
     options: InstallOptions<'_>,
 ) -> Result<(), (Option<String>, Error)> {
-    let InstallOptions { node_version, force, concurrency, update, only_bins, progress_to_stderr } =
-        options;
+    let InstallOptions { node_version, force, concurrency, update, only_bins } = options;
     if package_specs.is_empty() {
         return Ok(());
     }
@@ -173,16 +165,13 @@ pub async fn install(
     let packages_count = packages.len();
 
     let concurrency = concurrency.max(1);
-    emit_info(
-        progress_to_stderr,
-        &format!(
-            "{} {} global {} with Node.js {}",
-            operation_progress,
-            packages_count,
-            if packages_count == 1 { "package" } else { "packages" },
-            node_version
-        ),
-    );
+    output::info(&format!(
+        "{} {} global {} with Node.js {}",
+        operation_progress,
+        packages_count,
+        if packages_count == 1 { "package" } else { "packages" },
+        node_version
+    ));
 
     let progress = ProgressBar::new(packages_count as u64);
     if std::io::stderr().is_terminal() && std::env::var_os("CI").is_none() {
@@ -211,14 +200,7 @@ pub async fn install(
             installs.push(async {
                 (
                     package_name.clone(),
-                    install_one(
-                        package_name,
-                        package.spec,
-                        &npm_path,
-                        &node_bin_dir,
-                        progress_to_stderr,
-                    )
-                    .await,
+                    install_one(package_name, package.spec, &npm_path, &node_bin_dir).await,
                 )
             });
         }
@@ -341,10 +323,10 @@ pub async fn install(
                     conflicts.iter().map(|(_, pkg)| pkg.clone()).collect();
                 let mut uninstall_failed = false;
                 for pkg in packages_to_remove {
-                    emit_raw(
-                        progress_to_stderr,
-                        &format!("Uninstalling {} (conflicts with {})...", pkg, package_name),
-                    );
+                    output::raw(&format!(
+                        "Uninstalling {} (conflicts with {})...",
+                        pkg, package_name
+                    ));
                     if let Err(error) = Box::pin(uninstall(&pkg, false)).await {
                         let _ = cleanup_failed_install(&package_name, backup.take()).await;
                         if first_error.is_none() {
@@ -471,26 +453,23 @@ pub async fn install(
         }
 
         // 4.7 Print success message
-        emit_success(
-            progress_to_stderr,
-            &format!(
-                "{} {} {}{}",
-                operation_past,
-                package_name.bold(),
-                if update { "to " } else { "" },
-                installed_version.bold()
-            ),
-        );
+        output::success(&format!(
+            "{} {} {}{}",
+            operation_past,
+            package_name.bold(),
+            if update { "to " } else { "" },
+            installed_version.bold()
+        ));
         if !bin_names.is_empty() {
             let bins = bin_names
                 .iter()
                 .map(|bin_name| bin_name.bold().to_string())
                 .collect::<Vec<_>>()
                 .join(", ");
-            emit_raw(progress_to_stderr, &format!("  Bins: {}", bins));
+            output::raw(&format!("  Bins: {}", bins));
         }
         if index + 1 < packages_count {
-            emit_raw(progress_to_stderr, "");
+            output::raw("");
         }
     }
 
@@ -503,7 +482,6 @@ async fn install_one(
     package_spec: &str,
     npm_path: &AbsolutePathBuf,
     node_bin_dir: &AbsolutePathBuf,
-    progress_to_stderr: bool,
 ) -> Result<InstalledPackage, Error> {
     // 1. Backup a installed package, create directories
     let packages_dir = get_packages_dir()?;
@@ -525,8 +503,8 @@ async fn install_one(
 
     if !output.status.success() {
         // Show captured output to help debug the failure. npm's stdout joins
-        // stderr when the caller needs its own stdout to stay parseable.
-        if progress_to_stderr {
+        // stderr when vp's stdout must stay parseable (shim dispatch).
+        if output::user_output_to_stderr() {
             let _ = std::io::stderr().write_all(&output.stdout);
         } else {
             let _ = std::io::stdout().write_all(&output.stdout);
@@ -895,15 +873,10 @@ pub(crate) async fn create_package_shim(
     {
         let shim_path = bin_dir.join(bin_name);
 
-        // Check if already a Vite+ shim: either the standard relative target
-        // or a resolvable absolute path to the vp binary (external/dev
-        // layouts created by `vp env setup`, where replacing it with the
-        // relative target would dangle because VP_HOME/current is absent).
+        // Keep an existing Vite+ shim: replacing an external/dev-layout link
+        // with the relative target would dangle when VP_HOME/current is absent.
         if let Ok(target) = tokio::fs::read_link(&shim_path).await {
-            let is_vp_target = target == std::path::Path::new(PACKAGE_SHIM_TARGET)
-                || (target.file_name().is_some_and(|file_name| file_name == "vp")
-                    && std::fs::exists(shim_path.as_path()).unwrap_or(false));
-            if is_vp_target {
+            if is_vp_shim_target(&target, &shim_path) {
                 return Ok(());
             }
             // Exists but points elsewhere (e.g., npm-installed direct symlink) — replace it

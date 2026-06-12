@@ -936,11 +936,11 @@ fn delegated_help_doc(command: &str) -> Option<HelpDoc> {
     }
 }
 
-fn is_help_flag(arg: &str) -> bool {
+pub(crate) fn is_help_flag(arg: &str) -> bool {
     matches!(arg, "-h" | "--help")
 }
 
-fn has_help_flag_before_terminator(args: &[String]) -> bool {
+pub(crate) fn has_help_flag_before_terminator(args: &[String]) -> bool {
     args.iter().take_while(|arg| arg.as_str() != "--").any(|arg| is_help_flag(arg))
 }
 

@@ -315,7 +315,9 @@ async fn main() -> ExitCode {
     tracing::debug!("argv0: {argv0}");
 
     if let Some(tool) = shim::detect_shim_tool(argv0) {
-        // Shim mode - dispatch to the appropriate tool
+        // Shim mode - dispatch to the appropriate tool. stdout belongs to the
+        // wrapped tool; route vp's own output to stderr.
+        output::route_user_output_to_stderr();
         let exit_code = shim::dispatch(&tool, &args[1..]).await;
         return ExitCode::from(exit_code as u8);
     }

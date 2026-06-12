@@ -39,14 +39,17 @@ pub async fn execute(cwd: AbsolutePathBuf, tool: &str) -> Result<ExitStatus, Err
     if CORE_TOOLS.contains(&tool) {
         // corepack: a vp-managed global install wins over the Node-bundled
         // copy. Mirror the shim dispatch: BinConfig-based lookup, falling
-        // back to the bundled copy when the managed state is unusable
-        // (dispatch warns and falls back the same way), so the diagnostic
-        // matches what actually runs.
-        if tool == "corepack"
-            && let Ok(Some(metadata)) = crate::shim::dispatch::find_package_for_binary(tool).await
-            && locate_package_binary(&metadata.name, tool).is_ok()
-        {
-            return execute_package_binary(tool, &metadata).await;
+        // back to the bundled copy (with the same warning) when the managed
+        // state is unusable, so the diagnostic matches what actually runs.
+        if tool == "corepack" {
+            match crate::shim::dispatch::find_package_for_binary(tool).await {
+                Ok(Some(metadata)) => match locate_package_binary(&metadata.name, tool) {
+                    Ok(_) => return execute_package_binary(tool, &metadata).await,
+                    Err(e) => warn_unusable_managed_corepack(&e.to_string()),
+                },
+                Ok(None) => {}
+                Err(e) => warn_unusable_managed_corepack(&e),
+            }
         }
         return execute_core_tool(cwd, tool).await;
     }
@@ -103,6 +106,15 @@ async fn execute_package_manager_tool(
     );
 
     Ok(Some(ExitStatus::default()))
+}
+
+/// Warn that a vp-managed corepack exists but cannot run (mirrors the shim
+/// dispatch warning).
+fn warn_unusable_managed_corepack(reason: &str) {
+    output::warn(&format!(
+        "Ignoring unusable vp-managed corepack ({reason}); falling back to the \
+         Node-bundled corepack. Run `vp remove -g corepack` to clear it."
+    ));
 }
 
 /// Execute which for a core tool (node, npm, npx, corepack).
