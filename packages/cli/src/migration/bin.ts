@@ -1109,7 +1109,7 @@ async function main() {
       workspaceInfoOptional.rootDir,
       workspaceInfoOptional.packageManager,
     );
-    const packageManager = vitePlusBootstrapPending
+    let packageManager: PackageManager | undefined = vitePlusBootstrapPending
       ? (workspaceInfoOptional.packageManager ??
         (await selectPackageManager(options.interactive, true)))
       : workspaceInfoOptional.packageManager;
@@ -1130,9 +1130,13 @@ async function main() {
       packageManagerVersion = downloadedPackageManager.version;
       return downloadedPackageManager;
     };
+    const ensureExistingPackageManager = async () => {
+      packageManager ??= await selectPackageManager(options.interactive, true);
+      return downloadExistingPackageManager();
+    };
 
     if (vitePlusBootstrapPending) {
-      await downloadExistingPackageManager();
+      await ensureExistingPackageManager();
     }
 
     const coreMigrationResult = finalizeCoreMigrationForExistingVitePlus(
@@ -1174,7 +1178,7 @@ async function main() {
     let needsInstall = false;
     let forceInstall = false;
     if (vitePlusBootstrapPending) {
-      const downloadResult = await downloadExistingPackageManager();
+      const downloadResult = await ensureExistingPackageManager();
       if (downloadResult && packageManager) {
         updateMigrationProgress('Configuring package manager');
         const bootstrapResult = ensureVitePlusBootstrap(
@@ -1215,6 +1219,7 @@ async function main() {
 
     let eslintMigrated = false;
     if (plan.migrateEslint) {
+      await ensureExistingPackageManager();
       updateMigrationProgress('Migrating ESLint');
       const eslintOk = await migrateEslintToOxlint(
         workspaceInfoOptional.rootDir,
@@ -1238,6 +1243,7 @@ async function main() {
     if (prettierProject.hasDependency && prettierProject.configFile) {
       const migratePrettier = await confirmPrettierMigration(options.interactive);
       if (migratePrettier) {
+        await ensureExistingPackageManager();
         updateMigrationProgress('Migrating Prettier');
         const prettierOk = await migratePrettierToOxfmt(
           workspaceInfoOptional.rootDir,
@@ -1299,6 +1305,7 @@ async function main() {
     }
 
     if (plan.shouldSetupHooks) {
+      await ensureExistingPackageManager();
       updateMigrationProgress('Configuring git hooks');
       if (installGitHooks(workspaceInfoOptional.rootDir, true, report, packageManager)) {
         didMigrate = true;
@@ -1307,12 +1314,9 @@ async function main() {
     }
 
     if (needsInstall) {
+      const resolved = await ensureExistingPackageManager();
       updateMigrationProgress('Installing dependencies');
-      let resolvedVersion = packageManagerVersion;
-      if (packageManager && !semver.valid(semver.coerce(resolvedVersion) ?? '')) {
-        const resolved = downloadedPackageManager ?? (await downloadExistingPackageManager());
-        resolvedVersion = resolved?.version ?? resolvedVersion;
-      }
+      const resolvedVersion = resolved?.version ?? packageManagerVersion;
       const installSummary = await runViteInstall(
         workspaceInfoOptional.rootDir,
         options.interactive,
