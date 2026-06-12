@@ -57,3 +57,7 @@ export default defineConfig({
     "types": ["vite-plus/client"]
   }
 }
+
+> test ! -f AGENTS.md # disabled agent setup should not write instructions
+> test ! -d .vite-hooks # disabled hook setup should not write hooks
+> test ! -d .vscode # disabled editor setup should not write editor config

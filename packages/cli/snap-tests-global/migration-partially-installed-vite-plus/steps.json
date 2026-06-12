@@ -3,6 +3,9 @@
     "vp migrate --no-interactive --no-hooks --no-agent --no-editor # should finish core rewrites even when vite-plus is already installed",
     "cat package.json # scripts should be rewritten without adding overrides",
     "cat vite.config.ts # vite imports should be rewritten",
-    "cat tsconfig.app.json # vite/client types should be rewritten"
+    "cat tsconfig.app.json # vite/client types should be rewritten",
+    "test ! -f AGENTS.md # disabled agent setup should not write instructions",
+    "test ! -d .vite-hooks # disabled hook setup should not write hooks",
+    "test ! -d .vscode # disabled editor setup should not write editor config"
   ]
 }

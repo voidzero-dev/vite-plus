@@ -1,3 +1,21 @@
-> vp migrate --no-interactive # should detect existing vite-plus and exit
+> vp migrate --no-interactive # should detect existing vite-plus and exit without setup defaults
 This project is already using Vite+! Happy coding!
 
+> vp migrate --no-interactive --hooks --agent agents # explicit setup should still update existing vite-plus project
+◇ Updated .
+• Node <semver>  unknown latest
+• 2 config updates applied
+
+> cat package.json # prepare script should be configured for vp config
+{
+  "name": "migration-already-vite-plus",
+  "devDependencies": {
+    "vite-plus": "latest"
+  },
+  "scripts": {
+    "prepare": "vp config"
+  }
+}
+
+> test -f AGENTS.md # explicit agent instructions should be written
+> test -f .vite-hooks/pre-commit # explicit pre-commit hook should be written

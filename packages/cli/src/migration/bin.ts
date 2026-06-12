@@ -65,7 +65,6 @@ import {
   migrateNodeVersionManagerFile,
   migratePrettierToOxfmt,
   preflightGitHooksSetup,
-  promptEslintMigration,
   promptPrettierMigration,
   rewriteMonorepo,
   rewriteStandaloneProject,
@@ -326,8 +325,7 @@ function parseArgs() {
   };
 }
 
-interface MigrationPlan {
-  packageManager: PackageManager;
+interface MigrationSetupPlan {
   shouldSetupHooks: boolean;
   selectedAgentTargetPaths?: string[];
   agentConflictDecisions: Map<string, 'append' | 'skip'>;
@@ -335,6 +333,10 @@ interface MigrationPlan {
   editorConflictDecisions: Map<string, 'merge' | 'skip'>;
   migrateEslint: boolean;
   eslintConfigFile?: string;
+}
+
+interface MigrationPlan extends MigrationSetupPlan {
+  packageManager: PackageManager;
   migratePrettier: boolean;
   prettierConfigFile?: string;
   fixBaseUrl: boolean;
@@ -343,17 +345,39 @@ interface MigrationPlan {
   frameworkShimFrameworks?: Framework[];
 }
 
-async function collectMigrationPlan(
-  rootDir: string,
-  detectedPackageManager: PackageManager | undefined,
-  options: MigrationOptions,
-  packages?: WorkspacePackage[],
-): Promise<MigrationPlan> {
-  // 1. Package manager selection
-  const packageManager =
-    detectedPackageManager ?? (await selectPackageManager(options.interactive, true));
+function hasEnabledOption(value: string | string[] | false | undefined): boolean {
+  if (Array.isArray(value)) {
+    return value.some((item) => Boolean(item));
+  }
+  return value !== undefined && value !== false && value !== '';
+}
 
-  // 2. Git hooks (including preflight check)
+function hasExplicitExistingVitePlusSetupRequest(options: MigrationOptions): boolean {
+  return (
+    options.hooks === true || hasEnabledOption(options.agent) || hasEnabledOption(options.editor)
+  );
+}
+
+function hasExistingVitePlusMigrationCandidates(
+  workspaceInfo: WorkspaceInfoOptional,
+  options: MigrationOptions,
+): boolean {
+  const eslintProject = detectEslintProject(workspaceInfo.rootDir, workspaceInfo.packages);
+  const prettierProject = detectPrettierProject(workspaceInfo.rootDir, workspaceInfo.packages);
+  return (
+    hasExplicitExistingVitePlusSetupRequest(options) ||
+    hasBaseUrlInWorkspace(workspaceInfo) ||
+    eslintProject.hasDependency ||
+    prettierProject.hasDependency ||
+    detectNodeVersionManagerFile(workspaceInfo.rootDir) !== undefined
+  );
+}
+
+async function collectGitHooksDecision(
+  rootDir: string,
+  packageManager: PackageManager | undefined,
+  options: MigrationOptions,
+): Promise<boolean> {
   let shouldSetupHooks = await promptGitHooks(options);
   if (shouldSetupHooks) {
     const reason = preflightGitHooksSetup(rootDir, packageManager);
@@ -362,8 +386,16 @@ async function collectMigrationPlan(
       shouldSetupHooks = false;
     }
   }
+  return shouldSetupHooks;
+}
 
-  // 3. Agent selection (auto-detect existing agent files to skip the selector prompt)
+async function collectAgentInstructionPlan(
+  rootDir: string,
+  options: MigrationOptions,
+): Promise<{
+  selectedAgentTargetPaths?: string[];
+  agentConflictDecisions: Map<string, 'append' | 'skip'>;
+}> {
   const existingAgentTargetPaths =
     options.agent !== undefined || !options.interactive
       ? undefined
@@ -377,7 +409,6 @@ async function collectMigrationPlan(
           onCancel: () => cancelAndExit(),
         });
 
-  // 4. Agent conflict detection + prompting
   const agentConflicts = await detectAgentConflicts({
     projectRoot: rootDir,
     targetPaths: selectedAgentTargetPaths,
@@ -407,14 +438,22 @@ async function collectMigrationPlan(
     }
   }
 
-  // 5. Editor selection
+  return { selectedAgentTargetPaths, agentConflictDecisions };
+}
+
+async function collectEditorConfigPlan(
+  rootDir: string,
+  options: MigrationOptions,
+): Promise<{
+  selectedEditor?: EditorId;
+  editorConflictDecisions: Map<string, 'merge' | 'skip'>;
+}> {
   const selectedEditor = await selectEditor({
     interactive: options.interactive,
     editor: options.editor,
     onCancel: () => cancelAndExit(),
   });
 
-  // 6. Editor conflict detection + prompting
   const editorConflicts = detectEditorConflicts({
     projectRoot: rootDir,
     editorId: selectedEditor,
@@ -448,7 +487,14 @@ async function collectMigrationPlan(
     }
   }
 
-  // 7. ESLint detection + prompt
+  return { selectedEditor, editorConflictDecisions };
+}
+
+async function collectEslintMigrationDecision(
+  rootDir: string,
+  options: MigrationOptions,
+  packages?: WorkspacePackage[],
+): Promise<{ migrateEslint: boolean; eslintConfigFile?: string }> {
   const eslintProject = detectEslintProject(rootDir, packages);
   const incompatibleEslintIntegration = detectIncompatibleEslintIntegration(rootDir, packages);
   let migrateEslint = false;
@@ -468,7 +514,54 @@ async function collectMigrationPlan(
     warnPackageLevelEslint();
   }
 
-  // 8. Prettier detection + prompt
+  return { migrateEslint, eslintConfigFile: eslintProject.configFile };
+}
+
+async function collectMigrationSetupPlan(
+  rootDir: string,
+  packageManager: PackageManager | undefined,
+  options: MigrationOptions,
+  packages?: WorkspacePackage[],
+): Promise<MigrationSetupPlan> {
+  const shouldSetupHooks = await collectGitHooksDecision(rootDir, packageManager, options);
+  const agentPlan = await collectAgentInstructionPlan(rootDir, options);
+  const editorPlan = await collectEditorConfigPlan(rootDir, options);
+  const eslintPlan = await collectEslintMigrationDecision(rootDir, options, packages);
+
+  return {
+    shouldSetupHooks,
+    ...agentPlan,
+    ...editorPlan,
+    ...eslintPlan,
+  };
+}
+
+function getExistingVitePlusSetupOptions(options: MigrationOptions): MigrationOptions {
+  if (options.interactive) {
+    return options;
+  }
+  return {
+    ...options,
+    hooks: options.hooks ?? false,
+    agent: options.agent ?? false,
+    editor: options.editor ?? false,
+  };
+}
+
+async function collectMigrationPlan(
+  rootDir: string,
+  detectedPackageManager: PackageManager | undefined,
+  options: MigrationOptions,
+  packages?: WorkspacePackage[],
+): Promise<MigrationPlan> {
+  // 1. Package manager selection
+  const packageManager =
+    detectedPackageManager ?? (await selectPackageManager(options.interactive, true));
+
+  // 2. Shared setup/tooling decisions
+  const setupPlan = await collectMigrationSetupPlan(rootDir, packageManager, options, packages);
+
+  // 3. Prettier detection + prompt
   const prettierProject = detectPrettierProject(rootDir, packages);
   let migratePrettier = false;
   if (prettierProject.hasDependency && prettierProject.configFile) {
@@ -520,13 +613,7 @@ async function collectMigrationPlan(
 
   const plan: MigrationPlan = {
     packageManager,
-    shouldSetupHooks,
-    selectedAgentTargetPaths,
-    agentConflictDecisions,
-    selectedEditor,
-    editorConflictDecisions,
-    migrateEslint,
-    eslintConfigFile: eslintProject.configFile,
+    ...setupPlan,
     migratePrettier,
     prettierConfigFile: prettierProject.configFile,
     fixBaseUrl,
@@ -908,7 +995,7 @@ async function main() {
   const workspaceInfoOptional = await detectWorkspace(projectPath);
   const resolvedPackageManager = workspaceInfoOptional.packageManager ?? 'unknown';
 
-  // Early return if already using Vite+ (only ESLint/hooks migration may be needed)
+  // Early return if already using Vite+ (only finalization/setup migrations may be needed)
   // In force-override mode (file: tgz overrides), skip this check and run full migration
   const rootPkg = readNearestPackageJson(
     workspaceInfoOptional.rootDir,
@@ -954,6 +1041,19 @@ async function main() {
       didMigrate = true;
     }
 
+    if (!didMigrate && !hasExistingVitePlusMigrationCandidates(workspaceInfoOptional, options)) {
+      prompts.outro(`This project is already using Vite+! ${accent(`Happy coding!`)}`);
+      return;
+    }
+
+    const setupOptions = getExistingVitePlusSetupOptions(options);
+    const plan = await collectMigrationSetupPlan(
+      workspaceInfoOptional.rootDir,
+      workspaceInfoOptional.packageManager,
+      setupOptions,
+      workspaceInfoOptional.packages,
+    );
+
     const fixBaseUrl = hasBaseUrlInWorkspace(workspaceInfoOptional)
       ? await confirmBaseUrlFix(options.interactive)
       : false;
@@ -974,11 +1074,22 @@ async function main() {
     }
     clearMigrationProgress();
 
-    const eslintMigrated = await promptEslintMigration(
-      workspaceInfoOptional.rootDir,
-      options.interactive,
-      workspaceInfoOptional.packages,
-    );
+    let eslintMigrated = false;
+    if (plan.migrateEslint) {
+      updateMigrationProgress('Migrating ESLint');
+      const eslintOk = await migrateEslintToOxlint(
+        workspaceInfoOptional.rootDir,
+        options.interactive,
+        plan.eslintConfigFile,
+        workspaceInfoOptional.packages,
+        { silent: true, report },
+      );
+      if (!eslintOk) {
+        clearMigrationProgress();
+        cancelAndExit('ESLint migration failed. Fix the issue and re-run `vp migrate`.', 1);
+      }
+      eslintMigrated = true;
+    }
 
     // Check if Prettier migration is needed
     const prettierMigrated = await promptPrettierMigration(
@@ -1044,19 +1155,9 @@ async function main() {
       report.prettierMigrated = prettierMigrated;
     }
 
-    // Check if husky/lint-staged migration is needed
-    const hasHooksToMigrate =
-      rootPkg?.devDependencies?.husky ||
-      rootPkg?.dependencies?.husky ||
-      rootPkg?.devDependencies?.['lint-staged'] ||
-      rootPkg?.dependencies?.['lint-staged'];
-    if (hasHooksToMigrate) {
-      const shouldSetupHooks = await promptGitHooks(options);
-      if (shouldSetupHooks) {
-        updateMigrationProgress('Configuring git hooks');
-      }
+    if (plan.shouldSetupHooks) {
+      updateMigrationProgress('Configuring git hooks');
       if (
-        shouldSetupHooks &&
         installGitHooks(
           workspaceInfoOptional.rootDir,
           true,
@@ -1066,6 +1167,30 @@ async function main() {
       ) {
         didMigrate = true;
       }
+    }
+
+    if (plan.selectedAgentTargetPaths && plan.selectedAgentTargetPaths.length > 0) {
+      updateMigrationProgress('Writing agent instructions');
+      await writeAgentInstructions({
+        projectRoot: workspaceInfoOptional.rootDir,
+        targetPaths: plan.selectedAgentTargetPaths,
+        interactive: options.interactive,
+        conflictDecisions: plan.agentConflictDecisions,
+        silent: true,
+      });
+      didMigrate = true;
+    }
+
+    if (plan.selectedEditor) {
+      updateMigrationProgress('Writing editor configs');
+      await writeEditorConfigs({
+        projectRoot: workspaceInfoOptional.rootDir,
+        editorId: plan.selectedEditor,
+        interactive: options.interactive,
+        conflictDecisions: plan.editorConflictDecisions,
+        silent: true,
+      });
+      didMigrate = true;
     }
 
     // Check for Rolldown-incompatible config patterns (root + workspace packages)
