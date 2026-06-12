@@ -5,6 +5,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { PackageManager } from '../../types/index.js';
+import { VITE_PLUS_OVERRIDE_PACKAGES, VITE_PLUS_VERSION } from '../../utils/constants.js';
 import { dropAliasedRuntimeDevDeps } from '../templates/monorepo.js';
 
 describe('dropAliasedRuntimeDevDeps', () => {
@@ -60,9 +61,8 @@ describe('dropAliasedRuntimeDevDeps', () => {
   for (const packageManager of [PackageManager.npm, PackageManager.yarn, PackageManager.bun]) {
     it(`drops aliased vite/vitest for ${packageManager}`, () => {
       writeWebsitePackageJson({
-        vite: 'npm:@voidzero-dev/vite-plus-core@latest',
-        vitest: 'npm:@voidzero-dev/vite-plus-test@latest',
-        'vite-plus': 'latest',
+        ...VITE_PLUS_OVERRIDE_PACKAGES,
+        'vite-plus': VITE_PLUS_VERSION,
         typescript: '~6.0.2',
       });
 
@@ -71,7 +71,7 @@ describe('dropAliasedRuntimeDevDeps', () => {
       const devDependencies = readDevDependencies();
       expect(devDependencies.vite).toBeUndefined();
       expect(devDependencies.vitest).toBeUndefined();
-      expect(devDependencies['vite-plus']).toBe('latest');
+      expect(devDependencies['vite-plus']).toBe(VITE_PLUS_VERSION);
     });
   }
 });

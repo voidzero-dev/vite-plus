@@ -596,6 +596,11 @@ async function runTestCase(
     GIT_COMMITTER_NAME: 'Test',
     GIT_AUTHOR_EMAIL: 'vite-plus-test@test.com',
     GIT_COMMITTER_EMAIL: 'vite-plus-test@test.com',
+    // Disable commit signing so a contributor's global git config
+    // (commit.gpgsign=true) can't break fixture commits in non-interactive runs
+    GIT_CONFIG_COUNT: '1',
+    GIT_CONFIG_KEY_0: 'commit.gpgsign',
+    GIT_CONFIG_VALUE_0: 'false',
     // Skip `vp install` inside `vp migrate` — snap tests don't need real installs
     VP_SKIP_INSTALL: '1',
     // make sure npm install global packages to the temporary directory

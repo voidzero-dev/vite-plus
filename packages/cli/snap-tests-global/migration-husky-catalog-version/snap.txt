@@ -34,9 +34,9 @@ packages:
 catalog:
   husky: ^9.1.7
   lint-staged: ^16.2.6
-  vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: npm:@voidzero-dev/vite-plus-test@latest
-  vite-plus: latest
+  vite: npm:@voidzero-dev/vite-plus-core@^<semver>
+  vitest: npm:@voidzero-dev/vite-plus-test@^<semver>
+  vite-plus: ^<semver>
 overrides:
   vite: 'catalog:'
   vitest: 'catalog:'
