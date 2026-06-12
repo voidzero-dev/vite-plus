@@ -1217,7 +1217,7 @@ async function main() {
         updatedExistingVitePlus: true,
       });
     } else {
-      prompts.outro(`This project is already using Vite+! ${accent(`Happy coding!`)}`);
+      prompts.outro(`This project is already using Vite+! ${accent('Happy coding!')}`);
     }
     return;
   }

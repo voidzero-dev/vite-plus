@@ -1,6 +1,7 @@
 > vp migrate --no-interactive # should detect existing vite-plus and exit without setup defaults
 This project is already using Vite+! Happy coding!
 
+
 > vp migrate --no-interactive --hooks --agent agents # explicit setup should still update existing vite-plus project
 ◇ Updated .
 • Node <semver>  unknown latest
