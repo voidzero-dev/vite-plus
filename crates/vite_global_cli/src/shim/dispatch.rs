@@ -1308,7 +1308,7 @@ pub(crate) fn find_system_tool(tool: &str) -> Option<AbsolutePathBuf> {
     tracing::debug!("bypass_paths: {:?}", bypass_paths);
 
     // Filter PATH to exclude our bin directory and any bypass directories
-    let filtered_paths: Vec<_> = std::env::split_paths(&path_var)
+    let mut filtered_paths: Vec<_> = std::env::split_paths(&path_var)
         .filter(|p| {
             if let Some(ref bin) = bin_dir {
                 if p == bin.as_path() {
@@ -1319,24 +1319,28 @@ pub(crate) fn find_system_tool(tool: &str) -> Option<AbsolutePathBuf> {
         })
         .collect();
 
-    let filtered_path = std::env::join_paths(filtered_paths).ok()?;
-
-    // Use vite_command::resolve_bin with filtered PATH - stops at first match
     let cwd = current_dir().ok()?;
-    let resolved = vite_command::resolve_bin(tool, Some(&filtered_path), &cwd).ok()?;
 
     // Backstop for symlinked shims that evade the directory filters above
     // (`current_exe` is fully resolved on Linux): never return the running
-    // executable itself.
-    if let Some(self_exe) = &self_exe
-        && let (Ok(resolved_real), Ok(self_real)) =
-            (resolved.as_path().canonicalize(), self_exe.canonicalize())
-        && resolved_real == self_real
-    {
-        return None;
+    // executable itself. Skip the self candidate's directory and keep
+    // searching so a real system tool later in PATH is still found.
+    let self_real = self_exe.and_then(|exe| exe.canonicalize().ok());
+    loop {
+        // Use vite_command::resolve_bin with filtered PATH - stops at first match
+        let search_path = std::env::join_paths(&filtered_paths).ok()?;
+        let resolved = vite_command::resolve_bin(tool, Some(&search_path), &cwd).ok()?;
+        if self_real.is_none() || resolved.as_path().canonicalize().ok() != self_real {
+            return Some(resolved);
+        }
+        let self_candidate_dir = resolved.as_path().parent()?.to_path_buf();
+        let len_before = filtered_paths.len();
+        filtered_paths.retain(|p| *p != self_candidate_dir);
+        if filtered_paths.len() == len_before {
+            // Nothing left to drop; give up rather than loop forever.
+            return None;
+        }
     }
-
-    Some(resolved)
 }
 
 #[cfg(test)]
@@ -1438,6 +1442,39 @@ mod tests {
         assert!(
             result.unwrap().as_path().starts_with(&dir_b),
             "Should find tool in dir_b, not dir_a"
+        );
+    }
+
+    /// A symlink to the running executable evades the directory filters (its
+    /// directory differs from `current_exe().parent()`), exercising the
+    /// canonicalize backstop: the self candidate must be skipped while the
+    /// search continues to the real tool later in PATH.
+    #[cfg(unix)]
+    #[test]
+    #[serial]
+    fn test_find_system_tool_skips_self_symlink_and_keeps_searching() {
+        let _guard = EnvGuard::new();
+        let temp = TempDir::new().unwrap();
+        let dir_a = temp.path().join("bin_a");
+        let dir_b = temp.path().join("bin_b");
+        std::fs::create_dir_all(&dir_a).unwrap();
+        std::fs::create_dir_all(&dir_b).unwrap();
+        std::os::unix::fs::symlink(std::env::current_exe().unwrap(), dir_a.join("mytesttool"))
+            .unwrap();
+        create_fake_executable(&dir_b, "mytesttool");
+
+        let path = std::env::join_paths([dir_a.as_path(), dir_b.as_path()]).unwrap();
+        // SAFETY: This test runs in isolation with serial_test
+        unsafe {
+            std::env::set_var("PATH", &path);
+            std::env::remove_var(env_vars::VP_BYPASS);
+        }
+
+        let result = find_system_tool("mytesttool");
+        assert!(result.is_some(), "Should skip the self symlink and keep searching");
+        assert!(
+            result.unwrap().as_path().starts_with(&dir_b),
+            "Should find the real tool in dir_b, not the self symlink in dir_a"
         );
     }
 
