@@ -2,6 +2,16 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { checkNpmPackageExists } from '../package.js';
 
+// Pin the registry: getNpmRegistry reads the developer's real `.npmrc`, so
+// the URL assertions below would fail for anyone using a mirror registry.
+vi.mock('../npm-config.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../npm-config.js')>();
+  return {
+    ...actual,
+    getNpmRegistry: () => 'https://registry.npmjs.org',
+  };
+});
+
 describe('checkNpmPackageExists', () => {
   afterEach(() => {
     vi.restoreAllMocks();
