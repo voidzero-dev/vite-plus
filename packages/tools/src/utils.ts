@@ -86,13 +86,15 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
       )
       // ignore pnpm progress
       .replaceAll(/Progress: resolved \d+, reused \d+, downloaded \d+, added \d+\n/g, '')
-      // ignore pnpm warn
-      .replaceAll(/ ?WARN\s+Skip\s+adding .+?\n/g, '')
-      .replaceAll(/ ?WARN\s+Request\s+took .+?\n/g, '')
+      // ignore pnpm warn lines; pnpm pads `WARN` with thin spaces (U+2009) in
+      // TTY output and brackets it as `[WARN]` in non-interactive output
+      .replaceAll(/[\u2009 ]?\[?WARN\]?\s+Skip\s+adding .+?\n/g, '')
+      .replaceAll(/[\u2009 ]?\[?WARN\]?\s+Request\s+took .+?\n/g, '')
       .replaceAll(/Scope: all \d+ workspace projects/g, 'Scope: all <variable> workspace projects')
       .replaceAll(/\+{2,}\n/g, '+<repeat>\n')
-      // ignore pnpm registry request error warning log
-      .replaceAll(/ ?WARN\s+GET\s+https:\/\/registry\..+?\n/g, '')
+      // ignore pnpm registry request error warning log, e.g.:
+      // `[WARN] GET https://registry.npmjs.org/testnpm2 error (ECONNRESET). Will retry in 10 seconds. 2 retries left.`
+      .replaceAll(/[\u2009 ]?\[?WARN\]?\s+GET\s+https:\/\/registry\..+?\n/g, '')
       // ignore clack spinner frames (e.g. `◒  Preparing local Git repository...`),
       // they appear intermittently depending on timing; the final `◇`/`◆` line stays
       .replaceAll(/^[◐◓◑◒]\s[^\n]*\n?/gm, '')
@@ -118,7 +120,7 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
       // npm warn Unknown env config "recursive". This will stop working in the next major version of npm
       .replaceAll(/npm warn Unknown env config .+?\n/g, '')
       // WARN  Issue while reading "/path/to/.npmrc". Failed to replace env in config: ${NPM_AUTH_TOKEN}
-      .replaceAll(/WARN\s+Issue\s+while\s+reading .+?\n/g, '')
+      .replaceAll(/[\u2009 ]?\[?WARN\]?\s+Issue\s+while\s+reading .+?\n/g, '')
       // ignore npm audited packages log
       // "removed 1 package, and audited 3 packages in 700ms" => "removed <variable> package in <variable>ms"
       // "up to date, audited 4 packages in 11ms" => "up to date in <variable>ms"
@@ -148,7 +150,7 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
       // ignore npm registry domain
       .replaceAll(/(https?:\/\/registry\.)[^/\s]+(\/?)/g, '$1<domain>$2')
       // ignore pnpm tarball download average speed warning log
-      .replaceAll(/ WARN  Tarball download average speed .+?\n/g, '')
+      .replaceAll(/[\u2009 ]?\[?WARN\]?\s+Tarball download average speed .+?\n/g, '')
       // ignore npm hash values
       .replaceAll(/shasum: .+?\n/g, 'shasum: <hash>\n')
       .replaceAll(/integrity: ([\w-]+)-.+?\n/g, 'integrity: $1-<hash>\n')
