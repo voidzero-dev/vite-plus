@@ -2027,6 +2027,9 @@ type BootstrapPackageJson = {
   overrides?: Record<string, string>;
   resolutions?: Record<string, string>;
   devDependencies?: Record<string, string>;
+  dependencies?: Record<string, string>;
+  peerDependencies?: Record<string, string>;
+  optionalDependencies?: Record<string, string>;
   pnpm?: {
     overrides?: Record<string, string>;
     peerDependencyRules?: {
@@ -2103,6 +2106,35 @@ function hasPackageManagerPin(pkg: BootstrapPackageJson): boolean {
   return Boolean(pkg.packageManager || pkg.devEngines?.packageManager);
 }
 
+function pnpmPeerDependencyRulesSatisfyVitePlus(
+  peerDependencyRules:
+    | { allowAny?: string[]; allowedVersions?: Record<string, string> }
+    | undefined,
+): boolean {
+  const overrideKeys = Object.keys(VITE_PLUS_OVERRIDE_PACKAGES);
+  const allowAny = new Set(peerDependencyRules?.allowAny ?? []);
+  const allowedVersions = peerDependencyRules?.allowedVersions ?? {};
+  return overrideKeys.every((key) => allowAny.has(key) && allowedVersions[key] === '*');
+}
+
+function vitePlusManagedDependenciesPending(
+  pkg: BootstrapPackageJson,
+  catalogDependencyResolver?: CatalogDependencyResolver,
+): boolean {
+  const dependencyGroups = [pkg.devDependencies, pkg.dependencies, pkg.optionalDependencies];
+  return Object.keys(VITE_PLUS_OVERRIDE_PACKAGES).some((dependencyName) =>
+    dependencyGroups.some(
+      (dependencies) =>
+        dependencies?.[dependencyName] !== undefined &&
+        !overrideSpecSatisfiesVitePlus(
+          dependencyName,
+          dependencies[dependencyName],
+          catalogDependencyResolver,
+        ),
+    ),
+  );
+}
+
 function readPnpmWorkspaceCatalogDependencyResolver(
   projectPath: string,
 ): CatalogDependencyResolver | undefined {
@@ -2124,6 +2156,19 @@ function readPnpmWorkspaceOverrides(projectPath: string): Record<string, string>
   }
   const doc = readYamlFile(pnpmWorkspaceYamlPath) as { overrides?: Record<string, string> } | null;
   return doc?.overrides;
+}
+
+function readPnpmWorkspacePeerDependencyRules(
+  projectPath: string,
+): { allowAny?: string[]; allowedVersions?: Record<string, string> } | undefined {
+  const pnpmWorkspaceYamlPath = path.join(projectPath, 'pnpm-workspace.yaml');
+  if (!fs.existsSync(pnpmWorkspaceYamlPath)) {
+    return undefined;
+  }
+  const doc = readYamlFile(pnpmWorkspaceYamlPath) as {
+    peerDependencyRules?: { allowAny?: string[]; allowedVersions?: Record<string, string> };
+  } | null;
+  return doc?.peerDependencyRules;
 }
 
 function ensurePnpmWorkspacePackages(projectPath: string, workspacePatterns: string[]): boolean {
@@ -2184,21 +2229,35 @@ export function detectVitePlusBootstrapPending(
   }
 
   if (packageManager === PackageManager.yarn) {
-    return !overridesSatisfyVitePlus(pkg.resolutions);
+    const resolver = createCatalogDependencyResolver(projectPath, packageManager);
+    return (
+      !overridesSatisfyVitePlus(pkg.resolutions) ||
+      vitePlusManagedDependenciesPending(pkg, resolver)
+    );
   }
   if (packageManager === PackageManager.npm) {
-    return !overridesSatisfyVitePlus(pkg.overrides);
+    return !overridesSatisfyVitePlus(pkg.overrides) || vitePlusManagedDependenciesPending(pkg);
   }
   if (packageManager === PackageManager.bun) {
-    return !overridesSatisfyVitePlus(pkg.overrides, readBunCatalogDependencyResolver(pkg));
+    const resolver = readBunCatalogDependencyResolver(pkg);
+    return (
+      !overridesSatisfyVitePlus(pkg.overrides, resolver) ||
+      vitePlusManagedDependenciesPending(pkg, resolver)
+    );
   }
   if (packageManager === PackageManager.pnpm) {
     if (pkg.pnpm) {
-      return !overridesSatisfyVitePlus(pkg.pnpm.overrides);
+      return (
+        !overridesSatisfyVitePlus(pkg.pnpm.overrides) ||
+        !pnpmPeerDependencyRulesSatisfyVitePlus(pkg.pnpm.peerDependencyRules) ||
+        vitePlusManagedDependenciesPending(pkg)
+      );
     }
-    return !overridesSatisfyVitePlus(
-      readPnpmWorkspaceOverrides(projectPath),
-      readPnpmWorkspaceCatalogDependencyResolver(projectPath),
+    const resolver = readPnpmWorkspaceCatalogDependencyResolver(projectPath);
+    return (
+      !overridesSatisfyVitePlus(readPnpmWorkspaceOverrides(projectPath), resolver) ||
+      !pnpmPeerDependencyRulesSatisfyVitePlus(readPnpmWorkspacePeerDependencyRules(projectPath)) ||
+      vitePlusManagedDependenciesPending(pkg, resolver)
     );
   }
 
@@ -2235,6 +2294,44 @@ function ensureOverrideEntries(
     }
   }
   return { overrides: next, changed };
+}
+
+function ensureVitePlusManagedDependencies(
+  pkg: BootstrapPackageJson,
+  packageManager: PackageManager,
+  supportCatalog: boolean,
+  catalogDependencyResolver?: CatalogDependencyResolver,
+): boolean {
+  let changed = false;
+  const dependencyGroups: {
+    dependencyField: PackageJsonDependencyField;
+    dependencies: Record<string, string> | undefined;
+  }[] = [
+    { dependencyField: 'devDependencies', dependencies: pkg.devDependencies },
+    { dependencyField: 'dependencies', dependencies: pkg.dependencies },
+    { dependencyField: 'optionalDependencies', dependencies: pkg.optionalDependencies },
+  ];
+  for (const [dependencyName, version] of Object.entries(VITE_PLUS_OVERRIDE_PACKAGES)) {
+    for (const { dependencyField, dependencies } of dependencyGroups) {
+      if (
+        dependencies?.[dependencyName] !== undefined &&
+        !overrideSpecSatisfiesVitePlus(
+          dependencyName,
+          dependencies[dependencyName],
+          catalogDependencyResolver,
+        )
+      ) {
+        dependencies[dependencyName] = getCatalogDependencySpec(
+          dependencies[dependencyName],
+          version,
+          supportCatalog,
+          { dependencyField, dependencyName, packageManager, catalogDependencyResolver },
+        );
+        changed = true;
+      }
+    }
+  }
+  return changed;
 }
 
 function ensurePnpmPeerDependencyRules(pkg: BootstrapPackageJson): boolean {
@@ -2277,12 +2374,26 @@ export function ensureVitePlusBootstrap(
       catalogs?: Record<string, Record<string, string>>;
     }
   >(packageJsonPath, (pkg) => {
+    const usePnpmWorkspaceYaml = workspaceInfo.packageManager === PackageManager.pnpm && !pkg.pnpm;
+    const supportCatalog =
+      !VITE_PLUS_VERSION.startsWith('file:') &&
+      (usePnpmWorkspaceYaml ||
+        (workspaceInfo.isMonorepo && workspaceInfo.packageManager !== PackageManager.npm));
+    const catalogDependencyResolver =
+      workspaceInfo.packageManager === PackageManager.bun
+        ? readBunCatalogDependencyResolver(pkg)
+        : createCatalogDependencyResolver(projectPath, workspaceInfo.packageManager);
     let packageJsonChanged = ensureVitePlusDevDependency(
       pkg,
-      workspaceInfo.packageManager === PackageManager.pnpm && !VITE_PLUS_VERSION.startsWith('file:')
-        ? 'catalog:'
-        : VITE_PLUS_VERSION,
+      supportCatalog ? 'catalog:' : VITE_PLUS_VERSION,
     );
+    packageJsonChanged =
+      ensureVitePlusManagedDependencies(
+        pkg,
+        workspaceInfo.packageManager,
+        supportCatalog,
+        catalogDependencyResolver,
+      ) || packageJsonChanged;
 
     if (workspaceInfo.packageManager === PackageManager.yarn) {
       const ensured = ensureOverrideEntries(pkg.resolutions);
@@ -2297,8 +2408,7 @@ export function ensureVitePlusBootstrap(
         packageJsonChanged = true;
       }
     } else if (workspaceInfo.packageManager === PackageManager.bun) {
-      const resolver = readBunCatalogDependencyResolver(pkg);
-      const ensured = ensureOverrideEntries(pkg.overrides, resolver);
+      const ensured = ensureOverrideEntries(pkg.overrides, catalogDependencyResolver);
       if (ensured.changed) {
         pkg.overrides = ensured.overrides;
         packageJsonChanged = true;
@@ -2323,11 +2433,13 @@ export function ensureVitePlusBootstrap(
       const before = fs.existsSync(pnpmWorkspaceYamlPath)
         ? fs.readFileSync(pnpmWorkspaceYamlPath, 'utf-8')
         : undefined;
+      const catalogDependencyResolver = readPnpmWorkspaceCatalogDependencyResolver(projectPath);
       if (
         !overridesSatisfyVitePlus(
           readPnpmWorkspaceOverrides(projectPath),
-          readPnpmWorkspaceCatalogDependencyResolver(projectPath),
-        )
+          catalogDependencyResolver,
+        ) ||
+        !pnpmPeerDependencyRulesSatisfyVitePlus(readPnpmWorkspacePeerDependencyRules(projectPath))
       ) {
         rewritePnpmWorkspaceYaml(projectPath);
       }

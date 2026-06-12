@@ -1075,6 +1075,36 @@ describe('ensureVitePlusBootstrap', () => {
     expect(fs.readFileSync(path.join(tmpDir, 'package.json'), 'utf-8')).toBe(before);
   });
 
+  it('rewrites direct npm Vite dependencies before adding overrides', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { 'vite-plus': 'latest', vite: '^7.0.0' },
+        dependencies: { vitest: '^3.0.0' },
+        overrides: {
+          vite: 'npm:@voidzero-dev/vite-plus-core@latest',
+          vitest: 'npm:@voidzero-dev/vite-plus-test@latest',
+        },
+        devEngines: {
+          packageManager: { name: 'npm', version: '10.33.0', onFail: 'download' },
+        },
+      }),
+    );
+
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(true);
+    const result = ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.npm));
+
+    expect(result.changed).toBe(true);
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(false);
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+      dependencies: Record<string, string>;
+    };
+    expect(pkg.devDependencies.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+    expect(pkg.dependencies.vitest).toBe('npm:@voidzero-dev/vite-plus-test@latest');
+  });
+
   it('adds missing pnpm workspace overrides without writing optional setup files', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
@@ -1088,6 +1118,65 @@ describe('ensureVitePlusBootstrap', () => {
     expect(fs.existsSync(path.join(tmpDir, 'AGENTS.md'))).toBe(false);
     expect(fs.existsSync(path.join(tmpDir, '.vite-hooks'))).toBe(false);
     expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
+  });
+
+  it('uses a concrete vite-plus version when pnpm config stays in package.json', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        dependencies: { 'vite-plus': 'latest' },
+        pnpm: {},
+      }),
+    );
+
+    const result = ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm));
+
+    expect(result.changed).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, 'pnpm-workspace.yaml'))).toBe(false);
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+      pnpm: { overrides: Record<string, string> };
+    };
+    expect(pkg.devDependencies['vite-plus']).toBe('latest');
+    expect(pkg.pnpm.overrides.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+  });
+
+  it('completes missing pnpm workspace peer dependency rules', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { 'vite-plus': 'catalog:' },
+        devEngines: {
+          packageManager: { name: 'pnpm', version: '10.33.0', onFail: 'download' },
+        },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'catalog:',
+        '  vite: npm:@voidzero-dev/vite-plus-core@latest',
+        '  vitest: npm:@voidzero-dev/vite-plus-test@latest',
+        '  vite-plus: latest',
+        'overrides:',
+        "  vite: 'catalog:'",
+        "  vitest: 'catalog:'",
+        '',
+      ].join('\n'),
+    );
+
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(true);
+    const result = ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm));
+
+    expect(result.changed).toBe(true);
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      peerDependencyRules: { allowAny: string[]; allowedVersions: Record<string, string> };
+    };
+    expect(workspace.peerDependencyRules.allowAny).toEqual(['vite', 'vitest']);
+    expect(workspace.peerDependencyRules.allowedVersions).toEqual({ vite: '*', vitest: '*' });
   });
 
   it('preserves package.json workspace patterns when creating pnpm-workspace.yaml', () => {

@@ -1065,7 +1065,7 @@ async function main() {
       !vitePlusBootstrapPending &&
       !hasExistingVitePlusMigrationCandidates(workspaceInfoOptional, options)
     ) {
-      prompts.outro(`This project is already using Vite+! ${accent(`Happy coding!`)}`);
+      prompts.outro(`This project is already using Vite+! ${accent('Happy coding!')}`);
       return;
     }
 
