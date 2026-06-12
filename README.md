@@ -28,7 +28,13 @@ Vite+ is fully open-source under the MIT license.
 
 Install Vite+ globally as `vp`:
 
-For Linux or macOS:
+For macOS (Homebrew):
+
+```bash
+brew install vite-plus
+```
+
+For macOS / Linux:
 
 ```bash
 curl -fsSL https://vite.plus | bash
