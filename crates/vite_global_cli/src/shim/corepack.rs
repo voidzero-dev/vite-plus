@@ -148,12 +148,11 @@ async fn resolve_corepack_invocation() -> Result<CorepackInvocation, i32> {
     // Preserve the shape of a previous explicit (unrestricted) install: the
     // reinstall must not silently drop launcher bins the user had exposed
     // (the stale-bin cleanup would delete their pnpm/yarn shims).
-    let restrict =
-        match crate::commands::env::package_metadata::PackageMetadata::load("corepack").await {
-            Ok(Some(previous)) if !previous.bins_restricted => false,
-            _ => true,
-        };
-    let only_bins: Option<&[&str]> = if restrict { Some(&["corepack"]) } else { None };
+    let unrestricted = matches!(
+        crate::commands::env::package_metadata::PackageMetadata::load("corepack").await,
+        Ok(Some(previous)) if !previous.bins_restricted
+    );
+    let only_bins: Option<&[&str]> = if unrestricted { None } else { Some(&["corepack"]) };
     if let Err((_, error)) = crate::commands::global::install::install(
         &["corepack".to_string()],
         None,
