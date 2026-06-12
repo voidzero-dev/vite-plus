@@ -2116,20 +2116,13 @@ function pnpmPeerDependencyRulesSatisfyVitePlus(
   return overrideKeys.every((key) => allowAny.has(key) && allowedVersions[key] === '*');
 }
 
-function vitePlusManagedDependenciesPending(
-  pkg: BootstrapPackageJson,
-  catalogDependencyResolver?: CatalogDependencyResolver,
-): boolean {
+function npmVitePlusManagedDependenciesPending(pkg: BootstrapPackageJson): boolean {
   const dependencyGroups = [pkg.devDependencies, pkg.dependencies, pkg.optionalDependencies];
   return Object.keys(VITE_PLUS_OVERRIDE_PACKAGES).some((dependencyName) =>
     dependencyGroups.some(
       (dependencies) =>
         dependencies?.[dependencyName] !== undefined &&
-        !overrideSpecSatisfiesVitePlus(
-          dependencyName,
-          dependencies[dependencyName],
-          catalogDependencyResolver,
-        ),
+        !overrideSpecSatisfiesVitePlus(dependencyName, dependencies[dependencyName]),
     ),
   );
 }
@@ -2228,35 +2221,25 @@ export function detectVitePlusBootstrapPending(
   }
 
   if (packageManager === PackageManager.yarn) {
-    const resolver = createCatalogDependencyResolver(projectPath, packageManager);
-    return (
-      !overridesSatisfyVitePlus(pkg.resolutions) ||
-      vitePlusManagedDependenciesPending(pkg, resolver)
-    );
+    return !overridesSatisfyVitePlus(pkg.resolutions);
   }
   if (packageManager === PackageManager.npm) {
-    return !overridesSatisfyVitePlus(pkg.overrides) || vitePlusManagedDependenciesPending(pkg);
+    return !overridesSatisfyVitePlus(pkg.overrides) || npmVitePlusManagedDependenciesPending(pkg);
   }
   if (packageManager === PackageManager.bun) {
-    const resolver = readBunCatalogDependencyResolver(pkg);
-    return (
-      !overridesSatisfyVitePlus(pkg.overrides, resolver) ||
-      vitePlusManagedDependenciesPending(pkg, resolver)
-    );
+    return !overridesSatisfyVitePlus(pkg.overrides, readBunCatalogDependencyResolver(pkg));
   }
   if (packageManager === PackageManager.pnpm) {
     if (pkg.pnpm) {
       return (
         !overridesSatisfyVitePlus(pkg.pnpm.overrides) ||
-        !pnpmPeerDependencyRulesSatisfyVitePlus(pkg.pnpm.peerDependencyRules) ||
-        vitePlusManagedDependenciesPending(pkg)
+        !pnpmPeerDependencyRulesSatisfyVitePlus(pkg.pnpm.peerDependencyRules)
       );
     }
     const resolver = readPnpmWorkspaceCatalogDependencyResolver(projectPath);
     return (
       !overridesSatisfyVitePlus(readPnpmWorkspaceOverrides(projectPath), resolver) ||
-      !pnpmPeerDependencyRulesSatisfyVitePlus(readPnpmWorkspacePeerDependencyRules(projectPath)) ||
-      vitePlusManagedDependenciesPending(pkg, resolver)
+      !pnpmPeerDependencyRulesSatisfyVitePlus(readPnpmWorkspacePeerDependencyRules(projectPath))
     );
   }
 
@@ -2295,37 +2278,16 @@ function ensureOverrideEntries(
   return { overrides: next, changed };
 }
 
-function ensureVitePlusManagedDependencies(
-  pkg: BootstrapPackageJson,
-  packageManager: PackageManager,
-  supportCatalog: boolean,
-  catalogDependencyResolver?: CatalogDependencyResolver,
-): boolean {
+function ensureNpmVitePlusManagedDependencies(pkg: BootstrapPackageJson): boolean {
   let changed = false;
-  const dependencyGroups: {
-    dependencyField: PackageJsonDependencyField;
-    dependencies: Record<string, string> | undefined;
-  }[] = [
-    { dependencyField: 'devDependencies', dependencies: pkg.devDependencies },
-    { dependencyField: 'dependencies', dependencies: pkg.dependencies },
-    { dependencyField: 'optionalDependencies', dependencies: pkg.optionalDependencies },
-  ];
+  const dependencyGroups = [pkg.devDependencies, pkg.dependencies, pkg.optionalDependencies];
   for (const [dependencyName, version] of Object.entries(VITE_PLUS_OVERRIDE_PACKAGES)) {
-    for (const { dependencyField, dependencies } of dependencyGroups) {
+    for (const dependencies of dependencyGroups) {
       if (
         dependencies?.[dependencyName] !== undefined &&
-        !overrideSpecSatisfiesVitePlus(
-          dependencyName,
-          dependencies[dependencyName],
-          catalogDependencyResolver,
-        )
+        !overrideSpecSatisfiesVitePlus(dependencyName, dependencies[dependencyName])
       ) {
-        dependencies[dependencyName] = getCatalogDependencySpec(
-          dependencies[dependencyName],
-          version,
-          supportCatalog,
-          { dependencyField, dependencyName, packageManager, catalogDependencyResolver },
-        );
+        dependencies[dependencyName] = version;
         changed = true;
       }
     }
@@ -2377,21 +2339,13 @@ export function ensureVitePlusBootstrap(
     const supportCatalog =
       !VITE_PLUS_VERSION.startsWith('file:') &&
       (usePnpmWorkspaceYaml || workspaceInfo.packageManager === PackageManager.bun);
-    const catalogDependencyResolver =
-      workspaceInfo.packageManager === PackageManager.bun
-        ? readBunCatalogDependencyResolver(pkg)
-        : createCatalogDependencyResolver(projectPath, workspaceInfo.packageManager);
     let packageJsonChanged = ensureVitePlusDevDependency(
       pkg,
       supportCatalog ? 'catalog:' : VITE_PLUS_VERSION,
     );
-    packageJsonChanged =
-      ensureVitePlusManagedDependencies(
-        pkg,
-        workspaceInfo.packageManager,
-        supportCatalog,
-        catalogDependencyResolver,
-      ) || packageJsonChanged;
+    if (workspaceInfo.packageManager === PackageManager.npm) {
+      packageJsonChanged = ensureNpmVitePlusManagedDependencies(pkg) || packageJsonChanged;
+    }
 
     if (workspaceInfo.packageManager === PackageManager.yarn) {
       const ensured = ensureOverrideEntries(pkg.resolutions);
@@ -2406,7 +2360,7 @@ export function ensureVitePlusBootstrap(
         packageJsonChanged = true;
       }
     } else if (workspaceInfo.packageManager === PackageManager.bun) {
-      const ensured = ensureOverrideEntries(pkg.overrides, catalogDependencyResolver);
+      const ensured = ensureOverrideEntries(pkg.overrides, readBunCatalogDependencyResolver(pkg));
       if (ensured.changed) {
         pkg.overrides = ensured.overrides;
         packageJsonChanged = true;

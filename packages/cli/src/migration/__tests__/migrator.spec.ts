@@ -1166,7 +1166,7 @@ describe('ensureVitePlusBootstrap', () => {
     expect(pkg.devDependencies['vite-plus']).toBe('latest');
   });
 
-  it('uses concrete Vite+ specs for yarn monorepos without a catalog file', () => {
+  it('keeps yarn monorepo bootstrap rewrites out of package dependency specs', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
@@ -1191,7 +1191,7 @@ describe('ensureVitePlusBootstrap', () => {
       devDependencies: Record<string, string>;
       resolutions: Record<string, string>;
     };
-    expect(pkg.devDependencies.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+    expect(pkg.devDependencies.vite).toBe('^7.0.0');
     expect(pkg.devDependencies['vite-plus']).toBe('latest');
     expect(pkg.resolutions.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
   });
