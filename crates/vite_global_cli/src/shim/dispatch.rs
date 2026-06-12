@@ -1293,21 +1293,17 @@ pub(crate) fn find_system_tool(tool: &str) -> Option<AbsolutePathBuf> {
 
     // Parse VP_BYPASS as a PATH-style list of additional directories to skip.
     // This prevents infinite loops when multiple vite-plus installations exist in PATH.
-    let mut bypass_paths: Vec<std::path::PathBuf> = std::env::var_os(env_vars::VP_BYPASS)
+    let bypass_paths: Vec<std::path::PathBuf> = std::env::var_os(env_vars::VP_BYPASS)
         .map(|v| std::env::split_paths(&v).collect())
         .unwrap_or_default();
-
-    // Also skip the directory containing the running shim executable. The
-    // configured bin dir can point elsewhere (e.g. VP_HOME overridden) while
-    // the invoked shim still lives on PATH; without this the lookup resolves
-    // back to the shim itself, which then exec's itself in an infinite loop.
-    let self_exe = std::env::current_exe().ok();
-    if let Some(self_dir) = self_exe.as_deref().and_then(|exe| exe.parent()) {
-        bypass_paths.push(self_dir.to_path_buf());
-    }
     tracing::debug!("bypass_paths: {:?}", bypass_paths);
 
-    // Filter PATH to exclude our bin directory and any bypass directories
+    let cwd = current_dir().ok()?;
+
+    // Filter PATH to exclude our bin directory and any bypass directories.
+    // Relative entries are resolved against cwd because `which` reports
+    // matches from them as relative paths, which `AbsolutePathBuf` rejects;
+    // `~`-prefixed entries are left to `which`'s own tilde expansion.
     let mut filtered_paths: Vec<_> = std::env::split_paths(&path_var)
         .filter(|p| {
             if let Some(ref bin) = bin_dir {
@@ -1317,15 +1313,17 @@ pub(crate) fn find_system_tool(tool: &str) -> Option<AbsolutePathBuf> {
             }
             !bypass_paths.iter().any(|bp| p == bp)
         })
+        .map(|p| if p.is_absolute() || p.starts_with("~") { p } else { cwd.as_path().join(p) })
         .collect();
 
-    let cwd = current_dir().ok()?;
-
-    // Backstop for symlinked shims that evade the directory filters above
-    // (`current_exe` is fully resolved on Linux): never return the running
-    // executable itself. Skip the self candidate's directory and keep
-    // searching so a real system tool later in PATH is still found.
-    let self_real = self_exe.and_then(|exe| exe.canonicalize().ok());
+    // Never return the running executable itself: with a misconfigured bin
+    // dir (e.g. VP_HOME overridden) the invoked shim can still live on PATH,
+    // and returning it would make the shim exec itself in an infinite loop.
+    // Compare canonical identities (symlinks defeat path comparison, and
+    // `current_exe` is fully resolved on Linux), then skip the self
+    // candidate's directory and keep searching so a real system tool later
+    // in PATH is still found.
+    let self_real = std::env::current_exe().ok().and_then(|exe| exe.canonicalize().ok());
     loop {
         // Use vite_command::resolve_bin with filtered PATH - stops at first match
         let search_path = std::env::join_paths(&filtered_paths).ok()?;
@@ -1333,9 +1331,15 @@ pub(crate) fn find_system_tool(tool: &str) -> Option<AbsolutePathBuf> {
         if self_real.is_none() || resolved.as_path().canonicalize().ok() != self_real {
             return Some(resolved);
         }
-        let self_candidate_dir = resolved.as_path().parent()?.to_path_buf();
+        // Canonicalize both sides of the comparison so symlink-aliased PATH
+        // entries still match the resolved parent.
+        let self_dir = resolved.as_path().parent()?.to_path_buf();
+        let canonical_self_dir = self_dir.canonicalize().ok();
         let len_before = filtered_paths.len();
-        filtered_paths.retain(|p| *p != self_candidate_dir);
+        filtered_paths.retain(|p| {
+            *p != self_dir
+                && (canonical_self_dir.is_none() || p.canonicalize().ok() != canonical_self_dir)
+        });
         if filtered_paths.len() == len_before {
             // Nothing left to drop; give up rather than loop forever.
             return None;
@@ -1475,6 +1479,41 @@ mod tests {
         assert!(
             result.unwrap().as_path().starts_with(&dir_b),
             "Should find the real tool in dir_b, not the self symlink in dir_a"
+        );
+    }
+
+    /// Same as above but with the self-symlink directory listed as a relative
+    /// PATH entry: dropping it requires comparing canonicalized directories,
+    /// otherwise the retry loop gives up instead of reaching dir_b.
+    #[cfg(unix)]
+    #[test]
+    #[serial]
+    fn test_find_system_tool_skips_self_symlink_in_relative_path_entry() {
+        let _guard = EnvGuard::new();
+        let temp = TempDir::new().unwrap();
+        let dir_a = temp.path().join("bin_a");
+        let dir_b = temp.path().join("bin_b");
+        std::fs::create_dir_all(&dir_a).unwrap();
+        std::fs::create_dir_all(&dir_b).unwrap();
+        std::os::unix::fs::symlink(std::env::current_exe().unwrap(), dir_a.join("mytesttool"))
+            .unwrap();
+        create_fake_executable(&dir_b, "mytesttool");
+
+        let original_cwd = current_dir().unwrap();
+        std::env::set_current_dir(temp.path()).unwrap();
+        let path = std::env::join_paths([std::path::Path::new("bin_a"), dir_b.as_path()]).unwrap();
+        // SAFETY: This test runs in isolation with serial_test
+        unsafe {
+            std::env::set_var("PATH", &path);
+            std::env::remove_var(env_vars::VP_BYPASS);
+        }
+
+        let result = find_system_tool("mytesttool");
+        std::env::set_current_dir(original_cwd.as_path()).unwrap();
+        assert!(result.is_some(), "Should skip the relative self-symlink entry and keep searching");
+        assert!(
+            result.unwrap().as_path().starts_with(&dir_b),
+            "Should find the real tool in dir_b, not the self symlink in relative bin_a"
         );
     }
 
