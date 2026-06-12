@@ -91,8 +91,11 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
       .replaceAll(/ ?WARN\s+Request\s+took .+?\n/g, '')
       .replaceAll(/Scope: all \d+ workspace projects/g, 'Scope: all <variable> workspace projects')
       .replaceAll(/\+{2,}\n/g, '+<repeat>\n')
-      // ignore pnpm registry request error warning log
-      .replaceAll(/ ?WARN\s+GET\s+https:\/\/registry\..+?\n/g, '')
+      // ignore pnpm registry request error warning log; the prefix is `WARN`
+      // padded with a thin space (U+2009) by pnpm's TTY reporter, or `[WARN]`
+      // in non-interactive output, e.g.:
+      // `[WARN] GET https://registry.npmjs.org/testnpm2 error (ECONNRESET). Will retry in 10 seconds. 2 retries left.`
+      .replaceAll(/[\u2009 ]?\[?WARN\]?\s+GET\s+https:\/\/registry\..+?\n/g, '')
       // ignore clack spinner frames (e.g. `◒  Preparing local Git repository...`),
       // they appear intermittently depending on timing; the final `◇`/`◆` line stays
       .replaceAll(/^[◐◓◑◒]\s[^\n]*\n?/gm, '')
