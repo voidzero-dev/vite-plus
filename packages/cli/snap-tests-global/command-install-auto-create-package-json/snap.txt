@@ -14,6 +14,7 @@ no package.json
 }
 
 > vp add testnpm2 -D && cat package.json # should add package to auto-created package.json
+✓ Lockfile passes supply-chain policies (verified <variable>ms ago)
 Packages: +<variable>
 +
 Progress: resolved <variable>, reused <variable>, downloaded <variable>, added <variable>, done
