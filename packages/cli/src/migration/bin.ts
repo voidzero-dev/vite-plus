@@ -1109,6 +1109,32 @@ async function main() {
       workspaceInfoOptional.rootDir,
       workspaceInfoOptional.packageManager,
     );
+    const packageManager = vitePlusBootstrapPending
+      ? (workspaceInfoOptional.packageManager ??
+        (await selectPackageManager(options.interactive, true)))
+      : workspaceInfoOptional.packageManager;
+    let downloadedPackageManager: Awaited<ReturnType<typeof downloadPackageManager>> | undefined;
+    let packageManagerVersion = workspaceInfoOptional.packageManagerVersion;
+    const downloadExistingPackageManager = async () => {
+      if (!packageManager) {
+        return undefined;
+      }
+      downloadedPackageManager ??= await downloadSupportedPackageManager({
+        rootDir: workspaceInfoOptional.rootDir,
+        packageManager,
+        packageManagerVersion,
+        interactive: options.interactive,
+        updateMigrationProgress,
+        failMigrationProgress,
+      });
+      packageManagerVersion = downloadedPackageManager.version;
+      return downloadedPackageManager;
+    };
+
+    if (vitePlusBootstrapPending) {
+      await downloadExistingPackageManager();
+    }
+
     const coreMigrationResult = finalizeCoreMigrationForExistingVitePlus(
       workspaceInfoOptional,
       true,
@@ -1131,28 +1157,6 @@ async function main() {
       prompts.outro(`This project is already using Vite+! ${accent('Happy coding!')}`);
       return;
     }
-
-    const packageManager = vitePlusBootstrapPending
-      ? (workspaceInfoOptional.packageManager ??
-        (await selectPackageManager(options.interactive, true)))
-      : workspaceInfoOptional.packageManager;
-    let downloadedPackageManager: Awaited<ReturnType<typeof downloadPackageManager>> | undefined;
-    let packageManagerVersion = workspaceInfoOptional.packageManagerVersion;
-    const downloadExistingPackageManager = async () => {
-      if (!packageManager) {
-        return undefined;
-      }
-      downloadedPackageManager ??= await downloadSupportedPackageManager({
-        rootDir: workspaceInfoOptional.rootDir,
-        packageManager,
-        packageManagerVersion,
-        interactive: options.interactive,
-        updateMigrationProgress,
-        failMigrationProgress,
-      });
-      packageManagerVersion = downloadedPackageManager.version;
-      return downloadedPackageManager;
-    };
 
     const setupOptions = getExistingVitePlusSetupOptions(options, legacyGitHooksMigrationCandidate);
     const plan = await collectMigrationSetupPlan(
