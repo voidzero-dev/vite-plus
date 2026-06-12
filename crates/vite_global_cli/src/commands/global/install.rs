@@ -79,6 +79,15 @@ pub(crate) fn is_protected_shim(bin_name: &str) -> bool {
     CORE_SHIMS.contains(&bin_name) || crate::commands::env::setup::SHIM_TOOLS.contains(&bin_name)
 }
 
+/// Whether a package may own a bin name. Protected shim names never belong
+/// to packages, with one exception: the `corepack` package owning its own
+/// `corepack` bin, so an explicit `vp install -g corepack` wins the shim's
+/// resolution order. The exemption is scoped to the package name; any other
+/// package declaring a `corepack` bin must not take BinConfig ownership.
+pub(crate) fn package_may_own_bin(package_name: &str, bin_name: &str) -> bool {
+    !is_protected_shim(bin_name) || (bin_name == "corepack" && package_name == "corepack")
+}
+
 /// Options for [`install`].
 pub struct InstallOptions<'a> {
     /// Node.js version to install with; resolved from the current directory
@@ -265,6 +274,21 @@ pub async fn install(
             bin_names.retain(|bin| only.contains(bin));
             js_bins.retain(|bin| only.contains(bin));
         }
+
+        // Drop bin names the package must not own before conflict detection,
+        // shim creation, BinConfig ownership, and metadata recording.
+        bin_names.retain(|bin| {
+            let allowed = package_may_own_bin(&package_name, bin);
+            if !allowed {
+                output::warn(&format!(
+                    "Package '{}' provides '{}' binary, but it conflicts with a built-in shim. \
+                     Skipping.",
+                    package_name, bin
+                ));
+            }
+            allowed
+        });
+        js_bins.retain(|bin| package_may_own_bin(&package_name, bin));
 
         let stale_bin_names = match stale_bin_names_for_package(
             previous_metadata.as_ref(),
@@ -853,12 +877,10 @@ pub(crate) async fn create_package_shim(
     bin_name: &str,
     package_name: &str,
 ) -> Result<(), Error> {
-    // Check for conflicts with protected shims. corepack is the exception:
-    // an explicit `vp install -g corepack` must own a BinConfig so the
-    // managed copy wins in the shim's resolution order, and its default shim
-    // dispatches through vp either way. vpx/vpr never dispatch to packages,
-    // so a package binary with those names would be unreachable.
-    if is_protected_shim(bin_name) && bin_name != "corepack" {
+    // Defense in depth: the finalize loop already filters bin names the
+    // package must not own (see package_may_own_bin); keep the guard here so
+    // no other caller can hand a protected shim to a package.
+    if !package_may_own_bin(package_name, bin_name) {
         output::warn(&format!(
             "Package '{}' provides '{}' binary, but it conflicts with a built-in shim. Skipping.",
             package_name, bin_name
@@ -1040,6 +1062,41 @@ mod tests {
         let shim_path = bin_dir.join("node");
         #[cfg(windows)]
         let shim_path = bin_dir.join("node.exe");
+        assert!(!shim_path.as_path().exists());
+    }
+
+    #[test]
+    fn test_package_may_own_bin_scopes_corepack_to_its_package() {
+        // Only the corepack package may own the corepack bin; any other
+        // package declaring a `corepack` bin must not take BinConfig
+        // ownership (it would win the corepack shim's resolution order).
+        assert!(package_may_own_bin("corepack", "corepack"));
+        assert!(!package_may_own_bin("some-package", "corepack"));
+        assert!(!package_may_own_bin("@scope/corepack", "corepack"));
+
+        // Other protected shims never belong to packages
+        assert!(!package_may_own_bin("corepack", "npm"));
+        assert!(!package_may_own_bin("some-package", "vpx"));
+        assert!(!package_may_own_bin("some-package", "vpr"));
+
+        // Regular bins are unrestricted
+        assert!(package_may_own_bin("typescript", "tsc"));
+    }
+
+    #[tokio::test]
+    async fn test_create_package_shim_skips_corepack_bin_for_other_packages() {
+        use tempfile::TempDir;
+        use vite_path::AbsolutePathBuf;
+
+        let temp_dir = TempDir::new().unwrap();
+        let bin_dir = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        create_package_shim(&bin_dir, "corepack", "some-package").await.unwrap();
+
+        #[cfg(unix)]
+        let shim_path = bin_dir.join("corepack");
+        #[cfg(windows)]
+        let shim_path = bin_dir.join("corepack.exe");
         assert!(!shim_path.as_path().exists());
     }
 
