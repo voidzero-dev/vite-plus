@@ -21,6 +21,10 @@ const {
   rewriteStandaloneProject,
   rewriteMonorepo,
   rewriteMonorepoProject,
+  detectPendingCoreMigration,
+  detectVitePlusBootstrapPending,
+  ensureVitePlusBootstrap,
+  finalizeCoreMigrationForExistingVitePlus,
   parseNvmrcVersion,
   detectNodeVersionManagerFile,
   migrateNodeVersionManagerFile,
@@ -31,6 +35,7 @@ const {
   rewriteEslintPackageJson,
   detectIncompatibleEslintIntegration,
   preflightGitHooksSetup,
+  detectLegacyGitHooksMigrationCandidate,
   setPackageManager,
 } = await import('../migrator.js');
 
@@ -989,10 +994,10 @@ function makeWorkspaceInfo(
     packageManager,
     packageManagerVersion: '10.33.0',
     downloadPackageManager: {
-      name: 'pnpm',
+      name: packageManager,
       installDir: '/tmp',
       binPrefix: '/tmp/bin',
-      packageName: 'pnpm',
+      packageName: packageManager,
       version: '10.33.0',
     },
     packages: [],
@@ -1010,6 +1015,247 @@ function readYaml(filePath: string): string {
 function readYamlObject(filePath: string): Record<string, unknown> {
   return parseYaml(readYaml(filePath)) as Record<string, unknown>;
 }
+
+describe('ensureVitePlusBootstrap', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-bootstrap-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('adds missing npm overrides and package manager pin for existing Vite+ projects', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'test', devDependencies: { 'vite-plus': 'latest' } }),
+    );
+
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(true);
+
+    const report = createMigrationReport();
+    const result = ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.npm), report);
+
+    expect(result.changed).toBe(true);
+    expect(report.packageManagerBootstrapConfigured).toBe(true);
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(false);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      overrides: Record<string, string>;
+      devEngines: { packageManager: { name: string } };
+    };
+    expect(pkg.overrides.vite).toContain('@voidzero-dev/vite-plus-core');
+    expect(pkg.overrides.vitest).toContain('@voidzero-dev/vite-plus-test');
+    expect(pkg.devEngines.packageManager.name).toBe(PackageManager.npm);
+  });
+
+  it('does not rewrite semantic npm overrides that already point at Vite+ packages', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { 'vite-plus': 'latest' },
+        overrides: {
+          vite: 'npm:@voidzero-dev/vite-plus-core@0.1.0',
+          vitest: 'npm:@voidzero-dev/vite-plus-test@0.1.0',
+        },
+        devEngines: {
+          packageManager: { name: 'npm', version: '10.33.0', onFail: 'download' },
+        },
+      }),
+    );
+    const before = fs.readFileSync(path.join(tmpDir, 'package.json'), 'utf-8');
+
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(false);
+    const result = ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.npm));
+
+    expect(result.changed).toBe(false);
+    expect(fs.readFileSync(path.join(tmpDir, 'package.json'), 'utf-8')).toBe(before);
+  });
+
+  it('rewrites direct npm Vite dependencies before adding overrides', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { 'vite-plus': 'latest', vite: '^7.0.0' },
+        dependencies: { vitest: '^3.0.0' },
+        overrides: {
+          vite: 'npm:@voidzero-dev/vite-plus-core@latest',
+          vitest: 'npm:@voidzero-dev/vite-plus-test@latest',
+        },
+        devEngines: {
+          packageManager: { name: 'npm', version: '10.33.0', onFail: 'download' },
+        },
+      }),
+    );
+
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(true);
+    const result = ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.npm));
+
+    expect(result.changed).toBe(true);
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(false);
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+      dependencies: Record<string, string>;
+    };
+    expect(pkg.devDependencies.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+    expect(pkg.dependencies.vitest).toBe('npm:@voidzero-dev/vite-plus-test@latest');
+  });
+
+  it('adds missing pnpm workspace overrides without writing optional setup files', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'test', devDependencies: { 'vite-plus': 'catalog:' } }),
+    );
+
+    const result = ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm));
+
+    expect(result.changed).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, 'pnpm-workspace.yaml'))).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, 'AGENTS.md'))).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, '.vite-hooks'))).toBe(false);
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
+  });
+
+  it('uses a concrete vite-plus version when pnpm config stays in package.json', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        dependencies: { 'vite-plus': 'latest' },
+        pnpm: {},
+      }),
+    );
+
+    const result = ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm));
+
+    expect(result.changed).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, 'pnpm-workspace.yaml'))).toBe(false);
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+      pnpm: { overrides: Record<string, string> };
+    };
+    expect(pkg.devDependencies['vite-plus']).toBe('latest');
+    expect(pkg.pnpm.overrides.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+  });
+
+  it('uses a concrete vite-plus version for pnpm monorepos that keep pnpm config in package.json', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        dependencies: { 'vite-plus': 'latest' },
+        pnpm: {},
+      }),
+    );
+
+    const result = ensureVitePlusBootstrap({
+      ...makeWorkspaceInfo(tmpDir, PackageManager.pnpm),
+      isMonorepo: true,
+      workspacePatterns: ['packages/*'],
+    });
+
+    expect(result.changed).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, 'pnpm-workspace.yaml'))).toBe(false);
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    expect(pkg.devDependencies['vite-plus']).toBe('latest');
+  });
+
+  it('keeps yarn monorepo bootstrap rewrites out of package dependency specs', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { 'vite-plus': 'latest', vite: '^7.0.0' },
+        devEngines: {
+          packageManager: { name: 'yarn', version: '4.0.0', onFail: 'download' },
+        },
+      }),
+    );
+
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.yarn)).toBe(true);
+    const result = ensureVitePlusBootstrap({
+      ...makeWorkspaceInfo(tmpDir, PackageManager.yarn),
+      isMonorepo: true,
+      workspacePatterns: ['packages/*'],
+    });
+
+    expect(result.changed).toBe(true);
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.yarn)).toBe(false);
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+      resolutions: Record<string, string>;
+    };
+    expect(pkg.devDependencies.vite).toBe('^7.0.0');
+    expect(pkg.devDependencies['vite-plus']).toBe('latest');
+    expect(pkg.resolutions.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+  });
+
+  it('completes missing pnpm workspace peer dependency rules', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { 'vite-plus': 'catalog:' },
+        devEngines: {
+          packageManager: { name: 'pnpm', version: '10.33.0', onFail: 'download' },
+        },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'catalog:',
+        '  vite: npm:@voidzero-dev/vite-plus-core@latest',
+        '  vitest: npm:@voidzero-dev/vite-plus-test@latest',
+        '  vite-plus: latest',
+        'overrides:',
+        "  vite: 'catalog:'",
+        "  vitest: 'catalog:'",
+        '',
+      ].join('\n'),
+    );
+
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(true);
+    const result = ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm));
+
+    expect(result.changed).toBe(true);
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      peerDependencyRules: { allowAny: string[]; allowedVersions: Record<string, string> };
+    };
+    expect(workspace.peerDependencyRules.allowAny).toEqual(['vite', 'vitest']);
+    expect(workspace.peerDependencyRules.allowedVersions).toEqual({ vite: '*', vitest: '*' });
+  });
+
+  it('preserves package.json workspace patterns when creating pnpm-workspace.yaml', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        workspaces: ['packages/*'],
+        devDependencies: { 'vite-plus': 'catalog:' },
+      }),
+    );
+
+    const result = ensureVitePlusBootstrap({
+      ...makeWorkspaceInfo(tmpDir, PackageManager.pnpm),
+      isMonorepo: true,
+      workspacePatterns: ['packages/*'],
+    });
+
+    expect(result.changed).toBe(true);
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      packages: string[];
+    };
+    expect(workspace.packages).toEqual(['packages/*']);
+  });
+});
 
 describe('rewriteStandaloneProject pnpm workspace yaml', () => {
   let tmpDir: string;
@@ -1988,6 +2234,110 @@ describe('rewriteStandaloneProject — tsconfig types rewriting', () => {
   });
 });
 
+describe('existing Vite+ core migration finalization', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-existing-vite-plus-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('detects and finalizes legacy scripts, imports, and tsconfig types without dependency rewrites', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify(
+        {
+          name: 'test',
+          scripts: {
+            dev: 'vite',
+            build: 'tsc -b && vite build',
+            preview: 'vite preview',
+          },
+          devDependencies: {
+            'vite-plus': 'latest',
+            '@voidzero-dev/vite-plus-core': 'latest',
+          },
+        },
+        null,
+        2,
+      ),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'vite.config.ts'),
+      "import { defineConfig } from 'vite';\nexport default defineConfig({});\n",
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'tsconfig.app.json'),
+      JSON.stringify({ compilerOptions: { types: ['vite/client'] } }, null, 2),
+    );
+
+    const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.npm);
+    expect(detectPendingCoreMigration(workspaceInfo)).toEqual({
+      scripts: true,
+      tsconfigTypes: true,
+    });
+
+    expect(finalizeCoreMigrationForExistingVitePlus(workspaceInfo, true)).toEqual({
+      scripts: true,
+      tsconfigTypes: true,
+      imports: true,
+    });
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      scripts: Record<string, string>;
+      devDependencies: Record<string, string>;
+      overrides?: Record<string, string>;
+    };
+    expect(pkg.scripts).toMatchObject({
+      dev: 'vp dev',
+      build: 'tsc -b && vp build',
+      preview: 'vp preview',
+    });
+    expect(pkg.devDependencies).toEqual({
+      'vite-plus': 'latest',
+      '@voidzero-dev/vite-plus-core': 'latest',
+    });
+    expect(pkg.overrides).toBeUndefined();
+    expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8')).toContain(
+      "from 'vite-plus'",
+    );
+    const tsconfig = readJson(path.join(tmpDir, 'tsconfig.app.json'));
+    expect((tsconfig.compilerOptions as { types: string[] }).types).toEqual(['vite-plus/client']);
+    expect(detectPendingCoreMigration(workspaceInfo)).toEqual({
+      scripts: false,
+      tsconfigTypes: false,
+    });
+  });
+
+  it('detects package-level legacy signals in workspaces', () => {
+    const appDir = path.join(tmpDir, 'packages', 'app');
+    fs.mkdirSync(appDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'root', devDependencies: { 'vite-plus': 'latest' } }, null, 2),
+    );
+    fs.writeFileSync(
+      path.join(appDir, 'package.json'),
+      JSON.stringify({ name: 'app', scripts: { dev: 'vite' } }, null, 2),
+    );
+    const workspaceInfo = {
+      ...makeWorkspaceInfo(tmpDir, PackageManager.pnpm),
+      isMonorepo: true,
+      packages: [{ name: 'app', path: 'packages/app' }],
+    };
+
+    expect(detectPendingCoreMigration(workspaceInfo).scripts).toBe(true);
+    expect(finalizeCoreMigrationForExistingVitePlus(workspaceInfo, true).scripts).toBe(true);
+    const appPkg = readJson(path.join(appDir, 'package.json')) as {
+      scripts: Record<string, string>;
+    };
+    expect(appPkg.scripts.dev).toBe('vp dev');
+  });
+});
+
 // Regression: templates such as `create-fate` ship a populated vite.config.ts
 // alongside a standalone `.oxfmtrc.jsonc` / `.oxlintrc.json`. The merge step
 // must not insert a second `fmt:` / `lint:` block when one is already present.
@@ -2032,6 +2382,83 @@ export default defineConfig({
     expect(viteConfig).not.toContain('singleQuote: false');
     // Redundant standalone file removed.
     expect(fs.existsSync(path.join(tmpDir, '.oxfmtrc.jsonc'))).toBe(false);
+  });
+});
+
+describe('detectLegacyGitHooksMigrationCandidate', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-legacy-hooks-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('detects leftover husky and lint-staged in an existing Vite+ project', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        scripts: { prepare: 'husky' },
+        devDependencies: { husky: '^9.1.7', 'lint-staged': '^16.2.7', 'vite-plus': 'latest' },
+        'lint-staged': { '*': 'vp check --fix' },
+      }),
+    );
+
+    expect(detectLegacyGitHooksMigrationCandidate(tmpDir)).toBe(true);
+  });
+
+  it('does not treat a completed Vite+ project as needing hook migration', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        scripts: { prepare: 'vp config' },
+        devDependencies: { 'vite-plus': 'latest' },
+      }),
+    );
+    fs.mkdirSync(path.join(tmpDir, '.vite-hooks'));
+
+    expect(detectLegacyGitHooksMigrationCandidate(tmpDir)).toBe(false);
+  });
+
+  it('does not treat standalone lint-staged config as active hook migration', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        devDependencies: { 'vite-plus': 'latest' },
+      }),
+    );
+    fs.writeFileSync(path.join(tmpDir, 'lint-staged.config.mjs'), 'export default {};\n');
+
+    expect(detectLegacyGitHooksMigrationCandidate(tmpDir)).toBe(false);
+  });
+
+  it('does not treat a passive .husky directory as active hook migration', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        devDependencies: { 'vite-plus': 'latest' },
+      }),
+    );
+    fs.mkdirSync(path.join(tmpDir, '.husky'));
+
+    expect(detectLegacyGitHooksMigrationCandidate(tmpDir)).toBe(false);
+  });
+
+  it('does not treat passive husky or lint-staged dependencies as active hook migration', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        devDependencies: {
+          husky: '^9.1.7',
+          'lint-staged': '^16.2.7',
+          'vite-plus': 'latest',
+        },
+      }),
+    );
+
+    expect(detectLegacyGitHooksMigrationCandidate(tmpDir)).toBe(false);
   });
 });
 

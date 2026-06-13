@@ -66,6 +66,7 @@ export default defineConfig({
       'packages/cli/snap-tests/check-*/**',
       'packages/cli/snap-tests/fmt-ignore-patterns/src/ignored',
       'packages/cli/snap-tests-global/migration-lint-staged-ts-config',
+      'packages/cli/snap-tests-global/migration-partially-installed-vite-plus/**',
       'ecosystem-ci/*/**',
       'packages/test/**.cjs',
       'packages/test/**.cts',

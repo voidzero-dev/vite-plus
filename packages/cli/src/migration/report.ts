@@ -13,6 +13,7 @@ export interface MigrationReport {
   nodeVersionFileMigrated: boolean;
   gitHooksConfigured: boolean;
   frameworkShimAdded: boolean;
+  packageManagerBootstrapConfigured: boolean;
   warnings: string[];
   manualSteps: string[];
 }
@@ -33,6 +34,7 @@ export function createMigrationReport(): MigrationReport {
     nodeVersionFileMigrated: false,
     gitHooksConfigured: false,
     frameworkShimAdded: false,
+    packageManagerBootstrapConfigured: false,
     warnings: [],
     manualSteps: [],
   };

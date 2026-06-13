@@ -39,6 +39,7 @@ import { cancelAndExit, getSpinner } from '../utils/prompts.ts';
 import {
   findTsconfigFiles,
   hasBaseUrlInTsconfig,
+  hasTypesToRewriteInTsconfig,
   removeDeprecatedTsconfigFalseOption,
   rewriteTypesInTsconfig,
 } from '../utils/tsconfig.ts';
@@ -891,10 +892,16 @@ function cleanupDeprecatedTsconfigOptions(
   }
 }
 
-function rewriteTsconfigTypes(projectPath: string, silent = false, report?: MigrationReport): void {
+function rewriteTsconfigTypes(
+  projectPath: string,
+  silent = false,
+  report?: MigrationReport,
+): boolean {
+  let changed = false;
   const files = findTsconfigFiles(projectPath);
   for (const filePath of files) {
     if (rewriteTypesInTsconfig(filePath)) {
+      changed = true;
       if (report) {
         report.removedConfigCount++;
       }
@@ -903,6 +910,11 @@ function rewriteTsconfigTypes(projectPath: string, silent = false, report?: Migr
       }
     }
   }
+  return changed;
+}
+
+function hasTsconfigTypesToRewrite(projectPath: string): boolean {
+  return findTsconfigFiles(projectPath).some((filePath) => hasTypesToRewriteInTsconfig(filePath));
 }
 
 // .svelte files are handled by @sveltejs/vite-plugin-svelte (transpilation)
@@ -1913,6 +1925,502 @@ function readPrepareRulesYaml(): string {
   return cachedPrepareRulesYaml;
 }
 
+type CoreMigrationWorkspace = {
+  rootDir: string;
+  packages?: WorkspacePackage[];
+};
+
+export type PendingCoreMigration = {
+  scripts: boolean;
+  tsconfigTypes: boolean;
+};
+
+export type CoreMigrationFinalizationResult = {
+  scripts: boolean;
+  tsconfigTypes: boolean;
+  imports: boolean;
+};
+
+function getCoreMigrationProjectPaths(workspaceInfo: CoreMigrationWorkspace): string[] {
+  return [
+    workspaceInfo.rootDir,
+    ...(workspaceInfo.packages ?? []).map((pkg) => path.join(workspaceInfo.rootDir, pkg.path)),
+  ];
+}
+
+function hasCorePackageScriptRewrites(projectPath: string): boolean {
+  const packageJsonPath = path.join(projectPath, 'package.json');
+  if (!fs.existsSync(packageJsonPath)) {
+    return false;
+  }
+  const pkg = readJsonFile(packageJsonPath) as { scripts?: Record<string, string> };
+  if (!pkg.scripts) {
+    return false;
+  }
+  return !!rewriteScripts(JSON.stringify(pkg.scripts), getScriptRulesYaml(true));
+}
+
+function rewriteCorePackageScripts(projectPath: string): boolean {
+  const packageJsonPath = path.join(projectPath, 'package.json');
+  if (!fs.existsSync(packageJsonPath)) {
+    return false;
+  }
+
+  let changed = false;
+  editJsonFile<{ scripts?: Record<string, string> }>(packageJsonPath, (pkg) => {
+    if (!pkg.scripts) {
+      return undefined;
+    }
+    const updated = rewriteScripts(JSON.stringify(pkg.scripts), getScriptRulesYaml(true));
+    if (!updated) {
+      return undefined;
+    }
+    pkg.scripts = JSON.parse(updated);
+    changed = true;
+    return pkg;
+  });
+  return changed;
+}
+
+export function detectPendingCoreMigration(
+  workspaceInfo: CoreMigrationWorkspace,
+): PendingCoreMigration {
+  const projectPaths = getCoreMigrationProjectPaths(workspaceInfo);
+  return {
+    scripts: projectPaths.some((projectPath) => hasCorePackageScriptRewrites(projectPath)),
+    tsconfigTypes: projectPaths.some((projectPath) => hasTsconfigTypesToRewrite(projectPath)),
+  };
+}
+
+export function finalizeCoreMigrationForExistingVitePlus(
+  workspaceInfo: CoreMigrationWorkspace,
+  silent = false,
+  report?: MigrationReport,
+  pending = detectPendingCoreMigration(workspaceInfo),
+): CoreMigrationFinalizationResult {
+  const projectPaths = getCoreMigrationProjectPaths(workspaceInfo);
+  const result: CoreMigrationFinalizationResult = {
+    scripts: false,
+    tsconfigTypes: false,
+    imports: false,
+  };
+
+  if (pending.scripts) {
+    for (const projectPath of projectPaths) {
+      result.scripts = rewriteCorePackageScripts(projectPath) || result.scripts;
+    }
+  }
+
+  if (pending.tsconfigTypes) {
+    for (const projectPath of projectPaths) {
+      result.tsconfigTypes =
+        rewriteTsconfigTypes(projectPath, silent, report) || result.tsconfigTypes;
+    }
+  }
+
+  result.imports = rewriteAllImports(workspaceInfo.rootDir, silent, report);
+
+  return result;
+}
+
+type BootstrapPackageJson = {
+  overrides?: Record<string, string>;
+  resolutions?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+  dependencies?: Record<string, string>;
+  optionalDependencies?: Record<string, string>;
+  pnpm?: {
+    overrides?: Record<string, string>;
+    peerDependencyRules?: {
+      allowAny?: string[];
+      allowedVersions?: Record<string, string>;
+    };
+  };
+  packageManager?: string;
+  devEngines?: { packageManager?: unknown; [key: string]: unknown };
+};
+
+export type VitePlusBootstrapResult = {
+  changed: boolean;
+  packageJson: boolean;
+  packageManagerConfig: boolean;
+  packageManagerField: boolean;
+};
+
+function getVitePlusOverridePackageName(dependencyName: string): string | undefined {
+  if (dependencyName === 'vite') {
+    return '@voidzero-dev/vite-plus-core';
+  }
+  if (dependencyName === 'vitest') {
+    return '@voidzero-dev/vite-plus-test';
+  }
+  return undefined;
+}
+
+function isSemanticVitePlusOverrideSpec(dependencyName: string, spec: string | undefined): boolean {
+  if (!spec) {
+    return false;
+  }
+  if (spec === VITE_PLUS_OVERRIDE_PACKAGES[dependencyName]) {
+    return true;
+  }
+  const packageName = getVitePlusOverridePackageName(dependencyName);
+  return packageName !== undefined && spec.includes(packageName);
+}
+
+function overrideSpecSatisfiesVitePlus(
+  dependencyName: string,
+  spec: string | undefined,
+  catalogDependencyResolver?: CatalogDependencyResolver,
+): boolean {
+  if (!spec) {
+    return false;
+  }
+  if (isSemanticVitePlusOverrideSpec(dependencyName, spec)) {
+    return true;
+  }
+  if (!spec.startsWith('catalog:')) {
+    return false;
+  }
+  return isSemanticVitePlusOverrideSpec(
+    dependencyName,
+    catalogDependencyResolver?.(spec, dependencyName),
+  );
+}
+
+function overridesSatisfyVitePlus(
+  overrides: Record<string, string> | undefined,
+  catalogDependencyResolver?: CatalogDependencyResolver,
+): boolean {
+  return Object.keys(VITE_PLUS_OVERRIDE_PACKAGES).every((dependencyName) =>
+    overrideSpecSatisfiesVitePlus(
+      dependencyName,
+      overrides?.[dependencyName],
+      catalogDependencyResolver,
+    ),
+  );
+}
+
+function hasPackageManagerPin(pkg: BootstrapPackageJson): boolean {
+  return Boolean(pkg.packageManager || pkg.devEngines?.packageManager);
+}
+
+function pnpmPeerDependencyRulesSatisfyVitePlus(
+  peerDependencyRules:
+    | { allowAny?: string[]; allowedVersions?: Record<string, string> }
+    | undefined,
+): boolean {
+  const overrideKeys = Object.keys(VITE_PLUS_OVERRIDE_PACKAGES);
+  const allowAny = new Set(peerDependencyRules?.allowAny ?? []);
+  const allowedVersions = peerDependencyRules?.allowedVersions ?? {};
+  return overrideKeys.every((key) => allowAny.has(key) && allowedVersions[key] === '*');
+}
+
+function npmVitePlusManagedDependenciesPending(pkg: BootstrapPackageJson): boolean {
+  const dependencyGroups = [pkg.devDependencies, pkg.dependencies, pkg.optionalDependencies];
+  return Object.keys(VITE_PLUS_OVERRIDE_PACKAGES).some((dependencyName) =>
+    dependencyGroups.some(
+      (dependencies) =>
+        dependencies?.[dependencyName] !== undefined &&
+        !overrideSpecSatisfiesVitePlus(dependencyName, dependencies[dependencyName]),
+    ),
+  );
+}
+
+function readPnpmWorkspaceCatalogDependencyResolver(
+  projectPath: string,
+): CatalogDependencyResolver | undefined {
+  const pnpmWorkspaceYamlPath = path.join(projectPath, 'pnpm-workspace.yaml');
+  if (!fs.existsSync(pnpmWorkspaceYamlPath)) {
+    return undefined;
+  }
+  const doc = readYamlFile(pnpmWorkspaceYamlPath) as {
+    catalog?: Record<string, string>;
+    catalogs?: Record<string, Record<string, string>>;
+  } | null;
+  return createCatalogDependencyResolverFromCatalogs(doc?.catalog, doc?.catalogs);
+}
+
+function readPnpmWorkspaceOverrides(projectPath: string): Record<string, string> | undefined {
+  const pnpmWorkspaceYamlPath = path.join(projectPath, 'pnpm-workspace.yaml');
+  if (!fs.existsSync(pnpmWorkspaceYamlPath)) {
+    return undefined;
+  }
+  const doc = readYamlFile(pnpmWorkspaceYamlPath) as { overrides?: Record<string, string> } | null;
+  return doc?.overrides;
+}
+
+function readPnpmWorkspacePeerDependencyRules(
+  projectPath: string,
+): { allowAny?: string[]; allowedVersions?: Record<string, string> } | undefined {
+  const pnpmWorkspaceYamlPath = path.join(projectPath, 'pnpm-workspace.yaml');
+  if (!fs.existsSync(pnpmWorkspaceYamlPath)) {
+    return undefined;
+  }
+  const doc = readYamlFile(pnpmWorkspaceYamlPath) as {
+    peerDependencyRules?: { allowAny?: string[]; allowedVersions?: Record<string, string> };
+  } | null;
+  return doc?.peerDependencyRules;
+}
+
+function ensurePnpmWorkspacePackages(projectPath: string, workspacePatterns: string[]): boolean {
+  if (workspacePatterns.length === 0) {
+    return false;
+  }
+  const pnpmWorkspaceYamlPath = path.join(projectPath, 'pnpm-workspace.yaml');
+  let changed = false;
+  editYamlFile(pnpmWorkspaceYamlPath, (doc) => {
+    if (doc.has('packages')) {
+      return;
+    }
+    const packages = new YAMLSeq<Scalar<string>>();
+    for (const pattern of workspacePatterns) {
+      packages.add(scalarString(pattern));
+    }
+    doc.set('packages', packages);
+    changed = true;
+  });
+  return changed;
+}
+
+function readBunCatalogDependencyResolver(pkg: {
+  workspaces?: NpmWorkspaces;
+  catalog?: Record<string, string>;
+  catalogs?: Record<string, Record<string, string>>;
+}): CatalogDependencyResolver {
+  const workspacesObj = pkg.workspaces && !Array.isArray(pkg.workspaces) ? pkg.workspaces : {};
+  const fromWorkspaces = createCatalogDependencyResolverFromCatalogs(
+    workspacesObj.catalog,
+    workspacesObj.catalogs,
+  );
+  const fromPkg = createCatalogDependencyResolverFromCatalogs(pkg.catalog, pkg.catalogs);
+  return (catalogSpec, dependencyName) =>
+    fromWorkspaces(catalogSpec, dependencyName) ?? fromPkg(catalogSpec, dependencyName);
+}
+
+export function detectVitePlusBootstrapPending(
+  projectPath: string,
+  packageManager: PackageManager | undefined,
+): boolean {
+  const packageJsonPath = path.join(projectPath, 'package.json');
+  if (!fs.existsSync(packageJsonPath)) {
+    return false;
+  }
+  const pkg = readJsonFile(packageJsonPath) as BootstrapPackageJson & {
+    workspaces?: NpmWorkspaces;
+    catalog?: Record<string, string>;
+    catalogs?: Record<string, Record<string, string>>;
+  };
+
+  if (!pkg.devDependencies?.[VITE_PLUS_NAME] || !hasPackageManagerPin(pkg)) {
+    return true;
+  }
+
+  if (packageManager === undefined) {
+    return true;
+  }
+
+  if (packageManager === PackageManager.yarn) {
+    return !overridesSatisfyVitePlus(pkg.resolutions);
+  }
+  if (packageManager === PackageManager.npm) {
+    return !overridesSatisfyVitePlus(pkg.overrides) || npmVitePlusManagedDependenciesPending(pkg);
+  }
+  if (packageManager === PackageManager.bun) {
+    return !overridesSatisfyVitePlus(pkg.overrides, readBunCatalogDependencyResolver(pkg));
+  }
+  if (packageManager === PackageManager.pnpm) {
+    if (pkg.pnpm) {
+      return (
+        !overridesSatisfyVitePlus(pkg.pnpm.overrides) ||
+        !pnpmPeerDependencyRulesSatisfyVitePlus(pkg.pnpm.peerDependencyRules)
+      );
+    }
+    const resolver = readPnpmWorkspaceCatalogDependencyResolver(projectPath);
+    return (
+      !overridesSatisfyVitePlus(readPnpmWorkspaceOverrides(projectPath), resolver) ||
+      !pnpmPeerDependencyRulesSatisfyVitePlus(readPnpmWorkspacePeerDependencyRules(projectPath))
+    );
+  }
+
+  return false;
+}
+
+function ensureVitePlusDevDependency(pkg: BootstrapPackageJson, version: string): boolean {
+  if (pkg.devDependencies?.[VITE_PLUS_NAME]) {
+    return false;
+  }
+  pkg.devDependencies = {
+    ...pkg.devDependencies,
+    [VITE_PLUS_NAME]: version,
+  };
+  return true;
+}
+
+function ensureOverrideEntries(
+  overrides: Record<string, string> | undefined,
+  catalogDependencyResolver?: CatalogDependencyResolver,
+): { overrides: Record<string, string>; changed: boolean } {
+  const next = { ...overrides };
+  let changed = false;
+  for (const [dependencyName, overrideSpec] of Object.entries(VITE_PLUS_OVERRIDE_PACKAGES)) {
+    if (
+      !overrideSpecSatisfiesVitePlus(
+        dependencyName,
+        next[dependencyName],
+        catalogDependencyResolver,
+      )
+    ) {
+      next[dependencyName] = overrideSpec;
+      changed = true;
+    }
+  }
+  return { overrides: next, changed };
+}
+
+function ensureNpmVitePlusManagedDependencies(pkg: BootstrapPackageJson): boolean {
+  let changed = false;
+  const dependencyGroups = [pkg.devDependencies, pkg.dependencies, pkg.optionalDependencies];
+  for (const [dependencyName, version] of Object.entries(VITE_PLUS_OVERRIDE_PACKAGES)) {
+    for (const dependencies of dependencyGroups) {
+      if (
+        dependencies?.[dependencyName] !== undefined &&
+        !overrideSpecSatisfiesVitePlus(dependencyName, dependencies[dependencyName])
+      ) {
+        dependencies[dependencyName] = version;
+        changed = true;
+      }
+    }
+  }
+  return changed;
+}
+
+function ensurePnpmPeerDependencyRules(pkg: BootstrapPackageJson): boolean {
+  const overrideKeys = Object.keys(VITE_PLUS_OVERRIDE_PACKAGES);
+  pkg.pnpm ??= {};
+  const peerDependencyRules = {
+    ...pkg.pnpm.peerDependencyRules,
+    allowAny: [...new Set([...(pkg.pnpm.peerDependencyRules?.allowAny ?? []), ...overrideKeys])],
+    allowedVersions: {
+      ...pkg.pnpm.peerDependencyRules?.allowedVersions,
+      ...Object.fromEntries(overrideKeys.map((key) => [key, '*'])),
+    },
+  };
+  const changed =
+    JSON.stringify(pkg.pnpm.peerDependencyRules ?? {}) !== JSON.stringify(peerDependencyRules);
+  pkg.pnpm.peerDependencyRules = peerDependencyRules;
+  return changed;
+}
+
+export function ensureVitePlusBootstrap(
+  workspaceInfo: WorkspaceInfo,
+  report?: MigrationReport,
+): VitePlusBootstrapResult {
+  const projectPath = workspaceInfo.rootDir;
+  const packageJsonPath = path.join(projectPath, 'package.json');
+  const result: VitePlusBootstrapResult = {
+    changed: false,
+    packageJson: false,
+    packageManagerConfig: false,
+    packageManagerField: false,
+  };
+  if (!fs.existsSync(packageJsonPath)) {
+    return result;
+  }
+
+  editJsonFile<
+    BootstrapPackageJson & {
+      workspaces?: NpmWorkspaces;
+      catalog?: Record<string, string>;
+      catalogs?: Record<string, Record<string, string>>;
+    }
+  >(packageJsonPath, (pkg) => {
+    const usePnpmWorkspaceYaml = workspaceInfo.packageManager === PackageManager.pnpm && !pkg.pnpm;
+    const supportCatalog =
+      !VITE_PLUS_VERSION.startsWith('file:') &&
+      (usePnpmWorkspaceYaml || workspaceInfo.packageManager === PackageManager.bun);
+    let packageJsonChanged = ensureVitePlusDevDependency(
+      pkg,
+      supportCatalog ? 'catalog:' : VITE_PLUS_VERSION,
+    );
+    if (workspaceInfo.packageManager === PackageManager.npm) {
+      packageJsonChanged = ensureNpmVitePlusManagedDependencies(pkg) || packageJsonChanged;
+    }
+
+    if (workspaceInfo.packageManager === PackageManager.yarn) {
+      const ensured = ensureOverrideEntries(pkg.resolutions);
+      if (ensured.changed) {
+        pkg.resolutions = ensured.overrides;
+        packageJsonChanged = true;
+      }
+    } else if (workspaceInfo.packageManager === PackageManager.npm) {
+      const ensured = ensureOverrideEntries(pkg.overrides);
+      if (ensured.changed) {
+        pkg.overrides = ensured.overrides;
+        packageJsonChanged = true;
+      }
+    } else if (workspaceInfo.packageManager === PackageManager.bun) {
+      const ensured = ensureOverrideEntries(pkg.overrides, readBunCatalogDependencyResolver(pkg));
+      if (ensured.changed) {
+        pkg.overrides = ensured.overrides;
+        packageJsonChanged = true;
+      }
+    } else if (workspaceInfo.packageManager === PackageManager.pnpm && pkg.pnpm) {
+      const ensured = ensureOverrideEntries(pkg.pnpm.overrides);
+      if (ensured.changed) {
+        pkg.pnpm.overrides = ensured.overrides;
+        packageJsonChanged = true;
+      }
+      packageJsonChanged = ensurePnpmPeerDependencyRules(pkg) || packageJsonChanged;
+    }
+
+    result.packageJson = packageJsonChanged;
+    return pkg;
+  });
+
+  if (workspaceInfo.packageManager === PackageManager.pnpm) {
+    const pkg = readJsonFile(packageJsonPath) as BootstrapPackageJson;
+    if (!pkg.pnpm) {
+      const pnpmWorkspaceYamlPath = path.join(projectPath, 'pnpm-workspace.yaml');
+      const before = fs.existsSync(pnpmWorkspaceYamlPath)
+        ? fs.readFileSync(pnpmWorkspaceYamlPath, 'utf-8')
+        : undefined;
+      const catalogDependencyResolver = readPnpmWorkspaceCatalogDependencyResolver(projectPath);
+      if (
+        !overridesSatisfyVitePlus(
+          readPnpmWorkspaceOverrides(projectPath),
+          catalogDependencyResolver,
+        ) ||
+        !pnpmPeerDependencyRulesSatisfyVitePlus(readPnpmWorkspacePeerDependencyRules(projectPath))
+      ) {
+        rewritePnpmWorkspaceYaml(projectPath);
+      }
+      if (fs.existsSync(pnpmWorkspaceYamlPath)) {
+        ensurePnpmWorkspacePackages(projectPath, workspaceInfo.workspacePatterns);
+      }
+      const after = fs.existsSync(pnpmWorkspaceYamlPath)
+        ? fs.readFileSync(pnpmWorkspaceYamlPath, 'utf-8')
+        : undefined;
+      result.packageManagerConfig = before !== after;
+    }
+  } else if (workspaceInfo.packageManager === PackageManager.bun) {
+    const before = fs.readFileSync(packageJsonPath, 'utf-8');
+    rewriteBunCatalog(projectPath);
+    const after = fs.readFileSync(packageJsonPath, 'utf-8');
+    result.packageJson = result.packageJson || before !== after;
+  }
+
+  const beforePackageManager = fs.readFileSync(packageJsonPath, 'utf-8');
+  setPackageManager(projectPath, workspaceInfo.downloadPackageManager);
+  const afterPackageManager = fs.readFileSync(packageJsonPath, 'utf-8');
+  result.packageManagerField = beforePackageManager !== afterPackageManager;
+  result.changed = result.packageJson || result.packageManagerConfig || result.packageManagerField;
+  if (result.changed && report) {
+    report.packageManagerBootstrapConfigured = true;
+  }
+  return result;
+}
+
 export function rewritePackageJson(
   pkg: {
     scripts?: Record<string, string>;
@@ -2798,7 +3306,7 @@ function wrapLazyPluginsInViteConfig(
  * This rewrites vite/vitest imports to @voidzero-dev/vite-plus
  * @param projectPath - The root directory to search for files
  */
-function rewriteAllImports(projectPath: string, silent = false, report?: MigrationReport): void {
+function rewriteAllImports(projectPath: string, silent = false, report?: MigrationReport): boolean {
   const result = rewriteImportsInDirectory(projectPath);
   const modified = result.modifiedFiles.length;
   const errors = result.errors.length;
@@ -2833,6 +3341,7 @@ function rewriteAllImports(projectPath: string, silent = false, report?: Migrati
       }
     }
   }
+  return modified > 0;
 }
 
 /**
@@ -2902,6 +3411,18 @@ function removeReplacedHookPackages(packageJsonPath: string): void {
     }
     return pkg;
   });
+}
+
+export function detectLegacyGitHooksMigrationCandidate(projectPath: string): boolean {
+  const packageJsonPath = path.join(projectPath, 'package.json');
+  if (!fs.existsSync(packageJsonPath)) {
+    return false;
+  }
+  const pkg = readJsonFile(packageJsonPath) as {
+    scripts?: Record<string, string>;
+    'lint-staged'?: unknown;
+  };
+  return getOldHooksDir(projectPath) !== undefined || pkg['lint-staged'] !== undefined;
 }
 
 /**
