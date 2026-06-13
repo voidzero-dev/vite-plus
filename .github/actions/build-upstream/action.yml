@@ -28,6 +28,8 @@ runs:
     # Compute cache key once before any builds modify files
     # (packages/cli/package.json is modified by syncTestPackageExports during build-ts)
     # Include env vars (RELEASE_BUILD, DEBUG, VERSION) to ensure cache miss on release builds
+    # Keep the hashFiles input set in sync with ci.yml's build-windows-cli
+    # "Compute binaries cache key" step.
     - name: Compute NAPI binding cache key
       id: cache-key
       shell: bash
@@ -60,6 +62,15 @@ runs:
           ${{ steps.rust-target.outputs.dir }}/${{ inputs.target }}/release/vp-setup.exe
         key: ${{ steps.cache-key.outputs.key }}
 
+    # Single source of truth for "build the native binaries in this job":
+    # false when the caller supplied prebuilt ones (skip-native) or the cache
+    # already has them. Every native build step (and the cache save) gates on
+    # this one flag instead of repeating the two-part condition.
+    - name: Decide native build
+      id: native
+      shell: bash
+      run: echo "build=${{ inputs.skip-native != 'true' && steps.cache-restore.outputs.cache-hit != 'true' }}" >> "$GITHUB_OUTPUT"
+
     # Apply Vite+ branding patches to vite source (CI checks out
     # upstream vite which doesn't have branding patches)
     - name: Brand vite
@@ -77,14 +88,14 @@ runs:
 
     # Install zig + cargo-zigbuild for musl cross-compilation (napi-cross only supports gnu)
     - name: Add musl Rust target
-      if: inputs.skip-native != 'true' && steps.cache-restore.outputs.cache-hit != 'true' && contains(inputs.target, 'musl')
+      if: steps.native.outputs.build == 'true' && contains(inputs.target, 'musl')
       shell: bash
       run: rustup target add ${INPUTS_TARGET}
       env:
         INPUTS_TARGET: ${{ inputs.target }}
 
     - name: Setup zig (musl)
-      if: inputs.skip-native != 'true' && steps.cache-restore.outputs.cache-hit != 'true' && contains(inputs.target, 'musl')
+      if: steps.native.outputs.build == 'true' && contains(inputs.target, 'musl')
       uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
       with:
         version: 0.15.2
@@ -95,7 +106,7 @@ runs:
     # the pinned git commit. TODO: revert to taiki-e/install-action once
     # cargo-zigbuild > 0.22.3 is released.
     - name: Install cargo-zigbuild (musl)
-      if: inputs.skip-native != 'true' && steps.cache-restore.outputs.cache-hit != 'true' && contains(inputs.target, 'musl')
+      if: steps.native.outputs.build == 'true' && contains(inputs.target, 'musl')
       shell: bash
       run: cargo install --locked --git https://github.com/rust-cross/cargo-zigbuild --rev 7e791b4be71b9870e0abccedf7885486803cd923 cargo-zigbuild
 
@@ -103,7 +114,7 @@ runs:
     # Must run before vite-plus TypeScript builds which depend on the bindings
     - name: Build NAPI bindings (Linux gnu)
       shell: bash
-      if: inputs.skip-native != 'true' && steps.cache-restore.outputs.cache-hit != 'true' && contains(inputs.target, 'linux') && !contains(inputs.target, 'musl')
+      if: steps.native.outputs.build == 'true' && contains(inputs.target, 'linux') && !contains(inputs.target, 'musl')
       run: |
         pnpm --filter=vite-plus build-native --target ${INPUTS_TARGET} --use-napi-cross
       env:
@@ -114,7 +125,7 @@ runs:
 
     - name: Build NAPI bindings (Linux musl)
       shell: bash
-      if: inputs.skip-native != 'true' && steps.cache-restore.outputs.cache-hit != 'true' && contains(inputs.target, 'musl')
+      if: steps.native.outputs.build == 'true' && contains(inputs.target, 'musl')
       run: |
         pnpm --filter=vite-plus build-native --target ${INPUTS_TARGET} -x
       env:
@@ -125,7 +136,7 @@ runs:
 
     - name: Build NAPI bindings (non-Linux targets)
       shell: bash
-      if: inputs.skip-native != 'true' && steps.cache-restore.outputs.cache-hit != 'true' && !contains(inputs.target, 'linux')
+      if: steps.native.outputs.build == 'true' && !contains(inputs.target, 'linux')
       run: |
         pnpm --filter=vite-plus build-native --target ${INPUTS_TARGET}
       env:
@@ -133,7 +144,7 @@ runs:
         INPUTS_TARGET: ${{ inputs.target }}
 
     - name: Build Rust CLI binary (Linux gnu)
-      if: inputs.skip-native != 'true' && steps.cache-restore.outputs.cache-hit != 'true' && contains(inputs.target, 'linux') && !contains(inputs.target, 'musl')
+      if: steps.native.outputs.build == 'true' && contains(inputs.target, 'linux') && !contains(inputs.target, 'musl')
       shell: bash
       run: |
         pnpm exec napi build --use-napi-cross --target ${INPUTS_TARGET} --release -p vite_global_cli
@@ -144,7 +155,7 @@ runs:
         INPUTS_TARGET: ${{ inputs.target }}
 
     - name: Build Rust CLI binary (Linux musl)
-      if: inputs.skip-native != 'true' && steps.cache-restore.outputs.cache-hit != 'true' && contains(inputs.target, 'musl')
+      if: steps.native.outputs.build == 'true' && contains(inputs.target, 'musl')
       shell: bash
       run: |
         pnpm exec napi build -x --target ${INPUTS_TARGET} --release -p vite_global_cli
@@ -155,28 +166,28 @@ runs:
         INPUTS_TARGET: ${{ inputs.target }}
 
     - name: Build Rust CLI binary (non-Linux targets)
-      if: inputs.skip-native != 'true' && steps.cache-restore.outputs.cache-hit != 'true' && !contains(inputs.target, 'linux')
+      if: steps.native.outputs.build == 'true' && !contains(inputs.target, 'linux')
       shell: bash
       run: cargo build --release --target ${INPUTS_TARGET} -p vite_global_cli
       env:
         INPUTS_TARGET: ${{ inputs.target }}
 
     - name: Build trampoline shim binary (Windows only)
-      if: inputs.skip-native != 'true' && steps.cache-restore.outputs.cache-hit != 'true' && contains(inputs.target, 'windows')
+      if: steps.native.outputs.build == 'true' && contains(inputs.target, 'windows')
       shell: bash
       run: cargo build --release --target ${INPUTS_TARGET} -p vite_trampoline
       env:
         INPUTS_TARGET: ${{ inputs.target }}
 
     - name: Build installer binary (Windows only)
-      if: inputs.skip-native != 'true' && steps.cache-restore.outputs.cache-hit != 'true' && contains(inputs.target, 'windows')
+      if: steps.native.outputs.build == 'true' && contains(inputs.target, 'windows')
       shell: bash
       run: cargo build --release --target ${INPUTS_TARGET} -p vite_installer
       env:
         INPUTS_TARGET: ${{ inputs.target }}
 
     - name: Save NAPI binding cache
-      if: inputs.skip-native != 'true' && steps.cache-restore.outputs.cache-hit != 'true'
+      if: steps.native.outputs.build == 'true'
       uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       with:
         path: |

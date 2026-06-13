@@ -48,9 +48,8 @@ const {
 });
 
 // Filter out custom flags before passing to NAPI CLI
-const napiArgs = process.argv
-  .slice(2)
-  .filter((arg) => arg !== '--skip-native' && arg !== '--skip-ts' && arg !== '--skip-format');
+const customFlags = new Set(['--skip-native', '--skip-ts', '--skip-format']);
+const napiArgs = process.argv.slice(2).filter((arg) => !customFlags.has(arg));
 
 if (!skipTs) {
   buildWithTsdown();
