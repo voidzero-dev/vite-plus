@@ -76,8 +76,6 @@ jobs:
         include:
           - os: namespace-profile-linux-x64-default
             target: x86_64-unknown-linux-gnu
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
           - os: namespace-profile-mac-default
             target: aarch64-apple-darwin
     runs-on: ${{ matrix.os }}
@@ -85,28 +83,147 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
-      - name: Setup Dev Drive
-        if: runner.os == 'Windows'
-        uses: samypr100/setup-dev-drive@30f0f98ae5636b2b6501e181dfb3631b9974818d # v4.0.0
-        with:
-          drive-size: 12GB
-          drive-format: ReFS
-          env-mapping: |
-            CARGO_HOME,{{ DEV_DRIVE }}/.cargo
-            RUSTUP_HOME,{{ DEV_DRIVE }}/.rustup
-
       - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
         with:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: test
           tools: just
-          target-dir: ${{ runner.os == 'Windows' && format('{0}/target', env.DEV_DRIVE) || '' }}
 
       - run: cargo check --all-targets --all-features
         env:
           RUSTFLAGS: '-D warnings --cfg tokio_unstable' # also update .cargo/config.toml
 
       - run: just test
+
+  # Windows tests are cross-compiled on a fast Linux runner with cargo-xwin
+  # (clang-cl + lld-link against the xwin-downloaded MSVC CRT/Windows SDK)
+  # and packed into a portable nextest archive. The test-windows job then
+  # only downloads the archive and runs it: no Rust toolchain, dev drive, or
+  # compilation on the slow Windows runner. Same approach as
+  # voidzero-dev/vite-task#443.
+  build-windows-tests:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.code-changed == 'true'
+    name: Build Windows tests
+    runs-on: namespace-profile-linux-x64-default
+    env:
+      XWIN_ACCEPT_LICENSE: '1'
+      # The MSVC STL from xwin's VS17 manifest static-asserts a minimum Clang
+      # version newer than what runner images ship. Microsoft's documented
+      # escape hatch lets Detours (C++, via the fspy git dependency) compile
+      # with the runner's clang-cl; cargo-xwin folds a pre-set CXXFLAGS into
+      # the per-target CXXFLAGS it generates.
+      CXXFLAGS: -D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - uses: ./.github/actions/clone
+
+      # llvm-tools provides llvm-ar in the toolchain's rustlib bin dir;
+      # cargo-xwin symlinks the MSVC-style llvm-lib/llvm-dlltool (used by
+      # cc-rs to archive C/C++ deps) and lld-link from there when the runner
+      # image has no matching system LLVM.
+      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+        with:
+          save-cache: ${{ github.ref_name == 'main' }}
+          cache-key: windows-cross
+          components: llvm-tools
+
+      - run: rustup target add x86_64-pc-windows-msvc
+
+      - uses: taiki-e/install-action@7a79fe8c3a13344501c80d99cae481c1c9085912 # v2.81.10
+        with:
+          tool: cargo-nextest,cargo-xwin
+
+      # Downloading and unpacking the MSVC CRT/Windows SDK dominates cold
+      # wall time (~10 minutes); the unpacked result is immutable for a given
+      # manifest version, so cache it. Bump the key when bumping cargo-xwin.
+      - uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        id: xwin-cache
+        with:
+          path: ~/.cache/cargo-xwin
+          key: cargo-xwin-msvc-17
+
+      # `cargo xwin env` resolves the rustflags configured in
+      # .cargo/config.toml (including the cfg-based Windows section), appends
+      # its -Lnative Windows SDK paths, and re-exports the result as
+      # CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS, so plain cargo
+      # invocations cross-compile exactly like `cargo xwin` would. It renders
+      # its intended *removal* of RUSTFLAGS as `export RUSTFLAGS="";`, which
+      # must become a real unset: a set RUSTFLAGS takes precedence over the
+      # target-specific rustflags and would shadow them.
+      - name: Check Windows target
+        run: |
+          eval "$(cargo xwin env --target x86_64-pc-windows-msvc | grep '^export ')"
+          unset RUSTFLAGS
+          # Fail fast if cargo-xwin ever stops folding the repo's cfg-based
+          # Windows rustflags (--cfg tokio_unstable, /STACK:8388608) into the
+          # target env var; a dropped /STACK would be a silent runtime
+          # difference in the shipped test binaries.
+          case "$CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS" in
+            *tokio_unstable*STACK:8388608*) ;;
+            *)
+              echo "::error::cargo-xwin dropped the .cargo/config.toml Windows rustflags: $CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS"
+              exit 1
+              ;;
+          esac
+          export CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS="$CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS -D warnings"
+          cargo check --all-targets --all-features --target x86_64-pc-windows-msvc
+
+      # Keep the package selection in sync with the `test` recipe in justfile.
+      - name: Build test archive
+        run: |
+          eval "$(cargo xwin env --target x86_64-pc-windows-msvc | grep '^export ')"
+          unset RUSTFLAGS
+          cargo nextest archive $(for d in crates/*/; do echo -n "-p $(basename $d) "; done) -p vite-plus-cli \
+            --target x86_64-pc-windows-msvc --archive-file windows-tests.tar.zst
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows-test-archive
+          path: windows-tests.tar.zst
+          retention-days: 7
+
+      - uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        if: steps.xwin-cache.outputs.cache-hit != 'true'
+        with:
+          path: ~/.cache/cargo-xwin
+          key: cargo-xwin-msvc-17
+
+  test-windows:
+    needs: build-windows-tests
+    name: Test (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - uses: ./.github/actions/clone
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: windows-test-archive
+
+      - uses: taiki-e/install-action@7a79fe8c3a13344501c80d99cae481c1c9085912 # v2.81.10
+        with:
+          tool: cargo-nextest
+
+      # `cargo-nextest` is invoked directly so the job never depends on the
+      # runner's Rust toolchain.
+      # --test-threads=1: nextest runs each test in its own process, so
+      # serial_test's in-process locks no longer serialize tests that contend
+      # on cross-process shared state (fixed temp paths, e.g.
+      # `vp-test-custom-home` in vite_shared::home tests). The whole suite is
+      # only ~1 minute of test time, so full serialization is cheap
+      # insurance; revisit if it becomes the bottleneck.
+      - name: Run tests
+        run: cargo-nextest nextest run --archive-file windows-tests.tar.zst --workspace-remap . --test-threads 1
+        env:
+          RUST_MIN_STACK: '8388608'
+          # Keep Windows env parity with the `test` recipe in justfile.
+          __COMPAT_LAYER: RunAsInvoker
+          # Snapshot assertions resolve paths from the Linux build machine's
+          # workspace root baked in at compile time; point insta at this
+          # checkout instead (without it, insta shells out to a `cargo` that
+          # is not installed here).
+          INSTA_WORKSPACE_ROOT: ${{ github.workspace }}
 
   test-musl:
     needs: detect-changes
@@ -185,10 +302,134 @@ jobs:
       - name: Deduplicate dependencies
         run: pnpm dedupe --check || pnpm dedupe --check
 
+  # Cross-compiles the Windows release NAPI binding (vite-plus .node) and CLI
+  # binaries (vp.exe, vp-shim.exe, vp-setup.exe) on a fast Linux runner with
+  # cargo-xwin, then publishes them as the windows-cli-binaries artifact. The
+  # Windows entries of cli-e2e-test, cli-snap-test, and install-e2e-test-sfw
+  # download that artifact instead of each spending ~24 minutes rebuilding the
+  # same binaries on slow windows-latest runners whenever build-upstream's
+  # NAPI binding cache misses. Release builds are unaffected: they keep
+  # building natively on Windows via reusable-release-build.yml (their cache
+  # keys differ through RELEASE_BUILD/VERSION).
+  build-windows-cli:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.code-changed == 'true'
+    name: Build Windows CLI binaries
+    runs-on: namespace-profile-linux-x64-default
+    env:
+      XWIN_ACCEPT_LICENSE: '1'
+      # See build-windows-tests for why this Detours escape hatch is needed.
+      CXXFLAGS: -D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+      - uses: ./.github/actions/clone
+
+      # Must use the same hashFiles input set as build-upstream's "Compute
+      # NAPI binding cache key" step (keep the two lists in sync, or a stale
+      # cross-built artifact is served on a cache that should have missed),
+      # but under a distinct prefix: this cache stores Linux-relative paths
+      # and must never mix with the caches build-upstream saves on other
+      # runners.
+      - name: Compute binaries cache key
+        id: cache-key
+        run: |
+          echo "key=windows-cli-xwin-v1-${{ hashFiles('packages/tools/.upstream-versions.json', 'rust-toolchain.toml', 'Cargo.lock', 'crates/**/*.rs', 'crates/*/Cargo.toml', 'packages/cli/binding/**/*.rs', 'packages/cli/binding/Cargo.toml', 'Cargo.toml', '.cargo/config.toml', 'packages/cli/package.json', 'packages/cli/build.ts', 'packages/cli/tsdown.config.ts') }}" >> $GITHUB_OUTPUT
+
+      - name: Restore binaries cache
+        id: binaries-cache
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: |
+            packages/cli/binding/*.node
+            target/x86_64-pc-windows-msvc/release/vp.exe
+            target/x86_64-pc-windows-msvc/release/vp-shim.exe
+            target/x86_64-pc-windows-msvc/release/vp-setup.exe
+          key: ${{ steps.cache-key.outputs.key }}
+
+      # llvm-tools provides llvm-ar in the toolchain's rustlib bin dir;
+      # cargo-xwin symlinks the MSVC-style llvm-lib/llvm-dlltool and lld-link
+      # from there when the runner image has no matching system LLVM.
+      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+        if: steps.binaries-cache.outputs.cache-hit != 'true'
+        with:
+          save-cache: ${{ github.ref_name == 'main' }}
+          cache-key: windows-cli-cross
+          components: llvm-tools
+
+      - run: rustup target add x86_64-pc-windows-msvc
+        if: steps.binaries-cache.outputs.cache-hit != 'true'
+
+      # Preinstall cargo-xwin so `napi build -x` (which shells out to
+      # `cargo xwin build` for MSVC targets) doesn't fall back to a slow
+      # `cargo install` of it.
+      - uses: taiki-e/install-action@7a79fe8c3a13344501c80d99cae481c1c9085912 # v2.81.10
+        if: steps.binaries-cache.outputs.cache-hit != 'true'
+        with:
+          tool: cargo-xwin
+
+      # Shared with build-windows-tests; see that job for details.
+      - uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        if: steps.binaries-cache.outputs.cache-hit != 'true'
+        id: xwin-cache
+        with:
+          path: ~/.cache/cargo-xwin
+          key: cargo-xwin-msvc-17
+
+      - uses: oxc-project/setup-node@4c588e9266bd930b6ddc34307df0659ed511d187 # v1.3.1
+        if: steps.binaries-cache.outputs.cache-hit != 'true'
+
+      # --skip-format: formatting the generated index.cjs/index.d.cts needs
+      # the repo vite config, which imports the built vite-plus dist; this
+      # job skips the TS builds on purpose.
+      - name: Build NAPI binding
+        if: steps.binaries-cache.outputs.cache-hit != 'true'
+        run: pnpm --filter=vite-plus build-native --target x86_64-pc-windows-msvc -x --skip-format
+        env:
+          DEBUG: 'napi:*'
+
+      - name: Build Rust CLI binaries
+        if: steps.binaries-cache.outputs.cache-hit != 'true'
+        run: cargo xwin build --release --target x86_64-pc-windows-msvc -p vite_global_cli -p vite_trampoline -p vite_installer
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows-cli-binaries
+          # Both path roots are workspace-relative, so the artifact preserves
+          # the repo layout and a plain download into the workspace places
+          # every file where bootstrap-cli:ci (tool install-global-cli)
+          # expects it. The generated binding JS (index.cjs etc.) is NOT
+          # included: those files are committed, and the unformatted copies
+          # this job produces (--skip-format) must not overwrite them in the
+          # consumer checkouts (vp check would flag them).
+          path: |
+            packages/cli/binding/*.node
+            target/x86_64-pc-windows-msvc/release/vp.exe
+            target/x86_64-pc-windows-msvc/release/vp-shim.exe
+            target/x86_64-pc-windows-msvc/release/vp-setup.exe
+          if-no-files-found: error
+          retention-days: 7
+
+      - uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        if: steps.binaries-cache.outputs.cache-hit != 'true'
+        with:
+          path: |
+            packages/cli/binding/*.node
+            target/x86_64-pc-windows-msvc/release/vp.exe
+            target/x86_64-pc-windows-msvc/release/vp-shim.exe
+            target/x86_64-pc-windows-msvc/release/vp-setup.exe
+          key: ${{ steps.cache-key.outputs.key }}
+
+      - uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        if: steps.binaries-cache.outputs.cache-hit != 'true' && steps.xwin-cache.outputs.cache-hit != 'true'
+        with:
+          path: ~/.cache/cargo-xwin
+          key: cargo-xwin-msvc-17
+
   cli-e2e-test:
     name: CLI E2E test
     needs:
       - download-previous-rolldown-binaries
+      - build-windows-cli
     strategy:
       fail-fast: false
       matrix:
@@ -204,21 +445,13 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
-      - name: Setup Dev Drive
-        if: runner.os == 'Windows'
-        uses: samypr100/setup-dev-drive@30f0f98ae5636b2b6501e181dfb3631b9974818d # v4.0.0
-        with:
-          drive-size: 12GB
-          drive-format: ReFS
-          env-mapping: |
-            CARGO_HOME,{{ DEV_DRIVE }}/.cargo
-            RUSTUP_HOME,{{ DEV_DRIVE }}/.rustup
-
+      # Windows runs against the prebuilt binaries from build-windows-cli,
+      # so it needs no Rust toolchain or dev drive here.
       - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+        if: runner.os != 'Windows'
         with:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: cli-e2e-test-${{ matrix.target }}
-          target-dir: ${{ runner.os == 'Windows' && format('{0}/target', env.DEV_DRIVE) || '' }}
 
       - uses: oxc-project/setup-node@4c588e9266bd930b6ddc34307df0659ed511d187 # v1.3.1
 
@@ -231,10 +464,22 @@ jobs:
           path: ./rolldown/packages/rolldown/src
           merge-multiple: true
 
+      # Prebuilt by build-windows-cli (Linux + cargo-xwin); the artifact
+      # paths are workspace-relative, so this places the binding into
+      # packages/cli/binding/ and the CLI binaries into
+      # target/x86_64-pc-windows-msvc/release/ where
+      # `tool install-global-cli` finds them.
+      - name: Download prebuilt Windows binaries
+        if: runner.os == 'Windows'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: windows-cli-binaries
+
       - name: Build with upstream
         uses: ./.github/actions/build-upstream
         with:
           target: ${{ matrix.target }}
+          skip-native: ${{ runner.os == 'Windows' && 'true' || 'false' }}
 
       - name: Ensure no unexpected file changes after build
         if: ${{ matrix.target == 'x86_64-unknown-linux-gnu' }}
@@ -724,6 +969,7 @@ jobs:
     name: CLI snap test (${{ matrix.target }}, ${{ matrix.shard }}/${{ matrix.shardTotal }})
     needs:
       - download-previous-rolldown-binaries
+      - build-windows-cli
     strategy:
       fail-fast: false
       matrix:
@@ -785,8 +1031,6 @@ jobs:
           # during `vp fmt --write` in the
           # `new-create-vite-migrates-eslint-prettier` snap test).
           env-mapping: |
-            CARGO_HOME,{{ DEV_DRIVE }}/.cargo
-            RUSTUP_HOME,{{ DEV_DRIVE }}/.rustup
             TEMP,{{ DEV_DRIVE }}/Temp
             TMP,{{ DEV_DRIVE }}/Temp
 
@@ -799,11 +1043,14 @@ jobs:
         shell: bash
         run: mkdir -p "$TEMP" "$TMP"
 
+      # Windows runs against the prebuilt binaries from build-windows-cli,
+      # so it needs no Rust toolchain here (the Dev Drive above stays for
+      # the TEMP/TMP routing).
       - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+        if: runner.os != 'Windows'
         with:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: cli-snap-test-${{ matrix.target }}
-          target-dir: ${{ runner.os == 'Windows' && format('{0}/target', env.DEV_DRIVE) || '' }}
 
       - uses: oxc-project/setup-node@4c588e9266bd930b6ddc34307df0659ed511d187 # v1.3.1
 
@@ -816,10 +1063,18 @@ jobs:
           path: ./rolldown/packages/rolldown/src
           merge-multiple: true
 
+      # See the cli-e2e-test job for details on the prebuilt binaries.
+      - name: Download prebuilt Windows binaries
+        if: runner.os == 'Windows'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: windows-cli-binaries
+
       - name: Build with upstream
         uses: ./.github/actions/build-upstream
         with:
           target: ${{ matrix.target }}
+          skip-native: ${{ runner.os == 'Windows' && 'true' || 'false' }}
 
       - name: Install Global CLI vp
         run: |
@@ -987,6 +1242,7 @@ jobs:
     name: Local CLI `vp install` E2E test (Socket Firewall Free)
     needs:
       - download-previous-rolldown-binaries
+      - build-windows-cli
     # Run if: not a PR (push-to-main / workflow_dispatch), OR PR has 'test: sfw' label.
     # Heavy job (3 OSes × real registry traffic) — gated to avoid running on every PR.
     if: >-
@@ -1024,21 +1280,13 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
-      - name: Setup Dev Drive
-        if: runner.os == 'Windows'
-        uses: samypr100/setup-dev-drive@30f0f98ae5636b2b6501e181dfb3631b9974818d # v4.0.0
-        with:
-          drive-size: 12GB
-          drive-format: ReFS
-          env-mapping: |
-            CARGO_HOME,{{ DEV_DRIVE }}/.cargo
-            RUSTUP_HOME,{{ DEV_DRIVE }}/.rustup
-
+      # Windows runs against the prebuilt binaries from build-windows-cli,
+      # so it needs no Rust toolchain or dev drive here.
       - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+        if: runner.os != 'Windows'
         with:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: install-e2e-test-sfw-${{ matrix.os }}
-          target-dir: ${{ runner.os == 'Windows' && format('{0}/target', env.DEV_DRIVE) || '' }}
 
       - uses: oxc-project/setup-node@4c588e9266bd930b6ddc34307df0659ed511d187 # v1.3.1
 
@@ -1048,10 +1296,18 @@ jobs:
           path: ./rolldown/packages/rolldown/src
           merge-multiple: true
 
+      # See the cli-e2e-test job for details on the prebuilt binaries.
+      - name: Download prebuilt Windows binaries
+        if: runner.os == 'Windows'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: windows-cli-binaries
+
       - name: Build with upstream
         uses: ./.github/actions/build-upstream
         with:
           target: ${{ matrix.target }}
+          skip-native: ${{ runner.os == 'Windows' && 'true' || 'false' }}
 
       - name: Build CLI
         run: |
@@ -1113,6 +1369,9 @@ jobs:
     if: always()
     needs:
       - test
+      - build-windows-tests
+      - test-windows
+      - build-windows-cli
       - test-musl
       - lint
       - cli-e2e-test
