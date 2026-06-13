@@ -23,7 +23,7 @@ use crate::{
             config::{self, ShimMode},
             package_metadata::PackageMetadata,
         },
-        global::CORE_SHIMS,
+        global::install::is_protected_shim,
     },
     error::Error,
 };
@@ -265,8 +265,21 @@ fn check_npm_global_install_result(
         let bin_names = extract_bin_names(&package_json);
 
         for bin_name in bin_names {
-            // Skip core shims
-            if CORE_SHIMS.contains(&bin_name.as_str()) {
+            // Skip protected shims (core shims and default env shims). Tell
+            // the user for the non-core names (e.g. `npm i -g corepack`):
+            // npm installed the package, but the binary stays unlinked.
+            if is_protected_shim(&bin_name) {
+                if !crate::commands::global::CORE_SHIMS.contains(&bin_name.as_str()) {
+                    let hint = if bin_name == "corepack" {
+                        " Use `vp install -g corepack` to manage its version."
+                    } else {
+                        ""
+                    };
+                    output::note(&vite_str::format!(
+                        "'{bin_name}' is a Vite+ default shim; the npm-installed copy is not \
+                         linked.{hint}"
+                    ));
+                }
                 continue;
             }
 
@@ -419,7 +432,7 @@ fn extract_bin_path(package_json: &serde_json::Value, bin_name: &str) -> Option<
 }
 
 /// Create a bin link for a binary and record it via BinConfig.
-fn create_bin_link(
+pub(crate) fn create_bin_link(
     bin_dir: &AbsolutePath,
     bin_name: &str,
     source_path: &AbsolutePath,
@@ -514,8 +527,10 @@ fn remove_npm_global_uninstall_links(bin_entries: &[(String, String)], npm_prefi
     let Ok(bin_dir) = config::get_bin_dir() else { return };
 
     for (bin_name, package_name) in bin_entries {
-        // Skip core shims
-        if CORE_SHIMS.contains(&bin_name.as_str()) {
+        // Skip protected shims: a stale Npm BinConfig (e.g. a pre-default-shim
+        // `npm install -g corepack`) must not let `npm uninstall -g` delete a
+        // default shim that `vp env setup` now owns.
+        if is_protected_shim(bin_name) {
             continue;
         }
 
@@ -701,8 +716,8 @@ async fn resolve_matching_package_manager_tool(
 
 /// Main shim dispatch entry point.
 ///
-/// Called when the binary is invoked as node, npm, npx, or a package binary.
-/// Returns an exit code to be used with std::process::exit.
+/// Called when the binary is invoked as node, npm, npx, corepack, or a
+/// package binary. Returns an exit code to be used with std::process::exit.
 pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
     tracing::debug!("dispatch: tool: {tool}, args: {:?}", args);
 
@@ -772,6 +787,15 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
         // Fall through to managed if system not found
     }
 
+    // corepack: dedicated resolution chain (vp-managed package → Node-bundled
+    // → auto-install), see shim::corepack. Intentionally placed after the
+    // bypass/system-first checks and outside the recursion passthrough so it
+    // always re-resolves (corepack may not exist on the prepended PATH at all
+    // with Node.js 25+).
+    if tool == "corepack" {
+        return super::corepack::dispatch_corepack(args).await;
+    }
+
     // Check if this is a package binary (not node/npm/npx)
     if !is_core_shim_tool(tool) {
         return dispatch_package_binary(tool, args).await;
@@ -796,19 +820,13 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
         }
     };
 
-    // Ensure Node.js is installed
-    if let Err(e) = ensure_installed(&resolution.version).await {
-        eprintln!("vp: Failed to install Node {}: {e}", resolution.version);
-        return 1;
-    }
-
-    // Locate the Node binary for PATH preparation. Package-manager shims can use
-    // their own declared version, but JS-based package managers still need the
-    // project-resolved Node.js runtime to execute.
-    let node_path = match locate_tool(&resolution.version, "node") {
+    // Ensure Node.js is installed and locate its binary for PATH preparation.
+    // Package-manager shims can use their own declared version, but JS-based
+    // package managers still need the project-resolved Node.js runtime.
+    let node_path = match ensure_installed(&resolution.version).await {
         Ok(p) => p,
         Err(e) => {
-            eprintln!("vp: Node not found: {e}");
+            eprintln!("vp: Failed to install Node {}: {e}", resolution.version);
             return 1;
         }
     };
@@ -939,14 +957,19 @@ async fn dispatch_package_binary(tool: &str, args: &[String]) -> i32 {
                     };
 
                     if !node_version.is_empty() {
-                        if let Err(e) = ensure_installed(&node_version).await {
-                            eprintln!("vp: Failed to install Node {}: {e}", node_version);
-                            return 1;
-                        }
-                        if let Ok(node_path) = locate_tool(&node_version, "node")
-                            && let Some(node_bin_dir) = node_path.parent()
-                        {
-                            let _ = prepend_to_path_env(node_bin_dir, PrependOptions::default());
+                        match ensure_installed(&node_version).await {
+                            Ok(node_path) => {
+                                if let Some(node_bin_dir) = node_path.parent() {
+                                    let _ = prepend_to_path_env(
+                                        node_bin_dir,
+                                        PrependOptions::default(),
+                                    );
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("vp: Failed to install Node {}: {e}", node_version);
+                                return 1;
+                            }
                         }
                     }
                 }
@@ -1006,44 +1029,52 @@ async fn dispatch_package_binary(tool: &str, args: &[String]) -> i32 {
         package_metadata.platform.node.clone()
     };
 
-    // Ensure Node.js is installed
-    if let Err(e) = ensure_installed(&node_version).await {
-        eprintln!("vp: Failed to install Node {}: {e}", node_version);
-        return 1;
+    let (program, mut full_args) =
+        match package_binary_invocation(&package_metadata, tool, &node_version).await {
+            Ok(invocation) => invocation,
+            Err(e) => {
+                eprintln!("vp: {e}");
+                return 1;
+            }
+        };
+    // Native binaries have no leading args; exec with the caller's slice
+    // instead of cloning every argument.
+    if full_args.is_empty() {
+        return exec::exec_tool(&program, args);
     }
+    full_args.extend(args.iter().cloned());
+    exec::exec_tool(&program, &full_args)
+}
+
+/// Resolve how to invoke a package binary installed via `vp install -g` with
+/// the given Node.js version: ensures the runtime is present, prepends its bin
+/// directory to PATH for child processes, and returns the program plus leading
+/// arguments (JS binaries run through node).
+pub(crate) async fn package_binary_invocation(
+    metadata: &PackageMetadata,
+    tool: &str,
+    node_version: &str,
+) -> Result<(AbsolutePathBuf, Vec<String>), String> {
+    let node_path = ensure_installed(node_version)
+        .await
+        .map_err(|e| format!("Failed to install Node {node_version}: {e}"))?;
 
     // Locate the actual binary in the package directory
-    let binary_path = match locate_package_binary(&package_metadata.name, tool) {
-        Ok(p) => p,
-        Err(e) => {
-            eprintln!("vp: Binary '{tool}' not found: {e}");
-            return 1;
-        }
-    };
-
-    // Locate node binary for this version
-    let node_path = match locate_tool(&node_version, "node") {
-        Ok(p) => p,
-        Err(e) => {
-            eprintln!("vp: Node not found: {e}");
-            return 1;
-        }
-    };
+    let binary_path = locate_package_binary(&metadata.name, tool)
+        .map_err(|e| format!("Binary '{tool}' not found: {e}"))?;
 
     // Prepare environment for recursive invocations
-    let node_bin_dir = node_path.parent().expect("Node has no parent directory");
+    let node_bin_dir =
+        node_path.parent().ok_or_else(|| "Node has no parent directory".to_string())?;
     let _ = prepend_to_path_env(node_bin_dir, PrependOptions::default());
 
-    // Check if the binary is a JavaScript file that needs Node.js
-    // This info was determined at install time and stored in metadata
-    if package_metadata.is_js_binary(tool) {
-        // Execute: node <binary_path> <args>
-        let mut full_args = vec![binary_path.as_path().display().to_string()];
-        full_args.extend(args.iter().cloned());
-        exec::exec_tool(&node_path, &full_args)
+    // JS binaries (determined at install time and stored in metadata) run
+    // through node; native executables run directly.
+    if metadata.is_js_binary(tool) {
+        let pre_args = vec![binary_path.as_path().display().to_string()];
+        Ok((node_path, pre_args))
     } else {
-        // Execute the binary directly (native executable or non-Node script)
-        exec::exec_tool(&binary_path, args)
+        Ok((binary_path, Vec::new()))
     }
 }
 
@@ -1147,7 +1178,7 @@ fn passthrough_to_system(tool: &str, args: &[String]) -> i32 {
 }
 
 /// Resolve version with caching.
-async fn resolve_with_cache(cwd: &AbsolutePathBuf) -> Result<ResolveCacheEntry, String> {
+pub(crate) async fn resolve_with_cache(cwd: &AbsolutePathBuf) -> Result<ResolveCacheEntry, String> {
     // Fast-path: VP_NODE_VERSION env var set by `vp env use`
     // Skip all disk I/O for cache when session override is active
     if let Ok(env_version) = std::env::var(config::VERSION_ENV_VAR) {
@@ -1225,7 +1256,7 @@ async fn resolve_with_cache(cwd: &AbsolutePathBuf) -> Result<ResolveCacheEntry, 
 }
 
 /// Ensure Node.js is installed.
-pub(crate) async fn ensure_installed(version: &str) -> Result<(), String> {
+pub(crate) async fn ensure_installed(version: &str) -> Result<AbsolutePathBuf, String> {
     let home_dir = vite_shared::get_vp_home()
         .map_err(|e| format!("Failed to get vite-plus home dir: {e}"))?
         .join("js_runtime")
@@ -1239,14 +1270,18 @@ pub(crate) async fn ensure_installed(version: &str) -> Result<(), String> {
 
     // Check if already installed
     if binary_path.as_path().exists() {
-        return Ok(());
+        return Ok(binary_path);
     }
 
     // Download the runtime
     vite_js_runtime::download_runtime(vite_js_runtime::JsRuntimeType::Node, version)
         .await
         .map_err(|e| format!("{e}"))?;
-    Ok(())
+
+    if !binary_path.as_path().exists() {
+        return Err(format!("Node not found at {}", binary_path.as_path().display()));
+    }
+    Ok(binary_path)
 }
 
 /// Locate a tool binary within the Node.js installation.

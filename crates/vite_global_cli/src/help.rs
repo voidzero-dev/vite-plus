@@ -543,7 +543,7 @@ fn env_help_doc() -> HelpDoc {
                 "Examples",
                 vec![
                     "  Setup:",
-                    "    vp env setup                  # Create shims for node, npm, npx",
+                    "    vp env setup                  # Create shims for node, npm, npx, corepack",
                     "    vp env on                     # Use vite-plus managed Node.js",
                     "    vp env print                  # Print shell snippet for this session",
                     "",
@@ -936,11 +936,11 @@ fn delegated_help_doc(command: &str) -> Option<HelpDoc> {
     }
 }
 
-fn is_help_flag(arg: &str) -> bool {
+pub(crate) fn is_help_flag(arg: &str) -> bool {
     matches!(arg, "-h" | "--help")
 }
 
-fn has_help_flag_before_terminator(args: &[String]) -> bool {
+pub(crate) fn has_help_flag_before_terminator(args: &[String]) -> bool {
     args.iter().take_while(|arg| arg.as_str() != "--").any(|arg| is_help_flag(arg))
 }
 

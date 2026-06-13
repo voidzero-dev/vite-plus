@@ -327,8 +327,10 @@ jobs:
             node-version: 22
             command: |
               # scripts/bootstrap.mjs spawns `pnpm build` via tinyexec and needs
-              # pnpm on PATH (not exposed by the vp install itself).
-              vp i -g pnpm
+              # pnpm on PATH (not exposed by the vp install itself). corepack
+              # enable creates a pnpm launcher in the vp bin dir that resolves
+              # the project's pinned packageManager version (pnpm@9.15.9).
+              corepack enable
               node scripts/bootstrap.mjs
               # Report-only: oxlint 1.68.0 surfaces ts1038 ("A 'declare' modifier
               # cannot be used in an already ambient context.") on varlet's

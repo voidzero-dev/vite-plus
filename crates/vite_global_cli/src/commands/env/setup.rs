@@ -1,16 +1,16 @@
 //! Setup command implementation for creating bin directory and shims.
 //!
 //! Creates the following structure:
-//! - ~/.vite-plus/bin/     - Contains vp symlink and node/npm/npx shims
+//! - ~/.vite-plus/bin/     - Contains vp symlink and node/npm/npx/corepack shims
 //! - ~/.vite-plus/current/ - Contains the actual vp CLI binary
 //!
 //! On Unix:
 //! - bin/vp is a symlink to the active vp binary
-//! - bin/node, bin/npm, bin/npx are symlinks to the active vp binary
+//! - bin/node, bin/npm, bin/npx, bin/corepack are symlinks to the active vp binary
 //! - Symlinks preserve argv[0], allowing tool detection via the symlink name
 //!
 //! On Windows:
-//! - bin/vp.exe, bin/node.exe, bin/npm.exe, bin/npx.exe are trampoline executables
+//! - bin/vp.exe, bin/node.exe, bin/npm.exe, bin/npx.exe, bin/corepack.exe are trampoline executables
 //! - Each trampoline detects its tool name from its own filename and spawns
 //!   current\bin\vp.exe with VP_SHIM_TOOL env var set
 //! - This avoids the "Terminate batch job (Y/N)?" prompt from .cmd wrappers
@@ -43,8 +43,8 @@ impl EnvShell {
     }
 }
 
-/// Tools to create shims for (node, npm, npx, vpx, vpr)
-pub(crate) const SHIM_TOOLS: &[&str] = &["node", "npm", "npx", "vpx", "vpr"];
+/// Tools to create shims for (node, npm, npx, corepack, vpx, vpr)
+pub(crate) const SHIM_TOOLS: &[&str] = &["node", "npm", "npx", "corepack", "vpx", "vpr"];
 
 fn accent_command(command: &str) -> String {
     if help::should_style_help() {
@@ -90,7 +90,7 @@ pub async fn execute(refresh: bool, env_only: bool) -> Result<ExitStatus, Error>
     // Create wrapper script in bin/
     setup_vp_wrapper(&current_exe, &bin_dir, refresh).await?;
 
-    // Create shims for node, npm, npx
+    // Create shims for node, npm, npx, corepack
     let mut created = Vec::new();
     let mut skipped = Vec::new();
 
@@ -100,6 +100,22 @@ pub async fn execute(refresh: bool, env_only: bool) -> Result<ExitStatus, Error>
             created.push(*tool);
         } else {
             skipped.push(*tool);
+        }
+
+        // Remove corepack-written .cmd/.ps1/extensionless launchers that
+        // would shadow an existing trampoline .exe in PowerShell/Git Bash
+        // (create_shim skips existing shims without cleaning siblings).
+        #[cfg(windows)]
+        cleanup_legacy_windows_shim(&bin_dir, tool).await;
+
+        // Drop stale `npm install -g` link configs for default shim names
+        // (e.g. a pre-default-shim `npm i -g corepack`): the link itself is
+        // replaced by the shim above, and a leftover Npm-sourced BinConfig
+        // would let a later `npm uninstall -g` delete the default shim.
+        if let Ok(Some(config)) = super::bin_config::BinConfig::load(tool).await
+            && config.source == super::bin_config::BinSource::Npm
+        {
+            let _ = super::bin_config::BinConfig::delete(tool).await;
         }
     }
 
@@ -228,10 +244,10 @@ pub(crate) async fn resolve_unix_vp_shim_target(
     Ok(current_exe.to_path_buf())
 }
 
-/// Create a single shim for node/npm/npx.
+/// Create a single shim for a default shim tool (node/npm/npx/corepack/vpx/vpr).
 ///
 /// Returns `true` if the shim was created, `false` if it already exists.
-async fn create_shim(
+pub(crate) async fn create_shim(
     source: &std::path::Path,
     bin_dir: &vite_path::AbsolutePath,
     tool: &str,
@@ -483,6 +499,12 @@ pub(crate) async fn cleanup_legacy_windows_shim(bin_dir: &vite_path::AbsolutePat
     // Remove old .cmd wrapper (best-effort, ignore NotFound)
     let cmd_path = bin_dir.join(format!("{tool}.cmd"));
     let _ = tokio::fs::remove_file(&cmd_path).await;
+
+    // Remove .ps1 launchers (corepack's cmd-shim writes them; PowerShell
+    // resolves `<tool>.ps1` ahead of `<tool>.exe`, so a leftover would shadow
+    // the trampoline). Vite+ never creates per-tool .ps1 files in bin.
+    let ps1_path = bin_dir.join(format!("{tool}.ps1"));
+    let _ = tokio::fs::remove_file(&ps1_path).await;
 
     // Remove old shell script wrapper (extensionless, for Git Bash)
     // Only remove if it starts with #!/bin/sh (not a binary or other file)
@@ -846,6 +868,15 @@ mod tests {
     use vite_path::AbsolutePathBuf;
 
     use super::*;
+
+    #[test]
+    fn test_shim_tools_contains_default_shims() {
+        // corepack is a default shim (#858, #1309). It must NOT be a core
+        // shim: `vp install -g corepack` stays allowed (CORE_SHIMS guard) and
+        // dispatch uses a dedicated resolution path instead of the core one.
+        assert!(SHIM_TOOLS.contains(&"corepack"));
+        assert!(!crate::commands::global::CORE_SHIMS.contains(&"corepack"));
+    }
 
     /// Helper: create a test_guard with user_home set to the given path.
     fn home_guard(home: impl Into<std::path::PathBuf>) -> vite_shared::TestEnvGuard {

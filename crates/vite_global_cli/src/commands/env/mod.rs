@@ -15,7 +15,7 @@ mod off;
 mod on;
 pub mod package_metadata;
 mod pin;
-mod setup;
+pub(crate) mod setup;
 mod unpin;
 mod r#use;
 mod which;

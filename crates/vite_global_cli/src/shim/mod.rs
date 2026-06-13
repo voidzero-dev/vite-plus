@@ -1,7 +1,8 @@
-//! Shim module for intercepting node, npm, npx, and package binary commands.
+//! Shim module for intercepting node, npm, npx, corepack, and package binary commands.
 //!
 //! This module provides the functionality for the vp binary to act as a shim
-//! when invoked as `node`, `npm`, `npx`, or any globally installed package binary.
+//! when invoked as `node`, `npm`, `npx`, `corepack`, or any globally installed
+//! package binary.
 //!
 //! Detection methods:
 //! - Unix: Symlinks to vp binary preserve argv[0], allowing tool detection
@@ -9,6 +10,7 @@
 //! - Legacy: `.cmd` wrappers call `vp env exec <tool>` directly (deprecated)
 
 mod cache;
+pub(crate) mod corepack;
 pub(crate) mod dispatch;
 pub(crate) mod exec;
 
@@ -17,7 +19,12 @@ pub use dispatch::dispatch;
 pub(crate) use dispatch::find_system_tool;
 use vite_shared::env_vars;
 
-/// Core shim tools (node, npm, npx)
+/// Core shim tools (node, npm, npx).
+///
+/// `corepack` is also a default shim (see `commands::env::setup::SHIM_TOOLS`)
+/// but is intentionally not a core tool: it is not always bundled with the
+/// resolved Node.js version (removed in Node.js 25+), so it has a dedicated
+/// dispatch path with a managed fallback and never uses recursion passthrough.
 pub const CORE_SHIM_TOOLS: &[&str] = &["node", "npm", "npx"];
 
 /// Extract the tool name from argv[0].
@@ -193,6 +200,9 @@ mod tests {
         assert!(!is_core_shim_tool("vp"));
         assert!(!is_core_shim_tool("cargo"));
         assert!(!is_core_shim_tool("tsc")); // Package binary, not core
+        // corepack is a default shim but intentionally not a core tool:
+        // it has a dedicated dispatch path and never uses recursion passthrough
+        assert!(!is_core_shim_tool("corepack"));
 
         // is_shim_tool includes core tools
         assert!(is_shim_tool("node"));

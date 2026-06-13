@@ -154,17 +154,11 @@ async fn find_global_binary(cmd: &str) -> Option<GlobalBinary> {
 /// Ensures the required Node.js version is installed, prepends its bin dir
 /// and local node_modules/.bin dirs to PATH, then executes.
 async fn execute_global_binary(bin: GlobalBinary, args: &[String], cwd: &AbsolutePath) -> i32 {
-    // Ensure Node.js is installed
-    if let Err(e) = dispatch::ensure_installed(&bin.node_version).await {
-        output::error(&format!("vpx: Failed to install Node {}: {e}", bin.node_version));
-        return 1;
-    }
-
-    // Locate node binary for this version
-    let node_path = match dispatch::locate_tool(&bin.node_version, "node") {
+    // Ensure Node.js is installed and locate its binary
+    let node_path = match dispatch::ensure_installed(&bin.node_version).await {
         Ok(p) => p,
         Err(e) => {
-            output::error(&format!("vpx: Node not found: {e}"));
+            output::error(&format!("vpx: Failed to install Node {}: {e}", bin.node_version));
             return 1;
         }
     };

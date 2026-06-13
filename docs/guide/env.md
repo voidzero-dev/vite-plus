@@ -95,7 +95,7 @@ In CI, `vp env use` can still run without shell initialization. It writes a temp
 
 ```bash
 # Setup
-vp env setup                  # Create shims for node, npm, npx
+vp env setup                  # Create shims for node, npm, npx, corepack
 vp env on                     # Use Vite+ managed Node.js
 vp env print                  # Print shell snippet for this session
 
@@ -119,6 +119,25 @@ vp env exec node -v           # Use shim mode with automatic version resolution
 vp node script.js             # Shorthand: run a Node.js script with the resolved version
 vp node -e "console.log(1+1)" # Shorthand: forward any node flag or argument
 ```
+
+## Corepack
+
+Vite+ creates a `corepack` shim by default, so corepack works without a system Node.js installation:
+
+- On Node.js 24 and earlier, the shim runs the corepack bundled with the resolved Node.js version.
+- On Node.js 25 and later, where corepack is no longer bundled, Vite+ installs corepack as a managed global package on first use. Only the `corepack` binary is linked; run `vp install -g corepack` yourself if you also want the package's pnpm/yarn launchers exposed directly.
+- If you install corepack explicitly with `vp install -g corepack`, that installation is always preferred.
+
+`corepack enable` normally creates `pnpm`/`yarn` launchers next to the corepack binary, which under Vite+ would not be on `PATH`. The shim fixes this by defaulting `--install-directory` to `VP_HOME/bin`, so after `corepack enable` the launchers are available everywhere and still resolve the project's Node.js and package-manager versions:
+
+```bash
+corepack enable               # pnpm and yarn now resolve via corepack
+corepack disable              # Remove the pnpm/yarn launchers again
+```
+
+The launchers reference the corepack copy that created them. If that copy is later removed (for example by uninstalling the Node.js version it shipped with), rerun `corepack enable` to recreate them.
+
+Shims owned by Vite+ (`npm`, `npx`, and binaries installed with `vp install -g`) are protected: if corepack removes or replaces them, Vite+ restores them and prints a warning.
 
 ## Custom Node.js Mirror
 

@@ -387,7 +387,7 @@ function Refresh-Shims {
     }
 }
 
-# Setup Node.js version manager (node/npm/npx shims)
+# Setup Node.js version manager (node/npm/npx/corepack shims)
 # Returns: "true" = enabled, "false" = not enabled, "already" = already configured
 function Setup-NodeManager {
     param([string]$BinDir)
@@ -433,7 +433,7 @@ function Setup-NodeManager {
     if ($isInteractive) {
         Write-Host ""
         Write-Host "Would you like Vite+ to manage your Node.js versions?"
-        Write-Host "It adds ``node``, ``npm``, and ``npx`` shims to ~/.vite-plus/bin/ and automatically uses the right version."
+        Write-Host "It adds ``node``, ``npm``, ``npx``, and ``corepack`` shims to ~/.vite-plus/bin/ and automatically uses the right version."
         Write-Host "Opt out anytime with ``vp env off``."
         $response = Read-Host "Press Enter to accept (Y/n)"
 
@@ -631,7 +631,7 @@ function Main {
         # Pre-trampoline versions: fall back to legacy .cmd and shell script wrappers.
         # Remove any stale trampoline .exe shims left by a newer install — .exe wins
         # over .cmd on Windows PATH, so leftover trampolines would bypass the wrappers.
-        foreach ($stale in @("vp.exe", "node.exe", "npm.exe", "npx.exe", "vpx.exe")) {
+        foreach ($stale in @("vp.exe", "node.exe", "npm.exe", "npx.exe", "corepack.exe", "vpx.exe", "vpr.exe")) {
             $stalePath = Join-Path "$InstallDir\bin" $stale
             if (Test-Path $stalePath) {
                 Remove-Item -Path $stalePath -Force -ErrorAction SilentlyContinue

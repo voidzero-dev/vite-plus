@@ -52,18 +52,65 @@ fn package_error(package_name: &str, error: impl Into<Error>) -> (Option<String>
     (Some(package_name.to_string()), error.into())
 }
 
+/// Symlink target used for package shims on Unix (relative to the bin dir).
+#[cfg(unix)]
+pub(crate) const PACKAGE_SHIM_TARGET: &str = "../current/bin/vp";
+
+/// Check whether a bin symlink target points at the vp binary: the standard
+/// relative package-shim target, or a resolvable link to a binary named `vp`
+/// (absolute paths in external/dev layouts created by `vp env setup`).
+#[cfg(unix)]
+pub(crate) fn is_vp_shim_target(
+    target: &std::path::Path,
+    shim_path: &vite_path::AbsolutePath,
+) -> bool {
+    target == std::path::Path::new(PACKAGE_SHIM_TARGET)
+        || (target.file_name().is_some_and(|file_name| file_name == "vp")
+            && std::fs::exists(shim_path.as_path()).unwrap_or(false))
+}
+
+/// Check whether a binary name is a shim Vite+ owns unconditionally: core
+/// shims plus the default env shims (node, npm, npx, corepack, vpx, vpr).
+/// Protected shims are never removed on behalf of packages, and are never
+/// created for packages either, with one exception: `vp install -g corepack`
+/// may take BinConfig ownership of the corepack shim (see
+/// `create_package_shim`).
+pub(crate) fn is_protected_shim(bin_name: &str) -> bool {
+    CORE_SHIMS.contains(&bin_name) || crate::commands::env::setup::SHIM_TOOLS.contains(&bin_name)
+}
+
+/// Whether a package may own a bin name. Protected shim names never belong
+/// to packages, with one exception: the `corepack` package owning its own
+/// `corepack` bin, so an explicit `vp install -g corepack` wins the shim's
+/// resolution order. The exemption is scoped to the package name; any other
+/// package declaring a `corepack` bin must not take BinConfig ownership.
+pub(crate) fn package_may_own_bin(package_name: &str, bin_name: &str) -> bool {
+    !is_protected_shim(bin_name) || (bin_name == "corepack" && package_name == "corepack")
+}
+
+/// Options for [`install`].
+pub struct InstallOptions<'a> {
+    /// Node.js version to install with; resolved from the current directory
+    /// when `None`.
+    pub node_version: Option<&'a str>,
+    /// Auto-uninstall packages whose binaries conflict.
+    pub force: bool,
+    /// Number of packages to install in parallel.
+    pub concurrency: usize,
+    /// `vp update -g` semantics: carries a recorded bin restriction forward.
+    pub update: bool,
+    /// Only expose these binaries as shims; other bins the package declares
+    /// are ignored (used by the corepack shim auto-install, which must not
+    /// link corepack's pnpm/yarn launchers).
+    pub only_bins: Option<&'a [&'a str]>,
+}
+
 /// Install global packages parallelly.
-///
-/// If `node_version` is provided, uses that version. Otherwise, resolves from current directory.
-/// If `force` is true, auto-uninstalls conflicting packages.
-/// Use `concurrency` to control the number of packages to install in parallel.
 pub async fn install(
     package_specs: &[String],
-    node_version: Option<&str>,
-    force: bool,
-    concurrency: usize,
-    update: bool,
+    options: InstallOptions<'_>,
 ) -> Result<(), (Option<String>, Error)> {
+    let InstallOptions { node_version, force, concurrency, update, only_bins } = options;
     if package_specs.is_empty() {
         return Ok(());
     }
@@ -190,12 +237,66 @@ pub async fn install(
     // 4. Finalize installed packages.
     let mut bin_owners = HashMap::<String, String>::new();
     for (index, (package_name, Package { spec: _, install })) in packages.into_iter().enumerate() {
-        let Some(InstalledPackage { installed_version, bin_names, js_bins, backup }) = install
+        let Some(InstalledPackage { installed_version, mut bin_names, mut js_bins, mut backup }) =
+            install
         else {
             continue;
         };
-        let mut backup = backup;
-        let stale_bin_names = match stale_bin_names_for_package(&package_name, &bin_names).await {
+
+        // Previous metadata drives both the inherited bin restriction and
+        // stale-bin detection below; load it once.
+        let previous_metadata = match PackageMetadata::load(&package_name).await {
+            Ok(metadata) => metadata,
+            Err(error) => {
+                let _ = cleanup_failed_install(&package_name, backup.take()).await;
+                if first_error.is_none() {
+                    first_error = Some(package_error(&package_name, error));
+                }
+                continue;
+            }
+        };
+
+        // Restrict exposed binaries when requested (e.g., the corepack shim
+        // auto-install only links `corepack`, not the pnpm/yarn launchers
+        // that `corepack enable` creates on demand). Updates carry a recorded
+        // restriction forward so `vp update -g` cannot re-expose the filtered
+        // bins; explicit installs (update=false) re-expose the full bin list.
+        let restriction: Option<Vec<String>> = match only_bins {
+            Some(only) => Some(only.iter().map(ToString::to_string).collect()),
+            None if update => previous_metadata
+                .as_ref()
+                .filter(|previous| previous.bins_restricted)
+                .map(|previous| previous.bins.clone()),
+            None => None,
+        };
+        let bins_restricted = restriction.is_some();
+        if let Some(only) = &restriction {
+            bin_names.retain(|bin| only.contains(bin));
+            js_bins.retain(|bin| only.contains(bin));
+        }
+
+        // Drop bin names the package must not own before conflict detection,
+        // shim creation, BinConfig ownership, and metadata recording.
+        bin_names.retain(|bin| {
+            let allowed = package_may_own_bin(&package_name, bin);
+            if !allowed {
+                output::warn(&format!(
+                    "Package '{}' provides '{}' binary, but it conflicts with a built-in shim. \
+                     Skipping.",
+                    package_name, bin
+                ));
+            }
+            allowed
+        });
+        js_bins.retain(|bin| package_may_own_bin(&package_name, bin));
+
+        let stale_bin_names = match stale_bin_names_for_package(
+            previous_metadata.as_ref(),
+            &package_name,
+            &bin_names,
+        )
+        .await
+        {
             Ok(bin_names) => bin_names,
             Err(error) => {
                 let _ = cleanup_failed_install(&package_name, backup.take()).await;
@@ -290,7 +391,7 @@ pub async fn install(
             }
         };
 
-        let metadata = PackageMetadata::new(
+        let mut metadata = PackageMetadata::new(
             package_name.clone(),
             installed_version.clone(),
             node_version.clone(),
@@ -299,6 +400,7 @@ pub async fn install(
             js_bins,
             "npm".to_string(),
         );
+        metadata.bins_restricted = bins_restricted;
         if let Err(error) =
             metadata.save().await.map_err(|error| package_error(&package_name, error))
         {
@@ -424,8 +526,13 @@ async fn install_one(
         .await?;
 
     if !output.status.success() {
-        // Show captured output to help debug the failure
-        let _ = std::io::stdout().write_all(&output.stdout);
+        // Show captured output to help debug the failure. npm's stdout joins
+        // stderr when vp's stdout must stay parseable (shim dispatch).
+        if output::user_output_to_stderr() {
+            let _ = std::io::stderr().write_all(&output.stdout);
+        } else {
+            let _ = std::io::stdout().write_all(&output.stdout);
+        }
         let _ = std::io::stderr().write_all(&output.stderr);
         cleanup_failed_install(package_name, backup).await?;
         return Err(Error::ConfigError(
@@ -497,9 +604,14 @@ impl PackageBackup {
             tokio::fs::create_dir_all(parent).await?;
         }
 
-        tokio::fs::rename(package_dir, &backup_dir).await?;
-
-        Ok(Some(Self { package_dir: package_dir.clone(), backup_dir }))
+        match tokio::fs::rename(package_dir, &backup_dir).await {
+            Ok(()) => Ok(Some(Self { package_dir: package_dir.clone(), backup_dir })),
+            // The package dir vanished between the existence check and the
+            // rename (a concurrent install/uninstall of the same package):
+            // treat it as no previous install.
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(e.into()),
+        }
     }
 
     async fn restore(self) -> Result<(), Error> {
@@ -586,14 +698,15 @@ async fn cleanup_installed_package(package_name: &str) -> Result<(), Error> {
 }
 
 async fn stale_bin_names_for_package(
+    previous_metadata: Option<&PackageMetadata>,
     package_name: &str,
     current_bin_names: &[String],
 ) -> Result<Vec<String>, Error> {
     let current_bin_names: HashSet<_> = current_bin_names.iter().cloned().collect();
     let mut previous_bin_names = HashSet::new();
 
-    if let Some(metadata) = PackageMetadata::load(package_name).await? {
-        previous_bin_names.extend(metadata.bins);
+    if let Some(metadata) = previous_metadata {
+        previous_bin_names.extend(metadata.bins.iter().cloned());
     }
 
     previous_bin_names.extend(BinConfig::find_by_package(package_name).await?);
@@ -643,7 +756,15 @@ pub async fn uninstall(package_name: &str, dry_run: bool) -> Result<(), Error> {
 
         output::raw(&format!("Would uninstall {}:", package_name));
         for bin_name in &bins {
-            output::raw(&format!("  - shim: {}", bin_dir.join(bin_name).as_path().display()));
+            // Protected shims survive the real uninstall; keep dry-run honest.
+            if is_protected_shim(bin_name) {
+                output::raw(&format!(
+                    "  - shim: {} (kept: default shim)",
+                    bin_dir.join(bin_name).as_path().display()
+                ));
+            } else {
+                output::raw(&format!("  - shim: {}", bin_dir.join(bin_name).as_path().display()));
+            }
         }
         output::raw(&format!("  - package dir: {}", package_dir.as_path().display()));
         output::raw(&format!("  - metadata: {}", metadata_path.as_path().display()));
@@ -751,15 +872,17 @@ fn is_javascript_binary(path: &AbsolutePath) -> bool {
 ///
 /// On Unix: Creates a symlink to ../current/bin/vp
 /// On Windows: Creates a trampoline .exe that forwards to vp.exe
-async fn create_package_shim(
+pub(crate) async fn create_package_shim(
     bin_dir: &vite_path::AbsolutePath,
     bin_name: &str,
     package_name: &str,
 ) -> Result<(), Error> {
-    // Check for conflicts with core shims
-    if CORE_SHIMS.contains(&bin_name) {
+    // Defense in depth: the finalize loop already filters bin names the
+    // package must not own (see package_may_own_bin); keep the guard here so
+    // no other caller can hand a protected shim to a package.
+    if !package_may_own_bin(package_name, bin_name) {
         output::warn(&format!(
-            "Package '{}' provides '{}' binary, but it conflicts with a core shim. Skipping.",
+            "Package '{}' provides '{}' binary, but it conflicts with a built-in shim. Skipping.",
             package_name, bin_name
         ));
         return Ok(());
@@ -772,9 +895,10 @@ async fn create_package_shim(
     {
         let shim_path = bin_dir.join(bin_name);
 
-        // Check if already a managed shim (symlink to ../current/bin/vp)
+        // Keep an existing Vite+ shim: replacing an external/dev-layout link
+        // with the relative target would dangle when VP_HOME/current is absent.
         if let Ok(target) = tokio::fs::read_link(&shim_path).await {
-            if target == std::path::Path::new("../current/bin/vp") {
+            if is_vp_shim_target(&target, &shim_path) {
                 return Ok(());
             }
             // Exists but points elsewhere (e.g., npm-installed direct symlink) — replace it
@@ -782,7 +906,7 @@ async fn create_package_shim(
         }
 
         // Create symlink to ../current/bin/vp
-        tokio::fs::symlink("../current/bin/vp", &shim_path).await?;
+        tokio::fs::symlink(PACKAGE_SHIM_TARGET, &shim_path).await?;
         tracing::debug!("Created package shim symlink {:?} -> ../current/bin/vp", shim_path);
     }
 
@@ -819,8 +943,10 @@ async fn remove_package_shim(
     bin_dir: &vite_path::AbsolutePath,
     bin_name: &str,
 ) -> Result<(), Error> {
-    // Don't remove core shims
-    if CORE_SHIMS.contains(&bin_name) {
+    // Don't remove protected shims (e.g., `vp remove -g corepack` must keep
+    // the default corepack shim so it falls back to the Node-bundled or
+    // auto-installed corepack).
+    if is_protected_shim(bin_name) {
         return Ok(());
     }
 
@@ -936,6 +1062,41 @@ mod tests {
         let shim_path = bin_dir.join("node");
         #[cfg(windows)]
         let shim_path = bin_dir.join("node.exe");
+        assert!(!shim_path.as_path().exists());
+    }
+
+    #[test]
+    fn test_package_may_own_bin_scopes_corepack_to_its_package() {
+        // Only the corepack package may own the corepack bin; any other
+        // package declaring a `corepack` bin must not take BinConfig
+        // ownership (it would win the corepack shim's resolution order).
+        assert!(package_may_own_bin("corepack", "corepack"));
+        assert!(!package_may_own_bin("some-package", "corepack"));
+        assert!(!package_may_own_bin("@scope/corepack", "corepack"));
+
+        // Other protected shims never belong to packages
+        assert!(!package_may_own_bin("corepack", "npm"));
+        assert!(!package_may_own_bin("some-package", "vpx"));
+        assert!(!package_may_own_bin("some-package", "vpr"));
+
+        // Regular bins are unrestricted
+        assert!(package_may_own_bin("typescript", "tsc"));
+    }
+
+    #[tokio::test]
+    async fn test_create_package_shim_skips_corepack_bin_for_other_packages() {
+        use tempfile::TempDir;
+        use vite_path::AbsolutePathBuf;
+
+        let temp_dir = TempDir::new().unwrap();
+        let bin_dir = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        create_package_shim(&bin_dir, "corepack", "some-package").await.unwrap();
+
+        #[cfg(unix)]
+        let shim_path = bin_dir.join("corepack");
+        #[cfg(windows)]
+        let shim_path = bin_dir.join("corepack.exe");
         assert!(!shim_path.as_path().exists());
     }
 

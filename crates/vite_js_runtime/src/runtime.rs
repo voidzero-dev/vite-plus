@@ -531,7 +531,9 @@ fn check_constraint(
         Ok(range) => {
             if !range.satisfies(version) {
                 let source_str = source.map_or("none".to_string(), |s| s.to_string());
-                println!(
+                // Warnings go to stderr: shims must keep the wrapped
+                // tool's stdout parseable.
+                eprintln!(
                     "warning: Node.js version {resolved_version} (from {source_str}) does not \
                      satisfy {constraint_source} constraint '{constraint}'"
                 );
@@ -580,7 +582,7 @@ pub fn normalize_version(version: &Str, source: &str) -> Option<Str> {
 
     // Invalid version — print warning (only if non-empty, empty is just "not specified")
     if !trimmed.is_empty() {
-        println!("warning: invalid version '{version}' in {source}, ignoring");
+        eprintln!("warning: invalid version '{version}' in {source}, ignoring");
     }
     None
 }
