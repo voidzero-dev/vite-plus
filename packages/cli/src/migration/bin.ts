@@ -1168,8 +1168,9 @@ async function main() {
 
     const useFullMigrationDefaults =
       vitePlusBootstrapPending ||
-      pendingCoreMigration.scripts ||
-      pendingCoreMigration.tsconfigTypes;
+      coreMigrationResult.scripts ||
+      coreMigrationResult.tsconfigTypes ||
+      coreMigrationResult.imports;
     const setupOptions = getExistingVitePlusSetupOptions(
       options,
       legacyGitHooksMigrationCandidate,
