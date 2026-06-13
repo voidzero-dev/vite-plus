@@ -152,13 +152,41 @@ async function updatePnpmWorkspace(versions: PnpmWorkspaceVersions): Promise<voi
   let content = fs.readFileSync(filePath, 'utf8');
 
   // oxlint's trailing \n in the pattern disambiguates from oxlint-tsgolint.
+  // All @vitest/* catalog entries (browser + core direct deps) must stay pinned
+  // to the same exact version as `vitest` itself, otherwise the catalog drifts
+  // from VITEST_VERSION and the @vitest/mocker patch key, causing a patch mismatch.
+  const vitestExactVersionPackages = [
+    '@vitest/browser',
+    '@vitest/browser-playwright',
+    '@vitest/browser-preview',
+    '@vitest/browser-webdriverio',
+    '@vitest/expect',
+    '@vitest/mocker',
+    '@vitest/pretty-format',
+    '@vitest/runner',
+    '@vitest/snapshot',
+    '@vitest/spy',
+    '@vitest/utils',
+  ];
+  const vitestExactVersionEntries: PnpmWorkspaceEntry[] = vitestExactVersionPackages.map((pkg) => ({
+    name: pkg,
+    pattern: new RegExp(`'${pkg.replaceAll('/', '\\/')}': ([\\d.]+(?:-[\\w.]+)?)`),
+    replacement: `'${pkg}': ${versions.vitest}`,
+    newVersion: versions.vitest,
+  }));
   const entries: PnpmWorkspaceEntry[] = [
     {
       name: 'vitest',
-      pattern: /vitest-dev: npm:vitest@\^([\d.]+(?:-[\w.]+)?)/,
-      replacement: `vitest-dev: npm:vitest@^${versions.vitest}`,
+      // The `@voidzero-dev/vite-plus-test` wrapper (which used to be aliased
+      // here via `vitest-dev: npm:vitest@^…`) has been removed. Vitest is now
+      // a plain catalog entry pinned to an exact version (`vitest: x.y.z`),
+      // so match that shape directly. The leading newline anchor disambiguates
+      // from neighbouring keys like `vitepress-*` and `@vitest/browser`.
+      pattern: /\n {2}vitest: ([\d.]+(?:-[\w.]+)?)\n/,
+      replacement: `\n  vitest: ${versions.vitest}\n`,
       newVersion: versions.vitest,
     },
+    ...vitestExactVersionEntries,
     {
       name: 'tsdown',
       pattern: /tsdown: \^([\d.]+(?:-[\w.]+)?)/,
@@ -246,34 +274,120 @@ async function updatePnpmWorkspace(versions: PnpmWorkspaceVersions): Promise<voi
   console.log('Updated pnpm-workspace.yaml');
 }
 
-// ============ Update packages/test/package.json ============
-async function updateTestPackage(vitestVersion: string): Promise<void> {
-  const filePath = path.join(ROOT, 'packages/test/package.json');
-  const pkg: PackageJson = readJsonFile(filePath);
-  const devDependencies = pkg.devDependencies;
-  if (!devDependencies) {
-    throw new Error('packages/test/package.json is missing devDependencies');
+// ============ Update VITEST_VERSION constant ============
+// Keeps the TypeScript source-of-truth (`packages/cli/src/utils/constants.ts`)
+// in sync with the `vitest:` catalog entry in pnpm-workspace.yaml. The
+// constant is consumed by both `packages/cli` and `ecosystem-ci/patch-project.ts`
+// (which re-imports it), so daily upstream bumps must update it here too.
+async function updateVitestVersionConstant(vitestVersion: string): Promise<void> {
+  const filePath = path.join(ROOT, 'packages/cli/src/utils/constants.ts');
+  const content = fs.readFileSync(filePath, 'utf8');
+  const pattern = /export const VITEST_VERSION = '([\d.]+(?:-[\w.]+)?)';/;
+  let oldVersion: string | undefined;
+  const updated = content.replace(pattern, (_match: string, captured: string) => {
+    oldVersion = captured;
+    return `export const VITEST_VERSION = '${vitestVersion}';`;
+  });
+  if (oldVersion === undefined) {
+    throw new Error(
+      `Failed to match VITEST_VERSION in ${filePath} — the pattern ${pattern} is stale, ` +
+        `please update it in .github/scripts/upgrade-deps.ts`,
+    );
   }
+  fs.writeFileSync(filePath, updated);
+  recordChange('VITEST_VERSION constant', oldVersion, vitestVersion);
+  console.log('Updated packages/cli/src/utils/constants.ts');
+}
 
-  // Update all @vitest/* devDependencies
-  for (const dep of Object.keys(devDependencies)) {
-    if (dep.startsWith('@vitest/')) {
-      devDependencies[dep] = vitestVersion;
+// ============ Update .github/workflows/test-vp-create.yml ============
+// The `vp create` smoke-test workflow pins every vitest-family package via the
+// `VP_OVERRIDE_PACKAGES` env var so that template installs use the bundled
+// version. Daily upstream bumps must rewrite those pins so the workflow does
+// not drift behind the rest of the repo.
+async function updateTestVpCreateWorkflow(vitestVersion: string): Promise<void> {
+  const filePath = path.join(ROOT, '.github/workflows/test-vp-create.yml');
+  const content = fs.readFileSync(filePath, 'utf8');
+  const vitestKeys = [
+    'vitest',
+    '@vitest/expect',
+    '@vitest/runner',
+    '@vitest/snapshot',
+    '@vitest/spy',
+    '@vitest/utils',
+    '@vitest/mocker',
+    '@vitest/pretty-format',
+    '@vitest/coverage-v8',
+    '@vitest/coverage-istanbul',
+  ];
+  let updated = content;
+  let oldVersion: string | undefined;
+  for (const key of vitestKeys) {
+    const pattern = new RegExp(`"${key.replaceAll('/', '\\/')}":"([\\d.]+(?:-[\\w.]+)?)"`);
+    let matched = false;
+    updated = updated.replace(pattern, (_match: string, captured: string) => {
+      matched = true;
+      oldVersion ??= captured;
+      return `"${key}":"${vitestVersion}"`;
+    });
+    if (!matched) {
+      throw new Error(
+        `Failed to match "${key}" in ${filePath} — the pattern ${pattern} is stale, ` +
+          `please update it in .github/scripts/upgrade-deps.ts`,
+      );
     }
   }
+  fs.writeFileSync(filePath, updated);
+  recordChange('test-vp-create workflow', oldVersion ?? null, vitestVersion);
+  console.log('Updated .github/workflows/test-vp-create.yml');
+}
 
-  // Update vitest-dev devDependency
-  if (devDependencies['vitest-dev']) {
-    devDependencies['vitest-dev'] = `^${vitestVersion}`;
+// ============ Update the @vitest/mocker pnpm patch entry ============
+// `pnpm-workspace.yaml` patches `@vitest/mocker` so the static `vi.mock()`
+// hoister recognizes the public `vite-plus/test` specifier. pnpm keys
+// `patchedDependencies` by EXACT version (`@vitest/mocker@x.y.z`) and errors
+// hard (`ERR_PNPM_PATCHED_PKG_DOES_NOT_MATCH`) when the key drifts from the
+// installed version, so a daily vitest bump would otherwise break every
+// auto-upgrade PR. Rewrite the key + patch-file path and rename the patch file
+// to the new version. The patch file is kept version-suffixed (rather than
+// switching to a name-only key) because its diff context is version-specific:
+// if upstream changes `dist/chunk-hoistMocks.js`, the rename surfaces a loud
+// patch-apply failure that a human must resolve — which is the desired signal.
+async function updateVitestMockerPatch(vitestVersion: string): Promise<void> {
+  const filePath = path.join(ROOT, 'pnpm-workspace.yaml');
+  const content = fs.readFileSync(filePath, 'utf8');
+  const pattern =
+    /'@vitest\/mocker@([\d.]+(?:-[\w.]+)?)': patches\/@vitest__mocker@[\d.]+(?:-[\w.]+)?\.patch/;
+  let oldVersion: string | undefined;
+  const updated = content.replace(pattern, (_match: string, captured: string) => {
+    oldVersion = captured;
+    return `'@vitest/mocker@${vitestVersion}': patches/@vitest__mocker@${vitestVersion}.patch`;
+  });
+  if (oldVersion === undefined) {
+    throw new Error(
+      `Failed to match the @vitest/mocker patchedDependencies entry in ${filePath} — ` +
+        `the pattern ${pattern} is stale, please update it in .github/scripts/upgrade-deps.ts`,
+    );
   }
-
-  // Update @vitest/ui peerDependency if present
-  if (pkg.peerDependencies?.['@vitest/ui']) {
-    pkg.peerDependencies['@vitest/ui'] = vitestVersion;
+  if (oldVersion !== vitestVersion) {
+    const oldPatch = path.join(ROOT, 'patches', `@vitest__mocker@${oldVersion}.patch`);
+    const newPatch = path.join(ROOT, 'patches', `@vitest__mocker@${vitestVersion}.patch`);
+    if (!fs.existsSync(oldPatch)) {
+      throw new Error(
+        `Expected patch file ${oldPatch} to exist before renaming — ` +
+          `the @vitest/mocker patch may have been moved or removed.`,
+      );
+    }
+    fs.renameSync(oldPatch, newPatch);
+    console.log(`Renamed @vitest/mocker patch ${oldVersion} -> ${vitestVersion}`);
   }
-
-  fs.writeFileSync(filePath, JSON.stringify(pkg, null, 2) + '\n');
-  console.log('Updated packages/test/package.json');
+  // Also covers the case where the key version already matches `vitestVersion`
+  // but the value's patch-file suffix had drifted — `content.replace` repaired
+  // the line in memory and we must persist it, otherwise pnpm install can hit
+  // ERR_PNPM_PATCHED_PKG_DOES_NOT_MATCH.
+  if (updated !== content) {
+    fs.writeFileSync(filePath, updated);
+  }
+  recordChange('@vitest/mocker patch', oldVersion, vitestVersion);
 }
 
 // ============ Update packages/core/package.json ============
@@ -430,7 +544,9 @@ await updatePnpmWorkspace({
   oxcParser: oxcParserVersion,
   oxcTransform: oxcTransformVersion,
 });
-await updateTestPackage(vitestVersion);
+await updateVitestVersionConstant(vitestVersion);
+await updateTestVpCreateWorkflow(vitestVersion);
+await updateVitestMockerPatch(vitestVersion);
 await updateCorePackage(devtoolsVersion);
 
 writeMetaFiles();

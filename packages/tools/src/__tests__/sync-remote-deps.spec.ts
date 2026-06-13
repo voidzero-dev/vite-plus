@@ -1,5 +1,5 @@
-import { describe, expect, test } from '@voidzero-dev/vite-plus-test';
 import * as semver from 'semver';
+import { describe, expect, test } from 'vitest';
 
 import { mergePnpmWorkspaces } from '../sync-remote-deps.ts';
 

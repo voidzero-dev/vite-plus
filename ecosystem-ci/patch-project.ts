@@ -2,11 +2,9 @@ import { execSync } from 'node:child_process';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import cliPkg from '../packages/cli/package.json' with { type: 'json' };
+import { VITEST_VERSION } from '../packages/cli/src/utils/constants.ts';
 import { ecosystemCiDir, tgzDir } from './paths.ts';
 import repos from './repo.json' with { type: 'json' };
-
-const vpVersion = cliPkg.version;
 
 const projects = Object.keys(repos);
 
@@ -21,7 +19,9 @@ const repoRoot = join(ecosystemCiDir, project);
 const repoConfig = repos[project as keyof typeof repos];
 const directory = 'directory' in repoConfig ? repoConfig.directory : undefined;
 const cwd = directory ? join(repoRoot, directory) : repoRoot;
-const vitePlusTgz = `file:${tgzDir}/vite-plus-${vpVersion}.tgz`;
+// The e2e build job pins packages/cli to 0.0.0 before `pnpm pack`, so the
+// artifact is always vite-plus-0.0.0.tgz regardless of the committed version.
+const vitePlusTgz = `file:${tgzDir}/vite-plus-0.0.0.tgz`;
 // run vp migrate
 const cli = process.env.VP_CLI_BIN ?? 'vp';
 
@@ -66,6 +66,29 @@ if (project === 'dify') {
 // vp migrate runs full dependency rewriting instead of skipping.
 const forceFreshMigration = 'forceFreshMigration' in repoConfig && repoConfig.forceFreshMigration;
 
+// Bun is uniquely strict about vitest's `peer vite ^6 || ^7 || ^8` resolution
+// (https://github.com/oven-sh/bun/issues/8406): it checks both the override
+// target's package name and version. Point bun-based projects at the
+// vite-7.99.0 alias tgz (a copy of core renamed to "vite" with a satisfying
+// version); pnpm/npm/yarn must keep pointing at the real core tgz, otherwise
+// they trip a registry lookup for "vite@<version>" when a workspace
+// sub-package and the override both reference the same vite-named alias.
+const isBunProject = project === 'bun-vite-template';
+const viteOverrideTgz = isBunProject ? `vite-7.99.0.tgz` : `voidzero-dev-vite-plus-core-0.0.0.tgz`;
+
+const vitestOverrides = {
+  vitest: VITEST_VERSION,
+  '@vitest/expect': VITEST_VERSION,
+  '@vitest/runner': VITEST_VERSION,
+  '@vitest/snapshot': VITEST_VERSION,
+  '@vitest/spy': VITEST_VERSION,
+  '@vitest/utils': VITEST_VERSION,
+  '@vitest/mocker': VITEST_VERSION,
+  '@vitest/pretty-format': VITEST_VERSION,
+  '@vitest/coverage-v8': VITEST_VERSION,
+  '@vitest/coverage-istanbul': VITEST_VERSION,
+};
+
 execSync(`${cli} migrate --no-agent --no-interactive`, {
   cwd,
   stdio: 'inherit',
@@ -73,10 +96,9 @@ execSync(`${cli} migrate --no-agent --no-interactive`, {
     ...process.env,
     ...(forceFreshMigration ? { VP_FORCE_MIGRATE: '1' } : {}),
     VP_OVERRIDE_PACKAGES: JSON.stringify({
-      vite: `file:${tgzDir}/voidzero-dev-vite-plus-core-${vpVersion}.tgz`,
-      vitest: `file:${tgzDir}/voidzero-dev-vite-plus-test-${vpVersion}.tgz`,
-      '@voidzero-dev/vite-plus-core': `file:${tgzDir}/voidzero-dev-vite-plus-core-${vpVersion}.tgz`,
-      '@voidzero-dev/vite-plus-test': `file:${tgzDir}/voidzero-dev-vite-plus-test-${vpVersion}.tgz`,
+      vite: `file:${tgzDir}/${viteOverrideTgz}`,
+      '@voidzero-dev/vite-plus-core': `file:${tgzDir}/voidzero-dev-vite-plus-core-0.0.0.tgz`,
+      ...vitestOverrides,
     }),
     VP_VERSION: vitePlusTgz,
   },

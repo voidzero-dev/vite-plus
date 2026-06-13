@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { describe, expect, test } from '@voidzero-dev/vite-plus-test';
+import { describe, expect, test } from 'vitest';
 
 import { isPassThroughEnv, replaceUnstableOutput } from '../utils.ts';
 
@@ -124,6 +124,15 @@ Done in 171ms using pnpm v10.16.1
     for (const output of outputs) {
       expect(replaceUnstableOutput(output.trim())).toMatchSnapshot();
     }
+  });
+
+  test('strip pnpm supply-chain verification status line', () => {
+    const output = `
+> vp add testnpm2 -D
+✓ Lockfile passes supply-chain policies (verified 123ms ago)
+Packages: +1
+    `;
+    expect(replaceUnstableOutput(output.trim())).not.toContain('supply-chain policies');
   });
 
   test.skipIf(process.platform === 'win32')('replace unstable cwd', () => {

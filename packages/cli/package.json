@@ -96,7 +96,6 @@
     "./test": {
       "import": {
         "types": "./dist/test/index.d.ts",
-        "node": "./dist/test/index.js",
         "default": "./dist/test/index.js"
       },
       "require": {
@@ -148,8 +147,8 @@
     },
     "./test/config": {
       "types": "./dist/test/config.d.ts",
-      "default": "./dist/test/config.js",
-      "require": "./dist/test/config.cjs"
+      "require": "./dist/test/config.cjs",
+      "default": "./dist/test/config.js"
     },
     "./test/coverage": {
       "types": "./dist/test/coverage.d.ts",
@@ -171,8 +170,57 @@
       "types": "./dist/test/worker.d.ts",
       "default": "./dist/test/worker.js"
     },
-    "./test/browser-compat": {
-      "default": "./dist/test/browser-compat.js"
+    "./test/browser-playwright": {
+      "types": "./dist/test/browser-playwright.d.ts",
+      "default": "./dist/test/browser-playwright.js"
+    },
+    "./test/browser/providers/playwright": {
+      "types": "./dist/test/browser/providers/playwright.d.ts",
+      "default": "./dist/test/browser/providers/playwright.js"
+    },
+    "./test/browser-playwright/context": {
+      "types": "./dist/test/browser-playwright/context.d.ts",
+      "default": "./dist/test/browser-playwright/context.js"
+    },
+    "./test/browser/providers/playwright/context": {
+      "types": "./dist/test/browser/providers/playwright/context.d.ts",
+      "default": "./dist/test/browser/providers/playwright/context.js"
+    },
+    "./test/browser-preview": {
+      "types": "./dist/test/browser-preview.d.ts",
+      "default": "./dist/test/browser-preview.js"
+    },
+    "./test/browser/providers/preview": {
+      "types": "./dist/test/browser/providers/preview.d.ts",
+      "default": "./dist/test/browser/providers/preview.js"
+    },
+    "./test/browser-preview/context": {
+      "types": "./dist/test/browser-preview/context.d.ts",
+      "default": "./dist/test/browser-preview/context.js"
+    },
+    "./test/browser/providers/preview/context": {
+      "types": "./dist/test/browser/providers/preview/context.d.ts",
+      "default": "./dist/test/browser/providers/preview/context.js"
+    },
+    "./test/browser-webdriverio": {
+      "types": "./dist/test/browser-webdriverio.d.ts",
+      "default": "./dist/test/browser-webdriverio.js"
+    },
+    "./test/browser/providers/webdriverio": {
+      "types": "./dist/test/browser/providers/webdriverio.d.ts",
+      "default": "./dist/test/browser/providers/webdriverio.js"
+    },
+    "./test/browser-webdriverio/context": {
+      "types": "./dist/test/browser-webdriverio/context.d.ts",
+      "default": "./dist/test/browser-webdriverio/context.js"
+    },
+    "./test/browser/providers/webdriverio/context": {
+      "types": "./dist/test/browser/providers/webdriverio/context.d.ts",
+      "default": "./dist/test/browser/providers/webdriverio/context.js"
+    },
+    "./test/browser/context": {
+      "types": "./dist/test/browser/context.d.ts",
+      "default": "./dist/test/browser/context.js"
     },
     "./test/client": {
       "default": "./dist/test/client.js"
@@ -181,42 +229,20 @@
       "types": "./dist/test/context.d.ts",
       "default": "./dist/test/context.js"
     },
-    "./test/browser/context": {
-      "types": "./dist/test/browser/context.d.ts",
-      "default": "./dist/test/browser/context.js"
-    },
     "./test/locators": {
+      "types": "./dist/test/locators.d.ts",
       "default": "./dist/test/locators.js"
     },
     "./test/matchers": {
+      "types": "./dist/test/matchers.d.ts",
       "default": "./dist/test/matchers.js"
     },
     "./test/utils": {
       "default": "./dist/test/utils.js"
     },
-    "./test/browser-playwright": {
-      "types": "./dist/test/browser-playwright.d.ts",
-      "default": "./dist/test/browser-playwright.js"
-    },
-    "./test/browser-webdriverio": {
-      "types": "./dist/test/browser-webdriverio.d.ts",
-      "default": "./dist/test/browser-webdriverio.js"
-    },
-    "./test/browser-preview": {
-      "types": "./dist/test/browser-preview.d.ts",
-      "default": "./dist/test/browser-preview.js"
-    },
-    "./test/browser/providers/playwright": {
-      "types": "./dist/test/browser/providers/playwright.d.ts",
-      "default": "./dist/test/browser/providers/playwright.js"
-    },
-    "./test/browser/providers/webdriverio": {
-      "types": "./dist/test/browser/providers/webdriverio.d.ts",
-      "default": "./dist/test/browser/providers/webdriverio.js"
-    },
-    "./test/browser/providers/preview": {
-      "types": "./dist/test/browser/providers/preview.d.ts",
-      "default": "./dist/test/browser/providers/preview.js"
+    "./test/browser-compat": {
+      "types": "./dist/test/browser-compat.d.ts",
+      "default": "./dist/test/browser-compat.js"
     },
     "./test/plugins/runner": {
       "default": "./dist/test/plugins/runner.js"
@@ -247,9 +273,6 @@
     },
     "./test/plugins/utils-timers": {
       "default": "./dist/test/plugins/utils-timers.js"
-    },
-    "./test/plugins/utils-highlight": {
-      "default": "./dist/test/plugins/utils-highlight.js"
     },
     "./test/plugins/utils-offset": {
       "default": "./dist/test/plugins/utils-offset.js"
@@ -340,11 +363,23 @@
   "dependencies": {
     "@oxc-project/types": "catalog:",
     "@oxlint/plugins": "catalog:",
+    "@vitest/browser": "catalog:",
+    "@vitest/browser-playwright": "catalog:",
+    "@vitest/browser-preview": "catalog:",
+    "@vitest/expect": "catalog:",
+    "@vitest/mocker": "catalog:",
+    "@vitest/pretty-format": "catalog:",
+    "@vitest/runner": "catalog:",
+    "@vitest/snapshot": "catalog:",
+    "@vitest/spy": "catalog:",
+    "@vitest/utils": "catalog:",
     "@voidzero-dev/vite-plus-core": "workspace:*",
-    "@voidzero-dev/vite-plus-test": "workspace:*",
+    "es-module-lexer": "^1.7.0",
+    "oxc-parser": "catalog:",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
-    "oxlint-tsgolint": "catalog:"
+    "oxlint-tsgolint": "catalog:",
+    "vitest": "catalog:"
   },
   "devDependencies": {
     "@napi-rs/cli": "catalog:",
@@ -353,6 +388,7 @@
     "@types/cross-spawn": "catalog:",
     "@types/semver": "catalog:",
     "@types/validate-npm-package-name": "catalog:",
+    "@vitest/browser-webdriverio": "catalog:",
     "@voidzero-dev/vite-plus-prompts": "workspace:*",
     "@voidzero-dev/vite-plus-tools": "workspace:*",
     "bingo": "catalog:",
@@ -374,6 +410,14 @@
     "vite": "workspace:*",
     "yaml": "catalog:",
     "zod": "catalog:"
+  },
+  "peerDependencies": {
+    "@vitest/browser-webdriverio": "catalog:"
+  },
+  "peerDependenciesMeta": {
+    "@vitest/browser-webdriverio": {
+      "optional": true
+    }
   },
   "napi": {
     "binaryName": "vite-plus",

@@ -13,43 +13,60 @@ import { cac } from 'cac';
 
 import { resolveViteConfig } from './resolve-vite-config.ts';
 
-/**
- * Rolldown plugin that transforms value imports/exports to type-only in external
- * packages' .d.ts files. Some packages (e.g. postcss, lightningcss) use
- * `import { X }` and `export { X } from` instead of their type-only equivalents,
- * which causes MISSING_EXPORT warnings from the DTS bundler.
- *
- * Since .d.ts files contain only type information, all imports/exports are
- * inherently type-only, so this transformation is always safe.
- */
-const EXTERNAL_DTS_INTERNAL_RE = /node_modules\/(postcss|lightningcss)\/.*\.d\.(ts|mts|cts)$/;
-// Match consumer .d.ts files that import from postcss/lightningcss.
-// In CI (installed from tgz): node_modules/vite-plus-core/dist/...
-// In local development (symlinked workspace): packages/core/dist/...
-const EXTERNAL_DTS_CONSUMER_RE =
-  /(?:vite-plus-core|packages\/core)\/.*lightningcssOptions\.d\.ts$|(?:vite-plus-core|packages\/core)\/dist\/.*\.d\.ts$/;
-const EXTERNAL_DTS_FIX_RE = new RegExp(
-  `${EXTERNAL_DTS_INTERNAL_RE.source}|${EXTERNAL_DTS_CONSUMER_RE.source}`,
-);
+// Matches a `.d.ts` / `.d.mts` / `.d.cts` importer.
+const RE_DTS = /\.d\.[cm]?ts$/;
+// Bare specifier for postcss / lightningcss / vitest / `@vitest/*` /
+// vite-plus (root or any subpath).
+const EXTERNAL_DTS_PKG_RE = /^(?:postcss|lightningcss|vitest|@vitest\/[^/]+|vite-plus)(?:\/|$)/;
 
+/**
+ * Rolldown plugin that keeps `postcss` / `lightningcss` / `vitest` / `@vitest/*`
+ * / `vite-plus` external to the DTS bundle.
+ *
+ * The DTS bundler resolves these packages and tries to inline their `.d.ts`
+ * files. postcss ships its public types as a CJS `export = postcss` over a
+ * `declare namespace postcss { export { AtRule, ... } }` (see
+ * postcss/lib/postcss.d.ts), and its ESM types entry (postcss.d.mts) re-exports
+ * those names with `export { AtRule, ... } from './postcss.js'`. The bundler
+ * cannot map named imports onto an `export =`'d namespace's members, so every
+ * consumer `import type { AtRule } from 'postcss'` becomes a MISSING_EXPORT
+ * error.
+ *
+ * vitest fails for a different reason: `vitest@4.1.7`'s `dist/index.d.ts`
+ * re-exports `ExpectPollOptions` from `@vitest/expect`, but `@vitest/expect`
+ * does not actually export that name. `tsc` tolerates the dangling re-export
+ * because it only resolves re-exports lazily on use, but the DTS bundler
+ * eagerly resolves every re-export while inlining and so hits the missing
+ * export. `@vitest/browser/matchers.d.ts` then re-imports the same name from
+ * `vitest`, propagating the failure. Established vite-plus projects reach
+ * these files through the `vite-plus/test*` shims, which re-export `vitest` /
+ * `@vitest/*` from declaration files.
+ *
+ * `vite-plus` itself (root and `vite-plus/test*` shims) is kept external so the
+ * PUBLIC specifier survives in the emitted declarations. If the shim were
+ * inlined instead, its private `vitest` / `@vitest/*` re-exports would be the
+ * ones externalized above and the published `.d.ts` would carry bare `vitest`
+ * specifiers — unresolvable for consumers under strict pnpm / Yarn PnP layouts,
+ * where `vitest` is a dependency of `vite-plus` and not of the packed package.
+ *
+ * Marking these packages external for `.d.ts` importers leaves the import
+ * untouched in the emitted declarations (`import type { AtRule } from 'postcss'`),
+ * which is how third-party packages should be treated in a DTS bundle anyway.
+ * They are only externalized when imported *from a declaration file*, so runtime
+ * bundling is unaffected.
+ */
 function externalDtsTypeOnlyPlugin() {
   return {
     name: 'vite-plus:external-dts-type-only',
-    transform: {
-      filter: { id: { include: [EXTERNAL_DTS_FIX_RE] } },
-      handler(code: string, rawId: string) {
+    resolveId: {
+      order: 'pre' as const,
+      handler(id: string, importer: string | undefined) {
         // Normalize Windows backslash paths to forward slashes for regex matching
-        const id = rawId.replaceAll('\\', '/');
-        if (EXTERNAL_DTS_INTERNAL_RE.test(id)) {
-          // postcss/lightningcss internal files: transform imports only
-          // (exports may include value re-exports like `export const Features`)
-          return code.replace(/^(import\s+)(?!type\s)/gm, 'import type ');
+        const normalizedImporter = importer?.replaceAll('\\', '/');
+        if (normalizedImporter && RE_DTS.test(normalizedImporter) && EXTERNAL_DTS_PKG_RE.test(id)) {
+          return { id, external: true };
         }
-        // Consumer files: only transform imports from postcss/lightningcss
-        return code.replace(
-          /^(import\s+)(?!type\s)(.+from\s+['"](?:postcss|lightningcss)['"])/gm,
-          'import type $2',
-        );
+        return undefined;
       },
     },
   };
@@ -143,8 +160,7 @@ cli
         : [viteConfig.pack ?? {}];
       for (const packConfig of packConfigs) {
         const merged = { ...packConfig, ...flags };
-        // Inject plugin to fix MISSING_EXPORT warnings from external .d.ts files
-        // (postcss, lightningcss use `import`/`export` instead of `import type`/`export type`)
+        // Keep postcss/lightningcss external to the dts bundle (see plugin doc)
         if (merged.dts) {
           const existingPlugins = Array.isArray(merged.plugins) ? merged.plugins : [];
           merged.plugins = [...existingPlugins, externalDtsTypeOnlyPlugin()];
