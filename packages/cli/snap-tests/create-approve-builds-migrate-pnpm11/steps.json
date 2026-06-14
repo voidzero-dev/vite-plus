@@ -1,7 +1,8 @@
 {
   "env": {
     "VP_SKIP_INSTALL": "",
-    "CI": ""
+    "CI": "",
+    "ADBLOCK": "1"
   },
   "commands": [
     "node $SNAP_CASES_DIR/.shared/mock-npm-registry.mjs -- vp create @your-org:with-build-dep --no-interactive --approve-builds --directory approved-app # template ships Prettier, so create installs+migrates before the main install; the gated build (core-js) must still be surfaced and approved",

@@ -1,7 +1,8 @@
 {
   "env": {
     "VP_SKIP_INSTALL": "",
-    "CI": ""
+    "CI": "",
+    "ADBLOCK": "1"
   },
   "commands": [
     "node $SNAP_CASES_DIR/.shared/mock-npm-registry.mjs -- vp create @your-org:with-build-dep --no-interactive --approve-builds --package-manager bun --directory approved-app # --approve-builds runs `bun pm trust` for the gated build script (core-js)",
