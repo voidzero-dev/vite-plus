@@ -3,7 +3,7 @@
 Prettier configuration detected. Auto-migrating to Oxfmt...
 ◇ Migrated . to Vite+
 • Node <semver>  pnpm <semver>
-• 2 config updates applied
+• 1 config update applied
 • Prettier migrated to Oxfmt
 • Package manager settings configured
 
@@ -11,8 +11,7 @@ Prettier configuration detected. Auto-migrating to Oxfmt...
 {
   "name": "migration-prettier-rerun",
   "scripts": {
-    "format": "vp fmt .",
-    "prepare": "vp config"
+    "format": "vp fmt ."
   },
   "devDependencies": {
     "vite-plus": "latest"
@@ -31,9 +30,6 @@ Prettier configuration detected. Auto-migrating to Oxfmt...
 import { defineConfig } from "vite-plus";
 
 export default defineConfig({
-  staged: {
-    "*": "vp check --fix"
-  },
   fmt: {
     semi: true,
     singleQuote: true,

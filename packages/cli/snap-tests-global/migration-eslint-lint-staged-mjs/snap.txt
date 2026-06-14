@@ -1,6 +1,4 @@
-> vp migrate --no-interactive # migration should warn about non-JSON lint-staged config
-
-⚠ Unsupported lint-staged config format — skipping git hooks setup. Please configure git hooks manually.
+> vp migrate --no-interactive # migration should preserve non-JSON lint-staged config when hooks are not requested
 ◇ Migrated . to Vite+
 • Node <semver>  pnpm <semver>
 • 3 config updates applied

@@ -3,5 +3,4 @@
 Legacy ESLint configuration detected (.eslintrc). Automatic migration to Oxlint requires ESLint v9+ with flat config format (eslint.config.*). Please upgrade to ESLint v9 first: https://eslint.org/docs/latest/use/migrate-to-9.0.0
 ◇ Migrated . to Vite+
 • Node <semver>  pnpm <semver>
-• 2 config updates applied
 • Package manager settings configured
