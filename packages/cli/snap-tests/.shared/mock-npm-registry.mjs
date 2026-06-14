@@ -10,6 +10,7 @@
 import { spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
+import { get as httpsGet } from 'node:https';
 import path from 'node:path';
 
 const manifest = JSON.parse(readFileSync('./mock-manifest.json', 'utf-8'));
@@ -19,21 +20,35 @@ function rewriteRegistry(value, registry) {
   return JSON.parse(JSON.stringify(value).replaceAll('{REGISTRY}', registry));
 }
 
-async function proxyToUpstream(req, res) {
-  try {
-    const upstream = await fetch(`${UPSTREAM_REGISTRY}${req.url ?? '/'}`, {
-      method: req.method,
-      headers: { accept: req.headers.accept ?? 'application/json' },
+// Stream the upstream response byte-for-byte. Unlike `fetch`, `https` does not
+// auto-decompress, so the tarball reaches the client exactly as the registry
+// served it (content-encoding and all). bun verifies tarball integrity and
+// rejects any re-encoded body, so faithful streaming is what lets bun installs
+// work through the proxy (pnpm fetches tarballs from the upstream URL directly,
+// so it was never affected).
+function proxyToUpstream(req, res) {
+  const fetchUrl = (url, redirectsLeft) => {
+    httpsGet(url, { headers: { accept: req.headers.accept ?? 'application/json' } }, (upstream) => {
+      const status = upstream.statusCode ?? 502;
+      if (status >= 300 && status < 400 && upstream.headers.location && redirectsLeft > 0) {
+        upstream.resume();
+        fetchUrl(new URL(upstream.headers.location, url).toString(), redirectsLeft - 1);
+        return;
+      }
+      const headers = {};
+      for (const name of ['content-type', 'content-encoding', 'content-length']) {
+        if (upstream.headers[name] !== undefined) {
+          headers[name] = upstream.headers[name];
+        }
+      }
+      res.writeHead(status, headers);
+      upstream.pipe(res);
+    }).on('error', (error) => {
+      res.writeHead(502);
+      res.end(`proxy error: ${error.message}`);
     });
-    const body = Buffer.from(await upstream.arrayBuffer());
-    res.writeHead(upstream.status, {
-      'content-type': upstream.headers.get('content-type') ?? 'application/octet-stream',
-    });
-    res.end(body);
-  } catch (error) {
-    res.writeHead(502);
-    res.end(`proxy error: ${error.message}`);
-  }
+  };
+  fetchUrl(`${UPSTREAM_REGISTRY}${req.url ?? '/'}`, 5);
 }
 
 const server = createServer(async (req, res) => {
