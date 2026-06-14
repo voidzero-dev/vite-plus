@@ -1298,10 +1298,17 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       }
     }
     updateCreateProgress('Installing dependencies');
+    // Detect gated builds here too: without this, pnpm>=11 adds `--ignore-scripts`,
+    // which pins the ignore-scripts state so the later main install reports
+    // "already up to date" and never surfaces the gated build. The main install
+    // re-detects and approves, so we only need this pre-install to skip
+    // `--ignore-scripts` (detectIgnoredBuilds treats the gated-build error as
+    // installed, so migration still proceeds).
     installSummary = await runViteInstall(installCwd, options.interactive, installArgs, {
       silent: compactOutput,
       packageManager: workspaceInfo.packageManager,
       packageManagerVersion: workspaceInfo.downloadPackageManager.version,
+      detectIgnoredBuilds: true,
     });
     if (installSummary.status !== 'installed') {
       return;
