@@ -1220,6 +1220,7 @@ describe('ensureVitePlusBootstrap', () => {
     });
 
     expect(result.changed).toBe(true);
+    expect(result.packageManagerConfig).toBe(true);
     expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.yarn)).toBe(false);
     const pkg = readJson(path.join(tmpDir, 'package.json')) as {
       devDependencies: Record<string, string>;
@@ -1228,6 +1229,14 @@ describe('ensureVitePlusBootstrap', () => {
     expect(pkg.devDependencies.vite).toBe('^7.0.0');
     expect(pkg.devDependencies['vite-plus']).toBe('latest');
     expect(pkg.resolutions.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+    const yarnrc = readYamlObject(path.join(tmpDir, '.yarnrc.yml')) as {
+      nodeLinker: string;
+      catalog: Record<string, string>;
+    };
+    expect(yarnrc.nodeLinker).toBe('node-modules');
+    expect(yarnrc.catalog.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+    expect(yarnrc.catalog.vitest).toBe('npm:@voidzero-dev/vite-plus-test@latest');
+    expect(yarnrc.catalog['vite-plus']).toBe('latest');
   });
 
   it('completes missing pnpm workspace peer dependency rules', () => {

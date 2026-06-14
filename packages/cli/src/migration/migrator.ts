@@ -2167,6 +2167,23 @@ function readPnpmWorkspacePeerDependencyRules(
   return doc?.peerDependencyRules;
 }
 
+function yarnrcSatisfiesVitePlus(projectPath: string): boolean {
+  const yarnrcYmlPath = path.join(projectPath, '.yarnrc.yml');
+  if (!fs.existsSync(yarnrcYmlPath)) {
+    return false;
+  }
+  const doc = readYamlFile(yarnrcYmlPath) as {
+    nodeLinker?: string;
+    catalog?: Record<string, string>;
+  } | null;
+  return (
+    !!doc &&
+    Object.hasOwn(doc, 'nodeLinker') &&
+    overridesSatisfyVitePlus(doc.catalog) &&
+    (VITE_PLUS_VERSION.startsWith('file:') || doc.catalog?.[VITE_PLUS_NAME] === VITE_PLUS_VERSION)
+  );
+}
+
 function ensurePnpmWorkspacePackages(projectPath: string, workspacePatterns: string[]): boolean {
   if (workspacePatterns.length === 0) {
     return false;
@@ -2225,7 +2242,7 @@ export function detectVitePlusBootstrapPending(
   }
 
   if (packageManager === PackageManager.yarn) {
-    return !overridesSatisfyVitePlus(pkg.resolutions);
+    return !overridesSatisfyVitePlus(pkg.resolutions) || !yarnrcSatisfiesVitePlus(projectPath);
   }
   if (packageManager === PackageManager.npm) {
     return !overridesSatisfyVitePlus(pkg.overrides) || npmVitePlusManagedDependenciesPending(pkg);
@@ -2414,6 +2431,14 @@ export function ensureVitePlusBootstrap(
         : undefined;
       result.packageManagerConfig = before !== after;
     }
+  } else if (workspaceInfo.packageManager === PackageManager.yarn) {
+    const yarnrcYmlPath = path.join(projectPath, '.yarnrc.yml');
+    const before = fs.existsSync(yarnrcYmlPath)
+      ? fs.readFileSync(yarnrcYmlPath, 'utf-8')
+      : undefined;
+    rewriteYarnrcYml(projectPath);
+    const after = fs.readFileSync(yarnrcYmlPath, 'utf-8');
+    result.packageManagerConfig = before !== after;
   } else if (workspaceInfo.packageManager === PackageManager.bun) {
     const before = fs.readFileSync(packageJsonPath, 'utf-8');
     rewriteBunCatalog(projectPath);
