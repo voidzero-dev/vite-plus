@@ -1,9 +1,10 @@
-> vp migrate --no-interactive --no-hooks --no-agent --no-editor # should finish core rewrites even when vite-plus is already installed
+> vp migrate --no-interactive --no-hooks --no-agent --no-editor # should finish core rewrites even when vite-plus is already installed in a pnpm project
 ◇ Migrated . to Vite+
-• Node <semver>  npm <semver>
+• Node <semver>  pnpm <semver>
 • 1 config update applied, 1 file had imports rewritten
+• Package manager settings configured
 
-> cat package.json # scripts should be rewritten without adding overrides
+> cat package.json # scripts should be rewritten without adding package.json overrides
 {
   "name": "manual-vp-migrate",
   "private": true,
@@ -24,23 +25,35 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
-    "@voidzero-dev/vite-plus-core": "^0.1.24",
     "globals": "^17.6.0",
     "typescript": "~6.0.2",
+    "vite": "^8.0.12",
     "vite-plus": "^0.1.24"
-  },
-  "overrides": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
   },
   "devEngines": {
     "packageManager": {
-      "name": "npm",
+      "name": "pnpm",
       "version": "<semver>",
       "onFail": "download"
     }
   }
 }
+
+> cat pnpm-workspace.yaml # pnpm overrides and peerDependencyRules should be configured
+catalog:
+  vite: npm:@voidzero-dev/vite-plus-core@latest
+  vitest: npm:@voidzero-dev/vite-plus-test@latest
+  vite-plus: latest
+overrides:
+  vite: 'catalog:'
+  vitest: 'catalog:'
+peerDependencyRules:
+  allowAny:
+    - vite
+    - vitest
+  allowedVersions:
+    vite: '*'
+    vitest: '*'
 
 > cat vite.config.ts # vite imports should be rewritten
 import { defineConfig } from 'vite-plus'

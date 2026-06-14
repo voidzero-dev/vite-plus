@@ -18,20 +18,9 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
-    "@voidzero-dev/vite-plus-core": "^0.1.24",
     "globals": "^17.6.0",
     "typescript": "~6.0.2",
+    "vite": "^8.0.12",
     "vite-plus": "^0.1.24"
-  },
-  "overrides": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
-  },
-  "devEngines": {
-    "packageManager": {
-      "name": "npm",
-      "version": "11.16.0",
-      "onFail": "download"
-    }
   }
 }
