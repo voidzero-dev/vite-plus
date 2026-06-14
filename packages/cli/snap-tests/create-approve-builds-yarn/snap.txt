@@ -1,4 +1,4 @@
-> node $SNAP_CASES_DIR/.shared/mock-npm-registry.mjs -- vp create @your-org:with-build-dep --no-interactive --approve-builds --package-manager yarn --directory approved-app # --approve-builds enables the gated build (core-js) via dependenciesMeta.built and reinstalls
+> node $SNAP_CASES_DIR/.shared/mock-npm-registry.mjs -- vp create @your-org:with-build-dep --no-interactive --approve-builds --package-manager yarn --directory approved-app # yarn (Berry) blocks build scripts by default, so --approve-builds enables the gated build (core-js) via dependenciesMeta.built and reinstalls
 ◇ Scaffolded approved-app
 • Node <semver>  yarn <semver>
 ✓ Dependencies installed in <variable>ms
