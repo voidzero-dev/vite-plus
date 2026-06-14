@@ -2248,7 +2248,11 @@ export function detectVitePlusBootstrapPending(
     return !overridesSatisfyVitePlus(pkg.resolutions) || !yarnrcSatisfiesVitePlus(projectPath);
   }
   if (packageManager === PackageManager.npm) {
-    return !overridesSatisfyVitePlus(pkg.overrides) || npmVitePlusManagedDependenciesPending(pkg);
+    return (
+      vitePlusDependencyNeedsConcreteVersion(pkg) ||
+      !overridesSatisfyVitePlus(pkg.overrides) ||
+      npmVitePlusManagedDependenciesPending(pkg)
+    );
   }
   if (packageManager === PackageManager.bun) {
     return !overridesSatisfyVitePlus(pkg.overrides, readBunCatalogDependencyResolver(pkg));
