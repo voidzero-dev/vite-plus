@@ -30,6 +30,7 @@ import {
   writeAgentInstructions,
   writeCopilotSetupWorkflow,
 } from '../utils/agent.ts';
+import { approveBuilds, resolveApproveBuildTargets } from '../utils/approve-builds.ts';
 import { detectExistingEditors, selectEditors, writeEditorConfigs } from '../utils/editor.ts';
 import { createInitialCommit, initGitRepository } from '../utils/git.ts';
 import { renderCliDoc } from '../utils/help.ts';
@@ -134,6 +135,10 @@ const helpMessage = renderCliDoc({
           label: '--package-manager NAME',
           description: 'Use specified package manager (pnpm, npm, yarn, bun)',
         },
+        {
+          label: '--approve-builds',
+          description: 'Approve and run gated dependency build scripts without prompting (pnpm)',
+        },
         { label: '--verbose', description: 'Show detailed scaffolding output' },
         { label: '--no-interactive', description: 'Run in non-interactive mode' },
         { label: '--list', description: 'List all available templates' },
@@ -234,6 +239,12 @@ export interface Options {
   git?: boolean;
   hooks?: boolean;
   packageManager?: string;
+  /**
+   * Approve and run gated dependency build scripts (e.g. native builds like
+   * better-sqlite3) without prompting. Useful in non-interactive runs that need
+   * a ready-to-use project.
+   */
+  approveBuilds?: boolean;
 }
 
 type ParsedAgentOption = string | false | Array<string | false>;
@@ -270,9 +281,10 @@ function parseArgs() {
     git?: boolean;
     hooks?: boolean;
     'package-manager'?: string;
+    'approve-builds'?: boolean;
   }>(viteArgs, {
     alias: { h: 'help' },
-    boolean: ['help', 'list', 'all', 'interactive', 'hooks', 'verbose', 'git'],
+    boolean: ['help', 'list', 'all', 'interactive', 'hooks', 'verbose', 'git', 'approve-builds'],
     string: ['directory', 'agent', 'editor', 'package-manager'],
     default: { interactive: defaultInteractive() },
   });
@@ -292,6 +304,7 @@ function parseArgs() {
       git: parsed.git,
       hooks: parsed.hooks,
       packageManager: parsed['package-manager'],
+      approveBuilds: parsed['approve-builds'] || false,
     } as Options,
     templateArgs,
   };
@@ -921,6 +934,36 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       createProgressStarted = true;
     }
   };
+
+  // After a successful install, surface pnpm's gated build scripts (native
+  // builds like better-sqlite3 the template added as a direct dependency) and
+  // let the user approve them. `projectPath` is the created package whose direct
+  // deps decide what is worth prompting for; `installCwd` is where the package
+  // manager (and `node_modules`) lives.
+  const handleIgnoredBuilds = async (
+    projectPath: string,
+    installCwd: string,
+    summary: CommandRunSummary | undefined,
+  ) => {
+    const targets = resolveApproveBuildTargets(
+      projectPath,
+      summary?.status === 'installed' ? summary.pendingBuilds : undefined,
+      workspaceInfo.packageManager,
+    );
+    if (targets.length === 0) {
+      return;
+    }
+    pauseCreateProgress();
+    await approveBuilds({
+      cwd: installCwd,
+      targets,
+      interactive: options.interactive,
+      autoApprove: options.approveBuilds === true,
+      silent: compactOutput,
+    });
+    resumeCreateProgress();
+  };
+
   updateCreateProgress('Scaffolding project');
 
   // Discover template
@@ -1060,7 +1103,9 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       silent: compactOutput,
       packageManager: workspaceInfo.packageManager,
       packageManagerVersion: workspaceInfo.downloadPackageManager.version,
+      detectIgnoredBuilds: true,
     });
+    await handleIgnoredBuilds(fullPath, fullPath, installSummary);
     updateCreateProgress('Formatting code');
     await runViteFmt(fullPath, options.interactive, undefined, { silent: compactOutput });
     if (shouldSetupGit) {
@@ -1333,7 +1378,9 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       silent: compactOutput,
       packageManager: workspaceInfo.packageManager,
       packageManagerVersion: workspaceInfo.downloadPackageManager.version,
+      detectIgnoredBuilds: true,
     });
+    await handleIgnoredBuilds(fullPath, workspaceInfo.rootDir, installSummary);
     updateCreateProgress('Formatting code');
     // Also format the root config when generator registration rewrote it (the
     // merge writes a JSON-style block), so no separate format step is needed.
@@ -1368,7 +1415,9 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       silent: compactOutput,
       packageManager: workspaceInfo.packageManager,
       packageManagerVersion: workspaceInfo.downloadPackageManager.version,
+      detectIgnoredBuilds: true,
     });
+    await handleIgnoredBuilds(fullPath, fullPath, installSummary);
     updateCreateProgress('Formatting code');
     await runViteFmt(fullPath, options.interactive, undefined, { silent: compactOutput });
     if (shouldSetupGit) {
