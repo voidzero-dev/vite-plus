@@ -141,8 +141,7 @@ const helpMessage = renderCliDoc({
         },
         {
           label: '--approve-builds',
-          description:
-            'Approve and run gated dependency build scripts without prompting (pnpm, bun, yarn)',
+          description: 'Approve and run gated dependency build scripts without prompting',
         },
         { label: '--verbose', description: 'Show detailed scaffolding output' },
         { label: '--no-interactive', description: 'Run in non-interactive mode' },
