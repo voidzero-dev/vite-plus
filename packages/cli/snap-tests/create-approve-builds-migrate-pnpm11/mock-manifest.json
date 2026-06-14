@@ -5,8 +5,19 @@
     "versions": {
       "1.0.0": {
         "version": "1.0.0",
-        "dist": { "tarball": "{REGISTRY}/@your-org/create/-/create-1.0.0.tgz", "integrity": "sha512-kS9rnZeli5CMs19BqGc+rxj1Tpb+an06y4gzorf7DOWNOPVTSLMiSl4V7LlFN9c1GApQ9ysu9ZHqOG3x1D8LfA==" },
-        "createConfig": { "templates": [ { "name": "with-build-dep", "description": "Template that ships prettier and a gated build dep", "template": "./templates/demo" } ] }
+        "dist": {
+          "tarball": "{REGISTRY}/@your-org/create/-/create-1.0.0.tgz",
+          "integrity": "sha512-kS9rnZeli5CMs19BqGc+rxj1Tpb+an06y4gzorf7DOWNOPVTSLMiSl4V7LlFN9c1GApQ9ysu9ZHqOG3x1D8LfA=="
+        },
+        "createConfig": {
+          "templates": [
+            {
+              "name": "with-build-dep",
+              "description": "Template that ships prettier and a gated build dep",
+              "template": "./templates/demo"
+            }
+          ]
+        }
       }
     }
   }
