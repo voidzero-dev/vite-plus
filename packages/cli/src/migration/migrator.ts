@@ -35,7 +35,8 @@ import {
 import { editJsonFile, isJsonFile, readJsonFile } from '../utils/json.ts';
 import { detectPackageMetadata } from '../utils/package.ts';
 import { displayRelative, rulesDir } from '../utils/path.ts';
-import { cancelAndExit, getSpinner } from '../utils/prompts.ts';
+import { cancelAndExit } from '../utils/prompts.ts';
+import { getSpinner } from '../utils/spinner.ts';
 import {
   findTsconfigFiles,
   hasBaseUrlInTsconfig,

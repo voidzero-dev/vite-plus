@@ -5,6 +5,7 @@ import { downloadPackageManager as downloadPackageManagerBinding } from '../../b
 import { PackageManager } from '../types/index.ts';
 import { isPnpmIgnoredBuildsError, parseInstallGatedBuilds } from './approve-builds.ts';
 import { runCommandSilently } from './command.ts';
+import { getSilentSpinner, getSpinner } from './spinner.ts';
 import { accent } from './terminal.ts';
 
 export interface CommandRunSummary {
@@ -288,35 +289,4 @@ export async function resolveGitInit(
 export function defaultInteractive() {
   // If CI environment, use non-interactive mode by default
   return !process.env.CI && process.stdin.isTTY;
-}
-
-export function getSpinner(interactive?: boolean) {
-  if (interactive) {
-    return prompts.spinner();
-  }
-  return {
-    start: (msg?: string) => {
-      if (msg) {
-        prompts.log.info(msg);
-      }
-    },
-    stop: (msg?: string) => {
-      if (msg) {
-        prompts.log.info(msg);
-      }
-    },
-    message: (msg?: string) => {
-      if (msg) {
-        prompts.log.info(msg);
-      }
-    },
-  };
-}
-
-function getSilentSpinner() {
-  return {
-    start: () => {},
-    stop: () => {},
-    message: () => {},
-  };
 }

@@ -6,6 +6,7 @@ import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import { PackageManager } from '../types/index.ts';
 import { runCommandSilently } from './command.ts';
 import { readJsonFile, writeJsonFile } from './json.ts';
+import { getSilentSpinner, getSpinner } from './spinner.ts';
 import { accent } from './terminal.ts';
 
 /**
@@ -292,32 +293,6 @@ export async function detectGatedBuilds(
   return [];
 }
 
-function makeSpinner(interactive: boolean, silent: boolean) {
-  if (silent) {
-    return { start: () => {}, stop: () => {}, message: () => {} };
-  }
-  if (interactive) {
-    return prompts.spinner();
-  }
-  return {
-    start: (msg?: string) => {
-      if (msg) {
-        prompts.log.info(msg);
-      }
-    },
-    stop: (msg?: string) => {
-      if (msg) {
-        prompts.log.info(msg);
-      }
-    },
-    message: (msg?: string) => {
-      if (msg) {
-        prompts.log.info(msg);
-      }
-    },
-  };
-}
-
 function lastLines(text: string, count: number): string {
   const lines = text.split('\n');
   return lines.slice(-count).join('\n');
@@ -355,7 +330,7 @@ async function runBuildAndReport(
   interactive: boolean,
   silent: boolean,
 ): Promise<void> {
-  const spinner = makeSpinner(interactive, silent);
+  const spinner = silent ? getSilentSpinner() : getSpinner(interactive);
   spinner.start(`Building ${packages.join(', ')}...`);
   const { exitCode, stdout, stderr } = await runCommandSilently({
     command: process.env.VP_CLI_BIN ?? 'vp',
