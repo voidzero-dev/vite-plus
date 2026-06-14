@@ -14,6 +14,7 @@ import {
   parseIgnoredBuilds,
   parseInstallGatedBuilds,
   parseYarnDisabledBuilds,
+  pnpmSupportsPositionalApprove,
   resolveApproveBuildTargets,
   stripPackageVersion,
 } from '../approve-builds.ts';
@@ -159,6 +160,12 @@ describe('parseYarnDisabledBuilds', () => {
     expect(parseYarnDisabledBuilds(output)).toEqual(['core-js']);
   });
 
+  it('ignores yarn virtual-peer hashes trailing the descriptor', () => {
+    const output =
+      'svelte-preprocess@npm:6.0.3 [f4825] lists build scripts, but all build scripts have been disabled.';
+    expect(parseYarnDisabledBuilds(output)).toEqual(['svelte-preprocess']);
+  });
+
   it('returns [] when nothing is disabled', () => {
     expect(parseYarnDisabledBuilds('➤ YN0007: │ core-js@npm:3.39.0 must be built')).toEqual([]);
     expect(parseYarnDisabledBuilds('')).toEqual([]);
@@ -206,9 +213,33 @@ describe('collectDirectDependencyNames', () => {
     expect(names.has('react')).toBe(false);
   });
 
+  it('includes the real package name behind an npm: alias', () => {
+    const names = collectDirectDependencyNames({
+      dependencies: { sqlite: 'npm:better-sqlite3@^11.0.0', scoped: 'npm:@scope/native@1.0.0' },
+    });
+    // Both the alias key and the aliased real name (what the PM reports gated).
+    expect(names.has('sqlite')).toBe(true);
+    expect(names.has('better-sqlite3')).toBe(true);
+    expect(names.has('@scope/native')).toBe(true);
+  });
+
   it('is empty for a package.json without dependency fields', () => {
     expect(collectDirectDependencyNames({ name: 'x', version: '1.0.0' }).size).toBe(0);
     expect(collectDirectDependencyNames(undefined).size).toBe(0);
+  });
+});
+
+describe('pnpmSupportsPositionalApprove', () => {
+  it('is true for pnpm 11+ and unknown versions', () => {
+    expect(pnpmSupportsPositionalApprove('11.0.0')).toBe(true);
+    expect(pnpmSupportsPositionalApprove('11.6.0')).toBe(true);
+    expect(pnpmSupportsPositionalApprove('12.1.0')).toBe(true);
+    expect(pnpmSupportsPositionalApprove(undefined)).toBe(true);
+  });
+
+  it('is false for pnpm 10 (only `--all`, no positional approve)', () => {
+    expect(pnpmSupportsPositionalApprove('10.33.2')).toBe(false);
+    expect(pnpmSupportsPositionalApprove('10.0.0')).toBe(false);
   });
 });
 

@@ -969,6 +969,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       cwd: installCwd,
       projectDir: projectPath,
       packageManager: workspaceInfo.packageManager,
+      packageManagerVersion: workspaceInfo.downloadPackageManager.version,
       targets,
       interactive: options.interactive,
       autoApprove: options.approveBuilds === true,

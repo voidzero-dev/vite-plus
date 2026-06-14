@@ -151,8 +151,15 @@ export function parseYarnDisabledBuilds(output: string): string[] {
       return null;
     }
     // The descriptor is the last whitespace-delimited token before the marker
-    // (yarn descriptors never contain spaces), e.g. `core-js@npm:3.39.0`.
-    const descriptor = line.slice(0, markerIndex).trim().split(/\s+/u).pop() ?? '';
+    // (yarn descriptors never contain spaces), e.g. `core-js@npm:3.39.0`. Skip
+    // yarn's optional virtual-peer hash, which trails the descriptor:
+    // `svelte-preprocess@npm:6.0.3 [f4825] lists build scripts...`.
+    const tokens = line
+      .slice(0, markerIndex)
+      .trim()
+      .split(/\s+/u)
+      .filter((token) => token && !/^\[[0-9a-f]+\]$/u.test(token));
+    const descriptor = tokens.pop() ?? '';
     return yarnDescriptorName(descriptor);
   });
 }
@@ -201,8 +208,17 @@ export function collectDirectDependencyNames(
   for (const field of ['dependencies', 'devDependencies', 'optionalDependencies'] as const) {
     const deps = pkg[field];
     if (deps && typeof deps === 'object') {
-      for (const name of Object.keys(deps)) {
+      for (const [name, spec] of Object.entries(deps as Record<string, unknown>)) {
         names.add(name);
+        // An `npm:` alias installs under the aliased package's real name, which
+        // is what the package manager reports as the gated build (e.g.
+        // `"sqlite": "npm:better-sqlite3@1.0.0"` is reported as `better-sqlite3`).
+        if (typeof spec === 'string' && spec.startsWith('npm:')) {
+          const aliased = stripPackageVersion(spec.slice('npm:'.length));
+          if (aliased) {
+            names.add(aliased);
+          }
+        }
       }
     }
   }
@@ -211,6 +227,20 @@ export function collectDirectDependencyNames(
 
 export function filterToDirectDependencies(ignored: string[], direct: Set<string>): string[] {
   return ignored.filter((name) => direct.has(name));
+}
+
+/**
+ * pnpm gained positional `approve-builds <pkg>` in pnpm 11; pnpm 10 only accepts
+ * `--all` (and otherwise opens an interactive picker), so a non-interactive
+ * positional approve there silently does nothing. When the version is unknown,
+ * assume a modern pnpm (vp provisions 11+).
+ */
+export function pnpmSupportsPositionalApprove(version: string | undefined): boolean {
+  if (!version) {
+    return true;
+  }
+  const major = Number.parseInt(version, 10);
+  return Number.isNaN(major) || major >= 11;
 }
 
 /** Package managers that gate build scripts and expose an approval workflow. */
@@ -322,6 +352,7 @@ async function runBuildAndReport(
   packages: string[],
   interactive: boolean,
   silent: boolean,
+  extraEnv?: Record<string, string>,
 ): Promise<void> {
   const spinner = silent ? getSilentSpinner() : getSpinner(interactive);
   spinner.start(`Building ${packages.join(', ')}...`);
@@ -329,7 +360,7 @@ async function runBuildAndReport(
     command: process.env.VP_CLI_BIN ?? 'vp',
     args,
     cwd,
-    envs: process.env,
+    envs: extraEnv ? { ...process.env, ...extraEnv } : process.env,
   });
   if (exitCode === 0) {
     spinner.stop(`Built ${packages.join(', ')}`);
@@ -391,7 +422,12 @@ async function approveYarnBuilds(
     return;
   }
   writeJsonFile(pkgPath, addYarnBuiltDependenciesMeta(pkg, packages));
-  await runBuildAndReport(['install'], installCwd, packages, interactive, silent);
+  // Writing `dependenciesMeta` changes the manifest, so the reinstall has to be
+  // allowed to update the lockfile. Yarn Berry enables immutable installs by
+  // default under CI and would otherwise fail with YN0028.
+  await runBuildAndReport(['install'], installCwd, packages, interactive, silent, {
+    YARN_ENABLE_IMMUTABLE_INSTALLS: 'false',
+  });
 }
 
 export interface ApproveBuildsOptions {
@@ -404,6 +440,8 @@ export interface ApproveBuildsOptions {
    */
   projectDir: string;
   packageManager: PackageManager | undefined;
+  /** Resolved package-manager version, used to gate version-specific behavior. */
+  packageManagerVersion?: string;
   /** Direct-dependency packages with gated build scripts (already filtered). */
   targets: string[];
   interactive: boolean;
@@ -426,6 +464,7 @@ export async function approveBuilds(options: ApproveBuildsOptions): Promise<void
     cwd,
     projectDir,
     packageManager,
+    packageManagerVersion,
     targets,
     interactive,
     autoApprove,
@@ -460,6 +499,14 @@ export async function approveBuilds(options: ApproveBuildsOptions): Promise<void
 
   if (packageManager === PackageManager.yarn) {
     await approveYarnBuilds(projectDir, cwd, selected, interactive, silent);
+  } else if (
+    packageManager === PackageManager.pnpm &&
+    !pnpmSupportsPositionalApprove(packageManagerVersion)
+  ) {
+    // pnpm < 11 can't approve individual packages from the CLI (only `--all`,
+    // which would also approve the transitive builds we deliberately leave
+    // alone), so print guidance instead of reporting a build that didn't run.
+    printApproveBuildsGuidance(selected, packageManager);
   } else {
     await runBuildAndReport(
       ['pm', 'approve-builds', ...selected],
