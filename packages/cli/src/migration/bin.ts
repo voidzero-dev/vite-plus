@@ -1166,12 +1166,12 @@ async function main() {
       return;
     }
 
-    const useFullMigrationDefaults =
-      options.interactive &&
-      (vitePlusBootstrapPending ||
-        coreMigrationResult.scripts ||
-        coreMigrationResult.tsconfigTypes ||
-        coreMigrationResult.imports);
+    const fullMigrationSummary =
+      vitePlusBootstrapPending ||
+      coreMigrationResult.scripts ||
+      coreMigrationResult.tsconfigTypes ||
+      coreMigrationResult.imports;
+    const useFullMigrationDefaults = options.interactive && fullMigrationSummary;
     const setupOptions = getExistingVitePlusSetupOptions(
       options,
       legacyGitHooksMigrationCandidate,
@@ -1394,7 +1394,7 @@ async function main() {
         packageManagerVersion,
         installDurationMs,
         report,
-        updatedExistingVitePlus: !useFullMigrationDefaults,
+        updatedExistingVitePlus: !fullMigrationSummary,
       });
     } else {
       prompts.outro(`This project is already using Vite+! ${accent('Happy coding!')}`);
