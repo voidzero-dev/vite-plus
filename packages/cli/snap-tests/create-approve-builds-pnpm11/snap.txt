@@ -49,3 +49,25 @@ peerDependencyRules:
   allowedVersions:
     vite: "*"
     vitest: "*"
+
+> cd default-app && vp pm approve-builds core-js # the guidance's `vp pm approve-builds` command approves the gated build
+.../core-js@<semver>/node_modules/core-js postinstall$ node -e "try{require('./postinstall')}catch(e){}"
+.../core-js@<semver>/node_modules/core-js postinstall: Done
+
+> cat default-app/pnpm-workspace.yaml # core-js is now allowed under allowBuilds
+allowBuilds:
+  core-js: true
+catalog:
+  vite: npm:@voidzero-dev/vite-plus-core@latest
+  vitest: npm:@voidzero-dev/vite-plus-test@latest
+  vite-plus: latest
+overrides:
+  vite: "catalog:"
+  vitest: "catalog:"
+peerDependencyRules:
+  allowAny:
+    - vite
+    - vitest
+  allowedVersions:
+    vite: "*"
+    vitest: "*"

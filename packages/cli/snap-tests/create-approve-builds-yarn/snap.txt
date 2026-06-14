@@ -40,7 +40,7 @@
 
 Build scripts were not run for: core-js.
 
-These dependencies may not work until built. Run vp pm approve-builds in the project to approve them, or re-create with --approve-builds.
+These dependencies may not work until built. Enable them in package.json (dependenciesMeta.<pkg>.built: true) and reinstall, or re-create with --approve-builds.
 ◇ Scaffolded default-app
 • Node <semver>  yarn <semver>
 ✓ Dependencies installed in <variable>ms

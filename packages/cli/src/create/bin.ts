@@ -245,9 +245,8 @@ export interface Options {
   hooks?: boolean;
   packageManager?: string;
   /**
-   * Approve and run gated dependency build scripts (e.g. native builds like
-   * better-sqlite3) without prompting. Useful in non-interactive runs that need
-   * a ready-to-use project.
+   * Approve and run gated dependency build scripts without prompting. Useful in
+   * non-interactive runs that need a ready-to-use project.
    */
   approveBuilds?: boolean;
 }

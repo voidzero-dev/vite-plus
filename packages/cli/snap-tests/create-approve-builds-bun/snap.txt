@@ -70,3 +70,41 @@ These dependencies may not work until built. Run vp pm approve-builds in the pro
     }
   }
 }
+
+> cd default-app && vp pm approve-builds core-js # the guidance's `vp pm approve-builds` command approves the gated build
+bun pm trust v<semver> (<hash>)
+
+./node_modules/core-js @<semver>
+ ✓ [postinstall]: node -e "try{require('./postinstall')}catch(e){}"
+
+ 1 script ran across 1 package [<variable>ms]
+
+> cat default-app/package.json # core-js is now recorded under trustedDependencies
+{
+  "name": "default-app",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "prepare": "vp config"
+  },
+  "dependencies": {
+    "core-js": "3.39.0"
+  },
+  "devDependencies": {
+    "vite-plus": "latest"
+  },
+  "overrides": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "bun",
+      "version": "<semver>",
+      "onFail": "download"
+    }
+  },
+  "trustedDependencies": [
+    "core-js"
+  ]
+}

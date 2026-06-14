@@ -313,8 +313,20 @@ function lastLines(text: string, count: number): string {
   return lines.slice(-count).join('\n');
 }
 
-function printApproveBuildsGuidance(targets: string[]): void {
+function printApproveBuildsGuidance(
+  targets: string[],
+  packageManager: PackageManager | undefined,
+): void {
   prompts.log.warn(`Build scripts were not run for: ${accent(targets.join(', '))}.`);
+  // yarn has no `approve-builds` command, so point at its own workflow instead.
+  if (packageManager === PackageManager.yarn) {
+    prompts.log.info(
+      `These dependencies may not work until built. Enable them in package.json ` +
+        `(${accent('dependenciesMeta.<pkg>.built: true')}) and reinstall, or re-create with ` +
+        `${accent('--approve-builds')}.`,
+    );
+    return;
+  }
   prompts.log.info(
     `These dependencies may not work until built. Run ${accent('vp pm approve-builds')} in the ` +
       `project to approve them, or re-create with ${accent('--approve-builds')}.`,
@@ -370,7 +382,7 @@ async function approveYarnBuilds(
   try {
     pkg = readJsonFile(pkgPath);
   } catch {
-    printApproveBuildsGuidance(packages);
+    printApproveBuildsGuidance(packages, PackageManager.yarn);
     return;
   }
   const meta =
@@ -460,17 +472,17 @@ export async function approveBuilds(options: ApproveBuildsOptions): Promise<void
       required: false,
     });
     if (prompts.isCancel(answer)) {
-      printApproveBuildsGuidance(targets);
+      printApproveBuildsGuidance(targets, packageManager);
       return;
     }
     selected = answer;
   } else {
-    printApproveBuildsGuidance(targets);
+    printApproveBuildsGuidance(targets, packageManager);
     return;
   }
 
   if (selected.length === 0) {
-    printApproveBuildsGuidance(targets);
+    printApproveBuildsGuidance(targets, packageManager);
     return;
   }
 

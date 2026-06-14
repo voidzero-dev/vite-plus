@@ -52,7 +52,7 @@ Run `vp create --list` to see the built-in templates and the common shorthand te
 - `--hooks` enables pre-commit hook setup
 - `--no-hooks` skips hook setup
 - `--package-manager <name>` uses a specified package manager (`pnpm`, `npm`, `yarn`, or `bun`)
-- `--approve-builds` approves and runs gated dependency build scripts without prompting (pnpm, bun, yarn)
+- `--approve-builds` approves and runs gated dependency build scripts without prompting
 - `--no-interactive` runs without prompts
 - `--verbose` shows detailed scaffolding output
 - `--list` prints the available built-in and popular templates
