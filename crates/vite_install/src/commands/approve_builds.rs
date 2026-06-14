@@ -203,7 +203,8 @@ impl PackageManager {
                 }
             }
             PackageManagerType::Yarn => {
-                // Yarn 1 (Classic) runs lifecycle scripts by default; Berry (2+) blocks them.
+                // Both Yarn 1 (Classic) and Berry (2+) run build scripts by default; Berry
+                // only gates them when `enableScripts` is disabled.
                 if self.version.starts_with("1.") {
                     output::warn(
                         "yarn (v1) runs lifecycle scripts by default. To restrict them, set \
@@ -212,8 +213,10 @@ impl PackageManager {
                     );
                 } else {
                     output::warn(
-                        "yarn does not run third-party build scripts by default. To allow a \
-                         package, set `dependenciesMeta[\"<package>\"].built: true` in package.json.",
+                        "yarn runs build scripts by default. If you've disabled them \
+                         (`enableScripts: false`), allow a package by setting \
+                         `dependenciesMeta[\"<package>\"].built: true` in package.json and \
+                         reinstalling.",
                     );
                 }
                 warn_dropped_pass_through(options.pass_through_args);
