@@ -3,7 +3,7 @@ import semver from 'semver';
 
 import { downloadPackageManager as downloadPackageManagerBinding } from '../../binding/index.js';
 import { PackageManager } from '../types/index.ts';
-import { isPnpmIgnoredBuildsError, parseIgnoredBuilds } from './approve-builds.ts';
+import { isPnpmIgnoredBuildsError, parseInstallGatedBuilds } from './approve-builds.ts';
 import { runCommandSilently } from './command.ts';
 import { accent } from './terminal.ts';
 
@@ -137,7 +137,7 @@ export async function runViteInstall(
   });
   const combinedOutput = `${stdout.toString()}\n${stderr.toString()}`;
   const pendingBuilds = options?.detectIgnoredBuilds
-    ? parseIgnoredBuilds(combinedOutput)
+    ? parseInstallGatedBuilds(combinedOutput, options?.packageManager)
     : undefined;
   // pnpm >= 11 exits 1 when it gates a build script, but the install itself
   // completed (deps are on disk). Treat that one case as success so callers can

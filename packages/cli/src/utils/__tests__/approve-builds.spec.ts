@@ -11,6 +11,8 @@ import {
   isPnpmIgnoredBuildsError,
   parseBunUntrusted,
   parseIgnoredBuilds,
+  parseInstallGatedBuilds,
+  parseYarnDisabledBuilds,
   resolveApproveBuildTargets,
   stripPackageVersion,
 } from '../approve-builds.ts';
@@ -127,6 +129,56 @@ describe('parseBunUntrusted', () => {
   });
 });
 
+describe('parseYarnDisabledBuilds', () => {
+  it('parses package names from yarn YN0004 "build scripts disabled" lines', () => {
+    const output = [
+      '➤ YN0000: ┌ Link step',
+      '➤ YN0004: │ core-js@npm:3.39.0 lists build scripts, but all build scripts have been disabled.',
+      '➤ YN0004: │ @scope/native@npm:1.0.0 lists build scripts, but all build scripts have been disabled.',
+      '➤ YN0000: └ Completed',
+    ].join('\n');
+    expect(parseYarnDisabledBuilds(output)).toEqual(['core-js', '@scope/native']);
+  });
+
+  it('strips ANSI color codes and dedupes', () => {
+    const output =
+      '[33mcore-js@npm:3.39.0[39m lists build scripts, but all build scripts have been disabled.\n' +
+      'core-js@npm:3.39.0 lists build scripts, but all build scripts have been disabled.';
+    expect(parseYarnDisabledBuilds(output)).toEqual(['core-js']);
+  });
+
+  it('returns [] when nothing is disabled', () => {
+    expect(parseYarnDisabledBuilds('➤ YN0007: │ core-js@npm:3.39.0 must be built')).toEqual([]);
+    expect(parseYarnDisabledBuilds('')).toEqual([]);
+  });
+});
+
+describe('parseInstallGatedBuilds', () => {
+  it('dispatches to the pnpm parser for pnpm', () => {
+    expect(
+      parseInstallGatedBuilds(
+        '[ERR_PNPM_IGNORED_BUILDS] Ignored build scripts: better-sqlite3@11.0.0',
+        PackageManager.pnpm,
+      ),
+    ).toEqual(['better-sqlite3']);
+  });
+
+  it('dispatches to the yarn parser for yarn', () => {
+    expect(
+      parseInstallGatedBuilds(
+        'core-js@npm:3.39.0 lists build scripts, but all build scripts have been disabled.',
+        PackageManager.yarn,
+      ),
+    ).toEqual(['core-js']);
+  });
+
+  it('returns [] for bun/npm (not parsed from install output)', () => {
+    expect(parseInstallGatedBuilds('whatever', PackageManager.bun)).toEqual([]);
+    expect(parseInstallGatedBuilds('whatever', PackageManager.npm)).toEqual([]);
+    expect(parseInstallGatedBuilds('whatever', undefined)).toEqual([]);
+  });
+});
+
 describe('collectDirectDependencyNames', () => {
   it('collects dependencies, devDependencies and optionalDependencies', () => {
     const names = collectDirectDependencyNames({
@@ -190,10 +242,16 @@ describe('resolveApproveBuildTargets', () => {
     ]);
   });
 
+  it('returns direct-dep build targets for yarn', () => {
+    writePkg({ dependencies: { 'core-js': '3.39.0' } });
+    expect(resolveApproveBuildTargets(dir, ['core-js', 'esbuild'], PackageManager.yarn)).toEqual([
+      'core-js',
+    ]);
+  });
+
   it('returns [] for package managers that do not gate builds', () => {
     writePkg({ dependencies: { 'better-sqlite3': '^11.0.0' } });
     expect(resolveApproveBuildTargets(dir, ['better-sqlite3'], PackageManager.npm)).toEqual([]);
-    expect(resolveApproveBuildTargets(dir, ['better-sqlite3'], PackageManager.yarn)).toEqual([]);
   });
 
   it('returns [] when there are no pending builds', () => {

@@ -142,7 +142,7 @@ const helpMessage = renderCliDoc({
         {
           label: '--approve-builds',
           description:
-            'Approve and run gated dependency build scripts without prompting (pnpm, bun)',
+            'Approve and run gated dependency build scripts without prompting (pnpm, bun, yarn)',
         },
         { label: '--verbose', description: 'Show detailed scaffolding output' },
         { label: '--no-interactive', description: 'Run in non-interactive mode' },
@@ -969,6 +969,8 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     pauseCreateProgress();
     await approveBuilds({
       cwd: installCwd,
+      projectDir: projectPath,
+      packageManager: workspaceInfo.packageManager,
       targets,
       interactive: options.interactive,
       autoApprove: options.approveBuilds === true,

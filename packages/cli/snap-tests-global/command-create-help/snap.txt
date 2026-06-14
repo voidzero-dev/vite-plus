@@ -24,7 +24,7 @@ Options:
   --hooks                 Set up pre-commit hooks (default in non-interactive mode)
   --no-hooks              Skip pre-commit hooks setup
   --package-manager NAME  Use specified package manager (pnpm, npm, yarn, bun)
-  --approve-builds        Approve and run gated dependency build scripts without prompting (pnpm, bun)
+  --approve-builds        Approve and run gated dependency build scripts without prompting (pnpm, bun, yarn)
   --verbose               Show detailed scaffolding output
   --no-interactive        Run in non-interactive mode
   --list                  List all available templates
@@ -90,7 +90,7 @@ Options:
   --hooks                 Set up pre-commit hooks (default in non-interactive mode)
   --no-hooks              Skip pre-commit hooks setup
   --package-manager NAME  Use specified package manager (pnpm, npm, yarn, bun)
-  --approve-builds        Approve and run gated dependency build scripts without prompting (pnpm, bun)
+  --approve-builds        Approve and run gated dependency build scripts without prompting (pnpm, bun, yarn)
   --verbose               Show detailed scaffolding output
   --no-interactive        Run in non-interactive mode
   --list                  List all available templates
@@ -156,7 +156,7 @@ Options:
   --hooks                 Set up pre-commit hooks (default in non-interactive mode)
   --no-hooks              Skip pre-commit hooks setup
   --package-manager NAME  Use specified package manager (pnpm, npm, yarn, bun)
-  --approve-builds        Approve and run gated dependency build scripts without prompting (pnpm, bun)
+  --approve-builds        Approve and run gated dependency build scripts without prompting (pnpm, bun, yarn)
   --verbose               Show detailed scaffolding output
   --no-interactive        Run in non-interactive mode
   --list                  List all available templates

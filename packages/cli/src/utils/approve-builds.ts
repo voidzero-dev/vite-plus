@@ -4,8 +4,12 @@ import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
 import { PackageManager } from '../types/index.ts';
 import { runCommandSilently } from './command.ts';
-import { readJsonFile } from './json.ts';
+import { readJsonFile, writeJsonFile } from './json.ts';
 import { accent } from './terminal.ts';
+
+/** Strip ANSI color codes (yarn colorizes its install log). */
+/* oxlint-disable-next-line no-control-regex */
+const ANSI_CODES = /\u001B\[[0-9;]*m/gu;
 
 /**
  * pnpm prints this prefix whenever it gates a dependency's build (install /
@@ -116,6 +120,68 @@ export function parseBunUntrusted(output: string): string[] {
   return names;
 }
 
+const YARN_DISABLED_BUILDS_MARKER = 'lists build scripts, but all build scripts have been disabled';
+
+/**
+ * Yarn (Berry) gates build scripts when `enableScripts` is false: each gated
+ * package is reported on its own line as `<descriptor> lists build scripts, but
+ * all build scripts have been disabled` (e.g. `core-js@npm:3.39.0 lists build
+ * scripts...`). Yarn does not fail the install. Returns deduped package names.
+ */
+export function parseYarnDisabledBuilds(output: string): string[] {
+  if (!output) {
+    return [];
+  }
+  const names: string[] = [];
+  const seen = new Set<string>();
+  for (const rawLine of output.split('\n')) {
+    const line = rawLine.replace(ANSI_CODES, '');
+    const markerIndex = line.indexOf(YARN_DISABLED_BUILDS_MARKER);
+    if (markerIndex === -1) {
+      continue;
+    }
+    // The descriptor is the last whitespace-delimited token before the marker
+    // (yarn descriptors never contain spaces), e.g. `core-js@npm:3.39.0`.
+    const descriptor = line.slice(0, markerIndex).trim().split(/\s+/u).pop() ?? '';
+    const name = yarnDescriptorName(descriptor);
+    if (!name || seen.has(name)) {
+      continue;
+    }
+    seen.add(name);
+    names.push(name);
+  }
+  return names;
+}
+
+/**
+ * Extract the package name from a yarn descriptor by dropping the trailing
+ * `@<range>`: `core-js@npm:3.39.0` -> `core-js`, `@scope/pkg@npm:1.0.0` ->
+ * `@scope/pkg`.
+ */
+function yarnDescriptorName(descriptor: string): string {
+  const match = descriptor.match(/^(@[^@/]+\/[^@]+|[^@]+)@/u);
+  return match ? match[1] : descriptor;
+}
+
+/**
+ * Parse the gated build-script package names from an install log, dispatching on
+ * the package manager: pnpm prints `Ignored build scripts:`, yarn prints
+ * `... build scripts have been disabled`. bun is not parsed here (its blocked
+ * packages are queried separately via `bun pm untrusted`).
+ */
+export function parseInstallGatedBuilds(
+  output: string,
+  packageManager: PackageManager | undefined,
+): string[] {
+  if (packageManager === PackageManager.pnpm) {
+    return parseIgnoredBuilds(output);
+  }
+  if (packageManager === PackageManager.yarn) {
+    return parseYarnDisabledBuilds(output);
+  }
+  return [];
+}
+
 /**
  * Collect the names a project directly depends on (the dependencies it can
  * meaningfully approve). peerDependencies are intentionally excluded: they are
@@ -147,6 +213,7 @@ export function filterToDirectDependencies(ignored: string[], direct: Set<string
 const GATED_BUILD_PACKAGE_MANAGERS: ReadonlySet<PackageManager> = new Set([
   PackageManager.pnpm,
   PackageManager.bun,
+  PackageManager.yarn,
 ]);
 
 /**
@@ -185,8 +252,9 @@ export function resolveApproveBuildTargets(
  * Enumerate the packages whose build scripts a package manager gated during the
  * install, as raw names (still unfiltered by direct dependency).
  *
- * - pnpm reports them in its install output (a hard exit-1 on v11), so its names
- *   are parsed there and passed in via `pendingBuildsFromInstall`.
+ * - pnpm and yarn report them in their install output, so the names are parsed
+ *   there (see {@link parseInstallGatedBuilds}) and passed in via
+ *   `pendingBuildsFromInstall`.
  * - bun exits 0 and only prints a count, so `bun pm untrusted` is queried here.
  *
  * Other package managers run build scripts by default and return `[]`.
@@ -196,7 +264,7 @@ export async function detectGatedBuilds(
   packageManager: PackageManager | undefined,
   pendingBuildsFromInstall: string[] | undefined,
 ): Promise<string[]> {
-  if (packageManager === PackageManager.pnpm) {
+  if (packageManager === PackageManager.pnpm || packageManager === PackageManager.yarn) {
     return pendingBuildsFromInstall ?? [];
   }
   if (packageManager === PackageManager.bun) {
@@ -285,9 +353,69 @@ async function runApproveBuilds(
   );
 }
 
+/**
+ * Approve gated builds for yarn. Unlike pnpm/bun, yarn has no `approve-builds`
+ * command: a package's build is enabled by setting `dependenciesMeta[name].built`
+ * to true in package.json, after which a reinstall runs its build script.
+ */
+async function approveYarnBuilds(
+  projectDir: string,
+  installCwd: string,
+  packages: string[],
+  interactive: boolean,
+  silent: boolean,
+): Promise<void> {
+  const pkgPath = path.join(projectDir, 'package.json');
+  let pkg: Record<string, unknown>;
+  try {
+    pkg = readJsonFile(pkgPath);
+  } catch {
+    printApproveBuildsGuidance(packages);
+    return;
+  }
+  const meta =
+    pkg.dependenciesMeta && typeof pkg.dependenciesMeta === 'object'
+      ? (pkg.dependenciesMeta as Record<string, Record<string, unknown>>)
+      : {};
+  for (const name of packages) {
+    meta[name] = { ...meta[name], built: true };
+  }
+  pkg.dependenciesMeta = meta;
+  writeJsonFile(pkgPath, pkg);
+
+  const spinner = makeSpinner(interactive, silent);
+  spinner.start(`Building ${packages.join(', ')}...`);
+  const { exitCode, stdout, stderr } = await runCommandSilently({
+    command: process.env.VP_CLI_BIN ?? 'vp',
+    args: ['install'],
+    cwd: installCwd,
+    envs: process.env,
+  });
+  if (exitCode === 0) {
+    spinner.stop(`Built ${packages.join(', ')}`);
+    return;
+  }
+  spinner.stop(`Build failed for ${packages.join(', ')}`);
+  const output = `${stdout.toString()}\n${stderr.toString()}`.trim();
+  if (output) {
+    prompts.log.info(lastLines(output, 20));
+  }
+  prompts.log.warn(
+    `Build scripts failed for ${accent(packages.join(', '))}. They were approved in ` +
+      `package.json; fix the build toolchain and run ${accent('vp install')} to retry.`,
+  );
+}
+
 export interface ApproveBuildsOptions {
   /** Directory the package manager ran in (where `node_modules` lives). */
   cwd: string;
+  /**
+   * Directory whose package.json declares the gated direct deps. Same as `cwd`
+   * for a standalone project; the created package for a monorepo. yarn writes
+   * `dependenciesMeta` here.
+   */
+  projectDir: string;
+  packageManager: PackageManager | undefined;
   /** Direct-dependency packages with gated build scripts (already filtered). */
   targets: string[];
   interactive: boolean;
@@ -306,7 +434,15 @@ export interface ApproveBuildsOptions {
  * - non-interactive: print guidance pointing at `vp pm approve-builds`.
  */
 export async function approveBuilds(options: ApproveBuildsOptions): Promise<void> {
-  const { cwd, targets, interactive, autoApprove, silent = false } = options;
+  const {
+    cwd,
+    projectDir,
+    packageManager,
+    targets,
+    interactive,
+    autoApprove,
+    silent = false,
+  } = options;
   if (targets.length === 0) {
     return;
   }
@@ -317,7 +453,7 @@ export async function approveBuilds(options: ApproveBuildsOptions): Promise<void
   } else if (interactive) {
     const answer = await prompts.multiselect<string>({
       message:
-        'These dependencies have build scripts (e.g. native builds) that pnpm did not run. ' +
+        'These dependencies have build scripts (e.g. native builds) that were not run. ' +
         'Select which to approve and build:',
       options: targets.map((name) => ({ value: name, label: name })),
       initialValues: [],
@@ -338,5 +474,9 @@ export async function approveBuilds(options: ApproveBuildsOptions): Promise<void
     return;
   }
 
-  await runApproveBuilds(cwd, selected, interactive, silent);
+  if (packageManager === PackageManager.yarn) {
+    await approveYarnBuilds(projectDir, cwd, selected, interactive, silent);
+  } else {
+    await runApproveBuilds(cwd, selected, interactive, silent);
+  }
 }
