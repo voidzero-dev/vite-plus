@@ -2105,8 +2105,11 @@ function hasPackageManagerPin(pkg: BootstrapPackageJson): boolean {
   return Boolean(pkg.packageManager || pkg.devEngines?.packageManager);
 }
 
-function vitePlusDevDependencyNeedsConcreteVersion(pkg: BootstrapPackageJson): boolean {
-  return pkg.devDependencies?.[VITE_PLUS_NAME]?.startsWith('catalog:') ?? false;
+function vitePlusDependencyNeedsConcreteVersion(pkg: BootstrapPackageJson): boolean {
+  const dependencyGroups = [pkg.devDependencies, pkg.dependencies, pkg.optionalDependencies];
+  return dependencyGroups.some(
+    (dependencies) => dependencies?.[VITE_PLUS_NAME]?.startsWith('catalog:') ?? false,
+  );
 }
 
 function pnpmPeerDependencyRulesSatisfyVitePlus(
@@ -2253,7 +2256,7 @@ export function detectVitePlusBootstrapPending(
   if (packageManager === PackageManager.pnpm) {
     if (pkg.pnpm) {
       return (
-        vitePlusDevDependencyNeedsConcreteVersion(pkg) ||
+        vitePlusDependencyNeedsConcreteVersion(pkg) ||
         !overridesSatisfyVitePlus(pkg.pnpm.overrides) ||
         !pnpmPeerDependencyRulesSatisfyVitePlus(pkg.pnpm.peerDependencyRules)
       );
@@ -2268,15 +2271,19 @@ export function detectVitePlusBootstrapPending(
   return false;
 }
 
-function ensureVitePlusDevDependency(pkg: BootstrapPackageJson, version: string): boolean {
-  const devDependencies = pkg.devDependencies;
-  const existing = devDependencies?.[VITE_PLUS_NAME];
-  if (existing) {
-    if (version !== 'catalog:' && existing.startsWith('catalog:')) {
-      devDependencies[VITE_PLUS_NAME] = version;
-      return true;
+function ensureVitePlusDependencySpecs(pkg: BootstrapPackageJson, version: string): boolean {
+  let changed = false;
+  if (version !== 'catalog:') {
+    const dependencyGroups = [pkg.devDependencies, pkg.dependencies, pkg.optionalDependencies];
+    for (const dependencies of dependencyGroups) {
+      if (dependencies?.[VITE_PLUS_NAME]?.startsWith('catalog:')) {
+        dependencies[VITE_PLUS_NAME] = version;
+        changed = true;
+      }
     }
-    return false;
+  }
+  if (pkg.devDependencies?.[VITE_PLUS_NAME]) {
+    return changed;
   }
   pkg.devDependencies = {
     ...pkg.devDependencies,
@@ -2367,7 +2374,7 @@ export function ensureVitePlusBootstrap(
     const supportCatalog =
       !VITE_PLUS_VERSION.startsWith('file:') &&
       (usePnpmWorkspaceYaml || workspaceInfo.packageManager === PackageManager.bun);
-    let packageJsonChanged = ensureVitePlusDevDependency(
+    let packageJsonChanged = ensureVitePlusDependencySpecs(
       pkg,
       supportCatalog ? 'catalog:' : VITE_PLUS_VERSION,
     );
