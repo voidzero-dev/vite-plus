@@ -335,8 +335,15 @@ function printApproveBuildsGuidance(
     );
     return;
   }
+  // bun's `pm approve-builds` is a no-op without explicit names (it just prints
+  // "requires package names"), so spell them out. pnpm's runs an interactive
+  // picker when called bare, so it doesn't need them.
+  const command =
+    packageManager === PackageManager.bun
+      ? `vp pm approve-builds ${targets.join(' ')}`
+      : 'vp pm approve-builds';
   prompts.log.info(
-    `These dependencies may not work until built. Run ${accent('vp pm approve-builds')} in the ` +
+    `These dependencies may not work until built. Run ${accent(command)} in the ` +
       `project to approve them, or re-create with ${accent('--approve-builds')}.`,
   );
 }
@@ -344,7 +351,8 @@ function printApproveBuildsGuidance(
 /**
  * Run a `vp` build/approval command and report the outcome through a spinner.
  * On failure the approval has still been recorded (pnpm/bun config or yarn's
- * `dependenciesMeta`), so the retry hint points back at `vp install`.
+ * `dependenciesMeta`), so the retry hint points back at `vp install`. Returns
+ * `true` when the command succeeded, `false` when the build exited non-zero.
  */
 async function runBuildAndReport(
   args: string[],
@@ -353,7 +361,7 @@ async function runBuildAndReport(
   interactive: boolean,
   silent: boolean,
   extraEnv?: Record<string, string>,
-): Promise<void> {
+): Promise<boolean> {
   const spinner = silent ? getSilentSpinner() : getSpinner(interactive);
   spinner.start(`Building ${packages.join(', ')}...`);
   const { exitCode, stdout, stderr } = await runCommandSilently({
@@ -364,7 +372,7 @@ async function runBuildAndReport(
   });
   if (exitCode === 0) {
     spinner.stop(`Built ${packages.join(', ')}`);
-    return;
+    return true;
   }
   spinner.stop(`Build failed for ${packages.join(', ')}`);
   const output = `${stdout.toString()}\n${stderr.toString()}`.trim();
@@ -375,6 +383,7 @@ async function runBuildAndReport(
     `Build scripts failed for ${accent(packages.join(', '))}. They were approved; fix the ` +
       `build toolchain and run ${accent('vp install')} to retry.`,
   );
+  return false;
 }
 
 /**
@@ -405,27 +414,30 @@ export function addYarnBuiltDependenciesMeta(
  * Approve gated builds for yarn. Unlike pnpm/bun, yarn has no `approve-builds`
  * command: a package's build is enabled by setting `dependenciesMeta[name].built`
  * to true in package.json, after which a reinstall runs its build script.
+ *
+ * The metadata is written to the install root's manifest (`installCwd`), not the
+ * created package: yarn only honors `dependenciesMeta.<pkg>.built` from the
+ * workspace root, so a child-package entry is ignored and the build never runs.
  */
 async function approveYarnBuilds(
-  projectDir: string,
   installCwd: string,
   packages: string[],
   interactive: boolean,
   silent: boolean,
-): Promise<void> {
-  const pkgPath = path.join(projectDir, 'package.json');
+): Promise<boolean> {
+  const pkgPath = path.join(installCwd, 'package.json');
   let pkg: Record<string, unknown>;
   try {
     pkg = readJsonFile(pkgPath);
   } catch {
     printApproveBuildsGuidance(packages, PackageManager.yarn);
-    return;
+    return true;
   }
   writeJsonFile(pkgPath, addYarnBuiltDependenciesMeta(pkg, packages));
   // Writing `dependenciesMeta` changes the manifest, so the reinstall has to be
   // allowed to update the lockfile. Yarn Berry enables immutable installs by
   // default under CI and would otherwise fail with YN0028.
-  await runBuildAndReport(['install'], installCwd, packages, interactive, silent, {
+  return runBuildAndReport(['install'], installCwd, packages, interactive, silent, {
     YARN_ENABLE_IMMUTABLE_INSTALLS: 'false',
   });
 }
@@ -435,8 +447,8 @@ export interface ApproveBuildsOptions {
   cwd: string;
   /**
    * Directory whose package.json declares the gated direct deps. Same as `cwd`
-   * for a standalone project; the created package for a monorepo. yarn writes
-   * `dependenciesMeta` here.
+   * for a standalone project; the created package for a monorepo. (yarn records
+   * `dependenciesMeta` at the install root in `cwd`, not here.)
    */
   projectDir: string;
   packageManager: PackageManager | undefined;
@@ -458,11 +470,14 @@ export interface ApproveBuildsOptions {
  *   individually (pnpm gates them for security, so nothing is opt-in by
  *   default).
  * - non-interactive: print guidance pointing at `vp pm approve-builds`.
+ *
+ * Returns `false` only when an approved build actually ran and failed (so a
+ * non-interactive `--approve-builds` caller can surface a non-zero exit);
+ * approving nothing or printing guidance returns `true`.
  */
-export async function approveBuilds(options: ApproveBuildsOptions): Promise<void> {
+export async function approveBuilds(options: ApproveBuildsOptions): Promise<boolean> {
   const {
     cwd,
-    projectDir,
     packageManager,
     packageManagerVersion,
     targets,
@@ -471,7 +486,7 @@ export async function approveBuilds(options: ApproveBuildsOptions): Promise<void
     silent = false,
   } = options;
   if (targets.length === 0) {
-    return;
+    return true;
   }
 
   let selected: string[];
@@ -494,26 +509,37 @@ export async function approveBuilds(options: ApproveBuildsOptions): Promise<void
 
   if (selected.length === 0) {
     printApproveBuildsGuidance(targets, packageManager);
-    return;
+    return true;
   }
 
   if (packageManager === PackageManager.yarn) {
-    await approveYarnBuilds(projectDir, cwd, selected, interactive, silent);
-  } else if (
+    return approveYarnBuilds(cwd, selected, interactive, silent);
+  }
+  if (
     packageManager === PackageManager.pnpm &&
     !pnpmSupportsPositionalApprove(packageManagerVersion)
   ) {
-    // pnpm < 11 can't approve individual packages from the CLI (only `--all`,
-    // which would also approve the transitive builds we deliberately leave
-    // alone), so print guidance instead of reporting a build that didn't run.
+    // pnpm < 11 has no positional `approve-builds <pkg>`. For `--approve-builds`
+    // (the user opted into building everything) fall back to the supported
+    // `--all`; otherwise we can't approve just these direct deps, so print
+    // guidance rather than report a build that didn't run.
+    if (autoApprove) {
+      return runBuildAndReport(
+        ['pm', 'approve-builds', '--all'],
+        cwd,
+        selected,
+        interactive,
+        silent,
+      );
+    }
     printApproveBuildsGuidance(selected, packageManager);
-  } else {
-    await runBuildAndReport(
-      ['pm', 'approve-builds', ...selected],
-      cwd,
-      selected,
-      interactive,
-      silent,
-    );
+    return true;
   }
+  return runBuildAndReport(
+    ['pm', 'approve-builds', ...selected],
+    cwd,
+    selected,
+    interactive,
+    silent,
+  );
 }

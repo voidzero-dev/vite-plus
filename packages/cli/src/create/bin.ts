@@ -943,6 +943,11 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
   // blocked, and let the user approve them. `projectPath` is the created package
   // whose direct deps decide what is worth prompting for; `installCwd` is where
   // the package manager (and `node_modules`) lives.
+  // Gated builds reported by the ESLint/Prettier migration pre-install. yarn
+  // only emits YN0004 on the first install, so the later main install won't
+  // re-report them; carry them forward so detection still sees them.
+  let migratePendingBuilds: string[] = [];
+
   const handleIgnoredBuilds = async (
     projectPath: string,
     installCwd: string,
@@ -951,10 +956,11 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     if (summary?.status !== 'installed') {
       return;
     }
+    const reportedBuilds = [...(summary.pendingBuilds ?? []), ...migratePendingBuilds];
     const pendingBuilds = await detectGatedBuilds(
       installCwd,
       workspaceInfo.packageManager,
-      summary.pendingBuilds,
+      reportedBuilds.length > 0 ? [...new Set(reportedBuilds)] : undefined,
     );
     const targets = resolveApproveBuildTargets(
       projectPath,
@@ -965,7 +971,7 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       return;
     }
     pauseCreateProgress();
-    await approveBuilds({
+    const approved = await approveBuilds({
       cwd: installCwd,
       projectDir: projectPath,
       packageManager: workspaceInfo.packageManager,
@@ -976,6 +982,11 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       silent: compactOutput,
     });
     resumeCreateProgress();
+    // A failed build under non-interactive `--approve-builds` should surface a
+    // non-zero exit so CI notices, even though the project is still scaffolded.
+    if (!approved && !options.interactive && options.approveBuilds === true) {
+      process.exitCode = 1;
+    }
   };
 
   updateCreateProgress('Scaffolding project');
@@ -1312,6 +1323,11 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     });
     if (installSummary.status !== 'installed') {
       return;
+    }
+    // Remember any gated builds this pre-install reported; yarn won't repeat the
+    // YN0004 warning on the main install, so handleIgnoredBuilds needs them.
+    if (installSummary.pendingBuilds && installSummary.pendingBuilds.length > 0) {
+      migratePendingBuilds = installSummary.pendingBuilds;
     }
     updateCreateProgress('Migrating lint and format tools');
     pauseCreateProgress();
