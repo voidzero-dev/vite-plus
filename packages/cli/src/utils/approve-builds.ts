@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { stripVTControlCharacters } from 'node:util';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 
@@ -6,10 +7,6 @@ import { PackageManager } from '../types/index.ts';
 import { runCommandSilently } from './command.ts';
 import { readJsonFile, writeJsonFile } from './json.ts';
 import { accent } from './terminal.ts';
-
-/** Strip ANSI color codes (yarn colorizes its install log). */
-/* oxlint-disable-next-line no-control-regex */
-const ANSI_CODES = /\u001B\[[0-9;]*m/gu;
 
 /**
  * pnpm prints this prefix whenever it gates a dependency's build (install /
@@ -23,9 +20,10 @@ const IGNORED_BUILDS_MARKER = 'Ignored build scripts:';
 /** pnpm >= 11 turns the gated-builds warning into a hard exit-1 with this code. */
 const IGNORED_BUILDS_ERROR_CODE = 'ERR_PNPM_IGNORED_BUILDS';
 
-/** Box-drawing / list characters pnpm wraps the warning message in. */
-const BOX_CHARS_AT_END = /[│|╮╯╰╭─\s]+$/u;
+/** Box-drawing / list characters pnpm wraps the pnpm-10 warning message in. */
 const BOX_CHARS = /[│|╮╯╰╭─]/gu;
+/** Non-global form, for testing whether a line is a box-bordered continuation. */
+const BOX_LINE = /[│|╮╯╰╭─]/u;
 
 export function isPnpmIgnoredBuildsError(output: string): boolean {
   return output.includes(IGNORED_BUILDS_ERROR_CODE);
@@ -55,14 +53,25 @@ export function parseIgnoredBuilds(output: string): string[] {
   if (markerIndex === -1) {
     return [];
   }
-  // Only the marker's own line carries the package list; the "Run pnpm
-  // approve-builds" hint and box borders live on other lines.
-  let segment = output.slice(markerIndex + IGNORED_BUILDS_MARKER.length);
-  const newlineIndex = segment.indexOf('\n');
-  if (newlineIndex !== -1) {
-    segment = segment.slice(0, newlineIndex);
+  // Collect the marker's line plus any box-wrapped continuation lines (pnpm 10
+  // word-wraps long lists inside its warning box). Stop at the "Run ...
+  // approve-builds" hint, or the first line that is neither the marker line nor
+  // a box-bordered continuation (pnpm 11's blank separator, or trailing install
+  // output like "Done in 171ms").
+  const lines = output.slice(markerIndex + IGNORED_BUILDS_MARKER.length).split('\n');
+  const listLines: string[] = [];
+  for (const line of lines) {
+    if (listLines.length > 0 && (/approve-builds/u.test(line) || !BOX_LINE.test(line))) {
+      break;
+    }
+    listLines.push(line);
   }
-  segment = segment.replace(BOX_CHARS_AT_END, '').replace(/\.$/u, '').trim();
+  // Box borders become separators; the pnpm-10 form ends the list with a period.
+  const segment = listLines
+    .join(' ')
+    .replace(BOX_CHARS, ' ')
+    .replace(/[.\s]+$/u, '')
+    .trim();
   if (!segment) {
     return [];
   }
@@ -70,7 +79,7 @@ export function parseIgnoredBuilds(output: string): string[] {
   const names: string[] = [];
   const seen = new Set<string>();
   for (const rawToken of segment.split(',')) {
-    const token = rawToken.replace(BOX_CHARS, '').trim();
+    const token = rawToken.trim();
     if (!token) {
       continue;
     }
@@ -98,14 +107,15 @@ export function parseBunUntrusted(output: string): string[] {
   }
   const names: string[] = [];
   const seen = new Set<string>();
-  for (const line of output.split('\n')) {
-    const marker = line.trimEnd().lastIndexOf('node_modules/');
-    if (marker === -1) {
+  for (const rawLine of output.split('\n')) {
+    const line = rawLine.trim();
+    // A blocked-package entry is a path line (`./node_modules/<name> @<version>`).
+    // Require that exact shape so the indented `» [postinstall]: ...` detail
+    // lines — which may themselves contain a `node_modules/` path — are skipped.
+    if (!line.startsWith('./node_modules/') && !line.startsWith('node_modules/')) {
       continue;
     }
-    const rest = line.trimEnd().slice(marker + 'node_modules/'.length);
-    // A package entry is `<name> @<version>`; the name never contains a space
-    // (so the postinstall detail lines that mention paths are skipped).
+    const rest = line.slice(line.lastIndexOf('node_modules/') + 'node_modules/'.length);
     const match = rest.match(/^(@?[^\s]+) @[^\s]+$/u);
     if (!match) {
       continue;
@@ -135,7 +145,7 @@ export function parseYarnDisabledBuilds(output: string): string[] {
   const names: string[] = [];
   const seen = new Set<string>();
   for (const rawLine of output.split('\n')) {
-    const line = rawLine.replace(ANSI_CODES, '');
+    const line = stripVTControlCharacters(rawLine);
     const markerIndex = line.indexOf(YARN_DISABLED_BUILDS_MARKER);
     if (markerIndex === -1) {
       continue;
@@ -333,7 +343,13 @@ function printApproveBuildsGuidance(
   );
 }
 
-async function runApproveBuilds(
+/**
+ * Run a `vp` build/approval command and report the outcome through a spinner.
+ * On failure the approval has still been recorded (pnpm/bun config or yarn's
+ * `dependenciesMeta`), so the retry hint points back at `vp install`.
+ */
+async function runBuildAndReport(
+  args: string[],
   cwd: string,
   packages: string[],
   interactive: boolean,
@@ -343,7 +359,7 @@ async function runApproveBuilds(
   spinner.start(`Building ${packages.join(', ')}...`);
   const { exitCode, stdout, stderr } = await runCommandSilently({
     command: process.env.VP_CLI_BIN ?? 'vp',
-    args: ['pm', 'approve-builds', ...packages],
+    args,
     cwd,
     envs: process.env,
   });
@@ -356,13 +372,34 @@ async function runApproveBuilds(
   if (output) {
     prompts.log.info(lastLines(output, 20));
   }
-  // approve-builds records the approval in pnpm config even when the build
-  // itself fails, so a later `vp install` retries the build once the toolchain
-  // is fixed.
   prompts.log.warn(
     `Build scripts failed for ${accent(packages.join(', '))}. They were approved; fix the ` +
       `build toolchain and run ${accent('vp install')} to retry.`,
   );
+}
+
+/**
+ * Mark each package as build-allowed in yarn's `dependenciesMeta[<pkg>].built`,
+ * preserving existing metadata. Guards against a non-object container or
+ * per-package value so a hand-authored scalar doesn't corrupt package.json.
+ * Mutates and returns `pkg`.
+ */
+export function addYarnBuiltDependenciesMeta(
+  pkg: Record<string, unknown>,
+  packages: string[],
+): Record<string, unknown> {
+  const existing = pkg.dependenciesMeta;
+  const meta: Record<string, unknown> =
+    existing && typeof existing === 'object' ? { ...(existing as Record<string, unknown>) } : {};
+  for (const name of packages) {
+    const current = meta[name];
+    meta[name] = {
+      ...(current && typeof current === 'object' ? (current as Record<string, unknown>) : {}),
+      built: true,
+    };
+  }
+  pkg.dependenciesMeta = meta;
+  return pkg;
 }
 
 /**
@@ -385,37 +422,8 @@ async function approveYarnBuilds(
     printApproveBuildsGuidance(packages, PackageManager.yarn);
     return;
   }
-  const meta =
-    pkg.dependenciesMeta && typeof pkg.dependenciesMeta === 'object'
-      ? (pkg.dependenciesMeta as Record<string, Record<string, unknown>>)
-      : {};
-  for (const name of packages) {
-    meta[name] = { ...meta[name], built: true };
-  }
-  pkg.dependenciesMeta = meta;
-  writeJsonFile(pkgPath, pkg);
-
-  const spinner = makeSpinner(interactive, silent);
-  spinner.start(`Building ${packages.join(', ')}...`);
-  const { exitCode, stdout, stderr } = await runCommandSilently({
-    command: process.env.VP_CLI_BIN ?? 'vp',
-    args: ['install'],
-    cwd: installCwd,
-    envs: process.env,
-  });
-  if (exitCode === 0) {
-    spinner.stop(`Built ${packages.join(', ')}`);
-    return;
-  }
-  spinner.stop(`Build failed for ${packages.join(', ')}`);
-  const output = `${stdout.toString()}\n${stderr.toString()}`.trim();
-  if (output) {
-    prompts.log.info(lastLines(output, 20));
-  }
-  prompts.log.warn(
-    `Build scripts failed for ${accent(packages.join(', '))}. They were approved in ` +
-      `package.json; fix the build toolchain and run ${accent('vp install')} to retry.`,
-  );
+  writeJsonFile(pkgPath, addYarnBuiltDependenciesMeta(pkg, packages));
+  await runBuildAndReport(['install'], installCwd, packages, interactive, silent);
 }
 
 export interface ApproveBuildsOptions {
@@ -471,14 +479,10 @@ export async function approveBuilds(options: ApproveBuildsOptions): Promise<void
       initialValues: [],
       required: false,
     });
-    if (prompts.isCancel(answer)) {
-      printApproveBuildsGuidance(targets, packageManager);
-      return;
-    }
-    selected = answer;
+    // Cancelling or selecting nothing both mean "approve nothing" -> guidance.
+    selected = prompts.isCancel(answer) ? [] : answer;
   } else {
-    printApproveBuildsGuidance(targets, packageManager);
-    return;
+    selected = [];
   }
 
   if (selected.length === 0) {
@@ -489,6 +493,12 @@ export async function approveBuilds(options: ApproveBuildsOptions): Promise<void
   if (packageManager === PackageManager.yarn) {
     await approveYarnBuilds(projectDir, cwd, selected, interactive, silent);
   } else {
-    await runApproveBuilds(cwd, selected, interactive, silent);
+    await runBuildAndReport(
+      ['pm', 'approve-builds', ...selected],
+      cwd,
+      selected,
+      interactive,
+      silent,
+    );
   }
 }

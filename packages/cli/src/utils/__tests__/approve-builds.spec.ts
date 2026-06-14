@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { PackageManager } from '../../types/index.ts';
 import {
+  addYarnBuiltDependenciesMeta,
   collectDirectDependencyNames,
   filterToDirectDependencies,
   isPnpmIgnoredBuildsError,
@@ -86,6 +87,17 @@ describe('parseIgnoredBuilds', () => {
     const output =
       '[ERR_PNPM_IGNORED_BUILDS] Ignored build scripts: @scope/native@1.0.0, better-sqlite3@11.0.0';
     expect(parseIgnoredBuilds(output)).toEqual(['@scope/native', 'better-sqlite3']);
+  });
+
+  it('keeps packages on box continuation lines when pnpm 10 wraps a long list', () => {
+    const output = [
+      '╭ Warning ─────────────────────────────────────────────────────────────────────╮',
+      '│   Ignored build scripts: esbuild, better-sqlite3,                            │',
+      '│   @scope/native.                                                             │',
+      '│   Run "pnpm approve-builds" to pick which dependencies should run scripts.   │',
+      '╰──────────────────────────────────────────────────────────────────────────────╯',
+    ].join('\n');
+    expect(parseIgnoredBuilds(output)).toEqual(['esbuild', 'better-sqlite3', '@scope/native']);
   });
 
   it('returns [] when there is no ignored-builds marker', () => {
@@ -267,5 +279,40 @@ describe('resolveApproveBuildTargets', () => {
   it('ignores transitive-only pending builds (e.g. esbuild from vite)', () => {
     writePkg({ devDependencies: { vite: '^7.0.0' } });
     expect(resolveApproveBuildTargets(dir, ['esbuild'], PackageManager.pnpm)).toEqual([]);
+  });
+});
+
+describe('addYarnBuiltDependenciesMeta', () => {
+  it('adds dependenciesMeta[pkg].built=true, creating the container', () => {
+    const pkg: Record<string, unknown> = { name: 'app' };
+    addYarnBuiltDependenciesMeta(pkg, ['core-js', '@scope/native']);
+    expect(pkg.dependenciesMeta).toEqual({
+      'core-js': { built: true },
+      '@scope/native': { built: true },
+    });
+  });
+
+  it('preserves existing per-package metadata', () => {
+    const pkg: Record<string, unknown> = {
+      dependenciesMeta: { 'core-js': { optional: true }, other: { built: false } },
+    };
+    addYarnBuiltDependenciesMeta(pkg, ['core-js']);
+    expect(pkg.dependenciesMeta).toEqual({
+      'core-js': { optional: true, built: true },
+      other: { built: false },
+    });
+  });
+
+  it('does not corrupt a non-object existing entry (replaces it cleanly)', () => {
+    // A hand-authored scalar value must not be spread into indexed-char keys.
+    const pkg: Record<string, unknown> = { dependenciesMeta: { 'core-js': 'oops' } };
+    addYarnBuiltDependenciesMeta(pkg, ['core-js']);
+    expect(pkg.dependenciesMeta).toEqual({ 'core-js': { built: true } });
+  });
+
+  it('ignores a non-object dependenciesMeta container', () => {
+    const pkg: Record<string, unknown> = { dependenciesMeta: 'nope' };
+    addYarnBuiltDependenciesMeta(pkg, ['core-js']);
+    expect(pkg.dependenciesMeta).toEqual({ 'core-js': { built: true } });
   });
 });

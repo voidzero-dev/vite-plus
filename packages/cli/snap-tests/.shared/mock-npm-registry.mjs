@@ -27,6 +27,14 @@ function rewriteRegistry(value, registry) {
 // work through the proxy (pnpm fetches tarballs from the upstream URL directly,
 // so it was never affected).
 function proxyToUpstream(req, res) {
+  // Stream errors can fire after headers are already sent (e.g. the upstream
+  // connection resets mid-tarball), so guard against a second writeHead.
+  const fail = (error) => {
+    if (!res.headersSent) {
+      res.writeHead(502);
+    }
+    res.end(`proxy error: ${error.message}`);
+  };
   const fetchUrl = (url, redirectsLeft) => {
     httpsGet(url, { headers: { accept: req.headers.accept ?? 'application/json' } }, (upstream) => {
       const status = upstream.statusCode ?? 502;
@@ -36,17 +44,20 @@ function proxyToUpstream(req, res) {
         return;
       }
       const headers = {};
-      for (const name of ['content-type', 'content-encoding', 'content-length']) {
+      // Forward `location` too, so a 3xx we stop following (or one with no
+      // location to follow) still reaches the client with its redirect target.
+      for (const name of ['content-type', 'content-encoding', 'content-length', 'location']) {
         if (upstream.headers[name] !== undefined) {
           headers[name] = upstream.headers[name];
         }
       }
       res.writeHead(status, headers);
+      // `pipe` does not forward source errors, so listen on the response stream
+      // directly; otherwise a mid-stream upstream error is uncaught and crashes
+      // the mock server.
+      upstream.on('error', fail);
       upstream.pipe(res);
-    }).on('error', (error) => {
-      res.writeHead(502);
-      res.end(`proxy error: ${error.message}`);
-    });
+    }).on('error', fail);
   };
   fetchUrl(`${UPSTREAM_REGISTRY}${req.url ?? '/'}`, 5);
 }
