@@ -13,7 +13,7 @@ Modern package managers ship with **opt-in lifecycle script execution** to mitig
 - **pnpm ≥ v10** ignores all install scripts by default and requires explicit approval via the `allowBuilds` map in `pnpm-workspace.yaml`.
 - **bun** blocks lifecycle scripts for any dependency not listed in `trustedDependencies` (in `package.json`) or shipped in bun's default-trusted list.
 - **npm** still executes lifecycle scripts by default but can be flipped off with `ignore-scripts=true` in `.npmrc`.
-- **yarn (Berry)** blocks third-party build scripts by default (`enableScripts` is `false`); per-package opt-in is via `dependenciesMeta.<pkg>.built: true` in `package.json`.
+- **yarn** runs build scripts by default; Berry (2+) gates them only when `enableScripts` is set to `false`, after which per-package opt-in is via `dependenciesMeta.<pkg>.built: true` in `package.json`.
 
 This produces two parallel workflows for the **same conceptual task** — "I trust `esbuild` to run its post-install build":
 
@@ -109,8 +109,9 @@ Running: pnpm approve-builds
 - **yarn**: prints a warning and exits 0 (no-op):
 
   ```
-  warn  yarn does not run third-party build scripts by default. To allow a
-        package, set `dependenciesMeta["<package>"].built: true` in package.json.
+  warn  yarn runs build scripts by default. If you've disabled them
+        (`enableScripts: false`), allow a package by setting
+        `dependenciesMeta["<package>"].built: true` in package.json and reinstalling.
   ```
 
 #### 2. Direct approval
@@ -182,7 +183,7 @@ Running: bun pm trust --all
 
 **yarn references:**
 
-- No equivalent command. yarn@2+ already blocks third-party build scripts by default ([`enableScripts`](https://yarnpkg.com/configuration/yarnrc#enableScripts) defaults to `false`); per-package opt-in is via [`dependenciesMeta.<pkg>.built`](https://yarnpkg.com/configuration/manifest#dependenciesMeta) in `package.json`.
+- No equivalent command. yarn runs build scripts by default; Berry (2+) gates them only when [`enableScripts`](https://yarnpkg.com/configuration/yarnrc#enableScripts) is set to `false`, after which per-package opt-in is via [`dependenciesMeta.<pkg>.built`](https://yarnpkg.com/configuration/manifest#dependenciesMeta) in `package.json`.
 
 | Vite+ Flag                    | pnpm                                     | npm (≥ 11.16.0)                               | yarn@1     | yarn@2+    | bun                         | Description                                 |
 | ----------------------------- | ---------------------------------------- | --------------------------------------------- | ---------- | ---------- | --------------------------- | ------------------------------------------- |
@@ -195,7 +196,7 @@ Running: bun pm trust --all
 
 - **`!pkg` deny syntax is supported on pnpm and npm.** pnpm forwards `!core-js` verbatim; npm strips the `!` and routes it to `npm deny-scripts core-js`. For bun the deny syntax is rejected with a warning that names the affected positionals (so users notice rather than silently get a partial approval).
 - **npm splits approve vs. deny into two separate commands** (`approve-scripts` / `deny-scripts`). Because `vp pm approve-builds` accepts both in one invocation, a mixed call (`vp pm approve-builds esbuild !core-js`) is **rejected** on npm with an actionable message asking the user to run the two operations separately. pnpm handles the mixed case in a single command.
-- **npm < 11.16.0 and yarn never have an `approve-builds` command.** Vite+ prints a one-line `warn` and exits 0. For npm the warn points at upgrading to npm ≥ 11.16.0 (or `ignore-scripts`). For yarn (which blocks third-party scripts by default) the warn points at `dependenciesMeta.<pkg>.built`. We intentionally exit 0 (not non-zero) so monorepo scripts that run `vp pm approve-builds` opportunistically don't break on heterogeneous environments.
+- **npm < 11.16.0 and yarn never have an `approve-builds` command.** Vite+ prints a one-line `warn` and exits 0. For npm the warn points at upgrading to npm ≥ 11.16.0 (or `ignore-scripts`). For yarn (which runs build scripts by default, gating only when `enableScripts` is set to `false`) the warn points at `dependenciesMeta.<pkg>.built`. We intentionally exit 0 (not non-zero) so monorepo scripts that run `vp pm approve-builds` opportunistically don't break on heterogeneous environments.
 - **npm's `allowScripts` is advisory in npm 11.x.** Even after approving, install scripts still run; npm only warns about unreviewed packages at install time. Vite+ surfaces a one-line `note` after an npm approve/deny write to make this clear. Enforcement is planned for a future npm release.
 - **No-args mode on bun** also exits 0 with a `note` (bun's `bun pm trust` requires package names; there's no interactive picker to forward to).
 - **Configuration storage differs:** pnpm writes to `pnpm-workspace.yaml` under `allowBuilds:`. bun writes to `package.json` under `trustedDependencies: []`. Vite+ does not normalize the storage location — each PM owns its own state. (See [Design Decision §2](#2-do-not-normalize-storage).)
@@ -263,9 +264,11 @@ impl PackageManager {
                 Ok(ExitStatus::default()) // exit 0 — no-op
             }
             PackageManagerType::Yarn => {
-                note(
-                    "yarn does not run third-party build scripts by default. To allow a \
-                     package, set `dependenciesMeta[\"<package>\"].built: true` in package.json.",
+                warn(
+                    "yarn runs build scripts by default. If you've disabled them \
+                     (`enableScripts: false`), allow a package by setting \
+                     `dependenciesMeta[\"<package>\"].built: true` in package.json and \
+                     reinstalling.",
                 );
                 Ok(ExitStatus::default()) // exit 0 — no-op
             }
@@ -431,7 +434,7 @@ impl ApproveBuildsCommand {
 **Rationale**:
 
 - **npm < 11.16.0** runs lifecycle scripts by default and has no approval command — the warn points at upgrading to npm ≥ 11.16.0 or at how to _restrict_ scripts (`ignore-scripts=true`).
-- **yarn (Berry)** blocks third-party build scripts by default; the per-package opt-in lives in `package.json` (`dependenciesMeta.<pkg>.built: true`). We `warn` pointing at that field rather than performing the edit ourselves — staying within the RFC's intentionally-tight scope.
+- **yarn** runs build scripts by default; Berry (2+) gates them only when `enableScripts` is set to `false`, after which the per-package opt-in lives in `package.json` (`dependenciesMeta.<pkg>.built: true`). We `warn` pointing at that field rather than performing the edit ourselves, staying within the RFC's intentionally-tight scope.
 - Both fallback surfaces use `warn` (not `note`) for consistency: the user invoked `approve-builds` and the requested action could not be completed on this PM, so they need a visible signal and a manual workaround.
 - Exit 0 on the fallback lets CI scripts that conditionally run `vp pm approve-builds --all` work across heterogeneous repos where the PM has no approval command.
 - Exit non-zero on the fallback (the alternative) would break monorepo orchestration scripts and demand per-PM conditionals. (Once a PM _does_ have a command — pnpm, bun, npm ≥ 11.16.0 — Vite+ runs it and surfaces its real exit code, same as any forwarded command.)
@@ -557,8 +560,9 @@ warn  npm runs lifecycle scripts by default. To restrict them, set
 ```
 $ vp pm approve-builds esbuild
 Detected package manager: yarn@4.0.0
-warn  yarn does not run third-party build scripts by default. To allow a
-      package, set `dependenciesMeta["<package>"].built: true` in package.json.
+warn  yarn runs build scripts by default. If you've disabled them
+      (`enableScripts: false`), allow a package by setting
+      `dependenciesMeta["<package>"].built: true` in package.json and reinstalling.
 ```
 
 ## Alternative Designs Considered
