@@ -2105,6 +2105,10 @@ function hasPackageManagerPin(pkg: BootstrapPackageJson): boolean {
   return Boolean(pkg.packageManager || pkg.devEngines?.packageManager);
 }
 
+function vitePlusDevDependencyNeedsConcreteVersion(pkg: BootstrapPackageJson): boolean {
+  return pkg.devDependencies?.[VITE_PLUS_NAME]?.startsWith('catalog:') ?? false;
+}
+
 function pnpmPeerDependencyRulesSatisfyVitePlus(
   peerDependencyRules:
     | { allowAny?: string[]; allowedVersions?: Record<string, string> }
@@ -2232,6 +2236,7 @@ export function detectVitePlusBootstrapPending(
   if (packageManager === PackageManager.pnpm) {
     if (pkg.pnpm) {
       return (
+        vitePlusDevDependencyNeedsConcreteVersion(pkg) ||
         !overridesSatisfyVitePlus(pkg.pnpm.overrides) ||
         !pnpmPeerDependencyRulesSatisfyVitePlus(pkg.pnpm.peerDependencyRules)
       );
@@ -2247,7 +2252,13 @@ export function detectVitePlusBootstrapPending(
 }
 
 function ensureVitePlusDevDependency(pkg: BootstrapPackageJson, version: string): boolean {
-  if (pkg.devDependencies?.[VITE_PLUS_NAME]) {
+  const devDependencies = pkg.devDependencies;
+  const existing = devDependencies?.[VITE_PLUS_NAME];
+  if (existing) {
+    if (version !== 'catalog:' && existing.startsWith('catalog:')) {
+      devDependencies[VITE_PLUS_NAME] = version;
+      return true;
+    }
     return false;
   }
   pkg.devDependencies = {

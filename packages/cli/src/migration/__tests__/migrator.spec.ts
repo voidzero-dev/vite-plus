@@ -1142,6 +1142,40 @@ describe('ensureVitePlusBootstrap', () => {
     expect(pkg.pnpm.overrides.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
   });
 
+  it('normalizes an existing catalog vite-plus pin when pnpm config stays in package.json', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { 'vite-plus': 'catalog:' },
+        devEngines: {
+          packageManager: { name: 'pnpm', version: '10.33.0', onFail: 'download' },
+        },
+        pnpm: {
+          overrides: {
+            vite: 'npm:@voidzero-dev/vite-plus-core@latest',
+            vitest: 'npm:@voidzero-dev/vite-plus-test@latest',
+          },
+          peerDependencyRules: {
+            allowAny: ['vite', 'vitest'],
+            allowedVersions: { vite: '*', vitest: '*' },
+          },
+        },
+      }),
+    );
+
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(true);
+    const result = ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm));
+
+    expect(result.changed).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, 'pnpm-workspace.yaml'))).toBe(false);
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    expect(pkg.devDependencies['vite-plus']).toBe('latest');
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
+  });
+
   it('uses a concrete vite-plus version for pnpm monorepos that keep pnpm config in package.json', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
