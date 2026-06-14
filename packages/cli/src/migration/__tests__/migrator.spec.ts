@@ -1147,6 +1147,47 @@ describe('ensureVitePlusBootstrap', () => {
     expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
   });
 
+  it('detects missing pnpm workspace catalog entry for vite-plus', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { 'vite-plus': 'catalog:' },
+        devEngines: {
+          packageManager: { name: 'pnpm', version: '10.33.0', onFail: 'download' },
+        },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'catalog:',
+        '  vite: npm:@voidzero-dev/vite-plus-core@latest',
+        '  vitest: npm:@voidzero-dev/vite-plus-test@latest',
+        'overrides:',
+        "  vite: 'catalog:'",
+        "  vitest: 'catalog:'",
+        'peerDependencyRules:',
+        '  allowAny:',
+        '    - vite',
+        '    - vitest',
+        '  allowedVersions:',
+        "    vite: '*'",
+        "    vitest: '*'",
+      ].join('\n'),
+    );
+
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(true);
+    const result = ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm));
+
+    expect(result.changed).toBe(true);
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      catalog: Record<string, string>;
+    };
+    expect(workspace.catalog['vite-plus']).toBe('latest');
+  });
+
   it('uses a concrete vite-plus version when pnpm config stays in package.json', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),

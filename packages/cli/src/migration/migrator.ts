@@ -2112,6 +2112,20 @@ function vitePlusDependencyNeedsConcreteVersion(pkg: BootstrapPackageJson): bool
   );
 }
 
+function defaultCatalogVitePlusDependencyPending(
+  pkg: BootstrapPackageJson,
+  catalogDependencyResolver: CatalogDependencyResolver | undefined,
+): boolean {
+  const dependencyGroups = [pkg.devDependencies, pkg.dependencies, pkg.optionalDependencies];
+  return dependencyGroups.some((dependencies) => {
+    const spec = dependencies?.[VITE_PLUS_NAME];
+    if (spec !== 'catalog:' && spec !== 'catalog:default') {
+      return false;
+    }
+    return catalogDependencyResolver?.(spec, VITE_PLUS_NAME) !== VITE_PLUS_VERSION;
+  });
+}
+
 function pnpmPeerDependencyRulesSatisfyVitePlus(
   peerDependencyRules:
     | { allowAny?: string[]; allowedVersions?: Record<string, string> }
@@ -2267,6 +2281,7 @@ export function detectVitePlusBootstrapPending(
     }
     const resolver = readPnpmWorkspaceCatalogDependencyResolver(projectPath);
     return (
+      defaultCatalogVitePlusDependencyPending(pkg, resolver) ||
       !overridesSatisfyVitePlus(readPnpmWorkspaceOverrides(projectPath), resolver) ||
       !pnpmPeerDependencyRulesSatisfyVitePlus(readPnpmWorkspacePeerDependencyRules(projectPath))
     );
@@ -2426,6 +2441,7 @@ export function ensureVitePlusBootstrap(
         : undefined;
       const catalogDependencyResolver = readPnpmWorkspaceCatalogDependencyResolver(projectPath);
       if (
+        defaultCatalogVitePlusDependencyPending(pkg, catalogDependencyResolver) ||
         !overridesSatisfyVitePlus(
           readPnpmWorkspaceOverrides(projectPath),
           catalogDependencyResolver,
