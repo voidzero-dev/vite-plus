@@ -81,6 +81,42 @@ export function parseIgnoredBuilds(output: string): string[] {
 }
 
 /**
+ * Parse the package names from `bun pm untrusted` output. bun does not hard-fail
+ * on gated builds; after install it lists each blocked package on its own line
+ * as `./node_modules/<name> @<version>` (scoped: `@scope/pkg`, nested:
+ * `./node_modules/a/node_modules/b`). The name after the last `node_modules/`
+ * is what `bun pm trust` expects. Returns deduped names in first-seen order;
+ * `[]` when nothing is blocked.
+ */
+export function parseBunUntrusted(output: string): string[] {
+  if (!output) {
+    return [];
+  }
+  const names: string[] = [];
+  const seen = new Set<string>();
+  for (const line of output.split('\n')) {
+    const marker = line.trimEnd().lastIndexOf('node_modules/');
+    if (marker === -1) {
+      continue;
+    }
+    const rest = line.trimEnd().slice(marker + 'node_modules/'.length);
+    // A package entry is `<name> @<version>`; the name never contains a space
+    // (so the postinstall detail lines that mention paths are skipped).
+    const match = rest.match(/^(@?[^\s]+) @[^\s]+$/u);
+    if (!match) {
+      continue;
+    }
+    const name = match[1];
+    if (seen.has(name)) {
+      continue;
+    }
+    seen.add(name);
+    names.push(name);
+  }
+  return names;
+}
+
+/**
  * Collect the names a project directly depends on (the dependencies it can
  * meaningfully approve). peerDependencies are intentionally excluded: they are
  * not installed into the project's own tree.
@@ -107,19 +143,31 @@ export function filterToDirectDependencies(ignored: string[], direct: Set<string
   return ignored.filter((name) => direct.has(name));
 }
 
+/** Package managers that gate build scripts and expose an approval workflow. */
+const GATED_BUILD_PACKAGE_MANAGERS: ReadonlySet<PackageManager> = new Set([
+  PackageManager.pnpm,
+  PackageManager.bun,
+]);
+
 /**
- * Narrow pnpm's gated builds down to the ones worth surfacing during
- * `vp create`: packages the generated project depends on directly. Transitive
- * gated builds (e.g. `esbuild` pulled in by Vite) are noise the user did not
- * choose, so they are dropped. Returns `[]` for non-pnpm package managers,
- * since their gating models differ.
+ * Narrow a package manager's gated builds down to the ones worth surfacing
+ * during `vp create`: packages the generated project depends on directly.
+ * Transitive gated builds (e.g. `esbuild` pulled in by Vite) are noise the user
+ * did not choose, so they are dropped. Returns `[]` for package managers that
+ * do not gate build scripts (npm, yarn classic), since there is nothing to
+ * approve.
  */
 export function resolveApproveBuildTargets(
   projectDir: string,
   pendingBuilds: string[] | undefined,
   packageManager: PackageManager | undefined,
 ): string[] {
-  if (packageManager !== PackageManager.pnpm || !pendingBuilds || pendingBuilds.length === 0) {
+  if (
+    !packageManager ||
+    !GATED_BUILD_PACKAGE_MANAGERS.has(packageManager) ||
+    !pendingBuilds ||
+    pendingBuilds.length === 0
+  ) {
     return [];
   }
   let pkg: Record<string, unknown>;
@@ -131,6 +179,39 @@ export function resolveApproveBuildTargets(
   const direct = collectDirectDependencyNames(pkg);
   const deduped = [...new Set(pendingBuilds)];
   return filterToDirectDependencies(deduped, direct);
+}
+
+/**
+ * Enumerate the packages whose build scripts a package manager gated during the
+ * install, as raw names (still unfiltered by direct dependency).
+ *
+ * - pnpm reports them in its install output (a hard exit-1 on v11), so its names
+ *   are parsed there and passed in via `pendingBuildsFromInstall`.
+ * - bun exits 0 and only prints a count, so `bun pm untrusted` is queried here.
+ *
+ * Other package managers run build scripts by default and return `[]`.
+ */
+export async function detectGatedBuilds(
+  installCwd: string,
+  packageManager: PackageManager | undefined,
+  pendingBuildsFromInstall: string[] | undefined,
+): Promise<string[]> {
+  if (packageManager === PackageManager.pnpm) {
+    return pendingBuildsFromInstall ?? [];
+  }
+  if (packageManager === PackageManager.bun) {
+    const { exitCode, stdout, stderr } = await runCommandSilently({
+      command: process.env.VP_CLI_BIN ?? 'vp',
+      args: ['exec', 'bun', 'pm', 'untrusted'],
+      cwd: installCwd,
+      envs: process.env,
+    });
+    if (exitCode !== 0) {
+      return [];
+    }
+    return parseBunUntrusted(`${stdout.toString()}\n${stderr.toString()}`);
+  }
+  return [];
 }
 
 function makeSpinner(interactive: boolean, silent: boolean) {

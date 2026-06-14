@@ -30,7 +30,11 @@ import {
   writeAgentInstructions,
   writeCopilotSetupWorkflow,
 } from '../utils/agent.ts';
-import { approveBuilds, resolveApproveBuildTargets } from '../utils/approve-builds.ts';
+import {
+  approveBuilds,
+  detectGatedBuilds,
+  resolveApproveBuildTargets,
+} from '../utils/approve-builds.ts';
 import { detectExistingEditors, selectEditors, writeEditorConfigs } from '../utils/editor.ts';
 import { createInitialCommit, initGitRepository } from '../utils/git.ts';
 import { renderCliDoc } from '../utils/help.ts';
@@ -137,7 +141,8 @@ const helpMessage = renderCliDoc({
         },
         {
           label: '--approve-builds',
-          description: 'Approve and run gated dependency build scripts without prompting (pnpm)',
+          description:
+            'Approve and run gated dependency build scripts without prompting (pnpm, bun)',
         },
         { label: '--verbose', description: 'Show detailed scaffolding output' },
         { label: '--no-interactive', description: 'Run in non-interactive mode' },
@@ -935,19 +940,27 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     }
   };
 
-  // After a successful install, surface pnpm's gated build scripts (native
-  // builds like better-sqlite3 the template added as a direct dependency) and
-  // let the user approve them. `projectPath` is the created package whose direct
-  // deps decide what is worth prompting for; `installCwd` is where the package
-  // manager (and `node_modules`) lives.
+  // After a successful install, surface gated build scripts (native builds like
+  // better-sqlite3 the template added as a direct dependency) that pnpm or bun
+  // blocked, and let the user approve them. `projectPath` is the created package
+  // whose direct deps decide what is worth prompting for; `installCwd` is where
+  // the package manager (and `node_modules`) lives.
   const handleIgnoredBuilds = async (
     projectPath: string,
     installCwd: string,
     summary: CommandRunSummary | undefined,
   ) => {
+    if (summary?.status !== 'installed') {
+      return;
+    }
+    const pendingBuilds = await detectGatedBuilds(
+      installCwd,
+      workspaceInfo.packageManager,
+      summary.pendingBuilds,
+    );
     const targets = resolveApproveBuildTargets(
       projectPath,
-      summary?.status === 'installed' ? summary.pendingBuilds : undefined,
+      pendingBuilds,
       workspaceInfo.packageManager,
     );
     if (targets.length === 0) {

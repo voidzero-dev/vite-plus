@@ -9,6 +9,7 @@ import {
   collectDirectDependencyNames,
   filterToDirectDependencies,
   isPnpmIgnoredBuildsError,
+  parseBunUntrusted,
   parseIgnoredBuilds,
   resolveApproveBuildTargets,
   stripPackageVersion,
@@ -91,6 +92,41 @@ describe('parseIgnoredBuilds', () => {
   });
 });
 
+describe('parseBunUntrusted', () => {
+  it('parses the package names from real `bun pm untrusted` output', () => {
+    const output = [
+      'bun pm untrusted v1.3.11 (af24e281)',
+      '',
+      './node_modules/core-js @3.39.0',
+      ' » [postinstall]: node -e "try{require(\'./postinstall\')}catch(e){}"',
+      '',
+      './node_modules/@scope/native @1.0.0',
+      ' » [install]: node-gyp rebuild',
+      '',
+      'These dependencies had their lifecycle scripts blocked during install.',
+      '',
+      'If you trust them and wish to run their scripts, use `bun pm trust`.',
+    ].join('\n');
+    expect(parseBunUntrusted(output)).toEqual(['core-js', '@scope/native']);
+  });
+
+  it('takes the name after the last node_modules/ for nested packages', () => {
+    expect(parseBunUntrusted('./node_modules/a/node_modules/b @1.0.0')).toEqual(['b']);
+  });
+
+  it('skips lines that mention node_modules but are not package entries', () => {
+    // A lifecycle-script command can reference a node_modules path; it must not
+    // be parsed as a package (no trailing ` @<version>`).
+    expect(parseBunUntrusted(' » [postinstall]: node ./node_modules/.bin/tool')).toEqual([]);
+  });
+
+  it('dedupes and returns [] when nothing is blocked', () => {
+    expect(parseBunUntrusted('./node_modules/x @1.0.0\n./node_modules/x @1.0.0')).toEqual(['x']);
+    expect(parseBunUntrusted('No untrusted dependencies.')).toEqual([]);
+    expect(parseBunUntrusted('')).toEqual([]);
+  });
+});
+
 describe('collectDirectDependencyNames', () => {
   it('collects dependencies, devDependencies and optionalDependencies', () => {
     const names = collectDirectDependencyNames({
@@ -147,7 +183,14 @@ describe('resolveApproveBuildTargets', () => {
     ).toEqual(['better-sqlite3']);
   });
 
-  it('returns [] for non-pnpm package managers', () => {
+  it('returns direct-dep build targets for bun', () => {
+    writePkg({ dependencies: { 'core-js': '3.39.0' } });
+    expect(resolveApproveBuildTargets(dir, ['core-js', 'esbuild'], PackageManager.bun)).toEqual([
+      'core-js',
+    ]);
+  });
+
+  it('returns [] for package managers that do not gate builds', () => {
     writePkg({ dependencies: { 'better-sqlite3': '^11.0.0' } });
     expect(resolveApproveBuildTargets(dir, ['better-sqlite3'], PackageManager.npm)).toEqual([]);
     expect(resolveApproveBuildTargets(dir, ['better-sqlite3'], PackageManager.yarn)).toEqual([]);
