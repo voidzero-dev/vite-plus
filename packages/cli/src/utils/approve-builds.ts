@@ -41,6 +41,29 @@ export function stripPackageVersion(spec: string): string {
 }
 
 /**
+ * Collect the name `extract` pulls from each item, dropping empties and
+ * duplicates while preserving first-seen order. The three install-output
+ * parsers (pnpm / bun / yarn) differ only in how a name is read from each token
+ * or line; this captures their shared dedupe-in-order loop.
+ */
+function dedupeNames<T>(
+  items: Iterable<T>,
+  extract: (item: T) => string | null | undefined,
+): string[] {
+  const names: string[] = [];
+  const seen = new Set<string>();
+  for (const item of items) {
+    const name = extract(item);
+    if (!name || seen.has(name)) {
+      continue;
+    }
+    seen.add(name);
+    names.push(name);
+  }
+  return names;
+}
+
+/**
  * Parse the package names pnpm reports under "Ignored build scripts:" from
  * captured install output. Handles both the pnpm >= 11 single-line error and
  * the pnpm 10 boxed warning, strips version suffixes, and dedupes while
@@ -77,21 +100,10 @@ export function parseIgnoredBuilds(output: string): string[] {
     return [];
   }
 
-  const names: string[] = [];
-  const seen = new Set<string>();
-  for (const rawToken of segment.split(',')) {
+  return dedupeNames(segment.split(','), (rawToken) => {
     const token = rawToken.trim();
-    if (!token) {
-      continue;
-    }
-    const name = stripPackageVersion(token);
-    if (!name || seen.has(name)) {
-      continue;
-    }
-    seen.add(name);
-    names.push(name);
-  }
-  return names;
+    return token ? stripPackageVersion(token) : null;
+  });
 }
 
 /**
@@ -106,29 +118,18 @@ export function parseBunUntrusted(output: string): string[] {
   if (!output) {
     return [];
   }
-  const names: string[] = [];
-  const seen = new Set<string>();
-  for (const rawLine of output.split('\n')) {
+  return dedupeNames(output.split('\n'), (rawLine) => {
     const line = rawLine.trim();
     // A blocked-package entry is a path line (`./node_modules/<name> @<version>`).
     // Require that exact shape so the indented `» [postinstall]: ...` detail
     // lines — which may themselves contain a `node_modules/` path — are skipped.
     if (!line.startsWith('./node_modules/') && !line.startsWith('node_modules/')) {
-      continue;
+      return null;
     }
     const rest = line.slice(line.lastIndexOf('node_modules/') + 'node_modules/'.length);
     const match = rest.match(/^(@?[^\s]+) @[^\s]+$/u);
-    if (!match) {
-      continue;
-    }
-    const name = match[1];
-    if (seen.has(name)) {
-      continue;
-    }
-    seen.add(name);
-    names.push(name);
-  }
-  return names;
+    return match ? match[1] : null;
+  });
 }
 
 const YARN_DISABLED_BUILDS_MARKER = 'lists build scripts, but all build scripts have been disabled';
@@ -143,25 +144,17 @@ export function parseYarnDisabledBuilds(output: string): string[] {
   if (!output) {
     return [];
   }
-  const names: string[] = [];
-  const seen = new Set<string>();
-  for (const rawLine of output.split('\n')) {
+  return dedupeNames(output.split('\n'), (rawLine) => {
     const line = stripVTControlCharacters(rawLine);
     const markerIndex = line.indexOf(YARN_DISABLED_BUILDS_MARKER);
     if (markerIndex === -1) {
-      continue;
+      return null;
     }
     // The descriptor is the last whitespace-delimited token before the marker
     // (yarn descriptors never contain spaces), e.g. `core-js@npm:3.39.0`.
     const descriptor = line.slice(0, markerIndex).trim().split(/\s+/u).pop() ?? '';
-    const name = yarnDescriptorName(descriptor);
-    if (!name || seen.has(name)) {
-      continue;
-    }
-    seen.add(name);
-    names.push(name);
-  }
-  return names;
+    return yarnDescriptorName(descriptor);
+  });
 }
 
 /**
