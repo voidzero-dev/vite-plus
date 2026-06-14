@@ -1159,6 +1159,7 @@ async function main() {
 
     if (
       !didMigrate &&
+      report.warnings.length === 0 &&
       !vitePlusBootstrapPending &&
       !hasExistingVitePlusMigrationCandidates(workspaceInfoOptional, options)
     ) {
