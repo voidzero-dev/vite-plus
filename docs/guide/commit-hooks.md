@@ -48,11 +48,11 @@ vp staged --fail-on-changes
 Define staged-file checks in the `staged` block in `vite.config.ts`:
 
 ```ts [vite.config.ts]
-import { defineConfig } from "vite-plus";
+import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   staged: {
-    "*.{js,ts,tsx,vue,svelte}": "vp check --fix",
+    '*.{js,ts,tsx,vue,svelte}': 'vp check --fix',
   },
 });
 ```

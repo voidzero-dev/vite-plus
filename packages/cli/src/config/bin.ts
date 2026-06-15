@@ -4,50 +4,50 @@
 // Agent instructions: silently updates existing files with Vite+ markers.
 // Never creates new agent files. Same behavior for prepare and manual runs.
 
-import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 
-import mri from "mri";
+import mri from 'mri';
 
-import { ensurePreCommitHook, hasStagedConfigInViteConfig } from "../migration/migrator.ts";
-import { updateExistingAgentInstructions } from "../utils/agent.ts";
-import { renderCliDoc } from "../utils/help.ts";
-import { defaultInteractive, promptGitHooks } from "../utils/prompts.ts";
-import { log, printHeader } from "../utils/terminal.ts";
-import { install } from "./hooks.ts";
+import { ensurePreCommitHook, hasStagedConfigInViteConfig } from '../migration/migrator.ts';
+import { updateExistingAgentInstructions } from '../utils/agent.ts';
+import { renderCliDoc } from '../utils/help.ts';
+import { defaultInteractive, promptGitHooks } from '../utils/prompts.ts';
+import { log, printHeader } from '../utils/terminal.ts';
+import { install } from './hooks.ts';
 
 async function main() {
   const args = mri(process.argv.slice(3), {
-    boolean: ["help", "hooks-only", "hooks", "agent"],
-    string: ["hooks-dir"],
-    alias: { h: "help" },
+    boolean: ['help', 'hooks-only', 'hooks', 'agent'],
+    string: ['hooks-dir'],
+    alias: { h: 'help' },
   });
 
   if (args.help) {
     const helpMessage = renderCliDoc({
-      usage: "vp config [OPTIONS]",
-      summary: "Configure Vite+ for the current project (hooks + agent integration).",
-      documentationUrl: "https://viteplus.dev/guide/commit-hooks",
+      usage: 'vp config [OPTIONS]',
+      summary: 'Configure Vite+ for the current project (hooks + agent integration).',
+      documentationUrl: 'https://viteplus.dev/guide/commit-hooks',
       sections: [
         {
-          title: "Options",
+          title: 'Options',
           rows: [
             {
-              label: "--hooks-dir <path>",
-              description: "Custom hooks directory (default: .vite-hooks)",
+              label: '--hooks-dir <path>',
+              description: 'Custom hooks directory (default: .vite-hooks)',
             },
-            { label: "--no-hooks", description: "Skip hook installation" },
-            { label: "--no-agent", description: "Skip updating coding agent instructions" },
+            { label: '--no-hooks', description: 'Skip hook installation' },
+            { label: '--no-agent', description: 'Skip updating coding agent instructions' },
             {
-              label: "--hooks-only",
-              description: "Install hooks without updating agent instructions",
+              label: '--hooks-only',
+              description: 'Install hooks without updating agent instructions',
             },
-            { label: "-h, --help", description: "Show this help message" },
+            { label: '-h, --help', description: 'Show this help message' },
           ],
         },
         {
-          title: "Environment",
-          rows: [{ label: "VITE_GIT_HOOKS=0", description: "Skip hook installation" }],
+          title: 'Environment',
+          rows: [{ label: 'VITE_GIT_HOOKS=0', description: 'Skip hook installation' }],
         },
       ],
     });
@@ -56,18 +56,18 @@ async function main() {
     return;
   }
 
-  const dir = args["hooks-dir"] as string | undefined;
-  const hooksOnly = args["hooks-only"] as boolean;
+  const dir = args['hooks-dir'] as string | undefined;
+  const hooksOnly = args['hooks-only'] as boolean;
   const skipHooks = args.hooks === false;
   const skipAgent = args.agent === false;
   const interactive = defaultInteractive();
   const lifecycleEvent = process.env.npm_lifecycle_event;
-  const isLifecycleScript = lifecycleEvent === "prepare" || lifecycleEvent === "postinstall";
+  const isLifecycleScript = lifecycleEvent === 'prepare' || lifecycleEvent === 'postinstall';
   const root = process.cwd();
 
   // --- Step 1: Hooks setup ---
-  const hooksDir = dir ?? ".vite-hooks";
-  const isFirstHooksRun = !existsSync(join(root, hooksDir, "_", "pre-commit"));
+  const hooksDir = dir ?? '.vite-hooks';
+  const isFirstHooksRun = !existsSync(join(root, hooksDir, '_', 'pre-commit'));
 
   let shouldSetupHooks = !skipHooks;
   if (

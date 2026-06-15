@@ -50,3 +50,4 @@ Environment:
   VITE_GIT_HOOKS=0  Skip hook installation
 
 Documentation: https://viteplus.dev/guide/commit-hooks
+
