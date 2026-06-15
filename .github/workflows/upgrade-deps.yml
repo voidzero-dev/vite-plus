@@ -82,8 +82,9 @@ jobs:
             - Upgrade script: `./.github/scripts/upgrade-deps.ts`
             - Sync-remote tool: `pnpm tool sync-remote` (source in
               `packages/tools/src/sync-remote-deps.ts`) — clones rolldown/vite into the
-              working tree and merges their pnpm-workspace catalogs into the root
-              `pnpm-workspace.yaml`.
+              working tree, merges their pnpm-workspace catalogs into the root
+              `pnpm-workspace.yaml`, and syncs the root `Cargo.toml` oxc crate
+              versions to match `rolldown/Cargo.toml`.
             - Build-upstream action: `./.github/actions/build-upstream/action.yml`
             - Package manager: `pnpm`. Do NOT downgrade any dep — we want the latest.
 
@@ -105,7 +106,15 @@ jobs:
                then re-run `pnpm tool sync-remote` until it exits 0. Finish with
                `pnpm install --no-frozen-lockfile`.
             2. Re-run the steps in `./.github/actions/build-upstream/action.yml`; fix any
-               non-zero exits.
+               non-zero exits. If the Rust build fails inside a vendored `rolldown`
+               crate with an oxc API mismatch (e.g. `oxc_ast::template_element` taking
+               a different number of arguments, or any `oxc_*` type/signature error),
+               the root `Cargo.toml` oxc pins are out of sync with the bumped rolldown.
+               `pnpm tool sync-remote` should already reconcile them; if any `oxc_*`
+               entry in the root `Cargo.toml [workspace.dependencies]` still differs
+               from `rolldown/Cargo.toml`, bump it to match (the oxc same-version
+               family follows rolldown's umbrella `oxc` version), run `cargo update`,
+               and rebuild.
             3. If the rolldown hash changed, follow `.claude/agents/cargo-workspace-merger.md`
                to resync the workspace.
             4. Compare tsdown CLI options with `vp pack` and sync new/removed options per
@@ -182,6 +191,12 @@ jobs:
           pnpm dedupe
 
       - name: Format code
+        # `pnpm fmt` runs `vp fmt`, which loads the freshly built NAPI binding. When
+        # `build-upstream` fails (e.g. an upstream rolldown/oxc desync the in-workflow
+        # fixup could not resolve) the binding is never produced and `vp fmt` aborts.
+        # Keep going so the PR is still created with the broken state surfaced for review,
+        # matching the `continue-on-error` on the build steps above.
+        continue-on-error: true
         run: pnpm fmt
 
       - name: Enhance PR description with Claude

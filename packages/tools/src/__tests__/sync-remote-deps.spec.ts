@@ -1,7 +1,7 @@
 import { describe, expect, test } from '@voidzero-dev/vite-plus-test';
 import * as semver from 'semver';
 
-import { mergePnpmWorkspaces } from '../sync-remote-deps.ts';
+import { mergePnpmWorkspaces, syncCargoOxcVersions } from '../sync-remote-deps.ts';
 
 describe('mergePnpmWorkspaces() minimumReleaseAgeExclude', () => {
   test('drops versioned upstream entries already covered by a glob or bare pattern', () => {
@@ -78,5 +78,109 @@ describe('mergePnpmWorkspaces() minimumReleaseAgeExclude', () => {
     const result = mergePnpmWorkspaces(main, rolldown, {}, semver);
 
     expect(result.minimumReleaseAgeExclude).toEqual(['@oxc-parser/*', 'oxc-parser']);
+  });
+});
+
+// Reproduces the upstream-upgrade build break: when the bumped rolldown hash
+// pins a newer oxc release (e.g. 0.135.0 / oxc_index 5), the vendored rolldown
+// crates fail to compile against vp's stale `Cargo.toml` oxc pin (0.134.0). The
+// root `Cargo.toml` oxc versions must follow rolldown's `Cargo.toml`.
+describe('syncCargoOxcVersions()', () => {
+  const mainCargo = `[workspace]
+members = ["crates/*"]
+
+[workspace.dependencies]
+serde = "1"
+
+# oxc crates with the same version
+oxc = { version = "0.134.0", features = [
+  "ast_visit",
+  "transformer",
+] }
+oxc_allocator = { version = "0.134.0", features = ["pool"] }
+oxc_ast = "0.134.0"
+oxc_parser = "0.134.0"
+oxc_span = "0.134.0"
+oxc_traverse = "0.134.0"
+
+# oxc crates in their own repos
+oxc_index = { version = "4", features = ["rayon", "serde"] }
+oxc_resolver = { version = "11.21.0", features = ["yarn_pnp"] }
+oxc_sourcemap = "7"
+
+[profile.release]
+lto = true
+`;
+
+  const rolldownCargo = `[workspace]
+members = ["crates/*"]
+
+[workspace.dependencies]
+# oxc crates with the same version
+oxc = { version = "0.135.0", features = [
+  "ast_visit",
+  "transformer",
+] }
+oxc_allocator = { version = "0.135.0", features = ["pool"] }
+oxc_traverse = { version = "0.135.0" }
+
+# oxc crates in their own repos
+oxc_index = { version = "5", features = ["rayon", "serde"] }
+oxc_resolver = { version = "11.21.0", features = ["yarn_pnp"] }
+oxc_sourcemap = { version = "7" }
+`;
+
+  test('bumps the oxc same-version family and oxc_index to match rolldown', () => {
+    const { content, changes } = syncCargoOxcVersions(mainCargo, rolldownCargo);
+
+    // Same-version family follows rolldown's umbrella `oxc` version, including
+    // crates rolldown does not declare explicitly (oxc_ast/oxc_parser/oxc_span).
+    expect(content).toContain('oxc = { version = "0.135.0"');
+    expect(content).toContain('oxc_allocator = { version = "0.135.0"');
+    expect(content).toContain('oxc_ast = "0.135.0"');
+    expect(content).toContain('oxc_parser = "0.135.0"');
+    expect(content).toContain('oxc_span = "0.135.0"');
+    expect(content).toContain('oxc_traverse = "0.135.0"');
+    // Independently-versioned crate follows rolldown's own pin.
+    expect(content).toContain('oxc_index = { version = "5"');
+    // Unchanged crates stay put.
+    expect(content).toContain('oxc_resolver = { version = "11.21.0"');
+    expect(content).toContain('oxc_sourcemap = "7"');
+    // Features and unrelated entries are preserved.
+    expect(content).toContain('"ast_visit",');
+    expect(content).toContain('serde = "1"');
+
+    const changed = Object.fromEntries(changes.map((c) => [c.key, c.to]));
+    expect(changed).toMatchObject({
+      oxc: '0.135.0',
+      oxc_allocator: '0.135.0',
+      oxc_ast: '0.135.0',
+      oxc_parser: '0.135.0',
+      oxc_span: '0.135.0',
+      oxc_traverse: '0.135.0',
+      oxc_index: '5',
+    });
+    // No spurious changes for already-matching crates.
+    expect(changes.find((c) => c.key === 'oxc_resolver')).toBeUndefined();
+    expect(changes.find((c) => c.key === 'oxc_sourcemap')).toBeUndefined();
+  });
+
+  test('is a no-op when versions already match', () => {
+    const { content, changes } = syncCargoOxcVersions(mainCargo, mainCargo);
+    expect(content).toBe(mainCargo);
+    expect(changes).toEqual([]);
+  });
+
+  test('only rewrites entries inside [workspace.dependencies]', () => {
+    const withPatch = `${mainCargo}
+[patch.crates-io]
+# pinned override, must not be touched by the oxc sync
+oxc_ast = { git = "https://example.com/oxc", rev = "abc" }
+`;
+    const { content } = syncCargoOxcVersions(withPatch, rolldownCargo);
+    // The dependency entry is bumped...
+    expect(content).toContain('oxc_ast = "0.135.0"');
+    // ...but the [patch] git override is left intact.
+    expect(content).toContain('oxc_ast = { git = "https://example.com/oxc", rev = "abc" }');
   });
 });

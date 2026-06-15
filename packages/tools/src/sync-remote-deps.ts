@@ -957,6 +957,10 @@ export async function syncRemote() {
 
   execCommand('pnpm install --no-frozen-lockfile', rootDir);
 
+  // Keep the root Cargo.toml oxc pins in lockstep with the vendored rolldown.
+  log('Syncing Cargo.toml oxc versions with rolldown...');
+  syncCargoOxcWithRolldown(rootDir);
+
   // Merge package.json exports
   log('Merging package.json exports...');
 
