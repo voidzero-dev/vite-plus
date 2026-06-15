@@ -17,8 +17,8 @@
 use std::sync::LazyLock;
 
 use pgp::{
-    composed::{CleartextSignedMessage, Deserializable, SignedPublicKey},
-    packet::Signature,
+    composed::{CleartextSignedMessage, Deserializable, SignedPublicKey, SignedPublicSubKey},
+    packet::{Signature, SignatureType},
     types::{KeyDetails, Timestamp},
 };
 use vite_str::Str;
@@ -79,7 +79,8 @@ fn verify_clearsigned(
 
         // Primary-key signing path.
         if let Ok(signature) = message.verify(key)
-            && signature_within_validity(signature, key.created_at(), primary_self_signatures(key))
+            && let Some(signed_at) = signature_time(signature)
+            && primary_signature_valid(key, signed_at)
         {
             return Ok(message.signed_text());
         }
@@ -87,11 +88,8 @@ fn verify_clearsigned(
         // Subkey signing path (some releasers sign with a signing subkey).
         for subkey in &key.public_subkeys {
             if let Ok(signature) = message.verify(subkey)
-                && signature_within_validity(
-                    signature,
-                    subkey.created_at(),
-                    subkey.signatures.iter(),
-                )
+                && let Some(signed_at) = signature_time(signature)
+                && subkey_signature_valid(key, subkey, signed_at)
             {
                 return Ok(message.signed_text());
             }
@@ -101,12 +99,10 @@ fn verify_clearsigned(
     Err("signature does not match a valid, unexpired Node.js release key".to_string())
 }
 
-/// The primary key's self/direct signatures, which may carry its expiration.
-fn primary_self_signatures(key: &SignedPublicKey) -> impl Iterator<Item = &Signature> {
-    key.details
-        .direct_signatures
-        .iter()
-        .chain(key.details.users.iter().flat_map(|user| user.signatures.iter()))
+/// Unix-seconds creation time of a signature, if present. A signature with no
+/// creation time cannot be checked against key validity and is rejected.
+fn signature_time(signature: &Signature) -> Option<u64> {
+    signature.created().map(|t| u64::from(t.as_secs()))
 }
 
 /// Whether the primary key carries a valid self-revocation certificate.
@@ -117,29 +113,80 @@ fn primary_key_revoked(key: &SignedPublicKey) -> bool {
         .any(|revocation| revocation.verify_key(&key.primary_key).is_ok())
 }
 
-/// Whether `signature` was created within the signing key's validity window:
-/// the key/subkey must not have expired before the signature was made. A
-/// signature with no creation time is rejected (it cannot be checked); a key
-/// with no expiration is always within validity.
-fn signature_within_validity<'a>(
-    signature: &Signature,
-    key_created_at: Timestamp,
-    self_signatures: impl Iterator<Item = &'a Signature>,
+/// Whether a primary-key signature made at `signed_at` is within the key's
+/// validity, using the self-signature that was effective at that time (not the
+/// loosest one), so a later expiry change is honored as `gpgv` would.
+fn primary_signature_valid(key: &SignedPublicKey, signed_at: u64) -> bool {
+    let self_signatures = key
+        .details
+        .direct_signatures
+        .iter()
+        .chain(key.details.users.iter().flat_map(|user| user.signatures.iter()));
+    match effective_self_signature(self_signatures, signed_at) {
+        Some(self_sig) => within_validity(signed_at, expiry_instant(key.created_at(), self_sig)),
+        // No self-signature was in effect when the message was signed: the
+        // signature predates the key's own certification, so reject it.
+        None => false,
+    }
+}
+
+/// Whether a subkey signature made at `signed_at` should be trusted: the subkey
+/// must not be revoked and must carry a signing-capable binding signature (with
+/// a valid embedded primary-key back-signature) that was effective and unexpired
+/// at that time. rPGP's `verify` applies none of this subkey policy itself, so a
+/// non-signing or revoked subkey would otherwise be accepted.
+fn subkey_signature_valid(
+    key: &SignedPublicKey,
+    subkey: &SignedPublicSubKey,
+    signed_at: u64,
 ) -> bool {
-    let Some(created) = signature.created() else {
+    let primary = &key.primary_key;
+
+    // Reject if a valid subkey revocation exists.
+    let revoked = subkey
+        .signatures
+        .iter()
+        .filter(|s| s.typ() == Some(SignatureType::SubkeyRevocation))
+        .any(|s| s.verify_subkey_binding(primary, &subkey.key).is_ok());
+    if revoked {
+        return false;
+    }
+
+    // The binding signature effective at signing time governs capability and expiry.
+    let bindings =
+        subkey.signatures.iter().filter(|s| s.typ() == Some(SignatureType::SubkeyBinding));
+    let Some(binding) = effective_self_signature(bindings, signed_at) else {
         return false;
     };
 
-    // The latest expiration declared across the key's self-signatures. A
-    // KeyExpirationTime of 0 seconds means "does not expire".
-    let expires_at = self_signatures
-        .filter_map(Signature::key_expiration_time)
+    binding.key_flags().sign()
+        && binding.verify_subkey_binding(primary, &subkey.key).is_ok()
+        && binding
+            .embedded_signature()
+            .is_some_and(|back| back.verify_primary_key_binding(&subkey.key, primary).is_ok())
+        && within_validity(signed_at, expiry_instant(subkey.created_at(), binding))
+}
+
+/// The self/binding signature in effect at `signed_at`: the most recent one
+/// created at or before that time.
+fn effective_self_signature<'a>(
+    signatures: impl Iterator<Item = &'a Signature>,
+    signed_at: u64,
+) -> Option<&'a Signature> {
+    signatures
+        .filter(|s| s.created().is_some_and(|t| u64::from(t.as_secs()) <= signed_at))
+        .max_by_key(|s| s.created().map_or(0, |t| t.as_secs()))
+}
+
+/// Expiration instant (unix seconds) declared by a self/binding signature,
+/// relative to the key's creation time. A `KeyExpirationTime` of 0 means the
+/// key does not expire.
+fn expiry_instant(key_created_at: Timestamp, self_sig: &Signature) -> Option<u64> {
+    self_sig
+        .key_expiration_time()
         .map(|duration| u64::from(duration.as_secs()))
         .filter(|secs| *secs != 0)
         .map(|secs| u64::from(key_created_at.as_secs()) + secs)
-        .max();
-
-    within_validity(u64::from(created.as_secs()), expires_at)
 }
 
 /// Pure validity check: a signature made at `signed_at` (unix seconds) is valid
@@ -202,6 +249,11 @@ mod tests {
 
     /// A real, untampered `SHASUMS256.txt.asc` from Node.js v22.13.1.
     const FIXTURE_SIGNED: &str = include_str!("assets/test/SHASUMS256-v22.13.1.txt.asc");
+
+    /// A real `SHASUMS256.txt.asc` from Node.js v18.14.0, signed in Feb 2023 by
+    /// a release key that has since expired (2023-03-26). The genuine signature
+    /// predates the key's expiry, so it must still verify.
+    const FIXTURE_EXPIRED_SIGNER: &str = include_str!("assets/test/SHASUMS256-v18.14.0.txt.asc");
 
     #[test]
     fn embedded_keys_parse() {
@@ -288,5 +340,15 @@ mod tests {
         // The real v22.13.1 signature was made before its signing key expires,
         // so the added revocation/expiry policy must not reject it.
         assert!(verify_clearsigned(FIXTURE_SIGNED, node_release_keys()).is_ok());
+    }
+
+    #[test]
+    fn accepts_genuine_old_signature_from_now_expired_key() {
+        // The signing key has expired since, but the signature was made while it
+        // was valid, so it must still verify (validity is checked against the
+        // signature's creation time, not "now").
+        let verified =
+            verify_clearsigned(FIXTURE_EXPIRED_SIGNER, node_release_keys()).expect("should verify");
+        assert!(verified.contains("node-v18.14.0-linux-x64.tar.gz"));
     }
 }
