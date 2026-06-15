@@ -1132,11 +1132,11 @@ describe('ensureVitePlusBootstrap', () => {
       devEngines: { packageManager: { name: string } };
     };
     expect(pkg.overrides.vite).toContain('@voidzero-dev/vite-plus-core');
-    expect(pkg.overrides.vitest).toContain('@voidzero-dev/vite-plus-test');
+    expect(pkg.overrides.vitest).toBe('4.1.9');
     expect(pkg.devEngines.packageManager.name).toBe(PackageManager.npm);
   });
 
-  it('does not rewrite semantic npm overrides that already point at Vite+ packages', () => {
+  it('preserves existing Vite+ wrapper overrides while completing the @vitest/* family for npm projects', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
@@ -1151,13 +1151,28 @@ describe('ensureVitePlusBootstrap', () => {
         },
       }),
     );
-    const before = fs.readFileSync(path.join(tmpDir, 'package.json'), 'utf-8');
-
-    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(false);
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(true);
     const result = ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.npm));
 
-    expect(result.changed).toBe(false);
-    expect(fs.readFileSync(path.join(tmpDir, 'package.json'), 'utf-8')).toBe(before);
+    // The existing vite/vitest wrapper aliases still satisfy the migration (they
+    // point at Vite+ packages), so they are left untouched; the missing @vitest/*
+    // family pins are completed at the bundled vitest version.
+    expect(result.changed).toBe(true);
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      overrides: Record<string, string>;
+    };
+    expect(pkg.overrides.vite).toBe('npm:@voidzero-dev/vite-plus-core@0.1.0');
+    expect(pkg.overrides.vitest).toBe('npm:@voidzero-dev/vite-plus-test@0.1.0');
+    expect(pkg.overrides['@vitest/expect']).toBe('4.1.9');
+    expect(pkg.overrides['@vitest/runner']).toBe('4.1.9');
+    expect(pkg.overrides['@vitest/snapshot']).toBe('4.1.9');
+    expect(pkg.overrides['@vitest/spy']).toBe('4.1.9');
+    expect(pkg.overrides['@vitest/utils']).toBe('4.1.9');
+    expect(pkg.overrides['@vitest/mocker']).toBe('4.1.9');
+    expect(pkg.overrides['@vitest/pretty-format']).toBe('4.1.9');
+    expect(pkg.overrides['@vitest/coverage-v8']).toBe('4.1.9');
+    expect(pkg.overrides['@vitest/coverage-istanbul']).toBe('4.1.9');
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(false);
   });
 
   it('rewrites direct npm Vite dependencies before adding overrides', () => {
@@ -1187,7 +1202,7 @@ describe('ensureVitePlusBootstrap', () => {
       dependencies: Record<string, string>;
     };
     expect(pkg.devDependencies.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
-    expect(pkg.dependencies.vitest).toBe('npm:@voidzero-dev/vite-plus-test@latest');
+    expect(pkg.dependencies.vitest).toBe('4.1.9');
   });
 
   it('normalizes catalog vite-plus pins for npm projects', () => {
@@ -1427,7 +1442,7 @@ describe('ensureVitePlusBootstrap', () => {
     };
     expect(yarnrc.nodeLinker).toBe('node-modules');
     expect(yarnrc.catalog.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
-    expect(yarnrc.catalog.vitest).toBe('npm:@voidzero-dev/vite-plus-test@latest');
+    expect(yarnrc.catalog.vitest).toBe('4.1.9');
     expect(yarnrc.catalog['vite-plus']).toBe('latest');
   });
 
@@ -1464,8 +1479,32 @@ describe('ensureVitePlusBootstrap', () => {
     const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
       peerDependencyRules: { allowAny: string[]; allowedVersions: Record<string, string> };
     };
-    expect(workspace.peerDependencyRules.allowAny).toEqual(['vite', 'vitest']);
-    expect(workspace.peerDependencyRules.allowedVersions).toEqual({ vite: '*', vitest: '*' });
+    expect(workspace.peerDependencyRules.allowAny).toEqual([
+      'vite',
+      'vitest',
+      '@vitest/expect',
+      '@vitest/runner',
+      '@vitest/snapshot',
+      '@vitest/spy',
+      '@vitest/utils',
+      '@vitest/mocker',
+      '@vitest/pretty-format',
+      '@vitest/coverage-v8',
+      '@vitest/coverage-istanbul',
+    ]);
+    expect(workspace.peerDependencyRules.allowedVersions).toEqual({
+      vite: '*',
+      vitest: '*',
+      '@vitest/expect': '*',
+      '@vitest/runner': '*',
+      '@vitest/snapshot': '*',
+      '@vitest/spy': '*',
+      '@vitest/utils': '*',
+      '@vitest/mocker': '*',
+      '@vitest/pretty-format': '*',
+      '@vitest/coverage-v8': '*',
+      '@vitest/coverage-istanbul': '*',
+    });
   });
 
   it('preserves package.json workspace patterns when creating pnpm-workspace.yaml', () => {
