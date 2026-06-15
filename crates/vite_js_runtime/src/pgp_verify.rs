@@ -16,7 +16,11 @@
 
 use std::sync::LazyLock;
 
-use pgp::composed::{CleartextSignedMessage, Deserializable, SignedPublicKey};
+use pgp::{
+    composed::{CleartextSignedMessage, Deserializable, SignedPublicKey},
+    packet::Signature,
+    types::{KeyDetails, Timestamp},
+};
 use vite_str::Str;
 
 use crate::Error;
@@ -52,6 +56,14 @@ pub async fn verify_signed_shasums(signed_armor: String, filename: &str) -> Resu
 /// Returns the verified, normalized plaintext on success. Each key is tried
 /// against its primary key and every subkey, because Node.js releasers may sign
 /// with a signing subkey rather than the primary key.
+///
+/// A raw cryptographic match is not sufficient: the keyring is intentionally
+/// historical and rPGP's low-level `verify` does not apply OpenPGP key policy.
+/// So a match is only accepted when the signing key/subkey is not revoked and
+/// the signature was created before that key/subkey expired. This mirrors what
+/// `gpgv` does and prevents a compromised, long-expired release key from signing
+/// a fresh SHASUMS for a current release (a fresh signature postdates the
+/// expiry), while genuine old signatures made when the key was valid still pass.
 fn verify_clearsigned(
     signed_armor: &str,
     trusted_keys: &[SignedPublicKey],
@@ -60,17 +72,83 @@ fn verify_clearsigned(
         .map_err(|e| format!("failed to parse clearsigned message: {e}"))?;
 
     for key in trusted_keys {
-        if message.verify(key).is_ok() {
+        // A revoked primary key (and, with it, all its subkeys) is never trusted.
+        if primary_key_revoked(key) {
+            continue;
+        }
+
+        // Primary-key signing path.
+        if let Ok(signature) = message.verify(key)
+            && signature_within_validity(signature, key.created_at(), primary_self_signatures(key))
+        {
             return Ok(message.signed_text());
         }
+
+        // Subkey signing path (some releasers sign with a signing subkey).
         for subkey in &key.public_subkeys {
-            if message.verify(subkey).is_ok() {
+            if let Ok(signature) = message.verify(subkey)
+                && signature_within_validity(
+                    signature,
+                    subkey.created_at(),
+                    subkey.signatures.iter(),
+                )
+            {
                 return Ok(message.signed_text());
             }
         }
     }
 
-    Err("signature does not match any trusted Node.js release key".to_string())
+    Err("signature does not match a valid, unexpired Node.js release key".to_string())
+}
+
+/// The primary key's self/direct signatures, which may carry its expiration.
+fn primary_self_signatures(key: &SignedPublicKey) -> impl Iterator<Item = &Signature> {
+    key.details
+        .direct_signatures
+        .iter()
+        .chain(key.details.users.iter().flat_map(|user| user.signatures.iter()))
+}
+
+/// Whether the primary key carries a valid self-revocation certificate.
+fn primary_key_revoked(key: &SignedPublicKey) -> bool {
+    key.details
+        .revocation_signatures
+        .iter()
+        .any(|revocation| revocation.verify_key(&key.primary_key).is_ok())
+}
+
+/// Whether `signature` was created within the signing key's validity window:
+/// the key/subkey must not have expired before the signature was made. A
+/// signature with no creation time is rejected (it cannot be checked); a key
+/// with no expiration is always within validity.
+fn signature_within_validity<'a>(
+    signature: &Signature,
+    key_created_at: Timestamp,
+    self_signatures: impl Iterator<Item = &'a Signature>,
+) -> bool {
+    let Some(created) = signature.created() else {
+        return false;
+    };
+
+    // The latest expiration declared across the key's self-signatures. A
+    // KeyExpirationTime of 0 seconds means "does not expire".
+    let expires_at = self_signatures
+        .filter_map(Signature::key_expiration_time)
+        .map(|duration| u64::from(duration.as_secs()))
+        .filter(|secs| *secs != 0)
+        .map(|secs| u64::from(key_created_at.as_secs()) + secs)
+        .max();
+
+    within_validity(u64::from(created.as_secs()), expires_at)
+}
+
+/// Pure validity check: a signature made at `signed_at` (unix seconds) is valid
+/// when the key has no expiration, or the signature predates the expiry.
+const fn within_validity(signed_at: u64, expires_at: Option<u64>) -> bool {
+    match expires_at {
+        Some(expiry) => signed_at <= expiry,
+        None => true,
+    }
 }
 
 /// Lazily parsed embedded Node.js release keys.
@@ -183,5 +261,32 @@ mod tests {
             split_armored_blocks(NODE_RELEASE_KEYS_ARMOR).len(),
             "every vendored release key block should parse"
         );
+    }
+
+    #[test]
+    fn validity_window_rejects_signatures_made_after_expiry() {
+        let created = 1_000;
+        let expires_at = Some(created + 2_000); // key valid until 3_000
+
+        // A signature made while the key was valid is accepted...
+        assert!(within_validity(created, expires_at));
+        assert!(within_validity(3_000, expires_at));
+        // ...but a fresh signature made after the key expired is rejected,
+        // which is exactly the compromised-expired-key attack.
+        assert!(!within_validity(3_001, expires_at));
+        assert!(!within_validity(9_999_999, expires_at));
+    }
+
+    #[test]
+    fn validity_window_allows_keys_without_expiry() {
+        assert!(within_validity(0, None));
+        assert!(within_validity(9_999_999, None));
+    }
+
+    #[test]
+    fn genuine_fixture_passes_key_policy() {
+        // The real v22.13.1 signature was made before its signing key expires,
+        // so the added revocation/expiry policy must not reject it.
+        assert!(verify_clearsigned(FIXTURE_SIGNED, node_release_keys()).is_ok());
     }
 }

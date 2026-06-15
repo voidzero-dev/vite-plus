@@ -569,6 +569,21 @@ fn get_dist_url() -> Str {
     )
 }
 
+/// Whether `base_url` points at the official `nodejs.org` distribution, which
+/// always publishes the clearsigned `SHASUMS256.txt.asc`. Signature
+/// verification is required for the official host (even when reached through
+/// `VP_NODE_DIST_MIRROR`) and best-effort for any other mirror.
+#[cfg(not(target_env = "musl"))]
+fn is_official_dist_host(base_url: &str) -> bool {
+    let host = base_url
+        .split_once("://")
+        .map_or(base_url, |(_, rest)| rest)
+        .split(['/', ':'])
+        .next()
+        .unwrap_or_default();
+    host.eq_ignore_ascii_case("nodejs.org")
+}
+
 #[async_trait]
 impl JsRuntimeProvider for NodeProvider {
     fn name(&self) -> &'static str {
@@ -612,11 +627,12 @@ impl JsRuntimeProvider for NodeProvider {
         #[cfg(not(target_env = "musl"))]
         let signature = Some(ShasumsSignature {
             url: vite_str::format!("{base_url}/v{version}/SHASUMS256.txt.asc"),
-            // A custom mirror (VP_NODE_DIST_MIRROR), e.g. an internal
-            // Artifactory, may publish only the archives and SHASUMS256.txt;
-            // treat the signature as best-effort there. Official releases from
-            // nodejs.org always ship the signature, so require it.
-            required: vite_shared::EnvConfig::get().node_dist_mirror.is_none(),
+            // Require the signature based on the resolved host: official
+            // nodejs.org always ships it (including when VP_NODE_DIST_MIRROR
+            // points back at nodejs.org). A custom mirror (e.g. an internal
+            // Artifactory) may publish only the archives and SHASUMS256.txt, so
+            // there the signature is best-effort.
+            required: is_official_dist_host(&base_url),
         });
         #[cfg(target_env = "musl")]
         let signature = None;
@@ -769,6 +785,45 @@ mod tests {
         } else {
             panic!("Expected ShasumsFile verification");
         }
+    }
+
+    // A mirror pointed back at the official nodejs.org host must still require
+    // the signature (required is based on the resolved host, not merely whether
+    // VP_NODE_DIST_MIRROR is set).
+    #[cfg(not(target_env = "musl"))]
+    #[test]
+    fn test_get_download_info_official_mirror_requires_signature() {
+        let provider = NodeProvider::new();
+        let platform = Platform { os: Os::Linux, arch: Arch::X64 };
+
+        let info = vite_shared::EnvConfig::test_scope(
+            vite_shared::EnvConfig {
+                node_dist_mirror: Some("https://nodejs.org/download/release".into()),
+                ..vite_shared::EnvConfig::for_test()
+            },
+            || provider.get_download_info("22.13.1", platform),
+        );
+
+        if let HashVerification::ShasumsFile { signature, .. } = &info.hash_verification {
+            let signature = signature.as_ref().expect("official host is signature-verified");
+            assert!(
+                signature.required,
+                "an official nodejs.org mirror URL must still require the signature"
+            );
+        } else {
+            panic!("Expected ShasumsFile verification");
+        }
+    }
+
+    #[cfg(not(target_env = "musl"))]
+    #[test]
+    fn test_is_official_dist_host() {
+        assert!(is_official_dist_host("https://nodejs.org/dist"));
+        assert!(is_official_dist_host("https://nodejs.org/download/release"));
+        assert!(is_official_dist_host("https://NODEJS.ORG/dist"));
+        assert!(!is_official_dist_host("https://npmmirror.com/mirrors/node"));
+        assert!(!is_official_dist_host("https://unofficial-builds.nodejs.org/download/release"));
+        assert!(!is_official_dist_host("https://artifactory.internal/node"));
     }
 
     #[test]
