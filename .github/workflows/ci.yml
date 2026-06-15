@@ -291,85 +291,12 @@ jobs:
     if: needs.detect-changes.outputs.code-changed == 'true'
     name: Build Windows CLI binaries
     runs-on: namespace-profile-linux-x64-default
-    env:
-      XWIN_ACCEPT_LICENSE: '1'
-      # See build-windows-tests for why this Detours escape hatch is needed.
-      CXXFLAGS: -D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
-
-      # Must use the same hashFiles input set as build-upstream's "Compute
-      # NAPI binding cache key" step (keep the two lists in sync, or a stale
-      # cross-built artifact is served on a cache that should have missed),
-      # but under a distinct prefix: this cache stores Linux-relative paths
-      # and must never mix with the caches build-upstream saves on other
-      # runners.
-      - name: Compute binaries cache key
-        id: cache-key
-        run: |
-          echo "key=windows-cli-xwin-v1-${{ hashFiles('packages/tools/.upstream-versions.json', 'rust-toolchain.toml', 'Cargo.lock', 'crates/**/*.rs', 'crates/*/Cargo.toml', 'packages/cli/binding/**/*.rs', 'packages/cli/binding/Cargo.toml', 'Cargo.toml', '.cargo/config.toml', 'packages/cli/package.json', 'packages/cli/build.ts', 'packages/cli/tsdown.config.ts') }}" >> $GITHUB_OUTPUT
-
-      - name: Restore binaries cache
-        id: binaries-cache
-        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
-        with:
-          path: |
-            packages/cli/binding/*.node
-            target/x86_64-pc-windows-msvc/release/vp.exe
-            target/x86_64-pc-windows-msvc/release/vp-shim.exe
-            target/x86_64-pc-windows-msvc/release/vp-setup.exe
-          key: ${{ steps.cache-key.outputs.key }}
-
-      - uses: ./.github/actions/setup-xwin
-        if: steps.binaries-cache.outputs.cache-hit != 'true'
+      - uses: ./.github/actions/build-windows-cli
         with:
           save-cache: ${{ github.ref_name == 'main' }}
-          cache-key: windows-cli-cross
-
-      - uses: oxc-project/setup-node@4c588e9266bd930b6ddc34307df0659ed511d187 # v1.3.1
-        if: steps.binaries-cache.outputs.cache-hit != 'true'
-
-      # --skip-format: formatting the generated index.cjs/index.d.cts needs
-      # the repo vite config, which imports the built vite-plus dist; this
-      # job skips the TS builds on purpose.
-      - name: Build NAPI binding
-        if: steps.binaries-cache.outputs.cache-hit != 'true'
-        run: pnpm --filter=vite-plus build-native --target x86_64-pc-windows-msvc -x --skip-format
-        env:
-          DEBUG: 'napi:*'
-
-      - name: Build Rust CLI binaries
-        if: steps.binaries-cache.outputs.cache-hit != 'true'
-        run: cargo xwin build --release --target x86_64-pc-windows-msvc -p vite_global_cli -p vite_trampoline -p vite_installer
-
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: windows-cli-binaries
-          # Both path roots are workspace-relative, so the artifact preserves
-          # the repo layout and a plain download into the workspace places
-          # every file where bootstrap-cli:ci (tool install-global-cli)
-          # expects it. The generated binding JS (index.cjs etc.) is NOT
-          # included: those files are committed, and the unformatted copies
-          # this job produces (--skip-format) must not overwrite them in the
-          # consumer checkouts (vp check would flag them).
-          path: |
-            packages/cli/binding/*.node
-            target/x86_64-pc-windows-msvc/release/vp.exe
-            target/x86_64-pc-windows-msvc/release/vp-shim.exe
-            target/x86_64-pc-windows-msvc/release/vp-setup.exe
-          if-no-files-found: error
-          retention-days: 7
-
-      - uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
-        if: steps.binaries-cache.outputs.cache-hit != 'true'
-        with:
-          path: |
-            packages/cli/binding/*.node
-            target/x86_64-pc-windows-msvc/release/vp.exe
-            target/x86_64-pc-windows-msvc/release/vp-shim.exe
-            target/x86_64-pc-windows-msvc/release/vp-setup.exe
-          key: ${{ steps.cache-key.outputs.key }}
 
   cli-e2e-test:
     name: CLI E2E test
