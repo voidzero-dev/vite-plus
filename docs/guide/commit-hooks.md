@@ -22,7 +22,16 @@ If you use [`vp create`](/guide/create) or [`vp migrate`](/guide/migrate), Vite+
 ```bash
 vp config
 vp config --hooks-dir .vite-hooks
+vp config --no-hooks
+vp config --no-agent
 ```
+
+Use `--no-hooks` when you want `vp config` to leave existing Git hook setup unchanged. Use
+`--no-agent` when you want it to skip updates to existing coding agent instruction files. If
+you only want hook setup and no agent integration, use `vp config --hooks-only`.
+
+You can also set `VITE_GIT_HOOKS=0` to disable hook installation from lifecycle scripts such as
+`prepare` or `postinstall`.
 
 ### `vp staged`
 
@@ -39,11 +48,11 @@ vp staged --fail-on-changes
 Define staged-file checks in the `staged` block in `vite.config.ts`:
 
 ```ts [vite.config.ts]
-import { defineConfig } from 'vite-plus';
+import { defineConfig } from "vite-plus";
 
 export default defineConfig({
   staged: {
-    '*.{js,ts,tsx,vue,svelte}': 'vp check --fix',
+    "*.{js,ts,tsx,vue,svelte}": "vp check --fix",
   },
 });
 ```
