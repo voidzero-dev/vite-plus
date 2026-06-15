@@ -50,6 +50,12 @@ pub enum HashVerification {
 pub struct ShasumsSignature {
     /// URL to the clearsigned SHASUMS file (e.g. `SHASUMS256.txt.asc`).
     pub url: Str,
+    /// Whether a usable signature is mandatory. `true` for official releases:
+    /// a missing or invalid signature is a hard error. `false` for custom
+    /// mirrors that may publish only the archives and plain `SHASUMS256.txt`:
+    /// a missing `.asc` falls back to the plain SHASUMS, but a present-but-
+    /// invalid signature still fails.
+    pub required: bool,
 }
 
 /// Information needed to download a runtime

@@ -185,12 +185,30 @@ pub async fn download_runtime_with_provider<P: JsRuntimeProvider>(
             // verify its PGP signature against the runtime's release keys, then
             // parse the verified plaintext. Otherwise fall back to the plain
             // SHASUMS (e.g. musl unofficial builds publish no signature).
-            let shasums_content = if let Some(signature) = signature {
-                let signed = download_text(&signature.url).await?;
-                crate::pgp_verify::verify_signed_shasums(signed, &download_info.archive_filename)
-                    .await?
-            } else {
-                download_text(url).await?
+            let shasums_content = match signature {
+                Some(signature) => match download_text(&signature.url).await {
+                    Ok(signed) => {
+                        crate::pgp_verify::verify_signed_shasums(
+                            signed,
+                            &download_info.archive_filename,
+                        )
+                        .await?
+                    }
+                    // A custom mirror may publish only the plain SHASUMS256.txt;
+                    // fall back to it there. The official source requires the
+                    // signature, and a downloaded-but-invalid signature always
+                    // fails (verify errors propagate above).
+                    Err(e) if !signature.required => {
+                        tracing::warn!(
+                            "Signature {} unavailable ({e}); falling back to the unsigned \
+                             SHASUMS256.txt from the configured mirror",
+                            signature.url
+                        );
+                        download_text(url).await?
+                    }
+                    Err(e) => return Err(e),
+                },
+                None => download_text(url).await?,
             };
             Some(provider.parse_shasums(&shasums_content, &download_info.archive_filename)?)
         }

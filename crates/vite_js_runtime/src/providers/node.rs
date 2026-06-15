@@ -612,6 +612,11 @@ impl JsRuntimeProvider for NodeProvider {
         #[cfg(not(target_env = "musl"))]
         let signature = Some(ShasumsSignature {
             url: vite_str::format!("{base_url}/v{version}/SHASUMS256.txt.asc"),
+            // A custom mirror (VP_NODE_DIST_MIRROR), e.g. an internal
+            // Artifactory, may publish only the archives and SHASUMS256.txt;
+            // treat the signature as best-effort there. Official releases from
+            // nodejs.org always ship the signature, so require it.
+            required: vite_shared::EnvConfig::get().node_dist_mirror.is_none(),
         });
         #[cfg(target_env = "musl")]
         let signature = None;
@@ -694,7 +699,11 @@ mod tests {
         let provider = NodeProvider::new();
         let platform = Platform { os: Os::Linux, arch: Arch::X64 };
 
-        let info = provider.get_download_info("22.13.1", platform);
+        // for_test() leaves node_dist_mirror unset, so this exercises the
+        // official (default) source where signature verification is required.
+        let info = vite_shared::EnvConfig::test_scope(vite_shared::EnvConfig::for_test(), || {
+            provider.get_download_info("22.13.1", platform)
+        });
 
         #[cfg(not(target_env = "musl"))]
         {
@@ -708,6 +717,7 @@ mod tests {
                 assert_eq!(url, "https://nodejs.org/dist/v22.13.1/SHASUMS256.txt");
                 let signature = signature.as_ref().expect("official builds are signature-verified");
                 assert_eq!(signature.url, "https://nodejs.org/dist/v22.13.1/SHASUMS256.txt.asc");
+                assert!(signature.required, "official builds must require signature verification");
             } else {
                 panic!("Expected ShasumsFile verification");
             }
@@ -732,6 +742,33 @@ mod tests {
             }
         }
         assert_eq!(info.archive_format, ArchiveFormat::TarGz);
+    }
+
+    // A custom mirror (VP_NODE_DIST_MIRROR) may publish only the archives and
+    // plain SHASUMS256.txt, so signature verification there is best-effort.
+    #[cfg(not(target_env = "musl"))]
+    #[test]
+    fn test_get_download_info_custom_mirror_signature_optional() {
+        let provider = NodeProvider::new();
+        let platform = Platform { os: Os::Linux, arch: Arch::X64 };
+
+        let info = vite_shared::EnvConfig::test_scope(
+            vite_shared::EnvConfig {
+                node_dist_mirror: Some("https://mirror.example/node".into()),
+                ..vite_shared::EnvConfig::for_test()
+            },
+            || provider.get_download_info("22.13.1", platform),
+        );
+
+        if let HashVerification::ShasumsFile { url, signature } = &info.hash_verification {
+            assert_eq!(url, "https://mirror.example/node/v22.13.1/SHASUMS256.txt");
+            let signature =
+                signature.as_ref().expect("signature URL is still provided for mirrors");
+            assert_eq!(signature.url, "https://mirror.example/node/v22.13.1/SHASUMS256.txt.asc");
+            assert!(!signature.required, "custom mirror signature must be best-effort");
+        } else {
+            panic!("Expected ShasumsFile verification");
+        }
     }
 
     #[test]
