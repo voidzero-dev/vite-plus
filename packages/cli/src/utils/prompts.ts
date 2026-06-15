@@ -113,6 +113,7 @@ export async function runViteInstall(
     return { durationMs: 0, status: 'skipped' } satisfies CommandRunSummary;
   }
 
+  const detectIgnoredBuilds = options?.detectIgnoredBuilds === true;
   const installArgs = [...(extraArgs ?? [])];
   // `--ignore-scripts` keeps auto-installs from hard-failing on pnpm >= 11, but
   // it also makes the gated builds unrecoverable (`approve-builds` then reports
@@ -120,7 +121,7 @@ export async function runViteInstall(
   // flag off and instead tolerate the resulting `ERR_PNPM_IGNORED_BUILDS` exit
   // below.
   if (
-    !options?.detectIgnoredBuilds &&
+    !detectIgnoredBuilds &&
     shouldIgnoreScriptsForAutoInstall(options?.packageManager, options?.packageManagerVersion) &&
     !installArgs.includes('--ignore-scripts')
   ) {
@@ -137,16 +138,14 @@ export async function runViteInstall(
     envs: process.env,
   });
   const combinedOutput = `${stdout.toString()}\n${stderr.toString()}`;
-  const pendingBuilds = options?.detectIgnoredBuilds
+  const pendingBuilds = detectIgnoredBuilds
     ? parseInstallGatedBuilds(combinedOutput, options?.packageManager)
     : undefined;
   // pnpm >= 11 exits 1 when it gates a build script, but the install itself
   // completed (deps are on disk). Treat that one case as success so callers can
   // offer to approve the builds rather than report a broken install.
   const ignoredBuildsOnly =
-    exitCode !== 0 &&
-    Boolean(options?.detectIgnoredBuilds) &&
-    isPnpmIgnoredBuildsError(combinedOutput);
+    exitCode !== 0 && detectIgnoredBuilds && isPnpmIgnoredBuildsError(combinedOutput);
   if (exitCode === 0 || ignoredBuildsOnly) {
     spinner.stop(`Dependencies installed`);
     return {

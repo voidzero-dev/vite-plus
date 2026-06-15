@@ -956,11 +956,13 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
     if (summary?.status !== 'installed') {
       return;
     }
-    const reportedBuilds = [...(summary.pendingBuilds ?? []), ...migratePendingBuilds];
+    const reportedBuilds = [
+      ...new Set([...(summary.pendingBuilds ?? []), ...migratePendingBuilds]),
+    ];
     const pendingBuilds = await detectGatedBuilds(
       installCwd,
       workspaceInfo.packageManager,
-      reportedBuilds.length > 0 ? [...new Set(reportedBuilds)] : undefined,
+      reportedBuilds,
     );
     const targets = resolveApproveBuildTargets(
       projectPath,
