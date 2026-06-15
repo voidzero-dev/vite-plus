@@ -1612,8 +1612,15 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
   // Env keys the Yarn-hoisting resolver consults at HIGHEST precedence. Clear them in
   // setup so an ambient `YARN_NODE_LINKER=pnp` (etc.) in the runner's environment can't
   // override the fixture `.yarnrc.yml` values and make these tests non-hermetic; the
-  // env-precedence tests set them explicitly inside try/finally.
-  const ISOLATED_ENV = ['HOME', 'YARN_NODE_LINKER', 'YARN_NM_HOISTING_LIMITS'] as const;
+  // env-precedence tests set them explicitly. `HOME`/`USERPROFILE` both matter because
+  // `os.homedir()` reads `HOME` on POSIX but `USERPROFILE` on Windows — set both so the
+  // home-rc lookup is redirected on every platform.
+  const ISOLATED_ENV = [
+    'HOME',
+    'USERPROFILE',
+    'YARN_NODE_LINKER',
+    'YARN_NM_HOISTING_LIMITS',
+  ] as const;
 
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-pnpm-'));
@@ -1623,10 +1630,11 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     }
     // Point Yarn's home `.yarnrc.yml` (the lowest-precedence config source the resolver
     // consults) at a clean, empty dir so these tests can't read a contributor's real
-    // ~/.yarnrc.yml. Tests that need a home rc set $HOME themselves.
+    // ~/.yarnrc.yml. Tests that need a home rc set the home env vars themselves.
     const cleanHome = path.join(tmpDir, '.home');
     fs.mkdirSync(cleanHome, { recursive: true });
     process.env.HOME = cleanHome;
+    process.env.USERPROFILE = cleanHome;
   });
 
   afterEach(() => {
@@ -3510,17 +3518,11 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
       JSON.stringify({ name: '@scope/lib', devDependencies: { vitest: '^4.0.0' } }),
     );
 
-    const savedHome = process.env.HOME;
+    // Redirect the home dir to our temp home. `os.homedir()` reads `HOME` on POSIX and
+    // `USERPROFILE` on Windows, so set both; the describe-level afterEach restores them.
     process.env.HOME = homeDir;
-    try {
-      rewriteMonorepoProject(libDir, PackageManager.yarn, true, true);
-    } finally {
-      if (savedHome === undefined) {
-        delete process.env.HOME;
-      } else {
-        process.env.HOME = savedHome;
-      }
-    }
+    process.env.USERPROFILE = homeDir;
+    rewriteMonorepoProject(libDir, PackageManager.yarn, true, true);
 
     const libPkg = readJson(path.join(libDir, 'package.json')) as {
       devDependencies?: Record<string, string>;
