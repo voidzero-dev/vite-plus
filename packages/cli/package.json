@@ -16,7 +16,8 @@
   "bin": {
     "oxfmt": "./bin/oxfmt",
     "oxlint": "./bin/oxlint",
-    "vp": "./bin/vp"
+    "vp": "./bin/vp",
+    "vpr": "./bin/vpr"
   },
   "files": [
     "AGENTS.md",
