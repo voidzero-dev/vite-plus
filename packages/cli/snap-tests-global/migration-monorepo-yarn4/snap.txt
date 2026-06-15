@@ -81,6 +81,9 @@ export default defineConfig({
 
 > cat .yarnrc.yml # check .yarnrc.yml
 nodeLinker: node-modules
+npmPreapprovedPackages:
+  - vitest
+  - '@vitest/*'
 catalog:
   vite: npm:@voidzero-dev/vite-plus-core@latest
   vitest: <semver>

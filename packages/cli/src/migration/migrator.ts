@@ -2261,6 +2261,16 @@ function rewriteYarnrcYml(projectPath: string): void {
     if (!doc.has('nodeLinker')) {
       doc.set('nodeLinker', 'node-modules');
     }
+    // Vite+ pins the vitest family to exact, sometimes freshly published,
+    // versions. Yarn 4 hardened mode (auto-enabled for public-PR installs)
+    // quarantines packages younger than `npmMinimalAgeGate`, which makes
+    // `yarn install` fail on a just-released vitest pin. Preapprove the family
+    // so the Vite+-managed versions install regardless of release age; the
+    // `@vitest/*` glob also covers the optional `@vitest/browser-*` peers that
+    // are not in the override set.
+    if (!doc.has('npmPreapprovedPackages')) {
+      doc.set('npmPreapprovedPackages', ['vitest', '@vitest/*']);
+    }
     // catalog
     rewriteCatalog(doc);
   });
