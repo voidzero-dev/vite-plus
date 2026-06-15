@@ -112,10 +112,7 @@ const OPT_IN_BROWSER_PROVIDERS = [WEBDRIVERIO_PROVIDER, PLAYWRIGHT_PROVIDER] as 
 // uses REMOVE_PACKAGES (not this set) on purpose — a catalog entry is only a
 // version *definition*, and deleting it could dangle a surviving `catalog:`
 // reference (e.g. in peerDependencies) and break install.
-const PROVIDER_OVERRIDE_DROP_NAMES = [
-  ...REMOVE_PACKAGES,
-  ...OPT_IN_BROWSER_PROVIDERS,
-] as const;
+const PROVIDER_OVERRIDE_DROP_NAMES = [...REMOVE_PACKAGES, ...OPT_IN_BROWSER_PROVIDERS] as const;
 
 // Extract the package name an override/resolution key *targets* — i.e. the
 // package whose version would be forced. This mirrors the grammar of the real
@@ -1741,6 +1738,11 @@ export function rewriteMonorepo(
     rootDir: workspaceInfo.rootDir,
     packages: workspaceInfo.packages,
   };
+  // Yarn `node-modules` + an isolating `nmHoistingLimits` would give each
+  // vite-plus-receiving workspace its own physical `vitest` copy, splitting the
+  // runner across two `@vitest/runner` instances. `rewriteMonorepoProject` detects
+  // the layout per workspace (reading the root `.yarnrc.yml` itself) and auto-fixes
+  // or warns — see `applyYarnWorkspaceHoistingFix`.
   for (const pkg of workspaceInfo.packages) {
     rewriteMonorepoProject(
       path.join(workspaceInfo.rootDir, pkg.path),
@@ -1808,6 +1810,16 @@ export function rewriteMonorepoProject(
     return;
   }
 
+  // Yarn `nmHoistingLimits` for this workspace's project, found by walking up to the
+  // root `.yarnrc.yml`. Derived here (not threaded as an arg) so EVERY caller — full
+  // monorepo migration, a direct `rewriteMonorepoProject` call, and `vp create`
+  // integrating a package into an existing monorepo — is covered. undefined for
+  // non-Yarn repos.
+  const yarnHoisting =
+    packageManager === PackageManager.yarn
+      ? findYarnWorkspaceHoisting(workspaceContext?.rootDir ?? projectPath)
+      : undefined;
+
   let extractedStagedConfig: Record<string, string | string[]> | null = null;
   editJsonFile<{
     devDependencies?: Record<string, string>;
@@ -1815,6 +1827,7 @@ export function rewriteMonorepoProject(
     peerDependencies?: Record<string, string>;
     optionalDependencies?: Record<string, string>;
     scripts?: Record<string, string>;
+    installConfig?: { hoistingLimits?: string };
   }>(packageJsonPath, (pkg) => {
     // rewrite scripts in package.json
     extractedStagedConfig = rewritePackageJson(
@@ -1826,6 +1839,25 @@ export function rewriteMonorepoProject(
       usesVitestBrowserMode(projectPath),
       collectProviderSourceModes(projectPath),
     );
+    // If this SUB-workspace now depends on `vite-plus` and Yarn isolates its
+    // hoisting (via the root `nmHoistingLimits` OR the workspace's own
+    // `installConfig.hoistingLimits`), dedupe the bundled `vitest` family to the
+    // single shared root copy (avoids the dual-`@vitest/runner` "reading 'config'"
+    // crash), or warn when the split cannot be fixed from package.json. The monorepo
+    // root itself is skipped (`projectPath === yarnHoisting.rootDir`): its deps
+    // already hoist to the top level, so it never needs an opt-out.
+    if (
+      yarnHoisting &&
+      path.resolve(projectPath) !== yarnHoisting.rootDir &&
+      pkg.devDependencies?.[VITE_PLUS_NAME]
+    ) {
+      applyYarnWorkspaceHoistingFix(
+        pkg,
+        yarnHoisting.limit,
+        path.relative(yarnHoisting.rootDir, projectPath) || projectPath,
+        report,
+      );
+    }
     return pkg;
   });
 
@@ -2284,6 +2316,179 @@ function cleanupPeerDependencyRules(
  * Rewrite .yarnrc.yml to add vite-plus dependencies
  * @param projectPath - The path to the project
  */
+// Under Yarn's `node-modules` linker, `nmHoistingLimits: workspaces` STOPS a
+// dependency from being hoisted past the workspace that declares it — so every
+// workspace that gets a direct `vite-plus` dep receives its OWN physical
+// `vitest`/`@vitest/runner` copy instead of sharing one hoisted copy at the
+// monorepo root. `vp test` resolves the Vitest runner bin ONCE from the workspace
+// root (the root copy) but spawns it with the package as cwd; Vitest's per-package
+// Vite server then serves the test graph's `@vitest/runner` from the PACKAGE's own
+// copy. The runner process initialises its (root) `@vitest/runner` module instance
+// while the test file imports `describe` from the package's DIFFERENT instance
+// whose module-level runner is undefined -> `describe(...)` -> `initSuite()` ->
+// `validateTags(runner.config, …)` -> `TypeError: Cannot read properties of
+// undefined (reading 'config')`. Yarn has no per-package "force-hoist this dep to
+// root" lever, so the only reliable dedupe is to let the affected workspaces hoist
+// normally (a per-workspace `installConfig.hoistingLimits: none`). See
+// `setYarnWorkspaceHoistingOptOut`.
+//
+// Only `workspaces` is auto-fixable. The stricter `dependencies` limit keeps a
+// dependency BELOW each dependent package even when the workspace opts out to
+// `none`, so the opt-out does NOT dedupe there — verified with Yarn 4.17: two
+// workspaces sharing a dep under root `nmHoistingLimits: dependencies` + per-
+// workspace `hoistingLimits: none` still produced two physical copies, whereas
+// the same setup under `workspaces` deduped to one root copy. For `dependencies`
+// (and for a `workspaces` root where the affected workspace already pins its own
+// isolating limit) the migration cannot fix the split from package.json, so it
+// WARNS instead of silently leaving a known-broken layout. See
+// `applyYarnWorkspaceHoistingFix`.
+
+// Read a SINGLE directory's `.yarnrc.yml` `nmHoistingLimits` raw value (or undefined
+// when the file/key is absent). The caller decides per workspace whether that value
+// is auto-fixable (`workspaces`) or only warnable (`dependencies`).
+function readYarnRootHoistingLimit(rootDir: string): string | undefined {
+  const yarnrcYmlPath = path.join(rootDir, '.yarnrc.yml');
+  if (!fs.existsSync(yarnrcYmlPath)) {
+    return undefined;
+  }
+  const doc = readYamlFile(yarnrcYmlPath) as { nmHoistingLimits?: unknown } | null;
+  return typeof doc?.nmHoistingLimits === 'string' ? doc.nmHoistingLimits : undefined;
+}
+
+// Resolve the EFFECTIVE `nmHoistingLimits` Yarn would apply to a project rooted at
+// `workspaceRootDir`. Yarn merges `.yarnrc.yml` across the project root AND its
+// ancestor directories, with the closest file that defines the key winning (verified
+// with Yarn 4.17: a key set only in an ancestor `.yarnrc.yml` is in effect, while a
+// value at the workspace root overrides an ancestor's). So walk UP from the workspace
+// root and return the first DEFINED value; undefined when no ancestor `.yarnrc.yml`
+// sets it (Yarn's default is the safe `none`). The walk starts AT the workspace root,
+// never below it — a sub-workspace's own `.yarnrc.yml` is not part of Yarn's
+// install-time config resolution and must not shadow the root.
+function resolveEffectiveYarnHoistingLimit(workspaceRootDir: string): string | undefined {
+  let dir = path.resolve(workspaceRootDir);
+  for (;;) {
+    const limit = readYarnRootHoistingLimit(dir);
+    if (limit !== undefined) {
+      return limit;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) {
+      return undefined;
+    }
+    dir = parent;
+  }
+}
+
+// True when `dir`'s package.json declares a `workspaces` field — i.e. `dir` is a
+// workspace (Yarn project) root. `workspaces` may be an array or an object
+// (`{ packages: [...] }`); both are truthy.
+function dirIsWorkspaceRoot(dir: string): boolean {
+  const pkgJsonPath = path.join(dir, 'package.json');
+  if (!fs.existsSync(pkgJsonPath)) {
+    return false;
+  }
+  try {
+    const pkg = readJsonFile(pkgJsonPath) as { workspaces?: unknown };
+    return pkg.workspaces != null;
+  } catch {
+    return false;
+  }
+}
+
+// Walk up from a workspace directory to the nearest ancestor that IS a workspace
+// root (its package.json declares `workspaces`) — the real Yarn project root — and
+// return that directory plus the EFFECTIVE `nmHoistingLimits` resolved across the
+// `.yarnrc.yml` chain at and above that root. Keying on the workspace-root marker
+// (NOT the nearest `.yarnrc.yml`) is deliberate: a package-local `.yarnrc.yml`
+// written under a sub-package (e.g. by `vp create` / install) must not shadow the
+// real root's limit, while a limit set in an ancestor `.yarnrc.yml` above the root
+// is still honoured (Yarn merges the ancestor chain). This lets
+// `rewriteMonorepoProject` discover the layout for ANY caller without it being
+// threaded as an argument (the omitted-arg path was a missed-auto-fix bug class), and
+// lets the caller tell whether the workspace it is rewriting IS the root (the root's
+// deps already hoist to the top, so it must never be opted out). undefined when no
+// workspace root is found up to the filesystem root.
+function findYarnWorkspaceHoisting(
+  startDir: string,
+): { rootDir: string; limit: string | undefined } | undefined {
+  let dir = path.resolve(startDir);
+  for (;;) {
+    if (dirIsWorkspaceRoot(dir)) {
+      return { rootDir: dir, limit: resolveEffectiveYarnHoistingLimit(dir) };
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) {
+      return undefined;
+    }
+    dir = parent;
+  }
+}
+
+// Opt a single workspace OUT of the INHERITED root `nmHoistingLimits` isolation by
+// setting its own `installConfig.hoistingLimits: none`, so its `vite-plus` (and
+// thus the bundled `vitest` family) hoists to the single shared root copy the
+// runner bin resolves to. Scoped to workspaces the migration adds `vite-plus` to,
+// so unrelated workspaces are untouched. `none` is Yarn's DEFAULT hoisting
+// behaviour, so this only re-enables ordinary deduping — it never force-promotes a
+// conflicting version to root.
+//
+// Only relaxes the INHERITED root limit: if the workspace already carries an
+// EXPLICIT `installConfig.hoistingLimits` we leave it as-is. Overwriting it would
+// clobber an intentional per-workspace invariant (e.g. a React Native `example`
+// that isolates its whole tree for Metro and happens to also use Vite+ for tests),
+// and that field governs the workspace's ENTIRE dependency tree, not just the
+// vitest family. Idempotent: a no-op when any explicit value is already present.
+function setYarnWorkspaceHoistingOptOut(pkg: {
+  installConfig?: { hoistingLimits?: string };
+}): void {
+  if (pkg.installConfig?.hoistingLimits !== undefined) {
+    return;
+  }
+  pkg.installConfig = { ...pkg.installConfig, hoistingLimits: 'none' };
+}
+
+// Resolve the Yarn workspace-hoisting isolation for a workspace that now depends on
+// `vite-plus`. `rootLimit` is the root `.yarnrc.yml` `nmHoistingLimits` (undefined
+// for non-Yarn repos or an unset key). Either auto-fixes the workspace (mutating
+// `pkg`) or, when the split cannot be fixed from package.json, warns so the
+// migration never reports success while `vp test` is still known-broken.
+function applyYarnWorkspaceHoistingFix(
+  pkg: { installConfig?: { hoistingLimits?: string } },
+  rootLimit: string | undefined,
+  workspaceLabel: string,
+  report?: MigrationReport,
+): void {
+  // `workspaces` isolation with no explicit per-workspace limit is the one layout a
+  // `none` opt-out deduplicates — fix it silently.
+  if (rootLimit === 'workspaces' && pkg.installConfig?.hoistingLimits === undefined) {
+    setYarnWorkspaceHoistingOptOut(pkg);
+    return;
+  }
+  // Layouts we must NOT (or cannot) auto-fix, but which still isolate this
+  // workspace's `vitest`/`vite-plus` copy so `vp test` can crash with a split
+  // `@vitest/runner`:
+  //   - the INHERITED root `dependencies` limit (a `none` opt-out does not dedupe
+  //     it — verified), and
+  //   - the workspace's OWN explicit isolating `installConfig.hoistingLimits`
+  //     (`workspaces`/`dependencies`), which isolates it regardless of the root
+  //     value (incl. root unset or `none`) and is intentional, so it is preserved
+  //     rather than clobbered.
+  // Surface a manual step for both rather than report a silently broken migration.
+  const explicit = pkg.installConfig?.hoistingLimits;
+  const isolatedByRoot = rootLimit === 'dependencies';
+  const isolatedByWorkspace = explicit === 'workspaces' || explicit === 'dependencies';
+  if (isolatedByRoot || isolatedByWorkspace) {
+    warnMigration(
+      `Yarn workspace "${workspaceLabel}" isolates dependency hoisting ` +
+        `(hoistingLimits: ${explicit ?? rootLimit}), so it keeps its own ` +
+        `\`vitest\`/\`vite-plus\` copy and \`vp test\` may crash with a split ` +
+        `\`@vitest/runner\`. Dedupe them to a single copy — relax this workspace's ` +
+        `hoisting isolation or pin one \`vitest\` for the workspace.`,
+      report,
+    );
+  }
+}
+
 function rewriteYarnrcYml(projectPath: string): void {
   const yarnrcYmlPath = path.join(projectPath, '.yarnrc.yml');
   if (!fs.existsSync(yarnrcYmlPath)) {
@@ -3756,6 +3961,7 @@ export function rewritePackageJson(
   // the bundled vitest, and we ensure its runtime framework peer
   // (`webdriverio` / `playwright`). (`@vitest/browser`/preview stay bundled +
   // stripped, handled in the REMOVE_PACKAGES loop above.)
+  let usesAnyOptInProvider = false;
   for (const provider of OPT_IN_BROWSER_PROVIDERS) {
     const usesProvider =
       providerSourceModes?.[provider] ||
@@ -3763,6 +3969,7 @@ export function rewritePackageJson(
     if (!usesProvider) {
       continue;
     }
+    usesAnyOptInProvider = true;
     // The provider must be INSTALLED (in deps/devDeps/optionalDeps, not merely a
     // peer) for the rewritten `vite-plus/test/browser-<provider>` import to
     // resolve. Normalize an existing install-group declaration to the bundled
@@ -3788,6 +3995,29 @@ export function rewritePackageJson(
       pkg.devDependencies[peer] = '*';
     }
     needVitePlus = true;
+  }
+  // An opt-in browser provider drags in its OWN `@vitest/browser → @vitest/mocker`
+  // subtree that is distinct from the one vite-plus bundles, so npm's flat
+  // node_modules cannot dedupe the two and leaves several nested `@vitest/mocker`
+  // copies. `@vitest/mocker/dist/node.js` statically `import`s `vite` (its `vite`
+  // peer is optional, so install never errors), and the `vite` override only lands
+  // deep inside the `vitest` subtree — unreachable from the nested provider chain.
+  // The result is `ERR_MODULE_NOT_FOUND: Cannot find package 'vite'` when loading
+  // the browser config. Mirror the override as a direct `vite` devDep (as the bun
+  // branch already does for its own resolver) so npm hoists a single top-level
+  // `node_modules/vite` that every nested `@vitest/mocker` resolves. Gated on
+  // provider usage so non-browser (node-mode) projects — which dedupe cleanly and
+  // need no direct `vite` — stay untouched. pnpm/yarn use symlink/PnP layouts that
+  // already expose the override to the provider subtree, so this is npm-only.
+  if (usesAnyOptInProvider && packageManager === PackageManager.npm) {
+    const viteOverride = VITE_PLUS_OVERRIDE_PACKAGES.vite;
+    const viteAlreadyDirect =
+      pkg.dependencies?.vite ?? pkg.devDependencies?.vite ?? pkg.optionalDependencies?.vite;
+    if (viteOverride && !viteAlreadyDirect) {
+      pkg.devDependencies ??= {};
+      pkg.devDependencies.vite = viteOverride;
+      needVitePlus = true;
+    }
   }
   // Promote dep-derived signal to the same flag the source-scan feeds, so the
   // downstream "add direct `vitest`" branch fires for config-only browser-mode

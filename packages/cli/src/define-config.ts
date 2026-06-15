@@ -159,36 +159,30 @@ export function isVitestFamilySpecifier(id: string): boolean {
 }
 
 /**
- * Rescue `vitest` / `@vitest/*` resolution for BROWSER-mode tests only.
+ * Rescue `vitest` / `@vitest/*` resolution for browser-mode tests.
  *
  * In an established project that depends only on `vite-plus`, both `vitest`
  * and `@vitest/browser` are transitive deps. pnpm's isolated layout only
  * exposes a package's *direct* deps, so the browser-mode Vite dev server
  * (rooted at the consumer project) cannot resolve `vitest/internal/browser`,
- * `@vitest/expect`, etc. The browser fetches the family as real modules served
- * by the dev server, so it has no fallback — these MUST be pinned to the
- * bundled copy.
+ * `@vitest/expect`, etc. Non-browser tests are unaffected — vitest's own
+ * module runner handles resolution there.
  *
- * Node-mode tests are deliberately left alone (the `resolveId` gate below
- * short-circuits unless THIS resolution runs in the browser Vite server — see
- * [[hasBrowserServerPlugin]]). There, vitest externalizes the `vitest` /
- * `@vitest/*` family to the runner process `vp test` already spawned — the
- * bundled copy (see `resolveBundled` in `resolve-test.ts`) — so resolution is
- * self-consistent without this plugin.
- * Intercepting node-mode resolution is not only unnecessary, it is actively
- * harmful under Yarn's peer-divergent layout: YN0086 ("peer dependencies are
- * incorrectly met") materializes TWO physical `vitest` copies, and re-resolving
- * via `this.resolve` from a bundled anchor can pick a DIFFERENT copy than the
- * one the runner loaded, splitting the run across two Vitest instances
- * (`TypeError: Cannot read properties of undefined (reading 'config')`). On
- * pnpm the override dedupes to one physical copy so it never bit there; the
- * gate makes both package managers safe.
- *
- * In browser mode this plugin re-resolves the family through Vite's OWN
- * resolver, ROOTED at `vite-plus`'s location ([[vitePlusModuleFile]]) and then
- * the bundled `vitest`'s location ([[getVitestAnchor]]) BEFORE the project, so
- * every browser-served import binds to the same physical (pinned) Vitest the
- * `vite-plus/test*` shims re-export.
+ * This plugin re-resolves the `vitest` / `@vitest/*` family through Vite's OWN
+ * resolver, but ROOTED at `vite-plus`'s location ([[vitePlusModuleFile]]) and
+ * then the bundled `vitest`'s location ([[getVitestAnchor]]) BEFORE the
+ * project. So every such import binds to the same physical (pinned) Vitest that
+ * `vp test` spawns as the runner (see `resolveBundled` in `resolve-test.ts`)
+ * and that the `vite-plus/test*` shims re-export. Were a project-local Vitest
+ * preferred instead, a project that keeps its own `vitest` dependency would
+ * split the run across two physical Vitest module instances — the runner
+ * (bundled) vs. the test files' `vi`/`expect`/runner internals (project) — a
+ * classic source of internal-state and mock-hoisting mismatches. For the common
+ * migrated layout (a project depending only on `vite-plus`) nothing in this
+ * family is resolvable from the project root under pnpm's isolated layout
+ * anyway, so default resolution would return `null` there regardless;
+ * bundle-first only changes the project-keeps-its-own-`vitest` case, which is
+ * exactly the case we want pinned.
  *
  * Resolution goes through `this.resolve` (NOT [[vitePlusRequire]].resolve) so
  * Vite's ESM export conditions are honoured: a raw `require.resolve` would pick
@@ -212,52 +206,11 @@ export function isVitestFamilySpecifier(id: string): boolean {
  *     with the bundled runner; Vitest validates provider/runner versions and
  *     errors on a mismatch.
  */
-// True iff `plugins` contains one of `@vitest/browser`'s own plugins (every one
-// it injects is named `vitest:browser*`). That plugin set is added ONLY to
-// `@vitest/browser`'s browser Vite server — under BOTH the config-declared
-// (`test.browser.enabled`) and `--browser` CLI paths, and for every provider
-// (preview / playwright / webdriverio all route through the same serverFactory).
-// The node-side project server (built by vitest's `initializeProject`) gets only
-// `vitest:*` / `vitest:project*` plugins, never `vitest:browser*`. So this is the
-// browser-server-EXCLUSIVE marker this resolver gates on.
-function hasBrowserServerPlugin(plugins: unknown): boolean {
-  return (
-    Array.isArray(plugins) &&
-    plugins.some(
-      (plugin) =>
-        typeof (plugin as { name?: unknown })?.name === 'string' &&
-        (plugin as { name: string }).name.startsWith('vitest:browser'),
-    )
-  );
-}
-
 function vitePlusVitestResolverPlugin(): PluginOption {
   return {
     name: 'vite-plus:vitest-resolver',
     enforce: 'pre',
     async resolveId(id, importer, options) {
-      // Act ONLY inside the browser Vite server that `@vitest/browser` spins up —
-      // never on the node-side server. Node mode resolves the family itself
-      // (externalized to the bundled runner) and intercepting it can pick the
-      // wrong physical copy under Yarn's dual-copy layout (the
-      // `TypeError: …reading 'config'` split this guard prevents).
-      //
-      // The browser-vs-node signal is read PER-SERVER off `this.environment`,
-      // NOT from plugin-instance state: vitest shares ONE copy of this plugin
-      // object between the node-side server and the browser server (both spread
-      // the same `project.options.plugins`), so any flag latched on the instance
-      // (e.g. in `configResolved`) would leak from the browser server into the
-      // node server and reopen the split. `getTopLevelConfig()` returns the
-      // resolving server's full (unfiltered) plugin list, so the `vitest:browser*`
-      // marker is present only when THIS resolution runs in the browser server.
-      // (`test.browser.enabled` and `options.ssr === false` are deliberately not
-      // used — both are also true on the node-side server / node-mode DOM tests.)
-      const env = this.environment as
-        | { getTopLevelConfig?: () => { plugins?: unknown } }
-        | undefined;
-      if (!hasBrowserServerPlugin(env?.getTopLevelConfig?.().plugins)) {
-        return null;
-      }
       if (!isVitestFamilySpecifier(id)) {
         return null;
       }

@@ -122,10 +122,6 @@ const PROJECT_IMPORTER = '/fake/project/app.test.ts';
 
 type ResolveResult = { id: string } | null;
 type ResolveIdCtx = {
-  // The resolver reads its browser-vs-node signal per-server from
-  // `this.environment.getTopLevelConfig().plugins`. Optional so a context can
-  // omit it to exercise the fail-safe (no environment → no-op).
-  environment?: { getTopLevelConfig: () => { plugins?: unknown } };
   resolve: (
     id: string,
     importer: string | undefined,
@@ -145,45 +141,23 @@ interface ResolveCall {
   fromProject: boolean;
 }
 
-function getPlugin(): Record<string, unknown> {
+function getResolveId(): ResolveId {
   const result = defineConfig({}) as { plugins: unknown[] };
   const plugin = findPlugin(result.plugins, RESOLVER_PLUGIN_NAME);
   expect(plugin).toBeDefined();
-  return plugin as Record<string, unknown>;
+  return plugin?.resolveId as ResolveId;
 }
 
-// `@vitest/browser` injects these (all named `vitest:browser*`) into its browser
-// Vite server only; their presence on the resolving server's top-level config is
-// the browser-server-exclusive signal the resolver gates on.
-const BROWSER_SERVER_PLUGINS = [{ name: 'vitest:browser' }, { name: 'vitest:browser:tests' }];
-// The node-side project server's plugins (`vitest:resolve-root` is vitest's own
-// family resolver). No `vitest:browser*` member, so the resolver must no-op here.
-const NODE_SERVER_PLUGINS = [
-  { name: 'vitest' },
-  { name: 'vitest:project' },
-  { name: 'vitest:resolve-root' },
-];
-
-function getResolveId(): ResolveId {
-  return getPlugin().resolveId as ResolveId;
-}
-
-// The resolver reads its browser-vs-node signal PER-SERVER from
-// `this.environment.getTopLevelConfig().plugins`. `makeCtx` builds a `this` for a
-// single Vite server: `plugins` is that server's top-level plugin list (default:
-// the browser server, so the bundle-first tests below exercise the active path).
-// A `this.resolve` whose `importer` is NOT the project importer is a bundled-anchor
-// probe; `importer === PROJECT_IMPORTER` is the last-resort project fallback.
-function makeCtx(
-  resolveFor: (call: ResolveCall) => ResolveResult,
-  plugins: ReadonlyArray<{ name: string }> = BROWSER_SERVER_PLUGINS,
-): {
+// The resolver re-resolves through `this.resolve` rooted at vite-plus's own
+// (bundled) anchors BEFORE the project importer. A `this.resolve` whose
+// `importer` is NOT the project importer is therefore a bundled-anchor probe;
+// `importer === PROJECT_IMPORTER` is the last-resort project fallback.
+function makeCtx(resolveFor: (call: ResolveCall) => ResolveResult): {
   ctx: ResolveIdCtx;
   calls: ResolveCall[];
 } {
   const calls: ResolveCall[] = [];
   const ctx: ResolveIdCtx = {
-    environment: { getTopLevelConfig: () => ({ plugins: [...plugins] }) },
     resolve: async (id, importer) => {
       const call: ResolveCall = { id, importer, fromProject: importer === PROJECT_IMPORTER };
       calls.push(call);
@@ -192,112 +166,6 @@ function makeCtx(
   };
   return { ctx, calls };
 }
-
-describe('vitePlusVitestResolverPlugin resolveId (browser-server gate)', () => {
-  // The resolver acts ONLY inside @vitest/browser's browser Vite server. Node
-  // mode resolves the vitest family itself (externalized to the bundled runner);
-  // intercepting it can pick a different physical copy than the runner under
-  // Yarn's peer-divergent dual-copy layout. The signal is read per-server from
-  // `this.environment.getTopLevelConfig().plugins` (a `vitest:browser*` plugin).
-
-  it('no-ops on the node-side server (no vitest:browser* plugin), never calling this.resolve', async () => {
-    const resolveId = getResolveId();
-    const { ctx, calls } = makeCtx(() => ({ id: '/should/not/be/used' }), NODE_SERVER_PLUGINS);
-
-    expect(idOf(await resolveId.call(ctx, 'vitest', PROJECT_IMPORTER, {}))).toBeUndefined();
-    expect(calls).toHaveLength(0);
-  });
-
-  it('no-ops (fail-safe to node behavior) when no environment is available', async () => {
-    const resolveId = getResolveId();
-    const calls: ResolveCall[] = [];
-    const ctx: ResolveIdCtx = {
-      resolve: async (id, importer) => {
-        calls.push({ id, importer, fromProject: importer === PROJECT_IMPORTER });
-        return { id: '/should/not/be/used' };
-      },
-    };
-
-    expect(idOf(await resolveId.call(ctx, 'vitest', PROJECT_IMPORTER, {}))).toBeUndefined();
-    expect(calls).toHaveLength(0);
-  });
-
-  // Critical regression: in config-declared browser mode `test.browser.enabled`
-  // is true on BOTH the node-side project server AND the browser server, but only
-  // the browser server carries `vitest:browser*` plugins. The node server must
-  // stay a strict no-op even when resolution arrives with ssr:false — gating on
-  // `test.browser.enabled` would wrongly redirect the family here.
-  it('stays a no-op on the node server even in config-declared browser mode (ssr:false, no browser plugins)', async () => {
-    const resolveId = getResolveId();
-    const { ctx, calls } = makeCtx(() => ({ id: '/should/not/be/used' }), NODE_SERVER_PLUGINS);
-
-    expect(
-      idOf(await resolveId.call(ctx, 'vitest', PROJECT_IMPORTER, { ssr: false })),
-    ).toBeUndefined();
-    expect(calls).toHaveLength(0);
-  });
-
-  // Regression for the node-mode DOM hole: vitest 4.x marks `jsdom`/`happy-dom`
-  // as vite's `client` environment, so a NODE-mode test in those environments
-  // resolves the family with ssr:false even though browser mode is OFF. Its server
-  // has no `vitest:browser*` plugin, so the resolver must stay a strict no-op —
-  // gating on ssr:false would reopen the dual-copy split.
-  it('stays a no-op for a node-mode jsdom server (ssr:false, no browser plugins)', async () => {
-    const resolveId = getResolveId();
-    const { ctx, calls } = makeCtx(() => ({ id: '/should/not/be/used' }), NODE_SERVER_PLUGINS);
-
-    expect(
-      idOf(await resolveId.call(ctx, 'vitest', PROJECT_IMPORTER, { ssr: false })),
-    ).toBeUndefined();
-    expect(calls).toHaveLength(0);
-  });
-
-  // The `--browser` CLI flag never writes `test.browser.enabled` back to the
-  // resolved config, but @vitest/browser still injects its `vitest:browser*`
-  // plugins into the browser server under both that path and the config-declared
-  // path — so their presence on the resolving server activates the resolver.
-  it('activates when the browser server carries @vitest/browser plugins', async () => {
-    const resolveId = getResolveId();
-    const BUNDLED = '/bundled/vite-plus/node_modules/vitest/dist/index.js';
-    const { ctx, calls } = makeCtx(
-      ({ fromProject }) => ({
-        id: fromProject ? '/fake/project/node_modules/vitest/dist/index.js' : BUNDLED,
-      }),
-      BROWSER_SERVER_PLUGINS,
-    );
-
-    expect(idOf(await resolveId.call(ctx, 'vitest', PROJECT_IMPORTER, { ssr: false }))).toBe(
-      BUNDLED,
-    );
-    expect(calls[0]?.fromProject).toBe(false);
-  });
-
-  // Critical regression for the shared-plugin-instance leak: vitest reuses ONE
-  // copy of this plugin object across the node-side AND browser servers. The gate
-  // is read per-resolution from `this.environment`, so a browser-server
-  // resolution that activates must NOT leak into a later node-server resolution
-  // on the SAME plugin object.
-  it('is per-server: a node-server resolution no-ops even after a browser-server resolution activated', async () => {
-    const resolveId = getResolveId(); // ONE plugin instance, reused for both calls below.
-    const BUNDLED = '/bundled/vite-plus/node_modules/vitest/dist/index.js';
-
-    // 1) browser-server `this` → activates and redirects to the bundled copy.
-    const browser = makeCtx(
-      ({ fromProject }) => ({ id: fromProject ? '/fake/project/vitest' : BUNDLED }),
-      BROWSER_SERVER_PLUGINS,
-    );
-    expect(
-      idOf(await resolveId.call(browser.ctx, 'vitest', PROJECT_IMPORTER, { ssr: false })),
-    ).toBe(BUNDLED);
-
-    // 2) node-server `this` on the SAME plugin → must stay a no-op (no leaked state).
-    const node = makeCtx(() => ({ id: '/should/not/be/used' }), NODE_SERVER_PLUGINS);
-    expect(
-      idOf(await resolveId.call(node.ctx, 'vitest', PROJECT_IMPORTER, { ssr: false })),
-    ).toBeUndefined();
-    expect(node.calls).toHaveLength(0);
-  });
-});
 
 describe('vitePlusVitestResolverPlugin resolveId (bundle-first)', () => {
   // The runner `vp test` spawns is the Vitest bundled with vite-plus (see
@@ -362,7 +230,6 @@ describe('vitePlusVitestResolverPlugin resolveId (bundle-first)', () => {
   it('resolves vitest / vitest/config to the ESM entry, never the require-condition CJS stub', async () => {
     const resolveId = getResolveId();
     const ctx: ResolveIdCtx = {
-      environment: { getTopLevelConfig: () => ({ plugins: [...BROWSER_SERVER_PLUGINS] }) },
       resolve: async (id) => {
         try {
           return { id: fileURLToPath(import.meta.resolve(id)) };

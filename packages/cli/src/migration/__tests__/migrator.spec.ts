@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parse as parseYaml } from 'yaml';
 
 import { PackageManager } from '../../types/index.js';
-import { VITEST_VERSION } from '../../utils/constants.js';
+import { VITE_PLUS_OVERRIDE_PACKAGES, VITEST_VERSION } from '../../utils/constants.js';
 import { createMigrationReport } from '../report.js';
 
 // Mock VITE_PLUS_VERSION to a stable value for snapshot tests.
@@ -366,6 +366,71 @@ describe('rewritePackageJson', () => {
     expect(pkg.devDependencies).toHaveProperty('@vitest/browser-playwright', VITEST_VERSION);
     expect(pkg.devDependencies).toHaveProperty('playwright', '*');
     expect(pkg.devDependencies).not.toHaveProperty('@vitest/browser');
+  });
+
+  it('injects a direct vite devDependency for an npm project that uses an opt-in browser provider', async () => {
+    // npm's flat node_modules cannot dedupe the provider's own
+    // `@vitest/browser → @vitest/mocker` subtree against the one vite-plus
+    // bundles, leaving several nested `@vitest/mocker` copies. The `vite`
+    // override only lands inside the `vitest` subtree, so the nested mockers
+    // can't resolve their (optional) `vite` peer and `@vitest/mocker/dist/node.js`
+    // throws `ERR_MODULE_NOT_FOUND: Cannot find package 'vite'` at config load.
+    // A direct `vite` devDep (= the override target) forces npm to hoist a
+    // single top-level `node_modules/vite` every nested mocker resolves.
+    const pkg = {
+      devDependencies: {
+        '@vitest/browser-playwright': '^4.0.0',
+        playwright: '^1.60.0',
+        vitest: '^4.0.0',
+      },
+    };
+    rewritePackageJson(pkg, PackageManager.npm);
+    expect(pkg.devDependencies).toHaveProperty('vite', VITE_PLUS_OVERRIDE_PACKAGES.vite);
+  });
+
+  it('does not inject a direct vite devDependency for npm projects without a browser provider', async () => {
+    // Node-mode projects dedupe cleanly (a single hoisted `@vitest/mocker`
+    // next to a top-level `vite`), so the migration must not add a direct
+    // `vite` dep — leaving non-browser consumers untouched.
+    const pkg = {
+      devDependencies: {
+        vitest: '^4.0.0',
+      },
+    };
+    rewritePackageJson(pkg, PackageManager.npm);
+    expect(pkg.devDependencies).not.toHaveProperty('vite');
+  });
+
+  it('does not inject a direct vite devDependency for non-npm provider projects', async () => {
+    // pnpm/yarn use symlink/PnP layouts that already expose the `vite` override
+    // to the provider subtree, so the npm-only direct-`vite` workaround must not
+    // fire for them.
+    const pkg = {
+      devDependencies: {
+        '@vitest/browser-playwright': '^4.0.0',
+        playwright: '^1.60.0',
+        vitest: '^4.0.0',
+      },
+    };
+    rewritePackageJson(pkg, PackageManager.pnpm);
+    expect(pkg.devDependencies).not.toHaveProperty('vite');
+  });
+
+  it('normalizes a pre-existing direct vite dep to the override target for an npm provider project', async () => {
+    // A pre-existing direct `vite` is already normalized to the override target
+    // by the `VITE_PLUS_OVERRIDE_PACKAGES` loop (vite-plus replaces `vite` with
+    // its bundled core). The provider workaround must not duplicate or clobber
+    // it — the single direct `vite` stays pointed at the override target.
+    const pkg = {
+      devDependencies: {
+        '@vitest/browser-playwright': '^4.0.0',
+        playwright: '^1.60.0',
+        vite: '^7.0.0',
+        vitest: '^4.0.0',
+      },
+    };
+    rewritePackageJson(pkg, PackageManager.npm);
+    expect(pkg.devDependencies).toHaveProperty('vite', VITE_PLUS_OVERRIDE_PACKAGES.vite);
   });
 
   it('keeps and normalizes @vitest/browser-webdriverio and ensures the webdriverio peer', async () => {
@@ -2859,6 +2924,431 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
       string
     >;
     expect(appDeps.vitest).toBe('catalog:');
+  });
+
+  it('opts vite-plus workspaces out of yarn nmHoistingLimits so the bundled vitest dedupes', () => {
+    // Yarn `node-modules` + `nmHoistingLimits: workspaces` would give every
+    // workspace that gets `vite-plus` (which depends on the bundled `vitest`) its
+    // own physical `vitest`/`@vitest/runner` copy, splitting `vp test`'s runner
+    // across two instances -> `TypeError: ...reading 'config'`. The migration must
+    // set `installConfig.hoistingLimits: none` on each vite-plus-receiving
+    // workspace so its vitest hoists to the single shared root copy, WITHOUT
+    // touching the root `.yarnrc.yml` isolation (which unrelated workspaces such as
+    // a React Native `example` may rely on).
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'root',
+        private: true,
+        workspaces: ['packages/*'],
+        devDependencies: {},
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, '.yarnrc.yml'),
+      'nodeLinker: node-modules\nnmHoistingLimits: workspaces\n',
+    );
+    // A workspace WITH vitest -> gets vite-plus -> must be opted out.
+    const libDir = path.join(tmpDir, 'packages', 'lib');
+    fs.mkdirSync(libDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(libDir, 'package.json'),
+      JSON.stringify({ name: '@scope/lib', devDependencies: { vitest: '^4.0.0' } }),
+    );
+    // A workspace WITHOUT any vite-plus signal -> must stay untouched.
+    const isoDir = path.join(tmpDir, 'packages', 'iso');
+    fs.mkdirSync(isoDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(isoDir, 'package.json'),
+      JSON.stringify({ name: '@scope/iso', dependencies: { 'left-pad': '^1.0.0' } }),
+    );
+
+    const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.yarn);
+    workspaceInfo.isMonorepo = true;
+    workspaceInfo.packages = [
+      { name: '@scope/lib', path: 'packages/lib' },
+      { name: '@scope/iso', path: 'packages/iso' },
+    ];
+    const report = createMigrationReport();
+    rewriteMonorepo(workspaceInfo, true, false, report);
+
+    const libPkg = readJson(path.join(libDir, 'package.json')) as {
+      devDependencies?: Record<string, string>;
+      installConfig?: { hoistingLimits?: string };
+    };
+    expect(libPkg.devDependencies).toHaveProperty('vite-plus');
+    expect(libPkg.installConfig?.hoistingLimits).toBe('none');
+
+    // No vite-plus added -> no installConfig opt-out.
+    const isoPkg = readJson(path.join(isoDir, 'package.json')) as {
+      devDependencies?: Record<string, string>;
+      installConfig?: unknown;
+    };
+    expect(isoPkg.devDependencies ?? {}).not.toHaveProperty('vite-plus');
+    expect(isoPkg.installConfig).toBeUndefined();
+
+    // The root .yarnrc.yml isolation is preserved (not silently removed) and the
+    // root package.json is not given a redundant per-workspace opt-out.
+    expect(readYamlObject(path.join(tmpDir, '.yarnrc.yml')).nmHoistingLimits).toBe('workspaces');
+    expect(
+      (readJson(path.join(tmpDir, 'package.json')) as { installConfig?: unknown }).installConfig,
+    ).toBeUndefined();
+
+    // Auto-fix is silent: a deduped workspace needs no manual-step warning.
+    expect(report.warnings.some((w) => w.includes('isolates dependency hoisting'))).toBe(false);
+  });
+
+  it('leaves yarn workspaces alone when nmHoistingLimits does not isolate them', () => {
+    // Default hoisting (no nmHoistingLimits) already dedupes vitest to root, so the
+    // migration must NOT add a spurious installConfig opt-out.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'root',
+        private: true,
+        workspaces: ['packages/*'],
+        devDependencies: {},
+      }),
+    );
+    fs.writeFileSync(path.join(tmpDir, '.yarnrc.yml'), 'nodeLinker: node-modules\n');
+    const libDir = path.join(tmpDir, 'packages', 'lib');
+    fs.mkdirSync(libDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(libDir, 'package.json'),
+      JSON.stringify({ name: '@scope/lib', devDependencies: { vitest: '^4.0.0' } }),
+    );
+
+    const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.yarn);
+    workspaceInfo.isMonorepo = true;
+    workspaceInfo.packages = [{ name: '@scope/lib', path: 'packages/lib' }];
+    const report = createMigrationReport();
+    rewriteMonorepo(workspaceInfo, true, false, report);
+
+    const libPkg = readJson(path.join(libDir, 'package.json')) as {
+      devDependencies?: Record<string, string>;
+      installConfig?: unknown;
+    };
+    expect(libPkg.devDependencies).toHaveProperty('vite-plus');
+    expect(libPkg.installConfig).toBeUndefined();
+    expect(report.warnings.some((w) => w.includes('isolates dependency hoisting'))).toBe(false);
+  });
+
+  it('does not auto-fix yarn `dependencies` hoisting (the opt-out cannot dedupe it)', () => {
+    // The stricter `nmHoistingLimits: dependencies` keeps a dep BELOW each
+    // dependent package even when the workspace opts out to `none` (verified with
+    // Yarn 4.17: two workspaces sharing a dep still produced two physical copies),
+    // so writing the opt-out would be false remediation — a package.json that looks
+    // fixed but keeps the crash layout. The migration must leave installConfig
+    // untouched for this mode.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'root',
+        private: true,
+        workspaces: ['packages/*'],
+        devDependencies: {},
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, '.yarnrc.yml'),
+      'nodeLinker: node-modules\nnmHoistingLimits: dependencies\n',
+    );
+    const libDir = path.join(tmpDir, 'packages', 'lib');
+    fs.mkdirSync(libDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(libDir, 'package.json'),
+      JSON.stringify({ name: '@scope/lib', devDependencies: { vitest: '^4.0.0' } }),
+    );
+
+    const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.yarn);
+    workspaceInfo.isMonorepo = true;
+    workspaceInfo.packages = [{ name: '@scope/lib', path: 'packages/lib' }];
+    const report = createMigrationReport();
+    rewriteMonorepo(workspaceInfo, true, false, report);
+
+    const libPkg = readJson(path.join(libDir, 'package.json')) as {
+      devDependencies?: Record<string, string>;
+      installConfig?: unknown;
+    };
+    expect(libPkg.devDependencies).toHaveProperty('vite-plus');
+    expect(libPkg.installConfig).toBeUndefined();
+    // Not silently broken: warn that vp test can crash for this isolated workspace.
+    expect(report.warnings.some((w) => w.includes('isolates dependency hoisting'))).toBe(true);
+  });
+
+  it('preserves an explicit workspace installConfig.hoistingLimits instead of clobbering it', () => {
+    // A workspace that deliberately set its OWN hoisting limit (e.g. to isolate its
+    // whole tree for Metro) and also uses Vite+ must keep that explicit invariant —
+    // `installConfig.hoistingLimits` governs the ENTIRE workspace tree, not just the
+    // vitest family. The opt-out only relaxes the INHERITED root limit (unset field).
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'root',
+        private: true,
+        workspaces: ['packages/*'],
+        devDependencies: {},
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, '.yarnrc.yml'),
+      'nodeLinker: node-modules\nnmHoistingLimits: workspaces\n',
+    );
+    const libDir = path.join(tmpDir, 'packages', 'lib');
+    fs.mkdirSync(libDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(libDir, 'package.json'),
+      JSON.stringify({
+        name: '@scope/lib',
+        devDependencies: { vitest: '^4.0.0' },
+        installConfig: { hoistingLimits: 'workspaces' },
+      }),
+    );
+
+    const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.yarn);
+    workspaceInfo.isMonorepo = true;
+    workspaceInfo.packages = [{ name: '@scope/lib', path: 'packages/lib' }];
+    const report = createMigrationReport();
+    rewriteMonorepo(workspaceInfo, true, false, report);
+
+    const libPkg = readJson(path.join(libDir, 'package.json')) as {
+      devDependencies?: Record<string, string>;
+      installConfig?: { hoistingLimits?: string };
+    };
+    expect(libPkg.devDependencies).toHaveProperty('vite-plus');
+    // Explicit value preserved, NOT overwritten to 'none'.
+    expect(libPkg.installConfig?.hoistingLimits).toBe('workspaces');
+    // The preserved isolation still splits vp test, so it must be flagged.
+    expect(report.warnings.some((w) => w.includes('isolates dependency hoisting'))).toBe(true);
+  });
+
+  it('warns on workspace-level hoisting isolation even when the root nmHoistingLimits is unset', () => {
+    // A workspace can isolate its OWN tree via `installConfig.hoistingLimits`
+    // regardless of the root limit. With the root unset, that workspace still keeps
+    // its own vitest copy, so the migration must preserve the explicit value AND
+    // warn — the per-workspace check cannot be gated on the root limit.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'root',
+        private: true,
+        workspaces: ['packages/*'],
+        devDependencies: {},
+      }),
+    );
+    fs.writeFileSync(path.join(tmpDir, '.yarnrc.yml'), 'nodeLinker: node-modules\n');
+    const libDir = path.join(tmpDir, 'packages', 'lib');
+    fs.mkdirSync(libDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(libDir, 'package.json'),
+      JSON.stringify({
+        name: '@scope/lib',
+        devDependencies: { vitest: '^4.0.0' },
+        installConfig: { hoistingLimits: 'workspaces' },
+      }),
+    );
+
+    const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.yarn);
+    workspaceInfo.isMonorepo = true;
+    workspaceInfo.packages = [{ name: '@scope/lib', path: 'packages/lib' }];
+    const report = createMigrationReport();
+    rewriteMonorepo(workspaceInfo, true, false, report);
+
+    const libPkg = readJson(path.join(libDir, 'package.json')) as {
+      devDependencies?: Record<string, string>;
+      installConfig?: { hoistingLimits?: string };
+    };
+    expect(libPkg.devDependencies).toHaveProperty('vite-plus');
+    expect(libPkg.installConfig?.hoistingLimits).toBe('workspaces');
+    expect(report.warnings.some((w) => w.includes('isolates dependency hoisting'))).toBe(true);
+  });
+
+  it('warns on workspace-level hoisting isolation even when the root nmHoistingLimits is none', () => {
+    // Root explicitly `none` (default deduping) but the workspace pins its own
+    // `dependencies` isolation -> it still keeps its own vitest copy -> the
+    // migration must preserve the explicit value AND warn.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'root',
+        private: true,
+        workspaces: ['packages/*'],
+        devDependencies: {},
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, '.yarnrc.yml'),
+      'nodeLinker: node-modules\nnmHoistingLimits: none\n',
+    );
+    const libDir = path.join(tmpDir, 'packages', 'lib');
+    fs.mkdirSync(libDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(libDir, 'package.json'),
+      JSON.stringify({
+        name: '@scope/lib',
+        devDependencies: { vitest: '^4.0.0' },
+        installConfig: { hoistingLimits: 'dependencies' },
+      }),
+    );
+
+    const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.yarn);
+    workspaceInfo.isMonorepo = true;
+    workspaceInfo.packages = [{ name: '@scope/lib', path: 'packages/lib' }];
+    const report = createMigrationReport();
+    rewriteMonorepo(workspaceInfo, true, false, report);
+
+    const libPkg = readJson(path.join(libDir, 'package.json')) as {
+      devDependencies?: Record<string, string>;
+      installConfig?: { hoistingLimits?: string };
+    };
+    expect(libPkg.devDependencies).toHaveProperty('vite-plus');
+    expect(libPkg.installConfig?.hoistingLimits).toBe('dependencies');
+    expect(report.warnings.some((w) => w.includes('isolates dependency hoisting'))).toBe(true);
+  });
+
+  it('auto-fixes a direct rewriteMonorepoProject call by deriving the root .yarnrc.yml limit', () => {
+    // Callers other than rewriteMonorepo (e.g. `vp create` integrating a package
+    // into an existing monorepo) call rewriteMonorepoProject directly with no
+    // workspace context and no root-limit argument. The root
+    // `nmHoistingLimits: workspaces` must still be discovered by walking up from
+    // the package directory, so the workspace is deduped — not silently left split.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'root', private: true, workspaces: ['packages/*'] }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, '.yarnrc.yml'),
+      'nodeLinker: node-modules\nnmHoistingLimits: workspaces\n',
+    );
+    const libDir = path.join(tmpDir, 'packages', 'lib');
+    fs.mkdirSync(libDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(libDir, 'package.json'),
+      JSON.stringify({ name: '@scope/lib', devDependencies: { vitest: '^4.0.0' } }),
+    );
+
+    // Direct call: no workspaceContext, no root-limit arg.
+    rewriteMonorepoProject(libDir, PackageManager.yarn, true, true);
+
+    const libPkg = readJson(path.join(libDir, 'package.json')) as {
+      devDependencies?: Record<string, string>;
+      installConfig?: { hoistingLimits?: string };
+    };
+    expect(libPkg.devDependencies).toHaveProperty('vite-plus');
+    expect(libPkg.installConfig?.hoistingLimits).toBe('none');
+  });
+
+  it('finds the real monorepo root limit even when the workspace has its own .yarnrc.yml', () => {
+    // `vp create` (and install) can write a package-local `.yarnrc.yml` under a
+    // workspace before it is rewritten. The hoisting lookup must NOT treat that
+    // child rc as the project root — it must find the actual workspace root (the
+    // package.json with `workspaces`) and read ITS nmHoistingLimits, so the
+    // workspace is still deduped rather than silently left split.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'root', private: true, workspaces: ['packages/*'] }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, '.yarnrc.yml'),
+      'nodeLinker: node-modules\nnmHoistingLimits: workspaces\n',
+    );
+    const libDir = path.join(tmpDir, 'packages', 'lib');
+    fs.mkdirSync(libDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(libDir, 'package.json'),
+      JSON.stringify({ name: '@scope/lib', devDependencies: { vitest: '^4.0.0' } }),
+    );
+    // A package-local `.yarnrc.yml` (no nmHoistingLimits) must NOT shadow the root.
+    fs.writeFileSync(path.join(libDir, '.yarnrc.yml'), 'nodeLinker: node-modules\n');
+
+    // Direct call (no workspaceContext): the lookup must walk past the child rc to
+    // the workspace root.
+    rewriteMonorepoProject(libDir, PackageManager.yarn, true, true);
+
+    const libPkg = readJson(path.join(libDir, 'package.json')) as {
+      devDependencies?: Record<string, string>;
+      installConfig?: { hoistingLimits?: string };
+    };
+    expect(libPkg.devDependencies).toHaveProperty('vite-plus');
+    expect(libPkg.installConfig?.hoistingLimits).toBe('none');
+  });
+
+  it('honours nmHoistingLimits set in an ANCESTOR .yarnrc.yml above the monorepo root', () => {
+    // Yarn merges `.yarnrc.yml` across the project root AND its ancestor directories
+    // (verified with Yarn 4.17: a key set only in an ancestor rc is in effect). So a
+    // monorepo root whose own `.yarnrc.yml` omits `nmHoistingLimits` can still inherit
+    // `workspaces` isolation from a parent rc. The lookup must resolve the effective
+    // limit across the chain, not read only the root dir's rc, or the workspace is
+    // silently left split.
+    const ancestorDir = tmpDir;
+    const rootDir = path.join(ancestorDir, 'monorepo');
+    fs.mkdirSync(rootDir, { recursive: true });
+    // Ancestor rc (ABOVE the monorepo root) sets the isolating limit.
+    fs.writeFileSync(
+      path.join(ancestorDir, '.yarnrc.yml'),
+      'nodeLinker: node-modules\nnmHoistingLimits: workspaces\n',
+    );
+    // The monorepo root is the package.json with `workspaces`; its own rc omits the key.
+    fs.writeFileSync(
+      path.join(rootDir, 'package.json'),
+      JSON.stringify({ name: 'root', private: true, workspaces: ['packages/*'] }),
+    );
+    fs.writeFileSync(path.join(rootDir, '.yarnrc.yml'), 'nodeLinker: node-modules\n');
+    const libDir = path.join(rootDir, 'packages', 'lib');
+    fs.mkdirSync(libDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(libDir, 'package.json'),
+      JSON.stringify({ name: '@scope/lib', devDependencies: { vitest: '^4.0.0' } }),
+    );
+
+    // Direct call (no workspaceContext): the lookup must walk past the root rc to the
+    // ancestor rc to find the effective `workspaces` limit.
+    rewriteMonorepoProject(libDir, PackageManager.yarn, true, true);
+
+    const libPkg = readJson(path.join(libDir, 'package.json')) as {
+      devDependencies?: Record<string, string>;
+      installConfig?: { hoistingLimits?: string };
+    };
+    expect(libPkg.devDependencies).toHaveProperty('vite-plus');
+    expect(libPkg.installConfig?.hoistingLimits).toBe('none');
+  });
+
+  it('lets a monorepo-root .yarnrc.yml override an ancestor nmHoistingLimits (closer wins)', () => {
+    // Yarn's config merge gives the closest `.yarnrc.yml` precedence: a root rc that
+    // sets `nmHoistingLimits: none` neutralizes an ancestor's `workspaces`, so the
+    // layout already dedupes and the migration must NOT add a spurious opt-out.
+    const ancestorDir = tmpDir;
+    const rootDir = path.join(ancestorDir, 'monorepo');
+    fs.mkdirSync(rootDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(ancestorDir, '.yarnrc.yml'),
+      'nodeLinker: node-modules\nnmHoistingLimits: workspaces\n',
+    );
+    fs.writeFileSync(
+      path.join(rootDir, 'package.json'),
+      JSON.stringify({ name: 'root', private: true, workspaces: ['packages/*'] }),
+    );
+    // Root rc explicitly opts back into full hoisting — overrides the ancestor.
+    fs.writeFileSync(
+      path.join(rootDir, '.yarnrc.yml'),
+      'nodeLinker: node-modules\nnmHoistingLimits: none\n',
+    );
+    const libDir = path.join(rootDir, 'packages', 'lib');
+    fs.mkdirSync(libDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(libDir, 'package.json'),
+      JSON.stringify({ name: '@scope/lib', devDependencies: { vitest: '^4.0.0' } }),
+    );
+
+    rewriteMonorepoProject(libDir, PackageManager.yarn, true, true);
+
+    const libPkg = readJson(path.join(libDir, 'package.json')) as {
+      devDependencies?: Record<string, string>;
+      installConfig?: { hoistingLimits?: string };
+    };
+    expect(libPkg.devDependencies).toHaveProperty('vite-plus');
+    // Closer rc wins (none) -> no isolation -> no opt-out added.
+    expect(libPkg.installConfig?.hoistingLimits).toBeUndefined();
   });
 
   it('denies edgedriver/geckodriver builds in pnpm-workspace.yaml when webdriverio is unused (pnpm v10)', () => {
