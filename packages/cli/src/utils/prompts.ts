@@ -3,13 +3,21 @@ import semver from 'semver';
 
 import { downloadPackageManager as downloadPackageManagerBinding } from '../../binding/index.js';
 import { PackageManager } from '../types/index.ts';
+import { isPnpmIgnoredBuildsError, parseInstallGatedBuilds } from './approve-builds.ts';
 import { runCommandSilently } from './command.ts';
+import { getSilentSpinner, getSpinner } from './spinner.ts';
 import { accent } from './terminal.ts';
 
 export interface CommandRunSummary {
   durationMs: number;
   exitCode?: number;
   status: 'installed' | 'formatted' | 'failed' | 'skipped';
+  /**
+   * pnpm packages whose build (install/postinstall) scripts were gated during
+   * the install. Only populated when `runViteInstall` is called with
+   * `detectIgnoredBuilds`. See {@link runViteInstall}.
+   */
+  pendingBuilds?: string[];
 }
 
 /**
@@ -90,6 +98,14 @@ export async function runViteInstall(
     silent?: boolean;
     packageManager?: PackageManager;
     packageManagerVersion?: string;
+    /**
+     * Surface pnpm's gated build scripts instead of suppressing them. When set,
+     * the auto `--ignore-scripts` workaround is skipped (so pnpm records which
+     * packages need approval), a pnpm >= 11 `ERR_PNPM_IGNORED_BUILDS` exit is
+     * treated as a successful install (deps are on disk), and the gated package
+     * names are returned in `pendingBuilds`.
+     */
+    detectIgnoredBuilds?: boolean;
   },
 ) {
   // install dependencies on non-CI environment
@@ -97,8 +113,15 @@ export async function runViteInstall(
     return { durationMs: 0, status: 'skipped' } satisfies CommandRunSummary;
   }
 
+  const detectIgnoredBuilds = options?.detectIgnoredBuilds === true;
   const installArgs = [...(extraArgs ?? [])];
+  // `--ignore-scripts` keeps auto-installs from hard-failing on pnpm >= 11, but
+  // it also makes the gated builds unrecoverable (`approve-builds` then reports
+  // nothing pending). When the caller wants to act on those builds, leave the
+  // flag off and instead tolerate the resulting `ERR_PNPM_IGNORED_BUILDS` exit
+  // below.
   if (
+    !detectIgnoredBuilds &&
     shouldIgnoreScriptsForAutoInstall(options?.packageManager, options?.packageManagerVersion) &&
     !installArgs.includes('--ignore-scripts')
   ) {
@@ -114,12 +137,22 @@ export async function runViteInstall(
     cwd,
     envs: process.env,
   });
-  if (exitCode === 0) {
+  const combinedOutput = `${stdout.toString()}\n${stderr.toString()}`;
+  const pendingBuilds = detectIgnoredBuilds
+    ? parseInstallGatedBuilds(combinedOutput, options?.packageManager)
+    : undefined;
+  // pnpm >= 11 exits 1 when it gates a build script, but the install itself
+  // completed (deps are on disk). Treat that one case as success so callers can
+  // offer to approve the builds rather than report a broken install.
+  const ignoredBuildsOnly =
+    exitCode !== 0 && detectIgnoredBuilds && isPnpmIgnoredBuildsError(combinedOutput);
+  if (exitCode === 0 || ignoredBuildsOnly) {
     spinner.stop(`Dependencies installed`);
     return {
       durationMs: Date.now() - startTime,
       exitCode,
       status: 'installed',
+      pendingBuilds,
     } satisfies CommandRunSummary;
   } else {
     spinner.stop(`Install failed`);
@@ -255,35 +288,4 @@ export async function resolveGitInit(
 export function defaultInteractive() {
   // If CI environment, use non-interactive mode by default
   return !process.env.CI && process.stdin.isTTY;
-}
-
-export function getSpinner(interactive?: boolean) {
-  if (interactive) {
-    return prompts.spinner();
-  }
-  return {
-    start: (msg?: string) => {
-      if (msg) {
-        prompts.log.info(msg);
-      }
-    },
-    stop: (msg?: string) => {
-      if (msg) {
-        prompts.log.info(msg);
-      }
-    },
-    message: (msg?: string) => {
-      if (msg) {
-        prompts.log.info(msg);
-      }
-    },
-  };
-}
-
-function getSilentSpinner() {
-  return {
-    start: () => {},
-    stop: () => {},
-    message: () => {},
-  };
 }

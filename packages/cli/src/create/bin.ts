@@ -30,6 +30,11 @@ import {
   writeAgentInstructions,
   writeCopilotSetupWorkflow,
 } from '../utils/agent.ts';
+import {
+  approveBuilds,
+  detectGatedBuilds,
+  resolveApproveBuildTargets,
+} from '../utils/approve-builds.ts';
 import { detectExistingEditors, selectEditors, writeEditorConfigs } from '../utils/editor.ts';
 import { createInitialCommit, initGitRepository } from '../utils/git.ts';
 import { renderCliDoc } from '../utils/help.ts';
@@ -134,6 +139,10 @@ const helpMessage = renderCliDoc({
           label: '--package-manager NAME',
           description: 'Use specified package manager (pnpm, npm, yarn, bun)',
         },
+        {
+          label: '--approve-builds',
+          description: 'Approve and run gated dependency build scripts without prompting',
+        },
         { label: '--verbose', description: 'Show detailed scaffolding output' },
         { label: '--no-interactive', description: 'Run in non-interactive mode' },
         { label: '--list', description: 'List all available templates' },
@@ -234,6 +243,11 @@ export interface Options {
   git?: boolean;
   hooks?: boolean;
   packageManager?: string;
+  /**
+   * Approve and run gated dependency build scripts without prompting. Useful in
+   * non-interactive runs that need a ready-to-use project.
+   */
+  approveBuilds?: boolean;
 }
 
 type ParsedAgentOption = string | false | Array<string | false>;
@@ -270,9 +284,10 @@ function parseArgs() {
     git?: boolean;
     hooks?: boolean;
     'package-manager'?: string;
+    'approve-builds'?: boolean;
   }>(viteArgs, {
     alias: { h: 'help' },
-    boolean: ['help', 'list', 'all', 'interactive', 'hooks', 'verbose', 'git'],
+    boolean: ['help', 'list', 'all', 'interactive', 'hooks', 'verbose', 'git', 'approve-builds'],
     string: ['directory', 'agent', 'editor', 'package-manager'],
     default: { interactive: defaultInteractive() },
   });
@@ -292,6 +307,7 @@ function parseArgs() {
       git: parsed.git,
       hooks: parsed.hooks,
       packageManager: parsed['package-manager'],
+      approveBuilds: parsed['approve-builds'] || false,
     } as Options,
     templateArgs,
   };
@@ -921,6 +937,60 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       createProgressStarted = true;
     }
   };
+
+  // After a successful install, surface gated build scripts (native builds like
+  // better-sqlite3 the template added as a direct dependency) that pnpm or bun
+  // blocked, and let the user approve them. `projectPath` is the created package
+  // whose direct deps decide what is worth prompting for; `installCwd` is where
+  // the package manager (and `node_modules`) lives.
+  // Gated builds reported by the ESLint/Prettier migration pre-install. yarn
+  // only emits YN0004 on the first install, so the later main install won't
+  // re-report them; carry them forward so detection still sees them.
+  let migratePendingBuilds: string[] = [];
+
+  const handleIgnoredBuilds = async (
+    projectPath: string,
+    installCwd: string,
+    summary: CommandRunSummary | undefined,
+  ) => {
+    if (summary?.status !== 'installed') {
+      return;
+    }
+    const reportedBuilds = [
+      ...new Set([...(summary.pendingBuilds ?? []), ...migratePendingBuilds]),
+    ];
+    const pendingBuilds = await detectGatedBuilds(
+      installCwd,
+      workspaceInfo.packageManager,
+      reportedBuilds,
+    );
+    const targets = resolveApproveBuildTargets(
+      projectPath,
+      pendingBuilds,
+      workspaceInfo.packageManager,
+    );
+    if (targets.length === 0) {
+      return;
+    }
+    pauseCreateProgress();
+    const approved = await approveBuilds({
+      cwd: installCwd,
+      projectDir: projectPath,
+      packageManager: workspaceInfo.packageManager,
+      packageManagerVersion: workspaceInfo.downloadPackageManager.version,
+      targets,
+      interactive: options.interactive,
+      autoApprove: options.approveBuilds === true,
+      silent: compactOutput,
+    });
+    resumeCreateProgress();
+    // A failed build under non-interactive `--approve-builds` should surface a
+    // non-zero exit so CI notices, even though the project is still scaffolded.
+    if (!approved && !options.interactive && options.approveBuilds === true) {
+      process.exitCode = 1;
+    }
+  };
+
   updateCreateProgress('Scaffolding project');
 
   // Discover template
@@ -1060,7 +1130,9 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       silent: compactOutput,
       packageManager: workspaceInfo.packageManager,
       packageManagerVersion: workspaceInfo.downloadPackageManager.version,
+      detectIgnoredBuilds: true,
     });
+    await handleIgnoredBuilds(fullPath, fullPath, installSummary);
     updateCreateProgress('Formatting code');
     await runViteFmt(fullPath, options.interactive, undefined, { silent: compactOutput });
     if (shouldSetupGit) {
@@ -1239,13 +1311,25 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       }
     }
     updateCreateProgress('Installing dependencies');
+    // Detect gated builds here too: without this, pnpm>=11 adds `--ignore-scripts`,
+    // which pins the ignore-scripts state so the later main install reports
+    // "already up to date" and never surfaces the gated build. The main install
+    // re-detects and approves, so we only need this pre-install to skip
+    // `--ignore-scripts` (detectIgnoredBuilds treats the gated-build error as
+    // installed, so migration still proceeds).
     installSummary = await runViteInstall(installCwd, options.interactive, installArgs, {
       silent: compactOutput,
       packageManager: workspaceInfo.packageManager,
       packageManagerVersion: workspaceInfo.downloadPackageManager.version,
+      detectIgnoredBuilds: true,
     });
     if (installSummary.status !== 'installed') {
       return;
+    }
+    // Remember any gated builds this pre-install reported; yarn won't repeat the
+    // YN0004 warning on the main install, so handleIgnoredBuilds needs them.
+    if (installSummary.pendingBuilds && installSummary.pendingBuilds.length > 0) {
+      migratePendingBuilds = installSummary.pendingBuilds;
     }
     updateCreateProgress('Migrating lint and format tools');
     pauseCreateProgress();
@@ -1333,7 +1417,9 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       silent: compactOutput,
       packageManager: workspaceInfo.packageManager,
       packageManagerVersion: workspaceInfo.downloadPackageManager.version,
+      detectIgnoredBuilds: true,
     });
+    await handleIgnoredBuilds(fullPath, workspaceInfo.rootDir, installSummary);
     updateCreateProgress('Formatting code');
     // Also format the root config when generator registration rewrote it (the
     // merge writes a JSON-style block), so no separate format step is needed.
@@ -1368,7 +1454,9 @@ Use \`vp create --list\` to list all available templates, or run \`vp create --h
       silent: compactOutput,
       packageManager: workspaceInfo.packageManager,
       packageManagerVersion: workspaceInfo.downloadPackageManager.version,
+      detectIgnoredBuilds: true,
     });
+    await handleIgnoredBuilds(fullPath, fullPath, installSummary);
     updateCreateProgress('Formatting code');
     await runViteFmt(fullPath, options.interactive, undefined, { silent: compactOutput });
     if (shouldSetupGit) {

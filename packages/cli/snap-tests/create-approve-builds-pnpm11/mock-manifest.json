@@ -1,0 +1,26 @@
+{
+  "@your-org/create": {
+    "name": "@your-org/create",
+    "dist-tags": {
+      "latest": "1.0.0"
+    },
+    "versions": {
+      "1.0.0": {
+        "version": "1.0.0",
+        "dist": {
+          "tarball": "{REGISTRY}/@your-org/create/-/create-1.0.0.tgz",
+          "integrity": "sha512-ixybtmdasQGKVYm7m33nUnA2N37/CLV5T1u2nXqCx63bFvQHBMh4Ql5vhvB6usf7TlM9v6qEimRnyEckO5jZ2w=="
+        },
+        "createConfig": {
+          "templates": [
+            {
+              "name": "with-build-dep",
+              "description": "Template with a dependency that has a gated build script",
+              "template": "./templates/demo"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

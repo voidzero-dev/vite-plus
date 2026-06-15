@@ -52,9 +52,20 @@ Run `vp create --list` to see the built-in templates and the common shorthand te
 - `--hooks` enables pre-commit hook setup
 - `--no-hooks` skips hook setup
 - `--package-manager <name>` uses a specified package manager (`pnpm`, `npm`, `yarn`, or `bun`)
+- `--approve-builds` approves and runs gated dependency build scripts without prompting
 - `--no-interactive` runs without prompts
 - `--verbose` shows detailed scaffolding output
 - `--list` prints the available built-in and popular templates
+
+### Dependency build scripts
+
+For security, pnpm, bun, and yarn (Berry) do not run a dependency's build scripts (`install` / `postinstall`, e.g. native builds like `better-sqlite3`) until you approve them. When a template adds such a dependency directly, `vp create` surfaces it after installing instead of leaving the project in a half-built state:
+
+- Interactive: you are asked which of those dependencies to approve and build (nothing is selected by default).
+- Non-interactive: a note lists them and points at `vp pm approve-builds`.
+- `--approve-builds`: approves and builds them automatically, so non-interactive runs (CI) can produce a ready-to-use project.
+
+Approval is recorded the way each package manager expects: pnpm's `allowBuilds`, bun's `trustedDependencies`, or yarn's `dependenciesMeta.<pkg>.built` (in the workspace root manifest). Transitive build scripts you did not choose (e.g. `esbuild` pulled in by Vite) are left at the package manager's defaults and are not surfaced. npm runs build scripts by default, so there is nothing to approve there.
 
 ## Template Options
 
