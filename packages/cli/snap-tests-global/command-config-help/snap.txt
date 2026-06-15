@@ -5,6 +5,9 @@ Configure Vite+ for the current project (hooks + agent integration).
 
 Options:
   --hooks-dir <path>  Custom hooks directory (default: .vite-hooks)
+  --no-hooks          Skip hook installation
+  --no-agent          Skip updating coding agent instructions
+  --hooks-only        Install hooks without updating agent instructions
   -h, --help          Show this help message
 
 Environment:
@@ -20,6 +23,9 @@ Configure Vite+ for the current project (hooks + agent integration).
 
 Options:
   --hooks-dir <path>  Custom hooks directory (default: .vite-hooks)
+  --no-hooks          Skip hook installation
+  --no-agent          Skip updating coding agent instructions
+  --hooks-only        Install hooks without updating agent instructions
   -h, --help          Show this help message
 
 Environment:
@@ -35,10 +41,12 @@ Configure Vite+ for the current project (hooks + agent integration).
 
 Options:
   --hooks-dir <path>  Custom hooks directory (default: .vite-hooks)
+  --no-hooks          Skip hook installation
+  --no-agent          Skip updating coding agent instructions
+  --hooks-only        Install hooks without updating agent instructions
   -h, --help          Show this help message
 
 Environment:
   VITE_GIT_HOOKS=0  Skip hook installation
 
 Documentation: https://viteplus.dev/guide/commit-hooks
-
