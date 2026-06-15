@@ -118,30 +118,11 @@ jobs:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
-      # llvm-tools provides llvm-ar in the toolchain's rustlib bin dir;
-      # cargo-xwin symlinks the MSVC-style llvm-lib/llvm-dlltool (used by
-      # cc-rs to archive C/C++ deps) and lld-link from there when the runner
-      # image has no matching system LLVM.
-      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+      - uses: ./.github/actions/setup-xwin
         with:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: windows-cross
-          components: llvm-tools
-
-      - run: rustup target add x86_64-pc-windows-msvc
-
-      - uses: taiki-e/install-action@7a79fe8c3a13344501c80d99cae481c1c9085912 # v2.81.10
-        with:
-          tool: cargo-nextest,cargo-xwin
-
-      # Downloading and unpacking the MSVC CRT/Windows SDK dominates cold
-      # wall time (~10 minutes); the unpacked result is immutable for a given
-      # manifest version, so cache it. Bump the key when bumping cargo-xwin.
-      - uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
-        id: xwin-cache
-        with:
-          path: ~/.cache/cargo-xwin
-          key: cargo-xwin-msvc-17
+          tools: cargo-nextest
 
       # `cargo xwin env` resolves the rustflags configured in
       # .cargo/config.toml (including the cfg-based Windows section), appends
@@ -182,12 +163,6 @@ jobs:
           name: windows-test-archive
           path: windows-tests.tar.zst
           retention-days: 7
-
-      - uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
-        if: steps.xwin-cache.outputs.cache-hit != 'true'
-        with:
-          path: ~/.cache/cargo-xwin
-          key: cargo-xwin-msvc-17
 
   test-windows:
     needs: build-windows-tests
@@ -346,34 +321,11 @@ jobs:
             target/x86_64-pc-windows-msvc/release/vp-setup.exe
           key: ${{ steps.cache-key.outputs.key }}
 
-      # llvm-tools provides llvm-ar in the toolchain's rustlib bin dir;
-      # cargo-xwin symlinks the MSVC-style llvm-lib/llvm-dlltool and lld-link
-      # from there when the runner image has no matching system LLVM.
-      - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+      - uses: ./.github/actions/setup-xwin
         if: steps.binaries-cache.outputs.cache-hit != 'true'
         with:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: windows-cli-cross
-          components: llvm-tools
-
-      - run: rustup target add x86_64-pc-windows-msvc
-        if: steps.binaries-cache.outputs.cache-hit != 'true'
-
-      # Preinstall cargo-xwin so `napi build -x` (which shells out to
-      # `cargo xwin build` for MSVC targets) doesn't fall back to a slow
-      # `cargo install` of it.
-      - uses: taiki-e/install-action@7a79fe8c3a13344501c80d99cae481c1c9085912 # v2.81.10
-        if: steps.binaries-cache.outputs.cache-hit != 'true'
-        with:
-          tool: cargo-xwin
-
-      # Shared with build-windows-tests; see that job for details.
-      - uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
-        if: steps.binaries-cache.outputs.cache-hit != 'true'
-        id: xwin-cache
-        with:
-          path: ~/.cache/cargo-xwin
-          key: cargo-xwin-msvc-17
 
       - uses: oxc-project/setup-node@4c588e9266bd930b6ddc34307df0659ed511d187 # v1.3.1
         if: steps.binaries-cache.outputs.cache-hit != 'true'
@@ -418,12 +370,6 @@ jobs:
             target/x86_64-pc-windows-msvc/release/vp-shim.exe
             target/x86_64-pc-windows-msvc/release/vp-setup.exe
           key: ${{ steps.cache-key.outputs.key }}
-
-      - uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
-        if: steps.binaries-cache.outputs.cache-hit != 'true' && steps.xwin-cache.outputs.cache-hit != 'true'
-        with:
-          path: ~/.cache/cargo-xwin
-          key: cargo-xwin-msvc-17
 
   cli-e2e-test:
     name: CLI E2E test

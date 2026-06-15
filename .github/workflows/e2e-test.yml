@@ -63,35 +63,46 @@ jobs:
 
   build:
     name: Build vite-plus packages (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
       packages: read
     needs:
       - download-previous-rolldown-binaries
+    env:
+      XWIN_ACCEPT_LICENSE: '1'
+      # See ci.yml's build-windows-tests for why this Detours escape hatch is
+      # needed (harmless for the native Linux entry).
+      CXXFLAGS: -D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
+            runner: ubuntu-latest
+          # The Windows packages are cross-compiled on Linux with cargo-xwin;
+          # only the e2e-test run job below needs a real Windows runner. `os`
+          # stays windows-latest so the artifact name (consumed by e2e-test)
+          # is unchanged.
           - os: windows-latest
             target: x86_64-pc-windows-msvc
+            runner: namespace-profile-linux-x64-default
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
 
-      # Disable Windows Defender real-time scanning to speed up I/O-heavy builds (~30-50% faster)
-      - name: Disable Windows Defender
-        if: runner.os == 'Windows'
-        continue-on-error: true
-        shell: powershell
-        run: Set-MpPreference -DisableRealtimeMonitoring $true
-
       - uses: oxc-project/setup-rust@68c3199c5339f965e6e163924c3c450773eba42b # main (pending v1.0.17 — Swatinem/rust-cache v2.9.1 for node24)
+        if: ${{ !contains(matrix.target, 'windows') }}
         with:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: e2e-build-${{ matrix.os }}
+
+      - uses: ./.github/actions/setup-xwin
+        if: contains(matrix.target, 'windows')
+        with:
+          save-cache: ${{ github.ref_name == 'main' }}
+          cache-key: e2e-windows-cross
 
       - uses: oxc-project/setup-node@4c588e9266bd930b6ddc34307df0659ed511d187 # v1.3.1
 
@@ -101,10 +112,26 @@ jobs:
           path: ./rolldown/packages/rolldown/src
           merge-multiple: true
 
+      # Cross-compile the Windows binding + vp/vp-shim binaries on Linux before
+      # build-upstream's skip-native pass packs them. `napi build -x` and
+      # `cargo xwin build` drive cargo-xwin directly, so no `cargo xwin env`
+      # eval is needed. --skip-format skips formatting the generated
+      # index.cjs/index.d.cts (which would need the not-yet-built vite-plus
+      # dist); the unformatted loader is harmless in the e2e tgz since these
+      # runs never lint vite-plus's own binding.
+      - name: Cross-build Windows binaries
+        if: contains(matrix.target, 'windows')
+        env:
+          DEBUG: 'napi:*'
+        run: |
+          pnpm --filter=vite-plus build-native --target x86_64-pc-windows-msvc -x --skip-format
+          cargo xwin build --release --target x86_64-pc-windows-msvc -p vite_global_cli -p vite_trampoline
+
       - name: Build with upstream
         uses: ./.github/actions/build-upstream
         with:
           target: ${{ matrix.target }}
+          skip-native: ${{ contains(matrix.target, 'windows') && 'true' || 'false' }}
 
       - name: Pack packages into tgz
         run: |
