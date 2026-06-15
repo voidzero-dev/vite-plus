@@ -776,9 +776,7 @@ function replaceCargoCrateVersion(src: string, key: string, newVersion: string):
   const start = tableStart.index;
   const close = src.indexOf('}', start);
   const end = close >= 0 ? close : src.length;
-  const table = src
-    .slice(start, end)
-    .replace(/(version\s*=\s*")[^"]+(")/, `$1${newVersion}$2`);
+  const table = src.slice(start, end).replace(/(version\s*=\s*")[^"]+(")/, `$1${newVersion}$2`);
   return src.slice(0, start) + table + src.slice(end);
 }
 
