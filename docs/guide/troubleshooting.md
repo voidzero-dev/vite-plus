@@ -56,11 +56,11 @@ If `vp staged` fails or your pre-commit hook does not run:
 A minimal staged config looks like this:
 
 ```ts [vite.config.ts]
-import { defineConfig } from 'vite-plus';
+import { defineConfig } from "vite-plus";
 
 export default defineConfig({
   staged: {
-    '*': 'vp check --fix',
+    "*": "vp check --fix",
   },
 });
 ```
@@ -69,11 +69,13 @@ export default defineConfig({
 
 When `vite.config.ts` imports heavy plugins at the top level, every `import` is evaluated eagerly, even for commands like `vp lint` or `vp fmt` that don't need those plugins. This can make config loading noticeably slow.
 
+Eager plugins can also run unexpected side effects in long-lived tooling processes, such as editor integrations, format or lint language servers, and background workers. If a plugin touches the file system, starts a watcher, reads environment-specific files, or talks to a service during setup, prefer loading it through `lazyPlugins` so those side effects only happen for commands that actually execute the Vite pipeline.
+
 Use `lazyPlugins` to wrap plugin loading. Plugins are only loaded for commands that need them (`dev`, `build`, `test`, `preview`), and skipped for everything else:
 
 ```ts [vite.config.ts]
-import { defineConfig, lazyPlugins } from 'vite-plus';
-import myPlugin from 'vite-plugin-foo';
+import { defineConfig, lazyPlugins } from "vite-plus";
+import myPlugin from "vite-plugin-foo";
 
 export default defineConfig({
   plugins: lazyPlugins(() => [myPlugin()]),
@@ -83,11 +85,11 @@ export default defineConfig({
 For heavy plugins that should be lazily imported, combine with dynamic `import()`:
 
 ```ts [vite.config.ts]
-import { defineConfig, lazyPlugins } from 'vite-plus';
+import { defineConfig, lazyPlugins } from "vite-plus";
 
 export default defineConfig({
   plugins: lazyPlugins(async () => {
-    const { default: heavyPlugin } = await import('vite-plugin-heavy');
+    const { default: heavyPlugin } = await import("vite-plugin-heavy");
     return [heavyPlugin()];
   }),
 });
