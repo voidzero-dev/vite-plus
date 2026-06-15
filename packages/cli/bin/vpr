@@ -6,4 +6,4 @@ if (module.enableCompileCache) {
 }
 
 process.argv.splice(2, 0, 'run');
-import '../dist/bin.js';
+await import('../dist/bin.js');
