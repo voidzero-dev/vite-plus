@@ -30,7 +30,7 @@ export const core: DefaultTheme.TeamMember[] = [
     name: 'Christoph Nakazawa',
     links: [
       { icon: 'github', link: 'https://github.com/cpojer' },
-      { icon: 'x', link: 'https://x.com/cpojer' },
+      { icon: 'x', link: 'https://x.com/cnakazawa' },
       { icon: 'bluesky', link: 'https://bsky.app/profile/christoph.nkzw.tech' },
     ],
   },
