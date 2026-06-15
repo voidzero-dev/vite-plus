@@ -1407,14 +1407,21 @@ async function main() {
           packageManagerVersion: resolvedVersion,
         },
       );
-      installDurationMs += installSummary.durationMs;
+      // Route the install result through the shared helper (mirrors the full
+      // migration path and is enforced by install-failure-guard.spec): a failed
+      // install warns, appends to report.warnings, and flips process.exitCode
+      // rather than being silently credited as a successful migration. Clear the
+      // spinner first only on failure so the warning isn't interleaved with it;
+      // on success handleInstallResult returns durationMs, so the credited
+      // duration is unchanged.
       if (installSummary.status === 'failed') {
         clearMigrationProgress();
-        cancelAndExit(
-          'Dependency installation failed. Run `vp install` manually and re-run `vp migrate`.',
-          1,
-        );
       }
+      installDurationMs += handleInstallResult(
+        installSummary,
+        workspaceInfoOptional.rootDir,
+        report,
+      );
     }
 
     if (plan.selectedAgentTargetPaths && plan.selectedAgentTargetPaths.length > 0) {
