@@ -291,19 +291,25 @@ fn strip_schema_property(config: &str) -> Cow<'_, str> {
 /// duplicate keys are resolved at runtime by JS spread semantics.
 ///
 /// Returns `true` only when the key appears as a **direct** member of one of
-/// those recognized object literals. Comments, string occurrences, nested
-/// keys (e.g. `plugins: [{ fmt: ... }]`), and unrelated objects are all
-/// ignored correctly.
+/// those recognized object literals, either as a `key: value` pair or as a
+/// `{ key }` shorthand property (e.g. a template wiring in tooling config with
+/// `fmt,` / `lint,`). Comments, string occurrences, nested keys (e.g.
+/// `plugins: [{ fmt: ... }]`), and unrelated objects are all ignored correctly.
 pub fn has_config_key(vite_config_content: &str, config_key: &str) -> Result<bool, Error> {
     let grep = SupportLang::TypeScript.ast_grep(vite_config_content);
     let root = grep.root();
 
     for node in root.dfs() {
-        if node.kind() != "pair" {
-            continue;
-        }
-        let Some(key_node) = node.field("key") else { continue };
-        if !pair_key_matches(&key_node, config_key) {
+        // Match both `key: value` pairs and `{ key }` shorthand properties. A
+        // custom template that wires tooling config in via shorthand (`fmt,` /
+        // `lint,`) still declares the key, so it must not get a duplicate
+        // inline key injected by `vp create` / `vp lint --init`. See #1836.
+        let matches_key = match node.kind().as_ref() {
+            "pair" => node.field("key").is_some_and(|key| pair_key_matches(&key, config_key)),
+            "shorthand_property_identifier" => node.text() == config_key,
+            _ => continue,
+        };
+        if !matches_key {
             continue;
         }
         let Some(parent_object) = node.parent() else { continue };
@@ -1060,6 +1066,58 @@ export default () =>
   });
 "#;
         assert!(has_config_key(cfg, "fmt").unwrap());
+    }
+
+    #[test]
+    fn test_has_config_key_shorthand_property() {
+        // A custom template that keeps tooling config in separate modules wires
+        // them in with shorthand properties (`fmt,` / `lint,`). The key is
+        // present even though there is no explicit value, so `vp create` /
+        // `vp lint --init` must not inject a duplicate inline key. See #1836.
+        let cfg = r#"import { defineConfig } from 'vite-plus';
+
+import { fmt } from './tooling/format';
+import { lint } from './tooling/lint';
+
+export default defineConfig(({ mode }) => {
+  return {
+    server: { port: 3000 },
+    fmt,
+    lint,
+  };
+});
+"#;
+        assert!(has_config_key(cfg, "fmt").unwrap());
+        assert!(has_config_key(cfg, "lint").unwrap());
+        assert!(!has_config_key(cfg, "pack").unwrap());
+        assert!(!has_config_key(cfg, "staged").unwrap());
+    }
+
+    #[test]
+    fn test_has_config_key_shorthand_object_export() {
+        let cfg = r#"import { defineConfig } from 'vite-plus';
+
+const fmt = { singleQuote: true };
+
+export default defineConfig({
+  fmt,
+});
+"#;
+        assert!(has_config_key(cfg, "fmt").unwrap());
+        assert!(!has_config_key(cfg, "lint").unwrap());
+    }
+
+    #[test]
+    fn test_has_config_key_ignores_nested_shorthand() {
+        // `fmt` shorthand is nested inside a plugin's options object, not a
+        // top-level config key, so it must not count as present.
+        let cfg = r#"import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  plugins: [somePlugin({ fmt })],
+});
+"#;
+        assert!(!has_config_key(cfg, "fmt").unwrap());
     }
 
     #[test]

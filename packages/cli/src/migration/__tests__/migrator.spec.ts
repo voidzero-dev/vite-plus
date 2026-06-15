@@ -32,6 +32,8 @@ const {
   hasFrameworkShim,
   addFrameworkShim,
   injectCreateDefaultTemplate,
+  injectFmtDefaults,
+  injectLintTypeCheckDefaults,
   rewriteEslintPackageJson,
   detectIncompatibleEslintIntegration,
   preflightGitHooksSetup,
@@ -2194,6 +2196,64 @@ describe('framework shim', () => {
       expect(content).toContain("'@other'");
       expect(content).not.toContain('@your-org');
     });
+  });
+});
+
+// `vp create` / `vp migrate` inject default `lint`/`fmt` blocks into the
+// scaffolded vite.config.ts. A custom template that already declares these
+// keys via shorthand properties (`fmt,` / `lint,`, e.g. wiring in tooling
+// modules) must be preserved verbatim, not get a duplicate inline key. See #1836.
+describe('inject defaults — shorthand config keys', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-migrator-inject-shorthand-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  function writeShorthandViteConfig(): void {
+    fs.writeFileSync(
+      path.join(tmpDir, 'vite.config.ts'),
+      `import { defineConfig } from 'vite-plus';
+
+import { fmt } from './tooling/format';
+import { lint } from './tooling/lint';
+
+export default defineConfig(({ mode }) => {
+  return {
+    server: { port: 3000 },
+    fmt,
+    lint,
+  };
+});
+`,
+    );
+  }
+
+  it('does not inject a duplicate `fmt` key when one exists as a shorthand property', () => {
+    writeShorthandViteConfig();
+    const before = fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf-8');
+
+    injectFmtDefaults(tmpDir, true);
+
+    const after = fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf-8');
+    expect(after).toBe(before);
+    expect(after).not.toContain('fmt: {');
+  });
+
+  it('does not inject a duplicate `lint` key when one exists as a shorthand property', () => {
+    writeShorthandViteConfig();
+    const before = fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf-8');
+
+    injectLintTypeCheckDefaults(tmpDir, true);
+
+    const after = fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf-8');
+    expect(after).toBe(before);
+    expect(after).not.toContain('jsPlugins');
+    expect(after).not.toContain('prefer-vite-plus-imports');
   });
 });
 
