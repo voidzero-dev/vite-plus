@@ -40,7 +40,10 @@ write('.oxlintrc.json', `${JSON.stringify({ rules: {} }, null, 2)}\n`);
 write('.oxfmtrc.json', `${JSON.stringify({}, null, 2)}\n`);
 
 mkdirSync(path.join(dir, 'tooling'), { recursive: true });
-writeFileSync(path.join(dir, 'tooling', 'format.ts'), 'export const fmt = { ignorePatterns: [] };\n');
+writeFileSync(
+  path.join(dir, 'tooling', 'format.ts'),
+  'export const fmt = { ignorePatterns: [] };\n',
+);
 writeFileSync(path.join(dir, 'tooling', 'lint.ts'), 'export const lint = { rules: {} };\n');
 
 console.log(`cloned starter-template to ${dir}`);
