@@ -92,7 +92,7 @@ fn parse_public_keys(armored: &str) -> Vec<SignedPublicKey> {
     for block in split_armored_blocks(armored) {
         match SignedPublicKey::from_string(&block) {
             Ok((key, _)) => keys.push(key),
-            Err(e) => tracing::debug!("skipping unparseable release key: {e}"),
+            Err(e) => tracing::debug!("skipping unparsable release key: {e}"),
         }
     }
     keys

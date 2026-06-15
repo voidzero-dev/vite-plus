@@ -10,4 +10,6 @@ extend-exclude = [
   "crates/fspy_detours_sys/detours",
   "crates/fspy_detours_sys/src/generated_bindings.rs",
   "packages/cli/src/oxfmt-config.ts",
+  # Vendored PGP key/signature blobs: base64 armor trips the spell checker.
+  "crates/vite_js_runtime/src/assets/**/*.asc",
 ]
