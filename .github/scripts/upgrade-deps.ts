@@ -154,7 +154,7 @@ async function updatePnpmWorkspace(versions: PnpmWorkspaceVersions): Promise<voi
   // oxlint's trailing \n in the pattern disambiguates from oxlint-tsgolint.
   // All @vitest/* catalog entries (browser + core direct deps) must stay pinned
   // to the same exact version as `vitest` itself, otherwise the catalog drifts
-  // from VITEST_VERSION and the @vitest/mocker patch key, causing a patch mismatch.
+  // from VITEST_VERSION.
   const vitestExactVersionPackages = [
     '@vitest/browser',
     '@vitest/browser-playwright',
@@ -341,55 +341,6 @@ async function updateTestVpCreateWorkflow(vitestVersion: string): Promise<void> 
   console.log('Updated .github/workflows/test-vp-create.yml');
 }
 
-// ============ Update the @vitest/mocker pnpm patch entry ============
-// `pnpm-workspace.yaml` patches `@vitest/mocker` so the static `vi.mock()`
-// hoister recognizes the public `vite-plus/test` specifier. pnpm keys
-// `patchedDependencies` by EXACT version (`@vitest/mocker@x.y.z`) and errors
-// hard (`ERR_PNPM_PATCHED_PKG_DOES_NOT_MATCH`) when the key drifts from the
-// installed version, so a daily vitest bump would otherwise break every
-// auto-upgrade PR. Rewrite the key + patch-file path and rename the patch file
-// to the new version. The patch file is kept version-suffixed (rather than
-// switching to a name-only key) because its diff context is version-specific:
-// if upstream changes `dist/chunk-hoistMocks.js`, the rename surfaces a loud
-// patch-apply failure that a human must resolve — which is the desired signal.
-async function updateVitestMockerPatch(vitestVersion: string): Promise<void> {
-  const filePath = path.join(ROOT, 'pnpm-workspace.yaml');
-  const content = fs.readFileSync(filePath, 'utf8');
-  const pattern =
-    /'@vitest\/mocker@([\d.]+(?:-[\w.]+)?)': patches\/@vitest__mocker@[\d.]+(?:-[\w.]+)?\.patch/;
-  let oldVersion: string | undefined;
-  const updated = content.replace(pattern, (_match: string, captured: string) => {
-    oldVersion = captured;
-    return `'@vitest/mocker@${vitestVersion}': patches/@vitest__mocker@${vitestVersion}.patch`;
-  });
-  if (oldVersion === undefined) {
-    throw new Error(
-      `Failed to match the @vitest/mocker patchedDependencies entry in ${filePath} — ` +
-        `the pattern ${pattern} is stale, please update it in .github/scripts/upgrade-deps.ts`,
-    );
-  }
-  if (oldVersion !== vitestVersion) {
-    const oldPatch = path.join(ROOT, 'patches', `@vitest__mocker@${oldVersion}.patch`);
-    const newPatch = path.join(ROOT, 'patches', `@vitest__mocker@${vitestVersion}.patch`);
-    if (!fs.existsSync(oldPatch)) {
-      throw new Error(
-        `Expected patch file ${oldPatch} to exist before renaming — ` +
-          `the @vitest/mocker patch may have been moved or removed.`,
-      );
-    }
-    fs.renameSync(oldPatch, newPatch);
-    console.log(`Renamed @vitest/mocker patch ${oldVersion} -> ${vitestVersion}`);
-  }
-  // Also covers the case where the key version already matches `vitestVersion`
-  // but the value's patch-file suffix had drifted — `content.replace` repaired
-  // the line in memory and we must persist it, otherwise pnpm install can hit
-  // ERR_PNPM_PATCHED_PKG_DOES_NOT_MATCH.
-  if (updated !== content) {
-    fs.writeFileSync(filePath, updated);
-  }
-  recordChange('@vitest/mocker patch', oldVersion, vitestVersion);
-}
-
 // ============ Update packages/core/package.json ============
 async function updateCorePackage(devtoolsVersion: string): Promise<void> {
   const filePath = path.join(ROOT, 'packages/core/package.json');
@@ -546,7 +497,6 @@ await updatePnpmWorkspace({
 });
 await updateVitestVersionConstant(vitestVersion);
 await updateTestVpCreateWorkflow(vitestVersion);
-await updateVitestMockerPatch(vitestVersion);
 await updateCorePackage(devtoolsVersion);
 
 writeMetaFiles();

@@ -374,8 +374,6 @@
     "@vitest/spy": "catalog:",
     "@vitest/utils": "catalog:",
     "@voidzero-dev/vite-plus-core": "workspace:*",
-    "es-module-lexer": "^1.7.0",
-    "oxc-parser": "catalog:",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
     "oxlint-tsgolint": "catalog:",

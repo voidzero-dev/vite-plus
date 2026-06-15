@@ -66,16 +66,16 @@ export default defineConfig({
   "packageManager": "yarn@<semver>",
   "resolutions": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vitest": "4.1.7",
-    "@vitest/expect": "4.1.7",
-    "@vitest/runner": "4.1.7",
-    "@vitest/snapshot": "4.1.7",
-    "@vitest/spy": "4.1.7",
-    "@vitest/utils": "4.1.7",
-    "@vitest/mocker": "4.1.7",
-    "@vitest/pretty-format": "4.1.7",
-    "@vitest/coverage-v8": "4.1.7",
-    "@vitest/coverage-istanbul": "4.1.7"
+    "vitest": "4.1.9",
+    "@vitest/expect": "4.1.9",
+    "@vitest/runner": "4.1.9",
+    "@vitest/snapshot": "4.1.9",
+    "@vitest/spy": "4.1.9",
+    "@vitest/utils": "4.1.9",
+    "@vitest/mocker": "4.1.9",
+    "@vitest/pretty-format": "4.1.9",
+    "@vitest/coverage-v8": "4.1.9",
+    "@vitest/coverage-istanbul": "4.1.9"
   }
 }
 

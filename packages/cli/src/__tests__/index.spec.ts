@@ -90,20 +90,18 @@ test('lazyPlugins wraps sync function returning a Promise into array', () => {
   expect(result).not.toBeInstanceOf(Promise);
 });
 
-// defineConfig auto-injects three internal plugins before user-supplied
-// plugins: vite-plus:vitest-specifier-rewrite, vite-plus:vitest-resolver, and
-// vite-plus:auto-inline-matcher-deps. The helper below strips those prefix
-// entries so tests can assert on user-supplied plugins only.
-const REWRITE_PLUGIN_NAME = 'vite-plus:vitest-specifier-rewrite';
+// defineConfig auto-injects two internal plugins before user-supplied
+// plugins: vite-plus:vitest-resolver and vite-plus:auto-inline-matcher-deps.
+// The helper below strips those prefix entries so tests can assert on
+// user-supplied plugins only.
 const RESOLVER_PLUGIN_NAME = 'vite-plus:vitest-resolver';
 const AUTO_INLINE_PLUGIN_NAME = 'vite-plus:auto-inline-matcher-deps';
 const userPlugins = (plugins: unknown): unknown[] => {
   expect(Array.isArray(plugins)).toBe(true);
   const arr = plugins as unknown[];
-  expect((arr[0] as { name?: string })?.name).toBe(REWRITE_PLUGIN_NAME);
-  expect((arr[1] as { name?: string })?.name).toBe(RESOLVER_PLUGIN_NAME);
-  expect((arr[2] as { name?: string })?.name).toBe(AUTO_INLINE_PLUGIN_NAME);
-  return arr.slice(3);
+  expect((arr[0] as { name?: string })?.name).toBe(RESOLVER_PLUGIN_NAME);
+  expect((arr[1] as { name?: string })?.name).toBe(AUTO_INLINE_PLUGIN_NAME);
+  return arr.slice(2);
 };
 
 // lazyPlugins type compatibility tests — these verify at compile time that

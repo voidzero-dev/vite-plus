@@ -124,7 +124,7 @@ describe('rewriteMonorepo bun catalog with file: protocol', () => {
   });
 
   it('writes bunfig.toml with `peer = false` so vitest peer-dep on vite does not break install', () => {
-    // vitest@4.1.7 declares peer vite^6/^7/^8. With overrides.vite pointing at
+    // vitest@4.1.9 declares peer vite^6/^7/^8. With overrides.vite pointing at
     // file:vite-plus-core@0.0.0 (whose package.json version does not match),
     // bun aborts the install. pnpm/yarn/npm tolerate this; bun has no equivalent
     // to pnpm's peerDependencyRules and only respects the `[install] peer = false`

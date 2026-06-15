@@ -265,7 +265,7 @@ describe('rewritePackageJson', () => {
     // vitest is now a managed override key — yarn optional deps receive the
     // literal override version so the resolution doesn't depend on catalog
     // lookup at the optionalDependency site.
-    expect(pkg.optionalDependencies.vitest).toBe('4.1.7');
+    expect(pkg.optionalDependencies.vitest).toBe('4.1.9');
     expect((pkg.devDependencies as Record<string, string>)['vite-plus']).toBe('catalog:');
   });
 
@@ -1553,7 +1553,7 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(overrides.vite).toBeDefined();
     // vitest is pinned via overrides so downstream projects resolve a single
     // vitest copy (the one vp-cli ships).
-    expect(overrides.vitest).toBe('4.1.7');
+    expect(overrides.vitest).toBe('4.1.9');
 
     // peerDependencyRules should be present
     expect(pnpm.peerDependencyRules).toBeDefined();
@@ -1648,12 +1648,12 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     // `catalog:` reference, and its catalog entry is rewritten to the pinned
     // vitest version vp-cli ships.
     expect(yaml.overrides.vitest).toBe('catalog:');
-    expect(yaml.catalog.vitest).toBe('4.1.7');
+    expect(yaml.catalog.vitest).toBe('4.1.9');
     expect(yaml.catalogs.vite7.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
     expect(yaml.catalogs.vite7.react).toBe('^18.0.0');
     expect(yaml.catalogs.vite7['vite-plus']).toBe('latest');
     // Named catalog vitest entries are also pinned to the managed override version.
-    expect(yaml.catalogs.test.vitest).toBe('4.1.7');
+    expect(yaml.catalogs.test.vitest).toBe('4.1.9');
     expect(yaml.catalogs.test.tsdown).toBeUndefined();
     expect(yaml.catalogs.test['vite-plus']).toBeUndefined();
 
@@ -2311,7 +2311,7 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     // npm hard-fails with EOVERRIDE when an override pins the provider to a
     // version different from the migrated direct dep. Because webdriverio is now
     // KEPT/injected as a direct dep (not stripped), the migration must prune the
-    // stale `overrides` entry before injecting `@vitest/browser-webdriverio@4.1.7`.
+    // stale `overrides` entry before injecting `@vitest/browser-webdriverio@4.1.9`.
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
@@ -2339,7 +2339,7 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     // `@<5`). The `>` MUST NOT be mistaken for a pnpm `parent>child` selector
     // (pnpm's own delimiter rule excludes a `>` preceded by `@`), or the key's
     // target is parsed incorrectly and the stale pin survives, forcing the
-    // provider off the migrated 4.1.7 dep. A comparator-range key for an
+    // provider off the migrated 4.1.9 dep. A comparator-range key for an
     // unrelated package must still be preserved.
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
@@ -2366,7 +2366,7 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
 
   it('drops a stale yarn @vitest/browser-webdriverio resolution that would force the wrong provider version', () => {
     // Same hazard as npm, via yarn `resolutions`: a leftover pin would force the
-    // stale provider over the migrated, bundled-vitest-aligned 4.1.7 dep.
+    // stale provider over the migrated, bundled-vitest-aligned 4.1.9 dep.
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
@@ -2483,7 +2483,7 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     // npm-alias key targets `fork` (the aliased descriptor), not the provider — preserved.
     expect(resolutions['@vitest/browser-webdriverio@npm:@other/fork@1.2.3']).toBe('2.0.0');
     // The bare key DOES target the provider — pruned so it can't force the
-    // stale provider over the migrated 4.1.7 dep.
+    // stale provider over the migrated 4.1.9 dep.
     expect(resolutions).not.toHaveProperty('@vitest/browser-webdriverio');
     const devDeps = pkg.devDependencies as Record<string, string>;
     expect(devDeps['@vitest/browser-webdriverio']).toBe(VITEST_VERSION);
@@ -3124,7 +3124,7 @@ describe('rewriteMonorepo yarn catalog', () => {
     expect(yarnrc.catalogs.vite7.react).toBe('^18.0.0');
     // vitest is now a managed override key — existing catalog entries are
     // rewritten to the pinned vp-cli vitest version.
-    expect(yarnrc.catalogs.test.vitest).toBe('4.1.7');
+    expect(yarnrc.catalogs.test.vitest).toBe('4.1.9');
     expect(yarnrc.catalogs.test.oxlint).toBeUndefined();
 
     const pkg = readJson(path.join(tmpDir, 'package.json')) as {
@@ -3231,7 +3231,7 @@ describe('rewriteMonorepo bun catalog', () => {
     expect(pkg.catalog.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
     // vitest is now a managed override key — pre-existing catalog entries are
     // rewritten to the pinned vp-cli vitest version.
-    expect(pkg.catalog.vitest).toBe('4.1.7');
+    expect(pkg.catalog.vitest).toBe('4.1.9');
     expect(pkg.catalog.tsdown).toBeUndefined();
     expect(pkg.catalog.react).toBe('^19.0.0');
     expect(pkg.catalog['vite-plus']).toBeUndefined();
@@ -3294,7 +3294,7 @@ describe('rewriteMonorepo bun catalog', () => {
     // vitest is now a managed override key — existing catalog entries are
     // rewritten to the pinned version and `overrides.vitest` is injected
     // as a `catalog:` ref so bun resolves it through the catalog.
-    expect(pkg.catalogs.test.vitest).toBe('4.1.7');
+    expect(pkg.catalogs.test.vitest).toBe('4.1.9');
     expect(pkg.overrides.vite).toBe('catalog:build');
     expect(pkg.overrides.vitest).toBe('catalog:');
     expect(pkg.devDependencies.vite).toBe('catalog:build');
@@ -3338,7 +3338,7 @@ describe('rewriteMonorepo bun catalog', () => {
     expect(pkg.workspaces.catalogs.build.oxlint).toBeUndefined();
     // vitest is a managed override key — existing catalog entries are
     // rewritten to the pinned vp-cli vitest version.
-    expect(pkg.workspaces.catalogs.test.vitest).toBe('4.1.7');
+    expect(pkg.workspaces.catalogs.test.vitest).toBe('4.1.9');
     expect(pkg.workspaces.catalogs.test.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
     expect(pkg.overrides.vite).toBe('catalog:');
   });

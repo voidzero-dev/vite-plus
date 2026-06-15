@@ -1491,7 +1491,7 @@ export function rewriteStandaloneProject(
     // `resolutions` sinks before re-merging managed overrides. A leftover pin
     // would conflict with the migrated direct `@vitest/browser-webdriverio` dep
     // — npm hard-fails with EOVERRIDE, and yarn/bun would force the stale version
-    // over the bundled-vitest-aligned 4.1.7. (The pnpm sinks are pruned below.)
+    // over the bundled-vitest-aligned 4.1.9. (The pnpm sinks are pruned below.)
     dropRemovePackageOverrideKeys(pkg.resolutions);
     dropRemovePackageOverrideKeys(pkg.overrides);
     if (packageManager === PackageManager.yarn) {
@@ -1506,7 +1506,7 @@ export function rewriteStandaloneProject(
       };
       if (packageManager === PackageManager.bun) {
         // Bun walks transitive peer-deps before resolving overrides; vitest
-        // 4.1.7 declares peer `vite ^6 || ^7 || ^8` and aborts with
+        // 4.1.9 declares peer `vite ^6 || ^7 || ^8` and aborts with
         // "vite@... failed to resolve" if `vite` isn't a direct dep somewhere
         // in the tree, even when the override would redirect it. Mirror the
         // override as a devDep so bun's resolver sees `vite` immediately;
@@ -2486,7 +2486,7 @@ function rewriteCatalogsObject(catalogs: Record<string, Record<string, string>>)
 }
 
 /**
- * Bun rejects vitest@4.1.7's `vite^6/^7/^8` peer-dep when the user's project
+ * Bun rejects vitest@4.1.9's `vite^6/^7/^8` peer-dep when the user's project
  * overrides `vite` to `@voidzero-dev/vite-plus-core` (whose package.json version
  * does not match those ranges). pnpm/yarn/npm all tolerate this redirect; bun
  * does not, and there is no `peerDependencyRules`-style escape hatch — only the
@@ -2649,7 +2649,7 @@ function rewriteRootWorkspacePackageJson(
     // `resolutions` sinks before re-merging managed overrides. A leftover pin
     // would conflict with the migrated direct `@vitest/browser-webdriverio` dep
     // — npm hard-fails with EOVERRIDE, and yarn/bun would force the stale version
-    // over the bundled-vitest-aligned 4.1.7. (The pnpm sinks are pruned below.)
+    // over the bundled-vitest-aligned 4.1.9. (The pnpm sinks are pruned below.)
     dropRemovePackageOverrideKeys(pkg.resolutions);
     dropRemovePackageOverrideKeys(pkg.overrides);
     if (packageManager === PackageManager.yarn) {
@@ -2666,7 +2666,7 @@ function rewriteRootWorkspacePackageJson(
       };
     } else if (packageManager === PackageManager.bun) {
       // bun overrides are handled in rewriteBunCatalog() with catalog: references
-      // Bun walks transitive peer-deps before resolving overrides; vitest 4.1.7
+      // Bun walks transitive peer-deps before resolving overrides; vitest 4.1.9
       // declares peer `vite ^6 || ^7 || ^8` and aborts unless `vite` is a direct
       // dep at the workspace root. Mirror the override as a devDep; the override
       // configured in rewriteBunCatalog still redirects it to vite-plus-core.

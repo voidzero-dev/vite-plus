@@ -32,7 +32,7 @@ const EXTERNAL_DTS_PKG_RE = /^(?:postcss|lightningcss|vitest|@vitest\/[^/]+|vite
  * consumer `import type { AtRule } from 'postcss'` becomes a MISSING_EXPORT
  * error.
  *
- * vitest fails for a different reason: `vitest@4.1.7`'s `dist/index.d.ts`
+ * vitest fails for a different reason: `vitest@4.1.9`'s `dist/index.d.ts`
  * re-exports `ExpectPollOptions` from `@vitest/expect`, but `@vitest/expect`
  * does not actually export that name. `tsc` tolerates the dangling re-export
  * because it only resolves re-exports lazily on use, but the DTS bundler

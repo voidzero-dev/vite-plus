@@ -43,7 +43,7 @@ export default defineConfig({
     "vite": "catalog:",
     "vitest": "catalog:",
     "playwright": "*",
-    "@vitest/browser-webdriverio": "4.1.7",
+    "@vitest/browser-webdriverio": "4.1.9",
     "webdriverio": "*",
     "vite-plus": "catalog:"
   },

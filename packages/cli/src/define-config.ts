@@ -2,9 +2,6 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
 import type { PluginOption, UserConfig } from '@voidzero-dev/vite-plus-core';
-import { RolldownMagicString } from '@voidzero-dev/vite-plus-core/rolldown';
-import { initSync, parse, type ImportSpecifier } from 'es-module-lexer';
-import { parseSync as oxcParseSync, Visitor } from 'oxc-parser';
 import type { OxfmtConfig } from 'oxfmt';
 import type { OxlintConfig } from 'oxlint';
 import {
@@ -80,299 +77,6 @@ type ViteUserConfigExport =
   | ViteUserConfigFnObject
   | ViteUserConfigFnPromise
   | ViteUserConfigFn;
-
-/**
- * Rewrite bare-root `vite-plus/test` import specifiers to `vitest` so that
- * `@vitest/mocker`'s static hoister (which hardcodes `hoistedModule = "vitest"`)
- * recognizes calls like `vi.mock(...)`. Subpaths such as
- * `vite-plus/test/browser` are intentionally left unchanged.
- *
- * Task #50 pins `vitest` and the `@vitest/*` family so both specifiers resolve
- * to the same physical module, making this rewrite runtime-safe.
- *
- * Uses `es-module-lexer` for the fast path on plain JS/TS so only real ESM
- * `import`/`export ... from` and dynamic `import()` specifiers are touched —
- * string literals, template literals, and error messages that happen to
- * contain `vite-plus/test` are left alone. When `es-module-lexer` cannot
- * parse the source (typically JSX/TSX), we fall back to `oxc-parser`, which
- * understands TSX and exposes precise import-specifier offsets so JSX text
- * and string-literal occurrences of `vite-plus/test` stay untouched.
- * CommonJS `require(...)` calls are handled by a separate `oxc-parser` walk —
- * es-module-lexer / oxc-parser's ESM API only surface real ESM imports, so
- * the require pass needs its own AST visitor (which also ensures `require`
- * inside template literals and string contents stays untouched).
- *
- * Exported for unit testing.
- */
-const TARGET_SPECIFIER = 'vite-plus/test';
-const TARGET_REPLACEMENT = 'vitest';
-
-// Filename passed to `oxc-parser` for the JSX/TSX fallback. The extension is
-// what selects TSX-mode parsing — the file does not need to exist on disk.
-const OXC_FALLBACK_FILENAME = 'rewrite.tsx';
-
-// Quoted forms of the target specifier that oxc-parser's `dynamicImports`
-// entries can yield when the argument is a plain string literal. `moduleRequest`
-// for a dynamic import does not expose `.value`, so we slice the source and
-// compare against these literal forms.
-const QUOTED_TARGETS: ReadonlySet<string> = new Set([
-  `'${TARGET_SPECIFIER}'`,
-  `"${TARGET_SPECIFIER}"`,
-]);
-
-let esLexerInitialized = false;
-function ensureLexerInit(): void {
-  if (esLexerInitialized) {
-    return;
-  }
-  initSync();
-  esLexerInitialized = true;
-}
-
-/**
- * Fallback rewrite for sources that `es-module-lexer` cannot parse — most
- * commonly JSX/TSX. Uses `oxc-parser` to locate real static and dynamic
- * import specifiers so JSX text and string literals containing
- * `vite-plus/test` are left alone.
- *
- * Mutates the supplied `RolldownMagicString` in place via `overwrite(...)`
- * so the final sourcemap reflects the actual byte ranges that were
- * replaced. Returns `true` when at least one edit was applied so the
- * caller knows whether the orchestrator needs to emit a sourcemap.
- *
- * Returns `false` (no edits) when `oxc-parser` itself throws — we never
- * fall back to a regex on raw TSX, because that re-introduces the exact
- * bug this function exists to fix.
- */
-function applyOxcParserEdits(code: string, ms: RolldownMagicString): boolean {
-  let staticImports: ReadonlyArray<{
-    moduleRequest: { value: string; start: number; end: number };
-  }>;
-  let dynamicImports: ReadonlyArray<{ moduleRequest: { start: number; end: number } }>;
-  let staticExports: ReadonlyArray<{
-    entries: ReadonlyArray<{
-      moduleRequest: { value: string; start: number; end: number } | null;
-    }>;
-  }>;
-  try {
-    const parsed = oxcParseSync(OXC_FALLBACK_FILENAME, code);
-    staticImports = parsed.module.staticImports;
-    dynamicImports = parsed.module.dynamicImports;
-    staticExports = parsed.module.staticExports;
-  } catch {
-    // Extremely malformed input that oxc-parser cannot recover from. Leave
-    // the source untouched rather than risk a regex-based rewrite that would
-    // again clobber JSX text / string literals.
-    return false;
-  }
-
-  // For both static and dynamic imports, `moduleRequest.start/end` bound the
-  // specifier INCLUDING its surrounding quotes, so we preserve the original
-  // quote character in the replacement.
-  let changed = false;
-
-  for (const si of staticImports) {
-    const mr = si.moduleRequest;
-    if (mr.value !== TARGET_SPECIFIER) {
-      continue;
-    }
-    const quote = code[mr.start];
-    if (quote !== '"' && quote !== "'") {
-      continue;
-    }
-    ms.overwrite(mr.start, mr.end, `${quote}${TARGET_REPLACEMENT}${quote}`);
-    changed = true;
-  }
-
-  for (const di of dynamicImports) {
-    const mr = di.moduleRequest;
-    const slice = code.slice(mr.start, mr.end);
-    if (!QUOTED_TARGETS.has(slice)) {
-      continue;
-    }
-    const quote = slice[0];
-    ms.overwrite(mr.start, mr.end, `${quote}${TARGET_REPLACEMENT}${quote}`);
-    changed = true;
-  }
-
-  for (const entry of staticExports.flatMap((e) => e.entries)) {
-    const mr = entry.moduleRequest;
-    if (mr === null || mr.value !== TARGET_SPECIFIER) {
-      continue;
-    }
-    const quote = code[mr.start];
-    if (quote !== '"' && quote !== "'") {
-      continue;
-    }
-    ms.overwrite(mr.start, mr.end, `${quote}${TARGET_REPLACEMENT}${quote}`);
-    changed = true;
-  }
-
-  return changed;
-}
-
-/**
- * AST-driven rewrite for CommonJS `require('vite-plus/test')` calls.
- *
- * The previous implementation used a regex with a lookbehind that anchored
- * `require` at a statement-ish boundary, but raw newline + whitespace inside
- * a JS template literal also matches that boundary — so fixture/snapshot
- * strings like `` `\n  require('vite-plus/test')\n` `` were mutated even
- * though they were not real require calls.
- *
- * Instead, walk the source with `oxc-parser` and only edit a string-literal
- * argument when its parent is a `CallExpression` whose callee is the plain
- * `Identifier "require"`. Template literals, string literals, JSX text,
- * member calls like `obj.require(...)`, and string concatenation are all
- * distinct AST nodes and therefore left untouched.
- *
- * Mutates the supplied `RolldownMagicString` in place via `overwrite(...)`.
- * Returns `true` when at least one edit was applied. Returns `false` when
- * `oxc-parser` cannot parse the source — we never fall back to a regex
- * on raw user code.
- */
-function applyRequireEdits(code: string, ms: RolldownMagicString): boolean {
-  // Cheap pre-filter: skip parsing when the file has no `require` token at all.
-  if (!code.includes('require')) {
-    return false;
-  }
-
-  let parsed;
-  try {
-    parsed = oxcParseSync(OXC_FALLBACK_FILENAME, code);
-  } catch {
-    // Parser bailout — leave the source untouched. Never fall back to regex
-    // on raw user code; that re-introduces the template-literal false-positive
-    // that this function exists to fix.
-    return false;
-  }
-
-  let changed = false;
-
-  const visitor = new Visitor({
-    CallExpression(node) {
-      const callee = node.callee;
-      if (callee.type !== 'Identifier' || callee.name !== 'require') {
-        return;
-      }
-      const first = node.arguments[0];
-      if (!first || first.type !== 'Literal' || typeof first.value !== 'string') {
-        return;
-      }
-      if (first.value !== TARGET_SPECIFIER) {
-        return;
-      }
-      // `first.start`/`first.end` bound the literal INCLUDING its quotes.
-      const quote = code[first.start];
-      if (quote !== '"' && quote !== "'") {
-        return;
-      }
-      ms.overwrite(first.start, first.end, `${quote}${TARGET_REPLACEMENT}${quote}`);
-      changed = true;
-    },
-  });
-  visitor.visit(parsed.program);
-
-  return changed;
-}
-
-/**
- * Result of a `vite-plus/test` → `vitest` rewrite.
- *
- * `null` means the input was untouched (either because it does not mention
- * the target specifier at all, or because every occurrence was inside a
- * comment / string literal / template literal / member call). When edits
- * were applied, `code` is the rewritten source and `map` is a JSON
- * sourcemap string (V3) generated from the underlying `RolldownMagicString`
- * via `generateMap({ hires: 'boundary' })`. Returning the map as a
- * pre-serialised string lets us satisfy Vite's `SourceMapInput` shape
- * without exposing the native `BindingSourceMap` instance to downstream
- * transforms — which in turn would force an awkward structural cast.
- */
-export type RewriteResult = { code: string; map: string };
-
-export function rewriteVitePlusTestSpecifier(
-  code: string,
-  filename?: string,
-): RewriteResult | null {
-  if (!code.includes(TARGET_SPECIFIER)) {
-    return null;
-  }
-
-  const ms = new RolldownMagicString(code);
-  let changed = false;
-
-  // Step 1: rewrite ESM static/dynamic imports via es-module-lexer (fast path).
-  let imports: ReadonlyArray<ImportSpecifier> | undefined;
-  let lexerThrew = false;
-  try {
-    ensureLexerInit();
-    [imports] = parse(code);
-  } catch {
-    // Parse failure (JSX/TSX, non-JS file, syntax error before transformation,
-    // etc.). Fall back to the oxc-parser pass below.
-    imports = undefined;
-    lexerThrew = true;
-  }
-
-  if (imports && imports.length > 0) {
-    for (const spec of imports) {
-      if (spec.n !== TARGET_SPECIFIER) {
-        continue;
-      }
-      const { s, e, d } = spec;
-      // For static imports, `s`/`e` bound the specifier name without quotes.
-      // For dynamic imports (`d !== -1`), they bound the full string literal
-      // expression including its quotes, so wrap the replacement to preserve them.
-      const replacement = d === -1 ? TARGET_REPLACEMENT : `'${TARGET_REPLACEMENT}'`;
-      ms.overwrite(s, e, replacement);
-      changed = true;
-    }
-  } else if (lexerThrew) {
-    // `es-module-lexer` can't parse JSX/TSX, so .tsx test files with
-    // `vi.mock(...)` were silently left with the original `vite-plus/test`
-    // specifier. That causes `@vitest/mocker` to refuse to hoist the mock
-    // and crash at runtime with `Cannot access '__vi_import_0__' before
-    // initialization`. Fall back to `oxc-parser`, which handles TSX and
-    // distinguishes real imports from JSX text / string literals.
-    if (applyOxcParserEdits(code, ms)) {
-      changed = true;
-    }
-  }
-
-  // Step 2: rewrite CJS require() calls (not seen by es-module-lexer / the
-  // oxc-parser ESM API) via a dedicated AST walk. Template literals and
-  // string-literal contents that happen to contain
-  // `require('vite-plus/test')` are left untouched because the visitor only
-  // matches real `CallExpression` callee identifiers.
-  if (applyRequireEdits(code, ms)) {
-    changed = true;
-  }
-
-  if (!changed) {
-    return null;
-  }
-
-  const map = ms.generateMap({
-    source: filename,
-    hires: 'boundary',
-    includeContent: true,
-  });
-  return { code: ms.toString(), map: map.toString() };
-}
-
-function vitePlusTestSpecifierRewritePlugin(): PluginOption {
-  return {
-    name: 'vite-plus:vitest-specifier-rewrite',
-    enforce: 'pre',
-    transform(code, id) {
-      if (id.includes('/node_modules/')) {
-        return null;
-      }
-      return rewriteVitePlusTestSpecifier(code, id);
-    },
-  };
-}
 
 /**
  * `require` anchored at THIS module's location so `require.resolve` reaches
@@ -639,9 +343,9 @@ function vitePlusAutoInlineMatcherPlugin(): PluginOption {
 }
 
 /**
- * Inject the rewrite plugin, the vitest resolver plugin, and the auto-inline
- * matcher plugin into a single inline project config. Used both for root
- * configs and for object-shaped entries inside `test.projects`.
+ * Inject the vitest resolver plugin and the auto-inline matcher plugin into a
+ * single inline project config. Used both for root configs and for
+ * object-shaped entries inside `test.projects`.
  *
  * The shapes overlap (both have an optional top-level `plugins` array and
  * an optional `test.server.deps.inline`), so a shared helper keeps the
@@ -656,7 +360,6 @@ function injectPluginIntoInlineConfig<
   return {
     ...config,
     plugins: [
-      vitePlusTestSpecifierRewritePlugin(),
       vitePlusVitestResolverPlugin(),
       vitePlusAutoInlineMatcherPlugin(),
       ...(config.plugins ?? []),
@@ -665,10 +368,10 @@ function injectPluginIntoInlineConfig<
 }
 
 /**
- * Walk `config.test?.projects` and inject the rewrite plugin into each
+ * Walk `config.test?.projects` and inject the vite-plus plugins into each
  * project entry. Vitest spins up an independent Vite pipeline per project, so
  * root-level plugins do NOT propagate — without this, files matched by a
- * project's `include` glob never get the `vite-plus/test` → `vitest` rewrite.
+ * project's `include` glob never get the vitest resolver / auto-inline plugins.
  *
  * Entry shapes (from `TestProjectConfiguration`):
  *   - string  (glob path like `'./packages/*'`)  → passed through unchanged.

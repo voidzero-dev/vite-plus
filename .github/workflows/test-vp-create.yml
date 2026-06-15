@@ -105,7 +105,7 @@ jobs:
           cd packages/cli && pnpm pack --pack-destination ../../tmp/tgz && cd ../..
           # Bun is uniquely strict about peer-dep resolution:
           #   1. It checks the *resolved target's* package name and version
-          #      against the peer range (vitest 4.1.7 declares peer
+          #      against the peer range (vitest 4.1.9 declares peer
           #      `vite ^6 || ^7 || ^8`).
           #   2. A file: override pointing at the vite-plus-core tgz fails
           #      both the name check (target is `@voidzero-dev/vite-plus-core`,
@@ -218,7 +218,7 @@ jobs:
       - name: Run vp create ${{ matrix.template.name }} with ${{ matrix.package-manager }}
         working-directory: ${{ runner.temp }}
         env:
-          VP_OVERRIDE_PACKAGES: '{"vite":"file:${{ github.workspace }}/tmp/tgz/${{ env.VITE_OVERRIDE_TGZ }}","@voidzero-dev/vite-plus-core":"file:${{ github.workspace }}/tmp/tgz/voidzero-dev-vite-plus-core-0.0.0.tgz","vitest":"4.1.7","@vitest/expect":"4.1.7","@vitest/runner":"4.1.7","@vitest/snapshot":"4.1.7","@vitest/spy":"4.1.7","@vitest/utils":"4.1.7","@vitest/mocker":"4.1.7","@vitest/pretty-format":"4.1.7","@vitest/coverage-v8":"4.1.7","@vitest/coverage-istanbul":"4.1.7"}'
+          VP_OVERRIDE_PACKAGES: '{"vite":"file:${{ github.workspace }}/tmp/tgz/${{ env.VITE_OVERRIDE_TGZ }}","@voidzero-dev/vite-plus-core":"file:${{ github.workspace }}/tmp/tgz/voidzero-dev-vite-plus-core-0.0.0.tgz","vitest":"4.1.9","@vitest/expect":"4.1.9","@vitest/runner":"4.1.9","@vitest/snapshot":"4.1.9","@vitest/spy":"4.1.9","@vitest/utils":"4.1.9","@vitest/mocker":"4.1.9","@vitest/pretty-format":"4.1.9","@vitest/coverage-v8":"4.1.9","@vitest/coverage-istanbul":"4.1.9"}'
         run: |
           vp create ${{ matrix.template.create-args }} \
             --no-interactive \
