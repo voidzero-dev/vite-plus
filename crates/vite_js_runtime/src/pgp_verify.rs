@@ -12,6 +12,25 @@
 //! support, the embedded keyring and [`verify_signed_shasums`] should be
 //! generalized to take the relevant keys.
 //!
+//! # Trust model and limitations
+//!
+//! The trust boundary is the curated set of Node.js release keys plus honoring
+//! key/subkey revocation, which is what `gpgv` against the release keyring
+//! provides. Two limitations follow from that model and are intentional:
+//!
+//! - **Expiry is checked against the signature's self-asserted creation time**
+//!   (as `gpgv` does). An attacker who holds a leaked release private key also
+//!   controls that timestamp, so the expiry check does not by itself stop a
+//!   key-compromise attacker who backdates a forgery; it is defense-in-depth.
+//!   The real protection against a compromised key is its revocation, which is
+//!   enforced here, plus keeping the vendored keyring current.
+//! - **The keyring is a vendored snapshot.** Node version resolution is live, so
+//!   a release signed by a releaser key added after this snapshot was built has
+//!   no matching trusted key and fails closed on the official source until the
+//!   keyring (and `vite-plus`) is updated. The current releasers' keys are
+//!   included, so this only affects brand-new releasers; the keyring must be
+//!   refreshed from [`nodejs/release-keys`] as the releaser set changes.
+//!
 //! [`nodejs/release-keys`]: https://github.com/nodejs/release-keys
 
 use std::sync::LazyLock;
@@ -59,11 +78,13 @@ pub async fn verify_signed_shasums(signed_armor: String, filename: &str) -> Resu
 ///
 /// A raw cryptographic match is not sufficient: the keyring is intentionally
 /// historical and rPGP's low-level `verify` does not apply OpenPGP key policy.
-/// So a match is only accepted when the signing key/subkey is not revoked and
-/// the signature was created before that key/subkey expired. This mirrors what
-/// `gpgv` does and prevents a compromised, long-expired release key from signing
-/// a fresh SHASUMS for a current release (a fresh signature postdates the
-/// expiry), while genuine old signatures made when the key was valid still pass.
+/// So a match is only accepted when the signing key/subkey is not revoked, is a
+/// signing-capable self-issued key/binding, and the signature was created before
+/// that key/subkey expired. This mirrors `gpgv` against the release keyring.
+///
+/// Note the expiry check uses the signature's self-asserted creation time, so it
+/// is defense-in-depth rather than a defense against a leaked key (see the module
+/// docs); the trust boundary is the curated keyring plus revocation.
 fn verify_clearsigned(
     signed_armor: &str,
     trusted_keys: &[SignedPublicKey],
@@ -113,21 +134,45 @@ fn primary_key_revoked(key: &SignedPublicKey) -> bool {
         .any(|revocation| revocation.verify_key(&key.primary_key).is_ok())
 }
 
-/// Whether a primary-key signature made at `signed_at` is within the key's
-/// validity, using the self-signature that was effective at that time (not the
-/// loosest one), so a later expiry change is honored as `gpgv` would.
+/// Whether a primary-key signature made at `signed_at` should be trusted. Only
+/// the key's own self-issued certifications/direct signatures define its policy
+/// (a third-party certification must not supply expiry or capability), the key
+/// must not be marked certify-only, and the self-signature effective at signing
+/// time must not have expired (matching how `gpgv` selects the effective
+/// self-signature when a key's expiry changes over time).
 fn primary_signature_valid(key: &SignedPublicKey, signed_at: u64) -> bool {
     let self_signatures = key
         .details
         .direct_signatures
         .iter()
-        .chain(key.details.users.iter().flat_map(|user| user.signatures.iter()));
-    match effective_self_signature(self_signatures, signed_at) {
-        Some(self_sig) => within_validity(signed_at, expiry_instant(key.created_at(), self_sig)),
+        .chain(key.details.users.iter().flat_map(|user| user.signatures.iter()))
+        .filter(|sig| is_self_issued(sig, key));
+
+    let Some(self_sig) = effective_self_signature(self_signatures, signed_at) else {
         // No self-signature was in effect when the message was signed: the
         // signature predates the key's own certification, so reject it.
-        None => false,
+        return false;
+    };
+
+    // Reject a primary whose own self-signature declares it certify-only (i.e.
+    // explicitly capable of certifying but not of signing data).
+    let flags = self_sig.key_flags();
+    if flags.certify() && !flags.sign() {
+        return false;
     }
+
+    within_validity(signed_at, expiry_instant(key.created_at(), self_sig))
+}
+
+/// Whether `sig` was issued by `key`'s own primary key (a self-signature),
+/// identified by issuer fingerprint or key id. The certifications come from the
+/// trusted vendored keyring, so an identity match is sufficient to exclude
+/// third-party certifications from defining the key's policy.
+fn is_self_issued(sig: &Signature, key: &SignedPublicKey) -> bool {
+    let fingerprint = key.fingerprint();
+    let key_id = key.legacy_key_id();
+    sig.issuer_fingerprint().iter().any(|f| **f == fingerprint)
+        || sig.issuer_key_id().iter().any(|k| **k == key_id)
 }
 
 /// Whether a subkey signature made at `signed_at` should be trusted: the subkey
