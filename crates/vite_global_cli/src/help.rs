@@ -259,6 +259,27 @@ fn is_section_heading(line: &str) -> bool {
     !trimmed.is_empty() && !trimmed.starts_with(' ') && trimmed.ends_with(':')
 }
 
+fn split_alias_suffix(description: &str) -> Option<(&str, &str)> {
+    let description = description.strip_suffix(']')?;
+    let (description, aliases) = description.rsplit_once(" [aliases: ")?;
+    if aliases.trim().is_empty() {
+        return None;
+    }
+    Some((description, aliases))
+}
+
+fn normalize_alias_suffix(label: String, description: String) -> (String, String) {
+    if label.starts_with('-') {
+        return (label, description);
+    }
+
+    let Some((description_without_aliases, aliases)) = split_alias_suffix(&description) else {
+        return (label, description);
+    };
+
+    (format!("{label}, {aliases}"), description_without_aliases.to_string())
+}
+
 fn split_label_and_description(content: &str) -> Option<(String, String)> {
     let bytes = content.as_bytes();
     let mut i = 0;
@@ -285,6 +306,17 @@ fn split_label_and_description(content: &str) -> Option<(String, String)> {
 }
 
 fn parse_rows(lines: &[String]) -> Vec<OwnedHelpRow> {
+    parse_rows_with_alias_normalization(lines, false)
+}
+
+fn parse_command_rows(lines: &[String]) -> Vec<OwnedHelpRow> {
+    parse_rows_with_alias_normalization(lines, true)
+}
+
+fn parse_rows_with_alias_normalization(
+    lines: &[String],
+    normalize_alias_suffixes: bool,
+) -> Vec<OwnedHelpRow> {
     let mut rows = Vec::new();
 
     for line in lines {
@@ -299,6 +331,11 @@ fn parse_rows(lines: &[String]) -> Vec<OwnedHelpRow> {
         }
 
         if let Some((label, description)) = split_label_and_description(content) {
+            let (label, description) = if normalize_alias_suffixes {
+                normalize_alias_suffix(label, description)
+            } else {
+                (label, description)
+            };
             rows.push(OwnedHelpRow { label, description: vec![description] });
             continue;
         }
@@ -407,7 +444,11 @@ fn parse_clap_help_to_doc(raw_help: &str) -> Option<OwnedHelpDoc> {
         let row_sections =
             matches!(title.as_str(), "Arguments" | "Options" | "Commands" | "Subcommands");
         if row_sections {
-            let rows = parse_rows(&body);
+            let rows = if matches!(title.as_str(), "Commands" | "Subcommands") {
+                parse_command_rows(&body)
+            } else {
+                parse_rows(&body)
+            };
             sections.push(OwnedHelpSection::Rows { title, rows });
         } else {
             let lines = body.into_iter().filter(|line| !line.trim().is_empty()).collect::<Vec<_>>();
@@ -521,9 +562,9 @@ fn env_help_doc() -> HelpDoc {
                         "Remove the Node.js pin from the current directory (alias for `pin --unpin`)",
                     ),
                     row("use", "Use a specific Node.js version for this shell session"),
-                    row("install", "Install a Node.js version [aliases: i]"),
-                    row("uninstall", "Uninstall a Node.js version [aliases: uni]"),
-                    row("exec", "Execute a command with a specific Node.js version [aliases: run]"),
+                    row("install, i", "Install a Node.js version"),
+                    row("uninstall, uni", "Uninstall a Node.js version"),
+                    row("exec, run", "Execute a command with a specific Node.js version"),
                 ],
             ),
             section_rows(
@@ -532,10 +573,10 @@ fn env_help_doc() -> HelpDoc {
                     row("current", "Show current environment information"),
                     row("doctor", "Run diagnostics and show environment status"),
                     row("which", "Show path to the tool that would be executed"),
-                    row("list", "List locally installed Node.js versions [aliases: ls]"),
+                    row("list, ls", "List locally installed Node.js versions"),
                     row(
-                        "list-remote",
-                        "List available Node.js versions from the registry [aliases: ls-remote]",
+                        "list-remote, ls-remote",
+                        "List available Node.js versions from the registry",
                     ),
                 ],
             ),
@@ -1101,8 +1142,9 @@ pub fn print_unified_clap_help_for_path(command_path: &[&str]) -> bool {
 mod tests {
     use super::{
         HelpDoc, documentation_url_for_command_path, has_help_flag_before_terminator,
-        parse_clap_help_to_doc, parse_rows, render_help_doc,
-        should_skip_parent_help_for_unknown_direct_nested_child, split_comment_suffix, strip_ansi,
+        parse_clap_help_to_doc, parse_command_rows, parse_rows, render_help_doc,
+        should_skip_parent_help_for_unknown_direct_nested_child, split_comment_suffix,
+        split_label_and_description, strip_ansi,
     };
 
     #[test]
@@ -1119,6 +1161,59 @@ mod tests {
         assert_eq!(rows[0].description, vec!["Do not install devDependencies"]);
         assert_eq!(rows[1].label, "--no-optional");
         assert_eq!(rows[1].description, vec!["Do not install optionalDependencies"]);
+    }
+
+    #[test]
+    fn parse_rows_moves_command_alias_suffixes_to_labels() {
+        let lines = vec![
+            "  list  List installed packages [aliases: ls]".to_string(),
+            "  view  View package information from the registry [aliases: info, show]".to_string(),
+        ];
+
+        let rows = parse_command_rows(&lines);
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].label, "list, ls");
+        assert_eq!(rows[0].description, vec!["List installed packages"]);
+        assert_eq!(rows[1].label, "view, info, show");
+        assert_eq!(rows[1].description, vec!["View package information from the registry"]);
+    }
+
+    #[test]
+    fn parse_rows_leaves_non_terminal_alias_text_unchanged() {
+        let lines = vec!["  search  Search [aliases: lookup] packages in the registry".to_string()];
+
+        let rows = parse_command_rows(&lines);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].label, "search");
+        assert_eq!(rows[0].description, vec!["Search [aliases: lookup] packages in the registry"]);
+    }
+
+    #[test]
+    fn parse_rows_leaves_option_alias_suffixes_unchanged() {
+        let lines = vec!["  -h, --help  Print help [aliases: ?]".to_string()];
+
+        let rows = parse_rows(&lines);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].label, "-h, --help");
+        assert_eq!(rows[0].description, vec!["Print help [aliases: ?]"]);
+    }
+
+    #[test]
+    fn parse_rows_leaves_argument_alias_suffixes_unchanged() {
+        let lines = vec!["  <PACKAGE>  Package to inspect [aliases: pkg]".to_string()];
+
+        let rows = parse_rows(&lines);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].label, "<PACKAGE>");
+        assert_eq!(rows[0].description, vec!["Package to inspect [aliases: pkg]"]);
+    }
+
+    #[test]
+    fn split_label_and_description_preserves_plain_rows() {
+        let (label, description) =
+            split_label_and_description("list  List installed packages").expect("row should split");
+        assert_eq!(label, "list");
+        assert_eq!(description, "List installed packages");
     }
 
     #[test]
