@@ -8,13 +8,14 @@ use serde::{Deserialize, Serialize};
 use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_str::Str;
 
+// Only referenced on non-musl builds, where official releases are signed.
+#[cfg(not(target_env = "musl"))]
+use crate::provider::ShasumsSignature;
 use crate::{
     Error, Platform,
     download::fetch_with_cache_headers,
     platform::Os,
-    provider::{
-        ArchiveFormat, DownloadInfo, HashVerification, JsRuntimeProvider, ShasumsSignature,
-    },
+    provider::{ArchiveFormat, DownloadInfo, HashVerification, JsRuntimeProvider},
 };
 
 /// Default Node.js distribution base URL

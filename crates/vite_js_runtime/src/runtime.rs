@@ -190,7 +190,7 @@ pub async fn download_runtime_with_provider<P: JsRuntimeProvider>(
                 crate::pgp_verify::verify_signed_shasums(signed, &download_info.archive_filename)
                     .await?
             } else {
-                download_text(url).await?.into()
+                download_text(url).await?
             };
             Some(provider.parse_shasums(&shasums_content, &download_info.archive_filename)?)
         }

@@ -37,15 +37,12 @@ const NODE_RELEASE_KEYS_ARMOR: &str = include_str!("assets/node-release-keys.asc
 ///
 /// Returns [`Error::SignatureVerificationFailed`] if the message cannot be
 /// parsed or no embedded release key produced a valid signature.
-pub async fn verify_signed_shasums(signed_armor: String, filename: &str) -> Result<Str, Error> {
+pub async fn verify_signed_shasums(signed_armor: String, filename: &str) -> Result<String, Error> {
     let filename: Str = filename.into();
     tokio::task::spawn_blocking(move || {
-        verify_clearsigned(&signed_armor, node_release_keys()).map_or_else(
-            |reason| {
-                Err(Error::SignatureVerificationFailed { file: filename, reason: reason.into() })
-            },
-            |content| Ok(Str::from(content)),
-        )
+        verify_clearsigned(&signed_armor, node_release_keys()).map_err(|reason| {
+            Error::SignatureVerificationFailed { file: filename, reason: reason.into() }
+        })
     })
     .await?
 }
