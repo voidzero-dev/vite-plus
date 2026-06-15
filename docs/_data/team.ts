@@ -113,6 +113,7 @@ export const core: DefaultTheme.TeamMember[] = [
     name: 'JongKyung Lee',
     links: [
       { icon: 'github', link: 'https://github.com/jong-kyung' },
+      { icon: 'x', link: 'https://x.com/jongkyung_dev' },
       { icon: 'linkedin', link: 'https://www.linkedin.com/in/jong-kyung' },
     ],
   },
