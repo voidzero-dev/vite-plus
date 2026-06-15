@@ -247,25 +247,6 @@ export function pnpmSupportsPositionalApprove(version: string | undefined): bool
   return Number.isNaN(major) || major >= 11;
 }
 
-/**
- * `pnpm approve-builds --all` was added in pnpm 10.32.0 (and the vp wrapper
- * rejects it on older pnpm), so the `--all` fallback is only usable on pnpm 11+
- * or pnpm 10.32+. Unknown versions assume a modern pnpm (vp provisions 11+).
- */
-export function pnpmSupportsApproveBuildsAll(version: string | undefined): boolean {
-  if (!version) {
-    return true;
-  }
-  const [major, minor] = version.split('.').map((part) => Number.parseInt(part, 10));
-  if (Number.isNaN(major)) {
-    return true;
-  }
-  if (major >= 11) {
-    return true;
-  }
-  return major === 10 && !Number.isNaN(minor) && minor >= 32;
-}
-
 /** Package managers that gate build scripts and expose an approval workflow. */
 const GATED_BUILD_PACKAGE_MANAGERS: ReadonlySet<PackageManager> = new Set([
   PackageManager.pnpm,
@@ -542,21 +523,14 @@ export async function approveBuilds(options: ApproveBuildsOptions): Promise<bool
     packageManager === PackageManager.pnpm &&
     !pnpmSupportsPositionalApprove(packageManagerVersion)
   ) {
-    // pnpm < 11 has no positional `approve-builds <pkg>`. For `--approve-builds`
-    // (the user opted into building everything) fall back to `--all` when pnpm
-    // supports it (>= 10.32); otherwise we can't approve from the CLI, so print
-    // guidance rather than report a build that didn't run.
-    if (autoApprove && pnpmSupportsApproveBuildsAll(packageManagerVersion)) {
-      return runBuildAndReport(
-        ['pm', 'approve-builds', '--all'],
-        cwd,
-        selected,
-        interactive,
-        silent,
-      );
-    }
+    // pnpm < 11 can't approve individual packages: its only non-interactive
+    // option is `--all`, which would also build the transitive scripts we
+    // deliberately leave at pnpm's defaults. So we don't auto-approve here;
+    // point the user at `vp pm approve-builds` (pnpm's interactive picker). For
+    // a non-interactive `--approve-builds` we couldn't honor the request, so
+    // report failure (non-zero exit) instead of a silent no-op.
     printApproveBuildsGuidance(selected, packageManager);
-    return true;
+    return !(autoApprove && !interactive);
   }
   return runBuildAndReport(
     ['pm', 'approve-builds', ...selected],

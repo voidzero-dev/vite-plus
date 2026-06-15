@@ -14,7 +14,6 @@ import {
   parseIgnoredBuilds,
   parseInstallGatedBuilds,
   parseYarnDisabledBuilds,
-  pnpmSupportsApproveBuildsAll,
   pnpmSupportsPositionalApprove,
   resolveApproveBuildTargets,
   stripPackageVersion,
@@ -248,21 +247,6 @@ describe('pnpmSupportsPositionalApprove', () => {
   it('is false for pnpm 10 (only `--all`, no positional approve)', () => {
     expect(pnpmSupportsPositionalApprove('10.33.2')).toBe(false);
     expect(pnpmSupportsPositionalApprove('10.0.0')).toBe(false);
-  });
-});
-
-describe('pnpmSupportsApproveBuildsAll', () => {
-  it('is true for pnpm 11+, pnpm 10.32+, and unknown versions', () => {
-    expect(pnpmSupportsApproveBuildsAll('11.6.0')).toBe(true);
-    expect(pnpmSupportsApproveBuildsAll('10.32.0')).toBe(true);
-    expect(pnpmSupportsApproveBuildsAll('10.33.2')).toBe(true);
-    expect(pnpmSupportsApproveBuildsAll(undefined)).toBe(true);
-  });
-
-  it('is false for pnpm < 10.32 (no `--all` support)', () => {
-    expect(pnpmSupportsApproveBuildsAll('10.31.0')).toBe(false);
-    expect(pnpmSupportsApproveBuildsAll('10.0.0')).toBe(false);
-    expect(pnpmSupportsApproveBuildsAll('9.15.0')).toBe(false);
   });
 });
 
