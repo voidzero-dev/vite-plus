@@ -39,6 +39,9 @@ function proxyToUpstream(req, res) {
     httpsGet(url, { headers: { accept: req.headers.accept ?? 'application/json' } }, (upstream) => {
       const status = upstream.statusCode ?? 502;
       if (status >= 300 && status < 400 && upstream.headers.location && redirectsLeft > 0) {
+        // Draining can still emit 'error' (e.g. the socket resets mid-redirect),
+        // so guard it here too — otherwise it's uncaught and crashes the server.
+        upstream.on('error', fail);
         upstream.resume();
         fetchUrl(new URL(upstream.headers.location, url).toString(), redirectsLeft - 1);
         return;
@@ -51,6 +54,9 @@ function proxyToUpstream(req, res) {
           headers[name] = upstream.headers[name];
         }
       }
+      // Default a missing content-type (parity with the prior fetch-based proxy)
+      // so clients that key off it still recognize a proxied tarball.
+      headers['content-type'] ??= 'application/octet-stream';
       res.writeHead(status, headers);
       // `pipe` does not forward source errors, so listen on the response stream
       // directly; otherwise a mid-stream upstream error is uncaught and crashes
