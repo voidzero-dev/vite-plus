@@ -1608,13 +1608,36 @@ describe('ensureVitePlusBootstrap', () => {
 
 describe('rewriteStandaloneProject pnpm workspace yaml', () => {
   let tmpDir: string;
+  const savedEnv: Record<string, string | undefined> = {};
+  // Env keys the Yarn-hoisting resolver consults at HIGHEST precedence. Clear them in
+  // setup so an ambient `YARN_NODE_LINKER=pnp` (etc.) in the runner's environment can't
+  // override the fixture `.yarnrc.yml` values and make these tests non-hermetic; the
+  // env-precedence tests set them explicitly inside try/finally.
+  const ISOLATED_ENV = ['HOME', 'YARN_NODE_LINKER', 'YARN_NM_HOISTING_LIMITS'] as const;
 
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-pnpm-'));
+    for (const key of ISOLATED_ENV) {
+      savedEnv[key] = process.env[key];
+      delete process.env[key];
+    }
+    // Point Yarn's home `.yarnrc.yml` (the lowest-precedence config source the resolver
+    // consults) at a clean, empty dir so these tests can't read a contributor's real
+    // ~/.yarnrc.yml. Tests that need a home rc set $HOME themselves.
+    const cleanHome = path.join(tmpDir, '.home');
+    fs.mkdirSync(cleanHome, { recursive: true });
+    process.env.HOME = cleanHome;
   });
 
   afterEach(() => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
+    for (const key of ISOLATED_ENV) {
+      if (savedEnv[key] === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = savedEnv[key];
+      }
+    }
   });
 
   it('creates pnpm-workspace.yaml when no existing pnpm config in package.json', () => {
@@ -3349,6 +3372,163 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(libPkg.devDependencies).toHaveProperty('vite-plus');
     // Closer rc wins (none) -> no isolation -> no opt-out added.
     expect(libPkg.installConfig?.hoistingLimits).toBeUndefined();
+  });
+
+  it('skips the hoisting opt-out for a PnP Yarn project (nmHoistingLimits is inert without node-modules)', () => {
+    // Yarn DEFAULTS to Plug'n'Play; `nmHoistingLimits` only splits physical copies
+    // under the `node-modules` linker. With `nodeLinker` unset the effective linker is
+    // `pnp`, resolution is virtual, and there is no dual-`@vitest/runner` — so writing
+    // `installConfig.hoistingLimits: none` would be a spurious mutation. Skip it.
+    const savedLinker = process.env.YARN_NODE_LINKER;
+    delete process.env.YARN_NODE_LINKER;
+    try {
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify({ name: 'root', private: true, workspaces: ['packages/*'] }),
+      );
+      // nmHoistingLimits set, but nodeLinker unset -> effective linker is pnp.
+      fs.writeFileSync(path.join(tmpDir, '.yarnrc.yml'), 'nmHoistingLimits: workspaces\n');
+      const libDir = path.join(tmpDir, 'packages', 'lib');
+      fs.mkdirSync(libDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(libDir, 'package.json'),
+        JSON.stringify({ name: '@scope/lib', devDependencies: { vitest: '^4.0.0' } }),
+      );
+
+      rewriteMonorepoProject(libDir, PackageManager.yarn, true, true);
+
+      const libPkg = readJson(path.join(libDir, 'package.json')) as {
+        devDependencies?: Record<string, string>;
+        installConfig?: unknown;
+      };
+      expect(libPkg.devDependencies).toHaveProperty('vite-plus');
+      expect(libPkg.installConfig).toBeUndefined();
+    } finally {
+      if (savedLinker === undefined) {
+        delete process.env.YARN_NODE_LINKER;
+      } else {
+        process.env.YARN_NODE_LINKER = savedLinker;
+      }
+    }
+  });
+
+  it('honours YARN_NM_HOISTING_LIMITS=workspaces from the environment (highest precedence)', () => {
+    // Yarn lets `YARN_<KEY>` env vars override `.yarnrc.yml` (verified with Yarn 4.17).
+    // A repo whose rc omits `nmHoistingLimits` but runs under
+    // `YARN_NM_HOISTING_LIMITS=workspaces` is still isolated, so the workspace must be
+    // auto-fixed.
+    const savedLimit = process.env.YARN_NM_HOISTING_LIMITS;
+    process.env.YARN_NM_HOISTING_LIMITS = 'workspaces';
+    try {
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify({ name: 'root', private: true, workspaces: ['packages/*'] }),
+      );
+      // node-modules linker, but no rc nmHoistingLimits — the env supplies it.
+      fs.writeFileSync(path.join(tmpDir, '.yarnrc.yml'), 'nodeLinker: node-modules\n');
+      const libDir = path.join(tmpDir, 'packages', 'lib');
+      fs.mkdirSync(libDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(libDir, 'package.json'),
+        JSON.stringify({ name: '@scope/lib', devDependencies: { vitest: '^4.0.0' } }),
+      );
+
+      rewriteMonorepoProject(libDir, PackageManager.yarn, true, true);
+
+      const libPkg = readJson(path.join(libDir, 'package.json')) as {
+        installConfig?: { hoistingLimits?: string };
+      };
+      expect(libPkg.installConfig?.hoistingLimits).toBe('none');
+    } finally {
+      if (savedLimit === undefined) {
+        delete process.env.YARN_NM_HOISTING_LIMITS;
+      } else {
+        process.env.YARN_NM_HOISTING_LIMITS = savedLimit;
+      }
+    }
+  });
+
+  it('lets YARN_NM_HOISTING_LIMITS=none override an in-tree workspaces limit (env wins)', () => {
+    // Env precedence cuts both ways: an env override to `none` makes an in-tree
+    // `workspaces` value non-effective, so the layout already dedupes and the
+    // migration must NOT add a spurious opt-out.
+    const savedLimit = process.env.YARN_NM_HOISTING_LIMITS;
+    process.env.YARN_NM_HOISTING_LIMITS = 'none';
+    try {
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify({ name: 'root', private: true, workspaces: ['packages/*'] }),
+      );
+      fs.writeFileSync(
+        path.join(tmpDir, '.yarnrc.yml'),
+        'nodeLinker: node-modules\nnmHoistingLimits: workspaces\n',
+      );
+      const libDir = path.join(tmpDir, 'packages', 'lib');
+      fs.mkdirSync(libDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(libDir, 'package.json'),
+        JSON.stringify({ name: '@scope/lib', devDependencies: { vitest: '^4.0.0' } }),
+      );
+
+      rewriteMonorepoProject(libDir, PackageManager.yarn, true, true);
+
+      const libPkg = readJson(path.join(libDir, 'package.json')) as {
+        installConfig?: unknown;
+      };
+      expect(libPkg.installConfig).toBeUndefined();
+    } finally {
+      if (savedLimit === undefined) {
+        delete process.env.YARN_NM_HOISTING_LIMITS;
+      } else {
+        process.env.YARN_NM_HOISTING_LIMITS = savedLimit;
+      }
+    }
+  });
+
+  it('honours nodeLinker from the home ~/.yarnrc.yml for a repo OUTSIDE $HOME (devcontainer layout)', () => {
+    // Yarn reads the home `.yarnrc.yml` even when the project is not under $HOME
+    // (verified with Yarn 4.17). Devcontainers/Codespaces mount the repo under
+    // /workspaces while $HOME is /home/<user>, so the node-modules linker can come
+    // from the home rc while the project rc carries `nmHoistingLimits: workspaces`.
+    // The gate must still fire — resolving `nodeLinker` from the home rc — or the
+    // split is silently left behind.
+    const homeDir = path.join(tmpDir, 'home');
+    const projectRoot = path.join(tmpDir, 'workspaces', 'repo');
+    fs.mkdirSync(homeDir, { recursive: true });
+    fs.mkdirSync(projectRoot, { recursive: true });
+    // nodeLinker lives ONLY in the home rc; the project is a sibling of $HOME.
+    fs.writeFileSync(path.join(homeDir, '.yarnrc.yml'), 'nodeLinker: node-modules\n');
+    fs.writeFileSync(
+      path.join(projectRoot, 'package.json'),
+      JSON.stringify({ name: 'root', private: true, workspaces: ['packages/*'] }),
+    );
+    fs.writeFileSync(path.join(projectRoot, '.yarnrc.yml'), 'nmHoistingLimits: workspaces\n');
+    const libDir = path.join(projectRoot, 'packages', 'lib');
+    fs.mkdirSync(libDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(libDir, 'package.json'),
+      JSON.stringify({ name: '@scope/lib', devDependencies: { vitest: '^4.0.0' } }),
+    );
+
+    const savedHome = process.env.HOME;
+    process.env.HOME = homeDir;
+    try {
+      rewriteMonorepoProject(libDir, PackageManager.yarn, true, true);
+    } finally {
+      if (savedHome === undefined) {
+        delete process.env.HOME;
+      } else {
+        process.env.HOME = savedHome;
+      }
+    }
+
+    const libPkg = readJson(path.join(libDir, 'package.json')) as {
+      devDependencies?: Record<string, string>;
+      installConfig?: { hoistingLimits?: string };
+    };
+    expect(libPkg.devDependencies).toHaveProperty('vite-plus');
+    // node-modules (home rc) + workspaces (project rc) -> the split is real -> opt-out.
+    expect(libPkg.installConfig?.hoistingLimits).toBe('none');
   });
 
   it('denies edgedriver/geckodriver builds in pnpm-workspace.yaml when webdriverio is unused (pnpm v10)', () => {

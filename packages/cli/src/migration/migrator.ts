@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { styleText } from 'node:util';
 
@@ -1854,6 +1855,7 @@ export function rewriteMonorepoProject(
       applyYarnWorkspaceHoistingFix(
         pkg,
         yarnHoisting.limit,
+        yarnHoisting.nodeLinker,
         path.relative(yarnHoisting.rootDir, projectPath) || projectPath,
         report,
       );
@@ -2343,40 +2345,83 @@ function cleanupPeerDependencyRules(
 // WARNS instead of silently leaving a known-broken layout. See
 // `applyYarnWorkspaceHoistingFix`.
 
-// Read a SINGLE directory's `.yarnrc.yml` `nmHoistingLimits` raw value (or undefined
-// when the file/key is absent). The caller decides per workspace whether that value
-// is auto-fixable (`workspaces`) or only warnable (`dependencies`).
-function readYarnRootHoistingLimit(rootDir: string): string | undefined {
-  const yarnrcYmlPath = path.join(rootDir, '.yarnrc.yml');
+// Read a SINGLE directory's `.yarnrc.yml` scalar value for `key` (or undefined when
+// the file/key is absent or non-string). Malformed YAML throws inside `readYamlFile`,
+// so guard with try/catch — a broken ancestor rc must not abort the migration.
+//
+// Values are taken VERBATIM: Yarn's `${VAR}` / `${VAR:-default}` string interpolation
+// is NOT evaluated. An interpolated `nmHoistingLimits`/`nodeLinker` therefore won't
+// match the literal `'workspaces'`/`'node-modules'` the caller compares against, so the
+// hoisting fix conservatively does NOTHING for it — a no-op (and never a spurious
+// mutation), the same outcome as a repo with no hoisting handling at all. Faithfully
+// evaluating Yarn interpolation would mean reimplementing Yarn's config loader (or
+// shelling out to `yarn config get`, a fragile pre-install process dependency), which
+// is out of scope for this best-effort safety net.
+//
+// The filename is the literal `.yarnrc.yml`, not Yarn's `YARN_RC_FILENAME`-renamed rc.
+// `YARN_RC_FILENAME` support is intentionally out of scope: the rest of the Yarn
+// migration (catalog/`nodeLinker`/`npmPreapprovedPackages` writes in `rewriteYarnrcYml`
+// et al.) only ever writes `.yarnrc.yml`, so reading a renamed rc here would be a
+// partial, inconsistent treatment — and a repo with `YARN_RC_FILENAME` set cannot be
+// migrated at all until the write path also honours it (a separate, larger change).
+// Keeping reads and writes on the same `.yarnrc.yml` is the consistent behaviour.
+function readYarnrcValue(dir: string, key: string): string | undefined {
+  const yarnrcYmlPath = path.join(dir, '.yarnrc.yml');
   if (!fs.existsSync(yarnrcYmlPath)) {
     return undefined;
   }
-  const doc = readYamlFile(yarnrcYmlPath) as { nmHoistingLimits?: unknown } | null;
-  return typeof doc?.nmHoistingLimits === 'string' ? doc.nmHoistingLimits : undefined;
+  try {
+    const doc = readYamlFile(yarnrcYmlPath) as Record<string, unknown> | null;
+    const value = doc?.[key];
+    return typeof value === 'string' ? value : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
-// Resolve the EFFECTIVE `nmHoistingLimits` Yarn would apply to a project rooted at
-// `workspaceRootDir`. Yarn merges `.yarnrc.yml` across the project root AND its
-// ancestor directories, with the closest file that defines the key winning (verified
-// with Yarn 4.17: a key set only in an ancestor `.yarnrc.yml` is in effect, while a
-// value at the workspace root overrides an ancestor's). So walk UP from the workspace
-// root and return the first DEFINED value; undefined when no ancestor `.yarnrc.yml`
-// sets it (Yarn's default is the safe `none`). The walk starts AT the workspace root,
+// Resolve the EFFECTIVE value Yarn would apply for a config `key` (and its
+// `YARN_<KEY>` env override) for a project rooted at `workspaceRootDir`, matching
+// Yarn 4.17 precedence (all verified with `yarn config get`):
+//   1. the `YARN_*` environment variable wins over every `.yarnrc.yml` (e.g.
+//      `YARN_NM_HOISTING_LIMITS`, `YARN_NODE_LINKER`);
+//   2. otherwise Yarn merges `.yarnrc.yml` across the project root AND its ancestor
+//      directories, the CLOSEST file that defines the key winning — so a key set only
+//      in an ancestor rc is in effect, while a workspace-root value overrides it.
+// So check the env var, then walk UP from the workspace root, then finally the home
+// `~/.yarnrc.yml`, returning the first DEFINED value; undefined when none set it (the
+// caller applies Yarn's default). The ancestor walk starts AT the workspace root,
 // never below it — a sub-workspace's own `.yarnrc.yml` is not part of Yarn's
 // install-time config resolution and must not shadow the root.
-function resolveEffectiveYarnHoistingLimit(workspaceRootDir: string): string | undefined {
+//
+// The home rc is consulted LAST (lowest precedence, below the project/ancestor chain
+// — verified with Yarn 4.17: a project-root value beats the home value). For a project
+// UNDER $HOME the ancestor walk already passed through $HOME, so the explicit read is
+// redundant; it matters for projects OUTSIDE $HOME (e.g. devcontainers/Codespaces
+// mount the repo under /workspaces while $HOME is /home/<user>), where Yarn still
+// reads the home rc and the ancestor walk would otherwise miss it.
+function resolveEffectiveYarnConfigValue(
+  workspaceRootDir: string,
+  key: string,
+  envVar: string,
+): string | undefined {
+  const fromEnv = process.env[envVar]?.trim();
+  if (fromEnv) {
+    return fromEnv;
+  }
   let dir = path.resolve(workspaceRootDir);
   for (;;) {
-    const limit = readYarnRootHoistingLimit(dir);
-    if (limit !== undefined) {
-      return limit;
+    const value = readYarnrcValue(dir, key);
+    if (value !== undefined) {
+      return value;
     }
     const parent = path.dirname(dir);
     if (parent === dir) {
-      return undefined;
+      break;
     }
     dir = parent;
   }
+  const home = os.homedir();
+  return home ? readYarnrcValue(home, key) : undefined;
 }
 
 // True when `dir`'s package.json declares a `workspaces` field — i.e. `dir` is a
@@ -2397,24 +2442,30 @@ function dirIsWorkspaceRoot(dir: string): boolean {
 
 // Walk up from a workspace directory to the nearest ancestor that IS a workspace
 // root (its package.json declares `workspaces`) — the real Yarn project root — and
-// return that directory plus the EFFECTIVE `nmHoistingLimits` resolved across the
-// `.yarnrc.yml` chain at and above that root. Keying on the workspace-root marker
-// (NOT the nearest `.yarnrc.yml`) is deliberate: a package-local `.yarnrc.yml`
-// written under a sub-package (e.g. by `vp create` / install) must not shadow the
-// real root's limit, while a limit set in an ancestor `.yarnrc.yml` above the root
-// is still honoured (Yarn merges the ancestor chain). This lets
+// return that directory plus the EFFECTIVE `nmHoistingLimits` and `nodeLinker`
+// resolved across env + the `.yarnrc.yml` chain at and above that root. Keying on the
+// workspace-root marker (NOT the nearest `.yarnrc.yml`) is deliberate: a package-local
+// `.yarnrc.yml` written under a sub-package (e.g. by `vp create` / install) must not
+// shadow the real root's limit, while a limit set in an ancestor `.yarnrc.yml` above
+// the root is still honoured (Yarn merges the ancestor chain). This lets
 // `rewriteMonorepoProject` discover the layout for ANY caller without it being
 // threaded as an argument (the omitted-arg path was a missed-auto-fix bug class), and
 // lets the caller tell whether the workspace it is rewriting IS the root (the root's
-// deps already hoist to the top, so it must never be opted out). undefined when no
-// workspace root is found up to the filesystem root.
+// deps already hoist to the top, so it must never be opted out). `nodeLinker` gates
+// the fix: `nmHoistingLimits` only splits packages under the `node-modules` linker, so
+// a PnP project (Yarn's default) is left untouched. undefined when no workspace root
+// is found up to the filesystem root.
 function findYarnWorkspaceHoisting(
   startDir: string,
-): { rootDir: string; limit: string | undefined } | undefined {
+): { rootDir: string; limit: string | undefined; nodeLinker: string | undefined } | undefined {
   let dir = path.resolve(startDir);
   for (;;) {
     if (dirIsWorkspaceRoot(dir)) {
-      return { rootDir: dir, limit: resolveEffectiveYarnHoistingLimit(dir) };
+      return {
+        rootDir: dir,
+        limit: resolveEffectiveYarnConfigValue(dir, 'nmHoistingLimits', 'YARN_NM_HOISTING_LIMITS'),
+        nodeLinker: resolveEffectiveYarnConfigValue(dir, 'nodeLinker', 'YARN_NODE_LINKER'),
+      };
     }
     const parent = path.dirname(dir);
     if (parent === dir) {
@@ -2448,16 +2499,27 @@ function setYarnWorkspaceHoistingOptOut(pkg: {
 }
 
 // Resolve the Yarn workspace-hoisting isolation for a workspace that now depends on
-// `vite-plus`. `rootLimit` is the root `.yarnrc.yml` `nmHoistingLimits` (undefined
-// for non-Yarn repos or an unset key). Either auto-fixes the workspace (mutating
-// `pkg`) or, when the split cannot be fixed from package.json, warns so the
-// migration never reports success while `vp test` is still known-broken.
+// `vite-plus`. `rootLimit` is the effective `nmHoistingLimits` and `nodeLinker` the
+// effective linker (both undefined for non-Yarn repos or an unset key). Either
+// auto-fixes the workspace (mutating `pkg`) or, when the split cannot be fixed from
+// package.json, warns so the migration never reports success while `vp test` is still
+// known-broken.
 function applyYarnWorkspaceHoistingFix(
   pkg: { installConfig?: { hoistingLimits?: string } },
   rootLimit: string | undefined,
+  nodeLinker: string | undefined,
   workspaceLabel: string,
   report?: MigrationReport,
 ): void {
+  // `nmHoistingLimits`/`installConfig.hoistingLimits` only govern the `node-modules`
+  // linker — they physically isolate copies there. Under Plug'n'Play (Yarn's DEFAULT
+  // when `nodeLinker` is unset) resolution is virtual: no duplicate `@vitest/runner`
+  // can exist, so neither the auto-fix nor the warning applies. Writing an opt-out
+  // there would be a spurious source mutation that weakens isolation if the repo later
+  // switches linkers, so skip everything unless the linker is `node-modules`.
+  if (nodeLinker !== 'node-modules') {
+    return;
+  }
   // `workspaces` isolation with no explicit per-workspace limit is the one layout a
   // `none` opt-out deduplicates — fix it silently.
   if (rootLimit === 'workspaces' && pkg.installConfig?.hoistingLimits === undefined) {
