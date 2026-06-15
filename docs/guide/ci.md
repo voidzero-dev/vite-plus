@@ -13,7 +13,7 @@ That means you usually do not need separate `setup-node`, package-manager setup,
 ```yaml [.github/workflows/ci.yml]
 - uses: voidzero-dev/setup-vp@v1
   with:
-    node-version: '24'
+    node-version: "24"
     cache: true
 - run: vp install
 - run: vp check
@@ -22,6 +22,17 @@ That means you usually do not need separate `setup-node`, package-manager setup,
 ```
 
 With `cache: true`, `setup-vp` handles dependency caching for you automatically.
+
+## npm v12 Readiness
+
+npm v12 changes dependency install defaults so lifecycle scripts, git dependencies, and remote URL dependencies require explicit approval. If your Vite+ project uses npm in CI, you can test the stricter behavior early with npm 11.16 or newer:
+
+```yaml [.github/workflows/ci.yml]
+- run: npm install --strict-allow-scripts
+- run: npm approve-scripts --allow-scripts-pending
+```
+
+Review any pending packages, commit the resulting `package.json` allowlist from `npm approve-scripts`, and add the required `--allow-git` or `--allow-remote` policy if your project depends on non-registry sources. See GitHub's [npm v12 breaking changes](https://github.blog/changelog/2026-06-09-upcoming-breaking-changes-for-npm-v12/) for the current migration guidance.
 
 ## Simplifying Existing Workflows
 
@@ -36,7 +47,7 @@ If you are migrating an existing GitHub Actions workflow, you can often replace 
 
 - uses: actions/setup-node@v6
   with:
-    node-version: '24'
+    node-version: "24"
     cache: pnpm
 
 - run: pnpm ci && pnpm dev:setup
@@ -49,7 +60,7 @@ If you are migrating an existing GitHub Actions workflow, you can often replace 
 ```yaml [.github/workflows/ci.yml]
 - uses: voidzero-dev/setup-vp@v1
   with:
-    node-version: '24'
+    node-version: "24"
     cache: true
 
 - run: vp install && vp run dev:setup
