@@ -16,11 +16,21 @@
     "core-js": "3.39.0"
   },
   "devDependencies": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
     "vite-plus": "latest"
   },
   "overrides": {
+    "@vitest/coverage-istanbul": "4.1.9",
+    "@vitest/coverage-v8": "4.1.9",
+    "@vitest/expect": "4.1.9",
+    "@vitest/mocker": "4.1.9",
+    "@vitest/pretty-format": "4.1.9",
+    "@vitest/runner": "4.1.9",
+    "@vitest/snapshot": "4.1.9",
+    "@vitest/spy": "4.1.9",
+    "@vitest/utils": "4.1.9",
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+    "vitest": "4.1.9"
   },
   "devEngines": {
     "packageManager": {
@@ -56,11 +66,21 @@ These dependencies may not work until built. Run vp pm approve-builds core-js in
     "core-js": "3.39.0"
   },
   "devDependencies": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
     "vite-plus": "latest"
   },
   "overrides": {
+    "@vitest/coverage-istanbul": "4.1.9",
+    "@vitest/coverage-v8": "4.1.9",
+    "@vitest/expect": "4.1.9",
+    "@vitest/mocker": "4.1.9",
+    "@vitest/pretty-format": "4.1.9",
+    "@vitest/runner": "4.1.9",
+    "@vitest/snapshot": "4.1.9",
+    "@vitest/spy": "4.1.9",
+    "@vitest/utils": "4.1.9",
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+    "vitest": "4.1.9"
   },
   "devEngines": {
     "packageManager": {
@@ -91,11 +111,21 @@ bun pm trust v<semver> (<hash>)
     "core-js": "3.39.0"
   },
   "devDependencies": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
     "vite-plus": "latest"
   },
   "overrides": {
+    "@vitest/coverage-istanbul": "4.1.9",
+    "@vitest/coverage-v8": "4.1.9",
+    "@vitest/expect": "4.1.9",
+    "@vitest/mocker": "4.1.9",
+    "@vitest/pretty-format": "4.1.9",
+    "@vitest/runner": "4.1.9",
+    "@vitest/snapshot": "4.1.9",
+    "@vitest/spy": "4.1.9",
+    "@vitest/utils": "4.1.9",
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+    "vitest": "4.1.9"
   },
   "devEngines": {
     "packageManager": {
