@@ -14,8 +14,11 @@ You can upgrade both of them independently.
 ## Global `vp`
 
 ```bash
-vp upgrade              # upgrade to the latest version
-vp upgrade --check      # check for updates without installing
+vp upgrade                        # upgrade to the latest version
+vp upgrade --check                # check for updates without installing
+vp upgrade 0.2.0                  # install a specific version
+vp upgrade --tag alpha            # install from a dist-tag
+vp upgrade --registry <registry>  # use a custom npm registry
 ```
 
 ### Rollback
