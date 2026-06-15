@@ -743,6 +743,130 @@ export function mergeWorkspaceYaml(
   return mainDoc.toString(stringifyOptions);
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// Parse every `oxc*` crate version from a Cargo.toml in a single pass, keyed by
+// crate name. Handles both the bare `oxc_x = "X"` form and the inline-table
+// `oxc = { version = "X", features = [...] }` form (which may span lines, but
+// always lists `version` before its `[...]` feature array, so `[^}]*?` reaches
+// it without crossing the closing `}`).
+function parseCargoOxcVersions(src: string): Map<string, string> {
+  const versions = new Map<string, string>();
+  const re = /^\s*(oxc[\w-]*)\s*=\s*(?:"([^"]+)"|\{[^}]*?version\s*=\s*"([^"]+)")/gm;
+  for (let m = re.exec(src); m; m = re.exec(src)) {
+    versions.set(m[1], m[2] ?? m[3]);
+  }
+  return versions;
+}
+
+// Replace the version of a single crate entry in-place, preserving features,
+// formatting, and surrounding text. Only the first matching entry is rewritten.
+function replaceCargoCrateVersion(src: string, key: string, newVersion: string): string {
+  const escaped = escapeRegExp(key);
+  const bareRe = new RegExp(`^(\\s*${escaped}\\s*=\\s*")[^"]+(")`, 'm');
+  if (bareRe.test(src)) {
+    return src.replace(bareRe, `$1${newVersion}$2`);
+  }
+  const tableStart = new RegExp(`^\\s*${escaped}\\s*=\\s*\\{`, 'm').exec(src);
+  if (!tableStart) {
+    return src;
+  }
+  const start = tableStart.index;
+  const close = src.indexOf('}', start);
+  const end = close >= 0 ? close : src.length;
+  const table = src.slice(start, end).replace(/(version\s*=\s*")[^"]+(")/, `$1${newVersion}$2`);
+  return src.slice(0, start) + table + src.slice(end);
+}
+
+export interface CargoOxcChange {
+  key: string;
+  from: string;
+  to: string;
+}
+
+// Keep vp's root `Cargo.toml` oxc pins in lockstep with the vendored rolldown
+// source. When the daily upgrade bumps the rolldown hash to a commit built
+// against a newer oxc release, rolldown's crates no longer compile against vp's
+// stale oxc pin (e.g. `oxc_ast::template_element` gaining an argument between
+// 0.134 and 0.135). For every oxc-family crate in the root
+// `[workspace.dependencies]`, follow the version rolldown's `Cargo.toml`
+// declares; crates rolldown does not pin explicitly but that currently track
+// the umbrella `oxc` version (oxc_ast/oxc_parser/oxc_span, ...) follow rolldown's
+// `oxc` version. Crates with an independent pin rolldown does not declare are
+// left untouched. Only the `[workspace.dependencies]` section is edited so that
+// `[patch.*]` overrides are never rewritten.
+export function syncCargoOxcVersions(
+  mainCargoSrc: string,
+  rolldownCargoSrc: string,
+): { content: string; changes: CargoOxcChange[] } {
+  const changes: CargoOxcChange[] = [];
+
+  const header = '[workspace.dependencies]';
+  const headerIdx = mainCargoSrc.indexOf(header);
+  if (headerIdx < 0) {
+    return { content: mainCargoSrc, changes };
+  }
+  const afterHeader = headerIdx + header.length;
+  const nextHeader = mainCargoSrc.slice(afterHeader).search(/\n\[[^\]\n]+\]/);
+  const sectionEnd = nextHeader < 0 ? mainCargoSrc.length : afterHeader + nextHeader;
+
+  let section = mainCargoSrc.slice(headerIdx, sectionEnd);
+
+  const mainVersions = parseCargoOxcVersions(section);
+  const rolldownVersions = parseCargoOxcVersions(rolldownCargoSrc);
+  const mainUmbrella = mainVersions.get('oxc');
+  const rolldownUmbrella = rolldownVersions.get('oxc');
+
+  for (const [key, current] of mainVersions) {
+    // Prefer rolldown's explicit pin; otherwise, if this crate currently tracks
+    // the umbrella `oxc` version, follow rolldown's umbrella bump. Independent
+    // pins rolldown does not declare are skipped.
+    let target = rolldownVersions.get(key);
+    if (!target && mainUmbrella && current === mainUmbrella) {
+      target = rolldownUmbrella;
+    }
+    if (!target || target === current) {
+      continue;
+    }
+    section = replaceCargoCrateVersion(section, key, target);
+    changes.push({ key, from: current, to: target });
+  }
+
+  if (changes.length === 0) {
+    return { content: mainCargoSrc, changes };
+  }
+
+  const content = mainCargoSrc.slice(0, headerIdx) + section + mainCargoSrc.slice(sectionEnd);
+  return { content, changes };
+}
+
+// Rewrite the root Cargo.toml oxc pins in place to match the freshly cloned
+// rolldown, so the bumped rolldown source compiles against the same oxc release.
+function syncCargoOxcWithRolldown(rootDir: string): void {
+  const mainCargoPath = join(rootDir, 'Cargo.toml');
+  const rolldownCargoPath = join(rootDir, ROLLDOWN_DIR, 'Cargo.toml');
+  if (!existsSync(mainCargoPath) || !existsSync(rolldownCargoPath)) {
+    return;
+  }
+
+  const { content, changes } = syncCargoOxcVersions(
+    readFileSync(mainCargoPath, 'utf-8'),
+    readFileSync(rolldownCargoPath, 'utf-8'),
+  );
+  if (changes.length === 0) {
+    log('✓ Cargo.toml oxc versions already in sync');
+    return;
+  }
+
+  writeFileSync(mainCargoPath, content, 'utf-8');
+  for (const change of changes) {
+    log(`  ${change.key}: ${change.from} -> ${change.to}`);
+  }
+  log('✓ Cargo.toml oxc versions updated; run `cargo update` to refresh Cargo.lock');
+}
+
 export async function syncRemote() {
   const { values } = parseArgs({
     options: {
@@ -832,6 +956,10 @@ export async function syncRemote() {
   log('✓ pnpm-workspace.yaml updated successfully!');
 
   execCommand('pnpm install --no-frozen-lockfile', rootDir);
+
+  // Keep the root Cargo.toml oxc pins in lockstep with the vendored rolldown.
+  log('Syncing Cargo.toml oxc versions with rolldown...');
+  syncCargoOxcWithRolldown(rootDir);
 
   // Merge package.json exports
   log('Merging package.json exports...');
