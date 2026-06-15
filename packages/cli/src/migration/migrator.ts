@@ -3307,7 +3307,12 @@ export function ensureVitePlusBootstrap(
         ) ||
         !pnpmPeerDependencyRulesSatisfyVitePlus(readPnpmWorkspacePeerDependencyRules(projectPath))
       ) {
-        rewritePnpmWorkspaceYaml(projectPath);
+        // Bootstrap only completes the catalog / overrides / peer rules for a
+        // project that already uses Vite+. Build-script allowance stays owned
+        // by the full migration paths, so pass an undefined pnpm major to skip
+        // it (mirrors the single-arg call this path used before the signature
+        // grew the build-allowance parameters).
+        rewritePnpmWorkspaceYaml(projectPath, undefined, false);
       }
       if (fs.existsSync(pnpmWorkspaceYamlPath)) {
         ensurePnpmWorkspacePackages(projectPath, workspaceInfo.workspacePatterns);
