@@ -10,8 +10,8 @@ catalog:
   '@babel/preset-typescript': ^7.24.7
   '@clack/core': ^1.0.0
   '@iconify/vue': ^5.0.0
-  '@napi-rs/cli': ^3.6.1
-  '@napi-rs/wasm-runtime': ^1.1.4
+  '@napi-rs/cli': ^3.7.1
+  '@napi-rs/wasm-runtime': ^1.1.5
   '@nkzw/safe-word-list': ^3.1.0
   '@oxc-node/cli': ^0.1.0
   '@oxc-node/core': ^0.1.0
@@ -94,7 +94,7 @@ catalog:
   react-dom: ^19.1.0
   remark-parse: ^11.0.0
   remeda: ^2.34.1
-  rolldown-plugin-dts: ^0.25.1
+  rolldown-plugin-dts: ^0.25.2
   rollup: ^4.60.4
   semver: ^7.8.0
   serve-static: ^2.0.0
@@ -117,7 +117,7 @@ catalog:
   vitepress-plugin-llms: ^1.1.0
   vitepress-plugin-og: ^0.0.5
   vitest: ^4.1.6
-  vue: ^3.5.21
+  vue: ^3.5.35
   web-tree-sitter: ^0.26.0
   ws: ^8.20.1
   yaml: ^2.8.1
