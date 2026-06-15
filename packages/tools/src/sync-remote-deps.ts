@@ -743,6 +743,124 @@ export function mergeWorkspaceYaml(
   return mainDoc.toString(stringifyOptions);
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// Read a crate's version from a Cargo.toml `[workspace.dependencies]` entry.
+// Handles both the bare `key = "X"` form and the inline-table
+// `key = { version = "X", features = [...] }` form (which may span lines).
+function readCargoCrateVersion(src: string, key: string): string | undefined {
+  const escaped = escapeRegExp(key);
+  const bare = src.match(new RegExp(`^\\s*${escaped}\\s*=\\s*"([^"]+)"`, 'm'));
+  if (bare) {
+    return bare[1];
+  }
+  const tableStart = new RegExp(`^\\s*${escaped}\\s*=\\s*\\{`, 'm').exec(src);
+  if (!tableStart) {
+    return undefined;
+  }
+  // The inline table ends at the first `}` (oxc tables only nest `[...]`
+  // feature arrays, never `{...}`), so version lookup stays within this entry.
+  const after = src.slice(tableStart.index);
+  const close = after.indexOf('}');
+  const body = close >= 0 ? after.slice(0, close) : after;
+  const version = body.match(/version\s*=\s*"([^"]+)"/);
+  return version ? version[1] : undefined;
+}
+
+// Replace the version of a single crate entry in-place, preserving features,
+// formatting, and surrounding text. Only the first matching entry is rewritten.
+function replaceCargoCrateVersion(src: string, key: string, newVersion: string): string {
+  const escaped = escapeRegExp(key);
+  const bareRe = new RegExp(`^(\\s*${escaped}\\s*=\\s*")[^"]+(")`, 'm');
+  if (bareRe.test(src)) {
+    return src.replace(bareRe, `$1${newVersion}$2`);
+  }
+  const tableStart = new RegExp(`^\\s*${escaped}\\s*=\\s*\\{`, 'm').exec(src);
+  if (!tableStart) {
+    return src;
+  }
+  const start = tableStart.index;
+  const close = src.indexOf('}', start);
+  const end = close >= 0 ? close : src.length;
+  const table = src
+    .slice(start, end)
+    .replace(/(version\s*=\s*")[^"]+(")/, `$1${newVersion}$2`);
+  return src.slice(0, start) + table + src.slice(end);
+}
+
+export interface CargoOxcChange {
+  key: string;
+  from: string;
+  to: string;
+}
+
+// Keep vp's root `Cargo.toml` oxc pins in lockstep with the vendored rolldown
+// source. When the daily upgrade bumps the rolldown hash to a commit built
+// against a newer oxc release, rolldown's crates no longer compile against vp's
+// stale oxc pin (e.g. `oxc_ast::template_element` gaining an argument between
+// 0.134 and 0.135). For every oxc-family crate in the root
+// `[workspace.dependencies]`, follow the version rolldown's `Cargo.toml`
+// declares; crates rolldown does not pin explicitly but that currently track
+// the umbrella `oxc` version (oxc_ast/oxc_parser/oxc_span, ...) follow rolldown's
+// `oxc` version. Crates with an independent pin rolldown does not declare are
+// left untouched. Only the `[workspace.dependencies]` section is edited so that
+// `[patch.*]` overrides are never rewritten.
+export function syncCargoOxcVersions(
+  mainCargoSrc: string,
+  rolldownCargoSrc: string,
+): { content: string; changes: CargoOxcChange[] } {
+  const changes: CargoOxcChange[] = [];
+
+  const header = '[workspace.dependencies]';
+  const headerIdx = mainCargoSrc.indexOf(header);
+  if (headerIdx < 0) {
+    return { content: mainCargoSrc, changes };
+  }
+  const afterHeader = headerIdx + header.length;
+  const nextHeader = mainCargoSrc.slice(afterHeader).search(/\n\[[^\]\n]+\]/);
+  const sectionEnd = nextHeader < 0 ? mainCargoSrc.length : afterHeader + nextHeader;
+
+  let section = mainCargoSrc.slice(headerIdx, sectionEnd);
+
+  const mainUmbrella = readCargoCrateVersion(section, 'oxc');
+  const rolldownUmbrella = readCargoCrateVersion(rolldownCargoSrc, 'oxc');
+
+  // Collect every oxc-prefixed dependency key declared in the section.
+  const keys = new Set<string>();
+  const keyRe = /^\s*(oxc[\w-]*)\s*=/gm;
+  for (let m = keyRe.exec(section); m; m = keyRe.exec(section)) {
+    keys.add(m[1]);
+  }
+
+  for (const key of keys) {
+    const current = readCargoCrateVersion(section, key);
+    if (!current) {
+      continue;
+    }
+    // Prefer rolldown's explicit pin; otherwise, if this crate currently tracks
+    // the umbrella `oxc` version, follow rolldown's umbrella bump. Independent
+    // pins rolldown does not declare are skipped.
+    let target = readCargoCrateVersion(rolldownCargoSrc, key);
+    if (!target && mainUmbrella && current === mainUmbrella) {
+      target = rolldownUmbrella;
+    }
+    if (!target || target === current) {
+      continue;
+    }
+    section = replaceCargoCrateVersion(section, key, target);
+    changes.push({ key, from: current, to: target });
+  }
+
+  if (changes.length === 0) {
+    return { content: mainCargoSrc, changes };
+  }
+
+  const content = mainCargoSrc.slice(0, headerIdx) + section + mainCargoSrc.slice(sectionEnd);
+  return { content, changes };
+}
+
 export async function syncRemote() {
   const { values } = parseArgs({
     options: {
@@ -832,6 +950,27 @@ export async function syncRemote() {
   log('✓ pnpm-workspace.yaml updated successfully!');
 
   execCommand('pnpm install --no-frozen-lockfile', rootDir);
+
+  // Keep the root Cargo.toml oxc pins in lockstep with the vendored rolldown,
+  // so the bumped rolldown source compiles against the same oxc release.
+  log('Syncing Cargo.toml oxc versions with rolldown...');
+  const mainCargoPath = join(rootDir, 'Cargo.toml');
+  const rolldownCargoPath = join(rootDir, ROLLDOWN_DIR, 'Cargo.toml');
+  if (existsSync(mainCargoPath) && existsSync(rolldownCargoPath)) {
+    const { content: cargoContent, changes: cargoChanges } = syncCargoOxcVersions(
+      readFileSync(mainCargoPath, 'utf-8'),
+      readFileSync(rolldownCargoPath, 'utf-8'),
+    );
+    if (cargoChanges.length > 0) {
+      writeFileSync(mainCargoPath, cargoContent, 'utf-8');
+      for (const change of cargoChanges) {
+        log(`  ${change.key}: ${change.from} -> ${change.to}`);
+      }
+      log('✓ Cargo.toml oxc versions updated; run `cargo update` to refresh Cargo.lock');
+    } else {
+      log('✓ Cargo.toml oxc versions already in sync');
+    }
+  }
 
   // Merge package.json exports
   log('Merging package.json exports...');
