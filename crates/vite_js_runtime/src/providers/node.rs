@@ -12,7 +12,9 @@ use crate::{
     Error, Platform,
     download::fetch_with_cache_headers,
     platform::Os,
-    provider::{ArchiveFormat, DownloadInfo, HashVerification, JsRuntimeProvider},
+    provider::{
+        ArchiveFormat, DownloadInfo, HashVerification, JsRuntimeProvider, ShasumsSignature,
+    },
 };
 
 /// Default Node.js distribution base URL
@@ -602,11 +604,22 @@ impl JsRuntimeProvider for NodeProvider {
         let shasums_url = vite_str::format!("{base_url}/v{version}/SHASUMS256.txt");
         let extracted_dir_name = vite_str::format!("node-v{version}-{platform_str}");
 
+        // Official nodejs.org releases publish a clearsigned SHASUMS256.txt.asc
+        // signed by a Node.js releaser; verify it. The unofficial musl builds
+        // (unofficial-builds.nodejs.org) publish no signature, so fall back to
+        // the plain SHASUMS256.txt there.
+        #[cfg(not(target_env = "musl"))]
+        let signature = Some(ShasumsSignature {
+            url: vite_str::format!("{base_url}/v{version}/SHASUMS256.txt.asc"),
+        });
+        #[cfg(target_env = "musl")]
+        let signature = None;
+
         DownloadInfo {
             archive_url,
             archive_filename,
             archive_format: format,
-            hash_verification: HashVerification::ShasumsFile { url: shasums_url },
+            hash_verification: HashVerification::ShasumsFile { url: shasums_url, signature },
             extracted_dir_name,
         }
     }
@@ -690,8 +703,10 @@ mod tests {
                 "https://nodejs.org/dist/v22.13.1/node-v22.13.1-linux-x64.tar.gz"
             );
             assert_eq!(info.extracted_dir_name, "node-v22.13.1-linux-x64");
-            if let HashVerification::ShasumsFile { url } = &info.hash_verification {
+            if let HashVerification::ShasumsFile { url, signature } = &info.hash_verification {
                 assert_eq!(url, "https://nodejs.org/dist/v22.13.1/SHASUMS256.txt");
+                let signature = signature.as_ref().expect("official builds are signature-verified");
+                assert_eq!(signature.url, "https://nodejs.org/dist/v22.13.1/SHASUMS256.txt.asc");
             } else {
                 panic!("Expected ShasumsFile verification");
             }
@@ -704,11 +719,13 @@ mod tests {
                 "https://unofficial-builds.nodejs.org/download/release/v22.13.1/node-v22.13.1-linux-x64-musl.tar.gz"
             );
             assert_eq!(info.extracted_dir_name, "node-v22.13.1-linux-x64-musl");
-            if let HashVerification::ShasumsFile { url } = &info.hash_verification {
+            if let HashVerification::ShasumsFile { url, signature } = &info.hash_verification {
                 assert_eq!(
                     url,
                     "https://unofficial-builds.nodejs.org/download/release/v22.13.1/SHASUMS256.txt"
                 );
+                // Unofficial musl builds publish no PGP signature.
+                assert!(signature.is_none(), "musl builds have no signature to verify");
             } else {
                 panic!("Expected ShasumsFile verification");
             }

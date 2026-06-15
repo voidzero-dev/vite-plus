@@ -175,12 +175,23 @@ pub async fn download_runtime_with_provider<P: JsRuntimeProvider>(
     let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
     let archive_path = temp_path.join(&download_info.archive_filename);
 
-    // Resolve the expected hash once. The SHASUMS fetch/parse is deterministic
-    // (parse failures are permanent and the fetch already retries internally),
-    // so it stays outside the content-integrity retry below.
+    // Resolve the expected hash once. The SHASUMS fetch/verify/parse is
+    // deterministic (parse and signature failures are permanent and the fetch
+    // already retries internally), so it stays outside the content-integrity
+    // retry below.
     let expected_hash: Option<Str> = match &download_info.hash_verification {
-        HashVerification::ShasumsFile { url } => {
-            let shasums_content = download_text(url).await?;
+        HashVerification::ShasumsFile { url, signature } => {
+            // When a signature is available, fetch the clearsigned SHASUMS and
+            // verify its PGP signature against the runtime's release keys, then
+            // parse the verified plaintext. Otherwise fall back to the plain
+            // SHASUMS (e.g. musl unofficial builds publish no signature).
+            let shasums_content = if let Some(signature) = signature {
+                let signed = download_text(&signature.url).await?;
+                crate::pgp_verify::verify_signed_shasums(signed, &download_info.archive_filename)
+                    .await?
+            } else {
+                download_text(url).await?.into()
+            };
             Some(provider.parse_shasums(&shasums_content, &download_info.archive_filename)?)
         }
         HashVerification::None => None,

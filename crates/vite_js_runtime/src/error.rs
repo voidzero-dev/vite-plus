@@ -32,6 +32,10 @@ pub enum Error {
     #[error("Hash not found for {filename} in SHASUMS256.txt")]
     HashNotFound { filename: Str },
 
+    /// PGP signature verification of the SHASUMS file failed
+    #[error("PGP signature verification failed for {file}: {reason}")]
+    SignatureVerificationFailed { file: Str, reason: Str },
+
     /// Failed to parse version index
     #[error("Failed to parse version index: {reason}")]
     VersionIndexParseFailed { reason: Str },

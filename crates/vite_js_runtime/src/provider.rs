@@ -34,11 +34,22 @@ pub enum HashVerification {
     /// Download a SHASUMS file and parse it to find the hash
     /// Used by Node.js (SHASUMS256.txt format)
     ShasumsFile {
-        /// URL to the SHASUMS file
+        /// URL to the plain SHASUMS file. Used when `signature` is `None`.
         url: Str,
+        /// When set, the clearsigned SHASUMS file is downloaded and its PGP
+        /// signature verified against the runtime's release keys before any
+        /// hash is trusted.
+        signature: Option<ShasumsSignature>,
     },
     /// No hash verification (not recommended, but some runtimes may not provide checksums)
     None,
+}
+
+/// PGP signature verification details for a SHASUMS file.
+#[derive(Debug, Clone)]
+pub struct ShasumsSignature {
+    /// URL to the clearsigned SHASUMS file (e.g. `SHASUMS256.txt.asc`).
+    pub url: Str,
 }
 
 /// Information needed to download a runtime

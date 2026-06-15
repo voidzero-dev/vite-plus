@@ -239,6 +239,9 @@ owo-colors = "4.2.2"
 parking_lot = "0.12.5"
 pathdiff = "0.2.3"
 path-posix = "0.0.1"
+# default features pull in bzip2 (a C dependency) which breaks musl/Windows
+# cross-builds; clearsigned verification needs no compression.
+pgp = { version = "0.19.0", default-features = false }
 pnp = "0.12.9"
 percent-encoding = "2.3.1"
 petgraph = "0.8.2"
