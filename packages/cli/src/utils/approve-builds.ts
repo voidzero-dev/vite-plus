@@ -73,7 +73,11 @@ export function parseIgnoredBuilds(output: string): string[] {
   if (!output) {
     return [];
   }
-  const markerIndex = output.indexOf(IGNORED_BUILDS_MARKER);
+  // Strip ANSI/VT codes first: colorized pnpm output (e.g. FORCE_COLOR in CI)
+  // wraps the warning box and package list in control sequences that would
+  // otherwise cling to the trailing package name and break the match.
+  const clean = stripVTControlCharacters(output);
+  const markerIndex = clean.indexOf(IGNORED_BUILDS_MARKER);
   if (markerIndex === -1) {
     return [];
   }
@@ -82,7 +86,7 @@ export function parseIgnoredBuilds(output: string): string[] {
   // approve-builds" hint, or the first line that is neither the marker line nor
   // a box-bordered continuation (pnpm 11's blank separator, or trailing install
   // output like "Done in 171ms").
-  const lines = output.slice(markerIndex + IGNORED_BUILDS_MARKER.length).split('\n');
+  const lines = clean.slice(markerIndex + IGNORED_BUILDS_MARKER.length).split('\n');
   const listLines: string[] = [];
   for (const line of lines) {
     if (listLines.length > 0 && (/approve-builds/u.test(line) || !BOX_LINE.test(line))) {
@@ -243,6 +247,25 @@ export function pnpmSupportsPositionalApprove(version: string | undefined): bool
   return Number.isNaN(major) || major >= 11;
 }
 
+/**
+ * `pnpm approve-builds --all` was added in pnpm 10.32.0 (and the vp wrapper
+ * rejects it on older pnpm), so the `--all` fallback is only usable on pnpm 11+
+ * or pnpm 10.32+. Unknown versions assume a modern pnpm (vp provisions 11+).
+ */
+export function pnpmSupportsApproveBuildsAll(version: string | undefined): boolean {
+  if (!version) {
+    return true;
+  }
+  const [major, minor] = version.split('.').map((part) => Number.parseInt(part, 10));
+  if (Number.isNaN(major)) {
+    return true;
+  }
+  if (major >= 11) {
+    return true;
+  }
+  return major === 10 && !Number.isNaN(minor) && minor >= 32;
+}
+
 /** Package managers that gate build scripts and expose an approval workflow. */
 const GATED_BUILD_PACKAGE_MANAGERS: ReadonlySet<PackageManager> = new Set([
   PackageManager.pnpm,
@@ -329,9 +352,9 @@ function printApproveBuildsGuidance(
   // yarn has no `approve-builds` command, so point at its own workflow instead.
   if (packageManager === PackageManager.yarn) {
     prompts.log.info(
-      `These dependencies may not work until built. Enable them in package.json ` +
-        `(${accent('dependenciesMeta.<pkg>.built: true')}) and reinstall, or re-create with ` +
-        `${accent('--approve-builds')}.`,
+      `These dependencies may not work until built. Enable them in the workspace root ` +
+        `package.json (${accent('dependenciesMeta.<pkg>.built: true')}) and reinstall, or ` +
+        `re-create with ${accent('--approve-builds')}.`,
     );
     return;
   }
@@ -520,10 +543,10 @@ export async function approveBuilds(options: ApproveBuildsOptions): Promise<bool
     !pnpmSupportsPositionalApprove(packageManagerVersion)
   ) {
     // pnpm < 11 has no positional `approve-builds <pkg>`. For `--approve-builds`
-    // (the user opted into building everything) fall back to the supported
-    // `--all`; otherwise we can't approve just these direct deps, so print
+    // (the user opted into building everything) fall back to `--all` when pnpm
+    // supports it (>= 10.32); otherwise we can't approve from the CLI, so print
     // guidance rather than report a build that didn't run.
-    if (autoApprove) {
+    if (autoApprove && pnpmSupportsApproveBuildsAll(packageManagerVersion)) {
       return runBuildAndReport(
         ['pm', 'approve-builds', '--all'],
         cwd,
