@@ -6,10 +6,9 @@ const {
   defaultBrowserPort,
   defaultExclude,
   defaultInclude,
-  defineProject,
 } = require('vitest/config');
 
-const { defineConfig, lazyPlugins } = require('./define-config');
+const { defineConfig, defineProject, lazyPlugins } = require('./define-config');
 
 module.exports = {
   ...vite,

@@ -348,7 +348,12 @@ describe('rewritePackageJson', () => {
     ).toBe('catalog:');
   });
 
-  it('should preserve playwright when removing @vitest/browser-playwright', async () => {
+  it('keeps and normalizes @vitest/browser-playwright and ensures the playwright peer', async () => {
+    // Playwright is opt-in: vite-plus no longer bundles the provider at runtime
+    // (its `playwright` peer is non-optional), so the migration KEEPS the user's
+    // declared `@vitest/browser-playwright` (version-normalized to the bundled
+    // vitest version) and ensures its runtime framework peer `playwright`.
+    // `@vitest/browser` stays in REMOVE_PACKAGES and is still stripped.
     const pkg = {
       devDependencies: {
         '@vitest/browser': '^4.0.0',
@@ -357,9 +362,10 @@ describe('rewritePackageJson', () => {
       },
     };
     rewritePackageJson(pkg, PackageManager.pnpm);
+    // Standalone (supportCatalog=false) → concrete pinned spec.
+    expect(pkg.devDependencies).toHaveProperty('@vitest/browser-playwright', VITEST_VERSION);
     expect(pkg.devDependencies).toHaveProperty('playwright', '*');
     expect(pkg.devDependencies).not.toHaveProperty('@vitest/browser');
-    expect(pkg.devDependencies).not.toHaveProperty('@vitest/browser-playwright');
   });
 
   it('keeps and normalizes @vitest/browser-webdriverio and ensures the webdriverio peer', async () => {
@@ -474,9 +480,11 @@ describe('rewritePackageJson', () => {
     rewritePackageJson(pkg, PackageManager.pnpm, true, undefined, undefined, false);
     expect(pkg.devDependencies).toHaveProperty('vitest', 'catalog:');
     expect(pkg.devDependencies).toHaveProperty('vite-plus', 'catalog:');
-    // The browser packages themselves are still stripped.
+    // The base `@vitest/browser` is still stripped (bundled by vite-plus).
     expect(pkg.devDependencies).not.toHaveProperty('@vitest/browser');
-    expect(pkg.devDependencies).not.toHaveProperty('@vitest/browser-playwright');
+    // Playwright is opt-in: vite-plus keeps it in the user's deps, normalized to
+    // the bundled vitest version, so the rewritten import resolves.
+    expect(pkg.devDependencies).toHaveProperty('@vitest/browser-playwright', VITEST_VERSION);
     // The provider's runtime peer dep is preserved.
     expect(pkg.devDependencies).toHaveProperty('playwright', '*');
   });
@@ -1136,7 +1144,7 @@ describe('ensureVitePlusBootstrap', () => {
     expect(pkg.devEngines.packageManager.name).toBe(PackageManager.npm);
   });
 
-  it('preserves existing Vite+ wrapper overrides while completing the @vitest/* family for npm projects', () => {
+  it('rewrites the stale vitest wrapper override and completes the @vitest/* family for npm projects', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
@@ -1154,15 +1162,17 @@ describe('ensureVitePlusBootstrap', () => {
     expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(true);
     const result = ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.npm));
 
-    // The existing vite/vitest wrapper aliases still satisfy the migration (they
-    // point at Vite+ packages), so they are left untouched; the missing @vitest/*
-    // family pins are completed at the bundled vitest version.
+    // The `vite` alias still points at the live `@voidzero-dev/vite-plus-core`
+    // package, so it satisfies the migration and is left untouched. The `vitest`
+    // alias points at the DELETED `@voidzero-dev/vite-plus-test` wrapper, so it is
+    // rewritten to the bundled vitest version; the missing @vitest/* family pins
+    // are completed alongside it.
     expect(result.changed).toBe(true);
     const pkg = readJson(path.join(tmpDir, 'package.json')) as {
       overrides: Record<string, string>;
     };
     expect(pkg.overrides.vite).toBe('npm:@voidzero-dev/vite-plus-core@0.1.0');
-    expect(pkg.overrides.vitest).toBe('npm:@voidzero-dev/vite-plus-test@0.1.0');
+    expect(pkg.overrides.vitest).toBe('4.1.9');
     expect(pkg.overrides['@vitest/expect']).toBe('4.1.9');
     expect(pkg.overrides['@vitest/runner']).toBe('4.1.9');
     expect(pkg.overrides['@vitest/snapshot']).toBe('4.1.9');
@@ -1729,9 +1739,17 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
             'some-app>@vitest/browser-playwright': '^4.0.0',
             'a>vite-plus>@vitest/browser-playwright': '^4.0.0',
             '@vitest/browser-playwright@4': '4.1.7',
+            // `@vitest/browser-preview` stays in REMOVE_PACKAGES, so it remains a
+            // vite-plus-OWNED provider ancestor: an un-anchored chain through it
+            // still constrains vite-plus's own `@vitest/browser` dep — dropped.
+            '@vitest/browser-preview>@vitest/browser': '4.0.0',
+            'vite-plus>@vitest/browser-preview>@vitest/browser': '4.0.0',
+            'some-app>@vitest/browser-preview>@vitest/browser': '4.0.0',
+            // Playwright is now opt-in (NOT owned by vite-plus), so an un-anchored
+            // chain PARENTED by playwright constrains the user's own provider
+            // subtree, not vite-plus's — PRESERVED.
             '@vitest/browser-playwright>@vitest/browser': '4.0.0',
             'vite-plus>@vitest/browser-playwright>@vitest/browser': '4.0.0',
-            'some-app>@vitest/browser-playwright>@vitest/browser': '4.0.0',
             'other>foo': '1.0.0',
           },
         },
@@ -1743,17 +1761,24 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
       pnpm?: { overrides?: Record<string, string> };
     };
     const overrides = pkg.pnpm?.overrides ?? {};
-    // vite-plus parent and versioned global pin reach vite-plus's own dep — dropped.
+    // Playwright-as-TARGET: vite-plus parent and versioned global pin reach
+    // vite-plus's own (now direct-dep) provider — dropped.
     expect(overrides).not.toHaveProperty('vite-plus>@vitest/browser-playwright');
     expect(overrides).not.toHaveProperty('@vitest/browser-playwright@4');
-    // An owned-provider ancestor still constrains vite-plus's provider subtree
-    // (selectors are not root-anchored), with or without an explicit vite-plus
-    // prefix — dropped.
-    expect(overrides).not.toHaveProperty('@vitest/browser-playwright>@vitest/browser');
-    expect(overrides).not.toHaveProperty('vite-plus>@vitest/browser-playwright>@vitest/browser');
-    // Provider selector scoped under a SPECIFIC non-vite-plus parent — PRESERVED.
+    // An OWNED-provider ancestor (`@vitest/browser-preview`) still constrains
+    // vite-plus's provider subtree (selectors are not root-anchored), with or
+    // without an explicit vite-plus prefix — dropped.
+    expect(overrides).not.toHaveProperty('@vitest/browser-preview>@vitest/browser');
+    expect(overrides).not.toHaveProperty('vite-plus>@vitest/browser-preview>@vitest/browser');
+    // Provider-as-TARGET selector scoped under a SPECIFIC non-vite-plus parent —
+    // PRESERVED.
     expect(overrides['some-app>@vitest/browser-playwright']).toBe('^4.0.0');
-    expect(overrides['some-app>@vitest/browser-playwright>@vitest/browser']).toBe('4.0.0');
+    expect(overrides['some-app>@vitest/browser-preview>@vitest/browser']).toBe('4.0.0');
+    // Playwright is opt-in (not a vite-plus-owned ancestor), so a chain PARENTED
+    // by it constrains the user's own subtree — PRESERVED even with a vite-plus
+    // prefix above it.
+    expect(overrides['@vitest/browser-playwright>@vitest/browser']).toBe('4.0.0');
+    expect(overrides['vite-plus>@vitest/browser-playwright>@vitest/browser']).toBe('4.0.0');
     // A chain with an outer non-vite-plus ancestor (`a>vite-plus>…`) requires
     // vite-plus to sit UNDER `a`, so it never matches the root vite-plus edge —
     // PRESERVED.
@@ -1773,10 +1798,11 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
         devDependencies: { vite: '^7.0.0' },
         overrides: {
           'vite-plus': { '@vitest/browser-playwright': '4.0.0' },
-          // An owned-provider parent reaches vite-plus's provider subtree even
-          // without an explicit vite-plus level — its child pin is dropped and
-          // the emptied parent pruned with it.
-          '@vitest/browser-playwright': { '@vitest/browser': '4.0.0' },
+          // An OWNED-provider parent (`@vitest/browser-preview`, still bundled by
+          // vite-plus) reaches vite-plus's provider subtree even without an
+          // explicit vite-plus level — its child pin is dropped and the emptied
+          // parent pruned with it.
+          '@vitest/browser-preview': { '@vitest/browser': '4.0.0' },
         },
       }),
     );
@@ -1786,8 +1812,10 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
       overrides?: Record<string, unknown>;
     };
     const overrides = pkg.overrides ?? {};
+    // `vite-plus` parent (with playwright-as-target child) is dropped and pruned.
     expect(overrides).not.toHaveProperty('vite-plus');
-    expect(overrides).not.toHaveProperty('@vitest/browser-playwright');
+    // Owned-provider parent emptied by dropping its child pin is pruned too.
+    expect(overrides).not.toHaveProperty('@vitest/browser-preview');
   });
 
   it('preserves a provider override scoped under an unrelated parent', () => {
@@ -2072,14 +2100,17 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     const yaml = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
       overrides: Record<string, string>;
     };
-    // Playwright stays in REMOVE_PACKAGES, so its bare/versioned/global overrides
-    // and `vite-plus`-parented selector are stripped (vite-plus owns the provider
-    // dep directly).
+    // Playwright is opt-in: vite-plus keeps it in the user's deps pinned to the
+    // bundled vitest version, but a stale override pinning an old version (as a
+    // TARGET — bare/versioned/global pin, or a `vite-plus`-parented selector)
+    // would win over that direct dep and misalign the provider against bundled
+    // vitest — so the stale override is dropped (the dep stays installed, the pin
+    // does not).
     expect(yaml.overrides).not.toHaveProperty('@vitest/browser-playwright');
     expect(yaml.overrides).not.toHaveProperty('@vitest/browser-playwright@4');
     expect(yaml.overrides).not.toHaveProperty('vite-plus>@vitest/browser-playwright');
-    // A provider selector scoped under a SPECIFIC non-vite-plus parent only
-    // constrains that parent's subtree, so it is PRESERVED.
+    // A provider-as-TARGET selector scoped under a SPECIFIC non-vite-plus parent
+    // only constrains that parent's subtree, so it is PRESERVED.
     expect(yaml.overrides['some-app>@vitest/browser-playwright']).toBe('4.0.0');
     // Webdriverio is opt-in: vite-plus keeps it in the user's deps pinned to the
     // bundled vitest version, but a stale override pinning an old version would
@@ -2227,6 +2258,73 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(yaml.allowBuilds.geckodriver).toBe(true);
   });
 
+  it('injects the playwright provider + peer from a source-only vitest config', () => {
+    // Opt-in provider: vite-plus no longer bundles `@vitest/browser-playwright`
+    // at runtime (its `playwright` peer is non-optional). A project that imports
+    // it in source with NO declared dep must have the provider injected into its
+    // own deps (pinned to the bundled vitest version) plus the `playwright`
+    // framework peer. (Playwright has no edgedriver/geckodriver postinstall, so
+    // — unlike webdriverio — it does not touch allowBuilds.)
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'test', devDependencies: { vite: '^7.0.0' } }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'vitest.config.ts'),
+      [
+        "import { playwright } from '@vitest/browser-playwright';",
+        "import { defineConfig } from 'vite-plus';",
+        'export default defineConfig({',
+        '  test: { browser: { enabled: true, provider: playwright() } },',
+        '});',
+        '',
+      ].join('\n'),
+    );
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+    const devDeps = readJson(path.join(tmpDir, 'package.json')).devDependencies as Record<
+      string,
+      string
+    >;
+    // Opt-in provider pinned to a CONCRETE bundled vitest version in the user's
+    // own deps — deliberately NOT in VITE_PLUS_OVERRIDE_PACKAGES, so no catalog
+    // entry is written for it and it must self-resolve.
+    expect(devDeps).toHaveProperty('@vitest/browser-playwright', VITEST_VERSION);
+    expect(devDeps.playwright).toBe('*');
+  });
+
+  it('injects the playwright provider on a re-run from the migrated provider-subpath import', () => {
+    // Re-running migration on an ALREADY-migrated project: the import rewriter
+    // maps `@vitest/browser-playwright/provider` to
+    // `vite-plus/test/browser/providers/playwright`, so an already-migrated
+    // source can contain that subpath form. The playwright source scan must
+    // recognize it, or the re-run would skip injecting the (no-longer-bundled)
+    // provider and the import would break under pnpm strict / Yarn PnP.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({ name: 'test', devDependencies: { vite: '^7.0.0' } }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'vitest.config.ts'),
+      [
+        "import { playwright } from 'vite-plus/test/browser/providers/playwright';",
+        "import { defineConfig } from 'vite-plus';",
+        'export default defineConfig({',
+        '  test: { browser: { enabled: true, provider: playwright() } },',
+        '});',
+        '',
+      ].join('\n'),
+    );
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+    const devDeps = readJson(path.join(tmpDir, 'package.json')).devDependencies as Record<
+      string,
+      string
+    >;
+    expect(devDeps).toHaveProperty('@vitest/browser-playwright', VITEST_VERSION);
+    expect(devDeps.playwright).toBe('*');
+  });
+
   it('injects the webdriverio provider on a re-run from the migrated provider-subpath import', () => {
     // Re-running migration on an ALREADY-migrated project: the import rewriter
     // maps `@vitest/browser-webdriverio/provider` to
@@ -2371,6 +2469,30 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     const devDeps = pkg.devDependencies as Record<string, string>;
     expect(devDeps['@vitest/browser-webdriverio']).toBe(VITEST_VERSION);
     expect(devDeps.webdriverio).toBe('*');
+  });
+
+  it('drops a stale npm @vitest/browser-playwright override that would conflict with the kept provider', () => {
+    // Same hazard as webdriverio: playwright is now opt-in and KEPT as a direct
+    // dep (not stripped), so a stale `overrides` pin to a different version would
+    // EOVERRIDE-conflict with the migrated `@vitest/browser-playwright@4.1.9`. The
+    // migration must prune it before normalizing the provider dep.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { vite: '^7.0.0', '@vitest/browser-playwright': '^4.0.0' },
+        overrides: { '@vitest/browser-playwright': '4.0.0', 'some-other-pkg': '1.0.0' },
+      }),
+    );
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.npm), true, true);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json'));
+    const overrides = pkg.overrides as Record<string, string>;
+    expect(overrides).not.toHaveProperty('@vitest/browser-playwright');
+    expect(overrides['some-other-pkg']).toBe('1.0.0');
+    const devDeps = pkg.devDependencies as Record<string, string>;
+    expect(devDeps['@vitest/browser-playwright']).toBe(VITEST_VERSION);
+    expect(devDeps.playwright).toBe('*');
   });
 
   it('drops a stale @vitest/browser-webdriverio override pinned with a COMPARATOR range', () => {
@@ -2579,7 +2701,9 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     >;
     expect(devDeps.vitest).toBe('catalog:');
     expect(devDeps['vite-plus']).toBe('catalog:');
-    expect(devDeps).not.toHaveProperty('@vitest/browser-playwright');
+    // Playwright is opt-in: vite-plus keeps the provider in the user's deps,
+    // normalized to the bundled vitest version.
+    expect(devDeps['@vitest/browser-playwright']).toBe(VITEST_VERSION);
     // Provider's runtime peer dep is preserved.
     expect(devDeps.playwright).toBe('*');
   });

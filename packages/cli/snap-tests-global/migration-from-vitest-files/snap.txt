@@ -15,6 +15,7 @@
     "prepare": "vp config"
   },
   "devDependencies": {
+    "@vitest/browser-playwright": "4.1.9",
     "vite": "catalog:",
     "vitest": "catalog:",
     "playwright": "*",

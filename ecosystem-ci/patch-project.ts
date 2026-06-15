@@ -45,6 +45,19 @@ if (project === 'vinext') {
     throw new Error(`vinext patch: \`minimumReleaseAge:\` not found in ${workspacePath}`);
   }
   await writeFile(workspacePath, patched, 'utf-8');
+
+  // The single in-process `integration` project runs serially and its ISR
+  // revalidation test sits right at the 30s ceiling under CI load (observed
+  // 26.8s on green main runs, 30.0s here) — a borderline timeout, not a real
+  // regression (the vitest runner is byte-identical across this bump). Give it
+  // headroom so the ecosystem run isn't flaky.
+  const viteConfigPath = join(repoRoot, 'vite.config.ts');
+  const viteConfig = await readFile(viteConfigPath, 'utf-8');
+  const patchedConfig = viteConfig.replace('testTimeout: 30000', 'testTimeout: 60000');
+  if (patchedConfig === viteConfig) {
+    throw new Error(`vinext patch: \`testTimeout: 30000\` not found in ${viteConfigPath}`);
+  }
+  await writeFile(viteConfigPath, patchedConfig, 'utf-8');
 }
 
 if (project === 'dify') {

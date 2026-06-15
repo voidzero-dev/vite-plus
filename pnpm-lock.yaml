@@ -368,9 +368,6 @@ importers:
       '@vitest/browser':
         specifier: 'catalog:'
         version: 4.1.9(vite@packages+core)(vitest@4.1.9)
-      '@vitest/browser-playwright':
-        specifier: 'catalog:'
-        version: 4.1.9(playwright@1.57.0)(vite@packages+core)(vitest@4.1.9)
       '@vitest/browser-preview':
         specifier: 'catalog:'
         version: 4.1.9(vite@packages+core)(vitest@4.1.9)
@@ -429,6 +426,9 @@ importers:
       '@types/validate-npm-package-name':
         specifier: 'catalog:'
         version: 4.0.2
+      '@vitest/browser-playwright':
+        specifier: 'catalog:'
+        version: 4.1.9(playwright@1.57.0)(vite@packages+core)(vitest@4.1.9)
       '@vitest/browser-webdriverio':
         specifier: 'catalog:'
         version: 4.1.9(vite@packages+core)(vitest@4.1.9)(webdriverio@9.20.1)

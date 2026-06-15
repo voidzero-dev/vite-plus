@@ -1,4 +1,4 @@
-import { defineConfig, lazyPlugins } from './define-config.ts';
+import { defineConfig, defineProject, lazyPlugins } from './define-config.ts';
 
 export * from '@voidzero-dev/vite-plus-core';
 
@@ -8,7 +8,6 @@ export {
   defaultBrowserPort,
   defaultExclude,
   defaultInclude,
-  defineProject,
 } from 'vitest/config';
 
 export type {
@@ -27,4 +26,4 @@ export type {
   WatcherTriggerPattern,
 } from 'vitest/config';
 
-export { defineConfig, lazyPlugins };
+export { defineConfig, defineProject, lazyPlugins };
