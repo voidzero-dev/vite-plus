@@ -1255,7 +1255,6 @@ async function main() {
     );
 
     let needsInstall = false;
-    let forceInstall = false;
     if (vitePlusBootstrapPending) {
       const downloadResult = await ensureExistingPackageManager();
       if (downloadResult && packageManager) {
@@ -1270,9 +1269,6 @@ async function main() {
         );
         didMigrate = bootstrapResult.changed || didMigrate;
         needsInstall = bootstrapResult.changed || needsInstall;
-        forceInstall =
-          bootstrapResult.changed &&
-          (packageManager === PackageManager.npm || packageManager === PackageManager.bun);
       }
     }
 
@@ -1399,7 +1395,12 @@ async function main() {
       const installSummary = await runViteInstall(
         workspaceInfoOptional.rootDir,
         options.interactive,
-        forceInstall ? ['--force'] : undefined,
+        // Migration steps rewrote package.json/config, so the lockfile is now
+        // stale; tell each package manager to re-resolve instead of refusing
+        // (pnpm/yarn default to frozen-lockfile under CI, npm/bun need --force).
+        packageManager === PackageManager.npm || packageManager === PackageManager.bun
+          ? ['--force']
+          : ['--no-frozen-lockfile'],
         {
           silent: true,
           packageManager,
