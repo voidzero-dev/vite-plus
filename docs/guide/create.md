@@ -59,7 +59,7 @@ Run `vp create --list` to see the built-in templates and the common shorthand te
 
 ### Dependency build scripts
 
-For security, pnpm and bun do not run a dependency's build scripts (`install` / `postinstall`, e.g. native builds like `better-sqlite3`) until you approve them, and yarn (Berry) does the same: its `enableScripts` is off by default. When a template adds such a dependency directly, `vp create` surfaces it after installing instead of leaving the project in a half-built state:
+For security, pnpm, bun, and yarn (Berry) do not run a dependency's build scripts (`install` / `postinstall`, e.g. native builds like `better-sqlite3`) until you approve them. When a template adds such a dependency directly, `vp create` surfaces it after installing instead of leaving the project in a half-built state:
 
 - Interactive: you are asked which of those dependencies to approve and build (nothing is selected by default).
 - Non-interactive: a note lists them and points at `vp pm approve-builds`.
