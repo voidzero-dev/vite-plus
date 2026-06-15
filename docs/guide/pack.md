@@ -30,12 +30,12 @@ Use it for:
 - [standalone executables](https://tsdown.dev/options/exe#executable)
 
 ```ts [vite.config.ts]
-import { defineConfig } from 'vite-plus';
+import { defineConfig } from "vite-plus";
 
 export default defineConfig({
   pack: {
     dts: true,
-    format: ['esm', 'cjs'],
+    format: ["esm", "cjs"],
     sourcemap: true,
   },
 });
@@ -47,12 +47,20 @@ export default defineConfig({
 
 Use this when you want to ship a CLI or other Node-based tool as a native executable that runs without requiring Node.js to be installed separately.
 
+Executable builds require tsdown's optional executable package in your project:
+
+```bash
+vp add -D @tsdown/exe tsdown
+```
+
+`@tsdown/exe` imports `tsdown/internal` through its peer dependency on `tsdown`. Vite+ bundles tsdown internally for `vp pack`, but that bundled copy is not exposed as a top-level `tsdown` package for third-party peer dependency resolution. Install both packages explicitly when enabling `pack.exe`.
+
 ```ts [vite.config.ts]
-import { defineConfig } from 'vite-plus';
+import { defineConfig } from "vite-plus";
 
 export default defineConfig({
   pack: {
-    entry: ['src/cli.ts'],
+    entry: ["src/cli.ts"],
     exe: true,
   },
 });
