@@ -1554,6 +1554,100 @@ describe('ensureVitePlusBootstrap', () => {
     });
   });
 
+  it('exempts the vitest family from a pnpm minimumReleaseAge gate, preserving existing entries', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { 'vite-plus': 'catalog:' },
+        devEngines: {
+          packageManager: { name: 'pnpm', version: '10.33.0', onFail: 'download' },
+        },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'catalog:',
+        '  vite: npm:@voidzero-dev/vite-plus-core@latest',
+        '  vitest: npm:@voidzero-dev/vite-plus-test@latest',
+        'minimumReleaseAge: 1440',
+        'minimumReleaseAgeExclude:',
+        '  - my-internal-pkg',
+        '',
+      ].join('\n'),
+    );
+
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm));
+
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      minimumReleaseAgeExclude: string[];
+    };
+    // Vite+ pins a possibly-fresh vitest; its family must bypass the gate.
+    expect(workspace.minimumReleaseAgeExclude).toContain('vitest');
+    expect(workspace.minimumReleaseAgeExclude).toContain('@vitest/*');
+    // The user's own entry and the vite-plus/ox families are preserved.
+    expect(workspace.minimumReleaseAgeExclude).toContain('my-internal-pkg');
+    expect(workspace.minimumReleaseAgeExclude).toContain('vite-plus');
+  });
+
+  it('does not add minimumReleaseAgeExclude when the pnpm age gate is absent', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { 'vite-plus': 'catalog:' },
+        devEngines: {
+          packageManager: { name: 'pnpm', version: '10.33.0', onFail: 'download' },
+        },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'catalog:',
+        '  vite: npm:@voidzero-dev/vite-plus-core@latest',
+        '  vitest: npm:@voidzero-dev/vite-plus-test@latest',
+        '',
+      ].join('\n'),
+    );
+
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm));
+
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      minimumReleaseAgeExclude?: string[];
+    };
+    // No gate present → we never introduce the exclude list.
+    expect(workspace.minimumReleaseAgeExclude).toBeUndefined();
+  });
+
+  it('merges the vitest family into an existing yarn npmPreapprovedPackages list', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { 'vite-plus': 'latest' },
+        devEngines: {
+          packageManager: { name: 'yarn', version: '4.0.0', onFail: 'download' },
+        },
+      }),
+    );
+    // A project that already preapproves private packages must keep them.
+    fs.writeFileSync(
+      path.join(tmpDir, '.yarnrc.yml'),
+      ['npmPreapprovedPackages:', '  - "@my-org/*"', ''].join('\n'),
+    );
+
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.yarn));
+
+    const yarnrc = readYamlObject(path.join(tmpDir, '.yarnrc.yml')) as {
+      npmPreapprovedPackages: string[];
+    };
+    expect(yarnrc.npmPreapprovedPackages).toContain('@my-org/*');
+    expect(yarnrc.npmPreapprovedPackages).toContain('vitest');
+    expect(yarnrc.npmPreapprovedPackages).toContain('@vitest/*');
+  });
+
   it('preserves package.json workspace patterns when creating pnpm-workspace.yaml', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),

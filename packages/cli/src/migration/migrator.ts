@@ -31,6 +31,7 @@ import {
   VITE_PLUS_NAME,
   VITE_PLUS_OVERRIDE_PACKAGES,
   VITE_PLUS_VERSION,
+  VITEST_AGE_GATE_EXEMPT_PACKAGES,
   VITEST_VERSION,
   isForceOverrideMode,
 } from '../utils/constants.ts';
@@ -1973,7 +1974,11 @@ function rewritePnpmWorkspaceYaml(
 
     // minimumReleaseAgeExclude
     if (doc.has('minimumReleaseAge')) {
-      // add vite-plus, @voidzero-dev/*, oxlint, oxlint-tsgolint, oxfmt to minimumReleaseAgeExclude
+      // Exempt the Vite+-managed packages from the age gate: vite-plus,
+      // @voidzero-dev/*, the ox* family, and the vitest family. Vite+ pins
+      // `vitest` to an exact (sometimes freshly published) version and the
+      // in-tree @vitest/* siblings install transitively at that version, so the
+      // age gate would otherwise quarantine them and break `vp install`.
       const excludes = [
         'vite-plus',
         '@voidzero-dev/*',
@@ -1983,6 +1988,7 @@ function rewritePnpmWorkspaceYaml(
         '@oxlint-tsgolint/*',
         'oxfmt',
         '@oxfmt/*',
+        ...VITEST_AGE_GATE_EXEMPT_PACKAGES,
       ];
       let minimumReleaseAgeExclude = doc.getIn(['minimumReleaseAgeExclude']) as YAMLSeq<
         Scalar<string>
@@ -2594,10 +2600,20 @@ function rewriteYarnrcYml(projectPath: string): void {
     // `yarn install` fail on a just-released vitest pin. Preapprove the family
     // so the Vite+-managed versions install regardless of release age; the
     // `@vitest/*` glob also covers the optional `@vitest/browser-*` peers that
-    // are not in the override set.
-    if (!doc.has('npmPreapprovedPackages')) {
-      doc.set('npmPreapprovedPackages', ['vitest', '@vitest/*']);
+    // are not in the override set. MERGE into any existing list (e.g. a project
+    // that already preapproves private packages) instead of skipping when set,
+    // otherwise the gate could still reject the freshly pinned vitest.
+    let npmPreapprovedPackages = doc.getIn(['npmPreapprovedPackages']) as YAMLSeq<Scalar<string>>;
+    if (!npmPreapprovedPackages) {
+      npmPreapprovedPackages = new YAMLSeq();
     }
+    const existingPreapproved = new Set(npmPreapprovedPackages.items.map((n) => n.value));
+    for (const pkg of VITEST_AGE_GATE_EXEMPT_PACKAGES) {
+      if (!existingPreapproved.has(pkg)) {
+        npmPreapprovedPackages.add(scalarString(pkg));
+      }
+    }
+    doc.setIn(['npmPreapprovedPackages'], npmPreapprovedPackages);
     // catalog
     rewriteCatalog(doc);
   });

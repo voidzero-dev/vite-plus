@@ -22,6 +22,22 @@ export const VITE_PLUS_OVERRIDE_PACKAGES: Record<string, string> = process.env.V
     };
 
 /**
+ * Package-name patterns the migrator exempts from a package manager's
+ * "minimum release age" gate (pnpm `minimumReleaseAgeExclude` / Yarn
+ * `npmPreapprovedPackages`).
+ *
+ * Vite+ pins `vitest` to an exact, sometimes freshly published version, and the
+ * in-tree `@vitest/*` siblings install transitively at that same version, so an
+ * age gate would otherwise quarantine the Vite+-managed family and break
+ * `vp install`. The `@vitest/*` glob also covers the optional `@vitest/browser-*`
+ * peers the migrator pins for browser projects. This does NOT pin or manage any
+ * package — it only lets the chosen versions through the user's gate, including
+ * the `@vitest/coverage-*` version the coverage guard asks the user to align to
+ * the bundled vitest.
+ */
+export const VITEST_AGE_GATE_EXEMPT_PACKAGES = ['vitest', '@vitest/*'] as const;
+
+/**
  * When VP_FORCE_MIGRATE is set, force full dependency rewriting
  * even for projects already using vite-plus. Used by ecosystem CI to
  * override dependencies with locally built tgz packages.
