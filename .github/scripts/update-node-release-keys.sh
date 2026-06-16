@@ -45,7 +45,10 @@ files = sorted(glob.glob(os.path.join(keys_dir, "*.asc")))
 if not files:
     sys.exit("error: no key files found in nodejs/release-keys")
 
-blocks = [open(path, encoding="utf-8").read().strip("\n") for path in files]
+blocks = [
+    open(path, encoding="utf-8").read().replace("\r\n", "\n").replace("\r", "\n").strip("\n")
+    for path in files
+]
 with open(dest, "w", encoding="utf-8") as out:
     out.write("\n".join(blocks) + "\n")
 print(f"wrote {len(files)} release keys to {dest}")
@@ -66,6 +69,8 @@ echo "keyring has $begin key blocks"
 if [[ -n "$SUMMARY_FILE" ]]; then
   if ! python3 - "$TMP/before.asc" "$DEST" > "$SUMMARY_FILE" <<'PY'
 import hashlib
+import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -81,14 +86,23 @@ PREAMBLE = (
 )
 
 
+def unescape(value):
+    # gpg --with-colons backslash-escapes field-conflicting bytes as \xHH
+    # (e.g. a literal ':' in a uid becomes '\x3a'); decode them for display.
+    return re.sub(r"\\x([0-9a-fA-F]{2})", lambda m: chr(int(m.group(1), 16)), value)
+
+
 def load_keys(asc_path):
-    """Map primary fingerprint -> {uid, fingerprint, digest of its colon record}."""
+    """Map primary fingerprint -> {uid, digest of its colon record}."""
     home = tempfile.mkdtemp()
-    out = subprocess.run(
-        ["gpg", "--homedir", home, "--quiet", "--batch",
-         "--show-keys", "--with-colons", asc_path],
-        capture_output=True, text=True, check=True,
-    ).stdout
+    try:
+        out = subprocess.run(
+            ["gpg", "--homedir", home, "--quiet", "--batch",
+             "--show-keys", "--with-colons", asc_path],
+            capture_output=True, text=True, check=True,
+        ).stdout
+    finally:
+        shutil.rmtree(home, ignore_errors=True)
 
     keys, fpr, pending = {}, None, []
     for line in out.splitlines():
@@ -103,7 +117,7 @@ def load_keys(asc_path):
         elif fpr is not None:
             keys[fpr]["lines"].append(line)
             if record == "uid" and not keys[fpr]["uid"]:
-                keys[fpr]["uid"] = field[9]
+                keys[fpr]["uid"] = unescape(field[9])
         else:
             pending.append(line)
 

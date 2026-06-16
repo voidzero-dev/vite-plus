@@ -116,6 +116,11 @@ fn verify_clearsigned(
 }
 
 /// Whether the primary key carries a valid self-revocation certificate.
+///
+/// This detects self-revocations (issued by the primary key itself), which is
+/// how Node.js release keys are revoked. Designated-revoker (third-party)
+/// revocations are not honored, but no Node release key delegates revocation, so
+/// this matches the keyring in practice.
 fn primary_key_revoked(key: &SignedPublicKey) -> bool {
     key.details
         .revocation_signatures

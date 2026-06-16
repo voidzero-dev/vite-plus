@@ -575,12 +575,18 @@ fn get_dist_url() -> Str {
 /// `VP_NODE_DIST_MIRROR`) and best-effort for any other mirror.
 #[cfg(not(target_env = "musl"))]
 fn is_official_dist_host(base_url: &str) -> bool {
-    let host = base_url
-        .split_once("://")
-        .map_or(base_url, |(_, rest)| rest)
-        .split(['/', ':'])
+    let authority =
+        base_url.split_once("://").map_or(base_url, |(_, rest)| rest).split(['/', '?', '#']).next();
+    let host = authority
+        .unwrap_or_default()
+        // Drop any `userinfo@` prefix and `:port` suffix, then a trailing dot.
+        .rsplit('@')
         .next()
-        .unwrap_or_default();
+        .unwrap_or_default()
+        .split(':')
+        .next()
+        .unwrap_or_default()
+        .trim_end_matches('.');
     host.eq_ignore_ascii_case("nodejs.org")
 }
 
@@ -821,9 +827,16 @@ mod tests {
         assert!(is_official_dist_host("https://nodejs.org/dist"));
         assert!(is_official_dist_host("https://nodejs.org/download/release"));
         assert!(is_official_dist_host("https://NODEJS.ORG/dist"));
+        // Official host reached via userinfo, port, or a trailing dot still counts.
+        assert!(is_official_dist_host("https://user@nodejs.org/dist"));
+        assert!(is_official_dist_host("https://nodejs.org:443/dist"));
+        assert!(is_official_dist_host("https://nodejs.org./dist"));
         assert!(!is_official_dist_host("https://npmmirror.com/mirrors/node"));
         assert!(!is_official_dist_host("https://unofficial-builds.nodejs.org/download/release"));
         assert!(!is_official_dist_host("https://artifactory.internal/node"));
+        // A look-alike host must not be mistaken for the official one.
+        assert!(!is_official_dist_host("https://nodejs.org.evil.com/dist"));
+        assert!(!is_official_dist_host("https://evil.com/nodejs.org"));
     }
 
     #[test]
