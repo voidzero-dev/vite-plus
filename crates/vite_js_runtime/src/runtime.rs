@@ -117,30 +117,42 @@ pub async fn download_runtime(
 
 /// Fetch the SHASUMS content to parse for the expected archive hash.
 ///
-/// With a signature, fetch and PGP-verify the clearsigned `.asc`. A custom
-/// mirror that does not publish the `.asc` (signature not required) falls back
-/// to the plain SHASUMS; the official source requires it, and a downloaded but
-/// invalid signature always fails (verify errors propagate).
+/// With a signature, fetch and PGP-verify the clearsigned `.asc`. When no
+/// signature is available (the unofficial musl builds, or a custom mirror that
+/// publishes only `SHASUMS256.txt`) it falls back to the plain SHASUMS and warns
+/// that the download is verified by checksum only. The official source requires
+/// the signature, and a downloaded but invalid signature always fails.
 async fn resolve_shasums_content(
     plain_url: &str,
     signature: Option<&ShasumsSignature>,
     archive_filename: &str,
 ) -> Result<String, Error> {
     let Some(signature) = signature else {
+        // No signature is published for this source (e.g. unofficial musl builds).
+        warn_checksum_only(archive_filename);
         return download_text(plain_url).await;
     };
     match download_text(&signature.url).await {
         Ok(signed) => crate::pgp_verify::verify_signed_shasums(signed, archive_filename).await,
         Err(e) if signature.required => Err(e),
-        Err(e) => {
-            tracing::warn!(
-                "Signature {} unavailable ({e}); falling back to the unsigned SHASUMS256.txt \
-                 from the configured mirror",
-                signature.url
-            );
+        Err(_) => {
+            // A custom mirror may publish only the plain SHASUMS256.txt.
+            warn_checksum_only(archive_filename);
             download_text(plain_url).await
         }
     }
+}
+
+/// Warn that a runtime download is verified by SHA-256 checksum only because no
+/// PGP signature is available (the unofficial musl builds, or a custom mirror
+/// that publishes only `SHASUMS256.txt`).
+///
+/// Printed to stderr so shimmed tools keep their stdout parseable.
+fn warn_checksum_only(archive_filename: &str) {
+    eprintln!(
+        "warning: no PGP signature available for {archive_filename}; \
+         verifying SHA-256 checksum only"
+    );
 }
 
 /// Download and cache a JavaScript runtime using a provider
