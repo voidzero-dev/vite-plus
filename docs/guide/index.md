@@ -104,10 +104,11 @@ Vite+ can handle the entire local frontend development cycle from starting a pro
 ### Execute
 
 - [`vp run`](/guide/run) runs tasks across workspaces with caching.
+- [`vp exec`](/guide/vpx) runs local project binaries.
+- [`vp node`](/guide/env) runs Node.js scripts with the resolved Vite+ environment.
+- [`vp dlx`](/guide/vpx) downloads and runs package binaries without adding them as dependencies.
 - [`vp cache clean`](/guide/cache) clears task cache entries.
 - [`vpx`](/guide/vpx) downloads and runs binaries globally.
-- [`vp exec`](/guide/vpx) runs local project binaries.
-- [`vp dlx`](/guide/vpx) downloads and runs package binaries without adding them as dependencies.
 
 ### Build
 
@@ -117,7 +118,8 @@ Vite+ can handle the entire local frontend development cycle from starting a pro
 
 ### Manage Dependencies
 
-- [`vp add`](/guide/install), [`vp remove`](/guide/install), [`vp update`](/guide/install), [`vp dedupe`](/guide/install), [`vp outdated`](/guide/install), [`vp why`](/guide/install), and [`vp info`](/guide/install) wrap package-manager workflows.
+- [`vp add`](/guide/install), [`vp remove`](/guide/install), [`vp update`](/guide/install), [`vp dedupe`](/guide/install), [`vp outdated`](/guide/install), [`vp list`](/guide/install), [`vp why`](/guide/install), and [`vp info`](/guide/install) wrap package-manager workflows.
+- [`vp link`](/guide/install), [`vp unlink`](/guide/install), and [`vp rebuild`](/guide/install) cover local package links and native module rebuilds.
 - [`vp pm <command>`](/guide/install) calls other package manager commands directly.
 
 ### Maintain
