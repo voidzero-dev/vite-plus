@@ -2345,12 +2345,21 @@ async function patchMockerHoistedModule() {
     join(distDir, '@vitest/mocker/chunk-hoistMocks.js'),
   ];
 
-  // Find and replace the hoistedModule check
-  // Original: if (hoistedModule === source) {
-  // New: if (hoistedModule === source || source === "vite-plus/test" || source === "@voidzero-dev/vite-plus-test") {
-  const originalCheck = 'if (hoistedModule === source) {';
-  const newCheck =
+  // Two code shapes exist depending on the vitest version:
+  //
+  // Older vitest: a direct equality check
+  //   Original: if (hoistedModule === source) {
+  //   New:      if (hoistedModule === source || source === "vite-plus/test" || source === "@voidzero-dev/vite-plus-test") {
+  //
+  // vitest >= 4.1.9: an allow-list array that upstream now seeds with our
+  // public entry point. We only need to add the internal package name:
+  //   Original: const REDISTRIBUTED_HOISTED_MODULES = ["vite-plus/test"];
+  //   New:      const REDISTRIBUTED_HOISTED_MODULES = ["vite-plus/test", "@voidzero-dev/vite-plus-test"];
+  const oldCheck = 'if (hoistedModule === source) {';
+  const oldCheckReplacement =
     'if (hoistedModule === source || source === "vite-plus/test" || source === "@voidzero-dev/vite-plus-test") {';
+  const internalPackage = '@voidzero-dev/vite-plus-test';
+  const redistributedDecl = /const REDISTRIBUTED_HOISTED_MODULES = \[([^\]]*)\];/;
 
   let patched = false;
   for (const candidatePath of candidateFiles) {
@@ -2360,10 +2369,28 @@ async function patchMockerHoistedModule() {
     } catch {
       continue;
     }
-    if (content.includes(originalCheck)) {
-      content = content.replace(originalCheck, newCheck);
+    if (content.includes(oldCheck)) {
+      content = content.replace(oldCheck, oldCheckReplacement);
       await writeFile(candidatePath, content, 'utf-8');
-      console.log(`  Patched hoistMocks to recognize @voidzero-dev packages in ${candidatePath}`);
+      console.log(`  Patched hoistMocks check to recognize @voidzero-dev packages in ${candidatePath}`);
+      patched = true;
+      break;
+    }
+    const declMatch = content.match(redistributedDecl);
+    if (declMatch) {
+      // Upstream already recognizes "vite-plus/test"; ensure the internal
+      // package name is also accepted (idempotent if already present).
+      if (declMatch[1].includes(internalPackage)) {
+        console.log(`  REDISTRIBUTED_HOISTED_MODULES already includes ${internalPackage} in ${candidatePath}`);
+        patched = true;
+        break;
+      }
+      content = content.replace(
+        redistributedDecl,
+        (_full, entries) => `const REDISTRIBUTED_HOISTED_MODULES = [${entries}, ${JSON.stringify(internalPackage)}];`,
+      );
+      await writeFile(candidatePath, content, 'utf-8');
+      console.log(`  Added ${internalPackage} to REDISTRIBUTED_HOISTED_MODULES in ${candidatePath}`);
       patched = true;
       break;
     }
