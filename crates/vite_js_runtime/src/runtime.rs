@@ -129,7 +129,7 @@ async fn resolve_shasums_content(
 ) -> Result<String, Error> {
     let Some(signature) = signature else {
         // No signature is published for this source (e.g. unofficial musl builds).
-        warn_checksum_only(archive_filename);
+        log_checksum_only(archive_filename);
         return download_text(plain_url).await;
     };
     match download_text(&signature.url).await {
@@ -137,24 +137,22 @@ async fn resolve_shasums_content(
         Err(e) if signature.required => Err(e),
         Err(_) => {
             // A custom mirror may publish only the plain SHASUMS256.txt.
-            warn_checksum_only(archive_filename);
+            log_checksum_only(archive_filename);
             download_text(plain_url).await
         }
     }
 }
 
-/// Warn that a runtime download is verified by SHA-256 checksum only because no
-/// PGP signature is available (the unofficial musl builds, or a custom mirror
+/// Record that a runtime download is verified by SHA-256 checksum only because
+/// no PGP signature is available (the unofficial musl builds, or a custom mirror
 /// that publishes only `SHASUMS256.txt`).
 ///
-/// Skipped in CI, where the warning is just noise.
-fn warn_checksum_only(archive_filename: &str) {
-    if vite_shared::EnvConfig::get().is_ci {
-        return;
-    }
-    vite_shared::output::warn(&format!(
+/// This is an expected, non-actionable condition for those sources, so it is a
+/// debug log (visible via `VITE_LOG`) rather than a user-facing warning.
+fn log_checksum_only(archive_filename: &str) {
+    tracing::debug!(
         "no PGP signature available for {archive_filename}; verifying SHA-256 checksum only"
-    ));
+    );
 }
 
 /// Download and cache a JavaScript runtime using a provider
