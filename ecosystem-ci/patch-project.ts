@@ -89,17 +89,10 @@ const forceFreshMigration = 'forceFreshMigration' in repoConfig && repoConfig.fo
 const isBunProject = project === 'bun-vite-template';
 const viteOverrideTgz = isBunProject ? `vite-7.99.0.tgz` : `voidzero-dev-vite-plus-core-0.0.0.tgz`;
 
+// Mirror VITE_PLUS_OVERRIDE_PACKAGES: pin `vitest` only. The `@vitest/*` family
+// are exact deps of `vitest`, so a single `vitest` override cascades them.
 const vitestOverrides = {
   vitest: VITEST_VERSION,
-  '@vitest/expect': VITEST_VERSION,
-  '@vitest/runner': VITEST_VERSION,
-  '@vitest/snapshot': VITEST_VERSION,
-  '@vitest/spy': VITEST_VERSION,
-  '@vitest/utils': VITEST_VERSION,
-  '@vitest/mocker': VITEST_VERSION,
-  '@vitest/pretty-format': VITEST_VERSION,
-  '@vitest/coverage-v8': VITEST_VERSION,
-  '@vitest/coverage-istanbul': VITEST_VERSION,
 };
 
 execSync(`${cli} migrate --no-agent --no-interactive`, {

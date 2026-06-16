@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
@@ -19,6 +20,7 @@ import type { CreateTemplateEntry } from './create/org-manifest.ts';
 import type { PackUserConfig } from './pack.ts';
 import type { RunConfig } from './run-config.ts';
 import type { StagedConfig } from './staged-config.ts';
+import { VITEST_VERSION } from './utils/constants.ts';
 
 declare module '@voidzero-dev/vite-plus-core' {
   interface UserConfig {
@@ -203,8 +205,10 @@ export function isVitestFamilySpecifier(id: string): boolean {
  *   - Coverage providers (`@vitest/coverage-v8` / `-istanbul`) are NOT shipped
  *     with `vite-plus`, so they hit the project fallback below. Under
  *     `--coverage`, a project-installed provider of a different version pairs
- *     with the bundled runner; Vitest validates provider/runner versions and
- *     errors on a mismatch.
+ *     with the bundled runner; Vitest only WARNS on the version skew and then
+ *     runs mixed versions (its provider `_initialize` logs and continues, it
+ *     does not throw), which silently yields unreliable coverage — so
+ *     [[vitePlusCoverageVersionGuardPlugin]] fails fast on a mismatch instead.
  */
 function vitePlusVitestResolverPlugin(): PluginOption {
   return {
@@ -345,10 +349,232 @@ function vitePlusAutoInlineMatcherPlugin(): PluginOption {
   };
 }
 
+/** Coverage providers vite-plus can version-check against the bundled runner. */
+const KNOWN_COVERAGE_PROVIDERS: ReadonlySet<string> = new Set(['v8', 'istanbul']);
+
 /**
- * Inject the vitest resolver plugin and the auto-inline matcher plugin into a
- * single inline project config. Used both for root configs and for
- * object-shaped entries inside `test.projects`.
+ * Resolve the coverage provider package name that should be version-checked, or
+ * `null` when no check applies (coverage off, or a `custom`/unknown provider
+ * vite-plus does not bundle a runner for).
+ *
+ * Takes Vitest's OWN resolved coverage options (`enabled`/`provider`), which the
+ * `configureVitest` hook exposes AFTER Vitest's CLI parser has run — so the
+ * `--coverage` family of flags is already folded into `enabled`/`provider` and
+ * we never re-parse `process.argv` ourselves. Unset `provider` defaults to `v8`
+ * (Vitest's default).
+ *
+ * Exported for unit testing.
+ */
+export function resolveCoverageProviderToCheck(
+  coverage: { enabled?: boolean; provider?: string } | undefined,
+): string | null {
+  if (!coverage?.enabled) {
+    return null;
+  }
+  const name = coverage.provider ?? 'v8';
+  return KNOWN_COVERAGE_PROVIDERS.has(name) ? `@vitest/coverage-${name}` : null;
+}
+
+/**
+ * vite-plus bundles `vitest@VITEST_VERSION` as the test runner, but coverage
+ * providers (`@vitest/coverage-v8` / `-istanbul`) are project-installed peer
+ * deps it does not ship. Vitest only PRINTS A WARNING on a provider/runner
+ * version skew and then runs mixed versions (verified in 4.1.9: the provider's
+ * `_initialize` calls `logger.warn`, it never throws), silently producing
+ * unreliable coverage. Fail fast instead.
+ *
+ * Exported for unit testing.
+ */
+export function assertCoverageProviderVersionMatch(
+  providerPackageName: string,
+  installedVersion: string | null | undefined,
+  expectedVersion: string = VITEST_VERSION,
+): void {
+  if (installedVersion && installedVersion !== expectedVersion) {
+    throw new Error(
+      `vite-plus bundles vitest@${expectedVersion}, but ${providerPackageName}@${installedVersion} ` +
+        `is installed. A coverage provider must match the test runner version: Vitest only prints a ` +
+        `warning on a mismatch and then runs mixed versions, which produces unreliable coverage. ` +
+        `Pin ${providerPackageName} to ${expectedVersion} in your dependencies.`,
+    );
+  }
+}
+
+/**
+ * The bundled vitest's `package.json` path — the SAME anchor Vitest's own
+ * `import('@vitest/coverage-*')` resolves against (its dist walks up from here).
+ * Used as a fallback resolution anchor for the coverage guard. Lazily computed
+ * and cached; `null` when the bundled vitest is somehow unreachable, in which
+ * case the guard simply relies on the project-root anchor.
+ */
+let bundledVitestAnchorCache: string | null | undefined;
+function bundledVitestAnchor(): string | null {
+  if (bundledVitestAnchorCache === undefined) {
+    try {
+      bundledVitestAnchorCache = createRequire(import.meta.url).resolve('vitest/package.json');
+    } catch {
+      bundledVitestAnchorCache = null;
+    }
+  }
+  return bundledVitestAnchorCache;
+}
+
+/**
+ * Read a project-installed coverage provider's version, mirroring how Vitest
+ * itself resolves the provider. Vitest install-checks it from BOTH the runner
+ * root AND its own bundled dir (`isPackageExists(dep, {paths:[root, vitestDir]})`)
+ * and then loads it via a bare `import('@vitest/coverage-*')` anchored at that
+ * bundled dir. So the guard tries the project root FIRST — the supported layout
+ * where a directly-declared provider is symlinked at the root, the same copy the
+ * bundled vitest walks up to — then falls back to the bundled-vitest anchor,
+ * which catches hoisted / pnpm peer-set layouts where the provider lives next to
+ * vitest but is not resolvable from the project root (a silent skip otherwise).
+ * `@vitest/coverage-*`'s exports map has a `"./*": "./*"` catch-all, so
+ * `./package.json` is resolvable. Returns `null` when no anchor can resolve it —
+ * Vitest then emits its own (already clear) missing-provider error.
+ *
+ * The `_createRequire` / `_readFile` parameters let tests inject controlled
+ * resolvers without spying on Node's module/fs namespaces.
+ */
+function readInstalledCoverageProviderVersion(
+  providerPackageName: string,
+  projectRoot: string,
+  _createRequire: (from: string) => { resolve: (id: string) => string } = createRequire,
+  _readFile: (path: string) => string = (path) => readFileSync(path, 'utf8'),
+): string | null {
+  const anchors = [`${projectRoot}/package.json`, bundledVitestAnchor()];
+  for (const anchor of anchors) {
+    if (!anchor) {
+      continue;
+    }
+    try {
+      const req = _createRequire(anchor);
+      const pkgJsonPath = req.resolve(`${providerPackageName}/package.json`);
+      const parsed = JSON.parse(_readFile(pkgJsonPath)) as { version?: string };
+      if (parsed.version) {
+        return parsed.version;
+      }
+    } catch {
+      // This anchor can't resolve the provider — try the next one.
+    }
+  }
+  return null;
+}
+
+/**
+ * Orchestrates the coverage version guard: detect the active provider from
+ * Vitest's resolved coverage options, read its installed version from the
+ * project root, and throw on a mismatch. A no-op when coverage is off or the
+ * provider is not installed.
+ *
+ * Exported (with injectable `deps`) for unit testing.
+ */
+export function checkCoverageProviderVersion(
+  coverage: { enabled?: boolean; provider?: string } | undefined,
+  projectRoot: string,
+  deps: {
+    createRequire?: (from: string) => { resolve: (id: string) => string };
+    readFile?: (path: string) => string;
+  } = {},
+): void {
+  const providerPackageName = resolveCoverageProviderToCheck(coverage);
+  if (!providerPackageName) {
+    return;
+  }
+  const installedVersion = readInstalledCoverageProviderVersion(
+    providerPackageName,
+    projectRoot,
+    deps.createRequire,
+    deps.readFile,
+  );
+  assertCoverageProviderVersionMatch(providerPackageName, installedVersion);
+}
+
+interface ResolvedCoverageView {
+  root: string;
+  coverage?: { enabled?: boolean; provider?: string };
+}
+
+/**
+ * The shared Vitest instance, narrowed to what the late-path guard touches. Its
+ * `enableCoverage()` is the programmatic/watch/UI path that turns coverage on
+ * AFTER `configureVitest` and creates the provider lazily — wrapping it lets the
+ * same skew check guard that path.
+ */
+interface VitestInstanceView {
+  config: ResolvedCoverageView;
+  enableCoverage: () => Promise<void>;
+}
+
+/**
+ * The `configureVitest` plugin hook context, narrowed to the fields the guard
+ * reads. Vitest passes more (incl. a per-project `project`), but coverage is a
+ * single, GLOBAL runner concern: Vitest creates ONE provider from the shared
+ * runner config and imports it from the runner context — never per project. So
+ * the guard reads the shared `vitest.config` (its `coverage.{enabled,provider}`
+ * already reflects the `--coverage` CLI flags, unlike a `configResolved` Vite
+ * hook) and resolves the provider from `vitest.config.root` (the workspace/
+ * runner root), which resolves to the exact provider copy Vitest loads. Reading
+ * the per-project `project.config.root` would miss a root-level skew or
+ * false-positive on a leaf-local provider the runner never loads.
+ */
+interface VitestConfigureContext {
+  vitest: VitestInstanceView;
+}
+
+/**
+ * Vitest instances the guard has already handled. The `configureVitest` hook
+ * fires once PER PROJECT but `vitest` is shared and coverage is global, so this
+ * runs the whole guard exactly once per instance (and never leaks, since it is
+ * keyed weakly on identity).
+ */
+const coverageGuardedVitestInstances = new WeakSet<object>();
+
+function vitePlusCoverageVersionGuardPlugin(): PluginOption {
+  return {
+    name: 'vite-plus:coverage-version-guard',
+    // `configureVitest` is a Vitest-specific plugin hook absent from Vite's
+    // `Plugin` type (vite-plus-core is a vite fork, so Vitest's `declare module
+    // 'vite'` augmentation does not reach it). Cast the object so the extra hook
+    // type-checks; Vitest invokes it via `getSortedPluginHooks('configureVitest')`.
+    configureVitest(context: VitestConfigureContext) {
+      const { vitest } = context;
+      // Coverage is global and the provider is imported once from the runner, so
+      // run the guard once per shared instance even though this hook fires per
+      // project.
+      if (coverageGuardedVitestInstances.has(vitest)) {
+        return;
+      }
+      coverageGuardedVitestInstances.add(vitest);
+
+      // STARTUP path: `vitest run --coverage` / config `coverage.enabled` — the
+      // only path `vp test`/CI take. `vitest.config.coverage` is the resolved
+      // runner config; `vitest.config.root` anchors the provider resolution.
+      checkCoverageProviderVersion(vitest.config.coverage, vitest.config.root);
+
+      // LATE path: Vitest's programmatic `enableCoverage()` (node API / watch /
+      // UI toggle) flips coverage on after this hook and creates the provider
+      // lazily, so the startup check above already returned. Wrap it so the same
+      // skew check runs before the provider loads. The wrapper always delegates.
+      const enableCoverage = vitest.enableCoverage.bind(vitest);
+      vitest.enableCoverage = async () => {
+        // `enableCoverage()` sets enabled:true then creates the provider; force
+        // enabled so the check does not early-return, and read the provider from
+        // the live runner config (the late-path source of truth).
+        checkCoverageProviderVersion(
+          { enabled: true, provider: vitest.config.coverage?.provider },
+          vitest.config.root,
+        );
+        return enableCoverage();
+      };
+    },
+  } as PluginOption;
+}
+
+/**
+ * Inject the vitest resolver plugin, the auto-inline matcher plugin, and the
+ * coverage version guard into a single inline project config. Used both for
+ * root configs and for object-shaped entries inside `test.projects`.
  *
  * The shapes overlap (both have an optional top-level `plugins` array and
  * an optional `test.server.deps.inline`), so a shared helper keeps the
@@ -365,6 +591,7 @@ function injectPluginIntoInlineConfig<
     plugins: [
       vitePlusVitestResolverPlugin(),
       vitePlusAutoInlineMatcherPlugin(),
+      vitePlusCoverageVersionGuardPlugin(),
       ...(config.plugins ?? []),
     ],
   } as T;
@@ -381,6 +608,15 @@ function injectPluginIntoInlineConfig<
  *   - object  (inline config with `test: {...}`) → clone and prepend plugin.
  *   - function (sync or async)                   → wrap so its result is injected.
  *   - Promise (resolves to inline config)        → chain `.then(injectPlugin)`.
+ *
+ * String/glob entries cannot be cloned, so they carry no injected plugin. This
+ * only weakens the COVERAGE guard, and only narrowly: coverage is global, and
+ * the migration rewrites every nested config file to vite-plus
+ * `defineConfig`/`defineProject` (which re-inject the guard), so a migrated
+ * workspace still fires it from its resolved projects. The residual gap is a
+ * hand-authored workspace whose string globs resolve to raw `vitest/config`
+ * sub-configs or bare directory projects — there a provider/runner skew falls
+ * back to Vitest's own (softer) warning instead of the guard's hard error.
  */
 function injectPluginIntoProject(project: TestProjectConfiguration): TestProjectConfiguration {
   if (typeof project === 'string') {

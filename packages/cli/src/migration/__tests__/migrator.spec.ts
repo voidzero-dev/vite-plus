@@ -1209,7 +1209,7 @@ describe('ensureVitePlusBootstrap', () => {
     expect(pkg.devEngines.packageManager.name).toBe(PackageManager.npm);
   });
 
-  it('rewrites the stale vitest wrapper override and completes the @vitest/* family for npm projects', () => {
+  it('rewrites the stale vitest wrapper override without pinning the @vitest/* family for npm projects', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
@@ -1230,23 +1230,16 @@ describe('ensureVitePlusBootstrap', () => {
     // The `vite` alias still points at the live `@voidzero-dev/vite-plus-core`
     // package, so it satisfies the migration and is left untouched. The `vitest`
     // alias points at the DELETED `@voidzero-dev/vite-plus-test` wrapper, so it is
-    // rewritten to the bundled vitest version; the missing @vitest/* family pins
-    // are completed alongside it.
+    // rewritten to the bundled vitest version. The `@vitest/*` family is NOT pinned:
+    // it resolves transitively from `vitest`'s own exact deps.
     expect(result.changed).toBe(true);
     const pkg = readJson(path.join(tmpDir, 'package.json')) as {
       overrides: Record<string, string>;
     };
     expect(pkg.overrides.vite).toBe('npm:@voidzero-dev/vite-plus-core@0.1.0');
     expect(pkg.overrides.vitest).toBe('4.1.9');
-    expect(pkg.overrides['@vitest/expect']).toBe('4.1.9');
-    expect(pkg.overrides['@vitest/runner']).toBe('4.1.9');
-    expect(pkg.overrides['@vitest/snapshot']).toBe('4.1.9');
-    expect(pkg.overrides['@vitest/spy']).toBe('4.1.9');
-    expect(pkg.overrides['@vitest/utils']).toBe('4.1.9');
-    expect(pkg.overrides['@vitest/mocker']).toBe('4.1.9');
-    expect(pkg.overrides['@vitest/pretty-format']).toBe('4.1.9');
-    expect(pkg.overrides['@vitest/coverage-v8']).toBe('4.1.9');
-    expect(pkg.overrides['@vitest/coverage-istanbul']).toBe('4.1.9');
+    expect(pkg.overrides['@vitest/expect']).toBeUndefined();
+    expect(pkg.overrides['@vitest/coverage-v8']).toBeUndefined();
     expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(false);
   });
 
@@ -1554,31 +1547,10 @@ describe('ensureVitePlusBootstrap', () => {
     const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
       peerDependencyRules: { allowAny: string[]; allowedVersions: Record<string, string> };
     };
-    expect(workspace.peerDependencyRules.allowAny).toEqual([
-      'vite',
-      'vitest',
-      '@vitest/expect',
-      '@vitest/runner',
-      '@vitest/snapshot',
-      '@vitest/spy',
-      '@vitest/utils',
-      '@vitest/mocker',
-      '@vitest/pretty-format',
-      '@vitest/coverage-v8',
-      '@vitest/coverage-istanbul',
-    ]);
+    expect(workspace.peerDependencyRules.allowAny).toEqual(['vite', 'vitest']);
     expect(workspace.peerDependencyRules.allowedVersions).toEqual({
       vite: '*',
       vitest: '*',
-      '@vitest/expect': '*',
-      '@vitest/runner': '*',
-      '@vitest/snapshot': '*',
-      '@vitest/spy': '*',
-      '@vitest/utils': '*',
-      '@vitest/mocker': '*',
-      '@vitest/pretty-format': '*',
-      '@vitest/coverage-v8': '*',
-      '@vitest/coverage-istanbul': '*',
     });
   });
 
@@ -1937,6 +1909,59 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     const overrides = pkg.overrides ?? {};
     expect(overrides).toHaveProperty('some-pkg');
     expect(overrides['some-pkg']['@vitest/browser-playwright']).toBe('4.0.0');
+  });
+
+  it('leaves an already-declared coverage provider untouched (no pin, no override)', () => {
+    // Coverage providers are vitest PEER deps the project installs and versions
+    // ITSELF. vite-plus never pins or overrides them: the user owns the provider
+    // version. (The runtime guard in define-config.ts only fail-fasts on a skew
+    // at `vp test --coverage` time; it does not rewrite the project's deps.)
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: {
+          vite: '^7.0.0',
+          vitest: '^4.0.0',
+          '@vitest/coverage-v8': '^4.0.0',
+          '@vitest/coverage-istanbul': '^4.0.0',
+        },
+      }),
+    );
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.npm), true, true);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+      overrides?: Record<string, unknown>;
+    };
+    // Provider versions are preserved exactly as the user declared them.
+    expect(pkg.devDependencies['@vitest/coverage-v8']).toBe('^4.0.0');
+    expect(pkg.devDependencies['@vitest/coverage-istanbul']).toBe('^4.0.0');
+    // vitest itself is still pinned to the bundled version.
+    expect(pkg.devDependencies.vitest).toBe(VITEST_VERSION);
+    // …and coverage is never written into the override sink.
+    const overrides = pkg.overrides ?? {};
+    expect(overrides['@vitest/coverage-v8']).toBeUndefined();
+    expect(overrides['@vitest/coverage-istanbul']).toBeUndefined();
+  });
+
+  it('does not add a coverage provider the project never declared', () => {
+    // A project that uses vitest WITHOUT a coverage provider must not have one
+    // injected by the migration — the user installs it only if they need it.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { vite: '^7.0.0', vitest: '^4.0.0' },
+      }),
+    );
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.npm), true, true);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    expect(pkg.devDependencies['@vitest/coverage-v8']).toBeUndefined();
+    expect(pkg.devDependencies['@vitest/coverage-istanbul']).toBeUndefined();
   });
 
   it('drops a vite-plus-scoped provider pin while keeping non-provider siblings', () => {

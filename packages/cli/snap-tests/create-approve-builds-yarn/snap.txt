@@ -24,15 +24,6 @@
     }
   },
   "resolutions": {
-    "@vitest/coverage-istanbul": "4.1.9",
-    "@vitest/coverage-v8": "4.1.9",
-    "@vitest/expect": "4.1.9",
-    "@vitest/mocker": "4.1.9",
-    "@vitest/pretty-format": "4.1.9",
-    "@vitest/runner": "4.1.9",
-    "@vitest/snapshot": "4.1.9",
-    "@vitest/spy": "4.1.9",
-    "@vitest/utils": "4.1.9",
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
     "vitest": "4.1.9"
   },
@@ -70,15 +61,6 @@ These dependencies may not work until built. Enable them in the workspace root p
     "vite-plus": "latest"
   },
   "resolutions": {
-    "@vitest/coverage-istanbul": "4.1.9",
-    "@vitest/coverage-v8": "4.1.9",
-    "@vitest/expect": "4.1.9",
-    "@vitest/mocker": "4.1.9",
-    "@vitest/pretty-format": "4.1.9",
-    "@vitest/runner": "4.1.9",
-    "@vitest/snapshot": "4.1.9",
-    "@vitest/spy": "4.1.9",
-    "@vitest/utils": "4.1.9",
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
     "vitest": "4.1.9"
   },

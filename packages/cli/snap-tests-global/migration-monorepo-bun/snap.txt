@@ -46,16 +46,7 @@ export default defineConfig({
     "catalog": {
       "vite": "npm:@voidzero-dev/vite-plus-core@latest",
       "vitest": "4.1.9",
-      "vite-plus": "latest",
-      "@vitest/expect": "4.1.9",
-      "@vitest/runner": "4.1.9",
-      "@vitest/snapshot": "4.1.9",
-      "@vitest/spy": "4.1.9",
-      "@vitest/utils": "4.1.9",
-      "@vitest/mocker": "4.1.9",
-      "@vitest/pretty-format": "4.1.9",
-      "@vitest/coverage-v8": "4.1.9",
-      "@vitest/coverage-istanbul": "4.1.9"
+      "vite-plus": "latest"
     }
   },
   "scripts": {
@@ -78,16 +69,7 @@ export default defineConfig({
   "packageManager": "bun@<semver>",
   "overrides": {
     "vite": "catalog:",
-    "vitest": "catalog:",
-    "@vitest/expect": "catalog:",
-    "@vitest/runner": "catalog:",
-    "@vitest/snapshot": "catalog:",
-    "@vitest/spy": "catalog:",
-    "@vitest/utils": "catalog:",
-    "@vitest/mocker": "catalog:",
-    "@vitest/pretty-format": "catalog:",
-    "@vitest/coverage-v8": "catalog:",
-    "@vitest/coverage-istanbul": "catalog:"
+    "vitest": "catalog:"
   }
 }
 

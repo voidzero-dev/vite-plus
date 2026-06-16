@@ -9,16 +9,16 @@ export const VITE_PLUS_OVERRIDE_PACKAGES: Record<string, string> = process.env.V
   ? JSON.parse(process.env.VP_OVERRIDE_PACKAGES)
   : {
       vite: 'npm:@voidzero-dev/vite-plus-core@latest',
+      // Pin `vitest` only. The `@vitest/*` family (expect, runner, snapshot, spy,
+      // utils, mocker, pretty-format) are EXACT (`4.1.9`) dependencies of `vitest`
+      // itself, so a single `vitest` override cascades one consistent version to
+      // the whole tree — overriding the indirect deps individually is redundant.
+      // Coverage providers (`@vitest/coverage-v8` / `-istanbul`) are vitest PEER
+      // deps the project installs and versions itself — vite-plus never adds,
+      // pins, or overrides them. The runtime guard in `define-config.ts` only
+      // fail-fasts when an installed provider's version skews from the bundled
+      // vitest (Vitest would otherwise silently run mixed versions).
       vitest: VITEST_VERSION,
-      '@vitest/expect': VITEST_VERSION,
-      '@vitest/runner': VITEST_VERSION,
-      '@vitest/snapshot': VITEST_VERSION,
-      '@vitest/spy': VITEST_VERSION,
-      '@vitest/utils': VITEST_VERSION,
-      '@vitest/mocker': VITEST_VERSION,
-      '@vitest/pretty-format': VITEST_VERSION,
-      '@vitest/coverage-v8': VITEST_VERSION,
-      '@vitest/coverage-istanbul': VITEST_VERSION,
     };
 
 /**
