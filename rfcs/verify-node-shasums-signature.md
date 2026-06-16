@@ -164,8 +164,16 @@ The keyring is a vendored snapshot while Node version resolution is live. A
 release signed by a releaser key added after the snapshot was built has no
 matching trusted key and fails closed on the official source until the keyring
 (and Vite+) is updated. All current releasers' keys are included, so this only
-affects a brand-new releaser before a refresh. The keyring must be refreshed
-from `nodejs/release-keys` as the releaser set changes.
+affects a brand-new releaser before a refresh.
+
+The keyring is kept current automatically. A scheduled workflow
+(`.github/workflows/update-node-release-keys.yml`, weekly) regenerates the
+embedded keyring from `nodejs/release-keys` via
+`.github/scripts/update-node-release-keys.sh` and opens a pull request when it
+changes. The PR is **not** auto-merged: a human reviews which keys changed
+before the trust anchor is updated, and PR CI (the `vite_js_runtime` tests)
+confirms every vendored key still parses. The same script can be run locally to
+refresh the keyring on demand.
 
 ### `rsa` advisory
 

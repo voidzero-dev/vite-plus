@@ -3,6 +3,7 @@ ratatui = "ratatui"
 PUNICODE = "PUNICODE"
 Jod = "Jod" # Node.js v22 LTS codename
 flate = "flate" # flate2 crate name (gzip/deflate compression)
+fpr = "fpr" # GPG colon-format record name for a key fingerprint
 
 [files]
 extend-exclude = [

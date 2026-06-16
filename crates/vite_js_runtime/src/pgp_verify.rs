@@ -230,8 +230,15 @@ mod tests {
 
     #[test]
     fn split_armored_blocks_finds_every_key() {
+        // Self-consistent against the vendored file rather than a fixed count, so
+        // adding keys upstream needs no test edit. The floor stays at the current
+        // 28 keys: nodejs/release-keys retains historical keys, so the set should
+        // only grow; dropping below 28 means a regression worth catching.
+        let begin_markers =
+            NODE_RELEASE_KEYS_ARMOR.matches("-----BEGIN PGP PUBLIC KEY BLOCK-----").count();
         let blocks = split_armored_blocks(NODE_RELEASE_KEYS_ARMOR);
-        assert_eq!(blocks.len(), 28, "expected 28 vendored release key blocks");
+        assert_eq!(blocks.len(), begin_markers, "every BEGIN block should be captured");
+        assert!(blocks.len() >= 28, "keyring unexpectedly small: {}", blocks.len());
         assert!(blocks.iter().all(|b| b.contains("-----END PGP PUBLIC KEY BLOCK-----")));
     }
 
