@@ -2216,16 +2216,26 @@ function applyBuildAllowanceToPackageJsonPnpm(
   if (major >= 10) {
     pnpm.allowBuilds ??= {};
     for (const name of BROWSER_PROVIDER_POSTINSTALL_PACKAGES) {
-      if (!shouldAllow && directDriverDeps.has(name)) {
-        // Don't force-DENY a driver the user depends on directly — leave the
-        // key absent so pnpm preserves their pre-existing postinstall approval
-        // (or prompts on first install). When builds should be allowed
-        // (webdriverio present), still write `true`: a user-owned driver that
-        // webdriverio also needs built must not be left to a prompt.
-        continue;
-      }
-      if (!(name in pnpm.allowBuilds)) {
-        pnpm.allowBuilds[name] = shouldAllow;
+      if (shouldAllow) {
+        // WebdriverIO present -> the edgedriver/geckodriver postinstall MUST run.
+        // Write `true` unconditionally, OVERWRITING any stale `false` a prior
+        // WebdriverIO-less migration left behind (a re-run after adding WebdriverIO
+        // would otherwise keep the driver build blocked). A user-owned driver that
+        // WebdriverIO also needs built must not be left to a prompt either.
+        pnpm.allowBuilds[name] = true;
+      } else if (directDriverDeps.has(name)) {
+        // User depends on this driver directly (e.g. their own Selenium setup): leave
+        // the key ABSENT so pnpm preserves their own approval/prompt. Remove ONLY a
+        // stale `false` a prior migration wrote — otherwise the re-run keeps the user's
+        // own driver build blocked. Preserve an existing `true`: that is the user's
+        // recorded postinstall approval, which deleting would silently revoke.
+        if (pnpm.allowBuilds[name] === false) {
+          delete pnpm.allowBuilds[name];
+        }
+      } else if (!(name in pnpm.allowBuilds)) {
+        // No WebdriverIO and not user-owned -> default-deny the untrusted postinstall,
+        // but never clobber an entry the user (or a prior run) set intentionally.
+        pnpm.allowBuilds[name] = false;
       }
     }
   } else if (shouldAllow) {
@@ -2255,17 +2265,34 @@ function applyBuildAllowanceToWorkspaceYaml(
       allowBuilds = new YAMLMap<Scalar<string>, Scalar<boolean>>();
     }
     const existingKeys = new Set(allowBuilds.items.map((n) => n.key.value));
+    // Effective values with YAML anchors/aliases resolved (`&a false` / `*a`), so the
+    // stale-`false` check below matches alias-backed denials too — keeping this sink
+    // equivalent to the plain-JSON package.json sink for every value shape a tool emits
+    // (pnpm writes flat `<pkg>: <bool>`). `<<` merge keys are NOT resolved (the reader
+    // does not enable YAML merge); a merge-backed denial — which no tooling produces —
+    // is conservatively left in place rather than removed (a no-op, never a wrong
+    // mutation).
+    const resolvedValues = (allowBuilds.toJS(doc) ?? {}) as Record<string, unknown>;
     for (const name of BROWSER_PROVIDER_POSTINSTALL_PACKAGES) {
-      if (!shouldAllow && directDriverDeps.has(name)) {
-        // Don't force-DENY a driver the user depends on directly — leave the
-        // key absent so pnpm preserves their pre-existing postinstall approval
-        // (or prompts on first install). When builds should be allowed
-        // (webdriverio present), still write `true`: a user-owned driver that
-        // webdriverio also needs built must not be left to a prompt.
-        continue;
-      }
-      if (!existingKeys.has(name)) {
-        allowBuilds.set(scalarString(name), new Scalar(shouldAllow));
+      if (shouldAllow) {
+        // WebdriverIO present -> the edgedriver/geckodriver postinstall MUST run.
+        // Set `true`, OVERWRITING any stale `false` a prior WebdriverIO-less migration
+        // left behind (a re-run after adding WebdriverIO would otherwise keep the
+        // driver build blocked). A user-owned driver WebdriverIO also needs built must
+        // not be left to a prompt either.
+        allowBuilds.set(scalarString(name), new Scalar(true));
+      } else if (directDriverDeps.has(name)) {
+        // User depends on this driver directly: leave the key ABSENT so pnpm preserves
+        // their own approval/prompt. Remove ONLY a stale `false` a prior migration
+        // wrote; preserve an existing `true` (the user's recorded postinstall approval,
+        // which deleting would silently revoke).
+        if (resolvedValues[name] === false) {
+          allowBuilds.delete(name);
+        }
+      } else if (!existingKeys.has(name)) {
+        // No WebdriverIO and not user-owned -> default-deny the untrusted postinstall,
+        // but never clobber an entry the user (or a prior run) set intentionally.
+        allowBuilds.set(scalarString(name), new Scalar(false));
       }
     }
     doc.setIn(['allowBuilds'], allowBuilds);
