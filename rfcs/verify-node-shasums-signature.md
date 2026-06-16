@@ -68,7 +68,10 @@ practice (mise has a recurring stream of GPG key-import/encoding failures).
 Vite+ is the only one that verifies the signature in-process with no external
 `gpg`. That is what justifies bundling rPGP and the keyring (~1.2 MiB added to
 the `vp` binary): it brings the strongest guarantee available while keeping the
-zero-dependency, cross-platform install that `vp` requires.
+zero-dependency, cross-platform install that `vp` requires. Like asdf
+(`NODEJS_CHECK_SIGNATURES`) and mise, Vite+ also exposes an opt-out
+(`VP_NODE_SKIP_SIGNATURE_VERIFY`) for when key/certificate issues would
+otherwise block installs; see [Escape hatch](#escape-hatch-skipping-signature-verification).
 
 [asdf-nodejs]: https://github.com/asdf-vm/asdf-nodejs
 [mise]: https://mise.jdx.dev/
@@ -174,6 +177,24 @@ The signature fetch/verify stays outside the content-integrity retry loop, like
 the existing SHASUMS fetch/parse: signature failures are permanent, and
 `download_text` already retries the network layer.
 
+### Escape hatch: skipping signature verification
+
+Setting `VP_NODE_SKIP_SIGNATURE_VERIFY` (to any value) skips PGP verification
+entirely and uses the plain `SHASUMS256.txt`, regardless of `required`. This is
+a deliberate opt-out for the case where a future keyring or certificate problem
+would otherwise block installs, mirroring asdf's `NODEJS_CHECK_SIGNATURES=no`
+and mise's `verify_checksums`/signature settings. Two properties keep it from
+silently weakening the install:
+
+- The SHA-256 checksum of the archive against `SHASUMS256.txt` is still
+  verified, so integrity (archive matches its SHASUMS) is preserved; only
+  authenticity (the SHASUMS came from a Node.js releaser) is dropped.
+- It prints a warning on every skipped install so the weaker mode is visible in
+  logs, not silent.
+
+It is an env-var only switch: there is no config-file or CI flag, keeping the
+secure path the unconditional default.
+
 ## Trust model and limitations
 
 The trust boundary is the curated set of Node.js release keys plus honoring key
@@ -211,6 +232,14 @@ changes. The PR is **not** auto-merged: a human reviews which keys changed
 before the trust anchor is updated, and PR CI (the `vite_js_runtime` tests)
 confirms every vendored key still parses. The same script can be run locally to
 refresh the keyring on demand.
+
+### Operator opt-out
+
+`VP_NODE_SKIP_SIGNATURE_VERIFY` (see [Escape hatch](#escape-hatch-skipping-signature-verification))
+lets an operator lower the trust boundary to integrity-only (SHA-256 against
+`SHASUMS256.txt`), forgoing authenticity. It is off by default, requires an
+explicit env var, and warns on every skipped install, so the weaker mode is an
+opt-in choice rather than a silent default.
 
 ### `rsa` advisory
 

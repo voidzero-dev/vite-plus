@@ -127,6 +127,17 @@ async fn resolve_shasums_content(
     signature: Option<&ShasumsSignature>,
     archive_filename: &str,
 ) -> Result<String, Error> {
+    // Escape hatch: skip PGP verification entirely (e.g. to work around a stale
+    // keyring or a signature-fetch failure). The SHA-256 checksum still runs, so
+    // this only drops authenticity, not integrity. Warn loudly, including in CI,
+    // since it is a deliberate security downgrade the operator opted into.
+    if vite_shared::EnvConfig::get().node_skip_signature_verify {
+        vite_shared::output::warn(&format!(
+            "PGP signature verification skipped for {archive_filename} \
+             (VP_NODE_SKIP_SIGNATURE_VERIFY set); verifying SHA-256 checksum only"
+        ));
+        return download_text(plain_url).await;
+    }
     let Some(signature) = signature else {
         // No signature is published for this source (e.g. unofficial musl builds).
         log_checksum_only(archive_filename);

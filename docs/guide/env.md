@@ -153,3 +153,15 @@ VP_NODE_DIST_MIRROR=https://my-mirror.example.com/nodejs/dist vp env default lts
 # Set it permanently in your shell profile (.bashrc, .zshrc, etc.)
 echo 'export VP_NODE_DIST_MIRROR=https://my-mirror.example.com/nodejs/dist' >> ~/.zshrc
 ```
+
+## Node.js Signature Verification
+
+When installing Node.js from the official `nodejs.org` distribution, Vite+ downloads the PGP-signed `SHASUMS256.txt.asc` and verifies it against the bundled Node.js release keys before trusting any checksum. This protects against a tampered `SHASUMS256.txt` paired with a matching malicious archive. The SHA-256 checksum of the downloaded archive is always verified afterward.
+
+Custom mirrors (`VP_NODE_DIST_MIRROR`) that publish only the plain `SHASUMS256.txt` fall back to checksum-only verification. A mirror that does publish a `.asc` still has its signature verified, and an invalid signature is a hard error.
+
+If a future keyring or certificate issue blocks downloads, set `VP_NODE_SKIP_SIGNATURE_VERIFY` to temporarily bypass PGP verification. The SHA-256 checksum is still verified, and Vite+ prints a warning when the signature check is skipped:
+
+```bash
+VP_NODE_SKIP_SIGNATURE_VERIFY=1 vp env install 22
+```
