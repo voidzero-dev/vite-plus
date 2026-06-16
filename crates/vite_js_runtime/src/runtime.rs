@@ -147,12 +147,14 @@ async fn resolve_shasums_content(
 /// PGP signature is available (the unofficial musl builds, or a custom mirror
 /// that publishes only `SHASUMS256.txt`).
 ///
-/// Printed to stderr so shimmed tools keep their stdout parseable.
+/// Skipped in CI, where the warning is just noise.
 fn warn_checksum_only(archive_filename: &str) {
-    eprintln!(
-        "warning: no PGP signature available for {archive_filename}; \
-         verifying SHA-256 checksum only"
-    );
+    if vite_shared::EnvConfig::get().is_ci {
+        return;
+    }
+    vite_shared::output::warn(&format!(
+        "no PGP signature available for {archive_filename}; verifying SHA-256 checksum only"
+    ));
 }
 
 /// Download and cache a JavaScript runtime using a provider
