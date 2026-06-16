@@ -40,6 +40,43 @@ misconfigured proxy, or any party able to influence the bytes returned for the
 SHASUMS request. Without signature verification, such a party can serve a
 SHASUMS file whose hash matches an archive they control.
 
+## Prior art in Node.js version managers
+
+Download verification across the popular Node.js version managers ranges from
+nothing to full signature checking. Two levels matter: **integrity** (SHA-256
+against `SHASUMS256.txt`) and **authenticity** (the PGP signature on
+`SHASUMS256.txt.asc`, which proves the SHASUMS file itself came from a Node.js
+releaser). Only authenticity defends against a tampered SHASUMS; HTTPS transport
+is table stakes for all of them.
+
+| Manager             | SHA-256 |         PGP signature          | Mechanism                                               |
+| ------------------- | :-----: | :----------------------------: | ------------------------------------------------------- |
+| Vite+ (`vp`)        |   yes   | yes (default, official source) | built-in, pure Rust; bundled keyring; no external `gpg` |
+| [asdf-nodejs]       |   yes   |     yes (default `strict`)     | external `gpg`; user imports the release keyring        |
+| [mise]              |   yes   |       yes (configurable)       | external `gpg`                                          |
+| [nvm]               |   yes   |               no               | GPG [declined][nvm-pr] to stay POSIX / dependency-free  |
+| [Volta]             |   yes   |               no               | `sha2` crate (project unmaintained)                     |
+| nodenv / node-build |   yes   |               no               | checksum embedded in version definitions                |
+| [fnm]               |   no    |               no               | HTTPS only, no verification                             |
+
+Most managers stop at checksums, which only bind the archive to a SHASUMS file
+fetched over the same channel, and `fnm` does nothing beyond HTTPS. Only
+asdf-nodejs and mise also verify the signature, and both shell out to system
+`gpg` and require the release keyring to be imported, which is fragile in
+practice (mise has a recurring stream of GPG key-import/encoding failures).
+
+Vite+ is the only one that verifies the signature in-process with no external
+`gpg`. That is what justifies bundling rPGP and the keyring (~1.2 MiB added to
+the `vp` binary): it brings the strongest guarantee available while keeping the
+zero-dependency, cross-platform install that `vp` requires.
+
+[asdf-nodejs]: https://github.com/asdf-vm/asdf-nodejs
+[mise]: https://mise.jdx.dev/
+[nvm]: https://github.com/nvm-sh/nvm
+[nvm-pr]: https://github.com/nvm-sh/nvm/pull/736
+[Volta]: https://github.com/volta-cli/volta
+[fnm]: https://github.com/Schniz/fnm
+
 ## Goals
 
 1. Verify the PGP signature of `SHASUMS256.txt` before trusting any checksum.
