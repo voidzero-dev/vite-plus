@@ -16,14 +16,16 @@
 //!
 //! The trust boundary is the curated set of Node.js release keys plus honoring
 //! key/subkey revocation, which is what `gpgv` against the release keyring
-//! provides. Two limitations follow from that model and are intentional:
+//! provides. Three properties follow from that model and are intentional:
 //!
-//! - **Expiry is checked against the signature's self-asserted creation time**
-//!   (as `gpgv` does). An attacker who holds a leaked release private key also
-//!   controls that timestamp, so the expiry check does not by itself stop a
-//!   key-compromise attacker who backdates a forgery; it is defense-in-depth.
-//!   The real protection against a compromised key is its revocation, which is
-//!   enforced here, plus keeping the vendored keyring current.
+//! - **Key expiry is not enforced.** `gpgv` treats an expired key as advisory
+//!   and still reports its signatures as good (verified: it exits 0 for a real
+//!   release signed shortly after its key's expiry, e.g. `node-v16.20.0`).
+//!   Enforcing expiry would reject such legitimate releases. It would also not
+//!   add protection against a leaked key, because the attacker controls the
+//!   signature's self-asserted creation time and can backdate a forgery. The
+//!   real protection against a compromised key is its revocation (enforced
+//!   here) plus keeping the vendored keyring current.
 //! - **The keyring is a vendored snapshot.** Node version resolution is live, so
 //!   a release signed by a releaser key added after this snapshot was built has
 //!   no matching trusted key and fails closed on the official source until the
@@ -37,8 +39,7 @@ use std::sync::LazyLock;
 
 use pgp::{
     composed::{CleartextSignedMessage, Deserializable, SignedPublicKey, SignedPublicSubKey},
-    packet::{Signature, SignatureType},
-    types::{KeyDetails, Timestamp},
+    packet::SignatureType,
 };
 use vite_str::Str;
 
@@ -76,15 +77,14 @@ pub async fn verify_signed_shasums(signed_armor: String, filename: &str) -> Resu
 /// against its primary key and every subkey, because Node.js releasers may sign
 /// with a signing subkey rather than the primary key.
 ///
-/// A raw cryptographic match is not sufficient: the keyring is intentionally
-/// historical and rPGP's low-level `verify` does not apply OpenPGP key policy.
-/// So a match is only accepted when the signing key/subkey is not revoked, is a
-/// signing-capable self-issued key/binding, and the signature was created before
-/// that key/subkey expired. This mirrors `gpgv` against the release keyring.
-///
-/// Note the expiry check uses the signature's self-asserted creation time, so it
-/// is defense-in-depth rather than a defense against a leaked key (see the module
-/// docs); the trust boundary is the curated keyring plus revocation.
+/// This mirrors `gpgv` against the Node release keyring: a cryptographically
+/// valid signature from a trusted, non-revoked key is accepted. A subkey
+/// signature additionally requires the subkey to be a validly-bound, signing-
+/// capable subkey of the primary, so a leaked encryption-only subkey cannot be
+/// used to sign. Key expiry is intentionally not enforced (see the module docs):
+/// `gpgv` treats it as advisory and still reports such signatures good, so
+/// enforcing it would reject legitimate releases signed near a key's expiry
+/// while not stopping a backdating attacker.
 fn verify_clearsigned(
     signed_armor: &str,
     trusted_keys: &[SignedPublicKey],
@@ -98,32 +98,21 @@ fn verify_clearsigned(
             continue;
         }
 
-        // Primary-key signing path.
-        if let Ok(signature) = message.verify(key)
-            && let Some(signed_at) = signature_time(signature)
-            && primary_signature_valid(key, signed_at)
-        {
+        // Primary-key signing path: a valid signature from a trusted, non-revoked
+        // primary key is accepted, as gpgv trusts keys present in the keyring.
+        if message.verify(key).is_ok() {
             return Ok(message.signed_text());
         }
 
         // Subkey signing path (some releasers sign with a signing subkey).
         for subkey in &key.public_subkeys {
-            if let Ok(signature) = message.verify(subkey)
-                && let Some(signed_at) = signature_time(signature)
-                && subkey_signature_valid(key, subkey, signed_at)
-            {
+            if message.verify(subkey).is_ok() && subkey_is_valid_signer(key, subkey) {
                 return Ok(message.signed_text());
             }
         }
     }
 
-    Err("signature does not match a valid, unexpired Node.js release key".to_string())
-}
-
-/// Unix-seconds creation time of a signature, if present. A signature with no
-/// creation time cannot be checked against key validity and is rejected.
-fn signature_time(signature: &Signature) -> Option<u64> {
-    signature.created().map(|t| u64::from(t.as_secs()))
+    Err("signature does not match a trusted Node.js release key".to_string())
 }
 
 /// Whether the primary key carries a valid self-revocation certificate.
@@ -134,58 +123,12 @@ fn primary_key_revoked(key: &SignedPublicKey) -> bool {
         .any(|revocation| revocation.verify_key(&key.primary_key).is_ok())
 }
 
-/// Whether a primary-key signature made at `signed_at` should be trusted. Only
-/// the key's own self-issued certifications/direct signatures define its policy
-/// (a third-party certification must not supply expiry or capability), the key
-/// must not be marked certify-only, and the signature must predate the key's
-/// expiry. The current (latest) self-signature defines the effective expiry, as
-/// `gpgv` does: a key re-certified after a release (e.g. to extend its expiry)
-/// must still verify that release's older signature.
-fn primary_signature_valid(key: &SignedPublicKey, signed_at: u64) -> bool {
-    let self_signatures = key
-        .details
-        .direct_signatures
-        .iter()
-        .chain(key.details.users.iter().flat_map(|user| user.signatures.iter()))
-        .filter(|sig| is_self_issued(sig, key));
-
-    let Some(self_sig) = latest_self_signature(self_signatures) else {
-        // No self-signature at all: the key's policy can't be established.
-        return false;
-    };
-
-    // Reject a primary whose own self-signature declares it certify-only (i.e.
-    // explicitly capable of certifying but not of signing data).
-    let flags = self_sig.key_flags();
-    if flags.certify() && !flags.sign() {
-        return false;
-    }
-
-    within_validity(signed_at, expiry_instant(key.created_at(), self_sig))
-}
-
-/// Whether `sig` was issued by `key`'s own primary key (a self-signature),
-/// identified by issuer fingerprint or key id. The certifications come from the
-/// trusted vendored keyring, so an identity match is sufficient to exclude
-/// third-party certifications from defining the key's policy.
-fn is_self_issued(sig: &Signature, key: &SignedPublicKey) -> bool {
-    let fingerprint = key.fingerprint();
-    let key_id = key.legacy_key_id();
-    sig.issuer_fingerprint().iter().any(|f| **f == fingerprint)
-        || sig.issuer_key_id().iter().any(|k| **k == key_id)
-}
-
-/// Whether a subkey signature made at `signed_at` should be trusted: the subkey
-/// must not be revoked and must carry a signing-capable binding signature (with
-/// a valid embedded primary-key back-signature) that has not expired. The
-/// current (latest) binding signature governs capability and expiry. rPGP's
-/// `verify` applies none of this subkey policy itself, so a non-signing or
-/// revoked subkey would otherwise be accepted.
-fn subkey_signature_valid(
-    key: &SignedPublicKey,
-    subkey: &SignedPublicSubKey,
-    signed_at: u64,
-) -> bool {
+/// Whether `subkey` may legitimately sign on the primary's behalf: it must not
+/// be revoked and must carry a signing-capable binding signature with a valid
+/// embedded primary-key back-signature. rPGP's `verify` applies no subkey policy
+/// itself, so without this a leaked encryption-only or revoked subkey would be
+/// accepted as a signer.
+fn subkey_is_valid_signer(key: &SignedPublicKey, subkey: &SignedPublicSubKey) -> bool {
     let primary = &key.primary_key;
 
     // Reject if a valid subkey revocation exists.
@@ -198,49 +141,17 @@ fn subkey_signature_valid(
         return false;
     }
 
-    // The current (latest) binding signature governs capability and expiry.
-    let bindings =
-        subkey.signatures.iter().filter(|s| s.typ() == Some(SignatureType::SubkeyBinding));
-    let Some(binding) = latest_self_signature(bindings) else {
-        return false;
-    };
-
-    binding.key_flags().sign()
-        && binding.verify_subkey_binding(primary, &subkey.key).is_ok()
-        && binding
-            .embedded_signature()
-            .is_some_and(|back| back.verify_primary_key_binding(&subkey.key, primary).is_ok())
-        && within_validity(signed_at, expiry_instant(subkey.created_at(), binding))
-}
-
-/// The current self/binding signature: the most recently created one. This is
-/// the signature that defines the key's effective policy (capability/expiry),
-/// matching `gpgv`. It is intentionally not filtered by the message signature's
-/// timestamp, because a key may be re-certified after it signs a release.
-fn latest_self_signature<'a>(
-    signatures: impl Iterator<Item = &'a Signature>,
-) -> Option<&'a Signature> {
-    signatures.max_by_key(|s| s.created().map_or(0, |t| t.as_secs()))
-}
-
-/// Expiration instant (unix seconds) declared by a self/binding signature,
-/// relative to the key's creation time. A `KeyExpirationTime` of 0 means the
-/// key does not expire.
-fn expiry_instant(key_created_at: Timestamp, self_sig: &Signature) -> Option<u64> {
-    self_sig
-        .key_expiration_time()
-        .map(|duration| u64::from(duration.as_secs()))
-        .filter(|secs| *secs != 0)
-        .map(|secs| u64::from(key_created_at.as_secs()) + secs)
-}
-
-/// Pure validity check: a signature made at `signed_at` (unix seconds) is valid
-/// when the key has no expiration, or the signature predates the expiry.
-const fn within_validity(signed_at: u64, expires_at: Option<u64>) -> bool {
-    match expires_at {
-        Some(expiry) => signed_at <= expiry,
-        None => true,
-    }
+    // Require a signing-capable binding signature with a valid embedded
+    // primary-key back-signature.
+    subkey.signatures.iter().filter(|s| s.typ() == Some(SignatureType::SubkeyBinding)).any(
+        |binding| {
+            binding.key_flags().sign()
+                && binding.verify_subkey_binding(primary, &subkey.key).is_ok()
+                && binding.embedded_signature().is_some_and(|back| {
+                    back.verify_primary_key_binding(&subkey.key, primary).is_ok()
+                })
+        },
+    )
 }
 
 /// Lazily parsed embedded Node.js release keys.
@@ -295,18 +206,20 @@ mod tests {
     /// A real, untampered `SHASUMS256.txt.asc` from Node.js v22.13.1.
     const FIXTURE_SIGNED: &str = include_str!("assets/test/SHASUMS256-v22.13.1.txt.asc");
 
-    /// A real `SHASUMS256.txt.asc` from Node.js v18.14.0, signed in Feb 2023 by
-    /// a release key that has since expired (2023-03-26). The genuine signature
-    /// predates the key's expiry, so it must still verify.
+    /// A real `SHASUMS256.txt.asc` from Node.js v18.14.0, signed by a release
+    /// key that has since expired. `gpgv` still verifies it, so we must too.
     const FIXTURE_EXPIRED_SIGNER: &str = include_str!("assets/test/SHASUMS256-v18.14.0.txt.asc");
 
-    /// A real `SHASUMS256.txt.asc` from Node.js v20.18.0, signed Oct 2024 by a
-    /// key whose self-certification was later refreshed (re-certified Dec 2025).
-    /// The current self-signature postdates this release signature, so policy
-    /// must use the latest self-signature for expiry, not one predating the
-    /// release signature.
+    /// A real `SHASUMS256.txt.asc` from Node.js v20.18.0, whose signing key was
+    /// re-certified after this release was signed. `gpgv` still verifies it.
     const FIXTURE_RECERTIFIED_SIGNER: &str =
         include_str!("assets/test/SHASUMS256-v20.18.0.txt.asc");
+
+    /// A real `SHASUMS256.txt.asc` from Node.js v16.20.0, signed a few days
+    /// *after* its signing key's expiry. `gpgv` reports this good (exit 0), so
+    /// enforcing expiry would wrongly reject a legitimate release.
+    const FIXTURE_EXPIRED_AT_SIGNING: &str =
+        include_str!("assets/test/SHASUMS256-v16.20.0.txt.asc");
 
     #[test]
     fn embedded_keys_parse() {
@@ -369,37 +282,9 @@ mod tests {
     }
 
     #[test]
-    fn validity_window_rejects_signatures_made_after_expiry() {
-        let created = 1_000;
-        let expires_at = Some(created + 2_000); // key valid until 3_000
-
-        // A signature made while the key was valid is accepted...
-        assert!(within_validity(created, expires_at));
-        assert!(within_validity(3_000, expires_at));
-        // ...but a fresh signature made after the key expired is rejected,
-        // which is exactly the compromised-expired-key attack.
-        assert!(!within_validity(3_001, expires_at));
-        assert!(!within_validity(9_999_999, expires_at));
-    }
-
-    #[test]
-    fn validity_window_allows_keys_without_expiry() {
-        assert!(within_validity(0, None));
-        assert!(within_validity(9_999_999, None));
-    }
-
-    #[test]
-    fn genuine_fixture_passes_key_policy() {
-        // The real v22.13.1 signature was made before its signing key expires,
-        // so the added revocation/expiry policy must not reject it.
-        assert!(verify_clearsigned(FIXTURE_SIGNED, node_release_keys()).is_ok());
-    }
-
-    #[test]
-    fn accepts_genuine_old_signature_from_now_expired_key() {
-        // The signing key has expired since, but the signature was made while it
-        // was valid, so it must still verify (validity is checked against the
-        // signature's creation time, not "now").
+    fn accepts_release_from_now_expired_key() {
+        // The signing key has since expired, but gpgv still verifies the
+        // signature, so we must too.
         let verified =
             verify_clearsigned(FIXTURE_EXPIRED_SIGNER, node_release_keys()).expect("should verify");
         assert!(verified.contains("node-v18.14.0-linux-x64.tar.gz"));
@@ -407,11 +292,19 @@ mod tests {
 
     #[test]
     fn accepts_release_signed_before_key_was_recertified() {
-        // The signing key's current self-signature was created after this
-        // release was signed; policy must use the latest self-signature for
-        // expiry rather than rejecting because none predates the release.
+        // The signing key's self-certification was refreshed after this release
+        // was signed; it must still verify.
         let verified = verify_clearsigned(FIXTURE_RECERTIFIED_SIGNER, node_release_keys())
             .expect("should verify");
         assert!(verified.contains("node-v20.18.0-linux-x64.tar.gz"));
+    }
+
+    #[test]
+    fn accepts_release_signed_after_key_expiry() {
+        // Signed days after the key's expiry; gpgv reports it good, so enforcing
+        // expiry would wrongly reject this legitimate release.
+        let verified = verify_clearsigned(FIXTURE_EXPIRED_AT_SIGNING, node_release_keys())
+            .expect("should verify");
+        assert!(verified.contains("node-v16.20.0-linux-x64.tar.gz"));
     }
 }
