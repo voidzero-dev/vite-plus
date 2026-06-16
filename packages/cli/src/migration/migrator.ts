@@ -4053,23 +4053,24 @@ export function rewritePackageJson(
     supportCatalog &&
     existingVitePlus !== canonicalVitePlusSpec &&
     !isProtocolPinnedSpec(existingVitePlus);
-  // vitest-adjacent / browser-mode signals only trigger a vite-plus install
-  // when the project doesn't already have vite-plus — otherwise the user has
-  // a working setup and this is just a normalize pass, which must not mutate
-  // beyond the vite-plus spec.
+  // vitest-adjacent / browser-mode signals only trigger a vite-plus INSTALL when the
+  // project doesn't already have vite-plus — otherwise vite-plus is already present and
+  // re-adding it would be churn. (The direct `vitest` pin those signals also require is
+  // decided separately below, independent of whether vite-plus is present.)
   if (!existingVitePlus && (isVitestAdjacent || effectiveBrowserMode)) {
     needVitePlus = true;
   }
-  // Browser mode needs a direct `vitest` pin independent of whether `vite-plus`
-  // is already present: a package that already owns `vite-plus` and imports a
-  // browser shim (e.g. `vite-plus/test/client`) but has no direct `vitest` still
-  // needs `vitest` resolvable from its own root for the browser optimizer under
-  // pnpm strict / Yarn PnP. Tracked separately from `needVitePlus` so the pin is
-  // added without re-adding the already-present `vite-plus` dep. The
-  // vitest-adjacent case stays folded into `needVitePlus` (only when vite-plus
-  // is absent), so a pure normalize pass of an existing project still mutates
-  // nothing beyond the vite-plus spec.
-  const needDirectVitest = needVitePlus || effectiveBrowserMode;
+  // Browser mode AND a vitest-adjacent dep (e.g. `vitest-browser-svelte`, which
+  // declares a non-optional `vitest` peer) both need a direct `vitest` pin INDEPENDENT
+  // of whether `vite-plus` is already present: that peer must resolve from the package's
+  // OWN root under pnpm strict / Yarn PnP, where `vite-plus`'s transitive `vitest` is not
+  // visible. Tracked separately from `needVitePlus` so the pin is added without re-adding
+  // an already-present `vite-plus` — e.g. a monorepo root, where
+  // `rewriteRootWorkspacePackageJson` injects `vite-plus` BEFORE this runs (so
+  // `existingVitePlus` is already truthy here), or a re-migration of a project that
+  // already owns it. The guard below still no-ops when a direct `vitest` already exists,
+  // so a genuine normalize pass of an already-correct project mutates nothing.
+  const needDirectVitest = needVitePlus || effectiveBrowserMode || isVitestAdjacent;
   if (needVitePlus || shouldNormalizeExistingVitePlus) {
     pkg.devDependencies = {
       ...pkg.devDependencies,

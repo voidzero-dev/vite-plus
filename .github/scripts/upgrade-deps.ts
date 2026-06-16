@@ -341,6 +341,64 @@ async function updateTestVpCreateWorkflow(vitestVersion: string): Promise<void> 
   console.log('Updated .github/workflows/test-vp-create.yml');
 }
 
+// ============ Update README.md manual-migration vitest pins ============
+// The manual-migration guide pins `vitest` to an exact version in three places —
+// the npm/Bun `overrides` block, the pnpm-workspace `overrides` block, and the
+// Yarn `resolutions` block — so a hand-migrated project shares one Vitest copy
+// with the bundled `vp test`. Those literals are NOT interpolated from
+// VITEST_VERSION, so a daily bump must rewrite them or the guide drifts behind the
+// bundled version. The packages/cli/README.md mirror (refreshed from the root
+// README's suffix at build time) is kept in sync here too so the daily PR stays
+// self-consistent without depending on a build step running first.
+async function updateReadmeVitestPins(vitestVersion: string): Promise<void> {
+  const readmePaths = [path.join(ROOT, 'README.md'), path.join(ROOT, 'packages/cli/README.md')];
+  // JSON form: `"vitest": "4.1.9"` — npm/Bun `overrides` + Yarn `resolutions` (2 blocks)
+  const jsonPattern = /("vitest": ")[\d.]+(?:-[\w.]+)?(")/g;
+  // YAML form: `  vitest: 4.1.9` — pnpm-workspace `overrides` (1 block)
+  const yamlPattern = /(\n\s*vitest: )[\d.]+(?:-[\w.]+)?(\n)/g;
+  // Both READMEs carry the same three manual-migration pins (the cli copy mirrors the
+  // root's suffix). Assert the exact shape so a daily run fails loudly — like every
+  // other updater here — if a block is reworded or removed, instead of silently
+  // shipping a README where only some pins were bumped.
+  const EXPECTED_JSON = 2;
+  const EXPECTED_YAML = 1;
+  let oldVersion: string | undefined;
+  const capture = (match: string): void => {
+    const found = /(\d[\d.]*(?:-[\w.]+)?)/.exec(match)?.[1];
+    if (found && oldVersion === undefined) {
+      oldVersion = found;
+    }
+  };
+  for (const filePath of readmePaths) {
+    if (!fs.existsSync(filePath)) {
+      continue;
+    }
+    const content = fs.readFileSync(filePath, 'utf8');
+    let jsonMatched = 0;
+    let yamlMatched = 0;
+    let updated = content.replace(jsonPattern, (match: string, pre: string, post: string) => {
+      jsonMatched++;
+      capture(match);
+      return `${pre}${vitestVersion}${post}`;
+    });
+    updated = updated.replace(yamlPattern, (match: string, pre: string, post: string) => {
+      yamlMatched++;
+      capture(match);
+      return `${pre}${vitestVersion}${post}`;
+    });
+    if (jsonMatched !== EXPECTED_JSON || yamlMatched !== EXPECTED_YAML) {
+      throw new Error(
+        `Expected ${EXPECTED_JSON} JSON + ${EXPECTED_YAML} YAML vitest pins in ${filePath}, ` +
+          `found ${jsonMatched} + ${yamlMatched} — the manual-migration section changed, ` +
+          `please update updateReadmeVitestPins in .github/scripts/upgrade-deps.ts`,
+      );
+    }
+    fs.writeFileSync(filePath, updated);
+    console.log(`Updated ${path.relative(ROOT, filePath)}`);
+  }
+  recordChange('README vitest pins', oldVersion ?? null, vitestVersion);
+}
+
 // ============ Update packages/core/package.json ============
 async function updateCorePackage(devtoolsVersion: string): Promise<void> {
   const filePath = path.join(ROOT, 'packages/core/package.json');
@@ -497,6 +555,7 @@ await updatePnpmWorkspace({
 });
 await updateVitestVersionConstant(vitestVersion);
 await updateTestVpCreateWorkflow(vitestVersion);
+await updateReadmeVitestPins(vitestVersion);
 await updateCorePackage(devtoolsVersion);
 
 writeMetaFiles();

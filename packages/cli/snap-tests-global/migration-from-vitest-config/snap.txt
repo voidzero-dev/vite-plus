@@ -40,10 +40,10 @@ export default defineConfig({
     "prepare": "vp config"
   },
   "devDependencies": {
-    "@vitest/browser-playwright": "4.1.9",
+    "@vitest/browser-playwright": "<semver>",
     "vite": "catalog:",
     "vitest": "catalog:",
-    "@vitest/browser-webdriverio": "4.1.9",
+    "@vitest/browser-webdriverio": "<semver>",
     "webdriverio": "*",
     "playwright": "*",
     "vite-plus": "catalog:"

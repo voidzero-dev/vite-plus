@@ -214,11 +214,33 @@ describe('rewritePackageJson', () => {
     }
   });
 
-  it('does not auto-add vitest on a pure normalize pass (only on actual vite/vitest/REMOVE migrations)', async () => {
+  it('adds a direct vitest for a vitest-adjacent dep even when vite-plus is already present', async () => {
+    // `vitest-browser-svelte` declares a NON-optional `vitest` peer. Even though
+    // `vite-plus` is already here (bundling vitest transitively), a strict pnpm /
+    // Yarn PnP layout won't expose that transitive vitest to the package root, so
+    // the peer can't resolve. The migrator must pin a direct `vitest` regardless of
+    // whether `vite-plus` is already present.
     const pkg = {
       devDependencies: {
         'vite-plus': '^0.1.20',
         'vitest-browser-svelte': '^1.0.0',
+      },
+    };
+
+    rewritePackageJson(pkg, PackageManager.pnpm, true);
+
+    expect(pkg.devDependencies['vite-plus']).toBe('catalog:');
+    expect((pkg.devDependencies as Record<string, string>).vitest).toBe('catalog:');
+  });
+
+  it('does not auto-add vitest on a genuine normalize pass (no browser mode, no vitest-adjacent dep)', async () => {
+    // vite-plus present, nothing vitest-adjacent, no browser mode -> nothing to
+    // pin. needDirectVitest stays false and the package is left untouched beyond
+    // the vite-plus spec normalization.
+    const pkg = {
+      devDependencies: {
+        'vite-plus': '^0.1.20',
+        '@scope/some-plugin': '^1.0.0',
       },
     };
 

@@ -57,3 +57,21 @@ vp update vite-plus @voidzero-dev/vite-plus-core
 ```
 
 You can verify with `vp outdated` that no Vite+ packages remain outdated.
+
+### Updating the Vitest Pin
+
+If you migrated with `vp migrate`, your project pins `vitest` to an exact version so the whole project shares a single Vitest copy with the bundled `vp test` runner. The pin lives in your package manager's override block:
+
+- **npm / Bun:** a `vitest` entry under `overrides` in `package.json`
+- **Yarn:** a `vitest` entry under `resolutions` in `package.json`
+- **pnpm:** a `vitest` entry under `overrides` in `pnpm-workspace.yaml` — unless your `package.json` already had a `pnpm` field, in which case it lives under `pnpm.overrides` in `package.json` instead (pnpm ignores `pnpm-workspace.yaml` overrides when `package.json` defines `pnpm.overrides`)
+
+A Vite+ release can bump the bundled Vitest. Because that pin also applies to `vite-plus`'s own `vitest` dependency, an out-of-date pin keeps installing the previous runner even after you upgrade `vite-plus` — splitting Vitest's internals (mocks, `expect`, runner state) between the pinned copy and the one `vp test` loads.
+
+After upgrading `vite-plus`, re-pin `vitest` to the version Vite+ now bundles. Check that version with:
+
+```bash
+vp --version
+```
+
+Then set the `vitest` override to that exact version, or rerun `vp migrate` to update the pin for you.
