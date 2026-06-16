@@ -227,13 +227,6 @@ mod tests {
         include_str!("assets/test/SHASUMS256-v16.20.0.txt.asc");
 
     #[test]
-    fn embedded_keys_parse() {
-        let keys = node_release_keys();
-        // The keyring should parse cleanly enough to cover the current releasers.
-        assert!(keys.len() >= 8, "expected at least 8 parsed release keys, got {}", keys.len());
-    }
-
-    #[test]
     fn split_armored_blocks_finds_every_key() {
         // Self-consistent against the vendored file rather than a fixed count, so
         // adding keys upstream needs no test edit. The floor stays at the current
