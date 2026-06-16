@@ -91,8 +91,19 @@ const viteOverrideTgz = isBunProject ? `vite-7.99.0.tgz` : `voidzero-dev-vite-pl
 
 // Mirror VITE_PLUS_OVERRIDE_PACKAGES: pin `vitest` only. The `@vitest/*` family
 // are exact deps of `vitest`, so a single `vitest` override cascades them.
+//
+// Coverage providers are intentionally NOT in the shipped override map (the
+// product leaves them user-owned; the runtime guard fail-fasts on a skew). But
+// this rig FORCE-INSTALLS the locally built vitest, and many ecosystem projects
+// pin an older `@vitest/coverage-*` in their lockfile. Without alignment, the
+// forced runner (4.1.9) skews from the project's pinned provider and the guard
+// aborts `vp test --coverage` — testing an incoherent combo no real install has.
+// Pin the providers here so the E2E coverage step runs against a consistent
+// runner+provider pair, exactly as a user who followed the guard's advice would.
 const vitestOverrides = {
   vitest: VITEST_VERSION,
+  '@vitest/coverage-v8': VITEST_VERSION,
+  '@vitest/coverage-istanbul': VITEST_VERSION,
 };
 
 execSync(`${cli} migrate --no-agent --no-interactive`, {
