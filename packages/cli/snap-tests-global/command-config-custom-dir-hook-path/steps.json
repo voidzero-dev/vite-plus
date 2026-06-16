@@ -1,7 +1,7 @@
 {
   "commands": [
     { "command": "git init", "ignoreOutput": true },
-    { "command": "vp config --hooks-only --hooks-dir .config/husky", "ignoreOutput": true },
+    { "command": "vp config --no-agent --hooks-dir .config/husky", "ignoreOutput": true },
     {
       "command": "mkdir -p node_modules/.bin && printf '#!/usr/bin/env sh\\necho hook-path-ok' > node_modules/.bin/test-hook-cmd && chmod +x node_modules/.bin/test-hook-cmd",
       "ignoreOutput": true

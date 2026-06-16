@@ -7,7 +7,6 @@ Options:
   --hooks-dir <path>  Custom hooks directory (default: .vite-hooks)
   --no-hooks          Skip hook installation
   --no-agent          Skip updating coding agent instructions
-  --hooks-only        Install hooks without updating agent instructions
   -h, --help          Show this help message
 
 Environment:
@@ -25,7 +24,6 @@ Options:
   --hooks-dir <path>  Custom hooks directory (default: .vite-hooks)
   --no-hooks          Skip hook installation
   --no-agent          Skip updating coding agent instructions
-  --hooks-only        Install hooks without updating agent instructions
   -h, --help          Show this help message
 
 Environment:
@@ -43,7 +41,6 @@ Options:
   --hooks-dir <path>  Custom hooks directory (default: .vite-hooks)
   --no-hooks          Skip hook installation
   --no-agent          Skip updating coding agent instructions
-  --hooks-only        Install hooks without updating agent instructions
   -h, --help          Show this help message
 
 Environment:

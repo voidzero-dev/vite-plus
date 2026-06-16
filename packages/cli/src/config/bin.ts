@@ -18,7 +18,7 @@ import { install } from './hooks.ts';
 
 async function main() {
   const args = mri(process.argv.slice(3), {
-    boolean: ['help', 'hooks-only', 'hooks', 'agent'],
+    boolean: ['help', 'hooks', 'agent'],
     string: ['hooks-dir'],
     alias: { h: 'help' },
   });
@@ -38,10 +38,6 @@ async function main() {
             },
             { label: '--no-hooks', description: 'Skip hook installation' },
             { label: '--no-agent', description: 'Skip updating coding agent instructions' },
-            {
-              label: '--hooks-only',
-              description: 'Install hooks without updating agent instructions',
-            },
             { label: '-h, --help', description: 'Show this help message' },
           ],
         },
@@ -57,7 +53,6 @@ async function main() {
   }
 
   const dir = args['hooks-dir'] as string | undefined;
-  const hooksOnly = args['hooks-only'] as boolean;
   const skipHooks = args.hooks === false;
   const skipAgent = args.agent === false;
   const interactive = defaultInteractive();
@@ -101,7 +96,7 @@ async function main() {
   }
 
   // --- Step 2: Update agent instructions if Vite+ header exists and is outdated ---
-  if (!hooksOnly && !skipAgent) {
+  if (!skipAgent) {
     updateExistingAgentInstructions(root);
   }
 }
