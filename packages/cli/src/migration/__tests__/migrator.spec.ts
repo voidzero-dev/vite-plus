@@ -3652,18 +3652,21 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(libPkg.installConfig?.hoistingLimits).toBe('none');
   });
 
-  it('denies edgedriver/geckodriver builds in pnpm-workspace.yaml when webdriverio is unused (pnpm v10)', () => {
+  it('does not write an edgedriver/geckodriver default-deny in pnpm-workspace.yaml when webdriverio is unused (pnpm v10)', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({ name: 'test', devDependencies: { vite: '^7.0.0' } }),
     );
     rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
 
+    // edgedriver/geckodriver only reach the tree via the opt-in webdriverio provider (an
+    // OPTIONAL peer of both vite-plus and vitest, so pnpm never auto-installs it). A
+    // non-webdriverio project never installs them, so there is nothing to manage and
+    // vite-plus writes no allowBuilds block at all.
     const yaml = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
-      allowBuilds: Record<string, boolean>;
+      allowBuilds?: Record<string, boolean>;
     };
-    expect(yaml.allowBuilds.edgedriver).toBe(false);
-    expect(yaml.allowBuilds.geckodriver).toBe(false);
+    expect(yaml.allowBuilds).toBeUndefined();
   });
 
   it('allows edgedriver/geckodriver builds when webdriverio is in devDependencies (pnpm v10)', () => {
@@ -3735,7 +3738,7 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(yaml.allowBuilds.geckodriver).toBe(true);
   });
 
-  it('preserves explicit allowBuilds entries on second run (idempotent)', () => {
+  it('preserves explicit allowBuilds entries and adds nothing else on second run (idempotent)', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({ name: 'test', devDependencies: { vite: '^7.0.0' } }),
@@ -3749,9 +3752,10 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     const firstPass = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
       allowBuilds: Record<string, boolean>;
     };
-    // explicit user choice survives, missing entry is added with default deny
+    // explicit user choice survives; with no webdriverio the missing geckodriver entry is
+    // left absent (vite-plus no longer writes a default deny).
     expect(firstPass.allowBuilds.edgedriver).toBe(true);
-    expect(firstPass.allowBuilds.geckodriver).toBe(false);
+    expect('geckodriver' in firstPass.allowBuilds).toBe(false);
 
     rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
     const secondPass = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
@@ -3785,12 +3789,12 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(yaml.allowBuilds.geckodriver).toBe(true);
   });
 
-  it('removes a stale denial when the user later adds the driver as a direct dep on a re-migration (pnpm v10)', () => {
-    // A prior migration wrote `allowBuilds.edgedriver: false`. The user then adds
-    // `edgedriver` directly (their own Selenium setup, no webdriverio) and re-runs:
-    // the migration must REMOVE the stale `false` so pnpm respects the user's own
-    // postinstall approval/prompt instead of keeping their driver blocked. The
-    // not-owned `geckodriver` denial stays.
+  it('leaves a user-authored driver denial untouched on a re-migration (pnpm v10, no webdriverio)', () => {
+    // The user directly depends on `edgedriver` and has denied its build
+    // (`allowBuilds.edgedriver: false`, e.g. their own Selenium setup, no webdriverio).
+    // vite-plus does not manage these postinstalls when webdriverio is unused, so it must
+    // leave the user's denial — and the unrelated geckodriver entry — exactly as-is
+    // rather than deleting a trust decision it never made.
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
@@ -3807,15 +3811,15 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     const yaml = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
       allowBuilds: Record<string, boolean>;
     };
-    expect('edgedriver' in yaml.allowBuilds).toBe(false);
+    expect(yaml.allowBuilds.edgedriver).toBe(false);
     expect(yaml.allowBuilds.geckodriver).toBe(false);
   });
 
   it('preserves a user-approved (true) direct-driver dep on a re-migration (pnpm-workspace.yaml v10)', () => {
     // The user depends on `edgedriver` directly AND has already approved its build
     // (`allowBuilds.edgedriver: true`, e.g. via `pnpm approve-builds`). Re-running
-    // migration (no webdriverio) must PRESERVE that approval — only a stale `false`
-    // denial gets removed, never a deliberate `true`.
+    // migration (no webdriverio) must PRESERVE that approval untouched — vite-plus does
+    // not manage these postinstalls when webdriverio is unused.
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
@@ -3837,10 +3841,11 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(yaml.allowBuilds.geckodriver).toBe(false);
   });
 
-  it('removes an alias-backed (*anchor) stale false denial for a direct-driver dep (pnpm-workspace.yaml v10)', () => {
-    // Valid YAML can express the denial through an anchor/alias. The effective value is
-    // still `false`, so a re-migration that finds the driver as a direct dep must
-    // resolve the alias and remove the stale denial — same as a plain scalar `false`.
+  it('leaves an anchored (&/*) driver denial untouched without crashing (pnpm-workspace.yaml v10, no webdriverio)', () => {
+    // Valid YAML can express the denial through an anchor/alias. With no webdriverio,
+    // vite-plus does not touch allowBuilds, so the anchor (`&deny false`) and its alias
+    // (`*deny`) are both preserved intact — there is no delete that could orphan the
+    // alias and abort serialization with "Unresolved alias".
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
@@ -3857,10 +3862,9 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     const yaml = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
       allowBuilds: Record<string, boolean>;
     };
-    // alias-backed false for the user's direct geckodriver -> removed; not-owned
-    // edgedriver denial stays.
-    expect('geckodriver' in yaml.allowBuilds).toBe(false);
+    // both the anchor-owner and the alias resolve to the preserved `false`.
     expect(yaml.allowBuilds.edgedriver).toBe(false);
+    expect(yaml.allowBuilds.geckodriver).toBe(false);
   });
 
   it('preserves a user-approved (true) direct-driver dep on a re-migration (package.json pnpm sink, v10)', () => {
@@ -3877,8 +3881,8 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     const pnpm = (readJson(path.join(tmpDir, 'package.json')).pnpm ?? {}) as {
       allowBuilds?: Record<string, boolean>;
     };
-    // geckodriver is user-owned + approved -> survives; edgedriver stale false stays
-    // (not user-owned, no webdriverio).
+    // No webdriverio -> vite-plus leaves the whole allowBuilds map untouched: the
+    // user-approved geckodriver `true` and the user's edgedriver `false` both survive.
     expect(pnpm.allowBuilds?.geckodriver).toBe(true);
     expect(pnpm.allowBuilds?.edgedriver).toBe(false);
   });
@@ -3903,7 +3907,7 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(pnpm.allowBuilds?.geckodriver).toBe(true);
   });
 
-  it('writes pnpm.allowBuilds in package.json when pnpm config lives there (pnpm v10)', () => {
+  it('does not write a pnpm.allowBuilds default-deny in package.json when webdriverio is unused (pnpm v10)', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
@@ -3914,11 +3918,12 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     );
     rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
 
+    // No webdriverio -> nothing to manage -> no allowBuilds key added to the pnpm sink
+    // (the webdriverio-present case still writes `true` here — see the flip test below).
     const pnpm = (readJson(path.join(tmpDir, 'package.json')).pnpm ?? {}) as {
       allowBuilds?: Record<string, boolean>;
     };
-    expect(pnpm.allowBuilds?.edgedriver).toBe(false);
-    expect(pnpm.allowBuilds?.geckodriver).toBe(false);
+    expect(pnpm.allowBuilds).toBeUndefined();
   });
 
   it('appends edgedriver/geckodriver to onlyBuiltDependencies on pnpm v9 when webdriverio is used', () => {
@@ -3989,10 +3994,11 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(yaml.allowBuilds.geckodriver).toBe(true);
   });
 
-  it('skips allowBuilds.edgedriver when the user already depends on edgedriver directly (pnpm v10, no webdriverio)', () => {
-    // Non-webdriverio Selenium setup: the user already manages their own
-    // edgedriver postinstall approval, so the migration must not overwrite it
-    // with `false`. geckodriver is not a direct dep and remains denied.
+  it('does not deny a driver the user depends on directly when webdriverio is unused (pnpm v10)', () => {
+    // Non-webdriverio Selenium setup: the user manages their own edgedriver postinstall
+    // approval. The migration writes no deny — neither for the user-owned edgedriver nor
+    // for the not-owned geckodriver (never installed without webdriverio) — so no
+    // allowBuilds block is written and pnpm keeps the user's own approval/prompt.
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
@@ -4003,18 +4009,16 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
 
     const yaml = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
-      allowBuilds: Record<string, boolean>;
+      allowBuilds?: Record<string, boolean>;
     };
-    expect(yaml.allowBuilds).not.toHaveProperty('edgedriver');
-    expect(yaml.allowBuilds.geckodriver).toBe(false);
+    expect(yaml.allowBuilds).toBeUndefined();
   });
 
   it('auto-allows a user direct driver dep when webdriverio is present (pnpm v10)', () => {
     // The user depends on edgedriver directly AND uses webdriverio (which also
     // needs the driver built). The webdriverio signal makes builds allowed, so
     // write `allowBuilds.edgedriver = true` rather than leaving the key absent —
-    // a driver webdriverio needs built must not be left to a pnpm prompt. The
-    // direct-dep skip only suppresses the `false` deny path (no webdriverio).
+    // a driver webdriverio needs built must not be left to a pnpm prompt.
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
@@ -4035,7 +4039,7 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(yaml.allowBuilds.geckodriver).toBe(true);
   });
 
-  it('writes both driver allowBuilds entries when no driver is a direct dep (regression guard)', () => {
+  it('writes no driver allowBuilds entries when no driver is a direct dep and webdriverio is unused (regression guard)', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({ name: 'test', devDependencies: { vite: '^7.0.0' } }),
@@ -4043,13 +4047,12 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
 
     const yaml = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
-      allowBuilds: Record<string, boolean>;
+      allowBuilds?: Record<string, boolean>;
     };
-    expect(yaml.allowBuilds.edgedriver).toBe(false);
-    expect(yaml.allowBuilds.geckodriver).toBe(false);
+    expect(yaml.allowBuilds).toBeUndefined();
   });
 
-  it('skips pnpm.allowBuilds.edgedriver when the user already depends on edgedriver directly (package.json pnpm config)', () => {
+  it('does not deny a driver the user depends on directly when webdriverio is unused (package.json pnpm config)', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
@@ -4063,15 +4066,13 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     const pkg = readJson(path.join(tmpDir, 'package.json')) as {
       pnpm?: { allowBuilds?: Record<string, boolean> };
     };
-    expect(pkg.pnpm?.allowBuilds).not.toHaveProperty('edgedriver');
-    expect(pkg.pnpm?.allowBuilds?.geckodriver).toBe(false);
+    expect(pkg.pnpm?.allowBuilds).toBeUndefined();
   });
 
-  it('skips workspace-yaml allowBuilds for a driver a sub-package depends on directly (monorepo, pnpm v10, no webdriverio)', () => {
-    // A sub-package has its own edgedriver postinstall approval but nothing in
-    // the workspace uses webdriverio. The monorepo path must not overwrite the
-    // user-owned edgedriver with `false`; geckodriver is not a direct dep and
-    // remains denied.
+  it('writes no workspace-yaml allowBuilds for a monorepo with a direct driver dep but no webdriverio (pnpm v10)', () => {
+    // A sub-package has its own edgedriver postinstall approval but nothing in the
+    // workspace uses webdriverio. The migration writes no deny for either driver, so the
+    // sub-package's own edgedriver approval is left to pnpm.
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({ name: 'root', devDependencies: {} }),
@@ -4093,19 +4094,16 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     rewriteMonorepo(workspaceInfo, true);
 
     const yaml = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
-      allowBuilds: Record<string, boolean>;
+      allowBuilds?: Record<string, boolean>;
     };
-    expect(yaml.allowBuilds).not.toHaveProperty('edgedriver');
-    expect(yaml.allowBuilds.geckodriver).toBe(false);
+    expect(yaml.allowBuilds).toBeUndefined();
   });
 
-  it('skips allowBuilds for a driver the workspace ROOT depends on directly (monorepo, pnpm v10, no webdriverio)', () => {
-    // The workspace root has its own geckodriver postinstall approval but
-    // nothing uses webdriverio. The monorepo root contribution to
-    // `collectWorkspaceDirectDriverDeps` must keep geckodriver out of the
-    // force-denied set; edgedriver is not a direct dep and remains denied.
-    // In non-force mode the root pnpm config is normalized into
-    // pnpm-workspace.yaml, so that is the operative allowBuilds sink here.
+  it('writes no allowBuilds for a monorepo where the ROOT has a direct driver dep but no webdriverio (pnpm v10)', () => {
+    // The workspace root has its own geckodriver postinstall approval but nothing uses
+    // webdriverio. The migration writes no deny for either driver; the root's own
+    // geckodriver approval is left to pnpm. In non-force mode the root pnpm config is
+    // normalized into pnpm-workspace.yaml, so that is the operative allowBuilds sink.
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
@@ -4127,10 +4125,9 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     rewriteMonorepo(workspaceInfo, true);
 
     const yaml = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
-      allowBuilds: Record<string, boolean>;
+      allowBuilds?: Record<string, boolean>;
     };
-    expect(yaml.allowBuilds).not.toHaveProperty('geckodriver');
-    expect(yaml.allowBuilds.edgedriver).toBe(false);
+    expect(yaml.allowBuilds).toBeUndefined();
   });
 
   it('auto-allows a direct driver dep when another workspace package uses webdriverio (monorepo, pnpm v10)', () => {
@@ -4138,8 +4135,7 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     // uses webdriverio (which also needs edgedriver/geckodriver built). The
     // allowBuilds sink is workspace-global, so the webdriverio signal must write
     // `true` for BOTH drivers — including the one a package depends on directly.
-    // Leaving edgedriver absent would force a pnpm prompt for a build webdriverio
-    // needs. (The direct-dep skip only applies on the no-webdriverio deny path.)
+    // Leaving edgedriver absent would force a pnpm prompt for a build webdriverio needs.
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({ name: 'root', devDependencies: {} }),

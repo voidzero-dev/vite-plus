@@ -48,9 +48,6 @@ overrides:
   vite: 'catalog:'
   vitest: 'catalog:'
   react-click-away-listener>react: <semver>
-allowBuilds:
-  edgedriver: false
-  geckodriver: false
 peerDependencyRules:
   allowAny:
     - vite

@@ -67,9 +67,6 @@ catalog:
   vite: npm:@voidzero-dev/vite-plus-core@latest
   vitest: <semver>
   vite-plus: latest
-allowBuilds:
-  edgedriver: false
-  geckodriver: false
 overrides:
   vite: "catalog:"
   vitest: "catalog:"

@@ -1488,7 +1488,6 @@ export function rewriteStandaloneProject(
   let shouldRewritePnpmWorkspaceYaml = false;
   let shouldAddPnpmWorkspaceVitePlusOverride = false;
   let shouldAllowBrowserProviderBuilds = false;
-  let directDriverDeps: Set<string> = new Set();
   // Determined inside editJsonFile callback to avoid a redundant file read
   let usePnpmWorkspaceYaml = false;
   editJsonFile<{
@@ -1511,7 +1510,6 @@ export function rewriteStandaloneProject(
   }>(packageJsonPath, (pkg) => {
     shouldAllowBrowserProviderBuilds =
       hasOwnWebdriverioDependency(pkg) || usesWebdriverioProvider(projectPath);
-    directDriverDeps = collectDirectDriverDeps(pkg);
     // Strip stale `vite-plus-test` wrapper aliases before injecting new overrides
     // so the deleted wrapper doesn't survive migration in any sink.
     pruneLegacyWrapperAliases(pkg.resolutions);
@@ -1606,7 +1604,6 @@ export function rewriteStandaloneProject(
           pkg.pnpm,
           pnpmMajorVersion,
           shouldAllowBrowserProviderBuilds,
-          directDriverDeps,
         );
       }
     }
@@ -1636,12 +1633,7 @@ export function rewriteStandaloneProject(
   });
 
   if (shouldRewritePnpmWorkspaceYaml) {
-    rewritePnpmWorkspaceYaml(
-      projectPath,
-      pnpmMajorVersion,
-      shouldAllowBrowserProviderBuilds,
-      directDriverDeps,
-    );
+    rewritePnpmWorkspaceYaml(projectPath, pnpmMajorVersion, shouldAllowBrowserProviderBuilds);
   }
 
   // Move remaining non-Vite pnpm.overrides to pnpm-workspace.yaml
@@ -1703,17 +1695,12 @@ export function rewriteMonorepo(
     workspaceInfo.rootDir,
     workspaceInfo.packages,
   );
-  const workspaceDirectDriverDeps = collectWorkspaceDirectDriverDeps(
-    workspaceInfo.rootDir,
-    workspaceInfo.packages,
-  );
   // rewrite root workspace
   if (workspaceInfo.packageManager === PackageManager.pnpm) {
     rewritePnpmWorkspaceYaml(
       workspaceInfo.rootDir,
       pnpmMajorVersion,
       workspaceShouldAllowBrowserBuilds,
-      workspaceDirectDriverDeps,
     );
   } else if (workspaceInfo.packageManager === PackageManager.yarn) {
     rewriteYarnrcYml(workspaceInfo.rootDir);
@@ -1728,7 +1715,6 @@ export function rewriteMonorepo(
     workspaceInfo.packages,
     pnpmMajorVersion,
     workspaceShouldAllowBrowserBuilds,
-    workspaceDirectDriverDeps,
   );
   // (mergeViteConfigFiles below will sanitize the merged lint config
   // against this workspace's full package set.)
@@ -1884,7 +1870,6 @@ function rewritePnpmWorkspaceYaml(
   projectPath: string,
   pnpmMajorVersion: number | undefined,
   shouldAllowBrowserBuilds: boolean,
-  directDriverDeps: Set<string> = new Set(),
 ): void {
   const pnpmWorkspaceYamlPath = path.join(projectPath, 'pnpm-workspace.yaml');
   if (!fs.existsSync(pnpmWorkspaceYamlPath)) {
@@ -1895,12 +1880,7 @@ function rewritePnpmWorkspaceYaml(
     // catalog
     rewriteCatalog(doc);
     if (pnpmMajorVersion !== undefined) {
-      applyBuildAllowanceToWorkspaceYaml(
-        doc,
-        pnpmMajorVersion,
-        shouldAllowBrowserBuilds,
-        directDriverDeps,
-      );
+      applyBuildAllowanceToWorkspaceYaml(doc, pnpmMajorVersion, shouldAllowBrowserBuilds);
     }
 
     // overrides
@@ -2106,35 +2086,6 @@ function hasOwnWebdriverioDependency(pkg: DependencyBag): boolean {
   return false;
 }
 
-// True iff `driverName` appears directly in any of the user's dependency
-// fields. Used to skip writing `allowBuilds[driverName] = false` so we don't
-// override a user-managed postinstall approval for a driver they depend on
-// directly (e.g. a non-webdriverio Selenium setup).
-function hasOwnDriverPostinstallDependency(pkg: DependencyBag, driverName: string): boolean {
-  return Boolean(
-    pkg.dependencies?.[driverName] ??
-    pkg.devDependencies?.[driverName] ??
-    pkg.optionalDependencies?.[driverName] ??
-    pkg.peerDependencies?.[driverName],
-  );
-}
-
-// Collect drivers that already appear as direct dependencies of `pkg` so the
-// allowBuilds writers can skip them. Returning a Set keeps the worker
-// functions ignorant of the package.json shape.
-function collectDirectDriverDeps(pkg: DependencyBag | undefined): Set<string> {
-  const result = new Set<string>();
-  if (!pkg) {
-    return result;
-  }
-  for (const driver of BROWSER_PROVIDER_POSTINSTALL_PACKAGES) {
-    if (hasOwnDriverPostinstallDependency(pkg, driver)) {
-      result.add(driver);
-    }
-  }
-  return result;
-}
-
 function workspaceUsesWebdriverio(
   rootDir: string,
   packages: WorkspacePackage[] | undefined,
@@ -2166,29 +2117,6 @@ function workspaceUsesWebdriverio(
   return false;
 }
 
-// Union of drivers directly depended on anywhere in the workspace (root + every
-// sub-package). Mirrors `workspaceUsesWebdriverio`'s traversal so the monorepo
-// allowBuilds writers skip user-owned drivers exactly like the standalone path.
-function collectWorkspaceDirectDriverDeps(
-  rootDir: string,
-  packages: WorkspacePackage[] | undefined,
-): Set<string> {
-  const result = new Set<string>();
-  const rootPkg = readPackageJsonIfExists(path.join(rootDir, 'package.json'));
-  for (const driver of collectDirectDriverDeps(rootPkg)) {
-    result.add(driver);
-  }
-  if (packages) {
-    for (const pkg of packages) {
-      const subPkg = readPackageJsonIfExists(path.join(rootDir, pkg.path, 'package.json'));
-      for (const driver of collectDirectDriverDeps(subPkg)) {
-        result.add(driver);
-      }
-    }
-  }
-  return result;
-}
-
 function readPackageJsonIfExists(packageJsonPath: string): DependencyBag | undefined {
   if (!fs.existsSync(packageJsonPath)) {
     return undefined;
@@ -2217,33 +2145,23 @@ function applyBuildAllowanceToPackageJsonPnpm(
   },
   major: number,
   shouldAllow: boolean,
-  directDriverDeps: Set<string> = new Set(),
 ): void {
   if (major >= 10) {
-    pnpm.allowBuilds ??= {};
-    for (const name of BROWSER_PROVIDER_POSTINSTALL_PACKAGES) {
-      if (shouldAllow) {
-        // WebdriverIO present -> the edgedriver/geckodriver postinstall MUST run.
-        // Write `true` unconditionally, OVERWRITING any stale `false` a prior
-        // WebdriverIO-less migration left behind (a re-run after adding WebdriverIO
-        // would otherwise keep the driver build blocked). A user-owned driver that
-        // WebdriverIO also needs built must not be left to a prompt either.
-        pnpm.allowBuilds[name] = true;
-      } else if (directDriverDeps.has(name)) {
-        // User depends on this driver directly (e.g. their own Selenium setup): leave
-        // the key ABSENT so pnpm preserves their own approval/prompt. Remove ONLY a
-        // stale `false` a prior migration wrote — otherwise the re-run keeps the user's
-        // own driver build blocked. Preserve an existing `true`: that is the user's
-        // recorded postinstall approval, which deleting would silently revoke.
-        if (pnpm.allowBuilds[name] === false) {
-          delete pnpm.allowBuilds[name];
-        }
-      } else if (!(name in pnpm.allowBuilds)) {
-        // No WebdriverIO and not user-owned -> default-deny the untrusted postinstall,
-        // but never clobber an entry the user (or a prior run) set intentionally.
-        pnpm.allowBuilds[name] = false;
+    if (shouldAllow) {
+      // WebdriverIO present -> the edgedriver/geckodriver postinstall MUST run. Write
+      // `true`, OVERWRITING any stale `false` a prior WebdriverIO-less migration left
+      // behind (a re-run after adding WebdriverIO would otherwise keep the driver build
+      // blocked).
+      for (const name of BROWSER_PROVIDER_POSTINSTALL_PACKAGES) {
+        (pnpm.allowBuilds ??= {})[name] = true;
       }
     }
+    // No WebdriverIO -> vite-plus does NOT manage these postinstalls. edgedriver and
+    // geckodriver reach the tree only via the opt-in webdriverio provider (an OPTIONAL
+    // peer of both vite-plus and vitest, so pnpm never auto-installs it); a project that
+    // does not use it never installs them, so there is nothing to allow or deny. We
+    // write nothing and leave any user-authored allowBuilds entry (their own trust
+    // decision) untouched.
   } else if (shouldAllow) {
     // v9 onlyBuiltDependencies is an allow-list — omission is denial, so we
     // only mutate when the user actually needs these packages built.
@@ -2263,45 +2181,30 @@ function applyBuildAllowanceToWorkspaceYaml(
   doc: YamlDocument,
   major: number,
   shouldAllow: boolean,
-  directDriverDeps: Set<string> = new Set(),
 ): void {
   if (major >= 10) {
-    let allowBuilds = doc.getIn(['allowBuilds']) as YAMLMap<Scalar<string>, Scalar<boolean>>;
-    if (!(allowBuilds instanceof YAMLMap)) {
-      allowBuilds = new YAMLMap<Scalar<string>, Scalar<boolean>>();
-    }
-    const existingKeys = new Set(allowBuilds.items.map((n) => n.key.value));
-    // Effective values with YAML anchors/aliases resolved (`&a false` / `*a`), so the
-    // stale-`false` check below matches alias-backed denials too — keeping this sink
-    // equivalent to the plain-JSON package.json sink for every value shape a tool emits
-    // (pnpm writes flat `<pkg>: <bool>`). `<<` merge keys are NOT resolved (the reader
-    // does not enable YAML merge); a merge-backed denial — which no tooling produces —
-    // is conservatively left in place rather than removed (a no-op, never a wrong
-    // mutation).
-    const resolvedValues = (allowBuilds.toJS(doc) ?? {}) as Record<string, unknown>;
-    for (const name of BROWSER_PROVIDER_POSTINSTALL_PACKAGES) {
-      if (shouldAllow) {
-        // WebdriverIO present -> the edgedriver/geckodriver postinstall MUST run.
-        // Set `true`, OVERWRITING any stale `false` a prior WebdriverIO-less migration
-        // left behind (a re-run after adding WebdriverIO would otherwise keep the
-        // driver build blocked). A user-owned driver WebdriverIO also needs built must
-        // not be left to a prompt either.
+    if (shouldAllow) {
+      // WebdriverIO present -> the edgedriver/geckodriver postinstall MUST run. Set
+      // `true`, OVERWRITING any stale `false` a prior WebdriverIO-less migration left
+      // behind (a re-run after adding WebdriverIO would otherwise keep the driver build
+      // blocked). Mutate an existing map in place (preserving its document position);
+      // only attach a freshly created one.
+      const existing = doc.getIn(['allowBuilds']);
+      const isNew = !(existing instanceof YAMLMap);
+      const allowBuilds = isNew
+        ? new YAMLMap<Scalar<string>, Scalar<boolean>>()
+        : (existing as YAMLMap<Scalar<string>, Scalar<boolean>>);
+      for (const name of BROWSER_PROVIDER_POSTINSTALL_PACKAGES) {
         allowBuilds.set(scalarString(name), new Scalar(true));
-      } else if (directDriverDeps.has(name)) {
-        // User depends on this driver directly: leave the key ABSENT so pnpm preserves
-        // their own approval/prompt. Remove ONLY a stale `false` a prior migration
-        // wrote; preserve an existing `true` (the user's recorded postinstall approval,
-        // which deleting would silently revoke).
-        if (resolvedValues[name] === false) {
-          allowBuilds.delete(name);
-        }
-      } else if (!existingKeys.has(name)) {
-        // No WebdriverIO and not user-owned -> default-deny the untrusted postinstall,
-        // but never clobber an entry the user (or a prior run) set intentionally.
-        allowBuilds.set(scalarString(name), new Scalar(false));
+      }
+      if (isNew) {
+        doc.setIn(['allowBuilds'], allowBuilds);
       }
     }
-    doc.setIn(['allowBuilds'], allowBuilds);
+    // No WebdriverIO -> vite-plus does NOT manage these postinstalls and leaves any
+    // user-authored allowBuilds entry untouched (see the package.json sink rationale).
+    // The drivers reach the tree only via the opt-in webdriverio provider, so a project
+    // that does not use it never installs them and there is nothing to allow or deny.
   } else if (shouldAllow) {
     let onlyBuiltDependencies = doc.getIn(['onlyBuiltDependencies']) as YAMLSeq<Scalar<string>>;
     if (!(onlyBuiltDependencies instanceof YAMLSeq)) {
@@ -2967,7 +2870,6 @@ function rewriteRootWorkspacePackageJson(
   packages?: WorkspacePackage[],
   pnpmMajorVersion?: number,
   shouldAllowBrowserBuilds = false,
-  directDriverDeps: Set<string> = new Set(),
 ): void {
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
@@ -3069,12 +2971,7 @@ function rewriteRootWorkspacePackageJson(
         }
       }
       if (pnpmMajorVersion !== undefined && pkg.pnpm) {
-        applyBuildAllowanceToPackageJsonPnpm(
-          pkg.pnpm,
-          pnpmMajorVersion,
-          shouldAllowBrowserBuilds,
-          directDriverDeps,
-        );
+        applyBuildAllowanceToPackageJsonPnpm(pkg.pnpm, pnpmMajorVersion, shouldAllowBrowserBuilds);
       }
     }
 
