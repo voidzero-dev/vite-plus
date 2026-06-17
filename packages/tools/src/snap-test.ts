@@ -265,9 +265,7 @@ function replaceInstalledCheckoutPackages(rootDir: string, repoRoot: string): vo
   const replacements = new Map([
     ['node_modules/vite-plus', path.join(repoRoot, 'packages', 'cli')],
     ['node_modules/vite', path.join(repoRoot, 'packages', 'core')],
-    ['node_modules/vitest', path.join(repoRoot, 'packages', 'test')],
     ['node_modules/@voidzero-dev/vite-plus-core', path.join(repoRoot, 'packages', 'core')],
-    ['node_modules/@voidzero-dev/vite-plus-test', path.join(repoRoot, 'packages', 'test')],
   ]);
 
   while (stack.length > 0) {

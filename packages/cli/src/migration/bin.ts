@@ -29,6 +29,7 @@ import { hasVitePlusDependency, readNearestPackageJson } from '../utils/package.
 import { displayRelative } from '../utils/path.ts';
 import {
   cancelAndExit,
+  type CommandRunSummary,
   defaultInteractive,
   downloadPackageManager,
   promptGitHooks,
@@ -36,7 +37,7 @@ import {
   selectPackageManager,
   upgradeYarn,
 } from '../utils/prompts.ts';
-import { accent, log, muted, printHeader } from '../utils/terminal.ts';
+import { accent, log, muted, printHeader, warnMsg } from '../utils/terminal.ts';
 import {
   confirmBaseUrlFix,
   fixBaseUrlInTsconfig,
@@ -689,11 +690,49 @@ function formatDuration(durationMs: number) {
   return `${Math.round(durationSeconds)}s`;
 }
 
+/**
+ * Reconcile a CommandRunSummary from `runViteInstall` with the migration's
+ * duration counter and exit-code state. `runViteInstall` returns
+ * `{ status: 'failed', exitCode }` without throwing; treating that as a success
+ * (incrementing duration unconditionally) would let the migration claim
+ * "Dependencies installed" while node_modules is desynced from the just-mutated
+ * package.json. This helper centralizes the right handling: credit duration on
+ * success, warn + flip exitCode on failure, stay silent on skip.
+ */
+function handleInstallResult(
+  installSummary: CommandRunSummary,
+  rootDir: string,
+  report: MigrationReport,
+  // The pre-migration "initial" install is best-effort: the migration proceeds
+  // regardless of its outcome, and a post-migration "final" install runs with
+  // `--force` / `--no-frozen-lockfile` as the authoritative recovery. Only that
+  // final install's failure should flip `process.exitCode` so a successful
+  // recovery yields exit 0; the initial failure is still surfaced via
+  // `report.warnings` + the warn message.
+  options?: { propagateExitCode?: boolean },
+): number {
+  if (installSummary.status === 'installed') {
+    return installSummary.durationMs;
+  }
+  if (installSummary.status === 'failed') {
+    const exitCode = installSummary.exitCode ?? 1;
+    const message = `Dependency installation failed (exit code ${exitCode}). Run \`vp install\` manually in ${rootDir} to resync node_modules.`;
+    warnMsg(message);
+    report.warnings.push(message);
+    if (options?.propagateExitCode !== false) {
+      process.exitCode = exitCode;
+    }
+    return 0;
+  }
+  return 0;
+}
+
 function showMigrationSummary(options: {
   projectRoot: string;
   packageManager: string;
   packageManagerVersion: string;
   installDurationMs: number;
+  finalInstallOk: boolean;
   report: MigrationReport;
   updatedExistingVitePlus?: boolean;
 }) {
@@ -702,6 +741,7 @@ function showMigrationSummary(options: {
     packageManager,
     packageManagerVersion,
     installDurationMs,
+    finalInstallOk,
     report,
     updatedExistingVitePlus,
   } = options;
@@ -723,7 +763,11 @@ function showMigrationSummary(options: {
   log(
     `${styleText('gray', '•')} Node ${process.versions.node}  ${packageManager} ${packageManagerVersion}`,
   );
-  if (installDurationMs > 0) {
+  // Gate the green success line on the FINAL install actually succeeding.
+  // A nonzero duration could come from a successful pre-migration install
+  // followed by a failed post-migration reinstall — in that case node_modules
+  // is desynced and reporting success would mislead the user.
+  if (finalInstallOk && installDurationMs > 0) {
     log(
       `${styleText('green', '✓')} Dependencies installed in ${formatDuration(installDurationMs)}`,
     );
@@ -857,6 +901,7 @@ async function executeMigrationPlan(
   interactive: boolean,
 ): Promise<{
   installDurationMs: number;
+  finalInstallOk: boolean;
   packageManagerVersion: string;
   report: MigrationReport;
 }> {
@@ -1028,12 +1073,14 @@ async function executeMigrationPlan(
   );
 
   // 12. Reinstall after migration
-  // npm needs --force to re-resolve packages with newly added overrides,
-  // otherwise the stale lockfile prevents override resolution.
+  // The migration intentionally rewrites overrides/catalogs/deps, so the
+  // existing lockfile is guaranteed to be stale. Tell each package manager to
+  // re-resolve instead of refusing the install (pnpm/yarn default to
+  // frozen-lockfile under CI, npm/bun need an explicit --force).
   const installArgs =
     plan.packageManager === PackageManager.npm || plan.packageManager === PackageManager.bun
       ? ['--force']
-      : undefined;
+      : ['--no-frozen-lockfile'];
   updateMigrationProgress('Installing dependencies');
   const finalInstallSummary = await runViteInstall(
     workspaceInfo.rootDir,
@@ -1047,8 +1094,24 @@ async function executeMigrationPlan(
   );
 
   clearMigrationProgress();
+  // Process the initial install first so the final install's exit code "wins":
+  // if the initial install failed but the final install succeeded, the
+  // migration should still report success (exit 0). The initial call opts out
+  // of exitCode propagation; only the final call may flip process.exitCode.
+  const initialInstallDurationMs = handleInstallResult(
+    initialInstallSummary,
+    workspaceInfo.rootDir,
+    report,
+    { propagateExitCode: false },
+  );
+  const finalInstallDurationMs = handleInstallResult(
+    finalInstallSummary,
+    workspaceInfo.rootDir,
+    report,
+  );
   return {
-    installDurationMs: initialInstallSummary.durationMs + finalInstallSummary.durationMs,
+    installDurationMs: initialInstallDurationMs + finalInstallDurationMs,
+    finalInstallOk: finalInstallSummary.status === 'installed',
     packageManagerVersion: downloadResult.version,
     report,
   };
@@ -1076,6 +1139,7 @@ async function main() {
   if (hasVitePlusDependency(rootPkg) && !isForceOverrideMode()) {
     let didMigrate = false;
     let installDurationMs = 0;
+    let finalInstallOk = true;
     const report = createMigrationReport();
     const migrationProgress = options.interactive
       ? prompts.spinner({ indicator: 'timer' })
@@ -1191,7 +1255,6 @@ async function main() {
     );
 
     let needsInstall = false;
-    let forceInstall = false;
     if (vitePlusBootstrapPending) {
       const downloadResult = await ensureExistingPackageManager();
       if (downloadResult && packageManager) {
@@ -1206,9 +1269,6 @@ async function main() {
         );
         didMigrate = bootstrapResult.changed || didMigrate;
         needsInstall = bootstrapResult.changed || needsInstall;
-        forceInstall =
-          bootstrapResult.changed &&
-          (packageManager === PackageManager.npm || packageManager === PackageManager.bun);
       }
     }
 
@@ -1335,21 +1395,33 @@ async function main() {
       const installSummary = await runViteInstall(
         workspaceInfoOptional.rootDir,
         options.interactive,
-        forceInstall ? ['--force'] : undefined,
+        // Migration steps rewrote package.json/config, so the lockfile is now
+        // stale; tell each package manager to re-resolve instead of refusing
+        // (pnpm/yarn default to frozen-lockfile under CI, npm/bun need --force).
+        packageManager === PackageManager.npm || packageManager === PackageManager.bun
+          ? ['--force']
+          : ['--no-frozen-lockfile'],
         {
           silent: true,
           packageManager,
           packageManagerVersion: resolvedVersion,
         },
       );
-      installDurationMs += installSummary.durationMs;
+      // Route the install result through the shared helper (mirrors the full
+      // migration path and is enforced by install-failure-guard.spec): a failed
+      // install warns, appends to report.warnings, and flips process.exitCode
+      // rather than being silently credited as a successful migration. Clear the
+      // spinner first only on failure so the warning isn't interleaved with it;
+      // on success handleInstallResult returns durationMs, so the credited
+      // duration is unchanged.
       if (installSummary.status === 'failed') {
         clearMigrationProgress();
-        cancelAndExit(
-          'Dependency installation failed. Run `vp install` manually and re-run `vp migrate`.',
-          1,
-        );
       }
+      installDurationMs += handleInstallResult(
+        installSummary,
+        workspaceInfoOptional.rootDir,
+        report,
+      );
     }
 
     if (plan.selectedAgentTargetPaths && plan.selectedAgentTargetPaths.length > 0) {
@@ -1394,6 +1466,7 @@ async function main() {
         packageManager: packageManager ?? resolvedPackageManager,
         packageManagerVersion,
         installDurationMs,
+        finalInstallOk,
         report,
         updatedExistingVitePlus: !fullMigrationSummary,
       });
@@ -1418,6 +1491,7 @@ async function main() {
     packageManager: plan.packageManager,
     packageManagerVersion: result.packageManagerVersion,
     installDurationMs: result.installDurationMs,
+    finalInstallOk: result.finalInstallOk,
     report: result.report,
   });
 }
