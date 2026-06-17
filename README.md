@@ -113,6 +113,7 @@ Use `vp migrate` to migrate to Vite+. It merges tool-specific config files such 
 
 - **run** - Run monorepo tasks
 - **exec** - Execute a command from local `node_modules/.bin`
+- **node** - Run a Node.js script with the resolved Vite+ environment
 - **dlx** - Execute a package binary without installing it as a dependency
 - **cache** - Manage the task cache
 
@@ -124,7 +125,7 @@ Use `vp migrate` to migrate to Vite+. It merges tool-specific config files such 
 
 #### Manage Dependencies
 
-Vite+ automatically wraps your package manager (pnpm, npm, or Yarn) based on `packageManager` and lockfiles:
+Vite+ automatically wraps your package manager (pnpm, npm, Yarn, or Bun) based on `packageManager` and lockfiles:
 
 - **add** - Add packages to dependencies
 - **remove** (`rm`, `un`, `uninstall`) - Remove packages from dependencies
@@ -135,6 +136,7 @@ Vite+ automatically wraps your package manager (pnpm, npm, or Yarn) based on `pa
 - **why** (`explain`) - Show why a package is installed
 - **info** (`view`, `show`) - View package metadata from the registry
 - **link** (`ln`) / **unlink** - Manage local package links
+- **rebuild** - Rebuild native modules
 - **pm** - Forward a command to the package manager
 
 #### Maintain
