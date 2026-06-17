@@ -26,7 +26,7 @@ packages:
   - packages/*
 catalog:
   vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: npm:@voidzero-dev/vite-plus-test@latest
+  vitest: <semver>
   vite-plus: latest
 overrides:
   vite: "catalog:"
