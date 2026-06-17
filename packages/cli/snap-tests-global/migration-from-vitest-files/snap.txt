@@ -15,6 +15,7 @@
     "prepare": "vp config"
   },
   "devDependencies": {
+    "@vitest/browser-playwright": "<semver>",
     "vite": "catalog:",
     "vitest": "catalog:",
     "playwright": "*",
@@ -32,7 +33,7 @@
 > cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog
 catalog:
   vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: npm:@voidzero-dev/vite-plus-test@latest
+  vitest: <semver>
   vite-plus: latest
 overrides:
   vite: 'catalog:'
@@ -46,7 +47,7 @@ peerDependencyRules:
     vitest: '*'
 
 > cat test/hello.ts # check test/hello.ts
-import { server } from 'vite-plus/test/browser-playwright/context';
+import { server } from 'vite-plus/test/browser/context';
 import { test, describe, expect, it } from 'vite-plus/test';
 
 const { readFile } = server.commands;
