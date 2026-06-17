@@ -9,13 +9,13 @@
   "name": "migration-standalone-npm",
   "devDependencies": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vitest": "npm:@voidzero-dev/vite-plus-test@latest",
+    "vitest": "<semver>",
     "vite-plus": "latest"
   },
   "packageManager": "npm@<semver>",
   "overrides": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+    "vitest": "<semver>"
   }
 }
 
