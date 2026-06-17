@@ -5220,10 +5220,10 @@ export function setupGitHooks(
 
   const vpBin = process.env.VP_CLI_BIN ?? 'vp';
 
-  // Install git hooks via vp config (--hooks-only to skip agent setup, handled by migration)
+  // Install git hooks via vp config (--no-agent to skip agent setup, handled by migration)
   const configArgs = isCustomDir
-    ? ['config', '--hooks-only', '--hooks-dir', hooksDir]
-    : ['config', '--hooks-only'];
+    ? ['config', '--no-agent', '--hooks-dir', hooksDir]
+    : ['config', '--no-agent'];
   const configResult = spawn.sync(vpBin, configArgs, {
     cwd: projectPath,
     stdio: 'pipe',

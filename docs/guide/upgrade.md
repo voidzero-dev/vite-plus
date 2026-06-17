@@ -14,8 +14,10 @@ You can upgrade both of them independently.
 ## Global `vp`
 
 ```bash
-vp upgrade              # upgrade to the latest version
-vp upgrade --check      # check for updates without installing
+vp upgrade                        # upgrade to the latest version
+vp upgrade --check                # check for updates without installing
+vp upgrade <version>              # install a specific version
+vp upgrade --registry <registry>  # use a custom npm registry
 ```
 
 ### Rollback

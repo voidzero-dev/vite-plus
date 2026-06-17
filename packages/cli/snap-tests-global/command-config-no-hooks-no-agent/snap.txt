@@ -1,0 +1,7 @@
+> git init
+> vp config --no-hooks --no-agent # should skip hook installation and agent instruction updates
+> test ! -e .vite-hooks/_/pre-commit && echo 'hooks skipped' # should not install hooks
+hooks skipped
+
+> grep -q 'OUTDATED CONTENT' AGENTS.md && echo 'agent unchanged' || echo 'ERROR: agent updated' # should not update agent instructions
+agent unchanged
