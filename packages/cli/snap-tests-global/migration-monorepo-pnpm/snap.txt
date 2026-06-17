@@ -83,7 +83,7 @@ catalog:
   testnpm2: ^1.0.0
   # test comment here to check if the comment is preserved
   vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: npm:@voidzero-dev/vite-plus-test@latest
+  vitest: <semver>
   vite-plus: latest
 
 minimumReleaseAge: 1440
@@ -106,6 +106,8 @@ minimumReleaseAgeExclude:
   - '@oxlint-tsgolint/*'
   - oxfmt
   - '@oxfmt/*'
+  - vitest
+  - '@vitest/*'
 
 > cat packages/app/package.json # check app package.json
 {

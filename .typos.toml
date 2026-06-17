@@ -5,6 +5,12 @@ Jod = "Jod" # Node.js v22 LTS codename
 flate = "flate" # flate2 crate name (gzip/deflate compression)
 fpr = "fpr" # GPG colon-format record name for a key fingerprint
 
+[default.extend-identifiers]
+# Yarn Plug'n'Play — tokenizer splits `PnP` into the word `Pn`, which typos
+# otherwise wants to autocorrect to `On`. Whitelist the full identifier so
+# the parts aren't tokenized.
+PnP = "PnP"
+
 [files]
 extend-exclude = [
   "**/snap-tests/**/snap.txt",

@@ -3,7 +3,7 @@
 **The Unified Toolchain for the Web**
 _runtime and package management, create, dev, check, test, build, pack, and monorepo task caching in a single dependency_
 
-This package provides the project-local version of Vite+. The global `vite` command automatically delegates to this package for all project-specific tasks.
+This package provides the project-local version of Vite+. The global `vp` command automatically delegates to this package for all project-specific tasks.
 
 ---
 
@@ -111,6 +111,7 @@ Use `vp migrate` to migrate to Vite+. It merges tool-specific config files such 
 
 - **run** - Run monorepo tasks
 - **exec** - Execute a command from local `node_modules/.bin`
+- **node** - Run a Node.js script with the resolved Vite+ environment
 - **dlx** - Execute a package binary without installing it as a dependency
 - **cache** - Manage the task cache
 
@@ -122,7 +123,7 @@ Use `vp migrate` to migrate to Vite+. It merges tool-specific config files such 
 
 #### Manage Dependencies
 
-Vite+ automatically wraps your package manager (pnpm, npm, or Yarn) based on `packageManager` and lockfiles:
+Vite+ automatically wraps your package manager (pnpm, npm, Yarn, or Bun) based on `packageManager` and lockfiles:
 
 - **add** - Add packages to dependencies
 - **remove** (`rm`, `un`, `uninstall`) - Remove packages from dependencies
@@ -133,6 +134,7 @@ Vite+ automatically wraps your package manager (pnpm, npm, or Yarn) based on `pa
 - **why** (`explain`) - Show why a package is installed
 - **info** (`view`, `show`) - View package metadata from the registry
 - **link** (`ln`) / **unlink** - Manage local package links
+- **rebuild** - Rebuild native modules
 - **pm** - Forward a command to the package manager
 
 #### Maintain
@@ -187,12 +189,12 @@ If you are manually migrating a project to Vite+, install these dev dependencies
 npm install -D vite-plus @voidzero-dev/vite-plus-core@latest
 ```
 
-You need to add overrides to your package manager for `vite` and `vitest` so that other packages depending on Vite and Vitest will use the Vite+ versions:
+You need to add overrides to your package manager so that other packages resolve the Vite+ versions: alias `vite` to `@voidzero-dev/vite-plus-core`, and pin `vitest` to the version Vite+ bundles (run `vp --version`) so the whole project shares a single Vitest copy with `vp test`. Without the `vitest` pin, a dependency or workspace package can pull a different Vitest than the bundled runner, splitting Vitest's internals (mocks, `expect`, runner state):
 
 ```json
 "overrides": {
   "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-  "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+  "vitest": "4.1.9"
 }
 ```
 
@@ -201,7 +203,7 @@ If you are using `pnpm`, add this to your `pnpm-workspace.yaml`:
 ```yaml
 overrides:
   vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: npm:@voidzero-dev/vite-plus-test@latest
+  vitest: 4.1.9
 ```
 
 Or, if you are using Yarn:
@@ -209,7 +211,7 @@ Or, if you are using Yarn:
 ```json
 "resolutions": {
   "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-  "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+  "vitest": "4.1.9"
 }
 ```
 

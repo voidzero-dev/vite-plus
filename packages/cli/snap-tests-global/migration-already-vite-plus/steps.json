@@ -1,6 +1,6 @@
 {
   "commands": [
-    "vp migrate --no-interactive # should detect existing vite-plus and exit without setup defaults",
+    "vp migrate --no-interactive # legacy wrapper-override project: rewrites the stale vitest wrapper override to bundled vitest and completes the missing @vitest/* family pins, no hooks/agent setup defaults",
     "vp migrate --no-interactive --hooks --agent agents # explicit setup should still update existing vite-plus project",
     "cat package.json # prepare script should be configured for vp config",
     "test -f AGENTS.md # explicit agent instructions should be written",

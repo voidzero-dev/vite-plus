@@ -9,7 +9,7 @@ allowBuilds:
   core-js: true
 catalog:
   vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: npm:@voidzero-dev/vite-plus-test@latest
+  vitest: <semver>
   vite-plus: latest
 overrides:
   vite: "catalog:"
@@ -37,7 +37,7 @@ allowBuilds:
   core-js: set this to true or false
 catalog:
   vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: npm:@voidzero-dev/vite-plus-test@latest
+  vitest: <semver>
   vite-plus: latest
 overrides:
   vite: "catalog:"
@@ -59,7 +59,7 @@ allowBuilds:
   core-js: true
 catalog:
   vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: npm:@voidzero-dev/vite-plus-test@latest
+  vitest: <semver>
   vite-plus: latest
 overrides:
   vite: "catalog:"
