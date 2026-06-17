@@ -56,7 +56,7 @@ jobs:
 
   Release:
     runs-on: ubuntu-latest
-    environment: release
+    environment: Release
     needs: [check, build-rust, request-approval]
     if: needs.check.outputs.version_changed == 'true'
     permissions:
