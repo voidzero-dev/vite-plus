@@ -1,6 +1,7 @@
-> vp migrate --no-interactive # should detect existing vite-plus and exit without setup defaults
-This project is already using Vite+! Happy coding!
-
+> vp migrate --no-interactive # legacy wrapper-override project: rewrites the stale vitest wrapper override to bundled vitest and completes the missing @vitest/* family pins, no hooks/agent setup defaults
+◇ Migrated . to Vite+
+• Node <semver>  npm <semver>
+• Package manager settings configured
 
 > vp migrate --no-interactive --hooks --agent agents # explicit setup should still update existing vite-plus project
 ◇ Updated .
@@ -15,7 +16,7 @@ This project is already using Vite+! Happy coding!
   },
   "overrides": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+    "vitest": "<semver>"
   },
   "devEngines": {
     "packageManager": {

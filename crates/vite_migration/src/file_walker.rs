@@ -3,9 +3,12 @@ use std::path::{Path, PathBuf};
 use ignore::WalkBuilder;
 use vite_error::Error;
 
-// TODO: only support esm files for now
-/// File extensions to process for import rewriting
-const TS_JS_EXTENSIONS: &[&str] = &["ts", "tsx", "mts", "js", "jsx", "mjs"];
+/// File extensions to process for import rewriting.
+///
+/// Includes CommonJS (`.cjs`/`.cts`) variants in addition to ESM, because
+/// the legacy reverse-migration rules also cover `require('vite-plus/test/browser-*')`
+/// calls that are most commonly found in `.cjs` / `vitest.config.cjs` files.
+const TS_JS_EXTENSIONS: &[&str] = &["ts", "tsx", "mts", "cts", "js", "jsx", "mjs", "cjs"];
 
 /// Result of walking TypeScript/JavaScript files
 #[derive(Debug)]
@@ -164,7 +167,7 @@ mod tests {
 
         let result = find_ts_files(temp.path()).unwrap();
 
-        assert_eq!(result.files.len(), 6);
+        assert_eq!(result.files.len(), 8);
     }
 
     #[test]

@@ -59,22 +59,6 @@ Finished in <variable>ms on 1 file with <variable> rules using <variable> thread
  5 │ 
    ╰────
 
-  × vite-plus(prefer-vite-plus-imports): Use 'vite-plus/test/browser-playwright' instead of '@vitest/browser-playwright' in Vite+ projects.
-   ╭─[src/types.ts:6:16]
- 5 │ 
- 6 │ declare module '@vitest/browser-playwright' {}
-   ·                ────────────────────────────
- 7 │ declare module '@vitest/browser-playwright/context' {}
-   ╰────
-
-  × vite-plus(prefer-vite-plus-imports): Use 'vite-plus/test/browser/context' instead of '@vitest/browser-playwright/context' in Vite+ projects.
-   ╭─[src/types.ts:7:16]
- 6 │ declare module '@vitest/browser-playwright' {}
- 7 │ declare module '@vitest/browser-playwright/context' {}
-   ·                ────────────────────────────────────
- 8 │ 
-   ╰────
-
   × vite-plus(prefer-vite-plus-imports): Use 'vite-plus/client' instead of 'vite/client' in Vite+ projects.
     ╭─[src/types.ts:9:25]
   8 │ 
@@ -83,7 +67,7 @@ Finished in <variable>ms on 1 file with <variable> rules using <variable> thread
  10 │ 
     ╰────
 
-Found 0 warnings and 7 errors.
+Found 0 warnings and 5 errors.
 Finished in <variable>ms on 1 file with <variable> rules using <variable> threads.
 
 > vp lint --fix src/index.ts src/types.ts # rewrite vite and vitest imports via the vite-plus oxlint plugin
@@ -106,8 +90,8 @@ type BrowserContext = typeof import('vite-plus/test/browser/context');
 type BrowserClient = typeof import('vite-plus/test/client');
 type PlaywrightProvider = typeof import('vite-plus/test/browser/providers/playwright');
 
-declare module 'vite-plus/test/browser-playwright' {}
-declare module 'vite-plus/test/browser/context' {}
+declare module '@vitest/browser-playwright' {}
+declare module '@vitest/browser-playwright/context' {}
 
 import client = require('vite-plus/client');
 
