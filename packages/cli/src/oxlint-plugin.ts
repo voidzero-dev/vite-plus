@@ -6,6 +6,22 @@ import {
   VITE_PLUS_OXLINT_PLUGIN_NAME,
 } from './oxlint-plugin-config.ts';
 
+// `declare module 'vitest…'` and `declare module '@vitest/browser…'` are
+// intentionally preserved by `vp migrate` (see migration's import_rewriter and
+// docs/guide/migrate.md) — `vite-plus/test*` is a thin re-export of upstream
+// `vitest*`, so type augmentations have to target the upstream module identity
+// to merge correctly. Autofixing those module declarations here would split the
+// augmentation away from what imports actually resolve through.
+function isVitestFamilyDeclareModuleSpecifier(specifier: string): boolean {
+  return (
+    specifier === 'vitest' ||
+    specifier.startsWith('vitest/') ||
+    specifier === '@vitest/browser' ||
+    specifier.startsWith('@vitest/browser/') ||
+    specifier.startsWith('@vitest/browser-')
+  );
+}
+
 function rewriteVitePlusImportSpecifier(specifier: string): string | null {
   if (specifier === 'vite') {
     return 'vite-plus';
@@ -23,6 +39,17 @@ function rewriteVitePlusImportSpecifier(specifier: string): string | null {
     return 'vite-plus/test';
   }
 
+  // `vitest/package.json` is a metadata-access pattern (reading the vitest
+  // version) and `vite-plus`'s generated exports map deliberately omits
+  // `./test/package.json` (see `syncTestPackageExports()` in build.ts, which
+  // skips upstream's `./package.json`). Rewriting it would yield
+  // `vite-plus/test/package.json`, which fails with ERR_PACKAGE_PATH_NOT_EXPORTED.
+  // The original specifier still resolves through the installed `vitest`. This
+  // mirrors the migrate rewriter's exclusion in import_rewriter.rs.
+  if (specifier === 'vitest/package.json') {
+    return null;
+  }
+
   if (specifier.startsWith('vitest/')) {
     return `vite-plus/test/${specifier.slice('vitest/'.length)}`;
   }
@@ -31,10 +58,15 @@ function rewriteVitePlusImportSpecifier(specifier: string): string | null {
     return 'vite-plus/test/browser';
   }
 
+  // `@vitest/browser/context` keeps the nested path (vite-plus exports
+  // `./test/browser/context`); the remaining subpaths are exposed only at the
+  // bare `./test/<name>` surface, so the `/browser/` segment is dropped.
   const browserSubpathRewrites: Record<string, string> = {
     '@vitest/browser/context': 'vite-plus/test/browser/context',
     '@vitest/browser/client': 'vite-plus/test/client',
     '@vitest/browser/locators': 'vite-plus/test/locators',
+    '@vitest/browser/matchers': 'vite-plus/test/matchers',
+    '@vitest/browser/utils': 'vite-plus/test/utils',
   };
   if (specifier in browserSubpathRewrites) {
     return browserSubpathRewrites[specifier];
@@ -129,7 +161,15 @@ export const preferVitePlusImportsRule = defineRule({
         if (node.global) {
           return;
         }
-        maybeReportLiteral(context, node.id);
+        const id = node.id;
+        if (
+          id?.type === 'Literal' &&
+          typeof id.value === 'string' &&
+          isVitestFamilyDeclareModuleSpecifier(id.value)
+        ) {
+          return;
+        }
+        maybeReportLiteral(context, id);
       },
     };
   },

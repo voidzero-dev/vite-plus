@@ -49,6 +49,30 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
       // e.g.: ` v1.0.0` -> ` <semver>`
       // e.g.: `/1.0.0` -> `/<semver>`
       .replaceAll(/([@/\s]v?)\d+\.\d+\.\d+(?:-.*)?/g, '$1<semver>')
+      // vitest-family pins written as JSON values (catalog blocks, devDependencies,
+      // overrides/resolutions) all track the bundled VITEST_VERSION and so change on
+      // every daily upgrade-deps bump. The quote-preceded value is not caught by the
+      // generic semver rule above (which only matches `@`/`/`/whitespace prefixes),
+      // so mask it here to keep these snaps stable — mirroring the already-masked YAML
+      // `vitest: <semver>` catalog form. e.g.: `"vitest": "4.1.9"` -> `"vitest": "<semver>"`
+      //
+      // Only major >= 4 is masked. The migrator refuses to manage vitest < 4
+      // (`checkVitestVersion` requires >=4.0.0), so the only place a pre-4 pin can
+      // surface in a snapshot is an unsupported-version fixture echoing the user's
+      // OWN untouched `package.json` (e.g. migration-not-supported-vitest3 keeps
+      // `"vitest": "3.2.4"`). Leaving those visible keeps that snap able to prove the
+      // refused migration did not rewrite the dependency. Major matcher: `[4-9]` or
+      // any 2+ digit major (`[1-9]\d+`), so it also covers future vitest 10+.
+      //
+      // `@vitest/coverage-*` is EXCLUDED: coverage providers are user-installed peers
+      // that vite-plus never adds, pins, or overrides (see VITE_PLUS_OVERRIDE_PACKAGES
+      // in constants.ts), and `define-config.ts` fail-fasts when an installed provider
+      // skews from the bundled vitest. Their exact version is meaningful, so keep it
+      // visible — masking it would hide a stale/accidentally-rewritten user pin.
+      .replaceAll(
+        /("(?:vitest|@vitest\/(?!coverage-)[\w-]+)": ")(?:[4-9]|[1-9]\d+)\.\d+\.\d+(?:-[\w.]+)?(")/g,
+        '$1<semver>$2',
+      )
       // devEngines.packageManager auto-pin writes the exact resolved version
       // e.g.: `"name": "pnpm",\n  "version": "11.5.1"` -> `"version": "<semver>"`
       // (the optional suffix covers prerelease and build metadata: -rc-1, +sha.abc)
@@ -86,6 +110,10 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
       )
       // ignore pnpm progress
       .replaceAll(/Progress: resolved \d+, reused \d+, downloaded \d+, added \d+\n/g, '')
+      // ignore the pnpm supply-chain verification status line (pnpm >= 10.34.3);
+      // whether it appears and its "verified ... ago" timing depend on pnpm
+      // version and lockfile verification state, not on vp behavior
+      .replaceAll(/✓ Lockfile passes supply-chain policies \(verified [^)]*\)\n/g, '')
       // ignore pnpm warn lines; pnpm pads `WARN` with thin spaces (U+2009) in
       // TTY output and brackets it as `[WARN]` in non-interactive output
       .replaceAll(/[\u2009 ]?\[?WARN\]?\s+Skip\s+adding .+?\n/g, '')
