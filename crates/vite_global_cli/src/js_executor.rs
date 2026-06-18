@@ -247,6 +247,32 @@ impl JsExecutor {
         self.run_js_entry_output(project_path, &node_binary, &bin_prefix, args).await
     }
 
+    /// Delegate `migrate`, escalating to the global CLI when the project's local
+    /// `vite-plus` is older than this global `vp`. A stale local CLI predates the
+    /// upgrade logic and would otherwise run (and leave the project unmigrated),
+    /// so the newer global CLI must perform the upgrade; it re-pins `vite-plus`,
+    /// so the next invocation resolves the upgraded local CLI. When local == global
+    /// (or local is newer, or none is installed) keep local-first semantics
+    /// (`delegate_to_local_cli` already falls back to the global bin when no local
+    /// vite-plus is resolvable).
+    pub async fn delegate_migrate(
+        &mut self,
+        project_path: &AbsolutePath,
+        args: &[String],
+    ) -> Result<ExitStatus, Error> {
+        let escalate = resolve_local_vite_plus_version(project_path)
+            .is_some_and(|local| local_vite_plus_is_older(&local, env!("CARGO_PKG_VERSION")));
+        if escalate {
+            tracing::debug!(
+                "Local vite-plus is older than global vp {}; running migrate from the global CLI",
+                env!("CARGO_PKG_VERSION")
+            );
+            self.delegate_to_global_cli(project_path, args).await
+        } else {
+            self.delegate_to_local_cli(project_path, args).await
+        }
+    }
+
     /// Delegate to the global vite-plus CLI entrypoint directly.
     ///
     /// Unlike [`delegate_to_local_cli`], this bypasses project-local resolution and always runs
@@ -364,6 +390,31 @@ impl JsExecutor {
     }
 }
 
+/// Resolve the version of the project-local `vite-plus`, if one is installed.
+fn resolve_local_vite_plus_version(project_path: &AbsolutePath) -> Option<String> {
+    use oxc_resolver::{ResolveOptions, Resolver};
+
+    let resolver = Resolver::new(ResolveOptions {
+        condition_names: vec!["import".into(), "node".into()],
+        ..ResolveOptions::default()
+    });
+    let resolved = resolver.resolve(project_path, "vite-plus/package.json").ok()?;
+    let content = std::fs::read_to_string(resolved.path()).ok()?;
+    let value: serde_json::Value = serde_json::from_str(&content).ok()?;
+    value.get("version")?.as_str().map(str::to_string)
+}
+
+/// True when `local` is a parseable semver strictly older than `global`.
+///
+/// Returns false if either version fails to parse (be conservative: never
+/// escalate on a version we can't understand).
+fn local_vite_plus_is_older(local: &str, global: &str) -> bool {
+    match (node_semver::Version::parse(local), node_semver::Version::parse(global)) {
+        (Ok(local_v), Ok(global_v)) => local_v < global_v,
+        _ => false,
+    }
+}
+
 /// Check whether a project directory has at least one valid version source.
 ///
 /// Uses `is_valid_version` (no warning side effects) to avoid duplicate
@@ -426,6 +477,18 @@ mod tests {
     use serial_test::serial;
 
     use super::*;
+
+    #[test]
+    fn test_local_vite_plus_is_older() {
+        // Older local should escalate.
+        assert!(local_vite_plus_is_older("0.1.24", "0.2.1"));
+        // Equal versions keep local-first semantics.
+        assert!(!local_vite_plus_is_older("0.2.1", "0.2.1"));
+        // Newer local keeps local-first semantics.
+        assert!(!local_vite_plus_is_older("0.3.0", "0.2.1"));
+        // Unparseable versions are conservative: never escalate.
+        assert!(!local_vite_plus_is_older("latest", "0.2.1"));
+    }
 
     #[test]
     fn test_js_executor_new() {

@@ -105,6 +105,13 @@ const PLAYWRIGHT_PROVIDER = '@vitest/browser-playwright';
 // forcing pins dropped, while their catalog entries are PRESERVED.
 const OPT_IN_BROWSER_PROVIDERS = [WEBDRIVERIO_PROVIDER, PLAYWRIGHT_PROVIDER] as const;
 
+// Coverage providers are project-installed peers (NOT bundled by vite-plus).
+// Vitest pins each to an exact runner version, and the `define-config.ts` guard
+// fail-fasts when an installed provider skews from the bundled vitest (Vitest
+// otherwise runs mixed versions and yields unreliable coverage). The upgrade
+// aligns any the project lists to the bundled `VITEST_VERSION`.
+const VITEST_COVERAGE_PROVIDERS = ['@vitest/coverage-v8', '@vitest/coverage-istanbul'] as const;
+
 // Provider names whose stale pnpm overrides / resolutions are dropped during
 // migration: everything vite-plus owns (REMOVE_PACKAGES) plus the user-owned
 // opt-in providers. The provider DEP is preserved, but a leftover
@@ -3418,6 +3425,54 @@ function readBunCatalogDependencyResolver(pkg: {
     fromWorkspaces(catalogSpec, dependencyName) ?? fromPkg(catalogSpec, dependencyName);
 }
 
+// Decide where a pnpm project keeps its overrides / peer rules. A truthy
+// `pkg.pnpm` is not enough: an empty `pnpm: {}` is truthy yet carries no
+// config, and when a real `pnpm-workspace.yaml` exists the workspace file is
+// the actual config source. Treat the config as living in package.json only
+// when `pkg.pnpm` has entries, or when it is present-but-empty AND there is no
+// `pnpm-workspace.yaml` to own the config instead.
+function pnpmConfigLivesInPackageJson(
+  pkg: BootstrapPackageJson,
+  projectPath: string,
+): boolean {
+  if (pkg.pnpm == null) {
+    return false;
+  }
+  return (
+    Object.keys(pkg.pnpm).length > 0 ||
+    !fs.existsSync(path.join(projectPath, 'pnpm-workspace.yaml'))
+  );
+}
+
+// Pin any coverage provider the project lists to the bundled vitest version.
+// Returns true if any spec changed. Providers are plain dependency entries
+// (not overrides), so this is package-manager agnostic.
+function alignVitestCoverageProviders(pkg: BootstrapPackageJson): boolean {
+  const dependencyGroups = [pkg.devDependencies, pkg.dependencies, pkg.optionalDependencies];
+  let changed = false;
+  for (const provider of VITEST_COVERAGE_PROVIDERS) {
+    for (const dependencies of dependencyGroups) {
+      if (dependencies?.[provider] !== undefined && dependencies[provider] !== VITEST_VERSION) {
+        dependencies[provider] = VITEST_VERSION;
+        changed = true;
+      }
+    }
+  }
+  return changed;
+}
+
+// True when the project lists a coverage provider at a version other than the
+// bundled vitest, so the bootstrap should run to realign it.
+function vitestCoverageProvidersPending(pkg: BootstrapPackageJson): boolean {
+  const dependencyGroups = [pkg.devDependencies, pkg.dependencies, pkg.optionalDependencies];
+  return VITEST_COVERAGE_PROVIDERS.some((provider) =>
+    dependencyGroups.some(
+      (dependencies) =>
+        dependencies?.[provider] !== undefined && dependencies[provider] !== VITEST_VERSION,
+    ),
+  );
+}
+
 export function detectVitePlusBootstrapPending(
   projectPath: string,
   packageManager: PackageManager | undefined,
@@ -3433,6 +3488,12 @@ export function detectVitePlusBootstrapPending(
   };
 
   if (!pkg.devDependencies?.[VITE_PLUS_NAME] || !hasPackageManagerPin(pkg)) {
+    return true;
+  }
+
+  // A coverage provider skewed from the bundled vitest needs realigning,
+  // independent of the package manager's override shape.
+  if (vitestCoverageProvidersPending(pkg)) {
     return true;
   }
 
@@ -3454,11 +3515,11 @@ export function detectVitePlusBootstrapPending(
     return !overridesSatisfyVitePlus(pkg.overrides, readBunCatalogDependencyResolver(pkg));
   }
   if (packageManager === PackageManager.pnpm) {
-    if (pkg.pnpm) {
+    if (pnpmConfigLivesInPackageJson(pkg, projectPath)) {
       return (
         vitePlusDependencyNeedsConcreteVersion(pkg) ||
-        !overridesSatisfyVitePlus(pkg.pnpm.overrides) ||
-        !pnpmPeerDependencyRulesSatisfyVitePlus(pkg.pnpm.peerDependencyRules)
+        !overridesSatisfyVitePlus(pkg.pnpm?.overrides) ||
+        !pnpmPeerDependencyRulesSatisfyVitePlus(pkg.pnpm?.peerDependencyRules)
       );
     }
     const resolver = readPnpmWorkspaceCatalogDependencyResolver(projectPath);
@@ -3474,13 +3535,31 @@ export function detectVitePlusBootstrapPending(
 
 function ensureVitePlusDependencySpecs(pkg: BootstrapPackageJson, version: string): boolean {
   let changed = false;
-  if (version !== 'catalog:') {
-    const dependencyGroups = [pkg.devDependencies, pkg.dependencies, pkg.optionalDependencies];
-    for (const dependencies of dependencyGroups) {
-      if (dependencies?.[VITE_PLUS_NAME]?.startsWith('catalog:')) {
-        dependencies[VITE_PLUS_NAME] = version;
-        changed = true;
-      }
+  // Re-pin a pre-existing vite-plus spec to the migrating toolchain target so
+  // the lockfile moves off an old resolution (e.g. `^0.1.24`). Mirrors the
+  // full-migration rule at `shouldNormalizeExistingVitePlus`/`canonicalVitePlusSpec`:
+  // only vanilla version ranges are rewritten; deliberate protocol pins
+  // (workspace:, link:, file:, npm:, github:, git, http) are preserved.
+  const dependencyGroups = [pkg.devDependencies, pkg.dependencies, pkg.optionalDependencies];
+  for (const dependencies of dependencyGroups) {
+    const spec = dependencies?.[VITE_PLUS_NAME];
+    if (spec === undefined || spec === version) {
+      continue;
+    }
+    // Concrete target (e.g. `latest`): also rewrite an existing `catalog:`
+    // pin onto the concrete version — `isProtocolPinnedSpec` matches
+    // `catalog:`, so handle it explicitly before the generic plain-range case.
+    if (version !== 'catalog:' && spec.startsWith('catalog:')) {
+      dependencies[VITE_PLUS_NAME] = version;
+      changed = true;
+      continue;
+    }
+    // Plain (non-protocol-pinned) range like `^0.1.24` → rewrite to the target
+    // (`catalog:` for catalog-supporting projects, otherwise the concrete
+    // version). Already-`catalog:` / other protocol pins are left untouched.
+    if (!isProtocolPinnedSpec(spec)) {
+      dependencies[VITE_PLUS_NAME] = version;
+      changed = true;
     }
   }
   if (pkg.devDependencies?.[VITE_PLUS_NAME]) {
@@ -3571,7 +3650,9 @@ export function ensureVitePlusBootstrap(
       catalogs?: Record<string, Record<string, string>>;
     }
   >(packageJsonPath, (pkg) => {
-    const usePnpmWorkspaceYaml = workspaceInfo.packageManager === PackageManager.pnpm && !pkg.pnpm;
+    const usePnpmWorkspaceYaml =
+      workspaceInfo.packageManager === PackageManager.pnpm &&
+      !pnpmConfigLivesInPackageJson(pkg, projectPath);
     const supportCatalog =
       !VITE_PLUS_VERSION.startsWith('file:') &&
       (usePnpmWorkspaceYaml || workspaceInfo.packageManager === PackageManager.bun);
@@ -3579,6 +3660,7 @@ export function ensureVitePlusBootstrap(
       pkg,
       supportCatalog ? 'catalog:' : VITE_PLUS_VERSION,
     );
+    packageJsonChanged = alignVitestCoverageProviders(pkg) || packageJsonChanged;
     if (workspaceInfo.packageManager === PackageManager.npm) {
       packageJsonChanged = ensureNpmVitePlusManagedDependencies(pkg) || packageJsonChanged;
     }
@@ -3601,7 +3683,13 @@ export function ensureVitePlusBootstrap(
         pkg.overrides = ensured.overrides;
         packageJsonChanged = true;
       }
-    } else if (workspaceInfo.packageManager === PackageManager.pnpm && pkg.pnpm) {
+    } else if (
+      workspaceInfo.packageManager === PackageManager.pnpm &&
+      pnpmConfigLivesInPackageJson(pkg, projectPath)
+    ) {
+      // `pnpmConfigLivesInPackageJson` guarantees `pkg.pnpm` is present here,
+      // but it may be an empty object (no pnpm-workspace.yaml case), so seed it.
+      pkg.pnpm ??= {};
       const ensured = ensureOverrideEntries(pkg.pnpm.overrides);
       if (ensured.changed) {
         pkg.pnpm.overrides = ensured.overrides;
@@ -3616,7 +3704,7 @@ export function ensureVitePlusBootstrap(
 
   if (workspaceInfo.packageManager === PackageManager.pnpm) {
     const pkg = readJsonFile(packageJsonPath) as BootstrapPackageJson;
-    if (!pkg.pnpm) {
+    if (!pnpmConfigLivesInPackageJson(pkg, projectPath)) {
       const pnpmWorkspaceYamlPath = path.join(projectPath, 'pnpm-workspace.yaml');
       const before = fs.existsSync(pnpmWorkspaceYamlPath)
         ? fs.readFileSync(pnpmWorkspaceYamlPath, 'utf-8')

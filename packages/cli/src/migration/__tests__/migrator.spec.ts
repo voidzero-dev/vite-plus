@@ -1464,6 +1464,125 @@ describe('ensureVitePlusBootstrap', () => {
     expect(workspace.catalog['vite-plus']).toBe('latest');
   });
 
+  it('reconciles stale pnpm-workspace.yaml overrides when package.json has an empty pnpm field (urllib shape)', () => {
+    // urllib 0.1.x shape: an empty `pnpm: {}` in package.json AND a committed
+    // pnpm-workspace.yaml whose overrides pin vite/vitest to the deleted
+    // @voidzero-dev/vite-plus-test wrapper. The empty `pnpm: {}` is truthy, so the
+    // bootstrap used to take the package.json path and IGNORE the workspace.yaml,
+    // leaving the dead wrapper override in place (and a second, conflicting
+    // override source in package.json). Because a pnpm-workspace.yaml exists, the
+    // workspace.yaml is the real config location and must be reconciled.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'urllib',
+        devDependencies: {
+          '@vitest/coverage-v8': '^4.1.8',
+          vite: 'npm:@voidzero-dev/vite-plus-core@^0.1.24',
+          'vite-plus': '^0.1.24',
+          vitest: 'npm:@voidzero-dev/vite-plus-test@^0.1.24',
+        },
+        pnpm: {},
+        devEngines: {
+          packageManager: { name: 'pnpm', version: '11.7.0', onFail: 'download' },
+        },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'overrides:',
+        "  vite: 'npm:@voidzero-dev/vite-plus-core@^0.1.24'",
+        "  vitest: 'npm:@voidzero-dev/vite-plus-test@^0.1.24'",
+        'peerDependencyRules:',
+        '  allowAny:',
+        '    - vite',
+        '    - vitest',
+      ].join('\n'),
+    );
+
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm));
+
+    // The deleted wrapper alias must no longer survive in the workspace.yaml.
+    const workspaceRaw = fs.readFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'utf-8');
+    expect(workspaceRaw).not.toContain('@voidzero-dev/vite-plus-test');
+
+    // And the project must not be left pending (no stale wrapper override anywhere).
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
+  });
+
+  it('aligns coverage providers to the bundled vitest version (urllib coverage-v8 symptom)', () => {
+    // A coverage provider is a project-installed peer that Vitest pins to an
+    // exact runner version; a skewed copy makes Vitest run mixed versions. The
+    // upgrade must bump it to the bundled vitest version, not leave it behind.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: {
+          'vite-plus': 'latest',
+          '@vitest/coverage-v8': '^4.1.8',
+        },
+        overrides: {
+          vite: 'npm:@voidzero-dev/vite-plus-core@latest',
+          vitest: 'npm:@voidzero-dev/vite-plus-test@latest',
+        },
+        devEngines: {
+          packageManager: { name: 'npm', version: '10.33.0', onFail: 'download' },
+        },
+      }),
+    );
+
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(true);
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.npm));
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    expect(pkg.devDependencies['@vitest/coverage-v8']).toBe(VITEST_VERSION);
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(false);
+  });
+
+  it('re-pins a behind vite-plus spec so the upgrade moves off the old version (urllib)', () => {
+    // urllib pinned vite-plus to a concrete 0.1.x range. A spec that stays at
+    // ^0.1.24 keeps the lockfile on the old resolution; the upgrade must re-pin
+    // it to the migrating toolchain target (here the mocked VITE_PLUS_VERSION
+    // 'latest', materialized as `catalog:` in a pnpm-workspace.yaml project) so
+    // the reinstall resolves the new version.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'urllib',
+        devDependencies: {
+          'vite-plus': '^0.1.24',
+          vite: 'npm:@voidzero-dev/vite-plus-core@^0.1.24',
+          vitest: 'npm:@voidzero-dev/vite-plus-test@^0.1.24',
+        },
+        pnpm: {},
+        devEngines: {
+          packageManager: { name: 'pnpm', version: '11.7.0', onFail: 'download' },
+        },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'overrides:',
+        "  vite: 'npm:@voidzero-dev/vite-plus-core@^0.1.24'",
+        "  vitest: 'npm:@voidzero-dev/vite-plus-test@^0.1.24'",
+      ].join('\n'),
+    );
+
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm));
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    // vite-plus must no longer be pinned to the old 0.1.x range.
+    expect(pkg.devDependencies['vite-plus']).not.toContain('0.1.24');
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
+  });
+
   it('uses a concrete vite-plus version when pnpm config stays in package.json', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
