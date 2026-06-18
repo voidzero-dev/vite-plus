@@ -145,6 +145,25 @@ export function setPackageName(projectDir: string, packageName: string) {
   });
 }
 
+export function removeSrcOnlyTsconfigInclude(projectDir: string): void {
+  const tsconfigPath = path.join(projectDir, 'tsconfig.json');
+  if (!fs.existsSync(tsconfigPath)) {
+    return;
+  }
+
+  editJsonFile<{ include?: unknown }>(tsconfigPath, (tsconfig) => {
+    if (
+      Array.isArray(tsconfig.include) &&
+      tsconfig.include.length === 1 &&
+      tsconfig.include[0] === 'src'
+    ) {
+      delete tsconfig.include;
+      return tsconfig;
+    }
+    return undefined;
+  });
+}
+
 const RENAME_FILES = {
   _gitignore: '.gitignore',
   _npmrc: '.npmrc',

@@ -10,7 +10,13 @@ import { editJsonFile } from '../../utils/json.ts';
 import { templatesDir } from '../../utils/path.ts';
 import type { ExecutionWithProjectDir } from '../command.ts';
 import { discoverTemplate } from '../discovery.ts';
-import { copyDir, formatDisplayTargetDir, renameFiles, setPackageName } from '../utils.ts';
+import {
+  copyDir,
+  formatDisplayTargetDir,
+  removeSrcOnlyTsconfigInclude,
+  renameFiles,
+  setPackageName,
+} from '../utils.ts';
 import { runRemoteTemplateCommand } from './remote.ts';
 import { type BuiltinTemplateInfo, LibraryTemplateRepo } from './types.ts';
 
@@ -116,6 +122,7 @@ export async function executeMonorepoTemplate(
     : 'website';
   const appProjectPath = path.join(fullPath, InitialMonorepoAppDir);
   setPackageName(appProjectPath, appPackageName);
+  removeSrcOnlyTsconfigInclude(appProjectPath);
   // Perform auto-migration on the created app
   rewriteMonorepoProject(
     appProjectPath,
@@ -150,6 +157,7 @@ export async function executeMonorepoTemplate(
     : 'utils';
   const libraryProjectPath = path.join(fullPath, libraryDir);
   setPackageName(libraryProjectPath, libraryPackageName);
+  removeSrcOnlyTsconfigInclude(libraryProjectPath);
   // Perform auto-migration on the created library
   rewriteMonorepoProject(
     libraryProjectPath,

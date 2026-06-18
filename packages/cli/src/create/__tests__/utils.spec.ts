@@ -12,6 +12,7 @@ import {
   getProjectDirFromPackageName,
   normalizeEditorOption,
   renameFiles,
+  removeSrcOnlyTsconfigInclude,
   shouldConfigureEditorsForCreate,
 } from '../utils.js';
 
@@ -121,6 +122,61 @@ describe('deriveDefaultPackageName', () => {
     const result = deriveDefaultPackageName('/', undefined, 'vite-plus-app');
     // basename of '/' is empty, so a random name is generated
     expect(result.length).toBeGreaterThan(0);
+  });
+});
+
+describe('removeSrcOnlyTsconfigInclude', () => {
+  let projectDir: string;
+
+  beforeEach(() => {
+    projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-tsconfig-include-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(projectDir, { recursive: true, force: true });
+  });
+
+  function writeTsconfig(tsconfig: unknown): void {
+    fs.writeFileSync(path.join(projectDir, 'tsconfig.json'), JSON.stringify(tsconfig, null, 2));
+  }
+
+  function readTsconfig(): Record<string, unknown> {
+    return JSON.parse(fs.readFileSync(path.join(projectDir, 'tsconfig.json'), 'utf-8'));
+  }
+
+  it('removes the default src-only include', () => {
+    writeTsconfig({
+      compilerOptions: {
+        strict: true,
+      },
+      include: ['src'],
+    });
+
+    removeSrcOnlyTsconfigInclude(projectDir);
+
+    expect(readTsconfig()).toEqual({
+      compilerOptions: {
+        strict: true,
+      },
+    });
+  });
+
+  it('keeps custom include patterns', () => {
+    const tsconfig = {
+      compilerOptions: {
+        strict: true,
+      },
+      include: ['src', 'tests'],
+    };
+    writeTsconfig(tsconfig);
+
+    removeSrcOnlyTsconfigInclude(projectDir);
+
+    expect(readTsconfig()).toEqual(tsconfig);
+  });
+
+  it('ignores projects without a tsconfig', () => {
+    expect(() => removeSrcOnlyTsconfigInclude(projectDir)).not.toThrow();
   });
 });
 

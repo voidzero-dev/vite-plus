@@ -7,7 +7,7 @@ import colors from 'picocolors';
 import type { WorkspaceInfo } from '../../types/index.ts';
 import type { ExecutionWithProjectDir } from '../command.ts';
 import { discoverTemplate } from '../discovery.ts';
-import { setPackageName } from '../utils.ts';
+import { removeSrcOnlyTsconfigInclude, setPackageName } from '../utils.ts';
 import { executeGeneratorScaffold } from './generator.ts';
 import { runRemoteTemplateCommand } from './remote.ts';
 import { BuiltinTemplate, type BuiltinTemplateInfo, LibraryTemplateRepo } from './types.ts';
@@ -49,6 +49,7 @@ export async function executeBuiltinTemplate(
     }
     const fullPath = path.join(workspaceInfo.rootDir, templateInfo.targetDir);
     setPackageName(fullPath, templateInfo.packageName);
+    removeSrcOnlyTsconfigInclude(fullPath);
     return { ...result, projectDir: templateInfo.targetDir };
   }
 
@@ -76,6 +77,9 @@ export async function executeBuiltinTemplate(
   const fullPath = path.join(workspaceInfo.rootDir, templateInfo.targetDir);
   // set package name in the project directory
   setPackageName(fullPath, templateInfo.packageName);
+  if (templateInfo.command === 'create-vite@latest') {
+    removeSrcOnlyTsconfigInclude(fullPath);
+  }
 
   return {
     ...result,
