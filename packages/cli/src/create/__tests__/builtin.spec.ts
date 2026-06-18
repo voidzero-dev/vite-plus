@@ -85,6 +85,7 @@ describe('executeBuiltinTemplate', () => {
       command: 'vite:application',
       packageName: '@scope/temperature-symbol',
       targetDir: 'apps/temperature-symbol',
+      args: [],
     });
 
     expect(result).toEqual({ exitCode: 0, projectDir: 'apps/temperature-symbol' });
@@ -112,6 +113,7 @@ describe('executeBuiltinTemplate', () => {
       command: 'vite:application',
       packageName: 'workspace',
       targetDir: '.',
+      args: [],
     });
 
     expect(result).toEqual({ exitCode: 0, projectDir: '.' });
