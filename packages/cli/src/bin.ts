@@ -22,8 +22,8 @@ import { pack } from './resolve-pack.ts';
 import { test } from './resolve-test.ts';
 import { resolveUniversalViteConfig } from './resolve-vite-config.ts';
 import { vite } from './resolve-vite.ts';
-import { detectWorkspace } from './utils/workspace.ts';
 import { accent, errorMsg, log, warnMsg } from './utils/terminal.ts';
+import { detectWorkspace } from './utils/workspace.ts';
 
 function getErrorMessage(err: unknown): string {
   if (err instanceof Error) {
