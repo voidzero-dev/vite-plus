@@ -5,6 +5,7 @@
       "ignoreOutput": true
     },
     "ls vite-plus-application/package.json # check package.json",
+    "node -e \"const fs = require('node:fs'); const tsconfig = JSON.parse(fs.readFileSync('vite-plus-application/tsconfig.json', 'utf8')); if ('include' in tsconfig) { console.error('ERROR: src-only include still exists'); process.exit(1); } console.log('src-only include removed');\" # check default tsconfig include removed",
     "test -f vite-plus-application/.vscode/settings.json && echo '.vscode/settings.json exists' # check VS Code settings created",
     "test -f vite-plus-application/.vscode/extensions.json && echo '.vscode/extensions.json exists' # check VS Code extensions created",
     "node -e \"const { spawnSync } = require('node:child_process'); const file = '.vscode/settings.json'; const result = spawnSync('git', ['-C', 'vite-plus-application', 'check-ignore', '--no-index', file], { stdio: 'ignore' }); const status = result.status; if (status === 1) { console.log(file + ' trackable'); } else { console.log(status === 0 ? 'ERROR: ' + file + ' ignored' : 'ERROR: git check-ignore failed with status ' + status); process.exit(status || 1); }\" # check VS Code settings are trackable",
