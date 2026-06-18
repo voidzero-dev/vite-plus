@@ -55,16 +55,6 @@ pub enum Error {
     #[error("{0}")]
     Setup(#[from] vite_setup::error::Error),
 
-    #[error(
-        "Node.js {version} is incompatible with Vite+ CLI.\nRequired by Vite+: {requirement}{version_source}\n\n{help}"
-    )]
-    NodeVersionIncompatible {
-        version: String,
-        requirement: String,
-        version_source: String,
-        help: String,
-    },
-
     #[error(transparent)]
     PmCli(#[from] vite_pm_cli::Error),
 }
