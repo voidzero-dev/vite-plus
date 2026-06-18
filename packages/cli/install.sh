@@ -377,9 +377,41 @@ verify_platform_package_provenance() {
     error "Failed to fetch CLI package metadata '${package_name}@${package_version}': ${error_msg:-unknown error}\n  URL: $metadata_url"
   fi
 
-  local provenance_pattern
-  provenance_pattern='"dist"[[:space:]]*:[[:space:]]*\{[^}]*"attestations"[[:space:]]*:[[:space:]]*\{[^}]*"provenance"[[:space:]]*:[[:space:]]*\{'
-  if ! printf '%s' "$metadata" | tr -d '\n' | grep -Eq "$provenance_pattern"; then
+  if ! printf '%s' "$metadata" | awk '
+    BEGIN { depth = 0; in_str = 0; esc = 0; in_dist = 0; in_attestations = 0; found = 0 }
+    {
+      for (i = 1; i <= length($0); i++) {
+        c = substr($0, i, 1)
+        if (in_str) {
+          if (esc) { esc = 0 }
+          else if (c == "\\") { esc = 1 }
+          else if (c == "\"") { in_str = 0; last_string = token }
+          else { token = token c }
+          continue
+        }
+        if (c == "\"") { in_str = 1; token = ""; continue }
+        if (c == ":" && last_string != "") {
+          if (!in_dist && last_string == "dist") { expect_object = "dist" }
+          else if (in_dist && last_string == "attestations") { expect_object = "attestations" }
+          else if (in_attestations && last_string == "provenance") { found = 1 }
+          last_string = ""
+          continue
+        }
+        if (c == "{") {
+          depth++
+          if (expect_object == "dist") { in_dist = 1; dist_depth = depth; expect_object = "" }
+          else if (expect_object == "attestations") { in_attestations = 1; attestations_depth = depth; expect_object = "" }
+          continue
+        }
+        if (c == "}") {
+          if (in_attestations && depth == attestations_depth) { in_attestations = 0 }
+          if (in_dist && depth == dist_depth) { in_dist = 0 }
+          depth--
+        }
+      }
+    }
+    END { exit found ? 0 : 1 }
+  '; then
     error "Refusing to install ${package_name}@${package_version} because its npm package metadata does not include provenance attestation."
   fi
 }
