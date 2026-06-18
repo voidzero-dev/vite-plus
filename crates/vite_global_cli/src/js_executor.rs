@@ -194,7 +194,7 @@ impl JsExecutor {
                 // and intra-project fallback chain
                 download_runtime_for_project(project_path).await?
             } else {
-                // No valid project source — fall back to user default from config, then LTS
+                // No valid project source, fall back to user default from config, then LTS
                 let resolution = config::resolve_version(project_path).await?;
                 download_runtime(JsRuntimeType::Node, &resolution.version).await?
             };
