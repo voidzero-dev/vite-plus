@@ -187,6 +187,8 @@ fn extract_config_fields(program: &Program<'_>) -> FieldMap {
 
 /// Extract the config object from an expression that is either:
 /// - `defineConfig({ ... })` → extract the object argument
+/// - `defineConfig(mergeConfig(...))` → extract the merged object arguments
+/// - `mergeConfig({ ... }, defineConfig({ ... }))` → merge static object arguments
 /// - `defineConfig(() => ({ ... }))` → extract from arrow function expression body
 /// - `defineConfig(() => { return { ... }; })` → extract from return statement
 /// - `defineConfig(function() { return { ... }; })` → extract from return statement
@@ -196,32 +198,75 @@ fn extract_config_from_expr(expr: &Expression<'_>) -> FieldMap {
     let expr = expr.without_parentheses();
     match expr {
         Expression::CallExpression(call) => {
-            if !call.callee.is_specific_id("defineConfig") {
-                return FieldMap::unanalyzable();
-            }
-            let Some(first_arg) = call.arguments.first() else {
-                return FieldMap::unanalyzable();
-            };
-            let Some(first_arg_expr) = first_arg.as_expression() else {
-                return FieldMap::unanalyzable();
-            };
-            match first_arg_expr {
-                Expression::ObjectExpression(obj) => extract_object_fields(obj),
-                Expression::ArrowFunctionExpression(arrow) => {
-                    extract_config_from_function_body(&arrow.body)
+            if call.callee.is_specific_id("defineConfig") {
+                let Some(first_arg) = call.arguments.first() else {
+                    return FieldMap::unanalyzable();
+                };
+                let Some(first_arg_expr) = first_arg.as_expression() else {
+                    return FieldMap::unanalyzable();
+                };
+                match first_arg_expr.without_parentheses() {
+                    Expression::ObjectExpression(obj) => extract_object_fields(obj),
+                    Expression::CallExpression(_) => extract_config_from_expr(first_arg_expr),
+                    Expression::ArrowFunctionExpression(arrow) => {
+                        extract_config_from_function_body(&arrow.body)
+                    }
+                    Expression::FunctionExpression(func) => {
+                        let Some(body) = func.body.as_ref() else {
+                            return FieldMap::unanalyzable();
+                        };
+                        extract_config_from_function_body(body)
+                    }
+                    _ => FieldMap::unanalyzable(),
                 }
-                Expression::FunctionExpression(func) => {
-                    let Some(body) = func.body.as_ref() else {
-                        return FieldMap::unanalyzable();
-                    };
-                    extract_config_from_function_body(body)
-                }
-                _ => FieldMap::unanalyzable(),
+            } else if call.callee.is_specific_id("mergeConfig") {
+                extract_merge_config(call)
+            } else {
+                FieldMap::unanalyzable()
             }
         }
         Expression::ObjectExpression(obj) => extract_object_fields(obj),
         _ => FieldMap::unanalyzable(),
     }
+}
+
+fn extract_merge_config(call: &oxc_ast::ast::CallExpression<'_>) -> FieldMap {
+    let mut merged = FieldMap::no_config();
+
+    for arg in &call.arguments {
+        let Some(expr) = arg.as_expression() else {
+            return FieldMap::unanalyzable();
+        };
+        merged = merge_field_maps(merged, extract_config_from_expr(expr));
+    }
+
+    merged
+}
+
+fn merge_field_maps(left: FieldMap, right: FieldMap) -> FieldMap {
+    let inner = match (left.0, right.0) {
+        (FieldMapInner::Closed(mut left), FieldMapInner::Closed(right)) => {
+            left.extend(right);
+            FieldMapInner::Closed(left)
+        }
+        (FieldMapInner::Closed(_), FieldMapInner::Open(right)) => FieldMapInner::Open(right),
+        (FieldMapInner::Open(mut left), FieldMapInner::Closed(right)) => {
+            for (key, value) in right {
+                match value {
+                    FieldValue::Json(json) => {
+                        left.insert(key, json);
+                    }
+                    FieldValue::NonStatic => {
+                        left.remove(key.as_ref());
+                    }
+                }
+            }
+            FieldMapInner::Open(left)
+        }
+        (FieldMapInner::Open(_), FieldMapInner::Open(right)) => FieldMapInner::Open(right),
+    };
+
+    FieldMap(inner)
 }
 
 /// Extract the config object from the body of a function passed to `defineConfig`.
@@ -567,6 +612,58 @@ mod tests {
         );
         assert_json(&result, "run", serde_json::json!({ "cacheScripts": true }));
         assert_json(&result, "lint", serde_json::json!({ "plugins": ["a"] }));
+    }
+
+    #[test]
+    fn merge_config_call_merges_static_fields() {
+        let result = parse(
+            r"
+            import { defineConfig, mergeConfig } from 'vite-plus';
+            export default mergeConfig(
+                { run: { cacheScripts: false }, fmt: {} },
+                defineConfig({ run: { cacheScripts: true }, lint: { options: { typeAware: true } } }),
+            );
+            ",
+        );
+        assert_json(&result, "run", serde_json::json!({ "cacheScripts": true }));
+        assert_json(&result, "fmt", serde_json::json!({}));
+        assert_json(&result, "lint", serde_json::json!({ "options": { "typeAware": true } }));
+    }
+
+    #[test]
+    fn define_config_accepts_merge_config_call() {
+        let result = parse(
+            r"
+            import { defineConfig, mergeConfig } from 'vite-plus';
+            export default defineConfig(mergeConfig(
+                { run: { cacheScripts: false } },
+                { run: { cacheScripts: true } },
+            ));
+            ",
+        );
+        assert_json(&result, "run", serde_json::json!({ "cacheScripts": true }));
+    }
+
+    #[test]
+    fn merge_config_with_dynamic_plugin_array_can_still_prove_run_absent() {
+        let result = parse(
+            r"
+            import { defineConfig, mergeConfig } from 'vite-plus';
+            import utils from 'utils';
+            export default mergeConfig(
+                {},
+                defineConfig({
+                    pack: { exports: true },
+                    plugins: [utils()],
+                    lint: { options: { typeAware: true } },
+                    fmt: {},
+                }),
+            );
+            ",
+        );
+        assert!(result.get("run").is_none());
+        assert_non_static(&result, "plugins");
+        assert_json(&result, "pack", serde_json::json!({ "exports": true }));
     }
 
     // ── module.exports = { ... } ───────────────────────────────────────
