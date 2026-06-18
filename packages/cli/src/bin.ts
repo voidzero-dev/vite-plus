@@ -14,6 +14,7 @@ import path from 'node:path';
 
 import { run } from '../binding/index.js';
 import { applyToolInitConfigToViteConfig, inspectInitCommand } from './init-config.ts';
+import { formatDevMonorepoRootHint, shouldWarnDevFromMonorepoRoot } from './monorepo-root-hint.ts';
 import { doc } from './resolve-doc.ts';
 import { fmt } from './resolve-fmt.ts';
 import { lint } from './resolve-lint.ts';
@@ -21,7 +22,8 @@ import { pack } from './resolve-pack.ts';
 import { test } from './resolve-test.ts';
 import { resolveUniversalViteConfig } from './resolve-vite-config.ts';
 import { vite } from './resolve-vite.ts';
-import { accent, errorMsg, log } from './utils/terminal.ts';
+import { detectWorkspace } from './utils/workspace.ts';
+import { accent, errorMsg, log, warnMsg } from './utils/terminal.ts';
 
 function getErrorMessage(err: unknown): string {
   if (err instanceof Error) {
@@ -72,6 +74,13 @@ if (command === 'create') {
         `Skipped initialization: '${accent(initInspection.configKey)}' already exists in '${accent(path.basename(initInspection.existingViteConfigPath))}'.`,
       );
       process.exit(0);
+    }
+
+    if (command === 'dev') {
+      const workspaceInfo = await detectWorkspace(process.cwd());
+      if (shouldWarnDevFromMonorepoRoot(command, args, process.cwd(), workspaceInfo)) {
+        warnMsg(formatDevMonorepoRootHint(workspaceInfo));
+      }
     }
 
     const exitCode = await run({
