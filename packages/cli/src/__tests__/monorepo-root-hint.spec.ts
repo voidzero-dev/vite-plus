@@ -20,8 +20,6 @@ const workspaceInfo: WorkspaceInfoOptional = {
       name: 'website',
       path: 'apps/website',
       version: '1.0.0',
-      dependencies: [],
-      scripts: { dev: 'vp dev' },
     },
   ],
 };
