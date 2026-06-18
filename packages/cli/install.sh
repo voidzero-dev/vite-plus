@@ -359,6 +359,30 @@ get_version_from_metadata() {
   fi
 }
 
+verify_platform_package_provenance() {
+  local package_name="$1"
+  local package_version="$2"
+  local encoded_package_name="${package_name/\//%2F}"
+  local metadata_url="${NPM_REGISTRY}/${encoded_package_name}/${package_version}"
+  local metadata
+
+  metadata=$(curl_with_error_handling -s "$metadata_url")
+  if [ -z "$metadata" ]; then
+    error "Failed to fetch CLI package metadata from: $metadata_url"
+  fi
+
+  if echo "$metadata" | grep -q '"error"'; then
+    local error_msg
+    error_msg=$(echo "$metadata" | grep -o '"error" *: *"[^"]*"' | cut -d'"' -f4)
+    error "Failed to fetch CLI package metadata '${package_name}@${package_version}': ${error_msg:-unknown error}\n  URL: $metadata_url"
+  fi
+
+  if ! echo "$metadata" | grep -Eq '"attestations" *: *\{' ||
+     ! echo "$metadata" | grep -Eq '"provenance" *: *\{'; then
+    error "Refusing to install ${package_name}@${package_version} because its npm package metadata does not include provenance attestation."
+  fi
+}
+
 # Get platform suffix for CLI package download
 # Sets PLATFORM_SUFFIX global variable
 # Platform format from detect_platform(): darwin-arm64, darwin-x64, linux-x64-gnu, linux-arm64-gnu, win32-x64, etc.
@@ -921,6 +945,7 @@ main() {
       platform_url="${PKG_PR_NEW_BASE}/@voidzero-dev/vite-plus-cli-${PLATFORM_SUFFIX}@${PR_VERSION}"
     else
       local package_name="@voidzero-dev/vite-plus-cli-${PLATFORM_SUFFIX}"
+      verify_platform_package_provenance "$package_name" "$VP_VERSION"
       platform_url="${NPM_REGISTRY}/${package_name}/-/vite-plus-cli-${PLATFORM_SUFFIX}-${VP_VERSION}.tgz"
     fi
 

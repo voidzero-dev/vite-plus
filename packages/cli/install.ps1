@@ -198,6 +198,36 @@ function Get-VersionFromMetadata {
     return $metadata.version
 }
 
+function Assert-PlatformPackageProvenance {
+    param(
+        [string]$PackageName,
+        [string]$Version
+    )
+
+    $encodedPackageName = [System.Uri]::EscapeDataString($PackageName)
+    $metadataUrl = "$NpmRegistry/$encodedPackageName/$Version"
+    try {
+        $metadata = Invoke-RestMethod -Uri $metadataUrl -Headers @{ Accept = "application/json" }
+    } catch {
+        $errorMsg = $_.ErrorDetails.Message
+        if ($errorMsg) {
+            try {
+                $errorJson = $errorMsg | ConvertFrom-Json
+                if ($errorJson.error) {
+                    Write-Error-Exit "Failed to fetch CLI package metadata '${PackageName}@${Version}': $($errorJson.error)`n  URL: $metadataUrl"
+                }
+            } catch {
+                # JSON parsing failed, fall through to generic error
+            }
+        }
+        Write-Error-Exit "Failed to fetch CLI package metadata from: $metadataUrl`nError: $_"
+    }
+
+    if (-not $metadata.dist -or -not $metadata.dist.attestations -or -not $metadata.dist.attestations.provenance) {
+        Write-Error-Exit "Refusing to install ${PackageName}@${Version} because its npm package metadata does not include provenance attestation."
+    }
+}
+
 function Get-PlatformSuffix {
     param([string]$Platform)
     # Windows needs -msvc suffix, other platforms map directly
@@ -516,6 +546,7 @@ function Main {
             $platformUrl = "$PkgPrNewBase/@voidzero-dev/vite-plus-cli-$platformSuffix@$PrVersion"
         } else {
             $packageName = "@voidzero-dev/vite-plus-cli-$platformSuffix"
+            Assert-PlatformPackageProvenance -PackageName $packageName -Version $ViteVersion
             $platformUrl = "$NpmRegistry/$packageName/-/vite-plus-cli-$platformSuffix-$ViteVersion.tgz"
         }
 

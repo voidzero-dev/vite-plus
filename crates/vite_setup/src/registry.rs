@@ -20,6 +20,24 @@ pub struct PackageVersionMetadata {
 pub struct DistInfo {
     pub tarball: String,
     pub integrity: String,
+    #[serde(default)]
+    pub attestations: Option<DistAttestations>,
+}
+
+/// npm attestation metadata from `dist.attestations`.
+#[derive(Debug, Deserialize)]
+pub struct DistAttestations {
+    #[serde(default)]
+    pub provenance: Option<serde_json::Value>,
+}
+
+impl DistInfo {
+    fn has_provenance(&self) -> bool {
+        self.attestations
+            .as_ref()
+            .and_then(|attestations| attestations.provenance.as_ref())
+            .is_some()
+    }
 }
 
 /// Resolved version info with URLs and integrity for the platform package.
@@ -86,6 +104,17 @@ pub async fn resolve_platform_package(
         )
     })?;
 
+    if !cli_meta.dist.has_provenance() {
+        return Err(Error::Setup(
+            format!(
+                "Refusing to install {cli_package_name}@{} because its npm package metadata \
+                 does not include provenance attestation.",
+                cli_meta.version
+            )
+            .into(),
+        ));
+    }
+
     Ok(ResolvedVersion {
         version: version.to_owned(),
         platform_tarball_url: cli_meta.dist.tarball,
@@ -116,6 +145,43 @@ mod tests {
         let suffix = "darwin-arm64";
         let name = format!("{PLATFORM_PACKAGE_SCOPE}/{CLI_PACKAGE_NAME_PREFIX}-{suffix}");
         assert_eq!(name, "@voidzero-dev/vite-plus-cli-darwin-arm64");
+    }
+
+    #[test]
+    fn test_dist_info_detects_provenance() {
+        let meta: PackageVersionMetadata = serde_json::from_value(serde_json::json!({
+            "version": "0.2.0",
+            "dist": {
+                "tarball": "https://registry.npmjs.org/package.tgz",
+                "integrity": "sha512-test",
+                "attestations": {
+                    "url": "https://registry.npmjs.org/-/npm/v1/attestations/pkg@0.2.0",
+                    "provenance": {
+                        "predicateType": "https://slsa.dev/provenance/v1"
+                    }
+                }
+            }
+        }))
+        .unwrap();
+
+        assert!(meta.dist.has_provenance());
+    }
+
+    #[test]
+    fn test_dist_info_rejects_missing_provenance() {
+        let meta: PackageVersionMetadata = serde_json::from_value(serde_json::json!({
+            "version": "0.2.0",
+            "dist": {
+                "tarball": "https://registry.npmjs.org/package.tgz",
+                "integrity": "sha512-test",
+                "attestations": {
+                    "url": "https://registry.npmjs.org/-/npm/v1/attestations/pkg@0.2.0"
+                }
+            }
+        }))
+        .unwrap();
+
+        assert!(!meta.dist.has_provenance());
     }
 
     #[test]
