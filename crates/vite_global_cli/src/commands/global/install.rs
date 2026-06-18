@@ -13,7 +13,7 @@ use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use owo_colors::OwoColorize;
 use tokio::process::Command;
 use vite_js_runtime::NodeProvider;
-use vite_path::{AbsolutePath, AbsolutePathBuf, current_dir};
+use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_shared::{format_path_prepended, output};
 
 use crate::{
