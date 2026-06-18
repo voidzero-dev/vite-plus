@@ -78,7 +78,12 @@ import {
   type Framework,
   type NodeVersionManagerDetection,
 } from './migrator.ts';
-import { addMigrationWarning, createMigrationReport, type MigrationReport } from './report.ts';
+import {
+  addManualStep,
+  addMigrationWarning,
+  createMigrationReport,
+  type MigrationReport,
+} from './report.ts';
 
 async function confirmNodeVersionFileMigration(
   interactive: boolean,
@@ -330,6 +335,7 @@ function parseArgs() {
 
 interface MigrationSetupPlan {
   shouldSetupHooks: boolean;
+  gitHooksSkipReason?: string;
   selectedAgentTargetPaths?: string[];
   agentConflictDecisions: Map<string, 'append' | 'skip'>;
   selectedEditor?: EditorId;
@@ -445,16 +451,18 @@ async function collectGitHooksDecision(
   rootDir: string,
   packageManager: PackageManager | undefined,
   options: MigrationOptions,
-): Promise<boolean> {
+): Promise<{ shouldSetupHooks: boolean; gitHooksSkipReason?: string }> {
   let shouldSetupHooks = await promptGitHooks(options);
+  let gitHooksSkipReason: string | undefined;
   if (shouldSetupHooks) {
     const reason = preflightGitHooksSetup(rootDir, packageManager);
     if (reason) {
       prompts.log.warn(`⚠ ${reason}`);
+      gitHooksSkipReason = reason;
       shouldSetupHooks = false;
     }
   }
-  return shouldSetupHooks;
+  return { shouldSetupHooks, gitHooksSkipReason };
 }
 
 async function collectAgentInstructionPlan(
@@ -592,7 +600,7 @@ async function collectMigrationSetupPlan(
   packages?: WorkspacePackage[],
   includeEslint = true,
 ): Promise<MigrationSetupPlan> {
-  const shouldSetupHooks = await collectGitHooksDecision(rootDir, packageManager, options);
+  const gitHooksPlan = await collectGitHooksDecision(rootDir, packageManager, options);
   const agentPlan = await collectAgentInstructionPlan(rootDir, options);
   const editorPlan = await collectEditorConfigPlan(rootDir, options);
   const eslintPlan = includeEslint
@@ -600,7 +608,7 @@ async function collectMigrationSetupPlan(
     : { migrateEslint: false };
 
   return {
-    shouldSetupHooks,
+    ...gitHooksPlan,
     ...agentPlan,
     ...editorPlan,
     ...eslintPlan,
@@ -1022,6 +1030,9 @@ async function executeMigrationPlan(
   // Without hooks, lint-staged config must stay in package.json so existing
   // .husky/pre-commit scripts that invoke `npx lint-staged` keep working.
   const skipStagedMigration = !plan.shouldSetupHooks;
+  if (plan.gitHooksSkipReason) {
+    addManualStep(report, `Git hooks were not migrated: ${plan.gitHooksSkipReason}`);
+  }
 
   // 7. Rewrite configs
   updateMigrationProgress('Rewriting configs');
