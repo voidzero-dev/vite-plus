@@ -169,7 +169,7 @@ async fn resolve_corepack_invocation() -> Result<CorepackInvocation, i32> {
     if let Err((_, error)) = crate::commands::global::install::install(
         &["corepack".to_string()],
         crate::commands::global::install::InstallOptions {
-            node_version: None,
+            node_version: Some(&resolution.version),
             force: false,
             concurrency: 1,
             update: false,
