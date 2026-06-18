@@ -21,6 +21,13 @@ pub fn get_npm_package_version_url(name: &str, version_or_tag: &str) -> String {
     format!("{registry}/{name}/{version_or_tag}")
 }
 
+/// Get the metadata url of a npm package (lists all published versions)
+#[must_use]
+pub fn get_npm_package_metadata_url(name: &str) -> String {
+    let registry = npm_registry();
+    format!("{registry}/{name}")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

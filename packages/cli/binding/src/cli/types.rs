@@ -35,7 +35,7 @@ pub enum SynthesizableSubcommand {
         args: Vec<String>,
     },
     /// Format code
-    #[command(disable_help_flag = true)]
+    #[command(disable_help_flag = true, visible_alias = "format")]
     Fmt {
         #[clap(allow_hyphen_values = true, trailing_var_arg = true)]
         args: Vec<String>,

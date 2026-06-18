@@ -1,12 +1,17 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+// Mirrors Vite's own DEFAULT_CONFIG_FILES order so finders here pick the same
+// file Vite loads when a directory contains more than one config (e.g. a
+// `vite.config.js` next to a stray `vite.config.ts`). Readers evaluate via
+// Vite's loader, so a different order would make read and write target
+// different files.
 const VITE_CONFIG_FILES = [
-  'vite.config.ts',
   'vite.config.js',
   'vite.config.mjs',
-  'vite.config.mts',
+  'vite.config.ts',
   'vite.config.cjs',
+  'vite.config.mts',
   'vite.config.cts',
 ];
 
@@ -34,8 +39,18 @@ export function findViteConfigUp(startDir: string, stopDir: string): string | un
   return undefined;
 }
 
+/**
+ * Find a vite config file directly in `dir` (no walking up). Returns the
+ * absolute path of the first config file found, or undefined. Covers every
+ * supported extension (`.ts/.js/.mjs/.mts/.cjs/.cts`).
+ */
+export function findViteConfig(dir: string): string | undefined {
+  const filename = VITE_CONFIG_FILES.find((f) => fs.existsSync(path.join(dir, f)));
+  return filename ? path.join(dir, filename) : undefined;
+}
+
 export function hasViteConfig(dir: string): boolean {
-  return VITE_CONFIG_FILES.some((f) => fs.existsSync(path.join(dir, f)));
+  return findViteConfig(dir) !== undefined;
 }
 
 /**

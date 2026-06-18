@@ -4,7 +4,6 @@
     "vp pm ls # should show friendly error",
     "vp pm prune # should show friendly error",
     "vp outdated # should show friendly error",
-    "vp why lodash # should show friendly error",
-    "vp why definitely-not-installed-vite-plus-snap-pkg -g --json # should not require package.json for global why"
+    "vp why lodash # should show friendly error"
   ]
 }

@@ -16,7 +16,13 @@
     "vite": "catalog:",
     "vite-plus": "catalog:"
   },
-  "packageManager": "pnpm@<semver>"
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "<semver>",
+      "onFail": "download"
+    }
+  }
 }
 
 > cat vite.config.ts # lint.jsPlugins keeps `eslint-plugin-survives`; lint.rules keeps `survives/no-fiction`

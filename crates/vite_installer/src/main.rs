@@ -188,8 +188,13 @@ async fn do_install(
     let target_version =
         registry::resolve_version_string(version_or_tag, opts.registry.as_deref()).await?;
 
-    // Same version only if the binary is intact — a corrupted install needs a full reinstall
-    let same_version = current_version.as_deref() == Some(target_version.as_str())
+    // Same version only if the binary is intact — a corrupted install needs a full reinstall.
+    // `is_install_dir_for_version` also matches `{version}+force.*` dirs left by a forced
+    // reinstall (`vp upgrade <version> --force`), so re-running setup recognizes them as
+    // already installed instead of re-downloading.
+    let same_version = current_version
+        .as_deref()
+        .is_some_and(|current| install::is_install_dir_for_version(current, &target_version))
         && tokio::fs::try_exists(install_dir.join("current").join("bin").join(VP_BINARY_NAME))
             .await
             .unwrap_or(false);

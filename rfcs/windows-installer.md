@@ -265,7 +265,7 @@ The installer replicates the same result as `install.ps1`, implemented in Rust v
 │  │                          (junction on Windows,            │
 │  │                           atomic symlink on Unix)         │
 │  │                                                          │
-│  └─ cleanup old versions ── keep last 5 by creation time     │
+│  └─ cleanup old versions ── keep last 3 by creation time     │
 │                              protects new + previous version │
 └─────────────────────────────────────────────────────────────┘
                               │

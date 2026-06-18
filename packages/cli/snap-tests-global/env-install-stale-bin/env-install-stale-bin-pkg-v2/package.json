@@ -1,0 +1,7 @@
+{
+  "name": "env-install-stale-bin-pkg",
+  "version": "2.0.0",
+  "bin": {
+    "env-install-stale-keep": "./cli-keep.js"
+  }
+}

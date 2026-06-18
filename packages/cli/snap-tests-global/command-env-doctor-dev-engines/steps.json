@@ -1,0 +1,7 @@
+{
+  "env": {},
+  "ignoredPlatforms": ["win32"],
+  "commands": [
+    "vp env doctor > doctor.txt 2>&1; node -e \"const fs=require('node:fs');const text=fs.readFileSync('doctor.txt','utf8').replace(/\\u001b\\[[0-9;]*m/g,'');const lines=text.split('\\n');const start=lines.findIndex(l=>l.trim()==='devEngines');if(start===-1){console.error('devEngines section not found in doctor output');process.exit(1);}const out=[];for(let i=start;i<lines.length;i++){if(i>start&&lines[i].trim()===''){break;}out.push(lines[i].trimEnd());}console.log(out.join('\\n'));\" # print only the deterministic devEngines section of vp env doctor (the other sections are environment-dependent)"
+  ]
+}

@@ -22,7 +22,7 @@ pub mod platform;
 pub mod registry;
 
 /// Maximum number of old versions to keep.
-pub const MAX_VERSIONS_KEEP: usize = 5;
+pub const MAX_VERSIONS_KEEP: usize = 3;
 
 /// Platform-specific binary name for the `vp` CLI.
 pub const VP_BINARY_NAME: &str = if cfg!(windows) { "vp.exe" } else { "vp" };

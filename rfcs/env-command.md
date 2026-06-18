@@ -2,9 +2,9 @@
 
 ## Summary
 
-This RFC proposes adding a `vp env` command that provides system-wide, IDE-safe Node.js version management through a shim-based architecture. The shims intercept `node`, `npm`, and `npx` commands, automatically resolving and executing the correct Node.js version based on project configuration.
+This RFC proposes adding a `vp env` command that provides system-wide, IDE-safe Node.js version management through a shim-based architecture. The shims intercept `node`, `npm`, `npx`, and `corepack` commands, automatically resolving and executing the correct Node.js version based on project configuration.
 
-> **Note**: Corepack shim is not included as vite-plus has integrated package manager functionality.
+> **Note**: The `corepack` shim was originally excluded because Vite+ has integrated package manager functionality. This was revisited in [#858](https://github.com/voidzero-dev/vite-plus/issues/858) and [#1309](https://github.com/voidzero-dev/vite-plus/issues/1309): users and scripts invoke `corepack`/`pnpm`/`yarn` directly, and without a system Node.js installation there is no reachable `corepack` at all. See [Corepack Shim](#corepack-shim).
 
 ## Motivation
 
@@ -23,7 +23,7 @@ This RFC proposes adding a `vp env` command that provides system-wide, IDE-safe 
 A shim-based approach where:
 
 - `VITE_PLUS_HOME/bin/` directory is added to PATH (system-level for IDE reliability)
-- Shims (`node`, `npm`, `npx`) are symlinks to the `vp` binary (Unix) or trampoline `.exe` files (Windows)
+- Shims (`node`, `npm`, `npx`, `corepack`) are symlinks to the `vp` binary (Unix) or trampoline `.exe` files (Windows)
 - The `vp` CLI itself is also in `VITE_PLUS_HOME/bin/`, so users only need one PATH entry
 - The binary detects invocation via `argv[0]` and dispatches accordingly
 - Version resolution and installation leverage existing `vite_js_runtime` infrastructure
@@ -221,6 +221,7 @@ vp update -g typescript   # Update specific package
 node -v           # Uses project-specific version
 npm install       # Uses packageManager npm@<version> when explicitly configured, otherwise Node-bundled npm
 npx vitest        # Uses packageManager npm@<version> when explicitly configured, otherwise Node-bundled npx
+corepack enable   # Uses Node-bundled or vp-managed corepack (see Corepack Shim)
 ```
 
 Package-manager shims use `packageManager` only when the invoked command matches the configured manager or one of its generated aliases. For example, `packageManager: "npm@11.14.0"` makes the `npm` and `npx` shims run npm 11.14.0, while `packageManager: "pnpm@10.19.0"` does not turn `npm install` into `pnpm install`; `npm` falls back to the npm available through the resolved Node.js runtime. Alias pairs follow the package-manager download layout: `npm`/`npx`, `pnpm`/`pnpx`, `yarn`/`yarnpkg`, and `bun`/`bunx`.
@@ -236,6 +237,7 @@ argv[0] = "vp"        → Normal CLI mode (vp env, vp build, etc.)
 argv[0] = "node"      → Shim mode: resolve version, exec node
 argv[0] = "npm"       → Shim mode: resolve version, exec npm
 argv[0] = "npx"       → Shim mode: resolve version, exec npx
+argv[0] = "corepack"  → Shim mode: resolve version, exec corepack (managed fallback on Node 25+)
 ```
 
 ### Architecture Diagram
@@ -288,8 +290,8 @@ argv[0] = "npx"       → Shim mode: resolve version, exec npx
 │  │  (walk up directory tree)    │     │  0. VITE_PLUS_NODE_VERSION  │       │
 │  └──────────────┬───────────────┘     │  1. .session-node-version   │       │
 │                 │                     │  2. .node-version           │       │
-│                 │                     │  3. package.json#engines    │       │
-│                 │                     │  4. package.json#devEngines │       │
+│                 │                     │  3. package.json#devEngines │       │
+│                 │                     │  4. package.json#engines    │       │
 │                 │                     │  5. User default (config)   │       │
 │                 │                     │  6. Latest LTS              │       │
 │                 ▼                     └─────────────────────────────┘       │
@@ -315,7 +317,8 @@ argv[0] = "npx"       → Shim mode: resolve version, exec npx
 │  │   ├── vp   ──────────────────────  Symlink to ../current/bin/vp          │
 │  │   ├── node ──────────────────────┐                                       │
 │  │   ├── npm  ──────────────────────┼──▶ Symlinks to ../current/bin/vp      │
-│  │   └── npx  ──────────────────────┘                                       │
+│  │   ├── npx  ──────────────────────┤                                       │
+│  │   └── corepack ──────────────────┘                                       │
 │  ├── current/bin/vp                   The actual vp CLI binary              │
 │  ├── js_runtime/node/                 Node.js installations                 │
 │  │   ├── 20.18.0/bin/node             Installed Node.js versions            │
@@ -362,11 +365,13 @@ VITE_PLUS_HOME/                              # Default: ~/.vite-plus
 │   ├── node -> ../current/bin/vp     # Symlink to vp binary (Unix)
 │   ├── npm -> ../current/bin/vp      # Symlink to vp binary (Unix)
 │   ├── npx -> ../current/bin/vp      # Symlink to vp binary (Unix)
+│   ├── corepack -> ../current/bin/vp # Symlink to vp binary (Unix)
 │   ├── tsc -> ../current/bin/vp      # Symlink for global package (Unix)
 │   ├── vp.exe                        # Trampoline forwarding to current\bin\vp.exe (Windows)
 │   ├── node.exe                      # Trampoline shim for node (Windows)
 │   ├── npm.exe                       # Trampoline shim for npm (Windows)
 │   ├── npx.exe                       # Trampoline shim for npx (Windows)
+│   ├── corepack.exe                  # Trampoline shim for corepack (Windows)
 │   └── tsc.exe                       # Trampoline shim for global package (Windows)
 ├── current/
 │   └── bin/
@@ -406,16 +411,16 @@ VITE_PLUS_HOME/                              # Default: ~/.vite-plus
 
 **Key Directories:**
 
-| Directory          | Purpose                                                            |
-| ------------------ | ------------------------------------------------------------------ |
-| `bin/`             | vp symlink and all shims (node, npm, npx, global package binaries) |
-| `current/bin/`     | The actual vp CLI binary (bin/ shims point here)                   |
-| `js_runtime/node/` | Installed Node.js versions                                         |
-| `packages/`        | Installed global packages with metadata                            |
-| `bins/`            | Per-binary config files (tracks which package owns each binary)    |
-| `shared/`          | NODE_PATH symlinks for package require() resolution                |
-| `tmp/`             | Staging area for atomic installations                              |
-| `cache/`           | Resolution cache                                                   |
+| Directory          | Purpose                                                                      |
+| ------------------ | ---------------------------------------------------------------------------- |
+| `bin/`             | vp symlink and all shims (node, npm, npx, corepack, global package binaries) |
+| `current/bin/`     | The actual vp CLI binary (bin/ shims point here)                             |
+| `js_runtime/node/` | Installed Node.js versions                                                   |
+| `packages/`        | Installed global packages with metadata                                      |
+| `bins/`            | Per-binary config files (tracks which package owns each binary)              |
+| `shared/`          | NODE_PATH symlinks for package require() resolution                          |
+| `tmp/`             | Staging area for atomic installations                                        |
+| `cache/`           | Resolution cache                                                             |
 
 ### config.json Format
 
@@ -546,13 +551,13 @@ When resolving which Node.js version to use, vite-plus checks the following sour
    - Checked in current directory, then parent directories
    - Simple format: one version per file
 
-3. **`package.json#engines.node`**
+3. **`package.json#devEngines.runtime`**
    - Checked in current directory, then parent directories
-   - Standard npm constraint field
+   - Development-environment requirement field (see [RFC: devEngines Support](./dev-engines.md))
 
-4. **`package.json#devEngines.runtime`**
+4. **`package.json#engines.node`**
    - Checked in current directory, then parent directories
-   - npm RFC-compliant development engines spec
+   - Consumer-facing npm constraint field
 
 5. **User default** (`~/.vite-plus/config.json`)
    - Set via `vp env default <version>`
@@ -811,8 +816,8 @@ The resolution order is:
 1. `VITE_PLUS_NODE_VERSION` env var (session override)
 2. `.session-node-version` file (session override)
 3. `.node-version` in current or parent directories
-4. `package.json#engines.node` in current or parent directories
-5. `package.json#devEngines.runtime` in current or parent directories
+4. `package.json#devEngines.runtime` in current or parent directories
+5. `package.json#engines.node` in current or parent directories
 6. **User Default**: Configured via `vp env default <version>` (stored in `~/.vite-plus/config.json`)
 7. **System Default**: Latest LTS version
 
@@ -840,7 +845,7 @@ $ vp env doctor
 Installation
   ✓ VITE_PLUS_HOME    ~/.vite-plus
   ✓ Bin directory     exists
-  ✓ Shims             node, npm, npx
+  ✓ Shims             node, npm, npx, corepack
 
 Configuration
   ✓ Node.js mode      managed
@@ -918,6 +923,7 @@ Created shims:
   /Users/user/.vite-plus/bin/node
   /Users/user/.vite-plus/bin/npm
   /Users/user/.vite-plus/bin/npx
+  /Users/user/.vite-plus/bin/corepack
 
 Add to your shell profile (~/.zshrc, ~/.bashrc, etc.):
 
@@ -938,7 +944,7 @@ $ vp env doctor
 Installation
   ✓ VITE_PLUS_HOME    ~/.vite-plus
   ✓ Bin directory     exists
-  ✓ Shims             node, npm, npx
+  ✓ Shims             node, npm, npx, corepack
 
 Configuration
   ✓ Node.js mode      managed
@@ -949,6 +955,7 @@ PATH
   ✓ node              ~/.vite-plus/bin/node (vp shim)
   ✓ npm               ~/.vite-plus/bin/npm (vp shim)
   ✓ npx               ~/.vite-plus/bin/npx (vp shim)
+  ✓ corepack          ~/.vite-plus/bin/corepack (vp shim)
 
 Version Resolution
     Directory         /Users/user/projects/my-app
@@ -1019,7 +1026,7 @@ $ vp env doctor
 Installation
   ✓ VITE_PLUS_HOME    ~/.vite-plus
   ✗ Bin directory     does not exist
-  ✗ Missing shims     node, npm, npx
+  ✗ Missing shims     node, npm, npx, corepack
                       Run 'vp env setup' to create bin directory and shims.
 
 Configuration
@@ -1042,6 +1049,7 @@ PATH
   node                not found
   npm                 not found
   npx                 not found
+  corepack            not found
 
 Version Resolution
     Directory         /Users/user/projects/my-app
@@ -1378,7 +1386,7 @@ $ vp env which eslint
 # Unknown tool (not core tool, not in any global package)
 $ vp env which unknown-tool
 error: tool 'unknown-tool' not found
-Not a core tool (node, npm, npx) or installed global package.
+Not a core tool (node, npm, npx, corepack) or installed global package.
 Run 'vp list -g' to see installed packages.
 
 # Node.js version not installed
@@ -1396,7 +1404,7 @@ Run 'vp install -g typescript' to reinstall.
 
 ## Pin Command
 
-The `vp env pin` command provides per-directory Node.js version pinning by managing `.node-version` files.
+The `vp env pin` command provides per-directory Node.js version pinning. The write target follows the compatibility-first rule from [RFC: devEngines Support](./dev-engines.md): an existing `.node-version` keeps being updated; otherwise the pin is written to `package.json#devEngines.runtime` (creating the node entry with `onFail: "download"` when absent); `.node-version` is only created when the directory has no `package.json`. An explicit `--target node-version` / `--target dev-engines` flag overrides the selection.
 
 ### Behavior
 
@@ -1427,12 +1435,22 @@ $ vp env pin
 Pinned version: 20.18.0
   Source: /Users/user/projects/my-app/.node-version
 
-# If no .node-version in current directory but found in parent
+# Pinned via devEngines.runtime in the current directory's package.json
+$ vp env pin
+Pinned version: 24.1.0
+  Source: /Users/user/projects/my-app/package.json (devEngines.runtime)
+
+# If no pin in current directory but found in a parent (.node-version or
+# devEngines.runtime, checked in resolution order per directory)
 $ vp env pin
 No version pinned in current directory.
   Inherited: 22.13.0 from /Users/user/projects/.node-version
 
-# If no .node-version anywhere
+$ vp env pin
+No version pinned in current directory.
+  Inherited: ^24.0.0 from /Users/user/projects/package.json (devEngines.runtime)
+
+# If no pin anywhere
 $ vp env pin
 No version pinned.
   Using default: 20.18.0 (from ~/.vite-plus/config.json)
@@ -1449,24 +1467,29 @@ $ vp env unpin
 ✓ Removed .node-version from /Users/user/projects/my-app
 ```
 
+`vp env unpin` removes the pin from the same source that `vp env pin` would write: it deletes `.node-version` when present, otherwise it removes the node entry from `package.json#devEngines.runtime`.
+
 ### Version Format Support
 
-| Input     | Written to File | Behavior                         |
-| --------- | --------------- | -------------------------------- |
-| `20.18.0` | `20.18.0`       | Exact version                    |
-| `20.18`   | `20.18`         | Latest 20.18.x at runtime        |
-| `20`      | `20`            | Latest 20.x.x at runtime         |
-| `lts`     | `22.13.0`       | Resolved at pin time             |
-| `latest`  | `24.0.0`        | Resolved at pin time             |
-| `^20.0.0` | `^20.0.0`       | Semver range resolved at runtime |
+| Input     | Written to the target | Behavior                                       |
+| --------- | --------------------- | ---------------------------------------------- |
+| `20.18.0` | `20.18.0`             | Exact version (validated against the registry) |
+| `20.18`   | e.g. `20.18.3`        | Resolved to exact at pin time                  |
+| `20`      | e.g. `20.19.0`        | Resolved to exact at pin time                  |
+| `lts`     | e.g. `22.13.0`        | Resolved to exact at pin time                  |
+| `latest`  | e.g. `24.0.0`         | Resolved to exact at pin time                  |
+| `^20.0.0` | e.g. `20.19.0`        | Resolved to exact at pin time                  |
+
+Both write targets receive the same exact resolved version; the devEngines spec only allows semver range syntax in `devEngines.runtime.version`, and exact versions satisfy that. See [RFC: devEngines Support](./dev-engines.md).
 
 ### Flags
 
-| Flag           | Description                                             |
-| -------------- | ------------------------------------------------------- |
-| `--unpin`      | Remove the `.node-version` file                         |
-| `--no-install` | Skip pre-downloading the pinned version                 |
-| `--force`      | Overwrite existing `.node-version` without confirmation |
+| Flag                                   | Description                                                                      |
+| -------------------------------------- | -------------------------------------------------------------------------------- |
+| `--unpin`                              | Remove the pin from its current source (`.node-version` or `devEngines.runtime`) |
+| `--no-install`                         | Skip pre-downloading the pinned version                                          |
+| `--force`                              | Overwrite an existing pin without confirmation                                   |
+| `--target <node-version\|dev-engines>` | Explicitly choose the write target (overrides the default selection)             |
 
 ### Pre-download Behavior
 
@@ -1495,6 +1518,13 @@ Use `--force` to skip confirmation:
 ```bash
 $ vp env pin 22.13.0 --force
 ✓ Pinned Node.js version to 22.13.0
+```
+
+When the target is already pinned to the same version, the command no-ops (with or without `--force`):
+
+```bash
+$ vp env pin 22.13.0
+Already pinned to 22.13.0
 ```
 
 ### Error Handling
@@ -1792,7 +1822,6 @@ User runs: npm install -g codex
 │  │    → warn about managed conflicts                     │  │
 │  │    → interactive? prompt to create links              │  │
 │  │      non-interactive? create links directly           │  │
-│  │    → prints tip: use `vp install -g` instead          │  │
 │  │                                                       │  │
 │  │  return exit_code (0)                                 │  │
 │  └───────────────────────────────────────────────────────┘  │
@@ -1816,12 +1845,6 @@ If the user confirms (Y or Enter):
 
 - Creates a symlink: `~/.vite-plus/bin/codex` → `~/.vite-plus/js_runtime/node/20.18.0/bin/codex`
 - Prints: `Linked 'codex' to ~/.vite-plus/bin/codex`
-
-Then always prints the tip:
-
-```
-tip: Use `vp install -g codex` for managed shims that persist across Node.js version changes.
-```
 
 **Non-interactive mode** (piped/CI):
 
@@ -1865,6 +1888,46 @@ When `npm uninstall -g` is detected, the shim uses `spawn_tool()` (like install)
 #### Design Decision: spawn vs exec
 
 On Unix, `exec_tool()` uses `exec()` which replaces the current process — no code runs after. For `npm install -g` and `npm uninstall -g` specifically, we use `spawn_tool()` (spawn + wait) to retain control after npm finishes, enabling the post-install hint and post-uninstall link cleanup. All other npm commands continue to use `exec_tool()` for zero overhead.
+
+## Corepack Shim
+
+> Added in response to [#858](https://github.com/voidzero-dev/vite-plus/issues/858) and [#1309](https://github.com/voidzero-dev/vite-plus/issues/1309).
+
+`corepack` is part of the default shim tool list, so `vp env setup` (and the install scripts and `vp upgrade` shim refresh) create a `corepack` shim alongside `node`, `npm`, and `npx`.
+
+### Motivation
+
+- Without a system Node.js installation, corepack is unreachable even though Node.js ≤ 24 bundles it: `npm list -g` shows `corepack`, but no shim exists in `~/.vite-plus/bin`, so `corepack enable` fails with "command not found" (#1309).
+- Many projects, scripts, and AI agents invoke `pnpm`/`yarn` directly instead of `vp` commands (#858). Corepack provides version-correct package manager executables based on `package.json#packageManager`, covering workflows `vp pm` does not (e.g., `yarn plugin ...`, see [#1539](https://github.com/voidzero-dev/vite-plus/issues/1539)).
+- Node.js 25+ no longer bundles corepack, so the shim needs a managed fallback rather than relying on the bundled binary forever.
+
+### Resolution Order
+
+When the `corepack` shim is invoked:
+
+1. **vp-managed global package**: if corepack was installed via `vp install -g corepack`, that installation wins. Explicit user intent takes precedence, and the managed copy provides a consistent corepack version across Node.js versions (same philosophy as `packageManager` winning over the Node-bundled npm).
+2. **Node-bundled corepack**: resolve the project Node.js version (same resolution chain as `node`/`npm`/`npx`) and use the `corepack` bundled with that installation (present in Node.js ≤ 24).
+3. **Auto-install fallback**: on Node.js 25+ where corepack is not bundled, automatically install corepack as a vp-managed global package and execute it. Unlike an explicit `vp install -g corepack` (which exposes every binary the package declares, including its pnpm/yarn launchers), the auto-install links **only the `corepack` binary**: creating package-manager launchers stays `corepack enable`'s job, and the auto-install can never conflict with vp-managed package managers like an existing `vp install -g pnpm`. The restriction is recorded in the package metadata (`bins_restricted`) so `vp update -g` preserves it; an explicit `vp install -g corepack` resets it, and a shim-triggered reinstall over a previous unrestricted install keeps it unrestricted (it must not silently delete the user's exposed launcher bins). A one-line notice is printed to stderr when the install happens.
+
+### `corepack enable` / `corepack disable`
+
+Corepack's `enable` command creates package-manager launchers (`pnpm`, `yarn`, ...) **next to the corepack binary found in `PATH`**. Under the Vite+ shim that would be the per-version Node.js bin directory (`~/.vite-plus/js_runtime/node/<version>/bin/`), which is not on `PATH` — `corepack enable` would silently produce unreachable launchers.
+
+To fix this, the shim intercepts `corepack enable` and `corepack disable` invocations that do not pass an explicit `--install-directory` and injects `--install-directory ~/.vite-plus/bin` (the same spawn+wait pattern used for `npm install -g` interception):
+
+- `corepack enable` places `pnpm`/`yarn` launchers into `~/.vite-plus/bin`, which is on `PATH`. The launchers run via the shimmed `node`, so they still respect per-project Node.js version resolution, while corepack itself respects `package.json#packageManager`.
+- `corepack disable` removes them from the same location. Vite+-owned entries among the corepack-managed launcher names (`npm`, `npx`, `pnpm`, `pnpx`, `yarn`, `yarnpkg`) are protected: default shims, `vp install -g` binaries, and `npm install -g` links tracked by a `BinConfig` are snapshotted before corepack runs and restored afterwards if corepack removed or replaced them. Entries that were already absent or not Vite+-owned before the run are left alone.
+
+### Interplay with `vp install -g corepack`
+
+- `corepack` is **not** added to `CORE_SHIMS` (the `vp install -g` conflict guard), so `vp install -g corepack` remains allowed — it is the explicit way to control the corepack version and the documented fallback for older Vite+ versions.
+- `vp remove -g corepack` removes the package and its `BinConfig`, but keeps the default `corepack` shim in place (resolution falls back to the Node-bundled / auto-install path).
+- `npm install -g corepack` installs the package but does not link the binary: the post-install check skips protected shim names (default shims are guarded by `is_protected_shim`) and prints a note pointing at `vp install -g corepack` instead.
+
+### Out of Scope
+
+- Default `pnpm`/`yarn` shims that route to `vp pm` equivalents — `vp pm` does not cover all package-manager subcommands yet ([#1539](https://github.com/voidzero-dev/vite-plus/issues/1539)).
+- Replacing corepack with built-in Vite+ functionality. The shim is the compatibility bridge "until there is a proper alternative that everyone is happy to use".
 
 ## Exec Command
 
@@ -2117,6 +2180,7 @@ VITE_PLUS_HOME/
 │   ├── node -> ../current/bin/vp    # Symlink to same binary
 │   ├── npm -> ../current/bin/vp     # Symlink to same binary
 │   ├── npx -> ../current/bin/vp     # Symlink to same binary
+│   ├── corepack -> ../current/bin/vp # Symlink to same binary
 │   └── tsc -> ../current/bin/vp     # Symlink for global package
 └── current/
     └── bin/
@@ -2145,6 +2209,7 @@ All shims use relative symlinks:
 ln -sf ../current/bin/vp ~/.vite-plus/bin/node
 ln -sf ../current/bin/vp ~/.vite-plus/bin/npm
 ln -sf ../current/bin/vp ~/.vite-plus/bin/npx
+ln -sf ../current/bin/vp ~/.vite-plus/bin/corepack
 
 # Global package binaries
 ln -sf ../current/bin/vp ~/.vite-plus/bin/tsc
@@ -2161,6 +2226,7 @@ VITE_PLUS_HOME\
 │   ├── node.exe     # Trampoline shim (sets VITE_PLUS_SHIM_TOOL=node)
 │   ├── npm.exe      # Trampoline shim (sets VITE_PLUS_SHIM_TOOL=npm)
 │   ├── npx.exe      # Trampoline shim (sets VITE_PLUS_SHIM_TOOL=npx)
+│   ├── corepack.exe # Trampoline shim (sets VITE_PLUS_SHIM_TOOL=corepack)
 │   └── tsc.exe      # Trampoline shim for global package
 └── current\
     └── bin\
@@ -2202,7 +2268,7 @@ The Windows installer (`install.ps1`) follows this flow:
 
 1. Download and install `vp.exe` and `vp-shim.exe` to `~/.vite-plus/current/bin/`
 2. Create `~/.vite-plus/bin/vp.exe` trampoline (copy of `vp-shim.exe`)
-3. Create shim trampolines: `node.exe`, `npm.exe`, `npx.exe` (via `vp env setup`)
+3. Create shim trampolines: `node.exe`, `npm.exe`, `npx.exe`, `corepack.exe` (via `vp env setup`)
 4. Configure User PATH to include `~/.vite-plus/bin`
 
 ## Testing Strategy
@@ -2297,6 +2363,14 @@ env-doctor/
 
 1. NODE_PATH setup for shared package resolution
 
+### Phase 5: Corepack Shim (P1)
+
+1. Add `corepack` to the default shim tool list created by `vp env setup` (Unix symlink, Windows trampoline)
+2. Dispatch: vp-managed global corepack first, then Node-bundled corepack, then auto-install fallback (Node.js 25+)
+3. Intercept `corepack enable`/`corepack disable` to default `--install-directory` to `~/.vite-plus/bin`, restoring Vite+-owned shims afterwards
+4. Keep `vp install -g corepack` allowed; `vp remove -g corepack` keeps the default shim
+5. Update `vp env doctor`, `vp env which`, install scripts, and docs; add snap tests
+
 ## Backward Compatibility
 
 This is a new feature with no impact on existing functionality. The `vp` binary continues to work normally when invoked directly.
@@ -2315,7 +2389,7 @@ The following decisions have been made:
 
 2. **Windows Shim Strategy**: Trampoline `.exe` files that set `VITE_PLUS_SHIM_TOOL` and spawn `vp.exe` - Avoids "Terminate batch job?" prompt, works in all shells. See [RFC: Trampoline EXE for Shims](./trampoline-exe-for-shims.md).
 
-3. **Corepack Handling**: Not included - vite-plus has integrated package manager functionality, making corepack shims unnecessary.
+3. **Corepack Handling**: Included as a default shim (revisited in [#1309](https://github.com/voidzero-dev/vite-plus/issues/1309), originally excluded). The shim prefers a vp-managed global corepack, falls back to the Node-bundled binary (Node.js ≤ 24), and auto-installs a managed copy on Node.js 25+ where corepack is no longer bundled. See [Corepack Shim](#corepack-shim).
 
 4. **Cache Persistence**: Persist across upgrades - Better performance, with cache format versioning for compatibility.
 

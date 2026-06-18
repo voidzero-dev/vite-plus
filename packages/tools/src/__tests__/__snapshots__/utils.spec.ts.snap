@@ -47,10 +47,7 @@ exports[`replaceUnstableOutput() > replace ignore pnpm request warning log 1`] =
 Packages:"
 `;
 
-exports[`replaceUnstableOutput() > replace ignore tarball download average speed warning log 1`] = `
-"WARN  Tarball download average speed 29 KiB/s (size 56 KiB) is below 50 KiB/s: https://registry.<domain>/qs/-/qs-6.14.0.tgz (GET)
- WARN  Tarball download average speed 34 KiB/s (size 347 KiB) is below 50 KiB/s: https://registry.<domain>/undici/-/undici-7.16.0.tgz (GET)"
-`;
+exports[`replaceUnstableOutput() > replace ignore tarball download average speed warning log 1`] = `"Progress: resolved"`;
 
 exports[`replaceUnstableOutput() > replace pnpm progress plus markers with <repeat> 1`] = `
 "Scope: all <variable> workspace projects

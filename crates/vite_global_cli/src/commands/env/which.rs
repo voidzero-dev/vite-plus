@@ -2,8 +2,8 @@
 //!
 //! Shows the path to the tool binary that would be executed.
 //!
-//! For core tools (node, npm, npx), shows the resolved Node.js binary path
-//! along with version and resolution source.
+//! For core tools (node, npm, npx, corepack), shows the resolved Node.js
+//! binary path along with version and resolution source.
 //! For global packages, shows the binary path plus package metadata.
 
 use std::process::ExitStatus;
@@ -23,8 +23,8 @@ use super::{
 };
 use crate::error::Error;
 
-/// Core tools (node, npm, npx)
-const CORE_TOOLS: &[&str] = &["node", "npm", "npx"];
+/// Core tools (node, npm, npx, corepack)
+const CORE_TOOLS: &[&str] = &["node", "npm", "npx", "corepack"];
 
 /// Column width for left-side labels in aligned metadata output
 const LABEL_WIDTH: usize = 10;
@@ -37,6 +37,20 @@ pub async fn execute(cwd: AbsolutePathBuf, tool: &str) -> Result<ExitStatus, Err
 
     // Check if this is a core tool
     if CORE_TOOLS.contains(&tool) {
+        // corepack: a vp-managed global install wins over the Node-bundled
+        // copy. Mirror the shim dispatch: BinConfig-based lookup, falling
+        // back to the bundled copy (with the same warning) when the managed
+        // state is unusable, so the diagnostic matches what actually runs.
+        if tool == "corepack" {
+            match crate::shim::dispatch::find_package_for_binary(tool).await {
+                Ok(Some(metadata)) => match locate_package_binary(&metadata.name, tool) {
+                    Ok(_) => return execute_package_binary(tool, &metadata).await,
+                    Err(e) => warn_unusable_managed_corepack(&e.to_string()),
+                },
+                Ok(None) => {}
+                Err(e) => warn_unusable_managed_corepack(&e),
+            }
+        }
         return execute_core_tool(cwd, tool).await;
     }
 
@@ -47,7 +61,7 @@ pub async fn execute(cwd: AbsolutePathBuf, tool: &str) -> Result<ExitStatus, Err
 
     // Unknown tool
     output::error(&format!("tool '{}' not found", tool.bold()));
-    eprintln!("Not a core tool (node, npm, npx) or installed global package.");
+    eprintln!("Not a core tool (node, npm, npx, corepack) or installed global package.");
     eprintln!("Run 'vp list -g' to see installed packages.");
     Ok(exit_status(1))
 }
@@ -94,7 +108,16 @@ async fn execute_package_manager_tool(
     Ok(Some(ExitStatus::default()))
 }
 
-/// Execute which for a core tool (node, npm, npx).
+/// Warn that a vp-managed corepack exists but cannot run (mirrors the shim
+/// dispatch warning).
+fn warn_unusable_managed_corepack(reason: &str) {
+    output::warn(&format!(
+        "Ignoring unusable vp-managed corepack ({reason}); falling back to the \
+         Node-bundled corepack. Run `vp remove -g corepack` to clear it."
+    ));
+}
+
+/// Execute which for a core tool (node, npm, npx, corepack).
 async fn execute_core_tool(cwd: AbsolutePathBuf, tool: &str) -> Result<ExitStatus, Error> {
     // Resolve version for current directory
     let resolution = resolve_version(&cwd).await?;
@@ -116,8 +139,20 @@ async fn execute_core_tool(cwd: AbsolutePathBuf, tool: &str) -> Result<ExitStatu
     // Check if the tool exists
     if !tokio::fs::try_exists(&tool_path).await.unwrap_or(false) {
         output::error(&format!("{} not found", tool.bold()));
-        eprintln!("Node.js {} is not installed.", resolution.version);
-        eprintln!("Run 'vp env install {}' to install it.", resolution.version);
+        // corepack is no longer bundled starting with Node.js 25 (and a
+        // bundled copy may have been removed); only print that hint when the
+        // Node.js installation itself is present.
+        if tool == "corepack"
+            && crate::shim::dispatch::locate_tool(&resolution.version, "node").is_ok()
+        {
+            eprintln!("corepack is not available for Node.js {}.", resolution.version);
+            eprintln!(
+                "It is installed automatically on first use, or run 'vp install -g corepack'."
+            );
+        } else {
+            eprintln!("Node.js {} is not installed.", resolution.version);
+            eprintln!("Run 'vp env install {}' to install it.", resolution.version);
+        }
         return Ok(exit_status(1));
     }
 

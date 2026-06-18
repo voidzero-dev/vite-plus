@@ -107,8 +107,19 @@ pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
         output::info("installing...");
     }
 
-    // Step 8: Create version directory
-    let version_dir = install_dir.join(&resolved.version);
+    // Step 8: Create version directory.
+    //
+    // A forced reinstall of the active version cannot write into the active
+    // version directory on Windows because the running `vp.exe` is locked.
+    // Install into a unique semver build-metadata directory instead, then
+    // repoint `current` after the install has completed.
+    let active_install_dir = install::read_current_version(&install_dir).await;
+    let install_dir_name = install::target_install_dir_name(
+        &resolved.version,
+        active_install_dir.as_deref(),
+        options.force,
+    );
+    let version_dir = install_dir.join(&install_dir_name);
     tokio::fs::create_dir_all(&version_dir).await?;
 
     // Step 9: Extract platform binary and install via npm
@@ -116,6 +127,7 @@ pub async fn execute(options: UpgradeOptions) -> Result<ExitStatus, Error> {
         &platform_data,
         &version_dir,
         &install_dir,
+        &install_dir_name,
         &resolved.version,
         current_version,
         options.silent,
@@ -138,6 +150,7 @@ async fn install_platform_and_main(
     platform_data: &[u8],
     version_dir: &AbsolutePathBuf,
     install_dir: &AbsolutePathBuf,
+    install_dir_name: &str,
     new_version: &str,
     current_version: &str,
     silent: bool,
@@ -166,14 +179,14 @@ async fn install_platform_and_main(
     tracing::debug!("Previous version: {:?}", previous_version);
 
     // Swap current link — POINT OF NO RETURN
-    install::swap_current_link(install_dir, new_version).await?;
+    install::swap_current_link(install_dir, install_dir_name).await?;
 
     // Post-swap operations: non-fatal (the update already succeeded)
     if let Err(e) = install::refresh_shims(install_dir).await {
         output::warn(&format!("Shim refresh failed (non-fatal): {e}"));
     }
 
-    let mut protected = vec![new_version];
+    let mut protected = vec![install_dir_name];
     if let Some(ref prev) = previous_version {
         protected.push(prev.as_str());
     }

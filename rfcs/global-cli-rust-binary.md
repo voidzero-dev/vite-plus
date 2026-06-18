@@ -751,7 +751,7 @@ main_url="${NPM_REGISTRY}/vite-plus-cli/-/vite-plus-cli-${VITE_PLUS_VERSION}.tgz
 # Create/update current symlink
 ln -sfn "$VITE_PLUS_VERSION" "$CURRENT_LINK"
 
-# Cleanup old versions (keep max 5)
+# Cleanup old versions (keep max 3)
 cleanup_old_versions
 
 # Add ~/.vite-plus/current/bin to PATH
@@ -803,7 +803,7 @@ if (Test-Path $CurrentLink) {
 }
 cmd /c mklink /J "$CurrentLink" "$VersionDir" | Out-Null
 
-# Cleanup old versions (keep max 5)
+# Cleanup old versions (keep max 3)
 Cleanup-OldVersions -InstallDir $InstallDir
 
 # Add $InstallDir\current\bin to user PATH
@@ -853,7 +853,7 @@ The installer supports multiple versions with symlinks, allowing version switchi
 
 - PATH points to `~/.vite-plus/current/bin` (stable location)
 - Installing a new version updates the `current` symlink
-- Old versions are automatically cleaned up (keeps max 5 versions)
+- Old versions are automatically cleaned up (keeps max 3 versions)
 
 #### How the Rust Binary Uses JS Scripts
 

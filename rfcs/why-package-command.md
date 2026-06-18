@@ -101,22 +101,11 @@ vp why react --no-optional      # Exclude optional dependencies
 # Depth control
 vp why react --depth 3          # Limit tree depth to 3 levels
 
-# Global packages
-vp why typescript -g            # Check globally installed packages
-
 # Custom finder (pnpm only)
 vp why react --find-by myFinder # Use finder function from .pnpmfile.cjs
 ```
 
-### Global Packages Checking
-
-Only use `npm` to check globally installed packages, because `vp install -g` uses `npm` cli to install global packages.
-
-```bash
-vp why typescript -g            # Check globally installed packages
-
--> npm why typescript -g
-```
+We do not provide `why` feature for global packages managed by Vite+.
 
 ### Command Mapping
 
@@ -151,7 +140,6 @@ vp why typescript -g            # Check globally installed packages
 | `-D, --dev`               | `-D, --dev`               | N/A                     | N/A                 | N/A                      | N/A             | Only dev dependencies (pnpm only)                               |
 | `--depth <number>`        | `--depth <number>`        | N/A                     | N/A                 | N/A                      | `--depth`       | Limit tree depth (pnpm/bun)                                     |
 | `--no-optional`           | `--no-optional`           | N/A                     | `--ignore-optional` | N/A                      | N/A             | Exclude optional dependencies (pnpm only)                       |
-| `-g, --global`            | `-g, --global`            | N/A                     | N/A                 | N/A                      | N/A             | Check globally installed packages                               |
 | `--exclude-peers`         | `--exclude-peers`         | N/A                     | N/A                 | Removes `--peers` flag   | N/A             | Exclude peer dependencies (yarn@2+ defaults to including peers) |
 | `--find-by <finder_name>` | `--find-by <finder_name>` | N/A                     | N/A                 | N/A                      | N/A             | Use finder function from .pnpmfile.cjs                          |
 
@@ -181,7 +169,6 @@ vp why typescript -g            # Check globally installed packages
 - Supports workspace filtering with `--filter`
 - Can filter by dependency type (prod, dev, optional)
 - Supports depth limiting
-- Can check global packages with `-g`
 
 **Output format:**
 
@@ -467,10 +454,6 @@ impl PackageManager {
 
                 if options.no_optional {
                     args.push("--no-optional".into());
-                }
-
-                if options.global {
-                    args.push("--global".into());
                 }
 
                 if options.exclude_peers {
@@ -1122,7 +1105,6 @@ Options:
   -D, --dev              Only dev dependencies (pnpm-specific)
   --depth <NUMBER>       Limit tree depth (pnpm-specific)
   --no-optional          Exclude optional dependencies (pnpm-specific)
-  -g, --global           Check globally installed packages
   --exclude-peers        Exclude peer dependencies (pnpm/yarn@2+-specific)
   --find-by <FINDER_NAME> Use a finder function defined in .pnpmfile.cjs (pnpm-specific)
   -h, --help             Print help
@@ -1143,7 +1125,6 @@ Examples:
   vp why react --filter app          # Check in specific workspace (pnpm)
   vp why react --prod                # Only production deps (pnpm)
   vp why react --depth 3             # Limit tree depth (pnpm)
-  vp why typescript -g               # Check global packages
   vp why react --find-by myFinder    # Use custom finder (pnpm)
 ```
 
@@ -1268,7 +1249,6 @@ vp why package --prod --json
 | Workspace filter | ✅ `--filter`     | ✅ `--workspace` | ❌ Not supported | ❌ Not supported | ❌ Not supported | pnpm and npm            |
 | Dep type filter  | ✅ `--prod/--dev` | ❌ Not supported | ❌ Not supported | ❌ Not supported | ❌ Not supported | pnpm only               |
 | Depth limit      | ✅ `--depth`      | ❌ Not supported | ❌ Not supported | ❌ Not supported | ✅ `--depth`     | pnpm and bun            |
-| Global check     | ✅ `-g`           | ❌ Not supported | ❌ Not supported | ❌ Not supported | ❌ Not supported | pnpm only               |
 | Tree view        | ❌ Not supported  | ❌ Not supported | ❌ Not supported | ❌ Not supported | ✅ Built-in      | bun shows tree view     |
 
 ## Future Enhancements

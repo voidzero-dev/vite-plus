@@ -9,18 +9,37 @@ Use Vite+ to manage dependencies across pnpm, npm, Yarn, and Bun. Instead of swi
 Vite+ detects the package manager from the workspace root in this order:
 
 1. `packageManager` in `package.json`
-2. `pnpm-workspace.yaml`
-3. `pnpm-lock.yaml`
-4. `yarn.lock` or `.yarnrc.yml`
-5. `package-lock.json`
-6. `bun.lock` or `bun.lockb`
-7. `.pnpmfile.cjs` or `pnpmfile.cjs`
-8. `bunfig.toml`
-9. `yarn.config.cjs`
+2. `devEngines.packageManager` in `package.json`
+3. `pnpm-workspace.yaml`
+4. `pnpm-lock.yaml`
+5. `yarn.lock` or `.yarnrc.yml`
+6. `package-lock.json`
+7. `bun.lock` or `bun.lockb`
+8. `.pnpmfile.cjs` or `pnpmfile.cjs`
+9. `bunfig.toml`
+10. `yarn.config.cjs`
 
-If none of those files are present, `vp` falls back to `pnpm` by default. Vite+ automatically downloads the matching package manager and uses it for the command you ran.
+If none of those files are present, `vp` falls back to `pnpm` by default. Vite+ automatically downloads the matching package manager and uses it for the command you ran. When detection comes from lockfiles or config files, the resolved version is written to `devEngines.packageManager` so future runs are deterministic; projects that already declare `packageManager` or `devEngines.packageManager` are left as-is.
 
-The explicit `packageManager` field also affects matching package-manager shims. If a project has `packageManager: "npm@10.9.4"`, `npm` and `npx` use npm 10.9.4. Other generated alias pairs behave the same way: `pnpm`/`pnpx`, `yarn`/`yarnpkg`, and `bun`/`bunx`. Mismatched tools are not translated; `npm` in a `pnpm` project still resolves as npm.
+The [`devEngines.packageManager`](https://docs.npmjs.com/cli/v11/configuring-npm/package-json#devengines) field accepts a single object or an array of objects, and its `version` may be a semver range:
+
+```json
+{
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "^11.0.0",
+      "onFail": "download"
+    }
+  }
+}
+```
+
+A range resolves to an already-downloaded satisfying version when possible, otherwise to the latest satisfying version from the npm registry. The range itself stays the source of truth; Vite+ never freezes it into an exact `packageManager` pin. When both `packageManager` and `devEngines.packageManager` are declared, the `packageManager` field drives selection and Vite+ warns when it does not satisfy the devEngines constraint (`vp env doctor` shows details).
+
+Vite+ currently downloads the declared package manager (the `onFail: "download"` behavior); the other `onFail` values are accepted but not yet differentiated.
+
+The explicit `packageManager` field (or the `devEngines.packageManager` declaration) also affects matching package-manager shims. If a project has `packageManager: "npm@10.9.4"`, `npm` and `npx` use npm 10.9.4. Other generated alias pairs behave the same way: `pnpm`/`pnpx`, `yarn`/`yarnpkg`, and `bun`/`bunx`. Mismatched tools are not translated; `npm` in a `pnpm` project still resolves as npm.
 
 ## Usage
 
@@ -151,3 +170,20 @@ vp pm config get registry
 vp pm cache clean --force
 vp pm exec tsc --version
 ```
+
+#### Staged publishing
+
+`vp pm stage` exposes [npm's staged publishing](https://docs.npmjs.com/staged-publishing) workflow: a build is uploaded to a staging area (no 2FA, CI-friendly), then a maintainer approves or rejects it from a trusted device (2FA). It adapts to the detected package manager.
+
+```bash
+vp pm stage publish              # upload the package to staging (no 2FA)
+vp pm stage list                 # list staged versions
+vp pm stage view <stage-id>      # inspect a staged version
+vp pm stage download <stage-id>  # download the staged tarball
+vp pm stage approve <stage-id>   # promote to the live registry (2FA)
+vp pm stage reject <stage-id>    # discard a staged version (2FA)
+```
+
+- pnpm (`pnpm stage`, requires pnpm ≥ 11.3) and npm (`npm stage`, requires npm ≥ 11.15 and Node ≥ 22.14) pass through directly.
+- yarn (Berry) uses its npm plugin (`yarn npm publish --staged`, `yarn npm stage …`); `view`/`download` fall back to npm.
+- yarn Classic and bun have no staged-publishing support and fall back to `npm stage`.

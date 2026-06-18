@@ -10,13 +10,42 @@ import {
   ensureGitignoreVsCodeEditorConfigs,
   formatTargetDir,
   getProjectDirFromPackageName,
+  normalizeEditorOption,
   renameFiles,
+  shouldConfigureEditorsForCreate,
 } from '../utils.js';
 
 describe('getProjectDirFromPackageName', () => {
   it('should get project dir from package name', () => {
     expect(getProjectDirFromPackageName('@my/package')).toBe('package');
     expect(getProjectDirFromPackageName('my-package')).toBe('my-package');
+  });
+});
+
+describe('editor configuration policy', () => {
+  it('normalizes repeated editor options to a single editor value', () => {
+    expect(normalizeEditorOption('vscode')).toBe('vscode');
+    expect(normalizeEditorOption(['vscode', 'zed'])).toBe('zed');
+    expect(normalizeEditorOption(['vscode', false])).toBe(false);
+    expect(normalizeEditorOption([undefined, 'vscode'])).toBe('vscode');
+  });
+
+  it('allows automatic editor configuration outside existing monorepos', () => {
+    expect(shouldConfigureEditorsForCreate({ isMonorepo: false, editor: undefined })).toBe(true);
+  });
+
+  it('skips automatic editor configuration inside existing monorepos', () => {
+    expect(shouldConfigureEditorsForCreate({ isMonorepo: true, editor: undefined })).toBe(false);
+  });
+
+  it('allows explicit editor opt-in inside existing monorepos', () => {
+    expect(shouldConfigureEditorsForCreate({ isMonorepo: true, editor: 'vscode' })).toBe(true);
+    expect(shouldConfigureEditorsForCreate({ isMonorepo: true, editor: '   ' })).toBe(false);
+  });
+
+  it('keeps --no-editor as an explicit opt-out in every workspace mode', () => {
+    expect(shouldConfigureEditorsForCreate({ isMonorepo: false, editor: false })).toBe(false);
+    expect(shouldConfigureEditorsForCreate({ isMonorepo: true, editor: false })).toBe(false);
   });
 });
 

@@ -13,6 +13,6 @@
     "dev": "vp run website#dev"
   },
   "engines": {
-    "node": ">=22.12.0"
+    "node": ">=22.18.0"
   }
 }

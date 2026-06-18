@@ -1,8 +1,11 @@
+import fs from 'node:fs';
 import path from 'node:path';
 
 import type { WorkspaceInfo, WorkspaceInfoOptional } from '../types/index.ts';
 import { readJsonFile } from '../utils/json.ts';
+import { isBingoTemplate } from '../utils/workspace.ts';
 import { prependToPathToEnvs } from './command.ts';
+import { isRelativePath } from './org-manifest.ts';
 import { BuiltinTemplate, type TemplateInfo, TemplateType } from './templates/types.ts';
 
 // Check if template name is a GitHub URL
@@ -40,6 +43,53 @@ export function inferGitHubRepoName(templateName: string): string | null {
   return repoName || null;
 }
 
+// Resolve a declared local template (by workspace package name or a relative
+// `./path`) to its directory, relative to the workspace root and using forward
+// slashes (so it matches `parentDirs` and joins cleanly on any platform).
+function localTemplateDir(
+  workspaceInfo: WorkspaceInfoOptional,
+  templateName: string,
+): string | undefined {
+  if (isRelativePath(templateName)) {
+    return templateName.replace(/^\.\//, '');
+  }
+  return workspaceInfo.packages.find((pkg) => pkg.name === templateName)?.path;
+}
+
+// Resolve the bin script a local template package should be executed through.
+// A single bin (string, or a one-entry object) is unambiguous. For multiple
+// bin entries, prefer the one named after the package (scoped or unscoped) and
+// fail clearly otherwise, since a local generator is run directly by `node`.
+function resolveLocalBinPath(
+  localPackagePath: string,
+  packageName: string,
+  bin: Record<string, string> | string | undefined,
+): string | undefined {
+  if (!bin) {
+    return undefined;
+  }
+  if (typeof bin === 'string') {
+    return path.join(localPackagePath, bin);
+  }
+  const entries = Object.entries(bin);
+  if (entries.length === 0) {
+    return undefined;
+  }
+  if (entries.length === 1) {
+    return path.join(localPackagePath, entries[0][1]);
+  }
+  const unscopedName = packageName.slice(packageName.lastIndexOf('/') + 1);
+  const preferred = bin[packageName] ?? bin[unscopedName];
+  if (preferred) {
+    return path.join(localPackagePath, preferred);
+  }
+  throw new Error(
+    `Local template package "${packageName}" defines multiple "bin" entries (${entries
+      .map(([name]) => name)
+      .join(', ')}); add a "bin" entry named "${packageName}" so the template entry is unambiguous`,
+  );
+}
+
 // Discover and identify a template
 export function discoverTemplate(
   templateName: string,
@@ -48,11 +98,15 @@ export function discoverTemplate(
   interactive?: boolean,
   bundledLocalPath?: string,
   skipShorthand?: boolean,
+  // True when `templateName` was resolved from a `create.templates` entry, so a
+  // matching workspace package should run as a local template (and a missing
+  // `bin` is an error rather than an npm fall-through).
+  localTemplate?: boolean,
 ): TemplateInfo {
   const envs = prependToPathToEnvs(workspaceInfo.downloadPackageManager.binPrefix, {
     ...process.env,
   });
-  const parentDir = inferParentDir(templateName, workspaceInfo);
+  const parentDir = inferParentDir(templateName, workspaceInfo, localTemplate);
   if (bundledLocalPath) {
     return {
       command: '',
@@ -91,42 +145,57 @@ export function discoverTemplate(
     }
   }
 
-  // Check for local package
-  const localPackage = workspaceInfo.packages.find((pkg) => pkg.name === templateName);
-  if (localPackage) {
-    const localPackagePath = path.join(workspaceInfo.rootDir, localPackage.path);
+  // Resolve a declared `create.templates` entry that points at a local package,
+  // either by workspace package name or by a relative `./path` to its directory
+  // (resolved against the workspace root). Only when `localTemplate` is set —
+  // `create.templates` is the source of truth; a bare workspace name is not a
+  // template otherwise. Relative paths are escape-checked at config validation.
+  if (localTemplate) {
+    const localDir = localTemplateDir(workspaceInfo, templateName);
+    // A declared local template that resolves to nothing (a renamed/removed
+    // workspace package, or a typo) must fail clearly instead of falling
+    // through to an unrelated same-named npm package.
+    if (!localDir) {
+      throw new Error(
+        `Local template "${templateName}" does not match any workspace package; ` +
+          `update the \`create.templates\` entry in vite.config.ts`,
+      );
+    }
+    const localPackagePath = path.join(workspaceInfo.rootDir, localDir);
     const packageJsonPath = path.join(localPackagePath, 'package.json');
+    if (!fs.existsSync(packageJsonPath)) {
+      throw new Error(
+        `Local template "${templateName}" has no package.json, so it cannot be run as a template`,
+      );
+    }
     const pkg = readJsonFile(packageJsonPath) as {
+      name?: string;
       dependencies?: Record<string, string>;
-      keywords?: string[];
       bin?: Record<string, string> | string;
     };
-    let binPath = '';
-    if (pkg.bin) {
-      if (typeof pkg.bin === 'string') {
-        binPath = path.join(localPackagePath, pkg.bin);
-      } else {
-        const binName = Object.keys(pkg.bin)[0];
-        binPath = path.join(localPackagePath, pkg.bin[binName]);
-      }
+    const binPath = resolveLocalBinPath(localPackagePath, pkg.name ?? templateName, pkg.bin);
+    // A declared template without a bin entry cannot be executed. Fail clearly
+    // instead of falling through to an unrelated `create-<name>` npm package.
+    if (!binPath) {
+      throw new Error(
+        `Local template "${templateName}" has no "bin" entry in its package.json, so it cannot be run as a template`,
+      );
     }
     const args = [binPath, ...templateArgs];
     let type: TemplateType = TemplateType.remote;
-    if (pkg.keywords?.includes('bingo-template') || !!pkg.dependencies?.bingo) {
+    if (isBingoTemplate(pkg)) {
       type = TemplateType.bingo;
       // add `--skip-requests` by default for bingo templates
       args.push('--skip-requests');
     }
-    if (binPath) {
-      return {
-        command: 'node',
-        args,
-        envs,
-        type,
-        parentDir,
-        interactive,
-      };
-    }
+    return {
+      command: 'node',
+      args,
+      envs,
+      type,
+      parentDir,
+      interactive,
+    };
   }
 
   // Manifest-resolved entries are already fully qualified by the author —
@@ -234,9 +303,22 @@ export function expandCreateShorthand(templateName: string): string {
 export function inferParentDir(
   templateName: string,
   workspaceInfo: WorkspaceInfoOptional,
+  localTemplate = false,
 ): string | undefined {
   if (workspaceInfo.parentDirs.length === 0) {
     return undefined;
+  }
+  // Output generated from a local package belongs next to that package, in the
+  // parent directory it already lives in, rather than defaulting to the `apps`
+  // rule below. Gated like `discoverTemplate`: only a `create.templates`
+  // resolution makes the name local — an npm template that merely collides
+  // with a workspace package name must not be co-located with it.
+  const localDir = localTemplate ? localTemplateDir(workspaceInfo, templateName) : undefined;
+  if (localDir) {
+    const ownParentDir = path.dirname(localDir);
+    if (workspaceInfo.parentDirs.includes(ownParentDir)) {
+      return ownParentDir;
+    }
   }
   // apps/applications by default
   let rule = /app/i;

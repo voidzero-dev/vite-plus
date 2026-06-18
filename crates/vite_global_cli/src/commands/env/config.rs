@@ -200,8 +200,8 @@ pub async fn delete_session_version() -> Result<(), Error> {
 /// 0. `VP_NODE_VERSION` env var (session override from `vp env use`)
 /// 1. `.session-node-version` file (session override written by `vp env use` for shell-wrapper-less environments)
 /// 2. `.node-version` file in current or parent directories
-/// 3. `package.json#engines.node` in current or parent directories
-/// 4. `package.json#devEngines.runtime` in current or parent directories
+/// 3. `package.json#devEngines.runtime` in current or parent directories
+/// 4. `package.json#engines.node` in current or parent directories
 /// 5. User default from config.json
 /// 6. Latest LTS version
 pub async fn resolve_version(cwd: &AbsolutePath) -> Result<VersionResolution, Error> {
@@ -267,27 +267,28 @@ pub async fn resolve_version_from_files(cwd: &AbsolutePath) -> Result<VersionRes
 
         // Invalid version from a project source - try lower-priority sources in the same directory.
         // This mirrors the fallback logic in download_runtime_for_project().
-        // - NodeVersionFile: try engines.node, then devEngines.runtime
-        // - EnginesNode: try devEngines.runtime
-        if matches!(resolution.source, VersionSource::NodeVersionFile | VersionSource::EnginesNode)
-        {
+        // - NodeVersionFile: try devEngines.runtime, then engines.node
+        // - DevEnginesRuntime: try engines.node
+        if matches!(
+            resolution.source,
+            VersionSource::NodeVersionFile | VersionSource::DevEnginesRuntime
+        ) {
             if let Some(project_root) = &resolution.project_root {
                 let package_json_path = project_root.join("package.json");
                 if let Ok(Some(pkg)) = read_package_json(&package_json_path).await {
-                    // Try engines.node (only when falling back from .node-version)
+                    // Try devEngines.runtime (only when falling back from .node-version)
                     if matches!(resolution.source, VersionSource::NodeVersionFile) {
-                        if let Some(engines_node) = pkg
-                            .engines
-                            .as_ref()
-                            .and_then(|e| e.node.clone())
-                            .and_then(|v| normalize_version(&v, "engines.node"))
+                        if let Some(dev_engines) = pkg
+                            .dev_engines_runtime("node")
+                            .and_then(|r| r.version.clone())
+                            .and_then(|v| normalize_version(&v, "devEngines.runtime"))
                         {
-                            let resolved = resolve_version_string(&engines_node, &provider).await?;
-                            let is_range = NodeProvider::is_lts_alias(&engines_node)
-                                || !NodeProvider::is_exact_version(&engines_node);
+                            let resolved = resolve_version_string(&dev_engines, &provider).await?;
+                            let is_range = NodeProvider::is_lts_alias(&dev_engines)
+                                || !NodeProvider::is_exact_version(&dev_engines);
                             return Ok(VersionResolution {
                                 version: resolved,
-                                source: "engines.node".into(),
+                                source: "devEngines.runtime".into(),
                                 source_path: Some(package_json_path),
                                 project_root: Some(project_root.clone()),
                                 is_range,
@@ -295,22 +296,19 @@ pub async fn resolve_version_from_files(cwd: &AbsolutePath) -> Result<VersionRes
                         }
                     }
 
-                    // Try devEngines.runtime
-                    if let Some(dev_engines) = pkg
-                        .dev_engines
+                    // Try engines.node
+                    if let Some(engines_node) = pkg
+                        .engines
                         .as_ref()
-                        .and_then(|de| de.runtime.as_ref())
-                        .and_then(|rt| rt.find_by_name("node"))
-                        .map(|r| r.version.clone())
-                        .filter(|v| !v.is_empty())
-                        .and_then(|v| normalize_version(&v, "devEngines.runtime"))
+                        .and_then(|e| e.node.clone())
+                        .and_then(|v| normalize_version(&v, "engines.node"))
                     {
-                        let resolved = resolve_version_string(&dev_engines, &provider).await?;
-                        let is_range = NodeProvider::is_lts_alias(&dev_engines)
-                            || !NodeProvider::is_exact_version(&dev_engines);
+                        let resolved = resolve_version_string(&engines_node, &provider).await?;
+                        let is_range = NodeProvider::is_lts_alias(&engines_node)
+                            || !NodeProvider::is_exact_version(&engines_node);
                         return Ok(VersionResolution {
                             version: resolved,
-                            source: "devEngines.runtime".into(),
+                            source: "engines.node".into(),
                             source_path: Some(package_json_path),
                             project_root: Some(project_root.clone()),
                             is_range,

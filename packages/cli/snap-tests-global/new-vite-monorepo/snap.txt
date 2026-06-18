@@ -23,10 +23,16 @@ vite.config.ts
   "devDependencies": {
     "vite-plus": "catalog:"
   },
-  "engines": {
-    "node": ">=22.12.0"
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "<semver>",
+      "onFail": "download"
+    }
   },
-  "packageManager": "pnpm@<semver>"
+  "engines": {
+    "node": ">=22.18.0"
+  }
 }
 
 > cat vite-plus-monorepo/vite.config.ts # check vite config has cache enabled
@@ -59,7 +65,7 @@ catalog:
   "@types/node": ^24
   typescript: ^5
   vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: npm:@voidzero-dev/vite-plus-test@latest
+  vitest: <semver>
   vite-plus: latest
 overrides:
   vite: "catalog:"
@@ -81,6 +87,10 @@ No .yarnrc.yml
 > test -d vite-plus-monorepo/.git && echo 'Git initialized' # check git init
 Git initialized
 
+> vp create vite:monorepo --interactive --verbose --no-git --no-hooks --no-agent --no-editor --package-manager pnpm --directory verbose-no-git-monorepo # explicit --no-git should skip verbose monorepo git prompt
+> test ! -d verbose-no-git-monorepo/.git && echo 'No git initialized for explicit --no-git' || (echo 'ERROR: git initialized' && exit 1) # check verbose --no-git is respected
+No git initialized for explicit --no-git
+
 > test -f vite-plus-monorepo/.vscode/settings.json && echo '.vscode/settings.json exists' # check VS Code settings created
 .vscode/settings.json exists
 
@@ -96,7 +106,7 @@ Git initialized
 > ls vite-plus-monorepo/apps # check apps directory created
 website
 
-> cat vite-plus-monorepo/apps/website/package.json # check website strips aliased vite/vitest
+> cat vite-plus-monorepo/apps/website/package.json # check website keeps aliased vite for pnpm (workspace override stays effective)
 {
   "name": "website",
   "version": "0.0.0",
@@ -109,6 +119,7 @@ website
   },
   "devDependencies": {
     "typescript": "~6.0.2",
+    "vite": "catalog:",
     "vite-plus": "catalog:"
   }
 }
@@ -163,9 +174,26 @@ website
 > ls vite-plus-monorepo/apps/vite-plus-application/package.json # check vite-plus-application package.json
 vite-plus-monorepo/apps/vite-plus-application/package.json
 
+> test ! -e vite-plus-monorepo/apps/vite-plus-application/.vscode && echo 'No app editor config' || (echo 'ERROR: app editor config exists' && exit 1) # monorepo package create without --editor should not write VS Code config
+No app editor config
+
+> cd vite-plus-monorepo && vp create --no-interactive vite:application --directory apps/no-editor --no-editor # create application with explicit editor opt-out inside monorepo
+> test ! -e vite-plus-monorepo/apps/no-editor/.vscode && echo 'No opt-out app editor config' || (echo 'ERROR: opt-out app editor config exists' && exit 1) # --no-editor should not write VS Code config
+No opt-out app editor config
+
+> cd vite-plus-monorepo && vp create --no-interactive vite:application --directory apps/editor-opt-in --editor vscode # create application with explicit editor opt-in inside monorepo
+> test -f vite-plus-monorepo/apps/editor-opt-in/.vscode/settings.json && echo 'Opt-in app VS Code settings exist' # explicit --editor should write VS Code settings
+Opt-in app VS Code settings exist
+
+> test -f vite-plus-monorepo/apps/editor-opt-in/.vscode/extensions.json && echo 'Opt-in app VS Code extensions exist' # explicit --editor should write VS Code extensions
+Opt-in app VS Code extensions exist
+
 > cd vite-plus-monorepo && vp create --no-interactive vite:library # create library in non-interactive mode
 > ls vite-plus-monorepo/packages/vite-plus-library/package.json # check vite-plus-library package.json
 vite-plus-monorepo/packages/vite-plus-library/package.json
+
+> test ! -e vite-plus-monorepo/packages/vite-plus-library/.vscode && echo 'No library editor config' || (echo 'ERROR: library editor config exists' && exit 1) # monorepo package create without --editor should not write VS Code config
+No library editor config
 
 > cd vite-plus-monorepo && vp create --no-interactive vite:generator # create generator in non-interactive mode
 > ls vite-plus-monorepo/tools # check tools directory created
@@ -178,7 +206,6 @@ vite-plus-generator
   "private": true,
   "description": "A starter for creating a Vite+ code generator.",
   "keywords": [
-    "bingo-template",
     "vite-plus-generator"
   ],
   "bin": "./bin/index.ts",
@@ -188,7 +215,7 @@ vite-plus-generator
     "dev": "node bin/index.ts"
   },
   "dependencies": {
-    "bingo": "^0.7.0",
+    "bingo": "^0.9.3",
     "zod": "^3.25.76"
   },
   "devDependencies": {
@@ -196,7 +223,7 @@ vite-plus-generator
     "typescript": "catalog:"
   },
   "engines": {
-    "node": ">=22.12.0"
+    "node": ">=22.18.0"
   }
 }
 
@@ -225,8 +252,14 @@ vite.config.ts
   "devDependencies": {
     "vite-plus": "catalog:"
   },
-  "engines": {
-    "node": ">=22.12.0"
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "<semver>",
+      "onFail": "download"
+    }
   },
-  "packageManager": "pnpm@<semver>"
+  "engines": {
+    "node": ">=22.18.0"
+  }
 }

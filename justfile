@@ -66,16 +66,26 @@ check:
 watch-check:
   just watch "'cargo check; cargo clippy'"
 
+# Test all crates/* packages (new crates are automatically included) plus
+# vite-plus-cli (lives outside crates/) to catch type sync issues.
+# Single source of truth for cargo test, used by CI too.
 [unix]
 test:
-  cargo test $(for d in crates/*/; do echo -n "-p $(basename $d) "; done) -p vite-plus-cli
+  RUST_MIN_STACK=8388608 cargo test $(for d in crates/*/; do echo -n "-p $(basename $d) "; done) -p vite-plus-cli
 
 [windows]
 test:
-  $packages = Get-ChildItem -Path crates -Directory | ForEach-Object { '-p'; $_.Name }; $Env:__COMPAT_LAYER='RunAsInvoker'; cargo test @packages -p vite-plus-cli
+  $packages = Get-ChildItem -Path crates -Directory | ForEach-Object { '-p'; $_.Name }; $Env:RUST_MIN_STACK='8388608'; $Env:__COMPAT_LAYER='RunAsInvoker'; cargo test @packages -p vite-plus-cli
 
+# Single source of truth for clippy, used by CI too. The `-A` flags allow
+# new toolchain lints that fire in upstream rolldown crates without a `[lints]` table.
 lint:
-  cargo clippy --workspace --all-targets --all-features -- --deny warnings
+  cargo clippy --workspace --all-targets --all-features -- --deny warnings \
+    -A clippy::byte_char_slices \
+    -A clippy::manual_assert_eq \
+    -A clippy::needless_return_with_question_mark \
+    -A clippy::unused_async_trait_impl \
+    -A clippy::useless_borrows_in_formatting
 
 [unix]
 doc:

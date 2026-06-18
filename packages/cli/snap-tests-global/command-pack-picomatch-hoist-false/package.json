@@ -1,0 +1,10 @@
+{
+  "name": "command-pack-picomatch-hoist-false",
+  "version": "1.0.0",
+  "type": "module",
+  "devDependencies": {
+    "typescript": "^6.0.3",
+    "vite-plus": "0.1.23"
+  },
+  "packageManager": "pnpm@11.5.0"
+}

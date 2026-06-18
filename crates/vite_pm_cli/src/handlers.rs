@@ -31,6 +31,7 @@ use vite_install::{
         rebuild::RebuildCommandOptions,
         remove::RemoveCommandOptions,
         search::SearchCommandOptions,
+        stage::{StageCommandOptions, StageSubcommand},
         token::TokenSubcommand,
         unlink::UnlinkCommandOptions,
         update::UpdateCommandOptions,
@@ -42,12 +43,11 @@ use vite_install::{
 use vite_path::AbsolutePath;
 
 use crate::{
-    cli::{ConfigCommands, DistTagCommands, OwnerCommands, PmCommands, TokenCommands},
-    error::Error,
-    helpers::{
-        build_package_manager, build_package_manager_or_npm_default, default_npm_package_manager,
-        ensure_package_json,
+    cli::{
+        ConfigCommands, DistTagCommands, OwnerCommands, PmCommands, StageCommands, TokenCommands,
     },
+    error::Error,
+    helpers::{build_package_manager, build_package_manager_or_npm_default, ensure_package_json},
 };
 
 pub async fn run_add(
@@ -104,11 +104,7 @@ pub async fn run_why(
     cwd: &AbsolutePath,
     options: &WhyCommandOptions<'_>,
 ) -> Result<ExitStatus, Error> {
-    let pm = if options.global {
-        default_npm_package_manager(cwd)
-    } else {
-        build_package_manager(cwd).await?
-    };
+    let pm = build_package_manager(cwd).await?;
     Ok(pm.run_why_command(options, cwd).await?)
 }
 
@@ -180,6 +176,7 @@ pub async fn run_pm_subcommand(
             | PmCommands::Pack { .. }
             | PmCommands::List { .. }
             | PmCommands::Publish { .. }
+            | PmCommands::Stage(StageCommands::Publish { .. })
             | PmCommands::Rebuild { .. }
             | PmCommands::Fund { .. }
             | PmCommands::Audit { .. }
@@ -317,6 +314,59 @@ pub async fn run_pm_subcommand(
                 pass_through_args: pass_through_args.as_deref(),
             };
             Ok(pm.run_publish_command(&options, cwd).await?)
+        }
+
+        PmCommands::Stage(stage_command) => {
+            let (subcommand, registry, pass_through_args) = match stage_command {
+                StageCommands::Publish {
+                    target,
+                    tag,
+                    access,
+                    otp,
+                    dry_run,
+                    json,
+                    recursive,
+                    filter,
+                    provenance,
+                    registry,
+                    pass_through_args,
+                } => (
+                    StageSubcommand::Publish {
+                        target,
+                        tag,
+                        access,
+                        otp,
+                        dry_run,
+                        json,
+                        recursive,
+                        filters: filter,
+                        provenance,
+                    },
+                    registry,
+                    pass_through_args,
+                ),
+                StageCommands::List { package, json, registry, pass_through_args } => {
+                    (StageSubcommand::List { package, json }, registry, pass_through_args)
+                }
+                StageCommands::View { stage_id, json, registry, pass_through_args } => {
+                    (StageSubcommand::View { stage_id, json }, registry, pass_through_args)
+                }
+                StageCommands::Download { stage_id, registry, pass_through_args } => {
+                    (StageSubcommand::Download { stage_id }, registry, pass_through_args)
+                }
+                StageCommands::Approve { stage_id, otp, registry, pass_through_args } => {
+                    (StageSubcommand::Approve { stage_id, otp }, registry, pass_through_args)
+                }
+                StageCommands::Reject { stage_id, otp, registry, pass_through_args } => {
+                    (StageSubcommand::Reject { stage_id, otp }, registry, pass_through_args)
+                }
+            };
+            let options = StageCommandOptions {
+                subcommand,
+                registry: registry.as_deref(),
+                pass_through_args: pass_through_args.as_deref(),
+            };
+            Ok(pm.run_stage_command(&options, cwd).await?)
         }
 
         PmCommands::Owner(owner_command) => {

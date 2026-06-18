@@ -24,6 +24,11 @@ pub struct PackageMetadata {
     /// Binary names that are JavaScript files (need Node.js to run).
     #[serde(default)]
     pub js_bins: HashSet<String>,
+    /// Whether `bins` was deliberately restricted to a subset of the bins the
+    /// package declares (e.g., the corepack shim auto-install links only
+    /// `corepack`). Updates keep the restriction; explicit installs reset it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub bins_restricted: bool,
     /// Package manager used for installation (npm, yarn, pnpm)
     pub manager: String,
     /// Installation timestamp
@@ -57,6 +62,7 @@ impl PackageMetadata {
             platform: Platform { node: node_version, npm: npm_version },
             bins,
             js_bins,
+            bins_restricted: false,
             manager,
             installed_at: Utc::now(),
         }
@@ -119,6 +125,7 @@ impl PackageMetadata {
 
         let mut packages = Vec::new();
         list_packages_recursive(&packages_dir, &mut packages).await?;
+        packages.sort_by(|a, b| a.name.cmp(&b.name).then_with(|| a.version.cmp(&b.version)));
         Ok(packages)
     }
 
@@ -266,6 +273,43 @@ mod tests {
         let names: Vec<_> = all.iter().map(|p| p.name.as_str()).collect();
         assert!(names.contains(&"typescript"), "Missing typescript package");
         assert!(names.contains(&"@types/node"), "Missing @types/node package");
+    }
+
+    #[tokio::test]
+    async fn test_list_all_sorts_packages_by_name() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = temp_dir.path().to_path_buf();
+        let _guard = vite_shared::EnvConfig::test_guard(
+            vite_shared::EnvConfig::for_test_with_home(&temp_path),
+        );
+
+        let zed = PackageMetadata::new(
+            "zed".to_string(),
+            "1.0.0".to_string(),
+            "20.18.0".to_string(),
+            None,
+            vec![],
+            HashSet::new(),
+            "npm".to_string(),
+        );
+        zed.save().await.unwrap();
+
+        let alpha = PackageMetadata::new(
+            "alpha".to_string(),
+            "1.0.0".to_string(),
+            "20.18.0".to_string(),
+            None,
+            vec![],
+            HashSet::new(),
+            "npm".to_string(),
+        );
+        alpha.save().await.unwrap();
+
+        let all = PackageMetadata::list_all().await.unwrap();
+        let names: Vec<_> = all.iter().map(|p| p.name.as_str()).collect();
+        assert_eq!(names, vec!["alpha", "zed"]);
     }
 
     #[tokio::test]

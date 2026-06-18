@@ -204,6 +204,20 @@ export default defineConfig({
     expect(fs.existsSync(path.join(projectPath, '.oxfmtrc.json'))).toBe(false);
   });
 
+  it('treats format as a fmt init alias when merging generated config', async () => {
+    const projectPath = createTempDir();
+    fs.writeFileSync(path.join(projectPath, '.oxfmtrc.json'), '{\n  "semi": true\n}\n');
+
+    const result = await applyToolInitConfigToViteConfig('format', ['--init'], projectPath);
+    expect(result.handled).toBe(true);
+    expect(result.action).toBe('added');
+
+    const content = fs.readFileSync(path.join(projectPath, 'vite.config.ts'), 'utf8');
+    expect(content).toContain('fmt:');
+    expect(content).toContain('semi');
+    expect(fs.existsSync(path.join(projectPath, '.oxfmtrc.json'))).toBe(false);
+  });
+
   it('uses explicit --config path when provided', async () => {
     const projectPath = createTempDir();
     const customConfigPath = path.join(projectPath, 'custom-oxfmt.json');

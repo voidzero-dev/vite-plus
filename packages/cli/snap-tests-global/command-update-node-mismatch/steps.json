@@ -1,0 +1,10 @@
+{
+  "serial": true,
+  "commands": [
+    "vp install -g --node 20 testnpm2",
+    "vp update -g testnpm2 # should warn and skip node mismatch reinstall in CI",
+    "vp update -g testnpm2 --ignore-node-mismatch # should explicitly skip node mismatch reinstall",
+    "vp update -g testnpm2 --reinstall-node-mismatch"
+  ],
+  "after": ["vp remove -g testnpm2"]
+}

@@ -168,6 +168,30 @@ export function removeDeprecatedTsconfigFalseOption(filePath: string, optionName
   return true;
 }
 
+const TSCONFIG_TYPE_REPLACEMENTS: Record<string, string> = {
+  'tsdown/client': 'vite-plus/pack/client',
+  'vite/client': 'vite-plus/client',
+};
+
+export function hasTypesToRewriteInTsconfig(filePath: string): boolean {
+  let text: string;
+  try {
+    text = fs.readFileSync(filePath, 'utf-8');
+  } catch {
+    return false;
+  }
+
+  const parsed = parseJsonc(text) as {
+    compilerOptions?: { types?: unknown[] };
+  } | null;
+
+  const types = parsed?.compilerOptions?.types;
+  return (
+    Array.isArray(types) &&
+    types.some((t) => typeof t === 'string' && t in TSCONFIG_TYPE_REPLACEMENTS)
+  );
+}
+
 export function rewriteTypesInTsconfig(filePath: string): boolean {
   let text: string;
   try {
@@ -185,14 +209,11 @@ export function rewriteTypesInTsconfig(filePath: string): boolean {
     return false;
   }
 
-  const REPLACEMENTS: Record<string, string> = {
-    'tsdown/client': 'vite-plus/pack/client',
-    'vite/client': 'vite-plus/client',
-  };
-
   const toReplace = types
     .map((t, i) =>
-      typeof t === 'string' && t in REPLACEMENTS ? { i, newVal: REPLACEMENTS[t] } : null,
+      typeof t === 'string' && t in TSCONFIG_TYPE_REPLACEMENTS
+        ? { i, newVal: TSCONFIG_TYPE_REPLACEMENTS[t] }
+        : null,
     )
     .filter((x): x is { i: number; newVal: string } => x !== null);
 

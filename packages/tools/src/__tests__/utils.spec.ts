@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { describe, expect, test } from '@voidzero-dev/vite-plus-test';
+import { describe, expect, test } from 'vitest';
 
 import { isPassThroughEnv, replaceUnstableOutput } from '../utils.ts';
 
@@ -16,6 +16,13 @@ describe('replaceUnstableOutput()', () => {
   test('normalize CRLF line endings', () => {
     const output = 'line 1\r\nline 2\r\nline 3\r';
     expect(replaceUnstableOutput(output)).toBe('line 1\nline 2\nline 3');
+  });
+
+  test('strip clack spinner frames', () => {
+    const output = '│\n◒  Preparing local Git repository...\n◇  Prepared local Git repository\n';
+    expect(replaceUnstableOutput(output)).toBe('│\n◇  Prepared local Git repository\n');
+    // a frame at end-of-output without a trailing newline is stripped too
+    expect(replaceUnstableOutput('text\n◐  Working...')).toBe('text\n');
   });
 
   test('replace unstable semver version', () => {
@@ -33,6 +40,73 @@ foo@1.0.0
 bar@v1.0.0
     `;
     expect(replaceUnstableOutput(output.trim())).toMatchSnapshot();
+  });
+
+  test('replace devEngines.packageManager pinned versions', () => {
+    // prerelease identifiers with hyphens and build metadata are normalized too
+    for (const version of ['11.5.1', '11.5.1-rc-1', '11.5.1+sha.abc']) {
+      const json = [
+        '{',
+        '  "devEngines": {',
+        '    "packageManager": {',
+        '      "name": "pnpm",',
+        `      "version": "${version}",`,
+        '      "onFail": "download"',
+        '    }',
+        '  }',
+        '}',
+      ].join('\n');
+      expect(replaceUnstableOutput(json)).toContain('"version": "<semver>"');
+    }
+  });
+
+  test('replace vitest-family JSON version pins', () => {
+    // these track the bundled VITEST_VERSION and bump on every daily upgrade-deps run,
+    // so masking keeps catalog / devDependency snaps stable across bumps
+    const output = [
+      '  "catalog": {',
+      '    "vite": "npm:@voidzero-dev/vite-plus-core@latest",',
+      '    "vitest": "4.1.9",',
+      '    "vite-plus": "latest"',
+      '  },',
+      '  "devDependencies": {',
+      '    "@vitest/browser-playwright": "4.1.9",',
+      '    "@vitest/browser-webdriverio": "4.1.9-beta.2"',
+      '  }',
+    ].join('\n');
+    const result = replaceUnstableOutput(output);
+    expect(result).toContain('"vitest": "<semver>"');
+    expect(result).toContain('"@vitest/browser-playwright": "<semver>"');
+    expect(result).toContain('"@vitest/browser-webdriverio": "<semver>"');
+    // range specs and the vite-plus alias must stay untouched
+    expect(result).toContain('"vite": "npm:@voidzero-dev/vite-plus-core@latest"');
+    expect(result).toContain('"vite-plus": "latest"');
+  });
+
+  test('keeps user-owned @vitest/coverage-* provider pins visible', () => {
+    // coverage providers are project-installed peers vite-plus never pins; the
+    // runtime guard fail-fasts on version skew, so the exact version must stay
+    // visible in snapshots rather than collapse to <semver>
+    const output = [
+      '    "@vitest/coverage-v8": "4.1.8",',
+      '    "@vitest/coverage-istanbul": "4.1.8"',
+    ].join('\n');
+    expect(replaceUnstableOutput(output)).toBe(output);
+  });
+
+  test('keeps non-exact vitest specs (catalog: / ranges) unmasked', () => {
+    const output = ['    "vitest": "catalog:",', '    "vitest": "^4.0.0"'].join('\n');
+    expect(replaceUnstableOutput(output)).toBe(output);
+  });
+
+  test('keeps unsupported pre-4 vitest pins visible (migration-refusal echoes)', () => {
+    // The migrator refuses to manage vitest < 4, so a pre-4 JSON pin is always a
+    // user's OWN untouched package.json echoed by an unsupported-version fixture.
+    // Masking it would hide a regression that rewrote the dependency before failing.
+    expect(replaceUnstableOutput('    "vitest": "3.2.4"')).toBe('    "vitest": "3.2.4"');
+    expect(replaceUnstableOutput('    "@vitest/spy": "3.0.0"')).toBe('    "@vitest/spy": "3.0.0"');
+    // future double-digit majors still mask
+    expect(replaceUnstableOutput('    "vitest": "10.0.1"')).toBe('    "vitest": "<semver>"');
   });
 
   test('replace date', () => {
@@ -99,6 +173,15 @@ Done in 171ms using pnpm v10.16.1
     for (const output of outputs) {
       expect(replaceUnstableOutput(output.trim())).toMatchSnapshot();
     }
+  });
+
+  test('strip pnpm supply-chain verification status line', () => {
+    const output = `
+> vp add testnpm2 -D
+✓ Lockfile passes supply-chain policies (verified 123ms ago)
+Packages: +1
+    `;
+    expect(replaceUnstableOutput(output.trim())).not.toContain('supply-chain policies');
   });
 
   test.skipIf(process.platform === 'win32')('replace unstable cwd', () => {
@@ -218,6 +301,7 @@ https://registry.yarnpkg.com/testnpm2/-/testnpm2-1.0.0.tgz
   test('replace pnpm registry request error warning log', () => {
     const output = `
  WARN  GET https://registry.npmjs.org/test-vite-plus-install error (ECONNRESET). Will retry in 10 seconds. 2 retries left.
+[WARN] GET https://registry.npmjs.org/testnpm2 error (ECONNRESET). Will retry in 10 seconds. 2 retries left.
 Progress: resolved
 `;
     expect(replaceUnstableOutput(output.trim())).toMatchSnapshot();
@@ -227,6 +311,7 @@ Progress: resolved
     const output = `
  WARN  Tarball download average speed 29 KiB/s (size 56 KiB) is below 50 KiB/s: https://registry.npmjs.org/qs/-/qs-6.14.0.tgz (GET)
  WARN  Tarball download average speed 34 KiB/s (size 347 KiB) is below 50 KiB/s: https://registry.npmjs.org/undici/-/undici-7.16.0.tgz (GET)
+Progress: resolved
 `;
     expect(replaceUnstableOutput(output.trim())).toMatchSnapshot();
   });

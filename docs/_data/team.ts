@@ -10,11 +10,11 @@ export const core: DefaultTheme.TeamMember[] = [
     ],
   },
   {
-    avatar: 'https://github.com/branchseer.png',
+    avatar: 'https://github.com/wan9chi.png',
     name: 'Wang Chi',
     links: [
-      { icon: 'github', link: 'https://github.com/branchseer' },
-      { icon: 'x', link: 'https://x.com/branchseer' },
+      { icon: 'github', link: 'https://github.com/wan9chi' },
+      { icon: 'x', link: 'https://x.com/wan9chi' },
     ],
   },
   {
@@ -30,7 +30,7 @@ export const core: DefaultTheme.TeamMember[] = [
     name: 'Christoph Nakazawa',
     links: [
       { icon: 'github', link: 'https://github.com/cpojer' },
-      { icon: 'x', link: 'https://x.com/cpojer' },
+      { icon: 'x', link: 'https://x.com/cnakazawa' },
       { icon: 'bluesky', link: 'https://bsky.app/profile/christoph.nkzw.tech' },
     ],
   },
@@ -113,6 +113,7 @@ export const core: DefaultTheme.TeamMember[] = [
     name: 'JongKyung Lee',
     links: [
       { icon: 'github', link: 'https://github.com/jong-kyung' },
+      { icon: 'x', link: 'https://x.com/jongkyung_dev' },
       { icon: 'linkedin', link: 'https://www.linkedin.com/in/jong-kyung' },
     ],
   },

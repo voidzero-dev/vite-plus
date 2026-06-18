@@ -728,7 +728,7 @@ refresh_shims() {
   fi
 }
 
-# Setup Node.js version manager (node/npm/npx shims)
+# Setup Node.js version manager (node/npm/npx/corepack shims)
 # Sets NODE_MANAGER_ENABLED global
 # Arguments: bin_dir - path to the version's bin directory containing vp
 setup_node_manager() {
@@ -787,7 +787,7 @@ setup_node_manager() {
   if [ -e /dev/tty ] && [ -t 1 ]; then
     echo ""
     echo "Would you like Vite+ to manage your Node.js versions?"
-    echo "It adds \`node\`, \`npm\`, and \`npx\` shims to ~/.vite-plus/bin/ and automatically uses the right version."
+    echo "It adds \`node\`, \`npm\`, \`npx\`, and \`corepack\` shims to ~/.vite-plus/bin/ and automatically uses the right version."
     echo "Opt out anytime with \`vp env off\`."
     echo -n "Press Enter to accept (Y/n): "
     read -r response < /dev/tty
@@ -801,7 +801,7 @@ setup_node_manager() {
 
 # Cleanup old versions, keeping only the most recent ones
 cleanup_old_versions() {
-  local max_versions=5
+  local max_versions=3
   local versions=()
 
   # List version directories (semver format like 0.1.0, 1.2.3-beta.1, 0.0.0-f48af939.20260205-0533)

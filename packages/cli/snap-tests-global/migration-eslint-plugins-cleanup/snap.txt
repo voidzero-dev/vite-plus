@@ -23,7 +23,13 @@
     "vue": "^3.5.0",
     "vite-plus": "catalog:"
   },
-  "packageManager": "pnpm@<semver>"
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "<semver>",
+      "onFail": "download"
+    }
+  }
 }
 
 > test ! -f eslint.config.mjs # check eslint config is removed

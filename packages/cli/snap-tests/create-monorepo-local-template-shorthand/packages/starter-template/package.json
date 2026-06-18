@@ -1,0 +1,8 @@
+{
+  "name": "starter-template",
+  "version": "0.0.0",
+  "private": true,
+  "description": "A local starter template that wires fmt/lint via shorthand.",
+  "bin": "./bin/index.mjs",
+  "type": "module"
+}

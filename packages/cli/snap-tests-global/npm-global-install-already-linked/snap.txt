@@ -9,7 +9,7 @@ info: Installing 1 global package with Node.js <semver>
 > npm-global-linked-cli # Should be callable via the link
 npm-global-linked-cli works
 
-> npm install -g ./npm-global-linked-pkg # Should NOT show hint (binary already exists)
+> npm install -g ./npm-global-linked-pkg # Should not create duplicate link
 
 added 1 package in <variable>ms
 Skipped 'npm-global-linked-cli': managed by `vp install -g npm-global-linked-pkg`. Run `vp uninstall -g npm-global-linked-pkg` to remove it first.

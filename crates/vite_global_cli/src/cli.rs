@@ -3,17 +3,23 @@
 //! This module defines the CLI structure using clap and routes commands
 //! to their appropriate handlers.
 
-use std::{ffi::OsStr, process::ExitStatus};
+use std::{collections::HashSet, ffi::OsStr, io::IsTerminal, process::ExitStatus};
 
 use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
 use clap_complete::ArgValueCompleter;
+use dialoguer::{Confirm, theme::ColorfulTheme};
+use owo_colors::OwoColorize;
 use tokio::runtime::Runtime;
 use vite_path::AbsolutePathBuf;
 use vite_pm_cli::PackageManagerCommand;
 use vite_shared::output;
 
 use crate::{
-    commands::{self, env::package_metadata::PackageMetadata, global},
+    commands::{
+        self,
+        env::{config::resolve_version, package_metadata::PackageMetadata},
+        global,
+    },
     error::Error,
     help,
 };
@@ -130,7 +136,7 @@ pub enum Commands {
     },
 
     /// Format code
-    #[command(disable_help_flag = true)]
+    #[command(disable_help_flag = true, visible_alias = "format")]
     Fmt {
         /// Additional arguments
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
@@ -250,7 +256,7 @@ impl Commands {
 #[command(after_help = "\
 Examples:
   Setup:
-    vp env setup                  # Create shims for node, npm, npx
+    vp env setup                  # Create shims for node, npm, npx, corepack
     vp env on                     # Use vite-plus managed Node.js
     vp env print                  # Print shell snippet for this session
 
@@ -331,18 +337,24 @@ Examples:
         tool: String,
     },
 
-    /// Pin a Node.js version in the current directory (creates .node-version)
+    /// Pin a Node.js version in the current directory
+    /// (updates .node-version or package.json#devEngines.runtime)
     #[command(after_long_help = "\
 Examples:
   vp env pin lts                  # Pin to latest LTS
-  vp env pin --unpin              # Remove .node-version
-  vp env pin \"^20.0.0\" --force    # Overwrite existing pin")]
+  vp env pin --unpin              # Remove the pin
+  vp env pin \"^20.0.0\" --force    # Overwrite existing pin
+  vp env pin 24 --target node-version   # Force the .node-version file
+
+The write target follows the compatibility-first rule: an existing .node-version
+keeps being updated; otherwise the pin is written to package.json#devEngines.runtime;
+.node-version is only created when the directory has no package.json.")]
     Pin {
         /// Version to pin (e.g., "20.18.0", "lts", "latest", "^20.0.0").
         /// If omitted, prints the currently pinned version.
         version: Option<String>,
 
-        /// Remove the .node-version file from current directory
+        /// Remove the pin from the current directory
         #[arg(long)]
         unpin: bool,
 
@@ -350,13 +362,21 @@ Examples:
         #[arg(long)]
         no_install: bool,
 
-        /// Overwrite existing .node-version without confirmation
+        /// Overwrite an existing pin without confirmation
         #[arg(long)]
         force: bool,
+
+        /// Explicitly choose the write target (overrides the default selection)
+        #[arg(long, value_enum)]
+        target: Option<PinTarget>,
     },
 
-    /// Remove the .node-version file from current directory (alias for `pin --unpin`)
-    Unpin,
+    /// Remove the Node.js pin from current directory (alias for `pin --unpin`)
+    Unpin {
+        /// Explicitly choose which pin source to remove
+        #[arg(long, value_enum)]
+        target: Option<PinTarget>,
+    },
 
     /// List locally installed Node.js versions
     #[command(visible_alias = "ls")]
@@ -460,6 +480,15 @@ impl EnvSubcommands {
             _ => false,
         }
     }
+}
+
+/// Write target for `vp env pin` / `vp env unpin` (see rfcs/dev-engines.md)
+#[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PinTarget {
+    /// Pin via the .node-version file
+    NodeVersion,
+    /// Pin via package.json#devEngines.runtime
+    DevEngines,
 }
 
 /// Version sorting order for list-remote command
@@ -575,8 +604,22 @@ async fn run_package_manager_command(
             managed_uninstall(packages, dry_run).await
         }
 
-        PackageManagerCommand::Update { global: true, ref packages, concurrency, .. } => {
-            managed_update(packages, concurrency).await
+        PackageManagerCommand::Update {
+            global: true,
+            ref packages,
+            concurrency,
+            reinstall_node_mismatch,
+            ignore_node_mismatch,
+            ..
+        } => {
+            if reinstall_node_mismatch && ignore_node_mismatch {
+                output::error(
+                    "--reinstall-node-mismatch and --ignore-node-mismatch cannot be used together",
+                );
+                return Ok(exit_status(1));
+            }
+            managed_update(packages, concurrency, reinstall_node_mismatch, ignore_node_mismatch)
+                .await
         }
 
         PackageManagerCommand::Outdated {
@@ -619,10 +662,13 @@ async fn managed_install(
 ) -> Result<ExitStatus, Error> {
     if let Err((package_name, error)) = global::install::install(
         packages,
-        node,
-        force,
-        concurrency.unwrap_or(DEFAULT_GLOBAL_INSTALL_CONCURRENCY),
-        false,
+        global::install::InstallOptions {
+            node_version: node,
+            force,
+            concurrency: concurrency.unwrap_or(DEFAULT_GLOBAL_INSTALL_CONCURRENCY),
+            update: false,
+            only_bins: None,
+        },
     )
     .await
     {
@@ -646,12 +692,32 @@ async fn managed_uninstall(packages: &[String], dry_run: bool) -> Result<ExitSta
     Ok(ExitStatus::default())
 }
 
+fn is_same_node_version(installed_version: &str, current_version: &str) -> bool {
+    installed_version.trim().trim_start_matches('v')
+        == current_version.trim().trim_start_matches('v')
+}
+
+fn display_node_version(version: &str) -> String {
+    let version = version.trim();
+    if version.starts_with('v') { version.to_string() } else { format!("v{version}") }
+}
+
+struct NodeMismatchPackage {
+    name: String,
+    spec: String,
+    installed_node: String,
+}
+
 async fn managed_update(
     packages: &[String],
     concurrency: Option<usize>,
+    reinstall_node_mismatch: bool,
+    ignore_node_mismatch: bool,
 ) -> Result<ExitStatus, Error> {
     let concurrency = concurrency.unwrap_or(DEFAULT_GLOBAL_INSTALL_CONCURRENCY);
     let mut to_update: Vec<String> = Vec::new();
+    let mut node_mismatches: Vec<NodeMismatchPackage> = Vec::new();
+    let current_node_version;
 
     let packages = if packages.is_empty() {
         let all = PackageMetadata::list_all().await?;
@@ -659,10 +725,22 @@ async fn managed_update(
             vite_shared::output::raw("No global packages installed.");
             return Ok(ExitStatus::default());
         }
+        current_node_version = get_current_node_version().await?;
+
+        for metadata in &all {
+            if !is_same_node_version(&metadata.platform.node, &current_node_version) {
+                node_mismatches.push(NodeMismatchPackage {
+                    name: metadata.name.clone(),
+                    spec: metadata.name.clone(),
+                    installed_node: metadata.platform.node.clone(),
+                });
+            }
+        }
 
         None
     } else {
         let mut managed_specs = Vec::new();
+        current_node_version = get_current_node_version().await?;
 
         for package in packages {
             // Always update local packages
@@ -673,7 +751,14 @@ async fn managed_update(
 
             // It is not a local package, so `parse_package_spec` there won't return `Err()`
             let (package_name, _) = global::parse_package_spec(package).unwrap();
-            if PackageMetadata::load(&package_name).await?.is_some() {
+            if let Some(metadata) = PackageMetadata::load(&package_name).await? {
+                if !is_same_node_version(&metadata.platform.node, &current_node_version) {
+                    node_mismatches.push(NodeMismatchPackage {
+                        name: package_name,
+                        spec: package.clone(),
+                        installed_node: metadata.platform.node,
+                    });
+                }
                 managed_specs.push(package.clone());
             } else {
                 to_update.push(package.clone());
@@ -682,16 +767,26 @@ async fn managed_update(
 
         Some(managed_specs)
     };
-    to_update.extend(
-        global::outdated::get_outdated_packages(
-            &packages.unwrap_or(Vec::new()),
-            concurrency * 3,
-            true,
-        )
-        .await?
-        .into_iter()
-        .map(|package| package.spec.unwrap_or(package.name)),
-    );
+
+    let outdated = global::outdated::get_outdated_packages(
+        &packages.unwrap_or_default(),
+        concurrency * 3,
+        true,
+    )
+    .await?;
+    to_update.extend(outdated.into_iter().map(|package| package.spec.unwrap_or(package.name)));
+
+    let to_update_set = to_update.iter().map(String::as_str).collect::<HashSet<_>>();
+    node_mismatches.retain(|package| !to_update_set.contains(package.spec.as_str()));
+
+    if should_reinstall_node_mismatches(
+        &node_mismatches,
+        &current_node_version,
+        reinstall_node_mismatch,
+        ignore_node_mismatch,
+    ) {
+        to_update.extend(node_mismatches.into_iter().map(|package| package.spec));
+    }
 
     if to_update.is_empty() {
         vite_shared::output::raw("All global packages are up to date.");
@@ -699,8 +794,17 @@ async fn managed_update(
     }
 
     // Call reinstall logic
-    if let Err((package_name, error)) =
-        global::install::install(&to_update, None, false, concurrency, true).await
+    if let Err((package_name, error)) = global::install::install(
+        &to_update,
+        global::install::InstallOptions {
+            node_version: Some(&current_node_version),
+            force: false,
+            concurrency,
+            update: true,
+            only_bins: None,
+        },
+    )
+    .await
     {
         output::error(&format!(
             "Failed to update {}: {error}",
@@ -709,6 +813,63 @@ async fn managed_update(
         return Ok(exit_status(1));
     }
     Ok(ExitStatus::default())
+}
+
+async fn get_current_node_version() -> Result<String, Error> {
+    let cwd = vite_path::current_dir().map_err(|error| {
+        Error::ConfigError(format!("Cannot get current directory: {error}").into())
+    })?;
+    Ok(resolve_version(&cwd).await?.version)
+}
+
+fn should_reinstall_node_mismatches(
+    packages: &[NodeMismatchPackage],
+    current_node_version: &str,
+    reinstall_node_mismatch: bool,
+    ignore_node_mismatch: bool,
+) -> bool {
+    if packages.is_empty() || ignore_node_mismatch {
+        return false;
+    }
+
+    if reinstall_node_mismatch {
+        return true;
+    }
+
+    if !std::io::stdin().is_terminal() || std::env::var_os("CI").is_some() {
+        let package_names =
+            packages.iter().map(|package| package.name.as_str()).collect::<Vec<_>>().join(", ");
+        output::warn(&format!(
+            "Skipping reinstall for global packages installed with a different Node.js version: {package_names}. Use --reinstall-node-mismatch to reinstall them."
+        ));
+        return false;
+    }
+
+    prompt_reinstall_node_mismatches(packages, current_node_version)
+}
+
+fn prompt_reinstall_node_mismatches(
+    packages: &[NodeMismatchPackage],
+    current_node_version: &str,
+) -> bool {
+    output::info("Some global packages were installed with a different Node.js version.");
+    output::raw("");
+    output::raw(&format!("Current Node.js: {}", display_node_version(current_node_version).bold()));
+    output::raw("");
+    output::raw("Affected packages:");
+    for package in packages {
+        output::raw(&format!(
+            "- {} (installed with {})",
+            package.name.bold(),
+            display_node_version(&package.installed_node).bold()
+        ));
+    }
+    output::raw("");
+    Confirm::with_theme(&ColorfulTheme::default())
+        .with_prompt("Reinstall them with the current Node.js version?")
+        .default(false)
+        .interact()
+        .unwrap_or(false)
 }
 
 /// Run the CLI command.
@@ -953,9 +1114,21 @@ pub fn try_parse_args_from_with_options(
 #[cfg(test)]
 mod tests {
     use super::{
-        has_flag_before_terminator, should_force_global_delegate,
-        should_suppress_header_for_subcommand,
+        display_node_version, has_flag_before_terminator, is_same_node_version,
+        should_force_global_delegate, should_suppress_header_for_subcommand,
     };
+
+    #[test]
+    fn detects_global_update_node_version_mismatch() {
+        assert!(is_same_node_version("21.0.0", "v21.0.0"));
+        assert!(!is_same_node_version("21.0.0", "25.0.0"));
+    }
+
+    #[test]
+    fn displays_node_versions_with_v_prefix() {
+        assert_eq!(display_node_version("25.0.0"), "v25.0.0");
+        assert_eq!(display_node_version("v25.0.0"), "v25.0.0");
+    }
 
     #[test]
     fn detects_flag_before_option_terminator() {

@@ -28,7 +28,6 @@
     "@types/node": "catalog:",
     "@typescript/native-preview": "catalog:",
     "@voidzero-dev/vite-plus-tools": "workspace:*",
-    "bingo": "catalog:",
     "husky": "catalog:",
     "lint-staged": "catalog:",
     "oxfmt": "catalog:",
@@ -37,8 +36,7 @@
     "typescript": "catalog:",
     "vite": "catalog:",
     "vite-plus": "workspace:*",
-    "vitest": "catalog:",
-    "zod": "catalog:"
+    "vitest": "catalog:"
   },
   "lint-staged": {
     "*.@(js|ts|tsx|md|yaml|yml)": "vp check --fix",

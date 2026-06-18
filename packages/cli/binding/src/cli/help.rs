@@ -187,7 +187,7 @@ pub(super) fn print_help() {
   {bold}build{reset}          Build for production
   {bold}test{reset}           Run tests
   {bold}lint{reset}           Lint code
-  {bold}fmt{reset}            Format code
+  {bold}fmt, format{reset}    Format code
   {bold}check{reset}          Run format, lint, and type checks
   {bold}pack{reset}           Build library
   {bold}run{reset}            Run tasks

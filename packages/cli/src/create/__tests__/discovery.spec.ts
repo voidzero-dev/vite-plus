@@ -1,11 +1,198 @@
-import { describe, expect, it } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
+import { afterEach, describe, expect, it } from 'vitest';
+
+import type { WorkspaceInfo, WorkspaceInfoOptional } from '../../types/index.js';
 import {
   discoverTemplate,
   expandCreateShorthand,
   inferGitHubRepoName,
+  inferParentDir,
   parseGitHubUrl,
 } from '../discovery.js';
+
+// The local-package branch only engages for a resolved create.templates entry.
+function discoverLocal(workspaceInfo: WorkspaceInfo) {
+  return discoverTemplate('my-template', [], workspaceInfo, undefined, undefined, undefined, true);
+}
+
+describe('discoverTemplate', () => {
+  let rootDir: string;
+
+  afterEach(() => {
+    if (rootDir) {
+      fs.rmSync(rootDir, { recursive: true, force: true });
+    }
+  });
+
+  function createWorkspaceWithPackage(packageJson: Record<string, unknown>): WorkspaceInfo {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-discovery-spec-'));
+    const packageDir = path.join(rootDir, 'tools/my-template');
+    fs.mkdirSync(packageDir, { recursive: true });
+    fs.writeFileSync(path.join(packageDir, 'package.json'), JSON.stringify(packageJson));
+    return {
+      rootDir,
+      isMonorepo: true,
+      monorepoScope: '',
+      workspacePatterns: ['tools/*'],
+      parentDirs: ['tools'],
+      downloadPackageManager: { binPrefix: '' },
+      packages: [{ name: 'my-template', path: 'tools/my-template' }],
+    } as unknown as WorkspaceInfo;
+  }
+
+  it('runs a local bingo template through its bin entry', () => {
+    const workspaceInfo = createWorkspaceWithPackage({
+      name: 'my-template',
+      dependencies: { bingo: '^0.9.3' },
+      bin: './bin/index.ts',
+    });
+
+    const templateInfo = discoverLocal(workspaceInfo);
+    expect(templateInfo.command).toBe('node');
+    expect(templateInfo.type).toBe('bingo');
+    expect(templateInfo.args).toContain('--skip-requests');
+  });
+
+  it('runs a local template referenced by a relative path', () => {
+    const workspaceInfo = createWorkspaceWithPackage({
+      name: 'my-template',
+      dependencies: { bingo: '^0.9.3' },
+      bin: './bin/index.ts',
+    });
+
+    const templateInfo = discoverTemplate(
+      './tools/my-template',
+      [],
+      workspaceInfo,
+      undefined,
+      undefined,
+      undefined,
+      true,
+    );
+    expect(templateInfo.command).toBe('node');
+    expect(templateInfo.type).toBe('bingo');
+    expect(templateInfo.args[0]).toMatch(/tools[/\\]my-template[/\\]bin[/\\]index\.ts$/);
+  });
+
+  it('rejects a relative-path template with no package.json', () => {
+    const workspaceInfo = createWorkspaceWithPackage({ name: 'my-template' });
+    expect(() =>
+      discoverTemplate('./tools/missing', [], workspaceInfo, undefined, undefined, undefined, true),
+    ).toThrow(/no package\.json|has no "bin" entry/);
+  });
+
+  it('does not treat a bare workspace package as a template without the flag', () => {
+    const workspaceInfo = createWorkspaceWithPackage({
+      name: 'my-template',
+      dependencies: { bingo: '^0.9.3' },
+      bin: './bin/index.ts',
+    });
+
+    // Without the localTemplate flag, a workspace package name is not a template;
+    // it expands to the `create-my-template` npm package instead.
+    const templateInfo = discoverTemplate('my-template', [], workspaceInfo);
+    expect(templateInfo.command).toBe('create-my-template');
+  });
+
+  it('rejects a declared by-name template that matches no workspace package', () => {
+    const workspaceInfo = createWorkspaceWithPackage({
+      name: 'my-template',
+      bin: './bin/index.ts',
+    });
+
+    // A stale/typo'd `create.templates` entry must error instead of falling
+    // through to a same-named npm package.
+    expect(() =>
+      discoverTemplate('my-renamed', [], workspaceInfo, undefined, undefined, true, true),
+    ).toThrow(/does not match any workspace package/);
+  });
+
+  it('rejects a declared local template without a bin entry', () => {
+    const workspaceInfo = createWorkspaceWithPackage({ name: 'my-template' });
+
+    // Must not fall through to the `create-my-template` npm package
+    expect(() => discoverLocal(workspaceInfo)).toThrow(/has no "bin" entry/);
+  });
+
+  it('uses a single-entry object bin', () => {
+    const workspaceInfo = createWorkspaceWithPackage({
+      name: 'my-template',
+      bin: { whatever: './bin/cli.ts' },
+    });
+
+    expect(discoverLocal(workspaceInfo).args[0]).toMatch(
+      /tools[/\\]my-template[/\\]bin[/\\]cli\.ts$/,
+    );
+  });
+
+  it('prefers the bin entry named after the package for multi-bin packages', () => {
+    const workspaceInfo = createWorkspaceWithPackage({
+      name: 'my-template',
+      bin: { other: './bin/other.ts', 'my-template': './bin/index.ts' },
+    });
+
+    expect(discoverLocal(workspaceInfo).args[0]).toMatch(
+      /tools[/\\]my-template[/\\]bin[/\\]index\.ts$/,
+    );
+  });
+
+  it('rejects an ambiguous multi-bin package with no entry named after it', () => {
+    const workspaceInfo = createWorkspaceWithPackage({
+      name: 'my-template',
+      bin: { one: './bin/one.ts', two: './bin/two.ts' },
+    });
+
+    expect(() => discoverLocal(workspaceInfo)).toThrow(/multiple "bin" entries/);
+  });
+});
+
+// inferParentDir only reads parentDirs and packages off the workspace.
+function inferParentDirWorkspace(
+  parentDirs: string[],
+  packages: WorkspaceInfoOptional['packages'] = [],
+): WorkspaceInfoOptional {
+  return { parentDirs, packages } as unknown as WorkspaceInfoOptional;
+}
+
+describe('inferParentDir', () => {
+  it('places a local generator next to itself, not in the apps parent', () => {
+    const ws = inferParentDirWorkspace(
+      ['apps', 'packages', 'tools'],
+      [{ name: 'my-generator', path: 'tools/my-generator' }],
+    );
+    // Must NOT fall back to the default `apps` rule for a local generator;
+    // output is co-located with the matched workspace package.
+    expect(inferParentDir('my-generator', ws, true)).toBe('tools');
+  });
+
+  it('co-locates a relative-path template next to its directory', () => {
+    const ws = inferParentDirWorkspace(['apps', 'packages', 'tools']);
+    expect(inferParentDir('./tools/my-generator', ws, true)).toBe('tools');
+  });
+
+  it('co-locates under a nested (multi-segment) parent directory', () => {
+    const ws = inferParentDirWorkspace(['apps', 'tools/generators']);
+    expect(inferParentDir('./tools/generators/my-gen', ws, true)).toBe('tools/generators');
+  });
+
+  it('falls back to the app rule when the name is not a local package', () => {
+    const ws = inferParentDirWorkspace(['apps', 'packages', 'tools']);
+    expect(inferParentDir('vite', ws, true)).toBe('apps');
+  });
+
+  it('ignores a colliding workspace package when the template is not local', () => {
+    // `vp create vue` running the npm `create-vue` template must use the app
+    // rule even when an unrelated workspace package is also named `vue`.
+    const ws = inferParentDirWorkspace(
+      ['apps', 'packages', 'tools'],
+      [{ name: 'vue', path: 'tools/vue' }],
+    );
+    expect(inferParentDir('vue', ws)).toBe('apps');
+  });
+});
 
 describe('expandCreateShorthand', () => {
   it('should expand unscoped names to create-* packages', () => {

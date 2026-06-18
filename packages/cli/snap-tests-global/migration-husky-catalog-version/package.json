@@ -1,0 +1,14 @@
+{
+  "name": "migration-husky-catalog-version",
+  "scripts": {
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "husky": "catalog:",
+    "lint-staged": "catalog:",
+    "vite": "catalog:"
+  },
+  "lint-staged": {
+    "*.js": "oxlint --fix"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "linkCheckoutPackages": true,
+  "commands": [
+    {
+      "command": "vp install --ignore-scripts",
+      "ignoreOutput": true,
+      "timeout": 120000
+    },
+    "vp pack src/index.ts 2>&1"
+  ]
+}

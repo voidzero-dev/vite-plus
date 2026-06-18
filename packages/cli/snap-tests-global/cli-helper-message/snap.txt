@@ -11,11 +11,11 @@ Start:
   env         Manage Node.js versions
 
 Develop:
-  dev    Run the development server
-  check  Run format, lint, and type checks
-  lint   Lint code
-  fmt    Format code
-  test   Run tests
+  dev          Run the development server
+  check        Run format, lint, and type checks
+  lint         Lint code
+  fmt, format  Format code
+  test         Run tests
 
 Execute:
   run    Run tasks (also available as standalone `vpr`)
@@ -176,6 +176,8 @@ Options:
   -L, --latest                 Update to latest version (ignore semver range)
   -g, --global                 Update global packages
   --concurrency <CONCURRENCY>  Number of global package updates to run in parallel (only with -g)
+  --reinstall-node-mismatch    Reinstall up-to-date global packages installed with a different Node.js version
+  --ignore-node-mismatch       Skip up-to-date global packages installed with a different Node.js version
   -r, --recursive              Update recursively in all workspace packages
   --filter <PATTERN>           Filter packages in monorepo (can be used multiple times)
   -w, --workspace-root         Include workspace root
@@ -283,7 +285,6 @@ Options:
   -D, --dev                Only dev dependencies
   --depth <DEPTH>          Limit tree depth
   --no-optional            Exclude optional dependencies
-  -g, --global             Check globally installed packages
   --exclude-peers          Exclude peer dependencies
   --find-by <FINDER_NAME>  Use a finder function defined in .pnpmfile.cjs
   -h, --help               Print help
@@ -314,26 +315,27 @@ Usage: vp pm <COMMAND>
 Forward a command to the package manager
 
 Commands:
-  approve-builds  Approve dependency lifecycle scripts (install/postinstall) to run
-  prune           Remove unnecessary packages
-  pack            Create a tarball of the package
-  list            List installed packages [aliases: ls]
-  view            View package information from the registry [aliases: info, show]
-  publish         Publish package to registry
-  owner           Manage package owners [aliases: author]
-  cache           Manage package cache
-  config          Manage package manager configuration [aliases: c]
-  login           Log in to a registry [aliases: adduser]
-  logout          Log out from a registry
-  whoami          Show the current logged-in user
-  token           Manage authentication tokens
-  audit           Run a security audit
-  dist-tag        Manage distribution tags
-  deprecate       Deprecate a package version
-  search          Search for packages in the registry
-  rebuild         Rebuild native modules [aliases: rb]
-  fund            Show funding information for installed packages
-  ping            Ping the registry
+  approve-builds    Approve dependency lifecycle scripts (install/postinstall) to run
+  prune             Remove unnecessary packages
+  pack              Create a tarball of the package
+  list, ls          List installed packages
+  view, info, show  View package information from the registry
+  publish           Publish package to registry
+  stage             Stage a package for publishing (npm staged publishing workflow)
+  owner, author     Manage package owners
+  cache             Manage package cache
+  config, c         Manage package manager configuration
+  login, adduser    Log in to a registry
+  logout            Log out from a registry
+  whoami            Show the current logged-in user
+  token             Manage authentication tokens
+  audit             Run a security audit
+  dist-tag          Manage distribution tags
+  deprecate         Deprecate a package version
+  search            Search for packages in the registry
+  rebuild, rb       Rebuild native modules
+  fund              Show funding information for installed packages
+  ping              Ping the registry
 
 Options:
   -h, --help  Print help
@@ -353,24 +355,24 @@ Setup:
   print  Print shell snippet to set environment for current session
 
 Manage:
-  default    Set or show the global default Node.js version
-  pin        Pin a Node.js version in the current directory (creates .node-version)
-  unpin      Remove the .node-version file from current directory (alias for `pin --unpin`)
-  use        Use a specific Node.js version for this shell session
-  install    Install a Node.js version [aliases: i]
-  uninstall  Uninstall a Node.js version [aliases: uni]
-  exec       Execute a command with a specific Node.js version [aliases: run]
+  default         Set or show the global default Node.js version
+  pin             Pin a Node.js version in the current directory
+  unpin           Remove the Node.js pin from the current directory (alias for `pin --unpin`)
+  use             Use a specific Node.js version for this shell session
+  install, i      Install a Node.js version
+  uninstall, uni  Uninstall a Node.js version
+  exec, run       Execute a command with a specific Node.js version
 
 Inspect:
-  current      Show current environment information
-  doctor       Run diagnostics and show environment status
-  which        Show path to the tool that would be executed
-  list         List locally installed Node.js versions [aliases: ls]
-  list-remote  List available Node.js versions from the registry [aliases: ls-remote]
+  current                 Show current environment information
+  doctor                  Run diagnostics and show environment status
+  which                   Show path to the tool that would be executed
+  list, ls                List locally installed Node.js versions
+  list-remote, ls-remote  List available Node.js versions from the registry
 
 Examples:
   Setup:
-    vp env setup                  # Create shims for node, npm, npx
+    vp env setup                  # Create shims for node, npm, npx, corepack
     vp env on                     # Use vite-plus managed Node.js
     vp env print                  # Print shell snippet for this session
 

@@ -11,12 +11,12 @@
  * provides ESLint-compatible linting with significantly better performance.
  */
 
-import { existsSync, realpathSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { relative } from 'node:path/win32';
-import { fileURLToPath } from 'node:url';
 
 import { DEFAULT_ENVS, resolve } from './utils/constants.ts';
+import { resolveTsgolintExecutable } from './utils/tsgolint-path.ts';
+
+export { resolveWindowsTsgolintExecutable } from './utils/tsgolint-path.ts';
 
 /**
  * Resolves the oxlint binary path and environment variables.
@@ -40,43 +40,10 @@ export async function lint(): Promise<{
   const oxlintMainPath = resolve('oxlint');
   const oxlintPackageRoot = dirname(dirname(oxlintMainPath));
   const binPath = join(oxlintPackageRoot, 'bin', 'oxlint');
-  let oxlintTsgolintPath = resolve('oxlint-tsgolint/bin/tsgolint');
-  if (process.platform === 'win32') {
-    // On Windows, try .exe first (bun creates .exe), then .cmd (npm/pnpm/yarn create .cmd)
-    const scriptDir = dirname(fileURLToPath(import.meta.url));
-    const localBinDir = join(scriptDir, '..', 'node_modules', '.bin');
-    const oxlintTsgolintPackagePath = dirname(dirname(oxlintTsgolintPath));
-    const projectBinDir = join(oxlintTsgolintPackagePath, '..', '.bin');
-    const pathCandidates = [
-      join(localBinDir, 'tsgolint.exe'),
-      join(localBinDir, 'tsgolint.cmd'),
-      join(projectBinDir, 'tsgolint.exe'),
-      join(projectBinDir, 'tsgolint.cmd'),
-    ];
-    oxlintTsgolintPath = pathCandidates.find((p) => existsSync(p)) ?? '';
-    // Bun stores packages in .bun/ cache dirs where the symlinked paths above won't match.
-    if (!oxlintTsgolintPath) {
-      try {
-        const realPkgDir = realpathSync(join(scriptDir, '..'));
-        const realBinDir = join(dirname(realPkgDir), '.bin');
-        oxlintTsgolintPath =
-          [join(realBinDir, 'tsgolint.exe'), join(realBinDir, 'tsgolint.cmd')].find((p) =>
-            existsSync(p),
-          ) ?? '';
-      } catch {
-        // realpath failed, fall through to default
-      }
-    }
-    if (!oxlintTsgolintPath) {
-      throw new Error(
-        'Unable to resolve oxlint-tsgolint executable, tried:\n' +
-          pathCandidates.map((path) => `- ${path}`).join('\n'),
-      );
-    }
-    const relativePath = relative(process.cwd(), oxlintTsgolintPath);
-    // Only prepend .\ if it's actually a relative path (not an absolute path returned by relative())
-    oxlintTsgolintPath = /^[a-zA-Z]:/.test(relativePath) ? relativePath : `.\\${relativePath}`;
-  }
+  const oxlintTsgolintPath = resolveTsgolintExecutable(
+    resolve('oxlint-tsgolint/bin/tsgolint'),
+    import.meta.url,
+  );
   const result = {
     binPath,
     // TODO: provide envs inference API

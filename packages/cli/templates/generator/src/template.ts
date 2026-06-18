@@ -22,7 +22,6 @@ export default createTemplate({
       files: {
         'package.json': JSON.stringify(
           {
-            // @ts-expect-error
             name: options.name,
             version: '0.0.0',
             type: 'module',
@@ -32,7 +31,6 @@ export default createTemplate({
           2,
         ),
         src: {
-          // @ts-expect-error
           'index.ts': `export const name = '${options.name}';
 `,
         },

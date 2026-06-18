@@ -20,7 +20,7 @@ The PackageManager implementation in `vite_install` successfully handles automat
 
 ## Non-Goals (Initial Version)
 
-- ~~Configuration auto-detection (no reading from package.json, .nvmrc, etc.)~~ **Now supported via `.node-version`, `engines.node`, and `devEngines.runtime`**
+- ~~Configuration auto-detection (no reading from package.json, .nvmrc, etc.)~~ **Now supported via `.node-version`, `devEngines.runtime`, and `engines.node`**
 - Managing multiple runtime versions simultaneously
 - Providing a version manager CLI (like nvm/fnm)
 - Supporting custom/unofficial Node.js builds
@@ -155,7 +155,7 @@ pub async fn download_runtime(
 ) -> Result<JsRuntime, Error>;
 
 /// Download runtime based on project's version configuration
-/// Reads from .node-version, engines.node, or devEngines.runtime (in priority order)
+/// Reads from .node-version, devEngines.runtime, or engines.node (in priority order)
 /// Resolves semver ranges, downloads the matching version
 pub async fn download_runtime_for_project(
     project_path: &AbsolutePath,
@@ -202,7 +202,7 @@ println!("Node.js installed at: {}", runtime.get_binary_path());
 println!("Version: {}", runtime.version()); // "22.13.1"
 ```
 
-**Project-based download (reads from .node-version, engines.node, or devEngines.runtime):**
+**Project-based download (reads from .node-version, devEngines.runtime, or engines.node):**
 
 ```rust
 use vite_js_runtime::download_runtime_for_project;
@@ -210,7 +210,7 @@ use vite_path::AbsolutePathBuf;
 
 let project_path = AbsolutePathBuf::new("/path/to/project".into()).unwrap();
 let runtime = download_runtime_for_project(&project_path).await?;
-// Version is resolved from .node-version > engines.node > devEngines.runtime
+// Version is resolved from .node-version > devEngines.runtime > engines.node
 ```
 
 ## Cache Directory Structure
@@ -271,8 +271,10 @@ The `download_runtime_for_project` function reads Node.js version from multiple 
 | Priority    | Source               | File            | Example                               | Used By                       |
 | ----------- | -------------------- | --------------- | ------------------------------------- | ----------------------------- |
 | 1 (highest) | `.node-version`      | `.node-version` | `22.13.1`                             | fnm, nvm, Netlify, Cloudflare |
-| 2           | `engines.node`       | `package.json`  | `">=20.0.0"`                          | Vercel, npm                   |
-| 3 (lowest)  | `devEngines.runtime` | `package.json`  | `{"name":"node","version":"^24.4.0"}` | npm RFC                       |
+| 2           | `devEngines.runtime` | `package.json`  | `{"name":"node","version":"^24.4.0"}` | npm, pnpm                     |
+| 3 (lowest)  | `engines.node`       | `package.json`  | `">=20.0.0"`                          | Vercel, npm                   |
+
+`devEngines.runtime` ranks above `engines.node` because it declares the development-environment requirement, while `engines.node` is a consumer-facing support range. See [RFC: devEngines Support](./dev-engines.md).
 
 ### `.node-version` File Format
 

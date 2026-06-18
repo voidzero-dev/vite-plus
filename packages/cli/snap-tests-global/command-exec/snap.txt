@@ -27,6 +27,7 @@ Options:
   -t, --transitive             Select the current package and its transitive dependencies
   -w, --workspace-root         Select the workspace root package
   -F, --filter <FILTERS>       Match packages by name, directory, or glob pattern
+  --fail-if-no-match           Exit with a non-zero status if a filter matches no packages
   -c, --shell-mode             Execute the command within a shell environment
   --parallel                   Run concurrently without topological ordering
   --reverse                    Reverse execution order

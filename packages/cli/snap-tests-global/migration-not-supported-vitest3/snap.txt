@@ -10,7 +10,7 @@ Vite+ cannot automatically migrate this project yet.
 > cat package.json # check package.json is not updated
 {
   "devDependencies": {
-    "vitest": "^3.0.0"
+    "vitest": "3.2.4"
   },
   "packageManager": "pnpm@<semver>"
 }

@@ -80,6 +80,7 @@ fn documentation_url_for_command_path(command_path: &[&str]) -> Option<&'static 
         ["pack"] => Some("https://viteplus.dev/guide/pack"),
         ["env", ..] => Some("https://viteplus.dev/guide/env"),
         ["upgrade"] => Some("https://viteplus.dev/guide/upgrade"),
+        ["implode"] => Some("https://viteplus.dev/guide/implode"),
         _ => None,
     }
 }
@@ -258,6 +259,27 @@ fn is_section_heading(line: &str) -> bool {
     !trimmed.is_empty() && !trimmed.starts_with(' ') && trimmed.ends_with(':')
 }
 
+fn split_alias_suffix(description: &str) -> Option<(&str, &str)> {
+    let description = description.strip_suffix(']')?;
+    let (description, aliases) = description.rsplit_once(" [aliases: ")?;
+    if aliases.trim().is_empty() {
+        return None;
+    }
+    Some((description, aliases))
+}
+
+fn normalize_alias_suffix(label: String, description: String) -> (String, String) {
+    if label.starts_with('-') {
+        return (label, description);
+    }
+
+    let Some((description_without_aliases, aliases)) = split_alias_suffix(&description) else {
+        return (label, description);
+    };
+
+    (format!("{label}, {aliases}"), description_without_aliases.to_string())
+}
+
 fn split_label_and_description(content: &str) -> Option<(String, String)> {
     let bytes = content.as_bytes();
     let mut i = 0;
@@ -284,6 +306,17 @@ fn split_label_and_description(content: &str) -> Option<(String, String)> {
 }
 
 fn parse_rows(lines: &[String]) -> Vec<OwnedHelpRow> {
+    parse_rows_with_alias_normalization(lines, false)
+}
+
+fn parse_command_rows(lines: &[String]) -> Vec<OwnedHelpRow> {
+    parse_rows_with_alias_normalization(lines, true)
+}
+
+fn parse_rows_with_alias_normalization(
+    lines: &[String],
+    normalize_alias_suffixes: bool,
+) -> Vec<OwnedHelpRow> {
     let mut rows = Vec::new();
 
     for line in lines {
@@ -298,6 +331,11 @@ fn parse_rows(lines: &[String]) -> Vec<OwnedHelpRow> {
         }
 
         if let Some((label, description)) = split_label_and_description(content) {
+            let (label, description) = if normalize_alias_suffixes {
+                normalize_alias_suffix(label, description)
+            } else {
+                (label, description)
+            };
             rows.push(OwnedHelpRow { label, description: vec![description] });
             continue;
         }
@@ -406,7 +444,11 @@ fn parse_clap_help_to_doc(raw_help: &str) -> Option<OwnedHelpDoc> {
         let row_sections =
             matches!(title.as_str(), "Arguments" | "Options" | "Commands" | "Subcommands");
         if row_sections {
-            let rows = parse_rows(&body);
+            let rows = if matches!(title.as_str(), "Commands" | "Subcommands") {
+                parse_command_rows(&body)
+            } else {
+                parse_rows(&body)
+            };
             sections.push(OwnedHelpSection::Rows { title, rows });
         } else {
             let lines = body.into_iter().filter(|line| !line.trim().is_empty()).collect::<Vec<_>>();
@@ -442,7 +484,7 @@ pub fn top_level_help_doc() -> HelpDoc {
                     row("dev", "Run the development server"),
                     row("check", "Run format, lint, and type checks"),
                     row("lint", "Lint code"),
-                    row("fmt", "Format code"),
+                    row("fmt, format", "Format code"),
                     row("test", "Run tests"),
                 ],
             ),
@@ -514,18 +556,15 @@ fn env_help_doc() -> HelpDoc {
                 "Manage",
                 vec![
                     row("default", "Set or show the global default Node.js version"),
-                    row(
-                        "pin",
-                        "Pin a Node.js version in the current directory (creates .node-version)",
-                    ),
+                    row("pin", "Pin a Node.js version in the current directory"),
                     row(
                         "unpin",
-                        "Remove the .node-version file from current directory (alias for `pin --unpin`)",
+                        "Remove the Node.js pin from the current directory (alias for `pin --unpin`)",
                     ),
                     row("use", "Use a specific Node.js version for this shell session"),
-                    row("install", "Install a Node.js version [aliases: i]"),
-                    row("uninstall", "Uninstall a Node.js version [aliases: uni]"),
-                    row("exec", "Execute a command with a specific Node.js version [aliases: run]"),
+                    row("install, i", "Install a Node.js version"),
+                    row("uninstall, uni", "Uninstall a Node.js version"),
+                    row("exec, run", "Execute a command with a specific Node.js version"),
                 ],
             ),
             section_rows(
@@ -534,10 +573,10 @@ fn env_help_doc() -> HelpDoc {
                     row("current", "Show current environment information"),
                     row("doctor", "Run diagnostics and show environment status"),
                     row("which", "Show path to the tool that would be executed"),
-                    row("list", "List locally installed Node.js versions [aliases: ls]"),
+                    row("list, ls", "List locally installed Node.js versions"),
                     row(
-                        "list-remote",
-                        "List available Node.js versions from the registry [aliases: ls-remote]",
+                        "list-remote, ls-remote",
+                        "List available Node.js versions from the registry",
                     ),
                 ],
             ),
@@ -545,7 +584,7 @@ fn env_help_doc() -> HelpDoc {
                 "Examples",
                 vec![
                     "  Setup:",
-                    "    vp env setup                  # Create shims for node, npm, npx",
+                    "    vp env setup                  # Create shims for node, npm, npx, corepack",
                     "    vp env on                     # Use vite-plus managed Node.js",
                     "    vp env print                  # Print shell snippet for this session",
                     "",
@@ -829,10 +868,25 @@ fn delegated_help_doc(command: &str) -> Option<HelpDoc> {
                             "Match packages by name, directory, or glob pattern",
                         ),
                         row(
+                            "--fail-if-no-match",
+                            "Exit with a non-zero status if a filter matches no packages",
+                        ),
+                        row(
                             "--ignore-depends-on",
                             "Do not run dependencies specified in `dependsOn` fields",
                         ),
                         row("-v, --verbose", "Show full detailed summary after execution"),
+                        row("--cache", "Force caching on for all tasks and scripts"),
+                        row("--no-cache", "Force caching off for all tasks and scripts"),
+                        row("--log <MODE>", "Set output mode: interleaved, labeled, or grouped"),
+                        row(
+                            "--concurrency-limit <N>",
+                            "Maximum number of tasks to run concurrently (default: 4)",
+                        ),
+                        row(
+                            "--parallel",
+                            "Run tasks without dependency ordering (unlimited concurrency by default)",
+                        ),
                         row("--last-details", "Display the detailed summary of the last run"),
                         row("-h, --help", "Print help (see more with '--help')"),
                     ],
@@ -872,6 +926,10 @@ fn delegated_help_doc(command: &str) -> Option<HelpDoc> {
                         row(
                             "-F, --filter <FILTERS>",
                             "Match packages by name, directory, or glob pattern",
+                        ),
+                        row(
+                            "--fail-if-no-match",
+                            "Exit with a non-zero status if a filter matches no packages",
                         ),
                         row("-c, --shell-mode", "Execute the command within a shell environment"),
                         row("--parallel", "Run concurrently without topological ordering"),
@@ -919,11 +977,11 @@ fn delegated_help_doc(command: &str) -> Option<HelpDoc> {
     }
 }
 
-fn is_help_flag(arg: &str) -> bool {
+pub(crate) fn is_help_flag(arg: &str) -> bool {
     matches!(arg, "-h" | "--help")
 }
 
-fn has_help_flag_before_terminator(args: &[String]) -> bool {
+pub(crate) fn has_help_flag_before_terminator(args: &[String]) -> bool {
     args.iter().take_while(|arg| arg.as_str() != "--").any(|arg| is_help_flag(arg))
 }
 
@@ -946,6 +1004,16 @@ fn skip_clap_unified_help(command: &str) -> bool {
     )
 }
 
+fn should_skip_parent_help_for_unknown_direct_nested_child(
+    command_path: &[String],
+    argv: &[String],
+    index: usize,
+) -> bool {
+    matches!(command_path, [command] if matches!(command.as_str(), "pm" | "env"))
+        && argv.get(index).is_some_and(|arg| !arg.starts_with('-'))
+        && has_help_flag_before_terminator(&argv[index..])
+}
+
 pub fn maybe_print_unified_clap_subcommand_help(argv: &[String]) -> bool {
     if argv.len() < 3 {
         return false;
@@ -960,6 +1028,10 @@ pub fn maybe_print_unified_clap_subcommand_help(argv: &[String]) -> bool {
 
     while index < argv.len() {
         let arg = &argv[index];
+        if is_help_flag(arg) {
+            index += 1;
+            continue;
+        }
         if arg.starts_with('-') {
             break;
         }
@@ -982,6 +1054,10 @@ pub fn maybe_print_unified_clap_subcommand_help(argv: &[String]) -> bool {
         return false;
     }
 
+    if should_skip_parent_help_for_unknown_direct_nested_child(&command_path, argv, index) {
+        return false;
+    }
+
     let Some(first_command_name) = first_command_name else {
         return false;
     };
@@ -991,7 +1067,7 @@ pub fn maybe_print_unified_clap_subcommand_help(argv: &[String]) -> bool {
 
     // Respect `--` option terminator: flags after `--` belong to the wrapped
     // command and should not trigger CLI help rewriting.
-    if !has_help_flag_before_terminator(&argv[index..]) {
+    if !has_help_flag_before_terminator(&argv[1..]) {
         return false;
     }
 
@@ -1066,7 +1142,9 @@ pub fn print_unified_clap_help_for_path(command_path: &[&str]) -> bool {
 mod tests {
     use super::{
         HelpDoc, documentation_url_for_command_path, has_help_flag_before_terminator,
-        parse_clap_help_to_doc, parse_rows, render_help_doc, split_comment_suffix, strip_ansi,
+        parse_clap_help_to_doc, parse_command_rows, parse_rows, render_help_doc,
+        should_skip_parent_help_for_unknown_direct_nested_child, split_comment_suffix,
+        split_label_and_description, strip_ansi,
     };
 
     #[test]
@@ -1083,6 +1161,59 @@ mod tests {
         assert_eq!(rows[0].description, vec!["Do not install devDependencies"]);
         assert_eq!(rows[1].label, "--no-optional");
         assert_eq!(rows[1].description, vec!["Do not install optionalDependencies"]);
+    }
+
+    #[test]
+    fn parse_rows_moves_command_alias_suffixes_to_labels() {
+        let lines = vec![
+            "  list  List installed packages [aliases: ls]".to_string(),
+            "  view  View package information from the registry [aliases: info, show]".to_string(),
+        ];
+
+        let rows = parse_command_rows(&lines);
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].label, "list, ls");
+        assert_eq!(rows[0].description, vec!["List installed packages"]);
+        assert_eq!(rows[1].label, "view, info, show");
+        assert_eq!(rows[1].description, vec!["View package information from the registry"]);
+    }
+
+    #[test]
+    fn parse_rows_leaves_non_terminal_alias_text_unchanged() {
+        let lines = vec!["  search  Search [aliases: lookup] packages in the registry".to_string()];
+
+        let rows = parse_command_rows(&lines);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].label, "search");
+        assert_eq!(rows[0].description, vec!["Search [aliases: lookup] packages in the registry"]);
+    }
+
+    #[test]
+    fn parse_rows_leaves_option_alias_suffixes_unchanged() {
+        let lines = vec!["  -h, --help  Print help [aliases: ?]".to_string()];
+
+        let rows = parse_rows(&lines);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].label, "-h, --help");
+        assert_eq!(rows[0].description, vec!["Print help [aliases: ?]"]);
+    }
+
+    #[test]
+    fn parse_rows_leaves_argument_alias_suffixes_unchanged() {
+        let lines = vec!["  <PACKAGE>  Package to inspect [aliases: pkg]".to_string()];
+
+        let rows = parse_rows(&lines);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].label, "<PACKAGE>");
+        assert_eq!(rows[0].description, vec!["Package to inspect [aliases: pkg]"]);
+    }
+
+    #[test]
+    fn split_label_and_description_preserves_plain_rows() {
+        let (label, description) =
+            split_label_and_description("list  List installed packages").expect("row should split");
+        assert_eq!(label, "list");
+        assert_eq!(description, "List installed packages");
     }
 
     #[test]
@@ -1115,6 +1246,42 @@ Options:
     fn help_flag_after_terminator_is_ignored() {
         let args = vec!["vpx".to_string(), "--".to_string(), "--help".to_string()];
         assert!(!has_help_flag_before_terminator(&args));
+    }
+
+    #[test]
+    fn skips_parent_help_for_unknown_pm_child_with_help() {
+        let args = vec!["vp", "pm", "apprev-build", "--help"]
+            .into_iter()
+            .map(String::from)
+            .collect::<Vec<_>>();
+        assert!(should_skip_parent_help_for_unknown_direct_nested_child(
+            &["pm".to_string()],
+            &args,
+            2,
+        ));
+    }
+
+    #[test]
+    fn keeps_unified_help_for_valid_pm_child_with_help() {
+        let args = vec!["vp", "pm", "approve-builds", "--help"]
+            .into_iter()
+            .map(String::from)
+            .collect::<Vec<_>>();
+        assert!(!should_skip_parent_help_for_unknown_direct_nested_child(
+            &["pm".to_string(), "approve-builds".to_string()],
+            &args,
+            3,
+        ));
+    }
+
+    #[test]
+    fn keeps_unified_help_for_parent_help() {
+        let args = vec!["vp", "env", "--help"].into_iter().map(String::from).collect::<Vec<_>>();
+        assert!(!should_skip_parent_help_for_unknown_direct_nested_child(
+            &["env".to_string()],
+            &args,
+            2,
+        ));
     }
 
     #[test]
@@ -1169,6 +1336,10 @@ Options:
         assert_eq!(
             documentation_url_for_command_path(&["config"]),
             Some("https://viteplus.dev/guide/commit-hooks")
+        );
+        assert_eq!(
+            documentation_url_for_command_path(&["implode"]),
+            Some("https://viteplus.dev/guide/implode")
         );
     }
 

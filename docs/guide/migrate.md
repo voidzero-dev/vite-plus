@@ -75,8 +75,8 @@ Migrate this project to Vite+. Vite+ replaces the current split tooling around r
 After the migration:
 
 - Confirm `vite` imports were rewritten to `vite-plus` where needed
-- Confirm `vitest` imports were rewritten to `vite-plus/test` where needed
-- Remove old `vite` and `vitest` dependencies only after those rewrites are confirmed
+- Confirm `vitest` imports were rewritten to `vite-plus/test` (and `@vitest/browser*` to `vite-plus/test/browser*`) where needed
+- Remove old `vite`, `vitest`, and `@vitest/browser*` dependencies only after those rewrites are confirmed — `vite-plus` ships them as direct deps
 - Move remaining tool-specific config into the appropriate blocks in `vite.config.ts`
 
 Command mapping to keep in mind:
@@ -96,19 +96,29 @@ Summarize the migration at the end and report any manual follow-up still require
 
 ### Vitest
 
-Vitest is automatically migrated through `vp migrate`. If you are migrating manually, you have to update all the imports to `vite-plus/test` instead:
+Vitest is automatically migrated through `vp migrate`. `vite-plus` re-exports upstream `vitest@4.x` under `vite-plus/test*`, so for node-mode tests a single `vite-plus` install is enough — you no longer need to install `vitest` directly.
+
+Browser mode is more nuanced. `vite-plus` bundles the base browser runtime (`@vitest/browser`) and the preview provider (`@vitest/browser-preview`), but the **Playwright** and **WebdriverIO** providers stay opt-in: `@vitest/browser-playwright` (with its `playwright` peer) and `@vitest/browser-webdriverio` (with its `webdriverio` peer) are **not** shipped with `vite-plus`, so non-browser projects never pull them in. `vp migrate` detects the provider you actually use and adds it — pinned to the bundled vitest version — together with its framework. If you migrate manually and use one of these providers, install the provider package and its framework yourself so `vite-plus/test/browser-playwright` / `vite-plus/test/browser-webdriverio` can resolve.
+
+If you are migrating manually, update all the imports to `vite-plus/test*` instead:
 
 ```ts
 // before
+import { defineConfig } from 'vitest/config';
 import { describe, expect, it, vi } from 'vitest';
+import { playwright } from '@vitest/browser-playwright';
 
 const { page } = await import('@vitest/browser/context');
 
 // after
+import { defineConfig } from 'vite-plus';
 import { describe, expect, it, vi } from 'vite-plus/test';
+import { playwright } from 'vite-plus/test/browser-playwright';
 
 const { page } = await import('vite-plus/test/browser/context');
 ```
+
+`declare module 'vitest'` / `declare module '@vitest/browser*'` augmentations are intentionally **not** rewritten — `vite-plus/test*` is a thin re-export of upstream `vitest*`, so type augmentations have to target the upstream module identity to merge correctly. Leave those `declare module` statements pointing at `'vitest'` / `'@vitest/browser*'`.
 
 ### tsdown
 

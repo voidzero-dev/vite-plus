@@ -32,7 +32,7 @@ jobs:
         id: check_skip
         # v0.0.9 still declares `using: node20`; emits a Node 20 deprecation warning until upstream ships a node24 release.
         # https://github.com/withgraphite/graphite-ci-action
-        uses: withgraphite/graphite-ci-action@9bc969adfd43bb790da3b64b543c78c75cef9689 # v0.0.9
+        uses: withgraphite/graphite-ci-action@b87de3d800df90082f5f1ba2817f4e1a6f3b0a7b # v0.0.10
         with:
           graphite_token: ${{ secrets.GRAPHITE_CI_OPTIMIZER_TOKEN }}
 
@@ -99,17 +99,14 @@ jobs:
         with:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: test
+          tools: just
           target-dir: ${{ runner.os == 'Windows' && format('{0}/target', env.DEV_DRIVE) || '' }}
 
       - run: cargo check --all-targets --all-features
         env:
           RUSTFLAGS: '-D warnings --cfg tokio_unstable' # also update .cargo/config.toml
 
-      # Test all crates/* packages. New crates are automatically included.
-      # Also test vite-plus-cli (lives outside crates/) to catch type sync issues.
-      - run: cargo test $(for d in crates/*/; do echo -n "-p $(basename $d) "; done) -p vite-plus-cli
-        env:
-          RUST_MIN_STACK: 8388608
+      - run: just test
 
   test-musl:
     needs: detect-changes
@@ -133,7 +130,7 @@ jobs:
     steps:
       - name: Install Alpine dependencies
         shell: sh {0}
-        run: apk add --no-cache bash curl git musl-dev gcc g++ python3 cmake make
+        run: apk add --no-cache bash curl git just musl-dev gcc g++ python3 cmake make
 
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
       - uses: ./.github/actions/clone
@@ -148,12 +145,8 @@ jobs:
       - name: Install Rust toolchain
         run: rustup show
 
-      # Test all crates/* packages. New crates are automatically included.
-      # Also test vite-plus-cli (lives outside crates/) to catch type sync issues.
       # Skip separate cargo check — cargo test already compiles everything.
-      - run: cargo test $(for d in crates/*/; do echo -n "-p $(basename $d) "; done) -p vite-plus-cli
-        env:
-          RUST_MIN_STACK: 8388608
+      - run: just test
 
   lint:
     needs: detect-changes
@@ -168,26 +161,20 @@ jobs:
         with:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: lint
-          tools: cargo-shear
+          tools: just,cargo-shear
           components: clippy rust-docs rustfmt
 
       - run: |
           cargo shear
           cargo fmt --check
-          # Allow new clippy lints from the toolchain that fire in upstream
-          # rolldown crates without a `[lints]` table.
-          cargo clippy --all-targets --all-features -- -D warnings \
-            -A clippy::byte_char_slices \
-            -A clippy::manual_assert_eq \
-            -A clippy::needless_return_with_question_mark \
-            -A clippy::useless_borrows_in_formatting
+          just lint
           # RUSTDOCFLAGS='-D warnings' cargo doc --no-deps --document-private-items
 
-      - uses: crate-ci/typos@7b04f660f4ee4f048d18fd341887cf28dfbedfe2 # v1.46.3
+      - uses: crate-ci/typos@37bb98842b0d8c4ffebdb75301a13db0267cef89 # v1.47.2
         with:
           files: .
 
-      - uses: oxc-project/setup-node@ab97f03642370d79a7e96dd286bd02a1be40e0ba # v1.3.0
+      - uses: oxc-project/setup-node@4c588e9266bd930b6ddc34307df0659ed511d187 # v1.3.1
 
       - name: Install docs dependencies
         run: pnpm -C docs install --frozen-lockfile
@@ -233,7 +220,7 @@ jobs:
           cache-key: cli-e2e-test-${{ matrix.target }}
           target-dir: ${{ runner.os == 'Windows' && format('{0}/target', env.DEV_DRIVE) || '' }}
 
-      - uses: oxc-project/setup-node@ab97f03642370d79a7e96dd286bd02a1be40e0ba # v1.3.0
+      - uses: oxc-project/setup-node@4c588e9266bd930b6ddc34307df0659ed511d187 # v1.3.1
 
       - name: Install docs dependencies
         run: pnpm -C docs install --frozen-lockfile
@@ -552,6 +539,113 @@ jobs:
             exit /b 1
           )
 
+      - name: Test same-version forced upgrade (Windows)
+        if: ${{ matrix.os == 'windows-latest' }}
+        shell: pwsh
+        run: |
+          # Force-reinstall the published `latest` version rather than the local
+          # build's version: mid-release-cycle the build can be ahead of the
+          # registry, and `vp upgrade <version>` must download <version> from npm.
+          $version = "$(npm view vite-plus version)".Trim()
+          if (-not $version) {
+            Write-Error "Failed to resolve latest published vite-plus version"
+            exit 1
+          }
+
+          $realVpHome = Join-Path $HOME ".vite-plus"
+          $currentVp = Join-Path $realVpHome "current/bin/vp.exe"
+
+          $tempVpHome = Join-Path $env:RUNNER_TEMP "vp-same-version-force"
+          if (Test-Path $tempVpHome) {
+            Remove-Item $tempVpHome -Recurse -Force
+          }
+
+          $initialVersionDir = Join-Path $tempVpHome $version
+          $initialBinDir = Join-Path $initialVersionDir "bin"
+          New-Item -ItemType Directory -Path $initialBinDir | Out-Null
+          Copy-Item $currentVp (Join-Path $initialBinDir "vp.exe")
+          New-Item -ItemType Junction -Path (Join-Path $tempVpHome "current") -Target $initialVersionDir | Out-Null
+
+          $env:VP_HOME = $tempVpHome
+          & (Join-Path $tempVpHome "current/bin/vp.exe") upgrade $version --force
+
+          $currentTarget = (Get-Item (Join-Path $tempVpHome "current")).Target
+          if ($currentTarget -is [array]) {
+            $currentTarget = $currentTarget[0]
+          }
+          $updatedDir = Split-Path -Leaf $currentTarget
+          Write-Host "Updated install dir: $updatedDir"
+          if (-not $updatedDir.StartsWith("$version+force.")) {
+            Write-Error "Expected current to point at a forced reinstall dir for $version, got $updatedDir"
+            exit 1
+          }
+
+          if (-not (Test-Path (Join-Path $tempVpHome "$version/bin/vp.exe"))) {
+            Write-Error "Original same-version install directory was unexpectedly removed"
+            exit 1
+          }
+
+          $previousVersion = Get-Content (Join-Path $tempVpHome ".previous-version") -Raw
+          if ($previousVersion.Trim() -ne $version) {
+            Write-Error "Expected .previous-version to be $version, got $previousVersion"
+            exit 1
+          }
+
+      - name: Test same-version forced upgrade (Unix)
+        if: ${{ matrix.os != 'windows-latest' }}
+        shell: bash
+        run: |
+          # Unix mirror of the Windows same-version forced-upgrade test above.
+          # Overwriting the running binary in place does not fail on macOS or
+          # modern Linux the way it does on Windows, but the fix still changes
+          # the on-disk layout on every platform (current must repoint at a
+          # `<version>+force.*` dir, the original version tree must survive, and
+          # `.previous-version` must be recorded), so we assert that here too.
+          #
+          # Force-reinstall the published `latest` version rather than the local
+          # build's version: mid-release-cycle the build can be ahead of the
+          # registry, and `vp upgrade <version>` must download <version> from npm.
+          version=$(npm view vite-plus version)
+          if [ -z "$version" ]; then
+            echo "Failed to resolve latest published vite-plus version"
+            exit 1
+          fi
+
+          real_vp_home="$HOME/.vite-plus"
+          current_vp="$real_vp_home/current/bin/vp"
+          temp_vp_home="${RUNNER_TEMP:?RUNNER_TEMP must be set}/vp-same-version-force"
+          rm -rf "$temp_vp_home"
+
+          initial_bin_dir="$temp_vp_home/$version/bin"
+          mkdir -p "$initial_bin_dir"
+          cp "$current_vp" "$initial_bin_dir/vp"
+          chmod +x "$initial_bin_dir/vp"
+          # Relative symlink, matching swap_current_link's `current -> <version>`.
+          ln -s "$version" "$temp_vp_home/current"
+
+          VP_HOME="$temp_vp_home" "$temp_vp_home/current/bin/vp" upgrade "$version" --force
+
+          updated_dir=$(basename "$(readlink "$temp_vp_home/current")")
+          echo "Updated install dir: $updated_dir"
+          case "$updated_dir" in
+            "$version+force."*) ;;
+            *)
+              echo "Expected current to point at a forced reinstall dir for $version, got $updated_dir"
+              exit 1
+              ;;
+          esac
+
+          if [ ! -f "$temp_vp_home/$version/bin/vp" ]; then
+            echo "Original same-version install directory was unexpectedly removed"
+            exit 1
+          fi
+
+          previous_version=$(tr -d '[:space:]' < "$temp_vp_home/.previous-version")
+          if [ "$previous_version" != "$version" ]; then
+            echo "Expected .previous-version to be $version, got $previous_version"
+            exit 1
+          fi
+
       - name: Test implode (bash)
         shell: bash
         run: |
@@ -711,7 +805,7 @@ jobs:
           cache-key: cli-snap-test-${{ matrix.target }}
           target-dir: ${{ runner.os == 'Windows' && format('{0}/target', env.DEV_DRIVE) || '' }}
 
-      - uses: oxc-project/setup-node@ab97f03642370d79a7e96dd286bd02a1be40e0ba # v1.3.0
+      - uses: oxc-project/setup-node@4c588e9266bd930b6ddc34307df0659ed511d187 # v1.3.1
 
       - name: Install docs dependencies
         run: pnpm -C docs install --frozen-lockfile
@@ -758,7 +852,7 @@ jobs:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: cli-e2e-test-musl
 
-      - uses: oxc-project/setup-node@ab97f03642370d79a7e96dd286bd02a1be40e0ba # v1.3.0
+      - uses: oxc-project/setup-node@4c588e9266bd930b6ddc34307df0659ed511d187 # v1.3.1
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -838,7 +932,7 @@ jobs:
           save-cache: ${{ github.ref_name == 'main' }}
           cache-key: install-e2e-test
 
-      - uses: oxc-project/setup-node@ab97f03642370d79a7e96dd286bd02a1be40e0ba # v1.3.0
+      - uses: oxc-project/setup-node@4c588e9266bd930b6ddc34307df0659ed511d187 # v1.3.1
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -946,7 +1040,7 @@ jobs:
           cache-key: install-e2e-test-sfw-${{ matrix.os }}
           target-dir: ${{ runner.os == 'Windows' && format('{0}/target', env.DEV_DRIVE) || '' }}
 
-      - uses: oxc-project/setup-node@ab97f03642370d79a7e96dd286bd02a1be40e0ba # v1.3.0
+      - uses: oxc-project/setup-node@4c588e9266bd930b6ddc34307df0659ed511d187 # v1.3.1
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:

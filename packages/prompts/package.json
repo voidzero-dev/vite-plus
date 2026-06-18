@@ -33,7 +33,7 @@
   },
   "devDependencies": {
     "fast-string-width": "^1.1.0",
-    "fast-wrap-ansi": "^0.1.3",
+    "fast-wrap-ansi": "^0.2.0",
     "is-unicode-supported": "^1.3.0",
     "tsdown": "catalog:"
   }

@@ -23,7 +23,6 @@ pub struct WhyCommandOptions<'a> {
     pub dev: bool,
     pub depth: Option<u32>,
     pub no_optional: bool,
-    pub global: bool,
     pub exclude_peers: bool,
     pub find_by: Option<&'a str>,
     pub pass_through_args: Option<&'a [String]>,
@@ -99,10 +98,6 @@ impl PackageManager {
 
                 if options.no_optional {
                     args.push("--no-optional".into());
-                }
-
-                if options.global {
-                    args.push("--global".into());
                 }
 
                 if options.exclude_peers {

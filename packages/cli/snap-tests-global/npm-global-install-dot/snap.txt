@@ -1,9 +1,7 @@
-> cd npm-global-dot-pkg && npm install -g . # Should install and show hint + create link
+> cd npm-global-dot-pkg && npm install -g . # Should install and create link
 
 added 1 package in <variable>ms
 Linked 'npm-global-dot-cli' to <vite-plus-home>/bin/npm-global-dot-cli
-
-tip: Use `vp install -g .` for managed shims that persist across Node.js version changes.
 
 > test -L $VP_HOME/bin/npm-global-dot-cli && echo 'link created' # Link should exist
 link created

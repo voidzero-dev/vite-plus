@@ -8,7 +8,6 @@ const isWindows = process.platform === 'win32';
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const cliDistDir = path.join(repoRoot, 'packages', 'cli', 'dist');
 const cliBinPath = path.join(cliDistDir, 'bin.js');
-const testCliPath = path.join(repoRoot, 'packages', 'test', 'dist', 'cli.js');
 const localVpBinaryName = isWindows ? 'vp.exe' : 'vp';
 const defaultLocalVpPath = path.join(repoRoot, 'target', 'debug', localVpBinaryName);
 const viteRepoDir = path.join(repoRoot, 'vite');
@@ -81,16 +80,13 @@ function findLocalVpBinary(): string | null {
   return null;
 }
 
-function ensureLocalCliReady(options?: { needsTestCli?: boolean }): LocalCliArtifacts {
+function ensureLocalCliReady(): LocalCliArtifacts {
   if (!existsSync(cliBinPath)) {
     failMissing(cliBinPath, 'local CLI bundle');
   }
   const vpPath = findLocalVpBinary();
   if (!vpPath) {
     failMissing(defaultLocalVpPath, 'local vp binary');
-  }
-  if (options?.needsTestCli && !existsSync(testCliPath)) {
-    failMissing(testCliPath, 'local test CLI bundle');
   }
 
   return {
@@ -330,7 +326,7 @@ function exitWith(result: ReturnType<typeof spawnSync>): never {
 }
 
 export function runLocalCli(args: string[]) {
-  const { vpPath } = ensureLocalCliReady({ needsTestCli: args[0] === 'test' });
+  const { vpPath } = ensureLocalCliReady();
 
   const result = spawnSync(vpPath, args, {
     cwd: process.cwd(),
@@ -393,7 +389,6 @@ export function runBuildLocalCli(args: string[]) {
     hint: 'If this fails because vite dependencies are missing, rerun "pnpm install" from the repo root.',
   });
   runPnpmCommand('Build vite-plus core', ['--filter', '@voidzero-dev/vite-plus-core', 'build']);
-  runPnpmCommand('Build vite-plus test', ['--filter', '@voidzero-dev/vite-plus-test', 'build']);
   runPnpmCommand('Build vite-plus prompts', [
     '--filter',
     '@voidzero-dev/vite-plus-prompts',

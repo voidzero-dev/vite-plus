@@ -1,18 +1,9 @@
 > vp migrate --no-interactive # should detect vite-plus + eslint and auto-migrate eslint
-
-Migrating ESLint config to Oxlint...
-
-ESLint config migrated to .oxlintrc.json
-
-Replacing ESLint comments with Oxlint equivalents...
-
-ESLint comments replaced
-
-✔ Removed eslint.config.mjs
-◇ Updated .
-• Node <semver>  unknown latest
-• 1 config update applied
+◇ Migrated . to Vite+
+• Node <semver>  pnpm <semver>
+• 2 config updates applied
 • ESLint rules migrated to Oxlint
+• Package manager settings configured
 
 > cat package.json # check eslint removed from devDependencies and scripts rewritten
 {
@@ -23,7 +14,13 @@ ESLint comments replaced
   "devDependencies": {
     "vite-plus": "latest"
   },
-  "packageManager": "pnpm@<semver>"
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "<semver>",
+      "onFail": "download"
+    }
+  }
 }
 
 > test ! -f eslint.config.mjs # check eslint config is removed

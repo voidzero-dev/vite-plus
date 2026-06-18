@@ -64,6 +64,8 @@ pub async fn execute(
         // - Recursion prevention via VP_TOOL_RECURSION
         // - Shim mode checking (managed vs system-first)
         let args: Vec<String> = command[1..].to_vec();
+        // stdout belongs to the dispatched tool; route vp's own output to stderr.
+        vite_shared::output::route_user_output_to_stderr();
         let exit_code = shim_dispatch(tool, &args).await;
         return Ok(exit_status(exit_code));
     }

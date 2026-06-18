@@ -8,7 +8,7 @@ Core Commands:
   build          Build for production
   test           Run tests
   lint           Lint code
-  fmt            Format code
+  fmt, format    Format code
   check          Run format, lint, and type checks
   pack           Build library
   run            Run tasks

@@ -145,7 +145,7 @@ pub async fn detect_workspace(cwd: String) -> Result<DetectWorkspaceResult> {
     let workspace_root_path = workspace_root.path.as_path().to_string_lossy().to_string();
 
     match get_package_manager_type_and_version(&workspace_root, None) {
-        Ok((package_manager_type, version, _)) => Ok(DetectWorkspaceResult {
+        Ok((package_manager_type, version, _, _)) => Ok(DetectWorkspaceResult {
             package_manager_name: Some(package_manager_type.to_string()),
             package_manager_version: Some(version.to_string()),
             is_monorepo,

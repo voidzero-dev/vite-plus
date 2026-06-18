@@ -13,6 +13,6 @@ pub mod request;
 mod shim;
 
 pub use package_manager::{
-    PackageManager, PackageManagerType, download_package_manager,
+    PackageManager, PackageManagerSource, PackageManagerType, download_package_manager,
     get_package_manager_type_and_version,
 };

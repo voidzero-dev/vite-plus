@@ -21,7 +21,10 @@ const require = createRequire(import.meta.url);
 const oxfmtMainPath = require.resolve('oxfmt');
 const oxfmtBin = join(dirname(dirname(oxfmtMainPath)), 'bin', 'oxfmt');
 
-// This allows oxfmt to load vite.config.ts
-// For `vp check` and `vp fmt`, it is injected by `merge_resolved_envs_with_version()` in `cli.rs`
+// This allows oxfmt to load vite.config.ts.
+// For `vp check` and `vp fmt`, VP_VERSION is injected by
+// `merge_resolved_envs_with_version()` in `cli.rs`, and VP_COMMAND is injected
+// by `SubcommandResolver::resolve()`.
 process.env.VP_VERSION = pkg.version;
+process.env.VP_COMMAND ??= 'fmt';
 await import(pathToFileURL(oxfmtBin).href);

@@ -39,8 +39,9 @@ Migration Prompt:
   After the migration:
   - Confirm `vite` imports were rewritten to `vite-plus` where needed
   - Confirm `vitest` imports were rewritten to `vite-plus/test` where needed
-  - Remove old `vite` and `vitest` dependencies only after those rewrites
-    are confirmed
+  - On pnpm, keep the `vite` / `vitest` entries that `vp migrate` aliased to
+    the Vite+ packages so the workspace override stays effective; with other
+    package managers you can remove them once those rewrites are confirmed
   - Move remaining tool-specific config into the appropriate blocks in
     `vite.config.ts`
 

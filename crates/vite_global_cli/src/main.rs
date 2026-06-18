@@ -20,7 +20,6 @@ mod error;
 mod help;
 mod js_executor;
 mod shim;
-mod tips;
 mod upgrade_check;
 
 use std::{
@@ -43,7 +42,7 @@ use crate::cli::{
 /// Normalize CLI arguments:
 /// - `vp list ...` / `vp ls ...` → `vp pm list ...`
 /// - `vp rebuild ...` → `vp pm rebuild ...`
-/// - `vp help [command]` → `vp [command] --help`
+/// - `vp help [command] [args...]` → `vp [command] [args...] --help`
 /// - `vp node [args...]` → `vp env exec node [args...]`
 fn normalize_args(args: Vec<String>) -> Vec<String> {
     let mut normalized = args;
@@ -72,13 +71,26 @@ fn normalize_args(args: Vec<String>) -> Vec<String> {
             Some("help") if normalized.len() == 2 => {
                 vec![normalized[0].clone(), "--help".to_string()]
             }
-            // `vp help [command] [args...]` -> `vp [command] --help [args...]`
+            // `vp help [command] [args...]` -> `vp [command] [args...] --help`
             Some("help") if normalized.len() > 2 => {
                 let mut next = Vec::with_capacity(normalized.len());
                 next.push(normalized[0].clone());
-                next.push(normalized[2].clone());
+                next.extend(normalized[2..].iter().cloned());
                 next.push("--help".to_string());
-                next.extend(normalized[3..].iter().cloned());
+                next
+            }
+            // `vp pm --help <command>` → `vp pm <command> --help`
+            // `vp env --help <command>` → `vp env <command> --help`
+            Some("pm" | "env")
+                if normalized.get(2).is_some_and(|arg| matches!(arg.as_str(), "-h" | "--help"))
+                    && normalized.get(3).is_some_and(|arg| !arg.starts_with('-')) =>
+            {
+                let mut next = Vec::with_capacity(normalized.len());
+                next.push(normalized[0].clone());
+                next.push(normalized[1].clone());
+                next.push(normalized[3].clone());
+                next.push(normalized[2].clone());
+                next.extend(normalized[4..].iter().cloned());
                 next
             }
             // `vp node [args...]` → `vp env exec node [args...]`
@@ -126,6 +138,26 @@ fn print_invalid_subcommand_error(details: &InvalidSubcommandDetails) {
 
     let highlighted_subcommand = details.invalid_subcommand.bright_blue().to_string();
     output::error(&format!("Command '{highlighted_subcommand}' not found"));
+}
+
+fn print_nested_suggestion(suggestion: &str) {
+    eprintln!();
+    let highlighted_suggestion = format!("`vp {suggestion}`").bright_blue().to_string();
+    eprintln!("Did you mean {highlighted_suggestion}?");
+}
+
+fn nested_suggestion_command(
+    raw_args: &[String],
+    invalid_subcommand: &str,
+    suggestion: &str,
+) -> String {
+    let Some(index) = raw_args.iter().position(|arg| arg == invalid_subcommand) else {
+        return suggestion.to_owned();
+    };
+
+    let mut corrected = raw_args[..index].to_vec();
+    corrected.push(suggestion.to_owned());
+    corrected.join(" ")
 }
 
 fn is_affirmative_response(input: &str) -> bool {
@@ -185,6 +217,11 @@ fn exit_status_to_exit_code(exit_status: ExitStatus) -> ExitCode {
     }
 }
 
+fn clap_error_to_exit_code(e: &clap::Error) -> ExitCode {
+    #[allow(clippy::cast_sign_loss)]
+    ExitCode::from(e.exit_code() as u8)
+}
+
 async fn run_corrected_args(cwd: &vite_path::AbsolutePathBuf, raw_args: &[String]) -> ExitCode {
     let render_options = RenderOptions { show_header: false };
     let args_with_program = std::iter::once("vp".to_string()).chain(raw_args.iter().cloned());
@@ -194,8 +231,7 @@ async fn run_corrected_args(cwd: &vite_path::AbsolutePathBuf, raw_args: &[String
         Ok(args) => args,
         Err(e) => {
             e.print().ok();
-            #[allow(clippy::cast_sign_loss)]
-            return ExitCode::from(e.exit_code() as u8);
+            return clap_error_to_exit_code(&e);
         }
     };
 
@@ -279,7 +315,9 @@ async fn main() -> ExitCode {
     tracing::debug!("argv0: {argv0}");
 
     if let Some(tool) = shim::detect_shim_tool(argv0) {
-        // Shim mode - dispatch to the appropriate tool
+        // Shim mode - dispatch to the appropriate tool. stdout belongs to the
+        // wrapped tool; route vp's own output to stderr.
+        output::route_user_output_to_stderr();
         let exit_code = shim::dispatch(&tool, &args[1..]).await;
         return ExitCode::from(exit_code as u8);
     }
@@ -311,14 +349,12 @@ async fn main() -> ExitCode {
         }
     }
 
-    let mut tip_context = tips::TipContext {
-        // Capture user args (excluding argv0) before normalization
-        raw_args: args[1..].to_vec(),
-        ..Default::default()
-    };
+    // Capture user args (excluding argv0) before normalization.
+    let raw_args = args[1..].to_vec();
 
     // Normalize arguments (list/ls aliases, help rewriting)
     let normalized_args = normalize_args(args);
+    let normalized_raw_args = normalized_args.get(1..).map_or_else(Vec::new, |args| args.to_vec());
 
     // Print unified subcommand help for clap-managed commands before clap handles help output.
     if help::maybe_print_unified_clap_subcommand_help(&normalized_args) {
@@ -346,56 +382,47 @@ async fn main() -> ExitCode {
                 ExitCode::SUCCESS
             } else if matches!(e.kind(), ErrorKind::InvalidSubcommand) {
                 if let Some(details) = extract_invalid_subcommand_details(&e) {
+                    let corrected_top_level_args =
+                        details.suggestion.as_ref().and_then(|suggestion| {
+                            replace_top_level_typoed_subcommand(
+                                &raw_args,
+                                &details.invalid_subcommand,
+                                suggestion,
+                            )
+                        });
+
                     print_invalid_subcommand_error(&details);
 
-                    if let Some(suggestion) = &details.suggestion {
-                        if let Some(corrected_raw_args) = replace_top_level_typoed_subcommand(
-                            &tip_context.raw_args,
-                            &details.invalid_subcommand,
-                            suggestion,
-                        ) {
-                            if prompt_to_run_suggested_command(suggestion) {
-                                tip_context.raw_args = corrected_raw_args.clone();
-                                run_corrected_args(&cwd, &corrected_raw_args).await
-                            } else {
-                                let code = e.exit_code();
-                                tip_context.clap_error = Some(e);
-                                #[allow(clippy::cast_sign_loss)]
-                                ExitCode::from(code as u8)
-                            }
+                    if let Some(corrected_raw_args) = corrected_top_level_args {
+                        let suggestion = details.suggestion.as_ref().expect("suggestion exists");
+                        if prompt_to_run_suggested_command(suggestion) {
+                            run_corrected_args(&cwd, &corrected_raw_args).await
                         } else {
-                            let code = e.exit_code();
-                            tip_context.clap_error = Some(e);
-                            #[allow(clippy::cast_sign_loss)]
-                            ExitCode::from(code as u8)
+                            clap_error_to_exit_code(&e)
                         }
                     } else {
-                        let code = e.exit_code();
-                        tip_context.clap_error = Some(e);
-                        #[allow(clippy::cast_sign_loss)]
-                        ExitCode::from(code as u8)
+                        if let Some(suggestion) = &details.suggestion {
+                            let suggestion = nested_suggestion_command(
+                                &normalized_raw_args,
+                                &details.invalid_subcommand,
+                                suggestion,
+                            );
+                            print_nested_suggestion(&suggestion);
+                        }
+                        clap_error_to_exit_code(&e)
                     }
                 } else {
                     e.print().ok();
-                    let code = e.exit_code();
-                    tip_context.clap_error = Some(e);
-                    #[allow(clippy::cast_sign_loss)]
-                    ExitCode::from(code as u8)
+                    clap_error_to_exit_code(&e)
                 }
             } else if matches!(e.kind(), ErrorKind::UnknownArgument) {
                 if !print_unknown_argument_error(&e) {
                     e.print().ok();
                 }
-                let code = e.exit_code();
-                tip_context.clap_error = Some(e);
-                #[allow(clippy::cast_sign_loss)]
-                ExitCode::from(code as u8)
+                clap_error_to_exit_code(&e)
             } else {
                 e.print().ok();
-                let code = e.exit_code();
-                tip_context.clap_error = Some(e);
-                #[allow(clippy::cast_sign_loss)]
-                ExitCode::from(code as u8)
+                clap_error_to_exit_code(&e)
             }
         }
         Ok(args) => match run_command(cwd.clone(), args).await {
@@ -417,12 +444,6 @@ async fn main() -> ExitCode {
             tokio::time::timeout(std::time::Duration::from_millis(500), handle).await
     {
         upgrade_check::display_upgrade_notice(&result);
-    }
-
-    tip_context.exit_code = if exit_code == ExitCode::SUCCESS { 0 } else { 1 };
-
-    if let Some(tip) = tips::get_tip(&tip_context) {
-        eprintln!("\n{} {}", "tip:".bright_black().bold(), tip.bright_black());
     }
 
     exit_code
@@ -492,6 +513,20 @@ mod tests {
         let input = s(&["vp", "help", "node"]);
         let normalized = normalize_args(input);
         assert_eq!(normalized, s(&["vp", "env", "exec", "node", "--help"]));
+    }
+
+    #[test]
+    fn normalize_args_keeps_help_after_nested_path() {
+        let input = s(&["vp", "help", "pm", "apprev-build"]);
+        let normalized = normalize_args(input);
+        assert_eq!(normalized, s(&["vp", "pm", "apprev-build", "--help"]));
+    }
+
+    #[test]
+    fn normalize_args_moves_pm_help_before_child_after_child() {
+        let input = s(&["vp", "pm", "--help", "apprev-build"]);
+        let normalized = normalize_args(input);
+        assert_eq!(normalized, s(&["vp", "pm", "apprev-build", "--help"]));
     }
 
     #[test]

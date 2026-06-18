@@ -257,6 +257,14 @@ pub enum PackageManagerCommand {
         #[arg(long, requires = "global", value_parser = parse_positive_usize)]
         concurrency: Option<usize>,
 
+        /// Reinstall up-to-date global packages installed with a different Node.js version
+        #[arg(long, requires = "global")]
+        reinstall_node_mismatch: bool,
+
+        /// Skip up-to-date global packages installed with a different Node.js version
+        #[arg(long, requires = "global")]
+        ignore_node_mismatch: bool,
+
         /// Update recursively in all workspace packages
         #[arg(short = 'r', long)]
         recursive: bool,
@@ -417,10 +425,6 @@ pub enum PackageManagerCommand {
         #[arg(long)]
         no_optional: bool,
 
-        /// Check globally installed packages
-        #[arg(short = 'g', long)]
-        global: bool,
-
         /// Exclude peer dependencies
         #[arg(long)]
         exclude_peers: bool,
@@ -521,8 +525,7 @@ impl PackageManagerCommand {
     /// Whether this invocation hits the vite-plus-managed-global flow on the
     /// global CLI. The local CLI binding refuses these cases (it has no
     /// managed package store of its own); pass-through `-g` cases like
-    /// `outdated -g`, `why -g`, and `pm config get -g` return `false` and
-    /// keep working on both CLIs.
+    /// `pm config get -g` return `false` and keep working on both CLIs.
     pub fn is_managed_global(&self) -> bool {
         match self {
             Self::Install { global, .. }
@@ -562,11 +565,11 @@ pub enum PmCommands {
     /// Approve dependency lifecycle scripts (install/postinstall) to run
     #[command(name = "approve-builds")]
     ApproveBuilds {
-        /// Packages to approve. Prefix with `!` to deny (pnpm >= 11.0.0 only).
-        /// Omit to launch interactive mode (pnpm only).
+        /// Packages to approve. Prefix with `!` to deny (pnpm >= 11.0.0, npm >= 11.16.0).
+        /// Omit to launch interactive mode (pnpm) or list pending packages (npm >= 11.16.0).
         packages: Vec<String>,
 
-        /// Approve every package currently pending approval (pnpm >= 10.32.0).
+        /// Approve every package currently pending approval (pnpm >= 10.32.0, npm >= 11.16.0).
         /// Mutually exclusive with positional packages.
         #[arg(long, conflicts_with = "packages")]
         all: bool,
@@ -763,6 +766,10 @@ pub enum PmCommands {
         pass_through_args: Option<Vec<String>>,
     },
 
+    /// Stage a package for publishing (npm staged publishing workflow)
+    #[command(subcommand)]
+    Stage(StageCommands),
+
     /// Manage package owners
     #[command(subcommand, visible_alias = "author")]
     Owner(OwnerCommands),
@@ -945,6 +952,7 @@ impl PmCommands {
             | Self::Fund { json, .. } => *json,
             Self::Config(sub) => sub.is_quiet_or_machine_readable(),
             Self::Token(sub) => sub.is_quiet_or_machine_readable(),
+            Self::Stage(sub) => sub.is_quiet_or_machine_readable(),
             _ => false,
         }
     }
@@ -1165,6 +1173,157 @@ pub enum DistTagCommands {
     },
 }
 
+/// Staged-publishing subcommands (`vp pm stage <subcommand>`).
+///
+/// Maps to `npm stage`/`pnpm stage` and yarn berry's npm plugin
+/// (`yarn npm publish --staged`, `yarn npm stage …`). Note: this is unrelated
+/// to yarn's own `yarn stage` command, which stages files for a VCS commit.
+#[derive(Subcommand, Debug, Clone)]
+pub enum StageCommands {
+    /// Stage a package for publishing (no 2FA required)
+    Publish {
+        /// Tarball or folder to stage
+        #[arg(value_name = "TARBALL|FOLDER")]
+        target: Option<String>,
+
+        /// Publish tag
+        #[arg(long)]
+        tag: Option<String>,
+
+        /// Access level (public/restricted)
+        #[arg(long)]
+        access: Option<String>,
+
+        /// One-time password for authentication
+        #[arg(long, value_name = "OTP")]
+        otp: Option<String>,
+
+        /// Preview without staging
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
+
+        /// Stage all publishable workspace packages
+        #[arg(short = 'r', long)]
+        recursive: bool,
+
+        /// Filter packages in monorepo
+        #[arg(long, value_name = "PATTERN")]
+        filter: Option<Vec<String>>,
+
+        /// Stage with provenance
+        #[arg(long)]
+        provenance: bool,
+
+        /// Registry URL
+        #[arg(long, value_name = "URL")]
+        registry: Option<String>,
+
+        /// Additional arguments
+        #[arg(last = true, allow_hyphen_values = true)]
+        pass_through_args: Option<Vec<String>>,
+    },
+
+    /// List staged versions
+    #[command(visible_alias = "ls")]
+    List {
+        /// Package spec to filter by
+        package: Option<String>,
+
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
+
+        /// Registry URL
+        #[arg(long, value_name = "URL")]
+        registry: Option<String>,
+
+        /// Additional arguments
+        #[arg(last = true, allow_hyphen_values = true)]
+        pass_through_args: Option<Vec<String>>,
+    },
+
+    /// Show details about a staged version
+    View {
+        /// Stage ID
+        stage_id: String,
+
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
+
+        /// Registry URL
+        #[arg(long, value_name = "URL")]
+        registry: Option<String>,
+
+        /// Additional arguments
+        #[arg(last = true, allow_hyphen_values = true)]
+        pass_through_args: Option<Vec<String>>,
+    },
+
+    /// Download the staged tarball for inspection
+    Download {
+        /// Stage ID
+        stage_id: String,
+
+        /// Registry URL
+        #[arg(long, value_name = "URL")]
+        registry: Option<String>,
+
+        /// Additional arguments
+        #[arg(last = true, allow_hyphen_values = true)]
+        pass_through_args: Option<Vec<String>>,
+    },
+
+    /// Promote a staged version to the live registry (2FA required)
+    Approve {
+        /// Stage ID
+        stage_id: String,
+
+        /// One-time password for authentication
+        #[arg(long, value_name = "OTP")]
+        otp: Option<String>,
+
+        /// Registry URL
+        #[arg(long, value_name = "URL")]
+        registry: Option<String>,
+
+        /// Additional arguments
+        #[arg(last = true, allow_hyphen_values = true)]
+        pass_through_args: Option<Vec<String>>,
+    },
+
+    /// Discard a staged version (2FA required)
+    Reject {
+        /// Stage ID
+        stage_id: String,
+
+        /// One-time password for authentication
+        #[arg(long, value_name = "OTP")]
+        otp: Option<String>,
+
+        /// Registry URL
+        #[arg(long, value_name = "URL")]
+        registry: Option<String>,
+
+        /// Additional arguments
+        #[arg(last = true, allow_hyphen_values = true)]
+        pass_through_args: Option<Vec<String>>,
+    },
+}
+
+impl StageCommands {
+    pub fn is_quiet_or_machine_readable(&self) -> bool {
+        match self {
+            Self::Publish { json, .. } | Self::List { json, .. } | Self::View { json, .. } => *json,
+            _ => false,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use clap::FromArgMatches;
@@ -1255,5 +1414,39 @@ mod tests {
             panic!("expected ApproveBuilds variant");
         };
         assert_eq!(pass_through_args, Some(vec!["--workspace-root".to_string()]));
+    }
+
+    #[test]
+    fn stage_publish_parses() {
+        let command = parse_pm_command(&["vp", "pm", "stage", "publish", "--tag", "next"])
+            .expect("stage publish should parse");
+
+        assert!(matches!(
+            command,
+            PackageManagerCommand::Pm(PmCommands::Stage(StageCommands::Publish { .. }))
+        ));
+    }
+
+    #[test]
+    fn stage_approve_requires_stage_id() {
+        let error = parse_pm_command(&["vp", "pm", "stage", "approve"])
+            .expect_err("stage approve without an id should fail");
+
+        assert_eq!(error.kind(), clap::error::ErrorKind::MissingRequiredArgument);
+    }
+
+    #[test]
+    fn stage_list_pass_through_args_capture() {
+        let command = parse_pm_command(&["vp", "pm", "stage", "list", "--", "--registry", "x"])
+            .expect("pass-through args should parse");
+
+        let PackageManagerCommand::Pm(PmCommands::Stage(StageCommands::List {
+            pass_through_args,
+            ..
+        })) = command
+        else {
+            panic!("expected Stage(List) variant");
+        };
+        assert_eq!(pass_through_args, Some(vec!["--registry".to_string(), "x".to_string()]));
     }
 }

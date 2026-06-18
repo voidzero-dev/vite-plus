@@ -47,11 +47,7 @@ const TOOL_SPECS: [ToolSpec; 7] = [
         package_name: "@voidzero-dev/vite-plus-core",
         bundled_version_key: Some("rolldown"),
     },
-    ToolSpec {
-        display_name: "vitest",
-        package_name: "@voidzero-dev/vite-plus-test",
-        bundled_version_key: Some("vitest"),
-    },
+    ToolSpec { display_name: "vitest", package_name: "vitest", bundled_version_key: None },
     ToolSpec { display_name: "oxfmt", package_name: "oxfmt", bundled_version_key: None },
     ToolSpec { display_name: "oxlint", package_name: "oxlint", bundled_version_key: None },
     ToolSpec {
@@ -191,7 +187,14 @@ pub async fn execute(cwd: AbsolutePathBuf) -> Result<ExitStatus, Error> {
         .and_then(|(root, _)| {
             get_package_manager_type_and_version(&root, None)
                 .ok()
-                .map(|(pm, v, _)| format!("{pm} v{v}"))
+                // a devEngines range (e.g. "^11.0.0") has no meaningful "v" prefix
+                .map(|(pm, v, _, _)| {
+                    if v.starts_with(|c: char| c.is_ascii_digit()) {
+                        format!("{pm} v{v}")
+                    } else {
+                        format!("{pm} {v}")
+                    }
+                })
         })
         .unwrap_or(NOT_FOUND.to_string());
 
@@ -215,6 +218,8 @@ mod tests {
     #[cfg(unix)]
     use std::{fs, path::Path};
 
+    use serial_test::serial;
+
     #[cfg(unix)]
     use super::{ToolSpec, find_local_vite_plus, resolve_tool_version};
     use super::{detect_system_node_version, format_version};
@@ -230,7 +235,11 @@ mod tests {
         assert_eq!(format_version(None), "Not found");
     }
 
+    // Run serially: the spawned `node` inherits this process's environment, and
+    // concurrent #[serial] tests mutate PATH/VP_HOME via std::env::set_var,
+    // which can make a vp shim on PATH resolve incorrectly mid-test.
     #[test]
+    #[serial]
     fn detect_system_node_version_returns_version() {
         let version = detect_system_node_version();
         assert!(version.is_some(), "expected node to be installed");

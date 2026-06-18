@@ -308,9 +308,7 @@ function replaceInstalledCheckoutPackages(rootDir: string, repoRoot: string): vo
   const replacements = new Map([
     ['node_modules/vite-plus', path.join(repoRoot, 'packages', 'cli')],
     ['node_modules/vite', path.join(repoRoot, 'packages', 'core')],
-    ['node_modules/vitest', path.join(repoRoot, 'packages', 'test')],
     ['node_modules/@voidzero-dev/vite-plus-core', path.join(repoRoot, 'packages', 'core')],
-    ['node_modules/@voidzero-dev/vite-plus-test', path.join(repoRoot, 'packages', 'test')],
   ]);
 
   while (stack.length > 0) {
@@ -691,16 +689,24 @@ async function runTestCase(
     env['PATH'] = env['Path'];
     delete env['Path'];
   }
-  // The node shim prepends ~/.vite-plus/js_runtime/node/VERSION/bin/ to PATH,
-  // which leaks into this process. Strip internal vite-plus paths so the test
-  // environment simulates a clean user PATH (only the shim bin dir + system paths).
-  const vitePlusJsRuntime = path.join(env['VP_HOME'], 'js_runtime');
+  // The node shim prepends a managed `js_runtime/node/VERSION/bin/` dir to PATH,
+  // which leaks into this process. Strip managed-runtime paths so the test
+  // environment simulates a clean user PATH (only the shim bin dir + system
+  // paths). The leak can come from the test's isolated VP_HOME or, on CI, from
+  // the globally installed `~/.vite-plus` whose shim prepended its own runtime;
+  // strip both so `vp env off` resolves to the real system Node.js.
+  const managedJsRuntimes = [
+    path.join(env['VP_HOME'], 'js_runtime'),
+    path.join(homedir(), '.vite-plus', 'js_runtime'),
+  ];
   env['PATH'] = [
     // Extend PATH to include the package's bin directory
     // --bin-dir overrides the default for cases like global CLI tests
     // where vp should resolve to the Rust binary instead of the Node.js script
     path.resolve(expandHome(binDir || 'bin')),
-    ...env['PATH'].split(path.delimiter).filter((p) => !p.startsWith(vitePlusJsRuntime)),
+    ...env['PATH']
+      .split(path.delimiter)
+      .filter((p) => !managedJsRuntimes.some((runtime) => p.startsWith(runtime))),
   ].join(path.delimiter);
 
   const newSnap: string[] = [];

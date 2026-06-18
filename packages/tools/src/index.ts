@@ -41,10 +41,14 @@ switch (subcommand) {
     const { brandVite } = await import('./brand-vite.ts');
     brandVite();
     break;
+  case 'repack-vite-tgz':
+    const { repackViteTgz } = await import('./repack-vite-tgz.ts');
+    await repackViteTgz();
+    break;
   default:
     console.error(`Unknown subcommand: ${subcommand}`);
     console.error(
-      'Available subcommands: snap-test, replace-file-content, sync-remote, json-sort, merge-peer-deps, install-global-cli, build-local-cli, local-cli, snap-test-global-local, brand-vite',
+      'Available subcommands: snap-test, replace-file-content, sync-remote, json-sort, merge-peer-deps, install-global-cli, build-local-cli, local-cli, snap-test-global-local, brand-vite, repack-vite-tgz',
     );
     process.exit(1);
 }

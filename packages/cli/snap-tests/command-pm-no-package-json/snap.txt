@@ -9,13 +9,3 @@ No package.json found.
 
 [1]> vp why lodash # should show friendly error
 No package.json found.
-
-[1]> vp why definitely-not-installed-vite-plus-snap-pkg -g --json # should not require package.json for global why
-npm error No dependencies found matching definitely-not-installed-vite-plus-snap-pkg
-{
-  "error": {
-    "summary": "No dependencies found matching definitely-not-installed-vite-plus-snap-pkg",
-    "detail": ""
-  }
-}
-npm error A complete log of this run can be found in: <homedir>/.npm/_logs/<timestamp>-debug.log

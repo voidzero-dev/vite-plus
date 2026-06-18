@@ -1,0 +1,7 @@
+{
+  "name": "install-fail-local-package",
+  "version": "0.0.0",
+  "bin": {
+    "install-fail-local-package": "./bin.js"
+  }
+}

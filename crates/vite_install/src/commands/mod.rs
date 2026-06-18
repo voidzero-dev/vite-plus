@@ -22,6 +22,7 @@ pub mod publish;
 pub mod rebuild;
 pub mod remove;
 pub mod search;
+pub mod stage;
 pub mod token;
 pub mod unlink;
 pub mod update;

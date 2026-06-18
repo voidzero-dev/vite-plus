@@ -1,12 +1,83 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  CreateConfigSchemaError,
   filterManifestForContext,
   OrgManifestSchemaError,
   parseOrgScopedSpec,
   readOrgManifest,
+  validateCreateTemplates,
   type OrgTemplateEntry,
 } from '../org-manifest.js';
+
+describe('validateCreateTemplates', () => {
+  it('returns an empty array when create.templates is absent', () => {
+    expect(validateCreateTemplates(undefined)).toEqual([]);
+  });
+
+  it('returns an empty array for an empty list', () => {
+    expect(validateCreateTemplates([])).toEqual([]);
+  });
+
+  it('accepts valid lean entries and drops org-only fields', () => {
+    const entries = validateCreateTemplates([
+      { name: 'component', description: 'UI component', template: './tools/create-component' },
+      // a stray `monorepo` field is not part of the lean schema and is ignored
+      {
+        name: 'service',
+        description: 'Backend service',
+        template: 'million-finding',
+        monorepo: true,
+      },
+    ]);
+    expect(entries).toEqual([
+      { name: 'component', description: 'UI component', template: './tools/create-component' },
+      { name: 'service', description: 'Backend service', template: 'million-finding' },
+    ]);
+  });
+
+  it('throws on a non-array value', () => {
+    expect(() => validateCreateTemplates({})).toThrow(CreateConfigSchemaError);
+    expect(() => validateCreateTemplates({})).toThrow(/must be an array/);
+  });
+
+  it('throws on a missing or empty required field', () => {
+    expect(() => validateCreateTemplates([{ name: 'a', description: 'a' }])).toThrow(
+      /create\.templates\[0]\.template must be a non-empty string/,
+    );
+    expect(() => validateCreateTemplates([{ name: '', description: 'a', template: 'a' }])).toThrow(
+      /create\.templates\[0]\.name must be a non-empty string/,
+    );
+  });
+
+  it('throws on the reserved __vp_ name prefix', () => {
+    expect(() =>
+      validateCreateTemplates([{ name: '__vp_x', description: 'a', template: 'a' }]),
+    ).toThrow(/uses the reserved `__vp_` prefix/);
+  });
+
+  it('throws on the reserved vite: name prefix', () => {
+    // A local entry named like a builtin would shadow it in `vp create`.
+    expect(() =>
+      validateCreateTemplates([{ name: 'vite:application', description: 'a', template: 'a' }]),
+    ).toThrow(/uses the reserved `vite:` prefix/);
+  });
+
+  it('throws on a relative template that escapes the root', () => {
+    expect(() =>
+      validateCreateTemplates([{ name: 'a', description: 'a', template: '../outside' }]),
+    ).toThrow(/escapes the package root/);
+  });
+
+  it('throws on duplicate names', () => {
+    expect(() =>
+      validateCreateTemplates([
+        { name: 'dup', description: 'a', template: 'a' },
+        { name: 'dup', description: 'b', template: 'b' },
+      ]),
+    ).toThrow(/duplicates an earlier entry/);
+  });
+});
 
 describe('parseOrgScopedSpec', () => {
   it('returns null for non-scoped specs', () => {

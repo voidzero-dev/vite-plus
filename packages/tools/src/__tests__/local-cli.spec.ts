@@ -1,6 +1,6 @@
 import path from 'node:path';
 
-import { describe, expect, test } from '@voidzero-dev/vite-plus-test';
+import { describe, expect, test } from 'vitest';
 
 import { getPnpmInvocation } from '../local-cli.ts';
 

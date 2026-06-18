@@ -41,7 +41,7 @@ export interface CompressOptions {
    *
    * @default 'esnext'
    *
-   * @see [esbuild#target](https://esbuild.github.io/api/#target)
+   * @see [oxc#target](https://oxc.rs/docs/guide/usage/transformer/lowering#target)
    */
   target?: string | Array<string>;
   /**
@@ -1184,6 +1184,97 @@ export interface PluginsOptions {
   taggedTemplateEscape?: boolean;
 }
 
+/** Dynamic gating for {@link ReactCompilerOptions#dynamicGating}. */
+export interface ReactCompilerDynamicGating {
+  /** Module the gating import comes from. */
+  source: string;
+}
+
+/** Static gating for {@link ReactCompilerOptions#gating}. */
+export interface ReactCompilerGating {
+  /** Module the gating import comes from. */
+  source: string;
+  /** Imported specifier used as the gate. */
+  importSpecifierName: string;
+}
+
+/**
+ * Options for the experimental [React Compiler](https://github.com/facebook/react/pull/36173).
+ *
+ * Mirrors the compiler's `PluginOptions`. The deep `environment` configuration
+ * (inference / validation flags) is not surfaced here.
+ *
+ * @see {@link TransformOptions#reactCompiler}
+ */
+export interface ReactCompilerOptions {
+  /**
+   * Which functions to compile.
+   *
+   * @default 'infer'
+   */
+  compilationMode?: 'infer' | 'syntax' | 'annotation' | 'all';
+  /**
+   * What to do when a function cannot be compiled.
+   *
+   * @default 'none'
+   */
+  panicThreshold?: 'none' | 'critical_errors' | 'all_errors';
+  /**
+   * React runtime version target. `17` and `18` require the
+   * `react-compiler-runtime` package; `19` ships the runtime in `react`.
+   *
+   * @default '19'
+   */
+  target?: '17' | '18' | '19';
+  /**
+   * Analyze and report diagnostics only; emit no transformed code.
+   *
+   * @default false
+   */
+  noEmit?: boolean;
+  /**
+   * Compiler output mode.
+   *
+   * @default undefined
+   */
+  outputMode?: 'client' | 'ssr' | 'lint';
+  /**
+   * Compile even functions marked with the `"use no memo"` / `"use no forget"`
+   * opt-out directives.
+   *
+   * @default false
+   */
+  ignoreUseNoForget?: boolean;
+  /**
+   * Treat Flow suppression comments as opt-outs.
+   *
+   * @default true
+   */
+  flowSuppressions?: boolean;
+  /**
+   * Enable `react-native-reanimated` support.
+   *
+   * @default false
+   */
+  enableReanimated?: boolean;
+  /**
+   * Development mode (extra validation / instrumentation).
+   *
+   * @default false
+   */
+  isDev?: boolean;
+  /** Source file name, used for the fast-refresh hash and in diagnostics. */
+  filename?: string;
+  /** ESLint rules whose suppressions opt a function out of compilation. */
+  eslintSuppressionRules?: Array<string>;
+  /** Extra directives that opt a function out of compilation. */
+  customOptOutDirectives?: Array<string>;
+  /** Also emit a gated (feature-flagged) version of each compiled function. */
+  gating?: ReactCompilerGating;
+  /** Dynamically-gated compilation. */
+  dynamicGating?: ReactCompilerDynamicGating;
+}
+
 export interface ReactRefreshOptions {
   /**
    * Specify the identifier of the refresh registration variable.
@@ -1365,6 +1456,14 @@ export interface TransformOptions {
   inject?: Record<string, string | [string, string]>;
   /** Decorator plugin */
   decorator?: DecoratorOptions;
+  /**
+   * Enable the experimental [React Compiler](https://github.com/facebook/react/pull/36173).
+   *
+   * `true` enables it with default options; an object enables it with the
+   * given options; `false` or omitted disables it. When enabled, the compiler
+   * runs as the first transform and memoizes React components and hooks.
+   */
+  reactCompiler?: boolean | ReactCompilerOptions;
   /**
    * Third-party plugins to use.
    * @see {@link https://oxc.rs/docs/guide/usage/transformer/plugins}
@@ -1599,12 +1698,12 @@ export declare class BindingDevEngine {
   run(): Promise<void>;
   ensureCurrentBuildFinish(): Promise<void>;
   getBundleState(): Promise<BindingBundleState>;
-  ensureLatestBuildOutput(): Promise<void>;
+  ensureLatestBuildOutput(): Promise<BindingResult<undefined>>;
   triggerFullBuild(): void;
   invalidate(
     caller: string,
     firstInvalidatedBy?: string | undefined | null,
-  ): Promise<Array<BindingClientHmrUpdate>>;
+  ): Promise<BindingResult<Array<BindingClientHmrUpdate>>>;
   registerModules(clientId: string, modules: Array<string>): Promise<void>;
   removeClient(clientId: string): Promise<void>;
   close(): Promise<void>;
@@ -2023,6 +2122,7 @@ export interface BindingChecksOptions {
   unsupportedTsconfigOption?: boolean;
   ineffectiveDynamicImport?: boolean;
   largeBarrelModules?: boolean;
+  sourcemapBroken?: boolean;
 }
 
 export interface BindingChunkImportMap {
@@ -2352,7 +2452,11 @@ export interface BindingHookLoadOutput {
 
 export interface BindingHookRenderChunkOutput {
   code: string;
-  map?: BindingSourcemap;
+  /**
+   * A sourcemap, or `null` to explicitly signal "no sourcemap" (distinct from
+   * omitting the field, which mirrors Rollup's "possibly broken" semantics).
+   */
+  map?: BindingSourcemap | null;
 }
 
 export interface BindingHookResolveIdExtraArgs {
@@ -2543,6 +2647,7 @@ export interface BindingMatchGroup {
   entriesAware?: boolean;
   entriesAwareMergeThreshold?: number;
   tags?: Array<string>;
+  includeDependenciesRecursively?: boolean;
 }
 
 export interface BindingModulePreloadOptions {
@@ -3607,5 +3712,51 @@ export interface RunCommandResult {
  */
 export declare function shouldPrintVitePlusHeader(): boolean;
 
+/**
+ * Set the value of a top-level config key in a vite config file (upsert)
+ *
+ * Unlike `mergeJsonConfig`, which prepends a new key (and duplicates it when
+ * the key already exists), this targets only direct config objects
+ * (`defineConfig({...})`, `export default {...}`, direct callback returns):
+ * it replaces the value of an existing `config_key` (pair or shorthand
+ * property) or inserts the key when absent. Unrecognized shapes (e.g.
+ * `module.exports`, `return someVar`) report `updated: false` instead of
+ * being corrupted. The splice is raw, the JS caller is expected to reformat
+ * afterwards.
+ *
+ * # Arguments
+ *
+ * * `vite_config_path` - Path to the vite.config.ts or vite.config.js file
+ * * `json_config_path` - Path to the JSON config file whose contents become the new value
+ * * `config_key` - The top-level key whose value should be set
+ *
+ * # Returns
+ *
+ * Returns a `MergeJsonConfigResult`. `updated` is `true` only when at least
+ * one direct config object was updated; otherwise the original content is
+ * returned unchanged.
+ *
+ * # Example
+ *
+ * ```javascript
+ * const result = upsertJsonConfig('vite.config.ts', 'create.json', 'create');
+ * if (result.updated) {
+ *     fs.writeFileSync('vite.config.ts', result.content);
+ * }
+ * ```
+ */
+export declare function upsertJsonConfig(
+  viteConfigPath: string,
+  jsonConfigPath: string,
+  configKey: string,
+): MergeJsonConfigResult;
+
 /** Render the Vite+ header using the Rust implementation. */
 export declare function vitePlusHeader(): string;
+
+/**
+ * Wrap safe inline `plugins: [...]` arrays in recognized Vite config objects
+ * with `lazyPlugins(() => [...])` and add a `lazyPlugins` import from
+ * `vite-plus` when needed.
+ */
+export declare function wrapLazyPlugins(viteConfigPath: string): MergeJsonConfigResult;
