@@ -1313,11 +1313,13 @@ describe('ensureVitePlusBootstrap', () => {
       devEngines: { packageManager: { name: string } };
     };
     expect(pkg.overrides.vite).toContain('@voidzero-dev/vite-plus-core');
-    expect(pkg.overrides.vitest).toBe('4.1.9');
+    // Common case (no @vitest/* dep, no vitest source): `vitest` is NOT managed —
+    // it arrives transitively through vite-plus, so no override is written.
+    expect(pkg.overrides.vitest).toBeUndefined();
     expect(pkg.devEngines.packageManager.name).toBe(PackageManager.npm);
   });
 
-  it('rewrites the stale vitest wrapper override without pinning the @vitest/* family for npm projects', () => {
+  it('removes the stale vitest wrapper override for a non-vitest npm project', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
@@ -1336,16 +1338,16 @@ describe('ensureVitePlusBootstrap', () => {
     const result = ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.npm));
 
     // The `vite` alias still points at the live `@voidzero-dev/vite-plus-core`
-    // package, so it satisfies the migration and is left untouched. The `vitest`
-    // alias points at the DELETED `@voidzero-dev/vite-plus-test` wrapper, so it is
-    // rewritten to the bundled vitest version. The `@vitest/*` family is NOT pinned:
-    // it resolves transitively from `vitest`'s own exact deps.
+    // package, so it satisfies the migration and is left untouched. The project
+    // does NOT use vitest directly (no @vitest/* dep, no vitest source), so the
+    // stale `vitest` wrapper override (the DELETED `@voidzero-dev/vite-plus-test`)
+    // is REMOVED entirely — vitest arrives transitively through vite-plus.
     expect(result.changed).toBe(true);
     const pkg = readJson(path.join(tmpDir, 'package.json')) as {
       overrides: Record<string, string>;
     };
     expect(pkg.overrides.vite).toBe('npm:@voidzero-dev/vite-plus-core@0.1.0');
-    expect(pkg.overrides.vitest).toBe('4.1.9');
+    expect(pkg.overrides.vitest).toBeUndefined();
     expect(pkg.overrides['@vitest/expect']).toBeUndefined();
     expect(pkg.overrides['@vitest/coverage-v8']).toBeUndefined();
     expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(false);
@@ -1378,7 +1380,9 @@ describe('ensureVitePlusBootstrap', () => {
       dependencies: Record<string, string>;
     };
     expect(pkg.devDependencies.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
-    expect(pkg.dependencies.vitest).toBe('4.1.9');
+    // Common case (no @vitest/* dep, no vitest source): the direct `vitest` dep
+    // is removed — it arrives transitively through vite-plus.
+    expect(pkg.dependencies.vitest).toBeUndefined();
   });
 
   it('normalizes catalog vite-plus pins for npm projects', () => {
@@ -1541,6 +1545,129 @@ describe('ensureVitePlusBootstrap', () => {
     };
     expect(pkg.devDependencies['@vitest/coverage-v8']).toBe(VITEST_VERSION);
     expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(false);
+  });
+
+  it('removes a stale vitest wrapper override for a common-case npm project (no @vitest/* dep, no vitest source)', () => {
+    // v0.2.1 spec: vite-plus consumes upstream vitest directly, so a project that
+    // does NOT use vitest directly must NOT carry a managed `vitest` override —
+    // it arrives transitively through vite-plus. A pre-existing stale wrapper
+    // override (`npm:@voidzero-dev/vite-plus-test@*`) is REMOVED entirely while
+    // the `vite` alias stays. The bootstrap is idempotent: a second detect is
+    // false.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { 'vite-plus': 'latest' },
+        overrides: {
+          vite: 'npm:@voidzero-dev/vite-plus-core@latest',
+          vitest: 'npm:@voidzero-dev/vite-plus-test@latest',
+        },
+        devEngines: {
+          packageManager: { name: 'npm', version: '10.33.0', onFail: 'download' },
+        },
+      }),
+    );
+
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(true);
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.npm));
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      overrides: Record<string, string>;
+    };
+    expect(pkg.overrides.vitest).toBeUndefined();
+    expect(pkg.overrides.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(false);
+  });
+
+  it('keeps vitest managed for a direct-usage npm project (@vitest/coverage-v8) and aligns coverage', () => {
+    // The project lists `@vitest/coverage-v8`, so it USES vitest directly: the
+    // managed `vitest` override is kept (re-pinned to the bundled vitest version,
+    // off the stale wrapper) AND the coverage provider is aligned to that version.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: {
+          'vite-plus': 'latest',
+          '@vitest/coverage-v8': '^4.1.8',
+        },
+        overrides: {
+          vite: 'npm:@voidzero-dev/vite-plus-core@latest',
+          vitest: 'npm:@voidzero-dev/vite-plus-test@latest',
+        },
+        devEngines: {
+          packageManager: { name: 'npm', version: '10.33.0', onFail: 'download' },
+        },
+      }),
+    );
+
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(true);
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.npm));
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+      overrides: Record<string, string>;
+    };
+    // vitest stays managed (the stale wrapper is re-pinned to the bundled version).
+    expect(pkg.overrides.vitest).toBe(VITEST_VERSION);
+    // Coverage provider aligned to the same bundled vitest version.
+    expect(pkg.devDependencies['@vitest/coverage-v8']).toBe(VITEST_VERSION);
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(false);
+  });
+
+  it('removes managed vitest catalog/override/peer entries from pnpm-workspace.yaml in the common case', () => {
+    // pnpm-workspace.yaml common-case removal: a project with no @vitest/* dep
+    // and no vitest source must have every managed `vitest` entry (catalog,
+    // override, peer rule) stripped from the workspace file so vitest resolves
+    // transitively through vite-plus.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { 'vite-plus': 'catalog:' },
+        devEngines: {
+          packageManager: { name: 'pnpm', version: '10.33.0', onFail: 'download' },
+        },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'catalog:',
+        '  vite: npm:@voidzero-dev/vite-plus-core@latest',
+        '  vitest: npm:@voidzero-dev/vite-plus-test@latest',
+        '  vite-plus: latest',
+        'overrides:',
+        "  vite: 'catalog:'",
+        "  vitest: 'catalog:'",
+        'peerDependencyRules:',
+        '  allowAny:',
+        '    - vite',
+        '    - vitest',
+        '  allowedVersions:',
+        "    vite: '*'",
+        "    vitest: '*'",
+        '',
+      ].join('\n'),
+    );
+
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(true);
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm));
+
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      catalog: Record<string, string>;
+      overrides: Record<string, string>;
+      peerDependencyRules: { allowAny: string[]; allowedVersions: Record<string, string> };
+    };
+    // Managed `vitest` is gone from every sink; `vite` stays managed.
+    expect(workspace.catalog.vitest).toBeUndefined();
+    expect(workspace.catalog.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+    expect(workspace.overrides.vitest).toBeUndefined();
+    expect(workspace.overrides.vite).toBe('catalog:');
+    expect(workspace.peerDependencyRules.allowAny).toEqual(['vite']);
+    expect(workspace.peerDependencyRules.allowedVersions).toEqual({ vite: '*' });
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
   });
 
   it('re-pins a behind vite-plus spec so the upgrade moves off the old version (urllib)', () => {
@@ -1737,7 +1864,9 @@ describe('ensureVitePlusBootstrap', () => {
     };
     expect(yarnrc.nodeLinker).toBe('node-modules');
     expect(yarnrc.catalog.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
-    expect(yarnrc.catalog.vitest).toBe('4.1.9');
+    // Common case (no @vitest/* dep, no vitest source): `vitest` is not managed,
+    // so no catalog entry is written for it.
+    expect(yarnrc.catalog.vitest).toBeUndefined();
     expect(yarnrc.catalog['vite-plus']).toBe('latest');
   });
 
@@ -1771,13 +1900,19 @@ describe('ensureVitePlusBootstrap', () => {
 
     expect(result.changed).toBe(true);
     expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
+    // Common case (no @vitest/* dep, no vitest source): the pre-existing managed
+    // `vitest` catalog/override/peer entries are REMOVED — only `vite` stays
+    // managed. vitest arrives transitively through vite-plus.
     const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      catalog: Record<string, string>;
+      overrides: Record<string, string>;
       peerDependencyRules: { allowAny: string[]; allowedVersions: Record<string, string> };
     };
-    expect(workspace.peerDependencyRules.allowAny).toEqual(['vite', 'vitest']);
+    expect(workspace.catalog.vitest).toBeUndefined();
+    expect(workspace.overrides.vitest).toBeUndefined();
+    expect(workspace.peerDependencyRules.allowAny).toEqual(['vite']);
     expect(workspace.peerDependencyRules.allowedVersions).toEqual({
       vite: '*',
-      vitest: '*',
     });
   });
 
@@ -1989,9 +2124,9 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     const overrides = pnpm.overrides as Record<string, string>;
     expect(overrides['some-pkg']).toBe('1.0.0');
     expect(overrides.vite).toBeDefined();
-    // vitest is pinned via overrides so downstream projects resolve a single
-    // vitest copy (the one vp-cli ships).
-    expect(overrides.vitest).toBe('4.1.9');
+    // Common case (no @vitest/* dep, no vitest source): `vitest` is not managed,
+    // so no override is written — it arrives transitively through vite-plus.
+    expect(overrides.vitest).toBeUndefined();
 
     // peerDependencyRules should be present
     expect(pnpm.peerDependencyRules).toBeDefined();
@@ -2037,9 +2172,10 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
 
     const yaml = readYaml(path.join(tmpDir, 'pnpm-workspace.yaml'));
     expect(yaml).toContain("vite: 'catalog:'");
-    // vitest is now a managed override key — it resolves through the catalog
-    // like vite does.
-    expect(yaml).toContain("vitest: 'catalog:'");
+    // Common case (no @vitest/* dep, no vitest source): `vitest` is not managed,
+    // so no `vitest` override is written — it arrives transitively through
+    // vite-plus.
+    expect(yaml).not.toContain('vitest');
   });
 
   it('rewrites named catalogs in pnpm-workspace.yaml without adding new entries', () => {
@@ -2082,16 +2218,16 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
       catalogs: Record<string, Record<string, string>>;
     };
     expect(yaml.overrides.vite).toBe('catalog:vite7');
-    // vitest is now a managed override key — it is added to overrides as a
-    // `catalog:` reference, and its catalog entry is rewritten to the pinned
-    // vitest version vp-cli ships.
-    expect(yaml.overrides.vitest).toBe('catalog:');
-    expect(yaml.catalog.vitest).toBe('4.1.9');
+    // Common case (no @vitest/* dep, no vitest source): `vitest` is not managed,
+    // so no override is added and the pre-existing managed `vitest` catalog
+    // entries (default + named) are REMOVED — it arrives transitively through
+    // vite-plus.
+    expect(yaml.overrides.vitest).toBeUndefined();
+    expect(yaml.catalog?.vitest).toBeUndefined();
     expect(yaml.catalogs.vite7.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
     expect(yaml.catalogs.vite7.react).toBe('^18.0.0');
     expect(yaml.catalogs.vite7['vite-plus']).toBe('latest');
-    // Named catalog vitest entries are also pinned to the managed override version.
-    expect(yaml.catalogs.test.vitest).toBe('4.1.9');
+    expect(yaml.catalogs.test.vitest).toBeUndefined();
     expect(yaml.catalogs.test.tsdown).toBeUndefined();
     expect(yaml.catalogs.test['vite-plus']).toBeUndefined();
 
@@ -2102,11 +2238,9 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(pkg.devDependencies.vite).toBe('catalog:vite7');
     expect(pkg.devDependencies['vite-plus']).toBe('catalog:');
     expect(pkg.peerDependencies.vite).toBe('^7.0.0');
-    // vitest peer `catalog:` is resolved against the pre-rewrite catalog
-    // (which still holds the user's `^4.0.0`); only the catalog file itself
-    // is later rewritten to the pinned vp-cli version. The peer range stays
-    // as the user wrote it.
-    expect(pkg.peerDependencies.vitest).toBe('^4.0.0');
+    // `vitest` is no longer a managed override key, so the peer entry is left as
+    // the user wrote it (untouched).
+    expect(pkg.peerDependencies.vitest).toBe('catalog:');
     expect(pkg.peerDependencies).not.toHaveProperty('tsdown');
   });
 
@@ -3177,8 +3311,9 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
       catalogs: Record<string, Record<string, string>>;
     };
     expect(yaml.overrides.vite).toBe('catalog:vite7');
-    // vitest is now injected into overrides as a managed override key.
-    expect(yaml.overrides.vitest).toBe('catalog:');
+    // Common case (no @vitest/* dep, no vitest source): `vitest` is not managed,
+    // so no `vitest` override is injected.
+    expect(yaml.overrides.vitest).toBeUndefined();
     expect(yaml.overrides.react).toBe('^18.0.0');
     expect(yaml.catalogs.vite7.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
 
@@ -3222,8 +3357,9 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
       overrides: Record<string, string>;
     };
     expect(yaml.overrides.vite).toBe('catalog:');
-    // vitest is now a managed override key — added to overrides as catalog: ref.
-    expect(yaml.overrides.vitest).toBe('catalog:');
+    // Common case (no @vitest/* dep, no vitest source): `vitest` is not managed,
+    // so no `vitest` override is added.
+    expect(yaml.overrides.vitest).toBeUndefined();
   });
 
   it('does not resolve peer dependency catalog specs to migrated aliases', () => {
@@ -3255,9 +3391,9 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
       peerDependencies: Record<string, string>;
     };
     expect(pkg.peerDependencies.vite).toBe('*');
-    // vitest is now a managed override key — peer dep catalog refs that
-    // resolve to the override target are coerced to '*'.
-    expect(pkg.peerDependencies.vitest).toBe('*');
+    // `vitest` is no longer a managed override key (common case: no @vitest/*
+    // dep, no vitest source), so its peer entry is left as the user wrote it.
+    expect(pkg.peerDependencies.vitest).toBe('catalog:');
   });
 
   it('adds vitest only to the monorepo package that uses browser mode', () => {
@@ -4442,9 +4578,9 @@ describe('rewriteMonorepo yarn catalog', () => {
     expect(yarnrc.nodeLinker).toBe('node-modules');
     expect(yarnrc.catalogs.vite7.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
     expect(yarnrc.catalogs.vite7.react).toBe('^18.0.0');
-    // vitest is now a managed override key — existing catalog entries are
-    // rewritten to the pinned vp-cli vitest version.
-    expect(yarnrc.catalogs.test.vitest).toBe('4.1.9');
+    // Common case (no @vitest/* dep, no vitest source): `vitest` is not managed,
+    // so the pre-existing named-catalog `vitest` entry is REMOVED.
+    expect(yarnrc.catalogs.test.vitest).toBeUndefined();
     expect(yarnrc.catalogs.test.oxlint).toBeUndefined();
 
     const pkg = readJson(path.join(tmpDir, 'package.json')) as {
@@ -4453,10 +4589,9 @@ describe('rewriteMonorepo yarn catalog', () => {
     };
     expect(pkg.devDependencies.vite).toBe('catalog:vite7');
     expect(pkg.peerDependencies.vite).toBe('^7.0.0');
-    // vitest peer `catalog:test` is resolved against the pre-rewrite catalog
-    // (which still holds the user's `^4.0.0`). The peer range stays as the
-    // user wrote it; only the catalog file itself is later rewritten.
-    expect(pkg.peerDependencies.vitest).toBe('^4.0.0');
+    // `vitest` is no longer managed, so the peer entry is left as the user
+    // wrote it (untouched).
+    expect(pkg.peerDependencies.vitest).toBe('catalog:test');
   });
 });
 
@@ -4549,9 +4684,9 @@ describe('rewriteMonorepo bun catalog', () => {
     expect(pkg.workspaces.catalog.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
     expect(pkg.workspaces.catalog['vite-plus']).toBe('latest');
     expect(pkg.catalog.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
-    // vitest is now a managed override key — pre-existing catalog entries are
-    // rewritten to the pinned vp-cli vitest version.
-    expect(pkg.catalog.vitest).toBe('4.1.9');
+    // Common case (no @vitest/* dep, no vitest source): `vitest` is not managed,
+    // so the pre-existing catalog `vitest` entry is REMOVED.
+    expect(pkg.catalog.vitest).toBeUndefined();
     expect(pkg.catalog.tsdown).toBeUndefined();
     expect(pkg.catalog.react).toBe('^19.0.0');
     expect(pkg.catalog['vite-plus']).toBeUndefined();
@@ -4611,17 +4746,17 @@ describe('rewriteMonorepo bun catalog', () => {
     expect(pkg.catalogs.build.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
     expect(pkg.catalogs.build.react).toBe('^19.0.0');
     expect(pkg.catalogs.build.tsdown).toBeUndefined();
-    // vitest is now a managed override key — existing catalog entries are
-    // rewritten to the pinned version and `overrides.vitest` is injected
-    // as a `catalog:` ref so bun resolves it through the catalog.
-    expect(pkg.catalogs.test.vitest).toBe('4.1.9');
+    // Common case (no @vitest/* dep, no vitest source): `vitest` is not managed,
+    // so the pre-existing named-catalog `vitest` entry is REMOVED and no
+    // `overrides.vitest` is injected.
+    expect(pkg.catalogs.test.vitest).toBeUndefined();
     expect(pkg.overrides.vite).toBe('catalog:build');
-    expect(pkg.overrides.vitest).toBe('catalog:');
+    expect(pkg.overrides.vitest).toBeUndefined();
     expect(pkg.devDependencies.vite).toBe('catalog:build');
     expect(pkg.peerDependencies.vite).toBe('^7.0.0');
-    // vitest peer `catalog:test` is resolved against the pre-rewrite catalog
-    // (which still holds the user's `^4.0.0`). Peer range stays as-is.
-    expect(pkg.peerDependencies.vitest).toBe('^4.0.0');
+    // `vitest` is no longer managed, so the peer entry is left as the user
+    // wrote it (untouched).
+    expect(pkg.peerDependencies.vitest).toBe('catalog:test');
   });
 
   it('rewrites workspaces named catalogs and writes default catalog beside them', () => {
@@ -4656,9 +4791,9 @@ describe('rewriteMonorepo bun catalog', () => {
     expect(pkg.workspaces.catalog['vite-plus']).toBe('latest');
     expect(pkg.workspaces.catalogs.build.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
     expect(pkg.workspaces.catalogs.build.oxlint).toBeUndefined();
-    // vitest is a managed override key — existing catalog entries are
-    // rewritten to the pinned vp-cli vitest version.
-    expect(pkg.workspaces.catalogs.test.vitest).toBe('4.1.9');
+    // Common case (no @vitest/* dep, no vitest source): `vitest` is not managed,
+    // so the pre-existing named-catalog `vitest` entry is REMOVED.
+    expect(pkg.workspaces.catalogs.test.vitest).toBeUndefined();
     expect(pkg.workspaces.catalogs.test.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
     expect(pkg.overrides.vite).toBe('catalog:');
   });

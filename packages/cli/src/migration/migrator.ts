@@ -490,6 +490,132 @@ const PUBLIC_PEER_DEPENDENCY_FALLBACKS: Record<string, string> = {
   vitest: '*',
 };
 
+// The managed override/catalog packages vite-plus writes and the detector
+// requires. `vite` is ALWAYS managed (aliased to vite-plus-core). `vitest` is
+// managed ONLY when the project uses vitest DIRECTLY — vite-plus consumes
+// upstream vitest itself, so a non-vitest project gets it transitively through
+// vite-plus and must NOT carry a managed `vitest` pin (which would drift on a
+// future `vp update vite-plus`). When `usesVitest` is false the common-case
+// removal logic ACTIVELY strips any lingering `vitest` entry.
+function managedOverridePackages(usesVitest: boolean): Record<string, string> {
+  if (usesVitest) {
+    return VITE_PLUS_OVERRIDE_PACKAGES;
+  }
+  // Drop only `vitest`; every other managed key (e.g. `vite`, and in
+  // force-override/CI mode the `@voidzero-dev/vite-plus-core` file: alias) stays.
+  return Object.fromEntries(
+    Object.entries(VITE_PLUS_OVERRIDE_PACKAGES).filter(([key]) => key !== 'vitest'),
+  );
+}
+
+// True iff a dependency field lists a vitest ecosystem package — any name that
+// contains `vitest` other than bare `vitest` itself (e.g. `@vitest/coverage-v8`,
+// `@vitest/browser-playwright`, `vitest-browser-svelte`). A bare `vitest`
+// dependency alone is deliberately NOT a signal — a prior migration may have
+// injected it transitively-redundantly, so it must not keep the project pinned
+// to a managed `vitest`. This mirrors the `isVitestAdjacent` signal used later
+// when deciding to inject a direct `vitest`, so the two stay consistent.
+function projectListsVitestEcosystemDep(pkg: {
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+  optionalDependencies?: Record<string, string>;
+  peerDependencies?: Record<string, string>;
+}): boolean {
+  const dependencyGroups = [
+    pkg.dependencies,
+    pkg.devDependencies,
+    pkg.optionalDependencies,
+    pkg.peerDependencies,
+  ];
+  return dependencyGroups.some((deps) =>
+    deps ? Object.keys(deps).some((name) => name !== 'vitest' && name.includes('vitest')) : false,
+  );
+}
+
+// True iff the project uses vitest DIRECTLY — via a vitest ecosystem dependency
+// (see `projectListsVitestEcosystemDep`), a source file referencing vitest (the
+// `vitest` substring matches `vitest` / `@vitest/` import specifiers and not
+// `vite-plus/test`), or vitest browser mode (whose published `vite-plus/test/browser*`
+// shims carry no `vitest` substring but still need vitest resolvable). Drives
+// whether the migration keeps `vitest` managed or removes it entirely; the
+// browser-mode arm keeps it aligned with the direct-`vitest` injection below so
+// an injected `catalog:` spec never dangles against a vitest-less catalog.
+function projectUsesVitestDirectly(
+  projectPath: string,
+  pkg: {
+    dependencies?: Record<string, string>;
+    optionalDependencies?: Record<string, string>;
+    devDependencies?: Record<string, string>;
+    peerDependencies?: Record<string, string>;
+  },
+): boolean {
+  return (
+    projectListsVitestEcosystemDep(pkg) ||
+    sourceTreeReferencesAny(projectPath, ['vitest']) ||
+    usesVitestBrowserMode(projectPath)
+  );
+}
+
+// Common case (`!usesVitest`): vite-plus consumes upstream vitest itself, so a
+// lingering `vitest` entry — a managed pin, a stale `npm:@voidzero-dev/vite-plus-test@*`
+// wrapper alias, or a `catalog:` reference — must be REMOVED from every sink so
+// it arrives transitively through vite-plus and a future `vp update vite-plus`
+// keeps it correct with no pin to drift. The `@vitest/*` family is left
+// untouched (those are direct-usage signals handled elsewhere).
+//
+// The removal only applies when `vitest` is a key vite-plus actually manages in
+// the active override config. In force-override / CI mode (`VP_OVERRIDE_PACKAGES`
+// with file: tgz aliases) `vitest` is NOT in the override set, so a `vitest`
+// entry there is the user's own and must be left untouched.
+const VITEST_IS_MANAGED_OVERRIDE = 'vitest' in VITE_PLUS_OVERRIDE_PACKAGES;
+
+// Remove a managed `vitest` key from a flat string-valued record (dependency
+// field, npm/bun overrides, yarn resolutions, pnpm.overrides, a catalog object).
+// Only a STRING value is removed: a managed pin, `catalog:` reference, or wrapper
+// alias is always a string, whereas a nested object value (npm/bun `overrides`)
+// is a user override scoped under `vitest` and must be left intact. Returns true
+// iff an entry was removed.
+function removeManagedVitestEntry(record: Record<string, string> | undefined): boolean {
+  if (VITEST_IS_MANAGED_OVERRIDE && typeof record?.vitest === 'string') {
+    delete record.vitest;
+    return true;
+  }
+  return false;
+}
+
+// Remove a managed `vitest` scalar key from a YAMLMap (pnpm-workspace.yaml
+// `overrides`, `catalog`, and each named `catalogs` entry).
+function removeYamlMapVitestEntry(map: unknown): void {
+  if (!VITEST_IS_MANAGED_OVERRIDE || !(map instanceof YAMLMap)) {
+    return;
+  }
+  const target = map.items.find(
+    (item) => item.key instanceof Scalar && item.key.value === 'vitest',
+  )?.key;
+  if (target) {
+    map.delete(target);
+  }
+}
+
+// Remove the managed `vitest` entry from pnpm peerDependencyRules (its
+// `allowAny` array entry and `allowedVersions.vitest`), in place. Works on both
+// the package.json `pnpm.peerDependencyRules` JSON shape and the same shape read
+// back from pnpm-workspace.yaml.
+function removeVitestPeerDependencyRule(peerDependencyRules: {
+  allowAny?: string[];
+  allowedVersions?: Record<string, string>;
+}): void {
+  if (!VITEST_IS_MANAGED_OVERRIDE) {
+    return;
+  }
+  if (Array.isArray(peerDependencyRules.allowAny)) {
+    peerDependencyRules.allowAny = peerDependencyRules.allowAny.filter((key) => key !== 'vitest');
+  }
+  if (peerDependencyRules.allowedVersions) {
+    delete peerDependencyRules.allowedVersions.vitest;
+  }
+}
+
 // Plugins Oxlint resolves natively (no JS import). Source:
 // `LintPluginOptionsSchema` in `node_modules/oxlint/dist/index.d.ts`.
 // Anything else in the merged `lint.plugins[]` after migration is a
@@ -1495,6 +1621,10 @@ export function rewriteStandaloneProject(
   let shouldRewritePnpmWorkspaceYaml = false;
   let shouldAddPnpmWorkspaceVitePlusOverride = false;
   let shouldAllowBrowserProviderBuilds = false;
+  // Whether the project uses vitest directly (an `@vitest/*` dep or a source
+  // reference). Computed inside the callback (where `pkg` is available) and
+  // hoisted so the post-callback pnpm-workspace.yaml writer sees it too.
+  let usesVitest = false;
   // Determined inside editJsonFile callback to avoid a redundant file read
   let usePnpmWorkspaceYaml = false;
   editJsonFile<{
@@ -1517,6 +1647,8 @@ export function rewriteStandaloneProject(
   }>(packageJsonPath, (pkg) => {
     shouldAllowBrowserProviderBuilds =
       hasOwnWebdriverioDependency(pkg) || usesWebdriverioProvider(projectPath);
+    usesVitest = projectUsesVitestDirectly(projectPath, pkg);
+    const managed = managedOverridePackages(usesVitest);
     // Strip stale `vite-plus-test` wrapper aliases before injecting new overrides
     // so the deleted wrapper doesn't survive migration in any sink.
     pruneLegacyWrapperAliases(pkg.resolutions);
@@ -1531,15 +1663,21 @@ export function rewriteStandaloneProject(
     // the bundled-vitest-aligned 4.1.9. (The pnpm sinks are pruned below.)
     dropRemovePackageOverrideKeys(pkg.resolutions);
     dropRemovePackageOverrideKeys(pkg.overrides);
+    // Common case (no direct vitest): strip a lingering managed `vitest` from
+    // the npm/bun `overrides` and yarn `resolutions` sinks so it isn't re-pinned.
+    if (!usesVitest) {
+      removeManagedVitestEntry(pkg.resolutions);
+      removeManagedVitestEntry(pkg.overrides);
+    }
     if (packageManager === PackageManager.yarn) {
       pkg.resolutions = {
         ...pkg.resolutions,
-        ...VITE_PLUS_OVERRIDE_PACKAGES,
+        ...managed,
       };
     } else if (packageManager === PackageManager.npm || packageManager === PackageManager.bun) {
       pkg.overrides = {
         ...pkg.overrides,
-        ...VITE_PLUS_OVERRIDE_PACKAGES,
+        ...managed,
       };
       if (packageManager === PackageManager.bun) {
         // Bun walks transitive peer-deps before resolving overrides; vitest
@@ -1562,18 +1700,26 @@ export function rewriteStandaloneProject(
         shouldRewritePnpmWorkspaceYaml = true;
         shouldAddPnpmWorkspaceVitePlusOverride = isForceOverrideMode();
       }
-      const overrideKeys = Object.keys(VITE_PLUS_OVERRIDE_PACKAGES);
+      const overrideKeys = Object.keys(managed);
       if (!usePnpmWorkspaceYaml) {
         // Strip selector-shaped overrides (e.g. `parent>@vitest/browser-playwright`)
         // whose target is a removed package, before re-merging the user's
         // overrides into the new pnpm config.
         dropRemovePackageOverrideKeys(pkg.pnpm?.overrides);
+        // Common case: drop a lingering managed `vitest` override + its peer
+        // rules before re-merging.
+        if (!usesVitest) {
+          removeManagedVitestEntry(pkg.pnpm?.overrides);
+          if (pkg.pnpm?.peerDependencyRules) {
+            removeVitestPeerDependencyRule(pkg.pnpm.peerDependencyRules);
+          }
+        }
         // Project already has pnpm config in package.json -- keep using it.
         pkg.pnpm = {
           ...pkg.pnpm,
           overrides: {
             ...pkg.pnpm?.overrides,
-            ...VITE_PLUS_OVERRIDE_PACKAGES,
+            ...managed,
             ...(isForceOverrideMode() ? { [VITE_PLUS_NAME]: VITE_PLUS_VERSION } : {}),
           },
           peerDependencyRules: {
@@ -1623,6 +1769,7 @@ export function rewriteStandaloneProject(
       catalogDependencyResolver,
       usesVitestBrowserMode(projectPath),
       collectProviderSourceModes(projectPath),
+      usesVitest,
     );
 
     // ensure vite-plus is in devDependencies
@@ -1647,7 +1794,12 @@ export function rewriteStandaloneProject(
   });
 
   if (shouldRewritePnpmWorkspaceYaml) {
-    rewritePnpmWorkspaceYaml(projectPath, pnpmMajorVersion, shouldAllowBrowserProviderBuilds);
+    rewritePnpmWorkspaceYaml(
+      projectPath,
+      pnpmMajorVersion,
+      shouldAllowBrowserProviderBuilds,
+      usesVitest,
+    );
   }
 
   // Move remaining non-Vite pnpm.overrides to pnpm-workspace.yaml
@@ -1662,7 +1814,7 @@ export function rewriteStandaloneProject(
   }
 
   if (packageManager === PackageManager.yarn) {
-    rewriteYarnrcYml(projectPath);
+    rewriteYarnrcYml(projectPath, usesVitest);
   } else if (packageManager === PackageManager.bun) {
     ensureBunfigPeerSuppression(projectPath);
   }
@@ -1709,17 +1861,24 @@ export function rewriteMonorepo(
     workspaceInfo.rootDir,
     workspaceInfo.packages,
   );
+  // The SHARED workspace sinks (catalog / overrides / peer rules) keep `vitest`
+  // managed iff ANY package in the workspace uses vitest directly.
+  const workspaceUsesVitest = workspaceUsesVitestDirectly(
+    workspaceInfo.rootDir,
+    workspaceInfo.packages,
+  );
   // rewrite root workspace
   if (workspaceInfo.packageManager === PackageManager.pnpm) {
     rewritePnpmWorkspaceYaml(
       workspaceInfo.rootDir,
       pnpmMajorVersion,
       workspaceShouldAllowBrowserBuilds,
+      workspaceUsesVitest,
     );
   } else if (workspaceInfo.packageManager === PackageManager.yarn) {
-    rewriteYarnrcYml(workspaceInfo.rootDir);
+    rewriteYarnrcYml(workspaceInfo.rootDir, workspaceUsesVitest);
   } else if (workspaceInfo.packageManager === PackageManager.bun) {
-    rewriteBunCatalog(workspaceInfo.rootDir);
+    rewriteBunCatalog(workspaceInfo.rootDir, workspaceUsesVitest);
   }
   rewriteRootWorkspacePackageJson(
     workspaceInfo.rootDir,
@@ -1729,6 +1888,7 @@ export function rewriteMonorepo(
     workspaceInfo.packages,
     pnpmMajorVersion,
     workspaceShouldAllowBrowserBuilds,
+    workspaceUsesVitest,
   );
   // (mergeViteConfigFiles below will sanitize the merged lint config
   // against this workspace's full package set.)
@@ -1840,6 +2000,7 @@ export function rewriteMonorepoProject(
       catalogDependencyResolver,
       usesVitestBrowserMode(projectPath),
       collectProviderSourceModes(projectPath),
+      projectUsesVitestDirectly(projectPath, pkg),
     );
     // If this SUB-workspace now depends on `vite-plus` and Yarn isolates its
     // hoisting (via the root `nmHoistingLimits` OR the workspace's own
@@ -1884,15 +2045,17 @@ function rewritePnpmWorkspaceYaml(
   projectPath: string,
   pnpmMajorVersion: number | undefined,
   shouldAllowBrowserBuilds: boolean,
+  usesVitest: boolean,
 ): void {
   const pnpmWorkspaceYamlPath = path.join(projectPath, 'pnpm-workspace.yaml');
   if (!fs.existsSync(pnpmWorkspaceYamlPath)) {
     fs.writeFileSync(pnpmWorkspaceYamlPath, '');
   }
+  const managed = managedOverridePackages(usesVitest);
 
   editYamlFile(pnpmWorkspaceYamlPath, (doc) => {
     // catalog
-    rewriteCatalog(doc);
+    rewriteCatalog(doc, usesVitest);
     if (pnpmMajorVersion !== undefined) {
       applyBuildAllowanceToWorkspaceYaml(doc, pnpmMajorVersion, shouldAllowBrowserBuilds);
     }
@@ -1919,13 +2082,14 @@ function rewritePnpmWorkspaceYaml(
         }
       }
     }
-    for (const key of Object.keys(VITE_PLUS_OVERRIDE_PACKAGES)) {
+    // Common case (no direct vitest): actively strip any lingering managed
+    // `vitest` override so it arrives transitively through vite-plus.
+    if (!usesVitest) {
+      removeYamlMapVitestEntry(doc.getIn(['overrides']));
+    }
+    for (const key of Object.keys(managed)) {
       const currentVersion = getYamlMapScalarStringValue(overrides, key);
-      const version = getCatalogDependencySpec(
-        currentVersion,
-        VITE_PLUS_OVERRIDE_PACKAGES[key],
-        true,
-      );
+      const version = getCatalogDependencySpec(currentVersion, managed[key], true);
       doc.setIn(['overrides', scalarString(key)], scalarString(version));
     }
     // remove dependency selector from vite, e.g. "vite-plugin-svgr>vite": "npm:vite@7.0.12"
@@ -1944,8 +2108,12 @@ function rewritePnpmWorkspaceYaml(
     if (!allowAny) {
       allowAny = new YAMLSeq<Scalar<string>>();
     }
+    // Common case: drop any lingering managed `vitest` allowAny entry.
+    if (!usesVitest && VITEST_IS_MANAGED_OVERRIDE) {
+      allowAny.items = allowAny.items.filter((n) => n.value !== 'vitest');
+    }
     const existing = new Set(allowAny.items.map((n) => n.value));
-    for (const key of Object.keys(VITE_PLUS_OVERRIDE_PACKAGES)) {
+    for (const key of Object.keys(managed)) {
       if (!existing.has(key)) {
         allowAny.add(scalarString(key));
       }
@@ -1960,7 +2128,11 @@ function rewritePnpmWorkspaceYaml(
     if (!allowedVersions) {
       allowedVersions = new YAMLMap<Scalar<string>, Scalar<string>>();
     }
-    for (const key of Object.keys(VITE_PLUS_OVERRIDE_PACKAGES)) {
+    // Common case: drop any lingering managed `vitest` allowedVersions entry.
+    if (!usesVitest) {
+      removeYamlMapVitestEntry(allowedVersions);
+    }
+    for (const key of Object.keys(managed)) {
       // - vite: '*'
       allowedVersions.set(scalarString(key), scalarString('*'));
     }
@@ -2018,10 +2190,17 @@ function cleanupPnpmOverridesForWorkspaceYaml(
   // Strip selector-shaped overrides (e.g. `parent>@vitest/browser-playwright`)
   // whose target is a removed package, before the exact-key sweep below.
   dropRemovePackageOverrideKeys(pkg.pnpm?.overrides);
-  // Remove Vite-managed keys from pnpm.overrides
+  // Remove Vite-managed keys from pnpm.overrides. `vitest` is always swept so a
+  // lingering managed `vitest` override is dropped in the common case (when it
+  // is NOT in `overrideKeys` because the project does not use vitest directly) —
+  // it is deleted but NOT captured as a moved catalog override.
+  const sweepKeys =
+    overrideKeys.includes('vitest') || !VITEST_IS_MANAGED_OVERRIDE
+      ? overrideKeys
+      : [...overrideKeys, 'vitest'];
   const catalogOverrides: Record<string, string> = {};
   const overrides = pkg.pnpm?.overrides;
-  for (const key of [...overrideKeys, ...PROVIDER_OVERRIDE_DROP_NAMES]) {
+  for (const key of [...sweepKeys, ...PROVIDER_OVERRIDE_DROP_NAMES]) {
     const value = overrides?.[key];
     if (value) {
       if (overrideKeys.includes(key) && value.startsWith('catalog:')) {
@@ -2049,8 +2228,10 @@ function cleanupPnpmOverridesForWorkspaceYaml(
     remaining = { ...remaining, ...pkg.pnpm.overrides };
   }
   delete pkg.pnpm?.overrides;
-  // Only remove Vite-managed peerDependencyRules entries, preserve custom ones
-  cleanupPeerDependencyRules(pkg.pnpm?.peerDependencyRules, overrideKeys);
+  // Only remove Vite-managed peerDependencyRules entries, preserve custom ones.
+  // `vitest` is always swept (common case: dropped even though it is not in the
+  // managed `overrideKeys`).
+  cleanupPeerDependencyRules(pkg.pnpm?.peerDependencyRules, sweepKeys);
   if (pkg.pnpm?.peerDependencyRules && Object.keys(pkg.pnpm.peerDependencyRules).length === 0) {
     delete pkg.pnpm.peerDependencyRules;
   }
@@ -2125,6 +2306,32 @@ function workspaceUsesWebdriverio(
       return true;
     }
     if (usesWebdriverioProvider(packageDir)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Workspace-wide direct-vitest signal for the SHARED sinks a monorepo root
+// owns (pnpm-workspace.yaml catalog/overrides/peer rules, .yarnrc.yml catalog,
+// bun catalog): `vitest` stays managed there iff ANY package in the workspace —
+// the root or any sub-package — uses vitest directly (an `@vitest/*` dep or a
+// source reference). See `projectUsesVitestDirectly`.
+function workspaceUsesVitestDirectly(
+  rootDir: string,
+  packages: WorkspacePackage[] | undefined,
+): boolean {
+  const rootPkg = readPackageJsonIfExists(path.join(rootDir, 'package.json')) ?? {};
+  if (projectUsesVitestDirectly(rootDir, rootPkg)) {
+    return true;
+  }
+  if (!packages) {
+    return false;
+  }
+  for (const pkg of packages) {
+    const packageDir = path.join(rootDir, pkg.path);
+    const subPkg = readPackageJsonIfExists(path.join(packageDir, 'package.json')) ?? {};
+    if (projectUsesVitestDirectly(packageDir, subPkg)) {
       return true;
     }
   }
@@ -2501,7 +2708,7 @@ function applyYarnWorkspaceHoistingFix(
   }
 }
 
-function rewriteYarnrcYml(projectPath: string): void {
+function rewriteYarnrcYml(projectPath: string, usesVitest: boolean): void {
   const yarnrcYmlPath = path.join(projectPath, '.yarnrc.yml');
   if (!fs.existsSync(yarnrcYmlPath)) {
     fs.writeFileSync(yarnrcYmlPath, '');
@@ -2532,7 +2739,7 @@ function rewriteYarnrcYml(projectPath: string): void {
     }
     doc.setIn(['npmPreapprovedPackages'], npmPreapprovedPackages);
     // catalog
-    rewriteCatalog(doc);
+    rewriteCatalog(doc, usesVitest);
   });
 }
 
@@ -2740,8 +2947,14 @@ function pruneYamlMapLegacyWrapperAliases(map: unknown): void {
   }
 }
 
-function rewriteCatalog(doc: YamlDocument): void {
-  for (const [key, value] of Object.entries(VITE_PLUS_OVERRIDE_PACKAGES)) {
+function rewriteCatalog(doc: YamlDocument, usesVitest: boolean): void {
+  const managed = managedOverridePackages(usesVitest);
+  // Common case (no direct vitest): remove any lingering managed `vitest`
+  // catalog entry so it resolves transitively through vite-plus.
+  if (!usesVitest) {
+    removeYamlMapVitestEntry(doc.getIn(['catalog']));
+  }
+  for (const [key, value] of Object.entries(managed)) {
     // ERR_PNPM_CATALOG_IN_OVERRIDES  Could not resolve a catalog in the overrides: The entry for 'vite' in catalog 'default' declares a dependency using the 'file' protocol
     // ignore setting catalog if value starts with 'file:'
     if (value.startsWith('file:')) {
@@ -2770,7 +2983,12 @@ function rewriteCatalog(doc: YamlDocument): void {
     if (typeof catalogName !== 'string' || !(item.value instanceof YAMLMap)) {
       continue;
     }
-    for (const [key, value] of Object.entries(VITE_PLUS_OVERRIDE_PACKAGES)) {
+    // Common case: strip a lingering managed `vitest` entry from this named
+    // catalog (existing entries only — named catalogs are never grown here).
+    if (!usesVitest) {
+      removeYamlMapVitestEntry(item.value);
+    }
+    for (const [key, value] of Object.entries(managed)) {
       const catalogPath = ['catalogs', catalogName, key];
       if (!value.startsWith('file:') && doc.hasIn(catalogPath)) {
         doc.setIn(catalogPath, scalarString(value));
@@ -2790,8 +3008,18 @@ function rewriteCatalog(doc: YamlDocument): void {
   }
 }
 
-function rewriteCatalogObject(catalog: Record<string, string>, addMissing: boolean): void {
-  for (const [key, value] of Object.entries(VITE_PLUS_OVERRIDE_PACKAGES)) {
+function rewriteCatalogObject(
+  catalog: Record<string, string>,
+  addMissing: boolean,
+  usesVitest: boolean,
+): void {
+  const managed = managedOverridePackages(usesVitest);
+  // Common case (no direct vitest): strip a lingering managed `vitest` catalog
+  // entry so it resolves transitively through vite-plus.
+  if (!usesVitest) {
+    removeManagedVitestEntry(catalog);
+  }
+  for (const [key, value] of Object.entries(managed)) {
     if (value.startsWith('file:') || (!addMissing && !(key in catalog))) {
       continue;
     }
@@ -2805,9 +3033,12 @@ function rewriteCatalogObject(catalog: Record<string, string>, addMissing: boole
   }
 }
 
-function rewriteCatalogsObject(catalogs: Record<string, Record<string, string>>): void {
+function rewriteCatalogsObject(
+  catalogs: Record<string, Record<string, string>>,
+  usesVitest: boolean,
+): void {
   for (const catalog of Object.values(catalogs)) {
-    rewriteCatalogObject(catalog, false);
+    rewriteCatalogObject(catalog, false, usesVitest);
   }
 }
 
@@ -2853,11 +3084,12 @@ function ensureBunfigPeerSuppression(projectPath: string): void {
  * unlike pnpm which uses pnpm-workspace.yaml.
  * @see https://bun.sh/docs/pm/catalogs
  */
-function rewriteBunCatalog(projectPath: string): void {
+function rewriteBunCatalog(projectPath: string, usesVitest: boolean): void {
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
     return;
   }
+  const managed = managedOverridePackages(usesVitest);
 
   editJsonFile<{
     workspaces?: NpmWorkspaces;
@@ -2875,30 +3107,30 @@ function rewriteBunCatalog(projectPath: string): void {
       ...(useWorkspacesCatalog ? workspacesObj?.catalog : pkg.catalog),
     };
 
-    rewriteCatalogObject(catalog, true);
+    rewriteCatalogObject(catalog, true, usesVitest);
     pruneLegacyWrapperAliases(catalog);
 
     if (useWorkspacesCatalog) {
       workspacesObj.catalog = catalog;
       if (pkg.catalog) {
-        rewriteCatalogObject(pkg.catalog, false);
+        rewriteCatalogObject(pkg.catalog, false, usesVitest);
         pruneLegacyWrapperAliases(pkg.catalog);
       }
     } else {
       pkg.catalog = catalog;
       if (workspacesObj?.catalog) {
-        rewriteCatalogObject(workspacesObj.catalog, false);
+        rewriteCatalogObject(workspacesObj.catalog, false, usesVitest);
         pruneLegacyWrapperAliases(workspacesObj.catalog);
       }
     }
     if (workspacesObj?.catalogs) {
-      rewriteCatalogsObject(workspacesObj.catalogs);
+      rewriteCatalogsObject(workspacesObj.catalogs, usesVitest);
       for (const named of Object.values(workspacesObj.catalogs)) {
         pruneLegacyWrapperAliases(named);
       }
     }
     if (pkg.catalogs) {
-      rewriteCatalogsObject(pkg.catalogs);
+      rewriteCatalogsObject(pkg.catalogs, usesVitest);
       for (const named of Object.values(pkg.catalogs)) {
         pruneLegacyWrapperAliases(named);
       }
@@ -2907,7 +3139,13 @@ function rewriteBunCatalog(projectPath: string): void {
     // bun overrides support catalog: references
     const overrides: Record<string, string> = { ...pkg.overrides };
     pruneLegacyWrapperAliases(overrides);
-    for (const [key, value] of Object.entries(VITE_PLUS_OVERRIDE_PACKAGES)) {
+    // Common case (no direct vitest): strip a lingering managed `vitest`
+    // override (string-valued only — a nested user override is left intact;
+    // removeManagedVitestEntry also no-ops when vitest is not a managed key).
+    if (!usesVitest && typeof overrides.vitest === 'string') {
+      removeManagedVitestEntry(overrides);
+    }
+    for (const [key, value] of Object.entries(managed)) {
       const current = overrides[key] as unknown;
       // A nested object value is a user override scoped under this managed key,
       // not a version pin — leave it intact (getCatalogDependencySpec expects a
@@ -2940,11 +3178,16 @@ function rewriteRootWorkspacePackageJson(
   packages?: WorkspacePackage[],
   pnpmMajorVersion?: number,
   shouldAllowBrowserBuilds = false,
+  // Workspace-wide direct-vitest signal: the root resolution/override sinks are
+  // shared by every package, so `vitest` stays managed here iff ANY package uses
+  // vitest directly.
+  workspaceUsesVitest = true,
 ): void {
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
     return;
   }
+  const managed = managedOverridePackages(workspaceUsesVitest);
 
   let remainingPnpmOverrides: Record<string, string> | undefined;
   editJsonFile<{
@@ -2978,17 +3221,23 @@ function rewriteRootWorkspacePackageJson(
     // the bundled-vitest-aligned 4.1.9. (The pnpm sinks are pruned below.)
     dropRemovePackageOverrideKeys(pkg.resolutions);
     dropRemovePackageOverrideKeys(pkg.overrides);
+    // Common case (no workspace-wide direct vitest): strip a lingering managed
+    // `vitest` from the shared root sinks so it isn't re-pinned.
+    if (!workspaceUsesVitest) {
+      removeManagedVitestEntry(pkg.resolutions);
+      removeManagedVitestEntry(pkg.overrides);
+    }
     if (packageManager === PackageManager.yarn) {
       pkg.resolutions = {
         ...pkg.resolutions,
         // FIXME: yarn don't support catalog on resolutions
         // https://github.com/yarnpkg/berry/issues/6979
-        ...VITE_PLUS_OVERRIDE_PACKAGES,
+        ...managed,
       };
     } else if (packageManager === PackageManager.npm) {
       pkg.overrides = {
         ...pkg.overrides,
-        ...VITE_PLUS_OVERRIDE_PACKAGES,
+        ...managed,
       };
     } else if (packageManager === PackageManager.bun) {
       // bun overrides are handled in rewriteBunCatalog() with catalog: references
@@ -3006,12 +3255,16 @@ function rewriteRootWorkspacePackageJson(
         ),
       };
     } else if (packageManager === PackageManager.pnpm) {
-      const overrideKeys = Object.keys(VITE_PLUS_OVERRIDE_PACKAGES);
+      const overrideKeys = Object.keys(managed);
       if (isForceOverrideMode()) {
         // Strip selector-shaped overrides (e.g. `parent>@vitest/browser-playwright`)
         // whose target is a removed package, before re-merging the user's
         // overrides into the new pnpm config.
         dropRemovePackageOverrideKeys(pkg.pnpm?.overrides);
+        // Common case: drop a lingering managed `vitest` override before merging.
+        if (!workspaceUsesVitest) {
+          removeManagedVitestEntry(pkg.pnpm?.overrides);
+        }
         // In force-override mode, keep overrides in package.json pnpm.overrides
         // because pnpm ignores pnpm-workspace.yaml overrides when pnpm.overrides
         // exists in package.json (even with unrelated entries like rollup).
@@ -3019,7 +3272,7 @@ function rewriteRootWorkspacePackageJson(
           ...pkg.pnpm,
           overrides: {
             ...pkg.pnpm?.overrides,
-            ...VITE_PLUS_OVERRIDE_PACKAGES,
+            ...managed,
             [VITE_PLUS_NAME]: VITE_PLUS_VERSION,
           },
         };
@@ -3279,9 +3532,15 @@ function overrideSpecSatisfiesVitePlus(
 
 function overridesSatisfyVitePlus(
   overrides: Record<string, string> | undefined,
+  usesVitest: boolean,
   catalogDependencyResolver?: CatalogDependencyResolver,
 ): boolean {
-  return Object.keys(VITE_PLUS_OVERRIDE_PACKAGES).every((dependencyName) =>
+  // Common case: a lingering managed `vitest` override is NOT satisfied — it
+  // must be removed, so the bootstrap stays pending until it is.
+  if (!usesVitest && VITEST_IS_MANAGED_OVERRIDE && overrides?.vitest !== undefined) {
+    return false;
+  }
+  return Object.keys(managedOverridePackages(usesVitest)).every((dependencyName) =>
     overrideSpecSatisfiesVitePlus(
       dependencyName,
       overrides?.[dependencyName],
@@ -3319,16 +3578,36 @@ function pnpmPeerDependencyRulesSatisfyVitePlus(
   peerDependencyRules:
     | { allowAny?: string[]; allowedVersions?: Record<string, string> }
     | undefined,
+  usesVitest: boolean,
 ): boolean {
-  const overrideKeys = Object.keys(VITE_PLUS_OVERRIDE_PACKAGES);
   const allowAny = new Set(peerDependencyRules?.allowAny ?? []);
   const allowedVersions = peerDependencyRules?.allowedVersions ?? {};
+  // Common case: a lingering managed `vitest` peer rule is NOT satisfied.
+  if (
+    !usesVitest &&
+    VITEST_IS_MANAGED_OVERRIDE &&
+    (allowAny.has('vitest') || allowedVersions.vitest !== undefined)
+  ) {
+    return false;
+  }
+  const overrideKeys = Object.keys(managedOverridePackages(usesVitest));
   return overrideKeys.every((key) => allowAny.has(key) && allowedVersions[key] === '*');
 }
 
-function npmVitePlusManagedDependenciesPending(pkg: BootstrapPackageJson): boolean {
+function npmVitePlusManagedDependenciesPending(
+  pkg: BootstrapPackageJson,
+  usesVitest: boolean,
+): boolean {
   const dependencyGroups = [pkg.devDependencies, pkg.dependencies, pkg.optionalDependencies];
-  return Object.keys(VITE_PLUS_OVERRIDE_PACKAGES).some((dependencyName) =>
+  // Common case: a lingering managed `vitest` install dep is pending removal.
+  if (
+    !usesVitest &&
+    VITEST_IS_MANAGED_OVERRIDE &&
+    dependencyGroups.some((dependencies) => dependencies?.vitest !== undefined)
+  ) {
+    return true;
+  }
+  return Object.keys(managedOverridePackages(usesVitest)).some((dependencyName) =>
     dependencyGroups.some(
       (dependencies) =>
         dependencies?.[dependencyName] !== undefined &&
@@ -3373,7 +3652,7 @@ function readPnpmWorkspacePeerDependencyRules(
   return doc?.peerDependencyRules;
 }
 
-function yarnrcSatisfiesVitePlus(projectPath: string): boolean {
+function yarnrcSatisfiesVitePlus(projectPath: string, usesVitest: boolean): boolean {
   const yarnrcYmlPath = path.join(projectPath, '.yarnrc.yml');
   if (!fs.existsSync(yarnrcYmlPath)) {
     return false;
@@ -3385,7 +3664,7 @@ function yarnrcSatisfiesVitePlus(projectPath: string): boolean {
   return (
     !!doc &&
     Object.hasOwn(doc, 'nodeLinker') &&
-    overridesSatisfyVitePlus(doc.catalog) &&
+    overridesSatisfyVitePlus(doc.catalog, usesVitest) &&
     (VITE_PLUS_VERSION.startsWith('file:') || doc.catalog?.[VITE_PLUS_NAME] === VITE_PLUS_VERSION)
   );
 }
@@ -3501,32 +3780,47 @@ export function detectVitePlusBootstrapPending(
     return true;
   }
 
+  // `vitest` is managed only when the project uses it directly; otherwise a
+  // lingering managed `vitest` entry is treated as pending so the bootstrap
+  // removes it (and a second detect after removal returns false).
+  const usesVitest = projectUsesVitestDirectly(projectPath, pkg);
+
   if (packageManager === PackageManager.yarn) {
-    return !overridesSatisfyVitePlus(pkg.resolutions) || !yarnrcSatisfiesVitePlus(projectPath);
+    return (
+      !overridesSatisfyVitePlus(pkg.resolutions, usesVitest) ||
+      !yarnrcSatisfiesVitePlus(projectPath, usesVitest)
+    );
   }
   if (packageManager === PackageManager.npm) {
     return (
       vitePlusDependencyNeedsConcreteVersion(pkg) ||
-      !overridesSatisfyVitePlus(pkg.overrides) ||
-      npmVitePlusManagedDependenciesPending(pkg)
+      !overridesSatisfyVitePlus(pkg.overrides, usesVitest) ||
+      npmVitePlusManagedDependenciesPending(pkg, usesVitest)
     );
   }
   if (packageManager === PackageManager.bun) {
-    return !overridesSatisfyVitePlus(pkg.overrides, readBunCatalogDependencyResolver(pkg));
+    return !overridesSatisfyVitePlus(
+      pkg.overrides,
+      usesVitest,
+      readBunCatalogDependencyResolver(pkg),
+    );
   }
   if (packageManager === PackageManager.pnpm) {
     if (pnpmConfigLivesInPackageJson(pkg, projectPath)) {
       return (
         vitePlusDependencyNeedsConcreteVersion(pkg) ||
-        !overridesSatisfyVitePlus(pkg.pnpm?.overrides) ||
-        !pnpmPeerDependencyRulesSatisfyVitePlus(pkg.pnpm?.peerDependencyRules)
+        !overridesSatisfyVitePlus(pkg.pnpm?.overrides, usesVitest) ||
+        !pnpmPeerDependencyRulesSatisfyVitePlus(pkg.pnpm?.peerDependencyRules, usesVitest)
       );
     }
     const resolver = readPnpmWorkspaceCatalogDependencyResolver(projectPath);
     return (
       defaultCatalogVitePlusDependencyPending(pkg, resolver) ||
-      !overridesSatisfyVitePlus(readPnpmWorkspaceOverrides(projectPath), resolver) ||
-      !pnpmPeerDependencyRulesSatisfyVitePlus(readPnpmWorkspacePeerDependencyRules(projectPath))
+      !overridesSatisfyVitePlus(readPnpmWorkspaceOverrides(projectPath), usesVitest, resolver) ||
+      !pnpmPeerDependencyRulesSatisfyVitePlus(
+        readPnpmWorkspacePeerDependencyRules(projectPath),
+        usesVitest,
+      )
     );
   }
 
@@ -3542,7 +3836,10 @@ function ensureVitePlusDependencySpecs(pkg: BootstrapPackageJson, version: strin
   // (workspace:, link:, file:, npm:, github:, git, http) are preserved.
   const dependencyGroups = [pkg.devDependencies, pkg.dependencies, pkg.optionalDependencies];
   for (const dependencies of dependencyGroups) {
-    const spec = dependencies?.[VITE_PLUS_NAME];
+    if (dependencies === undefined) {
+      continue;
+    }
+    const spec = dependencies[VITE_PLUS_NAME];
     if (spec === undefined || spec === version) {
       continue;
     }
@@ -3574,11 +3871,18 @@ function ensureVitePlusDependencySpecs(pkg: BootstrapPackageJson, version: strin
 
 function ensureOverrideEntries(
   overrides: Record<string, string> | undefined,
+  usesVitest: boolean,
   catalogDependencyResolver?: CatalogDependencyResolver,
 ): { overrides: Record<string, string>; changed: boolean } {
   const next = { ...overrides };
   let changed = false;
-  for (const [dependencyName, overrideSpec] of Object.entries(VITE_PLUS_OVERRIDE_PACKAGES)) {
+  // Common case: drop a lingering managed `vitest` override.
+  if (!usesVitest && removeManagedVitestEntry(next)) {
+    changed = true;
+  }
+  for (const [dependencyName, overrideSpec] of Object.entries(
+    managedOverridePackages(usesVitest),
+  )) {
     if (
       !overrideSpecSatisfiesVitePlus(
         dependencyName,
@@ -3593,10 +3897,21 @@ function ensureOverrideEntries(
   return { overrides: next, changed };
 }
 
-function ensureNpmVitePlusManagedDependencies(pkg: BootstrapPackageJson): boolean {
+function ensureNpmVitePlusManagedDependencies(
+  pkg: BootstrapPackageJson,
+  usesVitest: boolean,
+): boolean {
   let changed = false;
   const dependencyGroups = [pkg.devDependencies, pkg.dependencies, pkg.optionalDependencies];
-  for (const [dependencyName, version] of Object.entries(VITE_PLUS_OVERRIDE_PACKAGES)) {
+  // Common case: strip a lingering managed `vitest` install dep.
+  if (!usesVitest) {
+    for (const dependencies of dependencyGroups) {
+      if (removeManagedVitestEntry(dependencies)) {
+        changed = true;
+      }
+    }
+  }
+  for (const [dependencyName, version] of Object.entries(managedOverridePackages(usesVitest))) {
     for (const dependencies of dependencyGroups) {
       if (
         dependencies?.[dependencyName] !== undefined &&
@@ -3610,14 +3925,29 @@ function ensureNpmVitePlusManagedDependencies(pkg: BootstrapPackageJson): boolea
   return changed;
 }
 
-function ensurePnpmPeerDependencyRules(pkg: BootstrapPackageJson): boolean {
-  const overrideKeys = Object.keys(VITE_PLUS_OVERRIDE_PACKAGES);
+function ensurePnpmPeerDependencyRules(pkg: BootstrapPackageJson, usesVitest: boolean): boolean {
+  const overrideKeys = Object.keys(managedOverridePackages(usesVitest));
   pkg.pnpm ??= {};
+  // Common case: drop a lingering managed `vitest` peer rule from the source
+  // shape before re-deriving the managed rules.
+  const seed = { ...pkg.pnpm.peerDependencyRules } as {
+    allowAny?: string[];
+    allowedVersions?: Record<string, string>;
+  };
+  if (!usesVitest && VITEST_IS_MANAGED_OVERRIDE) {
+    if (Array.isArray(seed.allowAny)) {
+      seed.allowAny = seed.allowAny.filter((key) => key !== 'vitest');
+    }
+    if (seed.allowedVersions) {
+      seed.allowedVersions = { ...seed.allowedVersions };
+      delete seed.allowedVersions.vitest;
+    }
+  }
   const peerDependencyRules = {
-    ...pkg.pnpm.peerDependencyRules,
-    allowAny: [...new Set([...(pkg.pnpm.peerDependencyRules?.allowAny ?? []), ...overrideKeys])],
+    ...seed,
+    allowAny: [...new Set([...(seed.allowAny ?? []), ...overrideKeys])],
     allowedVersions: {
-      ...pkg.pnpm.peerDependencyRules?.allowedVersions,
+      ...seed.allowedVersions,
       ...Object.fromEntries(overrideKeys.map((key) => [key, '*'])),
     },
   };
@@ -3643,6 +3973,16 @@ export function ensureVitePlusBootstrap(
     return result;
   }
 
+  // Whether the project uses vitest directly (an `@vitest/*` dep or a source
+  // reference). Read up front so it is available to the post-callback
+  // pnpm-workspace.yaml / .yarnrc.yml / bun catalog rewrites too. `vitest` stays
+  // managed only when true; otherwise the bootstrap REMOVES any lingering
+  // managed `vitest` entry from every sink.
+  const usesVitest = projectUsesVitestDirectly(
+    projectPath,
+    readJsonFile(packageJsonPath) as BootstrapPackageJson,
+  );
+
   editJsonFile<
     BootstrapPackageJson & {
       workspaces?: NpmWorkspaces;
@@ -3662,23 +4002,27 @@ export function ensureVitePlusBootstrap(
     );
     packageJsonChanged = alignVitestCoverageProviders(pkg) || packageJsonChanged;
     if (workspaceInfo.packageManager === PackageManager.npm) {
-      packageJsonChanged = ensureNpmVitePlusManagedDependencies(pkg) || packageJsonChanged;
+      packageJsonChanged = ensureNpmVitePlusManagedDependencies(pkg, usesVitest) || packageJsonChanged;
     }
 
     if (workspaceInfo.packageManager === PackageManager.yarn) {
-      const ensured = ensureOverrideEntries(pkg.resolutions);
+      const ensured = ensureOverrideEntries(pkg.resolutions, usesVitest);
       if (ensured.changed) {
         pkg.resolutions = ensured.overrides;
         packageJsonChanged = true;
       }
     } else if (workspaceInfo.packageManager === PackageManager.npm) {
-      const ensured = ensureOverrideEntries(pkg.overrides);
+      const ensured = ensureOverrideEntries(pkg.overrides, usesVitest);
       if (ensured.changed) {
         pkg.overrides = ensured.overrides;
         packageJsonChanged = true;
       }
     } else if (workspaceInfo.packageManager === PackageManager.bun) {
-      const ensured = ensureOverrideEntries(pkg.overrides, readBunCatalogDependencyResolver(pkg));
+      const ensured = ensureOverrideEntries(
+        pkg.overrides,
+        usesVitest,
+        readBunCatalogDependencyResolver(pkg),
+      );
       if (ensured.changed) {
         pkg.overrides = ensured.overrides;
         packageJsonChanged = true;
@@ -3690,12 +4034,12 @@ export function ensureVitePlusBootstrap(
       // `pnpmConfigLivesInPackageJson` guarantees `pkg.pnpm` is present here,
       // but it may be an empty object (no pnpm-workspace.yaml case), so seed it.
       pkg.pnpm ??= {};
-      const ensured = ensureOverrideEntries(pkg.pnpm.overrides);
+      const ensured = ensureOverrideEntries(pkg.pnpm.overrides, usesVitest);
       if (ensured.changed) {
         pkg.pnpm.overrides = ensured.overrides;
         packageJsonChanged = true;
       }
-      packageJsonChanged = ensurePnpmPeerDependencyRules(pkg) || packageJsonChanged;
+      packageJsonChanged = ensurePnpmPeerDependencyRules(pkg, usesVitest) || packageJsonChanged;
     }
 
     result.packageJson = packageJsonChanged;
@@ -3714,16 +4058,20 @@ export function ensureVitePlusBootstrap(
         defaultCatalogVitePlusDependencyPending(pkg, catalogDependencyResolver) ||
         !overridesSatisfyVitePlus(
           readPnpmWorkspaceOverrides(projectPath),
+          usesVitest,
           catalogDependencyResolver,
         ) ||
-        !pnpmPeerDependencyRulesSatisfyVitePlus(readPnpmWorkspacePeerDependencyRules(projectPath))
+        !pnpmPeerDependencyRulesSatisfyVitePlus(
+          readPnpmWorkspacePeerDependencyRules(projectPath),
+          usesVitest,
+        )
       ) {
         // Bootstrap only completes the catalog / overrides / peer rules for a
         // project that already uses Vite+. Build-script allowance stays owned
         // by the full migration paths, so pass an undefined pnpm major to skip
         // it (mirrors the single-arg call this path used before the signature
         // grew the build-allowance parameters).
-        rewritePnpmWorkspaceYaml(projectPath, undefined, false);
+        rewritePnpmWorkspaceYaml(projectPath, undefined, false, usesVitest);
       }
       if (fs.existsSync(pnpmWorkspaceYamlPath)) {
         ensurePnpmWorkspacePackages(projectPath, workspaceInfo.workspacePatterns);
@@ -3738,12 +4086,12 @@ export function ensureVitePlusBootstrap(
     const before = fs.existsSync(yarnrcYmlPath)
       ? fs.readFileSync(yarnrcYmlPath, 'utf-8')
       : undefined;
-    rewriteYarnrcYml(projectPath);
+    rewriteYarnrcYml(projectPath, usesVitest);
     const after = fs.readFileSync(yarnrcYmlPath, 'utf-8');
     result.packageManagerConfig = before !== after;
   } else if (workspaceInfo.packageManager === PackageManager.bun) {
     const before = fs.readFileSync(packageJsonPath, 'utf-8');
-    rewriteBunCatalog(projectPath);
+    rewriteBunCatalog(projectPath, usesVitest);
     const after = fs.readFileSync(packageJsonPath, 'utf-8');
     result.packageJson = result.packageJson || before !== after;
   }
@@ -4003,6 +4351,12 @@ export function rewritePackageJson(
   // `@vitest/browser-webdriverio` → true). A provider with no dep declared but
   // imported in source still gets kept/injected.
   providerSourceModes?: Partial<Record<string, boolean>>,
+  // Whether the project uses vitest DIRECTLY (an `@vitest/*` dep or a source
+  // reference). `vitest` is managed (and a managed dep/override pin kept) only
+  // when true; in the common case (`false`) a lingering managed `vitest` entry
+  // is REMOVED so it arrives transitively through vite-plus. Defaults to true to
+  // preserve legacy behavior for callers that don't compute the signal.
+  usesVitestDirectly = true,
 ): Record<string, string | string[]> | null {
   if (pkg.scripts) {
     const updated = rewriteScripts(
@@ -4041,7 +4395,29 @@ export function rewritePackageJson(
       needVitePlus = true;
     }
   }
-  for (const [key, version] of Object.entries(VITE_PLUS_OVERRIDE_PACKAGES)) {
+  const managed = managedOverridePackages(usesVitestDirectly);
+  // Common case (no direct vitest): vite-plus consumes upstream vitest itself,
+  // so ACTIVELY REMOVE any lingering managed `vitest` dependency (a managed pin,
+  // a `catalog:` reference, or a stale wrapper alias already normalized above) —
+  // it arrives transitively through vite-plus and a future `vp update vite-plus`
+  // keeps it correct with no pin to drift. The `@vitest/*` family and unrelated
+  // keys are untouched. (Browser-mode / vitest-adjacent projects re-add a direct
+  // `vitest` below; those are direct-usage signals, so this never strips one a
+  // surviving consumer needs.)
+  if (!usesVitestDirectly) {
+    // Only the INSTALL groups — a `peerDependencies` `vitest` is a declaration
+    // about consumers (coerced to `*` via PUBLIC_PEER_DEPENDENCY_FALLBACKS),
+    // not an install pin, so it is left as-is.
+    for (const { dependencyField, dependencies } of dependencyGroups) {
+      if (dependencyField === 'peerDependencies') {
+        continue;
+      }
+      if (removeManagedVitestEntry(dependencies)) {
+        needVitePlus = true;
+      }
+    }
+  }
+  for (const [key, version] of Object.entries(managed)) {
     for (const { dependencyField, dependencies } of dependencyGroups) {
       if (dependencies?.[key]) {
         dependencies[key] = getCatalogDependencySpec(dependencies[key], version, supportCatalog, {
