@@ -361,6 +361,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@napi-rs/cli": "catalog:",
     "@oxc-project/types": "catalog:",
     "@oxlint/plugins": "catalog:",
     "@vitest/browser": "catalog:",
@@ -379,7 +380,6 @@
     "vitest": "catalog:"
   },
   "devDependencies": {
-    "@napi-rs/cli": "catalog:",
     "@nkzw/safe-word-list": "catalog:",
     "@oxc-node/core": "catalog:",
     "@types/cross-spawn": "catalog:",
