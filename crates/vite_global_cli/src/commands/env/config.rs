@@ -233,6 +233,41 @@ pub async fn resolve_version(cwd: &AbsolutePath) -> Result<VersionResolution, Er
     resolve_version_from_files(cwd).await
 }
 
+/// Resolve Node.js version for managed global package operations.
+///
+/// Global installs and updates should not be affected by a project's
+/// `.node-version` or `package.json` engine fields in the current directory.
+/// They still respect explicit session overrides, then the user default, then
+/// the latest LTS fallback.
+pub async fn resolve_global_package_version() -> Result<VersionResolution, Error> {
+    // Session override via environment variable (set by `vp env use`)
+    if let Some(env_version) = vite_shared::EnvConfig::get().node_version {
+        let env_version = env_version.trim();
+        if !env_version.is_empty() {
+            return Ok(VersionResolution {
+                version: env_version.to_string(),
+                source: VERSION_ENV_VAR.into(),
+                source_path: None,
+                project_root: None,
+                is_range: false,
+            });
+        }
+    }
+
+    // Session override via file (written by `vp env use` for shell-wrapper-less environments)
+    if let Some(session_version) = read_session_version().await {
+        return Ok(VersionResolution {
+            version: session_version,
+            source: SESSION_VERSION_FILE.into(),
+            source_path: get_session_version_path().ok(),
+            project_root: None,
+            is_range: false,
+        });
+    }
+
+    resolve_default_or_lts(&NodeProvider::new()).await
+}
+
 /// Resolve Node.js version from project files only (skipping session overrides).
 ///
 /// This is used by `vp env use` without arguments to revert to file-based resolution.
@@ -320,10 +355,14 @@ pub async fn resolve_version_from_files(cwd: &AbsolutePath) -> Result<VersionRes
         // Invalid version and no valid package.json sources - fall through to user default or LTS
     }
 
+    resolve_default_or_lts(&provider).await
+}
+
+async fn resolve_default_or_lts(provider: &NodeProvider) -> Result<VersionResolution, Error> {
     // CLI-specific: Check user default from config
     let config = load_config().await?;
     if let Some(default_version) = config.default_node_version {
-        let resolved = resolve_version_alias(&default_version, &provider).await?;
+        let resolved = resolve_version_alias(&default_version, provider).await?;
         // Check if default is an alias or range
         let is_alias = matches!(default_version.to_lowercase().as_str(), "lts" | "latest");
         let is_range = is_alias
@@ -606,6 +645,52 @@ mod tests {
         // .node-version should take priority
         assert_eq!(resolution.version, "22.0.0");
         assert_eq!(resolution.source, ".node-version");
+    }
+
+    #[tokio::test]
+    async fn test_resolve_global_package_version_ignores_project_node_version() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let _guard = vite_shared::EnvConfig::test_guard(
+            vite_shared::EnvConfig::for_test_with_home(temp_dir.path()),
+        );
+
+        let config =
+            Config { default_node_version: Some("24.11.0".to_string()), ..Default::default() };
+        save_config(&config).await.unwrap();
+        tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
+        tokio::fs::write(temp_path.join("package.json"), r#"{"engines":{"node":"22.0.0"}}"#)
+            .await
+            .unwrap();
+
+        let project_resolution = resolve_version(&temp_path).await.unwrap();
+        assert_eq!(project_resolution.version, "20.18.0");
+        assert_eq!(project_resolution.source, ".node-version");
+
+        let global_resolution = resolve_global_package_version().await.unwrap();
+        assert_eq!(global_resolution.version, "24.11.0");
+        assert_eq!(global_resolution.source, "default");
+        assert!(global_resolution.project_root.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_resolve_global_package_version_keeps_session_override_priority() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let _guard = vite_shared::EnvConfig::test_guard(vite_shared::EnvConfig {
+            node_version: Some("26.1.0".into()),
+            ..vite_shared::EnvConfig::for_test_with_home(temp_dir.path())
+        });
+
+        let config =
+            Config { default_node_version: Some("24.11.0".to_string()), ..Default::default() };
+        save_config(&config).await.unwrap();
+        tokio::fs::write(temp_path.join(".node-version"), "20.18.0\n").await.unwrap();
+
+        let resolution = resolve_global_package_version().await.unwrap();
+        assert_eq!(resolution.version, "26.1.0");
+        assert_eq!(resolution.source, VERSION_ENV_VAR);
+        assert!(resolution.project_root.is_none());
     }
 
     #[tokio::test]

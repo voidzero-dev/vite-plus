@@ -16,7 +16,7 @@ use tokio::process::Command;
 use vite_path::{AbsolutePathBuf, current_dir};
 use vite_shared::format_path_prepended;
 
-use crate::{commands::env::config::resolve_version, error::Error};
+use crate::{commands::env::config::resolve_global_package_version, error::Error};
 
 pub mod install;
 pub mod outdated;
@@ -38,10 +38,7 @@ struct NpmRegistry {
 
 impl NpmRegistry {
     async fn resolve() -> Result<Self, Error> {
-        let cwd = current_dir().map_err(|error| {
-            Error::ConfigError(format!("Cannot get current directory: {error}").into())
-        })?;
-        let resolution = resolve_version(&cwd).await?;
+        let resolution = resolve_global_package_version().await?;
         let runtime = vite_js_runtime::download_runtime(
             vite_js_runtime::JsRuntimeType::Node,
             &resolution.version,

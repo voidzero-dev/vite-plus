@@ -17,7 +17,7 @@ use vite_shared::output;
 use crate::{
     commands::{
         self,
-        env::{config::resolve_version, package_metadata::PackageMetadata},
+        env::{config::resolve_global_package_version, package_metadata::PackageMetadata},
         global,
     },
     error::Error,
@@ -816,10 +816,7 @@ async fn managed_update(
 }
 
 async fn get_current_node_version() -> Result<String, Error> {
-    let cwd = vite_path::current_dir().map_err(|error| {
-        Error::ConfigError(format!("Cannot get current directory: {error}").into())
-    })?;
-    Ok(resolve_version(&cwd).await?.version)
+    Ok(resolve_global_package_version().await?.version)
 }
 
 fn should_reinstall_node_mismatches(

@@ -21,8 +21,8 @@ use crate::{
         env::{
             bin_config::BinConfig,
             config::{
-                get_bin_dir, get_node_modules_dir, get_packages_dir, get_tmp_dir, resolve_version,
-                resolve_version_alias,
+                get_bin_dir, get_node_modules_dir, get_packages_dir, get_tmp_dir,
+                resolve_global_package_version, resolve_version_alias,
             },
             package_metadata::PackageMetadata,
         },
@@ -126,16 +126,7 @@ pub async fn install(
             Err(error) => return Err((None, error)),
         }
     } else {
-        // Resolve from current directory
-        let cwd = match current_dir() {
-            Ok(cwd) => cwd,
-            Err(error) => {
-                let error =
-                    Error::ConfigError(format!("Cannot get current directory: {}", error).into());
-                return Err((None, error));
-            }
-        };
-        let resolution = match resolve_version(&cwd).await {
+        let resolution = match resolve_global_package_version().await {
             Ok(resolution) => resolution,
             Err(error) => return Err((None, error)),
         };
