@@ -668,10 +668,94 @@ struct RegistryPackument {
     versions: HashMap<String, serde::de::IgnoredAny>,
 }
 
+/// npm package version metadata used before downloading managed package managers.
+#[derive(Deserialize)]
+struct RegistryPackageVersion {
+    #[serde(default)]
+    dist: RegistryDistInfo,
+}
+
+#[derive(Default, Deserialize)]
+struct RegistryDistInfo {
+    #[serde(default)]
+    attestations: Option<RegistryDistAttestations>,
+}
+
+#[derive(Deserialize)]
+struct RegistryDistAttestations {
+    #[serde(default)]
+    provenance: Option<serde_json::Value>,
+}
+
+impl RegistryPackageVersion {
+    fn has_provenance(&self) -> bool {
+        self.dist
+            .attestations
+            .as_ref()
+            .and_then(|attestations| attestations.provenance.as_ref())
+            .is_some()
+    }
+}
+
 /// Fetch all published versions of a package from the npm registry.
 /// The npm abbreviated metadata format: only install-relevant fields, much
 /// smaller than the full packument (KBs instead of MBs for popular packages).
 const NPM_ABBREVIATED_METADATA_ACCEPT: &str = "application/vnd.npm.install-v1+json";
+
+fn package_manager_requires_provenance(
+    package_manager_type: PackageManagerType,
+    package_name: &str,
+    version: &Version,
+) -> bool {
+    match package_manager_type {
+        PackageManagerType::Pnpm => {
+            VersionReq::parse(">=10.20.0").is_ok_and(|range| range.matches(version))
+        }
+        PackageManagerType::Yarn if package_name == "@yarnpkg/cli-dist" => {
+            VersionReq::parse(">=4.9.3").is_ok_and(|range| range.matches(version))
+        }
+        PackageManagerType::Npm | PackageManagerType::Bun | PackageManagerType::Yarn => false,
+    }
+}
+
+async fn verify_package_manager_provenance(
+    package_manager_type: PackageManagerType,
+    package_name: &str,
+    version: &Str,
+    parsed_version: &Version,
+) -> Result<(), Error> {
+    if !package_manager_requires_provenance(package_manager_type, package_name, parsed_version) {
+        return Ok(());
+    }
+
+    let url = get_npm_package_version_url(package_name, version);
+    let metadata: RegistryPackageVersion =
+        HttpClient::new().get_json(&url).await.map_err(|err| {
+            if let Error::Reqwest(e) = &err
+                && let Some(status) = e.status()
+                && status == reqwest::StatusCode::NOT_FOUND
+            {
+                Error::PackageManagerVersionNotFound {
+                    name: package_manager_type.to_string().into(),
+                    version: version.clone(),
+                    url: url.clone().into(),
+                }
+            } else {
+                err
+            }
+        })?;
+    if metadata.has_provenance() {
+        return Ok(());
+    }
+
+    Err(Error::InvalidArgument(
+        format!(
+            "refusing to install {package_name}@{version} because this package manager release \
+             should include npm provenance attestation"
+        )
+        .into(),
+    ))
+}
 
 async fn fetch_registry_versions(package_name: &str) -> Result<Vec<node_semver::Version>, Error> {
     let url = get_npm_package_metadata_url(package_name);
@@ -855,6 +939,14 @@ pub async fn download_package_manager(
     if matches!(package_manager_type, PackageManagerType::Bun) {
         return download_bun_package_manager(&version, &home_dir).await;
     }
+
+    verify_package_manager_provenance(
+        package_manager_type,
+        &package_name,
+        &version,
+        &parsed_version,
+    )
+    .await?;
 
     let tgz_url = get_npm_package_tgz_url(&package_name, &version);
     // $VP_HOME/package_manager/pnpm/10.0.0
@@ -1496,6 +1588,76 @@ mod tests {
         assert!(!requirement_requests_prerelease(">=10 <12"));
         assert!(!requirement_requests_prerelease("*"));
         assert!(!requirement_requests_prerelease("11.5.1"));
+    }
+
+    #[test]
+    fn test_package_manager_provenance_thresholds() {
+        assert!(!package_manager_requires_provenance(
+            PackageManagerType::Pnpm,
+            "pnpm",
+            &Version::parse("10.19.0").unwrap()
+        ));
+        assert!(package_manager_requires_provenance(
+            PackageManagerType::Pnpm,
+            "pnpm",
+            &Version::parse("10.20.0").unwrap()
+        ));
+        assert!(!package_manager_requires_provenance(
+            PackageManagerType::Yarn,
+            "yarn",
+            &Version::parse("4.9.3").unwrap()
+        ));
+        assert!(!package_manager_requires_provenance(
+            PackageManagerType::Yarn,
+            "@yarnpkg/cli-dist",
+            &Version::parse("4.9.2").unwrap()
+        ));
+        assert!(package_manager_requires_provenance(
+            PackageManagerType::Yarn,
+            "@yarnpkg/cli-dist",
+            &Version::parse("4.9.3").unwrap()
+        ));
+        assert!(!package_manager_requires_provenance(
+            PackageManagerType::Npm,
+            "npm",
+            &Version::parse("11.0.0").unwrap()
+        ));
+        assert!(!package_manager_requires_provenance(
+            PackageManagerType::Bun,
+            "bun",
+            &Version::parse("1.2.0").unwrap()
+        ));
+    }
+
+    #[test]
+    fn test_registry_package_version_detects_provenance() {
+        let metadata: RegistryPackageVersion = serde_json::from_value(serde_json::json!({
+            "dist": {
+                "attestations": {
+                    "url": "https://registry.npmjs.org/-/npm/v1/attestations/pnpm@10.20.0",
+                    "provenance": {
+                        "predicateType": "https://slsa.dev/provenance/v1"
+                    }
+                }
+            }
+        }))
+        .unwrap();
+
+        assert!(metadata.has_provenance());
+    }
+
+    #[test]
+    fn test_registry_package_version_rejects_missing_provenance() {
+        let metadata: RegistryPackageVersion = serde_json::from_value(serde_json::json!({
+            "dist": {
+                "attestations": {
+                    "url": "https://registry.npmjs.org/-/npm/v1/attestations/pnpm@10.20.0"
+                }
+            }
+        }))
+        .unwrap();
+
+        assert!(!metadata.has_provenance());
     }
 
     #[test]
