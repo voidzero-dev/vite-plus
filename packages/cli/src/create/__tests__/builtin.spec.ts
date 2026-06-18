@@ -1,8 +1,11 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { executeBuiltinTemplate } from '../templates/builtin.js';
 
-const { mockLogError } = vi.hoisted(() => ({ mockLogError: vi.fn() }));
+const { mockLogError, mockSetPackageName } = vi.hoisted(() => ({
+  mockLogError: vi.fn(),
+  mockSetPackageName: vi.fn(),
+}));
 
 vi.mock('../templates/remote.js', () => ({
   runRemoteTemplateCommand: vi.fn(),
@@ -10,6 +13,10 @@ vi.mock('../templates/remote.js', () => ({
 
 vi.mock('@voidzero-dev/vite-plus-prompts', () => ({
   log: { error: mockLogError },
+}));
+
+vi.mock('../utils.js', () => ({
+  setPackageName: mockSetPackageName,
 }));
 
 const workspaceInfo = {
@@ -26,6 +33,14 @@ const baseTemplateInfo = {
 };
 
 describe('executeBuiltinTemplate', () => {
+  beforeEach(async () => {
+    mockLogError.mockClear();
+    mockSetPackageName.mockClear();
+    const { runRemoteTemplateCommand } = await import('../templates/remote.js');
+    vi.mocked(runRemoteTemplateCommand).mockReset();
+    vi.mocked(runRemoteTemplateCommand).mockResolvedValue({ exitCode: 0 });
+  });
+
   it('returns exitCode 1 for unknown vite: template', async () => {
     const { runRemoteTemplateCommand } = await import('../templates/remote.js');
 
@@ -39,8 +54,6 @@ describe('executeBuiltinTemplate', () => {
   });
 
   it('shows error message with template name and --list hint', async () => {
-    mockLogError.mockClear();
-
     await executeBuiltinTemplate(workspaceInfo, {
       ...baseTemplateInfo,
       command: 'vite:unknown',
@@ -53,8 +66,6 @@ describe('executeBuiltinTemplate', () => {
   });
 
   it('does not show error message in silent mode', async () => {
-    mockLogError.mockClear();
-
     await executeBuiltinTemplate(
       workspaceInfo,
       { ...baseTemplateInfo, command: 'vite:test' },
@@ -62,5 +73,32 @@ describe('executeBuiltinTemplate', () => {
     );
 
     expect(mockLogError).not.toHaveBeenCalled();
+  });
+
+  it('runs create-vite from the parent directory for nested monorepo applications', async () => {
+    const { runRemoteTemplateCommand } = await import('../templates/remote.js');
+
+    const result = await executeBuiltinTemplate(workspaceInfo, {
+      ...baseTemplateInfo,
+      command: 'vite:application',
+      packageName: '@scope/temperature-symbol',
+      targetDir: 'apps/temperature-symbol',
+    });
+
+    expect(result).toEqual({ exitCode: 0, projectDir: 'apps/temperature-symbol' });
+    expect(runRemoteTemplateCommand).toHaveBeenCalledWith(
+      workspaceInfo,
+      '/tmp/workspace/apps',
+      expect.objectContaining({
+        command: 'create-vite@latest',
+        args: ['temperature-symbol', '--no-interactive'],
+      }),
+      false,
+      false,
+    );
+    expect(mockSetPackageName).toHaveBeenCalledWith(
+      '/tmp/workspace/apps/temperature-symbol',
+      '@scope/temperature-symbol',
+    );
   });
 });

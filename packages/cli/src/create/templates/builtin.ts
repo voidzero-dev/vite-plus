@@ -1,4 +1,5 @@
 import assert from 'node:assert';
+import fs from 'node:fs';
 import path from 'node:path';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
@@ -25,11 +26,33 @@ export async function executeBuiltinTemplate(
   }
 
   if (templateInfo.command === BuiltinTemplate.application) {
+    const parentDir = path.dirname(templateInfo.targetDir);
+    const projectDirName = path.basename(templateInfo.targetDir);
+    const cwd =
+      parentDir === '.'
+        ? workspaceInfo.rootDir
+        : path.join(workspaceInfo.rootDir, parentDir);
+    fs.mkdirSync(cwd, { recursive: true });
+
     templateInfo.command = 'create-vite@latest';
     if (!templateInfo.interactive) {
       templateInfo.args.push('--no-interactive');
     }
-    templateInfo.args.unshift(templateInfo.targetDir);
+    templateInfo.args.unshift(projectDirName);
+
+    const result = await runRemoteTemplateCommand(
+      workspaceInfo,
+      cwd,
+      templateInfo,
+      false,
+      options?.silent ?? false,
+    );
+    if (result.exitCode !== 0) {
+      return { exitCode: result.exitCode };
+    }
+    const fullPath = path.join(workspaceInfo.rootDir, templateInfo.targetDir);
+    setPackageName(fullPath, templateInfo.packageName);
+    return { ...result, projectDir: templateInfo.targetDir };
   } else if (templateInfo.command === BuiltinTemplate.library) {
     // Use degit to download the template directly from GitHub
     const libraryTemplateInfo = discoverTemplate(
