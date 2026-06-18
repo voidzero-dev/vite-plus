@@ -127,6 +127,6 @@ describe('executeBuiltinTemplate', () => {
       false,
       false,
     );
-    expect(mockSetPackageName).toHaveBeenCalledWith('/tmp/workspace', 'workspace');
+    expect(mockSetPackageName).toHaveBeenCalledWith(path.join('/tmp/workspace'), 'workspace');
   });
 });
