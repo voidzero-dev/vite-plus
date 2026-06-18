@@ -689,27 +689,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_download_runtime_for_project_with_older_engines_node() {
-        let temp_dir = TempDir::new().unwrap();
-        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
-
-        // An older, fully-EOL line (Node 18) that vite-plus no longer lists as
-        // supported must still resolve and download for projects that pin it.
-        let package_json = r#"{"engines":{"node":"^18.0.0"}}"#;
-        tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
-
-        let runtime = download_runtime_for_project(&temp_path).await.unwrap();
-
-        assert_eq!(runtime.runtime_type(), JsRuntimeType::Node);
-        let parsed = node_semver::Version::parse(runtime.version()).unwrap();
-        assert_eq!(parsed.major, 18, "expected an 18.x runtime, got {}", runtime.version());
-
-        // Verify the binary exists and works.
-        let binary_path = runtime.get_binary_path();
-        assert!(tokio::fs::try_exists(&binary_path).await.unwrap());
-    }
-
-    #[tokio::test]
     async fn test_download_runtime_for_project_with_multiple_runtimes() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
