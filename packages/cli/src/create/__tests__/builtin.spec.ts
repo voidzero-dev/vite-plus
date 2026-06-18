@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { executeBuiltinTemplate } from '../templates/builtin.js';
@@ -88,7 +90,7 @@ describe('executeBuiltinTemplate', () => {
     expect(result).toEqual({ exitCode: 0, projectDir: 'apps/temperature-symbol' });
     expect(runRemoteTemplateCommand).toHaveBeenCalledWith(
       workspaceInfo,
-      '/tmp/workspace/apps',
+      path.join('/tmp/workspace', 'apps'),
       expect.objectContaining({
         command: 'create-vite@latest',
         args: ['temperature-symbol', '--no-interactive'],
@@ -97,7 +99,7 @@ describe('executeBuiltinTemplate', () => {
       false,
     );
     expect(mockSetPackageName).toHaveBeenCalledWith(
-      '/tmp/workspace/apps/temperature-symbol',
+      path.join('/tmp/workspace', 'apps', 'temperature-symbol'),
       '@scope/temperature-symbol',
     );
   });
