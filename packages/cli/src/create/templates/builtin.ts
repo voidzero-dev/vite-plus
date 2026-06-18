@@ -27,7 +27,10 @@ export async function executeBuiltinTemplate(
 
   if (templateInfo.command === BuiltinTemplate.application) {
     const parentDir = path.dirname(templateInfo.targetDir);
-    const projectDirName = path.basename(templateInfo.targetDir);
+    const projectDirName =
+      templateInfo.targetDir === '.'
+        ? templateInfo.targetDir
+        : path.basename(templateInfo.targetDir);
     const cwd =
       parentDir === '.' ? workspaceInfo.rootDir : path.join(workspaceInfo.rootDir, parentDir);
     fs.mkdirSync(cwd, { recursive: true });

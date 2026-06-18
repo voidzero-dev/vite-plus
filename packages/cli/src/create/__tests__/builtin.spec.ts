@@ -103,4 +103,28 @@ describe('executeBuiltinTemplate', () => {
       '@scope/temperature-symbol',
     );
   });
+
+  it('preserves current-directory application targets', async () => {
+    const { runRemoteTemplateCommand } = await import('../templates/remote.js');
+
+    const result = await executeBuiltinTemplate(workspaceInfo, {
+      ...baseTemplateInfo,
+      command: 'vite:application',
+      packageName: 'workspace',
+      targetDir: '.',
+    });
+
+    expect(result).toEqual({ exitCode: 0, projectDir: '.' });
+    expect(runRemoteTemplateCommand).toHaveBeenCalledWith(
+      workspaceInfo,
+      '/tmp/workspace',
+      expect.objectContaining({
+        command: 'create-vite@latest',
+        args: ['.', '--no-interactive'],
+      }),
+      false,
+      false,
+    );
+    expect(mockSetPackageName).toHaveBeenCalledWith('/tmp/workspace', 'workspace');
+  });
 });
