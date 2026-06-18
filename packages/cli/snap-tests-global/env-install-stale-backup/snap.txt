@@ -17,7 +17,7 @@ stale
   "name": "env-install-stale-backup-cli",
   "package": "@scope/env-install-stale-backup-pkg",
   "version": "1.0.0",
-  "nodeVersion": "22.22.0",
+  "nodeVersion": "24.17.0",
   "source": "vp"
 }
 

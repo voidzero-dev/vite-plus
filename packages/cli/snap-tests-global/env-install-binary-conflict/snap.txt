@@ -8,7 +8,7 @@ info: Installing 1 global package with Node.js <semver>
   "name": "env-binary-conflict-cli",
   "package": "env-binary-conflict-pkg-a",
   "version": "1.0.0",
-  "nodeVersion": "22.22.0",
+  "nodeVersion": "24.17.0",
   "source": "vp"
 }
 [1]> vp install -g ./env-binary-conflict-pkg-b # Try to install pkg-b without force - should fail
@@ -22,7 +22,7 @@ Please remove env-binary-conflict-pkg-a before installing env-binary-conflict-pk
   "name": "env-binary-conflict-cli",
   "package": "env-binary-conflict-pkg-a",
   "version": "1.0.0",
-  "nodeVersion": "22.22.0",
+  "nodeVersion": "24.17.0",
   "source": "vp"
 }
 > vp install -g --force ./env-binary-conflict-pkg-b # Force install pkg-b - should auto-uninstall pkg-a
@@ -37,7 +37,7 @@ Uninstalled env-binary-conflict-pkg-a
   "name": "env-binary-conflict-cli",
   "package": "env-binary-conflict-pkg-b",
   "version": "2.0.0",
-  "nodeVersion": "22.22.0",
+  "nodeVersion": "24.17.0",
   "source": "vp"
 }
 > vp remove -g env-binary-conflict-pkg-b # Cleanup
