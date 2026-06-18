@@ -223,6 +223,18 @@ function Assert-PlatformPackageProvenance {
         Write-Error-Exit "Failed to fetch CLI package metadata from: $metadataUrl`nError: $_"
     }
 
+    if ($metadata -is [string]) {
+        try {
+            $metadata = $metadata | ConvertFrom-Json
+        } catch {
+            Write-Error-Exit "Failed to parse CLI package metadata '${PackageName}@${Version}'`n  URL: $metadataUrl"
+        }
+    }
+
+    if ($metadata.error) {
+        Write-Error-Exit "Failed to fetch CLI package metadata '${PackageName}@${Version}': $($metadata.error)`n  URL: $metadataUrl"
+    }
+
     if (-not $metadata.dist -or -not $metadata.dist.attestations -or -not $metadata.dist.attestations.provenance) {
         Write-Error-Exit "Refusing to install ${PackageName}@${Version} because its npm package metadata does not include provenance attestation."
     }

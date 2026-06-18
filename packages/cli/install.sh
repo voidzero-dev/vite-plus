@@ -377,8 +377,9 @@ verify_platform_package_provenance() {
     error "Failed to fetch CLI package metadata '${package_name}@${package_version}': ${error_msg:-unknown error}\n  URL: $metadata_url"
   fi
 
-  if ! echo "$metadata" | grep -Eq '"attestations" *: *\{' ||
-     ! echo "$metadata" | grep -Eq '"provenance" *: *\{'; then
+  local provenance_pattern
+  provenance_pattern='"dist"[[:space:]]*:[[:space:]]*\{[^}]*"attestations"[[:space:]]*:[[:space:]]*\{[^}]*"provenance"[[:space:]]*:[[:space:]]*\{'
+  if ! printf '%s' "$metadata" | tr -d '\n' | grep -Eq "$provenance_pattern"; then
     error "Refusing to install ${package_name}@${package_version} because its npm package metadata does not include provenance attestation."
   fi
 }
