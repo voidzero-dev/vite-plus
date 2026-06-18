@@ -5,6 +5,8 @@
 ◇ Migrated . to Vite+
 • Node <semver>  pnpm <semver>
 • 1 config update applied
+→ Manual follow-up:
+  - Git hooks were not migrated: Unsupported lint-staged config format — skipping git hooks setup. Please configure git hooks manually.
 
 > cat package.json # check lint-staged NOT added to package.json, husky/lint-staged removed from devDependencies
 {

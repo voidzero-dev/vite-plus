@@ -5,6 +5,8 @@
 ◇ Migrated . to Vite+
 • Node <semver>  pnpm <semver>
 • 1 config update applied
+→ Manual follow-up:
+  - Git hooks were not migrated: Unsupported lint-staged config format — skipping git hooks setup. Please configure git hooks manually.
 
 > cat .lintstagedrc # check .lintstagedrc is not updated
 '*.js':

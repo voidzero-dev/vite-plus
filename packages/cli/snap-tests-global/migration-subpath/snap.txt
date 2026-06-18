@@ -5,6 +5,8 @@
 ◇ Migrated foo to Vite+
 • Node <semver>  pnpm <semver>
 • 1 config update applied
+→ Manual follow-up:
+  - Git hooks were not migrated: Subdirectory project detected — skipping git hooks setup. Configure hooks at the repository root.
 
 > cat foo/package.json # check package.json
 {

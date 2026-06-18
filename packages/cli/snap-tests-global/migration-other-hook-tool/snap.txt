@@ -4,6 +4,8 @@
 ◇ Migrated . to Vite+
 • Node <semver>  pnpm <semver>
 • 1 config update applied
+→ Manual follow-up:
+  - Git hooks were not migrated: Detected simple-git-hooks — skipping git hooks setup. Please configure git hooks manually.
 
 > cat package.json # lint-staged config, scripts, and simple-git-hooks config should all be preserved
 {
