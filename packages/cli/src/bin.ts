@@ -77,9 +77,13 @@ if (command === 'create') {
     }
 
     if (command === 'dev') {
-      const workspaceInfo = await detectWorkspace(process.cwd());
-      if (shouldWarnDevFromMonorepoRoot(command, args, process.cwd(), workspaceInfo)) {
-        warnMsg(formatDevMonorepoRootHint(workspaceInfo));
+      try {
+        const workspaceInfo = await detectWorkspace(process.cwd());
+        if (shouldWarnDevFromMonorepoRoot(command, args, process.cwd(), workspaceInfo)) {
+          warnMsg(formatDevMonorepoRootHint(workspaceInfo));
+        }
+      } catch {
+        // The monorepo-root hint is best-effort; the Rust core owns command validation.
       }
     }
 
