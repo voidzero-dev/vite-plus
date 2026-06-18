@@ -14,8 +14,8 @@
 import { dirname, join } from 'node:path';
 
 import { resolve } from './utils/constants.ts';
-import { resolveTsgolintExecutable } from './utils/tsgolint-path.ts';
 import { createToolResolution, type ToolResolution } from './utils/tool-resolution.ts';
+import { resolveTsgolintExecutable } from './utils/tsgolint-path.ts';
 
 export { resolveWindowsTsgolintExecutable } from './utils/tsgolint-path.ts';
 
