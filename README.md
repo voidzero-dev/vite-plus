@@ -1,8 +1,12 @@
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="/logo-dark.svg">
-  <source media="(prefers-color-scheme: light)" srcset="/logo.svg">
-  <img alt="Vite+" src="/logo.svg">
-</picture>
+<p align="center">
+  <a href="https://viteplus.dev" target="_blank" rel="noopener noreferrer">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="/logo-dark.svg">
+      <source media="(prefers-color-scheme: light)" srcset="/logo.svg">
+      <img alt="Vite+" src="/logo.svg" height="60">
+    </picture>
+  </a>
+</p>
 
 **The Unified Toolchain for the Web**
 _runtime and package management, create, dev, check, test, build, pack, and monorepo task caching in a single dependency_
