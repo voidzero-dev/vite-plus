@@ -1055,7 +1055,7 @@ mod tests {
         // Create package.json with both engines.node and devEngines.runtime
         let package_json = r#"{
   "engines": {"node": "^20.18.0"},
-  "devEngines": {"runtime": {"name": "node", "version": "^22.0.0"}}
+  "devEngines": {"runtime": {"name": "node", "version": "22.13.0"}}
 }"#;
         tokio::fs::write(temp_path.join("package.json"), package_json).await.unwrap();
 

@@ -3,4 +3,7 @@
 v22.13.0
 
 > vp env exec pnpm exec node -v # pnpm should use same project Node version
-v22.13.0
+Already up to date
+
+Done in <variable>ms using pnpm v<semver>
+v<semver>
