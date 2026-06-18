@@ -10,7 +10,7 @@
 
 import { join } from 'node:path';
 
-import { DEFAULT_ENVS } from './utils/constants.ts';
+import { createToolResolution, type ToolResolution } from './utils/tool-resolution.ts';
 
 /**
  * Resolves the Tsdown binary path and environment variables.
@@ -21,18 +21,9 @@ import { DEFAULT_ENVS } from './utils/constants.ts';
  *
  * Tsdown is a tool that provides a library for building JavaScript/TypeScript libraries.
  */
-export async function pack(): Promise<{
-  binPath: string;
-  envs: Record<string, string>;
-}> {
+export async function pack(): Promise<ToolResolution> {
   // Resolve the bundled Tsdown CLI
   const binPath = join(import.meta.dirname, 'pack-bin.js');
 
-  return {
-    binPath,
-    // TODO: provide envs inference API
-    envs: {
-      ...DEFAULT_ENVS,
-    },
-  };
+  return createToolResolution(binPath);
 }

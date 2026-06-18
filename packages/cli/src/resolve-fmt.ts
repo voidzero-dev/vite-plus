@@ -13,7 +13,8 @@
 
 import { dirname, join } from 'node:path';
 
-import { DEFAULT_ENVS, resolve } from './utils/constants.ts';
+import { resolve } from './utils/constants.ts';
+import { createToolResolution, type ToolResolution } from './utils/tool-resolution.ts';
 
 /**
  * Resolves the oxfmt binary path and environment variables.
@@ -25,10 +26,7 @@ import { DEFAULT_ENVS, resolve } from './utils/constants.ts';
  * The environment variables provide runtime context to oxfmt,
  * including Node.js version information and package manager details.
  */
-export async function fmt(): Promise<{
-  binPath: string;
-  envs: Record<string, string>;
-}> {
+export async function fmt(): Promise<ToolResolution> {
   // Resolve the oxfmt package path first, then navigate to the bin file.
   // The bin/oxfmt subpath is not exported in package.json exports, so we
   // resolve the main entry point and derive the bin path from it.
@@ -37,11 +35,5 @@ export async function fmt(): Promise<{
   const oxfmtMainPath = resolve('oxfmt');
   const binPath = join(dirname(dirname(oxfmtMainPath)), 'bin', 'oxfmt');
 
-  return {
-    binPath,
-    // TODO: provide envs inference API
-    envs: {
-      ...DEFAULT_ENVS,
-    },
-  };
+  return createToolResolution(binPath);
 }

@@ -12,7 +12,7 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { DEFAULT_ENVS } from './utils/constants.ts';
+import { createToolResolution, type ToolResolution } from './utils/tool-resolution.ts';
 
 /**
  * Resolves the VitePress binary path and environment variables.
@@ -23,18 +23,9 @@ import { DEFAULT_ENVS } from './utils/constants.ts';
  *
  * The function points to the bundled VitePress in the CLI's dist directory.
  */
-export async function doc(): Promise<{
-  binPath: string;
-  envs: Record<string, string>;
-}> {
+export async function doc(): Promise<ToolResolution> {
   // VitePress's CLI binary is located at bin/vitepress.js relative to the package root
   const binPath = join(dirname(fileURLToPath(import.meta.url)), 'vitepress', 'node', 'cli.js');
 
-  return {
-    binPath,
-    // TODO: provide envs inference API
-    envs: {
-      ...DEFAULT_ENVS,
-    },
-  };
+  return createToolResolution(binPath);
 }

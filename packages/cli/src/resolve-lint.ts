@@ -13,8 +13,9 @@
 
 import { dirname, join } from 'node:path';
 
-import { DEFAULT_ENVS, resolve } from './utils/constants.ts';
+import { resolve } from './utils/constants.ts';
 import { resolveTsgolintExecutable } from './utils/tsgolint-path.ts';
+import { createToolResolution, type ToolResolution } from './utils/tool-resolution.ts';
 
 export { resolveWindowsTsgolintExecutable } from './utils/tsgolint-path.ts';
 
@@ -28,10 +29,7 @@ export { resolveWindowsTsgolintExecutable } from './utils/tsgolint-path.ts';
  * The environment variables provide runtime context to oxlint,
  * including Node.js version information and package manager details.
  */
-export async function lint(): Promise<{
-  binPath: string;
-  envs: Record<string, string>;
-}> {
+export async function lint(): Promise<ToolResolution> {
   // Resolve the oxlint package path first, then navigate to the bin file.
   // The bin/oxlint subpath is not exported in package.json exports, so we
   // resolve the main entry point and derive the bin path from it.
@@ -44,13 +42,7 @@ export async function lint(): Promise<{
     resolve('oxlint-tsgolint/bin/tsgolint'),
     import.meta.url,
   );
-  const result = {
-    binPath,
-    // TODO: provide envs inference API
-    envs: {
-      ...DEFAULT_ENVS,
-      OXLINT_TSGOLINT_PATH: oxlintTsgolintPath,
-    },
-  };
-  return result;
+  return createToolResolution(binPath, {
+    OXLINT_TSGOLINT_PATH: oxlintTsgolintPath,
+  });
 }
