@@ -1,16 +1,16 @@
-import fs from 'node:fs';
-import path from 'node:path';
+import fs from "node:fs";
+import path from "node:path";
 
-import validateNpmPackageName from 'validate-npm-package-name';
+import validateNpmPackageName from "validate-npm-package-name";
 
-import { editJsonFile } from '../utils/json.ts';
-import { getRandomProjectName } from './random-name.ts';
+import { editJsonFile } from "../utils/json.ts";
+import { getRandomProjectName } from "./random-name.ts";
 
 export type CreateEditorOption = string | false | undefined;
 type ParsedCreateEditorOption = CreateEditorOption | CreateEditorOption[];
 
 function hasExplicitEditorOptIn(editor: CreateEditorOption): boolean {
-  return typeof editor === 'string' && editor.trim() !== '';
+  return typeof editor === "string" && editor.trim() !== "";
 }
 
 export function normalizeEditorOption(editor: ParsedCreateEditorOption): CreateEditorOption {
@@ -20,7 +20,7 @@ export function normalizeEditorOption(editor: ParsedCreateEditorOption): CreateE
   if (editor.includes(false)) {
     return false;
   }
-  return editor.findLast((value): value is string => typeof value === 'string');
+  return editor.findLast((value): value is string => typeof value === "string");
 }
 
 export function shouldConfigureEditorsForCreate({
@@ -88,28 +88,28 @@ export function formatTargetDir(input: string): {
   let targetDir = path.normalize(input.trim());
 
   // "." or "./" means current directory — valid directory, but no package name derivable
-  if (targetDir === '.' || targetDir === `.${path.sep}`) {
-    return { directory: '.', packageName: '' };
+  if (targetDir === "." || targetDir === `.${path.sep}`) {
+    return { directory: ".", packageName: "" };
   }
 
   const parsed = path.parse(targetDir);
   if (parsed.root || path.isAbsolute(targetDir)) {
     return {
-      directory: '',
-      packageName: '',
-      error: 'Absolute path is not allowed',
+      directory: "",
+      packageName: "",
+      error: "Absolute path is not allowed",
     };
   }
-  if (targetDir.includes('..')) {
+  if (targetDir.includes("..")) {
     return {
-      directory: '',
-      packageName: '',
+      directory: "",
+      packageName: "",
       error: 'Relative path contains ".." which is not allowed',
     };
   }
   let packageName = parsed.base;
   const parentName = path.basename(parsed.dir);
-  if (parentName.startsWith('@')) {
+  if (parentName.startsWith("@")) {
     // skip scope directory
     // ./@my-scope/my-package -> ./my-package
     targetDir = path.join(path.dirname(parsed.dir), packageName);
@@ -118,56 +118,60 @@ export function formatTargetDir(input: string): {
   const result = validateNpmPackageName(packageName);
   if (!result.validForNewPackages) {
     // invalid package name
-    const message = result.errors?.[0] ?? result.warnings?.[0] ?? 'Invalid package name';
+    const message = result.errors?.[0] ?? result.warnings?.[0] ?? "Invalid package name";
     return {
-      directory: '',
-      packageName: '',
+      directory: "",
+      packageName: "",
       error: `Parsed package name "${packageName}" is invalid: ${message}`,
     };
   }
-  return { directory: targetDir.split(path.sep).join('/'), packageName };
+  return { directory: targetDir.split(path.sep).join("/"), packageName };
 }
 
 // Get the project directory from the project name
 // If the project name is a scoped package name, return the second part
 // Otherwise, return the project name
 export function getProjectDirFromPackageName(packageName: string) {
-  if (packageName.startsWith('@')) {
-    return packageName.split('/')[1];
+  if (packageName.startsWith("@")) {
+    return packageName.split("/")[1];
   }
   return packageName;
 }
 
 export function setPackageName(projectDir: string, packageName: string) {
-  editJsonFile<{ name?: string }>(path.join(projectDir, 'package.json'), (pkg) => {
+  editJsonFile<{ name?: string }>(path.join(projectDir, "package.json"), (pkg) => {
     pkg.name = packageName;
     return pkg;
   });
 }
 
 export function removeSrcOnlyTsconfigInclude(projectDir: string): void {
-  const tsconfigPath = path.join(projectDir, 'tsconfig.json');
+  const tsconfigPath = path.join(projectDir, "tsconfig.json");
   if (!fs.existsSync(tsconfigPath)) {
     return;
   }
 
-  editJsonFile<{ include?: unknown }>(tsconfigPath, (tsconfig) => {
-    if (
-      Array.isArray(tsconfig.include) &&
-      tsconfig.include.length === 1 &&
-      tsconfig.include[0] === 'src'
-    ) {
-      delete tsconfig.include;
-      return tsconfig;
-    }
-    return undefined;
-  });
+  editJsonFile<{ include?: unknown }>(
+    tsconfigPath,
+    (tsconfig) => {
+      if (
+        Array.isArray(tsconfig.include) &&
+        tsconfig.include.length === 1 &&
+        tsconfig.include[0] === "src"
+      ) {
+        delete tsconfig.include;
+        return tsconfig;
+      }
+      return undefined;
+    },
+    true,
+  );
 }
 
 const RENAME_FILES = {
-  _gitignore: '.gitignore',
-  _npmrc: '.npmrc',
-  '_yarnrc.yml': '.yarnrc.yml',
+  _gitignore: ".gitignore",
+  _npmrc: ".npmrc",
+  "_yarnrc.yml": ".yarnrc.yml",
 } as const;
 
 /** Rename underscore-prefixed scaffold files to their dotfile names in `projectDir`. */
@@ -189,24 +193,24 @@ export function renameFiles(projectDir: string): void {
  * `.gitignore` already lists `node_modules`.
  */
 export function ensureGitignoreNodeModules(projectDir: string): void {
-  const gitignorePath = path.join(projectDir, '.gitignore');
-  let content = '';
+  const gitignorePath = path.join(projectDir, ".gitignore");
+  let content = "";
   try {
-    content = fs.readFileSync(gitignorePath, 'utf-8');
+    content = fs.readFileSync(gitignorePath, "utf-8");
   } catch {
     // No existing .gitignore — we'll write a fresh one below.
   }
   if (/^\s*node_modules\/?\s*$/m.test(content)) {
     return;
   }
-  const prefix = content === '' || content.endsWith('\n') ? '' : '\n';
+  const prefix = content === "" || content.endsWith("\n") ? "" : "\n";
   fs.appendFileSync(gitignorePath, `${prefix}node_modules\n`);
 }
 
-const VSCODE_SETTINGS_PATH = '.vscode/settings.json';
-const VSCODE_EXTENSIONS_PATH = '.vscode/extensions.json';
+const VSCODE_SETTINGS_PATH = ".vscode/settings.json";
+const VSCODE_EXTENSIONS_PATH = ".vscode/extensions.json";
 const VSCODE_CONFIG_UNIGNORE_BLOCK = [
-  '!.vscode/',
+  "!.vscode/",
   `!${VSCODE_SETTINGS_PATH}`,
   `!${VSCODE_EXTENSIONS_PATH}`,
 ] as const;
@@ -219,10 +223,10 @@ export function ensureGitignoreVsCodeEditorConfigs(projectDir: string): void {
     return;
   }
 
-  const gitignorePath = path.join(projectDir, '.gitignore');
+  const gitignorePath = path.join(projectDir, ".gitignore");
   let content: string;
   try {
-    content = fs.readFileSync(gitignorePath, 'utf-8');
+    content = fs.readFileSync(gitignorePath, "utf-8");
   } catch {
     return;
   }
@@ -231,7 +235,7 @@ export function ensureGitignoreVsCodeEditorConfigs(projectDir: string): void {
 }
 
 function appendGitignoreVsCodeEditorConfigsBlock(gitignorePath: string, content: string): void {
-  if (content.trimEnd().endsWith(VSCODE_CONFIG_UNIGNORE_BLOCK.join('\n'))) {
+  if (content.trimEnd().endsWith(VSCODE_CONFIG_UNIGNORE_BLOCK.join("\n"))) {
     return;
   }
   appendGitignoreLines(gitignorePath, content, VSCODE_CONFIG_UNIGNORE_BLOCK);
@@ -245,20 +249,20 @@ function appendGitignoreLines(
   if (lines.length === 0) {
     return;
   }
-  const prefix = content === '' || content.endsWith('\n') ? '' : '\n';
-  fs.appendFileSync(gitignorePath, `${prefix}${lines.join('\n')}\n`);
+  const prefix = content === "" || content.endsWith("\n") ? "" : "\n";
+  fs.appendFileSync(gitignorePath, `${prefix}${lines.join("\n")}\n`);
 }
 
 export function formatDisplayTargetDir(targetDir: string) {
-  const normalized = targetDir.split(path.sep).join('/');
-  if (normalized === '' || normalized === '.') {
-    return './';
+  const normalized = targetDir.split(path.sep).join("/");
+  if (normalized === "" || normalized === ".") {
+    return "./";
   }
   if (
-    normalized.startsWith('./') ||
-    normalized.startsWith('../') ||
-    normalized.startsWith('/') ||
-    normalized.startsWith('~')
+    normalized.startsWith("./") ||
+    normalized.startsWith("../") ||
+    normalized.startsWith("/") ||
+    normalized.startsWith("~")
   ) {
     return normalized;
   }
