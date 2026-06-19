@@ -62,6 +62,12 @@ vp --version
 
 This builds all packages, compiles the Rust `vp` binary, and installs the CLI to `~/.vite-plus`.
 
+To switch back to a release version, use `vp upgrade --force` (`current` points to `local-dev-*` but the binary version may still match the release, so `--force` is needed)
+
+```bash
+vp upgrade --force
+```
+
 ## Validate the local build against a real project
 
 Unit and snap tests don't cover everything. Interactive flows in particular (prompts, pickers, scaffolding) are easiest to validate by running your work-in-progress CLI inside a real Vite+ project.
