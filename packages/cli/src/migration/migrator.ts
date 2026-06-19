@@ -105,12 +105,19 @@ const PLAYWRIGHT_PROVIDER = '@vitest/browser-playwright';
 // forcing pins dropped, while their catalog entries are PRESERVED.
 const OPT_IN_BROWSER_PROVIDERS = [WEBDRIVERIO_PROVIDER, PLAYWRIGHT_PROVIDER] as const;
 
-// Coverage providers are project-installed peers (NOT bundled by vite-plus).
-// Vitest pins each to an exact runner version, and the `define-config.ts` guard
-// fail-fasts when an installed provider skews from the bundled vitest (Vitest
-// otherwise runs mixed versions and yields unreliable coverage). The upgrade
-// aligns any the project lists to the bundled `VITEST_VERSION`.
-const VITEST_COVERAGE_PROVIDERS = ['@vitest/coverage-v8', '@vitest/coverage-istanbul'] as const;
+// Official `@vitest/*` packages are versioned in lockstep with vitest and carry
+// an EXACT `vitest` peer (verified against the registry: `@vitest/coverage-v8`,
+// `@vitest/coverage-istanbul`, `@vitest/ui`, `@vitest/web-worker`, the browser
+// family, and the runtime internals all pin `vitest: <version>`), so any the
+// project lists must match the bundled vitest or Vitest runs mixed copies (the
+// `define-config.ts` coverage guard fail-fasts on exactly this skew).
+// `@vitest/eslint-plugin` is the exception: it versions on its own line with a
+// `vitest: *` peer, so it must NOT be pinned to the vitest version.
+const VITEST_ALIGN_EXCLUDED = new Set(['@vitest/eslint-plugin']);
+
+function isAlignableVitestEcosystemPackage(name: string): boolean {
+  return name.startsWith('@vitest/') && !VITEST_ALIGN_EXCLUDED.has(name);
+}
 
 // Provider names whose stale pnpm overrides / resolutions are dropped during
 // migration: everything vite-plus owns (REMOVE_PACKAGES) plus the user-owned
@@ -3723,16 +3730,19 @@ function pnpmConfigLivesInPackageJson(
   );
 }
 
-// Pin any coverage provider the project lists to the bundled vitest version.
-// Returns true if any spec changed. Providers are plain dependency entries
-// (not overrides), so this is package-manager agnostic.
-function alignVitestCoverageProviders(pkg: BootstrapPackageJson): boolean {
+// Pin every alignable `@vitest/*` package the project lists to the bundled
+// vitest version. Returns true if any spec changed. These are plain dependency
+// entries (not overrides), so this is package-manager agnostic.
+function alignVitestEcosystemPackages(pkg: BootstrapPackageJson): boolean {
   const dependencyGroups = [pkg.devDependencies, pkg.dependencies, pkg.optionalDependencies];
   let changed = false;
-  for (const provider of VITEST_COVERAGE_PROVIDERS) {
-    for (const dependencies of dependencyGroups) {
-      if (dependencies?.[provider] !== undefined && dependencies[provider] !== VITEST_VERSION) {
-        dependencies[provider] = VITEST_VERSION;
+  for (const dependencies of dependencyGroups) {
+    if (!dependencies) {
+      continue;
+    }
+    for (const name of Object.keys(dependencies)) {
+      if (isAlignableVitestEcosystemPackage(name) && dependencies[name] !== VITEST_VERSION) {
+        dependencies[name] = VITEST_VERSION;
         changed = true;
       }
     }
@@ -3740,15 +3750,17 @@ function alignVitestCoverageProviders(pkg: BootstrapPackageJson): boolean {
   return changed;
 }
 
-// True when the project lists a coverage provider at a version other than the
-// bundled vitest, so the bootstrap should run to realign it.
-function vitestCoverageProvidersPending(pkg: BootstrapPackageJson): boolean {
+// True when the project lists an alignable `@vitest/*` package at a version
+// other than the bundled vitest, so the bootstrap should run to realign it.
+function vitestEcosystemPackagesPending(pkg: BootstrapPackageJson): boolean {
   const dependencyGroups = [pkg.devDependencies, pkg.dependencies, pkg.optionalDependencies];
-  return VITEST_COVERAGE_PROVIDERS.some((provider) =>
-    dependencyGroups.some(
-      (dependencies) =>
-        dependencies?.[provider] !== undefined && dependencies[provider] !== VITEST_VERSION,
-    ),
+  return dependencyGroups.some((dependencies) =>
+    dependencies
+      ? Object.keys(dependencies).some(
+          (name) =>
+            isAlignableVitestEcosystemPackage(name) && dependencies[name] !== VITEST_VERSION,
+        )
+      : false,
   );
 }
 
@@ -3770,9 +3782,9 @@ export function detectVitePlusBootstrapPending(
     return true;
   }
 
-  // A coverage provider skewed from the bundled vitest needs realigning,
-  // independent of the package manager's override shape.
-  if (vitestCoverageProvidersPending(pkg)) {
+  // A `@vitest/*` ecosystem package skewed from the bundled vitest needs
+  // realigning, independent of the package manager's override shape.
+  if (vitestEcosystemPackagesPending(pkg)) {
     return true;
   }
 
@@ -4000,7 +4012,7 @@ export function ensureVitePlusBootstrap(
       pkg,
       supportCatalog ? 'catalog:' : VITE_PLUS_VERSION,
     );
-    packageJsonChanged = alignVitestCoverageProviders(pkg) || packageJsonChanged;
+    packageJsonChanged = alignVitestEcosystemPackages(pkg) || packageJsonChanged;
     if (workspaceInfo.packageManager === PackageManager.npm) {
       packageJsonChanged = ensureNpmVitePlusManagedDependencies(pkg, usesVitest) || packageJsonChanged;
     }

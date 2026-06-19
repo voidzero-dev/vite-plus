@@ -1547,6 +1547,39 @@ describe('ensureVitePlusBootstrap', () => {
     expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(false);
   });
 
+  it('aligns the full @vitest/* ecosystem (ui, web-worker) but leaves @vitest/eslint-plugin alone', () => {
+    // Every official @vitest/* package carries an exact `vitest` peer, so each
+    // must match the bundled vitest. @vitest/eslint-plugin versions on its own
+    // line (`vitest: *` peer) and must NOT be pinned to the vitest version.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: {
+          'vite-plus': 'latest',
+          '@vitest/ui': '^4.1.0',
+          '@vitest/web-worker': '^4.1.0',
+          '@vitest/eslint-plugin': '^1.0.0',
+        },
+        overrides: {
+          vite: 'npm:@voidzero-dev/vite-plus-core@latest',
+        },
+        devEngines: {
+          packageManager: { name: 'npm', version: '10.33.0', onFail: 'download' },
+        },
+      }),
+    );
+
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.npm));
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    expect(pkg.devDependencies['@vitest/ui']).toBe(VITEST_VERSION);
+    expect(pkg.devDependencies['@vitest/web-worker']).toBe(VITEST_VERSION);
+    expect(pkg.devDependencies['@vitest/eslint-plugin']).toBe('^1.0.0');
+  });
+
   it('removes a stale vitest wrapper override for a common-case npm project (no @vitest/* dep, no vitest source)', () => {
     // v0.2.1 spec: vite-plus consumes upstream vitest directly, so a project that
     // does NOT use vitest directly must NOT carry a managed `vitest` override —
