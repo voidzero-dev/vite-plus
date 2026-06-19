@@ -46,6 +46,7 @@ pub enum PackageManagerType {
     Yarn,
     Npm,
     Bun,
+    Deno,
 }
 
 impl fmt::Display for PackageManagerType {
@@ -55,6 +56,7 @@ impl fmt::Display for PackageManagerType {
             Self::Yarn => write!(f, "yarn"),
             Self::Npm => write!(f, "npm"),
             Self::Bun => write!(f, "bun"),
+            Self::Deno => write!(f, "deno"),
         }
     }
 }
@@ -69,6 +71,7 @@ impl PackageManagerType {
             "pnpm" | "pnpx" => Some(Self::Pnpm),
             "yarn" | "yarnpkg" => Some(Self::Yarn),
             "bun" | "bunx" => Some(Self::Bun),
+            "deno" => Some(Self::Deno),
             _ => None,
         }
     }
@@ -84,6 +87,7 @@ impl PackageManagerType {
             "yarn" => Some(Self::Yarn),
             "npm" => Some(Self::Npm),
             "bun" => Some(Self::Bun),
+            "deno" => Some(Self::Deno),
             _ => None,
         }
     }
@@ -101,6 +105,7 @@ impl PackageManagerType {
             (_, Self::Pnpm) => "pnpm",
             (_, Self::Yarn) => "yarn",
             (_, Self::Bun) => "bun",
+            (_, Self::Deno) => "deno",
         }
     }
 }
@@ -312,6 +317,17 @@ pub fn get_package_manager_type_and_version(
     let bun_lockb_path = workspace_root.path.join("bun.lockb");
     if is_exists_file(&bun_lockb_path)? {
         return Ok((PackageManagerType::Bun, version, None, source));
+    }
+
+    // if deno.json, deno.jsonc, or deno.lock exists, use deno@latest (experimental)
+    let deno_json_path = workspace_root.path.join("deno.json");
+    let deno_jsonc_path = workspace_root.path.join("deno.jsonc");
+    let deno_lock_path = workspace_root.path.join("deno.lock");
+    if is_exists_file(&deno_json_path)?
+        || is_exists_file(&deno_jsonc_path)?
+        || is_exists_file(&deno_lock_path)?
+    {
+        return Ok((PackageManagerType::Deno, version, None, source));
     }
 
     // if .pnpmfile.cjs exists, use pnpm@latest
@@ -813,6 +829,15 @@ pub async fn download_package_manager(
     version_or_latest: &str,
     expected_hash: Option<&str>,
 ) -> Result<(AbsolutePathBuf, Str, Str), Error> {
+    // Deno is expected to be installed system-wide; Vite+ does not download it.
+    if matches!(package_manager_type, PackageManagerType::Deno) {
+        return Err(Error::UnsupportedPackageManager(
+            "Deno package manager support is experimental and not yet fully implemented. \
+             Please install Deno separately and follow https://github.com/voidzero-dev/vite-plus/issues/1886."
+                .into(),
+        ));
+    }
+
     let version: Str = if version_or_latest == "latest" {
         get_latest_version(package_manager_type).await?
     } else if Version::parse(version_or_latest).is_ok() {
@@ -1112,6 +1137,11 @@ async fn create_shim_files(
             let bin_prefix = bin_prefix.as_ref();
             return create_bun_shim_files(bin_prefix).await;
         }
+        PackageManagerType::Deno => {
+            // deno is a native binary distributed separately; shims are not
+            // created here. The system `deno` binary is invoked directly.
+            return Ok(());
+        }
     }
 
     let bin_prefix = bin_prefix.as_ref();
@@ -1253,6 +1283,7 @@ fn interactive_package_manager_menu() -> Result<PackageManagerType, Error> {
         ("npm", PackageManagerType::Npm),
         ("yarn", PackageManagerType::Yarn),
         ("bun", PackageManagerType::Bun),
+        ("deno (experimental)", PackageManagerType::Deno),
     ];
 
     let mut selected_index = 0;
@@ -1377,16 +1408,17 @@ fn interactive_package_manager_menu() -> Result<PackageManagerType, Error> {
     terminal::disable_raw_mode()?;
     execute!(io::stdout(), cursor::Show, cursor::MoveDown(options.len() as u16), Print("\n"))?;
 
-    // Print selection confirmation
-    if let Ok(pm) = &result {
-        let name = match pm {
-            PackageManagerType::Pnpm => "pnpm",
-            PackageManagerType::Npm => "npm",
-            PackageManagerType::Yarn => "yarn",
-            PackageManagerType::Bun => "bun",
-        };
-        println!("\n✓ Selected package manager: {name}\n");
-    }
+        // Print selection confirmation
+        if let Ok(pm) = &result {
+            let name = match pm {
+                PackageManagerType::Pnpm => "pnpm",
+                PackageManagerType::Npm => "npm",
+                PackageManagerType::Yarn => "yarn",
+                PackageManagerType::Bun => "bun",
+                PackageManagerType::Deno => "deno",
+            };
+            println!("\n✓ Selected package manager: {name}\n");
+        }
 
     result
 }
@@ -1425,6 +1457,7 @@ fn simple_text_prompt() -> Result<PackageManagerType, Error> {
         ("npm", PackageManagerType::Npm),
         ("yarn", PackageManagerType::Yarn),
         ("bun", PackageManagerType::Bun),
+        ("deno", PackageManagerType::Deno),
     ];
 
     println!("\nNo package manager detected. Please select one:");

@@ -4,7 +4,7 @@
 
 ## Overview
 
-Use Vite+ to manage dependencies across pnpm, npm, Yarn, and Bun. Instead of switching between `pnpm install`, `npm install`, `yarn install`, and `bun install`, you can keep using `vp install`, `vp add`, `vp remove`, and the rest of the Vite+ package-management commands.
+Use Vite+ to manage dependencies across pnpm, npm, Yarn, Bun, and Deno (experimental). Instead of switching between `pnpm install`, `npm install`, `yarn install`, `bun install`, and `deno install`, you can keep using `vp install`, `vp add`, `vp remove`, and the rest of the Vite+ package-management commands.
 
 Vite+ detects the package manager from the workspace root in this order:
 
@@ -15,9 +15,10 @@ Vite+ detects the package manager from the workspace root in this order:
 5. `yarn.lock` or `.yarnrc.yml`
 6. `package-lock.json`
 7. `bun.lock` or `bun.lockb`
-8. `.pnpmfile.cjs` or `pnpmfile.cjs`
-9. `bunfig.toml`
-10. `yarn.config.cjs`
+8. `deno.json`, `deno.jsonc`, or `deno.lock` (experimental)
+9. `.pnpmfile.cjs` or `pnpmfile.cjs`
+10. `bunfig.toml`
+11. `yarn.config.cjs`
 
 If none of those files are present, `vp` falls back to `pnpm` by default. Vite+ automatically downloads the matching package manager and uses it for the command you ran. When detection comes from lockfiles or config files, the resolved version is written to `devEngines.packageManager` so future runs are deterministic; projects that already declare `packageManager` or `devEngines.packageManager` are left as-is.
 

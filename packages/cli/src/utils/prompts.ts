@@ -56,6 +56,7 @@ export async function selectPackageManager(interactive?: boolean, silent = false
         { value: PackageManager.yarn },
         { value: PackageManager.npm },
         { value: PackageManager.bun },
+        { value: PackageManager.deno },
       ],
       initialValue: PackageManager.pnpm,
     });
@@ -80,6 +81,18 @@ export async function downloadPackageManager(
   interactive?: boolean,
   silent = false,
 ) {
+  // Deno is expected to be installed system-wide; do not try to download it
+  // from the npm registry.
+  if (packageManager === PackageManager.deno) {
+    return {
+      name: PackageManager.deno,
+      version: 'system',
+      binPrefix: '',
+      installDir: '',
+      packageName: PackageManager.deno,
+    };
+  }
+
   const spinner = silent ? getSilentSpinner() : getSpinner(interactive);
   spinner.start(`${packageManager}@${version} installing...`);
   const downloadResult = await downloadPackageManagerBinding({
