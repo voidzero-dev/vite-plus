@@ -1178,6 +1178,7 @@ async function main() {
     const vitePlusBootstrapPending = detectVitePlusBootstrapPending(
       workspaceInfoOptional.rootDir,
       workspaceInfoOptional.packageManager,
+      workspaceInfoOptional.packages,
     );
     let packageManager: PackageManager | undefined = vitePlusBootstrapPending
       ? (workspaceInfoOptional.packageManager ??

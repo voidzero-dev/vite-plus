@@ -1,7 +1,7 @@
 > vp migrate --no-agent --no-interactive # migration with --no-agent should skip agent instructions
 ◇ Migrated . to Vite+
 • Node <semver>  pnpm <semver>
-• 2 config updates applied
+• 2 config updates applied, 1 file had imports rewritten
 
 > ls -la | grep -E '(AGENTS|CLAUDE)' || echo 'No agent file created' # verify no agent file was created
 No agent file created

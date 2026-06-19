@@ -60,13 +60,11 @@ export default defineConfig({
   "devDependencies": {
     "@vitejs/plugin-react": "catalog:",
     "vite": "catalog:",
-    "vitest": "catalog:",
     "vite-plus": "catalog:"
   },
   "packageManager": "yarn@<semver>",
   "resolutions": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vitest": "<semver>"
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest"
   }
 }
 
@@ -77,7 +75,6 @@ npmPreapprovedPackages:
   - '@vitest/*'
 catalog:
   vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: <semver>
   vite-plus: latest
 
 > cat packages/app/package.json # check app package.json
@@ -96,7 +93,6 @@ catalog:
   "devDependencies": {
     "test-vite-plus-package": "1.0.0",
     "vite": "catalog:",
-    "vitest": "catalog:",
     "vite-plus": "catalog:"
   },
   "optionalDependencies": {
@@ -117,7 +113,6 @@ catalog:
   },
   "devDependencies": {
     "vite": "catalog:",
-    "vitest": "catalog:",
     "vite-plus": "catalog:"
   }
 }

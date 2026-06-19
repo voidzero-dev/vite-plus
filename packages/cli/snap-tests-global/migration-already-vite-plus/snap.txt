@@ -15,8 +15,7 @@
     "vite-plus": "latest"
   },
   "overrides": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vitest": "<semver>"
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest"
   },
   "devEngines": {
     "packageManager": {

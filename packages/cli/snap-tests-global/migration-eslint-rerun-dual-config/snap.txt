@@ -12,7 +12,7 @@
     "lint": "vp lint ."
   },
   "devDependencies": {
-    "vite-plus": "latest"
+    "vite-plus": "catalog:"
   },
   "devEngines": {
     "packageManager": {

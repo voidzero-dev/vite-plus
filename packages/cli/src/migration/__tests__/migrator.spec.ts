@@ -1510,6 +1510,11 @@ describe('ensureVitePlusBootstrap', () => {
     // The deleted wrapper alias must no longer survive in the workspace.yaml.
     const workspaceRaw = fs.readFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'utf-8');
     expect(workspaceRaw).not.toContain('@voidzero-dev/vite-plus-test');
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    expect(pkg.devDependencies.vitest).toBe('catalog:');
+    expect(JSON.stringify(pkg)).not.toContain('@voidzero-dev/vite-plus-test');
 
     // And the project must not be left pending (no stale wrapper override anywhere).
     expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
@@ -1544,6 +1549,7 @@ describe('ensureVitePlusBootstrap', () => {
       devDependencies: Record<string, string>;
     };
     expect(pkg.devDependencies['@vitest/coverage-v8']).toBe(VITEST_VERSION);
+    expect(pkg.devDependencies.vitest).toBe(VITEST_VERSION);
     expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(false);
   });
 
@@ -1578,6 +1584,161 @@ describe('ensureVitePlusBootstrap', () => {
     expect(pkg.devDependencies['@vitest/ui']).toBe(VITEST_VERSION);
     expect(pkg.devDependencies['@vitest/web-worker']).toBe(VITEST_VERSION);
     expect(pkg.devDependencies['@vitest/eslint-plugin']).toBe('^1.0.0');
+    expect(pkg.devDependencies.vitest).toBe(VITEST_VERSION);
+  });
+
+  it('does not treat @vitest/eslint-plugin as runner usage', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: {
+          'vite-plus': 'latest',
+          '@vitest/eslint-plugin': '^1.6.0',
+          '@vitest/utils': '^4.1.8',
+          vitest: '4.1.8',
+        },
+        overrides: {
+          vite: 'npm:@voidzero-dev/vite-plus-core@latest',
+          vitest: '4.1.8',
+        },
+        devEngines: {
+          packageManager: { name: 'npm', version: '10.33.0', onFail: 'download' },
+        },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'eslint.config.js'),
+      "import vitest from '@vitest/eslint-plugin';\nimport { diff } from '@vitest/utils';\nexport default [vitest.configs.recommended, diff];\n",
+    );
+
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.npm));
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+      overrides: Record<string, string>;
+    };
+    expect(pkg.devDependencies['@vitest/eslint-plugin']).toBe('^1.6.0');
+    expect(pkg.devDependencies['@vitest/utils']).toBe(VITEST_VERSION);
+    expect(pkg.devDependencies.vitest).toBeUndefined();
+    expect(pkg.overrides.vitest).toBeUndefined();
+  });
+
+  it('reconciles vitest and vite-plus in the workspace package that needs them', () => {
+    const appDir = path.join(tmpDir, 'packages/app');
+    fs.mkdirSync(appDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'root',
+        private: true,
+        devDependencies: { 'vite-plus': 'catalog:' },
+        devEngines: {
+          packageManager: { name: 'pnpm', version: '10.33.0', onFail: 'download' },
+        },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(appDir, 'package.json'),
+      JSON.stringify({
+        name: 'app',
+        devDependencies: {
+          'vite-plus': '^0.1.24',
+          vitest: 'npm:@voidzero-dev/vite-plus-test@^0.1.24',
+          '@vitest/ui': '^4.1.8',
+        },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'packages:',
+        '  - packages/*',
+        'catalog:',
+        '  vite-plus: latest',
+        '  vite: npm:@voidzero-dev/vite-plus-core@latest',
+        'overrides:',
+        "  vite: 'catalog:'",
+        'peerDependencyRules:',
+        '  allowAny: [vite]',
+        '  allowedVersions:',
+        "    vite: '*'",
+        '',
+      ].join('\n'),
+    );
+    const workspaceInfo = {
+      ...makeWorkspaceInfo(tmpDir, PackageManager.pnpm),
+      isMonorepo: true,
+      workspacePatterns: ['packages/*'],
+      packages: [{ name: 'app', path: 'packages/app' }],
+    };
+
+    expect(
+      detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm, workspaceInfo.packages),
+    ).toBe(true);
+    ensureVitePlusBootstrap(workspaceInfo);
+
+    const rootPkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    const appPkg = readJson(path.join(appDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    expect(rootPkg.devDependencies.vitest).toBeUndefined();
+    expect(appPkg.devDependencies['vite-plus']).toBe('catalog:');
+    expect(appPkg.devDependencies['@vitest/ui']).toBe(VITEST_VERSION);
+    expect(appPkg.devDependencies.vitest).toBe('catalog:');
+    expect(JSON.stringify(appPkg)).not.toContain('@voidzero-dev/vite-plus-test');
+    expect(
+      detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm, workspaceInfo.packages),
+    ).toBe(false);
+  });
+
+  it('restores an opt-in browser provider used only through a Vite+ shim', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'browser-app',
+        devDependencies: { 'vite-plus': 'catalog:' },
+        devEngines: {
+          packageManager: { name: 'pnpm', version: '10.33.0', onFail: 'download' },
+        },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'vite.config.ts'),
+      [
+        "import { defineConfig } from 'vite-plus';",
+        "import { playwright } from 'vite-plus/test/browser-playwright';",
+        'export default defineConfig({ test: { browser: { enabled: true, provider: playwright() } } });',
+      ].join('\n'),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'catalog:',
+        '  vite-plus: latest',
+        '  vite: npm:@voidzero-dev/vite-plus-core@latest',
+        'overrides:',
+        "  vite: 'catalog:'",
+        'peerDependencyRules:',
+        '  allowAny: [vite]',
+        '  allowedVersions:',
+        "    vite: '*'",
+        '',
+      ].join('\n'),
+    );
+
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(true);
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm));
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    expect(pkg.devDependencies['@vitest/browser-playwright']).toBe(VITEST_VERSION);
+    expect(pkg.devDependencies.playwright).toBe('*');
+    expect(pkg.devDependencies.vitest).toBe('catalog:');
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
   });
 
   it('removes a stale vitest wrapper override for a common-case npm project (no @vitest/* dep, no vitest source)', () => {
@@ -2399,11 +2560,9 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(overrides['some-pkg']['@vitest/browser-playwright']).toBe('4.0.0');
   });
 
-  it('leaves an already-declared coverage provider untouched (no pin, no override)', () => {
-    // Coverage providers are vitest PEER deps the project installs and versions
-    // ITSELF. vite-plus never pins or overrides them: the user owns the provider
-    // version. (The runtime guard in define-config.ts only fail-fasts on a skew
-    // at `vp test --coverage` time; it does not rewrite the project's deps.)
+  it('aligns already-declared coverage providers without adding provider overrides', () => {
+    // Coverage providers have an exact vitest peer and must match the runner.
+    // Align their dependency specs directly; no provider override is needed.
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
@@ -2422,15 +2581,40 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
       devDependencies: Record<string, string>;
       overrides?: Record<string, unknown>;
     };
-    // Provider versions are preserved exactly as the user declared them.
-    expect(pkg.devDependencies['@vitest/coverage-v8']).toBe('^4.0.0');
-    expect(pkg.devDependencies['@vitest/coverage-istanbul']).toBe('^4.0.0');
+    expect(pkg.devDependencies['@vitest/coverage-v8']).toBe(VITEST_VERSION);
+    expect(pkg.devDependencies['@vitest/coverage-istanbul']).toBe(VITEST_VERSION);
     // vitest itself is still pinned to the bundled version.
     expect(pkg.devDependencies.vitest).toBe(VITEST_VERSION);
     // …and coverage is never written into the override sink.
     const overrides = pkg.overrides ?? {};
     expect(overrides['@vitest/coverage-v8']).toBeUndefined();
     expect(overrides['@vitest/coverage-istanbul']).toBeUndefined();
+  });
+
+  it('removes direct vitest in the same pass that rewrites ordinary vitest imports', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { vite: '^7.0.0', vitest: '^4.0.0' },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'example.spec.ts'),
+      "import { expect, it } from 'vitest';\nit('works', () => expect(true).toBe(true));\n",
+    );
+
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.npm), true, true);
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+      overrides: Record<string, string>;
+    };
+    expect(pkg.devDependencies.vitest).toBeUndefined();
+    expect(pkg.overrides.vitest).toBeUndefined();
+    expect(fs.readFileSync(path.join(tmpDir, 'example.spec.ts'), 'utf8')).toContain(
+      "from 'vite-plus/test'",
+    );
   });
 
   it('does not add a coverage provider the project never declared', () => {

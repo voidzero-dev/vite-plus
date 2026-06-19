@@ -28,7 +28,7 @@
     "globals": "^17.6.0",
     "typescript": "~6.0.2",
     "vite": "^8.0.12",
-    "vite-plus": "^0.1.24"
+    "vite-plus": "catalog:"
   },
   "devEngines": {
     "packageManager": {
@@ -42,18 +42,14 @@
 > cat pnpm-workspace.yaml # pnpm overrides and peerDependencyRules should be configured
 catalog:
   vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: <semver>
   vite-plus: latest
 overrides:
   vite: 'catalog:'
-  vitest: 'catalog:'
 peerDependencyRules:
   allowAny:
     - vite
-    - vitest
   allowedVersions:
     vite: '*'
-    vitest: '*'
 
 > cat vite.config.ts # vite imports should be rewritten
 import { defineConfig } from 'vite-plus'

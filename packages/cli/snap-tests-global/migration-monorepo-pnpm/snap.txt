@@ -66,7 +66,6 @@ export default defineConfig({
   "devDependencies": {
     "@vitejs/plugin-react": "catalog:",
     "vite": "catalog:",
-    "vitest": "catalog:",
     "vite-plus": "catalog:"
   },
   "resolutions": {
@@ -83,20 +82,16 @@ catalog:
   testnpm2: ^1.0.0
   # test comment here to check if the comment is preserved
   vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: <semver>
   vite-plus: latest
 
 minimumReleaseAge: 1440
 overrides:
   vite: 'catalog:'
-  vitest: 'catalog:'
 peerDependencyRules:
   allowAny:
     - vite
-    - vitest
   allowedVersions:
     vite: '*'
-    vitest: '*'
 minimumReleaseAgeExclude:
   - vite-plus
   - '@voidzero-dev/*'
@@ -125,7 +120,6 @@ minimumReleaseAgeExclude:
   "devDependencies": {
     "test-vite-plus-package": "1.0.0",
     "vite": "catalog:",
-    "vitest": "catalog:",
     "vite-plus": "catalog:"
   },
   "optionalDependencies": {
@@ -146,7 +140,6 @@ minimumReleaseAgeExclude:
   },
   "devDependencies": {
     "vite": "catalog:",
-    "vitest": "catalog:",
     "vite-plus": "catalog:"
   }
 }
