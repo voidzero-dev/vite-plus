@@ -1,0 +1,29 @@
+> vp migrate --no-interactive # exact @vitest peers require a package-local vitest
+◇ Migrated . to Vite+
+• Node <semver>  npm <semver>
+• Package manager settings configured
+
+> cat package.json # ecosystem packages and vitest should align to the bundled version
+{
+  "name": "migration-upgrade-vitest-exact-peer-npm",
+  "devDependencies": {
+    "@vitest/coverage-v8": "4.1.9",
+    "@vitest/eslint-plugin": "^1.6.0",
+    "@vitest/ui": "<semver>",
+    "@vitest/utils": "<semver>",
+    "@vitest/web-worker": "<semver>",
+    "vite-plus": "latest",
+    "vitest": "<semver>"
+  },
+  "overrides": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vitest": "<semver>"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "npm",
+      "version": "<semver>",
+      "onFail": "download"
+    }
+  }
+}

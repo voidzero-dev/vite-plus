@@ -1,4 +1,4 @@
-> vp migrate --no-interactive # legacy wrapper-override project: rewrites the stale vitest wrapper override to bundled vitest and completes the missing @vitest/* family pins, no hooks/agent setup defaults
+> vp migrate --no-interactive # common existing project removes the stale wrapper override, no hooks/agent setup defaults
 ◇ Migrated . to Vite+
 • Node <semver>  npm <semver>
 • Package manager settings configured

@@ -1,0 +1,37 @@
+> vp migrate --no-interactive # vitest omitted from managed overrides must remain user-owned
+◇ Migrated . to Vite+
+• Node <semver>  pnpm <semver>
+• 2 config updates applied
+
+> cat package.json # user's vitest dependency should be preserved
+{
+  "name": "migration-vitest-unmanaged-override",
+  "scripts": {
+    "test": "vp test",
+    "prepare": "vp config"
+  },
+  "devDependencies": {
+    "vite": "catalog:",
+    "vitest": "^4.0.0",
+    "vite-plus": "catalog:"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "<semver>",
+      "onFail": "download"
+    }
+  }
+}
+
+> cat pnpm-workspace.yaml # no vitest catalog or override should be introduced
+catalog:
+  vite: npm:@voidzero-dev/vite-plus-core@latest
+  vite-plus: latest
+overrides:
+  vite: 'catalog:'
+peerDependencyRules:
+  allowAny:
+    - vite
+  allowedVersions:
+    vite: '*'

@@ -78,6 +78,7 @@ import {
   type Framework,
   type NodeVersionManagerDetection,
 } from './migrator.ts';
+import { prepareNpmViteAliasReinstall } from './npm-reinstall.ts';
 import { addMigrationWarning, createMigrationReport, type MigrationReport } from './report.ts';
 
 async function confirmNodeVersionFileMigration(
@@ -1083,6 +1084,9 @@ async function executeMigrationPlan(
     plan.packageManager === PackageManager.npm || plan.packageManager === PackageManager.bun
       ? ['--force']
       : ['--no-frozen-lockfile'];
+  if (plan.packageManager === PackageManager.npm) {
+    prepareNpmViteAliasReinstall(workspaceInfo.rootDir, getWorkspaceProjectPaths(workspaceInfo));
+  }
   updateMigrationProgress('Installing dependencies');
   const finalInstallSummary = await runViteInstall(
     workspaceInfo.rootDir,
@@ -1395,6 +1399,12 @@ async function main() {
       const resolved = await ensureExistingPackageManager();
       updateMigrationProgress('Installing dependencies');
       const resolvedVersion = resolved?.version ?? packageManagerVersion;
+      if (packageManager === PackageManager.npm) {
+        prepareNpmViteAliasReinstall(
+          workspaceInfoOptional.rootDir,
+          getWorkspaceProjectPaths(workspaceInfoOptional),
+        );
+      }
       const installSummary = await runViteInstall(
         workspaceInfoOptional.rootDir,
         options.interactive,

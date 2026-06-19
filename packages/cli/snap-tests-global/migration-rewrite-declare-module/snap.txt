@@ -1,4 +1,4 @@
-> vp migrate --no-interactive # migration should rewrite imports to vite-plus
+> vp migrate --no-interactive # retained vitest augmentations should keep a package-local vitest
 ◇ Migrated . to Vite+
 • Node <semver>  pnpm <semver>
 • 2 config updates applied, 1 file had imports rewritten
@@ -39,7 +39,8 @@ declare module 'vitest/config' {
   "name": "migration-rewrite-declare-module",
   "devDependencies": {
     "vite": "catalog:",
-    "vite-plus": "catalog:"
+    "vite-plus": "catalog:",
+    "vitest": "catalog:"
   },
   "devEngines": {
     "packageManager": {

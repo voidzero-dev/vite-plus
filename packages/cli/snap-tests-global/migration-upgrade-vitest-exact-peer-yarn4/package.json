@@ -1,0 +1,17 @@
+{
+  "name": "migration-upgrade-vitest-exact-peer-yarn4",
+  "devDependencies": {
+    "@vitest/ui": "^4.1.8",
+    "vite-plus": "catalog:"
+  },
+  "resolutions": {
+    "vite": "catalog:"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "yarn",
+      "version": "4.12.0",
+      "onFail": "download"
+    }
+  }
+}

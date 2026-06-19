@@ -1,0 +1,25 @@
+> vp migrate --no-interactive # non-runtime @vitest packages must not keep a vitest pin
+◇ Migrated . to Vite+
+• Node <semver>  npm <semver>
+• Package manager settings configured
+
+> cat package.json # internal packages align, eslint plugin stays independent, vitest is removed
+{
+  "name": "migration-upgrade-vitest-non-runtime-only-npm",
+  "devDependencies": {
+    "@vitest/eslint-plugin": "^1.6.0",
+    "@vitest/utils": "<semver>",
+    "@vitest/ws-client": "<semver>",
+    "vite-plus": "latest"
+  },
+  "overrides": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "npm",
+      "version": "<semver>",
+      "onFail": "download"
+    }
+  }
+}

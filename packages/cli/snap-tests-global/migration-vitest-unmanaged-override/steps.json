@@ -1,0 +1,10 @@
+{
+  "env": {
+    "VP_OVERRIDE_PACKAGES": "{\"vite\":\"npm:@voidzero-dev/vite-plus-core@latest\"}"
+  },
+  "commands": [
+    "vp migrate --no-interactive # vitest omitted from managed overrides must remain user-owned",
+    "cat package.json # user's vitest dependency should be preserved",
+    "cat pnpm-workspace.yaml # no vitest catalog or override should be introduced"
+  ]
+}

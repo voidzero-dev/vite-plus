@@ -1,6 +1,6 @@
 {
   "commands": [
-    "vp migrate --no-interactive # migration should rewrite imports to vite-plus",
+    "vp migrate --no-interactive # retained vitest augmentations should keep a package-local vitest",
     "cat src/index.ts # check src/index.ts",
     "cat package.json # check package.json",
     "cat pnpm-workspace.yaml # check pnpm-workspace.yaml has overrides and catalog"

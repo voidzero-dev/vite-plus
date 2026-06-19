@@ -13,7 +13,7 @@
     "prepare": "vp config"
   },
   "devDependencies": {
-    "vite": "^7.0.0",
+    "vite": "catalog:",
     "vite-plus": "catalog:"
   },
   "devEngines": {

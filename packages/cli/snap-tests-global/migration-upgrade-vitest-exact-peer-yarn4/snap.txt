@@ -1,0 +1,35 @@
+> vp migrate --no-interactive # Yarn PnP exact peer should receive package-local vitest
+◇ Migrated . to Vite+
+• Node <semver>  yarn <semver>
+• Package manager settings configured
+
+> cat package.json # direct deps and resolutions should use the managed catalog/version
+{
+  "name": "migration-upgrade-vitest-exact-peer-yarn4",
+  "devDependencies": {
+    "@vitest/ui": "<semver>",
+    "vite-plus": "catalog:",
+    "vitest": "catalog:"
+  },
+  "resolutions": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vitest": "<semver>"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "yarn",
+      "version": "<semver>",
+      "onFail": "download"
+    }
+  }
+}
+
+> cat .yarnrc.yml # shared catalog should include the aligned vitest
+nodeLinker: pnp
+catalog:
+  vite: npm:@voidzero-dev/vite-plus-core@latest
+  vite-plus: latest
+  vitest: <semver>
+npmPreapprovedPackages:
+  - vitest
+  - '@vitest/*'

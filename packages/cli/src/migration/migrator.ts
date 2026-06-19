@@ -1798,6 +1798,7 @@ export function rewriteStandaloneProject(
       usesVitestBrowserMode(projectPath),
       collectProviderSourceModes(projectPath),
       usesVitest,
+      sourceTreeReferencesRetainedVitestModule(projectPath),
     );
 
     // ensure vite-plus is in devDependencies
@@ -2029,6 +2030,7 @@ export function rewriteMonorepoProject(
       usesVitestBrowserMode(projectPath),
       collectProviderSourceModes(projectPath),
       projectUsesVitestDirectly(projectPath, pkg),
+      sourceTreeReferencesRetainedVitestModule(projectPath),
     );
     // If this SUB-workspace now depends on `vite-plus` and Yarn isolates its
     // hoisting (via the root `nmHoistingLimits` OR the workspace's own
@@ -3798,16 +3800,16 @@ function reconcileVitePlusBootstrapPackage(
     pruneLegacyWrapperAliases(dependencies);
   }
 
-  // npm keeps the managed alias directly in package.json. Catalog-based package
-  // managers leave dependency specs alone and repair their shared override.
-  if (packageManager === PackageManager.npm) {
-    for (const dependencies of installGroups) {
-      if (
-        dependencies?.vite !== undefined &&
-        !overrideSpecSatisfiesVitePlus('vite', dependencies.vite)
-      ) {
-        dependencies.vite = VITE_PLUS_OVERRIDE_PACKAGES.vite;
-      }
+  // Normalize direct Vite install entries as well as the shared override. Keep
+  // named catalog references intact; plain/behind aliases move to the active
+  // default catalog or the current core alias.
+  for (const dependencies of installGroups) {
+    if (dependencies?.vite !== undefined) {
+      dependencies.vite = getCatalogDependencySpec(
+        dependencies.vite,
+        VITE_PLUS_OVERRIDE_PACKAGES.vite,
+        supportCatalog,
+      );
     }
   }
 
@@ -3928,7 +3930,9 @@ export function detectVitePlusBootstrapPending(
     packageManager === PackageManager.pnpm && !pnpmConfigLivesInPackageJson(pkg, projectPath);
   const supportCatalog =
     !VITE_PLUS_VERSION.startsWith('file:') &&
-    (usePnpmWorkspaceYaml || packageManager === PackageManager.bun);
+    (usePnpmWorkspaceYaml ||
+      packageManager === PackageManager.yarn ||
+      packageManager === PackageManager.bun);
   const canonicalVitePlusSpec = supportCatalog ? 'catalog:' : VITE_PLUS_VERSION;
   for (const [index, packagePath] of bootstrapProjectPaths(projectPath, packages).entries()) {
     const childPackageJsonPath = path.join(packagePath, 'package.json');
@@ -4131,7 +4135,9 @@ export function ensureVitePlusBootstrap(
     !pnpmConfigLivesInPackageJson(initialRootPkg, projectPath);
   const supportCatalog =
     !VITE_PLUS_VERSION.startsWith('file:') &&
-    (usePnpmWorkspaceYaml || workspaceInfo.packageManager === PackageManager.bun);
+    (usePnpmWorkspaceYaml ||
+      workspaceInfo.packageManager === PackageManager.yarn ||
+      workspaceInfo.packageManager === PackageManager.bun);
   const canonicalVitePlusSpec = supportCatalog ? 'catalog:' : VITE_PLUS_VERSION;
 
   editJsonFile<
@@ -4548,6 +4554,10 @@ export function rewritePackageJson(
   // is REMOVED so it arrives transitively through vite-plus. Defaults to true to
   // preserve legacy behavior for callers that don't compute the signal.
   usesVitestDirectly = true,
+  // Module augmentations/triple-slash references intentionally retain the
+  // upstream `vitest` identity after import rewriting and therefore require a
+  // package-local provider under strict dependency layouts.
+  retainedVitestModule = false,
 ): Record<string, string | string[]> | null {
   if (pkg.scripts) {
     const updated = rewriteScripts(
@@ -4795,7 +4805,8 @@ export function rewritePackageJson(
   // `existingVitePlus` is already truthy here), or a re-migration of a project that
   // already owns it. The guard below still no-ops when a direct `vitest` already exists,
   // so a genuine normalize pass of an already-correct project mutates nothing.
-  const needDirectVitest = needVitePlus || effectiveBrowserMode || isVitestAdjacent;
+  const needDirectVitest =
+    needVitePlus || effectiveBrowserMode || isVitestAdjacent || retainedVitestModule;
   if (needVitePlus || shouldNormalizeExistingVitePlus) {
     pkg.devDependencies = {
       ...pkg.devDependencies,
@@ -4822,7 +4833,9 @@ export function rewritePackageJson(
     };
     if (
       !installableDeps.vitest &&
-      (effectiveBrowserMode || Object.keys(installableDeps).some((name) => name.includes('vitest')))
+      (effectiveBrowserMode ||
+        retainedVitestModule ||
+        Object.keys(installableDeps).some((name) => name.includes('vitest')))
     ) {
       pkg.devDependencies ??= {};
       pkg.devDependencies.vitest = getCatalogDependencySpec(

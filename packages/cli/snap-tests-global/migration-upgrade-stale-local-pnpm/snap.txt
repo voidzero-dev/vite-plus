@@ -1,0 +1,34 @@
+> node setup-local.mjs
+> vp migrate --no-interactive # newer global CLI must bypass the installed stale local CLI
+◇ Migrated . to Vite+
+• Node <semver>  pnpm <semver>
+• Package manager settings configured
+
+> cat package.json # stale wrapper deps and plain vite-plus range should be repaired
+{
+  "name": "migration-upgrade-stale-local-pnpm",
+  "devDependencies": {
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "<semver>",
+      "onFail": "download"
+    }
+  },
+  "pnpm": {}
+}
+
+> cat pnpm-workspace.yaml # empty pnpm field must not hide workspace overrides
+overrides:
+  vite: 'catalog:'
+peerDependencyRules:
+  allowAny:
+    - vite
+  allowedVersions:
+    vite: '*'
+catalog:
+  vite: npm:@voidzero-dev/vite-plus-core@latest
+  vite-plus: latest
