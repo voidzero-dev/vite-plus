@@ -56,15 +56,20 @@ impl PackageManager {
             PackageManagerType::Yarn => {
                 if self.version.starts_with("1.") {
                     args.push("info".into());
+                    args.push(options.package.to_string());
+
+                    if let Some(field) = options.field {
+                        args.push(field.to_string());
+                    }
                 } else {
                     args.push("npm".into());
                     args.push("info".into());
-                }
+                    args.push(options.package.to_string());
 
-                args.push(options.package.to_string());
-
-                if let Some(field) = options.field {
-                    args.push(field.to_string());
+                    if let Some(field) = options.field {
+                        args.push("--fields".into());
+                        args.push(field.to_string());
+                    }
                 }
 
                 if options.json {
@@ -192,6 +197,19 @@ mod tests {
         });
         assert_eq!(result.bin_path, "yarn");
         assert_eq!(result.args, vec!["npm", "info", "lodash", "--json"]);
+    }
+
+    #[test]
+    fn test_yarn_berry_view_uses_fields_option_for_view_field() {
+        let pm = create_mock_package_manager(PackageManagerType::Yarn, "4.0.0");
+        let result = pm.resolve_view_command(&ViewCommandOptions {
+            package: "lodash",
+            field: Some("dist.tarball"),
+            json: false,
+            pass_through_args: None,
+        });
+        assert_eq!(result.bin_path, "yarn");
+        assert_eq!(result.args, vec!["npm", "info", "lodash", "--fields", "dist.tarball"]);
     }
 
     #[test]
