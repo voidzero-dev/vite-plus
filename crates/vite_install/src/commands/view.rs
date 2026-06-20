@@ -54,20 +54,20 @@ impl PackageManager {
                 "bun".into()
             }
             PackageManagerType::Yarn => {
-                if self.version.starts_with("1.") {
-                    args.push("info".into());
-                    args.push(options.package.to_string());
-
-                    if let Some(field) = options.field {
-                        args.push(field.to_string());
-                    }
-                } else {
+                if self.is_yarn_berry() {
                     args.push("npm".into());
                     args.push("info".into());
                     args.push(options.package.to_string());
 
                     if let Some(field) = options.field {
                         args.push("--fields".into());
+                        args.push(field.to_string());
+                    }
+                } else {
+                    args.push("info".into());
+                    args.push(options.package.to_string());
+
+                    if let Some(field) = options.field {
                         args.push(field.to_string());
                     }
                 }
