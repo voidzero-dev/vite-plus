@@ -3,8 +3,8 @@
 use std::{
     collections::{HashMap, HashSet},
     io::{IsTerminal, Read, Write},
-    process::{self, Stdio},
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    process::Stdio,
+    time::Duration,
 };
 
 use futures::{StreamExt, stream::FuturesUnordered};
@@ -592,10 +592,7 @@ async fn install_one(
 }
 
 fn new_install_id() -> String {
-    let timestamp =
-        SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos() as u64;
-    let random = Uuid::new_v4().as_u128() as u64;
-    format!("{INSTALL_ID_PREFIX}{timestamp:016x}{:08x}{random:016x}", process::id())
+    format!("{INSTALL_ID_PREFIX}{}", Uuid::new_v4())
 }
 
 async fn restore_package_metadata(package_name: &str, previous_metadata: Option<&PackageMetadata>) {
@@ -1244,8 +1241,8 @@ mod tests {
 
         let legacy_package_dir =
             AbsolutePathBuf::new(temp_path.join("packages").join("@scope").join("pkg")).unwrap();
-        let current_install_id = "#0000000000000001000000010000000000000001";
-        let old_install_id = "#0000000000000002000000020000000000000002";
+        let current_install_id = "#123e4567-e89b-42d3-a456-426614174000";
+        let old_install_id = "#987e6543-e21b-42d3-a456-426614174000";
         let current_install = AbsolutePathBuf::new(
             legacy_package_dir.as_path().with_file_name(format!("pkg{current_install_id}")),
         )

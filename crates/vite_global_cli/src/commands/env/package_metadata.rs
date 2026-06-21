@@ -4,6 +4,7 @@ use std::collections::HashSet;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use uuid::{Uuid, Version};
 use vite_path::AbsolutePathBuf;
 
 use super::config::get_packages_dir;
@@ -12,12 +13,14 @@ use crate::error::Error;
 // `#` is filesystem-safe but invalid in npm package names, so sibling installs cannot collide.
 pub(crate) const INSTALL_ID_PREFIX: char = '#';
 // Keeps npm's 214-byte maximum package name within the common 255-byte filename limit.
-pub(crate) const INSTALL_ID_LENGTH: usize = 41;
+pub(crate) const INSTALL_ID_LENGTH: usize = 37;
 
 pub(crate) fn is_install_id(value: &str) -> bool {
     value.len() == INSTALL_ID_LENGTH
-        && value.starts_with(INSTALL_ID_PREFIX)
-        && value[INSTALL_ID_PREFIX.len_utf8()..].bytes().all(|byte| byte.is_ascii_hexdigit())
+        && value
+            .strip_prefix(INSTALL_ID_PREFIX)
+            .and_then(|uuid| Uuid::parse_str(uuid).ok())
+            .is_some_and(|uuid| uuid.get_version() == Some(Version::Random))
 }
 
 /// Metadata for a globally installed package.
@@ -268,7 +271,7 @@ mod tests {
         let legacy = PackageMetadata::installation_dir_for("@scope/pkg", "").unwrap();
         let identified = PackageMetadata::installation_dir_for(
             "@scope/pkg",
-            "#0000000000000001000000010000000000000001",
+            "#123e4567-e89b-42d3-a456-426614174000",
         )
         .unwrap();
 
@@ -276,7 +279,7 @@ mod tests {
         assert!(
             identified
                 .as_path()
-                .ends_with("packages/@scope/pkg#0000000000000001000000010000000000000001")
+                .ends_with("packages/@scope/pkg#123e4567-e89b-42d3-a456-426614174000")
         );
         assert!(PackageMetadata::installation_dir_for("@scope/pkg", "invalid").is_err());
     }
