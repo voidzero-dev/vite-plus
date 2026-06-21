@@ -3,12 +3,11 @@
 • Node <semver>  pnpm <semver>
 • 2 config updates applied, 1 file had imports rewritten
 
-> cat package.json # directive detection keeps package-local Vitest provisioned
+> cat package.json # rewritten directive does not retain a redundant Vitest dependency
 {
   "name": "migration-upgrade-vitest-reference-whitespace-pnpm",
   "devDependencies": {
     "vite": "catalog:",
-    "vitest": "catalog:",
     "vite-plus": "catalog:"
   },
   "devEngines": {
@@ -26,18 +25,17 @@
 > cat env.d.ts # directive is rewritten to the Vite+ public type surface
 /// <reference types = "vite-plus/test" />
 
-> cat pnpm-workspace.yaml # directive detection keeps shared Vitest management
+> cat pnpm-workspace.yaml # rewritten directive does not retain shared Vitest management
 catalog:
   vite: npm:@voidzero-dev/vite-plus-core@latest
   vite-plus: latest
-  vitest: <semver>
 overrides:
   vite: 'catalog:'
-  vitest: 'catalog:'
 peerDependencyRules:
   allowAny:
     - vite
-    - vitest
   allowedVersions:
     vite: '*'
-    vitest: '*'
+
+> vp migrate --no-interactive # directive rewriting is stable on rerun
+This project is already using Vite+! Happy coding!

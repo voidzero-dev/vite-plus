@@ -1587,6 +1587,130 @@ describe('ensureVitePlusBootstrap', () => {
     expect(pkg.devDependencies.vitest).toBe(VITEST_VERSION);
   });
 
+  it('does not align deprecated @vitest/coverage-c8 to a nonexistent Vitest 4 version', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: {
+          'vite-plus': 'latest',
+          '@vitest/coverage-c8': '^0.33.0',
+        },
+        overrides: {
+          vite: 'npm:@voidzero-dev/vite-plus-core@latest',
+        },
+        devEngines: {
+          packageManager: { name: 'npm', version: '10.33.0', onFail: 'download' },
+        },
+      }),
+    );
+
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.npm));
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    expect(pkg.devDependencies['@vitest/coverage-c8']).toBe('^0.33.0');
+    expect(pkg.devDependencies.vitest).toBe(VITEST_VERSION);
+  });
+
+  it('detects a required Vitest peer from Yarn PnP dependency metadata', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: {
+          'vite-plus': 'latest',
+          'vite-plugin-gherkin': '0.2.0',
+        },
+        resolutions: {
+          vite: 'npm:@voidzero-dev/vite-plus-core@latest',
+        },
+        devEngines: {
+          packageManager: { name: 'yarn', version: '4.12.0', onFail: 'download' },
+        },
+      }),
+    );
+    const pluginDir = path.join(tmpDir, '.yarn/cache/vite-plugin-gherkin');
+    fs.mkdirSync(pluginDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(pluginDir, 'package.json'),
+      JSON.stringify({
+        name: 'vite-plugin-gherkin',
+        version: '0.2.0',
+        exports: { '.': './index.js' },
+        peerDependencies: { vitest: '^4.1.0' },
+      }),
+    );
+    fs.writeFileSync(path.join(pluginDir, 'index.js'), 'module.exports = {};\n');
+    fs.writeFileSync(
+      path.join(tmpDir, '.pnp.cjs'),
+      [
+        "const path = require('node:path');",
+        'module.exports = {',
+        '  resolveToUnqualified(request) {',
+        "    if (request !== 'vite-plugin-gherkin') throw new Error('not found');",
+        "    return path.join(__dirname, '.yarn/cache/vite-plugin-gherkin');",
+        '  },',
+        '};',
+        '',
+      ].join('\n'),
+    );
+    fs.writeFileSync(path.join(tmpDir, '.yarnrc.yml'), 'nodeLinker: pnp\n');
+
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.yarn));
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+      resolutions: Record<string, string>;
+    };
+    expect(pkg.devDependencies.vitest).toBe('catalog:');
+    expect(pkg.resolutions.vitest).toBe(VITEST_VERSION);
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.yarn)).toBe(false);
+  });
+
+  it.each([
+    {
+      name: 'compilerOptions.types',
+      writeReference: (projectPath: string) =>
+        fs.writeFileSync(
+          path.join(projectPath, 'tsconfig.json'),
+          JSON.stringify({ compilerOptions: { types: ['vitest/globals'] } }),
+        ),
+    },
+    {
+      name: 'vitest/package.json',
+      writeReference: (projectPath: string) =>
+        fs.writeFileSync(
+          path.join(projectPath, 'version.ts'),
+          "import metadata from 'vitest/package.json';\nconsole.log(metadata.version);\n",
+        ),
+    },
+  ])('keeps package-local Vitest for retained $name references', ({ writeReference }) => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { 'vite-plus': 'latest' },
+        overrides: { vite: 'npm:@voidzero-dev/vite-plus-core@latest' },
+        devEngines: {
+          packageManager: { name: 'npm', version: '10.33.0', onFail: 'download' },
+        },
+      }),
+    );
+    writeReference(tmpDir);
+
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.npm));
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+      overrides: Record<string, string>;
+    };
+    expect(pkg.devDependencies.vitest).toBe(VITEST_VERSION);
+    expect(pkg.overrides.vitest).toBe(VITEST_VERSION);
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(false);
+  });
+
   it('does not treat @vitest/eslint-plugin as runner usage', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
@@ -1835,15 +1959,12 @@ describe('ensureVitePlusBootstrap', () => {
     expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
   });
 
-  it('recognizes whitespace in retained Vitest triple-slash directives', () => {
+  it('rewrites whitespace-tolerant Vitest directives without leaving rerun mutations', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
         name: 'typed-library',
-        devDependencies: { 'vite-plus': 'catalog:' },
-        devEngines: {
-          packageManager: { name: 'pnpm', version: '10.33.0', onFail: 'download' },
-        },
+        devDependencies: { vite: '^7.0.0', vitest: '^4.0.0' },
       }),
     );
     fs.writeFileSync(path.join(tmpDir, 'env.d.ts'), '/// <reference types = "vitest" />\n');
@@ -1863,13 +1984,21 @@ describe('ensureVitePlusBootstrap', () => {
       ].join('\n'),
     );
 
-    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm));
+    const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.pnpm);
+    rewriteStandaloneProject(tmpDir, workspaceInfo, true, true);
 
-    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
-      devDependencies: Record<string, string>;
-    };
-    expect(pkg.devDependencies.vitest).toBe('catalog:');
-    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
+    const firstPackageJson = fs.readFileSync(path.join(tmpDir, 'package.json'), 'utf8');
+    const firstWorkspace = fs.readFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'utf8');
+    const firstDirective = fs.readFileSync(path.join(tmpDir, 'env.d.ts'), 'utf8');
+
+    expect(firstPackageJson).not.toContain('"vitest"');
+    expect(firstWorkspace).not.toContain('vitest:');
+    expect(firstDirective).toContain('types = "vite-plus/test"');
+
+    rewriteStandaloneProject(tmpDir, workspaceInfo, true, true);
+    expect(fs.readFileSync(path.join(tmpDir, 'package.json'), 'utf8')).toBe(firstPackageJson);
+    expect(fs.readFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'utf8')).toBe(firstWorkspace);
+    expect(fs.readFileSync(path.join(tmpDir, 'env.d.ts'), 'utf8')).toBe(firstDirective);
   });
 
   it('does not remain pending for an object-valued nested Vitest override', () => {
@@ -2381,6 +2510,35 @@ describe('ensureVitePlusBootstrap', () => {
       packages: string[];
     };
     expect(workspace.packages).toEqual(['packages/*']);
+  });
+
+  it('writes catalog specs during the first standalone Yarn migration', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { vite: '^7.0.0', vitest: '^4.0.0' },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'example.spec.ts'),
+      "import { expect, it } from 'vitest';\nit('works', () => expect(true).toBe(true));\n",
+    );
+    const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.yarn);
+
+    rewriteStandaloneProject(tmpDir, workspaceInfo, true, true);
+
+    const firstPackageJson = fs.readFileSync(path.join(tmpDir, 'package.json'), 'utf8');
+    const firstYarnrc = fs.readFileSync(path.join(tmpDir, '.yarnrc.yml'), 'utf8');
+    const pkg = JSON.parse(firstPackageJson) as { devDependencies: Record<string, string> };
+    expect(pkg.devDependencies.vite).toBe('catalog:');
+    expect(pkg.devDependencies['vite-plus']).toBe('catalog:');
+    expect(pkg.devDependencies.vitest).toBeUndefined();
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.yarn)).toBe(false);
+
+    rewriteStandaloneProject(tmpDir, workspaceInfo, true, true);
+    expect(fs.readFileSync(path.join(tmpDir, 'package.json'), 'utf8')).toBe(firstPackageJson);
+    expect(fs.readFileSync(path.join(tmpDir, '.yarnrc.yml'), 'utf8')).toBe(firstYarnrc);
   });
 });
 

@@ -3,7 +3,7 @@
 • Node <semver>  pnpm <semver>
 • 2 config updates applied
 
-> cat package.json # user's vitest dependency should be preserved
+> cat package.json # user's Vitest and exact-peer UI versions should both be preserved
 {
   "name": "migration-vitest-unmanaged-override",
   "scripts": {
@@ -11,8 +11,9 @@
     "prepare": "vp config"
   },
   "devDependencies": {
+    "@vitest/ui": "<semver>",
     "vite": "catalog:",
-    "vitest": "^4.0.0",
+    "vitest": "<semver>",
     "vite-plus": "catalog:"
   },
   "devEngines": {
@@ -24,6 +25,7 @@
   }
 }
 
+> node -e "const pkg = require('./package.json'); if (pkg.devDependencies.vitest !== '4.0.13' || pkg.devDependencies['@vitest/ui'] !== '4.0.13') process.exit(1)" # exact user-owned versions remain unchanged
 > cat pnpm-workspace.yaml # no vitest catalog or override should be introduced
 catalog:
   vite: npm:@voidzero-dev/vite-plus-core@latest
@@ -35,3 +37,6 @@ peerDependencyRules:
     - vite
   allowedVersions:
     vite: '*'
+
+> vp migrate --no-interactive # unmanaged Vitest ecosystem versions remain stable on rerun
+This project is already using Vite+! Happy coding!

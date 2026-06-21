@@ -205,4 +205,19 @@ describe('rewriteMonorepo bun catalog with file: protocol', () => {
       (pkg as { devDependencies?: Record<string, string> }).devDependencies?.['vite-plus'],
     ).toBe('file:/tmp/tgz/vite-plus-0.0.0.tgz');
   });
+
+  it('does not align Vitest ecosystem packages when Vitest is unmanaged', () => {
+    const pkg = {
+      devDependencies: {
+        vite: '^7.0.0',
+        vitest: '4.0.13',
+        '@vitest/ui': '4.0.13',
+      },
+    };
+
+    rewritePackageJson(pkg, PackageManager.npm);
+
+    expect(pkg.devDependencies.vitest).toBe('4.0.13');
+    expect(pkg.devDependencies['@vitest/ui']).toBe('4.0.13');
+  });
 });

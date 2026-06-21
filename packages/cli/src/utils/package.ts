@@ -19,15 +19,97 @@ interface PackageMetadata {
   path: string;
 }
 
+function findOwningPackageJson(resolvedPath: string, packageName: string): string | undefined {
+  let currentDir: string;
+  try {
+    currentDir = fs.statSync(resolvedPath).isDirectory()
+      ? resolvedPath
+      : path.dirname(resolvedPath);
+  } catch {
+    return undefined;
+  }
+  while (currentDir !== path.dirname(currentDir)) {
+    const candidate = path.join(currentDir, 'package.json');
+    if (fs.existsSync(candidate)) {
+      try {
+        const candidatePkg = JSON.parse(fs.readFileSync(candidate, 'utf8'));
+        if (candidatePkg.name === packageName) {
+          return candidate;
+        }
+      } catch {
+        // Keep walking: this may be an unrelated or malformed nested manifest.
+      }
+    }
+    currentDir = path.dirname(currentDir);
+  }
+  return undefined;
+}
+
+function resolvePackageJsonWithNode(
+  require: ReturnType<typeof createRequire>,
+  packageName: string,
+): string | undefined {
+  try {
+    return require.resolve(`${packageName}/package.json`);
+  } catch {
+    // Packages with an exports map often do not expose `./package.json`.
+  }
+  try {
+    return findOwningPackageJson(require.resolve(packageName), packageName);
+  } catch {
+    return undefined;
+  }
+}
+
+function findPnpApiPath(projectPath: string): string | undefined {
+  let currentDir = path.resolve(projectPath);
+  while (currentDir !== path.dirname(currentDir)) {
+    const candidate = path.join(currentDir, '.pnp.cjs');
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+    currentDir = path.dirname(currentDir);
+  }
+  return undefined;
+}
+
 export function detectPackageMetadata(
   projectPath: string,
   packageName: string,
 ): PackageMetadata | void {
+  // Create require from the project path so resolution only searches the
+  // project's dependencies, not the global installation's.
+  const require = createRequire(path.join(projectPath, 'noop.js'));
+  let pkgFilePath = resolvePackageJsonWithNode(require, packageName);
+  if (!pkgFilePath) {
+    const pnpApiPath = findPnpApiPath(projectPath);
+    if (!pnpApiPath) {
+      return;
+    }
+    try {
+      const pnpApi = createRequire(pnpApiPath)(pnpApiPath) as {
+        resolveToUnqualified: (request: string, issuer: string) => string;
+        setup?: () => void;
+      };
+      // Activating the generated API makes archive-backed Yarn cache paths
+      // readable through Node's fs implementation as well.
+      pnpApi.setup?.();
+      const unqualified = pnpApi.resolveToUnqualified(
+        packageName,
+        path.join(projectPath, 'noop.js'),
+      );
+      pkgFilePath = findOwningPackageJson(unqualified, packageName);
+      if (!pkgFilePath) {
+        pkgFilePath = resolvePackageJsonWithNode(require, packageName);
+      }
+    } catch {
+      return;
+    }
+  }
+  if (!pkgFilePath) {
+    return;
+  }
   try {
-    // Create require from the project path so resolution only searches
-    // the project's node_modules, not the global installation's
-    const require = createRequire(path.join(projectPath, 'noop.js'));
-    const pkgFilePath = require.resolve(`${packageName}/package.json`);
     const pkg = JSON.parse(fs.readFileSync(pkgFilePath, 'utf8'));
     return {
       name: pkg.name,
@@ -35,7 +117,6 @@ export function detectPackageMetadata(
       path: path.dirname(pkgFilePath),
     };
   } catch {
-    // ignore MODULE_NOT_FOUND error
     return;
   }
 }

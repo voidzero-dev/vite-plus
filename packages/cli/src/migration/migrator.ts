@@ -44,6 +44,7 @@ import {
   findTsconfigFiles,
   hasBaseUrlInTsconfig,
   hasTypesToRewriteInTsconfig,
+  hasVitestTypesInTsconfig,
   removeDeprecatedTsconfigFalseOption,
   rewriteTypesInTsconfig,
 } from '../utils/tsconfig.ts';
@@ -111,15 +112,22 @@ const OPT_IN_BROWSER_PROVIDERS = [WEBDRIVERIO_PROVIDER, PLAYWRIGHT_PROVIDER] as 
 // family, and the runtime internals all pin `vitest: <version>`), so any the
 // project lists must match the bundled vitest or Vitest runs mixed copies (the
 // `define-config.ts` coverage guard fail-fasts on exactly this skew).
-// `@vitest/eslint-plugin` is the exception: it versions on its own line with a
-// `vitest: *` peer, so it must NOT be pinned to the vitest version.
-const VITEST_ALIGN_EXCLUDED = new Set(['@vitest/eslint-plugin']);
+// `@vitest/eslint-plugin` versions on its own line, and deprecated
+// `@vitest/coverage-c8` never published on the Vitest 4 line, so neither may be
+// pinned to the bundled Vitest version.
+const VITEST_ALIGN_EXCLUDED = new Set([
+  '@vitest/eslint-plugin',
+  // Deprecated at 0.33.0 and replaced by @vitest/coverage-v8. It does not
+  // publish versions on Vitest's current release line, so pinning it to the
+  // bundled Vitest version creates a dependency spec that does not exist.
+  '@vitest/coverage-c8',
+]);
 
 // Official packages that do not declare a required `vitest` peer. Keep them
 // aligned when a project lists them directly, but do not add a direct vitest
 // merely because they are present.
 const VITEST_DIRECT_USAGE_EXCLUDED = new Set([
-  ...VITEST_ALIGN_EXCLUDED,
+  '@vitest/eslint-plugin',
   '@vitest/expect',
   '@vitest/mocker',
   '@vitest/pretty-format',
@@ -561,6 +569,49 @@ function projectListsVitestEcosystemDep(pkg: {
   );
 }
 
+// Detect installed dependencies whose package metadata declares a required
+// Vitest peer. Package names are not authoritative: integrations such as
+// `vite-plugin-gherkin` require Vitest without containing "vitest" in their
+// own name. Optional peers do not require package-local provisioning.
+function projectListsRequiredVitestPeer(
+  projectPath: string,
+  pkg: {
+    dependencies?: Record<string, string>;
+    devDependencies?: Record<string, string>;
+    optionalDependencies?: Record<string, string>;
+  },
+): boolean {
+  const dependencyNames = new Set([
+    ...Object.keys(pkg.dependencies ?? {}),
+    ...Object.keys(pkg.devDependencies ?? {}),
+    ...Object.keys(pkg.optionalDependencies ?? {}),
+  ]);
+  dependencyNames.delete('vitest');
+
+  for (const name of dependencyNames) {
+    const metadata = detectPackageMetadata(projectPath, name);
+    if (!metadata) {
+      continue;
+    }
+    try {
+      const installedPkg = readJsonFile(path.join(metadata.path, 'package.json')) as {
+        peerDependencies?: Record<string, string>;
+        peerDependenciesMeta?: Record<string, { optional?: boolean }>;
+      };
+      if (
+        typeof installedPkg.peerDependencies?.vitest === 'string' &&
+        installedPkg.peerDependenciesMeta?.vitest?.optional !== true
+      ) {
+        return true;
+      }
+    } catch {
+      // Missing or unreadable installed metadata cannot provide a peer signal;
+      // retain the existing package-name and source-based fallbacks below.
+    }
+  }
+  return false;
+}
+
 // True iff the project uses vitest DIRECTLY — via a dependency that is expected
 // to have a required vitest peer (see `projectListsVitestEcosystemDep`), an
 // upstream `vitest` module specifier, or vitest browser mode. Drives
@@ -575,9 +626,11 @@ function projectUsesVitestDirectly(
     devDependencies?: Record<string, string>;
     peerDependencies?: Record<string, string>;
   },
+  requiredVitestPeer = projectListsRequiredVitestPeer(projectPath, pkg),
 ): boolean {
   return (
     projectListsVitestEcosystemDep(pkg) ||
+    requiredVitestPeer ||
     // Browser packages declared only as peers still become direct installs:
     // rewritePackageJson/reconcileVitePlusBootstrapPackage promote opt-in
     // providers into devDependencies and treat the bundled browser packages as
@@ -1681,7 +1734,8 @@ export function rewriteStandaloneProject(
   }>(packageJsonPath, (pkg) => {
     shouldAllowBrowserProviderBuilds =
       hasOwnWebdriverioDependency(pkg) || usesWebdriverioProvider(projectPath);
-    usesVitest = projectUsesVitestDirectly(projectPath, pkg);
+    const requiredVitestPeer = projectListsRequiredVitestPeer(projectPath, pkg);
+    usesVitest = projectUsesVitestDirectly(projectPath, pkg, requiredVitestPeer);
     const managed = managedOverridePackages(usesVitest);
     // Strip stale `vite-plus-test` wrapper aliases before injecting new overrides
     // so the deleted wrapper doesn't survive migration in any sink.
@@ -1796,24 +1850,24 @@ export function rewriteStandaloneProject(
       }
     }
 
+    const supportCatalog = usePnpmWorkspaceYaml || packageManager === PackageManager.yarn;
     extractedStagedConfig = rewritePackageJson(
       pkg,
       packageManager,
-      usePnpmWorkspaceYaml,
+      supportCatalog,
       skipStagedMigration,
       catalogDependencyResolver,
       usesVitestBrowserMode(projectPath),
       collectProviderSourceModes(projectPath),
       usesVitest,
       sourceTreeReferencesRetainedVitestModule(projectPath),
+      requiredVitestPeer,
     );
 
     // ensure vite-plus is in devDependencies
     if (!pkg.devDependencies?.[VITE_PLUS_NAME] || isForceOverrideMode()) {
       const version =
-        usePnpmWorkspaceYaml && !VITE_PLUS_VERSION.startsWith('file:')
-          ? 'catalog:'
-          : VITE_PLUS_VERSION;
+        supportCatalog && !VITE_PLUS_VERSION.startsWith('file:') ? 'catalog:' : VITE_PLUS_VERSION;
       pkg.devDependencies = {
         ...pkg.devDependencies,
         [VITE_PLUS_NAME]: version,
@@ -2027,6 +2081,7 @@ export function rewriteMonorepoProject(
     scripts?: Record<string, string>;
     installConfig?: { hoistingLimits?: string };
   }>(packageJsonPath, (pkg) => {
+    const requiredVitestPeer = projectListsRequiredVitestPeer(projectPath, pkg);
     // rewrite scripts in package.json
     extractedStagedConfig = rewritePackageJson(
       pkg,
@@ -2036,8 +2091,9 @@ export function rewriteMonorepoProject(
       catalogDependencyResolver,
       usesVitestBrowserMode(projectPath),
       collectProviderSourceModes(projectPath),
-      projectUsesVitestDirectly(projectPath, pkg),
+      projectUsesVitestDirectly(projectPath, pkg, requiredVitestPeer),
       sourceTreeReferencesRetainedVitestModule(projectPath),
+      requiredVitestPeer,
     );
     // If this SUB-workspace now depends on `vite-plus` and Yarn isolates its
     // hoisting (via the root `nmHoistingLimits` OR the workspace's own
@@ -3791,6 +3847,9 @@ function pnpmConfigLivesInPackageJson(pkg: BootstrapPackageJson, projectPath: st
 // vitest version. Returns true if any spec changed. These are plain dependency
 // entries (not overrides), so this is package-manager agnostic.
 function alignVitestEcosystemPackages(pkg: BootstrapPackageJson): boolean {
+  if (!VITEST_IS_MANAGED_OVERRIDE) {
+    return false;
+  }
   const dependencyGroups = [pkg.devDependencies, pkg.dependencies, pkg.optionalDependencies];
   let changed = false;
   for (const dependencies of dependencyGroups) {
@@ -3865,7 +3924,9 @@ function reconcileVitePlusBootstrapPackage(
       (dependencies) => dependencies?.[provider] !== undefined,
     );
     if (installGroup) {
-      installGroup[provider] = VITEST_VERSION;
+      if (VITEST_IS_MANAGED_OVERRIDE) {
+        installGroup[provider] = VITEST_VERSION;
+      }
     } else {
       pkg.devDependencies ??= {};
       pkg.devDependencies[provider] = VITEST_VERSION;
@@ -3907,11 +3968,13 @@ function reconcileVitePlusBootstrapPackage(
     // the same exact version as the Vite+ runner.
     const existingGroup = installGroups.find((dependencies) => dependencies?.vitest !== undefined);
     if (existingGroup) {
-      existingGroup.vitest = getCatalogDependencySpec(
-        existingGroup.vitest,
-        VITEST_VERSION,
-        supportCatalog,
-      );
+      if (VITEST_IS_MANAGED_OVERRIDE) {
+        existingGroup.vitest = getCatalogDependencySpec(
+          existingGroup.vitest,
+          VITEST_VERSION,
+          supportCatalog,
+        );
+      }
     } else {
       pkg.devDependencies ??= {};
       pkg.devDependencies.vitest = getCatalogDependencySpec(
@@ -4534,17 +4597,21 @@ function sourceTreeReferencesAny(projectPath: string, hints: readonly string[]):
   return sourceTreeMatches(projectPath, (content) => hints.some((hint) => content.includes(hint)));
 }
 
-// Normal imports from `vitest` are rewritten to `vite-plus/test` later in the
-// same migration and therefore do not justify a lasting direct dependency.
-// Module augmentations and triple-slash type references deliberately retain the
-// upstream module identity, so keep vitest package-local for those surfaces.
+// Normal imports and triple-slash type directives from `vitest` are rewritten
+// to `vite-plus/test` later in the same migration and therefore do not justify
+// a lasting direct dependency. Module augmentations, `vitest/package.json`, and
+// compilerOptions.types entries deliberately retain the upstream package
+// identity, so keep Vitest package-local for those surfaces.
 function sourceTreeReferencesRetainedVitestModule(projectPath: string): boolean {
-  return sourceTreeMatches(projectPath, (content) => {
-    return (
-      /\bdeclare\s+module\s+['"]vitest(?:\/[^'"]*)?['"]/.test(content) ||
-      /<reference\s+types\s*=\s*['"]vitest(?:\/[^'"]*)?['"]/.test(content)
-    );
-  });
+  return (
+    findTsconfigFiles(projectPath).some(hasVitestTypesInTsconfig) ||
+    sourceTreeMatches(projectPath, (content) => {
+      return (
+        /\bdeclare\s+module\s+['"]vitest(?:\/[^'"]*)?['"]/.test(content) ||
+        content.includes('vitest/package.json')
+      );
+    })
+  );
 }
 
 function usesVitestBrowserMode(projectPath: string): boolean {
@@ -4599,10 +4666,13 @@ export function rewritePackageJson(
   // is REMOVED so it arrives transitively through vite-plus. Defaults to true to
   // preserve legacy behavior for callers that don't compute the signal.
   usesVitestDirectly = true,
-  // Module augmentations/triple-slash references intentionally retain the
-  // upstream `vitest` identity after import rewriting and therefore require a
-  // package-local provider under strict dependency layouts.
+  // Module augmentations, compilerOptions.types, and `vitest/package.json`
+  // intentionally retain the upstream package identity after import rewriting
+  // and therefore require a package-local provider under strict layouts.
   retainedVitestModule = false,
+  // Installed dependency metadata can reveal required Vitest peers whose
+  // package names do not include "vitest".
+  requiredVitestPeer = false,
 ): Record<string, string | string[]> | null {
   if (pkg.scripts) {
     const updated = rewriteScripts(
@@ -4763,7 +4833,9 @@ export function rewritePackageJson(
       (deps) => deps?.[provider] !== undefined,
     );
     if (installGroup) {
-      installGroup[provider] = VITEST_VERSION;
+      if (VITEST_IS_MANAGED_OVERRIDE) {
+        installGroup[provider] = VITEST_VERSION;
+      }
     } else {
       pkg.devDependencies ??= {};
       pkg.devDependencies[provider] = VITEST_VERSION;
@@ -4854,7 +4926,11 @@ export function rewritePackageJson(
   // already owns it. The guard below still no-ops when a direct `vitest` already exists,
   // so a genuine normalize pass of an already-correct project mutates nothing.
   const needDirectVitest =
-    needVitePlus || effectiveBrowserMode || isVitestAdjacent || retainedVitestModule;
+    needVitePlus ||
+    effectiveBrowserMode ||
+    isVitestAdjacent ||
+    retainedVitestModule ||
+    requiredVitestPeer;
   if (needVitePlus || shouldNormalizeExistingVitePlus) {
     pkg.devDependencies = {
       ...pkg.devDependencies,
@@ -4883,6 +4959,7 @@ export function rewritePackageJson(
       !installableDeps.vitest &&
       (effectiveBrowserMode ||
         retainedVitestModule ||
+        requiredVitestPeer ||
         Object.keys(installableDeps).some((name) => name.includes('vitest')))
     ) {
       pkg.devDependencies ??= {};

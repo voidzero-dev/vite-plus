@@ -192,6 +192,27 @@ export function hasTypesToRewriteInTsconfig(filePath: string): boolean {
   );
 }
 
+export function hasVitestTypesInTsconfig(filePath: string): boolean {
+  let text: string;
+  try {
+    text = fs.readFileSync(filePath, 'utf-8');
+  } catch {
+    return false;
+  }
+
+  const parsed = parseJsonc(text) as {
+    compilerOptions?: { types?: unknown[] };
+  } | null;
+
+  const types = parsed?.compilerOptions?.types;
+  return (
+    Array.isArray(types) &&
+    types.some((type) =>
+      typeof type === 'string' ? type === 'vitest' || type.startsWith('vitest/') : false,
+    )
+  );
+}
+
 export function rewriteTypesInTsconfig(filePath: string): boolean {
   let text: string;
   try {
