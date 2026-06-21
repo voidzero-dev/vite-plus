@@ -91,9 +91,9 @@ impl PackageManager {
                 bin_name = "yarn".into();
 
                 // Determine yarn version
-                let is_yarn_v1 = self.version.starts_with("1.");
+                let is_berry = self.is_yarn_berry();
 
-                if is_yarn_v1 {
+                if !is_berry {
                     // yarn@1: yarn upgrade [--latest]
                     if let Some(filters) = options.filters {
                         args.push("workspace".into());

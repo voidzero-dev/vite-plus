@@ -45,7 +45,9 @@ impl PackageManager {
             PackageManagerType::Pnpm => self.resolve_pnpm_dlx(options, envs),
             PackageManagerType::Npm => self.resolve_npm_dlx(options, envs),
             PackageManagerType::Yarn => {
-                if self.version.starts_with("1.") {
+                let is_berry = self.is_yarn_berry();
+
+                if !is_berry {
                     // Yarn 1.x doesn't have dlx, fall back to npx
                     self.resolve_npx_fallback(options, envs)
                 } else {
