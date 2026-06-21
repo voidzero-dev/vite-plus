@@ -138,6 +138,8 @@ pub(crate) async fn execute_check(
         if fix && lint_enabled {
             args.push("--fix".to_string());
         }
+        let lint_format = if is_github_actions_env(envs) { "github" } else { "default" };
+        args.push(format!("--format={lint_format}"));
         if !lint_enabled && type_check_enabled {
             args.push("--type-check-only".to_string());
         }
@@ -271,6 +273,10 @@ fn flush_deferred_pass_lines(
     }
 }
 
+fn is_github_actions_env(envs: &FxHashMap<Arc<OsStr>, Arc<OsStr>>) -> bool {
+    envs.get(OsStr::new("GITHUB_ACTIONS")).is_some_and(|value| value.as_ref() == OsStr::new("true"))
+}
+
 /// Combine stdout and stderr from a captured command output.
 fn combine_output(captured: CapturedCommandOutput) -> (ExitStatus, String) {
     let combined = if captured.stderr.is_empty() {
@@ -281,4 +287,27 @@ fn combine_output(captured: CapturedCommandOutput) -> (ExitStatus, String) {
         format!("{}{}", captured.stdout, captured.stderr)
     };
     (captured.status, combined)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{ffi::OsStr, sync::Arc};
+
+    use rustc_hash::FxHashMap;
+
+    use super::is_github_actions_env;
+
+    fn envs(entries: &[(&str, &str)]) -> FxHashMap<Arc<OsStr>, Arc<OsStr>> {
+        entries
+            .iter()
+            .map(|(key, value)| (Arc::from(OsStr::new(key)), Arc::from(OsStr::new(value))))
+            .collect()
+    }
+
+    #[test]
+    fn github_actions_env_requires_true_value() {
+        assert!(is_github_actions_env(&envs(&[("GITHUB_ACTIONS", "true")])));
+        assert!(!is_github_actions_env(&envs(&[("GITHUB_ACTIONS", "false")])));
+        assert!(!is_github_actions_env(&envs(&[])));
+    }
 }
