@@ -121,11 +121,11 @@ impl PackageManager {
                 }
             }
             PackageManagerType::Yarn => {
-                let is_yarn1 = self.version.starts_with("1.");
+                let is_berry = self.is_yarn_berry();
                 let has_filters = options.filters.is_some_and(|f| !f.is_empty());
 
                 // yarn@2+ uses 'workspaces foreach' for recursive or filters
-                if !is_yarn1 && (options.recursive || has_filters) {
+                if is_berry && (options.recursive || has_filters) {
                     args.push("workspaces".into());
                     args.push("foreach".into());
                     args.push("--all".into());
@@ -141,19 +141,19 @@ impl PackageManager {
                     args.push("pack".into());
                 } else {
                     // yarn@1 or single package pack
-                    if options.recursive && is_yarn1 {
+                    if options.recursive && !is_berry {
                         output::warn(
                             "yarn@1 does not support recursive pack, ignoring --recursive flag",
                         );
                     }
-                    if has_filters && is_yarn1 {
+                    if has_filters && !is_berry {
                         output::warn("yarn@1 does not support --filter, ignoring --filter flag");
                     }
                     args.push("pack".into());
                 }
 
                 if let Some(out) = options.out {
-                    if is_yarn1 {
+                    if !is_berry {
                         args.push("--filename".into());
                     } else {
                         args.push("--out".into());
