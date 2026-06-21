@@ -1,0 +1,7 @@
+{
+  "name": "@scope/env-install-id-pkg",
+  "version": "1.0.0",
+  "bin": {
+    "env-install-id-cli": "./cli.js"
+  }
+}

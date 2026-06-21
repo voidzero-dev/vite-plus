@@ -17,6 +17,9 @@ pub struct PackageMetadata {
     pub name: String,
     /// Package version
     pub version: String,
+    /// Directory identifier for this installation. Empty for legacy installs.
+    #[serde(default)]
+    pub install_id: String,
     /// Platform versions used during installation
     pub platform: Platform,
     /// Binary names provided by this package
@@ -59,6 +62,7 @@ impl PackageMetadata {
         Self {
             name,
             version,
+            install_id: String::new(),
             platform: Platform { node: node_version, npm: npm_version },
             bins,
             js_bins,
@@ -71,6 +75,21 @@ impl PackageMetadata {
     /// Check if a binary requires Node.js to run.
     pub fn is_js_binary(&self, bin_name: &str) -> bool {
         self.js_bins.contains(bin_name)
+    }
+
+    /// Get the package installation prefix.
+    pub fn installation_dir(&self) -> Result<AbsolutePathBuf, Error> {
+        Self::installation_dir_for(&self.name, &self.install_id)
+    }
+
+    /// Resolve an installation prefix, including the legacy empty-ID layout.
+    pub fn installation_dir_for(
+        package_name: &str,
+        install_id: &str,
+    ) -> Result<AbsolutePathBuf, Error> {
+        let packages_dir = get_packages_dir()?;
+        let package_dir = packages_dir.join(package_name);
+        if install_id.is_empty() { Ok(package_dir) } else { Ok(package_dir.join(install_id)) }
     }
 
     /// Get the metadata file path for a package.
@@ -200,6 +219,39 @@ mod tests {
             "Expected path ending with @types/node.json, got: {}",
             path_str
         );
+    }
+
+    #[test]
+    fn test_legacy_metadata_defaults_to_empty_install_id() {
+        let metadata: PackageMetadata = serde_json::from_str(
+            r#"{
+                "name": "typescript",
+                "version": "5.9.3",
+                "platform": { "node": "22.0.0" },
+                "bins": ["tsc"],
+                "manager": "npm",
+                "installedAt": "2026-01-01T00:00:00Z"
+            }"#,
+        )
+        .unwrap();
+
+        assert!(metadata.install_id.is_empty());
+    }
+
+    #[test]
+    fn test_installation_dir_uses_install_id() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = vite_shared::EnvConfig::test_guard(
+            vite_shared::EnvConfig::for_test_with_home(temp_dir.path()),
+        );
+
+        let legacy = PackageMetadata::installation_dir_for("@scope/pkg", "").unwrap();
+        let identified = PackageMetadata::installation_dir_for("@scope/pkg", "install-id").unwrap();
+
+        assert!(legacy.as_path().ends_with("packages/@scope/pkg"));
+        assert!(identified.as_path().ends_with("packages/@scope/pkg/install-id"));
     }
 
     #[tokio::test]

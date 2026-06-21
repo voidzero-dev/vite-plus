@@ -1,0 +1,12 @@
+{
+  "env": {},
+  "commands": [
+    "vp install -g ./env-install-id-pkg # Install scoped package globally",
+    "env-install-id-cli # Installed bin should run",
+    "node -e \"const fs = require('fs'); const path = require('path'); const metadata = JSON.parse(fs.readFileSync(path.join(process.env.VP_HOME, 'packages/@scope/env-install-id-pkg.json'), 'utf8')); if (!metadata.installId) throw new Error('missing install id'); const packageDir = path.join(process.env.VP_HOME, 'packages/@scope/env-install-id-pkg'); if (!fs.existsSync(path.join(packageDir, metadata.installId))) throw new Error('install directory missing'); fs.writeFileSync(path.join(process.env.VP_HOME, 'first-install-id'), metadata.installId); fs.writeFileSync(path.join(packageDir, 'legacy-marker'), 'legacy'); console.log('identified install exists');\" # Record the first install and seed a legacy-layout file",
+    "vp install -g ./env-install-id-pkg # Reinstall into a new immutable directory",
+    "env-install-id-cli # Reinstalled bin should run",
+    "node -e \"const fs = require('fs'); const path = require('path'); const metadata = JSON.parse(fs.readFileSync(path.join(process.env.VP_HOME, 'packages/@scope/env-install-id-pkg.json'), 'utf8')); const packageDir = path.join(process.env.VP_HOME, 'packages/@scope/env-install-id-pkg'); const previous = fs.readFileSync(path.join(process.env.VP_HOME, 'first-install-id'), 'utf8'); if (!metadata.installId || metadata.installId === previous) throw new Error('install id did not change'); if (!fs.existsSync(path.join(packageDir, metadata.installId))) throw new Error('new install directory missing'); if (fs.existsSync(path.join(packageDir, previous)) || fs.existsSync(path.join(packageDir, 'legacy-marker'))) throw new Error('old install was not removed'); fs.rmSync(path.join(process.env.VP_HOME, 'first-install-id')); console.log('install switched and old installs removed');\" # Metadata should activate only the new install",
+    "vp remove -g @scope/env-install-id-pkg # Cleanup"
+  ]
+}

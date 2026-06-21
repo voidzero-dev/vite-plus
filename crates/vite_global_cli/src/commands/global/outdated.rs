@@ -11,10 +11,7 @@ use vite_install::commands::outdated::Format;
 
 use super::{latest_package_versions, parse_package_spec};
 use crate::{
-    commands::env::{
-        config::{get_node_modules_dir, get_packages_dir},
-        package_metadata::PackageMetadata,
-    },
+    commands::env::{config::get_node_modules_dir, package_metadata::PackageMetadata},
     error::Error,
 };
 
@@ -24,6 +21,7 @@ pub struct OutdatedPackage {
     pub current: String,
     pub latest: String,
     pub spec: Option<String>,
+    install_id: String,
     node: String,
     bins: Vec<String>,
 }
@@ -108,6 +106,7 @@ pub async fn get_outdated_packages(
             current: package.version,
             latest: version,
             spec,
+            install_id: package.install_id,
             node: package.platform.node,
             bins: package.bins,
         });
@@ -154,11 +153,11 @@ pub async fn execute(
 }
 
 fn print_json(packages: &[OutdatedPackage]) -> Result<(), Error> {
-    let packages_dir = get_packages_dir()?;
     let mut output = BTreeMap::new();
 
     for package in packages {
-        let package_dir = packages_dir.join(&package.name);
+        let package_dir =
+            PackageMetadata::installation_dir_for(&package.name, &package.install_id)?;
         let location = get_node_modules_dir(&package_dir, &package.name);
 
         output.insert(

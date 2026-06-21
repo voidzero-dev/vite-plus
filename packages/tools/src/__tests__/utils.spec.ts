@@ -350,7 +350,7 @@ line 3
     const home = homedir();
     const output = [
       `${home}/.vite-plus/js_runtime/node/v20.18.0/bin/node`,
-      `${home}/.vite-plus/packages/cowsay/lib/node_modules/cowsay/./cli.js`,
+      `${home}/.vite-plus/packages/cowsay/1782100800123-12345-0123456789abcdef0123456789abcdef/lib/node_modules/cowsay/./cli.js`,
       `${home}/.vite-plus`,
       `${home}/.vite-plus/bin`,
     ].join('\n');
