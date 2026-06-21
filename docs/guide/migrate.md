@@ -168,7 +168,7 @@ After migrating, remove lint-staged from your dependencies and delete any lint-s
 
 ### Git hook tools
 
-The `vp migrate` command can set up Vite+ commit hooks for you, but it doesn't automatically migrate every type of Git hook tool. This automatic migration path is specifically designed to handle Husky and lint-staged-style setups.
+The `vp migrate` command can set up Vite+ commit hooks for you, but it doesn't automatically migrate every type of Git hook tool. This automatic migration path is specifically designed to handle Husky v9+ and lint-staged-style setups. Projects using Husky versions older than 9.0.0 are skipped and should upgrade to Husky v9 before using the automatic migration path.
 
 If your project currently uses `lefthook`, `simple-git-hooks`, or `yorkie`, `vp migrate` will leave your existing configuration alone and show a warning. This happens even if you choose to set up hooks during the prompt or include the `--hooks` flag.
 
