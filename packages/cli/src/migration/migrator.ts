@@ -5080,7 +5080,7 @@ export function preflightGitHooksSetup(
   const prodDeps = pkgContent.dependencies as Record<string, string> | undefined;
   for (const tool of OTHER_HOOK_TOOLS) {
     if (deps?.[tool] || prodDeps?.[tool] || pkgContent[tool]) {
-      return `Detected ${tool} — skipping git hooks setup. Please configure git hooks manually.`;
+      return `Detected ${tool} — skipping git hooks setup. Please configure git hooks manually, see https://viteplus.dev/guide/migrate#git-hook-tools`;
     }
   }
   const huskyReason = checkUnsupportedHuskyVersion(projectPath, deps, prodDeps, packageManager);
