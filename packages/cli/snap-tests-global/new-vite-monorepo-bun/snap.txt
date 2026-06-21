@@ -30,8 +30,7 @@ vite.config.ts
     "vite-plus": "catalog:"
   },
   "overrides": {
-    "vite": "catalog:",
-    "vitest": "catalog:"
+    "vite": "catalog:"
   },
   "devEngines": {
     "packageManager": {
@@ -45,7 +44,6 @@ vite.config.ts
   },
   "catalog": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vitest": "<semver>",
     "vite-plus": "latest"
   }
 }

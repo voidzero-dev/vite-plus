@@ -9,18 +9,14 @@ allowBuilds:
   core-js: true
 catalog:
   vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: <semver>
   vite-plus: latest
 overrides:
   vite: "catalog:"
-  vitest: "catalog:"
 peerDependencyRules:
   allowAny:
     - vite
-    - vitest
   allowedVersions:
     vite: "*"
-    vitest: "*"
 
 > node $SNAP_CASES_DIR/.shared/mock-npm-registry.mjs -- vp create @your-org:with-build-dep --no-interactive --directory default-app # default run surfaces the gated build with guidance, leaving it unapproved
 
@@ -37,18 +33,14 @@ allowBuilds:
   core-js: set this to true or false
 catalog:
   vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: <semver>
   vite-plus: latest
 overrides:
   vite: "catalog:"
-  vitest: "catalog:"
 peerDependencyRules:
   allowAny:
     - vite
-    - vitest
   allowedVersions:
     vite: "*"
-    vitest: "*"
 
 > cd default-app && vp pm approve-builds core-js # the guidance's `vp pm approve-builds` command approves the gated build
 .../core-js@<semver>/node_modules/core-js postinstall$ node -e "try{require('./postinstall')}catch(e){}"
@@ -59,15 +51,11 @@ allowBuilds:
   core-js: true
 catalog:
   vite: npm:@voidzero-dev/vite-plus-core@latest
-  vitest: <semver>
   vite-plus: latest
 overrides:
   vite: "catalog:"
-  vitest: "catalog:"
 peerDependencyRules:
   allowAny:
     - vite
-    - vitest
   allowedVersions:
     vite: "*"
-    vitest: "*"

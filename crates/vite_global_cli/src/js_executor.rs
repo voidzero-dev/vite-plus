@@ -486,7 +486,7 @@ mod tests {
         assert!(!local_vite_plus_is_older("0.2.1", "0.2.1"));
         // Newer local keeps local-first semantics.
         assert!(!local_vite_plus_is_older("0.3.0", "0.2.1"));
-        // Unparseable versions are conservative: never escalate.
+        // Unparsable versions are conservative: never escalate.
         assert!(!local_vite_plus_is_older("latest", "0.2.1"));
     }
 

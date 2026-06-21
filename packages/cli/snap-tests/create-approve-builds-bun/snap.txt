@@ -20,8 +20,7 @@
     "vite-plus": "latest"
   },
   "overrides": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vitest": "<semver>"
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest"
   },
   "devEngines": {
     "packageManager": {
@@ -61,8 +60,7 @@ These dependencies may not work until built. Run vp pm approve-builds core-js in
     "vite-plus": "latest"
   },
   "overrides": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vitest": "<semver>"
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest"
   },
   "devEngines": {
     "packageManager": {
@@ -97,8 +95,7 @@ bun pm trust v<semver> (<hash>)
     "vite-plus": "latest"
   },
   "overrides": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vitest": "<semver>"
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest"
   },
   "devEngines": {
     "packageManager": {

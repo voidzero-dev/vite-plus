@@ -24,8 +24,7 @@
     }
   },
   "resolutions": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vitest": "<semver>"
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest"
   },
   "devEngines": {
     "packageManager": {
@@ -61,8 +60,7 @@ These dependencies may not work until built. Enable them in the workspace root p
     "vite-plus": "latest"
   },
   "resolutions": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vitest": "<semver>"
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest"
   },
   "devEngines": {
     "packageManager": {
