@@ -269,15 +269,7 @@ pub async fn install_production_deps(
         args.push(registry_url);
     }
 
-    // The child normally honors session and project runtime overrides.
-    // Pin an exact LTS version so incompatible overrides cannot skip optional native binaries.
-    let node_version =
-        vite_js_runtime::NodeProvider::new().resolve_latest_version().await.map_err(|error| {
-            Error::Setup(
-                format!("Failed to resolve the latest Node.js LTS version: {error}").into(),
-            )
-        })?;
-    let output = run_vp_install(version_dir, &vp_binary, &args, &node_version).await?;
+    let output = run_vp_install(version_dir, &vp_binary, &args).await?;
 
     if !output.status.success() {
         let log_path = write_upgrade_log(version_dir, &output.stdout, &output.stderr).await;
@@ -309,7 +301,7 @@ pub async fn install_production_deps(
         // Only create the local override after explicit consent. This preserves
         // minimumReleaseAge protection for the default and non-interactive paths.
         write_release_age_overrides(version_dir).await?;
-        let retry_output = run_vp_install(version_dir, &vp_binary, &args, &node_version).await?;
+        let retry_output = run_vp_install(version_dir, &vp_binary, &args).await?;
         if !retry_output.status.success() {
             let retry_log_path =
                 write_upgrade_log(version_dir, &retry_output.stdout, &retry_output.stderr).await;
@@ -331,13 +323,12 @@ async fn run_vp_install(
     version_dir: &AbsolutePath,
     vp_binary: &AbsolutePath,
     args: &[&str],
-    node_version: &str,
 ) -> Result<Output, Error> {
     let output = tokio::process::Command::new(vp_binary.as_path())
         .args(args)
         .current_dir(version_dir)
         .env("CI", "true")
-        .env(vite_shared::env_vars::VP_NODE_VERSION, node_version)
+        .env(crate::FORCE_LTS_NODE_ENV, "1")
         .output()
         .await?;
 
@@ -835,7 +826,7 @@ mod tests {
 
     #[cfg(unix)]
     #[tokio::test]
-    async fn run_vp_install_overrides_node_version() {
+    async fn run_vp_install_forces_lts_node() {
         use std::os::unix::fs::PermissionsExt;
 
         let temp = tempfile::tempdir().unwrap();
@@ -846,7 +837,7 @@ mod tests {
         let vp_binary = bin_dir.join(crate::VP_BINARY_NAME);
         tokio::fs::write(
             &vp_binary,
-            "#!/bin/sh\nprintf '%s' \"$VP_NODE_VERSION\" > node-version.txt\n",
+            "#!/bin/sh\nprintf '%s' \"$VP_FORCE_LTS_NODE\" > force-lts-node.txt\n",
         )
         .await
         .unwrap();
@@ -854,13 +845,12 @@ mod tests {
             .await
             .unwrap();
 
-        let output =
-            run_vp_install(&version_dir, &vp_binary, &["install"], "24.11.1").await.unwrap();
+        let output = run_vp_install(&version_dir, &vp_binary, &["install"]).await.unwrap();
         assert!(output.status.success());
 
-        let node_version =
-            tokio::fs::read_to_string(version_dir.join("node-version.txt")).await.unwrap();
-        assert_eq!(node_version, "24.11.1");
+        let force_lts =
+            tokio::fs::read_to_string(version_dir.join("force-lts-node.txt")).await.unwrap();
+        assert_eq!(force_lts, "1");
     }
 
     #[test]
