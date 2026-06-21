@@ -269,7 +269,15 @@ pub async fn install_production_deps(
         args.push(registry_url);
     }
 
-    let output = run_vp_install(version_dir, &vp_binary, &args).await?;
+    // The child normally honors session and project runtime overrides.
+    // Pin an exact LTS version so incompatible overrides cannot skip optional native binaries.
+    let node_version =
+        vite_js_runtime::NodeProvider::new().resolve_latest_version().await.map_err(|error| {
+            Error::Setup(
+                format!("Failed to resolve the latest Node.js LTS version: {error}").into(),
+            )
+        })?;
+    let output = run_vp_install(version_dir, &vp_binary, &args, &node_version).await?;
 
     if !output.status.success() {
         let log_path = write_upgrade_log(version_dir, &output.stdout, &output.stderr).await;
@@ -301,7 +309,7 @@ pub async fn install_production_deps(
         // Only create the local override after explicit consent. This preserves
         // minimumReleaseAge protection for the default and non-interactive paths.
         write_release_age_overrides(version_dir).await?;
-        let retry_output = run_vp_install(version_dir, &vp_binary, &args).await?;
+        let retry_output = run_vp_install(version_dir, &vp_binary, &args, &node_version).await?;
         if !retry_output.status.success() {
             let retry_log_path =
                 write_upgrade_log(version_dir, &retry_output.stdout, &retry_output.stderr).await;
@@ -323,11 +331,13 @@ async fn run_vp_install(
     version_dir: &AbsolutePath,
     vp_binary: &AbsolutePath,
     args: &[&str],
+    node_version: &str,
 ) -> Result<Output, Error> {
     let output = tokio::process::Command::new(vp_binary.as_path())
         .args(args)
         .current_dir(version_dir)
         .env("CI", "true")
+        .env(vite_shared::env_vars::VP_NODE_VERSION, node_version)
         .output()
         .await?;
 
@@ -821,6 +831,36 @@ mod tests {
             !version_dir.join("bunfig.toml").as_path().exists(),
             "bunfig.toml should not be created"
         );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn run_vp_install_overrides_node_version() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp = tempfile::tempdir().unwrap();
+        let version_dir = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        let bin_dir = version_dir.join("bin");
+        tokio::fs::create_dir_all(&bin_dir).await.unwrap();
+
+        let vp_binary = bin_dir.join(crate::VP_BINARY_NAME);
+        tokio::fs::write(
+            &vp_binary,
+            "#!/bin/sh\nprintf '%s' \"$VP_NODE_VERSION\" > node-version.txt\n",
+        )
+        .await
+        .unwrap();
+        tokio::fs::set_permissions(&vp_binary, std::fs::Permissions::from_mode(0o755))
+            .await
+            .unwrap();
+
+        let output =
+            run_vp_install(&version_dir, &vp_binary, &["install"], "24.11.1").await.unwrap();
+        assert!(output.status.success());
+
+        let node_version =
+            tokio::fs::read_to_string(version_dir.join("node-version.txt")).await.unwrap();
+        assert_eq!(node_version, "24.11.1");
     }
 
     #[test]
