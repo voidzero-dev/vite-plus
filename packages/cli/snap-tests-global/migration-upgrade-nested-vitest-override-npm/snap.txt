@@ -25,3 +25,4 @@ This project is already using Vite+! Happy coding!
 
 > vp migrate --no-interactive # nested override must not make migration permanently pending
 This project is already using Vite+! Happy coding!
+

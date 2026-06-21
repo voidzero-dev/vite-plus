@@ -39,3 +39,4 @@ peerDependencyRules:
 
 > vp migrate --no-interactive # directive rewriting is stable on rerun
 This project is already using Vite+! Happy coding!
+

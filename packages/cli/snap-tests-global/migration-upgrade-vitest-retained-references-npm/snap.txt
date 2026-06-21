@@ -37,3 +37,4 @@ console.log(metadata.version);
 
 > vp migrate --no-interactive # retained references remain stable on rerun
 This project is already using Vite+! Happy coding!
+

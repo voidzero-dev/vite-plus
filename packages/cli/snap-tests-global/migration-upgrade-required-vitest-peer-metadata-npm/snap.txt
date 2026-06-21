@@ -27,3 +27,4 @@
 
 > vp migrate --no-interactive # metadata-based peer provisioning is stable on rerun
 This project is already using Vite+! Happy coding!
+

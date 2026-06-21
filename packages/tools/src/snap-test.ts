@@ -715,10 +715,7 @@ async function runTestCase(
     }
   }
 
-  // Command output commonly ends with multiple newlines. Preserve one existing
-  // terminal newline, but collapse extras so rerun snapshots do not gain a
-  // blank line at EOF on every invocation.
-  const newSnapContent = newSnap.join('\n').replace(/(?:\r?\n)+$/, '\n');
+  const newSnapContent = newSnap.join('\n');
 
   await fsPromises.writeFile(`${casesDir}/${name}/snap.txt`, newSnapContent);
   console.log('%s finished in %dms', name, Date.now() - startTime);
