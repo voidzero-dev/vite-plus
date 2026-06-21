@@ -18,8 +18,7 @@
 
 use std::{collections::HashMap, io::BufReader};
 
-use vite_js_runtime::{JsRuntimeType, NodeProvider, download_runtime};
-use vite_path::{AbsolutePath, AbsolutePathBuf};
+use vite_path::AbsolutePath;
 use vite_shared::{PrependOptions, prepend_to_path_env};
 
 use crate::{error::Error, js_executor::JsExecutor};
@@ -66,28 +65,8 @@ pub fn has_vite_plus_dependency(cwd: &AbsolutePath) -> bool {
 /// If `project_path` contains a package.json, uses the project's runtime
 /// (based on devEngines.runtime). Otherwise, falls back to the CLI's runtime.
 pub async fn prepend_js_runtime_to_path_env(project_path: &AbsolutePath) -> Result<(), Error> {
-    let force_lts = std::env::var_os(vite_setup::FORCE_LTS_NODE_ENV).is_some();
-    let node_bin_prefix = resolve_package_manager_node_bin(project_path, force_lts).await?;
-
-    // Use dedupe_anywhere=true to check if node bin already exists anywhere in PATH
-    let options = PrependOptions { dedupe_anywhere: true };
-    if prepend_to_path_env(&node_bin_prefix, options) {
-        tracing::debug!("Set PATH to include {:?}", node_bin_prefix);
-    }
-
-    Ok(())
-}
-
-async fn resolve_package_manager_node_bin(
-    project_path: &AbsolutePath,
-    force_lts: bool,
-) -> Result<AbsolutePathBuf, Error> {
-    if force_lts {
-        let version = NodeProvider::new().resolve_latest_version().await?;
-        return Ok(download_runtime(JsRuntimeType::Node, &version).await?.get_bin_prefix());
-    }
-
     let mut executor = JsExecutor::new(None);
+
     // Use project runtime if package.json exists, otherwise use CLI runtime
     let package_json_path = project_path.join("package.json");
     let runtime = if package_json_path.as_path().exists() {
@@ -95,7 +74,15 @@ async fn resolve_package_manager_node_bin(
     } else {
         executor.ensure_cli_runtime().await?
     };
-    Ok(runtime.get_bin_prefix())
+
+    let node_bin_prefix = runtime.get_bin_prefix();
+    // Use dedupe_anywhere=true to check if node bin already exists anywhere in PATH
+    let options = PrependOptions { dedupe_anywhere: true };
+    if prepend_to_path_env(&node_bin_prefix, options) {
+        tracing::debug!("Set PATH to include {:?}", node_bin_prefix);
+    }
+
+    Ok(())
 }
 
 // Global package management
@@ -216,35 +203,5 @@ mod tests {
         let child_path = AbsolutePathBuf::new(child_dir.as_path().to_path_buf()).unwrap();
         // Should find the child's package.json first and return false
         assert!(!has_vite_plus_dependency(&child_path));
-    }
-
-    #[tokio::test]
-    async fn forced_lts_runtime_ignores_project_and_system_first_config() {
-        use tempfile::TempDir;
-        use vite_shared::EnvConfig;
-
-        let vp_home = TempDir::new().unwrap();
-        let _guard =
-            EnvConfig::test_guard(EnvConfig::for_test_with_home(vp_home.path().to_path_buf()));
-        tokio::fs::write(vp_home.path().join("config.json"), r#"{"shimMode":"system_first"}"#)
-            .await
-            .unwrap();
-
-        let project = TempDir::new().unwrap();
-        tokio::fs::write(project.path().join("package.json"), "{}").await.unwrap();
-        tokio::fs::write(project.path().join(".node-version"), "20.0.0\n").await.unwrap();
-        let project_path = AbsolutePathBuf::new(project.path().to_path_buf()).unwrap();
-
-        let node_bin = resolve_package_manager_node_bin(&project_path, true).await.unwrap();
-
-        assert!(
-            node_bin.as_path().starts_with(vp_home.path()),
-            "forced LTS runtime should be managed under VP_HOME, got {}",
-            node_bin.as_path().display()
-        );
-        assert!(
-            !node_bin.as_path().to_string_lossy().contains("20.0.0"),
-            "forced LTS runtime should ignore the project Node pin"
-        );
     }
 }

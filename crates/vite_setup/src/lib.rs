@@ -26,6 +26,3 @@ pub const MAX_VERSIONS_KEEP: usize = 3;
 
 /// Platform-specific binary name for the `vp` CLI.
 pub const VP_BINARY_NAME: &str = if cfg!(windows) { "vp.exe" } else { "vp" };
-
-/// Force the package-manager bootstrap to use the managed latest LTS Node.js runtime.
-pub const FORCE_LTS_NODE_ENV: &str = "VP_FORCE_LTS_NODE";
