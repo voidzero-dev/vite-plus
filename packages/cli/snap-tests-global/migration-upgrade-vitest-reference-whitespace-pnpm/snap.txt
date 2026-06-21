@@ -1,0 +1,43 @@
+> vp migrate --no-interactive # TypeScript whitespace in a Vitest type directive is valid
+◇ Migrated . to Vite+
+• Node <semver>  pnpm <semver>
+• 2 config updates applied, 1 file had imports rewritten
+
+> cat package.json # directive detection keeps package-local Vitest provisioned
+{
+  "name": "migration-upgrade-vitest-reference-whitespace-pnpm",
+  "devDependencies": {
+    "vite": "catalog:",
+    "vitest": "catalog:",
+    "vite-plus": "catalog:"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "<semver>",
+      "onFail": "download"
+    }
+  },
+  "scripts": {
+    "prepare": "vp config"
+  }
+}
+
+> cat env.d.ts # directive is rewritten to the Vite+ public type surface
+/// <reference types = "vite-plus/test" />
+
+> cat pnpm-workspace.yaml # directive detection keeps shared Vitest management
+catalog:
+  vite: npm:@voidzero-dev/vite-plus-core@latest
+  vite-plus: latest
+  vitest: <semver>
+overrides:
+  vite: 'catalog:'
+  vitest: 'catalog:'
+peerDependencyRules:
+  allowAny:
+    - vite
+    - vitest
+  allowedVersions:
+    vite: '*'
+    vitest: '*'

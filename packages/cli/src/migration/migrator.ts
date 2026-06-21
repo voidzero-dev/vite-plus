@@ -578,6 +578,13 @@ function projectUsesVitestDirectly(
 ): boolean {
   return (
     projectListsVitestEcosystemDep(pkg) ||
+    // Browser packages declared only as peers still become direct installs:
+    // rewritePackageJson/reconcileVitePlusBootstrapPackage promote opt-in
+    // providers into devDependencies and treat the bundled browser packages as
+    // browser-mode intent. Account for that promotion before shared
+    // catalog/override ownership is decided, otherwise the promoted provider's
+    // exact Vitest peer is left unsatisfied under strict pnpm/Yarn layouts.
+    VITEST_BROWSER_DEP_NAMES.some((name) => pkg.peerDependencies?.[name] !== undefined) ||
     sourceTreeReferencesRetainedVitestModule(projectPath) ||
     usesVitestBrowserMode(projectPath)
   );
@@ -2866,6 +2873,33 @@ function ensureDirectViteForPnpm(
   return true;
 }
 
+// A peer declaration does not install Vitest and therefore must not keep a
+// workspace-wide managed Vitest catalog alive. Resolve its catalog reference to
+// the public peer range before that catalog is pruned, so the surviving peer
+// never points at a missing default/named catalog entry.
+function normalizeVitestPeerCatalogSpec(
+  peerDependencies: Record<string, string> | undefined,
+  catalogDependencyResolver?: CatalogDependencyResolver,
+): boolean {
+  if (!peerDependencies) {
+    return false;
+  }
+  const current = peerDependencies.vitest;
+  if (!current?.startsWith('catalog:')) {
+    return false;
+  }
+  const normalized = getCatalogDependencySpec(current, VITEST_VERSION, true, {
+    dependencyField: 'peerDependencies',
+    dependencyName: 'vitest',
+    catalogDependencyResolver,
+  });
+  if (normalized === current) {
+    return false;
+  }
+  peerDependencies.vitest = normalized;
+  return true;
+}
+
 function isVitePlusOverrideSpec(value: string): boolean {
   return (
     Object.values(VITE_PLUS_OVERRIDE_PACKAGES).includes(value) ||
@@ -3570,7 +3604,7 @@ function overridesSatisfyVitePlus(
 ): boolean {
   // Common case: a lingering managed `vitest` override is NOT satisfied — it
   // must be removed, so the bootstrap stays pending until it is.
-  if (!usesVitest && VITEST_IS_MANAGED_OVERRIDE && overrides?.vitest !== undefined) {
+  if (!usesVitest && VITEST_IS_MANAGED_OVERRIDE && typeof overrides?.vitest === 'string') {
     return false;
   }
   return Object.keys(managedOverridePackages(usesVitest)).every((dependencyName) =>
@@ -3786,6 +3820,7 @@ function reconcileVitePlusBootstrapPackage(
   packageManager: PackageManager,
   supportCatalog: boolean,
   ensureVitePlus: boolean,
+  catalogDependencyResolver?: CatalogDependencyResolver,
 ): boolean {
   const before = JSON.stringify(pkg);
   const usesVitest = projectUsesVitestDirectly(projectPath, pkg);
@@ -3814,6 +3849,7 @@ function reconcileVitePlusBootstrapPackage(
   }
 
   alignVitestEcosystemPackages(pkg);
+  normalizeVitestPeerCatalogSpec(pkg.peerDependencies, catalogDependencyResolver);
 
   const providerSourceModes = collectProviderSourceModes(projectPath);
   let usesAnyOptInProvider = false;
@@ -3934,6 +3970,7 @@ export function detectVitePlusBootstrapPending(
       packageManager === PackageManager.yarn ||
       packageManager === PackageManager.bun);
   const canonicalVitePlusSpec = supportCatalog ? 'catalog:' : VITE_PLUS_VERSION;
+  const catalogDependencyResolver = createCatalogDependencyResolver(projectPath, packageManager);
   for (const [index, packagePath] of bootstrapProjectPaths(projectPath, packages).entries()) {
     const childPackageJsonPath = path.join(packagePath, 'package.json');
     if (!fs.existsSync(childPackageJsonPath)) {
@@ -3949,6 +3986,7 @@ export function detectVitePlusBootstrapPending(
         packageManager,
         supportCatalog,
         index === 0,
+        catalogDependencyResolver,
       )
     ) {
       return true;
@@ -4139,6 +4177,10 @@ export function ensureVitePlusBootstrap(
       workspaceInfo.packageManager === PackageManager.yarn ||
       workspaceInfo.packageManager === PackageManager.bun);
   const canonicalVitePlusSpec = supportCatalog ? 'catalog:' : VITE_PLUS_VERSION;
+  const catalogDependencyResolver = createCatalogDependencyResolver(
+    projectPath,
+    workspaceInfo.packageManager,
+  );
 
   editJsonFile<
     BootstrapPackageJson & {
@@ -4154,6 +4196,7 @@ export function ensureVitePlusBootstrap(
       workspaceInfo.packageManager,
       supportCatalog,
       true,
+      catalogDependencyResolver,
     );
 
     if (workspaceInfo.packageManager === PackageManager.yarn) {
@@ -4219,6 +4262,7 @@ export function ensureVitePlusBootstrap(
         workspaceInfo.packageManager,
         supportCatalog,
         false,
+        catalogDependencyResolver,
       );
       return childChanged ? pkg : undefined;
     });
@@ -4234,6 +4278,7 @@ export function ensureVitePlusBootstrap(
         : undefined;
       const catalogDependencyResolver = readPnpmWorkspaceCatalogDependencyResolver(projectPath);
       if (
+        result.packageJson ||
         defaultCatalogVitePlusDependencyPending(pkg, catalogDependencyResolver) ||
         !overridesSatisfyVitePlus(
           readPnpmWorkspaceOverrides(projectPath),
@@ -4497,7 +4542,7 @@ function sourceTreeReferencesRetainedVitestModule(projectPath: string): boolean 
   return sourceTreeMatches(projectPath, (content) => {
     return (
       /\bdeclare\s+module\s+['"]vitest(?:\/[^'"]*)?['"]/.test(content) ||
-      /<reference\s+types=['"]vitest(?:\/[^'"]*)?['"]/.test(content)
+      /<reference\s+types\s*=\s*['"]vitest(?:\/[^'"]*)?['"]/.test(content)
     );
   });
 }
@@ -4607,8 +4652,8 @@ export function rewritePackageJson(
   // surviving consumer needs.)
   if (!usesVitestDirectly) {
     // Only the INSTALL groups — a `peerDependencies` `vitest` is a declaration
-    // about consumers (coerced to `*` via PUBLIC_PEER_DEPENDENCY_FALLBACKS),
-    // not an install pin, so it is left as-is.
+    // about consumers, not an install pin, so it is not removed here. Catalog
+    // peer specs are resolved to their public range/fallback below.
     for (const { dependencyField, dependencies } of dependencyGroups) {
       if (dependencyField === 'peerDependencies') {
         continue;
@@ -4630,6 +4675,9 @@ export function rewritePackageJson(
         needVitePlus = true;
       }
     }
+  }
+  if (normalizeVitestPeerCatalogSpec(pkg.peerDependencies, catalogDependencyResolver)) {
+    needVitePlus = true;
   }
   // Optional Vitest packages are published in lockstep with the runner. Keep
   // every declared official @vitest/* package on the bundled version during a

@@ -195,7 +195,9 @@ describe('rewriteMonorepo bun catalog with file: protocol', () => {
     rewritePackageJson(pkg, PackageManager.pnpm, true);
 
     expect(pkg.peerDependencies.vite).toBe('^7.0.0');
-    expect(pkg.peerDependencies.vitest).toBe('catalog:test');
+    // With no catalog resolver available, use a public fallback rather than
+    // leaking either a dangling catalog reference or the managed file: path.
+    expect(pkg.peerDependencies.vitest).toBe('*');
     expect(pkg.optionalDependencies.vite).toBe(
       'file:/tmp/tgz/voidzero-dev-vite-plus-core-0.0.0.tgz',
     );

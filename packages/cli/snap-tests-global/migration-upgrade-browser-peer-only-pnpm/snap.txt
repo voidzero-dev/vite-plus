@@ -1,0 +1,44 @@
+> vp migrate --no-interactive # peer-only browser provider is promoted with its required peers
+◇ Migrated . to Vite+
+• Node <semver>  pnpm <semver>
+• Package manager settings configured
+
+> cat package.json # provider, Playwright, and package-local Vitest are installed
+{
+  "name": "migration-upgrade-browser-peer-only-pnpm",
+  "devDependencies": {
+    "vite-plus": "catalog:",
+    "@vitest/browser-playwright": "<semver>",
+    "playwright": "*",
+    "vitest": "catalog:"
+  },
+  "peerDependencies": {
+    "@vitest/browser-playwright": "^4.0.0"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "<semver>",
+      "onFail": "download"
+    }
+  }
+}
+
+> cat pnpm-workspace.yaml # promoted provider keeps shared Vitest management
+catalog:
+  vite: npm:@voidzero-dev/vite-plus-core@latest
+  vite-plus: latest
+  vitest: <semver>
+overrides:
+  vite: 'catalog:'
+  vitest: 'catalog:'
+peerDependencyRules:
+  allowAny:
+    - vite
+    - vitest
+  allowedVersions:
+    vite: '*'
+    vitest: '*'
+
+> vp migrate --no-interactive # repaired project should no longer be pending
+This project is already using Vite+! Happy coding!
