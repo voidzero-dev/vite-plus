@@ -166,6 +166,16 @@ export default defineConfig({
 
 After migrating, remove lint-staged from your dependencies and delete any lint-staged config files. See the [Commit hooks guide](/guide/commit-hooks) and [Staged config reference](/config/staged) for details.
 
+### Git hook tools
+
+The `vp migrate` command can set up Vite+ commit hooks for you, but it doesn't automatically migrate every type of Git hook tool. This automatic migration path is specifically designed to handle Husky and lint-staged-style setups.
+
+If your project currently uses `lefthook`, `simple-git-hooks`, or `yorkie`, `vp migrate` will leave your existing configuration alone and show a warning. This happens even if you choose to set up hooks during the prompt or include the `--hooks` flag.
+
+If you want to move one of those tools over to Vite+ manually, you can follow these steps. First, move your staged-file commands into the `staged` block within `vite.config.ts`. Then, update your lifecycle script so it runs `vp config`. You will also need to create a Vite+ hook at `.vite-hooks/pre-commit` that runs `vp staged`. Finally, once you have confirmed that the Vite+ hook is working as expected, you can remove the old tool's configuration and dependency.
+
+You can find more details about the full Vite+ hook setup in the [Commit hooks guide](/guide/commit-hooks).
+
 ## Examples
 
 ```bash
