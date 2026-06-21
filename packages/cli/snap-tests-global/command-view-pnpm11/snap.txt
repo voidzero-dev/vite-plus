@@ -16,7 +16,6 @@ Documentation: https://viteplus.dev/guide/install
 
 
 > vp pm view testnpm2 # should view lodash package information (uses npm view)
-
 testnpm2@<semver> | ISC | deps: none | versions: 2
 
 dist
@@ -25,19 +24,16 @@ dist
 .integrity: sha512-<hash>
 
 maintainers:
-- fengmk2 <fengmk2@gmail.com>
+- fengmk2
 
 dist-tags:
 latest: <semver>
 release-1: <semver>
 
-published over a year ago by fengmk2 <fengmk2@gmail.com>
-
 > vp pm view testnpm2 version # should view lodash version field (uses npm view)
 1.0.1
 
 > vp pm view testnpm2@1.0.0 # should view specific version of lodash (uses npm view)
-
 testnpm2@<semver> | ISC | deps: none | versions: 2
 
 dist
@@ -46,13 +42,11 @@ dist
 .integrity: sha512-<hash>
 
 maintainers:
-- fengmk2 <fengmk2@gmail.com>
+- fengmk2
 
 dist-tags:
 latest: <semver>
 release-1: <semver>
-
-published over a year ago by fengmk2 <fengmk2@gmail.com>
 
 > vp pm view testnpm2 dist.tarball # should view nested field (uses npm view)
 https://registry.<domain>/testnpm2/-/testnpm2-1.0.1.tgz
@@ -65,7 +59,6 @@ https://registry.<domain>/testnpm2/-/testnpm2-1.0.1.tgz
 "1.0.1"
 
 > vp pm view testnpm2 -- --loglevel=warn # should support pass through arguments (uses npm view)
-
 testnpm2@<semver> | ISC | deps: none | versions: 2
 
 dist
@@ -74,10 +67,8 @@ dist
 .integrity: sha512-<hash>
 
 maintainers:
-- fengmk2 <fengmk2@gmail.com>
+- fengmk2
 
 dist-tags:
 latest: <semver>
 release-1: <semver>
-
-published over a year ago by fengmk2 <fengmk2@gmail.com>

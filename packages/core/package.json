@@ -1,6 +1,6 @@
 {
   "name": "@voidzero-dev/vite-plus-core",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "The Unified Toolchain for the Web",
   "homepage": "https://viteplus.dev/guide",
   "bugs": {
@@ -215,7 +215,7 @@
     "fsevents": "~2.3.3"
   },
   "engines": {
-    "node": "^22.18.0 || >=24.11.0"
+    "node": "^20.19.0 || ^22.18.0 || >=24.11.0"
   },
   "bundledVersions": {
     "vite": "8.0.16",

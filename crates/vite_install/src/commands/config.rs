@@ -86,12 +86,12 @@ impl PackageManager {
             PackageManagerType::Yarn => {
                 args.push("config".into());
 
-                let is_yarn1 = self.version.starts_with("1.");
+                let is_berry = self.is_yarn_berry();
 
                 // yarn@2+ uses 'unset' instead of 'delete', and no subcommand for 'list'
-                if options.subcommand == "delete" && !is_yarn1 {
+                if options.subcommand == "delete" && is_berry {
                     args.push("unset".into());
-                } else if options.subcommand == "list" && !is_yarn1 {
+                } else if options.subcommand == "list" && is_berry {
                     // yarn@2+: 'yarn config' with no subcommand lists all
                     // Don't add 'list'
                 } else {
@@ -112,7 +112,7 @@ impl PackageManager {
 
                 // Handle --location parameter
                 if let Some(location) = options.location {
-                    if is_yarn1 {
+                    if !is_berry {
                         // yarn@1: use --global for global location
                         if location == "global" {
                             args.push("--global".into());

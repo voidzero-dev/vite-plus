@@ -27,6 +27,7 @@ pub(super) async fn execute_exec_workspace(
     let indexed = IndexedPackageGraph::index(graph);
 
     // Build the query from exec flags
+    let fail_if_no_match = args.packages.fail_if_no_match;
     let cwd_arc: Arc<vite_path::AbsolutePath> = cwd.clone().into();
     let (query, is_cwd_only) = match args.packages.into_package_query(None, &cwd_arc) {
         Ok(result) => result,
@@ -44,6 +45,19 @@ pub(super) async fn execute_exec_workspace(
             return Ok(ExitStatus(1));
         }
     };
+
+    if fail_if_no_match && !resolution.unmatched_selectors.is_empty() {
+        let unmatched_selectors = resolution
+            .unmatched_selectors
+            .iter()
+            .map(vite_str::Str::as_str)
+            .collect::<Vec<_>>()
+            .join(", ");
+        vite_shared::output::error(&vite_str::format!(
+            "No packages matched the filter: {unmatched_selectors}"
+        ));
+        return Ok(ExitStatus(1));
+    }
 
     // Warn about unmatched selectors
     for selector in &resolution.unmatched_selectors {
