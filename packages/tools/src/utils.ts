@@ -94,8 +94,8 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
       .replaceAll(/\d{4}-\d{2}-\d{2}/g, '<date>')
       // time only (HH:MM:SS)
       .replaceAll(/\d{2}:\d{2}:\d{2}/g, '<date>')
-      // managed global package install ID: timestamp-pid-random UUID
-      .replaceAll(/\b\d{13,}-\d+-[0-9a-f]{32}\b/g, '<install-id>')
+      // managed global package install ID: reserved prefix + timestamp + pid + random UUID
+      .replaceAll(/#[0-9a-f]{40}\b/g, '<install-id>')
       // duration
       .replaceAll(/\d+(?:\.\d+)?(?:s|ms|µs|ns)/g, '<variable>ms')
       // parenthesized thread counts in CLI summaries

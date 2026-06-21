@@ -17,6 +17,8 @@ use vite_js_runtime::NodeProvider;
 use vite_path::{AbsolutePath, AbsolutePathBuf, current_dir};
 use vite_shared::{format_path_prepended, output};
 
+#[cfg(test)]
+use crate::commands::env::package_metadata::INSTALL_ID_LENGTH;
 use crate::{
     commands::{
         env::{
@@ -25,7 +27,7 @@ use crate::{
                 get_bin_dir, get_node_modules_dir, get_packages_dir, resolve_version,
                 resolve_version_alias,
             },
-            package_metadata::PackageMetadata,
+            package_metadata::{INSTALL_ID_PREFIX, PackageMetadata, is_install_id},
         },
         global::{CORE_SHIMS, is_local_package_spec, parse_package_spec},
     },
@@ -590,8 +592,10 @@ async fn install_one(
 }
 
 fn new_install_id() -> String {
-    let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis();
-    format!("{timestamp}-{}-{}", process::id(), Uuid::new_v4().simple())
+    let timestamp =
+        SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos() as u64;
+    let random = Uuid::new_v4().as_u128() as u64;
+    format!("{INSTALL_ID_PREFIX}{timestamp:016x}{:08x}{random:016x}", process::id())
 }
 
 async fn restore_package_metadata(package_name: &str, previous_metadata: Option<&PackageMetadata>) {
@@ -621,15 +625,33 @@ async fn cleanup_old_installations(package_name: &str, current_install_id: &str)
         }
     }
 
-    let Ok(package_dir) = PackageMetadata::installation_dir_for(package_name, "") else {
+    let Ok(legacy_package_dir) = PackageMetadata::installation_dir_for(package_name, "") else {
         return;
     };
-    let Ok(mut entries) = tokio::fs::read_dir(&package_dir).await else {
+    let Some(parent_dir) = legacy_package_dir.parent() else {
+        return;
+    };
+    let Some(package_dir_name) =
+        legacy_package_dir.as_path().file_name().and_then(|name| name.to_str())
+    else {
+        return;
+    };
+    let current_dir_name = format!("{package_dir_name}{current_install_id}");
+    let Ok(mut entries) = tokio::fs::read_dir(parent_dir).await else {
         return;
     };
 
     while let Ok(Some(entry)) = entries.next_entry().await {
-        if entry.file_name() == current_install_id {
+        let entry_name = entry.file_name();
+        let Some(entry_name) = entry_name.to_str() else {
+            continue;
+        };
+        if entry_name == current_dir_name {
+            continue;
+        }
+        let is_legacy = entry_name == package_dir_name;
+        let is_old_install = entry_name.strip_prefix(package_dir_name).is_some_and(is_install_id);
+        if !is_legacy && !is_old_install {
             continue;
         }
 
@@ -1220,13 +1242,26 @@ mod tests {
             vite_shared::EnvConfig::for_test_with_home(&temp_path),
         );
 
-        let package_dir =
+        let legacy_package_dir =
             AbsolutePathBuf::new(temp_path.join("packages").join("@scope").join("pkg")).unwrap();
-        let current_install = package_dir.join("current-id");
-        let old_install = package_dir.join("old-id");
+        let current_install_id = "#0000000000000001000000010000000000000001";
+        let old_install_id = "#0000000000000002000000020000000000000002";
+        let current_install = AbsolutePathBuf::new(
+            legacy_package_dir.as_path().with_file_name(format!("pkg{current_install_id}")),
+        )
+        .unwrap();
+        let old_install = AbsolutePathBuf::new(
+            legacy_package_dir.as_path().with_file_name(format!("pkg{old_install_id}")),
+        )
+        .unwrap();
+        let unrelated_install = AbsolutePathBuf::new(
+            legacy_package_dir.as_path().with_file_name(format!("other{old_install_id}")),
+        )
+        .unwrap();
         tokio::fs::create_dir_all(&current_install).await.unwrap();
         tokio::fs::create_dir_all(&old_install).await.unwrap();
-        tokio::fs::create_dir_all(package_dir.join("lib")).await.unwrap();
+        tokio::fs::create_dir_all(&legacy_package_dir).await.unwrap();
+        tokio::fs::create_dir_all(&unrelated_install).await.unwrap();
         tokio::fs::write(current_install.join("marker").as_path(), "current").await.unwrap();
 
         let mut metadata = PackageMetadata::new(
@@ -1238,14 +1273,24 @@ mod tests {
             HashSet::new(),
             "npm".to_string(),
         );
-        metadata.install_id = "current-id".to_string();
+        metadata.install_id = current_install_id.to_string();
         metadata.save().await.unwrap();
 
-        cleanup_old_installations("@scope/pkg", "current-id").await;
+        cleanup_old_installations("@scope/pkg", current_install_id).await;
 
         assert!(current_install.join("marker").as_path().exists());
         assert!(!old_install.as_path().exists());
-        assert!(!package_dir.join("lib").as_path().exists());
+        assert!(!legacy_package_dir.as_path().exists());
+        assert!(unrelated_install.as_path().exists());
+    }
+
+    #[test]
+    fn test_new_install_id_has_fixed_reserved_shape() {
+        let install_id = new_install_id();
+
+        assert!(is_install_id(&install_id));
+        assert_eq!(install_id.len(), INSTALL_ID_LENGTH);
+        assert!(install_id.starts_with(INSTALL_ID_PREFIX));
     }
 
     #[test]

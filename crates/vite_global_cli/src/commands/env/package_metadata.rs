@@ -9,6 +9,17 @@ use vite_path::AbsolutePathBuf;
 use super::config::get_packages_dir;
 use crate::error::Error;
 
+// `#` is filesystem-safe but invalid in npm package names, so sibling installs cannot collide.
+pub(crate) const INSTALL_ID_PREFIX: char = '#';
+// Keeps npm's 214-byte maximum package name within the common 255-byte filename limit.
+pub(crate) const INSTALL_ID_LENGTH: usize = 41;
+
+pub(crate) fn is_install_id(value: &str) -> bool {
+    value.len() == INSTALL_ID_LENGTH
+        && value.starts_with(INSTALL_ID_PREFIX)
+        && value[INSTALL_ID_PREFIX.len_utf8()..].bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
 /// Metadata for a globally installed package.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -88,8 +99,15 @@ impl PackageMetadata {
         install_id: &str,
     ) -> Result<AbsolutePathBuf, Error> {
         let packages_dir = get_packages_dir()?;
-        let package_dir = packages_dir.join(package_name);
-        if install_id.is_empty() { Ok(package_dir) } else { Ok(package_dir.join(install_id)) }
+        if install_id.is_empty() {
+            Ok(packages_dir.join(package_name))
+        } else if is_install_id(install_id) {
+            Ok(packages_dir.join(format!("{package_name}{install_id}")))
+        } else {
+            Err(Error::ConfigError(
+                format!("Invalid global package install ID: {install_id}").into(),
+            ))
+        }
     }
 
     /// Get the metadata file path for a package.
@@ -248,10 +266,19 @@ mod tests {
         );
 
         let legacy = PackageMetadata::installation_dir_for("@scope/pkg", "").unwrap();
-        let identified = PackageMetadata::installation_dir_for("@scope/pkg", "install-id").unwrap();
+        let identified = PackageMetadata::installation_dir_for(
+            "@scope/pkg",
+            "#0000000000000001000000010000000000000001",
+        )
+        .unwrap();
 
         assert!(legacy.as_path().ends_with("packages/@scope/pkg"));
-        assert!(identified.as_path().ends_with("packages/@scope/pkg/install-id"));
+        assert!(
+            identified
+                .as_path()
+                .ends_with("packages/@scope/pkg#0000000000000001000000010000000000000001")
+        );
+        assert!(PackageMetadata::installation_dir_for("@scope/pkg", "invalid").is_err());
     }
 
     #[tokio::test]
