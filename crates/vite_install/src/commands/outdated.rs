@@ -157,9 +157,10 @@ impl PackageManager {
                 }
                 PackageManagerType::Yarn => {
                     bin_name = "yarn".into();
+                    let is_berry = self.is_yarn_berry();
 
                     // Check if yarn@2+ (uses upgrade-interactive)
-                    if self.version.starts_with("1.") {
+                    if !is_berry {
                         // yarn@1
                         args.push("outdated".into());
 

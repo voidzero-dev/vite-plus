@@ -54,9 +54,9 @@ impl PackageManager {
                 args.push("rebuild".into());
             }
             PackageManagerType::Yarn => {
-                let is_yarn1 = self.version.starts_with("1.");
+                let is_berry = self.is_yarn_berry();
 
-                if is_yarn1 {
+                if !is_berry {
                     output::warn("yarn v1 does not support the rebuild command");
                 } else {
                     output::warn("yarn berry does not support the rebuild command");

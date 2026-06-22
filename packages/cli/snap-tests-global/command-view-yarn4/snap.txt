@@ -1,20 +1,47 @@
-> vp pm view testnpm2 # should view testnpm2 package information (uses npm view)
+> vp pm view testnpm2 # should view testnpm2 package information (uses yarn npm info)
+{
+  name: 'testnpm2',
+  time: {
+    modified: '<date>T<date>.474Z',
+    created: '<date>T<date>.187Z',
+    '0.0.1': '<date>T<date>.187Z',
+    '0.0.2': '<date>T<date>.290Z',
+    '0.0.3': '<date>T<date>.614Z',
+    '0.0.4': '<date>T<date>.134Z',
+    '0.0.5': '<date>T<date>.517Z',
+    '0.0.6': '<date>T<date>.300Z',
+    '0.0.7': '<date>T<date>.493Z',
+    '0.0.8': '<date>T<date>.636Z',
+    '1.0.0': '<date>T<date>.382Z',
+    '1.0.1': '<date>T<date>.560Z',
+    '2.0.0': '<date>T<date>.747Z',
+    '2.0.1': '<date>T<date>.572Z'
+  },
+  maintainers: [
+    {
+      name: 'fengmk2',
+      email: 'fengmk2@gmail.com'
+    }
+  ],
+  'dist-tags': {
+    latest: '1.0.1',
+    'release-1': '1.0.1'
+  },
+  versions: [
+    '1.0.0',
+    '1.0.1'
+  ],
+  license: 'ISC',
+  version: '1.0.1',
+  main: 'index.js',
+  scripts: {
+    test: 'echo "Error: no test specified" && exit 1'
+  },
+  directories: {}
+}
 
-testnpm2@<semver> | ISC | deps: none | versions: 2
-
-dist
-.tarball: https://registry.<domain>/testnpm2/-/testnpm2-1.0.1.tgz
-.shasum: <hash>
-.integrity: sha512-<hash>
-
-maintainers:
-- fengmk2 <fengmk2@gmail.com>
-
-dist-tags:
-latest: <semver>
-release-1: <semver>
-
-published over a year ago by fengmk2 <fengmk2@gmail.com>
-
-> vp pm view testnpm2 version # should view testnpm2 version field (uses npm view)
-1.0.1
+> vp pm view testnpm2 version # should view testnpm2 version field (uses yarn npm info)
+{
+  name: 'testnpm2',
+  version: '1.0.1'
+}

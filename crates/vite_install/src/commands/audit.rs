@@ -93,9 +93,8 @@ impl PackageManager {
                 }
             }
             PackageManagerType::Yarn => {
-                let is_yarn1 = self.version.starts_with("1.");
-
-                if is_yarn1 {
+                let is_berry = self.is_yarn_berry();
+                if !is_berry {
                     if options.fix {
                         output::warn("yarn v1 audit does not support --fix");
                         return None;
