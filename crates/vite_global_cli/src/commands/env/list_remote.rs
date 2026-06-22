@@ -61,7 +61,7 @@ pub async fn execute(
     }
 
     // Locally-derived markers (installed / current / default) used to annotate output.
-    let markers = local_markers(&cwd).await;
+    let markers = local_markers(&cwd, &provider).await;
 
     // Filter versions based on options
     let mut filtered = filter_versions(&versions, pattern.as_deref(), lts_only, show_all);
@@ -85,12 +85,18 @@ pub async fn execute(
 ///
 /// All lookups degrade gracefully: failures yield empty/none so the registry
 /// listing still renders.
-async fn local_markers(cwd: &AbsolutePathBuf) -> LocalMarkers {
+async fn local_markers(cwd: &AbsolutePathBuf, provider: &NodeProvider) -> LocalMarkers {
     let installed = installed_versions();
-    // Version resolved for the current project/cwd (same logic as `vp env current`).
+    // Version resolved for the current project/cwd (same logic as `vp env current`);
+    // this is already a concrete version, never an alias.
     let current = config::resolve_version(cwd).await.ok().map(|r| r.version);
-    // Global default version, if configured.
-    let default = config::load_config().await.ok().and_then(|c| c.default_node_version);
+    // Global default may be stored as an alias (e.g. `lts`/`latest`) by
+    // `vp env default`, so resolve it to a concrete version before comparing
+    // against exact remote versions.
+    let default = match config::load_config().await.ok().and_then(|c| c.default_node_version) {
+        Some(alias) => config::resolve_version_alias(&alias, provider).await.ok(),
+        None => None,
+    };
 
     LocalMarkers { installed, current, default }
 }
