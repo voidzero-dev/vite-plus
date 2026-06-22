@@ -22,6 +22,10 @@ type LatestTag = {
   tag: string;
 };
 
+type LatestTagOptions = {
+  stableOnly?: boolean;
+};
+
 type NpmLatestResponse = {
   version?: unknown;
 };
@@ -62,6 +66,8 @@ type PackageJson = {
   peerDependencies?: Record<string, string>;
 };
 
+const STABLE_SEMVER_TAG_RE = /^v?\d+\.\d+\.\d+$/;
+
 const isFullSha = (s: string): boolean => /^[0-9a-f]{40}$/.test(s);
 
 const changes = new Map<string, Change>();
@@ -89,13 +95,21 @@ function recordChange(
 }
 
 // ============ GitHub API ============
-async function getLatestTag(owner: string, repo: string): Promise<LatestTag> {
-  const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/tags?per_page=1`, {
-    headers: {
-      Authorization: `token ${process.env.GITHUB_TOKEN}`,
-      Accept: 'application/vnd.github.v3+json',
+async function getLatestTag(
+  owner: string,
+  repo: string,
+  options: LatestTagOptions = {},
+): Promise<LatestTag> {
+  const perPage = options.stableOnly ? 100 : 1;
+  const res = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/tags?per_page=${perPage}`,
+    {
+      headers: {
+        Authorization: `token ${process.env.GITHUB_TOKEN}`,
+        Accept: 'application/vnd.github.v3+json',
+      },
     },
-  });
+  );
   if (!res.ok) {
     throw new Error(`Failed to fetch tags for ${owner}/${repo}: ${res.status} ${res.statusText}`);
   }
@@ -103,7 +117,12 @@ async function getLatestTag(owner: string, repo: string): Promise<LatestTag> {
   if (!Array.isArray(tags) || !tags.length) {
     throw new Error(`No tags found for ${owner}/${repo}`);
   }
-  const [latest] = tags;
+  const latest = options.stableOnly
+    ? tags.find((tag) => typeof tag.name === 'string' && STABLE_SEMVER_TAG_RE.test(tag.name))
+    : tags[0];
+  if (!latest) {
+    throw new Error(`No stable semver tags found for ${owner}/${repo}`);
+  }
   if (typeof latest?.commit?.sha !== 'string' || typeof latest.name !== 'string') {
     throw new Error(`Invalid tag structure for ${owner}/${repo}: missing SHA or name`);
   }
@@ -135,7 +154,7 @@ async function updateUpstreamVersions(): Promise<void> {
   const oldViteHash = data.vite.hash;
   const [rolldown, vite] = await Promise.all([
     getLatestTag('rolldown', 'rolldown'),
-    getLatestTag('vitejs', 'vite'),
+    getLatestTag('vitejs', 'vite', { stableOnly: true }),
   ]);
   data.rolldown.hash = rolldown.sha;
   data.vite.hash = vite.sha;
