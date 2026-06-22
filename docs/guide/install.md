@@ -67,6 +67,7 @@ Use the `-g` flag for installing, updating or removing globally installed packag
 - `vp uninstall -g <pkg>` removes a global package
 - `vp update -g [pkg]` updates one global package or all of them
 - `vp list -g [pkg]` lists global packages
+- `vp outdated -g [pkg]` prints outdated packages
 
 ::: warning
 These commands do **NOT** interact with the underlying package manager's global installation directory.
