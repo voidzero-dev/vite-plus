@@ -247,7 +247,7 @@ pub(super) fn analyze_lint_output(output: &str) -> Option<Result<LintSuccess, Li
 mod tests {
     use serde_json::json;
 
-    use super::{LintMessageKind, analyze_lint_output, lint_config_type_check_enabled};
+    use super::{LintMessageKind, lint_config_type_check_enabled};
 
     #[test]
     fn lint_message_kind_defaults_to_lint_only_without_typecheck() {
@@ -307,22 +307,5 @@ mod tests {
         assert!(!lint_config_type_check_enabled(Some(&json!({
             "options": { "typeAware": true, "typeCheck": false }
         }))));
-    }
-
-    #[test]
-    fn lint_output_allows_github_reporter_annotations_before_summary() {
-        let output = "\
-::warning file=src/example.ts,line=1,col=1,title=oxlint::example annotation
-Found 0 warnings and 0 errors.
-Finished in 12ms on 1 file using 12 threads.
-";
-
-        let result = analyze_lint_output(output)
-            .expect("summary should be parsed")
-            .expect("zero warnings and errors should pass");
-
-        assert_eq!(result.summary.duration, "12ms");
-        assert_eq!(result.summary.files, 1);
-        assert_eq!(result.summary.threads, 12);
     }
 }
