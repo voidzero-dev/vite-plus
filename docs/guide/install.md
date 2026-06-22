@@ -120,6 +120,14 @@ Use these commands when you want package-manager-managed tools available outside
 - `vp list -g`
 - `vp outdated -g`
 
+::: warning
+These commands do **NOT** interact with the underlying package manager's global installation directory.
+
+Instead, Vite+ manages its own global packages under `~/.vite-plus/packages`, allowing them to remain available across different Node.js versions.
+
+As a result, commands such as `vp link` do not affect Vite+'s global packages and will not appear in `vp list -g`.
+:::
+
 #### Add and Remove
 
 Use `vp add` and `vp remove` for day-to-day dependency edits instead of editing `package.json` by hand.
