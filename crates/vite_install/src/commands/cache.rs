@@ -91,17 +91,17 @@ impl PackageManager {
             }
             PackageManagerType::Yarn => {
                 bin_name = "yarn".into();
-                let is_yarn1 = self.version.starts_with("1.");
 
                 match options.subcommand {
                     "dir" | "path" => {
-                        if is_yarn1 {
-                            args.push("cache".into());
-                            args.push("dir".into());
-                        } else {
+                        let is_berry = self.is_yarn_berry();
+                        if is_berry {
                             args.push("config".into());
                             args.push("get".into());
                             args.push("cacheFolder".into());
+                        } else {
+                            args.push("cache".into());
+                            args.push("dir".into());
                         }
                     }
                     "clean" => {

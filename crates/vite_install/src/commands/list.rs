@@ -54,7 +54,7 @@ impl PackageManager {
         options: &ListCommandOptions,
     ) -> Option<ResolveCommandResult> {
         // yarn@2+ does not support list command
-        if self.client == PackageManagerType::Yarn && !self.version.starts_with("1.") {
+        if self.client == PackageManagerType::Yarn && self.is_yarn_berry() {
             output::warn("yarn@2+ does not support 'list' command");
             return None;
         }
