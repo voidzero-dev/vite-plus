@@ -431,6 +431,14 @@ jobs:
       - name: Migrate in ${{ matrix.project.name }}
         working-directory: ${{ runner.temp }}/vite-plus-ecosystem-ci/${{ matrix.project.name }}${{ matrix.project.directory && format('/{0}', matrix.project.directory) || '' }}
         shell: bash
+        env:
+          # `vp migrate` runs `vp dlx @oxlint/migrate@<bundled oxlint>`. When an
+          # oxlint bump landed <24h ago, pnpm rejects the fresh version with
+          # ERR_PNPM_NO_MATURE_MATCHING_VERSION under a minimumReleaseAge gate.
+          # The migrate tool is version-pinned, so disable the gate for the
+          # ecosystem run. Note the `pnpm_config_` prefix is required:
+          # `npm_config_*` does not override pnpm-workspace.yaml settings.
+          pnpm_config_minimum_release_age: '0'
         run: |
           node $GITHUB_WORKSPACE/ecosystem-ci/patch-project.ts ${{ matrix.project.name }}
           vp install --no-frozen-lockfile
