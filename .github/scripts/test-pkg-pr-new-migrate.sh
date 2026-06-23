@@ -109,6 +109,11 @@ export VP_OVERRIDE_PACKAGES="$(printf \
   "$vite_plus_core_spec" \
   "$vitest_version")"
 export VP_FORCE_MIGRATE=1
+# pkg.pr.new packages depend on URL-resolved platform binaries. pnpm blocks
+# those transitive URL dependencies when blockExoticSubdeps is enabled. The
+# migration persists the corresponding workspace setting, while this temporary
+# override also lets its pre-rewrite install recover a partially migrated tree.
+export PNPM_CONFIG_BLOCK_EXOTIC_SUBDEPS=false
 hash -r
 
 echo

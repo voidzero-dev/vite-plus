@@ -1931,6 +1931,10 @@ export function rewriteStandaloneProject(
     });
   }
 
+  if (packageManager === PackageManager.pnpm) {
+    ensurePnpmWorkspaceExoticSubdepsSetting(projectPath);
+  }
+
   if (packageManager === PackageManager.yarn) {
     rewriteYarnrcYml(projectPath, usesVitest);
   } else if (packageManager === PackageManager.bun) {
@@ -2195,6 +2199,8 @@ function rewritePnpmWorkspaceYaml(
   const managed = managedOverridePackages(usesVitest);
 
   editYamlFile(pnpmWorkspaceYamlPath, (doc) => {
+    ensurePnpmExoticSubdepsSetting(doc);
+
     // catalog
     rewriteCatalog(doc, usesVitest);
     if (pnpmMajorVersion !== undefined) {
@@ -3866,6 +3872,50 @@ function readPnpmWorkspacePeerDependencyRules(
   return doc?.peerDependencyRules;
 }
 
+function forceOverrideUsesExoticPnpmSpec(): boolean {
+  if (!isForceOverrideMode()) {
+    return false;
+  }
+  return [VITE_PLUS_VERSION, ...Object.values(VITE_PLUS_OVERRIDE_PACKAGES)].some((spec) =>
+    /^(?:file|https?):/.test(spec),
+  );
+}
+
+function pnpmWorkspaceExoticSubdepsSettingSatisfied(projectPath: string): boolean {
+  if (!forceOverrideUsesExoticPnpmSpec()) {
+    return true;
+  }
+  const pnpmWorkspaceYamlPath = path.join(projectPath, 'pnpm-workspace.yaml');
+  if (!fs.existsSync(pnpmWorkspaceYamlPath)) {
+    return false;
+  }
+  const doc = readYamlFile(pnpmWorkspaceYamlPath) as { blockExoticSubdeps?: boolean } | null;
+  return doc?.blockExoticSubdeps === false;
+}
+
+function ensurePnpmExoticSubdepsSetting(doc: YamlDocument): boolean {
+  if (!forceOverrideUsesExoticPnpmSpec() || doc.get('blockExoticSubdeps') === false) {
+    return false;
+  }
+  doc.set('blockExoticSubdeps', false);
+  return true;
+}
+
+function ensurePnpmWorkspaceExoticSubdepsSetting(projectPath: string): boolean {
+  if (!forceOverrideUsesExoticPnpmSpec()) {
+    return false;
+  }
+  const pnpmWorkspaceYamlPath = path.join(projectPath, 'pnpm-workspace.yaml');
+  if (!fs.existsSync(pnpmWorkspaceYamlPath)) {
+    fs.writeFileSync(pnpmWorkspaceYamlPath, '');
+  }
+  let changed = false;
+  editYamlFile(pnpmWorkspaceYamlPath, (doc) => {
+    changed = ensurePnpmExoticSubdepsSetting(doc);
+  });
+  return changed;
+}
+
 function yarnrcSatisfiesVitePlus(projectPath: string, usesVitest: boolean): boolean {
   const yarnrcYmlPath = path.join(projectPath, '.yarnrc.yml');
   if (!fs.existsSync(yarnrcYmlPath)) {
@@ -4184,6 +4234,9 @@ export function detectVitePlusBootstrapPending(
     );
   }
   if (packageManager === PackageManager.pnpm) {
+    if (!pnpmWorkspaceExoticSubdepsSettingSatisfied(projectPath)) {
+      return true;
+    }
     if (pnpmConfigLivesInPackageJson(pkg, projectPath)) {
       return (
         vitePlusDependencyNeedsConcreteVersion(pkg) ||
@@ -4454,6 +4507,7 @@ export function ensureVitePlusBootstrap(
       const catalogDependencyResolver = readPnpmWorkspaceCatalogDependencyResolver(projectPath);
       if (
         result.packageJson ||
+        !pnpmWorkspaceExoticSubdepsSettingSatisfied(projectPath) ||
         defaultCatalogVitePlusDependencyPending(pkg, catalogDependencyResolver) ||
         !overridesSatisfyVitePlus(
           readPnpmWorkspaceOverrides(projectPath),
@@ -4479,6 +4533,9 @@ export function ensureVitePlusBootstrap(
         ? fs.readFileSync(pnpmWorkspaceYamlPath, 'utf-8')
         : undefined;
       result.packageManagerConfig = before !== after;
+    } else if (ensurePnpmWorkspaceExoticSubdepsSetting(projectPath)) {
+      ensurePnpmWorkspacePackages(projectPath, workspaceInfo.workspacePatterns);
+      result.packageManagerConfig = true;
     }
   } else if (workspaceInfo.packageManager === PackageManager.yarn) {
     const yarnrcYmlPath = path.join(projectPath, '.yarnrc.yml');

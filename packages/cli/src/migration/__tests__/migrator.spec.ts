@@ -1539,6 +1539,66 @@ describe('ensureVitePlusBootstrap', () => {
     expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
   });
 
+  it('allows pkg.pr.new transitive URLs in pnpm workspace config and is idempotent', () => {
+    const savedForceMigrate = process.env.VP_FORCE_MIGRATE;
+    const savedViteOverride = VITE_PLUS_OVERRIDE_PACKAGES.vite;
+    const viteOverride =
+      'https://pkg.pr.new/voidzero-dev/vite-plus/@voidzero-dev/vite-plus-core@1891';
+    process.env.VP_FORCE_MIGRATE = '1';
+    VITE_PLUS_OVERRIDE_PACKAGES.vite = viteOverride;
+    try {
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify({
+          name: 'test',
+          devDependencies: { 'vite-plus': 'catalog:' },
+          devEngines: {
+            packageManager: { name: 'pnpm', version: '10.33.0', onFail: 'download' },
+          },
+        }),
+      );
+      fs.writeFileSync(
+        path.join(tmpDir, 'pnpm-workspace.yaml'),
+        [
+          'blockExoticSubdeps: true',
+          'catalog:',
+          `  vite: '${viteOverride}'`,
+          '  vite-plus: latest',
+          'overrides:',
+          "  vite: 'catalog:'",
+          'peerDependencyRules:',
+          '  allowAny:',
+          '    - vite',
+          '  allowedVersions:',
+          "    vite: '*'",
+        ].join('\n'),
+      );
+
+      expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(true);
+      const first = ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm));
+
+      expect(first.packageManagerConfig).toBe(true);
+      expect(
+        (
+          readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+            blockExoticSubdeps: boolean;
+          }
+        ).blockExoticSubdeps,
+      ).toBe(false);
+      expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
+      expect(ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm)).changed).toBe(
+        false,
+      );
+    } finally {
+      VITE_PLUS_OVERRIDE_PACKAGES.vite = savedViteOverride;
+      if (savedForceMigrate === undefined) {
+        delete process.env.VP_FORCE_MIGRATE;
+      } else {
+        process.env.VP_FORCE_MIGRATE = savedForceMigrate;
+      }
+    }
+  });
+
   it('detects missing pnpm workspace catalog entry for vite-plus', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
