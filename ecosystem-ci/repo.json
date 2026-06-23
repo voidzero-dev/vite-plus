@@ -94,7 +94,7 @@
   "npmx.dev": {
     "repository": "https://github.com/npmx-dev/npmx.dev.git",
     "branch": "main",
-    "hash": "230b7c7ddb6bb8551ce797144f0ce0f047ff8d7d",
+    "hash": "035776c96cf8f089c44e6011264b534b0bcde53c",
     "forceFreshMigration": true
   },
   "vite-plus-jest-dom-repro": {
