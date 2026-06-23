@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import { copyFile, cp, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { dirname, join, parse, resolve, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -54,6 +55,7 @@ await bundleRolldown();
 await buildVite();
 await bundleTsdown();
 await brandTsdown();
+await wireBundledTsdownExtensions();
 await bundleVitepress();
 generateLicenseFile({
   title: 'Vite-Plus core license',
@@ -379,23 +381,47 @@ async function bundleRolldown() {
 async function bundleTsdown() {
   await mkdir(join(projectDir, 'dist/tsdown/dist'), { recursive: true });
 
-  const tsdownExternal = Object.keys(pkgJson.peerDependencies);
+  const require = createRequire(import.meta.url);
+
+  // `@tsdown/exe` and `@tsdown/css` are bundled directly into core instead of
+  // being externalized. They have a hard peer dependency on `tsdown` and import
+  // `tsdown/internal`, but Vite+ bundles tsdown inside core rather than exposing
+  // a resolvable top-level `tsdown` package. Bundling them here resolves
+  // `tsdown/internal` against the bundled tsdown at build time, so `vp pack
+  // --exe` and CSS bundling work without users installing anything extra.
+  // See https://github.com/voidzero-dev/vite-plus/issues/1586
+  const bundledTsdownPackages = new Set(['@tsdown/exe', '@tsdown/css']);
+
+  // Everything else in tsdown's peer dependencies stays external. `lightningcss`
+  // (a native module) and `postcss` also stay external: `@tsdown/css` pulls them
+  // in, and they cannot be bundled. `lightningcss` becomes an optional peer with
+  // a friendly loader injected by `wireBundledTsdownExtensions()`.
+  const tsdownExternal = [
+    ...Object.keys(pkgJson.peerDependencies).filter((name) => !bundledTsdownPackages.has(name)),
+    'lightningcss',
+    'postcss',
+  ];
+  const isExternal = (id: string) => tsdownExternal.some((e) => id === e || id.startsWith(`${e}/`));
 
   const thirdPartyCjsModules = new Set<string>();
 
-  // Re-build tsdown cli
+  // Re-build tsdown cli plus the bundled `@tsdown/exe` and `@tsdown/css`
+  // extensions as stable named entries (`tsdown-exe.js`, `tsdown-css.js`).
   await build({
     input: {
       run: join(tsdownSourceDir, 'dist/run.mjs'),
       index: join(tsdownSourceDir, 'dist/index.mjs'),
+      'tsdown-exe': require.resolve('@tsdown/exe'),
+      'tsdown-css': require.resolve('@tsdown/css'),
     },
     output: {
       format: 'esm',
       cleanDir: true,
       dir: join(projectDir, 'dist/tsdown'),
+      entryFileNames: '[name].js',
     },
     platform: 'node',
-    external: (id: string) => tsdownExternal.some((e) => id.startsWith(e)),
+    external: isExternal,
     plugins: [
       RewriteImportsPlugin,
       {
@@ -425,7 +451,7 @@ async function bundleTsdown() {
       format: 'esm',
       dir: join(projectDir, 'dist/tsdown'),
     },
-    external: (id: string) => tsdownExternal.some((e) => id.startsWith(e)),
+    external: isExternal,
     plugins: [
       RewriteImportsPlugin,
       dts({
@@ -448,12 +474,13 @@ async function bundleTsdown() {
 async function brandTsdown() {
   const tsdownDistDir = join(projectDir, 'dist/tsdown');
   const buildFiles = await glob(toPosixPath(join(tsdownDistDir, 'build-*.js')), { absolute: true });
-  const mainFiles = await glob(toPosixPath(join(tsdownDistDir, 'main-*.js')), { absolute: true });
+  // The logger code lives in a shared chunk whose name depends on rolldown's
+  // chunking (e.g. `main-*.js` or `debug-*.js`), so scan every chunk for it.
+  const loggerCandidateFiles = await glob(toPosixPath(join(tsdownDistDir, '*.js')), {
+    absolute: true,
+  });
   if (buildFiles.length === 0) {
     throw new Error('brandTsdown: no build chunk found in dist/tsdown/');
-  }
-  if (mainFiles.length === 0) {
-    throw new Error('brandTsdown: no main chunk found in dist/tsdown/');
   }
 
   const search = '"tsdown <your-file>"';
@@ -534,8 +561,8 @@ async function brandTsdown() {
   ];
   let loggerPatched = false;
 
-  for (const mainFile of mainFiles) {
-    let content = await readFile(mainFile, 'utf-8');
+  for (const candidateFile of loggerCandidateFiles) {
+    let content = await readFile(candidateFile, 'utf-8');
     let changed = false;
     for (const { search, replacement } of loggerPatches) {
       if (content.includes(search)) {
@@ -546,13 +573,91 @@ async function brandTsdown() {
     if (!changed) {
       continue;
     }
-    await writeFile(mainFile, content, 'utf-8');
-    console.log(`Branded tsdown logger prefixes in ${mainFile}`);
+    await writeFile(candidateFile, content, 'utf-8');
+    console.log(`Branded tsdown logger prefixes in ${candidateFile}`);
     loggerPatched = true;
   }
 
   if (!loggerPatched) {
-    throw new Error('brandTsdown: logger prefix patterns not found in any main chunk');
+    throw new Error('brandTsdown: logger prefix patterns not found in any chunk');
+  }
+}
+
+// Wire the bundled `@tsdown/exe` and `@tsdown/css` extensions into the bundled
+// tsdown so they load from the local chunks instead of resolving external
+// top-level packages, and make `lightningcss` an optional peer with a friendly
+// loader. See https://github.com/voidzero-dev/vite-plus/issues/1586
+async function wireBundledTsdownExtensions() {
+  const tsdownDistDir = join(projectDir, 'dist/tsdown');
+  const buildFiles = await glob(toPosixPath(join(tsdownDistDir, 'build-*.js')), { absolute: true });
+  if (buildFiles.length === 0) {
+    throw new Error('wireBundledTsdownExtensions: no build chunk found in dist/tsdown/');
+  }
+
+  // 1) Route `@tsdown/exe` and `@tsdown/css` to the bundled entries.
+  //    - `importWithError("@tsdown/exe")` dynamically imports a runtime string,
+  //      which rolldown cannot follow, so rewrite the call site to the chunk.
+  //    - `pkgExists("@tsdown/css")` resolves the top-level package at runtime;
+  //      since it is bundled now, force it on and point the import at the chunk.
+  let exeWired = false;
+  let cssWired = false;
+  for (const buildFile of buildFiles) {
+    let content = await readFile(buildFile, 'utf-8');
+    let changed = false;
+    if (content.includes('importWithError("@tsdown/exe")')) {
+      content = content.replaceAll('importWithError("@tsdown/exe")', 'import("./tsdown-exe.js")');
+      exeWired = true;
+      changed = true;
+    }
+    if (content.includes('pkgExists("@tsdown/css")')) {
+      content = content.replaceAll('pkgExists("@tsdown/css")', 'true');
+      cssWired = true;
+      changed = true;
+    }
+    if (content.includes('import("@tsdown/css")')) {
+      content = content.replaceAll('import("@tsdown/css")', 'import("./tsdown-css.js")');
+      changed = true;
+    }
+    if (changed) {
+      await writeFile(buildFile, content);
+    }
+  }
+  if (!exeWired) {
+    throw new Error('wireBundledTsdownExtensions: `importWithError("@tsdown/exe")` not found');
+  }
+  if (!cssWired) {
+    throw new Error('wireBundledTsdownExtensions: `pkgExists("@tsdown/css")` not found');
+  }
+
+  // 2) `lightningcss` is a native module and an optional peer. Wrap its dynamic
+  //    import so a missing install produces an actionable error instead of a raw
+  //    `Cannot find package 'lightningcss'`.
+  const helper =
+    'async function __vpImportLightningcss() {\n' +
+    '  try {\n' +
+    '    return await import("lightningcss");\n' +
+    '  } catch (cause) {\n' +
+    '    throw new Error(' +
+    '"Cannot find package \\"lightningcss\\". CSS bundling with `vp pack` requires it. ' +
+    'Install it with `vp add -D lightningcss`.", { cause });\n' +
+    '  }\n' +
+    '}\n';
+  const allChunks = await glob(toPosixPath(join(tsdownDistDir, '*.js')), { absolute: true });
+  let lightningcssWired = false;
+  for (const chunk of allChunks) {
+    let content = await readFile(chunk, 'utf-8');
+    if (!content.includes('import("lightningcss")')) {
+      continue;
+    }
+    // Rewrite the call sites first, then prepend the helper (whose own
+    // `import("lightningcss")` must not be rewritten).
+    content = content.replaceAll('import("lightningcss")', '__vpImportLightningcss()');
+    content = helper + content;
+    await writeFile(chunk, content);
+    lightningcssWired = true;
+  }
+  if (!lightningcssWired) {
+    throw new Error('wireBundledTsdownExtensions: `import("lightningcss")` not found');
   }
 }
 
@@ -650,6 +755,14 @@ async function mergePackageJson() {
   const vitePkg = JSON.parse(await readFile(vitePkgPath, 'utf-8'));
   const destPkg = JSON.parse(await readFile(destPkgPath, 'utf-8'));
 
+  // Track the bundled `@tsdown/css` lightningcss dependency so the optional peer
+  // range stays in lockstep with what the bundled CSS code expects.
+  const require = createRequire(import.meta.url);
+  const tsdownCssPkg = JSON.parse(
+    await readFile(require.resolve('@tsdown/css/package.json'), 'utf-8'),
+  );
+  const lightningcssPeerRange: string = tsdownCssPkg.dependencies?.lightningcss ?? '^1.30.2';
+
   // Merge peerDependencies from tsdown and vite
   destPkg.peerDependencies = {
     ...tsdownPkg.peerDependencies,
@@ -661,6 +774,18 @@ async function mergePackageJson() {
     ...tsdownPkg.peerDependenciesMeta,
     ...vitePkg.peerDependenciesMeta,
   };
+
+  // `@tsdown/exe` and `@tsdown/css` are bundled into core (see bundleTsdown),
+  // so they must not be advertised as peers anymore. `lightningcss` is a native
+  // module pulled in by the bundled `@tsdown/css` (and Vite's lightningcss
+  // transformer); keep it external as an optional peer so users only install it
+  // when they actually bundle CSS.
+  for (const bundled of ['@tsdown/exe', '@tsdown/css']) {
+    delete destPkg.peerDependencies[bundled];
+    delete destPkg.peerDependenciesMeta[bundled];
+  }
+  destPkg.peerDependencies['lightningcss'] = lightningcssPeerRange;
+  destPkg.peerDependenciesMeta['lightningcss'] = { optional: true };
 
   destPkg.bundledVersions = {
     ...destPkg.bundledVersions,

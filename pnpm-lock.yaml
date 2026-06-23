@@ -51,6 +51,12 @@ catalogs:
     '@rollup/plugin-node-resolve':
       specifier: ^16.0.0
       version: 16.0.3
+    '@tsdown/css':
+      specifier: ^0.22.3
+      version: 0.22.3
+    '@tsdown/exe':
+      specifier: ^0.22.3
+      version: 0.22.3
     '@types/babel__core':
       specifier: 7.20.5
       version: 7.20.5
@@ -177,6 +183,9 @@ catalogs:
     jsonc-parser:
       specifier: ^3.3.1
       version: 3.3.1
+    lightningcss:
+      specifier: ^1.32.0
+      version: 1.32.0
     lint-staged:
       specifier: ^16.2.6
       version: 16.4.0
@@ -507,12 +516,6 @@ importers:
       '@oxc-project/types':
         specifier: 'catalog:'
         version: 0.137.0
-      '@tsdown/css':
-        specifier: 0.22.3
-        version: 0.22.3(jiti@2.7.0)(postcss-import@16.1.1(postcss@8.5.15))(postcss-modules@6.0.1(postcss@8.5.15))(postcss@8.5.15)(sass-embedded@1.100.0(source-map-js@1.2.1))(sass@1.101.0)(tsdown@0.22.3)(tsx@4.22.4)(yaml@2.9.0)
-      '@tsdown/exe':
-        specifier: 0.22.3
-        version: 0.22.3(tsdown@0.22.3)
       '@types/node':
         specifier: ^20.19.0 || >=22.12.0
         version: 24.13.2
@@ -526,7 +529,7 @@ importers:
         specifier: ^4.0.0
         version: 4.4.2
       lightningcss:
-        specifier: ^1.30.2
+        specifier: 'catalog:'
         version: 1.32.0
       postcss:
         specifier: ^8.5.6
@@ -583,6 +586,12 @@ importers:
       '@oxc-node/core':
         specifier: 'catalog:'
         version: 0.1.0
+      '@tsdown/css':
+        specifier: 'catalog:'
+        version: 0.22.3(jiti@2.7.0)(postcss-import@16.1.1(postcss@8.5.15))(postcss-modules@6.0.1(postcss@8.5.15))(postcss@8.5.15)(sass-embedded@1.100.0(source-map-js@1.2.1))(sass@1.101.0)(tsdown@0.22.3)(tsx@4.22.4)(yaml@2.9.0)
+      '@tsdown/exe':
+        specifier: 'catalog:'
+        version: 0.22.3(tsdown@0.22.3)
       '@vitejs/devtools':
         specifier: ^0.3.3
         version: 0.3.3(typescript@6.0.2)(vite@packages+core)
