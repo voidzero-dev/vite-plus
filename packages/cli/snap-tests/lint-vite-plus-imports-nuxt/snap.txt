@@ -1,0 +1,41 @@
+[1]> vp lint src/nuxt.spec.ts src/unit.spec.ts # only the Nuxt bare import is exempt; subpaths and unrelated files still fail
+
+  × vite-plus(prefer-vite-plus-imports): Use 'vite-plus/test/node' instead of 'vitest/node' in Vite+ projects.
+   ╭─[src/nuxt.spec.ts:3:29]
+ 2 │ import { expect, vi } from 'vitest';
+ 3 │ import { startVitest } from 'vitest/node';
+   ·                             ─────────────
+ 4 │ 
+   ╰────
+
+  × vite-plus(prefer-vite-plus-imports): Use 'vite-plus/test' instead of 'vitest' in Vite+ projects.
+   ╭─[src/unit.spec.ts:1:24]
+ 1 │ import { expect } from 'vitest';
+   ·                        ────────
+ 2 │ 
+   ╰────
+
+Found 0 warnings and 2 errors.
+Finished in <variable>ms on 2 files with <variable> rules using <variable> threads.
+
+> vp lint --fix src/nuxt.spec.ts src/unit.spec.ts # preserve the compatible bare import while fixing all other Vitest imports
+Found 0 warnings and 0 errors.
+Finished in <variable>ms on 2 files with <variable> rules using <variable> threads.
+
+> cat src/nuxt.spec.ts
+import { mockNuxtImport } from '@nuxt/test-utils/runtime';
+import { expect, vi } from 'vitest';
+import { startVitest } from 'vite-plus/test/node';
+
+mockNuxtImport('useExample', () => vi.fn());
+void expect;
+void startVitest;
+
+> cat src/unit.spec.ts
+import { expect } from 'vite-plus/test';
+
+void expect;
+
+> vp lint src/nuxt.spec.ts src/unit.spec.ts # confirm the mixed compatible result is clean
+Found 0 warnings and 0 errors.
+Finished in <variable>ms on 2 files with <variable> rules using <variable> threads.

@@ -55,6 +55,7 @@ import {
   detectFramework,
   detectIncompatibleEslintIntegration,
   detectNodeVersionManagerFile,
+  detectNuxtTestUtilsVitestImportFiles,
   detectPendingCoreMigration,
   detectPrettierProject,
   detectVitePlusBootstrapPending,
@@ -347,6 +348,51 @@ interface MigrationPlan extends MigrationSetupPlan {
   migrateNodeVersionFile: boolean;
   nodeVersionDetection?: NodeVersionManagerDetection;
   frameworkShimFrameworks?: Framework[];
+  preserveNuxtVitestImports: boolean;
+  nuxtVitestUnsafeRewrite: boolean;
+}
+
+const NUXT_VITEST_REWRITE_WARNING =
+  '@nuxt/test-utils compatibility: bare `vitest` imports were rewritten. Files using ' +
+  '`mockNuxtImport` or `mockComponent` may need manual fixes for duplicate `vi` imports.';
+
+async function collectNuxtVitestImportDecision(
+  rootDir: string,
+  options: MigrationOptions,
+  packages?: WorkspacePackage[],
+): Promise<{ preserveNuxtVitestImports: boolean; nuxtVitestUnsafeRewrite: boolean }> {
+  const affectedFiles = detectNuxtTestUtilsVitestImportFiles(rootDir, packages);
+  if (affectedFiles.length === 0) {
+    return { preserveNuxtVitestImports: true, nuxtVitestUnsafeRewrite: false };
+  }
+  if (!options.interactive) {
+    return { preserveNuxtVitestImports: true, nuxtVitestUnsafeRewrite: false };
+  }
+
+  prompts.log.step('@nuxt/test-utils detected', { withGuide: true });
+  const action = await prompts.select({
+    message: 'How should bare `vitest` imports in Nuxt test files be handled?',
+    options: [
+      {
+        label: 'Keep `vitest` imports (recommended)',
+        value: 'preserve' as const,
+        hint: 'Compatible with mockNuxtImport and mockComponent',
+      },
+      {
+        label: 'Rewrite to `vite-plus/test`',
+        value: 'rewrite' as const,
+        hint: 'May require manual fixes for duplicate vi imports',
+      },
+    ],
+    initialValue: 'preserve' as const,
+  });
+  if (prompts.isCancel(action)) {
+    cancelAndExit();
+  }
+  return {
+    preserveNuxtVitestImports: action === 'preserve',
+    nuxtVitestUnsafeRewrite: action === 'rewrite',
+  };
 }
 
 function getFrameworkShimCandidates(rootDir: string, packages?: WorkspacePackage[]): Framework[] {
@@ -636,6 +682,8 @@ async function collectMigrationPlan(
   const packageManager =
     detectedPackageManager ?? (await selectPackageManager(options.interactive, true));
 
+  const nuxtVitestPlan = await collectNuxtVitestImportDecision(rootDir, options, packages);
+
   // 2. Shared setup/tooling decisions
   const setupPlan = await collectMigrationSetupPlan(rootDir, packageManager, options, packages);
 
@@ -675,6 +723,7 @@ async function collectMigrationPlan(
     migrateNodeVersionFile,
     nodeVersionDetection,
     frameworkShimFrameworks,
+    ...nuxtVitestPlan,
   };
 
   return plan;
@@ -788,6 +837,13 @@ function showMigrationSummary(options: {
       );
     }
     log(`${styleText('gray', '•')} ${parts.join(', ')}`);
+  }
+  if (report.preservedNuxtVitestImportFileCount > 0) {
+    log(
+      `${styleText('gray', '•')} Kept bare \`vitest\` imports in ${report.preservedNuxtVitestImportFileCount} ${
+        report.preservedNuxtVitestImportFileCount === 1 ? 'file' : 'files'
+      } for @nuxt/test-utils compatibility`,
+    );
   }
   if (report.eslintMigrated) {
     log(`${styleText('gray', '•')} ESLint rules migrated to Oxlint`);
@@ -909,6 +965,9 @@ async function executeMigrationPlan(
   report: MigrationReport;
 }> {
   const report = createMigrationReport();
+  if (plan.nuxtVitestUnsafeRewrite) {
+    addMigrationWarning(report, NUXT_VITEST_REWRITE_WARNING);
+  }
   const migrationProgress = interactive ? prompts.spinner({ indicator: 'timer' }) : undefined;
   let migrationProgressStarted = false;
   const updateMigrationProgress = (message: string) => {
@@ -1029,7 +1088,9 @@ async function executeMigrationPlan(
   // 7. Rewrite configs
   updateMigrationProgress('Rewriting configs');
   if (workspaceInfo.isMonorepo) {
-    rewriteMonorepo(workspaceInfo, skipStagedMigration, true, report);
+    rewriteMonorepo(workspaceInfo, skipStagedMigration, true, report, {
+      preserveNuxtVitestImports: plan.preserveNuxtVitestImports,
+    });
   } else {
     rewriteStandaloneProject(
       workspaceInfo.rootDir,
@@ -1037,6 +1098,7 @@ async function executeMigrationPlan(
       skipStagedMigration,
       true,
       report,
+      { preserveNuxtVitestImports: plan.preserveNuxtVitestImports },
     );
   }
 
@@ -1175,6 +1237,18 @@ async function main() {
       }
     };
 
+    const nuxtVitestPlan = await collectNuxtVitestImportDecision(
+      workspaceInfoOptional.rootDir,
+      options,
+      workspaceInfoOptional.packages,
+    );
+    const nuxtVitestImportOptions = {
+      preserveNuxtVitestImports: nuxtVitestPlan.preserveNuxtVitestImports,
+    };
+    if (nuxtVitestPlan.nuxtVitestUnsafeRewrite) {
+      addMigrationWarning(report, NUXT_VITEST_REWRITE_WARNING);
+    }
+
     const pendingCoreMigration = detectPendingCoreMigration(workspaceInfoOptional);
     const legacyGitHooksMigrationCandidate = detectLegacyGitHooksMigrationCandidate(
       workspaceInfoOptional.rootDir,
@@ -1183,6 +1257,7 @@ async function main() {
       workspaceInfoOptional.rootDir,
       workspaceInfoOptional.packageManager,
       workspaceInfoOptional.packages,
+      nuxtVitestImportOptions,
     );
     let packageManager: PackageManager | undefined = vitePlusBootstrapPending
       ? (workspaceInfoOptional.packageManager ??
@@ -1219,6 +1294,7 @@ async function main() {
       true,
       report,
       pendingCoreMigration,
+      nuxtVitestImportOptions,
     );
     if (
       coreMigrationResult.scripts ||
@@ -1273,6 +1349,7 @@ async function main() {
             downloadPackageManager: downloadResult,
           },
           report,
+          nuxtVitestImportOptions,
         );
         didMigrate = bootstrapResult.changed || didMigrate;
         needsInstall = bootstrapResult.changed || needsInstall;

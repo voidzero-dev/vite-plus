@@ -23,6 +23,7 @@ const {
   rewriteMonorepo,
   rewriteMonorepoProject,
   detectPendingCoreMigration,
+  detectNuxtTestUtilsVitestImportFiles,
   detectVitePlusBootstrapPending,
   ensureVitePlusBootstrap,
   finalizeCoreMigrationForExistingVitePlus,
@@ -2930,6 +2931,114 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(fs.readFileSync(path.join(tmpDir, 'example.spec.ts'), 'utf8')).toContain(
       "from 'vite-plus/test'",
     );
+  });
+
+  it.each(['dependencies', 'devDependencies', 'optionalDependencies'] as const)(
+    'detects Nuxt-compatible bare Vitest imports from %s without installed metadata',
+    (dependencyGroup) => {
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify({
+          name: 'nuxt-project',
+          [dependencyGroup]: { '@nuxt/test-utils': '^4.0.3' },
+        }),
+      );
+      fs.writeFileSync(
+        path.join(tmpDir, 'nuxt.spec.ts'),
+        "import { vi } from 'vitest';\nimport { mockNuxtImport } from '@nuxt/test-utils/runtime';\n",
+      );
+      fs.writeFileSync(path.join(tmpDir, 'unit.spec.ts'), "import { expect } from 'vitest';\n");
+
+      expect(detectNuxtTestUtilsVitestImportFiles(tmpDir)).toEqual([
+        path.join(tmpDir, 'nuxt.spec.ts'),
+      ]);
+    },
+  );
+
+  it('preserves Nuxt bare Vitest imports, keeps direct Vitest, and rewrites subpaths', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'nuxt-project',
+        devDependencies: {
+          vite: '^7.0.0',
+          vitest: '^4.0.0',
+          '@nuxt/test-utils': '^4.0.3',
+        },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'nuxt.spec.ts'),
+      [
+        "import { vi } from 'vitest';",
+        "import { defineConfig } from 'vitest/config';",
+        "import { mockNuxtImport } from '@nuxt/test-utils/runtime';",
+        '',
+      ].join('\n'),
+    );
+    fs.writeFileSync(path.join(tmpDir, 'unit.spec.ts'), "import { expect } from 'vitest';\n");
+    const report = createMigrationReport();
+
+    rewriteStandaloneProject(
+      tmpDir,
+      makeWorkspaceInfo(tmpDir, PackageManager.npm),
+      true,
+      true,
+      report,
+    );
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+      overrides: Record<string, string>;
+    };
+    expect(pkg.devDependencies.vitest).toBe(VITEST_VERSION);
+    expect(pkg.overrides.vitest).toBe(VITEST_VERSION);
+    const nuxtTest = fs.readFileSync(path.join(tmpDir, 'nuxt.spec.ts'), 'utf8');
+    expect(nuxtTest).toContain("from 'vitest'");
+    expect(nuxtTest).toContain("from 'vite-plus'");
+    expect(fs.readFileSync(path.join(tmpDir, 'unit.spec.ts'), 'utf8')).toContain(
+      "from 'vite-plus/test'",
+    );
+    expect(report.preservedNuxtVitestImportFileCount).toBe(1);
+  });
+
+  it('rewrites Nuxt bare Vitest imports when compatibility preservation is declined', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'nuxt-project',
+        devDependencies: {
+          vite: '^7.0.0',
+          vitest: '^4.0.0',
+          '@nuxt/test-utils': '^4.0.3',
+        },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'nuxt.spec.ts'),
+      "import { vi } from 'vitest';\nimport { mockNuxtImport } from '@nuxt/test-utils/runtime';\n",
+    );
+    const report = createMigrationReport();
+
+    rewriteStandaloneProject(
+      tmpDir,
+      makeWorkspaceInfo(tmpDir, PackageManager.npm),
+      true,
+      true,
+      report,
+      { preserveNuxtVitestImports: false },
+    );
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+      overrides: Record<string, string>;
+    };
+    expect(pkg.devDependencies.vitest).toBeUndefined();
+    expect(pkg.overrides.vitest).toBeUndefined();
+    expect(fs.readFileSync(path.join(tmpDir, 'nuxt.spec.ts'), 'utf8')).toContain(
+      "from 'vite-plus/test'",
+    );
+    expect(report.preservedNuxtVitestImportFileCount).toBe(0);
   });
 
   it('does not add a coverage provider the project never declared', () => {

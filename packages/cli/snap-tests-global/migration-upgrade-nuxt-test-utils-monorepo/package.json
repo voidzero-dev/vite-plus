@@ -1,0 +1,14 @@
+{
+  "name": "migration-upgrade-nuxt-test-utils-monorepo",
+  "private": true,
+  "devDependencies": {
+    "vite-plus": "catalog:"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "10.33.2",
+      "onFail": "download"
+    }
+  }
+}

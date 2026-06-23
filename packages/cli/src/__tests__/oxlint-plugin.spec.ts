@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 import { RuleTester } from 'oxlint/plugins-dev';
 import { describe, expect, it } from 'vitest';
 
@@ -9,6 +11,11 @@ import {
   VITE_PLUS_OXLINT_PLUGIN_SPECIFIER,
 } from '../oxlint-plugin-config.js';
 import { preferVitePlusImportsRule, rewriteVitePlusImportSpecifier } from '../oxlint-plugin.js';
+
+const nuxtTestFilename = path.join(
+  import.meta.dirname,
+  'fixtures/nuxt-test-utils/component.spec.ts',
+);
 
 describe('oxlint plugin config defaults', () => {
   it('adds vite-plus js plugin and lint rule defaults', () => {
@@ -147,6 +154,10 @@ new RuleTester({
       code: `declare module '@vitest/browser-playwright/context' {}`,
       filename: 'types.ts',
     },
+    {
+      code: `import { vi } from 'vitest';\nimport { mockNuxtImport } from '@nuxt/test-utils/runtime';`,
+      filename: nuxtTestFilename,
+    },
   ],
   invalid: [
     {
@@ -210,6 +221,18 @@ new RuleTester({
       code: `export * from 'vitest';\nimport { defineConfig } from 'vite';`,
       errors: 2,
       output: `export * from 'vite-plus/test';\nimport { defineConfig } from 'vite-plus';`,
+    },
+    {
+      code: `import { vi } from 'vitest';\nimport { startVitest } from 'vitest/node';\nimport { mockNuxtImport } from '@nuxt/test-utils/runtime';`,
+      errors: 1,
+      filename: nuxtTestFilename,
+      output: `import { vi } from 'vitest';\nimport { startVitest } from 'vite-plus/test/node';\nimport { mockNuxtImport } from '@nuxt/test-utils/runtime';`,
+    },
+    {
+      code: `import { vi } from 'vitest';\nimport { mockNuxtImport } from '@nuxt/test-utils/runtime';`,
+      errors: 1,
+      filename: path.join(import.meta.dirname, 'ordinary.spec.ts'),
+      output: `import { vi } from 'vite-plus/test';\nimport { mockNuxtImport } from '@nuxt/test-utils/runtime';`,
     },
   ],
 });

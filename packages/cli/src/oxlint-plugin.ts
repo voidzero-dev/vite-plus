@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import path from 'node:path';
+
 import { definePlugin, defineRule } from '@oxlint/plugins';
 import type { Context, ESTree } from '@oxlint/plugins';
 
@@ -98,11 +101,55 @@ function quoteSpecifier(literal: ESTree.StringLiteral, replacement: string): str
   return `${quote}${replacement}${quote}`;
 }
 
+const NUXT_TEST_UTILS_MODULE_REFERENCE =
+  /(?:\bfrom\s*|\b(?:import|require)\s*\(\s*|\bimport\s*)['"]@nuxt\/test-utils(?:\/[^'"]+)?['"]/m;
+const nuxtTestUtilsPackageCache = new Map<string, boolean>();
+
+function nearestPackageUsesNuxtTestUtils(filename: string): boolean {
+  if (!path.isAbsolute(filename)) {
+    return false;
+  }
+  let directory = path.dirname(filename);
+  while (true) {
+    const packageJsonPath = path.join(directory, 'package.json');
+    if (fs.existsSync(packageJsonPath)) {
+      const cached = nuxtTestUtilsPackageCache.get(packageJsonPath);
+      if (cached !== undefined) {
+        return cached;
+      }
+      let usesNuxtTestUtils = false;
+      try {
+        const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8')) as {
+          dependencies?: Record<string, string>;
+          devDependencies?: Record<string, string>;
+          optionalDependencies?: Record<string, string>;
+        };
+        usesNuxtTestUtils = [pkg.dependencies, pkg.devDependencies, pkg.optionalDependencies].some(
+          (dependencies) => dependencies?.['@nuxt/test-utils'] !== undefined,
+        );
+      } catch {
+        // Invalid or unreadable package metadata cannot opt into the exception.
+      }
+      nuxtTestUtilsPackageCache.set(packageJsonPath, usesNuxtTestUtils);
+      return usesNuxtTestUtils;
+    }
+    const parent = path.dirname(directory);
+    if (parent === directory) {
+      return false;
+    }
+    directory = parent;
+  }
+}
+
 function maybeReportLiteral(
   context: Context,
   literal: ESTree.Expression | ESTree.TSModuleDeclaration['id'] | null | undefined,
+  preserveBareVitest = false,
 ) {
   if (!literal || literal.type !== 'Literal' || typeof literal.value !== 'string') {
+    return;
+  }
+  if (preserveBareVitest && literal.value === 'vitest') {
     return;
   }
 
@@ -138,24 +185,30 @@ export const preferVitePlusImportsRule = defineRule({
     },
   },
   createOnce(context: Context) {
+    let preserveBareVitest = false;
     return {
+      Program() {
+        preserveBareVitest =
+          nearestPackageUsesNuxtTestUtils(context.filename) &&
+          NUXT_TEST_UTILS_MODULE_REFERENCE.test(context.sourceCode.text);
+      },
       ImportDeclaration(node) {
-        maybeReportLiteral(context, node.source);
+        maybeReportLiteral(context, node.source, preserveBareVitest);
       },
       ExportAllDeclaration(node) {
-        maybeReportLiteral(context, node.source);
+        maybeReportLiteral(context, node.source, preserveBareVitest);
       },
       ExportNamedDeclaration(node) {
-        maybeReportLiteral(context, node.source);
+        maybeReportLiteral(context, node.source, preserveBareVitest);
       },
       ImportExpression(node) {
-        maybeReportLiteral(context, node.source);
+        maybeReportLiteral(context, node.source, preserveBareVitest);
       },
       TSImportType(node) {
-        maybeReportLiteral(context, node.source);
+        maybeReportLiteral(context, node.source, preserveBareVitest);
       },
       TSExternalModuleReference(node) {
-        maybeReportLiteral(context, node.expression);
+        maybeReportLiteral(context, node.expression, preserveBareVitest);
       },
       TSModuleDeclaration(node) {
         if (node.global) {
@@ -169,7 +222,7 @@ export const preferVitePlusImportsRule = defineRule({
         ) {
           return;
         }
-        maybeReportLiteral(context, id);
+        maybeReportLiteral(context, id, preserveBareVitest);
       },
     };
   },

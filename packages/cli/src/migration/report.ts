@@ -7,6 +7,7 @@ export interface MigrationReport {
   tsdownImportCount: number;
   wrappedPluginConfigCount: number;
   rewrittenImportFileCount: number;
+  preservedNuxtVitestImportFileCount: number;
   rewrittenImportErrors: Array<{ path: string; message: string }>;
   eslintMigrated: boolean;
   prettierMigrated: boolean;
@@ -28,6 +29,7 @@ export function createMigrationReport(): MigrationReport {
     tsdownImportCount: 0,
     wrappedPluginConfigCount: 0,
     rewrittenImportFileCount: 0,
+    preservedNuxtVitestImportFileCount: 0,
     rewrittenImportErrors: [],
     eslintMigrated: false,
     prettierMigrated: false,

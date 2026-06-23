@@ -1,0 +1,8 @@
+{
+  "name": "nuxt-tests",
+  "private": true,
+  "devDependencies": {
+    "@nuxt/test-utils": "file:../../.fixture/nuxt-test-utils",
+    "vitest": "catalog:"
+  }
+}

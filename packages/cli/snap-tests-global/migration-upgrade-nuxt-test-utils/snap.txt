@@ -1,0 +1,46 @@
+> vp migrate --no-interactive # preserve Nuxt-compatible bare imports by default while rewriting other Vitest surfaces
+◇ Migrated . to Vite+
+• Node <semver>  npm <semver>
+• 2 files had imports rewritten
+• Kept bare `vitest` imports in 1 file for @nuxt/test-utils compatibility
+• Package manager settings configured
+
+> cat package.json # direct Vitest and its shared pin remain for the preserved import
+{
+  "name": "migration-upgrade-nuxt-test-utils",
+  "devDependencies": {
+    "@nuxt/test-utils": "file:.fixture/nuxt-test-utils",
+    "vite-plus": "latest",
+    "vitest": "<semver>"
+  },
+  "overrides": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vitest": "<semver>"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "npm",
+      "version": "<semver>",
+      "onFail": "download"
+    }
+  }
+}
+
+> cat nuxt.spec.ts # bare Vitest stays; config and browser subpaths migrate
+import { mockNuxtImport } from '@nuxt/test-utils/runtime';
+import { page } from 'vite-plus/test/browser/context';
+import { vi } from 'vitest';
+import { defineConfig } from 'vite-plus';
+
+mockNuxtImport('useExample', () => vi.fn());
+void page;
+void defineConfig;
+
+> cat unit.spec.ts # unrelated bare Vitest imports still migrate
+import { expect } from 'vite-plus/test';
+
+expect(true).toBe(true);
+
+> vp migrate --no-interactive # the compatibility result is idempotent
+This project is already using Vite+! Happy coding!
+
