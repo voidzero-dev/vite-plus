@@ -389,6 +389,16 @@ Tests `vp pack src/index.ts --minify` on a CSS entry: the bundled `@tsdown/css` 
 
 Loads the bundled `dist/tsdown/tsdown-exe.js` and `dist/tsdown/tsdown-css.js` chunks to prove they resolve `tsdown/internal` against the bundled tsdown without a top-level `tsdown` package. This is Node-version independent (it does not run the SEA build), so it catches the import-resolution regression on every CI Node version.
 
+### Local CLI Test: `command-pack-css-missing-lightningcss`
+
+**Location**: `packages/cli/snap-tests/command-pack-css-missing-lightningcss/`
+
+Runs `vp pack --minify` with a resolve hook (`NODE_OPTIONS=--import`) that makes `lightningcss` unresolvable, simulating the uninstalled optional peer (the dev/CI monorepo always has it). Asserts the actionable error tells the user how to fix it:
+
+```
+Cannot find package "lightningcss". CSS bundling with `vp pack` requires it. Install it with `vp add -D lightningcss`.
+```
+
 ### Global CLI Test: `command-pack-exe`
 
 **Location**: `packages/cli/snap-tests-global/command-pack-exe/`

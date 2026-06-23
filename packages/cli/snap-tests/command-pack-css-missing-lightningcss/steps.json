@@ -1,0 +1,6 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "commands": [
+    "NODE_OPTIONS=--import=./register-block.mjs vp pack src/index.ts --minify # missing optional lightningcss peer prints an actionable install hint (issue #1586)"
+  ]
+}

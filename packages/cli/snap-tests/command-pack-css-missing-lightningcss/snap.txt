@@ -1,0 +1,9 @@
+[1]> NODE_OPTIONS=--import=./register-block.mjs vp pack src/index.ts --minify # missing optional lightningcss peer prints an actionable install hint (issue #1586)
+ℹ entry: src/index.ts
+ℹ Build start
+error: Build failed with 1 error:
+
+[plugin @tsdown/css] <cwd>/src/style.css
+Error: Cannot find package "lightningcss". CSS bundling with `vp pack` requires it. Install it with `vp add -D lightningcss`.
+Caused by:
+  Error: Cannot find package 'lightningcss'
