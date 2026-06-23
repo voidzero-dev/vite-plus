@@ -212,6 +212,21 @@ async function updatePnpmWorkspace(versions: PnpmWorkspaceVersions): Promise<voi
       replacement: `tsdown: ^${versions.tsdown}`,
       newVersion: versions.tsdown,
     },
+    // `@tsdown/css` and `@tsdown/exe` are bundled into core and published in
+    // lockstep with tsdown (they exact-peer-depend on the same tsdown version),
+    // so pin both catalog entries to the tsdown version to avoid drift.
+    {
+      name: '@tsdown/css',
+      pattern: /'@tsdown\/css': \^([\d.]+(?:-[\w.]+)?)/,
+      replacement: `'@tsdown/css': ^${versions.tsdown}`,
+      newVersion: versions.tsdown,
+    },
+    {
+      name: '@tsdown/exe',
+      pattern: /'@tsdown\/exe': \^([\d.]+(?:-[\w.]+)?)/,
+      replacement: `'@tsdown/exe': ^${versions.tsdown}`,
+      newVersion: versions.tsdown,
+    },
     {
       name: '@oxc-node/cli',
       pattern: /'@oxc-node\/cli': \^([\d.]+(?:-[\w.]+)?)/,
