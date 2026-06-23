@@ -3288,8 +3288,8 @@ export interface BatchRewriteError {
 export interface BatchRewriteResult {
   /** Files that were modified */
   modifiedFiles: Array<string>;
-  /** Nuxt test-utils files where exact bare `vitest` imports were preserved */
-  preservedBareVitestFiles: Array<string>;
+  /** Files in Nuxt test-utils packages where upstream `vitest` imports were preserved */
+  preservedVitestFiles: Array<string>;
   /** Files that had errors */
   errors: Array<BatchRewriteError>;
 }
@@ -3522,8 +3522,8 @@ export declare function rewriteEslint(scriptsJson: string): string | null;
  * # Arguments
  *
  * * `root` - The root directory to search for files
- * * `preserve_bare_vitest_in_nuxt_files` - Preserve exact bare `vitest`
- *   specifiers in files that directly reference a declared `@nuxt/test-utils`
+ * * `preserve_vitest_in_nuxt_packages` - Preserve `vitest` and `vitest/*`
+ *   specifiers throughout packages that declare `@nuxt/test-utils`
  *
  * # Returns
  *
@@ -3543,7 +3543,7 @@ export declare function rewriteEslint(scriptsJson: string): string | null;
  */
 export declare function rewriteImportsInDirectory(
   root: string,
-  preserveBareVitestInNuxtFiles?: boolean | undefined | null,
+  preserveVitestInNuxtPackages?: boolean | undefined | null,
 ): BatchRewriteResult;
 
 /**

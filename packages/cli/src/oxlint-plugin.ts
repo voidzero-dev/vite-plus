@@ -101,9 +101,11 @@ function quoteSpecifier(literal: ESTree.StringLiteral, replacement: string): str
   return `${quote}${replacement}${quote}`;
 }
 
-const NUXT_TEST_UTILS_MODULE_REFERENCE =
-  /(?:\bfrom\s*|\b(?:import|require)\s*\(\s*|\bimport\s*)['"]@nuxt\/test-utils(?:\/[^'"]+)?['"]/m;
 const nuxtTestUtilsPackageCache = new Map<string, boolean>();
+
+function isUpstreamVitestSpecifier(specifier: string): boolean {
+  return specifier === 'vitest' || specifier.startsWith('vitest/');
+}
 
 function nearestPackageUsesNuxtTestUtils(filename: string): boolean {
   if (!path.isAbsolute(filename)) {
@@ -144,12 +146,12 @@ function nearestPackageUsesNuxtTestUtils(filename: string): boolean {
 function maybeReportLiteral(
   context: Context,
   literal: ESTree.Expression | ESTree.TSModuleDeclaration['id'] | null | undefined,
-  preserveBareVitest = false,
+  preserveUpstreamVitest = false,
 ) {
   if (!literal || literal.type !== 'Literal' || typeof literal.value !== 'string') {
     return;
   }
-  if (preserveBareVitest && literal.value === 'vitest') {
+  if (preserveUpstreamVitest && isUpstreamVitestSpecifier(literal.value)) {
     return;
   }
 
@@ -185,30 +187,28 @@ export const preferVitePlusImportsRule = defineRule({
     },
   },
   createOnce(context: Context) {
-    let preserveBareVitest = false;
+    let preserveUpstreamVitest = false;
     return {
       Program() {
-        preserveBareVitest =
-          nearestPackageUsesNuxtTestUtils(context.filename) &&
-          NUXT_TEST_UTILS_MODULE_REFERENCE.test(context.sourceCode.text);
+        preserveUpstreamVitest = nearestPackageUsesNuxtTestUtils(context.filename);
       },
       ImportDeclaration(node) {
-        maybeReportLiteral(context, node.source, preserveBareVitest);
+        maybeReportLiteral(context, node.source, preserveUpstreamVitest);
       },
       ExportAllDeclaration(node) {
-        maybeReportLiteral(context, node.source, preserveBareVitest);
+        maybeReportLiteral(context, node.source, preserveUpstreamVitest);
       },
       ExportNamedDeclaration(node) {
-        maybeReportLiteral(context, node.source, preserveBareVitest);
+        maybeReportLiteral(context, node.source, preserveUpstreamVitest);
       },
       ImportExpression(node) {
-        maybeReportLiteral(context, node.source, preserveBareVitest);
+        maybeReportLiteral(context, node.source, preserveUpstreamVitest);
       },
       TSImportType(node) {
-        maybeReportLiteral(context, node.source, preserveBareVitest);
+        maybeReportLiteral(context, node.source, preserveUpstreamVitest);
       },
       TSExternalModuleReference(node) {
-        maybeReportLiteral(context, node.expression, preserveBareVitest);
+        maybeReportLiteral(context, node.expression, preserveUpstreamVitest);
       },
       TSModuleDeclaration(node) {
         if (node.global) {
@@ -222,7 +222,7 @@ export const preferVitePlusImportsRule = defineRule({
         ) {
           return;
         }
-        maybeReportLiteral(context, id, preserveBareVitest);
+        maybeReportLiteral(context, id, preserveUpstreamVitest);
       },
     };
   },

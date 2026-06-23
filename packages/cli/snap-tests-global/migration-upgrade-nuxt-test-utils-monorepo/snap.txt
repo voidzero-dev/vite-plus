@@ -1,8 +1,8 @@
-> vp migrate --no-interactive # preserve Nuxt imports and localize direct Vitest to the affected workspace
+> vp migrate --no-interactive # preserve upstream Vitest package-wide and localize it to the affected workspace
 ◇ Migrated . to Vite+
 • Node <semver>  pnpm <semver>
-• 2 files had imports rewritten
-• Kept bare `vitest` imports in 1 file for @nuxt/test-utils compatibility
+• 1 file had imports rewritten
+• Kept upstream `vitest` imports in 2 files for @nuxt/test-utils compatibility
 • Package manager settings configured
 
 > cat packages/nuxt/package.json # affected workspace keeps direct Vitest
@@ -42,16 +42,23 @@ peerDependencyRules:
     vite: '*'
     vitest: '*'
 
-> cat packages/nuxt/nuxt.spec.ts # bare Vitest stays while its subpath migrates
+> cat packages/nuxt/nuxt.spec.ts # upstream Vitest and its subpath stay
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { expect, vi } from 'vitest';
-import { startVitest } from 'vite-plus/test/node';
+import { startVitest } from 'vitest/node';
 
 mockNuxtImport('useExample', () => vi.fn());
 void expect;
 void startVitest;
 
-> cat packages/unit/unit.spec.ts # unrelated bare Vitest migrates
+> cat packages/nuxt/unit.spec.ts # files without Nuxt imports still preserve Vitest in the affected package
+import { expect } from 'vitest';
+import { startVitest } from 'vitest/node';
+
+void expect;
+void startVitest;
+
+> cat packages/unit/unit.spec.ts # an unrelated workspace still migrates Vitest
 import { expect } from 'vite-plus/test';
 
 void expect;

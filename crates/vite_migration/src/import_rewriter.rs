@@ -1586,20 +1586,26 @@ fn is_bare_vitest_rule(rule: &RuleConfig<SupportLang>) -> bool {
     BARE_VITEST_RULE_IDS.contains(&rule.id.as_str())
 }
 
-static PARSED_BARE_VITEST_RULES: LazyLock<Vec<RuleConfig<SupportLang>>> = LazyLock::new(|| {
+fn is_unscoped_vitest_rule(rule: &RuleConfig<SupportLang>) -> bool {
+    is_bare_vitest_rule(rule)
+        || rule.id.starts_with("rewrite-vitest-config-")
+        || rule.id.starts_with("rewrite-vitest-subpath-")
+}
+
+static PARSED_UNSCOPED_VITEST_RULES: LazyLock<Vec<RuleConfig<SupportLang>>> = LazyLock::new(|| {
     ast_grep::load_rules(REWRITE_VITEST_RULES)
         .expect("failed to parse vitest rewrite rules")
         .into_iter()
-        .filter(is_bare_vitest_rule)
+        .filter(is_unscoped_vitest_rule)
         .collect()
 });
 
-static PARSED_VITEST_RULES_WITHOUT_BARE: LazyLock<Vec<RuleConfig<SupportLang>>> =
+static PARSED_VITEST_RULES_WITHOUT_UNSCOPED: LazyLock<Vec<RuleConfig<SupportLang>>> =
     LazyLock::new(|| {
         ast_grep::load_rules(REWRITE_VITEST_RULES)
             .expect("failed to parse vitest rewrite rules")
             .into_iter()
-            .filter(|rule| !is_bare_vitest_rule(rule))
+            .filter(|rule| !is_unscoped_vitest_rule(rule))
             .collect()
     });
 
@@ -1717,7 +1723,11 @@ fn apply_regex_replace(content: &mut String, re: &Regex, replacement: &str) -> b
 /// to match TypeScript semantics and avoid false positives inside string/template literals.
 /// Allocates only for preamble lines, leaving the file body untouched.
 /// Returns whether any changes were made.
-fn rewrite_reference_types(content: &mut String, skip_packages: &SkipPackages) -> bool {
+fn rewrite_reference_types(
+    content: &mut String,
+    skip_packages: &SkipPackages,
+    preserve_unscoped_vitest: bool,
+) -> bool {
     // Fast path: skip files with no triple-slash reference directives.
     // Check for "///" which covers all spacing variants (///<ref, /// <ref, ///\t<ref).
     if !content.contains("///") {
@@ -1830,7 +1840,9 @@ fn rewrite_reference_types(content: &mut String, skip_packages: &SkipPackages) -
         }
         // Each line matches at most one pattern; use early exit to skip remaining regexes.
         if !skip_packages.skip_vitest {
-            if apply_regex_replace(line, &RE_REF_VITEST_CONFIG, "${1}vite-plus${2}") {
+            if !preserve_unscoped_vitest
+                && apply_regex_replace(line, &RE_REF_VITEST_CONFIG, "${1}vite-plus${2}")
+            {
                 changed = true;
                 continue;
             }
@@ -1878,11 +1890,15 @@ fn rewrite_reference_types(content: &mut String, skip_packages: &SkipPackages) -
                 changed = true;
                 continue;
             }
-            if apply_regex_replace(line, &RE_REF_VITEST_SUBPATH, "${1}vite-plus/test/${2}${3}") {
+            if !preserve_unscoped_vitest
+                && apply_regex_replace(line, &RE_REF_VITEST_SUBPATH, "${1}vite-plus/test/${2}${3}")
+            {
                 changed = true;
                 continue;
             }
-            if apply_regex_replace(line, &RE_REF_VITEST, "${1}vite-plus/test${2}") {
+            if !preserve_unscoped_vitest
+                && apply_regex_replace(line, &RE_REF_VITEST, "${1}vite-plus/test${2}")
+            {
                 changed = true;
                 continue;
             }
@@ -1942,9 +1958,9 @@ struct PackageRewriteContext {
 /// Options controlling directory-wide import rewriting.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct RewriteImportsOptions {
-    /// Preserve exact bare `vitest` module specifiers in files that directly
-    /// reference `@nuxt/test-utils`, provided the nearest package declares it.
-    pub preserve_bare_vitest_in_nuxt_files: bool,
+    /// Preserve `vitest` and `vitest/*` module specifiers throughout packages
+    /// whose nearest package.json declares `@nuxt/test-utils`.
+    pub preserve_vitest_in_nuxt_packages: bool,
 }
 
 impl SkipPackages {
@@ -2027,8 +2043,8 @@ struct RewriteResult {
     pub content: String,
     /// Whether any changes were made
     pub updated: bool,
-    /// Whether an exact bare `vitest` specifier was intentionally preserved.
-    pub preserved_bare_vitest: bool,
+    /// Whether an upstream `vitest` specifier was intentionally preserved.
+    pub preserved_vitest: bool,
 }
 
 /// Result of rewriting imports in multiple files
@@ -2038,8 +2054,8 @@ pub struct BatchRewriteResult {
     pub modified_files: Vec<PathBuf>,
     /// Files that had no changes
     pub unchanged_files: Vec<PathBuf>,
-    /// Nuxt test-utils files where exact bare `vitest` imports were preserved.
-    pub preserved_bare_vitest_files: Vec<PathBuf>,
+    /// Files in Nuxt test-utils packages where upstream `vitest` imports were preserved.
+    pub preserved_vitest_files: Vec<PathBuf>,
     /// Files that had errors (path, error message)
     pub errors: Vec<(PathBuf, String)>,
 }
@@ -2083,7 +2099,7 @@ pub fn rewrite_imports_in_directory(root: &Path) -> Result<BatchRewriteResult, E
     rewrite_imports_in_directory_with_options(root, RewriteImportsOptions::default())
 }
 
-/// Rewrite imports with file-scoped compatibility options.
+/// Rewrite imports with package-scoped compatibility options.
 pub fn rewrite_imports_in_directory_with_options(
     root: &Path,
     options: RewriteImportsOptions,
@@ -2120,17 +2136,17 @@ pub fn rewrite_imports_in_directory_with_options(
             match rewrite_import(
                 &file_path,
                 &skip_packages,
-                options.preserve_bare_vitest_in_nuxt_files && package_context.uses_nuxt_test_utils,
+                options.preserve_vitest_in_nuxt_packages && package_context.uses_nuxt_test_utils,
             ) {
                 Ok(rewrite_result) => {
                     if rewrite_result.updated {
                         if let Err(e) = std::fs::write(&file_path, &rewrite_result.content) {
                             (file_path, FileResult::Error(e.to_string()), false)
                         } else {
-                            (file_path, FileResult::Modified, rewrite_result.preserved_bare_vitest)
+                            (file_path, FileResult::Modified, rewrite_result.preserved_vitest)
                         }
                     } else {
-                        (file_path, FileResult::Unchanged, rewrite_result.preserved_bare_vitest)
+                        (file_path, FileResult::Unchanged, rewrite_result.preserved_vitest)
                     }
                 }
                 Err(e) => (file_path, FileResult::Error(e.to_string()), false),
@@ -2142,13 +2158,13 @@ pub fn rewrite_imports_in_directory_with_options(
     let mut batch_result = BatchRewriteResult {
         modified_files: Vec::new(),
         unchanged_files: Vec::new(),
-        preserved_bare_vitest_files: Vec::new(),
+        preserved_vitest_files: Vec::new(),
         errors: Vec::new(),
     };
 
-    for (file_path, file_result, preserved_bare_vitest) in results {
-        if preserved_bare_vitest {
-            batch_result.preserved_bare_vitest_files.push(file_path.clone());
+    for (file_path, file_result, preserved_vitest) in results {
+        if preserved_vitest {
+            batch_result.preserved_vitest_files.push(file_path.clone());
         }
         match file_result {
             FileResult::Modified => batch_result.modified_files.push(file_path),
@@ -2179,25 +2195,13 @@ pub fn rewrite_imports_in_directory_with_options(
 fn rewrite_import(
     file_path: &Path,
     skip_packages: &SkipPackages,
-    preserve_bare_vitest_in_nuxt_files: bool,
+    preserve_vitest_in_nuxt_package: bool,
 ) -> Result<RewriteResult, Error> {
     // Read the file
     let content = std::fs::read_to_string(file_path)?;
 
     // Rewrite the imports
-    let preserve_bare_vitest =
-        preserve_bare_vitest_in_nuxt_files && source_directly_references_nuxt_test_utils(&content);
-    rewrite_import_content_with_options(&content, skip_packages, preserve_bare_vitest)
-}
-
-fn source_directly_references_nuxt_test_utils(content: &str) -> bool {
-    static RE_NUXT_TEST_UTILS_REFERENCE: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(
-            r#"(?m)(?:\bfrom\s*|\b(?:import|require)\s*\(\s*|\bimport\s*)["']@nuxt/test-utils(?:/[^"']+)?["']"#,
-        )
-        .unwrap()
-    });
-    RE_NUXT_TEST_UTILS_REFERENCE.is_match(content)
+    rewrite_import_content_with_options(&content, skip_packages, preserve_vitest_in_nuxt_package)
 }
 
 /// Fast pre-filter to skip expensive AST parsing for files with no relevant imports.
@@ -2231,20 +2235,20 @@ fn rewrite_import_content(
 fn rewrite_import_content_with_options(
     content: &str,
     skip_packages: &SkipPackages,
-    preserve_bare_vitest: bool,
+    preserve_unscoped_vitest: bool,
 ) -> Result<RewriteResult, Error> {
     // Fast path: skip AST parsing if the file doesn't contain any target strings
     if !content_may_need_rewriting(content, skip_packages) {
         return Ok(RewriteResult {
             content: content.to_string(),
             updated: false,
-            preserved_bare_vitest: false,
+            preserved_vitest: false,
         });
     }
 
     let mut new_content = content.to_string();
     let mut updated = false;
-    let mut preserved_bare_vitest = false;
+    let mut preserved_vitest = false;
 
     // Apply vite rules if not skipped (using pre-parsed rules)
     if !skip_packages.skip_vite {
@@ -2257,11 +2261,11 @@ fn rewrite_import_content_with_options(
 
     // Apply vitest rules if not skipped (using pre-parsed rules)
     if !skip_packages.skip_vitest {
-        let vitest_rules = if preserve_bare_vitest {
-            let bare_rewrite =
-                ast_grep::apply_loaded_rules(&new_content, &PARSED_BARE_VITEST_RULES);
-            preserved_bare_vitest = bare_rewrite != new_content;
-            &*PARSED_VITEST_RULES_WITHOUT_BARE
+        let vitest_rules = if preserve_unscoped_vitest {
+            let upstream_rewrite =
+                ast_grep::apply_loaded_rules(&new_content, &PARSED_UNSCOPED_VITEST_RULES);
+            preserved_vitest = upstream_rewrite != new_content;
+            &*PARSED_VITEST_RULES_WITHOUT_UNSCOPED
         } else {
             &*PARSED_VITEST_RULES
         };
@@ -2283,9 +2287,9 @@ fn rewrite_import_content_with_options(
 
     // Apply reference type rewriting (/// <reference types="..." />)
     // These cannot be handled by ast-grep because they are parsed as comments.
-    updated |= rewrite_reference_types(&mut new_content, skip_packages);
+    updated |= rewrite_reference_types(&mut new_content, skip_packages, preserve_unscoped_vitest);
 
-    Ok(RewriteResult { content: new_content, updated, preserved_bare_vitest })
+    Ok(RewriteResult { content: new_content, updated, preserved_vitest })
 }
 
 #[cfg(test)]
@@ -2893,7 +2897,7 @@ describe('test', () => {});"#,
     }
 
     #[test]
-    fn test_preserves_only_bare_vitest_in_nuxt_test_utils_files() {
+    fn test_preserves_unscoped_vitest_in_nuxt_test_utils_packages() {
         use std::fs;
 
         let temp = tempdir().unwrap();
@@ -2919,26 +2923,32 @@ import { page } from '@vitest/browser/context';
 import { mockNuxtImport } from '@nuxt/test-utils/runtime';"#,
         )
         .unwrap();
-        fs::write(temp.path().join("ordinary.spec.ts"), "import { expect } from 'vitest';\n")
-            .unwrap();
-
-        let result = rewrite_imports_in_directory_with_options(
-            temp.path(),
-            RewriteImportsOptions { preserve_bare_vitest_in_nuxt_files: true },
+        fs::write(
+            temp.path().join("ordinary.spec.ts"),
+            "/// <reference types=\"vitest/globals\" />\nimport { expect } from 'vitest';\n",
         )
         .unwrap();
 
-        assert_eq!(result.preserved_bare_vitest_files, [temp.path().join("nuxt.spec.ts")]);
+        let result = rewrite_imports_in_directory_with_options(
+            temp.path(),
+            RewriteImportsOptions { preserve_vitest_in_nuxt_packages: true },
+        )
+        .unwrap();
+
+        assert_eq!(result.preserved_vitest_files.len(), 2);
+        assert!(result.preserved_vitest_files.contains(&temp.path().join("nuxt.spec.ts")));
+        assert!(result.preserved_vitest_files.contains(&temp.path().join("ordinary.spec.ts")));
         let nuxt = fs::read_to_string(temp.path().join("nuxt.spec.ts")).unwrap();
         assert!(nuxt.contains("from 'vitest'"));
         assert!(nuxt.contains("require('vitest')"));
         assert!(nuxt.contains("import('vitest')"));
-        assert!(nuxt.contains("from 'vite-plus'"));
-        assert!(nuxt.contains("from 'vite-plus/test/node'"));
+        assert!(nuxt.contains("from 'vitest/config'"));
+        assert!(nuxt.contains("from 'vitest/node'"));
         assert!(nuxt.contains("from 'vite-plus/test/browser/context'"));
 
         let ordinary = fs::read_to_string(temp.path().join("ordinary.spec.ts")).unwrap();
-        assert!(ordinary.contains("from 'vite-plus/test'"));
+        assert!(ordinary.contains("from 'vitest'"));
+        assert!(ordinary.contains("types=\"vitest/globals\""));
     }
 
     #[test]
@@ -2956,11 +2966,11 @@ import { mockNuxtImport } from '@nuxt/test-utils/runtime';"#,
 
         let result = rewrite_imports_in_directory_with_options(
             temp.path(),
-            RewriteImportsOptions { preserve_bare_vitest_in_nuxt_files: true },
+            RewriteImportsOptions { preserve_vitest_in_nuxt_packages: true },
         )
         .unwrap();
 
-        assert!(result.preserved_bare_vitest_files.is_empty());
+        assert!(result.preserved_vitest_files.is_empty());
         let content = fs::read_to_string(temp.path().join("nuxt.spec.ts")).unwrap();
         assert!(content.contains("from 'vite-plus/test'"));
     }

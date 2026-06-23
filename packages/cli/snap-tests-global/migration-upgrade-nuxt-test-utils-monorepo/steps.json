@@ -1,11 +1,12 @@
 {
   "commands": [
-    "vp migrate --no-interactive # preserve Nuxt imports and localize direct Vitest to the affected workspace",
+    "vp migrate --no-interactive # preserve upstream Vitest package-wide and localize it to the affected workspace",
     "cat packages/nuxt/package.json # affected workspace keeps direct Vitest",
     "cat packages/unit/package.json # unrelated workspace drops direct Vitest",
     "cat pnpm-workspace.yaml # shared Vitest pin remains because one workspace needs it",
-    "cat packages/nuxt/nuxt.spec.ts # bare Vitest stays while its subpath migrates",
-    "cat packages/unit/unit.spec.ts # unrelated bare Vitest migrates",
+    "cat packages/nuxt/nuxt.spec.ts # upstream Vitest and its subpath stay",
+    "cat packages/nuxt/unit.spec.ts # files without Nuxt imports still preserve Vitest in the affected package",
+    "cat packages/unit/unit.spec.ts # an unrelated workspace still migrates Vitest",
     "vp migrate --no-interactive # workspace result is idempotent"
   ],
   "ignoredPlatforms": [

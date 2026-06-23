@@ -1,10 +1,10 @@
 {
   "commands": [
-    "vp migrate --no-interactive # preserve Nuxt-compatible bare imports by default while rewriting other Vitest surfaces",
-    "cat package.json # direct Vitest and its shared pin remain for the preserved import",
-    "cat nuxt.spec.ts # bare Vitest stays; config and browser subpaths migrate",
-    "cat unit.spec.ts # unrelated bare Vitest imports still migrate",
-    "vp migrate --no-interactive # the compatibility result is idempotent"
+    "vp migrate --no-interactive # preserve upstream Vitest throughout packages that declare @nuxt/test-utils",
+    "cat package.json # direct Vitest and its shared pin remain for the package-level exception",
+    "cat nuxt.spec.ts # unscoped Vitest stays while the scoped browser package migrates",
+    "cat unit.spec.ts # an unrelated test file in the same package also keeps upstream Vitest",
+    "vp migrate --no-interactive # the package-level compatibility result is idempotent"
   ],
   "ignoredPlatforms": [
     {

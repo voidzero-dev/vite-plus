@@ -1,10 +1,10 @@
 {
   "ignoredPlatforms": [{ "os": "linux", "libc": "musl" }],
   "commands": [
-    "vp lint --threads=1 src/nuxt.spec.ts src/unit.spec.ts # only the Nuxt bare import is exempt; subpaths and unrelated files still fail",
-    "vp lint --threads=1 --fix src/nuxt.spec.ts src/unit.spec.ts # preserve the compatible bare import while fixing all other Vitest imports",
+    "vp lint --threads=1 src/nuxt.spec.ts src/unit.spec.ts # all upstream Vitest imports are exempt; the unrelated Vite import still fails",
+    "vp lint --threads=1 --fix src/nuxt.spec.ts src/unit.spec.ts # fix Vite without changing any upstream Vitest imports",
     "cat src/nuxt.spec.ts",
     "cat src/unit.spec.ts",
-    "vp lint --threads=1 src/nuxt.spec.ts src/unit.spec.ts # confirm the mixed compatible result is clean"
+    "vp lint --threads=1 src/nuxt.spec.ts src/unit.spec.ts # confirm the package-level compatible result is clean"
   ]
 }

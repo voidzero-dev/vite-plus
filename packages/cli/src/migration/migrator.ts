@@ -614,7 +614,8 @@ function projectListsRequiredVitestPeer(
 
 // True iff the project uses vitest DIRECTLY — via a dependency that is expected
 // to have a required vitest peer (see `projectListsVitestEcosystemDep`), an
-// upstream `vitest` module specifier, or vitest browser mode. Drives
+// upstream `vitest` module specifier, a package-level @nuxt/test-utils
+// compatibility boundary, or vitest browser mode. Drives
 // whether the migration keeps `vitest` managed or removes it entirely; the
 // browser-mode arm keeps it aligned with the direct-`vitest` injection below so
 // an injected `catalog:` spec never dangles against a vitest-less catalog.
@@ -640,7 +641,7 @@ function projectUsesVitestDirectly(
     // exact Vitest peer is left unsatisfied under strict pnpm/Yarn layouts.
     VITEST_BROWSER_DEP_NAMES.some((name) => pkg.peerDependencies?.[name] !== undefined) ||
     sourceTreeReferencesRetainedVitestModule(projectPath) ||
-    (preserveNuxtVitestImports && sourceTreeReferencesNuxtVitestImport(projectPath, pkg)) ||
+    (preserveNuxtVitestImports && hasNuxtTestUtilsDependency(pkg)) ||
     usesVitestBrowserMode(projectPath)
   );
 }
@@ -4670,10 +4671,8 @@ function sourceTreeReferencesAny(projectPath: string, hints: readonly string[]):
   return sourceTreeMatches(projectPath, (content) => hints.some((hint) => content.includes(hint)));
 }
 
-const BARE_VITEST_MODULE_REFERENCE =
-  /(?:\bfrom\s*|\b(?:import|require)\s*\(\s*|\bimport\s*)['"]vitest['"]/m;
-const NUXT_TEST_UTILS_MODULE_REFERENCE =
-  /(?:\bfrom\s*|\b(?:import|require)\s*\(\s*|\bimport\s*)['"]@nuxt\/test-utils(?:\/[^'"]+)?['"]/m;
+const UPSTREAM_VITEST_MODULE_REFERENCE =
+  /(?:\bfrom\s*|\b(?:import|require)\s*\(\s*|\bimport\s*)['"]vitest(?:\/[^'"]+)?['"]/m;
 
 function hasNuxtTestUtilsDependency(pkg: DependencyBag): boolean {
   return [pkg.dependencies, pkg.devDependencies, pkg.optionalDependencies].some(
@@ -4681,21 +4680,9 @@ function hasNuxtTestUtilsDependency(pkg: DependencyBag): boolean {
   );
 }
 
-function sourceReferencesNuxtTestUtilsWithBareVitest(content: string): boolean {
-  return (
-    BARE_VITEST_MODULE_REFERENCE.test(content) && NUXT_TEST_UTILS_MODULE_REFERENCE.test(content)
-  );
-}
-
-function sourceTreeReferencesNuxtVitestImport(projectPath: string, pkg: DependencyBag): boolean {
-  return (
-    hasNuxtTestUtilsDependency(pkg) &&
-    sourceTreeMatches(projectPath, sourceReferencesNuxtTestUtilsWithBareVitest)
-  );
-}
-
 /**
- * Find files eligible for the @nuxt/test-utils bare-vitest compatibility choice.
+ * Find files whose upstream Vitest imports are preserved by the
+ * @nuxt/test-utils package-level compatibility rule.
  * Each package is scanned independently so a root dependency does not leak into
  * unrelated workspace manifests.
  */
@@ -4713,7 +4700,9 @@ export function detectNuxtTestUtilsVitestImportFiles(
       continue;
     }
     files.push(
-      ...sourceTreeMatchingFiles(projectPath, sourceReferencesNuxtTestUtilsWithBareVitest),
+      ...sourceTreeMatchingFiles(projectPath, (content) =>
+        UPSTREAM_VITEST_MODULE_REFERENCE.test(content),
+      ),
     );
   }
   return [...new Set(files)];
@@ -5862,7 +5851,7 @@ function rewriteAllImports(
 ): boolean {
   const result = rewriteImportsInDirectory(projectPath, preserveNuxtVitestImports);
   const modified = result.modifiedFiles.length;
-  const preserved = result.preservedBareVitestFiles.length;
+  const preserved = result.preservedVitestFiles.length;
   const errors = result.errors.length;
 
   if (report) {

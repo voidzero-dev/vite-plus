@@ -16,6 +16,10 @@ const nuxtTestFilename = path.join(
   import.meta.dirname,
   'fixtures/nuxt-test-utils/component.spec.ts',
 );
+const nuxtUnitTestFilename = path.join(
+  import.meta.dirname,
+  'fixtures/nuxt-test-utils/unit.spec.ts',
+);
 
 describe('oxlint plugin config defaults', () => {
   it('adds vite-plus js plugin and lint rule defaults', () => {
@@ -158,8 +162,18 @@ new RuleTester({
       code: `import { vi } from 'vitest';\nimport { mockNuxtImport } from '@nuxt/test-utils/runtime';`,
       filename: nuxtTestFilename,
     },
+    {
+      code: `import { expect } from 'vitest';\nimport { startVitest } from 'vitest/node';\nimport { defineConfig } from 'vitest/config';`,
+      filename: nuxtUnitTestFilename,
+    },
   ],
   invalid: [
+    {
+      code: `import { page } from '@vitest/browser/context'`,
+      errors: 1,
+      filename: nuxtUnitTestFilename,
+      output: `import { page } from 'vite-plus/test/browser/context'`,
+    },
     {
       // `declare module 'vite'` IS rewritten — the vite family doesn't
       // re-export upstream vite types so augmentation works against either id.
@@ -224,9 +238,9 @@ new RuleTester({
     },
     {
       code: `import { vi } from 'vitest';\nimport { startVitest } from 'vitest/node';\nimport { mockNuxtImport } from '@nuxt/test-utils/runtime';`,
-      errors: 1,
-      filename: nuxtTestFilename,
-      output: `import { vi } from 'vitest';\nimport { startVitest } from 'vite-plus/test/node';\nimport { mockNuxtImport } from '@nuxt/test-utils/runtime';`,
+      errors: 2,
+      filename: path.join(import.meta.dirname, 'ordinary.spec.ts'),
+      output: `import { vi } from 'vite-plus/test';\nimport { startVitest } from 'vite-plus/test/node';\nimport { mockNuxtImport } from '@nuxt/test-utils/runtime';`,
     },
     {
       code: `import { vi } from 'vitest';\nimport { mockNuxtImport } from '@nuxt/test-utils/runtime';`,
