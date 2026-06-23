@@ -45,6 +45,7 @@ export default defineConfig({
     ],
     "catalog": {
       "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+      "vitest": "<semver>",
       "vite-plus": "latest"
     }
   },
@@ -62,11 +63,13 @@ export default defineConfig({
   "devDependencies": {
     "@vitejs/plugin-react": "catalog:",
     "vite": "catalog:",
+    "vitest": "catalog:",
     "vite-plus": "catalog:"
   },
   "packageManager": "bun@<semver>",
   "overrides": {
-    "vite": "catalog:"
+    "vite": "catalog:",
+    "vitest": "catalog:"
   }
 }
 
@@ -86,6 +89,7 @@ export default defineConfig({
   "devDependencies": {
     "test-vite-plus-package": "1.0.0",
     "vite": "catalog:",
+    "vitest": "catalog:",
     "vite-plus": "catalog:"
   }
 }
@@ -103,6 +107,7 @@ export default defineConfig({
   },
   "devDependencies": {
     "vite": "catalog:",
+    "vitest": "catalog:",
     "vite-plus": "catalog:"
   }
 }

@@ -1,10 +1,15 @@
 > vp migrate --no-interactive # migration should merge vite.config.ts and remove oxlintrc
 
+⚠ Vite+ does not currently support Yarn Plug'n'Play (PnP).
+
+✔ Switched Yarn to node-modules mode
+
 ✔ Merged .oxlintrc.json into vite.config.ts
 ◇ Migrated . to Vite+
 • Node <semver>  yarn <semver>
 • 2 config updates applied, 1 file had imports rewritten
 • Inline Vite plugins wrapped with lazyPlugins for check/lint/fmt
+• Package manager settings configured
 
 > cat vite.config.ts # check vite.config.ts
 import react from '@vitejs/plugin-react';
@@ -60,11 +65,13 @@ export default defineConfig({
   "devDependencies": {
     "@vitejs/plugin-react": "catalog:",
     "vite": "catalog:",
+    "vitest": "catalog:",
     "vite-plus": "catalog:"
   },
   "packageManager": "yarn@<semver>",
   "resolutions": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest"
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vitest": "<semver>"
   }
 }
 
@@ -75,6 +82,7 @@ npmPreapprovedPackages:
   - '@vitest/*'
 catalog:
   vite: npm:@voidzero-dev/vite-plus-core@latest
+  vitest: <semver>
   vite-plus: latest
 
 > cat packages/app/package.json # check app package.json
@@ -93,6 +101,7 @@ catalog:
   "devDependencies": {
     "test-vite-plus-package": "1.0.0",
     "vite": "catalog:",
+    "vitest": "catalog:",
     "vite-plus": "catalog:"
   },
   "optionalDependencies": {
@@ -113,6 +122,7 @@ catalog:
   },
   "devDependencies": {
     "vite": "catalog:",
+    "vitest": "catalog:",
     "vite-plus": "catalog:"
   }
 }
