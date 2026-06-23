@@ -28,6 +28,7 @@ type LatestTagOptions = {
 
 type NpmLatestResponse = {
   version?: unknown;
+  dependencies?: Record<string, string>;
 };
 
 type UpstreamVersions = {
@@ -132,14 +133,18 @@ async function getLatestTag(
 }
 
 // ============ npm Registry ============
-async function getLatestNpmVersion(packageName: string): Promise<string> {
+async function fetchNpmLatest(packageName: string): Promise<NpmLatestResponse> {
   const res = await fetch(`https://registry.npmjs.org/${packageName}/latest`);
   if (!res.ok) {
     throw new Error(
-      `Failed to fetch npm version for ${packageName}: ${res.status} ${res.statusText}`,
+      `Failed to fetch npm metadata for ${packageName}: ${res.status} ${res.statusText}`,
     );
   }
-  const data = (await res.json()) as NpmLatestResponse;
+  return (await res.json()) as NpmLatestResponse;
+}
+
+async function getLatestNpmVersion(packageName: string): Promise<string> {
+  const data = await fetchNpmLatest(packageName);
   if (typeof data.version !== 'string') {
     throw new Error(`Invalid npm response for ${packageName}: missing version field`);
   }
@@ -149,13 +154,7 @@ async function getLatestNpmVersion(packageName: string): Promise<string> {
 // Read a dependency range from the latest published version of `packageName`,
 // e.g. the `lightningcss` range that the bundled `@tsdown/css` depends on.
 async function getNpmDependencyRange(packageName: string, dependencyName: string): Promise<string> {
-  const res = await fetch(`https://registry.npmjs.org/${packageName}/latest`);
-  if (!res.ok) {
-    throw new Error(
-      `Failed to fetch npm metadata for ${packageName}: ${res.status} ${res.statusText}`,
-    );
-  }
-  const data = (await res.json()) as { dependencies?: Record<string, string> };
+  const data = await fetchNpmLatest(packageName);
   const range = data.dependencies?.[dependencyName];
   if (typeof range !== 'string') {
     throw new Error(
