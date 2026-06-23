@@ -1,12 +1,18 @@
-use std::{collections::HashMap, process::ExitStatus};
+use std::{
+    collections::HashMap,
+    fs, io,
+    path::{Path, PathBuf},
+    process::ExitStatus,
+};
 
 use vite_command::run_command;
 use vite_error::Error;
 use vite_path::AbsolutePath;
 use vite_shared::output;
 
-use crate::package_manager::{
-    PackageManager, PackageManagerType, ResolveCommandResult, format_path_env,
+use crate::{
+    commands::install::InstallCommandOptions,
+    package_manager::{PackageManager, PackageManagerType, ResolveCommandResult, format_path_env},
 };
 
 /// Options for the update command.
@@ -35,9 +41,49 @@ impl PackageManager {
         options: &UpdateCommandOptions<'_>,
         cwd: impl AsRef<AbsolutePath>,
     ) -> Result<ExitStatus, Error> {
+        let cwd = cwd.as_ref();
+        let snapshot = if self.requires_update_validation() {
+            Some(ProjectFileSnapshot::capture(cwd, NPM_UPDATE_PROJECT_FILES)?)
+        } else {
+            None
+        };
         let resolve_command = self.resolve_update_command(options);
-        run_command(&resolve_command.bin_path, &resolve_command.args, &resolve_command.envs, cwd)
-            .await
+        let status = run_command(
+            &resolve_command.bin_path,
+            &resolve_command.args,
+            &resolve_command.envs,
+            cwd,
+        )
+        .await?;
+        if !status.success() {
+            if let Some(snapshot) = snapshot {
+                snapshot.restore()?;
+            }
+            return Ok(status);
+        }
+
+        if let Some(validate_command) = self.resolve_update_validation_command() {
+            let status = run_command(
+                &validate_command.bin_path,
+                &validate_command.args,
+                &validate_command.envs,
+                cwd,
+            )
+            .await?;
+
+            if !status.success() {
+                if let Some(snapshot) = snapshot {
+                    snapshot.restore()?;
+                    output::warn(
+                        "npm update produced package metadata that npm install could not resolve. Restored package.json and lockfile state.",
+                    );
+                }
+            }
+
+            return Ok(status);
+        }
+
+        Ok(status)
     }
 
     /// Resolve the update command.
@@ -197,6 +243,76 @@ impl PackageManager {
         args.extend_from_slice(options.packages);
 
         ResolveCommandResult { bin_path: bin_name, args, envs }
+    }
+
+    /// Resolve a command that validates the graph produced by an update.
+    #[must_use]
+    pub fn resolve_update_validation_command(&self) -> Option<ResolveCommandResult> {
+        match self.client {
+            PackageManagerType::Npm => {
+                Some(self.resolve_install_command_with_options(&InstallCommandOptions {
+                    lockfile_only: true,
+                    ignore_scripts: true,
+                    ..Default::default()
+                }))
+            }
+            PackageManagerType::Pnpm | PackageManagerType::Yarn | PackageManagerType::Bun => None,
+        }
+    }
+
+    #[must_use]
+    fn requires_update_validation(&self) -> bool {
+        matches!(self.client, PackageManagerType::Npm)
+    }
+}
+
+const NPM_UPDATE_PROJECT_FILES: &[&str] =
+    &["package.json", "package-lock.json", "npm-shrinkwrap.json"];
+
+struct ProjectFileSnapshot {
+    files: Vec<ProjectFileState>,
+}
+
+enum ProjectFileState {
+    Present { path: PathBuf, contents: Vec<u8> },
+    Missing { path: PathBuf },
+}
+
+impl ProjectFileSnapshot {
+    fn capture(cwd: &AbsolutePath, file_names: &[&str]) -> io::Result<Self> {
+        let mut files = Vec::with_capacity(file_names.len());
+
+        for file_name in file_names {
+            let path = cwd.join(file_name).into_path_buf();
+            match fs::read(&path) {
+                Ok(contents) => files.push(ProjectFileState::Present { path, contents }),
+                Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                    files.push(ProjectFileState::Missing { path });
+                }
+                Err(error) => return Err(error),
+            }
+        }
+
+        Ok(Self { files })
+    }
+
+    fn restore(self) -> io::Result<()> {
+        for file in self.files {
+            match file {
+                ProjectFileState::Present { path, contents } => fs::write(path, contents)?,
+                ProjectFileState::Missing { path } => remove_file_if_exists(&path)?,
+            }
+        }
+
+        Ok(())
+    }
+}
+
+fn remove_file_if_exists(path: &Path) -> io::Result<()> {
+    match fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error),
     }
 }
 
@@ -522,6 +638,48 @@ mod tests {
         });
         assert_eq!(result.args, vec!["update", "--no-save", "react"]);
         assert_eq!(result.bin_path, "npm");
+    }
+
+    #[test]
+    fn test_npm_update_validation_command() {
+        let pm = create_mock_package_manager(PackageManagerType::Npm, "11.0.0");
+        let result = pm.resolve_update_validation_command().unwrap();
+        assert_eq!(result.args, vec!["install", "--package-lock-only", "--ignore-scripts"]);
+        assert_eq!(result.bin_path, "npm");
+    }
+
+    #[test]
+    fn test_pnpm_update_has_no_extra_validation_command() {
+        let pm = create_mock_package_manager(PackageManagerType::Pnpm, "10.0.0");
+        assert!(pm.resolve_update_validation_command().is_none());
+    }
+
+    #[test]
+    fn test_project_file_snapshot_restores_existing_and_missing_files() {
+        let temp_dir = create_temp_dir();
+        let cwd = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let package_json_path = cwd.join("package.json");
+        let package_lock_path = cwd.join("package-lock.json");
+
+        fs::write(&package_json_path, "before").unwrap();
+        let snapshot =
+            ProjectFileSnapshot::capture(&cwd, &["package.json", "package-lock.json"]).unwrap();
+
+        fs::write(&package_json_path, "after").unwrap();
+        fs::write(&package_lock_path, "new lockfile").unwrap();
+
+        snapshot.restore().unwrap();
+
+        assert_eq!(fs::read_to_string(&package_json_path).unwrap(), "before");
+        assert!(fs::metadata(&package_lock_path).is_err());
+    }
+
+    #[test]
+    fn test_remove_file_if_exists_allows_missing_files() {
+        let temp_dir = create_temp_dir();
+        let missing_file = temp_dir.path().join("missing.json");
+
+        remove_file_if_exists(&missing_file).unwrap();
     }
 
     #[test]
