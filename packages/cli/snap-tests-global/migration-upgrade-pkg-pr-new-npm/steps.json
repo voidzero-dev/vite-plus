@@ -1,0 +1,15 @@
+{
+  "env": {
+    "VP_FORCE_MIGRATE": "1",
+    "VP_OVERRIDE_PACKAGES": "{\"vite\":\"https://pkg.pr.new/voidzero-dev/vite-plus/@voidzero-dev/vite-plus-core@1891\",\"@voidzero-dev/vite-plus-core\":\"https://pkg.pr.new/voidzero-dev/vite-plus/@voidzero-dev/vite-plus-core@1891\",\"vitest\":\"4.1.9\"}",
+    "VP_VERSION": "https://pkg.pr.new/voidzero-dev/vite-plus@1891"
+  },
+  "commands": [
+    "vp migrate --no-interactive # pkg.pr.new targets replace every stale managed spec",
+    "cat package.json # direct dependencies and npm overrides use the same PR URLs",
+    "node -e \"const p = require('./package.json'); const vp = 'https://pkg.pr.new/voidzero-dev/vite-plus@1891'; const core = 'https://pkg.pr.new/voidzero-dev/vite-plus/@voidzero-dev/vite-plus-core@1891'; if (p.devDependencies['vite-plus'] !== vp || p.devDependencies.vite !== core || p.overrides.vite !== core || p.overrides['@voidzero-dev/vite-plus-core'] !== core) process.exit(1)\" # pkg.pr.new specs are coherent",
+    "node -e \"require('node:fs').copyFileSync('package.json', 'package.after-first-migration.json')\" # capture first migration result",
+    "vp migrate --no-interactive # pkg.pr.new migration is idempotent",
+    "node -e \"const fs = require('node:fs'); if (fs.readFileSync('package.json', 'utf8') !== fs.readFileSync('package.after-first-migration.json', 'utf8')) process.exit(1)\" # rerun leaves package.json unchanged"
+  ]
+}

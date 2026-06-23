@@ -1409,20 +1409,60 @@ describe('ensureVitePlusBootstrap', () => {
     expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(true);
     const result = ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.npm));
 
-    // The `vite` alias still points at the live `@voidzero-dev/vite-plus-core`
-    // package, so it satisfies the migration and is left untouched. The project
-    // does NOT use vitest directly (no @vitest/* dep, no vitest source), so the
-    // stale `vitest` wrapper override (the DELETED `@voidzero-dev/vite-plus-test`)
-    // is REMOVED entirely — vitest arrives transitively through vite-plus.
+    // Both managed aliases must match the active toolchain target. Keeping the
+    // old core alias while rewriting a direct `vite` dependency causes npm's
+    // EOVERRIDE error. The project does NOT use vitest directly (no @vitest/*
+    // dep, no vitest source), so the stale deleted wrapper override is removed.
     expect(result.changed).toBe(true);
     const pkg = readJson(path.join(tmpDir, 'package.json')) as {
       overrides: Record<string, string>;
     };
-    expect(pkg.overrides.vite).toBe('npm:@voidzero-dev/vite-plus-core@0.1.0');
+    expect(pkg.overrides.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
     expect(pkg.overrides.vitest).toBeUndefined();
     expect(pkg.overrides['@vitest/expect']).toBeUndefined();
     expect(pkg.overrides['@vitest/coverage-v8']).toBeUndefined();
     expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(false);
+  });
+
+  it('replaces protocol-pinned migration targets in force-override mode', () => {
+    const savedForceMigrate = process.env.VP_FORCE_MIGRATE;
+    process.env.VP_FORCE_MIGRATE = '1';
+    try {
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify({
+          name: 'test',
+          devDependencies: {
+            'vite-plus': 'https://pkg.pr.new/voidzero-dev/vite-plus@old',
+            vite: 'https://pkg.pr.new/voidzero-dev/vite-plus/@voidzero-dev/vite-plus-core@old',
+          },
+          overrides: {
+            vite: 'https://pkg.pr.new/voidzero-dev/vite-plus/@voidzero-dev/vite-plus-core@old',
+          },
+          devEngines: {
+            packageManager: { name: 'npm', version: '10.33.0', onFail: 'download' },
+          },
+        }),
+      );
+
+      expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(true);
+      ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.npm));
+
+      const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+        devDependencies: Record<string, string>;
+        overrides: Record<string, string>;
+      };
+      expect(pkg.devDependencies['vite-plus']).toBe('latest');
+      expect(pkg.devDependencies.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+      expect(pkg.overrides.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+      expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(false);
+    } finally {
+      if (savedForceMigrate === undefined) {
+        delete process.env.VP_FORCE_MIGRATE;
+      } else {
+        process.env.VP_FORCE_MIGRATE = savedForceMigrate;
+      }
+    }
   });
 
   it('rewrites direct npm Vite dependencies before adding overrides', () => {

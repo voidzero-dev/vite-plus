@@ -3706,16 +3706,6 @@ export type VitePlusBootstrapResult = {
   packageManagerField: boolean;
 };
 
-function getVitePlusOverridePackageName(dependencyName: string): string | undefined {
-  if (dependencyName === 'vite') {
-    return '@voidzero-dev/vite-plus-core';
-  }
-  if (dependencyName === 'vitest') {
-    return '@voidzero-dev/vite-plus-test';
-  }
-  return undefined;
-}
-
 function isSemanticVitePlusOverrideSpec(dependencyName: string, spec: string | undefined): boolean {
   if (!spec) {
     return false;
@@ -3731,8 +3721,7 @@ function isSemanticVitePlusOverrideSpec(dependencyName: string, spec: string | u
   if (spec === VITE_PLUS_OVERRIDE_PACKAGES[dependencyName]) {
     return true;
   }
-  const packageName = getVitePlusOverridePackageName(dependencyName);
-  return packageName !== undefined && spec.includes(packageName);
+  return false;
 }
 
 function overrideSpecSatisfiesVitePlus(
@@ -4246,8 +4235,10 @@ function ensureVitePlusDependencySpecs(
     }
     // Plain (non-protocol-pinned) range like `^0.1.24` → rewrite to the target
     // (`catalog:` for catalog-supporting projects, otherwise the concrete
-    // version). Already-`catalog:` / other protocol pins are left untouched.
-    if (!isProtocolPinnedSpec(spec)) {
+    // version). Already-`catalog:` / other protocol pins are left untouched,
+    // except in force-override mode where ecosystem/pkg.pr.new validation must
+    // replace every prior target with the requested artifact.
+    if (isForceOverrideMode() || !isProtocolPinnedSpec(spec)) {
       dependencies[VITE_PLUS_NAME] = version;
       changed = true;
     }
