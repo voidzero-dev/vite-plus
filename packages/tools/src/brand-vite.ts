@@ -11,6 +11,13 @@
  * 3. build.ts: Remove startup build banner and change error prefix
  * 4. logger.ts: Change default prefix from '[vite]' to '[vite+]'
  * 5. plugins/reporter.ts: Suppress redundant "vite v<version>" native reporter line
+ *
+ * Rolldown-compat patches (tolerant: skipped once upstream vite catches up):
+ * 6. plugins/index.ts: Drop the removed native `viteWasmFallbackPlugin`. Latest
+ *    rolldown deleted `rolldown_plugin_vite_wasm_fallback` (rolldown #9775)
+ *    because vite stopped using it in vite #21779, but the latest *stable* vite
+ *    release we pin predates that PR and still imports/calls it. Remove the
+ *    import and usage so the bundled vite builds against the newer rolldown.
  */
 
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -169,6 +176,20 @@ export function brandVite(rootDir: string = process.cwd()) {
     'plugins/reporter.ts',
     'Suppressed redundant version-only native reporter line',
     reporterResults.includes('patched') ? 'patched' : 'already',
+  );
+
+  // 6. plugins/index.ts: Drop the removed native wasm fallback plugin.
+  // Tolerant: once the pinned vite includes vite #21779, these lines are gone
+  // upstream and removeAnyInFile reports 'already' instead of failing.
+  const pluginsIndexFile = join(nodeDir, 'plugins', 'index.ts');
+  const wasmFallbackResults = [
+    removeAnyInFile(pluginsIndexFile, ['  viteWasmFallbackPlugin as nativeWasmFallbackPlugin,\n']),
+    removeAnyInFile(pluginsIndexFile, ['    nativeWasmFallbackPlugin(),\n']),
+  ];
+  logPatch(
+    'plugins/index.ts',
+    'Removed native wasm fallback plugin (rolldown-compat)',
+    wasmFallbackResults.includes('patched') ? 'patched' : 'already',
   );
 
   log('Done!');
