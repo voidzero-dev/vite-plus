@@ -105,8 +105,7 @@ export VP_HOME="$pr_home"
 export PATH="$VP_HOME/bin:$PATH"
 export VP_VERSION="$vite_plus_spec"
 export VP_OVERRIDE_PACKAGES="$(printf \
-  '{"vite":"%s","@voidzero-dev/vite-plus-core":"%s","vitest":"%s"}' \
-  "$vite_plus_core_spec" \
+  '{"vite":"%s","vitest":"%s"}' \
   "$vite_plus_core_spec" \
   "$vitest_version")"
 export VP_FORCE_MIGRATE=1

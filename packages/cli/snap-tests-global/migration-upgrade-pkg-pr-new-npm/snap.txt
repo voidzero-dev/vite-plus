@@ -11,8 +11,7 @@
     "vite-plus": "https://pkg.pr.new/voidzero-dev/vite-plus@1891"
   },
   "overrides": {
-    "vite": "https://pkg.pr.new/voidzero-dev/vite-plus/@voidzero-dev/vite-plus-core@1891",
-    "@voidzero-dev/vite-plus-core": "https://pkg.pr.new/voidzero-dev/vite-plus/@voidzero-dev/vite-plus-core@1891"
+    "vite": "https://pkg.pr.new/voidzero-dev/vite-plus/@voidzero-dev/vite-plus-core@1891"
   },
   "packageManager": "npm@<semver>",
   "scripts": {
@@ -20,7 +19,7 @@
   }
 }
 
-> node -e "const p = require('./package.json'); const vp = 'https://pkg.pr.new/voidzero-dev/vite-plus@1891'; const core = 'https://pkg.pr.new/voidzero-dev/vite-plus/@voidzero-dev/vite-plus-core@1891'; if (p.devDependencies['vite-plus'] !== vp || p.devDependencies.vite !== core || p.overrides.vite !== core || p.overrides['@voidzero-dev/vite-plus-core'] !== core) process.exit(1)" # pkg.pr.new specs are coherent
+> node -e "const p = require('./package.json'); const vp = 'https://pkg.pr.new/voidzero-dev/vite-plus@1891'; const core = 'https://pkg.pr.new/voidzero-dev/vite-plus/@voidzero-dev/vite-plus-core@1891'; if (p.devDependencies['vite-plus'] !== vp || p.devDependencies.vite !== core || p.overrides.vite !== core || p.overrides['@voidzero-dev/vite-plus-core'] !== undefined) process.exit(1)" # pkg.pr.new specs use the minimal override shape
 > node -e "require('node:fs').copyFileSync('package.json', 'package.after-first-migration.json')" # capture first migration result
 > vp migrate --no-interactive # pkg.pr.new migration is idempotent
 ◇ Migrated . to Vite+
