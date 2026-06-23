@@ -10,6 +10,12 @@
     "vp staged # should succeed with staged .ts files",
     { "command": "git add -A && git commit -m 'second'", "ignoreOutput": true },
     {
+      "command": "echo 'export const bar = 2;' >> src/index.ts && git add src/index.ts",
+      "ignoreOutput": true
+    },
+    "vp staged --debug > /dev/null 2>&1 # should succeed with debug enabled",
+    { "command": "git add -A && git commit -m 'third'", "ignoreOutput": true },
+    {
       "command": "printf 'eval(\"code\");\\n' > src/fail.js && git add src/fail.js",
       "ignoreOutput": true
     },

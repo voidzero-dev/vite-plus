@@ -4,6 +4,7 @@ import { defineConfig } from 'tsdown';
 
 const require = createRequire(import.meta.url);
 const lintStagedPackageJson = require('lint-staged/package.json') as { version: string };
+const virtualLintStagedVersionId = '\0vite-plus:lint-staged-version';
 
 /**
  * Rewrite `../versions.js` → `./versions.js` at resolve time.
@@ -24,22 +25,29 @@ const fixVersionsPathPlugin = {
 };
 
 /**
- * `lint-staged` reads `../package.json` only when debug mode is enabled.
- * After bundling `lib/version.js` into `dist/staged/bin.js`, that relative URL
- * points at `dist/package.json` instead of lint-staged's package root.
+ * `lint-staged` reads `../package.json` from `lib/version.js` when debug logging is enabled.
+ * The CLI bundles lint-staged into `dist/staged/bin.js`, so that relative runtime file does not
+ * exist in the published package. Inline the resolved dependency version instead.
  */
 const inlineLintStagedVersionPlugin = {
   name: 'inline-lint-staged-version',
-  transform(_code: string, id: string) {
-    const normalizedId = id.split('?')[0].replaceAll('\\', '/');
-
-    if (normalizedId.endsWith('/lint-staged/lib/version.js')) {
-      return {
-        code: `export const getVersion = async () => ${JSON.stringify(lintStagedPackageJson.version)};\n`,
-        map: null,
-      };
+  resolveId(source: string, importer?: string) {
+    if (
+      source === './version.js' &&
+      importer?.replaceAll('\\', '/').endsWith('/lint-staged/lib/index.js')
+    ) {
+      return virtualLintStagedVersionId;
     }
-
+    return undefined;
+  },
+  load(id: string) {
+    if (id === virtualLintStagedVersionId) {
+      return [
+        `const version = ${JSON.stringify(lintStagedPackageJson.version)};`,
+        'export const getVersion = async () => version;',
+        '',
+      ].join('\n');
+    }
     return undefined;
   },
 };
