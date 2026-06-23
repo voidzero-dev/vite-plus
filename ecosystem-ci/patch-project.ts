@@ -64,13 +64,23 @@ if (project === 'dify') {
   // dify sets `minimumReleaseAge` (0) with `resolutionMode: time-based`, and
   // pnpm 11.5.2 crashes with ERR_PNPM_RESOLUTION_POLICY_VIOLATIONS_UNHANDLED
   // once the policy machinery is active and the local `file:` tgz overrides
-  // produce violations (file deps have no publish timestamp). Remove the key
+  // produce violations (file deps have no publish timestamp). Remove both keys
   // so the policy stays inactive for the ecosystem run.
+  //
+  // `resolutionMode: time-based` must be stripped too: on its own (without an
+  // explicit `minimumReleaseAge`) pnpm 11 re-activates the policy with a 1440
+  // default, which rejects freshly-published deps. For example, `vp migrate`
+  // running `vp dlx @oxlint/migrate@<bundled oxlint>` when an oxlint bump
+  // landed <24h ago fails with ERR_PNPM_NO_MATURE_MATCHING_VERSION.
   const workspacePath = join(repoRoot, 'pnpm-workspace.yaml');
   const workspace = await readFile(workspacePath, 'utf-8');
-  const patched = workspace.replace(/^minimumReleaseAge:.*\n/m, '');
-  if (patched === workspace) {
+  const withoutReleaseAge = workspace.replace(/^minimumReleaseAge:.*\n/m, '');
+  if (withoutReleaseAge === workspace) {
     throw new Error(`dify patch: \`minimumReleaseAge:\` not found in ${workspacePath}`);
+  }
+  const patched = withoutReleaseAge.replace(/^resolutionMode:.*\n/m, '');
+  if (patched === withoutReleaseAge) {
+    throw new Error(`dify patch: \`resolutionMode:\` not found in ${workspacePath}`);
   }
   await writeFile(workspacePath, patched, 'utf-8');
 }
