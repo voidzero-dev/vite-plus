@@ -83,6 +83,8 @@ catalog:
   glob: ^13.0.0
   husky: ^9.1.7
   jsonc-parser: ^3.3.1
+  # Kept in lockstep with the bundled @tsdown/css by .github/scripts/upgrade-deps.ts
+  lightningcss: ^1.32.0
   lint-staged: ^16.2.6
   lodash-es: ^4.17.21
   micromatch: ^4.0.9

@@ -102,6 +102,7 @@
   "dependencies": {
     "@oxc-project/runtime": "catalog:",
     "@oxc-project/types": "catalog:",
+    "lightningcss": "catalog:",
     "postcss": "^8.5.6"
   },
   "devDependencies": {
@@ -116,7 +117,6 @@
     "@vitejs/devtools": "^0.3.3",
     "es-module-lexer": "^1.7.0",
     "hookable": "^6.0.1",
-    "lightningcss": "^1.32.0",
     "magic-string": "^0.30.21",
     "oxc-parser": "catalog:",
     "oxfmt": "catalog:",
@@ -140,7 +140,6 @@
     "esbuild": "^0.27.0 || ^0.28.0",
     "jiti": ">=1.21.0",
     "less": "^4.0.0",
-    "lightningcss": "^1.32.0",
     "publint": "^0.3.8",
     "sass": "^1.70.0",
     "sass-embedded": "^1.70.0",
@@ -203,9 +202,6 @@
       "optional": true
     },
     "yaml": {
-      "optional": true
-    },
-    "lightningcss": {
       "optional": true
     }
   },

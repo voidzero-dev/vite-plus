@@ -66,12 +66,4 @@ See the official [tsdown executable docs](https://tsdown.dev/options/exe#executa
 
 ## CSS Bundling
 
-`vp pack` can transform and bundle CSS (including CSS Modules and Lightning CSS optimizations) for your entry points. This support is bundled into Vite+, so you do not need to install `@tsdown/css`.
-
-CSS transforms are powered by [Lightning CSS](https://lightningcss.dev/), which ships as a native module and is an optional peer dependency. Install it when you bundle CSS:
-
-```bash
-vp add -D lightningcss
-```
-
-If it is missing, `vp pack` prints an actionable error telling you to install it.
+`vp pack` can transform and bundle CSS (including CSS Modules and [Lightning CSS](https://lightningcss.dev/) optimizations) for your entry points. This support is bundled into Vite+, so you do not need to install `@tsdown/css` or `lightningcss` separately, it works out of the box.
