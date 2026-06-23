@@ -300,7 +300,7 @@ These are distinct commands:
 - Ensures consistent tsdown version across all vite-plus users
 - Avoids version conflicts in monorepos
 - The core build process bundles JS, CJS deps, and types together
-- The extensions peer-depend on `tsdown`/`tsdown/internal`, which Vite+ does not expose as a top-level package, so bundling them is the only way they resolve (issue #1586). Only `lightningcss` (native) stays external as an optional peer.
+- The extensions peer-depend on `tsdown`/`tsdown/internal`, which Vite+ does not expose as a top-level package, so bundling them is the only way they resolve (issue #1586). Only `lightningcss` (native, cannot be bundled) stays external; it ships as a regular core dependency.
 
 ### 4. Category C Delegation
 
@@ -404,7 +404,7 @@ This RFC documents an existing command with no breaking changes:
 - All existing `vp pack` options continue to work
 - The new `--exe` flag is purely additive
 - Config format in `vite.config.ts` is unchanged
-- Bundling `@tsdown/exe`/`@tsdown/css` is a strict improvement: projects that previously installed them keep working and no longer need to. CSS bundling now only requires the optional `lightningcss` peer (`vp add -D lightningcss`), which is loaded lazily with an actionable error when missing.
+- Bundling `@tsdown/exe`/`@tsdown/css` is a strict improvement: projects that previously installed them keep working and no longer need to. CSS bundling works out of the box, `lightningcss` is a core dependency that ships with the toolchain, so nothing extra needs installing.
 
 ## Exe Advanced Configuration
 

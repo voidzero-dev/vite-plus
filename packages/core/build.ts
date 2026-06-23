@@ -588,9 +588,11 @@ async function brandTsdown() {
 // top-level packages. See https://github.com/voidzero-dev/vite-plus/issues/1586
 async function wireBundledTsdownExtensions() {
   const tsdownDistDir = join(projectDir, 'dist/tsdown');
-  const buildFiles = await glob(toPosixPath(join(tsdownDistDir, 'build-*.js')), { absolute: true });
-  if (buildFiles.length === 0) {
-    throw new Error('wireBundledTsdownExtensions: no build chunk found in dist/tsdown/');
+  // Scan every emitted chunk, not just `build-*.js`: which chunk rolldown hoists
+  // these call sites into depends on its chunking heuristics, so don't pin to one.
+  const chunkFiles = await glob(toPosixPath(join(tsdownDistDir, '*.js')), { absolute: true });
+  if (chunkFiles.length === 0) {
+    throw new Error('wireBundledTsdownExtensions: no chunk found in dist/tsdown/');
   }
 
   // Route `@tsdown/exe` and `@tsdown/css` to the bundled entries.
@@ -602,8 +604,12 @@ async function wireBundledTsdownExtensions() {
   // bundled), which resolves to core's own `lightningcss` dependency.
   let exeWired = false;
   let cssWired = false;
-  for (const buildFile of buildFiles) {
-    let content = await readFile(buildFile, 'utf-8');
+  // The `import("@tsdown/css")` call site may already be deduped to the bundled
+  // entry by rolldown; track whether the bundled load ends up referenced either
+  // way so a silent miss (no rewrite and no dedup) fails the build.
+  let cssLoadWired = false;
+  for (const chunkFile of chunkFiles) {
+    let content = await readFile(chunkFile, 'utf-8');
     let changed = false;
     if (content.includes('importWithError("@tsdown/exe")')) {
       content = content.replaceAll('importWithError("@tsdown/exe")', 'import("./tsdown-exe.js")');
@@ -619,8 +625,11 @@ async function wireBundledTsdownExtensions() {
       content = content.replaceAll('import("@tsdown/css")', 'import("./tsdown-css.js")');
       changed = true;
     }
+    if (content.includes('import("./tsdown-css.js")')) {
+      cssLoadWired = true;
+    }
     if (changed) {
-      await writeFile(buildFile, content);
+      await writeFile(chunkFile, content);
     }
   }
   if (!exeWired) {
@@ -628,6 +637,9 @@ async function wireBundledTsdownExtensions() {
   }
   if (!cssWired) {
     throw new Error('wireBundledTsdownExtensions: `pkgExists("@tsdown/css")` not found');
+  }
+  if (!cssLoadWired) {
+    throw new Error('wireBundledTsdownExtensions: bundled `./tsdown-css.js` is never imported');
   }
 }
 

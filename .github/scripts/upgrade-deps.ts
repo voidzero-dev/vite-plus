@@ -252,7 +252,9 @@ async function updatePnpmWorkspace(versions: PnpmWorkspaceVersions): Promise<voi
     // tsdown upgrade that bumps lightningcss is mirrored here.
     {
       name: 'lightningcss',
-      pattern: /\n {2}lightningcss: (\^?[\d.]+(?:-[\w.]+)?)\n/,
+      // Match any range value (not just `^x.y.z`) so the pattern can re-match
+      // whatever `@tsdown/css` declares (`~`, `>=`, compound ranges) on the next run.
+      pattern: /\n {2}lightningcss: ([^\n]+)\n/,
       replacement: `\n  lightningcss: ${versions.lightningcss}\n`,
       newVersion: versions.lightningcss,
     },
