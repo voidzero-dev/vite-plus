@@ -58,6 +58,7 @@ import {
   detectPendingCoreMigration,
   detectPrettierProject,
   detectVitePlusBootstrapPending,
+  detectYarnPnpMode,
   ensureVitePlusBootstrap,
   finalizeCoreMigrationForExistingVitePlus,
   hasFrameworkShim,
@@ -68,6 +69,7 @@ import {
   migrateEslintToOxlint,
   migrateNodeVersionManagerFile,
   migratePrettierToOxfmt,
+  configureYarnNodeModulesMode,
   preflightGitHooksSetup,
   rewriteMonorepo,
   rewriteStandaloneProject,
@@ -122,6 +124,47 @@ async function confirmFrameworkShim(framework: Framework, interactive: boolean):
     }
     return confirmed;
   }
+  return true;
+}
+
+async function ensureYarnNodeModulesMode(
+  rootDir: string,
+  packageManager: PackageManager | undefined,
+  packageManagerVersion: string,
+  interactive: boolean,
+): Promise<boolean> {
+  if (packageManager !== PackageManager.yarn) {
+    return false;
+  }
+
+  const pnp = detectYarnPnpMode(rootDir, packageManagerVersion);
+  if (!pnp) {
+    return false;
+  }
+
+  prompts.log.warn(`⚠ Vite+ does not currently support Yarn Plug'n'Play (PnP).`);
+  if (pnp.source === 'environment') {
+    cancelAndExit(
+      'YARN_NODE_LINKER=pnp overrides project configuration. Set it to node-modules or unset it, then re-run `vp migrate`.',
+      1,
+    );
+  }
+
+  if (interactive) {
+    const confirmed = await prompts.confirm({
+      message: 'Switch this project to Yarn node-modules mode and continue?',
+      initialValue: true,
+    });
+    if (prompts.isCancel(confirmed)) {
+      cancelAndExit();
+    }
+    if (!confirmed) {
+      cancelAndExit('Migration cancelled. Vite+ requires Yarn node-modules mode.');
+    }
+  }
+
+  configureYarnNodeModulesMode(rootDir);
+  prompts.log.success('✔ Switched Yarn to node-modules mode');
   return true;
 }
 
@@ -341,6 +384,7 @@ interface MigrationSetupPlan {
 
 interface MigrationPlan extends MigrationSetupPlan {
   packageManager: PackageManager;
+  yarnPnpConverted: boolean;
   migratePrettier: boolean;
   prettierConfigFile?: string;
   fixBaseUrl: boolean;
@@ -629,12 +673,19 @@ function getExistingVitePlusSetupOptions(
 async function collectMigrationPlan(
   rootDir: string,
   detectedPackageManager: PackageManager | undefined,
+  detectedPackageManagerVersion: string,
   options: MigrationOptions,
   packages?: WorkspacePackage[],
 ): Promise<MigrationPlan> {
   // 1. Package manager selection
   const packageManager =
     detectedPackageManager ?? (await selectPackageManager(options.interactive, true));
+  const yarnPnpConverted = await ensureYarnNodeModulesMode(
+    rootDir,
+    packageManager,
+    detectedPackageManager ? detectedPackageManagerVersion : 'latest',
+    options.interactive,
+  );
 
   // 2. Shared setup/tooling decisions
   const setupPlan = await collectMigrationSetupPlan(rootDir, packageManager, options, packages);
@@ -668,6 +719,7 @@ async function collectMigrationPlan(
 
   const plan: MigrationPlan = {
     packageManager,
+    yarnPnpConverted,
     ...setupPlan,
     migratePrettier,
     prettierConfigFile: prettierProject.configFile,
@@ -916,6 +968,7 @@ async function executeMigrationPlan(
   report: MigrationReport;
 }> {
   const report = createMigrationReport();
+  report.packageManagerBootstrapConfigured = plan.yarnPnpConverted;
   const migrationProgress = interactive ? prompts.spinner({ indicator: 'timer' }) : undefined;
   let migrationProgressStarted = false;
   const updateMigrationProgress = (message: string) => {
@@ -1150,10 +1203,17 @@ async function main() {
     workspaceInfoOptional.rootDir,
   ) as PackageDependencies | null;
   if (hasVitePlusDependency(rootPkg) && !isForceOverrideMode()) {
-    let didMigrate = false;
+    const yarnPnpConverted = await ensureYarnNodeModulesMode(
+      workspaceInfoOptional.rootDir,
+      workspaceInfoOptional.packageManager,
+      workspaceInfoOptional.packageManagerVersion,
+      options.interactive,
+    );
+    let didMigrate = yarnPnpConverted;
     let installDurationMs = 0;
     let finalInstallOk = true;
     const report = createMigrationReport();
+    report.packageManagerBootstrapConfigured = yarnPnpConverted;
     const migrationProgress = options.interactive
       ? prompts.spinner({ indicator: 'timer' })
       : undefined;
@@ -1268,7 +1328,7 @@ async function main() {
       workspaceInfoOptional.packages,
     );
 
-    let needsInstall = false;
+    let needsInstall = yarnPnpConverted;
     if (vitePlusBootstrapPending) {
       const downloadResult = await ensureExistingPackageManager();
       if (downloadResult && packageManager) {
@@ -1500,6 +1560,7 @@ async function main() {
   const plan = await collectMigrationPlan(
     workspaceInfoOptional.rootDir,
     workspaceInfoOptional.packageManager,
+    workspaceInfoOptional.packageManagerVersion,
     options,
     workspaceInfoOptional.packages,
   );

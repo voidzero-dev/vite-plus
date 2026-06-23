@@ -40,8 +40,79 @@ const {
   detectIncompatibleEslintIntegration,
   preflightGitHooksSetup,
   detectLegacyGitHooksMigrationCandidate,
+  detectYarnPnpMode,
+  configureYarnNodeModulesMode,
   setPackageManager,
 } = await import('../migrator.js');
+
+describe('Yarn PnP migration preflight', () => {
+  let tmpDir: string;
+  const savedEnv: Record<string, string | undefined> = {};
+  const isolatedEnv = ['HOME', 'USERPROFILE', 'YARN_NODE_LINKER'] as const;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-test-yarn-pnp-'));
+    for (const key of isolatedEnv) {
+      savedEnv[key] = process.env[key];
+      delete process.env[key];
+    }
+    const cleanHome = path.join(tmpDir, '.home');
+    fs.mkdirSync(cleanHome);
+    process.env.HOME = cleanHome;
+    process.env.USERPROFILE = cleanHome;
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+    for (const key of isolatedEnv) {
+      if (savedEnv[key] === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = savedEnv[key];
+      }
+    }
+  });
+
+  it('detects explicit and implicit Yarn Berry PnP modes', () => {
+    fs.writeFileSync(path.join(tmpDir, '.yarnrc.yml'), 'nodeLinker: pnp\n');
+    expect(detectYarnPnpMode(tmpDir, '4.12.0')).toEqual({ source: 'configuration' });
+
+    fs.rmSync(path.join(tmpDir, '.yarnrc.yml'));
+    expect(detectYarnPnpMode(tmpDir, '4.12.0')).toEqual({ source: 'default' });
+    expect(detectYarnPnpMode(tmpDir, 'latest')).toEqual({ source: 'default' });
+  });
+
+  it('does not classify Yarn Classic or node-modules configuration as PnP', () => {
+    expect(detectYarnPnpMode(tmpDir, '1.22.22')).toBeUndefined();
+    fs.writeFileSync(path.join(tmpDir, '.yarnrc.yml'), 'nodeLinker: node-modules\n');
+    expect(detectYarnPnpMode(tmpDir, '4.12.0')).toBeUndefined();
+  });
+
+  it('honours YARN_NODE_LINKER over project configuration', () => {
+    fs.writeFileSync(path.join(tmpDir, '.yarnrc.yml'), 'nodeLinker: node-modules\n');
+    process.env.YARN_NODE_LINKER = 'pnp';
+    expect(detectYarnPnpMode(tmpDir, '4.12.0')).toEqual({ source: 'environment' });
+
+    process.env.YARN_NODE_LINKER = 'node-modules';
+    fs.writeFileSync(path.join(tmpDir, '.yarnrc.yml'), 'nodeLinker: pnp\n');
+    expect(detectYarnPnpMode(tmpDir, '4.12.0')).toBeUndefined();
+  });
+
+  it('converts the project rc without discarding other settings and is idempotent', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, '.yarnrc.yml'),
+      'nodeLinker: pnp\nnmHoistingLimits: workspaces\ncatalog:\n  react: ^19.0.0\n',
+    );
+
+    expect(configureYarnNodeModulesMode(tmpDir)).toBe(true);
+    expect(readYamlObject(path.join(tmpDir, '.yarnrc.yml'))).toEqual({
+      nodeLinker: 'node-modules',
+      nmHoistingLimits: 'workspaces',
+      catalog: { react: '^19.0.0' },
+    });
+    expect(configureYarnNodeModulesMode(tmpDir)).toBe(false);
+  });
+});
 
 describe('rewritePackageJson', () => {
   it('should rewrite package.json scripts and extract staged config', async () => {
@@ -1670,6 +1741,37 @@ describe('ensureVitePlusBootstrap', () => {
     expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.yarn)).toBe(false);
   });
 
+  it('preserves existing Vitest when dependency peer metadata is unavailable', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: {
+          'vite-plus': 'latest',
+          'vite-plugin-gherkin': '0.2.0',
+          vitest: '^4.1.0',
+        },
+        overrides: {
+          vite: 'npm:@voidzero-dev/vite-plus-core@latest',
+          vitest: '^4.1.0',
+        },
+        devEngines: {
+          packageManager: { name: 'npm', version: '10.33.0', onFail: 'download' },
+        },
+      }),
+    );
+
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.npm));
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+      overrides: Record<string, string>;
+    };
+    expect(pkg.devDependencies.vitest).toBe(VITEST_VERSION);
+    expect(pkg.overrides.vitest).toBe(VITEST_VERSION);
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.npm)).toBe(false);
+  });
+
   it.each([
     {
       name: 'compilerOptions.types',
@@ -1680,11 +1782,30 @@ describe('ensureVitePlusBootstrap', () => {
         ),
     },
     {
+      name: 'nested compilerOptions.types',
+      writeReference: (projectPath: string) => {
+        const configDir = path.join(projectPath, 'config');
+        fs.mkdirSync(configDir);
+        fs.writeFileSync(
+          path.join(configDir, 'tsconfig.test.json'),
+          JSON.stringify({ compilerOptions: { types: ['vitest/globals'] } }),
+        );
+      },
+    },
+    {
       name: 'vitest/package.json',
       writeReference: (projectPath: string) =>
         fs.writeFileSync(
           path.join(projectPath, 'version.ts'),
           "import metadata from 'vitest/package.json';\nconsole.log(metadata.version);\n",
+        ),
+    },
+    {
+      name: 'require.resolve',
+      writeReference: (projectPath: string) =>
+        fs.writeFileSync(
+          path.join(projectPath, 'resolve.cjs'),
+          "module.exports = require.resolve('vitest');\n",
         ),
     },
   ])('keeps package-local Vitest for retained $name references', ({ writeReference }) => {

@@ -30,6 +30,16 @@
   }
 }
 
+> cat config/tsconfig.test.json # nested compilerOptions.types is also retained
+{
+  "compilerOptions": {
+    "types": ["vitest/globals"]
+  }
+}
+
+> cat resolve.cjs # require.resolve remains an upstream Vitest reference
+module.exports = require.resolve('vitest');
+
 > cat version.ts # vitest/package.json remains intentionally unre-written
 import metadata from 'vitest/package.json';
 

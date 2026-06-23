@@ -581,16 +581,27 @@ function projectListsRequiredVitestPeer(
     optionalDependencies?: Record<string, string>;
   },
 ): boolean {
+  const installGroups = [pkg.dependencies, pkg.devDependencies, pkg.optionalDependencies];
+  const hasExistingVitest = installGroups.some(
+    (dependencies) => dependencies?.vitest !== undefined,
+  );
   const dependencyNames = new Set([
     ...Object.keys(pkg.dependencies ?? {}),
     ...Object.keys(pkg.devDependencies ?? {}),
     ...Object.keys(pkg.optionalDependencies ?? {}),
   ]);
   dependencyNames.delete('vitest');
+  dependencyNames.delete('vite');
+  dependencyNames.delete(VITE_PLUS_NAME);
+  for (const name of VITEST_DIRECT_USAGE_EXCLUDED) {
+    dependencyNames.delete(name);
+  }
+  let metadataUnavailable = false;
 
   for (const name of dependencyNames) {
     const metadata = detectPackageMetadata(projectPath, name);
     if (!metadata) {
+      metadataUnavailable = true;
       continue;
     }
     try {
@@ -605,11 +616,15 @@ function projectListsRequiredVitestPeer(
         return true;
       }
     } catch {
-      // Missing or unreadable installed metadata cannot provide a peer signal;
-      // retain the existing package-name and source-based fallbacks below.
+      metadataUnavailable = true;
     }
   }
-  return false;
+  // A clean checkout may not have node_modules/.pnp metadata yet. If the user
+  // already carries a direct Vitest while any dependency's peer contract is
+  // unknown, preserve it rather than risk removing the provider for an
+  // arbitrary integration such as vite-plugin-gherkin. A later migration with
+  // complete metadata can safely remove a genuinely redundant pin.
+  return metadataUnavailable && hasExistingVitest;
 }
 
 // True iff the project uses vitest DIRECTLY — via a dependency that is expected
@@ -2708,6 +2723,51 @@ function resolveEffectiveYarnConfigValue(
   return home ? readYarnrcValue(home, key) : undefined;
 }
 
+export interface YarnPnpDetection {
+  source: 'environment' | 'configuration' | 'default';
+}
+
+/**
+ * Detect Yarn Plug'n'Play using the same precedence Yarn applies to
+ * `nodeLinker`. Yarn 2+ defaults to PnP when no value is configured, while
+ * Yarn Classic defaults to node_modules. Unknown/`latest` Yarn versions are
+ * treated as modern because that is the version `vp` will provision.
+ */
+export function detectYarnPnpMode(
+  projectPath: string,
+  yarnVersion: string,
+): YarnPnpDetection | undefined {
+  const environmentLinker = process.env.YARN_NODE_LINKER?.trim();
+  if (environmentLinker) {
+    return environmentLinker.toLowerCase() === 'pnp' ? { source: 'environment' } : undefined;
+  }
+
+  const configuredLinker = resolveEffectiveYarnConfigValue(
+    projectPath,
+    'nodeLinker',
+    'YARN_NODE_LINKER',
+  );
+  if (configuredLinker) {
+    return configuredLinker.toLowerCase() === 'pnp' ? { source: 'configuration' } : undefined;
+  }
+
+  const coercedVersion = semver.coerce(yarnVersion);
+  return coercedVersion?.major === 1 ? undefined : { source: 'default' };
+}
+
+/** Set the project-local Yarn linker while preserving every other rc setting. */
+export function configureYarnNodeModulesMode(projectPath: string): boolean {
+  const yarnrcYmlPath = path.join(projectPath, '.yarnrc.yml');
+  const before = fs.existsSync(yarnrcYmlPath) ? fs.readFileSync(yarnrcYmlPath, 'utf8') : undefined;
+  if (before === undefined) {
+    fs.writeFileSync(yarnrcYmlPath, '');
+  }
+  editYamlFile(yarnrcYmlPath, (doc) => {
+    doc.set('nodeLinker', 'node-modules');
+  });
+  return before !== fs.readFileSync(yarnrcYmlPath, 'utf8');
+}
+
 // True when `dir`'s package.json declares a `workspaces` field — i.e. `dir` is a
 // workspace (Yarn project) root. `workspaces` may be an array or an object
 // (`{ packages: [...] }`); both are truthy.
@@ -4671,6 +4731,33 @@ function sourceTreeReferencesAny(projectPath: string, hints: readonly string[]):
   return sourceTreeMatches(projectPath, (content) => hints.some((hint) => content.includes(hint)));
 }
 
+function findPackageTsconfigFiles(projectPath: string): string[] {
+  const files: string[] = [];
+  const scanDir = (dir: string, isRoot: boolean): void => {
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    if (!isRoot && entries.some((entry) => entry.isFile() && entry.name === 'package.json')) {
+      return;
+    }
+    for (const entry of entries) {
+      const entryPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (!VITEST_SCAN_SKIP_DIRS.has(entry.name)) {
+          scanDir(entryPath, false);
+        }
+      } else if (entry.isFile() && /^tsconfig(?:\.[\w-]+)?\.json$/i.test(entry.name)) {
+        files.push(entryPath);
+      }
+    }
+  };
+  scanDir(projectPath, true);
+  return files;
+}
+
 const UPSTREAM_VITEST_MODULE_REFERENCE =
   /(?:\bfrom\s*|\b(?:import|require)\s*\(\s*|\bimport\s*)['"]vitest(?:\/[^'"]+)?['"]/m;
 
@@ -4715,11 +4802,13 @@ export function detectNuxtTestUtilsVitestImportFiles(
 // identity, so keep Vitest package-local for those surfaces.
 function sourceTreeReferencesRetainedVitestModule(projectPath: string): boolean {
   return (
-    findTsconfigFiles(projectPath).some(hasVitestTypesInTsconfig) ||
+    findPackageTsconfigFiles(projectPath).some(hasVitestTypesInTsconfig) ||
     sourceTreeMatches(projectPath, (content) => {
       return (
         /\bdeclare\s+module\s+['"]vitest(?:\/[^'"]*)?['"]/.test(content) ||
-        content.includes('vitest/package.json')
+        content.includes('vitest/package.json') ||
+        /\brequire\.resolve\s*\(\s*['"]vitest(?:\/[^'"]*)?['"]/.test(content) ||
+        /\bimport\.meta\.resolve\s*\(\s*['"]vitest(?:\/[^'"]*)?['"]/.test(content)
       );
     })
   );

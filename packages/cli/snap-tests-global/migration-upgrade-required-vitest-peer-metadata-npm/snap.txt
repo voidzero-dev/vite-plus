@@ -1,5 +1,4 @@
-> node -e "const fs = require('node:fs'); fs.mkdirSync('node_modules', { recursive: true }); fs.cpSync('.fixture/vite-plugin-gherkin', 'node_modules/vite-plugin-gherkin', { recursive: true })" # simulate installed dependency metadata
-> vp migrate --no-interactive # required Vitest peer is detected without a Vitest package name
+> vp migrate --no-interactive # clean checkout conservatively preserves existing Vitest
 ◇ Migrated . to Vite+
 • Node <semver>  npm <semver>
 • Package manager settings configured
@@ -25,6 +24,7 @@
   }
 }
 
-> vp migrate --no-interactive # metadata-based peer provisioning is stable on rerun
+> node -e "const fs = require('node:fs'); fs.mkdirSync('node_modules', { recursive: true }); fs.cpSync('.fixture/vite-plugin-gherkin', 'node_modules/vite-plugin-gherkin', { recursive: true })" # simulate installed dependency metadata
+> vp migrate --no-interactive # metadata confirms the unnamed required Vitest peer
 This project is already using Vite+! Happy coding!
 

@@ -1,4 +1,8 @@
-> vp migrate --no-interactive # Yarn PnP exact peer should receive package-local vitest
+> vp migrate --no-interactive # Yarn PnP converts to node-modules before exact-peer migration
+
+⚠ Vite+ does not currently support Yarn Plug'n'Play (PnP).
+
+✔ Switched Yarn to node-modules mode
 ◇ Migrated . to Vite+
 • Node <semver>  yarn <semver>
 • Package manager settings configured
@@ -24,8 +28,8 @@
   }
 }
 
-> cat .yarnrc.yml # shared catalog should include the aligned vitest
-nodeLinker: pnp
+> cat .yarnrc.yml # linker conversion and aligned Vitest catalog are persisted
+nodeLinker: node-modules
 catalog:
   vite: npm:@voidzero-dev/vite-plus-core@latest
   vite-plus: latest

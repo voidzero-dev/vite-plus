@@ -1,7 +1,12 @@
-> vp migrate --no-interactive # standalone Yarn writes catalog specs on the first pass
+> vp migrate --no-interactive # implicit Yarn Berry PnP converts before the first pass
+
+⚠ Vite+ does not currently support Yarn Plug'n'Play (PnP).
+
+✔ Switched Yarn to node-modules mode
 ◇ Migrated . to Vite+
 • Node <semver>  yarn <semver>
 • 2 config updates applied, 1 file had imports rewritten
+• Package manager settings configured
 
 > cat package.json # migrated dependency specs use the Yarn catalog immediately
 {
