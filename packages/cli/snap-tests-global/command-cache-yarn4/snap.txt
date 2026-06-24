@@ -3,3 +3,5 @@
 
 > vp pm cache path # should show cache path (alias for dir, uses yarn config get cacheFolder)
 <homedir>/.yarn/berry/cache
+
+> vp pm cache clean --all # should support pass-through flags without separator

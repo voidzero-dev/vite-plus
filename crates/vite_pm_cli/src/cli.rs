@@ -781,7 +781,7 @@ pub enum PmCommands {
         subcommand: String,
 
         /// Additional arguments
-        #[arg(last = true, allow_hyphen_values = true)]
+        #[arg(allow_hyphen_values = true, trailing_var_arg = true)]
         pass_through_args: Option<Vec<String>>,
     },
 
@@ -1414,6 +1414,17 @@ mod tests {
             panic!("expected ApproveBuilds variant");
         };
         assert_eq!(pass_through_args, Some(vec!["--workspace-root".to_string()]));
+    }
+
+    #[test]
+    fn cache_clean_accepts_flags_without_separator() {
+        let command = parse_pm_command(&["vp", "pm", "cache", "clean", "--force"])
+            .expect("cache pass-through flags should parse");
+
+        let PackageManagerCommand::Pm(PmCommands::Cache { pass_through_args, .. }) = command else {
+            panic!("expected Cache variant");
+        };
+        assert_eq!(pass_through_args, Some(vec!["--force".to_string()]));
     }
 
     #[test]

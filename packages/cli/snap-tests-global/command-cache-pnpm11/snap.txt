@@ -1,5 +1,5 @@
 > vp pm cache --help # should show help
-Usage: vp pm cache <SUBCOMMAND> [-- <PASS_THROUGH_ARGS>...]
+Usage: vp pm cache <SUBCOMMAND> [PASS_THROUGH_ARGS]...
 
 Manage package cache
 
@@ -15,3 +15,4 @@ Documentation: https://viteplus.dev/guide/install
 
 > vp pm cache dir > /dev/null # should show cache directory (uses pnpm store path)
 > vp pm cache path > /dev/null # should show cache path (alias for dir, uses pnpm store path)
+> vp pm cache clean --force # should support pass-through flags without separator
