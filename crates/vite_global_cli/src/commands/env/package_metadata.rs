@@ -126,9 +126,7 @@ impl PackageMetadata {
             return Ok(None);
         }
         let content = tokio::fs::read_to_string(&path).await?;
-        let metadata: Self = serde_json::from_str(&content).map_err(|e| {
-            Error::ConfigError(format!("Failed to parse package metadata: {e}").into())
-        })?;
+        let metadata: Self = serde_json::from_str(&content).map_err(Error::JsonError)?;
         Ok(Some(metadata))
     }
 
@@ -140,9 +138,7 @@ impl PackageMetadata {
             tokio::fs::create_dir_all(parent).await?;
         }
 
-        let content = serde_json::to_string_pretty(self).map_err(|e| {
-            Error::ConfigError(format!("Failed to serialize package metadata: {e}").into())
-        })?;
+        let content = serde_json::to_string_pretty(self).map_err(Error::JsonError)?;
         tokio::fs::write(&path, content).await?;
         Ok(())
     }

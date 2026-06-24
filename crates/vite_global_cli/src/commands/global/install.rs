@@ -125,11 +125,7 @@ pub async fn install(
         // Resolve from current directory
         let cwd = match current_dir() {
             Ok(cwd) => cwd,
-            Err(error) => {
-                let error =
-                    Error::ConfigError(format!("Cannot get current directory: {}", error).into());
-                return Err((None, error));
-            }
+            Err(error) => return Err((None, error.into())),
         };
         let resolution = match resolve_version(&cwd).await {
             Ok(resolution) => resolution,
@@ -553,7 +549,7 @@ async fn install_one(
         }
         let _ = std::io::stderr().write_all(&output.stderr);
         cleanup_failed_install(&install_dir).await?;
-        return Err(Error::ConfigError(
+        return Err(Error::Other(
             format!("npm install failed with exit code: {:?}", output.status.code()).into(),
         ));
     }
@@ -563,7 +559,7 @@ async fn install_one(
 
     if !tokio::fs::try_exists(&package_json_path).await.unwrap_or(false) {
         cleanup_failed_install(&install_dir).await?;
-        return Err(Error::ConfigError(
+        return Err(Error::Other(
             format!(
                 "Package was not installed correctly, package.json not found at {}",
                 package_json_path.as_path().display()
@@ -583,9 +579,7 @@ async fn install_one(
         Ok(package_json) => package_json,
         Err(error) => {
             cleanup_failed_install(&install_dir).await?;
-            return Err(Error::ConfigError(
-                format!("Failed to parse package.json: {error}").into(),
-            ));
+            return Err(Error::Other(format!("Failed to parse package.json: {error}").into()));
         }
     };
 
@@ -731,7 +725,7 @@ async fn stale_bin_names_for_package(
 pub async fn uninstall(package_name: &str, dry_run: bool) -> Result<(), Error> {
     if is_local_package_spec(package_name) {
         // We can't resolve local packages for uninstall, follow npm's behavior
-        return Err(Error::ConfigError(
+        return Err(Error::Other(
             format!(
                 "Local path {} can't be resolved, please enter a package name instead",
                 package_name
@@ -750,9 +744,7 @@ pub async fn uninstall(package_name: &str, dry_run: bool) -> Result<(), Error> {
         // Phase 2: Fallback - scan BinConfig files for orphaned binaries
         let orphan_bins = BinConfig::find_by_package(&package_name).await?;
         if orphan_bins.is_empty() {
-            return Err(Error::ConfigError(
-                format!("Package {} is not installed", package_name).into(),
-            ));
+            return Err(Error::Other(format!("Package {} is not installed", package_name).into()));
         }
         orphan_bins
     };
