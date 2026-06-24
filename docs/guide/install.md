@@ -67,6 +67,15 @@ Use the `-g` flag for installing, updating or removing globally installed packag
 - `vp uninstall -g <pkg>` removes a global package
 - `vp update -g [pkg]` updates one global package or all of them
 - `vp list -g [pkg]` lists global packages
+- `vp outdated -g [pkg]` prints outdated packages
+
+::: warning
+These commands do **NOT** interact with the underlying package manager's global installation directory.
+
+Instead, Vite+ manages its own global packages under `~/.vite-plus/packages`, allowing them to remain available across different Node.js versions.
+
+As a result, commands such as `vp link` do not affect Vite+'s global packages and will not appear in `vp list -g`.
+:::
 
 ## Managing Dependencies
 
@@ -109,6 +118,7 @@ Use these commands when you want package-manager-managed tools available outside
 - `vp uninstall -g typescript`
 - `vp update -g`
 - `vp list -g`
+- `vp outdated -g`
 
 #### Add and Remove
 
