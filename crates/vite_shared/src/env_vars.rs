@@ -27,6 +27,10 @@ pub const NPM_CONFIG_REGISTRY_UPPER: &str = "NPM_CONFIG_REGISTRY";
 /// Node.js distribution mirror URL for downloads.
 pub const VP_NODE_DIST_MIRROR: &str = "VP_NODE_DIST_MIRROR";
 
+/// Skip PGP signature verification of `SHASUMS256.txt` when set (escape hatch).
+/// The SHA-256 checksum is still verified.
+pub const VP_NODE_SKIP_SIGNATURE_VERIFY: &str = "VP_NODE_SKIP_SIGNATURE_VERIFY";
+
 /// Override Node.js version (takes highest priority in version resolution).
 pub const VP_NODE_VERSION: &str = "VP_NODE_VERSION";
 

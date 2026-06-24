@@ -155,27 +155,40 @@ async fn execute_with_version(
 ///
 /// Handles aliases (lts, latest) and version ranges.
 async fn resolve_version(version: &str, provider: &NodeProvider) -> Result<String, Error> {
-    match version.to_lowercase().as_str() {
-        "lts" => {
+    match classify_version(version) {
+        VersionSelector::LatestLts => {
             let resolved = provider.resolve_latest_version().await?;
             Ok(resolved.to_string())
         }
-        "latest" => {
+        VersionSelector::AbsoluteLatest => {
             let resolved = provider.resolve_absolute_latest_version().await?;
             Ok(resolved.to_string())
         }
-        _ => {
-            // For exact versions, use directly
-            if NodeProvider::is_exact_version(version) {
-                // Strip v prefix if present
-                let normalized = version.strip_prefix('v').unwrap_or(version);
-                Ok(normalized.to_string())
-            } else {
-                // For ranges/partial versions, resolve to exact
-                let resolved = provider.resolve_version(version).await?;
-                Ok(resolved.to_string())
-            }
+        VersionSelector::Exact(version) => Ok(version.to_string()),
+        VersionSelector::Range(version) => {
+            let resolved = provider.resolve_version(version).await?;
+            Ok(resolved.to_string())
         }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum VersionSelector<'a> {
+    LatestLts,
+    AbsoluteLatest,
+    Exact(&'a str),
+    Range(&'a str),
+}
+
+fn classify_version(version: &str) -> VersionSelector<'_> {
+    if version.eq_ignore_ascii_case("lts") {
+        VersionSelector::LatestLts
+    } else if version.eq_ignore_ascii_case("latest") {
+        VersionSelector::AbsoluteLatest
+    } else if NodeProvider::is_exact_version(version) {
+        VersionSelector::Exact(version.strip_prefix('v').unwrap_or(version))
+    } else {
+        VersionSelector::Range(version)
     }
 }
 
@@ -232,32 +245,21 @@ mod tests {
         assert_eq!(version, "20.18.0");
     }
 
-    #[tokio::test]
-    async fn test_resolve_version_partial() {
-        let provider = NodeProvider::new();
-        let version = resolve_version("20", &provider).await.unwrap();
-        // Should resolve to a 20.x.x version - check starts with "20."
-        assert!(version.starts_with("20."), "Expected version starting with '20.', got: {version}");
+    #[test]
+    fn test_classify_version_partial() {
+        assert_eq!(classify_version("20"), VersionSelector::Range("20"));
     }
 
-    #[tokio::test]
-    async fn test_resolve_version_range() {
-        let provider = NodeProvider::new();
-        let version = resolve_version("^20.0.0", &provider).await.unwrap();
-        // Should resolve to a 20.x.x version - check starts with "20."
-        assert!(version.starts_with("20."), "Expected version starting with '20.', got: {version}");
+    #[test]
+    fn test_classify_version_range() {
+        assert_eq!(classify_version("^20.0.0"), VersionSelector::Range("^20.0.0"));
     }
 
-    #[tokio::test]
-    async fn test_resolve_version_lts() {
-        let provider = NodeProvider::new();
-        let version = resolve_version("lts", &provider).await.unwrap();
-        // Should resolve to a valid version (format: x.y.z)
-        let parts: Vec<&str> = version.split('.').collect();
-        assert_eq!(parts.len(), 3, "Expected version format x.y.z, got: {version}");
-        // Major version should be >= 20 (current LTS line)
-        let major: u32 = parts[0].parse().expect("Major version should be a number");
-        assert!(major >= 20, "Expected major version >= 20, got: {major}");
+    #[test]
+    fn test_classify_version_aliases() {
+        assert_eq!(classify_version("lts"), VersionSelector::LatestLts);
+        assert_eq!(classify_version("LTS"), VersionSelector::LatestLts);
+        assert_eq!(classify_version("latest"), VersionSelector::AbsoluteLatest);
     }
 
     #[tokio::test]

@@ -3,6 +3,7 @@ ratatui = "ratatui"
 PUNICODE = "PUNICODE"
 Jod = "Jod" # Node.js v22 LTS codename
 flate = "flate" # flate2 crate name (gzip/deflate compression)
+fpr = "fpr" # GPG colon-format record name for a key fingerprint
 
 [default.extend-identifiers]
 # Yarn Plug'n'Play — tokenizer splits `PnP` into the word `Pn`, which typos
@@ -16,4 +17,6 @@ extend-exclude = [
   "crates/fspy_detours_sys/detours",
   "crates/fspy_detours_sys/src/generated_bindings.rs",
   "packages/cli/src/oxfmt-config.ts",
+  # Vendored PGP key/signature blobs: base64 armor trips the spell checker.
+  "crates/vite_js_runtime/src/assets/**/*.asc",
 ]

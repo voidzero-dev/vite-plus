@@ -10,7 +10,7 @@ use crate::{
     Error, Platform,
     dev_engines::{PackageJson, read_node_version_file},
     download::{download_file, download_text, extract_archive, move_to_cache, verify_file_hash},
-    provider::{HashVerification, JsRuntimeProvider},
+    provider::{HashVerification, JsRuntimeProvider, ShasumsSignature},
     providers::NodeProvider,
 };
 
@@ -115,6 +115,57 @@ pub async fn download_runtime(
     }
 }
 
+/// Fetch the SHASUMS content to parse for the expected archive hash.
+///
+/// With a signature, fetch and PGP-verify the clearsigned `.asc`. When no
+/// signature is available (the unofficial musl builds, or a custom mirror that
+/// publishes only `SHASUMS256.txt`) it falls back to the plain SHASUMS and warns
+/// that the download is verified by checksum only. The official source requires
+/// the signature, and a downloaded but invalid signature always fails.
+async fn resolve_shasums_content(
+    plain_url: &str,
+    signature: Option<&ShasumsSignature>,
+    archive_filename: &str,
+) -> Result<String, Error> {
+    // Escape hatch: skip PGP verification entirely (e.g. to work around a stale
+    // keyring or a signature-fetch failure). The SHA-256 checksum still runs, so
+    // this only drops authenticity, not integrity. Warn loudly, including in CI,
+    // since it is a deliberate security downgrade the operator opted into.
+    if vite_shared::EnvConfig::get().node_skip_signature_verify {
+        vite_shared::output::warn(&format!(
+            "PGP signature verification skipped for {archive_filename} \
+             (VP_NODE_SKIP_SIGNATURE_VERIFY set); verifying SHA-256 checksum only"
+        ));
+        return download_text(plain_url).await;
+    }
+    let Some(signature) = signature else {
+        // No signature is published for this source (e.g. unofficial musl builds).
+        log_checksum_only(archive_filename);
+        return download_text(plain_url).await;
+    };
+    match download_text(&signature.url).await {
+        Ok(signed) => crate::pgp_verify::verify_signed_shasums(signed, archive_filename).await,
+        Err(e) if signature.required => Err(e),
+        Err(_) => {
+            // A custom mirror may publish only the plain SHASUMS256.txt.
+            log_checksum_only(archive_filename);
+            download_text(plain_url).await
+        }
+    }
+}
+
+/// Record that a runtime download is verified by SHA-256 checksum only because
+/// no PGP signature is available (the unofficial musl builds, or a custom mirror
+/// that publishes only `SHASUMS256.txt`).
+///
+/// This is an expected, non-actionable condition for those sources, so it is a
+/// debug log (visible via `VITE_LOG`) rather than a user-facing warning.
+fn log_checksum_only(archive_filename: &str) {
+    tracing::debug!(
+        "no PGP signature available for {archive_filename}; verifying SHA-256 checksum only"
+    );
+}
+
 /// Download and cache a JavaScript runtime using a provider
 ///
 /// This is the generic download function that works with any `JsRuntimeProvider`.
@@ -175,12 +226,15 @@ pub async fn download_runtime_with_provider<P: JsRuntimeProvider>(
     let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
     let archive_path = temp_path.join(&download_info.archive_filename);
 
-    // Resolve the expected hash once. The SHASUMS fetch/parse is deterministic
-    // (parse failures are permanent and the fetch already retries internally),
-    // so it stays outside the content-integrity retry below.
+    // Resolve the expected hash once. The SHASUMS fetch/verify/parse is
+    // deterministic (parse and signature failures are permanent and the fetch
+    // already retries internally), so it stays outside the content-integrity
+    // retry below.
     let expected_hash: Option<Str> = match &download_info.hash_verification {
-        HashVerification::ShasumsFile { url } => {
-            let shasums_content = download_text(url).await?;
+        HashVerification::ShasumsFile { url, signature } => {
+            let shasums_content =
+                resolve_shasums_content(url, signature.as_ref(), &download_info.archive_filename)
+                    .await?;
             Some(provider.parse_shasums(&shasums_content, &download_info.archive_filename)?)
         }
         HashVerification::None => None,

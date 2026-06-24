@@ -146,7 +146,7 @@ fn parse_js_ts_config(source: &str, extension: &str) -> FieldMap {
     let parser = Parser::new(&allocator, source, source_type);
     let result = parser.parse();
 
-    if result.panicked || !result.errors.is_empty() {
+    if result.panicked || !result.diagnostics.is_empty() {
         return FieldMap::unanalyzable();
     }
 

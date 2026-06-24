@@ -137,11 +137,8 @@ pub async fn execute(
 
     // Ensure version is installed (unless --no-install)
     if !no_install {
-        let home_dir = vite_shared::get_vp_home()
-            .map_err(|e| Error::ConfigError(format!("{e}").into()))?
-            .join("js_runtime")
-            .join("node")
-            .join(&resolved_version);
+        let home_dir =
+            vite_shared::get_vp_home()?.join("js_runtime").join("node").join(&resolved_version);
 
         #[cfg(windows)]
         let binary_path = home_dir.join("node.exe");

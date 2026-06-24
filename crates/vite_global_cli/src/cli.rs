@@ -816,9 +816,7 @@ async fn managed_update(
 }
 
 async fn get_current_node_version() -> Result<String, Error> {
-    let cwd = vite_path::current_dir().map_err(|error| {
-        Error::ConfigError(format!("Cannot get current directory: {error}").into())
-    })?;
+    let cwd = vite_path::current_dir()?;
     Ok(resolve_version(&cwd).await?.version)
 }
 
