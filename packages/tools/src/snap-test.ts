@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import fsPromises from 'node:fs/promises';
@@ -90,6 +91,48 @@ function selectShard<T>(items: T[], index: number, total: number): T[] {
 }
 
 const NPM_GLOBAL_PREFIX_DIR = 'npm-global-lib-for-snap-tests';
+const vpBinaryName = process.platform === 'win32' ? 'vp.exe' : 'vp';
+
+function setupLocalGlobalShims(vitePlusHome: string, sourceBinDir: string): string {
+  const resolvedSourceBinDir = path.resolve(expandHome(sourceBinDir));
+  const sourceVpPath = path.join(resolvedSourceBinDir, vpBinaryName);
+  if (!fs.existsSync(sourceVpPath)) {
+    throw new Error(`Missing local vp binary for snap tests: ${sourceVpPath}`);
+  }
+
+  const currentBinDir = path.join(vitePlusHome, 'current', 'bin');
+  fs.mkdirSync(currentBinDir, { recursive: true });
+
+  const localVpPath = path.join(currentBinDir, vpBinaryName);
+  if (process.platform === 'win32') {
+    fs.copyFileSync(sourceVpPath, localVpPath);
+
+    const sourceShimPath = path.join(resolvedSourceBinDir, 'vp-shim.exe');
+    if (!fs.existsSync(sourceShimPath)) {
+      throw new Error(`Missing local vp trampoline for snap tests: ${sourceShimPath}`);
+    }
+    fs.copyFileSync(sourceShimPath, path.join(currentBinDir, 'vp-shim.exe'));
+  } else {
+    fs.symlinkSync(sourceVpPath, localVpPath);
+  }
+
+  const result = spawnSync(localVpPath, ['env', 'setup', '--refresh'], {
+    env: {
+      ...process.env,
+      VP_HOME: vitePlusHome,
+    },
+    encoding: 'utf-8',
+  });
+
+  if (!result.error && result.status === 0) {
+    return path.join(vitePlusHome, 'bin');
+  }
+
+  const output = [result.stdout, result.stderr].filter(Boolean).join('\n').trim();
+  throw new Error(
+    `Failed to prepare local global shims for snap tests.${output ? `\n${output}` : ''}`,
+  );
+}
 
 function resolveGlobalCliScriptsDir(casesDir: string): string {
   const candidates = [
@@ -304,6 +347,7 @@ export async function snapTest() {
     options: {
       dir: { type: 'string' },
       'bin-dir': { type: 'string' },
+      'local-vp-bin-dir': { type: 'string' },
       shard: { type: 'string' },
     },
   });
@@ -340,7 +384,11 @@ export async function snapTest() {
     }
   }
 
-  const vitePlusHome = path.join(homedir(), '.vite-plus');
+  const vitePlusHome = path.join(tempTmpDir, 'vite-plus-home');
+  fs.mkdirSync(vitePlusHome, { recursive: true });
+  const effectiveBinDir = values['local-vp-bin-dir']
+    ? setupLocalGlobalShims(vitePlusHome, values['local-vp-bin-dir'])
+    : values['bin-dir'];
 
   // Remove .previous-version so command-upgrade-rollback snap test is stable
   const previousVersionPath = path.join(vitePlusHome, '.previous-version');
@@ -422,7 +470,7 @@ export async function snapTest() {
   const selectedCases = shard
     ? selectShard(validCaseNames, shard.index, shard.total)
     : validCaseNames;
-  const globalCliScriptsDir = values['bin-dir'] ? resolveGlobalCliScriptsDir(casesDir) : undefined;
+  const globalCliScriptsDir = effectiveBinDir ? resolveGlobalCliScriptsDir(casesDir) : undefined;
   if (values['bin-dir']) {
     assertGlobalCliBinaryMatchesCheckout(values['bin-dir'], casesDir);
   }
@@ -433,7 +481,14 @@ export async function snapTest() {
     const stepsPath = path.join(casesDir, caseName, 'steps.json');
     const steps: Steps = JSON.parse(fs.readFileSync(stepsPath, 'utf-8'));
     const task = () =>
-      runTestCase(caseName, tempTmpDir, casesDir, values['bin-dir'], globalCliScriptsDir);
+      runTestCase(
+        caseName,
+        tempTmpDir,
+        casesDir,
+        vitePlusHome,
+        effectiveBinDir,
+        globalCliScriptsDir,
+      );
     if (steps.serial) {
       serialTasks.push(task);
     } else {
@@ -556,6 +611,7 @@ async function runTestCase(
   name: string,
   tempTmpDir: string,
   casesDir: string,
+  vitePlusHome: string,
   binDir?: string,
   globalCliScriptsDir?: string,
 ) {
@@ -588,12 +644,19 @@ async function runTestCase(
     NO_COLOR: 'true',
     // set CI=true make sure snap-tests are stable on GitHub Actions
     CI: 'true',
-    VP_HOME: path.join(homedir(), '.vite-plus'),
+    VP_HOME: vitePlusHome,
     // Set git identity so `git commit` works on CI runners without global git config
     GIT_AUTHOR_NAME: 'Test',
     GIT_COMMITTER_NAME: 'Test',
     GIT_AUTHOR_EMAIL: 'vite-plus-test@test.com',
     GIT_COMMITTER_EMAIL: 'vite-plus-test@test.com',
+    GIT_CONFIG_COUNT: '3',
+    GIT_CONFIG_KEY_0: 'user.name',
+    GIT_CONFIG_VALUE_0: 'Test',
+    GIT_CONFIG_KEY_1: 'user.email',
+    GIT_CONFIG_VALUE_1: 'vite-plus-test@test.com',
+    GIT_CONFIG_KEY_2: 'commit.gpgsign',
+    GIT_CONFIG_VALUE_2: 'false',
     // Skip `vp install` inside `vp migrate` — snap tests don't need real installs
     VP_SKIP_INSTALL: '1',
     // make sure npm install global packages to the temporary directory
@@ -626,16 +689,24 @@ async function runTestCase(
     env['PATH'] = env['Path'];
     delete env['Path'];
   }
-  // The node shim prepends ~/.vite-plus/js_runtime/node/VERSION/bin/ to PATH,
-  // which leaks into this process. Strip internal vite-plus paths so the test
-  // environment simulates a clean user PATH (only the shim bin dir + system paths).
-  const vitePlusJsRuntime = path.join(env['VP_HOME'], 'js_runtime');
+  // The node shim prepends a managed `js_runtime/node/VERSION/bin/` dir to PATH,
+  // which leaks into this process. Strip managed-runtime paths so the test
+  // environment simulates a clean user PATH (only the shim bin dir + system
+  // paths). The leak can come from the test's isolated VP_HOME or, on CI, from
+  // the globally installed `~/.vite-plus` whose shim prepended its own runtime;
+  // strip both so `vp env off` resolves to the real system Node.js.
+  const managedJsRuntimes = [
+    path.join(env['VP_HOME'], 'js_runtime'),
+    path.join(homedir(), '.vite-plus', 'js_runtime'),
+  ];
   env['PATH'] = [
     // Extend PATH to include the package's bin directory
     // --bin-dir overrides the default for cases like global CLI tests
     // where vp should resolve to the Rust binary instead of the Node.js script
     path.resolve(expandHome(binDir || 'bin')),
-    ...env['PATH'].split(path.delimiter).filter((p) => !p.startsWith(vitePlusJsRuntime)),
+    ...env['PATH']
+      .split(path.delimiter)
+      .filter((p) => !managedJsRuntimes.some((runtime) => p.startsWith(runtime))),
   ].join(path.delimiter);
 
   const newSnap: string[] = [];

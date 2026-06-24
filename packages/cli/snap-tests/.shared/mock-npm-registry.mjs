@@ -15,9 +15,14 @@ import path from 'node:path';
 
 const manifest = JSON.parse(readFileSync('./mock-manifest.json', 'utf-8'));
 const UPSTREAM_REGISTRY = 'https://registry.npmjs.org';
+const LOCALHOST_NO_PROXY = '127.0.0.1,localhost';
 
 function rewriteRegistry(value, registry) {
   return JSON.parse(JSON.stringify(value).replaceAll('{REGISTRY}', registry));
+}
+
+function prependNoProxy(value) {
+  return value ? `${LOCALHOST_NO_PROXY},${value}` : LOCALHOST_NO_PROXY;
 }
 
 // Stream the upstream response byte-for-byte. Unlike `fetch`, `https` does not
@@ -111,7 +116,12 @@ server.listen(0, '127.0.0.1', () => {
   }
   const [cmd, ...args] = process.argv.slice(separatorIndex + 1);
   const child = spawn(cmd, args, {
-    env: { ...process.env, NPM_CONFIG_REGISTRY: registry },
+    env: {
+      ...process.env,
+      NPM_CONFIG_REGISTRY: registry,
+      NO_PROXY: prependNoProxy(process.env.NO_PROXY),
+      no_proxy: prependNoProxy(process.env.no_proxy),
+    },
     stdio: 'inherit',
   });
   child.on('exit', (code, signal) => {

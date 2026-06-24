@@ -31,6 +31,7 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
     replacePathToken(cwd, '<cwd>');
     const parent = path.dirname(cwd);
     if (parent !== '/') {
+      replacePathToken(path.join(parent, 'vite-plus-home'), '<vite-plus-home>');
       replacePathToken(parent, '<cwd>/..');
     }
   }

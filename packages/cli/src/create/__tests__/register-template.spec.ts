@@ -60,6 +60,10 @@ describe('registerLocalTemplate', () => {
     return config.create ?? {};
   }
 
+  // The first `readCreate()` cold-starts `resolveViteConfig`, which dynamically
+  // imports Vite's config loader. On the local-CLI Windows runner that import is
+  // slow enough to exceed the default 5s timeout (subsequent calls are cached);
+  // give the first config resolution extra headroom.
   it('creates a vite.config.ts with create.templates when none exists', async () => {
     expect(fs.existsSync(path.join(workspaceRoot, 'vite.config.ts'))).toBe(false);
 
@@ -69,7 +73,7 @@ describe('registerLocalTemplate', () => {
     const create = await readCreate();
     expect(create.defaultTemplate).toBeUndefined();
     expect(create.templates).toEqual([ENTRY_A]);
-  });
+  }, 30_000);
 
   it('targets an existing vite.config.mts instead of creating a stray vite.config.ts', async () => {
     // A monorepo whose only config is a .mts (or .cts/.cjs) file must be the
