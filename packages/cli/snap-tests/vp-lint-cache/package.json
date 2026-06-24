@@ -1,0 +1,7 @@
+{
+  "name": "vp-lint-cache-test",
+  "type": "module",
+  "scripts": {
+    "lint": "vp lint"
+  }
+}
