@@ -69,6 +69,7 @@ installer_home="$(mktemp -d "${TMPDIR:-/tmp}/vite-plus-pr-installer.XXXXXX")"
 cached_version_dir="$pr_home/pkg-pr-new-$pr_ref"
 vp_bin="$pr_home/bin/vp"
 vite_plus_package_json="$pr_home/current/node_modules/vite-plus/package.json"
+global_cli_entry="$pr_home/current/node_modules/vite-plus/dist/bin.js"
 commit_marker="$cached_version_dir/.pkg-pr-new-commit"
 pkg_pr_new_base="https://pkg.pr.new/voidzero-dev/vite-plus"
 vite_plus_spec="$pkg_pr_new_base@$pr_ref"
@@ -111,7 +112,8 @@ if [ -n "$available_commit" ] &&
   [ "$installed_commit" = "$available_commit" ] &&
   [ "$current_target" = "pkg-pr-new-$pr_ref" ] &&
   [ -x "$vp_bin" ] &&
-  [ -f "$vite_plus_package_json" ]; then
+  [ -f "$vite_plus_package_json" ] &&
+  [ -f "$global_cli_entry" ]; then
   reuse_install=1
 fi
 
@@ -165,6 +167,11 @@ if [ ! -f "$vite_plus_package_json" ]; then
   exit 1
 fi
 
+if [ ! -f "$global_cli_entry" ]; then
+  echo "error: installed Vite+ CLI entry not found: $global_cli_entry" >&2
+  exit 1
+fi
+
 vitest_version="$(awk -F '"' '$2 == "vitest" { print $4; exit }' "$vite_plus_package_json")"
 if [ -z "$vitest_version" ]; then
   echo "error: could not determine the bundled Vitest version from $vite_plus_package_json" >&2
@@ -196,14 +203,13 @@ echo "  vite spec: $vite_plus_core_spec"
 
 echo
 echo "Running vp migrate in $project_dir"
-runner_dir="$installer_home/runner"
-mkdir -p "$runner_dir"
 set +e
 (
-  # Resolve the CLI from an empty directory so a project-local vite-plus at the
-  # same semver cannot take precedence over the installed pkg.pr.new build.
-  cd "$runner_dir"
-  "$vp_bin" migrate "$project_dir" "$@"
+  # Run the installed JS entry directly so a project-local vite-plus at the
+  # same semver cannot take precedence. Keep cwd at the project root because
+  # project config and plugins may resolve dependencies from process.cwd().
+  cd "$project_dir"
+  "$vp_bin" node "$global_cli_entry" migrate "$project_dir" "$@"
 )
 migrate_status=$?
 set -e
