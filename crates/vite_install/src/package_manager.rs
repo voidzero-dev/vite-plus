@@ -3247,8 +3247,8 @@ mod tests {
         assert_eq!(package_json["name"].as_str().unwrap(), "test-package");
     }
 
-    #[tokio::test]
-    async fn test_detect_package_manager_priority_order_lock_over_config() {
+    #[test]
+    fn test_detect_package_manager_priority_order_lock_over_config() {
         let temp_dir = create_temp_dir();
         let temp_dir_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
         let package_content = r#"{"name": "test-package"}"#;
@@ -3272,14 +3272,19 @@ mod tests {
         fs::write(temp_dir_path.join("package-lock.json"), r#"{"lockfileVersion": 3}"#)
             .expect("Failed to write package-lock.json");
 
-        let result = PackageManager::builder(temp_dir_path)
-            .build()
-            .await
-            .expect("Should detect npm from package-lock.json");
+        let (workspace_root, _) =
+            find_workspace_root(&temp_dir_path).expect("Should find workspace root");
+        let (package_manager_type, version, hash, source) =
+            get_package_manager_type_and_version(&workspace_root, None)
+                .expect("Should detect npm from package-lock.json");
         assert_eq!(
-            result.bin_name, "npm",
+            package_manager_type,
+            PackageManagerType::Npm,
             "package-lock.json should take precedence over pnpmfile.cjs and yarn.config.cjs"
         );
+        assert_eq!(version, "latest");
+        assert_eq!(hash, None);
+        assert_eq!(source, PackageManagerSource::LockfileOrConfig);
     }
 
     #[tokio::test]
