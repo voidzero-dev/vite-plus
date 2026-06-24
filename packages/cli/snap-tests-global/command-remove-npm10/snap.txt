@@ -51,4 +51,4 @@ removed 1 package in <variable>ms
 }
 
 [1]> vp remove -g --dry-run testnpm2 && cat package.json # support remove global package with dry-run
-Failed to uninstall testnpm2: Configuration error: Package testnpm2 is not installed
+Failed to uninstall testnpm2: Package testnpm2 is not installed
