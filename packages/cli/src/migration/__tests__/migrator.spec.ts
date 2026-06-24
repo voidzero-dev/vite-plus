@@ -202,74 +202,79 @@ describe('rewritePackageJson', () => {
     }
   });
 
-  // #1932: under pnpm, any package that depends on vite-plus needs a direct
-  // `vite` so vitest's required `vite` peer binds to the override
-  // (@voidzero-dev/vite-plus-core); otherwise pnpm's autoInstallPeers installs a
-  // second upstream vite and splits vite-plus / vite / vitest into duplicates.
-  it('adds a direct `vite` devDep when a package depends on vite-plus under pnpm (#1932)', () => {
-    // monorepo sub-package -> catalog: (catalog.vite is written by rewriteCatalog)
-    const sub: { devDependencies: Record<string, string> } = {
-      devDependencies: { 'vite-plus': 'catalog:' },
-    };
-    rewritePackageJson(sub, PackageManager.pnpm, true);
-    expect(sub.devDependencies.vite).toBe('catalog:');
-
-    // standalone (no catalog) -> mirror the override target directly
-    const standalone: { devDependencies: Record<string, string> } = {
-      devDependencies: { 'vite-plus': 'latest' },
-    };
-    rewritePackageJson(standalone, PackageManager.pnpm);
-    expect(standalone.devDependencies.vite).toBe(VITE_PLUS_OVERRIDE_PACKAGES.vite);
-  });
-
-  it('does not add a direct `vite` for npm/yarn/bun (they dedupe via overrides/resolutions) (#1932)', () => {
-    for (const pm of [PackageManager.npm, PackageManager.yarn, PackageManager.bun]) {
-      const pkg: { devDependencies: Record<string, string> } = {
-        devDependencies: { 'vite-plus': pm === PackageManager.npm ? '^0.1.20' : 'catalog:' },
+  // Under pnpm, a package that depends on vite-plus needs a direct `vite` so
+  // vitest's required `vite` peer binds to the override (@voidzero-dev/vite-plus-core);
+  // otherwise pnpm's autoInstallPeers installs a second upstream vite and splits
+  // vite-plus / vite / vitest into duplicate instances.
+  describe('pnpm direct-vite dedupe (#1932)', () => {
+    it('adds a direct `vite` devDep when a package depends on vite-plus under pnpm', () => {
+      // monorepo sub-package -> catalog: (catalog.vite is written by rewriteCatalog)
+      const sub: { devDependencies: Record<string, string> } = {
+        devDependencies: { 'vite-plus': 'catalog:' },
       };
-      rewritePackageJson(pkg, pm, true);
+      rewritePackageJson(sub, PackageManager.pnpm, true);
+      expect(sub.devDependencies.vite).toBe('catalog:');
+
+      // standalone (no catalog) -> mirror the override target directly
+      const standalone: { devDependencies: Record<string, string> } = {
+        devDependencies: { 'vite-plus': 'latest' },
+      };
+      rewritePackageJson(standalone, PackageManager.pnpm);
+      expect(standalone.devDependencies.vite).toBe(VITE_PLUS_OVERRIDE_PACKAGES.vite);
+    });
+
+    it('does not add a direct `vite` for npm/yarn/bun (they dedupe via overrides/resolutions)', () => {
+      for (const pm of [PackageManager.npm, PackageManager.yarn, PackageManager.bun]) {
+        const pkg: { devDependencies: Record<string, string> } = {
+          devDependencies: { 'vite-plus': pm === PackageManager.npm ? '^0.1.20' : 'catalog:' },
+        };
+        rewritePackageJson(pkg, pm, true);
+        expect(pkg.devDependencies.vite).toBeUndefined();
+      }
+    });
+
+    it('does not add `vite` for a pnpm package that does not depend on vite-plus', () => {
+      const pkg: { devDependencies: Record<string, string> } = {
+        devDependencies: { typescript: '^5' },
+      };
+      rewritePackageJson(pkg, PackageManager.pnpm, true);
       expect(pkg.devDependencies.vite).toBeUndefined();
-    }
-  });
+    });
 
-  it('does not add `vite` for a pnpm package that does not depend on vite-plus (#1932)', () => {
-    const pkg: { devDependencies: Record<string, string> } = {
-      devDependencies: { typescript: '^5' },
-    };
-    rewritePackageJson(pkg, PackageManager.pnpm, true);
-    expect(pkg.devDependencies.vite).toBeUndefined();
-  });
+    it('keeps an existing direct `vite` instead of overwriting it under pnpm', () => {
+      const pkg: { devDependencies: Record<string, string> } = {
+        devDependencies: { 'vite-plus': 'catalog:', vite: 'catalog:vite7' },
+      };
+      rewritePackageJson(pkg, PackageManager.pnpm, true);
+      expect(pkg.devDependencies.vite).toBe('catalog:vite7');
+    });
 
-  it('keeps an existing direct `vite` instead of overwriting it under pnpm (#1932)', () => {
-    const pkg: { devDependencies: Record<string, string> } = {
-      devDependencies: { 'vite-plus': 'catalog:', vite: 'catalog:vite7' },
-    };
-    rewritePackageJson(pkg, PackageManager.pnpm, true);
-    expect(pkg.devDependencies.vite).toBe('catalog:vite7');
-  });
+    it('does not inject a direct vite when vite is only a peerDependency under pnpm', () => {
+      // A vite plugin that pins `vite` as a peer must keep its own contract;
+      // injecting vite-plus-core as a concrete devDep would conflict with it.
+      const pkg: {
+        devDependencies: Record<string, string>;
+        peerDependencies: Record<string, string>;
+      } = {
+        devDependencies: { 'vite-plus': 'catalog:' },
+        peerDependencies: { vite: '^6.0.0' },
+      };
+      rewritePackageJson(pkg, PackageManager.pnpm, true);
+      expect(pkg.devDependencies.vite).toBeUndefined();
+      expect(pkg.peerDependencies.vite).toBe('^6.0.0');
+    });
 
-  it('does not inject a direct vite when vite is only a peerDependency under pnpm (#1932)', () => {
-    // A vite plugin that pins `vite` as a peer must keep its own contract;
-    // injecting vite-plus-core as a concrete devDep would conflict with it.
-    const pkg: {
-      devDependencies: Record<string, string>;
-      peerDependencies: Record<string, string>;
-    } = {
-      devDependencies: { 'vite-plus': 'catalog:' },
-      peerDependencies: { vite: '^6.0.0' },
-    };
-    rewritePackageJson(pkg, PackageManager.pnpm, true);
-    expect(pkg.devDependencies.vite).toBeUndefined();
-    expect(pkg.peerDependencies.vite).toBe('^6.0.0');
-  });
-
-  it('does not add a second vite when an empty-string vite spec is already declared under pnpm (#1932)', () => {
-    const pkg: { dependencies: Record<string, string>; devDependencies: Record<string, string> } = {
-      dependencies: { vite: '' },
-      devDependencies: { 'vite-plus': 'catalog:' },
-    };
-    rewritePackageJson(pkg, PackageManager.pnpm, true);
-    expect(pkg.devDependencies.vite).toBeUndefined();
+    it('does not add a second vite when an empty-string vite spec is already declared under pnpm', () => {
+      const pkg: {
+        dependencies: Record<string, string>;
+        devDependencies: Record<string, string>;
+      } = {
+        dependencies: { vite: '' },
+        devDependencies: { 'vite-plus': 'catalog:' },
+      };
+      rewritePackageJson(pkg, PackageManager.pnpm, true);
+      expect(pkg.devDependencies.vite).toBeUndefined();
+    });
   });
 
   it('preserves protocol-prefixed vite-plus specs (catalog:named, workspace:, link:, github:) in catalog-supporting monorepos', async () => {
@@ -495,11 +500,11 @@ describe('rewritePackageJson', () => {
     expect(pkg.devDependencies).not.toHaveProperty('vite');
   });
 
-  it('injects a direct vite devDependency for pnpm projects depending on vite-plus, but not yarn/bun (#1932)', async () => {
+  it('injects a direct vite devDependency for pnpm projects depending on vite-plus, but not yarn/bun', async () => {
     // pnpm needs a direct `vite` so vitest's `vite` peer binds to the override
-    // instead of pnpm auto-installing a separate upstream vite (#1932). yarn/bun
-    // redirect the transitive/peer vite via resolutions/overrides, so they do not
-    // get a direct `vite` here (the bun workspace root is handled separately).
+    // instead of pnpm auto-installing a separate upstream vite. yarn/bun redirect
+    // the transitive/peer vite via resolutions/overrides, so they do not get a
+    // direct `vite` here (the bun workspace root is handled separately).
     for (const pm of [PackageManager.pnpm, PackageManager.yarn, PackageManager.bun]) {
       const pkg: { devDependencies: Record<string, string> } = {
         devDependencies: {
