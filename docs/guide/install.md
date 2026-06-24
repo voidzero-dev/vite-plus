@@ -167,7 +167,7 @@ Examples:
 
 ```bash
 vp pm config get registry
-vp pm cache clean --force
+vp pm cache clean -- --force
 vp pm exec tsc --version
 ```
 
