@@ -2,4 +2,6 @@
 direct npm uses managed npm
 
 > node index.js
-node child process uses managed npm
+node child process uses managed npm 
+<vite-plus-home>/package_manager/npm/<semver>/npm/bin/npm 
+<semver>

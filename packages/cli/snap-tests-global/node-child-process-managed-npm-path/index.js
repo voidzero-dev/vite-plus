@@ -20,4 +20,4 @@ if (
   process.exit(1);
 }
 
-console.log('node child process uses managed npm');
+console.log(`node child process uses managed npm \n${npmPath} \n${version}`);
