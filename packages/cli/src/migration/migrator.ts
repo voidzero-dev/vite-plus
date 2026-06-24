@@ -1725,6 +1725,7 @@ export function rewriteStandaloneProject(
 
   const packageManager = workspaceInfo.packageManager;
   const catalogDependencyResolver = createCatalogDependencyResolver(projectPath, packageManager);
+  const vitestEcosystemPackages = collectVitestEcosystemInstallDependencyNames(projectPath);
   const pnpmMajorVersion = pnpmMajor(workspaceInfo.downloadPackageManager.version);
   let extractedStagedConfig: Record<string, string | string[]> | null = null;
   let remainingPnpmOverrides: Record<string, string> | undefined;
@@ -1917,6 +1918,7 @@ export function rewriteStandaloneProject(
       pnpmMajorVersion,
       shouldAllowBrowserProviderBuilds,
       usesVitest,
+      vitestEcosystemPackages,
     );
   }
 
@@ -1936,7 +1938,7 @@ export function rewriteStandaloneProject(
   }
 
   if (packageManager === PackageManager.yarn) {
-    rewriteYarnrcYml(projectPath, usesVitest);
+    rewriteYarnrcYml(projectPath, usesVitest, vitestEcosystemPackages);
   } else if (packageManager === PackageManager.bun) {
     ensureBunfigPeerSuppression(projectPath);
   }
@@ -1996,6 +1998,10 @@ export function rewriteMonorepo(
     workspaceInfo.packages,
     importOptions?.preserveNuxtVitestImports !== false,
   );
+  const vitestEcosystemPackages = collectVitestEcosystemInstallDependencyNames(
+    workspaceInfo.rootDir,
+    workspaceInfo.packages,
+  );
   // rewrite root workspace
   if (workspaceInfo.packageManager === PackageManager.pnpm) {
     rewritePnpmWorkspaceYaml(
@@ -2003,11 +2009,12 @@ export function rewriteMonorepo(
       pnpmMajorVersion,
       workspaceShouldAllowBrowserBuilds,
       workspaceUsesVitest,
+      vitestEcosystemPackages,
     );
   } else if (workspaceInfo.packageManager === PackageManager.yarn) {
-    rewriteYarnrcYml(workspaceInfo.rootDir, workspaceUsesVitest);
+    rewriteYarnrcYml(workspaceInfo.rootDir, workspaceUsesVitest, vitestEcosystemPackages);
   } else if (workspaceInfo.packageManager === PackageManager.bun) {
-    rewriteBunCatalog(workspaceInfo.rootDir, workspaceUsesVitest);
+    rewriteBunCatalog(workspaceInfo.rootDir, workspaceUsesVitest, vitestEcosystemPackages);
   }
   rewriteRootWorkspacePackageJson(
     workspaceInfo.rootDir,
@@ -2191,6 +2198,7 @@ function rewritePnpmWorkspaceYaml(
   pnpmMajorVersion: number | undefined,
   shouldAllowBrowserBuilds: boolean,
   usesVitest: boolean,
+  vitestEcosystemPackages: ReadonlySet<string>,
 ): void {
   const pnpmWorkspaceYamlPath = path.join(projectPath, 'pnpm-workspace.yaml');
   if (!fs.existsSync(pnpmWorkspaceYamlPath)) {
@@ -2202,7 +2210,7 @@ function rewritePnpmWorkspaceYaml(
     ensurePnpmExoticSubdepsSetting(doc);
 
     // catalog
-    rewriteCatalog(doc, usesVitest);
+    rewriteCatalog(doc, usesVitest, vitestEcosystemPackages);
     if (pnpmMajorVersion !== undefined) {
       applyBuildAllowanceToWorkspaceYaml(doc, pnpmMajorVersion, shouldAllowBrowserBuilds);
     }
@@ -2901,7 +2909,11 @@ function applyYarnWorkspaceHoistingFix(
   }
 }
 
-function rewriteYarnrcYml(projectPath: string, usesVitest: boolean): void {
+function rewriteYarnrcYml(
+  projectPath: string,
+  usesVitest: boolean,
+  vitestEcosystemPackages: ReadonlySet<string>,
+): void {
   const yarnrcYmlPath = path.join(projectPath, '.yarnrc.yml');
   if (!fs.existsSync(yarnrcYmlPath)) {
     fs.writeFileSync(yarnrcYmlPath, '');
@@ -2932,7 +2944,7 @@ function rewriteYarnrcYml(projectPath: string, usesVitest: boolean): void {
     }
     doc.setIn(['npmPreapprovedPackages'], npmPreapprovedPackages);
     // catalog
-    rewriteCatalog(doc, usesVitest);
+    rewriteCatalog(doc, usesVitest, vitestEcosystemPackages);
   });
 }
 
@@ -3167,7 +3179,11 @@ function pruneYamlMapLegacyWrapperAliases(map: unknown): void {
   }
 }
 
-function rewriteCatalog(doc: YamlDocument, usesVitest: boolean): void {
+function rewriteCatalog(
+  doc: YamlDocument,
+  usesVitest: boolean,
+  vitestEcosystemPackages: ReadonlySet<string>,
+): void {
   const managed = managedOverridePackages(usesVitest);
   // Common case (no direct vitest): remove any lingering managed `vitest`
   // catalog entry so it resolves transitively through vite-plus.
@@ -3193,6 +3209,7 @@ function rewriteCatalog(doc: YamlDocument, usesVitest: boolean): void {
   }
   // Drop any entry still pointing at the deleted `vite-plus-test` wrapper.
   pruneYamlMapLegacyWrapperAliases(doc.getIn(['catalog']));
+  rewriteVitestEcosystemYamlCatalog(doc.getIn(['catalog']), vitestEcosystemPackages);
 
   const catalogs = doc.getIn(['catalogs']);
   if (!(catalogs instanceof YAMLMap)) {
@@ -3225,6 +3242,26 @@ function rewriteCatalog(doc: YamlDocument, usesVitest: boolean): void {
       }
     }
     pruneYamlMapLegacyWrapperAliases(item.value);
+    rewriteVitestEcosystemYamlCatalog(item.value, vitestEcosystemPackages);
+  }
+}
+
+function rewriteVitestEcosystemYamlCatalog(
+  catalog: unknown,
+  vitestEcosystemPackages: ReadonlySet<string>,
+): void {
+  if (!VITEST_IS_MANAGED_OVERRIDE || !(catalog instanceof YAMLMap)) {
+    return;
+  }
+  for (const item of catalog.items) {
+    const name = item.key instanceof Scalar ? item.key.value : undefined;
+    if (
+      typeof name === 'string' &&
+      vitestEcosystemPackages.has(name) &&
+      isAlignableVitestEcosystemPackage(name)
+    ) {
+      catalog.set(item.key, scalarString(VITEST_VERSION));
+    }
   }
 }
 
@@ -3232,6 +3269,7 @@ function rewriteCatalogObject(
   catalog: Record<string, string>,
   addMissing: boolean,
   usesVitest: boolean,
+  vitestEcosystemPackages: ReadonlySet<string>,
 ): void {
   const managed = managedOverridePackages(usesVitest);
   // Common case (no direct vitest): strip a lingering managed `vitest` catalog
@@ -3251,14 +3289,22 @@ function rewriteCatalogObject(
   for (const name of REMOVE_PACKAGES) {
     delete catalog[name];
   }
+  if (VITEST_IS_MANAGED_OVERRIDE) {
+    for (const name of Object.keys(catalog)) {
+      if (vitestEcosystemPackages.has(name) && isAlignableVitestEcosystemPackage(name)) {
+        catalog[name] = VITEST_VERSION;
+      }
+    }
+  }
 }
 
 function rewriteCatalogsObject(
   catalogs: Record<string, Record<string, string>>,
   usesVitest: boolean,
+  vitestEcosystemPackages: ReadonlySet<string>,
 ): void {
   for (const catalog of Object.values(catalogs)) {
-    rewriteCatalogObject(catalog, false, usesVitest);
+    rewriteCatalogObject(catalog, false, usesVitest, vitestEcosystemPackages);
   }
 }
 
@@ -3304,7 +3350,11 @@ function ensureBunfigPeerSuppression(projectPath: string): void {
  * unlike pnpm which uses pnpm-workspace.yaml.
  * @see https://bun.sh/docs/pm/catalogs
  */
-function rewriteBunCatalog(projectPath: string, usesVitest: boolean): void {
+function rewriteBunCatalog(
+  projectPath: string,
+  usesVitest: boolean,
+  vitestEcosystemPackages: ReadonlySet<string>,
+): void {
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
     return;
@@ -3327,30 +3377,30 @@ function rewriteBunCatalog(projectPath: string, usesVitest: boolean): void {
       ...(useWorkspacesCatalog ? workspacesObj?.catalog : pkg.catalog),
     };
 
-    rewriteCatalogObject(catalog, true, usesVitest);
+    rewriteCatalogObject(catalog, true, usesVitest, vitestEcosystemPackages);
     pruneLegacyWrapperAliases(catalog);
 
     if (useWorkspacesCatalog) {
       workspacesObj.catalog = catalog;
       if (pkg.catalog) {
-        rewriteCatalogObject(pkg.catalog, false, usesVitest);
+        rewriteCatalogObject(pkg.catalog, false, usesVitest, vitestEcosystemPackages);
         pruneLegacyWrapperAliases(pkg.catalog);
       }
     } else {
       pkg.catalog = catalog;
       if (workspacesObj?.catalog) {
-        rewriteCatalogObject(workspacesObj.catalog, false, usesVitest);
+        rewriteCatalogObject(workspacesObj.catalog, false, usesVitest, vitestEcosystemPackages);
         pruneLegacyWrapperAliases(workspacesObj.catalog);
       }
     }
     if (workspacesObj?.catalogs) {
-      rewriteCatalogsObject(workspacesObj.catalogs, usesVitest);
+      rewriteCatalogsObject(workspacesObj.catalogs, usesVitest, vitestEcosystemPackages);
       for (const named of Object.values(workspacesObj.catalogs)) {
         pruneLegacyWrapperAliases(named);
       }
     }
     if (pkg.catalogs) {
-      rewriteCatalogsObject(pkg.catalogs, usesVitest);
+      rewriteCatalogsObject(pkg.catalogs, usesVitest, vitestEcosystemPackages);
       for (const named of Object.values(pkg.catalogs)) {
         pruneLegacyWrapperAliases(named);
       }
@@ -3984,27 +4034,95 @@ function pnpmConfigLivesInPackageJson(pkg: BootstrapPackageJson, projectPath: st
   return Object.hasOwn(pkg.pnpm, 'overrides') || Object.hasOwn(pkg.pnpm, 'peerDependencyRules');
 }
 
-// Pin every alignable `@vitest/*` package the project lists to the bundled
-// vitest version. Returns true if any spec changed. These are plain dependency
-// entries (not overrides), so this is package-manager agnostic.
-function alignVitestEcosystemPackages(pkg: BootstrapPackageJson): boolean {
+function getAlignedVitestEcosystemDependencySpec(
+  current: string,
+  dependencyName: string,
+  dependencyField: PackageJsonDependencyField,
+  packageManager: PackageManager,
+  supportCatalog: boolean,
+  catalogDependencyResolver?: CatalogDependencyResolver,
+): string {
+  const catalogSpec = current.startsWith('catalog:') ? current : 'catalog:';
+  const catalogSupported =
+    supportCatalog && catalogDependencyResolver?.(catalogSpec, dependencyName) !== undefined;
+  return getCatalogDependencySpec(current, VITEST_VERSION, catalogSupported, {
+    dependencyField,
+    dependencyName,
+    packageManager,
+    catalogDependencyResolver,
+  });
+}
+
+// Align every declared official `@vitest/*` package with the bundled Vitest.
+// Prefer an existing default or named catalog entry when the package manager
+// supports catalogs; otherwise use the concrete bundled version. Returns true
+// if any package.json spec changed. Catalog values are reconciled separately by
+// the package-manager config writers above.
+function alignVitestEcosystemPackages(
+  pkg: BootstrapPackageJson,
+  packageManager: PackageManager,
+  supportCatalog: boolean,
+  catalogDependencyResolver?: CatalogDependencyResolver,
+): boolean {
   if (!VITEST_IS_MANAGED_OVERRIDE) {
     return false;
   }
-  const dependencyGroups = [pkg.devDependencies, pkg.dependencies, pkg.optionalDependencies];
+  const dependencyGroups: Array<{
+    dependencyField: PackageJsonDependencyField;
+    dependencies: Record<string, string> | undefined;
+  }> = [
+    { dependencyField: 'devDependencies', dependencies: pkg.devDependencies },
+    { dependencyField: 'dependencies', dependencies: pkg.dependencies },
+    { dependencyField: 'optionalDependencies', dependencies: pkg.optionalDependencies },
+  ];
   let changed = false;
-  for (const dependencies of dependencyGroups) {
+  for (const { dependencyField, dependencies } of dependencyGroups) {
     if (!dependencies) {
       continue;
     }
     for (const name of Object.keys(dependencies)) {
-      if (isAlignableVitestEcosystemPackage(name) && dependencies[name] !== VITEST_VERSION) {
-        dependencies[name] = VITEST_VERSION;
+      if (!isAlignableVitestEcosystemPackage(name)) {
+        continue;
+      }
+      const aligned = getAlignedVitestEcosystemDependencySpec(
+        dependencies[name],
+        name,
+        dependencyField,
+        packageManager,
+        supportCatalog,
+        catalogDependencyResolver,
+      );
+      if (dependencies[name] !== aligned) {
+        dependencies[name] = aligned;
         changed = true;
       }
     }
   }
   return changed;
+}
+
+function vitestEcosystemCatalogReferencesPending(
+  pkg: BootstrapPackageJson,
+  catalogDependencyResolver?: CatalogDependencyResolver,
+): boolean {
+  if (!VITEST_IS_MANAGED_OVERRIDE || !catalogDependencyResolver) {
+    return false;
+  }
+  for (const dependencies of [pkg.devDependencies, pkg.dependencies, pkg.optionalDependencies]) {
+    if (!dependencies) {
+      continue;
+    }
+    for (const [name, spec] of Object.entries(dependencies)) {
+      if (
+        isAlignableVitestEcosystemPackage(name) &&
+        spec.startsWith('catalog:') &&
+        catalogDependencyResolver(spec, name) !== VITEST_VERSION
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 /**
@@ -4054,7 +4172,7 @@ function reconcileVitePlusBootstrapPackage(
     }
   }
 
-  alignVitestEcosystemPackages(pkg);
+  alignVitestEcosystemPackages(pkg, packageManager, supportCatalog, catalogDependencyResolver);
   normalizeVitestPeerCatalogSpec(pkg.peerDependencies, catalogDependencyResolver);
 
   const providerSourceModes = collectProviderSourceModes(projectPath);
@@ -4067,12 +4185,24 @@ function reconcileVitePlusBootstrapPackage(
       continue;
     }
     usesAnyOptInProvider = true;
-    const installGroup = installGroups.find(
-      (dependencies) => dependencies?.[provider] !== undefined,
-    );
-    if (installGroup) {
+    const installGroupEntry = [
+      { dependencyField: 'devDependencies' as const, dependencies: pkg.devDependencies },
+      { dependencyField: 'dependencies' as const, dependencies: pkg.dependencies },
+      {
+        dependencyField: 'optionalDependencies' as const,
+        dependencies: pkg.optionalDependencies,
+      },
+    ].find(({ dependencies }) => dependencies?.[provider] !== undefined);
+    if (installGroupEntry?.dependencies) {
       if (VITEST_IS_MANAGED_OVERRIDE) {
-        installGroup[provider] = VITEST_VERSION;
+        installGroupEntry.dependencies[provider] = getAlignedVitestEcosystemDependencySpec(
+          installGroupEntry.dependencies[provider],
+          provider,
+          installGroupEntry.dependencyField,
+          packageManager,
+          supportCatalog,
+          catalogDependencyResolver,
+        );
       }
     } else {
       pkg.devDependencies ??= {};
@@ -4149,6 +4279,45 @@ function bootstrapProjectPaths(
   return [rootDir, ...(packages ?? []).map((pkg) => path.join(rootDir, pkg.path))];
 }
 
+function collectVitestEcosystemInstallDependencyNames(
+  rootDir: string,
+  packages?: WorkspacePackage[],
+): Set<string> {
+  const names = new Set<string>();
+  for (const packagePath of bootstrapProjectPaths(rootDir, packages)) {
+    const packageJsonPath = path.join(packagePath, 'package.json');
+    if (!fs.existsSync(packageJsonPath)) {
+      continue;
+    }
+    const pkg = readJsonFile(packageJsonPath) as BootstrapPackageJson;
+    for (const dependencies of [pkg.devDependencies, pkg.dependencies, pkg.optionalDependencies]) {
+      for (const name of Object.keys(dependencies ?? {})) {
+        if (isAlignableVitestEcosystemPackage(name)) {
+          names.add(name);
+        }
+      }
+    }
+  }
+  return names;
+}
+
+function workspaceVitestEcosystemCatalogReferencesPending(
+  rootDir: string,
+  packages: WorkspacePackage[] | undefined,
+  catalogDependencyResolver?: CatalogDependencyResolver,
+): boolean {
+  return bootstrapProjectPaths(rootDir, packages).some((packagePath) => {
+    const packageJsonPath = path.join(packagePath, 'package.json');
+    if (!fs.existsSync(packageJsonPath)) {
+      return false;
+    }
+    return vitestEcosystemCatalogReferencesPending(
+      readJsonFile(packageJsonPath) as BootstrapPackageJson,
+      catalogDependencyResolver,
+    );
+  });
+}
+
 export function detectVitePlusBootstrapPending(
   projectPath: string,
   packageManager: PackageManager | undefined,
@@ -4182,6 +4351,15 @@ export function detectVitePlusBootstrapPending(
       packageManager === PackageManager.bun);
   const canonicalVitePlusSpec = supportCatalog ? 'catalog:' : VITE_PLUS_VERSION;
   const catalogDependencyResolver = createCatalogDependencyResolver(projectPath, packageManager);
+  if (
+    workspaceVitestEcosystemCatalogReferencesPending(
+      projectPath,
+      packages,
+      catalogDependencyResolver,
+    )
+  ) {
+    return true;
+  }
   for (const [index, packagePath] of bootstrapProjectPaths(projectPath, packages).entries()) {
     const childPackageJsonPath = path.join(packagePath, 'package.json');
     if (!fs.existsSync(childPackageJsonPath)) {
@@ -4407,6 +4585,15 @@ export function ensureVitePlusBootstrap(
     projectPath,
     workspaceInfo.packageManager,
   );
+  const ecosystemCatalogReferencesPending = workspaceVitestEcosystemCatalogReferencesPending(
+    projectPath,
+    workspaceInfo.packages,
+    catalogDependencyResolver,
+  );
+  const vitestEcosystemPackages = collectVitestEcosystemInstallDependencyNames(
+    projectPath,
+    workspaceInfo.packages,
+  );
 
   editJsonFile<
     BootstrapPackageJson & {
@@ -4507,6 +4694,7 @@ export function ensureVitePlusBootstrap(
       const catalogDependencyResolver = readPnpmWorkspaceCatalogDependencyResolver(projectPath);
       if (
         result.packageJson ||
+        ecosystemCatalogReferencesPending ||
         !pnpmWorkspaceExoticSubdepsSettingSatisfied(projectPath) ||
         defaultCatalogVitePlusDependencyPending(pkg, catalogDependencyResolver) ||
         !overridesSatisfyVitePlus(
@@ -4524,6 +4712,7 @@ export function ensureVitePlusBootstrap(
           pnpmMajorVersion,
           shouldAllowBrowserBuilds,
           usesVitest,
+          vitestEcosystemPackages,
         );
       }
       if (fs.existsSync(pnpmWorkspaceYamlPath)) {
@@ -4542,12 +4731,12 @@ export function ensureVitePlusBootstrap(
     const before = fs.existsSync(yarnrcYmlPath)
       ? fs.readFileSync(yarnrcYmlPath, 'utf-8')
       : undefined;
-    rewriteYarnrcYml(projectPath, usesVitest);
+    rewriteYarnrcYml(projectPath, usesVitest, vitestEcosystemPackages);
     const after = fs.readFileSync(yarnrcYmlPath, 'utf-8');
     result.packageManagerConfig = before !== after;
   } else if (workspaceInfo.packageManager === PackageManager.bun) {
     const before = fs.readFileSync(packageJsonPath, 'utf-8');
-    rewriteBunCatalog(projectPath, usesVitest);
+    rewriteBunCatalog(projectPath, usesVitest, vitestEcosystemPackages);
     const after = fs.readFileSync(packageJsonPath, 'utf-8');
     result.packageJson = result.packageJson || before !== after;
   }
@@ -5001,7 +5190,7 @@ export function rewritePackageJson(
   // every declared official @vitest/* package on the bundled version during a
   // fresh migration too; existing-Vite+ upgrades use the same rule in the
   // bootstrap path.
-  alignVitestEcosystemPackages(pkg);
+  alignVitestEcosystemPackages(pkg, packageManager, supportCatalog, catalogDependencyResolver);
   // Force-override mode (ecosystem CI / `vp create` E2E) must re-pin any
   // pre-existing `vite-plus` range to the local tgz. Otherwise pnpm reads the
   // published vite-plus metadata for transitive dep resolution (e.g.
@@ -5057,12 +5246,11 @@ export function rewritePackageJson(
   // rewritten `vite-plus/test/browser-<provider>` import to resolve. Unlike the
   // rest of the `@vitest/*` family they are deliberately NOT in
   // VITE_PLUS_OVERRIDE_PACKAGES (so projects not using a provider stay
-  // untouched), which means the normalization loop above does not pin them. We
-  // pin each used provider here, to a CONCRETE version (no catalog entry is
-  // written for an opt-in provider) so it self-resolves and stays aligned with
-  // the bundled vitest, and we ensure its runtime framework peer
-  // (`webdriverio` / `playwright`). (`@vitest/browser`/preview stay bundled +
-  // stripped, handled in the REMOVE_PACKAGES loop above.)
+  // untouched), which means the normalization loop above does not add them. We
+  // align each installed provider here using its existing catalog when present,
+  // or the concrete bundled version otherwise, and ensure its runtime framework
+  // peer (`webdriverio` / `playwright`). (`@vitest/browser`/preview stay bundled
+  // + stripped, handled in the REMOVE_PACKAGES loop above.)
   let usesAnyOptInProvider = false;
   for (const provider of OPT_IN_BROWSER_PROVIDERS) {
     const usesProvider =
@@ -5077,12 +5265,20 @@ export function rewritePackageJson(
     // resolve. Normalize an existing install-group declaration to the bundled
     // vitest version in place (the override loop above no longer pins it);
     // otherwise — a source-only or peer-only user — inject it into devDeps.
-    const installGroup = [pkg.dependencies, pkg.devDependencies, pkg.optionalDependencies].find(
-      (deps) => deps?.[provider] !== undefined,
+    const installGroupEntry = dependencyGroups.find(
+      ({ dependencyField, dependencies }) =>
+        dependencyField !== 'peerDependencies' && dependencies?.[provider] !== undefined,
     );
-    if (installGroup) {
+    if (installGroupEntry?.dependencies) {
       if (VITEST_IS_MANAGED_OVERRIDE) {
-        installGroup[provider] = VITEST_VERSION;
+        installGroupEntry.dependencies[provider] = getAlignedVitestEcosystemDependencySpec(
+          installGroupEntry.dependencies[provider],
+          provider,
+          installGroupEntry.dependencyField,
+          packageManager,
+          supportCatalog,
+          catalogDependencyResolver,
+        );
       }
     } else {
       pkg.devDependencies ??= {};

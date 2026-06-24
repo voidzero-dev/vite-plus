@@ -1759,6 +1759,88 @@ describe('ensureVitePlusBootstrap', () => {
     expect(pkg.devDependencies.vitest).toBe(VITEST_VERSION);
   });
 
+  it('prefers existing catalogs for Vitest ecosystem packages and pins unsupported ones', () => {
+    const appDir = path.join(tmpDir, 'packages/app');
+    fs.mkdirSync(appDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'root',
+        private: true,
+        devDependencies: { 'vite-plus': 'catalog:' },
+        devEngines: {
+          packageManager: { name: 'pnpm', version: '10.33.0', onFail: 'download' },
+        },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(appDir, 'package.json'),
+      JSON.stringify({
+        name: 'app',
+        devDependencies: {
+          // Reproduce the output from the prior migration: the package was
+          // hard-pinned even though the default catalog already owned it.
+          '@vitest/coverage-istanbul': VITEST_VERSION,
+          '@vitest/ui': 'catalog:test',
+          '@vitest/web-worker': '^4.1.0',
+        },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'packages:',
+        '  - packages/*',
+        'catalog:',
+        '  vite-plus: latest',
+        '  vite: npm:@voidzero-dev/vite-plus-core@latest',
+        `  vitest: ${VITEST_VERSION}`,
+        "  '@vitest/coverage-istanbul': 4.1.4",
+        'catalogs:',
+        '  test:',
+        "    '@vitest/ui': 4.1.4",
+        'blockExoticSubdeps: false',
+        'overrides:',
+        "  vite: 'catalog:'",
+        "  vitest: 'catalog:'",
+        'peerDependencyRules:',
+        '  allowAny: [vite, vitest]',
+        '  allowedVersions:',
+        "    vite: '*'",
+        "    vitest: '*'",
+        '',
+      ].join('\n'),
+    );
+    const workspaceInfo = {
+      ...makeWorkspaceInfo(tmpDir, PackageManager.pnpm),
+      isMonorepo: true,
+      workspacePatterns: ['packages/*'],
+      packages: [{ name: 'app', path: 'packages/app' }],
+    };
+
+    expect(
+      detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm, workspaceInfo.packages),
+    ).toBe(true);
+    ensureVitePlusBootstrap(workspaceInfo);
+
+    const pkg = readJson(path.join(appDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+    expect(pkg.devDependencies['@vitest/coverage-istanbul']).toBe('catalog:');
+    expect(pkg.devDependencies['@vitest/ui']).toBe('catalog:test');
+    expect(pkg.devDependencies['@vitest/web-worker']).toBe(VITEST_VERSION);
+
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      catalog: Record<string, string>;
+      catalogs: Record<string, Record<string, string>>;
+    };
+    expect(workspace.catalog['@vitest/coverage-istanbul']).toBe(VITEST_VERSION);
+    expect(workspace.catalogs.test['@vitest/ui']).toBe(VITEST_VERSION);
+    expect(
+      detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm, workspaceInfo.packages),
+    ).toBe(false);
+  });
+
   it('does not align deprecated @vitest/coverage-c8 to a nonexistent Vitest 4 version', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
