@@ -8,6 +8,7 @@ use std::{fs::File, io::IsTerminal, time::Duration};
 use backon::{ExponentialBuilder, Retryable};
 use futures_util::StreamExt;
 use indicatif::{ProgressBar, ProgressStyle};
+use serde::de::DeserializeOwned;
 use sha2::{Digest, Sha256};
 use tokio::{fs, io::AsyncWriteExt};
 use vite_path::{AbsolutePath, AbsolutePathBuf};
@@ -16,10 +17,9 @@ use vite_str::Str;
 use crate::{Error, provider::ArchiveFormat};
 
 /// Response from a cached fetch operation
-pub struct CachedFetchResponse {
-    /// Response body (None if 304 Not Modified)
-    #[expect(clippy::disallowed_types, reason = "HTTP response body is a String")]
-    pub body: Option<String>,
+pub struct CachedFetchResponse<T> {
+    /// Deserialized response body (None if 304 Not Modified)
+    pub body: Option<T>,
     /// `ETag` header value
     pub etag: Option<Str>,
     /// Cache max-age in seconds (from Cache-Control header)
@@ -164,26 +164,60 @@ pub async fn download_text(url: &str) -> Result<String, Error> {
     Ok(content)
 }
 
-/// Fetch text with conditional request support
+/// Fetch JSON with conditional request support.
 ///
 /// If `if_none_match` is provided, sends `If-None-Match` header for conditional request.
-/// Returns response with cache headers and `not_modified` flag.
-pub async fn fetch_with_cache_headers(
+/// The request, response body, and JSON decoding are retried as one operation so a
+/// truncated body cannot escape the retry boundary as a deserialization error.
+pub async fn fetch_json_with_cache_headers<T: DeserializeOwned>(
     url: &str,
     if_none_match: Option<&str>,
-) -> Result<CachedFetchResponse, Error> {
+) -> Result<CachedFetchResponse<T>, Error> {
     let client = vite_shared::shared_http_client();
 
     tracing::debug!("Fetching with cache headers from {url}");
 
-    let response = (|| async {
+    (|| async {
         let mut request = client.get(url);
 
         if let Some(etag) = if_none_match {
             request = request.header("If-None-Match", etag);
         }
 
-        request.send().await
+        let response = request.send().await?.error_for_status()?;
+
+        if response.status() == reqwest::StatusCode::NOT_MODIFIED {
+            tracing::debug!("Received 304 Not Modified for {url}");
+            return Ok(CachedFetchResponse {
+                body: None,
+                etag: None,
+                max_age: None,
+                not_modified: true,
+            });
+        }
+
+        // Extract headers before consuming the response.
+        let etag = response
+            .headers()
+            .get("etag")
+            .and_then(|v| v.to_str().ok())
+            .map(std::convert::Into::into);
+
+        let max_age = response
+            .headers()
+            .get("cache-control")
+            .and_then(|v| v.to_str().ok())
+            .and_then(parse_max_age);
+
+        let bytes = response.bytes().await?;
+        let body = serde_json::from_slice(&bytes)?;
+
+        Ok::<CachedFetchResponse<T>, Error>(CachedFetchResponse {
+            body: Some(body),
+            etag,
+            max_age,
+            not_modified: false,
+        })
     })
     .retry(
         ExponentialBuilder::default()
@@ -195,35 +229,7 @@ pub async fn fetch_with_cache_headers(
     .map_err(|e| Error::DownloadFailed {
         url: url.into(),
         reason: vite_shared::format_error_chain(&e).into(),
-    })?;
-
-    // Check for 304 Not Modified
-    if response.status() == reqwest::StatusCode::NOT_MODIFIED {
-        tracing::debug!("Received 304 Not Modified for {url}");
-        return Ok(CachedFetchResponse {
-            body: None,
-            etag: None,
-            max_age: None,
-            not_modified: true,
-        });
-    }
-
-    // Extract headers before consuming response
-    let etag =
-        response.headers().get("etag").and_then(|v| v.to_str().ok()).map(std::convert::Into::into);
-
-    let max_age = response
-        .headers()
-        .get("cache-control")
-        .and_then(|v| v.to_str().ok())
-        .and_then(parse_max_age);
-
-    let body = response.text().await.map_err(|e| Error::DownloadFailed {
-        url: url.into(),
-        reason: vite_shared::format_error_chain(&e).into(),
-    })?;
-
-    Ok(CachedFetchResponse { body: Some(body), etag, max_age, not_modified: false })
+    })
 }
 
 /// Parse max-age from Cache-Control header value

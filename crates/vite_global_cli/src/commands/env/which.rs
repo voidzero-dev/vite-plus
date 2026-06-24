@@ -229,13 +229,13 @@ fn locate_package_binary(package_name: &str, binary_name: &str) -> Result<Absolu
     let package_json_path = node_modules_dir.join("package.json");
 
     if !package_json_path.as_path().exists() {
-        return Err(Error::ConfigError(format!("Package {} not found", package_name).into()));
+        return Err(Error::Other(format!("Package {} not found", package_name).into()));
     }
 
     // Read package.json to find the binary path
     let content = std::fs::read_to_string(package_json_path.as_path())?;
     let package_json: serde_json::Value = serde_json::from_str(&content)
-        .map_err(|e| Error::ConfigError(format!("Failed to parse package.json: {e}").into()))?;
+        .map_err(|e| Error::Other(format!("Failed to parse package.json: {e}").into()))?;
 
     let binary_path = match package_json.get("bin") {
         Some(serde_json::Value::String(path)) => {
@@ -245,7 +245,7 @@ fn locate_package_binary(package_name: &str, binary_name: &str) -> Result<Absolu
             if expected_name == binary_name {
                 node_modules_dir.join(path)
             } else {
-                return Err(Error::ConfigError(
+                return Err(Error::Other(
                     format!("Binary {} not found in package", binary_name).into(),
                 ));
             }
@@ -255,13 +255,13 @@ fn locate_package_binary(package_name: &str, binary_name: &str) -> Result<Absolu
             if let Some(serde_json::Value::String(path)) = map.get(binary_name) {
                 node_modules_dir.join(path)
             } else {
-                return Err(Error::ConfigError(
+                return Err(Error::Other(
                     format!("Binary {} not found in package", binary_name).into(),
                 ));
             }
         }
         _ => {
-            return Err(Error::ConfigError(
+            return Err(Error::Other(
                 format!("No bin field in package.json for {}", package_name).into(),
             ));
         }
