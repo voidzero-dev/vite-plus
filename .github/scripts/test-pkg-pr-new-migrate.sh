@@ -67,6 +67,22 @@ cache_root="${XDG_CACHE_HOME:-$original_home/.cache}"
 pr_home="${VP_PKG_PR_NEW_HOME:-$cache_root/vite-plus/pkg-pr-new/$pr_ref}"
 installer_home="$(mktemp -d "${TMPDIR:-/tmp}/vite-plus-pr-installer.XXXXXX")"
 
+# Numeric pkg.pr.new references are mutable PR aliases. The installer reuses a
+# version directory named after the reference, so its lockfile can retain the
+# checksum from an older publish of the same PR and fail with
+# ERR_PNPM_TARBALL_INTEGRITY after the alias is refreshed. Keep the downloaded
+# runtime/package-manager cache, but force the wrapper dependency to resolve
+# and install again for every PR-alias run. Commit SHA references are immutable
+# and can safely retain their installed dependency state.
+case "$pr_ref" in
+  *[!0-9]*) ;;
+  *)
+    cached_version_dir="$pr_home/pkg-pr-new-$pr_ref"
+    rm -rf "$cached_version_dir/node_modules"
+    rm -f "$cached_version_dir/pnpm-lock.yaml"
+    ;;
+esac
+
 cleanup() {
   rm -rf "$installer_home"
 }
