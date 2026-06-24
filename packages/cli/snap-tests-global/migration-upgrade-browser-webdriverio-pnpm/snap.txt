@@ -23,8 +23,8 @@
 
 > cat pnpm-workspace.yaml # driver builds and shared vitest should be enabled
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@latest
-  vite-plus: latest
+  vite: npm:@voidzero-dev/vite-plus-core@<semver>
+  vite-plus: <semver>
   vitest: <semver>
 overrides:
   vite: 'catalog:'

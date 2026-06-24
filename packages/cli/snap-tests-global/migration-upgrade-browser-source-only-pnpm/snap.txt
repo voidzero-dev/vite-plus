@@ -23,8 +23,8 @@
 
 > cat pnpm-workspace.yaml # shared vitest catalog and override should be present
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@latest
-  vite-plus: latest
+  vite: npm:@voidzero-dev/vite-plus-core@<semver>
+  vite-plus: <semver>
   vitest: <semver>
 overrides:
   vite: 'catalog:'

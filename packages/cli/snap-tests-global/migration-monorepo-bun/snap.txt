@@ -44,9 +44,9 @@ export default defineConfig({
       "packages/*"
     ],
     "catalog": {
-      "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+      "vite": "npm:@voidzero-dev/vite-plus-core@<semver>",
       "vitest": "<semver>",
-      "vite-plus": "latest"
+      "vite-plus": "<semver>"
     }
   },
   "scripts": {

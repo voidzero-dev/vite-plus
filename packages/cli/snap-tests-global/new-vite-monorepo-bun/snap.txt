@@ -43,8 +43,8 @@ vite.config.ts
     "node": ">=22.18.0"
   },
   "catalog": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vite-plus": "latest"
+    "vite": "npm:@voidzero-dev/vite-plus-core@<semver>",
+    "vite-plus": "<semver>"
   }
 }
 

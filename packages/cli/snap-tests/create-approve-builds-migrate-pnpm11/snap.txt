@@ -10,8 +10,8 @@ Prettier detected in workspace packages but no root config found. Package-level 
 allowBuilds:
   core-js: true
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@latest
-  vite-plus: latest
+  vite: npm:@voidzero-dev/vite-plus-core@<semver>
+  vite-plus: <semver>
 overrides:
   vite: "catalog:"
 peerDependencyRules:
@@ -36,8 +36,8 @@ These dependencies may not work until built. Run vp pm approve-builds in the pro
 allowBuilds:
   core-js: set this to true or false
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@latest
-  vite-plus: latest
+  vite: npm:@voidzero-dev/vite-plus-core@<semver>
+  vite-plus: <semver>
 overrides:
   vite: "catalog:"
 peerDependencyRules:
@@ -54,8 +54,8 @@ peerDependencyRules:
 allowBuilds:
   core-js: true
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@latest
-  vite-plus: latest
+  vite: npm:@voidzero-dev/vite-plus-core@<semver>
+  vite-plus: <semver>
 overrides:
   vite: "catalog:"
 peerDependencyRules:

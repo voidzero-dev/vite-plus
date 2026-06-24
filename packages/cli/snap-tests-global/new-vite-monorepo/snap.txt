@@ -65,8 +65,8 @@ catalogMode: prefer
 catalog:
   "@types/node": ^24
   typescript: ^5
-  vite: npm:@voidzero-dev/vite-plus-core@latest
-  vite-plus: latest
+  vite: npm:@voidzero-dev/vite-plus-core@<semver>
+  vite-plus: <semver>
 overrides:
   vite: "catalog:"
 peerDependencyRules:

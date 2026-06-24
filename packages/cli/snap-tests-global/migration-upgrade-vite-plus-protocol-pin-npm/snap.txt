@@ -10,7 +10,7 @@
     "vite-plus": "file:../custom-vite-plus"
   },
   "overrides": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest"
+    "vite": "npm:@voidzero-dev/vite-plus-core@<semver>"
   },
   "devEngines": {
     "packageManager": {

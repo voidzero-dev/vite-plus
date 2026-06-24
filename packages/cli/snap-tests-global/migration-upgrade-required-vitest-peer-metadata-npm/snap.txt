@@ -8,11 +8,11 @@
   "name": "migration-upgrade-required-vitest-peer-metadata-npm",
   "devDependencies": {
     "vite-plugin-gherkin": "0.2.0",
-    "vite-plus": "latest",
+    "vite-plus": "<semver>",
     "vitest": "<semver>"
   },
   "overrides": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vite": "npm:@voidzero-dev/vite-plus-core@<semver>",
     "vitest": "<semver>"
   },
   "devEngines": {
@@ -27,4 +27,3 @@
 > node -e "const fs = require('node:fs'); fs.mkdirSync('node_modules', { recursive: true }); fs.cpSync('.fixture/vite-plugin-gherkin', 'node_modules/vite-plugin-gherkin', { recursive: true })" # simulate installed dependency metadata
 > vp migrate --no-interactive # metadata confirms the unnamed required Vitest peer
 This project is already using Vite+! Happy coding!
-

@@ -12,10 +12,10 @@
 {
   "name": "migration-already-vite-plus",
   "devDependencies": {
-    "vite-plus": "latest"
+    "vite-plus": "<semver>"
   },
   "overrides": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest"
+    "vite": "npm:@voidzero-dev/vite-plus-core@<semver>"
   },
   "devEngines": {
     "packageManager": {

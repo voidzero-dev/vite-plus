@@ -23,8 +23,8 @@
 
 > cat pnpm-workspace.yaml # unreferenced managed Vitest catalog is removed
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@latest
-  vite-plus: latest
+  vite: npm:@voidzero-dev/vite-plus-core@<semver>
+  vite-plus: <semver>
 catalogs:
   test: {}
 overrides:
@@ -37,4 +37,3 @@ peerDependencyRules:
 
 > vp migrate --no-interactive # repaired project should no longer be pending
 This project is already using Vite+! Happy coding!
-

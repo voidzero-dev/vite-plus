@@ -12,11 +12,11 @@
     "@vitest/ui": "<semver>",
     "@vitest/utils": "<semver>",
     "@vitest/web-worker": "<semver>",
-    "vite-plus": "latest",
+    "vite-plus": "<semver>",
     "vitest": "<semver>"
   },
   "overrides": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vite": "npm:@voidzero-dev/vite-plus-core@<semver>",
     "vitest": "<semver>"
   },
   "devEngines": {

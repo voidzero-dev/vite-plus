@@ -32,8 +32,8 @@ it('works', () => {
 
 > cat pnpm-workspace.yaml
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@latest
-  vite-plus: latest
+  vite: npm:@voidzero-dev/vite-plus-core@<semver>
+  vite-plus: <semver>
 overrides:
   vite: 'catalog:'
 peerDependencyRules:

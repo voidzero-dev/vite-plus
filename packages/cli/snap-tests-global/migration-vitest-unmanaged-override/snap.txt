@@ -29,7 +29,7 @@
 > cat pnpm-workspace.yaml # no vitest catalog or override should be introduced
 catalog:
   vite: npm:@voidzero-dev/vite-plus-core@latest
-  vite-plus: latest
+  vite-plus: <semver>
 overrides:
   vite: 'catalog:'
 peerDependencyRules:
@@ -40,4 +40,3 @@ peerDependencyRules:
 
 > vp migrate --no-interactive # unmanaged Vitest ecosystem versions remain stable on rerun
 This project is already using Vite+! Happy coding!
-

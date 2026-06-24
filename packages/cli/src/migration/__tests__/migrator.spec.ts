@@ -14,7 +14,14 @@ import { createMigrationReport } from '../report.js';
 // which would cause snapshot mismatches.
 vi.mock('../../utils/constants.js', async (importOriginal) => {
   const mod = await importOriginal<typeof import('../../utils/constants.js')>();
-  return { ...mod, VITE_PLUS_VERSION: 'latest' };
+  return {
+    ...mod,
+    VITE_PLUS_VERSION: 'latest',
+    VITE_PLUS_OVERRIDE_PACKAGES: {
+      ...mod.VITE_PLUS_OVERRIDE_PACKAGES,
+      vite: 'npm:@voidzero-dev/vite-plus-core@latest',
+    },
+  };
 });
 
 const {

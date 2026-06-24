@@ -70,7 +70,7 @@ export default defineConfig({
   },
   "packageManager": "yarn@<semver>",
   "resolutions": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vite": "npm:@voidzero-dev/vite-plus-core@<semver>",
     "vitest": "<semver>"
   }
 }
@@ -81,9 +81,9 @@ npmPreapprovedPackages:
   - vitest
   - '@vitest/*'
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@latest
+  vite: npm:@voidzero-dev/vite-plus-core@<semver>
   vitest: <semver>
-  vite-plus: latest
+  vite-plus: <semver>
 
 > cat packages/app/package.json # check app package.json
 {

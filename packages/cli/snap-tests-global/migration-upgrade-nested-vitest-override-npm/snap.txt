@@ -6,10 +6,10 @@ This project is already using Vite+! Happy coding!
 {
   "name": "migration-upgrade-nested-vitest-override-npm",
   "devDependencies": {
-    "vite-plus": "latest"
+    "vite-plus": "<semver>"
   },
   "overrides": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vite": "npm:@voidzero-dev/vite-plus-core@<semver>",
     "vitest": {
       "@vitest/runner": "<semver>"
     }
@@ -25,4 +25,3 @@ This project is already using Vite+! Happy coding!
 
 > vp migrate --no-interactive # nested override must not make migration permanently pending
 This project is already using Vite+! Happy coding!
-

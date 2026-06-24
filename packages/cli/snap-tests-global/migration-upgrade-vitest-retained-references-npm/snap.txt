@@ -7,11 +7,11 @@
 {
   "name": "migration-upgrade-vitest-retained-references-npm",
   "devDependencies": {
-    "vite-plus": "latest",
+    "vite-plus": "<semver>",
     "vitest": "<semver>"
   },
   "overrides": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vite": "npm:@voidzero-dev/vite-plus-core@<semver>",
     "vitest": "<semver>"
   },
   "devEngines": {
@@ -47,4 +47,3 @@ console.log(metadata.version);
 
 > vp migrate --no-interactive # retained references remain stable on rerun
 This project is already using Vite+! Happy coding!
-

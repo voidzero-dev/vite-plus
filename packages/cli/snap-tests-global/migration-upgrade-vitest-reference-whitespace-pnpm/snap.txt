@@ -27,8 +27,8 @@
 
 > cat pnpm-workspace.yaml # rewritten directive does not retain shared Vitest management
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@latest
-  vite-plus: latest
+  vite: npm:@voidzero-dev/vite-plus-core@<semver>
+  vite-plus: <semver>
 overrides:
   vite: 'catalog:'
 peerDependencyRules:
@@ -39,4 +39,3 @@ peerDependencyRules:
 
 > vp migrate --no-interactive # directive rewriting is stable on rerun
 This project is already using Vite+! Happy coding!
-

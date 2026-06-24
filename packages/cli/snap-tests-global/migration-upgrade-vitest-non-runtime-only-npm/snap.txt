@@ -10,10 +10,10 @@
     "@vitest/eslint-plugin": "^1.6.0",
     "@vitest/utils": "<semver>",
     "@vitest/ws-client": "<semver>",
-    "vite-plus": "latest"
+    "vite-plus": "<semver>"
   },
   "overrides": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest"
+    "vite": "npm:@voidzero-dev/vite-plus-core@<semver>"
   },
   "devEngines": {
     "packageManager": {

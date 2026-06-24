@@ -10,11 +10,11 @@
   "name": "migration-upgrade-nuxt-test-utils",
   "devDependencies": {
     "@nuxt/test-utils": "file:.fixture/nuxt-test-utils",
-    "vite-plus": "latest",
+    "vite-plus": "<semver>",
     "vitest": "<semver>"
   },
   "overrides": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vite": "npm:@voidzero-dev/vite-plus-core@<semver>",
     "vitest": "<semver>"
   },
   "devEngines": {
@@ -43,4 +43,3 @@ expect(true).toBe(true);
 
 > vp migrate --no-interactive # the package-level compatibility result is idempotent
 This project is already using Vite+! Happy coding!
-

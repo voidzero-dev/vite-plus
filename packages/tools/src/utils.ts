@@ -73,6 +73,14 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
         /("(?:vitest|@vitest\/(?!coverage-)[\w-]+)": ")(?:[4-9]|[1-9]\d+)\.\d+\.\d+(?:-[\w.]+)?(")/g,
         '$1<semver>$2',
       )
+      // Vite+ and its core package are written as exact lockstep versions by
+      // create/migrate. Mask JSON dependency values so release bumps do not
+      // create unrelated snapshot churn (YAML values and npm aliases are
+      // already covered by the generic semver normalization above).
+      .replaceAll(
+        /("(?:vite-plus|@voidzero-dev\/vite-plus-core)": ")\d+\.\d+\.\d+(?:-[\w.]+)?(")/g,
+        '$1<semver>$2',
+      )
       // devEngines.packageManager auto-pin writes the exact resolved version
       // e.g.: `"name": "pnpm",\n  "version": "11.5.1"` -> `"version": "<semver>"`
       // (the optional suffix covers prerelease and build metadata: -rc-1, +sha.abc)

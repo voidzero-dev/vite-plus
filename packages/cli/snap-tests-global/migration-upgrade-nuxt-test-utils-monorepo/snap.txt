@@ -27,9 +27,9 @@ packages:
   - packages/*
 
 catalog:
-  vite-plus: latest
+  vite-plus: <semver>
   vitest: <semver>
-  vite: npm:@voidzero-dev/vite-plus-core@latest
+  vite: npm:@voidzero-dev/vite-plus-core@<semver>
 
 overrides:
   vite: 'catalog:'
@@ -65,4 +65,3 @@ void expect;
 
 > vp migrate --no-interactive # workspace result is idempotent
 This project is already using Vite+! Happy coding!
-

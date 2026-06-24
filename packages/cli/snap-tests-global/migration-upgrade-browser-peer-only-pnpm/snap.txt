@@ -26,8 +26,8 @@
 
 > cat pnpm-workspace.yaml # promoted provider keeps shared Vitest management
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@latest
-  vite-plus: latest
+  vite: npm:@voidzero-dev/vite-plus-core@<semver>
+  vite-plus: <semver>
   vitest: <semver>
 overrides:
   vite: 'catalog:'
@@ -42,4 +42,3 @@ peerDependencyRules:
 
 > vp migrate --no-interactive # repaired project should no longer be pending
 This project is already using Vite+! Happy coding!
-
