@@ -202,6 +202,52 @@ describe('rewritePackageJson', () => {
     }
   });
 
+  // #1932: under pnpm, any package that depends on vite-plus needs a direct
+  // `vite` so vitest's required `vite` peer binds to the override
+  // (@voidzero-dev/vite-plus-core); otherwise pnpm's autoInstallPeers installs a
+  // second upstream vite and splits vite-plus / vite / vitest into duplicates.
+  it('adds a direct `vite` devDep when a package depends on vite-plus under pnpm (#1932)', () => {
+    // monorepo sub-package -> catalog: (catalog.vite is written by rewriteCatalog)
+    const sub: { devDependencies: Record<string, string> } = {
+      devDependencies: { 'vite-plus': 'catalog:' },
+    };
+    rewritePackageJson(sub, PackageManager.pnpm, true);
+    expect(sub.devDependencies.vite).toBe('catalog:');
+
+    // standalone (no catalog) -> mirror the override target directly
+    const standalone: { devDependencies: Record<string, string> } = {
+      devDependencies: { 'vite-plus': 'latest' },
+    };
+    rewritePackageJson(standalone, PackageManager.pnpm);
+    expect(standalone.devDependencies.vite).toBe(VITE_PLUS_OVERRIDE_PACKAGES.vite);
+  });
+
+  it('does not add a direct `vite` for npm/yarn/bun (they dedupe via overrides/resolutions) (#1932)', () => {
+    for (const pm of [PackageManager.npm, PackageManager.yarn, PackageManager.bun]) {
+      const pkg: { devDependencies: Record<string, string> } = {
+        devDependencies: { 'vite-plus': pm === PackageManager.npm ? '^0.1.20' : 'catalog:' },
+      };
+      rewritePackageJson(pkg, pm, true);
+      expect(pkg.devDependencies.vite).toBeUndefined();
+    }
+  });
+
+  it('does not add `vite` for a pnpm package that does not depend on vite-plus (#1932)', () => {
+    const pkg: { devDependencies: Record<string, string> } = {
+      devDependencies: { typescript: '^5' },
+    };
+    rewritePackageJson(pkg, PackageManager.pnpm, true);
+    expect(pkg.devDependencies.vite).toBeUndefined();
+  });
+
+  it('keeps an existing direct `vite` instead of overwriting it under pnpm (#1932)', () => {
+    const pkg: { devDependencies: Record<string, string> } = {
+      devDependencies: { 'vite-plus': 'catalog:', vite: 'catalog:vite7' },
+    };
+    rewritePackageJson(pkg, PackageManager.pnpm, true);
+    expect(pkg.devDependencies.vite).toBe('catalog:vite7');
+  });
+
   it('preserves protocol-prefixed vite-plus specs (catalog:named, workspace:, link:, github:) in catalog-supporting monorepos', async () => {
     for (const existing of [
       'catalog:next',
@@ -425,19 +471,26 @@ describe('rewritePackageJson', () => {
     expect(pkg.devDependencies).not.toHaveProperty('vite');
   });
 
-  it('does not inject a direct vite devDependency for non-npm provider projects', async () => {
-    // pnpm/yarn use symlink/PnP layouts that already expose the `vite` override
-    // to the provider subtree, so the npm-only direct-`vite` workaround must not
-    // fire for them.
-    const pkg = {
+  it('injects a direct vite devDependency for pnpm projects depending on vite-plus, but not yarn/bun (#1932)', async () => {
+    // pnpm needs a direct `vite` so vitest's `vite` peer binds to the override
+    // instead of pnpm auto-installing a separate upstream vite (#1932). yarn/bun
+    // redirect the transitive/peer vite via resolutions/overrides, so they do not
+    // get a direct `vite` here (the bun workspace root is handled separately).
+    const makePkg = () => ({
       devDependencies: {
         '@vitest/browser-playwright': '^4.0.0',
         playwright: '^1.60.0',
         vitest: '^4.0.0',
       },
-    };
-    rewritePackageJson(pkg, PackageManager.pnpm);
-    expect(pkg.devDependencies).not.toHaveProperty('vite');
+    });
+    const pnpmPkg = makePkg();
+    rewritePackageJson(pnpmPkg, PackageManager.pnpm);
+    expect(pnpmPkg.devDependencies).toHaveProperty('vite', VITE_PLUS_OVERRIDE_PACKAGES.vite);
+    for (const pm of [PackageManager.yarn, PackageManager.bun]) {
+      const pkg = makePkg();
+      rewritePackageJson(pkg, pm);
+      expect(pkg.devDependencies).not.toHaveProperty('vite');
+    }
   });
 
   it('normalizes a pre-existing direct vite dep to the override target for an npm provider project', async () => {
