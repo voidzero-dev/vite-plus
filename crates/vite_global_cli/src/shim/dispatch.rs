@@ -714,13 +714,19 @@ async fn resolve_matching_package_manager_tool(
     Ok(Some(package_manager_bin_path(&install_dir, bin_name)))
 }
 
-async fn resolve_declared_npm_bin_dir(
+async fn prepend_declared_npm_bin_dir_to_path_env(
     cwd: &AbsolutePath,
-) -> Result<Option<AbsolutePathBuf>, Error> {
+    node_bin_dir: &AbsolutePath,
+) -> Result<(), Error> {
     let Some(npm_path) = resolve_matching_package_manager_tool(cwd, "npm").await? else {
-        return Ok(None);
+        return Ok(());
     };
-    Ok(npm_path.parent().map(AbsolutePath::to_absolute_path_buf))
+    if let Some(pm_bin_dir) = npm_path.parent()
+        && pm_bin_dir != node_bin_dir
+    {
+        let _ = prepend_to_path_env(pm_bin_dir, PrependOptions::default());
+    }
+    Ok(())
 }
 
 /// Main shim dispatch entry point.
@@ -871,17 +877,9 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
     // nested invocations see the same PM version while recursion prevention is set.
     let node_bin_dir = node_path.parent().expect("Node has no parent directory");
     let _ = prepend_to_path_env(node_bin_dir, PrependOptions::default());
-    if tool == "node" {
-        match resolve_declared_npm_bin_dir(&cwd).await {
-            Ok(Some(pm_bin_dir)) if pm_bin_dir != node_bin_dir => {
-                let _ = prepend_to_path_env(&pm_bin_dir, PrependOptions::default());
-            }
-            Ok(_) => {}
-            Err(e) => {
-                eprintln!("vp: Failed to resolve package manager for node child process PATH: {e}");
-                return 1;
-            }
-        }
+    if let Err(e) = prepend_declared_npm_bin_dir_to_path_env(&cwd, node_bin_dir).await {
+        eprintln!("vp: Failed to resolve package manager for child process PATH: {e}");
+        return 1;
     }
     if let Some(pm_bin_dir) = tool_path.parent()
         && pm_bin_dir != node_bin_dir
@@ -985,6 +983,16 @@ async fn dispatch_package_binary(tool: &str, args: &[String]) -> i32 {
                                         node_bin_dir,
                                         PrependOptions::default(),
                                     );
+                                    if let Err(e) =
+                                        prepend_declared_npm_bin_dir_to_path_env(&cwd, node_bin_dir)
+                                            .await
+                                    {
+                                        eprintln!(
+                                            "vp: Failed to resolve package manager for child \
+                                             process PATH: {e}"
+                                        );
+                                        return 1;
+                                    }
                                 }
                             }
                             Err(e) => {
@@ -1088,6 +1096,11 @@ pub(crate) async fn package_binary_invocation(
     let node_bin_dir =
         node_path.parent().ok_or_else(|| "Node has no parent directory".to_string())?;
     let _ = prepend_to_path_env(node_bin_dir, PrependOptions::default());
+    if let Ok(cwd) = current_dir() {
+        prepend_declared_npm_bin_dir_to_path_env(&cwd, node_bin_dir).await.map_err(|e| {
+            format!("Failed to resolve package manager for child process PATH: {e}")
+        })?;
+    }
 
     // JS binaries (determined at install time and stored in metadata) run
     // through node; native executables run directly.
