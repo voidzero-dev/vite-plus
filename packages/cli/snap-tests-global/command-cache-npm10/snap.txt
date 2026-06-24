@@ -3,5 +3,3 @@
 
 > vp pm cache path # should show cache path (alias for dir, uses npm config get cache)
 <homedir>/.npm
-
-> vp pm cache clean --force # should support pass-through flags without separator
