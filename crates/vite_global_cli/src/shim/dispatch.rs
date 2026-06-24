@@ -714,6 +714,15 @@ async fn resolve_matching_package_manager_tool(
     Ok(Some(package_manager_bin_path(&install_dir, bin_name)))
 }
 
+async fn resolve_declared_npm_bin_dir(
+    cwd: &AbsolutePath,
+) -> Result<Option<AbsolutePathBuf>, Error> {
+    let Some(npm_path) = resolve_matching_package_manager_tool(cwd, "npm").await? else {
+        return Ok(None);
+    };
+    Ok(npm_path.parent().map(AbsolutePath::to_absolute_path_buf))
+}
+
 /// Main shim dispatch entry point.
 ///
 /// Called when the binary is invoked as node, npm, npx, corepack, or a
@@ -862,6 +871,18 @@ pub async fn dispatch(tool: &str, args: &[String]) -> i32 {
     // nested invocations see the same PM version while recursion prevention is set.
     let node_bin_dir = node_path.parent().expect("Node has no parent directory");
     let _ = prepend_to_path_env(node_bin_dir, PrependOptions::default());
+    if tool == "node" {
+        match resolve_declared_npm_bin_dir(&cwd).await {
+            Ok(Some(pm_bin_dir)) if pm_bin_dir != node_bin_dir => {
+                let _ = prepend_to_path_env(&pm_bin_dir, PrependOptions::default());
+            }
+            Ok(_) => {}
+            Err(e) => {
+                eprintln!("vp: Failed to resolve package manager for node child process PATH: {e}");
+                return 1;
+            }
+        }
+    }
     if let Some(pm_bin_dir) = tool_path.parent()
         && pm_bin_dir != node_bin_dir
     {

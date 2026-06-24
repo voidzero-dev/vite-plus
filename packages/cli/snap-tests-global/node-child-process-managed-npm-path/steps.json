@@ -1,0 +1,4 @@
+{
+  "ignoredPlatforms": ["win32"],
+  "commands": ["node index.js"]
+}

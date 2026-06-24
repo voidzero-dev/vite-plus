@@ -1,0 +1,2 @@
+> node index.js
+node child process uses managed npm

@@ -1,0 +1,18 @@
+{
+  "name": "node-child-process-managed-npm-path",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": "20.18.0",
+      "onFail": "download"
+    },
+    "packageManager": {
+      "name": "npm",
+      "version": "11.17.0",
+      "onFail": "download"
+    }
+  }
+}
