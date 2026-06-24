@@ -1,0 +1,4 @@
+> vp run dev # should show passthrough notice and run script
+warn: Node 14.15.0 is below the Vite+ minimum (20.19.0); using passthrough mode — running the project's package manager directly without loading the Vite+ CLI. Upgrade Node to restore full Vite+ functionality.
+$ pnpm run dev
+PASSTHROUGH_MARKER

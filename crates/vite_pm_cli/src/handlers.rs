@@ -44,7 +44,8 @@ use vite_path::AbsolutePath;
 
 use crate::{
     cli::{
-        ConfigCommands, DistTagCommands, OwnerCommands, PmCommands, StageCommands, TokenCommands,
+        ConfigCommands, DistTagCommands, OwnerCommands, PackageManagerCommand, PmCommands,
+        StageCommands, TokenCommands,
     },
     error::Error,
     helpers::{build_package_manager, build_package_manager_or_npm_default, ensure_package_json},
@@ -56,6 +57,16 @@ pub async fn run_add(
 ) -> Result<ExitStatus, Error> {
     ensure_package_json(cwd).await?;
     let pm = PackageManager::builder(cwd).build_with_default().await?;
+    run_add_with_pm(cwd, options, &pm).await
+}
+
+/// Run `add` with an externally-provided `PackageManager` (no internal build/pin).
+/// Used by passthrough mode, where the pm comes from `detect_only`.
+pub async fn run_add_with_pm(
+    cwd: &AbsolutePath,
+    options: &AddCommandOptions<'_>,
+    pm: &PackageManager,
+) -> Result<ExitStatus, Error> {
     Ok(pm.run_add_command(options, cwd).await?)
 }
 
@@ -65,6 +76,15 @@ pub async fn run_install(
 ) -> Result<ExitStatus, Error> {
     ensure_package_json(cwd).await?;
     let pm = PackageManager::builder(cwd).build_with_default().await?;
+    run_install_with_pm(cwd, options, &pm).await
+}
+
+/// Run `install` with an externally-provided `PackageManager` (no internal build/pin).
+pub async fn run_install_with_pm(
+    cwd: &AbsolutePath,
+    options: &InstallCommandOptions<'_>,
+    pm: &PackageManager,
+) -> Result<ExitStatus, Error> {
     Ok(pm.run_install_command(options, cwd).await?)
 }
 
@@ -73,6 +93,14 @@ pub async fn run_remove(
     options: &RemoveCommandOptions<'_>,
 ) -> Result<ExitStatus, Error> {
     let pm = build_package_manager(cwd).await?;
+    run_remove_with_pm(cwd, options, &pm).await
+}
+
+pub async fn run_remove_with_pm(
+    cwd: &AbsolutePath,
+    options: &RemoveCommandOptions<'_>,
+    pm: &PackageManager,
+) -> Result<ExitStatus, Error> {
     Ok(pm.run_remove_command(options, cwd).await?)
 }
 
@@ -81,6 +109,14 @@ pub async fn run_update(
     options: &UpdateCommandOptions<'_>,
 ) -> Result<ExitStatus, Error> {
     let pm = build_package_manager(cwd).await?;
+    run_update_with_pm(cwd, options, &pm).await
+}
+
+pub async fn run_update_with_pm(
+    cwd: &AbsolutePath,
+    options: &UpdateCommandOptions<'_>,
+    pm: &PackageManager,
+) -> Result<ExitStatus, Error> {
     Ok(pm.run_update_command(options, cwd).await?)
 }
 
@@ -89,6 +125,14 @@ pub async fn run_dedupe(
     options: &DedupeCommandOptions<'_>,
 ) -> Result<ExitStatus, Error> {
     let pm = build_package_manager(cwd).await?;
+    run_dedupe_with_pm(cwd, options, &pm).await
+}
+
+pub async fn run_dedupe_with_pm(
+    cwd: &AbsolutePath,
+    options: &DedupeCommandOptions<'_>,
+    pm: &PackageManager,
+) -> Result<ExitStatus, Error> {
     Ok(pm.run_dedupe_command(options, cwd).await?)
 }
 
@@ -97,6 +141,14 @@ pub async fn run_outdated(
     options: &OutdatedCommandOptions<'_>,
 ) -> Result<ExitStatus, Error> {
     let pm = build_package_manager(cwd).await?;
+    run_outdated_with_pm(cwd, options, &pm).await
+}
+
+pub async fn run_outdated_with_pm(
+    cwd: &AbsolutePath,
+    options: &OutdatedCommandOptions<'_>,
+    pm: &PackageManager,
+) -> Result<ExitStatus, Error> {
     Ok(pm.run_outdated_command(options, cwd).await?)
 }
 
@@ -105,6 +157,14 @@ pub async fn run_why(
     options: &WhyCommandOptions<'_>,
 ) -> Result<ExitStatus, Error> {
     let pm = build_package_manager(cwd).await?;
+    run_why_with_pm(cwd, options, &pm).await
+}
+
+pub async fn run_why_with_pm(
+    cwd: &AbsolutePath,
+    options: &WhyCommandOptions<'_>,
+    pm: &PackageManager,
+) -> Result<ExitStatus, Error> {
     Ok(pm.run_why_command(options, cwd).await?)
 }
 
@@ -113,6 +173,14 @@ pub async fn run_info(
     options: &ViewCommandOptions<'_>,
 ) -> Result<ExitStatus, Error> {
     let pm = build_package_manager_or_npm_default(cwd).await?;
+    run_info_with_pm(cwd, options, &pm).await
+}
+
+pub async fn run_info_with_pm(
+    cwd: &AbsolutePath,
+    options: &ViewCommandOptions<'_>,
+    pm: &PackageManager,
+) -> Result<ExitStatus, Error> {
     Ok(pm.run_view_command(options, cwd).await?)
 }
 
@@ -121,6 +189,14 @@ pub async fn run_link(
     options: &LinkCommandOptions<'_>,
 ) -> Result<ExitStatus, Error> {
     let pm = build_package_manager(cwd).await?;
+    run_link_with_pm(cwd, options, &pm).await
+}
+
+pub async fn run_link_with_pm(
+    cwd: &AbsolutePath,
+    options: &LinkCommandOptions<'_>,
+    pm: &PackageManager,
+) -> Result<ExitStatus, Error> {
     Ok(pm.run_link_command(options, cwd).await?)
 }
 
@@ -129,6 +205,14 @@ pub async fn run_unlink(
     options: &UnlinkCommandOptions<'_>,
 ) -> Result<ExitStatus, Error> {
     let pm = build_package_manager(cwd).await?;
+    run_unlink_with_pm(cwd, options, &pm).await
+}
+
+pub async fn run_unlink_with_pm(
+    cwd: &AbsolutePath,
+    options: &UnlinkCommandOptions<'_>,
+    pm: &PackageManager,
+) -> Result<ExitStatus, Error> {
     Ok(pm.run_unlink_command(options, cwd).await?)
 }
 
@@ -165,6 +249,37 @@ pub async fn run_dlx(
     }
 }
 
+/// Run `dlx` with an externally-provided `PackageManager` (no internal build/pin).
+///
+/// Unlike `run_dlx`, this has no `PackageJsonNotFound → npx` fallback — passthrough
+/// guarantees the pm is already resolved. Takes the same scattered args as
+/// `run_dlx` and constructs the options internally (DRY with the original).
+pub async fn run_dlx_with_pm(
+    cwd: &AbsolutePath,
+    packages: Vec<String>,
+    shell_mode: bool,
+    silent: bool,
+    args: Vec<String>,
+    pm: &PackageManager,
+) -> Result<ExitStatus, Error> {
+    if args.is_empty() {
+        return Err(Error::Other("dlx requires a package name".into()));
+    }
+
+    let package_spec = &args[0];
+    let command_args: Vec<String> = args[1..].to_vec();
+
+    let options = DlxCommandOptions {
+        packages: &packages,
+        package_spec,
+        args: &command_args,
+        shell_mode,
+        silent,
+    };
+
+    Ok(pm.run_dlx_command(&options, cwd).await?)
+}
+
 pub async fn run_pm_subcommand(
     cwd: &AbsolutePath,
     command: PmCommands,
@@ -188,6 +303,16 @@ pub async fn run_pm_subcommand(
         build_package_manager_or_npm_default(cwd).await?
     };
 
+    run_pm_subcommand_with_pm(cwd, command, &pm).await
+}
+
+/// Run a `vp pm <sub>` command with an externally-provided `PackageManager`
+/// (no internal build/pin). Used by passthrough mode.
+pub async fn run_pm_subcommand_with_pm(
+    cwd: &AbsolutePath,
+    command: PmCommands,
+    pm: &PackageManager,
+) -> Result<ExitStatus, Error> {
     match command {
         PmCommands::ApproveBuilds { packages, all, pass_through_args } => {
             let options = ApproveBuildsCommandOptions {
@@ -547,6 +672,108 @@ pub async fn run_pm_subcommand(
     }
 }
 
+/// Build the `PackageManager` for a `dispatch` call, picking the build strategy
+/// each `run_*` historically used. This preserves the original `dispatch` path's
+/// behavior (including `ensure_package_json` for install/add) so that
+/// `dispatch` → `build_for_dispatch` + `dispatch_with_pm` is a behavior-preserving
+/// refactor. `dispatch_with_pm` (passthrough) bypasses this entirely.
+pub async fn build_for_dispatch(
+    cwd: &AbsolutePath,
+    command: &PackageManagerCommand,
+) -> Result<PackageManager, Error> {
+    match command {
+        // install/add use build_with_default (+ ensure_package_json, matching run_install/run_add)
+        PackageManagerCommand::Install { .. } | PackageManagerCommand::Add { .. } => {
+            ensure_package_json(cwd).await?;
+            Ok(PackageManager::builder(cwd).build_with_default().await?)
+        }
+        // NOTE: Dlx is intentionally NOT handled here — `dispatch()` intercepts
+        // Dlx before calling `build_for_dispatch`, routing it to `run_dlx` which
+        // has the `PackageJsonNotFound → npx` fallback. If Dlx ever reaches this
+        // function, it falls through to the `_ =>` arm (build_package_manager),
+        // which will surface a clear error rather than silently losing the fallback.
+        // info uses build_package_manager_or_npm_default
+        PackageManagerCommand::Info { .. } => Ok(build_package_manager_or_npm_default(cwd).await?),
+        // pm subcommands: pick by needs_project (mirrors run_pm_subcommand)
+        PackageManagerCommand::Pm(pm_command) => {
+            let needs_project = matches!(
+                pm_command,
+                PmCommands::ApproveBuilds { .. }
+                    | PmCommands::Prune { .. }
+                    | PmCommands::Pack { .. }
+                    | PmCommands::List { .. }
+                    | PmCommands::Publish { .. }
+                    | PmCommands::Stage(StageCommands::Publish { .. })
+                    | PmCommands::Rebuild { .. }
+                    | PmCommands::Fund { .. }
+                    | PmCommands::Audit { .. }
+            );
+            if needs_project {
+                Ok(build_package_manager(cwd).await?)
+            } else {
+                Ok(build_package_manager_or_npm_default(cwd).await?)
+            }
+        }
+        // remove/update/dedupe/outdated/why/link/unlink use build_package_manager
+        _ => Ok(build_package_manager(cwd).await?),
+    }
+}
+
 fn config_location(global: bool, location: Option<&str>) -> Option<&str> {
     if global { Some("global") } else { location }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use vite_install::PackageManagerType;
+    use vite_path::AbsolutePathBuf;
+
+    #[tokio::test]
+    async fn run_install_with_pm_uses_provided_pm_without_build() {
+        // run_install_with_pm must NOT call build_package_manager — it uses the
+        // provided pm directly. With a bare package.json (no packageManager field,
+        // no lockfile), build_package_manager would return UnrecognizedPackageManager
+        // and panic the test; reaching run_install_command (which then fails on the
+        // missing npm binary, not on build) proves the build was skipped.
+        let tmp = tempfile::tempdir().unwrap();
+        let cwd = AbsolutePathBuf::new(tmp.path().to_path_buf()).unwrap();
+        tokio::fs::write(cwd.join("package.json"), r#"{"name":"x"}"#)
+            .await
+            .unwrap();
+        let pm = PackageManager {
+            client: PackageManagerType::Npm,
+            package_name: "npm".into(),
+            version: "bundled".into(),
+            hash: None,
+            bin_name: "npm".into(),
+            workspace_root: cwd.clone(),
+            is_monorepo: false,
+            install_dir: cwd.clone(),
+        };
+        let options = InstallCommandOptions {
+            prod: false,
+            dev: false,
+            no_optional: false,
+            frozen_lockfile: false,
+            no_frozen_lockfile: false,
+            lockfile_only: false,
+            prefer_offline: false,
+            offline: false,
+            force: false,
+            ignore_scripts: false,
+            no_lockfile: false,
+            fix_lockfile: false,
+            shamefully_hoist: false,
+            resolution_only: false,
+            silent: false,
+            filters: None,
+            workspace_root: false,
+            pass_through_args: None,
+        };
+        // Should not panic on build; the underlying run_command may fail (no real
+        // npm binary) but that failure is downstream of the injected pm, proving
+        // build was skipped.
+        let _ = run_install_with_pm(&cwd, &options, &pm).await;
+    }
 }

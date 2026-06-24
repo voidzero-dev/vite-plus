@@ -11,6 +11,7 @@ use vite_install::commands::{
     unlink::UnlinkCommandOptions, update::UpdateCommandOptions, view::ViewCommandOptions,
     why::WhyCommandOptions,
 };
+use vite_install::PackageManager;
 use vite_path::AbsolutePath;
 
 use crate::{cli::PackageManagerCommand, error::Error, handlers};
@@ -18,6 +19,28 @@ use crate::{cli::PackageManagerCommand, error::Error, handlers};
 pub async fn dispatch(
     cwd: &AbsolutePath,
     command: PackageManagerCommand,
+) -> Result<ExitStatus, Error> {
+    // Dlx is special-cased: `run_dlx` has a `PackageJsonNotFound → npx` fallback
+    // that must be preserved. The `build_for_dispatch` path would propagate
+    // `PackageJsonNotFound` via `?`, making the fallback dead code. Call `run_dlx`
+    // directly to preserve the original behavior.
+    if let PackageManagerCommand::Dlx { package, shell_mode, silent, args } = command {
+        return handlers::run_dlx(cwd, package, shell_mode, silent, args).await;
+    }
+    let pm = handlers::build_for_dispatch(cwd, &command).await?;
+    dispatch_with_pm(cwd, command, &pm).await
+}
+
+/// Dispatch using an externally-provided [`PackageManager`] (no internal build/pin).
+///
+/// Used by passthrough mode, where the pm comes from
+/// `PackageManager::detect_only`. The match body is identical to the original
+/// `dispatch` (zero behavior drift) — only the handler calls take the injected
+/// `pm` via the `*_with_pm` variants.
+pub async fn dispatch_with_pm(
+    cwd: &AbsolutePath,
+    command: PackageManagerCommand,
+    pm: &PackageManager,
 ) -> Result<ExitStatus, Error> {
     match command {
         PackageManagerCommand::Install {
@@ -70,7 +93,7 @@ pub async fn dispatch(
                     allow_build: None,
                     pass_through_args: pass_through_args.as_deref(),
                 };
-                return handlers::run_add(cwd, &options).await;
+                return handlers::run_add_with_pm(cwd, &options, pm).await;
             }
 
             let options = InstallCommandOptions {
@@ -93,7 +116,7 @@ pub async fn dispatch(
                 workspace_root,
                 pass_through_args: pass_through_args.as_deref(),
             };
-            handlers::run_install(cwd, &options).await
+            handlers::run_install_with_pm(cwd, &options, pm).await
         }
 
         PackageManagerCommand::Add {
@@ -132,7 +155,7 @@ pub async fn dispatch(
                 allow_build: allow_build.as_deref(),
                 pass_through_args: pass_through_args.as_deref(),
             };
-            handlers::run_add(cwd, &options).await
+            handlers::run_add_with_pm(cwd, &options, pm).await
         }
 
         PackageManagerCommand::Remove {
@@ -162,7 +185,7 @@ pub async fn dispatch(
                 save_prod,
                 pass_through_args: pass_through_args.as_deref(),
             };
-            handlers::run_remove(cwd, &options).await
+            handlers::run_remove_with_pm(cwd, &options, pm).await
         }
 
         PackageManagerCommand::Update {
@@ -197,13 +220,13 @@ pub async fn dispatch(
                 workspace_only: workspace,
                 pass_through_args: pass_through_args.as_deref(),
             };
-            handlers::run_update(cwd, &options).await
+            handlers::run_update_with_pm(cwd, &options, pm).await
         }
 
         PackageManagerCommand::Dedupe { check, pass_through_args } => {
             let options =
                 DedupeCommandOptions { check, pass_through_args: pass_through_args.as_deref() };
-            handlers::run_dedupe(cwd, &options).await
+            handlers::run_dedupe_with_pm(cwd, &options, pm).await
         }
 
         PackageManagerCommand::Outdated {
@@ -237,7 +260,7 @@ pub async fn dispatch(
                 global,
                 pass_through_args: pass_through_args.as_deref(),
             };
-            handlers::run_outdated(cwd, &options).await
+            handlers::run_outdated_with_pm(cwd, &options, pm).await
         }
 
         PackageManagerCommand::Why {
@@ -272,7 +295,7 @@ pub async fn dispatch(
                 find_by: find_by.as_deref(),
                 pass_through_args: pass_through_args.as_deref(),
             };
-            handlers::run_why(cwd, &options).await
+            handlers::run_why_with_pm(cwd, &options, pm).await
         }
 
         PackageManagerCommand::Info { package, field, json, pass_through_args } => {
@@ -282,7 +305,7 @@ pub async fn dispatch(
                 json,
                 pass_through_args: pass_through_args.as_deref(),
             };
-            handlers::run_info(cwd, &options).await
+            handlers::run_info_with_pm(cwd, &options, pm).await
         }
 
         PackageManagerCommand::Link { package, args } => {
@@ -290,7 +313,7 @@ pub async fn dispatch(
                 package: package.as_deref(),
                 pass_through_args: pass_through_slice(&args),
             };
-            handlers::run_link(cwd, &options).await
+            handlers::run_link_with_pm(cwd, &options, pm).await
         }
 
         PackageManagerCommand::Unlink { package, recursive, args } => {
@@ -299,14 +322,16 @@ pub async fn dispatch(
                 recursive,
                 pass_through_args: pass_through_slice(&args),
             };
-            handlers::run_unlink(cwd, &options).await
+            handlers::run_unlink_with_pm(cwd, &options, pm).await
         }
 
         PackageManagerCommand::Dlx { package, shell_mode, silent, args } => {
-            handlers::run_dlx(cwd, package, shell_mode, silent, args).await
+            handlers::run_dlx_with_pm(cwd, package, shell_mode, silent, args, pm).await
         }
 
-        PackageManagerCommand::Pm(pm_command) => handlers::run_pm_subcommand(cwd, pm_command).await,
+        PackageManagerCommand::Pm(pm_command) => {
+            handlers::run_pm_subcommand_with_pm(cwd, pm_command, pm).await
+        }
     }
 }
 

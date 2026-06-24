@@ -16,6 +16,7 @@ mod http;
 mod json_edit;
 pub mod output;
 mod package_json;
+pub mod passthrough;
 mod path_env;
 pub mod string_similarity;
 mod tls;
@@ -26,6 +27,7 @@ pub use error::format_error_chain;
 pub use home::get_vp_home;
 pub use http::shared_http_client;
 pub use json_edit::{JsonStyle, edit_json_object, insert_after};
+pub use passthrough::{MIN_SUPPORTED_NODE, SUPPORTED_NODE_RANGE, is_node_below_min};
 pub use package_json::{
     DevEngineDependency, DevEngineField, DevEngines, Engines, OnFail, PackageJson, dev_engine_entry,
 };

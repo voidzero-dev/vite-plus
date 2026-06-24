@@ -1,0 +1,5 @@
+{
+  "commands": [
+    "vp run dev # should show passthrough notice and run script"
+  ]
+}
