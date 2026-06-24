@@ -321,6 +321,9 @@ jobs:
             echo "[$pkg]"; echo "$found"
             if echo "$found" | grep -qE "$pattern"; then
               echo "✗ $pkg is not a single instance (override did not dedupe under pnpm)"
+              echo "----- full \`vp why $pkg\` output -----"
+              echo "$out"
+              echo "---------------------------------------"
               fail=1
             else
               echo "✓ $pkg single instance"
