@@ -306,15 +306,18 @@ jobs:
           #   only summarises that package; a standalone upstream copy adds a
           #   "Found <n> version(s) of vite" line.
           # Regression guard for voidzero-dev/vite-plus#1932 (the pnpm dedupe fix).
+          # `-r` checks every workspace package, not just the root importer, so a
+          # duplicate confined to a sub-package (apps/website, packages/utils) is
+          # still caught.
           fail=0
           check() {
             pkg="$1"; pattern="$2"
-            out=$(vp why "$pkg" 2>&1)
+            out=$(vp why -r "$pkg" 2>&1)
             found=$(echo "$out" | grep '^Found' || true)
             echo "[$pkg]"; echo "$found"
             if echo "$found" | grep -qE "$pattern"; then
               echo "✗ $pkg is not a single instance (override did not dedupe under pnpm)"
-              echo "----- full \`vp why $pkg\` output -----"
+              echo "----- full \`vp why -r $pkg\` output -----"
               echo "$out"
               echo "---------------------------------------"
               fail=1
