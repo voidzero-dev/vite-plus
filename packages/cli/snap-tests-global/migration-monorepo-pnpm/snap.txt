@@ -158,7 +158,8 @@ minimumReleaseAgeExclude:
     "lint": "vp lint --fix"
   },
   "devDependencies": {
-    "vite-plus": "catalog:"
+    "vite-plus": "catalog:",
+    "vite": "catalog:"
   }
 }
 

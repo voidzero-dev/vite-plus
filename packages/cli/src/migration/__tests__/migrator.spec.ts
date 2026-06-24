@@ -476,20 +476,20 @@ describe('rewritePackageJson', () => {
     // instead of pnpm auto-installing a separate upstream vite (#1932). yarn/bun
     // redirect the transitive/peer vite via resolutions/overrides, so they do not
     // get a direct `vite` here (the bun workspace root is handled separately).
-    const makePkg = () => ({
-      devDependencies: {
-        '@vitest/browser-playwright': '^4.0.0',
-        playwright: '^1.60.0',
-        vitest: '^4.0.0',
-      },
-    });
-    const pnpmPkg = makePkg();
-    rewritePackageJson(pnpmPkg, PackageManager.pnpm);
-    expect(pnpmPkg.devDependencies).toHaveProperty('vite', VITE_PLUS_OVERRIDE_PACKAGES.vite);
-    for (const pm of [PackageManager.yarn, PackageManager.bun]) {
-      const pkg = makePkg();
+    for (const pm of [PackageManager.pnpm, PackageManager.yarn, PackageManager.bun]) {
+      const pkg: { devDependencies: Record<string, string> } = {
+        devDependencies: {
+          '@vitest/browser-playwright': '^4.0.0',
+          playwright: '^1.60.0',
+          vitest: '^4.0.0',
+        },
+      };
       rewritePackageJson(pkg, pm);
-      expect(pkg.devDependencies).not.toHaveProperty('vite');
+      if (pm === PackageManager.pnpm) {
+        expect(pkg.devDependencies).toHaveProperty('vite', VITE_PLUS_OVERRIDE_PACKAGES.vite);
+      } else {
+        expect(pkg.devDependencies).not.toHaveProperty('vite');
+      }
     }
   });
 

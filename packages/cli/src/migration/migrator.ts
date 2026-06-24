@@ -4110,12 +4110,17 @@ export function rewritePackageJson(
     if (dependsOnVitePlus && !viteAlreadyDirect) {
       pkg.devDependencies = {
         ...pkg.devDependencies,
-        vite: getCatalogDependencySpec(undefined, VITE_PLUS_OVERRIDE_PACKAGES.vite, supportCatalog, {
-          dependencyField: 'devDependencies',
-          dependencyName: 'vite',
-          packageManager,
-          catalogDependencyResolver,
-        }),
+        vite: getCatalogDependencySpec(
+          undefined,
+          VITE_PLUS_OVERRIDE_PACKAGES.vite,
+          supportCatalog,
+          {
+            dependencyField: 'devDependencies',
+            dependencyName: 'vite',
+            packageManager,
+            catalogDependencyResolver,
+          },
+        ),
       };
     }
   }

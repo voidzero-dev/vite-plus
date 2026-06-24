@@ -30,7 +30,8 @@ export default defineConfig({
 {
   "name": "migration-monorepo-skip-vite-peer-dependency",
   "devDependencies": {
-    "vite-plus": "catalog:"
+    "vite-plus": "catalog:",
+    "vite": "catalog:"
   },
   "devEngines": {
     "packageManager": {
@@ -51,6 +52,7 @@ export default defineConfig({
     "vite": "^6.0.0"
   },
   "devDependencies": {
-    "vite-plus": "catalog:"
+    "vite-plus": "catalog:",
+    "vite": "catalog:"
   }
 }

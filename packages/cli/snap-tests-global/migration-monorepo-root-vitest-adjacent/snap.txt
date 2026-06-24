@@ -13,6 +13,7 @@
   "devDependencies": {
     "vitest-browser-svelte": "^2.1.0",
     "vite-plus": "catalog:",
+    "vite": "catalog:",
     "vitest": "catalog:"
   },
   "devEngines": {
