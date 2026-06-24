@@ -1629,8 +1629,8 @@ export function rewriteStandaloneProject(
         [VITE_PLUS_NAME]: version,
       };
     }
-    // #1932: vite-plus may be injected above (after rewritePackageJson ran), so
-    // ensure the direct `vite` here too under pnpm (see ensureDirectViteForPnpm).
+    // This caller injects vite-plus after rewritePackageJson returned, so the
+    // direct-`vite` pass must run here too.
     ensureDirectViteForPnpm(
       pkg,
       packageManager,
@@ -3042,8 +3042,6 @@ function rewriteRootWorkspacePackageJson(
             : 'catalog:',
       };
     }
-    // #1932: the root depends on vite-plus too, so under pnpm it needs a direct
-    // `vite` for the override to bind vitest's peer (see ensureDirectViteForPnpm).
     ensureDirectViteForPnpm(pkg, packageManager, true);
     return pkg;
   });
@@ -4137,8 +4135,6 @@ export function rewritePackageJson(
       [VITE_PLUS_NAME]: canonicalVitePlusSpec,
     };
   }
-  // #1932: under pnpm, a package that depends on vite-plus needs a direct `vite`
-  // so the override binds vitest's peer (see ensureDirectViteForPnpm).
   ensureDirectViteForPnpm(pkg, packageManager, supportCatalog);
   // Add `vitest` as a direct devDependency when:
   //  - a remaining dependency likely peer-depends on vitest (e.g.
