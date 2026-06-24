@@ -195,6 +195,13 @@ jobs:
       # `YN0016 ... are quarantined`. The migrate tool is version-pinned to the
       # bundled oxlint, so disable the gate for this test (no-op for npm/pnpm/bun).
       YARN_NPM_MINIMAL_AGE_GATE: '0'
+      # pnpm 11's default `minimumReleaseAge` (~24h) makes the bundled vitest's
+      # auto-installed `vite` peer resolve to the previous upstream release,
+      # which can predate vite's `@voidzero-dev/vite-task-client` integration and
+      # surface a false `vp test` cache miss in "Verify cache". Force 0 so the
+      # latest vite (with the integration) is used. pnpm-only (no-op elsewhere).
+      # Temporary band-aid; real fix tracked in voidzero-dev/vite-plus#1932.
+      PNPM_CONFIG_MINIMUM_RELEASE_AGE: '0'
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
