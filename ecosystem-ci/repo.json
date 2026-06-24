@@ -2,7 +2,7 @@
   "dify": {
     "repository": "https://github.com/langgenius/dify.git",
     "branch": "main",
-    "hash": "49c97a3f6152d9a5ced1975e95186bd5b2d156e5",
+    "hash": "50b3228bc7b26c9f501008916f60a6fa2dfb6e3e",
     "directory": "web",
     "forceFreshMigration": true
   },

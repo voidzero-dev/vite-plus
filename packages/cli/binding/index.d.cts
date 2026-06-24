@@ -1184,97 +1184,6 @@ export interface PluginsOptions {
   taggedTemplateEscape?: boolean;
 }
 
-/** Dynamic gating for {@link ReactCompilerOptions#dynamicGating}. */
-export interface ReactCompilerDynamicGating {
-  /** Module the gating import comes from. */
-  source: string;
-}
-
-/** Static gating for {@link ReactCompilerOptions#gating}. */
-export interface ReactCompilerGating {
-  /** Module the gating import comes from. */
-  source: string;
-  /** Imported specifier used as the gate. */
-  importSpecifierName: string;
-}
-
-/**
- * Options for the experimental [React Compiler](https://github.com/facebook/react/pull/36173).
- *
- * Mirrors the compiler's `PluginOptions`. The deep `environment` configuration
- * (inference / validation flags) is not surfaced here.
- *
- * @see {@link TransformOptions#reactCompiler}
- */
-export interface ReactCompilerOptions {
-  /**
-   * Which functions to compile.
-   *
-   * @default 'infer'
-   */
-  compilationMode?: 'infer' | 'syntax' | 'annotation' | 'all';
-  /**
-   * What to do when a function cannot be compiled.
-   *
-   * @default 'none'
-   */
-  panicThreshold?: 'none' | 'critical_errors' | 'all_errors';
-  /**
-   * React runtime version target. `17` and `18` require the
-   * `react-compiler-runtime` package; `19` ships the runtime in `react`.
-   *
-   * @default '19'
-   */
-  target?: '17' | '18' | '19';
-  /**
-   * Analyze and report diagnostics only; emit no transformed code.
-   *
-   * @default false
-   */
-  noEmit?: boolean;
-  /**
-   * Compiler output mode.
-   *
-   * @default undefined
-   */
-  outputMode?: 'client' | 'ssr' | 'lint';
-  /**
-   * Compile even functions marked with the `"use no memo"` / `"use no forget"`
-   * opt-out directives.
-   *
-   * @default false
-   */
-  ignoreUseNoForget?: boolean;
-  /**
-   * Treat Flow suppression comments as opt-outs.
-   *
-   * @default true
-   */
-  flowSuppressions?: boolean;
-  /**
-   * Enable `react-native-reanimated` support.
-   *
-   * @default false
-   */
-  enableReanimated?: boolean;
-  /**
-   * Development mode (extra validation / instrumentation).
-   *
-   * @default false
-   */
-  isDev?: boolean;
-  /** Source file name, used for the fast-refresh hash and in diagnostics. */
-  filename?: string;
-  /** ESLint rules whose suppressions opt a function out of compilation. */
-  eslintSuppressionRules?: Array<string>;
-  /** Extra directives that opt a function out of compilation. */
-  customOptOutDirectives?: Array<string>;
-  /** Also emit a gated (feature-flagged) version of each compiled function. */
-  gating?: ReactCompilerGating;
-  /** Dynamically-gated compilation. */
-  dynamicGating?: ReactCompilerDynamicGating;
-}
-
 export interface ReactRefreshOptions {
   /**
    * Specify the identifier of the refresh registration variable.
@@ -1322,7 +1231,10 @@ export interface StyledComponentsOptions {
    * Transpiles styled-components tagged template literals to a smaller representation
    * than what Babel normally creates, helping to reduce bundle size.
    *
-   * @default true
+   * Disabled by default because Oxc does not down-level template literals, so this
+   * transform only increases output size.
+   *
+   * @default false
    */
   transpileTemplateLiterals?: boolean;
   /**
@@ -1393,6 +1305,13 @@ export declare function transform(
 /**
  * Options for transforming a JavaScript or TypeScript file.
  *
+ * Options are listed in evaluation order: the source is parsed (`lang`,
+ * `sourceType`), declarations are emitted (`typescript.declaration`), then
+ * transforms run (`typescript`, `decorator`, `plugins`,
+ * `jsx`, `target`), followed by the `inject` and `define` plugins, and
+ * finally codegen (`sourcemap`). `helpers` configures the runtime helpers
+ * the transforms emit.
+ *
  * @see {@link transform}
  */
 export interface TransformOptions {
@@ -1405,23 +1324,23 @@ export interface TransformOptions {
    * options.
    */
   cwd?: string;
-  /**
-   * Enable source map generation.
-   *
-   * When `true`, the `sourceMap` field of transform result objects will be populated.
-   *
-   * @default false
-   *
-   * @see {@link SourceMap}
-   */
-  sourcemap?: boolean;
   /** Set assumptions in order to produce smaller output. */
   assumptions?: CompilerAssumptions;
   /**
    * Configure how TypeScript is transformed.
+   *
+   * `typescript.declaration` is evaluated before all transforms.
+   *
    * @see {@link https://oxc.rs/docs/guide/usage/transformer/typescript}
    */
   typescript?: TypeScriptOptions;
+  /** Decorator plugin */
+  decorator?: DecoratorOptions;
+  /**
+   * Third-party plugins to use.
+   * @see {@link https://oxc.rs/docs/guide/usage/transformer/plugins}
+   */
+  plugins?: PluginsOptions;
   /**
    * Configure how TSX and JSX are transformed.
    * @see {@link https://oxc.rs/docs/guide/usage/transformer/jsx}
@@ -1445,30 +1364,31 @@ export interface TransformOptions {
   /** Behaviour for runtime helpers. */
   helpers?: Helpers;
   /**
+   * Inject Plugin
+   *
+   * Runs after all transforms.
+   *
+   * @see {@link https://oxc.rs/docs/guide/usage/transformer/global-variable-replacement#inject}
+   */
+  inject?: Record<string, string | [string, string]>;
+  /**
    * Define Plugin
+   *
+   * Runs after the inject plugin.
+   *
    * @see {@link https://oxc.rs/docs/guide/usage/transformer/global-variable-replacement#define}
    */
   define?: Record<string, string>;
   /**
-   * Inject Plugin
-   * @see {@link https://oxc.rs/docs/guide/usage/transformer/global-variable-replacement#inject}
-   */
-  inject?: Record<string, string | [string, string]>;
-  /** Decorator plugin */
-  decorator?: DecoratorOptions;
-  /**
-   * Enable the experimental [React Compiler](https://github.com/facebook/react/pull/36173).
+   * Enable source map generation.
    *
-   * `true` enables it with default options; an object enables it with the
-   * given options; `false` or omitted disables it. When enabled, the compiler
-   * runs as the first transform and memoizes React components and hooks.
+   * When `true`, the `sourceMap` field of transform result objects will be populated.
+   *
+   * @default false
+   *
+   * @see {@link SourceMap}
    */
-  reactCompiler?: boolean | ReactCompilerOptions;
-  /**
-   * Third-party plugins to use.
-   * @see {@link https://oxc.rs/docs/guide/usage/transformer/plugins}
-   */
-  plugins?: PluginsOptions;
+  sourcemap?: boolean;
 }
 
 export interface TransformResult {
@@ -2076,7 +1996,6 @@ export declare const enum BindingBuiltinPluginName {
   ViteReporter = 'builtin:vite-reporter',
   ViteResolve = 'builtin:vite-resolve',
   ViteTransform = 'builtin:vite-transform',
-  ViteWasmFallback = 'builtin:vite-wasm-fallback',
   ViteWebWorkerPost = 'builtin:vite-web-worker-post',
   OxcRuntime = 'builtin:oxc-runtime',
 }
@@ -2095,7 +2014,16 @@ export interface BindingBundlerOptions {
 }
 
 export interface BindingBundleState {
-  lastFullBuildFailed: boolean;
+  lastBuildErrored: boolean;
+  /**
+   * The stage of the last incremental failure, when `last_build_errored`
+   * is true and the engine is in an incremental-failure state. Absent on
+   * success and for an initial full-build failure (use
+   * `last_build_errored` to detect that). The consumer can force a full
+   * rebuild on the next page load when this is `Hmr`. See
+   * `internal-docs/dev-engine/implementation.md` §12.
+   */
+  lastErrorStage?: BindingErrorStage;
   hasStaleOutput: boolean;
 }
 
@@ -2364,6 +2292,20 @@ export interface BindingErrors {
   isBindingErrors: boolean;
 }
 
+/**
+ * Which stage of an incremental dev build produced the last error.
+ *
+ * Mirrors `rolldown_dev::ErrorStage`. Surfaced on
+ * [`crate::binding_dev_engine::BindingBundleState`] so the consumer can
+ * treat an `Hmr`-stage failure as recoverable by forcing a full rebuild
+ * on the next page load (HMR generation may itself be buggy). See
+ * `internal-docs/dev-engine/implementation.md` §12.
+ */
+export declare const enum BindingErrorStage {
+  Hmr = 'Hmr',
+  Rebuild = 'Rebuild',
+}
+
 export interface BindingEsmExternalRequirePluginConfig {
   external: Array<BindingStringOrRegex>;
   skipDuplicateCheck?: boolean;
@@ -2510,6 +2452,8 @@ export interface BindingIndentOptions {
   exclude?: Array<Array<number>> | Array<number>;
 }
 
+export type BindingInjectImport = BindingInjectImportNamed | BindingInjectImportNamespace;
+
 export interface BindingInjectImportNamed {
   tagNamed: true;
   imported: string;
@@ -2549,7 +2493,7 @@ export interface BindingInputOptions {
   moduleTypes?: Record<string, string>;
   define?: Array<[string, string]>;
   dropLabels?: Array<string>;
-  inject?: Array<BindingInjectImportNamed | BindingInjectImportNamespace>;
+  inject?: Array<BindingInjectImport>;
   experimental?: BindingExperimentalOptions;
   profilerNames?: boolean;
   transform?: TransformOptions;
@@ -2667,7 +2611,7 @@ export interface BindingModules {
 export interface BindingModuleSideEffectsRule {
   test?: RegExp | undefined;
   sideEffects: boolean;
-  external?: boolean | undefined;
+  external?: boolean;
 }
 
 export interface BindingOptimization {
@@ -3006,6 +2950,13 @@ export interface BindingTsconfigCompilerOptions {
   experimentalDecorators?: boolean;
   /** Enables decorator metadata emission. */
   emitDecoratorMetadata?: boolean;
+  /** Enables all strict type-checking options. Used as the fallback for `strictNullChecks`. */
+  strict?: boolean;
+  /**
+   * Enables strict null checks. Controls whether `null`/`undefined` are elided from
+   * nullable-union `design:type` decorator metadata.
+   */
+  strictNullChecks?: boolean;
   /** Preserves module structure of imports/exports. */
   verbatimModuleSyntax?: boolean;
   /** Configures how class fields are emitted. */
