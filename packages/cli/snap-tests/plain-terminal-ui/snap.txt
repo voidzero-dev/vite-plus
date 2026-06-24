@@ -11,17 +11,17 @@ input_content 1
 vp run: cache hit, <variable>ms saved.
 
 > FOO=2 vp run hello # env changed
-$ node hello.mjs ○ cache miss: envs changed, executing
+$ node hello.mjs ○ cache miss: env 'FOO' changed, executing
 input_content 2
 
 
 > FOO=2 BAR=1 vp run hello # env added
-$ node hello.mjs ○ cache miss: envs changed, executing
+$ node hello.mjs ○ cache miss: env 'BAR' changed, executing
 input_content 2
 
 
 > vp run hello # env removed
-$ node hello.mjs ○ cache miss: envs changed, executing
+$ node hello.mjs ○ cache miss: envs 'BAR', 'FOO' changed, executing
 input_content undefined
 
 

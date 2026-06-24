@@ -1,0 +1,6 @@
+{
+  "commands": [
+    "vp run fmt # first run populates the cache",
+    "vp run fmt # second run should be a cache hit"
+  ]
+}
