@@ -1550,7 +1550,7 @@ describe('ensureVitePlusBootstrap', () => {
     const savedForceMigrate = process.env.VP_FORCE_MIGRATE;
     const savedViteOverride = VITE_PLUS_OVERRIDE_PACKAGES.vite;
     const viteOverride =
-      'https://pkg.pr.new/voidzero-dev/vite-plus/@voidzero-dev/vite-plus-core@1891';
+      'https://pkg.pr.new/voidzero-dev/vite-plus/@voidzero-dev/vite-plus-core@0c515e3fbf5c140db35280d700df0bd600838617';
     process.env.VP_FORCE_MIGRATE = '1';
     VITE_PLUS_OVERRIDE_PACKAGES.vite = viteOverride;
     try {

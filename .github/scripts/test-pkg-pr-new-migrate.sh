@@ -66,17 +66,11 @@ original_home="$HOME"
 cache_root="${XDG_CACHE_HOME:-$original_home/.cache}"
 pr_home="${VP_PKG_PR_NEW_HOME:-$cache_root/vite-plus/pkg-pr-new/$pr_ref}"
 installer_home="$(mktemp -d "${TMPDIR:-/tmp}/vite-plus-pr-installer.XXXXXX")"
-cached_version_dir="$pr_home/pkg-pr-new-$pr_ref"
-vp_bin="$pr_home/bin/vp"
-vite_plus_package_json="$pr_home/current/node_modules/vite-plus/package.json"
-global_cli_entry="$pr_home/current/node_modules/vite-plus/dist/bin.js"
-commit_marker="$cached_version_dir/.pkg-pr-new-commit"
 pkg_pr_new_base="https://pkg.pr.new/voidzero-dev/vite-plus"
-vite_plus_spec="$pkg_pr_new_base@$pr_ref"
-vite_plus_core_spec="$pkg_pr_new_base/@voidzero-dev/vite-plus-core@$pr_ref"
+requested_vite_plus_spec="$pkg_pr_new_base@$pr_ref"
 
 resolve_pkg_pr_new_commit() {
-  curl -fsSIL "$vite_plus_spec" | tr -d '\r' | awk -F ': ' '
+  curl -fsSIL "$requested_vite_plus_spec" | tr -d '\r' | awk -F ': ' '
     tolower($1) == "x-commit-key" {
       count = split($2, parts, ":")
       print parts[count]
@@ -84,6 +78,32 @@ resolve_pkg_pr_new_commit() {
     }
   '
 }
+
+available_commit="$(resolve_pkg_pr_new_commit || true)"
+case "$available_commit" in
+  '' | *[!0-9a-fA-F]*)
+    echo "error: could not resolve an immutable pkg.pr.new commit for $pr_ref" >&2
+    exit 1
+    ;;
+esac
+if [ "${#available_commit}" -ne 40 ]; then
+  echo "error: pkg.pr.new returned an invalid commit for $pr_ref: $available_commit" >&2
+  exit 1
+fi
+
+# PR-number URLs are mutable and pkg.pr.new packages reference their internal
+# workspace dependencies by commit SHA. Persisting the PR URL alongside those
+# SHA URLs makes package managers install duplicate copies of the same package.
+# Resolve once, then use the immutable SHA for the global install and every
+# dependency spec written by migration.
+resolved_ref="$available_commit"
+cached_version_dir="$pr_home/pkg-pr-new-$resolved_ref"
+vp_bin="$pr_home/bin/vp"
+vite_plus_package_json="$pr_home/current/node_modules/vite-plus/package.json"
+global_cli_entry="$pr_home/current/node_modules/vite-plus/dist/bin.js"
+commit_marker="$cached_version_dir/.pkg-pr-new-commit"
+vite_plus_spec="$pkg_pr_new_base@$resolved_ref"
+vite_plus_core_spec="$pkg_pr_new_base/@voidzero-dev/vite-plus-core@$resolved_ref"
 
 read_installed_commit() {
   if [ -f "$commit_marker" ]; then
@@ -103,14 +123,12 @@ read_installed_commit() {
   fi
 }
 
-available_commit="$(resolve_pkg_pr_new_commit || true)"
 installed_commit="$(read_installed_commit || true)"
 current_target="$(readlink "$pr_home/current" 2>/dev/null || true)"
 reuse_install=0
 
-if [ -n "$available_commit" ] &&
-  [ "$installed_commit" = "$available_commit" ] &&
-  [ "$current_target" = "pkg-pr-new-$pr_ref" ] &&
+if [ "$installed_commit" = "$resolved_ref" ] &&
+  [ "$current_target" = "pkg-pr-new-$resolved_ref" ] &&
   [ -x "$vp_bin" ] &&
   [ -f "$vite_plus_package_json" ] &&
   [ -f "$global_cli_entry" ]; then
@@ -123,38 +141,36 @@ cleanup() {
 trap cleanup EXIT
 
 if [ "$reuse_install" -eq 1 ]; then
-  printf '%s\n' "$available_commit" > "$commit_marker"
-  echo "Reusing installed Vite+ pkg.pr.new build $pr_ref ($available_commit) from $pr_home"
+  printf '%s\n' "$resolved_ref" > "$commit_marker"
+  echo "Reusing installed Vite+ pkg.pr.new build $resolved_ref (requested $pr_ref) from $pr_home"
 else
-  if [ -z "$available_commit" ]; then
-    echo "Could not verify the current pkg.pr.new commit; reinstalling $pr_ref."
+  if [ -n "$installed_commit" ] && [ "$installed_commit" != "$resolved_ref" ]; then
+    echo "pkg.pr.new build changed: $installed_commit -> $resolved_ref"
   elif [ -n "$installed_commit" ]; then
-    echo "pkg.pr.new build changed: $installed_commit -> $available_commit"
+    echo "Reinstalling pkg.pr.new build $resolved_ref with an immutable cache key"
   fi
 
-  # Numeric pkg.pr.new references are mutable PR aliases. If the published
-  # commit changed, the reused lockfile can retain the checksum from the older
-  # tarball and fail with ERR_PNPM_TARBALL_INTEGRITY. Keep the downloaded
-  # runtime/package-manager cache, but force the wrapper dependency to resolve
-  # again. Commit SHA references are immutable and use their own cache path.
-  case "$pr_ref" in
-    *[!0-9]*) ;;
-    *)
-      rm -rf "$cached_version_dir/node_modules"
-      rm -f "$cached_version_dir/pnpm-lock.yaml"
-      ;;
-  esac
+  # This helper owns a dedicated VP_HOME for each requested PR/ref. Remember
+  # the previous immutable install so it can be removed only after the new one
+  # succeeds, while retaining shared runtime and package-manager caches.
+  previous_target=""
+  if [ -n "$current_target" ] && [ "$current_target" != "pkg-pr-new-$resolved_ref" ]; then
+    case "$current_target" in
+      pkg-pr-new-*) previous_target="$current_target" ;;
+    esac
+  fi
 
-  echo "Installing Vite+ pkg.pr.new build $pr_ref into $pr_home"
+  echo "Installing Vite+ pkg.pr.new build $resolved_ref (requested $pr_ref) into $pr_home"
   HOME="$installer_home" \
     VP_HOME="$pr_home" \
-    VP_PR_VERSION="$pr_ref" \
+    VP_PR_VERSION="$resolved_ref" \
     VP_NODE_MANAGER=no \
     bash "$installer"
 
-  if [ -n "$available_commit" ]; then
-    printf '%s\n' "$available_commit" > "$commit_marker"
+  if [ -n "$previous_target" ]; then
+    rm -rf "$pr_home/$previous_target"
   fi
+  printf '%s\n' "$resolved_ref" > "$commit_marker"
 fi
 
 if [ ! -x "$vp_bin" ]; then
@@ -195,6 +211,8 @@ hash -r
 
 echo
 echo "Using isolated global CLI:"
+echo "  requested ref: $pr_ref"
+echo "  resolved commit: $resolved_ref"
 echo "  executable: $vp_bin"
 echo "  installation: $(readlink "$pr_home/current" 2>/dev/null || echo unknown)"
 echo "  vite-plus spec: $VP_VERSION"

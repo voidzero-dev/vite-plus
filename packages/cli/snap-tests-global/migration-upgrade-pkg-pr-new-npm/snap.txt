@@ -3,15 +3,15 @@
 • Node <semver>  npm <semver>
 • 2 config updates applied
 
-> cat package.json # direct dependencies and npm overrides use the same PR URLs
+> cat package.json # direct dependencies and npm overrides use the same immutable commit URLs
 {
   "name": "migration-upgrade-pkg-pr-new-npm",
   "devDependencies": {
-    "vite": "https://pkg.pr.new/voidzero-dev/vite-plus/@voidzero-dev/vite-plus-core@1891",
-    "vite-plus": "https://pkg.pr.new/voidzero-dev/vite-plus@1891"
+    "vite": "https://pkg.pr.new/voidzero-dev/vite-plus/@voidzero-dev/vite-plus-core@0c515e3fbf5c140db35280d700df0bd600838617",
+    "vite-plus": "https://pkg.pr.new/voidzero-dev/vite-plus@0c515e3fbf5c140db35280d700df0bd600838617"
   },
   "overrides": {
-    "vite": "https://pkg.pr.new/voidzero-dev/vite-plus/@voidzero-dev/vite-plus-core@1891"
+    "vite": "https://pkg.pr.new/voidzero-dev/vite-plus/@voidzero-dev/vite-plus-core@0c515e3fbf5c140db35280d700df0bd600838617"
   },
   "packageManager": "npm@<semver>",
   "scripts": {
@@ -19,7 +19,7 @@
   }
 }
 
-> node -e "const p = require('./package.json'); const vp = 'https://pkg.pr.new/voidzero-dev/vite-plus@1891'; const core = 'https://pkg.pr.new/voidzero-dev/vite-plus/@voidzero-dev/vite-plus-core@1891'; if (p.devDependencies['vite-plus'] !== vp || p.devDependencies.vite !== core || p.overrides.vite !== core || p.overrides['@voidzero-dev/vite-plus-core'] !== undefined) process.exit(1)" # pkg.pr.new specs use the minimal override shape
+> node -e "const p = require('./package.json'); const sha = '0c515e3fbf5c140db35280d700df0bd600838617'; const vp = 'https://pkg.pr.new/voidzero-dev/vite-plus@' + sha; const core = 'https://pkg.pr.new/voidzero-dev/vite-plus/@voidzero-dev/vite-plus-core@' + sha; if (p.devDependencies['vite-plus'] !== vp || p.devDependencies.vite !== core || p.overrides.vite !== core || p.overrides['@voidzero-dev/vite-plus-core'] !== undefined || JSON.stringify(p).includes('@1891')) process.exit(1)" # pkg.pr.new specs use one immutable commit and the minimal override shape
 > node -e "require('node:fs').copyFileSync('package.json', 'package.after-first-migration.json')" # capture first migration result
 > vp migrate --no-interactive # pkg.pr.new migration is idempotent
 ◇ Migrated . to Vite+
