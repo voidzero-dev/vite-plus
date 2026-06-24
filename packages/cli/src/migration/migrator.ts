@@ -1635,7 +1635,6 @@ export function rewriteStandaloneProject(
       pkg,
       packageManager,
       usePnpmWorkspaceYaml && packageManager !== PackageManager.npm,
-      catalogDependencyResolver,
     );
     return pkg;
   });
@@ -2592,7 +2591,6 @@ function ensureDirectViteForPnpm(
   },
   packageManager: PackageManager,
   supportCatalog: boolean,
-  catalogDependencyResolver?: CatalogDependencyResolver,
 ): boolean {
   const viteOverride = VITE_PLUS_OVERRIDE_PACKAGES.vite;
   if (packageManager !== PackageManager.pnpm || !viteOverride) {
@@ -2609,15 +2607,12 @@ function ensureDirectViteForPnpm(
   if (!dependsOnVitePlus || viteAlreadyDirect) {
     return false;
   }
-  pkg.devDependencies = {
-    ...pkg.devDependencies,
-    vite: getCatalogDependencySpec(undefined, viteOverride, supportCatalog, {
-      dependencyField: 'devDependencies',
-      dependencyName: 'vite',
-      packageManager,
-      catalogDependencyResolver,
-    }),
-  };
+  // The catalog-vs-alias choice is driven entirely by supportCatalog and the
+  // (file:/npm:) override spec; the extra getCatalogDependencySpec options only
+  // matter for an existing value or a peerDependencies field, neither of which
+  // applies here (we only reach this for a fresh devDependencies entry).
+  pkg.devDependencies ??= {};
+  pkg.devDependencies.vite = getCatalogDependencySpec(undefined, viteOverride, supportCatalog);
   return true;
 }
 
@@ -3049,7 +3044,7 @@ function rewriteRootWorkspacePackageJson(
     }
     // #1932: the root depends on vite-plus too, so under pnpm it needs a direct
     // `vite` for the override to bind vitest's peer (see ensureDirectViteForPnpm).
-    ensureDirectViteForPnpm(pkg, packageManager, true, catalogDependencyResolver);
+    ensureDirectViteForPnpm(pkg, packageManager, true);
     return pkg;
   });
 
@@ -4144,7 +4139,7 @@ export function rewritePackageJson(
   }
   // #1932: under pnpm, a package that depends on vite-plus needs a direct `vite`
   // so the override binds vitest's peer (see ensureDirectViteForPnpm).
-  ensureDirectViteForPnpm(pkg, packageManager, supportCatalog, catalogDependencyResolver);
+  ensureDirectViteForPnpm(pkg, packageManager, supportCatalog);
   // Add `vitest` as a direct devDependency when:
   //  - a remaining dependency likely peer-depends on vitest (e.g.
   //    vitest-browser-svelte), OR
