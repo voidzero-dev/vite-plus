@@ -1,0 +1,7 @@
+{
+  "name": "vite-plugins-run-verbatim-build-test",
+  "private": true,
+  "scripts": {
+    "build": "node build.mjs"
+  }
+}

@@ -45,7 +45,6 @@ if (args[0] === 'help' && args[1]) {
 }
 
 const command = args[0];
-process.env.VP_COMMAND = command ?? '';
 
 // Global commands — handled by tsdown-bundled modules in dist/
 if (command === 'create') {
