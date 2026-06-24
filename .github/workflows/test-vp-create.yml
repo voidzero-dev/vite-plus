@@ -300,6 +300,41 @@ jobs:
             esac
           fi
 
+      - name: Verify single dependency instances (pnpm only)
+        if: matrix.package-manager == 'pnpm'
+        working-directory: ${{ runner.temp }}/test-project
+        run: |
+          # The `vite` override must dedupe vite-plus / vite / vitest to a single
+          # instance each. When a peer variation splits the graph (e.g. an upstream
+          # `vite` auto-installed to satisfy vitest's peer in a package without a
+          # direct `vite` dep), `vp why` reports multiple instances. Detection:
+          # - vite-plus / vitest: a split prints "Found 1 version, N instances of <pkg>".
+          # - vite: it is overridden to @voidzero-dev/vite-plus-core, so a clean tree
+          #   only summarises that package; a standalone upstream copy adds a
+          #   "Found <n> version(s) of vite" line.
+          # Tracks voidzero-dev/vite-plus#1932 (currently expected to fail for monorepo).
+          fail=0
+          check() {
+            pkg="$1"; pattern="$2"
+            out=$(vp why "$pkg" 2>&1)
+            found=$(echo "$out" | grep '^Found' || true)
+            echo "[$pkg]"; echo "$found"
+            if echo "$found" | grep -qE "$pattern"; then
+              echo "✗ $pkg is not a single instance (override did not dedupe under pnpm)"
+              fail=1
+            else
+              echo "✓ $pkg single instance"
+            fi
+          }
+          check vite-plus 'instances of vite-plus'
+          check vitest 'instances of vitest'
+          check vite 'of vite$'
+          if [ "$fail" -ne 0 ]; then
+            echo "Expected vite-plus, vite, and vitest to each resolve to a single instance."
+            exit 1
+          fi
+          echo "✓ vite-plus, vite, vitest are all single instances"
+
       - name: Verify local tgz packages installed
         working-directory: ${{ runner.temp }}/test-project
         run: |
