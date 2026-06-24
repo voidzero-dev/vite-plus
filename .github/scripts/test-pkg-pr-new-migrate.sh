@@ -66,42 +66,100 @@ original_home="$HOME"
 cache_root="${XDG_CACHE_HOME:-$original_home/.cache}"
 pr_home="${VP_PKG_PR_NEW_HOME:-$cache_root/vite-plus/pkg-pr-new/$pr_ref}"
 installer_home="$(mktemp -d "${TMPDIR:-/tmp}/vite-plus-pr-installer.XXXXXX")"
+cached_version_dir="$pr_home/pkg-pr-new-$pr_ref"
+vp_bin="$pr_home/bin/vp"
+vite_plus_package_json="$pr_home/current/node_modules/vite-plus/package.json"
+commit_marker="$cached_version_dir/.pkg-pr-new-commit"
+pkg_pr_new_base="https://pkg.pr.new/voidzero-dev/vite-plus"
+vite_plus_spec="$pkg_pr_new_base@$pr_ref"
+vite_plus_core_spec="$pkg_pr_new_base/@voidzero-dev/vite-plus-core@$pr_ref"
 
-# Numeric pkg.pr.new references are mutable PR aliases. The installer reuses a
-# version directory named after the reference, so its lockfile can retain the
-# checksum from an older publish of the same PR and fail with
-# ERR_PNPM_TARBALL_INTEGRITY after the alias is refreshed. Keep the downloaded
-# runtime/package-manager cache, but force the wrapper dependency to resolve
-# and install again for every PR-alias run. Commit SHA references are immutable
-# and can safely retain their installed dependency state.
-case "$pr_ref" in
-  *[!0-9]*) ;;
-  *)
-    cached_version_dir="$pr_home/pkg-pr-new-$pr_ref"
-    rm -rf "$cached_version_dir/node_modules"
-    rm -f "$cached_version_dir/pnpm-lock.yaml"
-    ;;
-esac
+resolve_pkg_pr_new_commit() {
+  curl -fsSIL "$vite_plus_spec" | tr -d '\r' | awk -F ': ' '
+    tolower($1) == "x-commit-key" {
+      count = split($2, parts, ":")
+      print parts[count]
+      exit
+    }
+  '
+}
+
+read_installed_commit() {
+  if [ -f "$commit_marker" ]; then
+    head -n 1 "$commit_marker"
+    return
+  fi
+
+  if [ -f "$vite_plus_package_json" ]; then
+    awk -F '"' '
+      $2 == "@voidzero-dev/vite-plus-core" {
+        value = $4
+        sub(/^.*@/, "", value)
+        print value
+        exit
+      }
+    ' "$vite_plus_package_json"
+  fi
+}
+
+available_commit="$(resolve_pkg_pr_new_commit || true)"
+installed_commit="$(read_installed_commit || true)"
+current_target="$(readlink "$pr_home/current" 2>/dev/null || true)"
+reuse_install=0
+
+if [ -n "$available_commit" ] &&
+  [ "$installed_commit" = "$available_commit" ] &&
+  [ "$current_target" = "pkg-pr-new-$pr_ref" ] &&
+  [ -x "$vp_bin" ] &&
+  [ -f "$vite_plus_package_json" ]; then
+  reuse_install=1
+fi
 
 cleanup() {
   rm -rf "$installer_home"
 }
 trap cleanup EXIT
 
-echo "Installing Vite+ pkg.pr.new build $pr_ref into $pr_home"
-HOME="$installer_home" \
-  VP_HOME="$pr_home" \
-  VP_PR_VERSION="$pr_ref" \
-  VP_NODE_MANAGER=no \
-  bash "$installer"
+if [ "$reuse_install" -eq 1 ]; then
+  printf '%s\n' "$available_commit" > "$commit_marker"
+  echo "Reusing installed Vite+ pkg.pr.new build $pr_ref ($available_commit) from $pr_home"
+else
+  if [ -z "$available_commit" ]; then
+    echo "Could not verify the current pkg.pr.new commit; reinstalling $pr_ref."
+  elif [ -n "$installed_commit" ]; then
+    echo "pkg.pr.new build changed: $installed_commit -> $available_commit"
+  fi
 
-vp_bin="$pr_home/bin/vp"
+  # Numeric pkg.pr.new references are mutable PR aliases. If the published
+  # commit changed, the reused lockfile can retain the checksum from the older
+  # tarball and fail with ERR_PNPM_TARBALL_INTEGRITY. Keep the downloaded
+  # runtime/package-manager cache, but force the wrapper dependency to resolve
+  # again. Commit SHA references are immutable and use their own cache path.
+  case "$pr_ref" in
+    *[!0-9]*) ;;
+    *)
+      rm -rf "$cached_version_dir/node_modules"
+      rm -f "$cached_version_dir/pnpm-lock.yaml"
+      ;;
+  esac
+
+  echo "Installing Vite+ pkg.pr.new build $pr_ref into $pr_home"
+  HOME="$installer_home" \
+    VP_HOME="$pr_home" \
+    VP_PR_VERSION="$pr_ref" \
+    VP_NODE_MANAGER=no \
+    bash "$installer"
+
+  if [ -n "$available_commit" ]; then
+    printf '%s\n' "$available_commit" > "$commit_marker"
+  fi
+fi
+
 if [ ! -x "$vp_bin" ]; then
   echo "error: installed vp executable not found: $vp_bin" >&2
   exit 1
 fi
 
-vite_plus_package_json="$pr_home/current/node_modules/vite-plus/package.json"
 if [ ! -f "$vite_plus_package_json" ]; then
   echo "error: installed vite-plus package not found: $vite_plus_package_json" >&2
   exit 1
@@ -112,10 +170,6 @@ if [ -z "$vitest_version" ]; then
   echo "error: could not determine the bundled Vitest version from $vite_plus_package_json" >&2
   exit 1
 fi
-
-pkg_pr_new_base="https://pkg.pr.new/voidzero-dev/vite-plus"
-vite_plus_spec="$pkg_pr_new_base@$pr_ref"
-vite_plus_core_spec="$pkg_pr_new_base/@voidzero-dev/vite-plus-core@$pr_ref"
 
 export VP_HOME="$pr_home"
 export PATH="$VP_HOME/bin:$PATH"
