@@ -83,8 +83,8 @@ Documentation: https://viteplus.dev/guide/migrate
 {
   "name": "migration-lintstagedrc",
   "devDependencies": {
-    "vite-plus": "catalog:",
-    "vite": "catalog:"
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
   },
   "devEngines": {
     "packageManager": {

@@ -214,6 +214,8 @@ describe('rewritePackageJson', () => {
       };
       rewritePackageJson(sub, PackageManager.pnpm, true);
       expect(sub.devDependencies.vite).toBe('catalog:');
+      // inserted in sorted position (oxfmt sorts package.json), not appended
+      expect(Object.keys(sub.devDependencies)).toEqual(['vite', 'vite-plus']);
 
       // standalone (no catalog) -> mirror the override target directly
       const standalone: { devDependencies: Record<string, string> } = {

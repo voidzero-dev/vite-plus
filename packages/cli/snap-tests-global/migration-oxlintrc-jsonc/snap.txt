@@ -40,8 +40,8 @@ export default defineConfig({
 > cat package.json # check package.json
 {
   "devDependencies": {
-    "vite-plus": "catalog:",
-    "vite": "catalog:"
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
   },
   "devEngines": {
     "packageManager": {

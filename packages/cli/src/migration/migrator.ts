@@ -2611,8 +2611,14 @@ function ensureDirectViteForPnpm(
   // (file:/npm:) override spec; the extra getCatalogDependencySpec options only
   // matter for an existing value or a peerDependencies field, neither of which
   // applies here (we only reach this for a fresh devDependencies entry).
-  pkg.devDependencies ??= {};
-  pkg.devDependencies.vite = getCatalogDependencySpec(undefined, viteOverride, supportCatalog);
+  const viteSpec = getCatalogDependencySpec(undefined, viteOverride, supportCatalog);
+  // Insert `vite` in sorted position rather than appending it: oxfmt sorts
+  // package.json dependencies and `vp migrate` has no later format pass, so an
+  // out-of-order key would fail a follow-up `vp check`.
+  const entries: [string, string][] = Object.entries(pkg.devDependencies ?? {});
+  const insertAt = entries.findIndex(([name]) => name > 'vite');
+  entries.splice(insertAt === -1 ? entries.length : insertAt, 0, ['vite', viteSpec]);
+  pkg.devDependencies = Object.fromEntries(entries);
   return true;
 }
 
