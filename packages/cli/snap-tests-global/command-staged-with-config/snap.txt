@@ -21,7 +21,7 @@
 
 > git add -A && git commit -m 'second'
 > echo 'export const bar = 2;' >> src/index.ts && git add src/index.ts
-> vp staged --debug > /dev/null 2>&1 # should succeed with debug enabled
+> vp staged --debug # should succeed with debug enabled
 > git add -A && git commit -m 'third'
 > printf 'eval("code");\n' > src/fail.js && git add src/fail.js
 [1]> vp staged > /dev/null 2>&1 # should fail when staged .js file has lint errors
