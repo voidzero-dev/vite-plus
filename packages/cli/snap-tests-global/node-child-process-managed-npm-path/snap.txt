@@ -1,2 +1,5 @@
+> test "$(npm --version)" = "11.17.0" && echo "direct npm uses managed npm"
+direct npm uses managed npm
+
 > node index.js
 node child process uses managed npm

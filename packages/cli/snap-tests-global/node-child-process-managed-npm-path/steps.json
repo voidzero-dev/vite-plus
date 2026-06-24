@@ -1,4 +1,7 @@
 {
   "ignoredPlatforms": ["win32"],
-  "commands": ["node index.js"]
+  "commands": [
+    "test \"$(npm --version)\" = \"11.17.0\" && echo \"direct npm uses managed npm\"",
+    "node index.js"
+  ]
 }
