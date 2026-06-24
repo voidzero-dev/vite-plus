@@ -248,6 +248,30 @@ describe('rewritePackageJson', () => {
     expect(pkg.devDependencies.vite).toBe('catalog:vite7');
   });
 
+  it('does not inject a direct vite when vite is only a peerDependency under pnpm (#1932)', () => {
+    // A vite plugin that pins `vite` as a peer must keep its own contract;
+    // injecting vite-plus-core as a concrete devDep would conflict with it.
+    const pkg: {
+      devDependencies: Record<string, string>;
+      peerDependencies: Record<string, string>;
+    } = {
+      devDependencies: { 'vite-plus': 'catalog:' },
+      peerDependencies: { vite: '^6.0.0' },
+    };
+    rewritePackageJson(pkg, PackageManager.pnpm, true);
+    expect(pkg.devDependencies.vite).toBeUndefined();
+    expect(pkg.peerDependencies.vite).toBe('^6.0.0');
+  });
+
+  it('does not add a second vite when an empty-string vite spec is already declared under pnpm (#1932)', () => {
+    const pkg: { dependencies: Record<string, string>; devDependencies: Record<string, string> } = {
+      dependencies: { vite: '' },
+      devDependencies: { 'vite-plus': 'catalog:' },
+    };
+    rewritePackageJson(pkg, PackageManager.pnpm, true);
+    expect(pkg.devDependencies.vite).toBeUndefined();
+  });
+
   it('preserves protocol-prefixed vite-plus specs (catalog:named, workspace:, link:, github:) in catalog-supporting monorepos', async () => {
     for (const existing of [
       'catalog:next',

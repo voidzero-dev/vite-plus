@@ -19,7 +19,8 @@
     ]
   },
   "devDependencies": {
-    "vite-plus": "catalog:"
+    "vite-plus": "catalog:",
+    "vite": "catalog:"
   },
   "devEngines": {
     "packageManager": {

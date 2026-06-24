@@ -33,8 +33,7 @@ export default defineConfig({
     "vite": "^6.0.0"
   },
   "devDependencies": {
-    "vite-plus": "catalog:",
-    "vite": "catalog:"
+    "vite-plus": "catalog:"
   },
   "devEngines": {
     "packageManager": {

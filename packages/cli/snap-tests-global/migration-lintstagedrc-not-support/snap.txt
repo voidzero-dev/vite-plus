@@ -30,7 +30,8 @@ export default {
   "devDependencies": {
     "husky": "^9.1.7",
     "lint-staged": "^16.2.6",
-    "vite-plus": "catalog:"
+    "vite-plus": "catalog:",
+    "vite": "catalog:"
   },
   "devEngines": {
     "packageManager": {

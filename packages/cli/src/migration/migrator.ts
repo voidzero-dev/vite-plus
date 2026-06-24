@@ -1629,6 +1629,14 @@ export function rewriteStandaloneProject(
         [VITE_PLUS_NAME]: version,
       };
     }
+    // #1932: vite-plus may be injected above (after rewritePackageJson ran), so
+    // ensure the direct `vite` here too under pnpm (see ensureDirectViteForPnpm).
+    ensureDirectViteForPnpm(
+      pkg,
+      packageManager,
+      usePnpmWorkspaceYaml && packageManager !== PackageManager.npm,
+      catalogDependencyResolver,
+    );
     return pkg;
   });
 
@@ -2559,6 +2567,60 @@ function getCatalogDependencySpec(
   return currentValue?.startsWith('catalog:') ? currentValue : 'catalog:';
 }
 
+/**
+ * #1932: under pnpm, an importer that depends on `vite-plus` (which bundles
+ * `vitest`) needs a DIRECT `vite` devDep so the `vite` override binds vitest's
+ * required `vite` peer to @voidzero-dev/vite-plus-core. Without a direct edge,
+ * pnpm's `autoInstallPeers` fabricates a separate upstream `vite` to satisfy the
+ * peer, splitting vite-plus / vite / vitest into duplicate instances (the extra
+ * vite also lacks vite's `@voidzero-dev/vite-task-client` integration, breaking
+ * the `vp test` cache). npm/yarn/bun redirect transitive/peer vite via root
+ * overrides/resolutions (and drop the aliased vite), so this is pnpm-only,
+ * mirroring the bun root-package branch in `rewriteRootWorkspacePackageJson`.
+ *
+ * A package that already declares `vite` in ANY dependency field, including
+ * `peerDependencies` (e.g. a vite plugin pinning `vite ^6`), is left untouched
+ * so its existing version contract is preserved. Call this AFTER `vite-plus`
+ * has been ensured in the package, so the dependency check sees it.
+ */
+function ensureDirectViteForPnpm(
+  pkg: {
+    dependencies?: Record<string, string>;
+    devDependencies?: Record<string, string>;
+    optionalDependencies?: Record<string, string>;
+    peerDependencies?: Record<string, string>;
+  },
+  packageManager: PackageManager,
+  supportCatalog: boolean,
+  catalogDependencyResolver?: CatalogDependencyResolver,
+): boolean {
+  const viteOverride = VITE_PLUS_OVERRIDE_PACKAGES.vite;
+  if (packageManager !== PackageManager.pnpm || !viteOverride) {
+    return false;
+  }
+  const dependsOnVitePlus =
+    pkg.dependencies?.[VITE_PLUS_NAME] !== undefined ||
+    pkg.devDependencies?.[VITE_PLUS_NAME] !== undefined;
+  const viteAlreadyDirect =
+    pkg.dependencies?.vite !== undefined ||
+    pkg.devDependencies?.vite !== undefined ||
+    pkg.optionalDependencies?.vite !== undefined ||
+    pkg.peerDependencies?.vite !== undefined;
+  if (!dependsOnVitePlus || viteAlreadyDirect) {
+    return false;
+  }
+  pkg.devDependencies = {
+    ...pkg.devDependencies,
+    vite: getCatalogDependencySpec(undefined, viteOverride, supportCatalog, {
+      dependencyField: 'devDependencies',
+      dependencyName: 'vite',
+      packageManager,
+      catalogDependencyResolver,
+    }),
+  };
+  return true;
+}
+
 function isVitePlusOverrideSpec(value: string): boolean {
   return (
     Object.values(VITE_PLUS_OVERRIDE_PACKAGES).includes(value) ||
@@ -2985,22 +3047,9 @@ function rewriteRootWorkspacePackageJson(
             : 'catalog:',
       };
     }
-    // #1932: under pnpm the root also depends on vite-plus (-> vitest), so it
-    // needs a direct `vite` for the override to bind vitest's peer; otherwise
-    // pnpm auto-installs a separate upstream vite and splits the graph into
-    // duplicate instances. Mirror the override as a direct devDep, like the bun
-    // branch above. pnpm-only (npm/yarn/bun dedupe via overrides/resolutions).
-    if (
-      packageManager === PackageManager.pnpm &&
-      !pkg.dependencies?.vite &&
-      !pkg.devDependencies?.vite &&
-      !pkg.optionalDependencies?.vite
-    ) {
-      pkg.devDependencies = {
-        ...pkg.devDependencies,
-        vite: getCatalogDependencySpec(undefined, VITE_PLUS_OVERRIDE_PACKAGES.vite, true),
-      };
-    }
+    // #1932: the root depends on vite-plus too, so under pnpm it needs a direct
+    // `vite` for the override to bind vitest's peer (see ensureDirectViteForPnpm).
+    ensureDirectViteForPnpm(pkg, packageManager, true, catalogDependencyResolver);
     return pkg;
   });
 
@@ -4093,37 +4142,9 @@ export function rewritePackageJson(
       [VITE_PLUS_NAME]: canonicalVitePlusSpec,
     };
   }
-  // #1932: under pnpm, any package that depends on `vite-plus` (which bundles
-  // `vitest`) needs a DIRECT `vite` devDep so the `vite` override binds vitest's
-  // required `vite` peer to @voidzero-dev/vite-plus-core. Without a direct edge,
-  // pnpm's `autoInstallPeers` fabricates a separate upstream `vite` to satisfy the
-  // peer, splitting vite-plus / vite / vitest into duplicate instances (a 2nd vite
-  // also misses vite's `@voidzero-dev/vite-task-client` integration, breaking the
-  // `vp test` cache). npm/yarn/bun redirect the transitive/peer vite via root
-  // overrides/resolutions (and drop the aliased vite), so this is pnpm-only —
-  // mirroring the bun root-package fix in `rewriteRootWorkspacePackageJson`.
-  if (packageManager === PackageManager.pnpm && VITE_PLUS_OVERRIDE_PACKAGES.vite) {
-    const dependsOnVitePlus =
-      !!pkg.dependencies?.[VITE_PLUS_NAME] || !!pkg.devDependencies?.[VITE_PLUS_NAME];
-    const viteAlreadyDirect =
-      pkg.dependencies?.vite ?? pkg.devDependencies?.vite ?? pkg.optionalDependencies?.vite;
-    if (dependsOnVitePlus && !viteAlreadyDirect) {
-      pkg.devDependencies = {
-        ...pkg.devDependencies,
-        vite: getCatalogDependencySpec(
-          undefined,
-          VITE_PLUS_OVERRIDE_PACKAGES.vite,
-          supportCatalog,
-          {
-            dependencyField: 'devDependencies',
-            dependencyName: 'vite',
-            packageManager,
-            catalogDependencyResolver,
-          },
-        ),
-      };
-    }
-  }
+  // #1932: under pnpm, a package that depends on vite-plus needs a direct `vite`
+  // so the override binds vitest's peer (see ensureDirectViteForPnpm).
+  ensureDirectViteForPnpm(pkg, packageManager, supportCatalog, catalogDependencyResolver);
   // Add `vitest` as a direct devDependency when:
   //  - a remaining dependency likely peer-depends on vitest (e.g.
   //    vitest-browser-svelte), OR
