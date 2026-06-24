@@ -1,0 +1,7 @@
+{
+  "commands": [
+    "VITE_GREETING=hello vp run build # first build",
+    "VITE_GREETING=hello vp run build # same env, cache hit",
+    "VITE_GREETING=world vp run build # VITE_ env changed, cache miss (tracked via vite-task-client)"
+  ]
+}
