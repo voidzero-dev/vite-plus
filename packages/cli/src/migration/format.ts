@@ -12,6 +12,17 @@ const FORMAT_FAILURE_MESSAGE =
   'Automatic formatting failed. Run `vp fmt` manually after migration.';
 
 /**
+ * Do not apply Oxfmt to a project that still uses Prettier. Their formatting
+ * rules can conflict, especially when Prettier is enforced through ESLint.
+ */
+export function canFormatWithOxfmt(
+  hasPrettierDependency: boolean,
+  prettierMigrated: boolean,
+): boolean {
+  return !hasPrettierDependency || prettierMigrated;
+}
+
+/**
  * Format a successfully migrated project without turning a formatter problem
  * into an unhandled migration failure. The formatter already prints its
  * stdout/stderr when it exits nonzero; the report keeps the manual follow-up

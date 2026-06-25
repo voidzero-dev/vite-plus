@@ -1,4 +1,8 @@
 > vp migrate --no-interactive --no-hooks # migration should add Astro shim when astro dependency is detected
+
+Formatting code...
+
+Code formatted
 ◇ Migrated . to Vite+
 • Node <semver>  pnpm <semver>
 ✓ Dependencies installed in <variable>ms

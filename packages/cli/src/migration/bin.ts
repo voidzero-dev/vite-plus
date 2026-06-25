@@ -46,7 +46,7 @@ import {
 import type { PackageDependencies } from '../utils/types.ts';
 import { detectWorkspace } from '../utils/workspace.ts';
 import { checkRolldownCompatibility } from './compat-runner.ts';
-import { formatMigratedProject } from './format.ts';
+import { canFormatWithOxfmt, formatMigratedProject } from './format.ts';
 import {
   addFrameworkShim,
   checkVitestVersion,
@@ -388,6 +388,7 @@ interface MigrationPlan extends MigrationSetupPlan {
   packageManager: PackageManager;
   yarnPnpConverted: boolean;
   migratePrettier: boolean;
+  hasPrettierDependency: boolean;
   prettierConfigFile?: string;
   fixBaseUrl: boolean;
   migrateNodeVersionFile: boolean;
@@ -724,6 +725,7 @@ async function collectMigrationPlan(
     yarnPnpConverted,
     ...setupPlan,
     migratePrettier,
+    hasPrettierDependency: prettierProject.hasDependency,
     prettierConfigFile: prettierProject.configFile,
     fixBaseUrl,
     migrateNodeVersionFile,
@@ -1159,7 +1161,10 @@ async function executeMigrationPlan(
     workspaceInfo.rootDir,
     report,
   );
-  if (finalInstallSummary.status === 'installed') {
+  if (
+    finalInstallSummary.status === 'installed' &&
+    canFormatWithOxfmt(plan.hasPrettierDependency, plan.migratePrettier)
+  ) {
     await formatMigratedProject(workspaceInfo.rootDir, interactive, report);
   }
   return {
@@ -1530,7 +1535,12 @@ async function main() {
       }
     }
 
-    if (didMigrate && finalInstallOk && canFormatMigratedProject) {
+    if (
+      didMigrate &&
+      finalInstallOk &&
+      canFormatMigratedProject &&
+      canFormatWithOxfmt(prettierProject.hasDependency, prettierMigrated)
+    ) {
       clearMigrationProgress();
       await formatMigratedProject(workspaceInfoOptional.rootDir, options.interactive, report);
     }

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { formatMigratedProject } from '../format.ts';
+import { canFormatWithOxfmt, formatMigratedProject } from '../format.ts';
 import { createMigrationReport } from '../report.ts';
 
 describe('formatMigratedProject', () => {
@@ -43,5 +43,19 @@ describe('formatMigratedProject', () => {
     expect(report.warnings).toEqual([
       'Automatic formatting failed. Run `vp fmt` manually after migration.',
     ]);
+  });
+});
+
+describe('canFormatWithOxfmt', () => {
+  it('formats projects that do not use Prettier', () => {
+    expect(canFormatWithOxfmt(false, false)).toBe(true);
+  });
+
+  it('formats projects after Prettier was migrated', () => {
+    expect(canFormatWithOxfmt(true, true)).toBe(true);
+  });
+
+  it('does not reformat projects that still use Prettier', () => {
+    expect(canFormatWithOxfmt(true, false)).toBe(false);
   });
 });

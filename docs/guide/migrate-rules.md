@@ -192,5 +192,6 @@ lint autofix preserves these imports.
 After updating the manifests and package-manager configuration, migration
 reinstalls dependencies once to refresh the lockfile. If installation fails,
 migration reports the error and exits with a nonzero status. After a successful
-migration, it runs `vp fmt`. A formatter failure is reported as a warning
-so the migration result and manual formatting command remain available.
+migration, it runs `vp fmt` unless the project still uses Prettier. A formatter
+failure is reported as a warning so the migration result and manual formatting
+command remain available.
