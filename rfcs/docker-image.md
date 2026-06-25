@@ -261,6 +261,15 @@ pkg.pr.new build (`VP_PR_VERSION`), and pushes it as `ghcr.io/voidzero-dev/vite-
 so labeling a PR with `pkg.pr.new` produces a pullable preview image that
 exercises the real build path.
 
+### Docs example verification
+
+The Dockerfile patterns documented below (and in `docs/guide/docker.md`) are kept
+honest by a reproduction repo whose GitHub Actions build and smoke-test each
+example end to end (build the image, run the container, assert `HTTP 200`, and
+assert the SSR runtime Node.js matches the pinned `.node-version`):
+
+- <https://github.com/why-reproductions-are-required/vite-plus-docker-example>
+
 ## Recommended Dockerfile patterns (documented for users)
 
 ### 1. SSR / Node-server app, slim runtime (the #1490 case)
