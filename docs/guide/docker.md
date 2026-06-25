@@ -32,8 +32,7 @@ Tags track the `vp` version:
 Pin an exact tag (or a digest) for reproducible builds. The image is published
 for `linux/amd64` and `linux/arm64` and runs as a non-root user by default.
 
-Browse all published versions and digests on the GitHub package page:
-<https://github.com/voidzero-dev/vite-plus/pkgs/container/vite-plus>.
+Browse all published versions and digests on the [GitHub package page](https://github.com/voidzero-dev/vite-plus/pkgs/container/vite-plus).
 
 The default image is Debian (glibc). An Alpine (musl) variant is published under
 the same versions with an `-alpine` suffix (`:latest-alpine`, `:0-alpine`,
