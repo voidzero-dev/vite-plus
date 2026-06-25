@@ -4,7 +4,7 @@
 • Node <semver>  pnpm <semver>
 • Package manager settings configured
 
-> cat package.json # stale wrapper deps and plain vite-plus range should be repaired
+> cat package.json # stale wrapper deps and plain vite-plus range should be repaired; empty pnpm field should be removed
 {
   "name": "migration-upgrade-stale-local-pnpm",
   "devDependencies": {
@@ -17,11 +17,10 @@
       "version": "<semver>",
       "onFail": "download"
     }
-  },
-  "pnpm": {}
+  }
 }
 
-> cat pnpm-workspace.yaml # empty pnpm field must not hide workspace overrides
+> cat pnpm-workspace.yaml # pnpm settings should be consolidated here
 overrides:
   vite: 'catalog:'
 peerDependencyRules:

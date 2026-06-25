@@ -1710,6 +1710,110 @@ export interface VitestImportMigrationOptions {
   preserveNuxtVitestImports?: boolean;
 }
 
+const PNPM_WORKSPACE_SETTINGS_MIN_VERSION = '10.6.2';
+
+type PnpmPeerDependencyRules = {
+  allowAny?: string[];
+  allowedVersions?: Record<string, string>;
+  [key: string]: unknown;
+};
+
+type PnpmPackageJsonSettings = {
+  overrides?: Record<string, string>;
+  peerDependencyRules?: PnpmPeerDependencyRules;
+  allowBuilds?: Record<string, boolean>;
+  onlyBuiltDependencies?: string[];
+  [key: string]: unknown;
+};
+
+// pnpm 10.5 started reading package.json#pnpm settings from
+// pnpm-workspace.yaml, but overrides and peerDependencyRules needed fixes in
+// 10.5.1 and 10.6.2 respectively. Use the latter as the atomic migration
+// boundary so the complete object can move without splitting its ownership.
+export function pnpmSupportsWorkspaceSettings(version: string): boolean {
+  const coerced = semver.coerce(version);
+  if (coerced) {
+    return semver.gte(coerced, PNPM_WORKSPACE_SETTINGS_MIN_VERSION);
+  }
+  return version === 'latest' || version === 'next';
+}
+
+// These are the root package.json#pnpm settings pnpm 10.6.2+ accepts at the
+// top level of pnpm-workspace.yaml. Unknown keys may belong to third-party
+// tooling and stay in package.json.
+const PNPM_WORKSPACE_SETTING_KEYS = [
+  'allowNonAppliedPatches',
+  'allowBuilds',
+  'allowUnusedPatches',
+  'allowedDeprecatedVersions',
+  'auditConfig',
+  'configDependencies',
+  'executionEnv',
+  'ignorePatchFailures',
+  'ignoredBuiltDependencies',
+  'ignoredOptionalDependencies',
+  'neverBuiltDependencies',
+  'onlyBuiltDependencies',
+  'onlyBuiltDependenciesFile',
+  'overrides',
+  'packageExtensions',
+  'patchedDependencies',
+  'peerDependencyRules',
+  'requiredScripts',
+  'supportedArchitectures',
+  'updateConfig',
+] as const;
+
+function hasPnpmWorkspaceSettings(pkg: { pnpm?: PnpmPackageJsonSettings }): boolean {
+  return PNPM_WORKSPACE_SETTING_KEYS.some((key) => Object.hasOwn(pkg.pnpm ?? {}, key));
+}
+
+function pnpmPackageJsonSettingsPending(pkg: { pnpm?: PnpmPackageJsonSettings }): boolean {
+  return (
+    hasPnpmWorkspaceSettings(pkg) || (pkg.pnpm !== undefined && Object.keys(pkg.pnpm).length === 0)
+  );
+}
+
+function takePnpmWorkspaceSettings(pkg: {
+  pnpm?: PnpmPackageJsonSettings;
+}): Record<string, unknown> | undefined {
+  if (!pkg.pnpm) {
+    return undefined;
+  }
+  const settings: Record<string, unknown> = {};
+  for (const key of PNPM_WORKSPACE_SETTING_KEYS) {
+    if (!Object.hasOwn(pkg.pnpm, key)) {
+      continue;
+    }
+    settings[key] = pkg.pnpm[key];
+    delete pkg.pnpm[key];
+  }
+  if (Object.keys(pkg.pnpm).length === 0) {
+    delete pkg.pnpm;
+  }
+  return Object.keys(settings).length > 0 ? settings : undefined;
+}
+
+function migratePnpmSettingsToWorkspaceYaml(
+  projectPath: string,
+  settings: Record<string, unknown> | undefined,
+): void {
+  if (!settings || Object.keys(settings).length === 0) {
+    return;
+  }
+  const pnpmWorkspaceYamlPath = path.join(projectPath, 'pnpm-workspace.yaml');
+  if (!fs.existsSync(pnpmWorkspaceYamlPath)) {
+    fs.writeFileSync(pnpmWorkspaceYamlPath, '');
+  }
+  editYamlFile(pnpmWorkspaceYamlPath, (doc) => {
+    for (const [key, value] of Object.entries(settings)) {
+      // package.json#pnpm was the effective source before migration. Preserve
+      // that precedence when the workspace file already defines the same key.
+      doc.set(key, doc.createNode(value));
+    }
+  });
+}
+
 export function rewriteStandaloneProject(
   projectPath: string,
   workspaceInfo: WorkspaceInfo,
@@ -1728,7 +1832,7 @@ export function rewriteStandaloneProject(
   const vitestEcosystemPackages = collectVitestEcosystemInstallDependencyNames(projectPath);
   const pnpmMajorVersion = pnpmMajor(workspaceInfo.downloadPackageManager.version);
   let extractedStagedConfig: Record<string, string | string[]> | null = null;
-  let remainingPnpmOverrides: Record<string, string> | undefined;
+  let movedPnpmSettings: Record<string, unknown> | undefined;
   let shouldRewritePnpmWorkspaceYaml = false;
   let shouldAddPnpmWorkspaceVitePlusOverride = false;
   let shouldAllowBrowserProviderBuilds = false;
@@ -1746,15 +1850,7 @@ export function rewriteStandaloneProject(
     peerDependencies?: Record<string, string>;
     optionalDependencies?: Record<string, string>;
     scripts?: Record<string, string>;
-    pnpm?: {
-      overrides?: Record<string, string>;
-      peerDependencyRules?: {
-        allowAny?: string[];
-        allowedVersions?: Record<string, string>;
-      };
-      allowBuilds?: Record<string, boolean>;
-      onlyBuiltDependencies?: string[];
-    };
+    pnpm?: PnpmPackageJsonSettings;
   }>(packageJsonPath, (pkg) => {
     shouldAllowBrowserProviderBuilds =
       hasOwnWebdriverioDependency(pkg) || usesWebdriverioProvider(projectPath);
@@ -1810,10 +1906,9 @@ export function rewriteStandaloneProject(
         };
       }
     } else if (packageManager === PackageManager.pnpm) {
-      // Keep overrides in package.json only when it actually owns override/peer
-      // configuration (or no workspace file exists). An empty/unrelated `pnpm`
-      // object must not hide stale overrides in pnpm-workspace.yaml.
-      usePnpmWorkspaceYaml = !pnpmConfigLivesInPackageJson(pkg, projectPath);
+      usePnpmWorkspaceYaml = pnpmSupportsWorkspaceSettings(
+        workspaceInfo.downloadPackageManager.version,
+      );
       if (usePnpmWorkspaceYaml) {
         shouldRewritePnpmWorkspaceYaml = true;
         shouldAddPnpmWorkspaceVitePlusOverride = isForceOverrideMode();
@@ -1852,7 +1947,7 @@ export function rewriteStandaloneProject(
           },
         };
       } else {
-        remainingPnpmOverrides = cleanupPnpmOverridesForWorkspaceYaml(pkg, overrideKeys);
+        movedPnpmSettings = takePnpmWorkspaceSettings(pkg);
       }
       // remove dependency selectors targeting vite (e.g. "vite-plugin-svgr>vite")
       for (const key in pkg.pnpm?.overrides) {
@@ -1912,6 +2007,8 @@ export function rewriteStandaloneProject(
     return pkg;
   });
 
+  migratePnpmSettingsToWorkspaceYaml(projectPath, movedPnpmSettings);
+
   if (shouldRewritePnpmWorkspaceYaml) {
     rewritePnpmWorkspaceYaml(
       projectPath,
@@ -1920,11 +2017,6 @@ export function rewriteStandaloneProject(
       usesVitest,
       vitestEcosystemPackages,
     );
-  }
-
-  // Move remaining non-Vite pnpm.overrides to pnpm-workspace.yaml
-  if (remainingPnpmOverrides) {
-    migratePnpmOverridesToWorkspaceYaml(projectPath, remainingPnpmOverrides);
   }
 
   if (shouldAddPnpmWorkspaceVitePlusOverride) {
@@ -1987,6 +2079,9 @@ export function rewriteMonorepo(
     workspaceInfo.packageManager,
   );
   const pnpmMajorVersion = pnpmMajor(workspaceInfo.downloadPackageManager.version);
+  const usePnpmWorkspaceSettings = pnpmSupportsWorkspaceSettings(
+    workspaceInfo.downloadPackageManager.version,
+  );
   const workspaceShouldAllowBrowserBuilds = workspaceUsesWebdriverio(
     workspaceInfo.rootDir,
     workspaceInfo.packages,
@@ -2003,15 +2098,7 @@ export function rewriteMonorepo(
     workspaceInfo.packages,
   );
   // rewrite root workspace
-  if (workspaceInfo.packageManager === PackageManager.pnpm) {
-    rewritePnpmWorkspaceYaml(
-      workspaceInfo.rootDir,
-      pnpmMajorVersion,
-      workspaceShouldAllowBrowserBuilds,
-      workspaceUsesVitest,
-      vitestEcosystemPackages,
-    );
-  } else if (workspaceInfo.packageManager === PackageManager.yarn) {
+  if (workspaceInfo.packageManager === PackageManager.yarn) {
     rewriteYarnrcYml(workspaceInfo.rootDir, workspaceUsesVitest, vitestEcosystemPackages);
   } else if (workspaceInfo.packageManager === PackageManager.bun) {
     rewriteBunCatalog(workspaceInfo.rootDir, workspaceUsesVitest, vitestEcosystemPackages);
@@ -2023,10 +2110,26 @@ export function rewriteMonorepo(
     catalogDependencyResolver,
     workspaceInfo.packages,
     pnpmMajorVersion,
+    workspaceInfo.downloadPackageManager.version,
     workspaceShouldAllowBrowserBuilds,
     workspaceUsesVitest,
     importOptions,
   );
+  if (workspaceInfo.packageManager === PackageManager.pnpm) {
+    rewritePnpmWorkspaceYaml(
+      workspaceInfo.rootDir,
+      pnpmMajorVersion,
+      workspaceShouldAllowBrowserBuilds,
+      workspaceUsesVitest,
+      vitestEcosystemPackages,
+      usePnpmWorkspaceSettings,
+    );
+    if (usePnpmWorkspaceSettings && isForceOverrideMode()) {
+      migratePnpmOverridesToWorkspaceYaml(workspaceInfo.rootDir, {
+        [VITE_PLUS_NAME]: VITE_PLUS_VERSION,
+      });
+    }
+  }
   // (mergeViteConfigFiles below will sanitize the merged lint config
   // against this workspace's full package set.)
 
@@ -2199,6 +2302,7 @@ function rewritePnpmWorkspaceYaml(
   shouldAllowBrowserBuilds: boolean,
   usesVitest: boolean,
   vitestEcosystemPackages: ReadonlySet<string>,
+  writeWorkspaceSettings = true,
 ): void {
   const pnpmWorkspaceYamlPath = path.join(projectPath, 'pnpm-workspace.yaml');
   if (!fs.existsSync(pnpmWorkspaceYamlPath)) {
@@ -2207,10 +2311,13 @@ function rewritePnpmWorkspaceYaml(
   const managed = managedOverridePackages(usesVitest);
 
   editYamlFile(pnpmWorkspaceYamlPath, (doc) => {
-    ensurePnpmExoticSubdepsSetting(doc);
-
     // catalog
     rewriteCatalog(doc, usesVitest, vitestEcosystemPackages);
+    if (!writeWorkspaceSettings) {
+      return;
+    }
+
+    ensurePnpmExoticSubdepsSetting(doc);
     if (pnpmMajorVersion !== undefined) {
       applyBuildAllowanceToWorkspaceYaml(doc, pnpmMajorVersion, shouldAllowBrowserBuilds);
     }
@@ -2326,74 +2433,6 @@ function rewritePnpmWorkspaceYaml(
       doc.setIn(['minimumReleaseAgeExclude'], minimumReleaseAgeExclude);
     }
   });
-}
-
-/**
- * Clean up pnpm.overrides and peerDependencyRules from package.json when migrating
- * to pnpm-workspace.yaml. Returns any remaining non-Vite overrides that need to be
- * moved to pnpm-workspace.yaml.
- */
-function cleanupPnpmOverridesForWorkspaceYaml(
-  pkg: {
-    pnpm?: {
-      overrides?: Record<string, string>;
-      peerDependencyRules?: { allowAny?: string[]; allowedVersions?: Record<string, string> };
-    };
-  },
-  overrideKeys: string[],
-): Record<string, string> | undefined {
-  // Strip selector-shaped overrides (e.g. `parent>@vitest/browser-playwright`)
-  // whose target is a removed package, before the exact-key sweep below.
-  dropRemovePackageOverrideKeys(pkg.pnpm?.overrides);
-  // Remove Vite-managed keys from pnpm.overrides. `vitest` is always swept so a
-  // lingering managed `vitest` override is dropped in the common case (when it
-  // is NOT in `overrideKeys` because the project does not use vitest directly) —
-  // it is deleted but NOT captured as a moved catalog override.
-  const sweepKeys =
-    overrideKeys.includes('vitest') || !VITEST_IS_MANAGED_OVERRIDE
-      ? overrideKeys
-      : [...overrideKeys, 'vitest'];
-  const catalogOverrides: Record<string, string> = {};
-  const overrides = pkg.pnpm?.overrides;
-  for (const key of [...sweepKeys, ...PROVIDER_OVERRIDE_DROP_NAMES]) {
-    const value = overrides?.[key];
-    if (value) {
-      if (overrideKeys.includes(key) && value.startsWith('catalog:')) {
-        catalogOverrides[key] = value;
-      }
-      delete overrides[key];
-    }
-  }
-  // Remove dependency selectors targeting vite
-  for (const key in pkg.pnpm?.overrides) {
-    if (key.includes('>')) {
-      const splits = key.split('>');
-      if (splits[splits.length - 1].trim() === 'vite') {
-        delete pkg.pnpm.overrides[key];
-      }
-    }
-  }
-  // Collect remaining overrides to move to pnpm-workspace.yaml then delete all
-  // (pnpm ignores workspace-level overrides when pnpm.overrides exists in package.json)
-  let remaining: Record<string, string> | undefined;
-  if (Object.keys(catalogOverrides).length > 0) {
-    remaining = { ...catalogOverrides };
-  }
-  if (pkg.pnpm?.overrides && Object.keys(pkg.pnpm.overrides).length > 0) {
-    remaining = { ...remaining, ...pkg.pnpm.overrides };
-  }
-  delete pkg.pnpm?.overrides;
-  // Only remove Vite-managed peerDependencyRules entries, preserve custom ones.
-  // `vitest` is always swept (common case: dropped even though it is not in the
-  // managed `overrideKeys`).
-  cleanupPeerDependencyRules(pkg.pnpm?.peerDependencyRules, sweepKeys);
-  if (pkg.pnpm?.peerDependencyRules && Object.keys(pkg.pnpm.peerDependencyRules).length === 0) {
-    delete pkg.pnpm.peerDependencyRules;
-  }
-  if (pkg.pnpm && Object.keys(pkg.pnpm).length === 0) {
-    delete pkg.pnpm;
-  }
-  return remaining;
 }
 
 /**
@@ -2594,36 +2633,6 @@ function applyBuildAllowanceToWorkspaceYaml(
       }
     }
     doc.setIn(['onlyBuiltDependencies'], onlyBuiltDependencies);
-  }
-}
-
-/**
- * Remove only Vite-managed entries from peerDependencyRules, preserving custom ones.
- */
-function cleanupPeerDependencyRules(
-  peerDependencyRules:
-    | { allowAny?: string[]; allowedVersions?: Record<string, string> }
-    | undefined,
-  overrideKeys: string[],
-): void {
-  if (!peerDependencyRules) {
-    return;
-  }
-  if (Array.isArray(peerDependencyRules.allowAny)) {
-    peerDependencyRules.allowAny = peerDependencyRules.allowAny.filter(
-      (key) => !overrideKeys.includes(key),
-    );
-    if (peerDependencyRules.allowAny.length === 0) {
-      delete peerDependencyRules.allowAny;
-    }
-  }
-  if (peerDependencyRules.allowedVersions) {
-    for (const key of overrideKeys) {
-      delete peerDependencyRules.allowedVersions[key];
-    }
-    if (Object.keys(peerDependencyRules.allowedVersions).length === 0) {
-      delete peerDependencyRules.allowedVersions;
-    }
   }
 }
 
@@ -3447,6 +3456,7 @@ function rewriteRootWorkspacePackageJson(
   // just the root's own `package.json`.
   packages?: WorkspacePackage[],
   pnpmMajorVersion?: number,
+  pnpmVersion?: string,
   shouldAllowBrowserBuilds = false,
   // Workspace-wide direct-vitest signal: the root resolution/override sinks are
   // shared by every package, so `vitest` stays managed here iff ANY package uses
@@ -3460,7 +3470,7 @@ function rewriteRootWorkspacePackageJson(
   }
   const managed = managedOverridePackages(workspaceUsesVitest);
 
-  let remainingPnpmOverrides: Record<string, string> | undefined;
+  let movedPnpmSettings: Record<string, unknown> | undefined;
   editJsonFile<{
     resolutions?: Record<string, string>;
     overrides?: Record<string, string>;
@@ -3468,15 +3478,7 @@ function rewriteRootWorkspacePackageJson(
     dependencies?: Record<string, string>;
     peerDependencies?: Record<string, string>;
     optionalDependencies?: Record<string, string>;
-    pnpm?: {
-      overrides?: Record<string, string>;
-      peerDependencyRules?: {
-        allowAny?: string[];
-        allowedVersions?: Record<string, string>;
-      };
-      allowBuilds?: Record<string, boolean>;
-      onlyBuiltDependencies?: string[];
-    };
+    pnpm?: PnpmPackageJsonSettings;
   }>(packageJsonPath, (pkg) => {
     // Strip stale `vite-plus-test` wrapper aliases before injecting new overrides
     // so the deleted wrapper doesn't survive migration in any sink.
@@ -3527,7 +3529,8 @@ function rewriteRootWorkspacePackageJson(
       };
     } else if (packageManager === PackageManager.pnpm) {
       const overrideKeys = Object.keys(managed);
-      if (isForceOverrideMode()) {
+      const usePnpmWorkspaceSettings = pnpmSupportsWorkspaceSettings(pnpmVersion ?? '');
+      if (!usePnpmWorkspaceSettings) {
         // Strip selector-shaped overrides (e.g. `parent>@vitest/browser-playwright`)
         // whose target is a removed package, before re-merging the user's
         // overrides into the new pnpm config.
@@ -3536,15 +3539,25 @@ function rewriteRootWorkspacePackageJson(
         if (!workspaceUsesVitest) {
           removeManagedVitestEntry(pkg.pnpm?.overrides);
         }
-        // In force-override mode, keep overrides in package.json pnpm.overrides
-        // because pnpm ignores pnpm-workspace.yaml overrides when pnpm.overrides
-        // exists in package.json (even with unrelated entries like rollup).
+        if (!workspaceUsesVitest && pkg.pnpm?.peerDependencyRules) {
+          removeVitestPeerDependencyRule(pkg.pnpm.peerDependencyRules);
+        }
         pkg.pnpm = {
           ...pkg.pnpm,
           overrides: {
             ...pkg.pnpm?.overrides,
             ...managed,
-            [VITE_PLUS_NAME]: VITE_PLUS_VERSION,
+            ...(isForceOverrideMode() ? { [VITE_PLUS_NAME]: VITE_PLUS_VERSION } : {}),
+          },
+          peerDependencyRules: {
+            ...pkg.pnpm?.peerDependencyRules,
+            allowAny: [
+              ...new Set([...(pkg.pnpm?.peerDependencyRules?.allowAny ?? []), ...overrideKeys]),
+            ],
+            allowedVersions: {
+              ...pkg.pnpm?.peerDependencyRules?.allowedVersions,
+              ...Object.fromEntries(overrideKeys.map((key) => [key, '*'])),
+            },
           },
         };
       } else {
@@ -3553,7 +3566,7 @@ function rewriteRootWorkspacePackageJson(
             delete pkg.resolutions[key];
           }
         }
-        remainingPnpmOverrides = cleanupPnpmOverridesForWorkspaceYaml(pkg, overrideKeys);
+        movedPnpmSettings = takePnpmWorkspaceSettings(pkg);
       }
       // remove dependency selectors targeting vite (e.g. "vite-plugin-svgr>vite")
       for (const key in pkg.pnpm?.overrides) {
@@ -3583,10 +3596,7 @@ function rewriteRootWorkspacePackageJson(
     return pkg;
   });
 
-  // Move remaining non-Vite pnpm.overrides to pnpm-workspace.yaml
-  if (remainingPnpmOverrides) {
-    migratePnpmOverridesToWorkspaceYaml(projectPath, remainingPnpmOverrides);
-  }
+  migratePnpmSettingsToWorkspaceYaml(projectPath, movedPnpmSettings);
 
   // rewrite package.json — `projectPath` IS the workspace root here, so
   // `workspaceContext.rootDir` matches it; sanitizer resolves
@@ -3742,15 +3752,7 @@ type BootstrapPackageJson = {
   dependencies?: Record<string, string>;
   peerDependencies?: Record<string, string>;
   optionalDependencies?: Record<string, string>;
-  pnpm?: {
-    overrides?: Record<string, string>;
-    peerDependencyRules?: {
-      allowAny?: string[];
-      allowedVersions?: Record<string, string>;
-    };
-    allowBuilds?: Record<string, boolean>;
-    onlyBuiltDependencies?: string[];
-  };
+  pnpm?: PnpmPackageJsonSettings;
   packageManager?: string;
   devEngines?: { packageManager?: unknown; [key: string]: unknown };
 };
@@ -3821,6 +3823,26 @@ function overridesSatisfyVitePlus(
 
 function hasPackageManagerPin(pkg: BootstrapPackageJson): boolean {
   return Boolean(pkg.packageManager || pkg.devEngines?.packageManager);
+}
+
+function pinnedPackageManagerVersion(pkg: BootstrapPackageJson): string | undefined {
+  if (typeof pkg.packageManager === 'string') {
+    const separator = pkg.packageManager.indexOf('@');
+    if (separator !== -1) {
+      return pkg.packageManager.slice(separator + 1);
+    }
+  }
+  const devEngine = pkg.devEngines?.packageManager;
+  if (
+    typeof devEngine === 'object' &&
+    devEngine !== null &&
+    !Array.isArray(devEngine) &&
+    'version' in devEngine &&
+    typeof devEngine.version === 'string'
+  ) {
+    return devEngine.version;
+  }
+  return undefined;
 }
 
 function vitePlusDependencyNeedsConcreteVersion(pkg: BootstrapPackageJson): boolean {
@@ -4016,22 +4038,6 @@ function readBunCatalogDependencyResolver(pkg: {
   const fromPkg = createCatalogDependencyResolverFromCatalogs(pkg.catalog, pkg.catalogs);
   return (catalogSpec, dependencyName) =>
     fromWorkspaces(catalogSpec, dependencyName) ?? fromPkg(catalogSpec, dependencyName);
-}
-
-// Decide where a pnpm project keeps its overrides / peer rules. A truthy
-// `pkg.pnpm` is not enough: an empty `pnpm: {}` is truthy yet carries no
-// override/peer config, and when a real `pnpm-workspace.yaml` exists that file
-// is the actual source unless package.json explicitly defines one of those
-// managed sections. Unrelated keys such as `onlyBuiltDependencies` do not move
-// override ownership into package.json.
-function pnpmConfigLivesInPackageJson(pkg: BootstrapPackageJson, projectPath: string): boolean {
-  if (pkg.pnpm == null) {
-    return false;
-  }
-  if (!fs.existsSync(path.join(projectPath, 'pnpm-workspace.yaml'))) {
-    return true;
-  }
-  return Object.hasOwn(pkg.pnpm, 'overrides') || Object.hasOwn(pkg.pnpm, 'peerDependencyRules');
 }
 
 function getAlignedVitestEcosystemDependencySpec(
@@ -4322,6 +4328,7 @@ export function detectVitePlusBootstrapPending(
   projectPath: string,
   packageManager: PackageManager | undefined,
   packages?: WorkspacePackage[],
+  packageManagerVersion?: string,
   importOptions?: VitestImportMigrationOptions,
 ): boolean {
   const packageJsonPath = path.join(projectPath, 'package.json');
@@ -4342,8 +4349,12 @@ export function detectVitePlusBootstrapPending(
     return true;
   }
 
+  const pnpmVersion = packageManagerVersion ?? pinnedPackageManagerVersion(pkg) ?? '';
   const usePnpmWorkspaceYaml =
-    packageManager === PackageManager.pnpm && !pnpmConfigLivesInPackageJson(pkg, projectPath);
+    packageManager === PackageManager.pnpm && pnpmSupportsWorkspaceSettings(pnpmVersion);
+  if (usePnpmWorkspaceYaml && pnpmPackageJsonSettingsPending(pkg)) {
+    return true;
+  }
   const supportCatalog =
     !VITE_PLUS_VERSION.startsWith('file:') &&
     (usePnpmWorkspaceYaml ||
@@ -4415,7 +4426,7 @@ export function detectVitePlusBootstrapPending(
     if (!pnpmWorkspaceExoticSubdepsSettingSatisfied(projectPath)) {
       return true;
     }
-    if (pnpmConfigLivesInPackageJson(pkg, projectPath)) {
+    if (!usePnpmWorkspaceYaml) {
       return (
         vitePlusDependencyNeedsConcreteVersion(pkg) ||
         !overridesSatisfyVitePlus(pkg.pnpm?.overrides, usesVitest) ||
@@ -4561,7 +4572,6 @@ export function ensureVitePlusBootstrap(
     return result;
   }
 
-  const initialRootPkg = readJsonFile(packageJsonPath) as BootstrapPackageJson;
   // Shared override/catalog sinks are workspace-wide, so keep vitest managed
   // when any package needs it. Each package's direct vitest dependency is
   // reconciled independently below.
@@ -4574,7 +4584,7 @@ export function ensureVitePlusBootstrap(
   const shouldAllowBrowserBuilds = workspaceUsesWebdriverio(projectPath, workspaceInfo.packages);
   const usePnpmWorkspaceYaml =
     workspaceInfo.packageManager === PackageManager.pnpm &&
-    !pnpmConfigLivesInPackageJson(initialRootPkg, projectPath);
+    pnpmSupportsWorkspaceSettings(workspaceInfo.downloadPackageManager.version);
   const supportCatalog =
     !VITE_PLUS_VERSION.startsWith('file:') &&
     (usePnpmWorkspaceYaml ||
@@ -4594,6 +4604,7 @@ export function ensureVitePlusBootstrap(
     projectPath,
     workspaceInfo.packages,
   );
+  let movedPnpmSettings: Record<string, unknown> | undefined;
 
   editJsonFile<
     BootstrapPackageJson & {
@@ -4635,12 +4646,7 @@ export function ensureVitePlusBootstrap(
         pkg.overrides = ensured.overrides;
         packageJsonChanged = true;
       }
-    } else if (
-      workspaceInfo.packageManager === PackageManager.pnpm &&
-      pnpmConfigLivesInPackageJson(pkg, projectPath)
-    ) {
-      // `pnpmConfigLivesInPackageJson` guarantees `pkg.pnpm` is present here,
-      // but it may be an empty object (no pnpm-workspace.yaml case), so seed it.
+    } else if (workspaceInfo.packageManager === PackageManager.pnpm && !usePnpmWorkspaceYaml) {
       pkg.pnpm ??= {};
       const ensured = ensureOverrideEntries(pkg.pnpm.overrides, usesVitest);
       if (ensured.changed) {
@@ -4653,6 +4659,13 @@ export function ensureVitePlusBootstrap(
         applyBuildAllowanceToPackageJsonPnpm(pkg.pnpm, pnpmMajorVersion, shouldAllowBrowserBuilds);
         packageJsonChanged = beforePnpm !== JSON.stringify(pkg.pnpm) || packageJsonChanged;
       }
+    } else if (workspaceInfo.packageManager === PackageManager.pnpm) {
+      const hadPnpmField = pkg.pnpm !== undefined;
+      movedPnpmSettings = takePnpmWorkspaceSettings(pkg);
+      packageJsonChanged =
+        movedPnpmSettings !== undefined ||
+        (hadPnpmField && pkg.pnpm === undefined) ||
+        packageJsonChanged;
     }
 
     result.packageJson = packageJsonChanged;
@@ -4686,13 +4699,15 @@ export function ensureVitePlusBootstrap(
 
   if (workspaceInfo.packageManager === PackageManager.pnpm) {
     const pkg = readJsonFile(packageJsonPath) as BootstrapPackageJson;
-    if (!pnpmConfigLivesInPackageJson(pkg, projectPath)) {
+    if (usePnpmWorkspaceYaml) {
       const pnpmWorkspaceYamlPath = path.join(projectPath, 'pnpm-workspace.yaml');
       const before = fs.existsSync(pnpmWorkspaceYamlPath)
         ? fs.readFileSync(pnpmWorkspaceYamlPath, 'utf-8')
         : undefined;
+      migratePnpmSettingsToWorkspaceYaml(projectPath, movedPnpmSettings);
       const catalogDependencyResolver = readPnpmWorkspaceCatalogDependencyResolver(projectPath);
       if (
+        movedPnpmSettings !== undefined ||
         result.packageJson ||
         ecosystemCatalogReferencesPending ||
         !pnpmWorkspaceExoticSubdepsSettingSatisfied(projectPath) ||

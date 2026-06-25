@@ -49,8 +49,22 @@ const {
   detectLegacyGitHooksMigrationCandidate,
   detectYarnPnpMode,
   configureYarnNodeModulesMode,
+  pnpmSupportsWorkspaceSettings,
   setPackageManager,
 } = await import('../migrator.js');
+
+describe('pnpm workspace settings support', () => {
+  it.each([
+    ['10.5.0', false],
+    ['10.6.1', false],
+    ['10.6.2', true],
+    ['10.33.0', true],
+    ['11.0.0', true],
+    ['latest', true],
+  ])('detects support for pnpm %s', (version, expected) => {
+    expect(pnpmSupportsWorkspaceSettings(version)).toBe(expected);
+  });
+});
 
 describe('Yarn PnP migration preflight', () => {
   let tmpDir: string;
@@ -2500,7 +2514,7 @@ describe('ensureVitePlusBootstrap', () => {
     expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
   });
 
-  it('uses a concrete vite-plus version when pnpm config stays in package.json', () => {
+  it('removes an empty pnpm field and creates pnpm-workspace.yaml on pnpm 10.6.2+', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
@@ -2513,16 +2527,22 @@ describe('ensureVitePlusBootstrap', () => {
     const result = ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm));
 
     expect(result.changed).toBe(true);
-    expect(fs.existsSync(path.join(tmpDir, 'pnpm-workspace.yaml'))).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, 'pnpm-workspace.yaml'))).toBe(true);
     const pkg = readJson(path.join(tmpDir, 'package.json')) as {
       devDependencies: Record<string, string>;
-      pnpm: { overrides: Record<string, string> };
+      pnpm?: unknown;
     };
-    expect(pkg.devDependencies['vite-plus']).toBe('latest');
-    expect(pkg.pnpm.overrides.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+    expect(pkg.devDependencies['vite-plus']).toBe('catalog:');
+    expect(pkg.pnpm).toBeUndefined();
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      catalog: Record<string, string>;
+      overrides: Record<string, string>;
+    };
+    expect(workspace.catalog['vite-plus']).toBe('latest');
+    expect(workspace.overrides.vite).toBe('catalog:');
   });
 
-  it('normalizes an existing catalog vite-plus pin when pnpm config stays in package.json', () => {
+  it('moves existing pnpm settings to pnpm-workspace.yaml', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
@@ -2536,6 +2556,13 @@ describe('ensureVitePlusBootstrap', () => {
             vite: 'npm:@voidzero-dev/vite-plus-core@latest',
             vitest: 'npm:@voidzero-dev/vite-plus-test@latest',
           },
+          onlyBuiltDependencies: ['esbuild'],
+          packageExtensions: {
+            'some-package@*': { peerDependencies: { react: '*' } },
+          },
+          patchedDependencies: {
+            'is-odd@3.0.1': 'patches/is-odd.patch',
+          },
           peerDependencyRules: {
             allowAny: ['vite', 'vitest'],
             allowedVersions: { vite: '*', vitest: '*' },
@@ -2548,15 +2575,88 @@ describe('ensureVitePlusBootstrap', () => {
     const result = ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm));
 
     expect(result.changed).toBe(true);
-    expect(fs.existsSync(path.join(tmpDir, 'pnpm-workspace.yaml'))).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, 'pnpm-workspace.yaml'))).toBe(true);
     const pkg = readJson(path.join(tmpDir, 'package.json')) as {
       devDependencies: Record<string, string>;
+      pnpm?: unknown;
     };
-    expect(pkg.devDependencies['vite-plus']).toBe('latest');
+    expect(pkg.devDependencies['vite-plus']).toBe('catalog:');
+    expect(pkg.pnpm).toBeUndefined();
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      onlyBuiltDependencies: string[];
+      packageExtensions: Record<string, unknown>;
+      patchedDependencies: Record<string, string>;
+      peerDependencyRules: { allowAny: string[]; allowedVersions: Record<string, string> };
+    };
+    expect(workspace.onlyBuiltDependencies).toEqual(['esbuild']);
+    expect(workspace.packageExtensions).toEqual({
+      'some-package@*': { peerDependencies: { react: '*' } },
+    });
+    expect(workspace.patchedDependencies).toEqual({
+      'is-odd@3.0.1': 'patches/is-odd.patch',
+    });
+    expect(workspace.peerDependencyRules.allowAny).toEqual(['vite']);
+    expect(workspace.peerDependencyRules.allowedVersions).toEqual({ vite: '*' });
     expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
   });
 
-  it('normalizes catalog vite-plus pins outside devDependencies when pnpm config stays in package.json', () => {
+  it('keeps pnpm settings in package.json before pnpm 10.6.2', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { 'vite-plus': 'latest' },
+        pnpm: {
+          overrides: { react: '18.3.1' },
+          peerDependencyRules: { allowAny: ['react'] },
+        },
+      }),
+    );
+    const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.pnpm);
+    workspaceInfo.packageManagerVersion = '10.6.1';
+    workspaceInfo.downloadPackageManager.version = '10.6.1';
+
+    ensureVitePlusBootstrap(workspaceInfo);
+
+    expect(fs.existsSync(path.join(tmpDir, 'pnpm-workspace.yaml'))).toBe(false);
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      pnpm: {
+        overrides: Record<string, string>;
+        peerDependencyRules: { allowAny: string[] };
+      };
+    };
+    expect(pkg.pnpm.overrides.react).toBe('18.3.1');
+    expect(pkg.pnpm.overrides.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+    expect(pkg.pnpm.peerDependencyRules.allowAny).toEqual(['react', 'vite']);
+  });
+
+  it('preserves unknown package.json pnpm keys while moving supported settings', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { 'vite-plus': 'latest' },
+        pnpm: {
+          app: { target: 'desktop' },
+          overrides: { react: '18.3.1' },
+        },
+      }),
+    );
+
+    ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm));
+
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      pnpm: { app: { target: string }; overrides?: unknown };
+    };
+    expect(pkg.pnpm).toEqual({ app: { target: 'desktop' } });
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      overrides: Record<string, string>;
+    };
+    expect(workspace.overrides.react).toBe('18.3.1');
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
+  });
+
+  it('keeps catalog vite-plus pins outside devDependencies while moving pnpm settings', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
@@ -2583,19 +2683,21 @@ describe('ensureVitePlusBootstrap', () => {
     const result = ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm));
 
     expect(result.changed).toBe(true);
-    expect(fs.existsSync(path.join(tmpDir, 'pnpm-workspace.yaml'))).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, 'pnpm-workspace.yaml'))).toBe(true);
     const pkg = readJson(path.join(tmpDir, 'package.json')) as {
       devDependencies: Record<string, string>;
       dependencies: Record<string, string>;
       optionalDependencies: Record<string, string>;
+      pnpm?: unknown;
     };
-    expect(pkg.devDependencies['vite-plus']).toBe('latest');
-    expect(pkg.dependencies['vite-plus']).toBe('latest');
-    expect(pkg.optionalDependencies['vite-plus']).toBe('latest');
+    expect(pkg.devDependencies['vite-plus']).toBe('catalog:');
+    expect(pkg.dependencies['vite-plus']).toBe('catalog:');
+    expect(pkg.optionalDependencies['vite-plus']).toBe('catalog:');
+    expect(pkg.pnpm).toBeUndefined();
     expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
   });
 
-  it('uses a concrete vite-plus version for pnpm monorepos that keep pnpm config in package.json', () => {
+  it('uses workspace catalog settings for pnpm 10.6.2+ monorepos', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
@@ -2612,11 +2714,13 @@ describe('ensureVitePlusBootstrap', () => {
     });
 
     expect(result.changed).toBe(true);
-    expect(fs.existsSync(path.join(tmpDir, 'pnpm-workspace.yaml'))).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, 'pnpm-workspace.yaml'))).toBe(true);
     const pkg = readJson(path.join(tmpDir, 'package.json')) as {
       devDependencies: Record<string, string>;
+      pnpm?: unknown;
     };
-    expect(pkg.devDependencies['vite-plus']).toBe('latest');
+    expect(pkg.devDependencies['vite-plus']).toBe('catalog:');
+    expect(pkg.pnpm).toBeUndefined();
   });
 
   it('normalizes yarn monorepo dependency specs through the shared catalog', () => {
@@ -2919,7 +3023,7 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(devDeps['vite-plus']).toBe('catalog:');
   });
 
-  it('keeps pnpm config in package.json when existing pnpm field present', () => {
+  it('moves existing pnpm config into pnpm-workspace.yaml on pnpm 10.6.2+', () => {
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
@@ -2933,14 +3037,15 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     );
     rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
 
-    // pnpm-workspace.yaml should NOT be created
-    expect(fs.existsSync(path.join(tmpDir, 'pnpm-workspace.yaml'))).toBe(false);
-
-    // package.json should have pnpm.overrides with both existing and vite overrides
+    expect(fs.existsSync(path.join(tmpDir, 'pnpm-workspace.yaml'))).toBe(true);
     const pkg = readJson(path.join(tmpDir, 'package.json'));
-    const pnpm = pkg.pnpm as Record<string, unknown>;
-    expect(pnpm).toBeDefined();
-    const overrides = pnpm.overrides as Record<string, string>;
+    expect(pkg.pnpm).toBeUndefined();
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      overrides: Record<string, string>;
+      peerDependencyRules: Record<string, unknown>;
+      onlyBuiltDependencies: string[];
+    };
+    const overrides = workspace.overrides;
     expect(overrides['some-pkg']).toBe('1.0.0');
     expect(overrides.vite).toBeDefined();
     // Common case (no @vitest/* dep, no vitest source): `vitest` is not managed,
@@ -2948,14 +3053,11 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(overrides.vitest).toBeUndefined();
 
     // peerDependencyRules should be present
-    expect(pnpm.peerDependencyRules).toBeDefined();
-    // onlyBuiltDependencies should be preserved
-    expect(pnpm.onlyBuiltDependencies).toEqual(['esbuild']);
+    expect(workspace.peerDependencyRules).toBeDefined();
+    expect(workspace.onlyBuiltDependencies).toEqual(['esbuild']);
   });
 
   it('preserves custom peerDependencyRules when migrating to pnpm-workspace.yaml', () => {
-    // Project has peerDependencyRules but no pnpm.overrides -- pnpm field is present
-    // so it should keep using package.json
     fs.writeFileSync(
       path.join(tmpDir, 'package.json'),
       JSON.stringify({
@@ -2973,8 +3075,11 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
 
     const pkg = readJson(path.join(tmpDir, 'package.json'));
-    const pnpm = pkg.pnpm as Record<string, unknown>;
-    const rules = pnpm.peerDependencyRules as Record<string, unknown>;
+    expect(pkg.pnpm).toBeUndefined();
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      peerDependencyRules: Record<string, unknown>;
+    };
+    const rules = workspace.peerDependencyRules;
     // Custom entries preserved, Vite entries merged (vitest is no longer
     // injected as it's not a managed override key anymore).
     expect(rules.allowAny).toEqual(expect.arrayContaining(['react', 'vite']));
@@ -3064,8 +3169,8 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(pkg.peerDependencies).not.toHaveProperty('tsdown');
   });
 
-  it('drops only global/vite-plus-parent selector-shaped REMOVE_PACKAGES overrides from package.json pnpm.overrides', () => {
-    // Project keeps its pnpm config in package.json (`pkg.pnpm.overrides`).
+  it('drops only global/vite-plus-parent selector-shaped REMOVE_PACKAGES overrides after moving pnpm config', () => {
+    // Project starts with its pnpm config in package.json (`pkg.pnpm.overrides`).
     // A selector-shaped provider key is stripped only when it would re-pin
     // vite-plus's OWN provider dep — a versioned global pin or a `vite-plus`
     // parent. A provider selector scoped under a SPECIFIC non-vite-plus parent
@@ -3100,10 +3205,12 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     );
     rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
 
-    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
-      pnpm?: { overrides?: Record<string, string> };
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as { pnpm?: unknown };
+    expect(pkg.pnpm).toBeUndefined();
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      overrides: Record<string, string>;
     };
-    const overrides = pkg.pnpm?.overrides ?? {};
+    const overrides = workspace.overrides;
     // Playwright-as-TARGET: vite-plus parent and versioned global pin reach
     // vite-plus's own (now direct-dep) provider — dropped.
     expect(overrides).not.toHaveProperty('vite-plus>@vitest/browser-playwright');
@@ -5151,7 +5258,9 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
         pnpm: { allowBuilds: { edgedriver: false, geckodriver: true }, overrides: {} },
       }),
     );
-    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+    const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.pnpm);
+    workspaceInfo.downloadPackageManager.version = '10.6.1';
+    rewriteStandaloneProject(tmpDir, workspaceInfo, true, true);
 
     const pnpm = (readJson(path.join(tmpDir, 'package.json')).pnpm ?? {}) as {
       allowBuilds?: Record<string, boolean>;
@@ -5173,7 +5282,9 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
         pnpm: { allowBuilds: { edgedriver: false, geckodriver: false }, overrides: {} },
       }),
     );
-    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+    const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.pnpm);
+    workspaceInfo.downloadPackageManager.version = '10.6.1';
+    rewriteStandaloneProject(tmpDir, workspaceInfo, true, true);
 
     const pnpm = (readJson(path.join(tmpDir, 'package.json')).pnpm ?? {}) as {
       allowBuilds?: Record<string, boolean>;
@@ -5191,7 +5302,9 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
         pnpm: { overrides: {} },
       }),
     );
-    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+    const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.pnpm);
+    workspaceInfo.downloadPackageManager.version = '10.6.1';
+    rewriteStandaloneProject(tmpDir, workspaceInfo, true, true);
 
     // No webdriverio -> nothing to manage -> no allowBuilds key added to the pnpm sink
     // (the webdriverio-present case still writes `true` here — see the flip test below).
@@ -5210,18 +5323,19 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
       }),
     );
     const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.pnpm);
+    workspaceInfo.packageManagerVersion = '9.15.0';
     workspaceInfo.downloadPackageManager.version = '9.15.0';
     rewriteStandaloneProject(tmpDir, workspaceInfo, true, true);
 
-    const yaml = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
-      onlyBuiltDependencies?: string[];
+    const pnpm = (readJson(path.join(tmpDir, 'package.json')).pnpm ?? {}) as {
+      onlyBuiltDependencies: string[];
       allowBuilds?: Record<string, boolean>;
     };
-    expect(yaml.onlyBuiltDependencies).toEqual(
+    expect(pnpm.onlyBuiltDependencies).toEqual(
       expect.arrayContaining(['edgedriver', 'geckodriver']),
     );
     // v10-shape key must not appear on v9 setups
-    expect(yaml.allowBuilds).toBeUndefined();
+    expect(pnpm.allowBuilds).toBeUndefined();
   });
 
   it('leaves onlyBuiltDependencies untouched on pnpm v9 when webdriverio is unused', () => {
@@ -5230,15 +5344,16 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
       JSON.stringify({ name: 'test', devDependencies: { vite: '^7.0.0' } }),
     );
     const workspaceInfo = makeWorkspaceInfo(tmpDir, PackageManager.pnpm);
+    workspaceInfo.packageManagerVersion = '9.15.0';
     workspaceInfo.downloadPackageManager.version = '9.15.0';
     rewriteStandaloneProject(tmpDir, workspaceInfo, true, true);
 
-    const yaml = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+    const pnpm = (readJson(path.join(tmpDir, 'package.json')).pnpm ?? {}) as {
       onlyBuiltDependencies?: string[];
       allowBuilds?: Record<string, boolean>;
     };
-    expect(yaml.onlyBuiltDependencies).toBeUndefined();
-    expect(yaml.allowBuilds).toBeUndefined();
+    expect(pnpm.onlyBuiltDependencies).toBeUndefined();
+    expect(pnpm.allowBuilds).toBeUndefined();
   });
 
   it('detects webdriverio in a monorepo sub-package and allows builds at the root', () => {

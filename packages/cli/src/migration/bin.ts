@@ -1233,6 +1233,7 @@ async function main() {
       workspaceInfoOptional.rootDir,
       workspaceInfoOptional.packageManager,
       workspaceInfoOptional.packages,
+      workspaceInfoOptional.packageManagerVersion,
     );
     let packageManager: PackageManager | undefined = vitePlusBootstrapPending
       ? (workspaceInfoOptional.packageManager ??

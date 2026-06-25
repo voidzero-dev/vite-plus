@@ -3,7 +3,7 @@
   "commands": [
     { "command": "node setup-local.mjs", "ignoreOutput": true },
     "vp migrate --no-interactive # newer global CLI must bypass the installed stale local CLI",
-    "cat package.json # stale wrapper deps and plain vite-plus range should be repaired",
-    "cat pnpm-workspace.yaml # empty pnpm field must not hide workspace overrides"
+    "cat package.json # stale wrapper deps and plain vite-plus range should be repaired; empty pnpm field should be removed",
+    "cat pnpm-workspace.yaml # pnpm settings should be consolidated here"
   ]
 }
