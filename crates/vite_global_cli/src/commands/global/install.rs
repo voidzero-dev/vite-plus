@@ -43,10 +43,7 @@ struct InstalledPackage {
     js_bins: HashSet<String>,
     install_id: String,
     install_dir: AbsolutePathBuf,
-    _install_lock: File,
 }
-
-const INSTALL_LOCK_SUFFIX: &str = ".lock";
 
 fn package_error(package_name: &str, error: impl Into<Error>) -> (Option<String>, Error) {
     (Some(package_name.to_string()), error.into())
@@ -195,6 +192,7 @@ pub async fn install(
     let mut package_names = package_names.iter();
 
     let mut installs = FuturesUnordered::new();
+    let mut install_locks = HashMap::<String, File>::new();
     let mut first_error = None;
     let mut stop_scheduling = false;
     loop {
@@ -215,9 +213,10 @@ pub async fn install(
         }
 
         match installs.next().await {
-            Some((package_name, Ok(installed_package))) => {
+            Some((package_name, Ok((installed_package, lock_file)))) => {
                 progress.inc(1);
-                packages.get_mut(&package_name).unwrap().install = Some(installed_package)
+                packages.get_mut(&package_name).unwrap().install = Some(installed_package);
+                install_locks.insert(package_name, lock_file);
             }
             Some((package_name, Err(error))) => {
                 stop_scheduling = true;
@@ -233,13 +232,13 @@ pub async fn install(
     // 4. Finalize installed packages.
     let mut bin_owners = HashMap::<String, String>::new();
     for (index, (package_name, Package { spec: _, install })) in packages.into_iter().enumerate() {
+        let lock_file = install_locks.remove(&package_name);
         let Some(InstalledPackage {
             installed_version,
             mut bin_names,
             mut js_bins,
             install_id,
             install_dir,
-            _install_lock,
         }) = install
         else {
             continue;
@@ -495,6 +494,7 @@ pub async fn install(
 
         // 4.6 Remove stale installations for this package.
         cleanup_stale_installations(&package_name, &install_id).await;
+        drop(lock_file);
 
         // 4.7 Print success message
         output::success(&format!(
@@ -526,11 +526,11 @@ async fn install_one(
     package_spec: &str,
     npm_path: &AbsolutePathBuf,
     node_bin_dir: &AbsolutePathBuf,
-) -> Result<InstalledPackage, Error> {
+) -> Result<(InstalledPackage, File), Error> {
     // 1. Create an immutable install directory.
     let install_id = new_install_id();
     let install_dir = PackageMetadata::installation_dir_for(package_name, &install_id)?;
-    let install_lock = lock_install_dir(&install_dir)?;
+    let lock_file = lock_install_dir(&install_dir)?;
     tokio::fs::create_dir_all(&install_dir).await?;
 
     // 2. Run npm install with prefix set to the final installation directory.
@@ -602,14 +602,10 @@ async fn install_one(
         }
     }
 
-    Ok(InstalledPackage {
-        installed_version,
-        bin_names,
-        js_bins,
-        install_id,
-        install_dir,
-        _install_lock: install_lock,
-    })
+    Ok((
+        InstalledPackage { installed_version, bin_names, js_bins, install_id, install_dir },
+        lock_file,
+    ))
 }
 
 fn new_install_id() -> String {
@@ -689,14 +685,6 @@ async fn remove_dir_all_if_exists(path: &AbsolutePathBuf) -> Result<(), Error> {
     }
 }
 
-async fn remove_file_if_exists(path: &AbsolutePathBuf) -> Result<(), Error> {
-    match tokio::fs::remove_file(path).await {
-        Ok(()) => Ok(()),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(error.into()),
-    }
-}
-
 fn install_dir_lock_path(install_dir: &AbsolutePathBuf) -> Result<AbsolutePathBuf, Error> {
     let parent = install_dir.as_path().parent().ok_or_else(|| {
         Error::ConfigError(
@@ -717,44 +705,47 @@ fn install_dir_lock_path(install_dir: &AbsolutePathBuf) -> Result<AbsolutePathBu
                 .into(),
             )
         })?;
-
-    Ok(AbsolutePathBuf::new(parent.join(format!("{file_name}{INSTALL_LOCK_SUFFIX}"))).ok_or_else(
-        || {
-            Error::ConfigError(
-                format!(
-                    "Invalid global package installation lock path for {}",
-                    install_dir.as_path().display()
-                )
-                .into(),
+    AbsolutePathBuf::new(parent.join(format!("{file_name}.lock"))).ok_or_else(|| {
+        Error::ConfigError(
+            format!(
+                "Invalid global package installation lock path for {}",
+                install_dir.as_path().display()
             )
-        },
-    )?)
+            .into(),
+        )
+    })
 }
 
-fn open_install_dir_lock_file(install_dir: &AbsolutePathBuf) -> Result<File, Error> {
+fn open_install_dir_lock_file(
+    install_dir: &AbsolutePathBuf,
+) -> Result<(AbsolutePathBuf, File), Error> {
     let lock_path = install_dir_lock_path(install_dir)?;
     if let Some(parent) = lock_path.as_path().parent() {
         std::fs::create_dir_all(parent)?;
     }
 
-    Ok(OpenOptions::new()
+    let lock_file = OpenOptions::new()
         .read(true)
         .write(true)
         .create(true)
         .truncate(false)
-        .open(lock_path.as_path())?)
+        .open(lock_path.as_path())?;
+
+    Ok((lock_path, lock_file))
 }
 
 fn lock_install_dir(install_dir: &AbsolutePathBuf) -> Result<File, Error> {
-    let lock_file = open_install_dir_lock_file(install_dir)?;
+    let (_, lock_file) = open_install_dir_lock_file(install_dir)?;
     lock_file.lock()?;
     Ok(lock_file)
 }
 
-fn try_lock_install_dir(install_dir: &AbsolutePathBuf) -> Result<Option<File>, Error> {
-    let lock_file = open_install_dir_lock_file(install_dir)?;
+fn try_lock_install_dir(
+    install_dir: &AbsolutePathBuf,
+) -> Result<Option<(AbsolutePathBuf, File)>, Error> {
+    let (lock_path, lock_file) = open_install_dir_lock_file(install_dir)?;
     match lock_file.try_lock() {
-        Ok(()) => Ok(Some(lock_file)),
+        Ok(()) => Ok(Some((lock_path, lock_file))),
         Err(TryLockError::WouldBlock) => Ok(None),
         Err(TryLockError::Error(error)) => Err(error.into()),
     }
@@ -766,8 +757,8 @@ async fn cleanup_stale_installations(package_name: &str, current_install_id: &st
     };
 
     for install_dir in stale_dirs {
-        let lock_file = match try_lock_install_dir(&install_dir) {
-            Ok(Some(lock_file)) => lock_file,
+        let (lock_path, lock_file) = match try_lock_install_dir(&install_dir) {
+            Ok(Some(lock)) => lock,
             Ok(None) => continue,
             Err(error) => {
                 tracing::warn!(
@@ -788,11 +779,8 @@ async fn cleanup_stale_installations(package_name: &str, current_install_id: &st
             continue;
         }
 
-        let Ok(lock_path) = install_dir_lock_path(&install_dir) else {
-            continue;
-        };
         drop(lock_file);
-        if let Err(error) = remove_file_if_exists(&lock_path).await {
+        if let Err(error) = tokio::fs::remove_file(&lock_path).await {
             tracing::warn!(
                 "Failed to remove stale global package installation lock at {}: {}",
                 lock_path.as_path().display(),
