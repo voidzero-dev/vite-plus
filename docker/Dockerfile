@@ -53,6 +53,8 @@ ENV VP_HOME=/home/vp/.vite-plus \
 # downloads its own pinned Node at build time, so the default is dead weight in a
 # builder image. The node/npm/npx shims remain and fetch the right version on
 # first use.
+#
+# Keep this install line in sync with docker/Dockerfile.alpine.
 RUN curl -fsSL https://vite.plus | VP_VERSION="${VP_VERSION}" VP_PR_VERSION="${VP_PR_VERSION}" bash \
  && vp --version \
  && rm -rf "$VP_HOME/js_runtime"

@@ -223,6 +223,8 @@ jobs:
             const image = process.env.IMAGE;
             const pr = context.payload.pull_request.number;
             const marker = '<!-- docker-preview -->';
+            // Built as a line array (not a template literal) so the fenced code
+            // blocks don't collide with the YAML block-scalar indentation.
             const body = [
               marker,
               '## 🐳 Docker preview images',
