@@ -36,29 +36,30 @@ another diff.
 
 ## Dependency Changes
 
-| Dependency                     | Migration rule                                                                                                                                                                                                                                |
-| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `vite-plus`                    | Add it where the package is migrated. Re-pin plain ranges to the current concrete target, directly or through a catalog. Preserve deliberate protocol pins.                                                                                   |
-| `vite`                         | Keep or add a real dependency edge where peer resolution requires one, and rewrite that edge plus the shared override/resolution to the matching `@voidzero-dev/vite-plus-core` target. An override rewrites an edge; it does not create one. |
-| `vitest`                       | Remove it in the common node-mode case because `vite-plus` provides it transitively. Keep or add an exact bundled version only in packages with direct Vitest requirements.                                                                   |
-| `@vitest/*`                    | Align lockstep packages that the project directly lists to the bundled Vitest version. Prefer the package's existing catalog reference when its catalog owns that package; otherwise write the concrete version.                              |
-| `@voidzero-dev/vite-plus-test` | Remove all dependency, override, resolution, and catalog aliases. Rewrite imports to the current `vite-plus/test*` surface.                                                                                                                   |
+| Dependency                     | Migration rule                                                                                                                                                                                                                                          |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `vite-plus`                    | Add it where the package is migrated. Re-pin plain ranges to the current concrete target, directly or through a catalog. Preserve deliberate protocol pins.                                                                                             |
+| `vite`                         | Keep existing declarations. With pnpm, add a direct dev dependency to every package that depends on `vite-plus` and does not already declare `vite`. Point managed edges and the shared override to the matching `@voidzero-dev/vite-plus-core` target. |
+| `vitest`                       | Remove it in the common node-mode case because `vite-plus` provides it transitively. Keep or add an exact bundled version only in packages with direct Vitest requirements.                                                                             |
+| `@vitest/*`                    | Align lockstep packages that the project directly lists to the bundled Vitest version. Prefer the package's existing catalog reference when its catalog owns that package; otherwise write the concrete version.                                        |
+| `@voidzero-dev/vite-plus-test` | Remove all dependency, override, resolution, and catalog aliases. Rewrite imports to the current `vite-plus/test*` surface.                                                                                                                             |
 
 ### Vite and Overrides
 
-Package-manager overrides do not synthesize dependency edges. This matters most
-with pnpm: Vitest has a required `vite` peer, and pnpm can auto-install upstream
-Vite when a package that depends on `vite-plus` has no direct `vite` edge. That
-creates separate Vite+, Vite, and Vitest peer contexts. Each affected pnpm
-workspace package must therefore declare `vite`; the workspace override then
-redirects that edge to Vite+ core.
+Package-manager overrides do not synthesize dependency edges. Under pnpm, every
+package that lists `vite-plus` in `dependencies` or `devDependencies` must also
+declare `vite`, unless it already has a `vite` entry in `dependencies`,
+`devDependencies`, `optionalDependencies`, or `peerDependencies`. Otherwise,
+pnpm can auto-install upstream Vite to satisfy Vitest's required `vite` peer,
+creating separate Vite+, Vite, and Vitest instances. `vp migrate` adds a missing
+`vite` entry to `devDependencies`; the workspace override redirects it to Vite+
+core.
 
 Do not remove a direct `vite` declaration merely because a root override exists.
 Normalize existing plain or stale aliases while retaining named catalog
-references. A real edge is also required for Bun's peer resolver, and npm
-browser-provider layouts may need a top-level edge so nested Vitest packages can
-resolve `vite`. After migration, pnpm users should verify that each affected
-workspace package has the required direct edge.
+references. The general rule above is specific to pnpm. Bun mirrors its core
+alias as a direct dependency for its peer resolver, while npm browser-provider
+layouts may need a top-level edge so nested Vitest packages can resolve `vite`.
 
 ### When Vitest Is Directly Required
 
@@ -154,8 +155,9 @@ lint autofix preserves these imports.
   11 no longer reads the legacy package.json settings.
 - Migration keeps dependency references, default and named catalogs, overrides,
   and `peerDependencyRules` consistent.
-- Each package whose `vite-plus`/Vitest peer context would otherwise install
-  upstream Vite needs a direct `vite` edge.
+- Each package that lists `vite-plus` in `dependencies` or `devDependencies`
+  gets a direct `vite` dev dependency unless it already declares `vite` in a
+  dependency field.
 - Unrelated selector-shaped and object-valued overrides are preserved.
 
 ### npm
