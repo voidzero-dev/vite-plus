@@ -38,6 +38,7 @@ declare module 'vitest/config' {
 {
   "name": "migration-rewrite-declare-module",
   "devDependencies": {
+    "vite": "catalog:",
     "vite-plus": "catalog:"
   },
   "devEngines": {
