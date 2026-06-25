@@ -232,3 +232,55 @@ jobs:
             • macOS/Linux: `curl -fsSL https://vite.plus | bash`
             • Windows: `irm https://vite.plus/ps1 | iex`
           embed-url: https://github.com/${{ github.repository }}/releases/tag/v${{ env.VERSION }}
+
+  # Build and push the official toolchain Docker image to GHCR after the npm
+  # release is published (the image installs vp from npm, so the version must
+  # exist first). See docker/Dockerfile and docs/guide/docker.md.
+  publish-docker:
+    name: Publish Docker image
+    runs-on: ubuntu-latest
+    needs: [check, Release]
+    if: needs.check.outputs.version_changed == 'true'
+    permissions:
+      contents: read
+      packages: write
+    env:
+      VERSION: ${{ needs.check.outputs.version }}
+      IMAGE: ghcr.io/voidzero-dev/vite-plus
+    steps:
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
+
+      - uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3 # v4.1.0
+
+      - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+
+      - name: Log in to GHCR
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # v6.1.0
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=semver,pattern={{version}},value=${{ env.VERSION }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ env.VERSION }}
+            type=semver,pattern={{major}},value=${{ env.VERSION }}
+            type=raw,value=latest
+
+      - name: Build and push
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        with:
+          context: docker
+          file: docker/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VP_VERSION=${{ env.VERSION }}
+          provenance: false
