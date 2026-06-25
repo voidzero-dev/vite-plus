@@ -42,7 +42,7 @@ export default defineConfig({
         files: ['**/*.test.ts', '**/*.spec.ts'],
         plugins: ['vitest'],
         rules: {
-          '@typescript-eslint/no-explicit-any': 'off',
+          'typescript/no-explicit-any': 'off',
           'vitest/no-disabled-tests': 'error',
         },
       },
