@@ -32,20 +32,17 @@ RUN apt-get update \
       ca-certificates \
       curl \
       git \
-      xz-utils \
       build-essential \
       python3 \
       pkg-config \
  && rm -rf /var/lib/apt/lists/* \
- && useradd --create-home --shell /bin/bash vp \
- && mkdir -p /app \
- && chown vp:vp /app
+ && useradd --create-home --shell /bin/bash vp
 
 # Run as a non-root user by default (mirrors oven/bun's `bun` and Deno's `deno`).
 USER vp
 
-ENV VP_HOME=/home/vp/.vite-plus
-ENV PATH=/home/vp/.vite-plus/bin:$PATH
+ENV VP_HOME=/home/vp/.vite-plus \
+    PATH=/home/vp/.vite-plus/bin:$PATH
 
 # Install the vp global CLI. The installer downloads the platform package from
 # npm (or from pkg.pr.new when VP_PR_VERSION is set). Node.js itself is

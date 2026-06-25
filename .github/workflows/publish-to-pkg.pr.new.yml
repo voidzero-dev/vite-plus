@@ -170,12 +170,14 @@ jobs:
 
       # Builds from the pkg.pr.new packages for this PR (VP_PR_VERSION). The
       # platform packages must exist first, hence `needs: publish`.
+      # amd64-only: this throwaway preview avoids the slow arm64 QEMU leg; arm64
+      # is covered by the release build and the test-install-sh-arm64 job.
       - name: Build and push preview image
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
         with:
           context: docker
           file: docker/Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: true
           tags: ${{ env.IMAGE }}:pr-${{ env.PR_NUMBER }}
           build-args: |
