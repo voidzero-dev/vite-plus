@@ -28,6 +28,7 @@ type LatestTagOptions = {
 
 type NpmLatestResponse = {
   version?: unknown;
+  dependencies?: Record<string, string>;
 };
 
 type UpstreamVersions = {
@@ -42,6 +43,7 @@ type UpstreamVersions = {
 type PnpmWorkspaceVersions = {
   vitest: string;
   tsdown: string;
+  lightningcss: string;
   oxcNodeCli: string;
   oxcNodeCore: string;
   oxfmt: string;
@@ -131,18 +133,35 @@ async function getLatestTag(
 }
 
 // ============ npm Registry ============
-async function getLatestNpmVersion(packageName: string): Promise<string> {
+async function fetchNpmLatest(packageName: string): Promise<NpmLatestResponse> {
   const res = await fetch(`https://registry.npmjs.org/${packageName}/latest`);
   if (!res.ok) {
     throw new Error(
-      `Failed to fetch npm version for ${packageName}: ${res.status} ${res.statusText}`,
+      `Failed to fetch npm metadata for ${packageName}: ${res.status} ${res.statusText}`,
     );
   }
-  const data = (await res.json()) as NpmLatestResponse;
+  return (await res.json()) as NpmLatestResponse;
+}
+
+async function getLatestNpmVersion(packageName: string): Promise<string> {
+  const data = await fetchNpmLatest(packageName);
   if (typeof data.version !== 'string') {
     throw new Error(`Invalid npm response for ${packageName}: missing version field`);
   }
   return data.version;
+}
+
+// Read a dependency range from the latest published version of `packageName`,
+// e.g. the `lightningcss` range that the bundled `@tsdown/css` depends on.
+async function getNpmDependencyRange(packageName: string, dependencyName: string): Promise<string> {
+  const data = await fetchNpmLatest(packageName);
+  const range = data.dependencies?.[dependencyName];
+  if (typeof range !== 'string') {
+    throw new Error(
+      `Invalid npm response for ${packageName}: missing dependencies.${dependencyName}`,
+    );
+  }
+  return range;
 }
 
 // ============ Update .upstream-versions.json ============
@@ -211,6 +230,32 @@ async function updatePnpmWorkspace(versions: PnpmWorkspaceVersions): Promise<voi
       pattern: /tsdown: \^([\d.]+(?:-[\w.]+)?)/,
       replacement: `tsdown: ^${versions.tsdown}`,
       newVersion: versions.tsdown,
+    },
+    // `@tsdown/css` and `@tsdown/exe` are bundled into core and published in
+    // lockstep with tsdown (they exact-peer-depend on the same tsdown version),
+    // so pin both catalog entries to the tsdown version to avoid drift.
+    {
+      name: '@tsdown/css',
+      pattern: /'@tsdown\/css': \^([\d.]+(?:-[\w.]+)?)/,
+      replacement: `'@tsdown/css': ^${versions.tsdown}`,
+      newVersion: versions.tsdown,
+    },
+    {
+      name: '@tsdown/exe',
+      pattern: /'@tsdown\/exe': \^([\d.]+(?:-[\w.]+)?)/,
+      replacement: `'@tsdown/exe': ^${versions.tsdown}`,
+      newVersion: versions.tsdown,
+    },
+    // `lightningcss` is a core dependency consumed by the bundled `@tsdown/css`.
+    // Track exactly what `@tsdown/css` requires (already an `^x.y.z` range) so a
+    // tsdown upgrade that bumps lightningcss is mirrored here.
+    {
+      name: 'lightningcss',
+      // Match any range value (not just `^x.y.z`) so the pattern can re-match
+      // whatever `@tsdown/css` declares (`~`, `>=`, compound ranges) on the next run.
+      pattern: /\n {2}lightningcss: ([^\n]+)\n/,
+      replacement: `\n  lightningcss: ${versions.lightningcss}\n`,
+      newVersion: versions.lightningcss,
     },
     {
       name: '@oxc-node/cli',
@@ -516,6 +561,7 @@ console.log('Fetching latest versions…');
 const [
   vitestVersion,
   tsdownVersion,
+  lightningcssVersion,
   devtoolsVersion,
   oxcNodeCliVersion,
   oxcNodeCoreVersion,
@@ -530,6 +576,8 @@ const [
 ] = await Promise.all([
   getLatestNpmVersion('vitest'),
   getLatestNpmVersion('tsdown'),
+  // Mirror exactly what the bundled @tsdown/css depends on.
+  getNpmDependencyRange('@tsdown/css', 'lightningcss'),
   getLatestNpmVersion('@vitejs/devtools'),
   getLatestNpmVersion('@oxc-node/cli'),
   getLatestNpmVersion('@oxc-node/core'),
@@ -545,6 +593,7 @@ const [
 
 console.log(`vitest: ${vitestVersion}`);
 console.log(`tsdown: ${tsdownVersion}`);
+console.log(`lightningcss (from @tsdown/css): ${lightningcssVersion}`);
 console.log(`@vitejs/devtools: ${devtoolsVersion}`);
 console.log(`@oxc-node/cli: ${oxcNodeCliVersion}`);
 console.log(`@oxc-node/core: ${oxcNodeCoreVersion}`);
@@ -561,6 +610,7 @@ await updateUpstreamVersions();
 await updatePnpmWorkspace({
   vitest: vitestVersion,
   tsdown: tsdownVersion,
+  lightningcss: lightningcssVersion,
   oxcNodeCli: oxcNodeCliVersion,
   oxcNodeCore: oxcNodeCoreVersion,
   oxfmt: oxfmtVersion,

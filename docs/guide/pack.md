@@ -58,4 +58,12 @@ export default defineConfig({
 });
 ```
 
+Executable support is bundled into Vite+, so you do not need to install `@tsdown/exe` separately.
+
+Building executables uses Node's [Single Executable Applications](https://nodejs.org/api/single-executable-applications.html) support and requires Node.js 25.7.0 or later. Switch the active runtime with `vp env use 26` if `vp pack --exe` reports an unsupported version.
+
 See the official [tsdown executable docs](https://tsdown.dev/options/exe#executable) for details about configuring custom file names, embedded assets, and cross-platform targets.
+
+## CSS Bundling
+
+`vp pack` can transform and bundle CSS (including CSS Modules and [Lightning CSS](https://lightningcss.dev/) optimizations) for your entry points. This support is bundled into Vite+, so you do not need to install `@tsdown/css` or `lightningcss` separately, it works out of the box.
