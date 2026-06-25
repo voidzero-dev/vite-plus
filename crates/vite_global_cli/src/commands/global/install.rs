@@ -47,6 +47,8 @@ struct InstalledPackage {
     install_dir: AbsolutePathBuf,
 }
 
+const STALE_GLOBAL_INSTALL_MIN_AGE: Duration = Duration::from_secs(60 * 60);
+
 fn package_error(package_name: &str, error: impl Into<Error>) -> (Option<String>, Error) {
     (Some(package_name.to_string()), error.into())
 }
@@ -753,6 +755,11 @@ async fn cleanup_stale_installation_dir(
         return;
     }
 
+    if !is_old_enough_for_stale_cleanup(path).await {
+        tracing::debug!("Skipping recent global package installation: {}", path.display());
+        return;
+    }
+
     tracing::debug!("Cleaning up stale global package installation: {}", path.display());
     if let Err(error) = tokio::fs::remove_dir_all(path).await {
         if error.kind() != std::io::ErrorKind::NotFound {
@@ -763,6 +770,18 @@ async fn cleanup_stale_installation_dir(
             );
         }
     }
+}
+
+async fn is_old_enough_for_stale_cleanup(path: &std::path::Path) -> bool {
+    let Ok(metadata) = tokio::fs::metadata(path).await else {
+        return false;
+    };
+    let Ok(modified) = metadata.modified() else {
+        return false;
+    };
+    std::time::SystemTime::now()
+        .duration_since(modified)
+        .is_ok_and(|age| age >= STALE_GLOBAL_INSTALL_MIN_AGE)
 }
 
 async fn remove_dir_all_if_exists(path: &AbsolutePathBuf) -> Result<(), Error> {
@@ -1395,6 +1414,7 @@ mod tests {
         let scoped_active_id = "#111e4567-e89b-42d3-a456-426614174000";
         let scoped_stale_id = "#222e4567-e89b-42d3-a456-426614174000";
         let legacy_stale_id = "#333e4567-e89b-42d3-a456-426614174000";
+        let in_progress_id = "#444e4567-e89b-42d3-a456-426614174000";
 
         let active_dir = packages_dir.join(format!("typescript{active_id}"));
         let stale_dir = packages_dir.join(format!("typescript{stale_id}"));
@@ -1405,6 +1425,7 @@ mod tests {
         let scoped_active_dir = packages_dir.join("@scope").join(format!("pkg{scoped_active_id}"));
         let scoped_stale_dir = packages_dir.join("@scope").join(format!("pkg{scoped_stale_id}"));
         let scoped_legacy_stale_for_active_identified_dir = packages_dir.join("@scope").join("pkg");
+        let in_progress_dir = packages_dir.join(format!("in-progress{in_progress_id}"));
 
         for dir in [
             &active_dir,
@@ -1416,6 +1437,7 @@ mod tests {
             &scoped_active_dir,
             &scoped_stale_dir,
             &scoped_legacy_stale_for_active_identified_dir,
+            &in_progress_dir,
         ] {
             tokio::fs::create_dir_all(dir).await.unwrap();
         }
@@ -1458,17 +1480,36 @@ mod tests {
         );
         legacy_metadata.save().await.unwrap();
 
+        for dir in [
+            &stale_dir,
+            &legacy_stale_for_active_identified_dir,
+            &legacy_stale_dir,
+            &scoped_stale_dir,
+            &scoped_legacy_stale_for_active_identified_dir,
+        ] {
+            mark_install_dir_old(dir);
+        }
+
         cleanup_stale_installations().await.unwrap();
 
         assert!(active_dir.join("marker").as_path().exists());
         assert!(legacy_dir.join("marker").as_path().exists());
         assert!(scoped_active_dir.join("marker").as_path().exists());
+        assert!(in_progress_dir.as_path().exists());
         assert!(malformed_dir.as_path().exists());
         assert!(!stale_dir.as_path().exists());
         assert!(!legacy_stale_for_active_identified_dir.as_path().exists());
         assert!(!legacy_stale_dir.as_path().exists());
         assert!(!scoped_stale_dir.as_path().exists());
         assert!(!scoped_legacy_stale_for_active_identified_dir.as_path().exists());
+    }
+
+    fn mark_install_dir_old(dir: &AbsolutePathBuf) {
+        let modified =
+            std::time::SystemTime::now() - STALE_GLOBAL_INSTALL_MIN_AGE - Duration::from_secs(1);
+        let file = std::fs::File::open(dir.as_path()).unwrap();
+        let times = std::fs::FileTimes::new().set_modified(modified);
+        file.set_times(times).unwrap();
     }
 
     #[tokio::test]
