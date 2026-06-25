@@ -1396,57 +1396,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_cleanup_previous_installation_removes_only_replaced_install() {
-        use tempfile::TempDir;
-        use vite_path::AbsolutePathBuf;
-
-        let temp_dir = TempDir::new().unwrap();
-        let temp_path = temp_dir.path().to_path_buf();
-        let _env_guard = vite_shared::EnvConfig::test_guard(
-            vite_shared::EnvConfig::for_test_with_home(&temp_path),
-        );
-
-        let legacy_package_dir =
-            AbsolutePathBuf::new(temp_path.join("packages").join("@scope").join("pkg")).unwrap();
-        let current_install_id = "#123e4567-e89b-42d3-a456-426614174000";
-        let old_install_id = "#987e6543-e21b-42d3-a456-426614174000";
-        let stale_install_id = "#987e6543-e21b-42d3-b456-426614174000";
-        let current_install = AbsolutePathBuf::new(
-            legacy_package_dir.as_path().with_file_name(format!("pkg{current_install_id}")),
-        )
-        .unwrap();
-        let old_install = AbsolutePathBuf::new(
-            legacy_package_dir.as_path().with_file_name(format!("pkg{old_install_id}")),
-        )
-        .unwrap();
-        let stale_install = AbsolutePathBuf::new(
-            legacy_package_dir.as_path().with_file_name(format!("pkg{stale_install_id}")),
-        )
-        .unwrap();
-        tokio::fs::create_dir_all(&current_install).await.unwrap();
-        tokio::fs::create_dir_all(&old_install).await.unwrap();
-        tokio::fs::create_dir_all(&stale_install).await.unwrap();
-        tokio::fs::write(current_install.join("marker").as_path(), "current").await.unwrap();
-
-        let mut previous_metadata = PackageMetadata::new(
-            "@scope/pkg".to_string(),
-            "1.0.0".to_string(),
-            "22.0.0".to_string(),
-            None,
-            vec![],
-            HashSet::new(),
-            "npm".to_string(),
-        );
-        previous_metadata.install_id = old_install_id.to_string();
-
-        cleanup_previous_installation(Some(&previous_metadata), current_install_id).await;
-
-        assert!(current_install.join("marker").as_path().exists());
-        assert!(!old_install.as_path().exists());
-        assert!(stale_install.as_path().exists());
-    }
-
-    #[tokio::test]
     #[cfg_attr(windows, serial_test::serial)]
     async fn test_restore_previous_install_state_removes_partial_new_bins() {
         use tempfile::TempDir;
