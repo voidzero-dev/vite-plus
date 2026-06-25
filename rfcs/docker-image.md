@@ -2,7 +2,7 @@
 
 - Issue: [#1490](https://github.com/voidzero-dev/vite-plus/issues/1490)
 - Plan: [#1324](https://github.com/voidzero-dev/vite-plus/issues/1324) ("Distribute `vp` across Homebrew, Windows installer, Docker image, apt etc.")
-- Status: Draft
+- Status: Accepted (implementation in progress)
 
 ## Summary
 
@@ -201,12 +201,23 @@ deployed images small.
 
 ### How `vp` gets into the image
 
-The published image is built hermetically from the release artifacts: the
-per-arch `vp` binary produced by the existing release pipeline is copied into the
-image, so the image version maps 1:1 to a `vp` release and needs no network at
-image-build time to install vp itself. (The user-facing one-liner
-`curl -fsSL https://vite.plus | VP_VERSION=<v> bash` remains the documented way to
-add vp to a custom base image.)
+The image installs `vp` with the official install script, pinned to the release
+version:
+
+```dockerfile
+RUN curl -fsSL https://vite.plus | VP_VERSION="${VP_VERSION}" bash
+```
+
+The publish job runs after the npm release, so the pinned version is already on
+the registry. This reuses the install script's battle-tested platform detection
+(including correct gnu/musl and amd64/arm64 selection under buildx), so the same
+Dockerfile produces every architecture without a per-arch artifact copy. The
+image version maps 1:1 to a `vp` release via the `VP_VERSION` build arg, and the
+same one-liner is the documented way to add `vp` to a custom base image.
+
+A fully hermetic build that copies the per-arch `vp` binary from the release
+artifacts (no network at image-build time) is a possible later hardening; it is
+not required for v1.
 
 ### Tagging
 
