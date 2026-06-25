@@ -5,7 +5,7 @@
     "long-time-install-package",
     "node test-reinstall-interrupt.js # Reinstall but interrupt",
     "long-time-install-package # Original package should be still runnable",
-    "node create-stale-packages.js # Create stale packages with empty and stale install ids",
+    "node check-stale-packages.js --expect-stale # Interrupted reinstall should leave stale package",
     "vp install -g ./long-time-install-package # Successful reinstall should clean stale packages",
     "node check-stale-packages.js"
   ],

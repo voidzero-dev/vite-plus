@@ -12,8 +12,8 @@ info: Installing 1 global package with Node.js <semver>
 > long-time-install-package # Original package should be still runnable
 long-time-install-package
 
-> node create-stale-packages.js # Create stale packages with empty and stale install ids
-stale packages created
+> node check-stale-packages.js --expect-stale # Interrupted reinstall should leave stale package
+interrupted stale package exists
 
 > vp install -g ./long-time-install-package # Successful reinstall should clean stale packages
 info: Installing 1 global package with Node.js <semver>
@@ -21,5 +21,4 @@ info: Installing 1 global package with Node.js <semver>
   Bins: long-time-install-package
 
 > node check-stale-packages.js
-empty install id stale package removed
 interrupted stale package removed

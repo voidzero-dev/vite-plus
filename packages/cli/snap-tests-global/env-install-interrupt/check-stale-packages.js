@@ -6,6 +6,7 @@ const scopeDir = path.join(process.env.VP_HOME, 'packages', '@scope');
 const metadataPath = path.join(scopeDir, `${packageBase}.json`);
 const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf8'));
 const activeDir = `${packageBase}${metadata.installId}`;
+const expectStale = process.argv.includes('--expect-stale');
 
 const packageDirs = fs
   .readdirSync(scopeDir, { withFileTypes: true })
@@ -23,14 +24,12 @@ const packageDirs = fs
   .map((entry) => entry.name)
   .sort();
 
-const hasLegacyStale = packageDirs.includes(packageBase);
 const hasIdentifiedStale = packageDirs.some((name) => name !== packageBase && name !== activeDir);
 
 console.log(
-  hasLegacyStale
-    ? 'empty install id stale package exists'
-    : 'empty install id stale package removed',
-);
-console.log(
   hasIdentifiedStale ? 'interrupted stale package exists' : 'interrupted stale package removed',
 );
+
+if (expectStale !== hasIdentifiedStale) {
+  process.exit(1);
+}
