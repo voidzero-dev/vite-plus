@@ -48,6 +48,7 @@ vite-plus/
 - **Package-manager commands**: start at `crates/vite_pm_cli/` and `crates/vite_install/`.
 - **Managed Node runtime / shims**: start at `crates/vite_js_runtime/`.
 - **Static `vite.config.ts` extraction**: start at `crates/vite_static_config/README.md` and `packages/cli/src/resolve-vite-config.ts`.
+- **Migration behavior**: `docs/guide/migrate-rules.md`.
 - **Bundled toolchain surfaces**: start with `packages/core/BUNDLING.md`, `packages/cli/BUNDLING.md`, and `packages/test/BUNDLING.md`.
 - **Generated project agent guidance**: `packages/cli/AGENTS.md` and `packages/cli/src/utils/agent.ts`; do not edit these when the task is only to improve root repo guidance.
 - **Product/repo docs**: root contributor docs live at the repo root and the VitePress site under `docs/` (`docs/guide/`, `docs/config/`); generated agent guidance is separate.
