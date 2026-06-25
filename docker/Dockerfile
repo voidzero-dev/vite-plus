@@ -20,6 +20,11 @@ LABEL org.opencontainers.image.source="https://github.com/voidzero-dev/vite-plus
 #   docker build --build-arg VP_VERSION=1.4.2 .
 ARG VP_VERSION=latest
 
+# Optional: build a preview image from a pkg.pr.new build instead of npm.
+# Set to a PR number or commit SHA; when set it overrides VP_VERSION.
+#   docker build --build-arg VP_PR_VERSION=1569 .
+ARG VP_PR_VERSION=
+
 # Toolchain image: include git and a C/C++ build toolchain so native addons
 # (for example better-sqlite3 or sharp) can compile during `vp install`.
 RUN apt-get update \
@@ -43,9 +48,10 @@ ENV VP_HOME=/home/vp/.vite-plus
 ENV PATH=/home/vp/.vite-plus/bin:$PATH
 
 # Install the vp global CLI. The installer downloads the platform package from
-# npm. Node.js itself is provisioned per-project by vp at build time, honoring
-# `.node-version` / `engines.node` / `devEngines.runtime`.
-RUN curl -fsSL https://vite.plus | VP_VERSION="${VP_VERSION}" bash \
+# npm (or from pkg.pr.new when VP_PR_VERSION is set). Node.js itself is
+# provisioned per-project by vp at build time, honoring `.node-version` /
+# `engines.node` / `devEngines.runtime`.
+RUN curl -fsSL https://vite.plus | VP_VERSION="${VP_VERSION}" VP_PR_VERSION="${VP_PR_VERSION}" bash \
  && vp --version
 
 WORKDIR /app

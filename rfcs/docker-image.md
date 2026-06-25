@@ -252,6 +252,15 @@ Add an image build/publish job to the release flow (`release.yml` /
 binaries and pushes to GHCR with the tag set above, gated on a successful
 release. (Exact wiring is an implementation detail for the PR.)
 
+### Pre-release validation (preview image)
+
+To verify the image before a real release, the `pkg.pr.new` workflow
+(`publish-to-pkg.pr.new.yml`) also builds the multi-arch image, but from the PR's
+pkg.pr.new build (`VP_PR_VERSION`), and pushes it as `ghcr.io/voidzero-dev/vite-plus:pr-<number>`
+(never `latest`). This reuses the exact same `docker/Dockerfile` as the release,
+so labeling a PR with `pkg.pr.new` produces a pullable preview image that
+exercises the real build path.
+
 ## Recommended Dockerfile patterns (documented for users)
 
 ### 1. SSR / Node-server app, slim runtime (the #1490 case)
