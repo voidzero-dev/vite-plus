@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 
+import { withConfigMetadataResolution } from '../define-config.ts';
 import {
   configDefaults,
   coverageConfigDefaults,
@@ -11,17 +12,18 @@ import {
   lazyPlugins,
 } from '../index.js';
 
-let originalVpCommand: string | undefined;
+let originalMetadataEnv: string | undefined;
 
 beforeEach(() => {
-  originalVpCommand = process.env.VP_COMMAND;
+  originalMetadataEnv = process.env.VP_RESOLVING_CONFIG_METADATA;
+  delete process.env.VP_RESOLVING_CONFIG_METADATA;
 });
 
 afterEach(() => {
-  if (originalVpCommand === undefined) {
-    delete process.env.VP_COMMAND;
+  if (originalMetadataEnv === undefined) {
+    delete process.env.VP_RESOLVING_CONFIG_METADATA;
   } else {
-    process.env.VP_COMMAND = originalVpCommand;
+    process.env.VP_RESOLVING_CONFIG_METADATA = originalMetadataEnv;
   }
 });
 
@@ -36,36 +38,68 @@ test('should keep vitest exports stable', () => {
   expect(defaultBrowserPort).toBeDefined();
 });
 
-// lazyPlugins tests
+// lazyPlugins tests — plugins load by default, and are skipped only while a
+// config-metadata resolution is in progress (withConfigMetadataResolution).
+// The decision does not depend on which command is running, so a build spawned
+// by a `vp run` verbatim task or a `vp exec` child keeps its plugins.
 
-test('lazyPlugins executes callback when VP_COMMAND is unset', () => {
-  delete process.env.VP_COMMAND;
+test('lazyPlugins executes the callback by default', () => {
   const result = lazyPlugins(() => [{ name: 'test' }]);
   expect(result).toEqual([{ name: 'test' }]);
 });
 
-test.each(['dev', 'build', 'test', 'preview'])(
-  'lazyPlugins executes callback when VP_COMMAND is %s',
-  (cmd) => {
-    process.env.VP_COMMAND = cmd;
-    const result = lazyPlugins(() => [{ name: 'my-plugin' }]);
-    expect(result).toEqual([{ name: 'my-plugin' }]);
-  },
-);
+test('lazyPlugins returns undefined during a config-metadata resolution', () => {
+  process.env.VP_RESOLVING_CONFIG_METADATA = '1';
+  const cb = vi.fn(() => [{ name: 'my-plugin' }]);
+  const result = lazyPlugins(cb);
+  expect(result).toBeUndefined();
+  expect(cb).not.toHaveBeenCalled();
+});
 
-test.each(['lint', 'fmt', 'check', 'staged', 'pack', 'install', 'run'])(
-  'lazyPlugins returns undefined when VP_COMMAND is %s',
-  (cmd) => {
-    process.env.VP_COMMAND = cmd;
-    const cb = vi.fn(() => [{ name: 'my-plugin' }]);
-    const result = lazyPlugins(cb);
-    expect(result).toBeUndefined();
-    expect(cb).not.toHaveBeenCalled();
-  },
-);
+test('withConfigMetadataResolution skips plugins during the resolution and restores after', async () => {
+  const cb = vi.fn(() => [{ name: 'my-plugin' }]);
+  let during: ReturnType<typeof lazyPlugins>;
+  const returned = await withConfigMetadataResolution(async () => {
+    during = lazyPlugins(cb);
+    return 'result';
+  });
+  expect(returned).toBe('result');
+  expect(during).toBeUndefined();
+  expect(cb).not.toHaveBeenCalled();
+  // marker cleared after → plugins load again
+  expect(lazyPlugins(() => [{ name: 'after' }])).toEqual([{ name: 'after' }]);
+});
+
+test('withConfigMetadataResolution restores a pre-existing marker (nesting)', async () => {
+  process.env.VP_RESOLVING_CONFIG_METADATA = '1';
+  await withConfigMetadataResolution(async () => {
+    expect(process.env.VP_RESOLVING_CONFIG_METADATA).toBe('1');
+  });
+  expect(process.env.VP_RESOLVING_CONFIG_METADATA).toBe('1');
+});
+
+test('withConfigMetadataResolution keeps the marker set across overlapping resolutions', async () => {
+  let releaseFirst!: () => void;
+  const firstPending = new Promise<void>((resolve) => {
+    releaseFirst = resolve;
+  });
+  // Two metadata resolutions overlap; the second finishes while the first is
+  // still awaiting. The marker must stay set until BOTH complete.
+  const first = withConfigMetadataResolution(async () => {
+    await firstPending;
+    return 'first';
+  });
+  const second = withConfigMetadataResolution(async () => 'second');
+  expect(await second).toBe('second');
+  // first is still in flight → lazyPlugins must still skip
+  expect(lazyPlugins(() => [{ name: 'plugin' }])).toBeUndefined();
+  releaseFirst();
+  expect(await first).toBe('first');
+  // both done → marker cleared, plugins load again
+  expect(lazyPlugins(() => [{ name: 'after' }])).toEqual([{ name: 'after' }]);
+});
 
 test('lazyPlugins supports async callback', async () => {
-  process.env.VP_COMMAND = 'build';
   const result = lazyPlugins(async () => {
     const plugin = await Promise.resolve({ name: 'async-plugin' });
     return [plugin];
@@ -74,8 +108,8 @@ test('lazyPlugins supports async callback', async () => {
   expect(Array.isArray(result)).toBe(true);
 });
 
-test('lazyPlugins returns undefined for async callback when skipped', () => {
-  process.env.VP_COMMAND = 'lint';
+test('lazyPlugins returns undefined for async callback during metadata resolution', () => {
+  process.env.VP_RESOLVING_CONFIG_METADATA = '1';
   const result = lazyPlugins(async () => {
     return [{ name: 'async-plugin' }];
   });
@@ -83,7 +117,6 @@ test('lazyPlugins returns undefined for async callback when skipped', () => {
 });
 
 test('lazyPlugins wraps sync function returning a Promise into array', () => {
-  process.env.VP_COMMAND = 'build';
   // A sync function that returns a Promise (not an async function) — same handling as async
   const result = lazyPlugins(() => Promise.resolve([{ name: 'sync-promise-plugin' }]));
   expect(Array.isArray(result)).toBe(true);
@@ -110,7 +143,6 @@ const userPlugins = (plugins: unknown): unknown[] => {
 // lazyPlugins return types satisfy Vite's plugins?: PluginOption[] field.
 
 test('lazyPlugins sync return type satisfies plugins field', () => {
-  process.env.VP_COMMAND = 'build';
   // Must compile: plugins accepts PluginOption[] | undefined
   const config = defineConfig({
     plugins: lazyPlugins(() => [{ name: 'sync-type-test' }]),
@@ -119,7 +151,6 @@ test('lazyPlugins sync return type satisfies plugins field', () => {
 });
 
 test('lazyPlugins async return type satisfies plugins field', () => {
-  process.env.VP_COMMAND = 'build';
   // Must compile: async overload returns PluginOption[] | undefined, not Promise
   const config = defineConfig({
     plugins: lazyPlugins(async () => {
@@ -130,7 +161,7 @@ test('lazyPlugins async return type satisfies plugins field', () => {
 });
 
 test('lazyPlugins undefined return satisfies plugins field', () => {
-  process.env.VP_COMMAND = 'lint';
+  process.env.VP_RESOLVING_CONFIG_METADATA = '1';
   // Must compile: undefined is accepted by plugins?: PluginOption[]
   const config = defineConfig({
     plugins: lazyPlugins(() => [{ name: 'skipped' }]),
@@ -140,7 +171,6 @@ test('lazyPlugins undefined return satisfies plugins field', () => {
 });
 
 test('lazyPlugins with vitest configureVitest plugin satisfies plugins field', () => {
-  process.env.VP_COMMAND = 'test';
   const config = defineConfig({
     plugins: lazyPlugins(() => [
       {
