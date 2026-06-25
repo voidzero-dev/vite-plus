@@ -13,13 +13,6 @@
     "vitest": "catalog:"
   },
   "packageManager": "pnpm@<semver>",
-  "pnpm": {
-    "overrides": {
-      "vite": "https://pkg.pr.new/voidzero-dev/vite-plus/@voidzero-dev/vite-plus-core@0c515e3fbf5c140db35280d700df0bd600838617",
-      "vitest": "<semver>",
-      "vite-plus": "https://pkg.pr.new/voidzero-dev/vite-plus@0c515e3fbf5c140db35280d700df0bd600838617"
-    }
-  },
   "scripts": {
     "prepare": "vp config"
   }
@@ -39,6 +32,7 @@ catalog:
 overrides:
   vite: 'catalog:'
   vitest: 'catalog:'
+  vite-plus: https://pkg.pr.new/voidzero-dev/vite-plus@0c515e3fbf5c140db35280d700df0bd600838617
 
 peerDependencyRules:
   allowAny:

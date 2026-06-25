@@ -41,3 +41,4 @@ it('works', () => expect(true).toBe(true));
 
 > vp migrate --no-interactive # a freshly migrated standalone Yarn project is complete
 This project is already using Vite+! Happy coding!
+

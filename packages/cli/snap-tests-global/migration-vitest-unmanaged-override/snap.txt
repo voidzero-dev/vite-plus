@@ -40,3 +40,4 @@ peerDependencyRules:
 
 > vp migrate --no-interactive # unmanaged Vitest ecosystem versions remain stable on rerun
 This project is already using Vite+! Happy coding!
+

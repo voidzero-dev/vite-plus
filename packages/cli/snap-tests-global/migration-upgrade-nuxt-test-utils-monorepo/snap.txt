@@ -65,3 +65,4 @@ void expect;
 
 > vp migrate --no-interactive # workspace result is idempotent
 This project is already using Vite+! Happy coding!
+

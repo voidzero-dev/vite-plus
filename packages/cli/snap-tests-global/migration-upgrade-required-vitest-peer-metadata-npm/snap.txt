@@ -27,3 +27,4 @@
 > node -e "const fs = require('node:fs'); fs.mkdirSync('node_modules', { recursive: true }); fs.cpSync('.fixture/vite-plugin-gherkin', 'node_modules/vite-plugin-gherkin', { recursive: true })" # simulate installed dependency metadata
 > vp migrate --no-interactive # metadata confirms the unnamed required Vitest peer
 This project is already using Vite+! Happy coding!
+

@@ -37,3 +37,4 @@ peerDependencyRules:
 
 > vp migrate --no-interactive # repaired project should no longer be pending
 This project is already using Vite+! Happy coding!
+

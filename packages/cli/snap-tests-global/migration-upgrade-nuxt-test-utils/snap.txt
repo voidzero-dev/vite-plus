@@ -43,3 +43,4 @@ expect(true).toBe(true);
 
 > vp migrate --no-interactive # the package-level compatibility result is idempotent
 This project is already using Vite+! Happy coding!
+
