@@ -1,0 +1,10 @@
+{
+  "name": "@scope/long-time-install-package",
+  "version": "0.0.0",
+  "bin": {
+    "long-time-install-package": "./cli.js"
+  },
+  "scripts": {
+    "postinstall": "node postinstall.js"
+  }
+}

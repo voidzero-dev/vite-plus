@@ -1085,7 +1085,7 @@ pub(crate) async fn package_binary_invocation(
         .map_err(|e| format!("Failed to install Node {node_version}: {e}"))?;
 
     // Locate the actual binary in the package directory
-    let binary_path = locate_package_binary(&metadata.name, tool)
+    let binary_path = locate_package_binary(metadata, tool)
         .map_err(|e| format!("Binary '{tool}' not found: {e}"))?;
 
     // Prepare environment for recursive invocations
@@ -1126,11 +1126,11 @@ pub(crate) async fn find_package_for_binary(
 
 /// Locate a binary within a package's installation directory.
 pub(crate) fn locate_package_binary(
-    package_name: &str,
+    metadata: &PackageMetadata,
     binary_name: &str,
 ) -> Result<AbsolutePathBuf, String> {
-    let packages_dir = config::get_packages_dir().map_err(|e| format!("{e}"))?;
-    let package_dir = packages_dir.join(package_name);
+    let package_dir = metadata.installation_dir().map_err(|e| format!("{e}"))?;
+    let package_name = &metadata.name;
 
     // The binary is referenced in package.json's bin field
     // npm uses different layouts: Unix=lib/node_modules, Windows=node_modules

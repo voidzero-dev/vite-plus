@@ -18,7 +18,7 @@ use vite_path::{AbsolutePath, AbsolutePathBuf};
 use vite_shared::output;
 
 use super::{
-    config::{VERSION_ENV_VAR, get_node_modules_dir, get_packages_dir, resolve_version},
+    config::{VERSION_ENV_VAR, get_node_modules_dir, resolve_version},
     package_metadata::PackageMetadata,
 };
 use crate::error::Error;
@@ -43,7 +43,7 @@ pub async fn execute(cwd: AbsolutePathBuf, tool: &str) -> Result<ExitStatus, Err
         // state is unusable, so the diagnostic matches what actually runs.
         if tool == "corepack" {
             match crate::shim::dispatch::find_package_for_binary(tool).await {
-                Ok(Some(metadata)) => match locate_package_binary(&metadata.name, tool) {
+                Ok(Some(metadata)) => match locate_package_binary(&metadata, tool) {
                     Ok(_) => return execute_package_binary(tool, &metadata).await,
                     Err(e) => warn_unusable_managed_corepack(&e.to_string()),
                 },
@@ -188,7 +188,7 @@ async fn execute_package_binary(
     metadata: &PackageMetadata,
 ) -> Result<ExitStatus, Error> {
     // Locate the binary path
-    let binary_path = locate_package_binary(&metadata.name, tool)?;
+    let binary_path = locate_package_binary(metadata, tool)?;
 
     // Check if binary exists
     if !tokio::fs::try_exists(&binary_path).await.unwrap_or(false) {
@@ -219,9 +219,12 @@ async fn execute_package_binary(
 }
 
 /// Locate a binary within a package's installation directory.
-fn locate_package_binary(package_name: &str, binary_name: &str) -> Result<AbsolutePathBuf, Error> {
-    let packages_dir = get_packages_dir()?;
-    let package_dir = packages_dir.join(package_name);
+fn locate_package_binary(
+    metadata: &PackageMetadata,
+    binary_name: &str,
+) -> Result<AbsolutePathBuf, Error> {
+    let package_dir = metadata.installation_dir()?;
+    let package_name = &metadata.name;
 
     // The binary is referenced in package.json's bin field
     // npm uses different layouts: Unix=lib/node_modules, Windows=node_modules

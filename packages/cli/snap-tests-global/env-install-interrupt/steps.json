@@ -1,0 +1,10 @@
+{
+  "env": {},
+  "commands": [
+    "vp install -g ./long-time-install-package",
+    "long-time-install-package",
+    "node test-reinstall-interrupt.js # Reinstall but interrupt",
+    "long-time-install-package # Original package should be still runnable"
+  ],
+  "after": ["vp remove -g @scope/long-time-install-package"]
+}

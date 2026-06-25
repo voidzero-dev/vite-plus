@@ -94,6 +94,11 @@ export function replaceUnstableOutput(output: string, cwd?: string) {
       .replaceAll(/\d{4}-\d{2}-\d{2}/g, '<date>')
       // time only (HH:MM:SS)
       .replaceAll(/\d{2}:\d{2}:\d{2}/g, '<date>')
+      // managed global package install ID
+      .replaceAll(
+        /#[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/g,
+        '<install-id>',
+      )
       // duration
       .replaceAll(/\d+(?:\.\d+)?(?:s|ms|µs|ns)/g, '<variable>ms')
       // parenthesized thread counts in CLI summaries

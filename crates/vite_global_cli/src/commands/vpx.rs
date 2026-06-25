@@ -137,7 +137,7 @@ async fn find_global_binary(cmd: &str) -> Option<GlobalBinary> {
         _ => return None,
     };
 
-    let path = match dispatch::locate_package_binary(&metadata.name, cmd) {
+    let path = match dispatch::locate_package_binary(&metadata, cmd) {
         Ok(p) => p,
         Err(_) => return None,
     };

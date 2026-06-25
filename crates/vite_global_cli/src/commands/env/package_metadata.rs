@@ -4,10 +4,24 @@ use std::collections::HashSet;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use uuid::{Uuid, Version};
 use vite_path::AbsolutePathBuf;
 
 use super::config::get_packages_dir;
 use crate::error::Error;
+
+// `#` is filesystem-safe but invalid in npm package names, so sibling installs cannot collide.
+pub(crate) const INSTALL_ID_PREFIX: char = '#';
+// Keeps npm's 214-byte maximum package name within the common 255-byte filename limit.
+pub(crate) const INSTALL_ID_LENGTH: usize = 37;
+
+pub(crate) fn is_install_id(value: &str) -> bool {
+    value.len() == INSTALL_ID_LENGTH
+        && value
+            .strip_prefix(INSTALL_ID_PREFIX)
+            .and_then(|uuid| Uuid::parse_str(uuid).ok())
+            .is_some_and(|uuid| uuid.get_version() == Some(Version::Random))
+}
 
 /// Metadata for a globally installed package.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -17,6 +31,9 @@ pub struct PackageMetadata {
     pub name: String,
     /// Package version
     pub version: String,
+    /// Directory identifier for this installation. Empty for legacy installs.
+    #[serde(default)]
+    pub install_id: String,
     /// Platform versions used during installation
     pub platform: Platform,
     /// Binary names provided by this package
@@ -59,6 +76,7 @@ impl PackageMetadata {
         Self {
             name,
             version,
+            install_id: String::new(),
             platform: Platform { node: node_version, npm: npm_version },
             bins,
             js_bins,
@@ -71,6 +89,28 @@ impl PackageMetadata {
     /// Check if a binary requires Node.js to run.
     pub fn is_js_binary(&self, bin_name: &str) -> bool {
         self.js_bins.contains(bin_name)
+    }
+
+    /// Get the package installation prefix.
+    pub fn installation_dir(&self) -> Result<AbsolutePathBuf, Error> {
+        Self::installation_dir_for(&self.name, &self.install_id)
+    }
+
+    /// Resolve an installation prefix, including the legacy empty-ID layout.
+    pub fn installation_dir_for(
+        package_name: &str,
+        install_id: &str,
+    ) -> Result<AbsolutePathBuf, Error> {
+        let packages_dir = get_packages_dir()?;
+        if install_id.is_empty() {
+            Ok(packages_dir.join(package_name))
+        } else if is_install_id(install_id) {
+            Ok(packages_dir.join(format!("{package_name}{install_id}")))
+        } else {
+            Err(Error::ConfigError(
+                format!("Invalid global package install ID: {install_id}").into(),
+            ))
+        }
     }
 
     /// Get the metadata file path for a package.
@@ -196,6 +236,48 @@ mod tests {
             "Expected path ending with @types/node.json, got: {}",
             path_str
         );
+    }
+
+    #[test]
+    fn test_legacy_metadata_defaults_to_empty_install_id() {
+        let metadata: PackageMetadata = serde_json::from_str(
+            r#"{
+                "name": "typescript",
+                "version": "5.9.3",
+                "platform": { "node": "22.0.0" },
+                "bins": ["tsc"],
+                "manager": "npm",
+                "installedAt": "2026-01-01T00:00:00Z"
+            }"#,
+        )
+        .unwrap();
+
+        assert!(metadata.install_id.is_empty());
+    }
+
+    #[test]
+    fn test_installation_dir_uses_install_id() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = vite_shared::EnvConfig::test_guard(
+            vite_shared::EnvConfig::for_test_with_home(temp_dir.path()),
+        );
+
+        let legacy = PackageMetadata::installation_dir_for("@scope/pkg", "").unwrap();
+        let identified = PackageMetadata::installation_dir_for(
+            "@scope/pkg",
+            "#123e4567-e89b-42d3-a456-426614174000",
+        )
+        .unwrap();
+
+        assert!(legacy.as_path().ends_with("packages/@scope/pkg"));
+        assert!(
+            identified
+                .as_path()
+                .ends_with("packages/@scope/pkg#123e4567-e89b-42d3-a456-426614174000")
+        );
+        assert!(PackageMetadata::installation_dir_for("@scope/pkg", "invalid").is_err());
     }
 
     #[tokio::test]
