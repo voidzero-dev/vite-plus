@@ -48,7 +48,7 @@ container Node aligned with `.node-version`. This RFC provides both.
 ### Why Vite+ is well positioned
 
 Every comparable tool delegates the Node version to the base `node:*` image tag
-and only manages the *package manager* (via Corepack). Vite+ already manages the
+and only manages the _package manager_ (via Corepack). Vite+ already manages the
 Node runtime itself: it reads the project's config and downloads the exact Node,
 verifying the official `SHASUMS256.txt.asc` PGP signature (see
 [`js-runtime.md`](./js-runtime.md) and
@@ -61,20 +61,20 @@ version pinning with image tags.
 Researched against current official docs (2026-06-25). Summary of how
 comparable tools handle Node version + Docker:
 
-| Tool                | Official image          | How the Node version is set                     | Default base        | musl/Alpine stance                          |
-| ------------------- | ----------------------- | ----------------------------------------------- | ------------------- | ------------------------------------------- |
-| Volta               | no (community only)     | `volta` field in package.json, auto-fetch       | glibc only          | unsupported (libc dependency)               |
-| mise                | exists but "do not use" | `mise install` from `.tool-versions`/`mise.toml`| debian-slim         | discouraged; needs `MISE_LIBC=musl`         |
-| proto / moon        | no (moon docs only)     | layered on top of `node:*` base                 | `node:latest`       | needs `MOON_TOOLCHAIN_FORCE_GLOBALS=true`   |
-| asdf                | no (community only)     | `asdf install` from `.tool-versions`            | community           | per-plugin; glibc Node by default           |
-| pnpm                | yes (`ghcr.io/pnpm/pnpm`, no Node) | base `node:*` tag + Corepack         | debian-slim         | not addressed                               |
-| Yarn                | no                      | base `node:*` tag + Corepack (`packageManager`) | `node:*`            | n/a                                         |
-| Turborepo           | no                      | base `node:*` tag; `turbo prune --docker`       | `node:*-alpine`     | adds `libc6-compat`                          |
-| Nx                  | no                      | base `node:*` tag; `prune-lockfile`             | `node:lts-alpine`   | not addressed                               |
-| Bun                 | yes (`oven/bun`)        | own runtime                                      | debian; offers distroless | not discussed                         |
-| Deno                | yes (Hub + GHCR)        | own runtime; ships a `:bin` image to copy in    | debian; offers distroless | non-root default                      |
-| Node official       | yes                     | the tag is the version                          | debian (`-slim`, `-alpine`) | warns musl breaks glibc apps          |
-| distroless nodejs   | yes (`gcr.io/distroless/nodejsNN`) | copy artifacts in                | debian/glibc, ~45MB | glibc only                                  |
+| Tool              | Official image                     | How the Node version is set                      | Default base                | musl/Alpine stance                        |
+| ----------------- | ---------------------------------- | ------------------------------------------------ | --------------------------- | ----------------------------------------- |
+| Volta             | no (community only)                | `volta` field in package.json, auto-fetch        | glibc only                  | unsupported (libc dependency)             |
+| mise              | exists but "do not use"            | `mise install` from `.tool-versions`/`mise.toml` | debian-slim                 | discouraged; needs `MISE_LIBC=musl`       |
+| proto / moon      | no (moon docs only)                | layered on top of `node:*` base                  | `node:latest`               | needs `MOON_TOOLCHAIN_FORCE_GLOBALS=true` |
+| asdf              | no (community only)                | `asdf install` from `.tool-versions`             | community                   | per-plugin; glibc Node by default         |
+| pnpm              | yes (`ghcr.io/pnpm/pnpm`, no Node) | base `node:*` tag + Corepack                     | debian-slim                 | not addressed                             |
+| Yarn              | no                                 | base `node:*` tag + Corepack (`packageManager`)  | `node:*`                    | n/a                                       |
+| Turborepo         | no                                 | base `node:*` tag; `turbo prune --docker`        | `node:*-alpine`             | adds `libc6-compat`                       |
+| Nx                | no                                 | base `node:*` tag; `prune-lockfile`              | `node:lts-alpine`           | not addressed                             |
+| Bun               | yes (`oven/bun`)                   | own runtime                                      | debian; offers distroless   | not discussed                             |
+| Deno              | yes (Hub + GHCR)                   | own runtime; ships a `:bin` image to copy in     | debian; offers distroless   | non-root default                          |
+| Node official     | yes                                | the tag is the version                           | debian (`-slim`, `-alpine`) | warns musl breaks glibc apps              |
+| distroless nodejs | yes (`gcr.io/distroless/nodejsNN`) | copy artifacts in                                | debian/glibc, ~45MB         | glibc only                                |
 
 Key takeaways that shape this RFC:
 
@@ -128,7 +128,7 @@ order:
    onboarding: a single image pins Node + package managers + vp so the toolchain
    matches the repo with zero host setup.
 4. **Ad-hoc / evaluation (secondary).** `docker run --rm -v $PWD:/app -w /app
-   ghcr.io/voidzero-dev/vite-plus vp <cmd>` to try vp or reproduce a bug report
+ghcr.io/voidzero-dev/vite-plus vp <cmd>` to try vp or reproduce a bug report
    on a clean toolchain.
 5. **Platform / monorepo builders (secondary).** Internal PaaS and buildpack-style
    systems standardizing on a canonical vp builder; monorepo single-app builds
@@ -340,7 +340,7 @@ build:
 ```jsonc
 // .devcontainer/devcontainer.json
 {
-  "image": "ghcr.io/voidzero-dev/vite-plus:1"
+  "image": "ghcr.io/voidzero-dev/vite-plus:1",
 }
 ```
 
@@ -410,6 +410,7 @@ docker run --rm -it -v "$PWD:/app" -w /app ghcr.io/voidzero-dev/vite-plus vp bui
      builds) and a documented libc autodetect/override. The release pipeline
      already builds musl `vp` binaries, so the build lift is small; the ongoing
      support burden is the real cost.
+
 5. **Docker Hub publishing** for discoverability, in addition to GHCR.
 6. **Offline / airgapped builds**: a prebaked-Node variant and `VP_NODE_DIST_MIRROR`
    guidance.

@@ -22,12 +22,12 @@ matching your project's Node version exactly.
 
 Tags track the `vp` version:
 
-| Tag                                          | Meaning                |
-| -------------------------------------------- | ---------------------- |
-| `ghcr.io/voidzero-dev/vite-plus:latest`      | Latest release         |
-| `ghcr.io/voidzero-dev/vite-plus:1`           | Latest 1.x             |
-| `ghcr.io/voidzero-dev/vite-plus:1.4`         | Latest 1.4.x           |
-| `ghcr.io/voidzero-dev/vite-plus:1.4.2`       | Exact version          |
+| Tag                                     | Meaning        |
+| --------------------------------------- | -------------- |
+| `ghcr.io/voidzero-dev/vite-plus:latest` | Latest release |
+| `ghcr.io/voidzero-dev/vite-plus:1`      | Latest 1.x     |
+| `ghcr.io/voidzero-dev/vite-plus:1.4`    | Latest 1.4.x   |
+| `ghcr.io/voidzero-dev/vite-plus:1.4.2`  | Exact version  |
 
 Pin an exact tag (or a digest) for reproducible builds. The image is published
 for `linux/amd64` and `linux/arm64` and runs as a non-root user by default.
@@ -124,7 +124,7 @@ preinstalled:
 
 ```jsonc [.devcontainer/devcontainer.json]
 {
-  "image": "ghcr.io/voidzero-dev/vite-plus:1"
+  "image": "ghcr.io/voidzero-dev/vite-plus:1",
 }
 ```
 
