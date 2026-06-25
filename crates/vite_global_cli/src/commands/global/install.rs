@@ -2,6 +2,7 @@
 
 use std::{
     collections::{HashMap, HashSet},
+    fs::{File, OpenOptions, TryLockError},
     io::{IsTerminal, Read, Write},
     process::Stdio,
     time::Duration,
@@ -18,13 +19,13 @@ use vite_path::{AbsolutePath, AbsolutePathBuf, current_dir};
 use vite_shared::{format_path_prepended, output};
 
 #[cfg(test)]
-use crate::commands::env::package_metadata::{INSTALL_ID_LENGTH, is_install_id};
+use crate::commands::env::package_metadata::INSTALL_ID_LENGTH;
 use crate::{
     commands::{
         env::{
             bin_config::BinConfig,
             config::{get_bin_dir, get_node_modules_dir, resolve_version, resolve_version_alias},
-            package_metadata::{INSTALL_ID_PREFIX, PackageMetadata},
+            package_metadata::{INSTALL_ID_PREFIX, PackageMetadata, is_install_id},
         },
         global::{CORE_SHIMS, is_local_package_spec, parse_package_spec},
     },
@@ -42,7 +43,10 @@ struct InstalledPackage {
     js_bins: HashSet<String>,
     install_id: String,
     install_dir: AbsolutePathBuf,
+    _install_lock: File,
 }
+
+const INSTALL_LOCK_SUFFIX: &str = ".lock";
 
 fn package_error(package_name: &str, error: impl Into<Error>) -> (Option<String>, Error) {
     (Some(package_name.to_string()), error.into())
@@ -235,6 +239,7 @@ pub async fn install(
             mut js_bins,
             install_id,
             install_dir,
+            _install_lock,
         }) = install
         else {
             continue;
@@ -488,8 +493,8 @@ pub async fn install(
             bin_owners.insert(bin_name.clone(), package_name.clone());
         }
 
-        // 4.6 Remove only the installation that this operation replaced.
-        cleanup_previous_installation(previous_metadata.as_ref(), &install_id).await;
+        // 4.6 Remove stale installations for this package.
+        cleanup_stale_installations(&package_name, &install_id).await;
 
         // 4.7 Print success message
         output::success(&format!(
@@ -525,6 +530,7 @@ async fn install_one(
     // 1. Create an immutable install directory.
     let install_id = new_install_id();
     let install_dir = PackageMetadata::installation_dir_for(package_name, &install_id)?;
+    let install_lock = lock_install_dir(&install_dir)?;
     tokio::fs::create_dir_all(&install_dir).await?;
 
     // 2. Run npm install with prefix set to the final installation directory.
@@ -596,7 +602,14 @@ async fn install_one(
         }
     }
 
-    Ok(InstalledPackage { installed_version, bin_names, js_bins, install_id, install_dir })
+    Ok(InstalledPackage {
+        installed_version,
+        bin_names,
+        js_bins,
+        install_id,
+        install_dir,
+        _install_lock: install_lock,
+    })
 }
 
 fn new_install_id() -> String {
@@ -668,35 +681,176 @@ async fn cleanup_failed_install(install_dir: &AbsolutePathBuf) -> Result<(), Err
     remove_dir_all_if_exists(install_dir).await
 }
 
-async fn cleanup_previous_installation(
-    previous_metadata: Option<&PackageMetadata>,
-    current_install_id: &str,
-) {
-    let Some(previous_metadata) = previous_metadata else {
-        return;
-    };
-    if previous_metadata.install_id == current_install_id {
-        return;
-    }
-
-    let Ok(previous_install_dir) = previous_metadata.installation_dir() else {
-        return;
-    };
-    if let Err(error) = remove_dir_all_if_exists(&previous_install_dir).await {
-        tracing::warn!(
-            "Failed to remove replaced global package installation at {}: {}",
-            previous_install_dir.as_path().display(),
-            error
-        );
-    }
-}
-
 async fn remove_dir_all_if_exists(path: &AbsolutePathBuf) -> Result<(), Error> {
     match tokio::fs::remove_dir_all(path).await {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(error) => Err(error.into()),
     }
+}
+
+async fn remove_file_if_exists(path: &AbsolutePathBuf) -> Result<(), Error> {
+    match tokio::fs::remove_file(path).await {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error.into()),
+    }
+}
+
+fn install_dir_lock_path(install_dir: &AbsolutePathBuf) -> Result<AbsolutePathBuf, Error> {
+    let parent = install_dir.as_path().parent().ok_or_else(|| {
+        Error::ConfigError(
+            format!(
+                "Global package installation path has no parent: {}",
+                install_dir.as_path().display()
+            )
+            .into(),
+        )
+    })?;
+    let file_name =
+        install_dir.as_path().file_name().and_then(|name| name.to_str()).ok_or_else(|| {
+            Error::ConfigError(
+                format!(
+                    "Global package installation path has no file name: {}",
+                    install_dir.as_path().display()
+                )
+                .into(),
+            )
+        })?;
+
+    Ok(AbsolutePathBuf::new(parent.join(format!("{file_name}{INSTALL_LOCK_SUFFIX}"))).ok_or_else(
+        || {
+            Error::ConfigError(
+                format!(
+                    "Invalid global package installation lock path for {}",
+                    install_dir.as_path().display()
+                )
+                .into(),
+            )
+        },
+    )?)
+}
+
+fn open_install_dir_lock_file(install_dir: &AbsolutePathBuf) -> Result<File, Error> {
+    let lock_path = install_dir_lock_path(install_dir)?;
+    if let Some(parent) = lock_path.as_path().parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+
+    Ok(OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(lock_path.as_path())?)
+}
+
+fn lock_install_dir(install_dir: &AbsolutePathBuf) -> Result<File, Error> {
+    let lock_file = open_install_dir_lock_file(install_dir)?;
+    lock_file.lock()?;
+    Ok(lock_file)
+}
+
+fn try_lock_install_dir(install_dir: &AbsolutePathBuf) -> Result<Option<File>, Error> {
+    let lock_file = open_install_dir_lock_file(install_dir)?;
+    match lock_file.try_lock() {
+        Ok(()) => Ok(Some(lock_file)),
+        Err(TryLockError::WouldBlock) => Ok(None),
+        Err(TryLockError::Error(error)) => Err(error.into()),
+    }
+}
+
+async fn cleanup_stale_installations(package_name: &str, current_install_id: &str) {
+    let Ok(stale_dirs) = stale_installation_dirs(package_name, current_install_id).await else {
+        return;
+    };
+
+    for install_dir in stale_dirs {
+        let lock_file = match try_lock_install_dir(&install_dir) {
+            Ok(Some(lock_file)) => lock_file,
+            Ok(None) => continue,
+            Err(error) => {
+                tracing::warn!(
+                    "Failed to lock stale global package installation at {}: {}",
+                    install_dir.as_path().display(),
+                    error
+                );
+                continue;
+            }
+        };
+
+        if let Err(error) = remove_dir_all_if_exists(&install_dir).await {
+            tracing::warn!(
+                "Failed to remove stale global package installation at {}: {}",
+                install_dir.as_path().display(),
+                error
+            );
+            continue;
+        }
+
+        let Ok(lock_path) = install_dir_lock_path(&install_dir) else {
+            continue;
+        };
+        drop(lock_file);
+        if let Err(error) = remove_file_if_exists(&lock_path).await {
+            tracing::warn!(
+                "Failed to remove stale global package installation lock at {}: {}",
+                lock_path.as_path().display(),
+                error
+            );
+        }
+    }
+}
+
+async fn stale_installation_dirs(
+    package_name: &str,
+    current_install_id: &str,
+) -> Result<Vec<AbsolutePathBuf>, Error> {
+    let legacy_install_dir = PackageMetadata::installation_dir_for(package_name, "")?;
+    let Some(parent) = legacy_install_dir.as_path().parent() else {
+        return Ok(Vec::new());
+    };
+    if !tokio::fs::try_exists(parent).await.unwrap_or(false) {
+        return Ok(Vec::new());
+    }
+
+    let Some(base_name) = legacy_install_dir.as_path().file_name().and_then(|name| name.to_str())
+    else {
+        return Ok(Vec::new());
+    };
+
+    let mut stale_dirs = Vec::new();
+    let mut entries = tokio::fs::read_dir(parent).await?;
+    while let Some(entry) = entries.next_entry().await? {
+        if !entry.file_type().await?.is_dir() {
+            continue;
+        }
+
+        let file_name = entry.file_name();
+        let Some(file_name) = file_name.to_str() else {
+            continue;
+        };
+        let Some(install_id) = stale_install_id(base_name, file_name) else {
+            continue;
+        };
+        if install_id == current_install_id {
+            continue;
+        }
+        if let Some(path) = AbsolutePathBuf::new(entry.path()) {
+            stale_dirs.push(path);
+        }
+    }
+
+    Ok(stale_dirs)
+}
+
+fn stale_install_id<'a>(base_name: &str, file_name: &'a str) -> Option<&'a str> {
+    if file_name == base_name {
+        return Some("");
+    }
+
+    let install_id = file_name.strip_prefix(base_name)?;
+    if is_install_id(install_id) { Some(install_id) } else { None }
 }
 
 async fn stale_bin_names_for_package(

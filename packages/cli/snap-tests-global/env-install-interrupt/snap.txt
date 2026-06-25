@@ -11,3 +11,15 @@ info: Installing 1 global package with Node.js <semver>
 
 > long-time-install-package # Original package should be still runnable
 long-time-install-package
+
+> node create-stale-packages.js # Create stale packages with empty and stale install ids
+stale packages created
+
+> vp install -g ./long-time-install-package # Successful reinstall should clean stale packages
+info: Installing 1 global package with Node.js <semver>
+✓ Installed @scope/long-time-install-package <semver>
+  Bins: long-time-install-package
+
+> node check-stale-packages.js
+empty install id stale package removed
+interrupted stale package removed
