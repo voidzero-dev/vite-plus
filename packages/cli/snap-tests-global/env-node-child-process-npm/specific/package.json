@@ -1,5 +1,5 @@
 {
-  "name": "node-child-process-managed-npm-path",
+  "name": "@env-node-child-process-npm/specific",
   "version": "1.0.0",
   "private": true,
   "type": "module",
