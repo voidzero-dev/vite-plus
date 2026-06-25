@@ -171,15 +171,15 @@ export async function runViteFmt(
   cwd: string,
   interactive?: boolean,
   paths?: string[],
-  options?: { silent?: boolean },
+  options?: { silent?: boolean; command?: string; commandArgs?: string[] },
 ) {
   const spinner = options?.silent ? getSilentSpinner() : getSpinner(interactive);
   const startTime = Date.now();
   spinner.start(`Formatting code...`);
 
   const { exitCode, stderr, stdout } = await runCommandSilently({
-    command: process.env.VP_CLI_BIN ?? 'vp',
-    args: ['fmt', '--write', ...(paths ?? [])],
+    command: options?.command ?? process.env.VP_CLI_BIN ?? 'vp',
+    args: [...(options?.commandArgs ?? []), 'fmt', ...(paths ?? [])],
     cwd,
     envs: process.env,
   });
@@ -196,7 +196,7 @@ export async function runViteFmt(
     prompts.log.info(stdout.toString());
     prompts.log.error(stderr.toString());
     const relativePaths = (paths ?? []).length > 0 ? ` ${(paths ?? []).join(' ')}` : '';
-    prompts.log.info(`You may need to run "vp fmt --write${relativePaths}" manually in ${cwd}`);
+    prompts.log.info(`You may need to run "vp fmt${relativePaths}" manually in ${cwd}`);
     return {
       durationMs: Date.now() - startTime,
       exitCode,

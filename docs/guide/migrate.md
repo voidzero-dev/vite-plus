@@ -48,6 +48,7 @@ The `migrate` command is designed to move existing projects onto Vite+ quickly. 
 - Updates scripts to the Vite+ command surface
 - Can set up commit hooks
 - Can write agent and editor configuration files
+- Formats the migrated project
 
 See [Migration Rules](./migrate-rules.md) for the exact dependency, source
 rewrite, and package-manager behavior.

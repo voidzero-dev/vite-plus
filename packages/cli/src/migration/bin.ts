@@ -46,6 +46,7 @@ import {
 import type { PackageDependencies } from '../utils/types.ts';
 import { detectWorkspace } from '../utils/workspace.ts';
 import { checkRolldownCompatibility } from './compat-runner.ts';
+import { formatMigratedProject } from './format.ts';
 import {
   addFrameworkShim,
   checkVitestVersion,
@@ -1158,6 +1159,9 @@ async function executeMigrationPlan(
     workspaceInfo.rootDir,
     report,
   );
+  if (finalInstallSummary.status === 'installed') {
+    await formatMigratedProject(workspaceInfo.rootDir, interactive, report);
+  }
   return {
     installDurationMs: initialInstallDurationMs + finalInstallDurationMs,
     finalInstallOk: finalInstallSummary.status === 'installed',
@@ -1195,6 +1199,7 @@ async function main() {
     let didMigrate = yarnPnpConverted;
     let installDurationMs = 0;
     let finalInstallOk = true;
+    let canFormatMigratedProject = !process.env.VP_SKIP_INSTALL;
     const report = createMigrationReport();
     report.packageManagerBootstrapConfigured = yarnPnpConverted;
     const migrationProgress = options.interactive
@@ -1481,6 +1486,8 @@ async function main() {
       if (installSummary.status === 'failed') {
         clearMigrationProgress();
       }
+      finalInstallOk = installSummary.status !== 'failed';
+      canFormatMigratedProject = finalInstallOk && canFormatMigratedProject;
       installDurationMs += handleInstallResult(
         installSummary,
         workspaceInfoOptional.rootDir,
@@ -1521,6 +1528,11 @@ async function main() {
           report,
         );
       }
+    }
+
+    if (didMigrate && finalInstallOk && canFormatMigratedProject) {
+      clearMigrationProgress();
+      await formatMigratedProject(workspaceInfoOptional.rootDir, options.interactive, report);
     }
 
     if (didMigrate || report.warnings.length > 0) {
