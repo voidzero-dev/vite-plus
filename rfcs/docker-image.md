@@ -200,7 +200,11 @@ deployed images small.
   version on first use. This keeps the toolchain image ~190 MB smaller, more than
   a switch to Alpine/musl would save (and without the musl tradeoffs).
 - **User:** create a non-root `vp` user (mirroring Bun's `USER bun` and Deno's
-  `USER deno`); document switching to root for steps that need `apt`.
+  `USER deno`); document switching to root for steps that need `apt`. Because the
+  image runs as non-root, the documented multi-stage examples copy sources with
+  `COPY --chown=vp:vp ...`; without it `COPY` writes root-owned files that
+  `vp install` cannot update (permission denied). Verified end to end against the
+  published preview image.
 - **Alpine/musl variant (opt-in):** an `alpine:3` (musl) toolchain image
   (`docker/Dockerfile.alpine`), published under `-alpine` tags. It produces the
   smallest runtime (an Alpine SSR runtime measured ~136 MB vs ~150 MB distroless
@@ -297,12 +301,14 @@ assert the SSR runtime Node.js matches the pinned `.node-version`):
 FROM ghcr.io/voidzero-dev/vite-plus:1 AS build
 WORKDIR /app
 
-# Dependency layer first for cache reuse.
-COPY package.json pnpm-lock.yaml .node-version ./
+# Dependency layer first for cache reuse. --chown is required: the image runs as
+# the non-root vp user, and COPY would otherwise write root-owned files that
+# vp install cannot update.
+COPY --chown=vp:vp package.json pnpm-lock.yaml .node-version ./
 RUN vp install --frozen-lockfile
 
 # Build. vp reads .node-version and provisions that exact Node automatically.
-COPY . .
+COPY --chown=vp:vp . .
 RUN vp build
 
 # Export the exact resolved Node binary for the runtime stage.
@@ -312,7 +318,7 @@ RUN cp "$(vp env which node | head -1)" /tmp/node
 # excluded; running --prod over the full install above would not prune them) ---
 FROM ghcr.io/voidzero-dev/vite-plus:1 AS deps
 WORKDIR /app
-COPY package.json pnpm-lock.yaml .node-version ./
+COPY --chown=vp:vp package.json pnpm-lock.yaml .node-version ./
 RUN vp install --frozen-lockfile --prod
 
 # --- runtime stage: small, glibc, no vp ---
@@ -346,9 +352,9 @@ not need a shell at runtime (see Future Work).
 ```dockerfile
 FROM ghcr.io/voidzero-dev/vite-plus:1 AS build
 WORKDIR /app
-COPY package.json pnpm-lock.yaml .node-version ./
+COPY --chown=vp:vp package.json pnpm-lock.yaml .node-version ./
 RUN vp install --frozen-lockfile
-COPY . .
+COPY --chown=vp:vp . .
 RUN vp build
 
 FROM nginx:alpine AS runtime
