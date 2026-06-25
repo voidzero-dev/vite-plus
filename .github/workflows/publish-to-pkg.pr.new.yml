@@ -213,11 +213,36 @@ jobs:
     runs-on: ubuntu-latest
     needs: publish-docker-preview
     permissions:
+      contents: read
+      packages: read
       pull-requests: write
+    env:
+      IMAGE: ghcr.io/voidzero-dev/vite-plus
+      PR_NUMBER: ${{ github.event.pull_request.number }}
     steps:
+      - name: Log in to GHCR
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Measure image sizes
+        id: sizes
+        run: |
+          size() {
+            docker pull -q "$1" >/dev/null
+            numfmt --to=si --suffix=B "$(docker image inspect "$1" --format '{{.Size}}')"
+          }
+          {
+            echo "debian=$(size "${IMAGE}:pr-${PR_NUMBER}")"
+            echo "alpine=$(size "${IMAGE}:pr-${PR_NUMBER}-alpine")"
+          } >> "$GITHUB_OUTPUT"
+
       - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
-          IMAGE: ghcr.io/voidzero-dev/vite-plus
+          DEBIAN_SIZE: ${{ steps.sizes.outputs.debian }}
+          ALPINE_SIZE: ${{ steps.sizes.outputs.alpine }}
         with:
           script: |
             const image = process.env.IMAGE;
@@ -230,6 +255,11 @@ jobs:
               '## 🐳 Docker preview images',
               '',
               "Built from this PR's pkg.pr.new build:",
+              '',
+              '| Image | Size |',
+              '| --- | --- |',
+              `| \`${image}:pr-${pr}\` | ${process.env.DEBIAN_SIZE} |`,
+              `| \`${image}:pr-${pr}-alpine\` | ${process.env.ALPINE_SIZE} |`,
               '',
               '```bash',
               `docker pull ${image}:pr-${pr}`,
