@@ -1,0 +1,407 @@
+# RFC: Official Vite+ Docker Image
+
+- Issue: [#1490](https://github.com/voidzero-dev/vite-plus/issues/1490)
+- Plan: [#1324](https://github.com/voidzero-dev/vite-plus/issues/1324) ("Distribute `vp` across Homebrew, Windows installer, Docker image, apt etc.")
+- Status: Draft
+
+## Summary
+
+Publish an official Vite+ Docker image to GHCR that bundles the `vp` global CLI
+for the **build, CI, and development** phases. The image is a toolchain image,
+not a production runtime image. Because `vp` already reads `.node-version` /
+`engines.node` / `devEngines.runtime` and downloads that exact Node version, the
+image needs no Node-version-specific tags: one image builds any project against
+its pinned Node.
+
+For production, this RFC does not ship a runtime image. Instead it documents a
+multi-stage pattern where the `vp` builder resolves and downloads the exact
+official (glibc, signature-verified) Node, and a slim final stage copies just
+that Node binary plus the built app and production dependencies into a small
+glibc base (no `vp`). This keeps deployed images small while honoring the
+project's pinned Node version, which is what [#1490](https://github.com/voidzero-dev/vite-plus/issues/1490)
+asks for.
+
+## Motivation
+
+### The problem (#1490)
+
+When containerizing a Vite+ project, users need the Node version to match the
+project's `.node-version` exactly. The reporter's project pins `24.15.0`:
+
+```text
+Environment:
+  Package manager  pnpm v10.33.2
+  Node.js          v24.15.0 (.node-version)
+```
+
+Their options today both have downsides:
+
+- `node:24-alpine` matches the major version and is reasonably small, but it is
+  musl-based and roughly doubles the image size in their case, and the tag does
+  not pin the exact patch version.
+- `alpine:3.23` + `apk add nodejs` is much smaller, but Alpine currently ships
+  `24.14.1`, which does not match the pinned `24.15.0`.
+
+There is no Vite+ Docker image or documented Docker pattern that keeps the
+container Node aligned with `.node-version`. This RFC provides both.
+
+### Why Vite+ is well positioned
+
+Every comparable tool delegates the Node version to the base `node:*` image tag
+and only manages the *package manager* (via Corepack). Vite+ already manages the
+Node runtime itself: it reads the project's config and downloads the exact Node,
+verifying the official `SHASUMS256.txt.asc` PGP signature (see
+[`js-runtime.md`](./js-runtime.md) and
+[`verify-node-shasums-signature.md`](./verify-node-shasums-signature.md)). The
+Docker story can build directly on that machinery instead of reinventing
+version pinning with image tags.
+
+## Prior art
+
+Researched against current official docs (2026-06-25). Summary of how
+comparable tools handle Node version + Docker:
+
+| Tool                | Official image          | How the Node version is set                     | Default base        | musl/Alpine stance                          |
+| ------------------- | ----------------------- | ----------------------------------------------- | ------------------- | ------------------------------------------- |
+| Volta               | no (community only)     | `volta` field in package.json, auto-fetch       | glibc only          | unsupported (libc dependency)               |
+| mise                | exists but "do not use" | `mise install` from `.tool-versions`/`mise.toml`| debian-slim         | discouraged; needs `MISE_LIBC=musl`         |
+| proto / moon        | no (moon docs only)     | layered on top of `node:*` base                 | `node:latest`       | needs `MOON_TOOLCHAIN_FORCE_GLOBALS=true`   |
+| asdf                | no (community only)     | `asdf install` from `.tool-versions`            | community           | per-plugin; glibc Node by default           |
+| pnpm                | yes (`ghcr.io/pnpm/pnpm`, no Node) | base `node:*` tag + Corepack         | debian-slim         | not addressed                               |
+| Yarn                | no                      | base `node:*` tag + Corepack (`packageManager`) | `node:*`            | n/a                                         |
+| Turborepo           | no                      | base `node:*` tag; `turbo prune --docker`       | `node:*-alpine`     | adds `libc6-compat`                          |
+| Nx                  | no                      | base `node:*` tag; `prune-lockfile`             | `node:lts-alpine`   | not addressed                               |
+| Bun                 | yes (`oven/bun`)        | own runtime                                      | debian; offers distroless | not discussed                         |
+| Deno                | yes (Hub + GHCR)        | own runtime; ships a `:bin` image to copy in    | debian; offers distroless | non-root default                      |
+| Node official       | yes                     | the tag is the version                          | debian (`-slim`, `-alpine`) | warns musl breaks glibc apps          |
+| distroless nodejs   | yes (`gcr.io/distroless/nodejsNN`) | copy artifacts in                | debian/glibc, ~45MB | glibc only                                  |
+
+Key takeaways that shape this RFC:
+
+1. **No one else manages Node from a config file in a usable published image.**
+   The version managers (Volta, mise, proto, asdf) either ship no official image
+   or one flagged unusable, and they all hit the musl wall because managed Node
+   means official glibc builds. The package-manager and monorepo tools pin Node
+   only via the base `node:*` tag. Vite+ collapsing both axes (Node + toolchain)
+   into one deterministic, project-driven build step is a genuine differentiator.
+
+2. **The closest analog (mise) and the runtimes (Deno) validate the chosen
+   pattern.** mise's documented best practice is to copy the small static binary
+   into a slim glibc base and install the pinned tool at build time, not to ship
+   a fat all-in-one image. Deno ships a `:bin` image precisely so users can
+   `COPY --from=denoland/deno:bin /deno ...` into any base, and its distroless
+   variant copies just the binary onto `gcr.io/distroless/cc`. This is exactly
+   the multi-stage "copy the resolved Node in" pattern below.
+
+3. **glibc is the consensus default.** Every Node-managing tool warns about or
+   breaks on musl. Defaulting to glibc keeps official signature-verified Node
+   (the unofficial musl builds publish no PGP signature) and avoids native-addon
+   surprises.
+
+4. **Monorepo pruning is the one capability plain package managers lack.**
+   Turborepo `turbo prune --docker` and Nx `prune-lockfile` exist only because a
+   shared lockfile makes one package's change rebuild every container. Vite+
+   owns the workspace graph, so a future `vp prune --docker` is a natural
+   follow-up (see Future Work).
+
+Sources: pnpm <https://pnpm.io/docker>; Turborepo <https://turborepo.dev/docs/guides/tools/docker>;
+Nx <https://nx.dev/docs/technologies/build-tools/docker/introduction>; mise
+<https://mise.jdx.dev/mise-cookbook/docker.html>; moon <https://moonrepo.dev/docs/guides/docker>;
+Volta <https://github.com/volta-cli/volta/issues/1162>; Bun <https://bun.com/docs/guides/ecosystem/docker>;
+Deno <https://github.com/denoland/deno_docker>; Node <https://hub.docker.com/_/node/>;
+distroless <https://github.com/GoogleContainerTools/distroless/blob/main/nodejs/README.md>.
+
+## User scenarios
+
+The official image is a toolchain image. The scenarios it serves, in priority
+order:
+
+1. **Build stage for app deployment (primary).** Used as `FROM ... AS build` in a
+   multi-stage Dockerfile. `vp install` + `vp build` produce the app; the exact
+   Node from `.node-version` is copied into a slim final stage. This is the
+   #1490 anchor.
+2. **Container-native CI (primary).** GitLab CI, Buildkite, CircleCI, Jenkins
+   agents, Tekton, etc. set `image: ghcr.io/voidzero-dev/vite-plus:<tag>` and run
+   `vp install`, `vp check`, `vp test`, `vp build`. (GitHub Actions users are
+   already served by `setup-vp`, so this targets the rest of the ecosystem.)
+3. **Reproducible dev environments (secondary).** Devcontainers, Codespaces, and
+   onboarding: a single image pins Node + package managers + vp so the toolchain
+   matches the repo with zero host setup.
+4. **Ad-hoc / evaluation (secondary).** `docker run --rm -v $PWD:/app -w /app
+   ghcr.io/voidzero-dev/vite-plus vp <cmd>` to try vp or reproduce a bug report
+   on a clean toolchain.
+5. **Platform / monorepo builders (secondary).** Internal PaaS and buildpack-style
+   systems standardizing on a canonical vp builder; monorepo single-app builds
+   (which motivate the future `vp prune --docker`).
+
+What it is explicitly **not**: the production runtime image. Shipping the full
+toolchain (vite, rolldown, vitest, oxlint, ...) into a deployed container is the
+bloat #1490 is complaining about. Production images are produced from the builder
+via the documented multi-stage pattern.
+
+## Goals
+
+1. Publish a maintained, multi-arch (`linux/amd64`, `linux/arm64`) Vite+
+   toolchain image on GHCR.
+2. Honor `.node-version` automatically at build time via vp's existing managed
+   runtime, with no Node-version-specific image tags.
+3. Document a recommended multi-stage pattern that produces a small production
+   image with the exact pinned Node and no vp.
+4. Keep official, signature-verified glibc Node end to end (builder downloads it,
+   runtime copies it).
+5. Provide patterns for the secondary scenarios (CI, devcontainer, static SPA,
+   ad-hoc).
+
+## Non-Goals
+
+1. A production runtime image (documented pattern instead, see Future Work for a
+   possible thin runtime base).
+2. Node-version-keyed image tags (the tag sprawl this design avoids).
+3. An Alpine/musl image variant in the first version. glibc is the v1 default
+   because it keeps official, signature-verified Node, avoids native-addon
+   breakage, and (via the multi-stage distroless final stage) is already smaller
+   than Alpine. Revisit in Future Work, gated on demand. See the rationale under
+   Future Work.
+4. `vp prune --docker` monorepo pruning (Future Work).
+5. Docker Hub publishing (GHCR only for now).
+
+## Design
+
+### Image role and version-alignment mechanism
+
+The image bundles `vp` and provisions Node at build time:
+
+1. In the build stage, `vp install` / `vp build` cause vp to read `.node-version`
+   (or `engines.node` / `devEngines.runtime`), download that exact official Node,
+   verify its PGP signature, and cache it under
+   `$VP_HOME/js_runtime/node/<version>/`.
+2. The documented multi-stage pattern copies the resolved Node binary plus the
+   built app and production dependencies into a slim glibc final stage that does
+   not contain vp.
+
+This makes one image version-agnostic across every project's pinned Node,
+eliminates the Corepack-in-Docker class of problems other tools hit, and keeps
+deployed images small.
+
+### Base image, contents, and variants
+
+- **Base:** `debian:bookworm-slim` (glibc). Glibc is required so vp downloads the
+  official signature-verified Node and so native addons behave; debian-slim is
+  the consensus small glibc base (pnpm's choice) and provides the shell, `apt`,
+  and `git` that build/CI/dev scenarios need.
+- **Preinstalled:** `vp` (on `PATH`), `ca-certificates`, `curl`, `git`, and a
+  build toolchain (`build-essential`, `python3`, `pkg-config`) for native addon
+  compilation (for example `better-sqlite3`). Package managers are handled by
+  vp's managed corepack/runtime, so they are provisioned per-project rather than
+  baked to a fixed version.
+- **User:** create a non-root `vp` user (mirroring Bun's `USER bun` and Deno's
+  `USER deno`); document switching to root for steps that need `apt`.
+- **Possible later variant:** a `-slim` toolchain image without the native build
+  toolchain for projects with no native deps (Future Work).
+
+### How `vp` gets into the image
+
+The published image is built hermetically from the release artifacts: the
+per-arch `vp` binary produced by the existing release pipeline is copied into the
+image, so the image version maps 1:1 to a `vp` release and needs no network at
+image-build time to install vp itself. (The user-facing one-liner
+`curl -fsSL https://vite.plus | VP_VERSION=<v> bash` remains the documented way to
+add vp to a custom base image.)
+
+### Tagging
+
+Tags track the `vp` version, not Node:
+
+- `ghcr.io/voidzero-dev/vite-plus:latest`
+- `ghcr.io/voidzero-dev/vite-plus:<major>` (for example `:1`)
+- `ghcr.io/voidzero-dev/vite-plus:<major>.<minor>` (for example `:1.4`)
+- `ghcr.io/voidzero-dev/vite-plus:<major>.<minor>.<patch>` (for example `:1.4.2`)
+
+Users pin by exact tag or digest for reproducibility. No `node-<version>` tags.
+
+### Security and reproducibility
+
+- Official, signature-verified glibc Node throughout (no unofficial musl builds).
+- Non-root default user.
+- Multi-arch manifest (`linux/amd64`, `linux/arm64`); vp already ships
+  `{x86_64,aarch64}-unknown-linux-gnu` binaries.
+- Pinnable by digest.
+
+### Locating the resolved Node for the runtime stage
+
+No new CLI surface is required: `vp env which node` prints the resolved Node
+binary path as its first (uncolored, pipe-friendly) line, and the runtime lives
+at `$VP_HOME/js_runtime/node/<version>/bin/node`. The runtime stage copies that
+file directly.
+
+### Publishing pipeline
+
+Add an image build/publish job to the release flow (`release.yml` /
+`reusable-release-build.yml`) that builds the multi-arch image from the release
+binaries and pushes to GHCR with the tag set above, gated on a successful
+release. (Exact wiring is an implementation detail for the PR.)
+
+## Recommended Dockerfile patterns (documented for users)
+
+### 1. SSR / Node-server app, slim runtime (the #1490 case)
+
+```dockerfile
+# syntax=docker/dockerfile:1
+
+# --- build stage: official Vite+ toolchain image ---
+FROM ghcr.io/voidzero-dev/vite-plus:1 AS build
+WORKDIR /app
+
+# Dependency layer first for cache reuse.
+COPY package.json pnpm-lock.yaml .node-version ./
+RUN vp install --frozen-lockfile
+
+# Build. vp reads .node-version and provisions that exact Node automatically.
+COPY . .
+RUN vp build
+
+# Production-only deps + the exact resolved Node binary for the runtime stage.
+RUN vp install --frozen-lockfile --prod \
+ && cp "$(vp env which node | head -1)" /tmp/node
+
+# --- runtime stage: small, glibc, no vp ---
+FROM debian:bookworm-slim AS runtime
+WORKDIR /app
+ENV NODE_ENV=production
+
+# Exact Node from .node-version (official, signature-verified glibc build).
+COPY --from=build /tmp/node /usr/local/bin/node
+
+COPY --from=build /app/dist ./dist
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/package.json ./
+
+USER nobody
+EXPOSE 3000
+CMD ["node", "dist/server.js"]
+```
+
+The deployed image carries only Node + app, matches `.node-version` exactly, and
+is far smaller than `node:24-alpine`. A distroless final base
+(`gcr.io/distroless/cc`) is a documented size/security upgrade for users who do
+not need a shell at runtime (see Future Work).
+
+### 2. Static SPA / SSG
+
+```dockerfile
+FROM ghcr.io/voidzero-dev/vite-plus:1 AS build
+WORKDIR /app
+COPY package.json pnpm-lock.yaml .node-version ./
+RUN vp install --frozen-lockfile
+COPY . .
+RUN vp build
+
+FROM nginx:alpine AS runtime
+COPY --from=build /app/dist /usr/share/nginx/html
+```
+
+No Node at runtime; the vp image is only the builder.
+
+### 3. Container-native CI
+
+```yaml
+# e.g. GitLab CI
+build:
+  image: ghcr.io/voidzero-dev/vite-plus:1
+  script:
+    - vp install --frozen-lockfile
+    - vp check
+    - vp test
+    - vp build
+```
+
+### 4. Devcontainer
+
+```jsonc
+// .devcontainer/devcontainer.json
+{
+  "image": "ghcr.io/voidzero-dev/vite-plus:1"
+}
+```
+
+### 5. Ad-hoc / evaluation
+
+```bash
+docker run --rm -it -v "$PWD:/app" -w /app ghcr.io/voidzero-dev/vite-plus vp build
+```
+
+## Open questions
+
+1. **Default app Node in the image.** The toolchain image bakes no specific app
+   Node (vp downloads the pinned version at build, needing network). Should we
+   offer a variant with an LTS Node prebaked for faster/offline builds, or rely
+   on caching and `VP_NODE_DIST_MIRROR`? (Leaning: no prebaked Node by default;
+   revisit with a prebaked or offline variant if demand appears.)
+2. **Native build toolchain by default.** Include `build-essential`/`python3` in
+   the default image (larger, but native addons just work), or keep the default
+   lean and add them in a `-full` variant? (Leaning: include by default since
+   this is a builder image; offer a `-slim` later.)
+3. **`vp install --prod` semantics for the runtime copy.** Confirm the exact flag
+   set vp exposes for a production-only install and whether a dedicated deps stage
+   improves layer caching in the documented pattern.
+4. **Image naming.** `ghcr.io/voidzero-dev/vite-plus` vs a `-toolchain` suffix to
+   leave room for other images later.
+
+## Future Work
+
+1. **`vp prune <target> --docker`** for monorepos: emit a target-scoped subset
+   (package.json files, pruned lockfile, source) so the dependency-install layer
+   caches across unrelated workspace edits, matching Turborepo `turbo prune` and
+   Nx `prune-lockfile`. This is the one capability plain package managers cannot
+   offer and the main reason monorepo Docker guides cite those tools. Likely its
+   own RFC.
+2. **Distroless runtime guidance/variant.** Document (or provide) a
+   `gcr.io/distroless/cc` final stage and the `tini` PID-1 pattern for a smaller,
+   shell-less, better-CVE-posture runtime.
+3. **Thin runtime base image.** Reconsider only if the documented copy-Node-in
+   pattern proves insufficient; would reintroduce Node-version coupling, so not
+   planned.
+4. **Alpine/musl variant.** Deferred, not part of v1, and only worth adding on
+   real demand. The reasoning:
+
+   - **Size does not motivate it here.** The two assumed wins for Alpine do not
+     apply to this design. On compressed size the glibc multi-stage path is
+     already smaller: `gcr.io/distroless/nodejs` ~45 MB and a distroless `cc`
+     base + copied Node beats `node:*-alpine` ~55 MB (`node:*-slim` ~75 MB).
+     #1490's "Alpine doubles the size" was bare-Alpine + `apk add nodejs` versus
+     `node:24-alpine`, a comparison the multi-stage glibc runtime sidesteps
+     entirely.
+   - **Two real costs.** (1) On musl, vp downloads Node from
+     `unofficial-builds.nodejs.org`, which publishes no PGP signature (see
+     `crates/vite_js_runtime/src/providers/node.rs`), so the musl variant breaks
+     this RFC's "official, signature-verified Node throughout" guarantee. (2)
+     musl is the classic native-addon sharp edge (prebuilt addons are usually
+     glibc; on musl they need musl prebuilds or source compilation plus
+     `gcompat`/`libc6-compat`), which Vite+ projects hit regularly (better-sqlite3,
+     sharp). The wider field treats musl as a hazard for the same reasons (Volta
+     unsupported on musl, mise needs `MISE_LIBC=musl`, moon needs
+     `MOON_TOOLCHAIN_FORCE_GLOBALS=true`, Turborepo `apk add libc6-compat`).
+   - **The one legitimate driver** is orgs that mandate Alpine everywhere: a
+     glibc-copied Node cannot load on a musl base, so those users are genuinely
+     excluded by v1. That narrow segment is what a future opt-in `-alpine`/musl
+     toolchain image would serve.
+   - **If added later**, ship it only as an opt-in variant with loud caveats
+     (unsigned unofficial Node; native addons may need `libc6-compat`/source
+     builds) and a documented libc autodetect/override. The release pipeline
+     already builds musl `vp` binaries, so the build lift is small; the ongoing
+     support burden is the real cost.
+5. **Docker Hub publishing** for discoverability, in addition to GHCR.
+6. **Offline / airgapped builds**: a prebaked-Node variant and `VP_NODE_DIST_MIRROR`
+   guidance.
+
+## References
+
+- Issue: [#1490](https://github.com/voidzero-dev/vite-plus/issues/1490)
+- Q2 plan: [#1324](https://github.com/voidzero-dev/vite-plus/issues/1324)
+- JS runtime management: [`js-runtime.md`](./js-runtime.md)
+- Node signature verification: [`verify-node-shasums-signature.md`](./verify-node-shasums-signature.md)
+- CI guide: `docs/guide/ci.md`
+- Distribution prior art: pnpm <https://pnpm.io/docker>, Deno <https://github.com/denoland/deno_docker>,
+  mise <https://mise.jdx.dev/mise-cookbook/docker.html>, Turborepo
+  <https://turborepo.dev/docs/guides/tools/docker>, distroless
+  <https://github.com/GoogleContainerTools/distroless/blob/main/nodejs/README.md>.
