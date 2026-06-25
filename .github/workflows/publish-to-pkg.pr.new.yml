@@ -145,19 +145,27 @@ jobs:
     if: >-
       github.repository == 'voidzero-dev/vite-plus' &&
       contains(github.event.pull_request.labels.*.name, 'pkg.pr.new')
-    name: Docker preview image
+    name: Docker preview image (${{ matrix.variant }})
     runs-on: ubuntu-latest
     needs: publish
     permissions:
       contents: read
       packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: debian
+            dockerfile: docker/Dockerfile
+            tag_suffix: ''
+          - variant: alpine
+            dockerfile: docker/Dockerfile.alpine
+            tag_suffix: '-alpine'
     env:
       IMAGE: ghcr.io/voidzero-dev/vite-plus
-      PR_NUMBER: ${{ github.event.pull_request.number }}
+      TAG: pr-${{ github.event.pull_request.number }}${{ matrix.tag_suffix }}
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
-
-      - uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3 # v4.1.0
 
       - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
 
@@ -176,20 +184,20 @@ jobs:
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
         with:
           context: docker
-          file: docker/Dockerfile
+          file: ${{ matrix.dockerfile }}
           platforms: linux/amd64
           push: true
-          tags: ${{ env.IMAGE }}:pr-${{ env.PR_NUMBER }}
+          tags: ${{ env.IMAGE }}:${{ env.TAG }}
           build-args: |
-            VP_PR_VERSION=${{ env.PR_NUMBER }}
+            VP_PR_VERSION=${{ github.event.pull_request.number }}
           provenance: false
 
       - name: Summary
         run: |
           {
-            echo "### Docker preview image"
+            echo "### Docker preview image (${{ matrix.variant }})"
             echo ""
             echo '```bash'
-            echo "docker pull ${IMAGE}:pr-${PR_NUMBER}"
+            echo "docker pull ${IMAGE}:${TAG}"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"

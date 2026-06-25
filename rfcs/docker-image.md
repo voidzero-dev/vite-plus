@@ -157,11 +157,10 @@ via the documented multi-stage pattern.
 1. A production runtime image (documented pattern instead, see Future Work for a
    possible thin runtime base).
 2. Node-version-keyed image tags (the tag sprawl this design avoids).
-3. An Alpine/musl image variant in the first version. glibc is the v1 default
-   because it keeps official, signature-verified Node, avoids native-addon
-   breakage, and (via the multi-stage distroless final stage) is already smaller
-   than Alpine. Revisit in Future Work, gated on demand. See the rationale under
-   Future Work.
+3. Alpine/musl as the _default_. glibc is the default (official,
+   signature-verified Node, no native-addon breakage). An Alpine/musl image is
+   published as an opt-in `-alpine` variant with documented caveats (see Design);
+   it is not the recommended default.
 4. `vp prune --docker` monorepo pruning (Future Work).
 5. Docker Hub publishing (GHCR only for now).
 
@@ -202,6 +201,14 @@ deployed images small.
   a switch to Alpine/musl would save (and without the musl tradeoffs).
 - **User:** create a non-root `vp` user (mirroring Bun's `USER bun` and Deno's
   `USER deno`); document switching to root for steps that need `apt`.
+- **Alpine/musl variant (opt-in):** an `alpine:3` (musl) toolchain image
+  (`docker/Dockerfile.alpine`), published under `-alpine` tags. It produces the
+  smallest runtime (an Alpine SSR runtime measured ~136 MB vs ~150 MB distroless
+  and ~198 MB debian-slim), but carries the musl tradeoffs: Node comes from the
+  unofficial, **unsigned** musl builds; native addons may need musl prebuilds or
+  source compilation; and a musl Node binary only runs on a musl base, so the
+  runtime stage must also be Alpine. The Debian image stays the recommended
+  default. Builds via the same matrix as the Debian image.
 - **Possible later variant:** a `-slim` toolchain image without the native build
   toolchain for projects with no native deps (Future Work).
 
@@ -233,6 +240,9 @@ Tags track the `vp` version, not Node:
 - `ghcr.io/voidzero-dev/vite-plus:<major>` (for example `:1`)
 - `ghcr.io/voidzero-dev/vite-plus:<major>.<minor>` (for example `:1.4`)
 - `ghcr.io/voidzero-dev/vite-plus:<major>.<minor>.<patch>` (for example `:1.4.2`)
+
+The Alpine variant publishes the same set with an `-alpine` suffix
+(`:latest-alpine`, `:1-alpine`, `:1.4-alpine`, `:1.4.2-alpine`).
 
 Users pin by exact tag or digest for reproducibility. No `node-<version>` tags.
 
@@ -406,35 +416,27 @@ docker run --rm -it -v "$PWD:/app" -w /app ghcr.io/voidzero-dev/vite-plus vp bui
 3. **Thin runtime base image.** Reconsider only if the documented copy-Node-in
    pattern proves insufficient; would reintroduce Node-version coupling, so not
    planned.
-4. **Alpine/musl variant.** Deferred, not part of v1, and only worth adding on
-   real demand. The reasoning:
+4. **Alpine/musl variant (shipped as opt-in).** Published under `-alpine` tags
+   (`docker/Dockerfile.alpine`); the Debian image stays the default. It serves
+   teams that mandate Alpine and yields the smallest runtime (an Alpine SSR
+   runtime measured ~136 MB). It ships with loud caveats because the tradeoffs
+   are real:
 
-   - **Size does not motivate it here.** The two assumed wins for Alpine do not
-     apply to this design. On compressed size the glibc multi-stage path is
-     already smaller: `gcr.io/distroless/nodejs` ~45 MB and a distroless `cc`
-     base + copied Node beats `node:*-alpine` ~55 MB (`node:*-slim` ~75 MB).
-     #1490's "Alpine doubles the size" was bare-Alpine + `apk add nodejs` versus
-     `node:24-alpine`, a comparison the multi-stage glibc runtime sidesteps
-     entirely.
-   - **Two real costs.** (1) On musl, vp downloads Node from
-     `unofficial-builds.nodejs.org`, which publishes no PGP signature (see
-     `crates/vite_js_runtime/src/providers/node.rs`), so the musl variant breaks
-     this RFC's "official, signature-verified Node throughout" guarantee. (2)
-     musl is the classic native-addon sharp edge (prebuilt addons are usually
+   - On musl, vp downloads Node from `unofficial-builds.nodejs.org`, which
+     publishes no PGP signature (see `crates/vite_js_runtime/src/providers/node.rs`),
+     so the Alpine variant does not get the "official, signature-verified Node"
+     guarantee the Debian image has.
+   - musl is the classic native-addon sharp edge (prebuilt addons are usually
      glibc; on musl they need musl prebuilds or source compilation plus
      `gcompat`/`libc6-compat`), which Vite+ projects hit regularly (better-sqlite3,
      sharp). The wider field treats musl as a hazard for the same reasons (Volta
      unsupported on musl, mise needs `MISE_LIBC=musl`, moon needs
      `MOON_TOOLCHAIN_FORCE_GLOBALS=true`, Turborepo `apk add libc6-compat`).
-   - **The one legitimate driver** is orgs that mandate Alpine everywhere: a
-     glibc-copied Node cannot load on a musl base, so those users are genuinely
-     excluded by v1. That narrow segment is what a future opt-in `-alpine`/musl
-     toolchain image would serve.
-   - **If added later**, ship it only as an opt-in variant with loud caveats
-     (unsigned unofficial Node; native addons may need `libc6-compat`/source
-     builds) and a documented libc autodetect/override. The release pipeline
-     already builds musl `vp` binaries, so the build lift is small; the ongoing
-     support burden is the real cost.
+   - A musl Node binary only runs on a musl base, so the documented Alpine
+     multi-stage pattern uses an Alpine runtime stage (not debian-slim/distroless).
+
+   Remaining follow-up: a documented libc autodetect/override and reducing the
+   ongoing support burden.
 
 5. **Docker Hub publishing** for discoverability, in addition to GHCR.
 6. **Offline / airgapped builds**: a prebaked-Node variant and `VP_NODE_DIST_MIRROR`
