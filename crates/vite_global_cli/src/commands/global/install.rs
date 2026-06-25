@@ -18,13 +18,16 @@ use vite_path::{AbsolutePath, AbsolutePathBuf, current_dir};
 use vite_shared::{format_path_prepended, output};
 
 #[cfg(test)]
-use crate::commands::env::package_metadata::{INSTALL_ID_LENGTH, is_install_id};
+use crate::commands::env::package_metadata::INSTALL_ID_LENGTH;
 use crate::{
     commands::{
         env::{
             bin_config::BinConfig,
-            config::{get_bin_dir, get_node_modules_dir, resolve_version, resolve_version_alias},
-            package_metadata::{INSTALL_ID_PREFIX, PackageMetadata},
+            config::{
+                get_bin_dir, get_node_modules_dir, get_packages_dir, resolve_version,
+                resolve_version_alias,
+            },
+            package_metadata::{INSTALL_ID_PREFIX, PackageMetadata, is_install_id},
         },
         global::{CORE_SHIMS, is_local_package_spec, parse_package_spec},
     },
@@ -691,6 +694,76 @@ async fn cleanup_previous_installation(
     }
 }
 
+pub(crate) async fn cleanup_stale_installations() -> Result<(), Error> {
+    let packages_dir = get_packages_dir()?;
+    if !tokio::fs::try_exists(&packages_dir).await.unwrap_or(false) {
+        return Ok(());
+    }
+
+    let active_install_dirs = PackageMetadata::list_all()
+        .await?
+        .into_iter()
+        .filter_map(|metadata| metadata.installation_dir().ok())
+        .map(|path| path.as_path().to_path_buf())
+        .collect::<HashSet<_>>();
+
+    let mut entries = tokio::fs::read_dir(packages_dir).await?;
+    while let Some(entry) = entries.next_entry().await? {
+        let file_type = entry.file_type().await?;
+        if !file_type.is_dir() {
+            continue;
+        }
+
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if name.starts_with('@') {
+            let mut scoped_entries = tokio::fs::read_dir(entry.path()).await?;
+            while let Some(scoped_entry) = scoped_entries.next_entry().await? {
+                if !scoped_entry.file_type().await?.is_dir() {
+                    continue;
+                }
+                let scoped_path = scoped_entry.path();
+                cleanup_stale_installation_dir(
+                    scoped_entry.file_name().to_string_lossy().as_ref(),
+                    &scoped_path,
+                    &active_install_dirs,
+                )
+                .await;
+            }
+            continue;
+        }
+
+        let path = entry.path();
+        cleanup_stale_installation_dir(&name, &path, &active_install_dirs).await;
+    }
+
+    Ok(())
+}
+
+async fn cleanup_stale_installation_dir(
+    name: &str,
+    path: &std::path::Path,
+    active_install_dirs: &HashSet<std::path::PathBuf>,
+) {
+    let has_install_id = name
+        .rfind(INSTALL_ID_PREFIX)
+        .is_some_and(|index| index > 0 && is_install_id(&name[index..]));
+    if !has_install_id || active_install_dirs.contains(path) {
+        return;
+    }
+
+    tracing::debug!("Cleaning up stale global package installation: {}", path.display());
+    if let Err(error) = tokio::fs::remove_dir_all(path).await {
+        if error.kind() != std::io::ErrorKind::NotFound {
+            tracing::warn!(
+                "Failed to remove stale global package installation at {}: {}",
+                path.display(),
+                error
+            );
+        }
+    }
+}
+
 async fn remove_dir_all_if_exists(path: &AbsolutePathBuf) -> Result<(), Error> {
     match tokio::fs::remove_dir_all(path).await {
         Ok(()) => Ok(()),
@@ -1302,6 +1375,93 @@ mod tests {
         assert!(current_install.join("marker").as_path().exists());
         assert!(!old_install.as_path().exists());
         assert!(stale_install.as_path().exists());
+    }
+
+    #[tokio::test]
+    async fn test_cleanup_stale_installations_removes_inactive_identified_dirs() {
+        use tempfile::TempDir;
+        use vite_path::AbsolutePathBuf;
+
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = temp_dir.path().to_path_buf();
+        let _env_guard = vite_shared::EnvConfig::test_guard(
+            vite_shared::EnvConfig::for_test_with_home(&temp_path),
+        );
+
+        let packages_dir = AbsolutePathBuf::new(temp_path.join("packages")).unwrap();
+        let active_id = "#123e4567-e89b-42d3-a456-426614174000";
+        let stale_id = "#987e6543-e21b-42d3-a456-426614174000";
+        let scoped_active_id = "#111e4567-e89b-42d3-a456-426614174000";
+        let scoped_stale_id = "#222e4567-e89b-42d3-a456-426614174000";
+        let legacy_stale_id = "#333e4567-e89b-42d3-a456-426614174000";
+
+        let active_dir = packages_dir.join(format!("typescript{active_id}"));
+        let stale_dir = packages_dir.join(format!("typescript{stale_id}"));
+        let legacy_dir = packages_dir.join("legacy-pkg");
+        let legacy_stale_dir = packages_dir.join(format!("legacy-pkg{legacy_stale_id}"));
+        let malformed_dir = packages_dir.join("typescript#not-a-valid-install-id");
+        let scoped_active_dir = packages_dir.join("@scope").join(format!("pkg{scoped_active_id}"));
+        let scoped_stale_dir = packages_dir.join("@scope").join(format!("pkg{scoped_stale_id}"));
+
+        for dir in [
+            &active_dir,
+            &stale_dir,
+            &legacy_dir,
+            &legacy_stale_dir,
+            &malformed_dir,
+            &scoped_active_dir,
+            &scoped_stale_dir,
+        ] {
+            tokio::fs::create_dir_all(dir).await.unwrap();
+        }
+        tokio::fs::write(active_dir.join("marker").as_path(), "active").await.unwrap();
+        tokio::fs::write(legacy_dir.join("marker").as_path(), "active").await.unwrap();
+        tokio::fs::write(scoped_active_dir.join("marker").as_path(), "active").await.unwrap();
+
+        let mut metadata = PackageMetadata::new(
+            "typescript".to_string(),
+            "5.9.3".to_string(),
+            "22.0.0".to_string(),
+            None,
+            vec![],
+            HashSet::new(),
+            "npm".to_string(),
+        );
+        metadata.install_id = active_id.to_string();
+        metadata.save().await.unwrap();
+
+        let mut scoped_metadata = PackageMetadata::new(
+            "@scope/pkg".to_string(),
+            "1.0.0".to_string(),
+            "22.0.0".to_string(),
+            None,
+            vec![],
+            HashSet::new(),
+            "npm".to_string(),
+        );
+        scoped_metadata.install_id = scoped_active_id.to_string();
+        scoped_metadata.save().await.unwrap();
+
+        let legacy_metadata = PackageMetadata::new(
+            "legacy-pkg".to_string(),
+            "1.0.0".to_string(),
+            "22.0.0".to_string(),
+            None,
+            vec![],
+            HashSet::new(),
+            "npm".to_string(),
+        );
+        legacy_metadata.save().await.unwrap();
+
+        cleanup_stale_installations().await.unwrap();
+
+        assert!(active_dir.join("marker").as_path().exists());
+        assert!(legacy_dir.join("marker").as_path().exists());
+        assert!(scoped_active_dir.join("marker").as_path().exists());
+        assert!(malformed_dir.as_path().exists());
+        assert!(!stale_dir.as_path().exists());
+        assert!(!legacy_stale_dir.as_path().exists());
+        assert!(!scoped_stale_dir.as_path().exists());
     }
 
     #[tokio::test]

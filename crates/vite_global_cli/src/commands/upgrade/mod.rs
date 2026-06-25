@@ -195,6 +195,9 @@ async fn install_platform_and_main(
     {
         output::warn(&format!("Old version cleanup failed (non-fatal): {e}"));
     }
+    if let Err(e) = crate::commands::global::install::cleanup_stale_installations().await {
+        output::warn(&format!("Stale global package cleanup failed (non-fatal): {e}"));
+    }
 
     if !silent {
         println!(
