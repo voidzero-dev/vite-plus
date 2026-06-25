@@ -4812,6 +4812,10 @@ export function ensureVitePlusBootstrap(
 // against every browser-surface `./test/*` export in package.json (those that
 // re-export `@vitest/browser*` or `vitest/internal/browser`).
 const VITEST_BROWSER_SPECIFIER_HINTS = [
+  // Before v0.2, projects commonly aliased `vitest` to
+  // `@voidzero-dev/vite-plus-test`, whose browser exports used these paths.
+  'vitest/browser',
+  'vitest/plugins/browser',
   '@vitest/browser',
   'vite-plus/test/browser',
   'vite-plus/test/plugins/browser',
@@ -4826,6 +4830,9 @@ const VITEST_BROWSER_SPECIFIER_HINTS = [
 // Specifier fragments that signal the WEBDRIVERIO provider specifically. Each
 // is a prefix, matched as a substring, so subpath imports (`/context`,
 // `/provider`, …) are covered too:
+//   - `vitest/browser-webdriverio`, `vitest/browser/providers/webdriverio`, and
+//     `vitest/plugins/browser-webdriverio` are legacy
+//     `@voidzero-dev/vite-plus-test` exports reached through the `vitest` alias
 //   - `@vitest/browser-webdriverio`            pre-migration (incl. `/provider`,
 //                                              `/context` subpaths)
 //   - `vite-plus/test/browser-webdriverio`     migrated (re-run); covers
@@ -4846,6 +4853,9 @@ const VITEST_BROWSER_SPECIFIER_HINTS = [
 //                                              it pulls in the (now opt-in)
 //                                              provider, so it signals usage too.
 const WEBDRIVERIO_PROVIDER_SPECIFIER_HINTS = [
+  'vitest/browser-webdriverio',
+  'vitest/browser/providers/webdriverio',
+  'vitest/plugins/browser-webdriverio',
   '@vitest/browser-webdriverio',
   'vite-plus/test/browser-webdriverio',
   'vite-plus/test/browser/providers/webdriverio',
@@ -4860,6 +4870,11 @@ const WEBDRIVERIO_PROVIDER_SPECIFIER_HINTS = [
 // provider via a `vite-plus/test/browser-playwright` shim with no declared dep)
 // must still have the provider kept/injected for the rewritten import to resolve.
 const PLAYWRIGHT_PROVIDER_SPECIFIER_HINTS = [
+  // Legacy `@voidzero-dev/vite-plus-test` exports reached through the `vitest`
+  // alias. These must be detected before rewriteAllImports changes the prefix.
+  'vitest/browser-playwright',
+  'vitest/browser/providers/playwright',
+  'vitest/plugins/browser-playwright',
   '@vitest/browser-playwright',
   'vite-plus/test/browser-playwright',
   'vite-plus/test/browser/providers/playwright',

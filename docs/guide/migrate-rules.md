@@ -117,12 +117,21 @@ Vite+ and should be removed as direct dependencies. The Playwright and
 WebdriverIO providers remain opt-in: keep or add the provider at the bundled
 Vitest version and ensure its `playwright` or `webdriverio` peer is installed.
 
+Migration detects providers before rewriting imports. This includes legacy
+projects that aliased `vitest` to `@voidzero-dev/vite-plus-test` and import from
+`vitest/browser-<provider>`, `vitest/browser/providers/<provider>`, or
+`vitest/plugins/browser-<provider>`. These imports still cause the corresponding
+`@vitest/browser-playwright` or `@vitest/browser-webdriverio` dependency and its
+framework peer to be installed.
+
 Object-valued nested npm and Bun overrides are preserved because they are
 user-defined scopes rather than scalar version pins.
 
 ## Source Rewrite Rules
 
 - Rewrite ordinary `vitest` and `vitest/*` imports to `vite-plus/test*`.
+- Detect legacy Playwright and WebdriverIO provider imports before applying that
+  rewrite so their optional provider dependencies are not lost.
 - Rewrite scoped browser imports to the corresponding
   `vite-plus/test/browser*` exports and provision opt-in providers when needed.
 - Leave existing `vite-plus/test*` imports unchanged.

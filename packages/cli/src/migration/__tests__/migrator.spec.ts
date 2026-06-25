@@ -3888,6 +3888,104 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     expect(devDeps.playwright).toBe('*');
   });
 
+  it.each([
+    ['playwright', 'browser-playwright'],
+    ['playwright', 'browser/providers/playwright'],
+    ['playwright', 'plugins/browser-playwright'],
+    ['webdriverio', 'browser-webdriverio'],
+    ['webdriverio', 'browser/providers/webdriverio'],
+    ['webdriverio', 'plugins/browser-webdriverio'],
+  ] as const)(
+    'injects the %s provider before rewriting the legacy vitest/%s import',
+    (provider, subpath) => {
+      const legacySpecifier = `vitest/${subpath}`;
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify({
+          name: 'test',
+          devDependencies: {
+            vite: '^7.0.0',
+            vitest: 'npm:@voidzero-dev/vite-plus-test@0.1.24',
+          },
+        }),
+      );
+      fs.writeFileSync(
+        path.join(tmpDir, 'vite.config.ts'),
+        [
+          `import { ${provider} } from '${legacySpecifier}';`,
+          "import { defineConfig } from 'vite-plus';",
+          'export default defineConfig({',
+          `  test: { browser: { enabled: true, provider: ${provider}() } },`,
+          '});',
+          '',
+        ].join('\n'),
+      );
+
+      rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+
+      const devDeps = readJson(path.join(tmpDir, 'package.json')).devDependencies as Record<
+        string,
+        string
+      >;
+      expect(devDeps[`@vitest/browser-${provider}`]).toBe(VITEST_VERSION);
+      expect(devDeps[provider]).toBe('*');
+      expect(devDeps.vitest).toBe('catalog:');
+      expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8')).toContain(
+        `from 'vite-plus/test/${subpath}'`,
+      );
+    },
+  );
+
+  it('injects the provider before rewriting a legacy provider import at a monorepo root', () => {
+    // Regression for vue-core: the root manifest is rewritten before imports,
+    // so the legacy vite-plus-test alias path must be recognized during the
+    // initial source scan.
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'root',
+        devDependencies: {
+          playwright: '^1.56.1',
+          vite: 'catalog:',
+          vitest: 'npm:@voidzero-dev/vite-plus-test@0.1.24',
+        },
+      }),
+    );
+    fs.writeFileSync(path.join(tmpDir, 'pnpm-workspace.yaml'), 'packages:\n  - packages/*\n');
+    fs.writeFileSync(
+      path.join(tmpDir, 'vite.config.ts'),
+      [
+        "import { playwright } from 'vitest/browser-playwright';",
+        "import { defineConfig } from 'vite-plus';",
+        'export default defineConfig({',
+        '  test: { browser: { enabled: true, provider: playwright() } },',
+        '});',
+        '',
+      ].join('\n'),
+    );
+
+    rewriteMonorepo(
+      {
+        ...makeWorkspaceInfo(tmpDir, PackageManager.pnpm),
+        isMonorepo: true,
+        workspacePatterns: ['packages/*'],
+      },
+      true,
+      true,
+    );
+
+    const devDeps = readJson(path.join(tmpDir, 'package.json')).devDependencies as Record<
+      string,
+      string
+    >;
+    expect(devDeps['@vitest/browser-playwright']).toBe(VITEST_VERSION);
+    expect(devDeps.playwright).toBe('^1.56.1');
+    expect(devDeps.vitest).toBe('catalog:');
+    expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8')).toContain(
+      "from 'vite-plus/test/browser-playwright'",
+    );
+  });
+
   it('injects the playwright provider on a re-run from the migrated provider-subpath import', () => {
     // Re-running migration on an ALREADY-migrated project: the import rewriter
     // maps `@vitest/browser-playwright/provider` to

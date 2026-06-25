@@ -45,6 +45,15 @@ When PnP is active, interactive migration prints the incompatibility and asks wh
 
 Force-override/CI mode (`VP_OVERRIDE_PACKAGES`) is respected: when `vitest` is not a managed key there, the project's own `vitest` is never stripped and its `@vitest/*` ecosystem dependencies are not realigned. Object-valued nested npm/Bun overrides are user-owned scopes rather than managed version pins and are preserved.
 
+Legacy browser-provider usage must be detected before source imports are
+rewritten. Projects that aliased `vitest` to the removed
+`@voidzero-dev/vite-plus-test` package can import Playwright or WebdriverIO from
+`vitest/browser-<provider>`, `vitest/browser/providers/<provider>`, or
+`vitest/plugins/browser-<provider>`. Migration treats all three forms as opt-in
+provider usage, installs the matching `@vitest/browser-<provider>` package and
+framework peer, and then rewrites the import to the equivalent
+`vite-plus/test*` surface.
+
 ## `@nuxt/test-utils` compatibility
 
 `@nuxt/test-utils`'s transform detects an existing `vi` import only when its module specifier is exactly `vitest`. When a test uses `mockNuxtImport` or `mockComponent`, changing that import to `vite-plus/test` makes the transform inject a second `vi` import and can fail compilation with a duplicate identifier. Requiring users to know which individual files exercise that transform is brittle, so the migration uses one package-level rule instead.
@@ -96,7 +105,7 @@ How each package the `vitest` ecosystem rule covers is handled, verified against
 | `packages/cli/src/migration/{migrator,npm-reinstall,bin}.ts`       | Yarn PnP preflight and `node-modules` conversion; usage-aware managed override set; per-package dependency reconciliation; `vitest` removal across every sink; full `@vitest/*` alignment; browser-provider restoration; behind `vite-plus`/`vite` re-pin; empty/unrelated-`pnpm` routing fix; stale npm Vite install cleanup; package-level Nuxt dependency detection and retained Vitest provisioning. |
 | Oxlint `prefer-vite-plus-imports` rule                             | Apply the same Nuxt package-level `vitest` / `vitest/*` exception so diagnostics and autofix preserve the migration's compatible result.                                                                                                                                                                                                                                                                 |
 
-Covered by unit tests in `migrator.spec.ts` (vitest removal, required-peer provisioning, ecosystem alignment, browser-provider restoration, workspace localization, behind re-pin, empty-`pnpm` reconciliation), `npm-reinstall.spec.ts` (stale npm install and lock cleanup), and a routing test in `vite_global_cli`.
+Covered by unit tests in `migrator.spec.ts` (vitest removal, required-peer provisioning, ecosystem alignment, browser-provider restoration including legacy wrapper import paths, workspace localization, behind re-pin, empty-`pnpm` reconciliation), `npm-reinstall.spec.ts` (stale npm install and lock cleanup), and a routing test in `vite_global_cli`.
 
 ## Snapshot coverage
 
