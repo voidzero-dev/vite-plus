@@ -4,7 +4,10 @@
     "vp install -g ./long-time-install-package",
     "long-time-install-package",
     "node test-reinstall-interrupt.js # Reinstall but interrupt",
-    "long-time-install-package # Original package should be still runnable"
+    "long-time-install-package # Original package should be still runnable",
+    "node check-stale-packages.js --expect-stale # Interrupted reinstall should leave stale package",
+    "vp install -g ./long-time-install-package # Successful reinstall should clean stale packages",
+    "node check-stale-packages.js"
   ],
   "after": ["vp remove -g @scope/long-time-install-package"]
 }
