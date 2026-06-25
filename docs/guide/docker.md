@@ -22,19 +22,22 @@ matching your project's Node version exactly.
 
 Tags track the `vp` version:
 
-| Tag                                     | Meaning        |
-| --------------------------------------- | -------------- |
-| `ghcr.io/voidzero-dev/vite-plus:latest` | Latest release |
-| `ghcr.io/voidzero-dev/vite-plus:1`      | Latest 1.x     |
-| `ghcr.io/voidzero-dev/vite-plus:1.4`    | Latest 1.4.x   |
-| `ghcr.io/voidzero-dev/vite-plus:1.4.2`  | Exact version  |
+| Tag                                     | Meaning                              |
+| --------------------------------------- | ------------------------------------ |
+| `ghcr.io/voidzero-dev/vite-plus:latest` | Latest release                       |
+| `ghcr.io/voidzero-dev/vite-plus:0`      | Latest 0.x                           |
+| `ghcr.io/voidzero-dev/vite-plus:0.2`    | Latest 0.2.x                         |
+| `ghcr.io/voidzero-dev/vite-plus:0.2.2`  | Exact version (first Docker release) |
 
 Pin an exact tag (or a digest) for reproducible builds. The image is published
 for `linux/amd64` and `linux/arm64` and runs as a non-root user by default.
 
+Browse all published versions and digests on the GitHub package page:
+<https://github.com/voidzero-dev/vite-plus/pkgs/container/vite-plus>.
+
 The default image is Debian (glibc). An Alpine (musl) variant is published under
-the same versions with an `-alpine` suffix (`:latest-alpine`, `:1-alpine`,
-`:1.4-alpine`, `:1.4.2-alpine`). See [Alpine variant](#alpine-musl-variant) for
+the same versions with an `-alpine` suffix (`:latest-alpine`, `:0-alpine`,
+`:0.2-alpine`, `:0.2.2-alpine`). See [Alpine variant](#alpine-musl-variant) for
 when to use it and its tradeoffs.
 
 ## Production: SSR / Node-server app
@@ -47,7 +50,7 @@ and the built app into a slim runtime stage:
 # syntax=docker/dockerfile:1
 
 # --- build stage: the official Vite+ toolchain image ---
-FROM ghcr.io/voidzero-dev/vite-plus:1 AS build
+FROM ghcr.io/voidzero-dev/vite-plus:0.2.2 AS build
 WORKDIR /app
 
 # Install dependencies first so this layer is cached across source changes.
@@ -65,7 +68,7 @@ RUN cp "$(vp env which node | head -1)" /tmp/node
 # A separate, fresh `--prod` install so devDependencies (including the vite-plus
 # toolchain) are excluded. Running `--prod` over the full install above would not
 # prune the already-installed devDependencies.
-FROM ghcr.io/voidzero-dev/vite-plus:1 AS deps
+FROM ghcr.io/voidzero-dev/vite-plus:0.2.2 AS deps
 WORKDIR /app
 COPY package.json pnpm-lock.yaml .node-version ./
 RUN vp install --frozen-lockfile --prod
@@ -111,7 +114,7 @@ A static site needs no Node.js at runtime; serve the build output with any stati
 server:
 
 ```dockerfile [Dockerfile]
-FROM ghcr.io/voidzero-dev/vite-plus:1 AS build
+FROM ghcr.io/voidzero-dev/vite-plus:0.2.2 AS build
 WORKDIR /app
 COPY package.json pnpm-lock.yaml .node-version ./
 RUN vp install --frozen-lockfile
@@ -129,7 +132,7 @@ Jenkins, and others):
 
 ```yaml [.gitlab-ci.yml]
 build:
-  image: ghcr.io/voidzero-dev/vite-plus:1
+  image: ghcr.io/voidzero-dev/vite-plus:0.2.2
   script:
     - vp install --frozen-lockfile
     - vp check
@@ -146,7 +149,7 @@ preinstalled:
 
 ```jsonc [.devcontainer/devcontainer.json]
 {
-  "image": "ghcr.io/voidzero-dev/vite-plus:1",
+  "image": "ghcr.io/voidzero-dev/vite-plus:0.2.2",
 }
 ```
 
@@ -176,7 +179,7 @@ pattern with an Alpine runtime:
 ```dockerfile [Dockerfile]
 # syntax=docker/dockerfile:1
 
-FROM ghcr.io/voidzero-dev/vite-plus:1-alpine AS build
+FROM ghcr.io/voidzero-dev/vite-plus:0.2.2-alpine AS build
 WORKDIR /app
 COPY package.json pnpm-lock.yaml .node-version ./
 RUN vp install --frozen-lockfile
@@ -184,7 +187,7 @@ COPY . .
 RUN vp build
 RUN cp "$(vp env which node | head -1)" /tmp/node
 
-FROM ghcr.io/voidzero-dev/vite-plus:1-alpine AS deps
+FROM ghcr.io/voidzero-dev/vite-plus:0.2.2-alpine AS deps
 WORKDIR /app
 COPY package.json pnpm-lock.yaml .node-version ./
 RUN vp install --frozen-lockfile --prod
@@ -204,7 +207,7 @@ CMD ["node", "dist/server.js"]
 ```
 
 For a static SPA there is no Node.js at runtime, so only the builder changes:
-swap the build stage to `ghcr.io/voidzero-dev/vite-plus:1-alpine`; the
+swap the build stage to `ghcr.io/voidzero-dev/vite-plus:0.2.2-alpine`; the
 `nginx:alpine` runtime and its output are unchanged.
 
 ## Notes
