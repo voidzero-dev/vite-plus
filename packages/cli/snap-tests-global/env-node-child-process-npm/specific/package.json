@@ -1,0 +1,18 @@
+{
+  "name": "@env-node-child-process-npm/specific",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "devEngines": {
+    "packageManager": {
+      "name": "npm",
+      "version": "11.17.0",
+      "onFail": "download"
+    },
+    "runtime": {
+      "name": "node",
+      "version": "20.18.0",
+      "onFail": "download"
+    }
+  }
+}
