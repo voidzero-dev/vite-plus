@@ -48,7 +48,13 @@ ENV VP_HOME=/home/vp/.vite-plus \
 # npm (or from pkg.pr.new when VP_PR_VERSION is set). Node.js itself is
 # provisioned per-project by vp at build time, honoring `.node-version` /
 # `engines.node` / `devEngines.runtime`.
+#
+# The installer pre-provisions a default Node.js (~190 MB). Drop it: each project
+# downloads its own pinned Node at build time, so the default is dead weight in a
+# builder image. The node/npm/npx shims remain and fetch the right version on
+# first use.
 RUN curl -fsSL https://vite.plus | VP_VERSION="${VP_VERSION}" VP_PR_VERSION="${VP_PR_VERSION}" bash \
- && vp --version
+ && vp --version \
+ && rm -rf "$VP_HOME/js_runtime"
 
 WORKDIR /app

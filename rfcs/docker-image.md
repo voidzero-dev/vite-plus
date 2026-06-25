@@ -194,6 +194,12 @@ deployed images small.
   compilation (for example `better-sqlite3`). Package managers are handled by
   vp's managed corepack/runtime, so they are provisioned per-project rather than
   baked to a fixed version.
+- **No baked default Node.js:** the installer pre-provisions a default Node.js
+  (~190 MB); the image drops it (`rm -rf $VP_HOME/js_runtime`) because each
+  project provisions its own pinned Node at build time, so a default is dead
+  weight in a builder. The `node`/`npm`/`npx` shims remain and fetch the right
+  version on first use. This keeps the toolchain image ~190 MB smaller, more than
+  a switch to Alpine/musl would save (and without the musl tradeoffs).
 - **User:** create a non-root `vp` user (mirroring Bun's `USER bun` and Deno's
   `USER deno`); document switching to root for steps that need `apt`.
 - **Possible later variant:** a `-slim` toolchain image without the native build
