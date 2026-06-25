@@ -289,9 +289,15 @@ RUN vp install --frozen-lockfile
 COPY . .
 RUN vp build
 
-# Production-only deps + the exact resolved Node binary for the runtime stage.
-RUN vp install --frozen-lockfile --prod \
- && cp "$(vp env which node | head -1)" /tmp/node
+# Export the exact resolved Node binary for the runtime stage.
+RUN cp "$(vp env which node | head -1)" /tmp/node
+
+# --- deps stage: production-only dependencies (fresh --prod, so devDeps are
+# excluded; running --prod over the full install above would not prune them) ---
+FROM ghcr.io/voidzero-dev/vite-plus:1 AS deps
+WORKDIR /app
+COPY package.json pnpm-lock.yaml .node-version ./
+RUN vp install --frozen-lockfile --prod
 
 # --- runtime stage: small, glibc, no vp ---
 FROM debian:bookworm-slim AS runtime
@@ -302,7 +308,7 @@ ENV NODE_ENV=production
 COPY --from=build /tmp/node /usr/local/bin/node
 
 COPY --from=build /app/dist ./dist
-COPY --from=build /app/node_modules ./node_modules
+COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/package.json ./
 
 USER nobody
@@ -310,8 +316,12 @@ EXPOSE 3000
 CMD ["node", "dist/server.js"]
 ```
 
-The deployed image carries only Node + app, matches `.node-version` exactly, and
-is far smaller than `node:24-alpine`. A distroless final base
+The deployed image carries only Node + app + production deps, matches
+`.node-version` exactly, and is much smaller than the default `node:*` image.
+Production dependencies must be installed in a separate `deps` stage: running
+`vp install --prod` over the full install in the build stage does not prune the
+already-installed devDependencies (the large `vite-plus` toolchain), so it would
+otherwise be copied into the runtime. A distroless final base
 (`gcr.io/distroless/cc`) is a documented size/security upgrade for users who do
 not need a shell at runtime (see Future Work).
 

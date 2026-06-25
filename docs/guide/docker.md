@@ -53,9 +53,17 @@ RUN vp install --frozen-lockfile
 COPY . .
 RUN vp build
 
-# Stage production-only dependencies and the exact resolved Node.js binary.
-RUN vp install --frozen-lockfile --prod \
- && cp "$(vp env which node | head -1)" /tmp/node
+# Export the exact resolved Node.js binary for the runtime stage.
+RUN cp "$(vp env which node | head -1)" /tmp/node
+
+# --- deps stage: production-only dependencies ---
+# A separate, fresh `--prod` install so devDependencies (including the vite-plus
+# toolchain) are excluded. Running `--prod` over the full install above would not
+# prune the already-installed devDependencies.
+FROM ghcr.io/voidzero-dev/vite-plus:1 AS deps
+WORKDIR /app
+COPY package.json pnpm-lock.yaml .node-version ./
+RUN vp install --frozen-lockfile --prod
 
 # --- runtime stage: small, glibc, no vp ---
 FROM debian:bookworm-slim AS runtime
@@ -66,7 +74,7 @@ ENV NODE_ENV=production
 COPY --from=build /tmp/node /usr/local/bin/node
 
 COPY --from=build /app/dist ./dist
-COPY --from=build /app/node_modules ./node_modules
+COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/package.json ./
 
 USER nobody
@@ -74,8 +82,17 @@ EXPOSE 3000
 CMD ["node", "dist/server.js"]
 ```
 
-The deployed image contains only Node.js plus your app, matches `.node-version`
-exactly, and is smaller than a full `node:*` base image.
+The deployed image contains only Node.js plus your app and production
+dependencies, and matches `.node-version` exactly. It is much smaller than the
+default `node:*` image; see the distroless tip below for the smallest result.
+
+::: warning Prune production dependencies in a separate stage
+Install production dependencies in their own `deps` stage as shown. Running
+`vp install --prod` after a full `vp install` in the same stage does not remove
+the already-installed devDependencies, so the `vite-plus` toolchain would be
+copied into the runtime image. If your server bundle is fully self-contained (no
+un-bundled runtime dependencies), you can skip copying `node_modules` entirely.
+:::
 
 ::: tip Smaller still
 For a shell-less, minimal-CVE runtime, swap the runtime base for distroless
