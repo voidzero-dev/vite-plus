@@ -178,7 +178,7 @@ Examples:
 ```bash
 vp pm config get registry
 vp pm cache clean -- --force
-vp exec tsc --version
+vp pm audit --json
 ```
 
 #### Staged publishing
