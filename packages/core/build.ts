@@ -317,9 +317,27 @@ async function buildVite() {
     if (!existsSync(dir)) {
       await mkdir(dir, { recursive: true });
     }
-    const rewrittenFile = rewriteModuleSpecifiers(file, srcDtsFile, {
+    let rewrittenFile = rewriteModuleSpecifiers(file, srcDtsFile, {
       rules: [...createViteRewriteRules(pkgJson.name), ...createRolldownRewriteRules(pkgJson.name)],
     });
+    // Upstream bug (vitejs/vite#21863, commit cc39e5540): `node/index.ts`
+    // re-exports `KnownQueryTypeMap` from `#types/importGlob`, but the type is
+    // declared there without `export`. Bundling vite's types into a downstream
+    // project then fails with `[MISSING_EXPORT]`. Add the missing `export` here
+    // until it is fixed upstream (drop this once vite exports it).
+    if (relativePath === '/importGlob.d.ts') {
+      const knownQueryTypeMapPattern = /^type KnownQueryTypeMap\b/m;
+      if (!knownQueryTypeMapPattern.test(rewrittenFile)) {
+        throw new Error(
+          'Expected vite types/importGlob.d.ts to declare non-exported KnownQueryTypeMap. ' +
+            'Upstream may have fixed vitejs/vite#21863; remove the KnownQueryTypeMap export workaround from packages/core/build.ts.',
+        );
+      }
+      rewrittenFile = rewrittenFile.replace(
+        knownQueryTypeMapPattern,
+        'export type KnownQueryTypeMap',
+      );
+    }
     await writeFile(dstFilePath, rewrittenFile);
   }
 

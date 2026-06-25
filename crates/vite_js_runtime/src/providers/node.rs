@@ -13,7 +13,7 @@ use vite_str::Str;
 use crate::provider::ShasumsSignature;
 use crate::{
     Error, Platform,
-    download::fetch_with_cache_headers,
+    download::fetch_json_with_cache_headers,
     platform::Os,
     provider::{ArchiveFormat, DownloadInfo, HashVerification, JsRuntimeProvider},
 };
@@ -237,7 +237,8 @@ impl NodeProvider {
         let base_url = get_dist_url();
         let index_url = vite_str::format!("{base_url}/index.json");
 
-        let response = fetch_with_cache_headers(&index_url, Some(etag)).await?;
+        let response =
+            fetch_json_with_cache_headers::<Vec<NodeVersionEntry>>(&index_url, Some(etag)).await?;
 
         if response.not_modified {
             // Server confirmed data hasn't changed, refresh TTL
@@ -252,10 +253,9 @@ impl NodeProvider {
         }
 
         // Got new data
-        let body = response.body.ok_or_else(|| Error::VersionIndexParseFailed {
+        let versions = response.body.ok_or_else(|| Error::VersionIndexParseFailed {
             reason: "Empty response body".into(),
         })?;
-        let versions: Vec<NodeVersionEntry> = serde_json::from_str(&body)?;
 
         let new_cache = VersionIndexCache {
             expires_at: calculate_expires_at(response.max_age),
@@ -276,12 +276,12 @@ impl NodeProvider {
         let index_url = vite_str::format!("{base_url}/index.json");
 
         tracing::debug!("Fetching version index from {index_url}");
-        let response = fetch_with_cache_headers(&index_url, None).await?;
+        let response =
+            fetch_json_with_cache_headers::<Vec<NodeVersionEntry>>(&index_url, None).await?;
 
-        let body = response.body.ok_or_else(|| Error::VersionIndexParseFailed {
+        let versions = response.body.ok_or_else(|| Error::VersionIndexParseFailed {
             reason: "Empty response body".into(),
         })?;
-        let versions: Vec<NodeVersionEntry> = serde_json::from_str(&body)?;
 
         let cache = VersionIndexCache {
             expires_at: calculate_expires_at(response.max_age),

@@ -84,8 +84,7 @@ pub async fn execute(refresh: bool, env_only: bool) -> Result<ExitStatus, Error>
     tokio::fs::create_dir_all(&bin_dir).await?;
 
     // Get the current executable path (for shims)
-    let current_exe = std::env::current_exe()
-        .map_err(|e| Error::ConfigError(format!("Cannot find current executable: {e}").into()))?;
+    let current_exe = std::env::current_exe()?;
 
     // Create wrapper script in bin/
     setup_vp_wrapper(&current_exe, &bin_dir, refresh).await?;
@@ -328,7 +327,7 @@ async fn create_unix_shim(
     tool: &str,
 ) -> Result<(), Error> {
     let bin_dir = shim_path.parent().ok_or_else(|| {
-        Error::ConfigError(format!("Cannot find parent directory for {tool} shim").into())
+        Error::Other(format!("Cannot find parent directory for {tool} shim").into())
     })?;
     let target = resolve_unix_vp_shim_target(source, bin_dir).await?;
     tokio::fs::symlink(&target, shim_path).await?;
@@ -414,19 +413,18 @@ pub(crate) fn get_trampoline_path() -> Result<vite_path::AbsolutePathBuf, Error>
         let path = std::path::PathBuf::from(override_path);
         if path.exists() {
             return vite_path::AbsolutePathBuf::new(path)
-                .ok_or_else(|| Error::ConfigError("Invalid trampoline override path".into()));
+                .ok_or_else(|| Error::Other("Invalid trampoline override path".into()));
         }
     }
 
-    let current_exe = std::env::current_exe()
-        .map_err(|e| Error::ConfigError(format!("Cannot find current executable: {e}").into()))?;
+    let current_exe = std::env::current_exe()?;
     let bin_dir = current_exe
         .parent()
-        .ok_or_else(|| Error::ConfigError("Cannot find parent directory of vp.exe".into()))?;
+        .ok_or_else(|| Error::Other("Cannot find parent directory of vp.exe".into()))?;
     let trampoline = bin_dir.join("vp-shim.exe");
 
     if !trampoline.exists() {
-        return Err(Error::ConfigError(
+        return Err(Error::Other(
             format!(
                 "Trampoline binary not found at {}. Re-install vite-plus to fix this.",
                 trampoline.display()
@@ -436,7 +434,7 @@ pub(crate) fn get_trampoline_path() -> Result<vite_path::AbsolutePathBuf, Error>
     }
 
     vite_path::AbsolutePathBuf::new(trampoline)
-        .ok_or_else(|| Error::ConfigError("Invalid trampoline path".into()))
+        .ok_or_else(|| Error::Other("Invalid trampoline path".into()))
 }
 
 /// Try to delete an `.exe` file; if deletion fails (e.g., file is locked by a

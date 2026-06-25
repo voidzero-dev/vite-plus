@@ -60,6 +60,7 @@ describe('registerLocalTemplate', () => {
     return config.create ?? {};
   }
 
+  // The first Vite config evaluation can cold-start slowly on Windows CI.
   it('creates a vite.config.ts with create.templates when none exists', async () => {
     expect(fs.existsSync(path.join(workspaceRoot, 'vite.config.ts'))).toBe(false);
 
@@ -69,7 +70,7 @@ describe('registerLocalTemplate', () => {
     const create = await readCreate();
     expect(create.defaultTemplate).toBeUndefined();
     expect(create.templates).toEqual([ENTRY_A]);
-  });
+  }, 15_000);
 
   it('targets an existing vite.config.mts instead of creating a stray vite.config.ts', async () => {
     // A monorepo whose only config is a .mts (or .cts/.cjs) file must be the

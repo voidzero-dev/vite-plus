@@ -11,7 +11,7 @@ npm error A complete log of this run can be found in: <homedir>/.npm/_logs/<time
 ✓ Installed install-fail-local-package <semver>
   Bins: install-fail-local-package
 
-error: Failed to install voidzero-nonexistent-pkg-xyz-23456: Configuration error: npm install failed with exit code: Some(1)
+error: Failed to install voidzero-nonexistent-pkg-xyz-23456: npm install failed with exit code: Some(1)
 
 > install-fail-local-package
 The package is installed successfully

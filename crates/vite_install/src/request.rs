@@ -94,11 +94,7 @@ impl HttpClient {
     /// * `Ok(T)` - Deserialized JSON data
     /// * `Err(e)` - If the request fails or JSON deserialization fails
     pub async fn get_json<T: DeserializeOwned>(&self, url: &str) -> Result<T, Error> {
-        tracing::debug!("Fetching JSON from: {}", url);
-
-        let response = self.get(url).await?;
-        let data = response.json::<T>().await?;
-        Ok(data)
+        self.get_json_with_optional_accept(url, None).await
     }
 
     /// Get JSON data from a URL with a custom Accept header
@@ -119,11 +115,32 @@ impl HttpClient {
         url: &str,
         accept: &str,
     ) -> Result<T, Error> {
-        tracing::debug!("Fetching JSON from: {} (accept: {})", url, accept);
+        self.get_json_with_optional_accept(url, Some(accept)).await
+    }
 
-        let response = self.get_with_accept(url, Some(accept)).await?;
-        let data = response.json::<T>().await?;
-        Ok(data)
+    async fn get_json_with_optional_accept<T: DeserializeOwned>(
+        &self,
+        url: &str,
+        accept: Option<&str>,
+    ) -> Result<T, Error> {
+        tracing::debug!("Fetching JSON from: {} (accept: {:?})", url, accept);
+
+        let client = vite_shared::shared_http_client();
+        (|| async {
+            let mut request = client.get(url);
+            if let Some(accept) = accept {
+                request = request.header(reqwest::header::ACCEPT, accept);
+            }
+            let response = request.send().await?.error_for_status()?;
+            Ok::<T, Error>(response.json::<T>().await?)
+        })
+        .retry(
+            ExponentialBuilder::default()
+                .with_jitter()
+                .with_min_delay(Duration::from_millis(self.min_delay))
+                .with_max_times(self.max_times),
+        )
+        .await
     }
 
     /// Download a file to a specified path
@@ -814,15 +831,16 @@ mod tests {
         let server = MockServer::start();
 
         // Mock response with invalid JSON
-        server.mock(|when, then| {
+        let mock = server.mock(|when, then| {
             when.method(GET).path("/invalid.json");
             then.status(200).header("content-type", "application/json").body("not valid json");
         });
 
-        let client = HttpClient::new();
+        let client = HttpClient::with_config(2, 1);
         let url = format!("{}/invalid.json", server.base_url());
 
         let result: Result<TestData, _> = client.get_json(&url).await;
         assert!(result.is_err(), "Expected JSON parsing to fail");
+        mock.assert_hits(3);
     }
 }
