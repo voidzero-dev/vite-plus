@@ -203,6 +203,10 @@ EXPOSE 3000
 CMD ["node", "dist/server.js"]
 ```
 
+For a static SPA there is no Node.js at runtime, so only the builder changes:
+swap the build stage to `ghcr.io/voidzero-dev/vite-plus:1-alpine`; the
+`nginx:alpine` runtime and its output are unchanged.
+
 ## Notes
 
 - **Node.js version**: the image provisions the version from `.node-version` /
