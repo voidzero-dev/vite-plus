@@ -745,10 +745,11 @@ async fn cleanup_stale_installation_dir(
     path: &std::path::Path,
     active_install_dirs: &HashSet<std::path::PathBuf>,
 ) {
-    let has_install_id = name
+    let has_reserved_separator = name.contains(INSTALL_ID_PREFIX);
+    let has_valid_install_id = name
         .rfind(INSTALL_ID_PREFIX)
         .is_some_and(|index| index > 0 && is_install_id(&name[index..]));
-    if !has_install_id || active_install_dirs.contains(path) {
+    if active_install_dirs.contains(path) || (has_reserved_separator && !has_valid_install_id) {
         return;
     }
 
@@ -1397,20 +1398,24 @@ mod tests {
 
         let active_dir = packages_dir.join(format!("typescript{active_id}"));
         let stale_dir = packages_dir.join(format!("typescript{stale_id}"));
+        let legacy_stale_for_active_identified_dir = packages_dir.join("typescript");
         let legacy_dir = packages_dir.join("legacy-pkg");
         let legacy_stale_dir = packages_dir.join(format!("legacy-pkg{legacy_stale_id}"));
         let malformed_dir = packages_dir.join("typescript#not-a-valid-install-id");
         let scoped_active_dir = packages_dir.join("@scope").join(format!("pkg{scoped_active_id}"));
         let scoped_stale_dir = packages_dir.join("@scope").join(format!("pkg{scoped_stale_id}"));
+        let scoped_legacy_stale_for_active_identified_dir = packages_dir.join("@scope").join("pkg");
 
         for dir in [
             &active_dir,
             &stale_dir,
+            &legacy_stale_for_active_identified_dir,
             &legacy_dir,
             &legacy_stale_dir,
             &malformed_dir,
             &scoped_active_dir,
             &scoped_stale_dir,
+            &scoped_legacy_stale_for_active_identified_dir,
         ] {
             tokio::fs::create_dir_all(dir).await.unwrap();
         }
@@ -1460,8 +1465,10 @@ mod tests {
         assert!(scoped_active_dir.join("marker").as_path().exists());
         assert!(malformed_dir.as_path().exists());
         assert!(!stale_dir.as_path().exists());
+        assert!(!legacy_stale_for_active_identified_dir.as_path().exists());
         assert!(!legacy_stale_dir.as_path().exists());
         assert!(!scoped_stale_dir.as_path().exists());
+        assert!(!scoped_legacy_stale_for_active_identified_dir.as_path().exists());
     }
 
     #[tokio::test]
