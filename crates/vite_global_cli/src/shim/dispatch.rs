@@ -1374,6 +1374,9 @@ async fn package_json_effective_source(dir: &AbsolutePathBuf) -> Result<ProjectS
     }
 
     if let Some(version) = pkg.engines.as_ref().and_then(|e| e.node.clone()) {
+        if version.trim().is_empty() {
+            return Ok(ProjectSource::KeepWalking);
+        }
         if is_valid_version_spec(&version) {
             return Ok(ProjectSource::Found(("engines.node".to_string(), source_path)));
         }
@@ -1690,6 +1693,20 @@ mod tests {
 
         assert_eq!(resolved.version, "22.22.0");
         assert_eq!(resolved.source, "devEngines.runtime");
+    }
+
+    #[tokio::test]
+    async fn test_empty_engines_node_keeps_parent_source_current() {
+        let temp = TempDir::new().unwrap();
+        let parent = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        let child = parent.join("child");
+        std::fs::create_dir(&child).unwrap();
+        let node_version = parent.join(".node-version");
+        std::fs::write(&node_version, "24.18.0").unwrap();
+        std::fs::write(child.join("package.json"), r#"{"engines":{"node":""}}"#).unwrap();
+        let entry = cache_entry(".node-version", Some(&node_version));
+
+        assert!(cached_project_source_still_current(&child, &entry).await.unwrap());
     }
 
     #[tokio::test]
