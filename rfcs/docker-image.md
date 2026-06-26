@@ -304,7 +304,7 @@ WORKDIR /app
 # Dependency layer first for cache reuse. --chown is required: the image runs as
 # the non-root vp user, and COPY would otherwise write root-owned files that
 # vp install cannot update.
-COPY --chown=vp:vp package.json pnpm-lock.yaml .node-version ./
+COPY --chown=vp:vp package.json pnpm-lock.yaml ./
 RUN vp install --frozen-lockfile
 
 # Build. vp reads .node-version and provisions that exact Node automatically.
@@ -318,7 +318,7 @@ RUN cp "$(vp env which node | head -1)" /tmp/node
 # excluded; running --prod over the full install above would not prune them) ---
 FROM ghcr.io/voidzero-dev/vite-plus:1 AS deps
 WORKDIR /app
-COPY --chown=vp:vp package.json pnpm-lock.yaml .node-version ./
+COPY --chown=vp:vp package.json pnpm-lock.yaml ./
 RUN vp install --frozen-lockfile --prod
 
 # --- runtime stage: small, glibc, no vp ---
@@ -352,7 +352,7 @@ not need a shell at runtime (see Future Work).
 ```dockerfile
 FROM ghcr.io/voidzero-dev/vite-plus:1 AS build
 WORKDIR /app
-COPY --chown=vp:vp package.json pnpm-lock.yaml .node-version ./
+COPY --chown=vp:vp package.json pnpm-lock.yaml ./
 RUN vp install --frozen-lockfile
 COPY --chown=vp:vp . .
 RUN vp build

@@ -53,7 +53,7 @@ FROM ghcr.io/voidzero-dev/vite-plus:latest AS build
 WORKDIR /app
 
 # Install dependencies first so this layer is cached across source changes.
-COPY --chown=vp:vp package.json pnpm-lock.yaml .node-version ./
+COPY --chown=vp:vp package.json pnpm-lock.yaml ./
 RUN vp install --frozen-lockfile
 
 # Build. vp reads .node-version and provisions that exact Node.js automatically.
@@ -69,7 +69,7 @@ RUN cp "$(vp env which node | head -1)" /tmp/node
 # prune the already-installed devDependencies.
 FROM ghcr.io/voidzero-dev/vite-plus:latest AS deps
 WORKDIR /app
-COPY --chown=vp:vp package.json pnpm-lock.yaml .node-version ./
+COPY --chown=vp:vp package.json pnpm-lock.yaml ./
 RUN vp install --frozen-lockfile --prod
 
 # --- runtime stage: small, glibc, no vp ---
@@ -115,7 +115,7 @@ server:
 ```dockerfile [Dockerfile]
 FROM ghcr.io/voidzero-dev/vite-plus:latest AS build
 WORKDIR /app
-COPY --chown=vp:vp package.json pnpm-lock.yaml .node-version ./
+COPY --chown=vp:vp package.json pnpm-lock.yaml ./
 RUN vp install --frozen-lockfile
 COPY --chown=vp:vp . .
 RUN vp build
@@ -180,7 +180,7 @@ pattern with an Alpine runtime:
 
 FROM ghcr.io/voidzero-dev/vite-plus:latest-alpine AS build
 WORKDIR /app
-COPY --chown=vp:vp package.json pnpm-lock.yaml .node-version ./
+COPY --chown=vp:vp package.json pnpm-lock.yaml ./
 RUN vp install --frozen-lockfile
 COPY --chown=vp:vp . .
 RUN vp build
@@ -188,7 +188,7 @@ RUN cp "$(vp env which node | head -1)" /tmp/node
 
 FROM ghcr.io/voidzero-dev/vite-plus:latest-alpine AS deps
 WORKDIR /app
-COPY --chown=vp:vp package.json pnpm-lock.yaml .node-version ./
+COPY --chown=vp:vp package.json pnpm-lock.yaml ./
 RUN vp install --frozen-lockfile --prod
 
 # Runtime must be a musl base so the musl Node.js binary runs.
@@ -211,9 +211,11 @@ swap the build stage to `ghcr.io/voidzero-dev/vite-plus:latest-alpine`; the
 
 ## Notes
 
-- **Node.js version**: the image provisions the version from `.node-version` /
-  `engines.node` / `devEngines.runtime` at build time. There is no need to pick a
-  Node-specific image tag.
+- **Node.js version**: provisioned from `.node-version`, `engines.node`, or
+  `devEngines.runtime` at build time, so there is no Node-specific image tag. The
+  dependency layer copies only `package.json` + the lockfile (always present);
+  `.node-version`, if your project uses it, is picked up from the full
+  `COPY . .` before `vp build`.
 - **Non-root user**: the image runs as the non-root `vp` user, so copy sources
   with `COPY --chown=vp:vp ...` as shown. Without it, `COPY` writes root-owned
   files that `vp install` cannot update (permission denied).
