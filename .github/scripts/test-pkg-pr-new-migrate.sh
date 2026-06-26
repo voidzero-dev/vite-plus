@@ -46,9 +46,15 @@ fi
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 repo_root="$(cd "$script_dir/../.." && pwd -P)"
 installer="$repo_root/packages/cli/install.sh"
+pnpm_version_helper="$script_dir/ensure-pkg-pr-new-pnpm-version.mjs"
 
 if [ ! -f "$installer" ]; then
   echo "error: Vite+ installer not found: $installer" >&2
+  exit 2
+fi
+
+if [ ! -f "$pnpm_version_helper" ]; then
+  echo "error: pnpm version helper not found: $pnpm_version_helper" >&2
   exit 2
 fi
 
@@ -61,6 +67,11 @@ if command -v git >/dev/null 2>&1 && git -C "$project_dir" rev-parse --is-inside
     exit 2
   fi
 fi
+
+# pnpm 11.0.0 through 11.8.x can write pkg.pr.new tarball lock entries without
+# integrity metadata, which a later frozen install rejects. Upgrade the
+# project's package-manager pin before migration resolves or invokes pnpm.
+node "$pnpm_version_helper" "$project_dir/package.json"
 
 original_home="$HOME"
 cache_root="${XDG_CACHE_HOME:-$original_home/.cache}"
