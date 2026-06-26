@@ -583,11 +583,11 @@ executors remain unchanged and can be addressed separately.
 
 ## Post-Migration Formatting
 
-After a successful install, migration runs the formatter only on supported
-files changed in the Git worktree. This formats manifests, generated config,
-and rewritten source without reformatting unrelated files in a large project.
-Non-Git projects retain full-project formatting. Projects that still use
-Prettier are not formatted automatically.
+After a successful install, migration runs the formatter only on files changed
+in the Git worktree. Oxfmt selects the supported formats. This formats
+manifests, generated config, and rewritten source without reformatting
+unrelated files in a large project. Non-Git projects retain full-project
+formatting. Projects that still use Prettier are not formatted automatically.
 
 ## ESLint Migration
 

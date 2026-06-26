@@ -67,18 +67,34 @@ describe('formatMigratedProject', () => {
 });
 
 describe('collectChangedFormatPaths', () => {
-  it('collects supported changed Git paths without formatting unrelated files', async () => {
+  it('collects existing changed Git paths without an extension allowlist', async () => {
     const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-migrate-format-'));
     try {
       execFileSync('git', ['init'], { cwd: projectRoot, stdio: 'ignore' });
       fs.writeFileSync(path.join(projectRoot, 'package.json'), '{}\n');
-      fs.writeFileSync(path.join(projectRoot, 'vite.config.ts'), 'export default {}\n');
       fs.writeFileSync(path.join(projectRoot, 'template.mdx'), '# untouched\n');
       fs.writeFileSync(path.join(projectRoot, 'bun.lock'), 'lockfileVersion = 1\n');
-      execFileSync('git', ['add', 'package.json'], { cwd: projectRoot });
+      execFileSync('git', ['add', '.'], { cwd: projectRoot });
+      execFileSync(
+        'git',
+        [
+          '-c',
+          'user.name=Vite+ Test',
+          '-c',
+          'user.email=test@vite-plus.dev',
+          'commit',
+          '-m',
+          'initial',
+        ],
+        { cwd: projectRoot, stdio: 'ignore' },
+      );
+
       fs.appendFileSync(path.join(projectRoot, 'package.json'), '\n');
+      fs.writeFileSync(path.join(projectRoot, 'vite.config.ts'), 'export default {}\n');
+      fs.writeFileSync(path.join(projectRoot, 'future.custom'), 'future format\n');
 
       await expect(collectChangedFormatPaths(projectRoot)).resolves.toEqual([
+        'future.custom',
         'package.json',
         'vite.config.ts',
       ]);

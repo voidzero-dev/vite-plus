@@ -220,8 +220,8 @@ Unrelated `bunx` commands and other package-executor forms remain unchanged.
 After updating the manifests and package-manager configuration, migration
 reinstalls dependencies once to refresh the lockfile. If installation fails,
 migration reports the error and exits with a nonzero status. After a successful
-migration, it runs `vp fmt` on supported files changed in the Git worktree,
-leaving unrelated project files untouched. Non-Git projects retain full-project
-formatting. Formatting is skipped while the project still uses Prettier. A
-formatter failure is reported as a warning so the migration result and manual
-formatting command remain available.
+migration, it runs `vp fmt` on files changed in the Git worktree, leaving
+unrelated project files untouched. Oxfmt selects the supported formats. Non-Git
+projects retain full-project formatting. Formatting is skipped while the
+project still uses Prettier. A formatter failure is reported as a warning so
+the migration result and manual formatting command remain available.

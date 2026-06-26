@@ -17,41 +17,13 @@ type FormatPathCollector = (cwd: string) => Promise<string[] | undefined>;
 const FORMAT_FAILURE_MESSAGE =
   'Automatic formatting failed. Run `vp fmt` manually after migration.';
 
-const FORMAT_EXTENSIONS = new Set([
-  '.astro',
-  '.cjs',
-  '.css',
-  '.cts',
-  '.html',
-  '.js',
-  '.json',
-  '.jsonc',
-  '.jsx',
-  '.less',
-  '.md',
-  '.mjs',
-  '.mts',
-  '.scss',
-  '.svelte',
-  '.toml',
-  '.ts',
-  '.tsx',
-  '.vue',
-  '.yaml',
-  '.yml',
-]);
-
 function parseNullDelimitedPaths(output: Buffer): string[] {
   return output.toString().split('\0').filter(Boolean);
 }
 
-function isFormatCandidate(projectRoot: string, relativePath: string): boolean {
+function isExistingFile(projectRoot: string, relativePath: string): boolean {
   const absolutePath = path.join(projectRoot, relativePath);
-  return (
-    fs.existsSync(absolutePath) &&
-    fs.statSync(absolutePath).isFile() &&
-    FORMAT_EXTENSIONS.has(path.extname(relativePath).toLowerCase())
-  );
+  return fs.existsSync(absolutePath) && fs.statSync(absolutePath).isFile();
 }
 
 /**
@@ -86,15 +58,15 @@ export async function collectChangedFormatPaths(
       return undefined;
     }
 
-    return [
-      ...new Set([
-        ...parseNullDelimitedPaths(unstaged.stdout),
-        ...parseNullDelimitedPaths(staged.stdout),
-        ...parseNullDelimitedPaths(untracked.stdout),
-      ]),
-    ]
-      .filter((file) => isFormatCandidate(projectRoot, file))
-      .toSorted();
+    const changedPaths = new Set([
+      ...parseNullDelimitedPaths(unstaged.stdout),
+      ...parseNullDelimitedPaths(staged.stdout),
+      ...parseNullDelimitedPaths(untracked.stdout),
+    ]);
+
+    // Oxfmt owns the supported-file list and skips unknown formats. Passing
+    // every existing changed file keeps migration aligned as Oxfmt evolves.
+    return [...changedPaths].filter((file) => isExistingFile(projectRoot, file)).toSorted();
   } catch {
     return undefined;
   }
