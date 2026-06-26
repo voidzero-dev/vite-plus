@@ -190,17 +190,9 @@ jobs:
           tags: ${{ env.IMAGE }}:${{ env.TAG }}
           build-args: |
             VP_PR_VERSION=${{ github.event.pull_request.number }}
+          # Single-manifest image (no attestation index): simpler for consumers
+          # and lets the comment job read the size via `docker manifest inspect`.
           provenance: false
-
-      - name: Summary
-        run: |
-          {
-            echo "### Docker preview image (${{ matrix.variant }})"
-            echo ""
-            echo '```bash'
-            echo "docker pull ${IMAGE}:${TAG}"
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
 
   # Post (or update) a single sticky PR comment with the preview image tags after
   # both variants publish successfully. Re-runs reuse the same comment via the
@@ -227,12 +219,16 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Compressed download size from the registry manifest (config + layers),
+      # without pulling the images. Matches what `docker pull` transfers and what
+      # the GHCR package page shows.
       - name: Measure image sizes
         id: sizes
         run: |
           size() {
-            docker pull -q "$1" >/dev/null
-            numfmt --to=si --suffix=B "$(docker image inspect "$1" --format '{{.Size}}')"
+            local bytes
+            bytes=$(docker manifest inspect "$1" | jq '[.config.size] + [.layers[].size] | add')
+            numfmt --to=si --suffix=B "$bytes"
           }
           {
             echo "debian=$(size "${IMAGE}:pr-${PR_NUMBER}")"
@@ -256,7 +252,7 @@ jobs:
               '',
               "Built from this PR's pkg.pr.new build:",
               '',
-              '| Image | Size |',
+              '| Image | Compressed size |',
               '| --- | --- |',
               `| \`${image}:pr-${pr}\` | ${process.env.DEBIAN_SIZE} |`,
               `| \`${image}:pr-${pr}-alpine\` | ${process.env.ALPINE_SIZE} |`,
