@@ -55,7 +55,7 @@ ENV VP_HOME=/home/vp/.vite-plus \
 # `engines.node` / `devEngines.runtime`.
 #
 # The installer pre-provisions a default Node.js (~190 MB). Drop it: each project
-# downloads its own pinned Node at build time, so the default is dead weight in a
+# downloads its own pinned Node.js at build time, so the default is dead weight in a
 # builder image. The node/npm/npx shims remain and fetch the right version on
 # first use.
 #

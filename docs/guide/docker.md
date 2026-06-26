@@ -10,13 +10,13 @@ ghcr.io/voidzero-dev/vite-plus
 The image is a toolchain image, not a production runtime image. Because `vp`
 already reads your project's pinned Node.js version (`.node-version`,
 `engines.node`, or `devEngines.runtime`) and downloads that exact version, you do
-not need a Node-version-specific base image: one image builds any project against
-its own Node.
+not need a base image pinned to a specific Node.js version: one image builds any
+project against its own Node.js.
 
 For production, you do not ship this image. Instead you use a multi-stage build
 where this image builds the app, and the exact Node.js it resolved is copied into
 a small, vp-free runtime image. That keeps the deployed image small while
-matching your project's Node version exactly.
+matching your project's Node.js version exactly.
 
 ## Image tags
 
@@ -40,7 +40,7 @@ the same versions with an `-alpine` suffix (`:latest-alpine`,
 `:<major>-alpine`, and so on). See [Alpine variant](#alpine-musl-variant) for
 when to use it and its tradeoffs.
 
-## Production: SSR / Node-server app
+## Production: SSR / Node.js server app
 
 For apps that run Node.js in production (SvelteKit, Nuxt, a custom Vite SSR
 server, and so on), build with the toolchain image and copy the resolved Node.js
@@ -213,7 +213,7 @@ swap the build stage to `ghcr.io/voidzero-dev/vite-plus:latest-alpine`; the
 ## Notes
 
 - **Node.js version**: provisioned from `.node-version`, `engines.node`, or
-  `devEngines.runtime` at build time, so there is no Node-specific image tag. The
+  `devEngines.runtime` at build time, so there is no Node.js-specific image tag. The
   dependency `COPY` uses a `.node-version*` glob so the file is optional: projects
   that pin via `engines.node`/`devEngines.runtime` need no `.node-version`, and
   those that use one have it available in every stage.

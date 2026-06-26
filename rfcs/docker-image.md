@@ -9,23 +9,23 @@
 Publish an official Vite+ Docker image to GHCR that bundles the `vp` global CLI
 for the **build, CI, and development** phases. The image is a toolchain image,
 not a production runtime image. Because `vp` already reads `.node-version` /
-`engines.node` / `devEngines.runtime` and downloads that exact Node version, the
-image needs no Node-version-specific tags: one image builds any project against
-its pinned Node.
+`engines.node` / `devEngines.runtime` and downloads that exact Node.js version, the
+image needs no Node.js-version-specific tags: one image builds any project against
+its pinned Node.js.
 
 For production, this RFC does not ship a runtime image. Instead it documents a
 multi-stage pattern where the `vp` builder resolves and downloads the exact
-official (glibc, signature-verified) Node, and a slim final stage copies just
-that Node binary plus the built app and production dependencies into a small
+official (glibc, signature-verified) Node.js, and a slim final stage copies just
+that Node.js binary plus the built app and production dependencies into a small
 glibc base (no `vp`). This keeps deployed images small while honoring the
-project's pinned Node version, which is what [#1490](https://github.com/voidzero-dev/vite-plus/issues/1490)
+project's pinned Node.js version, which is what [#1490](https://github.com/voidzero-dev/vite-plus/issues/1490)
 asks for.
 
 ## Motivation
 
 ### The problem (#1490)
 
-When containerizing a Vite+ project, users need the Node version to match the
+When containerizing a Vite+ project, users need the Node.js version to match the
 project's `.node-version` exactly. The reporter's project pins `24.15.0`:
 
 ```text
@@ -43,13 +43,13 @@ Their options today both have downsides:
   `24.14.1`, which does not match the pinned `24.15.0`.
 
 There is no Vite+ Docker image or documented Docker pattern that keeps the
-container Node aligned with `.node-version`. This RFC provides both.
+container Node.js aligned with `.node-version`. This RFC provides both.
 
 ### Why Vite+ is well positioned
 
-Every comparable tool delegates the Node version to the base `node:*` image tag
+Every comparable tool delegates the Node.js version to the base `node:*` image tag
 and only manages the _package manager_ (via Corepack). Vite+ already manages the
-Node runtime itself: it reads the project's config and downloads the exact Node,
+Node.js runtime itself: it reads the project's config and downloads the exact Node.js,
 verifying the official `SHASUMS256.txt.asc` PGP signature (see
 [`js-runtime.md`](./js-runtime.md) and
 [`verify-node-shasums-signature.md`](./verify-node-shasums-signature.md)). The
@@ -59,30 +59,30 @@ version pinning with image tags.
 ## Prior art
 
 Researched against current official docs (2026-06-25). Summary of how
-comparable tools handle Node version + Docker:
+comparable tools handle Node.js version + Docker:
 
-| Tool              | Official image                     | How the Node version is set                      | Default base                | musl/Alpine stance                        |
-| ----------------- | ---------------------------------- | ------------------------------------------------ | --------------------------- | ----------------------------------------- |
-| Volta             | no (community only)                | `volta` field in package.json, auto-fetch        | glibc only                  | unsupported (libc dependency)             |
-| mise              | exists but "do not use"            | `mise install` from `.tool-versions`/`mise.toml` | debian-slim                 | discouraged; needs `MISE_LIBC=musl`       |
-| proto / moon      | no (moon docs only)                | layered on top of `node:*` base                  | `node:latest`               | needs `MOON_TOOLCHAIN_FORCE_GLOBALS=true` |
-| asdf              | no (community only)                | `asdf install` from `.tool-versions`             | community                   | per-plugin; glibc Node by default         |
-| pnpm              | yes (`ghcr.io/pnpm/pnpm`, no Node) | base `node:*` tag + Corepack                     | debian-slim                 | not addressed                             |
-| Yarn              | no                                 | base `node:*` tag + Corepack (`packageManager`)  | `node:*`                    | n/a                                       |
-| Turborepo         | no                                 | base `node:*` tag; `turbo prune --docker`        | `node:*-alpine`             | adds `libc6-compat`                       |
-| Nx                | no                                 | base `node:*` tag; `prune-lockfile`              | `node:lts-alpine`           | not addressed                             |
-| Bun               | yes (`oven/bun`)                   | own runtime                                      | debian; offers distroless   | not discussed                             |
-| Deno              | yes (Hub + GHCR)                   | own runtime; ships a `:bin` image to copy in     | debian; offers distroless   | non-root default                          |
-| Node official     | yes                                | the tag is the version                           | debian (`-slim`, `-alpine`) | warns musl breaks glibc apps              |
-| distroless nodejs | yes (`gcr.io/distroless/nodejsNN`) | copy artifacts in                                | debian/glibc, ~45MB         | glibc only                                |
+| Tool              | Official image                        | How the Node.js version is set                   | Default base                | musl/Alpine stance                        |
+| ----------------- | ------------------------------------- | ------------------------------------------------ | --------------------------- | ----------------------------------------- |
+| Volta             | no (community only)                   | `volta` field in package.json, auto-fetch        | glibc only                  | unsupported (libc dependency)             |
+| mise              | exists but "do not use"               | `mise install` from `.tool-versions`/`mise.toml` | debian-slim                 | discouraged; needs `MISE_LIBC=musl`       |
+| proto / moon      | no (moon docs only)                   | layered on top of `node:*` base                  | `node:latest`               | needs `MOON_TOOLCHAIN_FORCE_GLOBALS=true` |
+| asdf              | no (community only)                   | `asdf install` from `.tool-versions`             | community                   | per-plugin; glibc Node.js by default      |
+| pnpm              | yes (`ghcr.io/pnpm/pnpm`, no Node.js) | base `node:*` tag + Corepack                     | debian-slim                 | not addressed                             |
+| Yarn              | no                                    | base `node:*` tag + Corepack (`packageManager`)  | `node:*`                    | n/a                                       |
+| Turborepo         | no                                    | base `node:*` tag; `turbo prune --docker`        | `node:*-alpine`             | adds `libc6-compat`                       |
+| Nx                | no                                    | base `node:*` tag; `prune-lockfile`              | `node:lts-alpine`           | not addressed                             |
+| Bun               | yes (`oven/bun`)                      | own runtime                                      | debian; offers distroless   | not discussed                             |
+| Deno              | yes (Hub + GHCR)                      | own runtime; ships a `:bin` image to copy in     | debian; offers distroless   | non-root default                          |
+| Node.js official  | yes                                   | the tag is the version                           | debian (`-slim`, `-alpine`) | warns musl breaks glibc apps              |
+| distroless nodejs | yes (`gcr.io/distroless/nodejsNN`)    | copy artifacts in                                | debian/glibc, ~45MB         | glibc only                                |
 
 Key takeaways that shape this RFC:
 
-1. **No one else manages Node from a config file in a usable published image.**
+1. **No one else manages Node.js from a config file in a usable published image.**
    The version managers (Volta, mise, proto, asdf) either ship no official image
-   or one flagged unusable, and they all hit the musl wall because managed Node
-   means official glibc builds. The package-manager and monorepo tools pin Node
-   only via the base `node:*` tag. Vite+ collapsing both axes (Node + toolchain)
+   or one flagged unusable, and they all hit the musl wall because managed Node.js
+   means official glibc builds. The package-manager and monorepo tools pin Node.js
+   only via the base `node:*` tag. Vite+ collapsing both axes (Node.js + toolchain)
    into one deterministic, project-driven build step is a genuine differentiator.
 
 2. **The closest analog (mise) and the runtimes (Deno) validate the chosen
@@ -91,10 +91,10 @@ Key takeaways that shape this RFC:
    a fat all-in-one image. Deno ships a `:bin` image precisely so users can
    `COPY --from=denoland/deno:bin /deno ...` into any base, and its distroless
    variant copies just the binary onto `gcr.io/distroless/cc`. This is exactly
-   the multi-stage "copy the resolved Node in" pattern below.
+   the multi-stage "copy the resolved Node.js in" pattern below.
 
-3. **glibc is the consensus default.** Every Node-managing tool warns about or
-   breaks on musl. Defaulting to glibc keeps official signature-verified Node
+3. **glibc is the consensus default.** Every Node.js-managing tool warns about or
+   breaks on musl. Defaulting to glibc keeps official signature-verified Node.js
    (the unofficial musl builds publish no PGP signature) and avoids native-addon
    surprises.
 
@@ -108,7 +108,7 @@ Sources: pnpm <https://pnpm.io/docker>; Turborepo <https://turborepo.dev/docs/gu
 Nx <https://nx.dev/docs/technologies/build-tools/docker/introduction>; mise
 <https://mise.jdx.dev/mise-cookbook/docker.html>; moon <https://moonrepo.dev/docs/guides/docker>;
 Volta <https://github.com/volta-cli/volta/issues/1162>; Bun <https://bun.com/docs/guides/ecosystem/docker>;
-Deno <https://github.com/denoland/deno_docker>; Node <https://hub.docker.com/_/node/>;
+Deno <https://github.com/denoland/deno_docker>; Node.js <https://hub.docker.com/_/node/>;
 distroless <https://github.com/GoogleContainerTools/distroless/blob/main/nodejs/README.md>.
 
 ## User scenarios
@@ -118,14 +118,14 @@ order:
 
 1. **Build stage for app deployment (primary).** Used as `FROM ... AS build` in a
    multi-stage Dockerfile. `vp install` + `vp build` produce the app; the exact
-   Node from `.node-version` is copied into a slim final stage. This is the
+   Node.js from `.node-version` is copied into a slim final stage. This is the
    #1490 anchor.
 2. **Container-native CI (primary).** GitLab CI, Buildkite, CircleCI, Jenkins
    agents, Tekton, etc. set `image: ghcr.io/voidzero-dev/vite-plus:<tag>` and run
    `vp install`, `vp check`, `vp test`, `vp build`. (GitHub Actions users are
    already served by `setup-vp`, so this targets the rest of the ecosystem.)
 3. **Reproducible dev environments (secondary).** Devcontainers, Codespaces, and
-   onboarding: a single image pins Node + package managers + vp so the toolchain
+   onboarding: a single image pins Node.js + package managers + vp so the toolchain
    matches the repo with zero host setup.
 4. **Ad-hoc / evaluation (secondary).** `docker run --rm -v $PWD:/app -w /app
 ghcr.io/voidzero-dev/vite-plus vp <cmd>` to try vp or reproduce a bug report
@@ -144,10 +144,10 @@ via the documented multi-stage pattern.
 1. Publish a maintained, multi-arch (`linux/amd64`, `linux/arm64`) Vite+
    toolchain image on GHCR.
 2. Honor `.node-version` automatically at build time via vp's existing managed
-   runtime, with no Node-version-specific image tags.
+   runtime, with no Node.js-version-specific image tags.
 3. Document a recommended multi-stage pattern that produces a small production
-   image with the exact pinned Node and no vp.
-4. Keep official, signature-verified glibc Node end to end (builder downloads it,
+   image with the exact pinned Node.js and no vp.
+4. Keep official, signature-verified glibc Node.js end to end (builder downloads it,
    runtime copies it).
 5. Provide patterns for the secondary scenarios (CI, devcontainer, static SPA,
    ad-hoc).
@@ -156,9 +156,9 @@ via the documented multi-stage pattern.
 
 1. A production runtime image (documented pattern instead, see Future Work for a
    possible thin runtime base).
-2. Node-version-keyed image tags (the tag sprawl this design avoids).
+2. Node.js-version-keyed image tags (the tag sprawl this design avoids).
 3. Alpine/musl as the _default_. glibc is the default (official,
-   signature-verified Node, no native-addon breakage). An Alpine/musl image is
+   signature-verified Node.js, no native-addon breakage). An Alpine/musl image is
    published as an opt-in `-alpine` variant with documented caveats (see Design);
    it is not the recommended default.
 4. `vp prune --docker` monorepo pruning (Future Work).
@@ -168,24 +168,24 @@ via the documented multi-stage pattern.
 
 ### Image role and version-alignment mechanism
 
-The image bundles `vp` and provisions Node at build time:
+The image bundles `vp` and provisions Node.js at build time:
 
 1. In the build stage, `vp install` / `vp build` cause vp to read `.node-version`
-   (or `engines.node` / `devEngines.runtime`), download that exact official Node,
+   (or `engines.node` / `devEngines.runtime`), download that exact official Node.js,
    verify its PGP signature, and cache it under
    `$VP_HOME/js_runtime/node/<version>/`.
-2. The documented multi-stage pattern copies the resolved Node binary plus the
+2. The documented multi-stage pattern copies the resolved Node.js binary plus the
    built app and production dependencies into a slim glibc final stage that does
    not contain vp.
 
-This makes one image version-agnostic across every project's pinned Node,
+This makes one image version-agnostic across every project's pinned Node.js,
 eliminates the Corepack-in-Docker class of problems other tools hit, and keeps
 deployed images small.
 
 ### Base image, contents, and variants
 
 - **Base:** `debian:bookworm-slim` (glibc). Glibc is required so vp downloads the
-  official signature-verified Node and so native addons behave; debian-slim is
+  official signature-verified Node.js and so native addons behave; debian-slim is
   the consensus small glibc base (pnpm's choice) and provides the shell, `apt`,
   and `git` that build/CI/dev scenarios need.
 - **Preinstalled:** `vp` (on `PATH`), `ca-certificates`, `curl`, `git`, and a
@@ -195,7 +195,7 @@ deployed images small.
   baked to a fixed version.
 - **No baked default Node.js:** the installer pre-provisions a default Node.js
   (~190 MB); the image drops it (`rm -rf $VP_HOME/js_runtime`) because each
-  project provisions its own pinned Node at build time, so a default is dead
+  project provisions its own pinned Node.js at build time, so a default is dead
   weight in a builder. The `node`/`npm`/`npx` shims remain and fetch the right
   version on first use. This keeps the toolchain image ~190 MB smaller, more than
   a switch to Alpine/musl would save (and without the musl tradeoffs).
@@ -208,9 +208,9 @@ deployed images small.
 - **Alpine/musl variant (opt-in):** an `alpine:3` (musl) toolchain image
   (`docker/Dockerfile.alpine`), published under `-alpine` tags. It produces the
   smallest runtime (an Alpine SSR runtime measured ~136 MB vs ~150 MB distroless
-  and ~198 MB debian-slim), but carries the musl tradeoffs: Node comes from the
+  and ~198 MB debian-slim), but carries the musl tradeoffs: Node.js comes from the
   unofficial, **unsigned** musl builds; native addons may need musl prebuilds or
-  source compilation; and a musl Node binary only runs on a musl base, so the
+  source compilation; and a musl Node.js binary only runs on a musl base, so the
   runtime stage must also be Alpine. The Debian image stays the recommended
   default. Builds via the same matrix as the Debian image.
 - **Possible later variant:** a `-slim` toolchain image without the native build
@@ -238,7 +238,7 @@ not required for v1.
 
 ### Tagging
 
-Tags track the `vp` version, not Node:
+Tags track the `vp` version, not Node.js:
 
 - `ghcr.io/voidzero-dev/vite-plus:latest`
 - `ghcr.io/voidzero-dev/vite-plus:<major>` (for example `:1`)
@@ -252,15 +252,15 @@ Users pin by exact tag or digest for reproducibility. No `node-<version>` tags.
 
 ### Security and reproducibility
 
-- Official, signature-verified glibc Node throughout (no unofficial musl builds).
+- Official, signature-verified glibc Node.js throughout (no unofficial musl builds).
 - Non-root default user.
 - Multi-arch manifest (`linux/amd64`, `linux/arm64`); vp already ships
   `{x86_64,aarch64}-unknown-linux-gnu` binaries.
 - Pinnable by digest.
 
-### Locating the resolved Node for the runtime stage
+### Locating the resolved Node.js for the runtime stage
 
-No new CLI surface is required: `vp env which node` prints the resolved Node
+No new CLI surface is required: `vp env which node` prints the resolved Node.js
 binary path as its first (uncolored, pipe-friendly) line, and the runtime lives
 at `$VP_HOME/js_runtime/node/<version>/bin/node`. The runtime stage copies that
 file directly.
@@ -292,7 +292,7 @@ assert the SSR runtime Node.js matches the pinned `.node-version`):
 
 ## Recommended Dockerfile patterns (documented for users)
 
-### 1. SSR / Node-server app, slim runtime (the #1490 case)
+### 1. SSR / Node.js-server app, slim runtime (the #1490 case)
 
 ```dockerfile
 # syntax=docker/dockerfile:1
@@ -307,11 +307,11 @@ WORKDIR /app
 COPY --chown=vp:vp package.json pnpm-lock.yaml .node-version* ./
 RUN vp install --frozen-lockfile
 
-# Build. vp reads .node-version and provisions that exact Node automatically.
+# Build. vp reads .node-version and provisions that exact Node.js automatically.
 COPY --chown=vp:vp . .
 RUN vp build
 
-# Export the exact resolved Node binary for the runtime stage.
+# Export the exact resolved Node.js binary for the runtime stage.
 RUN cp "$(vp env which node | head -1)" /tmp/node
 
 # --- deps stage: production-only dependencies (fresh --prod, so devDeps are
@@ -326,7 +326,7 @@ FROM debian:bookworm-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 
-# Exact Node from .node-version (official, signature-verified glibc build).
+# Exact Node.js from .node-version (official, signature-verified glibc build).
 COPY --from=build /tmp/node /usr/local/bin/node
 
 COPY --from=build /app/dist ./dist
@@ -338,7 +338,7 @@ EXPOSE 3000
 CMD ["node", "dist/server.js"]
 ```
 
-The deployed image carries only Node + app + production deps, matches
+The deployed image carries only Node.js + app + production deps, matches
 `.node-version` exactly, and is much smaller than the default `node:*` image.
 Production dependencies must be installed in a separate `deps` stage: running
 `vp install --prod` over the full install in the build stage does not prune the
@@ -361,7 +361,7 @@ FROM nginx:alpine AS runtime
 COPY --from=build /app/dist /usr/share/nginx/html
 ```
 
-No Node at runtime; the vp image is only the builder.
+No Node.js at runtime; the vp image is only the builder.
 
 ### 3. Container-native CI
 
@@ -393,10 +393,10 @@ docker run --rm -it -v "$PWD:/app" -w /app ghcr.io/voidzero-dev/vite-plus vp bui
 
 ## Open questions
 
-1. **Default app Node in the image.** The toolchain image bakes no specific app
-   Node (vp downloads the pinned version at build, needing network). Should we
-   offer a variant with an LTS Node prebaked for faster/offline builds, or rely
-   on caching and `VP_NODE_DIST_MIRROR`? (Leaning: no prebaked Node by default;
+1. **Default app Node.js in the image.** The toolchain image bakes no specific app
+   Node.js (vp downloads the pinned version at build, needing network). Should we
+   offer a variant with an LTS Node.js prebaked for faster/offline builds, or rely
+   on caching and `VP_NODE_DIST_MIRROR`? (Leaning: no prebaked Node.js by default;
    revisit with a prebaked or offline variant if demand appears.)
 2. **Native build toolchain by default.** Include `build-essential`/`python3` in
    the default image (larger, but native addons just work), or keep the default
@@ -419,8 +419,8 @@ docker run --rm -it -v "$PWD:/app" -w /app ghcr.io/voidzero-dev/vite-plus vp bui
 2. **Distroless runtime guidance/variant.** Document (or provide) a
    `gcr.io/distroless/cc` final stage and the `tini` PID-1 pattern for a smaller,
    shell-less, better-CVE-posture runtime.
-3. **Thin runtime base image.** Reconsider only if the documented copy-Node-in
-   pattern proves insufficient; would reintroduce Node-version coupling, so not
+3. **Thin runtime base image.** Reconsider only if the documented copy-Node.js-in
+   pattern proves insufficient; would reintroduce Node.js-version coupling, so not
    planned.
 4. **Alpine/musl variant (shipped as opt-in).** Published under `-alpine` tags
    (`docker/Dockerfile.alpine`); the Debian image stays the default. It serves
@@ -428,9 +428,9 @@ docker run --rm -it -v "$PWD:/app" -w /app ghcr.io/voidzero-dev/vite-plus vp bui
    runtime measured ~136 MB). It ships with loud caveats because the tradeoffs
    are real:
 
-   - On musl, vp downloads Node from `unofficial-builds.nodejs.org`, which
+   - On musl, vp downloads Node.js from `unofficial-builds.nodejs.org`, which
      publishes no PGP signature (see `crates/vite_js_runtime/src/providers/node.rs`),
-     so the Alpine variant does not get the "official, signature-verified Node"
+     so the Alpine variant does not get the "official, signature-verified Node.js"
      guarantee the Debian image has.
    - musl is the classic native-addon sharp edge (prebuilt addons are usually
      glibc; on musl they need musl prebuilds or source compilation plus
@@ -438,14 +438,14 @@ docker run --rm -it -v "$PWD:/app" -w /app ghcr.io/voidzero-dev/vite-plus vp bui
      sharp). The wider field treats musl as a hazard for the same reasons (Volta
      unsupported on musl, mise needs `MISE_LIBC=musl`, moon needs
      `MOON_TOOLCHAIN_FORCE_GLOBALS=true`, Turborepo `apk add libc6-compat`).
-   - A musl Node binary only runs on a musl base, so the documented Alpine
+   - A musl Node.js binary only runs on a musl base, so the documented Alpine
      multi-stage pattern uses an Alpine runtime stage (not debian-slim/distroless).
 
    Remaining follow-up: a documented libc autodetect/override and reducing the
    ongoing support burden.
 
 5. **Docker Hub publishing** for discoverability, in addition to GHCR.
-6. **Offline / airgapped builds**: a prebaked-Node variant and `VP_NODE_DIST_MIRROR`
+6. **Offline / airgapped builds**: a prebaked-Node.js variant and `VP_NODE_DIST_MIRROR`
    guidance.
 
 ## References
@@ -453,7 +453,7 @@ docker run --rm -it -v "$PWD:/app" -w /app ghcr.io/voidzero-dev/vite-plus vp bui
 - Issue: [#1490](https://github.com/voidzero-dev/vite-plus/issues/1490)
 - Q2 plan: [#1324](https://github.com/voidzero-dev/vite-plus/issues/1324)
 - JS runtime management: [`js-runtime.md`](./js-runtime.md)
-- Node signature verification: [`verify-node-shasums-signature.md`](./verify-node-shasums-signature.md)
+- Node.js signature verification: [`verify-node-shasums-signature.md`](./verify-node-shasums-signature.md)
 - CI guide: `docs/guide/ci.md`
 - Distribution prior art: pnpm <https://pnpm.io/docker>, Deno <https://github.com/denoland/deno_docker>,
   mise <https://mise.jdx.dev/mise-cookbook/docker.html>, Turborepo
