@@ -186,6 +186,13 @@ Unrelated `bunx` commands and other package-executor forms remain unchanged.
   11 no longer reads the legacy package.json settings.
 - Migration keeps dependency references, default and named catalogs, overrides,
   and `peerDependencyRules` consistent.
+- pnpm accepts the logical default catalog as either top-level `catalog` or
+  `catalogs.default`, but not both. Migration preserves the existing form and
+  never creates the other form beside it.
+- When an existing named catalog already owns `vite-plus`, `vite`, or `vitest`,
+  migration reuses that managed toolchain catalog for newly added dependencies
+  and overrides. It creates a top-level default catalog only when no managed or
+  default catalog can be reused.
 - Each package that lists `vite-plus` in `dependencies` or `devDependencies`
   gets a direct `vite` dev dependency unless it already declares `vite` in a
   dependency field.

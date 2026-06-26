@@ -3179,13 +3179,173 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
       peerDependencies: Record<string, string>;
     };
     expect(pkg.devDependencies.vite).toBe('catalog:vite7');
-    expect(pkg.devDependencies['vite-plus']).toBe('catalog:');
+    expect(pkg.devDependencies['vite-plus']).toBe('catalog:vite7');
     expect(pkg.peerDependencies.vite).toBe('^7.0.0');
     // Peer declarations do not keep the managed catalog alive. Resolve the
     // catalog entry to its public range before pruning it so the peer cannot
     // dangle after migration.
     expect(pkg.peerDependencies.vitest).toBe('^4.0.0');
     expect(pkg.peerDependencies).not.toHaveProperty('tsdown');
+  });
+
+  it('reuses catalogs.default without creating a duplicate top-level catalog', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'rari-shaped-workspace',
+        devDependencies: {
+          vite: 'catalog:build',
+          'vite-plus': 'catalog:build',
+        },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'catalogs:',
+        '  build:',
+        '    vite: ^8.0.0',
+        '    vite-plus: ^0.2.0',
+        '  default:',
+        '    rari: ^0.14.12',
+        '',
+      ].join('\n'),
+    );
+
+    const savedForceMigrate = process.env.VP_FORCE_MIGRATE;
+    process.env.VP_FORCE_MIGRATE = '1';
+    try {
+      rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+    } finally {
+      if (savedForceMigrate === undefined) {
+        delete process.env.VP_FORCE_MIGRATE;
+      } else {
+        process.env.VP_FORCE_MIGRATE = savedForceMigrate;
+      }
+    }
+
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      catalog?: Record<string, string>;
+      catalogs: Record<string, Record<string, string>>;
+      overrides: Record<string, string>;
+    };
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+
+    expect(workspace.catalog).toBeUndefined();
+    expect(workspace.catalogs.default).toEqual({ rari: '^0.14.12' });
+    expect(workspace.catalogs.build.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+    expect(workspace.catalogs.build['vite-plus']).toBe('latest');
+    expect(workspace.overrides.vite).toBe('catalog:build');
+    expect(pkg.devDependencies.vite).toBe('catalog:build');
+    expect(pkg.devDependencies['vite-plus']).toBe('catalog:build');
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
+  });
+
+  it('writes managed dependencies into an active catalogs.default definition', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'default-catalog-workspace',
+        devDependencies: {
+          vite: 'catalog:',
+          'vite-plus': 'catalog:',
+        },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'catalogs:',
+        '  default:',
+        '    react: ^19.0.0',
+        '    vite: ^8.0.0',
+        '    vite-plus: ^0.2.0',
+        '',
+      ].join('\n'),
+    );
+
+    const savedForceMigrate = process.env.VP_FORCE_MIGRATE;
+    process.env.VP_FORCE_MIGRATE = '1';
+    try {
+      rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+    } finally {
+      if (savedForceMigrate === undefined) {
+        delete process.env.VP_FORCE_MIGRATE;
+      } else {
+        process.env.VP_FORCE_MIGRATE = savedForceMigrate;
+      }
+    }
+
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      catalog?: Record<string, string>;
+      catalogs: Record<string, Record<string, string>>;
+      overrides: Record<string, string>;
+    };
+
+    expect(workspace.catalog).toBeUndefined();
+    expect(workspace.catalogs.default.react).toBe('^19.0.0');
+    expect(workspace.catalogs.default.vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+    expect(workspace.catalogs.default['vite-plus']).toBe('latest');
+    expect(workspace.overrides.vite).toBe('catalog:');
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
+  });
+
+  it('reuses a named-only Vite stack catalog without creating a default catalog', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'vize-shaped-workspace',
+        devDependencies: {
+          vite: 'catalog:vite-stack',
+          'vite-plus': 'catalog:vite-stack',
+        },
+      }),
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'catalogs:',
+        '  repo-tooling:',
+        '    prettier: 3.8.3',
+        '  vite-stack:',
+        '    vite: npm:@voidzero-dev/vite-plus-core@0.1.21',
+        '    vitest: npm:@voidzero-dev/vite-plus-test@0.1.21',
+        '    vite-plus: 0.1.21',
+        '',
+      ].join('\n'),
+    );
+
+    const savedForceMigrate = process.env.VP_FORCE_MIGRATE;
+    process.env.VP_FORCE_MIGRATE = '1';
+    try {
+      rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+    } finally {
+      if (savedForceMigrate === undefined) {
+        delete process.env.VP_FORCE_MIGRATE;
+      } else {
+        process.env.VP_FORCE_MIGRATE = savedForceMigrate;
+      }
+    }
+
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      catalog?: Record<string, string>;
+      catalogs: Record<string, Record<string, string>>;
+      overrides: Record<string, string>;
+    };
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+    };
+
+    expect(workspace.catalog).toBeUndefined();
+    expect(workspace.catalogs['repo-tooling']).toEqual({ prettier: '3.8.3' });
+    expect(workspace.catalogs['vite-stack'].vite).toBe('npm:@voidzero-dev/vite-plus-core@latest');
+    expect(workspace.catalogs['vite-stack']['vite-plus']).toBe('latest');
+    expect(workspace.overrides.vite).toBe('catalog:vite-stack');
+    expect(pkg.devDependencies.vite).toBe('catalog:vite-stack');
+    expect(pkg.devDependencies['vite-plus']).toBe('catalog:vite-stack');
+    expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
   });
 
   it('drops only global/vite-plus-parent selector-shaped REMOVE_PACKAGES overrides after moving pnpm config', () => {

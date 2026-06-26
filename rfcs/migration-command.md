@@ -32,7 +32,7 @@ When transitioning to Vite+, projects typically use standalone tools like vite, 
 
 - ✅ **Dependencies**: vite, vitest, oxlint, oxfmt → vite-plus
 - ✅ **Overrides**: Force vite → vite-plus (for all dependencies)
-  - pnpm (no existing `pnpm` config): Writes `overrides`, `peerDependencyRules`, and `catalog` to `pnpm-workspace.yaml`
+  - pnpm (workspace settings): Writes `overrides` and `peerDependencyRules` to `pnpm-workspace.yaml`; reuses an existing managed/default catalog or creates top-level `catalog` when none exists
   - pnpm (existing `pnpm` config): Adds `pnpm.overrides` and `pnpm.peerDependencyRules` in `package.json`
   - npm/bun: Adds `overrides.vite` mapping in `package.json`
   - yarn: Adds `resolutions.vite` mapping in `package.json`
@@ -251,6 +251,11 @@ peerDependencyRules:
     vite: '*'
     vitest: '*'
 ```
+
+This example shows the fallback top-level default catalog. If the workspace
+already uses `catalogs.default`, migration keeps that form. If an existing named
+catalog owns the Vite+ toolchain, migration keeps package references and the
+managed override on that named catalog instead of introducing a default.
 
 **After (pnpm, existing `pnpm` config) -- `package.json`:**
 
@@ -497,7 +502,7 @@ export default defineConfig({
 
 ### for pnpm
 
-For monorepo projects and standalone projects without existing `pnpm` config in `package.json`, overrides, peerDependencyRules, and catalog are written to `pnpm-workspace.yaml`. Projects with existing `pnpm` config in `package.json` keep using `package.json`.
+For monorepo projects and standalone projects without existing `pnpm` config in `package.json`, overrides and peerDependencyRules are written to `pnpm-workspace.yaml`. Catalog-backed projects reuse their existing managed/default catalog layout; migration creates top-level `catalog` only when no suitable catalog exists. Projects with existing `pnpm` config in `package.json` keep using `package.json`.
 
 `pnpm-workspace.yaml`
 

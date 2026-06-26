@@ -1,0 +1,52 @@
+> vp migrate --no-interactive # reuse the existing named-only Vite stack catalog
+◇ Migrated . to Vite+
+• Node <semver>  pnpm <semver>
+• 2 config updates applied
+
+> cat package.json # catalog:vite-stack dependency references are preserved
+{
+  "name": "migration-upgrade-pnpm-named-catalog",
+  "devDependencies": {
+    "vite": "catalog:vite-stack",
+    "vite-plus": "catalog:vite-stack"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "<semver>",
+      "onFail": "download"
+    }
+  },
+  "scripts": {
+    "prepare": "vp config"
+  }
+}
+
+> cat pnpm-workspace.yaml # managed versions and overrides stay in vite-stack
+packages:
+  - .
+
+catalogs:
+  repo-tooling:
+    prettier: <semver>
+  vite-stack:
+    vite: https://pkg.pr.new/voidzero-dev/vite-plus/@voidzero-dev/vite-plus-core@0c515e3fbf5c140db35280d700df0bd600838617
+    vitest: <semver>
+    vite-plus: https://pkg.pr.new/voidzero-dev/vite-plus@0c515e3fbf5c140db35280d700df0bd600838617
+blockExoticSubdeps: false
+overrides:
+  vite: catalog:vite-stack
+  vite-plus: https://pkg.pr.new/voidzero-dev/vite-plus@0c515e3fbf5c140db35280d700df0bd600838617
+peerDependencyRules:
+  allowAny:
+    - vite
+  allowedVersions:
+    vite: '*'
+
+> node -e "const fs = require('node:fs'); const p = require('./package.json'); const y = fs.readFileSync('pnpm-workspace.yaml', 'utf8'); if (p.devDependencies.vite !== 'catalog:vite-stack' || p.devDependencies['vite-plus'] !== 'catalog:vite-stack' || /^catalog:/m.test(y) || !y.includes('  vite-stack:') || !y.includes('  vite: catalog:vite-stack')) process.exit(1)" # no default catalog is introduced
+> node -e "const fs = require('node:fs'); fs.copyFileSync('package.json', 'package.after-first-migration.json'); fs.copyFileSync('pnpm-workspace.yaml', 'workspace.after-first-migration.yaml')" # capture first migration result
+> vp migrate --no-interactive # named-only catalog migration is idempotent
+◇ Migrated . to Vite+
+• Node <semver>  pnpm <semver>
+
+> node -e "const fs = require('node:fs'); if (fs.readFileSync('package.json', 'utf8') !== fs.readFileSync('package.after-first-migration.json', 'utf8') || fs.readFileSync('pnpm-workspace.yaml', 'utf8') !== fs.readFileSync('workspace.after-first-migration.yaml', 'utf8')) process.exit(1)" # rerun leaves catalog placement unchanged
