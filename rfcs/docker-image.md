@@ -2,7 +2,6 @@
 
 - Issue: [#1490](https://github.com/voidzero-dev/vite-plus/issues/1490)
 - Plan: [#1324](https://github.com/voidzero-dev/vite-plus/issues/1324) ("Distribute `vp` across Homebrew, Windows installer, Docker image, apt etc.")
-- Status: Accepted (implementation in progress)
 
 ## Summary
 
