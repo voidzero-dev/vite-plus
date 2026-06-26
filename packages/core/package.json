@@ -120,7 +120,7 @@
     "magic-string": "^0.30.21",
     "oxc-parser": "catalog:",
     "oxfmt": "catalog:",
-    "picocolors": "^1.1.1",
+    "picocolors": "catalog:",
     "picomatch": "^4.0.3",
     "pkg-types": "^2.3.0",
     "rolldown": "workspace:*",

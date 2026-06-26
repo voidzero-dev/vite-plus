@@ -28,7 +28,7 @@
   },
   "dependencies": {
     "@clack/core": "^1.0.0",
-    "picocolors": "^1.0.0",
+    "picocolors": "catalog:",
     "sisteransi": "^1.0.5"
   },
   "devDependencies": {
