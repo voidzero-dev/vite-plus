@@ -4,8 +4,11 @@ import path from 'node:path';
 import { styleText } from 'node:util';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
+import detectIndent from 'detect-indent';
+import { detectNewline } from 'detect-newline';
+import { applyEdits, type FormattingOptions, modify, parse as parseJsonc } from 'jsonc-parser';
 
-import { readJsonFile, writeJsonFile } from './json.ts';
+import { writeJsonFile } from './json.ts';
 
 // Language-specific overrides because user-level [lang] settings beat the workspace default
 const VSCODE_LANGUAGE_OVERRIDES = {
@@ -444,6 +447,12 @@ function normalizeEditorSelection(editorId: EditorSelection): EditorId[] {
   return [...new Set(Array.isArray(editorId) ? editorId : [editorId])];
 }
 
+/**
+ * Merge incoming settings into an existing editor JSON/JSONC file by patching the
+ * original text with `jsonc-parser` instead of re-serializing a merged object.
+ * This preserves comments, key order, trailing commas, and untouched formatting.
+ * Existing values always win; only missing keys/branches are inserted.
+ */
 function mergeAndWriteEditorConfig(
   filePath: string,
   incoming: Record<string, unknown>,
@@ -451,58 +460,122 @@ function mergeAndWriteEditorConfig(
   displayPath: string,
   silent = false,
 ) {
-  const existing = readJsonFile(filePath, true);
-  const merged = mergeEditorConfigs(existing, incoming, fileName);
-  writeJsonFile(filePath, merged);
+  const originalText = fs.readFileSync(filePath, 'utf-8');
+  const existing = parseJsonc(originalText) as unknown;
+  if (!isPlainObject(existing)) {
+    throw new Error(`Cannot merge editor config: ${displayPath} is not a JSON object`);
+  }
+
+  const formattingOptions = detectFormattingOptions(originalText);
+  const newText =
+    fileName === 'extensions.json'
+      ? mergeExtensionsText(originalText, existing, incoming, formattingOptions)
+      : mergeSettingsText(originalText, existing, incoming, formattingOptions);
+
+  // Do not rewrite when the merge produced no changes (keeps the operation idempotent).
+  if (newText === originalText) {
+    if (!silent) {
+      prompts.log.info(`No changes needed for ${displayPath}`);
+    }
+    return;
+  }
+
+  fs.writeFileSync(filePath, newText, 'utf-8');
   if (!silent) {
     prompts.log.success(`Merged editor config into ${displayPath}`);
   }
 }
 
-function mergeEditorConfigs(
-  existing: Record<string, unknown>,
-  incoming: Record<string, unknown>,
-  fileName: string,
-): Record<string, unknown> {
-  if (fileName === 'extensions.json') {
-    const existingRecs = Array.isArray(existing['recommendations'])
-      ? (existing['recommendations'] as string[])
-      : [];
-    const incomingRecs = Array.isArray(incoming['recommendations'])
-      ? (incoming['recommendations'] as string[])
-      : [];
-    return {
-      ...existing,
-      recommendations: [...new Set([...existingRecs, ...incomingRecs])],
-    };
-  }
-
-  return deepMerge(existing, incoming);
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function deepMerge(
-  target: Record<string, unknown>,
-  source: Record<string, unknown>,
-): Record<string, unknown> {
-  const result = { ...target };
-  for (const [key, value] of Object.entries(source)) {
-    if (!(key in result)) {
-      result[key] = value;
-    } else if (
-      typeof result[key] === 'object' &&
-      result[key] !== null &&
-      !Array.isArray(result[key]) &&
-      typeof value === 'object' &&
-      value !== null &&
-      !Array.isArray(value)
-    ) {
-      result[key] = deepMerge(
-        result[key] as Record<string, unknown>,
-        value as Record<string, unknown>,
-      );
+function detectFormattingOptions(text: string): FormattingOptions {
+  const detected = detectIndent(text);
+  const eol = detectNewline(text) ?? '\n';
+  return {
+    insertSpaces: detected.type !== 'tab',
+    tabSize: detected.amount || 2,
+    eol,
+  };
+}
+
+/**
+ * Deep-merge missing keys from `incoming` into the existing text. Inserts a whole
+ * branch when it is absent, and recurses only when both sides are non-array objects
+ * so comments inside existing branches are preserved.
+ */
+function mergeSettingsText(
+  text: string,
+  existing: Record<string, unknown>,
+  incoming: Record<string, unknown>,
+  formattingOptions: FormattingOptions,
+): string {
+  let currentText = text;
+  const insertMissing = (
+    existingNode: Record<string, unknown>,
+    incomingNode: Record<string, unknown>,
+    basePath: (string | number)[],
+  ) => {
+    for (const [key, value] of Object.entries(incomingNode)) {
+      const fullPath = [...basePath, key];
+      if (!(key in existingNode)) {
+        currentText = applyEdits(
+          currentText,
+          modify(currentText, fullPath, value, { formattingOptions }),
+        );
+      } else if (isPlainObject(existingNode[key]) && isPlainObject(value)) {
+        insertMissing(existingNode[key], value, fullPath);
+      }
+      // Otherwise the existing value wins and is left untouched.
     }
+  };
+  insertMissing(existing, incoming, []);
+  return currentText;
+}
+
+/**
+ * For `extensions.json`, append missing recommendations without rebuilding the array,
+ * so comments inside the array survive. Existing entries always win.
+ */
+function mergeExtensionsText(
+  text: string,
+  existing: Record<string, unknown>,
+  incoming: Record<string, unknown>,
+  formattingOptions: FormattingOptions,
+): string {
+  const incomingRecs = Array.isArray(incoming['recommendations'])
+    ? (incoming['recommendations'] as unknown[])
+    : [];
+  const existingValue = existing['recommendations'];
+
+  // No existing recommendations key: insert the incoming array as-is.
+  if (!('recommendations' in existing)) {
+    return applyEdits(text, modify(text, ['recommendations'], incomingRecs, { formattingOptions }));
   }
-  return result;
+
+  // Unexpected non-array value: existing user value wins, leave it untouched.
+  if (!Array.isArray(existingValue)) {
+    return text;
+  }
+
+  const existingRecs = existingValue as unknown[];
+  let currentText = text;
+  let nextIndex = existingRecs.length;
+  for (const rec of incomingRecs) {
+    if (existingRecs.includes(rec)) {
+      continue;
+    }
+    currentText = applyEdits(
+      currentText,
+      modify(currentText, ['recommendations', nextIndex], rec, {
+        formattingOptions,
+        isArrayInsertion: true,
+      }),
+    );
+    nextIndex++;
+  }
+  return currentText;
 }
 
 function resolveEditorId(editor: string): EditorId | undefined {
