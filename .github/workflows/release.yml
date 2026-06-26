@@ -216,7 +216,11 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release edit "v${VERSION}" --draft=false --repo "${{ github.repository }}"
 
+      # Non-blocking: a notification failure must not fail the Release job
+      # (npm/GitHub release are already published) or skip downstream publishing
+      # such as publish-docker.
       - name: Send Discord notification
+        continue-on-error: true
         uses: tsickert/discord-webhook@b217a69502f52803de774ded2b1ab7c282e99645 # v7.0.0
         with:
           webhook-url: ${{ secrets.DISCORD_RELEASES_WEBHOOK_URL }}
