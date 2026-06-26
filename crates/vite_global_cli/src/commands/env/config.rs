@@ -7,7 +7,8 @@
 
 use serde::{Deserialize, Serialize};
 use vite_js_runtime::{
-    NodeProvider, VersionSource, normalize_version, read_package_json, resolve_node_version,
+    NodeProvider, VersionSource, is_valid_version, normalize_version, read_package_json,
+    resolve_node_version,
 };
 use vite_path::{AbsolutePath, AbsolutePathBuf};
 
@@ -228,91 +229,123 @@ pub async fn resolve_version(cwd: &AbsolutePath) -> Result<VersionResolution, Er
     resolve_version_from_files(cwd).await
 }
 
+pub(crate) struct ProjectVersionSource {
+    pub version: String,
+    pub source: String,
+    pub source_path: AbsolutePathBuf,
+    pub project_root: AbsolutePathBuf,
+}
+
+/// Resolve the effective project-file Node.js version source.
+///
+/// `warn_invalid` controls whether invalid version specs print user-facing
+/// warnings. Use `true` for env commands, and `false` for shim cache validation
+/// so wrapped tool output stays quiet.
+pub(crate) async fn resolve_project_version_source(
+    cwd: &AbsolutePath,
+    warn_invalid: bool,
+) -> Result<Option<ProjectVersionSource>, Error> {
+    let Some(resolution) = resolve_node_version(cwd, true)
+        .await
+        .map_err(|e| Error::ConfigError(e.to_string().into()))?
+    else {
+        return Ok(None);
+    };
+
+    if let Some(version) =
+        validate_version_spec(&resolution.version, &resolution.source.to_string(), warn_invalid)
+    {
+        if let (Some(source_path), Some(project_root)) =
+            (resolution.source_path, resolution.project_root)
+        {
+            return Ok(Some(ProjectVersionSource {
+                version,
+                source: resolution.source.to_string(),
+                source_path,
+                project_root,
+            }));
+        }
+        return Ok(None);
+    }
+
+    // Invalid version from a project source: try lower-priority sources in the same directory.
+    // This mirrors the fallback logic in download_runtime_for_project().
+    if !matches!(
+        resolution.source,
+        VersionSource::NodeVersionFile | VersionSource::DevEnginesRuntime
+    ) {
+        return Ok(None);
+    }
+
+    let Some(project_root) = resolution.project_root else {
+        return Ok(None);
+    };
+    let package_json_path = project_root.join("package.json");
+    let Ok(Some(pkg)) = read_package_json(&package_json_path).await else {
+        return Ok(None);
+    };
+
+    if matches!(resolution.source, VersionSource::NodeVersionFile)
+        && let Some(version) = pkg
+            .dev_engines_runtime("node")
+            .and_then(|r| r.version.clone())
+            .and_then(|v| validate_version_spec(&v, "devEngines.runtime", warn_invalid))
+    {
+        return Ok(Some(ProjectVersionSource {
+            version,
+            source: "devEngines.runtime".into(),
+            source_path: package_json_path,
+            project_root,
+        }));
+    }
+
+    if let Some(version) = pkg
+        .engines
+        .as_ref()
+        .and_then(|e| e.node.clone())
+        .and_then(|v| validate_version_spec(&v, "engines.node", warn_invalid))
+    {
+        return Ok(Some(ProjectVersionSource {
+            version,
+            source: "engines.node".into(),
+            source_path: package_json_path,
+            project_root,
+        }));
+    }
+
+    Ok(None)
+}
+
+fn validate_version_spec(
+    version: &vite_str::Str,
+    source: &str,
+    warn_invalid: bool,
+) -> Option<String> {
+    if warn_invalid {
+        normalize_version(version, source).map(|v| v.to_string())
+    } else {
+        let trimmed = version.trim();
+        is_valid_version(trimmed).then(|| trimmed.to_string())
+    }
+}
+
 /// Resolve Node.js version from project files only (skipping session overrides).
 ///
 /// This is used by `vp env use` without arguments to revert to file-based resolution.
 pub async fn resolve_version_from_files(cwd: &AbsolutePath) -> Result<VersionResolution, Error> {
     let provider = NodeProvider::new();
 
-    // Use shared version resolution with directory walking
-    let resolution = resolve_node_version(cwd, true)
-        .await
-        .map_err(|e| Error::ConfigError(e.to_string().into()))?;
-
-    if let Some(resolution) = resolution {
-        // Validate version before attempting resolution
-        // If invalid, warning is printed by normalize_version and we fall through to defaults
-        if let Some(validated) =
-            normalize_version(&resolution.version.clone().into(), &resolution.source.to_string())
-        {
-            // Detect if the original version spec was a range (not exact)
-            // This includes partial versions (20, 20.18), semver ranges (^20.0.0), LTS aliases, and "latest"
-            let is_range = NodeProvider::is_version_alias(&validated)
-                || !NodeProvider::is_exact_version(&validated);
-
-            let resolved = resolve_version_string(&validated, &provider).await?;
-            return Ok(VersionResolution {
-                version: resolved,
-                source: resolution.source.to_string(),
-                source_path: resolution.source_path,
-                project_root: resolution.project_root,
-                is_range,
-            });
-        }
-
-        // Invalid version from a project source - try lower-priority sources in the same directory.
-        // This mirrors the fallback logic in download_runtime_for_project().
-        // - NodeVersionFile: try devEngines.runtime, then engines.node
-        // - DevEnginesRuntime: try engines.node
-        if matches!(
-            resolution.source,
-            VersionSource::NodeVersionFile | VersionSource::DevEnginesRuntime
-        ) {
-            if let Some(project_root) = &resolution.project_root {
-                let package_json_path = project_root.join("package.json");
-                if let Ok(Some(pkg)) = read_package_json(&package_json_path).await {
-                    // Try devEngines.runtime (only when falling back from .node-version)
-                    if matches!(resolution.source, VersionSource::NodeVersionFile) {
-                        if let Some(dev_engines) = pkg
-                            .dev_engines_runtime("node")
-                            .and_then(|r| r.version.clone())
-                            .and_then(|v| normalize_version(&v, "devEngines.runtime"))
-                        {
-                            let resolved = resolve_version_string(&dev_engines, &provider).await?;
-                            let is_range = NodeProvider::is_lts_alias(&dev_engines)
-                                || !NodeProvider::is_exact_version(&dev_engines);
-                            return Ok(VersionResolution {
-                                version: resolved,
-                                source: "devEngines.runtime".into(),
-                                source_path: Some(package_json_path),
-                                project_root: Some(project_root.clone()),
-                                is_range,
-                            });
-                        }
-                    }
-
-                    // Try engines.node
-                    if let Some(engines_node) = pkg
-                        .engines
-                        .as_ref()
-                        .and_then(|e| e.node.clone())
-                        .and_then(|v| normalize_version(&v, "engines.node"))
-                    {
-                        let resolved = resolve_version_string(&engines_node, &provider).await?;
-                        let is_range = NodeProvider::is_lts_alias(&engines_node)
-                            || !NodeProvider::is_exact_version(&engines_node);
-                        return Ok(VersionResolution {
-                            version: resolved,
-                            source: "engines.node".into(),
-                            source_path: Some(package_json_path),
-                            project_root: Some(project_root.clone()),
-                            is_range,
-                        });
-                    }
-                }
-            }
-        }
-        // Invalid version and no valid package.json sources - fall through to user default or LTS
+    if let Some(project_source) = resolve_project_version_source(cwd, true).await? {
+        let is_range = NodeProvider::is_version_alias(&project_source.version)
+            || !NodeProvider::is_exact_version(&project_source.version);
+        let resolved = resolve_version_string(&project_source.version, &provider).await?;
+        return Ok(VersionResolution {
+            version: resolved,
+            source: project_source.source,
+            source_path: Some(project_source.source_path),
+            project_root: Some(project_source.project_root),
+            is_range,
+        });
     }
 
     // CLI-specific: Check user default from config
@@ -777,6 +810,120 @@ mod tests {
             "Expected version to start with '20.', got: {}",
             resolution.version
         );
+    }
+
+    #[tokio::test]
+    async fn test_project_source_detects_new_dev_engines() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+
+        assert!(resolve_project_version_source(&temp_path, false).await.unwrap().is_none());
+
+        tokio::fs::write(
+            temp_path.join("package.json"),
+            r#"{"devEngines":{"runtime":{"name":"node","version":"22.22.0"}}}"#,
+        )
+        .await
+        .unwrap();
+
+        let source = resolve_project_version_source(&temp_path, false).await.unwrap().unwrap();
+        assert_eq!(source.version, "22.22.0");
+        assert_eq!(source.source, "devEngines.runtime");
+        assert_eq!(source.source_path, temp_path.join("package.json"));
+    }
+
+    #[tokio::test]
+    async fn test_project_source_prefers_nearer_dev_engines_over_parent_node_version() {
+        let temp_dir = TempDir::new().unwrap();
+        let parent = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let child = parent.join("child");
+        tokio::fs::create_dir(&child).await.unwrap();
+        tokio::fs::write(parent.join(".node-version"), "24.18.0").await.unwrap();
+        tokio::fs::write(
+            child.join("package.json"),
+            r#"{"devEngines":{"runtime":{"name":"node","version":"22.22.0"}}}"#,
+        )
+        .await
+        .unwrap();
+
+        let source = resolve_project_version_source(&child, false).await.unwrap().unwrap();
+        assert_eq!(source.version, "22.22.0");
+        assert_eq!(source.source, "devEngines.runtime");
+        assert_eq!(source.source_path, child.join("package.json"));
+    }
+
+    #[tokio::test]
+    async fn test_project_source_falls_back_from_invalid_node_version_to_dev_engines() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        tokio::fs::write(temp_path.join(".node-version"), "not-a-version").await.unwrap();
+        tokio::fs::write(
+            temp_path.join("package.json"),
+            r#"{"devEngines":{"runtime":{"name":"node","version":"22.22.0"}}}"#,
+        )
+        .await
+        .unwrap();
+
+        let source = resolve_project_version_source(&temp_path, false).await.unwrap().unwrap();
+        assert_eq!(source.version, "22.22.0");
+        assert_eq!(source.source, "devEngines.runtime");
+    }
+
+    #[tokio::test]
+    async fn test_project_source_falls_back_from_invalid_dev_engines_to_engines_node() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        tokio::fs::write(
+            temp_path.join("package.json"),
+            r#"{"devEngines":{"runtime":{"name":"node","version":"not-a-version"}},"engines":{"node":"22.22.0"}}"#,
+        )
+        .await
+        .unwrap();
+
+        let source = resolve_project_version_source(&temp_path, false).await.unwrap().unwrap();
+        assert_eq!(source.version, "22.22.0");
+        assert_eq!(source.source, "engines.node");
+    }
+
+    #[tokio::test]
+    async fn test_project_source_ignores_empty_engines_node_and_keeps_walking() {
+        let temp_dir = TempDir::new().unwrap();
+        let parent = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let child = parent.join("child");
+        tokio::fs::create_dir(&child).await.unwrap();
+        tokio::fs::write(parent.join(".node-version"), "24.18.0").await.unwrap();
+        tokio::fs::write(child.join("package.json"), r#"{"engines":{"node":""}}"#).await.unwrap();
+
+        let source = resolve_project_version_source(&child, false).await.unwrap().unwrap();
+        assert_eq!(source.version, "24.18.0");
+        assert_eq!(source.source, ".node-version");
+        assert_eq!(source.source_path, parent.join(".node-version"));
+    }
+
+    #[tokio::test]
+    async fn test_project_source_stops_at_invalid_package_source() {
+        let temp_dir = TempDir::new().unwrap();
+        let parent = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        let child = parent.join("child");
+        tokio::fs::create_dir(&child).await.unwrap();
+        tokio::fs::write(parent.join(".node-version"), "24.18.0").await.unwrap();
+        tokio::fs::write(
+            child.join("package.json"),
+            r#"{"devEngines":{"runtime":{"name":"node","version":"not-a-version"}}}"#,
+        )
+        .await
+        .unwrap();
+
+        assert!(resolve_project_version_source(&child, false).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn test_project_source_returns_none_for_invalid_project_source() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = AbsolutePathBuf::new(temp_dir.path().to_path_buf()).unwrap();
+        tokio::fs::write(temp_path.join(".node-version"), "not-a-version").await.unwrap();
+
+        assert!(resolve_project_version_source(&temp_path, false).await.unwrap().is_none());
     }
 
     #[tokio::test]

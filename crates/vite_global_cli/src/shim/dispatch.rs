@@ -1245,14 +1245,16 @@ pub(crate) async fn resolve_with_cache(cwd: &AbsolutePathBuf) -> Result<ResolveC
     let mut cache = cache_path.as_ref().map(|p| ResolveCache::load(p)).unwrap_or_default();
 
     // Check cache hit
-    if let Some(entry) = cache.get(cwd) {
+    if let Some(entry) = cache.get(cwd).cloned()
+        && cached_project_source_still_current(cwd, &entry).await?
+    {
         tracing::debug!(
             "Cache hit for {}: {} (from {})",
             cwd.as_path().display(),
             entry.version,
             entry.source
         );
-        return Ok(entry.clone());
+        return Ok(entry);
     }
 
     // Cache miss - resolve version
@@ -1284,6 +1286,24 @@ pub(crate) async fn resolve_with_cache(cwd: &AbsolutePathBuf) -> Result<ResolveC
     }
 
     Ok(entry)
+}
+
+async fn cached_project_source_still_current(
+    cwd: &AbsolutePathBuf,
+    entry: &ResolveCacheEntry,
+) -> Result<bool, String> {
+    let Some(current) =
+        config::resolve_project_version_source(cwd, false).await.map_err(|e| format!("{e}"))?
+    else {
+        return Ok(!matches!(
+            entry.source.as_str(),
+            ".node-version" | "devEngines.runtime" | "engines.node"
+        ));
+    };
+
+    let current_source_path = current.source_path.as_path().display().to_string();
+    Ok(entry.source == current.source
+        && entry.source_path.as_deref() == Some(current_source_path.as_str()))
 }
 
 /// Ensure Node.js is installed.
@@ -1469,6 +1489,45 @@ mod tests {
                 }
             }
         }
+    }
+
+    fn cache_entry(source: &str, source_path: Option<&AbsolutePathBuf>) -> ResolveCacheEntry {
+        ResolveCacheEntry {
+            version: "24.18.0".to_string(),
+            source: source.to_string(),
+            project_root: None,
+            resolved_at: cache::now_timestamp(),
+            version_file_mtime: 0,
+            source_path: source_path.map(|p| p.as_path().display().to_string()),
+            is_range: false,
+        }
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_resolve_with_cache_bypasses_stale_lts_after_dev_engines_is_added() {
+        let temp = TempDir::new().unwrap();
+        let vp_home = AbsolutePathBuf::new(temp.path().join("vp-home")).unwrap();
+        let cwd = AbsolutePathBuf::new(temp.path().join("project")).unwrap();
+        std::fs::create_dir(&cwd).unwrap();
+        let _guard = vite_shared::EnvConfig::test_guard(
+            vite_shared::EnvConfig::for_test_with_home(vp_home.as_path()),
+        );
+
+        let mut cache = ResolveCache::default();
+        cache.insert(&cwd, cache_entry("lts", None));
+        cache.save(&cache::get_cache_path().unwrap());
+
+        std::fs::write(
+            cwd.join("package.json"),
+            r#"{"devEngines":{"runtime":{"name":"node","version":"22.22.0"}}}"#,
+        )
+        .unwrap();
+
+        let resolved = resolve_with_cache(&cwd).await.unwrap();
+
+        assert_eq!(resolved.version, "22.22.0");
+        assert_eq!(resolved.source, "devEngines.runtime");
     }
 
     #[test]
