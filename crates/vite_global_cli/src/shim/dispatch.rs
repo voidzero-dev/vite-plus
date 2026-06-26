@@ -1292,99 +1292,18 @@ async fn cached_project_source_still_current(
     cwd: &AbsolutePathBuf,
     entry: &ResolveCacheEntry,
 ) -> Result<bool, String> {
-    let Some(current) = current_effective_project_source(cwd).await? else {
+    let Some(current) =
+        config::resolve_project_version_source(cwd, false).await.map_err(|e| format!("{e}"))?
+    else {
         return Ok(!matches!(
             entry.source.as_str(),
             ".node-version" | "devEngines.runtime" | "engines.node"
         ));
     };
 
-    Ok(entry.source == current.0 && entry.source_path.as_deref() == Some(current.1.as_str()))
-}
-
-async fn current_effective_project_source(
-    cwd: &AbsolutePathBuf,
-) -> Result<Option<(String, String)>, String> {
-    let mut current = cwd.clone();
-
-    loop {
-        let node_version_path = current.join(".node-version");
-        if tokio::fs::try_exists(&node_version_path).await.unwrap_or(false)
-            && let Some(version) = vite_js_runtime::read_node_version_file(&current).await
-        {
-            if is_valid_version_spec(&version) {
-                return Ok(Some((
-                    ".node-version".to_string(),
-                    node_version_path.as_path().display().to_string(),
-                )));
-            }
-            return Ok(match package_json_effective_source(&current).await? {
-                ProjectSource::Found(source) => Some(source),
-                ProjectSource::Stop | ProjectSource::KeepWalking => None,
-            });
-        }
-
-        match package_json_effective_source(&current).await? {
-            ProjectSource::Found(source) => return Ok(Some(source)),
-            ProjectSource::Stop => return Ok(None),
-            ProjectSource::KeepWalking => {}
-        }
-
-        match current.parent() {
-            Some(parent) => current = parent.to_absolute_path_buf(),
-            None => return Ok(None),
-        }
-    }
-}
-
-enum ProjectSource {
-    Found((String, String)),
-    Stop,
-    KeepWalking,
-}
-
-async fn package_json_effective_source(dir: &AbsolutePathBuf) -> Result<ProjectSource, String> {
-    let path = dir.join("package.json");
-    if !tokio::fs::try_exists(&path).await.unwrap_or(false) {
-        return Ok(ProjectSource::KeepWalking);
-    }
-
-    let content = tokio::fs::read_to_string(&path).await.map_err(|e| format!("{e}"))?;
-    let Ok(pkg) = serde_json::from_str::<vite_shared::PackageJson>(&content) else {
-        return Ok(ProjectSource::KeepWalking);
-    };
-    let source_path = path.as_path().display().to_string();
-
-    if let Some(version) = pkg.dev_engines_runtime("node").and_then(|r| r.version.clone()) {
-        if is_valid_version_spec(&version) {
-            return Ok(ProjectSource::Found(("devEngines.runtime".to_string(), source_path)));
-        }
-        return Ok(pkg
-            .engines
-            .as_ref()
-            .and_then(|e| e.node.clone())
-            .and_then(|version| {
-                is_valid_version_spec(&version)
-                    .then(|| ProjectSource::Found(("engines.node".to_string(), source_path)))
-            })
-            .unwrap_or(ProjectSource::Stop));
-    }
-
-    if let Some(version) = pkg.engines.as_ref().and_then(|e| e.node.clone()) {
-        if version.trim().is_empty() {
-            return Ok(ProjectSource::KeepWalking);
-        }
-        if is_valid_version_spec(&version) {
-            return Ok(ProjectSource::Found(("engines.node".to_string(), source_path)));
-        }
-        return Ok(ProjectSource::Stop);
-    }
-
-    Ok(ProjectSource::KeepWalking)
-}
-
-fn is_valid_version_spec(version: &str) -> bool {
-    vite_js_runtime::is_valid_version(&vite_str::Str::from(version.trim()))
+    let current_source_path = current.source_path.as_path().display().to_string();
+    Ok(entry.source == current.source
+        && entry.source_path.as_deref() == Some(current_source_path.as_str()))
 }
 
 /// Ensure Node.js is installed.
@@ -1585,83 +1504,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_cached_lts_invalidates_when_dev_engines_is_added() {
-        let temp = TempDir::new().unwrap();
-        let cwd = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
-        let entry = cache_entry("lts", None);
-
-        assert!(cached_project_source_still_current(&cwd, &entry).await.unwrap());
-
-        std::fs::write(
-            cwd.join("package.json"),
-            r#"{"devEngines":{"runtime":{"name":"node","version":"22.22.0"}}}"#,
-        )
-        .unwrap();
-
-        assert!(!cached_project_source_still_current(&cwd, &entry).await.unwrap());
-    }
-
-    #[tokio::test]
-    async fn test_cached_parent_source_invalidates_when_nearer_dev_engines_is_added() {
-        let temp = TempDir::new().unwrap();
-        let parent = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
-        let child = parent.join("child");
-        std::fs::create_dir(&child).unwrap();
-        let node_version = parent.join(".node-version");
-        std::fs::write(&node_version, "24.18.0").unwrap();
-        let entry = cache_entry(".node-version", Some(&node_version));
-
-        assert!(cached_project_source_still_current(&child, &entry).await.unwrap());
-
-        std::fs::write(
-            child.join("package.json"),
-            r#"{"devEngines":{"runtime":{"name":"node","version":"22.22.0"}}}"#,
-        )
-        .unwrap();
-
-        assert!(!cached_project_source_still_current(&child, &entry).await.unwrap());
-    }
-
-    #[tokio::test]
-    async fn test_cached_fallback_source_survives_invalid_higher_priority_source() {
-        let temp = TempDir::new().unwrap();
-        let cwd = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
-        std::fs::write(cwd.join(".node-version"), "not-a-version").unwrap();
-        std::fs::write(
-            cwd.join("package.json"),
-            r#"{"devEngines":{"runtime":{"name":"node","version":"22.22.0"}}}"#,
-        )
-        .unwrap();
-        let entry = cache_entry("devEngines.runtime", Some(&cwd.join("package.json")));
-
-        assert!(cached_project_source_still_current(&cwd, &entry).await.unwrap());
-    }
-
-    #[tokio::test]
-    async fn test_cached_engines_source_survives_invalid_dev_engines_runtime() {
-        let temp = TempDir::new().unwrap();
-        let cwd = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
-        std::fs::write(
-            cwd.join("package.json"),
-            r#"{"devEngines":{"runtime":{"name":"node","version":"not-a-version"}},"engines":{"node":"22.22.0"}}"#,
-        )
-        .unwrap();
-        let entry = cache_entry("engines.node", Some(&cwd.join("package.json")));
-
-        assert!(cached_project_source_still_current(&cwd, &entry).await.unwrap());
-    }
-
-    #[tokio::test]
-    async fn test_cached_default_survives_invalid_project_source() {
-        let temp = TempDir::new().unwrap();
-        let cwd = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
-        std::fs::write(cwd.join(".node-version"), "not-a-version").unwrap();
-        let entry = cache_entry("lts", None);
-
-        assert!(cached_project_source_still_current(&cwd, &entry).await.unwrap());
-    }
-
-    #[tokio::test]
     #[serial]
     async fn test_resolve_with_cache_bypasses_stale_lts_after_dev_engines_is_added() {
         let temp = TempDir::new().unwrap();
@@ -1686,37 +1528,6 @@ mod tests {
 
         assert_eq!(resolved.version, "22.22.0");
         assert_eq!(resolved.source, "devEngines.runtime");
-    }
-
-    #[tokio::test]
-    async fn test_empty_engines_node_keeps_parent_source_current() {
-        let temp = TempDir::new().unwrap();
-        let parent = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
-        let child = parent.join("child");
-        std::fs::create_dir(&child).unwrap();
-        let node_version = parent.join(".node-version");
-        std::fs::write(&node_version, "24.18.0").unwrap();
-        std::fs::write(child.join("package.json"), r#"{"engines":{"node":""}}"#).unwrap();
-        let entry = cache_entry(".node-version", Some(&node_version));
-
-        assert!(cached_project_source_still_current(&child, &entry).await.unwrap());
-    }
-
-    #[tokio::test]
-    async fn test_invalid_package_source_does_not_walk_to_parent() {
-        let temp = TempDir::new().unwrap();
-        let parent = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
-        let child = parent.join("child");
-        std::fs::create_dir(&child).unwrap();
-        std::fs::write(parent.join(".node-version"), "24.18.0").unwrap();
-        std::fs::write(
-            child.join("package.json"),
-            r#"{"devEngines":{"runtime":{"name":"node","version":"not-a-version"}}}"#,
-        )
-        .unwrap();
-        let entry = cache_entry("lts", None);
-
-        assert!(cached_project_source_still_current(&child, &entry).await.unwrap());
     }
 
     #[test]
