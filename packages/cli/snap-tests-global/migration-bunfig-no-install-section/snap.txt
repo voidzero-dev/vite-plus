@@ -1,0 +1,11 @@
+> vp migrate --no-interactive # migration adds a missing install section
+◇ Migrated . to Vite+
+• Node <semver>  bun <semver>
+• 2 config updates applied
+
+> cat bunfig.toml # check the existing config and new peer suppression are preserved
+[run]
+shell = "bun"
+
+[install]
+peer = false

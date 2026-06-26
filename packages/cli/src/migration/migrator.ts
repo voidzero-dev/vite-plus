@@ -3345,10 +3345,16 @@ function ensureBunfigPeerSuppression(projectPath: string): void {
   if (/^\s*peer\s*=\s*(true|false)\s*$/m.test(existing)) {
     return;
   }
-  // Append under existing [install] section, or add a new section.
-  const installSectionRe = /^\[install\][^[]*/m;
-  const next = installSectionRe.test(existing)
-    ? existing.replace(installSectionRe, (section) => `${section.trimEnd()}\npeer = false\n`)
+  // Insert directly after the existing [install] header. Scanning for the next
+  // `[` is unsafe because array values such as `minimumReleaseAgeExcludes = []`
+  // also contain that character.
+  const installSectionHeaderRe = /^(\s*\[install\][^\S\r\n]*(?:#[^\r\n]*)?)(\r?\n|$)/m;
+  const next = installSectionHeaderRe.test(existing)
+    ? existing.replace(
+        installSectionHeaderRe,
+        (_match, header: string, newline: string) =>
+          `${header}${newline || '\n'}peer = false${newline || '\n'}`,
+      )
     : `${existing.trimEnd()}\n\n${block}`;
   fs.writeFileSync(bunfigPath, next);
 }

@@ -1,0 +1,10 @@
+> vp migrate --no-interactive # migration preserves inline arrays in an existing bunfig.toml
+◇ Migrated . to Vite+
+• Node <semver>  bun <semver>
+• 2 config updates applied
+
+> cat bunfig.toml # check peer suppression is added without corrupting inline arrays
+[install]
+peer = false
+minimumReleaseAge = 259200
+minimumReleaseAgeExcludes = ["@zerobyte/*"]
