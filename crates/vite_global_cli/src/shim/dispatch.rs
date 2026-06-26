@@ -1352,9 +1352,7 @@ async fn package_json_effective_source(dir: &AbsolutePathBuf) -> Result<ProjectS
         return Ok(ProjectSource::KeepWalking);
     }
 
-    let Ok(content) = tokio::fs::read_to_string(&path).await else {
-        return Ok(ProjectSource::KeepWalking);
-    };
+    let content = tokio::fs::read_to_string(&path).await.map_err(|e| format!("{e}"))?;
     let Ok(pkg) = serde_json::from_str::<vite_shared::PackageJson>(&content) else {
         return Ok(ProjectSource::KeepWalking);
     };
@@ -1644,6 +1642,20 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_cached_engines_source_survives_invalid_dev_engines_runtime() {
+        let temp = TempDir::new().unwrap();
+        let cwd = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        std::fs::write(
+            cwd.join("package.json"),
+            r#"{"devEngines":{"runtime":{"name":"node","version":"not-a-version"}},"engines":{"node":"22.22.0"}}"#,
+        )
+        .unwrap();
+        let entry = cache_entry("engines.node", Some(&cwd.join("package.json")));
+
+        assert!(cached_project_source_still_current(&cwd, &entry).await.unwrap());
+    }
+
+    #[tokio::test]
     async fn test_cached_default_survives_invalid_project_source() {
         let temp = TempDir::new().unwrap();
         let cwd = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
@@ -1651,6 +1663,33 @@ mod tests {
         let entry = cache_entry("lts", None);
 
         assert!(cached_project_source_still_current(&cwd, &entry).await.unwrap());
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_resolve_with_cache_bypasses_stale_lts_after_dev_engines_is_added() {
+        let temp = TempDir::new().unwrap();
+        let vp_home = AbsolutePathBuf::new(temp.path().join("vp-home")).unwrap();
+        let cwd = AbsolutePathBuf::new(temp.path().join("project")).unwrap();
+        std::fs::create_dir(&cwd).unwrap();
+        let _guard = vite_shared::EnvConfig::test_guard(
+            vite_shared::EnvConfig::for_test_with_home(vp_home.as_path()),
+        );
+
+        let mut cache = ResolveCache::default();
+        cache.insert(&cwd, cache_entry("lts", None));
+        cache.save(&cache::get_cache_path().unwrap());
+
+        std::fs::write(
+            cwd.join("package.json"),
+            r#"{"devEngines":{"runtime":{"name":"node","version":"22.22.0"}}}"#,
+        )
+        .unwrap();
+
+        let resolved = resolve_with_cache(&cwd).await.unwrap();
+
+        assert_eq!(resolved.version, "22.22.0");
+        assert_eq!(resolved.source, "devEngines.runtime");
     }
 
     #[tokio::test]
