@@ -119,19 +119,27 @@ const [command, ...args] = process.argv.slice(2);
 
 switch (command) {
   case 'is-bun-project':
-    if (args.length !== 1) usage();
+    if (args.length !== 1) {
+      usage();
+    }
     isBunProject(...args);
     break;
   case 'patch-package':
-    if (args.length !== 3) usage();
+    if (args.length !== 3) {
+      usage();
+    }
     patchPackage(...args);
     break;
   case 'add-core-dependency':
-    if (args.length !== 2) usage();
+    if (args.length !== 2) {
+      usage();
+    }
     addCoreDependency(...args);
     break;
   case 'normalize-vite-paths':
-    if (args.length !== 2) usage();
+    if (args.length !== 2) {
+      usage();
+    }
     normalizeVitePaths(...args);
     break;
   default:
