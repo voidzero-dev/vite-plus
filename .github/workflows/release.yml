@@ -289,7 +289,8 @@ jobs:
   discord-notify:
     name: Notify Discord
     runs-on: ubuntu-latest
-    needs: [check, Release, publish-docker]
+    # publish-docker already needs Release, so depending on it orders this last.
+    needs: [check, publish-docker]
     if: needs.check.outputs.version_changed == 'true'
     env:
       VERSION: ${{ needs.check.outputs.version }}
