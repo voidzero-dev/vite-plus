@@ -195,8 +195,6 @@ lint autofix preserves these imports.
   references.
 - Mirror the core alias as a direct `vite` dependency so Bun sees the peer
   provider before applying overrides.
-- Configure missing-peer suppression in `bunfig.toml` when needed, but do not
-  overwrite an explicit user `peer` setting.
 
 After updating the manifests and package-manager configuration, migration
 reinstalls dependencies once to refresh the lockfile. If installation fails,

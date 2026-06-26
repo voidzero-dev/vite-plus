@@ -3,8 +3,7 @@
 • Node <semver>  bun <semver>
 • 2 config updates applied
 
-> cat bunfig.toml # check peer suppression is added without corrupting inline arrays
+> cat bunfig.toml # check Bun configuration is unchanged
 [install]
-peer = false
 minimumReleaseAge = 259200
 minimumReleaseAgeExcludes = ["@zerobyte/*"]

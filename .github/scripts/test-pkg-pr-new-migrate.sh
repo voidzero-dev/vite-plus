@@ -6,6 +6,9 @@ usage() {
   cat <<'EOF'
 Usage: .github/scripts/test-pkg-pr-new-migrate.sh <PR-or-SHA> <project-path> [migrate-options...]
 
+This helper does not support Bun projects because pkg.pr.new URL artifacts
+cannot preserve npm alias semantics for vite-plus-core.
+
 Examples:
   .github/scripts/test-pkg-pr-new-migrate.sh 1891 /path/to/npmx.dev
   .github/scripts/test-pkg-pr-new-migrate.sh 4eb2104c /path/to/project --no-interactive
@@ -40,6 +43,22 @@ fi
 project_dir="$(cd "$project_input" && pwd -P)"
 if [ ! -f "$project_dir/package.json" ]; then
   echo "error: package.json not found in project: $project_dir" >&2
+  exit 2
+fi
+
+if [ -f "$project_dir/bun.lock" ] ||
+  [ -f "$project_dir/bun.lockb" ] ||
+  [ -f "$project_dir/bunfig.toml" ] ||
+  node -e '
+    const pkg = require(process.argv[1]);
+    const packageManager =
+      typeof pkg.packageManager === "string" ? pkg.packageManager.split("@")[0] : undefined;
+    const devEngine = pkg.devEngines?.packageManager;
+    const devEngineName = typeof devEngine === "string" ? devEngine : devEngine?.name;
+    process.exit(packageManager === "bun" || devEngineName === "bun" ? 0 : 1);
+  ' "$project_dir/package.json"; then
+  echo "error: Bun projects are not supported by test-pkg-pr-new-migrate.sh." >&2
+  echo "pkg.pr.new URL artifacts cannot represent the npm alias used for published vite-plus-core packages." >&2
   exit 2
 fi
 

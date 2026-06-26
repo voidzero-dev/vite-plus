@@ -1,6 +1,6 @@
 {
   "commands": [
-    "vp migrate --no-interactive # migration adds a missing install section",
-    "cat bunfig.toml # check the existing config and new peer suppression are preserved"
+    "vp migrate --no-interactive # migration preserves bunfig.toml without an install section",
+    "cat bunfig.toml # check Bun configuration is unchanged"
   ]
 }
