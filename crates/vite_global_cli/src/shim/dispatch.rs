@@ -1293,7 +1293,10 @@ async fn cached_project_source_still_current(
     entry: &ResolveCacheEntry,
 ) -> Result<bool, String> {
     let Some(current) = current_effective_project_source(cwd).await? else {
-        return Ok(!is_project_version_source(&entry.source));
+        return Ok(!matches!(
+            entry.source.as_str(),
+            ".node-version" | "devEngines.runtime" | "engines.node"
+        ));
     };
 
     Ok(entry.source == current.0 && entry.source_path.as_deref() == Some(current.1.as_str()))
@@ -1315,7 +1318,10 @@ async fn current_effective_project_source(
                     node_version_path.as_path().display().to_string(),
                 )));
             }
-            return package_json_effective_source(&current).await.map(ProjectSource::into_option);
+            return Ok(match package_json_effective_source(&current).await? {
+                ProjectSource::Found(source) => Some(source),
+                ProjectSource::Stop | ProjectSource::KeepWalking => None,
+            });
         }
 
         match package_json_effective_source(&current).await? {
@@ -1335,15 +1341,6 @@ enum ProjectSource {
     Found((String, String)),
     Stop,
     KeepWalking,
-}
-
-impl ProjectSource {
-    fn into_option(self) -> Option<(String, String)> {
-        match self {
-            Self::Found(source) => Some(source),
-            Self::Stop | Self::KeepWalking => None,
-        }
-    }
 }
 
 async fn package_json_effective_source(dir: &AbsolutePathBuf) -> Result<ProjectSource, String> {
@@ -1388,10 +1385,6 @@ async fn package_json_effective_source(dir: &AbsolutePathBuf) -> Result<ProjectS
 
 fn is_valid_version_spec(version: &str) -> bool {
     vite_js_runtime::is_valid_version(&vite_str::Str::from(version.trim()))
-}
-
-fn is_project_version_source(source: &str) -> bool {
-    matches!(source, ".node-version" | "devEngines.runtime" | "engines.node")
 }
 
 /// Ensure Node.js is installed.
