@@ -216,27 +216,6 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release edit "v${VERSION}" --draft=false --repo "${{ github.repository }}"
 
-      # Non-blocking: a notification failure must not fail the Release job
-      # (npm/GitHub release are already published) or skip downstream publishing
-      # such as publish-docker.
-      - name: Send Discord notification
-        continue-on-error: true
-        uses: tsickert/discord-webhook@b217a69502f52803de774ded2b1ab7c282e99645 # v7.0.0
-        with:
-          webhook-url: ${{ secrets.DISCORD_RELEASES_WEBHOOK_URL }}
-          embed-title: vite-plus v${{ env.VERSION }}
-          embed-description: |
-            A new release is available!
-
-            **Published Packages:**
-            • @voidzero-dev/vite-plus-core@${{ env.VERSION }}
-            • vite-plus@${{ env.VERSION }}
-
-            **Install:**
-            • macOS/Linux: `curl -fsSL https://vite.plus | bash`
-            • Windows: `irm https://vite.plus/ps1 | iex`
-          embed-url: https://github.com/${{ github.repository }}/releases/tag/v${{ env.VERSION }}
-
   # Build and push the official toolchain Docker image to GHCR after the npm
   # release is published (the image installs vp from npm, so the version must
   # exist first). See docker/Dockerfile and docs/guide/docker.md.
@@ -303,3 +282,39 @@ jobs:
           build-args: |
             VP_VERSION=${{ env.VERSION }}
           provenance: false
+
+  # Announce the release on Discord last, after the Docker images are published,
+  # so the message can include the GHCR image. Runs after the npm release
+  # (Release) and the images (publish-docker).
+  discord-notify:
+    name: Notify Discord
+    runs-on: ubuntu-latest
+    needs: [check, Release, publish-docker]
+    if: needs.check.outputs.version_changed == 'true'
+    env:
+      VERSION: ${{ needs.check.outputs.version }}
+      IMAGE: ghcr.io/voidzero-dev/vite-plus
+    steps:
+      # Non-blocking: a webhook failure must not mark the release run as failed
+      # (npm, GitHub release, and Docker images are already published).
+      - name: Send Discord notification
+        continue-on-error: true
+        uses: tsickert/discord-webhook@b217a69502f52803de774ded2b1ab7c282e99645 # v7.0.0
+        with:
+          webhook-url: ${{ secrets.DISCORD_RELEASES_WEBHOOK_URL }}
+          embed-title: vite-plus v${{ env.VERSION }}
+          embed-description: |
+            A new release is available!
+
+            **Published Packages:**
+            • @voidzero-dev/vite-plus-core@${{ env.VERSION }}
+            • vite-plus@${{ env.VERSION }}
+
+            **Docker (GHCR):**
+            • `docker pull ${{ env.IMAGE }}:${{ env.VERSION }}`
+            • Alpine: `${{ env.IMAGE }}:${{ env.VERSION }}-alpine`
+
+            **Install:**
+            • macOS/Linux: `curl -fsSL https://vite.plus | bash`
+            • Windows: `irm https://vite.plus/ps1 | iex`
+          embed-url: https://github.com/${{ github.repository }}/releases/tag/v${{ env.VERSION }}
