@@ -294,8 +294,28 @@ fn print_unknown_argument_error(error: &clap::Error) -> bool {
     true
 }
 
-#[tokio::main]
-async fn main() -> ExitCode {
+fn main() -> ExitCode {
+    // Advertise that this process tree is running under Vite+ so the tools we
+    // invoke (e.g. `vp dlx create-vite`) can detect vp as the package manager.
+    // The underlying package managers overwrite `npm_config_user_agent` with
+    // their own value, so we expose a dedicated variable that is passed through
+    // untouched and inherited by every child process (including the `npx`
+    // fallback used when there is no local `package.json`).
+    //
+    // SAFETY: `set_var` must run while the process is still single-threaded.
+    // This is the first statement in `main`, before the async runtime (and its
+    // worker threads) are created.
+    unsafe {
+        std::env::set_var(
+            vite_shared::env_vars::VP_USER_AGENT,
+            concat!("vp/", env!("CARGO_PKG_VERSION")),
+        );
+    }
+
+    tokio::runtime::Runtime::new().expect("failed to build tokio runtime").block_on(run())
+}
+
+async fn run() -> ExitCode {
     // Initialize tracing
     vite_shared::init_tracing();
 
