@@ -46,7 +46,7 @@ import {
 import type { PackageDependencies } from '../utils/types.ts';
 import { detectWorkspace } from '../utils/workspace.ts';
 import { checkRolldownCompatibility } from './compat-runner.ts';
-import { canFormatWithOxfmt, formatMigratedProject } from './format.ts';
+import { canFormatWithOxfmt, collectChangedFormatPaths, formatMigratedProject } from './format.ts';
 import {
   addFrameworkShim,
   checkVitestVersion,
@@ -129,7 +129,7 @@ async function confirmFrameworkShim(framework: Framework, interactive: boolean):
   return true;
 }
 
-async function ensureYarnNodeModulesMode(
+async function confirmYarnNodeModulesMode(
   rootDir: string,
   packageManager: PackageManager | undefined,
   packageManagerVersion: string,
@@ -165,8 +165,6 @@ async function ensureYarnNodeModulesMode(
     }
   }
 
-  configureYarnNodeModulesMode(rootDir);
-  prompts.log.success('✔ Switched Yarn to node-modules mode');
   return true;
 }
 
@@ -386,7 +384,7 @@ interface MigrationSetupPlan {
 
 interface MigrationPlan extends MigrationSetupPlan {
   packageManager: PackageManager;
-  yarnPnpConverted: boolean;
+  convertYarnPnp: boolean;
   migratePrettier: boolean;
   hasPrettierDependency: boolean;
   prettierConfigFile?: string;
@@ -683,7 +681,7 @@ async function collectMigrationPlan(
   // 1. Package manager selection
   const packageManager =
     detectedPackageManager ?? (await selectPackageManager(options.interactive, true));
-  const yarnPnpConverted = await ensureYarnNodeModulesMode(
+  const convertYarnPnp = await confirmYarnNodeModulesMode(
     rootDir,
     packageManager,
     detectedPackageManager ? detectedPackageManagerVersion : 'latest',
@@ -722,7 +720,7 @@ async function collectMigrationPlan(
 
   const plan: MigrationPlan = {
     packageManager,
-    yarnPnpConverted,
+    convertYarnPnp,
     ...setupPlan,
     migratePrettier,
     hasPrettierDependency: prettierProject.hasDependency,
@@ -947,6 +945,7 @@ async function executeMigrationPlan(
   workspaceInfoOptional: WorkspaceInfoOptional,
   plan: MigrationPlan,
   interactive: boolean,
+  preExistingChangedPaths?: ReadonlySet<string>,
 ): Promise<{
   installDurationMs: number;
   finalInstallOk: boolean;
@@ -954,7 +953,6 @@ async function executeMigrationPlan(
   report: MigrationReport;
 }> {
   const report = createMigrationReport();
-  report.packageManagerBootstrapConfigured = plan.yarnPnpConverted;
   const migrationProgress = interactive ? prompts.spinner({ indicator: 'timer' }) : undefined;
   let migrationProgressStarted = false;
   const updateMigrationProgress = (message: string) => {
@@ -995,6 +993,14 @@ async function executeMigrationPlan(
     packageManager: plan.packageManager,
     downloadPackageManager: downloadResult,
   };
+
+  if (plan.convertYarnPnp) {
+    updateMigrationProgress('Configuring Yarn node-modules mode');
+    report.packageManagerBootstrapConfigured = configureYarnNodeModulesMode(workspaceInfo.rootDir);
+    if (report.packageManagerBootstrapConfigured) {
+      prompts.log.success('✔ Switched Yarn to node-modules mode');
+    }
+  }
 
   // 3. Migrate node version manager file → .node-version (independent of vite version)
   if (plan.migrateNodeVersionFile && plan.nodeVersionDetection) {
@@ -1165,7 +1171,9 @@ async function executeMigrationPlan(
     finalInstallSummary.status === 'installed' &&
     canFormatWithOxfmt(plan.hasPrettierDependency, plan.migratePrettier)
   ) {
-    await formatMigratedProject(workspaceInfo.rootDir, interactive, report);
+    await formatMigratedProject(workspaceInfo.rootDir, interactive, report, {
+      excludedPaths: preExistingChangedPaths,
+    });
   }
   return {
     installDurationMs: initialInstallDurationMs + finalInstallDurationMs,
@@ -1187,6 +1195,8 @@ async function main() {
   printHeader();
 
   const workspaceInfoOptional = await detectWorkspace(projectPath);
+  const initialChangedPaths = await collectChangedFormatPaths(workspaceInfoOptional.rootDir);
+  const preExistingChangedPaths = initialChangedPaths ? new Set(initialChangedPaths) : undefined;
   const resolvedPackageManager = workspaceInfoOptional.packageManager ?? 'unknown';
 
   // Early return if already using Vite+ (only finalization/setup migrations may be needed)
@@ -1195,18 +1205,17 @@ async function main() {
     workspaceInfoOptional.rootDir,
   ) as PackageDependencies | null;
   if (hasVitePlusDependency(rootPkg) && !isForceOverrideMode()) {
-    const yarnPnpConverted = await ensureYarnNodeModulesMode(
+    const convertYarnPnp = await confirmYarnNodeModulesMode(
       workspaceInfoOptional.rootDir,
       workspaceInfoOptional.packageManager,
       workspaceInfoOptional.packageManagerVersion,
       options.interactive,
     );
-    let didMigrate = yarnPnpConverted;
+    let didMigrate = false;
     let installDurationMs = 0;
     let finalInstallOk = true;
     let canFormatMigratedProject = !process.env.VP_SKIP_INSTALL;
     const report = createMigrationReport();
-    report.packageManagerBootstrapConfigured = yarnPnpConverted;
     const migrationProgress = options.interactive
       ? prompts.spinner({ indicator: 'timer' })
       : undefined;
@@ -1291,6 +1300,7 @@ async function main() {
 
     if (
       !didMigrate &&
+      !convertYarnPnp &&
       report.warnings.length === 0 &&
       !vitePlusBootstrapPending &&
       !hasExistingVitePlusMigrationCandidates(workspaceInfoOptional, options)
@@ -1322,7 +1332,7 @@ async function main() {
       workspaceInfoOptional.packages,
     );
 
-    let needsInstall = yarnPnpConverted;
+    let needsInstall = false;
     if (vitePlusBootstrapPending) {
       const downloadResult = await ensureExistingPackageManager();
       if (downloadResult && packageManager) {
@@ -1417,6 +1427,17 @@ async function main() {
         migrateNodeVersionManagerFile(workspaceInfoOptional.rootDir, nodeVersionDetection, report)
       ) {
         didMigrate = true;
+      }
+    }
+
+    if (convertYarnPnp) {
+      updateMigrationProgress('Configuring Yarn node-modules mode');
+      const yarnPnpConverted = configureYarnNodeModulesMode(workspaceInfoOptional.rootDir);
+      if (yarnPnpConverted) {
+        prompts.log.success('✔ Switched Yarn to node-modules mode');
+        report.packageManagerBootstrapConfigured = true;
+        didMigrate = true;
+        needsInstall = true;
       }
     }
 
@@ -1542,7 +1563,9 @@ async function main() {
       canFormatWithOxfmt(prettierProject.hasDependency, prettierMigrated)
     ) {
       clearMigrationProgress();
-      await formatMigratedProject(workspaceInfoOptional.rootDir, options.interactive, report);
+      await formatMigratedProject(workspaceInfoOptional.rootDir, options.interactive, report, {
+        excludedPaths: preExistingChangedPaths,
+      });
     }
 
     if (didMigrate || report.warnings.length > 0) {
@@ -1572,7 +1595,12 @@ async function main() {
   );
 
   // Phase 2: Execute without prompts
-  const result = await executeMigrationPlan(workspaceInfoOptional, plan, options.interactive);
+  const result = await executeMigrationPlan(
+    workspaceInfoOptional,
+    plan,
+    options.interactive,
+    preExistingChangedPaths,
+  );
   showMigrationSummary({
     projectRoot: workspaceInfoOptional.rootDir,
     packageManager: plan.packageManager,

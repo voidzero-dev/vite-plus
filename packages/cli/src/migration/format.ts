@@ -12,7 +12,16 @@ type FormatRunner = (
   options?: { silent?: boolean; command?: string; commandArgs?: string[] },
 ) => Promise<CommandRunSummary>;
 
-type FormatPathCollector = (cwd: string) => Promise<string[] | undefined>;
+type FormatPathCollector = (
+  cwd: string,
+  excludedPaths?: ReadonlySet<string>,
+) => Promise<string[] | undefined>;
+
+interface FormatMigratedProjectOptions {
+  format?: FormatRunner;
+  collectPaths?: FormatPathCollector;
+  excludedPaths?: ReadonlySet<string>;
+}
 
 const FORMAT_FAILURE_MESSAGE =
   'Automatic formatting failed. Run `vp fmt` manually after migration.';
@@ -36,6 +45,7 @@ function isExistingFile(projectRoot: string, relativePath: string): boolean {
  */
 export async function collectChangedFormatPaths(
   projectRoot: string,
+  excludedPaths?: ReadonlySet<string>,
 ): Promise<string[] | undefined> {
   try {
     const git = (args: string[]) =>
@@ -66,7 +76,9 @@ export async function collectChangedFormatPaths(
 
     // Oxfmt owns the supported-file list and skips unknown formats. Passing
     // every existing changed file keeps migration aligned as Oxfmt evolves.
-    return [...changedPaths].filter((file) => isExistingFile(projectRoot, file)).toSorted();
+    return [...changedPaths]
+      .filter((file) => !excludedPaths?.has(file) && isExistingFile(projectRoot, file))
+      .toSorted();
   } catch {
     return undefined;
   }
@@ -93,11 +105,11 @@ export async function formatMigratedProject(
   projectRoot: string,
   interactive: boolean,
   report: MigrationReport,
-  format: FormatRunner = runViteFmt,
-  collectPaths: FormatPathCollector = collectChangedFormatPaths,
+  options: FormatMigratedProjectOptions = {},
 ): Promise<boolean> {
+  const { format = runViteFmt, collectPaths = collectChangedFormatPaths, excludedPaths } = options;
   try {
-    const paths = await collectPaths(projectRoot);
+    const paths = await collectPaths(projectRoot, excludedPaths);
     if (paths?.length === 0) {
       return true;
     }

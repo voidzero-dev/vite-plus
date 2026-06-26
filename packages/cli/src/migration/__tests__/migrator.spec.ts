@@ -105,6 +105,14 @@ describe('Yarn PnP migration preflight', () => {
 
   it('does not classify Yarn Classic or node-modules configuration as PnP', () => {
     expect(detectYarnPnpMode(tmpDir, '1.22.22')).toBeUndefined();
+    fs.writeFileSync(path.join(tmpDir, '.yarnrc.yml'), 'nodeLinker: pnp\n');
+    expect(detectYarnPnpMode(tmpDir, '1.22.22')).toBeUndefined();
+
+    fs.rmSync(path.join(tmpDir, '.yarnrc.yml'));
+    process.env.YARN_NODE_LINKER = 'pnp';
+    expect(detectYarnPnpMode(tmpDir, '1.22.22')).toBeUndefined();
+
+    delete process.env.YARN_NODE_LINKER;
     fs.writeFileSync(path.join(tmpDir, '.yarnrc.yml'), 'nodeLinker: node-modules\n');
     expect(detectYarnPnpMode(tmpDir, '4.12.0')).toBeUndefined();
   });

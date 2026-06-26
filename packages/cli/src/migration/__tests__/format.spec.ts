@@ -17,10 +17,16 @@ describe('formatMigratedProject', () => {
     });
     const report = createMigrationReport();
     const collectPaths = vi.fn().mockResolvedValue(['package.json', 'vite.config.ts']);
+    const excludedPaths = new Set(['notes.md']);
 
     await expect(
-      formatMigratedProject('/project', false, report, format, collectPaths),
+      formatMigratedProject('/project', false, report, {
+        format,
+        collectPaths,
+        excludedPaths,
+      }),
     ).resolves.toBe(true);
+    expect(collectPaths).toHaveBeenCalledWith('/project', excludedPaths);
     expect(format).toHaveBeenCalledWith('/project', false, ['package.json', 'vite.config.ts'], {
       silent: false,
       command: process.execPath,
@@ -35,7 +41,7 @@ describe('formatMigratedProject', () => {
     const collectPaths = vi.fn().mockResolvedValue([]);
 
     await expect(
-      formatMigratedProject('/project', false, report, format, collectPaths),
+      formatMigratedProject('/project', false, report, { format, collectPaths }),
     ).resolves.toBe(true);
     expect(format).not.toHaveBeenCalled();
     expect(report.warnings).toEqual([]);
@@ -49,7 +55,7 @@ describe('formatMigratedProject', () => {
     });
     const report = createMigrationReport();
 
-    await expect(formatMigratedProject('/project', false, report, format)).resolves.toBe(false);
+    await expect(formatMigratedProject('/project', false, report, { format })).resolves.toBe(false);
     expect(report.warnings).toEqual([
       'Automatic formatting failed. Run `vp fmt` manually after migration.',
     ]);
@@ -59,7 +65,7 @@ describe('formatMigratedProject', () => {
     const format = vi.fn().mockRejectedValue(new Error('could not load config'));
     const report = createMigrationReport();
 
-    await expect(formatMigratedProject('/project', false, report, format)).resolves.toBe(false);
+    await expect(formatMigratedProject('/project', false, report, { format })).resolves.toBe(false);
     expect(report.warnings).toEqual([
       'Automatic formatting failed. Run `vp fmt` manually after migration.',
     ]);
@@ -89,15 +95,17 @@ describe('collectChangedFormatPaths', () => {
         { cwd: projectRoot, stdio: 'ignore' },
       );
 
+      fs.writeFileSync(path.join(projectRoot, 'notes.md'), '# existing work\n');
+      const preExistingPaths = await collectChangedFormatPaths(projectRoot);
+      expect(preExistingPaths).toEqual(['notes.md']);
+
       fs.appendFileSync(path.join(projectRoot, 'package.json'), '\n');
       fs.writeFileSync(path.join(projectRoot, 'vite.config.ts'), 'export default {}\n');
       fs.writeFileSync(path.join(projectRoot, 'future.custom'), 'future format\n');
 
-      await expect(collectChangedFormatPaths(projectRoot)).resolves.toEqual([
-        'future.custom',
-        'package.json',
-        'vite.config.ts',
-      ]);
+      await expect(
+        collectChangedFormatPaths(projectRoot, new Set(preExistingPaths)),
+      ).resolves.toEqual(['future.custom', 'package.json', 'vite.config.ts']);
     } finally {
       fs.rmSync(projectRoot, { recursive: true, force: true });
     }

@@ -195,11 +195,11 @@ mod tests {
     fn test_rewrite_prettier_bunx() {
         assert_eq!(
             rewrite_prettier_script("bunx --bun prettier --write --single-quote ."),
-            "bunx --bun vp fmt ."
+            "bunx vp fmt ."
         );
         assert_eq!(
             rewrite_prettier_script("dotenv -e .env -- bunx --bun prettier --check ."),
-            "dotenv -e .env -- bunx --bun vp fmt --check ."
+            "dotenv -e .env -- bunx vp fmt --check ."
         );
         assert_eq!(
             rewrite_prettier_script("bunx --bun prettier-plugin-foo"),

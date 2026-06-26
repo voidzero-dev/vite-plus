@@ -170,6 +170,7 @@ struct CommandWord {
 
 struct BunxInvocation {
     target_suffix_index: usize,
+    forced_bun_suffix_indices: Vec<usize>,
 }
 
 fn collect_command_words(cmd: &ast::SimpleCommand) -> Vec<CommandWord> {
@@ -195,7 +196,7 @@ fn collect_command_words(cmd: &ast::SimpleCommand) -> Vec<CommandWord> {
     words
 }
 
-fn bunx_target(words: &[CommandWord], start: usize) -> Option<usize> {
+fn bunx_target(words: &[CommandWord], start: usize) -> Option<(usize, Vec<usize>)> {
     let contiguous = |left: usize, right: usize| {
         words.get(left).zip(words.get(right)).is_some_and(|(a, b)| b.ordinal == a.ordinal + 1)
     };
@@ -205,11 +206,15 @@ fn bunx_target(words: &[CommandWord], start: usize) -> Option<usize> {
         return None;
     }
     let mut target = next(start)?;
+    let mut forced_bun_suffix_indices = Vec::new();
 
     while words.get(target)?.value == "--bun" {
+        if let CommandWordPosition::Suffix(index) = words[target].position {
+            forced_bun_suffix_indices.push(index);
+        }
         target = next(target)?;
     }
-    Some(target)
+    Some((target, forced_bun_suffix_indices))
 }
 
 fn find_bunx_invocations(cmd: &ast::SimpleCommand) -> Vec<BunxInvocation> {
@@ -217,7 +222,7 @@ fn find_bunx_invocations(cmd: &ast::SimpleCommand) -> Vec<BunxInvocation> {
     let mut invocations = Vec::new();
 
     for start in 0..words.len() {
-        let Some(target) = bunx_target(&words, start) else {
+        let Some((target, forced_bun_suffix_indices)) = bunx_target(&words, start) else {
             continue;
         };
         let CommandWordPosition::Suffix(target_suffix_index) = words[target].position else {
@@ -239,7 +244,7 @@ fn find_bunx_invocations(cmd: &ast::SimpleCommand) -> Vec<BunxInvocation> {
                 }),
         };
         if allowed_position {
-            invocations.push(BunxInvocation { target_suffix_index });
+            invocations.push(BunxInvocation { target_suffix_index, forced_bun_suffix_indices });
         }
     }
 
@@ -309,13 +314,17 @@ fn rewrite_bunx_in_simple_command(
             replacement_items.extend(inner_suffix.0);
         }
         suffix.0.splice(invocation.target_suffix_index.., replacement_items);
+        for index in invocation.forced_bun_suffix_indices.iter().rev() {
+            suffix.0.remove(*index);
+        }
         return true;
     }
     false
 }
 
-/// Rewrite commands launched through `bunx`. The runner and its flags are
-/// preserved; only an inner command changed by the supplied rewriter is replaced.
+/// Rewrite commands launched through `bunx`. The runner is preserved, but its
+/// `--bun` flag is removed when the inner command becomes `vp` so Vite+ runs
+/// through its Node runtime rather than being forced into Bun.
 pub(crate) fn rewrite_bunx_commands(
     script: &str,
     mut rewrite_inner: impl FnMut(&str) -> String,

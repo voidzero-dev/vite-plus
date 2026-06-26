@@ -29,8 +29,12 @@ function isBunProject(packageJsonPath) {
   const packageManager =
     typeof pkg.packageManager === 'string' ? pkg.packageManager.split('@')[0] : undefined;
   const devEngine = pkg.devEngines?.packageManager;
-  const devEngineName = typeof devEngine === 'string' ? devEngine : devEngine?.name;
-  process.exit(packageManager === 'bun' || devEngineName === 'bun' ? 0 : 1);
+  const devEngines = Array.isArray(devEngine) ? devEngine : [devEngine];
+  const hasBunDevEngine = devEngines.some((entry) => {
+    const name = typeof entry === 'string' ? entry : entry?.name;
+    return name === 'bun';
+  });
+  process.exit(packageManager === 'bun' || hasBunDevEngine ? 0 : 1);
 }
 
 function patchPackage(packageJsonPath, coreUrl, vitePlusUrl) {

@@ -291,36 +291,31 @@ fix: vp pack
             rewrite_script("NODE_ENV=test oxlint --type-aware", &rules),
             "NODE_ENV=test vp lint --type-aware"
         );
-        // bunx and its flags are preserved while managed commands are rewritten
-        assert_eq!(rewrite_script("bunx --bun vite build", &rules), "bunx --bun vp build");
-        assert_eq!(rewrite_script("bunx --bun vite preview", &rules), "bunx --bun vp preview");
-        assert_eq!(rewrite_script("bunx --bun vitest run", &rules), "bunx --bun vp test run");
+        // bunx is preserved, but --bun is removed so vp runs through Node
+        assert_eq!(rewrite_script("bunx --bun vite build", &rules), "bunx vp build");
+        assert_eq!(rewrite_script("bunx --bun vite preview", &rules), "bunx vp preview");
+        assert_eq!(rewrite_script("bunx --bun vitest run", &rules), "bunx vp test run");
         assert_eq!(
             rewrite_script("bunx --bun oxlint --type-aware", &rules),
-            "bunx --bun vp lint --type-aware"
+            "bunx vp lint --type-aware"
         );
-        assert_eq!(
-            rewrite_script("bunx --bun oxfmt --check .", &rules),
-            "bunx --bun vp fmt --check ."
-        );
-        assert_eq!(
-            rewrite_script("bunx --bun tsdown --watch", &rules),
-            "bunx --bun vp pack --watch"
-        );
-        assert_eq!(rewrite_script("bunx --bun lint-staged", &rules), "bunx --bun vp staged");
+        assert_eq!(rewrite_script("bunx --bun oxfmt --check .", &rules), "bunx vp fmt --check .");
+        assert_eq!(rewrite_script("bunx --bun tsdown --watch", &rules), "bunx vp pack --watch");
+        assert_eq!(rewrite_script("bunx --bun lint-staged", &rules), "bunx vp staged");
         assert_eq!(
             rewrite_script("NODE_ENV=development portless --tailscale run bunx --bun vite", &rules,),
-            "NODE_ENV=development portless --tailscale run bunx --bun vp dev"
+            "NODE_ENV=development portless --tailscale run bunx vp dev"
         );
         assert_eq!(
             rewrite_script("dotenv -e .env.test -- bunx --bun vitest run", &rules),
-            "dotenv -e .env.test -- bunx --bun vp test run"
+            "dotenv -e .env.test -- bunx vp test run"
         );
         // unrelated executor calls and non-launcher arguments stay unchanged
         assert_eq!(
             rewrite_script("bunx --bun playwright test", &rules),
             "bunx --bun playwright test"
         );
+        assert_eq!(rewrite_script("bunx --bun jest", &rules), "bunx --bun jest");
         assert_eq!(rewrite_script("bunx --bun vp build", &rules), "bunx --bun vp build");
         assert_eq!(
             rewrite_script("echo bunx --bun vite build", &rules),

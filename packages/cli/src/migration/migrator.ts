@@ -2758,6 +2758,11 @@ export function detectYarnPnpMode(
   projectPath: string,
   yarnVersion: string,
 ): YarnPnpDetection | undefined {
+  const coercedVersion = semver.coerce(yarnVersion);
+  if (coercedVersion?.major === 1) {
+    return undefined;
+  }
+
   const environmentLinker = process.env.YARN_NODE_LINKER?.trim();
   if (environmentLinker) {
     return environmentLinker.toLowerCase() === 'pnp' ? { source: 'environment' } : undefined;
@@ -2772,8 +2777,7 @@ export function detectYarnPnpMode(
     return configuredLinker.toLowerCase() === 'pnp' ? { source: 'configuration' } : undefined;
   }
 
-  const coercedVersion = semver.coerce(yarnVersion);
-  return coercedVersion?.major === 1 ? undefined : { source: 'default' };
+  return { source: 'default' };
 }
 
 /** Set the project-local Yarn linker while preserving every other rc setting. */

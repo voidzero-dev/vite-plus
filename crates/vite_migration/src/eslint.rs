@@ -161,11 +161,11 @@ mod tests {
     fn test_rewrite_eslint_bunx() {
         assert_eq!(
             rewrite_eslint_script("bunx --bun eslint --cache --fix ."),
-            "bunx --bun vp lint --fix ."
+            "bunx vp lint --fix ."
         );
         assert_eq!(
             rewrite_eslint_script("dotenv -e .env -- bunx --bun eslint --ext .ts ."),
-            "dotenv -e .env -- bunx --bun vp lint ."
+            "dotenv -e .env -- bunx vp lint ."
         );
         assert_eq!(
             rewrite_eslint_script("bunx --bun eslint-plugin-foo"),
