@@ -1,10 +1,5 @@
 {
-  "env": {
-    "PNPM_CONFIG_BLOCK_EXOTIC_SUBDEPS": "false",
-    "VP_FORCE_MIGRATE": "1",
-    "VP_OVERRIDE_PACKAGES": "{\"vite\":\"https://pkg.pr.new/voidzero-dev/vite-plus/@voidzero-dev/vite-plus-core@0c515e3fbf5c140db35280d700df0bd600838617\"}",
-    "VP_VERSION": "https://pkg.pr.new/voidzero-dev/vite-plus@0c515e3fbf5c140db35280d700df0bd600838617"
-  },
+  "env": {},
   "commands": [
     "vp migrate --no-interactive # reuse the managed named catalog beside catalogs.default",
     "cat package.json # existing catalog:build dependency references are preserved",
