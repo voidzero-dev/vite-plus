@@ -25,18 +25,23 @@ ARG VP_VERSION=latest
 #   docker build --build-arg VP_PR_VERSION=1569 .
 ARG VP_PR_VERSION=
 
-# Toolchain image: include git and a C/C++ build toolchain so native addons
-# (for example better-sqlite3 or sharp) can compile during `vp install`.
+# Toolchain image: include git (+ openssh-client for git+ssh dependencies) and a
+# C/C++ build toolchain so native addons (for example better-sqlite3 or sharp)
+# can compile during `vp install`.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       ca-certificates \
       curl \
       git \
+      openssh-client \
       build-essential \
       python3 \
       pkg-config \
  && rm -rf /var/lib/apt/lists/* \
- && useradd --create-home --shell /bin/bash vp
+ && useradd --create-home --shell /bin/bash vp \
+ # Own /app for the vp user so downstream `WORKDIR /app` + `vp install` can write.
+ && mkdir -p /app \
+ && chown vp:vp /app
 
 # Run as a non-root user by default (mirrors oven/bun's `bun` and Deno's `deno`).
 USER vp

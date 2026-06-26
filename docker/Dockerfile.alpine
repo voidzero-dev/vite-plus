@@ -25,16 +25,21 @@ ARG VP_VERSION=latest
 # Optional: build a preview image from a pkg.pr.new build instead of npm.
 ARG VP_PR_VERSION=
 
-# build-base + python3 let native addons compile from source on musl.
+# build-base + python3 let native addons compile from source on musl;
+# openssh-client supports git+ssh dependencies.
 RUN apk add --no-cache \
       bash \
       ca-certificates \
       curl \
       git \
+      openssh-client \
       tar \
       build-base \
       python3 \
- && adduser -D -s /bin/bash vp
+ && adduser -D -s /bin/bash vp \
+ # Own /app for the vp user so downstream `WORKDIR /app` + `vp install` can write.
+ && mkdir -p /app \
+ && chown vp:vp /app
 
 # Run as a non-root user by default (mirrors oven/bun's `bun` and Deno's `deno`).
 USER vp
