@@ -2,7 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-const SAFE_PNPM_VERSION = '11.9.0';
+const LATEST_PNPM_10_VERSION = '10.34.4';
+const SAFE_PNPM_11_VERSION = '11.9.0';
 const SUPPORTED_PACKAGE_MANAGERS = new Set(['pnpm', 'yarn', 'npm', 'bun']);
 
 function parseExactVersion(version) {
@@ -66,15 +67,26 @@ function compareVersions(left, right) {
   return 0;
 }
 
-function isAffectedPnpmVersion(version) {
+function safePnpmVersionFor(version) {
   const parsed = parseExactVersion(version);
-  const lower = parseExactVersion('11.0.0');
-  const upper = parseExactVersion(SAFE_PNPM_VERSION);
-  return (
-    parsed !== undefined &&
-    compareVersions(parsed, lower) >= 0 &&
-    compareVersions(parsed, upper) < 0
-  );
+  if (!parsed) {
+    return undefined;
+  }
+
+  // pnpm before 10.2.0 rewrites non-semver overrides into peerDependencies,
+  // causing pkg.pr.new URLs to fail peer-spec validation. Stay on the same
+  // major and use the latest v10 release containing pnpm/pnpm#9000.
+  if (parsed.major === 10 && compareVersions(parsed, parseExactVersion('10.2.0')) < 0) {
+    return LATEST_PNPM_10_VERSION;
+  }
+
+  const pnpm11Lower = parseExactVersion('11.0.0');
+  const pnpm11Upper = parseExactVersion(SAFE_PNPM_11_VERSION);
+  if (compareVersions(parsed, pnpm11Lower) >= 0 && compareVersions(parsed, pnpm11Upper) < 0) {
+    return SAFE_PNPM_11_VERSION;
+  }
+
+  return undefined;
 }
 
 function parsePackageManagerSpec(spec) {
@@ -104,13 +116,13 @@ function serializeLike(source, pkg) {
   return JSON.stringify(pkg, null, indent).replaceAll('\n', newline) + finalNewline;
 }
 
-function replacePackageManagerSpec(source, previousSpec) {
+function replacePackageManagerSpec(source, previousSpec, targetVersion) {
   const pattern = /("packageManager"\s*:\s*)("(?:\\.|[^"\\])*")/g;
   return source.replace(pattern, (match, prefix, value) => {
     if (JSON.parse(value) !== previousSpec) {
       return match;
     }
-    return `${prefix}${JSON.stringify(`pnpm@${SAFE_PNPM_VERSION}`)}`;
+    return `${prefix}${JSON.stringify(`pnpm@${targetVersion}`)}`;
   });
 }
 
@@ -118,16 +130,18 @@ export function ensureSafePkgPrNewPnpmVersion(source) {
   const pkg = JSON.parse(source);
   const previousVersions = [];
   let packageManagerSpec;
+  let targetVersion;
   let devEnginesChanged = false;
 
   if (typeof pkg.packageManager === 'string') {
     const parsed = parsePackageManagerSpec(pkg.packageManager);
-    if (parsed?.name !== 'pnpm' || !isAffectedPnpmVersion(parsed.version)) {
+    targetVersion = parsed?.name === 'pnpm' ? safePnpmVersionFor(parsed.version) : undefined;
+    if (!targetVersion) {
       return { changed: false, source, previousVersions };
     }
     packageManagerSpec = pkg.packageManager;
     previousVersions.push(parsed.version);
-    pkg.packageManager = `pnpm@${SAFE_PNPM_VERSION}`;
+    pkg.packageManager = `pnpm@${targetVersion}`;
 
     // Keep exact pnpm devEngines constraints in sync with the authoritative
     // packageManager field so the two declarations do not conflict.
@@ -135,35 +149,35 @@ export function ensureSafePkgPrNewPnpmVersion(source) {
       if (
         entry.name === 'pnpm' &&
         typeof entry.version === 'string' &&
-        isAffectedPnpmVersion(entry.version)
+        safePnpmVersionFor(entry.version)
       ) {
         previousVersions.push(entry.version);
-        entry.version = SAFE_PNPM_VERSION;
+        entry.version = targetVersion;
         devEnginesChanged = true;
       }
     }
   } else {
     const selected = selectedDevEngineEntry(pkg);
-    if (
-      selected?.name !== 'pnpm' ||
-      typeof selected.version !== 'string' ||
-      !isAffectedPnpmVersion(selected.version)
-    ) {
+    targetVersion =
+      selected?.name === 'pnpm' && typeof selected.version === 'string'
+        ? safePnpmVersionFor(selected.version)
+        : undefined;
+    if (!targetVersion || selected?.name !== 'pnpm' || typeof selected.version !== 'string') {
       return { changed: false, source, previousVersions };
     }
     previousVersions.push(selected.version);
-    selected.version = SAFE_PNPM_VERSION;
+    selected.version = targetVersion;
     devEnginesChanged = true;
   }
 
   const updatedSource = devEnginesChanged
     ? serializeLike(source, pkg)
-    : replacePackageManagerSpec(source, packageManagerSpec);
+    : replacePackageManagerSpec(source, packageManagerSpec, targetVersion);
   return {
     changed: true,
     source: updatedSource,
     previousVersions: [...new Set(previousVersions)],
-    version: SAFE_PNPM_VERSION,
+    version: targetVersion,
   };
 }
 
@@ -179,7 +193,7 @@ if (invokedPath === import.meta.url) {
   if (result.changed) {
     fs.writeFileSync(packageJsonPath, result.source);
     console.log(
-      `Updating project pnpm ${result.previousVersions.join(', ')} -> ${result.version} to avoid pkg.pr.new tarball integrity failures`,
+      `Updating project pnpm ${result.previousVersions.join(', ')} -> ${result.version} to avoid pkg.pr.new install failures`,
     );
   }
 }

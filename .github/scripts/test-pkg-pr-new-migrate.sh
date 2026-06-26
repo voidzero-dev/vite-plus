@@ -77,9 +77,11 @@ if command -v git >/dev/null 2>&1 && git -C "$project_dir" rev-parse --is-inside
   fi
 fi
 
-# pnpm 11.0.0 through 11.8.x can write pkg.pr.new tarball lock entries without
-# integrity metadata, which a later frozen install rejects. Upgrade the
-# project's package-manager pin before migration resolves or invokes pnpm.
+# pnpm 10 before 10.2.0 rewrites pkg.pr.new URL overrides into workspace peer
+# declarations, which then fail peer-spec validation. pnpm 11.0.0 through
+# 11.8.x can write pkg.pr.new tarball lock entries without integrity metadata,
+# which a later frozen install rejects. Upgrade affected package-manager pins
+# before migration resolves or invokes pnpm.
 node "$pnpm_version_helper" "$project_dir/package.json"
 
 original_home="$HOME"
