@@ -4,11 +4,16 @@ import path from 'node:path';
 import { styleText } from 'node:util';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
-import detectIndent from 'detect-indent';
-import { detectNewline } from 'detect-newline';
-import { applyEdits, type FormattingOptions, modify, parse as parseJsonc } from 'jsonc-parser';
+import {
+  applyEdits,
+  type FormattingOptions,
+  type JSONPath,
+  modify,
+  type ModificationOptions,
+  parse as parseJsonc,
+} from 'jsonc-parser';
 
-import { writeJsonFile } from './json.ts';
+import { detectFormattingOptions, writeJsonFile } from './json.ts';
 
 // Language-specific overrides because user-level [lang] settings beat the workspace default
 const VSCODE_LANGUAGE_OVERRIDES = {
@@ -490,14 +495,14 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function detectFormattingOptions(text: string): FormattingOptions {
-  const detected = detectIndent(text);
-  const eol = detectNewline(text) ?? '\n';
-  return {
-    insertSpaces: detected.type !== 'tab',
-    tabSize: detected.amount || 2,
-    eol,
-  };
+/** Apply a single `jsonc-parser` modification to `text` and return the patched text. */
+function applyJsoncEdit(
+  text: string,
+  path: JSONPath,
+  value: unknown,
+  options: ModificationOptions,
+): string {
+  return applyEdits(text, modify(text, path, value, options));
 }
 
 /**
@@ -515,15 +520,12 @@ function mergeSettingsText(
   const insertMissing = (
     existingNode: Record<string, unknown>,
     incomingNode: Record<string, unknown>,
-    basePath: (string | number)[],
+    basePath: JSONPath,
   ) => {
     for (const [key, value] of Object.entries(incomingNode)) {
       const fullPath = [...basePath, key];
       if (!(key in existingNode)) {
-        currentText = applyEdits(
-          currentText,
-          modify(currentText, fullPath, value, { formattingOptions }),
-        );
+        currentText = applyJsoncEdit(currentText, fullPath, value, { formattingOptions });
       } else if (isPlainObject(existingNode[key]) && isPlainObject(value)) {
         insertMissing(existingNode[key], value, fullPath);
       }
@@ -551,7 +553,7 @@ function mergeExtensionsText(
 
   // No existing recommendations key: insert the incoming array as-is.
   if (!('recommendations' in existing)) {
-    return applyEdits(text, modify(text, ['recommendations'], incomingRecs, { formattingOptions }));
+    return applyJsoncEdit(text, ['recommendations'], incomingRecs, { formattingOptions });
   }
 
   // Unexpected non-array value: existing user value wins, leave it untouched.
@@ -559,20 +561,17 @@ function mergeExtensionsText(
     return text;
   }
 
-  const existingRecs = existingValue as unknown[];
+  const existingRecs = new Set<unknown>(existingValue);
   let currentText = text;
-  let nextIndex = existingRecs.length;
+  let nextIndex = existingValue.length;
   for (const rec of incomingRecs) {
-    if (existingRecs.includes(rec)) {
+    if (existingRecs.has(rec)) {
       continue;
     }
-    currentText = applyEdits(
-      currentText,
-      modify(currentText, ['recommendations', nextIndex], rec, {
-        formattingOptions,
-        isArrayInsertion: true,
-      }),
-    );
+    currentText = applyJsoncEdit(currentText, ['recommendations', nextIndex], rec, {
+      formattingOptions,
+      isArrayInsertion: true,
+    });
     nextIndex++;
   }
   return currentText;

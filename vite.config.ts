@@ -65,6 +65,8 @@ export default defineConfig({
       '**/tmp/**',
       'packages/cli/snap-tests/check-*/**',
       'packages/cli/snap-tests/fmt-ignore-patterns/src/ignored',
+      // JSONC fixtures intentionally keep comments and trailing commas
+      'packages/cli/snap-tests/migration-preserve-editor-jsonc-comments/.vscode/**',
       'packages/cli/snap-tests-global/migration-lint-staged-ts-config',
       'packages/cli/snap-tests-global/migration-partially-installed-vite-plus/**',
       'ecosystem-ci/*/**',
