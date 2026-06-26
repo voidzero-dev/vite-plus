@@ -86,6 +86,17 @@ exports[`rewritePackageJson > should rewrite package.json scripts and extract st
     "test_run": "vp test run && vp test --ui",
     "version": "vp --version",
     "version_short": "vp -v",
+    "wrapped_build": "bunx --bun vp build",
+    "wrapped_dev": "bunx --bun vp dev",
+    "wrapped_fmt": "bunx --bun vp fmt --check .",
+    "wrapped_lint": "bunx --bun vp lint --type-aware",
+    "wrapped_nested_dev": "NODE_ENV=development portless --tailscale run bunx --bun vp dev",
+    "wrapped_nested_test": "dotenv -e .env.test -- bunx --bun vp test run",
+    "wrapped_pack": "bunx --bun vp pack --watch",
+    "wrapped_preview": "bunx --bun vp preview",
+    "wrapped_staged": "bunx --bun vp staged",
+    "wrapped_test": "bunx --bun vp test run",
+    "wrapped_unrelated": "bunx --bun playwright test",
   },
 }
 `;

@@ -567,6 +567,20 @@ A successful migration should:
 8. ✅ Handle monorepo migrations efficiently
 9. ✅ Be safe and transparent about what changes
 
+## Bunx Script Rewriting
+
+The normal script rules rewrite `vite`, `vitest`, `oxlint`, `oxfmt`, `tsdown`,
+and `lint-staged` to their corresponding `vp` commands. When one of these tools
+is launched through `bunx`, migration preserves `bunx` and its flags and
+rewrites only the inner command. For example, `bunx --bun vite build` becomes
+`bunx --bun vp build` and `bunx --bun vitest run` becomes
+`bunx --bun vp test run`.
+
+The same behavior applies to `eslint` and `prettier` when their optional
+migrations run. Nested launcher forms such as
+`portless --tailscale run bunx --bun vite` are also handled. Other package
+executors remain unchanged and can be addressed separately.
+
 ## ESLint Migration
 
 When an ESLint flat config (`eslint.config.{js,mjs,cjs,ts,mts,cts}`) and `eslint` dependency are detected, `vp migrate` offers to convert the ESLint configuration to oxlint using [`@oxlint/migrate`](https://www.npmjs.com/package/@oxlint/migrate).
@@ -585,15 +599,16 @@ When an ESLint flat config (`eslint.config.{js,mjs,cjs,ts,mts,cts}`) and `eslint
 
 **Script Rewriting** (powered by [brush-parser](https://github.com/reubeno/brush) for shell AST parsing):
 
-| Before                                     | After                                        |
-| ------------------------------------------ | -------------------------------------------- |
-| `eslint .`                                 | `vp lint .`                                  |
-| `eslint --cache --ext .ts --fix .`         | `vp lint --fix .`                            |
-| `NODE_ENV=test eslint --cache .`           | `NODE_ENV=test vp lint .`                    |
-| `cross-env NODE_ENV=test eslint --cache .` | `cross-env NODE_ENV=test vp lint .`          |
-| `eslint . && vite build`                   | `vp lint . && vite build`                    |
-| `if [ -f .eslintrc ]; then eslint .; fi`   | `if [ -f .eslintrc ]; then vp lint . fi`     |
-| `npx eslint .`                             | `npx eslint .` (npx/bunx wrappers preserved) |
+| Before                                     | After                                    |
+| ------------------------------------------ | ---------------------------------------- |
+| `eslint .`                                 | `vp lint .`                              |
+| `eslint --cache --ext .ts --fix .`         | `vp lint --fix .`                        |
+| `NODE_ENV=test eslint --cache .`           | `NODE_ENV=test vp lint .`                |
+| `cross-env NODE_ENV=test eslint --cache .` | `cross-env NODE_ENV=test vp lint .`      |
+| `eslint . && vite build`                   | `vp lint . && vite build`                |
+| `if [ -f .eslintrc ]; then eslint .; fi`   | `if [ -f .eslintrc ]; then vp lint . fi` |
+| `bunx --bun eslint .`                      | `bunx --bun vp lint .`                   |
+| `npx eslint .`                             | `npx eslint .` (unchanged)               |
 
 Stripped ESLint-only flags: `--cache`, `--ext`, `--parser`, `--parser-options`, `--plugin`, `--rulesdir`, `--resolve-plugins-relative-to`, `--output-file`, `--env`, `--no-eslintrc`, `--no-error-on-unmatched-pattern`, `--debug`, `--no-inline-config`
 
@@ -636,19 +651,20 @@ When a Prettier configuration file (`.prettierrc*`, `prettier.config.*`, or `"pr
 
 **Script Rewriting** (powered by [brush-parser](https://github.com/reubeno/brush) for shell AST parsing):
 
-| Before                                            | After                                                  |
-| ------------------------------------------------- | ------------------------------------------------------ |
-| `prettier .`                                      | `vp fmt .`                                             |
-| `prettier --write .`                              | `vp fmt .`                                             |
-| `prettier --check .`                              | `vp fmt --check .`                                     |
-| `prettier --list-different .`                     | `vp fmt --check .`                                     |
-| `prettier -l .`                                   | `vp fmt --check .`                                     |
-| `prettier --write --single-quote --tab-width 4 .` | `vp fmt .`                                             |
-| `prettier --config .prettierrc --write .`         | `vp fmt .`                                             |
-| `prettier --plugin prettier-plugin-tailwindcss .` | `vp fmt .`                                             |
-| `cross-env NODE_ENV=test prettier --write .`      | `cross-env NODE_ENV=test vp fmt .`                     |
-| `prettier --write . && eslint --fix .`            | `vp fmt . && eslint --fix .`                           |
-| `npx prettier --write .`                          | `npx prettier --write .` (npx/bunx wrappers preserved) |
+| Before                                            | After                                |
+| ------------------------------------------------- | ------------------------------------ |
+| `prettier .`                                      | `vp fmt .`                           |
+| `prettier --write .`                              | `vp fmt .`                           |
+| `prettier --check .`                              | `vp fmt --check .`                   |
+| `prettier --list-different .`                     | `vp fmt --check .`                   |
+| `prettier -l .`                                   | `vp fmt --check .`                   |
+| `prettier --write --single-quote --tab-width 4 .` | `vp fmt .`                           |
+| `prettier --config .prettierrc --write .`         | `vp fmt .`                           |
+| `prettier --plugin prettier-plugin-tailwindcss .` | `vp fmt .`                           |
+| `cross-env NODE_ENV=test prettier --write .`      | `cross-env NODE_ENV=test vp fmt .`   |
+| `prettier --write . && eslint --fix .`            | `vp fmt . && eslint --fix .`         |
+| `bunx --bun prettier --write .`                   | `bunx --bun vp fmt .`                |
+| `npx prettier --write .`                          | `npx prettier --write .` (unchanged) |
 
 **Stripped Prettier-only flags**:
 

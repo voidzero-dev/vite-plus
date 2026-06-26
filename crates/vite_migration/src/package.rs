@@ -3,7 +3,10 @@ use ast_grep_language::SupportLang;
 use serde_json::{Map, Value};
 use vite_error::Error;
 
-use crate::{ast_grep, eslint::rewrite_eslint_script, prettier::rewrite_prettier_script};
+use crate::{
+    ast_grep, eslint::rewrite_eslint_script, prettier::rewrite_prettier_script,
+    script_rewrite::rewrite_bunx_commands,
+};
 
 // Marker to replace "cross-env " before ast-grep processing
 // Using a fake env var assignment that won't match our rules
@@ -22,8 +25,11 @@ fn rewrite_script(script: &str, rules: &[RuleConfig<SupportLang>]) -> String {
         script.to_string()
     };
 
-    // Step 2: Process with ast-grep
-    let result = ast_grep::apply_loaded_rules(&preprocessed, rules);
+    // Step 2: Rewrite commands behind bunx only when their inner command
+    // matches an active rule, then process ordinary commands.
+    let rewritten_bunx =
+        rewrite_bunx_commands(&preprocessed, |inner| ast_grep::apply_loaded_rules(inner, rules));
+    let result = ast_grep::apply_loaded_rules(&rewritten_bunx, rules);
 
     // Step 3: Replace cross-env marker back with "cross-env " (only if we replaced it)
 
@@ -172,6 +178,15 @@ rule:
   regex: '^vitest$'
 fix: vp test
 
+# lint-staged => vp staged
+---
+id: replace-lint-staged
+language: bash
+rule:
+  kind: command_name
+  regex: '^lint-staged$'
+fix: vp staged
+
 # tsdown => vp pack
 ---
 id: replace-tsdown
@@ -276,6 +291,43 @@ fix: vp pack
             rewrite_script("NODE_ENV=test oxlint --type-aware", &rules),
             "NODE_ENV=test vp lint --type-aware"
         );
+        // bunx and its flags are preserved while managed commands are rewritten
+        assert_eq!(rewrite_script("bunx --bun vite build", &rules), "bunx --bun vp build");
+        assert_eq!(rewrite_script("bunx --bun vite preview", &rules), "bunx --bun vp preview");
+        assert_eq!(rewrite_script("bunx --bun vitest run", &rules), "bunx --bun vp test run");
+        assert_eq!(
+            rewrite_script("bunx --bun oxlint --type-aware", &rules),
+            "bunx --bun vp lint --type-aware"
+        );
+        assert_eq!(
+            rewrite_script("bunx --bun oxfmt --check .", &rules),
+            "bunx --bun vp fmt --check ."
+        );
+        assert_eq!(
+            rewrite_script("bunx --bun tsdown --watch", &rules),
+            "bunx --bun vp pack --watch"
+        );
+        assert_eq!(rewrite_script("bunx --bun lint-staged", &rules), "bunx --bun vp staged");
+        assert_eq!(
+            rewrite_script("NODE_ENV=development portless --tailscale run bunx --bun vite", &rules,),
+            "NODE_ENV=development portless --tailscale run bunx --bun vp dev"
+        );
+        assert_eq!(
+            rewrite_script("dotenv -e .env.test -- bunx --bun vitest run", &rules),
+            "dotenv -e .env.test -- bunx --bun vp test run"
+        );
+        // unrelated executor calls and non-launcher arguments stay unchanged
+        assert_eq!(
+            rewrite_script("bunx --bun playwright test", &rules),
+            "bunx --bun playwright test"
+        );
+        assert_eq!(rewrite_script("bunx --bun vp build", &rules), "bunx --bun vp build");
+        assert_eq!(
+            rewrite_script("echo bunx --bun vite build", &rules),
+            "echo bunx --bun vite build"
+        );
+        assert_eq!(rewrite_script("npx vite build", &rules), "npx vite build");
+        assert_eq!(rewrite_script("bun x vite build", &rules), "bun x vite build");
         // oxlint commands
         assert_eq!(rewrite_script("oxlint", &rules), "vp lint");
         assert_eq!(rewrite_script("oxlint --type-aware", &rules), "vp lint --type-aware");

@@ -148,6 +148,27 @@ user-defined scopes rather than scalar version pins.
 The `prefer-vite-plus-imports` lint rule follows the same Nuxt exception, so
 lint autofix preserves these imports.
 
+## Package Script Rewrite Rules
+
+Migration rewrites commands provided by the Vite+ toolchain while preserving
+their arguments: `vite` to `vp dev` or the matching `vp` subcommand, `vitest` to
+`vp test`, `oxlint` to `vp lint`, `oxfmt` to `vp fmt`, `tsdown` to `vp pack`, and
+`lint-staged` to `vp staged`. When their optional migrations run, `eslint` and
+`prettier` are similarly rewritten to `vp lint` and `vp fmt`.
+
+For commands launched through `bunx`, migration preserves `bunx` and its
+runner flags and rewrites only the managed command. This also works when
+`bunx` follows a command-launcher delimiter such as `run` or `--`:
+
+| Before                                                  | After                                                    |
+| ------------------------------------------------------- | -------------------------------------------------------- |
+| `bunx --bun vite build`                                 | `bunx --bun vp build`                                    |
+| `bunx --bun vitest run`                                 | `bunx --bun vp test run`                                 |
+| `portless --tailscale run bunx --bun vite`              | `portless --tailscale run bunx --bun vp dev`             |
+| `dotenv -e .env.test -- bunx --bun oxlint --type-aware` | `dotenv -e .env.test -- bunx --bun vp lint --type-aware` |
+
+Unrelated `bunx` commands and other package-executor forms remain unchanged.
+
 ## Package-Manager Rules
 
 ### pnpm
