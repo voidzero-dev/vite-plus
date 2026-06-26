@@ -1,10 +1,10 @@
-> vp migrate --no-interactive # migration should rewrite bare eslint but leave npx wrappers unchanged
+> vp migrate --no-interactive # migration should rewrite bare and bunx eslint but leave other wrappers unchanged
 ◇ Migrated . to Vite+
 • Node <semver>  pnpm <semver>
 • 4 config updates applied
 • ESLint rules migrated to Oxlint
 
-> cat package.json # check eslint removed, bare eslint rewritten, npx/pnpm exec/bunx wrappers unchanged
+> cat package.json # check eslint removed, bare and bunx eslint rewritten, npx/pnpm exec unchanged
 {
   "name": "migration-eslint-npx-wrapper",
   "scripts": {
@@ -12,7 +12,7 @@
     "build": "vp build",
     "lint": "npx eslint .",
     "lint:fix": "pnpm exec eslint --fix .",
-    "lint:bunx": "bunx eslint .",
+    "lint:bunx": "bunx vp lint .",
     "lint:bare": "vp lint --fix .",
     "prepare": "vp config"
   },

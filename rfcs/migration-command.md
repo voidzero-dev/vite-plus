@@ -581,6 +581,14 @@ migrations run. Nested launcher forms such as
 `portless --tailscale run bunx --bun vite` are also handled. Other package
 executors remain unchanged and can be addressed separately.
 
+## Post-Migration Formatting
+
+After a successful install, migration runs the formatter only on supported
+files changed in the Git worktree. This formats manifests, generated config,
+and rewritten source without reformatting unrelated files in a large project.
+Non-Git projects retain full-project formatting. Projects that still use
+Prettier are not formatted automatically.
+
 ## ESLint Migration
 
 When an ESLint flat config (`eslint.config.{js,mjs,cjs,ts,mts,cts}`) and `eslint` dependency are detected, `vp migrate` offers to convert the ESLint configuration to oxlint using [`@oxlint/migrate`](https://www.npmjs.com/package/@oxlint/migrate).

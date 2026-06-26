@@ -1,6 +1,11 @@
+import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
 import { describe, expect, it, vi } from 'vitest';
 
-import { canFormatWithOxfmt, formatMigratedProject } from '../format.ts';
+import { canFormatWithOxfmt, collectChangedFormatPaths, formatMigratedProject } from '../format.ts';
 import { createMigrationReport } from '../report.ts';
 
 describe('formatMigratedProject', () => {
@@ -11,13 +16,28 @@ describe('formatMigratedProject', () => {
       status: 'formatted',
     });
     const report = createMigrationReport();
+    const collectPaths = vi.fn().mockResolvedValue(['package.json', 'vite.config.ts']);
 
-    await expect(formatMigratedProject('/project', false, report, format)).resolves.toBe(true);
-    expect(format).toHaveBeenCalledWith('/project', false, undefined, {
+    await expect(
+      formatMigratedProject('/project', false, report, format, collectPaths),
+    ).resolves.toBe(true);
+    expect(format).toHaveBeenCalledWith('/project', false, ['package.json', 'vite.config.ts'], {
       silent: false,
       command: process.execPath,
       commandArgs: [...process.execArgv, process.argv[1]],
     });
+    expect(report.warnings).toEqual([]);
+  });
+
+  it('skips formatting when migration changed no supported files', async () => {
+    const format = vi.fn();
+    const report = createMigrationReport();
+    const collectPaths = vi.fn().mockResolvedValue([]);
+
+    await expect(
+      formatMigratedProject('/project', false, report, format, collectPaths),
+    ).resolves.toBe(true);
+    expect(format).not.toHaveBeenCalled();
     expect(report.warnings).toEqual([]);
   });
 
@@ -43,6 +63,37 @@ describe('formatMigratedProject', () => {
     expect(report.warnings).toEqual([
       'Automatic formatting failed. Run `vp fmt` manually after migration.',
     ]);
+  });
+});
+
+describe('collectChangedFormatPaths', () => {
+  it('collects supported changed Git paths without formatting unrelated files', async () => {
+    const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-migrate-format-'));
+    try {
+      execFileSync('git', ['init'], { cwd: projectRoot, stdio: 'ignore' });
+      fs.writeFileSync(path.join(projectRoot, 'package.json'), '{}\n');
+      fs.writeFileSync(path.join(projectRoot, 'vite.config.ts'), 'export default {}\n');
+      fs.writeFileSync(path.join(projectRoot, 'template.mdx'), '# untouched\n');
+      fs.writeFileSync(path.join(projectRoot, 'bun.lock'), 'lockfileVersion = 1\n');
+      execFileSync('git', ['add', 'package.json'], { cwd: projectRoot });
+      fs.appendFileSync(path.join(projectRoot, 'package.json'), '\n');
+
+      await expect(collectChangedFormatPaths(projectRoot)).resolves.toEqual([
+        'package.json',
+        'vite.config.ts',
+      ]);
+    } finally {
+      fs.rmSync(projectRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('falls back to full-project formatting outside Git', async () => {
+    const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'vp-migrate-format-no-git-'));
+    try {
+      await expect(collectChangedFormatPaths(projectRoot)).resolves.toBeUndefined();
+    } finally {
+      fs.rmSync(projectRoot, { recursive: true, force: true });
+    }
   });
 });
 
