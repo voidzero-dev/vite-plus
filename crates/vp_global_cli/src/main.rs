@@ -329,8 +329,28 @@ fn is_homebrew_recovery_command(args: &[String]) -> bool {
         )
 }
 
-#[tokio::main]
-async fn main() -> ExitCode {
+fn main() -> ExitCode {
+    // Advertise that this process tree is running under Vite+ so the tools we
+    // invoke (e.g. `vp dlx create-vite`) can detect vp as the package manager.
+    // The underlying package managers overwrite `npm_config_user_agent` with
+    // their own value, so we expose a dedicated variable that is passed through
+    // untouched and inherited by every child process (including the `npx`
+    // fallback used when there is no local `package.json`).
+    //
+    // SAFETY: `set_var` must run while the process is still single-threaded.
+    // This is the first statement in `main`, before the async runtime (and its
+    // worker threads) are created.
+    unsafe {
+        std::env::set_var(
+            vp_shared::env_vars::VP_USER_AGENT,
+            concat!("vp/", env!("CARGO_PKG_VERSION")),
+        );
+    }
+
+    tokio::runtime::Runtime::new().expect("failed to build tokio runtime").block_on(run())
+}
+
+async fn run() -> ExitCode {
     // Probe before tracing, directory resolution, or argument dispatch can emit output.
     if let Some(check) = env::var_os(vp_shared::env_vars::VP_SELF_SETUP_SUPPORT_CHECK) {
         for line in vp_setup::support::support_response(&check) {
