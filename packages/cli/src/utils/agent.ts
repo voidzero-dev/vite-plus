@@ -1,9 +1,9 @@
 import fs from 'node:fs';
 import fsPromises from 'node:fs/promises';
 import path from 'node:path';
-import { styleText } from 'node:util';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
+import colors from 'picocolors';
 
 import { pkgRoot } from './path.ts';
 
@@ -490,8 +490,7 @@ export async function writeAgentInstructions({
         const action = await prompts.select({
           message:
             `Agent instructions already exist at ${targetPathToWrite}.\n  ` +
-            styleText(
-              'gray',
+            colors.gray(
               'The Vite+ template includes guidance on `vp` commands, the build pipeline, and project conventions.',
             ),
           options: [

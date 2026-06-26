@@ -1,11 +1,11 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { styleText } from 'node:util';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import spawn from 'cross-spawn';
 import type { OxlintConfig } from 'oxlint';
+import colors from 'picocolors';
 import semver from 'semver';
 import { Scalar, YAMLMap, YAMLSeq } from 'yaml';
 
@@ -5715,8 +5715,7 @@ export async function confirmEslintMigration(interactive: boolean): Promise<bool
     const confirmed = await prompts.confirm({
       message:
         'Migrate ESLint rules to Oxlint using @oxlint/migrate?\n  ' +
-        styleText(
-          'gray',
+        colors.gray(
           "Oxlint is Vite+'s built-in linter — significantly faster than ESLint with compatible rule support. @oxlint/migrate converts your existing rules automatically.",
         ),
       initialValue: true,
@@ -5779,8 +5778,7 @@ export async function confirmPrettierMigration(interactive: boolean): Promise<bo
     const confirmed = await prompts.confirm({
       message:
         'Migrate Prettier to Oxfmt?\n  ' +
-        styleText(
-          'gray',
+        colors.gray(
           "Oxfmt is Vite+'s built-in formatter that replaces Prettier with faster performance. Your configuration will be converted automatically.",
         ),
       initialValue: true,

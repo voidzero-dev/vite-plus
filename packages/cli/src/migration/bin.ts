@@ -1,8 +1,8 @@
 import path from 'node:path';
-import { styleText } from 'node:util';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import mri from 'mri';
+import colors from 'picocolors';
 import semver from 'semver';
 
 import {
@@ -110,8 +110,7 @@ async function confirmFrameworkShim(framework: Framework, interactive: boolean):
     const confirmed = await prompts.confirm({
       message:
         `Add TypeScript shim for ${name} component files (*.${framework})?\n  ` +
-        styleText(
-          'gray',
+        colors.gray(
           `Lets TypeScript recognize .${framework} files until vp check fully supports them.`,
         ),
       initialValue: true,
@@ -487,8 +486,7 @@ async function collectAgentInstructionPlan(
       const action = await prompts.select({
         message:
           `Agent instructions already exist at ${conflict.targetPath}.\n  ` +
-          styleText(
-            'gray',
+          colors.gray(
             'The Vite+ template includes guidance on `vp` commands, the build pipeline, and project conventions.',
           ),
         options: [
@@ -532,8 +530,7 @@ async function collectEditorConfigPlan(
       const action = await prompts.select({
         message:
           `${conflict.displayPath} already exists.\n  ` +
-          styleText(
-            'gray',
+          colors.gray(
             'Vite+ adds editor settings for the built-in linter and formatter. Merge adds new keys without overwriting existing ones.',
           ),
         options: [
@@ -756,21 +753,19 @@ function showMigrationSummary(options: {
     report.wrappedPluginConfigCount;
 
   log(
-    `${styleText('magenta', '◇')} ${updatedExistingVitePlus ? 'Updated' : 'Migrated'} ${accent(projectLabel)}${
+    `${colors.magenta('◇')} ${updatedExistingVitePlus ? 'Updated' : 'Migrated'} ${accent(projectLabel)}${
       updatedExistingVitePlus ? '' : ' to Vite+'
     }`,
   );
   log(
-    `${styleText('gray', '•')} Node ${process.versions.node}  ${packageManager} ${packageManagerVersion}`,
+    `${colors.gray('•')} Node ${process.versions.node}  ${packageManager} ${packageManagerVersion}`,
   );
   // Gate the green success line on the FINAL install actually succeeding.
   // A nonzero duration could come from a successful pre-migration install
   // followed by a failed post-migration reinstall — in that case node_modules
   // is desynced and reporting success would mislead the user.
   if (finalInstallOk && installDurationMs > 0) {
-    log(
-      `${styleText('green', '✓')} Dependencies installed in ${formatDuration(installDurationMs)}`,
-    );
+    log(`${colors.green('✓')} Dependencies installed in ${formatDuration(installDurationMs)}`);
   }
   if (configUpdates > 0 || report.rewrittenImportFileCount > 0) {
     const parts: string[] = [];
@@ -786,39 +781,37 @@ function showMigrationSummary(options: {
         } imports rewritten`,
       );
     }
-    log(`${styleText('gray', '•')} ${parts.join(', ')}`);
+    log(`${colors.gray('•')} ${parts.join(', ')}`);
   }
   if (report.eslintMigrated) {
-    log(`${styleText('gray', '•')} ESLint rules migrated to Oxlint`);
+    log(`${colors.gray('•')} ESLint rules migrated to Oxlint`);
   }
   if (report.prettierMigrated) {
-    log(`${styleText('gray', '•')} Prettier migrated to Oxfmt`);
+    log(`${colors.gray('•')} Prettier migrated to Oxfmt`);
   }
   if (report.nodeVersionFileMigrated) {
-    log(`${styleText('gray', '•')} Node version manager file migrated to .node-version`);
+    log(`${colors.gray('•')} Node version manager file migrated to .node-version`);
   }
   if (report.wrappedPluginConfigCount > 0) {
-    log(
-      `${styleText('gray', '•')} Inline Vite plugins wrapped with lazyPlugins for check/lint/fmt`,
-    );
+    log(`${colors.gray('•')} Inline Vite plugins wrapped with lazyPlugins for check/lint/fmt`);
   }
   if (report.gitHooksConfigured) {
-    log(`${styleText('gray', '•')} Git hooks configured`);
+    log(`${colors.gray('•')} Git hooks configured`);
   }
   if (report.frameworkShimAdded) {
-    log(`${styleText('gray', '•')} TypeScript shim added for framework component files`);
+    log(`${colors.gray('•')} TypeScript shim added for framework component files`);
   }
   if (report.packageManagerBootstrapConfigured) {
-    log(`${styleText('gray', '•')} Package manager settings configured`);
+    log(`${colors.gray('•')} Package manager settings configured`);
   }
   if (report.warnings.length > 0) {
-    log(`${styleText('yellow', '!')} Warnings:`);
+    log(`${colors.yellow('!')} Warnings:`);
     for (const warning of report.warnings) {
       log(`  - ${warning}`);
     }
   }
   if (report.manualSteps.length > 0) {
-    log(`${styleText('blue', '→')} Manual follow-up:`);
+    log(`${colors.blue('→')} Manual follow-up:`);
     for (const step of report.manualSteps) {
       log(`  - ${step}`);
     }

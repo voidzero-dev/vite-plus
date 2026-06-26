@@ -1,4 +1,6 @@
-import { stripVTControlCharacters, styleText } from 'node:util';
+import { stripVTControlCharacters } from 'node:util';
+
+import colors from 'picocolors';
 
 export type CliDoc = {
   usage?: string;
@@ -71,9 +73,7 @@ function heading(label: string, color: boolean): string {
     return `${label}:`;
   }
 
-  return label === 'Usage'
-    ? styleText('bold', `${label}:`)
-    : styleText(['blue', 'bold'], `${label}:`);
+  return label === 'Usage' ? colors.bold(`${label}:`) : colors.bold(colors.blue(`${label}:`));
 }
 
 export function renderCliDoc(doc: CliDoc, options: RenderCliDocOptions = {}): string {
@@ -81,7 +81,7 @@ export function renderCliDoc(doc: CliDoc, options: RenderCliDocOptions = {}): st
   const output: string[] = [];
 
   if (doc.usage) {
-    const usage = color ? styleText('bold', doc.usage) : doc.usage;
+    const usage = color ? colors.bold(doc.usage) : doc.usage;
     output.push(`${heading('Usage', color)} ${usage}`);
   }
 

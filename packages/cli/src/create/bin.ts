@@ -1,10 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { styleText } from 'node:util';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import spawn from 'cross-spawn';
 import mri from 'mri';
+import colors from 'picocolors';
 
 import { vitePlusHeader } from '../../binding/index.js';
 import {
@@ -433,21 +433,19 @@ function showCreateSummary(options: {
   } = options;
 
   log(
-    `${styleText('magenta', '◇')} Scaffolded ${accent(projectDir)}${
+    `${colors.magenta('◇')} Scaffolded ${accent(projectDir)}${
       description ? ` with ${description}` : ''
     }`,
   );
   log(
-    `${styleText('gray', '•')} Node ${process.versions.node}  ${packageManager} ${packageManagerVersion}`,
+    `${colors.gray('•')} Node ${process.versions.node}  ${packageManager} ${packageManagerVersion}`,
   );
   if (installSummary?.status === 'installed') {
     log(
-      `${styleText('green', '✓')} Dependencies installed in ${formatDuration(
-        installSummary.durationMs,
-      )}`,
+      `${colors.green('✓')} Dependencies installed in ${formatDuration(installSummary.durationMs)}`,
     );
   }
-  log(`${styleText('blue', '→')} Next: ${accent(nextCommand)}`);
+  log(`${colors.blue('→')} Next: ${accent(nextCommand)}`);
 }
 
 async function main() {

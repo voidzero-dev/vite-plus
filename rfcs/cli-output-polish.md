@@ -52,11 +52,11 @@ Neither identifies the experience as "Vite+". Users who installed `vite-plus` se
 
 **4. Color libraries differ (but this is acceptable)**
 
-| Layer              | Library                 |
-| ------------------ | ----------------------- |
-| Rust (global CLI)  | `owo_colors`            |
-| JS (vite-plus CLI) | `node:util styleText()` |
-| vite               | `picocolors`            |
+| Layer              | Library      |
+| ------------------ | ------------ |
+| Rust (global CLI)  | `owo_colors` |
+| JS (vite-plus CLI) | `picocolors` |
+| vite               | `picocolors` |
 
 **5. The `[vite]` logger prefix in vite**
 
@@ -345,19 +345,19 @@ The JS code in `packages/cli/src/utils/terminal.ts` already has `accent()`, `hea
 
 ```typescript
 export function info(msg: string) {
-  console.error(styleText(['blue', 'bold'], 'info:'), msg);
+  console.error(colors.bold(colors.blue('info:')), msg);
 }
 
 export function warn(msg: string) {
-  console.error(styleText(['yellow', 'bold'], 'warn:'), msg);
+  console.error(colors.bold(colors.yellow('warn:')), msg);
 }
 
 export function errorMsg(msg: string) {
-  console.error(styleText(['red', 'bold'], 'error:'), msg);
+  console.error(colors.bold(colors.red('error:')), msg);
 }
 
 export function note(msg: string) {
-  console.error(styleText(['gray', 'bold'], 'note:'), msg);
+  console.error(colors.bold(colors.gray('note:')), msg);
 }
 ```
 
@@ -397,7 +397,7 @@ Migrate JS-side code (`migration/bin.ts`, `create/bin.ts`) to use these shared f
 
 ### D6: Keep each layer's color library
 
-**Decision:** Rust keeps `owo_colors`, JS keeps `node:util styleText()`, vite keeps `picocolors`.
+**Decision:** Rust keeps `owo_colors`; JS and Vite keep `picocolors`.
 
 **Rationale:** Changing color libraries is high-risk, low-reward. The shared formatting module abstracts the library choice so the output convention is consistent regardless of the underlying library.
 

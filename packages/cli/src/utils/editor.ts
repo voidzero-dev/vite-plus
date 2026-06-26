@@ -1,9 +1,9 @@
 import fs from 'node:fs';
 import fsPromises from 'node:fs/promises';
 import path from 'node:path';
-import { styleText } from 'node:util';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
+import colors from 'picocolors';
 
 import { readJsonFile, writeJsonFile } from './json.ts';
 
@@ -193,8 +193,7 @@ export async function selectEditor({
     const selectedEditor = await prompts.select({
       message:
         'Which editor are you using?\n  ' +
-        styleText(
-          'gray',
+        colors.gray(
           'Writes editor config files to enable recommended extensions and Oxlint/Oxfmt integrations.',
         ),
       options: [...editorOptions, otherOption],
@@ -236,8 +235,7 @@ export async function selectEditors({
     const selectedEditors = await prompts.multiselect({
       message:
         'Which editors are you using?\n  ' +
-        styleText(
-          'gray',
+        colors.gray(
           'Writes editor config files to enable recommended extensions and Oxlint/Oxfmt integrations.',
         ),
       options: EDITORS.map((option) => ({
@@ -396,8 +394,7 @@ async function writeEditorConfig({
         const action = await prompts.select({
           message:
             `${displayPath} already exists.\n  ` +
-            styleText(
-              'gray',
+            colors.gray(
               `Vite+ adds ${editorConfig.label} settings for the built-in linter and formatter. Merge adds new keys without overwriting existing ones.`,
             ),
           options: [

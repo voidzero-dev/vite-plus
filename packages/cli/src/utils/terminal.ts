@@ -1,4 +1,4 @@
-import { styleText } from 'node:util';
+import colors from 'picocolors';
 
 import { shouldPrintVitePlusHeader, vitePlusHeader } from '../../binding/index.js';
 
@@ -21,19 +21,19 @@ export function printHeader() {
 }
 
 export function accent(text: string) {
-  return styleText('blue', text);
+  return colors.blue(text);
 }
 
 export function muted(text: string) {
-  return styleText('gray', text);
+  return colors.gray(text);
 }
 
 export function success(text: string) {
-  return styleText('green', text);
+  return colors.green(text);
 }
 
 export function error(text: string) {
-  return styleText('red', text);
+  return colors.red(text);
 }
 
 // Standard message prefix functions matching the Rust CLI convention.
@@ -41,20 +41,20 @@ export function error(text: string) {
 
 export function infoMsg(msg: string) {
   /* oxlint-disable-next-line no-console */
-  console.log(styleText(['blue', 'bold'], 'info:'), msg);
+  console.log(colors.bold(colors.blue('info:')), msg);
 }
 
 export function warnMsg(msg: string) {
   /* oxlint-disable-next-line no-console */
-  console.error(styleText(['yellow', 'bold'], 'warn:'), msg);
+  console.error(colors.bold(colors.yellow('warn:')), msg);
 }
 
 export function errorMsg(msg: string) {
   /* oxlint-disable-next-line no-console */
-  console.error(styleText(['red', 'bold'], 'error:'), msg);
+  console.error(colors.bold(colors.red('error:')), msg);
 }
 
 export function noteMsg(msg: string) {
   /* oxlint-disable-next-line no-console */
-  console.log(styleText(['gray', 'bold'], 'note:'), msg);
+  console.log(colors.bold(colors.gray('note:')), msg);
 }

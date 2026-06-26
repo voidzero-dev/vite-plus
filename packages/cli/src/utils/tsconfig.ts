@@ -1,9 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { styleText } from 'node:util';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
 import { applyEdits, modify, parse as parseJsonc } from 'jsonc-parser';
+import colors from 'picocolors';
 
 import { runCommandSilently } from './command.ts';
 import { BASEURL_TSCONFIG_FIX_PACKAGE, createBaseUrlTsconfigFixArgs } from './constants.ts';
@@ -60,12 +60,9 @@ export async function confirmBaseUrlFix(interactive: boolean): Promise<boolean> 
   const confirmed = await prompts.confirm({
     message:
       'Your tsconfig contains `baseUrl`, which prevents enabling type-aware linting.\n  ' +
-      styleText(
-        'gray',
-        '`baseUrl` is deprecated in TypeScript 6.0 and removed in TypeScript 7.0.',
-      ) +
+      colors.gray('`baseUrl` is deprecated in TypeScript 6.0 and removed in TypeScript 7.0.') +
       `\n  Download and run the external \`${BASEURL_TSCONFIG_FIX_PACKAGE}\` fixer now?\n  ` +
-      styleText('gray', `Equivalent command: \`vp dlx ${command}\``),
+      colors.gray(`Equivalent command: \`vp dlx ${command}\``),
     initialValue: true,
   });
   if (prompts.isCancel(confirmed)) {
