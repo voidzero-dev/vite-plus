@@ -6,9 +6,6 @@ usage() {
   cat <<'EOF'
 Usage: .github/scripts/test-pkg-pr-new-migrate.sh <PR-or-SHA> <project-path> [migrate-options...]
 
-This helper does not support Bun projects because pkg.pr.new URL artifacts
-cannot preserve npm alias semantics for vite-plus-core.
-
 Examples:
   .github/scripts/test-pkg-pr-new-migrate.sh 1891 /path/to/npmx.dev
   .github/scripts/test-pkg-pr-new-migrate.sh 4eb2104c /path/to/project --no-interactive
@@ -46,23 +43,16 @@ if [ ! -f "$project_dir/package.json" ]; then
   exit 2
 fi
 
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+
+is_bun_project=0
 if [ -f "$project_dir/bun.lock" ] ||
   [ -f "$project_dir/bun.lockb" ] ||
   [ -f "$project_dir/bunfig.toml" ] ||
-  node -e '
-    const pkg = require(process.argv[1]);
-    const packageManager =
-      typeof pkg.packageManager === "string" ? pkg.packageManager.split("@")[0] : undefined;
-    const devEngine = pkg.devEngines?.packageManager;
-    const devEngineName = typeof devEngine === "string" ? devEngine : devEngine?.name;
-    process.exit(packageManager === "bun" || devEngineName === "bun" ? 0 : 1);
-  ' "$project_dir/package.json"; then
-  echo "error: Bun projects are not supported by test-pkg-pr-new-migrate.sh." >&2
-  echo "pkg.pr.new URL artifacts cannot represent the npm alias used for published vite-plus-core packages." >&2
-  exit 2
+  node "$script_dir/bun-pkg-pr-new.mjs" is-bun-project "$project_dir/package.json"; then
+  is_bun_project=1
 fi
 
-script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 repo_root="$(cd "$script_dir/../.." && pwd -P)"
 installer="$repo_root/packages/cli/install.sh"
 pnpm_version_helper="$script_dir/ensure-pkg-pr-new-pnpm-version.mjs"
@@ -134,6 +124,32 @@ global_cli_entry="$pr_home/current/node_modules/vite-plus/dist/bin.js"
 commit_marker="$cached_version_dir/.pkg-pr-new-commit"
 vite_plus_spec="$pkg_pr_new_base@$resolved_ref"
 vite_plus_core_spec="$pkg_pr_new_base/@voidzero-dev/vite-plus-core@$resolved_ref"
+vite_override_spec="$vite_plus_core_spec"
+
+if [ "$is_bun_project" -eq 1 ]; then
+  bun_repack_script="$script_dir/repack-vite-pr.sh"
+  if [ ! -f "$bun_repack_script" ]; then
+    echo "error: Bun pkg.pr.new repack helper not found: $bun_repack_script" >&2
+    exit 2
+  fi
+
+  generated_tarball_path="$(bash "$bun_repack_script" "$resolved_ref" "$project_dir")"
+  if [ ! -f "$generated_tarball_path" ]; then
+    echo "error: Bun repack script did not create its reported tarball: $generated_tarball_path" >&2
+    exit 1
+  fi
+
+  # Keep the real Core package directly resolvable alongside the repacked
+  # `vite` alias. Bun otherwise nests it under the local tarball dependency.
+  node "$script_dir/bun-pkg-pr-new.mjs" \
+    add-core-dependency \
+    "$project_dir/package.json" \
+    "$vite_plus_core_spec"
+
+  # The migrator applies this override to every workspace package. Use an
+  # absolute file URL so nested package.json files resolve the same tarball.
+  vite_override_spec="file:$generated_tarball_path"
+fi
 
 read_installed_commit() {
   if [ -f "$commit_marker" ]; then
@@ -229,7 +245,7 @@ export PATH="$VP_HOME/bin:$PATH"
 export VP_VERSION="$vite_plus_spec"
 export VP_OVERRIDE_PACKAGES="$(printf \
   '{"vite":"%s","vitest":"%s"}' \
-  "$vite_plus_core_spec" \
+  "$vite_override_spec" \
   "$vitest_version")"
 export VP_FORCE_MIGRATE=1
 # pkg.pr.new packages depend on URL-resolved platform binaries. pnpm blocks
@@ -246,8 +262,14 @@ echo "  resolved commit: $resolved_ref"
 echo "  executable: $vp_bin"
 echo "  installation: $(readlink "$pr_home/current" 2>/dev/null || echo unknown)"
 echo "  vite-plus spec: $VP_VERSION"
-echo "  vite spec: $vite_plus_core_spec"
+echo "  vite spec: $vite_override_spec"
 "$vp_bin" --version
+
+if [ "$is_bun_project" -eq 1 ] && [ -d "$project_dir/node_modules" ]; then
+  echo
+  echo "Removing stale Bun node_modules before migration"
+  rm -rf "$project_dir/node_modules"
+fi
 
 echo
 echo "Running vp migrate in $project_dir"
@@ -261,6 +283,32 @@ set +e
 )
 migrate_status=$?
 set -e
+
+if [ "$is_bun_project" -eq 1 ] && [ "$migrate_status" -eq 0 ]; then
+  # Migration uses one absolute file URL so every workspace can install the
+  # same tarball. Persist portable specs by rebasing that URL relative to each
+  # package.json, then refresh Bun's lockfile once with the final paths.
+  node "$script_dir/bun-pkg-pr-new.mjs" \
+    normalize-vite-paths \
+    "$project_dir" \
+    "$generated_tarball_path"
+
+  echo
+  echo "Reinstalling Bun dependencies with relative Vite tarball paths"
+  rm -rf "$project_dir/node_modules"
+  set +e
+  (
+    cd "$project_dir"
+    unset VP_OVERRIDE_PACKAGES VP_FORCE_MIGRATE
+    "$vp_bin" install
+  )
+  bun_install_status=$?
+  set -e
+  if [ "$bun_install_status" -ne 0 ]; then
+    echo "error: dependency installation failed after normalizing Bun file paths" >&2
+    migrate_status="$bun_install_status"
+  fi
+fi
 
 if [ "$is_git_repo" -eq 1 ]; then
   echo
