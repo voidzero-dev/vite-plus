@@ -46,6 +46,9 @@ pub struct PackageMetadata {
     /// `corepack`). Updates keep the restriction; explicit installs reset it.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub bins_restricted: bool,
+    /// Whether the package was installed from local filesystem content.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub local: bool,
     /// Package manager used for installation (npm, yarn, pnpm)
     pub manager: String,
     /// Installation timestamp
@@ -81,6 +84,7 @@ impl PackageMetadata {
             bins,
             js_bins,
             bins_restricted: false,
+            local: false,
             manager,
             installed_at: Utc::now(),
         }
@@ -253,6 +257,7 @@ mod tests {
         .unwrap();
 
         assert!(metadata.install_id.is_empty());
+        assert!(!metadata.local);
     }
 
     #[test]

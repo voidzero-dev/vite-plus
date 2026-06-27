@@ -231,7 +231,7 @@ pub async fn install(
 
     // 4. Finalize installed packages.
     let mut bin_owners = HashMap::<String, String>::new();
-    for (index, (package_name, Package { spec: _, install })) in packages.into_iter().enumerate() {
+    for (index, (package_name, Package { spec, install })) in packages.into_iter().enumerate() {
         let lock_file = install_locks.remove(&package_name);
         let Some(InstalledPackage {
             installed_version,
@@ -403,6 +403,7 @@ pub async fn install(
         );
         metadata.install_id = install_id.clone();
         metadata.bins_restricted = bins_restricted;
+        metadata.local = is_local_package_spec(spec);
 
         let mut finalized = true;
         for bin_name in &stale_bin_names {

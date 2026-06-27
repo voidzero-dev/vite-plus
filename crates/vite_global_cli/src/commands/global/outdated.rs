@@ -53,12 +53,20 @@ pub async fn get_outdated_packages(
                 continue;
             };
             if let Some(metadata) = PackageMetadata::load(&package_name).await? {
+                if metadata.local {
+                    continue;
+                }
                 installed.push((metadata, Some(package.clone())));
             }
         }
         installed
     } else {
-        PackageMetadata::list_all().await?.into_iter().map(|package| (package, None)).collect()
+        PackageMetadata::list_all()
+            .await?
+            .into_iter()
+            .filter(|package| !package.local)
+            .map(|package| (package, None))
+            .collect()
     };
 
     if installed.is_empty() {
@@ -270,5 +278,58 @@ fn exit_status(code: i32) -> ExitStatus {
     {
         use std::os::windows::process::ExitStatusExt;
         ExitStatus::from_raw(code as u32)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
+
+    use tempfile::TempDir;
+
+    use super::*;
+    use crate::commands::env::package_metadata::PackageMetadata;
+
+    async fn save_local_metadata(name: &str) {
+        let mut metadata = PackageMetadata::new(
+            name.to_string(),
+            "1.0.0".to_string(),
+            "22.0.0".to_string(),
+            None,
+            vec![name.to_string()],
+            HashSet::from([name.to_string()]),
+            "npm".to_string(),
+        );
+        metadata.local = true;
+        metadata.save().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn skips_local_packages_when_checking_all_global_updates() {
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = vite_shared::EnvConfig::test_guard(
+            vite_shared::EnvConfig::for_test_with_home(temp_dir.path()),
+        );
+
+        save_local_metadata("some-local-package").await;
+
+        let outdated = get_outdated_packages(&[], 1, true).await.unwrap();
+
+        assert!(outdated.is_empty());
+    }
+
+    #[tokio::test]
+    async fn skips_local_packages_when_checking_named_global_updates() {
+        let temp_dir = TempDir::new().unwrap();
+        let _guard = vite_shared::EnvConfig::test_guard(
+            vite_shared::EnvConfig::for_test_with_home(temp_dir.path()),
+        );
+
+        save_local_metadata("some-local-package").await;
+
+        let outdated =
+            get_outdated_packages(&["some-local-package".to_string()], 1, true).await.unwrap();
+
+        assert!(outdated.is_empty());
     }
 }

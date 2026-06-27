@@ -727,7 +727,7 @@ async fn managed_update(
         }
         current_node_version = get_current_node_version().await?;
 
-        for metadata in &all {
+        for metadata in all.iter().filter(|metadata| !metadata.local) {
             if !is_same_node_version(&metadata.platform.node, &current_node_version) {
                 node_mismatches.push(NodeMismatchPackage {
                     name: metadata.name.clone(),
@@ -743,15 +743,17 @@ async fn managed_update(
         current_node_version = get_current_node_version().await?;
 
         for package in packages {
-            // Always update local packages
-            if global::is_local_package_spec(package) {
-                to_update.push(package.clone());
-                continue;
-            }
-
-            // It is not a local package, so `parse_package_spec` there won't return `Err()`
-            let (package_name, _) = global::parse_package_spec(package).unwrap();
+            let (package_name, _) = match global::parse_package_spec(package) {
+                Ok(parsed) => parsed,
+                Err(error) => {
+                    output::error(&format!("Failed to update {package}: {error}"));
+                    return Ok(exit_status(1));
+                }
+            };
             if let Some(metadata) = PackageMetadata::load(&package_name).await? {
+                if metadata.local {
+                    continue;
+                }
                 if !is_same_node_version(&metadata.platform.node, &current_node_version) {
                     node_mismatches.push(NodeMismatchPackage {
                         name: package_name,
