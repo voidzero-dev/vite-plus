@@ -1205,7 +1205,11 @@ async function main() {
     workspaceInfoOptional.rootDir,
   ) as PackageDependencies | null;
   if (hasVitePlusDependency(rootPkg) && !isForceOverrideMode()) {
-    const convertYarnPnp = await confirmYarnNodeModulesMode(
+    // Runs with the detected package manager, which may be undefined for an
+    // existing Vite+ project that has no lockfile/`packageManager` pin. In that
+    // case `confirmYarnNodeModulesMode` no-ops here and the guard is re-run
+    // below once the package manager is actually resolved.
+    let convertYarnPnp = await confirmYarnNodeModulesMode(
       workspaceInfoOptional.rootDir,
       workspaceInfoOptional.packageManager,
       workspaceInfoOptional.packageManagerVersion,
@@ -1282,6 +1286,24 @@ async function main() {
 
     if (vitePlusBootstrapPending) {
       await ensureExistingPackageManager();
+    }
+
+    // The early guard ran before the package manager was resolved. If it was
+    // only determined to be Yarn afterwards (e.g. selected because the project
+    // had no detectable manager), re-run the guard so a `YARN_NODE_LINKER=pnp`
+    // override is still rejected instead of silently writing config for an
+    // unsupported PnP layout.
+    if (
+      !convertYarnPnp &&
+      workspaceInfoOptional.packageManager === undefined &&
+      packageManager === PackageManager.yarn
+    ) {
+      convertYarnPnp = await confirmYarnNodeModulesMode(
+        workspaceInfoOptional.rootDir,
+        packageManager,
+        packageManagerVersion,
+        options.interactive,
+      );
     }
 
     const coreMigrationResult = finalizeCoreMigrationForExistingVitePlus(
