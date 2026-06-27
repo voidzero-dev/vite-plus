@@ -19,7 +19,6 @@ directories = { workspace = true }
 dialoguer = { workspace = true }
 futures = { workspace = true }
 flate2 = { workspace = true }
-same-file = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 node-semver = { workspace = true }

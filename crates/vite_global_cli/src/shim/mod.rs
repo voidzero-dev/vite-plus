@@ -19,7 +19,6 @@ use std::fs;
 pub(crate) use cache::invalidate_cache;
 pub use dispatch::dispatch;
 pub(crate) use dispatch::find_system_tool;
-use same_file::is_same_file;
 use vite_shared::env_vars;
 
 use crate::commands::env::config::get_bin_dir;
@@ -33,7 +32,7 @@ use crate::commands::env::config::get_bin_dir;
 pub const CORE_SHIM_TOOLS: &[&str] = &["node", "npm", "npx"];
 
 /// Extract the tool name from argv[0].
-/// We hope all
+/// We hope all bins should be put under $VP_HOME/bin
 ///
 /// Handles various formats:
 /// - `node` (Unix)
@@ -44,27 +43,35 @@ pub fn extract_tool_name(argv0: &str) -> String {
     let path = std::path::Path::new(argv0);
     let file_name = path.file_name().unwrap_or_default();
 
-    let bin_dir = get_bin_dir();
-    if let Ok(bin_dir) = bin_dir {
-        let path = bin_dir.join(file_name);
-
-        if let Ok(read_dir) = fs::read_dir(&bin_dir) {
-            for bin in read_dir.flatten() {
-                if is_same_file(bin_dir.join(bin.file_name()), &path).unwrap_or(false) {
-                    return bin
-                        .path()
-                        // Handle Windows: strip .exe, .cmd extensions if present in stem
-                        // (file_stem already strips the extension)
-                        .file_stem()
-                        .unwrap_or_default()
+    // Handle Windows: strip .exe, .cmd extensions if present in stem
+    // (file_stem already strips the extension)
+    let stem = path.file_stem().unwrap_or_default().to_string_lossy().to_string();
+    if cfg!(target_os = "linux") {
+        stem
+    } else {
+        let bin_dir = get_bin_dir();
+        if let Ok(bin_dir) = bin_dir {
+            if let Ok(read_dir) = fs::read_dir(&bin_dir) {
+                for bin in read_dir.flatten() {
+                    if bin
+                        .file_name()
                         .to_string_lossy()
-                        .to_string();
+                        .to_lowercase()
+                        .starts_with(&file_name.to_string_lossy().to_lowercase())
+                    {
+                        return bin
+                            .path()
+                            .file_stem()
+                            .unwrap_or_default()
+                            .to_string_lossy()
+                            .to_string();
+                    }
                 }
             }
         }
-    }
 
-    path.file_stem().unwrap_or_default().to_string_lossy().to_string()
+        stem
+    }
 }
 
 /// Check if the given tool name is a core shim tool (node/npm/npx).
