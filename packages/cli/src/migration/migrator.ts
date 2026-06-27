@@ -1629,6 +1629,13 @@ export function rewriteStandaloneProject(
         [VITE_PLUS_NAME]: version,
       };
     }
+    // This caller injects vite-plus after rewritePackageJson returned, so the
+    // direct-`vite` pass must run here too.
+    ensureDirectViteForPnpm(
+      pkg,
+      packageManager,
+      usePnpmWorkspaceYaml && packageManager !== PackageManager.npm,
+    );
     return pkg;
   });
 
@@ -2559,6 +2566,62 @@ function getCatalogDependencySpec(
   return currentValue?.startsWith('catalog:') ? currentValue : 'catalog:';
 }
 
+/**
+ * #1932: under pnpm, an importer that depends on `vite-plus` (which bundles
+ * `vitest`) needs a DIRECT `vite` devDep so the `vite` override binds vitest's
+ * required `vite` peer to @voidzero-dev/vite-plus-core. Without a direct edge,
+ * pnpm's `autoInstallPeers` fabricates a separate upstream `vite` to satisfy the
+ * peer, splitting vite-plus / vite / vitest into duplicate instances (the extra
+ * vite also lacks vite's `@voidzero-dev/vite-task-client` integration, breaking
+ * the `vp test` cache). npm/yarn/bun redirect transitive/peer vite via root
+ * overrides/resolutions (and drop the aliased vite), so this is pnpm-only,
+ * mirroring the bun root-package branch in `rewriteRootWorkspacePackageJson`.
+ *
+ * A package that already declares `vite` in ANY dependency field, including
+ * `peerDependencies` (e.g. a vite plugin pinning `vite ^6`), is left untouched
+ * so its existing version contract is preserved. Call this AFTER `vite-plus`
+ * has been ensured in the package, so the dependency check sees it.
+ */
+function ensureDirectViteForPnpm(
+  pkg: {
+    dependencies?: Record<string, string>;
+    devDependencies?: Record<string, string>;
+    optionalDependencies?: Record<string, string>;
+    peerDependencies?: Record<string, string>;
+  },
+  packageManager: PackageManager,
+  supportCatalog: boolean,
+): boolean {
+  const viteOverride = VITE_PLUS_OVERRIDE_PACKAGES.vite;
+  if (packageManager !== PackageManager.pnpm || !viteOverride) {
+    return false;
+  }
+  const dependsOnVitePlus =
+    pkg.dependencies?.[VITE_PLUS_NAME] !== undefined ||
+    pkg.devDependencies?.[VITE_PLUS_NAME] !== undefined;
+  const viteAlreadyDirect =
+    pkg.dependencies?.vite !== undefined ||
+    pkg.devDependencies?.vite !== undefined ||
+    pkg.optionalDependencies?.vite !== undefined ||
+    pkg.peerDependencies?.vite !== undefined;
+  if (!dependsOnVitePlus || viteAlreadyDirect) {
+    return false;
+  }
+  // The catalog-vs-alias choice is driven entirely by supportCatalog and the
+  // (file:/npm:) override spec; the extra getCatalogDependencySpec options only
+  // matter for an existing value or a peerDependencies field, neither of which
+  // applies here (we only reach this for a fresh devDependencies entry).
+  const viteSpec = getCatalogDependencySpec(undefined, viteOverride, supportCatalog);
+  // Insert `vite` in sorted position rather than appending it: oxfmt sorts
+  // package.json dependencies and `vp migrate` has no later format pass, so an
+  // out-of-order key would fail a follow-up `vp check`.
+  const entries: [string, string][] = Object.entries(pkg.devDependencies ?? {});
+  const insertAt = entries.findIndex(([name]) => name > 'vite');
+  entries.splice(insertAt === -1 ? entries.length : insertAt, 0, ['vite', viteSpec]);
+  pkg.devDependencies = Object.fromEntries(entries);
+  return true;
+}
+
 function isVitePlusOverrideSpec(value: string): boolean {
   return (
     Object.values(VITE_PLUS_OVERRIDE_PACKAGES).includes(value) ||
@@ -2985,6 +3048,7 @@ function rewriteRootWorkspacePackageJson(
             : 'catalog:',
       };
     }
+    ensureDirectViteForPnpm(pkg, packageManager, true);
     return pkg;
   });
 
@@ -4077,6 +4141,7 @@ export function rewritePackageJson(
       [VITE_PLUS_NAME]: canonicalVitePlusSpec,
     };
   }
+  ensureDirectViteForPnpm(pkg, packageManager, supportCatalog);
   // Add `vitest` as a direct devDependency when:
   //  - a remaining dependency likely peer-depends on vitest (e.g.
   //    vitest-browser-svelte), OR
@@ -5080,7 +5145,7 @@ export function preflightGitHooksSetup(
   const prodDeps = pkgContent.dependencies as Record<string, string> | undefined;
   for (const tool of OTHER_HOOK_TOOLS) {
     if (deps?.[tool] || prodDeps?.[tool] || pkgContent[tool]) {
-      return `Detected ${tool} — skipping git hooks setup. Please configure git hooks manually.`;
+      return `Detected ${tool} — skipping git hooks setup. Please configure git hooks manually, see https://viteplus.dev/guide/migrate#git-hook-tools`;
     }
   }
   const huskyReason = checkUnsupportedHuskyVersion(projectPath, deps, prodDeps, packageManager);

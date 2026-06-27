@@ -201,6 +201,36 @@ tsdown is bundled inside `@voidzero-dev/vite-plus-core/pack`:
 - `packages/core/package.json` tracks `bundledVersions.tsdown`
 - Re-exported via `packages/cli/src/pack.ts`
 
+The `@tsdown/exe` (executables) and `@tsdown/css` (CSS bundling) extensions are
+bundled alongside tsdown as well, so `vp pack --exe` and CSS bundling work
+without users installing anything extra. See [tsdown Extensions](#bundled-tsdown-extensions).
+
+### Bundled tsdown Extensions
+
+This covers the `@tsdown/exe` (executables) and `@tsdown/css` (CSS bundling) extensions.
+
+Standalone `@tsdown/exe` and `@tsdown/css` hard-peer-depend on `tsdown` and import
+`tsdown/internal`. Because Vite+ bundles tsdown internally rather than exposing a
+resolvable top-level `tsdown` package, installing them at the project level fails
+to resolve `tsdown/internal` (`Failed to import module "@tsdown/exe"`). See
+[issue #1586](https://github.com/voidzero-dev/vite-plus/issues/1586).
+
+To fix this, both extensions are bundled into core instead of left as peers:
+
+- `packages/core/build.ts` (`bundleTsdown`) builds them as stable named entries
+  `dist/tsdown/tsdown-exe.js` and `dist/tsdown/tsdown-css.js`, so `tsdown/internal`
+  resolves against the bundled tsdown at build time.
+- `wireBundledTsdownExtensions` rewrites the bundled tsdown call sites to load the
+  local chunks (`importWithError("@tsdown/exe")` → `import("./tsdown-exe.js")`,
+  `pkgExists("@tsdown/css")` → `true`, `import("@tsdown/css")` → `import("./tsdown-css.js")`).
+- `mergePackageJson` drops `@tsdown/exe`/`@tsdown/css` from the published
+  `peerDependencies`; their types are inlined into `dist/tsdown/index-types.d.ts`.
+
+`lightningcss` (which `@tsdown/css` uses for CSS transforms) is a native module and
+cannot be bundled, so it stays external. It is already a core `dependency` (Vite's
+lightningcss transformer uses it too), so the bundled `@tsdown/css` resolves it
+automatically and CSS bundling works without any extra install.
+
 ## `--exe` Feature (Experimental)
 
 The `--exe` flag bundles the output as a Node.js Single Executable Application (SEA).
@@ -263,13 +293,14 @@ These are distinct commands:
 
 ### 3. tsdown Bundled Inside Core
 
-**Decision**: tsdown is bundled inside `@voidzero-dev/vite-plus-core/pack` rather than used as a direct dependency.
+**Decision**: tsdown is bundled inside `@voidzero-dev/vite-plus-core/pack` rather than used as a direct dependency. Its `@tsdown/exe` and `@tsdown/css` extensions are bundled the same way (see [tsdown Extensions](#bundled-tsdown-extensions)).
 
 **Rationale**:
 
 - Ensures consistent tsdown version across all vite-plus users
 - Avoids version conflicts in monorepos
 - The core build process bundles JS, CJS deps, and types together
+- The extensions peer-depend on `tsdown`/`tsdown/internal`, which Vite+ does not expose as a top-level package, so bundling them is the only way they resolve (issue #1586). Only `lightningcss` (native, cannot be bundled) stays external; it ships as a regular core dependency.
 
 ### 4. Category C Delegation
 
@@ -342,11 +373,29 @@ Options:
 
 Tests `vp pack -h` (help output includes all options including `--exe`) and `vp run pack` (build and cache hit).
 
-### Local CLI Test: `command-pack-exe`
+### Local CLI Test: `command-pack-css`
 
-**Location**: `packages/cli/snap-tests/command-pack-exe/`
+**Location**: `packages/cli/snap-tests/command-pack-css/`
 
-Tests `vp pack src/index.ts --exe` error behavior when Node.js version is below 25.7.0.
+Tests `vp pack src/index.ts --minify` on a CSS entry: the bundled `@tsdown/css` plus `lightningcss` transform the CSS (e.g. `#ff0000` → `red`), proving CSS bundling works without installing `@tsdown/css` (issue #1586).
+
+### Local CLI Test: `command-pack-tsdown-extensions`
+
+**Location**: `packages/cli/snap-tests/command-pack-tsdown-extensions/`
+
+Loads the bundled `dist/tsdown/tsdown-exe.js` and `dist/tsdown/tsdown-css.js` chunks to prove they resolve `tsdown/internal` against the bundled tsdown without a top-level `tsdown` package. This is Node-version independent (it does not run the SEA build), so it catches the import-resolution regression on every CI Node version.
+
+### Global CLI Test: `command-pack-exe`
+
+**Location**: `packages/cli/snap-tests-global/command-pack-exe/`
+
+Pins Node.js 25.7.0 (`engines.node`) and builds a real SEA executable end-to-end (`vp pack --exe`, then runs `./build/index`), exercising the bundled `@tsdown/exe`.
+
+### Global CLI Test: `command-pack-exe-error`
+
+**Location**: `packages/cli/snap-tests-global/command-pack-exe-error/`
+
+Tests `vp pack src/index.ts --exe` error behavior when the active Node.js version is below 25.7.0.
 
 ## Backward Compatibility
 
@@ -355,6 +404,7 @@ This RFC documents an existing command with no breaking changes:
 - All existing `vp pack` options continue to work
 - The new `--exe` flag is purely additive
 - Config format in `vite.config.ts` is unchanged
+- Bundling `@tsdown/exe`/`@tsdown/css` is a strict improvement: projects that previously installed them keep working and no longer need to. CSS bundling works out of the box, `lightningcss` is a core dependency that ships with the toolchain, so nothing extra needs installing.
 
 ## Exe Advanced Configuration
 
@@ -382,7 +432,7 @@ export default {
 
 ### Cross-Platform Executable Building
 
-Cross-platform builds are supported via the `@tsdown/exe` package (optional peer dependency). The `targets` option accepts an array of `{ platform, arch, nodeVersion }` objects to build executables for different platforms from a single host.
+Cross-platform builds are powered by `@tsdown/exe`, which is bundled into core (no separate install needed; see [tsdown Extensions](#bundled-tsdown-extensions)). The `targets` option accepts an array of `{ platform, arch, nodeVersion }` objects to build executables for different platforms from a single host.
 
 ## Conclusion
 

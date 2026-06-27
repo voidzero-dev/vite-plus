@@ -9,7 +9,7 @@
     "wanted": "1.0.1",
     "latest": "1.0.1",
     "dependent": "global",
-    "location": "<vite-plus-home>/packages/testnpm2/lib/node_modules/testnpm2"
+    "location": "<vite-plus-home>/packages/testnpm2<install-id>/lib/node_modules/testnpm2"
   }
 }
 

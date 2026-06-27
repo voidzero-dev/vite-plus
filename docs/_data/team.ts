@@ -117,6 +117,15 @@ export const core: DefaultTheme.TeamMember[] = [
       { icon: 'linkedin', link: 'https://www.linkedin.com/in/jong-kyung' },
     ],
   },
+  {
+    avatar: 'https://github.com/liangmiQwQ.png',
+    name: 'Liang',
+    links: [
+      { icon: 'github', link: 'https://github.com/liangmiQwQ' },
+      { icon: 'x', link: 'https://x.com/liangmiQwQ' },
+      { icon: 'bluesky', link: 'https://bsky.app/profile/liangmi.dev' },
+    ],
+  },
 ];
 
 export const emeriti: DefaultTheme.TeamMember[] = [];

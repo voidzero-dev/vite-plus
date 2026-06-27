@@ -828,12 +828,14 @@ function showMigrationSummary(options: {
 async function checkRolldownCompatibility(rootDir: string, report: MigrationReport): Promise<void> {
   try {
     const { resolveConfig } = await import('../index.js');
+    const { withConfigMetadataResolution } = await import('../define-config.js');
     const { checkManualChunksCompat } = await import('./compat.js');
     // Use 'runner' configLoader to avoid Rolldown bundling the config file,
     // which prints UNRESOLVED_IMPORT warnings that cannot be suppressed via logLevel.
-    const config = await resolveConfig(
-      { root: rootDir, logLevel: 'silent', configLoader: 'runner' },
-      'build',
+    // Reads the config only for the manualChunks compat check, so skip the
+    // user's plugin factory while it resolves.
+    const config = await withConfigMetadataResolution(() =>
+      resolveConfig({ root: rootDir, logLevel: 'silent', configLoader: 'runner' }, 'build'),
     );
     checkManualChunksCompat(config.build?.rollupOptions?.output, report);
   } catch {

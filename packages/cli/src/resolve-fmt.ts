@@ -13,7 +13,7 @@
 
 import { dirname, join } from 'node:path';
 
-import { DEFAULT_ENVS, resolve } from './utils/constants.ts';
+import { CONFIG_METADATA_ENV, DEFAULT_ENVS, resolve } from './utils/constants.ts';
 
 /**
  * Resolves the oxfmt binary path and environment variables.
@@ -42,6 +42,9 @@ export async function fmt(): Promise<{
     // TODO: provide envs inference API
     envs: {
       ...DEFAULT_ENVS,
+      // oxfmt loads vite.config.ts only to read the `fmt` block, so skip the
+      // user's Vite plugin factory (lazyPlugins) while it evaluates the config.
+      [CONFIG_METADATA_ENV]: '1',
     },
   };
 }

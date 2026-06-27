@@ -4,7 +4,7 @@ use rustc_hash::FxHashMap;
 use vite_path::AbsolutePath;
 use vite_str::Str;
 use vite_task::config::user::{
-    AutoInput, EnabledCacheConfig, GlobWithBase, InputBase, UserCacheConfig, UserInputEntry,
+    AutoTracking, EnabledCacheConfig, GlobWithBase, InputBase, UserCacheConfig, UserInputEntry,
 };
 
 use super::{
@@ -68,13 +68,7 @@ impl SubcommandResolver {
         resolved_vite_config: Option<&ResolvedUniversalViteConfig>,
         envs: &Arc<FxHashMap<Arc<OsStr>, Arc<OsStr>>>,
     ) -> anyhow::Result<ResolvedSubcommand> {
-        let command_name = subcommand.command_name();
-        let mut resolved = self.resolve_inner(subcommand, resolved_vite_config, envs).await?;
-        // Inject VP_COMMAND so that defineConfig's plugin factory knows which command is running,
-        // even when the subcommand is synthesized inside `vp run`.
-        let envs = Arc::make_mut(&mut resolved.envs);
-        envs.insert(Arc::from(OsStr::new("VP_COMMAND")), Arc::from(OsStr::new(command_name)));
-        Ok(resolved)
+        self.resolve_inner(subcommand, resolved_vite_config, envs).await
     }
 
     async fn resolve_inner(
@@ -171,10 +165,16 @@ impl SubcommandResolver {
                         .chain(iter::once(Str::from("build")))
                         .chain(args.into_iter().map(Str::from))
                         .collect(),
+                    // No synthetic cache config: vite reports its inputs/outputs/
+                    // envs to the runner via `@voidzero-dev/vite-task-client`.
+                    // All fields `None` keep caching enabled with auto input and
+                    // auto output inference (the latter drives output restoration);
+                    // vite's `ignoreInput`/`ignoreOutput`/`getEnv`/`getEnvs` refine
+                    // the fingerprint at runtime.
                     cache_config: UserCacheConfig::with_config(EnabledCacheConfig {
-                        env: Some(Box::new([Str::from("VITE_*")])),
+                        env: None,
                         untracked_env: None,
-                        input: Some(build_pack_cache_inputs()),
+                        input: None,
                         output: None,
                     }),
                     envs: merge_resolved_envs_with_version(envs, resolved.envs),
@@ -201,8 +201,7 @@ impl SubcommandResolver {
                         env: None,
                         untracked_env: None,
                         input: Some(vec![
-                            UserInputEntry::Auto(AutoInput { auto: true }),
-                            exclude_glob("!node_modules/.vite-temp/**", InputBase::Package),
+                            UserInputEntry::Auto(AutoTracking { auto: true }),
                             exclude_glob(
                                 "!node_modules/.vite/vitest/**/results.json",
                                 InputBase::Package,
@@ -307,15 +306,13 @@ fn exclude_glob(pattern: &str, base: InputBase) -> UserInputEntry {
     UserInputEntry::GlobWithBase(GlobWithBase { pattern: Str::from(pattern), base })
 }
 
-/// Common cache input entries for build/pack commands.
-/// Excludes .vite-temp config files and dist output files that are both read and written.
+/// Common cache input entries for the pack command.
+/// Excludes dist output files that are both read and written.
 /// TODO: The hardcoded `!dist/**` exclusion is a temporary workaround. It will be replaced
 /// by a runner-aware approach that automatically excludes task output directories.
 fn build_pack_cache_inputs() -> Vec<UserInputEntry> {
     vec![
-        UserInputEntry::Auto(AutoInput { auto: true }),
-        exclude_glob("!node_modules/.vite-temp/**", InputBase::Workspace),
-        exclude_glob("!node_modules/.vite-temp/**", InputBase::Package),
+        UserInputEntry::Auto(AutoTracking { auto: true }),
         exclude_glob("!dist/**", InputBase::Package),
     ]
 }
@@ -323,13 +320,10 @@ fn build_pack_cache_inputs() -> Vec<UserInputEntry> {
 /// Cache input entries for the check command.
 /// The vp check subprocess is a full vp CLI process (not resolved to a binary like
 /// build/lint/fmt), so it accesses additional directories that must be excluded:
-/// - `.vite-temp`: config compilation cache, read+written during vp CLI startup
 /// - `.vite/task-cache`: task runner state files that change after each run
 pub(super) fn check_cache_inputs() -> Vec<UserInputEntry> {
     vec![
-        UserInputEntry::Auto(AutoInput { auto: true }),
-        exclude_glob("!node_modules/.vite-temp/**", InputBase::Workspace),
-        exclude_glob("!node_modules/.vite-temp/**", InputBase::Package),
+        UserInputEntry::Auto(AutoTracking { auto: true }),
         exclude_glob("!node_modules/.vite/task-cache/**", InputBase::Workspace),
         exclude_glob("!node_modules/.vite/task-cache/**", InputBase::Package),
     ]

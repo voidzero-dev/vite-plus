@@ -38,9 +38,7 @@ struct NpmRegistry {
 
 impl NpmRegistry {
     async fn resolve() -> Result<Self, Error> {
-        let cwd = current_dir().map_err(|error| {
-            Error::ConfigError(format!("Cannot get current directory: {error}").into())
-        })?;
+        let cwd = current_dir()?;
         let resolution = resolve_version(&cwd).await?;
         let runtime = vite_js_runtime::download_runtime(
             vite_js_runtime::JsRuntimeType::Node,
@@ -78,9 +76,7 @@ async fn npm_view(
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        return Err(Error::ConfigError(
-            format!("npm view failed for {package_spec}: {stderr}").into(),
-        ));
+        return Err(Error::Other(format!("npm view failed for {package_spec}: {stderr}").into()));
     }
 
     Ok(output.stdout)
@@ -159,7 +155,7 @@ pub(crate) fn parse_package_spec(spec: &str) -> Result<(String, Option<String>),
     if is_local_package_spec(spec) {
         let package_json = read_local_package_json(spec)?;
         let Some(package_name) = package_json.get("name").and_then(|name| name.as_str()) else {
-            return Err(Error::ConfigError(
+            return Err(Error::Other(
                 format!("Local package {spec} must have a string name in package.json").into(),
             ));
         };
@@ -187,13 +183,9 @@ fn resolve_local_package_path(spec: &str) -> Result<AbsolutePathBuf, Error> {
     let path = std::path::Path::new(path_spec);
     if path.is_absolute() {
         AbsolutePathBuf::new(path.to_path_buf())
-            .ok_or_else(|| Error::ConfigError(format!("Invalid local package path {spec}").into()))
+            .ok_or_else(|| Error::Other(format!("Invalid local package path {spec}").into()))
     } else {
-        Ok(current_dir()
-            .map_err(|error| {
-                Error::ConfigError(format!("Cannot get current directory: {error}").into())
-            })?
-            .join(path))
+        Ok(current_dir()?.join(path))
     }
 }
 
@@ -206,7 +198,7 @@ fn read_local_package_json(spec: &str) -> Result<serde_json::Value, Error> {
     let package_json_path = package_path.join("package.json");
     let package_json_content =
         std::fs::read_to_string(package_json_path.as_path()).map_err(|error| {
-            Error::ConfigError(
+            Error::Other(
                 format!(
                     "Failed to read package.json for local package {spec} at {}: {error}",
                     package_json_path.as_path().display()
@@ -227,7 +219,7 @@ fn read_package_json_from_tarball(
     package_path: &AbsolutePathBuf,
 ) -> Result<serde_json::Value, Error> {
     let file = File::open(package_path.as_path()).map_err(|error| {
-        Error::ConfigError(
+        Error::Other(
             format!(
                 "Failed to read package tarball {spec} at {}: {error}",
                 package_path.as_path().display()
@@ -239,13 +231,13 @@ fn read_package_json_from_tarball(
     let mut archive = Archive::new(decoder);
 
     for entry in archive.entries().map_err(|error| {
-        Error::ConfigError(format!("Failed to read package tarball {spec}: {error}").into())
+        Error::Other(format!("Failed to read package tarball {spec}: {error}").into())
     })? {
         let mut entry = entry.map_err(|error| {
-            Error::ConfigError(format!("Failed to read package tarball {spec}: {error}").into())
+            Error::Other(format!("Failed to read package tarball {spec}: {error}").into())
         })?;
         let path = entry.path().map_err(|error| {
-            Error::ConfigError(format!("Failed to read package tarball {spec}: {error}").into())
+            Error::Other(format!("Failed to read package tarball {spec}: {error}").into())
         })?;
         if path.as_ref() != std::path::Path::new("package/package.json") {
             continue;
@@ -253,30 +245,28 @@ fn read_package_json_from_tarball(
 
         let mut package_json_content = String::new();
         entry.read_to_string(&mut package_json_content).map_err(|error| {
-            Error::ConfigError(
+            Error::Other(
                 format!("Failed to read package.json from package tarball {spec}: {error}").into(),
             )
         })?;
         return serde_json::from_str(&package_json_content).map_err(Error::JsonError);
     }
 
-    Err(Error::ConfigError(
-        format!("Package tarball {spec} must contain package/package.json").into(),
-    ))
+    Err(Error::Other(format!("Package tarball {spec} must contain package/package.json").into()))
 }
 
 fn parse_npm_view_version(stdout: &[u8]) -> Result<String, Error> {
     let raw = String::from_utf8_lossy(stdout);
     let trimmed = raw.trim();
     if trimmed.is_empty() {
-        return Err(Error::ConfigError("npm view returned an empty version".into()));
+        return Err(Error::Other("npm view returned an empty version".into()));
     }
 
     match serde_json::from_str::<serde_json::Value>(trimmed) {
         Ok(serde_json::Value::String(version)) => Ok(version),
         Ok(serde_json::Value::Array(versions)) => {
             let Some(version) = versions.iter().rev().find_map(|version| version.as_str()) else {
-                return Err(Error::ConfigError("npm view returned an empty version list".into()));
+                return Err(Error::Other("npm view returned an empty version list".into()));
             };
             Ok(version.to_string())
         }

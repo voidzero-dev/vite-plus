@@ -204,7 +204,8 @@ impl PackageManager {
             }
             PackageManagerType::Yarn => {
                 // Yarn 1 (Classic) runs lifecycle scripts by default; Berry (2+) blocks them.
-                if self.version.starts_with("1.") {
+                let is_berry = self.is_yarn_berry();
+                if !is_berry {
                     output::warn(
                         "yarn (v1) runs lifecycle scripts by default. To restrict them, set \
                          `ignore-scripts=true` in .npmrc and rebuild approved packages with \

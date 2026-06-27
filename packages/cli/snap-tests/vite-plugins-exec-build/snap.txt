@@ -1,0 +1,3 @@
+> vp exec node build.mjs
+> cat dist/index.html | grep 'exec-build-plugin-injected' # vp exec should still load vite plugins from factory
+  <!-- exec-build-plugin-injected --></body>

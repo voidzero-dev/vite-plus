@@ -294,7 +294,6 @@ jobs:
           Get-Command tsc
 
           # Test 2: Verify the package was installed correctly
-          Get-ChildItem (Join-Path $vpHome "packages/typescript")
           Get-ChildItem $vpBin
 
           # Test 3: Uninstall
@@ -386,7 +385,6 @@ jobs:
           which tsc
 
           # Test 2: Verify the package was installed correctly
-          ls -la ~/.vite-plus/packages/typescript/
           ls -la ~/.vite-plus/bin/
 
           # Test 3: Uninstall

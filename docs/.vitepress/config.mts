@@ -101,15 +101,6 @@ export default extendConfig(
         ['meta', { property: 'og:site_name', content: 'Vite+' }],
         ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
         ['meta', { name: 'twitter:site', content: '@voidzerodev' }],
-        [
-          'script',
-          {
-            src: 'https://cdn.usefathom.com/script.js',
-            'data-site': 'JFDLUWBH',
-            'data-spa': 'auto',
-            defer: '',
-          },
-        ],
       ],
       vite: {
         optimizeDeps: {

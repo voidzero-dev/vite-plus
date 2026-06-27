@@ -80,15 +80,14 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
             crate::cli::EnvSubcommands::Uninstall { version } => {
                 let provider = vite_js_runtime::NodeProvider::new();
                 let resolved = config::resolve_version_alias(&version, &provider).await?;
-                let home_dir = vite_shared::get_vp_home()
-                    .map_err(|e| crate::error::Error::ConfigError(format!("{e}").into()))?;
+                let home_dir = vite_shared::get_vp_home()?;
                 let version_dir = home_dir.join("js_runtime").join("node").join(&resolved);
                 if !version_dir.as_path().exists() {
                     eprintln!("Node.js v{} is not installed", resolved);
                     return Ok(exit_status(1));
                 }
                 tokio::fs::remove_dir_all(version_dir.as_path()).await.map_err(|e| {
-                    crate::error::Error::ConfigError(
+                    crate::error::Error::Other(
                         format!("Failed to remove Node.js v{}: {}", resolved, e).into(),
                     )
                 })?;

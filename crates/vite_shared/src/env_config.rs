@@ -68,6 +68,12 @@ pub struct EnvConfig {
     /// Env: `VP_NODE_DIST_MIRROR`
     pub node_dist_mirror: Option<String>,
 
+    /// Skip PGP signature verification of the Node.js `SHASUMS256.txt` (escape
+    /// hatch); the SHA-256 checksum is still verified.
+    ///
+    /// Env: `VP_NODE_SKIP_SIGNATURE_VERIFY`
+    pub node_skip_signature_verify: bool,
+
     /// Whether running in a CI environment.
     ///
     /// Env: `CI`
@@ -132,6 +138,8 @@ impl EnvConfig {
                 .trim_end_matches('/')
                 .to_string(),
             node_dist_mirror: std::env::var(env_vars::VP_NODE_DIST_MIRROR).ok(),
+            node_skip_signature_verify: std::env::var(env_vars::VP_NODE_SKIP_SIGNATURE_VERIFY)
+                .is_ok(),
             is_ci: std::env::var("CI").is_ok(),
             bypass_shim: std::env::var(env_vars::VP_BYPASS).is_ok(),
             debug_shim: std::env::var(env_vars::VP_DEBUG_SHIM).is_ok(),
@@ -218,6 +226,7 @@ impl EnvConfig {
             vite_plus_home: None,
             npm_registry: "https://registry.npmjs.org".into(),
             node_dist_mirror: None,
+            node_skip_signature_verify: false,
             is_ci: false,
             bypass_shim: false,
             debug_shim: false,
@@ -269,6 +278,7 @@ mod tests {
         assert_eq!(config.npm_registry, "https://registry.npmjs.org");
         assert!(!config.is_ci);
         assert!(!config.bypass_shim);
+        assert!(!config.node_skip_signature_verify);
     }
 
     #[test]

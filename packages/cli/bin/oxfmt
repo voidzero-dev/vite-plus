@@ -23,8 +23,11 @@ const oxfmtBin = join(dirname(dirname(oxfmtMainPath)), 'bin', 'oxfmt');
 
 // This allows oxfmt to load vite.config.ts.
 // For `vp check` and `vp fmt`, VP_VERSION is injected by
-// `merge_resolved_envs_with_version()` in `cli.rs`, and VP_COMMAND is injected
-// by `SubcommandResolver::resolve()`.
+// `merge_resolved_envs_with_version()` in `cli.rs`.
 process.env.VP_VERSION = pkg.version;
-process.env.VP_COMMAND ??= 'fmt';
+// oxfmt reads vite.config.ts only for the `fmt` block, so skip the user's
+// Vite plugin factory (lazyPlugins) while the config evaluates.
+// Literal kept in sync with CONFIG_METADATA_ENV in src/utils/constants.ts
+// (this plain-JS bin can't import the bundled constant).
+process.env.VP_RESOLVING_CONFIG_METADATA ??= '1';
 await import(pathToFileURL(oxfmtBin).href);
