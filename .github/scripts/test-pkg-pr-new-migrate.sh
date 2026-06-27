@@ -12,6 +12,10 @@ Installs an isolated global Vite+ CLI built from a pkg.pr.new commit and runs
 bridge (https://github.com/fengmk2/pkg-pr-registry-bridge) so they install like
 ordinary npm versions (0.0.0-commit.<sha>) instead of mutable pkg.pr.new URLs.
 
+Persists the bridge registry into the project's `.npmrc` (npm/pnpm/Yarn
+Classic/Bun) and, for Yarn Berry projects, `.yarnrc.yml`, so the migrated
+project resolves the commit versions both during this run and in its own CI.
+
 Examples:
   .github/scripts/test-pkg-pr-new-migrate.sh 1891 /path/to/npmx.dev
   .github/scripts/test-pkg-pr-new-migrate.sh 4eb2104c /path/to/project --no-interactive
@@ -229,10 +233,49 @@ export VP_FORCE_MIGRATE=1
 # Point every package manager at the registry bridge. It serves the vite-plus /
 # vite-plus-core / per-platform CLI commit builds and proxies everything else to
 # npmjs, so the project resolves the commit versions like any released package.
-# npm_config_registry covers npm, pnpm, Yarn Classic and Bun;
-# YARN_NPM_REGISTRY_SERVER covers Yarn Berry.
+# Yarn Berry only honors YARN_NPM_REGISTRY_SERVER; Bun honors npm_config_registry.
 export npm_config_registry="$bridge_registry"
 export YARN_NPM_REGISTRY_SERVER="$bridge_registry"
+
+# Persist the bridge registry into the project's own config files so the
+# migrated project installs the commit builds in ITS OWN CI too, not just during
+# this run (the env vars above are not persisted). pnpm in particular resolves
+# from .npmrc, not npm_config_registry, and without this fetches the commit
+# version from registry.npmjs.org and fails with ERR_PNPM_NO_MATCHING_VERSION.
+registry_marker="# pkg.pr.new registry bridge (added by test-pkg-pr-new-migrate.sh)"
+
+# .npmrc is read by npm, pnpm, Yarn Classic and Bun.
+project_npmrc="$project_dir/.npmrc"
+if ! grep -qsF "$registry_marker" "$project_npmrc"; then
+  if [ -s "$project_npmrc" ]; then
+    printf '\n' >> "$project_npmrc"
+  fi
+  printf '%s\nregistry=%s\n' "$registry_marker" "$bridge_registry" >> "$project_npmrc"
+fi
+
+# Yarn Berry ignores .npmrc and reads .yarnrc.yml instead. The migration's own
+# .yarnrc.yml rewrite preserves unrelated keys, so npmRegistryServer survives.
+project_yarnrc="$project_dir/.yarnrc.yml"
+is_yarn_berry=0
+if [ -f "$project_yarnrc" ] ||
+  { [ -f "$project_dir/yarn.lock" ] && grep -q '^__metadata:' "$project_dir/yarn.lock" 2>/dev/null; } ||
+  grep -qE '"packageManager"[[:space:]]*:[[:space:]]*"yarn@([2-9]|[1-9][0-9])' "$project_dir/package.json" 2>/dev/null; then
+  is_yarn_berry=1
+fi
+if [ "$is_yarn_berry" -eq 1 ]; then
+  if grep -qsE '^npmRegistryServer:' "$project_yarnrc"; then
+    # Override an existing default-registry setting in place.
+    sed -i.pkg-pr-new.bak -E \
+      "s|^npmRegistryServer:.*|npmRegistryServer: \"$bridge_registry\"|" "$project_yarnrc"
+    rm -f "$project_yarnrc.pkg-pr-new.bak"
+  elif ! grep -qsF "$registry_marker" "$project_yarnrc"; then
+    if [ -s "$project_yarnrc" ]; then
+      printf '\n' >> "$project_yarnrc"
+    fi
+    printf '%s\nnpmRegistryServer: "%s"\n' "$registry_marker" "$bridge_registry" >> "$project_yarnrc"
+  fi
+fi
+
 hash -r
 
 echo
@@ -242,6 +285,7 @@ echo "  resolved commit: $resolved_ref"
 echo "  executable: $vp_bin"
 echo "  installation: $(readlink "$pr_home/current" 2>/dev/null || echo unknown)"
 echo "  registry bridge: $bridge_registry"
+echo "  project .npmrc: $project_npmrc"
 echo "  vite-plus spec: $commit_version"
 echo "  vite spec: $vite_core_spec"
 "$vp_bin" --version
