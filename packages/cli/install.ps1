@@ -90,12 +90,33 @@ function Test-IsInstallStopException {
     return $ErrorRecord.Exception.Message -eq $script:InstallStopSignal
 }
 
+function Test-ShouldKeepShellOpenAfterFailure {
+    # Only `irm ... | iex` typed in an already-open interactive shell should keep the
+    # session alive. CI, script files, and `powershell -Command "..."` must exit non-zero.
+    if ($env:CI -eq "true") {
+        return $false
+    }
+    if ($PSCommandPath) {
+        return $false
+    }
+    if (-not [Environment]::UserInteractive) {
+        return $false
+    }
+    try {
+        $commandLine = (Get-CimInstance Win32_Process -Filter "ProcessId=$PID").CommandLine
+        if ($commandLine -match '(^|\s)-Command(\s|$)') {
+            return $false
+        }
+    } catch {
+        return $false
+    }
+    return $true
+}
+
 function Exit-Installer {
     param([int]$Code = 1)
     $global:LASTEXITCODE = $Code
-    # CI and script-file invocations must propagate a non-zero process exit code.
-    # `irm ... | iex` has no $PSCommandPath; use a catchable stop signal to keep the shell open.
-    if ($env:CI -eq "true" -or $PSCommandPath) {
+    if (-not (Test-ShouldKeepShellOpenAfterFailure)) {
         exit $Code
     }
     throw $script:InstallStopSignal
@@ -823,7 +844,11 @@ exec "`$VP_HOME/current/bin/vp.exe" "`$@"
 try {
     Main
 } catch {
-    if (-not (Test-IsInstallStopException $_)) {
-        throw
+    if (Test-IsInstallStopException $_) {
+        if (Test-ShouldKeepShellOpenAfterFailure) {
+            return
+        }
+        exit $global:LASTEXITCODE
     }
+    throw
 }
