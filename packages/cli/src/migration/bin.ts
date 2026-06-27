@@ -1288,6 +1288,12 @@ async function main() {
       await ensureExistingPackageManager();
     }
 
+    // The package-manager download above starts the "Preparing migration"
+    // spinner. Stop it before gathering interactive decisions below: a live
+    // spinner keeps re-rendering its timer line over the prompts and corrupts
+    // them (the spinner is restarted for the bootstrap/install phase).
+    clearMigrationProgress();
+
     // The early guard ran before the package manager was resolved. If it was
     // only determined to be Yarn afterwards (e.g. selected because the project
     // had no detectable manager), re-run the guard so a `YARN_NODE_LINKER=pnp`
