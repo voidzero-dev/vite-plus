@@ -77,3 +77,84 @@ vp --version
 ```
 
 Then set the `vitest` override to that exact version, or rerun `vp migrate` to update the pin for you.
+
+## Preview Builds
+
+Some Vite+ pull requests publish temporary packages through `pkg.pr.new`. Treat these as nightly or bleeding-edge builds: they are useful when you want to verify a specific fix, test a fresh upstream dependency bump, or confirm a change before the next npm release. For day-to-day work, prefer the published `latest` release.
+
+You can find preview builds in pull requests that automatically update upstream dependencies. For examples, search the merged pull requests for [upstream dependency updates](https://github.com/voidzero-dev/vite-plus/pulls?q=is%3Apr+is%3Amerged+upgrade+upstream+dependencies).
+
+Preview builds are addressed by pull request number or commit SHA. They are not a stable version range, and you should avoid leaving them in long-lived branches unless a maintainer asks you to.
+
+### Global `vp` Preview
+
+Install a preview build of the global CLI by passing `VP_PR_VERSION` to the installer:
+
+```bash
+curl -fsSL https://vite.plus | VP_PR_VERSION=<pr-or-sha> bash
+```
+
+On Windows:
+
+```powershell
+$env:VP_PR_VERSION = "<pr-or-sha>"
+irm https://vite.plus/ps1 | iex
+Remove-Item Env:\VP_PR_VERSION
+```
+
+Run `vp --version` afterward to confirm which build and bundled tool versions are active. When you are done testing, return to the published release with `vp upgrade --force` or by running the installer again without `VP_PR_VERSION`.
+
+### Local `vite-plus` Preview
+
+To test an unreleased local package in a project, update the project dependency and any Vite+ alias or override before installing. Use the same pull request number or commit SHA for every preview URL:
+
+- `vite-plus` should point at `https://pkg.pr.new/voidzero-dev/vite-plus@<pr-or-sha>`
+- any direct `vite` alias or direct `@voidzero-dev/vite-plus-core` dependency should point at `https://pkg.pr.new/voidzero-dev/vite-plus/@voidzero-dev/vite-plus-core@<pr-or-sha>`
+- any `vite` override or resolution should point at that same core preview URL
+
+For npm and Bun projects, update the relevant `package.json` entries:
+
+```json
+{
+  "devDependencies": {
+    "vite-plus": "https://pkg.pr.new/voidzero-dev/vite-plus@<pr-or-sha>",
+    "vite": "https://pkg.pr.new/voidzero-dev/vite-plus/@voidzero-dev/vite-plus-core@<pr-or-sha>"
+  },
+  "overrides": {
+    "vite": "https://pkg.pr.new/voidzero-dev/vite-plus/@voidzero-dev/vite-plus-core@<pr-or-sha>"
+  }
+}
+```
+
+Only include the direct `vite` entry if your project already has one. If your project has `@voidzero-dev/vite-plus-core` directly instead, update that package spec to the same core preview URL.
+
+For pnpm workspaces, make the same temporary override change in `pnpm-workspace.yaml` if that is where your Vite+ overrides live:
+
+```yaml
+overrides:
+  vite: 'https://pkg.pr.new/voidzero-dev/vite-plus/@voidzero-dev/vite-plus-core@<pr-or-sha>'
+```
+
+For Yarn projects, update `resolutions` instead:
+
+```json
+{
+  "resolutions": {
+    "vite": "https://pkg.pr.new/voidzero-dev/vite-plus/@voidzero-dev/vite-plus-core@<pr-or-sha>"
+  }
+}
+```
+
+Then install once:
+
+```bash
+vp install
+```
+
+After installing a preview, check the bundled versions with `vp --version`. If the preview includes a newer bundled Vitest, update your `vitest` override to that exact version so `vp test` and project imports keep using the same Vitest copy.
+
+When testing is complete, restore every preview spec first: set `vite-plus` back to `latest`, and set any direct `vite` / `@voidzero-dev/vite-plus-core` dependency plus any `vite` override or resolution back to `npm:@voidzero-dev/vite-plus-core@latest`. Then reinstall:
+
+```bash
+vp install
+```
