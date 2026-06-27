@@ -114,8 +114,11 @@ Do not align independently versioned or obsolete packages:
 
 The base `@vitest/browser` runtime and `@vitest/browser-preview` are bundled by
 Vite+ and should be removed as direct dependencies. The Playwright and
-WebdriverIO providers remain opt-in: keep or add the provider at the bundled
-Vitest version and ensure its `playwright` or `webdriverio` peer is installed.
+WebdriverIO providers remain opt-in. Preserve an existing catalog reference when
+its catalog owns the provider. When migration injects a provider into a
+catalog-capable project, it uses the preferred catalog and adds the provider at
+the bundled Vitest version. Otherwise, it writes the concrete bundled version.
+Ensure the provider's `playwright` or `webdriverio` peer is also installed.
 
 Migration detects providers before rewriting imports. This includes legacy
 projects that aliased `vitest` to `@voidzero-dev/vite-plus-test` and import from
@@ -180,6 +183,10 @@ Unrelated `bunx` commands and other package-executor forms remain unchanged.
   architecture and build policy, audit/update configuration, and configuration
   dependencies. It removes the `pnpm` object when it becomes empty and preserves
   unknown keys that may belong to other tooling.
+- When both files define the same migrated pnpm setting, migration recursively
+  merges object entries and retains unique array entries. Values from
+  `package.json#pnpm` win at conflicting scalar leaves, while workspace-only
+  sibling entries are preserved.
 - Before pnpm 10.6.2, migration retains these settings in
   `package.json#pnpm`. General workspace-setting support started in pnpm 10.5.0,
   but overrides required 10.5.1 and `peerDependencyRules` required 10.6.2. pnpm

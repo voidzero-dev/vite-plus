@@ -113,7 +113,7 @@ export async function formatMigratedProject(
     if (paths?.length === 0) {
       return true;
     }
-    const cliEntry = process.argv[1];
+    const cliEntry = process.argv[1] ? path.resolve(process.cwd(), process.argv[1]) : undefined;
     const result = await format(projectRoot, interactive, paths, {
       silent: false,
       ...(cliEntry

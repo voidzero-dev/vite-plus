@@ -2203,9 +2203,13 @@ describe('ensureVitePlusBootstrap', () => {
     const pkg = readJson(path.join(tmpDir, 'package.json')) as {
       devDependencies: Record<string, string>;
     };
-    expect(pkg.devDependencies['@vitest/browser-playwright']).toBe(VITEST_VERSION);
+    expect(pkg.devDependencies['@vitest/browser-playwright']).toBe('catalog:');
     expect(pkg.devDependencies.playwright).toBe('*');
     expect(pkg.devDependencies.vitest).toBe('catalog:');
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      catalog: Record<string, string>;
+    };
+    expect(workspace.catalog['@vitest/browser-playwright']).toBe(VITEST_VERSION);
     expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
   });
 
@@ -2291,13 +2295,14 @@ describe('ensureVitePlusBootstrap', () => {
       peerDependencies: Record<string, string>;
     };
     expect(pkg.peerDependencies['@vitest/browser-playwright']).toBe('^4.0.0');
-    expect(pkg.devDependencies['@vitest/browser-playwright']).toBe(VITEST_VERSION);
+    expect(pkg.devDependencies['@vitest/browser-playwright']).toBe('catalog:');
     expect(pkg.devDependencies.playwright).toBe('*');
     expect(pkg.devDependencies.vitest).toBe('catalog:');
     const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
       catalog: Record<string, string>;
       overrides: Record<string, string>;
     };
+    expect(workspace.catalog['@vitest/browser-playwright']).toBe(VITEST_VERSION);
     expect(workspace.catalog.vitest).toBe(VITEST_VERSION);
     expect(workspace.overrides.vitest).toBe('catalog:');
     expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
@@ -2589,6 +2594,27 @@ describe('ensureVitePlusBootstrap', () => {
         },
       }),
     );
+    fs.writeFileSync(
+      path.join(tmpDir, 'pnpm-workspace.yaml'),
+      [
+        'overrides:',
+        '  react: 18.3.1',
+        'onlyBuiltDependencies:',
+        '  - sharp',
+        'packageExtensions:',
+        "  'other-package@*':",
+        '    peerDependencies:',
+        "      vue: '*'",
+        'patchedDependencies:',
+        '  is-even@1.0.0: patches/is-even.patch',
+        'peerDependencyRules:',
+        '  allowAny:',
+        '    - react',
+        '  allowedVersions:',
+        "    react: '*'",
+        '',
+      ].join('\n'),
+    );
 
     expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(true);
     const result = ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.pnpm));
@@ -2605,17 +2631,21 @@ describe('ensureVitePlusBootstrap', () => {
       onlyBuiltDependencies: string[];
       packageExtensions: Record<string, unknown>;
       patchedDependencies: Record<string, string>;
+      overrides: Record<string, string>;
       peerDependencyRules: { allowAny: string[]; allowedVersions: Record<string, string> };
     };
-    expect(workspace.onlyBuiltDependencies).toEqual(['esbuild']);
+    expect(workspace.onlyBuiltDependencies).toEqual(['sharp', 'esbuild']);
     expect(workspace.packageExtensions).toEqual({
+      'other-package@*': { peerDependencies: { vue: '*' } },
       'some-package@*': { peerDependencies: { react: '*' } },
     });
     expect(workspace.patchedDependencies).toEqual({
+      'is-even@1.0.0': 'patches/is-even.patch',
       'is-odd@3.0.1': 'patches/is-odd.patch',
     });
-    expect(workspace.peerDependencyRules.allowAny).toEqual(['vite']);
-    expect(workspace.peerDependencyRules.allowedVersions).toEqual({ vite: '*' });
+    expect(workspace.overrides.react).toBe('18.3.1');
+    expect(workspace.peerDependencyRules.allowAny).toEqual(['react', 'vite']);
+    expect(workspace.peerDependencyRules.allowedVersions).toEqual({ react: '*', vite: '*' });
     expect(detectVitePlusBootstrapPending(tmpDir, PackageManager.pnpm)).toBe(false);
   });
 
@@ -4018,16 +4048,17 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
       string,
       string
     >;
-    // Opt-in provider is pinned to a CONCRETE bundled vitest version in the
-    // user's own deps — it is deliberately NOT in VITE_PLUS_OVERRIDE_PACKAGES, so
-    // no catalog entry is written for it and it must self-resolve.
-    expect(devDeps).toHaveProperty('@vitest/browser-webdriverio', VITEST_VERSION);
+    // The injected provider follows the same catalog as the managed Vitest
+    // dependency, and the catalog owns its concrete bundled version.
+    expect(devDeps).toHaveProperty('@vitest/browser-webdriverio', 'catalog:');
     expect(devDeps.webdriverio).toBe('*');
     expect(devDeps.vitest).toBe('catalog:');
 
     const yaml = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
       allowBuilds: Record<string, boolean>;
+      catalog: Record<string, string>;
     };
+    expect(yaml.catalog['@vitest/browser-webdriverio']).toBe(VITEST_VERSION);
     expect(yaml.allowBuilds.edgedriver).toBe(true);
     expect(yaml.allowBuilds.geckodriver).toBe(true);
   });
@@ -4060,11 +4091,12 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
       string,
       string
     >;
-    // Opt-in provider pinned to a CONCRETE bundled vitest version in the user's
-    // own deps — deliberately NOT in VITE_PLUS_OVERRIDE_PACKAGES, so no catalog
-    // entry is written for it and it must self-resolve.
-    expect(devDeps).toHaveProperty('@vitest/browser-playwright', VITEST_VERSION);
+    expect(devDeps).toHaveProperty('@vitest/browser-playwright', 'catalog:');
     expect(devDeps.playwright).toBe('*');
+    const yaml = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      catalog: Record<string, string>;
+    };
+    expect(yaml.catalog['@vitest/browser-playwright']).toBe(VITEST_VERSION);
   });
 
   it.each([
@@ -4106,9 +4138,13 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
         string,
         string
       >;
-      expect(devDeps[`@vitest/browser-${provider}`]).toBe(VITEST_VERSION);
+      expect(devDeps[`@vitest/browser-${provider}`]).toBe('catalog:');
       expect(devDeps[provider]).toBe('*');
       expect(devDeps.vitest).toBe('catalog:');
+      const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+        catalog: Record<string, string>;
+      };
+      expect(workspace.catalog[`@vitest/browser-${provider}`]).toBe(VITEST_VERSION);
       expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8')).toContain(
         `from 'vite-plus/test/${subpath}'`,
       );
@@ -4157,9 +4193,13 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
       string,
       string
     >;
-    expect(devDeps['@vitest/browser-playwright']).toBe(VITEST_VERSION);
+    expect(devDeps['@vitest/browser-playwright']).toBe('catalog:');
     expect(devDeps.playwright).toBe('^1.56.1');
     expect(devDeps.vitest).toBe('catalog:');
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      catalog: Record<string, string>;
+    };
+    expect(workspace.catalog['@vitest/browser-playwright']).toBe(VITEST_VERSION);
     expect(fs.readFileSync(path.join(tmpDir, 'vite.config.ts'), 'utf8')).toContain(
       "from 'vite-plus/test/browser-playwright'",
     );
@@ -4193,8 +4233,12 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
       string,
       string
     >;
-    expect(devDeps).toHaveProperty('@vitest/browser-playwright', VITEST_VERSION);
+    expect(devDeps).toHaveProperty('@vitest/browser-playwright', 'catalog:');
     expect(devDeps.playwright).toBe('*');
+    const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
+      catalog: Record<string, string>;
+    };
+    expect(workspace.catalog['@vitest/browser-playwright']).toBe(VITEST_VERSION);
   });
 
   it('injects the webdriverio provider on a re-run from the migrated provider-subpath import', () => {
@@ -4226,11 +4270,13 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
       string,
       string
     >;
-    expect(devDeps).toHaveProperty('@vitest/browser-webdriverio', VITEST_VERSION);
+    expect(devDeps).toHaveProperty('@vitest/browser-webdriverio', 'catalog:');
     expect(devDeps.webdriverio).toBe('*');
     const yaml = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
       allowBuilds: Record<string, boolean>;
+      catalog: Record<string, string>;
     };
+    expect(yaml.catalog['@vitest/browser-webdriverio']).toBe(VITEST_VERSION);
     expect(yaml.allowBuilds.edgedriver).toBe(true);
     expect(yaml.allowBuilds.geckodriver).toBe(true);
   });
@@ -4261,11 +4307,13 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
       string,
       string
     >;
-    expect(devDeps).toHaveProperty('@vitest/browser-webdriverio', VITEST_VERSION);
+    expect(devDeps).toHaveProperty('@vitest/browser-webdriverio', 'catalog:');
     expect(devDeps.webdriverio).toBe('*');
     const yaml = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
       allowBuilds: Record<string, boolean>;
+      catalog: Record<string, string>;
     };
+    expect(yaml.catalog['@vitest/browser-webdriverio']).toBe(VITEST_VERSION);
     expect(yaml.allowBuilds.edgedriver).toBe(true);
     expect(yaml.allowBuilds.geckodriver).toBe(true);
   });
@@ -4299,8 +4347,9 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
 
     const pkg = readJson(path.join(tmpDir, 'package.json'));
     const devDeps = pkg.devDependencies as Record<string, string>;
-    // Provider installed in the user's own deps at the bundled vitest version.
-    expect(devDeps).toHaveProperty('@vitest/browser-webdriverio', VITEST_VERSION);
+    // Provider installed through the same catalog used by the managed Vitest
+    // dependency.
+    expect(devDeps).toHaveProperty('@vitest/browser-webdriverio', 'catalog:');
     expect(devDeps.webdriverio).toBe('*');
     // Peer-only declaration is left intact and its `catalog:` reference still
     // resolves because the catalog entry is preserved (NOT deleted).
@@ -4311,7 +4360,7 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
       catalog: Record<string, string>;
       allowBuilds: Record<string, boolean>;
     };
-    expect(yaml.catalog['@vitest/browser-webdriverio']).toBe('4.0.0');
+    expect(yaml.catalog['@vitest/browser-webdriverio']).toBe(VITEST_VERSION);
     expect(yaml.catalog.vitest).toBe(VITEST_VERSION);
     expect(yaml.allowBuilds.edgedriver).toBe(true);
     expect(yaml.allowBuilds.geckodriver).toBe(true);

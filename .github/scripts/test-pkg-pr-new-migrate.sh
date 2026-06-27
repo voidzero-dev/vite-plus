@@ -56,6 +56,7 @@ fi
 repo_root="$(cd "$script_dir/../.." && pwd -P)"
 installer="$repo_root/packages/cli/install.sh"
 pnpm_version_helper="$script_dir/ensure-pkg-pr-new-pnpm-version.mjs"
+override_json_helper="$script_dir/create-pkg-pr-new-overrides.mjs"
 
 if [ ! -f "$installer" ]; then
   echo "error: Vite+ installer not found: $installer" >&2
@@ -64,6 +65,11 @@ fi
 
 if [ ! -f "$pnpm_version_helper" ]; then
   echo "error: pnpm version helper not found: $pnpm_version_helper" >&2
+  exit 2
+fi
+
+if [ ! -f "$override_json_helper" ]; then
+  echo "error: pkg.pr.new override helper not found: $override_json_helper" >&2
   exit 2
 fi
 
@@ -245,8 +251,8 @@ fi
 export VP_HOME="$pr_home"
 export PATH="$VP_HOME/bin:$PATH"
 export VP_VERSION="$vite_plus_spec"
-export VP_OVERRIDE_PACKAGES="$(printf \
-  '{"vite":"%s","vitest":"%s"}' \
+export VP_OVERRIDE_PACKAGES="$(node \
+  "$override_json_helper" \
   "$vite_override_spec" \
   "$vitest_version")"
 export VP_FORCE_MIGRATE=1

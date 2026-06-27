@@ -30,9 +30,39 @@ describe('formatMigratedProject', () => {
     expect(format).toHaveBeenCalledWith('/project', false, ['package.json', 'vite.config.ts'], {
       silent: false,
       command: process.execPath,
-      commandArgs: [...process.execArgv, process.argv[1]],
+      commandArgs: [...process.execArgv, path.resolve(process.cwd(), process.argv[1])],
     });
     expect(report.warnings).toEqual([]);
+  });
+
+  it('resolves a relative CLI entry before formatting from the project root', async () => {
+    const originalCliEntry = process.argv[1];
+    process.argv[1] = './packages/cli/src/migration/bin.ts';
+    try {
+      const format = vi.fn().mockResolvedValue({
+        durationMs: 1,
+        exitCode: 0,
+        status: 'formatted',
+      });
+      const report = createMigrationReport();
+
+      await expect(
+        formatMigratedProject('/different/project', false, report, {
+          format,
+          collectPaths: vi.fn().mockResolvedValue(['package.json']),
+        }),
+      ).resolves.toBe(true);
+      expect(format).toHaveBeenCalledWith('/different/project', false, ['package.json'], {
+        silent: false,
+        command: process.execPath,
+        commandArgs: [
+          ...process.execArgv,
+          path.resolve(process.cwd(), './packages/cli/src/migration/bin.ts'),
+        ],
+      });
+    } finally {
+      process.argv[1] = originalCliEntry;
+    }
   });
 
   it('skips formatting when migration changed no supported files', async () => {

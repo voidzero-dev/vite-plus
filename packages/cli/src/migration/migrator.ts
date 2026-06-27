@@ -1796,6 +1796,40 @@ function takePnpmWorkspaceSettings(pkg: {
   return Object.keys(settings).length > 0 ? settings : undefined;
 }
 
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+/**
+ * Preserve workspace-level siblings while moving the effective package.json
+ * pnpm settings into pnpm-workspace.yaml. Package values win at scalar leaves,
+ * while objects merge recursively and arrays retain unique entries from both
+ * locations.
+ */
+function mergePnpmWorkspaceSetting(existing: unknown, incoming: unknown): unknown {
+  if (Array.isArray(existing) && Array.isArray(incoming)) {
+    const seen = new Set<string | undefined>();
+    return [...existing, ...incoming].filter((value) => {
+      const key = JSON.stringify(value);
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
+  }
+  if (isPlainRecord(existing) && isPlainRecord(incoming)) {
+    const merged: Record<string, unknown> = { ...existing };
+    for (const [key, value] of Object.entries(incoming)) {
+      merged[key] = Object.hasOwn(existing, key)
+        ? mergePnpmWorkspaceSetting(existing[key], value)
+        : value;
+    }
+    return merged;
+  }
+  return incoming;
+}
+
 function migratePnpmSettingsToWorkspaceYaml(
   projectPath: string,
   settings: Record<string, unknown> | undefined,
@@ -1808,10 +1842,12 @@ function migratePnpmSettingsToWorkspaceYaml(
     fs.writeFileSync(pnpmWorkspaceYamlPath, '');
   }
   editYamlFile(pnpmWorkspaceYamlPath, (doc) => {
+    const workspace = (doc.toJS() ?? {}) as Record<string, unknown>;
     for (const [key, value] of Object.entries(settings)) {
       // package.json#pnpm was the effective source before migration. Preserve
-      // that precedence when the workspace file already defines the same key.
-      doc.set(key, doc.createNode(value));
+      // that precedence at conflicting leaves while retaining workspace-only
+      // object properties and array entries.
+      doc.set(key, doc.createNode(mergePnpmWorkspaceSetting(workspace[key], value)));
     }
   });
 }
@@ -1832,6 +1868,7 @@ export function rewriteStandaloneProject(
   const packageManager = workspaceInfo.packageManager;
   const catalogDependencyResolver = createCatalogDependencyResolver(projectPath, packageManager);
   const vitestEcosystemPackages = collectVitestEcosystemInstallDependencyNames(projectPath);
+  const providerCatalogAdditions = collectInjectedProviderNames(projectPath);
   const pnpmMajorVersion = pnpmMajor(workspaceInfo.downloadPackageManager.version);
   let extractedStagedConfig: Record<string, string | string[]> | null = null;
   let movedPnpmSettings: Record<string, unknown> | undefined;
@@ -2024,6 +2061,8 @@ export function rewriteStandaloneProject(
       shouldAllowBrowserProviderBuilds,
       usesVitest,
       vitestEcosystemPackages,
+      true,
+      providerCatalogAdditions,
     );
   }
 
@@ -2038,7 +2077,7 @@ export function rewriteStandaloneProject(
   }
 
   if (packageManager === PackageManager.yarn) {
-    rewriteYarnrcYml(projectPath, usesVitest, vitestEcosystemPackages);
+    rewriteYarnrcYml(projectPath, usesVitest, vitestEcosystemPackages, providerCatalogAdditions);
   }
 
   // Merge extracted staged config into vite.config.ts, then remove lint-staged from package.json
@@ -2103,9 +2142,18 @@ export function rewriteMonorepo(
     workspaceInfo.rootDir,
     workspaceInfo.packages,
   );
+  const providerCatalogAdditions = collectInjectedProviderNames(
+    workspaceInfo.rootDir,
+    workspaceInfo.packages,
+  );
   // rewrite root workspace
   if (workspaceInfo.packageManager === PackageManager.yarn) {
-    rewriteYarnrcYml(workspaceInfo.rootDir, workspaceUsesVitest, vitestEcosystemPackages);
+    rewriteYarnrcYml(
+      workspaceInfo.rootDir,
+      workspaceUsesVitest,
+      vitestEcosystemPackages,
+      providerCatalogAdditions,
+    );
   } else if (workspaceInfo.packageManager === PackageManager.bun) {
     rewriteBunCatalog(workspaceInfo.rootDir, workspaceUsesVitest, vitestEcosystemPackages);
   }
@@ -2129,6 +2177,7 @@ export function rewriteMonorepo(
       workspaceUsesVitest,
       vitestEcosystemPackages,
       usePnpmWorkspaceSettings,
+      providerCatalogAdditions,
     );
     if (usePnpmWorkspaceSettings && isForceOverrideMode()) {
       migratePnpmOverridesToWorkspaceYaml(workspaceInfo.rootDir, {
@@ -2309,6 +2358,7 @@ function rewritePnpmWorkspaceYaml(
   usesVitest: boolean,
   vitestEcosystemPackages: ReadonlySet<string>,
   writeWorkspaceSettings = true,
+  catalogAdditions: ReadonlySet<string> = new Set(),
 ): void {
   const pnpmWorkspaceYamlPath = path.join(projectPath, 'pnpm-workspace.yaml');
   if (!fs.existsSync(pnpmWorkspaceYamlPath)) {
@@ -2318,7 +2368,12 @@ function rewritePnpmWorkspaceYaml(
 
   editYamlFile(pnpmWorkspaceYamlPath, (doc) => {
     // catalog
-    const preferredCatalogSpec = rewriteCatalog(doc, usesVitest, vitestEcosystemPackages);
+    const preferredCatalogSpec = rewriteCatalog(
+      doc,
+      usesVitest,
+      vitestEcosystemPackages,
+      catalogAdditions,
+    );
     if (!writeWorkspaceSettings) {
       return;
     }
@@ -2934,6 +2989,7 @@ function rewriteYarnrcYml(
   projectPath: string,
   usesVitest: boolean,
   vitestEcosystemPackages: ReadonlySet<string>,
+  catalogAdditions: ReadonlySet<string> = new Set(),
 ): void {
   const yarnrcYmlPath = path.join(projectPath, '.yarnrc.yml');
   if (!fs.existsSync(yarnrcYmlPath)) {
@@ -2965,7 +3021,7 @@ function rewriteYarnrcYml(
     }
     doc.setIn(['npmPreapprovedPackages'], npmPreapprovedPackages);
     // catalog
-    rewriteCatalog(doc, usesVitest, vitestEcosystemPackages);
+    rewriteCatalog(doc, usesVitest, vitestEcosystemPackages, catalogAdditions);
   });
 }
 
@@ -3256,6 +3312,7 @@ function rewriteCatalog(
   doc: YamlDocument,
   usesVitest: boolean,
   vitestEcosystemPackages: ReadonlySet<string>,
+  catalogAdditions: ReadonlySet<string>,
 ): string {
   const parsed = doc.toJS() as {
     catalog?: Record<string, string>;
@@ -3270,10 +3327,24 @@ function rewriteCatalog(
         ? ['catalog']
         : ['catalogs', 'default'];
 
-  rewriteYamlCatalogAtPath(doc, targetPath, true, usesVitest, vitestEcosystemPackages);
+  rewriteYamlCatalogAtPath(
+    doc,
+    targetPath,
+    true,
+    usesVitest,
+    vitestEcosystemPackages,
+    catalogAdditions,
+  );
 
   if (targetPath[0] !== 'catalog') {
-    rewriteYamlCatalogAtPath(doc, ['catalog'], false, usesVitest, vitestEcosystemPackages);
+    rewriteYamlCatalogAtPath(
+      doc,
+      ['catalog'],
+      false,
+      usesVitest,
+      vitestEcosystemPackages,
+      catalogAdditions,
+    );
   }
 
   const catalogs = doc.getIn(['catalogs']);
@@ -3293,6 +3364,7 @@ function rewriteCatalog(
         false,
         usesVitest,
         vitestEcosystemPackages,
+        catalogAdditions,
       );
     }
   }
@@ -3306,6 +3378,7 @@ function rewriteYamlCatalogAtPath(
   addMissing: boolean,
   usesVitest: boolean,
   vitestEcosystemPackages: ReadonlySet<string>,
+  catalogAdditions: ReadonlySet<string>,
 ): void {
   const managed = managedOverridePackages(usesVitest);
   let catalogNode = doc.getIn(catalogPath);
@@ -3333,6 +3406,13 @@ function rewriteYamlCatalogAtPath(
   }
   if (!VITE_PLUS_VERSION.startsWith('file:') && (addMissing || catalog.has(VITE_PLUS_NAME))) {
     catalog.set(scalarString(VITE_PLUS_NAME), scalarString(VITE_PLUS_VERSION));
+  }
+  if (addMissing && VITEST_IS_MANAGED_OVERRIDE) {
+    for (const name of catalogAdditions) {
+      if (isAlignableVitestEcosystemPackage(name)) {
+        catalog.set(scalarString(name), scalarString(VITEST_VERSION));
+      }
+    }
   }
   for (const name of REMOVE_PACKAGES) {
     catalog.delete(name);
@@ -4277,7 +4357,12 @@ function reconcileVitePlusBootstrapPackage(
       }
     } else {
       pkg.devDependencies ??= {};
-      pkg.devDependencies[provider] = VITEST_VERSION;
+      pkg.devDependencies[provider] = getCatalogDependencySpec(
+        undefined,
+        VITEST_VERSION,
+        supportCatalog && packageManager !== PackageManager.bun,
+        { preferredCatalogSpec: catalogDependencyResolver?.preferredCatalogSpec },
+      );
     }
     const frameworkPeer = BROWSER_PROVIDER_PEER_DEPS[provider];
     const frameworkPresent = dependencyGroups.some(
@@ -4368,6 +4453,32 @@ function collectVitestEcosystemInstallDependencyNames(
         if (isAlignableVitestEcosystemPackage(name)) {
           names.add(name);
         }
+      }
+    }
+  }
+  return names;
+}
+
+function collectInjectedProviderNames(rootDir: string, packages?: WorkspacePackage[]): Set<string> {
+  const names = new Set<string>();
+  for (const packagePath of bootstrapProjectPaths(rootDir, packages)) {
+    const packageJsonPath = path.join(packagePath, 'package.json');
+    if (!fs.existsSync(packageJsonPath)) {
+      continue;
+    }
+    const pkg = readJsonFile(packageJsonPath) as BootstrapPackageJson;
+    const sourceModes = collectProviderSourceModes(packagePath);
+    const installGroups = [pkg.devDependencies, pkg.dependencies, pkg.optionalDependencies];
+    const dependencyGroups = [...installGroups, pkg.peerDependencies];
+    for (const provider of OPT_IN_BROWSER_PROVIDERS) {
+      const used =
+        sourceModes[provider] ||
+        dependencyGroups.some((dependencies) => dependencies?.[provider] !== undefined);
+      const installed = installGroups.some(
+        (dependencies) => dependencies?.[provider] !== undefined,
+      );
+      if (used && !installed) {
+        names.add(provider);
       }
     }
   }
@@ -4682,6 +4793,10 @@ export function ensureVitePlusBootstrap(
     projectPath,
     workspaceInfo.packages,
   );
+  const providerCatalogAdditions = collectInjectedProviderNames(
+    projectPath,
+    workspaceInfo.packages,
+  );
   let movedPnpmSettings: Record<string, unknown> | undefined;
 
   editJsonFile<
@@ -4806,6 +4921,8 @@ export function ensureVitePlusBootstrap(
           shouldAllowBrowserBuilds,
           usesVitest,
           vitestEcosystemPackages,
+          true,
+          providerCatalogAdditions,
         );
       }
       if (fs.existsSync(pnpmWorkspaceYamlPath)) {
@@ -4824,7 +4941,7 @@ export function ensureVitePlusBootstrap(
     const before = fs.existsSync(yarnrcYmlPath)
       ? fs.readFileSync(yarnrcYmlPath, 'utf-8')
       : undefined;
-    rewriteYarnrcYml(projectPath, usesVitest, vitestEcosystemPackages);
+    rewriteYarnrcYml(projectPath, usesVitest, vitestEcosystemPackages, providerCatalogAdditions);
     const after = fs.readFileSync(yarnrcYmlPath, 'utf-8');
     result.packageManagerConfig = before !== after;
   } else if (workspaceInfo.packageManager === PackageManager.bun) {
@@ -5400,7 +5517,12 @@ export function rewritePackageJson(
       }
     } else {
       pkg.devDependencies ??= {};
-      pkg.devDependencies[provider] = VITEST_VERSION;
+      pkg.devDependencies[provider] = getCatalogDependencySpec(
+        undefined,
+        VITEST_VERSION,
+        supportCatalog && packageManager !== PackageManager.bun,
+        { preferredCatalogSpec: catalogDependencyResolver?.preferredCatalogSpec },
+      );
     }
     const peer = BROWSER_PROVIDER_PEER_DEPS[provider]; // 'webdriverio' / 'playwright'
     const peerPresent =

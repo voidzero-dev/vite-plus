@@ -202,14 +202,17 @@ Wrote agent instructions to AGENTS.md
     "react": "^18.2.0"
   },
   "devDependencies": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vite": "npm:@voidzero-dev/vite-plus-core@<vite-plus-version>",
     "@vitejs/plugin-react": "^4.2.0"
   },
   "overrides": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest"
+    "vite": "npm:@voidzero-dev/vite-plus-core@<vite-plus-version>"
   }
 }
 ```
+
+`<vite-plus-version>` is the concrete version bundled with the CLI running the
+migration; migration does not persist the mutable `latest` tag.
 
 **After (pnpm, no existing `pnpm` config) -- `package.json`:**
 
@@ -240,8 +243,8 @@ Wrote agent instructions to AGENTS.md
 
 ```yaml
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@latest
-  vite-plus: latest
+  vite: npm:@voidzero-dev/vite-plus-core@<vite-plus-version>
+  vite-plus: <vite-plus-version>
 overrides:
   vite: 'catalog:'
 peerDependencyRules:
@@ -265,12 +268,12 @@ Projects that already have a `pnpm` field in `package.json` (e.g., with `overrid
 {
   "name": "my-package",
   "devDependencies": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vite-plus": "latest"
+    "vite": "npm:@voidzero-dev/vite-plus-core@<vite-plus-version>",
+    "vite-plus": "<vite-plus-version>"
   },
   "pnpm": {
     "overrides": {
-      "vite": "npm:@voidzero-dev/vite-plus-core@latest"
+      "vite": "npm:@voidzero-dev/vite-plus-core@<vite-plus-version>"
     },
     "peerDependencyRules": {
       "allowAny": ["vite"],
@@ -508,8 +511,8 @@ For monorepo projects and standalone projects without existing `pnpm` config in 
 
 ```yaml
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@latest
-  vite-plus: latest
+  vite: npm:@voidzero-dev/vite-plus-core@<vite-plus-version>
+  vite-plus: <vite-plus-version>
 overrides:
   vite: 'catalog:'
 peerDependencyRules:
@@ -527,10 +530,10 @@ peerDependencyRules:
 ```json
 {
   "devDependencies": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest"
+    "vite": "npm:@voidzero-dev/vite-plus-core@<vite-plus-version>"
   },
   "overrides": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest"
+    "vite": "npm:@voidzero-dev/vite-plus-core@<vite-plus-version>"
   }
 }
 ```
@@ -541,7 +544,7 @@ peerDependencyRules:
 
 ```yaml
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@latest
+  vite: npm:@voidzero-dev/vite-plus-core@<vite-plus-version>
 ```
 
 `package.json`

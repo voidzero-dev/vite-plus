@@ -8,7 +8,7 @@
   "name": "migration-upgrade-browser-peer-only-pnpm",
   "devDependencies": {
     "vite-plus": "catalog:",
-    "@vitest/browser-playwright": "<semver>",
+    "@vitest/browser-playwright": "catalog:",
     "playwright": "*",
     "vitest": "catalog:"
   },
@@ -29,6 +29,7 @@ catalog:
   vite: npm:@voidzero-dev/vite-plus-core@<semver>
   vite-plus: <semver>
   vitest: <semver>
+  '@vitest/browser-playwright': <semver>
 overrides:
   vite: 'catalog:'
   vitest: 'catalog:'
