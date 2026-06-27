@@ -51,7 +51,17 @@ $script:DllNotFoundExitCode = -1073741515
 
 function Test-IsDllNotFoundExitCode {
     param([int]$ExitCode)
-    return $ExitCode -eq $script:DllNotFoundExitCode -or [uint32][int32]$ExitCode -eq 0xC0000135
+    if ($ExitCode -eq $script:DllNotFoundExitCode) {
+        return $true
+    }
+    if ($ExitCode -eq 3221225781) {
+        return $true
+    }
+    if ($ExitCode -lt 0) {
+        $hex = '{0:X8}' -f ($ExitCode -band 0xFFFFFFFF)
+        return $hex -eq 'C0000135'
+    }
+    return $false
 }
 
 function Get-DllNotFoundInstallMessage {
@@ -73,10 +83,19 @@ Then re-run: irm https://vite.plus/ps1 | iex
 # Internal stop signal: halts install without re-printing an error we already wrote.
 $script:InstallStopSignal = 'VP_INSTALL_STOP'
 
+function Test-IsInstallStopException {
+    param(
+        [System.Management.Automation.ErrorRecord]$ErrorRecord
+    )
+    return $ErrorRecord.Exception.Message -eq $script:InstallStopSignal
+}
+
 function Exit-Installer {
     param([int]$Code = 1)
     $global:LASTEXITCODE = $Code
-    if ($env:CI -eq "true") {
+    # CI and script-file invocations must propagate a non-zero process exit code.
+    # `irm ... | iex` has no $PSCommandPath; use a catchable stop signal to keep the shell open.
+    if ($env:CI -eq "true" -or $PSCommandPath) {
         exit $Code
     }
     throw $script:InstallStopSignal
@@ -208,6 +227,7 @@ function Get-PackageMetadata {
         try {
             $script:PackageMetadata = Invoke-RestMethod $metadataUrl
         } catch {
+            if (Test-IsInstallStopException $_) { throw }
             # Try to extract npm error message from response
             $errorMsg = $_.ErrorDetails.Message
             if ($errorMsg) {
@@ -217,6 +237,7 @@ function Get-PackageMetadata {
                         Write-Error-Exit "Failed to fetch version '${versionPath}': $($errorJson.error)`n  URL: $metadataUrl"
                     }
                 } catch {
+                    if (Test-IsInstallStopException $_) { throw }
                     # JSON parsing failed, fall through to generic error
                 }
             }
@@ -230,6 +251,7 @@ function Get-PackageMetadata {
             try {
                 $script:PackageMetadata = $script:PackageMetadata | ConvertFrom-Json
             } catch {
+                if (Test-IsInstallStopException $_) { throw }
                 # Not valid JSON - treat as plain string error
                 Write-Error-Exit "Failed to fetch version '${versionPath}': $script:PackageMetadata`n  URL: $metadataUrl"
             }
@@ -801,7 +823,7 @@ exec "`$VP_HOME/current/bin/vp.exe" "`$@"
 try {
     Main
 } catch {
-    if ($_.Exception.Message -ne $script:InstallStopSignal) {
+    if (-not (Test-IsInstallStopException $_)) {
         throw
     }
 }
