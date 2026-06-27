@@ -268,7 +268,7 @@ fn check_npm_global_install_result(
             // Skip protected shims (core shims and default env shims). Tell
             // the user for the non-core names (e.g. `npm i -g corepack`):
             // npm installed the package, but the binary stays unlinked.
-            if is_protected_shim(&bin_name) {
+            if is_protected_shim(&bin_name, false) {
                 if !crate::commands::global::CORE_SHIMS.contains(&bin_name.as_str()) {
                     let hint = if bin_name == "corepack" {
                         " Use `vp install -g corepack` to manage its version."
@@ -530,7 +530,7 @@ fn remove_npm_global_uninstall_links(bin_entries: &[(String, String)], npm_prefi
         // Skip protected shims: a stale Npm BinConfig (e.g. a pre-default-shim
         // `npm install -g corepack`) must not let `npm uninstall -g` delete a
         // default shim that `vp env setup` now owns.
-        if is_protected_shim(bin_name) {
+        if is_protected_shim(bin_name, false) {
             continue;
         }
 
