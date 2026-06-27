@@ -330,22 +330,32 @@ fn is_homebrew_recovery_command(args: &[String]) -> bool {
 }
 
 fn main() -> ExitCode {
+    let args: Vec<String> = std::env::args().collect();
+
+    // Inspect shim mode without clearing its environment markers: Homebrew
+    // setup still needs them before the normal shim dispatch.
+    let argv0 = args.first().map(|s| s.as_str()).unwrap_or("vp");
+    let shim_tool = shim::peek_shim_tool(argv0);
+
     // Advertise that this process tree is running under Vite+ so the tools we
     // invoke (e.g. `vp dlx create-vite`) can detect vp as the package manager.
     // The underlying package managers overwrite `npm_config_user_agent` with
     // their own value, so we expose a dedicated variable that is passed through
     // untouched and inherited by every child process (including the `npx`
-    // fallback used when there is no local `package.json`). Shim mode clears it
-    // again below, since there the user invokes the wrapped tool, not vp.
+    // fallback used when there is no local `package.json`).
+    //
+    // Only set it for a real `vp` invocation, not when vp is acting as a shim:
+    // there the user is invoking the wrapped tool (e.g. `npm`/`npx`), not vp.
     //
     // SAFETY: `set_var` must run while the process is still single-threaded.
-    // This is the first statement in `main`, before the async runtime (and its
-    // worker threads) are created.
-    unsafe {
-        std::env::set_var(
-            vp_shared::env_vars::VP_USER_AGENT,
-            concat!("vp/", env!("CARGO_PKG_VERSION")),
-        );
+    // This runs before the async runtime (and its worker threads) are created.
+    if shim_tool.is_none() {
+        unsafe {
+            std::env::set_var(
+                vp_shared::env_vars::VP_USER_AGENT,
+                concat!("vp/", env!("CARGO_PKG_VERSION")),
+            );
+        }
     }
 
     tokio::runtime::Runtime::new().expect("failed to build tokio runtime").block_on(run())
@@ -446,11 +456,6 @@ async fn run() -> ExitCode {
     if let Some(tool) = shim::detect_shim_tool(argv0) {
         // Shim mode - dispatch to the appropriate tool. stdout belongs to the
         // wrapped tool; route vp's own output to stderr.
-        //
-        // The user is invoking the wrapped tool (e.g. `npm`/`npx`), not vp, so
-        // don't advertise vp to it or its children. Clear the marker set in
-        // `main` before dispatching. SAFETY: see the `set_var` in `main`.
-        unsafe { std::env::remove_var(vite_shared::env_vars::VP_USER_AGENT) };
         output::route_user_output_to_stderr();
         let exit_code = shim::dispatch(&tool, &args[1..], vp_shared::ToolPathEnv::from_env()).await;
         return ExitCode::from(exit_code as u8);
