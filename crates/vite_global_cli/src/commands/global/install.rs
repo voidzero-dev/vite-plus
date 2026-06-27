@@ -73,6 +73,7 @@ pub(crate) fn is_vp_shim_target(
 /// may take BinConfig ownership of the corepack shim (see
 /// `create_package_shim`).
 pub(crate) fn is_protected_shim(bin_name: &str) -> bool {
+    let bin_name = if cfg!(target_os = "linux") { bin_name } else { &bin_name.to_lowercase() };
     CORE_SHIMS.contains(&bin_name) || crate::commands::env::setup::SHIM_TOOLS.contains(&bin_name)
 }
 
@@ -1228,6 +1229,13 @@ mod tests {
 
         // Regular bins are unrestricted
         assert!(package_may_own_bin("typescript", "tsc"));
+
+        #[cfg(any(windows, target_os = "macos"))]
+        assert!(!package_may_own_bin("some-package", "NPM"));
+        #[cfg(any(windows, target_os = "macos"))]
+        assert!(!package_may_own_bin("some-package", "Node"));
+        #[cfg(any(windows, target_os = "macos"))]
+        assert!(!package_may_own_bin("some-package", "VP"));
     }
 
     #[tokio::test]
