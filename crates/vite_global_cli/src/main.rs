@@ -300,7 +300,8 @@ fn main() -> ExitCode {
     // The underlying package managers overwrite `npm_config_user_agent` with
     // their own value, so we expose a dedicated variable that is passed through
     // untouched and inherited by every child process (including the `npx`
-    // fallback used when there is no local `package.json`).
+    // fallback used when there is no local `package.json`). Shim mode clears it
+    // again below, since there the user invokes the wrapped tool, not vp.
     //
     // SAFETY: `set_var` must run while the process is still single-threaded.
     // This is the first statement in `main`, before the async runtime (and its
@@ -337,6 +338,11 @@ async fn run() -> ExitCode {
     if let Some(tool) = shim::detect_shim_tool(argv0) {
         // Shim mode - dispatch to the appropriate tool. stdout belongs to the
         // wrapped tool; route vp's own output to stderr.
+        //
+        // The user is invoking the wrapped tool (e.g. `npm`/`npx`), not vp, so
+        // don't advertise vp to it or its children. Clear the marker set in
+        // `main` before dispatching. SAFETY: see the `set_var` in `main`.
+        unsafe { std::env::remove_var(vite_shared::env_vars::VP_USER_AGENT) };
         output::route_user_output_to_stderr();
         let exit_code = shim::dispatch(&tool, &args[1..]).await;
         return ExitCode::from(exit_code as u8);
