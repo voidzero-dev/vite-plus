@@ -2033,8 +2033,13 @@ export function rewriteStandaloneProject(
       requiredVitestPeer,
     );
 
-    // ensure vite-plus is in devDependencies
-    if (!pkg.devDependencies?.[VITE_PLUS_NAME] || isForceOverrideMode()) {
+    // ensure vite-plus is in devDependencies — but only when it isn't already a
+    // direct dependency/devDependency, so a project that declares vite-plus in
+    // `dependencies` is not duplicated into `devDependencies`. Force-override
+    // still re-pins a pre-existing devDependencies entry in place.
+    const forceRepinExistingDevEntry =
+      isForceOverrideMode() && pkg.devDependencies?.[VITE_PLUS_NAME] !== undefined;
+    if (!hasDirectVitePlusInstallEntry(pkg) || forceRepinExistingDevEntry) {
       const existingVitePlusSpec = pkg.devDependencies?.[VITE_PLUS_NAME];
       const version =
         supportCatalog && !VITE_PLUS_VERSION.startsWith('file:')
@@ -3695,8 +3700,9 @@ function rewriteRootWorkspacePackageJson(
       }
     }
 
-    // ensure vite-plus is in devDependencies
-    if (!pkg.devDependencies?.[VITE_PLUS_NAME]) {
+    // ensure vite-plus is in devDependencies — skip when it already lives in
+    // `dependencies` or `devDependencies` so it isn't duplicated across groups.
+    if (!hasDirectVitePlusInstallEntry(pkg)) {
       pkg.devDependencies = {
         ...pkg.devDependencies,
         [VITE_PLUS_NAME]:
@@ -4513,7 +4519,10 @@ export function detectVitePlusBootstrapPending(
     catalogs?: Record<string, Record<string, string>>;
   };
 
-  if (!pkg.devDependencies?.[VITE_PLUS_NAME] || !hasPackageManagerPin(pkg)) {
+  // vite-plus counts as installed when it's a direct dependency/devDependency,
+  // so a project that declares it in `dependencies` isn't reported as pending a
+  // (duplicate) devDependencies entry.
+  if (!hasDirectVitePlusInstallEntry(pkg) || !hasPackageManagerPin(pkg)) {
     return true;
   }
 
@@ -4616,6 +4625,20 @@ export function detectVitePlusBootstrapPending(
   return false;
 }
 
+// vite-plus counts as already installed when it lives directly in
+// `dependencies` OR `devDependencies`. `optionalDependencies` is deliberately
+// excluded: an optional-only entry may be skipped at install time, so the
+// package should still receive a guaranteed `devDependencies` entry.
+function hasDirectVitePlusInstallEntry(pkg: {
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+}): boolean {
+  return (
+    pkg.dependencies?.[VITE_PLUS_NAME] !== undefined ||
+    pkg.devDependencies?.[VITE_PLUS_NAME] !== undefined
+  );
+}
+
 function ensureVitePlusDependencySpecs(
   pkg: BootstrapPackageJson,
   version: string,
@@ -4661,7 +4684,7 @@ function ensureVitePlusDependencySpecs(
       changed = true;
     }
   }
-  if (pkg.devDependencies?.[VITE_PLUS_NAME] || !ensurePresent) {
+  if (hasDirectVitePlusInstallEntry(pkg) || !ensurePresent) {
     return changed;
   }
   pkg.devDependencies = {
@@ -5526,7 +5549,17 @@ export function rewritePackageJson(
     supportCatalog && !VITE_PLUS_VERSION.startsWith('file:')
       ? (catalogDependencyResolver?.preferredCatalogSpec ?? 'catalog:')
       : VITE_PLUS_VERSION;
-  const existingVitePlus = pkg.devDependencies?.[VITE_PLUS_NAME];
+  // Treat vite-plus as present when it lives in either `devDependencies` or
+  // `dependencies` (devDeps wins when both exist). Re-pin/normalize happens in
+  // whichever group already owns it so a `dependencies` entry is never
+  // duplicated into `devDependencies`.
+  const existingVitePlusGroup =
+    pkg.devDependencies?.[VITE_PLUS_NAME] !== undefined
+      ? pkg.devDependencies
+      : pkg.dependencies?.[VITE_PLUS_NAME] !== undefined
+        ? pkg.dependencies
+        : undefined;
+  const existingVitePlus = existingVitePlusGroup?.[VITE_PLUS_NAME];
   const shouldNormalizeExistingVitePlus =
     !!existingVitePlus &&
     supportCatalog &&
@@ -5555,7 +5588,15 @@ export function rewritePackageJson(
     isVitestAdjacent ||
     retainedVitestModule ||
     requiredVitestPeer;
-  if (needVitePlus || shouldNormalizeExistingVitePlus) {
+  if (existingVitePlusGroup) {
+    // Already present in `dependencies` or `devDependencies`: re-pin in place
+    // (only vanilla ranges are normalized; protocol pins are preserved) and
+    // never add a cross-group duplicate.
+    if (shouldNormalizeExistingVitePlus) {
+      existingVitePlusGroup[VITE_PLUS_NAME] = canonicalVitePlusSpec;
+    }
+  } else if (needVitePlus) {
+    // Absent from both groups: add it to `devDependencies` as before.
     pkg.devDependencies = {
       ...pkg.devDependencies,
       [VITE_PLUS_NAME]: canonicalVitePlusSpec,

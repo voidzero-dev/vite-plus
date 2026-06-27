@@ -1,0 +1,13 @@
+{
+  "name": "migration-vite-plus-in-dependencies-pnpm",
+  "dependencies": {
+    "vite-plus": "0.1.20"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "10.33.0",
+      "onFail": "download"
+    }
+  }
+}

@@ -2578,10 +2578,14 @@ describe('ensureVitePlusBootstrap', () => {
     expect(result.changed).toBe(true);
     expect(fs.existsSync(path.join(tmpDir, 'pnpm-workspace.yaml'))).toBe(true);
     const pkg = readJson(path.join(tmpDir, 'package.json')) as {
-      devDependencies: Record<string, string>;
+      dependencies: Record<string, string>;
+      devDependencies?: Record<string, string>;
       pnpm?: unknown;
     };
-    expect(pkg.devDependencies['vite-plus']).toBe('catalog:');
+    // vite-plus was declared in `dependencies`, so it is normalized in place
+    // (to `catalog:`) and not duplicated into `devDependencies`.
+    expect(pkg.dependencies['vite-plus']).toBe('catalog:');
+    expect(pkg.devDependencies?.['vite-plus']).toBeUndefined();
     expect(pkg.pnpm).toBeUndefined();
     const workspace = readYamlObject(path.join(tmpDir, 'pnpm-workspace.yaml')) as {
       catalog: Record<string, string>;
@@ -2759,12 +2763,14 @@ describe('ensureVitePlusBootstrap', () => {
     expect(result.changed).toBe(true);
     expect(fs.existsSync(path.join(tmpDir, 'pnpm-workspace.yaml'))).toBe(true);
     const pkg = readJson(path.join(tmpDir, 'package.json')) as {
-      devDependencies: Record<string, string>;
+      devDependencies?: Record<string, string>;
       dependencies: Record<string, string>;
       optionalDependencies: Record<string, string>;
       pnpm?: unknown;
     };
-    expect(pkg.devDependencies['vite-plus']).toBe('catalog:');
+    // vite-plus already lives in `dependencies` (and `optionalDependencies`), so
+    // it is kept in place and not duplicated into `devDependencies`.
+    expect(pkg.devDependencies?.['vite-plus']).toBeUndefined();
     expect(pkg.dependencies['vite-plus']).toBe('catalog:');
     expect(pkg.optionalDependencies['vite-plus']).toBe('catalog:');
     expect(pkg.pnpm).toBeUndefined();
@@ -2790,10 +2796,14 @@ describe('ensureVitePlusBootstrap', () => {
     expect(result.changed).toBe(true);
     expect(fs.existsSync(path.join(tmpDir, 'pnpm-workspace.yaml'))).toBe(true);
     const pkg = readJson(path.join(tmpDir, 'package.json')) as {
-      devDependencies: Record<string, string>;
+      dependencies: Record<string, string>;
+      devDependencies?: Record<string, string>;
       pnpm?: unknown;
     };
-    expect(pkg.devDependencies['vite-plus']).toBe('catalog:');
+    // vite-plus was declared in `dependencies`, so it is normalized in place
+    // (to `catalog:`) and not duplicated into `devDependencies`.
+    expect(pkg.dependencies['vite-plus']).toBe('catalog:');
+    expect(pkg.devDependencies?.['vite-plus']).toBeUndefined();
     expect(pkg.pnpm).toBeUndefined();
   });
 
@@ -3095,6 +3105,24 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
     const devDeps = pkg.devDependencies as Record<string, string>;
     expect(devDeps.vite).toBe('catalog:');
     expect(devDeps['vite-plus']).toBe('catalog:');
+  });
+
+  it('does not duplicate vite-plus into devDependencies when it already lives in dependencies', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        dependencies: { 'vite-plus': '0.1.20' },
+        devDependencies: { vite: '^7.0.0' },
+      }),
+    );
+    rewriteStandaloneProject(tmpDir, makeWorkspaceInfo(tmpDir, PackageManager.pnpm), true, true);
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
+    expect(pkg.devDependencies?.['vite-plus']).toBeUndefined();
+    expect(pkg.dependencies?.['vite-plus']).toBeDefined();
   });
 
   it('moves existing pnpm config into pnpm-workspace.yaml on pnpm 10.6.2+', () => {
