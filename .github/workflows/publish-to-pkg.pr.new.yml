@@ -137,3 +137,23 @@ jobs:
             './packages/cli' \
             './packages/core' \
             './packages/prompts'
+
+      # Register this commit build with the pkg.pr.new registry bridge so it can
+      # be installed as the npm version 0.0.0-commit.<sha>
+      # (https://github.com/fengmk2/pkg-pr-registry-bridge). This CI step
+      # replaces the bridge's GitHub webhook. pkg-pr-new publishes under the PR
+      # head commit, so register that SHA (not the merge commit github.sha).
+      # Restricted to same-repo PRs because fork PRs do not receive the admin
+      # token secret; never fails the publish if the bridge is unreachable.
+      - name: Register commit build with the registry bridge
+        if: github.event.pull_request.head.repo.full_name == github.repository
+        continue-on-error: true
+        env:
+          PKG_PR_BRIDGE_ADMIN_TOKEN: ${{ secrets.PKG_PR_BRIDGE_ADMIN_TOKEN }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          curl -fsS -X POST \
+            -H "authorization: Bearer ${PKG_PR_BRIDGE_ADMIN_TOKEN}" \
+            -H 'content-type: application/json' \
+            -d "{\"ref\":\"commit.${HEAD_SHA}\"}" \
+            https://pkg-pr-registry-bridge.render.vip/-/refs
