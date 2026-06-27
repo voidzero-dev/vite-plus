@@ -52,13 +52,8 @@ pub fn extract_tool_name(argv0: &str) -> String {
         if let Ok(bin_dir) = bin_dir {
             if let Ok(read_dir) = fs::read_dir(&bin_dir) {
                 for bin in read_dir.flatten() {
-                    if bin
-                        .path()
-                        .file_stem()
-                        .unwrap_or_default()
-                        .to_string_lossy()
-                        .to_lowercase()
-                        .starts_with(&stem.to_lowercase())
+                    if bin.path().file_stem().unwrap_or_default().to_string_lossy().to_lowercase()
+                        == stem.to_lowercase()
                     {
                         return bin
                             .path()
