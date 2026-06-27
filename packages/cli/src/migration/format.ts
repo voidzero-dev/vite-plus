@@ -26,6 +26,32 @@ interface FormatMigratedProjectOptions {
 const FORMAT_FAILURE_MESSAGE =
   'Automatic formatting failed. Run `vp fmt` manually after migration.';
 
+// Keep each `vp fmt <...paths>` argument list well under the OS command-line
+// limit (ARG_MAX is ~256KB on macOS). Migrating a large monorepo can rewrite
+// thousands of files, so the path list is split into batches to avoid an E2BIG
+// spawn failure that would leave the migrated source unformatted.
+const MAX_FORMAT_ARG_BYTES = 100_000;
+
+function chunkPathsByArgLength(paths: string[]): string[][] {
+  const chunks: string[][] = [];
+  let current: string[] = [];
+  let currentBytes = 0;
+  for (const filePath of paths) {
+    const bytes = Buffer.byteLength(filePath) + 1; // +1 for the argument separator
+    if (current.length > 0 && currentBytes + bytes > MAX_FORMAT_ARG_BYTES) {
+      chunks.push(current);
+      current = [];
+      currentBytes = 0;
+    }
+    current.push(filePath);
+    currentBytes += bytes;
+  }
+  if (current.length > 0) {
+    chunks.push(current);
+  }
+  return chunks;
+}
+
 function parseNullDelimitedPaths(output: Buffer): string[] {
   return output.toString().split('\0').filter(Boolean);
 }
@@ -50,6 +76,16 @@ export async function collectChangedFormatPaths(
   try {
     const git = (args: string[]) =>
       runCommandSilently({ command: 'git', args, cwd: projectRoot, envs: process.env });
+
+    // Only fall back to whole-project formatting when the project is genuinely
+    // not a Git worktree. A worktree that exists but cannot enumerate changes
+    // (locked repo, mid-rebase, unusual config) must NOT trigger a full-tree
+    // reformat that would bury the migration diff.
+    const worktree = await git(['rev-parse', '--is-inside-work-tree']);
+    if (worktree.exitCode !== 0 || worktree.stdout.toString().trim() !== 'true') {
+      return undefined;
+    }
+
     const [unstaged, staged, untracked] = await Promise.all([
       git(['diff', '--name-only', '--relative', '-z', '--diff-filter=ACMRTUXB', '--', '.']),
       git([
@@ -65,7 +101,9 @@ export async function collectChangedFormatPaths(
       git(['ls-files', '--others', '--exclude-standard', '-z', '--', '.']),
     ]);
     if (unstaged.exitCode !== 0 || staged.exitCode !== 0 || untracked.exitCode !== 0) {
-      return undefined;
+      // Inside a worktree but Git could not list changes; skip targeted
+      // formatting rather than reformatting the entire project.
+      return [];
     }
 
     const changedPaths = new Set([
@@ -114,13 +152,24 @@ export async function formatMigratedProject(
       return true;
     }
     const cliEntry = process.argv[1] ? path.resolve(process.cwd(), process.argv[1]) : undefined;
-    const result = await format(projectRoot, interactive, paths, {
+    const formatOptions = {
       silent: false,
       ...(cliEntry
         ? { command: process.execPath, commandArgs: [...process.execArgv, cliEntry] }
         : {}),
-    });
-    if (result.status === 'formatted') {
+    };
+    // `undefined` means "format the whole project" (single invocation); a path
+    // list is batched so a huge monorepo cannot overflow the command line.
+    const batches = paths === undefined ? [undefined] : chunkPathsByArgLength(paths);
+    let allFormatted = true;
+    for (const batch of batches) {
+      const result = await format(projectRoot, interactive, batch, formatOptions);
+      if (result.status !== 'formatted') {
+        allFormatted = false;
+        break;
+      }
+    }
+    if (allFormatted) {
       return true;
     }
   } catch {

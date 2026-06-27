@@ -30,7 +30,6 @@ const {
   rewriteMonorepo,
   rewriteMonorepoProject,
   detectPendingCoreMigration,
-  detectNuxtTestUtilsVitestImportFiles,
   detectVitePlusBootstrapPending,
   ensureVitePlusBootstrap,
   finalizeCoreMigrationForExistingVitePlus,
@@ -1429,6 +1428,32 @@ describe('ensureVitePlusBootstrap', () => {
     // it arrives transitively through vite-plus, so no override is written.
     expect(pkg.overrides.vitest).toBeUndefined();
     expect(pkg.devEngines.packageManager.name).toBe(PackageManager.npm);
+  });
+
+  it('adds the direct vite dependency for an existing bun Vite+ project so bun resolves the vitest peer', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'package.json'),
+      JSON.stringify({
+        name: 'test',
+        devDependencies: { 'vite-plus': 'latest', vitest: '4.1.9' },
+        overrides: { vite: 'npm:@voidzero-dev/vite-plus-core@0.1.0' },
+        devEngines: {
+          packageManager: { name: 'bun', version: '1.2.0', onFail: 'download' },
+        },
+      }),
+    );
+
+    const result = ensureVitePlusBootstrap(makeWorkspaceInfo(tmpDir, PackageManager.bun));
+
+    expect(result.changed).toBe(true);
+    const pkg = readJson(path.join(tmpDir, 'package.json')) as {
+      devDependencies: Record<string, string>;
+      overrides: Record<string, string>;
+    };
+    // Bun needs `vite` as a direct dependency (pointing at vite-plus-core) for
+    // vitest's peer to resolve; the bootstrap path previously only wrote the
+    // override and left `bun install` broken.
+    expect(pkg.devDependencies.vite).toContain('@voidzero-dev/vite-plus-core');
   });
 
   it('removes the stale vitest wrapper override for a non-vitest npm project', () => {
@@ -3558,29 +3583,6 @@ describe('rewriteStandaloneProject pnpm workspace yaml', () => {
       "from 'vite-plus/test'",
     );
   });
-
-  it.each(['dependencies', 'devDependencies', 'optionalDependencies'] as const)(
-    'detects package-wide upstream Vitest imports from %s without installed metadata',
-    (dependencyGroup) => {
-      fs.writeFileSync(
-        path.join(tmpDir, 'package.json'),
-        JSON.stringify({
-          name: 'nuxt-project',
-          [dependencyGroup]: { '@nuxt/test-utils': '^4.0.3' },
-        }),
-      );
-      fs.writeFileSync(
-        path.join(tmpDir, 'nuxt.spec.ts'),
-        "import { vi } from 'vitest';\nimport { mockNuxtImport } from '@nuxt/test-utils/runtime';\n",
-      );
-      fs.writeFileSync(path.join(tmpDir, 'unit.spec.ts'), "import { expect } from 'vitest';\n");
-
-      expect(detectNuxtTestUtilsVitestImportFiles(tmpDir)).toEqual([
-        path.join(tmpDir, 'nuxt.spec.ts'),
-        path.join(tmpDir, 'unit.spec.ts'),
-      ]);
-    },
-  );
 
   it('preserves all upstream Vitest imports in a Nuxt test-utils package', () => {
     fs.writeFileSync(

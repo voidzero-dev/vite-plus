@@ -65,6 +65,25 @@ describe('formatMigratedProject', () => {
     }
   });
 
+  it('splits a very large changed-file set across multiple format invocations', async () => {
+    const format = vi.fn().mockResolvedValue({ durationMs: 1, exitCode: 0, status: 'formatted' });
+    const report = createMigrationReport();
+    const paths = Array.from(
+      { length: 5000 },
+      (_, index) => `packages/app/src/very/deeply/nested/module-${index}.ts`,
+    );
+    const collectPaths = vi.fn().mockResolvedValue(paths);
+
+    await expect(
+      formatMigratedProject('/project', false, report, { format, collectPaths }),
+    ).resolves.toBe(true);
+    // A single spawn with all 5000 paths would risk E2BIG; it must be batched.
+    expect(format.mock.calls.length).toBeGreaterThan(1);
+    // Every path is still formatted exactly once across the batches.
+    expect(format.mock.calls.flatMap((call) => call[2])).toEqual(paths);
+    expect(report.warnings).toEqual([]);
+  });
+
   it('skips formatting when migration changed no supported files', async () => {
     const format = vi.fn();
     const report = createMigrationReport();

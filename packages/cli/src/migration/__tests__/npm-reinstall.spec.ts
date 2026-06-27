@@ -81,4 +81,20 @@ describe('prepareNpmViteAliasReinstall', () => {
     expect(fs.existsSync(staleVite)).toBe(false);
     expect(prepareNpmViteAliasReinstall(rootDir, [rootDir, workspaceDir])).toBe(false);
   });
+
+  it('does not throw on a malformed package-lock.json and still prunes install trees', () => {
+    const rootDir = createTempDir();
+    const workspaceDir = path.join(rootDir, 'packages', 'app');
+    const staleVite = path.join(workspaceDir, 'node_modules', 'vite');
+    writePackage(staleVite, 'vite');
+    // A merge-conflicted / truncated lockfile (e.g. an interrupted prior
+    // `npm install`) must not abort the migration with an uncaught SyntaxError.
+    fs.writeFileSync(
+      path.join(rootDir, 'package-lock.json'),
+      '<<<<<<< HEAD\n{ "lockfileVersion": 3 }\n=======\n{}\n>>>>>>> incoming\n',
+    );
+
+    expect(() => prepareNpmViteAliasReinstall(rootDir, [rootDir, workspaceDir])).not.toThrow();
+    expect(fs.existsSync(staleVite)).toBe(false);
+  });
 });

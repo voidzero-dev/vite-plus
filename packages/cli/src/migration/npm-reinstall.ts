@@ -59,32 +59,38 @@ export function prepareNpmViteAliasReinstall(
   let changed = false;
 
   if (fs.existsSync(packageLockPath)) {
-    const packageLock = readJsonFile(packageLockPath) as NpmPackageLock;
-    let lockChanged = false;
+    try {
+      const packageLock = readJsonFile(packageLockPath) as NpmPackageLock;
+      let lockChanged = false;
 
-    for (const [packagePath, pkg] of Object.entries(packageLock.packages ?? {})) {
-      if (!isViteInstallPath(packagePath)) {
-        continue;
+      for (const [packagePath, pkg] of Object.entries(packageLock.packages ?? {})) {
+        if (!isViteInstallPath(packagePath)) {
+          continue;
+        }
+
+        const installPath = path.resolve(rootDir, packagePath);
+        const relativeInstallPath = path.relative(rootDir, installPath);
+        if (relativeInstallPath.startsWith('..') || path.isAbsolute(relativeInstallPath)) {
+          continue;
+        }
+
+        if (!isVitePlusCorePackage(pkg)) {
+          delete packageLock.packages?.[packagePath];
+          lockChanged = true;
+          removeStaleInstalledVite(installPath);
+        } else {
+          changed = removeStaleInstalledVite(installPath) || changed;
+        }
       }
 
-      const installPath = path.resolve(rootDir, packagePath);
-      const relativeInstallPath = path.relative(rootDir, installPath);
-      if (relativeInstallPath.startsWith('..') || path.isAbsolute(relativeInstallPath)) {
-        continue;
+      if (lockChanged) {
+        writeJsonFile(packageLockPath, packageLock as unknown as Record<string, unknown>);
+        changed = true;
       }
-
-      if (!isVitePlusCorePackage(pkg)) {
-        delete packageLock.packages?.[packagePath];
-        lockChanged = true;
-        removeStaleInstalledVite(installPath);
-      } else {
-        changed = removeStaleInstalledVite(installPath) || changed;
-      }
-    }
-
-    if (lockChanged) {
-      writeJsonFile(packageLockPath, packageLock as unknown as Record<string, unknown>);
-      changed = true;
+    } catch {
+      // A malformed, truncated, or merge-conflicted package-lock.json cannot be
+      // safely rewritten. Skip lockfile reconciliation instead of aborting the
+      // migration mid-write; the final `npm install --force` regenerates it.
     }
   }
 

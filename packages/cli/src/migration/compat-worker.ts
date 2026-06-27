@@ -12,11 +12,15 @@ async function main(): Promise<void> {
 
   try {
     const { resolveConfig } = await import('../index.js');
+    const { withConfigMetadataResolution } = await import('../define-config.js');
     // Use 'runner' configLoader to avoid Rolldown bundling the config file,
     // which prints UNRESOLVED_IMPORT warnings that cannot be suppressed via logLevel.
-    const config = await resolveConfig(
-      { root: rootDir, logLevel: 'silent', configLoader: 'runner' },
-      'build',
+    // Reads the config only for the manualChunks compat check, so skip the user's
+    // plugin factory (lazyPlugins) while it resolves, otherwise a blocking or
+    // slow factory would hang this worker and a throwing factory would drop the
+    // warning silently.
+    const config = await withConfigMetadataResolution(() =>
+      resolveConfig({ root: rootDir, logLevel: 'silent', configLoader: 'runner' }, 'build'),
     );
     const report = createMigrationReport();
     checkManualChunksCompat(config.build?.rollupOptions?.output, report);
@@ -25,7 +29,7 @@ async function main(): Promise<void> {
       `${ROLLDOWN_COMPAT_RESULT_PREFIX}${JSON.stringify({ warnings: report.warnings })}\n`,
     );
   } catch {
-    // Config resolution may fail — skip compatibility checking silently.
+    // Config resolution may fail; skip compatibility checking silently.
   }
 }
 

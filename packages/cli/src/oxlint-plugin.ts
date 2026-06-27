@@ -101,7 +101,10 @@ function quoteSpecifier(literal: ESTree.StringLiteral, replacement: string): str
   return `${quote}${replacement}${quote}`;
 }
 
-const nuxtTestUtilsPackageCache = new Map<string, boolean>();
+// Keyed by package.json path and invalidated by its mtime so a long-lived lint
+// process (editor/LSP session) re-reads the manifest after the user adds or
+// removes `@nuxt/test-utils`, instead of reusing the pre-edit decision forever.
+const nuxtTestUtilsPackageCache = new Map<string, { mtimeMs: number; usesNuxtTestUtils: boolean }>();
 
 function isUpstreamVitestSpecifier(specifier: string): boolean {
   return specifier === 'vitest' || specifier.startsWith('vitest/');
@@ -115,9 +118,15 @@ function nearestPackageUsesNuxtTestUtils(filename: string): boolean {
   while (true) {
     const packageJsonPath = path.join(directory, 'package.json');
     if (fs.existsSync(packageJsonPath)) {
+      let mtimeMs = 0;
+      try {
+        mtimeMs = fs.statSync(packageJsonPath).mtimeMs;
+      } catch {
+        // Unreadable manifest: fall through to a fresh read below.
+      }
       const cached = nuxtTestUtilsPackageCache.get(packageJsonPath);
-      if (cached !== undefined) {
-        return cached;
+      if (cached !== undefined && cached.mtimeMs === mtimeMs) {
+        return cached.usesNuxtTestUtils;
       }
       let usesNuxtTestUtils = false;
       try {
@@ -132,7 +141,7 @@ function nearestPackageUsesNuxtTestUtils(filename: string): boolean {
       } catch {
         // Invalid or unreadable package metadata cannot opt into the exception.
       }
-      nuxtTestUtilsPackageCache.set(packageJsonPath, usesNuxtTestUtils);
+      nuxtTestUtilsPackageCache.set(packageJsonPath, { mtimeMs, usesNuxtTestUtils });
       return usesNuxtTestUtils;
     }
     const parent = path.dirname(directory);

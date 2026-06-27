@@ -644,6 +644,11 @@ function projectUsesVitestDirectly(
   },
   requiredVitestPeer = projectListsRequiredVitestPeer(projectPath, pkg),
   preserveNuxtVitestImports = true,
+  // Optional precomputed source-tree scan results. Callers that already computed
+  // these for the same `projectPath` at the same point (no source mutation in
+  // between) thread them here to avoid re-traversing the source tree. When
+  // omitted, the scans run lazily as before, preserving short-circuit behavior.
+  precomputedScans?: { browserMode: boolean; retainedModule: boolean },
 ): boolean {
   return (
     projectListsVitestEcosystemDep(pkg) ||
@@ -655,9 +660,9 @@ function projectUsesVitestDirectly(
     // catalog/override ownership is decided, otherwise the promoted provider's
     // exact Vitest peer is left unsatisfied under strict pnpm/Yarn layouts.
     VITEST_BROWSER_DEP_NAMES.some((name) => pkg.peerDependencies?.[name] !== undefined) ||
-    sourceTreeReferencesRetainedVitestModule(projectPath) ||
+    (precomputedScans?.retainedModule ?? sourceTreeReferencesRetainedVitestModule(projectPath)) ||
     (preserveNuxtVitestImports && hasNuxtTestUtilsDependency(pkg)) ||
-    usesVitestBrowserMode(projectPath)
+    (precomputedScans?.browserMode ?? usesVitestBrowserMode(projectPath))
   );
 }
 
@@ -1704,14 +1709,6 @@ export function addFrameworkShim(
   }
 }
 
-/**
- * Rewrite standalone project to add vite-plus dependencies
- * @param projectPath - The path to the project
- */
-export interface VitestImportMigrationOptions {
-  preserveNuxtVitestImports?: boolean;
-}
-
 const PNPM_WORKSPACE_SETTINGS_MIN_VERSION = '10.6.2';
 
 type PnpmPeerDependencyRules = {
@@ -1857,9 +1854,7 @@ export function rewriteStandaloneProject(
   workspaceInfo: WorkspaceInfo,
   skipStagedMigration?: boolean,
   silent = false,
-  report?: MigrationReport,
-  importOptions?: VitestImportMigrationOptions,
-): void {
+  report?: MigrationReport,): void {
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
     return;
@@ -1868,7 +1863,19 @@ export function rewriteStandaloneProject(
   const packageManager = workspaceInfo.packageManager;
   const catalogDependencyResolver = createCatalogDependencyResolver(projectPath, packageManager);
   const vitestEcosystemPackages = collectVitestEcosystemInstallDependencyNames(projectPath);
-  const providerCatalogAdditions = collectInjectedProviderNames(projectPath);
+  // Source-tree scan signals are computed once here and reused below (and inside
+  // projectUsesVitestDirectly / collectInjectedProviderNames) so the source tree
+  // is traversed once each instead of repeatedly. They do not depend on
+  // package.json contents and no scanned source files are mutated before they
+  // are consumed, so the values match the previous lazy per-call scans exactly.
+  const providerSourceModes = collectProviderSourceModes(projectPath);
+  const browserMode = usesVitestBrowserMode(projectPath);
+  const retainedVitestModule = sourceTreeReferencesRetainedVitestModule(projectPath);
+  const providerCatalogAdditions = collectInjectedProviderNames(
+    projectPath,
+    undefined,
+    new Map([[projectPath, providerSourceModes]]),
+  );
   const pnpmMajorVersion = pnpmMajor(workspaceInfo.downloadPackageManager.version);
   let extractedStagedConfig: Record<string, string | string[]> | null = null;
   let movedPnpmSettings: Record<string, unknown> | undefined;
@@ -1898,7 +1905,8 @@ export function rewriteStandaloneProject(
       projectPath,
       pkg,
       requiredVitestPeer,
-      importOptions?.preserveNuxtVitestImports !== false,
+      true,
+      { browserMode, retainedModule: retainedVitestModule },
     );
     const managed = managedOverridePackages(usesVitest);
     // Strip stale `vite-plus-test` wrapper aliases before injecting new overrides
@@ -2020,10 +2028,10 @@ export function rewriteStandaloneProject(
       supportCatalog,
       skipStagedMigration,
       catalogDependencyResolver,
-      usesVitestBrowserMode(projectPath),
-      collectProviderSourceModes(projectPath),
+      browserMode,
+      providerSourceModes,
       usesVitest,
-      sourceTreeReferencesRetainedVitestModule(projectPath),
+      retainedVitestModule,
       requiredVitestPeer,
     );
 
@@ -2101,7 +2109,7 @@ export function rewriteStandaloneProject(
     projectPath,
     silent,
     report,
-    importOptions?.preserveNuxtVitestImports !== false,
+    true,
   );
   wrapLazyPluginsInViteConfig(projectPath, silent, report);
   // set package manager
@@ -2116,9 +2124,7 @@ export function rewriteMonorepo(
   workspaceInfo: WorkspaceInfo,
   skipStagedMigration?: boolean,
   silent = false,
-  report?: MigrationReport,
-  importOptions?: VitestImportMigrationOptions,
-): void {
+  report?: MigrationReport,): void {
   const catalogDependencyResolver = createCatalogDependencyResolver(
     workspaceInfo.rootDir,
     workspaceInfo.packageManager,
@@ -2136,7 +2142,7 @@ export function rewriteMonorepo(
   const workspaceUsesVitest = workspaceUsesVitestDirectly(
     workspaceInfo.rootDir,
     workspaceInfo.packages,
-    importOptions?.preserveNuxtVitestImports !== false,
+    true,
   );
   const vitestEcosystemPackages = collectVitestEcosystemInstallDependencyNames(
     workspaceInfo.rootDir,
@@ -2166,9 +2172,7 @@ export function rewriteMonorepo(
     pnpmMajorVersion,
     workspaceInfo.downloadPackageManager.version,
     workspaceShouldAllowBrowserBuilds,
-    workspaceUsesVitest,
-    importOptions,
-  );
+    workspaceUsesVitest,  );
   if (workspaceInfo.packageManager === PackageManager.pnpm) {
     rewritePnpmWorkspaceYaml(
       workspaceInfo.rootDir,
@@ -2209,9 +2213,7 @@ export function rewriteMonorepo(
       report,
       catalogDependencyResolver,
       workspaceContext,
-      true,
-      importOptions,
-    );
+      true,    );
   }
 
   if (!skipStagedMigration) {
@@ -2228,7 +2230,7 @@ export function rewriteMonorepo(
     workspaceInfo.rootDir,
     silent,
     report,
-    importOptions?.preserveNuxtVitestImports !== false,
+    true,
   );
   wrapLazyPluginsInViteConfig(workspaceInfo.rootDir, silent, report);
   for (const pkg of workspaceInfo.packages) {
@@ -2255,9 +2257,7 @@ export function rewriteMonorepoProject(
   report?: MigrationReport,
   catalogDependencyResolver?: CatalogDependencyResolver,
   workspaceContext?: { rootDir: string; packages: WorkspacePackage[] },
-  deferLazyPluginWrapping = false,
-  importOptions?: VitestImportMigrationOptions,
-): void {
+  deferLazyPluginWrapping = false,): void {
   cleanupDeprecatedTsconfigOptions(projectPath, silent, report);
   rewriteTsconfigTypes(projectPath, silent, report);
   mergeViteConfigFiles(
@@ -2294,6 +2294,12 @@ export function rewriteMonorepoProject(
     installConfig?: { hoistingLimits?: string };
   }>(packageJsonPath, (pkg) => {
     const requiredVitestPeer = projectListsRequiredVitestPeer(projectPath, pkg);
+    // Compute the browser-mode and retained-module source scans once and reuse
+    // them across rewritePackageJson and projectUsesVitestDirectly: the scans do
+    // not depend on package.json and nothing mutates the source tree between
+    // these reads, so this is identical to the previous per-call scans.
+    const browserMode = usesVitestBrowserMode(projectPath);
+    const retainedVitestModule = sourceTreeReferencesRetainedVitestModule(projectPath);
     // rewrite scripts in package.json
     extractedStagedConfig = rewritePackageJson(
       pkg,
@@ -2301,15 +2307,16 @@ export function rewriteMonorepoProject(
       true,
       skipStagedMigration,
       catalogDependencyResolver,
-      usesVitestBrowserMode(projectPath),
+      browserMode,
       collectProviderSourceModes(projectPath),
       projectUsesVitestDirectly(
         projectPath,
         pkg,
         requiredVitestPeer,
-        importOptions?.preserveNuxtVitestImports !== false,
+        true,
+        { browserMode, retainedModule: retainedVitestModule },
       ),
-      sourceTreeReferencesRetainedVitestModule(projectPath),
+      retainedVitestModule,
       requiredVitestPeer,
     );
     // If this SUB-workspace now depends on `vite-plus` and Yarn isolates its
@@ -3194,21 +3201,10 @@ function createCatalogDependencyResolver(
       catalog?: Record<string, string>;
       catalogs?: Record<string, Record<string, string>>;
     };
-    const workspacesObj =
-      pkg.workspaces && !Array.isArray(pkg.workspaces) ? pkg.workspaces : undefined;
-    const fromWorkspaces = createCatalogDependencyResolverFromCatalogs(
-      workspacesObj?.catalog,
-      workspacesObj?.catalogs,
-    );
-    const fromPkg = createCatalogDependencyResolverFromCatalogs(pkg.catalog, pkg.catalogs);
-    const resolver = (catalogSpec: string, dependencyName: string) =>
-      fromWorkspaces(catalogSpec, dependencyName) ?? fromPkg(catalogSpec, dependencyName);
-    return Object.assign(resolver, {
-      preferredCatalogSpec:
-        workspacesObj?.catalog || workspacesObj?.catalogs
-          ? fromWorkspaces.preferredCatalogSpec
-          : fromPkg.preferredCatalogSpec,
-    });
+    // A missing/absent `workspaces.catalog` resolves identically whether the
+    // fallback is `undefined` (optional chaining) or `{}`, so this shares the
+    // exact bun catalog resolution used by the in-memory callers.
+    return readBunCatalogDependencyResolver(pkg);
   }
   return undefined;
 }
@@ -3590,9 +3586,7 @@ function rewriteRootWorkspacePackageJson(
   // Workspace-wide direct-vitest signal: the root resolution/override sinks are
   // shared by every package, so `vitest` stays managed here iff ANY package uses
   // vitest directly.
-  workspaceUsesVitest = true,
-  importOptions?: VitestImportMigrationOptions,
-): void {
+  workspaceUsesVitest = true,): void {
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
     return;
@@ -3738,9 +3732,7 @@ function rewriteRootWorkspacePackageJson(
     undefined,
     catalogDependencyResolver,
     packages ? { rootDir: projectPath, packages } : undefined,
-    true,
-    importOptions,
-  );
+    true,  );
 }
 
 const RULES_YAML_PATH = path.join(rulesDir, 'vite-tools.yml');
@@ -3841,9 +3833,7 @@ export function finalizeCoreMigrationForExistingVitePlus(
   workspaceInfo: CoreMigrationWorkspace,
   silent = false,
   report?: MigrationReport,
-  pending = detectPendingCoreMigration(workspaceInfo),
-  importOptions?: VitestImportMigrationOptions,
-): CoreMigrationFinalizationResult {
+  pending = detectPendingCoreMigration(workspaceInfo),): CoreMigrationFinalizationResult {
   const projectPaths = getCoreMigrationProjectPaths(workspaceInfo);
   const result: CoreMigrationFinalizationResult = {
     scripts: false,
@@ -3868,7 +3858,7 @@ export function finalizeCoreMigrationForExistingVitePlus(
     workspaceInfo.rootDir,
     silent,
     report,
-    importOptions?.preserveNuxtVitestImports !== false,
+    true,
   );
 
   return result;
@@ -4288,15 +4278,13 @@ function reconcileVitePlusBootstrapPackage(
   packageManager: PackageManager,
   supportCatalog: boolean,
   ensureVitePlus: boolean,
-  catalogDependencyResolver?: CatalogDependencyResolver,
-  importOptions?: VitestImportMigrationOptions,
-): boolean {
+  catalogDependencyResolver?: CatalogDependencyResolver,): boolean {
   const before = JSON.stringify(pkg);
   const usesVitest = projectUsesVitestDirectly(
     projectPath,
     pkg,
     undefined,
-    importOptions?.preserveNuxtVitestImports !== false,
+    true,
   );
   ensureVitePlusDependencySpecs(pkg, vitePlusVersion, ensureVitePlus);
 
@@ -4394,6 +4382,22 @@ function reconcileVitePlusBootstrapPackage(
     }
   }
 
+  if (packageManager === PackageManager.bun) {
+    // Bun resolves vitest's `vite ^6 || ^7 || ^8` peer before applying the
+    // override that redirects `vite` to vite-plus-core, and aborts with
+    // "vite@... failed to resolve" unless `vite` is a direct dependency. Mirror
+    // the full-migration path (rewriteStandaloneProject) so the idempotent
+    // bootstrap path also produces an installable bun project. The override set
+    // above still points the direct dep at vite-plus-core.
+    const viteAlreadyDirect = installGroups.some(
+      (dependencies) => dependencies?.vite !== undefined,
+    );
+    if (!viteAlreadyDirect) {
+      pkg.devDependencies ??= {};
+      pkg.devDependencies.vite = VITE_PLUS_OVERRIDE_PACKAGES.vite;
+    }
+  }
+
   if (usesVitest) {
     // A direct @vitest/*/integration dependency with a required vitest peer
     // cannot use the copy nested under its sibling `vite-plus` dependency under
@@ -4459,7 +4463,14 @@ function collectVitestEcosystemInstallDependencyNames(
   return names;
 }
 
-function collectInjectedProviderNames(rootDir: string, packages?: WorkspacePackage[]): Set<string> {
+function collectInjectedProviderNames(
+  rootDir: string,
+  packages?: WorkspacePackage[],
+  // Optional precomputed provider source-scan results keyed by absolute package
+  // path. Lets a caller that already scanned a path reuse the result instead of
+  // re-traversing the source tree; unknown paths fall back to a fresh scan.
+  precomputedSourceModes?: ReadonlyMap<string, Record<string, boolean>>,
+): Set<string> {
   const names = new Set<string>();
   for (const packagePath of bootstrapProjectPaths(rootDir, packages)) {
     const packageJsonPath = path.join(packagePath, 'package.json');
@@ -4467,7 +4478,8 @@ function collectInjectedProviderNames(rootDir: string, packages?: WorkspacePacka
       continue;
     }
     const pkg = readJsonFile(packageJsonPath) as BootstrapPackageJson;
-    const sourceModes = collectProviderSourceModes(packagePath);
+    const sourceModes =
+      precomputedSourceModes?.get(packagePath) ?? collectProviderSourceModes(packagePath);
     const installGroups = [pkg.devDependencies, pkg.dependencies, pkg.optionalDependencies];
     const dependencyGroups = [...installGroups, pkg.peerDependencies];
     for (const provider of OPT_IN_BROWSER_PROVIDERS) {
@@ -4506,9 +4518,7 @@ export function detectVitePlusBootstrapPending(
   projectPath: string,
   packageManager: PackageManager | undefined,
   packages?: WorkspacePackage[],
-  packageManagerVersion?: string,
-  importOptions?: VitestImportMigrationOptions,
-): boolean {
+  packageManagerVersion?: string,): boolean {
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
     return false;
@@ -4566,9 +4576,7 @@ export function detectVitePlusBootstrapPending(
         packageManager,
         supportCatalog,
         index === 0,
-        catalogDependencyResolver,
-        importOptions,
-      )
+        catalogDependencyResolver,      )
     ) {
       return true;
     }
@@ -4579,7 +4587,7 @@ export function detectVitePlusBootstrapPending(
   const usesVitest = workspaceUsesVitestDirectly(
     projectPath,
     packages,
-    importOptions?.preserveNuxtVitestImports !== false,
+    true,
   );
 
   if (packageManager === PackageManager.yarn) {
@@ -4744,9 +4752,7 @@ function ensurePnpmPeerDependencyRules(pkg: BootstrapPackageJson, usesVitest: bo
 
 export function ensureVitePlusBootstrap(
   workspaceInfo: WorkspaceInfo,
-  report?: MigrationReport,
-  importOptions?: VitestImportMigrationOptions,
-): VitePlusBootstrapResult {
+  report?: MigrationReport,): VitePlusBootstrapResult {
   const projectPath = workspaceInfo.rootDir;
   const packageJsonPath = path.join(projectPath, 'package.json');
   const result: VitePlusBootstrapResult = {
@@ -4765,7 +4771,7 @@ export function ensureVitePlusBootstrap(
   const usesVitest = workspaceUsesVitestDirectly(
     projectPath,
     workspaceInfo.packages,
-    importOptions?.preserveNuxtVitestImports !== false,
+    true,
   );
   const pnpmMajorVersion = pnpmMajor(workspaceInfo.downloadPackageManager.version);
   const shouldAllowBrowserBuilds = workspaceUsesWebdriverio(projectPath, workspaceInfo.packages);
@@ -4813,9 +4819,7 @@ export function ensureVitePlusBootstrap(
       workspaceInfo.packageManager,
       supportCatalog,
       true,
-      catalogDependencyResolver,
-      importOptions,
-    );
+      catalogDependencyResolver,    );
 
     if (workspaceInfo.packageManager === PackageManager.yarn) {
       const ensured = ensureOverrideEntries(pkg.resolutions, usesVitest);
@@ -4882,9 +4886,7 @@ export function ensureVitePlusBootstrap(
         workspaceInfo.packageManager,
         supportCatalog,
         false,
-        catalogDependencyResolver,
-        importOptions,
-      );
+        catalogDependencyResolver,      );
       return childChanged ? pkg : undefined;
     });
     result.packageJson = result.packageJson || childChanged;
@@ -5135,12 +5137,10 @@ const VITEST_SCAN_SKIP_DIRS = new Set([
  * is a separate package that the migration scans on its own pass, so the root
  * package must not inherit a browser-mode signal from a sub-package.
  */
-function sourceTreeMatchingFiles(
+function sourceTreeMatches(
   projectPath: string,
   matchesContent: (content: string) => boolean,
-  stopAfterFirst = false,
-): string[] {
-  const matchingFiles: string[] = [];
+): boolean {
   const scanDir = (dir: string, isRoot: boolean): boolean => {
     let entries: fs.Dirent[];
     try {
@@ -5165,10 +5165,7 @@ function sourceTreeMatchingFiles(
       } else if (entry.isFile() && VITEST_SCAN_EXTENSIONS.has(path.extname(entry.name))) {
         try {
           if (matchesContent(fs.readFileSync(entryPath, 'utf8'))) {
-            matchingFiles.push(entryPath);
-            if (stopAfterFirst) {
-              return true;
-            }
+            return true;
           }
         } catch {
           // Unreadable file — ignore and keep scanning.
@@ -5178,15 +5175,7 @@ function sourceTreeMatchingFiles(
     return false;
   };
 
-  scanDir(projectPath, true);
-  return matchingFiles;
-}
-
-function sourceTreeMatches(
-  projectPath: string,
-  matchesContent: (content: string) => boolean,
-): boolean {
-  return sourceTreeMatchingFiles(projectPath, matchesContent, true).length > 0;
+  return scanDir(projectPath, true);
 }
 
 function sourceTreeReferencesAny(projectPath: string, hints: readonly string[]): boolean {
@@ -5220,41 +5209,10 @@ function findPackageTsconfigFiles(projectPath: string): string[] {
   return files;
 }
 
-const UPSTREAM_VITEST_MODULE_REFERENCE =
-  /(?:\bfrom\s*|\b(?:import|require)\s*\(\s*|\bimport\s*)['"]vitest(?:\/[^'"]+)?['"]/m;
-
 function hasNuxtTestUtilsDependency(pkg: DependencyBag): boolean {
   return [pkg.dependencies, pkg.devDependencies, pkg.optionalDependencies].some(
     (dependencies) => dependencies?.['@nuxt/test-utils'] !== undefined,
   );
-}
-
-/**
- * Find files whose upstream Vitest imports are preserved by the
- * @nuxt/test-utils package-level compatibility rule.
- * Each package is scanned independently so a root dependency does not leak into
- * unrelated workspace manifests.
- */
-export function detectNuxtTestUtilsVitestImportFiles(
-  rootDir: string,
-  packages?: WorkspacePackage[],
-): string[] {
-  const files: string[] = [];
-  for (const projectPath of [
-    rootDir,
-    ...(packages ?? []).map((pkg) => path.join(rootDir, pkg.path)),
-  ]) {
-    const pkg = readPackageJsonIfExists(path.join(projectPath, 'package.json'));
-    if (!pkg || !hasNuxtTestUtilsDependency(pkg)) {
-      continue;
-    }
-    files.push(
-      ...sourceTreeMatchingFiles(projectPath, (content) =>
-        UPSTREAM_VITEST_MODULE_REFERENCE.test(content),
-      ),
-    );
-  }
-  return [...new Set(files)];
 }
 
 // Normal imports and triple-slash type directives from `vitest` are rewritten
