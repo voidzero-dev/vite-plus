@@ -1,8 +1,8 @@
 import { writeSync } from 'node:fs';
 
-import { ROLLDOWN_COMPAT_RESULT_PREFIX } from './compat-protocol.ts';
-import { checkManualChunksCompat } from './compat.ts';
-import { createMigrationReport } from './report.ts';
+import { createMigrationReport } from '../report.ts';
+import { checkManualChunksCompat } from './manual-chunks.ts';
+import { ROLLDOWN_COMPAT_RESULT_PREFIX } from './protocol.ts';
 
 async function main(): Promise<void> {
   const rootDir = process.argv[2];
@@ -11,8 +11,8 @@ async function main(): Promise<void> {
   }
 
   try {
-    const { resolveConfig } = await import('../index.js');
-    const { withConfigMetadataResolution } = await import('../define-config.js');
+    const { resolveConfig } = await import('../../index.js');
+    const { withConfigMetadataResolution } = await import('../../define-config.js');
     // Use 'runner' configLoader to avoid Rolldown bundling the config file,
     // which prints UNRESOLVED_IMPORT warnings that cannot be suppressed via logLevel.
     // Reads the config only for the manualChunks compat check, so skip the user's

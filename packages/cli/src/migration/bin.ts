@@ -45,7 +45,7 @@ import {
 } from '../utils/tsconfig.ts';
 import type { PackageDependencies } from '../utils/types.ts';
 import { detectWorkspace } from '../utils/workspace.ts';
-import { checkRolldownCompatibility } from './compat-runner.ts';
+import { checkRolldownCompatibility } from './compat/runner.ts';
 import { canFormatWithOxfmt, collectChangedFormatPaths, formatMigratedProject } from './format.ts';
 import {
   addFrameworkShim,

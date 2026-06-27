@@ -5,7 +5,7 @@ vi.mock('../../utils/command.ts', () => ({
 }));
 
 import { runCommandSilently } from '../../utils/command.ts';
-import { checkRolldownCompatibility, ROLLDOWN_COMPAT_RESULT_PREFIX } from '../compat-runner.ts';
+import { checkRolldownCompatibility, ROLLDOWN_COMPAT_RESULT_PREFIX } from '../compat/runner.ts';
 import { createMigrationReport } from '../report.ts';
 
 const mockRunCommandSilently = vi.mocked(runCommandSilently);
@@ -30,7 +30,7 @@ describe('checkRolldownCompatibility', () => {
     expect(report.warnings).toEqual(['manualChunks warning']);
     expect(mockRunCommandSilently).toHaveBeenCalledWith({
       command: process.execPath,
-      args: [expect.stringMatching(/compat-worker\.js$/), '/project'],
+      args: [expect.stringMatching(/compat\/worker\.js$/), '/project'],
       cwd: '/project',
       envs: process.env,
     });

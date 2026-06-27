@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { checkManualChunksCompat } from '../compat.js';
+import { checkManualChunksCompat } from '../compat/manual-chunks.js';
 import { createMigrationReport } from '../report.js';
 
 describe('checkManualChunksCompat', () => {

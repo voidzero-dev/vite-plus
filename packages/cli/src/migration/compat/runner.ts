@@ -1,8 +1,8 @@
 import { fileURLToPath } from 'node:url';
 
-import { runCommandSilently } from '../utils/command.ts';
-import { ROLLDOWN_COMPAT_RESULT_PREFIX } from './compat-protocol.ts';
-import { addMigrationWarning, type MigrationReport } from './report.ts';
+import { runCommandSilently } from '../../utils/command.ts';
+import { addMigrationWarning, type MigrationReport } from '../report.ts';
+import { ROLLDOWN_COMPAT_RESULT_PREFIX } from './protocol.ts';
 
 export { ROLLDOWN_COMPAT_RESULT_PREFIX };
 
@@ -46,7 +46,7 @@ export async function checkRolldownCompatibility(
   report: MigrationReport,
 ): Promise<void> {
   try {
-    const workerPath = fileURLToPath(new URL('./compat-worker.js', import.meta.url));
+    const workerPath = fileURLToPath(new URL('./compat/worker.js', import.meta.url));
     const result = await runCommandSilently({
       command: process.execPath,
       args: [workerPath, rootDir],
