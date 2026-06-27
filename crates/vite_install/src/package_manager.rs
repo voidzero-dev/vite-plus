@@ -229,6 +229,82 @@ impl PackageManagerBuilder {
         };
         Ok(package_manager)
     }
+
+    /// Build a `PackageManager` for passthrough mode: detect and download the
+    /// explicitly-configured package manager version WITHOUT writing
+    /// `devEngines.packageManager` to package.json.
+    ///
+    /// Resolution rules (mirrors `build()` detection, diverges on pin + fallback):
+    /// - Explicit version (`packageManager` / `devEngines.packageManager` with a
+    ///   version) → download that version (feature preserved), skip pin.
+    /// - npm with no explicit version → use the Node-bundled npm at
+    ///   `node_bin_prefix` (compatible with the active Node).
+    /// - pnpm/yarn/bun with no explicit version → `Error::UnrecognizedPackageManager`
+    ///   (caller surfaces a "specify a version" message); we never download an
+    ///   unverified `latest` that may be incompatible with the active Node.
+    ///
+    /// `node_bin_prefix` is the bin directory of the resolved project Node
+    /// runtime (where the bundled `npm` lives).
+    pub async fn detect_only(
+        &self,
+        node_bin_prefix: &AbsolutePath,
+    ) -> Result<PackageManager, Error> {
+        let (workspace_root, _cwd) = find_workspace_root(&self.cwd)?;
+        let (package_manager_type, version_or_req, hash, source) =
+            get_package_manager_type_and_version(&workspace_root, self.client_override)?;
+
+        let has_explicit_version = matches!(
+            source,
+            PackageManagerSource::PackageManagerField
+                | PackageManagerSource::DevEnginesPackageManager
+        ) && version_or_req.as_str() != "*"
+            && !version_or_req.is_empty();
+
+        // Non-npm without an explicit version: refuse to guess/download latest.
+        if !has_explicit_version && package_manager_type != PackageManagerType::Npm {
+            return Err(Error::UnrecognizedPackageManager);
+        }
+
+        let (install_dir, package_name, version, bin_name) = if has_explicit_version {
+            let (install_dir, package_name, version) =
+                download_package_manager(package_manager_type, &version_or_req, hash.as_deref())
+                    .await?;
+            (install_dir, package_name, version, package_manager_type.to_string().into())
+        } else {
+            // npm, no explicit version: use Node-bundled npm.
+            // Set install_dir to the *parent* of node_bin_prefix (the Node
+            // installation root) so that get_bin_prefix() — which does
+            // install_dir.join("bin") — produces the correct bin directory
+            // (e.g. <node_root>/bin/) rather than a doubled bin/bin/ path.
+            let node_bin_buf = node_bin_prefix.to_absolute_path_buf();
+            let install_dir = node_bin_buf
+                .parent()
+                .map(|p| p.to_absolute_path_buf())
+                .unwrap_or(node_bin_buf);
+            (
+                install_dir,
+                "npm".into(),
+                "bundled".into(),
+                "npm".into(),
+            )
+        };
+
+        let is_monorepo = matches!(
+            workspace_root.workspace_file,
+            WorkspaceFile::PnpmWorkspaceYaml(_) | WorkspaceFile::NpmWorkspaceJson(_)
+        );
+
+        Ok(PackageManager {
+            client: package_manager_type,
+            package_name,
+            version,
+            hash,
+            bin_name,
+            workspace_root: workspace_root.path.to_absolute_path_buf(),
+            is_monorepo,
+            install_dir,
+        })
+    }
 }
 
 impl PackageManager {
@@ -3479,5 +3555,69 @@ mod tests {
 
         // Release lock
         lock_file1.unlock().expect("Failed to unlock file 1");
+    }
+
+    #[tokio::test]
+    async fn detect_only_npm_no_config_uses_node_bundled_npm() {
+        // Project with package-lock.json (npm) but no explicit version.
+        let tmp = tempfile::tempdir().unwrap();
+        let project = AbsolutePathBuf::new(tmp.path().to_path_buf()).unwrap();
+        tokio::fs::write(project.join("package.json"), r#"{"name":"x"}"#).await.unwrap();
+        tokio::fs::write(project.join("package-lock.json"), "{}").await.unwrap();
+        // Mimic real Node layout: <root>/node/bin/ contains the node binary.
+        // The node_bin_prefix is the "bin" directory inside the Node install.
+        let node_root = tmp.path().join("node");
+        let node_bin = node_root.join("bin");
+        tokio::fs::create_dir_all(&node_bin).await.unwrap();
+        let node_bin = AbsolutePathBuf::new(node_bin).unwrap();
+
+        let pm = PackageManager::builder(&project).detect_only(&node_bin).await.unwrap();
+        assert_eq!(pm.client, PackageManagerType::Npm);
+        // install_dir points to the parent of node_bin (Node installation root),
+        // so get_bin_prefix() == node_bin (install_dir.join("bin")).
+        let expected_install_dir = AbsolutePathBuf::new(node_root).unwrap();
+        assert_eq!(pm.install_dir, expected_install_dir);
+        assert_eq!(pm.get_bin_prefix(), node_bin);
+        // bin_name resolves to "npm"
+        assert_eq!(pm.bin_name.as_str(), "npm");
+    }
+
+    #[tokio::test]
+    async fn detect_only_pnpm_no_config_errors() {
+        // Project with pnpm-lock.yaml but no explicit version -> error (not download latest).
+        let tmp = tempfile::tempdir().unwrap();
+        let project = AbsolutePathBuf::new(tmp.path().to_path_buf()).unwrap();
+        tokio::fs::write(project.join("package.json"), r#"{"name":"x"}"#).await.unwrap();
+        tokio::fs::write(project.join("pnpm-lock.yaml"), "").await.unwrap();
+        let node_bin = AbsolutePathBuf::new(tmp.path().join("node_bin")).unwrap();
+        tokio::fs::create_dir_all(&node_bin).await.unwrap();
+
+        let result = PackageManager::builder(&project).detect_only(&node_bin).await;
+        assert!(matches!(result, Err(Error::UnrecognizedPackageManager)));
+    }
+
+    #[tokio::test]
+    async fn detect_only_never_writes_dev_engines() {
+        // Even with an explicit version (which triggers download), devEngines must NOT be written.
+        let tmp = tempfile::tempdir().unwrap();
+        let project = AbsolutePathBuf::new(tmp.path().to_path_buf()).unwrap();
+        tokio::fs::write(
+            project.join("package.json"),
+            r#"{"name":"x","packageManager":"npm@10.0.0"}"#,
+        )
+        .await
+        .unwrap();
+        let node_bin = AbsolutePathBuf::new(tmp.path().join("node_bin")).unwrap();
+        tokio::fs::create_dir_all(&node_bin).await.unwrap();
+
+        // detect_only may attempt to download npm@10.0.0; in tests we only assert
+        // the package.json is NOT mutated with devEngines. If download is unreachable
+        // in CI, gate the devEngines assertion behind the download succeeding.
+        let before = tokio::fs::read_to_string(project.join("package.json")).await.unwrap();
+        let _ = PackageManager::builder(&project).detect_only(&node_bin).await;
+        let after = tokio::fs::read_to_string(project.join("package.json")).await.unwrap();
+        assert!(!after.contains("devEngines"));
+        // Ensure we didn't accidentally rewrite other content
+        assert_eq!(before, after);
     }
 }

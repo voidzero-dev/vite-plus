@@ -1,0 +1,7 @@
+{
+  "name": "passthrough-notice",
+  "packageManager": "pnpm@7.33.0",
+  "scripts": {
+    "dev": "echo PASSTHROUGH_MARKER"
+  }
+}

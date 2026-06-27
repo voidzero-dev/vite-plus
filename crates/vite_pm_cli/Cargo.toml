@@ -23,5 +23,8 @@ vite_workspace = { workspace = true }
 [lib]
 doctest = false
 
+[dev-dependencies]
+tempfile = { workspace = true }
+
 [lints]
 workspace = true

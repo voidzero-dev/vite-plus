@@ -110,6 +110,9 @@ pub mod upgrade;
 // Category C: Local CLI Delegation
 pub mod delegate;
 
+// Low-Node passthrough (degrades eligible commands to the project's package manager)
+pub mod passthrough;
+
 #[cfg(test)]
 mod tests {
     use vite_path::AbsolutePathBuf;

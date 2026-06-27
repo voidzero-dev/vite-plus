@@ -6,9 +6,13 @@
 //! 2. Global vp packages (installed via `vp install -g`)
 //! 3. System PATH (excluding vite-plus bin directory)
 //! 4. Remote download via `vp dlx`
+//!
+//! On low-Node projects (Node < 20.19.0), steps 2 and 4 are adapted:
+//! - Step 2 is skipped (global lookup requires the Vite+ JS CLI)
+//! - Step 4 uses passthrough mode (project's PM runs dlx directly)
 
 use vite_path::{AbsolutePath, AbsolutePathBuf};
-use vite_shared::{PrependOptions, output, prepend_to_path_env};
+use vite_shared::{PrependOptions, is_node_below_min, output, prepend_to_path_env};
 
 use crate::{commands::env::config, shim::dispatch};
 
@@ -85,7 +89,7 @@ pub async fn execute_vpx(args: &[String], cwd: &AbsolutePath) -> i32 {
 
     // If no version spec and no --package flag, try local → global → PATH lookup
     if !has_version_spec(cmd_spec) && flags.packages.is_empty() && !flags.shell_mode {
-        // 1. Try local node_modules/.bin
+        // 1. Try local node_modules/.bin (pure filesystem -- works on low-Node)
         if let Some(local_bin) = find_local_binary(cwd, &cmd_name) {
             tracing::debug!("vpx: found local binary at {}", local_bin.as_path().display());
             prepend_node_modules_bin_to_path(cwd);
@@ -93,13 +97,20 @@ pub async fn execute_vpx(args: &[String], cwd: &AbsolutePath) -> i32 {
             return crate::shim::exec::exec_tool(&local_bin, &cmd_args);
         }
 
-        // 2. Try global vp packages
-        if let Some(global_bin) = find_global_binary(&cmd_name).await {
-            tracing::debug!("vpx: found global binary at {}", global_bin.path.as_path().display());
-            return execute_global_binary(global_bin, &positional[1..], cwd).await;
+        // 2. Try global vp packages (requires JS CLI -- skip on low-Node).
+        //    Deferred is_low_node check: only resolves node version when we
+        //    actually need the global binary lookup or dlx fallback.
+        if !is_low_node(cwd).await {
+            if let Some(global_bin) = find_global_binary(&cmd_name).await {
+                tracing::debug!(
+                    "vpx: found global binary at {}",
+                    global_bin.path.as_path().display()
+                );
+                return execute_global_binary(global_bin, &positional[1..], cwd).await;
+            }
         }
 
-        // 3. Try system PATH (excluding vite-plus bin dir)
+        // 3. Try system PATH (excluding vite-plus bin dir -- works on low-Node)
         if let Some(path_bin) = find_on_path(&cmd_name) {
             tracing::debug!("vpx: found on PATH at {}", path_bin.as_path().display());
             prepend_node_modules_bin_to_path(cwd);
@@ -109,6 +120,12 @@ pub async fn execute_vpx(args: &[String], cwd: &AbsolutePath) -> i32 {
     }
 
     // 4. Fall back to dlx (remote download)
+    if is_low_node(cwd).await {
+        // Low-Node passthrough: use the project's package manager directly.
+        // This bypasses the Vite+ JS CLI which cannot load on old Node.
+        return execute_dlx_passthrough(cwd, &flags, &positional).await;
+    }
+
     if let Err(e) = super::prepend_js_runtime_to_path_env(cwd).await {
         output::error(&format!("vpx: {e}"));
         return 1;
@@ -120,6 +137,81 @@ pub async fn execute_vpx(args: &[String], cwd: &AbsolutePath) -> i32 {
         args: positional,
     };
     match vite_pm_cli::dispatch(cwd, dlx).await {
+        Ok(status) => status.code().unwrap_or(1),
+        Err(e) => {
+            output::error(&format!("vpx: {e}"));
+            1
+        }
+    }
+}
+
+/// Check if the project's resolved Node version is below the Vite+ minimum.
+///
+/// Returns `true` when passthrough mode should activate. Delegates to the
+/// shared resolve function from `commands::passthrough`.
+async fn is_low_node(cwd: &AbsolutePath) -> bool {
+    match crate::commands::passthrough::resolve_project_node_version(cwd).await {
+        Some(version) => is_node_below_min(&version),
+        None => false,
+    }
+}
+
+/// Execute dlx in passthrough mode: detect the project's PM (no devEngines
+/// pin) and run `<pm> dlx <args>` directly, bypassing the Vite+ JS CLI.
+async fn execute_dlx_passthrough(
+    cwd: &AbsolutePath,
+    flags: &VpxFlags,
+    positional: &[String],
+) -> i32 {
+    use vite_install::PackageManager;
+
+    use crate::js_executor::JsExecutor;
+
+    // Resolve the Node runtime (download if needed) to get the bin dir.
+    let mut executor = JsExecutor::new(None);
+    let runtime = match executor.ensure_project_runtime(cwd).await {
+        Ok(r) => r,
+        Err(e) => {
+            output::error(&format!("vpx: {e}"));
+            return 1;
+        }
+    };
+    let runtime_bin = runtime.get_bin_prefix();
+
+    // Detect the package manager without writing devEngines.
+    let pm = match PackageManager::builder(cwd)
+        .detect_only(&runtime_bin)
+        .await
+    {
+        Ok(pm) => pm,
+        Err(e) => {
+            output::error(&format!(
+                "vpx: Could not resolve a package manager for passthrough: {e}\n\
+                 Please specify one in package.json (e.g. \"packageManager\": \"pnpm@9.15.0\") \
+                 or upgrade Node."
+            ));
+            return 1;
+        }
+    };
+
+    // Print the passthrough notice.
+    let node_version = runtime.version();
+    crate::commands::passthrough::print_passthrough_notice(
+        node_version,
+        vite_shared::MIN_SUPPORTED_NODE,
+    );
+
+    // Prepend Node runtime bin to process PATH so PM shims can find `node`.
+    prepend_to_path_env(&runtime_bin, PrependOptions { dedupe_anywhere: true });
+
+    // Dispatch dlx via the project's PM.
+    let dlx = vite_pm_cli::PackageManagerCommand::Dlx {
+        package: flags.packages.clone(),
+        shell_mode: flags.shell_mode,
+        silent: flags.silent,
+        args: positional.to_vec(),
+    };
+    match vite_pm_cli::dispatch::dispatch_with_pm(cwd, dlx, &pm).await {
         Ok(status) => status.code().unwrap_or(1),
         Err(e) => {
             output::error(&format!("vpx: {e}"));

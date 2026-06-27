@@ -899,6 +899,19 @@ pub async fn run_command_with_options(
         return Ok(std::process::ExitStatus::default());
     };
 
+    // Low-Node passthrough precheck: when the project's resolved Node is below
+    // the supported minimum AND the command is eligible (run / package manager),
+    // bypass the Vite+ JS CLI and run the project's own package manager directly.
+    if commands::passthrough::is_eligible(&command) {
+        if let Some(node_version) = commands::passthrough::resolve_project_node_version(&cwd).await {
+            if commands::passthrough::should_passthrough(&command, &node_version) {
+                let mut executor = crate::js_executor::JsExecutor::new(None);
+                let runtime = executor.ensure_project_runtime(&cwd).await?;
+                return commands::passthrough::execute(&cwd, &command, runtime).await;
+            }
+        }
+    }
+
     match command {
         // Category A: Package Manager Commands
         // Print the runtime header for `vp install` (when not silent).

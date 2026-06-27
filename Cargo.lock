@@ -8507,6 +8507,7 @@ version = "0.0.0"
 dependencies = [
  "clap",
  "serde_json",
+ "tempfile",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -8566,6 +8567,7 @@ version = "0.0.0"
 dependencies = [
  "directories",
  "nix 0.30.1",
+ "node-semver",
  "owo-colors",
  "reqwest",
  "rustls",
