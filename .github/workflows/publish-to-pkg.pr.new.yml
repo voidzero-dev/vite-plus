@@ -146,6 +146,7 @@ jobs:
       # Restricted to same-repo PRs because fork PRs do not receive the admin
       # token secret; never fails the publish if the bridge is unreachable.
       - name: Register commit build with the registry bridge
+        id: bridge
         if: github.event.pull_request.head.repo.full_name == github.repository
         continue-on-error: true
         env:
@@ -157,3 +158,30 @@ jobs:
             -H 'content-type: application/json' \
             -d "{\"ref\":\"commit.${HEAD_SHA}\"}" \
             https://pkg-pr-registry-bridge.render.vip/-/refs
+
+      # Once the bridge has the commit build, post (or update) a sticky PR comment
+      # with the resolved npm versions and per-package-manager registry config, so
+      # reviewers can install the build directly. Gated on the bridge step's real
+      # outcome (it is continue-on-error) and skipped for fork PRs.
+      - name: Comment bridge version on the PR
+        if: steps.bridge.outcome == 'success'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          sed -e "s/__SHA__/${HEAD_SHA}/g" -e "s/__SHORT__/${HEAD_SHA:0:7}/g" \
+            .github/bridge-comment-template.md > bridge-comment.md
+          existing=$(gh api "repos/${REPO}/issues/${PR_NUMBER}/comments" --paginate \
+            --jq 'map(select(.body | contains("<!-- pkg-pr-bridge-version -->"))) | last | .id // empty')
+          if [ -n "$existing" ]; then
+            gh api -X PATCH "repos/${REPO}/issues/comments/${existing}" \
+              -f body="$(cat bridge-comment.md)" >/dev/null
+            echo "Updated bridge comment ${existing}"
+          else
+            gh api -X POST "repos/${REPO}/issues/${PR_NUMBER}/comments" \
+              -f body="$(cat bridge-comment.md)" >/dev/null
+            echo "Created bridge comment"
+          fi
