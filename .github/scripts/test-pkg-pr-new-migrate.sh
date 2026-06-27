@@ -224,12 +224,12 @@ fi
 
 export VP_HOME="$pr_home"
 export PATH="$VP_HOME/bin:$PATH"
-# vite-plus and vite (-> vite-plus-core) become ordinary npm versions. The
-# values are constrained (commit SHA, semver) so the override JSON needs no
-# escaping.
+# vite-plus and vite (-> vite-plus-core) become ordinary npm versions resolved
+# through the bridge, so the normal upgrade path re-pins them (no force-override
+# needed). The values are constrained (commit SHA, semver) so the override JSON
+# needs no escaping.
 export VP_VERSION="$commit_version"
 export VP_OVERRIDE_PACKAGES="{\"vite\":\"$vite_core_spec\",\"vitest\":\"$vitest_version\"}"
-export VP_FORCE_MIGRATE=1
 # Point every package manager at the registry bridge. It serves the vite-plus /
 # vite-plus-core / per-platform CLI commit builds and proxies everything else to
 # npmjs, so the project resolves the commit versions like any released package.
