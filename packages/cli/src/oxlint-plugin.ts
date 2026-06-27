@@ -104,7 +104,10 @@ function quoteSpecifier(literal: ESTree.StringLiteral, replacement: string): str
 // Keyed by package.json path and invalidated by its mtime so a long-lived lint
 // process (editor/LSP session) re-reads the manifest after the user adds or
 // removes `@nuxt/test-utils`, instead of reusing the pre-edit decision forever.
-const nuxtTestUtilsPackageCache = new Map<string, { mtimeMs: number; usesNuxtTestUtils: boolean }>();
+const nuxtTestUtilsPackageCache = new Map<
+  string,
+  { mtimeMs: number; usesNuxtTestUtils: boolean }
+>();
 
 function isUpstreamVitestSpecifier(specifier: string): boolean {
   return specifier === 'vitest' || specifier.startsWith('vitest/');

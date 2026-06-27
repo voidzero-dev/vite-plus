@@ -43,7 +43,7 @@ export default defineConfig({
     "@vitest/browser-playwright": "<semver>",
     "vite": "catalog:",
     "vitest": "catalog:",
-    "@vitest/browser-webdriverio": "<semver>",
+    "@vitest/browser-webdriverio": "catalog:",
     "webdriverio": "*",
     "playwright": "*",
     "vite-plus": "catalog:"
@@ -62,6 +62,7 @@ catalog:
   vite: npm:@voidzero-dev/vite-plus-core@<semver>
   vitest: <semver>
   vite-plus: <semver>
+  '@vitest/browser-webdriverio': <semver>
 allowBuilds:
   edgedriver: true
   geckodriver: true

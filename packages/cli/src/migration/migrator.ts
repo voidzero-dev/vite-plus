@@ -1854,7 +1854,8 @@ export function rewriteStandaloneProject(
   workspaceInfo: WorkspaceInfo,
   skipStagedMigration?: boolean,
   silent = false,
-  report?: MigrationReport,): void {
+  report?: MigrationReport,
+): void {
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
     return;
@@ -1901,13 +1902,10 @@ export function rewriteStandaloneProject(
     shouldAllowBrowserProviderBuilds =
       hasOwnWebdriverioDependency(pkg) || usesWebdriverioProvider(projectPath);
     const requiredVitestPeer = projectListsRequiredVitestPeer(projectPath, pkg);
-    usesVitest = projectUsesVitestDirectly(
-      projectPath,
-      pkg,
-      requiredVitestPeer,
-      true,
-      { browserMode, retainedModule: retainedVitestModule },
-    );
+    usesVitest = projectUsesVitestDirectly(projectPath, pkg, requiredVitestPeer, true, {
+      browserMode,
+      retainedModule: retainedVitestModule,
+    });
     const managed = managedOverridePackages(usesVitest);
     // Strip stale `vite-plus-test` wrapper aliases before injecting new overrides
     // so the deleted wrapper doesn't survive migration in any sink.
@@ -2105,12 +2103,7 @@ export function rewriteStandaloneProject(
   injectFmtDefaults(projectPath, silent, report);
   mergeTsdownConfigFile(projectPath, silent, report);
   // rewrite imports in all TypeScript/JavaScript files before lazy plugin import merging
-  rewriteAllImports(
-    projectPath,
-    silent,
-    report,
-    true,
-  );
+  rewriteAllImports(projectPath, silent, report, true);
   wrapLazyPluginsInViteConfig(projectPath, silent, report);
   // set package manager
   setPackageManager(projectPath, workspaceInfo.downloadPackageManager);
@@ -2124,7 +2117,8 @@ export function rewriteMonorepo(
   workspaceInfo: WorkspaceInfo,
   skipStagedMigration?: boolean,
   silent = false,
-  report?: MigrationReport,): void {
+  report?: MigrationReport,
+): void {
   const catalogDependencyResolver = createCatalogDependencyResolver(
     workspaceInfo.rootDir,
     workspaceInfo.packageManager,
@@ -2172,7 +2166,8 @@ export function rewriteMonorepo(
     pnpmMajorVersion,
     workspaceInfo.downloadPackageManager.version,
     workspaceShouldAllowBrowserBuilds,
-    workspaceUsesVitest,  );
+    workspaceUsesVitest,
+  );
   if (workspaceInfo.packageManager === PackageManager.pnpm) {
     rewritePnpmWorkspaceYaml(
       workspaceInfo.rootDir,
@@ -2213,7 +2208,8 @@ export function rewriteMonorepo(
       report,
       catalogDependencyResolver,
       workspaceContext,
-      true,    );
+      true,
+    );
   }
 
   if (!skipStagedMigration) {
@@ -2226,12 +2222,7 @@ export function rewriteMonorepo(
   injectFmtDefaults(workspaceInfo.rootDir, silent, report);
   mergeTsdownConfigFile(workspaceInfo.rootDir, silent, report);
   // rewrite imports in all TypeScript/JavaScript files before lazy plugin import merging
-  rewriteAllImports(
-    workspaceInfo.rootDir,
-    silent,
-    report,
-    true,
-  );
+  rewriteAllImports(workspaceInfo.rootDir, silent, report, true);
   wrapLazyPluginsInViteConfig(workspaceInfo.rootDir, silent, report);
   for (const pkg of workspaceInfo.packages) {
     wrapLazyPluginsInViteConfig(path.join(workspaceInfo.rootDir, pkg.path), silent, report);
@@ -2257,7 +2248,8 @@ export function rewriteMonorepoProject(
   report?: MigrationReport,
   catalogDependencyResolver?: CatalogDependencyResolver,
   workspaceContext?: { rootDir: string; packages: WorkspacePackage[] },
-  deferLazyPluginWrapping = false,): void {
+  deferLazyPluginWrapping = false,
+): void {
   cleanupDeprecatedTsconfigOptions(projectPath, silent, report);
   rewriteTsconfigTypes(projectPath, silent, report);
   mergeViteConfigFiles(
@@ -2309,13 +2301,10 @@ export function rewriteMonorepoProject(
       catalogDependencyResolver,
       browserMode,
       collectProviderSourceModes(projectPath),
-      projectUsesVitestDirectly(
-        projectPath,
-        pkg,
-        requiredVitestPeer,
-        true,
-        { browserMode, retainedModule: retainedVitestModule },
-      ),
+      projectUsesVitestDirectly(projectPath, pkg, requiredVitestPeer, true, {
+        browserMode,
+        retainedModule: retainedVitestModule,
+      }),
       retainedVitestModule,
       requiredVitestPeer,
     );
@@ -3586,7 +3575,8 @@ function rewriteRootWorkspacePackageJson(
   // Workspace-wide direct-vitest signal: the root resolution/override sinks are
   // shared by every package, so `vitest` stays managed here iff ANY package uses
   // vitest directly.
-  workspaceUsesVitest = true,): void {
+  workspaceUsesVitest = true,
+): void {
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
     return;
@@ -3732,7 +3722,8 @@ function rewriteRootWorkspacePackageJson(
     undefined,
     catalogDependencyResolver,
     packages ? { rootDir: projectPath, packages } : undefined,
-    true,  );
+    true,
+  );
 }
 
 const RULES_YAML_PATH = path.join(rulesDir, 'vite-tools.yml');
@@ -3833,7 +3824,8 @@ export function finalizeCoreMigrationForExistingVitePlus(
   workspaceInfo: CoreMigrationWorkspace,
   silent = false,
   report?: MigrationReport,
-  pending = detectPendingCoreMigration(workspaceInfo),): CoreMigrationFinalizationResult {
+  pending = detectPendingCoreMigration(workspaceInfo),
+): CoreMigrationFinalizationResult {
   const projectPaths = getCoreMigrationProjectPaths(workspaceInfo);
   const result: CoreMigrationFinalizationResult = {
     scripts: false,
@@ -3854,12 +3846,7 @@ export function finalizeCoreMigrationForExistingVitePlus(
     }
   }
 
-  result.imports = rewriteAllImports(
-    workspaceInfo.rootDir,
-    silent,
-    report,
-    true,
-  );
+  result.imports = rewriteAllImports(workspaceInfo.rootDir, silent, report, true);
 
   return result;
 }
@@ -4278,14 +4265,10 @@ function reconcileVitePlusBootstrapPackage(
   packageManager: PackageManager,
   supportCatalog: boolean,
   ensureVitePlus: boolean,
-  catalogDependencyResolver?: CatalogDependencyResolver,): boolean {
+  catalogDependencyResolver?: CatalogDependencyResolver,
+): boolean {
   const before = JSON.stringify(pkg);
-  const usesVitest = projectUsesVitestDirectly(
-    projectPath,
-    pkg,
-    undefined,
-    true,
-  );
+  const usesVitest = projectUsesVitestDirectly(projectPath, pkg, undefined, true);
   ensureVitePlusDependencySpecs(pkg, vitePlusVersion, ensureVitePlus);
 
   const installGroups = [pkg.devDependencies, pkg.dependencies, pkg.optionalDependencies];
@@ -4518,7 +4501,8 @@ export function detectVitePlusBootstrapPending(
   projectPath: string,
   packageManager: PackageManager | undefined,
   packages?: WorkspacePackage[],
-  packageManagerVersion?: string,): boolean {
+  packageManagerVersion?: string,
+): boolean {
   const packageJsonPath = path.join(projectPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
     return false;
@@ -4576,7 +4560,8 @@ export function detectVitePlusBootstrapPending(
         packageManager,
         supportCatalog,
         index === 0,
-        catalogDependencyResolver,      )
+        catalogDependencyResolver,
+      )
     ) {
       return true;
     }
@@ -4584,11 +4569,7 @@ export function detectVitePlusBootstrapPending(
 
   // Shared override/catalog sinks must keep vitest managed when any package in
   // the workspace needs it. The direct dependency itself is localized above.
-  const usesVitest = workspaceUsesVitestDirectly(
-    projectPath,
-    packages,
-    true,
-  );
+  const usesVitest = workspaceUsesVitestDirectly(projectPath, packages, true);
 
   if (packageManager === PackageManager.yarn) {
     return (
@@ -4752,7 +4733,8 @@ function ensurePnpmPeerDependencyRules(pkg: BootstrapPackageJson, usesVitest: bo
 
 export function ensureVitePlusBootstrap(
   workspaceInfo: WorkspaceInfo,
-  report?: MigrationReport,): VitePlusBootstrapResult {
+  report?: MigrationReport,
+): VitePlusBootstrapResult {
   const projectPath = workspaceInfo.rootDir;
   const packageJsonPath = path.join(projectPath, 'package.json');
   const result: VitePlusBootstrapResult = {
@@ -4768,11 +4750,7 @@ export function ensureVitePlusBootstrap(
   // Shared override/catalog sinks are workspace-wide, so keep vitest managed
   // when any package needs it. Each package's direct vitest dependency is
   // reconciled independently below.
-  const usesVitest = workspaceUsesVitestDirectly(
-    projectPath,
-    workspaceInfo.packages,
-    true,
-  );
+  const usesVitest = workspaceUsesVitestDirectly(projectPath, workspaceInfo.packages, true);
   const pnpmMajorVersion = pnpmMajor(workspaceInfo.downloadPackageManager.version);
   const shouldAllowBrowserBuilds = workspaceUsesWebdriverio(projectPath, workspaceInfo.packages);
   const usePnpmWorkspaceYaml =
@@ -4819,7 +4797,8 @@ export function ensureVitePlusBootstrap(
       workspaceInfo.packageManager,
       supportCatalog,
       true,
-      catalogDependencyResolver,    );
+      catalogDependencyResolver,
+    );
 
     if (workspaceInfo.packageManager === PackageManager.yarn) {
       const ensured = ensureOverrideEntries(pkg.resolutions, usesVitest);
@@ -4886,7 +4865,8 @@ export function ensureVitePlusBootstrap(
         workspaceInfo.packageManager,
         supportCatalog,
         false,
-        catalogDependencyResolver,      );
+        catalogDependencyResolver,
+      );
       return childChanged ? pkg : undefined;
     });
     result.packageJson = result.packageJson || childChanged;
