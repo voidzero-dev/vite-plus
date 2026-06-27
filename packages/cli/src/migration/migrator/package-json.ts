@@ -325,11 +325,19 @@ export function rewritePackageJson(
         ? pkg.dependencies
         : undefined;
   const existingVitePlus = existingVitePlusGroup?.[VITE_PLUS_NAME];
+  // Mirrors `ensureVitePlusDependencySpecs`: a named/default `catalog:` reference
+  // is always preserved (never collapsed onto the workspace default), but every
+  // other non-canonical spec is rewritten when it's a vanilla range OR when
+  // force-override demands the requested artifact. Without the force-override
+  // arm, the force-override block above re-pins vite-plus to a protocol-pinned
+  // pkg.pr.new URL that then survives here, leaking the raw URL into the direct
+  // dep instead of `catalog:` (the catalog still holds the URL).
   const shouldNormalizeExistingVitePlus =
     !!existingVitePlus &&
     supportCatalog &&
     existingVitePlus !== canonicalVitePlusSpec &&
-    !isProtocolPinnedSpec(existingVitePlus);
+    !existingVitePlus.startsWith('catalog:') &&
+    (isForceOverrideMode() || !isProtocolPinnedSpec(existingVitePlus));
   // vitest-adjacent / browser-mode signals only trigger a vite-plus INSTALL when the
   // project doesn't already have vite-plus — otherwise vite-plus is already present and
   // re-adding it would be churn. (The direct `vitest` pin those signals also require is
