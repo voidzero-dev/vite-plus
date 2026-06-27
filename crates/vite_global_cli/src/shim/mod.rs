@@ -41,7 +41,6 @@ pub const CORE_SHIM_TOOLS: &[&str] = &["node", "npm", "npx"];
 /// - `C:\path\node.exe` (Windows full path)
 pub fn extract_tool_name(argv0: &str) -> String {
     let path = std::path::Path::new(argv0);
-    let file_name = path.file_name().unwrap_or_default();
 
     // Handle Windows: strip .exe, .cmd extensions if present in stem
     // (file_stem already strips the extension)
@@ -54,10 +53,12 @@ pub fn extract_tool_name(argv0: &str) -> String {
             if let Ok(read_dir) = fs::read_dir(&bin_dir) {
                 for bin in read_dir.flatten() {
                     if bin
-                        .file_name()
+                        .path()
+                        .file_stem()
+                        .unwrap_or_default()
                         .to_string_lossy()
                         .to_lowercase()
-                        .starts_with(&file_name.to_string_lossy().to_lowercase())
+                        .starts_with(&stem.to_lowercase())
                     {
                         return bin
                             .path()
