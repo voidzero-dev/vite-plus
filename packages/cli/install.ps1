@@ -46,11 +46,47 @@ function Write-Warn {
     Write-Host $Message
 }
 
+# Exit code when a Windows native binary cannot load required DLLs (STATUS_DLL_NOT_FOUND).
+$script:DllNotFoundExitCode = -1073741515
+
+function Test-IsDllNotFoundExitCode {
+    param([int]$ExitCode)
+    return $ExitCode -eq $script:DllNotFoundExitCode -or [uint32][int32]$ExitCode -eq 0xC0000135
+}
+
+function Get-DllNotFoundInstallMessage {
+    $arch = if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "arm64" } else { "x64" }
+    $vcUrl = if ($arch -eq "arm64") {
+        "https://aka.ms/vs/17/release/vc_redist.arm64.exe"
+    } else {
+        "https://aka.ms/vs/17/release/vc_redist.x64.exe"
+    }
+    return @"
+vp.exe could not start (exit code 0xC0000135).
+This usually means Microsoft Visual C++ 2015-2022 Redistributable ($arch) is not installed.
+
+Install: $vcUrl
+Then re-run: irm https://vite.plus/ps1 | iex
+"@
+}
+
+# Internal stop signal: halts install without re-printing an error we already wrote.
+$script:InstallStopSignal = 'VP_INSTALL_STOP'
+
+function Exit-Installer {
+    param([int]$Code = 1)
+    $global:LASTEXITCODE = $Code
+    if ($env:CI -eq "true") {
+        exit $Code
+    }
+    throw $script:InstallStopSignal
+}
+
 function Write-Error-Exit {
     param([string]$Message)
     Write-Host "error: " -ForegroundColor Red -NoNewline
     Write-Host $Message
-    exit 1
+    Exit-Installer
 }
 
 function Test-ReleaseAgeError {
@@ -114,11 +150,26 @@ function Write-ReleaseAgeOverride {
 }
 
 function Write-InstallFailure {
-    param([string]$LogPath)
+    param(
+        [string]$LogPath,
+        [int]$ExitCode = 0
+    )
+
+    if (Test-IsDllNotFoundExitCode $ExitCode) {
+        $message = Get-DllNotFoundInstallMessage
+        if ($env:CI -eq "true") {
+            Write-Host "error: " -ForegroundColor Red -NoNewline
+            Write-Host $message
+            Exit-Installer
+        }
+        Write-Error-Exit $message
+    }
+
     if ($env:CI -eq "true") {
         Write-Host "error: " -ForegroundColor Red -NoNewline
         Write-Host "Failed to install dependencies. Log output:"
         Get-Content -Path $LogPath | ForEach-Object { Write-Host $_ }
+        Exit-Installer
     } else {
         Write-Error-Exit "Failed to install dependencies. See log for details: $LogPath"
     }
@@ -593,16 +644,14 @@ function Main {
                         $retryExitCode = $LASTEXITCODE
                         $retryOutput | Out-File $installLog
                         if ($retryExitCode -ne 0) {
-                            Write-InstallFailure $installLog
-                            exit 1
+                            Write-InstallFailure -LogPath $installLog -ExitCode $retryExitCode
                         }
                     } else {
                         Write-ReleaseAgeFailure $installLog
-                        exit 1
+                        Exit-Installer
                     }
                 } else {
-                    Write-InstallFailure $installLog
-                    exit 1
+                    Write-InstallFailure -LogPath $installLog -ExitCode $installExitCode
                 }
             }
         } finally {
@@ -749,4 +798,10 @@ exec "`$VP_HOME/current/bin/vp.exe" "`$@"
     Write-Host ""
 }
 
-Main
+try {
+    Main
+} catch {
+    if ($_.Exception.Message -ne $script:InstallStopSignal) {
+        throw
+    }
+}
