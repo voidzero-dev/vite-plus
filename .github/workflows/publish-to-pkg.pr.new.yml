@@ -138,26 +138,25 @@ jobs:
             './packages/core' \
             './packages/prompts'
 
-      # Register this commit build with the pkg.pr.new registry bridge so it can
-      # be installed as the npm version 0.0.0-commit.<sha>
-      # (https://github.com/fengmk2/pkg-pr-registry-bridge). This CI step
-      # replaces the bridge's GitHub webhook. pkg-pr-new publishes under the PR
-      # head commit, so register that SHA (not the merge commit github.sha).
-      # Restricted to same-repo PRs because fork PRs do not receive the admin
-      # token secret; never fails the publish if the bridge is unreachable.
+      # Publish this commit build to the pkg.pr.new registry bridge so it can be
+      # installed as the npm version 0.0.0-commit.<sha>
+      # (https://github.com/fengmk2/pkg-pr-registry-bridge). The bridge action
+      # downloads each pkg.pr.new package (the two preview packages and every
+      # platform binary), re-packs them under the commit version with matching
+      # integrity, uploads them to the bridge, and registers the ref (the CPU
+      # work that previously ran in the bridge's GitHub webhook). pkg-pr-new
+      # publishes under the PR head commit, so pass that SHA (not the merge
+      # commit github.sha). Restricted to same-repo PRs because fork PRs do not
+      # receive the admin token secret; never fails the publish if the bridge is
+      # unreachable.
       - name: Register commit build with the registry bridge
         id: bridge
         if: github.event.pull_request.head.repo.full_name == github.repository
         continue-on-error: true
-        env:
-          PKG_PR_BRIDGE_ADMIN_TOKEN: ${{ secrets.PKG_PR_BRIDGE_ADMIN_TOKEN }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          curl -fsS -X POST \
-            -H "authorization: Bearer ${PKG_PR_BRIDGE_ADMIN_TOKEN}" \
-            -H 'content-type: application/json' \
-            -d "{\"ref\":\"commit.${HEAD_SHA}\"}" \
-            https://pkg-pr-registry-bridge.render.vip/-/refs
+        uses: fengmk2/pkg-pr-registry-bridge/.github/actions/publish-preview@01ceebc2f6f269d162d0aa0d9f00cbfd8bc16c8d # main
+        with:
+          sha: ${{ github.event.pull_request.head.sha }}
+          admin-token: ${{ secrets.PKG_PR_BRIDGE_ADMIN_TOKEN }}
 
       # Once the bridge has the commit build, post (or update) a sticky PR comment
       # with the resolved npm versions and per-package-manager registry config, so
