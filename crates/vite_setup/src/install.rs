@@ -856,13 +856,15 @@ mod tests {
         );
     }
 
+    /// Build a fake managed Node.js runtime that records how `run_pnpm_install`
+    /// invokes it: arguments to `invocation.txt`, `$PATH` to `path.txt`, and
+    /// `$npm_config_registry` to `registry.txt` (all relative to `version_dir`).
     #[cfg(unix)]
-    #[tokio::test]
-    async fn run_pnpm_install_uses_managed_node_directly() {
+    async fn fake_pnpm_runtime(
+        version_dir: &AbsolutePath,
+    ) -> (AbsolutePathBuf, AbsolutePathBuf, vite_js_runtime::JsRuntime, AbsolutePathBuf) {
         use std::os::unix::fs::PermissionsExt;
 
-        let temp = tempfile::tempdir().unwrap();
-        let version_dir = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
         let node_bin = version_dir.join("node").join("bin");
         let pnpm_bin = version_dir.join("pnpm").join("bin");
         tokio::fs::create_dir_all(&node_bin).await.unwrap();
@@ -882,6 +884,16 @@ mod tests {
         tokio::fs::write(&pnpm_entry, "").await.unwrap();
         let node_runtime =
             vite_js_runtime::JsRuntime::from_system(JsRuntimeType::Node, node_binary);
+
+        (node_bin, pnpm_bin, node_runtime, pnpm_entry)
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn run_pnpm_install_uses_managed_node_directly() {
+        let temp = tempfile::tempdir().unwrap();
+        let version_dir = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
+        let (node_bin, pnpm_bin, node_runtime, pnpm_entry) = fake_pnpm_runtime(&version_dir).await;
 
         let output = run_pnpm_install(&version_dir, &node_runtime, &pnpm_entry, &["install"], None)
             .await
@@ -906,29 +918,9 @@ mod tests {
     #[cfg(unix)]
     #[tokio::test]
     async fn run_pnpm_install_passes_custom_registry_env() {
-        use std::os::unix::fs::PermissionsExt;
-
         let temp = tempfile::tempdir().unwrap();
         let version_dir = AbsolutePathBuf::new(temp.path().to_path_buf()).unwrap();
-        let node_bin = version_dir.join("node").join("bin");
-        let pnpm_bin = version_dir.join("pnpm").join("bin");
-        tokio::fs::create_dir_all(&node_bin).await.unwrap();
-        tokio::fs::create_dir_all(&pnpm_bin).await.unwrap();
-
-        let node_binary = node_bin.join("node");
-        tokio::fs::write(
-            &node_binary,
-            "#!/bin/sh\nprintf '%s' \"$npm_config_registry\" > registry.txt\n",
-        )
-        .await
-        .unwrap();
-        tokio::fs::set_permissions(&node_binary, std::fs::Permissions::from_mode(0o755))
-            .await
-            .unwrap();
-        let pnpm_entry = pnpm_bin.join("pnpm.cjs");
-        tokio::fs::write(&pnpm_entry, "").await.unwrap();
-        let node_runtime =
-            vite_js_runtime::JsRuntime::from_system(JsRuntimeType::Node, node_binary);
+        let (_, _, node_runtime, pnpm_entry) = fake_pnpm_runtime(&version_dir).await;
 
         let registry_url = "https://registry.example.com/";
         let output = run_pnpm_install(
