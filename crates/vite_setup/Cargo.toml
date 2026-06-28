@@ -21,6 +21,7 @@ tracing = { workspace = true }
 vite_install = { workspace = true }
 vite_js_runtime = { workspace = true }
 vite_path = { workspace = true }
+vite_shared = { workspace = true }
 vite_str = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]

@@ -612,6 +612,7 @@ fn env_help_doc() -> HelpDoc {
                     "  vp install -g <package>       # Install a package globally",
                     "  vp uninstall -g <package>     # Uninstall a package globally",
                     "  vp update -g [package]        # Update global packages",
+                    "  vp outdated -g [package]      # List outdated packages",
                     "  vp list -g [package]          # List global packages",
                 ],
             ),
