@@ -86,18 +86,15 @@ async fn execute_bin_config_binary(
 }
 
 async fn execute_npm_link_binary(tool: &str, bin_config: &BinConfig) -> Result<ExitStatus, Error> {
-    #[cfg(windows)]
-    let binary_path = get_bin_dir()?.join(format!("{tool}.cmd"));
-
-    #[cfg(not(windows))]
-    let binary_path = get_bin_dir()?.join(tool);
-
-    if !tokio::fs::try_exists(&binary_path).await.unwrap_or(false) {
-        output::error(&format!("binary '{}' not found", tool.bold()));
-        eprintln!("Package {} may need to be reinstalled.", bin_config.package);
-        eprintln!("Run 'npm install -g {}' to recreate the link.", bin_config.package);
-        return Ok(exit_status(1));
-    }
+    let binary_path = match locate_npm_link_binary(tool).await {
+        Ok(path) if tokio::fs::try_exists(&path).await.unwrap_or(false) => path,
+        _ => {
+            output::error(&format!("binary '{}' not found", tool.bold()));
+            eprintln!("Package {} may need to be reinstalled.", bin_config.package);
+            eprintln!("Run 'npm install -g {}' to recreate the link.", bin_config.package);
+            return Ok(exit_status(1));
+        }
+    };
 
     println!("{}", binary_path.as_path().display());
     println!(
@@ -109,6 +106,40 @@ async fn execute_npm_link_binary(tool: &str, bin_config: &BinConfig) -> Result<E
     println!("  {:<LABEL_WIDTH$}  {}", "Node:".dimmed(), bin_config.node_version.bright_green());
 
     Ok(ExitStatus::default())
+}
+
+#[cfg(unix)]
+async fn locate_npm_link_binary(tool: &str) -> Result<AbsolutePathBuf, Error> {
+    let link_path = get_bin_dir()?.join(tool);
+    let target = tokio::fs::read_link(&link_path).await?;
+    if target.is_absolute() {
+        return AbsolutePathBuf::new(target)
+            .ok_or_else(|| Error::Other(format!("Invalid npm link target for {tool}").into()));
+    }
+    let parent = link_path
+        .parent()
+        .ok_or_else(|| Error::Other(format!("Invalid npm link path for {tool}").into()))?;
+    Ok(parent.join(target))
+}
+
+#[cfg(windows)]
+async fn locate_npm_link_binary(tool: &str) -> Result<AbsolutePathBuf, Error> {
+    let cmd_path = get_bin_dir()?.join(format!("{tool}.cmd"));
+    let content = tokio::fs::read_to_string(&cmd_path).await?;
+    let mut lines = content.lines();
+    let source = match (lines.next(), lines.next(), lines.next(), lines.next()) {
+        (Some("@echo off"), Some(line), Some("exit /b %ERRORLEVEL%"), None)
+            if line.starts_with('"') && line.ends_with("\" %*") =>
+        {
+            &line[1..line.len() - "\" %*".len()]
+        }
+        _ => {
+            return Err(Error::Other(format!("Invalid npm link wrapper for {tool}").into()));
+        }
+    };
+
+    AbsolutePathBuf::new(std::path::PathBuf::from(source))
+        .ok_or_else(|| Error::Other(format!("Invalid npm link target for {tool}").into()))
 }
 
 async fn execute_package_manager_tool(
