@@ -206,16 +206,19 @@ where
     S: AsRef<OsStr>,
 {
     let cwd = cwd.as_ref();
+    let (program, prefix_args) = resolve_program(bin_name, envs, cwd)?;
     let args: Vec<OsString> = args.into_iter().map(|s| s.as_ref().to_owned()).collect();
     tracing::debug!(
         target: "vite_command::spawn",
-        bin_name,
+        program = %program.as_path().display(),
+        prefix_args = ?prefix_args,
         args = ?args,
         cwd = %cwd.as_path().display(),
         "spawn (fspy)",
     );
-    let mut cmd = fspy::Command::new(bin_name);
-    cmd.args(&args)
+    let mut cmd = fspy::Command::new(program.as_path());
+    cmd.args(&prefix_args)
+        .args(&args)
         // set system environment variables first
         .envs(std::env::vars_os())
         // then set custom environment variables
@@ -497,12 +500,9 @@ mod tests {
                 run_command_with_fspy("npm-not-exists", &["--version"], &envs, &temp_dir_path)
                     .await;
             assert!(result.is_err(), "Should not find binary path, but got: {:?}", result);
-            assert!(
-                result
-                    .err()
-                    .unwrap()
-                    .to_string()
-                    .contains("could not resolve the full path of program '\"npm-not-exists\"'")
+            assert_eq!(
+                result.unwrap_err().to_string(),
+                "Cannot find binary path for command 'npm-not-exists'"
             );
         }
     }
