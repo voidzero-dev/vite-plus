@@ -56,3 +56,26 @@ If you are migrating an existing GitHub Actions workflow, you can often replace 
 - run: vp check
 - run: vp test
 ```
+
+## Caching Task Results Across Runs
+
+`setup-vp`'s `cache: true` caches your **dependencies**. The [Vite Task cache](/guide/cache) — the replayed output of `vp run` tasks — is separate and can also be reused across CI runs with `actions/cache`:
+
+```yaml [.github/workflows/ci.yml]
+- uses: voidzero-dev/setup-vp@v1
+  with:
+    node-version: '24'
+    cache: true
+
+- name: Cache Vite Task results
+  uses: actions/cache@v4
+  with:
+    path: node_modules/.vite/task-cache
+    key: vite-task-${{ runner.os }}-${{ github.sha }}
+    restore-keys: |
+      vite-task-${{ runner.os }}-
+
+- run: vp run build
+```
+
+This is experimental. See [Reusing the Cache Across CI Runs](/guide/cache#reusing-the-cache-across-ci-runs) for the cache key strategy, input tuning, and limitations such as cache eviction.
