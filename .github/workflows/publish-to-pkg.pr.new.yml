@@ -166,22 +166,64 @@ jobs:
       - name: Comment bridge version on the PR
         if: steps.bridge.outcome == 'success'
         continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          REPO: ${{ github.repository }}
-        run: |
-          sed -e "s/__SHA__/${HEAD_SHA}/g" -e "s/__SHORT__/${HEAD_SHA:0:7}/g" \
-            .github/bridge-comment-template.md > bridge-comment.md
-          existing=$(gh api "repos/${REPO}/issues/${PR_NUMBER}/comments" --paginate \
-            --jq 'map(select(.body | contains("<!-- pkg-pr-bridge-version -->"))) | last | .id // empty')
-          if [ -n "$existing" ]; then
-            gh api -X PATCH "repos/${REPO}/issues/comments/${existing}" \
-              -f body="$(cat bridge-comment.md)" >/dev/null
-            echo "Updated bridge comment ${existing}"
-          else
-            gh api -X POST "repos/${REPO}/issues/${PR_NUMBER}/comments" \
-              -f body="$(cat bridge-comment.md)" >/dev/null
-            echo "Created bridge comment"
-          fi
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          script: |
+            const sha = context.payload.pull_request.head.sha;
+            const shortSha = sha.slice(0, 7);
+            const pr = context.payload.pull_request.number;
+            const marker = '<!-- pkg-pr-bridge-version -->';
+            const bridge = 'https://pkg-pr-registry-bridge.render.vip/';
+            // Built as a line array (not a template literal) so the fenced code
+            // block doesn't collide with the YAML block-scalar indentation.
+            const body = [
+              marker,
+              '',
+              `### Registry bridge build (\`${shortSha}\`)`,
+              '',
+              'This commit is published to pkg.pr.new and registered with the [registry bridge](https://github.com/fengmk2/pkg-pr-registry-bridge), which serves these as ordinary npm versions (every other package proxies to npmjs):',
+              '',
+              '| Package | Version |',
+              '| --- | --- |',
+              `| \`vite-plus\` | \`0.0.0-commit.${sha}\` |`,
+              `| \`@voidzero-dev/vite-plus-core\` | \`0.0.0-commit.${sha}\` |`,
+              '',
+              `**Point your package manager at the bridge registry** \`${bridge}\`:`,
+              '',
+              '| Package manager | Registry config |',
+              '| --- | --- |',
+              `| npm / pnpm / Bun | \`.npmrc\`: \`registry=${bridge}\` |`,
+              `| Yarn (v2+) | \`.yarnrc.yml\`: \`npmRegistryServer: "${bridge}"\` |`,
+              '',
+              'Then pin the build (`vite` aliases to vite-plus-core; pnpm can use a catalog, npm an `overrides` entry):',
+              '',
+              '```json',
+              '{',
+              '  "devDependencies": {',
+              `    "vite-plus": "0.0.0-commit.${sha}",`,
+              `    "vite": "npm:@voidzero-dev/vite-plus-core@0.0.0-commit.${sha}"`,
+              '  }',
+              '}',
+              '```',
+            ].join('\n');
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr,
+            });
+            const existing = comments.find((c) => c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr,
+                body,
+              });
+            }
