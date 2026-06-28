@@ -166,15 +166,19 @@ jobs:
         if: steps.bridge.outcome == 'success'
         continue-on-error: true
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          # The synthetic version (0.0.0-commit.<sha>) the bridge action
+          # published, so the version scheme has one source of truth (the action).
+          BRIDGE_VERSION: ${{ steps.bridge.outputs.version }}
         with:
           script: |
-            const sha = context.payload.pull_request.head.sha;
-            const shortSha = sha.slice(0, 7);
+            const version = process.env.BRIDGE_VERSION;
+            const shortSha = context.payload.pull_request.head.sha.slice(0, 7);
             const pr = context.payload.pull_request.number;
             const marker = '<!-- pkg-pr-bridge-version -->';
             const bridge = 'https://pkg-pr-registry-bridge.render.vip/';
-            // Built as a line array (not a template literal) so the fenced code
-            // block doesn't collide with the YAML block-scalar indentation.
+            // Built as a line array (not a template literal) so the inline
+            // backticks and the fenced json block don't need backslash-escaping.
             const body = [
               marker,
               '',
@@ -184,8 +188,8 @@ jobs:
               '',
               '| Package | Version |',
               '| --- | --- |',
-              `| \`vite-plus\` | \`0.0.0-commit.${sha}\` |`,
-              `| \`@voidzero-dev/vite-plus-core\` | \`0.0.0-commit.${sha}\` |`,
+              `| \`vite-plus\` | \`${version}\` |`,
+              `| \`@voidzero-dev/vite-plus-core\` | \`${version}\` |`,
               '',
               `**Point your package manager at the bridge registry** \`${bridge}\`:`,
               '',
@@ -199,8 +203,8 @@ jobs:
               '```json',
               '{',
               '  "devDependencies": {',
-              `    "vite-plus": "0.0.0-commit.${sha}",`,
-              `    "vite": "npm:@voidzero-dev/vite-plus-core@0.0.0-commit.${sha}"`,
+              `    "vite-plus": "${version}",`,
+              `    "vite": "npm:@voidzero-dev/vite-plus-core@${version}"`,
               '  }',
               '}',
               '```',
