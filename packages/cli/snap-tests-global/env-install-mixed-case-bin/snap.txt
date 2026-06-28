@@ -1,0 +1,7 @@
+> vp install -g .
+info: Installing 1 global package with Node.js <semver>
+✓ Installed env-install-mixed-case-bin <semver>
+  Bins: MixedCaseBin
+
+> MixedCaseBin
+mixed-case bin executed

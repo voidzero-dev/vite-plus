@@ -14,10 +14,14 @@ pub(crate) mod corepack;
 pub(crate) mod dispatch;
 pub(crate) mod exec;
 
+use std::fs;
+
 pub(crate) use cache::invalidate_cache;
 pub use dispatch::dispatch;
 pub(crate) use dispatch::find_system_tool;
 use vite_shared::env_vars;
+
+use crate::commands::env::config::get_bin_dir;
 
 /// Core shim tools (node, npm, npx).
 ///
@@ -28,6 +32,7 @@ use vite_shared::env_vars;
 pub const CORE_SHIM_TOOLS: &[&str] = &["node", "npm", "npx"];
 
 /// Extract the tool name from argv[0].
+/// We hope all bins should be put under $VP_HOME/bin
 ///
 /// Handles various formats:
 /// - `node` (Unix)
@@ -36,11 +41,33 @@ pub const CORE_SHIM_TOOLS: &[&str] = &["node", "npm", "npx"];
 /// - `C:\path\node.exe` (Windows full path)
 pub fn extract_tool_name(argv0: &str) -> String {
     let path = std::path::Path::new(argv0);
-    let stem = path.file_stem().unwrap_or_default().to_string_lossy();
 
     // Handle Windows: strip .exe, .cmd extensions if present in stem
     // (file_stem already strips the extension)
-    stem.to_lowercase()
+    let stem = path.file_stem().unwrap_or_default().to_string_lossy().to_string();
+    if cfg!(target_os = "linux") {
+        stem
+    } else {
+        let bin_dir = get_bin_dir();
+        if let Ok(bin_dir) = bin_dir {
+            if let Ok(read_dir) = fs::read_dir(&bin_dir) {
+                for bin in read_dir.flatten() {
+                    if bin.path().file_stem().unwrap_or_default().to_string_lossy().to_lowercase()
+                        == stem.to_lowercase()
+                    {
+                        return bin
+                            .path()
+                            .file_stem()
+                            .unwrap_or_default()
+                            .to_string_lossy()
+                            .to_string();
+                    }
+                }
+            }
+        }
+
+        stem
+    }
 }
 
 /// Check if the given tool name is a core shim tool (node/npm/npx).
@@ -140,10 +167,10 @@ pub fn detect_shim_tool(argv0: &str) -> Option<String> {
     // (so argv[0] would be "vp"), but the env var carries the real tool name.
     if let Some(tool) = env_tool {
         if !tool.is_empty() {
-            let tool_lower = tool.to_lowercase();
+            let tool = extract_tool_name(&tool);
             // Accept any tool from env var (could be core or package binary)
-            if tool_lower != "vp" {
-                return Some(tool_lower);
+            if tool != "vp" {
+                return Some(tool);
             }
         }
     }
