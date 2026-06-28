@@ -9,7 +9,7 @@ Usage: .github/scripts/test-pkg-pr-new-migrate.sh <PR-or-SHA> <project-path> [mi
 Installs an isolated global Vite+ CLI built from a pkg.pr.new commit and runs
 `vp migrate` against a local project. The migrated project pins `vite-plus` and
 `vite` to the matching commit build, resolved through the pkg.pr.new registry
-bridge (https://github.com/fengmk2/pkg-pr-registry-bridge) so they install like
+bridge (https://github.com/voidzero-dev/pkg-pr-registry-bridge) so they install like
 ordinary npm versions (0.0.0-commit.<sha>) instead of mutable pkg.pr.new URLs.
 
 Persists the bridge registry into the project's `.npmrc` (npm/pnpm/Yarn
@@ -72,7 +72,7 @@ if command -v git >/dev/null 2>&1 && git -C "$project_dir" rev-parse --is-inside
   fi
 fi
 
-bridge_registry="https://pkg-pr-registry-bridge.render.vip/"
+bridge_registry="https://pkg-pr-registry-bridge.void.app/"
 pkg_pr_new_base="https://pkg.pr.new/voidzero-dev/vite-plus"
 requested_vite_plus_spec="$pkg_pr_new_base@$pr_ref"
 

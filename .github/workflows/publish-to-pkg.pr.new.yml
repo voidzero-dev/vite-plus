@@ -140,7 +140,7 @@ jobs:
 
       # Publish this commit build to the pkg.pr.new registry bridge so it can be
       # installed as the npm version 0.0.0-commit.<sha>
-      # (https://github.com/fengmk2/pkg-pr-registry-bridge). The bridge action
+      # (https://github.com/voidzero-dev/pkg-pr-registry-bridge). The bridge action
       # downloads each pkg.pr.new package (the two preview packages and every
       # platform binary), re-packs them under the commit version with matching
       # integrity, uploads them to the bridge, and registers the ref (the CPU
@@ -153,7 +153,7 @@ jobs:
         id: bridge
         if: github.event.pull_request.head.repo.full_name == github.repository
         continue-on-error: true
-        uses: fengmk2/pkg-pr-registry-bridge/.github/actions/publish-preview@01ceebc2f6f269d162d0aa0d9f00cbfd8bc16c8d # main
+        uses: voidzero-dev/pkg-pr-registry-bridge@3ee9882f423375081609dd9160b50db722b42fd4 # main
         with:
           sha: ${{ github.event.pull_request.head.sha }}
           admin-token: ${{ secrets.PKG_PR_BRIDGE_ADMIN_TOKEN }}
@@ -176,7 +176,7 @@ jobs:
             const shortSha = context.payload.pull_request.head.sha.slice(0, 7);
             const pr = context.payload.pull_request.number;
             const marker = '<!-- pkg-pr-bridge-version -->';
-            const bridge = 'https://pkg-pr-registry-bridge.render.vip/';
+            const bridge = 'https://pkg-pr-registry-bridge.void.app/';
             // Built as a line array (not a template literal) so the inline
             // backticks and the fenced json block don't need backslash-escaping.
             const body = [
@@ -184,7 +184,7 @@ jobs:
               '',
               `### Registry bridge build (\`${shortSha}\`)`,
               '',
-              'This commit is published to pkg.pr.new and registered with the [registry bridge](https://github.com/fengmk2/pkg-pr-registry-bridge), which serves these as ordinary npm versions (every other package proxies to npmjs):',
+              'This commit is published to pkg.pr.new and registered with the [registry bridge](https://github.com/voidzero-dev/pkg-pr-registry-bridge), which serves these as ordinary npm versions (every other package proxies to npmjs):',
               '',
               '| Package | Version |',
               '| --- | --- |',
