@@ -319,8 +319,17 @@ migrate_status=$?
 set -e
 
 if [ "$is_git_repo" -eq 1 ]; then
+  # Force-stage the bridge registry config. Projects commonly gitignore .npmrc
+  # (and .yarnrc.yml), so without -f it never reaches the project's CI: the
+  # commit build then resolves from the default registry, which has no
+  # 0.0.0-commit.<sha>, and the supply-chain policy check rejects the lockfile
+  # (ERR_PNPM_TARBALL_URL_MISMATCH). Force-staging also surfaces it below.
+  git -C "$project_dir" add -f .npmrc 2>/dev/null || true
+  if [ "$is_yarn_berry" -eq 1 ]; then
+    git -C "$project_dir" add -f .yarnrc.yml 2>/dev/null || true
+  fi
   echo
-  echo "Migration worktree changes:"
+  echo "Migration worktree changes (.npmrc force-staged so it survives .gitignore):"
   git -C "$project_dir" status --short
   git -C "$project_dir" diff --stat
 fi
