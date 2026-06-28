@@ -1,0 +1,6 @@
+{
+  "recommendations": [
+    // keep my favorite extension
+    "dbaeumer.vscode-eslint",
+  ],
+}

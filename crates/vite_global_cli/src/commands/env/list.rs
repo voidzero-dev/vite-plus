@@ -20,7 +20,7 @@ struct InstalledVersionJson {
 }
 
 /// Scan the node versions directory and return sorted version strings.
-fn list_installed_versions(node_dir: &std::path::Path) -> Vec<String> {
+pub(super) fn list_installed_versions(node_dir: &std::path::Path) -> Vec<String> {
     let entries = match std::fs::read_dir(node_dir) {
         Ok(entries) => entries,
         Err(_) => return Vec::new(),

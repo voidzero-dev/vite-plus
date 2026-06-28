@@ -758,7 +758,7 @@ fn render_env_content(shell: EnvShell, vite_plus_home: &vite_path::AbsolutePath)
             // Normalize to forward slashes for $HOME/... paths (POSIX-style)
             format!("$HOME/{}", s.display().to_string().replace('\\', "/"))
         })
-        .unwrap_or_else(|| bin_path.as_path().display().to_string());
+        .unwrap_or_else(|| bin_path.as_path().display().to_string().replace('\\', "/"));
 
     match shell {
         EnvShell::Posix => ENV_TEMPLATE_POSIX.replace("__VP_BIN__", &bin_path_ref),
@@ -976,7 +976,7 @@ mod tests {
 
         // Should use absolute path since install dir is not under HOME
         let expected_bin = home.join("bin");
-        let expected_str = expected_bin.as_path().display().to_string();
+        let expected_str = expected_bin.as_path().display().to_string().replace('\\', "/");
         assert!(
             env_content.contains(&expected_str),
             "env file should use absolute path {expected_str}, got: {env_content}"

@@ -72,7 +72,7 @@ pub async fn execute(cwd: AbsolutePathBuf, args: EnvArgs) -> Result<ExitStatus, 
             crate::cli::EnvSubcommands::Unpin { target } => unpin::execute(cwd, target).await,
             crate::cli::EnvSubcommands::List { json } => list::execute(cwd, json).await,
             crate::cli::EnvSubcommands::ListRemote { pattern, lts, all, json, sort } => {
-                list_remote::execute(pattern, lts, all, json, sort).await
+                list_remote::execute(cwd, pattern, lts, all, json, sort).await
             }
             crate::cli::EnvSubcommands::Exec { node, npm, command } => {
                 exec::execute(node.as_deref(), npm.as_deref(), &command).await

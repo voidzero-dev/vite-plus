@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import * as prompts from '@voidzero-dev/vite-plus-prompts';
+import { parse as parseJsonc } from 'jsonc-parser';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { detectExistingEditors, selectEditors, writeEditorConfigs } from '../editor.js';
@@ -165,9 +166,13 @@ describe('writeEditorConfigs', () => {
       extraVsCodeSettings: { 'npm.scriptRunner': 'vp' },
     });
 
-    const settings = JSON.parse(
-      fs.readFileSync(path.join(projectRoot, '.vscode', 'settings.json'), 'utf8'),
-    ) as Record<string, unknown>;
+    const resultText = fs.readFileSync(path.join(projectRoot, '.vscode', 'settings.json'), 'utf8');
+
+    // Comments survive the merge
+    expect(resultText).toContain('// JSONC comment');
+    expect(resultText).toContain('// preserve existing key');
+
+    const settings = parseJsonc(resultText) as Record<string, unknown>;
 
     // Existing key is preserved (merge never overwrites)
     expect(settings['editor.formatOnSave']).toBe(false);
@@ -186,6 +191,252 @@ describe('writeEditorConfigs', () => {
     const codeActions = settings['editor.codeActionsOnSave'] as Record<string, unknown>;
     expect(codeActions['source.organizeImports']).toBe('explicit');
     expect(codeActions['source.fixAll.oxc']).toBe('explicit');
+  });
+
+  it('preserves a top-level comment before an existing setting (Vue Core style)', async () => {
+    const projectRoot = createTempDir();
+
+    const vscodeDir = path.join(projectRoot, '.vscode');
+    fs.mkdirSync(vscodeDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(vscodeDir, 'settings.json'),
+      `{
+  // Use the project's typescript version
+  "typescript.tsdk": "node_modules/typescript/lib"
+}
+`,
+      'utf8',
+    );
+
+    await writeEditorConfigs({
+      projectRoot,
+      editorId: 'vscode',
+      interactive: false,
+      silent: true,
+    });
+
+    const resultText = fs.readFileSync(path.join(projectRoot, '.vscode', 'settings.json'), 'utf8');
+
+    expect(resultText).toContain("// Use the project's typescript version");
+
+    const settings = parseJsonc(resultText) as Record<string, unknown>;
+    expect(settings['typescript.tsdk']).toBe('node_modules/typescript/lib');
+    expect(settings['editor.defaultFormatter']).toBe('oxc.oxc-vscode');
+  });
+
+  it('preserves a nested comment while adding source.fixAll.oxc', async () => {
+    const projectRoot = createTempDir();
+
+    const vscodeDir = path.join(projectRoot, '.vscode');
+    fs.mkdirSync(vscodeDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(vscodeDir, 'settings.json'),
+      `{
+  "editor.codeActionsOnSave": {
+    // keep my organize imports
+    "source.organizeImports": "explicit"
+  }
+}
+`,
+      'utf8',
+    );
+
+    await writeEditorConfigs({
+      projectRoot,
+      editorId: 'vscode',
+      interactive: false,
+      silent: true,
+    });
+
+    const resultText = fs.readFileSync(path.join(projectRoot, '.vscode', 'settings.json'), 'utf8');
+
+    expect(resultText).toContain('// keep my organize imports');
+
+    const settings = parseJsonc(resultText) as Record<string, unknown>;
+    const codeActions = settings['editor.codeActionsOnSave'] as Record<string, unknown>;
+    expect(codeActions['source.organizeImports']).toBe('explicit');
+    expect(codeActions['source.fixAll.oxc']).toBe('explicit');
+  });
+
+  it('never overwrites existing values during merge', async () => {
+    const projectRoot = createTempDir();
+
+    const vscodeDir = path.join(projectRoot, '.vscode');
+    fs.mkdirSync(vscodeDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(vscodeDir, 'settings.json'),
+      `{
+  "editor.formatOnSave": false,
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  }
+}
+`,
+      'utf8',
+    );
+
+    await writeEditorConfigs({
+      projectRoot,
+      editorId: 'vscode',
+      interactive: false,
+      silent: true,
+    });
+
+    const settings = parseJsonc(
+      fs.readFileSync(path.join(projectRoot, '.vscode', 'settings.json'), 'utf8'),
+    ) as Record<string, unknown>;
+
+    expect(settings['editor.formatOnSave']).toBe(false);
+    expect(settings['[typescript]']).toEqual({
+      'editor.defaultFormatter': 'esbenp.prettier-vscode',
+    });
+  });
+
+  it('keeps trailing-comma JSONC valid after merge', async () => {
+    const projectRoot = createTempDir();
+
+    const vscodeDir = path.join(projectRoot, '.vscode');
+    fs.mkdirSync(vscodeDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(vscodeDir, 'settings.json'),
+      `{
+  "editor.codeActionsOnSave": {
+    "source.organizeImports": "explicit",
+  },
+}
+`,
+      'utf8',
+    );
+
+    await writeEditorConfigs({
+      projectRoot,
+      editorId: 'vscode',
+      interactive: false,
+      silent: true,
+    });
+
+    const settings = parseJsonc(
+      fs.readFileSync(path.join(projectRoot, '.vscode', 'settings.json'), 'utf8'),
+    ) as Record<string, unknown>;
+
+    expect(settings['editor.defaultFormatter']).toBe('oxc.oxc-vscode');
+    const codeActions = settings['editor.codeActionsOnSave'] as Record<string, unknown>;
+    expect(codeActions['source.organizeImports']).toBe('explicit');
+    expect(codeActions['source.fixAll.oxc']).toBe('explicit');
+  });
+
+  it('appends extension recommendation without losing comments or duplicating', async () => {
+    const projectRoot = createTempDir();
+
+    const vscodeDir = path.join(projectRoot, '.vscode');
+    fs.mkdirSync(vscodeDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(vscodeDir, 'extensions.json'),
+      `{
+  "recommendations": [
+    // keep my favorite extension
+    "dbaeumer.vscode-eslint",
+  ],
+}
+`,
+      'utf8',
+    );
+
+    await writeEditorConfigs({
+      projectRoot,
+      editorId: 'vscode',
+      interactive: false,
+      silent: true,
+    });
+
+    const resultText = fs.readFileSync(
+      path.join(projectRoot, '.vscode', 'extensions.json'),
+      'utf8',
+    );
+
+    expect(resultText).toContain('// keep my favorite extension');
+
+    const extensions = parseJsonc(resultText) as { recommendations: string[] };
+    expect(extensions.recommendations).toContain('dbaeumer.vscode-eslint');
+    expect(
+      extensions.recommendations.filter((r) => r === 'VoidZero.vite-plus-extension-pack'),
+    ).toHaveLength(1);
+  });
+
+  it('is idempotent: a second merge makes no textual change', async () => {
+    const projectRoot = createTempDir();
+
+    const vscodeDir = path.join(projectRoot, '.vscode');
+    fs.mkdirSync(vscodeDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(vscodeDir, 'settings.json'),
+      `{
+  // JSONC comment
+  "editor.formatOnSave": false,
+}
+`,
+      'utf8',
+    );
+
+    const settingsPath = path.join(projectRoot, '.vscode', 'settings.json');
+
+    await writeEditorConfigs({
+      projectRoot,
+      editorId: 'vscode',
+      interactive: false,
+      silent: true,
+    });
+    const afterFirst = fs.readFileSync(settingsPath, 'utf8');
+
+    await writeEditorConfigs({
+      projectRoot,
+      editorId: 'vscode',
+      interactive: false,
+      silent: true,
+    });
+    const afterSecond = fs.readFileSync(settingsPath, 'utf8');
+
+    expect(afterSecond).toBe(afterFirst);
+  });
+
+  it('preserves an existing Zed JSONC comment while adding nested settings', async () => {
+    const projectRoot = createTempDir();
+
+    const zedDir = path.join(projectRoot, '.zed');
+    fs.mkdirSync(zedDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(zedDir, 'settings.json'),
+      `{
+  // my zed settings
+  "lsp": {
+    "oxlint": {
+      // keep this comment
+      "initialization_options": {}
+    }
+  }
+}
+`,
+      'utf8',
+    );
+
+    await writeEditorConfigs({
+      projectRoot,
+      editorId: 'zed',
+      interactive: false,
+      silent: true,
+    });
+
+    const resultText = fs.readFileSync(path.join(projectRoot, '.zed', 'settings.json'), 'utf8');
+
+    expect(resultText).toContain('// my zed settings');
+    expect(resultText).toContain('// keep this comment');
+
+    const settings = parseJsonc(resultText) as {
+      lsp?: { oxfmt?: { initialization_options?: { settings?: Record<string, unknown> } } };
+    };
+    expect(settings.lsp?.oxfmt?.initialization_options?.settings?.['fmt.configPath']).toBe(
+      './vite.config.ts',
+    );
   });
 
   it('does not apply extraVsCodeSettings to zed editor', async () => {

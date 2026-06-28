@@ -72,7 +72,9 @@ pub(crate) fn is_vp_shim_target(
 /// created for packages either, with one exception: `vp install -g corepack`
 /// may take BinConfig ownership of the corepack shim (see
 /// `create_package_shim`).
-pub(crate) fn is_protected_shim(bin_name: &str) -> bool {
+pub(crate) fn is_protected_shim(bin_name: &str, ignore_case: bool) -> bool {
+    let bin_name =
+        if cfg!(target_os = "linux") || !ignore_case { bin_name } else { &bin_name.to_lowercase() };
     CORE_SHIMS.contains(&bin_name) || crate::commands::env::setup::SHIM_TOOLS.contains(&bin_name)
 }
 
@@ -82,7 +84,7 @@ pub(crate) fn is_protected_shim(bin_name: &str) -> bool {
 /// resolution order. The exemption is scoped to the package name; any other
 /// package declaring a `corepack` bin must not take BinConfig ownership.
 pub(crate) fn package_may_own_bin(package_name: &str, bin_name: &str) -> bool {
-    !is_protected_shim(bin_name) || (bin_name == "corepack" && package_name == "corepack")
+    !is_protected_shim(bin_name, true) || (bin_name == "corepack" && package_name == "corepack")
 }
 
 /// Options for [`install`].
@@ -902,7 +904,7 @@ pub async fn uninstall(package_name: &str, dry_run: bool) -> Result<(), Error> {
         output::raw(&format!("Would uninstall {}:", package_name));
         for bin_name in &bins {
             // Protected shims survive the real uninstall; keep dry-run honest.
-            if is_protected_shim(bin_name) {
+            if is_protected_shim(bin_name, false) {
                 output::raw(&format!(
                     "  - shim: {} (kept: default shim)",
                     bin_dir.join(bin_name).as_path().display()
@@ -1093,7 +1095,7 @@ async fn remove_package_shim(
     // Don't remove protected shims (e.g., `vp remove -g corepack` must keep
     // the default corepack shim so it falls back to the Node-bundled or
     // auto-installed corepack).
-    if is_protected_shim(bin_name) {
+    if is_protected_shim(bin_name, false) {
         return Ok(());
     }
 
@@ -1228,6 +1230,13 @@ mod tests {
 
         // Regular bins are unrestricted
         assert!(package_may_own_bin("typescript", "tsc"));
+
+        #[cfg(any(windows, target_os = "macos"))]
+        assert!(!package_may_own_bin("some-package", "NPM"));
+        #[cfg(any(windows, target_os = "macos"))]
+        assert!(!package_may_own_bin("some-package", "Node"));
+        #[cfg(any(windows, target_os = "macos"))]
+        assert!(!package_may_own_bin("some-package", "VP"));
     }
 
     #[tokio::test]
