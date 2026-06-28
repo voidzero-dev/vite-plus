@@ -187,8 +187,6 @@ Migration normalizes the project's Node.js pin:
   Node otherwise makes the package manager skip the native binding's optional
   dependency. A bare major (`24`) or an open range (`^20`, `>=18`) that can
   still resolve to a supported release is left unchanged.
-- Interactive migration confirms the upgrade (default yes); `--no-interactive`
-  applies it directly.
 
 ## Package-Manager Rules
 
