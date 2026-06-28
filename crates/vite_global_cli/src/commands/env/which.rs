@@ -105,7 +105,7 @@ async fn execute_npm_link_binary(tool: &str, bin_config: &BinConfig) -> Result<E
         "Package:".dimmed(),
         bin_config.package.as_str().bright_blue()
     );
-    println!("  {:<LABEL_WIDTH$}  {}", "Source:".dimmed(), "npm install -g".dimmed());
+    println!("  {:<LABEL_WIDTH$}  {}", "Source:".dimmed(), "npm".dimmed());
     println!("  {:<LABEL_WIDTH$}  {}", "Node:".dimmed(), bin_config.node_version.bright_green());
 
     Ok(ExitStatus::default())

@@ -9,7 +9,7 @@ link created
 > vp env which npm-global-hint-cli # Should report npm-created link
 <vite-plus-home>/bin/npm-global-hint-cli
   Package:    npm-global-hint-pkg
-  Source:     npm install -g
+  Source:     npm
   Node:       <semver>
 
 > npm-global-hint-cli # Should be callable via the link
