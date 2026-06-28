@@ -7,7 +7,7 @@ Linked 'npm-global-hint-cli' to <vite-plus-home>/bin/npm-global-hint-cli
 link created
 
 > vp env which npm-global-hint-cli # Should report npm-created link
-<cwd>/../npm-global-lib-for-snap-tests/bin/npm-global-hint-cli
+<cwd>/npm-global-hint-pkg/cli.js
   Package:    npm-global-hint-pkg
   Source:     npm
   Node:       <semver>

@@ -112,14 +112,17 @@ async fn execute_npm_link_binary(tool: &str, bin_config: &BinConfig) -> Result<E
 async fn locate_npm_link_binary(tool: &str) -> Result<AbsolutePathBuf, Error> {
     let link_path = get_bin_dir()?.join(tool);
     let target = tokio::fs::read_link(&link_path).await?;
-    if target.is_absolute() {
-        return AbsolutePathBuf::new(target)
-            .ok_or_else(|| Error::Other(format!("Invalid npm link target for {tool}").into()));
-    }
-    let parent = link_path
-        .parent()
-        .ok_or_else(|| Error::Other(format!("Invalid npm link path for {tool}").into()))?;
-    Ok(parent.join(target))
+    let binary_path = if target.is_absolute() {
+        target
+    } else {
+        let parent = link_path
+            .parent()
+            .ok_or_else(|| Error::Other(format!("Invalid npm link path for {tool}").into()))?;
+        parent.join(target).into_path_buf()
+    };
+    let canonical_path = tokio::fs::canonicalize(&binary_path).await?;
+    AbsolutePathBuf::new(canonical_path)
+        .ok_or_else(|| Error::Other(format!("Invalid npm link target for {tool}").into()))
 }
 
 #[cfg(windows)]
