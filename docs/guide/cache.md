@@ -1,35 +1,41 @@
 # Task Caching
 
-Vite Task can automatically track dependencies and cache tasks run through `vp run`.
+Vite Task tracks dependencies, caches terminal output, and restores output files for cached tasks run through `vp run`.
 
 ## Overview
 
-When a task runs successfully (exit code 0), its terminal output (stdout/stderr) is saved. On the next run, Vite Task checks if anything changed:
+When a task exits with code 0, Vite Task saves its terminal output and any tracked output files. On the next run, Vite Task checks whether the cache entry still matches:
 
 1. **Arguments:** did the [additional arguments](/guide/run#additional-arguments) passed to the task change?
 2. **Environment variables:** did any [fingerprinted env vars](/config/run#env) change?
 3. **Input files:** did any file that the command reads change?
 
-If everything matches, the cached output is replayed instantly, and the command does not run.
+If the cache entry matches, Vite Task replays the terminal output, restores tracked output files, and skips the command.
 
-::: info
-By default, only terminal output is cached and replayed. To cache files produced by a task, configure [`output`](/config/run#output) globs. Matching files are archived after a successful run and restored on a cache hit.
-:::
+## Output Restoration
 
-```ts [vite.config.ts]
-tasks: {
-  build: {
-    command: 'vp build',
-    output: ['dist/**'],
-  },
-}
+Vite Task tracks files that a task writes. On a cache hit, Vite Task restores those files from the cache.
+
+For example, a cached `vp build` can restore `dist` after you delete it:
+
+```bash
+vp run build
+rm -rf dist
+vp run build # cache hit; Vite Task restores dist
 ```
+
+Use [`output`](/config/run#output) when you need to customize file restoration:
+
+- Omit `output` to restore files that the task writes.
+- Add glob patterns to restore a specific set of files.
+- Add `{ auto: true }` with globs to combine automatic write tracking with explicit patterns.
+- Set `output: []` to disable output restoration.
 
 When a cache miss occurs, Vite Task tells you exactly why:
 
 ```
 $ vp lint ✗ cache miss: 'src/utils.ts' modified, executing
-$ vp build ✗ cache miss: env changed, executing
+$ vp build ✗ cache miss: env 'VITE_GREETING' changed, executing
 $ vp test ✗ cache miss: args changed, executing
 ```
 
@@ -83,6 +89,10 @@ tasks: {
 }
 ```
 
+### Runner-Aware Tools
+
+Tools can report cache information to Vite Task while they run. Vite uses this runner protocol during `vp build` to report inputs, outputs, and Vite environment variables. You do not need to declare `env: ['VITE_*']` or `output: ['dist/**']` for a standard Vite build.
+
 ## Environment Variables
 
 By default, tasks run in a clean environment. Only a small set of common variables, such as `PATH`, `HOME`, and `CI`, are passed through. Other environment variables are neither visible to the task nor included in the cache fingerprint.
@@ -100,7 +110,7 @@ tasks: {
 
 To pass a variable to the task **without** affecting cache behavior, use [`untrackedEnv`](/config/run#untracked-env). This is useful for variables like `CI` or `GITHUB_ACTIONS` that should be available in the task, but do not generally affect caching behavior.
 
-See [Run Config](/config/run#env) for details on wildcard patterns and the full list of automatically passed-through variables.
+See [Run Config](/config/run#env) for details on wildcard patterns and the full list of default passed-through variables.
 
 ## Cache Sharing
 
@@ -125,4 +135,4 @@ Use `vp cache clean` when you need to clear cached task results:
 vp cache clean
 ```
 
-The task cache is stored in `node_modules/.vite/task-cache` at the project root. `vp cache clean` deletes that cache directory.
+Vite Task stores cache files under `node_modules/.vite/task-cache` at the project root. Vite Task keeps separate subdirectories for cache schema versions, and `vp cache clean` deletes the cache directory.

@@ -69,7 +69,7 @@ $ node compile-legacy-app.js ✗ cache miss: 'legacy/index.js' modified, executi
 
 ## Task Definitions
 
-Vite Task automatically tracks which files your command uses. You can define tasks directly in `vite.config.ts` to enable caching by default or control which files and environment variables affect cache behavior.
+Vite Task tracks which files your command uses. You can define tasks directly in `vite.config.ts` to enable caching by default or control which files and environment variables affect cache behavior.
 
 ```ts [vite.config.ts]
 import { defineConfig } from 'vite-plus';
@@ -102,11 +102,43 @@ See [Run Config](/config/run) for the full `run` block reference.
 
 ## Task Dependencies
 
-Use [`dependsOn`](/config/run#dependson) to run tasks in the right order. Running `vp run deploy` with the config above runs `build` and `test` first. Dependencies can also target other packages in the same project with the `package#task` notation:
+Use [`dependsOn`](/config/run#dependson) to run tasks in the right order. Running `vp run deploy` with the config above runs `build` and `test` first.
+
+String entries target tasks by name:
 
 ```ts [vite.config.ts]
-dependsOn: ['@my/core#build', '@my/utils#lint'];
+dependsOn: [
+  'build', // same package
+  '@my/core#build', // another package
+];
 ```
+
+Use the object form when a package should run a task in its direct workspace dependencies:
+
+```ts [vite.config.ts]
+import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  run: {
+    tasks: {
+      test: {
+        command: 'vp test',
+        dependsOn: [{ task: 'build', from: 'dependencies' }],
+      },
+    },
+  },
+});
+```
+
+In this example, `vp run test` checks the current package's `dependencies`. For each direct workspace dependency that defines `build`, Vite Task runs that dependency's `build` task before `test`.
+
+Use an array when you need more than one dependency field:
+
+```ts [vite.config.ts]
+dependsOn: [{ task: 'build', from: ['dependencies', 'devDependencies'] }];
+```
+
+Object-form `dependsOn` only selects direct dependencies from the listed package.json fields. A dependency package can pull in more tasks through its own `dependsOn` config.
 
 ## Running in a Workspace
 
@@ -251,7 +283,7 @@ A common monorepo pattern is a root script that runs a task recursively:
 
 This creates a potential recursion: root's `build` -> `vp run -r build` -> includes root's `build` -> ...
 
-Vite Task detects this and prunes the self-reference automatically, so other packages build normally.
+Vite Task detects this and prunes the self-reference, so other packages build normally.
 :::
 
 ## Execution Summary
