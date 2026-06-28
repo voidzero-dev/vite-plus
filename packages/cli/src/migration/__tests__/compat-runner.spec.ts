@@ -30,7 +30,8 @@ describe('checkRolldownCompatibility', () => {
     expect(report.warnings).toEqual(['manualChunks warning']);
     expect(mockRunCommandSilently).toHaveBeenCalledWith({
       command: process.execPath,
-      args: [expect.stringMatching(/compat\/worker\.js$/), '/project'],
+      // fileURLToPath yields OS-native separators: '/' on POSIX, '\' on Windows.
+      args: [expect.stringMatching(/compat[/\\]worker\.js$/), '/project'],
       cwd: '/project',
       envs: process.env,
     });
